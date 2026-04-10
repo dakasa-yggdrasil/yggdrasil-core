@@ -66,6 +66,60 @@ type ObserveProductInstallationResponse struct {
 	Results []ProductInstallationObservationResult `json:"results,omitempty"`
 }
 
+// UninstallProductInstallationRequest asks the core to remove one product
+// installation from its declared target integrations. TargetOverrides
+// (same semantics as ApplyProductInstallationRequest) redirect the
+// uninstall to different targets — useful when the original apply was
+// itself redirected.
+//
+// The core regenerates the Kubernetes object set using the same
+// reconcile code path as apply, then dispatches a declarative_delete
+// adapter RPC. Components whose source.kind is not "integration" are
+// skipped (same filter as apply).
+type UninstallProductInstallationRequest struct {
+	Product         ManifestSelector          `json:"product"`
+	TargetOverrides map[string]TargetOverride `json:"target_overrides,omitempty"`
+}
+
+// ProductInstallationUninstallResult describes one component uninstall result.
+type ProductInstallationUninstallResult struct {
+	Name           string                      `json:"name"`
+	Operation      string                      `json:"operation"`
+	Mode           string                      `json:"mode,omitempty"`
+	Uninstalled    bool                        `json:"uninstalled"`
+	Resources      []InstallationResourceState `json:"resources,omitempty"`
+	TargetType     *ManifestReference          `json:"target_type,omitempty"`
+	TargetInstance *ManifestReference          `json:"target_instance,omitempty"`
+	Metadata       map[string]any              `json:"metadata,omitempty"`
+}
+
+// UninstallProductInstallationResponse returns the uninstall results for one product.
+type UninstallProductInstallationResponse struct {
+	Product ManifestReference                    `json:"product"`
+	Results []ProductInstallationUninstallResult `json:"results,omitempty"`
+}
+
+// AdapterDeclarativeDeleteRequest asks a target integration to delete one desired object set.
+// Symmetric to AdapterDeclarativeApplyRequest — the core sends the same
+// object list that was applied so the adapter can delete the same
+// objects.
+type AdapterDeclarativeDeleteRequest struct {
+	Operation string                             `json:"operation"`
+	Context   AdapterGenerateInstallationContext `json:"context"`
+	Target    AdapterTargetIntegrationContext    `json:"target"`
+	Objects   []map[string]any                   `json:"objects"`
+	Namespace string                             `json:"namespace,omitempty"`
+}
+
+// AdapterDeclarativeDeleteResponse is returned by a target integration after deleting objects.
+type AdapterDeclarativeDeleteResponse struct {
+	Operation   string                      `json:"operation,omitempty"`
+	Uninstalled bool                        `json:"uninstalled"`
+	Mode        string                      `json:"mode,omitempty"`
+	Resources   []InstallationResourceState `json:"resources,omitempty"`
+	Metadata    map[string]any              `json:"metadata,omitempty"`
+}
+
 // AdapterTargetIntegrationContext gives one target-side adapter the resolved manifests it needs.
 type AdapterTargetIntegrationContext struct {
 	Type         ManifestReference               `json:"type"`

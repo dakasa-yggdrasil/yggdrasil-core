@@ -741,7 +741,7 @@ func normalizeWorkflowStepID(value string) string {
 
 // executeProductWorkflowStep runs a workflow step with use.kind = "product".
 // Supported operations: materialize, installation.reconcile, installation.apply,
-// installation.observe, installation_state.discover.
+// installation.observe, installation.uninstall, installation_state.discover.
 //
 // The step's with.product_ref identifies the target Product, and optional
 // with.target_overrides redirect specific components to different integration
@@ -818,6 +818,23 @@ func executeProductWorkflowStep(
 		result.Metadata = map[string]any{
 			"product_ref":         manifestReferenceFromRecord(productManifest),
 			"components_observed": len(observeResults),
+		}
+
+	case "installation.uninstall":
+		uninstallResults, err := executor.uninstallProduct(ctx, productManifest, spec)
+		if err != nil {
+			result.Error = fmt.Sprintf("uninstall: %v", err)
+			result.FinishedAt = time.Now().UTC()
+			return result
+		}
+		emitProductInstallationUninstalledEvent(ctx, db, logger, productManifest, spec, uninstallResults, targetOverrides)
+		result.Status = "succeeded"
+		result.Metadata = map[string]any{
+			"product_ref":            manifestReferenceFromRecord(productManifest),
+			"components_uninstalled": len(uninstallResults),
+		}
+		if len(targetOverrides) > 0 {
+			result.Metadata["target_overrides_used"] = len(targetOverrides)
 		}
 
 	case "materialize", "installation.reconcile", "installation_state.discover":

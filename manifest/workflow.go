@@ -20,6 +20,7 @@ var (
 		"installation.reconcile",
 		"installation.apply",
 		"installation.observe",
+		"installation.uninstall",
 		"installation_state.discover",
 	}
 	workflowTemplatePattern = regexp.MustCompile(`{{\s*([^{}]+?)\s*}}`)

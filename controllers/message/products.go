@@ -20,6 +20,7 @@ const (
 	queueProductInstallationReconcile     = "yggdrasil-core.product.installation.reconcile"
 	queueProductInstallationApply         = "yggdrasil-core.product.installation.apply"
 	queueProductInstallationObserve       = "yggdrasil-core.product.installation.observe"
+	queueProductInstallationUninstall     = "yggdrasil-core.product.installation.uninstall"
 	queueProductInstallationStateDiscover = "yggdrasil-core.product.installation_state.discover"
 )
 
@@ -48,6 +49,12 @@ func productConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) []C
 			Timeout: 30 * time.Second,
 			QoS:     5,
 			Handler: productObserveInstallationHandler(conn, db, logger),
+		},
+		{
+			Queue:   queueProductInstallationUninstall,
+			Timeout: 30 * time.Second,
+			QoS:     5,
+			Handler: productUninstallInstallationHandler(conn, db, logger),
 		},
 		{
 			Queue:   queueProductInstallationStateDiscover,
@@ -338,6 +345,133 @@ func productObserveInstallationHandler(conn *amqp.Connection, db *sql.DB, logger
 			Product: manifestReferenceFromRecord(productManifest),
 			Results: results,
 		}, logger)
+	}
+}
+
+// productUninstallInstallationHandler removes a product installation from
+// its declared target integrations. It regenerates the component object
+// sets using the same reconcile path as apply, then dispatches a
+// declarative_delete to the target adapter.
+//
+// IMPORTANT: uninstall requires the target adapter (e.g.
+// integration-kubernetes) to implement the `declarative_delete` action.
+// Adapters that do not implement it will return an RPC error — the core
+// surfaces it fail-loud rather than silently succeeding.
+func productUninstallInstallationHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
+	return func(ctx context.Context, d amqp.Delivery) error {
+		var req model.UninstallProductInstallationRequest
+		if err := json.Unmarshal(d.Body, &req); err != nil {
+			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+		}
+
+		productManifest, spec, err := resolveProductManifestSpec(ctx, db, req.Product)
+		if err != nil {
+			return replyFailure(ctx, conn, d, manifestLookupErrorCode(err), err, logger)
+		}
+
+		if err := validateTargetOverrides(req.TargetOverrides, spec); err != nil {
+			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+		}
+
+		executor := newProductTargetExecutor(conn, db, logger).withTargetOverrides(req.TargetOverrides)
+		results, err := executor.uninstallProduct(ctx, productManifest, spec)
+		if err != nil {
+			return replyFailure(ctx, conn, d, integrationAwareErrorCode(err, "uninstall_failed"), err, logger)
+		}
+
+		emitProductInstallationUninstalledEvent(ctx, db, logger, productManifest, spec, results, req.TargetOverrides)
+
+		return replySuccess(ctx, conn, d, model.UninstallProductInstallationResponse{
+			Product: manifestReferenceFromRecord(productManifest),
+			Results: results,
+		}, logger)
+	}
+}
+
+// emitProductInstallationUninstalledEvent records the uninstall success
+// on the core event stream. Failures are logged best-effort and do not
+// affect the caller response.
+func emitProductInstallationUninstalledEvent(
+	ctx context.Context,
+	db *sql.DB,
+	logger *zap.Logger,
+	productManifest model.Manifest,
+	spec model.ProductManifestSpec,
+	results []model.ProductInstallationUninstallResult,
+	targetOverrides map[string]model.TargetOverride,
+) {
+	_ = results
+	components := make([]map[string]interface{}, 0, len(spec.Components))
+	for _, c := range spec.Components {
+		targetMap := map[string]interface{}{
+			"kind":      c.Target.Kind,
+			"namespace": c.Target.Namespace,
+		}
+		if c.Target.IntegrationInstanceRef.Name != "" {
+			targetMap["integration_instance_ref"] = map[string]interface{}{
+				"name":      c.Target.IntegrationInstanceRef.Name,
+				"namespace": c.Target.IntegrationInstanceRef.Namespace,
+			}
+		}
+		components = append(components, map[string]interface{}{
+			"name":   c.Name,
+			"target": targetMap,
+		})
+	}
+
+	payload := map[string]interface{}{
+		"product_ref": map[string]interface{}{
+			"id":        productManifest.ID.String(),
+			"name":      productManifest.Metadata.Name,
+			"namespace": productManifest.Metadata.Namespace,
+			"version":   productManifest.Version,
+		},
+		"components_uninstalled": components,
+	}
+
+	if len(targetOverrides) > 0 {
+		overridesMap := make(map[string]interface{}, len(targetOverrides))
+		for key, override := range targetOverrides {
+			entry := map[string]interface{}{
+				"integration_instance_ref": map[string]interface{}{
+					"name":      override.IntegrationInstanceRef.Name,
+					"namespace": override.IntegrationInstanceRef.Namespace,
+				},
+			}
+			if override.Namespace != "" {
+				entry["namespace"] = override.Namespace
+			}
+			overridesMap[key] = entry
+		}
+		payload["target_overrides_used"] = overridesMap
+	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		if logger != nil {
+			logger.Warn("emit product.installation.uninstalled: begin tx failed", zap.Error(err))
+		}
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err := repository.EmitEvent(ctx, tx, model.EmitEventRequest{
+		Type:          "product.installation.uninstalled",
+		SchemaVersion: "v1",
+		AggregateType: "product",
+		AggregateID:   productManifest.ID.String(),
+		Payload:       payload,
+	}); err != nil {
+		if logger != nil {
+			logger.Warn("emit product.installation.uninstalled: emit failed", zap.Error(err))
+		}
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		if logger != nil {
+			logger.Warn("emit product.installation.uninstalled: commit failed", zap.Error(err))
+		}
 	}
 }
 
@@ -1005,6 +1139,75 @@ func (e *productTargetExecutor) observeProduct(
 	return results, nil
 }
 
+// uninstallProduct walks the product's components in iteration order and
+// dispatches a declarative_delete for each integration-sourced component
+// on the resolved target. It does NOT recursively uninstall product
+// requirements — a "product X depends on product Y" relationship is for
+// install ordering, not for teardown cascade. Uninstalling a dependent
+// should not force uninstall of its dependency (other Products may still
+// be using Y). Callers that want a full-cascade teardown must walk the
+// dependency graph themselves and call uninstall on each product.
+func (e *productTargetExecutor) uninstallProduct(
+	ctx context.Context,
+	productManifest model.Manifest,
+	spec model.ProductManifestSpec,
+) ([]model.ProductInstallationUninstallResult, error) {
+	productRef := manifestReferenceFromRecord(productManifest)
+	key := requirementReferenceKey(productRef)
+
+	if _, exists := e.completed[key]; exists {
+		return nil, nil
+	}
+	if _, exists := e.inFlight[key]; exists {
+		return nil, fmt.Errorf("cyclic product requirement detected for %s/%s", productRef.Namespace, productRef.Name)
+	}
+
+	e.inFlight[key] = struct{}{}
+	defer delete(e.inFlight, key)
+
+	results := make([]model.ProductInstallationUninstallResult, 0, len(spec.Components))
+	for _, component := range spec.Components {
+		if strings.ToLower(strings.TrimSpace(component.Source.Kind)) != "integration" {
+			continue
+		}
+
+		// Target overrides matter during uninstall too — if the original
+		// apply was redirected, the delete must target the same cluster.
+		component = e.applyTargetOverride(component)
+
+		componentResults, err := e.uninstallComponent(ctx, productRef, spec, component)
+		if err != nil {
+			return nil, err
+		}
+		results = append(results, componentResults...)
+	}
+
+	e.completed[key] = struct{}{}
+	return results, nil
+}
+
+// uninstallComponent regenerates the component's object set via reconcile
+// (same path as apply) and dispatches a declarative_delete. Dependencies
+// are NOT uninstalled — see uninstallProduct for rationale.
+func (e *productTargetExecutor) uninstallComponent(
+	ctx context.Context,
+	productRef model.ManifestReference,
+	spec model.ProductManifestSpec,
+	component model.ProductComponentSpec,
+) ([]model.ProductInstallationUninstallResult, error) {
+	reconcileResult, err := reconcileIntegrationComponent(ctx, e.conn, e.db, productRef, spec, component)
+	if err != nil {
+		return nil, err
+	}
+
+	uninstalled, err := e.uninstallComponentTarget(ctx, productRef, spec, component, reconcileResult)
+	if err != nil {
+		return nil, err
+	}
+
+	return []model.ProductInstallationUninstallResult{uninstalled}, nil
+}
+
 func (e *productTargetExecutor) applyComponent(
 	ctx context.Context,
 	productRef model.ManifestReference,
@@ -1300,6 +1503,82 @@ func (e *productTargetExecutor) observeComponentTarget(
 		Operation:      "observe_objects",
 		Status:         response.Status,
 		Observed:       response.Observed,
+		Resources:      response.Resources,
+		TargetType:     manifestReferencePointer(manifestReferenceFromRecord(targetType)),
+		TargetInstance: manifestReferencePointer(manifestReferenceFromRecord(targetInstance)),
+		Metadata:       metadata,
+	}, nil
+}
+
+func (e *productTargetExecutor) uninstallComponentTarget(
+	ctx context.Context,
+	productRef model.ManifestReference,
+	spec model.ProductManifestSpec,
+	component model.ProductComponentSpec,
+	reconcileResult model.ProductInstallationReconcileResult,
+) (model.ProductInstallationUninstallResult, error) {
+	if strings.ToLower(strings.TrimSpace(reconcileResult.Mode)) != "declarative_apply" {
+		return model.ProductInstallationUninstallResult{}, fmt.Errorf("component %q reconcile mode %q is unsupported for target uninstall", component.Name, reconcileResult.Mode)
+	}
+
+	targetInstance, targetInstanceSpec, targetType, targetTypeSpec, err := resolveIntegrationInstance(ctx, e.conn, e.db, component.Target.IntegrationInstanceRef)
+	if err != nil {
+		return model.ProductInstallationUninstallResult{}, fmt.Errorf("resolve target integration %s/%s: %w", component.Target.IntegrationInstanceRef.Namespace, component.Target.IntegrationInstanceRef.Name, err)
+	}
+
+	if err := validateTargetProvider(component.Target.Kind, targetTypeSpec.Provider); err != nil {
+		return model.ProductInstallationUninstallResult{}, err
+	}
+
+	queue := strings.TrimSpace(targetTypeSpec.Adapter.Queues.Execute)
+	if queue == "" {
+		return model.ProductInstallationUninstallResult{}, fmt.Errorf("target integration type %s/%s does not expose an execute queue", targetType.Metadata.Namespace, targetType.Metadata.Name)
+	}
+
+	timeout := time.Duration(targetTypeSpec.Adapter.TimeoutSeconds) * time.Second
+	if timeout <= 0 {
+		timeout = 30 * time.Second
+	}
+
+	rpcCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	request := model.AdapterDeclarativeDeleteRequest{
+		Operation: "declarative_delete",
+		Context: model.AdapterGenerateInstallationContext{
+			Product:   productRef,
+			Component: component.Name,
+			Category:  spec.Category,
+			Class:     spec.Class,
+		},
+		Target: model.AdapterTargetIntegrationContext{
+			Type:         manifestReferenceFromRecord(targetType),
+			TypeSpec:     targetTypeSpec,
+			Instance:     manifestReferenceFromRecord(targetInstance),
+			InstanceSpec: targetInstanceSpec,
+		},
+		Objects:   reconcileResult.Objects,
+		Namespace: component.Target.Namespace,
+	}
+
+	var response model.AdapterDeclarativeDeleteResponse
+	if err := callContractRPC(rpcCtx, e.conn, queue, declarativeDeleteContract, request, &response); err != nil {
+		return model.ProductInstallationUninstallResult{}, fmt.Errorf("call target execute queue %q: %w", queue, err)
+	}
+	if strings.TrimSpace(response.Operation) != "" && response.Operation != "declarative_delete" {
+		return model.ProductInstallationUninstallResult{}, fmt.Errorf("unexpected target adapter operation %q", response.Operation)
+	}
+
+	metadata := cloneMap(response.Metadata)
+	metadata["source_integration_type"] = reconcileResult.IntegrationType
+	metadata["source_integration_instance"] = reconcileResult.IntegrationInstance
+	metadata["planned_mode"] = reconcileResult.Mode
+
+	return model.ProductInstallationUninstallResult{
+		Name:           component.Name,
+		Operation:      "declarative_delete",
+		Mode:           response.Mode,
+		Uninstalled:    response.Uninstalled,
 		Resources:      response.Resources,
 		TargetType:     manifestReferencePointer(manifestReferenceFromRecord(targetType)),
 		TargetInstance: manifestReferencePointer(manifestReferenceFromRecord(targetInstance)),
