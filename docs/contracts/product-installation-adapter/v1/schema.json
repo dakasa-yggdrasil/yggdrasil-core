@@ -383,6 +383,36 @@
       },
       "additionalProperties": false
     },
+    "declarativeDeleteRequest": {
+      "type": "object",
+      "required": ["operation", "context", "target", "objects"],
+      "properties": {
+        "operation": { "type": "string" },
+        "context": { "$ref": "#/$defs/generateInstallationContext" },
+        "target": { "$ref": "#/$defs/targetIntegrationContext" },
+        "objects": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true }
+        },
+        "namespace": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "declarativeDeleteResponse": {
+      "type": "object",
+      "required": ["uninstalled"],
+      "properties": {
+        "operation": { "type": "string" },
+        "uninstalled": { "type": "boolean" },
+        "mode": { "type": "string" },
+        "resources": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/installationResourceState" }
+        },
+        "metadata": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": false
+    },
     "installationResourceState": {
       "type": "object",
       "required": ["kind", "name"],

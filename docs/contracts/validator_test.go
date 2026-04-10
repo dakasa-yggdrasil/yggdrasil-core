@@ -74,6 +74,39 @@ func TestValidateProductInstallationContracts(t *testing.T) {
 	if err := Validate(FamilyProductInstallationAdapterV1, "declarativeApplyRequest", applyReq); err != nil {
 		t.Fatalf("Validate(declarativeApplyRequest) error = %v", err)
 	}
+
+	deleteReq := model.AdapterDeclarativeDeleteRequest{
+		Operation: "declarative_delete",
+		Context:   req.Context,
+		Target: model.AdapterTargetIntegrationContext{
+			Type:         sampleManifestReference("integration_type", "global", "kubernetes"),
+			TypeSpec:     sampleIntegrationTypeSpec(),
+			Instance:     sampleManifestReference("integration_instance", "global", "kubernetes-platform"),
+			InstanceSpec: sampleIntegrationInstanceSpec(),
+		},
+		Objects: []map[string]any{
+			{
+				"apiVersion": "v1",
+				"kind":       "Namespace",
+				"metadata": map[string]any{
+					"name": "grafana",
+				},
+			},
+		},
+		Namespace: "grafana",
+	}
+
+	if err := Validate(FamilyProductInstallationAdapterV1, "declarativeDeleteRequest", deleteReq); err != nil {
+		t.Fatalf("Validate(declarativeDeleteRequest) error = %v", err)
+	}
+
+	deleteResp := model.AdapterDeclarativeDeleteResponse{
+		Operation:   "declarative_delete",
+		Uninstalled: true,
+	}
+	if err := Validate(FamilyProductInstallationAdapterV1, "declarativeDeleteResponse", deleteResp); err != nil {
+		t.Fatalf("Validate(declarativeDeleteResponse) error = %v", err)
+	}
 }
 
 func TestValidateRejectsMissingRequiredField(t *testing.T) {

@@ -52,6 +52,12 @@ var (
 		ResponseDef: "observeObjectsResponse",
 		Label:       "target observe objects",
 	}
+	declarativeDeleteContract = rpcContractSpec{
+		Family:      contractdocs.FamilyProductInstallationAdapterV1,
+		RequestDef:  "declarativeDeleteRequest",
+		ResponseDef: "declarativeDeleteResponse",
+		Label:       "target declarative delete",
+	}
 )
 
 func callContractRPC(
