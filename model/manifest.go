@@ -62,6 +62,7 @@ type ListManifestRequest struct {
 	Name       string            `json:"name,omitempty"`
 	Labels     map[string]string `json:"labels,omitempty"`
 	ActiveOnly bool              `json:"active_only,omitempty"`
+	Pagination PaginationRequest `json:"pagination,omitempty"`
 }
 
 // GetManifestRequest is the RabbitMQ payload for fetching a manifest by id.
