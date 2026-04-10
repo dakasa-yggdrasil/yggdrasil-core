@@ -1,0 +1,40 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_instance",
+  "metadata": {
+    "name": "rabbitmq-on-kubernetes-platform-prod",
+    "namespace": "global",
+    "description": "Default RabbitMQ on Kubernetes integration instance used to generate shared broker products.",
+    "labels": {
+      "bootstrap_source": "integration-rabbitmq-on-kubernetes",
+      "provider": "rabbitmq"
+    }
+  },
+  "spec": {
+    "type_ref": {
+      "name": "rabbitmq-on-kubernetes",
+      "namespace": "global"
+    },
+    "status": "active",
+    "owners": [
+      "team:platform"
+    ],
+    "config": {
+      "default_blueprint": "shared-broker",
+      "default_cluster_name": "platform-rabbitmq",
+      "default_namespace": "rabbitmq-system",
+      "default_replicas": 3,
+      "default_storage": "50Gi",
+      "default_service_type": "ClusterIP",
+      "persistence_enabled": true
+    },
+    "discovery": {
+      "enabled": false,
+      "mode": "manual"
+    },
+    "execution": {
+      "default_dry_run": false,
+      "max_batch_size": 10
+    }
+  }
+}

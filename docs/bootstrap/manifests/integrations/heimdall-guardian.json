@@ -1,0 +1,63 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_instance",
+  "metadata": {
+    "name": "heimdall-guardian",
+    "namespace": "global",
+    "description": "Default Heimdall ecosystem guardian instance used by the core for ecosystem observation and remediation planning.",
+    "labels": {
+      "bootstrap_source": "integration-heimdall",
+      "provider": "heimdall"
+    }
+  },
+  "spec": {
+    "type_ref": {
+      "name": "heimdall",
+      "namespace": "global"
+    },
+    "status": "active",
+    "owners": [
+      "team:platform"
+    ],
+    "credentials": {},
+    "config": {
+      "guardian_name": "Heimdall",
+      "observation_scope": "global",
+      "critical_auto_remediation_enabled": true,
+      "recommendation_limit": 10,
+      "default_owner_team": "team:platform",
+      "default_repository_owner": "dakasa-yggdrasil",
+      "default_deploy_workflow": "deploy.yml",
+      "queue_backlog_threshold": 1000,
+      "error_rate_threshold": 0.2,
+      "restart_count_threshold": 3,
+      "sync_lag_threshold_seconds": 300,
+      "secret_expiry_warning_hours": 72,
+      "monthly_cost_budget_usd": 1500,
+      "utilization_floor": 0.35,
+      "idle_environment_hours": 24,
+      "max_rightsize_change_percent": 25,
+      "llm_enabled": false,
+      "llm_mode": "fallback",
+      "llm_provider_order": "gpt,claude",
+      "llm_base_url": "https://api.openai.com/v1",
+      "llm_model": "gpt-5.4-mini-2026-03-17",
+      "llm_gpt_base_url": "https://api.openai.com/v1",
+      "llm_gpt_model": "gpt-5.4-mini-2026-03-17",
+      "llm_claude_base_url": "https://api.anthropic.com/v1",
+      "llm_claude_model": "claude-sonnet-4-20250514",
+      "llm_claude_version": "2023-06-01",
+      "llm_system_prompt": "",
+      "llm_timeout_seconds": 30,
+      "llm_temperature": 0.1
+    },
+    "discovery": {
+      "enabled": false,
+      "mode": "manual"
+    },
+    "execution": {
+      "default_dry_run": true,
+      "max_batch_size": 50
+    }
+  }
+}

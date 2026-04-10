@@ -1,0 +1,123 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "workflow",
+  "metadata": {
+    "name": "ecosystem-repository-commit",
+    "namespace": "global",
+    "description": "Template workflow that reacts to one repository commit event and dispatches the target repository deploy workflow through the GitHub integration.",
+    "labels": {
+      "bootstrap_source": "yggdrasil-core",
+      "workflow_type": "deployment",
+      "workflow_trigger": "commit",
+      "workflow_template": "ecosystem-repository-commit"
+    }
+  },
+  "spec": {
+    "trigger": {
+      "mode": "event"
+    },
+    "input_schema": {
+      "required": [
+        "repository",
+        "ref",
+        "component_kind",
+        "component_name"
+      ],
+      "properties": {
+        "repository": {
+          "type": "string",
+          "description": "GitHub repository in owner/name form."
+        },
+        "ref": {
+          "type": "string",
+          "description": "Git ref used to dispatch the repository deploy workflow."
+        },
+        "component_kind": {
+          "type": "string",
+          "description": "Ecosystem component kind, for example product, surface, or integration."
+        },
+        "component_name": {
+          "type": "string",
+          "description": "Stable component name inside the ecosystem."
+        },
+        "deploy_workflow": {
+          "type": "string",
+          "description": "GitHub Actions workflow file dispatched for deployment."
+        },
+        "commit_sha": {
+          "type": "string",
+          "description": "Commit SHA associated with the deploy event."
+        },
+        "actor": {
+          "type": "string",
+          "description": "Actor that caused the deploy event."
+        },
+        "event_name": {
+          "type": "string",
+          "description": "Source event name, normally push or workflow_dispatch."
+        },
+        "environment": {
+          "type": "string",
+          "description": "Optional target environment label forwarded to the repository deploy workflow."
+        },
+        "commit_message": {
+          "type": "string",
+          "description": "Optional commit message summary."
+        },
+        "source_run_url": {
+          "type": "string",
+          "description": "Optional URL of the source automation run."
+        },
+        "source_run_id": {
+          "type": "string",
+          "description": "Optional identifier of the source automation run."
+        }
+      }
+    },
+    "defaults": {
+      "deploy_workflow": "deploy.yml",
+      "commit_sha": "",
+      "actor": "",
+      "event_name": "commit",
+      "environment": "production",
+      "commit_message": "",
+      "source_run_url": "",
+      "source_run_id": ""
+    },
+    "steps": [
+      {
+        "id": "dispatch-repository-deploy",
+        "description": "Dispatch the target repository deploy workflow through the global GitHub integration.",
+        "use": {
+          "kind": "integration",
+          "instance_ref": {
+            "namespace": "global",
+            "name": "github-caller"
+          },
+          "capability": "dispatch_workflow"
+        },
+        "with": {
+          "repository": "{{ inputs.repository }}",
+          "workflow": "{{ inputs.deploy_workflow }}",
+          "ref": "{{ inputs.ref }}",
+          "inputs": {
+            "component_kind": "{{ inputs.component_kind }}",
+            "component_name": "{{ inputs.component_name }}",
+            "commit_sha": "{{ inputs.commit_sha }}",
+            "actor": "{{ inputs.actor }}",
+            "event_name": "{{ inputs.event_name }}",
+            "environment": "{{ inputs.environment }}",
+            "commit_message": "{{ inputs.commit_message }}",
+            "source_run_url": "{{ inputs.source_run_url }}",
+            "source_run_id": "{{ inputs.source_run_id }}"
+          },
+          "metadata": "{{ metadata }}"
+        },
+        "retry": {
+          "max_attempts": 2,
+          "backoff_seconds": 2
+        }
+      }
+    ]
+  }
+}

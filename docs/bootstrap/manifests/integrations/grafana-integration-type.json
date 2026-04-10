@@ -1,0 +1,162 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_type",
+  "metadata": {
+    "name": "grafana",
+    "namespace": "global",
+    "description": "Bootstrap integration type for the Grafana runtime and governance plugin.",
+    "labels": {
+      "bootstrap_source": "integration-grafana",
+      "provider": "grafana",
+      "yggdrasil.io/catalog-domain": "grafana",
+      "yggdrasil.io/catalog-section": "operations",
+      "yggdrasil.io/catalog-entry": "api"
+    }
+  },
+  "spec": {
+    "provider": "grafana",
+    "adapter": {
+      "transport": "rabbitmq",
+      "version": "1.0.0",
+      "queues": {
+        "describe": "yggdrasil.adapter.grafana.describe",
+        "execute": "yggdrasil.adapter.grafana.execute"
+      },
+      "timeout_seconds": 20
+    },
+    "capabilities": [
+      "describe",
+      "execute"
+    ],
+    "guardian_support": {
+      "mode": "light",
+      "signals": {
+        "error_rate": ["error_rate", "failure_rate"],
+        "auth_denied": ["auth_denied", "unauthorized", "forbidden"],
+        "sync_lag_seconds": ["sync_lag_seconds", "reconciliation_lag_seconds"]
+      }
+    },
+    "credential_schema": {
+      "mode": "inline",
+      "properties": {
+        "token": {
+          "type": "string",
+          "description": "Grafana API token used as Bearer authentication.",
+          "secret": true
+        },
+        "username": {
+          "type": "string",
+          "description": "Grafana username used when token auth is not configured."
+        },
+        "password": {
+          "type": "string",
+          "description": "Grafana password used when token auth is not configured.",
+          "secret": true
+        }
+      }
+    },
+    "instance_schema": {
+      "mode": "inline",
+      "properties": {
+        "base_url": {
+          "type": "string",
+          "description": "Grafana API base URL.",
+          "default": "http://localhost:3000/api"
+        },
+        "default_folder_uid": {
+          "type": "string",
+          "description": "Default folder UID used for dashboard upserts."
+        },
+        "default_folder_title": {
+          "type": "string",
+          "description": "Default folder title used when ensuring folders."
+        },
+        "org_id": {
+          "type": "string",
+          "description": "Optional Grafana organization ID forwarded as X-Grafana-Org-Id."
+        },
+        "insecure_skip_verify": {
+          "type": "boolean",
+          "description": "Skip TLS certificate verification when calling the Grafana API.",
+          "default": false
+        }
+      }
+    },
+    "resource_types": [
+      {
+        "name": "folder",
+        "canonical_prefix": "thirdparty.grafana.folder",
+        "identity_template": "folder.{uid}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_folder"
+        ]
+      },
+      {
+        "name": "datasource",
+        "canonical_prefix": "thirdparty.grafana.datasource",
+        "identity_template": "datasource.{name}",
+        "discoverable": false,
+        "default_actions": [
+          "upsert_datasource"
+        ]
+      },
+      {
+        "name": "dashboard",
+        "canonical_prefix": "thirdparty.grafana.dashboard",
+        "identity_template": "dashboard.{uid}",
+        "discoverable": false,
+        "default_actions": [
+          "upsert_dashboard"
+        ]
+      }
+    ],
+    "action_catalog": [
+      {
+        "name": "ensure_folder",
+        "description": "Ensure one Grafana folder exists and is ready for dashboard ownership.",
+        "resource_types": [
+          "folder"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "upsert_datasource",
+        "description": "Create or update one Grafana datasource by name.",
+        "resource_types": [
+          "datasource"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "upsert_dashboard",
+        "description": "Create or update one Grafana dashboard using overwrite semantics.",
+        "resource_types": [
+          "dashboard"
+        ],
+        "idempotent": true
+      }
+    ],
+    "discovery": {
+      "mode": "push",
+      "cursor": "none"
+    },
+    "normalization": {
+      "external_id_path": "uid",
+      "name_path": "title",
+      "owner_path": "folderUid",
+      "fallback_resource_prefix": "thirdparty.grafana.custom"
+    },
+    "execution": {
+      "supports_dry_run": false,
+      "idempotent_actions": [
+        "ensure_folder",
+        "upsert_datasource",
+        "upsert_dashboard"
+      ]
+    },
+    "extensions": {
+      "allow_custom_actions": true
+    }
+  }
+}

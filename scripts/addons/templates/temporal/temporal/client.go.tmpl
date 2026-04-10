@@ -1,0 +1,34 @@
+package temporal
+
+import (
+	"os"
+
+	tc "go.temporal.io/sdk/client"
+	"go.temporal.io/sdk/worker"
+)
+
+type WorkerSpec struct {
+	TaskQueue  string
+	Workflows  []any
+	Activities []any
+}
+
+// StartWorker registers the workflows and activities, then starts the worker.
+func StartWorker(c tc.Client, spec WorkerSpec) (worker.Worker, error) {
+	w := worker.New(c, spec.TaskQueue, worker.Options{
+		BuildID: os.Getenv("TEMPORAL_BUILD_ID"),
+	})
+
+	for _, workflowFn := range spec.Workflows {
+		w.RegisterWorkflow(workflowFn)
+	}
+	for _, activityFn := range spec.Activities {
+		w.RegisterActivity(activityFn)
+	}
+
+	if err := w.Start(); err != nil {
+		return nil, err
+	}
+
+	return w, nil
+}

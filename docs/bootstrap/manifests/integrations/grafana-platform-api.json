@@ -1,0 +1,39 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_instance",
+  "metadata": {
+    "name": "grafana-platform-api",
+    "namespace": "global",
+    "description": "Default Grafana runtime integration instance used for dashboards, datasources, and folders.",
+    "labels": {
+      "bootstrap_source": "integration-grafana",
+      "provider": "grafana"
+    }
+  },
+  "spec": {
+    "type_ref": {
+      "name": "grafana",
+      "namespace": "global"
+    },
+    "status": "active",
+    "owners": [
+      "team:platform"
+    ],
+    "credentials": {
+      "token": "change-me"
+    },
+    "config": {
+      "base_url": "https://grafana.example.com/api",
+      "default_folder_uid": "platform",
+      "default_folder_title": "Platform"
+    },
+    "discovery": {
+      "enabled": false,
+      "mode": "manual"
+    },
+    "execution": {
+      "default_dry_run": false,
+      "max_batch_size": 25
+    }
+  }
+}

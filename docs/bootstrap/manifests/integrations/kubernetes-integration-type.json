@@ -1,0 +1,140 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_type",
+  "metadata": {
+    "name": "kubernetes",
+    "namespace": "global",
+    "description": "Bootstrap integration type for the Kubernetes target plugin used to apply and observe installation objects.",
+    "labels": {
+      "bootstrap_source": "integration-kubernetes",
+      "provider": "kubernetes",
+      "yggdrasil.io/catalog-domain": "kubernetes",
+      "yggdrasil.io/catalog-section": "operations",
+      "yggdrasil.io/catalog-entry": "api"
+    }
+  },
+  "spec": {
+    "provider": "kubernetes",
+    "adapter": {
+      "transport": "rabbitmq",
+      "version": "1.0.0",
+      "queues": {
+        "describe": "yggdrasil.adapter.kubernetes.describe",
+        "execute": "yggdrasil.adapter.kubernetes.execute"
+      },
+      "timeout_seconds": 30
+    },
+    "capabilities": [
+      "describe",
+      "execute"
+    ],
+    "guardian_support": {
+      "mode": "light",
+      "signals": {
+        "oom_killed": ["oom_killed", "oom"],
+        "restart_count": ["restart_count", "restarts"],
+        "error_rate": ["error_rate", "failure_rate"],
+        "memory_pressure": ["memory_pressure"],
+        "disk_pressure": ["disk_pressure"],
+        "scheduling_failure": ["scheduling_failure", "failed_scheduling", "unschedulable"],
+        "insufficient_cpu": ["insufficient_cpu", "cpu_pressure", "cpu_exhausted"],
+        "utilization": ["utilization", "avg_utilization"],
+        "overprovisioned": ["overprovisioned"]
+      }
+    },
+    "credential_schema": {
+      "mode": "inline",
+      "properties": {
+        "kubeconfig": {
+          "type": "string",
+          "description": "Inline kubeconfig content.",
+          "secret": true
+        }
+      }
+    },
+    "instance_schema": {
+      "mode": "inline",
+      "properties": {
+        "in_cluster": {
+          "type": "boolean",
+          "description": "Use in-cluster Kubernetes authentication.",
+          "default": false
+        },
+        "kubeconfig_path": {
+          "type": "string",
+          "description": "Path to a kubeconfig file on the worker filesystem."
+        },
+        "kubeconfig": {
+          "type": "string",
+          "description": "Inline kubeconfig content.",
+          "secret": true
+        },
+        "context": {
+          "type": "string",
+          "description": "Optional kubeconfig context override."
+        },
+        "default_namespace": {
+          "type": "string",
+          "description": "Namespace used when desired objects omit one.",
+          "default": "default"
+        },
+        "field_manager": {
+          "type": "string",
+          "description": "Field manager used for server-side apply.",
+          "default": "yggdrasil"
+        }
+      }
+    },
+    "resource_types": [
+      {
+        "name": "object",
+        "canonical_prefix": "thirdparty.kubernetes.object",
+        "identity_template": "object.{namespace}.{kind}.{name}",
+        "discoverable": false,
+        "default_actions": [
+          "declarative_apply",
+          "observe_objects"
+        ]
+      }
+    ],
+    "action_catalog": [
+      {
+        "name": "declarative_apply",
+        "description": "Apply a desired object set to a Kubernetes cluster using server-side apply.",
+        "resource_types": [
+          "object"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "observe_objects",
+        "description": "Observe the current state of a desired object set in a Kubernetes cluster.",
+        "resource_types": [
+          "object"
+        ],
+        "idempotent": true
+      }
+    ],
+    "discovery": {
+      "mode": "push",
+      "cursor": "none"
+    },
+    "normalization": {
+      "external_id_path": "metadata.uid",
+      "name_path": "metadata.name",
+      "owner_path": "metadata.namespace",
+      "fallback_resource_prefix": "thirdparty.kubernetes.custom"
+    },
+    "execution": {
+      "supports_dry_run": false,
+      "idempotent_actions": [
+        "declarative_apply",
+        "observe_objects"
+      ]
+    },
+    "extensions": {
+      "allow_custom_resource_types": true,
+      "preserve_raw_payload": true
+    }
+  }
+}

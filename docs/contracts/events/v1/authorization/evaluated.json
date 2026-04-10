@@ -1,0 +1,41 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/authorization/evaluated.json",
+  "title": "authorization.evaluated payload",
+  "description": "Payload emitted after an RBAC+Policy authorization decision.",
+  "type": "object",
+  "required": ["resource", "action", "decision"],
+  "properties": {
+    "collaborator_id": { "type": "string" },
+    "resource": { "type": "string" },
+    "action": { "type": "string" },
+    "decision": {
+      "type": "string",
+      "enum": ["allow", "deny", "not_applicable"]
+    },
+    "matched_roles": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "matched_rules": {
+      "type": "array",
+      "items": { "type": "string" }
+    },
+    "rbac_manifest_ref": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string" },
+        "namespace": { "type": "string" }
+      }
+    },
+    "policy_manifest_ref": {
+      "type": "object",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string" },
+        "namespace": { "type": "string" }
+      }
+    }
+  }
+}

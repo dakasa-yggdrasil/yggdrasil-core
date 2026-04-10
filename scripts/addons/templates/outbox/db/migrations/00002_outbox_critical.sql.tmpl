@@ -1,0 +1,13 @@
+CREATE TABLE IF NOT EXISTS outbox_critical (
+    id UUID PRIMARY KEY,
+    exchange TEXT NOT NULL,
+    routing_key TEXT NOT NULL,
+    headers JSONB NOT NULL DEFAULT '{}'::jsonb,
+    payload JSONB NOT NULL,
+    created_at TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    published_at TIMESTAMPTZ,
+    error TEXT
+);
+
+CREATE INDEX IF NOT EXISTS outbox_critical_pending_idx
+    ON outbox_critical (published_at, created_at);

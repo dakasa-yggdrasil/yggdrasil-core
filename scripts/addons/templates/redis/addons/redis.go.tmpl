@@ -1,0 +1,38 @@
+package addons
+
+import (
+	"context"
+	"fmt"
+
+	"{{MODULE_PATH}}/internal/runtime"
+	"{{MODULE_PATH}}/store"
+
+	"github.com/redis/go-redis/v9"
+)
+
+func init() {
+	Register("redis", bootstrapRedis, 20)
+}
+
+func bootstrapRedis(ctx context.Context, app *runtime.ServiceApp) error {
+	client := store.NewRedis()
+	if err := store.Ping(ctx, client); err != nil {
+		_ = client.Close()
+		return fmt.Errorf("ping redis: %w", err)
+	}
+
+	app.SetResource("redis", client)
+	app.RegisterCloser(func(context.Context) error { return client.Close() })
+	return nil
+}
+
+// Redis returns the shared Redis client when the addon is installed.
+func Redis(app *runtime.ServiceApp) (*redis.Client, bool) {
+	resource, ok := app.Resource("redis")
+	if !ok {
+		return nil, false
+	}
+
+	client, ok := resource.(*redis.Client)
+	return client, ok
+}

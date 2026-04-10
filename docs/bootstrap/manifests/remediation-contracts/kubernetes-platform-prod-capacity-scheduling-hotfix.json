@@ -1,0 +1,74 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "remediation_contract",
+  "metadata": {
+    "name": "kubernetes-platform-prod-capacity-scheduling-hotfix",
+    "namespace": "global",
+    "description": "Bounded remediation contract for scheduling failures on the production Kubernetes platform integration.",
+    "labels": {
+      "bootstrap_source": "integration-kubernetes",
+      "component_kind": "integration"
+    }
+  },
+  "spec": {
+    "component_kind": "integration",
+    "component_namespace": "global",
+    "component_name": "kubernetes-platform-prod",
+    "actions": [
+      {
+        "name": "capacity_scheduling_hotfix",
+        "mode": "integration_execute",
+        "auto_execute": true,
+        "integration_execute": {
+          "integration": {
+            "namespace": "global",
+            "name": "kubernetes-platform-prod"
+          },
+          "operation": "declarative_apply",
+          "capability": "declarative_apply",
+          "input": {
+            "namespace": "{{ inputs.target_workload_namespace }}",
+            "reconcile": {
+              "strategy": "server_side_apply",
+              "wait": false,
+              "prune": false
+            },
+            "objects": [
+              {
+                "apiVersion": "{{ inputs.target_workload_api_version }}",
+                "kind": "{{ inputs.target_workload_kind }}",
+                "metadata": {
+                  "name": "{{ inputs.target_workload_name }}",
+                  "namespace": "{{ inputs.target_workload_namespace }}"
+                },
+                "spec": {
+                  "template": {
+                    "spec": {
+                      "containers": [
+                        {
+                          "name": "{{ inputs.target_container_name }}",
+                          "resources": {
+                            "requests": {
+                              "cpu": "{{ inputs.target_cpu_request }}"
+                            },
+                            "limits": {
+                              "cpu": "{{ inputs.target_cpu_limit }}"
+                            }
+                          }
+                        }
+                      ]
+                    }
+                  }
+                }
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "metadata": {
+      "environment": "production",
+      "provider": "kubernetes"
+    }
+  }
+}

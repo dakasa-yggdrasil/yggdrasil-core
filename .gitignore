@@ -1,0 +1,47 @@
+# Environment files with secrets
+.env
+.env.local
+.env.*.local
+
+# Go binaries
+*.exe
+*.exe~
+*.dll
+*.so
+*.dylib
+/yggdrasil-core
+/bin/
+/dist/
+
+# Test binary
+*.test
+*.out
+
+# Dependency directories
+vendor/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+/logs/
+
+# Coverage
+coverage.out
+coverage.html
+
+# Temp
+/tmp/
+*.tmp
+
+# Task / local dev
+.task/

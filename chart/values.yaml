@@ -1,0 +1,34 @@
+name: yggdrasil-core
+replicaCount: 3
+image:
+  repository: yggdrasil-core
+  pullPolicy: IfNotPresent
+  tag: "latest"
+
+imagePullSecrets: []
+nameOverride: ""
+fullnameOverride: ""
+
+serviceAccount:
+  create: true
+
+service:
+  port: 9080
+
+envs:
+  PORT: "9080"
+
+resources: 
+  limits:
+    cpu: 100m
+    memory: 128Mi
+  requests:
+    cpu: 100m
+    memory: 128Mi
+
+autoscaling:
+  enabled: true
+  minReplicas: 3
+  maxReplicas: 10
+  targetCPUUtilizationPercentage: 95
+  targetMemoryUtilizationPercentage: 80

@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: <MS-NAME>-credentials
+  labels:
+    app: <MS-NAME>
+data:
+  DB_NAME: <MS-NAME>
+  DB_USER: postgres
+  DB_HOST: <MS-NAME>-database.postgres.svc.cluster.local
+  DB_PASSWORD: someAwesomePassword
+  JWT_KEY: someEncryptedKey
+  API_KEY: SomeApiKey

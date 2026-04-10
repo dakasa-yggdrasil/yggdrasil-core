@@ -1,0 +1,44 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_instance",
+  "metadata": {
+    "name": "grafana-on-kubernetes-platform-prod",
+    "namespace": "global",
+    "description": "Default Grafana on Kubernetes integration instance used to generate Grafana products.",
+    "labels": {
+      "bootstrap_source": "integration-grafana-on-kubernetes",
+      "provider": "grafana"
+    }
+  },
+  "spec": {
+    "type_ref": {
+      "name": "grafana-on-kubernetes",
+      "namespace": "global"
+    },
+    "status": "active",
+    "owners": [
+      "team:platform"
+    ],
+    "config": {
+      "default_blueprint": "single-instance",
+      "default_name": "platform-grafana",
+      "default_namespace": "grafana",
+      "default_image": "grafana/grafana:11.1.0",
+      "default_service_type": "ClusterIP",
+      "default_port": 3000,
+      "default_storage": "20Gi",
+      "default_admin_user": "admin",
+      "default_admin_password": "grafana-admin-change-me",
+      "default_admin_secret_name": "grafana-admin-credentials",
+      "persistence_enabled": true
+    },
+    "discovery": {
+      "enabled": false,
+      "mode": "manual"
+    },
+    "execution": {
+      "default_dry_run": false,
+      "max_batch_size": 10
+    }
+  }
+}

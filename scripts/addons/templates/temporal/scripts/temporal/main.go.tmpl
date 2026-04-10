@@ -1,0 +1,93 @@
+package main
+
+import (
+	"context"
+	"flag"
+	"fmt"
+	"os"
+	"strings"
+	"time"
+
+	serviceTemporal "{{MODULE_PATH}}/temporal"
+
+	tc "go.temporal.io/sdk/client"
+)
+
+func main() {
+	if len(os.Args) < 2 {
+		usage()
+		os.Exit(1)
+	}
+
+	switch os.Args[1] {
+	case "check":
+		if err := runCheck(); err != nil {
+			fmt.Fprintf(os.Stderr, "temporal script error: %v\n", err)
+			os.Exit(1)
+		}
+	case "start":
+		if err := runStart(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "temporal script error: %v\n", err)
+			os.Exit(1)
+		}
+	default:
+		usage()
+		os.Exit(1)
+	}
+}
+
+func usage() {
+	fmt.Println("temporal helper")
+	fmt.Println()
+	fmt.Println("Usage:")
+	fmt.Println("  go run ./scripts/temporal check")
+	fmt.Println("  go run ./scripts/temporal start --name world")
+}
+
+func runCheck() error {
+	cli, err := tc.Dial(tc.Options{
+		HostPort: temporalHostPort(),
+	})
+	if err != nil {
+		return err
+	}
+	defer cli.Close()
+
+	fmt.Printf("Temporal reachable at %s\n", temporalHostPort())
+	return nil
+}
+
+func runStart(args []string) error {
+	fs := flag.NewFlagSet("start", flag.ContinueOnError)
+	name := fs.String("name", "world", "Workflow input name")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	cli, err := tc.Dial(tc.Options{
+		HostPort: temporalHostPort(),
+	})
+	if err != nil {
+		return err
+	}
+	defer cli.Close()
+
+	run, err := cli.ExecuteWorkflow(context.Background(), tc.StartWorkflowOptions{
+		ID:        fmt.Sprintf("{{SERVICE_NAME}}-hello-%d", time.Now().UnixNano()),
+		TaskQueue: serviceTemporal.HelloWorkflowTaskQueue,
+	}, serviceTemporal.HelloWorkflow, serviceTemporal.HelloInput{Name: *name})
+	if err != nil {
+		return err
+	}
+
+	fmt.Printf("workflow_id=%s run_id=%s task_queue=%s\n", run.GetID(), run.GetRunID(), serviceTemporal.HelloWorkflowTaskQueue)
+	return nil
+}
+
+func temporalHostPort() string {
+	hostPort := strings.TrimSpace(os.Getenv("TEMPORAL_HOST_PORT"))
+	if hostPort == "" {
+		return "127.0.0.1:7233"
+	}
+	return hostPort
+}

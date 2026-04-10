@@ -1,0 +1,67 @@
+package addons
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strings"
+
+	"{{MODULE_PATH}}/controllers"
+	"{{MODULE_PATH}}/internal/runtime"
+	serviceTemporal "{{MODULE_PATH}}/temporal"
+
+	tc "go.temporal.io/sdk/client"
+)
+
+func init() {
+	Register("temporal", bootstrapTemporal, 40)
+}
+
+func bootstrapTemporal(_ context.Context, app *runtime.ServiceApp) error {
+	hostPort := strings.TrimSpace(os.Getenv("TEMPORAL_HOST_PORT"))
+	if hostPort == "" {
+		hostPort = "127.0.0.1:7233"
+	}
+
+	cli, err := tc.Dial(tc.Options{HostPort: hostPort})
+	if err != nil {
+		return fmt.Errorf("dial temporal: %w", err)
+	}
+
+	worker, err := serviceTemporal.StartWorker(cli, serviceTemporal.WorkerSpec{
+		TaskQueue:  serviceTemporal.HelloWorkflowTaskQueue,
+		Workflows:  []any{serviceTemporal.HelloWorkflow},
+		Activities: []any{serviceTemporal.HelloActivity},
+	})
+	if err != nil {
+		cli.Close()
+		return fmt.Errorf("start temporal worker: %w", err)
+	}
+
+	app.SetResource("temporal", cli)
+	app.SetResource("temporal_worker", worker)
+	app.RegisterCloser(func(context.Context) error {
+		worker.Stop()
+		return nil
+	})
+	app.RegisterCloser(func(context.Context) error {
+		cli.Close()
+		return nil
+	})
+
+	group := app.Router.Group("/" + app.ServiceName + "/temporal")
+	group.POST("/hello", controllers.RunTemporalHello(app))
+
+	return nil
+}
+
+// TemporalClient returns the shared Temporal client when the addon is installed.
+func TemporalClient(app *runtime.ServiceApp) (tc.Client, bool) {
+	resource, ok := app.Resource("temporal")
+	if !ok {
+		return nil, false
+	}
+
+	client, ok := resource.(tc.Client)
+	return client, ok
+}

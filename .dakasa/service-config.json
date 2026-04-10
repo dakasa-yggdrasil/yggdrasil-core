@@ -1,0 +1,17 @@
+{
+  "Name": "yggdrasil-core",
+  "Scope": "be",
+  "DockerImage": "yggdrasil-core",
+  "DBName": "yggdrasil_core",
+  "DBURLEnv": "DATABASE_URL",
+  "DBDefaultURL": "postgres://postgres:someAwesomePassword@127.0.0.1:5432/yggdrasil_core?sslmode=disable",
+  "MigrationsDir": "db/migrations",
+  "MigrationsTbl": "yggdrasil_core_service_schema_version",
+  "SwaggerDir": "docs/swagger",
+  "ComposeFile": "functional_tests/docker-compose.test.yml",
+  "HasK8s": true,
+  "K8sDir": "platform/kube",
+  "GCPRegistry": {
+    "Repository": "dakasa-app-be"
+  }
+}

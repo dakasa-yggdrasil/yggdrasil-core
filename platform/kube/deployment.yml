@@ -1,0 +1,27 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: <MS-NAME>
+  labels:
+    app: <MS-NAME>
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: <MS-NAME>
+  template:
+    metadata:
+      labels:
+        app: <MS-NAME>
+    spec:
+      terminationGracePeriodSeconds: 30
+      serviceAccountName: <MS-NAME>
+      containers:
+      - name: <MS-NAME>
+        image: <MS-NAME>:<MS-VERSION>
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 9080
+        envFrom:
+        - configMapRef:
+            name: <MS-NAME>-credentials

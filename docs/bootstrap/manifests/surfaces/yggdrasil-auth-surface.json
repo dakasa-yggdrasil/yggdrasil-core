@@ -1,0 +1,60 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "surface",
+  "metadata": {
+    "name": "yggdrasil-auth-surface",
+    "namespace": "global",
+    "description": "Reference collaborator-facing auth surface for Yggdrasil.",
+    "labels": {
+      "yggdrasil.io/surface-category": "auth",
+      "yggdrasil.io/surface-reference": "true"
+    }
+  },
+  "spec": {
+    "category": "auth",
+    "owners": ["team:platform"],
+    "replaces": ["auth", "identities"],
+    "integration_binding": "core_only",
+    "runtime": {
+      "kind": "http_api",
+      "exposure": "collaborator",
+      "port": 9090,
+      "base_path": "/",
+      "health_path": "/healthz"
+    },
+    "core_contracts": [
+      "auth",
+      "authorization",
+      "collaborator",
+      "surface"
+    ],
+    "capabilities": [
+      {
+        "name": "collaborator-auth",
+        "kind": "auth_flow",
+        "audience": "collaborator"
+      },
+      {
+        "name": "login",
+        "kind": "endpoint",
+        "audience": "collaborator",
+        "path": "/api/v1/auth/login",
+        "methods": ["POST"]
+      },
+      {
+        "name": "session",
+        "kind": "endpoint",
+        "audience": "collaborator",
+        "path": "/api/v1/auth/session",
+        "methods": ["GET"]
+      },
+      {
+        "name": "logout",
+        "kind": "endpoint",
+        "audience": "collaborator",
+        "path": "/api/v1/auth/logout",
+        "methods": ["POST"]
+      }
+    ]
+  }
+}

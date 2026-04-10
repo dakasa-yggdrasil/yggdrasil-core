@@ -1,0 +1,181 @@
+package outbox
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"sync"
+	"time"
+
+	amqp "github.com/rabbitmq/amqp091-go"
+	"go.uber.org/zap"
+)
+
+type criticalInflight struct {
+	rowID            string
+	publishMessageID string
+}
+
+// StartWorkerCritical runs the PostgreSQL-backed outbox worker.
+func StartWorkerCritical(ch *amqp.Channel, db *sql.DB, batchSize int, logger *zap.Logger) {
+	if err := ch.Confirm(false); err != nil {
+		logWarn(logger, "enable confirms (critical)", err)
+	}
+
+	confirms := ch.NotifyPublish(make(chan amqp.Confirmation, batchSize*2))
+	returns := ch.NotifyReturn(make(chan amqp.Return, batchSize*2))
+
+	inflight := map[uint64]criticalInflight{}
+	byMessageID := map[string]string{}
+	var inflightMu sync.Mutex
+
+	go handleCriticalConfirms(confirms, db, inflight, byMessageID, &inflightMu, logger)
+	go handleCriticalReturns(returns, db, inflight, byMessageID, &inflightMu, logger)
+
+	ticker := time.NewTicker(1 * time.Second)
+	for range ticker.C {
+		inflightMu.Lock()
+		pending := len(inflight)
+		inflightMu.Unlock()
+		if pending > 0 {
+			continue
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if err := workerCritical(ctx, ch, db, batchSize, inflight, byMessageID, &inflightMu, logger); err != nil {
+			logWarn(logger, "outbox critical worker", err)
+		}
+		cancel()
+	}
+}
+
+func workerCritical(ctx context.Context, ch *amqp.Channel, db *sql.DB, batch int, inflight map[uint64]criticalInflight, byMessageID map[string]string, inflightMu *sync.Mutex, logger *zap.Logger) error {
+	if db == nil {
+		return nil
+	}
+
+	rows, err := db.QueryContext(ctx,
+		`SELECT id::text, exchange, routing_key, headers, payload
+		 FROM outbox_critical
+		 WHERE published_at IS NULL
+		 ORDER BY created_at ASC LIMIT $1`, batch)
+	if err != nil {
+		return err
+	}
+	defer rows.Close()
+
+	type row struct {
+		id string
+		ex string
+		rk string
+		h  []byte
+		p  []byte
+	}
+
+	var list []row
+	for rows.Next() {
+		var item row
+		if err := rows.Scan(&item.id, &item.ex, &item.rk, &item.h, &item.p); err != nil {
+			return err
+		}
+		list = append(list, item)
+	}
+	if err := rows.Err(); err != nil {
+		return err
+	}
+
+	for _, item := range list {
+		var headers map[string]any
+		if err := json.Unmarshal(item.h, &headers); err != nil {
+			logWarn(logger, "decode critical headers", err, zap.String("id", item.id))
+			headers = map[string]any{}
+		}
+
+		publishMessageID := ResolvePublishMessageID(item.id, headers)
+		message := amqp.Publishing{
+			DeliveryMode: amqp.Persistent,
+			ContentType:  "application/json",
+			MessageId:    publishMessageID,
+			Timestamp:    time.Now(),
+			Headers:      headers,
+			Body:         item.p,
+		}
+
+		seq := ch.GetNextPublishSeqNo()
+		inflightMu.Lock()
+		inflight[seq] = criticalInflight{rowID: item.id, publishMessageID: publishMessageID}
+		byMessageID[publishMessageID] = item.id
+		inflightMu.Unlock()
+
+		if err := ch.PublishWithContext(ctx, item.ex, item.rk, true, false, message); err != nil {
+			if _, execErr := db.ExecContext(ctx,
+				`UPDATE outbox_critical SET error=$2 WHERE id=$1`, item.id, err.Error()); execErr != nil {
+				logWarn(logger, "mark critical publish error", execErr, zap.String("id", item.id))
+			}
+			inflightMu.Lock()
+			delete(inflight, seq)
+			delete(byMessageID, publishMessageID)
+			inflightMu.Unlock()
+		}
+	}
+
+	return nil
+}
+
+func handleCriticalConfirms(confirms <-chan amqp.Confirmation, db *sql.DB, inflight map[uint64]criticalInflight, byMessageID map[string]string, inflightMu *sync.Mutex, logger *zap.Logger) {
+	for confirmation := range confirms {
+		inflightMu.Lock()
+		entry := inflight[confirmation.DeliveryTag]
+		delete(inflight, confirmation.DeliveryTag)
+		delete(byMessageID, entry.publishMessageID)
+		inflightMu.Unlock()
+		if entry.rowID == "" {
+			continue
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if confirmation.Ack {
+			if _, err := db.ExecContext(ctx,
+				`UPDATE outbox_critical SET published_at = now(), error=NULL WHERE id=$1`, entry.rowID); err != nil {
+				logWarn(logger, "mark critical published", err, zap.String("id", entry.rowID))
+			}
+		} else {
+			if _, err := db.ExecContext(ctx,
+				`UPDATE outbox_critical SET error='nack' WHERE id=$1`, entry.rowID); err != nil {
+				logWarn(logger, "mark critical nack", err, zap.String("id", entry.rowID))
+			}
+		}
+		cancel()
+	}
+}
+
+func handleCriticalReturns(returns <-chan amqp.Return, db *sql.DB, inflight map[uint64]criticalInflight, byMessageID map[string]string, inflightMu *sync.Mutex, logger *zap.Logger) {
+	for returned := range returns {
+		if returned.MessageId == "" {
+			continue
+		}
+
+		inflightMu.Lock()
+		rowID := byMessageID[returned.MessageId]
+		if rowID != "" {
+			delete(byMessageID, returned.MessageId)
+			for tag, entry := range inflight {
+				if entry.publishMessageID == returned.MessageId {
+					delete(inflight, tag)
+					break
+				}
+			}
+		}
+		inflightMu.Unlock()
+		if rowID == "" {
+			continue
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if _, err := db.ExecContext(ctx,
+			`UPDATE outbox_critical SET error=$2 WHERE id=$1`, rowID, "unroutable"); err != nil {
+			logWarn(logger, "mark critical return", err, zap.String("id", rowID))
+		}
+		cancel()
+	}
+}

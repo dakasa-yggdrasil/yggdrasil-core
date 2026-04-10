@@ -1,0 +1,33 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_instance",
+  "metadata": {
+    "name": "gcp-platform",
+    "namespace": "global",
+    "description": "Default GCP integration instance used by the core for product and workflow operations.",
+    "labels": {
+      "bootstrap_source": "integration-gcp",
+      "provider": "gcp"
+    }
+  },
+  "spec": {
+    "type_ref": {
+      "name": "gcp",
+      "namespace": "global"
+    },
+    "status": "active",
+    "owners": [
+      "team:platform"
+    ],
+    "credentials": {},
+    "config": {},
+    "discovery": {
+      "enabled": false,
+      "mode": "manual"
+    },
+    "execution": {
+      "default_dry_run": false,
+      "max_batch_size": 5
+    }
+  }
+}

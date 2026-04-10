@@ -1,0 +1,262 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_type",
+  "metadata": {
+    "name": "aws",
+    "namespace": "global",
+    "description": "Bootstrap integration type for the AWS governance plugin.",
+    "labels": {
+      "bootstrap_source": "integration-aws",
+      "provider": "aws",
+      "yggdrasil.io/catalog-domain": "aws",
+      "yggdrasil.io/catalog-section": "operations",
+      "yggdrasil.io/catalog-entry": "api"
+    }
+  },
+  "spec": {
+    "provider": "aws",
+    "adapter": {
+      "transport": "rabbitmq",
+      "version": "1.0.0",
+      "queues": {
+        "describe": "yggdrasil.adapter.aws.describe",
+        "execute": "yggdrasil.adapter.aws.execute"
+      },
+      "timeout_seconds": 120
+    },
+    "capabilities": [
+      "describe",
+      "execute"
+    ],
+    "guardian_support": {
+      "mode": "light",
+      "signals": {
+        "error_rate": ["error_rate", "failure_rate"],
+        "rate_limited": ["rate_limited", "throttled", "quota_exceeded"],
+        "auth_denied": ["auth_denied", "unauthorized", "forbidden"],
+        "sync_lag_seconds": ["sync_lag_seconds", "reconciliation_lag_seconds"],
+        "monthly_cost_usd": ["monthly_cost_usd", "estimated_monthly_cost_usd", "cost_usd"],
+        "utilization": ["utilization", "avg_utilization"],
+        "idle_hours": ["idle_hours", "last_active_hours_ago"],
+        "overprovisioned": ["overprovisioned"]
+      }
+    },
+    "credential_schema": {
+      "mode": "inline",
+      "properties": {
+        "access_key_id": {
+          "type": "string",
+          "description": "AWS access key id used by governance operations.",
+          "secret": true
+        },
+        "secret_access_key": {
+          "type": "string",
+          "description": "AWS secret access key used by governance operations.",
+          "secret": true
+        },
+        "session_token": {
+          "type": "string",
+          "description": "Optional AWS session token for temporary credentials.",
+          "secret": true
+        },
+        "profile": {
+          "type": "string",
+          "description": "Optional shared config profile name when the worker should use local AWS profiles."
+        }
+      }
+    },
+    "instance_schema": {
+      "mode": "inline",
+      "properties": {
+        "default_region": {
+          "type": "string",
+          "description": "Default AWS region for governance operations.",
+          "default": "us-east-1"
+        },
+        "default_account_id": {
+          "type": "string",
+          "description": "Optional fallback AWS account identifier used for metadata and normalization."
+        },
+        "default_tags": {
+          "type": "object",
+          "description": "Default tags applied when an operation omits tags."
+        },
+        "default_email_from": {
+          "type": "string",
+          "description": "Optional default sender address for SES email operations."
+        },
+        "default_sms_type": {
+          "type": "string",
+          "description": "Optional default SNS SMS type.",
+          "default": "Transactional"
+        }
+      }
+    },
+    "resource_types": [
+      {
+        "name": "s3_bucket",
+        "canonical_prefix": "thirdparty.aws.s3.bucket",
+        "identity_template": "s3_bucket.{region}.{bucket_name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_s3_bucket"
+        ]
+      },
+      {
+        "name": "ecr_repository",
+        "canonical_prefix": "thirdparty.aws.ecr.repository",
+        "identity_template": "ecr_repository.{region}.{repository_name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_ecr_repository"
+        ]
+      },
+      {
+        "name": "secret",
+        "canonical_prefix": "thirdparty.aws.secrets_manager.secret",
+        "identity_template": "secret.{region}.{secret_name}",
+        "discoverable": false,
+        "default_actions": [
+          "upsert_secrets_manager_secret"
+        ]
+      },
+      {
+        "name": "route53_zone",
+        "canonical_prefix": "thirdparty.aws.route53.hosted_zone",
+        "identity_template": "route53_zone.{zone_name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_route53_zone"
+        ]
+      },
+      {
+        "name": "route53_record",
+        "canonical_prefix": "thirdparty.aws.route53.record",
+        "identity_template": "route53_record.{zone_id}.{record_name}.{record_type}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_route53_record"
+        ]
+      },
+      {
+        "name": "ses_identity",
+        "canonical_prefix": "thirdparty.aws.ses.identity",
+        "identity_template": "ses_identity.{identity}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_ses_identity"
+        ]
+      },
+      {
+        "name": "email_message",
+        "canonical_prefix": "thirdparty.aws.ses.email",
+        "identity_template": "email.{region}.{from_email}.{subject}",
+        "discoverable": false,
+        "default_actions": [
+          "send_email"
+        ]
+      },
+      {
+        "name": "sms_message",
+        "canonical_prefix": "thirdparty.aws.sns.sms",
+        "identity_template": "sms.{region}.{phone_number}",
+        "discoverable": false,
+        "default_actions": [
+          "send_sms"
+        ]
+      }
+    ],
+    "action_catalog": [
+      {
+        "name": "ensure_s3_bucket",
+        "description": "Ensure one S3 bucket exists and optionally apply tags or versioning.",
+        "resource_types": [
+          "s3_bucket"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_ecr_repository",
+        "description": "Ensure one ECR repository exists and optionally apply tags or scanning settings.",
+        "resource_types": [
+          "ecr_repository"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "upsert_secrets_manager_secret",
+        "description": "Ensure one Secrets Manager secret exists and optionally write a new secret value.",
+        "resource_types": [
+          "secret"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_route53_zone",
+        "description": "Ensure one Route53 hosted zone exists and optionally apply tags.",
+        "resource_types": [
+          "route53_zone"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_route53_record",
+        "description": "Ensure one Route53 record exists in the target hosted zone.",
+        "resource_types": [
+          "route53_record"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_ses_identity",
+        "description": "Ensure one SES email or domain identity exists.",
+        "resource_types": [
+          "ses_identity"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "send_email",
+        "description": "Send one email through AWS SES.",
+        "resource_types": [
+          "email_message"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "send_sms",
+        "description": "Send one SMS message through AWS SNS.",
+        "resource_types": [
+          "sms_message"
+        ],
+        "idempotent": true
+      }
+    ],
+    "discovery": {
+      "mode": "push",
+      "cursor": "none"
+    },
+    "normalization": {
+      "external_id_path": "arn",
+      "name_path": "name",
+      "owner_path": "region",
+      "fallback_resource_prefix": "thirdparty.aws.custom"
+    },
+    "execution": {
+      "supports_dry_run": false,
+      "idempotent_actions": [
+        "ensure_s3_bucket",
+        "ensure_ecr_repository",
+        "upsert_secrets_manager_secret",
+        "ensure_route53_zone",
+        "ensure_route53_record",
+        "ensure_ses_identity",
+        "send_email",
+        "send_sms"
+      ]
+    },
+    "extensions": {
+      "allow_custom_actions": true
+    }
+  }
+}

@@ -1,0 +1,59 @@
+package outbox
+
+import (
+	"sync"
+
+	"github.com/prometheus/client_golang/prometheus"
+)
+
+var registerOnce sync.Once
+
+// RegisterMetrics registers the outbox Prometheus metrics once.
+func RegisterMetrics() {
+	registerOnce.Do(func() {
+		prometheus.MustRegister(
+			outboxFIFOSize,
+			outboxDelayedSize,
+			outboxDLQSize,
+			outboxOldestAgeSeconds,
+			outboxPublishSuccess,
+			outboxPublishFailures,
+			outboxRetryAttempts,
+		)
+	})
+}
+
+var (
+	outboxFIFOSize = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "outbox_fifo_size",
+		Help: "Number of items in outbox FIFO.",
+	})
+	outboxDelayedSize = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "outbox_delayed_size",
+		Help: "Number of items in outbox delayed set.",
+	})
+	outboxDLQSize = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "outbox_dlq_size",
+		Help: "Number of items in outbox dead-letter queue.",
+	})
+	outboxOldestAgeSeconds = prometheus.NewGauge(prometheus.GaugeOpts{
+		Name: "outbox_oldest_age_seconds",
+		Help: "Age in seconds of the oldest queued event.",
+	})
+	outboxPublishSuccess = prometheus.NewCounter(prometheus.CounterOpts{
+		Name: "outbox_publish_success_total",
+		Help: "Total successfully published outbox events.",
+	})
+	outboxPublishFailures = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "outbox_publish_failure_total",
+			Help: "Total failed publish attempts.",
+		},
+		[]string{"error_type"},
+	)
+	outboxRetryAttempts = prometheus.NewHistogram(prometheus.HistogramOpts{
+		Name:    "outbox_retry_attempts",
+		Help:    "Histogram of retry attempts per event.",
+		Buckets: prometheus.LinearBuckets(1, 1, 6),
+	})
+)

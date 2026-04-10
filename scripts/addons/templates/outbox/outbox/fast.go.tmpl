@@ -1,0 +1,168 @@
+package outbox
+
+import (
+	"context"
+	"encoding/json"
+	"errors"
+	"sync"
+	"time"
+
+	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/redis/go-redis/v9"
+	"go.uber.org/zap"
+)
+
+// StartWorkerFast runs the Redis-backed outbox worker.
+func StartWorkerFast(ch *amqp.Channel, rdb *redis.Client, namespace string, batch int, logger *zap.Logger) {
+	if err := ch.Confirm(false); err != nil {
+		logWarn(logger, "enable confirms (fast)", err, zap.String("namespace", namespace))
+	}
+
+	confirms := ch.NotifyPublish(make(chan amqp.Confirmation, batch*2))
+	returns := ch.NotifyReturn(make(chan amqp.Return, batch*2))
+
+	inflight := map[uint64]OutboxEvent{}
+	byID := map[string]uint64{}
+	var inflightMu sync.Mutex
+
+	go handleFastConfirms(confirms, rdb, namespace, inflight, byID, &inflightMu, logger)
+	go handleFastReturns(returns, rdb, namespace, inflight, byID, &inflightMu, logger)
+
+	ticker := time.NewTicker(300 * time.Millisecond)
+	for range ticker.C {
+		inflightMu.Lock()
+		pending := len(inflight)
+		inflightMu.Unlock()
+		if pending > 0 {
+			continue
+		}
+
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := workerFast(ctx, ch, rdb, namespace, batch, inflight, byID, &inflightMu, logger); err != nil {
+			logWarn(logger, "outbox fast worker", err, zap.String("namespace", namespace))
+		}
+		cancel()
+	}
+}
+
+func workerFast(ctx context.Context, ch *amqp.Channel, rdb *redis.Client, namespace string, batch int, inflight map[uint64]OutboxEvent, byID map[string]uint64, inflightMu *sync.Mutex, logger *zap.Logger) error {
+	fifo, delayed, dlq, oldestAge, err := CollectOutboxStats(ctx, rdb, namespace)
+	if err != nil {
+		logWarn(logger, "collect outbox stats", err, zap.String("namespace", namespace))
+	} else {
+		outboxFIFOSize.Set(float64(fifo))
+		outboxDelayedSize.Set(float64(delayed))
+		outboxDLQSize.Set(float64(dlq))
+		outboxOldestAgeSeconds.Set(oldestAge.Seconds())
+	}
+
+	events, err := PopOutboxBatch(ctx, rdb, namespace, batch)
+	if err != nil {
+		return err
+	}
+
+	now := time.Now()
+	for _, event := range events {
+		if event.FirstSeenAt.IsZero() {
+			event.FirstSeenAt = now
+		}
+		if time.Since(event.FirstSeenAt) > OutboxTTL {
+			outboxPublishFailures.WithLabelValues("expired").Inc()
+			if err := MoveToDLQ(ctx, rdb, namespace, event); err != nil {
+				logWarn(logger, "move fast to DLQ", err, zap.String("id", event.ID))
+			}
+			continue
+		}
+
+		var headers map[string]any
+		if err := json.Unmarshal(event.Headers, &headers); err != nil {
+			logWarn(logger, "decode fast headers", err, zap.String("id", event.ID))
+			headers = map[string]any{}
+		}
+
+		message := amqp.Publishing{
+			DeliveryMode: amqp.Persistent,
+			ContentType:  "application/json",
+			MessageId:    event.ID,
+			Timestamp:    time.Now(),
+			Headers:      headers,
+			Body:         event.Payload,
+		}
+
+		seq := ch.GetNextPublishSeqNo()
+		inflightMu.Lock()
+		inflight[seq] = event
+		byID[event.ID] = seq
+		inflightMu.Unlock()
+
+		if err := ch.PublishWithContext(ctx, event.Exchange, event.RoutingKey, true, false, message); err != nil {
+			outboxPublishFailures.WithLabelValues("network").Inc()
+			if retryErr := RequeueOutboxEventWithBackoff(ctx, rdb, namespace, event, "network", err); retryErr != nil {
+				logWarn(logger, "requeue fast publish", retryErr, zap.String("id", event.ID))
+			}
+			inflightMu.Lock()
+			delete(inflight, seq)
+			delete(byID, event.ID)
+			inflightMu.Unlock()
+		}
+	}
+
+	return nil
+}
+
+func handleFastConfirms(confirms <-chan amqp.Confirmation, rdb *redis.Client, namespace string, inflight map[uint64]OutboxEvent, byID map[string]uint64, inflightMu *sync.Mutex, logger *zap.Logger) {
+	for confirmation := range confirms {
+		inflightMu.Lock()
+		event := inflight[confirmation.DeliveryTag]
+		delete(inflight, confirmation.DeliveryTag)
+		if event.ID != "" {
+			delete(byID, event.ID)
+		}
+		inflightMu.Unlock()
+		if event.ID == "" {
+			continue
+		}
+
+		if confirmation.Ack {
+			outboxPublishSuccess.Inc()
+			outboxRetryAttempts.Observe(float64(event.Attempts + 1))
+			continue
+		}
+
+		outboxPublishFailures.WithLabelValues("nack").Inc()
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		if err := RequeueOutboxEventWithBackoff(ctx, rdb, namespace, event, "nack", errors.New("nack")); err != nil {
+			logWarn(logger, "requeue fast nack", err, zap.String("id", event.ID))
+		}
+		cancel()
+	}
+}
+
+func handleFastReturns(returns <-chan amqp.Return, rdb *redis.Client, namespace string, inflight map[uint64]OutboxEvent, byID map[string]uint64, inflightMu *sync.Mutex, logger *zap.Logger) {
+	for returned := range returns {
+		inflightMu.Lock()
+		seq, ok := byID[returned.MessageId]
+		if ok {
+			event := inflight[seq]
+			delete(inflight, seq)
+			delete(byID, event.ID)
+			inflightMu.Unlock()
+
+			outboxPublishFailures.WithLabelValues("unroutable").Inc()
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			if err := RequeueOutboxEventWithBackoff(ctx, rdb, namespace, event, "unroutable", errors.New("return")); err != nil {
+				logWarn(logger, "requeue fast return", err, zap.String("id", event.ID))
+			}
+			cancel()
+			continue
+		}
+		inflightMu.Unlock()
+	}
+}
+
+func logWarn(logger *zap.Logger, msg string, err error, fields ...zap.Field) {
+	if err == nil || logger == nil {
+		return
+	}
+	logger.Warn(msg, append(fields, zap.Error(err))...)
+}

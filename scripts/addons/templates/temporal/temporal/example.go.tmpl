@@ -1,0 +1,44 @@
+package temporal
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"go.temporal.io/sdk/activity"
+	"go.temporal.io/sdk/workflow"
+)
+
+const HelloWorkflowTaskQueue = "{{SERVICE_NAME}}-temporal"
+
+type HelloInput struct {
+	Name string `json:"name"`
+}
+
+// HelloWorkflow is a starter workflow showing the expected addon shape.
+func HelloWorkflow(ctx workflow.Context, input HelloInput) (string, error) {
+	if input.Name == "" {
+		input.Name = "world"
+	}
+
+	ctx = workflow.WithActivityOptions(ctx, workflow.ActivityOptions{
+		StartToCloseTimeout: 10 * time.Second,
+	})
+
+	var result string
+	if err := workflow.ExecuteActivity(ctx, HelloActivity, input.Name).Get(ctx, &result); err != nil {
+		return "", err
+	}
+
+	return result, nil
+}
+
+// HelloActivity is the sample activity paired with HelloWorkflow.
+func HelloActivity(ctx context.Context, name string) (string, error) {
+	if name == "" {
+		name = "world"
+	}
+
+	activity.GetLogger(ctx).Info("hello activity executed", "name", name)
+	return fmt.Sprintf("hello %s", name), nil
+}

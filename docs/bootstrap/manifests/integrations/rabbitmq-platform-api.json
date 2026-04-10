@@ -1,0 +1,39 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_instance",
+  "metadata": {
+    "name": "rabbitmq-platform-api",
+    "namespace": "global",
+    "description": "Default RabbitMQ runtime integration instance used for broker governance and day-2 operations.",
+    "labels": {
+      "bootstrap_source": "integration-rabbitmq",
+      "provider": "rabbitmq"
+    }
+  },
+  "spec": {
+    "type_ref": {
+      "name": "rabbitmq",
+      "namespace": "global"
+    },
+    "status": "active",
+    "owners": [
+      "team:platform"
+    ],
+    "credentials": {
+      "username": "admin",
+      "password": "change-me"
+    },
+    "config": {
+      "management_url": "https://rabbitmq.example.com/api",
+      "default_vhost": "/"
+    },
+    "discovery": {
+      "enabled": false,
+      "mode": "manual"
+    },
+    "execution": {
+      "default_dry_run": false,
+      "max_batch_size": 25
+    }
+  }
+}

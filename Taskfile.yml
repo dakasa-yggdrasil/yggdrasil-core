@@ -1,0 +1,73 @@
+version: "3"
+
+vars:
+  PROJECT_NAME: yggdrasil-dev
+  SERVICE_NAME: yggdrasil-core
+  COMPOSE_ARGS: >-
+    --env-file ../../.env
+    --env-file ./.env
+    -f ../../dev/compose/infra.yml
+    -f ./docker-compose.yml
+
+tasks:
+  env:init:
+    cmds:
+      - |
+        if [ ! -f ./.env ]; then
+          cp ./.env.example ./.env
+        fi
+
+  up:
+    deps: [env:init]
+    cmds:
+      - docker compose --project-name {{.PROJECT_NAME}} {{.COMPOSE_ARGS}} up -d {{.SERVICE_NAME}}
+
+  down:
+    deps: [env:init]
+    cmds:
+      - docker compose --project-name {{.PROJECT_NAME}} {{.COMPOSE_ARGS}} stop {{.SERVICE_NAME}}
+
+  restart:
+    deps: [env:init]
+    cmds:
+      - docker compose --project-name {{.PROJECT_NAME}} {{.COMPOSE_ARGS}} restart {{.SERVICE_NAME}}
+
+  logs:
+    deps: [env:init]
+    cmds:
+      - docker compose --project-name {{.PROJECT_NAME}} {{.COMPOSE_ARGS}} logs -f {{.SERVICE_NAME}}
+
+  ps:
+    deps: [env:init]
+    cmds:
+      - docker compose --project-name {{.PROJECT_NAME}} {{.COMPOSE_ARGS}} ps
+
+  config:
+    deps: [env:init]
+    cmds:
+      - docker compose --project-name {{.PROJECT_NAME}} {{.COMPOSE_ARGS}} config >/dev/null
+
+  shell:
+    deps: [env:init]
+    cmds:
+      - docker compose --project-name {{.PROJECT_NAME}} {{.COMPOSE_ARGS}} exec {{.SERVICE_NAME}} sh
+
+  test:
+    deps: [env:init]
+    cmds:
+      - docker compose --project-name {{.PROJECT_NAME}} {{.COMPOSE_ARGS}} run --rm {{.SERVICE_NAME}} sh -lc "/usr/local/go/bin/go test ./..."
+
+  build:image:
+    deps: [env:init]
+    cmds:
+      - docker build -t yggdrasil-core:local .
+
+  migrate:
+    deps: [up]
+    cmds:
+      - docker compose --project-name {{.PROJECT_NAME}} {{.COMPOSE_ARGS}} exec {{.SERVICE_NAME}} sh -lc "/usr/local/go/bin/go run ./scripts/goose up"
+
+  bootstrap:
+    deps: [up]
+    cmds:
+      - docker compose --project-name {{.PROJECT_NAME}} {{.COMPOSE_ARGS}} exec {{.SERVICE_NAME}} sh -lc "/usr/local/go/bin/go run ./scripts/bootstrap --path ./docs/bootstrap/manifests"
