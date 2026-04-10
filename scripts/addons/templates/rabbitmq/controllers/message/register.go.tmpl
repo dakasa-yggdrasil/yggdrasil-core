@@ -1,0 +1,8 @@
+package message
+
+import amqp "github.com/rabbitmq/amqp091-go"
+
+// RegisterAllConsumers is intentionally empty until the service defines queues.
+func RegisterAllConsumers(_ *amqp.Connection) error {
+	return nil
+}

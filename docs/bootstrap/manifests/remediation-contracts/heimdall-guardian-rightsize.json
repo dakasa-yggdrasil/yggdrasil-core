@@ -1,0 +1,35 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "remediation_contract",
+  "metadata": {
+    "name": "heimdall-guardian-rightsize",
+    "namespace": "global",
+    "description": "Bounded remediation contract for the Heimdall guardian integration runtime.",
+    "labels": {
+      "bootstrap_source": "yggdrasil-core",
+      "component_kind": "integration"
+    }
+  },
+  "spec": {
+    "component_kind": "integration",
+    "component_namespace": "global",
+    "component_name": "heimdall-guardian",
+    "actions": [
+      {
+        "name": "rightsize_component",
+        "mode": "workflow_dispatch",
+        "auto_execute": true,
+        "workflow_dispatch": {
+          "workflow": "deploy.yml",
+          "ref": "main",
+          "inputs": {
+            "remediation_contract": "heimdall.rightsize.v1"
+          }
+        }
+      }
+    ],
+    "metadata": {
+      "environment": "production"
+    }
+  }
+}

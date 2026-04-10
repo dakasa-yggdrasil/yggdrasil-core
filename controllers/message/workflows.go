@@ -1,0 +1,645 @@
+package message
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"strings"
+	"time"
+
+	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	amqp "github.com/rabbitmq/amqp091-go"
+	"go.uber.org/zap"
+)
+
+const (
+	queueWorkflowDispatch      = "yggdrasil-core.workflow.dispatch"
+	queueWorkflowRun           = "yggdrasil-core.workflow.run"
+	defaultWorkflowStepTimeout = 20 * time.Second
+)
+
+func workflowConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) []ConsumerConfig {
+	return []ConsumerConfig{
+		{
+			Queue:   queueWorkflowDispatch,
+			Timeout: 20 * time.Second,
+			QoS:     10,
+			Handler: workflowDispatchHandler(conn, db, logger),
+		},
+		{
+			Queue:   queueWorkflowRun,
+			Timeout: 60 * time.Second,
+			QoS:     5,
+			Handler: workflowRunHandler(conn, db, logger),
+		},
+	}
+}
+
+func workflowDispatchHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
+	return func(ctx context.Context, d amqp.Delivery) error {
+		var req model.DispatchWorkflowRequest
+		if err := json.Unmarshal(d.Body, &req); err != nil {
+			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+		}
+
+		req = normalizeWorkflowDispatchRequest(req)
+		if err := validateWorkflowDispatchRequest(req); err != nil {
+			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+		}
+
+		instanceManifest, instanceSpec, typeManifest, typeSpec, err := resolveIntegrationInstance(ctx, conn, db, req.Runner)
+		if err != nil {
+			return replyFailure(ctx, conn, d, integrationAwareErrorCode(err, "dispatch_failed"), err, logger)
+		}
+
+		response, err := dispatchWorkflowThroughIntegration(ctx, conn, req, instanceManifest, instanceSpec, typeManifest, typeSpec, 0)
+		if err != nil {
+			return replyFailure(ctx, conn, d, "dispatch_failed", err, logger)
+		}
+
+		return replySuccess(ctx, conn, d, response, logger)
+	}
+}
+
+func workflowRunHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
+	return func(ctx context.Context, d amqp.Delivery) error {
+		var req model.RunWorkflowRequest
+		if err := json.Unmarshal(d.Body, &req); err != nil {
+			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+		}
+
+		response, err := RunWorkflow(ctx, conn, db, req)
+		if err != nil {
+			code := integrationAwareErrorCode(err, "workflow_run_failed")
+			if manifestLookupErrorCode(err) != "internal_error" {
+				code = manifestLookupErrorCode(err)
+			} else if strings.Contains(strings.ToLower(strings.TrimSpace(err.Error())), "required") ||
+				strings.Contains(strings.ToLower(strings.TrimSpace(err.Error())), "invalid") ||
+				strings.Contains(strings.ToLower(strings.TrimSpace(err.Error())), "unsupported") ||
+				strings.Contains(strings.ToLower(strings.TrimSpace(err.Error())), "validation") {
+				code = "bad_request"
+			}
+			return replyFailure(ctx, conn, d, code, err, logger)
+		}
+
+		return replySuccess(ctx, conn, d, response, logger)
+	}
+}
+
+// RunWorkflow executes one stored workflow definition directly from an in-process caller.
+func RunWorkflow(
+	ctx context.Context,
+	conn *amqp.Connection,
+	db *sql.DB,
+	req model.RunWorkflowRequest,
+) (model.RunWorkflowResponse, error) {
+	req = normalizeRunWorkflowRequest(req)
+	if err := validateRunWorkflowRequest(req); err != nil {
+		return model.RunWorkflowResponse{}, err
+	}
+
+	workflowManifest, spec, err := resolveWorkflowManifestSpec(ctx, db, req.Workflow)
+	if err != nil {
+		return model.RunWorkflowResponse{}, err
+	}
+
+	if err := manifestengine.ValidateWorkflowSpec(spec); err != nil {
+		return model.RunWorkflowResponse{}, err
+	}
+	mergedInputs := manifestengine.MergeWorkflowInputs(spec, req.Inputs)
+	if err := manifestengine.ValidateWorkflowInputs(spec, mergedInputs); err != nil {
+		return model.RunWorkflowResponse{}, err
+	}
+	req.Inputs = mergedInputs
+
+	return runWorkflow(ctx, conn, db, workflowManifest, spec, req)
+}
+
+func resolveWorkflowManifestSpec(ctx context.Context, db *sql.DB, selector model.ManifestSelector) (model.Manifest, model.WorkflowManifestSpec, error) {
+	workflowManifest, err := resolveManifestForKind(ctx, db, "workflow", selector.ManifestID, selector.Namespace, selector.Name, selector.Version)
+	if err != nil {
+		return model.Manifest{}, model.WorkflowManifestSpec{}, err
+	}
+
+	spec, err := manifestengine.ParseWorkflowSpec(workflowManifest.Spec)
+	if err != nil {
+		return model.Manifest{}, model.WorkflowManifestSpec{}, fmt.Errorf("parse workflow spec: %w", err)
+	}
+
+	return workflowManifest, spec, nil
+}
+
+func runWorkflow(
+	ctx context.Context,
+	conn *amqp.Connection,
+	db *sql.DB,
+	workflowManifest model.Manifest,
+	spec model.WorkflowManifestSpec,
+	req model.RunWorkflowRequest,
+) (model.RunWorkflowResponse, error) {
+	orderedSteps, err := manifestengine.WorkflowExecutionOrder(spec)
+	if err != nil {
+		return model.RunWorkflowResponse{}, err
+	}
+
+	workflowRef := manifestReferenceFromRecord(workflowManifest)
+	startedAt := time.Now().UTC()
+	response := model.RunWorkflowResponse{
+		Workflow:  workflowRef,
+		Status:    "succeeded",
+		Metadata:  cloneAuthorizationInput(req.Metadata),
+		StartedAt: startedAt,
+	}
+
+	executionCtx := manifestengine.WorkflowExecutionContext{
+		Inputs:   req.Inputs,
+		Metadata: req.Metadata,
+		Auth:     req.Auth,
+		Workflow: workflowRef,
+		Steps:    map[string]model.WorkflowRunStepResult{},
+	}
+
+	for index, step := range orderedSteps {
+		result := executeWorkflowStep(ctx, conn, db, workflowRef, step, executionCtx, req)
+		response.Steps = append(response.Steps, result)
+		executionCtx.Steps[result.ID] = result
+
+		if result.Status != "succeeded" {
+			response.Status = "failed"
+			response.FinishedAt = result.FinishedAt
+			response.Steps = append(response.Steps, skipWorkflowSteps(orderedSteps[index+1:], result.ID)...)
+			if response.Metadata == nil {
+				response.Metadata = map[string]any{}
+			}
+			response.Metadata["failed_step"] = result.ID
+			return response, nil
+		}
+	}
+
+	response.FinishedAt = time.Now().UTC()
+	return response, nil
+}
+
+func executeWorkflowStep(
+	ctx context.Context,
+	conn *amqp.Connection,
+	db *sql.DB,
+	workflowRef model.ManifestReference,
+	step model.WorkflowStepSpec,
+	executionCtx manifestengine.WorkflowExecutionContext,
+	req model.RunWorkflowRequest,
+) model.WorkflowRunStepResult {
+	stepID := normalizeWorkflowStepID(step.ID)
+	result := model.WorkflowRunStepResult{
+		ID:         stepID,
+		Kind:       strings.ToLower(strings.TrimSpace(step.Use.Kind)),
+		Operation:  manifestengine.NormalizeWorkflowStepOperation(step),
+		Capability: manifestengine.NormalizeWorkflowStepCapability(step),
+		Status:     "failed",
+		StartedAt:  time.Now().UTC(),
+	}
+
+	renderedInput, err := renderWorkflowStepInput(step, executionCtx)
+	if err != nil {
+		result.Error = err.Error()
+		result.Attempts = 1
+		result.FinishedAt = time.Now().UTC()
+		return result
+	}
+
+	instanceManifest, instanceSpec, typeManifest, typeSpec, err := resolveIntegrationInstance(ctx, conn, db, *step.Use.InstanceRef)
+	if err != nil {
+		result.Error = err.Error()
+		result.Attempts = 1
+		result.FinishedAt = time.Now().UTC()
+		return result
+	}
+	result.IntegrationInstance = manifestReferencePointer(manifestReferenceFromRecord(instanceManifest))
+	result.IntegrationType = manifestReferencePointer(manifestReferenceFromRecord(typeManifest))
+
+	maxAttempts := workflowStepAttempts(step)
+	for attempt := 1; attempt <= maxAttempts; attempt++ {
+		result.Attempts = attempt
+
+		switch result.Operation {
+		case model.WorkflowDispatchOperation:
+			dispatchReq := buildWorkflowDispatchStepRequest(workflowRef, step, renderedInput, req)
+			dispatchResp, err := dispatchWorkflowThroughIntegration(
+				ctx,
+				conn,
+				dispatchReq,
+				instanceManifest,
+				instanceSpec,
+				typeManifest,
+				typeSpec,
+				workflowStepTimeout(step, typeSpec),
+			)
+			if err == nil {
+				result.Status = "succeeded"
+				result.Metadata = mergeStringAnyMaps(dispatchResp.Metadata, map[string]any{
+					"adapter_status": dispatchResp.Status,
+					"workflow":       dispatchResp.Workflow,
+				})
+				result.FinishedAt = time.Now().UTC()
+				return result
+			}
+
+			result.Error = err.Error()
+		default:
+			executeReq := model.ExecuteIntegrationRequest{
+				Integration: *step.Use.InstanceRef,
+				Operation:   result.Operation,
+				Capability:  result.Capability,
+				Input:       cloneAuthorizationInput(renderedInput),
+				Auth:        workflowDispatchAuthToMap(req.Auth),
+				Metadata: map[string]any{
+					"workflow": workflowRef,
+					"step_id":  result.ID,
+					"source":   "workflow.run",
+				},
+			}
+
+			executeResp, err := executeIntegrationThroughResolved(
+				ctx,
+				conn,
+				executeReq,
+				instanceManifest,
+				instanceSpec,
+				typeManifest,
+				typeSpec,
+				workflowStepTimeout(step, typeSpec),
+			)
+			if err == nil {
+				result.Status = normalizeWorkflowIntegrationStatus(executeResp.Status)
+				result.Metadata = mergeStringAnyMaps(executeResp.Metadata, map[string]any{
+					"integration_status": executeResp.Status,
+					"output":             executeResp.Output,
+				})
+				if result.Status == "succeeded" {
+					result.FinishedAt = time.Now().UTC()
+					return result
+				}
+
+				result.Error = fmt.Sprintf("integration returned status %q", executeResp.Status)
+			} else {
+				result.Error = err.Error()
+			}
+		}
+
+		if attempt >= maxAttempts {
+			break
+		}
+
+		if err := sleepWithContext(ctx, workflowStepBackoff(step)); err != nil {
+			result.Error = err.Error()
+			break
+		}
+	}
+
+	result.FinishedAt = time.Now().UTC()
+	return result
+}
+
+func skipWorkflowSteps(steps []model.WorkflowStepSpec, failedStepID string) []model.WorkflowRunStepResult {
+	if len(steps) == 0 {
+		return nil
+	}
+
+	now := time.Now().UTC()
+	results := make([]model.WorkflowRunStepResult, 0, len(steps))
+	for _, step := range steps {
+		results = append(results, model.WorkflowRunStepResult{
+			ID:         normalizeWorkflowStepID(step.ID),
+			Kind:       strings.ToLower(strings.TrimSpace(step.Use.Kind)),
+			Operation:  manifestengine.NormalizeWorkflowStepOperation(step),
+			Capability: manifestengine.NormalizeWorkflowStepCapability(step),
+			Status:     "skipped",
+			Error:      fmt.Sprintf("workflow aborted after step %q failed", failedStepID),
+			StartedAt:  now,
+			FinishedAt: now,
+		})
+	}
+
+	return results
+}
+
+func buildWorkflowDispatchStepRequest(
+	workflowRef model.ManifestReference,
+	step model.WorkflowStepSpec,
+	input map[string]any,
+	req model.RunWorkflowRequest,
+) model.DispatchWorkflowRequest {
+	metadata := mergeStringAnyMaps(req.Metadata, workflowInputMap(input["metadata"]))
+	if metadata == nil {
+		metadata = map[string]any{}
+	}
+	metadata["workflow_manifest"] = map[string]any{
+		"namespace": workflowRef.Namespace,
+		"name":      workflowRef.Name,
+		"version":   workflowRef.Version,
+	}
+	metadata["workflow_step"] = normalizeWorkflowStepID(step.ID)
+
+	return normalizeWorkflowDispatchRequest(model.DispatchWorkflowRequest{
+		Runner:     *step.Use.InstanceRef,
+		Operation:  manifestengine.NormalizeWorkflowStepOperation(step),
+		Capability: manifestengine.NormalizeWorkflowStepCapability(step),
+		Workflow: model.WorkflowDispatchSpec{
+			ComponentID: workflowInputString(input["component_id"]),
+			Repository:  workflowInputString(input["repository"]),
+			Workflow:    workflowInputString(input["workflow"]),
+			Ref:         workflowInputString(input["ref"]),
+			Inputs:      workflowInputMap(input["inputs"]),
+			Metadata:    metadata,
+		},
+		Auth: req.Auth,
+	})
+}
+
+func renderWorkflowStepInput(step model.WorkflowStepSpec, executionCtx manifestengine.WorkflowExecutionContext) (map[string]any, error) {
+	rendered, err := manifestengine.RenderWorkflowInput(step.With, executionCtx)
+	if err != nil {
+		return nil, err
+	}
+	if rendered == nil {
+		return map[string]any{}, nil
+	}
+
+	scope, ok := rendered.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("workflow step %q rendered a non-object payload", step.ID)
+	}
+	return scope, nil
+}
+
+func workflowInputMap(value any) map[string]any {
+	typed, ok := value.(map[string]any)
+	if !ok || typed == nil {
+		return map[string]any{}
+	}
+	return cloneAuthorizationInput(typed)
+}
+
+func workflowInputString(value any) string {
+	if value == nil {
+		return ""
+	}
+	return strings.TrimSpace(fmt.Sprint(value))
+}
+
+func workflowStepAttempts(step model.WorkflowStepSpec) int {
+	if step.Retry.MaxAttempts > 0 {
+		return step.Retry.MaxAttempts
+	}
+	return 1
+}
+
+func workflowStepBackoff(step model.WorkflowStepSpec) time.Duration {
+	if step.Retry.BackoffSeconds <= 0 {
+		return 0
+	}
+	return time.Duration(step.Retry.BackoffSeconds) * time.Second
+}
+
+func workflowStepTimeout(step model.WorkflowStepSpec, typeSpec model.IntegrationTypeManifestSpec) time.Duration {
+	if step.TimeoutSeconds > 0 {
+		return time.Duration(step.TimeoutSeconds) * time.Second
+	}
+	if typeSpec.Adapter.TimeoutSeconds > 0 {
+		return time.Duration(typeSpec.Adapter.TimeoutSeconds) * time.Second
+	}
+	return defaultWorkflowStepTimeout
+}
+
+func sleepWithContext(ctx context.Context, duration time.Duration) error {
+	if duration <= 0 {
+		return nil
+	}
+
+	timer := time.NewTimer(duration)
+	defer timer.Stop()
+
+	select {
+	case <-ctx.Done():
+		return ctx.Err()
+	case <-timer.C:
+		return nil
+	}
+}
+
+func dispatchWorkflowThroughIntegration(
+	ctx context.Context,
+	conn *amqp.Connection,
+	req model.DispatchWorkflowRequest,
+	instanceManifest model.Manifest,
+	instanceSpec model.IntegrationInstanceManifestSpec,
+	typeManifest model.Manifest,
+	typeSpec model.IntegrationTypeManifestSpec,
+	timeoutOverride time.Duration,
+) (model.DispatchWorkflowResponse, error) {
+	request := model.ExecuteIntegrationRequest{
+		Operation:  req.Operation,
+		Capability: req.Capability,
+		Input: map[string]any{
+			"component_id": req.Workflow.ComponentID,
+			"repository":   req.Workflow.Repository,
+			"workflow":     req.Workflow.Workflow,
+			"ref":          req.Workflow.Ref,
+			"inputs":       cloneAuthorizationInput(req.Workflow.Inputs),
+			"metadata":     cloneAuthorizationInput(req.Workflow.Metadata),
+		},
+		Auth: workflowDispatchAuthToMap(req.Auth),
+		Metadata: map[string]any{
+			"source": "workflow.dispatch",
+		},
+	}
+
+	response, err := executeIntegrationThroughResolved(
+		ctx,
+		conn,
+		request,
+		instanceManifest,
+		instanceSpec,
+		typeManifest,
+		typeSpec,
+		timeoutOverride,
+	)
+	if err != nil {
+		return model.DispatchWorkflowResponse{}, err
+	}
+
+	workflow := req.Workflow
+	renderedWorkflow := workflowDispatchSpecFromOutput(response.Output)
+	if workflowDispatchSpecProvided(renderedWorkflow) {
+		workflow = mergeWorkflowDispatchSpec(workflow, renderedWorkflow)
+	}
+
+	status := normalizeDispatchExecutionStatus(response.Status)
+	if status == "" {
+		status = "dispatched"
+	}
+
+	return model.DispatchWorkflowResponse{
+		Operation:       req.Operation,
+		Status:          status,
+		Runner:          manifestReferenceFromRecord(instanceManifest),
+		IntegrationType: manifestReferenceFromRecord(typeManifest),
+		Workflow:        workflow,
+		Metadata:        response.Metadata,
+	}, nil
+}
+
+func workflowDispatchSpecProvided(spec model.WorkflowDispatchSpec) bool {
+	return strings.TrimSpace(spec.Repository) != "" ||
+		strings.TrimSpace(spec.Workflow) != "" ||
+		strings.TrimSpace(spec.Ref) != "" ||
+		strings.TrimSpace(spec.ComponentID) != "" ||
+		len(spec.Inputs) > 0 ||
+		len(spec.Metadata) > 0
+}
+
+func workflowDispatchSpecFromOutput(value any) model.WorkflowDispatchSpec {
+	output, ok := value.(map[string]any)
+	if !ok || output == nil {
+		return model.WorkflowDispatchSpec{}
+	}
+
+	return model.WorkflowDispatchSpec{
+		ComponentID: workflowInputString(output["component_id"]),
+		Repository:  workflowInputString(output["repository"]),
+		Workflow:    workflowInputString(output["workflow"]),
+		Ref:         workflowInputString(output["ref"]),
+		Inputs:      workflowInputMap(output["inputs"]),
+		Metadata:    workflowInputMap(output["metadata"]),
+	}
+}
+
+func mergeWorkflowDispatchSpec(base model.WorkflowDispatchSpec, override model.WorkflowDispatchSpec) model.WorkflowDispatchSpec {
+	if strings.TrimSpace(override.ComponentID) != "" {
+		base.ComponentID = override.ComponentID
+	}
+	if strings.TrimSpace(override.Repository) != "" {
+		base.Repository = override.Repository
+	}
+	if strings.TrimSpace(override.Workflow) != "" {
+		base.Workflow = override.Workflow
+	}
+	if strings.TrimSpace(override.Ref) != "" {
+		base.Ref = override.Ref
+	}
+	if len(override.Inputs) > 0 {
+		base.Inputs = override.Inputs
+	}
+	if len(override.Metadata) > 0 {
+		base.Metadata = override.Metadata
+	}
+	return base
+}
+
+func normalizeDispatchExecutionStatus(status string) string {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "", "ok", "done", "completed", "success", "succeeded":
+		return "dispatched"
+	default:
+		return strings.TrimSpace(status)
+	}
+}
+
+func workflowDispatchAuthToMap(auth model.WorkflowDispatchAuth) map[string]any {
+	if strings.TrimSpace(auth.Token) == "" {
+		return map[string]any{}
+	}
+	return map[string]any{
+		"token": strings.TrimSpace(auth.Token),
+	}
+}
+
+func normalizeWorkflowIntegrationStatus(status string) string {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "", "ok", "done", "completed", "dispatched", "succeeded", "success":
+		return "succeeded"
+	default:
+		return "failed"
+	}
+}
+
+func normalizeRunWorkflowRequest(req model.RunWorkflowRequest) model.RunWorkflowRequest {
+	req.Auth.Token = strings.TrimSpace(req.Auth.Token)
+	if req.Inputs == nil {
+		req.Inputs = map[string]any{}
+	}
+	if req.Metadata == nil {
+		req.Metadata = map[string]any{}
+	}
+	return req
+}
+
+func validateRunWorkflowRequest(req model.RunWorkflowRequest) error {
+	if !manifestSelectorProvided(&req.Workflow) {
+		return fmt.Errorf("workflow requires manifest_id or name")
+	}
+	return nil
+}
+
+func normalizeWorkflowDispatchRequest(req model.DispatchWorkflowRequest) model.DispatchWorkflowRequest {
+	req.Operation = strings.TrimSpace(req.Operation)
+	if req.Operation == "" {
+		req.Operation = model.WorkflowDispatchOperation
+	}
+
+	req.Capability = strings.TrimSpace(req.Capability)
+	if req.Capability == "" {
+		req.Capability = req.Operation
+	}
+
+	req.Workflow.Repository = strings.TrimSpace(req.Workflow.Repository)
+	req.Workflow.Workflow = strings.TrimSpace(req.Workflow.Workflow)
+	req.Workflow.Ref = strings.TrimSpace(req.Workflow.Ref)
+	req.Workflow.ComponentID = strings.TrimSpace(req.Workflow.ComponentID)
+	req.Auth.Token = strings.TrimSpace(req.Auth.Token)
+
+	if req.Workflow.Inputs == nil {
+		req.Workflow.Inputs = map[string]any{}
+	}
+	if req.Workflow.Metadata == nil {
+		req.Workflow.Metadata = map[string]any{}
+	}
+
+	return req
+}
+
+func validateWorkflowDispatchRequest(req model.DispatchWorkflowRequest) error {
+	if strings.TrimSpace(req.Runner.ManifestID) == "" && strings.TrimSpace(req.Runner.Name) == "" {
+		return fmt.Errorf("workflow runner requires manifest_id or name")
+	}
+	if strings.TrimSpace(req.Workflow.Repository) == "" {
+		return fmt.Errorf("workflow repository is required")
+	}
+	if strings.TrimSpace(req.Workflow.Workflow) == "" {
+		return fmt.Errorf("workflow name is required")
+	}
+
+	return nil
+}
+
+func mergeStringAnyMaps(base map[string]any, extra map[string]any) map[string]any {
+	if len(base) == 0 && len(extra) == 0 {
+		return nil
+	}
+
+	merged := map[string]any{}
+	for key, value := range base {
+		merged[key] = value
+	}
+	for key, value := range extra {
+		merged[key] = value
+	}
+
+	return merged
+}
+
+func normalizeWorkflowStepID(value string) string {
+	return strings.ToLower(strings.TrimSpace(value))
+}

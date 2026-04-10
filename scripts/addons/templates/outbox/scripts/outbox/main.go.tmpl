@@ -1,0 +1,60 @@
+package main
+
+import (
+	"encoding/json"
+	"os"
+	"strconv"
+	"strings"
+
+	"{{MODULE_PATH}}/store"
+)
+
+func main() {
+	_ = json.NewEncoder(os.Stdout).Encode(map[string]any{
+		"service":         "{{SERVICE_NAME}}",
+		"fastEnabled":     envBool("OUTBOX_ENABLE_FAST", true),
+		"criticalEnabled": envBool("OUTBOX_ENABLE_CRITICAL", true),
+		"fastNamespace":   firstNonEmpty(os.Getenv("OUTBOX_FAST_NAMESPACE"), store.OutboxPrefixApp),
+		"fastBatch":       envInt("OUTBOX_FAST_BATCH", 500),
+		"criticalBatch":   envInt("OUTBOX_CRITICAL_BATCH", 300),
+		"brokerURLSet":    os.Getenv("BROKER_URL") != "",
+		"databaseURLSet":  os.Getenv("DATABASE_URL") != "",
+		"redisURLSet":     os.Getenv("REDIS_URL") != "",
+	})
+}
+
+func envBool(key string, fallback bool) bool {
+	raw := strings.TrimSpace(strings.ToLower(os.Getenv(key)))
+	if raw == "" {
+		return fallback
+	}
+	switch raw {
+	case "1", "true", "yes", "on":
+		return true
+	case "0", "false", "no", "off":
+		return false
+	default:
+		return fallback
+	}
+}
+
+func envInt(key string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(key))
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
+}
+
+func firstNonEmpty(values ...string) string {
+	for _, value := range values {
+		if value != "" {
+			return value
+		}
+	}
+	return ""
+}

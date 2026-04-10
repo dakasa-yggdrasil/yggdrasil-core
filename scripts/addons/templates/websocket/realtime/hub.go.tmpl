@@ -1,0 +1,72 @@
+package realtime
+
+import (
+	"sync"
+
+	"github.com/gorilla/websocket"
+)
+
+// Hub is a simple in-memory websocket broadcaster.
+type Hub struct {
+	mu      sync.RWMutex
+	clients map[*websocket.Conn]struct{}
+}
+
+// NewHub creates an empty websocket hub.
+func NewHub() *Hub {
+	return &Hub{
+		clients: map[*websocket.Conn]struct{}{},
+	}
+}
+
+// Add registers a websocket connection.
+func (h *Hub) Add(conn *websocket.Conn) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+	h.clients[conn] = struct{}{}
+}
+
+// Remove unregisters and closes a websocket connection.
+func (h *Hub) Remove(conn *websocket.Conn) {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	delete(h.clients, conn)
+	_ = conn.Close()
+}
+
+// Broadcast sends the same message to every active websocket connection.
+func (h *Hub) Broadcast(message []byte) {
+	h.mu.RLock()
+	clients := make([]*websocket.Conn, 0, len(h.clients))
+	for conn := range h.clients {
+		clients = append(clients, conn)
+	}
+	h.mu.RUnlock()
+
+	for _, conn := range clients {
+		if err := conn.WriteMessage(websocket.TextMessage, message); err != nil {
+			h.Remove(conn)
+		}
+	}
+}
+
+// Count returns the number of active connections.
+func (h *Hub) Count() int {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+	return len(h.clients)
+}
+
+// Close closes every websocket connection managed by the hub.
+func (h *Hub) Close() error {
+	h.mu.Lock()
+	defer h.mu.Unlock()
+
+	for conn := range h.clients {
+		_ = conn.Close()
+		delete(h.clients, conn)
+	}
+
+	return nil
+}

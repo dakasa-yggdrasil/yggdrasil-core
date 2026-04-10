@@ -1,0 +1,456 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/product-installation-adapter/v1/schema.json",
+  "title": "Yggdrasil Product Installation Adapter v1",
+  "type": "object",
+  "description": "Bundle schema for installation-oriented adapter requests and responses.",
+  "$defs": {
+    "manifestSelector": {
+      "type": "object",
+      "properties": {
+        "manifest_id": { "type": "string" },
+        "namespace": { "type": "string" },
+        "name": { "type": "string" },
+        "version": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "manifestReference": {
+      "type": "object",
+      "required": ["id", "kind", "namespace", "name", "version"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "kind": { "type": "string" },
+        "namespace": { "type": "string" },
+        "name": { "type": "string" },
+        "version": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "integrationAdapterQueue": {
+      "type": "object",
+      "properties": {
+        "describe": { "type": "string" },
+        "discover": { "type": "string" },
+        "read": { "type": "string" },
+        "execute": { "type": "string" },
+        "sync": { "type": "string" },
+        "health": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "integrationAdapterRoute": {
+      "type": "object",
+      "properties": {
+        "describe": { "type": "string" },
+        "discover": { "type": "string" },
+        "read": { "type": "string" },
+        "execute": { "type": "string" },
+        "sync": { "type": "string" },
+        "health": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "integrationAdapterSpec": {
+      "type": "object",
+      "required": ["transport", "version", "queues"],
+      "properties": {
+        "transport": { "type": "string" },
+        "version": { "type": "string" },
+        "queues": { "$ref": "#/$defs/integrationAdapterQueue" },
+        "endpoints": { "$ref": "#/$defs/integrationAdapterRoute" },
+        "timeout_seconds": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "integrationSchemaProperty": {
+      "type": "object",
+      "required": ["type"],
+      "properties": {
+        "type": { "type": "string" },
+        "description": { "type": "string" },
+        "secret": { "type": "boolean" },
+        "enum": { "type": "array", "items": true },
+        "default": true
+      },
+      "additionalProperties": false
+    },
+    "integrationSchemaSpec": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": { "type": "string" },
+        "required": { "type": "array", "items": { "type": "string" } },
+        "properties": {
+          "type": "object",
+          "additionalProperties": { "$ref": "#/$defs/integrationSchemaProperty" }
+        }
+      },
+      "additionalProperties": false
+    },
+    "integrationCredentialPolicySpec": {
+      "type": "object",
+      "properties": {
+        "source": { "type": "string" },
+        "materialize_inline": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "integrationGuardianSignalSupportSpec": {
+      "type": "object",
+      "properties": {
+        "oom_killed": { "type": "array", "items": { "type": "string" } },
+        "restart_count": { "type": "array", "items": { "type": "string" } },
+        "error_rate": { "type": "array", "items": { "type": "string" } },
+        "queue_backlog": { "type": "array", "items": { "type": "string" } },
+        "memory_pressure": { "type": "array", "items": { "type": "string" } },
+        "disk_pressure": { "type": "array", "items": { "type": "string" } },
+        "rate_limited": { "type": "array", "items": { "type": "string" } },
+        "auth_denied": { "type": "array", "items": { "type": "string" } },
+        "sync_lag_seconds": { "type": "array", "items": { "type": "string" } },
+        "monthly_cost_usd": { "type": "array", "items": { "type": "string" } },
+        "utilization": { "type": "array", "items": { "type": "string" } },
+        "idle_hours": { "type": "array", "items": { "type": "string" } },
+        "overprovisioned": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "integrationGuardianSupportSpec": {
+      "type": "object",
+      "properties": {
+        "mode": { "type": "string" },
+        "signals": { "$ref": "#/$defs/integrationGuardianSignalSupportSpec" }
+      },
+      "additionalProperties": false
+    },
+    "integrationResourceType": {
+      "type": "object",
+      "required": ["name", "canonical_prefix", "identity_template", "discoverable", "default_actions"],
+      "properties": {
+        "name": { "type": "string" },
+        "canonical_prefix": { "type": "string" },
+        "identity_template": { "type": "string" },
+        "discoverable": { "type": "boolean" },
+        "default_actions": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "integrationActionDefinition": {
+      "type": "object",
+      "required": ["name"],
+      "properties": {
+        "name": { "type": "string" },
+        "description": { "type": "string" },
+        "resource_types": { "type": "array", "items": { "type": "string" } },
+        "idempotent": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "integrationDiscoverySpec": {
+      "type": "object",
+      "required": ["mode"],
+      "properties": {
+        "mode": { "type": "string" },
+        "cursor": { "type": "string" },
+        "supports_webhooks": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "integrationNormalizationSpec": {
+      "type": "object",
+      "required": ["external_id_path", "fallback_resource_prefix"],
+      "properties": {
+        "external_id_path": { "type": "string" },
+        "name_path": { "type": "string" },
+        "owner_path": { "type": "string" },
+        "fallback_resource_prefix": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "integrationExecutionSpec": {
+      "type": "object",
+      "properties": {
+        "supports_dry_run": { "type": "boolean" },
+        "idempotent_actions": { "type": "array", "items": { "type": "string" } }
+      },
+      "additionalProperties": false
+    },
+    "integrationExtensionsSpec": {
+      "type": "object",
+      "properties": {
+        "allow_custom_resource_types": { "type": "boolean" },
+        "allow_custom_actions": { "type": "boolean" },
+        "preserve_raw_payload": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "integrationTypeManifestSpec": {
+      "type": "object",
+      "required": [
+        "provider",
+        "adapter",
+        "capabilities",
+        "credential_schema",
+        "instance_schema",
+        "resource_types",
+        "discovery",
+        "normalization",
+        "execution",
+        "extensions"
+      ],
+      "properties": {
+        "provider": { "type": "string" },
+        "adapter": { "$ref": "#/$defs/integrationAdapterSpec" },
+        "capabilities": { "type": "array", "items": { "type": "string" } },
+        "credential_policy": { "$ref": "#/$defs/integrationCredentialPolicySpec" },
+        "guardian_support": { "$ref": "#/$defs/integrationGuardianSupportSpec" },
+        "credential_schema": { "$ref": "#/$defs/integrationSchemaSpec" },
+        "instance_schema": { "$ref": "#/$defs/integrationSchemaSpec" },
+        "resource_types": { "type": "array", "items": { "$ref": "#/$defs/integrationResourceType" } },
+        "action_catalog": { "type": "array", "items": { "$ref": "#/$defs/integrationActionDefinition" } },
+        "discovery": { "$ref": "#/$defs/integrationDiscoverySpec" },
+        "normalization": { "$ref": "#/$defs/integrationNormalizationSpec" },
+        "execution": { "$ref": "#/$defs/integrationExecutionSpec" },
+        "extensions": { "$ref": "#/$defs/integrationExtensionsSpec" }
+      },
+      "additionalProperties": false
+    },
+    "integrationInstanceDiscoverySpec": {
+      "type": "object",
+      "required": ["enabled"],
+      "properties": {
+        "enabled": { "type": "boolean" },
+        "mode": { "type": "string" },
+        "sync_interval_seconds": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "integrationInstanceExecutionSpec": {
+      "type": "object",
+      "properties": {
+        "default_dry_run": { "type": "boolean" },
+        "max_batch_size": { "type": "integer" }
+      },
+      "additionalProperties": false
+    },
+    "integrationInstanceManifestSpec": {
+      "type": "object",
+      "required": ["type_ref", "discovery"],
+      "properties": {
+        "type_ref": { "$ref": "#/$defs/manifestSelector" },
+        "status": { "type": "string" },
+        "owners": { "type": "array", "items": { "type": "string" } },
+        "credentials": { "type": "object", "additionalProperties": true },
+        "credentials_ref": { "type": "string" },
+        "config": { "type": "object", "additionalProperties": true },
+        "discovery": { "$ref": "#/$defs/integrationInstanceDiscoverySpec" },
+        "execution": { "$ref": "#/$defs/integrationInstanceExecutionSpec" }
+      },
+      "additionalProperties": false
+    },
+    "productTargetSpec": {
+      "type": "object",
+      "required": ["kind", "integration_instance_ref"],
+      "properties": {
+        "kind": { "type": "string" },
+        "integration_instance_ref": { "$ref": "#/$defs/manifestSelector" },
+        "namespace": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "productReconcileSpec": {
+      "type": "object",
+      "properties": {
+        "strategy": { "type": "string" },
+        "prune": { "type": "boolean" },
+        "wait": { "type": "boolean" }
+      },
+      "additionalProperties": false
+    },
+    "generateInstallationContext": {
+      "type": "object",
+      "required": ["product", "component"],
+      "properties": {
+        "product": { "$ref": "#/$defs/manifestReference" },
+        "component": { "type": "string" },
+        "category": { "type": "string" },
+        "class": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "generateInstallationIntegrationContext": {
+      "type": "object",
+      "required": ["type", "type_spec", "instance", "instance_spec"],
+      "properties": {
+        "type": { "$ref": "#/$defs/manifestReference" },
+        "type_spec": { "$ref": "#/$defs/integrationTypeManifestSpec" },
+        "instance": { "$ref": "#/$defs/manifestReference" },
+        "instance_spec": { "$ref": "#/$defs/integrationInstanceManifestSpec" }
+      },
+      "additionalProperties": false
+    },
+    "targetIntegrationContext": {
+      "type": "object",
+      "required": ["type", "type_spec", "instance", "instance_spec"],
+      "properties": {
+        "type": { "$ref": "#/$defs/manifestReference" },
+        "type_spec": { "$ref": "#/$defs/integrationTypeManifestSpec" },
+        "instance": { "$ref": "#/$defs/manifestReference" },
+        "instance_spec": { "$ref": "#/$defs/integrationInstanceManifestSpec" }
+      },
+      "additionalProperties": false
+    },
+    "generateInstallationRequest": {
+      "type": "object",
+      "required": ["operation", "context", "integration"],
+      "properties": {
+        "operation": { "type": "string" },
+        "context": { "$ref": "#/$defs/generateInstallationContext" },
+        "integration": { "$ref": "#/$defs/generateInstallationIntegrationContext" },
+        "capability": { "type": "string" },
+        "input": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": false
+    },
+    "generateInstallationResponse": {
+      "type": "object",
+      "required": ["objects"],
+      "properties": {
+        "operation": { "type": "string" },
+        "objects": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true }
+        },
+        "metadata": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": false
+    },
+    "reconcileInstallationRequest": {
+      "type": "object",
+      "required": ["operation", "context", "integration", "target"],
+      "properties": {
+        "operation": { "type": "string" },
+        "context": { "$ref": "#/$defs/generateInstallationContext" },
+        "integration": { "$ref": "#/$defs/generateInstallationIntegrationContext" },
+        "capability": { "type": "string" },
+        "input": { "type": "object", "additionalProperties": true },
+        "target": { "$ref": "#/$defs/productTargetSpec" },
+        "reconcile": { "$ref": "#/$defs/productReconcileSpec" }
+      },
+      "additionalProperties": false
+    },
+    "reconcileInstallationResponse": {
+      "type": "object",
+      "properties": {
+        "operation": { "type": "string" },
+        "mode": { "type": "string" },
+        "objects": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true }
+        },
+        "metadata": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": false
+    },
+    "declarativeApplyRequest": {
+      "type": "object",
+      "required": ["operation", "context", "target", "objects"],
+      "properties": {
+        "operation": { "type": "string" },
+        "context": { "$ref": "#/$defs/generateInstallationContext" },
+        "target": { "$ref": "#/$defs/targetIntegrationContext" },
+        "objects": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true }
+        },
+        "namespace": { "type": "string" },
+        "reconcile": { "$ref": "#/$defs/productReconcileSpec" }
+      },
+      "additionalProperties": false
+    },
+    "declarativeApplyResponse": {
+      "type": "object",
+      "required": ["applied"],
+      "properties": {
+        "operation": { "type": "string" },
+        "applied": { "type": "boolean" },
+        "mode": { "type": "string" },
+        "resources": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/installationResourceState" }
+        },
+        "metadata": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": false
+    },
+    "installationResourceState": {
+      "type": "object",
+      "required": ["kind", "name"],
+      "properties": {
+        "kind": { "type": "string" },
+        "namespace": { "type": "string" },
+        "name": { "type": "string" },
+        "status": { "type": "string" },
+        "observed": { "type": "boolean" },
+        "metadata": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": false
+    },
+    "observeObjectsRequest": {
+      "type": "object",
+      "required": ["operation", "context", "target", "objects"],
+      "properties": {
+        "operation": { "type": "string" },
+        "context": { "$ref": "#/$defs/generateInstallationContext" },
+        "target": { "$ref": "#/$defs/targetIntegrationContext" },
+        "objects": {
+          "type": "array",
+          "items": { "type": "object", "additionalProperties": true }
+        },
+        "namespace": { "type": "string" }
+      },
+      "additionalProperties": false
+    },
+    "observeObjectsResponse": {
+      "type": "object",
+      "properties": {
+        "operation": { "type": "string" },
+        "status": { "type": "string" },
+        "observed": { "type": "boolean" },
+        "resources": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/installationResourceState" }
+        },
+        "metadata": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": false
+    },
+    "discoverInstallationStateRequest": {
+      "type": "object",
+      "required": ["operation", "context", "integration", "target"],
+      "properties": {
+        "operation": { "type": "string" },
+        "context": { "$ref": "#/$defs/generateInstallationContext" },
+        "integration": { "$ref": "#/$defs/generateInstallationIntegrationContext" },
+        "capability": { "type": "string" },
+        "input": { "type": "object", "additionalProperties": true },
+        "target": { "$ref": "#/$defs/productTargetSpec" }
+      },
+      "additionalProperties": false
+    },
+    "discoverInstallationStateResponse": {
+      "type": "object",
+      "properties": {
+        "operation": { "type": "string" },
+        "status": { "type": "string" },
+        "observed": { "type": "boolean" },
+        "resources": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/installationResourceState" }
+        },
+        "metadata": { "type": "object", "additionalProperties": true }
+      },
+      "additionalProperties": false
+    }
+  }
+}

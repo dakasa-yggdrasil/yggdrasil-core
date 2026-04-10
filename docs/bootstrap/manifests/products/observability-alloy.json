@@ -1,0 +1,505 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "product",
+  "metadata": {
+    "name": "observability-alloy",
+    "namespace": "legacy-products",
+    "description": "Bootstrap product manifest.",
+    "labels": {
+      "bootstrap_source": "core"
+    }
+  },
+  "spec": {
+    "category": "observability",
+    "class": "platform",
+    "lifecycle": {},
+    "components": [
+      {
+        "name": "alloy",
+        "source": {
+          "kind": "inline",
+          "objects": [
+            {
+              "apiVersion": "v1",
+              "kind": "Namespace",
+              "metadata": {
+                "name": "alloy"
+              }
+            },
+            {
+              "apiVersion": "rbac.authorization.k8s.io/v1",
+              "kind": "ClusterRole",
+              "metadata": {
+                "labels": {
+                  "app.kubernetes.io/instance": "alloy-operator",
+                  "app.kubernetes.io/managed-by": "Helm",
+                  "app.kubernetes.io/name": "alloy-operator",
+                  "app.kubernetes.io/version": "1.1.2",
+                  "helm.sh/chart": "alloy-operator-0.3.5"
+                },
+                "name": "alloy-operator-alloy-manager"
+              },
+              "rules": [
+                {
+                  "apiGroups": [
+                    "collectors.grafana.com"
+                  ],
+                  "resources": [
+                    "alloys",
+                    "alloys/status",
+                    "alloys/finalizers"
+                  ],
+                  "verbs": [
+                    "create",
+                    "delete",
+                    "get",
+                    "list",
+                    "patch",
+                    "update",
+                    "watch"
+                  ]
+                }
+              ]
+            },
+            {
+              "apiVersion": "rbac.authorization.k8s.io/v1",
+              "kind": "ClusterRole",
+              "metadata": {
+                "name": "alloy-operator"
+              },
+              "rules": [
+                {
+                  "apiGroups": [
+                    ""
+                  ],
+                  "resources": [
+                    "configmaps",
+                    "secrets",
+                    "serviceaccounts",
+                    "services"
+                  ],
+                  "verbs": [
+                    "*"
+                  ]
+                },
+                {
+                  "apiGroups": [
+                    "apps"
+                  ],
+                  "resources": [
+                    "daemonsets",
+                    "deployments",
+                    "statefulsets"
+                  ],
+                  "verbs": [
+                    "*"
+                  ]
+                },
+                {
+                  "apiGroups": [
+                    "autoscaling"
+                  ],
+                  "resources": [
+                    "horizontalpodautoscalers"
+                  ],
+                  "verbs": [
+                    "*"
+                  ]
+                },
+                {
+                  "apiGroups": [
+                    "networking.k8s.io"
+                  ],
+                  "resources": [
+                    "ingresses",
+                    "networkpolicies"
+                  ],
+                  "verbs": [
+                    "*"
+                  ]
+                },
+                {
+                  "apiGroups": [
+                    "policy"
+                  ],
+                  "resources": [
+                    "poddisruptionbudgets"
+                  ],
+                  "verbs": [
+                    "*"
+                  ]
+                },
+                {
+                  "apiGroups": [
+                    "rbac.authorization.k8s.io"
+                  ],
+                  "resources": [
+                    "clusterroles",
+                    "clusterrolebindings"
+                  ],
+                  "verbs": [
+                    "*"
+                  ]
+                }
+              ]
+            },
+            {
+              "apiVersion": "rbac.authorization.k8s.io/v1",
+              "kind": "ClusterRoleBinding",
+              "metadata": {
+                "labels": {
+                  "app.kubernetes.io/instance": "alloy-operator",
+                  "app.kubernetes.io/managed-by": "Helm",
+                  "app.kubernetes.io/name": "alloy-operator",
+                  "app.kubernetes.io/version": "1.1.2",
+                  "helm.sh/chart": "alloy-operator-0.3.5"
+                },
+                "name": "alloy-operator-alloy-manager"
+              },
+              "roleRef": {
+                "apiGroup": "rbac.authorization.k8s.io",
+                "kind": "ClusterRole",
+                "name": "alloy-operator-alloy-manager"
+              },
+              "subjects": [
+                {
+                  "kind": "ServiceAccount",
+                  "name": "alloy-operator",
+                  "namespace": "alloy"
+                }
+              ]
+            },
+            {
+              "apiVersion": "rbac.authorization.k8s.io/v1",
+              "kind": "ClusterRoleBinding",
+              "metadata": {
+                "labels": {
+                  "app.kubernetes.io/instance": "alloy-operator",
+                  "app.kubernetes.io/managed-by": "Helm",
+                  "app.kubernetes.io/name": "alloy-operator",
+                  "app.kubernetes.io/version": "1.1.2",
+                  "helm.sh/chart": "alloy-operator-0.3.5"
+                },
+                "name": "alloy-operator"
+              },
+              "roleRef": {
+                "apiGroup": "rbac.authorization.k8s.io",
+                "kind": "ClusterRole",
+                "name": "alloy-operator"
+              },
+              "subjects": [
+                {
+                  "kind": "ServiceAccount",
+                  "name": "alloy-operator",
+                  "namespace": "alloy"
+                }
+              ]
+            },
+            {
+              "apiVersion": "apiextensions.k8s.io/v1",
+              "kind": "CustomResourceDefinition",
+              "metadata": {
+                "name": "alloys.collectors.grafana.com"
+              },
+              "spec": {
+                "group": "collectors.grafana.com",
+                "names": {
+                  "kind": "Alloy",
+                  "listKind": "AlloyList",
+                  "plural": "alloys",
+                  "singular": "alloy"
+                },
+                "scope": "Namespaced",
+                "versions": [
+                  {
+                    "name": "v1alpha1",
+                    "schema": {
+                      "openAPIV3Schema": {
+                        "description": "Alloy is the Schema for the alloys API",
+                        "properties": {
+                          "apiVersion": {
+                            "description": "APIVersion defines the versioned schema of this representation of an object. Servers should convert recognized schemas to the latest internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources",
+                            "type": "string"
+                          },
+                          "kind": {
+                            "description": "Kind is a string value representing the REST resource this object represents. Servers may infer this from the endpoint the client submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds",
+                            "type": "string"
+                          },
+                          "metadata": {
+                            "type": "object"
+                          },
+                          "spec": {
+                            "description": "Spec defines the desired state of Alloy",
+                            "type": "object",
+                            "x-kubernetes-preserve-unknown-fields": true
+                          },
+                          "status": {
+                            "description": "Status defines the observed state of Alloy",
+                            "type": "object",
+                            "x-kubernetes-preserve-unknown-fields": true
+                          }
+                        },
+                        "type": "object"
+                      }
+                    },
+                    "served": true,
+                    "storage": true,
+                    "subresources": {
+                      "status": {}
+                    }
+                  }
+                ]
+              }
+            },
+            {
+              "apiVersion": "rbac.authorization.k8s.io/v1",
+              "kind": "Role",
+              "metadata": {
+                "labels": {
+                  "app.kubernetes.io/instance": "alloy-operator",
+                  "app.kubernetes.io/managed-by": "Helm",
+                  "app.kubernetes.io/name": "alloy-operator",
+                  "app.kubernetes.io/version": "1.1.2",
+                  "helm.sh/chart": "alloy-operator-0.3.5"
+                },
+                "name": "alloy-operator-leader-election-role",
+                "namespace": "alloy"
+              },
+              "rules": [
+                {
+                  "apiGroups": [
+                    ""
+                  ],
+                  "resources": [
+                    "configmaps"
+                  ],
+                  "verbs": [
+                    "get",
+                    "list",
+                    "watch",
+                    "create",
+                    "update",
+                    "patch",
+                    "delete"
+                  ]
+                },
+                {
+                  "apiGroups": [
+                    "coordination.k8s.io"
+                  ],
+                  "resources": [
+                    "leases"
+                  ],
+                  "verbs": [
+                    "get",
+                    "list",
+                    "watch",
+                    "create",
+                    "update",
+                    "patch",
+                    "delete"
+                  ]
+                },
+                {
+                  "apiGroups": [
+                    ""
+                  ],
+                  "resources": [
+                    "events"
+                  ],
+                  "verbs": [
+                    "create",
+                    "patch"
+                  ]
+                }
+              ]
+            },
+            {
+              "apiVersion": "rbac.authorization.k8s.io/v1",
+              "kind": "RoleBinding",
+              "metadata": {
+                "labels": {
+                  "app.kubernetes.io/instance": "alloy-operator",
+                  "app.kubernetes.io/managed-by": "Helm",
+                  "app.kubernetes.io/name": "alloy-operator",
+                  "app.kubernetes.io/version": "1.1.2",
+                  "helm.sh/chart": "alloy-operator-0.3.5"
+                },
+                "name": "alloy-operator-leader-election-rolebinding",
+                "namespace": "alloy"
+              },
+              "roleRef": {
+                "apiGroup": "rbac.authorization.k8s.io",
+                "kind": "Role",
+                "name": "alloy-operator-leader-election-role"
+              },
+              "subjects": [
+                {
+                  "kind": "ServiceAccount",
+                  "name": "alloy-operator",
+                  "namespace": "alloy"
+                }
+              ]
+            },
+            {
+              "apiVersion": "v1",
+              "kind": "Service",
+              "metadata": {
+                "labels": {
+                  "app.kubernetes.io/instance": "alloy-operator",
+                  "app.kubernetes.io/managed-by": "Helm",
+                  "app.kubernetes.io/name": "alloy-operator",
+                  "app.kubernetes.io/version": "1.1.2",
+                  "helm.sh/chart": "alloy-operator-0.3.5"
+                },
+                "name": "alloy-operator",
+                "namespace": "alloy"
+              },
+              "spec": {
+                "ports": [
+                  {
+                    "name": "http",
+                    "port": 8081,
+                    "protocol": "TCP",
+                    "targetPort": "http"
+                  },
+                  {
+                    "name": "metrics",
+                    "port": 8082,
+                    "protocol": "TCP",
+                    "targetPort": "metrics"
+                  }
+                ],
+                "selector": {
+                  "app.kubernetes.io/instance": "alloy-operator",
+                  "app.kubernetes.io/name": "alloy-operator"
+                },
+                "type": "ClusterIP"
+              }
+            },
+            {
+              "apiVersion": "v1",
+              "automountServiceAccountToken": true,
+              "kind": "ServiceAccount",
+              "metadata": {
+                "labels": {
+                  "app.kubernetes.io/instance": "alloy-operator",
+                  "app.kubernetes.io/managed-by": "Helm",
+                  "app.kubernetes.io/name": "alloy-operator",
+                  "app.kubernetes.io/version": "1.1.2",
+                  "helm.sh/chart": "alloy-operator-0.3.5"
+                },
+                "name": "alloy-operator",
+                "namespace": "alloy"
+              }
+            },
+            {
+              "apiVersion": "apps/v1",
+              "kind": "Deployment",
+              "metadata": {
+                "labels": {
+                  "app.kubernetes.io/instance": "alloy-operator",
+                  "app.kubernetes.io/managed-by": "Helm",
+                  "app.kubernetes.io/name": "alloy-operator",
+                  "app.kubernetes.io/version": "1.1.2",
+                  "helm.sh/chart": "alloy-operator-0.3.5"
+                },
+                "name": "alloy-operator",
+                "namespace": "alloy"
+              },
+              "spec": {
+                "replicas": 1,
+                "selector": {
+                  "matchLabels": {
+                    "app.kubernetes.io/instance": "alloy-operator",
+                    "app.kubernetes.io/name": "alloy-operator"
+                  }
+                },
+                "template": {
+                  "metadata": {
+                    "labels": {
+                      "app.kubernetes.io/instance": "alloy-operator",
+                      "app.kubernetes.io/managed-by": "Helm",
+                      "app.kubernetes.io/name": "alloy-operator",
+                      "app.kubernetes.io/version": "1.1.2",
+                      "helm.sh/chart": "alloy-operator-0.3.5"
+                    }
+                  },
+                  "spec": {
+                    "containers": [
+                      {
+                        "args": [
+                          "--leader-elect",
+                          "--leader-election-id=alloy-operator",
+                          "--health-probe-bind-address=:8081",
+                          "--metrics-bind-address=:8082"
+                        ],
+                        "image": "ghcr.io/grafana/alloy-operator:1.1.2",
+                        "imagePullPolicy": "IfNotPresent",
+                        "livenessProbe": {
+                          "httpGet": {
+                            "path": "/healthz",
+                            "port": 8081
+                          },
+                          "initialDelaySeconds": 15,
+                          "periodSeconds": 20
+                        },
+                        "name": "alloy-operator",
+                        "ports": [
+                          {
+                            "containerPort": 8081,
+                            "name": "http",
+                            "protocol": "TCP"
+                          },
+                          {
+                            "containerPort": 8082,
+                            "name": "metrics",
+                            "protocol": "TCP"
+                          }
+                        ],
+                        "readinessProbe": {
+                          "httpGet": {
+                            "path": "/readyz",
+                            "port": 8081
+                          },
+                          "initialDelaySeconds": 5,
+                          "periodSeconds": 10
+                        },
+                        "resources": {
+                          "limits": {},
+                          "requests": {}
+                        },
+                        "securityContext": {
+                          "runAsNonRoot": true
+                        }
+                      }
+                    ],
+                    "nodeSelector": {
+                      "kubernetes.io/os": "linux"
+                    },
+                    "serviceAccountName": "alloy-operator"
+                  }
+                }
+              }
+            }
+          ]
+        },
+        "renderer": {
+          "kind": "raw_k8s"
+        },
+        "target": {
+          "kind": "kubernetes",
+          "integration_instance_ref": {
+            "namespace": "global",
+            "name": "kubernetes-default"
+          },
+          "namespace": "alloy"
+        },
+        "reconcile": {
+          "strategy": "apply",
+          "prune": true
+        }
+      }
+    ]
+  }
+}

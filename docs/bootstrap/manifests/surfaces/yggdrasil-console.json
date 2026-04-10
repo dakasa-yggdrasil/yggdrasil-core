@@ -1,0 +1,49 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "surface",
+  "metadata": {
+    "name": "yggdrasil-console",
+    "namespace": "global",
+    "description": "Reference web console for operators using Yggdrasil.",
+    "labels": {
+      "yggdrasil.io/surface-category": "console",
+      "yggdrasil.io/surface-reference": "true"
+    }
+  },
+  "spec": {
+    "category": "console",
+    "owners": ["team:platform"],
+    "replaces": ["console"],
+    "integration_binding": "core_only",
+    "runtime": {
+      "kind": "web_ui",
+      "exposure": "operator",
+      "port": 3080,
+      "base_path": "/",
+      "health_path": "/"
+    },
+    "core_contracts": [
+      "authorization",
+      "collaborator",
+      "team",
+      "product",
+      "workflow",
+      "integration_catalog",
+      "surface"
+    ],
+    "capabilities": [
+      {
+        "name": "plugin-catalog-ui",
+        "kind": "ui_area",
+        "audience": "operator",
+        "path": "/catalog"
+      },
+      {
+        "name": "delivery-ui",
+        "kind": "ui_area",
+        "audience": "operator",
+        "path": "/delivery"
+      }
+    ]
+  }
+}

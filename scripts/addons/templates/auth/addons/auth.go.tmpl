@@ -1,0 +1,28 @@
+package addons
+
+import (
+	"context"
+	"fmt"
+	"os"
+	"strings"
+
+	"{{MODULE_PATH}}/controllers"
+	"{{MODULE_PATH}}/internal/runtime"
+	"{{MODULE_PATH}}/securities"
+)
+
+func init() {
+	Register("auth", bootstrapAuth, 30)
+}
+
+func bootstrapAuth(_ context.Context, app *runtime.ServiceApp) error {
+	if strings.TrimSpace(os.Getenv("JWT_KEY")) == "" {
+		return fmt.Errorf("JWT_KEY is not set")
+	}
+
+	group := app.Router.Group("/" + app.ServiceName + "/auth")
+	group.Use(securities.NormalizeJWTHeader(), securities.Authenticate())
+	group.GET("/me", controllers.CurrentJWTClaims())
+
+	return nil
+}

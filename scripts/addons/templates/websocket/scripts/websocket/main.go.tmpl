@@ -1,0 +1,84 @@
+package main
+
+import (
+	"flag"
+	"fmt"
+	"os"
+
+	"github.com/gorilla/websocket"
+)
+
+func main() {
+	if len(os.Args) < 2 {
+		usage()
+		os.Exit(1)
+	}
+
+	switch os.Args[1] {
+	case "check":
+		if err := check(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "websocket script error: %v\n", err)
+			os.Exit(1)
+		}
+	case "send":
+		if err := send(os.Args[2:]); err != nil {
+			fmt.Fprintf(os.Stderr, "websocket script error: %v\n", err)
+			os.Exit(1)
+		}
+	default:
+		usage()
+		os.Exit(1)
+	}
+}
+
+func usage() {
+	fmt.Println("websocket helper")
+	fmt.Println()
+	fmt.Println("Usage:")
+	fmt.Println("  go run ./scripts/websocket check --url ws://127.0.0.1:9080/{{SERVICE_NAME}}/realtime/ws")
+	fmt.Println("  go run ./scripts/websocket send --url ws://127.0.0.1:9080/{{SERVICE_NAME}}/realtime/ws --message ping")
+}
+
+func check(args []string) error {
+	fs := flag.NewFlagSet("check", flag.ContinueOnError)
+	url := fs.String("url", "ws://127.0.0.1:9080/{{SERVICE_NAME}}/realtime/ws", "WebSocket URL")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	conn, _, err := websocket.DefaultDialer.Dial(*url, nil)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	fmt.Printf("connected to %s\n", *url)
+	return nil
+}
+
+func send(args []string) error {
+	fs := flag.NewFlagSet("send", flag.ContinueOnError)
+	url := fs.String("url", "ws://127.0.0.1:9080/{{SERVICE_NAME}}/realtime/ws", "WebSocket URL")
+	message := fs.String("message", "ping", "Message to send")
+	if err := fs.Parse(args); err != nil {
+		return err
+	}
+
+	conn, _, err := websocket.DefaultDialer.Dial(*url, nil)
+	if err != nil {
+		return err
+	}
+	defer conn.Close()
+
+	if err := conn.WriteMessage(websocket.TextMessage, []byte(*message)); err != nil {
+		return err
+	}
+
+	_, reply, err := conn.ReadMessage()
+	if err != nil {
+		return err
+	}
+
+	fmt.Println(string(reply))
+	return nil
+}

@@ -1,0 +1,122 @@
+package monitoring
+
+import (
+	"net/http"
+	"sync"
+	"time"
+
+	"github.com/gin-gonic/gin"
+	"github.com/prometheus/client_golang/prometheus"
+	"go.uber.org/zap"
+)
+
+var registerHTTPOnce sync.Once
+
+var (
+	HttpRequestsTotal = prometheus.NewCounterVec(
+		prometheus.CounterOpts{
+			Name: "http_requests_total",
+			Help: "Total number of HTTP requests.",
+		},
+		[]string{"method", "path", "status"},
+	)
+	HttpRequestDuration = prometheus.NewHistogramVec(
+		prometheus.HistogramOpts{
+			Name:    "http_request_duration_seconds",
+			Help:    "Duration of HTTP requests.",
+			Buckets: prometheus.DefBuckets,
+		},
+		[]string{"method", "path", "status"},
+	)
+)
+
+// RegisterHTTPMetrics registers the HTTP Prometheus metrics once.
+func RegisterHTTPMetrics() {
+	registerHTTPOnce.Do(func() {
+		prometheus.MustRegister(HttpRequestsTotal, HttpRequestDuration)
+	})
+}
+
+// PrometheusMiddleware captures request metrics for every HTTP request.
+func PrometheusMiddleware() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		timer := prometheus.NewTimer(prometheus.ObserverFunc(func(v float64) {
+			statusCode := c.Writer.Status()
+			HttpRequestDuration.WithLabelValues(
+				c.Request.Method,
+				c.FullPath(),
+				http.StatusText(statusCode),
+			).Observe(v)
+		}))
+		defer timer.ObserveDuration()
+
+		c.Next()
+
+		statusCode := c.Writer.Status()
+		HttpRequestsTotal.WithLabelValues(
+			c.Request.Method,
+			c.FullPath(),
+			http.StatusText(statusCode),
+		).Inc()
+	}
+}
+
+// LoggerMiddleware writes structured logs for non-5xx HTTP requests.
+func LoggerMiddleware(logger *zap.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		start := time.Now()
+		c.Next()
+
+		status := c.Writer.Status()
+		if status >= 500 {
+			return
+		}
+		if status < 400 && ShouldSkipInfoLog(c) {
+			return
+		}
+
+		var requestErr string
+		if len(c.Errors) > 0 && status >= 400 {
+			requestErr = c.Errors.String()
+		}
+
+		logger.Info("HTTP Request",
+			zap.String("method", c.Request.Method),
+			zap.String("path", c.Request.URL.Path),
+			zap.String("query", c.Request.URL.RawQuery),
+			zap.String("client_ip", c.ClientIP()),
+			zap.Int("status", status),
+			zap.Int("size", c.Writer.Size()),
+			zap.Duration("latency", time.Since(start)),
+			zap.String("user_agent", c.Request.UserAgent()),
+			zap.String("error", requestErr),
+		)
+	}
+}
+
+// ErrorHandlingMiddleware writes 5xx errors to the structured logger.
+func ErrorHandlingMiddleware(logger *zap.Logger) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		c.Next()
+
+		if c.Writer.Status() < 500 {
+			return
+		}
+
+		var errs []string
+		for _, item := range c.Errors {
+			errs = append(errs, item.Error())
+		}
+
+		if len(errs) == 0 {
+			return
+		}
+
+		logger.Error("Request Error",
+			zap.Strings("errors", errs),
+			zap.String("path", c.Request.URL.Path),
+			zap.String("method", c.Request.Method),
+			zap.Int("status", c.Writer.Status()),
+		)
+	}
+}

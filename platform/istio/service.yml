@@ -1,0 +1,24 @@
+apiVersion: networking.istio.io/v1alpha3
+kind: VirtualService
+metadata:
+  name: dakasa
+spec:
+  hosts:
+  - "*"
+  gateways:
+  - dakasa-gateway
+  http:
+  - match:
+    - uri:
+        exact: /api/login
+    - uri:
+        exact: /api/register
+    - uri:
+        exact: /api/recovery
+    - uri:
+        exact: /api/chall-recovery
+    route:
+    - destination:
+        host: <MS-NAME>
+        port:
+          number: 9080

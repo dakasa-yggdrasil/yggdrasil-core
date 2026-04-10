@@ -1,0 +1,89 @@
+package auxiliary
+
+import (
+	"context"
+	"database/sql"
+	"encoding/json"
+	"fmt"
+	"time"
+
+	"{{MODULE_PATH}}/outbox"
+	"{{MODULE_PATH}}/store"
+
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+)
+
+type Reliability string
+
+const (
+	ReliabilityFast     Reliability = "fast"
+	ReliabilityCritical Reliability = "critical"
+)
+
+// EnqueueFast stores a Redis-backed outbox event using the DaKasa fast path.
+func EnqueueFast(ctx context.Context, rdb *redis.Client, namespace, exchange, routingKey string, headers map[string]any, payload any) error {
+	messageID, headerBytes, payloadBytes, err := marshalOutboxParts(headers, payload)
+	if err != nil {
+		return err
+	}
+	if namespace == "" {
+		namespace = store.OutboxPrefixApp
+	}
+
+	return outbox.SaveOutboxEvent(ctx, rdb, namespace, outbox.OutboxEvent{
+		ID:          messageID,
+		Exchange:    exchange,
+		RoutingKey:  routingKey,
+		Headers:     headerBytes,
+		Payload:     payloadBytes,
+		FirstSeenAt: time.Now().UTC(),
+	})
+}
+
+// EnqueueCritical stores a PostgreSQL-backed outbox event using the DaKasa critical path.
+func EnqueueCritical(ctx context.Context, tx *sql.Tx, exchange, routingKey string, headers map[string]any, payload any) error {
+	if tx == nil {
+		return fmt.Errorf("critical outbox requires a transaction")
+	}
+
+	messageID, headerBytes, payloadBytes, err := marshalOutboxParts(headers, payload)
+	if err != nil {
+		return err
+	}
+
+	_, err = tx.ExecContext(ctx,
+		`INSERT INTO outbox_critical (id, exchange, routing_key, headers, payload)
+		 VALUES ($1, $2, $3, $4, $5)`,
+		messageID,
+		exchange,
+		routingKey,
+		headerBytes,
+		payloadBytes,
+	)
+	return err
+}
+
+func marshalOutboxParts(headers map[string]any, payload any) (string, []byte, []byte, error) {
+	if headers == nil {
+		headers = map[string]any{}
+	}
+
+	messageID := uuid.NewString()
+	if raw, ok := headers["message_id"].(string); ok && raw != "" {
+		messageID = raw
+	} else {
+		headers["message_id"] = messageID
+	}
+
+	headerBytes, err := json.Marshal(headers)
+	if err != nil {
+		return "", nil, nil, err
+	}
+	payloadBytes, err := json.Marshal(payload)
+	if err != nil {
+		return "", nil, nil, err
+	}
+
+	return messageID, headerBytes, payloadBytes, nil
+}

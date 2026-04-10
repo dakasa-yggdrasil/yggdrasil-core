@@ -1,0 +1,35 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/workflow/run_completed.json",
+  "title": "workflow.run.completed payload",
+  "description": "Payload emitted when a workflow run finishes.",
+  "type": "object",
+  "required": ["workflow_ref", "run_id", "status", "started_at", "finished_at"],
+  "properties": {
+    "workflow_ref": {
+      "type": "object",
+      "required": ["name", "namespace"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string" },
+        "namespace": { "type": "string" },
+        "version": { "type": "integer" }
+      }
+    },
+    "run_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "status": {
+      "type": "string",
+      "enum": ["succeeded", "failed", "partial"]
+    },
+    "started_at": { "type": "string", "format": "date-time" },
+    "finished_at": { "type": "string", "format": "date-time" },
+    "step_count": { "type": "integer", "minimum": 0 },
+    "triggered_by": {
+      "type": "string",
+      "enum": ["manual", "schedule", "event"]
+    }
+  }
+}

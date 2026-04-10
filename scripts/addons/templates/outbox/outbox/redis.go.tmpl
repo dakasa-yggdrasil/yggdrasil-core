@@ -1,0 +1,208 @@
+package outbox
+
+import (
+	"context"
+	"crypto/sha256"
+	"encoding/hex"
+	"encoding/json"
+	"errors"
+	"fmt"
+	"strings"
+	"time"
+
+	"github.com/google/uuid"
+	"github.com/redis/go-redis/v9"
+)
+
+// SaveOutboxEvent appends a new event to the FIFO list, with optional deduplication.
+func SaveOutboxEvent(ctx context.Context, rdb *redis.Client, namespace string, evt OutboxEvent) error {
+	if evt.ID == "" {
+		evt.ID = uuid.NewString()
+	}
+	if evt.FirstSeenAt.IsZero() {
+		evt.FirstSeenAt = time.Now().UTC()
+	}
+
+	shouldEnqueue, err := claimOutboxDedupKey(ctx, rdb, namespace, evt.Headers)
+	if err != nil {
+		return err
+	}
+	if !shouldEnqueue {
+		return nil
+	}
+
+	raw, err := json.Marshal(evt)
+	if err != nil {
+		return err
+	}
+
+	return rdb.RPush(ctx, fifoKey(namespace), raw).Err()
+}
+
+// PopOutboxBatch prefers delayed events first, then fills from the FIFO queue.
+func PopOutboxBatch(ctx context.Context, rdb *redis.Client, namespace string, limit int) ([]OutboxEvent, error) {
+	delayQuota := max(limit/2, 1)
+	events, err := fetchDelayed(ctx, rdb, namespace, delayQuota)
+	if err != nil {
+		return nil, err
+	}
+
+	remaining := limit - len(events)
+	for i := 0; i < remaining; i++ {
+		raw, err := rdb.LPop(ctx, fifoKey(namespace)).Result()
+		if err == redis.Nil {
+			break
+		}
+		if err != nil {
+			return nil, err
+		}
+
+		evt, decodeErr := decodeOutboxEvent(raw)
+		if decodeErr != nil {
+			continue
+		}
+		events = append(events, evt)
+	}
+
+	return events, nil
+}
+
+// RequeueOutboxEventWithBackoff schedules a retry or moves the event to DLQ.
+func RequeueOutboxEventWithBackoff(ctx context.Context, rdb *redis.Client, namespace string, evt OutboxEvent, errType string, err error) error {
+	evt.Attempts++
+	evt.LastAttempt = time.Now().UTC()
+	evt.ErrorType = errType
+	if err != nil {
+		evt.LastError = err.Error()
+	}
+
+	if expired(evt) || evt.Attempts > len(Backoffs) {
+		return MoveToDLQ(ctx, rdb, namespace, evt)
+	}
+
+	delay := Backoffs[evt.Attempts-1]
+	score := float64(time.Now().Add(delay).UnixMilli())
+	raw, marshalErr := json.Marshal(evt)
+	if marshalErr != nil {
+		return marshalErr
+	}
+
+	return rdb.ZAdd(ctx, delayedKey(namespace), redis.Z{
+		Score:  score,
+		Member: raw,
+	}).Err()
+}
+
+// MoveToDLQ sends the event to the dead-letter list.
+func MoveToDLQ(ctx context.Context, rdb *redis.Client, namespace string, evt OutboxEvent) error {
+	raw, err := json.Marshal(evt)
+	if err != nil {
+		return err
+	}
+
+	return rdb.RPush(ctx, dlqKey(namespace), raw).Err()
+}
+
+// CollectOutboxStats returns the queue sizes plus the age of the oldest event.
+func CollectOutboxStats(ctx context.Context, rdb *redis.Client, namespace string) (fifo, delayed, dlq int64, oldestAge time.Duration, err error) {
+	pipe := rdb.TxPipeline()
+	fifoLen := pipe.LLen(ctx, fifoKey(namespace))
+	delayedLen := pipe.ZCard(ctx, delayedKey(namespace))
+	dlqLen := pipe.LLen(ctx, dlqKey(namespace))
+	oldest := pipe.LIndex(ctx, fifoKey(namespace), 0)
+	if _, execErr := pipe.Exec(ctx); execErr != nil && !errors.Is(execErr, redis.Nil) {
+		return 0, 0, 0, 0, execErr
+	}
+
+	var age time.Duration
+	if raw, resultErr := oldest.Result(); resultErr == nil {
+		if evt, decodeErr := decodeOutboxEvent(raw); decodeErr == nil && !evt.FirstSeenAt.IsZero() {
+			age = time.Since(evt.FirstSeenAt)
+		}
+	}
+
+	return fifoLen.Val(), delayedLen.Val(), dlqLen.Val(), age, nil
+}
+
+func fetchDelayed(ctx context.Context, rdb *redis.Client, namespace string, limit int) ([]OutboxEvent, error) {
+	now := fmt.Sprintf("%d", time.Now().UnixMilli())
+	key := delayedKey(namespace)
+	rawItems, err := rdb.ZRangeByScore(ctx, key, &redis.ZRangeBy{
+		Min:   "-inf",
+		Max:   now,
+		Count: int64(limit),
+	}).Result()
+	if err != nil {
+		return nil, err
+	}
+	if len(rawItems) == 0 {
+		return nil, nil
+	}
+
+	pipe := rdb.TxPipeline()
+	removals := make([]*redis.IntCmd, len(rawItems))
+	for index, value := range rawItems {
+		removals[index] = pipe.ZRem(ctx, key, value)
+	}
+	if _, err := pipe.Exec(ctx); err != nil {
+		return nil, err
+	}
+
+	events := make([]OutboxEvent, 0, len(rawItems))
+	for index, raw := range rawItems {
+		if removals[index].Val() == 0 {
+			continue
+		}
+		evt, err := decodeOutboxEvent(raw)
+		if err != nil {
+			continue
+		}
+		events = append(events, evt)
+	}
+
+	return events, nil
+}
+
+func decodeOutboxEvent(raw string) (OutboxEvent, error) {
+	var evt OutboxEvent
+	if raw == "" {
+		return evt, errors.New("empty outbox event")
+	}
+	if err := json.Unmarshal([]byte(raw), &evt); err != nil {
+		return evt, err
+	}
+	return evt, nil
+}
+
+func claimOutboxDedupKey(ctx context.Context, rdb *redis.Client, namespace string, rawHeaders json.RawMessage) (bool, error) {
+	if len(rawHeaders) == 0 {
+		return true, nil
+	}
+
+	var headers map[string]any
+	if err := json.Unmarshal(rawHeaders, &headers); err != nil {
+		return true, nil
+	}
+
+	rawDedup, ok := headers["dedup_key"]
+	if !ok {
+		return true, nil
+	}
+
+	dedupKey, ok := rawDedup.(string)
+	if !ok {
+		return true, nil
+	}
+	dedupKey = strings.TrimSpace(dedupKey)
+	if dedupKey == "" {
+		return true, nil
+	}
+
+	sum := sha256.Sum256([]byte(dedupKey))
+	redisKey := fmt.Sprintf("%s:dedup:%s", namespace, hex.EncodeToString(sum[:]))
+	return rdb.SetNX(ctx, redisKey, 1, OutboxTTL).Result()
+}
+
+func fifoKey(namespace string) string    { return namespace + ":fifo" }
+func delayedKey(namespace string) string { return namespace + ":delayed" }
+func dlqKey(namespace string) string     { return namespace + ":dlq" }

@@ -1,0 +1,31 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "repository_binding",
+  "metadata": {
+    "name": "gcp-platform",
+    "namespace": "global",
+    "description": "Repository binding for the production GCP platform integration instance.",
+    "labels": {
+      "bootstrap_source": "integration-gcp",
+      "component_kind": "integration"
+    }
+  },
+  "spec": {
+    "component_kind": "integration",
+    "component_namespace": "global",
+    "component_name": "gcp-platform",
+    "repository": "dakasa-yggdrasil/integration-gcp",
+    "default_branch": "main",
+    "deploy_workflow": "deploy.yml",
+    "automation": {
+      "observe": true,
+      "allow_dispatch_workflow": true,
+      "allow_pull_request_automation": false,
+      "allow_direct_push": false
+    },
+    "metadata": {
+      "environment": "production",
+      "provider": "gcp"
+    }
+  }
+}

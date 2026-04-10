@@ -1,0 +1,83 @@
+package monitoring
+
+import (
+	"os"
+	"strings"
+	"sync/atomic"
+
+	"github.com/gin-gonic/gin"
+	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"gopkg.in/natefinch/lumberjack.v2"
+)
+
+// Logger stores the package-level logger for addons that want a shared structured logger.
+var Logger *zap.Logger
+
+var pkgLogger atomic.Pointer[zap.Logger]
+
+// SetLogger stores the logger for concurrent-safe later retrieval.
+func SetLogger(logger *zap.Logger) {
+	pkgLogger.Store(logger)
+}
+
+// GetLogger returns the package-level logger.
+func GetLogger() *zap.Logger {
+	return pkgLogger.Load()
+}
+
+type zapLoggerWriter struct {
+	logger *zap.Logger
+}
+
+func (w *zapLoggerWriter) Write(p []byte) (int, error) {
+	w.logger.Error("Recovered from panic", zap.String("error", string(p)))
+	return len(p), nil
+}
+
+// ZapRecovery returns a Gin recovery middleware that emits zap logs.
+func ZapRecovery(logger *zap.Logger) gin.HandlerFunc {
+	return gin.RecoveryWithWriter(&zapLoggerWriter{logger: logger})
+}
+
+// NewZapLoggerWithRotation creates a JSON zap logger with rotating files.
+func NewZapLoggerWithRotation(serviceName string) *zap.Logger {
+	file := "/var/log/" + serviceName + ".log"
+	if value := os.Getenv("LOG_FILE"); value != "" {
+		file = value
+	}
+
+	level := zap.InfoLevel
+	switch strings.ToLower(os.Getenv("ENV_MODE")) {
+	case "development", "test":
+		level = zap.DebugLevel
+	}
+
+	core := zapcore.NewCore(
+		zapcore.NewJSONEncoder(zap.NewProductionEncoderConfig()),
+		zapcore.AddSync(&lumberjack.Logger{
+			Filename:   file,
+			MaxSize:    10,
+			MaxBackups: 5,
+			MaxAge:     30,
+			Compress:   true,
+		}),
+		level,
+	)
+
+	return zap.New(core)
+}
+
+// ShouldSkipInfoLog avoids noisy request logs for low-signal paths.
+func ShouldSkipInfoLog(c *gin.Context) bool {
+	if c.Request.Method == "OPTIONS" {
+		return true
+	}
+
+	path := strings.TrimSuffix(c.Request.URL.Path, "/")
+	if path == "" {
+		return false
+	}
+
+	return strings.HasSuffix(path, "/metrics") || strings.HasSuffix(path, "/health")
+}

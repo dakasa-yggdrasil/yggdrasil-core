@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/product/installation_applied.json",
+  "title": "product.installation.applied payload",
+  "description": "Payload emitted when a product installation apply operation succeeds.",
+  "type": "object",
+  "required": ["product_ref", "components_applied"],
+  "properties": {
+    "product_ref": {
+      "type": "object",
+      "required": ["name", "namespace"],
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string" },
+        "namespace": { "type": "string" },
+        "version": { "type": "integer" }
+      }
+    },
+    "components_applied": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["name", "target"],
+        "properties": {
+          "name": { "type": "string" },
+          "target": {
+            "type": "object",
+            "properties": {
+              "kind": { "type": "string" },
+              "integration_instance_ref": { "type": "object" },
+              "namespace": { "type": "string" }
+            }
+          }
+        }
+      }
+    },
+    "target_overrides_used": {
+      "type": "object",
+      "description": "Map of integration_instance_ref.name → override. Present if the apply was invoked with target_overrides (see target-overrides spec)."
+    },
+    "dispatched_by": {
+      "type": "string",
+      "description": "Optional identifier of the workflow run or caller that dispatched this apply."
+    }
+  }
+}

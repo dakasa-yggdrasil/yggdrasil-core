@@ -1,0 +1,37 @@
+package store
+
+import (
+	"context"
+	"os"
+	"strconv"
+
+	"github.com/redis/go-redis/v9"
+)
+
+// NewRedis returns a Redis client using either REDIS_URL or REDIS_ADDR settings.
+func NewRedis() *redis.Client {
+	if rawURL := os.Getenv("REDIS_URL"); rawURL != "" {
+		if opts, err := redis.ParseURL(rawURL); err == nil {
+			return redis.NewClient(opts)
+		}
+	}
+
+	db, _ := strconv.Atoi(getenv("REDIS_DB", "0"))
+	return redis.NewClient(&redis.Options{
+		Addr:     getenv("REDIS_ADDR", "127.0.0.1:6379"),
+		Password: os.Getenv("REDIS_PASSWORD"),
+		DB:       db,
+	})
+}
+
+// Ping checks Redis connectivity.
+func Ping(ctx context.Context, client *redis.Client) error {
+	return client.Ping(ctx).Err()
+}
+
+func getenv(key, fallback string) string {
+	if value := os.Getenv(key); value != "" {
+		return value
+	}
+	return fallback
+}

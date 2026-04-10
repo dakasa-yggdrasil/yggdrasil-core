@@ -1,0 +1,64 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/schema.json",
+  "title": "Yggdrasil Event v1 (base)",
+  "description": "Common structure of all events emitted by yggdrasil-core.",
+  "type": "object",
+  "required": ["event_id", "sequence", "type", "schema_version", "aggregate_type", "aggregate_id", "emitted_at", "payload"],
+  "properties": {
+    "event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID v7 (time-ordered) uniquely identifying the event."
+    },
+    "sequence": {
+      "type": "integer",
+      "minimum": 1,
+      "description": "Global monotonic sequence assigned by the core PostgreSQL BIGSERIAL."
+    },
+    "type": {
+      "type": "string",
+      "pattern": "^[a-z][a-z0-9_.]*$",
+      "description": "Dotted event type (e.g. manifest.product.created)."
+    },
+    "schema_version": {
+      "type": "string",
+      "pattern": "^v[0-9]+$",
+      "description": "Version of the payload schema. v1 is forever non-breaking."
+    },
+    "aggregate_type": {
+      "type": "string",
+      "description": "Type of the aggregate this event is about (manifest, product, workflow_run, etc.)."
+    },
+    "aggregate_id": {
+      "type": "string",
+      "description": "Identifier of the aggregate within its type. Per-aggregate ordering is guaranteed."
+    },
+    "actor": {
+      "type": "object",
+      "description": "Who/what caused the event. Optional; null for system-emitted events.",
+      "required": ["type", "id"],
+      "properties": {
+        "type": {
+          "type": "string",
+          "enum": ["collaborator", "system", "integration"]
+        },
+        "id": { "type": "string" },
+        "context": { "type": "object" }
+      }
+    },
+    "emitted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC 3339 UTC timestamp assigned by the server at emit time."
+    },
+    "payload": {
+      "type": "object",
+      "description": "Event-specific payload; validated against the schema of this event type."
+    },
+    "metadata": {
+      "type": "object",
+      "description": "Optional free-form metadata (correlation_id, causation_id, etc.)."
+    }
+  }
+}

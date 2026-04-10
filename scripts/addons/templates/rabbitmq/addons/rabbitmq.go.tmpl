@@ -1,0 +1,49 @@
+package addons
+
+import (
+	"context"
+	"fmt"
+	"os"
+
+	"{{MODULE_PATH}}/controllers/message"
+	"{{MODULE_PATH}}/internal/runtime"
+
+	amqp "github.com/rabbitmq/amqp091-go"
+)
+
+func init() {
+	Register("rabbitmq", bootstrapRabbitMQ, 20)
+}
+
+func bootstrapRabbitMQ(ctx context.Context, app *runtime.ServiceApp) error {
+	brokerURL := os.Getenv("BROKER_URL")
+	if brokerURL == "" {
+		return fmt.Errorf("BROKER_URL is not set")
+	}
+
+	conn, err := amqp.Dial(brokerURL)
+	if err != nil {
+		return fmt.Errorf("connect rabbitmq: %w", err)
+	}
+
+	if err := message.RegisterAllConsumers(conn); err != nil {
+		_ = conn.Close()
+		return fmt.Errorf("register consumers: %w", err)
+	}
+
+	app.SetResource("rabbitmq", conn)
+	app.RegisterCloser(func(context.Context) error { return conn.Close() })
+
+	return nil
+}
+
+// RabbitMQ returns the shared RabbitMQ connection when the addon is installed.
+func RabbitMQ(app *runtime.ServiceApp) (*amqp.Connection, bool) {
+	resource, ok := app.Resource("rabbitmq")
+	if !ok {
+		return nil, false
+	}
+
+	conn, ok := resource.(*amqp.Connection)
+	return conn, ok
+}

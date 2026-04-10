@@ -1,0 +1,72 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "workflow",
+  "metadata": {
+    "name": "github-dispatch",
+    "namespace": "global",
+    "description": "Bootstrap workflow that dispatches one GitHub Actions run through the GitHub integration.",
+    "labels": {
+      "bootstrap_source": "yggdrasil-core",
+      "workflow_type": "dispatch"
+    }
+  },
+  "spec": {
+    "trigger": {
+      "mode": "manual"
+    },
+    "input_schema": {
+      "required": [
+        "repository",
+        "workflow"
+      ],
+      "properties": {
+        "component_id": {
+          "type": "string",
+          "description": "Optional component identifier forwarded for audit."
+        },
+        "repository": {
+          "type": "string",
+          "description": "GitHub repository in owner/name form."
+        },
+        "workflow": {
+          "type": "string",
+          "description": "GitHub Actions workflow file name."
+        },
+        "ref": {
+          "type": "string",
+          "description": "Git reference used for dispatch."
+        },
+        "inputs": {
+          "type": "object",
+          "description": "Workflow inputs forwarded to GitHub Actions."
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "dispatch",
+        "description": "Dispatch one GitHub Actions workflow through the global GitHub integration.",
+        "use": {
+          "kind": "integration",
+          "instance_ref": {
+            "namespace": "global",
+            "name": "github-caller"
+          },
+          "capability": "dispatch_workflow"
+        },
+        "with": {
+          "component_id": "{{ inputs.component_id }}",
+          "repository": "{{ inputs.repository }}",
+          "workflow": "{{ inputs.workflow }}",
+          "ref": "{{ inputs.ref }}",
+          "inputs": "{{ inputs.inputs }}",
+          "metadata": "{{ metadata }}"
+        },
+        "retry": {
+          "max_attempts": 2,
+          "backoff_seconds": 1
+        }
+      }
+    ]
+  }
+}

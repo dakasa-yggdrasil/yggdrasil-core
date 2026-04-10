@@ -1,0 +1,64 @@
+package outbox
+
+import (
+	"encoding/json"
+	"strings"
+	"time"
+)
+
+const OutboxTTL = 15 * time.Minute
+
+var Backoffs = []time.Duration{
+	1 * time.Second,
+	5 * time.Second,
+	30 * time.Second,
+	2 * time.Minute,
+	5 * time.Minute,
+}
+
+// OutboxEvent represents a single Redis-backed outbox message.
+type OutboxEvent struct {
+	ID          string          `json:"id"`
+	Exchange    string          `json:"exchange"`
+	RoutingKey  string          `json:"routing_key"`
+	Headers     json.RawMessage `json:"headers"`
+	Payload     json.RawMessage `json:"payload"`
+	Attempts    int             `json:"attempts"`
+	FirstSeenAt time.Time       `json:"first_seen_at"`
+	LastAttempt time.Time       `json:"last_attempt_at"`
+	ErrorType   string          `json:"error_type,omitempty"`
+	LastError   string          `json:"last_error,omitempty"`
+}
+
+// ResolvePublishMessageID extracts message_id from headers, falling back when absent.
+func ResolvePublishMessageID(fallbackID string, headers map[string]any) string {
+	if headers == nil {
+		return fallbackID
+	}
+
+	raw, ok := headers["message_id"]
+	if !ok || raw == nil {
+		return fallbackID
+	}
+
+	switch value := raw.(type) {
+	case string:
+		if id := strings.TrimSpace(value); id != "" {
+			return id
+		}
+	case []byte:
+		if id := strings.TrimSpace(string(value)); id != "" {
+			return id
+		}
+	}
+
+	return fallbackID
+}
+
+func expired(evt OutboxEvent) bool {
+	if evt.FirstSeenAt.IsZero() {
+		return false
+	}
+
+	return time.Since(evt.FirstSeenAt) > OutboxTTL
+}

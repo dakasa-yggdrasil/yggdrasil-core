@@ -1,0 +1,42 @@
+services:
+  yggdrasil-core:
+    image: ${GO_IMAGE}
+    working_dir: /workspace
+    command: >-
+      sh -lc "if [ -x ./goose ] && [ -x ./yggdrasil-core ]; then
+        ./goose up && ./yggdrasil-core;
+      else
+        /usr/local/go/bin/go run ./scripts/goose up && /usr/local/go/bin/go run .;
+      fi"
+    environment:
+      PATH: /usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
+      PORT: "9080"
+      DB_NAME: ${POSTGRES_CORE_DB}
+      DB_HOST: yggdrasil-postgres
+      DB_PORT: "5432"
+      DB_USER: ${POSTGRES_USER}
+      DB_PASSWORD: ${POSTGRES_PASSWORD}
+      BROKER_URL: ${BROKER_URL}
+      AUTH_SESSION_TTL_HOURS: ${AUTH_SESSION_TTL_HOURS:-720}
+      AUTH_SESSION_COOKIE_NAME: ${AUTH_SESSION_COOKIE_NAME:-yggdrasil_session}
+      AUTH_SESSION_COOKIE_DOMAIN: ${AUTH_SESSION_COOKIE_DOMAIN:-}
+      AUTH_SESSION_COOKIE_SECURE: ${AUTH_SESSION_COOKIE_SECURE:-false}
+      HTTP_READ_HEADER_TIMEOUT_SECONDS: ${HTTP_READ_HEADER_TIMEOUT_SECONDS:-10}
+      HTTP_READ_TIMEOUT_SECONDS: ${HTTP_READ_TIMEOUT_SECONDS:-30}
+      HTTP_WRITE_TIMEOUT_SECONDS: ${HTTP_WRITE_TIMEOUT_SECONDS:-30}
+      HTTP_IDLE_TIMEOUT_SECONDS: ${HTTP_IDLE_TIMEOUT_SECONDS:-120}
+    ports:
+      - "${CORE_HTTP_PORT:-9080}:9080"
+    volumes:
+      - ../../services/yggdrasil-core:/workspace
+      - yggdrasil-core-go-mod:/go/pkg/mod
+      - yggdrasil-core-go-build:/root/.cache/go-build
+    depends_on:
+      yggdrasil-postgres:
+        condition: service_healthy
+      yggdrasil-rabbitmq:
+        condition: service_healthy
+
+volumes:
+  yggdrasil-core-go-mod:
+  yggdrasil-core-go-build:

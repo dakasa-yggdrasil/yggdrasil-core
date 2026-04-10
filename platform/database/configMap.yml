@@ -1,0 +1,13 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: <MS-NAME>db-credentials
+  namespace: postgres
+  labels:
+    app: <MS-NAME>-database
+data:
+  POSTGRES_DB: <MS-NAME>
+  POSTGRES_USER: postgres
+  POSTGRES_PASSWORD: someAwesomePassword
+  POSTGRES_PORT: "5432"
+  

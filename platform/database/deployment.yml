@@ -1,0 +1,33 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: <MS-NAME>-database
+  namespace: postgres
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: <MS-NAME>-database
+  template:
+    metadata:
+      labels:
+        app: <MS-NAME>-database
+    spec:
+      terminationGracePeriodSeconds: 30
+      serviceAccountName: <MS-NAME>-dba
+      containers:
+      - name: <MS-NAME>-database
+        image: database
+        imagePullPolicy: IfNotPresent
+        ports:
+        - containerPort: 5432
+        envFrom:
+        - configMapRef:
+            name: <MS-NAME>db-credentials
+        volumeMounts:
+        - mountPath: /var/lib/postgres/data
+          name: db-data
+      volumes:
+        - name: db-data
+          persistentVolumeClaim:
+            claimName: <MS-NAME>db-claim

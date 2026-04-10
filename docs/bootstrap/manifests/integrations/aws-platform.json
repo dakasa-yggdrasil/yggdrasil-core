@@ -1,0 +1,40 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_instance",
+  "metadata": {
+    "name": "aws-platform",
+    "namespace": "global",
+    "description": "Default AWS integration instance used by the core for governance operations.",
+    "labels": {
+      "bootstrap_source": "integration-aws",
+      "provider": "aws"
+    }
+  },
+  "spec": {
+    "type_ref": {
+      "name": "aws",
+      "namespace": "global"
+    },
+    "status": "active",
+    "owners": [
+      "team:platform"
+    ],
+    "credentials": {},
+    "config": {
+      "default_region": "us-east-1",
+      "default_email_from": "platform@example.com",
+      "default_sms_type": "Transactional",
+      "default_tags": {
+        "managed-by": "yggdrasil"
+      }
+    },
+    "discovery": {
+      "enabled": false,
+      "mode": "manual"
+    },
+    "execution": {
+      "default_dry_run": false,
+      "max_batch_size": 10
+    }
+  }
+}

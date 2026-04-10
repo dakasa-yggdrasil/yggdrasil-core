@@ -1,0 +1,25 @@
+package addons
+
+import (
+	"context"
+
+	"{{MODULE_PATH}}/controllers"
+	"{{MODULE_PATH}}/internal/runtime"
+	"{{MODULE_PATH}}/realtime"
+)
+
+func init() {
+	Register("websocket", bootstrapWebsocket, 40)
+}
+
+func bootstrapWebsocket(_ context.Context, app *runtime.ServiceApp) error {
+	hub := realtime.NewHub()
+	app.SetResource("websocket", hub)
+	app.RegisterCloser(func(context.Context) error { return hub.Close() })
+
+	group := app.Router.Group("/" + app.ServiceName + "/realtime")
+	group.GET("/ws", controllers.ServeWebsocket(hub))
+	group.POST("/broadcast", controllers.BroadcastWebsocket(hub))
+
+	return nil
+}

@@ -1,0 +1,30 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "repository_binding",
+  "metadata": {
+    "name": "action-emit-workflow-run",
+    "namespace": "global",
+    "description": "Repository binding for the official GitHub Action used by the ecosystem to emit workflow runs to the core.",
+    "labels": {
+      "bootstrap_source": "yggdrasil-core",
+      "component_kind": "repository"
+    }
+  },
+  "spec": {
+    "component_kind": "repository",
+    "component_namespace": "global",
+    "component_name": "action-emit-workflow-run",
+    "repository": "dakasa-yggdrasil/action-emit-workflow-run",
+    "default_branch": "main",
+    "deploy_workflow": "deploy.yml",
+    "automation": {
+      "observe": true,
+      "allow_dispatch_workflow": true,
+      "allow_pull_request_automation": false,
+      "allow_direct_push": false
+    },
+    "metadata": {
+      "environment": "production"
+    }
+  }
+}

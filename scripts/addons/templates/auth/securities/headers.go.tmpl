@@ -1,0 +1,65 @@
+package securities
+
+import (
+	"fmt"
+	"net/http"
+	"os"
+	"strings"
+
+	"github.com/gin-gonic/gin"
+	"github.com/golang-jwt/jwt/v5"
+)
+
+// NormalizeJWTHeader allows services to accept either X-JWT or Authorization: Bearer.
+func NormalizeJWTHeader() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if strings.TrimSpace(c.GetHeader("X-JWT")) != "" {
+			c.Next()
+			return
+		}
+
+		authHeader := strings.TrimSpace(c.GetHeader("Authorization"))
+		if strings.HasPrefix(strings.ToLower(authHeader), "bearer ") {
+			token := strings.TrimSpace(authHeader[7:])
+			if token != "" {
+				c.Request.Header.Set("X-JWT", token)
+			}
+		}
+
+		c.Next()
+	}
+}
+
+// Authenticate validates the X-JWT header and aborts the request with 401 on failure.
+func Authenticate() gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if _, _, err := ValidateJWT(c.GetHeader("X-JWT")); err != nil {
+			c.AbortWithStatusJSON(http.StatusUnauthorized, gin.H{
+				"msg": "Unauthorized",
+			})
+			return
+		}
+
+		c.Next()
+	}
+}
+
+// ValidateJWT parses and validates the token using JWT_KEY from the environment.
+func ValidateJWT(tokenStr string) (*jwt.Token, jwt.MapClaims, error) {
+	token, err := jwt.Parse(strings.TrimSpace(tokenStr), func(t *jwt.Token) (any, error) {
+		if _, ok := t.Method.(*jwt.SigningMethodHMAC); !ok {
+			return nil, fmt.Errorf("unexpected signing method: %v", t.Header["alg"])
+		}
+		return []byte(os.Getenv("JWT_KEY")), nil
+	})
+	if err != nil {
+		return nil, nil, err
+	}
+
+	claims, ok := token.Claims.(jwt.MapClaims)
+	if !ok || !token.Valid {
+		return nil, nil, fmt.Errorf("invalid token claims")
+	}
+
+	return token, claims, nil
+}

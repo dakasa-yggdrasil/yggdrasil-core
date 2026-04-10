@@ -1,0 +1,84 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "guardian_policy",
+  "metadata": {
+    "name": "heimdall-default",
+    "namespace": "global",
+    "description": "Default autonomy policy for the Heimdall guardian loop running inside the core.",
+    "labels": {
+      "bootstrap_source": "yggdrasil-core",
+      "guardian": "heimdall"
+    }
+  },
+  "spec": {
+    "guardian_ref": {
+      "namespace": "global",
+      "name": "heimdall-guardian"
+    },
+    "scope": "global",
+    "autonomy": {
+      "mode": "policy_bound",
+      "allow_llm_fallback": false,
+      "hotfix_severity_threshold": "critical",
+      "auto_execute_min_confidence": 0.7,
+      "manual_review_below_confidence": 0.25,
+      "max_auto_execute_blast_radius": "medium",
+      "max_bypass_hotfix_blast_radius": "high",
+      "protected_environments": {
+        "environments": ["prod", "production"],
+        "max_auto_execute_blast_radius": "low",
+        "max_bypass_hotfix_blast_radius": "medium"
+      },
+      "business_hours": {
+        "enabled": true,
+        "timezone": "UTC",
+        "weekdays": ["mon", "tue", "wed", "thu", "fri"],
+        "start_hour": 9,
+        "end_hour": 18,
+        "environments": ["prod", "production"],
+        "allow_hotfix_bypass": true
+      },
+      "freeze_windows": []
+    },
+    "maintenance_mode": {
+      "enabled": false,
+      "environments": ["prod", "production"],
+      "reason": "Planned maintenance in progress.",
+      "allow_hotfix_bypass": false
+    },
+    "escalation": {
+      "enabled": true,
+      "severity_threshold": "critical",
+      "max_auto_heal_attempts": 2,
+      "create_approval": true,
+      "dispatch_workflow": true,
+      "issue_workflow": "incident-escalation.yml",
+      "postmortem_workflow": "postmortem.yml",
+      "ref": "main",
+      "postmortem_severity_threshold": "critical",
+      "environments": ["prod", "production"]
+    },
+    "auto_heal": {
+      "enabled": true,
+      "severity_threshold": "critical",
+      "max_actions_per_sweep": 1,
+      "cooldown_seconds": 300,
+      "allow_dispatch_workflow": true,
+      "allow_rotate_secret": false,
+      "allow_rightsize": true
+    },
+    "profile_promotions": {
+      "enabled": true,
+      "require_approval": false
+    },
+    "repository_automation": {
+      "allow_pull_request_automation": false,
+      "allow_direct_push": false
+    },
+    "cost_optimization": {
+      "enabled": true,
+      "min_estimated_monthly_savings_usd": 100,
+      "allow_rightsize": false
+    }
+  }
+}

@@ -1,0 +1,36 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_instance",
+  "metadata": {
+    "name": "github-caller",
+    "namespace": "global",
+    "description": "Default GitHub integration instance used by the core to dispatch workflows on behalf of the product runtime.",
+    "labels": {
+      "bootstrap_source": "integration-github",
+      "provider": "github"
+    }
+  },
+  "spec": {
+    "type_ref": {
+      "name": "github",
+      "namespace": "global"
+    },
+    "status": "active",
+    "owners": [
+      "team:platform"
+    ],
+    "credentials": {},
+    "config": {
+      "default_ref": "main",
+      "api_base_url": "https://api.github.com"
+    },
+    "discovery": {
+      "enabled": false,
+      "mode": "manual"
+    },
+    "execution": {
+      "default_dry_run": false,
+      "max_batch_size": 10
+    }
+  }
+}

@@ -1,0 +1,198 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_type",
+  "metadata": {
+    "name": "gcp",
+    "namespace": "global",
+    "description": "Bootstrap integration type for the GCP runtime and governance plugin.",
+    "labels": {
+      "bootstrap_source": "integration-gcp",
+      "provider": "gcp",
+      "yggdrasil.io/catalog-domain": "gcp",
+      "yggdrasil.io/catalog-section": "operations",
+      "yggdrasil.io/catalog-entry": "api"
+    }
+  },
+  "spec": {
+    "provider": "gcp",
+    "adapter": {
+      "transport": "rabbitmq",
+      "version": "1.0.0",
+      "queues": {
+        "describe": "yggdrasil.adapter.gcp.describe",
+        "execute": "yggdrasil.adapter.gcp.execute"
+      },
+      "timeout_seconds": 120
+    },
+    "capabilities": [
+      "describe",
+      "execute"
+    ],
+    "guardian_support": {
+      "mode": "light",
+      "signals": {
+        "error_rate": ["error_rate", "failure_rate"],
+        "rate_limited": ["rate_limited", "throttled", "quota_exceeded"],
+        "auth_denied": ["auth_denied", "unauthorized", "forbidden"],
+        "sync_lag_seconds": ["sync_lag_seconds", "reconciliation_lag_seconds"],
+        "scheduling_failure": ["scheduling_failure", "failed_scheduling", "cluster_scheduling_failure"],
+        "insufficient_cpu": ["insufficient_cpu", "cpu_exhausted", "cluster_cpu_exhausted"],
+        "monthly_cost_usd": ["monthly_cost_usd", "estimated_monthly_cost_usd", "cost_usd"],
+        "utilization": ["utilization", "avg_utilization"],
+        "idle_hours": ["idle_hours", "last_active_hours_ago"],
+        "overprovisioned": ["overprovisioned"]
+      }
+    },
+    "credential_schema": {
+      "mode": "inline",
+      "properties": {
+        "credentials_json": {
+          "type": "string",
+          "description": "Inline Google Cloud service account credentials JSON used by governance operations.",
+          "secret": true
+        },
+        "credentials_file": {
+          "type": "string",
+          "description": "Path to a service account credentials file used by governance operations."
+        }
+      }
+    },
+    "instance_schema": {
+      "mode": "inline",
+      "properties": {
+        "default_project_id": {
+          "type": "string",
+          "description": "Optional fallback topology project node ID or Google Cloud project ID."
+        },
+        "default_build_name": {
+          "type": "string",
+          "description": "Optional fallback build name."
+        },
+        "default_location": {
+          "type": "string",
+          "description": "Default GCP location used by governance operations such as Artifact Registry.",
+          "default": "us-central1"
+        }
+      }
+    },
+    "resource_types": [
+      {
+        "name": "build_project",
+        "canonical_prefix": "thirdparty.gcp.build_project",
+        "identity_template": "build_project.{project_id}.{build_name}",
+        "discoverable": false,
+        "default_actions": [
+          "build_project",
+          "destroy_project"
+        ]
+      },
+      {
+        "name": "deployment",
+        "canonical_prefix": "thirdparty.gcp.deployment",
+        "identity_template": "deployment.{project_id}.{env_resource_id}",
+        "discoverable": false,
+        "default_actions": [
+          "build_and_deploy_entity",
+          "deploy_entity"
+        ]
+      },
+      {
+        "name": "artifact_repository",
+        "canonical_prefix": "thirdparty.gcp.artifact_registry.repository",
+        "identity_template": "artifact_repository.{project_id}.{location}.{repository_id}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_artifact_registry_repository"
+        ]
+      },
+      {
+        "name": "storage_bucket",
+        "canonical_prefix": "thirdparty.gcp.storage.bucket",
+        "identity_template": "storage_bucket.{project_id}.{bucket_name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_storage_bucket"
+        ]
+      },
+      {
+        "name": "secret",
+        "canonical_prefix": "thirdparty.gcp.secret_manager.secret",
+        "identity_template": "secret.{project_id}.{secret_id}",
+        "discoverable": false,
+        "default_actions": [
+          "upsert_secret_manager_secret"
+        ]
+      }
+    ],
+    "action_catalog": [
+      {
+        "name": "build_project",
+        "description": "Provision one project build runtime and its GCP resources.",
+        "resource_types": [
+          "build_project"
+        ]
+      },
+      {
+        "name": "build_and_deploy_entity",
+        "description": "Provision provider resources and deploy manifests for one entity.",
+        "resource_types": [
+          "deployment"
+        ]
+      },
+      {
+        "name": "deploy_entity",
+        "description": "Deploy manifests for one entity using an existing build runtime.",
+        "resource_types": [
+          "deployment"
+        ]
+      },
+      {
+        "name": "destroy_project",
+        "description": "Destroy one project build runtime and its managed GCP resources.",
+        "resource_types": [
+          "build_project"
+        ]
+      },
+      {
+        "name": "ensure_artifact_registry_repository",
+        "description": "Ensure one Artifact Registry repository exists.",
+        "resource_types": [
+          "artifact_repository"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_storage_bucket",
+        "description": "Ensure one Cloud Storage bucket exists.",
+        "resource_types": [
+          "storage_bucket"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "upsert_secret_manager_secret",
+        "description": "Ensure one Secret Manager secret exists and optionally add a new version.",
+        "resource_types": [
+          "secret"
+        ],
+        "idempotent": true
+      }
+    ],
+    "discovery": {
+      "mode": "push",
+      "cursor": "none"
+    },
+    "normalization": {
+      "external_id_path": "id",
+      "name_path": "build_name",
+      "owner_path": "project_id",
+      "fallback_resource_prefix": "thirdparty.gcp.custom"
+    },
+    "execution": {
+      "supports_dry_run": false
+    },
+    "extensions": {
+      "allow_custom_actions": true
+    }
+  }
+}

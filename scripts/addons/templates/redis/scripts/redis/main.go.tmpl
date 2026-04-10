@@ -1,0 +1,23 @@
+package main
+
+import (
+	"context"
+	"fmt"
+	"time"
+
+	"{{MODULE_PATH}}/store"
+)
+
+func main() {
+	client := store.NewRedis()
+	defer client.Close()
+
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	if err := store.Ping(ctx, client); err != nil {
+		panic(err)
+	}
+
+	fmt.Println("redis: ok")
+}

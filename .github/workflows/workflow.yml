@@ -1,0 +1,47 @@
+name: template-go-api CI
+
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+  pull-requests: read
+
+jobs:
+  unit-tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.25.0'
+          cache: false
+
+      - name: Running Unit Tests
+        run: go test ./...
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.25.0'
+          cache: false
+      - uses: golangci/golangci-lint-action@v3
+        with:
+          version: v1.64.8
+
+  addons-smoke:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v3
+      - uses: actions/setup-go@v4
+        with:
+          go-version: '1.25.0'
+          cache: false
+      - name: List addons
+        run: go run ./scripts/addons list
