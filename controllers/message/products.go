@@ -1061,6 +1061,33 @@ func (e *productTargetExecutor) applyTargetOverride(component model.ProductCompo
 	return overridden
 }
 
+// imageOverridesForOriginalKey returns a shallow copy of the image
+// overrides map attached to the TargetOverride identified by key (the
+// component's original target.integration_instance_ref.name before
+// applyTargetOverride rewrote it). Returns nil when no entry matches or
+// no image overrides were provided.
+func (e *productTargetExecutor) imageOverridesForOriginalKey(key string) map[string]string {
+	if len(e.targetOverrides) == 0 {
+		return nil
+	}
+	key = strings.TrimSpace(key)
+	if key == "" {
+		return nil
+	}
+	override, ok := e.targetOverrides[key]
+	if !ok {
+		return nil
+	}
+	if len(override.ImageOverrides) == 0 {
+		return nil
+	}
+	cloned := make(map[string]string, len(override.ImageOverrides))
+	for k, v := range override.ImageOverrides {
+		cloned[k] = v
+	}
+	return cloned
+}
+
 func (e *productTargetExecutor) applyProduct(
 	ctx context.Context,
 	productManifest model.Manifest,
@@ -1085,12 +1112,20 @@ func (e *productTargetExecutor) applyProduct(
 			continue
 		}
 
+		// Capture the original target key BEFORE applyTargetOverride
+		// rewrites it — imageOverridesForOriginalKey uses the original
+		// key to find the matching override entry. Without this, the
+		// map lookup would fail because the rewritten Name is the
+		// override's replacement, not the key we used to match.
+		originalKey := strings.TrimSpace(component.Target.IntegrationInstanceRef.Name)
+		imageOverrides := e.imageOverridesForOriginalKey(originalKey)
+
 		// Apply target overrides (if any) before executing the component.
 		// Overrides rewrite target.integration_instance_ref and optionally
 		// target.namespace without mutating the Product manifest.
 		component = e.applyTargetOverride(component)
 
-		componentResults, err := e.applyComponent(ctx, productRef, spec, component)
+		componentResults, err := e.applyComponent(ctx, productRef, spec, component, imageOverrides)
 		if err != nil {
 			return nil, err
 		}
@@ -1213,6 +1248,7 @@ func (e *productTargetExecutor) applyComponent(
 	productRef model.ManifestReference,
 	spec model.ProductManifestSpec,
 	component model.ProductComponentSpec,
+	imageOverrides map[string]string,
 ) ([]model.ProductInstallationApplyResult, error) {
 	dependencies, err := e.resolveExecutionDependencies(ctx, component.Requires)
 	if err != nil {
@@ -1233,7 +1269,7 @@ func (e *productTargetExecutor) applyComponent(
 		return nil, err
 	}
 
-	applied, err := e.applyComponentTarget(ctx, productRef, spec, component, reconcileResult)
+	applied, err := e.applyComponentTarget(ctx, productRef, spec, component, reconcileResult, imageOverrides)
 	if err != nil {
 		return nil, err
 	}
@@ -1363,6 +1399,7 @@ func (e *productTargetExecutor) applyComponentTarget(
 	spec model.ProductManifestSpec,
 	component model.ProductComponentSpec,
 	reconcileResult model.ProductInstallationReconcileResult,
+	imageOverrides map[string]string,
 ) (model.ProductInstallationApplyResult, error) {
 	if strings.ToLower(strings.TrimSpace(reconcileResult.Mode)) != "declarative_apply" {
 		return model.ProductInstallationApplyResult{}, fmt.Errorf("component %q reconcile mode %q is unsupported for target apply", component.Name, reconcileResult.Mode)
@@ -1404,9 +1441,10 @@ func (e *productTargetExecutor) applyComponentTarget(
 			Instance:     manifestReferenceFromRecord(targetInstance),
 			InstanceSpec: targetInstanceSpec,
 		},
-		Objects:   reconcileResult.Objects,
-		Namespace: component.Target.Namespace,
-		Reconcile: component.Reconcile,
+		Objects:        reconcileResult.Objects,
+		Namespace:      component.Target.Namespace,
+		ImageOverrides: imageOverrides,
+		Reconcile:      component.Reconcile,
 	}
 
 	var response model.AdapterDeclarativeApplyResponse

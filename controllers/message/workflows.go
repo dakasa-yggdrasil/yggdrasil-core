@@ -938,6 +938,23 @@ func parseTargetOverridesFromStepInput(input map[string]any) (map[string]model.T
 			override.Namespace = ns
 		}
 
+		if imageRaw, ok := valueMap["image_overrides"]; ok {
+			imageMap, ok := imageRaw.(map[string]any)
+			if !ok {
+				return nil, fmt.Errorf("target_overrides[%q].image_overrides must be an object", key)
+			}
+			if len(imageMap) > 0 {
+				override.ImageOverrides = make(map[string]string, len(imageMap))
+				for originalRef, replacement := range imageMap {
+					replacementStr, ok := replacement.(string)
+					if !ok {
+						return nil, fmt.Errorf("target_overrides[%q].image_overrides[%q] must be a string", key, originalRef)
+					}
+					override.ImageOverrides[originalRef] = replacementStr
+				}
+			}
+		}
+
 		overrides[key] = override
 	}
 

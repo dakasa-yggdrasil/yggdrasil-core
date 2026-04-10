@@ -75,6 +75,15 @@ func TestValidateProductInstallationContracts(t *testing.T) {
 		t.Fatalf("Validate(declarativeApplyRequest) error = %v", err)
 	}
 
+	// Apply request with image overrides populated should also validate.
+	applyWithImages := applyReq
+	applyWithImages.ImageOverrides = map[string]string{
+		"ghcr.io/dakasa-co/identities": "ghcr.io/dakasa-co/identities:sha-abc1234",
+	}
+	if err := Validate(FamilyProductInstallationAdapterV1, "declarativeApplyRequest", applyWithImages); err != nil {
+		t.Fatalf("Validate(declarativeApplyRequest) with image_overrides error = %v", err)
+	}
+
 	deleteReq := model.AdapterDeclarativeDeleteRequest{
 		Operation: "declarative_delete",
 		Context:   req.Context,
