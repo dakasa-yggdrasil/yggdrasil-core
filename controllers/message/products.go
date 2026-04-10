@@ -170,18 +170,23 @@ func productApplyInstallationHandler(conn *amqp.Connection, db *sql.DB, logger *
 			return replyFailure(ctx, conn, d, manifestLookupErrorCode(err), err, logger)
 		}
 
-		executor := newProductTargetExecutor(conn, db, logger)
+		// Validate target overrides against the Product components.
+		// A key in target_overrides that doesn't match any component is
+		// likely a typo and rejected loudly.
+		if err := validateTargetOverrides(req.TargetOverrides, spec); err != nil {
+			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+		}
+
+		executor := newProductTargetExecutor(conn, db, logger).withTargetOverrides(req.TargetOverrides)
 		results, err := executor.applyProduct(ctx, productManifest, spec)
 		if err != nil {
 			return replyFailure(ctx, conn, d, integrationAwareErrorCode(err, "apply_failed"), err, logger)
 		}
 
 		// Emit product.installation.applied event (best-effort, post-apply).
-		// The apply itself involves side effects on external systems (K8s, etc.)
-		// so it's not transactional with the core DB. We emit the event in its
-		// own transaction after success; on event emit failure we log and
-		// return success anyway (the apply already happened).
-		emitProductInstallationAppliedEvent(ctx, db, logger, productManifest, spec, results)
+		// The event payload includes target_overrides_used so the audit
+		// trail records which targets were rewritten at apply time.
+		emitProductInstallationAppliedEvent(ctx, db, logger, productManifest, spec, results, req.TargetOverrides)
 
 		return replySuccess(ctx, conn, d, model.ApplyProductInstallationResponse{
 			Product: manifestReferenceFromRecord(productManifest),
@@ -190,9 +195,35 @@ func productApplyInstallationHandler(conn *amqp.Connection, db *sql.DB, logger *
 	}
 }
 
+// validateTargetOverrides returns an error if any override key does not
+// match an integration_instance_ref.name used by the Product's components.
+// This catches typos that would otherwise silently do nothing.
+func validateTargetOverrides(overrides map[string]model.TargetOverride, spec model.ProductManifestSpec) error {
+	if len(overrides) == 0 {
+		return nil
+	}
+	usedNames := map[string]bool{}
+	for _, component := range spec.Components {
+		name := strings.TrimSpace(component.Target.IntegrationInstanceRef.Name)
+		if name != "" {
+			usedNames[name] = true
+		}
+	}
+	for key := range overrides {
+		if !usedNames[key] {
+			return fmt.Errorf("target_override key %q does not match any component target", key)
+		}
+	}
+	return nil
+}
+
 // emitProductInstallationAppliedEvent is a best-effort side channel that
 // records the apply success in the core event stream. Failures are logged
 // but do not affect the caller response (the apply already succeeded).
+//
+// If target_overrides were used, they're recorded in the event payload for
+// audit trail purposes (so consumers can reconstruct which cluster a given
+// apply went to even though the Product manifest is immutable).
 func emitProductInstallationAppliedEvent(
 	ctx context.Context,
 	db *sql.DB,
@@ -200,6 +231,7 @@ func emitProductInstallationAppliedEvent(
 	productManifest model.Manifest,
 	spec model.ProductManifestSpec,
 	results []model.ProductInstallationApplyResult,
+	targetOverrides map[string]model.TargetOverride,
 ) {
 	_ = results // results not currently used in the event payload (reserved for future enrichment)
 	components := make([]map[string]interface{}, 0, len(spec.Components))
@@ -228,6 +260,26 @@ func emitProductInstallationAppliedEvent(
 			"version":   productManifest.Version,
 		},
 		"components_applied": components,
+	}
+
+	// Include target_overrides_used in the payload when overrides were
+	// passed at apply time, so audit consumers can reconstruct the actual
+	// target each component was applied to.
+	if len(targetOverrides) > 0 {
+		overridesMap := make(map[string]interface{}, len(targetOverrides))
+		for key, override := range targetOverrides {
+			entry := map[string]interface{}{
+				"integration_instance_ref": map[string]interface{}{
+					"name":      override.IntegrationInstanceRef.Name,
+					"namespace": override.IntegrationInstanceRef.Namespace,
+				},
+			}
+			if override.Namespace != "" {
+				entry["namespace"] = override.Namespace
+			}
+			overridesMap[key] = entry
+		}
+		payload["target_overrides_used"] = overridesMap
 	}
 
 	tx, err := db.BeginTx(ctx, nil)
@@ -271,7 +323,12 @@ func productObserveInstallationHandler(conn *amqp.Connection, db *sql.DB, logger
 			return replyFailure(ctx, conn, d, manifestLookupErrorCode(err), err, logger)
 		}
 
-		executor := newProductTargetExecutor(conn, db, logger)
+		// Validate target overrides against the Product components.
+		if err := validateTargetOverrides(req.TargetOverrides, spec); err != nil {
+			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+		}
+
+		executor := newProductTargetExecutor(conn, db, logger).withTargetOverrides(req.TargetOverrides)
 		results, err := executor.observeProduct(ctx, productManifest, spec)
 		if err != nil {
 			return replyFailure(ctx, conn, d, integrationAwareErrorCode(err, "observe_failed"), err, logger)
@@ -805,11 +862,12 @@ func manifestReferencePointer(value model.ManifestReference) *model.ManifestRefe
 }
 
 type productTargetExecutor struct {
-	conn      *amqp.Connection
-	db        *sql.DB
-	logger    *zap.Logger
-	inFlight  map[string]struct{}
-	completed map[string]struct{}
+	conn            *amqp.Connection
+	db              *sql.DB
+	logger          *zap.Logger
+	inFlight        map[string]struct{}
+	completed       map[string]struct{}
+	targetOverrides map[string]model.TargetOverride
 }
 
 type productExecutionDependency struct {
@@ -825,6 +883,48 @@ func newProductTargetExecutor(conn *amqp.Connection, db *sql.DB, logger *zap.Log
 		inFlight:  map[string]struct{}{},
 		completed: map[string]struct{}{},
 	}
+}
+
+// withTargetOverrides returns a copy of the executor with target overrides
+// applied. Components whose target.integration_instance_ref.name matches a
+// key in the map will be redirected to the override's instance + namespace
+// at apply/observe time.
+//
+// Returns a new executor rather than mutating — the caller may reuse the
+// base executor for other products without overrides.
+func (e *productTargetExecutor) withTargetOverrides(overrides map[string]model.TargetOverride) *productTargetExecutor {
+	return &productTargetExecutor{
+		conn:            e.conn,
+		db:              e.db,
+		logger:          e.logger,
+		inFlight:        e.inFlight,
+		completed:       e.completed,
+		targetOverrides: overrides,
+	}
+}
+
+// applyTargetOverride returns a copy of the component with its target
+// rewritten if a matching override exists. If no override matches, the
+// original component is returned unchanged.
+func (e *productTargetExecutor) applyTargetOverride(component model.ProductComponentSpec) model.ProductComponentSpec {
+	if len(e.targetOverrides) == 0 {
+		return component
+	}
+	key := strings.TrimSpace(component.Target.IntegrationInstanceRef.Name)
+	if key == "" {
+		return component
+	}
+	override, ok := e.targetOverrides[key]
+	if !ok {
+		return component
+	}
+	// Copy the component to avoid mutating the spec
+	overridden := component
+	overridden.Target.IntegrationInstanceRef = override.IntegrationInstanceRef
+	if strings.TrimSpace(override.Namespace) != "" {
+		overridden.Target.Namespace = override.Namespace
+	}
+	return overridden
 }
 
 func (e *productTargetExecutor) applyProduct(
@@ -850,6 +950,11 @@ func (e *productTargetExecutor) applyProduct(
 		if strings.ToLower(strings.TrimSpace(component.Source.Kind)) != "integration" {
 			continue
 		}
+
+		// Apply target overrides (if any) before executing the component.
+		// Overrides rewrite target.integration_instance_ref and optionally
+		// target.namespace without mutating the Product manifest.
+		component = e.applyTargetOverride(component)
 
 		componentResults, err := e.applyComponent(ctx, productRef, spec, component)
 		if err != nil {
@@ -885,6 +990,9 @@ func (e *productTargetExecutor) observeProduct(
 		if strings.ToLower(strings.TrimSpace(component.Source.Kind)) != "integration" {
 			continue
 		}
+
+		// Apply target overrides before observing.
+		component = e.applyTargetOverride(component)
 
 		componentResults, err := e.observeComponent(ctx, productRef, spec, component)
 		if err != nil {

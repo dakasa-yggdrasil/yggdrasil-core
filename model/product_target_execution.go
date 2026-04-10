@@ -1,8 +1,25 @@
 package model
 
-// ApplyProductInstallationRequest asks the core to apply one product to its declared target integrations.
+// ApplyProductInstallationRequest asks the core to apply one product to its
+// declared target integrations. Optional TargetOverrides allow workflow
+// callers to redirect specific components to different integration instances
+// at apply time without modifying the immutable Product manifest.
 type ApplyProductInstallationRequest struct {
-	Product ManifestSelector `json:"product"`
+	Product         ManifestSelector        `json:"product"`
+	TargetOverrides map[string]TargetOverride `json:"target_overrides,omitempty"`
+}
+
+// TargetOverride replaces a component's target.integration_instance_ref and
+// optionally its namespace at apply time. The map key on the request is the
+// integration_instance_ref.name as authored in the Product manifest —
+// matching components get the override applied.
+type TargetOverride struct {
+	// IntegrationInstanceRef is the replacement instance reference. Required.
+	IntegrationInstanceRef ManifestSelector `json:"integration_instance_ref"`
+
+	// Namespace overrides the component's target.namespace. Empty string
+	// means "keep the original namespace".
+	Namespace string `json:"namespace,omitempty"`
 }
 
 // ProductInstallationApplyResult describes one component apply result.
@@ -23,9 +40,12 @@ type ApplyProductInstallationResponse struct {
 	Results []ProductInstallationApplyResult `json:"results,omitempty"`
 }
 
-// ObserveProductInstallationRequest asks the core to observe one product on its declared target integrations.
+// ObserveProductInstallationRequest asks the core to observe one product on
+// its declared target integrations. TargetOverrides (same semantics as
+// ApplyProductInstallationRequest) redirect observation to different targets.
 type ObserveProductInstallationRequest struct {
-	Product ManifestSelector `json:"product"`
+	Product         ManifestSelector        `json:"product"`
+	TargetOverrides map[string]TargetOverride `json:"target_overrides,omitempty"`
 }
 
 // ProductInstallationObservationResult describes one component observation result.
