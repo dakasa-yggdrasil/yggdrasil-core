@@ -396,7 +396,102 @@ func authorizationEvaluateHandler(conn *amqp.Connection, db *sql.DB, logger *zap
 			response.Policy.Manifest = manifestReferenceFromRecord(policyManifest)
 		}
 
+		// Emit authorization.evaluated event (best-effort, post-decision).
+		// The authorization evaluation is pure compute + DB reads; the event
+		// records the decision for audit trail.
+		emitAuthorizationEvaluatedEvent(ctx, db, logger, req, response, rbacManifest, policyManifest)
+
 		return replySuccess(ctx, conn, d, response, logger)
+	}
+}
+
+// emitAuthorizationEvaluatedEvent records an authorization decision in the
+// core event stream. Best-effort: failures are logged but do not affect the
+// caller response.
+func emitAuthorizationEvaluatedEvent(
+	ctx context.Context,
+	db *sql.DB,
+	logger *zap.Logger,
+	req model.EvaluateAuthorizationRequest,
+	response model.EvaluateAuthorizationResponse,
+	rbacManifest model.Manifest,
+	policyManifest model.Manifest,
+) {
+	decision := string(response.Decision)
+	if decision == "" {
+		decision = "not_applicable"
+	}
+
+	payload := map[string]interface{}{
+		"resource": req.Resource,
+		"action":   req.Action,
+		"decision": decision,
+	}
+	if collabID := strings.TrimSpace(req.CollaboratorID); collabID != "" {
+		payload["collaborator_id"] = collabID
+	}
+
+	// Collect matched roles from RBAC results
+	matchedRoles := make([]string, 0)
+	for _, role := range response.RBAC.MatchedRoles {
+		matchedRoles = append(matchedRoles, role)
+	}
+	if len(matchedRoles) > 0 {
+		payload["matched_roles"] = matchedRoles
+	}
+
+	matchedRules := make([]string, 0)
+	for _, rule := range response.RBAC.MatchedRules {
+		label := rule.Role
+		if rule.Effect != "" {
+			label += "/" + rule.Effect
+		}
+		matchedRules = append(matchedRules, label)
+	}
+	if len(matchedRules) > 0 {
+		payload["matched_rules"] = matchedRules
+	}
+
+	payload["rbac_manifest_ref"] = map[string]interface{}{
+		"id":        rbacManifest.ID.String(),
+		"name":      rbacManifest.Metadata.Name,
+		"namespace": rbacManifest.Metadata.Namespace,
+	}
+
+	if policyManifest.ID != (uuid.UUID{}) {
+		payload["policy_manifest_ref"] = map[string]interface{}{
+			"id":        policyManifest.ID.String(),
+			"name":      policyManifest.Metadata.Name,
+			"namespace": policyManifest.Metadata.Namespace,
+		}
+	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		if logger != nil {
+			logger.Warn("emit authorization.evaluated: begin tx failed", zap.Error(err))
+		}
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err := repository.EmitEvent(ctx, tx, model.EmitEventRequest{
+		Type:          "authorization.evaluated",
+		SchemaVersion: "v1",
+		AggregateType: "authorization",
+		AggregateID:   req.Resource,
+		Payload:       payload,
+	}); err != nil {
+		if logger != nil {
+			logger.Warn("emit authorization.evaluated: emit failed", zap.Error(err))
+		}
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		if logger != nil {
+			logger.Warn("emit authorization.evaluated: commit failed", zap.Error(err))
+		}
 	}
 }
 
