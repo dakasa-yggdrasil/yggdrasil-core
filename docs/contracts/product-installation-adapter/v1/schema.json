@@ -364,6 +364,11 @@
           "items": { "type": "object", "additionalProperties": true }
         },
         "namespace": { "type": "string" },
+        "image_overrides": {
+          "type": "object",
+          "description": "Map of original image reference -> replacement reference. Adapters that understand image overrides (Kustomize, Helm) apply them at render time.",
+          "additionalProperties": { "type": "string" }
+        },
         "reconcile": { "$ref": "#/$defs/productReconcileSpec" }
       },
       "additionalProperties": false

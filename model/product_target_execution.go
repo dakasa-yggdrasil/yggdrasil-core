@@ -20,6 +20,20 @@ type TargetOverride struct {
 	// Namespace overrides the component's target.namespace. Empty string
 	// means "keep the original namespace".
 	Namespace string `json:"namespace,omitempty"`
+
+	// ImageOverrides remaps container image references at apply time.
+	// Keys are the original image reference (e.g.
+	// "ghcr.io/dakasa-co/identities"); values are the replacement,
+	// typically the same repository with a new tag
+	// ("ghcr.io/dakasa-co/identities:sha-abc1234"). Empty map means "no
+	// remap". The core forwards the map verbatim to the target adapter
+	// via AdapterDeclarativeApplyRequest.ImageOverrides — the adapter is
+	// responsible for applying the overrides at render time (e.g.
+	// Kustomize images: field) before the actual apply.
+	//
+	// Consumer-side CD flows use this to avoid committing a new image
+	// tag to git on every build.
+	ImageOverrides map[string]string `json:"image_overrides,omitempty"`
 }
 
 // ProductInstallationApplyResult describes one component apply result.
@@ -129,13 +143,20 @@ type AdapterTargetIntegrationContext struct {
 }
 
 // AdapterDeclarativeApplyRequest asks a target integration to apply one desired object set.
+//
+// ImageOverrides carries any runtime container-image remaps the workflow
+// wants the adapter to apply before materializing the objects on the
+// cluster. The core does not parse or enforce it — adapters that
+// understand image overrides (e.g. integration-kubernetes with
+// Kustomize) are responsible for applying them at render time.
 type AdapterDeclarativeApplyRequest struct {
-	Operation string                             `json:"operation"`
-	Context   AdapterGenerateInstallationContext `json:"context"`
-	Target    AdapterTargetIntegrationContext    `json:"target"`
-	Objects   []map[string]any                   `json:"objects"`
-	Namespace string                             `json:"namespace,omitempty"`
-	Reconcile ProductReconcileSpec               `json:"reconcile,omitempty"`
+	Operation      string                             `json:"operation"`
+	Context        AdapterGenerateInstallationContext `json:"context"`
+	Target         AdapterTargetIntegrationContext    `json:"target"`
+	Objects        []map[string]any                   `json:"objects"`
+	Namespace      string                             `json:"namespace,omitempty"`
+	ImageOverrides map[string]string                  `json:"image_overrides,omitempty"`
+	Reconcile      ProductReconcileSpec               `json:"reconcile,omitempty"`
 }
 
 // AdapterDeclarativeApplyResponse is returned by a target integration after applying objects.
