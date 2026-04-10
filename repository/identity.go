@@ -379,7 +379,105 @@ func GetCollaboratorByThirdPartyLogin(ctx context.Context, db *sql.DB, provider,
 }
 
 // ListCollaborators returns collaborators matching the requested status.
+// ListCollaborators returns all collaborators matching the filters without
+// pagination. For RPC-facing lists, prefer ListCollaboratorsPaginated.
 func ListCollaborators(ctx context.Context, db *sql.DB, req model.ListCollaboratorsRequest) ([]model.Collaborator, error) {
+	q, args := buildListCollaboratorsQuery(req)
+	q += " ORDER BY display_name, slug"
+
+	rows, err := db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var collaborators []model.Collaborator
+	for rows.Next() {
+		collaborator, err := scanCollaborator(rows)
+		if err != nil {
+			return nil, err
+		}
+		collaborators = append(collaborators, collaborator)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return collaborators, nil
+}
+
+// ListCollaboratorsPaginated returns a single page of collaborators using
+// cursor-based pagination. Default sort is (slug ASC, id ASC).
+func ListCollaboratorsPaginated(
+	ctx context.Context,
+	db *sql.DB,
+	req model.ListCollaboratorsRequest,
+	pagination model.PaginationRequest,
+) ([]model.Collaborator, model.PaginationResponse, error) {
+	pagination = NormalizePagination(pagination)
+	cursor, err := DecodeCursor(pagination.Cursor)
+	if err != nil {
+		return nil, model.PaginationResponse{}, fmt.Errorf("invalid cursor: %w", err)
+	}
+
+	q, args := buildListCollaboratorsQuery(req)
+
+	// Cursor clause: (slug, id) > (cursor.last_sort_value, cursor.last_id)
+	if cursor.LastID != "" && cursor.LastSortValue != nil {
+		hasWhere := strings.Contains(q, " WHERE ")
+		clause := fmt.Sprintf("(slug, id) > ($%d, $%d)", len(args)+1, len(args)+2)
+		if hasWhere {
+			q += " AND " + clause
+		} else {
+			q += " WHERE " + clause
+		}
+		args = append(args, cursor.LastSortValue, cursor.LastID)
+	}
+	q += " ORDER BY slug ASC, id ASC"
+	args = append(args, pagination.Limit+1)
+	q += fmt.Sprintf(" LIMIT $%d", len(args))
+
+	rows, err := db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, model.PaginationResponse{}, err
+	}
+	defer rows.Close()
+
+	collaborators := make([]model.Collaborator, 0, pagination.Limit)
+	for rows.Next() {
+		c, err := scanCollaborator(rows)
+		if err != nil {
+			return nil, model.PaginationResponse{}, err
+		}
+		collaborators = append(collaborators, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, model.PaginationResponse{}, err
+	}
+
+	hasMore := len(collaborators) > pagination.Limit
+	if hasMore {
+		collaborators = collaborators[:pagination.Limit]
+	}
+
+	nextCursor := ""
+	if len(collaborators) > 0 {
+		last := collaborators[len(collaborators)-1]
+		nextCursor = EncodeCursor(Cursor{
+			LastID:        last.ID.String(),
+			LastSortValue: last.Slug,
+			SortKey:       "slug_asc",
+		})
+	}
+
+	return collaborators, model.PaginationResponse{
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+	}, nil
+}
+
+func buildListCollaboratorsQuery(req model.ListCollaboratorsRequest) (string, []any) {
 	q := `
 		SELECT
 			id,
@@ -412,28 +510,7 @@ func ListCollaborators(ctx context.Context, db *sql.DB, req model.ListCollaborat
 	if len(clauses) > 0 {
 		q += " WHERE " + strings.Join(clauses, " AND ")
 	}
-	q += " ORDER BY display_name, slug"
-
-	rows, err := db.QueryContext(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var collaborators []model.Collaborator
-	for rows.Next() {
-		collaborator, err := scanCollaborator(rows)
-		if err != nil {
-			return nil, err
-		}
-		collaborators = append(collaborators, collaborator)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return collaborators, nil
+	return q, args
 }
 
 // CreateTeam stores one team record.
@@ -527,7 +604,104 @@ func GetTeam(ctx context.Context, db *sql.DB, identity string) (model.Team, erro
 }
 
 // ListTeams returns teams matching the provided status/type filters.
+// ListTeams returns all teams matching the filters without pagination.
+// For RPC-facing lists, prefer ListTeamsPaginated.
 func ListTeams(ctx context.Context, db *sql.DB, req model.ListTeamsRequest) ([]model.Team, error) {
+	q, args := buildListTeamsQuery(req)
+	q += " ORDER BY name, slug"
+
+	rows, err := db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var teams []model.Team
+	for rows.Next() {
+		team, err := scanTeam(rows)
+		if err != nil {
+			return nil, err
+		}
+		teams = append(teams, team)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return teams, nil
+}
+
+// ListTeamsPaginated returns a single page of teams using cursor-based
+// pagination. Default sort is (slug ASC, id ASC).
+func ListTeamsPaginated(
+	ctx context.Context,
+	db *sql.DB,
+	req model.ListTeamsRequest,
+	pagination model.PaginationRequest,
+) ([]model.Team, model.PaginationResponse, error) {
+	pagination = NormalizePagination(pagination)
+	cursor, err := DecodeCursor(pagination.Cursor)
+	if err != nil {
+		return nil, model.PaginationResponse{}, fmt.Errorf("invalid cursor: %w", err)
+	}
+
+	q, args := buildListTeamsQuery(req)
+
+	if cursor.LastID != "" && cursor.LastSortValue != nil {
+		hasWhere := strings.Contains(q, " WHERE ")
+		clause := fmt.Sprintf("(slug, id) > ($%d, $%d)", len(args)+1, len(args)+2)
+		if hasWhere {
+			q += " AND " + clause
+		} else {
+			q += " WHERE " + clause
+		}
+		args = append(args, cursor.LastSortValue, cursor.LastID)
+	}
+	q += " ORDER BY slug ASC, id ASC"
+	args = append(args, pagination.Limit+1)
+	q += fmt.Sprintf(" LIMIT $%d", len(args))
+
+	rows, err := db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, model.PaginationResponse{}, err
+	}
+	defer rows.Close()
+
+	teams := make([]model.Team, 0, pagination.Limit)
+	for rows.Next() {
+		team, err := scanTeam(rows)
+		if err != nil {
+			return nil, model.PaginationResponse{}, err
+		}
+		teams = append(teams, team)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, model.PaginationResponse{}, err
+	}
+
+	hasMore := len(teams) > pagination.Limit
+	if hasMore {
+		teams = teams[:pagination.Limit]
+	}
+
+	nextCursor := ""
+	if len(teams) > 0 {
+		last := teams[len(teams)-1]
+		nextCursor = EncodeCursor(Cursor{
+			LastID:        last.ID.String(),
+			LastSortValue: last.Slug,
+			SortKey:       "slug_asc",
+		})
+	}
+
+	return teams, model.PaginationResponse{
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+	}, nil
+}
+
+func buildListTeamsQuery(req model.ListTeamsRequest) (string, []any) {
 	q := `
 		SELECT
 			id,
@@ -561,28 +735,7 @@ func ListTeams(ctx context.Context, db *sql.DB, req model.ListTeamsRequest) ([]m
 	if len(clauses) > 0 {
 		q += " WHERE " + strings.Join(clauses, " AND ")
 	}
-	q += " ORDER BY name, slug"
-
-	rows, err := db.QueryContext(ctx, q, args...)
-	if err != nil {
-		return nil, err
-	}
-	defer rows.Close()
-
-	var teams []model.Team
-	for rows.Next() {
-		team, err := scanTeam(rows)
-		if err != nil {
-			return nil, err
-		}
-		teams = append(teams, team)
-	}
-
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
-
-	return teams, nil
+	return q, args
 }
 
 // UpdateTeam updates one team record with patch semantics.
