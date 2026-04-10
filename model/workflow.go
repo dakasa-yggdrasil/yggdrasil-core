@@ -14,8 +14,57 @@ type WorkflowManifestSpec struct {
 }
 
 // WorkflowTriggerSpec describes how a workflow can be started.
+// Mode is one of: "manual", "schedule", "event". When Mode is "schedule",
+// the Schedule sub-object is required. When Mode is "event", the Event
+// sub-object is required. Manual mode uses neither.
 type WorkflowTriggerSpec struct {
-	Mode string `json:"mode,omitempty"`
+	Mode     string                     `json:"mode,omitempty"`
+	Enabled  *bool                      `json:"enabled,omitempty"`
+	Schedule *WorkflowScheduleTriggerSpec `json:"schedule,omitempty"`
+	Event    *WorkflowEventTriggerSpec    `json:"event,omitempty"`
+}
+
+// WorkflowScheduleTriggerSpec configures a cron-based scheduled trigger.
+// The core scheduler addon fires this workflow at each tick matching the
+// cron expression (in the configured timezone). CatchupPolicy controls what
+// happens when the scheduler catches up after downtime: "skip" (default)
+// fires only the next tick; "catch_up" fires every missed tick.
+type WorkflowScheduleTriggerSpec struct {
+	CronExpression string         `json:"cron_expression"`
+	Timezone       string         `json:"timezone,omitempty"`
+	StartAt        string         `json:"start_at,omitempty"`
+	EndAt          string         `json:"end_at,omitempty"`
+	CatchupPolicy  string         `json:"catchup_policy,omitempty"`
+	DefaultInputs  map[string]any `json:"default_inputs,omitempty"`
+}
+
+// WorkflowEventTriggerSpec configures an event-driven trigger. The core
+// event subscription loop watches the event stream (see Gap 1) and fires
+// the workflow when events matching Types + AggregateFilter + PayloadFilters
+// are emitted. Debounce consolidates bursts of matching events into a single
+// dispatch.
+type WorkflowEventTriggerSpec struct {
+	Types           []string                `json:"types"`
+	AggregateFilter *WorkflowEventAggregateFilter `json:"aggregate_filter,omitempty"`
+	PayloadFilters  []WorkflowEventPayloadFilter  `json:"payload_filters,omitempty"`
+	DebounceSeconds int                     `json:"debounce_seconds,omitempty"`
+	DefaultInputs   map[string]any          `json:"default_inputs,omitempty"`
+}
+
+// WorkflowEventAggregateFilter scopes an event trigger by aggregate type
+// and/or name pattern (glob).
+type WorkflowEventAggregateFilter struct {
+	AggregateType string `json:"aggregate_type,omitempty"`
+	NamePattern   string `json:"name_pattern,omitempty"`
+}
+
+// WorkflowEventPayloadFilter is a single condition over an event's payload.
+// Path is a dotted key lookup; Operator is one of eq/neq/in/not_in/contains/
+// matches; Value is the comparison target (typed at JSON level).
+type WorkflowEventPayloadFilter struct {
+	Path     string      `json:"path"`
+	Operator string      `json:"operator"`
+	Value    interface{} `json:"value"`
 }
 
 // WorkflowInputSchemaSpec validates runtime inputs passed to a workflow run.
