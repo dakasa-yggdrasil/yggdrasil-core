@@ -10,6 +10,8 @@ import (
 
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
 )
@@ -84,7 +86,68 @@ func workflowRunHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) C
 			return replyFailure(ctx, conn, d, code, err, logger)
 		}
 
+		// Emit workflow.run.completed event (best-effort, post-execution).
+		// Workflow runs are not transactional with the core DB; they involve
+		// external integration calls. The event is emitted in its own tx
+		// after the run finishes. On emit failure, log and continue.
+		emitWorkflowRunCompletedEvent(ctx, db, logger, response)
+
 		return replySuccess(ctx, conn, d, response, logger)
+	}
+}
+
+// emitWorkflowRunCompletedEvent records a workflow run completion in the
+// core event stream. Best-effort: failures are logged but do not affect the
+// caller response. Called after RunWorkflow returns successfully (workflow
+// status may still be "failed" if a step failed — the event captures that).
+func emitWorkflowRunCompletedEvent(
+	ctx context.Context,
+	db *sql.DB,
+	logger *zap.Logger,
+	response model.RunWorkflowResponse,
+) {
+	runID := uuid.NewString()
+	payload := map[string]interface{}{
+		"workflow_ref": map[string]interface{}{
+			"id":        response.Workflow.ID.String(),
+			"name":      response.Workflow.Name,
+			"namespace": response.Workflow.Namespace,
+			"version":   response.Workflow.Version,
+		},
+		"run_id":       runID,
+		"status":       response.Status,
+		"started_at":   response.StartedAt.Format(time.RFC3339),
+		"finished_at":  response.FinishedAt.Format(time.RFC3339),
+		"step_count":   len(response.Steps),
+		"triggered_by": "manual",
+	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		if logger != nil {
+			logger.Warn("emit workflow.run.completed: begin tx failed", zap.Error(err))
+		}
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err := repository.EmitEvent(ctx, tx, model.EmitEventRequest{
+		Type:          "workflow.run.completed",
+		SchemaVersion: "v1",
+		AggregateType: "workflow_run",
+		AggregateID:   runID,
+		Payload:       payload,
+	}); err != nil {
+		if logger != nil {
+			logger.Warn("emit workflow.run.completed: emit failed", zap.Error(err))
+		}
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		if logger != nil {
+			logger.Warn("emit workflow.run.completed: commit failed", zap.Error(err))
+		}
 	}
 }
 
