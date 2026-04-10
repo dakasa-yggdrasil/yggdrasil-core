@@ -11,9 +11,16 @@ import (
 )
 
 var (
-	supportedWorkflowTriggerModes = []string{"manual", "event", "schedule"}
-	supportedWorkflowStepKinds    = []string{"integration"}
-	workflowTemplatePattern       = regexp.MustCompile(`{{\s*([^{}]+?)\s*}}`)
+	supportedWorkflowTriggerModes  = []string{"manual", "event", "schedule"}
+	supportedWorkflowStepKinds     = []string{"integration", "product"}
+	supportedProductStepOperations = []string{
+		"materialize",
+		"installation.reconcile",
+		"installation.apply",
+		"installation.observe",
+		"installation_state.discover",
+	}
+	workflowTemplatePattern = regexp.MustCompile(`{{\s*([^{}]+?)\s*}}`)
 )
 
 // WorkflowExecutionContext carries the runtime values available while rendering one workflow step.
@@ -282,6 +289,28 @@ func validateWorkflowStep(step model.WorkflowStepSpec) error {
 		}
 		if capability := NormalizeWorkflowStepCapability(step); capability != "" && !integrationNamePattern.MatchString(capability) {
 			return fmt.Errorf("integration step capability %q is invalid", step.Use.Capability)
+		}
+	case "product":
+		// Product steps dispatch product operations from inside a workflow.
+		// They require an operation name and a product_ref in `with`. The
+		// product_ref target is validated at runtime by the product handlers
+		// (same code path as the direct product RPC calls).
+		operation := strings.ToLower(strings.TrimSpace(step.Use.Operation))
+		if operation == "" {
+			return fmt.Errorf("product step requires use.operation")
+		}
+		if !slices.Contains(supportedProductStepOperations, operation) {
+			return fmt.Errorf("product step operation %q is unsupported (allowed: %v)", operation, supportedProductStepOperations)
+		}
+		if step.With == nil {
+			return fmt.Errorf("product step requires with.product_ref")
+		}
+		if _, hasProductRef := step.With["product_ref"]; !hasProductRef {
+			return fmt.Errorf("product step requires with.product_ref")
+		}
+		// instance_ref is not used for product steps
+		if step.Use.InstanceRef != nil {
+			return fmt.Errorf("product step must not set use.instance_ref (use with.product_ref instead)")
 		}
 	}
 
