@@ -127,8 +127,41 @@ func manifestCreateHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger
 			return replyFailure(ctx, conn, d, "internal_error", err, logger)
 		}
 
-		manifestRecord, err := repository.CreateManifestVersion(ctx, db, doc, checksum)
+		// Atomic: create manifest + emit manifest.created event in the same tx.
+		tx, err := db.BeginTx(ctx, nil)
 		if err != nil {
+			return replyFailure(ctx, conn, d, "internal_error", err, logger)
+		}
+		defer tx.Rollback()
+
+		manifestRecord, err := repository.CreateManifestVersionTx(ctx, tx, doc, checksum)
+		if err != nil {
+			return replyFailure(ctx, conn, d, "internal_error", err, logger)
+		}
+
+		eventPayload := map[string]interface{}{
+			"manifest_id": manifestRecord.ID.String(),
+			"kind":        manifestRecord.Kind,
+			"namespace":   manifestRecord.Metadata.Namespace,
+			"name":        manifestRecord.Metadata.Name,
+			"version":     manifestRecord.Version,
+			"checksum":    manifestRecord.Checksum,
+		}
+		if len(manifestRecord.Metadata.Labels) > 0 {
+			eventPayload["labels"] = manifestRecord.Metadata.Labels
+		}
+
+		if _, err := repository.EmitEvent(ctx, tx, model.EmitEventRequest{
+			Type:          "manifest.created",
+			SchemaVersion: "v1",
+			AggregateType: "manifest",
+			AggregateID:   manifestRecord.ID.String(),
+			Payload:       eventPayload,
+		}); err != nil {
+			return replyFailure(ctx, conn, d, "internal_error", err, logger)
+		}
+
+		if err := tx.Commit(); err != nil {
 			return replyFailure(ctx, conn, d, "internal_error", err, logger)
 		}
 

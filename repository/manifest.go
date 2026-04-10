@@ -15,7 +15,34 @@ import (
 var ErrManifestNotFound = errors.New("manifest not found")
 
 // CreateManifestVersion stores a new manifest version.
+// CreateManifestVersion creates a new manifest version in its own transaction.
+// Use this when the caller has no other state mutations to combine with.
+// For atomic mutations (e.g., emitting events alongside the create),
+// prefer CreateManifestVersionTx with a caller-managed transaction.
 func CreateManifestVersion(ctx context.Context, db *sql.DB, doc model.ManifestDocument, checksum string) (model.Manifest, error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.Manifest{}, err
+	}
+	defer tx.Rollback()
+
+	manifest, err := CreateManifestVersionTx(ctx, tx, doc, checksum)
+	if err != nil {
+		return model.Manifest{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return model.Manifest{}, err
+	}
+
+	return manifest, nil
+}
+
+// CreateManifestVersionTx creates a new manifest version using a caller-provided
+// transaction. The caller is responsible for committing or rolling back the tx.
+// Use this when the caller needs to combine the manifest creation with other
+// state mutations (e.g., emitting an event in the same tx for atomicity).
+func CreateManifestVersionTx(ctx context.Context, tx *sql.Tx, doc model.ManifestDocument, checksum string) (model.Manifest, error) {
 	labels, err := marshalLabels(doc.Metadata.Labels)
 	if err != nil {
 		return model.Manifest{}, err
@@ -25,12 +52,6 @@ func CreateManifestVersion(ctx context.Context, db *sql.DB, doc model.ManifestDo
 	if len(spec) == 0 {
 		spec = []byte("{}")
 	}
-
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return model.Manifest{}, err
-	}
-	defer tx.Rollback()
 
 	var nextVersion int
 	err = tx.QueryRowContext(
@@ -113,10 +134,6 @@ func CreateManifestVersion(ctx context.Context, db *sql.DB, doc model.ManifestDo
 		checksum,
 	))
 	if err != nil {
-		return model.Manifest{}, err
-	}
-
-	if err := tx.Commit(); err != nil {
 		return model.Manifest{}, err
 	}
 
