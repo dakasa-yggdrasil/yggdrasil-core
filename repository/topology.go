@@ -843,33 +843,16 @@ func GetBuildProject(ctx context.Context, db *sql.DB, identity string) (model.Bu
 	return build, nil
 }
 
+// ListBuildProjects returns all build projects for a project node without
+// pagination. For external RPC-facing lists where result sets can grow,
+// prefer ListBuildProjectsPaginated.
 func ListBuildProjects(ctx context.Context, db *sql.DB, req model.ListBuildProjectsRequest) ([]model.BuildProject, error) {
 	projectNodeID, err := parseTopologyUUID(req.ProjectNodeID)
 	if err != nil {
 		return nil, fmt.Errorf("project_node_id: %w", err)
 	}
 
-	query := `
-		SELECT
-			id,
-			infra_map_document_id,
-			project_env_resource_id,
-			build_name,
-			env_type,
-			cloud,
-			ephemeral,
-			expires_at,
-			cluster_name,
-			cluster_zone,
-			immutable
-		FROM public.topology_build_projects
-		WHERE project_node_id = $1
-	`
-
-	args := []any{projectNodeID}
-	if req.MutableOnly {
-		query += " AND immutable = FALSE"
-	}
+	query, args := buildListBuildProjectsQuery(projectNodeID, req.MutableOnly)
 	query += " ORDER BY build_name ASC, id ASC"
 
 	rows, err := db.QueryContext(ctx, query, args...)
@@ -892,6 +875,107 @@ func ListBuildProjects(ctx context.Context, db *sql.DB, req model.ListBuildProje
 	}
 
 	return builds, nil
+}
+
+// ListBuildProjectsPaginated returns a single page of build projects using
+// cursor-based pagination.
+//
+// Sort keys supported:
+//   - "" (default): by (build_name ASC, id ASC)
+//   - "build_name_asc": same as default
+//   - "created_at_desc": not supported (build_projects table doesn't track
+//     created_at in current schema) — falls back to default
+func ListBuildProjectsPaginated(
+	ctx context.Context,
+	db *sql.DB,
+	req model.ListBuildProjectsRequest,
+	pagination model.PaginationRequest,
+) ([]model.BuildProject, model.PaginationResponse, error) {
+	projectNodeID, err := parseTopologyUUID(req.ProjectNodeID)
+	if err != nil {
+		return nil, model.PaginationResponse{}, fmt.Errorf("project_node_id: %w", err)
+	}
+
+	pagination = NormalizePagination(pagination)
+	cursor, err := DecodeCursor(pagination.Cursor)
+	if err != nil {
+		return nil, model.PaginationResponse{}, fmt.Errorf("invalid cursor: %w", err)
+	}
+
+	query, args := buildListBuildProjectsQuery(projectNodeID, req.MutableOnly)
+
+	// Cursor clause: (build_name, id) > (cursor.last_sort_value, cursor.last_id)
+	if cursor.LastID != "" && cursor.LastSortValue != nil {
+		query += fmt.Sprintf(" AND (build_name, id) > ($%d, $%d)", len(args)+1, len(args)+2)
+		args = append(args, cursor.LastSortValue, cursor.LastID)
+	}
+	query += " ORDER BY build_name ASC, id ASC"
+	args = append(args, pagination.Limit+1)
+	query += fmt.Sprintf(" LIMIT $%d", len(args))
+
+	rows, err := db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, model.PaginationResponse{}, err
+	}
+	defer rows.Close()
+
+	builds := make([]model.BuildProject, 0, pagination.Limit)
+	for rows.Next() {
+		build, err := scanBuildProject(rows)
+		if err != nil {
+			return nil, model.PaginationResponse{}, err
+		}
+		builds = append(builds, build)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, model.PaginationResponse{}, err
+	}
+
+	hasMore := len(builds) > pagination.Limit
+	if hasMore {
+		builds = builds[:pagination.Limit]
+	}
+
+	nextCursor := ""
+	if len(builds) > 0 {
+		last := builds[len(builds)-1]
+		nextCursor = EncodeCursor(Cursor{
+			LastID:        last.ID.String(),
+			LastSortValue: last.BuildName,
+			SortKey:       "build_name_asc",
+		})
+	}
+
+	return builds, model.PaginationResponse{
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+	}, nil
+}
+
+// buildListBuildProjectsQuery returns the base SELECT + WHERE clauses for
+// the ListBuildProjects queries (without ORDER BY or LIMIT).
+func buildListBuildProjectsQuery(projectNodeID interface{}, mutableOnly bool) (string, []any) {
+	query := `
+		SELECT
+			id,
+			infra_map_document_id,
+			project_env_resource_id,
+			build_name,
+			env_type,
+			cloud,
+			ephemeral,
+			expires_at,
+			cluster_name,
+			cluster_zone,
+			immutable
+		FROM public.topology_build_projects
+		WHERE project_node_id = $1
+	`
+	args := []any{projectNodeID}
+	if mutableOnly {
+		query += " AND immutable = FALSE"
+	}
+	return query, args
 }
 
 func DeleteBuildProject(ctx context.Context, db *sql.DB, identity string) (model.BuildProject, error) {
