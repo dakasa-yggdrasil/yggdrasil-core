@@ -59,6 +59,17 @@ type BuildProject struct {
 	ClusterName          string    `json:"cluster-name,omitempty"`
 	ClusterZone          string    `json:"cluster-zone,omitempty"`
 	Immutable            bool      `json:"immutable,omitempty"`
+
+	// Lifecycle fields (Gap 4 BuildProject Lifecycle Enforcement).
+	// LifecycleStatus transitions: active -> expiring -> deleted.
+	// TeardownWorkflowRef is optional; when set, the lifecycle enforcer
+	// dispatches this workflow when the project expires.
+	LifecycleStatus     string            `json:"lifecycle-status,omitempty"`
+	TeardownWorkflowRef *ManifestSelector `json:"teardown-workflow-ref,omitempty"`
+	ExpiringStartedAt   *time.Time        `json:"expiring-started-at,omitempty"`
+	DeletedAt           *time.Time        `json:"deleted-at,omitempty"`
+	ExtendedAt          *time.Time        `json:"extended-at,omitempty"`
+	TeardownRunID       string            `json:"teardown-run-id,omitempty"`
 }
 
 type UpsertTopologyNodeRequest struct {

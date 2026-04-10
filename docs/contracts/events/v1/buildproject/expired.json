@@ -1,0 +1,42 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/buildproject/expired.json",
+  "title": "buildproject.expired payload",
+  "description": "Payload emitted by the BuildProject lifecycle enforcer when an ephemeral BuildProject transitions from 'active' to 'expiring' because its expires_at has passed.",
+  "type": "object",
+  "required": ["build_project_id", "build_name"],
+  "properties": {
+    "build_project_id": {
+      "type": "string",
+      "format": "uuid"
+    },
+    "build_name": {
+      "type": "string"
+    },
+    "env_type": {
+      "type": "string"
+    },
+    "cloud": {
+      "type": "string"
+    },
+    "expires_at": {
+      "type": "string",
+      "description": "Original expires_at value as stored on the BuildProject (RFC 3339 or empty)."
+    },
+    "cluster_name": {
+      "type": "string"
+    },
+    "cluster_zone": {
+      "type": "string"
+    },
+    "teardown_workflow_ref": {
+      "type": "object",
+      "description": "Optional reference to the workflow the enforcer dispatched (or will dispatch) to clean up this BuildProject's resources.",
+      "properties": {
+        "id": { "type": "string", "format": "uuid" },
+        "name": { "type": "string" },
+        "namespace": { "type": "string" }
+      }
+    }
+  }
+}
