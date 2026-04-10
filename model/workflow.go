@@ -74,9 +74,20 @@ type WorkflowInputSchemaSpec struct {
 }
 
 // WorkflowStepSpec defines one ordered step inside a workflow.
+//
+// The optional Condition field is evaluated before the step runs. When
+// empty the step always runs. When set, the condition may use template
+// references ({{ inputs.x }}, {{ steps.y.metadata.z }}) and two comparison
+// operators: `==` and `!=` (with spaces around them). Without an operator
+// the rendered value is evaluated for truthiness. A step whose condition
+// evaluates to false is recorded with status "skipped" and downstream
+// steps continue normally. A condition that fails to render (e.g.
+// unresolvable template) fails the step fail-loud so broken workflows
+// surface early.
 type WorkflowStepSpec struct {
 	ID             string              `json:"id"`
 	Description    string              `json:"description,omitempty"`
+	Condition      string              `json:"condition,omitempty"`
 	Use            WorkflowStepUseSpec `json:"use"`
 	With           map[string]any      `json:"with,omitempty"`
 	DependsOn      []string            `json:"depends_on,omitempty"`

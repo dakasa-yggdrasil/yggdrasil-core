@@ -229,7 +229,9 @@ func runWorkflow(
 		response.Steps = append(response.Steps, result)
 		executionCtx.Steps[result.ID] = result
 
-		if result.Status != "succeeded" {
+		// A condition-skipped step is recorded as "skipped" but the workflow
+		// keeps running. Only a truly failed step aborts the run.
+		if result.Status == "failed" {
 			response.Status = "failed"
 			response.FinishedAt = result.FinishedAt
 			response.Steps = append(response.Steps, skipWorkflowSteps(orderedSteps[index+1:], result.ID)...)
@@ -262,6 +264,29 @@ func executeWorkflowStep(
 		Capability: manifestengine.NormalizeWorkflowStepCapability(step),
 		Status:     "failed",
 		StartedAt:  time.Now().UTC(),
+	}
+
+	// Condition gate: skip the step when Condition evaluates to false.
+	// A condition that fails to render fails the step fail-loud so
+	// broken workflows surface the mistake immediately.
+	if strings.TrimSpace(step.Condition) != "" {
+		run, err := manifestengine.EvaluateWorkflowStepCondition(step.Condition, executionCtx)
+		if err != nil {
+			result.Error = err.Error()
+			result.Attempts = 1
+			result.FinishedAt = time.Now().UTC()
+			return result
+		}
+		if !run {
+			result.Status = "skipped"
+			result.Attempts = 0
+			result.Metadata = map[string]any{
+				"skip_reason": "condition",
+				"condition":   step.Condition,
+			}
+			result.FinishedAt = time.Now().UTC()
+			return result
+		}
 	}
 
 	renderedInput, err := renderWorkflowStepInput(step, executionCtx)

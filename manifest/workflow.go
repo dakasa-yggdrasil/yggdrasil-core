@@ -575,3 +575,114 @@ func validateWorkflowTriggerDetails(mode string, trigger model.WorkflowTriggerSp
 
 	return nil
 }
+
+// EvaluateWorkflowStepCondition decides whether a step should run based on
+// its Condition expression. Empty conditions always return true. The
+// expression supports:
+//
+//  1. Unary truthiness — "{{ inputs.flag }}" or a literal like "true".
+//     The rendered value is coerced to bool via isConditionTruthy.
+//  2. Binary equality — "{{ inputs.env }} == production". The left and
+//     right sides are rendered independently then compared as strings.
+//     Both `==` and `!=` are supported. Operators must be surrounded by
+//     single spaces on both sides.
+//
+// Rendering failures (unresolvable templates) return an error — the caller
+// is expected to fail the step loudly rather than silently skip. Operators
+// without spaces are treated as literal characters, so "x==y" with no
+// spaces is a single unary expression.
+func EvaluateWorkflowStepCondition(condition string, ctx WorkflowExecutionContext) (bool, error) {
+	trimmed := strings.TrimSpace(condition)
+	if trimmed == "" {
+		return true, nil
+	}
+
+	if op, left, right, found := splitWorkflowStepConditionBinary(trimmed); found {
+		leftVal, err := RenderWorkflowInput(left, ctx)
+		if err != nil {
+			return false, fmt.Errorf("condition left side: %w", err)
+		}
+		rightVal, err := RenderWorkflowInput(right, ctx)
+		if err != nil {
+			return false, fmt.Errorf("condition right side: %w", err)
+		}
+		leftStr := fmt.Sprintf("%v", leftVal)
+		rightStr := fmt.Sprintf("%v", rightVal)
+		switch op {
+		case "==":
+			return leftStr == rightStr, nil
+		case "!=":
+			return leftStr != rightStr, nil
+		}
+	}
+
+	value, err := RenderWorkflowInput(trimmed, ctx)
+	if err != nil {
+		return false, fmt.Errorf("condition: %w", err)
+	}
+	return isConditionTruthy(value), nil
+}
+
+// splitWorkflowStepConditionBinary looks for " == " or " != " (surrounded
+// by a single space on each side) inside the expression. The first match
+// wins. Returns the operator, left side, right side and a found flag.
+func splitWorkflowStepConditionBinary(expr string) (op, left, right string, found bool) {
+	if idx := strings.Index(expr, " == "); idx >= 0 {
+		return "==", strings.TrimSpace(expr[:idx]), strings.TrimSpace(expr[idx+4:]), true
+	}
+	if idx := strings.Index(expr, " != "); idx >= 0 {
+		return "!=", strings.TrimSpace(expr[:idx]), strings.TrimSpace(expr[idx+4:]), true
+	}
+	return "", "", "", false
+}
+
+// isConditionTruthy coerces a rendered value to a boolean for the unary
+// truthiness check. The rules are deliberately permissive so templates
+// that resolve to natural boolean-ish values (strings "true"/"false",
+// numbers, slices, maps) behave as users expect.
+func isConditionTruthy(value any) bool {
+	if value == nil {
+		return false
+	}
+	switch typed := value.(type) {
+	case bool:
+		return typed
+	case string:
+		normalized := strings.ToLower(strings.TrimSpace(typed))
+		switch normalized {
+		case "", "false", "0", "null", "nil":
+			return false
+		}
+		return true
+	case int:
+		return typed != 0
+	case int8:
+		return typed != 0
+	case int16:
+		return typed != 0
+	case int32:
+		return typed != 0
+	case int64:
+		return typed != 0
+	case uint:
+		return typed != 0
+	case uint8:
+		return typed != 0
+	case uint16:
+		return typed != 0
+	case uint32:
+		return typed != 0
+	case uint64:
+		return typed != 0
+	case float32:
+		return typed != 0
+	case float64:
+		return typed != 0
+	case []any:
+		return len(typed) > 0
+	case map[string]any:
+		return len(typed) > 0
+	default:
+		return true
+	}
+}
