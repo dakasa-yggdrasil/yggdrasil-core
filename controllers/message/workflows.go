@@ -272,6 +272,13 @@ func executeWorkflowStep(
 		return result
 	}
 
+	// Branch on step kind: product steps have their own execution path that
+	// dispatches to the in-process product handlers (apply, observe, etc.)
+	// rather than going through an integration adapter.
+	if result.Kind == "product" {
+		return executeProductWorkflowStep(ctx, conn, db, workflowRef, step, result, renderedInput)
+	}
+
 	instanceManifest, instanceSpec, typeManifest, typeSpec, err := resolveIntegrationInstance(ctx, conn, db, *step.Use.InstanceRef)
 	if err != nil {
 		result.Error = err.Error()
@@ -705,4 +712,192 @@ func mergeStringAnyMaps(base map[string]any, extra map[string]any) map[string]an
 
 func normalizeWorkflowStepID(value string) string {
 	return strings.ToLower(strings.TrimSpace(value))
+}
+
+// executeProductWorkflowStep runs a workflow step with use.kind = "product".
+// Supported operations: materialize, installation.reconcile, installation.apply,
+// installation.observe, installation_state.discover.
+//
+// The step's with.product_ref identifies the target Product, and optional
+// with.target_overrides redirect specific components to different integration
+// instances at runtime (Gap 3 of the product audit).
+func executeProductWorkflowStep(
+	ctx context.Context,
+	conn *amqp.Connection,
+	db *sql.DB,
+	workflowRef model.ManifestReference,
+	step model.WorkflowStepSpec,
+	result model.WorkflowRunStepResult,
+	renderedInput map[string]any,
+) model.WorkflowRunStepResult {
+	result.Attempts = 1
+
+	operation := strings.ToLower(strings.TrimSpace(step.Use.Operation))
+
+	productRef, err := parseProductRefFromStepInput(renderedInput)
+	if err != nil {
+		result.Error = fmt.Sprintf("product step with.product_ref: %v", err)
+		result.FinishedAt = time.Now().UTC()
+		return result
+	}
+
+	targetOverrides, err := parseTargetOverridesFromStepInput(renderedInput)
+	if err != nil {
+		result.Error = fmt.Sprintf("product step with.target_overrides: %v", err)
+		result.FinishedAt = time.Now().UTC()
+		return result
+	}
+
+	productManifest, spec, err := resolveProductManifestSpec(ctx, db, productRef)
+	if err != nil {
+		result.Error = fmt.Sprintf("resolve product: %v", err)
+		result.FinishedAt = time.Now().UTC()
+		return result
+	}
+
+	if err := validateTargetOverrides(targetOverrides, spec); err != nil {
+		result.Error = err.Error()
+		result.FinishedAt = time.Now().UTC()
+		return result
+	}
+
+	logger := zap.NewNop()
+	executor := newProductTargetExecutor(conn, db, logger).withTargetOverrides(targetOverrides)
+
+	switch operation {
+	case "installation.apply":
+		applyResults, err := executor.applyProduct(ctx, productManifest, spec)
+		if err != nil {
+			result.Error = fmt.Sprintf("apply: %v", err)
+			result.FinishedAt = time.Now().UTC()
+			return result
+		}
+		emitProductInstallationAppliedEvent(ctx, db, logger, productManifest, spec, applyResults, targetOverrides)
+		result.Status = "succeeded"
+		result.Metadata = map[string]any{
+			"product_ref":        manifestReferenceFromRecord(productManifest),
+			"components_applied": len(applyResults),
+		}
+		if len(targetOverrides) > 0 {
+			result.Metadata["target_overrides_used"] = len(targetOverrides)
+		}
+
+	case "installation.observe":
+		observeResults, err := executor.observeProduct(ctx, productManifest, spec)
+		if err != nil {
+			result.Error = fmt.Sprintf("observe: %v", err)
+			result.FinishedAt = time.Now().UTC()
+			return result
+		}
+		result.Status = "succeeded"
+		result.Metadata = map[string]any{
+			"product_ref":         manifestReferenceFromRecord(productManifest),
+			"components_observed": len(observeResults),
+		}
+
+	case "materialize", "installation.reconcile", "installation_state.discover":
+		// These operations exist at the RPC level but are not yet wired into
+		// the workflow step executor. Reject with a clear error so callers
+		// know they need to wait for a future core release (or use direct
+		// RPC dispatch instead of a workflow step).
+		result.Error = fmt.Sprintf("product step operation %q not yet supported in workflow executor (use direct RPC)", operation)
+		result.FinishedAt = time.Now().UTC()
+		return result
+
+	default:
+		result.Error = fmt.Sprintf("unsupported product step operation %q", operation)
+		result.FinishedAt = time.Now().UTC()
+		return result
+	}
+
+	result.FinishedAt = time.Now().UTC()
+	_ = workflowRef
+	return result
+}
+
+// parseProductRefFromStepInput extracts a ManifestSelector from the step's
+// with.product_ref field. Accepts both object form (with namespace/name) and
+// is strict about type: returns an error if product_ref is missing or has
+// the wrong shape.
+func parseProductRefFromStepInput(input map[string]any) (model.ManifestSelector, error) {
+	raw, ok := input["product_ref"]
+	if !ok {
+		return model.ManifestSelector{}, fmt.Errorf("product_ref is required")
+	}
+	refMap, ok := raw.(map[string]any)
+	if !ok {
+		return model.ManifestSelector{}, fmt.Errorf("product_ref must be an object, got %T", raw)
+	}
+
+	ref := model.ManifestSelector{}
+	if id, ok := refMap["id"].(string); ok {
+		ref.ManifestID = id
+	}
+	if namespace, ok := refMap["namespace"].(string); ok {
+		ref.Namespace = namespace
+	}
+	if name, ok := refMap["name"].(string); ok {
+		ref.Name = name
+	}
+	if version, ok := refMap["version"].(float64); ok {
+		v := int(version)
+		ref.Version = &v
+	}
+
+	if ref.ManifestID == "" && (ref.Name == "" || ref.Namespace == "") {
+		return model.ManifestSelector{}, fmt.Errorf("product_ref requires id OR (namespace + name)")
+	}
+
+	return ref, nil
+}
+
+// parseTargetOverridesFromStepInput extracts the optional target_overrides
+// map from the step's with field. Returns an empty map if not present.
+// Each override must be a map with integration_instance_ref (with name +
+// optional namespace) and optional top-level namespace.
+func parseTargetOverridesFromStepInput(input map[string]any) (map[string]model.TargetOverride, error) {
+	raw, ok := input["target_overrides"]
+	if !ok {
+		return nil, nil
+	}
+	rawMap, ok := raw.(map[string]any)
+	if !ok {
+		return nil, fmt.Errorf("target_overrides must be an object, got %T", raw)
+	}
+
+	overrides := make(map[string]model.TargetOverride, len(rawMap))
+	for key, value := range rawMap {
+		valueMap, ok := value.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("target_overrides[%q] must be an object", key)
+		}
+
+		override := model.TargetOverride{}
+
+		refRaw, ok := valueMap["integration_instance_ref"]
+		if !ok {
+			return nil, fmt.Errorf("target_overrides[%q].integration_instance_ref is required", key)
+		}
+		refMap, ok := refRaw.(map[string]any)
+		if !ok {
+			return nil, fmt.Errorf("target_overrides[%q].integration_instance_ref must be an object", key)
+		}
+		if name, ok := refMap["name"].(string); ok {
+			override.IntegrationInstanceRef.Name = name
+		}
+		if namespace, ok := refMap["namespace"].(string); ok {
+			override.IntegrationInstanceRef.Namespace = namespace
+		}
+		if override.IntegrationInstanceRef.Name == "" {
+			return nil, fmt.Errorf("target_overrides[%q].integration_instance_ref.name is required", key)
+		}
+
+		if ns, ok := valueMap["namespace"].(string); ok {
+			override.Namespace = ns
+		}
+
+		overrides[key] = override
+	}
+
+	return overrides, nil
 }
