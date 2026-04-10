@@ -6,8 +6,10 @@ import (
 	"regexp"
 	"slices"
 	"strings"
+	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/robfig/cron/v3"
 )
 
 var (
@@ -49,6 +51,10 @@ func ValidateWorkflowSpec(spec model.WorkflowManifestSpec) error {
 	}
 	if !slices.Contains(supportedWorkflowTriggerModes, triggerMode) {
 		return fmt.Errorf("workflow trigger mode %q is unsupported", spec.Trigger.Mode)
+	}
+
+	if err := validateWorkflowTriggerDetails(triggerMode, spec.Trigger); err != nil {
+		return err
 	}
 
 	if err := validateWorkflowInputSchema(spec.InputSchema); err != nil {
@@ -508,4 +514,64 @@ func NormalizeWorkflowStepCapability(step model.WorkflowStepSpec) string {
 		return capability
 	}
 	return NormalizeWorkflowStepOperation(step)
+}
+
+// validateWorkflowTriggerDetails checks trigger mode-specific configuration.
+// Manual mode accepts any empty sub-objects. Schedule mode requires a valid
+// cron expression and optional catchup policy. Event mode requires at least
+// one event type pattern.
+func validateWorkflowTriggerDetails(mode string, trigger model.WorkflowTriggerSpec) error {
+	switch mode {
+	case "", "manual":
+		return nil
+
+	case "schedule":
+		if trigger.Schedule == nil {
+			return fmt.Errorf("workflow trigger mode=schedule requires schedule object")
+		}
+		if strings.TrimSpace(trigger.Schedule.CronExpression) == "" {
+			return fmt.Errorf("workflow trigger schedule.cron_expression is required")
+		}
+		parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
+		if _, err := parser.Parse(trigger.Schedule.CronExpression); err != nil {
+			return fmt.Errorf("workflow trigger schedule.cron_expression is invalid: %w", err)
+		}
+		if tz := strings.TrimSpace(trigger.Schedule.Timezone); tz != "" {
+			if _, err := time.LoadLocation(tz); err != nil {
+				return fmt.Errorf("workflow trigger schedule.timezone %q is invalid: %w", tz, err)
+			}
+		}
+		catchup := strings.ToLower(strings.TrimSpace(trigger.Schedule.CatchupPolicy))
+		if catchup != "" && catchup != "skip" && catchup != "catch_up" {
+			return fmt.Errorf("workflow trigger schedule.catchup_policy %q is invalid (allowed: skip, catch_up)", trigger.Schedule.CatchupPolicy)
+		}
+
+	case "event":
+		if trigger.Event == nil {
+			return fmt.Errorf("workflow trigger mode=event requires event object")
+		}
+		if len(trigger.Event.Types) == 0 {
+			return fmt.Errorf("workflow trigger event.types requires at least one type pattern")
+		}
+		for _, t := range trigger.Event.Types {
+			if strings.TrimSpace(t) == "" {
+				return fmt.Errorf("workflow trigger event.types cannot contain empty values")
+			}
+		}
+		for i, filter := range trigger.Event.PayloadFilters {
+			if strings.TrimSpace(filter.Path) == "" {
+				return fmt.Errorf("workflow trigger event.payload_filters[%d].path is required", i)
+			}
+			op := strings.ToLower(strings.TrimSpace(filter.Operator))
+			allowedOps := []string{"eq", "neq", "in", "not_in", "contains", "matches"}
+			if !slices.Contains(allowedOps, op) {
+				return fmt.Errorf("workflow trigger event.payload_filters[%d].operator %q is invalid (allowed: %v)", i, filter.Operator, allowedOps)
+			}
+		}
+		if trigger.Event.DebounceSeconds < 0 {
+			return fmt.Errorf("workflow trigger event.debounce_seconds cannot be negative")
+		}
+	}
+
+	return nil
 }
