@@ -176,10 +176,86 @@ func productApplyInstallationHandler(conn *amqp.Connection, db *sql.DB, logger *
 			return replyFailure(ctx, conn, d, integrationAwareErrorCode(err, "apply_failed"), err, logger)
 		}
 
+		// Emit product.installation.applied event (best-effort, post-apply).
+		// The apply itself involves side effects on external systems (K8s, etc.)
+		// so it's not transactional with the core DB. We emit the event in its
+		// own transaction after success; on event emit failure we log and
+		// return success anyway (the apply already happened).
+		emitProductInstallationAppliedEvent(ctx, db, logger, productManifest, spec, results)
+
 		return replySuccess(ctx, conn, d, model.ApplyProductInstallationResponse{
 			Product: manifestReferenceFromRecord(productManifest),
 			Results: results,
 		}, logger)
+	}
+}
+
+// emitProductInstallationAppliedEvent is a best-effort side channel that
+// records the apply success in the core event stream. Failures are logged
+// but do not affect the caller response (the apply already succeeded).
+func emitProductInstallationAppliedEvent(
+	ctx context.Context,
+	db *sql.DB,
+	logger *zap.Logger,
+	productManifest model.Manifest,
+	spec model.ProductManifestSpec,
+	results []model.ProductInstallationApplyResult,
+) {
+	_ = results // results not currently used in the event payload (reserved for future enrichment)
+	components := make([]map[string]interface{}, 0, len(spec.Components))
+	for _, c := range spec.Components {
+		targetMap := map[string]interface{}{
+			"kind":      c.Target.Kind,
+			"namespace": c.Target.Namespace,
+		}
+		if c.Target.IntegrationInstanceRef.Name != "" {
+			targetMap["integration_instance_ref"] = map[string]interface{}{
+				"name":      c.Target.IntegrationInstanceRef.Name,
+				"namespace": c.Target.IntegrationInstanceRef.Namespace,
+			}
+		}
+		components = append(components, map[string]interface{}{
+			"name":   c.Name,
+			"target": targetMap,
+		})
+	}
+
+	payload := map[string]interface{}{
+		"product_ref": map[string]interface{}{
+			"id":        productManifest.ID.String(),
+			"name":      productManifest.Metadata.Name,
+			"namespace": productManifest.Metadata.Namespace,
+			"version":   productManifest.Version,
+		},
+		"components_applied": components,
+	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		if logger != nil {
+			logger.Warn("emit product.installation.applied: begin tx failed", zap.Error(err))
+		}
+		return
+	}
+	defer tx.Rollback()
+
+	if _, err := repository.EmitEvent(ctx, tx, model.EmitEventRequest{
+		Type:          "product.installation.applied",
+		SchemaVersion: "v1",
+		AggregateType: "product",
+		AggregateID:   productManifest.ID.String(),
+		Payload:       payload,
+	}); err != nil {
+		if logger != nil {
+			logger.Warn("emit product.installation.applied: emit failed", zap.Error(err))
+		}
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		if logger != nil {
+			logger.Warn("emit product.installation.applied: commit failed", zap.Error(err))
+		}
 	}
 }
 
