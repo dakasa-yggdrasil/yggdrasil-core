@@ -141,7 +141,122 @@ func CreateManifestVersionTx(ctx context.Context, tx *sql.Tx, doc model.Manifest
 }
 
 // ListManifests returns manifests matching the provided filters.
+// ListManifests returns all manifests matching the given filters, without
+// pagination. Intended for internal callers with bounded result sets
+// (e.g., catalog discovery, heimdall observers). For external RPC-facing
+// lists where result sets can grow large, prefer ListManifestsPaginated.
 func ListManifests(ctx context.Context, db *sql.DB, filters model.ListManifestFilters) ([]model.Manifest, error) {
+	q, args := buildListManifestsQuery(filters)
+	q += " ORDER BY kind, namespace, name, version DESC"
+
+	rows, err := db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var manifests []model.Manifest
+	for rows.Next() {
+		manifest, err := scanManifest(rows)
+		if err != nil {
+			return nil, err
+		}
+		manifests = append(manifests, manifest)
+	}
+
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	return manifests, nil
+}
+
+// ListManifestsPaginated returns a single page of manifests matching the
+// filters, using cursor-based pagination. The caller passes an opaque cursor
+// from a prior response (empty string for the first call) and a limit.
+//
+// Sort keys supported (via pagination.Sort field):
+//   - "" (default): by (updated_at DESC, id DESC)
+//   - "updated_at_desc": same as default
+//   - "created_at_desc": by (created_at DESC, id DESC)
+//   - "name_asc": by (name ASC, id ASC)
+//
+// Unrecognized sort keys fall back to the default.
+func ListManifestsPaginated(
+	ctx context.Context,
+	db *sql.DB,
+	filters model.ListManifestFilters,
+	pagination model.PaginationRequest,
+) ([]model.Manifest, model.PaginationResponse, error) {
+	pagination = NormalizePagination(pagination)
+
+	cursor, err := DecodeCursor(pagination.Cursor)
+	if err != nil {
+		return nil, model.PaginationResponse{}, fmt.Errorf("invalid cursor: %w", err)
+	}
+
+	sortKey := normalizeManifestSortKey(pagination.Sort)
+
+	q, args := buildListManifestsQuery(filters)
+
+	// Append cursor condition + ORDER BY + LIMIT.
+	orderBy, cursorClause, cursorArgs := manifestCursorSQL(sortKey, cursor, len(args))
+	args = append(args, cursorArgs...)
+	if cursorClause != "" {
+		if containsWhere(q) {
+			q += " AND " + cursorClause
+		} else {
+			q += " WHERE " + cursorClause
+		}
+	}
+	q += " " + orderBy
+
+	args = append(args, pagination.Limit+1)
+	q += fmt.Sprintf(" LIMIT $%d", len(args))
+
+	rows, err := db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, model.PaginationResponse{}, err
+	}
+	defer rows.Close()
+
+	manifests := make([]model.Manifest, 0, pagination.Limit)
+	for rows.Next() {
+		manifest, err := scanManifest(rows)
+		if err != nil {
+			return nil, model.PaginationResponse{}, err
+		}
+		manifests = append(manifests, manifest)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, model.PaginationResponse{}, err
+	}
+
+	hasMore := len(manifests) > pagination.Limit
+	if hasMore {
+		manifests = manifests[:pagination.Limit]
+	}
+
+	nextCursor := ""
+	if len(manifests) > 0 {
+		last := manifests[len(manifests)-1]
+		nextCursor = EncodeCursor(Cursor{
+			LastID:        last.ID.String(),
+			LastSortValue: extractManifestSortValue(last, sortKey),
+			SortKey:       sortKey,
+		})
+	}
+
+	return manifests, model.PaginationResponse{
+		NextCursor: nextCursor,
+		HasMore:    hasMore,
+	}, nil
+}
+
+// buildListManifestsQuery returns the base SELECT + WHERE clauses for
+// the ListManifests queries (without ORDER BY or LIMIT). Shared by the
+// paginated and non-paginated variants.
+func buildListManifestsQuery(filters model.ListManifestFilters) (string, []any) {
 	q := `
 		SELECT
 			id,
@@ -182,11 +297,10 @@ func ListManifests(ctx context.Context, db *sql.DB, filters model.ListManifestFi
 
 	if len(filters.Labels) > 0 {
 		labels, err := marshalLabels(filters.Labels)
-		if err != nil {
-			return nil, err
+		if err == nil {
+			args = append(args, labels)
+			clauses = append(clauses, fmt.Sprintf("labels @> $%d::jsonb", len(args)))
 		}
-		args = append(args, labels)
-		clauses = append(clauses, fmt.Sprintf("labels @> $%d::jsonb", len(args)))
 	}
 
 	if filters.ActiveOnly {
@@ -197,28 +311,77 @@ func ListManifests(ctx context.Context, db *sql.DB, filters model.ListManifestFi
 		q += " WHERE " + strings.Join(clauses, " AND ")
 	}
 
-	q += " ORDER BY kind, namespace, name, version DESC"
+	return q, args
+}
 
-	rows, err := db.QueryContext(ctx, q, args...)
-	if err != nil {
-		return nil, err
+// containsWhere reports whether the accumulated query already has a WHERE
+// clause, so callers can know whether to start with WHERE or AND.
+func containsWhere(q string) bool {
+	return strings.Contains(q, " WHERE ")
+}
+
+// normalizeManifestSortKey maps a user-provided sort key to one of the
+// supported values. Unrecognized or empty keys fall back to the default.
+func normalizeManifestSortKey(sortKey string) string {
+	sortKey = strings.ToLower(strings.TrimSpace(sortKey))
+	switch sortKey {
+	case "", "updated_at_desc":
+		return "updated_at_desc"
+	case "created_at_desc":
+		return "created_at_desc"
+	case "name_asc":
+		return "name_asc"
+	default:
+		return "updated_at_desc"
 	}
-	defer rows.Close()
+}
 
-	var manifests []model.Manifest
-	for rows.Next() {
-		manifest, err := scanManifest(rows)
-		if err != nil {
-			return nil, err
+// manifestCursorSQL returns (ORDER BY clause, WHERE clause, args) to
+// append to a manifest query so it continues from the given cursor.
+// startArgIdx is the current length of the args slice before these
+// cursor args are appended.
+func manifestCursorSQL(sortKey string, cursor Cursor, startArgIdx int) (string, string, []any) {
+	cursorHasValue := cursor.LastID != "" && cursor.LastSortValue != nil
+
+	switch sortKey {
+	case "created_at_desc":
+		orderBy := "ORDER BY created_at DESC, id DESC"
+		if !cursorHasValue {
+			return orderBy, "", nil
 		}
-		manifests = append(manifests, manifest)
-	}
+		// Tuple comparison: (created_at, id) < ($n, $n+1)
+		clause := fmt.Sprintf("(created_at, id) < ($%d, $%d)", startArgIdx+1, startArgIdx+2)
+		return orderBy, clause, []any{cursor.LastSortValue, cursor.LastID}
 
-	if err := rows.Err(); err != nil {
-		return nil, err
-	}
+	case "name_asc":
+		orderBy := "ORDER BY name ASC, id ASC"
+		if !cursorHasValue {
+			return orderBy, "", nil
+		}
+		clause := fmt.Sprintf("(name, id) > ($%d, $%d)", startArgIdx+1, startArgIdx+2)
+		return orderBy, clause, []any{cursor.LastSortValue, cursor.LastID}
 
-	return manifests, nil
+	default: // updated_at_desc
+		orderBy := "ORDER BY updated_at DESC, id DESC"
+		if !cursorHasValue {
+			return orderBy, "", nil
+		}
+		clause := fmt.Sprintf("(updated_at, id) < ($%d, $%d)", startArgIdx+1, startArgIdx+2)
+		return orderBy, clause, []any{cursor.LastSortValue, cursor.LastID}
+	}
+}
+
+// extractManifestSortValue returns the field of the manifest that matches
+// the active sort key. Used to build the next cursor.
+func extractManifestSortValue(m model.Manifest, sortKey string) interface{} {
+	switch sortKey {
+	case "created_at_desc":
+		return m.CreatedAt.Format("2006-01-02T15:04:05.999999999Z07:00")
+	case "name_asc":
+		return m.Metadata.Name
+	default: // updated_at_desc
+		return m.UpdatedAt.Format("2006-01-02T15:04:05.999999999Z07:00")
+	}
 }
 
 // GetManifestByID returns a manifest by its UUID.

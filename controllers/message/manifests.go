@@ -178,18 +178,21 @@ func manifestListHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) 
 			}
 		}
 
-		manifests, err := repository.ListManifests(ctx, db, model.ListManifestFilters{
+		manifests, pagination, err := repository.ListManifestsPaginated(ctx, db, model.ListManifestFilters{
 			Kind:       req.Kind,
 			Namespace:  req.Namespace,
 			Name:       req.Name,
 			Labels:     req.Labels,
 			ActiveOnly: req.ActiveOnly,
-		})
+		}, req.Pagination)
 		if err != nil {
 			return replyFailure(ctx, conn, d, "internal_error", err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"manifests": manifests}, logger)
+		return replySuccess(ctx, conn, d, map[string]any{
+			"manifests":  manifests,
+			"pagination": pagination,
+		}, logger)
 	}
 }
 
