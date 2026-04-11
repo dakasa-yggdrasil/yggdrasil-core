@@ -164,6 +164,96 @@
         "default_actions": [
           "send_sms"
         ]
+      },
+      {
+        "name": "iam_role",
+        "canonical_prefix": "thirdparty.aws.iam.role",
+        "identity_template": "iam_role.{role_name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_iam_role"
+        ]
+      },
+      {
+        "name": "iam_policy_attachment",
+        "canonical_prefix": "thirdparty.aws.iam.policy_attachment",
+        "identity_template": "iam_policy_attachment.{role_name}.{policy_arn}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_iam_policy_attachment"
+        ]
+      },
+      {
+        "name": "oidc_provider",
+        "canonical_prefix": "thirdparty.aws.iam.oidc_provider",
+        "identity_template": "oidc_provider.{url}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_oidc_provider"
+        ]
+      },
+      {
+        "name": "vpc",
+        "canonical_prefix": "thirdparty.aws.ec2.vpc",
+        "identity_template": "vpc.{region}.{vpc_name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_vpc"
+        ]
+      },
+      {
+        "name": "subnet",
+        "canonical_prefix": "thirdparty.aws.ec2.subnet",
+        "identity_template": "subnet.{region}.{vpc_id}.{cidr_block}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_subnet"
+        ]
+      },
+      {
+        "name": "nat_gateway",
+        "canonical_prefix": "thirdparty.aws.ec2.nat_gateway",
+        "identity_template": "nat_gateway.{region}.{subnet_id}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_nat_gateway"
+        ]
+      },
+      {
+        "name": "eks_cluster",
+        "canonical_prefix": "thirdparty.aws.eks.cluster",
+        "identity_template": "eks_cluster.{region}.{cluster_name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_eks_cluster"
+        ]
+      },
+      {
+        "name": "eks_nodegroup",
+        "canonical_prefix": "thirdparty.aws.eks.nodegroup",
+        "identity_template": "eks_nodegroup.{region}.{cluster_name}.{nodegroup_name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_eks_nodegroup"
+        ]
+      },
+      {
+        "name": "rds_instance",
+        "canonical_prefix": "thirdparty.aws.rds.instance",
+        "identity_template": "rds_instance.{region}.{db_instance_identifier}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_rds_instance"
+        ]
+      },
+      {
+        "name": "elasticache_cluster",
+        "canonical_prefix": "thirdparty.aws.elasticache.cluster",
+        "identity_template": "elasticache_cluster.{region}.{cache_cluster_id}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_elasticache_cluster"
+        ]
       }
     ],
     "action_catalog": [
@@ -230,6 +320,86 @@
           "sms_message"
         ],
         "idempotent": true
+      },
+      {
+        "name": "ensure_iam_role",
+        "description": "Ensure one IAM role exists with the desired trust policy and optionally inline policies.",
+        "resource_types": [
+          "iam_role"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_iam_policy_attachment",
+        "description": "Ensure an IAM managed policy is attached to a role.",
+        "resource_types": [
+          "iam_policy_attachment"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_oidc_provider",
+        "description": "Ensure an IAM OpenID Connect provider exists (used for IRSA and GitHub Actions federation).",
+        "resource_types": [
+          "oidc_provider"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_vpc",
+        "description": "Ensure one VPC exists with the desired CIDR block, DNS attributes, and tags.",
+        "resource_types": [
+          "vpc"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_subnet",
+        "description": "Ensure one subnet exists in the target VPC with the desired CIDR, AZ, and tags.",
+        "resource_types": [
+          "subnet"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_nat_gateway",
+        "description": "Ensure one NAT Gateway exists in the target subnet (allocates an Elastic IP if not provided).",
+        "resource_types": [
+          "nat_gateway"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_eks_cluster",
+        "description": "Ensure one EKS cluster exists with the desired Kubernetes version, VPC config, and control-plane logging.",
+        "resource_types": [
+          "eks_cluster"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_eks_nodegroup",
+        "description": "Ensure one EKS managed node group exists with the desired instance types, disk size, and scaling config.",
+        "resource_types": [
+          "eks_nodegroup"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_rds_instance",
+        "description": "Ensure one RDS database instance exists with the desired engine, instance class, storage, and VPC config.",
+        "resource_types": [
+          "rds_instance"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_elasticache_cluster",
+        "description": "Ensure one ElastiCache cluster (Redis or Memcached) exists with the desired node type and VPC config.",
+        "resource_types": [
+          "elasticache_cluster"
+        ],
+        "idempotent": true
       }
     ],
     "discovery": {
@@ -252,7 +422,17 @@
         "ensure_route53_record",
         "ensure_ses_identity",
         "send_email",
-        "send_sms"
+        "send_sms",
+        "ensure_iam_role",
+        "ensure_iam_policy_attachment",
+        "ensure_oidc_provider",
+        "ensure_vpc",
+        "ensure_subnet",
+        "ensure_nat_gateway",
+        "ensure_eks_cluster",
+        "ensure_eks_nodegroup",
+        "ensure_rds_instance",
+        "ensure_elasticache_cluster"
       ]
     },
     "extensions": {
