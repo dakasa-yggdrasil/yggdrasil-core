@@ -12,43 +12,34 @@ Each entry describes:
 
 ---
 
-## 1. `integration-aws` adapter — IaC actions (EKS, RDS, ElastiCache, VPC, IAM)
+## 1. ✅ DONE — `integration-aws` adapter — IaC actions (EKS, RDS, ElastiCache, VPC, IAM)
 
-**What:** The `integration-aws` integration_type currently exposes
-`action_catalog` entries only for S3, ECR, Secrets Manager, Route53, SES and
-SNS (see `docs/bootstrap/manifests/integrations/aws-integration-type.json`).
-It cannot provision the infrastructure primitives that Kubernetes-targeted
-products depend on.
+**Status:** **Resolved** on 2026-04-11. All 10 IaC actions are implemented
+in the adapter (`integration-aws/internal/adapter/spec.go`) and registered
+in the integration_type manifest at
+`docs/bootstrap/manifests/integrations/aws-integration-type.json`. The
+manifest now exposes 18 total `action_catalog` entries (8 pre-existing +
+10 new).
 
-**Why it matters:** Bloco 3.1 of the DaKasa CD reformulation needs the
-Yggdrasil bootstrap workflow to provision a full EKS-backed stack (VPC +
-subnets + NAT + EKS cluster + RDS + ElastiCache + ECR repos + IAM roles).
-Without these actions, the bootstrap is a mixture of manual runbook steps
-(`eksctl create cluster`) and declarative workflow steps. The goal is to
-make the whole flow declarative.
+**What was delivered:**
+- `ensure_iam_role`, `ensure_iam_policy_attachment`, `ensure_oidc_provider`
+  (IAM phase — foundation for IRSA + GitHub Actions OIDC)
+- `ensure_vpc`, `ensure_subnet`, `ensure_nat_gateway` (VPC phase — network
+  foundation)
+- `ensure_eks_cluster`, `ensure_eks_nodegroup` (EKS phase — compute plane)
+- `ensure_rds_instance`, `ensure_elasticache_cluster` (storage phase)
 
-**Where the work lives:** Outside this repo. The core's responsibility is
-the RPC contract and the integration_type manifest. The adapter plugin
-(separate repo) implements the actual AWS SDK calls.
+Each action uses the same idempotent pattern as the pre-existing operations:
+Describe-then-Create, tag reconciliation on re-run, and structured response
+outputs (arn, status, existed, and resource-specific fields). All 10 new
+operations have dispatcher unit tests in `spec_test.go` bringing total from
+8 to 18 tests.
 
-**Required actions to add:**
-- `ensure_vpc`
-- `ensure_subnet`
-- `ensure_nat_gateway`
-- `ensure_eks_cluster`
-- `ensure_eks_nodegroup`
-- `ensure_rds_instance`
-- `ensure_elasticache_cluster`
-- `ensure_iam_role`
-- `ensure_iam_policy_attachment`
-- `ensure_oidc_provider` (for IRSA bootstrap)
-
-**Surface already landed:** None. This is purely additive — each new action
-needs a `resource_type`, `action_catalog` entry, adapter handler, and
-optionally new canonical resource prefixes.
-
-**Blocked consumer:** DaKasa Bloco 3.1 workflow `bootstrap-dakasa-validation`
-(Fase A–B — currently manual pre-requisite).
+**Consumer unblocked:** DaKasa Bloco 3.1 `bootstrap-dakasa-validation`
+workflow can now fully declaratively provision the EKS-backed validation
+stack from zero — no `eksctl`/Terraform pre-requisites. Writing the
+`bootstrap-dakasa-infra` workflow that uses these actions is a DaKasa-side
+follow-up, not a core debt.
 
 ---
 
@@ -161,6 +152,77 @@ unambiguous single condition, then the real step runs).
 **Status:** Not yet planned. Register here because the current syntax is
 known to be minimal by design, and consumers should expect a near-term
 extension when real workflows start using conditions.
+
+---
+
+## 5. `integration-grafana` adapter — `upsert_dashboard` and `upsert_alert_rule` capabilities
+
+**What:** The `integration-grafana` integration_type manifest at
+`docs/bootstrap/manifests/integrations/grafana-integration-type.json`
+does not define capabilities for pushing Grafana dashboards or alert
+rules. Today the only path for delivering dashboard/alert content is
+via Grafana provisioning at startup (ConfigMap mount), which requires
+a pod restart on every change.
+
+**Why it matters:** DaKasa Bloco 4.1 (observability) commits 6 Grafana
+dashboards + 12 alert rules to the git repo and needs a workflow to
+push them into the running Grafana instance. Without `upsert_dashboard`
+and `upsert_alert_rule` capabilities, the DaKasa team must fall back to
+Abordagem A (ConfigMap provisioning + rolling restart) instead of the
+preferred Abordagem B (runtime updates via HTTP API, no restart).
+
+**Where the work lives:** Outside this repo. The core's responsibility
+is to extend the integration_type manifest with the capability
+declarations and any contract schema the adapter needs to validate
+input payloads against. The adapter plugin (`integration-grafana`
+repo, external) implements the actual Grafana HTTP API calls.
+
+**Required additions:**
+- `upsert_dashboard` — takes a dashboard JSON payload + optional
+  folder UID + optional overwrite flag
+- `upsert_alert_rule` — takes a rule YAML/JSON payload + optional
+  folder UID
+
+**Blocked consumer:** DaKasa Bloco 4.1 Abordagem B (runtime dashboard
+provisioning via `dakasa-deploy-observability` workflow). Currently
+falling back to Abordagem A (ConfigMap + restart).
+
+---
+
+## 6. `handleWorkflowRun` authorization integration with RBAC + Policy
+
+**What:** `controllers/httpapi/workflow_runs.go:36`
+`authorizeWorkflowRunRequest` currently does simple bearer-token
+comparison against the `YGGDRASIL_WORKFLOW_RUN_TOKEN` environment
+variable. It does NOT route the request through the
+`authorizationEvaluateHandler` (at
+`controllers/message/manifests.go:304`) which combines RBAC and Policy
+via `EvaluateAuthorizationRequest`.
+
+**Why it matters:** DaKasa Bloco 4.2 commits 3 governance manifests
+(RBAC with 4 roles + 4 bindings, Policy with 3 conditional rules,
+Guardian Policy with approval_required autonomy). These are
+authoritative in the catalog but bypassed at the CD entrypoint — the
+bearer token on `POST /api/v1/workflow-runs` is the only enforcement
+point. The Policy `cd-dispatcher-validation-only` (which restricts
+the CD bot to `environment == "validation"`) is dead until this
+integration lands.
+
+**Where the work lives:** In this repo, `controllers/httpapi/`.
+
+**Proposed shape:**
+1. Extract the subject from the incoming bearer token (via a new
+   token-to-subject lookup, or via signed JWT claims if we move to
+   JWT tokens).
+2. Construct an `EvaluateAuthorizationRequest` with
+   `resource: "workflow:<namespace>:<name>"`,
+   `action: "run"`, and `input: <workflow inputs from request body>`.
+3. Short-circuit with HTTP 403 when `allow=false`.
+4. Log the matched RBAC roles + Policy rules on allowed requests
+   (audit trail via Event Stream — already built).
+
+**Blocked consumer:** DaKasa Bloco 4.2 runtime enforcement at the CD
+entrypoint.
 
 ---
 
