@@ -197,7 +197,7 @@ func TestManifestMaterializer_Materialize_DefaultsNamespace(t *testing.T) {
 
 	// Should be created in "dakasa" namespace by default.
 	_, err := client.CoreV1().ConfigMaps("dakasa").Get(
-		context.Background(), "ygg-guardian_policy-rate-limit", metav1.GetOptions{},
+		context.Background(), "ygg-guardian-policy-rate-limit", metav1.GetOptions{},
 	)
 	if err != nil {
 		t.Fatalf("expected ConfigMap in dakasa namespace: %v", err)
