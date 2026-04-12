@@ -16,6 +16,7 @@ import (
 	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/provisioner"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/reconciler"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -207,6 +208,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/workflows", server.handleWorkflowList)
 	mux.HandleFunc("POST /api/v1/workflows", server.handleWorkflowCreate)
 	mux.HandleFunc("POST /api/v1/workflow-runs", server.handleWorkflowRun)
+	mux.HandleFunc("POST /api/v1/provision/aws", server.handleProvisionAWS)
 	mux.HandleFunc("GET /api/v1/console/integration-catalog", server.handleIntegrationCatalogList)
 	mux.HandleFunc("GET /api/v1/console/integration-catalog/{domain}/{section}/{entry}", server.handleIntegrationCatalogEntry)
 	mux.HandleFunc("GET /api/v1/console/catalog-discovery", server.handleCatalogDiscovery)
@@ -255,6 +257,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/console/workflows", server.handleWorkflowList)
 	mux.HandleFunc("POST /api/v1/console/workflows", server.handleWorkflowCreate)
 	mux.HandleFunc("POST /api/v1/console/workflow-runs", server.handleWorkflowRun)
+	mux.HandleFunc("POST /api/v1/console/provision/aws", server.handleProvisionAWS)
 
 	return server.withLogging(mux), nil
 }
@@ -267,6 +270,11 @@ func WithReconciler(engine *reconciler.Engine) ServerOption {
 	return func(s *Server) { s.reconciler = engine }
 }
 
+// WithProvisioner injects the AWS provisioner into the HTTP server.
+func WithProvisioner(p *provisioner.AWSProvisioner) ServerOption {
+	return func(s *Server) { s.provisioner = p }
+}
+
 // Server exposes the synchronous HTTP surface of yggdrasil-core.
 type Server struct {
 	serviceName string
@@ -274,6 +282,7 @@ type Server struct {
 	rabbitmq    *amqp.Connection
 	logger      *zap.Logger
 	reconciler  *reconciler.Engine
+	provisioner *provisioner.AWSProvisioner
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {
