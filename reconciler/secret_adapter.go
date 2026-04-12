@@ -2,11 +2,13 @@ package reconciler
 
 import (
 	"context"
+	"database/sql"
 	"fmt"
 	"strconv"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	corev1 "k8s.io/api/core/v1"
 	k8serrors "k8s.io/apimachinery/pkg/api/errors"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -51,9 +53,65 @@ func (m *SecretMaterializer) Materialize(ctx context.Context, target KubeTarget,
 	return m.updateSecret(ctx, target, secret, existing)
 }
 
-// Reconcile is a stub — the engine loop handles full list iteration.
-func (m *SecretMaterializer) Reconcile(_ context.Context, _ KubeTarget) (ReconcileResult, error) {
-	return ReconcileResult{}, nil
+// Reconcile lists all active managed secrets from the database and reconciles
+// each against the corresponding Kubernetes Secret, materializing when needed.
+func (m *SecretMaterializer) Reconcile(ctx context.Context, target KubeTarget, db *sql.DB) (ReconcileResult, error) {
+	if db == nil {
+		return ReconcileResult{Kind: "secrets", Timestamp: time.Now()}, nil
+	}
+
+	secrets, err := repository.ListManagedSecrets(ctx, db, model.ListManagedSecretsRequest{
+		Status: "active",
+	})
+	if err != nil {
+		return ReconcileResult{}, err
+	}
+
+	return m.reconcileSecretList(ctx, target, secrets), nil
+}
+
+// reconcileSecretList iterates a list of managed secrets, comparing each
+// against the corresponding Kubernetes Secret and materializing when needed.
+func (m *SecretMaterializer) reconcileSecretList(ctx context.Context, target KubeTarget, secrets []model.ManagedSecret) ReconcileResult {
+	start := time.Now()
+	result := ReconcileResult{
+		Kind:      "secrets",
+		Timestamp: start,
+	}
+
+	for _, secret := range secrets {
+		ns, name := resolveTargetLocation(secret)
+
+		existing, err := target.Client.CoreV1().Secrets(ns).Get(ctx, name, metav1.GetOptions{})
+		if k8serrors.IsNotFound(err) {
+			if mErr := m.Materialize(ctx, target, secret); mErr != nil {
+				result.Errors++
+			} else {
+				result.Created++
+			}
+			continue
+		}
+		if err != nil {
+			result.Errors++
+			continue
+		}
+
+		// Compare the version annotation with the managed secret version.
+		existingVersion := existing.Annotations[AnnotationVersion]
+		if existingVersion == strconv.Itoa(secret.Version) {
+			result.Skipped++
+			continue
+		}
+
+		if mErr := m.Materialize(ctx, target, secret); mErr != nil {
+			result.Errors++
+		} else {
+			result.Updated++
+		}
+	}
+
+	result.Duration = time.Since(start)
+	return result
 }
 
 // createSecret builds and creates a new Kubernetes Secret.
