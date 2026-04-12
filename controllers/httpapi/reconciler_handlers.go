@@ -78,14 +78,15 @@ func (s *Server) handleMaterializeAll(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// handleReconcilerStatus returns the last reconciliation result.
+// handleReconcilerStatus returns the last reconciliation results for all
+// materializers.
 func (s *Server) handleReconcilerStatus(w http.ResponseWriter, _ *http.Request) {
 	if s.reconciler == nil {
 		writeJSON(w, http.StatusServiceUnavailable, errorResponse{Error: "reconciler is not available"})
 		return
 	}
 
-	writeJSON(w, http.StatusOK, s.reconciler.LastResult())
+	writeJSON(w, http.StatusOK, s.reconciler.LastResults())
 }
 
 // materializeAfterWrite notifies the reconciler of a secret change so it can
@@ -94,5 +95,14 @@ func (s *Server) materializeAfterWrite(secret model.ManagedSecret) {
 	if s.reconciler == nil {
 		return
 	}
-	s.reconciler.NotifyChange(secret)
+	s.reconciler.NotifySecretChange(secret)
+}
+
+// materializeAfterManifestWrite notifies the reconciler of a manifest change
+// so it can be materialized reactively. Safe to call when reconciler is nil.
+func (s *Server) materializeAfterManifestWrite(manifest model.Manifest) {
+	if s.reconciler == nil {
+		return
+	}
+	s.reconciler.NotifyChange("manifests", manifest)
 }
