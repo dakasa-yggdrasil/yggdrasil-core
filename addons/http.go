@@ -31,7 +31,11 @@ func bootstrapHTTP(_ context.Context, app *runtime.ServiceApp) error {
 		logger = zap.NewNop()
 	}
 
-	handler, err := httpapi.New(app.ServiceName, db, conn, logger)
+	var opts []httpapi.ServerOption
+	if engine, ok := Reconciler(app); ok {
+		opts = append(opts, httpapi.WithReconciler(engine))
+	}
+	handler, err := httpapi.New(app.ServiceName, db, conn, logger, opts...)
 	if err != nil {
 		return fmt.Errorf("build http api: %w", err)
 	}

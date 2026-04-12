@@ -16,6 +16,7 @@ import (
 	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/reconciler"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -128,7 +129,7 @@ func (w *statusWriter) WriteHeader(status int) {
 }
 
 // New builds the synchronous HTTP API exposed directly by yggdrasil-core.
-func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logger) (http.Handler, error) {
+func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logger, opts ...ServerOption) (http.Handler, error) {
 	if db == nil {
 		return nil, fmt.Errorf("http api requires postgres")
 	}
@@ -141,6 +142,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		db:          db,
 		rabbitmq:    conn,
 		logger:      logger,
+	}
+
+	for _, opt := range opts {
+		opt(server)
 	}
 
 	mux := http.NewServeMux()
@@ -181,6 +186,9 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/secrets/{namespace}/{name}/rotate", server.handleManagedSecretRotate)
 	mux.HandleFunc("POST /api/v1/secrets/{namespace}/{name}/disable", server.handleManagedSecretDisable)
 	mux.HandleFunc("POST /api/v1/secrets/{namespace}/{name}/revoke", server.handleManagedSecretRevoke)
+	mux.HandleFunc("POST /api/v1/secrets/materialize-all", server.handleMaterializeAll)
+	mux.HandleFunc("POST /api/v1/secrets/{namespace}/{name}/materialize", server.handleMaterializeOne)
+	mux.HandleFunc("GET /api/v1/reconciler/status", server.handleReconcilerStatus)
 	mux.HandleFunc("GET /api/v1/repository-bindings", server.handleRepositoryBindingList)
 	mux.HandleFunc("POST /api/v1/repository-bindings", server.handleRepositoryBindingCreate)
 	mux.HandleFunc("GET /api/v1/guardian-policies", server.handleGuardianPolicyList)
@@ -226,6 +234,9 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/console/secrets/{namespace}/{name}/rotate", server.handleManagedSecretRotate)
 	mux.HandleFunc("POST /api/v1/console/secrets/{namespace}/{name}/disable", server.handleManagedSecretDisable)
 	mux.HandleFunc("POST /api/v1/console/secrets/{namespace}/{name}/revoke", server.handleManagedSecretRevoke)
+	mux.HandleFunc("POST /api/v1/console/secrets/materialize-all", server.handleMaterializeAll)
+	mux.HandleFunc("POST /api/v1/console/secrets/{namespace}/{name}/materialize", server.handleMaterializeOne)
+	mux.HandleFunc("GET /api/v1/console/reconciler/status", server.handleReconcilerStatus)
 	mux.HandleFunc("GET /api/v1/console/repository-bindings", server.handleRepositoryBindingList)
 	mux.HandleFunc("POST /api/v1/console/repository-bindings", server.handleRepositoryBindingCreate)
 	mux.HandleFunc("GET /api/v1/console/guardian-policies", server.handleGuardianPolicyList)
@@ -248,12 +259,21 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	return server.withLogging(mux), nil
 }
 
+// ServerOption configures optional Server dependencies.
+type ServerOption func(*Server)
+
+// WithReconciler injects the reconciler engine into the HTTP server.
+func WithReconciler(engine *reconciler.Engine) ServerOption {
+	return func(s *Server) { s.reconciler = engine }
+}
+
 // Server exposes the synchronous HTTP surface of yggdrasil-core.
 type Server struct {
 	serviceName string
 	db          *sql.DB
 	rabbitmq    *amqp.Connection
 	logger      *zap.Logger
+	reconciler  *reconciler.Engine
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {
@@ -496,6 +516,8 @@ func (s *Server) handleManagedSecretCreate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	s.materializeAfterWrite(secret)
+
 	writeJSON(w, http.StatusCreated, map[string]any{
 		"secret": model.BuildManagedSecretView(secret, queryBool(r, "include_values")),
 	})
@@ -521,6 +543,8 @@ func (s *Server) handleManagedSecretRotate(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	s.materializeAfterWrite(secret)
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"secret": model.BuildManagedSecretView(secret, queryBool(r, "include_values")),
 	})
@@ -543,6 +567,8 @@ func (s *Server) handleManagedSecretDisable(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	s.materializeAfterWrite(secret)
+
 	writeJSON(w, http.StatusOK, map[string]any{
 		"secret": model.BuildManagedSecretView(secret, queryBool(r, "include_values")),
 	})
@@ -564,6 +590,8 @@ func (s *Server) handleManagedSecretRevoke(w http.ResponseWriter, r *http.Reques
 		writeMappedError(w, err)
 		return
 	}
+
+	s.materializeAfterWrite(secret)
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"secret": model.BuildManagedSecretView(secret, queryBool(r, "include_values")),
