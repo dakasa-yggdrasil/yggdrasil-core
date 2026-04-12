@@ -39,7 +39,11 @@ func bootstrapReconciler(ctx context.Context, app *runtime.ServiceApp) error {
 		return nil // non-fatal — yggdrasil still works, just no materialization
 	}
 
-	engine := reconciler.NewEngine(pool, db, logger)
+	engine := reconciler.NewEngine(pool, db, logger,
+		&reconciler.SecretMaterializer{},
+		&reconciler.ManifestMaterializer{},
+		&reconciler.ProductMaterializer{},
+	)
 
 	loopCtx, cancelLoop := context.WithCancel(context.Background())
 	go engine.Run(loopCtx)
