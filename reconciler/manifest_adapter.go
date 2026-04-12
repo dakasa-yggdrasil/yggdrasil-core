@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -162,9 +163,10 @@ func (m *ManifestMaterializer) Reconcile(ctx context.Context, target KubeTarget,
 }
 
 // manifestConfigMapName returns the ConfigMap name for a manifest:
-// ygg-{kind}-{name}
+// ygg-{kind}-{name}, with underscores replaced by hyphens (K8s DNS naming rules).
 func manifestConfigMapName(manifest model.Manifest) string {
-	return fmt.Sprintf("ygg-%s-%s", manifest.Kind, manifest.Metadata.Name)
+	kind := strings.ReplaceAll(manifest.Kind, "_", "-")
+	return fmt.Sprintf("ygg-%s-%s", kind, manifest.Metadata.Name)
 }
 
 // manifestNamespace returns the namespace where the ConfigMap should live.
