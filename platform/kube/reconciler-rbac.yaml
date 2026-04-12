@@ -1,0 +1,25 @@
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: yggdrasil-reconciler
+  labels:
+    app: yggdrasil
+rules:
+  - apiGroups: [""]
+    resources: ["secrets"]
+    verbs: ["get", "list", "create", "update", "patch"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: yggdrasil-reconciler
+  labels:
+    app: yggdrasil
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: yggdrasil-reconciler
+subjects:
+  - kind: ServiceAccount
+    name: yggdrasil
+    namespace: dakasa
