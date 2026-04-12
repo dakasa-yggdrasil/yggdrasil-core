@@ -3,71 +3,105 @@ package reconciler
 import (
 	"context"
 	"database/sql"
+	"fmt"
 	"os"
-	"strconv"
+	"sync"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
-	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
-	k8serrors "k8s.io/apimachinery/pkg/api/errors"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"go.uber.org/zap"
 )
 
-// Engine drives periodic and reactive reconciliation of managed secrets
+// Engine drives periodic and reactive reconciliation of managed resources
 // into Kubernetes clusters.
 type Engine struct {
-	pool    *KubeClientPool
-	db      *sql.DB
-	logger  *zap.Logger
-	secrets *SecretMaterializer
+	pool          *KubeClientPool
+	db            *sql.DB
+	logger        *zap.Logger
+	materializers map[string]Materializer // keyed by Owns()
 
-	eventCh    chan model.ManagedSecret
-	lastResult ReconcileResult
+	eventCh     chan ReconcileEvent
+	lastResults map[string]ReconcileResult
+	mu          sync.RWMutex // protects lastResults
 }
 
-// NewEngine creates a reconciliation engine.
-func NewEngine(pool *KubeClientPool, db *sql.DB, logger *zap.Logger) *Engine {
+// NewEngine creates a reconciliation engine with the given materializers.
+func NewEngine(pool *KubeClientPool, db *sql.DB, logger *zap.Logger, materializers ...Materializer) *Engine {
 	if logger == nil {
 		logger = zap.NewNop()
 	}
+	m := make(map[string]Materializer, len(materializers))
+	for _, mat := range materializers {
+		m[mat.Owns()] = mat
+	}
 	return &Engine{
-		pool:    pool,
-		db:      db,
-		logger:  logger,
-		secrets: &SecretMaterializer{},
-		eventCh: make(chan model.ManagedSecret, 64),
+		pool:          pool,
+		db:            db,
+		logger:        logger,
+		materializers: m,
+		eventCh:       make(chan ReconcileEvent, 64),
+		lastResults:   make(map[string]ReconcileResult),
 	}
 }
 
-// MaterializeSecret resolves the target cluster from the pool and materializes
-// a single secret.
-func (e *Engine) MaterializeSecret(ctx context.Context, secret model.ManagedSecret) error {
-	targetName := resolveTargetName(secret)
+// Materialize resolves the target cluster from the pool and delegates to
+// the appropriate materializer for the given kind.
+func (e *Engine) Materialize(ctx context.Context, kind string, resource any) error {
+	mat, ok := e.materializers[kind]
+	if !ok {
+		return fmt.Errorf("no materializer for kind %q", kind)
+	}
+	targetName := resolveTargetNameFromAny(resource)
 	target, err := e.pool.Target(ctx, targetName)
 	if err != nil {
 		return err
 	}
-	return e.secrets.Materialize(ctx, *target, secret)
+	return mat.Materialize(ctx, *target, resource)
 }
 
-// NotifyChange enqueues a secret for immediate reconciliation. If the event
-// channel is full the notification is silently dropped to avoid blocking
-// callers.
-func (e *Engine) NotifyChange(secret model.ManagedSecret) {
+// MaterializeSecret is a convenience method that materializes a single secret.
+// It delegates to Materialize with kind "secrets".
+func (e *Engine) MaterializeSecret(ctx context.Context, secret model.ManagedSecret) error {
+	return e.Materialize(ctx, "secrets", secret)
+}
+
+// NotifyChange enqueues a generic resource event for immediate reconciliation.
+// If the event channel is full the notification is silently dropped to avoid
+// blocking callers.
+func (e *Engine) NotifyChange(kind string, resource any) {
 	select {
-	case e.eventCh <- secret:
+	case e.eventCh <- ReconcileEvent{Kind: kind, Resource: resource}:
 	default:
 		e.logger.Warn("event channel full, dropping notification",
-			zap.String("namespace", secret.Namespace),
-			zap.String("name", secret.Name),
+			zap.String("kind", kind),
 		)
 	}
 }
 
-// LastResult returns the result of the most recent full reconciliation pass.
+// NotifySecretChange enqueues a secret for immediate reconciliation.
+// Backward-compatible convenience method for HTTP handlers.
+func (e *Engine) NotifySecretChange(secret model.ManagedSecret) {
+	e.NotifyChange("secrets", secret)
+}
+
+// LastResults returns a copy of the most recent reconciliation results
+// for all materializers.
+func (e *Engine) LastResults() map[string]ReconcileResult {
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	out := make(map[string]ReconcileResult, len(e.lastResults))
+	for k, v := range e.lastResults {
+		out[k] = v
+	}
+	return out
+}
+
+// LastResult returns the result of the most recent full reconciliation pass
+// for secrets. Backward-compatible convenience method for HTTP handlers.
 func (e *Engine) LastResult() ReconcileResult {
-	return e.lastResult
+	e.mu.RLock()
+	defer e.mu.RUnlock()
+	return e.lastResults["secrets"]
 }
 
 // Run blocks and runs the reconciliation loop until the context is cancelled.
@@ -85,11 +119,24 @@ func (e *Engine) Run(ctx context.Context) {
 
 	for {
 		select {
-		case secret := <-e.eventCh:
-			if err := e.MaterializeSecret(ctx, secret); err != nil {
+		case evt := <-e.eventCh:
+			mat, ok := e.materializers[evt.Kind]
+			if !ok {
+				e.logger.Warn("no materializer for event kind", zap.String("kind", evt.Kind))
+				continue
+			}
+			targetName := resolveTargetNameFromAny(evt.Resource)
+			target, err := e.pool.Target(ctx, targetName)
+			if err != nil {
+				e.logger.Error("reactive materialize: resolve target failed",
+					zap.String("kind", evt.Kind),
+					zap.Error(err),
+				)
+				continue
+			}
+			if err := mat.Materialize(ctx, *target, evt.Resource); err != nil {
 				e.logger.Error("reactive materialize failed",
-					zap.String("namespace", secret.Namespace),
-					zap.String("name", secret.Name),
+					zap.String("kind", evt.Kind),
 					zap.Error(err),
 				)
 			}
@@ -102,104 +149,50 @@ func (e *Engine) Run(ctx context.Context) {
 	}
 }
 
-// runFullReconcile fetches all active secrets from the database and reconciles
-// them against Kubernetes.
+// runFullReconcile iterates all materializers and delegates reconciliation
+// to each one.
 func (e *Engine) runFullReconcile(ctx context.Context) {
 	if e.db == nil {
 		e.logger.Debug("skipping full reconcile: no database configured")
 		return
 	}
 
-	secrets, err := repository.ListManagedSecrets(ctx, e.db, model.ListManagedSecretsRequest{
-		Status: "active",
-	})
+	target, err := e.pool.Local()
 	if err != nil {
-		e.logger.Error("list managed secrets failed", zap.Error(err))
+		e.logger.Error("local target not available", zap.Error(err))
 		return
 	}
 
-	result := e.reconcileSecretList(ctx, secrets)
-	e.lastResult = result
-
-	e.logger.Info("full reconcile complete",
-		zap.Int("created", result.Created),
-		zap.Int("updated", result.Updated),
-		zap.Int("skipped", result.Skipped),
-		zap.Int("errors", result.Errors),
-		zap.Duration("duration", result.Duration),
-	)
+	for kind, mat := range e.materializers {
+		result, err := mat.Reconcile(ctx, *target, e.db)
+		if err != nil {
+			e.logger.Error("reconcile failed", zap.String("kind", kind), zap.Error(err))
+			continue
+		}
+		e.mu.Lock()
+		e.lastResults[kind] = result
+		e.mu.Unlock()
+		if result.Created > 0 || result.Updated > 0 || result.Errors > 0 {
+			e.logger.Info("reconcile pass",
+				zap.String("kind", kind),
+				zap.Int("created", result.Created),
+				zap.Int("updated", result.Updated),
+				zap.Int("skipped", result.Skipped),
+				zap.Int("errors", result.Errors),
+			)
+		}
+	}
 }
 
-// reconcileSecretList iterates a list of managed secrets, comparing each
-// against the corresponding Kubernetes Secret and materializing when needed.
-func (e *Engine) reconcileSecretList(ctx context.Context, secrets []model.ManagedSecret) ReconcileResult {
-	start := time.Now()
-	result := ReconcileResult{
-		Kind:      "secrets",
-		Timestamp: start,
+// resolveTargetNameFromAny inspects the resource to determine which cluster
+// target it should be materialized into. Falls back to "local".
+func resolveTargetNameFromAny(resource any) string {
+	switch r := resource.(type) {
+	case model.ManagedSecret:
+		return resolveTargetName(r)
+	default:
+		return "local"
 	}
-
-	for _, secret := range secrets {
-		targetName := resolveTargetName(secret)
-		target, err := e.pool.Target(ctx, targetName)
-		if err != nil {
-			e.logger.Error("resolve target failed",
-				zap.String("target", targetName),
-				zap.String("namespace", secret.Namespace),
-				zap.String("name", secret.Name),
-				zap.Error(err),
-			)
-			result.Errors++
-			continue
-		}
-
-		ns, name := resolveTargetLocation(secret)
-
-		existing, err := target.Client.CoreV1().Secrets(ns).Get(ctx, name, metav1.GetOptions{})
-		if k8serrors.IsNotFound(err) {
-			if mErr := e.secrets.Materialize(ctx, *target, secret); mErr != nil {
-				e.logger.Error("create secret failed",
-					zap.String("namespace", ns),
-					zap.String("name", name),
-					zap.Error(mErr),
-				)
-				result.Errors++
-			} else {
-				result.Created++
-			}
-			continue
-		}
-		if err != nil {
-			e.logger.Error("get secret failed",
-				zap.String("namespace", ns),
-				zap.String("name", name),
-				zap.Error(err),
-			)
-			result.Errors++
-			continue
-		}
-
-		// Compare the version annotation with the managed secret version.
-		existingVersion := existing.Annotations[AnnotationVersion]
-		if existingVersion == strconv.Itoa(secret.Version) {
-			result.Skipped++
-			continue
-		}
-
-		if mErr := e.secrets.Materialize(ctx, *target, secret); mErr != nil {
-			e.logger.Error("update secret failed",
-				zap.String("namespace", ns),
-				zap.String("name", name),
-				zap.Error(mErr),
-			)
-			result.Errors++
-		} else {
-			result.Updated++
-		}
-	}
-
-	result.Duration = time.Since(start)
-	return result
 }
 
 // reconcileInterval reads RECONCILE_INTERVAL from the environment and returns
