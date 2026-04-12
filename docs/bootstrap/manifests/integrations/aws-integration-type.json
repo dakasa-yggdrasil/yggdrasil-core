@@ -31,14 +31,40 @@
     "guardian_support": {
       "mode": "light",
       "signals": {
-        "error_rate": ["error_rate", "failure_rate"],
-        "rate_limited": ["rate_limited", "throttled", "quota_exceeded"],
-        "auth_denied": ["auth_denied", "unauthorized", "forbidden"],
-        "sync_lag_seconds": ["sync_lag_seconds", "reconciliation_lag_seconds"],
-        "monthly_cost_usd": ["monthly_cost_usd", "estimated_monthly_cost_usd", "cost_usd"],
-        "utilization": ["utilization", "avg_utilization"],
-        "idle_hours": ["idle_hours", "last_active_hours_ago"],
-        "overprovisioned": ["overprovisioned"]
+        "error_rate": [
+          "error_rate",
+          "failure_rate"
+        ],
+        "rate_limited": [
+          "rate_limited",
+          "throttled",
+          "quota_exceeded"
+        ],
+        "auth_denied": [
+          "auth_denied",
+          "unauthorized",
+          "forbidden"
+        ],
+        "sync_lag_seconds": [
+          "sync_lag_seconds",
+          "reconciliation_lag_seconds"
+        ],
+        "monthly_cost_usd": [
+          "monthly_cost_usd",
+          "estimated_monthly_cost_usd",
+          "cost_usd"
+        ],
+        "utilization": [
+          "utilization",
+          "avg_utilization"
+        ],
+        "idle_hours": [
+          "idle_hours",
+          "last_active_hours_ago"
+        ],
+        "overprovisioned": [
+          "overprovisioned"
+        ]
       }
     },
     "credential_schema": {
@@ -254,6 +280,51 @@
         "default_actions": [
           "ensure_elasticache_cluster"
         ]
+      },
+      {
+        "name": "internet_gateway",
+        "canonical_prefix": "thirdparty.aws.ec2.internet_gateway",
+        "identity_template": "internet_gateway.{region}.{vpc_id}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_internet_gateway"
+        ]
+      },
+      {
+        "name": "route_table",
+        "canonical_prefix": "thirdparty.aws.ec2.route_table",
+        "identity_template": "route_table.{region}.{vpc_id}.{route_table_name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_route_table"
+        ]
+      },
+      {
+        "name": "security_group",
+        "canonical_prefix": "thirdparty.aws.ec2.security_group",
+        "identity_template": "security_group.{region}.{vpc_id}.{group_name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_security_group"
+        ]
+      },
+      {
+        "name": "db_subnet_group",
+        "canonical_prefix": "thirdparty.aws.rds.db_subnet_group",
+        "identity_template": "db_subnet_group.{region}.{name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_db_subnet_group"
+        ]
+      },
+      {
+        "name": "cache_subnet_group",
+        "canonical_prefix": "thirdparty.aws.elasticache.subnet_group",
+        "identity_template": "cache_subnet_group.{region}.{name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_cache_subnet_group"
+        ]
       }
     ],
     "action_catalog": [
@@ -400,6 +471,46 @@
           "elasticache_cluster"
         ],
         "idempotent": true
+      },
+      {
+        "name": "ensure_internet_gateway",
+        "description": "Ensure an Internet Gateway exists and is attached to the target VPC.",
+        "resource_types": [
+          "internet_gateway"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_route_table",
+        "description": "Ensure a route table exists with the desired routes and subnet associations.",
+        "resource_types": [
+          "route_table"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_security_group",
+        "description": "Ensure a security group exists with the desired ingress rules.",
+        "resource_types": [
+          "security_group"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_db_subnet_group",
+        "description": "Ensure an RDS DB subnet group exists spanning the given subnets.",
+        "resource_types": [
+          "db_subnet_group"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_cache_subnet_group",
+        "description": "Ensure an ElastiCache subnet group exists spanning the given subnets.",
+        "resource_types": [
+          "cache_subnet_group"
+        ],
+        "idempotent": true
       }
     ],
     "discovery": {
@@ -432,7 +543,12 @@
         "ensure_eks_cluster",
         "ensure_eks_nodegroup",
         "ensure_rds_instance",
-        "ensure_elasticache_cluster"
+        "ensure_elasticache_cluster",
+        "ensure_internet_gateway",
+        "ensure_route_table",
+        "ensure_security_group",
+        "ensure_db_subnet_group",
+        "ensure_cache_subnet_group"
       ]
     },
     "extensions": {
