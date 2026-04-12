@@ -11,7 +11,7 @@ import (
 )
 
 func init() {
-	Register("reconciler", bootstrapReconciler, 40)
+	Register("reconciler", bootstrapReconciler, 25)
 }
 
 func bootstrapReconciler(ctx context.Context, app *runtime.ServiceApp) error {
