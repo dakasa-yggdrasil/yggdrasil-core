@@ -209,6 +209,8 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/workflows", server.handleWorkflowCreate)
 	mux.HandleFunc("POST /api/v1/workflow-runs", server.handleWorkflowRun)
 	mux.HandleFunc("POST /api/v1/provision/aws", server.handleProvisionAWS)
+	mux.HandleFunc("POST /api/v1/products/{namespace}/{name}/deploy", server.handleDeployProduct)
+	mux.HandleFunc("POST /api/v1/products/deploy-all", server.handleDeployAll)
 	mux.HandleFunc("GET /api/v1/console/integration-catalog", server.handleIntegrationCatalogList)
 	mux.HandleFunc("GET /api/v1/console/integration-catalog/{domain}/{section}/{entry}", server.handleIntegrationCatalogEntry)
 	mux.HandleFunc("GET /api/v1/console/catalog-discovery", server.handleCatalogDiscovery)
@@ -258,6 +260,8 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/console/workflows", server.handleWorkflowCreate)
 	mux.HandleFunc("POST /api/v1/console/workflow-runs", server.handleWorkflowRun)
 	mux.HandleFunc("POST /api/v1/console/provision/aws", server.handleProvisionAWS)
+	mux.HandleFunc("POST /api/v1/console/products/{namespace}/{name}/deploy", server.handleDeployProduct)
+	mux.HandleFunc("POST /api/v1/console/products/deploy-all", server.handleDeployAll)
 
 	return server.withLogging(mux), nil
 }
@@ -275,6 +279,11 @@ func WithProvisioner(p *provisioner.AWSProvisioner) ServerOption {
 	return func(s *Server) { s.provisioner = p }
 }
 
+// WithDeployer injects the kustomize deployer into the HTTP server.
+func WithDeployer(d *provisioner.KustomizeDeployer) ServerOption {
+	return func(s *Server) { s.deployer = d }
+}
+
 // Server exposes the synchronous HTTP surface of yggdrasil-core.
 type Server struct {
 	serviceName string
@@ -283,6 +292,7 @@ type Server struct {
 	logger      *zap.Logger
 	reconciler  *reconciler.Engine
 	provisioner *provisioner.AWSProvisioner
+	deployer    *provisioner.KustomizeDeployer
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {
