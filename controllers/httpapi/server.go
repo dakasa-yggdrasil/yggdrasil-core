@@ -466,6 +466,8 @@ func (s *Server) handleIntegrationInstanceCreate(w http.ResponseWriter, r *http.
 		return
 	}
 
+	s.materializeAfterManifestWrite(manifestRecord)
+
 	writeJSON(w, http.StatusCreated, map[string]any{"manifest": manifestRecord})
 }
 
@@ -1281,6 +1283,8 @@ func (s *Server) handleManifestCreate(w http.ResponseWriter, r *http.Request, ki
 		writeMappedError(w, err)
 		return
 	}
+
+	s.materializeAfterManifestWrite(manifestRecord)
 
 	writeJSON(w, http.StatusCreated, map[string]any{"manifest": manifestRecord})
 }
