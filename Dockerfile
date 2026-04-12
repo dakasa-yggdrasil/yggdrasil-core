@@ -14,7 +14,9 @@ COPY . .
 
 RUN go build -o /bin/yggdrasil-core .
 
-FROM gcr.io/distroless/base-debian12:nonroot
+FROM alpine:3.21
+
+RUN apk add --no-cache ca-certificates
 
 WORKDIR /app
 
