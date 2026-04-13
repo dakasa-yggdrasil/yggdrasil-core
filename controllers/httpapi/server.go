@@ -152,6 +152,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", server.handleRoot)
 	mux.HandleFunc("GET /healthz", server.handleHealthz)
+	mux.HandleFunc("POST /api/v1/github/webhook", server.handleGitHubWebhook)
 	mux.HandleFunc("GET /readyz", server.handleReadyz)
 	mux.HandleFunc("POST /api/v1/auth/passwords", server.handleAuthPasswordUpsert)
 	mux.HandleFunc("POST /api/v1/auth/login", server.handleAuthLogin)
