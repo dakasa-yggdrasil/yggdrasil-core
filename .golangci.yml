@@ -3,7 +3,3 @@ version: "2"
 linters:
   enable:
     - staticcheck
-    - unused
-  disable:
-    - errcheck
-    - ineffassign
