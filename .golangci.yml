@@ -1,0 +1,15 @@
+linters:
+  enable:
+    - errcheck
+    - staticcheck
+    - unused
+    - ineffassign
+
+linters-settings:
+  errcheck:
+    exclude-functions:
+      - (*database/sql.Rows).Close
+      - (*database/sql.Tx).Rollback
+      - (*database/sql.DB).Close
+      - (*net/http.Response).Body.Close
+      - (io.Closer).Close
