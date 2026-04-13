@@ -211,6 +211,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/provision/aws", server.handleProvisionAWS)
 	mux.HandleFunc("POST /api/v1/products/{namespace}/{name}/deploy", server.handleDeployProduct)
 	mux.HandleFunc("POST /api/v1/products/deploy-all", server.handleDeployAll)
+	mux.HandleFunc("POST /api/v1/bootstrap", server.handleBootstrap)
 	mux.HandleFunc("GET /api/v1/console/integration-catalog", server.handleIntegrationCatalogList)
 	mux.HandleFunc("GET /api/v1/console/integration-catalog/{domain}/{section}/{entry}", server.handleIntegrationCatalogEntry)
 	mux.HandleFunc("GET /api/v1/console/catalog-discovery", server.handleCatalogDiscovery)
@@ -262,6 +263,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/console/provision/aws", server.handleProvisionAWS)
 	mux.HandleFunc("POST /api/v1/console/products/{namespace}/{name}/deploy", server.handleDeployProduct)
 	mux.HandleFunc("POST /api/v1/console/products/deploy-all", server.handleDeployAll)
+	mux.HandleFunc("POST /api/v1/console/bootstrap", server.handleBootstrap)
 
 	return server.withLogging(mux), nil
 }
