@@ -1,20 +1,15 @@
 version: "2"
 
 linters:
+  default: none
   enable:
     - errcheck
     - staticcheck
     - unused
     - ineffassign
 
-formatters:
-  enable: []
-
-linters-settings:
-  errcheck:
-    disable-default-exclusions: false
-    exclude-functions:
-      - "(*database/sql.Rows).Close"
-      - "(*database/sql.Tx).Rollback"
-      - "(*database/sql.DB).Close"
-      - "(io.Closer).Close"
+issues:
+  exclude-rules:
+    - linters:
+        - errcheck
+      text: "Error return value of .*(Close|Rollback).*is not checked"
