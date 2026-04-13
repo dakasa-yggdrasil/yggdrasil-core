@@ -1,7 +1,6 @@
 version: "2"
 
 linters:
-  default: none
   enable:
     - errcheck
     - staticcheck
@@ -12,4 +11,4 @@ issues:
   exclude-rules:
     - linters:
         - errcheck
-      text: "Error return value of .*(Close|Rollback).*is not checked"
+      source: "Close|Rollback"
