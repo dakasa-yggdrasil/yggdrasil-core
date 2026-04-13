@@ -88,12 +88,22 @@ func (p *KubeClientPool) Target(ctx context.Context, name string) (*KubeTarget, 
 		return p.Local()
 	}
 
+	// Check-lock-check: first read with RLock, then write with Lock if stale.
 	p.mu.RLock()
 	cached, ok := p.remotes[name]
 	p.mu.RUnlock()
 	if ok && time.Now().Before(cached.expiresAt) {
 		return &cached.target, nil
 	}
+
+	// Acquire write lock and re-check (another goroutine may have refreshed).
+	p.mu.Lock()
+	cached, ok = p.remotes[name]
+	if ok && time.Now().Before(cached.expiresAt) {
+		p.mu.Unlock()
+		return &cached.target, nil
+	}
+	p.mu.Unlock()
 
 	secret, err := repository.GetManagedSecret(ctx, p.db, model.GetManagedSecretRequest{
 		Namespace: "global",
