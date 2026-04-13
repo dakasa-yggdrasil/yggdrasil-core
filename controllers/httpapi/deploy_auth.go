@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"crypto/subtle"
 	"net/http"
 	"os"
 	"strings"
@@ -19,7 +20,7 @@ func requireDeployToken(next http.HandlerFunc) http.HandlerFunc {
 		}
 
 		token := extractDeployToken(r)
-		if token == "" || token != expected {
+		if token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(expected)) != 1 {
 			writeJSON(w, http.StatusUnauthorized, errorResponse{
 				Error: "unauthorized: valid deploy token required",
 			})
