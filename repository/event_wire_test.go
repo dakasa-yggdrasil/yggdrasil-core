@@ -48,7 +48,7 @@ func TestCreateManifestVersionTx_EmitsEventInSameTransaction(t *testing.T) {
 
 	manifestRecord, err := CreateManifestVersionTx(ctx, tx, doc, "sha256:aaaabbbbccccddddeeeeffff0000111122223333444455556666777788889999")
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		t.Fatalf("CreateManifestVersionTx: %v", err)
 	}
 
@@ -69,7 +69,7 @@ func TestCreateManifestVersionTx_EmitsEventInSameTransaction(t *testing.T) {
 		Payload:       eventPayload,
 	})
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		t.Fatalf("EmitEvent: %v", err)
 	}
 
@@ -164,7 +164,7 @@ func TestCreateManifestVersionTx_RollbackDoesNotPersistEvent(t *testing.T) {
 
 	manifestRecord, err := CreateManifestVersionTx(ctx, tx, doc, "sha256:aaaabbbbccccddddeeeeffff0000111122223333444455556666777788889999")
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		t.Fatalf("CreateManifestVersionTx: %v", err)
 	}
 
@@ -183,7 +183,7 @@ func TestCreateManifestVersionTx_RollbackDoesNotPersistEvent(t *testing.T) {
 		},
 	})
 	if err != nil {
-		tx.Rollback()
+		_ = tx.Rollback()
 		t.Fatalf("EmitEvent: %v", err)
 	}
 

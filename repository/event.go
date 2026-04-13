@@ -281,16 +281,16 @@ func CleanupExpiredEvents(ctx context.Context, db *sql.DB) (int64, error) {
 	for rows.Next() {
 		var p policy
 		if err := rows.Scan(&p.pattern, &p.days); err != nil {
-			rows.Close()
+			_ = rows.Close()
 			return 0, fmt.Errorf("scan retention policy: %w", err)
 		}
 		policies = append(policies, p)
 	}
 	if err := rows.Err(); err != nil {
-		rows.Close()
+		_ = rows.Close()
 		return 0, fmt.Errorf("iterate retention policies: %w", err)
 	}
-	rows.Close()
+	_ = rows.Close()
 
 	var totalDeleted int64
 	for _, p := range policies {

@@ -212,7 +212,7 @@ func TestExpireBuildProjectNow_ForcesActiveToExpiring(t *testing.T) {
 
 func TestExtendBuildProjectExpiry_UpdatesActiveExpiresAt(t *testing.T) {
 	db := dbForEventTest(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	cleanBuildProjects(t, db)
 
 	ctx := context.Background()
@@ -239,7 +239,7 @@ func TestExtendBuildProjectExpiry_UpdatesActiveExpiresAt(t *testing.T) {
 
 func TestHardDeleteBuildProjectsOlderThan_RespectsDeletedAtCutoff(t *testing.T) {
 	db := dbForEventTest(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	cleanBuildProjects(t, db)
 
 	ctx := context.Background()
