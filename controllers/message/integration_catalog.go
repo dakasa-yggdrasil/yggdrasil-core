@@ -99,13 +99,7 @@ func getIntegrationCatalogEntry(
 		return model.IntegrationCatalogEntry{}, fmt.Errorf("domain, section, and entry are required")
 	}
 
-	domains, err := integrationCatalogList(ctx, db, model.ListIntegrationCatalogRequest{
-		Namespace: req.Namespace,
-		Domain:    req.Domain,
-		Section:   req.Section,
-		Entry:     req.Entry,
-		CheckKind: req.CheckKind,
-	})
+	domains, err := integrationCatalogList(ctx, db, model.ListIntegrationCatalogRequest(req))
 	if err != nil {
 		return model.IntegrationCatalogEntry{}, err
 	}

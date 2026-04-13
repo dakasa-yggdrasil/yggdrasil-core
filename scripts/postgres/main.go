@@ -23,7 +23,7 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
@@ -58,7 +58,7 @@ func ensureDatabase(ctx context.Context, cfg psql.Config) error {
 	if err != nil {
 		return err
 	}
-	defer admin.Close()
+	defer func() { _ = admin.Close() }()
 
 	if err := admin.PingContext(ctx); err != nil {
 		return err

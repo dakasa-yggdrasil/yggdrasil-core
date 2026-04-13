@@ -251,7 +251,7 @@ func ListThirdPartyAuthProviders(
 	if err != nil {
 		return nil, err
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	items := make([]model.ThirdPartyAuthProvider, 0)
 	for rows.Next() {
@@ -273,7 +273,7 @@ func DeleteThirdPartyAuthProvider(
 	db *sql.DB,
 	req model.DeleteThirdPartyAuthProviderRequest,
 ) (model.ThirdPartyAuthProvider, error) {
-	provider, err := GetThirdPartyAuthProvider(ctx, db, model.GetThirdPartyAuthProviderRequest{Name: req.Name})
+	provider, err := GetThirdPartyAuthProvider(ctx, db, model.GetThirdPartyAuthProviderRequest(req))
 	if err != nil {
 		return model.ThirdPartyAuthProvider{}, err
 	}

@@ -351,7 +351,7 @@ func runHeimdallGuardianSweep(
 			}
 		} else {
 			actions := heimdallCostActions(costResponse.Output, policy)
-			executed, execErr := executeHeimdallActions(
+			_, execErr := executeHeimdallActions(
 				ctx,
 				conn,
 				db,
@@ -362,7 +362,6 @@ func runHeimdallGuardianSweep(
 				"cost_optimization",
 				actionsExecuted,
 			)
-			actionsExecuted = executed
 			if execErr != nil && logger != nil {
 				logger.Warn("heimdall guardian cost action execution failed", zap.Error(execErr))
 			}

@@ -52,7 +52,7 @@ func FindExpiredBuildProjectCandidates(ctx context.Context, db *sql.DB, limit in
 	if err != nil {
 		return nil, fmt.Errorf("query expired candidates: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	var builds []model.BuildProject
 	for rows.Next() {

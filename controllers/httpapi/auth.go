@@ -746,15 +746,15 @@ func coerceThirdPartyClientSecret(value any) (string, error) {
 }
 
 func isAuthUnauthorizedError(err error) bool {
-	switch {
-	case err == nil:
+	switch err {
+	case nil:
 		return false
-	case err == repository.ErrAuthInvalidCredentials,
-		err == repository.ErrAuthSessionNotFound,
-		err == repository.ErrAuthSessionExpired,
-		err == repository.ErrPasswordCredentialNotFound,
-		err == repository.ErrCollaboratorNotFound,
-		err == repository.ErrThirdPartyIdentityNotFound:
+	case repository.ErrAuthInvalidCredentials,
+		repository.ErrAuthSessionNotFound,
+		repository.ErrAuthSessionExpired,
+		repository.ErrPasswordCredentialNotFound,
+		repository.ErrCollaboratorNotFound,
+		repository.ErrThirdPartyIdentityNotFound:
 		return true
 	default:
 		return false

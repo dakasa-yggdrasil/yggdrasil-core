@@ -123,7 +123,7 @@ func (c *adapterTransportClient) callHTTPJSON(
 	if err != nil {
 		return fmt.Errorf("%w: call http adapter endpoint %q: %v", ErrAdapterTransportUnavailable, targetURL, err)
 	}
-	defer httpResp.Body.Close()
+	defer func() { _ = httpResp.Body.Close() }()
 
 	responseBody, err := io.ReadAll(httpResp.Body)
 	if err != nil {

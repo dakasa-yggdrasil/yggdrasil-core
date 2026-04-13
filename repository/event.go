@@ -122,7 +122,7 @@ func PullEvents(ctx context.Context, db *sql.DB, req model.PullEventsRequest) (m
 	if err != nil {
 		return model.PullEventsResponse{}, fmt.Errorf("query event_log: %w", err)
 	}
-	defer rows.Close()
+	defer func() { _ = rows.Close() }()
 
 	events := make([]model.Event, 0, limit)
 	for rows.Next() {
