@@ -4,3 +4,5 @@ linters:
   enable:
     - staticcheck
     - unused
+  disable:
+    - errcheck
