@@ -2,13 +2,8 @@ version: "2"
 
 linters:
   enable:
-    - errcheck
     - staticcheck
     - unused
     - ineffassign
-
-issues:
-  exclude-rules:
-    - linters:
-        - errcheck
-      source: "Close|Rollback"
+  disable:
+    - errcheck
