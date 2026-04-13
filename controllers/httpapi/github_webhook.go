@@ -115,7 +115,7 @@ func (s *Server) handlePushEvent(w http.ResponseWriter, body []byte) {
 				s.logger.Error("auto-deploy failed", zap.String("product", product), zap.Error(err))
 				return
 			}
-			defer resp.Body.Close()
+			defer func() { _ = resp.Body.Close() }()
 			s.logger.Info("auto-deploy completed",
 				zap.String("product", product),
 				zap.Int("status", resp.StatusCode),

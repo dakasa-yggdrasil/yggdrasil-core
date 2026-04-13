@@ -251,7 +251,7 @@ func checkHTTPJSONTransportConnectivity(
 	if err != nil {
 		return "", map[string]any{"target_url": targetURL}, fmt.Errorf("call connectivity endpoint %q: %w", targetURL, err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	details := map[string]any{
 		"target_url":   targetURL,

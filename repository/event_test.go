@@ -47,7 +47,7 @@ func validManifestCreatedPayload(name string, version int) map[string]interface{
 
 func TestEmitEvent_ValidPayload_InsertsEvent(t *testing.T) {
 	db := dbForEventTest(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	cleanEventLog(t, db)
 
 	ctx := context.Background()
@@ -93,7 +93,7 @@ func TestEmitEvent_ValidPayload_InsertsEvent(t *testing.T) {
 
 func TestEmitEvent_InvalidPayload_ReturnsValidationError(t *testing.T) {
 	db := dbForEventTest(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	cleanEventLog(t, db)
 
 	ctx := context.Background()
@@ -134,7 +134,7 @@ func TestEmitEvent_NilTransaction_ReturnsError(t *testing.T) {
 
 func TestEmitEvent_TransactionRollback_EventNotPersisted(t *testing.T) {
 	db := dbForEventTest(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	cleanEventLog(t, db)
 
 	ctx := context.Background()
@@ -169,7 +169,7 @@ func TestEmitEvent_TransactionRollback_EventNotPersisted(t *testing.T) {
 
 func TestPullEvents_NoCursor_ReturnsAllInOrder(t *testing.T) {
 	db := dbForEventTest(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	cleanEventLog(t, db)
 
 	ctx := context.Background()
@@ -212,7 +212,7 @@ func TestPullEvents_NoCursor_ReturnsAllInOrder(t *testing.T) {
 
 func TestPullEvents_WithCursor_ReturnsEventsAfterCursor(t *testing.T) {
 	db := dbForEventTest(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	cleanEventLog(t, db)
 
 	ctx := context.Background()
@@ -257,7 +257,7 @@ func TestPullEvents_WithCursor_ReturnsEventsAfterCursor(t *testing.T) {
 
 func TestPullEvents_FilterByType(t *testing.T) {
 	db := dbForEventTest(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	cleanEventLog(t, db)
 
 	ctx := context.Background()
@@ -281,7 +281,7 @@ func TestPullEvents_FilterByType(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("EmitEvent %s: %v", eventType, err)
 		}
-		tx.Commit()
+		_ = tx.Commit()
 	}
 
 	resp, err := PullEvents(ctx, db, model.PullEventsRequest{
@@ -305,7 +305,7 @@ func TestPullEvents_FilterByType(t *testing.T) {
 
 func TestPullEvents_InvalidCursor_ReturnsError(t *testing.T) {
 	db := dbForEventTest(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	_, err := PullEvents(ctx, db, model.PullEventsRequest{
@@ -319,7 +319,7 @@ func TestPullEvents_InvalidCursor_ReturnsError(t *testing.T) {
 
 func TestPullEvents_LimitCapped(t *testing.T) {
 	db := dbForEventTest(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	cleanEventLog(t, db)
 
 	ctx := context.Background()
@@ -336,7 +336,7 @@ func TestPullEvents_LimitCapped(t *testing.T) {
 
 func TestListRetentionPolicies_ReturnsSeededDefaults(t *testing.T) {
 	db := dbForEventTest(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 
 	ctx := context.Background()
 	policies, err := ListRetentionPolicies(ctx, db)
