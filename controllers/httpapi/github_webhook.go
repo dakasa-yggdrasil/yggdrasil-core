@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"time"
 
 	"go.uber.org/zap"
 )
@@ -104,13 +105,22 @@ func (s *Server) handlePushEvent(w http.ResponseWriter, body []byte) {
 				zap.String("repo", push.Repository.FullName),
 				zap.String("product", product),
 			)
-			// Use the bootstrap's deployProduct helper via HTTP self-call
-			// This is simpler than importing the full deploy logic
-			req, _ := http.NewRequest("POST",
-				fmt.Sprintf("http://localhost:9080/api/v1/products/dakasa/%s/deploy", product),
-				nil)
+
+			port := os.Getenv("PORT")
+			if port == "" {
+				port = "9080"
+			}
+			url := fmt.Sprintf("http://localhost:%s/api/v1/products/dakasa/%s/deploy", port, product)
+
+			req, err := http.NewRequest("POST", url, nil)
+			if err != nil {
+				s.logger.Error("auto-deploy: build request failed", zap.Error(err))
+				return
+			}
 			req.Header.Set("Authorization", "Bearer "+os.Getenv("YGGDRASIL_DEPLOY_TOKEN"))
-			resp, err := http.DefaultClient.Do(req)
+
+			client := &http.Client{Timeout: 5 * time.Minute}
+			resp, err := client.Do(req)
 			if err != nil {
 				s.logger.Error("auto-deploy failed", zap.String("product", product), zap.Error(err))
 				return
