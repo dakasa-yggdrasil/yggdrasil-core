@@ -110,7 +110,7 @@ func (d *KustomizeDeployer) DeployComponent(ctx context.Context, comp model.Prod
 
 	// Run: kubectl kustomize <path> | kubectl apply -f -
 	// The KUBECONFIG env is left empty so kubectl uses in-cluster config automatically.
-	shellCmd := fmt.Sprintf("kubectl kustomize %s | kubectl apply --validate=false --server-side=false -f -", overlayPath)
+	shellCmd := fmt.Sprintf("kubectl kustomize %s | kubectl apply --validate=false --force -f -", overlayPath)
 	cmd := exec.CommandContext(ctx, "sh", "-c", shellCmd)
 	cmd.Env = filterKubeconfig(os.Environ())
 	output, err := cmd.CombinedOutput()
