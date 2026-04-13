@@ -9,15 +9,6 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 )
 
-// seedPaginationTestManifests creates N valid product manifests under a given
-// namespace for pagination tests. Cleans existing manifests in the namespace
-// first so tests are repeatable.
-func seedPaginationTestManifests(t *testing.T, db interface {
-	Exec(query string, args ...any) (any, error)
-}, namespace string, count int) {
-	t.Helper()
-}
-
 func TestListManifestsPaginated_DefaultSort_ReturnsPageAndCursor(t *testing.T) {
 	db := dbForEventTest(t)
 	defer db.Close()

@@ -435,10 +435,7 @@ func emitAuthorizationEvaluatedEvent(
 	}
 
 	// Collect matched roles from RBAC results
-	matchedRoles := make([]string, 0)
-	for _, role := range response.RBAC.MatchedRoles {
-		matchedRoles = append(matchedRoles, role)
-	}
+	matchedRoles := append(make([]string, 0, len(response.RBAC.MatchedRoles)), response.RBAC.MatchedRoles...)
 	if len(matchedRoles) > 0 {
 		payload["matched_roles"] = matchedRoles
 	}
@@ -667,7 +664,7 @@ func replyJSON(ctx context.Context, conn *amqp.Connection, d amqp.Delivery, resp
 	if err != nil {
 		return err
 	}
-	defer ch.Close()
+	defer func() { _ = ch.Close() }()
 
 	if err := ch.PublishWithContext(ctx, "", d.ReplyTo, false, false, amqp.Publishing{
 		ContentType:   "application/json",

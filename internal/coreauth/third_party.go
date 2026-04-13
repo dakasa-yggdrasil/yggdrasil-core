@@ -147,7 +147,7 @@ func ExchangeAuthorizationCode(
 	if err != nil {
 		return "", nil, fmt.Errorf("exchange authorization code: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -180,7 +180,7 @@ func FetchOAuthProfile(ctx context.Context, client *http.Client, provider OAuthR
 	if err != nil {
 		return OAuthProfile{}, fmt.Errorf("fetch userinfo: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {
@@ -225,7 +225,7 @@ func ResolveOIDCDiscovery(ctx context.Context, client *http.Client, issuerURL st
 	if err != nil {
 		return OAuthDiscoveryDocument{}, fmt.Errorf("resolve oidc discovery: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	body, err := io.ReadAll(resp.Body)
 	if err != nil {

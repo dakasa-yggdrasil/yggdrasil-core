@@ -72,7 +72,7 @@ func cleanBuildProjects(t *testing.T, db *sql.DB) {
 
 func TestFindExpiredBuildProjectCandidates_ReturnsOnlyExpiredEphemeralActive(t *testing.T) {
 	db := dbForEventTest(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	cleanBuildProjects(t, db)
 
 	ctx := context.Background()
@@ -104,7 +104,7 @@ func TestFindExpiredBuildProjectCandidates_ReturnsOnlyExpiredEphemeralActive(t *
 
 func TestTransitionBuildProjectToExpiring_OptimisticLocking(t *testing.T) {
 	db := dbForEventTest(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	cleanBuildProjects(t, db)
 
 	ctx := context.Background()
@@ -121,7 +121,7 @@ func TestTransitionBuildProjectToExpiring_OptimisticLocking(t *testing.T) {
 	if !transitioned1 {
 		t.Error("first worker should have won the transition")
 	}
-	tx1.Commit()
+	_ = tx1.Commit()
 
 	// Second worker sees affected = 0
 	tx2, _ := db.BeginTx(ctx, nil)
@@ -132,7 +132,7 @@ func TestTransitionBuildProjectToExpiring_OptimisticLocking(t *testing.T) {
 	if transitioned2 {
 		t.Error("second worker should NOT have won the transition")
 	}
-	tx2.Commit()
+	_ = tx2.Commit()
 
 	// Verify the BP is in expiring state
 	var status string
@@ -147,7 +147,7 @@ func TestTransitionBuildProjectToExpiring_OptimisticLocking(t *testing.T) {
 
 func TestTransitionBuildProjectToDeleted_AfterExpiring(t *testing.T) {
 	db := dbForEventTest(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	cleanBuildProjects(t, db)
 
 	ctx := context.Background()
@@ -163,7 +163,7 @@ func TestTransitionBuildProjectToDeleted_AfterExpiring(t *testing.T) {
 	if !transitioned {
 		t.Error("expected transition to succeed")
 	}
-	tx.Commit()
+	_ = tx.Commit()
 
 	var status string
 	var deletedAt sql.NullTime
@@ -181,7 +181,7 @@ func TestTransitionBuildProjectToDeleted_AfterExpiring(t *testing.T) {
 
 func TestExpireBuildProjectNow_ForcesActiveToExpiring(t *testing.T) {
 	db := dbForEventTest(t)
-	defer db.Close()
+	defer func() { _ = db.Close() }()
 	cleanBuildProjects(t, db)
 
 	ctx := context.Background()
@@ -198,7 +198,7 @@ func TestExpireBuildProjectNow_ForcesActiveToExpiring(t *testing.T) {
 	if !transitioned {
 		t.Error("expected forced expiration to succeed")
 	}
-	tx.Commit()
+	_ = tx.Commit()
 
 	var status string
 	err = db.QueryRow(`SELECT lifecycle_status FROM public.topology_build_projects WHERE id = $1`, bpID).Scan(&status)

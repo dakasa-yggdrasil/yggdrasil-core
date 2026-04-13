@@ -17,14 +17,14 @@ func main() {
 	if err != nil {
 		panic(err)
 	}
-	defer conn.Close()
+	defer func() { _ = conn.Close() }()
 
 	if queue := os.Getenv("RABBITMQ_QUEUE"); queue != "" {
 		ch, err := conn.Channel()
 		if err != nil {
 			panic(err)
 		}
-		defer ch.Close()
+		defer func() { _ = ch.Close() }()
 
 		if _, err := ch.QueueDeclarePassive(queue, true, false, false, false, nil); err != nil {
 			panic(err)

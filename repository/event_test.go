@@ -55,7 +55,7 @@ func TestEmitEvent_ValidPayload_InsertsEvent(t *testing.T) {
 	if err != nil {
 		t.Fatalf("begin tx: %v", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	req := model.EmitEventRequest{
 		Type:          "manifest.created",
@@ -101,7 +101,7 @@ func TestEmitEvent_InvalidPayload_ReturnsValidationError(t *testing.T) {
 	if err != nil {
 		t.Fatalf("begin tx: %v", err)
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	req := model.EmitEventRequest{
 		Type:          "manifest.created",
@@ -155,7 +155,7 @@ func TestEmitEvent_TransactionRollback_EventNotPersisted(t *testing.T) {
 		t.Fatalf("EmitEvent: %v", err)
 	}
 
-	tx.Rollback()
+	_ = tx.Rollback()
 
 	var count int
 	err = db.QueryRow(`SELECT COUNT(*) FROM public.event_log`).Scan(&count)
@@ -226,7 +226,7 @@ func TestPullEvents_WithCursor_ReturnsEventsAfterCursor(t *testing.T) {
 		}); err != nil {
 			t.Fatalf("EmitEvent[%d]: %v", i, err)
 		}
-		tx.Commit()
+		_ = tx.Commit()
 	}
 
 	firstResp, err := PullEvents(ctx, db, model.PullEventsRequest{Limit: 2})

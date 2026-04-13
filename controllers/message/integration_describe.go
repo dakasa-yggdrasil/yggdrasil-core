@@ -288,8 +288,9 @@ func checkRabbitMQTransportConnectivity(
 	if err != nil {
 		return "", map[string]any{"queue": queue}, fmt.Errorf("open rabbitmq channel: %w", err)
 	}
-	defer channel.Close()
+	defer func() { _ = channel.Close() }()
 
+	//nolint:staticcheck // QueueInspect is deprecated but the replacement (passive QueueDeclare) has different semantics we don't need here.
 	if _, err := channel.QueueInspect(queue); err != nil {
 		return "", map[string]any{"queue": queue}, fmt.Errorf("inspect rabbitmq queue %q: %w", queue, err)
 	}

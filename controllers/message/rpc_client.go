@@ -20,7 +20,7 @@ func callRabbitRPC(ctx context.Context, conn *amqp.Connection, queue string, req
 	if err != nil {
 		return err
 	}
-	defer ch.Close()
+	defer func() { _ = ch.Close() }()
 
 	replyQueue, err := ch.QueueDeclare("", false, true, true, false, nil)
 	if err != nil {
