@@ -112,7 +112,7 @@ func (d *KustomizeDeployer) DeployComponent(ctx context.Context, comp model.Prod
 	// The KUBECONFIG env is left empty so kubectl uses in-cluster config automatically.
 	shellCmd := fmt.Sprintf("kubectl kustomize %s | kubectl apply --validate=false --force -f -", overlayPath)
 	cmd := exec.CommandContext(ctx, "sh", "-c", shellCmd)
-	cmd.Env = filterKubeconfig(os.Environ())
+	cmd.Env = buildKubeEnv(os.Environ())
 	output, err := cmd.CombinedOutput()
 	if err != nil {
 		return fmt.Errorf("kubectl apply failed for %s: %s: %w", comp.Name, string(output), err)
@@ -212,13 +212,28 @@ func (d *KustomizeDeployer) DeployAllProducts(ctx context.Context, manifests []m
 
 // filterKubeconfig returns a copy of the environment with KUBECONFIG removed,
 // so kubectl falls back to in-cluster config.
-func filterKubeconfig(environ []string) []string {
+// buildKubeEnv prepares the environment for kubectl exec.
+// Strips KUBECONFIG to force in-cluster config, and overrides
+// KUBERNETES_SERVICE_HOST/PORT to use the node IP directly
+// (bypasses the ClusterIP which is unreliable from within pods in k3s).
+func buildKubeEnv(environ []string) []string {
+	nodeHost := os.Getenv("KUBE_NODE_HOST") // set by deployment env
 	filtered := make([]string, 0, len(environ))
 	for _, env := range environ {
 		if strings.HasPrefix(env, "KUBECONFIG=") {
 			continue
 		}
+		if nodeHost != "" && strings.HasPrefix(env, "KUBERNETES_SERVICE_HOST=") {
+			continue
+		}
+		if nodeHost != "" && strings.HasPrefix(env, "KUBERNETES_SERVICE_PORT=") {
+			continue
+		}
 		filtered = append(filtered, env)
+	}
+	if nodeHost != "" {
+		filtered = append(filtered, "KUBERNETES_SERVICE_HOST="+nodeHost)
+		filtered = append(filtered, "KUBERNETES_SERVICE_PORT=6443")
 	}
 	return filtered
 }
