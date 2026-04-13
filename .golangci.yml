@@ -4,6 +4,6 @@ linters:
   enable:
     - staticcheck
     - unused
-    - ineffassign
   disable:
     - errcheck
+    - ineffassign
