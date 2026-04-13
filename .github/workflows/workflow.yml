@@ -14,11 +14,11 @@ jobs:
   unit-tests:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-go@v4
         with:
           go-version: '1.25.0'
-          cache: false
+          cache: true
 
       - name: Running Unit Tests
         run: go test ./...
@@ -26,22 +26,22 @@ jobs:
   lint:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-go@v4
         with:
           go-version: '1.25.0'
-          cache: false
-      - uses: golangci/golangci-lint-action@v3
+          cache: true
+      - uses: golangci/golangci-lint-action@v6
         with:
-          version: v1.64.8
+          args: --timeout=5m
 
   addons-smoke:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v3
+      - uses: actions/checkout@v4
       - uses: actions/setup-go@v4
         with:
           go-version: '1.25.0'
-          cache: false
+          cache: true
       - name: List addons
         run: go run ./scripts/addons list
