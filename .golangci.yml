@@ -1,3 +1,5 @@
+version: "2"
+
 linters:
   enable:
     - errcheck
@@ -5,11 +7,14 @@ linters:
     - unused
     - ineffassign
 
+formatters:
+  enable: []
+
 linters-settings:
   errcheck:
+    disable-default-exclusions: false
     exclude-functions:
-      - (*database/sql.Rows).Close
-      - (*database/sql.Tx).Rollback
-      - (*database/sql.DB).Close
-      - (*net/http.Response).Body.Close
-      - (io.Closer).Close
+      - "(*database/sql.Rows).Close"
+      - "(*database/sql.Tx).Rollback"
+      - "(*database/sql.DB).Close"
+      - "(io.Closer).Close"
