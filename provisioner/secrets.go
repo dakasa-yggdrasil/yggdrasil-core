@@ -14,45 +14,47 @@ import (
 
 // serviceSpec defines the environment variables a service needs.
 type serviceSpec struct {
-	name     string
-	dbName   string // empty = stateless, no DB vars
-	needsS3  bool
-	needsSES bool
-	needsSNS bool
-	extra    map[string]string // additional env vars
+	name           string
+	port           string            // HTTP listen port (SERVICE_NAME derived from name)
+	dbName         string            // empty = stateless, no DB vars
+	needsS3        bool
+	needsSES       bool
+	needsSNS       bool
+	needsYggdrasil bool              // needs YGGDRASIL_AUTH_URL (tartaro services)
+	extra          map[string]string // additional env vars
 }
 
 // allServices returns the 19 DaKasa microservice specs.
 func allServices() []serviceSpec {
 	return []serviceSpec{
-		{name: "identities", dbName: "identities", extra: map[string]string{
+		{name: "identities", port: "9080", dbName: "identities", extra: map[string]string{
 			"ENV_MODE": "development",
 		}},
-		{name: "hall", dbName: "hall"},
-		{name: "room", dbName: "room"},
-		{name: "notify", dbName: "notify", needsSES: true, needsSNS: true, extra: map[string]string{
+		{name: "hall", port: "9082", dbName: "hall"},
+		{name: "room", port: "9081", dbName: "room"},
+		{name: "notify", port: "9084", dbName: "notify", needsSES: true, needsSNS: true, extra: map[string]string{
 			"SKIP_PUSH": "true",
 		}},
-		{name: "media-compressor", needsS3: true},
-		{name: "rta"},
-		{name: "enterprise-api", dbName: "enterprise-identities"},
-		{name: "enterprise-ads-api", dbName: "enterprise-ads"},
-		{name: "enterprise-payments-api", dbName: "enterprise-payments", needsS3: true},
-		{name: "enterprise-notify", dbName: "enterprise-notify", needsSES: true},
-		{name: "enterprise-media-compressor", needsS3: true},
-		{name: "enterprise-rta"},
-		{name: "orchestrator", dbName: "orchestrator", extra: map[string]string{
+		{name: "media-compressor", port: "9083", needsS3: true},
+		{name: "rta", port: "3000"},
+		{name: "enterprise-api", port: "9050", dbName: "enterprise-identities"},
+		{name: "enterprise-ads-api", port: "9102", dbName: "enterprise-ads"},
+		{name: "enterprise-payments-api", port: "9101", dbName: "enterprise-payments", needsS3: true},
+		{name: "enterprise-notify", port: "9104", dbName: "enterprise-notify", needsSES: true},
+		{name: "enterprise-media-compressor", port: "9103", needsS3: true},
+		{name: "enterprise-rta", port: "3101"},
+		{name: "orchestrator", port: "9222", dbName: "orchestrator", extra: map[string]string{
 			"TEMPORAL_HOST_PORT": "temporal-server.infra.svc.cluster.local:7233",
 		}},
-		{name: "tartaro-api", dbName: "tartaro"},
-		{name: "tartaro-operations", dbName: "tartaro"},
-		{name: "tartaro-legal", dbName: "tartaro"},
-		{name: "tartaro-review", dbName: "tartaro"},
-		{name: "tartaro-notify", needsSES: true, extra: map[string]string{
+		{name: "tartaro-api", port: "8090", dbName: "tartaro", needsYggdrasil: true},
+		{name: "tartaro-operations", port: "8093", dbName: "tartaro", needsYggdrasil: true},
+		{name: "tartaro-legal", port: "8092", dbName: "tartaro", needsYggdrasil: true},
+		{name: "tartaro-review", port: "8091", dbName: "tartaro", needsYggdrasil: true},
+		{name: "tartaro-notify", port: "8094", needsSES: true, needsYggdrasil: true, extra: map[string]string{
 			"LOG_FILE": "/dev/stderr",
 			"SKIP_SES": "false",
 		}},
-		{name: "tartaro-rta"},
+		{name: "tartaro-rta", port: "3200", needsYggdrasil: true},
 	}
 }
 
@@ -86,6 +88,17 @@ func generateAndStoreSecrets(
 		// Common vars for all services.
 		data["BROKER_URL"] = brokerURL
 		data["REDIS_ADDR"] = redisAddr
+
+		// Service identity vars (PORT + SERVICE_NAME).
+		if svc.port != "" {
+			data["PORT"] = svc.port
+		}
+		data["SERVICE_NAME"] = "dakasa-" + svc.name
+
+		// Yggdrasil auth URL (tartaro services).
+		if svc.needsYggdrasil {
+			data["YGGDRASIL_AUTH_URL"] = "http://yggdrasil.dakasa:9080"
+		}
 
 		// Database vars (only for stateful services).
 		if svc.dbName != "" {
