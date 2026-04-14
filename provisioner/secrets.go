@@ -236,6 +236,9 @@ func generateAndStoreSecrets(
 			injectIfSet(data, "EFI_PIX_KEY")
 			injectIfSet(data, "EFI_API_CLIENT_KEY_ID")
 			injectIfSet(data, "EFI_API_CLIENT_SECRET")
+			// Certificate file paths (mounted from efi-certificates Secret)
+			data["EFI_CERTIFICATE"] = "/etc/efi-certificates/producao-wallet.p12"
+			data["EFI_CERTIFICATE_WEBHOOK"] = "/etc/efi-certificates/webhook-prod.crt"
 		}
 
 		// tartaro-operations cross-DB access.
