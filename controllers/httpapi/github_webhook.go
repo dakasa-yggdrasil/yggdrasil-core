@@ -167,7 +167,7 @@ var repoProductMap = map[string]string{
 	// shared
 	"dakasa-co/dakasa-orchestrator": "dakasa-shared",
 	"dakasa-co/dakasa-commons":      "", // library, no deploy
-	"dakasa-co/dakasa-system":       "dakasa-infra",
+	"dakasa-co/dakasa-system":       "", // infra monorepo, no auto-deploy (hostPath, requires manual git pull)
 
 	// yggdrasil
 	"dakasa-yggdrasil/yggdrasil-core": "", // self, no auto-deploy
