@@ -108,9 +108,13 @@ func (d *KustomizeDeployer) DeployComponent(ctx context.Context, comp model.Prod
 		return fmt.Errorf("kustomization.yaml not found at %s: %w", overlayPath, err)
 	}
 
-	// Run: kubectl kustomize <path> | kubectl apply -f -
+	// Run: kubectl kustomize <path> | kubectl apply --server-side -f -
+	// Server-side apply avoids the client-side `last-applied-configuration`
+	// annotation, which overflows the 262144-byte limit for large CRDs
+	// (e.g. prometheuses/alertmanagers/thanosrulers from prometheus-operator).
+	// --force-conflicts resolves field ownership conflicts on re-apply.
 	// The KUBECONFIG env is left empty so kubectl uses in-cluster config automatically.
-	shellCmd := fmt.Sprintf("kubectl kustomize %s | kubectl apply --validate=false --force -f -", overlayPath)
+	shellCmd := fmt.Sprintf("kubectl kustomize %s | kubectl apply --server-side --force-conflicts --validate=false -f -", overlayPath)
 	cmd := exec.CommandContext(ctx, "sh", "-c", shellCmd)
 	cmd.Env = buildKubeEnv(os.Environ())
 	output, err := cmd.CombinedOutput()
