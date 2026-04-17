@@ -176,6 +176,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/integration-instances", server.handleIntegrationInstanceCreate)
 	mux.HandleFunc("GET /api/v1/collaborators", server.handleCollaboratorList)
 	mux.HandleFunc("POST /api/v1/collaborators", server.handleCollaboratorCreate)
+	mux.HandleFunc("PATCH /api/v1/collaborators/{id}", server.handleCollaboratorUpdate)
 	mux.HandleFunc("GET /api/v1/teams", server.handleTeamList)
 	mux.HandleFunc("POST /api/v1/teams", server.handleTeamCreate)
 	mux.HandleFunc("GET /api/v1/team-memberships", server.handleTeamMembershipList)
@@ -221,6 +222,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/console/integration-instances", server.handleIntegrationInstanceCreate)
 	mux.HandleFunc("GET /api/v1/console/collaborators", server.handleCollaboratorList)
 	mux.HandleFunc("POST /api/v1/console/collaborators", server.handleCollaboratorCreate)
+	mux.HandleFunc("PATCH /api/v1/console/collaborators/{id}", server.handleCollaboratorUpdate)
 	mux.HandleFunc("GET /api/v1/console/teams", server.handleTeamList)
 	mux.HandleFunc("POST /api/v1/console/teams", server.handleTeamCreate)
 	mux.HandleFunc("GET /api/v1/console/team-memberships", server.handleTeamMembershipList)
@@ -648,6 +650,29 @@ func (s *Server) handleCollaboratorCreate(w http.ResponseWriter, r *http.Request
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]any{"collaborator": collaborator})
+}
+
+func (s *Server) handleCollaboratorUpdate(w http.ResponseWriter, r *http.Request) {
+	var req model.UpdateCollaboratorRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	if pathID := strings.TrimSpace(r.PathValue("id")); pathID != "" {
+		req.ID = pathID
+	}
+	if strings.TrimSpace(req.ID) == "" {
+		writeMappedError(w, fmt.Errorf("collaborator id is required"))
+		return
+	}
+
+	collaborator, err := repository.UpdateCollaborator(r.Context(), s.db, req)
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collaborator})
 }
 
 func (s *Server) handleTeamList(w http.ResponseWriter, r *http.Request) {
