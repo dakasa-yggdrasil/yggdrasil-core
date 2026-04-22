@@ -1,0 +1,119 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_type",
+  "metadata": {
+    "name": "rabbitmq-topology",
+    "namespace": "global",
+    "description": "Bootstrap integration type for the RabbitMQ topology provider — applies declarative topology specs (queues, exchanges, bindings) idempotently via the Management API.",
+    "labels": {
+      "bootstrap_source": "integration-rabbitmq",
+      "provider": "rabbitmq",
+      "yggdrasil.io/catalog-domain": "rabbitmq",
+      "yggdrasil.io/catalog-section": "operations",
+      "yggdrasil.io/catalog-entry": "topology"
+    }
+  },
+  "spec": {
+    "provider": "rabbitmq",
+    "family_ref": {
+      "name": "rabbitmq",
+      "namespace": "global"
+    },
+    "implemented_operations": [
+      "apply_topology_spec",
+      "describe_topology"
+    ],
+    "adapter": {
+      "transport": "rabbitmq",
+      "version": "1.0.0",
+      "queues": {
+        "describe": "yggdrasil.adapter.rabbitmq-topology.describe",
+        "execute": "yggdrasil.adapter.rabbitmq-topology.execute"
+      },
+      "timeout_seconds": 60
+    },
+    "capabilities": [
+      "describe",
+      "execute"
+    ],
+    "credential_schema": {
+      "mode": "inline",
+      "required": ["username", "password"],
+      "properties": {
+        "username": {
+          "type": "string",
+          "description": "RabbitMQ Management API username."
+        },
+        "password": {
+          "type": "string",
+          "description": "RabbitMQ Management API password.",
+          "secret": true
+        }
+      }
+    },
+    "instance_schema": {
+      "mode": "inline",
+      "properties": {
+        "management_url": {
+          "type": "string",
+          "description": "RabbitMQ Management API base URL.",
+          "default": "http://localhost:15672/api"
+        },
+        "default_vhost": {
+          "type": "string",
+          "description": "Default virtual host the spec applies to.",
+          "default": "/"
+        },
+        "insecure_skip_verify": {
+          "type": "boolean",
+          "description": "Skip TLS certificate verification when calling the Management API.",
+          "default": false
+        }
+      }
+    },
+    "resource_types": [
+      {
+        "name": "topology",
+        "canonical_prefix": "thirdparty.rabbitmq.topology",
+        "identity_template": "topology.{vhost}",
+        "discoverable": false,
+        "default_actions": [
+          "apply_topology_spec",
+          "describe_topology"
+        ]
+      }
+    ],
+    "action_catalog": [
+      {
+        "name": "apply_topology_spec",
+        "description": "Apply a declarative topology spec (vhosts, users, permissions, queues, exchanges, bindings) idempotently. Non-destructive unless input.purge_removed=true.",
+        "resource_types": ["topology"],
+        "idempotent": true
+      },
+      {
+        "name": "describe_topology",
+        "description": "Return the currently observed topology of a virtual host.",
+        "resource_types": ["topology"],
+        "idempotent": true
+      }
+    ],
+    "discovery": {
+      "mode": "push",
+      "cursor": "none"
+    },
+    "normalization": {
+      "external_id_path": "vhost",
+      "name_path": "vhost",
+      "owner_path": "vhost",
+      "fallback_resource_prefix": "thirdparty.rabbitmq.custom"
+    },
+    "execution": {
+      "supports_dry_run": false,
+      "idempotent_actions": [
+        "apply_topology_spec",
+        "describe_topology"
+      ]
+    },
+    "extensions": {}
+  }
+}

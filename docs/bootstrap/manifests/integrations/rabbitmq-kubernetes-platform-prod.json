@@ -2,17 +2,17 @@
   "apiVersion": "yggdrasil.io/v1alpha1",
   "kind": "integration_instance",
   "metadata": {
-    "name": "rabbitmq-on-kubernetes-platform-prod",
+    "name": "rabbitmq-kubernetes-platform-prod",
     "namespace": "global",
     "description": "Default RabbitMQ on Kubernetes integration instance used to generate shared broker products.",
     "labels": {
-      "bootstrap_source": "integration-rabbitmq-on-kubernetes",
+      "bootstrap_source": "integration-rabbitmq",
       "provider": "rabbitmq"
     }
   },
   "spec": {
     "type_ref": {
-      "name": "rabbitmq-on-kubernetes",
+      "name": "rabbitmq-kubernetes",
       "namespace": "global"
     },
     "status": "active",

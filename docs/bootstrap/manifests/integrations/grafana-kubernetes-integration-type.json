@@ -2,11 +2,11 @@
   "apiVersion": "yggdrasil.io/v1alpha1",
   "kind": "integration_type",
   "metadata": {
-    "name": "grafana-on-kubernetes",
+    "name": "grafana-kubernetes",
     "namespace": "global",
     "description": "Bootstrap integration type for the Grafana on Kubernetes installation plugin.",
     "labels": {
-      "bootstrap_source": "integration-grafana-on-kubernetes",
+      "bootstrap_source": "integration-grafana",
       "provider": "grafana",
       "yggdrasil.io/catalog-domain": "grafana",
       "yggdrasil.io/catalog-section": "installations",
@@ -15,12 +15,21 @@
   },
   "spec": {
     "provider": "grafana",
+    "family_ref": {
+      "name": "grafana",
+      "namespace": "global"
+    },
+    "implemented_operations": [
+      "generate_installation",
+      "reconcile_installation",
+      "discover_installation_state"
+    ],
     "adapter": {
       "transport": "rabbitmq",
       "version": "1.0.0",
       "queues": {
-        "describe": "yggdrasil.adapter.grafana-on-kubernetes.describe",
-        "execute": "yggdrasil.adapter.grafana-on-kubernetes.execute"
+        "describe": "yggdrasil.adapter.grafana-kubernetes.describe",
+        "execute": "yggdrasil.adapter.grafana-kubernetes.execute"
       },
       "timeout_seconds": 20
     },

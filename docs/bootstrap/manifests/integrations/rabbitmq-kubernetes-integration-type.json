@@ -2,11 +2,11 @@
   "apiVersion": "yggdrasil.io/v1alpha1",
   "kind": "integration_type",
   "metadata": {
-    "name": "rabbitmq-on-kubernetes",
+    "name": "rabbitmq-kubernetes",
     "namespace": "global",
     "description": "Bootstrap integration type for the substrate-specific RabbitMQ on Kubernetes plugin.",
     "labels": {
-      "bootstrap_source": "integration-rabbitmq-on-kubernetes",
+      "bootstrap_source": "integration-rabbitmq",
       "provider": "rabbitmq",
       "yggdrasil.io/catalog-domain": "rabbitmq",
       "yggdrasil.io/catalog-section": "installations",
@@ -15,12 +15,21 @@
   },
   "spec": {
     "provider": "rabbitmq",
+    "family_ref": {
+      "name": "rabbitmq",
+      "namespace": "global"
+    },
+    "implemented_operations": [
+      "generate_installation",
+      "reconcile_installation",
+      "discover_installation_state"
+    ],
     "adapter": {
       "transport": "rabbitmq",
       "version": "1.0.0",
       "queues": {
-        "describe": "yggdrasil.adapter.rabbitmq-on-kubernetes.describe",
-        "execute": "yggdrasil.adapter.rabbitmq-on-kubernetes.execute"
+        "describe": "yggdrasil.adapter.rabbitmq-kubernetes.describe",
+        "execute": "yggdrasil.adapter.rabbitmq-kubernetes.execute"
       },
       "timeout_seconds": 20
     },

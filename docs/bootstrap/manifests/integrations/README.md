@@ -15,13 +15,16 @@ Current catalog view:
 - `github`
   - `operations/api` -> `github-integration-type.json`
 - `grafana`
-  - `operations/api` -> `grafana-integration-type.json`
-  - `installations/kubernetes` -> `grafana-on-kubernetes-integration-type.json`
+  - `family` -> `grafana-integration-family.json`
+  - `operations/api` -> `grafana-integration-type.json` (provider: `grafana`)
+  - `installations/kubernetes` -> `grafana-kubernetes-integration-type.json` (provider: `grafana-kubernetes`)
 - `kubernetes`
   - `operations/api` -> `kubernetes-integration-type.json`
 - `rabbitmq`
-  - `operations/api` -> `rabbitmq-integration-type.json`
-  - `installations/kubernetes` -> `rabbitmq-on-kubernetes-integration-type.json`
+  - `family` -> `rabbitmq-integration-family.json`
+  - `operations/api` -> `rabbitmq-integration-type.json` (provider: `rabbitmq`)
+  - `installations/kubernetes` -> `rabbitmq-kubernetes-integration-type.json` (provider: `rabbitmq-kubernetes`)
+  - `operations/topology` -> `rabbitmq-topology-integration-type.json` (provider: `rabbitmq-topology`, declarative queues/exchanges/bindings via Management API; non-destructive by default — `input.purge_removed=true` to delete orphans)
 
 Current bootstrap instances:
 
