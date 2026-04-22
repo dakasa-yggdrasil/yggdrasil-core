@@ -160,11 +160,7 @@ func deriveIntegrationCatalogPosition(
 
 	section := normalizeCatalogValue(labels[model.IntegrationCatalogLabelSection])
 	if section == "" {
-		if strings.Contains(strings.ToLower(typeManifest.Metadata.Name), "-on-") {
-			section = model.IntegrationCatalogSectionInstallations
-		} else {
-			section = model.IntegrationCatalogSectionOperations
-		}
+		section = inferCatalogSection(typeManifest.Metadata.Name, typeSpec.Provider)
 	}
 
 	entry := normalizeCatalogValue(labels[model.IntegrationCatalogLabelEntry])
@@ -186,15 +182,68 @@ func deriveCatalogEntryFallback(pluginName, section string) string {
 	}
 
 	if section == model.IntegrationCatalogSectionInstallations {
+		// Legacy "<provider>-on-<substrate>" form (e.g. rabbitmq-on-kubernetes).
 		if _, suffix, ok := strings.Cut(pluginName, "-on-"); ok {
 			if suffix = normalizeCatalogValue(suffix); suffix != "" {
 				return suffix
 			}
 		}
+		// Current "<provider>-<substrate>" form (e.g. rabbitmq-kubernetes).
+		// Take the last "-"-separated token as the substrate when it matches
+		// a known one — keeps single-word providers (rabbitmq, grafana) out
+		// of the fallback while picking up explicit installation substrates.
+		if substrate := knownInstallationSubstrate(pluginName); substrate != "" {
+			return substrate
+		}
 		return "default"
 	}
 
 	return "api"
+}
+
+// inferCatalogSection guesses a section when the manifest omits the
+// yggdrasil.io/catalog-section label. Recognized patterns:
+//
+//   - "<provider>-on-<substrate>" → installations (legacy naming)
+//   - "<provider>-<substrate>" where substrate is a known installation
+//     target (kubernetes, helm, ...) → installations (current naming)
+//   - everything else → operations (the safe default for runtime adapters)
+func inferCatalogSection(pluginName, provider string) string {
+	name := strings.ToLower(strings.TrimSpace(pluginName))
+	if name == "" {
+		return model.IntegrationCatalogSectionOperations
+	}
+	if strings.Contains(name, "-on-") {
+		return model.IntegrationCatalogSectionInstallations
+	}
+	if knownInstallationSubstrate(name) != "" {
+		return model.IntegrationCatalogSectionInstallations
+	}
+	_ = provider // reserved for future provider-specific overrides
+	return model.IntegrationCatalogSectionOperations
+}
+
+// knownInstallationSubstrate returns the substrate name (e.g. "kubernetes")
+// when pluginName ends with one we recognize as an installation target.
+// Empty return means the suffix doesn't denote an installation — the caller
+// should fall back to "operations".
+func knownInstallationSubstrate(pluginName string) string {
+	name := strings.ToLower(strings.TrimSpace(pluginName))
+	for _, substrate := range knownInstallationSubstrates {
+		if strings.HasSuffix(name, "-"+substrate) {
+			return substrate
+		}
+	}
+	return ""
+}
+
+// knownInstallationSubstrates enumerates suffixes that mark a provider as an
+// installation adapter rather than a runtime operations adapter. Keep this
+// list narrow: false positives push runtime providers into the wrong section.
+var knownInstallationSubstrates = []string{
+	"kubernetes",
+	"helm",
+	"compose",
 }
 
 func normalizeCatalogValue(value string) string {

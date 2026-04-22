@@ -282,7 +282,7 @@ func productSpecIntegrationFixture() model.ProductManifestSpec {
 				Source: model.ProductSourceSpec{
 					Kind: "integration",
 					IntegrationInstanceRef: &model.ManifestSelector{
-						Name:      "rabbitmq-on-kubernetes-platform-prod",
+						Name:      "rabbitmq-kubernetes-platform-prod",
 						Namespace: "global",
 					},
 					Operation: "generate_installation",
