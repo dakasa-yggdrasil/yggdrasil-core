@@ -1,11 +1,22 @@
 package model
 
 // IntegrationTypeManifestSpec describes one adapter contract supported by Yggdrasil.
+//
+// When FamilyRef is set, this integration_type acts as one provider implementation
+// of the named integration_family contract. The provider must declare which subset
+// of the family's operations it covers via ImplementedOperations (or via the
+// adapter's describe response). Workflows that target the family + operation pair
+// will resolve to this provider when it's the active implementation.
+//
+// When FamilyRef is empty the type is standalone — the legacy single-implementation
+// model with no family contract.
 type IntegrationTypeManifestSpec struct {
-	Provider         string                          `json:"provider"`
-	Adapter          IntegrationAdapterSpec          `json:"adapter"`
-	Capabilities     []string                        `json:"capabilities"`
-	CredentialPolicy IntegrationCredentialPolicySpec `json:"credential_policy,omitempty"`
+	Provider              string                          `json:"provider"`
+	FamilyRef             *ManifestSelector               `json:"family_ref,omitempty"`
+	ImplementedOperations []string                        `json:"implemented_operations,omitempty"`
+	Adapter               IntegrationAdapterSpec          `json:"adapter"`
+	Capabilities          []string                        `json:"capabilities"`
+	CredentialPolicy      IntegrationCredentialPolicySpec `json:"credential_policy,omitempty"`
 	GuardianSupport  IntegrationGuardianSupportSpec  `json:"guardian_support,omitempty"`
 	CredentialSchema IntegrationSchemaSpec           `json:"credential_schema"`
 	InstanceSchema   IntegrationSchemaSpec           `json:"instance_schema"`

@@ -72,6 +72,12 @@ func ValidateDocument(doc model.ManifestDocument) error {
 			return err
 		}
 		return ValidatePolicySpec(spec)
+	case "integration_family":
+		spec, err := ParseIntegrationFamilySpec(doc.Spec)
+		if err != nil {
+			return err
+		}
+		return ValidateIntegrationFamilySpec(spec)
 	case "integration_type":
 		spec, err := ParseIntegrationTypeSpec(doc.Spec)
 		if err != nil {
