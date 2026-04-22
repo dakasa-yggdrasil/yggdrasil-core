@@ -285,11 +285,32 @@ func validateWorkflowStep(step model.WorkflowStepSpec) error {
 
 	switch kind {
 	case "integration":
-		if step.Use.InstanceRef == nil {
-			return fmt.Errorf("integration step requires instance_ref")
+		family := strings.TrimSpace(step.Use.Family)
+		if step.Use.InstanceRef == nil && family == "" {
+			return fmt.Errorf("integration step requires instance_ref or family")
 		}
-		if err := validateManifestSelector("workflow step instance_ref", *step.Use.InstanceRef); err != nil {
-			return err
+		if step.Use.InstanceRef != nil && family != "" {
+			return fmt.Errorf("integration step cannot combine instance_ref with family; use one resolution mode")
+		}
+		if step.Use.InstanceRef != nil {
+			if err := validateManifestSelector("workflow step instance_ref", *step.Use.InstanceRef); err != nil {
+				return err
+			}
+			if step.Use.ProviderRef != nil {
+				return fmt.Errorf("integration step cannot set provider_ref when instance_ref is used")
+			}
+		} else {
+			if !integrationNamePattern.MatchString(family) {
+				return fmt.Errorf("integration step family %q is invalid", step.Use.Family)
+			}
+			if strings.TrimSpace(step.Use.Operation) == "" {
+				return fmt.Errorf("integration step with family requires operation")
+			}
+			if step.Use.ProviderRef != nil {
+				if err := validateManifestSelector("workflow step provider_ref", *step.Use.ProviderRef); err != nil {
+					return err
+				}
+			}
 		}
 		if NormalizeWorkflowStepOperation(step) == "" {
 			return fmt.Errorf("integration step requires capability or operation")

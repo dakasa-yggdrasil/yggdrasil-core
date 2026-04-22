@@ -95,10 +95,24 @@ type WorkflowStepSpec struct {
 	TimeoutSeconds int                 `json:"timeout_seconds,omitempty"`
 }
 
-// WorkflowStepUseSpec declares how one step is executed.
+// WorkflowStepUseSpec declares how one step is executed. The target integration
+// can be addressed in one of three resolution modes — exactly one is required:
+//
+//  1. InstanceRef — explicit pin to a concrete integration_instance. Used when
+//     the workflow knows exactly which deployed instance to hit.
+//  2. Family + Operation — contract-driven resolution. The runtime finds the
+//     active integration_type whose family_ref matches Family and whose
+//     implemented_operations contains Operation, then the active
+//     integration_instance of that type. If more than one provider implements
+//     the operation, resolution fails explicitly and the caller must pin via
+//     ProviderRef.
+//  3. Family + Operation + ProviderRef — same as (2) but pinned to one
+//     provider, used as an escape hatch when the ambiguity above is intentional.
 type WorkflowStepUseSpec struct {
 	Kind        string            `json:"kind"`
 	InstanceRef *ManifestSelector `json:"instance_ref,omitempty"`
+	Family      string            `json:"family,omitempty"`
+	ProviderRef *ManifestSelector `json:"provider_ref,omitempty"`
 	Capability  string            `json:"capability,omitempty"`
 	Operation   string            `json:"operation,omitempty"`
 }
