@@ -27,7 +27,7 @@ func TestMaterializeProductSpecRewritesIntegrationComponent(t *testing.T) {
 		ID:        uuid.New(),
 		Kind:      "product",
 		Namespace: "global",
-		Name:      "rabbitmq-on-kubernetes-platform",
+		Name:      "rabbitmq-kubernetes-platform",
 		Version:   1,
 	}
 
@@ -79,7 +79,7 @@ func TestMaterializeProductSpecRejectsEmptyGeneratedObjects(t *testing.T) {
 		ID:        uuid.New(),
 		Kind:      "product",
 		Namespace: "global",
-		Name:      "rabbitmq-on-kubernetes-platform",
+		Name:      "rabbitmq-kubernetes-platform",
 		Version:   1,
 	}
 

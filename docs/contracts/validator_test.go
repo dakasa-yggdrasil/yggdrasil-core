@@ -36,9 +36,9 @@ func TestValidateProductInstallationContracts(t *testing.T) {
 			Class:     "platform",
 		},
 		Integration: model.AdapterGenerateInstallationIntegrationContext{
-			Type:         sampleManifestReference("integration_type", "global", "grafana-on-kubernetes"),
+			Type:         sampleManifestReference("integration_type", "global", "grafana-kubernetes"),
 			TypeSpec:     sampleIntegrationTypeSpec(),
-			Instance:     sampleManifestReference("integration_instance", "global", "grafana-on-kubernetes-platform"),
+			Instance:     sampleManifestReference("integration_instance", "global", "grafana-kubernetes-platform"),
 			InstanceSpec: sampleIntegrationInstanceSpec(),
 		},
 		Input: map[string]any{

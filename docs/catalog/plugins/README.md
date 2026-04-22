@@ -18,20 +18,20 @@ The catalog shape is:
 ## Why this convention exists
 
 The repository name and the concrete plugin name should stay honest. For example,
-`rabbitmq-on-kubernetes` clearly says what it is. But that explicit name alone is not a great
+`rabbitmq-kubernetes` clearly says what it is. But that explicit name alone is not a great
 catalog UX.
 
 The catalog fixes that by grouping explicit plugins under one shared domain:
 
 - `rabbitmq`
   - `installations`
-    - `kubernetes` -> `rabbitmq-on-kubernetes`
+    - `kubernetes` -> `rabbitmq-kubernetes`
   - `operations`
     - `api` -> `rabbitmq`
 
 - `grafana`
   - `installations`
-    - `kubernetes` -> `grafana-on-kubernetes`
+    - `kubernetes` -> `grafana-kubernetes`
   - `operations`
     - `api` -> `grafana`
 

@@ -10,7 +10,7 @@ import (
 func TestDeriveIntegrationCatalogPositionUsesLabels(t *testing.T) {
 	manifestRecord := model.Manifest{
 		Metadata: model.ManifestMetadata{
-			Name: "rabbitmq-on-kubernetes",
+			Name: "rabbitmq-kubernetes",
 			Labels: map[string]string{
 				model.IntegrationCatalogLabelDomain:  "rabbitmq",
 				model.IntegrationCatalogLabelSection: "installations",
@@ -28,7 +28,7 @@ func TestDeriveIntegrationCatalogPositionUsesLabels(t *testing.T) {
 func TestDeriveIntegrationCatalogPositionFallsBackFromPluginName(t *testing.T) {
 	manifestRecord := model.Manifest{
 		Metadata: model.ManifestMetadata{
-			Name: "rabbitmq-on-kubernetes",
+			Name: "rabbitmq-kubernetes",
 		},
 	}
 
@@ -101,7 +101,7 @@ func TestGroupIntegrationCatalogEntries(t *testing.T) {
 			Domain:     "rabbitmq",
 			Section:    "installations",
 			Entry:      "kubernetes",
-			PluginName: "rabbitmq-on-kubernetes",
+			PluginName: "rabbitmq-kubernetes",
 			IntegrationType: model.ManifestReference{
 				ID: uuid.New(),
 			},
@@ -110,7 +110,7 @@ func TestGroupIntegrationCatalogEntries(t *testing.T) {
 			Domain:     "grafana",
 			Section:    "installations",
 			Entry:      "kubernetes",
-			PluginName: "grafana-on-kubernetes",
+			PluginName: "grafana-kubernetes",
 			IntegrationType: model.ManifestReference{
 				ID: uuid.New(),
 			},
