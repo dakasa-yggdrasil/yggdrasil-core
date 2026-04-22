@@ -304,7 +304,19 @@ func executeWorkflowStep(
 		return executeProductWorkflowStep(ctx, conn, db, workflowRef, step, result, renderedInput)
 	}
 
-	instanceManifest, instanceSpec, typeManifest, typeSpec, err := resolveIntegrationInstance(ctx, conn, db, *step.Use.InstanceRef)
+	var (
+		instanceManifest model.Manifest
+		instanceSpec     model.IntegrationInstanceManifestSpec
+		typeManifest     model.Manifest
+		typeSpec         model.IntegrationTypeManifestSpec
+	)
+	if step.Use.InstanceRef != nil {
+		instanceManifest, instanceSpec, typeManifest, typeSpec, err = resolveIntegrationInstance(ctx, conn, db, *step.Use.InstanceRef)
+	} else {
+		instanceManifest, instanceSpec, typeManifest, typeSpec, err = resolveIntegrationByFamily(
+			ctx, conn, db, step.Use.Family, step.Use.Operation, step.Use.ProviderRef,
+		)
+	}
 	if err != nil {
 		result.Error = err.Error()
 		result.Attempts = 1
