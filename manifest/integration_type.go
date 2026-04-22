@@ -48,6 +48,20 @@ func ValidateIntegrationTypeSpec(spec model.IntegrationTypeManifestSpec) error {
 		return fmt.Errorf("integration_type provider %q is invalid", spec.Provider)
 	}
 
+	if spec.FamilyRef != nil {
+		if err := validateManifestSelector("integration_type family_ref", *spec.FamilyRef); err != nil {
+			return err
+		}
+		if len(spec.ImplementedOperations) == 0 {
+			return fmt.Errorf("integration_type with family_ref must declare implemented_operations")
+		}
+		if err := validateNamedStringList("integration_type implemented_operations", spec.ImplementedOperations); err != nil {
+			return err
+		}
+	} else if len(spec.ImplementedOperations) > 0 {
+		return fmt.Errorf("integration_type implemented_operations requires family_ref to be set")
+	}
+
 	if err := validateIntegrationAdapter(spec.Adapter, spec.Capabilities); err != nil {
 		return err
 	}
