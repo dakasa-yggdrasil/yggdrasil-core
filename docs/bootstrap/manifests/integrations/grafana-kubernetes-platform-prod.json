@@ -2,17 +2,17 @@
   "apiVersion": "yggdrasil.io/v1alpha1",
   "kind": "integration_instance",
   "metadata": {
-    "name": "grafana-on-kubernetes-platform-prod",
+    "name": "grafana-kubernetes-platform-prod",
     "namespace": "global",
     "description": "Default Grafana on Kubernetes integration instance used to generate Grafana products.",
     "labels": {
-      "bootstrap_source": "integration-grafana-on-kubernetes",
+      "bootstrap_source": "integration-grafana",
       "provider": "grafana"
     }
   },
   "spec": {
     "type_ref": {
-      "name": "grafana-on-kubernetes",
+      "name": "grafana-kubernetes",
       "namespace": "global"
     },
     "status": "active",

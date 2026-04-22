@@ -1,0 +1,34 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_family",
+  "metadata": {
+    "name": "rabbitmq",
+    "namespace": "global",
+    "description": "RabbitMQ integration family. Concrete providers (rabbitmq, rabbitmq-kubernetes, rabbitmq-topology) implement subsets of these operations and declare it via IntegrationType.implemented_operations.",
+    "labels": {
+      "bootstrap_source": "integration-rabbitmq",
+      "provider": "rabbitmq",
+      "yggdrasil.io/catalog-domain": "rabbitmq",
+      "yggdrasil.io/catalog-section": "operations",
+      "yggdrasil.io/catalog-entry": "family"
+    }
+  },
+  "spec": {
+    "display_name": "RabbitMQ",
+    "description": "Contract for any provider that adapts RabbitMQ for Yggdrasil — covers Management API operations (ensure_*), declarative topology, and Kubernetes installation.",
+    "owners": ["team:dakasa-platform"],
+    "operations": [
+      { "name": "ensure_vhost", "description": "Idempotently ensure one virtual host exists with the desired metadata.", "idempotent": true },
+      { "name": "ensure_user", "description": "Idempotently ensure one user exists with the desired tags and password.", "idempotent": true },
+      { "name": "ensure_permissions", "description": "Idempotently ensure one user permission set exists for a virtual host.", "idempotent": true },
+      { "name": "ensure_queue", "description": "Idempotently ensure one queue exists with the desired arguments.", "idempotent": true },
+      { "name": "ensure_exchange", "description": "Idempotently ensure one exchange exists with the desired type and properties.", "idempotent": true },
+      { "name": "ensure_binding", "description": "Idempotently ensure one binding exists between an exchange and its destination.", "idempotent": true },
+      { "name": "apply_topology_spec", "description": "Apply a declarative topology spec (vhosts, users, permissions, queues, exchanges, bindings) idempotently. Non-destructive unless input.purge_removed=true.", "idempotent": true },
+      { "name": "describe_topology", "description": "Return the currently observed topology of a virtual host (queues, exchanges, bindings) for diff against a spec.", "idempotent": true },
+      { "name": "generate_installation", "description": "Materialize a RabbitMQ broker installation as raw Kubernetes objects.", "idempotent": true },
+      { "name": "reconcile_installation", "description": "Build a declarative reconciliation plan for a RabbitMQ broker installation.", "idempotent": true },
+      { "name": "discover_installation_state", "description": "Return the currently known installation state for a RabbitMQ broker blueprint.", "idempotent": true }
+    ]
+  }
+}

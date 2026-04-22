@@ -15,6 +15,18 @@
   },
   "spec": {
     "provider": "rabbitmq",
+    "family_ref": {
+      "name": "rabbitmq",
+      "namespace": "global"
+    },
+    "implemented_operations": [
+      "ensure_vhost",
+      "ensure_user",
+      "ensure_permissions",
+      "ensure_queue",
+      "ensure_exchange",
+      "ensure_binding"
+    ],
     "adapter": {
       "transport": "rabbitmq",
       "version": "1.0.0",

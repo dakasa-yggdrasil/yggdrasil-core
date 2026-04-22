@@ -1,0 +1,29 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_family",
+  "metadata": {
+    "name": "grafana",
+    "namespace": "global",
+    "description": "Grafana integration family. Concrete providers (grafana, grafana-kubernetes) implement subsets of these operations and declare it via IntegrationType.implemented_operations.",
+    "labels": {
+      "bootstrap_source": "integration-grafana",
+      "provider": "grafana",
+      "yggdrasil.io/catalog-domain": "grafana",
+      "yggdrasil.io/catalog-section": "operations",
+      "yggdrasil.io/catalog-entry": "family"
+    }
+  },
+  "spec": {
+    "display_name": "Grafana",
+    "description": "Contract for any provider that adapts Grafana for Yggdrasil — covers HTTP API operations (ensure_folder/upsert_*) and Kubernetes installation.",
+    "owners": ["team:dakasa-platform"],
+    "operations": [
+      { "name": "ensure_folder", "description": "Idempotently ensure one Grafana folder exists with the desired metadata.", "idempotent": true },
+      { "name": "upsert_datasource", "description": "Idempotently upsert one Grafana data source.", "idempotent": true },
+      { "name": "upsert_dashboard", "description": "Idempotently upsert one Grafana dashboard JSON model.", "idempotent": true },
+      { "name": "generate_installation", "description": "Materialize a Grafana installation as raw Kubernetes objects.", "idempotent": true },
+      { "name": "reconcile_installation", "description": "Build a declarative reconciliation plan for a Grafana installation.", "idempotent": true },
+      { "name": "discover_installation_state", "description": "Return the currently known installation state for a Grafana blueprint.", "idempotent": true }
+    ]
+  }
+}
