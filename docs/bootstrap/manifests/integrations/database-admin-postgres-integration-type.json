@@ -1,0 +1,122 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_type",
+  "metadata": {
+    "name": "database-admin-postgres",
+    "namespace": "global",
+    "labels": {
+      "bootstrap_source": "database-admin-postgres",
+      "provider": "database-admin"
+    }
+  },
+  "spec": {
+    "provider": "database-admin",
+    "family_ref": {
+      "namespace": "global",
+      "name": "database-admin"
+    },
+    "implemented_operations": [
+      "ensure_user",
+      "alter_user_password",
+      "drop_user",
+      "ensure_database",
+      "grant_privileges"
+    ],
+    "adapter": {
+      "transport": "rabbitmq",
+      "version": "1.0.0",
+      "queues": {
+        "describe": "yggdrasil.adapter.postgres-admin.describe",
+        "execute": "yggdrasil.adapter.postgres-admin.execute"
+      },
+      "timeout_seconds": 60
+    },
+    "capabilities": [
+      "describe",
+      "execute"
+    ],
+    "credential_schema": {
+      "mode": "none"
+    },
+    "instance_schema": {
+      "mode": "inline",
+      "properties": {}
+    },
+    "discovery": {
+      "mode": "push",
+      "cursor": "none"
+    },
+    "normalization": {
+      "external_id_path": "username",
+      "name_path": "username",
+      "owner_path": "username",
+      "fallback_resource_prefix": "thirdparty.database-admin.custom"
+    },
+    "execution": {
+      "supports_dry_run": false,
+      "idempotent_actions": [
+        "ensure_user",
+        "ensure_database",
+        "grant_privileges"
+      ]
+    },
+    "extensions": {},
+    "resource_types": [
+      {
+        "name": "database_role",
+        "canonical_prefix": "thirdparty.database-admin.role",
+        "identity_template": "role.{username}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_user",
+          "alter_user_password",
+          "drop_user",
+          "ensure_database",
+          "grant_privileges"
+        ]
+      }
+    ],
+    "action_catalog": [
+      {
+        "name": "ensure_user",
+        "description": "Idempotent CREATE/ALTER USER with password + roles + attributes.",
+        "resource_types": [
+          "database_role"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "alter_user_password",
+        "description": "ALTER USER ... PASSWORD. Used by rotation workflow.",
+        "resource_types": [
+          "database_role"
+        ],
+        "idempotent": false
+      },
+      {
+        "name": "drop_user",
+        "description": "DROP USER, optionally REASSIGN owned objects first.",
+        "resource_types": [
+          "database_role"
+        ],
+        "idempotent": false
+      },
+      {
+        "name": "ensure_database",
+        "description": "CREATE DATABASE IF NOT EXISTS.",
+        "resource_types": [
+          "database_role"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "grant_privileges",
+        "description": "Apply GRANT statements transactionally.",
+        "resource_types": [
+          "database_role"
+        ],
+        "idempotent": true
+      }
+    ]
+  }
+}
