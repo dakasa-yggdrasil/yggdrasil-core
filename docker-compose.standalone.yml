@@ -1,0 +1,83 @@
+# Self-hosted docker-compose for yggdrasil-core.
+#
+# This stack is what `yggdrasil init` brings up on an adopter's
+# machine (or any docker host) to get a full control plane running
+# without kubernetes, helm, or tribal knowledge. It provisions:
+#
+#   - Postgres:    state store (manifests, sessions, events)
+#   - RabbitMQ:    adapter transport for integrations
+#   - yggdrasil-core: control plane, bootstraps first admin on fresh DB
+#
+# Configuration lives entirely in .env (see .env.example). Re-running
+# `docker compose up -d` after a restart is safe: the first-run
+# bootstrap only fires when the collaborators table is empty.
+services:
+  postgres:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-yggdrasil}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-yggdrasil}
+      POSTGRES_DB: ${POSTGRES_DB:-yggdrasil}
+    volumes:
+      - yggdrasil-postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test:
+        - CMD-SHELL
+        - pg_isready -U ${POSTGRES_USER:-yggdrasil} -d ${POSTGRES_DB:-yggdrasil}
+      interval: 5s
+      timeout: 3s
+      retries: 20
+
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-yggdrasil}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASSWORD:-yggdrasil}
+    volumes:
+      - yggdrasil-rabbitmq-data:/var/lib/rabbitmq
+    healthcheck:
+      test: ["CMD", "rabbitmq-diagnostics", "check_running"]
+      interval: 10s
+      timeout: 5s
+      retries: 20
+
+  yggdrasil-core:
+    image: ${YGGDRASIL_CORE_IMAGE:-ghcr.io/dakasa-yggdrasil/yggdrasil-core:latest}
+    restart: unless-stopped
+    environment:
+      PORT: "9080"
+      DB_HOST: postgres
+      DB_PORT: "5432"
+      DB_NAME: ${POSTGRES_DB:-yggdrasil}
+      DB_USER: ${POSTGRES_USER:-yggdrasil}
+      DB_PASSWORD: ${POSTGRES_PASSWORD:-yggdrasil}
+      BROKER_URL: amqp://${RABBITMQ_USER:-yggdrasil}:${RABBITMQ_PASSWORD:-yggdrasil}@rabbitmq:5672/
+      AUTH_SESSION_TTL_HOURS: ${AUTH_SESSION_TTL_HOURS:-720}
+      AUTH_SESSION_COOKIE_NAME: ${AUTH_SESSION_COOKIE_NAME:-yggdrasil_session}
+      AUTH_SESSION_COOKIE_DOMAIN: ${AUTH_SESSION_COOKIE_DOMAIN:-}
+      AUTH_SESSION_COOKIE_SECURE: ${AUTH_SESSION_COOKIE_SECURE:-false}
+      HTTP_READ_HEADER_TIMEOUT_SECONDS: ${HTTP_READ_HEADER_TIMEOUT_SECONDS:-10}
+      HTTP_READ_TIMEOUT_SECONDS: ${HTTP_READ_TIMEOUT_SECONDS:-30}
+      HTTP_WRITE_TIMEOUT_SECONDS: ${HTTP_WRITE_TIMEOUT_SECONDS:-30}
+      HTTP_IDLE_TIMEOUT_SECONDS: ${HTTP_IDLE_TIMEOUT_SECONDS:-120}
+      # First-run bootstrap. These are opt-in: leave empty to skip.
+      # yggdrasil init sets them so the first boot materializes the
+      # admin and seeds the baseline catalog.
+      YGGDRASIL_BOOTSTRAP_ADMIN_USERNAME: ${YGGDRASIL_BOOTSTRAP_ADMIN_USERNAME:-}
+      YGGDRASIL_BOOTSTRAP_ADMIN_PASSWORD: ${YGGDRASIL_BOOTSTRAP_ADMIN_PASSWORD:-}
+      YGGDRASIL_BOOTSTRAP_ADMIN_EMAIL: ${YGGDRASIL_BOOTSTRAP_ADMIN_EMAIL:-}
+      YGGDRASIL_BOOTSTRAP_ADMIN_DISPLAY_NAME: ${YGGDRASIL_BOOTSTRAP_ADMIN_DISPLAY_NAME:-Admin}
+      YGGDRASIL_BOOTSTRAP_MANIFESTS_PATH: ${YGGDRASIL_BOOTSTRAP_MANIFESTS_PATH:-/app/docs/bootstrap/manifests}
+    ports:
+      - "${CORE_HTTP_PORT:-9080}:9080"
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+volumes:
+  yggdrasil-postgres-data:
+  yggdrasil-rabbitmq-data:

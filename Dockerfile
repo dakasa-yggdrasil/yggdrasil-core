@@ -12,7 +12,9 @@ RUN go mod download
 
 COPY . .
 
-RUN go build -o /bin/yggdrasil-core .
+RUN go build -o /bin/yggdrasil-core . \
+ && go build -o /bin/goose ./scripts/goose \
+ && go build -o /bin/yggdrasil-bootstrap ./scripts/bootstrap
 
 FROM alpine:3.21
 
@@ -25,6 +27,14 @@ RUN apk add --no-cache ca-certificates curl \
 WORKDIR /app
 
 COPY --from=build /bin/yggdrasil-core /app/yggdrasil-core
+COPY --from=build /bin/goose /app/goose
+COPY --from=build /bin/yggdrasil-bootstrap /app/yggdrasil-bootstrap
+# Ship schema migrations and default seed manifests so a self-hosted
+# deployment can `goose up` and bootstrap without mounting anything.
+COPY db/migrations /app/db/migrations
+COPY docs/bootstrap /app/docs/bootstrap
+COPY scripts/entrypoint.sh /app/entrypoint.sh
+RUN chmod +x /app/entrypoint.sh
 
 EXPOSE 9080
-ENTRYPOINT ["/app/yggdrasil-core"]
+ENTRYPOINT ["/app/entrypoint.sh"]

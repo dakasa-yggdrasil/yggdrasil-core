@@ -1,0 +1,27 @@
+yggdrasil-core {{ .Chart.AppVersion }} is installing.
+
+{{- if .Values.bootstrap.enabled }}
+
+First-run bootstrap is enabled. The first pod to observe an empty
+database will create the admin account and seed the baseline catalog.
+
+Retrieve the admin password:
+
+  kubectl get secret --namespace {{ .Release.Namespace }} {{ include "yggdrasil-core.secretName" . }} \
+    -o jsonpath='{.data.admin-password}' | base64 -d ; echo
+
+Log in with the yggdrasil CLI:
+
+{{- if .Values.ingress.enabled }}
+{{- $host := (index .Values.ingress.hosts 0).host }}
+  yggdrasil login --server https://{{ $host }} --username {{ .Values.bootstrap.adminUsername }}
+{{- else }}
+  kubectl port-forward --namespace {{ .Release.Namespace }} svc/{{ include "yggdrasil-core.fullname" . }} 9080:{{ .Values.service.port }}
+  yggdrasil login --server http://localhost:9080 --username {{ .Values.bootstrap.adminUsername }}
+{{- end }}
+
+{{- end }}
+
+Health:
+
+  kubectl rollout status deployment/{{ include "yggdrasil-core.fullname" . }} --namespace {{ .Release.Namespace }}
