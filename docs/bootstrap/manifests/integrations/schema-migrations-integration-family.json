@@ -1,0 +1,26 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_family",
+  "metadata": {
+    "name": "schema-migrations",
+    "namespace": "global",
+    "description": "Schema migrations integration family. Concrete providers (goose-postgres, flyway-mysql, mongo-migrate, native-sql) implement subsets of these operations. Migrations are versioned, ordered, idempotent; checksum guards against silent mutation of already-applied versions.",
+    "labels": {
+      "bootstrap_source": "integration-schema-migrations",
+      "provider": "schema-migrations",
+      "yggdrasil.io/catalog-domain": "schema-migrations",
+      "yggdrasil.io/catalog-section": "operations",
+      "yggdrasil.io/catalog-entry": "family"
+    }
+  },
+  "spec": {
+    "display_name": "Schema Migrations",
+    "description": "Generic contract for any provider that applies versioned schema migrations against a target datastore. Migration.Up and Migration.Down are arbitrary JSON payloads — providers parse their own shape (SQL providers conventionally use {\"sql\": \"...\"}). The family enforces ordering, idempotency, and checksum-based drift detection; provider chooses how to talk to the engine.",
+    "owners": ["team:dakasa-platform"],
+    "operations": [
+      { "name": "apply_migrations_spec", "description": "Apply a list of versioned migrations in order. Idempotent. Rejects checksum drift on already-applied versions.", "idempotent": true },
+      { "name": "describe_applied_migrations", "description": "List already-applied migrations (version, applied_at, checksum). Used for drift detection and dashboards.", "idempotent": true },
+      { "name": "rollback_migration", "description": "Rollback last migration (mode=single) or down to a target version (mode=down_to). Providers that cannot rollback return status=unsupported.", "idempotent": false }
+    ]
+  }
+}

@@ -1,0 +1,106 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_type",
+  "metadata": {
+    "name": "schema-migrations-goose-postgres",
+    "namespace": "global",
+    "description": "Bootstrap integration type for the goose-postgres provider — applies versioned PostgreSQL migrations via pressly/goose embedded with checksum-guarded drift detection.",
+    "labels": {
+      "bootstrap_source": "integration-schema-migrations",
+      "provider": "schema-migrations",
+      "yggdrasil.io/catalog-domain": "schema-migrations",
+      "yggdrasil.io/catalog-section": "operations",
+      "yggdrasil.io/catalog-entry": "goose-postgres"
+    }
+  },
+  "spec": {
+    "provider": "schema-migrations",
+    "family_ref": {
+      "name": "schema-migrations",
+      "namespace": "global"
+    },
+    "implemented_operations": [
+      "apply_migrations_spec",
+      "describe_applied_migrations",
+      "rollback_migration"
+    ],
+    "adapter": {
+      "transport": "rabbitmq",
+      "version": "1.0.0",
+      "queues": {
+        "describe": "yggdrasil.adapter.goose-postgres.describe",
+        "execute": "yggdrasil.adapter.goose-postgres.execute"
+      },
+      "timeout_seconds": 300
+    },
+    "capabilities": ["describe", "execute"],
+    "credential_schema": {
+      "mode": "inline",
+      "properties": {
+        "default_dsn": {
+          "type": "string",
+          "description": "Optional default DSN used when MigrationTarget.dsn is empty (dev-time only).",
+          "secret": true
+        }
+      }
+    },
+    "instance_schema": {
+      "mode": "inline",
+      "properties": {
+        "default_track_table": {
+          "type": "string",
+          "description": "Default goose tracking table when MigrationTarget.track_table is empty.",
+          "default": "goose_db_version"
+        }
+      }
+    },
+    "resource_types": [
+      {
+        "name": "migration_set",
+        "canonical_prefix": "thirdparty.schema-migrations.set",
+        "identity_template": "migration_set.{namespace}",
+        "discoverable": false,
+        "default_actions": [
+          "apply_migrations_spec",
+          "describe_applied_migrations",
+          "rollback_migration"
+        ]
+      }
+    ],
+    "action_catalog": [
+      {
+        "name": "apply_migrations_spec",
+        "description": "Apply versioned migrations in order. Idempotent. Rejects checksum drift.",
+        "resource_types": ["migration_set"],
+        "idempotent": true
+      },
+      {
+        "name": "describe_applied_migrations",
+        "description": "List already-applied migrations with checksums and timestamps.",
+        "resource_types": ["migration_set"],
+        "idempotent": true
+      },
+      {
+        "name": "rollback_migration",
+        "description": "Rollback last migration (mode=single) or down to a target version (mode=down_to).",
+        "resource_types": ["migration_set"],
+        "idempotent": false
+      }
+    ],
+    "discovery": {
+      "mode": "push",
+      "cursor": "none"
+    },
+    "normalization": {
+      "external_id_path": "namespace",
+      "name_path": "namespace",
+      "owner_path": "namespace",
+      "fallback_resource_prefix": "thirdparty.schema-migrations.custom"
+    },
+    "execution": {
+      "supports_dry_run": true,
+      "idempotent_actions": ["apply_migrations_spec", "describe_applied_migrations"]
+    },
+    "extensions": {}
+  }
+}
