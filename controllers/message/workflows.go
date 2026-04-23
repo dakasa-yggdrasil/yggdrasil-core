@@ -299,7 +299,11 @@ func executeWorkflowStep(
 
 	// Branch on step kind: product steps have their own execution path that
 	// dispatches to the in-process product handlers (apply, observe, etc.)
-	// rather than going through an integration adapter.
+	// rather than going through an integration adapter. Yggdrasil steps
+	// persist manifests against the core's own store, also in-process.
+	if result.Kind == "yggdrasil" {
+		return executeYggdrasilWorkflowStep(ctx, db, step, result, renderedInput)
+	}
 	if result.Kind == "product" {
 		return executeProductWorkflowStep(ctx, conn, db, workflowRef, step, result, renderedInput)
 	}

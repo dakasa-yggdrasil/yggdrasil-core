@@ -34,6 +34,119 @@ func TestValidateWorkflowSpecRejectsMissingIntegrationRef(t *testing.T) {
 	}
 }
 
+func TestValidateWorkflowSpecAcceptsYggdrasilApplyManifest(t *testing.T) {
+	spec := model.WorkflowManifestSpec{
+		Trigger: model.WorkflowTriggerSpec{Mode: "manual"},
+		Steps: []model.WorkflowStepSpec{
+			{
+				ID: "register-instance",
+				Use: model.WorkflowStepUseSpec{
+					Kind:      "yggdrasil",
+					Operation: "apply_manifest",
+				},
+				With: map[string]any{
+					"manifest": map[string]any{
+						"apiVersion": "yggdrasil.io/v1alpha1",
+						"kind":       "integration_instance",
+						"metadata":   map[string]any{"name": "ygg-probe", "namespace": "global"},
+						"spec":       map[string]any{"type_ref": map[string]any{"name": "probe", "namespace": "dakasa"}},
+					},
+				},
+			},
+		},
+	}
+
+	if err := ValidateWorkflowSpec(spec); err != nil {
+		t.Fatalf("ValidateWorkflowSpec(yggdrasil apply_manifest) error: %v", err)
+	}
+}
+
+func TestValidateWorkflowSpecRejectsYggdrasilWithUnknownOperation(t *testing.T) {
+	spec := model.WorkflowManifestSpec{
+		Trigger: model.WorkflowTriggerSpec{Mode: "manual"},
+		Steps: []model.WorkflowStepSpec{
+			{
+				ID: "mystery",
+				Use: model.WorkflowStepUseSpec{
+					Kind:      "yggdrasil",
+					Operation: "delete_manifest",
+				},
+				With: map[string]any{"manifest": map[string]any{}},
+			},
+		},
+	}
+
+	if err := ValidateWorkflowSpec(spec); err == nil {
+		t.Fatal("expected yggdrasil step with unsupported operation to fail validation")
+	}
+}
+
+func TestValidateWorkflowSpecRejectsYggdrasilWithIntegrationFields(t *testing.T) {
+	cases := []struct {
+		name string
+		mut  func(*model.WorkflowStepSpec)
+	}{
+		{
+			name: "family set",
+			mut:  func(s *model.WorkflowStepSpec) { s.Use.Family = "kubernetes" },
+		},
+		{
+			name: "instance_ref set",
+			mut: func(s *model.WorkflowStepSpec) {
+				s.Use.InstanceRef = &model.ManifestSelector{Name: "whatever", Namespace: "global"}
+			},
+		},
+		{
+			name: "provider_ref set",
+			mut: func(s *model.WorkflowStepSpec) {
+				s.Use.ProviderRef = &model.ManifestSelector{Name: "whatever", Namespace: "global"}
+			},
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := model.WorkflowManifestSpec{
+				Trigger: model.WorkflowTriggerSpec{Mode: "manual"},
+				Steps: []model.WorkflowStepSpec{
+					{
+						ID: "apply",
+						Use: model.WorkflowStepUseSpec{
+							Kind:      "yggdrasil",
+							Operation: "apply_manifest",
+						},
+						With: map[string]any{"manifest": map[string]any{}},
+					},
+				},
+			}
+			tc.mut(&spec.Steps[0])
+
+			if err := ValidateWorkflowSpec(spec); err == nil {
+				t.Fatalf("expected yggdrasil step with %s to fail validation", tc.name)
+			}
+		})
+	}
+}
+
+func TestValidateWorkflowSpecRejectsYggdrasilWithoutManifest(t *testing.T) {
+	spec := model.WorkflowManifestSpec{
+		Trigger: model.WorkflowTriggerSpec{Mode: "manual"},
+		Steps: []model.WorkflowStepSpec{
+			{
+				ID: "apply",
+				Use: model.WorkflowStepUseSpec{
+					Kind:      "yggdrasil",
+					Operation: "apply_manifest",
+				},
+			},
+		},
+	}
+
+	if err := ValidateWorkflowSpec(spec); err == nil {
+		t.Fatal("expected yggdrasil apply_manifest step without with.manifest to fail validation")
+	}
+}
+
 func TestWorkflowDocumentValidation(t *testing.T) {
 	raw, err := json.Marshal(workflowSpecFixture())
 	if err != nil {

@@ -114,55 +114,16 @@ func manifestCreateHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger
 	return func(ctx context.Context, d amqp.Delivery) error {
 		var doc model.ManifestDocument
 		if err := json.Unmarshal(d.Body, &doc); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, conn, d, manifestPersistCodeBadRequest, err, logger)
 		}
 
-		doc = manifestengine.NormalizeDocument(doc)
-		if err := manifestengine.ValidateDocument(doc); err != nil {
-			return replyFailure(ctx, conn, d, "validation_failed", err, logger)
-		}
-
-		checksum, err := manifestengine.Checksum(doc)
+		manifestRecord, err := persistManifestVersion(ctx, db, doc)
 		if err != nil {
-			return replyFailure(ctx, conn, d, "internal_error", err, logger)
-		}
-
-		// Atomic: create manifest + emit manifest.created event in the same tx.
-		tx, err := db.BeginTx(ctx, nil)
-		if err != nil {
-			return replyFailure(ctx, conn, d, "internal_error", err, logger)
-		}
-		defer tx.Rollback()
-
-		manifestRecord, err := repository.CreateManifestVersionTx(ctx, tx, doc, checksum)
-		if err != nil {
-			return replyFailure(ctx, conn, d, "internal_error", err, logger)
-		}
-
-		eventPayload := map[string]interface{}{
-			"manifest_id": manifestRecord.ID.String(),
-			"kind":        manifestRecord.Kind,
-			"namespace":   manifestRecord.Metadata.Namespace,
-			"name":        manifestRecord.Metadata.Name,
-			"version":     manifestRecord.Version,
-			"checksum":    manifestRecord.Checksum,
-		}
-		if len(manifestRecord.Metadata.Labels) > 0 {
-			eventPayload["labels"] = manifestRecord.Metadata.Labels
-		}
-
-		if _, err := repository.EmitEvent(ctx, tx, model.EmitEventRequest{
-			Type:          "manifest.created",
-			SchemaVersion: "v1",
-			AggregateType: "manifest",
-			AggregateID:   manifestRecord.ID.String(),
-			Payload:       eventPayload,
-		}); err != nil {
-			return replyFailure(ctx, conn, d, "internal_error", err, logger)
-		}
-
-		if err := tx.Commit(); err != nil {
-			return replyFailure(ctx, conn, d, "internal_error", err, logger)
+			persistErr, ok := err.(*manifestPersistError)
+			if !ok {
+				return replyFailure(ctx, conn, d, manifestPersistCodeInternalError, err, logger)
+			}
+			return replyFailure(ctx, conn, d, persistErr.Code, persistErr.Err, logger)
 		}
 
 		return replySuccess(ctx, conn, d, map[string]any{"manifest": manifestRecord}, logger)

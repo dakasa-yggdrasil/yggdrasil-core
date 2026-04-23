@@ -14,7 +14,7 @@ import (
 
 var (
 	supportedWorkflowTriggerModes  = []string{"manual", "event", "schedule"}
-	supportedWorkflowStepKinds     = []string{"integration", "product"}
+	supportedWorkflowStepKinds     = []string{"integration", "product", "yggdrasil"}
 	supportedProductStepOperations = []string{
 		"materialize",
 		"installation.reconcile",
@@ -23,6 +23,11 @@ var (
 		"installation.uninstall",
 		"installation_state.discover",
 	}
+	// yggdrasil step operations run in-process against the core's own
+	// manifest store rather than dispatching to an adapter. Only
+	// apply_manifest exists today; new entries here require a matching
+	// handler in controllers/message.
+	supportedYggdrasilStepOperations = []string{"apply_manifest"}
 	workflowTemplatePattern = regexp.MustCompile(`{{\s*([^{}]+?)\s*}}`)
 )
 
@@ -339,6 +344,35 @@ func validateWorkflowStep(step model.WorkflowStepSpec) error {
 		// instance_ref is not used for product steps
 		if step.Use.InstanceRef != nil {
 			return fmt.Errorf("product step must not set use.instance_ref (use with.product_ref instead)")
+		}
+	case "yggdrasil":
+		// Yggdrasil steps run in-process against the core's own manifest
+		// store: they persist a manifest document carried in with.manifest
+		// through the same normalize/validate/persist pipeline that the
+		// HTTP and AMQP manifest handlers use. They are resolution-free —
+		// there is no integration instance to select and no provider to
+		// pin — so instance_ref/family/provider_ref must all be empty.
+		operation := strings.ToLower(strings.TrimSpace(step.Use.Operation))
+		if operation == "" {
+			return fmt.Errorf("yggdrasil step requires use.operation")
+		}
+		if !slices.Contains(supportedYggdrasilStepOperations, operation) {
+			return fmt.Errorf("yggdrasil step operation %q is unsupported (allowed: %v)", operation, supportedYggdrasilStepOperations)
+		}
+		if step.Use.InstanceRef != nil {
+			return fmt.Errorf("yggdrasil step must not set use.instance_ref")
+		}
+		if strings.TrimSpace(step.Use.Family) != "" {
+			return fmt.Errorf("yggdrasil step must not set use.family")
+		}
+		if step.Use.ProviderRef != nil {
+			return fmt.Errorf("yggdrasil step must not set use.provider_ref")
+		}
+		if step.With == nil {
+			return fmt.Errorf("yggdrasil step requires with.manifest")
+		}
+		if _, hasManifest := step.With["manifest"]; !hasManifest {
+			return fmt.Errorf("yggdrasil step requires with.manifest")
 		}
 	}
 
