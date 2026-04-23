@@ -78,6 +78,12 @@ func ValidateDocument(doc model.ManifestDocument) error {
 			return err
 		}
 		return ValidateIntegrationFamilySpec(spec)
+	case "integration_quickstart":
+		spec, err := ParseIntegrationQuickstartSpec(doc.Spec)
+		if err != nil {
+			return err
+		}
+		return ValidateIntegrationQuickstartSpec(spec)
 	case "integration_type":
 		spec, err := ParseIntegrationTypeSpec(doc.Spec)
 		if err != nil {
