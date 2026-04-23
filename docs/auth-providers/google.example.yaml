@@ -1,0 +1,41 @@
+# Register the Google OIDC provider.
+#
+# Prerequisites: create an OAuth 2.0 Client ID at
+#   https://console.cloud.google.com/apis/credentials
+#
+# Application type: Web application.
+# Authorized redirect URIs:
+#   https://<your-yggdrasil-host>/api/v1/auth/third-party/callback/google
+#
+# Apply with:
+#   yggdrasil auth provider apply -f google.example.yaml
+name: google
+type: oidc
+status: active
+display_name: Google
+
+# Standard Google OIDC endpoints. Keep these as-is unless Google
+# deprecates one — the yggdrasil-core does not auto-discover.
+issuer_url: https://accounts.google.com
+authorize_url: https://accounts.google.com/o/oauth2/v2/auth
+token_url: https://oauth2.googleapis.com/token
+userinfo_url: https://openidconnect.googleapis.com/v1/userinfo
+scopes:
+  - openid
+  - email
+  - profile
+
+client_id: YOUR_GOOGLE_CLIENT_ID.apps.googleusercontent.com
+client_secret: YOUR_GOOGLE_CLIENT_SECRET
+
+# Google OIDC userinfo response mapping.
+subject_field: sub
+login_field: email
+email_field: email
+display_name_field: name
+avatar_url_field: picture
+
+# Restrict sign-in to a Google Workspace domain (Dakasa employees
+# only, for example) via the hd hint in the authorize URL:
+#   metadata: { authorize_params: { hd: your-company.com } }
+auto_link_by_email: true

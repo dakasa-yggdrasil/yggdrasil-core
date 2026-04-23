@@ -1,0 +1,39 @@
+# Register the GitHub OAuth provider.
+#
+# Prerequisites: create an OAuth App at
+#   https://github.com/settings/developers
+#
+# Authorization callback URL:
+#   https://<your-yggdrasil-host>/api/v1/auth/third-party/callback/github
+#
+# After creating the app, replace the placeholders below and apply with:
+#   yggdrasil auth provider apply -f github.example.yaml
+#
+# The value in client_secret is stored as a managed secret on the core;
+# it is never logged and never returned by the list/get endpoints.
+name: github
+type: oauth2
+status: active
+display_name: GitHub
+authorize_url: https://github.com/login/oauth/authorize
+token_url: https://github.com/login/oauth/access_token
+userinfo_url: https://api.github.com/user
+scopes:
+  - read:user
+  - user:email
+
+client_id: YOUR_GITHUB_CLIENT_ID
+client_secret: YOUR_GITHUB_CLIENT_SECRET
+
+# How to map the GitHub user profile onto a yggdrasil collaborator.
+subject_field: id
+login_field: login
+email_field: email
+display_name_field: name
+avatar_url_field: avatar_url
+profile_url_field: html_url
+
+# Auto-link an existing collaborator (matched by primary_email) when
+# they sign in through GitHub for the first time. Disable when you want
+# manual link-via-admin instead.
+auto_link_by_email: true
