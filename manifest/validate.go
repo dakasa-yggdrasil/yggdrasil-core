@@ -156,6 +156,12 @@ func ValidateDocument(doc model.ManifestDocument) error {
 			return err
 		}
 		return ValidateWorkflowSpec(spec)
+	case "control_plane":
+		spec, err := ParseControlPlaneSpec(doc.Spec)
+		if err != nil {
+			return err
+		}
+		return ValidateControlPlaneSpec(spec)
 	default:
 		return fmt.Errorf("unsupported manifest kind: %s", doc.Kind)
 	}
