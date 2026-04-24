@@ -295,6 +295,66 @@ which points at the HOST's loopback, not the container's. On macOS:
 - The core image runs in-cluster against its own Postgres and serves
   the HTTP API.
 
+## Live validation status (2026-04-24)
+
+This walkthrough was executed end-to-end against a kind cluster as
+part of Fase 6. The run exposed six real bugs — all patched in the
+same session; the commit messages for the fixes carry their own root-
+cause analyses. The two remaining issues are tracked below.
+
+**Fixed as a result of Fase 6 execution:**
+
+1. `yggdrasil apply` / `init` built the POST payload as a nested
+   `apiVersion + metadata + spec` envelope, but the core's
+   `/api/v1/manifests` endpoint accepts a flat
+   `name/namespace/description/labels/spec` shape. Every non-console
+   write was rejected with `unknown field "apiVersion"`.
+2. The seeded deploy workflow passed
+   `{{ inputs.control_plane.version }}` into `control_plane_ref`;
+   `deploy control-plane` doesn't set a version input so the
+   template rendered as literal and the step failed. Version is
+   optional for the render handler — the seed now omits it entirely.
+3. Adapter instances shipped by `init` used a top-level
+   `spec.endpoint` field, but the http_json transport pulls the
+   base URL from `spec.config.base_url`. The field mismatch looked
+   like `integration base_url is required`.
+4. Both shipped adapters (`integration-kubernetes`,
+   `integration-schema-migrations`) hardcoded `Transport: "rabbitmq"`
+   in their `Describe()` — the describe-handshake vs stored
+   `integration_type` immediately failed on any HTTP deployment. Fix:
+   branch on `YGGDRASIL_TRANSPORT` at startup and emit the matching
+   envelope (queues vs endpoints).
+5. Workflow step templates were rendered for `step.With` but NOT for
+   `step.Use.InstanceRef` / `ProviderRef` / `Family`. Any workflow
+   using `{{ inputs.my_instance.name }}` in `instance_ref` got a
+   "manifest not found" error because the literal string flowed into
+   `ResolveManifest`. Fix: new `renderWorkflowStepUse` resolves
+   templates in the Use block before dispatch.
+6. Three schemas were too strict: the integration-adapter describe
+   response `required: [transport, version, queues]` forbade
+   http_json adapters that emit `endpoints` instead; the kubernetes
+   and schema-migrations `integration_type.instance_schema` didn't
+   declare `base_url`, so legitimate HTTP instances were rejected.
+   Relaxed both.
+
+**Known issues still in flight:**
+
+- Adapter describe response may still mismatch the contract on other
+  field-level details (JSON schema validation message is currently
+  flattened in the validator; iterate until apply-infra reaches the
+  adapter cleanly).
+- Kind cluster networking from integration-kubernetes container:
+  kind's kubeconfig advertises `https://127.0.0.1:<port>`, which
+  inside the adapter container resolves to the CONTAINER's loopback.
+  Needs `host.docker.internal` rewrite on Docker Desktop or a docker
+  network trick on colima.
+
+**What the walkthrough has proven:** seed compose + manifest apply +
+workflow dispatch + step progression up through `render` reliably,
+and `apply-infra` reaches the adapter's describe call. The bugs
+above were all caught BEFORE any K8s object touched the target
+cluster — the workflow engine's fail-fast behavior held.
+
 ## What this does NOT validate
 
 - Ingress. Step 4 sets `ingress.enabled: false` so the walkthrough
