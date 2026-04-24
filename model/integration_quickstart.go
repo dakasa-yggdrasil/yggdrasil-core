@@ -145,12 +145,20 @@ type QuickstartSmokeTest struct {
 
 // InstallIntegrationRequest is what the API endpoint accepts.
 type InstallIntegrationRequest struct {
-	// RepoRef identifies where to fetch the yggdrasil-quickstart.yaml from.
-	// Supported forms (resolved by the github integration):
-	//   - "owner/repo"               → default branch, root path
-	//   - "owner/repo@ref"           → specific branch/tag/sha
-	//   - "owner/repo:path/to/file"  → custom path inside the repo
+	// RepoRef identifies where to fetch the yggdrasil-quickstart.yaml
+	// from. Supported forms:
+	//   - "owner/repo"                               → GitHub default branch, root path
+	//   - "owner/repo@ref"                           → GitHub specific branch/tag/sha
+	//   - "owner/repo:path/to/file"                  → GitHub custom path
+	//   - "oci://<registry>/<path>[:<tag>]"          → OCI registry artifact
 	RepoRef string `json:"repo_ref"`
+
+	// ManifestInline lets the caller pass the already-fetched
+	// quickstart bytes instead of having the server fetch again. Used
+	// by the CLI for OCI refs so neither side needs double-auth or a
+	// second round-trip. When set, the server validates and compiles
+	// these bytes directly; RepoRef is still recorded for audit.
+	ManifestInline []byte `json:"manifest_inline,omitempty"`
 
 	// ProviderID picks ONE provider from the manifest's providers list.
 	// Required when the manifest declares more than one.
