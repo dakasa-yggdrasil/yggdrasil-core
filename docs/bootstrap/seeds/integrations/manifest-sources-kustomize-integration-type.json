@@ -44,10 +44,12 @@
     "instance_schema": {
       "mode": "inline",
       "properties": {
-        "default_git_url":  { "type": "string", "description": "Fallback git_url when input omits one." },
-        "default_revision": { "type": "string", "description": "Fallback revision (branch/tag/SHA).", "default": "main" },
-        "default_path":     { "type": "string", "description": "Fallback kustomize overlay path inside the repo.", "default": "." },
-        "github_token":     { "type": "string", "description": "Optional PAT for private repos.", "secret": true }
+        "base_url":              { "type": "string", "description": "HTTP adapter base URL used when the integration_type declares transport=http_json." },
+        "default_git_url":       { "type": "string", "description": "Fallback git_url when input omits one." },
+        "default_revision":      { "type": "string", "description": "Fallback revision (branch/tag/SHA).", "default": "main" },
+        "default_path":          { "type": "string", "description": "Fallback kustomize overlay path inside the repo.", "default": "." },
+        "github_token":          { "type": "string", "description": "Optional PAT for private repos.", "secret": true },
+        "github_token_username": { "type": "string", "description": "Username paired with github_token.", "default": "x-access-token" }
       }
     },
     "resource_types": [
