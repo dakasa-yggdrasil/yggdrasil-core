@@ -315,11 +315,23 @@ func executeWorkflowStep(
 		typeManifest     model.Manifest
 		typeSpec         model.IntegrationTypeManifestSpec
 	)
-	if step.Use.InstanceRef != nil {
-		instanceManifest, instanceSpec, typeManifest, typeSpec, err = resolveIntegrationInstance(ctx, conn, db, *step.Use.InstanceRef)
+	// Templates inside step.Use (instance_ref.namespace / name /
+	// version, family, provider_ref) must be resolved against the same
+	// execution context as step.With — otherwise "{{ inputs.kubernetes_instance.name }}"
+	// lands as a literal string in the selector and the resolver
+	// bottoms out with a confusing "manifest not found".
+	resolvedUse, err := renderWorkflowStepUse(step.Use, executionCtx)
+	if err != nil {
+		result.Error = fmt.Errorf("render step use block: %w", err).Error()
+		result.Attempts = 1
+		result.FinishedAt = time.Now().UTC()
+		return result
+	}
+	if resolvedUse.InstanceRef != nil {
+		instanceManifest, instanceSpec, typeManifest, typeSpec, err = resolveIntegrationInstance(ctx, conn, db, *resolvedUse.InstanceRef)
 	} else {
 		instanceManifest, instanceSpec, typeManifest, typeSpec, err = resolveIntegrationByFamily(
-			ctx, conn, db, step.Use.Family, step.Use.Operation, step.Use.ProviderRef,
+			ctx, conn, db, resolvedUse.Family, resolvedUse.Operation, resolvedUse.ProviderRef,
 		)
 	}
 	if err != nil {
@@ -468,6 +480,77 @@ func buildWorkflowDispatchStepRequest(
 		},
 		Auth: req.Auth,
 	})
+}
+
+// renderWorkflowStepUse resolves templates inside step.Use (instance_ref,
+// family, provider_ref) against the execution context. These fields
+// select the downstream integration before the dispatcher runs, so a
+// literal template like "{{ inputs.my_instance.name }}" must turn
+// into its real value or the resolver fails with a spurious "manifest
+// not found". The result is a parallel copy — step.Use itself is left
+// untouched for auditing.
+func renderWorkflowStepUse(use model.WorkflowStepUseSpec, executionCtx manifestengine.WorkflowExecutionContext) (model.WorkflowStepUseSpec, error) {
+	resolved := use
+	if use.InstanceRef != nil {
+		rendered, err := manifestengine.RenderWorkflowInput(map[string]any{
+			"manifest_id": use.InstanceRef.ManifestID,
+			"namespace":   use.InstanceRef.Namespace,
+			"name":        use.InstanceRef.Name,
+		}, executionCtx)
+		if err != nil {
+			return use, fmt.Errorf("instance_ref: %w", err)
+		}
+		shaped, ok := rendered.(map[string]any)
+		if !ok {
+			return use, fmt.Errorf("instance_ref rendered a non-object payload")
+		}
+		copied := *use.InstanceRef
+		if v, _ := shaped["manifest_id"].(string); v != "" {
+			copied.ManifestID = v
+		}
+		if v, _ := shaped["namespace"].(string); v != "" {
+			copied.Namespace = v
+		}
+		if v, _ := shaped["name"].(string); v != "" {
+			copied.Name = v
+		}
+		resolved.InstanceRef = &copied
+	}
+	if use.ProviderRef != nil {
+		rendered, err := manifestengine.RenderWorkflowInput(map[string]any{
+			"manifest_id": use.ProviderRef.ManifestID,
+			"namespace":   use.ProviderRef.Namespace,
+			"name":        use.ProviderRef.Name,
+		}, executionCtx)
+		if err != nil {
+			return use, fmt.Errorf("provider_ref: %w", err)
+		}
+		shaped, ok := rendered.(map[string]any)
+		if !ok {
+			return use, fmt.Errorf("provider_ref rendered a non-object payload")
+		}
+		copied := *use.ProviderRef
+		if v, _ := shaped["manifest_id"].(string); v != "" {
+			copied.ManifestID = v
+		}
+		if v, _ := shaped["namespace"].(string); v != "" {
+			copied.Namespace = v
+		}
+		if v, _ := shaped["name"].(string); v != "" {
+			copied.Name = v
+		}
+		resolved.ProviderRef = &copied
+	}
+	if strings.Contains(use.Family, "{{") {
+		rendered, err := manifestengine.RenderWorkflowInput(use.Family, executionCtx)
+		if err != nil {
+			return use, fmt.Errorf("family: %w", err)
+		}
+		if v, ok := rendered.(string); ok {
+			resolved.Family = v
+		}
+	}
+	return resolved, nil
 }
 
 func renderWorkflowStepInput(step model.WorkflowStepSpec, executionCtx manifestengine.WorkflowExecutionContext) (map[string]any, error) {
