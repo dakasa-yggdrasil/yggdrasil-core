@@ -51,8 +51,7 @@
         "with": {
           "control_plane_ref": {
             "namespace": "{{ inputs.control_plane.namespace }}",
-            "name": "{{ inputs.control_plane.name }}",
-            "version": "{{ inputs.control_plane.version }}"
+            "name": "{{ inputs.control_plane.name }}"
           }
         },
         "retry": {

@@ -47,6 +47,10 @@
     "instance_schema": {
       "mode": "inline",
       "properties": {
+        "base_url": {
+          "type": "string",
+          "description": "HTTP adapter base URL used when the integration_type declares transport=http_json."
+        },
         "default_track_table": {
           "type": "string",
           "description": "Default goose tracking table when MigrationTarget.track_table is empty.",

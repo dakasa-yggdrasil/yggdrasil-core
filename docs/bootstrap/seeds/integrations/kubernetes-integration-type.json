@@ -55,6 +55,10 @@
     "instance_schema": {
       "mode": "inline",
       "properties": {
+        "base_url": {
+          "type": "string",
+          "description": "HTTP adapter base URL used when the integration_type declares transport=http_json."
+        },
         "in_cluster": {
           "type": "boolean",
           "description": "Use in-cluster Kubernetes authentication.",
