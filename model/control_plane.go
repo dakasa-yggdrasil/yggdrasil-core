@@ -111,6 +111,24 @@ type ControlPlaneKubernetesSpec struct {
 	ClusterRef     ManifestSelector `json:"cluster_ref"`
 }
 
+// ControlPlaneEnvFrom references an existing Kubernetes Secret or
+// ConfigMap whose keys will be projected as environment variables
+// on the core container. Exactly one of SecretRef / ConfigMapRef
+// must be populated per entry. Mirrors the shape of the upstream
+// corev1.EnvFromSource to keep the renderer trivially translatable
+// by declarative_apply.
+type ControlPlaneEnvFrom struct {
+	SecretRef    *ControlPlaneLocalObjectRef `json:"secret_ref,omitempty"`
+	ConfigMapRef *ControlPlaneLocalObjectRef `json:"config_map_ref,omitempty"`
+}
+
+// ControlPlaneLocalObjectRef names a Kubernetes object in the same
+// namespace as the core Deployment. Only the name matters; callers
+// must ensure the referenced object exists at apply time.
+type ControlPlaneLocalObjectRef struct {
+	Name string `json:"name"`
+}
+
 // ControlPlaneBootstrapSpec seeds the control-plane's first-boot.
 type ControlPlaneBootstrapSpec struct {
 	AdminCredentialsRef string   `json:"admin_credentials_ref,omitempty"`
