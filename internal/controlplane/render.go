@@ -77,6 +77,17 @@ const (
 	amqpDataVolumeName = "data"
 )
 
+// resourceNameOrDefault picks spec.Name when set, else the hard-coded
+// default. Kept deliberately unexported and passed into each renderer
+// helper explicitly so the tests can still assert against the default
+// constants via the helpers' named-arg variants.
+func resourceNameOrDefault(spec model.ControlPlaneManifestSpec, fallback string) string {
+	if name := strings.TrimSpace(spec.Name); name != "" {
+		return name
+	}
+	return fallback
+}
+
 // Render translates spec into the concrete Kubernetes objects that make
 // up a yggdrasil-core deployment. The spec is assumed to have been
 // validated via manifest.ValidateControlPlaneSpec beforehand; the
@@ -133,9 +144,11 @@ func Render(spec model.ControlPlaneManifestSpec) (*RenderedBundle, error) {
 		// core Secret's envFrom block (see renderCoreSecret).
 	}
 
-	coreSecret := renderCoreSecret(namespace, spec)
+	coreName := resourceNameOrDefault(spec, coreDeploymentName)
+
+	coreSecret := renderCoreSecret(namespace, coreName, spec)
 	bundle.CoreObjects = append(bundle.CoreObjects, coreSecret)
-	coreEnvSources = append(coreEnvSources, envFromSecret(coreSecretName))
+	coreEnvSources = append(coreEnvSources, envFromSecret(coreName))
 
 	if strings.EqualFold(spec.Postgres.Mode, "external") {
 		coreEnvSources = append(coreEnvSources, envFromExternalPostgresSecret(spec.Postgres.External))
@@ -149,15 +162,15 @@ func Render(spec model.ControlPlaneManifestSpec) (*RenderedBundle, error) {
 	}
 
 	bundle.CoreObjects = append(bundle.CoreObjects,
-		renderCoreDeployment(namespace, spec, coreEnvSources),
-		renderCoreService(namespace),
+		renderCoreDeployment(namespace, coreName, spec, coreEnvSources),
+		renderCoreService(namespace, coreName),
 	)
 	bundle.WaitTargets = append(bundle.WaitTargets, WaitTarget{
-		Phase: phaseCore, Namespace: namespace, Kind: "Deployment", Name: coreDeploymentName,
+		Phase: phaseCore, Namespace: namespace, Kind: "Deployment", Name: coreName,
 	})
 
 	if spec.Ingress.Enabled {
-		bundle.CoreObjects = append(bundle.CoreObjects, renderIngress(namespace, spec.Ingress))
+		bundle.CoreObjects = append(bundle.CoreObjects, renderIngress(namespace, coreName, spec.Ingress))
 	}
 
 	return bundle, nil

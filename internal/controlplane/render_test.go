@@ -363,3 +363,43 @@ func mustPodContainers(t *testing.T, deployment map[string]any) []map[string]any
 	}
 	return out
 }
+
+func TestRenderNameOverride(t *testing.T) {
+	spec := baseSpec()
+	spec.Name = "yggdrasil"
+	spec.Postgres = model.ControlPlanePostgresSpec{Mode: "inherit"}
+
+	bundle, err := Render(spec)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	if findObject(t, bundle.CoreObjects, "Deployment", "yggdrasil") == nil {
+		t.Error("core Deployment must be named 'yggdrasil' when spec.name=yggdrasil")
+	}
+	if findObject(t, bundle.CoreObjects, "Service", "yggdrasil") == nil {
+		t.Error("core Service must be named 'yggdrasil' when spec.name=yggdrasil")
+	}
+	if findObject(t, bundle.CoreObjects, "Secret", "yggdrasil") == nil {
+		t.Error("core Secret must be named 'yggdrasil' when spec.name=yggdrasil")
+	}
+	if findObject(t, bundle.CoreObjects, "Deployment", "yggdrasil-core") != nil {
+		t.Error("default 'yggdrasil-core' name must not appear when spec.name is set")
+	}
+
+	if len(bundle.WaitTargets) != 1 || bundle.WaitTargets[0].Name != "yggdrasil" {
+		t.Errorf("WaitTargets[0].Name = %v, want yggdrasil", bundle.WaitTargets)
+	}
+}
+
+func TestRenderNameDefaultsToYggdrasilCore(t *testing.T) {
+	spec := baseSpec()
+	spec.Postgres = model.ControlPlanePostgresSpec{Mode: "inherit"}
+	bundle, err := Render(spec)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+	if findObject(t, bundle.CoreObjects, "Deployment", coreDeploymentName) == nil {
+		t.Errorf("default name must remain %q when spec.name is empty", coreDeploymentName)
+	}
+}

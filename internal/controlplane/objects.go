@@ -216,7 +216,7 @@ func renderBundledRabbitMQ(namespace string, spec *model.ControlPlaneTransportBu
 // already provided by another substrate's Secret (postgres / rabbitmq
 // bundled secrets, or external user-provided secrets referenced via
 // the core's envFrom list).
-func renderCoreSecret(namespace string, spec model.ControlPlaneManifestSpec) map[string]any {
+func renderCoreSecret(namespace, name string, spec model.ControlPlaneManifestSpec) map[string]any {
 	data := map[string]any{
 		"PORT": fmt.Sprintf("%d", coreHTTPPort),
 	}
@@ -232,7 +232,7 @@ func renderCoreSecret(namespace string, spec model.ControlPlaneManifestSpec) map
 		"apiVersion": "v1",
 		"kind":       "Secret",
 		"metadata": map[string]any{
-			"name":      coreSecretName,
+			"name":      name,
 			"namespace": namespace,
 			"labels":    baseLabels("core"),
 		},
@@ -241,9 +241,9 @@ func renderCoreSecret(namespace string, spec model.ControlPlaneManifestSpec) map
 	}
 }
 
-func renderCoreDeployment(namespace string, spec model.ControlPlaneManifestSpec, envFromSources []map[string]any) map[string]any {
+func renderCoreDeployment(namespace, name string, spec model.ControlPlaneManifestSpec, envFromSources []map[string]any) map[string]any {
 	container := map[string]any{
-		"name":    "yggdrasil-core",
+		"name":    name,
 		"image":   spec.Image,
 		"envFrom": anySlice(envFromSources),
 		"ports": []any{
@@ -271,7 +271,7 @@ func renderCoreDeployment(namespace string, spec model.ControlPlaneManifestSpec,
 		"apiVersion": "apps/v1",
 		"kind":       "Deployment",
 		"metadata": map[string]any{
-			"name":      coreDeploymentName,
+			"name":      name,
 			"namespace": namespace,
 			"labels":    baseLabels("core"),
 		},
@@ -286,12 +286,12 @@ func renderCoreDeployment(namespace string, spec model.ControlPlaneManifestSpec,
 	}
 }
 
-func renderCoreService(namespace string) map[string]any {
+func renderCoreService(namespace, name string) map[string]any {
 	return map[string]any{
 		"apiVersion": "v1",
 		"kind":       "Service",
 		"metadata": map[string]any{
-			"name":      coreServiceName,
+			"name":      name,
 			"namespace": namespace,
 			"labels":    baseLabels("core"),
 		},
@@ -304,7 +304,7 @@ func renderCoreService(namespace string) map[string]any {
 	}
 }
 
-func renderIngress(namespace string, ingress model.ControlPlaneIngressSpec) map[string]any {
+func renderIngress(namespace, name string, ingress model.ControlPlaneIngressSpec) map[string]any {
 	rule := map[string]any{
 		"host": ingress.Host,
 		"http": map[string]any{
@@ -314,7 +314,7 @@ func renderIngress(namespace string, ingress model.ControlPlaneIngressSpec) map[
 					"pathType": "Prefix",
 					"backend": map[string]any{
 						"service": map[string]any{
-							"name": coreServiceName,
+							"name": name,
 							"port": map[string]any{"name": coreHTTPPortName},
 						},
 					},
@@ -339,7 +339,7 @@ func renderIngress(namespace string, ingress model.ControlPlaneIngressSpec) map[
 		"apiVersion": "networking.k8s.io/v1",
 		"kind":       "Ingress",
 		"metadata": map[string]any{
-			"name":      coreIngressName,
+			"name":      name,
 			"namespace": namespace,
 			"labels":    baseLabels("core"),
 		},
