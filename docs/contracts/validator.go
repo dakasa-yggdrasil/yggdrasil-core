@@ -45,7 +45,30 @@ func Validate(family string, definition string, payload any) error {
 	}
 
 	if err := schema.Validate(instance); err != nil {
-		return fmt.Errorf("%s#/$defs/%s: %w", family, definition, err)
+		var detail string
+		if ve, ok := err.(*jsonschema.ValidationError); ok {
+			// Walk the ValidationError tree to surface the failing
+			// field paths + their messages. The default .Error() only
+			// prints the outermost location.
+			flat := []string{}
+			var walk func(*jsonschema.ValidationError)
+			walk = func(v *jsonschema.ValidationError) {
+				if v == nil {
+					return
+				}
+				if v.ErrorKind != nil {
+					flat = append(flat, fmt.Sprintf("%s: %s", strings.Join(v.InstanceLocation, "/"), v.ErrorKind))
+				}
+				for _, c := range v.Causes {
+					walk(c)
+				}
+			}
+			walk(ve)
+			if len(flat) > 0 {
+				detail = " [" + strings.Join(flat, "; ") + "]"
+			}
+		}
+		return fmt.Errorf("%s#/$defs/%s: %w%s", family, definition, err, detail)
 	}
 	return nil
 }
