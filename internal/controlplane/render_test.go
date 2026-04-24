@@ -403,3 +403,43 @@ func TestRenderNameDefaultsToYggdrasilCore(t *testing.T) {
 		t.Errorf("default name must remain %q when spec.name is empty", coreDeploymentName)
 	}
 }
+
+func TestRenderImagePullSecretsAndPullPolicy(t *testing.T) {
+	spec := baseSpec()
+	spec.Postgres = model.ControlPlanePostgresSpec{Mode: "inherit"}
+	spec.ImagePullSecrets = []string{"ghcr-pull", "ecr-pull"}
+	spec.PullPolicy = "IfNotPresent"
+
+	bundle, err := Render(spec)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	core := findObject(t, bundle.CoreObjects, "Deployment", coreDeploymentName)
+	if core == nil {
+		t.Fatal("missing core Deployment")
+	}
+
+	podSpec := mustPodSpec(t, core)
+	secrets, _ := podSpec["imagePullSecrets"].([]any)
+	if got, want := len(secrets), 2; got != want {
+		t.Fatalf("imagePullSecrets count = %d, want %d", got, want)
+	}
+	first, _ := secrets[0].(map[string]any)
+	if first["name"] != "ghcr-pull" {
+		t.Errorf("imagePullSecrets[0].name = %v, want ghcr-pull", first["name"])
+	}
+
+	containers := mustPodContainers(t, core)
+	if containers[0]["imagePullPolicy"] != "IfNotPresent" {
+		t.Errorf("imagePullPolicy = %v, want IfNotPresent", containers[0]["imagePullPolicy"])
+	}
+}
+
+func mustPodSpec(t *testing.T, deployment map[string]any) map[string]any {
+	t.Helper()
+	spec, _ := deployment["spec"].(map[string]any)
+	template, _ := spec["template"].(map[string]any)
+	podSpec, _ := template["spec"].(map[string]any)
+	return podSpec
+}

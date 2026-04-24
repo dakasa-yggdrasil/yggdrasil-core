@@ -256,6 +256,9 @@ func renderCoreDeployment(namespace, name string, spec model.ControlPlaneManifes
 			"httpGet": map[string]any{"path": "/healthz", "port": coreHTTPPortName},
 		},
 	}
+	if policy := strings.TrimSpace(spec.PullPolicy); policy != "" {
+		container["imagePullPolicy"] = policy
+	}
 	if r := renderResources(spec.Resources); r != nil {
 		container["resources"] = r
 	}
@@ -265,6 +268,17 @@ func renderCoreDeployment(namespace, name string, spec model.ControlPlaneManifes
 	}
 	if sa := strings.TrimSpace(spec.Kubernetes.ServiceAccount); sa != "" {
 		podSpec["serviceAccountName"] = sa
+	}
+	if len(spec.ImagePullSecrets) > 0 {
+		refs := make([]any, 0, len(spec.ImagePullSecrets))
+		for _, secret := range spec.ImagePullSecrets {
+			if trimmed := strings.TrimSpace(secret); trimmed != "" {
+				refs = append(refs, map[string]any{"name": trimmed})
+			}
+		}
+		if len(refs) > 0 {
+			podSpec["imagePullSecrets"] = refs
+		}
 	}
 
 	return map[string]any{
