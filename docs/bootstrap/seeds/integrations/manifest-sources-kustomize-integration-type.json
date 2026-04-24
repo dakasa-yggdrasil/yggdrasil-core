@@ -1,0 +1,70 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_type",
+  "metadata": {
+    "name": "manifest-sources-kustomize",
+    "namespace": "global",
+    "description": "Kustomize provider in the manifest-sources family. Clones a git repo and runs kustomize build in-process.",
+    "labels": {
+      "bootstrap_source": "integration-kustomize",
+      "provider": "kustomize",
+      "yggdrasil.io/catalog-domain": "manifest-sources",
+      "yggdrasil.io/catalog-section": "operations",
+      "yggdrasil.io/catalog-entry": "api"
+    }
+  },
+  "spec": {
+    "provider": "kustomize",
+    "family_ref": { "name": "manifest-sources", "namespace": "global" },
+    "implemented_operations": [
+      "generate_installation",
+      "reconcile_installation",
+      "discover_installation_state"
+    ],
+    "adapter": {
+      "transport": "rabbitmq",
+      "version": "1.0.0",
+      "queues": {
+        "describe": "yggdrasil.adapter.manifest-sources-kustomize.describe",
+        "execute": "yggdrasil.adapter.manifest-sources-kustomize.execute"
+      },
+      "timeout_seconds": 60
+    },
+    "capabilities": ["describe", "execute"],
+    "credential_schema": {
+      "mode": "inline",
+      "properties": {
+        "github_token": { "type": "string", "description": "Optional PAT or GitHub App installation token for private repos.", "secret": true }
+      }
+    },
+    "instance_schema": {
+      "mode": "inline",
+      "properties": {
+        "default_git_url":  { "type": "string", "description": "Fallback git_url when input omits one." },
+        "default_revision": { "type": "string", "description": "Fallback revision (branch/tag/SHA).", "default": "main" },
+        "default_path":     { "type": "string", "description": "Fallback kustomize overlay path inside the repo.", "default": "." },
+        "github_token":     { "type": "string", "description": "Optional PAT for private repos.", "secret": true }
+      }
+    },
+    "resource_types": [
+      {
+        "name": "rendered-object-set",
+        "canonical_prefix": "thirdparty.kustomize.objects",
+        "identity_template": "rendered.{product}.{component}",
+        "discoverable": false,
+        "default_actions": ["generate_installation", "reconcile_installation", "discover_installation_state"]
+      }
+    ],
+    "discovery": { "mode": "push", "cursor": "none" },
+    "normalization": {
+      "external_id_path": "metadata.name",
+      "name_path": "metadata.name",
+      "fallback_resource_prefix": "thirdparty.kustomize.custom"
+    },
+    "execution": {
+      "supports_dry_run": false,
+      "idempotent_actions": ["generate_installation", "reconcile_installation", "discover_installation_state"]
+    },
+    "extensions": { "preserve_raw_payload": true }
+  }
+}
