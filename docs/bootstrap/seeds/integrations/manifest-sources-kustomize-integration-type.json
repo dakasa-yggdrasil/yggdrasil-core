@@ -28,10 +28,6 @@
         "describe": "/rpc/describe",
         "execute": "/rpc/execute"
       },
-      "queues": {
-        "describe": "yggdrasil.adapter.manifest-sources-kustomize.describe",
-        "execute": "yggdrasil.adapter.manifest-sources-kustomize.execute"
-      },
       "timeout_seconds": 60
     },
     "capabilities": ["describe", "execute"],
