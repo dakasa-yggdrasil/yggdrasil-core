@@ -200,16 +200,28 @@ func WorkflowExecutionOrder(spec model.WorkflowManifestSpec) ([]model.WorkflowSt
 }
 
 // RenderWorkflowInput recursively resolves workflow templates against runtime inputs.
+// Both map values AND map keys are rendered — so a step spec like
+// `target_overrides: {"{{ inputs.component_name }}": {...}}` resolves the
+// key against runtime inputs, enabling generic templates over per-component
+// keys without downstream parsers needing to handle unrendered placeholders.
 func RenderWorkflowInput(value any, ctx WorkflowExecutionContext) (any, error) {
 	switch typed := value.(type) {
 	case map[string]any:
 		rendered := make(map[string]any, len(typed))
 		for key, item := range typed {
+			renderedKey, err := renderWorkflowString(key, ctx)
+			if err != nil {
+				return nil, fmt.Errorf("render map key %q: %w", key, err)
+			}
+			keyStr, ok := renderedKey.(string)
+			if !ok {
+				keyStr = fmt.Sprint(renderedKey)
+			}
 			next, err := RenderWorkflowInput(item, ctx)
 			if err != nil {
 				return nil, err
 			}
-			rendered[key] = next
+			rendered[keyStr] = next
 		}
 		return rendered, nil
 	case []any:
