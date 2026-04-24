@@ -281,6 +281,19 @@ func renderCoreDeployment(namespace, name string, spec model.ControlPlaneManifes
 		}
 	}
 
+	templateLabels := baseLabels("core")
+	for k, v := range spec.Labels {
+		templateLabels[k] = v
+	}
+	templateMeta := map[string]any{"labels": templateLabels}
+	if len(spec.Annotations) > 0 {
+		anns := map[string]any{}
+		for k, v := range spec.Annotations {
+			anns[k] = v
+		}
+		templateMeta["annotations"] = anns
+	}
+
 	return map[string]any{
 		"apiVersion": "apps/v1",
 		"kind":       "Deployment",
@@ -293,7 +306,7 @@ func renderCoreDeployment(namespace, name string, spec model.ControlPlaneManifes
 			"replicas": spec.Replicas,
 			"selector": map[string]any{"matchLabels": baseLabels("core")},
 			"template": map[string]any{
-				"metadata": map[string]any{"labels": baseLabels("core")},
+				"metadata": templateMeta,
 				"spec":     podSpec,
 			},
 		},

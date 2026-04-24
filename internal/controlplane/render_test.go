@@ -481,3 +481,39 @@ func TestRenderExtraEnvFrom(t *testing.T) {
 		t.Error("envFrom missing yggdrasil-config configMapRef")
 	}
 }
+
+func TestRenderAnnotationsAndLabels(t *testing.T) {
+	spec := baseSpec()
+	spec.Postgres = model.ControlPlanePostgresSpec{Mode: "inherit"}
+	spec.Annotations = map[string]string{
+		"ygg.io/deployed-at": "2026-04-24T22:00:00Z",
+		"ygg.io/deployed-by": "workflow",
+	}
+	spec.Labels = map[string]string{
+		"team": "platform",
+	}
+
+	bundle, err := Render(spec)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	core := findObject(t, bundle.CoreObjects, "Deployment", coreDeploymentName)
+	spec2, _ := core["spec"].(map[string]any)
+	template, _ := spec2["template"].(map[string]any)
+	templateMeta, _ := template["metadata"].(map[string]any)
+
+	annotations, _ := templateMeta["annotations"].(map[string]any)
+	if annotations == nil || annotations["ygg.io/deployed-at"] != "2026-04-24T22:00:00Z" {
+		t.Errorf("template annotations missing/invalid: %v", annotations)
+	}
+
+	labels, _ := templateMeta["labels"].(map[string]any)
+	if labels == nil || labels["team"] != "platform" {
+		t.Errorf("template labels missing custom: %v", labels)
+	}
+	// baseLabels still present
+	if labels == nil || labels[coreLabelKey] != coreLabelValue {
+		t.Errorf("template labels missing baseLabels: %v", labels)
+	}
+}
