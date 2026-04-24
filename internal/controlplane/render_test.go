@@ -307,3 +307,59 @@ func containsSecretRef(sources []map[string]any, name string) bool {
 	}
 	return false
 }
+
+func TestRenderPostgresInheritSkipsInfraAndEnvFrom(t *testing.T) {
+	spec := baseSpec()
+	spec.Postgres = model.ControlPlanePostgresSpec{Mode: "inherit"}
+
+	bundle, err := Render(spec)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	// Only the Namespace should be in infra (no Postgres StatefulSet/Secret/Service).
+	if got, want := len(bundle.InfraObjects), 1; got != want {
+		t.Fatalf("InfraObjects count = %d, want %d (only Namespace)", got, want)
+	}
+	if findObject(t, bundle.InfraObjects, "StatefulSet", postgresStatefulSet) != nil {
+		t.Error("Postgres StatefulSet must not render in inherit mode")
+	}
+
+	// WaitTargets should only include the core Deployment (no Postgres wait).
+	if got, want := len(bundle.WaitTargets), 1; got != want {
+		t.Fatalf("WaitTargets count = %d, want %d (core only)", got, want)
+	}
+	if bundle.WaitTargets[0].Kind != "Deployment" {
+		t.Errorf("WaitTargets[0].Kind = %q, want Deployment", bundle.WaitTargets[0].Kind)
+	}
+
+	// Core Deployment must not reference yggdrasil-postgres Secret in envFrom.
+	core := findObject(t, bundle.CoreObjects, "Deployment", coreDeploymentName)
+	if core == nil {
+		t.Fatal("missing core Deployment")
+	}
+	containers := mustPodContainers(t, core)
+	envFrom, _ := containers[0]["envFrom"].([]any)
+	for _, raw := range envFrom {
+		entry, _ := raw.(map[string]any)
+		secretRef, _ := entry["secretRef"].(map[string]any)
+		if secretRef != nil && secretRef["name"] == postgresSecretName {
+			t.Errorf("envFrom must not reference %s in inherit mode", postgresSecretName)
+		}
+	}
+}
+
+func mustPodContainers(t *testing.T, deployment map[string]any) []map[string]any {
+	t.Helper()
+	spec, _ := deployment["spec"].(map[string]any)
+	template, _ := spec["template"].(map[string]any)
+	podSpec, _ := template["spec"].(map[string]any)
+	rawContainers, _ := podSpec["containers"].([]any)
+	out := make([]map[string]any, 0, len(rawContainers))
+	for _, raw := range rawContainers {
+		if c, ok := raw.(map[string]any); ok {
+			out = append(out, c)
+		}
+	}
+	return out
+}

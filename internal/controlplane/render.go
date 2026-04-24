@@ -100,13 +100,19 @@ func Render(spec model.ControlPlaneManifestSpec) (*RenderedBundle, error) {
 
 	coreEnvSources := []map[string]any{}
 
-	if strings.EqualFold(spec.Postgres.Mode, "bundled") {
+	switch strings.ToLower(strings.TrimSpace(spec.Postgres.Mode)) {
+	case "bundled":
 		secret, set, svc := renderBundledPostgres(namespace, spec.Postgres.Bundled)
 		bundle.InfraObjects = append(bundle.InfraObjects, secret, set, svc)
 		bundle.WaitTargets = append(bundle.WaitTargets, WaitTarget{
 			Phase: phaseInfra, Namespace: namespace, Kind: "StatefulSet", Name: postgresStatefulSet,
 		})
 		coreEnvSources = append(coreEnvSources, envFromSecret(postgresSecretName))
+	case "external":
+		// envFrom is appended below, after the core Secret entry, to preserve
+		// ordering (core Secret first, external Postgres Secret second).
+	case "inherit":
+		// nothing to render; caller supplies DB_* via spec.ExtraEnvFrom.
 	}
 
 	for _, transport := range spec.Transports {
@@ -131,7 +137,7 @@ func Render(spec model.ControlPlaneManifestSpec) (*RenderedBundle, error) {
 	bundle.CoreObjects = append(bundle.CoreObjects, coreSecret)
 	coreEnvSources = append(coreEnvSources, envFromSecret(coreSecretName))
 
-	if spec.Postgres.Mode == "external" {
+	if strings.EqualFold(spec.Postgres.Mode, "external") {
 		coreEnvSources = append(coreEnvSources, envFromExternalPostgresSecret(spec.Postgres.External))
 	}
 	for _, transport := range spec.Transports {
