@@ -4,12 +4,20 @@
 # machine (or any docker host) to get a full control plane running
 # without kubernetes, helm, or tribal knowledge. It provisions:
 #
-#   - Postgres:       state store (manifests, sessions, events)
-#   - yggdrasil-core: control plane, bootstraps first admin on fresh DB
+#   - Postgres:                     state store (manifests, sessions, events)
+#   - yggdrasil-core:               control plane, bootstraps admin on fresh DB
+#   - integration-kubernetes:       HTTP adapter for applying K8s objects
+#   - integration-schema-migrations: HTTP adapter for goose-postgres
 #
-# By default the core runs HTTP-only — HTTP is the always-on transport
-# and no message broker is required. Additional `rpc.Transport`
-# backends are opt-in via docker compose profiles:
+# The two adapter services let `yggdrasil-deploy-control-plane` and
+# other workflows reach out to Kubernetes and Postgres without the
+# adopter hand-registering anything — the CLI (`yggdrasil init`)
+# auto-applies the matching integration_instance manifests after the
+# core comes up.
+#
+# By default everything speaks HTTP — HTTP is the always-on RPC
+# transport and no message broker is required. Additional
+# `rpc.Transport` backends are opt-in via docker compose profiles:
 #
 #   # HTTP-only (default):
 #   docker compose -f docker-compose.standalone.yml up -d
@@ -92,6 +100,31 @@ services:
     depends_on:
       postgres:
         condition: service_healthy
+
+  # Kubernetes adapter — consumed by `yggdrasil-deploy-control-plane`
+  # to apply K8s objects (Namespace, Deployments, Services, etc.) in
+  # an adopter's cluster. Needs KUBECONFIG mounted (or in_cluster when
+  # the core itself runs inside K8s; irrelevant for compose).
+  integration-kubernetes:
+    image: ${INTEGRATION_KUBERNETES_IMAGE:-ghcr.io/dakasa-yggdrasil/integration-kubernetes:latest}
+    restart: unless-stopped
+    environment:
+      YGGDRASIL_TRANSPORT: http
+      ADAPTER_PORT: "8081"
+      HEALTHCHECK_PORT: "8080"
+    volumes:
+      - ${KUBECONFIG_PATH:-${HOME}/.kube/config}:/root/.kube/config:ro
+
+  # Schema-migrations adapter (goose-postgres provider). Used by
+  # workflows that apply versioned SQL migrations against a target
+  # Postgres, including the core's own self-migration path.
+  integration-schema-migrations:
+    image: ${INTEGRATION_SCHEMA_MIGRATIONS_IMAGE:-ghcr.io/dakasa-yggdrasil/integration-schema-migrations:latest}
+    restart: unless-stopped
+    environment:
+      YGGDRASIL_TRANSPORT: http
+      ADAPTER_PORT: "8082"
+      HEALTHCHECK_PORT: "8080"
 
 volumes:
   yggdrasil-postgres-data:
