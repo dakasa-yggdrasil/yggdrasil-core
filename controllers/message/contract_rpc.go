@@ -5,7 +5,7 @@ import (
 	"fmt"
 
 	contractdocs "github.com/dakasa-yggdrasil/yggdrasil-core/docs/contracts"
-	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc"
 )
 
 type rpcContractSpec struct {
@@ -60,10 +60,14 @@ var (
 	}
 )
 
+// callContractRPC dispatches a contract-validated RPC call through
+// the given transport. Used by handlers that need to validate the
+// request/response against a versioned schema (contractdocs) before
+// and after the round-trip.
 func callContractRPC(
 	ctx context.Context,
-	conn *amqp.Connection,
-	queue string,
+	transport rpc.Transport,
+	endpoint string,
 	contract rpcContractSpec,
 	request any,
 	response any,
@@ -71,7 +75,7 @@ func callContractRPC(
 	if err := contractdocs.Validate(contract.Family, contract.RequestDef, request); err != nil {
 		return fmt.Errorf("validate %s request: %w", contract.Label, err)
 	}
-	if err := callRabbitRPC(ctx, conn, queue, request, response); err != nil {
+	if err := callRPC(ctx, transport, endpoint, request, response); err != nil {
 		return err
 	}
 	if response != nil && contract.ResponseDef != "" {

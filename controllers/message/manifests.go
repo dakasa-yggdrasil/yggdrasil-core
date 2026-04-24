@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc"
 )
 
 const (
@@ -86,23 +87,23 @@ func manifestConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) []
 }
 
 func manifestValidateHandler(conn *amqp.Connection, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var doc model.ManifestDocument
 		if err := json.Unmarshal(d.Body, &doc); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		doc = manifestengine.NormalizeDocument(doc)
 		if err := manifestengine.ValidateDocument(doc); err != nil {
-			return replyFailure(ctx, conn, d, "validation_failed", err, logger)
+			return replyFailure(ctx, d, "validation_failed", err, logger)
 		}
 
 		checksum, err := manifestengine.Checksum(doc)
 		if err != nil {
-			return replyFailure(ctx, conn, d, "internal_error", err, logger)
+			return replyFailure(ctx, d, "internal_error", err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{
+		return replySuccess(ctx, d, map[string]any{
 			"valid":    true,
 			"kind":     doc.Kind,
 			"checksum": checksum,
@@ -111,31 +112,31 @@ func manifestValidateHandler(conn *amqp.Connection, logger *zap.Logger) Consumer
 }
 
 func manifestCreateHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var doc model.ManifestDocument
 		if err := json.Unmarshal(d.Body, &doc); err != nil {
-			return replyFailure(ctx, conn, d, manifestPersistCodeBadRequest, err, logger)
+			return replyFailure(ctx, d, manifestPersistCodeBadRequest, err, logger)
 		}
 
 		manifestRecord, err := persistManifestVersion(ctx, db, doc)
 		if err != nil {
 			persistErr, ok := err.(*manifestPersistError)
 			if !ok {
-				return replyFailure(ctx, conn, d, manifestPersistCodeInternalError, err, logger)
+				return replyFailure(ctx, d, manifestPersistCodeInternalError, err, logger)
 			}
-			return replyFailure(ctx, conn, d, persistErr.Code, persistErr.Err, logger)
+			return replyFailure(ctx, d, persistErr.Code, persistErr.Err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"manifest": manifestRecord}, logger)
+		return replySuccess(ctx, d, map[string]any{"manifest": manifestRecord}, logger)
 	}
 }
 
 func manifestListHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		req := model.ListManifestRequest{}
 		if len(bytesTrimSpace(d.Body)) > 0 {
 			if err := json.Unmarshal(d.Body, &req); err != nil {
-				return replyFailure(ctx, conn, d, "bad_request", err, logger)
+				return replyFailure(ctx, d, "bad_request", err, logger)
 			}
 		}
 
@@ -147,10 +148,10 @@ func manifestListHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) 
 			ActiveOnly: req.ActiveOnly,
 		}, req.Pagination)
 		if err != nil {
-			return replyFailure(ctx, conn, d, "internal_error", err, logger)
+			return replyFailure(ctx, d, "internal_error", err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{
+		return replySuccess(ctx, d, map[string]any{
 			"manifests":  manifests,
 			"pagination": pagination,
 		}, logger)
@@ -158,15 +159,15 @@ func manifestListHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) 
 }
 
 func manifestGetHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.GetManifestRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		manifestID, err := uuid.Parse(strings.TrimSpace(req.ID))
 		if err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", fmt.Errorf("invalid manifest id"), logger)
+			return replyFailure(ctx, d, "bad_request", fmt.Errorf("invalid manifest id"), logger)
 		}
 
 		manifestRecord, err := repository.GetManifestByID(ctx, db, manifestID)
@@ -175,33 +176,33 @@ func manifestGetHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) C
 			if errors.Is(err, repository.ErrManifestNotFound) {
 				code = "not_found"
 			}
-			return replyFailure(ctx, conn, d, code, err, logger)
+			return replyFailure(ctx, d, code, err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"manifest": manifestRecord}, logger)
+		return replySuccess(ctx, d, map[string]any{"manifest": manifestRecord}, logger)
 	}
 }
 
 func manifestRBACEvaluateHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.EvaluateRBACRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		manifestRecord, err := resolveManifestForRBAC(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, manifestLookupErrorCode(err), err, logger)
+			return replyFailure(ctx, d, manifestLookupErrorCode(err), err, logger)
 		}
 
 		spec, err := manifestengine.ParseRBACSpec(manifestRecord.Spec)
 		if err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		allowed, roles, matches, err := manifestengine.EvaluateRBAC(spec, req.Subject, req.Resource, req.Action)
 		if err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		decision := "deny"
@@ -209,7 +210,7 @@ func manifestRBACEvaluateHandler(conn *amqp.Connection, db *sql.DB, logger *zap.
 			decision = "allow"
 		}
 
-		return replySuccess(ctx, conn, d, model.EvaluateRBACResponse{
+		return replySuccess(ctx, d, model.EvaluateRBACResponse{
 			Allowed:  allowed,
 			Decision: decision,
 			Manifest: model.ManifestReference{
@@ -226,28 +227,28 @@ func manifestRBACEvaluateHandler(conn *amqp.Connection, db *sql.DB, logger *zap.
 }
 
 func manifestPolicyEvaluateHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.EvaluatePolicyRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		manifestRecord, err := resolveManifestForKind(ctx, db, "policy", req.ManifestID, req.Namespace, req.Name, req.Version)
 		if err != nil {
-			return replyFailure(ctx, conn, d, manifestLookupErrorCode(err), err, logger)
+			return replyFailure(ctx, d, manifestLookupErrorCode(err), err, logger)
 		}
 
 		spec, err := manifestengine.ParsePolicySpec(manifestRecord.Spec)
 		if err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		allowed, decision, matches, err := manifestengine.EvaluatePolicy(spec, req.Resource, req.Action, req.Input)
 		if err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, model.EvaluatePolicyResponse{
+		return replySuccess(ctx, d, model.EvaluatePolicyResponse{
 			Allowed:  allowed,
 			Decision: decision,
 			Manifest: model.ManifestReference{
@@ -263,10 +264,10 @@ func manifestPolicyEvaluateHandler(conn *amqp.Connection, db *sql.DB, logger *za
 }
 
 func authorizationEvaluateHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.EvaluateAuthorizationRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		rbacManifest, err := resolveManifestForKind(
@@ -279,12 +280,12 @@ func authorizationEvaluateHandler(conn *amqp.Connection, db *sql.DB, logger *zap
 			req.RBAC.Version,
 		)
 		if err != nil {
-			return replyFailure(ctx, conn, d, manifestLookupErrorCode(err), err, logger)
+			return replyFailure(ctx, d, manifestLookupErrorCode(err), err, logger)
 		}
 
 		rbacSpec, err := manifestengine.ParseRBACSpec(rbacManifest.Spec)
 		if err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		var (
@@ -303,12 +304,12 @@ func authorizationEvaluateHandler(conn *amqp.Connection, db *sql.DB, logger *zap
 				req.Policy.Version,
 			)
 			if err != nil {
-				return replyFailure(ctx, conn, d, manifestLookupErrorCode(err), err, logger)
+				return replyFailure(ctx, d, manifestLookupErrorCode(err), err, logger)
 			}
 
 			spec, err := manifestengine.ParsePolicySpec(policyManifest.Spec)
 			if err != nil {
-				return replyFailure(ctx, conn, d, "bad_request", err, logger)
+				return replyFailure(ctx, d, "bad_request", err, logger)
 			}
 
 			policySpec = &spec
@@ -324,7 +325,7 @@ func authorizationEvaluateHandler(conn *amqp.Connection, db *sql.DB, logger *zap
 		if collaboratorID := strings.TrimSpace(req.CollaboratorID); collaboratorID != "" {
 			collaborator, teams, resolvedSubjects, err := repository.ResolveAuthorizationSubjects(ctx, db, collaboratorID)
 			if err != nil {
-				return replyFailure(ctx, conn, d, identityErrorCode(err), err, logger)
+				return replyFailure(ctx, d, identityErrorCode(err), err, logger)
 			}
 
 			subjects = append(subjects, resolvedSubjects...)
@@ -350,7 +351,7 @@ func authorizationEvaluateHandler(conn *amqp.Connection, db *sql.DB, logger *zap
 			input,
 		)
 		if err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		response.Collaborator = collaboratorRef
@@ -365,7 +366,7 @@ func authorizationEvaluateHandler(conn *amqp.Connection, db *sql.DB, logger *zap
 		// records the decision for audit trail.
 		emitAuthorizationEvaluatedEvent(ctx, db, logger, req, response, rbacManifest, policyManifest)
 
-		return replySuccess(ctx, conn, d, response, logger)
+		return replySuccess(ctx, d, response, logger)
 	}
 }
 
@@ -584,25 +585,29 @@ func teamReferencesFromTeams(teams []model.Team) []model.TeamReference {
 	return references
 }
 
-func replySuccess(ctx context.Context, conn *amqp.Connection, d amqp.Delivery, data any, logger *zap.Logger) error {
-	return replyJSON(ctx, conn, d, rpcResponse{
+// replySuccess and replyFailure are the single points where handler
+// results turn into an RPC reply to the caller. Transport-agnostic:
+// d.Reply dispatches through whichever rpc.Transport delivered the
+// message (AMQP, HTTP, gRPC, Kafka, …).
+func replySuccess(ctx context.Context, d rpc.Delivery, data any, logger *zap.Logger) error {
+	return replyJSON(ctx, d, rpcResponse{
 		OK:   true,
 		Data: data,
 	}, logger)
 }
 
-func replyFailure(ctx context.Context, conn *amqp.Connection, d amqp.Delivery, code string, err error, logger *zap.Logger) error {
+func replyFailure(ctx context.Context, d rpc.Delivery, code string, err error, logger *zap.Logger) error {
 	if logger != nil {
-		logger.Error("rabbitmq rpc handler failed",
-			zap.String("queue", d.RoutingKey),
+		logger.Error("rpc handler failed",
+			zap.String("endpoint", d.Endpoint),
 			zap.String("reply_to", d.ReplyTo),
-			zap.String("correlation_id", d.CorrelationId),
+			zap.String("correlation_id", d.CorrelationID),
 			zap.String("error_code", code),
 			zap.Error(err),
 		)
 	}
 
-	return replyJSON(ctx, conn, d, rpcResponse{
+	return replyJSON(ctx, d, rpcResponse{
 		OK: false,
 		Error: &rpcError{
 			Code:    code,
@@ -611,7 +616,7 @@ func replyFailure(ctx context.Context, conn *amqp.Connection, d amqp.Delivery, c
 	}, logger)
 }
 
-func replyJSON(ctx context.Context, conn *amqp.Connection, d amqp.Delivery, response rpcResponse, logger *zap.Logger) error {
+func replyJSON(ctx context.Context, d rpc.Delivery, response rpcResponse, logger *zap.Logger) error {
 	if strings.TrimSpace(d.ReplyTo) == "" {
 		return errors.New("reply_to is required for yggdrasil-core rpc consumers")
 	}
@@ -621,25 +626,15 @@ func replyJSON(ctx context.Context, conn *amqp.Connection, d amqp.Delivery, resp
 		return err
 	}
 
-	ch, err := conn.Channel()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = ch.Close() }()
-
-	if err := ch.PublishWithContext(ctx, "", d.ReplyTo, false, false, amqp.Publishing{
-		ContentType:   "application/json",
-		CorrelationId: d.CorrelationId,
-		Body:          body,
-	}); err != nil {
+	if err := d.Reply(ctx, body, "application/json"); err != nil {
 		return err
 	}
 
 	if logger != nil {
-		logger.Debug("rabbitmq rpc reply sent",
-			zap.String("queue", d.RoutingKey),
+		logger.Debug("rpc reply sent",
+			zap.String("endpoint", d.Endpoint),
 			zap.String("reply_to", d.ReplyTo),
-			zap.String("correlation_id", d.CorrelationId),
+			zap.String("correlation_id", d.CorrelationID),
 		)
 	}
 

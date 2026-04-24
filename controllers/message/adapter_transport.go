@@ -12,8 +12,8 @@ import (
 	"strings"
 
 	contractdocs "github.com/dakasa-yggdrasil/yggdrasil-core/docs/contracts"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
-	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 // ErrAdapterTransportUnavailable is returned when the configured adapter transport cannot be reached.
@@ -33,15 +33,20 @@ type AdapterTransportClient interface {
 }
 
 type adapterTransportClient struct {
-	rabbitmq   *amqp.Connection
-	httpClient *http.Client
+	rpcTransport rpc.Transport
+	httpClient   *http.Client
 }
 
-// NewAdapterTransportClient builds the transport client used by the core to reach integrations.
-func NewAdapterTransportClient(rabbitmq *amqp.Connection) AdapterTransportClient {
+// NewAdapterTransportClient builds the transport client used by the
+// core to reach integrations. Takes a generic rpc.Transport; the
+// caller wires AMQP, HTTP, or any future backend behind that
+// interface. The httpClient is kept distinct because http_json
+// integrations still dial adapter URLs directly (they don't route
+// through the core's rpc transport).
+func NewAdapterTransportClient(transport rpc.Transport) AdapterTransportClient {
 	return &adapterTransportClient{
-		rabbitmq:   rabbitmq,
-		httpClient: &http.Client{},
+		rpcTransport: transport,
+		httpClient:   &http.Client{},
 	}
 }
 
@@ -65,10 +70,10 @@ func (c *adapterTransportClient) Call(
 		if queue == "" {
 			return fmt.Errorf("adapter queue for capability %q is required", capability)
 		}
-		if c.rabbitmq == nil {
-			return fmt.Errorf("%w: rabbitmq connection is not configured", ErrAdapterTransportUnavailable)
+		if c.rpcTransport == nil {
+			return fmt.Errorf("%w: rpc transport is not configured", ErrAdapterTransportUnavailable)
 		}
-		if err := callRabbitRPC(ctx, c.rabbitmq, queue, request, response); err != nil {
+		if err := callRPC(ctx, c.rpcTransport, queue, request, response); err != nil {
 			return err
 		}
 	case "http_json":

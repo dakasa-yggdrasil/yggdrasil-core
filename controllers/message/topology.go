@@ -11,6 +11,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc"
 )
 
 const (
@@ -120,232 +121,232 @@ func topologyConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) []
 }
 
 func topologyNodeUpsertHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.UpsertTopologyNodeRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		node, err := repository.UpsertTopologyNode(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, topologyErrorCode(err), err, logger)
+			return replyFailure(ctx, d, topologyErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"node": node}, logger)
+		return replySuccess(ctx, d, map[string]any{"node": node}, logger)
 	}
 }
 
 func topologyNodeGetHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.GetTopologyNodeRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		node, err := repository.GetTopologyNode(ctx, db, req.ID)
 		if err != nil {
-			return replyFailure(ctx, conn, d, topologyErrorCode(err), err, logger)
+			return replyFailure(ctx, d, topologyErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"node": node}, logger)
+		return replySuccess(ctx, d, map[string]any{"node": node}, logger)
 	}
 }
 
 func topologyNodeChildrenHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.ListTopologyNodeChildrenRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		nodes, err := repository.ListTopologyNodeChildren(ctx, db, req.ParentID)
 		if err != nil {
-			return replyFailure(ctx, conn, d, topologyErrorCode(err), err, logger)
+			return replyFailure(ctx, d, topologyErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"nodes": nodes}, logger)
+		return replySuccess(ctx, d, map[string]any{"nodes": nodes}, logger)
 	}
 }
 
 func topologyEdgeUpsertHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.UpsertTopologyEdgeRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		edge, err := repository.UpsertTopologyEdge(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, topologyErrorCode(err), err, logger)
+			return replyFailure(ctx, d, topologyErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"edge": edge}, logger)
+		return replySuccess(ctx, d, map[string]any{"edge": edge}, logger)
 	}
 }
 
 func topologyEdgeListHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		req := model.ListTopologyEdgesRequest{}
 		if len(bytesTrimSpace(d.Body)) > 0 {
 			if err := json.Unmarshal(d.Body, &req); err != nil {
-				return replyFailure(ctx, conn, d, "bad_request", err, logger)
+				return replyFailure(ctx, d, "bad_request", err, logger)
 			}
 		}
 
 		edges, err := repository.ListTopologyEdges(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, topologyErrorCode(err), err, logger)
+			return replyFailure(ctx, d, topologyErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"edges": edges}, logger)
+		return replySuccess(ctx, d, map[string]any{"edges": edges}, logger)
 	}
 }
 
 func topologyDocumentUpsertHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.UpsertTopologyDocumentRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		document, err := repository.UpsertTopologyDocument(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, topologyErrorCode(err), err, logger)
+			return replyFailure(ctx, d, topologyErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"document": document}, logger)
+		return replySuccess(ctx, d, map[string]any{"document": document}, logger)
 	}
 }
 
 func topologyDocumentGetHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.GetTopologyDocumentRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		document, err := repository.GetTopologyDocument(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, topologyErrorCode(err), err, logger)
+			return replyFailure(ctx, d, topologyErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"document": document}, logger)
+		return replySuccess(ctx, d, map[string]any{"document": document}, logger)
 	}
 }
 
 func topologyDocumentListHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		req := model.ListTopologyDocumentsRequest{}
 		if len(bytesTrimSpace(d.Body)) > 0 {
 			if err := json.Unmarshal(d.Body, &req); err != nil {
-				return replyFailure(ctx, conn, d, "bad_request", err, logger)
+				return replyFailure(ctx, d, "bad_request", err, logger)
 			}
 		}
 
 		documents, err := repository.ListTopologyDocuments(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, topologyErrorCode(err), err, logger)
+			return replyFailure(ctx, d, topologyErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"documents": documents}, logger)
+		return replySuccess(ctx, d, map[string]any{"documents": documents}, logger)
 	}
 }
 
 func topologyDocumentValueHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.GetTopologyDocumentValueRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		value, err := repository.GetTopologyDocumentValue(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, topologyErrorCode(err), err, logger)
+			return replyFailure(ctx, d, topologyErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"value": string(value)}, logger)
+		return replySuccess(ctx, d, map[string]any{"value": string(value)}, logger)
 	}
 }
 
 func topologyAccessEvaluateHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.EvaluateTopologyAccessRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		response, err := repository.EvaluateTopologyAccess(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, topologyErrorCode(err), err, logger)
+			return replyFailure(ctx, d, topologyErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, response, logger)
+		return replySuccess(ctx, d, response, logger)
 	}
 }
 
 func buildProjectCreateHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.CreateBuildProjectRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		buildProject, err := repository.CreateBuildProject(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, topologyErrorCode(err), err, logger)
+			return replyFailure(ctx, d, topologyErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"build_project": buildProject}, logger)
+		return replySuccess(ctx, d, map[string]any{"build_project": buildProject}, logger)
 	}
 }
 
 func buildProjectGetHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.GetBuildProjectRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		buildProject, err := repository.GetBuildProject(ctx, db, req.ID)
 		if err != nil {
-			return replyFailure(ctx, conn, d, topologyErrorCode(err), err, logger)
+			return replyFailure(ctx, d, topologyErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"build_project": buildProject}, logger)
+		return replySuccess(ctx, d, map[string]any{"build_project": buildProject}, logger)
 	}
 }
 
 func buildProjectListHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.ListBuildProjectsRequest
 		if len(bytesTrimSpace(d.Body)) > 0 {
 			if err := json.Unmarshal(d.Body, &req); err != nil {
-				return replyFailure(ctx, conn, d, "bad_request", err, logger)
+				return replyFailure(ctx, d, "bad_request", err, logger)
 			}
 		}
 
 		buildProjects, err := repository.ListBuildProjects(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, topologyErrorCode(err), err, logger)
+			return replyFailure(ctx, d, topologyErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"build_projects": buildProjects}, logger)
+		return replySuccess(ctx, d, map[string]any{"build_projects": buildProjects}, logger)
 	}
 }
 
 func buildProjectDeleteHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.DeleteBuildProjectRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		buildProject, err := repository.DeleteBuildProject(ctx, db, req.ID)
 		if err != nil {
-			return replyFailure(ctx, conn, d, topologyErrorCode(err), err, logger)
+			return replyFailure(ctx, d, topologyErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"build_project": buildProject}, logger)
+		return replySuccess(ctx, d, map[string]any{"build_project": buildProject}, logger)
 	}
 }
 

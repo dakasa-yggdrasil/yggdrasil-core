@@ -13,6 +13,8 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc"
+	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc/amqp"
 )
 
 const (
@@ -66,20 +68,20 @@ func productConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) []C
 }
 
 func productMaterializeHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.MaterializeProductRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		productManifest, err := resolveManifestForKind(ctx, db, "product", req.Product.ManifestID, req.Product.Namespace, req.Product.Name, req.Product.Version)
 		if err != nil {
-			return replyFailure(ctx, conn, d, manifestLookupErrorCode(err), err, logger)
+			return replyFailure(ctx, d, manifestLookupErrorCode(err), err, logger)
 		}
 
 		spec, err := manifestengine.ParseProductSpec(productManifest.Spec)
 		if err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		materializedSpec, components, err := manifestengine.MaterializeProductSpec(
@@ -93,39 +95,39 @@ func productMaterializeHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Lo
 			},
 		)
 		if err != nil {
-			return replyFailure(ctx, conn, d, integrationAwareErrorCode(err, "materialization_failed"), err, logger)
+			return replyFailure(ctx, d, integrationAwareErrorCode(err, "materialization_failed"), err, logger)
 		}
 
 		record, err := repository.CreateProductMaterialization(ctx, db, productManifest, materializedSpec, components)
 		if err != nil {
-			return replyFailure(ctx, conn, d, "internal_error", err, logger)
+			return replyFailure(ctx, d, "internal_error", err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, model.MaterializeProductResponse{
+		return replySuccess(ctx, d, model.MaterializeProductResponse{
 			Materialization: record,
 		}, logger)
 	}
 }
 
 func productReconcileInstallationHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.ReconcileProductInstallationRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		productManifest, spec, err := resolveProductManifestSpec(ctx, db, req.Product)
 		if err != nil {
-			return replyFailure(ctx, conn, d, manifestLookupErrorCode(err), err, logger)
+			return replyFailure(ctx, d, manifestLookupErrorCode(err), err, logger)
 		}
 
 		planner := newProductInstallationPlanner(conn, db, logger)
 		results, err := planner.planProductReconciliation(ctx, productManifest, spec)
 		if err != nil {
-			return replyFailure(ctx, conn, d, integrationAwareErrorCode(err, "reconcile_failed"), err, logger)
+			return replyFailure(ctx, d, integrationAwareErrorCode(err, "reconcile_failed"), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, model.ReconcileProductInstallationResponse{
+		return replySuccess(ctx, d, model.ReconcileProductInstallationResponse{
 			Product: manifestReferenceFromRecord(productManifest),
 			Results: results,
 		}, logger)
@@ -133,15 +135,15 @@ func productReconcileInstallationHandler(conn *amqp.Connection, db *sql.DB, logg
 }
 
 func productDiscoverInstallationStateHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.DiscoverProductInstallationStateRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		productManifest, spec, err := resolveProductManifestSpec(ctx, db, req.Product)
 		if err != nil {
-			return replyFailure(ctx, conn, d, manifestLookupErrorCode(err), err, logger)
+			return replyFailure(ctx, d, manifestLookupErrorCode(err), err, logger)
 		}
 
 		productRef := manifestReferenceFromRecord(productManifest)
@@ -153,12 +155,12 @@ func productDiscoverInstallationStateHandler(conn *amqp.Connection, db *sql.DB, 
 
 			result, err := discoverIntegrationComponentState(ctx, conn, db, productRef, spec, component)
 			if err != nil {
-				return replyFailure(ctx, conn, d, integrationAwareErrorCode(err, "discover_failed"), err, logger)
+				return replyFailure(ctx, d, integrationAwareErrorCode(err, "discover_failed"), err, logger)
 			}
 			results = append(results, result)
 		}
 
-		return replySuccess(ctx, conn, d, model.DiscoverProductInstallationStateResponse{
+		return replySuccess(ctx, d, model.DiscoverProductInstallationStateResponse{
 			Product: productRef,
 			Results: results,
 		}, logger)
@@ -166,28 +168,28 @@ func productDiscoverInstallationStateHandler(conn *amqp.Connection, db *sql.DB, 
 }
 
 func productApplyInstallationHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.ApplyProductInstallationRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		productManifest, spec, err := resolveProductManifestSpec(ctx, db, req.Product)
 		if err != nil {
-			return replyFailure(ctx, conn, d, manifestLookupErrorCode(err), err, logger)
+			return replyFailure(ctx, d, manifestLookupErrorCode(err), err, logger)
 		}
 
 		// Validate target overrides against the Product components.
 		// A key in target_overrides that doesn't match any component is
 		// likely a typo and rejected loudly.
 		if err := validateTargetOverrides(req.TargetOverrides, spec); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		executor := newProductTargetExecutor(conn, db, logger).withTargetOverrides(req.TargetOverrides)
 		results, err := executor.applyProduct(ctx, productManifest, spec)
 		if err != nil {
-			return replyFailure(ctx, conn, d, integrationAwareErrorCode(err, "apply_failed"), err, logger)
+			return replyFailure(ctx, d, integrationAwareErrorCode(err, "apply_failed"), err, logger)
 		}
 
 		// Emit product.installation.applied event (best-effort, post-apply).
@@ -195,7 +197,7 @@ func productApplyInstallationHandler(conn *amqp.Connection, db *sql.DB, logger *
 		// trail records which targets were rewritten at apply time.
 		emitProductInstallationAppliedEvent(ctx, db, logger, productManifest, spec, results, req.TargetOverrides)
 
-		return replySuccess(ctx, conn, d, model.ApplyProductInstallationResponse{
+		return replySuccess(ctx, d, model.ApplyProductInstallationResponse{
 			Product: manifestReferenceFromRecord(productManifest),
 			Results: results,
 		}, logger)
@@ -319,29 +321,29 @@ func emitProductInstallationAppliedEvent(
 }
 
 func productObserveInstallationHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.ObserveProductInstallationRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		productManifest, spec, err := resolveProductManifestSpec(ctx, db, req.Product)
 		if err != nil {
-			return replyFailure(ctx, conn, d, manifestLookupErrorCode(err), err, logger)
+			return replyFailure(ctx, d, manifestLookupErrorCode(err), err, logger)
 		}
 
 		// Validate target overrides against the Product components.
 		if err := validateTargetOverrides(req.TargetOverrides, spec); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		executor := newProductTargetExecutor(conn, db, logger).withTargetOverrides(req.TargetOverrides)
 		results, err := executor.observeProduct(ctx, productManifest, spec)
 		if err != nil {
-			return replyFailure(ctx, conn, d, integrationAwareErrorCode(err, "observe_failed"), err, logger)
+			return replyFailure(ctx, d, integrationAwareErrorCode(err, "observe_failed"), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, model.ObserveProductInstallationResponse{
+		return replySuccess(ctx, d, model.ObserveProductInstallationResponse{
 			Product: manifestReferenceFromRecord(productManifest),
 			Results: results,
 		}, logger)
@@ -358,30 +360,30 @@ func productObserveInstallationHandler(conn *amqp.Connection, db *sql.DB, logger
 // Adapters that do not implement it will return an RPC error — the core
 // surfaces it fail-loud rather than silently succeeding.
 func productUninstallInstallationHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.UninstallProductInstallationRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		productManifest, spec, err := resolveProductManifestSpec(ctx, db, req.Product)
 		if err != nil {
-			return replyFailure(ctx, conn, d, manifestLookupErrorCode(err), err, logger)
+			return replyFailure(ctx, d, manifestLookupErrorCode(err), err, logger)
 		}
 
 		if err := validateTargetOverrides(req.TargetOverrides, spec); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		executor := newProductTargetExecutor(conn, db, logger).withTargetOverrides(req.TargetOverrides)
 		results, err := executor.uninstallProduct(ctx, productManifest, spec)
 		if err != nil {
-			return replyFailure(ctx, conn, d, integrationAwareErrorCode(err, "uninstall_failed"), err, logger)
+			return replyFailure(ctx, d, integrationAwareErrorCode(err, "uninstall_failed"), err, logger)
 		}
 
 		emitProductInstallationUninstalledEvent(ctx, db, logger, productManifest, spec, results, req.TargetOverrides)
 
-		return replySuccess(ctx, conn, d, model.UninstallProductInstallationResponse{
+		return replySuccess(ctx, d, model.UninstallProductInstallationResponse{
 			Product: manifestReferenceFromRecord(productManifest),
 			Results: results,
 		}, logger)
@@ -736,7 +738,7 @@ func reconcileIntegrationComponent(
 	}
 
 	var response model.AdapterReconcileInstallationResponse
-	if err := callContractRPC(rpcCtx, conn, queue, reconcileInstallationContract, request, &response); err != nil {
+	if err := callContractRPC(rpcCtx, rpcamqp.New(conn), queue, reconcileInstallationContract, request, &response); err != nil {
 		return model.ProductInstallationReconcileResult{}, fmt.Errorf("call integration execute queue %q: %w", queue, err)
 	}
 	if strings.TrimSpace(response.Operation) != "" && response.Operation != "reconcile_installation" {
@@ -802,7 +804,7 @@ func discoverIntegrationComponentState(
 	}
 
 	var response model.AdapterDiscoverInstallationStateResponse
-	if err := callContractRPC(rpcCtx, conn, queue, discoverInstallationStateContract, request, &response); err != nil {
+	if err := callContractRPC(rpcCtx, rpcamqp.New(conn), queue, discoverInstallationStateContract, request, &response); err != nil {
 		return model.ProductInstallationStateResult{}, fmt.Errorf("call integration execute queue %q: %w", queue, err)
 	}
 	if strings.TrimSpace(response.Operation) != "" && response.Operation != "discover_installation_state" {
@@ -871,7 +873,7 @@ func (g rabbitMQProductGenerator) Generate(ctx context.Context, input manifesten
 	}
 
 	var response model.AdapterGenerateInstallationResponse
-	if err := callContractRPC(rpcCtx, g.conn, queue, generateInstallationContract, request, &response); err != nil {
+	if err := callContractRPC(rpcCtx, rpcamqp.New(g.conn), queue, generateInstallationContract, request, &response); err != nil {
 		return manifestengine.GenerateProductComponentOutput{}, fmt.Errorf("call integration execute queue %q: %w", queue, err)
 	}
 	if strings.TrimSpace(response.Operation) != "" && response.Operation != operation {
@@ -1448,7 +1450,7 @@ func (e *productTargetExecutor) applyComponentTarget(
 	}
 
 	var response model.AdapterDeclarativeApplyResponse
-	if err := callContractRPC(rpcCtx, e.conn, queue, declarativeApplyContract, request, &response); err != nil {
+	if err := callContractRPC(rpcCtx, rpcamqp.New(e.conn), queue, declarativeApplyContract, request, &response); err != nil {
 		return model.ProductInstallationApplyResult{}, fmt.Errorf("call target execute queue %q: %w", queue, err)
 	}
 	if strings.TrimSpace(response.Operation) != "" && response.Operation != "declarative_apply" {
@@ -1524,7 +1526,7 @@ func (e *productTargetExecutor) observeComponentTarget(
 	}
 
 	var response model.AdapterObserveObjectsResponse
-	if err := callContractRPC(rpcCtx, e.conn, queue, observeObjectsContract, request, &response); err != nil {
+	if err := callContractRPC(rpcCtx, rpcamqp.New(e.conn), queue, observeObjectsContract, request, &response); err != nil {
 		return model.ProductInstallationObservationResult{}, fmt.Errorf("call target execute queue %q: %w", queue, err)
 	}
 	if strings.TrimSpace(response.Operation) != "" && response.Operation != "observe_objects" {
@@ -1600,7 +1602,7 @@ func (e *productTargetExecutor) uninstallComponentTarget(
 	}
 
 	var response model.AdapterDeclarativeDeleteResponse
-	if err := callContractRPC(rpcCtx, e.conn, queue, declarativeDeleteContract, request, &response); err != nil {
+	if err := callContractRPC(rpcCtx, rpcamqp.New(e.conn), queue, declarativeDeleteContract, request, &response); err != nil {
 		return model.ProductInstallationUninstallResult{}, fmt.Errorf("call target execute queue %q: %w", queue, err)
 	}
 	if strings.TrimSpace(response.Operation) != "" && response.Operation != "declarative_delete" {

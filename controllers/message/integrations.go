@@ -13,6 +13,8 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc"
+	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc/amqp"
 )
 
 const (
@@ -80,31 +82,31 @@ func integrationConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger)
 }
 
 func integrationExecuteHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.ExecuteIntegrationRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		req = normalizeExecuteIntegrationRequest(req)
 		if err := validateExecuteIntegrationRequest(req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		response, err := executeIntegrationRequest(ctx, conn, db, req, 0)
 		if err != nil {
-			return replyFailure(ctx, conn, d, integrationAwareErrorCode(err, "integration_execute_failed"), err, logger)
+			return replyFailure(ctx, d, integrationAwareErrorCode(err, "integration_execute_failed"), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, response, logger)
+		return replySuccess(ctx, d, response, logger)
 	}
 }
 
 func integrationStatusGetHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.GetIntegrationRuntimeStateRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		if strings.TrimSpace(req.CheckKind) == "" {
@@ -113,114 +115,114 @@ func integrationStatusGetHandler(conn *amqp.Connection, db *sql.DB, logger *zap.
 
 		state, err := repository.GetIntegrationRuntimeState(ctx, db, req.IntegrationInstance, req.CheckKind)
 		if err != nil {
-			return replyFailure(ctx, conn, d, integrationRuntimeStateErrorCode(err), err, logger)
+			return replyFailure(ctx, d, integrationRuntimeStateErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"state": state}, logger)
+		return replySuccess(ctx, d, map[string]any{"state": state}, logger)
 	}
 }
 
 func integrationStatusListHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		req := model.ListIntegrationRuntimeStatesRequest{}
 		if len(bytesTrimSpace(d.Body)) > 0 {
 			if err := json.Unmarshal(d.Body, &req); err != nil {
-				return replyFailure(ctx, conn, d, "bad_request", err, logger)
+				return replyFailure(ctx, d, "bad_request", err, logger)
 			}
 		}
 
 		states, err := repository.ListIntegrationRuntimeStates(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, integrationRuntimeStateErrorCode(err), err, logger)
+			return replyFailure(ctx, d, integrationRuntimeStateErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"states": states}, logger)
+		return replySuccess(ctx, d, map[string]any{"states": states}, logger)
 	}
 }
 
 func integrationInstanceHealthGetHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.GetIntegrationInstanceHealthRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		health, err := getIntegrationInstanceHealth(ctx, db, req.IntegrationInstance, req.CheckKind)
 		if err != nil {
-			return replyFailure(ctx, conn, d, integrationInstanceHealthErrorCode(err), err, logger)
+			return replyFailure(ctx, d, integrationInstanceHealthErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"health": health}, logger)
+		return replySuccess(ctx, d, map[string]any{"health": health}, logger)
 	}
 }
 
 func integrationInstanceHealthListHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		req := model.ListIntegrationInstanceHealthRequest{}
 		if len(bytesTrimSpace(d.Body)) > 0 {
 			if err := json.Unmarshal(d.Body, &req); err != nil {
-				return replyFailure(ctx, conn, d, "bad_request", err, logger)
+				return replyFailure(ctx, d, "bad_request", err, logger)
 			}
 		}
 
 		items, err := listIntegrationInstanceHealth(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, integrationInstanceHealthErrorCode(err), err, logger)
+			return replyFailure(ctx, d, integrationInstanceHealthErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"items": items}, logger)
+		return replySuccess(ctx, d, map[string]any{"items": items}, logger)
 	}
 }
 
 func integrationCatalogGetHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.GetIntegrationCatalogEntryRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		entry, err := getIntegrationCatalogEntry(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, integrationCatalogErrorCode(err), err, logger)
+			return replyFailure(ctx, d, integrationCatalogErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"entry": entry}, logger)
+		return replySuccess(ctx, d, map[string]any{"entry": entry}, logger)
 	}
 }
 
 func integrationCatalogListHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		req := model.ListIntegrationCatalogRequest{}
 		if len(bytesTrimSpace(d.Body)) > 0 {
 			if err := json.Unmarshal(d.Body, &req); err != nil {
-				return replyFailure(ctx, conn, d, "bad_request", err, logger)
+				return replyFailure(ctx, d, "bad_request", err, logger)
 			}
 		}
 
 		domains, err := integrationCatalogList(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, integrationCatalogErrorCode(err), err, logger)
+			return replyFailure(ctx, d, integrationCatalogErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"domains": domains}, logger)
+		return replySuccess(ctx, d, map[string]any{"domains": domains}, logger)
 	}
 }
 
 func catalogDiscoverHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		req := model.DiscoverCatalogRequest{}
 		if len(bytesTrimSpace(d.Body)) > 0 {
 			if err := json.Unmarshal(d.Body, &req); err != nil {
-				return replyFailure(ctx, conn, d, "bad_request", err, logger)
+				return replyFailure(ctx, d, "bad_request", err, logger)
 			}
 		}
 
 		response, err := discoverCatalog(ctx, conn, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, integrationAwareErrorCode(err, "catalog_discover_failed"), err, logger)
+			return replyFailure(ctx, d, integrationAwareErrorCode(err, "catalog_discover_failed"), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, response, logger)
+		return replySuccess(ctx, d, response, logger)
 	}
 }
 
@@ -275,7 +277,7 @@ func executeIntegrationThroughResolved(
 	}
 
 	var response model.AdapterExecuteIntegrationResponse
-	transport := NewAdapterTransportClient(conn)
+	transport := NewAdapterTransportClient(rpcamqp.New(conn))
 	if err := transport.Call(rpcCtx, integrationExecuteContract, typeSpec, instanceSpec, "execute", request, &response); err != nil {
 		return model.ExecuteIntegrationResponse{}, fmt.Errorf("call integration execute transport %q: %w", typeSpec.Adapter.Transport, err)
 	}

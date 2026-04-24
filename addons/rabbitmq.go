@@ -41,19 +41,21 @@ func bootstrapRabbitMQ(ctx context.Context, app *runtime.ServiceApp) error {
 
 	logger, _ := Logger(app)
 
-	if err := message.RegisterAllConsumers(conn, db, logger); err != nil {
+	// Construct the generic rpc.Transport first. Consumers subscribe
+	// through it; the raw amqp connection stays available so handlers
+	// that still do direct outbound publishes (resolveIntegrationInstance,
+	// dispatchWorkflowThroughIntegration, etc.) keep working during
+	// the migration.
+	rpcTransport := rpcamqp.New(conn)
+
+	if err := message.RegisterAllConsumers(rpcTransport, conn, db, logger); err != nil {
 		_ = conn.Close()
 		return fmt.Errorf("register consumers: %w", err)
 	}
 
 	app.SetResource("rabbitmq", conn)
-	app.RegisterCloser(func(context.Context) error { return conn.Close() })
-
-	// Expose the generic rpc.Transport alongside the raw amqp
-	// connection. New code should consume this; the raw connection
-	// stays available during the handler migration.
-	rpcTransport := rpcamqp.New(conn)
 	app.SetResource("rpc_transport", rpcTransport)
+	app.RegisterCloser(func(context.Context) error { return conn.Close() })
 
 	monitorInterval := integrationRuntimeMonitorInterval()
 	stopMonitor := message.StartIntegrationRuntimeMonitor(conn, db, logger, monitorInterval)
