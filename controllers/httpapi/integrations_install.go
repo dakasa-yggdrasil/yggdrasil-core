@@ -48,16 +48,25 @@ func (s *Server) handleInstallIntegration(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	repoRef, err := parseRepoRef(req.RepoRef)
-	if err != nil {
-		writeMappedError(w, err)
-		return
-	}
-
-	rawManifest, err := quickstartFetcher(r.Context(), repoRef)
-	if err != nil {
-		writeMappedError(w, fmt.Errorf("fetch quickstart manifest: %w", err))
-		return
+	var rawManifest []byte
+	if len(req.ManifestInline) > 0 {
+		// Caller already fetched the manifest (typical for OCI refs
+		// where the CLI handled Bearer auth) — trust+validate those
+		// bytes directly. RepoRef still goes through parseRepoRef if
+		// set, so audit logging gets a canonical ref; unparseable
+		// refs are tolerated when the inline bytes are provided.
+		rawManifest = req.ManifestInline
+	} else {
+		repoRef, err := parseRepoRef(req.RepoRef)
+		if err != nil {
+			writeMappedError(w, err)
+			return
+		}
+		rawManifest, err = quickstartFetcher(r.Context(), repoRef)
+		if err != nil {
+			writeMappedError(w, fmt.Errorf("fetch quickstart manifest: %w", err))
+			return
+		}
 	}
 
 	doc, err := decodeQuickstartDocument(rawManifest)
