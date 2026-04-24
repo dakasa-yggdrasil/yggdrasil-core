@@ -180,6 +180,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/catalog/discovery/register", server.handleCatalogDiscoveryRegister)
 	mux.HandleFunc("GET /api/v1/integration-instances", server.handleIntegrationInstanceList)
 	mux.HandleFunc("POST /api/v1/integration-instances", server.handleIntegrationInstanceCreate)
+	mux.HandleFunc("GET /api/v1/integration-runtime-states", server.handleIntegrationRuntimeStateList)
 	mux.HandleFunc("GET /api/v1/collaborators", server.handleCollaboratorList)
 	mux.HandleFunc("POST /api/v1/collaborators", server.handleCollaboratorCreate)
 	mux.HandleFunc("PATCH /api/v1/collaborators/{id}", server.handleCollaboratorUpdate)
