@@ -15,7 +15,7 @@ import (
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
-	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc"
+	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
 )
 
 const (

@@ -5,7 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc"
+	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
 )
 
 type rpcEnvelope struct {
