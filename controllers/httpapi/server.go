@@ -937,53 +937,14 @@ func (s *Server) handleGuardianApprovalDecision(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	if status != model.GuardianApprovalStatusApproved {
-		if err := messagecontroller.UpdateHeimdallApprovalMemoryStatus(r.Context(), s.db, spec, status, req.Comment); err != nil {
-			writeMappedError(w, err)
-			return
-		}
-		if err := messagecontroller.UpdateHeimdallApprovalBundleStatus(r.Context(), s.db, spec, status); err != nil {
-			writeMappedError(w, err)
-			return
-		}
-		writeJSON(w, http.StatusCreated, map[string]any{"manifest": updatedManifest})
-		return
-	}
-
-	if err := messagecontroller.UpdateHeimdallApprovalBundleStatus(r.Context(), s.db, spec, status); err != nil {
-		writeMappedError(w, err)
-		return
-	}
-
-	if err := messagecontroller.ExecuteHeimdallApprovedAction(r.Context(), s.rabbitmq, s.db, spec); err != nil {
-		writeMappedError(w, err)
-		return
-	}
-
-	spec.Status = model.GuardianApprovalStatusExecuted
-	spec.Metadata["executed_at"] = time.Now().UTC().Format(time.RFC3339)
-
-	executedSpecRaw, err := json.Marshal(spec)
-	if err != nil {
-		writeMappedError(w, fmt.Errorf("marshal guardian approval execution spec: %w", err))
-		return
-	}
-
-	executedManifest, err := createManifestVersion(r.Context(), s.db, model.ManifestDocument{
-		APIVersion: updatedManifest.APIVersion,
-		Kind:       updatedManifest.Kind,
-		Metadata:   guardianApprovalMetadataInput(updatedManifest, spec.Status),
-		Spec:       executedSpecRaw,
-	})
-	if err != nil {
-		writeMappedError(w, err)
-		return
-	}
-
-	writeJSON(w, http.StatusCreated, map[string]any{
-		"manifest":          executedManifest,
-		"approved_manifest": updatedManifest,
-	})
+	// The core used to drive Heimdall-specific side effects here —
+	// updating guardian_memory records, remediation bundles, and
+	// dispatching the approved action. Those side effects now live
+	// in the guardian integration that observes this approval via
+	// the event stream (manifest.created emits for every new version,
+	// including the approved one). The core's responsibility ends at
+	// persisting the decision.
+	writeJSON(w, http.StatusCreated, map[string]any{"manifest": updatedManifest})
 }
 
 func guardianApprovalMetadataInput(manifestRecord model.Manifest, status string) model.ManifestMetadataInput {

@@ -54,12 +54,12 @@ func bootstrapRabbitMQ(ctx context.Context, app *runtime.ServiceApp) error {
 		return nil
 	})
 
-	guardianInterval := heimdallGuardianLoopInterval()
-	stopGuardian := message.StartHeimdallGuardianLoop(conn, db, logger, guardianInterval)
-	app.RegisterCloser(func(context.Context) error {
-		stopGuardian()
-		return nil
-	})
+	// The Heimdall closed-loop guardian sweep used to live here. It
+	// moved to the separate integration-heimdall repo (commercial
+	// product). The core keeps the guardian_* / remediation_*
+	// manifest kinds and their CRUD endpoints; any guardian
+	// integration (Heimdall or a custom one) subscribes to the
+	// event stream and runs its own sweep loop.
 
 	return nil
 }
@@ -89,16 +89,3 @@ func integrationRuntimeMonitorInterval() time.Duration {
 	return time.Duration(seconds) * time.Second
 }
 
-func heimdallGuardianLoopInterval() time.Duration {
-	raw := os.Getenv("HEIMDALL_GUARDIAN_LOOP_INTERVAL_SECONDS")
-	if raw == "" {
-		return 120 * time.Second
-	}
-
-	seconds, err := strconv.ParseInt(raw, 10, 64)
-	if err != nil || seconds <= 0 {
-		return 120 * time.Second
-	}
-
-	return time.Duration(seconds) * time.Second
-}
