@@ -132,6 +132,32 @@ yggdrasil auth provider delete github
 
 See [docs/auth-providers/](./auth-providers/) for example payloads.
 
+### `yggdrasil new integration|surface <name>`
+
+Scaffold a new plugin from the official template. Shallow-clones
+[`integration-template`](https://github.com/dakasa-yggdrasil/integration-template)
+or [`surface-template`](https://github.com/dakasa-yggdrasil/surface-template),
+strips the template's git history, rewrites the Go module path and
+project references, and initializes a fresh git repo. `go test ./...`
+passes on the spot.
+
+```
+yggdrasil new integration datadog --owner acme-eng
+yggdrasil new surface admin-dashboard --owner acme-eng --module github.com/acme/surface-dashboard
+```
+
+Flags:
+
+| Flag | Purpose |
+|---|---|
+| `--owner` | GitHub owner used to derive the default module path and install hint. |
+| `--module` | Go module path for the new plugin (default: `github.com/<owner>/<kind>-<name>`). |
+| `--dir` | Target directory (default: `./<kind>-<name>`). |
+| `--template` | Override the upstream template repo (e.g. `your-org/custom-template`). |
+| `--no-git-init` | Skip `git init` in the scaffolded directory. |
+
+Full walkthrough: [extending.md](./extending.md).
+
 ### `yggdrasil install <repo_ref>`
 
 Quickstart-install an integration from a repo that carries a

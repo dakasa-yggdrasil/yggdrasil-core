@@ -238,13 +238,40 @@ integration exposes.
 | **secrets-management** | AWS Secrets Manager + GCP Secret Manager | `yggdrasil install dakasa-yggdrasil/integration-secrets-management` |
 | **database-admin** | Postgres declarative DB / role / grant | `yggdrasil install dakasa-yggdrasil/integration-database-admin` |
 
-> Want to write your own? Clone the [integration-template](https://github.com/dakasa-yggdrasil/integration-template) and read [`docs/concepts.md`](docs/concepts.md#integrations-family-type-instance-provider).
+### Build your own integration or surface
+
+One command scaffolds a compilable, testable, publishable plugin:
+
+```sh
+yggdrasil new integration datadog --owner acme-eng
+# ✓ scaffold ready
+#   directory: ./integration-datadog
+#   module:    github.com/acme-eng/integration-datadog
+# Next: cd in, edit internal/adapter/spec.go, git commit, publish.
+```
+
+The scaffold clones the official
+[integration-template](https://github.com/dakasa-yggdrasil/integration-template)
+(or [surface-template](https://github.com/dakasa-yggdrasil/surface-template)
+for a new surface), renames the module, initializes a fresh git repo, and
+leaves you with a working adapter that passes `go test` on the spot. Push
+to GitHub with a `vX.Y.Z` tag and the included GHA workflow publishes a
+multi-arch image to `ghcr.io`. Any adopter can then install your
+integration with one line:
+
+```sh
+yggdrasil install acme-eng/integration-datadog
+```
+
+Full walkthrough in [**docs/extending.md**](docs/extending.md) — 30
+minutes from zero to published.
 
 ## Documentation
 
 | Topic | Link |
 |---|---|
 | Getting started in 10 minutes | [docs/getting-started.md](docs/getting-started.md) |
+| **Build your first plugin in 30 minutes** | [**docs/extending.md**](docs/extending.md) |
 | Concepts (manifests, families, workflows) | [docs/concepts.md](docs/concepts.md) |
 | Architecture deep-dive | [docs/architecture.md](docs/architecture.md) |
 | Deployment (Compose, Helm, bare-metal) | [docs/deployment.md](docs/deployment.md) |

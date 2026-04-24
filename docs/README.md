@@ -30,6 +30,11 @@ zero to running.
 
 → [catalog.md](./catalog.md) — every shipped integration family.
 
+## I want to build my own integration or surface
+
+→ [extending.md](./extending.md) — thirty minutes from
+`yggdrasil new` to a published plugin anyone can install.
+
 ## I want to configure OAuth/OIDC sign-in
 
 → [auth-providers/](./auth-providers/) — GitHub, Google templates.
