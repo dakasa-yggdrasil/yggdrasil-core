@@ -24,8 +24,10 @@ The minimum viable production setup, in checklist form:
 - [ ] **HA core**: ≥ 2 replicas behind a service. See
   [scaling.md](./scaling.md).
 - [ ] **Managed Postgres** (RDS, Cloud SQL, Neon). The bundled
-  bitnami chart works for small footprints; a managed instance
-  removes operational toil at any scale that matters.
+  Postgres in `docker-compose.standalone.yml` is fine for demos and
+  small footprints; a managed instance removes operational toil at
+  any scale that matters. Control-plane manifests declare their
+  Postgres target via `spec.postgres.external`.
 - [ ] **Message broker only if needed** — required only if any
   integration uses `transport: rabbitmq`. Pure HTTP
   (`transport: http_json`) deployments can skip the broker entirely.
@@ -67,8 +69,9 @@ expected. Reading them once might save a postmortem.
 
 - **Treating `event_log` as queryable forever.** Archive after 90
   days. See [scaling.md](./scaling.md#event_log-archival).
-- **Sharing the bundled bitnami Postgres into prod.** It's fine for a
-  trial; in prod, use a managed DB.
+- **Sharing the compose-bundled Postgres into prod.** It's fine for
+  a trial; in prod, declare `spec.postgres.external` in your
+  control_plane manifest and point at a managed DB.
 - **Ignoring adapter health.** A degraded adapter manifests as
   workflow timeouts that look like Yggdrasil bugs. Monitor adapter
   describe handshakes via `integration_instance_runtime_state`.

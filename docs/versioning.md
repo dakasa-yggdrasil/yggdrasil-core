@@ -5,12 +5,17 @@ additions tailored to a manifest-driven, long-lived control plane.
 
 ## Version numbers
 
-`vMAJOR.MINOR.PATCH` applies to three artifacts in lockstep:
+`vMAJOR.MINOR.PATCH` applies to two artifacts in lockstep:
 
 - `yggdrasil-core` container image (`ghcr.io/dakasa-yggdrasil/yggdrasil-core`)
 - `yggdrasil` CLI binary
-- `chart/` Helm chart (the chart `version` matches; the `appVersion`
-  pins the core image it defaults to)
+
+Adapter images (`integration-kubernetes`, `integration-schema-migrations`,
+etc.) version independently — each declares its `adapter.version` in
+the `integration_type` manifest so the core verifies the contract at
+describe-handshake time. The SDK (`yggdrasil-sdk-go`) versions
+independently as well, with a compatibility matrix in its release
+notes.
 
 Running a CLI one minor ahead or behind the server is supported.
 Running two minor versions apart is not. The CLI refuses to talk to

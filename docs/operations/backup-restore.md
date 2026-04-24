@@ -67,12 +67,15 @@ find /backups -name 'yggdrasil-*.dump' -mtime +30 -delete
 Ship `/backups` off-site (S3 / GCS / your backup appliance). If the
 server is your only backup location, you have no backup.
 
-### The bundled bitnami Postgres
+### The compose-bundled Postgres
 
-If you're running the Helm chart with the bundled Postgres subchart,
-the subchart supports snapshot-based backup via Velero or persistent-
-volume snapshots. Document and automate whichever your cluster
-infrastructure supports.
+If you're running the standalone compose (`postgres.mode: bundled` in
+an equivalent control-plane, or the seed), back up the named Docker
+volume (`yggdrasil-postgres-data`) via `docker run --volumes-from ...
+pg_dump` — the same `pg_dump` call as above, just launched with
+access to the volume. For Kubernetes control planes using
+`spec.postgres.mode: bundled`, use Velero or persistent-volume
+snapshots against the StatefulSet's PVC.
 
 ## RPO / RTO targets
 
