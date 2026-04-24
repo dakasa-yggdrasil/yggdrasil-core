@@ -22,8 +22,12 @@
       "discover_installation_state"
     ],
     "adapter": {
-      "transport": "rabbitmq",
+      "transport": "http_json",
       "version": "1.0.0",
+      "endpoints": {
+        "describe": "/rpc/describe",
+        "execute": "/rpc/execute"
+      },
       "queues": {
         "describe": "yggdrasil.adapter.manifest-sources-kustomize.describe",
         "execute": "yggdrasil.adapter.manifest-sources-kustomize.execute"
