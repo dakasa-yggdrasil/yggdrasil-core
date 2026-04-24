@@ -1,0 +1,176 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "workflow",
+  "metadata": {
+    "name": "yggdrasil-deploy-control-plane",
+    "namespace": "global",
+    "description": "Reconciles a control_plane manifest by rendering its desired Kubernetes objects, applying them via integration-kubernetes, running the core's schema migrations via integration-schema-migrations, and waiting until the control plane is ready.",
+    "labels": {
+      "bootstrap_source": "yggdrasil-core",
+      "workflow_type": "deploy",
+      "workflow_template": "yggdrasil-deploy-control-plane"
+    }
+  },
+  "spec": {
+    "trigger": {
+      "mode": "manual"
+    },
+    "input_schema": {
+      "required": [
+        "control_plane"
+      ],
+      "properties": {
+        "control_plane": {
+          "type": "object",
+          "description": "Selector of the control_plane manifest to reconcile. Accepts {namespace, name} or {manifest_id}."
+        },
+        "kubernetes_instance": {
+          "type": "object",
+          "description": "Optional override for the integration-kubernetes instance used to apply objects. Defaults to the control_plane.spec.kubernetes.cluster_ref stored in the manifest."
+        },
+        "schema_migrations_instance": {
+          "type": "object",
+          "description": "Integration instance that runs the core schema migrations."
+        }
+      }
+    },
+    "defaults": {
+      "schema_migrations_instance": {
+        "namespace": "global",
+        "name": "yggdrasil-core-schema-migrations"
+      }
+    },
+    "steps": [
+      {
+        "id": "render",
+        "description": "Load the control_plane manifest and render its desired Kubernetes objects.",
+        "use": {
+          "kind": "yggdrasil",
+          "operation": "control_plane.render"
+        },
+        "with": {
+          "control_plane_ref": {
+            "namespace": "{{ inputs.control_plane.namespace }}",
+            "name": "{{ inputs.control_plane.name }}",
+            "version": "{{ inputs.control_plane.version }}"
+          }
+        },
+        "retry": {
+          "max_attempts": 1
+        }
+      },
+      {
+        "id": "apply-infra",
+        "description": "Apply namespace, Postgres, and bundled transport backends declared by the control_plane spec.",
+        "depends_on": ["render"],
+        "use": {
+          "kind": "integration",
+          "instance_ref": {
+            "namespace": "{{ inputs.kubernetes_instance.namespace }}",
+            "name": "{{ inputs.kubernetes_instance.name }}"
+          },
+          "capability": "declarative_apply"
+        },
+        "with": {
+          "namespace": "{{ steps.render.metadata.control_plane.name }}",
+          "objects": "{{ steps.render.metadata.infra_objects }}"
+        },
+        "retry": {
+          "max_attempts": 1
+        },
+        "timeout_seconds": 600
+      },
+      {
+        "id": "wait-infra",
+        "description": "Wait for Postgres and bundled transport backends to become ready.",
+        "depends_on": ["apply-infra"],
+        "use": {
+          "kind": "integration",
+          "instance_ref": {
+            "namespace": "{{ inputs.kubernetes_instance.namespace }}",
+            "name": "{{ inputs.kubernetes_instance.name }}"
+          },
+          "capability": "observe_objects"
+        },
+        "with": {
+          "objects": "{{ steps.render.metadata.infra_objects }}",
+          "readiness": {
+            "phase": "infra"
+          }
+        },
+        "retry": {
+          "max_attempts": 12,
+          "backoff_seconds": 10
+        },
+        "timeout_seconds": 600
+      },
+      {
+        "id": "migrate",
+        "description": "Run the core's schema migrations against the freshly-provisioned Postgres.",
+        "depends_on": ["wait-infra"],
+        "use": {
+          "kind": "integration",
+          "instance_ref": {
+            "namespace": "{{ inputs.schema_migrations_instance.namespace }}",
+            "name": "{{ inputs.schema_migrations_instance.name }}"
+          },
+          "capability": "apply_migrations_spec"
+        },
+        "with": {
+          "target": "yggdrasil-core",
+          "control_plane": "{{ steps.render.metadata.control_plane }}"
+        },
+        "retry": {
+          "max_attempts": 3,
+          "backoff_seconds": 5
+        },
+        "timeout_seconds": 900
+      },
+      {
+        "id": "apply-core",
+        "description": "Apply the core Secret, Deployment, Service, and optional Ingress.",
+        "depends_on": ["migrate"],
+        "use": {
+          "kind": "integration",
+          "instance_ref": {
+            "namespace": "{{ inputs.kubernetes_instance.namespace }}",
+            "name": "{{ inputs.kubernetes_instance.name }}"
+          },
+          "capability": "declarative_apply"
+        },
+        "with": {
+          "namespace": "{{ steps.render.metadata.control_plane.name }}",
+          "objects": "{{ steps.render.metadata.core_objects }}"
+        },
+        "retry": {
+          "max_attempts": 1
+        },
+        "timeout_seconds": 600
+      },
+      {
+        "id": "wait-core",
+        "description": "Wait for the control plane Deployment to become ready.",
+        "depends_on": ["apply-core"],
+        "use": {
+          "kind": "integration",
+          "instance_ref": {
+            "namespace": "{{ inputs.kubernetes_instance.namespace }}",
+            "name": "{{ inputs.kubernetes_instance.name }}"
+          },
+          "capability": "observe_objects"
+        },
+        "with": {
+          "objects": "{{ steps.render.metadata.core_objects }}",
+          "readiness": {
+            "phase": "core"
+          }
+        },
+        "retry": {
+          "max_attempts": 12,
+          "backoff_seconds": 10
+        },
+        "timeout_seconds": 600
+      }
+    ]
+  }
+}

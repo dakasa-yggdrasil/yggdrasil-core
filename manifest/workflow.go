@@ -24,10 +24,10 @@ var (
 		"installation_state.discover",
 	}
 	// yggdrasil step operations run in-process against the core's own
-	// manifest store rather than dispatching to an adapter. Only
-	// apply_manifest exists today; new entries here require a matching
-	// handler in controllers/message.
-	supportedYggdrasilStepOperations = []string{"apply_manifest"}
+	// manifest store or pure-render helpers rather than dispatching to
+	// an adapter. New entries here require a matching handler in
+	// controllers/message.
+	supportedYggdrasilStepOperations = []string{"apply_manifest", "control_plane.render"}
 	workflowTemplatePattern = regexp.MustCompile(`{{\s*([^{}]+?)\s*}}`)
 )
 
@@ -368,11 +368,21 @@ func validateWorkflowStep(step model.WorkflowStepSpec) error {
 		if step.Use.ProviderRef != nil {
 			return fmt.Errorf("yggdrasil step must not set use.provider_ref")
 		}
-		if step.With == nil {
-			return fmt.Errorf("yggdrasil step requires with.manifest")
-		}
-		if _, hasManifest := step.With["manifest"]; !hasManifest {
-			return fmt.Errorf("yggdrasil step requires with.manifest")
+		switch operation {
+		case "apply_manifest":
+			if step.With == nil {
+				return fmt.Errorf("yggdrasil step requires with.manifest")
+			}
+			if _, hasManifest := step.With["manifest"]; !hasManifest {
+				return fmt.Errorf("yggdrasil step requires with.manifest")
+			}
+		case "control_plane.render":
+			if step.With == nil {
+				return fmt.Errorf("yggdrasil step control_plane.render requires with.control_plane_ref")
+			}
+			if _, hasRef := step.With["control_plane_ref"]; !hasRef {
+				return fmt.Errorf("yggdrasil step control_plane.render requires with.control_plane_ref")
+			}
 		}
 	}
 
