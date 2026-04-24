@@ -161,6 +161,15 @@ func Render(spec model.ControlPlaneManifestSpec) (*RenderedBundle, error) {
 		}
 	}
 
+	for _, entry := range spec.ExtraEnvFrom {
+		switch {
+		case entry.SecretRef != nil && strings.TrimSpace(entry.SecretRef.Name) != "":
+			coreEnvSources = append(coreEnvSources, envFromSecret(entry.SecretRef.Name))
+		case entry.ConfigMapRef != nil && strings.TrimSpace(entry.ConfigMapRef.Name) != "":
+			coreEnvSources = append(coreEnvSources, envFromConfigMap(entry.ConfigMapRef.Name))
+		}
+	}
+
 	bundle.CoreObjects = append(bundle.CoreObjects,
 		renderCoreDeployment(namespace, coreName, spec, coreEnvSources),
 		renderCoreService(namespace, coreName),

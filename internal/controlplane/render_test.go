@@ -443,3 +443,41 @@ func mustPodSpec(t *testing.T, deployment map[string]any) map[string]any {
 	podSpec, _ := template["spec"].(map[string]any)
 	return podSpec
 }
+
+func TestRenderExtraEnvFrom(t *testing.T) {
+	spec := baseSpec()
+	spec.Postgres = model.ControlPlanePostgresSpec{Mode: "inherit"}
+	spec.ExtraEnvFrom = []model.ControlPlaneEnvFrom{
+		{SecretRef: &model.ControlPlaneLocalObjectRef{Name: "yggdrasil-secrets"}},
+		{ConfigMapRef: &model.ControlPlaneLocalObjectRef{Name: "yggdrasil-config"}},
+	}
+
+	bundle, err := Render(spec)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	core := findObject(t, bundle.CoreObjects, "Deployment", coreDeploymentName)
+	containers := mustPodContainers(t, core)
+	envFrom, _ := containers[0]["envFrom"].([]any)
+
+	// Expect at least 3 entries: core Secret + yggdrasil-secrets + yggdrasil-config.
+	// Exact count depends on what the render path adds in inherit mode (coreSecret only).
+	hasSecret := false
+	hasCM := false
+	for _, raw := range envFrom {
+		entry, _ := raw.(map[string]any)
+		if sr, _ := entry["secretRef"].(map[string]any); sr != nil && sr["name"] == "yggdrasil-secrets" {
+			hasSecret = true
+		}
+		if cm, _ := entry["configMapRef"].(map[string]any); cm != nil && cm["name"] == "yggdrasil-config" {
+			hasCM = true
+		}
+	}
+	if !hasSecret {
+		t.Error("envFrom missing yggdrasil-secrets secretRef")
+	}
+	if !hasCM {
+		t.Error("envFrom missing yggdrasil-config configMapRef")
+	}
+}

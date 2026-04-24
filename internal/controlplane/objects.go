@@ -395,6 +395,12 @@ func envFromSecret(secretName string) map[string]any {
 	}
 }
 
+func envFromConfigMap(name string) map[string]any {
+	return map[string]any{
+		"configMapRef": map[string]any{"name": name},
+	}
+}
+
 // envFromExternalPostgresSecret mounts the user-provided Postgres
 // password Secret into the core via envFrom. The secret ref uses the
 // `secret://name/key` convention; we only use the `name` segment here
