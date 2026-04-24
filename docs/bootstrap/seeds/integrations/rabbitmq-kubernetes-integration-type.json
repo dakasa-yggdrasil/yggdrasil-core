@@ -1,0 +1,160 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_type",
+  "metadata": {
+    "name": "rabbitmq-kubernetes",
+    "namespace": "global",
+    "description": "Bootstrap integration type for the substrate-specific RabbitMQ on Kubernetes plugin.",
+    "labels": {
+      "bootstrap_source": "integration-rabbitmq",
+      "provider": "rabbitmq",
+      "yggdrasil.io/catalog-domain": "rabbitmq",
+      "yggdrasil.io/catalog-section": "installations",
+      "yggdrasil.io/catalog-entry": "kubernetes"
+    }
+  },
+  "spec": {
+    "provider": "rabbitmq",
+    "family_ref": {
+      "name": "rabbitmq",
+      "namespace": "global"
+    },
+    "implemented_operations": [
+      "generate_installation",
+      "reconcile_installation",
+      "discover_installation_state"
+    ],
+    "adapter": {
+      "transport": "rabbitmq",
+      "version": "1.0.0",
+      "queues": {
+        "describe": "yggdrasil.adapter.rabbitmq-kubernetes.describe",
+        "execute": "yggdrasil.adapter.rabbitmq-kubernetes.execute"
+      },
+      "timeout_seconds": 20
+    },
+    "capabilities": [
+      "describe",
+      "execute"
+    ],
+    "guardian_support": {
+      "mode": "light",
+      "signals": {
+        "oom_killed": ["oom_killed", "oom"],
+        "restart_count": ["restart_count", "restarts"],
+        "error_rate": ["error_rate", "failure_rate"],
+        "queue_backlog": ["queue_backlog", "messages_ready", "backlog"],
+        "memory_pressure": ["memory_pressure"],
+        "disk_pressure": ["disk_pressure"]
+      }
+    },
+    "credential_schema": {
+      "mode": "none"
+    },
+    "instance_schema": {
+      "mode": "inline",
+      "properties": {
+        "default_blueprint": {
+          "type": "string",
+          "description": "Default generation blueprint when the product input omits one.",
+          "default": "shared-broker"
+        },
+        "default_cluster_name": {
+          "type": "string",
+          "description": "Default RabbitMQ cluster name.",
+          "default": "rabbitmq"
+        },
+        "default_namespace": {
+          "type": "string",
+          "description": "Default namespace for generated broker resources.",
+          "default": "rabbitmq-system"
+        },
+        "default_replicas": {
+          "type": "integer",
+          "description": "Default RabbitMQ replica count.",
+          "default": 1
+        },
+        "default_storage": {
+          "type": "string",
+          "description": "Default persistent volume size for the broker.",
+          "default": "20Gi"
+        },
+        "default_service_type": {
+          "type": "string",
+          "description": "Default Kubernetes service type exposed by the broker.",
+          "default": "ClusterIP"
+        },
+        "default_image": {
+          "type": "string",
+          "description": "Optional RabbitMQ image override used for generated clusters."
+        },
+        "default_additional_plugins": {
+          "type": "array",
+          "description": "Optional RabbitMQ plugins injected into generated clusters."
+        },
+        "persistence_enabled": {
+          "type": "boolean",
+          "description": "Controls whether generated clusters include a persistence block.",
+          "default": true
+        }
+      }
+    },
+    "resource_types": [
+      {
+        "name": "cluster",
+        "canonical_prefix": "thirdparty.rabbitmq.cluster",
+        "identity_template": "cluster.{name}",
+        "discoverable": false,
+        "default_actions": [
+          "generate_installation",
+          "reconcile_installation",
+          "discover_installation_state"
+        ]
+      }
+    ],
+    "action_catalog": [
+      {
+        "name": "generate_installation",
+        "description": "Generate a RabbitMQ broker installation component as raw Kubernetes objects.",
+        "resource_types": [
+          "cluster"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "reconcile_installation",
+        "description": "Build a declarative reconciliation plan for a RabbitMQ broker installation.",
+        "resource_types": [
+          "cluster"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "discover_installation_state",
+        "description": "Return the currently known installation state for a RabbitMQ broker blueprint.",
+        "resource_types": [
+          "cluster"
+        ],
+        "idempotent": true
+      }
+    ],
+    "discovery": {
+      "mode": "push",
+      "cursor": "none"
+    },
+    "normalization": {
+      "external_id_path": "metadata.name",
+      "name_path": "metadata.name",
+      "fallback_resource_prefix": "thirdparty.rabbitmq.custom"
+    },
+    "execution": {
+      "supports_dry_run": false,
+      "idempotent_actions": [
+        "generate_installation",
+        "reconcile_installation",
+        "discover_installation_state"
+      ]
+    },
+    "extensions": {}
+  }
+}

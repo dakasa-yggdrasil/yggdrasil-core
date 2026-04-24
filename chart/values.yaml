@@ -117,7 +117,7 @@ bootstrap:
   adminPassword: ""
   adminEmail: ""
   adminDisplayName: "Admin"
-  manifestsPath: "/app/docs/bootstrap/manifests"
+  manifestsPath: "/app/docs/bootstrap/seeds"
 
 # ─── Session cookie / HTTP timeouts ────────────────────────────────────
 session:

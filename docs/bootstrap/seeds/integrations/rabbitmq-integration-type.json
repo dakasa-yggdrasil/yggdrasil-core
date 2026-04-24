@@ -1,0 +1,227 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_type",
+  "metadata": {
+    "name": "rabbitmq",
+    "namespace": "global",
+    "description": "Bootstrap integration type for the RabbitMQ runtime and governance plugin.",
+    "labels": {
+      "bootstrap_source": "integration-rabbitmq",
+      "provider": "rabbitmq",
+      "yggdrasil.io/catalog-domain": "rabbitmq",
+      "yggdrasil.io/catalog-section": "operations",
+      "yggdrasil.io/catalog-entry": "api"
+    }
+  },
+  "spec": {
+    "provider": "rabbitmq",
+    "family_ref": {
+      "name": "rabbitmq",
+      "namespace": "global"
+    },
+    "implemented_operations": [
+      "ensure_vhost",
+      "ensure_user",
+      "ensure_permissions",
+      "ensure_queue",
+      "ensure_exchange",
+      "ensure_binding"
+    ],
+    "adapter": {
+      "transport": "rabbitmq",
+      "version": "1.0.0",
+      "queues": {
+        "describe": "yggdrasil.adapter.rabbitmq.describe",
+        "execute": "yggdrasil.adapter.rabbitmq.execute"
+      },
+      "timeout_seconds": 20
+    },
+    "capabilities": [
+      "describe",
+      "execute"
+    ],
+    "guardian_support": {
+      "mode": "light",
+      "signals": {
+        "restart_count": ["restart_count", "restarts"],
+        "error_rate": ["error_rate", "failure_rate"],
+        "queue_backlog": ["queue_backlog", "messages_ready", "backlog"],
+        "memory_pressure": ["memory_pressure"],
+        "disk_pressure": ["disk_pressure"],
+        "auth_denied": ["auth_denied", "unauthorized", "forbidden"]
+      }
+    },
+    "credential_schema": {
+      "mode": "inline",
+      "required": [
+        "username",
+        "password"
+      ],
+      "properties": {
+        "username": {
+          "type": "string",
+          "description": "RabbitMQ Management API username."
+        },
+        "password": {
+          "type": "string",
+          "description": "RabbitMQ Management API password.",
+          "secret": true
+        }
+      }
+    },
+    "instance_schema": {
+      "mode": "inline",
+      "properties": {
+        "management_url": {
+          "type": "string",
+          "description": "RabbitMQ Management API base URL.",
+          "default": "http://localhost:15672/api"
+        },
+        "default_vhost": {
+          "type": "string",
+          "description": "Default virtual host used when the request omits one.",
+          "default": "/"
+        },
+        "default_user_tags": {
+          "type": "array",
+          "description": "Default tags applied to ensured users when the request omits them."
+        },
+        "insecure_skip_verify": {
+          "type": "boolean",
+          "description": "Skip TLS certificate verification when talking to the Management API.",
+          "default": false
+        }
+      }
+    },
+    "resource_types": [
+      {
+        "name": "vhost",
+        "canonical_prefix": "thirdparty.rabbitmq.vhost",
+        "identity_template": "vhost.{vhost}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_vhost"
+        ]
+      },
+      {
+        "name": "user",
+        "canonical_prefix": "thirdparty.rabbitmq.user",
+        "identity_template": "user.{username}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_user"
+        ]
+      },
+      {
+        "name": "permission",
+        "canonical_prefix": "thirdparty.rabbitmq.permission",
+        "identity_template": "permission.{vhost}.{username}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_permissions"
+        ]
+      },
+      {
+        "name": "queue",
+        "canonical_prefix": "thirdparty.rabbitmq.queue",
+        "identity_template": "queue.{vhost}.{name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_queue"
+        ]
+      },
+      {
+        "name": "exchange",
+        "canonical_prefix": "thirdparty.rabbitmq.exchange",
+        "identity_template": "exchange.{vhost}.{name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_exchange"
+        ]
+      },
+      {
+        "name": "binding",
+        "canonical_prefix": "thirdparty.rabbitmq.binding",
+        "identity_template": "binding.{vhost}.{source}.{destination_type}.{destination}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_binding"
+        ]
+      }
+    ],
+    "action_catalog": [
+      {
+        "name": "ensure_vhost",
+        "description": "Ensure one RabbitMQ virtual host exists with the desired metadata.",
+        "resource_types": [
+          "vhost"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_user",
+        "description": "Ensure one RabbitMQ user exists with the desired tags.",
+        "resource_types": [
+          "user"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_permissions",
+        "description": "Ensure one RabbitMQ user permission set exists for a virtual host.",
+        "resource_types": [
+          "permission"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_queue",
+        "description": "Ensure one RabbitMQ queue exists with the desired arguments.",
+        "resource_types": [
+          "queue"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_exchange",
+        "description": "Ensure one RabbitMQ exchange exists with the desired properties.",
+        "resource_types": [
+          "exchange"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_binding",
+        "description": "Ensure one RabbitMQ binding exists between an exchange and its destination.",
+        "resource_types": [
+          "binding"
+        ],
+        "idempotent": true
+      }
+    ],
+    "discovery": {
+      "mode": "push",
+      "cursor": "none"
+    },
+    "normalization": {
+      "external_id_path": "name",
+      "name_path": "name",
+      "owner_path": "vhost",
+      "fallback_resource_prefix": "thirdparty.rabbitmq.custom"
+    },
+    "execution": {
+      "supports_dry_run": false,
+      "idempotent_actions": [
+        "ensure_vhost",
+        "ensure_user",
+        "ensure_permissions",
+        "ensure_queue",
+        "ensure_exchange",
+        "ensure_binding"
+      ]
+    },
+    "extensions": {
+      "allow_custom_actions": true
+    }
+  }
+}
