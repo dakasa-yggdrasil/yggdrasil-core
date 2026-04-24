@@ -96,13 +96,19 @@
         "identity_template": "object.{namespace}.{kind}.{name}",
         "discoverable": false,
         "default_actions": [
+          "apply_manifest",
           "declarative_apply",
-          "observe_objects",
-          "declarative_delete"
+          "observe_objects"
         ]
       }
     ],
     "action_catalog": [
+      {
+        "name": "apply_manifest",
+        "description": "Apply a single Kubernetes manifest object using server-side apply.",
+        "resource_types": ["object"],
+        "idempotent": true
+      },
       {
         "name": "declarative_apply",
         "description": "Apply a desired object set to a Kubernetes cluster using server-side apply.",
@@ -114,14 +120,6 @@
       {
         "name": "observe_objects",
         "description": "Observe the current state of a desired object set in a Kubernetes cluster.",
-        "resource_types": [
-          "object"
-        ],
-        "idempotent": true
-      },
-      {
-        "name": "declarative_delete",
-        "description": "Delete a desired object set from a Kubernetes cluster. Symmetric to declarative_apply — the caller sends the same object list that was previously applied and the adapter removes those objects. Used by product.installation.uninstall.",
         "resource_types": [
           "object"
         ],
@@ -141,6 +139,7 @@
     "execution": {
       "supports_dry_run": false,
       "idempotent_actions": [
+        "apply_manifest",
         "declarative_apply",
         "observe_objects"
       ]

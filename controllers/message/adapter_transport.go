@@ -143,7 +143,39 @@ func (c *adapterTransportClient) callHTTPJSON(
 		return fmt.Errorf("http adapter endpoint %q returned %d: %s", targetURL, httpResp.StatusCode, message)
 	}
 
-	return decodeRPCBody(responseBody, response)
+	// SDK HTTP transport wraps the adapter's reply in an envelope
+	// `{content_type, body}` where body is base64-encoded JSON. Peel
+	// that off here so decodeRPCBody sees the inner `{ok, data, ...}`
+	// envelope the adapter actually produced.
+	inner, err := unwrapSDKHTTPEnvelope(responseBody)
+	if err != nil {
+		return fmt.Errorf("unwrap adapter http envelope: %w", err)
+	}
+	return decodeRPCBody(inner, response)
+}
+
+// unwrapSDKHTTPEnvelope peels the {content_type, body} wrapper that
+// the yggdrasil-sdk-go HTTP transport emits around adapter replies.
+// If the payload does not look like the SDK envelope (zero-byte or
+// missing the well-known fields), it is returned unchanged — AMQP
+// replies and custom transports are already in the inner shape.
+func unwrapSDKHTTPEnvelope(raw []byte) ([]byte, error) {
+	if len(bytesTrimSpace(raw)) == 0 {
+		return raw, nil
+	}
+	var envelope struct {
+		ContentType string `json:"content_type"`
+		Body        []byte `json:"body"`
+	}
+	if err := json.Unmarshal(raw, &envelope); err != nil {
+		// Not an SDK envelope — pass through so older transports
+		// that don't wrap still work.
+		return raw, nil
+	}
+	if envelope.Body == nil {
+		return raw, nil
+	}
+	return envelope.Body, nil
 }
 
 func adapterQueueForCapability(queues model.IntegrationAdapterQueue, capability string) string {
