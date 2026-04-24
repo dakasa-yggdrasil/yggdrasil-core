@@ -4,7 +4,7 @@
   "metadata": {
     "name": "rabbitmq-topology",
     "namespace": "global",
-    "description": "Bootstrap integration type for the RabbitMQ topology provider — applies declarative topology specs (queues, exchanges, bindings) idempotently via the Management API.",
+    "description": "Bootstrap integration type for the RabbitMQ topology provider \u2014 applies declarative topology specs (queues, exchanges, bindings) idempotently via the Management API.",
     "labels": {
       "bootstrap_source": "integration-rabbitmq",
       "provider": "rabbitmq",
@@ -38,7 +38,10 @@
     ],
     "credential_schema": {
       "mode": "inline",
-      "required": ["username", "password"],
+      "required": [
+        "username",
+        "password"
+      ],
       "properties": {
         "username": {
           "type": "string",
@@ -66,7 +69,7 @@
         },
         "insecure_skip_verify": {
           "type": "boolean",
-          "description": "Skip TLS certificate verification when calling the Management API.",
+          "description": "Skip TLS verification when calling the Management API.",
           "default": false
         }
       }
@@ -86,14 +89,18 @@
     "action_catalog": [
       {
         "name": "apply_topology_spec",
-        "description": "Apply a declarative topology spec (vhosts, users, permissions, queues, exchanges, bindings) idempotently. Non-destructive unless input.purge_removed=true.",
-        "resource_types": ["topology"],
+        "description": "Apply a declarative topology spec (vhosts, users, permissions, queues, exchanges, bindings) idempotently. Non-destructive unless purge_removed=true.",
+        "resource_types": [
+          "topology"
+        ],
         "idempotent": true
       },
       {
         "name": "describe_topology",
         "description": "Return the currently observed topology of a virtual host.",
-        "resource_types": ["topology"],
+        "resource_types": [
+          "topology"
+        ],
         "idempotent": true
       }
     ],
