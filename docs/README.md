@@ -2,43 +2,79 @@
 
 Start here depending on what you're doing.
 
-## I want to try Yggdrasil
+## 🚀 Get running
 
-→ [getting-started.md](./getting-started.md) — ten minutes from
-zero to running.
+| I want to... | Read |
+|---|---|
+| Try Yggdrasil in 10 minutes | [getting-started.md](./getting-started.md) |
+| Understand what Yggdrasil is | [concepts.md](./concepts.md) |
+| See how components fit | [architecture.md](./architecture.md) |
 
-## I want to understand what Yggdrasil is
+## 🔌 Deep dive on a feature — [features/](./features/)
 
-→ [concepts.md](./concepts.md) — manifests, integrations, workflows.
-→ [architecture.md](./architecture.md) — how components fit together.
+| Feature | Page |
+|---|---|
+| Manifests | [features/manifests.md](./features/manifests.md) |
+| Workflows | [features/workflows.md](./features/workflows.md) |
+| Integrations | [features/integrations.md](./features/integrations.md) |
+| RBAC | [features/rbac.md](./features/rbac.md) |
+| Policy | [features/policy.md](./features/policy.md) |
+| Sessions & OAuth/OIDC | [features/sessions.md](./features/sessions.md) |
+| Events & audit | [features/events.md](./features/events.md) |
+| Surfaces | [features/surfaces.md](./features/surfaces.md) |
+| Products | [features/products.md](./features/products.md) |
+| Secrets | [features/secrets.md](./features/secrets.md) |
 
-## I want to deploy to production
+## 🛠 Build your own
 
-→ [deployment.md](./deployment.md) — Helm, compose, bare-metal.
-→ [security.md](./security.md) — auth, secrets, network boundaries.
+| I want to... | Read |
+|---|---|
+| Create an integration in 30 min | [extending.md](./extending.md) |
+| Scaffold a new plugin | `yggdrasil new integration <name>` |
+| See what's already shipped | [catalog.md](./catalog.md) |
+| Configure OAuth/OIDC sign-in | [auth-providers/](./auth-providers/) |
 
-## I want to use the CLI
+## 🧩 Fit Yggdrasil into your stack — [ecosystem/](./ecosystem/)
 
-→ [cli.md](./cli.md) — every subcommand, flags, env vars.
+Yggdrasil is **not** a replacement for your existing orchestrators.
+These guides show how it composes with what you already run.
 
-## I want to plan upgrades
+| Tool | Page |
+|---|---|
+| Backstage | [ecosystem/backstage.md](./ecosystem/backstage.md) |
+| Argo Workflows | [ecosystem/argo-workflows.md](./ecosystem/argo-workflows.md) |
+| Temporal | [ecosystem/temporal.md](./ecosystem/temporal.md) |
+| Airflow / Dagster / n8n | [ecosystem/airflow.md](./ecosystem/airflow.md) |
+| Crossplane / Terraform / Pulumi | [ecosystem/iac.md](./ecosystem/iac.md) |
+| GitHub Actions / GitLab CI | [ecosystem/ci-cd.md](./ecosystem/ci-cd.md) |
 
-→ [versioning.md](./versioning.md) — SemVer policy and deprecations.
-→ [upgrade.md](./upgrade.md) — step-by-step upgrade runbook.
+## 🏗 Run it in production — [operations/](./operations/)
 
-## I want to install integrations
+| Topic | Page |
+|---|---|
+| Overview & production checklist | [operations/README.md](./operations/README.md) |
+| Scaling | [operations/scaling.md](./operations/scaling.md) |
+| Observability | [operations/observability.md](./operations/observability.md) |
+| Backup & restore | [operations/backup-restore.md](./operations/backup-restore.md) |
+| Disaster recovery | [operations/disaster-recovery.md](./operations/disaster-recovery.md) |
+| Performance tuning | [operations/performance-tuning.md](./operations/performance-tuning.md) |
+| Multi-environment (dev/staging/prod, multi-tenant) | [operations/multi-environment.md](./operations/multi-environment.md) |
+| Incident response | [operations/incident-response.md](./operations/incident-response.md) |
+| Security hardening | [operations/security-hardening.md](./operations/security-hardening.md) |
 
-→ [catalog.md](./catalog.md) — every shipped integration family.
+## ⚙ Deploy & operate
 
-## I want to build my own integration or surface
+| I want to... | Read |
+|---|---|
+| Deploy (Compose, Helm, bare-metal) | [deployment.md](./deployment.md) |
+| Use the CLI | [cli.md](./cli.md) |
+| Upgrade | [upgrade.md](./upgrade.md) |
+| Understand the versioning policy | [versioning.md](./versioning.md) |
+| Understand the security model | [security.md](./security.md) |
 
-→ [extending.md](./extending.md) — thirty minutes from
-`yggdrasil new` to a published plugin anyone can install.
+## Contribute
 
-## I want to configure OAuth/OIDC sign-in
-
-→ [auth-providers/](./auth-providers/) — GitHub, Google templates.
-
-## I want to contribute
-
-→ [../AGENTS.md](../AGENTS.md) in the repo root.
+| I want to... | Read |
+|---|---|
+| Contribute code | [../AGENTS.md](../AGENTS.md) |
+| Report a security issue | **security@dakasa.me** ([policy](./security.md#responsible-disclosure)) |
