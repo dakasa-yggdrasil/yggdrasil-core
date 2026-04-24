@@ -372,8 +372,19 @@ func executeWorkflowStep(
 
 			result.Error = err.Error()
 		default:
+			// Integration request uses ManifestSelector (namespace/name[+version]).
+			// When step.Use declares family routing (no instance_ref), derive
+			// the selector from the resolved instanceManifest to avoid a nil
+			// deref panic on *step.Use.InstanceRef.
+			var integrationSel model.ManifestSelector
+			if resolvedUse.InstanceRef != nil {
+				integrationSel = *resolvedUse.InstanceRef
+			} else {
+				ref := manifestReferenceFromRecord(instanceManifest)
+				integrationSel = model.ManifestSelector{Namespace: ref.Namespace, Name: ref.Name}
+			}
 			executeReq := model.ExecuteIntegrationRequest{
-				Integration: *step.Use.InstanceRef,
+				Integration: integrationSel,
 				Operation:   result.Operation,
 				Capability:  result.Capability,
 				Input:       cloneAuthorizationInput(renderedInput),
