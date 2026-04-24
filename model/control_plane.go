@@ -12,14 +12,20 @@ package model
 // NATS, gRPC) are opt-in via the Transports slice; each plug-in
 // documents its expected `extra` keys.
 type ControlPlaneManifestSpec struct {
-	Image      string                     `json:"image"`
-	Replicas   int                        `json:"replicas"`
-	Resources  ControlPlaneResourcesSpec  `json:"resources,omitempty"`
-	Postgres   ControlPlanePostgresSpec   `json:"postgres"`
-	Ingress    ControlPlaneIngressSpec    `json:"ingress,omitempty"`
-	Transports []ControlPlaneTransport    `json:"transports,omitempty"`
-	Kubernetes ControlPlaneKubernetesSpec `json:"kubernetes"`
-	Bootstrap  ControlPlaneBootstrapSpec  `json:"bootstrap,omitempty"`
+	Name             string                     `json:"name,omitempty"`
+	Image            string                     `json:"image"`
+	PullPolicy       string                     `json:"pull_policy,omitempty"`
+	ImagePullSecrets []string                   `json:"image_pull_secrets,omitempty"`
+	Replicas         int                        `json:"replicas"`
+	Resources        ControlPlaneResourcesSpec  `json:"resources,omitempty"`
+	ExtraEnvFrom     []ControlPlaneEnvFrom      `json:"extra_env_from,omitempty"`
+	Annotations      map[string]string          `json:"annotations,omitempty"`
+	Labels           map[string]string          `json:"labels,omitempty"`
+	Postgres         ControlPlanePostgresSpec   `json:"postgres"`
+	Ingress          ControlPlaneIngressSpec    `json:"ingress,omitempty"`
+	Transports       []ControlPlaneTransport    `json:"transports,omitempty"`
+	Kubernetes       ControlPlaneKubernetesSpec `json:"kubernetes"`
+	Bootstrap        ControlPlaneBootstrapSpec  `json:"bootstrap,omitempty"`
 }
 
 // ControlPlaneResourcesSpec maps to Kubernetes resource requests/limits
@@ -109,6 +115,24 @@ type ControlPlaneKubernetesSpec struct {
 	Namespace      string           `json:"namespace"`
 	ServiceAccount string           `json:"service_account,omitempty"`
 	ClusterRef     ManifestSelector `json:"cluster_ref"`
+}
+
+// ControlPlaneEnvFrom references an existing Kubernetes Secret or
+// ConfigMap whose keys will be projected as environment variables
+// on the core container. Exactly one of SecretRef / ConfigMapRef
+// must be populated per entry. Mirrors the shape of the upstream
+// corev1.EnvFromSource to keep the renderer trivially translatable
+// by declarative_apply.
+type ControlPlaneEnvFrom struct {
+	SecretRef    *ControlPlaneLocalObjectRef `json:"secret_ref,omitempty"`
+	ConfigMapRef *ControlPlaneLocalObjectRef `json:"config_map_ref,omitempty"`
+}
+
+// ControlPlaneLocalObjectRef names a Kubernetes object in the same
+// namespace as the core Deployment. Only the name matters; callers
+// must ensure the referenced object exists at apply time.
+type ControlPlaneLocalObjectRef struct {
+	Name string `json:"name"`
 }
 
 // ControlPlaneBootstrapSpec seeds the control-plane's first-boot.

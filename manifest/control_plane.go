@@ -16,11 +16,13 @@ var (
 	// list is the signal that a new plug-in has been registered; no
 	// other change in this file is needed.
 	supportedControlPlaneTransportKinds = []string{"amqp", "kafka", "nats", "grpc"}
-	supportedControlPlanePostgresModes  = []string{"bundled", "external"}
+	supportedControlPlanePostgresModes  = []string{"bundled", "external", "inherit"}
 	supportedControlPlaneTransportModes = []string{"bundled", "external"}
 	supportedControlPlanePostgresSSL    = []string{"disable", "require", "verify-ca", "verify-full"}
 	controlPlaneStorageSizePattern      = regexp.MustCompile(`^[1-9][0-9]*(Mi|Gi|Ti)$`)
 	controlPlaneSecretRefPattern        = regexp.MustCompile(`^secret://[a-z0-9][a-z0-9._:/-]*$`)
+	supportedControlPlanePullPolicies   = []string{"Always", "IfNotPresent", "Never"}
+	controlPlaneNamePattern             = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$`)
 )
 
 // ParseControlPlaneSpec parses the raw spec payload into the typed
@@ -42,6 +44,15 @@ func ValidateControlPlaneSpec(spec model.ControlPlaneManifestSpec) error {
 	if spec.Replicas <= 0 {
 		return fmt.Errorf("control_plane replicas must be greater than zero")
 	}
+	if name := strings.TrimSpace(spec.Name); name != "" && !controlPlaneNamePattern.MatchString(name) {
+		return fmt.Errorf("control_plane name %q must match DNS-1123 label", spec.Name)
+	}
+	if policy := strings.TrimSpace(spec.PullPolicy); policy != "" && !slices.Contains(supportedControlPlanePullPolicies, policy) {
+		return fmt.Errorf("control_plane pull_policy %q is unsupported", spec.PullPolicy)
+	}
+	if err := validateControlPlaneEnvFrom(spec.ExtraEnvFrom); err != nil {
+		return err
+	}
 
 	if err := validateControlPlanePostgres(spec.Postgres); err != nil {
 		return err
@@ -57,6 +68,24 @@ func ValidateControlPlaneSpec(spec model.ControlPlaneManifestSpec) error {
 	}
 	if err := validateControlPlaneBootstrap(spec.Bootstrap); err != nil {
 		return err
+	}
+	return nil
+}
+
+func validateControlPlaneEnvFrom(entries []model.ControlPlaneEnvFrom) error {
+	for i, entry := range entries {
+		hasSecret := entry.SecretRef != nil
+		hasCM := entry.ConfigMapRef != nil
+		switch {
+		case !hasSecret && !hasCM:
+			return fmt.Errorf("control_plane extra_env_from[%d] must set secret_ref or config_map_ref", i)
+		case hasSecret && hasCM:
+			return fmt.Errorf("control_plane extra_env_from[%d] must set exactly one of secret_ref/config_map_ref", i)
+		case hasSecret && strings.TrimSpace(entry.SecretRef.Name) == "":
+			return fmt.Errorf("control_plane extra_env_from[%d].secret_ref.name cannot be empty", i)
+		case hasCM && strings.TrimSpace(entry.ConfigMapRef.Name) == "":
+			return fmt.Errorf("control_plane extra_env_from[%d].config_map_ref.name cannot be empty", i)
+		}
 	}
 	return nil
 }
@@ -109,6 +138,13 @@ func validateControlPlanePostgres(pg model.ControlPlanePostgresSpec) error {
 			if !slices.Contains(supportedControlPlanePostgresSSL, ssl) {
 				return fmt.Errorf("control_plane postgres.external.ssl_mode %q is unsupported", pg.External.SSLMode)
 			}
+		}
+	case "inherit":
+		if pg.Bundled != nil {
+			return fmt.Errorf("control_plane postgres.bundled must be empty when mode=inherit")
+		}
+		if pg.External != nil {
+			return fmt.Errorf("control_plane postgres.external must be empty when mode=inherit")
 		}
 	}
 	return nil

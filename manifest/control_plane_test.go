@@ -194,3 +194,125 @@ func TestControlPlaneDocumentValidation(t *testing.T) {
 		t.Fatalf("ValidateDocument(control_plane) error: %v", err)
 	}
 }
+
+func TestValidateControlPlanePostgresInherit(t *testing.T) {
+	spec := controlPlaneSpecFixture()
+	spec.Postgres = model.ControlPlanePostgresSpec{Mode: "inherit"}
+	if err := ValidateControlPlaneSpec(spec); err != nil {
+		t.Fatalf("postgres.mode=inherit should validate, got %v", err)
+	}
+}
+
+func TestValidateControlPlanePostgresInheritRejectsBundled(t *testing.T) {
+	spec := controlPlaneSpecFixture()
+	spec.Postgres = model.ControlPlanePostgresSpec{
+		Mode:    "inherit",
+		Bundled: &model.ControlPlanePostgresBundledSpec{Storage: "10Gi"},
+	}
+	if err := ValidateControlPlaneSpec(spec); err == nil {
+		t.Fatal("expected postgres.mode=inherit with bundled to fail validation")
+	}
+}
+
+func TestValidateControlPlanePostgresInheritRejectsExternal(t *testing.T) {
+	spec := controlPlaneSpecFixture()
+	spec.Postgres = model.ControlPlanePostgresSpec{
+		Mode: "inherit",
+		External: &model.ControlPlanePostgresExternalSpec{
+			Host: "example.local", Database: "y", Username: "u",
+			PasswordRef: "secret://x",
+		},
+	}
+	if err := ValidateControlPlaneSpec(spec); err == nil {
+		t.Fatal("expected postgres.mode=inherit with external to fail validation")
+	}
+}
+
+func TestValidateControlPlaneAcceptsFullOptionalFields(t *testing.T) {
+	spec := controlPlaneSpecFixture()
+	spec.Name = "yggdrasil"
+	spec.PullPolicy = "IfNotPresent"
+	spec.ImagePullSecrets = []string{"ghcr-pull"}
+	spec.ExtraEnvFrom = []model.ControlPlaneEnvFrom{
+		{SecretRef: &model.ControlPlaneLocalObjectRef{Name: "yggdrasil-secrets"}},
+		{ConfigMapRef: &model.ControlPlaneLocalObjectRef{Name: "yggdrasil-config"}},
+	}
+	spec.Annotations = map[string]string{"ygg.io/deployed-by": "workflow"}
+	spec.Labels = map[string]string{"team": "platform"}
+	if err := ValidateControlPlaneSpec(spec); err != nil {
+		t.Fatalf("full-fields spec should validate, got %v", err)
+	}
+}
+
+func TestValidateControlPlaneRejectsInvalidPullPolicy(t *testing.T) {
+	spec := controlPlaneSpecFixture()
+	spec.PullPolicy = "bogus"
+	if err := ValidateControlPlaneSpec(spec); err == nil {
+		t.Fatal("expected invalid pull_policy to fail validation")
+	}
+}
+
+func TestValidateControlPlaneRejectsInvalidName(t *testing.T) {
+	spec := controlPlaneSpecFixture()
+	spec.Name = "NotValidKubernetesName!"
+	if err := ValidateControlPlaneSpec(spec); err == nil {
+		t.Fatal("expected invalid spec.name to fail validation")
+	}
+}
+
+func TestValidateControlPlaneRejectsEmptyEnvFromEntry(t *testing.T) {
+	spec := controlPlaneSpecFixture()
+	spec.ExtraEnvFrom = []model.ControlPlaneEnvFrom{{}}
+	if err := ValidateControlPlaneSpec(spec); err == nil {
+		t.Fatal("expected empty extra_env_from entry to fail validation")
+	}
+}
+
+func TestValidateControlPlaneRejectsDualEnvFromEntry(t *testing.T) {
+	spec := controlPlaneSpecFixture()
+	spec.ExtraEnvFrom = []model.ControlPlaneEnvFrom{{
+		SecretRef:    &model.ControlPlaneLocalObjectRef{Name: "a"},
+		ConfigMapRef: &model.ControlPlaneLocalObjectRef{Name: "b"},
+	}}
+	if err := ValidateControlPlaneSpec(spec); err == nil {
+		t.Fatal("expected extra_env_from with both secret and configmap refs to fail")
+	}
+}
+
+func TestValidateControlPlaneRejectsBlankEnvFromSecretName(t *testing.T) {
+	spec := controlPlaneSpecFixture()
+	spec.ExtraEnvFrom = []model.ControlPlaneEnvFrom{{
+		SecretRef: &model.ControlPlaneLocalObjectRef{Name: "   "},
+	}}
+	if err := ValidateControlPlaneSpec(spec); err == nil {
+		t.Fatal("expected blank secret_ref.name to fail validation")
+	}
+}
+
+func TestValidateControlPlaneRejectsBlankEnvFromConfigMapName(t *testing.T) {
+	spec := controlPlaneSpecFixture()
+	spec.ExtraEnvFrom = []model.ControlPlaneEnvFrom{{
+		ConfigMapRef: &model.ControlPlaneLocalObjectRef{Name: ""},
+	}}
+	if err := ValidateControlPlaneSpec(spec); err == nil {
+		t.Fatal("expected blank config_map_ref.name to fail validation")
+	}
+}
+
+func TestValidateControlPlaneRejectsOverlongName(t *testing.T) {
+	spec := controlPlaneSpecFixture()
+	// 64 chars total (over the DNS-1123 label limit of 63)
+	spec.Name = "a" + strings.Repeat("b", 63)
+	if err := ValidateControlPlaneSpec(spec); err == nil {
+		t.Fatal("expected >63-char name to fail validation")
+	}
+}
+
+func TestValidateControlPlaneAccepts63CharName(t *testing.T) {
+	spec := controlPlaneSpecFixture()
+	// exactly 63 chars (DNS-1123 label limit)
+	spec.Name = "a" + strings.Repeat("b", 61) + "c"
+	if err := ValidateControlPlaneSpec(spec); err != nil {
+		t.Fatalf("expected 63-char name to validate, got: %v", err)
+	}
+}
