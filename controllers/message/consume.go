@@ -3,7 +3,7 @@ package message
 import (
 	"time"
 
-	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc"
+	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
 )
 
 // ConsumerHandler is the transport-agnostic handler signature. It is

@@ -12,7 +12,7 @@ import (
 	"strings"
 
 	contractdocs "github.com/dakasa-yggdrasil/yggdrasil-core/docs/contracts"
-	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc"
+	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 )
 

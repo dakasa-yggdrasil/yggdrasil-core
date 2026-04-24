@@ -8,8 +8,8 @@ import (
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
-	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc"
-	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc/amqp"
+	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
+	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc/amqp"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 
 	amqp "github.com/rabbitmq/amqp091-go"

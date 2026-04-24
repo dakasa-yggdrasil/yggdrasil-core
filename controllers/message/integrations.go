@@ -13,8 +13,8 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
-	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc"
-	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc/amqp"
+	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
+	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc/amqp"
 )
 
 const (
