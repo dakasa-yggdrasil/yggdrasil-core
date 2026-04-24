@@ -134,20 +134,28 @@ regardless of which transport or interface delivered the request.
 
 ## Deployment options
 
-### Docker Compose (dev and small self-hosted)
+### Seed — Docker Compose (dev, CI, small self-hosted)
 
-`docker-compose.standalone.yml` brings up Postgres + RabbitMQ +
-yggdrasil-core with random passwords and first-run bootstrap. Good
-for laptops and tiny deployments. `yggdrasil init` automates the
-whole thing.
+`docker-compose.standalone.yml` brings up Postgres + yggdrasil-core +
+the two bootstrap adapters (integration-kubernetes,
+integration-schema-migrations) with random passwords and first-run
+bootstrap. `yggdrasil init` automates the whole thing. Good for
+laptops, demos, CI, and single-host self-hosted deployments.
 
-### Kubernetes via Helm (production)
+### Kubernetes (production) — via `yggdrasil deploy control-plane`
 
-The chart at `chart/` depends on `bitnami/postgresql` and
-`bitnami/rabbitmq` by default, can be switched to external managed
-services via `postgresql.enabled=false` + `external.postgres.*`, and
-generates a first-run admin secret that survives upgrades.
-[deployment.md](./deployment.md) has the full runbook.
+Production Kubernetes install is manifest-first: write a
+`control_plane` manifest declaring image/replicas/Postgres/ingress/
+transports and apply it through the seed with
+`yggdrasil deploy control-plane`. The seed's
+`yggdrasil-deploy-control-plane` workflow renders the desired K8s
+objects via internal/controlplane and applies them through
+integration-kubernetes. No Helm chart. See [deployment.md](./deployment.md)
+for the full runbook.
+
+A future Kubernetes Operator (roadmap) watches `control_plane`
+manifests and reconciles them continuously — same shape as the
+deploy workflow, event-driven instead of one-shot.
 
 ### Custom / bare-metal
 

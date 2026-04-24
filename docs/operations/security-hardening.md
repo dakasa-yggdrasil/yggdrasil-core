@@ -35,10 +35,10 @@ Before the first non-platform user touches the system:
 
 - [ ] **Container image signed** (cosign or similar). Image-policy
   admission in your cluster verifies signatures.
-- [ ] **Pod security context** enforced. The Helm chart defaults
-  `runAsNonRoot: true`, `readOnlyRootFilesystem: false` (Go writes
-  temp files), `allowPrivilegeEscalation: false`, dropped all
-  capabilities.
+- [ ] **Pod security context** enforced via overlays on the
+  `control_plane` manifest — `runAsNonRoot: true`,
+  `readOnlyRootFilesystem: false` (Go writes temp files),
+  `allowPrivilegeEscalation: false`, dropped all capabilities.
 - [ ] **Network policy** restricting core pods to Postgres, RMQ, and
   ingress only.
 - [ ] **Postgres in a private subnet.** No public IP.
@@ -65,8 +65,11 @@ Before the first non-platform user touches the system:
   quarterly. Spot access drift.
 - [ ] **Audit bindings + collaborators** quarterly. Remove
   departed teammates, remove unused bots.
-- [ ] **Re-run `helm lint` and `helm template` after every chart
-  upgrade.** Catches regressions in the chart itself.
+- [ ] **Review the rendered bundle before applying a new control_plane
+  version.** Inspect the `steps.render.metadata.infra_objects` and
+  `core_objects` in a dispatched run's output (or via the console's
+  run detail view) so drift is caught before the workflow moves past
+  the render step.
 - [ ] **Penetration test** annually, or before a major release.
 
 ## Secrets and credentials

@@ -25,28 +25,27 @@ Migrations run inside the container via the entrypoint. If migration
 fails the pod crashes — inspect logs and restore from backup if the
 failure is corrupting state.
 
-## Helm
+## Kubernetes (control_plane manifest)
+
+Bump `spec.image` on the control_plane manifest and re-run the deploy
+workflow:
 
 ```sh
-helm repo update
-helm upgrade yggdrasil chart \
-  --namespace yggdrasil \
-  --set image.tag=<new-version> \
-  --values my-values.yaml
+# edit the image tag in control-plane.yaml
+yggdrasil deploy control-plane -f control-plane.yaml
 ```
 
-The chart keeps the admin secret value across upgrades (see
-`templates/secret.yaml` — `lookup` + existing-data reuse). Your
-admin password does NOT rotate unless you change
-`bootstrap.adminPassword` explicitly.
+The workflow applies the rendered objects with server-side apply, so
+the Deployment ends up at the new image; unchanged objects are a
+no-op. Migrations run as part of the workflow's `migrate` step
+before the new pods come up — a migration failure aborts the run
+and leaves the old pods serving.
 
 ### Rollback
 
-```sh
-helm rollback yggdrasil <revision>
-```
-
-Safe **within a MINOR line**. Cross-minor rollbacks may fail because
+Edit `spec.image` back to the previous tag and re-run
+`yggdrasil deploy control-plane -f control-plane.yaml`. Safe
+**within a MINOR line**. Cross-minor rollbacks may fail because
 schema migrations are one-way.
 
 ## Bare-metal
@@ -72,8 +71,9 @@ accordingly.
 
 1. Capture logs (`kubectl logs`, `docker compose logs`, or
    journalctl).
-2. Roll back: `helm rollback`, previous image tag in compose, or
-   restore the prior binary.
+2. Roll back: `yggdrasil deploy control-plane` with the previous
+   `spec.image`, previous image tag in compose, or restore the
+   prior binary.
 3. If the DB was touched, restore from the pre-upgrade Postgres
    backup.
 4. Open a GitHub issue with the release you upgraded from and to,

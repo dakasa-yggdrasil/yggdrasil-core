@@ -144,9 +144,11 @@ Two reasonable choices:
 - **Mirrored classic queues**. Older, less recommended. Use only for
   compatibility with existing tooling.
 
-The bundled bitnami subchart defaults to non-HA — fine for a trial,
-not fine for prod. For production, set `rabbitmq.enabled: false` in
-the chart and point at a managed RMQ or your own clustered install.
+The RabbitMQ service in the standalone compose defaults to single-
+node — fine for a trial, not fine for prod. For production, declare
+`transports: [{ kind: amqp, mode: external, ... }]` in your
+control_plane manifest and point at a managed RMQ or your own
+clustered install.
 
 ### Per-adapter dedicated queues
 

@@ -1,3 +1,0 @@
-# Local chart dependencies — Chart.lock pins versions; run
-# `helm dependency build chart` to re-materialize this directory.
-charts/
