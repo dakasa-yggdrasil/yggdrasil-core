@@ -32,8 +32,10 @@ A `pg_dump` of the Yggdrasil database covers all of it.
 - **Bootstrap seed files** (`docs/bootstrap/seeds/`). Shipped in
   the container image; no backup needed as long as you keep the
   image tag in your registry.
-- **RabbitMQ queue contents.** Adapters declare queues on boot;
-  there's no persistent queue content worth backing up.
+- **Transport state.** HTTP adapters are stateless — nothing to back
+  up. AMQP adapters (when `transport: rabbitmq` is used) re-declare
+  their queues on reconnect; no persistent queue content worth
+  backing up.
 
 ## Strategies
 
@@ -135,7 +137,7 @@ If these three pass, the control plane is back.
 
 ### 7. Integration adapters recover autonomously
 
-Adapters reconnect to RabbitMQ and re-declare their queues.
+Adapters reconnect to their transport and (for AMQP) re-declare their queues.
 `integration_instance_runtime_state` starts reporting `healthy`
 within one monitor interval (default 60s). No manual work needed.
 

@@ -69,7 +69,7 @@ From cAdvisor / node_exporter:
 - Container CPU + memory.
 - FD count (should stay flat — spikes mean a goroutine leak).
 - Open Postgres connections per pod.
-- Open AMQP channels per pod.
+- Open AMQP channels per pod *(only when using `transport: rabbitmq`)*.
 
 ### Recommended dashboards
 
@@ -82,8 +82,9 @@ Minimum three dashboards for a prod deployment:
    error rate, adapter pod replica count. Breaks down which integration
    is sick when things go sideways.
 3. **Infra.** Postgres (connections, slow queries, tx commit rate,
-   disk usage), RabbitMQ (queue depth per queue, message rate, channel
-   count), core pods (CPU/mem/FD).
+   disk usage), message broker when in use (queue depth per queue,
+   message rate, channel count), adapter services (HTTP latency + 5xx
+   rate for HTTP-transport adapters), core pods (CPU/mem/FD).
 
 Cheap to build. Enormously valuable during incidents.
 
@@ -92,18 +93,18 @@ Cheap to build. Enormously valuable during incidents.
 Two interesting sets of spans:
 
 - Per HTTP request on the core.
-- Per workflow run step, including the AMQP RPC round-trip to the
-  adapter.
+- Per workflow run step, including the transport round-trip to the
+  adapter (HTTP request or AMQP RPC, whichever the integration uses).
 
 Neither is wired out-of-the-box yet. When you wire traces
-(OpenTelemetry Go SDK, propagate trace context via AMQP headers),
-these are the spans you want:
+(OpenTelemetry Go SDK, propagate trace context via HTTP headers or
+AMQP headers per transport), these are the spans you want:
 
 - `http.request` — the core's top-level HTTP handler.
 - `manifest.persist` — the validate + checksum + tx + emit pipeline.
 - `workflow.run` — the full run.
 - `workflow.step.render` — template rendering.
-- `workflow.step.dispatch` — AMQP RPC to adapter.
+- `workflow.step.dispatch` — transport call to adapter (HTTP or AMQP).
 - `integration.describe_handshake` — the per-use verification.
 
 A typed span per step is the difference between "a workflow step

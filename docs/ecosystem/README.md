@@ -10,9 +10,11 @@ The question this directory answers is: *"I already run X. How does
 Yggdrasil compose with it?"*
 
 The short answer is **through integrations**. Each tool in your stack
-exposes operations through an adapter (AMQP RPC); Yggdrasil dispatches
-steps to the right adapter; your existing investment stays yours. The
-value Yggdrasil adds is the layer above:
+exposes operations through an adapter over a pluggable transport
+(HTTP and AMQP today; gRPC, Kafka, NATS, or anything else as plug-ins
+— see [features/transports.md](../features/transports.md)). Yggdrasil
+dispatches steps to the right adapter; your existing investment stays
+yours. The value Yggdrasil adds is the layer above:
 
 - A **versioned manifest catalog** that your tools can read and write.
 - A **uniform RBAC + policy** checked before any dispatch, across every

@@ -12,7 +12,7 @@ broken but the business still needs the platform to operate.
 | Full region loss | Low (<1%/yr) | < 5 min | < 1 h | Cross-region sync replica + cold standby core |
 | Encryption key compromise | Low | 0 min (no data loss, but rotate) | < 4 h | Rotation playbook + re-encryption workflow |
 | Postgres corruption | Rare | ≤ 1 h (PITR) | < 2 h | PITR + tested restore |
-| RabbitMQ loss | Uncommon | 0 min (stateless) | < 15 min | Redundant broker or managed RMQ |
+| Message broker loss *(when `transport: rabbitmq` is used)* | Uncommon | 0 min (stateless) | < 15 min | Redundant broker or managed RMQ. Not applicable to pure HTTP deployments. |
 | Ransomware / mass manifest deletion | Rare but bad | ≤ 1 h | < 2 h | Immutable off-site backups + write throttle |
 | Adapter compromise (one integration) | Depends | 0 min | < 30 min | Isolate, rotate creds, redeploy |
 
@@ -109,17 +109,21 @@ window.
 If PITR is not enabled (don't do that), restore from the nightly
 backup and accept the RPO hit.
 
-## RabbitMQ loss
+## Message broker loss
+
+Applies only when any integration uses `transport: rabbitmq`.
+HTTP-only deployments skip this section.
 
 Stateless by design. If the broker is completely gone:
 
 1. Stand up a fresh cluster.
-2. Update `BROKER_URL` on the core and all adapters.
+2. Update `BROKER_URL` on the core and all AMQP adapters.
 3. Adapters re-declare their queues on reconnect.
-4. Workflows that were in-flight during the outage are lost — they
-   appear in `workflow_run` as `status: running` forever. Run a
-   one-time cleanup workflow that marks them `failed` with
-   `error: "broker outage"`.
+4. AMQP-transport workflow steps that were in-flight during the
+   outage are lost — they appear in `workflow_run` as
+   `status: running` forever. Run a one-time cleanup workflow that
+   marks them `failed` with `error: "broker outage"`.
+5. HTTP-transport integrations are unaffected.
 
 ## Ransomware / mass deletion
 

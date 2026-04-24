@@ -69,10 +69,12 @@ that execute the actual work are a plug-in choice — yours.
 - 🧬 **Manifest-first catalog** — every integration, workflow, policy, RBAC
   role, auth provider, product, surface is a versioned YAML/JSON document
   in Postgres. Apply, diff, roll back by version.
-- 🔌 **Pluggable integration adapters** — anything that speaks AMQP RPC
-  becomes an integration. One command installs
+- 🔌 **Pluggable integration adapters** — integrations speak a
+  pluggable transport. HTTP and AMQP ship today; gRPC, Kafka, NATS,
+  or any other fit as plug-ins. One command installs
   (`yggdrasil install`). One command scaffolds a new one
-  (`yggdrasil new`).
+  (`yggdrasil new`). Details in
+  [docs/features/transports.md](docs/features/transports.md).
 - ⚙️ **Declarative workflows across everything** — DAG of steps over any
   integration family with template rendering, retry, per-step audit.
 - 🛡 **Built-in RBAC + policy** — subject/action/resource allow-deny plus
@@ -95,7 +97,11 @@ flowchart LR
     end
     subgraph State
         PG[(Postgres)]
-        RMQ[(RabbitMQ)]
+    end
+    subgraph Transport["Pluggable transport"]
+        HTTPT[HTTP]
+        AMQP[AMQP / RabbitMQ]
+        Other[gRPC / Kafka / NATS — plug-in]
     end
     subgraph Adapters["Integration adapters"]
         K8s[integration-kubernetes]
@@ -110,17 +116,23 @@ flowchart LR
     HTTP --> Auth
     Engine --> PG
     Auth --> PG
-    Engine -- AMQP RPC --> RMQ
-    RMQ --> K8s
-    RMQ --> Grafana
-    RMQ --> AWS
-    RMQ --> Etc
+    Engine --> Transport
+    Transport --> K8s
+    Transport --> Grafana
+    Transport --> AWS
+    Transport --> Etc
 ```
 
-The control plane (this repo) is a single Go binary. Integrations are
-independent containers that speak an AMQP RPC contract — install one with
-`yggdrasil install <repo>` and it appears in your catalog as a usable
-operation set inside workflows.
+The control plane (this repo) is a single Go binary that exposes an HTTP
+REST API. Integrations are independent adapters — they can talk to the
+core through any transport the deployment enables. Two transports ship
+today (`http_json` and `rabbitmq`); adding gRPC, Kafka, NATS, or any
+other is a small, local switch-case extension — see
+[docs/features/transports.md](docs/features/transports.md).
+
+Install an integration with `yggdrasil install <repo>` and it appears
+in your catalog as a usable operation set inside workflows, regardless
+of which transport it chose.
 
 ## Feature deep-dives
 
@@ -133,7 +145,10 @@ with wire protocol, evaluation semantics, and runbooks.
   rendering, retry, per-step audit, and three execution modes
   (integration, product, yggdrasil-local).
 - **[Integrations](docs/features/integrations.md)** — family/type/instance/
-  provider model, AMQP contract, install flow, catalog labels.
+  provider model, install flow, catalog labels.
+- **[Transports](docs/features/transports.md)** — how the core reaches
+  adapters: `http_json` and `rabbitmq` shipped, gRPC/Kafka/NATS as
+  extensions.
 - **[RBAC](docs/features/rbac.md)** and **[Policy](docs/features/policy.md)** —
   two-phase authorization with deny precedence, runtime condition operators,
   and full audit traces.
@@ -295,7 +310,7 @@ minutes from zero to published.
 ### 🔌 Feature deep-dives — [**docs/features/**](docs/features/)
 - [Manifests](docs/features/manifests.md)
 - [Workflows](docs/features/workflows.md)
-- [Integrations](docs/features/integrations.md)
+- [Integrations](docs/features/integrations.md) · [Transports](docs/features/transports.md)
 - [RBAC](docs/features/rbac.md) · [Policy](docs/features/policy.md)
 - [Sessions & OAuth/OIDC](docs/features/sessions.md)
 - [Events & audit](docs/features/events.md)

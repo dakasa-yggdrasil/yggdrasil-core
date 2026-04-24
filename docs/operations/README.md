@@ -26,8 +26,12 @@ The minimum viable production setup, in checklist form:
 - [ ] **Managed Postgres** (RDS, Cloud SQL, Neon). The bundled
   bitnami chart works for small footprints; a managed instance
   removes operational toil at any scale that matters.
-- [ ] **Managed RabbitMQ** OR a hardened self-hosted cluster with
-  classic queue HA + persistent storage.
+- [ ] **Message broker only if needed** — required only if any
+  integration uses `transport: rabbitmq`. Pure HTTP
+  (`transport: http_json`) deployments can skip the broker entirely.
+  If you do use AMQP: managed RabbitMQ OR a hardened self-hosted
+  cluster with queue HA + persistent storage. See
+  [features/transports.md](../features/transports.md).
 - [ ] **TLS termination** at an ingress (nginx / Traefik / cloud LB).
   Cookie marked `Secure`; `AUTH_SESSION_COOKIE_DOMAIN` set per your
   apex.

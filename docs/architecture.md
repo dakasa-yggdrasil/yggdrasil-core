@@ -8,46 +8,61 @@ is the better entrypoint — read that first.
 
 ```
                      ┌────────────────────────────────┐
-   yggdrasil CLI ──► │            yggdrasil-core       │ ◄── yggdrasil-console (surface)
+   yggdrasil CLI ──► │            yggdrasil-core       │ ◄── surface-console (surface)
    adopter browser ─►│  ┌─────────┐   ┌────────────┐   │
                      │  │  HTTP   │   │  Workflow  │   │
                      │  │  API    │   │  engine    │   │
                      │  └────┬────┘   └─────┬──────┘   │
                      │       │              │          │
                      │       ▼              ▼          │
-                     │  ┌──────────┐   ┌──────────┐    │
-                     │  │ Postgres │   │ RabbitMQ │    │
-                     │  └──────────┘   └────┬─────┘    │
-                     └──────────────────────┼──────────┘
-                                            │ AMQP RPC
-                                ┌───────────┼───────────────────────┐
-                                ▼           ▼                       ▼
-                         integration-    integration-         integration-
-                         kubernetes       grafana              rabbitmq
-                         (adapter pod)    (adapter pod)        (adapter pod)
+                     │  ┌──────────┐   Pluggable        │
+                     │  │ Postgres │   transport layer  │
+                     │  └──────────┘        │           │
+                     └──────────────────────┼───────────┘
+                                            ▼
+                       ┌────────┬───────────┬──────────────┐
+                       │        │           │              │
+                    HTTP     AMQP/RMQ    gRPC/Kafka/NATS  (plug-in)
+                       │        │           │
+                       ▼        ▼           ▼
+                    integration adapters (independent processes)
 ```
 
 **yggdrasil-core** is a single Go binary that hosts:
 
-- The HTTP API (REST, `/api/v1/...`).
+- The HTTP API (REST, `/api/v1/...`) — the public surface for the CLI,
+  surfaces, and every integration-caller.
 - The workflow engine that dispatches steps in order.
 - The manifest repository (reads and versioned writes against Postgres).
 - The third-party auth provider registry.
-- The addons registry (startup hooks: postgres, rabbitmq, HTTP, first
-  run, scheduler, cleaner, reconciler).
+- The addons registry (startup hooks: postgres, optional AMQP broker
+  connection, HTTP, first run, scheduler, cleaner, reconciler).
 
 **Postgres** is the single source of truth for all state: manifests,
 sessions, events, identities, guardian approvals. The outbox table
-(`event_log`) feeds downstream consumers.
+(`event_log`) feeds downstream consumers. This is the one
+infrastructure dependency that is always required.
 
-**RabbitMQ** is the async transport for integration calls. Every
-integration adapter consumes requests from `yggdrasil.adapter.<type>.
-execute` and replies on the correlation queue. The engine, not
-adapters, is the orchestrator.
+**Transport** is how the core reaches adapters. It is **pluggable** —
+declared per `integration_type` in its manifest:
 
-**Integration adapters** are independent containers (one per type)
-that speak the AMQP contract. They deploy as Kubernetes workloads
-in the adopter's cluster — typically installed via `yggdrasil install`.
+- `http_json` — the core POSTs to adapter HTTP endpoints. No broker
+  required.
+- `rabbitmq` — the core publishes to AMQP queues and awaits replies.
+  Opt-in (gated on the `BROKER_URL` env var); if you don't set
+  `BROKER_URL`, the RabbitMQ addon skips and the core boots
+  broker-free.
+- Any other transport (gRPC, Kafka, NATS, SQS, Pub/Sub) plugs in as a
+  small switch-case extension. See
+  [features/transports.md](./features/transports.md).
+
+A single deployment can mix transports — some adapters HTTP, some
+AMQP, simultaneously.
+
+**Integration adapters** are independent processes (typically
+Kubernetes workloads) that speak whichever transport they declared.
+They deploy into the adopter's infrastructure and are installed via
+`yggdrasil install`.
 
 **Surfaces** are user-facing UIs (the console is the first-party one)
 that talk to yggdrasil-core's HTTP API. Surfaces are themselves
@@ -65,8 +80,9 @@ registered as manifests.
    rendering templates), persists it, and dispatches a run.
 4. `controllers/message/workflows.go` orchestrates step execution.
    Each step either:
-   - `kind=integration`: resolves the instance, RPCs the adapter over
-     AMQP, records the result.
+   - `kind=integration`: resolves the instance, dispatches to the
+     adapter via whichever transport the integration_type declares
+     (HTTP / AMQP / pluggable), records the result.
    - `kind=product`: runs the product lifecycle handler in-process.
    - `kind=yggdrasil`: persists a manifest against the core itself
      (used by the `register-instance` step to create the
@@ -109,10 +125,12 @@ HTTP POST /api/v1/<kind>s
    (outbox workers)
 ```
 
-The AMQP `manifest.create` consumer and the workflow step
-`kind=yggdrasil, operation=apply_manifest` both funnel into the
-same helper (`controllers/message/manifest_persist.go`). This is the
-single code path that guarantees every manifest write emits an event.
+The `manifest.create` AMQP consumer (when the AMQP addon is enabled)
+and the workflow step `kind=yggdrasil, operation=apply_manifest` both
+funnel into the same helper
+(`controllers/message/manifest_persist.go`). This is the single code
+path that guarantees every manifest write emits an event, regardless
+of which transport or interface delivered the request.
 
 ## Deployment options
 
@@ -133,18 +151,31 @@ generates a first-run admin secret that survives upgrades.
 
 ### Custom / bare-metal
 
-yggdrasil-core is a single binary. Point `DB_*` and `BROKER_URL` at
-your Postgres and RabbitMQ, run `goose up` once to migrate the
-schema, then run the binary. The rest of the behavior — first-run
-bootstrap, TLS termination, ingress — is whatever the operator wires
-up externally.
+yggdrasil-core is a single binary. Point `DB_*` at your Postgres, run
+`goose up` once to migrate the schema, then run the binary. Optionally
+set `BROKER_URL` if any integration uses `transport: rabbitmq` — leave
+it unset for pure-HTTP deployments. The rest — first-run bootstrap,
+TLS termination, ingress — is whatever the operator wires up
+externally.
 
 ## Scale and failure model
 
 yggdrasil-core is horizontally scalable; every request is stateless
-apart from the DB + broker. A typical production deployment runs 2-3
-replicas behind a service. DB failure takes the whole control plane
-down; RMQ failure surfaces as step-level failures on integration
-calls but does not corrupt state. Adapters reconnect via
-`ReliableConnection` (see `commons` package) and survive short
-broker outages transparently.
+apart from the DB. A typical production deployment runs 2-3 replicas
+behind a service.
+
+DB failure takes the whole control plane down (Postgres is the only
+mandatory dependency). Transport failures are scoped:
+
+- **HTTP transport failure** — individual step fails with "adapter
+  unreachable"; the rest of the workflow continues.
+- **AMQP transport failure** (when enabled) — integrations that
+  declared `transport: rabbitmq` fail at dispatch; HTTP-transport
+  integrations keep working. Adapters reconnect via
+  `ReliableConnection` (see `commons` package) and survive short
+  broker outages transparently.
+
+Neither transport failure corrupts state. The catalog is safe; at
+most you have a handful of `workflow_run` rows in `running` status
+to reconcile after recovery — see
+[operations/incident-response.md](./operations/incident-response.md).

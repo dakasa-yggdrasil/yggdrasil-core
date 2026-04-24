@@ -94,9 +94,12 @@ returns stale.
 
 **Immediate action:**
 
-- Is RabbitMQ up? If no, adapter dispatch is failing silently.
+- Is the transport up? For AMQP-using integrations, check RabbitMQ —
+  a dead broker fails dispatch silently. For HTTP-using integrations,
+  check that adapter pods reach 200 on `/healthz`.
 - Is the engine up? Log: `workflow engine heartbeat`.
-- Check `workflow.dispatch` queue depth.
+- Check `workflow.dispatch` queue depth (when AMQP is in use) or
+  adapter HTTP error rates.
 
 **Why it happens:**
 
@@ -211,6 +214,8 @@ A single dashboard with these four graphs solves 80% of triage:
 1. Core HTTP error rate, by endpoint family.
 2. Adapter `execute` reply p95 and error rate, by family.
 3. Postgres: connections in use, slow query count.
-4. RabbitMQ: queue depth per `yggdrasil.adapter.*.execute`.
+4. Transport health: RabbitMQ queue depth per `yggdrasil.adapter.*.execute`
+   (when AMQP is in use), adapter HTTP latency and 5xx rate (when HTTP
+   is in use).
 
 When the page fires, that dashboard is your first tab.
