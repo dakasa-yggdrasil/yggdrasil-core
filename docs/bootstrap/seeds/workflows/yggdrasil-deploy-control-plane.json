@@ -104,31 +104,9 @@
         "timeout_seconds": 600
       },
       {
-        "id": "migrate",
-        "description": "Run the core's schema migrations against the freshly-provisioned Postgres.",
-        "depends_on": ["wait-infra"],
-        "use": {
-          "kind": "integration",
-          "instance_ref": {
-            "namespace": "{{ inputs.schema_migrations_instance.namespace }}",
-            "name": "{{ inputs.schema_migrations_instance.name }}"
-          },
-          "capability": "apply_migrations_spec"
-        },
-        "with": {
-          "target": "yggdrasil-core",
-          "control_plane": "{{ steps.render.metadata.control_plane }}"
-        },
-        "retry": {
-          "max_attempts": 3,
-          "backoff_seconds": 5
-        },
-        "timeout_seconds": 900
-      },
-      {
         "id": "apply-core",
-        "description": "Apply the core Secret, Deployment, Service, and optional Ingress.",
-        "depends_on": ["migrate"],
+        "description": "Apply the core Secret, Deployment, Service, and optional Ingress. The core's own container entrypoint runs schema migrations on first boot (goose up) before serving — we don't dispatch a migrate step here because the control-plane image already self-migrates and a separate step would duplicate the work.",
+        "depends_on": ["wait-infra"],
         "use": {
           "kind": "integration",
           "instance_ref": {

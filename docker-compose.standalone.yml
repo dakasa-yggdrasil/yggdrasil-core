@@ -112,8 +112,11 @@ services:
       YGGDRASIL_TRANSPORT: http
       ADAPTER_PORT: "8081"
       HEALTHCHECK_PORT: "8080"
+    # Mounted into /app (the adapter's WORKDIR, owned by nonroot in the
+    # distroless base image) so the container's non-root user can
+    # traverse the directory. /root/... fails because /root is 700.
     volumes:
-      - ${KUBECONFIG_PATH:-${HOME}/.kube/config}:/root/.kube/config:ro
+      - ${KUBECONFIG_PATH:-${HOME}/.kube/config}:/app/kubeconfig:ro
 
   # Schema-migrations adapter (goose-postgres provider). Used by
   # workflows that apply versioned SQL migrations against a target

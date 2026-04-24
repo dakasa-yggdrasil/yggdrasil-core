@@ -753,7 +753,16 @@ func workflowDispatchAuthToMap(auth model.WorkflowDispatchAuth) map[string]any {
 
 func normalizeWorkflowIntegrationStatus(status string) string {
 	switch strings.ToLower(strings.TrimSpace(status)) {
-	case "", "ok", "done", "completed", "dispatched", "succeeded", "success":
+	// "applied", "observed", "ensured" come from declarative adapters
+	// (kubernetes, grafana, rabbitmq topology) — their domain-specific
+	// success verbs. The workflow engine's contract is a single
+	// "succeeded" sentinel, so we accept any reasonable green-path
+	// status here rather than forcing every adapter to emit the exact
+	// string.
+	case "", "ok", "done", "completed", "dispatched",
+		"succeeded", "success",
+		"applied", "observed", "ensured",
+		"created", "updated", "already_exists":
 		return "succeeded"
 	default:
 		return "failed"
