@@ -2,16 +2,17 @@
 
 This page covers the concrete numbers and the steps when you outgrow
 each one. Yggdrasil scales horizontally on the core and on adapters,
-vertically on Postgres, and via standard RabbitMQ HA on the broker.
+vertically on Postgres, and — when AMQP transport is in use — via
+standard broker HA techniques.
 
 ## What scales how
 
 | Component | Scale model | Bottleneck signal |
 |---|---|---|
-| `yggdrasil-core` | Horizontal (stateless replicas behind a service). | CPU pegged on read endpoints, queue worker lag. |
+| `yggdrasil-core` | Horizontal (stateless replicas behind a service). | CPU pegged on read endpoints, dispatch lag. |
 | Postgres | Vertical first (CPU + IOPS), read replicas later for read-heavy surfaces. | Connection saturation, slow queries on `manifest_version` / `event_log`. |
-| RabbitMQ | Classic HA (mirrored queues) or quorum queues; horizontal nodes for throughput. | Queue depth growing on `yggdrasil.adapter.*.execute`. |
-| Adapter pods | Horizontal per integration_type. | Adapter `execute` reply latency rising. |
+| Message broker *(when `transport: rabbitmq` is used)* | HA cluster or quorum queues; horizontal nodes for throughput. | Queue depth growing on `yggdrasil.adapter.*.execute`. Skip entirely if you only use `transport: http_json`. |
+| Adapter pods | Horizontal per integration_type. Scales the same way for HTTP and AMQP transports. | Adapter `execute` reply latency rising. |
 | Surface pods | Horizontal, independent of core. | Surface request latency rising. |
 
 The quick rule: scale the layer where the bottleneck shows up, not
@@ -118,10 +119,15 @@ Run monthly. Automate via a `workflow` that uses the
 [integration-database-admin](https://github.com/dakasa-yggdrasil/integration-database-admin)
 adapter, gated by an RBAC role only the platform team holds.
 
-## RabbitMQ
+## Message broker (AMQP transport only)
 
-Adapter dispatch is the broker's main job. Each `integration.execute`
-sends one request, awaits one reply.
+Skip this section if none of your integrations declare
+`transport: rabbitmq`. For those that do, the broker carries every
+`integration.execute` request/reply for that transport.
+
+The guidance below is for RabbitMQ (the AMQP implementation shipped
+today). A custom transport plug-in that targets Kafka or NATS will
+have its own scaling story — follow the tool's docs.
 
 ### Queue throughput
 

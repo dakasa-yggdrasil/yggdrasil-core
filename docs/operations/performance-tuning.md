@@ -74,9 +74,11 @@ under 90 days.
 Managed Postgres providers usually pre-tune these. If you self-host,
 the defaults are not good enough past trial scale.
 
-## 2. RabbitMQ
+## 2. Message broker (when `transport: rabbitmq` is used)
 
-Adapter dispatch traffic is the broker's main load. Symptoms:
+Skip this section if no integration declares `transport: rabbitmq`.
+For those that do, the broker carries adapter dispatch traffic.
+Symptoms:
 
 - Queue depth on `yggdrasil.adapter.<family>.execute` growing
   faster than draining.
@@ -85,8 +87,9 @@ Adapter dispatch traffic is the broker's main load. Symptoms:
 
 ### Common fixes
 
-**Not enough adapter replicas.** Each adapter pod is one AMQP
-consumer. If a step family gets hit 1000 times in a minute and the
+**Not enough adapter replicas.** For AMQP adapters, each pod is one
+consumer; for HTTP adapters, each pod is one service backend. Either
+way, if a step family gets hit 1000 times in a minute and the
 adapter has 1 replica, steady-state throughput is 1 step at a time.
 Scale the adapter — see
 [scaling.md](./scaling.md#adapter-pods).
@@ -124,11 +127,12 @@ API is throttling. Check the adapter's error metadata — most surface
 the upstream error cleanly. Answer: back off at the caller
 (`retry.backoff_seconds`), not at the adapter.
 
-**Blocking I/O without parallelism.** Adapter handles one AMQP
-message at a time. If the operation does a lot of wait, a per-handler
-goroutine pool helps. See
+**Blocking I/O without parallelism.** By default an AMQP adapter
+handles one message at a time; an HTTP adapter handles one request
+per goroutine per connection. If the operation does a lot of wait, a
+per-handler goroutine pool helps. See
 [integration-template/controllers/message](https://github.com/dakasa-yggdrasil/integration-template/tree/main/controllers/message)
-for the pattern.
+for the AMQP pattern.
 
 ## 4. Workflow authoring
 
@@ -158,9 +162,9 @@ Rare bottleneck but worth knowing.
 - `GOMAXPROCS` matches CPU limits set by the container.
 - `GOGC` defaults to 100; 50 lowers memory at the cost of CPU.
   Don't change unless memory is constrained.
-- Pool the Postgres + AMQP clients at the package level; don't open
-  new ones per request. (The core already does this; custom
-  adapters sometimes miss it.)
+- Pool Postgres + transport clients (AMQP or HTTP) at the package
+  level; don't open new ones per request. (The core already does
+  this; custom adapters sometimes miss it.)
 
 ## HTTP timeouts
 

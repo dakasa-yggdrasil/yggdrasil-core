@@ -11,7 +11,8 @@ feature in production without reading the source.
 |---|---|---|
 | **Manifests** | [manifests.md](./manifests.md) | Versioned, checksum-guarded, event-emitting documents that hold every piece of platform state. |
 | **Workflows** | [workflows.md](./workflows.md) | DAG engine with template rendering, retry, per-step audit, three execution kinds. |
-| **Integrations** | [integrations.md](./integrations.md) | Family/type/instance/provider model, AMQP contract, install flow. |
+| **Integrations** | [integrations.md](./integrations.md) | Family/type/instance/provider model, install flow, catalog labels. |
+| **Transports** | [transports.md](./transports.md) | How the core reaches adapters. `http_json` and `rabbitmq` shipped; pluggable (gRPC / Kafka / NATS / ...). |
 | **RBAC** | [rbac.md](./rbac.md) | Subject-action-resource roles + bindings with effective-subject expansion. |
 | **Policy** | [policy.md](./policy.md) | Runtime conditions over arbitrary input, deny precedence, audit traces. |
 | **Sessions & OAuth/OIDC** | [sessions.md](./sessions.md) | Password + third-party identity, state signing, auto-link by email. |

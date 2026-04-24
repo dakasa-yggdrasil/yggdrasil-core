@@ -3,8 +3,10 @@
 Integrations are how Yggdrasil reaches out to other systems. Every
 external action — apply a Kubernetes object, rotate an AWS secret,
 trigger a GitHub workflow — happens through an **integration adapter**:
-an independent container that speaks an AMQP RPC contract with the
-core.
+an independent process that speaks one of the core's supported
+transports (HTTP `http_json` and AMQP `rabbitmq` today; gRPC / Kafka /
+NATS / any custom transport as plug-ins — see
+[transports.md](./transports.md)).
 
 This page covers the four-layer model (family → type → instance →
 provider), the install and discovery flow, and the wire shape adapters
@@ -91,13 +93,19 @@ that declares:
 
 ## Adapter wire contract
 
-Every adapter implements three AMQP RPC handlers minimum:
+Every adapter implements three handlers minimum, addressable either as
+AMQP queues (`transport: rabbitmq`) or HTTP endpoints
+(`transport: http_json`):
 
-| Queue | Purpose |
-|---|---|
-| `yggdrasil.adapter.<provider>.describe` | Return the contract this adapter implements. Used by the core for handshake verification. |
-| `yggdrasil.adapter.<provider>.execute` | Run an operation. The bulk of adapter work. |
-| `yggdrasil.adapter.<provider>.health` | Return health status (optional but recommended). |
+| Capability | AMQP queue | HTTP endpoint |
+|---|---|---|
+| `describe` | `yggdrasil.adapter.<provider>.describe` | `POST /describe` |
+| `execute` | `yggdrasil.adapter.<provider>.execute` | `POST /execute` |
+| `health` | `yggdrasil.adapter.<provider>.health` | `GET /healthz` |
+
+The request/response payloads are identical across transports — only
+the addressing changes. See [transports.md](./transports.md) for the
+mechanics.
 
 ### Describe response
 
@@ -105,15 +113,16 @@ Every adapter implements three AMQP RPC handlers minimum:
 {
   "provider": "goose-postgres",
   "adapter": {
-    "transport": "rabbitmq",
+    "transport": "http_json",
     "version": "1.0.0",
-    "queues": {
-      "describe": "yggdrasil.adapter.goose-postgres.describe",
-      "execute":  "yggdrasil.adapter.goose-postgres.execute"
+    "endpoints": {
+      "describe": "/describe",
+      "execute":  "/execute",
+      "health":   "/healthz"
     },
     "timeout_seconds": 30
   },
-  "capabilities": ["describe", "execute"],
+  "capabilities": ["describe", "execute", "health"],
   "credential_schema": { ... },
   "instance_schema":   { ... },
   "resource_types":    [ ... ],
@@ -121,12 +130,17 @@ Every adapter implements three AMQP RPC handlers minimum:
 }
 ```
 
+For AMQP adapters, swap `endpoints` for `queues` with the queue names.
+
 The core compares the live `describe` against the stored
 `integration_type` manifest before every execution and fast-fails on
 contract mismatch. This is how you catch "adapter v2 deployed against
 contract v1" issues before they corrupt state.
 
 ### Execute request
+
+Same JSON envelope on both transports (AMQP message body, or HTTP POST
+body):
 
 ```json
 {
@@ -185,8 +199,9 @@ the discoverable browse view.
 
 **Monitor:**
 
-- `integration.execute` AMQP timeouts and reply rate — most issues
-  surface here first.
+- `integration.execute` timeouts + error rate, per family. The shape
+  of the metric is transport-agnostic; how you scrape it varies by
+  transport (AMQP queue depth vs HTTP 5xx count).
 - Per-instance describe handshake state. The core stores the live
   state under `integration_instance_runtime_state`.
   Healthy / `contract_mismatch` / `unreachable` / `invalid_response`.
@@ -195,8 +210,9 @@ the discoverable browse view.
 
 **Tune:**
 
-- Adapter pod replicas. AMQP RPC fans out to consumers — more replicas
-  = more parallel ops.
+- Adapter pod replicas. Parallelism scales with replica count for
+  both transports (AMQP distributes via consumer-group semantics;
+  HTTP distributes via LB).
 - `adapter.timeout_seconds` per type. Set per the slowest realistic
   operation.
 
