@@ -1,0 +1,25 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_family",
+  "metadata": {
+    "name": "manifest-sources",
+    "namespace": "global",
+    "description": "Family for adapters that render a source location (git+kustomize, git+helm, ...) into raw Kubernetes objects. Rendered objects are forwarded to a target integration (usually kubernetes) for apply.",
+    "labels": {
+      "bootstrap_source": "integration-kustomize",
+      "yggdrasil.io/catalog-domain": "manifest-sources",
+      "yggdrasil.io/catalog-section": "operations",
+      "yggdrasil.io/catalog-entry": "family"
+    }
+  },
+  "spec": {
+    "display_name": "Manifest sources",
+    "description": "Contract for any provider that turns a source location into a rendered Kubernetes object set. Providers (kustomize, helm, jsonnet, kpt) implement subsets of these operations via IntegrationType.implemented_operations.",
+    "owners": ["team:dakasa-platform"],
+    "operations": [
+      { "name": "generate_installation",       "description": "Render the source into Kubernetes objects.",                              "idempotent": true },
+      { "name": "reconcile_installation",      "description": "Same rendering, framed as a reconcile plan for apply.",                   "idempotent": true },
+      { "name": "discover_installation_state", "description": "Return static planned state (manifest-sources are not stateful).",        "idempotent": true }
+    ]
+  }
+}
