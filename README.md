@@ -36,16 +36,51 @@ yggdrasil apply -f my-workflow.yaml                       # ship a workflow
 yggdrasil logs <run-id>                                   # stream the run
 ```
 
-## Why Yggdrasil?
+## How Yggdrasil fits in your stack
 
-|   | Yggdrasil | Backstage | Argo Workflows | Temporal |
-|---|---|---|---|---|
-| **One-command bootstrap** | ✅ `yggdrasil init` | ❌ npx + manual setup | ❌ helm + CRDs | ❌ helm + db setup |
-| **Versioned manifest catalog** | ✅ Postgres-backed, checksummed | ⚠️ catalog-only | ❌ | ❌ |
-| **Declarative workflows in YAML** | ✅ | ❌ Plugins in TS | ✅ | ❌ Code-first |
-| **First-class RBAC + policy engine** | ✅ | ⚠️ Permission framework | ❌ | ❌ |
-| **Plug-in integrations from a catalog** | ✅ Install via 1 command | ✅ Plugin marketplace | ❌ | ❌ |
-| **Self-hosted, OSS, no vendor account** | ✅ | ✅ | ✅ | ⚠️ |
+Yggdrasil is **not** a replacement for Backstage, Argo Workflows, Temporal,
+Airflow, or the CI system you already run. It's a **manifest-first control
+plane** that composes them. Every tool in your stack can be reached through
+a Yggdrasil integration, and the orchestration layer is unified — same
+RBAC, same policy, same audit trail — regardless of which engine actually
+runs the job.
+
+- **Backstage** — run its console as a Yggdrasil surface, or use Yggdrasil as
+  a data source for Backstage plugins. The service catalog is yours; the
+  workflows behind it are ours.
+- **Argo Workflows** — register an `integration-argo` plugin; Yggdrasil
+  steps dispatch pipelines to your existing Argo controller. Keep your
+  K8s-native pipeline expertise.
+- **Temporal** — an `integration-temporal` lets you use Temporal as the
+  durable-execution backend for long-running Yggdrasil workflow steps.
+- **Airflow / Dagster / n8n / Zapier** — compose, don't replace. A workflow
+  step can trigger any of them via a thin integration adapter.
+- **Crossplane / Terraform / Pulumi** — bring your IaC tool as an
+  integration; Yggdrasil orchestrates when and how it runs.
+- **GitHub Actions / GitLab CI** — ship an `integration-github-actions`
+  that dispatches workflows with typed inputs; your CI stays unchanged.
+
+The value Yggdrasil adds is the **connective layer**: versioned manifests,
+declarative workflows, unified RBAC + policy, shared audit. The engines
+that execute the actual work are a plug-in choice — yours.
+
+## What you get
+
+- 🧬 **Manifest-first catalog** — every integration, workflow, policy, RBAC
+  role, auth provider, product, surface is a versioned YAML/JSON document
+  in Postgres. Apply, diff, roll back by version.
+- 🔌 **Pluggable integration adapters** — anything that speaks AMQP RPC
+  becomes an integration. One command installs
+  (`yggdrasil install`). One command scaffolds a new one
+  (`yggdrasil new`).
+- ⚙️ **Declarative workflows across everything** — DAG of steps over any
+  integration family with template rendering, retry, per-step audit.
+- 🛡 **Built-in RBAC + policy** — subject/action/resource allow-deny plus
+  runtime-condition policy evaluation before every write.
+- 🔐 **OAuth/OIDC edges** — GitHub, Google, custom OIDC configurable from
+  YAML. Replace the login page as a surface.
+- 📦 **Self-hosted, one-command bootstrap** — `yggdrasil init` brings up a
+  full stack in ~1 minute. Helm chart for production.
 
 ## Architecture at a glance
 
@@ -87,48 +122,32 @@ independent containers that speak an AMQP RPC contract — install one with
 `yggdrasil install <repo>` and it appears in your catalog as a usable
 operation set inside workflows.
 
-## Features
+## Feature deep-dives
 
-### 🧬 Manifest-first
-Every concept — workflow, integration, policy, RBAC, surface, product — is a
-versioned YAML/JSON manifest. Apply with `yggdrasil apply -f`. Inspect with
-`yggdrasil get`. Roll back by re-applying an earlier version. The catalog is
-your source of truth.
+Every feature below has a dedicated guide in [docs/features/](docs/features/)
+with wire protocol, evaluation semantics, and runbooks.
 
-### ⚙️ Workflow engine that composes integrations
-Workflows are DAGs of steps. Each step picks a `family + operation` and the
-engine resolves it to the right adapter at runtime, dispatches over AMQP,
-retries with backoff, and renders templates from `inputs` + `metadata` +
-previous step results.
-
-### 🔌 Plug-in integrations via 1 command
-`yggdrasil install dakasa-yggdrasil/integration-X` fetches the integration's
-quickstart manifest, walks you through required inputs, and installs the
-adapter into your cluster — Kubernetes ServiceAccount, Deployment,
-broker secret, registered instance — in a single dispatched workflow.
-
-### 🛡 Built-in RBAC + policy
-First-class manifest kinds for `rbac` (roles, bindings, subject-action-resource)
-and `policy` (rule-based runtime constraints with operators, dotted-key input,
-deny-precedence). The authorization evaluator combines both before any write
-lands; every decision is auditable.
-
-### 🔐 OAuth/OIDC sign-in (GitHub, Google, custom OIDC)
-Out-of-the-box providers configurable through `yggdrasil auth provider apply
--f`. State signing, callback handling, third-party identity linking, optional
-auto-link by email. Adapter-friendly templates included for GitHub and Google.
-
-### 📦 Production-ready packaging
-Docker Compose for laptops + small self-hosted (`yggdrasil init`). Helm chart
-with bundled Postgres + RabbitMQ subcharts (or external managed services) for
-Kubernetes. Ingress, HPA, pod security, secret management — all opt-in via
-`values.yaml`.
-
-### 📡 Audit trail by design
-Every state transition emits a typed event into Postgres in the same
-transaction that wrote the state. `manifest.created`,
-`workflow.run.succeeded`, `authorization.evaluated` — your audit pipeline
-just tails one table.
+- **[Manifests](docs/features/manifests.md)** — versioned, checksum-guarded,
+  event-emitting documents that hold every piece of platform state.
+- **[Workflows](docs/features/workflows.md)** — DAG engine with template
+  rendering, retry, per-step audit, and three execution modes
+  (integration, product, yggdrasil-local).
+- **[Integrations](docs/features/integrations.md)** — family/type/instance/
+  provider model, AMQP contract, install flow, catalog labels.
+- **[RBAC](docs/features/rbac.md)** and **[Policy](docs/features/policy.md)** —
+  two-phase authorization with deny precedence, runtime condition operators,
+  and full audit traces.
+- **[Sessions + OAuth/OIDC](docs/features/sessions.md)** — password +
+  third-party identity flows, state signing, auto-link by email.
+- **[Events](docs/features/events.md)** — typed, transactionally emitted
+  audit stream. Your outbox workers tail one table.
+- **[Surfaces](docs/features/surfaces.md)** — replaceable UI/API edges that
+  consume the core's contracts. Swap the console, add a custom admin
+  dashboard, layer a nichado BFF.
+- **[Products](docs/features/products.md)** — versioned bundles with
+  renderer + target + reconcile for internal platform delivery.
+- **[Secrets](docs/features/secrets.md)** — managed-secret rotation,
+  `secret://` references, pluggable backends via integrations.
 
 ## 🚀 Quick start
 
@@ -268,19 +287,50 @@ minutes from zero to published.
 
 ## Documentation
 
-| Topic | Link |
-|---|---|
-| Getting started in 10 minutes | [docs/getting-started.md](docs/getting-started.md) |
-| **Build your first plugin in 30 minutes** | [**docs/extending.md**](docs/extending.md) |
-| Concepts (manifests, families, workflows) | [docs/concepts.md](docs/concepts.md) |
-| Architecture deep-dive | [docs/architecture.md](docs/architecture.md) |
-| Deployment (Compose, Helm, bare-metal) | [docs/deployment.md](docs/deployment.md) |
-| CLI reference | [docs/cli.md](docs/cli.md) |
-| OAuth/OIDC providers | [docs/auth-providers/](docs/auth-providers/) |
-| Versioning + deprecation policy | [docs/versioning.md](docs/versioning.md) |
-| Upgrade runbook | [docs/upgrade.md](docs/upgrade.md) |
-| Security model + responsible disclosure | [docs/security.md](docs/security.md) |
-| Integration catalog | [docs/catalog.md](docs/catalog.md) |
+### 📖 Getting started
+- [Getting started in 10 minutes](docs/getting-started.md)
+- [Core concepts](docs/concepts.md)
+- [Architecture](docs/architecture.md)
+
+### 🔌 Feature deep-dives — [**docs/features/**](docs/features/)
+- [Manifests](docs/features/manifests.md)
+- [Workflows](docs/features/workflows.md)
+- [Integrations](docs/features/integrations.md)
+- [RBAC](docs/features/rbac.md) · [Policy](docs/features/policy.md)
+- [Sessions & OAuth/OIDC](docs/features/sessions.md)
+- [Events & audit](docs/features/events.md)
+- [Surfaces](docs/features/surfaces.md) · [Products](docs/features/products.md) · [Secrets](docs/features/secrets.md)
+
+### 🛠 Build your own — [**docs/extending.md**](docs/extending.md)
+- `yggdrasil new integration <name>` — scaffold a plugin
+- `yggdrasil new surface <name>` — scaffold a UI/edge
+- [Integration catalog](docs/catalog.md) — what's already shipped
+- [OAuth/OIDC provider templates](docs/auth-providers/)
+
+### 🧩 Your stack — [**docs/ecosystem/**](docs/ecosystem/)
+- [Yggdrasil + Backstage](docs/ecosystem/backstage.md)
+- [Yggdrasil + Argo Workflows](docs/ecosystem/argo-workflows.md)
+- [Yggdrasil + Temporal](docs/ecosystem/temporal.md)
+- [Yggdrasil + Airflow / Dagster](docs/ecosystem/airflow.md)
+- [Yggdrasil + IaC (Crossplane, Terraform, Pulumi)](docs/ecosystem/iac.md)
+- [Yggdrasil + GitHub Actions / GitLab CI](docs/ecosystem/ci-cd.md)
+
+### 🏗 Running in production — [**docs/operations/**](docs/operations/)
+- [Deployment (Compose, Helm, bare-metal)](docs/deployment.md)
+- [Scaling](docs/operations/scaling.md)
+- [Observability](docs/operations/observability.md)
+- [Backup & restore](docs/operations/backup-restore.md)
+- [Disaster recovery](docs/operations/disaster-recovery.md)
+- [Performance tuning](docs/operations/performance-tuning.md)
+- [Multi-environment](docs/operations/multi-environment.md)
+- [Incident response](docs/operations/incident-response.md)
+- [Security hardening](docs/operations/security-hardening.md)
+
+### 📜 Policy & lifecycle
+- [Versioning + deprecation policy](docs/versioning.md)
+- [Upgrade runbook](docs/upgrade.md)
+- [Security model + responsible disclosure](docs/security.md)
+- [CLI reference](docs/cli.md)
 
 ## Project status
 
