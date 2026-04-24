@@ -12,14 +12,20 @@ package model
 // NATS, gRPC) are opt-in via the Transports slice; each plug-in
 // documents its expected `extra` keys.
 type ControlPlaneManifestSpec struct {
-	Image      string                     `json:"image"`
-	Replicas   int                        `json:"replicas"`
-	Resources  ControlPlaneResourcesSpec  `json:"resources,omitempty"`
-	Postgres   ControlPlanePostgresSpec   `json:"postgres"`
-	Ingress    ControlPlaneIngressSpec    `json:"ingress,omitempty"`
-	Transports []ControlPlaneTransport    `json:"transports,omitempty"`
-	Kubernetes ControlPlaneKubernetesSpec `json:"kubernetes"`
-	Bootstrap  ControlPlaneBootstrapSpec  `json:"bootstrap,omitempty"`
+	Name             string                     `json:"name,omitempty"`
+	Image            string                     `json:"image"`
+	PullPolicy       string                     `json:"pull_policy,omitempty"`
+	ImagePullSecrets []string                   `json:"image_pull_secrets,omitempty"`
+	Replicas         int                        `json:"replicas"`
+	Resources        ControlPlaneResourcesSpec  `json:"resources,omitempty"`
+	ExtraEnvFrom     []ControlPlaneEnvFrom      `json:"extra_env_from,omitempty"`
+	Annotations      map[string]string          `json:"annotations,omitempty"`
+	Labels           map[string]string          `json:"labels,omitempty"`
+	Postgres         ControlPlanePostgresSpec   `json:"postgres"`
+	Ingress          ControlPlaneIngressSpec    `json:"ingress,omitempty"`
+	Transports       []ControlPlaneTransport    `json:"transports,omitempty"`
+	Kubernetes       ControlPlaneKubernetesSpec `json:"kubernetes"`
+	Bootstrap        ControlPlaneBootstrapSpec  `json:"bootstrap,omitempty"`
 }
 
 // ControlPlaneResourcesSpec maps to Kubernetes resource requests/limits
