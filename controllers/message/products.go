@@ -915,7 +915,7 @@ func resolveIntegrationInstance(
 ) (model.Manifest, model.IntegrationInstanceManifestSpec, model.Manifest, model.IntegrationTypeManifestSpec, error) {
 	instanceManifest, err := resolveManifestForKind(ctx, db, "integration_instance", selector.ManifestID, selector.Namespace, selector.Name, selector.Version)
 	if err != nil {
-		return model.Manifest{}, model.IntegrationInstanceManifestSpec{}, model.Manifest{}, model.IntegrationTypeManifestSpec{}, err
+		return model.Manifest{}, model.IntegrationInstanceManifestSpec{}, model.Manifest{}, model.IntegrationTypeManifestSpec{}, fmt.Errorf("resolve integration_instance %s/%s: %w", selector.Namespace, selector.Name, err)
 	}
 
 	instanceSpec, err := manifestengine.ParseIntegrationInstanceSpec(instanceManifest.Spec)
@@ -923,12 +923,12 @@ func resolveIntegrationInstance(
 		return model.Manifest{}, model.IntegrationInstanceManifestSpec{}, model.Manifest{}, model.IntegrationTypeManifestSpec{}, fmt.Errorf("parse integration instance spec: %w", err)
 	}
 	if err := hydrateIntegrationInstanceSecrets(ctx, db, &instanceSpec); err != nil {
-		return model.Manifest{}, model.IntegrationInstanceManifestSpec{}, model.Manifest{}, model.IntegrationTypeManifestSpec{}, err
+		return model.Manifest{}, model.IntegrationInstanceManifestSpec{}, model.Manifest{}, model.IntegrationTypeManifestSpec{}, fmt.Errorf("hydrate secrets for instance %s/%s: %w", instanceManifest.Metadata.Namespace, instanceManifest.Metadata.Name, err)
 	}
 
 	typeManifest, err := resolveManifestForKind(ctx, db, "integration_type", instanceSpec.TypeRef.ManifestID, instanceSpec.TypeRef.Namespace, instanceSpec.TypeRef.Name, instanceSpec.TypeRef.Version)
 	if err != nil {
-		return model.Manifest{}, model.IntegrationInstanceManifestSpec{}, model.Manifest{}, model.IntegrationTypeManifestSpec{}, err
+		return model.Manifest{}, model.IntegrationInstanceManifestSpec{}, model.Manifest{}, model.IntegrationTypeManifestSpec{}, fmt.Errorf("resolve integration_type %s/%s (from instance %s): %w", instanceSpec.TypeRef.Namespace, instanceSpec.TypeRef.Name, instanceManifest.Metadata.Name, err)
 	}
 
 	typeSpec, err := manifestengine.ParseIntegrationTypeSpec(typeManifest.Spec)
