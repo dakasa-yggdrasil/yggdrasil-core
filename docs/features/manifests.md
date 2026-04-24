@@ -90,9 +90,12 @@ elsewhere in this directory:
 - `resource`, `repository_binding` — used by integrations to register
   discovered entities
 - `guardian_policy`, `guardian_approval`, `guardian_memory`,
-  `remediation_bundle`, `remediation_contract` — used by
-  [Heimdall](https://github.com/dakasa-yggdrasil/integration-heimdall)
-  for governed remediation flows
+  `remediation_bundle`, `remediation_contract` — first-class
+  manifest kinds for governed approval / remediation flows. The
+  core owns the contracts; whichever guardian integration an
+  adopter installs owns the closed-loop sweep. Reference
+  implementation: Heimdall (commercial — see
+  [catalog.md](../catalog.md#guardian-integrations))
 
 ## How versioning works
 

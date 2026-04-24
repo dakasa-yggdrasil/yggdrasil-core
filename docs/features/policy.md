@@ -98,7 +98,7 @@ mile.
 | "Only the platform team can deploy" | RBAC |
 | "Only the platform team can deploy, AND deploys to prod outside business hours need approval" | RBAC + policy |
 | "Anyone can rotate dev secrets, only admins can rotate prod secrets" | Two RBAC bindings, no policy needed |
-| "Anyone can rotate secrets, but rotations of `aws.iam.user.*` require an open Heimdall approval" | RBAC allows, policy denies unless `context.approval_id` exists |
+| "Anyone can rotate secrets, but rotations of `aws.iam.user.*` require an open guardian approval" | RBAC allows, policy denies unless `context.approval_id` matches an open `guardian_approval` manifest |
 
 The heuristic: if the answer depends on **who**, it's RBAC. If it
 depends on **what's true at the moment of the request**, it's policy.

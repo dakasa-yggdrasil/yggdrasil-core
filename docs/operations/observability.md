@@ -93,18 +93,19 @@ Cheap to build. Enormously valuable during incidents.
 Two interesting sets of spans:
 
 - Per HTTP request on the core.
-- Per workflow run step, including the transport round-trip to the
-  adapter (HTTP request or AMQP RPC, whichever the integration uses).
+- Per workflow run step, including the `rpc.Transport` round-trip to
+  the adapter (whichever transport the integration declares).
 
 Neither is wired out-of-the-box yet. When you wire traces
-(OpenTelemetry Go SDK, propagate trace context via HTTP headers or
-AMQP headers per transport), these are the spans you want:
+(OpenTelemetry Go SDK, propagate trace context through whichever
+transport the integration uses — HTTP headers, AMQP headers, gRPC
+metadata, etc.), these are the spans you want:
 
 - `http.request` — the core's top-level HTTP handler.
 - `manifest.persist` — the validate + checksum + tx + emit pipeline.
 - `workflow.run` — the full run.
 - `workflow.step.render` — template rendering.
-- `workflow.step.dispatch` — transport call to adapter (HTTP or AMQP).
+- `workflow.step.dispatch` — `rpc.Transport` call to adapter.
 - `integration.describe_handshake` — the per-use verification.
 
 A typed span per step is the difference between "a workflow step

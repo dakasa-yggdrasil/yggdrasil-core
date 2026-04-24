@@ -22,10 +22,13 @@ Contents:
 
 - **5 integration_family** manifests: database-admin, grafana,
   rabbitmq, schema-migrations, secrets-management.
-- **14 integration_type** manifests: aws, gcp, github, heimdall,
-  kubernetes, database-admin-postgres, grafana (runtime + kubernetes),
-  rabbitmq (runtime + kubernetes + topology),
-  schema-migrations-goose-postgres, secrets-management (aws + gcp).
+- **13 integration_type** manifests: aws, gcp, github, kubernetes,
+  database-admin-postgres, grafana (runtime + kubernetes), rabbitmq
+  (runtime + kubernetes + topology), schema-migrations-goose-postgres,
+  secrets-management (aws + gcp).
+
+Heimdall is not seeded (commercial guardian; see
+[docs/catalog.md](../../catalog.md#guardian-integrations)).
 
 The `YGGDRASIL_BOOTSTRAP_MANIFESTS_PATH` env var resolves to
 `/app/docs/bootstrap/seeds` by default in the production container

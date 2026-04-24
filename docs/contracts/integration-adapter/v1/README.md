@@ -1,12 +1,16 @@
 # Integration Adapter v1
 
-This contract defines the generic RabbitMQ adapter protocol used by
+This contract defines the generic RPC adapter protocol used by
 `yggdrasil-core` when talking to an integration plugin through:
 
 - `describe`
 - `execute`
 
-Queues are declared by the adapter itself in the `describe` response.
+The protocol is transport-agnostic — the same JSON envelope flows over
+HTTP, AMQP, or any registered `rpc.Transport` (see
+[features/transports.md](../../../features/transports.md)). The adapter
+declares its addressing (queues for AMQP, endpoints for HTTP, etc.) in
+the `describe` response.
 
 Important:
 

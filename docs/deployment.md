@@ -26,8 +26,12 @@ Not good for:
 
 ## 2. Kubernetes via Helm (production)
 
-The chart at [`chart/`](../chart) packages yggdrasil-core plus its
-Postgres and RabbitMQ dependencies into one release.
+The chart at [`chart/`](../chart) packages yggdrasil-core plus a
+bundled Postgres into one release. Default is HTTP-only —
+`rabbitmq.enabled` is `false` in `values.yaml`. Enable the bundled
+RabbitMQ subchart (or any other `rpc.Transport` backend you register)
+via values only if you need it; see
+[features/transports.md](./features/transports.md).
 
 ### Install
 
@@ -62,7 +66,7 @@ Then `yggdrasil login` with that password.
 | `resources.requests.cpu` | 200m |
 | `resources.requests.memory` | 256Mi |
 | `postgresql.primary.persistence.size` | 32Gi (grows with event_log) |
-| `rabbitmq.persistence.size` | 8Gi |
+| `rabbitmq.persistence.size` | 8Gi (only if AMQP backend enabled) |
 
 ### External managed Postgres
 
@@ -90,7 +94,17 @@ kubectl create secret generic yggdrasil-db \
   --from-literal=password=$DB_PASSWORD
 ```
 
-### External managed RabbitMQ
+### Optional: AMQP transport backend
+
+The AMQP `rpc.Transport` backend is **opt-in and off by default**
+(`rabbitmq.enabled: false` in `values.yaml`). Skip this section
+entirely if your integrations all speak `http_json`. If any
+`integration_type` in your catalog declares `transport: rabbitmq`,
+turn a backend on:
+
+- **Bundled**: set `rabbitmq.enabled: true` to pull the
+  `bitnami/rabbitmq` subchart.
+- **External managed** (recommended for prod):
 
 ```yaml
 rabbitmq:
@@ -103,6 +117,10 @@ external:
 ```
 
 The secret value is the full AMQP URL (`amqp://user:pass@host:5672/`).
+When both `rabbitmq.enabled` is false and `external.rabbitmq.urlSecret.name`
+is empty, the chart doesn't set `BROKER_URL` at all — the core boots
+HTTP-only. Other `rpc.Transport` plug-ins follow the same "register an
+addon + set its env var" pattern; consult each plug-in's docs.
 
 ### TLS / session cookie
 
@@ -118,11 +136,15 @@ Yggdrasil-core is a single Go binary. Minimum environment:
 ```sh
 export DB_HOST=localhost DB_PORT=5432 DB_NAME=yggdrasil \
        DB_USER=yggdrasil DB_PASSWORD=xxx \
-       BROKER_URL=amqp://user:pass@localhost:5672/ \
        PORT=9080
 ./goose up               # once, after each upgrade
 ./yggdrasil-core         # starts serving
 ```
+
+The HTTP API is always served on `PORT`. Additional `rpc.Transport`
+backends are opt-in — set their env vars only if you need them (e.g.
+`BROKER_URL=amqp://user:pass@localhost:5672/` enables the AMQP
+backend; other transports expose their own config variable).
 
 For first-run bootstrap add:
 
@@ -145,12 +167,12 @@ the release notes list them individually.
 ## Backup and restore
 
 Yggdrasil state lives entirely in Postgres. Use your standard
-Postgres backup (`pg_dump`, WAL archiving, managed snapshot).
-RabbitMQ state is transient (queues are re-declared on boot).
+Postgres backup (`pg_dump`, WAL archiving, managed snapshot). Any
+`rpc.Transport` backend state is transient (e.g. AMQP queues are
+re-declared on boot by the adapters themselves).
 
-Restore = restore Postgres + point `BROKER_URL` at any reachable
-RMQ + start the pods. Integration adapters recover autonomously
-(their queues are re-declared on reconnect).
+Restore = restore Postgres + bring any transport backends back up +
+start the pods. Integration adapters recover autonomously.
 
 ## Observability
 

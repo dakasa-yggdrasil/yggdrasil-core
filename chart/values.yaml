@@ -75,9 +75,12 @@ postgresql:
     persistence:
       size: 8Gi
 
-# ─── RabbitMQ dependency ───────────────────────────────────────────────
+# ─── Opt-in AMQP rpc.Transport backend ────────────────────────────────
+# HTTP is always on. The AMQP backend is opt-in: only enable if any
+# integration_type in your catalog declares `transport: rabbitmq`.
+# See docs/features/transports.md.
 rabbitmq:
-  enabled: true
+  enabled: false
   auth:
     username: yggdrasil
     password: "change-me-rabbitmq"

@@ -24,7 +24,11 @@ That's it. The init command:
 
 1. Writes `./yggdrasil/docker-compose.yml` + `./yggdrasil/.env` with random
    passwords.
-2. Runs `docker compose up -d` (Postgres, RabbitMQ, yggdrasil-core).
+2. Runs `docker compose up -d` — brings up Postgres + yggdrasil-core
+   (HTTP-only by default). The compose file also declares a RabbitMQ
+   service under the `amqp` profile, off by default; opt in only if
+   you use AMQP-transport integrations (see
+   [features/transports.md](./features/transports.md)).
 3. Waits for `/readyz` to come green.
 4. Logs in as the freshly-created admin and saves a context in
    `~/.yggdrasil/config.yaml` so every subsequent command just works.
