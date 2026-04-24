@@ -1,24 +1,22 @@
 package message
 
 import (
-	"context"
 	"time"
 
-	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc"
 )
 
-// ConsumerHandler processes one delivery.
-//
-// NOTE — RPC abstraction migration in progress.
-// The transport-level abstraction is in internal/rpc. Handlers in
-// this package still accept amqp.Delivery directly so the 20+
-// existing handler files (~14k LOC) can migrate incrementally
-// without breaking the build. See addons/rabbitmq.go and
-// internal/rpc/amqp/ for the transport wrapping the core exposes
-// to adopters today.
-type ConsumerHandler func(ctx context.Context, d amqp.Delivery) error
+// ConsumerHandler is the transport-agnostic handler signature. It is
+// an alias of rpc.Handler so every handler in this package binds
+// naturally regardless of which rpc.Transport implementation
+// delivered the message (AMQP, HTTP, gRPC, Kafka, …).
+type ConsumerHandler = rpc.Handler
 
-// ConsumerConfig declares a single queue consumer.
+// ConsumerConfig declares one consumer registration in the shape the
+// existing handler lists use. "Queue" maps to the rpc endpoint,
+// "QoS" maps to rpc concurrency. RegisterAllConsumers converts each
+// entry to rpc.ConsumerConfig before subscribing through the active
+// rpc.Transport.
 type ConsumerConfig struct {
 	Queue   string
 	Handler ConsumerHandler
@@ -26,31 +24,14 @@ type ConsumerConfig struct {
 	QoS     int
 }
 
-func consumeQueue(ch *amqp.Channel, cfg ConsumerConfig) error {
-	if cfg.QoS > 0 {
-		if err := ch.Qos(cfg.QoS, 0, false); err != nil {
-			return err
-		}
+// toRPC returns the rpc.ConsumerConfig equivalent for use with a
+// transport. Transports without native concurrency knobs simulate
+// QoS via a worker pool of matching size.
+func (c ConsumerConfig) toRPC() rpc.ConsumerConfig {
+	return rpc.ConsumerConfig{
+		Endpoint:    c.Queue,
+		Handler:     c.Handler,
+		Timeout:     c.Timeout,
+		Concurrency: c.QoS,
 	}
-
-	deliveries, err := ch.Consume(cfg.Queue, "", false, false, false, false, nil)
-	if err != nil {
-		return err
-	}
-
-	go func() {
-		for d := range deliveries {
-			ctx, cancel := context.WithTimeout(context.Background(), cfg.Timeout)
-			err := cfg.Handler(ctx, d)
-			cancel()
-
-			if err != nil {
-				_ = d.Nack(false, false)
-				continue
-			}
-			_ = d.Ack(false)
-		}
-	}()
-
-	return nil
 }

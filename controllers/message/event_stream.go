@@ -10,6 +10,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc"
 )
 
 const queueEventStreamPull = "yggdrasil-core.event_stream.pull"
@@ -26,17 +27,17 @@ func eventStreamConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger)
 }
 
 func eventStreamPullHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.PullEventsRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		resp, err := repository.PullEvents(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, "pull_failed", err, logger)
+			return replyFailure(ctx, d, "pull_failed", err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, resp, logger)
+		return replySuccess(ctx, d, resp, logger)
 	}
 }

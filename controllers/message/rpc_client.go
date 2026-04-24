@@ -5,8 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 
-	"github.com/google/uuid"
-	amqp "github.com/rabbitmq/amqp091-go"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc"
 )
 
 type rpcEnvelope struct {
@@ -15,57 +14,38 @@ type rpcEnvelope struct {
 	Error *rpcError       `json:"error,omitempty"`
 }
 
-func callRabbitRPC(ctx context.Context, conn *amqp.Connection, queue string, request any, response any) error {
-	ch, err := conn.Channel()
-	if err != nil {
-		return err
-	}
-	defer func() { _ = ch.Close() }()
-
-	replyQueue, err := ch.QueueDeclare("", false, true, true, false, nil)
-	if err != nil {
-		return err
-	}
-
-	deliveries, err := ch.Consume(replyQueue.Name, "", true, true, false, false, nil)
-	if err != nil {
-		return err
+// callRPC performs an RPC round-trip through a rpc.Transport: JSON-
+// marshals the request, dispatches to the endpoint, awaits the reply,
+// then decodes the rpcEnvelope wrapper into response. Used by every
+// core consumer that needs to talk to another core consumer (or to an
+// external RPC endpoint over the same transport).
+//
+// Replaces the AMQP-specific callRabbitRPC; the difference is purely
+// the transport layer — the request/response body shape is unchanged.
+func callRPC(ctx context.Context, transport rpc.Transport, endpoint string, request any, response any) error {
+	if transport == nil {
+		return fmt.Errorf("rpc: transport is nil")
 	}
 
 	body, err := json.Marshal(request)
 	if err != nil {
-		return err
+		return fmt.Errorf("rpc: encode request for %s: %w", endpoint, err)
 	}
 
-	correlationID := uuid.NewString()
-	if err := ch.PublishWithContext(ctx, "", queue, false, false, amqp.Publishing{
-		ContentType:   "application/json",
-		CorrelationId: correlationID,
-		ReplyTo:       replyQueue.Name,
-		Body:          body,
-	}); err != nil {
+	reply, err := transport.Request(ctx, rpc.Request{
+		Endpoint:    endpoint,
+		Body:        body,
+		ContentType: "application/json",
+	})
+	if err != nil {
 		return err
 	}
-
-	for {
-		select {
-		case <-ctx.Done():
-			return ctx.Err()
-		case delivery, ok := <-deliveries:
-			if !ok {
-				return fmt.Errorf("rabbitmq rpc reply channel closed")
-			}
-			if delivery.CorrelationId != correlationID {
-				continue
-			}
-			return decodeRPCBody(delivery.Body, response)
-		}
-	}
+	return decodeRPCBody(reply.Body, response)
 }
 
 func decodeRPCBody(body []byte, response any) error {
 	if len(bytesTrimSpace(body)) == 0 {
-		return fmt.Errorf("rabbitmq rpc response body is empty")
+		return fmt.Errorf("rpc response body is empty")
 	}
 
 	var envelope rpcEnvelope

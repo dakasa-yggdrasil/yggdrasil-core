@@ -16,6 +16,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	amqp "github.com/rabbitmq/amqp091-go"
+	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc/amqp"
 )
 
 const integrationDescribeCacheTTL = 30 * time.Second
@@ -81,7 +82,7 @@ func verifyResolvedIntegrationType(
 	}
 
 	var response model.AdapterDescribeResponse
-	transport := NewAdapterTransportClient(conn)
+	transport := NewAdapterTransportClient(rpcamqp.New(conn))
 	if err := transport.Call(rpcCtx, integrationDescribeContract, typeSpec, instanceSpec, "describe", request, &response); err != nil {
 		wrappedErr := fmt.Errorf(
 			"describe integration type %s/%s through transport %q: %w",

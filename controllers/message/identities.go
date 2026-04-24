@@ -12,6 +12,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc"
 )
 
 const (
@@ -107,200 +108,200 @@ func identityConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) []
 }
 
 func collaboratorCreateHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.CreateCollaboratorRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		collaborator, err := repository.CreateCollaborator(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, identityErrorCode(err), err, logger)
+			return replyFailure(ctx, d, identityErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"collaborator": collaborator}, logger)
+		return replySuccess(ctx, d, map[string]any{"collaborator": collaborator}, logger)
 	}
 }
 
 func collaboratorUpdateHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.UpdateCollaboratorRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		collaborator, err := repository.UpdateCollaborator(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, identityErrorCode(err), err, logger)
+			return replyFailure(ctx, d, identityErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"collaborator": collaborator}, logger)
+		return replySuccess(ctx, d, map[string]any{"collaborator": collaborator}, logger)
 	}
 }
 
 func collaboratorDeleteHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.DeleteCollaboratorRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		collaborator, err := repository.DeleteCollaborator(ctx, db, req.ID)
 		if err != nil {
-			return replyFailure(ctx, conn, d, identityErrorCode(err), err, logger)
+			return replyFailure(ctx, d, identityErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"collaborator": collaborator}, logger)
+		return replySuccess(ctx, d, map[string]any{"collaborator": collaborator}, logger)
 	}
 }
 
 func collaboratorGetHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.GetCollaboratorRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		collaborator, err := repository.GetCollaborator(ctx, db, req.ID)
 		if err != nil {
-			return replyFailure(ctx, conn, d, identityErrorCode(err), err, logger)
+			return replyFailure(ctx, d, identityErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"collaborator": collaborator}, logger)
+		return replySuccess(ctx, d, map[string]any{"collaborator": collaborator}, logger)
 	}
 }
 
 func collaboratorListHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		req := model.ListCollaboratorsRequest{}
 		if len(bytesTrimSpace(d.Body)) > 0 {
 			if err := json.Unmarshal(d.Body, &req); err != nil {
-				return replyFailure(ctx, conn, d, "bad_request", err, logger)
+				return replyFailure(ctx, d, "bad_request", err, logger)
 			}
 		}
 
 		collaborators, err := repository.ListCollaborators(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, "internal_error", err, logger)
+			return replyFailure(ctx, d, "internal_error", err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"collaborators": collaborators}, logger)
+		return replySuccess(ctx, d, map[string]any{"collaborators": collaborators}, logger)
 	}
 }
 
 func teamCreateHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.CreateTeamRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		team, err := repository.CreateTeam(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, identityErrorCode(err), err, logger)
+			return replyFailure(ctx, d, identityErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"team": team}, logger)
+		return replySuccess(ctx, d, map[string]any{"team": team}, logger)
 	}
 }
 
 func teamUpdateHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.UpdateTeamRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		team, err := repository.UpdateTeam(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, identityErrorCode(err), err, logger)
+			return replyFailure(ctx, d, identityErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"team": team}, logger)
+		return replySuccess(ctx, d, map[string]any{"team": team}, logger)
 	}
 }
 
 func teamDeleteHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.DeleteTeamRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		team, err := repository.DeleteTeam(ctx, db, req.ID)
 		if err != nil {
-			return replyFailure(ctx, conn, d, identityErrorCode(err), err, logger)
+			return replyFailure(ctx, d, identityErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"team": team}, logger)
+		return replySuccess(ctx, d, map[string]any{"team": team}, logger)
 	}
 }
 
 func teamGetHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.GetTeamRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		team, err := repository.GetTeam(ctx, db, req.ID)
 		if err != nil {
-			return replyFailure(ctx, conn, d, identityErrorCode(err), err, logger)
+			return replyFailure(ctx, d, identityErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"team": team}, logger)
+		return replySuccess(ctx, d, map[string]any{"team": team}, logger)
 	}
 }
 
 func teamListHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		req := model.ListTeamsRequest{}
 		if len(bytesTrimSpace(d.Body)) > 0 {
 			if err := json.Unmarshal(d.Body, &req); err != nil {
-				return replyFailure(ctx, conn, d, "bad_request", err, logger)
+				return replyFailure(ctx, d, "bad_request", err, logger)
 			}
 		}
 
 		teams, err := repository.ListTeams(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, "internal_error", err, logger)
+			return replyFailure(ctx, d, "internal_error", err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"teams": teams}, logger)
+		return replySuccess(ctx, d, map[string]any{"teams": teams}, logger)
 	}
 }
 
 func teamMembershipUpsertHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.UpsertTeamMembershipRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		membership, err := repository.UpsertTeamMembership(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, identityErrorCode(err), err, logger)
+			return replyFailure(ctx, d, identityErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"membership": membership}, logger)
+		return replySuccess(ctx, d, map[string]any{"membership": membership}, logger)
 	}
 }
 
 func teamMembershipListHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		req := model.ListTeamMembershipsRequest{}
 		if len(bytesTrimSpace(d.Body)) > 0 {
 			if err := json.Unmarshal(d.Body, &req); err != nil {
-				return replyFailure(ctx, conn, d, "bad_request", err, logger)
+				return replyFailure(ctx, d, "bad_request", err, logger)
 			}
 		}
 
 		memberships, err := repository.ListTeamMemberships(ctx, db, req)
 		if err != nil {
-			return replyFailure(ctx, conn, d, identityErrorCode(err), err, logger)
+			return replyFailure(ctx, d, identityErrorCode(err), err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, map[string]any{"memberships": memberships}, logger)
+		return replySuccess(ctx, d, map[string]any{"memberships": memberships}, logger)
 	}
 }
 

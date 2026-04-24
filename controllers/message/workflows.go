@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc"
 )
 
 const (
@@ -40,36 +41,36 @@ func workflowConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) []
 }
 
 func workflowDispatchHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.DispatchWorkflowRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		req = normalizeWorkflowDispatchRequest(req)
 		if err := validateWorkflowDispatchRequest(req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		instanceManifest, instanceSpec, typeManifest, typeSpec, err := resolveIntegrationInstance(ctx, conn, db, req.Runner)
 		if err != nil {
-			return replyFailure(ctx, conn, d, integrationAwareErrorCode(err, "dispatch_failed"), err, logger)
+			return replyFailure(ctx, d, integrationAwareErrorCode(err, "dispatch_failed"), err, logger)
 		}
 
 		response, err := dispatchWorkflowThroughIntegration(ctx, conn, req, instanceManifest, instanceSpec, typeManifest, typeSpec, 0)
 		if err != nil {
-			return replyFailure(ctx, conn, d, "dispatch_failed", err, logger)
+			return replyFailure(ctx, d, "dispatch_failed", err, logger)
 		}
 
-		return replySuccess(ctx, conn, d, response, logger)
+		return replySuccess(ctx, d, response, logger)
 	}
 }
 
 func workflowRunHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
-	return func(ctx context.Context, d amqp.Delivery) error {
+	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.RunWorkflowRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
-			return replyFailure(ctx, conn, d, "bad_request", err, logger)
+			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
 		response, err := RunWorkflow(ctx, conn, db, req)
@@ -83,7 +84,7 @@ func workflowRunHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) C
 				strings.Contains(strings.ToLower(strings.TrimSpace(err.Error())), "validation") {
 				code = "bad_request"
 			}
-			return replyFailure(ctx, conn, d, code, err, logger)
+			return replyFailure(ctx, d, code, err, logger)
 		}
 
 		// Emit workflow.run.completed event (best-effort, post-execution).
@@ -92,7 +93,7 @@ func workflowRunHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) C
 		// after the run finishes. On emit failure, log and continue.
 		emitWorkflowRunCompletedEvent(ctx, db, logger, response)
 
-		return replySuccess(ctx, conn, d, response, logger)
+		return replySuccess(ctx, d, response, logger)
 	}
 }
 
