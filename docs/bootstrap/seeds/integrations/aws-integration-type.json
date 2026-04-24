@@ -1,0 +1,558 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_type",
+  "metadata": {
+    "name": "aws",
+    "namespace": "global",
+    "description": "Bootstrap integration type for the AWS governance plugin.",
+    "labels": {
+      "bootstrap_source": "integration-aws",
+      "provider": "aws",
+      "yggdrasil.io/catalog-domain": "aws",
+      "yggdrasil.io/catalog-section": "operations",
+      "yggdrasil.io/catalog-entry": "api"
+    }
+  },
+  "spec": {
+    "provider": "aws",
+    "adapter": {
+      "transport": "rabbitmq",
+      "version": "1.0.0",
+      "queues": {
+        "describe": "yggdrasil.adapter.aws.describe",
+        "execute": "yggdrasil.adapter.aws.execute"
+      },
+      "timeout_seconds": 120
+    },
+    "capabilities": [
+      "describe",
+      "execute"
+    ],
+    "guardian_support": {
+      "mode": "light",
+      "signals": {
+        "error_rate": [
+          "error_rate",
+          "failure_rate"
+        ],
+        "rate_limited": [
+          "rate_limited",
+          "throttled",
+          "quota_exceeded"
+        ],
+        "auth_denied": [
+          "auth_denied",
+          "unauthorized",
+          "forbidden"
+        ],
+        "sync_lag_seconds": [
+          "sync_lag_seconds",
+          "reconciliation_lag_seconds"
+        ],
+        "monthly_cost_usd": [
+          "monthly_cost_usd",
+          "estimated_monthly_cost_usd",
+          "cost_usd"
+        ],
+        "utilization": [
+          "utilization",
+          "avg_utilization"
+        ],
+        "idle_hours": [
+          "idle_hours",
+          "last_active_hours_ago"
+        ],
+        "overprovisioned": [
+          "overprovisioned"
+        ]
+      }
+    },
+    "credential_schema": {
+      "mode": "inline",
+      "properties": {
+        "access_key_id": {
+          "type": "string",
+          "description": "AWS access key id used by governance operations.",
+          "secret": true
+        },
+        "secret_access_key": {
+          "type": "string",
+          "description": "AWS secret access key used by governance operations.",
+          "secret": true
+        },
+        "session_token": {
+          "type": "string",
+          "description": "Optional AWS session token for temporary credentials.",
+          "secret": true
+        },
+        "profile": {
+          "type": "string",
+          "description": "Optional shared config profile name when the worker should use local AWS profiles."
+        }
+      }
+    },
+    "instance_schema": {
+      "mode": "inline",
+      "properties": {
+        "default_region": {
+          "type": "string",
+          "description": "Default AWS region for governance operations.",
+          "default": "us-east-1"
+        },
+        "default_account_id": {
+          "type": "string",
+          "description": "Optional fallback AWS account identifier used for metadata and normalization."
+        },
+        "default_tags": {
+          "type": "object",
+          "description": "Default tags applied when an operation omits tags."
+        },
+        "default_email_from": {
+          "type": "string",
+          "description": "Optional default sender address for SES email operations."
+        },
+        "default_sms_type": {
+          "type": "string",
+          "description": "Optional default SNS SMS type.",
+          "default": "Transactional"
+        }
+      }
+    },
+    "resource_types": [
+      {
+        "name": "s3_bucket",
+        "canonical_prefix": "thirdparty.aws.s3.bucket",
+        "identity_template": "s3_bucket.{region}.{bucket_name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_s3_bucket"
+        ]
+      },
+      {
+        "name": "ecr_repository",
+        "canonical_prefix": "thirdparty.aws.ecr.repository",
+        "identity_template": "ecr_repository.{region}.{repository_name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_ecr_repository"
+        ]
+      },
+      {
+        "name": "secret",
+        "canonical_prefix": "thirdparty.aws.secrets_manager.secret",
+        "identity_template": "secret.{region}.{secret_name}",
+        "discoverable": false,
+        "default_actions": [
+          "upsert_secrets_manager_secret"
+        ]
+      },
+      {
+        "name": "route53_zone",
+        "canonical_prefix": "thirdparty.aws.route53.hosted_zone",
+        "identity_template": "route53_zone.{zone_name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_route53_zone"
+        ]
+      },
+      {
+        "name": "route53_record",
+        "canonical_prefix": "thirdparty.aws.route53.record",
+        "identity_template": "route53_record.{zone_id}.{record_name}.{record_type}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_route53_record"
+        ]
+      },
+      {
+        "name": "ses_identity",
+        "canonical_prefix": "thirdparty.aws.ses.identity",
+        "identity_template": "ses_identity.{identity}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_ses_identity"
+        ]
+      },
+      {
+        "name": "email_message",
+        "canonical_prefix": "thirdparty.aws.ses.email",
+        "identity_template": "email.{region}.{from_email}.{subject}",
+        "discoverable": false,
+        "default_actions": [
+          "send_email"
+        ]
+      },
+      {
+        "name": "sms_message",
+        "canonical_prefix": "thirdparty.aws.sns.sms",
+        "identity_template": "sms.{region}.{phone_number}",
+        "discoverable": false,
+        "default_actions": [
+          "send_sms"
+        ]
+      },
+      {
+        "name": "iam_role",
+        "canonical_prefix": "thirdparty.aws.iam.role",
+        "identity_template": "iam_role.{role_name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_iam_role"
+        ]
+      },
+      {
+        "name": "iam_policy_attachment",
+        "canonical_prefix": "thirdparty.aws.iam.policy_attachment",
+        "identity_template": "iam_policy_attachment.{role_name}.{policy_arn}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_iam_policy_attachment"
+        ]
+      },
+      {
+        "name": "oidc_provider",
+        "canonical_prefix": "thirdparty.aws.iam.oidc_provider",
+        "identity_template": "oidc_provider.{url}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_oidc_provider"
+        ]
+      },
+      {
+        "name": "vpc",
+        "canonical_prefix": "thirdparty.aws.ec2.vpc",
+        "identity_template": "vpc.{region}.{vpc_name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_vpc"
+        ]
+      },
+      {
+        "name": "subnet",
+        "canonical_prefix": "thirdparty.aws.ec2.subnet",
+        "identity_template": "subnet.{region}.{vpc_id}.{cidr_block}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_subnet"
+        ]
+      },
+      {
+        "name": "nat_gateway",
+        "canonical_prefix": "thirdparty.aws.ec2.nat_gateway",
+        "identity_template": "nat_gateway.{region}.{subnet_id}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_nat_gateway"
+        ]
+      },
+      {
+        "name": "eks_cluster",
+        "canonical_prefix": "thirdparty.aws.eks.cluster",
+        "identity_template": "eks_cluster.{region}.{cluster_name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_eks_cluster"
+        ]
+      },
+      {
+        "name": "eks_nodegroup",
+        "canonical_prefix": "thirdparty.aws.eks.nodegroup",
+        "identity_template": "eks_nodegroup.{region}.{cluster_name}.{nodegroup_name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_eks_nodegroup"
+        ]
+      },
+      {
+        "name": "rds_instance",
+        "canonical_prefix": "thirdparty.aws.rds.instance",
+        "identity_template": "rds_instance.{region}.{db_instance_identifier}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_rds_instance"
+        ]
+      },
+      {
+        "name": "elasticache_cluster",
+        "canonical_prefix": "thirdparty.aws.elasticache.cluster",
+        "identity_template": "elasticache_cluster.{region}.{cache_cluster_id}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_elasticache_cluster"
+        ]
+      },
+      {
+        "name": "internet_gateway",
+        "canonical_prefix": "thirdparty.aws.ec2.internet_gateway",
+        "identity_template": "internet_gateway.{region}.{vpc_id}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_internet_gateway"
+        ]
+      },
+      {
+        "name": "route_table",
+        "canonical_prefix": "thirdparty.aws.ec2.route_table",
+        "identity_template": "route_table.{region}.{vpc_id}.{route_table_name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_route_table"
+        ]
+      },
+      {
+        "name": "security_group",
+        "canonical_prefix": "thirdparty.aws.ec2.security_group",
+        "identity_template": "security_group.{region}.{vpc_id}.{group_name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_security_group"
+        ]
+      },
+      {
+        "name": "db_subnet_group",
+        "canonical_prefix": "thirdparty.aws.rds.db_subnet_group",
+        "identity_template": "db_subnet_group.{region}.{name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_db_subnet_group"
+        ]
+      },
+      {
+        "name": "cache_subnet_group",
+        "canonical_prefix": "thirdparty.aws.elasticache.subnet_group",
+        "identity_template": "cache_subnet_group.{region}.{name}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_cache_subnet_group"
+        ]
+      }
+    ],
+    "action_catalog": [
+      {
+        "name": "ensure_s3_bucket",
+        "description": "Ensure one S3 bucket exists and optionally apply tags or versioning.",
+        "resource_types": [
+          "s3_bucket"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_ecr_repository",
+        "description": "Ensure one ECR repository exists and optionally apply tags or scanning settings.",
+        "resource_types": [
+          "ecr_repository"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "upsert_secrets_manager_secret",
+        "description": "Ensure one Secrets Manager secret exists and optionally write a new secret value.",
+        "resource_types": [
+          "secret"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_route53_zone",
+        "description": "Ensure one Route53 hosted zone exists and optionally apply tags.",
+        "resource_types": [
+          "route53_zone"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_route53_record",
+        "description": "Ensure one Route53 record exists in the target hosted zone.",
+        "resource_types": [
+          "route53_record"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_ses_identity",
+        "description": "Ensure one SES email or domain identity exists.",
+        "resource_types": [
+          "ses_identity"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "send_email",
+        "description": "Send one email through AWS SES.",
+        "resource_types": [
+          "email_message"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "send_sms",
+        "description": "Send one SMS message through AWS SNS.",
+        "resource_types": [
+          "sms_message"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_iam_role",
+        "description": "Ensure one IAM role exists with the desired trust policy and optionally inline policies.",
+        "resource_types": [
+          "iam_role"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_iam_policy_attachment",
+        "description": "Ensure an IAM managed policy is attached to a role.",
+        "resource_types": [
+          "iam_policy_attachment"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_oidc_provider",
+        "description": "Ensure an IAM OpenID Connect provider exists (used for IRSA and GitHub Actions federation).",
+        "resource_types": [
+          "oidc_provider"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_vpc",
+        "description": "Ensure one VPC exists with the desired CIDR block, DNS attributes, and tags.",
+        "resource_types": [
+          "vpc"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_subnet",
+        "description": "Ensure one subnet exists in the target VPC with the desired CIDR, AZ, and tags.",
+        "resource_types": [
+          "subnet"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_nat_gateway",
+        "description": "Ensure one NAT Gateway exists in the target subnet (allocates an Elastic IP if not provided).",
+        "resource_types": [
+          "nat_gateway"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_eks_cluster",
+        "description": "Ensure one EKS cluster exists with the desired Kubernetes version, VPC config, and control-plane logging.",
+        "resource_types": [
+          "eks_cluster"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_eks_nodegroup",
+        "description": "Ensure one EKS managed node group exists with the desired instance types, disk size, and scaling config.",
+        "resource_types": [
+          "eks_nodegroup"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_rds_instance",
+        "description": "Ensure one RDS database instance exists with the desired engine, instance class, storage, and VPC config.",
+        "resource_types": [
+          "rds_instance"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_elasticache_cluster",
+        "description": "Ensure one ElastiCache cluster (Redis or Memcached) exists with the desired node type and VPC config.",
+        "resource_types": [
+          "elasticache_cluster"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_internet_gateway",
+        "description": "Ensure an Internet Gateway exists and is attached to the target VPC.",
+        "resource_types": [
+          "internet_gateway"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_route_table",
+        "description": "Ensure a route table exists with the desired routes and subnet associations.",
+        "resource_types": [
+          "route_table"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_security_group",
+        "description": "Ensure a security group exists with the desired ingress rules.",
+        "resource_types": [
+          "security_group"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_db_subnet_group",
+        "description": "Ensure an RDS DB subnet group exists spanning the given subnets.",
+        "resource_types": [
+          "db_subnet_group"
+        ],
+        "idempotent": true
+      },
+      {
+        "name": "ensure_cache_subnet_group",
+        "description": "Ensure an ElastiCache subnet group exists spanning the given subnets.",
+        "resource_types": [
+          "cache_subnet_group"
+        ],
+        "idempotent": true
+      }
+    ],
+    "discovery": {
+      "mode": "push",
+      "cursor": "none"
+    },
+    "normalization": {
+      "external_id_path": "arn",
+      "name_path": "name",
+      "owner_path": "region",
+      "fallback_resource_prefix": "thirdparty.aws.custom"
+    },
+    "execution": {
+      "supports_dry_run": false,
+      "idempotent_actions": [
+        "ensure_s3_bucket",
+        "ensure_ecr_repository",
+        "upsert_secrets_manager_secret",
+        "ensure_route53_zone",
+        "ensure_route53_record",
+        "ensure_ses_identity",
+        "send_email",
+        "send_sms",
+        "ensure_iam_role",
+        "ensure_iam_policy_attachment",
+        "ensure_oidc_provider",
+        "ensure_vpc",
+        "ensure_subnet",
+        "ensure_nat_gateway",
+        "ensure_eks_cluster",
+        "ensure_eks_nodegroup",
+        "ensure_rds_instance",
+        "ensure_elasticache_cluster",
+        "ensure_internet_gateway",
+        "ensure_route_table",
+        "ensure_security_group",
+        "ensure_db_subnet_group",
+        "ensure_cache_subnet_group"
+      ]
+    },
+    "extensions": {
+      "allow_custom_actions": true
+    }
+  }
+}

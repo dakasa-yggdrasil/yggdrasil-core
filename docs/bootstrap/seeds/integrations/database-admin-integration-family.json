@@ -1,0 +1,48 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_family",
+  "metadata": {
+    "name": "database-admin",
+    "namespace": "global",
+    "labels": {
+      "bootstrap_source": "database-admin",
+      "provider": "database-admin"
+    }
+  },
+  "spec": {
+    "provider": "database-admin",
+    "description": "Database admin-plane integration family. Engine-agnostic \u2014 providers (postgres-admin, mysql-admin, mongo-admin, ...) implement the same operations against different DB engines. Most common pattern: workflow chains secrets-management/rotate_secret \u2192 database-admin/alter_user_password for end-to-end credential rotation.",
+    "operations": [
+      {
+        "name": "ensure_user",
+        "description": "Idempotent CREATE/ALTER USER with password + roles + attributes.",
+        "kind": "execute",
+        "resource_type": "database_role"
+      },
+      {
+        "name": "alter_user_password",
+        "description": "Rotate one user's password \u2014 typically called right after secrets-management/rotate_secret.",
+        "kind": "execute",
+        "resource_type": "database_role"
+      },
+      {
+        "name": "drop_user",
+        "description": "DROP USER, optionally REASSIGN owned objects first.",
+        "kind": "execute",
+        "resource_type": "database_role"
+      },
+      {
+        "name": "ensure_database",
+        "description": "CREATE DATABASE IF NOT EXISTS (idempotent).",
+        "kind": "execute",
+        "resource_type": "database_role"
+      },
+      {
+        "name": "grant_privileges",
+        "description": "Apply GRANT statements transactionally.",
+        "kind": "execute",
+        "resource_type": "database_role"
+      }
+    ]
+  }
+}
