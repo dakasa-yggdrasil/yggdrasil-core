@@ -16,11 +16,11 @@
   "spec": {
     "provider": "kubernetes",
     "adapter": {
-      "transport": "rabbitmq",
+      "transport": "http_json",
       "version": "1.0.0",
-      "queues": {
-        "describe": "yggdrasil.adapter.kubernetes.describe",
-        "execute": "yggdrasil.adapter.kubernetes.execute"
+      "endpoints": {
+        "describe": "/rpc/describe",
+        "execute": "/rpc/execute"
       },
       "timeout_seconds": 30
     },

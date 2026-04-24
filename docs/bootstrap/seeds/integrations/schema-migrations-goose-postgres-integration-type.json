@@ -25,11 +25,11 @@
       "rollback_migration"
     ],
     "adapter": {
-      "transport": "rabbitmq",
+      "transport": "http_json",
       "version": "1.0.0",
-      "queues": {
-        "describe": "yggdrasil.adapter.goose-postgres.describe",
-        "execute": "yggdrasil.adapter.goose-postgres.execute"
+      "endpoints": {
+        "describe": "/rpc/describe",
+        "execute": "/rpc/execute"
       },
       "timeout_seconds": 300
     },
