@@ -8,6 +8,8 @@ import (
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc"
+	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-core/internal/rpc/amqp"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 
 	amqp "github.com/rabbitmq/amqp091-go"
@@ -47,6 +49,12 @@ func bootstrapRabbitMQ(ctx context.Context, app *runtime.ServiceApp) error {
 	app.SetResource("rabbitmq", conn)
 	app.RegisterCloser(func(context.Context) error { return conn.Close() })
 
+	// Expose the generic rpc.Transport alongside the raw amqp
+	// connection. New code should consume this; the raw connection
+	// stays available during the handler migration.
+	rpcTransport := rpcamqp.New(conn)
+	app.SetResource("rpc_transport", rpcTransport)
+
 	monitorInterval := integrationRuntimeMonitorInterval()
 	stopMonitor := message.StartIntegrationRuntimeMonitor(conn, db, logger, monitorInterval)
 	app.RegisterCloser(func(context.Context) error {
@@ -73,6 +81,19 @@ func RabbitMQ(app *runtime.ServiceApp) (*amqp.Connection, bool) {
 
 	conn, ok := resource.(*amqp.Connection)
 	return conn, ok
+}
+
+// RPCTransport returns the generic rpc.Transport when the addon is
+// installed. Handlers that have migrated off the amqp-specific types
+// call this; the raw RabbitMQ() accessor remains available for
+// handlers mid-migration.
+func RPCTransport(app *runtime.ServiceApp) (rpc.Transport, bool) {
+	resource, ok := app.Resource("rpc_transport")
+	if !ok {
+		return nil, false
+	}
+	transport, ok := resource.(rpc.Transport)
+	return transport, ok
 }
 
 func integrationRuntimeMonitorInterval() time.Duration {
