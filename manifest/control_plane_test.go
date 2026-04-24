@@ -194,3 +194,36 @@ func TestControlPlaneDocumentValidation(t *testing.T) {
 		t.Fatalf("ValidateDocument(control_plane) error: %v", err)
 	}
 }
+
+func TestValidateControlPlanePostgresInherit(t *testing.T) {
+	spec := controlPlaneSpecFixture()
+	spec.Postgres = model.ControlPlanePostgresSpec{Mode: "inherit"}
+	if err := ValidateControlPlaneSpec(spec); err != nil {
+		t.Fatalf("postgres.mode=inherit should validate, got %v", err)
+	}
+}
+
+func TestValidateControlPlanePostgresInheritRejectsBundled(t *testing.T) {
+	spec := controlPlaneSpecFixture()
+	spec.Postgres = model.ControlPlanePostgresSpec{
+		Mode:    "inherit",
+		Bundled: &model.ControlPlanePostgresBundledSpec{Storage: "10Gi"},
+	}
+	if err := ValidateControlPlaneSpec(spec); err == nil {
+		t.Fatal("expected postgres.mode=inherit with bundled to fail validation")
+	}
+}
+
+func TestValidateControlPlanePostgresInheritRejectsExternal(t *testing.T) {
+	spec := controlPlaneSpecFixture()
+	spec.Postgres = model.ControlPlanePostgresSpec{
+		Mode: "inherit",
+		External: &model.ControlPlanePostgresExternalSpec{
+			Host: "example.local", Database: "y", Username: "u",
+			PasswordRef: "secret://x",
+		},
+	}
+	if err := ValidateControlPlaneSpec(spec); err == nil {
+		t.Fatal("expected postgres.mode=inherit with external to fail validation")
+	}
+}

@@ -16,7 +16,7 @@ var (
 	// list is the signal that a new plug-in has been registered; no
 	// other change in this file is needed.
 	supportedControlPlaneTransportKinds = []string{"amqp", "kafka", "nats", "grpc"}
-	supportedControlPlanePostgresModes  = []string{"bundled", "external"}
+	supportedControlPlanePostgresModes  = []string{"bundled", "external", "inherit"}
 	supportedControlPlaneTransportModes = []string{"bundled", "external"}
 	supportedControlPlanePostgresSSL    = []string{"disable", "require", "verify-ca", "verify-full"}
 	controlPlaneStorageSizePattern      = regexp.MustCompile(`^[1-9][0-9]*(Mi|Gi|Ti)$`)
@@ -109,6 +109,13 @@ func validateControlPlanePostgres(pg model.ControlPlanePostgresSpec) error {
 			if !slices.Contains(supportedControlPlanePostgresSSL, ssl) {
 				return fmt.Errorf("control_plane postgres.external.ssl_mode %q is unsupported", pg.External.SSLMode)
 			}
+		}
+	case "inherit":
+		if pg.Bundled != nil {
+			return fmt.Errorf("control_plane postgres.bundled must be empty when mode=inherit")
+		}
+		if pg.External != nil {
+			return fmt.Errorf("control_plane postgres.external must be empty when mode=inherit")
 		}
 	}
 	return nil
