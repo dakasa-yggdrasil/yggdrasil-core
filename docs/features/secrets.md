@@ -75,7 +75,7 @@ spec:
 
 When the core dispatches an `integration.execute` for this instance,
 it resolves the `secret://` URI internally and includes the resolved
-value in the AMQP message to the adapter — never echoes it via the
+value in the RPC payload sent to the adapter — never echoes it via the
 HTTP read endpoints, never logs it.
 
 ### Per-key reference

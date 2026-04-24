@@ -4,9 +4,18 @@
 # machine (or any docker host) to get a full control plane running
 # without kubernetes, helm, or tribal knowledge. It provisions:
 #
-#   - Postgres:    state store (manifests, sessions, events)
-#   - RabbitMQ:    adapter transport for integrations
+#   - Postgres:       state store (manifests, sessions, events)
 #   - yggdrasil-core: control plane, bootstraps first admin on fresh DB
+#
+# By default the core runs HTTP-only — HTTP is the always-on transport
+# and no message broker is required. Additional `rpc.Transport`
+# backends are opt-in via docker compose profiles:
+#
+#   # HTTP-only (default):
+#   docker compose -f docker-compose.standalone.yml up -d
+#
+#   # Enable the AMQP backend (RabbitMQ) as well:
+#   docker compose --profile amqp -f docker-compose.standalone.yml up -d
 #
 # Configuration lives entirely in .env (see .env.example). Re-running
 # `docker compose up -d` after a restart is safe: the first-run
@@ -29,8 +38,13 @@ services:
       timeout: 3s
       retries: 20
 
+  # Opt-in AMQP backend. Only started when the `amqp` profile is
+  # activated (`docker compose --profile amqp ...`). When active, the
+  # core reads BROKER_URL from .env and registers the AMQP
+  # rpc.Transport backend at boot.
   rabbitmq:
     image: rabbitmq:3.13-management-alpine
+    profiles: ["amqp"]
     restart: unless-stopped
     environment:
       RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-yggdrasil}
@@ -53,7 +67,10 @@ services:
       DB_NAME: ${POSTGRES_DB:-yggdrasil}
       DB_USER: ${POSTGRES_USER:-yggdrasil}
       DB_PASSWORD: ${POSTGRES_PASSWORD:-yggdrasil}
-      BROKER_URL: amqp://${RABBITMQ_USER:-yggdrasil}:${RABBITMQ_PASSWORD:-yggdrasil}@rabbitmq:5672/
+      # AMQP rpc.Transport backend. Opt-in: set BROKER_URL in .env
+      # (and run with `--profile amqp`) to enable. Leave empty/unset
+      # for pure-HTTP deployments.
+      BROKER_URL: ${BROKER_URL:-}
       AUTH_SESSION_TTL_HOURS: ${AUTH_SESSION_TTL_HOURS:-720}
       AUTH_SESSION_COOKIE_NAME: ${AUTH_SESSION_COOKIE_NAME:-yggdrasil_session}
       AUTH_SESSION_COOKIE_DOMAIN: ${AUTH_SESSION_COOKIE_DOMAIN:-}
@@ -74,8 +91,6 @@ services:
       - "${CORE_HTTP_PORT:-9080}:9080"
     depends_on:
       postgres:
-        condition: service_healthy
-      rabbitmq:
         condition: service_healthy
 
 volumes:

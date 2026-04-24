@@ -71,10 +71,10 @@ sequenceDiagram
     Core->>Core: validate quickstart, pick provider
     Core->>Core: compile workflow from quickstart spec
     Core->>Core: dispatch workflow.run
-    Core->>Adapter: AMQP submit (apply k8s SA + Deployment)
+    Core->>Adapter: RPC submit (apply k8s SA + Deployment)
     Adapter-->>Core: applied
     Core->>Core: register integration_instance
-    Core->>Adapter: AMQP smoke test (read-only operation)
+    Core->>Adapter: RPC smoke test (read-only operation)
     Adapter-->>Core: ok
     Core-->>CLI: { run_id, status }
     CLI-->>User: ✓ installed
@@ -89,7 +89,7 @@ that declares:
   `image`, etc.) with types, defaults, validation regex.
 - The 3 install steps (apply ServiceAccount → apply Deployment →
   register instance).
-- A read-only smoke operation that proves the AMQP wiring works.
+- A read-only smoke operation that proves the RPC wiring works.
 
 ## Adapter wire contract
 
@@ -236,6 +236,8 @@ quickstart.
   shared instance per environment, parameterize per-call payloads
   through the workflow inputs.
 - **Long-running operations without timeouts.** Adapter timeout +
-  AMQP delivery timeout multiply. If your operation can take 5
-  minutes, declare `adapter.timeout_seconds: 600` on the type
+  transport delivery timeout multiply (AMQP message TTL for the
+  `rabbitmq` transport, HTTP client timeout for `http_json`, whatever
+  the plug-in declares for other transports). If your operation can
+  take 5 minutes, declare `adapter.timeout_seconds: 600` on the type
   manifest **and** `timeout_seconds: 600` on the workflow step.

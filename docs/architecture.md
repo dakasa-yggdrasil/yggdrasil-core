@@ -15,15 +15,15 @@ is the better entrypoint — read that first.
                      │  └────┬────┘   └─────┬──────┘   │
                      │       │              │          │
                      │       ▼              ▼          │
-                     │  ┌──────────┐   Pluggable        │
-                     │  │ Postgres │   transport layer  │
+                     │  ┌──────────┐   rpc.Transport    │
+                     │  │ Postgres │   (pluggable RPC)   │
                      │  └──────────┘        │           │
                      └──────────────────────┼───────────┘
                                             ▼
                        ┌────────┬───────────┬──────────────┐
                        │        │           │              │
-                    HTTP     AMQP/RMQ    gRPC/Kafka/NATS  (plug-in)
-                       │        │           │
+                     HTTP      AMQP     gRPC/Kafka/NATS/… │
+                       │        │           │   (plug-in)  │
                        ▼        ▼           ▼
                     integration adapters (independent processes)
 ```
@@ -35,8 +35,8 @@ is the better entrypoint — read that first.
 - The workflow engine that dispatches steps in order.
 - The manifest repository (reads and versioned writes against Postgres).
 - The third-party auth provider registry.
-- The addons registry (startup hooks: postgres, optional AMQP broker
-  connection, HTTP, first run, scheduler, cleaner, reconciler).
+- The addons registry (startup hooks: postgres, HTTP, RPC transport
+  backends, first run, scheduler, cleaner, reconciler).
 
 **Postgres** is the single source of truth for all state: manifests,
 sessions, events, identities, guardian approvals. The outbox table
@@ -44,25 +44,24 @@ sessions, events, identities, guardian approvals. The outbox table
 infrastructure dependency that is always required.
 
 **Transport** is how the core reaches adapters. It is **pluggable** —
-declared per `integration_type` in its manifest:
+every call goes through the `rpc.Transport` interface, declared per
+`integration_type` in its manifest. Backends shipped with the core:
 
-- `http_json` — the core POSTs to adapter HTTP endpoints. No broker
-  required.
-- `rabbitmq` — the core publishes to AMQP queues and awaits replies.
-  Opt-in (gated on the `BROKER_URL` env var); if you don't set
-  `BROKER_URL`, the RabbitMQ addon skips and the core boots
-  broker-free.
-- Any other transport (gRPC, Kafka, NATS, SQS, Pub/Sub) plugs in as a
-  small switch-case extension. See
-  [features/transports.md](./features/transports.md).
+- `http_json` — HTTP request/response.
+- `rabbitmq` — AMQP request/response (0-9-1).
 
-A single deployment can mix transports — some adapters HTTP, some
-AMQP, simultaneously.
+Any other transport (gRPC, Kafka, NATS, SQS, Pub/Sub) plugs in as a
+small switch-case extension implementing `rpc.Transport`. See
+[features/transports.md](./features/transports.md).
+
+A single deployment can mix transports simultaneously — one adapter
+may use HTTP, another AMQP, another gRPC; the core dispatches each
+through the transport its `integration_type` declares.
 
 **Integration adapters** are independent processes (typically
-Kubernetes workloads) that speak whichever transport they declared.
-They deploy into the adopter's infrastructure and are installed via
-`yggdrasil install`.
+Kubernetes workloads) that implement the `rpc.Transport` their
+`integration_type` declares. They deploy into the adopter's
+infrastructure and are installed via `yggdrasil install`.
 
 **Surfaces** are user-facing UIs (the console is the first-party one)
 that talk to yggdrasil-core's HTTP API. Surfaces are themselves
@@ -81,8 +80,8 @@ registered as manifests.
 4. `controllers/message/workflows.go` orchestrates step execution.
    Each step either:
    - `kind=integration`: resolves the instance, dispatches to the
-     adapter via whichever transport the integration_type declares
-     (HTTP / AMQP / pluggable), records the result.
+     adapter via whichever `rpc.Transport` the integration_type
+     declares, records the result.
    - `kind=product`: runs the product lifecycle handler in-process.
    - `kind=yggdrasil`: persists a manifest against the core itself
      (used by the `register-instance` step to create the
@@ -125,12 +124,13 @@ HTTP POST /api/v1/<kind>s
    (outbox workers)
 ```
 
-The `manifest.create` AMQP consumer (when the AMQP addon is enabled)
-and the workflow step `kind=yggdrasil, operation=apply_manifest` both
-funnel into the same helper
-(`controllers/message/manifest_persist.go`). This is the single code
-path that guarantees every manifest write emits an event, regardless
-of which transport or interface delivered the request.
+The HTTP API handlers, any RPC transport consumer (the `manifest.create`
+handler is exposed through whichever `rpc.Transport` backends the
+deployment registers), and the workflow step
+`kind=yggdrasil, operation=apply_manifest` all funnel into the same
+helper (`controllers/message/manifest_persist.go`). This is the single
+code path that guarantees every manifest write emits an event,
+regardless of which transport or interface delivered the request.
 
 ## Deployment options
 
@@ -152,11 +152,11 @@ generates a first-run admin secret that survives upgrades.
 ### Custom / bare-metal
 
 yggdrasil-core is a single binary. Point `DB_*` at your Postgres, run
-`goose up` once to migrate the schema, then run the binary. Optionally
-set `BROKER_URL` if any integration uses `transport: rabbitmq` — leave
-it unset for pure-HTTP deployments. The rest — first-run bootstrap,
-TLS termination, ingress — is whatever the operator wires up
-externally.
+`goose up` once to migrate the schema, then run the binary. Each
+`rpc.Transport` backend is its own addon — enable the ones you need
+via their env vars (each transport docs its own config). The rest —
+first-run bootstrap, TLS termination, ingress — is whatever the
+operator wires up externally.
 
 ## Scale and failure model
 
@@ -165,17 +165,15 @@ apart from the DB. A typical production deployment runs 2-3 replicas
 behind a service.
 
 DB failure takes the whole control plane down (Postgres is the only
-mandatory dependency). Transport failures are scoped:
+mandatory dependency). Transport failures are scoped per backend — if
+one `rpc.Transport` is unhealthy, integrations that declared that
+transport fail at dispatch while integrations on other transports keep
+working. Individual dispatches surface as "adapter unreachable" on the
+affected step; the rest of the workflow proceeds. Transports that
+support reconnect (the AMQP backend uses `ReliableConnection` from the
+`commons` package) absorb short outages transparently.
 
-- **HTTP transport failure** — individual step fails with "adapter
-  unreachable"; the rest of the workflow continues.
-- **AMQP transport failure** (when enabled) — integrations that
-  declared `transport: rabbitmq` fail at dispatch; HTTP-transport
-  integrations keep working. Adapters reconnect via
-  `ReliableConnection` (see `commons` package) and survive short
-  broker outages transparently.
-
-Neither transport failure corrupts state. The catalog is safe; at
-most you have a handful of `workflow_run` rows in `running` status
-to reconcile after recovery — see
+No transport failure corrupts state. The catalog is safe; at most you
+have a handful of `workflow_run` rows in `running` status to reconcile
+after recovery — see
 [operations/incident-response.md](./operations/incident-response.md).

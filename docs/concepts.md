@@ -59,7 +59,10 @@ composable.
 2. **Type** is one concrete implementation of a family. Example:
    `schema-migrations-goose-postgres` implements `schema-migrations`
    using `github.com/pressly/goose` against a PostgreSQL DSN. The
-   type declares its adapter (the AMQP transport queues), credential
+   type declares its adapter (queues for AMQP transport, HTTP
+   endpoints for HTTP transport, or the equivalent for any other
+   registered `rpc.Transport` — see
+   [features/transports.md](./features/transports.md)), credential
    schema, and capability set.
 
 3. **Instance** is one deployed configuration of a type. Example: an
@@ -83,7 +86,9 @@ use:
 ```
 
 the engine resolves family → active type → active instance at
-runtime, dispatches the operation through the adapter (over AMQP),
+runtime, dispatches the operation through the adapter (over whichever
+transport the integration_type declares — HTTP, AMQP, or a pluggable
+backend; see [features/transports.md](./features/transports.md)),
 and records the step result.
 
 ## Workflows and steps
@@ -96,7 +101,9 @@ runtime inputs before executing the step.
 
 Three step kinds exist today:
 
-- `kind: integration` — dispatch to an integration adapter (AMQP RPC).
+- `kind: integration` — dispatch to an integration adapter over the
+  transport declared in its `integration_type` (HTTP / AMQP / any
+  registered `rpc.Transport` — see [features/transports.md](./features/transports.md)).
 - `kind: product` — run a product lifecycle operation (apply,
   observe, uninstall) in-process.
 - `kind: yggdrasil` — persist a manifest against the core itself

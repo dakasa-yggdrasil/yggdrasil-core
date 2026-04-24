@@ -96,15 +96,21 @@ So:
   side-by-side; `integration_type.spec.adapter.transport` is what
   decides for each.
 
-The `yggdrasil init` defaults include RabbitMQ because most of the
-shipped integrations declare `transport: rabbitmq` and the
-one-command bootstrap assumes you want them to work. Production
-deployments can:
+The `yggdrasil init` compose file declares a RabbitMQ service under a
+`amqp` compose profile — **off by default**. Enable it only if you
+use AMQP-transport integrations:
 
-- Remove the broker from the Helm values (`rabbitmq.enabled: false`)
-  if you don't use AMQP-transport integrations.
-- Keep the broker but run adapters on HTTP for services that prefer
-  it (e.g., a serverless function adapter that scales to zero).
+```sh
+docker compose --profile amqp up -d
+```
+
+You can also:
+
+- Turn the broker off in the Helm values (`rabbitmq.enabled: false`,
+  which is the default) if you don't use AMQP-transport integrations.
+- Register any other `rpc.Transport` backend (gRPC, Kafka, NATS, …)
+  and use it exclusively — yggdrasil-core itself has zero hard
+  dependency on any specific transport beyond the always-on HTTP API.
 
 ## Choosing a transport for a new integration
 

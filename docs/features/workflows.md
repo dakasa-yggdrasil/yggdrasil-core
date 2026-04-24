@@ -2,8 +2,10 @@
 
 A workflow is a manifest that describes a DAG of steps to run.
 Workflows are first-class citizens of the catalog — versioned,
-auditable, RBAC-able, and dispatchable through both the HTTP API and
-the AMQP `workflow.run` queue.
+auditable, RBAC-able, and dispatchable through any registered
+`rpc.Transport` (the core ships HTTP and AMQP backends; gRPC / Kafka /
+NATS / anything else plugs in the same way — see
+[transports.md](./transports.md)).
 
 ## What it is
 
@@ -64,7 +66,7 @@ flowchart TB
     Dispatch[Dispatch step]
 
     subgraph StepKinds["Step kinds"]
-        Integration[kind=integration → AMQP RPC]
+        Integration[kind=integration → transport dispatch]
         Product[kind=product → in-process handler]
         Yggdrasil[kind=yggdrasil → in-process catalog write]
     end
@@ -86,8 +88,9 @@ sort, fail-fast on cycle), then walks the order. Each step:
 2. **Evaluates `condition`** if present (skip the step on false; fail
    the step on bad template).
 3. **Dispatches** based on `use.kind`:
-   - `integration` → resolve family/instance, dispatch over AMQP to
-     the right adapter, await reply.
+   - `integration` → resolve family/instance, dispatch through the
+     integration's transport (HTTP / AMQP / any registered
+     `rpc.Transport`), await reply.
    - `product` → run an in-process product handler (apply, observe,
      uninstall).
    - `yggdrasil` → write a manifest into the catalog
@@ -107,8 +110,9 @@ condition) does not — downstream steps continue.
 The most common. Resolves the integration_instance from
 `use.instance_ref` OR `use.family + use.operation` (with optional
 `provider_ref` to disambiguate when multiple providers implement the
-same family). Dispatches via AMQP, returns the adapter's response as
-the step metadata.
+same family). Dispatches via the integration's transport (`rpc.Transport`
+— HTTP, AMQP, or any registered plug-in), returns the adapter's
+response as the step metadata.
 
 ### `kind: product`
 
@@ -184,8 +188,10 @@ Response (synchronous mode):
 }
 ```
 
-The same dispatch is available over AMQP via the `workflow.dispatch`
-queue, asynchronously. `workflow.run` is the in-band synchronous form.
+The same dispatch is available asynchronously over any additional
+`rpc.Transport` registered in the deployment (the AMQP backend, for
+example, exposes `workflow.dispatch` as a queue). `workflow.run` is
+the in-band synchronous form over HTTP.
 
 ## Operate it
 

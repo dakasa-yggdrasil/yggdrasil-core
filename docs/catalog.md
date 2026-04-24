@@ -124,31 +124,36 @@ yggdrasil install dakasa-yggdrasil/integration-github --provider github
 Operations: `dispatch_workflow`, `list_workflow_runs`,
 `describe_workflow_run`.
 
-## Guardian
+## Guardian integrations
 
-### heimdall
+The `guardian_policy`, `guardian_approval`, `guardian_memory`,
+`remediation_bundle`, and `remediation_contract` manifest kinds are
+first-class in the core — any guardian integration can implement
+them. These kinds define the contract; the closed-loop sweep that
+consumes them lives in whichever guardian integration an adopter
+installs.
 
-**Family**: approval workflow for high-blast-radius changes.
-**Providers**: `heimdall` (core-owned guardian).
+Open-source guardian integrations: none shipped as first-party today.
+The contract is documented so any team can build one —
+`integration-template` scaffolds in one command.
 
-```sh
-yggdrasil install dakasa-yggdrasil/integration-heimdall --provider heimdall
-```
-
-Operations: `request_approval`, `describe_approval`, `record_decision`.
+**Commercial**: Dakasa publishes
+[Heimdall](https://dakasa.me/heimdall) — a production-grade guardian
+integration with the closed-loop sweep, LLM fallback, and managed
+remediation runbooks. Pricing at
+[dakasa.me/heimdall](https://dakasa.me/heimdall).
 
 ## Writing your own
 
-Create a new repo from the `integration-template`:
+The recommended path is one command:
 
 ```sh
-git clone https://github.com/dakasa-yggdrasil/integration-template my-integration
+yggdrasil new integration my-thing --owner your-org
 ```
 
-The template ships with:
+This scaffolds from [integration-template](https://github.com/dakasa-yggdrasil/integration-template)
+— Go entrypoint, RPC handlers, adapter skeleton, Dockerfile,
+`yggdrasil-quickstart.yaml` stub, and a multi-arch GHA release
+workflow, all wired to your module path.
 
-- `controllers/message/` — AMQP RPC handlers.
-- `internal/adapter/spec.go` — where you define operations.
-- `docs/` — YAML quickstart scaffolding.
-
-Read `AGENTS.md` in the template for the full walkthrough.
+Full 30-minute walkthrough: [extending.md](./extending.md).

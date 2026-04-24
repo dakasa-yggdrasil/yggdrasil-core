@@ -7,7 +7,8 @@ the manifest catalog, auth, and policy. Everything that talks to a real
 system out there — a SaaS, a cloud, a database — is a plugin. There are
 two kinds:
 
-- **Integrations** — outbound adapters that execute operations (AMQP RPC
+- **Integrations** — outbound adapters that execute operations (RPC over
+  a pluggable transport —
   with the core). Think `integration-kubernetes`, `integration-aws`,
   `integration-grafana`.
 - **Surfaces** — inbound edges that render a UI or expose a narrow HTTP
@@ -65,7 +66,7 @@ without a single line of your own code.
 
 ```
 integration-datadog/
-├── main.go                       # AMQP consumer entrypoint
+├── main.go                       # RPC consumer entrypoint (transport picked at startup)
 ├── controllers/message/          # RPC handlers (describe / execute / health)
 ├── internal/adapter/
 │   ├── spec.go                   # describe contract + operation switch
@@ -175,11 +176,12 @@ metadata:
 spec:
   provider: datadog
   adapter:
-    transport: rabbitmq
+    transport: http_json
     version: "1.0.0"
-    queues:
-      describe: yggdrasil.adapter.datadog.describe
-      execute:  yggdrasil.adapter.datadog.execute
+    endpoints:
+      describe: /describe
+      execute:  /execute
+      health:   /healthz
     timeout_seconds: 30
   capabilities: [describe, execute]
   credential_schema:
@@ -235,7 +237,7 @@ Same flow, different command:
 yggdrasil new surface admin-dashboard --owner acme-eng
 ```
 
-Surfaces are simpler: no AMQP consumer, no family manifest, no operation
+Surfaces are simpler: no RPC consumer, no family manifest, no operation
 catalog. They're just HTTP/UI edges that talk to the core's HTTP API.
 Register one with a `surface` manifest (see
 [concepts → surfaces](./concepts.md#surfaces)) and the core knows it

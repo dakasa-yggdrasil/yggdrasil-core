@@ -61,7 +61,7 @@ spec:
             {{- if .Values.rabbitmq.enabled }}
             - name: BROKER_URL
               value: {{ printf "amqp://%s:%s@%s-rabbitmq:5672/" .Values.rabbitmq.auth.username .Values.rabbitmq.auth.password .Release.Name | quote }}
-            {{- else }}
+            {{- else if .Values.external.rabbitmq.urlSecret.name }}
             - name: BROKER_URL
               valueFrom:
                 secretKeyRef:

@@ -81,10 +81,12 @@ Examples:
 - `domain = rabbitmq, section = installations`
 - `domain = github, section = operations`
 
-The core now also exposes a dedicated catalog API over RabbitMQ:
-
-- `yggdrasil-core.integration.catalog.list`
-- `yggdrasil-core.integration.catalog.get`
+The core also exposes a dedicated catalog API over RPC — any registered
+`rpc.Transport` can serve it (the HTTP API at
+`/api/v1/integration-catalog`, plus equivalent endpoints
+`yggdrasil-core.integration.catalog.list` /
+`yggdrasil-core.integration.catalog.get` on any other transport
+backend the deployment registers).
 
 That means consumers no longer need to know the underlying label conventions just to browse the
 catalog.
