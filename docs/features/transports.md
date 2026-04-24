@@ -153,6 +153,71 @@ implementations — each is ~200 lines of Go. A gRPC handler would be
 similar; a Kafka one would need consumer-group mechanics for the
 reply but still fits the same shape.
 
+## Out-of-process transport plugins (experimental)
+
+In addition to the compiled-in transports, the core can load transport
+backends as out-of-process plugins using
+[hashicorp/go-plugin](https://github.com/hashicorp/go-plugin). This is
+the path for transports the core doesn't want to vendor — proprietary
+brokers, experimental backends, custom wire formats.
+
+Plugin layout: any executable file named `yggdrasil-transport-<name>`
+inside the directory pointed to by `YGGDRASIL_TRANSPORT_PLUGIN_DIR` is
+discovered. The core spawns the subprocess on demand, handshakes with
+`hashicorp/go-plugin` (magic cookie + protocol version), and exposes
+the plugin as an `rpc.Transport` to the rest of the engine.
+
+Plugin contract (trimmed; see `internal/transportplugin/plugin.go`):
+
+```go
+type Transport interface {
+    Name() (string, error)
+    Dispatch(req DispatchRequest) (DispatchReply, error)
+    Close() error
+}
+```
+
+A minimal plugin is three screens of Go. Full worked example lives at
+`cmd/transport-echo/`:
+
+```go
+package main
+
+import (
+    "github.com/hashicorp/go-plugin"
+    "github.com/dakasa-yggdrasil/yggdrasil-core/internal/transportplugin"
+)
+
+type echoTransport struct{}
+
+func (echoTransport) Name() (string, error) { return "echo", nil }
+func (echoTransport) Dispatch(req transportplugin.DispatchRequest) (transportplugin.DispatchReply, error) {
+    return transportplugin.DispatchReply{Body: req.Body, ContentType: req.ContentType}, nil
+}
+func (echoTransport) Close() error { return nil }
+
+func main() {
+    plugin.Serve(&plugin.ServeConfig{
+        HandshakeConfig: transportplugin.Handshake,
+        Plugins:         transportplugin.PluginMap(echoTransport{}),
+    })
+}
+```
+
+Build + install:
+
+```sh
+go build -o /var/lib/yggdrasil/plugins/yggdrasil-transport-echo ./cmd/transport-echo
+YGGDRASIL_TRANSPORT_PLUGIN_DIR=/var/lib/yggdrasil/plugins ./yggdrasil-core
+```
+
+**Status**: the plugin infrastructure is wired and tested
+end-to-end (`internal/transportplugin`), but the workflow dispatcher
+still routes through the compiled-in `rabbitmq` / `http_json`
+handlers. Hooking the dispatcher into the plugin loader is the next
+phase — until then, plugins are addressable but not dispatchable from
+`integration_type.spec.adapter.transport`.
+
 ## Why not one transport to rule them all?
 
 We considered settling on a single transport for simplicity. Three

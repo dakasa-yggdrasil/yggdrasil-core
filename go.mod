@@ -9,6 +9,8 @@ require (
 	github.com/aws/aws-sdk-go-v2/service/ses v1.34.22
 	github.com/aws/aws-sdk-go-v2/service/sns v1.39.15
 	github.com/google/uuid v1.6.0
+	github.com/hashicorp/go-hclog v1.6.3
+	github.com/hashicorp/go-plugin v1.7.0
 	github.com/lib/pq v1.12.0
 	github.com/pressly/goose/v3 v3.27.0
 	github.com/rabbitmq/amqp091-go v1.10.0
@@ -20,6 +22,17 @@ require (
 	k8s.io/apimachinery v0.35.3
 	k8s.io/client-go v0.35.3
 	sigs.k8s.io/yaml v1.6.0
+)
+
+require (
+	github.com/fatih/color v1.13.0 // indirect
+	github.com/golang/protobuf v1.5.4 // indirect
+	github.com/hashicorp/yamux v0.1.2 // indirect
+	github.com/mattn/go-colorable v0.1.12 // indirect
+	github.com/mattn/go-isatty v0.0.20 // indirect
+	github.com/oklog/run v1.1.0 // indirect
+	google.golang.org/genproto/googleapis/rpc v0.0.0-20260217215200-42d3e9bedb6d // indirect
+	google.golang.org/grpc v1.79.1 // indirect
 )
 
 require (
@@ -63,7 +76,7 @@ require (
 	go.yaml.in/yaml/v2 v2.4.3 // indirect
 	go.yaml.in/yaml/v3 v3.0.4 // indirect
 	golang.org/x/net v0.50.0 // indirect
-	golang.org/x/oauth2 v0.30.0 // indirect
+	golang.org/x/oauth2 v0.34.0 // indirect
 	golang.org/x/sync v0.19.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
 	golang.org/x/term v0.40.0 // indirect
