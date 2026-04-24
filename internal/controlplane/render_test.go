@@ -265,21 +265,11 @@ func TestRenderRejectsMissingBasics(t *testing.T) {
 // structural surprise.
 func coreContainer(t *testing.T, deployment map[string]any) map[string]any {
 	t.Helper()
-	if deployment == nil {
-		t.Fatal("nil deployment")
-	}
-	spec, _ := deployment["spec"].(map[string]any)
-	template, _ := spec["template"].(map[string]any)
-	podSpec, _ := template["spec"].(map[string]any)
-	containers, _ := podSpec["containers"].([]any)
+	containers := mustPodContainers(t, deployment)
 	if len(containers) == 0 {
 		t.Fatal("no containers in Deployment pod spec")
 	}
-	container, _ := containers[0].(map[string]any)
-	if container == nil {
-		t.Fatal("container is not a map")
-	}
-	return container
+	return containers[0]
 }
 
 func extractEnvFromSources(t *testing.T, deployment map[string]any) []map[string]any {
@@ -515,5 +505,44 @@ func TestRenderAnnotationsAndLabels(t *testing.T) {
 	// baseLabels still present
 	if labels == nil || labels[coreLabelKey] != coreLabelValue {
 		t.Errorf("template labels missing baseLabels: %v", labels)
+	}
+}
+
+func TestRenderNameOverrideWithIngress(t *testing.T) {
+	spec := baseSpec()
+	spec.Name = "yggdrasil"
+	spec.Postgres = model.ControlPlanePostgresSpec{Mode: "inherit"}
+	spec.Ingress = model.ControlPlaneIngressSpec{Enabled: true, Host: "yggdrasil.example.com"}
+
+	bundle, err := Render(spec)
+	if err != nil {
+		t.Fatalf("Render error: %v", err)
+	}
+
+	ingress := findObject(t, bundle.CoreObjects, "Ingress", "yggdrasil")
+	if ingress == nil {
+		t.Fatal("Ingress must be named 'yggdrasil' when spec.name=yggdrasil")
+	}
+	if findObject(t, bundle.CoreObjects, "Ingress", coreIngressName) != nil {
+		t.Error("default Ingress name must not appear when spec.name is set")
+	}
+
+	// Verify the Ingress backend.service.name also picks up the override.
+	ingSpec, _ := ingress["spec"].(map[string]any)
+	rules, _ := ingSpec["rules"].([]any)
+	if len(rules) == 0 {
+		t.Fatal("Ingress has no rules")
+	}
+	rule0, _ := rules[0].(map[string]any)
+	http, _ := rule0["http"].(map[string]any)
+	paths, _ := http["paths"].([]any)
+	if len(paths) == 0 {
+		t.Fatal("Ingress rule has no paths")
+	}
+	path0, _ := paths[0].(map[string]any)
+	backend, _ := path0["backend"].(map[string]any)
+	service, _ := backend["service"].(map[string]any)
+	if service["name"] != "yggdrasil" {
+		t.Errorf("Ingress backend.service.name = %v, want yggdrasil", service["name"])
 	}
 }

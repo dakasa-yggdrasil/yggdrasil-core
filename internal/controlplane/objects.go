@@ -281,6 +281,12 @@ func renderCoreDeployment(namespace, name string, spec model.ControlPlaneManifes
 		}
 	}
 
+	// Custom labels are merged ONLY into the pod template metadata — NOT into
+	// the Deployment's top-level metadata.labels or selector.matchLabels. The
+	// selector is immutable after first apply; polluting it with user labels
+	// would cause upgrade failures on label changes. baseLabels remains the
+	// stable identity used by both the Deployment's own metadata and the
+	// selector; user labels are pod-template decoration only.
 	templateLabels := baseLabels("core")
 	for k, v := range spec.Labels {
 		templateLabels[k] = v

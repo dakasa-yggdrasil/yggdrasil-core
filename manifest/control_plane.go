@@ -22,7 +22,7 @@ var (
 	controlPlaneStorageSizePattern      = regexp.MustCompile(`^[1-9][0-9]*(Mi|Gi|Ti)$`)
 	controlPlaneSecretRefPattern        = regexp.MustCompile(`^secret://[a-z0-9][a-z0-9._:/-]*$`)
 	supportedControlPlanePullPolicies   = []string{"Always", "IfNotPresent", "Never"}
-	controlPlaneNamePattern             = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]*[a-z0-9])?$`)
+	controlPlaneNamePattern             = regexp.MustCompile(`^[a-z0-9]([-a-z0-9]{0,61}[a-z0-9])?$`)
 )
 
 // ParseControlPlaneSpec parses the raw spec payload into the typed
@@ -74,13 +74,17 @@ func ValidateControlPlaneSpec(spec model.ControlPlaneManifestSpec) error {
 
 func validateControlPlaneEnvFrom(entries []model.ControlPlaneEnvFrom) error {
 	for i, entry := range entries {
-		hasSecret := entry.SecretRef != nil && strings.TrimSpace(entry.SecretRef.Name) != ""
-		hasCM := entry.ConfigMapRef != nil && strings.TrimSpace(entry.ConfigMapRef.Name) != ""
+		hasSecret := entry.SecretRef != nil
+		hasCM := entry.ConfigMapRef != nil
 		switch {
 		case !hasSecret && !hasCM:
-			return fmt.Errorf("control_plane extra_env_from[%d] must set secret_ref.name or config_map_ref.name", i)
+			return fmt.Errorf("control_plane extra_env_from[%d] must set secret_ref or config_map_ref", i)
 		case hasSecret && hasCM:
 			return fmt.Errorf("control_plane extra_env_from[%d] must set exactly one of secret_ref/config_map_ref", i)
+		case hasSecret && strings.TrimSpace(entry.SecretRef.Name) == "":
+			return fmt.Errorf("control_plane extra_env_from[%d].secret_ref.name cannot be empty", i)
+		case hasCM && strings.TrimSpace(entry.ConfigMapRef.Name) == "":
+			return fmt.Errorf("control_plane extra_env_from[%d].config_map_ref.name cannot be empty", i)
 		}
 	}
 	return nil

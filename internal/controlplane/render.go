@@ -151,7 +151,11 @@ func Render(spec model.ControlPlaneManifestSpec) (*RenderedBundle, error) {
 	coreEnvSources = append(coreEnvSources, envFromSecret(coreName))
 
 	if strings.EqualFold(spec.Postgres.Mode, "external") {
-		coreEnvSources = append(coreEnvSources, envFromExternalPostgresSecret(spec.Postgres.External))
+		ref := envFromExternalPostgresSecret(spec.Postgres.External)
+		if ref == nil {
+			return nil, fmt.Errorf("control_plane render: external postgres password_ref is missing or not a secret:// reference")
+		}
+		coreEnvSources = append(coreEnvSources, ref)
 	}
 	for _, transport := range spec.Transports {
 		if strings.EqualFold(transport.Kind, "amqp") && strings.EqualFold(transport.Mode, "external") {
