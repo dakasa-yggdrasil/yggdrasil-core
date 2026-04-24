@@ -53,7 +53,7 @@
     },
     "integrationAdapterSpec": {
       "type": "object",
-      "required": ["transport", "version", "queues"],
+      "required": ["transport", "version"],
       "properties": {
         "transport": { "type": "string" },
         "version": { "type": "string" },
