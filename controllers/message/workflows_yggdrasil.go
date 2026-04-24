@@ -4,34 +4,36 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/google/uuid"
+
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/controlplane"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 )
 
 // executeYggdrasilWorkflowStep runs a workflow step with use.kind = "yggdrasil".
-// These steps persist a manifest document, carried in with.manifest, against
-// the core's own manifest store — they do NOT dispatch to an integration
-// adapter. The only supported operation today is apply_manifest; the
-// validator in manifest/workflow.go enforces that.
+// These steps execute in-process against the core rather than
+// dispatching to an adapter. The dispatch table lives here; the
+// manifest-level validator in manifest/workflow.go gates which
+// operations are legal.
 //
-// The handler reuses persistManifestVersion so that workflow-driven
-// manifest creation goes through the same normalize/validate/persist/emit
-// pipeline as the HTTP and AMQP entrypoints. That keeps the manifest.created
-// event stream consistent regardless of which surface created the record.
+// Supported operations:
 //
-// Step output (step.Metadata) on success:
+//   - apply_manifest       — persists with.manifest through the standard
+//     normalize/validate/persist/emit pipeline. See handleApplyManifest.
+//   - control_plane.render — loads a `control_plane` manifest by ref
+//     and returns its rendered Kubernetes objects as step metadata.
+//     The deploy-control-plane workflow consumes this metadata in
+//     subsequent declarative_apply / observe_objects steps.
 //
-//	manifest_id: UUID string of the persisted manifest record
-//	kind:        lowercase kind the manifest was created as
-//	namespace:   normalized namespace
-//	name:        normalized name
-//	version:     integer version number assigned by the repository
-//	checksum:    deterministic sha256 checksum
-//
-// Downstream steps can reference these via {{ steps.<id>.metadata.manifest_id }} etc.
+// On success, step.Metadata carries operation-specific fields (see the
+// per-handler doc comments).
 func executeYggdrasilWorkflowStep(
 	ctx context.Context,
 	db *sql.DB,
@@ -42,12 +44,31 @@ func executeYggdrasilWorkflowStep(
 	result.Attempts = 1
 
 	operation := strings.ToLower(strings.TrimSpace(step.Use.Operation))
-	if operation != "apply_manifest" {
+	switch operation {
+	case "apply_manifest":
+		return handleApplyManifest(ctx, db, result, renderedInput)
+	case "control_plane.render":
+		return handleControlPlaneRender(ctx, db, result, renderedInput)
+	default:
 		result.Error = fmt.Sprintf("unsupported yggdrasil step operation %q", operation)
 		result.FinishedAt = time.Now().UTC()
 		return result
 	}
+}
 
+// handleApplyManifest persists with.manifest through the same pipeline
+// the HTTP and RPC endpoints use. See persistManifestVersion for the
+// normalize/validate/persist/emit contract.
+//
+// Metadata on success:
+//
+//	manifest_id, kind, namespace, name, version, checksum
+func handleApplyManifest(
+	ctx context.Context,
+	db *sql.DB,
+	result model.WorkflowRunStepResult,
+	renderedInput map[string]any,
+) model.WorkflowRunStepResult {
 	doc, err := manifestDocumentFromStepInput(renderedInput)
 	if err != nil {
 		result.Error = err.Error()
@@ -73,6 +94,188 @@ func executeYggdrasilWorkflowStep(
 	}
 	result.FinishedAt = time.Now().UTC()
 	return result
+}
+
+// handleControlPlaneRender loads a control_plane manifest identified by
+// with.control_plane_ref, renders it via internal/controlplane, and
+// surfaces the rendered bundle as step metadata for downstream steps.
+//
+// Input:
+//
+//	with:
+//	  control_plane_ref:
+//	    namespace: global
+//	    name:      primary
+//	    version:   3      # optional; latest active when absent
+//
+// Metadata on success:
+//
+//	control_plane:  { manifest_id, namespace, name, version }
+//	infra_objects:  [ ... K8s objects ... ]
+//	core_objects:   [ ... K8s objects ... ]
+//	wait_targets:   [ { phase, namespace, kind, name } ]
+//
+// Downstream steps reference these via
+// {{ steps.<id>.metadata.infra_objects }} as the objects input to
+// integration-kubernetes declarative_apply.
+func handleControlPlaneRender(
+	ctx context.Context,
+	db *sql.DB,
+	result model.WorkflowRunStepResult,
+	renderedInput map[string]any,
+) model.WorkflowRunStepResult {
+	selector, err := controlPlaneSelectorFromInput(renderedInput)
+	if err != nil {
+		result.Error = err.Error()
+		result.FinishedAt = time.Now().UTC()
+		return result
+	}
+
+	record, err := resolveControlPlaneManifest(ctx, db, selector)
+	if err != nil {
+		result.Error = fmt.Errorf("load control_plane manifest: %w", err).Error()
+		result.FinishedAt = time.Now().UTC()
+		return result
+	}
+
+	spec, err := manifest.ParseControlPlaneSpec(record.Spec)
+	if err != nil {
+		result.Error = err.Error()
+		result.FinishedAt = time.Now().UTC()
+		return result
+	}
+
+	bundle, err := controlplane.Render(spec)
+	if err != nil {
+		result.Error = fmt.Errorf("render control_plane: %w", err).Error()
+		result.FinishedAt = time.Now().UTC()
+		return result
+	}
+
+	result.Status = "succeeded"
+	result.Metadata = map[string]any{
+		"control_plane": map[string]any{
+			"manifest_id": record.ID.String(),
+			"namespace":   record.Metadata.Namespace,
+			"name":        record.Metadata.Name,
+			"version":     record.Version,
+		},
+		"infra_objects": bundle.InfraObjects,
+		"core_objects":  bundle.CoreObjects,
+		"wait_targets":  waitTargetsForMetadata(bundle.WaitTargets),
+	}
+	result.FinishedAt = time.Now().UTC()
+	return result
+}
+
+// controlPlaneSelectorFromInput reads the `control_plane_ref` field
+// from the rendered with-block and normalizes it into a
+// ManifestSelector. The ref accepts the same shape as ManifestSelector
+// itself (name + optional namespace + optional version) to stay
+// consistent with how integrations reference their type_ref.
+func controlPlaneSelectorFromInput(input map[string]any) (model.ManifestSelector, error) {
+	raw, ok := input["control_plane_ref"]
+	if !ok {
+		return model.ManifestSelector{}, fmt.Errorf("control_plane.render requires with.control_plane_ref")
+	}
+	refMap, ok := raw.(map[string]any)
+	if !ok {
+		return model.ManifestSelector{}, fmt.Errorf("control_plane.render: with.control_plane_ref must be an object")
+	}
+
+	selector := model.ManifestSelector{
+		ManifestID: stringField(refMap, "manifest_id"),
+		Namespace:  strings.ToLower(strings.TrimSpace(stringField(refMap, "namespace"))),
+		Name:       strings.ToLower(strings.TrimSpace(stringField(refMap, "name"))),
+	}
+	if selector.Namespace == "" {
+		selector.Namespace = "global"
+	}
+	if selector.ManifestID == "" && selector.Name == "" {
+		return model.ManifestSelector{}, fmt.Errorf("control_plane.render: control_plane_ref requires manifest_id or name")
+	}
+	if version, ok := refMap["version"]; ok {
+		if parsed, err := toPositiveInt(version); err != nil {
+			return model.ManifestSelector{}, fmt.Errorf("control_plane.render: control_plane_ref.version is invalid: %w", err)
+		} else if parsed > 0 {
+			selector.Version = &parsed
+		}
+	}
+	return selector, nil
+}
+
+func stringField(m map[string]any, key string) string {
+	if v, ok := m[key].(string); ok {
+		return v
+	}
+	return ""
+}
+
+// toPositiveInt accepts the JSON number representations workflow
+// rendering produces (float64, json.Number, int) and rejects anything
+// else. Zero and negatives are valid inputs but the caller filters
+// them — we only signal whether the encoding itself is parseable.
+func toPositiveInt(v any) (int, error) {
+	switch value := v.(type) {
+	case float64:
+		return int(value), nil
+	case int:
+		return value, nil
+	case json.Number:
+		n, err := value.Int64()
+		if err != nil {
+			return 0, err
+		}
+		return int(n), nil
+	case nil:
+		return 0, nil
+	default:
+		return 0, fmt.Errorf("unsupported type %T", v)
+	}
+}
+
+// resolveControlPlaneManifest lifts a ManifestSelector into the
+// corresponding stored record. The selector may carry a manifest_id
+// (UUID), in which case GetManifestByID is exact; otherwise we fall
+// back to namespace/name/version resolution, honoring the activeOnly
+// default that everything else in the core uses.
+func resolveControlPlaneManifest(ctx context.Context, db *sql.DB, selector model.ManifestSelector) (model.Manifest, error) {
+	if id := strings.TrimSpace(selector.ManifestID); id != "" {
+		parsed, err := uuid.Parse(id)
+		if err != nil {
+			return model.Manifest{}, fmt.Errorf("manifest_id %q is not a valid UUID: %w", id, err)
+		}
+		record, err := repository.GetManifestByID(ctx, db, parsed)
+		if err != nil {
+			return model.Manifest{}, err
+		}
+		if !strings.EqualFold(record.Kind, "control_plane") {
+			return model.Manifest{}, fmt.Errorf("manifest %s is kind %q, not control_plane", id, record.Kind)
+		}
+		return record, nil
+	}
+
+	record, err := repository.ResolveManifest(ctx, db, "control_plane", selector.Namespace, selector.Name, selector.Version, true)
+	if err != nil {
+		if errors.Is(err, repository.ErrManifestNotFound) {
+			return model.Manifest{}, fmt.Errorf("control_plane %s/%s not found", selector.Namespace, selector.Name)
+		}
+		return model.Manifest{}, err
+	}
+	return record, nil
+}
+
+func waitTargetsForMetadata(targets []controlplane.WaitTarget) []map[string]any {
+	out := make([]map[string]any, 0, len(targets))
+	for _, target := range targets {
+		out = append(out, map[string]any{
+			"phase":     target.Phase,
+			"namespace": target.Namespace,
+			"kind":      target.Kind,
+			"name":      target.Name,
+		})
+	}
+	return out
 }
 
 // manifestDocumentFromStepInput extracts the with.manifest value produced by
