@@ -4,7 +4,7 @@
   "metadata": {
     "name": "schema-migrations-goose-postgres",
     "namespace": "global",
-    "description": "Bootstrap integration type for the goose-postgres provider — applies versioned PostgreSQL migrations via pressly/goose embedded with checksum-guarded drift detection.",
+    "description": "Bootstrap integration type for the goose-postgres provider \u2014 applies versioned PostgreSQL migrations via pressly/goose embedded with checksum-guarded drift detection.",
     "labels": {
       "bootstrap_source": "integration-schema-migrations",
       "provider": "schema-migrations",
@@ -33,13 +33,16 @@
       },
       "timeout_seconds": 300
     },
-    "capabilities": ["describe", "execute"],
+    "capabilities": [
+      "describe",
+      "execute"
+    ],
     "credential_schema": {
       "mode": "inline",
       "properties": {
         "default_dsn": {
           "type": "string",
-          "description": "Optional default DSN used when MigrationTarget.dsn is empty (dev-time only).",
+          "description": "Optional default DSN used when MigrationTarget.dsn is empty and dsn_ref is unresolved. Dev-time only.",
           "secret": true
         }
       }
@@ -55,6 +58,10 @@
           "type": "string",
           "description": "Default goose tracking table when MigrationTarget.track_table is empty.",
           "default": "goose_db_version"
+        },
+        "max_migration_seconds": {
+          "type": "integer",
+          "description": "Per-migration timeout cap. Defaults to the adapter timeout."
         }
       }
     },
@@ -75,19 +82,25 @@
       {
         "name": "apply_migrations_spec",
         "description": "Apply versioned migrations in order. Idempotent. Rejects checksum drift.",
-        "resource_types": ["migration_set"],
+        "resource_types": [
+          "migration_set"
+        ],
         "idempotent": true
       },
       {
         "name": "describe_applied_migrations",
         "description": "List already-applied migrations with checksums and timestamps.",
-        "resource_types": ["migration_set"],
+        "resource_types": [
+          "migration_set"
+        ],
         "idempotent": true
       },
       {
         "name": "rollback_migration",
         "description": "Rollback last migration (mode=single) or down to a target version (mode=down_to).",
-        "resource_types": ["migration_set"],
+        "resource_types": [
+          "migration_set"
+        ],
         "idempotent": false
       }
     ],
@@ -103,7 +116,10 @@
     },
     "execution": {
       "supports_dry_run": true,
-      "idempotent_actions": ["apply_migrations_spec", "describe_applied_migrations"]
+      "idempotent_actions": [
+        "apply_migrations_spec",
+        "describe_applied_migrations"
+      ]
     },
     "extensions": {}
   }

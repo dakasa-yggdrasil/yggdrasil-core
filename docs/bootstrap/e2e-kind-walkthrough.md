@@ -297,10 +297,11 @@ which points at the HOST's loopback, not the container's. On macOS:
 
 ## Live validation status (2026-04-24)
 
-This walkthrough was executed end-to-end against a kind cluster as
-part of Fase 6. The run exposed six real bugs — all patched in the
-same session; the commit messages for the fixes carry their own root-
-cause analyses. The two remaining issues are tracked below.
+**E2E validated end-to-end against a kind cluster.** Workflow status:
+succeeded; 5/5 steps green; `yggdrasil-core` deployment + postgres
+statefulset running in the target kind cluster. Run exposed **15 real
+bugs**, all patched in the same session — commit messages carry the
+individual root-cause analyses.
 
 **Fixed as a result of Fase 6 execution:**
 
@@ -337,23 +338,47 @@ cause analyses. The two remaining issues are tracked below.
    declare `base_url`, so legitimate HTTP instances were rejected.
    Relaxed both.
 
-**Known issues still in flight:**
+**Bugs 7-15 (caught after the first batch):**
 
-- Adapter describe response may still mismatch the contract on other
-  field-level details (JSON schema validation message is currently
-  flattened in the validator; iterate until apply-infra reaches the
-  adapter cleanly).
-- Kind cluster networking from integration-kubernetes container:
-  kind's kubeconfig advertises `https://127.0.0.1:<port>`, which
-  inside the adapter container resolves to the CONTAINER's loopback.
-  Needs `host.docker.internal` rewrite on Docker Desktop or a docker
-  network trick on colima.
+7. `callHTTPJSON` bypassed the SDK HTTP envelope (`{content_type,
+   body:base64}`) and passed the outer wrapper to decodeRPCBody.
+   Added `unwrapSDKHTTPEnvelope` to peel before decode.
+8. Contract validator now serializes `DetailedOutput` as JSON in the
+   error so failing field paths are visible (was terse
+   `mem://...` URL only).
+9-10. Adapter `Describe()` instance_schemas missing `base_url`
+   (both kubernetes + schema-migrations). Added.
+11. Seed `kubernetes-integration-type` diverged from the live
+   adapter (default_actions + action_catalog out of sync). Aligned.
+12. `integration-adapter/v1` JSON schema was too strict —
+   `additionalProperties: false` on every sub-spec blocked normal
+   struct evolution. Relaxed on 15 embedded defs; kept strict on
+   protocol-level envelopes.
+13. Compose mount `/root/.kube/config` failed permission — `/root`
+   is 700 and adapter runs as nonroot. Mounted at `/app/kubeconfig`
+   instead.
+14. Kind's kubeconfig advertises `https://127.0.0.1:<port>` which
+   inside the adapter container is the container itself. Resolved
+   via host-gateway: rewrite kubeconfig to `host.docker.internal` +
+   `extra_hosts: host.docker.internal:host-gateway` + skip TLS
+   verify (kind cert doesn't cover the rewritten hostname — dev-
+   only shortcut).
+15. Workflow engine's status normalizer only accepted "succeeded" /
+   "success" / "ok" — declarative adapters emit "applied" /
+   "observed". Extended the accept list.
 
-**What the walkthrough has proven:** seed compose + manifest apply +
-workflow dispatch + step progression up through `render` reliably,
-and `apply-infra` reaches the adapter's describe call. The bugs
-above were all caught BEFORE any K8s object touched the target
-cluster — the workflow engine's fail-fast behavior held.
+**Migrate step removed from the seed workflow.** The core's own
+container entrypoint runs `goose up` on first boot, so dispatching a
+separate apply_migrations_spec step just duplicated the work AND
+required a non-existent migration bundle input. Reintroduced only
+when the workflow engine can carry a real MigrationsSpec payload.
+
+**What the walkthrough proved:** seed compose boots → 3 adapter
+instances auto-register → control_plane apply → render →
+describe-handshake on 1 of 2 adapters (kubernetes) → apply-infra +
+wait-infra against kind → apply-core + wait-core → production
+control plane (core pod + postgres statefulset) up in the kind
+namespace `yggdrasil`. Total wall time after all bugs fixed: ~45s.
 
 ## What this does NOT validate
 
