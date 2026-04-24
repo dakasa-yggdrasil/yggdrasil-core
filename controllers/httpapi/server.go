@@ -350,18 +350,22 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// RabbitMQ is a soft dependency — a closed connection degrades workflow
+	// dispatch throughput but does not make the HTTP API unavailable.
+	// Without a ReliableConnection the single *amqp.Connection closes after
+	// transient broker blips and never recovers until pod restart, which
+	// cascaded into /readyz → 503 → Traefik 404 for every external caller.
+	// Surface the state via `rabbitmq_status` but stay ready.
+	rabbitmqStatus := "ok"
 	if strings.TrimSpace(os.Getenv("BROKER_URL")) != "" {
 		if s.rabbitmq == nil || s.rabbitmq.IsClosed() {
-			writeJSON(w, http.StatusServiceUnavailable, map[string]any{
-				"status": "not_ready",
-				"reason": "rabbitmq_unavailable",
-			})
-			return
+			rabbitmqStatus = "degraded"
 		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"status": "ready",
+		"status":          "ready",
+		"rabbitmq_status": rabbitmqStatus,
 	})
 }
 
