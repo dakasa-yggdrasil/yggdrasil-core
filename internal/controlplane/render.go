@@ -77,6 +77,17 @@ const (
 	amqpDataVolumeName = "data"
 )
 
+// resourceNameOrDefault picks spec.Name when set, else the hard-coded
+// default. Kept deliberately unexported and passed into each renderer
+// helper explicitly so the tests can still assert against the default
+// constants via the helpers' named-arg variants.
+func resourceNameOrDefault(spec model.ControlPlaneManifestSpec, fallback string) string {
+	if name := strings.TrimSpace(spec.Name); name != "" {
+		return name
+	}
+	return fallback
+}
+
 // Render translates spec into the concrete Kubernetes objects that make
 // up a yggdrasil-core deployment. The spec is assumed to have been
 // validated via manifest.ValidateControlPlaneSpec beforehand; the
@@ -100,13 +111,19 @@ func Render(spec model.ControlPlaneManifestSpec) (*RenderedBundle, error) {
 
 	coreEnvSources := []map[string]any{}
 
-	if strings.EqualFold(spec.Postgres.Mode, "bundled") {
+	switch strings.ToLower(strings.TrimSpace(spec.Postgres.Mode)) {
+	case "bundled":
 		secret, set, svc := renderBundledPostgres(namespace, spec.Postgres.Bundled)
 		bundle.InfraObjects = append(bundle.InfraObjects, secret, set, svc)
 		bundle.WaitTargets = append(bundle.WaitTargets, WaitTarget{
 			Phase: phaseInfra, Namespace: namespace, Kind: "StatefulSet", Name: postgresStatefulSet,
 		})
 		coreEnvSources = append(coreEnvSources, envFromSecret(postgresSecretName))
+	case "external":
+		// envFrom is appended below, after the core Secret entry, to preserve
+		// ordering (core Secret first, external Postgres Secret second).
+	case "inherit":
+		// nothing to render; caller supplies DB_* via spec.ExtraEnvFrom.
 	}
 
 	for _, transport := range spec.Transports {
@@ -127,12 +144,18 @@ func Render(spec model.ControlPlaneManifestSpec) (*RenderedBundle, error) {
 		// core Secret's envFrom block (see renderCoreSecret).
 	}
 
-	coreSecret := renderCoreSecret(namespace, spec)
-	bundle.CoreObjects = append(bundle.CoreObjects, coreSecret)
-	coreEnvSources = append(coreEnvSources, envFromSecret(coreSecretName))
+	coreName := resourceNameOrDefault(spec, coreDeploymentName)
 
-	if spec.Postgres.Mode == "external" {
-		coreEnvSources = append(coreEnvSources, envFromExternalPostgresSecret(spec.Postgres.External))
+	coreSecret := renderCoreSecret(namespace, coreName, spec)
+	bundle.CoreObjects = append(bundle.CoreObjects, coreSecret)
+	coreEnvSources = append(coreEnvSources, envFromSecret(coreName))
+
+	if strings.EqualFold(spec.Postgres.Mode, "external") {
+		ref := envFromExternalPostgresSecret(spec.Postgres.External)
+		if ref == nil {
+			return nil, fmt.Errorf("control_plane render: external postgres password_ref is missing or not a secret:// reference")
+		}
+		coreEnvSources = append(coreEnvSources, ref)
 	}
 	for _, transport := range spec.Transports {
 		if strings.EqualFold(transport.Kind, "amqp") && strings.EqualFold(transport.Mode, "external") {
@@ -142,16 +165,25 @@ func Render(spec model.ControlPlaneManifestSpec) (*RenderedBundle, error) {
 		}
 	}
 
+	for _, entry := range spec.ExtraEnvFrom {
+		switch {
+		case entry.SecretRef != nil && strings.TrimSpace(entry.SecretRef.Name) != "":
+			coreEnvSources = append(coreEnvSources, envFromSecret(entry.SecretRef.Name))
+		case entry.ConfigMapRef != nil && strings.TrimSpace(entry.ConfigMapRef.Name) != "":
+			coreEnvSources = append(coreEnvSources, envFromConfigMap(entry.ConfigMapRef.Name))
+		}
+	}
+
 	bundle.CoreObjects = append(bundle.CoreObjects,
-		renderCoreDeployment(namespace, spec, coreEnvSources),
-		renderCoreService(namespace),
+		renderCoreDeployment(namespace, coreName, spec, coreEnvSources),
+		renderCoreService(namespace, coreName),
 	)
 	bundle.WaitTargets = append(bundle.WaitTargets, WaitTarget{
-		Phase: phaseCore, Namespace: namespace, Kind: "Deployment", Name: coreDeploymentName,
+		Phase: phaseCore, Namespace: namespace, Kind: "Deployment", Name: coreName,
 	})
 
 	if spec.Ingress.Enabled {
-		bundle.CoreObjects = append(bundle.CoreObjects, renderIngress(namespace, spec.Ingress))
+		bundle.CoreObjects = append(bundle.CoreObjects, renderIngress(namespace, coreName, spec.Ingress))
 	}
 
 	return bundle, nil

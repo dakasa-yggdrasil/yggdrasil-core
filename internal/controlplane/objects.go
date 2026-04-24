@@ -216,7 +216,7 @@ func renderBundledRabbitMQ(namespace string, spec *model.ControlPlaneTransportBu
 // already provided by another substrate's Secret (postgres / rabbitmq
 // bundled secrets, or external user-provided secrets referenced via
 // the core's envFrom list).
-func renderCoreSecret(namespace string, spec model.ControlPlaneManifestSpec) map[string]any {
+func renderCoreSecret(namespace, name string, spec model.ControlPlaneManifestSpec) map[string]any {
 	data := map[string]any{
 		"PORT": fmt.Sprintf("%d", coreHTTPPort),
 	}
@@ -232,7 +232,7 @@ func renderCoreSecret(namespace string, spec model.ControlPlaneManifestSpec) map
 		"apiVersion": "v1",
 		"kind":       "Secret",
 		"metadata": map[string]any{
-			"name":      coreSecretName,
+			"name":      name,
 			"namespace": namespace,
 			"labels":    baseLabels("core"),
 		},
@@ -241,9 +241,9 @@ func renderCoreSecret(namespace string, spec model.ControlPlaneManifestSpec) map
 	}
 }
 
-func renderCoreDeployment(namespace string, spec model.ControlPlaneManifestSpec, envFromSources []map[string]any) map[string]any {
+func renderCoreDeployment(namespace, name string, spec model.ControlPlaneManifestSpec, envFromSources []map[string]any) map[string]any {
 	container := map[string]any{
-		"name":    "yggdrasil-core",
+		"name":    name,
 		"image":   spec.Image,
 		"envFrom": anySlice(envFromSources),
 		"ports": []any{
@@ -256,6 +256,9 @@ func renderCoreDeployment(namespace string, spec model.ControlPlaneManifestSpec,
 			"httpGet": map[string]any{"path": "/healthz", "port": coreHTTPPortName},
 		},
 	}
+	if policy := strings.TrimSpace(spec.PullPolicy); policy != "" {
+		container["imagePullPolicy"] = policy
+	}
 	if r := renderResources(spec.Resources); r != nil {
 		container["resources"] = r
 	}
@@ -266,12 +269,42 @@ func renderCoreDeployment(namespace string, spec model.ControlPlaneManifestSpec,
 	if sa := strings.TrimSpace(spec.Kubernetes.ServiceAccount); sa != "" {
 		podSpec["serviceAccountName"] = sa
 	}
+	if len(spec.ImagePullSecrets) > 0 {
+		refs := make([]any, 0, len(spec.ImagePullSecrets))
+		for _, secret := range spec.ImagePullSecrets {
+			if trimmed := strings.TrimSpace(secret); trimmed != "" {
+				refs = append(refs, map[string]any{"name": trimmed})
+			}
+		}
+		if len(refs) > 0 {
+			podSpec["imagePullSecrets"] = refs
+		}
+	}
+
+	// Custom labels are merged ONLY into the pod template metadata — NOT into
+	// the Deployment's top-level metadata.labels or selector.matchLabels. The
+	// selector is immutable after first apply; polluting it with user labels
+	// would cause upgrade failures on label changes. baseLabels remains the
+	// stable identity used by both the Deployment's own metadata and the
+	// selector; user labels are pod-template decoration only.
+	templateLabels := baseLabels("core")
+	for k, v := range spec.Labels {
+		templateLabels[k] = v
+	}
+	templateMeta := map[string]any{"labels": templateLabels}
+	if len(spec.Annotations) > 0 {
+		anns := map[string]any{}
+		for k, v := range spec.Annotations {
+			anns[k] = v
+		}
+		templateMeta["annotations"] = anns
+	}
 
 	return map[string]any{
 		"apiVersion": "apps/v1",
 		"kind":       "Deployment",
 		"metadata": map[string]any{
-			"name":      coreDeploymentName,
+			"name":      name,
 			"namespace": namespace,
 			"labels":    baseLabels("core"),
 		},
@@ -279,19 +312,19 @@ func renderCoreDeployment(namespace string, spec model.ControlPlaneManifestSpec,
 			"replicas": spec.Replicas,
 			"selector": map[string]any{"matchLabels": baseLabels("core")},
 			"template": map[string]any{
-				"metadata": map[string]any{"labels": baseLabels("core")},
+				"metadata": templateMeta,
 				"spec":     podSpec,
 			},
 		},
 	}
 }
 
-func renderCoreService(namespace string) map[string]any {
+func renderCoreService(namespace, name string) map[string]any {
 	return map[string]any{
 		"apiVersion": "v1",
 		"kind":       "Service",
 		"metadata": map[string]any{
-			"name":      coreServiceName,
+			"name":      name,
 			"namespace": namespace,
 			"labels":    baseLabels("core"),
 		},
@@ -304,7 +337,7 @@ func renderCoreService(namespace string) map[string]any {
 	}
 }
 
-func renderIngress(namespace string, ingress model.ControlPlaneIngressSpec) map[string]any {
+func renderIngress(namespace, name string, ingress model.ControlPlaneIngressSpec) map[string]any {
 	rule := map[string]any{
 		"host": ingress.Host,
 		"http": map[string]any{
@@ -314,7 +347,7 @@ func renderIngress(namespace string, ingress model.ControlPlaneIngressSpec) map[
 					"pathType": "Prefix",
 					"backend": map[string]any{
 						"service": map[string]any{
-							"name": coreServiceName,
+							"name": name,
 							"port": map[string]any{"name": coreHTTPPortName},
 						},
 					},
@@ -339,7 +372,7 @@ func renderIngress(namespace string, ingress model.ControlPlaneIngressSpec) map[
 		"apiVersion": "networking.k8s.io/v1",
 		"kind":       "Ingress",
 		"metadata": map[string]any{
-			"name":      coreIngressName,
+			"name":      name,
 			"namespace": namespace,
 			"labels":    baseLabels("core"),
 		},
@@ -378,6 +411,12 @@ func resourceClaim(claim model.ControlPlaneResourceClaim) map[string]any {
 func envFromSecret(secretName string) map[string]any {
 	return map[string]any{
 		"secretRef": map[string]any{"name": secretName},
+	}
+}
+
+func envFromConfigMap(name string) map[string]any {
+	return map[string]any{
+		"configMapRef": map[string]any{"name": name},
 	}
 }
 
