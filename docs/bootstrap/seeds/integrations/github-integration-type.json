@@ -9,121 +9,39 @@
       "bootstrap_source": "integration-github",
       "provider": "github",
       "yggdrasil.io/catalog-domain": "github",
-      "yggdrasil.io/catalog-section": "operations",
-      "yggdrasil.io/catalog-entry": "api"
+      "yggdrasil.io/catalog-entry": "api",
+      "yggdrasil.io/catalog-section": "operations"
     }
   },
   "spec": {
-    "provider": "github",
     "adapter": {
-      "transport": "rabbitmq",
-      "version": "1.0.0",
-      "queues": {
-        "describe": "yggdrasil.adapter.github.describe",
-        "execute": "yggdrasil.adapter.github.execute"
+      "version": "1.1.1",
+      "endpoints": {
+        "execute": "/rpc/execute",
+        "describe": "/rpc/describe"
       },
-      "timeout_seconds": 20
+      "transport": "http_json",
+      "timeout_seconds": 30
     },
+    "provider": "github",
+    "discovery": {
+      "mode": "push",
+      "cursor": "none"
+    },
+    "execution": {
+      "supports_dry_run": false
+    },
+    "extensions": {},
     "capabilities": [
       "describe",
       "execute"
     ],
-    "guardian_support": {
-      "mode": "light",
-      "signals": {
-        "error_rate": ["error_rate", "failure_rate"],
-        "rate_limited": ["rate_limited", "throttled", "secondary_rate_limited"],
-        "auth_denied": ["auth_denied", "unauthorized", "forbidden"],
-        "sync_lag_seconds": ["sync_lag_seconds", "reconciliation_lag_seconds"]
-      }
+    "normalization": {
+      "name_path": "name",
+      "owner_path": "owner.login",
+      "external_id_path": "full_name",
+      "fallback_resource_prefix": "thirdparty.github.custom"
     },
-    "credential_schema": {
-      "mode": "inline",
-      "properties": {
-        "token": {
-          "type": "string",
-          "description": "GitHub token used when the caller does not provide one.",
-          "secret": true
-        }
-      }
-    },
-    "instance_schema": {
-      "mode": "inline",
-      "properties": {
-        "default_owner": {
-          "type": "string",
-          "description": "Default repository owner used when the request omits one."
-        },
-        "catalog_owner": {
-          "type": "string",
-          "description": "Organization or user scanned when catalog_discover omits one."
-        },
-        "catalog_owner_type": {
-          "type": "string",
-          "description": "Whether catalog_discover should scan an organization or user scope.",
-          "default": "org",
-          "enum": ["org", "user"]
-        },
-        "default_ref": {
-          "type": "string",
-          "description": "Default Git ref used for workflow dispatches.",
-          "default": "main"
-        },
-        "default_workflow": {
-          "type": "string",
-          "description": "Default workflow filename used when the request omits one."
-        },
-        "default_visibility": {
-          "type": "string",
-          "description": "Default repository visibility for create_repository.",
-          "default": "private"
-        },
-        "api_base_url": {
-          "type": "string",
-          "description": "GitHub API base URL, useful for GitHub Enterprise.",
-          "default": "https://api.github.com"
-        }
-      }
-    },
-    "resource_types": [
-      {
-        "name": "repository",
-        "canonical_prefix": "thirdparty.github.repository",
-        "identity_template": "repository.{repository}",
-        "discoverable": false,
-        "default_actions": [
-          "dispatch_workflow",
-          "create_repository"
-        ]
-      },
-      {
-        "name": "environment",
-        "canonical_prefix": "thirdparty.github.environment",
-        "identity_template": "environment.{repository}.{environment}",
-        "discoverable": false,
-        "default_actions": [
-          "upsert_environment"
-        ]
-      },
-      {
-        "name": "team_repository_access",
-        "canonical_prefix": "thirdparty.github.team_repository_access",
-        "identity_template": "team_repository_access.{organization}.{team_slug}.{repository}",
-        "discoverable": false,
-        "default_actions": [
-          "grant_team_repository_access"
-        ]
-      },
-      {
-        "name": "catalog_entry",
-        "canonical_prefix": "thirdparty.github.catalog_entry",
-        "identity_template": "catalog_entry.{name}",
-        "discoverable": false,
-        "default_actions": [
-          "catalog_discover"
-        ]
-      }
-    ],
     "action_catalog": [
       {
         "name": "dispatch_workflow",
@@ -133,50 +51,154 @@
         ]
       },
       {
+        "name": "catalog_discover",
+        "idempotent": true,
+        "description": "Discover integration and surface candidates from one GitHub owner scope.",
+        "resource_types": [
+          "catalog_entry"
+        ]
+      },
+      {
         "name": "create_repository",
+        "idempotent": false,
         "description": "Create one GitHub repository in a user or organization scope.",
         "resource_types": [
           "repository"
         ]
       },
       {
-        "name": "catalog_discover",
-        "description": "Discover integration and surface candidates from one GitHub owner scope.",
-        "resource_types": [
-          "catalog_entry"
-        ],
-        "idempotent": true
-      },
-      {
         "name": "upsert_environment",
+        "idempotent": true,
         "description": "Create or update one GitHub environment on a repository.",
         "resource_types": [
           "environment"
-        ],
-        "idempotent": true
+        ]
       },
       {
         "name": "grant_team_repository_access",
+        "idempotent": true,
         "description": "Ensure one GitHub team has the desired permission on a repository.",
         "resource_types": [
           "team_repository_access"
-        ],
-        "idempotent": true
+        ]
       }
     ],
-    "discovery": {
-      "mode": "push",
-      "cursor": "none"
+    "resource_types": [
+      {
+        "name": "repository",
+        "discoverable": false,
+        "default_actions": [
+          "dispatch_workflow",
+          "create_repository"
+        ],
+        "canonical_prefix": "thirdparty.github.repository",
+        "identity_template": "repository.{repository}"
+      },
+      {
+        "name": "environment",
+        "discoverable": false,
+        "default_actions": [
+          "upsert_environment"
+        ],
+        "canonical_prefix": "thirdparty.github.environment",
+        "identity_template": "environment.{repository}.{environment}"
+      },
+      {
+        "name": "team_repository_access",
+        "discoverable": false,
+        "default_actions": [
+          "grant_team_repository_access"
+        ],
+        "canonical_prefix": "thirdparty.github.team_repository_access",
+        "identity_template": "team_repository_access.{organization}.{team_slug}.{repository}"
+      },
+      {
+        "name": "catalog_entry",
+        "discoverable": false,
+        "default_actions": [
+          "catalog_discover"
+        ],
+        "canonical_prefix": "thirdparty.github.catalog_entry",
+        "identity_template": "catalog_entry.{name}"
+      }
+    ],
+    "instance_schema": {
+      "mode": "inline",
+      "properties": {
+        "base_url": {
+          "type": "string",
+          "description": "HTTP adapter base URL used when the integration_type declares transport=http_json."
+        },
+        "default_ref": {
+          "type": "string",
+          "default": "main",
+          "description": "Default Git ref used for workflow dispatches."
+        },
+        "api_base_url": {
+          "type": "string",
+          "default": "https://api.github.com",
+          "description": "GitHub API base URL, useful for GitHub Enterprise."
+        },
+        "catalog_owner": {
+          "type": "string",
+          "description": "Organization or user scanned when catalog_discover omits one."
+        },
+        "default_owner": {
+          "type": "string",
+          "description": "Default repository owner used when the request omits one."
+        },
+        "default_workflow": {
+          "type": "string",
+          "description": "Default workflow filename used when the request omits one."
+        },
+        "catalog_owner_type": {
+          "enum": [
+            "org",
+            "user"
+          ],
+          "type": "string",
+          "default": "org",
+          "description": "Whether catalog_discover should scan an organization or user scope."
+        },
+        "default_visibility": {
+          "type": "string",
+          "default": "private",
+          "description": "Default repository visibility for create_repository."
+        }
+      }
     },
-    "normalization": {
-      "external_id_path": "full_name",
-      "name_path": "name",
-      "owner_path": "owner.login",
-      "fallback_resource_prefix": "thirdparty.github.custom"
+    "guardian_support": {
+      "mode": "light",
+      "signals": {
+        "error_rate": [
+          "error_rate",
+          "failure_rate"
+        ],
+        "auth_denied": [
+          "auth_denied",
+          "unauthorized",
+          "forbidden"
+        ],
+        "rate_limited": [
+          "rate_limited",
+          "throttled",
+          "secondary_rate_limited"
+        ],
+        "sync_lag_seconds": [
+          "sync_lag_seconds",
+          "reconciliation_lag_seconds"
+        ]
+      }
     },
-    "execution": {
-      "supports_dry_run": false
-    },
-    "extensions": {}
+    "credential_schema": {
+      "mode": "inline",
+      "properties": {
+        "token": {
+          "type": "string",
+          "secret": true,
+          "description": "GitHub token used when the caller does not provide one."
+        }
+      }
+    }
   }
 }
