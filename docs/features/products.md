@@ -1,5 +1,7 @@
 # Products
 
+> **As of yggdrasil v2.0.0, `kind: product` is informational only.** The legacy `POST /api/v1/products/{namespace}/{name}/deploy` endpoint and `POST /api/v1/products/deploy-all` return `410 Gone`. Configure deploys via `kind: repository_binding` with a `spec.deploy` block; the GitHub webhook handler dispatches the declared workflow on push. See `dakasa-system/docs/architecture/cd-via-yggdrasil.md` for the canonical CD flow.
+
 A product is a versioned bundle of components that ship together. It's
 how Yggdrasil represents internal platform capabilities that combine
 multiple integrations, templates, and infrastructure into a single
