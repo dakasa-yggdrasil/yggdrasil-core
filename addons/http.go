@@ -38,9 +38,6 @@ func bootstrapHTTP(_ context.Context, app *runtime.ServiceApp) error {
 	if p, ok := Provisioner(app); ok {
 		opts = append(opts, httpapi.WithProvisioner(p))
 	}
-	if d, ok := Deployer(app); ok {
-		opts = append(opts, httpapi.WithDeployer(d))
-	}
 	handler, err := httpapi.New(app.ServiceName, db, conn, logger, opts...)
 	if err != nil {
 		return fmt.Errorf("build http api: %w", err)
