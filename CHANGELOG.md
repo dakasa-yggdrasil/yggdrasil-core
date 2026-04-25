@@ -2,6 +2,22 @@
 
 All notable changes to yggdrasil-core are documented here.
 
+## [2.5.0] - 2026-04-25
+
+### Added
+- (none in core) — see companion `yggdrasil/yggdrasil` repo for the v2.5 CLI release. The CLI ships on its own cadence; this version bump in the core simply syncs the major.minor with the v2.x roadmap.
+
+### Notes
+- v2.5.0 of the **CLI** ships these adopter-visible changes (handled in the companion repo, not here):
+  - Shell completion (`yggdrasil completion bash|zsh|fish`).
+  - Friendly error messages on empty results (`yggdrasil get integration-instance` returns "no integration-instance manifests found in namespace X" instead of an empty stdout).
+  - `--output yaml|json|table` consistency across all `get` subcommands.
+  - `yggdrasil whoami` to show the current auth context.
+  - Verb-noun structure cleanup; dropped flags renamed with deprecation aliases for one minor.
+
+### Compatibility
+- The HTTP API surface in v2.5.0 of the core is **identical** to v2.4.0. Existing CLI binaries continue to work.
+
 ## [2.4.0] - 2026-04-25
 
 ### Added
