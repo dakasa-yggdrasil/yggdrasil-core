@@ -300,11 +300,6 @@ func WithProvisioner(p *provisioner.AWSProvisioner) ServerOption {
 	return func(s *Server) { s.provisioner = p }
 }
 
-// WithDeployer injects the kustomize deployer into the HTTP server.
-func WithDeployer(d *provisioner.KustomizeDeployer) ServerOption {
-	return func(s *Server) { s.deployer = d }
-}
-
 // workflowDispatchFunc dispatches a Yggdrasil workflow_run by manifest ref.
 // The default implementation wraps messagecontroller.RunWorkflow; tests
 // override the field directly with a fake to assert dispatch behaviour.
@@ -318,7 +313,6 @@ type Server struct {
 	logger           *zap.Logger
 	reconciler       *reconciler.Engine
 	provisioner      *provisioner.AWSProvisioner
-	deployer         *provisioner.KustomizeDeployer
 	dispatchWorkflow workflowDispatchFunc
 }
 
