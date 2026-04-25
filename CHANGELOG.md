@@ -2,6 +2,15 @@
 
 All notable changes to yggdrasil-core are documented here.
 
+## [2.8.1] - 2026-04-25
+
+### Fixed
+- **Renderer no longer overwrites `Namespace.metadata.labels.app.kubernetes.io/part-of`** (D2). Yggdrasil's renderer used to emit the namespace with `app.kubernetes.io/part-of=yggdrasil`, but the higher-level platform managing the namespace may classify it differently (e.g. `=dakasa` for a DaKasa-style ecosystem). When the platform also installs a NetworkPolicy keyed on its own `part-of` value, the renderer's label silently broke the egress rule on every reconcile. The renderer now emits only `app.kubernetes.io/managed-by=yggdrasil-core` on the Namespace; cluster admins or higher-level platforms own the rest of the namespace's labels.
+- **Dockerfile cross-compile support** (D1). Renamed/replaced the build with `BUILDPLATFORM` + `TARGETARCH` ARGs so Go cross-compiles natively on the build host instead of running through qemu. Fixes `go: error obtaining buildID for go tool compile: signal: segmentation fault (core dumped)` when building on Apple Silicon for `linux/amd64`.
+
+### Notes
+- D3 (Postgres healthcheck noise: `database "superuser" does not exist`) was a `pg_isready` probe missing `-d postgres` in the StatefulSet pod template. Fixed in the prod cluster's StatefulSet manifest, not in core (Postgres is a cluster-side concern, not Yggdrasil renderer-managed). The renderer-emitted bundled-Postgres profile already passes `-d postgres`; the bug existed only in the legacy hand-rolled StatefulSet predating Phase 14.
+
 ## [2.8.0] - 2026-04-25
 
 ### Added
