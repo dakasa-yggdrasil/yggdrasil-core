@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"net/http"
 	"strconv"
 	"time"
@@ -54,16 +55,24 @@ func (s *Server) handleAuditList(w http.ResponseWriter, r *http.Request) {
 // recordAudit is a fire-and-forget convenience for handlers. Failures are
 // logged via s.logger but do not propagate — audit is observability, never
 // gate the user request.
+//
+// The goroutine uses context.Background() with a 5-second timeout, NOT
+// r.Context(): the inbound request context cancels as soon as the handler
+// returns, which races the goroutine and silently drops audit rows. The
+// audit insert must outlive the handler.
 func (s *Server) recordAudit(r *http.Request, action, kind, resourceID, outcome string, metadata map[string]any) {
 	actor := actorFromRequest(r)
+	traceparent := r.Header.Get("traceparent")
 	go func() {
-		if err := repository.RecordAuditEvent(r.Context(), s.db, model.AuditEvent{
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		if err := repository.RecordAuditEvent(ctx, s.db, model.AuditEvent{
 			Actor:        actor,
 			Action:       action,
 			ResourceKind: kind,
 			ResourceID:   resourceID,
 			Outcome:      outcome,
-			TraceID:      r.Header.Get("traceparent"),
+			TraceID:      traceparent,
 			Metadata:     metadata,
 		}); err != nil && s.logger != nil {
 			s.logger.Sugar().Warnw("audit insert failed",
