@@ -285,6 +285,8 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/console/products/{namespace}/{name}/deploy", requireDeployToken(server.handleDeployProduct))
 	mux.HandleFunc("POST /api/v1/console/products/deploy-all", requireDeployToken(server.handleDeployAll))
 	mux.HandleFunc("POST /api/v1/console/bootstrap", requireDeployToken(server.handleBootstrap))
+	mux.HandleFunc("GET /api/v1/audit", server.handleAuditList)
+	mux.HandleFunc("POST /api/v1/workflow-templates/{namespace}/{name}/instantiate", server.handleWorkflowTemplateInstantiate)
 
 	return server.withLogging(mux), nil
 }
@@ -1310,12 +1312,20 @@ func (s *Server) handleManifestCreate(w http.ResponseWriter, r *http.Request, ki
 
 	manifestRecord, err := createManifestVersion(r.Context(), s.db, doc)
 	if err != nil {
+		s.recordAudit(r, "manifest.create", kind,
+			fmt.Sprintf("%s/%s", doc.Metadata.Namespace, doc.Metadata.Name),
+			"error", map[string]any{"error": err.Error()})
 		writeMappedError(w, err)
 		return
 	}
 
 	s.materializeAfterManifestWrite(manifestRecord)
 
+	s.recordAudit(r, "manifest.create", kind,
+		fmt.Sprintf("%s/%s", manifestRecord.Metadata.Namespace, manifestRecord.Metadata.Name),
+		"success", map[string]any{"version": manifestRecord.Version, "checksum": manifestRecord.Checksum})
+
+	IncManifestApplied()
 	writeJSON(w, http.StatusCreated, map[string]any{"manifest": manifestRecord})
 }
 
