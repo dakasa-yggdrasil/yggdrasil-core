@@ -1,0 +1,389 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Yggdrasil Core API",
+    "version": "2.1.0",
+    "description": "Synchronous HTTP surface of yggdrasil-core. Manifest CRUD, integration instances, workflow runs, secrets, GitHub webhook. See docs/api-reference/openapi.md for the narrative companion.",
+    "license": {"name": "MIT"}
+  },
+  "servers": [
+    {"url": "http://localhost:9080", "description": "Local quickstart (port-forward)"},
+    {"url": "https://yggdrasil.example.com", "description": "Adopter-hosted instance"}
+  ],
+  "tags": [
+    {"name": "health", "description": "Liveness / readiness"},
+    {"name": "manifests", "description": "Manifest CRUD"},
+    {"name": "integrations", "description": "Integration instances and runtime state"},
+    {"name": "workflows", "description": "Workflow runs"},
+    {"name": "webhooks", "description": "Inbound webhook routing"},
+    {"name": "secrets", "description": "Managed secret store"},
+    {"name": "products", "description": "Informational product manifests (deploy is via repository_binding in v2.0.0+)"}
+  ],
+  "paths": {
+    "/": {
+      "get": {
+        "tags": ["health"],
+        "summary": "Service banner",
+        "responses": {
+          "200": {
+            "description": "Banner",
+            "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ServiceBanner"}}}
+          }
+        }
+      }
+    },
+    "/healthz": {
+      "get": {
+        "tags": ["health"],
+        "summary": "Liveness probe (text/plain)",
+        "responses": {"200": {"description": "ok", "content": {"text/plain": {"schema": {"type": "string", "example": "ok"}}}}}
+      }
+    },
+    "/readyz": {
+      "get": {
+        "tags": ["health"],
+        "summary": "Readiness probe; checks postgres",
+        "responses": {
+          "200": {"description": "Ready", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReadyResponse"}}}},
+          "503": {"description": "Not ready", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReadyResponse"}}}}
+        }
+      }
+    },
+    "/openapi.json": {
+      "get": {
+        "tags": ["health"],
+        "summary": "Returns this OpenAPI spec",
+        "responses": {"200": {"description": "OpenAPI 3.0.3 document", "content": {"application/json": {}}}}
+      }
+    },
+    "/api/v1/manifests": {
+      "get": {
+        "tags": ["manifests"],
+        "summary": "List manifests by kind",
+        "parameters": [
+          {"name": "kind", "in": "query", "required": true, "schema": {"type": "string"}, "description": "e.g. integration_type, integration_instance, workflow, repository_binding, secret_intent, product, control_plane, surface, rbac, policy"},
+          {"name": "namespace", "in": "query", "schema": {"type": "string"}},
+          {"name": "name", "in": "query", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {
+            "description": "Array of manifests",
+            "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/Manifest"}}}}
+          }
+        }
+      },
+      "post": {
+        "tags": ["manifests"],
+        "summary": "Create a manifest version",
+        "parameters": [
+          {"name": "kind", "in": "query", "required": true, "schema": {"type": "string"}}
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ManifestCreateRequest"}}}
+        },
+        "responses": {
+          "201": {"description": "Created", "content": {"application/json": {"schema": {"type": "object", "properties": {"manifest": {"$ref": "#/components/schemas/Manifest"}}}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "409": {"description": "Conflict (e.g. repository_binding unique on spec.repository)", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}
+        }
+      }
+    },
+    "/api/v1/integration-instances": {
+      "get": {
+        "tags": ["integrations"],
+        "summary": "List integration instances",
+        "responses": {
+          "200": {"description": "Instances", "content": {"application/json": {"schema": {"type": "object", "properties": {"integration_instances": {"type": "array", "items": {"$ref": "#/components/schemas/Manifest"}}}}}}}
+        }
+      },
+      "post": {
+        "tags": ["integrations"],
+        "summary": "Create an integration_instance manifest",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/IntegrationInstanceCreate"}}}},
+        "responses": {"201": {"description": "Created"}, "400": {"$ref": "#/components/responses/BadRequest"}}
+      }
+    },
+    "/api/v1/integration-runtime-states": {
+      "get": {
+        "tags": ["integrations"],
+        "summary": "Diagnose adapter handshake / connectivity",
+        "parameters": [
+          {"name": "namespace", "in": "query", "schema": {"type": "string"}},
+          {"name": "name", "in": "query", "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "200": {"description": "Runtime states", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RuntimeStatesResponse"}}}}
+        }
+      }
+    },
+    "/api/v1/workflow-runs": {
+      "post": {
+        "tags": ["workflows"],
+        "summary": "Run a workflow synchronously",
+        "description": "Resolves the workflow manifest, validates inputs against its schema, runs each step in order, returns the per-step result. Steps are dispatched through the integration adapter declared by `use.kind` (`integration` or `yggdrasil`).",
+        "security": [{"BearerAuth": []}, {"WorkflowToken": []}],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RunWorkflowRequest"}}}
+        },
+        "responses": {
+          "201": {"description": "Run finished", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/RunWorkflowResponse"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"}
+        }
+      }
+    },
+    "/api/v1/github/webhook": {
+      "post": {
+        "tags": ["webhooks"],
+        "summary": "GitHub push webhook receiver",
+        "description": "Verifies the X-Hub-Signature-256 HMAC, looks up the `repository_binding` for `repository.full_name`, applies branch and path filters, and dispatches the bound workflow. Returns 200 with `status: skipped` when no binding is configured (so a webhook on an unmapped repo is harmless).",
+        "parameters": [
+          {"name": "X-GitHub-Event", "in": "header", "required": true, "schema": {"type": "string", "enum": ["push", "ping"]}},
+          {"name": "X-Hub-Signature-256", "in": "header", "schema": {"type": "string", "example": "sha256=abc..."}}
+        ],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/GitHubPushEvent"}}}},
+        "responses": {
+          "200": {"description": "Skipped (no binding) or ping pong", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/WebhookSkipResponse"}}}},
+          "202": {"description": "Workflow dispatched", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/WebhookDispatchResponse"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"description": "Invalid HMAC signature", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+          "501": {"description": "github_actions dispatch is reserved (not implemented in v2.0.0)", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}
+        }
+      }
+    },
+    "/api/v1/secrets": {
+      "get": {
+        "tags": ["secrets"],
+        "summary": "List managed secrets (metadata only)",
+        "responses": {"200": {"description": "Metadata list", "content": {"application/json": {"schema": {"type": "array", "items": {"$ref": "#/components/schemas/SecretMetadata"}}}}}}
+      },
+      "post": {
+        "tags": ["secrets"],
+        "summary": "Create a managed secret",
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SecretCreate"}}}},
+        "responses": {"201": {"description": "Created"}, "400": {"$ref": "#/components/responses/BadRequest"}}
+      }
+    },
+    "/api/v1/secrets/{namespace}/{name}": {
+      "get": {
+        "tags": ["secrets"],
+        "summary": "Get one managed secret (metadata only; values not returned)",
+        "parameters": [
+          {"name": "namespace", "in": "path", "required": true, "schema": {"type": "string"}},
+          {"name": "name", "in": "path", "required": true, "schema": {"type": "string"}}
+        ],
+        "responses": {"200": {"description": "Secret metadata", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/SecretMetadata"}}}}, "404": {"$ref": "#/components/responses/NotFound"}}
+      }
+    },
+    "/api/v1/products": {
+      "get": {
+        "tags": ["products"],
+        "summary": "List product manifests (informational only since v2.0.0)",
+        "responses": {"200": {"description": "Products"}}
+      },
+      "post": {
+        "tags": ["products"],
+        "summary": "Create a product manifest (informational; does not deploy)",
+        "responses": {"201": {"description": "Created"}}
+      }
+    },
+    "/api/v1/products/{namespace}/{name}/deploy": {
+      "post": {
+        "tags": ["products"],
+        "summary": "Deprecated since v2.0.0 — returns 410 Gone",
+        "deprecated": true,
+        "parameters": [
+          {"name": "namespace", "in": "path", "required": true, "schema": {"type": "string"}},
+          {"name": "name", "in": "path", "required": true, "schema": {"type": "string"}}
+        ],
+        "responses": {
+          "410": {"description": "Gone — use repository_binding + workflow dispatch", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DeprecationResponse"}}}}
+        }
+      }
+    }
+  },
+  "components": {
+    "securitySchemes": {
+      "BearerAuth": {"type": "http", "scheme": "bearer", "description": "Bearer token in Authorization header"},
+      "WorkflowToken": {"type": "apiKey", "in": "header", "name": "X-Yggdrasil-Workflow-Token", "description": "Optional shared token gating /api/v1/workflow-runs (env YGGDRASIL_WORKFLOW_TOKEN)"}
+    },
+    "schemas": {
+      "ServiceBanner": {"type": "object", "properties": {"service": {"type": "string"}, "status": {"type": "string"}}},
+      "ReadyResponse": {"type": "object", "required": ["status"], "properties": {"status": {"type": "string", "enum": ["ready", "not_ready"]}, "rabbitmq_status": {"type": "string", "enum": ["ok", "degraded"]}, "reason": {"type": "string"}, "error": {"type": "string"}}},
+      "ManifestMetadata": {
+        "type": "object",
+        "required": ["name", "namespace"],
+        "properties": {
+          "name": {"type": "string"},
+          "namespace": {"type": "string"},
+          "description": {"type": "string"},
+          "labels": {"type": "object", "additionalProperties": {"type": "string"}},
+          "active": {"type": "boolean"}
+        }
+      },
+      "Manifest": {
+        "type": "object",
+        "required": ["id", "apiVersion", "kind", "metadata", "version", "spec"],
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "apiVersion": {"type": "string", "example": "yggdrasil.io/v1alpha1"},
+          "kind": {"type": "string"},
+          "metadata": {"$ref": "#/components/schemas/ManifestMetadata"},
+          "version": {"type": "integer"},
+          "checksum": {"type": "string"},
+          "spec": {"type": "object", "additionalProperties": true},
+          "created_at": {"type": "string", "format": "date-time"},
+          "updated_at": {"type": "string", "format": "date-time"}
+        }
+      },
+      "ManifestCreateRequest": {
+        "type": "object",
+        "required": ["name", "spec"],
+        "properties": {
+          "name": {"type": "string"},
+          "namespace": {"type": "string", "default": "global"},
+          "description": {"type": "string"},
+          "labels": {"type": "object", "additionalProperties": {"type": "string"}},
+          "spec": {"type": "object", "additionalProperties": true, "description": "Kind-specific spec; validated server-side"}
+        }
+      },
+      "IntegrationInstanceCreate": {
+        "type": "object",
+        "required": ["name", "type_ref"],
+        "properties": {
+          "name": {"type": "string"},
+          "namespace": {"type": "string", "default": "global"},
+          "description": {"type": "string"},
+          "type_ref": {"$ref": "#/components/schemas/ManifestSelector"},
+          "status": {"type": "string", "enum": ["active", "draft", "disabled"], "default": "active"},
+          "owners": {"type": "array", "items": {"type": "string"}},
+          "credentials": {"type": "object", "additionalProperties": true},
+          "credentials_ref": {"type": "string", "description": "secret:// reference to managed secret"},
+          "config": {"type": "object", "additionalProperties": true},
+          "discovery": {"type": "object", "properties": {"enabled": {"type": "boolean"}, "mode": {"type": "string", "enum": ["manual", "automatic"]}, "sync_interval_seconds": {"type": "integer"}}},
+          "execution": {"type": "object", "properties": {"default_dry_run": {"type": "boolean"}, "max_batch_size": {"type": "integer"}}}
+        }
+      },
+      "ManifestSelector": {
+        "type": "object",
+        "properties": {
+          "manifest_id": {"type": "string", "format": "uuid"},
+          "namespace": {"type": "string"},
+          "name": {"type": "string"},
+          "version": {"type": "integer"}
+        }
+      },
+      "RuntimeStatesResponse": {
+        "type": "object",
+        "properties": {"runtime_states": {"type": "array", "items": {"$ref": "#/components/schemas/RuntimeState"}}}
+      },
+      "RuntimeState": {
+        "type": "object",
+        "properties": {
+          "integration_instance": {"$ref": "#/components/schemas/ManifestReference"},
+          "integration_type": {"$ref": "#/components/schemas/ManifestReference"},
+          "check_kind": {"type": "string", "enum": ["describe_handshake", "transport_connectivity", "credentials_validity"]},
+          "status": {"type": "string", "enum": ["healthy", "unreachable", "contract_mismatch", "unauthorized"]},
+          "message": {"type": "string"},
+          "details": {"type": "object", "additionalProperties": true},
+          "checked_at": {"type": "string", "format": "date-time"}
+        }
+      },
+      "ManifestReference": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string", "format": "uuid"},
+          "kind": {"type": "string"},
+          "namespace": {"type": "string"},
+          "name": {"type": "string"},
+          "version": {"type": "integer"}
+        }
+      },
+      "RunWorkflowRequest": {
+        "type": "object",
+        "required": ["workflow"],
+        "properties": {
+          "workflow": {"$ref": "#/components/schemas/ManifestSelector"},
+          "inputs": {"type": "object", "additionalProperties": true},
+          "auth": {"type": "object", "properties": {"token": {"type": "string"}}},
+          "metadata": {"type": "object", "additionalProperties": true}
+        }
+      },
+      "RunWorkflowResponse": {
+        "type": "object",
+        "properties": {
+          "workflow": {"$ref": "#/components/schemas/ManifestReference"},
+          "status": {"type": "string", "enum": ["succeeded", "failed", "running", "cancelled"]},
+          "steps": {"type": "array", "items": {"$ref": "#/components/schemas/WorkflowStepResult"}},
+          "metadata": {"type": "object", "additionalProperties": true},
+          "started_at": {"type": "string", "format": "date-time"},
+          "finished_at": {"type": "string", "format": "date-time"}
+        }
+      },
+      "WorkflowStepResult": {
+        "type": "object",
+        "properties": {
+          "id": {"type": "string"},
+          "kind": {"type": "string"},
+          "operation": {"type": "string"},
+          "capability": {"type": "string"},
+          "status": {"type": "string", "enum": ["succeeded", "failed", "skipped"]},
+          "attempts": {"type": "integer"},
+          "error": {"type": "string"},
+          "metadata": {"type": "object", "additionalProperties": true},
+          "started_at": {"type": "string", "format": "date-time"},
+          "finished_at": {"type": "string", "format": "date-time"}
+        }
+      },
+      "GitHubPushEvent": {
+        "type": "object",
+        "properties": {
+          "ref": {"type": "string", "example": "refs/heads/main"},
+          "repository": {"type": "object", "properties": {"full_name": {"type": "string"}, "clone_url": {"type": "string"}}},
+          "head_commit": {"type": "object", "properties": {"id": {"type": "string"}, "message": {"type": "string"}, "modified": {"type": "array", "items": {"type": "string"}}}},
+          "pusher": {"type": "object", "properties": {"name": {"type": "string"}}}
+        }
+      },
+      "WebhookSkipResponse": {
+        "type": "object",
+        "properties": {"status": {"type": "string", "enum": ["skipped", "pong", "ignored"]}, "reason": {"type": "string"}, "event": {"type": "string"}}
+      },
+      "WebhookDispatchResponse": {
+        "type": "object",
+        "properties": {"status": {"type": "string", "enum": ["deploying"]}, "workflow": {"type": "string"}, "binding": {"type": "string"}, "repo": {"type": "string"}}
+      },
+      "SecretMetadata": {
+        "type": "object",
+        "properties": {
+          "namespace": {"type": "string"},
+          "name": {"type": "string"},
+          "status": {"type": "string", "enum": ["active", "disabled", "revoked"]},
+          "version": {"type": "integer"},
+          "rotation": {"type": "object", "additionalProperties": true},
+          "expires_at": {"type": "string", "format": "date-time"},
+          "metadata": {"type": "object", "additionalProperties": true}
+        }
+      },
+      "SecretCreate": {
+        "type": "object",
+        "required": ["namespace", "name", "data"],
+        "properties": {
+          "namespace": {"type": "string"},
+          "name": {"type": "string"},
+          "data": {"type": "object", "description": "Map of key/value entries; values are not returned by GET", "additionalProperties": {"type": "string"}},
+          "metadata": {"type": "object", "additionalProperties": true},
+          "rotation": {"type": "object", "additionalProperties": true}
+        }
+      },
+      "ErrorResponse": {"type": "object", "properties": {"error": {"type": "string"}, "deprecation": {"type": "string"}}},
+      "DeprecationResponse": {"type": "object", "properties": {"error": {"type": "string"}, "deprecation": {"type": "string", "example": "yggdrasil v2.0.0"}}}
+    },
+    "responses": {
+      "BadRequest": {"description": "Invalid request", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+      "Unauthorized": {"description": "Unauthorized", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+      "NotFound": {"description": "Not found", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}
+    }
+  }
+}
