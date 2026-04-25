@@ -162,6 +162,12 @@ func ValidateDocument(doc model.ManifestDocument) error {
 			return err
 		}
 		return ValidateControlPlaneSpec(spec)
+	case "ephemeral_environment":
+		spec, err := ParseEphemeralEnvironmentSpec(doc.Spec)
+		if err != nil {
+			return err
+		}
+		return ValidateEphemeralEnvironmentSpec(spec)
 	default:
 		return fmt.Errorf("unsupported manifest kind: %s", doc.Kind)
 	}
