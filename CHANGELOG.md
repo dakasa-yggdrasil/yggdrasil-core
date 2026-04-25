@@ -2,6 +2,30 @@
 
 All notable changes to yggdrasil-core are documented here.
 
+## [2.2.0] - 2026-04-25
+
+### Added
+- New manifest kind `ephemeral_environment`. Declares a time-bounded environment with `create_workflow`, `destroy_workflow`, `ttl_seconds`, `auto_destroy`, optional `cost_projection`, and free-form `metadata`. Adopters POST one per PR / nightly env / demo env; the create_workflow runs at apply time and destroy_workflow at TTL expiry.
+- Validation: TTL must be 0 (no expiry) or ≥ 60 seconds; `auto_destroy` requires `destroy_workflow`; cost values must be non-negative.
+- Normalisation: `workflow_ref.namespace` defaults to `global`; `cost_projection.currency` defaults to `USD`.
+- `docs/tutorials/04-ephemeral-envs.md` — end-to-end tutorial.
+
+### Notes
+- TTL reaper goroutine ships in v2.2.x (next patch). Until then, schedule the destroy workflow externally on TTL expiry. The data shape and validation are stable in v2.2.0.
+
+## [2.1.0] - 2026-04-25
+
+### Added
+- `GET /openapi.json` — serves the bundled OpenAPI 3 spec describing the public REST surface (no auth). External tools can fetch and discover the API contract.
+- `docs/quickstart.md` — 12-step walkthrough from clean k3s to a working webhook → workflow → deploy pipeline. Target: 60 minutes for a competent platform engineer who has never seen Yggdrasil.
+- `docs/api-reference/openapi.json` — hand-curated OpenAPI 3 spec (~12 endpoints across health, manifests, integrations, workflows, webhooks, secrets, products).
+- `docs/api-reference/openapi.md` — narrative companion explaining manifest envelope, workflow templating language (`{{ inputs.* }}`, `{{ steps.* }}`, `{{ push.* }}`), webhook signature verification, skip semantics, error envelope, auth model, idempotency, and compatibility commitments.
+- `docs/api-reference/README.md` — endpoint index for quick lookup.
+- `docs/tutorials/01-webhook-cd.md` — wire a real service repository to declarative CD via `repository_binding`.
+- `docs/tutorials/02-custom-adapter.md` — build and deploy a custom integration adapter (Datadog event poster as worked example).
+- `docs/tutorials/03-secret-store.md` — migrate inline credentials to the managed secret store with rotation.
+- `docs/tutorials/README.md` — tutorial catalogue.
+
 ## [2.0.0] - 2026-04-25
 
 ### BREAKING
