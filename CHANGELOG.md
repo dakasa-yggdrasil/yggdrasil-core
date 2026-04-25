@@ -2,6 +2,25 @@
 
 All notable changes to yggdrasil-core are documented here.
 
+## [2.8.0] - 2026-04-25
+
+### Added
+- HA roadmap published. Adopter documentation describes the path to multi-replica yggdrasil-core with leader election, idempotent workflow_run creation, and zero-downtime rolling upgrades.
+
+### Notes
+- Implementation lands in v2.8.x patches: (1) Postgres advisory-lock-based leader election for the workflow scheduler ticker; (2) idempotency_key honoured on `POST /api/v1/workflow-runs`; (3) k8s deploymentmanifests configurable for replicas≥3 + PDB; (4) benchmark suite for p50/p95/p99 latency on manifest apply, workflow dispatch, webhook → run start.
+- v2.8.0 is the **last v2 minor**. v3.0 introduces RBAC enforcement default-on (current opt-in via `YGGDRASIL_TENANCY_ENFORCED`) and OpenAPI generation from handler annotations.
+
+## [2.7.0] - 2026-04-25
+
+### Added
+- Console UI roadmap published. The `surface-console` repo gains its first deploy with this minor; the bundled UI surfaces dashboard, manifests browser, workflow run viewer, audit log (when v2.4.x audit ships), ephemeral envs list, and repository_bindings.
+
+### Notes
+- The UI itself ships from the **`surface-console` companion repo** with its own release cycle (v0.x.0). The core in v2.7.0 is unchanged from v2.6.0; this version bump signals that the console is officially supported.
+- Auth uses the same OIDC flow exposed at `/api/v1/auth/third-party/*`. Multi-tenant aware (filters listings by caller's authorised tenants when `YGGDRASIL_TENANCY_ENFORCED=true`).
+- Live updates use SSE in v2.7.0 (WebSocket support is a v3 enhancement).
+
 ## [2.6.0] - 2026-04-25
 
 ### Added
