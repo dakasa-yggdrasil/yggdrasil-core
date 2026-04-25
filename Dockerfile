@@ -1,10 +1,17 @@
-FROM golang:1.25-bookworm AS build
+# Multi-stage build with cross-compile support.
+# Build stage runs on BUILDPLATFORM (e.g. arm64 on Apple Silicon dev) and Go
+# cross-compiles to TARGETPLATFORM (e.g. amd64 for production). Avoids qemu
+# emulation, which segfaults the Go toolchain on M-series Macs.
+FROM --platform=$BUILDPLATFORM golang:1.25-bookworm AS build
+
+ARG TARGETOS=linux
+ARG TARGETARCH=amd64
 
 WORKDIR /build
 
 ENV CGO_ENABLED=0 \
-    GOOS=linux \
-    GOARCH=amd64 \
+    GOOS=$TARGETOS \
+    GOARCH=$TARGETARCH \
     GOPROXY=https://proxy.golang.org,direct
 
 COPY go.mod go.sum ./
@@ -18,8 +25,10 @@ RUN go build -o /bin/yggdrasil-core . \
 
 FROM alpine:3.21
 
+ARG TARGETARCH=amd64
+
 RUN apk add --no-cache ca-certificates curl \
-    && curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/amd64/kubectl" \
+    && curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/${TARGETARCH}/kubectl" \
     && chmod +x kubectl \
     && mv kubectl /usr/local/bin/ \
     && rm -rf /tmp/*

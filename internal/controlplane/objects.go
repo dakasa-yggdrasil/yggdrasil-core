@@ -11,13 +11,25 @@ import (
 // making `kubectl apply -f` idempotent — real clusters usually already
 // have the target namespace, and declarative_apply is a no-op in that
 // case.
+//
+// The Namespace renders WITHOUT a `app.kubernetes.io/part-of` label
+// because that key is tenant-domain-specific: the Yggdrasil project
+// considers the namespace part-of `yggdrasil`, while a DaKasa-style
+// hosting platform may consider the same namespace part-of `dakasa`.
+// Letting the renderer overwrite it caused a hard-to-diagnose
+// NetworkPolicy bypass in production (2026-04-25), where the renderer
+// re-set the label on every reconcile and the NetworkPolicy stopped
+// matching. The cluster admin (or the higher-level platform) owns
+// namespace labels; Yggdrasil only ensures the Namespace exists.
 func renderNamespace(namespace string) map[string]any {
 	return map[string]any{
 		"apiVersion": "v1",
 		"kind":       "Namespace",
 		"metadata": map[string]any{
-			"name":   namespace,
-			"labels": baseLabels(""),
+			"name": namespace,
+			"labels": map[string]any{
+				"app.kubernetes.io/managed-by": "yggdrasil-core",
+			},
 		},
 	}
 }
