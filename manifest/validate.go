@@ -168,6 +168,12 @@ func ValidateDocument(doc model.ManifestDocument) error {
 			return err
 		}
 		return ValidateEphemeralEnvironmentSpec(spec)
+	case "tenant":
+		spec, err := ParseTenantSpec(doc.Spec)
+		if err != nil {
+			return err
+		}
+		return ValidateTenantSpec(spec)
 	default:
 		return fmt.Errorf("unsupported manifest kind: %s", doc.Kind)
 	}
