@@ -26,7 +26,9 @@ type githubPushEvent struct {
 		Name string `json:"name"`
 	} `json:"pusher"`
 	HeadCommit struct {
-		Message string `json:"message"`
+		ID       string   `json:"id"`
+		Message  string   `json:"message"`
+		Modified []string `json:"modified"`
 	} `json:"head_commit"`
 }
 
