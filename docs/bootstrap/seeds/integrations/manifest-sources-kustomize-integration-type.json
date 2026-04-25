@@ -108,6 +108,26 @@
         }
       }
     },
+    "action_catalog": [
+      {
+        "name": "generate_installation",
+        "idempotent": true,
+        "description": "Render a git+kustomize source into Kubernetes objects.",
+        "resource_types": ["rendered-object-set"]
+      },
+      {
+        "name": "reconcile_installation",
+        "idempotent": true,
+        "description": "Return the same rendering framed as a reconcile plan for apply.",
+        "resource_types": ["rendered-object-set"]
+      },
+      {
+        "name": "discover_installation_state",
+        "idempotent": true,
+        "description": "Return planned state from the blueprint — manifest-sources are stateless.",
+        "resource_types": ["rendered-object-set"]
+      }
+    ],
     "implemented_operations": [
       "generate_installation",
       "reconcile_installation",
