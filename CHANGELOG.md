@@ -2,6 +2,19 @@
 
 All notable changes to yggdrasil-core are documented here.
 
+## [2.9.0] - 2026-04-25
+
+### Added
+- **Audit trail** (`/api/v1/audit`). New table `audit_events` with fields actor, action, resource_kind, resource_id, outcome, tenant_slug, metadata, trace_id, span_id, created_at. `GET /api/v1/audit?actor=&action=&resource_kind=&resource_id=&tenant=&since=&until=&limit=` queries with AND-combined filters; default limit 100, capped 1000. `manifest.create` now emits an audit event on every POST `/api/v1/manifests` (success and error).
+- **Workflow template instantiation** (`POST /api/v1/workflow-templates/{namespace}/{name}/instantiate`). Substitutes `{{ params.<name> }}` placeholders in the template body with caller-supplied `params` (validates required params, applies defaults, rejects unknown placeholders). When `apply=true`, the rendered workflow manifest is created server-side and returned as a manifest record; when `apply=false` (default), the rendered shape is returned without persistence so callers can preview.
+- **`yggdrasil_manifest_applies_total` counter** now bumps on every successful manifest create (was wired in v2.4.0 but not actually called).
+- **Migration `00017_audit_events`** with btree indexes for the common query patterns (recent first, by actor, by resource, by tenant).
+
+### Notes
+- Audit insertion is fire-and-forget in a goroutine; failures are logged via the server logger but never gate the user's request. Audit is observability, not business logic.
+- Tracecontext propagation through adapter calls (W3C `traceparent` header forwarding into AdapterExecuteIntegrationRequest) is still v2.9.x — webhook handler and audit table already record the inbound `traceparent` when present.
+- TTL reaper goroutine for `ephemeral_environment` and Postgres advisory-lock leader election ship in v2.9.x patches; the data shapes are stable as of v2.2.0 / v2.3.0 respectively.
+
 ## [2.8.1] - 2026-04-25
 
 ### Fixed
