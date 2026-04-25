@@ -159,6 +159,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /", server.handleRoot)
 	mux.HandleFunc("GET /healthz", server.handleHealthz)
+	mux.HandleFunc("GET /metrics", server.handleMetrics)
 	mux.HandleFunc("GET /openapi.json", server.handleOpenAPI)
 	// Generic manifest endpoints. Used by the CLI (`yggdrasil get <kind>`,
 	// `yggdrasil apply -f <file>`) so adopters work with any kind without

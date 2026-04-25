@@ -2,6 +2,18 @@
 
 All notable changes to yggdrasil-core are documented here.
 
+## [2.4.0] - 2026-04-25
+
+### Added
+- `GET /metrics` endpoint serving Prometheus text exposition format (no auth, no external deps).
+- Counters: `yggdrasil_workflow_runs_total{status}`, `yggdrasil_webhook_events_total{outcome}`, `yggdrasil_manifest_applies_total`, `yggdrasil_secret_lookups_total`.
+- Gauges: `yggdrasil_uptime_seconds`, `yggdrasil_goroutines`, `yggdrasil_memory_bytes`.
+- Webhook handler instrumented to increment `yggdrasil_webhook_events_total` on every branch (skipped / failed / accepted).
+
+### Notes
+- Audit trail (`/api/v1/audit`) and W3C tracecontext propagation across core+adapters land in v2.4.x patches. The data shape and metric names in v2.4.0 are stable; later patches expand instrumentation coverage without changing the public surface.
+- v3 will switch to `prometheus/client_golang` (histograms with `le` buckets, native scrape negotiation). The current text-format implementation is dependency-free for adopters who do not run Prometheus.
+
 ## [2.3.0] - 2026-04-25
 
 ### Added
