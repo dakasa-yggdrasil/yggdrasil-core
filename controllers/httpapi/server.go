@@ -144,6 +144,13 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		rabbitmq:    conn,
 		logger:      logger,
 	}
+	server.dispatchWorkflow = func(ctx context.Context, ref model.ManifestSelector, inputs map[string]any) error {
+		_, err := messagecontroller.RunWorkflow(ctx, server.rabbitmq, server.db, model.RunWorkflowRequest{
+			Workflow: ref,
+			Inputs:   inputs,
+		})
+		return err
+	}
 
 	for _, opt := range opts {
 		opt(server)
@@ -298,15 +305,21 @@ func WithDeployer(d *provisioner.KustomizeDeployer) ServerOption {
 	return func(s *Server) { s.deployer = d }
 }
 
+// workflowDispatchFunc dispatches a Yggdrasil workflow_run by manifest ref.
+// The default implementation wraps messagecontroller.RunWorkflow; tests
+// override the field directly with a fake to assert dispatch behaviour.
+type workflowDispatchFunc func(ctx context.Context, ref model.ManifestSelector, inputs map[string]any) error
+
 // Server exposes the synchronous HTTP surface of yggdrasil-core.
 type Server struct {
-	serviceName string
-	db          *sql.DB
-	rabbitmq    *amqp.Connection
-	logger      *zap.Logger
-	reconciler  *reconciler.Engine
-	provisioner *provisioner.AWSProvisioner
-	deployer    *provisioner.KustomizeDeployer
+	serviceName      string
+	db               *sql.DB
+	rabbitmq         *amqp.Connection
+	logger           *zap.Logger
+	reconciler       *reconciler.Engine
+	provisioner      *provisioner.AWSProvisioner
+	deployer         *provisioner.KustomizeDeployer
+	dispatchWorkflow workflowDispatchFunc
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {

@@ -1,17 +1,20 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"os"
 	"strings"
-	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"go.uber.org/zap"
 )
 
@@ -36,14 +39,12 @@ type githubPushEvent struct {
 //
 //	POST /api/v1/github/webhook
 func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
-	// Read body
 	body, err := io.ReadAll(r.Body)
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "failed to read body"})
 		return
 	}
 
-	// Validate signature
 	secret := os.Getenv("GITHUB_WEBHOOK_SECRET")
 	if secret != "" {
 		sig := r.Header.Get("X-Hub-Signature-256")
@@ -53,133 +54,132 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// Route by event type
-	event := r.Header.Get("X-GitHub-Event")
-
-	switch event {
+	switch r.Header.Get("X-GitHub-Event") {
 	case "push":
-		s.handlePushEvent(w, body)
+		s.handlePushEvent(w, r, body)
 	case "ping":
 		writeJSON(w, http.StatusOK, map[string]string{"status": "pong"})
 	default:
-		writeJSON(w, http.StatusOK, map[string]string{"status": "ignored", "event": event})
+		writeJSON(w, http.StatusOK, map[string]string{
+			"status": "ignored",
+			"event":  r.Header.Get("X-GitHub-Event"),
+		})
 	}
 }
 
-// handlePushEvent processes a push event and triggers a deploy if the push
-// is to the main branch of a known repository.
-func (s *Server) handlePushEvent(w http.ResponseWriter, body []byte) {
+// handlePushEvent routes a GitHub push event by looking up the matching
+// repository_binding manifest and dispatching the workflow it declares.
+//
+// As of v2.0.0, push routing is fully declarative — there is no hardcoded
+// repo→product map. Pushes to repositories with no binding return
+// 200 with status "skipped" (so a webhook installation on an unmapped repo
+// is harmless rather than an error).
+func (s *Server) handlePushEvent(w http.ResponseWriter, r *http.Request, body []byte) {
 	var push githubPushEvent
 	if err := json.Unmarshal(body, &push); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid push payload"})
 		return
 	}
 
-	// Only deploy on pushes to main
-	if push.Ref != "refs/heads/main" {
+	binding, err := repository.FindBindingByRepository(r.Context(), s.db, push.Repository.FullName)
+	if errors.Is(err, repository.ErrBindingNotFound) {
 		writeJSON(w, http.StatusOK, map[string]string{
 			"status": "skipped",
-			"reason": fmt.Sprintf("ref %s is not main", push.Ref),
+			"reason": fmt.Sprintf("no repository_binding for %s", push.Repository.FullName),
+		})
+		return
+	}
+	if err != nil {
+		s.logger.Error("repository_binding lookup failed",
+			zap.String("repo", push.Repository.FullName),
+			zap.Error(err),
+		)
+		writeJSON(w, http.StatusInternalServerError, errorResponse{
+			Error: "binding lookup failed: " + err.Error(),
 		})
 		return
 	}
 
-	s.logger.Info("github push received",
-		zap.String("repo", push.Repository.FullName),
-		zap.String("pusher", push.Pusher.Name),
-		zap.String("commit", truncate(push.HeadCommit.Message, 80)),
-	)
-
-	// Map repository to product for deployment
-	product := repoToProduct(push.Repository.FullName)
-	if product == "" {
+	if binding.Spec.Deploy == nil {
 		writeJSON(w, http.StatusOK, map[string]string{
 			"status": "skipped",
-			"reason": fmt.Sprintf("repo %s not mapped to a product", push.Repository.FullName),
+			"reason": "binding has no deploy spec",
 		})
 		return
 	}
 
-	// Trigger deploy asynchronously
-	if s.deployer != nil {
+	deploy := binding.Spec.Deploy
+	if !matchesBranchFilter(push.Ref, deploy.BranchFilter) {
+		writeJSON(w, http.StatusOK, map[string]string{
+			"status": "skipped",
+			"reason": fmt.Sprintf("ref %s outside branch_filter", push.Ref),
+		})
+		return
+	}
+	if len(deploy.PathFilter) > 0 && !matchesPathFilter(push.HeadCommit.Modified, deploy.PathFilter) {
+		writeJSON(w, http.StatusOK, map[string]string{
+			"status": "skipped",
+			"reason": "no files matched path_filter",
+		})
+		return
+	}
+
+	inputs, err := buildInputsFromPush(deploy.DefaultInputs, push)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, errorResponse{
+			Error: "input templating failed: " + err.Error(),
+		})
+		return
+	}
+
+	switch deploy.WorkflowKind {
+	case "yggdrasil":
+		if deploy.WorkflowRef == nil {
+			writeJSON(w, http.StatusInternalServerError, errorResponse{
+				Error: "binding deploy.workflow_ref is missing for yggdrasil dispatch",
+			})
+			return
+		}
+		ref := model.ManifestSelector{
+			Namespace: deploy.WorkflowRef.Namespace,
+			Name:      deploy.WorkflowRef.Name,
+		}
+
+		s.logger.Info("github push dispatching workflow",
+			zap.String("repo", push.Repository.FullName),
+			zap.String("ref", push.Ref),
+			zap.String("commit", push.HeadCommit.ID),
+			zap.String("binding", binding.Metadata.Namespace+"/"+binding.Metadata.Name),
+			zap.String("workflow", ref.Namespace+"/"+ref.Name),
+		)
+
+		// Fire-and-forget dispatch in a goroutine so the webhook can ack
+		// the push promptly. Errors are logged for operator inspection.
 		go func() {
-			s.logger.Info("auto-deploy triggered by push",
-				zap.String("repo", push.Repository.FullName),
-				zap.String("product", product),
-			)
-
-			port := os.Getenv("PORT")
-			if port == "" {
-				port = "9080"
+			if err := s.dispatchWorkflow(context.Background(), ref, inputs); err != nil {
+				s.logger.Error("webhook dispatch failed",
+					zap.String("workflow", ref.Namespace+"/"+ref.Name),
+					zap.String("repo", push.Repository.FullName),
+					zap.Error(err),
+				)
 			}
-			url := fmt.Sprintf("http://localhost:%s/api/v1/products/dakasa/%s/deploy", port, product)
-
-			req, err := http.NewRequest("POST", url, nil)
-			if err != nil {
-				s.logger.Error("auto-deploy: build request failed", zap.Error(err))
-				return
-			}
-			req.Header.Set("Authorization", "Bearer "+os.Getenv("YGGDRASIL_DEPLOY_TOKEN"))
-
-			client := &http.Client{Timeout: 5 * time.Minute}
-			resp, err := client.Do(req)
-			if err != nil {
-				s.logger.Error("auto-deploy failed", zap.String("product", product), zap.Error(err))
-				return
-			}
-			defer func() { _ = resp.Body.Close() }()
-			s.logger.Info("auto-deploy completed",
-				zap.String("product", product),
-				zap.Int("status", resp.StatusCode),
-			)
 		}()
+
+		writeJSON(w, http.StatusAccepted, map[string]any{
+			"status":   "deploying",
+			"workflow": ref.Namespace + "/" + ref.Name,
+			"binding":  binding.Metadata.Namespace + "/" + binding.Metadata.Name,
+			"repo":     push.Repository.FullName,
+		})
+	case "github_actions":
+		writeJSON(w, http.StatusNotImplemented, errorResponse{
+			Error: "github_actions dispatch not implemented in v2.0.0",
+		})
+	default:
+		writeJSON(w, http.StatusInternalServerError, errorResponse{
+			Error: "unsupported workflow_kind: " + deploy.WorkflowKind,
+		})
 	}
-
-	writeJSON(w, http.StatusAccepted, map[string]string{
-		"status":  "deploying",
-		"product": product,
-		"repo":    push.Repository.FullName,
-	})
-}
-
-// repoToProduct maps a GitHub repository full name to a DaKasa product name.
-var repoProductMap = map[string]string{
-	// dakasa-app services
-	"dakasa-co/dakasa-app-identities-api":      "dakasa-app",
-	"dakasa-co/dakasa-app-hall-api":             "dakasa-app",
-	"dakasa-co/dakasa-app-room-api":             "dakasa-app",
-	"dakasa-co/dakasa-app-notify-api":           "dakasa-app",
-	"dakasa-co/dakasa-app-media-compressor-api": "dakasa-app",
-	"dakasa-co/dakasa-app-rta-api":              "dakasa-app",
-	"dakasa-co/dakasa-app-fe":                   "dakasa-app",
-
-	// dakasa-enterprise services
-	"dakasa-co/dakasa-enterprise-identities-api":      "dakasa-enterprise",
-	"dakasa-co/dakasa-enterprise-ads-api":              "dakasa-enterprise",
-	"dakasa-co/dakasa-enterprise-payments-api":         "dakasa-enterprise",
-	"dakasa-co/dakasa-enterprise-notify-api":           "dakasa-enterprise",
-	"dakasa-co/dakasa-enterprise-media-compressor-api": "dakasa-enterprise",
-	"dakasa-co/dakasa-enterprise-rta-api":              "dakasa-enterprise",
-	"dakasa-co/dakasa-enterprise-fe":                   "dakasa-enterprise",
-
-	// dakasa-tartaro services
-	"dakasa-co/dakasa-tartaro-api": "dakasa-tartaro",
-	"dakasa-co/dakasa-tartaro-fe":  "dakasa-tartaro",
-
-	// shared
-	"dakasa-co/dakasa-orchestrator": "dakasa-shared",
-	"dakasa-co/dakasa-commons":      "", // library, no deploy
-	"dakasa-co/dakasa-system":       "", // infra monorepo, no auto-deploy (hostPath, requires manual git pull)
-
-	// yggdrasil
-	"dakasa-yggdrasil/yggdrasil-core": "", // self, no auto-deploy
-}
-
-func repoToProduct(fullName string) string {
-	if product, ok := repoProductMap[fullName]; ok {
-		return product
-	}
-	return ""
 }
 
 // validateWebhookSignature checks the X-Hub-Signature-256 header.
@@ -194,12 +194,4 @@ func validateWebhookSignature(body []byte, signature, secret string) bool {
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write(body)
 	return hmac.Equal(sig, mac.Sum(nil))
-}
-
-func truncate(s string, n int) string {
-	s = strings.ReplaceAll(s, "\n", " ")
-	if len(s) <= n {
-		return s
-	}
-	return s[:n] + "..."
 }
