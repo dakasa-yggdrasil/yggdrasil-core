@@ -83,6 +83,7 @@ func (s *Server) handlePushEvent(w http.ResponseWriter, r *http.Request, body []
 
 	binding, err := repository.FindBindingByRepository(r.Context(), s.db, push.Repository.FullName)
 	if errors.Is(err, repository.ErrBindingNotFound) {
+		IncWebhookEvent("skipped")
 		writeJSON(w, http.StatusOK, map[string]string{
 			"status": "skipped",
 			"reason": fmt.Sprintf("no repository_binding for %s", push.Repository.FullName),
@@ -90,6 +91,7 @@ func (s *Server) handlePushEvent(w http.ResponseWriter, r *http.Request, body []
 		return
 	}
 	if err != nil {
+		IncWebhookEvent("failed")
 		s.logger.Error("repository_binding lookup failed",
 			zap.String("repo", push.Repository.FullName),
 			zap.Error(err),
@@ -101,6 +103,7 @@ func (s *Server) handlePushEvent(w http.ResponseWriter, r *http.Request, body []
 	}
 
 	if binding.Spec.Deploy == nil {
+		IncWebhookEvent("skipped")
 		writeJSON(w, http.StatusOK, map[string]string{
 			"status": "skipped",
 			"reason": "binding has no deploy spec",
@@ -110,6 +113,7 @@ func (s *Server) handlePushEvent(w http.ResponseWriter, r *http.Request, body []
 
 	deploy := binding.Spec.Deploy
 	if !matchesBranchFilter(push.Ref, deploy.BranchFilter) {
+		IncWebhookEvent("skipped")
 		writeJSON(w, http.StatusOK, map[string]string{
 			"status": "skipped",
 			"reason": fmt.Sprintf("ref %s outside branch_filter", push.Ref),
@@ -117,6 +121,7 @@ func (s *Server) handlePushEvent(w http.ResponseWriter, r *http.Request, body []
 		return
 	}
 	if len(deploy.PathFilter) > 0 && !matchesPathFilter(push.HeadCommit.Modified, deploy.PathFilter) {
+		IncWebhookEvent("skipped")
 		writeJSON(w, http.StatusOK, map[string]string{
 			"status": "skipped",
 			"reason": "no files matched path_filter",
@@ -165,6 +170,7 @@ func (s *Server) handlePushEvent(w http.ResponseWriter, r *http.Request, body []
 			}
 		}()
 
+		IncWebhookEvent("accepted")
 		writeJSON(w, http.StatusAccepted, map[string]any{
 			"status":   "deploying",
 			"workflow": ref.Namespace + "/" + ref.Name,
@@ -172,10 +178,12 @@ func (s *Server) handlePushEvent(w http.ResponseWriter, r *http.Request, body []
 			"repo":     push.Repository.FullName,
 		})
 	case "github_actions":
+		IncWebhookEvent("failed")
 		writeJSON(w, http.StatusNotImplemented, errorResponse{
 			Error: "github_actions dispatch not implemented in v2.0.0",
 		})
 	default:
+		IncWebhookEvent("failed")
 		writeJSON(w, http.StatusInternalServerError, errorResponse{
 			Error: "unsupported workflow_kind: " + deploy.WorkflowKind,
 		})
