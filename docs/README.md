@@ -6,9 +6,12 @@ Start here depending on what you're doing.
 
 | I want to... | Read |
 |---|---|
-| Try Yggdrasil in 10 minutes | [getting-started.md](./getting-started.md) |
+| **Adopt Yggdrasil end-to-end in ~1 hour** | **[quickstart.md](./quickstart.md)** |
+| Try Yggdrasil in 10 minutes (Docker compose) | [getting-started.md](./getting-started.md) |
 | Understand what Yggdrasil is | [concepts.md](./concepts.md) |
 | See how components fit | [architecture.md](./architecture.md) |
+| Browse the REST API | [api-reference/](./api-reference/) |
+| Walk a real adoption story | [tutorials/](./tutorials/) |
 
 ## 🔌 Deep dive on a feature — [features/](./features/)
 
