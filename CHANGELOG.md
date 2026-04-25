@@ -2,6 +2,17 @@
 
 All notable changes to yggdrasil-core are documented here.
 
+## [2.3.0] - 2026-04-25
+
+### Added
+- New manifest kind `tenant`. Declares a top-level tenancy scope with slug, display_name, owners, billing_ref, quotas, and metadata. Slug validates against `^[a-z0-9][a-z0-9-]{0,61}[a-z0-9]$` (2-63 chars, lowercase alphanumeric + hyphens). Owners must be `user:<id>`, `team:<name>` or `service:<name>`. Quotas must be non-negative (0 = no cap).
+- Other manifests can carry `metadata.tenant: <slug>` informationally in v2.3.0; v3.0 makes enforcement default-on.
+- `YGGDRASIL_TENANCY_ENFORCED=true` env var opts into RBAC enforcement: list endpoints filter by caller's tenants, write endpoints reject mismatched tenants, quota ceilings produce 429. Default (unset/`false`) preserves v2.2 behaviour.
+- `docs/tutorials/05-multi-tenancy.md` — adoption walkthrough.
+
+### Notes
+- This phase ships the **data shape** and **opt-in flag**. Quota counters and write-time enforcement land in v2.3.x patches as adopter feedback comes in. v3.0 flips `YGGDRASIL_TENANCY_ENFORCED` default to `true`.
+
 ## [2.2.0] - 2026-04-25
 
 ### Added
