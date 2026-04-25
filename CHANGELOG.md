@@ -2,6 +2,17 @@
 
 All notable changes to yggdrasil-core are documented here.
 
+## [2.6.0] - 2026-04-25
+
+### Added
+- New manifest kind `workflow_template`. Declares a parameterised workflow with `display_name`, `description`, `category`, `tags`, `authors`, `params` (typed input declarations: string/integer/number/boolean/array/object), `body` (workflow shape with `{{ params.<name> }}` placeholders), and `version`.
+- Validation: display_name + body required; param types must be one of the supported six; a param cannot be both required and have a default (contradictory).
+- Normalisation: trims whitespace; defaults `version` to `v0.1.0`.
+- Adopters POST templates via the generic `POST /api/v1/manifests?kind=workflow_template`. The companion CLI/console will add discovery and instantiation in v2.6.x.
+
+### Notes
+- Template instantiation (substituting `{{ params.* }}` and posting the resulting workflow) is currently adopter-side. v2.6.x adds a server endpoint `POST /api/v1/workflow-templates/{ns}/{name}/instantiate`. The data shape is stable in v2.6.0.
+
 ## [2.5.0] - 2026-04-25
 
 ### Added

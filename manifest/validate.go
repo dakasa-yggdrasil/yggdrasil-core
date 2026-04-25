@@ -174,6 +174,12 @@ func ValidateDocument(doc model.ManifestDocument) error {
 			return err
 		}
 		return ValidateTenantSpec(spec)
+	case "workflow_template":
+		spec, err := ParseWorkflowTemplateSpec(doc.Spec)
+		if err != nil {
+			return err
+		}
+		return ValidateWorkflowTemplateSpec(spec)
 	default:
 		return fmt.Errorf("unsupported manifest kind: %s", doc.Kind)
 	}
