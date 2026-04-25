@@ -9,37 +9,181 @@
       "bootstrap_source": "integration-kubernetes",
       "provider": "kubernetes",
       "yggdrasil.io/catalog-domain": "kubernetes",
-      "yggdrasil.io/catalog-section": "operations",
-      "yggdrasil.io/catalog-entry": "api"
+      "yggdrasil.io/catalog-entry": "api",
+      "yggdrasil.io/catalog-section": "operations"
     }
   },
   "spec": {
-    "provider": "kubernetes",
     "adapter": {
-      "transport": "http_json",
-      "version": "1.0.0",
+      "version": "1.2.0",
       "endpoints": {
-        "describe": "/rpc/describe",
-        "execute": "/rpc/execute"
+        "execute": "/rpc/execute",
+        "describe": "/rpc/describe"
       },
+      "transport": "http_json",
       "timeout_seconds": 30
+    },
+    "provider": "kubernetes",
+    "discovery": {
+      "mode": "push",
+      "cursor": "none"
+    },
+    "execution": {
+      "supports_dry_run": false,
+      "idempotent_actions": [
+        "apply_manifest",
+        "declarative_apply",
+        "ensure_docker_registry_secret",
+        "observe_objects",
+        "update_container_image"
+      ]
+    },
+    "extensions": {
+      "preserve_raw_payload": true,
+      "allow_custom_resource_types": true
     },
     "capabilities": [
       "describe",
       "execute"
     ],
+    "normalization": {
+      "name_path": "metadata.name",
+      "owner_path": "metadata.namespace",
+      "external_id_path": "metadata.uid",
+      "fallback_resource_prefix": "thirdparty.kubernetes.custom"
+    },
+    "action_catalog": [
+      {
+        "name": "apply_manifest",
+        "idempotent": true,
+        "description": "Apply a single Kubernetes manifest object using server-side apply.",
+        "resource_types": [
+          "object"
+        ]
+      },
+      {
+        "name": "declarative_apply",
+        "idempotent": true,
+        "description": "Apply a desired object set to a Kubernetes cluster using server-side apply.",
+        "resource_types": [
+          "object"
+        ]
+      },
+      {
+        "name": "ensure_docker_registry_secret",
+        "idempotent": true,
+        "description": "Create or update a Kubernetes Secret of type kubernetes.io/dockerconfigjson for image pull authentication.",
+        "resource_types": [
+          "object"
+        ]
+      },
+      {
+        "name": "observe_objects",
+        "idempotent": true,
+        "description": "Observe the current state of a desired object set in a Kubernetes cluster.",
+        "resource_types": [
+          "object"
+        ]
+      },
+      {
+        "name": "update_container_image",
+        "idempotent": true,
+        "description": "Update the image (and optionally imagePullPolicy) of a named container in an existing Deployment via strategic-merge patch by container name. Replaces fragile sparse-SSA upgrades.",
+        "resource_types": [
+          "object"
+        ]
+      }
+    ],
+    "resource_types": [
+      {
+        "name": "object",
+        "discoverable": false,
+        "default_actions": [
+          "apply_manifest",
+          "declarative_apply",
+          "ensure_docker_registry_secret",
+          "observe_objects",
+          "update_container_image"
+        ],
+        "canonical_prefix": "thirdparty.kubernetes.object",
+        "identity_template": "object.{namespace}.{kind}.{name}"
+      }
+    ],
+    "instance_schema": {
+      "mode": "inline",
+      "properties": {
+        "context": {
+          "type": "string",
+          "description": "Optional kubeconfig context override."
+        },
+        "base_url": {
+          "type": "string",
+          "description": "HTTP adapter base URL used when the integration_type declares transport=http_json."
+        },
+        "in_cluster": {
+          "type": "boolean",
+          "default": false,
+          "description": "Use in-cluster Kubernetes authentication."
+        },
+        "kubeconfig": {
+          "type": "string",
+          "secret": true,
+          "description": "Inline kubeconfig content."
+        },
+        "field_manager": {
+          "type": "string",
+          "default": "yggdrasil",
+          "description": "Field manager used for server-side apply."
+        },
+        "kubeconfig_path": {
+          "type": "string",
+          "description": "Path to a kubeconfig file on the worker filesystem."
+        },
+        "default_namespace": {
+          "type": "string",
+          "default": "default",
+          "description": "Namespace used when desired objects omit one."
+        }
+      }
+    },
     "guardian_support": {
       "mode": "light",
       "signals": {
-        "oom_killed": ["oom_killed", "oom"],
-        "restart_count": ["restart_count", "restarts"],
-        "error_rate": ["error_rate", "failure_rate"],
-        "memory_pressure": ["memory_pressure"],
-        "disk_pressure": ["disk_pressure"],
-        "scheduling_failure": ["scheduling_failure", "failed_scheduling", "unschedulable"],
-        "insufficient_cpu": ["insufficient_cpu", "cpu_pressure", "cpu_exhausted"],
-        "utilization": ["utilization", "avg_utilization"],
-        "overprovisioned": ["overprovisioned"]
+        "error_rate": [
+          "error_rate",
+          "failure_rate"
+        ],
+        "oom_killed": [
+          "oom_killed",
+          "oom"
+        ],
+        "utilization": [
+          "utilization",
+          "avg_utilization"
+        ],
+        "disk_pressure": [
+          "disk_pressure"
+        ],
+        "restart_count": [
+          "restart_count",
+          "restarts"
+        ],
+        "memory_pressure": [
+          "memory_pressure"
+        ],
+        "overprovisioned": [
+          "overprovisioned"
+        ],
+        "insufficient_cpu": [
+          "insufficient_cpu",
+          "cpu_pressure",
+          "cpu_exhausted"
+        ],
+        "scheduling_failure": [
+          "scheduling_failure",
+          "failed_scheduling",
+          "unschedulable"
+        ]
       }
     },
     "credential_schema": {
@@ -47,106 +191,10 @@
       "properties": {
         "kubeconfig": {
           "type": "string",
-          "description": "Inline kubeconfig content.",
-          "secret": true
+          "secret": true,
+          "description": "Inline kubeconfig content."
         }
       }
-    },
-    "instance_schema": {
-      "mode": "inline",
-      "properties": {
-        "base_url": {
-          "type": "string",
-          "description": "HTTP adapter base URL used when the integration_type declares transport=http_json."
-        },
-        "in_cluster": {
-          "type": "boolean",
-          "description": "Use in-cluster Kubernetes authentication.",
-          "default": false
-        },
-        "kubeconfig_path": {
-          "type": "string",
-          "description": "Path to a kubeconfig file on the worker filesystem."
-        },
-        "kubeconfig": {
-          "type": "string",
-          "description": "Inline kubeconfig content.",
-          "secret": true
-        },
-        "context": {
-          "type": "string",
-          "description": "Optional kubeconfig context override."
-        },
-        "default_namespace": {
-          "type": "string",
-          "description": "Namespace used when desired objects omit one.",
-          "default": "default"
-        },
-        "field_manager": {
-          "type": "string",
-          "description": "Field manager used for server-side apply.",
-          "default": "yggdrasil"
-        }
-      }
-    },
-    "resource_types": [
-      {
-        "name": "object",
-        "canonical_prefix": "thirdparty.kubernetes.object",
-        "identity_template": "object.{namespace}.{kind}.{name}",
-        "discoverable": false,
-        "default_actions": [
-          "apply_manifest",
-          "declarative_apply",
-          "observe_objects"
-        ]
-      }
-    ],
-    "action_catalog": [
-      {
-        "name": "apply_manifest",
-        "description": "Apply a single Kubernetes manifest object using server-side apply.",
-        "resource_types": ["object"],
-        "idempotent": true
-      },
-      {
-        "name": "declarative_apply",
-        "description": "Apply a desired object set to a Kubernetes cluster using server-side apply.",
-        "resource_types": [
-          "object"
-        ],
-        "idempotent": true
-      },
-      {
-        "name": "observe_objects",
-        "description": "Observe the current state of a desired object set in a Kubernetes cluster.",
-        "resource_types": [
-          "object"
-        ],
-        "idempotent": true
-      }
-    ],
-    "discovery": {
-      "mode": "push",
-      "cursor": "none"
-    },
-    "normalization": {
-      "external_id_path": "metadata.uid",
-      "name_path": "metadata.name",
-      "owner_path": "metadata.namespace",
-      "fallback_resource_prefix": "thirdparty.kubernetes.custom"
-    },
-    "execution": {
-      "supports_dry_run": false,
-      "idempotent_actions": [
-        "apply_manifest",
-        "declarative_apply",
-        "observe_objects"
-      ]
-    },
-    "extensions": {
-      "allow_custom_resource_types": true,
-      "preserve_raw_payload": true
     }
   }
 }

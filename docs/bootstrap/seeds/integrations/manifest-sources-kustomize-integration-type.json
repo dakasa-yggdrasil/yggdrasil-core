@@ -9,64 +9,109 @@
       "bootstrap_source": "integration-kustomize",
       "provider": "kustomize",
       "yggdrasil.io/catalog-domain": "manifest-sources",
-      "yggdrasil.io/catalog-section": "operations",
-      "yggdrasil.io/catalog-entry": "api"
+      "yggdrasil.io/catalog-entry": "api",
+      "yggdrasil.io/catalog-section": "operations"
     }
   },
   "spec": {
-    "provider": "kustomize",
-    "family_ref": { "name": "manifest-sources", "namespace": "global" },
-    "implemented_operations": [
-      "generate_installation",
-      "reconcile_installation",
-      "discover_installation_state"
-    ],
     "adapter": {
-      "transport": "http_json",
       "version": "1.0.0",
       "endpoints": {
-        "describe": "/rpc/describe",
-        "execute": "/rpc/execute"
+        "execute": "/rpc/execute",
+        "describe": "/rpc/describe"
       },
+      "transport": "http_json",
       "timeout_seconds": 60
     },
-    "capabilities": ["describe", "execute"],
-    "credential_schema": {
-      "mode": "inline",
-      "properties": {
-        "github_token": { "type": "string", "description": "Optional PAT or GitHub App installation token for private repos.", "secret": true }
-      }
+    "provider": "kustomize",
+    "discovery": {
+      "mode": "push",
+      "cursor": "none"
     },
-    "instance_schema": {
-      "mode": "inline",
-      "properties": {
-        "base_url":              { "type": "string", "description": "HTTP adapter base URL used when the integration_type declares transport=http_json." },
-        "default_git_url":       { "type": "string", "description": "Fallback git_url when input omits one." },
-        "default_revision":      { "type": "string", "description": "Fallback revision (branch/tag/SHA).", "default": "main" },
-        "default_path":          { "type": "string", "description": "Fallback kustomize overlay path inside the repo.", "default": "." },
-        "github_token":          { "type": "string", "description": "Optional PAT for private repos.", "secret": true },
-        "github_token_username": { "type": "string", "description": "Username paired with github_token.", "default": "x-access-token" }
-      }
+    "execution": {
+      "supports_dry_run": false,
+      "idempotent_actions": [
+        "generate_installation",
+        "reconcile_installation",
+        "discover_installation_state"
+      ]
+    },
+    "extensions": {
+      "preserve_raw_payload": true
+    },
+    "family_ref": {
+      "name": "manifest-sources",
+      "namespace": "global"
+    },
+    "capabilities": [
+      "describe",
+      "execute"
+    ],
+    "normalization": {
+      "name_path": "metadata.name",
+      "external_id_path": "metadata.name",
+      "fallback_resource_prefix": "thirdparty.kustomize.custom"
     },
     "resource_types": [
       {
         "name": "rendered-object-set",
-        "canonical_prefix": "thirdparty.kustomize.objects",
-        "identity_template": "rendered.{product}.{component}",
         "discoverable": false,
-        "default_actions": ["generate_installation", "reconcile_installation", "discover_installation_state"]
+        "default_actions": [
+          "generate_installation",
+          "reconcile_installation",
+          "discover_installation_state"
+        ],
+        "canonical_prefix": "thirdparty.kustomize.objects",
+        "identity_template": "rendered.{product}.{component}"
       }
     ],
-    "discovery": { "mode": "push", "cursor": "none" },
-    "normalization": {
-      "external_id_path": "metadata.name",
-      "name_path": "metadata.name",
-      "fallback_resource_prefix": "thirdparty.kustomize.custom"
+    "instance_schema": {
+      "mode": "inline",
+      "properties": {
+        "base_url": {
+          "type": "string",
+          "description": "HTTP adapter base URL used when the integration_type declares transport=http_json."
+        },
+        "default_path": {
+          "type": "string",
+          "default": ".",
+          "description": "Fallback kustomize overlay path inside the repo."
+        },
+        "github_token": {
+          "type": "string",
+          "secret": true,
+          "description": "Optional PAT for private repos."
+        },
+        "default_git_url": {
+          "type": "string",
+          "description": "Fallback git_url when input omits one."
+        },
+        "default_revision": {
+          "type": "string",
+          "default": "main",
+          "description": "Fallback revision (branch/tag/SHA)."
+        },
+        "github_token_username": {
+          "type": "string",
+          "default": "x-access-token",
+          "description": "Username paired with github_token (default 'x-access-token')."
+        }
+      }
     },
-    "execution": {
-      "supports_dry_run": false,
-      "idempotent_actions": ["generate_installation", "reconcile_installation", "discover_installation_state"]
+    "credential_schema": {
+      "mode": "inline",
+      "properties": {
+        "github_token": {
+          "type": "string",
+          "secret": true,
+          "description": "Optional PAT or GitHub App installation token for private repos."
+        }
+      }
     },
-    "extensions": { "preserve_raw_payload": true }
+    "implemented_operations": [
+      "generate_installation",
+      "reconcile_installation",
+      "discover_installation_state"
+    ]
   }
 }
