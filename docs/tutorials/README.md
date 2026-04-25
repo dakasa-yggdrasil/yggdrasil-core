@@ -7,8 +7,8 @@ End-to-end stories that take you from a working Yggdrasil installation to a real
 | 1 | [Wire your first service to Yggdrasil CD](./01-webhook-cd.md) | A real service repository deploys on every push to `main` via webhook | ~45 min |
 | 2 | [Build a custom integration adapter](./02-custom-adapter.md) | Yggdrasil talks to a system it did not previously know about | ~60 min |
 | 3 | [Use Yggdrasil as your secret store](./03-secret-store.md) | No more cleartext secrets in your manifests; rotation is one POST | ~30 min |
-
-Tutorials covering ephemeral environments and multi-tenancy ship with their own phases (v2.2 / v2.3) — those features do not exist in v2.1.0 and writing tutorials for them now would mislead adopters.
+| 4 | [Spin up ephemeral environments per pull request](./04-ephemeral-envs.md) | One PR → one namespace + TTL + cost projection (v2.2+) | ~30 min |
+| 5 | [Multi-tenancy](./05-multi-tenancy.md) | Organise manifests by tenant; opt-in enforcement (v2.3+) | ~30 min |
 
 ## Conventions
 
