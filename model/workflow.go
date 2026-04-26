@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 // WorkflowDispatchOperation is the canonical operation used to dispatch one workflow run through an integration.
 const WorkflowDispatchOperation = "dispatch_workflow"
@@ -140,6 +144,24 @@ type RunWorkflowRequest struct {
 	Inputs   map[string]any       `json:"inputs,omitempty"`
 	Auth     WorkflowDispatchAuth `json:"auth,omitempty"`
 	Metadata map[string]any       `json:"metadata,omitempty"`
+}
+
+// WorkflowRunRecord persists one async workflow execution. The HTTP layer
+// returns this shape from GET /api/v1/workflow-runs/{id}.
+type WorkflowRunRecord struct {
+	ID                uuid.UUID            `json:"id"`
+	WorkflowNamespace string               `json:"workflow_namespace"`
+	WorkflowName      string               `json:"workflow_name"`
+	WorkflowVersion   *int                 `json:"workflow_version,omitempty"`
+	Status            string               `json:"status"`
+	Inputs            map[string]any       `json:"inputs,omitempty"`
+	Metadata          map[string]any       `json:"metadata,omitempty"`
+	Result            *RunWorkflowResponse `json:"result,omitempty"`
+	Error             string               `json:"error,omitempty"`
+	StartedAt         *time.Time           `json:"started_at,omitempty"`
+	FinishedAt        *time.Time           `json:"finished_at,omitempty"`
+	CreatedAt         time.Time            `json:"created_at"`
+	UpdatedAt         time.Time            `json:"updated_at"`
 }
 
 // WorkflowRunStepResult captures the result of one workflow step.
