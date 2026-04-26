@@ -226,20 +226,24 @@ func runWorkflow(
 	}
 
 	for index, step := range orderedSteps {
-		result := executeWorkflowStep(ctx, conn, db, workflowRef, step, executionCtx, req)
-		response.Steps = append(response.Steps, result)
-		executionCtx.Steps[result.ID] = result
+		stepResults, failedID := runStepIterations(ctx, conn, db, workflowRef, step, executionCtx, req)
+		response.Steps = append(response.Steps, stepResults...)
+		for _, r := range stepResults {
+			executionCtx.Steps[r.ID] = r
+		}
 
 		// A condition-skipped step is recorded as "skipped" but the workflow
 		// keeps running. Only a truly failed step aborts the run.
-		if result.Status == "failed" {
+		if failedID != "" {
 			response.Status = "failed"
-			response.FinishedAt = result.FinishedAt
-			response.Steps = append(response.Steps, skipWorkflowSteps(orderedSteps[index+1:], result.ID)...)
+			if len(stepResults) > 0 {
+				response.FinishedAt = stepResults[len(stepResults)-1].FinishedAt
+			}
+			response.Steps = append(response.Steps, skipWorkflowSteps(orderedSteps[index+1:], failedID)...)
 			if response.Metadata == nil {
 				response.Metadata = map[string]any{}
 			}
-			response.Metadata["failed_step"] = result.ID
+			response.Metadata["failed_step"] = failedID
 			return response, nil
 		}
 	}
@@ -435,6 +439,127 @@ func executeWorkflowStep(
 
 	result.FinishedAt = time.Now().UTC()
 	return result
+}
+
+// runStepIterations executes one step, fanning it out into multiple runs
+// when the step declares for_each. Returns one result per iteration plus
+// the failed step ID (empty when all iterations succeeded).
+//
+// for_each behavior:
+//   - items field is a workflow template that must render to a slice.
+//   - each iteration gets a fresh execution context with Each[as]=item.
+//   - iteration IDs are <step.id>[<index>] so downstream `steps.X` paths
+//     remain unique. The base step ID is also kept for the LAST iteration
+//     so workflows that don't expect for_each fanout still see the step.
+//   - fail-fast: first iteration error aborts subsequent iterations.
+func runStepIterations(
+	ctx context.Context,
+	conn *amqp.Connection,
+	db *sql.DB,
+	workflowRef model.ManifestReference,
+	step model.WorkflowStepSpec,
+	executionCtx manifestengine.WorkflowExecutionContext,
+	req model.RunWorkflowRequest,
+) ([]model.WorkflowRunStepResult, string) {
+	if step.ForEach == nil || strings.TrimSpace(step.ForEach.Items) == "" {
+		result := executeWorkflowStep(ctx, conn, db, workflowRef, step, executionCtx, req)
+		failed := ""
+		if result.Status == "failed" {
+			failed = result.ID
+		}
+		return []model.WorkflowRunStepResult{result}, failed
+	}
+
+	asName := strings.TrimSpace(step.ForEach.As)
+	if asName == "" {
+		asName = "item"
+	}
+
+	rendered, err := manifestengine.RenderWorkflowInput(step.ForEach.Items, executionCtx)
+	if err != nil {
+		now := time.Now().UTC()
+		baseID := normalizeWorkflowStepID(step.ID)
+		return []model.WorkflowRunStepResult{{
+			ID:         baseID,
+			Kind:       strings.ToLower(strings.TrimSpace(step.Use.Kind)),
+			Operation:  manifestengine.NormalizeWorkflowStepOperation(step),
+			Capability: manifestengine.NormalizeWorkflowStepCapability(step),
+			Status:     "failed",
+			Error:      fmt.Sprintf("for_each items: %v", err),
+			StartedAt:  now,
+			FinishedAt: now,
+		}}, baseID
+	}
+
+	items, ok := coerceToSlice(rendered)
+	if !ok {
+		now := time.Now().UTC()
+		baseID := normalizeWorkflowStepID(step.ID)
+		return []model.WorkflowRunStepResult{{
+			ID:         baseID,
+			Kind:       strings.ToLower(strings.TrimSpace(step.Use.Kind)),
+			Operation:  manifestengine.NormalizeWorkflowStepOperation(step),
+			Capability: manifestengine.NormalizeWorkflowStepCapability(step),
+			Status:     "failed",
+			Error:      fmt.Sprintf("for_each items rendered to non-slice value: %T", rendered),
+			StartedAt:  now,
+			FinishedAt: now,
+		}}, baseID
+	}
+
+	results := make([]model.WorkflowRunStepResult, 0, len(items))
+	baseID := normalizeWorkflowStepID(step.ID)
+	for idx, item := range items {
+		iterCtx := executionCtx
+		each := map[string]any{}
+		if executionCtx.Each != nil {
+			for k, v := range executionCtx.Each {
+				each[k] = v
+			}
+		}
+		each[asName] = item
+		each["index"] = idx
+		iterCtx.Each = each
+
+		iterStep := step
+		iterStep.ID = fmt.Sprintf("%s[%d]", baseID, idx)
+		iterStep.ForEach = nil
+
+		result := executeWorkflowStep(ctx, conn, db, workflowRef, iterStep, iterCtx, req)
+		results = append(results, result)
+		if result.Status == "failed" {
+			return results, result.ID
+		}
+	}
+	return results, ""
+}
+
+func coerceToSlice(value any) ([]any, bool) {
+	switch typed := value.(type) {
+	case nil:
+		return nil, true
+	case []any:
+		return typed, true
+	case []string:
+		out := make([]any, len(typed))
+		for i, s := range typed {
+			out[i] = s
+		}
+		return out, true
+	case []int:
+		out := make([]any, len(typed))
+		for i, n := range typed {
+			out[i] = n
+		}
+		return out, true
+	case []float64:
+		out := make([]any, len(typed))
+		for i, n := range typed {
+			out[i] = n
+		}
+		return out, true
+	}
+	return nil, false
 }
 
 func skipWorkflowSteps(steps []model.WorkflowStepSpec, failedStepID string) []model.WorkflowRunStepResult {

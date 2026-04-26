@@ -85,14 +85,25 @@ type WorkflowInputSchemaSpec struct {
 // unresolvable template) fails the step fail-loud so broken workflows
 // surface early.
 type WorkflowStepSpec struct {
-	ID             string              `json:"id"`
-	Description    string              `json:"description,omitempty"`
-	Condition      string              `json:"condition,omitempty"`
-	Use            WorkflowStepUseSpec `json:"use"`
-	With           map[string]any      `json:"with,omitempty"`
-	DependsOn      []string            `json:"depends_on,omitempty"`
-	Retry          WorkflowRetrySpec   `json:"retry,omitempty"`
-	TimeoutSeconds int                 `json:"timeout_seconds,omitempty"`
+	ID             string                `json:"id"`
+	Description    string                `json:"description,omitempty"`
+	Condition      string                `json:"condition,omitempty"`
+	Use            WorkflowStepUseSpec   `json:"use"`
+	With           map[string]any        `json:"with,omitempty"`
+	DependsOn      []string              `json:"depends_on,omitempty"`
+	Retry          WorkflowRetrySpec     `json:"retry,omitempty"`
+	TimeoutSeconds int                   `json:"timeout_seconds,omitempty"`
+	ForEach        *WorkflowForEachSpec  `json:"for_each,omitempty"`
+}
+
+// WorkflowForEachSpec turns a step into a series of iterations driven by
+// a slice resolved from `Items` (a workflow template). Each iteration
+// gets a per-item execution context exposing `{{ each.<As> }}` to inner
+// templates. The engine emits one WorkflowRunStepResult per iteration,
+// with id `<step.id>[<index>]`, fail-fast on the first iteration error.
+type WorkflowForEachSpec struct {
+	Items string `json:"items"`
+	As    string `json:"as"`
 }
 
 // WorkflowStepUseSpec declares how one step is executed. The target integration
