@@ -32,12 +32,19 @@ var (
 )
 
 // WorkflowExecutionContext carries the runtime values available while rendering one workflow step.
+//
+// The `Each` field is populated only inside a for_each iteration: the engine
+// fans the parent step out into N iterations, each setting `Each[as]=item`
+// so that templates like `{{ each.sub }}` render the per-iteration value.
+// Outside a for_each iteration, `Each` is nil and `each.<x>` template paths
+// fail to render fail-loud.
 type WorkflowExecutionContext struct {
 	Inputs   map[string]any
 	Metadata map[string]any
 	Auth     model.WorkflowDispatchAuth
 	Workflow model.ManifestReference
 	Steps    map[string]model.WorkflowRunStepResult
+	Each     map[string]any
 }
 
 // ParseWorkflowSpec parses the raw spec payload into the typed workflow manifest.
@@ -528,6 +535,9 @@ func workflowTemplateValue(path string, ctx WorkflowExecutionContext) (any, bool
 		"auth":     map[string]any{"token": ctx.Auth.Token},
 		"workflow": map[string]any{"name": ctx.Workflow.Name, "namespace": ctx.Workflow.Namespace, "version": ctx.Workflow.Version},
 		"steps":    workflowStepResultsContext(ctx.Steps),
+	}
+	if ctx.Each != nil {
+		root["each"] = ctx.Each
 	}
 	return lookupWorkflowPath(root, strings.TrimSpace(path))
 }
