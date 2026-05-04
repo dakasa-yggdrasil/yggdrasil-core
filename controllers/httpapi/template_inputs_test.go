@@ -97,3 +97,30 @@ func TestBuildInputsFromPushMultiplePlaceholdersInOneValue(t *testing.T) {
 		t.Fatalf("image_tag: got %v, want %s", got, want)
 	}
 }
+
+func TestBuildInputsFromPushShortIDDerivedFromHeadCommitID(t *testing.T) {
+	in := map[string]any{
+		"image_tag": "sha-{{ push.head_commit.short_id }}",
+	}
+	out, err := buildInputsFromPush(in, samplePushEvent())
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	// samplePushEvent's HeadCommit.ID = "abcdef1234567890" → first 7 = "abcdef1"
+	want := "sha-abcdef1"
+	if got := out["image_tag"]; got != want {
+		t.Fatalf("image_tag: got %v, want %s", got, want)
+	}
+}
+
+func TestBuildInputsFromPushShortIDFallsBackForShortIDs(t *testing.T) {
+	p := samplePushEvent()
+	p.HeadCommit.ID = "abc"
+	out, err := buildInputsFromPush(map[string]any{"x": "{{ push.head_commit.short_id }}"}, p)
+	if err != nil {
+		t.Fatalf("err: %v", err)
+	}
+	if got := out["x"]; got != "abc" {
+		t.Fatalf("short_id fallback: got %v", got)
+	}
+}
