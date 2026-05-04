@@ -63,6 +63,15 @@ func lookupPushField(p githubPushEvent, path string) (string, bool) {
 		return p.Ref, true
 	case "head_commit.id":
 		return p.HeadCommit.ID, true
+	case "head_commit.short_id":
+		// First 7 chars match the `${GITHUB_SHA:0:7}` convention
+		// used by GHA build pipelines that tag images as
+		// `:sha-XXXXXXX`. Lets bindings derive the GHCR tag without
+		// shell post-processing.
+		if len(p.HeadCommit.ID) >= 7 {
+			return p.HeadCommit.ID[:7], true
+		}
+		return p.HeadCommit.ID, true
 	case "head_commit.message":
 		return p.HeadCommit.Message, true
 	case "pusher.name":
