@@ -6,6 +6,7 @@ import (
 	"os"
 	"testing"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	_ "github.com/lib/pq"
 )
 
@@ -48,5 +49,44 @@ func TestOIDCSchemaTablesExist(t *testing.T) {
 		if !exists {
 			t.Errorf("expected table %q to exist", name)
 		}
+	}
+}
+
+func TestGetOIDCClientByID_NotFound(t *testing.T) {
+	db := dbForOIDCTest(t)
+	defer db.Close()
+	_, err := GetOIDCClientByID(context.Background(), db, "nonexistent")
+	if err == nil {
+		t.Fatal("expected error for nonexistent client, got nil")
+	}
+	if err != ErrOIDCClientNotFound {
+		t.Errorf("want ErrOIDCClientNotFound, got %v", err)
+	}
+}
+
+func TestUpsertAndGetOIDCClient(t *testing.T) {
+	db := dbForOIDCTest(t)
+	defer db.Close()
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM oidc_clients WHERE client_id='test-client'`)
+	})
+	c := model.OIDCClient{
+		ClientID:               "test-client",
+		ClientSecretHash:       "$2a$10$fakehash",
+		RedirectURIs:           []string{"https://example.test/callback"},
+		PostLogoutRedirectURIs: []string{"https://example.test/"},
+		Scopes:                 []string{"openid", "email"},
+		GrantTypes:             []string{"authorization_code"},
+		PKCERequired:           true,
+	}
+	if err := UpsertOIDCClient(context.Background(), db, c); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+	got, err := GetOIDCClientByID(context.Background(), db, "test-client")
+	if err != nil {
+		t.Fatalf("get: %v", err)
+	}
+	if got.ClientID != "test-client" || !got.PKCERequired || len(got.RedirectURIs) != 1 {
+		t.Errorf("round-trip lost data: %+v", got)
 	}
 }
