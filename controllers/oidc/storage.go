@@ -6,11 +6,18 @@ package oidc
 
 import (
 	"context"
+	"crypto/rand"
+	"crypto/x509"
 	"database/sql"
+	"encoding/base64"
+	"encoding/pem"
 	"errors"
+	"fmt"
 	"net/url"
+	"strings"
 	"time"
 
+	jose "github.com/go-jose/go-jose/v4"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -304,3 +311,439 @@ func (s *Storage) DeleteAuthRequest(ctx context.Context, id string) error {
 	}
 	return repository.MarkOIDCAuthRequestConsumed(ctx, s.db, parsed)
 }
+
+// generateOpaqueToken returns 32 bytes of base64url-encoded entropy.
+// Used for both access-token IDs (which we don't persist; the JWT issued
+// by the OP is the actual access token) and refresh tokens (which we do
+// persist for rotation tracking).
+func generateOpaqueToken() (string, error) {
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		return "", fmt.Errorf("entropy: %w", err)
+	}
+	return base64.RawURLEncoding.EncodeToString(b), nil
+}
+
+// CreateAccessToken is invoked when the flow doesn't issue a refresh
+// token (rare in our setup, but kept correct). The returned ID is the
+// "jti" the OP embeds in the access JWT — opaque, not persisted because
+// access tokens are stateless.
+func (s *Storage) CreateAccessToken(ctx context.Context, request op.TokenRequest) (string, time.Time, error) {
+	id, err := generateOpaqueToken()
+	if err != nil {
+		return "", time.Time{}, err
+	}
+	return id, time.Now().Add(AccessTokenLifetime), nil
+}
+
+// CreateAccessAndRefreshTokens is the primary token-mint path. Two flows
+// converge here:
+//
+//   - Code Flow: currentRefreshToken == "". A fresh refresh token is created.
+//   - Refresh Flow: currentRefreshToken != "". The token is rotated: the
+//     old token is revoked atomically and the new token is issued. If the
+//     old token was already revoked or absent, the entire chain is revoked
+//     (replay defense, RFC 6819 §5.2.2.3).
+func (s *Storage) CreateAccessAndRefreshTokens(
+	ctx context.Context, request op.TokenRequest, currentRefreshToken string,
+) (accessTokenID string, newRefreshToken string, expiration time.Time, err error) {
+	accessID, err := generateOpaqueToken()
+	if err != nil {
+		return "", "", time.Time{}, err
+	}
+	rt, err := generateOpaqueToken()
+	if err != nil {
+		return "", "", time.Time{}, err
+	}
+
+	collabID, perr := uuid.Parse(request.GetSubject())
+	if perr != nil {
+		return "", "", time.Time{}, fmt.Errorf("token subject is not a UUID: %w", perr)
+	}
+
+	// Determine client_id from the request; the concrete type is one of
+	// authRequestView (code flow), refreshTokenRequestView (refresh flow),
+	// or *oidc.JWTTokenRequest. Best-effort extraction with a nil-safe path.
+	clientID := clientIDFromTokenRequest(request)
+
+	rec := model.OIDCRefreshToken{
+		Token:          rt,
+		CollaboratorID: collabID,
+		ClientID:       clientID,
+		Scopes:         request.GetScopes(),
+		ExpiresAt:      time.Now().Add(RefreshTokenLifetime),
+	}
+
+	if currentRefreshToken == "" {
+		// Code Flow: fresh issuance, no chain entry.
+		if err := repository.CreateOIDCRefreshToken(ctx, s.db, rec); err != nil {
+			return "", "", time.Time{}, fmt.Errorf("create refresh: %w", err)
+		}
+	} else {
+		// Refresh Flow: rotate atomically. Repository signals "already
+		// revoked or missing" by returning a sentinel-shaped error; on
+		// that, we revoke the chain to lock out the replayer.
+		rec.RotatedFrom = &currentRefreshToken
+		rotErr := repository.RotateOIDCRefreshToken(ctx, s.db, currentRefreshToken, rec)
+		if rotErr != nil {
+			if isReplayError(rotErr) {
+				// Defensive — RotateOIDCRefreshToken found the old token
+				// already revoked. Revoke the whole chain so any leaked
+				// descendant can't be exchanged.
+				_, _ = repository.RevokeOIDCRefreshChainByRoot(ctx, s.db, currentRefreshToken)
+				return "", "", time.Time{}, fmt.Errorf("refresh token replay detected; chain revoked")
+			}
+			return "", "", time.Time{}, fmt.Errorf("rotate refresh: %w", rotErr)
+		}
+	}
+
+	return accessID, rt, time.Now().Add(AccessTokenLifetime), nil
+}
+
+// isReplayError checks for the marker text used by RotateOIDCRefreshToken
+// when the old token is already revoked / missing. Brittle on the message
+// shape, so wrap the check in one place.
+func isReplayError(err error) bool {
+	if err == nil {
+		return false
+	}
+	return strings.Contains(err.Error(), "already revoked or missing")
+}
+
+// clientIDFromTokenRequest pulls the client identifier from whichever of
+// the supported request types is presented. Returns "" only if the type
+// genuinely doesn't expose one (which would be an error, but we leave
+// blame to the caller — refresh-token row will then violate the FK).
+func clientIDFromTokenRequest(req op.TokenRequest) string {
+	type clientIDProvider interface{ GetClientID() string }
+	if cp, ok := req.(clientIDProvider); ok {
+		return cp.GetClientID()
+	}
+	// Last-resort: scope-only audience hint. Should not happen in our flows.
+	if aud := req.GetAudience(); len(aud) > 0 {
+		return aud[0]
+	}
+	return ""
+}
+
+// refreshTokenRequestView adapts a stored refresh token to the OP's
+// op.RefreshTokenRequest interface. The OP uses this to assemble the new
+// access token claims.
+type refreshTokenRequestView struct {
+	r       model.OIDCRefreshToken
+	current []string
+}
+
+func (v *refreshTokenRequestView) GetAMR() []string         { return nil }
+func (v *refreshTokenRequestView) GetAudience() []string    { return []string{v.r.ClientID} }
+func (v *refreshTokenRequestView) GetAuthTime() time.Time   { return v.r.CreatedAt }
+func (v *refreshTokenRequestView) GetClientID() string      { return v.r.ClientID }
+func (v *refreshTokenRequestView) GetSubject() string       { return v.r.CollaboratorID.String() }
+func (v *refreshTokenRequestView) SetCurrentScopes(s []string) { v.current = s }
+
+// GetScopes returns the scopes the OP should embed in the new access
+// token. We default to the original grant scopes; if SetCurrentScopes
+// was called we honor that narrowing.
+func (v *refreshTokenRequestView) GetScopes() []string {
+	if v.current != nil {
+		return v.current
+	}
+	return v.r.Scopes
+}
+
+// TokenRequestByRefreshToken loads a refresh token, validates its state,
+// and returns a request view the OP can rebuild new tokens from. Critical:
+// if the token is already revoked, we revoke the whole chain (replay) and
+// return an error.
+func (s *Storage) TokenRequestByRefreshToken(ctx context.Context, refreshToken string) (op.RefreshTokenRequest, error) {
+	r, err := repository.GetOIDCRefreshToken(ctx, s.db, refreshToken)
+	if err != nil {
+		return nil, op.ErrInvalidRefreshToken
+	}
+	if r.RevokedAt != nil {
+		// Replay attempt: the token has been revoked. Revoke the entire
+		// chain rooted at this token so even unrevoked descendants stop
+		// working.
+		_, _ = repository.RevokeOIDCRefreshChainByRoot(ctx, s.db, refreshToken)
+		return nil, op.ErrInvalidRefreshToken
+	}
+	if time.Now().After(r.ExpiresAt) {
+		return nil, op.ErrInvalidRefreshToken
+	}
+	return &refreshTokenRequestView{r: r}, nil
+}
+
+// TerminateSession revokes all live refresh tokens issued for the given
+// client/user pair. Access tokens are stateless (JWTs) — they expire on
+// their own; we cannot recall them.
+func (s *Storage) TerminateSession(ctx context.Context, userID string, clientID string) error {
+	parsed, err := uuid.Parse(userID)
+	if err != nil {
+		return fmt.Errorf("invalid user id: %w", err)
+	}
+	_, err = s.db.ExecContext(ctx, `
+		UPDATE oidc_refresh_tokens SET revoked_at = NOW()
+		WHERE collaborator_id = $1 AND client_id = $2 AND revoked_at IS NULL
+	`, parsed, clientID)
+	if err != nil {
+		return fmt.Errorf("terminate session: %w", err)
+	}
+	return nil
+}
+
+// RevokeToken handles the revocation endpoint. Per the OP contract, when
+// the original request was for a refresh token, tokenOrTokenID is the
+// raw refresh token and userID may be empty. For access tokens, only
+// access-token-id is passed (we don't persist those — the JWT carries
+// its own expiry, so we treat the request as a no-op except for chain
+// revocation if the value happens to also be a refresh token).
+func (s *Storage) RevokeToken(ctx context.Context, tokenOrTokenID string, userID string, clientID string) *oidc.Error {
+	r, err := repository.GetOIDCRefreshToken(ctx, s.db, tokenOrTokenID)
+	if err != nil {
+		// Not a refresh token we know about — treat as access token id.
+		// We have nothing to revoke; the spec accepts silent no-op.
+		return nil
+	}
+	if r.ClientID != clientID {
+		return oidc.ErrInvalidClient().WithDescription("token was not issued for this client")
+	}
+	if _, err := repository.RevokeOIDCRefreshChainByRoot(ctx, s.db, tokenOrTokenID); err != nil {
+		return oidc.ErrServerError().WithDescription("%s", err.Error())
+	}
+	return nil
+}
+
+// GetRefreshTokenInfo returns the user-id and token-id of a refresh
+// token. The OP calls this from RevokeToken when the supplied value
+// looks like a refresh token. Token id and token value are the same in
+// our scheme (opaque base64url string).
+func (s *Storage) GetRefreshTokenInfo(ctx context.Context, clientID string, token string) (userID string, tokenID string, err error) {
+	r, err := repository.GetOIDCRefreshToken(ctx, s.db, token)
+	if err != nil {
+		return "", "", op.ErrInvalidRefreshToken
+	}
+	if r.ClientID != clientID {
+		return "", "", op.ErrInvalidRefreshToken
+	}
+	return r.CollaboratorID.String(), token, nil
+}
+
+// signingKeyView adapts a stored OIDCSigningKey to the OP's op.SigningKey
+// interface. The Key() method returns the parsed *rsa.PrivateKey so the
+// OP can sign JWTs directly.
+type signingKeyView struct {
+	id      string
+	private any // parsed via parseSigningKey
+}
+
+func (v *signingKeyView) SignatureAlgorithm() jose.SignatureAlgorithm { return jose.RS256 }
+func (v *signingKeyView) Key() any                                    { return v.private }
+func (v *signingKeyView) ID() string                                  { return v.id }
+
+// publicKeyView adapts a stored OIDCSigningKey to the OP's op.Key
+// interface (used for /jwks publication and for validating tokens via
+// the /userinfo endpoint).
+type publicKeyView struct {
+	id     string
+	pubKey any
+}
+
+func (v *publicKeyView) ID() string                              { return v.id }
+func (v *publicKeyView) Algorithm() jose.SignatureAlgorithm      { return jose.RS256 }
+func (v *publicKeyView) Use() string                             { return "sig" }
+func (v *publicKeyView) Key() any                                { return v.pubKey }
+
+// parseSigningKey extracts the *rsa.PrivateKey from a stored row's
+// PrivatePEM blob. Returns the key and the kid (sourced from PublicJWK).
+func parseSigningKey(k model.OIDCSigningKey) (privKey any, kid string, err error) {
+	block, _ := pem.Decode([]byte(k.PrivatePEM))
+	if block == nil {
+		return nil, "", fmt.Errorf("no PEM block in private key")
+	}
+	priv, perr := x509.ParsePKCS1PrivateKey(block.Bytes)
+	if perr != nil {
+		// Fall back to PKCS8 if PKCS1 parse fails.
+		anyKey, p2err := x509.ParsePKCS8PrivateKey(block.Bytes)
+		if p2err != nil {
+			return nil, "", fmt.Errorf("parse private key: %w (pkcs8: %v)", perr, p2err)
+		}
+		privKey = anyKey
+	} else {
+		privKey = priv
+	}
+	if v, ok := k.PublicJWK["kid"].(string); ok {
+		kid = v
+	} else {
+		kid = k.ID.String()
+	}
+	return privKey, kid, nil
+}
+
+// SigningKey returns the active RS256 signing key. Called by the OP each
+// time it needs to sign a JWT.
+func (s *Storage) SigningKey(ctx context.Context) (op.SigningKey, error) {
+	k, err := repository.GetCurrentOIDCSigningKey(ctx, s.db, SigningAlgorithm)
+	if err != nil {
+		return nil, err
+	}
+	priv, kid, err := parseSigningKey(k)
+	if err != nil {
+		return nil, err
+	}
+	return &signingKeyView{id: kid, private: priv}, nil
+}
+
+// SignatureAlgorithms enumerates the algorithms we publish in the
+// discovery document. RS256-only for MVP.
+func (s *Storage) SignatureAlgorithms(ctx context.Context) ([]jose.SignatureAlgorithm, error) {
+	return []jose.SignatureAlgorithm{jose.RS256}, nil
+}
+
+// KeySet returns the public keys we publish at /jwks. Includes every
+// active key (we may have two during rotation overlap).
+func (s *Storage) KeySet(ctx context.Context) ([]op.Key, error) {
+	keys, err := repository.ListActiveOIDCSigningKeys(ctx, s.db, SigningAlgorithm)
+	if err != nil {
+		return nil, err
+	}
+	out := make([]op.Key, 0, len(keys))
+	for _, k := range keys {
+		priv, kid, perr := parseSigningKey(k)
+		if perr != nil {
+			return nil, perr
+		}
+		// Extract the public part. RSA: priv.Public(). Other key types
+		// would need similar treatment when added.
+		type publicKeyer interface{ Public() any }
+		var pub any
+		if pp, ok := priv.(publicKeyer); ok {
+			pub = pp.Public()
+		} else {
+			pub = priv
+		}
+		out = append(out, &publicKeyView{id: kid, pubKey: pub})
+	}
+	return out, nil
+}
+
+// GetKeyByIDAndClientID is used to validate JWT-Profile assertions
+// (private_key_jwt etc.). We don't support that auth method in MVP,
+// so always fail closed.
+func (s *Storage) GetKeyByIDAndClientID(ctx context.Context, keyID, clientID string) (*jose.JSONWebKey, error) {
+	return nil, fmt.Errorf("private_key_jwt not supported")
+}
+
+// SetUserinfoFromScopes populates the OP's UserInfo struct given the
+// granted scopes. Per zitadel guidance this is deprecated in favor of
+// SetUserinfoFromRequest, but we still implement it because the
+// op.OPStorage interface requires it.
+func (s *Storage) SetUserinfoFromScopes(
+	ctx context.Context, userInfo *oidc.UserInfo, userID, clientID string, scopes []string,
+) error {
+	return s.populateUserInfo(ctx, userInfo, userID, scopes)
+}
+
+// SetUserinfoFromToken is the userinfo endpoint hook. The OP has already
+// validated the bearer access token; we just need to populate claims.
+func (s *Storage) SetUserinfoFromToken(
+	ctx context.Context, userInfo *oidc.UserInfo, tokenID, subject, origin string,
+) error {
+	return s.populateUserInfo(ctx, userInfo, subject, []string{
+		oidc.ScopeOpenID, oidc.ScopeEmail, oidc.ScopeProfile, "roles",
+	})
+}
+
+// SetIntrospectionFromToken is the introspection endpoint hook. We
+// populate the same claims as userinfo plus a few token-specific fields.
+func (s *Storage) SetIntrospectionFromToken(
+	ctx context.Context, introspection *oidc.IntrospectionResponse, tokenID, subject, clientID string,
+) error {
+	cid, email, displayName, err := loadCollaboratorForUserinfo(ctx, s.db, subject)
+	if err != nil {
+		return err
+	}
+	introspection.Subject = subject
+	introspection.UserInfoEmail.Email = email
+	introspection.UserInfoEmail.EmailVerified = true
+	introspection.UserInfoProfile.Name = displayName
+	introspection.ClientID = clientID
+
+	teams, terr := buildTeamsClaim(ctx, s.db, cid)
+	if terr == nil && len(teams) > 0 {
+		if introspection.Claims == nil {
+			introspection.Claims = make(map[string]any)
+		}
+		introspection.Claims["teams"] = teams
+	}
+	return nil
+}
+
+// populateUserInfo fills email/name and (if "roles" granted) teams on the
+// shared *oidc.UserInfo struct. Used by SetUserinfoFromScopes and
+// SetUserinfoFromToken which differ only in the trigger.
+func (s *Storage) populateUserInfo(
+	ctx context.Context, userInfo *oidc.UserInfo, userID string, scopes []string,
+) error {
+	cid, email, displayName, err := loadCollaboratorForUserinfo(ctx, s.db, userID)
+	if err != nil {
+		return err
+	}
+	userInfo.Subject = userID
+	if scopesContains(scopes, oidc.ScopeEmail) {
+		userInfo.UserInfoEmail.Email = email
+		userInfo.UserInfoEmail.EmailVerified = true
+	}
+	if scopesContains(scopes, oidc.ScopeProfile) {
+		userInfo.UserInfoProfile.Name = displayName
+	}
+	if scopesContains(scopes, "roles") {
+		teams, terr := buildTeamsClaim(ctx, s.db, cid)
+		if terr == nil {
+			userInfo.AppendClaims("teams", teams)
+		}
+	}
+	return nil
+}
+
+// GetPrivateClaimsFromScopes is invoked when minting a JWT access token.
+// We surface the same "teams" claim there as in userinfo when the
+// "roles" scope was granted, so resource servers can authorize without
+// a separate /userinfo round-trip.
+func (s *Storage) GetPrivateClaimsFromScopes(
+	ctx context.Context, userID, clientID string, scopes []string,
+) (map[string]any, error) {
+	if !scopesContains(scopes, "roles") {
+		return nil, nil
+	}
+	cid, _, _, err := loadCollaboratorForUserinfo(ctx, s.db, userID)
+	if err != nil {
+		// Don't fail the whole token mint over a missing claim — log
+		// upstream when introduced. Empty private claims is valid.
+		return nil, nil
+	}
+	teams, err := buildTeamsClaim(ctx, s.db, cid)
+	if err != nil {
+		return nil, nil
+	}
+	return map[string]any{"teams": teams}, nil
+}
+
+// ValidateJWTProfileScopes filters scopes for JWT Profile (RFC 7523)
+// grants. We don't enable that grant type, but the interface requires
+// the method. Echo back whatever was requested; the OP enforces the
+// grant_type allow-list separately.
+func (s *Storage) ValidateJWTProfileScopes(
+	ctx context.Context, userID string, scopes []string,
+) ([]string, error) {
+	return scopes, nil
+}
+
+// Health pings the database. The OP exposes /healthz; we want a real
+// signal there, not a constant green.
+func (s *Storage) Health(ctx context.Context) error {
+	return s.db.PingContext(ctx)
+}
+
+// _ ensures the interface is satisfied at compile time.
+var _ op.Storage = (*Storage)(nil)
+
