@@ -66,6 +66,39 @@ func GetOIDCAuthRequestByID(ctx context.Context, db *sql.DB, id uuid.UUID) (mode
 	return ar, nil
 }
 
+// GetOIDCAuthRequestByCode looks up the auth request via its issued
+// authorization code, joining oidc_auth_codes → oidc_auth_requests in a
+// single query. Returns ErrOIDCAuthCodeNotFound when no row matches.
+// Does NOT consume the code — callers that intend to exchange must call
+// ConsumeOIDCAuthCode separately within the same flow.
+func GetOIDCAuthRequestByCode(ctx context.Context, db *sql.DB, code string) (model.OIDCAuthRequest, error) {
+	var ar model.OIDCAuthRequest
+	var codeCh, codeChMethod, state, nonce sql.NullString
+	err := db.QueryRowContext(ctx, `
+		SELECT ar.id, ar.client_id, ar.collaborator_id, ar.redirect_uri, ar.scopes,
+		       ar.code_challenge, ar.code_challenge_method, ar.state, ar.nonce,
+		       ar.expires_at, ar.consumed_at, ar.created_at
+		FROM oidc_auth_codes c
+		JOIN oidc_auth_requests ar ON ar.id = c.auth_request_id
+		WHERE c.code = $1
+	`, code).Scan(
+		&ar.ID, &ar.ClientID, &ar.CollaboratorID, &ar.RedirectURI, pq.Array(&ar.Scopes),
+		&codeCh, &codeChMethod, &state, &nonce,
+		&ar.ExpiresAt, &ar.ConsumedAt, &ar.CreatedAt,
+	)
+	if errors.Is(err, sql.ErrNoRows) {
+		return model.OIDCAuthRequest{}, ErrOIDCAuthCodeNotFound
+	}
+	if err != nil {
+		return model.OIDCAuthRequest{}, fmt.Errorf("get auth request by code: %w", err)
+	}
+	ar.CodeChallenge = codeCh.String
+	ar.CodeChallengeMethod = codeChMethod.String
+	ar.State = state.String
+	ar.Nonce = nonce.String
+	return ar, nil
+}
+
 func MarkOIDCAuthRequestConsumed(ctx context.Context, db *sql.DB, id uuid.UUID) error {
 	_, err := db.ExecContext(ctx, `UPDATE oidc_auth_requests SET consumed_at=NOW() WHERE id=$1 AND consumed_at IS NULL`, id)
 	if err != nil {

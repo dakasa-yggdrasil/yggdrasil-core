@@ -13,6 +13,7 @@ import (
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	"github.com/google/uuid"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/oidc/v3/pkg/op"
 )
@@ -162,4 +163,144 @@ func (s *Storage) AuthorizeClientIDSecret(ctx context.Context, clientID, clientS
 		return errors.New("client has no secret configured")
 	}
 	return bcryptCompare(c.ClientSecretHash, clientSecret)
+}
+
+// authRequestView adapts a model.OIDCAuthRequest to op.AuthRequest. The
+// view also carries the userID set when the request was created (or
+// promoted on login completion) so the OP can build subject claims.
+type authRequestView struct {
+	r      model.OIDCAuthRequest
+	userID string
+}
+
+func newAuthRequestView(r model.OIDCAuthRequest) *authRequestView {
+	uid := ""
+	if r.CollaboratorID != nil {
+		uid = r.CollaboratorID.String()
+	}
+	return &authRequestView{r: r, userID: uid}
+}
+
+func (v *authRequestView) GetID() string         { return v.r.ID.String() }
+func (v *authRequestView) GetACR() string        { return "" }
+func (v *authRequestView) GetAMR() []string      { return nil }
+func (v *authRequestView) GetAudience() []string { return []string{v.r.ClientID} }
+
+// GetAuthTime: we don't track auth_time separately, so report the request
+// creation time. Once Task 8 wires login completion, this will be updated
+// to the actual login moment.
+func (v *authRequestView) GetAuthTime() time.Time { return v.r.CreatedAt }
+
+func (v *authRequestView) GetClientID() string { return v.r.ClientID }
+
+// GetCodeChallenge surfaces PKCE info to the OP. nil when the client
+// didn't supply one (and PKCE is not required for that client).
+func (v *authRequestView) GetCodeChallenge() *oidc.CodeChallenge {
+	if v.r.CodeChallenge == "" {
+		return nil
+	}
+	method := oidc.CodeChallengeMethodS256
+	if v.r.CodeChallengeMethod == "plain" {
+		method = oidc.CodeChallengeMethodPlain
+	}
+	return &oidc.CodeChallenge{
+		Challenge: v.r.CodeChallenge,
+		Method:    method,
+	}
+}
+
+func (v *authRequestView) GetNonce() string                  { return v.r.Nonce }
+func (v *authRequestView) GetRedirectURI() string            { return v.r.RedirectURI }
+func (v *authRequestView) GetResponseType() oidc.ResponseType { return oidc.ResponseTypeCode }
+
+// GetResponseMode — empty defers to OP defaults (form_post for code flow).
+func (v *authRequestView) GetResponseMode() oidc.ResponseMode { return "" }
+
+func (v *authRequestView) GetScopes() []string { return v.r.Scopes }
+func (v *authRequestView) GetState() string    { return v.r.State }
+func (v *authRequestView) GetSubject() string  { return v.userID }
+
+// Done reports whether the user has completed authentication. We treat
+// this as "user has been bound to the request": ID present and non-empty.
+// Task 8 will update the request's collaborator_id at login completion.
+func (v *authRequestView) Done() bool { return v.userID != "" }
+
+// CreateAuthRequest persists a new auth request. The OP passes the parsed
+// authorization request from the user agent; userID is the subject if the
+// session is already authenticated (we receive empty string for fresh
+// authorize calls and set collaborator_id later).
+func (s *Storage) CreateAuthRequest(ctx context.Context, req *oidc.AuthRequest, userID string) (op.AuthRequest, error) {
+	ar := model.OIDCAuthRequest{
+		ClientID:            req.ClientID,
+		RedirectURI:         req.RedirectURI,
+		Scopes:              []string(req.Scopes),
+		CodeChallenge:       req.CodeChallenge,
+		CodeChallengeMethod: string(req.CodeChallengeMethod),
+		State:               req.State,
+		Nonce:               req.Nonce,
+		ExpiresAt:           time.Now().Add(AuthorizationCodeLifetime),
+	}
+	if userID != "" {
+		// Tolerate non-UUID values (zitadel example uses string IDs).
+		// We only attach a collaborator_id when the value parses cleanly;
+		// otherwise leave the column NULL so the FK constraint passes.
+		if cid, err := uuid.Parse(userID); err == nil {
+			ar.CollaboratorID = &cid
+		}
+	}
+	id, err := repository.CreateOIDCAuthRequest(ctx, s.db, ar)
+	if err != nil {
+		return nil, err
+	}
+	ar.ID = id
+	ar.CreatedAt = time.Now() // approximation; row's created_at is authoritative
+	return newAuthRequestView(ar), nil
+}
+
+// AuthRequestByID looks up a previously created auth request. Called by
+// the OP after the login UI redirects back, before issuing a code.
+func (s *Storage) AuthRequestByID(ctx context.Context, id string) (op.AuthRequest, error) {
+	parsed, err := uuid.Parse(id)
+	if err != nil {
+		return nil, errors.New("invalid auth request id")
+	}
+	ar, err := repository.GetOIDCAuthRequestByID(ctx, s.db, parsed)
+	if err != nil {
+		return nil, err
+	}
+	return newAuthRequestView(ar), nil
+}
+
+// AuthRequestByCode resolves an auth request via its issued code. The OP
+// calls this in the token endpoint to recover the original request before
+// issuing access/refresh tokens. Code consumption (single-use enforcement)
+// happens separately via repository.ConsumeOIDCAuthCode.
+func (s *Storage) AuthRequestByCode(ctx context.Context, code string) (op.AuthRequest, error) {
+	ar, err := repository.GetOIDCAuthRequestByCode(ctx, s.db, code)
+	if err != nil {
+		return nil, err
+	}
+	return newAuthRequestView(ar), nil
+}
+
+// SaveAuthCode persists a freshly issued authorization code, linking it
+// to the originating auth request id. The OP generates the code value
+// (entropy is its concern); we just store it with our standard expiry.
+func (s *Storage) SaveAuthCode(ctx context.Context, id string, code string) error {
+	parsed, err := uuid.Parse(id)
+	if err != nil {
+		return errors.New("invalid auth request id")
+	}
+	return repository.SaveOIDCAuthCode(ctx, s.db, code, parsed, time.Now().Add(AuthorizationCodeLifetime))
+}
+
+// DeleteAuthRequest marks the request as consumed. We never hard-delete
+// because we keep the row for audit; consumed_at stops it being reused.
+// Idempotent: replays of DeleteAuthRequest are no-ops.
+func (s *Storage) DeleteAuthRequest(ctx context.Context, id string) error {
+	parsed, err := uuid.Parse(id)
+	if err != nil {
+		return errors.New("invalid auth request id")
+	}
+	return repository.MarkOIDCAuthRequestConsumed(ctx, s.db, parsed)
 }
