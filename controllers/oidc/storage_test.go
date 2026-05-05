@@ -233,6 +233,260 @@ func TestStorage_SaveAuthCode_AndAuthRequestByCode(t *testing.T) {
 	}
 }
 
+// minimalTokenRequest is a stand-in for op.TokenRequest used in tests
+// where we don't need to round-trip through the full code/refresh flow.
+// The OP would normally pass an authRequestView or refreshTokenRequestView.
+type minimalTokenRequest struct {
+	subject  string
+	audience []string
+	scopes   []string
+	clientID string
+}
+
+func (m *minimalTokenRequest) GetSubject() string  { return m.subject }
+func (m *minimalTokenRequest) GetAudience() []string {
+	if len(m.audience) > 0 {
+		return m.audience
+	}
+	return []string{m.clientID}
+}
+func (m *minimalTokenRequest) GetScopes() []string  { return m.scopes }
+func (m *minimalTokenRequest) GetClientID() string  { return m.clientID }
+
+func TestStorage_CreateAccessAndRefreshTokens_FreshSession(t *testing.T) {
+	db := dbForStorageTest(t)
+	defer db.Close()
+	seedStorageTestClient(t, db, "storage-test-client")
+	collabID := seedStorageTestCollaborator(t, db, "storage-test-collab-6c1", "6c1@example.test")
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(),
+			`DELETE FROM oidc_refresh_tokens WHERE collaborator_id=$1`, collabID)
+	})
+
+	s := NewStorage(db, "https://yggdrasil.test")
+	req := &minimalTokenRequest{
+		subject:  collabID.String(),
+		clientID: "storage-test-client",
+		scopes:   []string{"openid", "email"},
+	}
+	atID, rt, exp, err := s.CreateAccessAndRefreshTokens(context.Background(), req, "")
+	if err != nil {
+		t.Fatalf("CreateAccessAndRefreshTokens: %v", err)
+	}
+	if atID == "" || rt == "" {
+		t.Errorf("empty token ids: at=%q rt=%q", atID, rt)
+	}
+	if !exp.After(time.Now()) {
+		t.Errorf("expiration not in the future: %v", exp)
+	}
+
+	// The refresh token should be loadable from the DB.
+	stored, err := repository.GetOIDCRefreshToken(context.Background(), db, rt)
+	if err != nil {
+		t.Fatalf("GetOIDCRefreshToken: %v", err)
+	}
+	if stored.RotatedFrom != nil {
+		t.Errorf("fresh session should have RotatedFrom=nil, got %q", *stored.RotatedFrom)
+	}
+	if stored.RevokedAt != nil {
+		t.Errorf("fresh refresh token should not be revoked")
+	}
+}
+
+func TestStorage_CreateAccessAndRefreshTokens_Rotation(t *testing.T) {
+	db := dbForStorageTest(t)
+	defer db.Close()
+	seedStorageTestClient(t, db, "storage-test-client")
+	collabID := seedStorageTestCollaborator(t, db, "storage-test-collab-6c2", "6c2@example.test")
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(),
+			`DELETE FROM oidc_refresh_tokens WHERE collaborator_id=$1`, collabID)
+	})
+
+	s := NewStorage(db, "https://yggdrasil.test")
+	req := &minimalTokenRequest{
+		subject:  collabID.String(),
+		clientID: "storage-test-client",
+		scopes:   []string{"openid"},
+	}
+
+	// Mint the initial refresh token (Code Flow).
+	_, rt1, _, err := s.CreateAccessAndRefreshTokens(context.Background(), req, "")
+	if err != nil {
+		t.Fatalf("initial mint: %v", err)
+	}
+	// Rotate.
+	_, rt2, _, err := s.CreateAccessAndRefreshTokens(context.Background(), req, rt1)
+	if err != nil {
+		t.Fatalf("rotate: %v", err)
+	}
+	if rt1 == rt2 {
+		t.Errorf("rotated token equals previous: %q", rt2)
+	}
+	// Old token should be revoked.
+	stored1, err := repository.GetOIDCRefreshToken(context.Background(), db, rt1)
+	if err != nil {
+		t.Fatalf("Get old: %v", err)
+	}
+	if stored1.RevokedAt == nil {
+		t.Errorf("expected old refresh token to be revoked after rotation")
+	}
+	// New token should reference the old one as parent.
+	stored2, err := repository.GetOIDCRefreshToken(context.Background(), db, rt2)
+	if err != nil {
+		t.Fatalf("Get new: %v", err)
+	}
+	if stored2.RotatedFrom == nil || *stored2.RotatedFrom != rt1 {
+		got := "<nil>"
+		if stored2.RotatedFrom != nil {
+			got = *stored2.RotatedFrom
+		}
+		t.Errorf("RotatedFrom: got %q want %q", got, rt1)
+	}
+}
+
+func TestStorage_TokenRequestByRefreshToken_RevokedReplayDetection(t *testing.T) {
+	db := dbForStorageTest(t)
+	defer db.Close()
+	seedStorageTestClient(t, db, "storage-test-client")
+	collabID := seedStorageTestCollaborator(t, db, "storage-test-collab-6c3", "6c3@example.test")
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(),
+			`DELETE FROM oidc_refresh_tokens WHERE collaborator_id=$1`, collabID)
+	})
+
+	s := NewStorage(db, "https://yggdrasil.test")
+	req := &minimalTokenRequest{
+		subject:  collabID.String(),
+		clientID: "storage-test-client",
+		scopes:   []string{"openid"},
+	}
+
+	// Mint and rotate so we have a chain: rt1 -> rt2.
+	_, rt1, _, err := s.CreateAccessAndRefreshTokens(context.Background(), req, "")
+	if err != nil {
+		t.Fatalf("mint: %v", err)
+	}
+	_, rt2, _, err := s.CreateAccessAndRefreshTokens(context.Background(), req, rt1)
+	if err != nil {
+		t.Fatalf("rotate 1: %v", err)
+	}
+
+	// Replay attempt: try to use rt1 again. Should fail with invalid
+	// refresh token, AND the chain (including rt2) should be revoked.
+	_, replayErr := s.TokenRequestByRefreshToken(context.Background(), rt1)
+	if replayErr == nil {
+		t.Fatalf("expected error on replay, got nil")
+	}
+
+	// rt2 should now be revoked too (chain revocation).
+	stored2, err := repository.GetOIDCRefreshToken(context.Background(), db, rt2)
+	if err != nil {
+		t.Fatalf("Get rt2: %v", err)
+	}
+	if stored2.RevokedAt == nil {
+		t.Errorf("rt2 should be revoked after replay defense triggered on rt1")
+	}
+}
+
+func TestStorage_KeySet_ReturnsCurrentJWK(t *testing.T) {
+	db := dbForStorageTest(t)
+	defer db.Close()
+	// EnsureSigningKey is idempotent; safe to call from any test that
+	// needs a key.
+	if _, err := EnsureSigningKey(context.Background(), db); err != nil {
+		t.Fatalf("EnsureSigningKey: %v", err)
+	}
+	s := NewStorage(db, "https://yggdrasil.test")
+	keys, err := s.KeySet(context.Background())
+	if err != nil {
+		t.Fatalf("KeySet: %v", err)
+	}
+	if len(keys) == 0 {
+		t.Fatalf("expected at least one key")
+	}
+	k := keys[0]
+	if k.ID() == "" {
+		t.Errorf("key ID is empty")
+	}
+	if k.Use() != "sig" {
+		t.Errorf("Use: %q want sig", k.Use())
+	}
+	if k.Algorithm() == "" {
+		t.Errorf("Algorithm is empty")
+	}
+	if k.Key() == nil {
+		t.Errorf("Key value is nil")
+	}
+}
+
+func TestStorage_SigningKey_ParsesPrivateKey(t *testing.T) {
+	db := dbForStorageTest(t)
+	defer db.Close()
+	if _, err := EnsureSigningKey(context.Background(), db); err != nil {
+		t.Fatalf("EnsureSigningKey: %v", err)
+	}
+	s := NewStorage(db, "https://yggdrasil.test")
+	sk, err := s.SigningKey(context.Background())
+	if err != nil {
+		t.Fatalf("SigningKey: %v", err)
+	}
+	if sk.ID() == "" {
+		t.Errorf("SigningKey ID empty")
+	}
+	if sk.Key() == nil {
+		t.Errorf("SigningKey value nil")
+	}
+}
+
+func TestStorage_Health_Pings(t *testing.T) {
+	db := dbForStorageTest(t)
+	defer db.Close()
+	s := NewStorage(db, "https://yggdrasil.test")
+	if err := s.Health(context.Background()); err != nil {
+		t.Errorf("Health: %v", err)
+	}
+}
+
+func TestStorage_SetUserinfoFromScopes_PopulatesEmailAndTeams(t *testing.T) {
+	db := dbForStorageTest(t)
+	defer db.Close()
+	collabID := seedStorageTestCollaborator(t, db, "storage-test-collab-6c4", "6c4@example.test")
+
+	// Attach the collaborator to the seed access group "dakasa-internal"
+	// so the teams claim has something to surface.
+	t.Cleanup(func() {
+		_, _ = db.ExecContext(context.Background(),
+			`DELETE FROM team_memberships WHERE collaborator_id=$1`, collabID)
+	})
+	if _, err := db.ExecContext(context.Background(), `
+		INSERT INTO team_memberships (team_id, collaborator_id, role, active, source)
+		SELECT id, $1, 'member', TRUE, 'manual' FROM teams WHERE slug='dakasa-internal'
+		ON CONFLICT (team_id, collaborator_id) DO UPDATE SET active=TRUE
+	`, collabID); err != nil {
+		t.Fatalf("seed membership: %v", err)
+	}
+
+	s := NewStorage(db, "https://yggdrasil.test")
+	ui := &oidc.UserInfo{}
+	if err := s.SetUserinfoFromScopes(context.Background(), ui,
+		collabID.String(), "storage-test-client",
+		[]string{"openid", "email", "profile", "roles"},
+	); err != nil {
+		t.Fatalf("SetUserinfoFromScopes: %v", err)
+	}
+	if ui.Subject != collabID.String() {
+		t.Errorf("Subject: got %q want %q", ui.Subject, collabID.String())
+	}
+	if ui.UserInfoEmail.Email != "6c4@example.test" {
+		t.Errorf("Email: got %q want %q", ui.UserInfoEmail.Email, "6c4@example.test")
+	}
+	teams, _ := ui.Claims["teams"].([]string)
+	if len(teams) == 0 {
+		t.Errorf("expected at least one team in claims, got none. Claims: %v", ui.Claims)
+	}
+}
+
 func TestStorage_DeleteAuthRequest_MarksConsumed(t *testing.T) {
 	db := dbForStorageTest(t)
 	defer db.Close()
