@@ -297,7 +297,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// Opt-in OIDC OP. Skipped when no issuer is configured (the default)
 	// so tests and adopters who don't need OIDC keep a slimmer surface.
 	if server.oidcIssuerURL != "" {
-		if err := oidc.MountOIDC(mux, server.db, server.oidcIssuerURL); err != nil {
+		if err := oidc.MountOIDC(context.Background(), mux, server.db, server.oidcIssuerURL); err != nil {
 			return nil, fmt.Errorf("mount oidc: %w", err)
 		}
 	}

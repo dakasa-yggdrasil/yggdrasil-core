@@ -19,18 +19,25 @@ import (
 //
 // MountOIDC requires that an active signing key already exists in the DB —
 // callers must invoke EnsureSigningKey before mounting (the active key's
-// PrivatePEM is hashed to derive op.Config.CryptoKey, which is used by the
-// OP to encrypt code-exchange artifacts in the URL fragment of the auth
-// callback).
-func MountOIDC(mux *http.ServeMux, db *sql.DB, issuerURL string) error {
-	cryptoKey, err := deriveCryptoKey(context.Background(), db)
+// PrivatePEM is hashed to derive op.Config.CryptoKey).
+//
+// CryptoKey is used by zitadel/oidc to encrypt opaque artifacts the OP
+// returns to clients: notably the auth-code value (which wraps the auth
+// request ID encrypted with this key) and the opaque access-token wrapper
+// (tokenID:subject). Rotating this key invalidates any outstanding artifact
+// within its TTL window — auth codes are short-lived (~10 min), and access
+// tokens issued before rotation can no longer be decrypted for userinfo /
+// revocation / token exchange. Refresh tokens themselves are stored hashed
+// in `oidc_refresh_tokens` and unaffected by CryptoKey rotation.
+func MountOIDC(ctx context.Context, mux *http.ServeMux, db *sql.DB, issuerURL string) error {
+	cryptoKey, err := deriveCryptoKey(ctx, db)
 	if err != nil {
 		return fmt.Errorf("derive oidc crypto key: %w", err)
 	}
 
 	storage := NewStorage(db, issuerURL)
 	cfg := &op.Config{
-		CryptoKey:               cryptoKey,
+		CryptoKey:                cryptoKey,
 		DefaultLogoutRedirectURI: "/",
 		CodeMethodS256:           true,
 		AuthMethodPost:           true,
@@ -62,6 +69,10 @@ func MountOIDC(mux *http.ServeMux, db *sql.DB, issuerURL string) error {
 // Choosing this over a static env var keeps the deployment story simple —
 // no extra secret to provision, and CryptoKey rotation is implicit in the
 // existing key-rotation runbook.
+//
+// Captured at server startup; key rotation requires a server restart for
+// the in-memory CryptoKey to refresh. Auth-code signing tracks the DB on
+// each request, so token signing rolls forward independently.
 func deriveCryptoKey(ctx context.Context, db *sql.DB) ([32]byte, error) {
 	key, err := repository.GetCurrentOIDCSigningKey(ctx, db, SigningAlgorithm)
 	if err != nil {
