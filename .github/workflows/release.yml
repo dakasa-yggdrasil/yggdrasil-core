@@ -66,3 +66,9 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
+          # Token used by the console-build stage to clone the private
+          # dakasa-yggdrasil/yggdrasil-console repo. BuildKit mounts it
+          # at /run/secrets/github_token only during the RUN that needs
+          # it; never lands in an image layer.
+          secrets: |
+            github_token=${{ secrets.GITHUB_TOKEN }}
