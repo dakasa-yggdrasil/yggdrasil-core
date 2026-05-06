@@ -17,9 +17,9 @@ import (
 	"strings"
 	"time"
 
-	jose "github.com/go-jose/go-jose/v4"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	jose "github.com/go-jose/go-jose/v4"
 	"github.com/google/uuid"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
 	"github.com/zitadel/oidc/v3/pkg/op"
@@ -216,8 +216,8 @@ func (v *authRequestView) GetCodeChallenge() *oidc.CodeChallenge {
 	}
 }
 
-func (v *authRequestView) GetNonce() string                  { return v.r.Nonce }
-func (v *authRequestView) GetRedirectURI() string            { return v.r.RedirectURI }
+func (v *authRequestView) GetNonce() string                   { return v.r.Nonce }
+func (v *authRequestView) GetRedirectURI() string             { return v.r.RedirectURI }
 func (v *authRequestView) GetResponseType() oidc.ResponseType { return oidc.ResponseTypeCode }
 
 // GetResponseMode — empty defers to OP defaults (form_post for code flow).
@@ -434,11 +434,11 @@ type refreshTokenRequestView struct {
 	current []string
 }
 
-func (v *refreshTokenRequestView) GetAMR() []string         { return nil }
-func (v *refreshTokenRequestView) GetAudience() []string    { return []string{v.r.ClientID} }
-func (v *refreshTokenRequestView) GetAuthTime() time.Time   { return v.r.CreatedAt }
-func (v *refreshTokenRequestView) GetClientID() string      { return v.r.ClientID }
-func (v *refreshTokenRequestView) GetSubject() string       { return v.r.CollaboratorID.String() }
+func (v *refreshTokenRequestView) GetAMR() []string            { return nil }
+func (v *refreshTokenRequestView) GetAudience() []string       { return []string{v.r.ClientID} }
+func (v *refreshTokenRequestView) GetAuthTime() time.Time      { return v.r.CreatedAt }
+func (v *refreshTokenRequestView) GetClientID() string         { return v.r.ClientID }
+func (v *refreshTokenRequestView) GetSubject() string          { return v.r.CollaboratorID.String() }
 func (v *refreshTokenRequestView) SetCurrentScopes(s []string) { v.current = s }
 
 // GetScopes returns the scopes the OP should embed in the new access
@@ -548,10 +548,10 @@ type publicKeyView struct {
 	pubKey any
 }
 
-func (v *publicKeyView) ID() string                              { return v.id }
-func (v *publicKeyView) Algorithm() jose.SignatureAlgorithm      { return jose.RS256 }
-func (v *publicKeyView) Use() string                             { return "sig" }
-func (v *publicKeyView) Key() any                                { return v.pubKey }
+func (v *publicKeyView) ID() string                         { return v.id }
+func (v *publicKeyView) Algorithm() jose.SignatureAlgorithm { return jose.RS256 }
+func (v *publicKeyView) Use() string                        { return "sig" }
+func (v *publicKeyView) Key() any                           { return v.pubKey }
 
 // parseSigningKey extracts the *rsa.PrivateKey from a stored row's
 // PrivatePEM blob. Returns the key and the kid (sourced from PublicJWK).
@@ -746,4 +746,3 @@ func (s *Storage) Health(ctx context.Context) error {
 
 // _ ensures the interface is satisfied at compile time.
 var _ op.Storage = (*Storage)(nil)
-

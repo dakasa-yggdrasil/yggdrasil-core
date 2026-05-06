@@ -243,15 +243,15 @@ type minimalTokenRequest struct {
 	clientID string
 }
 
-func (m *minimalTokenRequest) GetSubject() string  { return m.subject }
+func (m *minimalTokenRequest) GetSubject() string { return m.subject }
 func (m *minimalTokenRequest) GetAudience() []string {
 	if len(m.audience) > 0 {
 		return m.audience
 	}
 	return []string{m.clientID}
 }
-func (m *minimalTokenRequest) GetScopes() []string  { return m.scopes }
-func (m *minimalTokenRequest) GetClientID() string  { return m.clientID }
+func (m *minimalTokenRequest) GetScopes() []string { return m.scopes }
+func (m *minimalTokenRequest) GetClientID() string { return m.clientID }
 
 func TestStorage_CreateAccessAndRefreshTokens_FreshSession(t *testing.T) {
 	db := dbForStorageTest(t)
