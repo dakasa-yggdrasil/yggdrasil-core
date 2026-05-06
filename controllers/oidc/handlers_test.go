@@ -3,6 +3,7 @@ package oidc
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"io"
 	"net/http"
 	"net/http/httptest"
@@ -36,6 +37,18 @@ func TestDiscoveryEndpointReturns200(t *testing.T) {
 	db := dbForHandlersTest(t)
 	defer db.Close()
 
+	// Pre-cleanup + t.Cleanup so the test is order-independent under
+	// `go test -shuffle on`. Mirrors the pattern in keyring_test.go.
+	// Note: we deliberately don't touch oidc_provider_settings — its
+	// singleton row is the FOR UPDATE lock the keyring uses; deleting it
+	// would break subsequent tests that call EnsureSigningKey.
+	cleanup := func() {
+		_, _ = db.ExecContext(context.Background(),
+			`DELETE FROM oidc_signing_keys WHERE algorithm='RS256'`)
+	}
+	cleanup()
+	t.Cleanup(cleanup)
+
 	// Ensure at least one signing key exists. MountOIDC needs the active
 	// signing key to derive the CryptoKey, and the discovery handler will
 	// publish the JWKS URL that points at it.
@@ -44,7 +57,7 @@ func TestDiscoveryEndpointReturns200(t *testing.T) {
 	}
 
 	mux := http.NewServeMux()
-	if err := MountOIDC(mux, db, "https://yggdrasil.test"); err != nil {
+	if err := MountOIDC(context.Background(), mux, db, "https://yggdrasil.test"); err != nil {
 		t.Fatalf("mount: %v", err)
 	}
 	srv := httptest.NewServer(mux)
@@ -59,7 +72,18 @@ func TestDiscoveryEndpointReturns200(t *testing.T) {
 		t.Errorf("discovery status: got %d, want 200", resp.StatusCode)
 	}
 	body, _ := io.ReadAll(resp.Body)
-	if !strings.Contains(string(body), `"issuer"`) {
-		t.Errorf("discovery missing issuer claim, got: %s", string(body))
+
+	var disco struct {
+		Issuer  string `json:"issuer"`
+		JWKSURI string `json:"jwks_uri"`
+	}
+	if err := json.Unmarshal(body, &disco); err != nil {
+		t.Fatalf("decode discovery: %v; body=%s", err, body)
+	}
+	if disco.Issuer != "https://yggdrasil.test" {
+		t.Errorf("issuer: got %q, want %q", disco.Issuer, "https://yggdrasil.test")
+	}
+	if !strings.HasPrefix(disco.JWKSURI, "https://yggdrasil.test") {
+		t.Errorf("jwks_uri: got %q, want prefix %q", disco.JWKSURI, "https://yggdrasil.test")
 	}
 }
