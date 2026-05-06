@@ -130,3 +130,30 @@ func ReleaseWorkflowEventTriggerLeadership(ctx context.Context, db *sql.DB) erro
 	}
 	return nil
 }
+
+// HasWorkflowEventMatched reports whether a workflow.event.matched record
+// already exists for the (workflow_manifest_id, source_event_id) pair. The
+// dispatcher uses this as the dedup signal: the matched event itself is the
+// dedup key, so re-running the leader pass over the same window cannot
+// dispatch the same workflow twice for the same source event.
+//
+// We pin the lookup against the same fields the trigger emits — aggregate_id
+// holds the workflow manifest id and payload->>'matched_event_id' holds the
+// source event id. No new schema is needed; this is a query over an existing
+// emitted event row.
+func HasWorkflowEventMatched(ctx context.Context, db *sql.DB, workflowManifestID, sourceEventID string) (bool, error) {
+	var exists bool
+	err := db.QueryRowContext(ctx, `
+		SELECT EXISTS (
+			SELECT 1
+			FROM public.event_log
+			WHERE type = 'workflow.event.matched'
+			  AND aggregate_id = $1
+			  AND payload->>'matched_event_id' = $2
+		)
+	`, workflowManifestID, sourceEventID).Scan(&exists)
+	if err != nil {
+		return false, fmt.Errorf("check workflow.event.matched dedup: %w", err)
+	}
+	return exists, nil
+}

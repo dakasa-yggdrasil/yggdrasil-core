@@ -85,6 +85,122 @@ durable than tailing `event_log` directly — combine with the outbox
 pattern (NOTIFY for "new events available", outbox query for actual
 read).
 
+## Publishing events from outside
+
+Reactive sources — Grafana webhooks, Kubernetes informers, custom
+shell scripts — drop typed events into the stream over the public
+publish endpoint:
+
+```http
+POST /api/v1/events
+Authorization: Bearer <YGGDRASIL_WORKFLOW_RUN_TOKEN>
+Content-Type: application/json
+```
+
+```bash
+curl -X POST https://yggdrasil.example.com/api/v1/events \
+  -H "Authorization: Bearer ${YGGDRASIL_WORKFLOW_RUN_TOKEN}" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "type": "infra.alert.firing",
+    "schema_version": "v1",
+    "aggregate_type": "alert",
+    "aggregate_id": "grafana/abc-123",
+    "payload": {
+      "alert": { "summary": "node disk over 90%", "severity": "critical" },
+      "labels": { "service": "yggdrasil-core" }
+    },
+    "actor": { "type": "system", "id": "grafana" }
+  }'
+```
+
+Returns `201 Created` with the generated event id:
+
+```json
+{ "event_id": "01935e3d-9c91-7c10-8deb-b6f1abcdef01" }
+```
+
+The endpoint is idempotent at the API level only: every successful
+call appends a new row. Callers that need at-most-once delivery
+should either dedup at the source or pin a stable
+`(aggregate_type, aggregate_id)` and let the consumer dedup.
+
+**Validation.** `type`, `aggregate_type`, `aggregate_id` and
+`payload` are required. `payload` MUST be a JSON object so workflows
+can reference `{{ inputs.event.<field> }}`. `schema_version` defaults
+to `"v1"` when omitted. The payload is validated against the JSON
+Schema registered for `<type>` in `docs/contracts/events/v1/`; new
+event types must register a schema before the API will accept them
+(returns `400` with the diagnostic otherwise).
+
+**Auth.** Same shared token as `POST /api/v1/workflow-runs`. Set
+`YGGDRASIL_WORKFLOW_RUN_TOKEN` in the deployment env; clients send
+it in `Authorization: Bearer …` or `X-Yggdrasil-Workflow-Token`.
+When the env var is unset the endpoint is open (dev mode), exactly
+like `/api/v1/workflow-runs`.
+
+## Reactive workflows
+
+A workflow declared with `trigger.mode=event` fires automatically
+whenever a published event matches its filters. The wiring is
+end-to-end inside core: no external worker, no extra component.
+
+```yaml
+apiVersion: yggdrasil.io/v1alpha1
+kind: workflow
+metadata:
+  name: respond-to-disk-alert
+  namespace: ops
+spec:
+  trigger:
+    mode: event
+    enabled: true
+    event:
+      types: ["infra.alert.firing"]
+      aggregate_filter:
+        aggregate_type: alert
+      payload_filters:
+        - path: alert.severity
+          operator: eq
+          value: critical
+      default_inputs:
+        runbook: drain-and-page
+  steps:
+    - id: page
+      use: { kind: integration, family: pager, operation: page }
+      with:
+        message: "{{ inputs.event.alert.summary }} ({{ inputs.runbook }})"
+```
+
+**Payload templating.** The matched event's payload is exposed under
+the input key `event`. Steps reference any field with
+`{{ inputs.event.<dotted.path> }}` — in the example above,
+`inputs.event.alert.summary` resolves to the `summary` field of the
+posted payload.
+
+**`default_inputs` precedence.** Keys declared in
+`trigger.event.default_inputs` override the same keys in the
+payload-derived inputs. This is a deliberate escape hatch: if an
+operator wants to pin a known value over whatever the source posted,
+they list the same key in `default_inputs` and it wins. Note that
+declaring `event` as a default_inputs key replaces the entire
+payload-derived map.
+
+**Idempotency.** The dispatcher uses the
+`workflow.event.matched` event in `event_log` as its dedup key —
+keyed on `(workflow_manifest_id, payload.matched_event_id)`. Two
+leader passes over the same window cannot dispatch the same workflow
+twice for the same source event. A crash between the matched-event
+commit and the dispatch insert leaves the matched record present, so
+the next pass sees it and bails (the source event is dropped — the
+workflow does not retry-on-crash by design; rerunning is the
+operator's call).
+
+**Disabled triggers.** Workflows with `trigger.enabled=false` (or any
+falsy value) are loaded but skipped during the match step, so an
+operator can disable a noisy workflow by toggling one field instead
+of deleting it.
+
 ## Wire shape (read API)
 
 ```http
