@@ -15,6 +15,7 @@
     {"name": "manifests", "description": "Manifest CRUD"},
     {"name": "integrations", "description": "Integration instances and runtime state"},
     {"name": "workflows", "description": "Workflow runs"},
+    {"name": "events", "description": "Event stream publish (reactive triggers)"},
     {"name": "webhooks", "description": "Inbound webhook routing"},
     {"name": "secrets", "description": "Managed secret store"},
     {"name": "products", "description": "Informational product manifests (deploy is via repository_binding in v2.0.0+)"}
@@ -86,6 +87,23 @@
           "201": {"description": "Created", "content": {"application/json": {"schema": {"type": "object", "properties": {"manifest": {"$ref": "#/components/schemas/Manifest"}}}}}},
           "400": {"$ref": "#/components/responses/BadRequest"},
           "409": {"description": "Conflict (e.g. repository_binding unique on spec.repository)", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}
+        }
+      }
+    },
+    "/api/v1/events": {
+      "post": {
+        "tags": ["events"],
+        "summary": "Publish an event into the event stream",
+        "description": "Public publish endpoint reactive sources call to drop a typed event into event_log. Workflows declared with trigger.mode=event match against these events and dispatch automatically.",
+        "security": [{"BearerAuth": []}, {"WorkflowToken": []}],
+        "requestBody": {
+          "required": true,
+          "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PublishEventRequest"}}}
+        },
+        "responses": {
+          "201": {"description": "Event persisted", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PublishEventResponse"}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"}
         }
       }
     },
@@ -375,6 +393,26 @@
           "data": {"type": "object", "description": "Map of key/value entries; values are not returned by GET", "additionalProperties": {"type": "string"}},
           "metadata": {"type": "object", "additionalProperties": true},
           "rotation": {"type": "object", "additionalProperties": true}
+        }
+      },
+      "PublishEventRequest": {
+        "type": "object",
+        "required": ["type", "aggregate_type", "aggregate_id", "payload"],
+        "properties": {
+          "type": {"type": "string", "description": "Event type, e.g. infra.alert.firing or manifest.created"},
+          "schema_version": {"type": "string", "default": "v1"},
+          "aggregate_type": {"type": "string", "description": "Aggregate kind, e.g. alert"},
+          "aggregate_id": {"type": "string", "description": "Aggregate identity, e.g. grafana/abc-123"},
+          "payload": {"type": "object", "additionalProperties": true, "description": "Type-specific payload validated against the registered JSON schema"},
+          "actor": {"type": "object", "properties": {"type": {"type": "string"}, "id": {"type": "string"}, "context": {"type": "object", "additionalProperties": true}}},
+          "metadata": {"type": "object", "additionalProperties": true}
+        }
+      },
+      "PublishEventResponse": {
+        "type": "object",
+        "required": ["event_id"],
+        "properties": {
+          "event_id": {"type": "string", "format": "uuid"}
         }
       },
       "ErrorResponse": {"type": "object", "properties": {"error": {"type": "string"}, "deprecation": {"type": "string"}}},

@@ -12,9 +12,12 @@ import (
 	"strings"
 	"time"
 
+	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	"github.com/google/uuid"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
 )
 
@@ -22,9 +25,15 @@ func init() {
 	Register("workflow_event_triggers", bootstrapWorkflowEventTriggers, 80)
 }
 
+// workflowDispatcher is the function the trigger loop calls to actually run a
+// workflow asynchronously. Pulled out so tests can substitute a deterministic
+// fake without spinning up a RabbitMQ connection.
+type workflowDispatcher func(ctx context.Context, db *sql.DB, conn *amqp.Connection, runID uuid.UUID, req model.RunWorkflowRequest)
+
 // bootstrapWorkflowEventTriggers starts a background loop that watches the
-// event stream (Gap 1) for events matching event-trigger workflows and
-// emits workflow.event.matched events when a match occurs.
+// event stream (Gap 1) for events matching event-trigger workflows, emits
+// workflow.event.matched events on hits and dispatches the matching
+// workflow asynchronously.
 //
 // Uses pg_try_advisory_lock so only one worker across the fleet runs the
 // event loop at a time. Other workers skip the pass and try again next tick.
@@ -36,11 +45,19 @@ func bootstrapWorkflowEventTriggers(ctx context.Context, app *runtime.ServiceApp
 		return nil
 	}
 
+	// RabbitMQ is required to actually dispatch workflows because
+	// messagecontroller.RunWorkflow publishes step messages through it.
+	// When BROKER_URL is unset (slim/dev mode) the trigger loop still
+	// runs and emits workflow.event.matched, but skips the dispatch and
+	// logs the skip. Returning an error here would block the addon
+	// chain on a soft dependency.
+	conn, _ := RabbitMQ(app)
+
 	logger, _ := Logger(app)
 	interval := workflowEventTriggersInterval()
 
 	stop := make(chan struct{})
-	go runWorkflowEventTriggersLoop(ctx, db, logger, interval, stop)
+	go runWorkflowEventTriggersLoop(ctx, db, conn, logger, dispatchAsyncWorkflowRunBackground, interval, stop)
 
 	app.RegisterCloser(func(context.Context) error {
 		close(stop)
@@ -53,7 +70,9 @@ func bootstrapWorkflowEventTriggers(ctx context.Context, app *runtime.ServiceApp
 func runWorkflowEventTriggersLoop(
 	ctx context.Context,
 	db *sql.DB,
+	conn *amqp.Connection,
 	logger *zap.Logger,
+	dispatch workflowDispatcher,
 	interval time.Duration,
 	stop <-chan struct{},
 ) {
@@ -67,16 +86,22 @@ func runWorkflowEventTriggersLoop(
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			runWorkflowEventTriggersPass(ctx, db, logger)
+			runWorkflowEventTriggersPass(ctx, db, conn, logger, dispatch)
 		}
 	}
 }
 
 // runWorkflowEventTriggersPass executes one pass. Acquires leadership lock,
 // pulls a batch of events from the event stream, matches them against
-// active event-trigger workflows, and emits workflow.event.matched for
-// each match.
-func runWorkflowEventTriggersPass(ctx context.Context, db *sql.DB, logger *zap.Logger) {
+// active event-trigger workflows, emits workflow.event.matched and
+// dispatches the workflow run asynchronously.
+func runWorkflowEventTriggersPass(
+	ctx context.Context,
+	db *sql.DB,
+	conn *amqp.Connection,
+	logger *zap.Logger,
+	dispatch workflowDispatcher,
+) {
 	leader, err := repository.TryAcquireWorkflowEventTriggerLeadership(ctx, db)
 	if err != nil {
 		if logger != nil {
@@ -128,16 +153,17 @@ func runWorkflowEventTriggersPass(ctx context.Context, db *sql.DB, logger *zap.L
 		return
 	}
 
-	// Match each event against each trigger and emit workflow.event.matched
-	// events for hits.
+	// Match each event against each trigger; on hit, emit
+	// workflow.event.matched (which doubles as the dedup key) and
+	// dispatch the workflow asynchronously.
 	for _, event := range resp.Events {
 		for _, trigger := range triggers {
 			if !eventMatchesTrigger(event, trigger) {
 				continue
 			}
-			if err := emitWorkflowEventMatched(ctx, db, logger, trigger, event); err != nil {
+			if err := processMatchedTrigger(ctx, db, conn, logger, dispatch, trigger, event); err != nil {
 				if logger != nil {
-					logger.Warn("workflow_event_triggers: emit match failed",
+					logger.Warn("workflow_event_triggers: process match failed",
 						zap.String("workflow_manifest_id", trigger.manifestID),
 						zap.String("event_id", event.EventID.String()),
 						zap.Error(err))
@@ -154,14 +180,19 @@ func runWorkflowEventTriggersPass(ctx context.Context, db *sql.DB, logger *zap.L
 	}
 }
 
+// eventTriggerWorkflow carries everything the trigger loop needs to dispatch
+// a run when a match fires: manifest identity (for the run selector + dedup
+// key) plus the parsed trigger spec (for filters + default inputs).
 type eventTriggerWorkflow struct {
 	manifestID string
+	namespace  string
+	name       string
 	trigger    *model.WorkflowEventTriggerSpec
 }
 
 func loadEventTriggerWorkflows(ctx context.Context, db *sql.DB) ([]eventTriggerWorkflow, error) {
 	rows, err := db.QueryContext(ctx, `
-		SELECT id, spec
+		SELECT id, namespace, name, spec
 		FROM public.manifests
 		WHERE kind = 'workflow'
 		  AND active = TRUE
@@ -175,10 +206,12 @@ func loadEventTriggerWorkflows(ctx context.Context, db *sql.DB) ([]eventTriggerW
 	var triggers []eventTriggerWorkflow
 	for rows.Next() {
 		var (
-			id   string
-			spec []byte
+			id        string
+			namespace string
+			name      string
+			spec      []byte
 		)
-		if err := rows.Scan(&id, &spec); err != nil {
+		if err := rows.Scan(&id, &namespace, &name, &spec); err != nil {
 			return nil, err
 		}
 
@@ -199,6 +232,8 @@ func loadEventTriggerWorkflows(ctx context.Context, db *sql.DB) ([]eventTriggerW
 
 		triggers = append(triggers, eventTriggerWorkflow{
 			manifestID: id,
+			namespace:  namespace,
+			name:       name,
 			trigger:    wfSpec.Trigger.Event,
 		})
 	}
@@ -314,12 +349,123 @@ func sliceContainsValue(slice interface{}, item interface{}) bool {
 	return false
 }
 
-// emitWorkflowEventMatched records a match in the event stream so the
-// workflow run pipeline can consume it and actually dispatch the workflow.
+// processMatchedTrigger closes the reactive loop for a single
+// (event, trigger) pair: dedup, emit workflow.event.matched, then dispatch
+// the workflow run asynchronously.
+//
+// Idempotency: the workflow.event.matched event itself is the dedup signal.
+// Before doing anything, query event_log for an existing matched record
+// keyed by (workflow_manifest_id=trigger.manifestID, payload.matched_event_id
+// =event.EventID). If one exists this pair was already handled (probably by
+// a previous leader-pass aborted between commit and cursor advance) and we
+// skip both the emit and the dispatch.
+//
+// The matched event commits before the dispatch starts, so a crash between
+// the two will dedup correctly the next time the loop comes around: we'll
+// see the matched record exists and bail.
+func processMatchedTrigger(
+	ctx context.Context,
+	db *sql.DB,
+	conn *amqp.Connection,
+	logger *zap.Logger,
+	dispatch workflowDispatcher,
+	trigger eventTriggerWorkflow,
+	event model.Event,
+) error {
+	already, err := repository.HasWorkflowEventMatched(ctx, db, trigger.manifestID, event.EventID.String())
+	if err != nil {
+		return fmt.Errorf("dedup check: %w", err)
+	}
+	if already {
+		if logger != nil {
+			logger.Debug("workflow_event_triggers: skip duplicate match",
+				zap.String("workflow_manifest_id", trigger.manifestID),
+				zap.String("event_id", event.EventID.String()))
+		}
+		return nil
+	}
+
+	if err := emitWorkflowEventMatched(ctx, db, trigger, event); err != nil {
+		return fmt.Errorf("emit workflow.event.matched: %w", err)
+	}
+
+	// RabbitMQ is required for actual dispatch (RunWorkflow publishes
+	// step messages). Without it, the matched event still records the
+	// hit so an operator can replay later, but we don't try to run.
+	if conn == nil {
+		if logger != nil {
+			logger.Warn("workflow_event_triggers: skip dispatch — no rabbitmq connection",
+				zap.String("workflow_manifest_id", trigger.manifestID),
+				zap.String("event_id", event.EventID.String()))
+		}
+		return nil
+	}
+
+	runID := uuid.New()
+	req := buildEventTriggerRunRequest(trigger, event)
+
+	// Persist the pending row up front so callers polling
+	// /api/v1/workflow-runs/{run_id} immediately see something. This
+	// happens on the leader-loop's path so any failure here returns
+	// loud rather than starting a goroutine that silently drops.
+	if err := repository.InsertWorkflowRun(ctx, db, runID, req.Workflow, req.Inputs, req.Metadata); err != nil {
+		return fmt.Errorf("insert workflow_run: %w", err)
+	}
+
+	dispatch(ctx, db, conn, runID, req)
+	return nil
+}
+
+// buildEventTriggerRunRequest produces the RunWorkflowRequest the dispatcher
+// will execute. inputs.event exposes the raw event payload so workflow steps
+// can reference {{ inputs.event.<field> }}; trigger.DefaultInputs are merged
+// on top, deliberately winning on key conflicts so operators can override
+// any payload-derived input by listing the same key in default_inputs.
+func buildEventTriggerRunRequest(trigger eventTriggerWorkflow, event model.Event) model.RunWorkflowRequest {
+	inputs := map[string]any{}
+
+	// 1. Payload-derived input. Empty/non-object payload still gets the
+	// `event` key (set to nil) so workflows referencing it don't panic
+	// on a missing key — the template engine resolves to "" in that
+	// case.
+	if len(event.Payload) > 0 {
+		var payloadMap map[string]any
+		if err := json.Unmarshal(event.Payload, &payloadMap); err == nil {
+			inputs["event"] = payloadMap
+		} else {
+			inputs["event"] = nil
+		}
+	} else {
+		inputs["event"] = nil
+	}
+
+	// 2. DefaultInputs override. Last-write wins so operators can pin
+	// a known value over a payload-derived one.
+	for k, v := range trigger.trigger.DefaultInputs {
+		inputs[k] = v
+	}
+
+	return model.RunWorkflowRequest{
+		Workflow: model.ManifestSelector{
+			Namespace: trigger.namespace,
+			Name:      trigger.name,
+		},
+		Inputs: inputs,
+		Metadata: map[string]any{
+			"triggered_by":       "workflow_event_triggers",
+			"matched_event_id":   event.EventID.String(),
+			"matched_event_type": event.Type,
+		},
+	}
+}
+
+// emitWorkflowEventMatched persists the workflow.event.matched record.
+// This row doubles as the dedup signal (HasWorkflowEventMatched looks for
+// it) so it MUST commit before the dispatch starts. Schema is registered
+// in docs/contracts/events_validator.go so this no longer silently fails.
 func emitWorkflowEventMatched(
 	ctx context.Context,
 	db *sql.DB,
-	logger *zap.Logger,
 	trigger eventTriggerWorkflow,
 	event model.Event,
 ) error {
@@ -327,7 +473,7 @@ func emitWorkflowEventMatched(
 	if err != nil {
 		return err
 	}
-	defer tx.Rollback()
+	defer func() { _ = tx.Rollback() }()
 
 	payload := map[string]interface{}{
 		"workflow_manifest_id": trigger.manifestID,
@@ -350,18 +496,52 @@ func emitWorkflowEventMatched(
 		},
 		Payload: payload,
 	}); err != nil {
-		// Schema for workflow.event.matched may not be registered yet.
-		// Log and continue — the dispatch won't happen, but the loop
-		// keeps advancing its cursor.
-		if logger != nil {
-			logger.Warn("workflow_event_triggers: emit failed",
-				zap.String("manifest_id", trigger.manifestID),
-				zap.Error(err))
-		}
-		return nil
+		return err
 	}
 
 	return tx.Commit()
+}
+
+// dispatchAsyncWorkflowRunBackground runs the workflow in a detached
+// goroutine, mirroring controllers/httpapi.dispatchAsyncWorkflowRun. We
+// can't call the httpapi version directly because that would cycle the
+// controllers/httpapi → addons import, so the small body is duplicated
+// here instead.
+func dispatchAsyncWorkflowRunBackground(
+	_ context.Context,
+	db *sql.DB,
+	conn *amqp.Connection,
+	runID uuid.UUID,
+	req model.RunWorkflowRequest,
+) {
+	go func() {
+		bg, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer cancel()
+
+		startedAt := time.Now().UTC()
+		_ = repository.MarkWorkflowRunRunning(bg, db, runID, startedAt)
+
+		response, runErr := messagecontroller.RunWorkflow(bg, conn, db, req)
+
+		status := "succeeded"
+		errMsg := ""
+		var resultPayload any
+		if runErr != nil {
+			status = "failed"
+			errMsg = runErr.Error()
+		} else {
+			resultPayload = response
+			if strings.EqualFold(response.Status, "failed") {
+				status = "failed"
+				if response.Metadata != nil {
+					if v, ok := response.Metadata["failed_step"].(string); ok && v != "" {
+						errMsg = "step " + v + " failed"
+					}
+				}
+			}
+		}
+		_ = repository.FinalizeWorkflowRun(bg, db, runID, status, resultPayload, errMsg, time.Now().UTC())
+	}()
 }
 
 func workflowEventTriggersInterval() time.Duration {
