@@ -175,6 +175,11 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// for console integrations that want stricter typing.
 	mux.HandleFunc("GET /api/v1/manifests", server.handleManifestListGeneric)
 	mux.HandleFunc("POST /api/v1/manifests", server.handleManifestCreateGeneric)
+	// Public publish endpoint: external sources (Grafana webhooks, K8s
+	// informers, …) drop typed events here, the addon trigger loop picks
+	// them up and fires workflows declared with trigger.mode=event. Auth
+	// reuses the same shared-token helper as POST /api/v1/workflow-runs.
+	mux.HandleFunc("POST /api/v1/events", server.handleEventPublish)
 	mux.HandleFunc("POST /api/v1/github/webhook", server.handleGitHubWebhook)
 	mux.HandleFunc("GET /readyz", server.handleReadyz)
 	mux.HandleFunc("POST /api/v1/auth/passwords", server.handleAuthPasswordUpsert)
