@@ -64,4 +64,3 @@ func scopesContains(scopes []string, scope string) bool {
 	}
 	return false
 }
-
