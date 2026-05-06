@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/httpapi"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/oidc"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 	"go.uber.org/zap"
 )
@@ -45,7 +46,17 @@ func bootstrapHTTP(_ context.Context, app *runtime.ServiceApp) error {
 	// in the `iss` field — terminating in /oidc preserves StripPrefix
 	// isolation (Task 7 follow-up commit ba95e2d). Empty/unset keeps
 	// the routes dormant for clusters that haven't onboarded OIDC yet.
+	//
+	// Before mounting, we run oidc.EnsureSigningKey to load-or-create the
+	// active RS256 keypair (Task 5 bootstrap). Without an active key,
+	// MountOIDC's deriveCryptoKey would fail with "fetch active signing
+	// key: oidc signing key not found". The Ensure* call is idempotent
+	// across multi-pod startup races via FOR UPDATE on the singleton
+	// oidc_provider_settings row.
 	if issuer := strings.TrimSpace(os.Getenv("YGGDRASIL_OIDC_ISSUER")); issuer != "" {
+		if _, ensureErr := oidc.EnsureSigningKey(context.Background(), db); ensureErr != nil {
+			return fmt.Errorf("oidc signing key bootstrap: %w", ensureErr)
+		}
 		opts = append(opts, httpapi.WithOIDCIssuer(issuer))
 		logger.Info("yggdrasil OIDC provider enabled", zap.String("issuer", issuer))
 	}
