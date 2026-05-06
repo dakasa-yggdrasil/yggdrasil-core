@@ -2,6 +2,20 @@
 # Build stage runs on BUILDPLATFORM (e.g. arm64 on Apple Silicon dev) and Go
 # cross-compiles to TARGETPLATFORM (e.g. amd64 for production). Avoids qemu
 # emulation, which segfaults the Go toolchain on M-series Macs.
+
+# Stage 0: build the Yggdrasil console SPA.
+# The output replaces the placeholder index.html committed at
+# controllers/console/yggdrasil-console-dist/ before the Go embed pass.
+# Pinned to node:20 LTS for reproducibility; bump deliberately.
+FROM --platform=$BUILDPLATFORM node:20-alpine AS console-build
+WORKDIR /console
+ARG CONSOLE_REPO=https://github.com/dakasa-yggdrasil/yggdrasil-console.git
+ARG CONSOLE_REF=main
+RUN apk add --no-cache git \
+ && git clone --depth=1 --branch "${CONSOLE_REF}" "${CONSOLE_REPO}" . \
+ && npm ci \
+ && npm run build
+
 FROM --platform=$BUILDPLATFORM golang:1.25-bookworm AS build
 
 ARG TARGETOS=linux
@@ -18,6 +32,11 @@ COPY go.mod go.sum ./
 RUN go mod download
 
 COPY . .
+
+# Replace the committed placeholder bundle with the freshly-built one
+# from stage console-build. The destination dir already exists with a
+# placeholder index.html so go:embed compiles in dev/local builds.
+COPY --from=console-build /console/dist ./controllers/console/yggdrasil-console-dist
 
 RUN go build -o /bin/yggdrasil-core . \
  && go build -o /bin/goose ./scripts/goose \
