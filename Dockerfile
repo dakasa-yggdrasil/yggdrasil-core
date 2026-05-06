@@ -11,7 +11,18 @@ FROM --platform=$BUILDPLATFORM node:20-alpine AS console-build
 WORKDIR /console
 ARG CONSOLE_REPO=https://github.com/dakasa-yggdrasil/yggdrasil-console.git
 ARG CONSOLE_REF=main
-RUN apk add --no-cache git \
+# yggdrasil-console is a private repo. CI passes a GitHub token via
+# BuildKit secret (id=github_token) and we wire it into git via
+# `insteadOf` so the clone re-uses the token without leaking it into
+# any image layer. The token file is mounted only for this RUN.
+# The guard allows local builds without a token (will only succeed if
+# CONSOLE_REPO is overridden to a public mirror or unset).
+RUN --mount=type=secret,id=github_token \
+    apk add --no-cache git \
+ && if [ -f /run/secrets/github_token ]; then \
+        TOKEN=$(cat /run/secrets/github_token) \
+     && git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"; \
+    fi \
  && git clone --depth=1 --branch "${CONSOLE_REF}" "${CONSOLE_REPO}" . \
  && npm ci \
  && npm run build
