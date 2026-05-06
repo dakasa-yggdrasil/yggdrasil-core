@@ -1503,6 +1503,8 @@ func httpStatusFromError(err error) int {
 		errors.Is(err, repository.ErrThirdPartyIdentityNotFound),
 		errors.Is(err, repository.ErrThirdPartyAuthProviderNotFound):
 		return http.StatusNotFound
+	case errors.Is(err, errAutoProvisionRejected):
+		return http.StatusForbidden
 	}
 
 	message := strings.ToLower(strings.TrimSpace(err.Error()))
