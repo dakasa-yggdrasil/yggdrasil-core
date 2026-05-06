@@ -391,6 +391,13 @@ func (s *Storage) CreateAccessAndRefreshTokens(
 				// already revoked. Revoke the whole chain so any leaked
 				// descendant can't be exchanged.
 				_, _ = repository.RevokeOIDCRefreshChainByRoot(ctx, s.db, currentRefreshToken)
+				// Audit after revocation so the chain is locked even if
+				// the audit insert fails. Token prefix only; the full
+				// token is sensitive material.
+				cid := rec.CollaboratorID
+				recordOIDCAudit(ctx, s.db, "oidc.refresh_token.replay_detected", &cid, rec.ClientID, map[string]any{
+					"replayed_token_prefix": tokenPrefix(currentRefreshToken),
+				}, "denied")
 				return "", "", time.Time{}, fmt.Errorf("refresh token replay detected; chain revoked")
 			}
 			return "", "", time.Time{}, fmt.Errorf("rotate refresh: %w", rotErr)
