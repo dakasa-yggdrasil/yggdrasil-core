@@ -1,0 +1,32 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/workflow/event_matched.json",
+  "title": "workflow.event.matched payload",
+  "description": "Payload emitted by the event-trigger loop when an external event matched a workflow's trigger.mode=event filters. Used both as an audit signal and as the dedup key for the dispatcher (one matched record per (workflow_manifest_id, matched_event_id) pair).",
+  "type": "object",
+  "required": ["workflow_manifest_id", "matched_event_id", "matched_event_type"],
+  "properties": {
+    "workflow_manifest_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "id of the workflow manifest that matched"
+    },
+    "matched_event_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "event_id of the source event that triggered the match"
+    },
+    "matched_event_type": {
+      "type": "string",
+      "description": "type of the matched event, e.g. infra.alert.firing"
+    },
+    "matched_aggregate_id": {
+      "type": "string"
+    },
+    "default_inputs": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "trigger.event.default_inputs at match time"
+    }
+  }
+}
