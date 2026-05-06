@@ -187,6 +187,18 @@ func (s *Server) handleAuthThirdPartyCallback(w http.ResponseWriter, r *http.Req
 		return
 	}
 
+	// Domain-default + auto-provision: ensure a collaborator exists for the
+	// claim email before AuthenticateWithThirdPartyIdentity runs the
+	// AutoLinkByEmail path. Google OAuth surfaces verification status as the
+	// boolean "email_verified" claim; defensive type assertion (`_, ok`) so a
+	// missing or non-bool claim is treated as "not verified" rather than
+	// panicking.
+	emailVerified, _ := profile.Claims["email_verified"].(bool)
+	if _, err := provisionCollaboratorFromClaim(r.Context(), s.db, profile.Email, profile.DisplayName, emailVerified); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
 	collaborator, identity, session, token, err := repository.AuthenticateWithThirdPartyIdentity(
 		r.Context(),
 		s.db,
