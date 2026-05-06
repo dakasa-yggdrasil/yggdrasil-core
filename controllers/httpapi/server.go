@@ -302,6 +302,18 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		}
 	}
 
+	// Opt-in console SPA. Mounted under <prefix>/ (e.g. /console/) with
+	// the prefix-with-and-without-trailing-slash both routing through.
+	if server.consoleHandler != nil && server.consoleMountPrefix != "" {
+		prefix := strings.TrimRight(server.consoleMountPrefix, "/")
+		// Both /console and /console/* must hit the SPA — Go's ServeMux
+		// pattern "/console/" doesn't match the bare "/console", so we
+		// register both. Trailing-slash-redirect would also work but
+		// produces an extra round-trip.
+		mux.Handle(prefix, server.consoleHandler)
+		mux.Handle(prefix+"/", server.consoleHandler)
+	}
+
 	return server.withLogging(mux), nil
 }
 
@@ -327,6 +339,23 @@ func WithOIDCIssuer(issuerURL string) ServerOption {
 	return func(s *Server) { s.oidcIssuerURL = issuerURL }
 }
 
+// WithConsole mounts the provided handler under prefix (e.g. "/console")
+// for serving the Yggdrasil console SPA. The handler is typically the
+// http.Handler returned by controllers/console.Handler, but any
+// http.Handler works (useful for tests and forks that ship a different
+// console). Empty prefix or nil handler leaves the console unmounted.
+//
+// The split between this option and the controllers/console package
+// keeps httpapi free of the SPA's go:embed bundle — adopters who don't
+// want the console (e.g. headless API-only deploys) avoid linking
+// the embedded files.
+func WithConsole(prefix string, handler http.Handler) ServerOption {
+	return func(s *Server) {
+		s.consoleHandler = handler
+		s.consoleMountPrefix = prefix
+	}
+}
+
 // workflowDispatchFunc dispatches a Yggdrasil workflow_run by manifest ref.
 // The default implementation wraps messagecontroller.RunWorkflow; tests
 // override the field directly with a fake to assert dispatch behaviour.
@@ -345,6 +374,13 @@ type Server struct {
 	// OIDC OP routes (.well-known/openid-configuration + /oidc/*). Set via
 	// WithOIDCIssuer. Empty (default) keeps OIDC dormant for tests/dev.
 	oidcIssuerURL string
+	// consoleHandler, when non-nil, mounts the Yggdrasil console SPA at
+	// consoleMountPrefix (e.g. /console) on the same mux. Set via
+	// WithConsole. The handler is provided by the caller so this package
+	// doesn't import controllers/console (which embeds a >0-byte SPA bundle
+	// even when the console isn't wanted — keeps the slim test/dev path).
+	consoleHandler     http.Handler
+	consoleMountPrefix string
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {
