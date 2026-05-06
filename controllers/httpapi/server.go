@@ -14,6 +14,7 @@ import (
 	"time"
 
 	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/oidc"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/provisioner"
@@ -293,6 +294,14 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/audit", server.handleAuditList)
 	mux.HandleFunc("POST /api/v1/workflow-templates/{namespace}/{name}/instantiate", server.handleWorkflowTemplateInstantiate)
 
+	// Opt-in OIDC OP. Skipped when no issuer is configured (the default)
+	// so tests and adopters who don't need OIDC keep a slimmer surface.
+	if server.oidcIssuerURL != "" {
+		if err := oidc.MountOIDC(mux, server.db, server.oidcIssuerURL); err != nil {
+			return nil, fmt.Errorf("mount oidc: %w", err)
+		}
+	}
+
 	return server.withLogging(mux), nil
 }
 
@@ -309,6 +318,15 @@ func WithProvisioner(p *provisioner.AWSProvisioner) ServerOption {
 	return func(s *Server) { s.provisioner = p }
 }
 
+// WithOIDCIssuer enables the OIDC OpenID Provider on the HTTP server,
+// mounting the discovery + token endpoints with this issuer URL. When
+// unset (default empty string) OIDC routes are not registered, so tests
+// and dev setups that don't need OIDC stay free of its DB requirement
+// (an active oidc_signing_keys row).
+func WithOIDCIssuer(issuerURL string) ServerOption {
+	return func(s *Server) { s.oidcIssuerURL = issuerURL }
+}
+
 // workflowDispatchFunc dispatches a Yggdrasil workflow_run by manifest ref.
 // The default implementation wraps messagecontroller.RunWorkflow; tests
 // override the field directly with a fake to assert dispatch behaviour.
@@ -323,6 +341,10 @@ type Server struct {
 	reconciler       *reconciler.Engine
 	provisioner      *provisioner.AWSProvisioner
 	dispatchWorkflow workflowDispatchFunc
+	// oidcIssuerURL, when non-empty, opts the server into mounting the
+	// OIDC OP routes (.well-known/openid-configuration + /oidc/*). Set via
+	// WithOIDCIssuer. Empty (default) keeps OIDC dormant for tests/dev.
+	oidcIssuerURL string
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {
