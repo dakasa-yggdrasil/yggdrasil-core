@@ -62,8 +62,10 @@ func eventTypeToSchemaPath(eventType string, schemaVersion string) string {
 		"manifest.created":             "events/v1/manifest/created.json",
 		"product.installation.applied": "events/v1/product/installation_applied.json",
 		"workflow.run.completed":       "events/v1/workflow/run_completed.json",
+		"workflow.event.matched":       "events/v1/workflow/event_matched.json",
 		"authorization.evaluated":      "events/v1/authorization/evaluated.json",
 		"buildproject.expired":         "events/v1/buildproject/expired.json",
+		"infra.alert.firing":           "events/v1/infra/alert_firing.json",
 	}
 	return mapping[eventType]
 }
