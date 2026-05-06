@@ -40,7 +40,8 @@ COPY --from=console-build /console/dist ./controllers/console/yggdrasil-console-
 
 RUN go build -o /bin/yggdrasil-core . \
  && go build -o /bin/goose ./scripts/goose \
- && go build -o /bin/yggdrasil-bootstrap ./scripts/bootstrap
+ && go build -o /bin/yggdrasil-bootstrap ./scripts/bootstrap \
+ && go build -o /bin/yggdrasil-bootstrap-admin ./scripts/bootstrap-admin
 
 FROM alpine:3.21
 
@@ -57,6 +58,7 @@ WORKDIR /app
 COPY --from=build /bin/yggdrasil-core /app/yggdrasil-core
 COPY --from=build /bin/goose /app/goose
 COPY --from=build /bin/yggdrasil-bootstrap /app/yggdrasil-bootstrap
+COPY --from=build /bin/yggdrasil-bootstrap-admin /app/yggdrasil-bootstrap-admin
 # Ship schema migrations and default seed manifests so a self-hosted
 # deployment can `goose up` and bootstrap without mounting anything.
 COPY db/migrations /app/db/migrations
