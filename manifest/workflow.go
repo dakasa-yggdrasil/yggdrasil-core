@@ -530,6 +530,22 @@ func renderWorkflowString(value string, ctx WorkflowExecutionContext) (any, erro
 }
 
 func workflowTemplateValue(path string, ctx WorkflowExecutionContext) (any, bool) {
+	trimmed := strings.TrimSpace(path)
+
+	// Pass-through for non-Yggdrasil templates. Yggdrasil paths always
+	// begin with a root key from the context (`inputs`, `steps`,
+	// `metadata`, `auth`, `workflow`, `each`). Anything starting with
+	// "." is intended for a downstream renderer (e.g. Grafana templates
+	// like `{{ .GroupKey }}` or `{{ . | toJson }}` that the
+	// integration-grafana adapter ships verbatim into a Grafana contact
+	// point's message body) and must survive the Yggdrasil pre-render
+	// untouched. Without this carve-out the workflow fails with
+	// "could not be resolved" before the manifest ever reaches the
+	// adapter, which is the symptom that drove this gate in.
+	if strings.HasPrefix(trimmed, ".") {
+		return "{{ " + trimmed + " }}", true
+	}
+
 	root := map[string]any{
 		"inputs":   ctx.Inputs,
 		"metadata": ctx.Metadata,
@@ -540,7 +556,7 @@ func workflowTemplateValue(path string, ctx WorkflowExecutionContext) (any, bool
 	if ctx.Each != nil {
 		root["each"] = ctx.Each
 	}
-	return lookupWorkflowPath(root, strings.TrimSpace(path))
+	return lookupWorkflowPath(root, trimmed)
 }
 
 func workflowStepResultsContext(results map[string]model.WorkflowRunStepResult) map[string]any {
