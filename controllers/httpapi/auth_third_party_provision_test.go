@@ -148,3 +148,43 @@ func TestProvisionCollaboratorFromGoogleClaim_ReturnsExisting(t *testing.T) {
 		t.Errorf("unknown email: got %v, want ErrCollaboratorNotFound", err)
 	}
 }
+
+func TestProvisionCollaboratorFromGoogleClaim_AutoProvisionDisabled(t *testing.T) {
+	db := dbForProvisionTest(t)
+	// Register Close FIRST so the restore-state cleanup (registered next)
+	// runs while db is still open — t.Cleanup runs LIFO, deferred funcs run
+	// BEFORE cleanups, so we must use t.Cleanup for Close instead of defer.
+	t.Cleanup(func() { db.Close() })
+
+	ctx := context.Background()
+	cleanupProvisionedCollaborator(ctx, db, "charlie@dakasa.me")
+	t.Cleanup(func() { cleanupProvisionedCollaborator(ctx, db, "charlie@dakasa.me") })
+
+	// Save and disable auto_provision; restore on cleanup so other tests
+	// (and -shuffle on -count 2) don't flake.
+	orig, err := repository.GetOIDCProviderSettings(ctx, db)
+	if err != nil {
+		t.Fatalf("get original settings: %v", err)
+	}
+	disabled := orig
+	disabled.AutoProvision = false
+	if err := repository.UpdateOIDCProviderSettings(ctx, db, disabled); err != nil {
+		t.Fatalf("disable auto_provision: %v", err)
+	}
+	t.Cleanup(func() {
+		if err := repository.UpdateOIDCProviderSettings(context.Background(), db, orig); err != nil {
+			t.Errorf("restore auto_provision: %v", err)
+		}
+	})
+
+	_, err = provisionCollaboratorFromClaim(ctx, db, "charlie@dakasa.me", "Charlie", true)
+	if err == nil {
+		t.Fatal("expected error for auto_provision=false, got nil")
+	}
+	if !strings.Contains(err.Error(), "auto_provision is disabled") {
+		t.Errorf("error wording: %v", err)
+	}
+	if !errors.Is(err, errAutoProvisionRejected) {
+		t.Errorf("expected errors.Is(err, errAutoProvisionRejected) to be true; got %v", err)
+	}
+}

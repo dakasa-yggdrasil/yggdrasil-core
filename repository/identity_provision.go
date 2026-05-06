@@ -11,12 +11,10 @@ import (
 	"github.com/google/uuid"
 )
 
-// CreateCollaboratorTx is the transaction-aware variant of CreateCollaborator.
-// It is used by auto-provision flows that need to atomically insert one
-// collaborator and one team membership in the same transaction.
-//
-// Behavior matches CreateCollaborator: same validation, same INSERT, same
-// scan path. The only difference is the receiver (*sql.Tx vs *sql.DB).
+// CreateCollaboratorTx is the transaction-aware variant used by auto-provision flows.
+// Unlike CreateCollaborator it does NOT accept ManagerID or PrimaryTeamID — auto-provisioned
+// users start without a manager or primary team; those fields are wired by an admin later
+// via UpdateCollaborator. If you need those fields, do a follow-up update after Commit.
 func CreateCollaboratorTx(ctx context.Context, tx *sql.Tx, req model.CreateCollaboratorRequest) (model.Collaborator, error) {
 	slug := normalizeSlug(req.Slug)
 	if slug == "" {
