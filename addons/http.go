@@ -38,6 +38,17 @@ func bootstrapHTTP(_ context.Context, app *runtime.ServiceApp) error {
 	if p, ok := Provisioner(app); ok {
 		opts = append(opts, httpapi.WithProvisioner(p))
 	}
+	// OIDC provider mount is opt-in via YGGDRASIL_OIDC_ISSUER. When set,
+	// httpapi.New invokes oidc.MountOIDC which registers /.well-known/
+	// openid-configuration plus /oidc/* (authorize, token, keys, userinfo,
+	// end_session). The issuer URL must match exactly what tokens claim
+	// in the `iss` field — terminating in /oidc preserves StripPrefix
+	// isolation (Task 7 follow-up commit ba95e2d). Empty/unset keeps
+	// the routes dormant for clusters that haven't onboarded OIDC yet.
+	if issuer := strings.TrimSpace(os.Getenv("YGGDRASIL_OIDC_ISSUER")); issuer != "" {
+		opts = append(opts, httpapi.WithOIDCIssuer(issuer))
+		logger.Info("yggdrasil OIDC provider enabled", zap.String("issuer", issuer))
+	}
 	handler, err := httpapi.New(app.ServiceName, db, conn, logger, opts...)
 	if err != nil {
 		return fmt.Errorf("build http api: %w", err)
