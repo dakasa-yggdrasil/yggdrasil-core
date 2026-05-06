@@ -11,21 +11,33 @@ FROM --platform=$BUILDPLATFORM node:20-alpine AS console-build
 WORKDIR /console
 ARG CONSOLE_REPO=https://github.com/dakasa-yggdrasil/yggdrasil-console.git
 ARG CONSOLE_REF=main
-# yggdrasil-console is a private repo. CI passes a GitHub token via
-# BuildKit secret (id=github_token) and we wire it into git via
-# `insteadOf` so the clone re-uses the token without leaking it into
-# any image layer. The token file is mounted only for this RUN.
-# The guard allows local builds without a token (will only succeed if
-# CONSOLE_REPO is overridden to a public mirror or unset).
+# WITH_CONSOLE controls whether to clone+build the console SPA bundle.
+# When unset/false (default in CI without a cross-repo token), the
+# stage produces an empty /console/dist with a minimal placeholder so
+# COPY --from=console-build in the build stage still works; the Go
+# binary then serves the placeholder from controllers/console/yggdrasil-console-dist
+# already committed to this repo.
+#
+# When set to true, the stage clones the private dakasa-yggdrasil/yggdrasil-console
+# repo using the BuildKit secret id=github_token (which must be a PAT
+# or GitHub App token with read access to that repo — GITHUB_TOKEN of
+# the current repo does NOT suffice for cross-repo clones).
+ARG WITH_CONSOLE=false
 RUN --mount=type=secret,id=github_token \
-    apk add --no-cache git \
- && if [ -f /run/secrets/github_token ]; then \
-        TOKEN=$(cat /run/secrets/github_token) \
-     && git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"; \
-    fi \
- && git clone --depth=1 --branch "${CONSOLE_REF}" "${CONSOLE_REPO}" . \
- && npm ci \
- && npm run build
+    if [ "${WITH_CONSOLE}" = "true" ]; then \
+        apk add --no-cache git \
+     && if [ -f /run/secrets/github_token ]; then \
+            TOKEN=$(cat /run/secrets/github_token) \
+         && git config --global url."https://x-access-token:${TOKEN}@github.com/".insteadOf "https://github.com/"; \
+        fi \
+     && git clone --depth=1 --branch "${CONSOLE_REF}" "${CONSOLE_REPO}" . \
+     && npm ci \
+     && npm run build; \
+    else \
+        echo "WITH_CONSOLE=false — skipping console SPA build (placeholder used)"; \
+        mkdir -p /console/dist; \
+        echo '<!doctype html><meta charset=utf-8><title>Yggdrasil Console</title><body>Console SPA was not embedded in this image (WITH_CONSOLE=false at build time). Mount via WithConsole ServerOption only when the bundle is present.</body>' > /console/dist/index.html; \
+    fi
 
 FROM --platform=$BUILDPLATFORM golang:1.25-bookworm AS build
 
