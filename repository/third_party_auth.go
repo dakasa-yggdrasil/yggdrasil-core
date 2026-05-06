@@ -275,7 +275,7 @@ func AuthenticateWithThirdPartyIdentity(
 		if email == "" {
 			return model.Collaborator{}, model.ThirdPartyIdentity{}, model.AuthSession{}, "", ErrAuthInvalidCredentials
 		}
-		collaborator, err := getCollaboratorByPrimaryEmail(ctx, db, email)
+		collaborator, err := GetCollaboratorByPrimaryEmail(ctx, db, email)
 		if err != nil {
 			if errors.Is(err, ErrCollaboratorNotFound) {
 				return model.Collaborator{}, model.ThirdPartyIdentity{}, model.AuthSession{}, "", ErrAuthInvalidCredentials

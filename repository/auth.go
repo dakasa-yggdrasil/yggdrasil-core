@@ -234,13 +234,15 @@ func resolveCollaboratorForLogin(ctx context.Context, db *sql.DB, identity strin
 	}
 
 	if strings.Contains(identity, "@") {
-		return getCollaboratorByPrimaryEmail(ctx, db, identity)
+		return GetCollaboratorByPrimaryEmail(ctx, db, identity)
 	}
 
 	return GetCollaborator(ctx, db, identity)
 }
 
-func getCollaboratorByPrimaryEmail(ctx context.Context, db *sql.DB, email string) (model.Collaborator, error) {
+// GetCollaboratorByPrimaryEmail returns one collaborator by their lowercased
+// primary_email. Returns ErrCollaboratorNotFound when no row matches.
+func GetCollaboratorByPrimaryEmail(ctx context.Context, db *sql.DB, email string) (model.Collaborator, error) {
 	email = strings.ToLower(strings.TrimSpace(email))
 	if email == "" {
 		return model.Collaborator{}, fmt.Errorf("collaborator primary_email is required")
@@ -497,4 +499,3 @@ func normalizeAuthStatus(value string) string {
 	}
 	return value
 }
-
