@@ -6,6 +6,8 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
+	"net/url"
+	"strings"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/zitadel/oidc/v3/pkg/op"
@@ -35,6 +37,21 @@ func MountOIDC(ctx context.Context, mux *http.ServeMux, db *sql.DB, issuerURL st
 		return fmt.Errorf("derive oidc crypto key: %w", err)
 	}
 
+	// The issuer URL's path becomes the mount prefix so the routes the
+	// discovery doc advertises actually exist on this mux. Example: an
+	// issuer of "https://yggdrasil.example/oidc" makes
+	// authorization_endpoint = "https://yggdrasil.example/oidc/authorize",
+	// and we mount the provider at "/oidc/" (StripPrefix-aware) so that
+	// path resolves. An issuer with an empty path mounts at root, which
+	// is fine when the host is dedicated to OIDC but collides with
+	// /api/v1 if anything else shares the mux — adopters who care should
+	// give the issuer a path.
+	parsed, err := url.Parse(strings.TrimRight(issuerURL, "/"))
+	if err != nil {
+		return fmt.Errorf("parse issuer url %q: %w", issuerURL, err)
+	}
+	prefix := strings.TrimRight(parsed.Path, "/") // "", "/oidc", "/auth/oidc", etc.
+
 	storage := NewStorage(db, issuerURL)
 	cfg := &op.Config{
 		CryptoKey:                cryptoKey,
@@ -50,12 +67,29 @@ func MountOIDC(ctx context.Context, mux *http.ServeMux, db *sql.DB, issuerURL st
 		return fmt.Errorf("oidc new provider: %w", err)
 	}
 
-	// Discovery is served at the absolute well-known path so existing
-	// clients (RFC 8414) find it without prefix knowledge.
-	mux.Handle("/.well-known/openid-configuration", provider)
-	// Everything else (authorize, token, userinfo, jwks, etc.) lives
-	// under /oidc/ to avoid colliding with the existing /api/v1 surface.
-	mux.Handle("/oidc/", http.StripPrefix("/oidc", provider))
+	// Mount strategy depends on whether the issuer URL has a path:
+	//
+	//   - Path-bearing issuer (e.g. https://host/oidc): a single
+	//     /<path>/ StripPrefix mount handles everything — discovery
+	//     at /<path>/.well-known/openid-configuration, plus authorize/
+	//     token/userinfo/jwks under the same prefix. The strip lets
+	//     the provider see the unprefixed paths it expects, and the
+	//     issuer URL it advertises matches the routes that actually
+	//     exist on this mux. This is the recommended deploy.
+	//
+	//   - Path-less issuer (e.g. https://host): keep the legacy split
+	//     mount — discovery at root /.well-known/... (no strip) and
+	//     other routes at /oidc/ (with strip) for backward compat
+	//     with the existing test fixtures and pre-fix deploys. The
+	//     discovery doc still advertises root URLs that won't
+	//     resolve, so any client following it will 404 — adopters
+	//     should migrate to a path-bearing issuer to avoid that.
+	if prefix == "" {
+		mux.Handle("/.well-known/openid-configuration", provider)
+		mux.Handle("/oidc/", http.StripPrefix("/oidc", provider))
+	} else {
+		mux.Handle(prefix+"/", http.StripPrefix(prefix, provider))
+	}
 
 	return nil
 }
