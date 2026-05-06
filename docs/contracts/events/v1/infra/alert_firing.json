@@ -1,0 +1,34 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/infra/alert_firing.json",
+  "title": "infra.alert.firing payload",
+  "description": "Generic payload accepted from any external alerting system that fans out to Yggdrasil via POST /api/v1/events. Grafana, Prometheus Alertmanager, Sentry, custom webhooks, etc. The shape mirrors Grafana's Alertmanager-compatible webhook to keep the most common publisher zero-config: receiver/status/alerts/groupLabels/commonLabels/commonAnnotations. Anything outside that vocabulary is allowed — workflows that consume this event read what they need from event.payload via template paths.",
+  "type": "object",
+  "additionalProperties": true,
+  "properties": {
+    "receiver": {"type": "string"},
+    "status": {"type": "string", "enum": ["firing", "resolved"]},
+    "alerts": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "additionalProperties": true,
+        "properties": {
+          "status": {"type": "string"},
+          "labels": {"type": "object", "additionalProperties": true},
+          "annotations": {"type": "object", "additionalProperties": true},
+          "startsAt": {"type": "string"},
+          "endsAt": {"type": "string"},
+          "fingerprint": {"type": "string"},
+          "generatorURL": {"type": "string"}
+        }
+      }
+    },
+    "groupLabels": {"type": "object", "additionalProperties": true},
+    "commonLabels": {"type": "object", "additionalProperties": true},
+    "commonAnnotations": {"type": "object", "additionalProperties": true},
+    "externalURL": {"type": "string"},
+    "version": {"type": "string"},
+    "groupKey": {"type": "string"}
+  }
+}
