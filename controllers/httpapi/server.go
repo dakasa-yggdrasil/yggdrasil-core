@@ -158,7 +158,14 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	}
 
 	mux := http.NewServeMux()
-	mux.HandleFunc("GET /", server.handleRoot)
+	// `GET /{$}` matches the literal root path only (Go 1.22+ ServeMux
+	// syntax). The previous `GET /` was a wildcard catch-all that
+	// conflicted with sub-routes registered through other paths — most
+	// notably `/oidc/` (registered by oidc.MountOIDC) which matches all
+	// methods on /oidc/* and therefore tied with the GET / catch-all.
+	// Restricting GET / to just the root keeps the original health-style
+	// response on `/` and lets the sub-routers own everything below it.
+	mux.HandleFunc("GET /{$}", server.handleRoot)
 	mux.HandleFunc("GET /healthz", server.handleHealthz)
 	mux.HandleFunc("GET /metrics", server.handleMetrics)
 	mux.HandleFunc("GET /openapi.json", server.handleOpenAPI)
