@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strconv"
 	"strings"
 	"time"
 
@@ -578,6 +579,15 @@ func lookupWorkflowPath(root map[string]any, path string) (any, bool) {
 				return nil, false
 			}
 			current = next
+		case []any:
+			// Numeric index into a slice — needed so workflow templates
+			// can navigate JSON-shaped event payloads, e.g. an alertmanager
+			// webhook's `alerts.0.labels.alertname`.
+			idx, err := strconv.Atoi(part)
+			if err != nil || idx < 0 || idx >= len(typed) {
+				return nil, false
+			}
+			current = typed[idx]
 		default:
 			return nil, false
 		}
