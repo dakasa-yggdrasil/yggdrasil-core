@@ -185,8 +185,22 @@ func processScheduledWorkflow(
 		return err
 	}
 
-	// If never fired, use start_at (or the current time) as the "last fire"
-	// baseline to compute the next fire from.
+	// If never fired, use start_at (or a past baseline) so the very first
+	// fire happens on the next pass instead of being indefinitely deferred.
+	//
+	// Previous logic used `now.Add(-1 * time.Second)` as the baseline, which
+	// makes sched.Next() return a future tick (e.g. cron */5 at 14:23:01 →
+	// next tick 14:25), and the `if nextFire.After(now) return nil` branch
+	// then defers forever — every pass observes the same future tick. Result:
+	// new scheduled workflows registered while the scheduler is already
+	// running NEVER fire on their own; only those bootstrap'd with a state
+	// row pre-populated (e.g. the legacy dakasa-health-probe) tick correctly.
+	//
+	// Walking the baseline back ~1h ensures sched.Next() finds a past tick
+	// for any reasonable cron expression (sub-hourly: */5, */10, */15 — all
+	// have at least one tick within an hour). The fire loop then catches up
+	// one tick per scheduler pass; catchup_policy="skip" callers can rely on
+	// the existing skip handling at the run-dispatch layer.
 	lastFired := state.LastFiredAt
 	if lastFired.IsZero() {
 		if schedule.StartAt != "" {
@@ -195,8 +209,7 @@ func processScheduledWorkflow(
 			}
 		}
 		if lastFired.IsZero() {
-			// First observation — assume we're "about to fire"
-			lastFired = now.Add(-1 * time.Second)
+			lastFired = now.Add(-1 * time.Hour)
 		}
 	}
 
