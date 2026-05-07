@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/workflow/schedule_fired.json",
+  "title": "workflow.schedule.fired payload",
+  "description": "Payload emitted by the workflow_scheduler addon when a scheduled workflow's cron expression elapsed past its next-fire timestamp and the schedule_state row was advanced. The downstream run dispatcher subscribes to this event type to materialise a workflow_run for each fire. One event per (workflow_manifest_id, scheduled_for) pair; the schedule_state UpsertWorkflowScheduleState's CAS-style won-the-tick check guarantees no duplicate fires across multiple scheduler workers.",
+  "type": "object",
+  "required": ["workflow_manifest_id", "scheduled_for", "cron_expression"],
+  "properties": {
+    "workflow_manifest_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "id of the workflow manifest whose schedule fired"
+    },
+    "scheduled_for": {
+      "type": "string",
+      "format": "date-time",
+      "description": "RFC3339 timestamp this fire was scheduled for (the cron tick that elapsed); not the wall-clock time the event was emitted"
+    },
+    "cron_expression": {
+      "type": "string",
+      "description": "cron expression from the workflow's trigger.schedule.cron_expression — surfaced in the event for audit + replay so downstream consumers don't need to re-parse the manifest"
+    },
+    "timezone": {
+      "type": "string",
+      "description": "Optional IANA timezone the cron was evaluated in (defaults to UTC when absent)"
+    },
+    "default_inputs": {
+      "type": "object",
+      "additionalProperties": true,
+      "description": "trigger.schedule.default_inputs forwarded so the run dispatcher does not need to re-read the manifest"
+    }
+  }
+}
