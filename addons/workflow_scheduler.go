@@ -340,8 +340,13 @@ func dispatchScheduledRun(
 	scheduledFor time.Time,
 ) error {
 	var namespace, name string
+	// namespace + name live as their own columns on public.manifests (the
+	// POST /api/v1/manifests handler validates and projects the flat
+	// {name,namespace,...} body into them); the spec JSON column does not
+	// re-encode them in metadata. Reading from spec->metadata returns NULL
+	// for every row and Scan fails on NULL→string.
 	if err := db.QueryRowContext(ctx, `
-		SELECT spec->'metadata'->>'namespace', spec->'metadata'->>'name'
+		SELECT namespace, name
 		FROM public.manifests
 		WHERE id = $1 AND kind = 'workflow' AND active = TRUE
 	`, manifestID).Scan(&namespace, &name); err != nil {
