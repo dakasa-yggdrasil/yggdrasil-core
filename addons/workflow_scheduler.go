@@ -9,9 +9,12 @@ import (
 	"strings"
 	"time"
 
+	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	"github.com/google/uuid"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"github.com/robfig/cron/v3"
 	"go.uber.org/zap"
 )
@@ -37,8 +40,13 @@ func bootstrapWorkflowScheduler(ctx context.Context, app *runtime.ServiceApp) er
 	logger, _ := Logger(app)
 	interval := workflowSchedulerInterval()
 
+	// AMQP optional. When unset (slim/dev mode) the scheduler still records
+	// fires and emits the event into event_log, but skips run dispatch —
+	// runs in a slim core are operator-driven via POST /api/v1/workflow-runs.
+	conn, _ := RabbitMQ(app)
+
 	stop := make(chan struct{})
-	go runWorkflowSchedulerLoop(ctx, db, logger, interval, stop)
+	go runWorkflowSchedulerLoop(ctx, db, conn, logger, interval, stop)
 
 	app.RegisterCloser(func(context.Context) error {
 		close(stop)
@@ -51,6 +59,7 @@ func bootstrapWorkflowScheduler(ctx context.Context, app *runtime.ServiceApp) er
 func runWorkflowSchedulerLoop(
 	ctx context.Context,
 	db *sql.DB,
+	conn *amqp.Connection,
 	logger *zap.Logger,
 	interval time.Duration,
 	stop <-chan struct{},
@@ -65,14 +74,14 @@ func runWorkflowSchedulerLoop(
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			runWorkflowSchedulerPass(ctx, db, logger)
+			runWorkflowSchedulerPass(ctx, db, conn, logger)
 		}
 	}
 }
 
 // runWorkflowSchedulerPass executes one pass of the scheduler. Exposed for
 // deterministic testing.
-func runWorkflowSchedulerPass(ctx context.Context, db *sql.DB, logger *zap.Logger) {
+func runWorkflowSchedulerPass(ctx context.Context, db *sql.DB, conn *amqp.Connection, logger *zap.Logger) {
 	rows, err := db.QueryContext(ctx, `
 		SELECT id, spec
 		FROM public.manifests
@@ -144,7 +153,7 @@ func runWorkflowSchedulerPass(ctx context.Context, db *sql.DB, logger *zap.Logge
 
 	now := time.Now().UTC()
 	for _, wf := range candidates {
-		if err := processScheduledWorkflow(ctx, db, logger, wf.manifestID, wf.schedule, now); err != nil {
+		if err := processScheduledWorkflow(ctx, db, conn, logger, wf.manifestID, wf.schedule, now); err != nil {
 			if logger != nil {
 				logger.Warn("workflow_scheduler: process failed",
 					zap.String("manifest_id", wf.manifestID),
@@ -161,6 +170,7 @@ func runWorkflowSchedulerPass(ctx context.Context, db *sql.DB, logger *zap.Logge
 func processScheduledWorkflow(
 	ctx context.Context,
 	db *sql.DB,
+	conn *amqp.Connection,
 	logger *zap.Logger,
 	manifestID string,
 	schedule *model.WorkflowScheduleTriggerSpec,
@@ -283,7 +293,110 @@ func processScheduledWorkflow(
 			zap.Time("scheduled_for", nextFire))
 	}
 
-	return tx.Commit()
+	if err := tx.Commit(); err != nil {
+		return err
+	}
+
+	// Dispatch the workflow run asynchronously after the schedule_state
+	// commit so the audit trail captures the fire even if dispatch fails.
+	// Without this step the scheduler is purely passive — it records "this
+	// cron tick elapsed" and emits an event into the log, but no consumer
+	// materialises a workflow_run, leaving every scheduled workflow armed
+	// but never triggered. Conn nil means slim/dev mode (no AMQP) — skip
+	// dispatch silently; the operator can still POST runs explicitly.
+	if conn == nil {
+		return nil
+	}
+	if err := dispatchScheduledRun(ctx, db, conn, logger, manifestID, schedule, nextFire); err != nil {
+		if logger != nil {
+			logger.Warn("workflow_scheduler: dispatch failed",
+				zap.String("manifest_id", manifestID),
+				zap.Error(err))
+		}
+		// Don't return the error — the schedule_state row is committed,
+		// the audit event is in event_log, the next pass will skip this
+		// tick (won=false) and try the following one. Failing the entire
+		// scheduler pass for a single bad workflow would cascade.
+	}
+	return nil
+}
+
+// dispatchScheduledRun resolves the workflow's namespace+name from the
+// manifests table, materialises a workflow_runs row in pending status,
+// then kicks the goroutine that owns the actual execution. Mirrors the
+// dispatchAsyncWorkflowRun handler in controllers/httpapi/workflow_runs.go
+// — same Insert + MarkRunning + RunWorkflow + FinalizeWorkflowRun flow,
+// just without the HTTP wrapper. Inputs come from the schedule's
+// default_inputs (always a map, may be empty); metadata captures the
+// scheduled_for timestamp + manifest_id so a later GET /workflow-runs/<id>
+// can show the operator which cron tick produced the run.
+func dispatchScheduledRun(
+	ctx context.Context,
+	db *sql.DB,
+	conn *amqp.Connection,
+	logger *zap.Logger,
+	manifestID string,
+	schedule *model.WorkflowScheduleTriggerSpec,
+	scheduledFor time.Time,
+) error {
+	var namespace, name string
+	if err := db.QueryRowContext(ctx, `
+		SELECT spec->'metadata'->>'namespace', spec->'metadata'->>'name'
+		FROM public.manifests
+		WHERE id = $1 AND kind = 'workflow' AND active = TRUE
+	`, manifestID).Scan(&namespace, &name); err != nil {
+		return err
+	}
+
+	inputs := map[string]any{}
+	for k, v := range schedule.DefaultInputs {
+		inputs[k] = v
+	}
+	metadata := map[string]any{
+		"triggered_by":  "workflow_scheduler",
+		"manifest_id":   manifestID,
+		"scheduled_for": scheduledFor.Format(time.RFC3339),
+	}
+
+	runID := uuid.New()
+	selector := model.ManifestSelector{Namespace: namespace, Name: name}
+	if err := repository.InsertWorkflowRun(ctx, db, runID, selector, inputs, metadata); err != nil {
+		return err
+	}
+
+	req := model.RunWorkflowRequest{
+		Workflow: selector,
+		Inputs:   inputs,
+		Metadata: metadata,
+	}
+
+	go func() {
+		bg := context.Background()
+		startedAt := time.Now().UTC()
+		_ = repository.MarkWorkflowRunRunning(bg, db, runID, startedAt)
+		response, runErr := messagecontroller.RunWorkflow(bg, conn, db, req)
+		status := "succeeded"
+		errMsg := ""
+		var resultPayload []byte
+		if runErr != nil {
+			status = "failed"
+			errMsg = runErr.Error()
+		} else {
+			if buf, err := json.Marshal(response); err == nil {
+				resultPayload = buf
+			}
+		}
+		_ = repository.FinalizeWorkflowRun(bg, db, runID, status, resultPayload, errMsg, time.Now().UTC())
+	}()
+
+	if logger != nil {
+		logger.Info("workflow_scheduler: dispatched",
+			zap.String("manifest_id", manifestID),
+			zap.String("namespace", namespace),
+			zap.String("name", name),
+			zap.String("run_id", runID.String()))
+	}
+	return nil
 }
 
 func workflowSchedulerInterval() time.Duration {
