@@ -93,6 +93,89 @@ func TestEvaluateWorkflowStepCondition_TemplateTruthyFromInputs(t *testing.T) {
 	}
 }
 
+// TestEvaluateWorkflowStepCondition_QuotedRightSide verifies the quoted-
+// string right side fix. Smoke-testing FinOps Phase 1 surfaced that
+// `{{ steps.X.status }} == "succeeded"` always evaluated false because
+// the literal `"succeeded"` (quotes included) was being compared against
+// the unquoted `succeeded` rendered from the left side.
+func TestEvaluateWorkflowStepCondition_QuotedRightSide(t *testing.T) {
+	ctx := WorkflowExecutionContext{Inputs: map[string]any{"env": "validation"}}
+	cases := []struct {
+		condition string
+		expect    bool
+	}{
+		{`{{ inputs.env }} == "validation"`, true},
+		{`{{ inputs.env }} == "production"`, false},
+		{`{{ inputs.env }} != "production"`, true},
+		{`{{ inputs.env }} == 'validation'`, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.condition, func(t *testing.T) {
+			run, err := EvaluateWorkflowStepCondition(tc.condition, ctx)
+			if err != nil {
+				t.Fatalf("err = %v", err)
+			}
+			if run != tc.expect {
+				t.Fatalf("got %v, want %v", run, tc.expect)
+			}
+		})
+	}
+}
+
+// TestEvaluateWorkflowStepCondition_CompoundAnd verifies the `&&`
+// short-circuit operator. Smoke-testing FinOps Phase 1 surfaced that
+// `A == true && B == true` skipped even when both sides were true.
+func TestEvaluateWorkflowStepCondition_CompoundAnd(t *testing.T) {
+	ctx := WorkflowExecutionContext{Inputs: map[string]any{"a": true, "b": true, "env": "validation"}}
+	cases := []struct {
+		condition string
+		expect    bool
+	}{
+		{`{{ inputs.a }} == true && {{ inputs.b }} == true`, true},
+		{`{{ inputs.a }} == true && {{ inputs.b }} == false`, false},
+		{`{{ inputs.env }} == "validation" && {{ inputs.a }} == true`, true},
+		{`{{ inputs.env }} == "production" && {{ inputs.a }} == true`, false},
+	}
+	for _, tc := range cases {
+		t.Run(tc.condition, func(t *testing.T) {
+			run, err := EvaluateWorkflowStepCondition(tc.condition, ctx)
+			if err != nil {
+				t.Fatalf("err = %v", err)
+			}
+			if run != tc.expect {
+				t.Fatalf("got %v, want %v", run, tc.expect)
+			}
+		})
+	}
+}
+
+// TestEvaluateWorkflowStepCondition_CompoundOr verifies the `||`
+// short-circuit operator and that `&&` binds tighter than `||`.
+func TestEvaluateWorkflowStepCondition_CompoundOr(t *testing.T) {
+	ctx := WorkflowExecutionContext{Inputs: map[string]any{"a": true, "b": false}}
+	cases := []struct {
+		condition string
+		expect    bool
+	}{
+		{`{{ inputs.a }} == true || {{ inputs.b }} == true`, true},
+		{`{{ inputs.a }} == false || {{ inputs.b }} == true`, false},
+		{`{{ inputs.a }} == false || {{ inputs.b }} == false`, true},
+		// && binds tighter: A || B && C  ==>  A || (B && C)
+		{`{{ inputs.a }} == true || {{ inputs.b }} == true && {{ inputs.b }} == true`, true},
+	}
+	for _, tc := range cases {
+		t.Run(tc.condition, func(t *testing.T) {
+			run, err := EvaluateWorkflowStepCondition(tc.condition, ctx)
+			if err != nil {
+				t.Fatalf("err = %v", err)
+			}
+			if run != tc.expect {
+				t.Fatalf("got %v, want %v", run, tc.expect)
+			}
+		})
+	}
+}
+
 // TestEvaluateWorkflowStepCondition_BinaryEquality covers the `==` operator.
 func TestEvaluateWorkflowStepCondition_BinaryEquality(t *testing.T) {
 	ctx := WorkflowExecutionContext{

@@ -711,6 +711,32 @@ func EvaluateWorkflowStepCondition(condition string, ctx WorkflowExecutionContex
 		return true, nil
 	}
 
+	// Compound conjunctions / disjunctions are evaluated short-circuit.
+	// `&&` binds tighter than `||`, matching the precedence operators
+	// have in Go and almost every templated workflow language. Recursion
+	// re-enters this same function so each conjunct/disjunct receives
+	// the same string-quote / equality treatment as a standalone clause.
+	if left, right, found := splitOnTopLevelOperator(trimmed, " || "); found {
+		leftBool, err := EvaluateWorkflowStepCondition(left, ctx)
+		if err != nil {
+			return false, err
+		}
+		if leftBool {
+			return true, nil
+		}
+		return EvaluateWorkflowStepCondition(right, ctx)
+	}
+	if left, right, found := splitOnTopLevelOperator(trimmed, " && "); found {
+		leftBool, err := EvaluateWorkflowStepCondition(left, ctx)
+		if err != nil {
+			return false, err
+		}
+		if !leftBool {
+			return false, nil
+		}
+		return EvaluateWorkflowStepCondition(right, ctx)
+	}
+
 	if op, left, right, found := splitWorkflowStepConditionBinary(trimmed); found {
 		leftVal, err := RenderWorkflowInput(left, ctx)
 		if err != nil {
@@ -720,8 +746,8 @@ func EvaluateWorkflowStepCondition(condition string, ctx WorkflowExecutionContex
 		if err != nil {
 			return false, fmt.Errorf("condition right side: %w", err)
 		}
-		leftStr := fmt.Sprintf("%v", leftVal)
-		rightStr := fmt.Sprintf("%v", rightVal)
+		leftStr := stripSurroundingQuotes(fmt.Sprintf("%v", leftVal))
+		rightStr := stripSurroundingQuotes(fmt.Sprintf("%v", rightVal))
 		switch op {
 		case "==":
 			return leftStr == rightStr, nil
@@ -737,9 +763,36 @@ func EvaluateWorkflowStepCondition(condition string, ctx WorkflowExecutionContex
 	return isConditionTruthy(value), nil
 }
 
+// splitOnTopLevelOperator looks for a separator that lives outside of any
+// {{ }} template span — so an inner `&&` inside a Grafana template literal
+// like `{{ printf "%v && %v" .a .b }}` does not split the expression in
+// the wrong place. The first top-level occurrence wins.
+func splitOnTopLevelOperator(expr, sep string) (left, right string, found bool) {
+	depth := 0
+	for i := 0; i+len(sep) <= len(expr); i++ {
+		if i+1 < len(expr) && expr[i] == '{' && expr[i+1] == '{' {
+			depth++
+			i++
+			continue
+		}
+		if i+1 < len(expr) && expr[i] == '}' && expr[i+1] == '}' {
+			if depth > 0 {
+				depth--
+			}
+			i++
+			continue
+		}
+		if depth == 0 && expr[i:i+len(sep)] == sep {
+			return strings.TrimSpace(expr[:i]), strings.TrimSpace(expr[i+len(sep):]), true
+		}
+	}
+	return "", "", false
+}
+
 // splitWorkflowStepConditionBinary looks for " == " or " != " (surrounded
 // by a single space on each side) inside the expression. The first match
 // wins. Returns the operator, left side, right side and a found flag.
+// Compound `&&` / `||` are handled before this in EvaluateWorkflowStepCondition.
 func splitWorkflowStepConditionBinary(expr string) (op, left, right string, found bool) {
 	if idx := strings.Index(expr, " == "); idx >= 0 {
 		return "==", strings.TrimSpace(expr[:idx]), strings.TrimSpace(expr[idx+4:]), true
@@ -748,6 +801,23 @@ func splitWorkflowStepConditionBinary(expr string) (op, left, right string, foun
 		return "!=", strings.TrimSpace(expr[:idx]), strings.TrimSpace(expr[idx+4:]), true
 	}
 	return "", "", "", false
+}
+
+// stripSurroundingQuotes removes a single matching pair of leading +
+// trailing double-quotes (or single-quotes) so condition expressions
+// can write `== "succeeded"` and have it compare against the unquoted
+// string the left side renders to. Without this fix
+// `{{ steps.X.status }} == "succeeded"` always evaluates false because
+// the literal `"succeeded"` (quotes included) never equals `succeeded`.
+func stripSurroundingQuotes(value string) string {
+	if len(value) >= 2 {
+		first := value[0]
+		last := value[len(value)-1]
+		if (first == '"' && last == '"') || (first == '\'' && last == '\'') {
+			return value[1 : len(value)-1]
+		}
+	}
+	return value
 }
 
 // isConditionTruthy coerces a rendered value to a boolean for the unary
