@@ -30,9 +30,11 @@ require (
 )
 
 require (
+	github.com/beevik/etree v1.5.0 // indirect
 	github.com/bmatcuk/doublestar/v4 v4.10.0 // indirect
 	github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 	github.com/cespare/xxhash/v2 v2.3.0 // indirect
+	github.com/crewjam/saml v0.5.1 // indirect
 	github.com/fatih/color v1.13.0 // indirect
 	github.com/go-chi/chi/v5 v5.2.5 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
@@ -43,6 +45,8 @@ require (
 	github.com/google/go-tpm v0.9.8 // indirect
 	github.com/gorilla/securecookie v1.1.2 // indirect
 	github.com/hashicorp/yamux v0.1.2 // indirect
+	github.com/jonboulle/clockwork v0.5.0 // indirect
+	github.com/mattermost/xml-roundtrip-validator v0.1.0 // indirect
 	github.com/mattn/go-colorable v0.1.12 // indirect
 	github.com/mattn/go-isatty v0.0.20 // indirect
 	github.com/muhlemmer/gu v0.3.1 // indirect
@@ -50,6 +54,7 @@ require (
 	github.com/oklog/run v1.1.0 // indirect
 	github.com/philhofer/fwd v1.2.0 // indirect
 	github.com/rs/cors v1.11.1 // indirect
+	github.com/russellhaering/goxmldsig v1.4.0 // indirect
 	github.com/sirupsen/logrus v1.9.4 // indirect
 	github.com/tinylib/msgp v1.6.4 // indirect
 	github.com/zitadel/logging v0.7.0 // indirect
