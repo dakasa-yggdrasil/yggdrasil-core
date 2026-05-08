@@ -708,6 +708,15 @@ func (s *Storage) populateUserInfo(
 		if terr == nil {
 			userInfo.AppendClaims("teams", teams)
 		}
+		if role, err := buildRoleClaim(ctx, s.db, cid); err == nil && role != "" {
+			userInfo.AppendClaims("role", role)
+		}
+		if perms, err := buildPermissionsClaim(ctx, s.db, cid); err == nil && len(perms) > 0 {
+			userInfo.AppendClaims("permissions", perms)
+		}
+		if attrs, err := buildAttributesClaim(ctx, s.db, cid); err == nil && len(attrs) > 0 {
+			userInfo.AppendClaims("attributes", attrs)
+		}
 	}
 	return nil
 }
@@ -732,7 +741,17 @@ func (s *Storage) GetPrivateClaimsFromScopes(
 	if err != nil {
 		return nil, nil
 	}
-	return map[string]any{"teams": teams}, nil
+	out := map[string]any{"teams": teams}
+	if role, err := buildRoleClaim(ctx, s.db, cid); err == nil && role != "" {
+		out["role"] = role
+	}
+	if perms, err := buildPermissionsClaim(ctx, s.db, cid); err == nil && len(perms) > 0 {
+		out["permissions"] = perms
+	}
+	if attrs, err := buildAttributesClaim(ctx, s.db, cid); err == nil && len(attrs) > 0 {
+		out["attributes"] = attrs
+	}
+	return out, nil
 }
 
 // ValidateJWTProfileScopes filters scopes for JWT Profile (RFC 7523)
