@@ -309,6 +309,50 @@ func TestGetLifecycleEvents_ReturnsAppendedEntries(t *testing.T) {
 	}
 }
 
+func TestCreateCollaborator_EmitsHiredEvent(t *testing.T) {
+	db := dbForLifecycleHandlerTest(t)
+	defer func() { _ = db.Close() }()
+	cleanLifecycleFixtures(t, db)
+	srv := newLifecycleTestServer(t, db)
+
+	body, _ := json.Marshal(map[string]any{
+		"slug":          "lh-test-hired",
+		"display_name":  "Hired Event",
+		"primary_email": "hired@dakasa.test",
+		"status":        "pending_start",
+		"employment_data": map[string]any{
+			"start_date": "2026-08-01",
+			"role":       "engineer",
+		},
+	})
+	req := httptest.NewRequest("POST", "/api/v1/collaborators", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		Collaborator model.Collaborator `json:"collaborator"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	events, err := repository.ListLifecycleEventsByCollaborator(context.Background(), db, model.ListLifecycleEventsRequest{
+		CollaboratorID: resp.Collaborator.ID,
+		EventType:      model.LifecycleEventHired,
+	})
+	if err != nil {
+		t.Fatalf("list events: %v", err)
+	}
+	if len(events) != 1 {
+		t.Fatalf("expected 1 hired event, got %d", len(events))
+	}
+	if events[0].Payload["start_date"] != "2026-08-01" {
+		t.Fatalf("expected start_date=2026-08-01 in payload, got %v", events[0].Payload)
+	}
+}
+
 func TestGetProviderState_EmptyByDefault(t *testing.T) {
 	db := dbForLifecycleHandlerTest(t)
 	defer func() { _ = db.Close() }()

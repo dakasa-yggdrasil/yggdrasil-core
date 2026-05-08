@@ -784,6 +784,33 @@ func (s *Server) handleCollaboratorCreate(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Emit hired lifecycle event for reconcile workflows to consume.
+	hiredPayload := map[string]any{}
+	if req.EmploymentData != nil {
+		if v, ok := req.EmploymentData["start_date"]; ok {
+			hiredPayload["start_date"] = v
+		}
+		if v, ok := req.EmploymentData["role"]; ok {
+			hiredPayload["role"] = v
+		}
+	}
+	if pid := strings.TrimSpace(req.PrimaryTeamID); pid != "" {
+		hiredPayload["primary_team_id"] = pid
+	}
+	if mid := strings.TrimSpace(req.ManagerID); mid != "" {
+		hiredPayload["manager_id"] = mid
+	}
+	if _, err := repository.AppendLifecycleEvent(r.Context(), s.db, model.AppendLifecycleEventRequest{
+		CollaboratorID: collaborator.ID,
+		EventType:      model.LifecycleEventHired,
+		Payload:        hiredPayload,
+		ActorType:      model.ActorTypeAPI,
+		ActorID:        actorIDFromRequest(r),
+	}); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
 	writeJSON(w, http.StatusCreated, map[string]any{"collaborator": collaborator})
 }
 
