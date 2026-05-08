@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/coreauth"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
@@ -135,6 +136,11 @@ func AuthenticateWithPassword(
 	}
 	if !valid {
 		return model.Collaborator{}, model.AuthSession{}, "", ErrAuthInvalidCredentials
+	}
+
+	// Universal MFA invariant: refuse session issuance if mfa not enrolled.
+	if err := mfa.EnforceMFAEnrolled(ctx, db, collaborator.ID); err != nil {
+		return model.Collaborator{}, model.AuthSession{}, "", err
 	}
 
 	session, token, err := createAuthSession(ctx, db, collaborator.ID, req.Metadata, ttl)
