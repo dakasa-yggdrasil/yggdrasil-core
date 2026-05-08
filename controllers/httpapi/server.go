@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,10 +12,12 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/oidc"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/cryptoenvelope"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/provisioner"
@@ -145,6 +148,19 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		rabbitmq:    conn,
 		logger:      logger,
 	}
+	// Optional: auth secrets envelope. KEK is 32 raw bytes base64-encoded
+	// in YGGDRASIL_AUTH_KEK_BASE64; if absent the MFA HTTP layer fails
+	// loud rather than persisting unencrypted TOTP/WebAuthn material.
+	if kek := strings.TrimSpace(os.Getenv("YGGDRASIL_AUTH_KEK_BASE64")); kek != "" {
+		raw, err := base64.StdEncoding.DecodeString(kek)
+		if err != nil {
+			return nil, fmt.Errorf("YGGDRASIL_AUTH_KEK_BASE64: %w", err)
+		}
+		if len(raw) != 32 {
+			return nil, fmt.Errorf("YGGDRASIL_AUTH_KEK_BASE64 must decode to 32 bytes, got %d", len(raw))
+		}
+		server.envelope = cryptoenvelope.NewWithStaticKEK(raw)
+	}
 	server.dispatchWorkflow = func(ctx context.Context, ref model.ManifestSelector, inputs map[string]any) error {
 		_, err := messagecontroller.RunWorkflow(ctx, server.rabbitmq, server.db, model.RunWorkflowRequest{
 			Workflow: ref,
@@ -196,6 +212,16 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("DELETE /api/v1/auth/providers/{provider}", server.handleThirdPartyAuthProviderDelete)
 	mux.HandleFunc("GET /api/v1/auth/session", server.handleAuthSession)
 	mux.HandleFunc("POST /api/v1/auth/logout", server.handleAuthLogout)
+	// MFA enroll endpoints (universal MFA mandatory invariant).
+	mux.HandleFunc("POST /api/v1/auth/mfa/enroll/request", server.handleMFAEnrollRequest)
+	mux.HandleFunc("POST /api/v1/auth/mfa/factors/totp/begin", server.handleMFATOTPBegin)
+	mux.HandleFunc("POST /api/v1/auth/mfa/factors/totp/finish", server.handleMFATOTPFinish)
+	mux.HandleFunc("POST /api/v1/auth/mfa/factors/webauthn/begin", server.handleMFAWebAuthnBegin)
+	mux.HandleFunc("POST /api/v1/auth/mfa/factors/webauthn/finish", server.handleMFAWebAuthnFinish)
+	mux.HandleFunc("POST /api/v1/auth/mfa/recovery-codes", server.handleMFAGenerateRecoveryCodes)
+	// SCIM clients admin (rotate bearer tokens).
+	mux.HandleFunc("POST /api/v1/auth/scim/clients", server.handleSCIMClientCreate)
+	mux.HandleFunc("GET /api/v1/auth/scim/clients", server.handleSCIMClientList)
 	mux.HandleFunc("POST /api/v1/invites", server.handleInviteCreate)
 	mux.HandleFunc("GET /api/v1/invites", server.handleInviteList)
 	mux.HandleFunc("GET /api/v1/invites/validate", server.handleInviteValidate)
@@ -429,6 +455,13 @@ type Server struct {
 	// even when the console isn't wanted — keeps the slim test/dev path).
 	consoleHandler     http.Handler
 	consoleMountPrefix string
+	// envelope encrypts MFA secrets and SAML signing keys at rest. Read from
+	// YGGDRASIL_AUTH_KEK_BASE64 (32 raw bytes base64-encoded). When unset
+	// MFA enroll handlers refuse with 503 — secrets-at-rest is mandatory.
+	envelope *cryptoenvelope.Envelope
+	// webauthnSessions caches in-flight WebAuthn registration challenges
+	// keyed by collaborator UUID. Phase 1 in-memory; Phase 2 moves to Redis.
+	webauthnSessions sync.Map
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {
