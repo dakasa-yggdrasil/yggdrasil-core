@@ -16,9 +16,10 @@ func TestHandleOpsWorkflowsList_DefaultLimit(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	mock.ExpectQuery(`SELECT .* FROM workflow_runs`).
+	mock.ExpectQuery(`SELECT .* FROM public\.workflow_runs`).
+		WithArgs(50).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"run_id", "workflow_name", "integration", "status",
+			"id", "workflow_name", "integration", "status",
 			"started_at", "finished_at", "trigger_source", "error",
 		}))
 
@@ -38,9 +39,10 @@ func TestHandleOpsWorkflowsList_StatusFilter(t *testing.T) {
 	require.NoError(t, err)
 	defer db.Close()
 
-	mock.ExpectQuery(`SELECT .* FROM workflow_runs WHERE .*status = ANY\(\$1\)`).
+	mock.ExpectQuery(`SELECT .* FROM public\.workflow_runs WHERE .*status = ANY\(\$1\)`).
+		WithArgs(sqlmock.AnyArg(), 50).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"run_id", "workflow_name", "integration", "status",
+			"id", "workflow_name", "integration", "status",
 			"started_at", "finished_at", "trigger_source", "error",
 		}))
 

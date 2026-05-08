@@ -270,6 +270,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 
 	mux.HandleFunc("GET /api/v1/collaborators", server.handleCollaboratorList)
 	mux.HandleFunc("POST /api/v1/collaborators", server.handleCollaboratorCreate)
+	mux.HandleFunc("GET /api/v1/collaborators/{id}", server.handleCollaboratorGet)
 	mux.HandleFunc("PATCH /api/v1/collaborators/{id}", server.handleCollaboratorUpdate)
 	mux.HandleFunc("POST /api/v1/collaborators/{id}/offboard", server.handleCollaboratorOffboard)
 	mux.HandleFunc("POST /api/v1/collaborators/{id}/suspend", server.handleCollaboratorSuspend)
@@ -336,6 +337,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/console/integration-instances", server.handleIntegrationInstanceCreate)
 	mux.HandleFunc("GET /api/v1/console/collaborators", server.handleCollaboratorList)
 	mux.HandleFunc("POST /api/v1/console/collaborators", server.handleCollaboratorCreate)
+	mux.HandleFunc("GET /api/v1/console/collaborators/{id}", server.handleCollaboratorGet)
 	mux.HandleFunc("PATCH /api/v1/console/collaborators/{id}", server.handleCollaboratorUpdate)
 	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/offboard", server.handleCollaboratorOffboard)
 	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/suspend", server.handleCollaboratorSuspend)
@@ -883,6 +885,22 @@ func (s *Server) handleCollaboratorCreate(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusCreated, map[string]any{"collaborator": collaborator})
 }
 
+func (s *Server) handleCollaboratorGet(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		writeMappedError(w, fmt.Errorf("collaborator id is required"))
+		return
+	}
+
+	collaborator, err := repository.GetCollaborator(r.Context(), s.db, id)
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collaborator})
+}
+
 func (s *Server) handleCollaboratorUpdate(w http.ResponseWriter, r *http.Request) {
 	var req model.UpdateCollaboratorRequest
 	if err := decodeJSON(r, &req); err != nil {
@@ -944,6 +962,9 @@ func (s *Server) handleTeamMembershipList(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		writeMappedError(w, err)
 		return
+	}
+	if memberships == nil {
+		memberships = []model.TeamMembership{}
 	}
 
 	writeJSON(w, http.StatusOK, membershipsResponse{Memberships: memberships})

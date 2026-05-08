@@ -20,17 +20,17 @@ func ListOpsWorkflowRuns(ctx context.Context, db *sql.DB, filter model.ListOpsWo
 	var args []any
 
 	if len(filter.Status) > 0 {
-		args = append(args, pq.Array(filter.Status))
+		args = append(args, pq.Array(toWorkflowRunStatuses(filter.Status)))
 		clauses = append(clauses, "status = ANY($"+strconv.Itoa(len(args))+")")
 	}
 	if filter.Integration != "" {
 		args = append(args, filter.Integration)
-		clauses = append(clauses, "integration = $"+strconv.Itoa(len(args)))
+		clauses = append(clauses, "COALESCE(metadata->>'integration', '') = $"+strconv.Itoa(len(args)))
 	}
 	if filter.Search != "" {
 		args = append(args, "%"+filter.Search+"%")
 		ph := "$" + strconv.Itoa(len(args))
-		clauses = append(clauses, "(run_id ILIKE "+ph+" OR workflow_name ILIKE "+ph+")")
+		clauses = append(clauses, "(id::text ILIKE "+ph+" OR workflow_name ILIKE "+ph+")")
 	}
 
 	args = append(args, limit)
@@ -41,12 +41,12 @@ func ListOpsWorkflowRuns(ctx context.Context, db *sql.DB, filter model.ListOpsWo
 		where = "WHERE " + strings.Join(clauses, " AND ")
 	}
 
-	q := `SELECT run_id, COALESCE(workflow_name, ''),
-	             COALESCE(integration, ''), status,
+	q := `SELECT id::text, COALESCE(workflow_name, ''),
+	             COALESCE(metadata->>'integration', ''), status,
 	             started_at, finished_at,
-	             COALESCE(trigger_source, 'unknown'),
+	             COALESCE(metadata->>'source', metadata->>'trigger_source', 'unknown'),
 	             COALESCE(error, '')
-	      FROM workflow_runs ` + where + `
+	      FROM public.workflow_runs ` + where + `
 	      ORDER BY COALESCE(started_at, NOW()) DESC LIMIT ` + limitArg
 
 	rows, err := db.QueryContext(ctx, q, args...)
@@ -63,6 +63,7 @@ func ListOpsWorkflowRuns(ctx context.Context, db *sql.DB, filter model.ListOpsWo
 			&startedAt, &finishedAt, &r.TriggerSource, &r.Error); err != nil {
 			return model.OpsWorkflowsResponse{}, err
 		}
+		r.Status = toOpsWorkflowStatus(r.Status)
 		if startedAt.Valid {
 			t := startedAt.Time
 			r.StartedAt = &t
@@ -77,4 +78,40 @@ func ListOpsWorkflowRuns(ctx context.Context, db *sql.DB, filter model.ListOpsWo
 		return model.OpsWorkflowsResponse{}, err
 	}
 	return out, nil
+}
+
+func toWorkflowRunStatuses(statuses []string) []string {
+	out := make([]string, 0, len(statuses))
+	for _, status := range statuses {
+		switch strings.TrimSpace(strings.ToLower(status)) {
+		case "active":
+			out = append(out, "running")
+		case "scheduled":
+			out = append(out, "pending")
+		case "aborted":
+			out = append(out, "cancelled")
+		case "cancelled":
+			out = append(out, "cancelled")
+		case "running", "pending", "succeeded", "failed":
+			out = append(out, strings.TrimSpace(strings.ToLower(status)))
+		default:
+			if trimmed := strings.TrimSpace(status); trimmed != "" {
+				out = append(out, trimmed)
+			}
+		}
+	}
+	return out
+}
+
+func toOpsWorkflowStatus(status string) string {
+	switch strings.TrimSpace(strings.ToLower(status)) {
+	case "running":
+		return "active"
+	case "pending":
+		return "scheduled"
+	case "cancelled":
+		return "aborted"
+	default:
+		return status
+	}
 }
