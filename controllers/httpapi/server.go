@@ -248,6 +248,14 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/integration-instances", server.handleIntegrationInstanceList)
 	mux.HandleFunc("POST /api/v1/integration-instances", server.handleIntegrationInstanceCreate)
 	mux.HandleFunc("GET /api/v1/integration-runtime-states", server.handleIntegrationRuntimeStateList)
+
+	// Ops console — Phase 1 foundation
+	mux.HandleFunc("GET /api/v1/ops/surfaces", server.handleOpsSurfacesList)
+	mux.HandleFunc("GET /api/v1/ops/surfaces/{id}/manifest", server.handleOpsSurfaceManifest)
+	mux.HandleFunc("GET /api/v1/ops/surfaces/{id}/data/{viewId}", server.handleOpsSurfaceData)
+	mux.HandleFunc("POST /api/v1/ops/surfaces/{id}/action/{actionId}", server.handleOpsSurfaceAction)
+	mux.HandleFunc("GET /api/v1/ops/workflows", server.handleOpsWorkflowsList)
+
 	mux.HandleFunc("GET /api/v1/collaborators", server.handleCollaboratorList)
 	mux.HandleFunc("POST /api/v1/collaborators", server.handleCollaboratorCreate)
 	mux.HandleFunc("PATCH /api/v1/collaborators/{id}", server.handleCollaboratorUpdate)
@@ -1634,6 +1642,10 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(status)
 	_ = json.NewEncoder(w).Encode(payload)
+}
+
+func writeJSONError(w http.ResponseWriter, status int, msg string) {
+	writeJSON(w, status, map[string]string{"error": msg})
 }
 
 func writeMappedError(w http.ResponseWriter, err error) {
