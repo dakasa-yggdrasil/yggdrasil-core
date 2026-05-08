@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 )
@@ -350,6 +351,13 @@ func createThirdPartyAuthSession(
 		"provider": identity.Provider,
 		"subject":  identity.Subject,
 		"login":    identity.Login,
+	}
+
+	// Universal MFA invariant: refuse session even after third-party
+	// auto-provision until the collaborator finishes MFA enroll. Callers
+	// should redirect to the enroll flow when this returns ErrMFANotEnrolled.
+	if err := mfa.EnforceMFAEnrolled(ctx, db, collaborator.ID); err != nil {
+		return model.Collaborator{}, model.ThirdPartyIdentity{}, model.AuthSession{}, "", err
 	}
 
 	session, token, err := createAuthSession(ctx, db, collaborator.ID, metadata, ttl)
