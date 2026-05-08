@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"net"
 	"net/http"
@@ -11,6 +12,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/coreauth"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -38,6 +40,11 @@ type thirdPartyAuthProvidersResponse struct {
 }
 
 func (s *Server) handleAuthPasswordUpsert(w http.ResponseWriter, r *http.Request) {
+	if err := authorizeAuthAdminRequest(r); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
 	var req model.UpsertPasswordCredentialRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeMappedError(w, err)
@@ -71,6 +78,10 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		authSessionTTL(),
 	)
 	if err != nil {
+		if errors.Is(err, mfa.ErrMFANotEnrolled) {
+			s.writeMFAEnrollRequired(w, r, collaborator)
+			return
+		}
 		writeMappedError(w, err)
 		return
 	}
@@ -98,6 +109,10 @@ func (s *Server) handleAuthThirdPartyLogin(w http.ResponseWriter, r *http.Reques
 		authSessionTTL(),
 	)
 	if err != nil {
+		if errors.Is(err, mfa.ErrMFANotEnrolled) {
+			s.writeMFAEnrollRequired(w, r, collaborator)
+			return
+		}
 		writeMappedError(w, err)
 		return
 	}
@@ -221,6 +236,16 @@ func (s *Server) handleAuthThirdPartyCallback(w http.ResponseWriter, r *http.Req
 		authSessionTTL(),
 	)
 	if err != nil {
+		if errors.Is(err, mfa.ErrMFANotEnrolled) {
+			enroll, issueErr := s.issueMFAEnrollLink(r.Context(), r, collaborator)
+			if issueErr != nil {
+				writeMappedError(w, issueErr)
+				return
+			}
+			clearThirdPartyStateCookie(w)
+			http.Redirect(w, r, enroll.EnrollURL, http.StatusFound)
+			return
+		}
 		writeMappedError(w, err)
 		return
 	}
@@ -293,6 +318,11 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleThirdPartyIdentityList(w http.ResponseWriter, r *http.Request) {
+	if err := authorizeAuthAdminRequest(r); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
 	identities, err := repository.ListThirdPartyIdentities(r.Context(), s.db, model.ListThirdPartyIdentitiesRequest{
 		CollaboratorID: queryString(r, "collaborator_id"),
 		Provider:       queryString(r, "provider"),
@@ -307,6 +337,11 @@ func (s *Server) handleThirdPartyIdentityList(w http.ResponseWriter, r *http.Req
 }
 
 func (s *Server) handleThirdPartyIdentityUpsert(w http.ResponseWriter, r *http.Request) {
+	if err := authorizeAuthAdminRequest(r); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
 	var req model.UpsertThirdPartyIdentityRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeMappedError(w, err)
@@ -326,6 +361,11 @@ func (s *Server) handleThirdPartyIdentityUpsert(w http.ResponseWriter, r *http.R
 }
 
 func (s *Server) handleThirdPartyIdentityDelete(w http.ResponseWriter, r *http.Request) {
+	if err := authorizeAuthAdminRequest(r); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
 	identity, collaborator, err := repository.DeleteThirdPartyIdentity(r.Context(), s.db, model.DeleteThirdPartyIdentityRequest{
 		Provider: r.PathValue("provider"),
 		Subject:  r.PathValue("subject"),
@@ -354,6 +394,11 @@ func (s *Server) handleThirdPartyAuthProviderList(w http.ResponseWriter, r *http
 }
 
 func (s *Server) handleThirdPartyAuthProviderGet(w http.ResponseWriter, r *http.Request) {
+	if err := authorizeAuthAdminRequest(r); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
 	provider, err := repository.GetThirdPartyAuthProvider(r.Context(), s.db, model.GetThirdPartyAuthProviderRequest{
 		Name: r.PathValue("provider"),
 	})
@@ -365,6 +410,11 @@ func (s *Server) handleThirdPartyAuthProviderGet(w http.ResponseWriter, r *http.
 }
 
 func (s *Server) handleThirdPartyAuthProviderUpsert(w http.ResponseWriter, r *http.Request) {
+	if err := authorizeAuthAdminRequest(r); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
 	var req model.UpsertThirdPartyAuthProviderRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeMappedError(w, err)
@@ -470,6 +520,11 @@ func parseManagedSecretWriteRef(ref string) (namespace string, name string, key 
 }
 
 func (s *Server) handleThirdPartyAuthProviderDelete(w http.ResponseWriter, r *http.Request) {
+	if err := authorizeAuthAdminRequest(r); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
 	provider, err := repository.DeleteThirdPartyAuthProvider(r.Context(), s.db, model.DeleteThirdPartyAuthProviderRequest{
 		Name: r.PathValue("provider"),
 	})

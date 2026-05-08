@@ -18,7 +18,7 @@ import (
 // metadataString extracts a string field from session metadata (set by the
 // HTTP layer via mergeAuthMetadata). Returns "" when the key is missing or
 // not a string, so callers can pass the result directly to NOT-NULL columns
-// that default to ''.
+// that default to ”.
 func metadataString(m map[string]any, key string) string {
 	if m == nil {
 		return ""
@@ -156,7 +156,7 @@ func AuthenticateWithPassword(
 
 	// Universal MFA invariant: refuse session issuance if mfa not enrolled.
 	if err := mfa.EnforceMFAEnrolled(ctx, db, collaborator.ID); err != nil {
-		return model.Collaborator{}, model.AuthSession{}, "", err
+		return collaborator, model.AuthSession{}, "", err
 	}
 
 	session, token, err := createAuthSession(ctx, db, collaborator.ID, req.Metadata, ttl)

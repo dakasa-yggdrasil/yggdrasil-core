@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"net/http"
 	"os"
+	"strings"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
@@ -27,6 +28,15 @@ type mfaEnrollRequestBody struct {
 type mfaEnrollResponse struct {
 	EnrollURL string    `json:"enroll_url"`
 	ExpiresAt time.Time `json:"expires_at"`
+}
+
+type mfaEnrollRequiredResponse struct {
+	Error        string              `json:"error"`
+	Code         string              `json:"code"`
+	Message      string              `json:"message"`
+	EnrollURL    string              `json:"enroll_url"`
+	ExpiresAt    time.Time           `json:"expires_at"`
+	Collaborator *model.Collaborator `json:"collaborator,omitempty"`
 }
 
 // hashEnrollToken returns the SHA-256 of the raw token (lower-cased hex).
@@ -49,18 +59,81 @@ func (s *Server) resolveCollaboratorFromEnrollToken(ctx context.Context, raw str
 		return model.Collaborator{}, err
 	}
 	if tok.ConsumedAt != nil {
-		return model.Collaborator{}, errors.New("token already consumed")
+		return model.Collaborator{}, repository.ErrMFAEnrollTokenAlreadyConsumed
 	}
 	if !tok.ExpiresAt.IsZero() && tok.ExpiresAt.Before(time.Now()) {
-		return model.Collaborator{}, errors.New("token expired")
+		return model.Collaborator{}, repository.ErrMFAEnrollTokenExpired
 	}
 	return repository.GetCollaborator(ctx, s.db, tok.CollaboratorID.String())
+}
+
+func (s *Server) issueMFAEnrollLink(ctx context.Context, r *http.Request, collab model.Collaborator) (mfaEnrollResponse, error) {
+	raw := make([]byte, 32)
+	if _, err := rand.Read(raw); err != nil {
+		return mfaEnrollResponse{}, err
+	}
+	token := hex.EncodeToString(raw)
+	hash := hashEnrollToken(token)
+
+	expiresAt := time.Now().Add(7 * 24 * time.Hour)
+	if _, err := repository.IssueMFAEnrollToken(ctx, s.db, collab.ID, hash, expiresAt); err != nil {
+		return mfaEnrollResponse{}, err
+	}
+
+	return mfaEnrollResponse{
+		EnrollURL: fmt.Sprintf("%s/mfa/enroll?token=%s", consoleBaseURL(r), token),
+		ExpiresAt: expiresAt,
+	}, nil
+}
+
+func (s *Server) writeMFAEnrollRequired(w http.ResponseWriter, r *http.Request, collab model.Collaborator) {
+	enroll, err := s.issueMFAEnrollLink(r.Context(), r, collab)
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusPreconditionRequired, mfaEnrollRequiredResponse{
+		Error:        "mfa_not_enrolled",
+		Code:         "mfa_not_enrolled",
+		Message:      "MFA enrollment is required before a session can be issued.",
+		EnrollURL:    enroll.EnrollURL,
+		ExpiresAt:    enroll.ExpiresAt,
+		Collaborator: &collab,
+	})
+}
+
+func consoleBaseURL(r *http.Request) string {
+	if base := strings.TrimRight(strings.TrimSpace(os.Getenv("YGGDRASIL_CONSOLE_URL")), "/"); base != "" {
+		return base
+	}
+	if r != nil {
+		scheme := strings.TrimSpace(r.Header.Get("X-Forwarded-Proto"))
+		if scheme == "" {
+			scheme = "https"
+			if r.TLS == nil && (strings.HasPrefix(r.Host, "localhost") || strings.HasPrefix(r.Host, "127.0.0.1")) {
+				scheme = "http"
+			}
+		}
+		host := strings.TrimSpace(r.Header.Get("X-Forwarded-Host"))
+		if host == "" {
+			host = strings.TrimSpace(r.Host)
+		}
+		if host != "" {
+			return scheme + "://" + host
+		}
+	}
+	return "https://yggdrasil.dakasa.me"
 }
 
 // handleMFAEnrollRequest issues a magic-link enroll token (POST). The CLI or
 // onboarding workflow calls this after creating the collaborator + before
 // fanning out provisioning downstream.
 func (s *Server) handleMFAEnrollRequest(w http.ResponseWriter, r *http.Request) {
+	if err := authorizeAuthAdminRequest(r); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
 	var req mfaEnrollRequestBody
 	if err := decodeJSON(r, &req); err != nil {
 		writeMappedError(w, err)
@@ -76,28 +149,22 @@ func (s *Server) handleMFAEnrollRequest(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	raw := make([]byte, 32)
-	if _, err := rand.Read(raw); err != nil {
-		writeMappedError(w, err)
-		return
-	}
-	token := hex.EncodeToString(raw)
-	hash := hashEnrollToken(token)
-
-	expiresAt := time.Now().Add(7 * 24 * time.Hour)
-	if _, err := repository.IssueMFAEnrollToken(r.Context(), s.db, collab.ID, hash, expiresAt); err != nil {
+	enroll, err := s.issueMFAEnrollLink(r.Context(), r, collab)
+	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
 
-	base := os.Getenv("YGGDRASIL_CONSOLE_URL")
-	if base == "" {
-		base = "https://yggdrasil-console.dakasa.me"
+	writeJSON(w, http.StatusCreated, enroll)
+}
+
+func (s *Server) handleMFAEnrollValidate(w http.ResponseWriter, r *http.Request) {
+	collab, err := s.resolveCollaboratorFromEnrollToken(r.Context(), r.URL.Query().Get("token"))
+	if err != nil {
+		writeMappedError(w, err)
+		return
 	}
-	writeJSON(w, http.StatusCreated, mfaEnrollResponse{
-		EnrollURL: fmt.Sprintf("%s/mfa/enroll?token=%s", base, token),
-		ExpiresAt: expiresAt,
-	})
+	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collab})
 }
 
 // totpBeginRequest is the body of POST /api/v1/auth/mfa/factors/totp/begin
@@ -181,6 +248,15 @@ func (s *Server) handleMFATOTPFinish(w http.ResponseWriter, r *http.Request) {
 		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid totp code"})
 		return
 	}
+	codes, hashes, err := mfa.GenerateRecoveryCodes()
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	if err := repository.SetRecoveryCodesHashes(r.Context(), s.db, collab.ID, hashes); err != nil {
+		writeMappedError(w, err)
+		return
+	}
 	if err := repository.ConsumeMFAEnrollToken(r.Context(), s.db, hashEnrollToken(req.Token)); err != nil {
 		writeMappedError(w, err)
 		return
@@ -189,7 +265,11 @@ func (s *Server) handleMFATOTPFinish(w http.ResponseWriter, r *http.Request) {
 		writeMappedError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, map[string]any{"mfa_enrolled": true})
+	writeJSON(w, http.StatusOK, map[string]any{
+		"mfa_enrolled":   true,
+		"codes":          codes,
+		"displayed_once": true,
+	})
 }
 
 // WebAuthn: Phase 1 ships begin (challenge issuance) — finish requires the
@@ -219,9 +299,9 @@ func (s *Server) handleMFAWebAuthnBegin(w http.ResponseWriter, r *http.Request) 
 	s.webauthnSessions.Store(collab.ID.String(), challenge)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"publicKey": map[string]any{
-			"challenge":   hex.EncodeToString(challenge),
-			"rp":          map[string]any{"name": "Yggdrasil", "id": webauthnRelyingPartyID()},
-			"user":        map[string]any{"id": collab.ID.String(), "name": collab.PrimaryEmail, "displayName": collab.DisplayName},
+			"challenge": hex.EncodeToString(challenge),
+			"rp":        map[string]any{"name": "Yggdrasil", "id": webauthnRelyingPartyID()},
+			"user":      map[string]any{"id": collab.ID.String(), "name": collab.PrimaryEmail, "displayName": collab.DisplayName},
 			"pubKeyCredParams": []map[string]any{
 				{"type": "public-key", "alg": -7},
 				{"type": "public-key", "alg": -257},

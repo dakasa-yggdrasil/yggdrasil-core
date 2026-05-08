@@ -357,7 +357,7 @@ func createThirdPartyAuthSession(
 	// auto-provision until the collaborator finishes MFA enroll. Callers
 	// should redirect to the enroll flow when this returns ErrMFANotEnrolled.
 	if err := mfa.EnforceMFAEnrolled(ctx, db, collaborator.ID); err != nil {
-		return model.Collaborator{}, model.ThirdPartyIdentity{}, model.AuthSession{}, "", err
+		return collaborator, identity, model.AuthSession{}, "", err
 	}
 
 	session, token, err := createAuthSession(ctx, db, collaborator.ID, metadata, ttl)

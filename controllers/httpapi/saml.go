@@ -26,7 +26,7 @@ import (
 // samlIdPState memoises the lazily-built SAML IdP. crewjam/saml is heavy to
 // initialise so we do it once per process; rotation reloads via rebuild().
 type samlIdPState struct {
-	mu sync.Mutex
+	mu  sync.Mutex
 	idp *saml.IdP
 }
 
@@ -122,20 +122,25 @@ func (s *Server) handleSAMLSLO(w http.ResponseWriter, r *http.Request) {
 
 // samlSPRegisterRequest is the body of POST /api/v1/auth/saml/service-providers.
 type samlSPRegisterRequest struct {
-	Slug              string            `json:"slug"`
-	SPEntityID        string            `json:"sp_entity_id"`
-	ACSURL            string            `json:"acs_url"`
-	SLOURL            string            `json:"slo_url,omitempty"`
-	NameIDFormat      string            `json:"name_id_format,omitempty"`
-	AttributeMapping  map[string]string `json:"attribute_mapping,omitempty"`
-	SigningRequired   bool              `json:"signing_required"`
-	EncryptionRequired bool             `json:"encryption_required"`
-	SPX509CertPEM     string            `json:"sp_x509_cert"`
+	Slug               string            `json:"slug"`
+	SPEntityID         string            `json:"sp_entity_id"`
+	ACSURL             string            `json:"acs_url"`
+	SLOURL             string            `json:"slo_url,omitempty"`
+	NameIDFormat       string            `json:"name_id_format,omitempty"`
+	AttributeMapping   map[string]string `json:"attribute_mapping,omitempty"`
+	SigningRequired    bool              `json:"signing_required"`
+	EncryptionRequired bool              `json:"encryption_required"`
+	SPX509CertPEM      string            `json:"sp_x509_cert"`
 }
 
 // handleSAMLSPRegister stores a new SAML SP entry. Trust workflows
 // (`register-saml-sp-*`) call this after they've validated the SP's metadata.
 func (s *Server) handleSAMLSPRegister(w http.ResponseWriter, r *http.Request) {
+	if err := authorizeAuthAdminRequest(r); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
 	var req samlSPRegisterRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeMappedError(w, err)
@@ -175,6 +180,23 @@ func (s *Server) handleSAMLSPRegister(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusCreated, sp)
 }
 
+func (s *Server) handleSAMLSPList(w http.ResponseWriter, r *http.Request) {
+	if err := authorizeAuthAdminRequest(r); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
+	items, err := repository.ListSAMLServiceProviders(r.Context(), s.db)
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	if items == nil {
+		items = []model.SAMLServiceProvider{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"service_providers": items})
+}
+
 // samlRotateSigningCertRequest is the body of POST /api/v1/auth/saml/rotate-signing-cert.
 type samlRotateSigningCertRequest struct {
 	KeyID         string `json:"key_id"`
@@ -188,6 +210,11 @@ type samlRotateSigningCertRequest struct {
 // it active. Caller may supply PEM material directly when rotation came
 // from an external CA; otherwise we self-generate.
 func (s *Server) handleSAMLRotateSigningCert(w http.ResponseWriter, r *http.Request) {
+	if err := authorizeAuthAdminRequest(r); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
 	if s.envelope == nil {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "envelope unavailable"})
 		return
@@ -247,12 +274,12 @@ func generateSelfSignedRSA(bits int, notAfter time.Time) (privPEM, certPEM strin
 		return "", "", err
 	}
 	tmpl := &x509.Certificate{
-		SerialNumber: big.NewInt(time.Now().UnixNano()),
-		Subject:      pkix.Name{CommonName: "yggdrasil-saml-idp"},
-		NotBefore:    time.Now().Add(-1 * time.Minute),
-		NotAfter:     notAfter,
-		KeyUsage:     x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
-		ExtKeyUsage:  []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		SerialNumber:          big.NewInt(time.Now().UnixNano()),
+		Subject:               pkix.Name{CommonName: "yggdrasil-saml-idp"},
+		NotBefore:             time.Now().Add(-1 * time.Minute),
+		NotAfter:              notAfter,
+		KeyUsage:              x509.KeyUsageDigitalSignature | x509.KeyUsageKeyEncipherment,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
 		BasicConstraintsValid: true,
 	}
 	der, err := x509.CreateCertificate(rand.Reader, tmpl, tmpl, &priv.PublicKey, priv)

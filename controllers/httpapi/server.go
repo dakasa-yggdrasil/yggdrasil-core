@@ -17,6 +17,7 @@ import (
 
 	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/oidc"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/scim"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/cryptoenvelope"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
@@ -215,6 +216,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/auth/logout", server.handleAuthLogout)
 	// MFA enroll endpoints (universal MFA mandatory invariant).
 	mux.HandleFunc("POST /api/v1/auth/mfa/enroll/request", server.handleMFAEnrollRequest)
+	mux.HandleFunc("GET /api/v1/auth/mfa/enroll/validate", server.handleMFAEnrollValidate)
 	mux.HandleFunc("POST /api/v1/auth/mfa/factors/totp/begin", server.handleMFATOTPBegin)
 	mux.HandleFunc("POST /api/v1/auth/mfa/factors/totp/finish", server.handleMFATOTPFinish)
 	mux.HandleFunc("POST /api/v1/auth/mfa/factors/webauthn/begin", server.handleMFAWebAuthnBegin)
@@ -231,6 +233,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /saml/sso", server.handleSAMLSSO)
 	mux.HandleFunc("POST /saml/slo", server.handleSAMLSLO)
 	mux.HandleFunc("POST /api/v1/auth/saml/service-providers", server.handleSAMLSPRegister)
+	mux.HandleFunc("GET /api/v1/auth/saml/service-providers", server.handleSAMLSPList)
 	mux.HandleFunc("POST /api/v1/auth/saml/rotate-signing-cert", server.handleSAMLRotateSigningCert)
 	// SCIM 2.0 IdP (read-only do lado SP). Bearer token validated against
 	// scim_clients table; PUT/PATCH/DELETE rejected by ReadOnlyGuard to
@@ -368,6 +371,11 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/console/auth/providers", server.handleThirdPartyAuthProviderUpsert)
 	mux.HandleFunc("GET /api/v1/console/auth/providers/{provider}", server.handleThirdPartyAuthProviderGet)
 	mux.HandleFunc("DELETE /api/v1/console/auth/providers/{provider}", server.handleThirdPartyAuthProviderDelete)
+	mux.HandleFunc("POST /api/v1/console/auth/scim/clients", server.handleSCIMClientCreate)
+	mux.HandleFunc("GET /api/v1/console/auth/scim/clients", server.handleSCIMClientList)
+	mux.HandleFunc("POST /api/v1/console/auth/saml/service-providers", server.handleSAMLSPRegister)
+	mux.HandleFunc("GET /api/v1/console/auth/saml/service-providers", server.handleSAMLSPList)
+	mux.HandleFunc("POST /api/v1/console/auth/saml/rotate-signing-cert", server.handleSAMLRotateSigningCert)
 	mux.HandleFunc("GET /api/v1/console/products", server.handleProductList)
 	mux.HandleFunc("POST /api/v1/console/products", server.handleProductCreate)
 	mux.HandleFunc("GET /api/v1/console/secrets", server.handleManagedSecretList)
@@ -1742,6 +1750,8 @@ func httpStatusFromError(err error) int {
 		return http.StatusServiceUnavailable
 	case errors.Is(err, errWorkflowRunUnauthorized):
 		return http.StatusUnauthorized
+	case errors.Is(err, errAuthAdminUnauthorized):
+		return http.StatusUnauthorized
 	case errors.Is(err, repository.ErrAuthInvalidCredentials),
 		errors.Is(err, repository.ErrAuthSessionNotFound),
 		errors.Is(err, repository.ErrAuthSessionExpired),
@@ -1749,13 +1759,19 @@ func httpStatusFromError(err error) int {
 		return http.StatusUnauthorized
 	case errors.Is(err, repository.ErrThirdPartyIdentityConflict):
 		return http.StatusConflict
+	case errors.Is(err, mfa.ErrMFANotEnrolled):
+		return http.StatusPreconditionRequired
 	case errors.Is(err, repository.ErrManifestNotFound),
 		errors.Is(err, repository.ErrCollaboratorNotFound),
 		errors.Is(err, repository.ErrTeamNotFound),
 		errors.Is(err, repository.ErrManagedSecretNotFound),
 		errors.Is(err, repository.ErrThirdPartyIdentityNotFound),
-		errors.Is(err, repository.ErrThirdPartyAuthProviderNotFound):
+		errors.Is(err, repository.ErrThirdPartyAuthProviderNotFound),
+		errors.Is(err, repository.ErrMFAEnrollTokenNotFound):
 		return http.StatusNotFound
+	case errors.Is(err, repository.ErrMFAEnrollTokenAlreadyConsumed),
+		errors.Is(err, repository.ErrMFAEnrollTokenExpired):
+		return http.StatusGone
 	case errors.Is(err, errAutoProvisionRejected):
 		return http.StatusForbidden
 	}
