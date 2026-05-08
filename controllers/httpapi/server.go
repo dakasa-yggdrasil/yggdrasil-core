@@ -17,6 +17,7 @@ import (
 
 	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/oidc"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/scim"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/cryptoenvelope"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -222,6 +223,12 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// SCIM clients admin (rotate bearer tokens).
 	mux.HandleFunc("POST /api/v1/auth/scim/clients", server.handleSCIMClientCreate)
 	mux.HandleFunc("GET /api/v1/auth/scim/clients", server.handleSCIMClientList)
+	// SCIM 2.0 IdP (read-only do lado SP). Bearer token validated against
+	// scim_clients table; PUT/PATCH/DELETE rejected by ReadOnlyGuard to
+	// preserve Crossplane-style zero-drift invariant.
+	scimMux := http.NewServeMux()
+	scim.NewServer(server.db).RegisterRoutes(scimMux)
+	mux.Handle("/scim/v2/", scim.BearerAuth(server.db)(scim.ReadOnlyGuard()(scimMux)))
 	mux.HandleFunc("POST /api/v1/invites", server.handleInviteCreate)
 	mux.HandleFunc("GET /api/v1/invites", server.handleInviteList)
 	mux.HandleFunc("GET /api/v1/invites/validate", server.handleInviteValidate)
