@@ -58,8 +58,8 @@ github.com/cespare/xxhash/v2 v2.3.0/go.mod h1:VGX0DQ3Q6kWi7AoAeZDth3/j3BFtOZR5XL
 github.com/creack/pty v1.1.9/go.mod h1:oKZEueFk5CKHvIhNR5MUki03XCEU+Q6VDXinZuGJ33E=
 github.com/crewjam/saml v0.5.1 h1:g+mfp0CrLuLRZCK793PgJcZeg5dS/0CDwoeAX2zcwNI=
 github.com/crewjam/saml v0.5.1/go.mod h1:r0fDkmFe5URDgPrmtH0IYokva6fac3AUdstiPhyEolQ=
-github.com/dakasa-yggdrasil/yggdrasil-sdk-go v0.1.0 h1:bnmQpqxyJoZB1XQ2u/88vFkO29O2EmoQr5LEgoyFwkk=
-github.com/dakasa-yggdrasil/yggdrasil-sdk-go v0.1.0/go.mod h1:ioc4KFweOm/Y30ppDBh1N8+/xk9YNq/Yl+DqBOBcQKY=
+github.com/dakasa-yggdrasil/yggdrasil-sdk-go v0.2.0 h1:/eu64XBP+KvfUN1OTwdy3IEfeMEGG4lt8U/qBhU/F80=
+github.com/dakasa-yggdrasil/yggdrasil-sdk-go v0.2.0/go.mod h1:ymWaM91GrRRjqL1hLfQaJFKhKSUoCsE4z8y49o3U/f8=
 github.com/davecgh/go-spew v1.1.0/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
 github.com/davecgh/go-spew v1.1.1 h1:vj9j/u1bqnvCEfJOwUhtlOARqs3+rkHYY13jYWTU97c=
 github.com/davecgh/go-spew v1.1.1/go.mod h1:J7Y8YcW2NihsgmVo/mv3lAwl/skON4iLHjSsI+c5H38=
