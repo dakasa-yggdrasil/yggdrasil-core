@@ -3,6 +3,7 @@ package mfa
 import (
 	"crypto/rand"
 	"crypto/sha256"
+	"crypto/subtle"
 	"encoding/base32"
 	"encoding/hex"
 	"errors"
@@ -43,10 +44,14 @@ func GenerateRecoveryCodes() (codes []string, hashes []string, err error) {
 // plaintext code, or -1 + ErrInvalidRecoveryCode if no match is found.
 // Caller is responsible for atomically removing/marking the matching hash to
 // enforce single-use.
+//
+// Comparison uses crypto/subtle.ConstantTimeCompare to avoid leaking match
+// position via timing. The loop still short-circuits on first match, but each
+// individual byte comparison is constant-time.
 func VerifyRecoveryCode(code string, storedHashes []string) (int, error) {
-	candidate := hashRecoveryCode(code)
+	candidate := []byte(hashRecoveryCode(code))
 	for i, h := range storedHashes {
-		if h == candidate {
+		if subtle.ConstantTimeCompare([]byte(h), candidate) == 1 {
 			return i, nil
 		}
 	}
