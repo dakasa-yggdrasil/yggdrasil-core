@@ -286,6 +286,7 @@ func GetCollaboratorByPrimaryEmail(ctx context.Context, db *sql.DB, email string
 				third_party_identities,
 				traits,
 				metadata,
+				version,
 				created_at,
 				updated_at
 			FROM public.collaborators
