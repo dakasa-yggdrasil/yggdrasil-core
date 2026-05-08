@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
@@ -541,6 +542,18 @@ func mergeAuthMetadata(input map[string]any, r *http.Request) map[string]any {
 	}
 	if remoteAddr := strings.TrimSpace(r.RemoteAddr); remoteAddr != "" {
 		output["remote_addr"] = remoteAddr
+		// Postgres `inet` rejects "host:port"; strip the port so the typed
+		// auth_sessions.ip_address column gets a parseable value. Falls
+		// back to the raw remoteAddr if the parse fails (covers x-forwarded
+		// pre-stripped values too).
+		if host, _, err := net.SplitHostPort(remoteAddr); err == nil && host != "" {
+			output["ip_address"] = host
+		} else {
+			output["ip_address"] = remoteAddr
+		}
+	}
+	if fp := strings.TrimSpace(r.Header.Get("X-Device-Fingerprint")); fp != "" {
+		output["device_fingerprint"] = fp
 	}
 
 	return output
