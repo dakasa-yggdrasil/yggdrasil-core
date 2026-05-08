@@ -223,6 +223,15 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// SCIM clients admin (rotate bearer tokens).
 	mux.HandleFunc("POST /api/v1/auth/scim/clients", server.handleSCIMClientCreate)
 	mux.HandleFunc("GET /api/v1/auth/scim/clients", server.handleSCIMClientList)
+	// SAML 2.0 IdP endpoints — Phase 1: metadata + admin SP/key registry are
+	// fully wired; SSO/SLO HTTP handlers stub 501 until session-provider
+	// integration lands in Phase 2.
+	mux.HandleFunc("GET /saml/metadata", server.handleSAMLMetadata)
+	mux.HandleFunc("POST /saml/sso", server.handleSAMLSSO)
+	mux.HandleFunc("GET /saml/sso", server.handleSAMLSSO)
+	mux.HandleFunc("POST /saml/slo", server.handleSAMLSLO)
+	mux.HandleFunc("POST /api/v1/auth/saml/service-providers", server.handleSAMLSPRegister)
+	mux.HandleFunc("POST /api/v1/auth/saml/rotate-signing-cert", server.handleSAMLRotateSigningCert)
 	// SCIM 2.0 IdP (read-only do lado SP). Bearer token validated against
 	// scim_clients table; PUT/PATCH/DELETE rejected by ReadOnlyGuard to
 	// preserve Crossplane-style zero-drift invariant.
