@@ -135,3 +135,45 @@ func TestBearerOrSession_FallsBackToCookieWhenBearerInvalid(t *testing.T) {
 		t.Errorf("cookie fallback should have authenticated; status=%d", w.Code)
 	}
 }
+
+func TestRequireAuthenticatedConsoleAPIs_RejectsAnonymousConsoleAndOps(t *testing.T) {
+	s := &Server{}
+	handler := s.requireAuthenticatedConsoleAPIs(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("protected handler should not be called without a session")
+	}))
+
+	for _, path := range []string{
+		"/api/v1/console/collaborators",
+		"/api/v1/ops/workflows",
+		"/api/v1/collaborators",
+		"/api/v1/teams",
+		"/api/v1/team-memberships",
+	} {
+		t.Run(path, func(t *testing.T) {
+			r := httptest.NewRequest(http.MethodGet, path, nil)
+			w := httptest.NewRecorder()
+
+			handler.ServeHTTP(w, r)
+
+			if w.Code != http.StatusUnauthorized {
+				t.Errorf("status: got %d, want %d", w.Code, http.StatusUnauthorized)
+			}
+		})
+	}
+}
+
+func TestRequireAuthenticatedConsoleAPIs_AllowsPublicAuthRoutes(t *testing.T) {
+	s := &Server{}
+	called := false
+	handler := s.requireAuthenticatedConsoleAPIs(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		called = true
+	}))
+
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/auth/session", nil)
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	if !called {
+		t.Fatal("public auth route should pass through")
+	}
+}

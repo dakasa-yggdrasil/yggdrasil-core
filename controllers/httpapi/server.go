@@ -426,7 +426,55 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		mux.Handle(prefix+"/", server.consoleHandler)
 	}
 
-	return server.withLogging(mux), nil
+	return server.withLogging(server.requireAuthenticatedConsoleAPIs(mux)), nil
+}
+
+func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler {
+	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if !requiresAuthenticatedConsoleAPI(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		token, ok := extractAuthToken(r)
+		if !ok {
+			writeJSONError(w, http.StatusUnauthorized, "unauthenticated")
+			return
+		}
+
+		session, collaborator, err := repository.ResolveAuthSession(r.Context(), s.db, token)
+		if err != nil {
+			if isAuthUnauthorizedError(err) {
+				clearAuthCookie(w)
+				writeJSONError(w, http.StatusUnauthorized, "unauthenticated")
+				return
+			}
+			writeMappedError(w, err)
+			return
+		}
+
+		claims := map[string]any{
+			"collaborator_id": collaborator.ID.String(),
+			"session_id":      session.ID.String(),
+			"sub":             collaborator.ID.String(),
+		}
+		next.ServeHTTP(w, r.WithContext(contextWithClaims(r.Context(), claims)))
+	})
+}
+
+func requiresAuthenticatedConsoleAPI(path string) bool {
+	for _, prefix := range []string{
+		"/api/v1/ops",
+		"/api/v1/console",
+		"/api/v1/collaborators",
+		"/api/v1/teams",
+		"/api/v1/team-memberships",
+	} {
+		if path == prefix || strings.HasPrefix(path, prefix+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // ServerOption configures optional Server dependencies.
