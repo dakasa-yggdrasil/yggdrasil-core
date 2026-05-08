@@ -24,6 +24,14 @@ type authLoginResponse struct {
 	Token        string             `json:"token"`
 }
 
+type authMFARequiredResponse struct {
+	Error        string              `json:"error"`
+	Code         string              `json:"code"`
+	Message      string              `json:"message"`
+	Factors      []string            `json:"factors"`
+	Collaborator *model.Collaborator `json:"collaborator,omitempty"`
+}
+
 type authThirdPartyLoginResponse struct {
 	Collaborator model.Collaborator       `json:"collaborator"`
 	Identity     model.ThirdPartyIdentity `json:"identity"`
@@ -71,17 +79,64 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.Metadata = mergeAuthMetadata(req.Metadata, r)
-	collaborator, session, token, err := repository.AuthenticateWithPassword(
-		r.Context(),
-		s.db,
-		req,
-		authSessionTTL(),
-	)
+	collaborator, err := repository.VerifyPasswordCredential(r.Context(), s.db, req)
 	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
+	if err := mfa.EnforceMFAEnrolled(r.Context(), s.db, collaborator.ID); err != nil {
 		if errors.Is(err, mfa.ErrMFANotEnrolled) {
 			s.writeMFAEnrollRequired(w, r, collaborator)
 			return
 		}
+		writeMappedError(w, err)
+		return
+	}
+
+	identity, err := repository.GetAuthIdentityByCollaboratorID(r.Context(), s.db, collaborator.ID)
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	if !identity.HasTOTP {
+		writeJSON(w, http.StatusBadRequest, map[string]string{
+			"error": "mfa enrollment has no TOTP factor available for login",
+			"code":  "mfa_totp_unavailable",
+		})
+		return
+	}
+	if !s.requireEnvelope(w) {
+		return
+	}
+
+	req.TOTPCode = strings.TrimSpace(req.TOTPCode)
+	if req.TOTPCode == "" {
+		writeJSON(w, http.StatusAccepted, authMFARequiredResponse{
+			Error:        "mfa_required",
+			Code:         "mfa_required",
+			Message:      "MFA verification is required before a session can be issued.",
+			Factors:      []string{"totp"},
+			Collaborator: &collaborator,
+		})
+		return
+	}
+
+	secret, err := repository.GetTOTPSecret(r.Context(), s.db, s.envelope, collaborator.ID)
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	if err := mfa.ValidateTOTP(string(secret), req.TOTPCode); err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]string{
+			"error": "invalid totp code",
+			"code":  "invalid_totp",
+		})
+		return
+	}
+
+	session, token, err := repository.CreateAuthSession(r.Context(), s.db, collaborator.ID, req.Metadata, authSessionTTL())
+	if err != nil {
 		writeMappedError(w, err)
 		return
 	}

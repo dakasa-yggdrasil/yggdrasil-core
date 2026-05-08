@@ -109,6 +109,56 @@ func UpsertPasswordCredential(
 	return credential, collaborator, nil
 }
 
+// VerifyPasswordCredential validates the identifier/password pair and returns
+// the collaborator when the credential is active. It intentionally does not
+// issue a session; HTTP callers layer MFA verification on top before calling
+// CreateAuthSession.
+func VerifyPasswordCredential(
+	ctx context.Context,
+	db *sql.DB,
+	req model.LoginWithPasswordRequest,
+) (model.Collaborator, error) {
+	identifier := strings.TrimSpace(req.Identifier)
+	if identifier == "" {
+		return model.Collaborator{}, fmt.Errorf("identifier is required")
+	}
+	if strings.TrimSpace(req.Password) == "" {
+		return model.Collaborator{}, fmt.Errorf("password is required")
+	}
+
+	collaborator, err := resolveCollaboratorForLogin(ctx, db, identifier)
+	if err != nil {
+		if errors.Is(err, ErrCollaboratorNotFound) {
+			return model.Collaborator{}, ErrAuthInvalidCredentials
+		}
+		return model.Collaborator{}, err
+	}
+	if strings.ToLower(strings.TrimSpace(collaborator.Status)) != "active" {
+		return model.Collaborator{}, ErrAuthInvalidCredentials
+	}
+
+	credential, passwordHash, err := getPasswordCredentialRow(ctx, db, collaborator.ID)
+	if err != nil {
+		if errors.Is(err, ErrPasswordCredentialNotFound) {
+			return model.Collaborator{}, ErrAuthInvalidCredentials
+		}
+		return model.Collaborator{}, err
+	}
+	if strings.ToLower(strings.TrimSpace(credential.Status)) != "active" {
+		return model.Collaborator{}, ErrAuthInvalidCredentials
+	}
+
+	valid, err := coreauth.VerifyPassword(passwordHash, req.Password)
+	if err != nil {
+		return model.Collaborator{}, err
+	}
+	if !valid {
+		return model.Collaborator{}, ErrAuthInvalidCredentials
+	}
+
+	return collaborator, nil
+}
+
 // AuthenticateWithPassword validates one login and opens a new session.
 func AuthenticateWithPassword(
 	ctx context.Context,
@@ -116,42 +166,9 @@ func AuthenticateWithPassword(
 	req model.LoginWithPasswordRequest,
 	ttl time.Duration,
 ) (model.Collaborator, model.AuthSession, string, error) {
-	identifier := strings.TrimSpace(req.Identifier)
-	if identifier == "" {
-		return model.Collaborator{}, model.AuthSession{}, "", fmt.Errorf("identifier is required")
-	}
-	if strings.TrimSpace(req.Password) == "" {
-		return model.Collaborator{}, model.AuthSession{}, "", fmt.Errorf("password is required")
-	}
-
-	collaborator, err := resolveCollaboratorForLogin(ctx, db, identifier)
-	if err != nil {
-		if errors.Is(err, ErrCollaboratorNotFound) {
-			return model.Collaborator{}, model.AuthSession{}, "", ErrAuthInvalidCredentials
-		}
-		return model.Collaborator{}, model.AuthSession{}, "", err
-	}
-	if strings.ToLower(strings.TrimSpace(collaborator.Status)) != "active" {
-		return model.Collaborator{}, model.AuthSession{}, "", ErrAuthInvalidCredentials
-	}
-
-	credential, passwordHash, err := getPasswordCredentialRow(ctx, db, collaborator.ID)
-	if err != nil {
-		if errors.Is(err, ErrPasswordCredentialNotFound) {
-			return model.Collaborator{}, model.AuthSession{}, "", ErrAuthInvalidCredentials
-		}
-		return model.Collaborator{}, model.AuthSession{}, "", err
-	}
-	if strings.ToLower(strings.TrimSpace(credential.Status)) != "active" {
-		return model.Collaborator{}, model.AuthSession{}, "", ErrAuthInvalidCredentials
-	}
-
-	valid, err := coreauth.VerifyPassword(passwordHash, req.Password)
+	collaborator, err := VerifyPasswordCredential(ctx, db, req)
 	if err != nil {
 		return model.Collaborator{}, model.AuthSession{}, "", err
-	}
-	if !valid {
-		return model.Collaborator{}, model.AuthSession{}, "", ErrAuthInvalidCredentials
 	}
 
 	// Universal MFA invariant: refuse session issuance if mfa not enrolled.
@@ -165,6 +182,18 @@ func AuthenticateWithPassword(
 	}
 
 	return collaborator, session, token, nil
+}
+
+// CreateAuthSession opens a new authenticated session for a collaborator after
+// the caller has completed every required authentication factor.
+func CreateAuthSession(
+	ctx context.Context,
+	db *sql.DB,
+	collaboratorID uuid.UUID,
+	metadata map[string]any,
+	ttl time.Duration,
+) (model.AuthSession, string, error) {
+	return createAuthSession(ctx, db, collaboratorID, metadata, ttl)
 }
 
 // ResolveAuthSession returns one active session and its collaborator from a raw token.

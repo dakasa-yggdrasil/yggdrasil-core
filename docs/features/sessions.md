@@ -37,8 +37,29 @@ POST /api/v1/auth/login
 { "identifier": "ana", "password": "..." }
 ```
 
-Verifies via `password_credential` (argon2id), opens a session,
-returns the bearer + Set-Cookie.
+Verifies the password credential first. If MFA has not been enrolled,
+the API returns `428` with `code: "mfa_not_enrolled"` and an
+`enroll_url`; no session is issued. If MFA is enrolled but the request
+does not include a TOTP code, the API returns `202` with
+`code: "mfa_required"`:
+
+```json
+{
+  "code": "mfa_required",
+  "factors": ["totp"]
+}
+```
+
+The client completes login by repeating the same request with
+`totp_code`:
+
+```http
+POST /api/v1/auth/login
+{ "identifier": "ana", "password": "...", "totp_code": "123456" }
+```
+
+Only after the TOTP code validates does the API open a session and
+return the bearer + Set-Cookie.
 
 The first admin's password credential is created by the bootstrap
 addon — see [getting-started.md](../getting-started.md). Subsequent

@@ -5,15 +5,21 @@ network boundaries in a self-hosted deployment.
 
 ## Authentication
 
-Two paths, both issuing a session row + bearer token:
+Two paths, both converging on a session row + bearer token after MFA:
 
 1. **Password** — `/api/v1/auth/login`. Credentials checked against
-   `password_credential` table (argon2id hash).
+   `password_credential` table. A valid password returns
+   `mfa_required` until the caller supplies a valid `totp_code`; a
+   session is not issued from password alone.
 2. **OAuth/OIDC** — `/api/v1/auth/third-party/start/<provider>` →
    redirect to the provider → `/api/v1/auth/third-party/callback/
    <provider>` → session issued. Provider config lives in
    `third_party_auth_provider` table (see
    [docs/auth-providers/](./auth-providers/)).
+
+MFA enrollment is mandatory. If a collaborator has no MFA enrollment,
+auth paths return `mfa_not_enrolled` and the console guides the user
+through TOTP enrollment before any session can be created.
 
 Sessions carry a server-side expiry (`AUTH_SESSION_TTL_HOURS`, 720
 default = 30 days). Revocation is immediate via

@@ -45,10 +45,11 @@ type UpsertPasswordCredentialRequest struct {
 	Metadata       map[string]any `json:"metadata,omitempty"`
 }
 
-// LoginWithPasswordRequest starts one local password-based session.
+// LoginWithPasswordRequest validates local credentials. HTTP login callers
+// receive mfa_required until TOTPCode is supplied for enrolled identities.
 type LoginWithPasswordRequest struct {
 	Identifier string         `json:"identifier"`
 	Password   string         `json:"password"`
+	TOTPCode   string         `json:"totp_code,omitempty"`
 	Metadata   map[string]any `json:"metadata,omitempty"`
 }
-
