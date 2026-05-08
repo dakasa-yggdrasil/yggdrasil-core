@@ -9,10 +9,27 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/coreauth"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 )
+
+// metadataString extracts a string field from session metadata (set by the
+// HTTP layer via mergeAuthMetadata). Returns "" when the key is missing or
+// not a string, so callers can pass the result directly to NOT-NULL columns
+// that default to ''.
+func metadataString(m map[string]any, key string) string {
+	if m == nil {
+		return ""
+	}
+	if v, ok := m[key]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
 
 var (
 	ErrPasswordCredentialNotFound = errors.New("password credential not found")
@@ -135,6 +152,11 @@ func AuthenticateWithPassword(
 	}
 	if !valid {
 		return model.Collaborator{}, model.AuthSession{}, "", ErrAuthInvalidCredentials
+	}
+
+	// Universal MFA invariant: refuse session issuance if mfa not enrolled.
+	if err := mfa.EnforceMFAEnrolled(ctx, db, collaborator.ID); err != nil {
+		return model.Collaborator{}, model.AuthSession{}, "", err
 	}
 
 	session, token, err := createAuthSession(ctx, db, collaborator.ID, req.Metadata, ttl)
@@ -264,6 +286,7 @@ func GetCollaboratorByPrimaryEmail(ctx context.Context, db *sql.DB, email string
 				third_party_identities,
 				traits,
 				metadata,
+				version,
 				created_at,
 				updated_at
 			FROM public.collaborators
@@ -361,6 +384,18 @@ func createAuthSession(
 	}
 
 	expiresAt := time.Now().UTC().Add(ttl)
+
+	// Extract device columns from metadata (populated by HTTP layer via
+	// mergeAuthMetadata). Fall back to empty so NOT-NULL DEFAULT '' columns
+	// stay happy. ipAddress stays as *string so a missing/invalid value
+	// becomes SQL NULL on the inet column.
+	deviceFingerprint := metadataString(metadata, "device_fingerprint")
+	userAgent := metadataString(metadata, "user_agent")
+	var ipAddress sql.NullString
+	if v := metadataString(metadata, "ip_address"); v != "" {
+		ipAddress = sql.NullString{String: v, Valid: true}
+	}
+
 	row := db.QueryRowContext(
 		ctx,
 		`
@@ -369,13 +404,19 @@ func createAuthSession(
 				status,
 				token_hash,
 				metadata,
-				expires_at
+				expires_at,
+				device_fingerprint,
+				user_agent,
+				ip_address
 			) VALUES (
 				$1,
 				'active',
 				$2,
 				$3::jsonb,
-				$4
+				$4,
+				$5,
+				$6,
+				$7
 			)
 			RETURNING
 				id,
@@ -392,6 +433,9 @@ func createAuthSession(
 		tokenHash,
 		metadataRaw,
 		expiresAt,
+		deviceFingerprint,
+		userAgent,
+		ipAddress,
 	)
 
 	session, err := scanAuthSession(row)

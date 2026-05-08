@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -11,10 +12,13 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/oidc"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/scim"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/cryptoenvelope"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/provisioner"
@@ -145,6 +149,19 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		rabbitmq:    conn,
 		logger:      logger,
 	}
+	// Optional: auth secrets envelope. KEK is 32 raw bytes base64-encoded
+	// in YGGDRASIL_AUTH_KEK_BASE64; if absent the MFA HTTP layer fails
+	// loud rather than persisting unencrypted TOTP/WebAuthn material.
+	if kek := strings.TrimSpace(os.Getenv("YGGDRASIL_AUTH_KEK_BASE64")); kek != "" {
+		raw, err := base64.StdEncoding.DecodeString(kek)
+		if err != nil {
+			return nil, fmt.Errorf("YGGDRASIL_AUTH_KEK_BASE64: %w", err)
+		}
+		if len(raw) != 32 {
+			return nil, fmt.Errorf("YGGDRASIL_AUTH_KEK_BASE64 must decode to 32 bytes, got %d", len(raw))
+		}
+		server.envelope = cryptoenvelope.NewWithStaticKEK(raw)
+	}
 	server.dispatchWorkflow = func(ctx context.Context, ref model.ManifestSelector, inputs map[string]any) error {
 		_, err := messagecontroller.RunWorkflow(ctx, server.rabbitmq, server.db, model.RunWorkflowRequest{
 			Workflow: ref,
@@ -196,6 +213,31 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("DELETE /api/v1/auth/providers/{provider}", server.handleThirdPartyAuthProviderDelete)
 	mux.HandleFunc("GET /api/v1/auth/session", server.handleAuthSession)
 	mux.HandleFunc("POST /api/v1/auth/logout", server.handleAuthLogout)
+	// MFA enroll endpoints (universal MFA mandatory invariant).
+	mux.HandleFunc("POST /api/v1/auth/mfa/enroll/request", server.handleMFAEnrollRequest)
+	mux.HandleFunc("POST /api/v1/auth/mfa/factors/totp/begin", server.handleMFATOTPBegin)
+	mux.HandleFunc("POST /api/v1/auth/mfa/factors/totp/finish", server.handleMFATOTPFinish)
+	mux.HandleFunc("POST /api/v1/auth/mfa/factors/webauthn/begin", server.handleMFAWebAuthnBegin)
+	mux.HandleFunc("POST /api/v1/auth/mfa/factors/webauthn/finish", server.handleMFAWebAuthnFinish)
+	mux.HandleFunc("POST /api/v1/auth/mfa/recovery-codes", server.handleMFAGenerateRecoveryCodes)
+	// SCIM clients admin (rotate bearer tokens).
+	mux.HandleFunc("POST /api/v1/auth/scim/clients", server.handleSCIMClientCreate)
+	mux.HandleFunc("GET /api/v1/auth/scim/clients", server.handleSCIMClientList)
+	// SAML 2.0 IdP endpoints — Phase 1: metadata + admin SP/key registry are
+	// fully wired; SSO/SLO HTTP handlers stub 501 until session-provider
+	// integration lands in Phase 2.
+	mux.HandleFunc("GET /saml/metadata", server.handleSAMLMetadata)
+	mux.HandleFunc("POST /saml/sso", server.handleSAMLSSO)
+	mux.HandleFunc("GET /saml/sso", server.handleSAMLSSO)
+	mux.HandleFunc("POST /saml/slo", server.handleSAMLSLO)
+	mux.HandleFunc("POST /api/v1/auth/saml/service-providers", server.handleSAMLSPRegister)
+	mux.HandleFunc("POST /api/v1/auth/saml/rotate-signing-cert", server.handleSAMLRotateSigningCert)
+	// SCIM 2.0 IdP (read-only do lado SP). Bearer token validated against
+	// scim_clients table; PUT/PATCH/DELETE rejected by ReadOnlyGuard to
+	// preserve Crossplane-style zero-drift invariant.
+	scimMux := http.NewServeMux()
+	scim.NewServer(server.db).RegisterRoutes(scimMux)
+	mux.Handle("/scim/v2/", scim.BearerAuth(server.db)(scim.ReadOnlyGuard()(scimMux)))
 	mux.HandleFunc("POST /api/v1/invites", server.handleInviteCreate)
 	mux.HandleFunc("GET /api/v1/invites", server.handleInviteList)
 	mux.HandleFunc("GET /api/v1/invites/validate", server.handleInviteValidate)
@@ -209,6 +251,24 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/collaborators", server.handleCollaboratorList)
 	mux.HandleFunc("POST /api/v1/collaborators", server.handleCollaboratorCreate)
 	mux.HandleFunc("PATCH /api/v1/collaborators/{id}", server.handleCollaboratorUpdate)
+	mux.HandleFunc("POST /api/v1/collaborators/{id}/offboard", server.handleCollaboratorOffboard)
+	mux.HandleFunc("POST /api/v1/collaborators/{id}/suspend", server.handleCollaboratorSuspend)
+	mux.HandleFunc("POST /api/v1/collaborators/{id}/unsuspend", server.handleCollaboratorUnsuspend)
+	mux.HandleFunc("POST /api/v1/collaborators/{id}/re-onboard", server.handleCollaboratorReOnboard)
+	mux.HandleFunc("POST /api/v1/collaborators/{id}/role-change", server.handleCollaboratorRoleChange)
+	mux.HandleFunc("POST /api/v1/collaborators/{id}/team-add", server.handleCollaboratorTeamAdd)
+	mux.HandleFunc("POST /api/v1/collaborators/{id}/team-remove", server.handleCollaboratorTeamRemove)
+	mux.HandleFunc("POST /api/v1/collaborators/{id}/attribute-set", server.handleCollaboratorAttributeSet)
+	mux.HandleFunc("POST /api/v1/collaborators/{id}/manager-change", server.handleCollaboratorManagerChange)
+	mux.HandleFunc("POST /api/v1/collaborators/{id}/absence/start", server.handleCollaboratorAbsenceStart)
+	mux.HandleFunc("POST /api/v1/collaborators/{id}/absence/end", server.handleCollaboratorAbsenceEnd)
+	mux.HandleFunc("GET /api/v1/collaborators/{id}/lifecycle-events", server.handleCollaboratorLifecycleEvents)
+	mux.HandleFunc("GET /api/v1/collaborators/{id}/provider-state", server.handleCollaboratorProviderState)
+	mux.HandleFunc("GET /api/v1/permissions/catalog", server.handlePermissionList)
+	mux.HandleFunc("POST /api/v1/permissions/catalog", server.handlePermissionRegister)
+	mux.HandleFunc("GET /api/v1/permissions/bindings", server.handlePermissionBindingList)
+	mux.HandleFunc("POST /api/v1/permissions/bindings", server.handlePermissionBindingCreate)
+	mux.HandleFunc("POST /api/v1/permissions/evaluate", server.handlePermissionEvaluate)
 	mux.HandleFunc("GET /api/v1/teams", server.handleTeamList)
 	mux.HandleFunc("POST /api/v1/teams", server.handleTeamCreate)
 	mux.HandleFunc("GET /api/v1/team-memberships", server.handleTeamMembershipList)
@@ -257,6 +317,24 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/console/collaborators", server.handleCollaboratorList)
 	mux.HandleFunc("POST /api/v1/console/collaborators", server.handleCollaboratorCreate)
 	mux.HandleFunc("PATCH /api/v1/console/collaborators/{id}", server.handleCollaboratorUpdate)
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/offboard", server.handleCollaboratorOffboard)
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/suspend", server.handleCollaboratorSuspend)
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/unsuspend", server.handleCollaboratorUnsuspend)
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/re-onboard", server.handleCollaboratorReOnboard)
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/role-change", server.handleCollaboratorRoleChange)
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/team-add", server.handleCollaboratorTeamAdd)
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/team-remove", server.handleCollaboratorTeamRemove)
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/attribute-set", server.handleCollaboratorAttributeSet)
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/manager-change", server.handleCollaboratorManagerChange)
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/absence/start", server.handleCollaboratorAbsenceStart)
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/absence/end", server.handleCollaboratorAbsenceEnd)
+	mux.HandleFunc("GET /api/v1/console/collaborators/{id}/lifecycle-events", server.handleCollaboratorLifecycleEvents)
+	mux.HandleFunc("GET /api/v1/console/collaborators/{id}/provider-state", server.handleCollaboratorProviderState)
+	mux.HandleFunc("GET /api/v1/console/permissions/catalog", server.handlePermissionList)
+	mux.HandleFunc("POST /api/v1/console/permissions/catalog", server.handlePermissionRegister)
+	mux.HandleFunc("GET /api/v1/console/permissions/bindings", server.handlePermissionBindingList)
+	mux.HandleFunc("POST /api/v1/console/permissions/bindings", server.handlePermissionBindingCreate)
+	mux.HandleFunc("POST /api/v1/console/permissions/evaluate", server.handlePermissionEvaluate)
 	mux.HandleFunc("GET /api/v1/console/teams", server.handleTeamList)
 	mux.HandleFunc("POST /api/v1/console/teams", server.handleTeamCreate)
 	mux.HandleFunc("GET /api/v1/console/team-memberships", server.handleTeamMembershipList)
@@ -393,6 +471,13 @@ type Server struct {
 	// even when the console isn't wanted — keeps the slim test/dev path).
 	consoleHandler     http.Handler
 	consoleMountPrefix string
+	// envelope encrypts MFA secrets and SAML signing keys at rest. Read from
+	// YGGDRASIL_AUTH_KEK_BASE64 (32 raw bytes base64-encoded). When unset
+	// MFA enroll handlers refuse with 503 — secrets-at-rest is mandatory.
+	envelope *cryptoenvelope.Envelope
+	// webauthnSessions caches in-flight WebAuthn registration challenges
+	// keyed by collaborator UUID. Phase 1 in-memory; Phase 2 moves to Redis.
+	webauthnSessions sync.Map
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {
@@ -744,6 +829,33 @@ func (s *Server) handleCollaboratorCreate(w http.ResponseWriter, r *http.Request
 
 	collaborator, err := repository.CreateCollaborator(r.Context(), s.db, req)
 	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
+	// Emit hired lifecycle event for reconcile workflows to consume.
+	hiredPayload := map[string]any{}
+	if req.EmploymentData != nil {
+		if v, ok := req.EmploymentData["start_date"]; ok {
+			hiredPayload["start_date"] = v
+		}
+		if v, ok := req.EmploymentData["role"]; ok {
+			hiredPayload["role"] = v
+		}
+	}
+	if pid := strings.TrimSpace(req.PrimaryTeamID); pid != "" {
+		hiredPayload["primary_team_id"] = pid
+	}
+	if mid := strings.TrimSpace(req.ManagerID); mid != "" {
+		hiredPayload["manager_id"] = mid
+	}
+	if _, err := repository.AppendLifecycleEvent(r.Context(), s.db, model.AppendLifecycleEventRequest{
+		CollaboratorID: collaborator.ID,
+		EventType:      model.LifecycleEventHired,
+		Payload:        hiredPayload,
+		ActorType:      model.ActorTypeAPI,
+		ActorID:        actorIDFromRequest(r),
+	}); err != nil {
 		writeMappedError(w, err)
 		return
 	}

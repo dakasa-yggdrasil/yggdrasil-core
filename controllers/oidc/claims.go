@@ -3,6 +3,7 @@ package oidc
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -63,4 +64,78 @@ func scopesContains(scopes []string, scope string) bool {
 		}
 	}
 	return false
+}
+
+// buildRoleClaim returns the collaborator's primary role (column on the
+// collaborators row, populated by migration 00022). Empty string when the
+// collaborator has no role assigned.
+func buildRoleClaim(ctx context.Context, db *sql.DB, collaboratorID uuid.UUID) (string, error) {
+	var role string
+	if err := db.QueryRowContext(ctx, `
+		SELECT COALESCE(role, '')
+		FROM public.collaborators
+		WHERE id = $1
+	`, collaboratorID).Scan(&role); err != nil {
+		return "", fmt.Errorf("query role: %w", err)
+	}
+	return role, nil
+}
+
+// buildPermissionsClaim resolves the effective permission set for a
+// collaborator by joining their primary role + every team membership against
+// role_permission_bindings. Returns sorted-distinct slugs.
+func buildPermissionsClaim(ctx context.Context, db *sql.DB, collaboratorID uuid.UUID) ([]string, error) {
+	rows, err := db.QueryContext(ctx, `
+		WITH subjects AS (
+			SELECT 'role:' || NULLIF(c.role, '') AS subject
+			FROM public.collaborators c
+			WHERE c.id = $1 AND COALESCE(c.role, '') <> ''
+			UNION
+			SELECT 'team:' || t.slug AS subject
+			FROM public.team_memberships tm
+			JOIN public.teams t ON t.id = tm.team_id
+			WHERE tm.collaborator_id = $1 AND tm.active = TRUE
+		)
+		SELECT DISTINCT pc.slug
+		FROM public.role_permission_bindings rpb
+		JOIN public.permissions_catalog pc ON pc.id = rpb.permission_id
+		JOIN subjects s ON s.subject = rpb.subject
+		WHERE rpb.revoked_at IS NULL
+		ORDER BY pc.slug
+	`, collaboratorID)
+	if err != nil {
+		// Permission catalog tables may not exist in older deployments; treat
+		// as empty rather than failing the whole token mint.
+		return []string{}, nil
+	}
+	defer rows.Close()
+	out := make([]string, 0)
+	for rows.Next() {
+		var slug string
+		if err := rows.Scan(&slug); err != nil {
+			return nil, fmt.Errorf("scan permission: %w", err)
+		}
+		out = append(out, slug)
+	}
+	return out, rows.Err()
+}
+
+// buildAttributesClaim returns the collaborator's traits JSONB as a typed map.
+func buildAttributesClaim(ctx context.Context, db *sql.DB, collaboratorID uuid.UUID) (map[string]any, error) {
+	var raw []byte
+	if err := db.QueryRowContext(ctx, `
+		SELECT COALESCE(traits, '{}'::jsonb)::text
+		FROM public.collaborators
+		WHERE id = $1
+	`, collaboratorID).Scan(&raw); err != nil {
+		return nil, fmt.Errorf("query traits: %w", err)
+	}
+	if len(raw) == 0 {
+		return map[string]any{}, nil
+	}
+	out := map[string]any{}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return map[string]any{}, nil
+	}
+	return out, nil
 }
