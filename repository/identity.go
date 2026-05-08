@@ -8,13 +8,15 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/collaboratorstate"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 )
 
 var (
-	ErrCollaboratorNotFound = errors.New("collaborator not found")
-	ErrTeamNotFound         = errors.New("team not found")
+	ErrCollaboratorNotFound                = errors.New("collaborator not found")
+	ErrTeamNotFound                        = errors.New("team not found")
+	ErrInvalidCollaboratorStatusTransition = errors.New("invalid collaborator status transition")
 )
 
 // CreateCollaborator stores one collaborator record.
@@ -138,6 +140,13 @@ func UpdateCollaborator(ctx context.Context, db *sql.DB, req model.UpdateCollabo
 	status := current.Status
 	if req.Status != nil {
 		status = normalizeStatus(*req.Status)
+		if status != current.Status {
+			from := collaboratorstate.Status(strings.TrimSpace(current.Status))
+			to := collaboratorstate.Status(strings.TrimSpace(status))
+			if err := collaboratorstate.ValidateTransition(from, to); err != nil {
+				return model.Collaborator{}, fmt.Errorf("%w: %s", ErrInvalidCollaboratorStatusTransition, err.Error())
+			}
+		}
 	}
 
 	displayName := current.DisplayName
