@@ -6,15 +6,17 @@ import (
 )
 
 // ReadOnlyGuard returns 403 + an RFC 7644 §3.12 error response for any
-// mutating method (PUT, PATCH, DELETE, POST). The single allowed POST hits
-// `/scim/v2/Schemas` etc. as a SCIM "search" — we do not implement that here,
-// so all mutations are blocked.
+// mutating method (PUT, PATCH, DELETE, POST creates).
+//
+// Exception: SCIM 2.0 §3.4.3 defines `POST /<resource>/.search` as a query
+// operation (not a mutation) — used for filter expressions too long for a
+// query string. Those POSTs are allowed through to the downstream handler.
 //
 // Yggdrasil is source of truth: downstream clients pull, never push.
 func ReadOnlyGuard() func(http.Handler) http.Handler {
 	return func(next http.Handler) http.Handler {
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-			if isMutating(r.Method) {
+			if isMutating(r.Method, r.URL.Path) {
 				writeReadOnlyError(w)
 				return
 			}
@@ -23,13 +25,24 @@ func ReadOnlyGuard() func(http.Handler) http.Handler {
 	}
 }
 
-func isMutating(method string) bool {
+func isMutating(method, path string) bool {
 	switch strings.ToUpper(method) {
-	case http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodPost:
+	case http.MethodPut, http.MethodPatch, http.MethodDelete:
 		return true
+	case http.MethodPost:
+		// RFC 7644 §3.4.3: POST /<resource>/.search is a query, not a mutation.
+		return !isSCIMSearch(path)
 	default:
 		return false
 	}
+}
+
+// isSCIMSearch reports whether the request path targets a SCIM search
+// endpoint. Trailing slashes are normalized so `/Users/.search` and
+// `/Users/.search/` both match.
+func isSCIMSearch(path string) bool {
+	trimmed := strings.TrimRight(path, "/")
+	return trimmed == "/scim/v2/.search" || strings.HasSuffix(trimmed, "/.search")
 }
 
 func writeReadOnlyError(w http.ResponseWriter) {
