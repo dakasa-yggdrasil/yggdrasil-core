@@ -7,6 +7,12 @@ import (
 )
 
 // Collaborator is the canonical internal subject managed by yggdrasil-core.
+//
+// Version is the row's optimistic-locking sequence; it is bumped by every
+// successful UpdateCollaborator. Callers receive the post-update value and may
+// stash it for subsequent updates if they wish to detect concurrent writes
+// explicitly. UpdateCollaborator transparently uses the loaded value for its
+// own conflict check via repository.ErrConcurrentUpdate.
 type Collaborator struct {
 	ID                   uuid.UUID      `json:"id"`
 	Slug                 string         `json:"slug"`
@@ -20,6 +26,7 @@ type Collaborator struct {
 	ThirdPartyIdentities map[string]any `json:"third_party_identities"`
 	Traits               map[string]any `json:"traits"`
 	Metadata             map[string]any `json:"metadata"`
+	Version              int            `json:"version"`
 	CreatedAt            time.Time      `json:"created_at"`
 	UpdatedAt            time.Time      `json:"updated_at"`
 }
@@ -100,6 +107,17 @@ type UpdateCollaboratorRequest struct {
 	ThirdPartyIdentities *map[string]any `json:"third_party_identities,omitempty"`
 	Traits               *map[string]any `json:"traits,omitempty"`
 	Metadata             *map[string]any `json:"metadata,omitempty"`
+
+	// ExpectedVersion, when non-nil, switches UpdateCollaborator into strict
+	// optimistic-locking mode: the UPDATE only commits if the row's current
+	// version equals this value, otherwise repository.ErrConcurrentUpdate is
+	// returned. Callers that loaded the row in a previous transaction (or
+	// across HTTP requests) should pass the version they saw, so a concurrent
+	// writer bumping it in the meantime flips them to retry-or-409. When nil,
+	// UpdateCollaborator transparently re-loads the row inside the same call
+	// — the race window collapses to the time between SELECT and UPDATE in
+	// the function, which is acceptable for short patches.
+	ExpectedVersion *int `json:"expected_version,omitempty"`
 }
 
 // GetCollaboratorRequest fetches one collaborator by UUID or slug.

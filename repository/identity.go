@@ -17,6 +17,11 @@ var (
 	ErrCollaboratorNotFound                = errors.New("collaborator not found")
 	ErrTeamNotFound                        = errors.New("team not found")
 	ErrInvalidCollaboratorStatusTransition = errors.New("invalid collaborator status transition")
+	// ErrConcurrentUpdate is returned by UpdateCollaborator when the row's
+	// version column changed between the initial load and the UPDATE — i.e.,
+	// another writer (HTTP PATCH, status_clock worker, lifecycle endpoint)
+	// won the race. Callers should re-fetch and retry, or surface a 409.
+	ErrConcurrentUpdate = errors.New("concurrent update detected; re-fetch and retry")
 )
 
 // CreateCollaborator stores one collaborator record.
@@ -103,6 +108,7 @@ func CreateCollaborator(ctx context.Context, db *sql.DB, req model.CreateCollabo
 				third_party_identities,
 				traits,
 				metadata,
+				version,
 				created_at,
 				updated_at
 		`,
@@ -225,6 +231,18 @@ func UpdateCollaborator(ctx context.Context, db *sql.DB, req model.UpdateCollabo
 		return model.Collaborator{}, err
 	}
 
+	// Optimistic locking: only update if the row is still on the version we
+	// expect. When req.ExpectedVersion is non-nil the caller is asserting they
+	// already loaded the row in a prior transaction (or HTTP request) and
+	// don't want a concurrent writer's bump to be silently overwritten — we
+	// match against that value and return ErrConcurrentUpdate on miss.
+	// Otherwise we use the version loaded by GetCollaborator above; the race
+	// window collapses to the time between SELECT and UPDATE in this call.
+	expectedVersion := current.Version
+	if req.ExpectedVersion != nil {
+		expectedVersion = *req.ExpectedVersion
+	}
+
 	row := db.QueryRowContext(
 		ctx,
 		`
@@ -240,8 +258,9 @@ func UpdateCollaborator(ctx context.Context, db *sql.DB, req model.UpdateCollabo
 				employment_data = $9::jsonb,
 				third_party_identities = $10::jsonb,
 				traits = $11::jsonb,
-				metadata = $12::jsonb
-			WHERE id = $1
+				metadata = $12::jsonb,
+				version = version + 1
+			WHERE id = $1 AND version = $13
 			RETURNING
 				id,
 				slug,
@@ -255,6 +274,7 @@ func UpdateCollaborator(ctx context.Context, db *sql.DB, req model.UpdateCollabo
 				third_party_identities,
 				traits,
 				metadata,
+				version,
 				created_at,
 				updated_at
 		`,
@@ -270,9 +290,14 @@ func UpdateCollaborator(ctx context.Context, db *sql.DB, req model.UpdateCollabo
 		thirdPartyIdentitiesRaw,
 		traitsRaw,
 		metadataRaw,
+		expectedVersion,
 	)
 
-	return scanCollaborator(row)
+	updated, err := scanCollaborator(row)
+	if errors.Is(err, sql.ErrNoRows) {
+		return model.Collaborator{}, ErrConcurrentUpdate
+	}
+	return updated, err
 }
 
 // DeleteCollaborator removes one collaborator by UUID or slug.
@@ -328,6 +353,7 @@ func GetCollaboratorByThirdPartyLogin(ctx context.Context, db *sql.DB, provider,
 				c.third_party_identities,
 				c.traits,
 				c.metadata,
+				c.version,
 				c.created_at,
 				c.updated_at
 			FROM public.collaborator_third_party_identities tpi
@@ -365,6 +391,7 @@ func GetCollaboratorByThirdPartyLogin(ctx context.Context, db *sql.DB, provider,
 				third_party_identities,
 				traits,
 				metadata,
+				version,
 				created_at,
 				updated_at
 			FROM public.collaborators
@@ -501,6 +528,7 @@ func buildListCollaboratorsQuery(req model.ListCollaboratorsRequest) (string, []
 			third_party_identities,
 			traits,
 			metadata,
+			version,
 			created_at,
 			updated_at
 		FROM public.collaborators
@@ -1183,6 +1211,7 @@ func collaboratorLookupQuery(identity string) string {
 			third_party_identities,
 			traits,
 			metadata,
+			version,
 			created_at,
 			updated_at
 		FROM public.collaborators
@@ -1296,6 +1325,7 @@ func scanCollaborator(row scanner) (model.Collaborator, error) {
 		&thirdPartyIdentities,
 		&traits,
 		&metadata,
+		&collaborator.Version,
 		&collaborator.CreatedAt,
 		&collaborator.UpdatedAt,
 	)
