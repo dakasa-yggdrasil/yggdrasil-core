@@ -4,7 +4,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"errors"
 	"net/http"
 	"time"
 
@@ -103,12 +102,4 @@ func (s *Server) handleSCIMClientList(w http.ResponseWriter, r *http.Request) {
 		})
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"scim_clients": out})
-}
-
-// requireSCIMSlug centralizes the not-empty check so callers don't drift.
-func requireSCIMSlug(slug string) error {
-	if slug == "" {
-		return errors.New("slug required")
-	}
-	return nil
 }

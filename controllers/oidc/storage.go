@@ -670,9 +670,9 @@ func (s *Storage) SetIntrospectionFromToken(
 		return err
 	}
 	introspection.Subject = subject
-	introspection.UserInfoEmail.Email = email
-	introspection.UserInfoEmail.EmailVerified = true
-	introspection.UserInfoProfile.Name = displayName
+	introspection.Email = email
+	introspection.EmailVerified = true
+	introspection.Name = displayName
 	introspection.ClientID = clientID
 
 	teams, terr := buildTeamsClaim(ctx, s.db, cid)
@@ -697,11 +697,11 @@ func (s *Storage) populateUserInfo(
 	}
 	userInfo.Subject = userID
 	if scopesContains(scopes, oidc.ScopeEmail) {
-		userInfo.UserInfoEmail.Email = email
-		userInfo.UserInfoEmail.EmailVerified = true
+		userInfo.Email = email
+		userInfo.EmailVerified = true
 	}
 	if scopesContains(scopes, oidc.ScopeProfile) {
-		userInfo.UserInfoProfile.Name = displayName
+		userInfo.Name = displayName
 	}
 	if scopesContains(scopes, "roles") {
 		teams, terr := buildTeamsClaim(ctx, s.db, cid)

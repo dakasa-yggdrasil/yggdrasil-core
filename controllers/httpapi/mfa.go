@@ -5,7 +5,6 @@ import (
 	"crypto/rand"
 	"crypto/sha256"
 	"encoding/hex"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"net/http"
@@ -363,13 +362,4 @@ func (s *Server) requireSessionCollaborator(r *http.Request) (uuid.UUID, error) 
 		return uuid.Nil, err
 	}
 	return collab.ID, nil
-}
-
-// jsonRawMessageOrEmpty is a guard so handler bodies don't panic on nil bodies
-// when echoing nested JSON.
-func jsonRawMessageOrEmpty(b []byte) json.RawMessage {
-	if len(b) == 0 {
-		return json.RawMessage([]byte("{}"))
-	}
-	return json.RawMessage(b)
 }

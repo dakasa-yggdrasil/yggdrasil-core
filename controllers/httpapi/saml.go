@@ -6,7 +6,6 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
-	"encoding/base64"
 	"encoding/pem"
 	"encoding/xml"
 	"errors"
@@ -293,14 +292,4 @@ func generateSelfSignedRSA(bits int, notAfter time.Time) (privPEM, certPEM strin
 	pp := pem.EncodeToMemory(&pem.Block{Type: "PRIVATE KEY", Bytes: pkcs8})
 	cp := pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der})
 	return string(pp), string(cp), nil
-}
-
-// stripPEMHeaderForLog redacts PEM body when emitting key materials in audit
-// logs. Currently unused — placeholder so the audit trail change in §11.2
-// has a single helper to reach for.
-func stripPEMHeaderForLog(pemStr string) string {
-	if pemStr == "" {
-		return ""
-	}
-	return base64.StdEncoding.EncodeToString([]byte("***REDACTED***"))
 }

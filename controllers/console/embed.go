@@ -10,8 +10,8 @@ package console
 
 import "embed"
 
-// consoleAssets contains the SPA bundle. The "all:" prefix instructs
-// go:embed to include dotfiles (Vite emits some, e.g. .vite/manifest.json
+// consoleAssets contains the SPA bundle. The "all:" prefix instructs the
+// embed directive to include dotfiles (Vite emits some, e.g. .vite/manifest.json
 // in certain plugin setups) so the served tree exactly mirrors `dist/`.
 //
 //go:embed all:yggdrasil-console-dist

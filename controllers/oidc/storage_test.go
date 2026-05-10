@@ -478,8 +478,8 @@ func TestStorage_SetUserinfoFromScopes_PopulatesEmailAndTeams(t *testing.T) {
 	if ui.Subject != collabID.String() {
 		t.Errorf("Subject: got %q want %q", ui.Subject, collabID.String())
 	}
-	if ui.UserInfoEmail.Email != "6c4@example.test" {
-		t.Errorf("Email: got %q want %q", ui.UserInfoEmail.Email, "6c4@example.test")
+	if ui.Email != "6c4@example.test" {
+		t.Errorf("Email: got %q want %q", ui.Email, "6c4@example.test")
 	}
 	teams, _ := ui.Claims["teams"].([]string)
 	if len(teams) == 0 {
