@@ -9,7 +9,7 @@
 # Pinned to node:20 LTS for reproducibility; bump deliberately.
 FROM --platform=$BUILDPLATFORM node:20-alpine AS console-build
 WORKDIR /console
-ARG CONSOLE_REPO=https://github.com/dakasa-yggdrasil/yggdrasil-console.git
+ARG CONSOLE_REPO=https://github.com/dakasa-yggdrasil/surface-console.git
 ARG CONSOLE_REF=main
 # WITH_CONSOLE controls whether to clone+build the console SPA bundle.
 # When unset/false (default in CI without a cross-repo token), the
@@ -18,7 +18,7 @@ ARG CONSOLE_REF=main
 # binary then serves the placeholder from controllers/console/yggdrasil-console-dist
 # already committed to this repo.
 #
-# When set to true, the stage clones the private dakasa-yggdrasil/yggdrasil-console
+# When set to true, the stage clones the private dakasa-yggdrasil/surface-console
 # repo using the BuildKit secret id=github_token (which must be a PAT
 # or GitHub App token with read access to that repo — GITHUB_TOKEN of
 # the current repo does NOT suffice for cross-repo clones).
