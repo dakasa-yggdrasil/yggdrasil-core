@@ -22,6 +22,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 
 	cjsaml "github.com/crewjam/saml"
+	"github.com/crewjam/saml/logger"
 )
 
 // Config is the minimum binding the host app provides to construct an IdP.
@@ -67,8 +68,14 @@ func Build(ctx context.Context, cfg Config, db *sql.DB, openPrivateKey func(ciph
 		return nil, fmt.Errorf("materialize signing key: %w", err)
 	}
 
-	idp := &cjsaml.IdentityProvider{
+	idp := newIdentityProvider(cfg, db, priv, cert)
+	return &IdP{Cfg: cfg, IDP: idp, DB: db}, nil
+}
+
+func newIdentityProvider(cfg Config, db *sql.DB, priv *rsa.PrivateKey, cert *x509.Certificate) *cjsaml.IdentityProvider {
+	return &cjsaml.IdentityProvider{
 		Key:                     priv,
+		Logger:                  logger.DefaultLogger,
 		Certificate:             cert,
 		MetadataURL:             *cfg.BaseURL.JoinPath("saml", "metadata"),
 		SSOURL:                  *cfg.BaseURL.JoinPath("saml", "sso"),
@@ -76,7 +83,6 @@ func Build(ctx context.Context, cfg Config, db *sql.DB, openPrivateKey func(ciph
 		ServiceProviderProvider: &dbSPRegistry{db: db},
 		AssertionMaker:          dbAssertionMaker{db: db},
 	}
-	return &IdP{Cfg: cfg, IDP: idp, DB: db}, nil
 }
 
 func materializeSigningKey(k model.SAMLSigningKey, openEnvelope func([]byte, []byte) ([]byte, error)) (*rsa.PrivateKey, *x509.Certificate, error) {
