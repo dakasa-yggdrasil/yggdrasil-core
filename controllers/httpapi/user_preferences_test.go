@@ -112,6 +112,9 @@ func TestApplyYggdrasilIdentityDesiredState(t *testing.T) {
 			"preferred_name": "Gio Martins",
 			"profile":        map[string]any{"avatar_data_url": avatar},
 		},
+		EmploymentData: map[string]any{
+			"role": "Engineer",
+		},
 	})
 
 	if got := desired["identity_source"]; got != "yggdrasil" {

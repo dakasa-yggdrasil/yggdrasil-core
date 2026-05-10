@@ -279,6 +279,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/collaborators", server.handleCollaboratorCreate)
 	mux.HandleFunc("GET /api/v1/collaborators/{id}", server.handleCollaboratorGet)
 	mux.HandleFunc("PATCH /api/v1/collaborators/{id}", server.handleCollaboratorUpdate)
+	mux.HandleFunc("DELETE /api/v1/collaborators/{id}", server.handleCollaboratorDelete)
 	mux.HandleFunc("POST /api/v1/collaborators/{id}/offboard", server.handleCollaboratorOffboard)
 	mux.HandleFunc("POST /api/v1/collaborators/{id}/suspend", server.handleCollaboratorSuspend)
 	mux.HandleFunc("POST /api/v1/collaborators/{id}/unsuspend", server.handleCollaboratorUnsuspend)
@@ -299,6 +300,9 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/permissions/evaluate", server.handlePermissionEvaluate)
 	mux.HandleFunc("GET /api/v1/teams", server.handleTeamList)
 	mux.HandleFunc("POST /api/v1/teams", server.handleTeamCreate)
+	mux.HandleFunc("GET /api/v1/teams/{id}", server.handleTeamGet)
+	mux.HandleFunc("PATCH /api/v1/teams/{id}", server.handleTeamUpdate)
+	mux.HandleFunc("DELETE /api/v1/teams/{id}", server.handleTeamDelete)
 	mux.HandleFunc("GET /api/v1/team-memberships", server.handleTeamMembershipList)
 	mux.HandleFunc("POST /api/v1/team-memberships", server.handleTeamMembershipUpsert)
 	mux.HandleFunc("GET /api/v1/products", server.handleProductList)
@@ -350,6 +354,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/console/collaborators", server.handleCollaboratorCreate)
 	mux.HandleFunc("GET /api/v1/console/collaborators/{id}", server.handleCollaboratorGet)
 	mux.HandleFunc("PATCH /api/v1/console/collaborators/{id}", server.handleCollaboratorUpdate)
+	mux.HandleFunc("DELETE /api/v1/console/collaborators/{id}", server.handleCollaboratorDelete)
 	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/offboard", server.handleCollaboratorOffboard)
 	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/suspend", server.handleCollaboratorSuspend)
 	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/unsuspend", server.handleCollaboratorUnsuspend)
@@ -370,6 +375,9 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/console/permissions/evaluate", server.handlePermissionEvaluate)
 	mux.HandleFunc("GET /api/v1/console/teams", server.handleTeamList)
 	mux.HandleFunc("POST /api/v1/console/teams", server.handleTeamCreate)
+	mux.HandleFunc("GET /api/v1/console/teams/{id}", server.handleTeamGet)
+	mux.HandleFunc("PATCH /api/v1/console/teams/{id}", server.handleTeamUpdate)
+	mux.HandleFunc("DELETE /api/v1/console/teams/{id}", server.handleTeamDelete)
 	mux.HandleFunc("GET /api/v1/console/team-memberships", server.handleTeamMembershipList)
 	mux.HandleFunc("POST /api/v1/console/team-memberships", server.handleTeamMembershipUpsert)
 	mux.HandleFunc("GET /api/v1/console/auth/third-party-identities", server.handleThirdPartyIdentityList)
@@ -1001,6 +1009,20 @@ func (s *Server) handleCollaboratorUpdate(w http.ResponseWriter, r *http.Request
 	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collaborator})
 }
 
+func (s *Server) handleCollaboratorDelete(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		writeMappedError(w, fmt.Errorf("collaborator id is required"))
+		return
+	}
+	collaborator, err := repository.DeleteCollaborator(r.Context(), s.db, id)
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collaborator, "deleted": true})
+}
+
 func (s *Server) handleTeamList(w http.ResponseWriter, r *http.Request) {
 	teams, err := repository.ListTeams(r.Context(), s.db, model.ListTeamsRequest{
 		Status: queryString(r, "status"),
@@ -1028,6 +1050,55 @@ func (s *Server) handleTeamCreate(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]any{"team": team})
+}
+
+func (s *Server) handleTeamGet(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		writeMappedError(w, fmt.Errorf("team id is required"))
+		return
+	}
+	team, err := repository.GetTeam(r.Context(), s.db, id)
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"team": team})
+}
+
+func (s *Server) handleTeamUpdate(w http.ResponseWriter, r *http.Request) {
+	var req model.UpdateTeamRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	if pathID := strings.TrimSpace(r.PathValue("id")); pathID != "" {
+		req.ID = pathID
+	}
+	if strings.TrimSpace(req.ID) == "" {
+		writeMappedError(w, fmt.Errorf("team id is required"))
+		return
+	}
+	team, err := repository.UpdateTeam(r.Context(), s.db, req)
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"team": team})
+}
+
+func (s *Server) handleTeamDelete(w http.ResponseWriter, r *http.Request) {
+	id := strings.TrimSpace(r.PathValue("id"))
+	if id == "" {
+		writeMappedError(w, fmt.Errorf("team id is required"))
+		return
+	}
+	team, err := repository.DeleteTeam(r.Context(), s.db, id)
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"team": team, "deleted": true})
 }
 
 func (s *Server) handleTeamMembershipList(w http.ResponseWriter, r *http.Request) {

@@ -12,6 +12,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"database/sql"
+	"encoding/pem"
 	"errors"
 	"fmt"
 	"net/url"
@@ -25,16 +26,16 @@ import (
 
 // Config is the minimum binding the host app provides to construct an IdP.
 type Config struct {
-	BaseURL    *url.URL  // e.g. https://yggdrasil.dakasa.me
+	BaseURL     *url.URL // e.g. https://yggdrasil.dakasa.me
 	IDPEntityID string   // e.g. https://yggdrasil.dakasa.me/saml/metadata
 }
 
 // IdP wraps crewjam/saml's identity-provider with a DB-backed signing-key and
 // SP-registry adapter. Construct via Build().
 type IdP struct {
-	Cfg     Config
-	IDP     *cjsaml.IdentityProvider
-	DB      *sql.DB
+	Cfg Config
+	IDP *cjsaml.IdentityProvider
+	DB  *sql.DB
 }
 
 // ErrIdPNotInitialized is returned by handlers when Build was never called.
@@ -43,7 +44,7 @@ var ErrIdPNotInitialized = errors.New("saml IdP not initialized")
 // Build wires DB-backed signing key and SP registry into an IdP. The active
 // signing key must already exist (rotate via the trust workflow); this just
 // loads the current one.
-func Build(ctx context.Context, cfg Config, db *sql.DB, decryptDEK func(encDEK []byte) ([]byte, error)) (*IdP, error) {
+func Build(ctx context.Context, cfg Config, db *sql.DB, openPrivateKey func(ciphertext, wrappedDEK []byte) ([]byte, error)) (*IdP, error) {
 	if cfg.BaseURL == nil {
 		return nil, fmt.Errorf("BaseURL required")
 	}
@@ -53,42 +54,41 @@ func Build(ctx context.Context, cfg Config, db *sql.DB, decryptDEK func(encDEK [
 	if db == nil {
 		return nil, fmt.Errorf("db required")
 	}
-	if decryptDEK == nil {
-		return nil, fmt.Errorf("decryptDEK required")
+	if openPrivateKey == nil {
+		return nil, fmt.Errorf("openPrivateKey required")
 	}
 
 	key, err := repository.GetActiveSAMLSigningKey(ctx, db)
 	if err != nil {
 		return nil, fmt.Errorf("get active signing key: %w", err)
 	}
-	priv, cert, err := materializeSigningKey(key, decryptDEK)
+	priv, cert, err := materializeSigningKey(key, openPrivateKey)
 	if err != nil {
 		return nil, fmt.Errorf("materialize signing key: %w", err)
 	}
 
 	idp := &cjsaml.IdentityProvider{
-		Key:         priv,
-		Certificate: cert,
-		MetadataURL: *cfg.BaseURL.JoinPath("saml", "metadata"),
-		SSOURL:      *cfg.BaseURL.JoinPath("saml", "sso"),
-		LogoutURL:   *cfg.BaseURL.JoinPath("saml", "slo"),
+		Key:                     priv,
+		Certificate:             cert,
+		MetadataURL:             *cfg.BaseURL.JoinPath("saml", "metadata"),
+		SSOURL:                  *cfg.BaseURL.JoinPath("saml", "sso"),
+		LogoutURL:               *cfg.BaseURL.JoinPath("saml", "slo"),
 		ServiceProviderProvider: &dbSPRegistry{db: db},
 		AssertionMaker:          dbAssertionMaker{db: db},
 	}
 	return &IdP{Cfg: cfg, IDP: idp, DB: db}, nil
 }
 
-func materializeSigningKey(k model.SAMLSigningKey, decryptDEK func([]byte) ([]byte, error)) (*rsa.PrivateKey, *x509.Certificate, error) {
+func materializeSigningKey(k model.SAMLSigningKey, openEnvelope func([]byte, []byte) ([]byte, error)) (*rsa.PrivateKey, *x509.Certificate, error) {
 	if len(k.PrivateKeyDEK) == 0 || len(k.PrivateKeyCiphertext) == 0 {
 		return nil, nil, fmt.Errorf("signing key missing ciphertext or DEK")
 	}
-	dek, err := decryptDEK(k.PrivateKeyDEK)
+	pkBytes, err := openEnvelope(k.PrivateKeyCiphertext, k.PrivateKeyDEK)
 	if err != nil {
-		return nil, nil, fmt.Errorf("decrypt DEK: %w", err)
+		return nil, nil, fmt.Errorf("open private key: %w", err)
 	}
-	pkBytes, err := openPrivateKey(k.PrivateKeyCiphertext, dek)
-	if err != nil {
-		return nil, nil, err
+	if block, _ := pem.Decode(pkBytes); block != nil {
+		pkBytes = block.Bytes
 	}
 	priv, err := x509.ParsePKCS8PrivateKey(pkBytes)
 	if err != nil {

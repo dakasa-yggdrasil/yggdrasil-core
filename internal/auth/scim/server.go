@@ -87,7 +87,8 @@ func (s *Server) handleListUsers(w http.ResponseWriter, r *http.Request) {
 	resources := make([]any, 0, to-from)
 	for _, c := range matched[from:to] {
 		ai, _ := repository.GetAuthIdentityByCollaboratorID(r.Context(), s.DB, c.ID)
-		resources = append(resources, MapCollaboratorToSCIMUser(c, &ai, nil, nil))
+		primaryTeam, manager := s.userRelations(r.Context(), c)
+		resources = append(resources, MapCollaboratorToSCIMUser(c, &ai, primaryTeam, manager))
 	}
 
 	writeSCIMJSON(w, http.StatusOK, model.SCIMListResponse{
@@ -107,7 +108,24 @@ func (s *Server) handleGetUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	ai, _ := repository.GetAuthIdentityByCollaboratorID(r.Context(), s.DB, c.ID)
-	writeSCIMJSON(w, http.StatusOK, MapCollaboratorToSCIMUser(c, &ai, nil, nil))
+	primaryTeam, manager := s.userRelations(r.Context(), c)
+	writeSCIMJSON(w, http.StatusOK, MapCollaboratorToSCIMUser(c, &ai, primaryTeam, manager))
+}
+
+func (s *Server) userRelations(ctx context.Context, c model.Collaborator) (*model.Team, *model.Collaborator) {
+	var primaryTeam *model.Team
+	if c.PrimaryTeamID != nil {
+		if team, err := repository.GetTeam(ctx, s.DB, c.PrimaryTeamID.String()); err == nil {
+			primaryTeam = &team
+		}
+	}
+	var manager *model.Collaborator
+	if c.ManagerID != nil {
+		if collab, err := repository.GetCollaborator(ctx, s.DB, c.ManagerID.String()); err == nil {
+			manager = &collab
+		}
+	}
+	return primaryTeam, manager
 }
 
 func (s *Server) handleListGroups(w http.ResponseWriter, r *http.Request) {
@@ -154,7 +172,7 @@ func (s *Server) handleGetGroup(w http.ResponseWriter, r *http.Request) {
 
 func (s *Server) handleSchemas(w http.ResponseWriter, r *http.Request) {
 	writeSCIMJSON(w, http.StatusOK, map[string]any{
-		"schemas": []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"},
+		"schemas":      []string{"urn:ietf:params:scim:api:messages:2.0:ListResponse"},
 		"totalResults": 3,
 		"Resources": []map[string]any{
 			{"id": "urn:ietf:params:scim:schemas:core:2.0:User", "name": "User"},

@@ -127,6 +127,73 @@ func TestEvaluatePermission_DeniesUnboundRole(t *testing.T) {
 	}
 }
 
+func TestEvaluatePermission_AllowsWildcardBindings(t *testing.T) {
+	db := dbForPermissionsTest(t)
+	defer func() { _ = db.Close() }()
+	cleanPermissions(t, db)
+
+	ctx := context.Background()
+	for _, name := range []string{"google_workspace.*", "google_workspace.users.write"} {
+		if _, err := RegisterPermission(ctx, db, model.RegisterPermissionRequest{
+			Name:         name,
+			RegisteredBy: "yggdrasil-core",
+		}); err != nil {
+			t.Fatalf("seed %s: %v", name, err)
+		}
+	}
+	if _, err := BindRoleToPermission(ctx, db, model.BindRoleToPermissionRequest{
+		Role:           "ceo",
+		PermissionName: "google_workspace.*",
+	}); err != nil {
+		t.Fatalf("bind wildcard: %v", err)
+	}
+
+	resp, err := EvaluatePermission(ctx, db, model.EvaluatePermissionRequest{
+		SubjectRole: "ceo",
+		Permission:  "google_workspace.users.write",
+	})
+	if err != nil {
+		t.Fatalf("EvaluatePermission: %v", err)
+	}
+	if !resp.Allowed {
+		t.Fatalf("expected wildcard binding to allow permission")
+	}
+}
+
+func TestEvaluatePermission_AllowsTeamRoleBindings(t *testing.T) {
+	db := dbForPermissionsTest(t)
+	defer func() { _ = db.Close() }()
+	cleanPermissions(t, db)
+
+	ctx := context.Background()
+	for _, name := range []string{"tartaro:*", "tartaro:admin:create"} {
+		if _, err := RegisterPermission(ctx, db, model.RegisterPermissionRequest{
+			Name:         name,
+			RegisteredBy: "integration-tartaro",
+		}); err != nil {
+			t.Fatalf("seed %s: %v", name, err)
+		}
+	}
+	if _, err := BindRoleToPermission(ctx, db, model.BindRoleToPermissionRequest{
+		Role:           "team:admin-tartaro",
+		PermissionName: "tartaro:*",
+	}); err != nil {
+		t.Fatalf("bind team wildcard: %v", err)
+	}
+
+	resp, err := EvaluatePermission(ctx, db, model.EvaluatePermissionRequest{
+		SubjectRole:  "cmo",
+		SubjectTeams: []string{"admin-tartaro"},
+		Permission:   "tartaro:admin:create",
+	})
+	if err != nil {
+		t.Fatalf("EvaluatePermission: %v", err)
+	}
+	if !resp.Allowed || resp.MatchedRole != "team:admin-tartaro" {
+		t.Fatalf("expected team binding, got %+v", resp)
+	}
+}
+
 func TestBindRoleToPermission_IdempotentOnDuplicate(t *testing.T) {
 	db := dbForPermissionsTest(t)
 	defer func() { _ = db.Close() }()

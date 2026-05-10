@@ -25,15 +25,19 @@ type SCIMClient struct {
 // AuthIdentity. Read-only — Yggdrasil is the source of truth, downstream
 // providers may only consume.
 type SCIMUser struct {
-	Schemas    []string         `json:"schemas"`
-	ID         string           `json:"id"`
-	ExternalID string           `json:"externalId,omitempty"`
-	UserName   string           `json:"userName"`
-	Name       SCIMName         `json:"name"`
-	Active     bool             `json:"active"`
-	Emails     []SCIMEmail      `json:"emails"`
-	Enterprise *SCIMEnterprise  `json:"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User,omitempty"`
-	Meta       SCIMResourceMeta `json:"meta"`
+	Schemas     []string         `json:"schemas"`
+	ID          string           `json:"id"`
+	ExternalID  string           `json:"externalId,omitempty"`
+	UserName    string           `json:"userName"`
+	Name        SCIMName         `json:"name"`
+	DisplayName string           `json:"displayName,omitempty"`
+	Title       string           `json:"title,omitempty"`
+	UserType    string           `json:"userType,omitempty"`
+	Active      bool             `json:"active"`
+	Emails      []SCIMEmail      `json:"emails"`
+	Photos      []SCIMPhoto      `json:"photos,omitempty"`
+	Enterprise  *SCIMEnterprise  `json:"urn:ietf:params:scim:schemas:extension:enterprise:2.0:User,omitempty"`
+	Meta        SCIMResourceMeta `json:"meta"`
 }
 
 type SCIMName struct {
@@ -48,11 +52,19 @@ type SCIMEmail struct {
 	Primary bool   `json:"primary,omitempty"`
 }
 
+type SCIMPhoto struct {
+	Value   string `json:"value"`
+	Type    string `json:"type,omitempty"`
+	Primary bool   `json:"primary,omitempty"`
+}
+
 type SCIMEnterprise struct {
-	EmployeeNumber string      `json:"employeeNumber,omitempty"`
-	Department     string      `json:"department,omitempty"`
-	CostCenter     string      `json:"costCenter,omitempty"`
-	Manager        *SCIMRef    `json:"manager,omitempty"`
+	EmployeeNumber string   `json:"employeeNumber,omitempty"`
+	Department     string   `json:"department,omitempty"`
+	CostCenter     string   `json:"costCenter,omitempty"`
+	Organization   string   `json:"organization,omitempty"`
+	Division       string   `json:"division,omitempty"`
+	Manager        *SCIMRef `json:"manager,omitempty"`
 }
 
 type SCIMRef struct {
@@ -72,12 +84,12 @@ type SCIMResourceMeta struct {
 // SCIMGroup is the SCIM 2.0 Group resource projected from a Team or
 // role-derived synthetic group ("role:engineer", "team:platform").
 type SCIMGroup struct {
-	Schemas     []string         `json:"schemas"`
-	ID          string           `json:"id"`
-	ExternalID  string           `json:"externalId,omitempty"`
-	DisplayName string           `json:"displayName"`
+	Schemas     []string          `json:"schemas"`
+	ID          string            `json:"id"`
+	ExternalID  string            `json:"externalId,omitempty"`
+	DisplayName string            `json:"displayName"`
 	Members     []SCIMGroupMember `json:"members"`
-	Meta        SCIMResourceMeta `json:"meta"`
+	Meta        SCIMResourceMeta  `json:"meta"`
 }
 
 type SCIMGroupMember struct {

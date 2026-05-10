@@ -9,6 +9,7 @@ import (
 	"strings"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/lib/pq"
 )
 
 // ErrPermissionNotFound is returned when a permission name is not in
@@ -94,23 +95,75 @@ func EvaluatePermission(ctx context.Context, db *sql.DB, req model.EvaluatePermi
 		return model.EvaluatePermissionResponse{}, fmt.Errorf("subject_role and permission are required")
 	}
 
-	var bindingID string
-	err := db.QueryRowContext(ctx, `
-		SELECT id::text FROM public.role_permission_bindings
-		WHERE role = $1 AND permission_name = $2
-		LIMIT 1
-	`, role, permName).Scan(&bindingID)
-	if errors.Is(err, sql.ErrNoRows) {
-		return model.EvaluatePermissionResponse{Allowed: false}, nil
-	}
+	subjectRoles := permissionSubjectRoles(role, req.SubjectTeams)
+	rows, err := db.QueryContext(ctx, `
+		SELECT id::text, role, permission_name FROM public.role_permission_bindings
+		WHERE role = ANY($1)
+	`, pq.Array(subjectRoles))
 	if err != nil {
 		return model.EvaluatePermissionResponse{}, fmt.Errorf("evaluate permission: %w", err)
 	}
+	defer rows.Close()
+
+	matches := []string{}
+	matchedRole := ""
+	for rows.Next() {
+		var bindingID, bindingRole, bindingPermission string
+		if err := rows.Scan(&bindingID, &bindingRole, &bindingPermission); err != nil {
+			return model.EvaluatePermissionResponse{}, fmt.Errorf("scan role binding: %w", err)
+		}
+		if permissionMatchesBinding(permName, bindingPermission) {
+			matches = append(matches, bindingID)
+			if matchedRole == "" {
+				matchedRole = bindingRole
+			}
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return model.EvaluatePermissionResponse{}, fmt.Errorf("evaluate permission rows: %w", err)
+	}
+	if len(matches) == 0 {
+		return model.EvaluatePermissionResponse{Allowed: false}, nil
+	}
 	return model.EvaluatePermissionResponse{
 		Allowed:         true,
-		MatchedRole:     role,
-		MatchedBindings: []string{bindingID},
+		MatchedRole:     matchedRole,
+		MatchedBindings: matches,
 	}, nil
+}
+
+func permissionSubjectRoles(role string, teams []string) []string {
+	seen := map[string]bool{}
+	out := []string{}
+	add := func(value string) {
+		value = strings.TrimSpace(value)
+		if value == "" || seen[value] {
+			return
+		}
+		seen[value] = true
+		out = append(out, value)
+	}
+	add(role)
+	for _, team := range teams {
+		team = strings.TrimSpace(team)
+		add("team:" + team)
+	}
+	return out
+}
+
+func permissionMatchesBinding(requested, binding string) bool {
+	requested = strings.TrimSpace(requested)
+	binding = strings.TrimSpace(binding)
+	if requested == "" || binding == "" {
+		return false
+	}
+	if binding == "*" || binding == requested {
+		return true
+	}
+	if strings.HasSuffix(binding, "*") {
+		return strings.HasPrefix(requested, strings.TrimSuffix(binding, "*"))
+	}
+	return false
 }
 
 // ListPermissions returns the permissions catalog filtered optionally

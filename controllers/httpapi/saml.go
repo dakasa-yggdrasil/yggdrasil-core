@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"crypto/x509"
 	"crypto/x509/pkix"
+	"database/sql"
 	"encoding/pem"
 	"encoding/xml"
 	"errors"
@@ -13,10 +14,12 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"sort"
 	"strings"
 	"sync"
 	"time"
 
+	cjsaml "github.com/crewjam/saml"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/saml"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -59,21 +62,13 @@ func (s *Server) samlIdP(ctx context.Context) (*saml.IdP, error) {
 		BaseURL:     base,
 		IDPEntityID: base.JoinPath("saml", "metadata").String(),
 	}
-	// saml.Build needs to invert envelope.Seal — it gets the wrappedDEK and
-	// returns the plaintext DEK. We cache the encrypted private key alongside
-	// the wrapped DEK in the same row, so the helper can pass them to Open.
-	idp, err := saml.Build(ctx, cfg, s.db, func(encDEK []byte) ([]byte, error) {
-		// The signing key payload is loaded via repository.GetActiveSAMLSigningKey,
-		// which provides PrivateKeyCiphertext + PrivateKeyDEK. saml.Build calls
-		// us with the DEK; we hand it back to envelope.Open along with the
-		// ciphertext that the caller stashed via Build's internal closure.
-		// Phase 1 short-cut: keep the DEK as the wrapped form and let Open
-		// decrypt; Phase 2 wires per-key DEK rotation.
-		return s.envelope.Open(ctx, encDEK, encDEK)
+	idp, err := saml.Build(ctx, cfg, s.db, func(ciphertext, wrappedDEK []byte) ([]byte, error) {
+		return s.envelope.Open(ctx, ciphertext, wrappedDEK)
 	})
 	if err != nil {
 		return nil, err
 	}
+	idp.IDP.SessionProvider = samlSessionProvider{db: s.db}
 	samlState.idp = idp
 	return idp, nil
 }
@@ -101,22 +96,216 @@ func (s *Server) handleSAMLMetadata(w http.ResponseWriter, r *http.Request) {
 	enc.Flush()
 }
 
-// handleSAMLSSO is the SAML 2.0 SSO endpoint. Phase 1 returns 501 with a
-// note pointing to the (not-yet-wired) session provider integration; SP
-// metadata + signing-key registry are in place so the handler can be
-// completed without re-architecting.
+// handleSAMLSSO is the SAML 2.0 SSO endpoint. The active Yggdrasil session is
+// the only authority: if no session cookie exists, the browser is sent to
+// /login with the full SAMLRequest/RelayState preserved in return_to.
 func (s *Server) handleSAMLSSO(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusNotImplemented, map[string]string{
-		"error": "SSO endpoint requires session provider integration (Phase 2 wiring)",
+	idp, err := s.samlIdP(r.Context())
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	idp.IDP.SessionProvider = samlSessionProvider{db: s.db}
+	idp.IDP.ServeSSO(w, r)
+}
+
+// handleSAMLSLO clears the local session cookie. Full SP-initiated logout
+// response signing can be layered onto this later without changing the source
+// of truth: Yggdrasil owns the session.
+func (s *Server) handleSAMLSLO(w http.ResponseWriter, r *http.Request) {
+	clearAuthCookie(w)
+	if r.Method == http.MethodGet {
+		http.Redirect(w, r, "/login", http.StatusFound)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"logged_out": true})
+}
+
+type samlSessionProvider struct {
+	db *sql.DB
+}
+
+func (p samlSessionProvider) GetSession(w http.ResponseWriter, r *http.Request, _ *cjsaml.IdpAuthnRequest) *cjsaml.Session {
+	token, ok := extractAuthToken(r)
+	if !ok {
+		redirectToSAMLLogin(w, r)
+		return nil
+	}
+	session, collaborator, err := repository.ResolveAuthSession(r.Context(), p.db, token)
+	if err != nil {
+		if isAuthUnauthorizedError(err) {
+			clearAuthCookie(w)
+			redirectToSAMLLogin(w, r)
+			return nil
+		}
+		writeMappedError(w, err)
+		return nil
+	}
+
+	return buildSAMLSession(r.Context(), p.db, session, collaborator)
+}
+
+func redirectToSAMLLogin(w http.ResponseWriter, r *http.Request) {
+	returnTo := r.URL.RequestURI()
+	if strings.TrimSpace(returnTo) == "" {
+		returnTo = "/saml/sso"
+	}
+	http.Redirect(w, r, "/login?return_to="+url.QueryEscape(returnTo), http.StatusFound)
+}
+
+func buildSAMLSession(ctx context.Context, db *sql.DB, session model.AuthSession, collaborator model.Collaborator) *cjsaml.Session {
+	email := strings.TrimSpace(collaborator.PrimaryEmail)
+	username := strings.ToLower(email)
+	if username == "" {
+		username = collaborator.Slug
+	}
+	fullName, givenName, familyName, preferredName := samlCollaboratorNames(collaborator)
+	if fullName == "" {
+		fullName = collaborator.DisplayName
+	}
+	if preferredName == "" {
+		preferredName = fullName
+	}
+
+	custom := []cjsaml.Attribute{}
+	custom = appendSAMLAttribute(custom, "email", email)
+	custom = appendSAMLAttribute(custom, "primary_email", email)
+	custom = appendSAMLAttribute(custom, "display_name", collaborator.DisplayName)
+	custom = appendSAMLAttribute(custom, "preferred_name", preferredName)
+	custom = appendSAMLAttribute(custom, "title", firstNonEmptyString(
+		stringValue(collaborator.EmploymentData["title"]),
+		stringValue(collaborator.EmploymentData["role"]),
+	))
+	custom = appendSAMLAttribute(custom, "department", stringValue(collaborator.EmploymentData["department"]))
+	custom = appendSAMLAttribute(custom, "cost_center", stringValue(collaborator.EmploymentData["cost_center"]))
+	custom = appendSAMLAttribute(custom, "yggdrasil_slug", collaborator.Slug)
+	custom = appendSAMLAttribute(custom, "avatar_url", firstNonEmptyString(
+		stringValue(mapValue(collaborator.PersonalData["profile"])["avatar_url"]),
+		stringValue(collaborator.PersonalData["avatar_url"]),
+	))
+
+	return &cjsaml.Session{
+		ID:               session.ID.String(),
+		CreateTime:       session.CreatedAt,
+		ExpireTime:       session.ExpiresAt,
+		Index:            session.ID.String(),
+		NameID:           username,
+		NameIDFormat:     "urn:oasis:names:tc:SAML:1.1:nameid-format:emailAddress",
+		SubjectID:        username,
+		Groups:           samlGroupsForCollaborator(ctx, db, collaborator),
+		UserName:         username,
+		UserEmail:        email,
+		UserCommonName:   fullName,
+		UserSurname:      familyName,
+		UserGivenName:    givenName,
+		CustomAttributes: custom,
+	}
+}
+
+func samlCollaboratorNames(collaborator model.Collaborator) (fullName, givenName, familyName, preferredName string) {
+	profile := mapValue(collaborator.PersonalData["profile"])
+	givenName = firstNonEmptyString(
+		stringValue(profile["given_name"]),
+		stringValue(collaborator.PersonalData["given_name"]),
+		stringValue(collaborator.PersonalData["first_name"]),
+	)
+	familyName = firstNonEmptyString(
+		stringValue(profile["family_name"]),
+		stringValue(collaborator.PersonalData["family_name"]),
+		stringValue(collaborator.PersonalData["last_name"]),
+	)
+	preferredName = firstNonEmptyString(
+		stringValue(collaborator.PersonalData["preferred_name"]),
+		stringValue(profile["preferred_name"]),
+		stringValue(collaborator.Traits["preferred_name"]),
+	)
+	fullName = firstNonEmptyString(
+		stringValue(profile["full_name"]),
+		stringValue(collaborator.PersonalData["full_name"]),
+		strings.TrimSpace(givenName+" "+familyName),
+		preferredName,
+		strings.TrimSpace(collaborator.DisplayName),
+	)
+	if givenName == "" || familyName == "" {
+		splitGiven, splitFamily := splitHumanName(fullName)
+		if givenName == "" {
+			givenName = splitGiven
+		}
+		if familyName == "" {
+			familyName = splitFamily
+		}
+	}
+	return fullName, givenName, familyName, preferredName
+}
+
+func samlGroupsForCollaborator(ctx context.Context, db *sql.DB, collaborator model.Collaborator) []string {
+	seen := map[string]bool{}
+	add := func(value string) {
+		value = strings.TrimSpace(value)
+		if value != "" {
+			seen[value] = true
+		}
+	}
+	if memberships, err := repository.ListTeamMemberships(ctx, db, model.ListTeamMembershipsRequest{
+		CollaboratorID: collaborator.ID.String(),
+		ActiveOnly:     true,
+	}); err == nil {
+		for _, membership := range memberships {
+			add("team:" + membership.TeamSlug)
+			if role := strings.TrimSpace(membership.Role); role != "" {
+				add("team:" + membership.TeamSlug + ":" + role)
+			}
+		}
+	}
+	if role := strings.TrimSpace(stringValue(collaborator.EmploymentData["role"])); role != "" {
+		add("role:" + role)
+	}
+	out := make([]string, 0, len(seen))
+	for group := range seen {
+		out = append(out, group)
+	}
+	sort.Strings(out)
+	return out
+}
+
+func appendSAMLAttribute(attrs []cjsaml.Attribute, name string, values ...string) []cjsaml.Attribute {
+	filtered := make([]cjsaml.AttributeValue, 0, len(values))
+	for _, value := range values {
+		value = strings.TrimSpace(value)
+		if value == "" {
+			continue
+		}
+		filtered = append(filtered, cjsaml.AttributeValue{Type: "xs:string", Value: value})
+	}
+	if len(filtered) == 0 {
+		return attrs
+	}
+	return append(attrs, cjsaml.Attribute{
+		FriendlyName: name,
+		Name:         name,
+		NameFormat:   "urn:oasis:names:tc:SAML:2.0:attrname-format:basic",
+		Values:       filtered,
 	})
 }
 
-// handleSAMLSLO is the SAML Single Logout endpoint. Same Phase 1 stub
-// approach as SSO.
-func (s *Server) handleSAMLSLO(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusNotImplemented, map[string]string{
-		"error": "SLO endpoint requires session provider integration (Phase 2 wiring)",
-	})
+func splitHumanName(displayName string) (string, string) {
+	parts := strings.Fields(strings.TrimSpace(displayName))
+	if len(parts) == 0 {
+		return "", ""
+	}
+	if len(parts) == 1 {
+		return parts[0], ""
+	}
+	return parts[0], strings.Join(parts[1:], " ")
+}
+
+func firstNonEmptyString(values ...string) string {
+	for _, value := range values {
+		if trimmed := strings.TrimSpace(value); trimmed != "" {
+			return trimmed
+		}
+	}
+	return ""
 }
 
 // samlSPRegisterRequest is the body of POST /api/v1/auth/saml/service-providers.

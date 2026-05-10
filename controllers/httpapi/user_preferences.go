@@ -182,17 +182,51 @@ func markProviderIdentityUpdatesPending(r *http.Request, db *sql.DB, collaborato
 
 func applyYggdrasilIdentityDesiredState(desired map[string]any, collaborator model.Collaborator) {
 	preferences := userPreferencesFromCollaborator(collaborator)
+	personalData := collaborator.PersonalData
+	profileData := mapValue(personalData["profile"])
+	employmentData := collaborator.EmploymentData
 	displayName := strings.TrimSpace(collaborator.DisplayName)
 	fullName := strings.TrimSpace(preferences.PreferredName)
 	if fullName == "" {
 		fullName = displayName
 	}
+	givenName := firstNonEmptyString(
+		stringValue(profileData["given_name"]),
+		stringValue(personalData["given_name"]),
+		stringValue(personalData["first_name"]),
+	)
+	familyName := firstNonEmptyString(
+		stringValue(profileData["family_name"]),
+		stringValue(personalData["family_name"]),
+		stringValue(personalData["last_name"]),
+	)
+	if givenName == "" || familyName == "" {
+		splitGiven, splitFamily := splitHumanName(fullName)
+		if givenName == "" {
+			givenName = splitGiven
+		}
+		if familyName == "" {
+			familyName = splitFamily
+		}
+	}
+	role := stringValue(employmentData["role"])
+	title := firstNonEmptyString(stringValue(employmentData["title"]), role)
+	department := stringValue(employmentData["department"])
+	costCenter := stringValue(employmentData["cost_center"])
 
 	setOrDelete(desired, "primary_email", collaborator.PrimaryEmail)
 	setOrDelete(desired, "display_name", displayName)
 	setOrDelete(desired, "full_name", fullName)
+	setOrDelete(desired, "given_name", givenName)
+	setOrDelete(desired, "family_name", familyName)
 	setOrDelete(desired, "preferred_name", preferences.PreferredName)
 	setOrDelete(desired, "avatar_data_url", preferences.AvatarDataURL)
+	setOrDelete(desired, "title", title)
+	setOrDelete(desired, "role", role)
+	setOrDelete(desired, "department", department)
+	setOrDelete(desired, "cost_center", costCenter)
+	desired["active"] = collaboratorActiveForProvider(collaborator.Status)
+	desired["external_id"] = collaborator.ID.String()
 	desired["identity_source"] = "yggdrasil"
 
 	profile := cloneAnyMap(mapValue(desired["profile"]))
@@ -201,10 +235,23 @@ func applyYggdrasilIdentityDesiredState(desired map[string]any, collaborator mod
 	}
 	setOrDelete(profile, "display_name", displayName)
 	setOrDelete(profile, "full_name", fullName)
+	setOrDelete(profile, "given_name", givenName)
+	setOrDelete(profile, "family_name", familyName)
 	setOrDelete(profile, "preferred_name", preferences.PreferredName)
 	setOrDelete(profile, "avatar_data_url", preferences.AvatarDataURL)
+	setOrDelete(profile, "title", title)
+	setOrDelete(profile, "department", department)
 	profile["source"] = "yggdrasil"
 	setOrDelete(desired, "profile", profile)
+}
+
+func collaboratorActiveForProvider(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "offboarded", "suspended", "inactive", "disabled":
+		return false
+	default:
+		return true
+	}
 }
 
 func validateOptionalAvatarDataURL(value string) error {
