@@ -41,3 +41,21 @@ type SurfaceCachedListEntry struct {
 	PermissionCount int       `json:"permission_count"`
 	FetchedAt       time.Time `json:"fetched_at"`
 }
+
+// SurfaceRuntimeTarget stores the adapter endpoint used by the ops
+// console to fetch a generic integration surface.
+type SurfaceRuntimeTarget struct {
+	SurfaceID   string    `json:"surface"`
+	BaseURL     string    `json:"base_url"`
+	Enabled     bool      `json:"enabled"`
+	Description string    `json:"description"`
+	CreatedAt   time.Time `json:"created_at"`
+	UpdatedAt   time.Time `json:"updated_at"`
+}
+
+type UpsertSurfaceRuntimeTargetRequest struct {
+	SurfaceID   string
+	BaseURL     string
+	Enabled     bool
+	Description string
+}

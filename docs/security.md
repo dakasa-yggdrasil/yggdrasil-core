@@ -9,8 +9,9 @@ Two paths, both converging on a session row + bearer token after MFA:
 
 1. **Password** — `/api/v1/auth/login`. Credentials checked against
    `password_credential` table. A valid password returns
-   `mfa_required` until the caller supplies a valid `totp_code`; a
-   session is not issued from password alone.
+   `mfa_required` until the caller supplies a valid `totp_code` or
+   single-use `recovery_code`; a session is not issued from password
+   alone.
 2. **OAuth/OIDC** — `/api/v1/auth/third-party/start/<provider>` →
    redirect to the provider → `/api/v1/auth/third-party/callback/
    <provider>` → session issued. Provider config lives in

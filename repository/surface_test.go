@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"database/sql"
 	"encoding/json"
 	"testing"
 	"time"
@@ -95,5 +96,103 @@ func TestGetSurfaceManifest_NotFound(t *testing.T) {
 	_, err = GetSurfaceManifest(context.Background(), db, "missing")
 	if err != ErrSurfaceManifestNotFound {
 		t.Errorf("err: got %v want ErrSurfaceManifestNotFound", err)
+	}
+}
+
+func TestUpsertSurfaceRuntimeTarget(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	now := time.Now()
+	rows := sqlmock.NewRows([]string{
+		"surface_id", "base_url", "enabled", "description", "created_at", "updated_at",
+	}).AddRow("github", "http://integration-github:8080", true, "GitHub Enterprise", now, now)
+
+	mock.ExpectQuery("INSERT INTO public.surface_runtime_targets").
+		WithArgs("github", "http://integration-github:8080", true, "GitHub Enterprise").
+		WillReturnRows(rows)
+
+	got, err := UpsertSurfaceRuntimeTarget(context.Background(), db, model.UpsertSurfaceRuntimeTargetRequest{
+		SurfaceID:   " GitHub ",
+		BaseURL:     "http://integration-github:8080/",
+		Enabled:     true,
+		Description: " GitHub Enterprise ",
+	})
+	if err != nil {
+		t.Fatalf("UpsertSurfaceRuntimeTarget: %v", err)
+	}
+	if got.SurfaceID != "github" || got.BaseURL != "http://integration-github:8080" {
+		t.Fatalf("target: %+v", got)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestListSurfaceRuntimeTargets(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	now := time.Now()
+	rows := sqlmock.NewRows([]string{
+		"surface_id", "base_url", "enabled", "description", "created_at", "updated_at",
+	}).AddRow("github", "http://integration-github:8080", true, "GitHub Enterprise", now, now)
+
+	mock.ExpectQuery("SELECT .* FROM public.surface_runtime_targets").
+		WithArgs(false).
+		WillReturnRows(rows)
+
+	got, err := ListSurfaceRuntimeTargets(context.Background(), db, false)
+	if err != nil {
+		t.Fatalf("ListSurfaceRuntimeTargets: %v", err)
+	}
+	if len(got) != 1 || got[0].SurfaceID != "github" {
+		t.Fatalf("targets: %+v", got)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestGetSurfaceRuntimeTarget_NotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	mock.ExpectQuery("SELECT .* FROM public.surface_runtime_targets").
+		WithArgs("missing").
+		WillReturnError(sql.ErrNoRows)
+
+	_, err = GetSurfaceRuntimeTarget(context.Background(), db, "missing")
+	if err != ErrSurfaceRuntimeTargetNotFound {
+		t.Errorf("err: got %v want ErrSurfaceRuntimeTargetNotFound", err)
+	}
+}
+
+func TestDeleteSurfaceRuntimeTarget_NotFound(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	mock.ExpectExec("DELETE FROM public.surface_runtime_targets").
+		WithArgs("missing").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	err = DeleteSurfaceRuntimeTarget(context.Background(), db, "missing")
+	if err != ErrSurfaceRuntimeTargetNotFound {
+		t.Errorf("err: got %v want ErrSurfaceRuntimeTargetNotFound", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }

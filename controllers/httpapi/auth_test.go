@@ -410,3 +410,22 @@ func TestAuthSurfaceBaseURLUsesForwardedHostWhenSurfaceHeaderIsMissing(t *testin
 		t.Fatalf("expected auth surface base URL %q, got %q", want, got)
 	}
 }
+
+func TestAuthLoginFactorsExposeOnlyImplementedLoginFactors(t *testing.T) {
+	t.Parallel()
+
+	got := authLoginFactors(model.AuthIdentity{
+		HasTOTP:             true,
+		HasRecoveryCodes:    true,
+		WebAuthnCredentials: []model.WebAuthnCredential{{ID: "security-key"}},
+	})
+	want := []string{"totp", "recovery_code"}
+	if len(got) != len(want) {
+		t.Fatalf("factors = %#v, want %#v", got, want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Fatalf("factors = %#v, want %#v", got, want)
+		}
+	}
+}

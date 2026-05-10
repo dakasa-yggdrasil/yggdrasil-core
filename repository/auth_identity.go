@@ -8,9 +8,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/cryptoenvelope"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 // ErrAuthIdentityNotFound is returned when no auth_identities row matches the
@@ -59,13 +61,13 @@ func GetAuthIdentityByCollaboratorID(ctx context.Context, db *sql.DB, collaborat
 	`, collaboratorID)
 
 	var (
-		id           model.AuthIdentity
-		credBlob     []byte
-		hasTOTP      sql.NullBool
-		hasRecovery  sql.NullBool
-		mfaEnrolled  sql.NullTime
-		lastLogin    sql.NullTime
-		lockedUntil  sql.NullTime
+		id          model.AuthIdentity
+		credBlob    []byte
+		hasTOTP     sql.NullBool
+		hasRecovery sql.NullBool
+		mfaEnrolled sql.NullTime
+		lastLogin   sql.NullTime
+		lockedUntil sql.NullTime
 	)
 	err := row.Scan(
 		&id.CollaboratorID,
@@ -163,6 +165,60 @@ func SetRecoveryCodesHashes(ctx context.Context, db *sql.DB, collaboratorID uuid
 	rows, _ := res.RowsAffected()
 	if rows == 0 {
 		return ErrAuthIdentityNotFound
+	}
+	return nil
+}
+
+// VerifyAndInvalidateRecoveryCode verifies a single-use recovery code and
+// removes the matching hash from storage before the caller issues a session.
+func VerifyAndInvalidateRecoveryCode(ctx context.Context, db *sql.DB, collaboratorID uuid.UUID, code string) error {
+	code = strings.TrimSpace(code)
+	if code == "" {
+		return mfa.ErrInvalidRecoveryCode
+	}
+
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin recovery-code verification: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	var hashes []string
+	err = tx.QueryRowContext(ctx, `
+		SELECT recovery_codes_hashes
+		FROM public.auth_identities
+		WHERE collaborator_id = $1
+		FOR UPDATE
+	`, collaboratorID).Scan(pq.Array(&hashes))
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrAuthIdentityNotFound
+	}
+	if err != nil {
+		return fmt.Errorf("read recovery codes: %w", err)
+	}
+
+	index, err := mfa.VerifyRecoveryCode(code, hashes)
+	if err != nil {
+		return err
+	}
+
+	remaining := make([]string, 0, len(hashes)-1)
+	remaining = append(remaining, hashes[:index]...)
+	remaining = append(remaining, hashes[index+1:]...)
+	res, err := tx.ExecContext(ctx, `
+		UPDATE public.auth_identities
+		SET recovery_codes_hashes = $1
+		WHERE collaborator_id = $2
+	`, pgTextArray(remaining), collaboratorID)
+	if err != nil {
+		return fmt.Errorf("invalidate recovery code: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return ErrAuthIdentityNotFound
+	}
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit recovery-code verification: %w", err)
 	}
 	return nil
 }

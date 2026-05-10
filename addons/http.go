@@ -2,10 +2,13 @@ package addons
 
 import (
 	"context"
+	"database/sql"
 	"errors"
 	"fmt"
 	"net/http"
+	"net/url"
 	"os"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -13,6 +16,8 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/httpapi"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/oidc"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
+	surfacesvc "github.com/dakasa-yggdrasil/yggdrasil-core/internal/surface"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"go.uber.org/zap"
 )
 
@@ -60,6 +65,29 @@ func bootstrapHTTP(_ context.Context, app *runtime.ServiceApp) error {
 		opts = append(opts, httpapi.WithOIDCIssuer(issuer))
 		logger.Info("yggdrasil OIDC provider enabled", zap.String("issuer", issuer))
 	}
+	surfaceTargets := surfaceTargetsFromEnv(logger)
+	if len(surfaceTargets) > 0 {
+		opts = append(opts, httpapi.WithSurfaceBaseURLs(surfaceTargets))
+	}
+	discovery := surfacesvc.NewDiscovery(db, surfacesvc.NewClient(nil), logger).
+		WithSource(surfaceTargetSource{db: db, fallback: surfaceTargets}).
+		WithReconciler(surfacesvc.NewPermissionsReconciler(db, logger))
+	discoveryCtx, cancelDiscovery := context.WithCancel(context.Background())
+	go func() {
+		if err := discovery.Run(
+			discoveryCtx,
+			httpDurationFromEnv("YGGDRASIL_SURFACE_DISCOVERY_INTERVAL_SECONDS", 30*time.Second),
+			intFromEnv("YGGDRASIL_SURFACE_DISCOVERY_PARALLELISM", 4),
+		); err != nil {
+			logger.Warn("surface discovery stopped", zap.Error(err))
+		}
+	}()
+	app.RegisterCloser(func(context.Context) error {
+		cancelDiscovery()
+		discovery.Stop()
+		return nil
+	})
+	logger.Info("surface discovery enabled", zap.Int("env_targets", len(surfaceTargets)))
 	handler, err := httpapi.New(app.ServiceName, db, conn, logger, opts...)
 	if err != nil {
 		return fmt.Errorf("build http api: %w", err)
@@ -116,4 +144,86 @@ func httpDurationFromEnv(name string, fallback time.Duration) time.Duration {
 		return fallback
 	}
 	return time.Duration(seconds) * time.Second
+}
+
+type surfaceTargetSource struct {
+	db       *sql.DB
+	fallback map[string]string
+}
+
+func (s surfaceTargetSource) List(ctx context.Context) ([]surfacesvc.AdapterTarget, error) {
+	targetsByID := make(map[string]string, len(s.fallback))
+	for id, baseURL := range s.fallback {
+		targetsByID[strings.ToLower(strings.TrimSpace(id))] = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+	}
+
+	if s.db != nil {
+		targets, err := repository.ListSurfaceRuntimeTargets(ctx, s.db, true)
+		if err != nil {
+			return nil, err
+		}
+		for _, target := range targets {
+			id := strings.ToLower(strings.TrimSpace(target.SurfaceID))
+			if !target.Enabled {
+				delete(targetsByID, id)
+				continue
+			}
+			targetsByID[id] = strings.TrimRight(strings.TrimSpace(target.BaseURL), "/")
+		}
+	}
+
+	keys := make([]string, 0, len(targetsByID))
+	for id := range targetsByID {
+		if id != "" && targetsByID[id] != "" {
+			keys = append(keys, id)
+		}
+	}
+	sort.Strings(keys)
+	out := make([]surfacesvc.AdapterTarget, 0, len(keys))
+	for _, id := range keys {
+		out = append(out, surfacesvc.AdapterTarget{ID: id, BaseURL: targetsByID[id]})
+	}
+	return out, nil
+}
+
+func surfaceTargetsFromEnv(logger *zap.Logger) map[string]string {
+	raw := strings.TrimSpace(os.Getenv("YGGDRASIL_SURFACE_TARGETS"))
+	if raw == "" {
+		return nil
+	}
+	out := map[string]string{}
+	for _, part := range strings.FieldsFunc(raw, func(r rune) bool {
+		return r == ',' || r == '\n' || r == ';'
+	}) {
+		id, baseURL, ok := strings.Cut(strings.TrimSpace(part), "=")
+		if !ok {
+			logger.Warn("ignoring malformed surface target", zap.String("target", part))
+			continue
+		}
+		id = strings.ToLower(strings.TrimSpace(id))
+		baseURL = strings.TrimRight(strings.TrimSpace(baseURL), "/")
+		if id == "" || !validHTTPBaseURL(baseURL) {
+			logger.Warn("ignoring invalid surface target", zap.String("surface", id), zap.String("base_url", baseURL))
+			continue
+		}
+		out[id] = baseURL
+	}
+	return out
+}
+
+func validHTTPBaseURL(value string) bool {
+	parsed, err := url.Parse(value)
+	return err == nil && (parsed.Scheme == "http" || parsed.Scheme == "https") && parsed.Host != ""
+}
+
+func intFromEnv(name string, fallback int) int {
+	raw := strings.TrimSpace(os.Getenv(name))
+	if raw == "" {
+		return fallback
+	}
+	value, err := strconv.Atoi(raw)
+	if err != nil || value <= 0 {
+		return fallback
+	}
+	return value
 }

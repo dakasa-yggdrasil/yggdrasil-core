@@ -99,40 +99,70 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		writeMappedError(w, err)
 		return
 	}
-	if !identity.HasTOTP {
+	factors := authLoginFactors(identity)
+	if len(factors) == 0 {
 		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "mfa enrollment has no TOTP factor available for login",
-			"code":  "mfa_totp_unavailable",
+			"error": "mfa enrollment has no factor available for login",
+			"code":  "mfa_factor_unavailable",
 		})
-		return
-	}
-	if !s.requireEnvelope(w) {
 		return
 	}
 
 	req.TOTPCode = strings.TrimSpace(req.TOTPCode)
-	if req.TOTPCode == "" {
+	req.RecoveryCode = strings.TrimSpace(req.RecoveryCode)
+	if req.TOTPCode == "" && req.RecoveryCode == "" {
 		writeJSON(w, http.StatusAccepted, authMFARequiredResponse{
 			Error:        "mfa_required",
 			Code:         "mfa_required",
 			Message:      "MFA verification is required before a session can be issued.",
-			Factors:      []string{"totp"},
+			Factors:      factors,
 			Collaborator: &collaborator,
 		})
 		return
 	}
 
-	secret, err := repository.GetTOTPSecret(r.Context(), s.db, s.envelope, collaborator.ID)
-	if err != nil {
-		writeMappedError(w, err)
-		return
-	}
-	if err := mfa.ValidateTOTP(string(secret), req.TOTPCode); err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{
-			"error": "invalid totp code",
-			"code":  "invalid_totp",
-		})
-		return
+	if req.TOTPCode != "" {
+		if !identity.HasTOTP {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error": "mfa enrollment has no TOTP factor available for login",
+				"code":  "mfa_totp_unavailable",
+			})
+			return
+		}
+		if !s.requireEnvelope(w) {
+			return
+		}
+		secret, err := repository.GetTOTPSecret(r.Context(), s.db, s.envelope, collaborator.ID)
+		if err != nil {
+			writeMappedError(w, err)
+			return
+		}
+		if err := mfa.ValidateTOTP(string(secret), req.TOTPCode); err != nil {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{
+				"error": "invalid totp code",
+				"code":  "invalid_totp",
+			})
+			return
+		}
+	} else {
+		if !identity.HasRecoveryCodes {
+			writeJSON(w, http.StatusUnauthorized, map[string]string{
+				"error": "invalid recovery code",
+				"code":  "invalid_recovery_code",
+			})
+			return
+		}
+		if err := repository.VerifyAndInvalidateRecoveryCode(r.Context(), s.db, collaborator.ID, req.RecoveryCode); err != nil {
+			if errors.Is(err, mfa.ErrInvalidRecoveryCode) {
+				writeJSON(w, http.StatusUnauthorized, map[string]string{
+					"error": "invalid recovery code",
+					"code":  "invalid_recovery_code",
+				})
+				return
+			}
+			writeMappedError(w, err)
+			return
+		}
 	}
 
 	session, token, err := repository.CreateAuthSession(r.Context(), s.db, collaborator.ID, req.Metadata, authSessionTTL())
@@ -147,6 +177,17 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		Session:      session,
 		Token:        token,
 	})
+}
+
+func authLoginFactors(identity model.AuthIdentity) []string {
+	factors := make([]string, 0, 2)
+	if identity.HasTOTP {
+		factors = append(factors, "totp")
+	}
+	if identity.HasRecoveryCodes {
+		factors = append(factors, "recovery_code")
+	}
+	return factors
 }
 
 func (s *Server) handleAuthThirdPartyLogin(w http.ResponseWriter, r *http.Request) {

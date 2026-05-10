@@ -3,14 +3,16 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"errors"
 	"os"
 	"testing"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/cryptoenvelope"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
+	"github.com/lib/pq"
 )
 
 func dbForAuthIdentityTest(t *testing.T) *sql.DB {
@@ -170,5 +172,40 @@ func TestSetRecoveryCodesHashes(t *testing.T) {
 	}
 	if !got.HasRecoveryCodes {
 		t.Error("expected has_recovery_codes=true after SetRecoveryCodesHashes")
+	}
+}
+
+func TestVerifyAndInvalidateRecoveryCode(t *testing.T) {
+	db := dbForAuthIdentityTest(t)
+	defer db.Close()
+	cleanAuthIdentityFixtures(t, db)
+	defer cleanAuthIdentityFixtures(t, db)
+
+	id := seedAuthIdentityCollaborator(t, db, "erin")
+	if err := UpsertAuthIdentity(context.Background(), db, id, "erin@dakasa-test.me"); err != nil {
+		t.Fatalf("upsert: %v", err)
+	}
+
+	codes, hashes, err := mfa.GenerateRecoveryCodes()
+	if err != nil {
+		t.Fatalf("generate recovery codes: %v", err)
+	}
+	if err := SetRecoveryCodesHashes(context.Background(), db, id, hashes); err != nil {
+		t.Fatalf("set hashes: %v", err)
+	}
+
+	if err := VerifyAndInvalidateRecoveryCode(context.Background(), db, id, codes[0]); err != nil {
+		t.Fatalf("verify recovery code: %v", err)
+	}
+	if err := VerifyAndInvalidateRecoveryCode(context.Background(), db, id, codes[0]); !errors.Is(err, mfa.ErrInvalidRecoveryCode) {
+		t.Fatalf("expected consumed code to be invalid, got %v", err)
+	}
+
+	var remaining []string
+	if err := db.QueryRow(`SELECT recovery_codes_hashes FROM public.auth_identities WHERE collaborator_id = $1`, id).Scan(pq.Array(&remaining)); err != nil {
+		t.Fatalf("read remaining hashes: %v", err)
+	}
+	if len(remaining) != len(hashes)-1 {
+		t.Fatalf("expected %d remaining hashes, got %d", len(hashes)-1, len(remaining))
 	}
 }

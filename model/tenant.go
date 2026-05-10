@@ -1,5 +1,11 @@
 package model
 
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
 // TenantManifestSpec declares a top-level tenancy unit. Tenants are
 // the outer boundary of multi-tenant isolation in Yggdrasil v2.3+:
 // each tenant has its own slug, billing identity, and default RBAC
@@ -36,10 +42,43 @@ type TenantManifestSpec struct {
 
 // TenantQuotas caps tenant-scoped resource counts. Each value 0 means "no cap".
 type TenantQuotas struct {
-	MaxProjects               int `json:"max_projects,omitempty"`
-	MaxManifests              int `json:"max_manifests,omitempty"`
-	MaxWorkflowRunsPerDay     int `json:"max_workflow_runs_per_day,omitempty"`
-	MaxSecrets                int `json:"max_secrets,omitempty"`
-	MaxEphemeralEnvironments  int `json:"max_ephemeral_environments,omitempty"`
-	MaxIntegrationInstances   int `json:"max_integration_instances,omitempty"`
+	MaxProjects              int `json:"max_projects,omitempty"`
+	MaxManifests             int `json:"max_manifests,omitempty"`
+	MaxWorkflowRunsPerDay    int `json:"max_workflow_runs_per_day,omitempty"`
+	MaxSecrets               int `json:"max_secrets,omitempty"`
+	MaxEphemeralEnvironments int `json:"max_ephemeral_environments,omitempty"`
+	MaxIntegrationInstances  int `json:"max_integration_instances,omitempty"`
+}
+
+// TenantBrand is the organization profile shown by generic Yggdrasil surfaces.
+type TenantBrand struct {
+	Name           string     `json:"name"`
+	ShortName      string     `json:"short_name"`
+	ProductLabel   string     `json:"product_label"`
+	Locale         string     `json:"locale"`
+	AccentOverride string     `json:"accent_override,omitempty"`
+	LogoURL        string     `json:"logo_url,omitempty"`
+	SupportEmail   string     `json:"support_email,omitempty"`
+	UpdatedBy      *uuid.UUID `json:"updated_by,omitempty"`
+	CreatedAt      time.Time  `json:"created_at,omitempty"`
+	UpdatedAt      time.Time  `json:"updated_at,omitempty"`
+}
+
+type UpdateTenantBrandRequest struct {
+	Name           string `json:"name"`
+	ShortName      string `json:"short_name"`
+	ProductLabel   string `json:"product_label"`
+	Locale         string `json:"locale"`
+	AccentOverride string `json:"accent_override,omitempty"`
+	LogoURL        string `json:"logo_url,omitempty"`
+	SupportEmail   string `json:"support_email,omitempty"`
+}
+
+func DefaultTenantBrand() TenantBrand {
+	return TenantBrand{
+		Name:         "Sua organização",
+		ShortName:    "ORG",
+		ProductLabel: "Yggdrasil Console",
+		Locale:       "pt-BR",
+	}
 }

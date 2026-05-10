@@ -254,6 +254,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 
 	// Ops console — Phase 1 foundation
 	mux.HandleFunc("GET /api/v1/ops/surfaces", server.handleOpsSurfacesList)
+	mux.HandleFunc("GET /api/v1/ops/surface-targets", server.handleOpsSurfaceTargetsList)
+	mux.HandleFunc("PUT /api/v1/ops/surface-targets/{id}", server.handleOpsSurfaceTargetUpsert)
+	mux.HandleFunc("DELETE /api/v1/ops/surface-targets/{id}", server.handleOpsSurfaceTargetDelete)
+	mux.HandleFunc("POST /api/v1/ops/surface-targets/{id}/refresh", server.handleOpsSurfaceTargetRefresh)
 	mux.HandleFunc("GET /api/v1/ops/surfaces/{id}/manifest", server.handleOpsSurfaceManifest)
 	mux.HandleFunc("GET /api/v1/ops/surfaces/{id}/data/{viewId}", server.handleOpsSurfaceData)
 	mux.HandleFunc("POST /api/v1/ops/surfaces/{id}/action/{actionId}", server.handleOpsSurfaceAction)
@@ -332,6 +336,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/products/{namespace}/{name}/deploy", requireDeployToken(server.handleDeployProduct))
 	mux.HandleFunc("POST /api/v1/products/deploy-all", requireDeployToken(server.handleDeployAll))
 	mux.HandleFunc("POST /api/v1/bootstrap", requireDeployToken(server.handleBootstrap))
+	mux.HandleFunc("GET /api/v1/tenant/brand", server.handleTenantBrandGet)
+	mux.HandleFunc("PATCH /api/v1/tenant/brand", server.handleTenantBrandPatch)
+	mux.HandleFunc("GET /api/v1/me/preferences", server.handleUserPreferencesGet)
+	mux.HandleFunc("PATCH /api/v1/me/preferences", server.handleUserPreferencesPatch)
 	mux.HandleFunc("GET /api/v1/console/integration-catalog", server.handleIntegrationCatalogList)
 	mux.HandleFunc("GET /api/v1/console/integration-catalog/{domain}/{section}/{entry}", server.handleIntegrationCatalogEntry)
 	mux.HandleFunc("GET /api/v1/console/catalog-discovery", server.handleCatalogDiscovery)
@@ -524,6 +532,18 @@ func WithConsole(prefix string, handler http.Handler) ServerOption {
 	}
 }
 
+// WithSurfaceBaseURLs maps surface ids to adapter health-server base URLs.
+// It keeps the core neutral: adopters decide which generic adapter runtime
+// backs each surface in their own deployment topology.
+func WithSurfaceBaseURLs(baseURLs map[string]string) ServerOption {
+	return func(s *Server) {
+		s.surfaceBaseURLs = make(map[string]string, len(baseURLs))
+		for surfaceID, baseURL := range baseURLs {
+			s.surfaceBaseURLs[normalizeSurfaceID(surfaceID)] = baseURL
+		}
+	}
+}
+
 // workflowDispatchFunc dispatches a Yggdrasil workflow_run by manifest ref.
 // The default implementation wraps messagecontroller.RunWorkflow; tests
 // override the field directly with a fake to assert dispatch behaviour.
@@ -549,6 +569,7 @@ type Server struct {
 	// even when the console isn't wanted — keeps the slim test/dev path).
 	consoleHandler     http.Handler
 	consoleMountPrefix string
+	surfaceBaseURLs    map[string]string
 	// envelope encrypts MFA secrets and SAML signing keys at rest. Read from
 	// YGGDRASIL_AUTH_KEK_BASE64 (32 raw bytes base64-encoded). When unset
 	// MFA enroll handlers refuse with 503 — secrets-at-rest is mandatory.

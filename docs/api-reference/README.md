@@ -78,7 +78,7 @@ Supported `kind` values: `integration_family`, `integration_type`, `integration_
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/v1/auth/login` | Username/password, then `totp_code` when `mfa_required` is returned |
+| POST | `/api/v1/auth/login` | Username/password, then `totp_code` or `recovery_code` when `mfa_required` is returned |
 | POST | `/api/v1/auth/third-party/login` | Third-party identity exchange |
 | GET | `/api/v1/auth/third-party/start/{provider}` | OIDC start |
 | GET | `/api/v1/auth/third-party/callback/{provider}` | OIDC callback |
