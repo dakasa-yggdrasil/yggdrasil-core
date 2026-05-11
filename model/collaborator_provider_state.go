@@ -54,10 +54,14 @@ type ReconcileProviderStateRequest struct {
 }
 
 // ReconcileProviderStateUser is one identity entry in a
-// ReconcileProviderStateRequest.
+// ReconcileProviderStateRequest. Email is the canonical lookup field;
+// UserName is accepted as a fallback so SCIM payloads (where the primary
+// email is carried in userName) can be forwarded directly from a
+// scim_list_users step without a transformation layer.
 type ReconcileProviderStateUser struct {
-	ExternalID    string         `json:"external_id"`               // id in the provider
-	Email         string         `json:"email"`                     // primary email of the user at the provider
+	ExternalID    string         `json:"external_id"`               // id in the provider (SCIM: id)
+	Email         string         `json:"email"`                     // primary email (preferred)
+	UserName      string         `json:"userName,omitempty"`        // SCIM userName alias for email
 	DisplayName   string         `json:"display_name,omitempty"`
 	ObservedState map[string]any `json:"observed_state,omitempty"`  // raw attributes from the provider
 }

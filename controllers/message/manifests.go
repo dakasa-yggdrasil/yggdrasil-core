@@ -290,6 +290,11 @@ func collaboratorReconcileProviderStateHandler(conn *amqp.Connection, db *sql.DB
 		for _, u := range req.Users {
 			email := strings.TrimSpace(strings.ToLower(u.Email))
 			if email == "" {
+				// Accept SCIM userName as a fallback so payloads forwarded
+				// directly from scim_list_users don't need transformation.
+				email = strings.TrimSpace(strings.ToLower(u.UserName))
+			}
+			if email == "" {
 				continue
 			}
 			collab, err := repository.GetCollaboratorByPrimaryEmail(ctx, db, email)
