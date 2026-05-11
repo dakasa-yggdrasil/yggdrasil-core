@@ -373,4 +373,92 @@ func TestGetProviderState_EmptyByDefault(t *testing.T) {
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
 	}
+	if resp.ProviderState == nil {
+		t.Fatal("expected non-nil provider_state slice")
+	}
+	if len(resp.ProviderState) != 0 {
+		t.Fatalf("expected empty provider_state, got %d rows", len(resp.ProviderState))
+	}
+}
+
+func TestGetProviderState_ReturnsRows(t *testing.T) {
+	db := dbForLifecycleHandlerTest(t)
+	defer func() { _ = db.Close() }()
+	cleanLifecycleFixtures(t, db)
+
+	collabID := seedActiveCollaborator(t, db, "ps-rows")
+	srv := newLifecycleTestServer(t, db)
+
+	// Seed a provider state row directly via the repository.
+	if _, err := repository.UpsertCollaboratorProviderState(context.Background(), db, model.UpsertProviderStateRequest{
+		CollaboratorID: collabID,
+		Provider:       "github",
+		ExternalID:     "gh-123",
+		DesiredState:   map[string]any{"active": true},
+	}); err != nil {
+		t.Fatalf("seed provider state: %v", err)
+	}
+
+	req := httptest.NewRequest("GET", "/api/v1/collaborators/"+collabID.String()+"/provider-state", nil)
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		ProviderState []model.CollaboratorProviderState `json:"provider_state"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.ProviderState) != 1 {
+		t.Fatalf("expected 1 provider_state row, got %d", len(resp.ProviderState))
+	}
+	if resp.ProviderState[0].Provider != "github" {
+		t.Fatalf("expected provider=github, got %q", resp.ProviderState[0].Provider)
+	}
+	if resp.ProviderState[0].ExternalID != "gh-123" {
+		t.Fatalf("expected external_id=gh-123, got %q", resp.ProviderState[0].ExternalID)
+	}
+}
+
+func TestGetProviderState_UnknownCollaborator_Returns404(t *testing.T) {
+	db := dbForLifecycleHandlerTest(t)
+	defer func() { _ = db.Close() }()
+	cleanLifecycleFixtures(t, db)
+
+	srv := newLifecycleTestServer(t, db)
+
+	// A well-formed UUID that has no corresponding collaborator row returns 404
+	// (the handler resolves by UUID, finds no row, maps ErrCollaboratorNotFound → 404).
+	nonExistentID := uuid.New()
+	req := httptest.NewRequest("GET", "/api/v1/collaborators/"+nonExistentID.String()+"/provider-state", nil)
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+	if rr.Code != http.StatusNotFound {
+		t.Fatalf("expected 404 for unknown collaborator, got %d body=%s", rr.Code, rr.Body.String())
+	}
+}
+
+func TestGetConsoleProviderState_RouteRegistered(t *testing.T) {
+	db := dbForLifecycleHandlerTest(t)
+	defer func() { _ = db.Close() }()
+	cleanLifecycleFixtures(t, db)
+
+	collabID := seedActiveCollaborator(t, db, "ps-console")
+	srv := newLifecycleTestServer(t, db)
+
+	// Verify the /console/ path alias resolves the same handler.
+	req := httptest.NewRequest("GET", "/api/v1/console/collaborators/"+collabID.String()+"/provider-state", nil)
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+	if rr.Code != http.StatusOK {
+		t.Fatalf("expected 200 on console route, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var resp struct {
+		ProviderState []model.CollaboratorProviderState `json:"provider_state"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
 }
