@@ -810,10 +810,10 @@ func reconcileGitComponent(
 		return model.ProductInstallationReconcileResult{}, err
 	}
 
-	queue := strings.TrimSpace(integrationTypeSpec.Adapter.Queues.Execute)
-	if queue == "" {
-		return model.ProductInstallationReconcileResult{}, fmt.Errorf("integration type %s/%s does not expose an execute queue", integrationTypeManifest.Metadata.Namespace, integrationTypeManifest.Metadata.Name)
-	}
+	// Transport check happens inside AdapterTransportClient.Call below
+	// — it picks queue or endpoint based on adapter.transport (rabbitmq
+	// or http_json), so we don't need to gate on Queues.Execute being
+	// non-empty (that's empty for http_json adapters by design).
 
 	timeout := time.Duration(integrationTypeSpec.Adapter.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
@@ -870,9 +870,17 @@ func reconcileGitComponent(
 		Input:      input,
 	}
 
+	// Use the generic transport client so this works whether the
+	// adapter declares `adapter.transport: rabbitmq` (queue-based) or
+	// `adapter.transport: http_json` (HTTP endpoints). The
+	// manifest-sources-kustomize adapter is http_json, so the older
+	// callContractRPC (AMQP-only) path used by reconcileIntegrationComponent
+	// would fail here with "execute queue does not expose" — the typed
+	// queue field is empty for HTTP transports.
+	transport := NewAdapterTransportClient(rpcamqp.New(conn))
 	var response model.AdapterGenerateInstallationResponse
-	if err := callContractRPC(rpcCtx, rpcamqp.New(conn), queue, generateInstallationContract, request, &response); err != nil {
-		return model.ProductInstallationReconcileResult{}, fmt.Errorf("call integration execute queue %q for git+renderer render: %w", queue, err)
+	if err := transport.Call(rpcCtx, generateInstallationContract, integrationTypeSpec, instanceSpec, "execute", request, &response); err != nil {
+		return model.ProductInstallationReconcileResult{}, fmt.Errorf("call integration execute transport %q for git+renderer render: %w", integrationTypeSpec.Adapter.Transport, err)
 	}
 	if strings.TrimSpace(response.Operation) != "" && response.Operation != capability {
 		return model.ProductInstallationReconcileResult{}, fmt.Errorf("unexpected adapter operation %q (expected %q)", response.Operation, capability)
