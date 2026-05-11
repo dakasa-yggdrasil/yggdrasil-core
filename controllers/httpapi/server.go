@@ -164,11 +164,45 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		server.envelope = cryptoenvelope.NewWithStaticKEK(raw)
 	}
 	server.dispatchWorkflow = func(ctx context.Context, ref model.ManifestSelector, inputs map[string]any) error {
-		_, err := messagecontroller.RunWorkflow(ctx, server.rabbitmq, server.db, model.RunWorkflowRequest{
-			Workflow: ref,
-			Inputs:   inputs,
-		})
-		return err
+		// Persist run to workflow_runs so audit trail + console UI can
+		// see webhook-driven dispatches alongside async API dispatches.
+		// Before this, webhook-triggered runs (handlePushEvent goroutine)
+		// executed in-memory only — RunWorkflow returned an in-memory
+		// response that the caller threw away, and the workflow_runs
+		// table never got an INSERT. Visible symptom: pushes to a repo
+		// with a binding fired `deploy-via-kustomize-source`, the steps
+		// executed, but `SELECT * FROM workflow_runs WHERE workflow_name
+		// = 'deploy-via-kustomize-source'` showed nothing from today —
+		// silent unobservable deploys.
+		req := model.RunWorkflowRequest{Workflow: ref, Inputs: inputs}
+		runID := uuid.New()
+		if err := repository.InsertWorkflowRun(ctx, server.db, runID, req.Workflow, req.Inputs, req.Metadata); err != nil {
+			return fmt.Errorf("insert workflow_run: %w", err)
+		}
+		startedAt := time.Now().UTC()
+		_ = repository.MarkWorkflowRunRunning(ctx, server.db, runID, startedAt)
+
+		response, runErr := messagecontroller.RunWorkflow(ctx, server.rabbitmq, server.db, req)
+
+		status := "succeeded"
+		errMsg := ""
+		var resultPayload any
+		if runErr != nil {
+			status = "failed"
+			errMsg = runErr.Error()
+		} else {
+			resultPayload = response
+			if strings.EqualFold(response.Status, "failed") {
+				status = "failed"
+				if response.Metadata != nil {
+					if v, ok := response.Metadata["failed_step"].(string); ok && v != "" {
+						errMsg = "step " + v + " failed"
+					}
+				}
+			}
+		}
+		_ = repository.FinalizeWorkflowRun(ctx, server.db, runID, status, resultPayload, errMsg, time.Now().UTC())
+		return runErr
 	}
 
 	for _, opt := range opts {
