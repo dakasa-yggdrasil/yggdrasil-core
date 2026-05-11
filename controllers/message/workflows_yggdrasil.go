@@ -25,12 +25,12 @@ import (
 //
 // Supported operations:
 //
-//   - apply_manifest       — persists with.manifest through the standard
+//   - apply_manifest                       — persists with.manifest through the standard
 //     normalize/validate/persist/emit pipeline. See handleApplyManifest.
-//   - control_plane.render — loads a `control_plane` manifest by ref
+//   - control_plane.render                 — loads a `control_plane` manifest by ref
 //     and returns its rendered Kubernetes objects as step metadata.
-//     The deploy-control-plane workflow consumes this metadata in
-//     subsequent declarative_apply / observe_objects steps.
+//   - collaborator.reconcile_provider_state — matches a batch of provider identities
+//     to collaborators by primary_email and upserts collaborator_provider_state rows.
 //
 // On success, step.Metadata carries operation-specific fields (see the
 // per-handler doc comments).
@@ -49,6 +49,8 @@ func executeYggdrasilWorkflowStep(
 		return handleApplyManifest(ctx, db, result, renderedInput)
 	case "control_plane.render":
 		return handleControlPlaneRender(ctx, db, result, renderedInput)
+	case "collaborator.reconcile_provider_state":
+		return handleCollaboratorReconcileProviderState(ctx, db, result, renderedInput)
 	default:
 		result.Error = fmt.Sprintf("unsupported yggdrasil step operation %q", operation)
 		result.FinishedAt = time.Now().UTC()
@@ -276,6 +278,110 @@ func waitTargetsForMetadata(targets []controlplane.WaitTarget) []map[string]any 
 		})
 	}
 	return out
+}
+
+// handleCollaboratorReconcileProviderState is the in-process executor for
+// the yggdrasil step operation "collaborator.reconcile_provider_state".
+// It reads with.provider and with.users from the rendered step input,
+// matches each user entry to a collaborator by primary_email, and upserts
+// collaborator_provider_state rows. Orphaned emails (no matching collaborator)
+// are collected and surfaced in step metadata rather than failing the step.
+//
+// Input (with block):
+//
+//	provider: github
+//	users:    # list — each item must carry email; external_id and
+//	          # observed_state are optional
+//	  - email:       alice@example.com
+//	    external_id: u-abc123
+//	    observed_state: { ... }
+//
+// Metadata on success:
+//
+//	matched:          int     — number of provider_state rows upserted
+//	unmatched_emails: []string — emails with no matching collaborator
+func handleCollaboratorReconcileProviderState(
+	ctx context.Context,
+	db *sql.DB,
+	result model.WorkflowRunStepResult,
+	renderedInput map[string]any,
+) model.WorkflowRunStepResult {
+	provider, _ := renderedInput["provider"].(string)
+	provider = strings.TrimSpace(provider)
+	if provider == "" {
+		result.Error = "collaborator.reconcile_provider_state: with.provider is required"
+		result.FinishedAt = time.Now().UTC()
+		return result
+	}
+
+	rawUsers, _ := renderedInput["users"]
+	var users []model.ReconcileProviderStateUser
+	switch v := rawUsers.(type) {
+	case []any:
+		// Template rendering produces []any; re-encode + decode into typed slice.
+		encoded, err := json.Marshal(v)
+		if err != nil {
+			result.Error = fmt.Sprintf("collaborator.reconcile_provider_state: marshal users: %v", err)
+			result.FinishedAt = time.Now().UTC()
+			return result
+		}
+		if err := json.Unmarshal(encoded, &users); err != nil {
+			result.Error = fmt.Sprintf("collaborator.reconcile_provider_state: decode users: %v", err)
+			result.FinishedAt = time.Now().UTC()
+			return result
+		}
+	case nil:
+		// No users supplied — succeed with matched=0.
+	default:
+		result.Error = fmt.Sprintf("collaborator.reconcile_provider_state: with.users must be a list, got %T", rawUsers)
+		result.FinishedAt = time.Now().UTC()
+		return result
+	}
+
+	var unmatched []string
+	matched := 0
+	for _, u := range users {
+		email := strings.TrimSpace(strings.ToLower(u.Email))
+		if email == "" {
+			continue
+		}
+		collab, err := repository.GetCollaboratorByPrimaryEmail(ctx, db, email)
+		if errors.Is(err, repository.ErrCollaboratorNotFound) {
+			unmatched = append(unmatched, email)
+			continue
+		}
+		if err != nil {
+			result.Error = fmt.Sprintf("collaborator.reconcile_provider_state: lookup %s: %v", email, err)
+			result.FinishedAt = time.Now().UTC()
+			return result
+		}
+
+		observedState := u.ObservedState
+		if _, err := repository.UpsertCollaboratorProviderState(ctx, db, model.UpsertProviderStateRequest{
+			CollaboratorID: collab.ID,
+			Provider:       provider,
+			ExternalID:     u.ExternalID,
+			ObservedState:  &observedState,
+		}); err != nil {
+			result.Error = fmt.Sprintf("collaborator.reconcile_provider_state: upsert %s: %v", email, err)
+			result.FinishedAt = time.Now().UTC()
+			return result
+		}
+		matched++
+	}
+
+	meta := map[string]any{
+		"provider": provider,
+		"matched":  matched,
+	}
+	if len(unmatched) > 0 {
+		meta["unmatched_emails"] = unmatched
+	}
+
+	result.Status = "succeeded"
+	result.Metadata = meta
+	result.FinishedAt = time.Now().UTC()
+	return result
 }
 
 // manifestDocumentFromStepInput extracts the with.manifest value produced by

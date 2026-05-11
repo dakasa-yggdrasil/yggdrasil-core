@@ -27,8 +27,12 @@ var (
 	// yggdrasil step operations run in-process against the core's own
 	// manifest store or pure-render helpers rather than dispatching to
 	// an adapter. New entries here require a matching handler in
-	// controllers/message.
-	supportedYggdrasilStepOperations = []string{"apply_manifest", "control_plane.render"}
+	// controllers/message/workflows_yggdrasil.go.
+	supportedYggdrasilStepOperations = []string{
+		"apply_manifest",
+		"control_plane.render",
+		"collaborator.reconcile_provider_state",
+	}
 	workflowTemplatePattern = regexp.MustCompile(`{{\s*([^{}]+?)\s*}}`)
 )
 
@@ -402,6 +406,13 @@ func validateWorkflowStep(step model.WorkflowStepSpec) error {
 			}
 			if _, hasRef := step.With["control_plane_ref"]; !hasRef {
 				return fmt.Errorf("yggdrasil step control_plane.render requires with.control_plane_ref")
+			}
+		case "collaborator.reconcile_provider_state":
+			if step.With == nil {
+				return fmt.Errorf("yggdrasil step collaborator.reconcile_provider_state requires with.provider")
+			}
+			if _, hasProvider := step.With["provider"]; !hasProvider {
+				return fmt.Errorf("yggdrasil step collaborator.reconcile_provider_state requires with.provider")
 			}
 		}
 	}
