@@ -111,7 +111,9 @@
         "monthly_cost_usd": { "type": "array", "items": { "type": "string" } },
         "utilization": { "type": "array", "items": { "type": "string" } },
         "idle_hours": { "type": "array", "items": { "type": "string" } },
-        "overprovisioned": { "type": "array", "items": { "type": "string" } }
+        "overprovisioned": { "type": "array", "items": { "type": "string" } },
+        "scheduling_failure": { "type": "array", "items": { "type": "string" } },
+        "insufficient_cpu": { "type": "array", "items": { "type": "string" } }
       },
       "additionalProperties": false
     },

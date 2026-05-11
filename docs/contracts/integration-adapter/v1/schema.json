@@ -261,6 +261,18 @@
           "items": {
             "type": "string"
           }
+        },
+        "scheduling_failure": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "insufficient_cpu": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         }
       }
     },
