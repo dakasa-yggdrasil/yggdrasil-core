@@ -19,13 +19,14 @@ import (
 )
 
 const (
-	queueManifestValidate     = "yggdrasil-core.manifest.validate"
-	queueManifestCreate       = "yggdrasil-core.manifest.create"
-	queueManifestList         = "yggdrasil-core.manifest.list"
-	queueManifestGet          = "yggdrasil-core.manifest.get"
-	queueManifestRBACEvaluate = "yggdrasil-core.manifest.rbac.evaluate"
-	queueManifestPolicyEval   = "yggdrasil-core.manifest.policy.evaluate"
-	queueAuthorizationEval    = "yggdrasil-core.authorization.evaluate"
+	queueManifestValidate            = "yggdrasil-core.manifest.validate"
+	queueManifestCreate              = "yggdrasil-core.manifest.create"
+	queueManifestList                = "yggdrasil-core.manifest.list"
+	queueManifestGet                 = "yggdrasil-core.manifest.get"
+	queueManifestRBACEvaluate        = "yggdrasil-core.manifest.rbac.evaluate"
+	queueManifestPolicyEval          = "yggdrasil-core.manifest.policy.evaluate"
+	queueAuthorizationEval           = "yggdrasil-core.authorization.evaluate"
+	queueCollaboratorReconcileState  = "yggdrasil-core.collaborator.reconcile_provider_state"
 )
 
 type rpcError struct {
@@ -82,6 +83,12 @@ func manifestConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) []
 			Timeout: 10 * time.Second,
 			QoS:     10,
 			Handler: authorizationEvaluateHandler(conn, db, logger),
+		},
+		{
+			Queue:   queueCollaboratorReconcileState,
+			Timeout: 30 * time.Second,
+			QoS:     5,
+			Handler: collaboratorReconcileProviderStateHandler(conn, db, logger),
 		},
 	}
 }
@@ -259,6 +266,60 @@ func manifestPolicyEvaluateHandler(conn *amqp.Connection, db *sql.DB, logger *za
 				Version:   manifestRecord.Version,
 			},
 			MatchedRules: matches,
+		}, logger)
+	}
+}
+
+// collaboratorReconcileProviderStateHandler accepts a batch of identities
+// discovered in one external provider, matches each to a collaborator by
+// primary_email, and upserts collaborator_provider_state rows. It returns
+// the count of matched (upserted) rows plus the list of emails for which no
+// matching collaborator was found (orphan provider identities).
+func collaboratorReconcileProviderStateHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
+	return func(ctx context.Context, d rpc.Delivery) error {
+		var req model.ReconcileProviderStateRequest
+		if err := json.Unmarshal(d.Body, &req); err != nil {
+			return replyFailure(ctx, d, "bad_request", err, logger)
+		}
+		if strings.TrimSpace(req.Provider) == "" {
+			return replyFailure(ctx, d, "bad_request", errors.New("provider is required"), logger)
+		}
+
+		var unmatched []string
+		matched := 0
+		for _, u := range req.Users {
+			email := strings.TrimSpace(strings.ToLower(u.Email))
+			if email == "" {
+				continue
+			}
+			collab, err := repository.GetCollaboratorByPrimaryEmail(ctx, db, email)
+			if errors.Is(err, repository.ErrCollaboratorNotFound) {
+				unmatched = append(unmatched, email)
+				continue
+			}
+			if err != nil {
+				return replyFailure(ctx, d, "internal_error", err, logger)
+			}
+
+			observedState := u.ObservedState
+			_, err = repository.UpsertCollaboratorProviderState(ctx, db, model.UpsertProviderStateRequest{
+				CollaboratorID: collab.ID,
+				Provider:       req.Provider,
+				ExternalID:     u.ExternalID,
+				ObservedState:  &observedState,
+				// DesiredState left nil (empty map) — that is the
+				// markProviderIdentityUpdatesPending pathway's responsibility.
+			})
+			if err != nil {
+				return replyFailure(ctx, d, "internal_error", fmt.Errorf("upsert provider state for %s: %w", email, err), logger)
+			}
+			matched++
+		}
+
+		return replySuccess(ctx, d, model.ReconcileProviderStateResponse{
+			Provider:        req.Provider,
+			Matched:         matched,
+			UnmatchedEmails: unmatched,
 		}, logger)
 	}
 }

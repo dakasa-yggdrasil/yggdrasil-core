@@ -42,3 +42,30 @@ type UpsertProviderStateRequest struct {
 	ObservedState  *map[string]any `json:"observed_state,omitempty"`
 	PendingAction  string          `json:"pending_action,omitempty"`
 }
+
+// ReconcileProviderStateRequest is the input to the
+// collaborator.reconcile_provider_state AMQP capability. It carries a
+// batch of identities discovered in one external provider; the handler
+// matches each identity to a collaborator by primary_email and upserts
+// the corresponding collaborator_provider_state row.
+type ReconcileProviderStateRequest struct {
+	Provider string                       `json:"provider"`          // e.g. "github"
+	Users    []ReconcileProviderStateUser `json:"users"`             // identities discovered in the provider
+}
+
+// ReconcileProviderStateUser is one identity entry in a
+// ReconcileProviderStateRequest.
+type ReconcileProviderStateUser struct {
+	ExternalID    string         `json:"external_id"`               // id in the provider
+	Email         string         `json:"email"`                     // primary email of the user at the provider
+	DisplayName   string         `json:"display_name,omitempty"`
+	ObservedState map[string]any `json:"observed_state,omitempty"`  // raw attributes from the provider
+}
+
+// ReconcileProviderStateResponse is the result returned by the
+// collaborator.reconcile_provider_state capability.
+type ReconcileProviderStateResponse struct {
+	Provider        string   `json:"provider"`
+	Matched         int      `json:"matched"`                    // rows upserted
+	UnmatchedEmails []string `json:"unmatched_emails,omitempty"` // no collaborator found for these emails
+}
