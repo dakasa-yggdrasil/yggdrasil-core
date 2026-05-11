@@ -10,6 +10,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 // validOffboardReasons is the canonical set accepted by /offboard.
@@ -68,6 +69,14 @@ func (s *Server) handleCollaboratorOffboard(w http.ResponseWriter, r *http.Reque
 		writeMappedError(w, err)
 		return
 	}
+
+	// Emit collaborator.offboarded into event_log for event-driven workflows.
+	// Failure is non-fatal: the offboard itself is committed; the daily cron
+	// reconciliation is the safety net for missed emissions.
+	if err := emitCollaboratorOffboarded(r.Context(), s.db, collab, strings.TrimSpace(req.Reason), strings.TrimSpace(req.EndDate)); err != nil {
+		s.logger.Warn("collaborator.offboarded event emit failed (non-fatal)", zap.Error(err), zap.String("collaborator_id", collab.ID.String()))
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collab})
 }
 

@@ -967,6 +967,16 @@ func (s *Server) handleCollaboratorCreate(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Emit collaborator.created into event_log so event-driven workflows
+	// (e.g. reconcile-github-identities-events) fire in real time.
+	// Opened in its own tx: the collaborator row is already committed above,
+	// so rolling back the event emit does not undo the create. Failure is
+	// logged but does not block the HTTP response — the daily cron is the
+	// safety net for any missed emissions.
+	if err := emitCollaboratorCreated(r.Context(), s.db, collaborator, actorIDFromRequest(r)); err != nil {
+		s.logger.Warn("collaborator.created event emit failed (non-fatal)", zap.Error(err), zap.String("collaborator_id", collaborator.ID.String()))
+	}
+
 	writeJSON(w, http.StatusCreated, map[string]any{"collaborator": collaborator})
 }
 

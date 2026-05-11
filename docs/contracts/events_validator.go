@@ -13,7 +13,7 @@ import (
 // FamilyEventsV1 identifies the events/v1 contract family.
 const FamilyEventsV1 = "events/v1"
 
-//go:embed events/v1/schema.json events/v1/manifest/*.json events/v1/product/*.json events/v1/workflow/*.json events/v1/authorization/*.json events/v1/buildproject/*.json events/v1/infra/*.json
+//go:embed events/v1/schema.json events/v1/manifest/*.json events/v1/product/*.json events/v1/workflow/*.json events/v1/authorization/*.json events/v1/buildproject/*.json events/v1/infra/*.json events/v1/collaborator/*.json
 var eventSchemaFS embed.FS
 
 var (
@@ -67,6 +67,8 @@ func eventTypeToSchemaPath(eventType string, schemaVersion string) string {
 		"authorization.evaluated":      "events/v1/authorization/evaluated.json",
 		"buildproject.expired":         "events/v1/buildproject/expired.json",
 		"infra.alert.firing":           "events/v1/infra/alert_firing.json",
+		"collaborator.created":         "events/v1/collaborator/created.json",
+		"collaborator.offboarded":      "events/v1/collaborator/offboarded.json",
 	}
 	return mapping[eventType]
 }

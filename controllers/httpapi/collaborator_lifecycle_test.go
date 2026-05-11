@@ -42,6 +42,10 @@ func cleanLifecycleFixtures(t *testing.T, db *sql.DB) {
 	if _, err := db.Exec(`DELETE FROM public.team_memberships WHERE collaborator_id IN (SELECT id FROM public.collaborators WHERE slug LIKE 'lh-test-%')`); err != nil {
 		t.Fatalf("delete team_memberships: %v", err)
 	}
+	// Clean event_log rows for test collaborators so assertions are stable across runs.
+	if _, err := db.Exec(`DELETE FROM public.event_log WHERE aggregate_type = 'collaborator' AND aggregate_id IN (SELECT id::text FROM public.collaborators WHERE slug LIKE 'lh-test-%')`); err != nil {
+		t.Fatalf("delete event_log: %v", err)
+	}
 	if _, err := db.Exec(`DELETE FROM public.collaborators WHERE slug LIKE 'lh-test-%'`); err != nil {
 		t.Fatalf("delete collaborators: %v", err)
 	}
@@ -460,5 +464,124 @@ func TestGetConsoleProviderState_RouteRegistered(t *testing.T) {
 	}
 	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
 		t.Fatalf("decode: %v", err)
+	}
+}
+
+// TestCreateCollaborator_EmitsCollaboratorCreatedEvent verifies that creating a
+// collaborator via the HTTP handler causes a collaborator.created event to appear
+// in event_log with the correct type, aggregate_id, and payload fields.
+func TestCreateCollaborator_EmitsCollaboratorCreatedEvent(t *testing.T) {
+	db := dbForLifecycleHandlerTest(t)
+	defer func() { _ = db.Close() }()
+	cleanLifecycleFixtures(t, db)
+	srv := newLifecycleTestServer(t, db)
+
+	body, _ := json.Marshal(map[string]any{
+		"slug":          "lh-test-ev-created",
+		"display_name":  "Event Created",
+		"primary_email": "ev-created@dakasa.test",
+		"status":        "active",
+	})
+	req := httptest.NewRequest("POST", "/api/v1/collaborators", bytes.NewReader(body))
+	req.Header.Set("Content-Type", "application/json")
+	rr := httptest.NewRecorder()
+	srv.ServeHTTP(rr, req)
+	if rr.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d body=%s", rr.Code, rr.Body.String())
+	}
+	var createResp struct {
+		Collaborator model.Collaborator `json:"collaborator"`
+	}
+	if err := json.Unmarshal(rr.Body.Bytes(), &createResp); err != nil {
+		t.Fatalf("decode create response: %v", err)
+	}
+	collabID := createResp.Collaborator.ID
+
+	// Pull events from event_log filtered to this collaborator.
+	evResp, err := repository.PullEvents(context.Background(), db, model.PullEventsRequest{
+		Limit: 10,
+		Filters: model.PullEventsFilters{
+			Types:         []string{"collaborator.created"},
+			AggregateType: "collaborator",
+			AggregateID:   collabID.String(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("PullEvents: %v", err)
+	}
+	if len(evResp.Events) != 1 {
+		t.Fatalf("expected 1 collaborator.created event in event_log, got %d", len(evResp.Events))
+	}
+
+	ev := evResp.Events[0]
+	if ev.Type != "collaborator.created" {
+		t.Errorf("event type: got %q, want collaborator.created", ev.Type)
+	}
+	if ev.AggregateID != collabID.String() {
+		t.Errorf("aggregate_id: got %q, want %q", ev.AggregateID, collabID.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(ev.Payload, &payload); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	if payload["collaborator_id"] != collabID.String() {
+		t.Errorf("payload.collaborator_id: got %v, want %s", payload["collaborator_id"], collabID.String())
+	}
+	if payload["primary_email"] != "ev-created@dakasa.test" {
+		t.Errorf("payload.primary_email: got %v, want ev-created@dakasa.test", payload["primary_email"])
+	}
+}
+
+// TestOffboardCollaborator_EmitsCollaboratorOffboardedEvent verifies that
+// offboarding a collaborator via the HTTP handler causes a
+// collaborator.offboarded event to appear in event_log with the correct
+// type, aggregate_id, and payload fields (including reason).
+func TestOffboardCollaborator_EmitsCollaboratorOffboardedEvent(t *testing.T) {
+	db := dbForLifecycleHandlerTest(t)
+	defer func() { _ = db.Close() }()
+	cleanLifecycleFixtures(t, db)
+
+	collabID := seedActiveCollaborator(t, db, "ev-offboarded")
+	srv := newLifecycleTestServer(t, db)
+
+	rr := postJSON(t, srv, "/api/v1/collaborators/"+collabID.String()+"/offboard", map[string]any{
+		"reason":   "involuntary",
+		"end_date": "2026-07-01",
+	})
+	if rr.Code != http.StatusOK {
+		t.Fatalf("offboard: expected 200, got %d body=%s", rr.Code, rr.Body.String())
+	}
+
+	evResp, err := repository.PullEvents(context.Background(), db, model.PullEventsRequest{
+		Limit: 10,
+		Filters: model.PullEventsFilters{
+			Types:         []string{"collaborator.offboarded"},
+			AggregateType: "collaborator",
+			AggregateID:   collabID.String(),
+		},
+	})
+	if err != nil {
+		t.Fatalf("PullEvents: %v", err)
+	}
+	if len(evResp.Events) != 1 {
+		t.Fatalf("expected 1 collaborator.offboarded event in event_log, got %d", len(evResp.Events))
+	}
+
+	ev := evResp.Events[0]
+	if ev.Type != "collaborator.offboarded" {
+		t.Errorf("event type: got %q, want collaborator.offboarded", ev.Type)
+	}
+	if ev.AggregateID != collabID.String() {
+		t.Errorf("aggregate_id: got %q, want %q", ev.AggregateID, collabID.String())
+	}
+	var payload map[string]any
+	if err := json.Unmarshal(ev.Payload, &payload); err != nil {
+		t.Fatalf("unmarshal payload: %v", err)
+	}
+	if payload["reason"] != "involuntary" {
+		t.Errorf("payload.reason: got %v, want involuntary", payload["reason"])
+	}
+	if payload["end_date"] != "2026-07-01" {
+		t.Errorf("payload.end_date: got %v, want 2026-07-01", payload["end_date"])
 	}
 }

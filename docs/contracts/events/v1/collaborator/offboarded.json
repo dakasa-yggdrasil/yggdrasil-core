@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/collaborator/offboarded.json",
+  "title": "collaborator.offboarded payload",
+  "description": "Payload emitted when a collaborator is offboarded from yggdrasil-core.",
+  "type": "object",
+  "required": ["collaborator_id", "reason"],
+  "properties": {
+    "collaborator_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID of the offboarded collaborator."
+    },
+    "primary_email": {
+      "type": "string",
+      "description": "Primary email address of the collaborator, for provider identity matching."
+    },
+    "reason": {
+      "type": "string",
+      "enum": ["voluntary", "involuntary", "contract-end", "deceased"],
+      "description": "Canonical reason for offboarding."
+    },
+    "end_date": {
+      "type": "string",
+      "description": "Last active date (ISO 8601 date string), if provided."
+    }
+  }
+}

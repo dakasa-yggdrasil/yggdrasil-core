@@ -1,0 +1,31 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/collaborator/created.json",
+  "title": "collaborator.created payload",
+  "description": "Payload emitted when a new collaborator is created in yggdrasil-core.",
+  "type": "object",
+  "required": ["collaborator_id", "slug", "display_name"],
+  "properties": {
+    "collaborator_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID of the newly created collaborator."
+    },
+    "slug": {
+      "type": "string",
+      "description": "URL-safe identifier for the collaborator."
+    },
+    "display_name": {
+      "type": "string",
+      "description": "Human-readable name of the collaborator."
+    },
+    "primary_email": {
+      "type": "string",
+      "description": "Primary email address, used to match against provider identities."
+    },
+    "status": {
+      "type": "string",
+      "description": "Initial status of the collaborator (e.g. active, pending_start)."
+    }
+  }
+}
