@@ -1641,10 +1641,10 @@ func (e *productTargetExecutor) applyComponentTarget(
 		return model.ProductInstallationApplyResult{}, err
 	}
 
-	queue := strings.TrimSpace(targetTypeSpec.Adapter.Queues.Execute)
-	if queue == "" {
-		return model.ProductInstallationApplyResult{}, fmt.Errorf("target integration type %s/%s does not expose an execute queue", targetType.Metadata.Namespace, targetType.Metadata.Name)
-	}
+	// Adapter transport (rabbitmq or http_json) is selected by
+	// AdapterTransportClient.Call based on targetTypeSpec.Adapter.Transport.
+	// Previously this path required a non-empty Queues.Execute, which
+	// blocked http_json target types (the kubernetes adapter is http_json).
 
 	timeout := time.Duration(targetTypeSpec.Adapter.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
@@ -1675,8 +1675,9 @@ func (e *productTargetExecutor) applyComponentTarget(
 	}
 
 	var response model.AdapterDeclarativeApplyResponse
-	if err := callContractRPC(rpcCtx, rpcamqp.New(e.conn), queue, declarativeApplyContract, request, &response); err != nil {
-		return model.ProductInstallationApplyResult{}, fmt.Errorf("call target execute queue %q: %w", queue, err)
+	transport := NewAdapterTransportClient(rpcamqp.New(e.conn))
+	if err := transport.Call(rpcCtx, declarativeApplyContract, targetTypeSpec, targetInstanceSpec, "execute", request, &response); err != nil {
+		return model.ProductInstallationApplyResult{}, fmt.Errorf("call target execute transport %q: %w", targetTypeSpec.Adapter.Transport, err)
 	}
 	if strings.TrimSpace(response.Operation) != "" && response.Operation != "declarative_apply" {
 		return model.ProductInstallationApplyResult{}, fmt.Errorf("unexpected target adapter operation %q", response.Operation)
@@ -1719,11 +1720,7 @@ func (e *productTargetExecutor) observeComponentTarget(
 		return model.ProductInstallationObservationResult{}, err
 	}
 
-	queue := strings.TrimSpace(targetTypeSpec.Adapter.Queues.Execute)
-	if queue == "" {
-		return model.ProductInstallationObservationResult{}, fmt.Errorf("target integration type %s/%s does not expose an execute queue", targetType.Metadata.Namespace, targetType.Metadata.Name)
-	}
-
+	// Adapter transport via AdapterTransportClient (rabbitmq or http_json).
 	timeout := time.Duration(targetTypeSpec.Adapter.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = 30 * time.Second
@@ -1751,8 +1748,9 @@ func (e *productTargetExecutor) observeComponentTarget(
 	}
 
 	var response model.AdapterObserveObjectsResponse
-	if err := callContractRPC(rpcCtx, rpcamqp.New(e.conn), queue, observeObjectsContract, request, &response); err != nil {
-		return model.ProductInstallationObservationResult{}, fmt.Errorf("call target execute queue %q: %w", queue, err)
+	transport := NewAdapterTransportClient(rpcamqp.New(e.conn))
+	if err := transport.Call(rpcCtx, observeObjectsContract, targetTypeSpec, targetInstanceSpec, "execute", request, &response); err != nil {
+		return model.ProductInstallationObservationResult{}, fmt.Errorf("call target execute transport %q: %w", targetTypeSpec.Adapter.Transport, err)
 	}
 	if strings.TrimSpace(response.Operation) != "" && response.Operation != "observe_objects" {
 		return model.ProductInstallationObservationResult{}, fmt.Errorf("unexpected target adapter operation %q", response.Operation)
@@ -1795,11 +1793,7 @@ func (e *productTargetExecutor) uninstallComponentTarget(
 		return model.ProductInstallationUninstallResult{}, err
 	}
 
-	queue := strings.TrimSpace(targetTypeSpec.Adapter.Queues.Execute)
-	if queue == "" {
-		return model.ProductInstallationUninstallResult{}, fmt.Errorf("target integration type %s/%s does not expose an execute queue", targetType.Metadata.Namespace, targetType.Metadata.Name)
-	}
-
+	// Adapter transport via AdapterTransportClient (rabbitmq or http_json).
 	timeout := time.Duration(targetTypeSpec.Adapter.TimeoutSeconds) * time.Second
 	if timeout <= 0 {
 		timeout = 30 * time.Second
@@ -1827,8 +1821,9 @@ func (e *productTargetExecutor) uninstallComponentTarget(
 	}
 
 	var response model.AdapterDeclarativeDeleteResponse
-	if err := callContractRPC(rpcCtx, rpcamqp.New(e.conn), queue, declarativeDeleteContract, request, &response); err != nil {
-		return model.ProductInstallationUninstallResult{}, fmt.Errorf("call target execute queue %q: %w", queue, err)
+	transport := NewAdapterTransportClient(rpcamqp.New(e.conn))
+	if err := transport.Call(rpcCtx, declarativeDeleteContract, targetTypeSpec, targetInstanceSpec, "execute", request, &response); err != nil {
+		return model.ProductInstallationUninstallResult{}, fmt.Errorf("call target execute transport %q: %w", targetTypeSpec.Adapter.Transport, err)
 	}
 	if strings.TrimSpace(response.Operation) != "" && response.Operation != "declarative_delete" {
 		return model.ProductInstallationUninstallResult{}, fmt.Errorf("unexpected target adapter operation %q", response.Operation)
