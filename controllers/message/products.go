@@ -149,7 +149,20 @@ func productDiscoverInstallationStateHandler(conn *amqp.Connection, db *sql.DB, 
 		productRef := manifestReferenceFromRecord(productManifest)
 		results := make([]model.ProductInstallationStateResult, 0, len(spec.Components))
 		for _, component := range spec.Components {
-			if strings.ToLower(strings.TrimSpace(component.Source.Kind)) != "integration" {
+			sourceKind := strings.ToLower(strings.TrimSpace(component.Source.Kind))
+			if sourceKind != "integration" {
+				// Discover state for non-integration sources (git, oci,
+				// inline) is not yet implemented — would need to render
+				// then observe each rendered object. Emit a typed
+				// result instead of silently skipping so callers see
+				// the gap.
+				results = append(results, model.ProductInstallationStateResult{
+					Name:      component.Name,
+					Operation: "discover",
+					Status:    "unsupported_source_kind",
+					Observed:  false,
+					Metadata:  map[string]any{"source_kind": component.Source.Kind, "note": "discover for non-integration source not implemented; render-then-observe pattern pending"},
+				})
 				continue
 			}
 
@@ -529,10 +542,10 @@ func (p *productInstallationPlanner) planProductReconciliation(
 
 	results := make([]model.ProductInstallationReconcileResult, 0, len(spec.Components))
 	for _, component := range spec.Components {
-		if strings.ToLower(strings.TrimSpace(component.Source.Kind)) != "integration" {
-			continue
-		}
-
+		// reconcileComponentBySourceKind handles source.kind dispatch
+		// and surfaces unsupported kinds as a typed error to the
+		// caller, so this loop no longer silently drops non-integration
+		// components.
 		componentResults, err := p.planComponentReconciliation(ctx, productRef, spec, component)
 		if err != nil {
 			return nil, err
@@ -555,7 +568,7 @@ func (p *productInstallationPlanner) planComponentReconciliation(
 		return nil, err
 	}
 
-	result, err := reconcileIntegrationComponent(ctx, p.conn, p.db, productRef, spec, component)
+	result, err := reconcileComponentBySourceKind(ctx, p.conn, p.db, productRef, spec, component)
 	if err != nil {
 		return nil, err
 	}
@@ -755,6 +768,146 @@ func reconcileIntegrationComponent(
 		IntegrationInstance: manifestReferencePointer(manifestReferenceFromRecord(instanceManifest)),
 		Metadata:            response.Metadata,
 	}, nil
+}
+
+// reconcileGitComponent renders a `source.kind: git` component into K8s
+// objects by invoking the source integration's `generate_installation`
+// capability with the git URL, revision, and renderer config. The
+// integration is expected to clone the repo and apply the renderer
+// (kustomize / helm / raw manifests) — typically an instance of
+// `manifest-sources-kustomize` type. The returned ReconcileResult
+// reuses the existing declarative_apply pipeline downstream, so
+// applyComponentTarget / observeComponentTarget / uninstallComponentTarget
+// work unchanged.
+//
+// Before this, `source.kind != "integration"` was silently skipped in
+// applyProduct / observeProduct / uninstallProduct / discover paths,
+// making installation.apply a no-op for every product whose components
+// live in git (which is every DaKasa product). The legacy
+// `deploy-via-kustomize-source` workflow covered the apply case but
+// observe/uninstall/discover remained dead.
+func reconcileGitComponent(
+	ctx context.Context,
+	conn *amqp.Connection,
+	db *sql.DB,
+	productRef model.ManifestReference,
+	spec model.ProductManifestSpec,
+	component model.ProductComponentSpec,
+) (model.ProductInstallationReconcileResult, error) {
+	if component.Source.IntegrationInstanceRef == nil {
+		return model.ProductInstallationReconcileResult{}, fmt.Errorf("git source component %q requires integration_instance_ref", component.Name)
+	}
+
+	instanceManifest, instanceSpec, integrationTypeManifest, integrationTypeSpec, err := resolveProductIntegration(ctx, conn, db, *component.Source.IntegrationInstanceRef)
+	if err != nil {
+		return model.ProductInstallationReconcileResult{}, err
+	}
+
+	queue := strings.TrimSpace(integrationTypeSpec.Adapter.Queues.Execute)
+	if queue == "" {
+		return model.ProductInstallationReconcileResult{}, fmt.Errorf("integration type %s/%s does not expose an execute queue", integrationTypeManifest.Metadata.Namespace, integrationTypeManifest.Metadata.Name)
+	}
+
+	timeout := time.Duration(integrationTypeSpec.Adapter.TimeoutSeconds) * time.Second
+	if timeout <= 0 {
+		// Git clone + kustomize render can take longer than the
+		// integration-RPC default (especially on cold cache). 120s is
+		// the same ceiling deploy-via-kustomize-source workflow uses.
+		timeout = 120 * time.Second
+	}
+
+	rpcCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	// Translate ProductComponentSpec (git/renderer) into the adapter
+	// input shape that integration-kustomize (and similar) expects.
+	// Caller-provided source.input wins over the schema-derived fields
+	// so manifests can override behaviour without code changes.
+	input := map[string]any{}
+	if locator := strings.TrimSpace(component.Source.Locator); locator != "" {
+		gitURL := locator
+		if !strings.Contains(gitURL, "://") {
+			gitURL = "https://" + gitURL
+		}
+		input["git_url"] = gitURL
+	}
+	if revision := strings.TrimSpace(component.Source.Revision); revision != "" {
+		input["revision"] = revision
+	}
+	if rendererKind := strings.ToLower(strings.TrimSpace(component.Renderer.Kind)); rendererKind != "" {
+		input["renderer"] = rendererKind
+	}
+	if path := strings.TrimSpace(component.Renderer.Path); path != "" {
+		input["path"] = path
+	}
+	for k, v := range component.Source.Input {
+		input[k] = v
+	}
+
+	const capability = "generate_installation"
+	request := model.AdapterGenerateInstallationRequest{
+		Operation: capability,
+		Context: model.AdapterGenerateInstallationContext{
+			Product:   productRef,
+			Component: component.Name,
+			Category:  spec.Category,
+			Class:     spec.Class,
+		},
+		Integration: model.AdapterGenerateInstallationIntegrationContext{
+			Type:         manifestReferenceFromRecord(integrationTypeManifest),
+			TypeSpec:     integrationTypeSpec,
+			Instance:     manifestReferenceFromRecord(instanceManifest),
+			InstanceSpec: instanceSpec,
+		},
+		Capability: capability,
+		Input:      input,
+	}
+
+	var response model.AdapterGenerateInstallationResponse
+	if err := callContractRPC(rpcCtx, rpcamqp.New(conn), queue, generateInstallationContract, request, &response); err != nil {
+		return model.ProductInstallationReconcileResult{}, fmt.Errorf("call integration execute queue %q for git+renderer render: %w", queue, err)
+	}
+	if strings.TrimSpace(response.Operation) != "" && response.Operation != capability {
+		return model.ProductInstallationReconcileResult{}, fmt.Errorf("unexpected adapter operation %q (expected %q)", response.Operation, capability)
+	}
+	if len(response.Objects) == 0 {
+		return model.ProductInstallationReconcileResult{}, fmt.Errorf("git+renderer render returned no objects for component %q", component.Name)
+	}
+
+	return model.ProductInstallationReconcileResult{
+		Name:                component.Name,
+		Operation:           capability,
+		Capability:          capability,
+		Mode:                "declarative_apply",
+		Objects:             response.Objects,
+		IntegrationType:     manifestReferencePointer(manifestReferenceFromRecord(integrationTypeManifest)),
+		IntegrationInstance: manifestReferencePointer(manifestReferenceFromRecord(instanceManifest)),
+		Metadata:            response.Metadata,
+	}, nil
+}
+
+// reconcileComponentBySourceKind dispatches reconciliation to the right
+// implementation based on `component.source.kind`. Centralises the
+// switch so apply / observe / uninstall / plan paths all get the same
+// dispatch table without divergence — adding a new source kind means
+// updating exactly one place.
+func reconcileComponentBySourceKind(
+	ctx context.Context,
+	conn *amqp.Connection,
+	db *sql.DB,
+	productRef model.ManifestReference,
+	spec model.ProductManifestSpec,
+	component model.ProductComponentSpec,
+) (model.ProductInstallationReconcileResult, error) {
+	kind := strings.ToLower(strings.TrimSpace(component.Source.Kind))
+	switch kind {
+	case "integration":
+		return reconcileIntegrationComponent(ctx, conn, db, productRef, spec, component)
+	case "git":
+		return reconcileGitComponent(ctx, conn, db, productRef, spec, component)
+	default:
+		return model.ProductInstallationReconcileResult{}, fmt.Errorf("source kind %q not yet supported by reconcile dispatcher (component %q)", component.Source.Kind, component.Name)
+	}
 }
 
 func discoverIntegrationComponentState(
@@ -1110,9 +1263,9 @@ func (e *productTargetExecutor) applyProduct(
 
 	results := make([]model.ProductInstallationApplyResult, 0, len(spec.Components))
 	for _, component := range spec.Components {
-		if strings.ToLower(strings.TrimSpace(component.Source.Kind)) != "integration" {
-			continue
-		}
+		// applyComponent dispatches via reconcileComponentBySourceKind
+		// — handles source.kind integration, git, and surfaces
+		// unsupported kinds explicitly. Previously skipped silently.
 
 		// Capture the original target key BEFORE applyTargetOverride
 		// rewrites it — imageOverridesForOriginalKey uses the original
@@ -1158,9 +1311,7 @@ func (e *productTargetExecutor) observeProduct(
 
 	results := make([]model.ProductInstallationObservationResult, 0, len(spec.Components))
 	for _, component := range spec.Components {
-		if strings.ToLower(strings.TrimSpace(component.Source.Kind)) != "integration" {
-			continue
-		}
+		// observeComponent dispatches via reconcileComponentBySourceKind.
 
 		// Apply target overrides before observing.
 		component = e.applyTargetOverride(component)
@@ -1204,9 +1355,7 @@ func (e *productTargetExecutor) uninstallProduct(
 
 	results := make([]model.ProductInstallationUninstallResult, 0, len(spec.Components))
 	for _, component := range spec.Components {
-		if strings.ToLower(strings.TrimSpace(component.Source.Kind)) != "integration" {
-			continue
-		}
+		// uninstallComponent dispatches via reconcileComponentBySourceKind.
 
 		// Target overrides matter during uninstall too — if the original
 		// apply was redirected, the delete must target the same cluster.
@@ -1232,7 +1381,7 @@ func (e *productTargetExecutor) uninstallComponent(
 	spec model.ProductManifestSpec,
 	component model.ProductComponentSpec,
 ) ([]model.ProductInstallationUninstallResult, error) {
-	reconcileResult, err := reconcileIntegrationComponent(ctx, e.conn, e.db, productRef, spec, component)
+	reconcileResult, err := reconcileComponentBySourceKind(ctx, e.conn, e.db, productRef, spec, component)
 	if err != nil {
 		return nil, err
 	}
@@ -1266,7 +1415,7 @@ func (e *productTargetExecutor) applyComponent(
 		results = append(results, dependencyResults...)
 	}
 
-	reconcileResult, err := reconcileIntegrationComponent(ctx, e.conn, e.db, productRef, spec, component)
+	reconcileResult, err := reconcileComponentBySourceKind(ctx, e.conn, e.db, productRef, spec, component)
 	if err != nil {
 		return nil, err
 	}
@@ -1300,7 +1449,7 @@ func (e *productTargetExecutor) observeComponent(
 		results = append(results, dependencyResults...)
 	}
 
-	reconcileResult, err := reconcileIntegrationComponent(ctx, e.conn, e.db, productRef, spec, component)
+	reconcileResult, err := reconcileComponentBySourceKind(ctx, e.conn, e.db, productRef, spec, component)
 	if err != nil {
 		return nil, err
 	}
