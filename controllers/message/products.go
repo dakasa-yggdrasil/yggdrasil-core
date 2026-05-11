@@ -635,8 +635,15 @@ func (p *productInstallationPlanner) resolveComponentRequirements(
 					plans = append(plans, dependencyPlans...)
 				} else if policy == "optional" {
 					result.Message = "optional product requirement is not materialized"
+				} else if err := ensureProductMaterialization(ctx, p.conn, p.db, productManifest); err == nil {
+					// Auto-materialize the prerequisite. Passthrough
+					// for git/oci/inline source; integration source
+					// triggers the generate capability. Persisted
+					// record satisfies the requirement going forward.
+					result.Satisfied = true
+					result.Message = "required product auto-materialized"
 				} else {
-					return nil, nil, fmt.Errorf("required product %s/%s is not materialized", ref.Namespace, ref.Name)
+					return nil, nil, fmt.Errorf("required product %s/%s could not be auto-materialized: %w", ref.Namespace, ref.Name, err)
 				}
 			}
 
@@ -975,6 +982,58 @@ func discoverIntegrationComponentState(
 		IntegrationInstance: manifestReferencePointer(manifestReferenceFromRecord(instanceManifest)),
 		Metadata:            response.Metadata,
 	}, nil
+}
+
+// ensureProductMaterialization creates a materialization record for the
+// given product if none exists yet. Used by resolveExecutionDependencies
+// so that installation.apply can satisfy `requires: {state: materialized}`
+// prerequisites on-the-fly instead of failing with "required product is
+// not materialized".
+//
+// For products whose components are entirely `source.kind: git` (or
+// `oci`, `inline`), this is effectively a passthrough — MaterializeProductSpec
+// just copies the spec into the materialized snapshot without invoking
+// any integration. For products with `source.kind: integration`
+// components, the integration's `generate` capability is invoked
+// (potentially slow). Either way, the resulting record is persisted so
+// subsequent calls short-circuit at the `HasProductMaterialization` check.
+//
+// Idempotent: if a materialization already exists for the product, this
+// is a no-op. Concurrent calls race-safe via the underlying repository
+// (CreateProductMaterialization handles dedupe by checksum).
+func ensureProductMaterialization(
+	ctx context.Context,
+	conn *amqp.Connection,
+	db *sql.DB,
+	productManifest model.Manifest,
+) error {
+	hasMat, err := repository.HasProductMaterialization(ctx, db, productManifest)
+	if err != nil {
+		return fmt.Errorf("check product materialization: %w", err)
+	}
+	if hasMat {
+		return nil
+	}
+
+	spec, err := manifestengine.ParseProductSpec(productManifest.Spec)
+	if err != nil {
+		return fmt.Errorf("parse product spec for materialize: %w", err)
+	}
+
+	materializedSpec, components, err := manifestengine.MaterializeProductSpec(
+		ctx,
+		manifestReferenceFromRecord(productManifest),
+		spec,
+		rabbitMQProductGenerator{conn: conn, db: db, logger: zap.NewNop()},
+	)
+	if err != nil {
+		return fmt.Errorf("materialize product %s/%s: %w", productManifest.Metadata.Namespace, productManifest.Metadata.Name, err)
+	}
+
+	if _, err := repository.CreateProductMaterialization(ctx, db, productManifest, materializedSpec, components); err != nil {
+		return fmt.Errorf("persist product materialization %s/%s: %w", productManifest.Metadata.Namespace, productManifest.Metadata.Name, err)
+	}
+	return nil
 }
 
 type rabbitMQProductGenerator struct {
@@ -1490,10 +1549,19 @@ func (e *productTargetExecutor) resolveExecutionDependencies(
 					return nil, fmt.Errorf("check product materialization %s/%s: %w", productManifest.Metadata.Namespace, productManifest.Metadata.Name, err)
 				}
 				if !hasMaterialization {
-					if policy == "optional" {
-						continue
+					// Auto-materialize the prerequisite on-the-fly.
+					// For git/oci/inline source components this is a
+					// cheap passthrough; for integration source it
+					// invokes the integration's generate capability.
+					// Either way, the resulting record satisfies the
+					// "state: materialized" requirement without
+					// requiring a separate manual materialize call.
+					if err := ensureProductMaterialization(ctx, e.conn, e.db, productManifest); err != nil {
+						if policy == "optional" {
+							continue
+						}
+						return nil, fmt.Errorf("auto-materialize required product %s/%s: %w", productManifest.Metadata.Namespace, productManifest.Metadata.Name, err)
 					}
-					return nil, fmt.Errorf("required product %s/%s is not materialized", productManifest.Metadata.Namespace, productManifest.Metadata.Name)
 				}
 			}
 
