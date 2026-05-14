@@ -314,7 +314,7 @@ func handleCollaboratorReconcileProviderState(
 		return result
 	}
 
-	rawUsers, _ := renderedInput["users"]
+	rawUsers := renderedInput["users"]
 	var users []model.ReconcileProviderStateUser
 	switch v := rawUsers.(type) {
 	case []any:
