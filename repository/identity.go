@@ -11,6 +11,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/collaboratorstate"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 var (
@@ -1726,4 +1727,60 @@ func parseOptionalUUIDGrants(value string) (*uuid.UUID, error) {
 		return nil, err
 	}
 	return &id, nil
+}
+
+// ListAvailableSourcesForTeam returns the pool of integration_instance sources
+// that the given team can pick from when configuring its own grants. Pool =
+// union of (own grants ∪ ancestor grants) deduped by (namespace, name).
+// Ancestor walk stops on inactive teams (same rule as ResolveAuthorizationSubjects).
+func ListAvailableSourcesForTeam(ctx context.Context, db *sql.DB, teamIdentity string) ([]model.TeamGrantSource, error) {
+	startTeam, err := GetTeam(ctx, db, teamIdentity)
+	if err != nil {
+		return nil, err
+	}
+
+	// Walk up the parent chain, collecting team IDs whose grants count.
+	teamIDs := []uuid.UUID{startTeam.ID}
+	seen := map[uuid.UUID]struct{}{startTeam.ID: {}}
+	cursor := startTeam.ParentTeamID
+	for cursor != nil && *cursor != uuid.Nil {
+		if _, dup := seen[*cursor]; dup {
+			break // defensive: cycle
+		}
+		parent, err := GetTeam(ctx, db, cursor.String())
+		if err != nil {
+			if errors.Is(err, ErrTeamNotFound) {
+				break
+			}
+			return nil, err
+		}
+		if parent.Status != "active" {
+			break
+		}
+		teamIDs = append(teamIDs, parent.ID)
+		seen[parent.ID] = struct{}{}
+		cursor = parent.ParentTeamID
+	}
+
+	// Query unique sources across all those teams.
+	rows, err := db.QueryContext(ctx, `
+		SELECT DISTINCT integration_instance_namespace, integration_instance_name
+		FROM public.team_grants
+		WHERE team_id = ANY($1)
+		ORDER BY integration_instance_namespace, integration_instance_name
+	`, pq.Array(teamIDs))
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	sources := []model.TeamGrantSource{}
+	for rows.Next() {
+		var s model.TeamGrantSource
+		if err := rows.Scan(&s.Namespace, &s.Name); err != nil {
+			return nil, err
+		}
+		sources = append(sources, s)
+	}
+	return sources, rows.Err()
 }

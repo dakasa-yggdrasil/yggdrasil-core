@@ -227,3 +227,11 @@ type ListTeamGrantsRequest struct {
 type RevokeTeamGrantRequest struct {
 	GrantID string `json:"grant_id"`
 }
+
+// TeamGrantSource is one (namespace, name) pair representing an
+// integration_instance that some team in a hierarchy holds a grant for.
+// Returned by ListAvailableSourcesForTeam.
+type TeamGrantSource struct {
+	Namespace string `json:"integration_instance_namespace"`
+	Name      string `json:"integration_instance_name"`
+}

@@ -340,6 +340,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/teams/{id}/grants", server.handleTeamGrantList)
 	mux.HandleFunc("POST /api/v1/teams/{id}/grants", server.handleTeamGrantCreate)
 	mux.HandleFunc("DELETE /api/v1/teams/{id}/grants/{grant_id}", server.handleTeamGrantDelete)
+	mux.HandleFunc("GET /api/v1/teams/{id}/available-sources", server.handleTeamAvailableSources)
 	mux.HandleFunc("GET /api/v1/team-memberships", server.handleTeamMembershipList)
 	mux.HandleFunc("POST /api/v1/team-memberships", server.handleTeamMembershipUpsert)
 	mux.HandleFunc("GET /api/v1/products", server.handleProductList)
@@ -418,6 +419,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/console/teams/{id}/grants", server.handleTeamGrantList)
 	mux.HandleFunc("POST /api/v1/console/teams/{id}/grants", server.handleTeamGrantCreate)
 	mux.HandleFunc("DELETE /api/v1/console/teams/{id}/grants/{grant_id}", server.handleTeamGrantDelete)
+	mux.HandleFunc("GET /api/v1/console/teams/{id}/available-sources", server.handleTeamAvailableSources)
 	mux.HandleFunc("GET /api/v1/console/team-memberships", server.handleTeamMembershipList)
 	mux.HandleFunc("POST /api/v1/console/team-memberships", server.handleTeamMembershipUpsert)
 	mux.HandleFunc("GET /api/v1/console/auth/third-party-identities", server.handleThirdPartyIdentityList)
@@ -1183,6 +1185,15 @@ func (s *Server) handleTeamGrantDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
+}
+
+func (s *Server) handleTeamAvailableSources(w http.ResponseWriter, r *http.Request) {
+	sources, err := repository.ListAvailableSourcesForTeam(r.Context(), s.db, r.PathValue("id"))
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"sources": sources})
 }
 
 func (s *Server) handleTeamMembershipList(w http.ResponseWriter, r *http.Request) {
