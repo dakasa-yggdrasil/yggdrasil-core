@@ -66,17 +66,21 @@ func CreateManifestVersionTx(ctx context.Context, tx *sql.Tx, doc model.Manifest
 	}
 
 	active := documentActive(doc)
-	if active {
-		_, err = tx.ExecContext(
-			ctx,
-			`UPDATE public.manifests SET active = FALSE WHERE kind = $1 AND namespace = $2 AND name = $3 AND active = TRUE`,
-			doc.Kind,
-			doc.Metadata.Namespace,
-			doc.Metadata.Name,
-		)
-		if err != nil {
-			return model.Manifest{}, err
-		}
+	// Either branch deactivates previously-active versions:
+	//   - active=true: the new version becomes the active one (standard flow).
+	//   - active=false: the new version is a tombstone — nothing is active
+	//     for this (kind, namespace, name) afterwards. Without this branch,
+	//     posting metadata.active=false would leave the previous version
+	//     still active and the tombstone dangling at the end of the table.
+	_, err = tx.ExecContext(
+		ctx,
+		`UPDATE public.manifests SET active = FALSE WHERE kind = $1 AND namespace = $2 AND name = $3 AND active = TRUE`,
+		doc.Kind,
+		doc.Metadata.Namespace,
+		doc.Metadata.Name,
+	)
+	if err != nil {
+		return model.Manifest{}, err
 	}
 
 	q := `

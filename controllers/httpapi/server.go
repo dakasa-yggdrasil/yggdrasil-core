@@ -57,6 +57,7 @@ type consoleCreateManifestRequest struct {
 	Namespace   string            `json:"namespace,omitempty"`
 	Description string            `json:"description,omitempty"`
 	Labels      map[string]string `json:"labels,omitempty"`
+	Active      *bool             `json:"active,omitempty"`
 	Spec        json.RawMessage   `json:"spec"`
 }
 
@@ -2001,6 +2002,7 @@ func manifestDocumentFromPayload(kind string, payload consoleCreateManifestReque
 			Namespace:   payload.Namespace,
 			Description: payload.Description,
 			Labels:      cloneStringMap(payload.Labels),
+			Active:      payload.Active,
 		},
 		Spec: specRaw,
 	}, nil
