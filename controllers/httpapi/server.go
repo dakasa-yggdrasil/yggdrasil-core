@@ -337,6 +337,9 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/teams/{id}", server.handleTeamGet)
 	mux.HandleFunc("PATCH /api/v1/teams/{id}", server.handleTeamUpdate)
 	mux.HandleFunc("DELETE /api/v1/teams/{id}", server.handleTeamDelete)
+	mux.HandleFunc("GET /api/v1/teams/{id}/grants", server.handleTeamGrantList)
+	mux.HandleFunc("POST /api/v1/teams/{id}/grants", server.handleTeamGrantCreate)
+	mux.HandleFunc("DELETE /api/v1/teams/{id}/grants/{grant_id}", server.handleTeamGrantDelete)
 	mux.HandleFunc("GET /api/v1/team-memberships", server.handleTeamMembershipList)
 	mux.HandleFunc("POST /api/v1/team-memberships", server.handleTeamMembershipUpsert)
 	mux.HandleFunc("GET /api/v1/products", server.handleProductList)
@@ -412,6 +415,9 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/console/teams/{id}", server.handleTeamGet)
 	mux.HandleFunc("PATCH /api/v1/console/teams/{id}", server.handleTeamUpdate)
 	mux.HandleFunc("DELETE /api/v1/console/teams/{id}", server.handleTeamDelete)
+	mux.HandleFunc("GET /api/v1/console/teams/{id}/grants", server.handleTeamGrantList)
+	mux.HandleFunc("POST /api/v1/console/teams/{id}/grants", server.handleTeamGrantCreate)
+	mux.HandleFunc("DELETE /api/v1/console/teams/{id}/grants/{grant_id}", server.handleTeamGrantDelete)
 	mux.HandleFunc("GET /api/v1/console/team-memberships", server.handleTeamMembershipList)
 	mux.HandleFunc("POST /api/v1/console/team-memberships", server.handleTeamMembershipUpsert)
 	mux.HandleFunc("GET /api/v1/console/auth/third-party-identities", server.handleThirdPartyIdentityList)
@@ -1143,6 +1149,40 @@ func (s *Server) handleTeamDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"team": team, "deleted": true})
+}
+
+func (s *Server) handleTeamGrantList(w http.ResponseWriter, r *http.Request) {
+	grants, err := repository.ListTeamGrants(r.Context(), s.db, model.ListTeamGrantsRequest{
+		TeamID: r.PathValue("id"),
+	})
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"grants": grants})
+}
+
+func (s *Server) handleTeamGrantCreate(w http.ResponseWriter, r *http.Request) {
+	var req model.GrantTeamActionRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	req.TeamID = r.PathValue("id")
+	grant, err := repository.GrantTeamAction(r.Context(), s.db, req)
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusCreated, map[string]any{"grant": grant})
+}
+
+func (s *Server) handleTeamGrantDelete(w http.ResponseWriter, r *http.Request) {
+	if err := repository.RevokeTeamGrant(r.Context(), s.db, r.PathValue("grant_id")); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
 func (s *Server) handleTeamMembershipList(w http.ResponseWriter, r *http.Request) {

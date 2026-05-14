@@ -1586,3 +1586,144 @@ func resolvedUUIDPointer(value any) *uuid.UUID {
 		return nil
 	}
 }
+
+// === TEAM GRANTS ===
+
+// ListTeamGrants returns grants of one team.
+func ListTeamGrants(ctx context.Context, db *sql.DB, req model.ListTeamGrantsRequest) ([]model.TeamGrant, error) {
+	teamID, err := resolveTeamID(ctx, db, req.TeamID)
+	if err != nil {
+		return nil, err
+	}
+
+	rows, err := db.QueryContext(ctx, `
+		SELECT id, team_id, integration_instance_namespace, integration_instance_name,
+			action_name, scope, granted_at, granted_by
+		FROM public.team_grants
+		WHERE team_id = $1
+		ORDER BY integration_instance_namespace, integration_instance_name, action_name
+	`, teamID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	grants := []model.TeamGrant{}
+	for rows.Next() {
+		var g model.TeamGrant
+		var scope []byte
+		var grantedBy sql.NullString
+		if err := rows.Scan(&g.ID, &g.TeamID, &g.IntegrationInstanceNamespace,
+			&g.IntegrationInstanceName, &g.ActionName, &scope, &g.GrantedAt, &grantedBy); err != nil {
+			return nil, err
+		}
+		obj, err := unmarshalJSONObject(scope)
+		if err != nil {
+			return nil, err
+		}
+		g.Scope = obj
+		if grantedBy.Valid {
+			val := grantedBy.String
+			g.GrantedBy = &val
+		}
+		grants = append(grants, g)
+	}
+	return grants, rows.Err()
+}
+
+// GrantTeamAction inserts (or updates) one grant.
+func GrantTeamAction(ctx context.Context, db *sql.DB, req model.GrantTeamActionRequest) (model.TeamGrant, error) {
+	teamID, err := resolveTeamID(ctx, db, req.TeamID)
+	if err != nil {
+		return model.TeamGrant{}, err
+	}
+
+	namespace := strings.TrimSpace(req.IntegrationInstanceNamespace)
+	name := strings.TrimSpace(req.IntegrationInstanceName)
+	action := strings.TrimSpace(req.ActionName)
+	if namespace == "" || name == "" {
+		return model.TeamGrant{}, fmt.Errorf("integration_instance namespace and name are required")
+	}
+	if action == "" {
+		action = "*"
+	}
+
+	scopeRaw, err := marshalJSONObject(req.Scope)
+	if err != nil {
+		return model.TeamGrant{}, err
+	}
+
+	grantedBy, err := parseOptionalUUIDGrants(req.GrantedBy)
+	if err != nil {
+		return model.TeamGrant{}, err
+	}
+
+	var g model.TeamGrant
+	var scope []byte
+	var grantedByDB sql.NullString
+	err = db.QueryRowContext(ctx, `
+		INSERT INTO public.team_grants (team_id, integration_instance_namespace,
+			integration_instance_name, action_name, scope, granted_by)
+		VALUES ($1, $2, $3, $4, $5::jsonb, $6)
+		ON CONFLICT (team_id, integration_instance_namespace, integration_instance_name, action_name)
+			DO UPDATE SET scope = EXCLUDED.scope, granted_by = EXCLUDED.granted_by, granted_at = NOW()
+		RETURNING id, team_id, integration_instance_namespace, integration_instance_name,
+			action_name, scope, granted_at, granted_by
+	`, teamID, namespace, name, action, scopeRaw, grantedBy).Scan(
+		&g.ID, &g.TeamID, &g.IntegrationInstanceNamespace, &g.IntegrationInstanceName,
+		&g.ActionName, &scope, &g.GrantedAt, &grantedByDB,
+	)
+	if err != nil {
+		return model.TeamGrant{}, err
+	}
+	obj, err := unmarshalJSONObject(scope)
+	if err != nil {
+		return model.TeamGrant{}, err
+	}
+	g.Scope = obj
+	if grantedByDB.Valid {
+		val := grantedByDB.String
+		g.GrantedBy = &val
+	}
+	return g, nil
+}
+
+// RevokeTeamGrant deletes one grant by id.
+func RevokeTeamGrant(ctx context.Context, db *sql.DB, grantID string) error {
+	id, err := uuid.Parse(strings.TrimSpace(grantID))
+	if err != nil {
+		return fmt.Errorf("invalid grant_id")
+	}
+	res, err := db.ExecContext(ctx, `DELETE FROM public.team_grants WHERE id = $1`, id)
+	if err != nil {
+		return err
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return err
+	}
+	if n == 0 {
+		return fmt.Errorf("grant not found")
+	}
+	return nil
+}
+
+func resolveTeamID(ctx context.Context, db *sql.DB, identity string) (string, error) {
+	team, err := GetTeam(ctx, db, identity)
+	if err != nil {
+		return "", err
+	}
+	return team.ID.String(), nil
+}
+
+func parseOptionalUUIDGrants(value string) (*uuid.UUID, error) {
+	value = strings.TrimSpace(value)
+	if value == "" {
+		return nil, nil
+	}
+	id, err := uuid.Parse(value)
+	if err != nil {
+		return nil, err
+	}
+	return &id, nil
+}

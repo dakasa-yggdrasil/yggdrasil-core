@@ -194,3 +194,36 @@ type ListTeamMembershipsRequest struct {
 	CollaboratorID string `json:"collaborator_id,omitempty"`
 	ActiveOnly     bool   `json:"active_only,omitempty"`
 }
+
+// TeamGrant binds one team to an action of one integration_instance.
+// action_name = "*" means wildcard (all actions of that integration_instance).
+type TeamGrant struct {
+	ID                            string         `json:"id"`
+	TeamID                        string         `json:"team_id"`
+	IntegrationInstanceNamespace  string         `json:"integration_instance_namespace"`
+	IntegrationInstanceName       string         `json:"integration_instance_name"`
+	ActionName                    string         `json:"action_name"`
+	Scope                         map[string]any `json:"scope"`
+	GrantedAt                     time.Time      `json:"granted_at"`
+	GrantedBy                     *string        `json:"granted_by,omitempty"`
+}
+
+// GrantTeamActionRequest grants one team an action of one integration_instance.
+type GrantTeamActionRequest struct {
+	TeamID                        string         `json:"team_id"`
+	IntegrationInstanceNamespace  string         `json:"integration_instance_namespace"`
+	IntegrationInstanceName       string         `json:"integration_instance_name"`
+	ActionName                    string         `json:"action_name,omitempty"`
+	Scope                         map[string]any `json:"scope,omitempty"`
+	GrantedBy                     string         `json:"granted_by,omitempty"`
+}
+
+// ListTeamGrantsRequest filters grants by team.
+type ListTeamGrantsRequest struct {
+	TeamID string `json:"team_id,omitempty"`
+}
+
+// RevokeTeamGrantRequest removes one grant by id.
+type RevokeTeamGrantRequest struct {
+	GrantID string `json:"grant_id"`
+}
