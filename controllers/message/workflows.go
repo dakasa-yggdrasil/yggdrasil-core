@@ -91,17 +91,21 @@ func workflowRunHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) C
 		// Workflow runs are not transactional with the core DB; they involve
 		// external integration calls. The event is emitted in its own tx
 		// after the run finishes. On emit failure, log and continue.
-		emitWorkflowRunCompletedEvent(ctx, db, logger, response)
+		EmitWorkflowRunCompletedEvent(ctx, db, logger, response)
 
 		return replySuccess(ctx, d, response, logger)
 	}
 }
 
-// emitWorkflowRunCompletedEvent records a workflow run completion in the
+// EmitWorkflowRunCompletedEvent records a workflow run completion in the
 // core event stream. Best-effort: failures are logged but do not affect the
 // caller response. Called after RunWorkflow returns successfully (workflow
 // status may still be "failed" if a step failed — the event captures that).
-func emitWorkflowRunCompletedEvent(
+// Exported so the HTTP handler can call it for runs dispatched outside the
+// AMQP path; without this, dispatches via POST /api/v1/workflow-runs never
+// fired workflow.run.completed and downstream event-triggered workflows
+// (alert-on-reconcile-failure, etc.) silently never ran.
+func EmitWorkflowRunCompletedEvent(
 	ctx context.Context,
 	db *sql.DB,
 	logger *zap.Logger,

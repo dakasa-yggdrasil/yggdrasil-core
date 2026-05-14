@@ -44,6 +44,12 @@ func (s *Server) handleWorkflowRun(w http.ResponseWriter, r *http.Request) {
 		writeMappedError(w, err)
 		return
 	}
+	// Emit workflow.run.completed even when the run aborted on a failed
+	// step — the AMQP-path handler did this from day one, but the HTTP
+	// path silently skipped it, which is why event-triggered workflows
+	// (alert-on-reconcile-failure) never fired for runs dispatched via
+	// curl + console UI.
+	messagecontroller.EmitWorkflowRunCompletedEvent(r.Context(), s.db, s.logger, response)
 	writeJSON(w, http.StatusCreated, response)
 }
 
@@ -83,6 +89,11 @@ func (s *Server) dispatchAsyncWorkflowRun(w http.ResponseWriter, r *http.Request
 					}
 				}
 			}
+			// Emit workflow.run.completed for async HTTP-dispatched runs so
+			// downstream event-triggered workflows fire (parity with AMQP).
+			// Only emit when RunWorkflow returned a typed response — runErr
+			// already captures the precondition-failed case.
+			messagecontroller.EmitWorkflowRunCompletedEvent(bg, s.db, s.logger, response)
 		}
 		_ = repository.FinalizeWorkflowRun(bg, s.db, runID, status, resultPayload, errMsg, time.Now().UTC())
 	}(req, runID)
