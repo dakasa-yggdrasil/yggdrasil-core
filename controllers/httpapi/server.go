@@ -1052,13 +1052,117 @@ func (s *Server) handleCollaboratorUpdate(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	// Capture pre-update state so we can diff for lifecycle events. A miss here
+	// (e.g. id not found) lets UpdateCollaborator return the canonical error.
+	before, beforeErr := repository.GetCollaborator(r.Context(), s.db, req.ID)
+
 	collaborator, err := repository.UpdateCollaborator(r.Context(), s.db, req)
 	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
 
+	if beforeErr == nil {
+		s.emitCollaboratorUpdateEvents(r.Context(), before, collaborator, actorIDFromRequest(r))
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collaborator})
+}
+
+// emitCollaboratorUpdateEvents writes a lifecycle event per field that changed
+// between before and after. Best-effort: a failure to write any one event is
+// logged but does not fail the request — the audit trail is a downstream
+// concern, not a precondition for the mutation.
+func (s *Server) emitCollaboratorUpdateEvents(ctx context.Context, before, after model.Collaborator, actorID string) {
+	beforeEmp := beforeEmpData(before)
+	afterEmp := beforeEmpData(after)
+
+	beforeRole := stringField(beforeEmp, "role")
+	afterRole := stringField(afterEmp, "role")
+	beforeTitle := stringField(beforeEmp, "title")
+	afterTitle := stringField(afterEmp, "title")
+	if beforeRole != afterRole || beforeTitle != afterTitle {
+		s.appendLifecycle(ctx, before.ID, model.LifecycleEventRoleChanged, map[string]any{
+			"from_role":  beforeRole,
+			"to_role":    afterRole,
+			"from_title": beforeTitle,
+			"to_title":   afterTitle,
+		}, actorID)
+	}
+
+	beforeStart := stringField(beforeEmp, "start_date")
+	afterStart := stringField(afterEmp, "start_date")
+	if beforeStart != afterStart {
+		s.appendLifecycle(ctx, before.ID, model.LifecycleEventAttributeSet, map[string]any{
+			"attribute": "start_date",
+			"from":      beforeStart,
+			"to":        afterStart,
+		}, actorID)
+	}
+
+	if !uuidPtrEqual(before.ManagerID, after.ManagerID) {
+		payload := map[string]any{}
+		if before.ManagerID != nil {
+			payload["from_manager_id"] = before.ManagerID.String()
+		}
+		if after.ManagerID != nil {
+			payload["to_manager_id"] = after.ManagerID.String()
+		}
+		s.appendLifecycle(ctx, before.ID, model.LifecycleEventManagerChanged, payload, actorID)
+	}
+
+	if !uuidPtrEqual(before.PrimaryTeamID, after.PrimaryTeamID) {
+		payload := map[string]any{"attribute": "primary_team_id"}
+		if before.PrimaryTeamID != nil {
+			payload["from"] = before.PrimaryTeamID.String()
+		}
+		if after.PrimaryTeamID != nil {
+			payload["to"] = after.PrimaryTeamID.String()
+		}
+		s.appendLifecycle(ctx, before.ID, model.LifecycleEventAttributeSet, payload, actorID)
+	}
+}
+
+func (s *Server) appendLifecycle(ctx context.Context, collaboratorID uuid.UUID, eventType string, payload map[string]any, actorID string) {
+	if _, err := repository.AppendLifecycleEvent(ctx, s.db, model.AppendLifecycleEventRequest{
+		CollaboratorID: collaboratorID,
+		EventType:      eventType,
+		Payload:        payload,
+		ActorType:      model.ActorTypeAPI,
+		ActorID:        actorID,
+	}); err != nil {
+		s.logger.Warn("lifecycle event emit failed (non-fatal)",
+			zap.Error(err),
+			zap.String("collaborator_id", collaboratorID.String()),
+			zap.String("event_type", eventType),
+		)
+	}
+}
+
+func beforeEmpData(c model.Collaborator) map[string]any {
+	if c.EmploymentData == nil {
+		return map[string]any{}
+	}
+	return c.EmploymentData
+}
+
+func stringField(m map[string]any, k string) string {
+	if v, ok := m[k]; ok {
+		if s, ok := v.(string); ok {
+			return s
+		}
+	}
+	return ""
+}
+
+func uuidPtrEqual(a, b *uuid.UUID) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
 }
 
 func (s *Server) handleCollaboratorDelete(w http.ResponseWriter, r *http.Request) {
@@ -1220,10 +1324,43 @@ func (s *Server) handleTeamMembershipUpsert(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// Probe previous membership so we can tell if this upsert is a transition
+	// (joining/leaving) versus a no-op or metadata edit. ListTeamMemberships
+	// accepts slugs or UUIDs through the same resolution path the upsert uses.
+	prevActive := false
+	prev, prevErr := repository.ListTeamMemberships(r.Context(), s.db, model.ListTeamMembershipsRequest{
+		TeamID:         req.TeamID,
+		CollaboratorID: req.CollaboratorID,
+	})
+	if prevErr == nil {
+		for _, m := range prev {
+			if m.Active {
+				prevActive = true
+				break
+			}
+		}
+	}
+
 	membership, err := repository.UpsertTeamMembership(r.Context(), s.db, req)
 	if err != nil {
 		writeMappedError(w, err)
 		return
+	}
+
+	nowActive := membership.Active
+	switch {
+	case nowActive && !prevActive:
+		s.appendLifecycle(r.Context(), membership.CollaboratorID, model.LifecycleEventTeamJoined, map[string]any{
+			"team_id":   membership.TeamID.String(),
+			"team_slug": membership.TeamSlug,
+			"role":      membership.Role,
+		}, actorIDFromRequest(r))
+	case !nowActive && prevActive:
+		s.appendLifecycle(r.Context(), membership.CollaboratorID, model.LifecycleEventTeamLeft, map[string]any{
+			"team_id":   membership.TeamID.String(),
+			"team_slug": membership.TeamSlug,
+			"role":      membership.Role,
+		}, actorIDFromRequest(r))
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]any{"membership": membership})
