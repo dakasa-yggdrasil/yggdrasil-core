@@ -783,11 +783,16 @@ func UpdateTeam(ctx context.Context, db *sql.DB, req model.UpdateTeamRequest) (m
 		return model.Team{}, err
 	}
 
+	protected := isTeamRootAdmin(current)
+
 	slug := current.Slug
 	if req.Slug != nil {
 		slug = normalizeSlug(*req.Slug)
 		if slug == "" {
 			return model.Team{}, fmt.Errorf("team slug is required")
+		}
+		if protected && slug != current.Slug {
+			return model.Team{}, fmt.Errorf("team %q is protected (traits.is_root_admin=true); slug cannot be changed", current.Slug)
 		}
 	}
 
@@ -807,6 +812,9 @@ func UpdateTeam(ctx context.Context, db *sql.DB, req model.UpdateTeamRequest) (m
 	status := current.Status
 	if req.Status != nil {
 		status = normalizeStatus(*req.Status)
+		if protected && status != "active" {
+			return model.Team{}, fmt.Errorf("team %q is protected (traits.is_root_admin=true); status must remain 'active'", current.Slug)
+		}
 	}
 
 	parentTeamID := current.ParentTeamID
@@ -819,6 +827,9 @@ func UpdateTeam(ctx context.Context, db *sql.DB, req model.UpdateTeamRequest) (m
 		if parentTeamID != nil && *parentTeamID == current.ID {
 			return model.Team{}, fmt.Errorf("team parent_team_id cannot reference itself")
 		}
+		if protected && !samePointer(current.ParentTeamID, parentTeamID) {
+			return model.Team{}, fmt.Errorf("team %q is protected (traits.is_root_admin=true); parent_team_id cannot be changed", current.Slug)
+		}
 	}
 
 	owners := current.Owners
@@ -828,6 +839,10 @@ func UpdateTeam(ctx context.Context, db *sql.DB, req model.UpdateTeamRequest) (m
 	traits := current.Traits
 	if req.Traits != nil {
 		traits = cloneJSONObject(*req.Traits)
+		if protected {
+			// Don't allow unsetting the flag — root-admin protection is self-defending.
+			traits["is_root_admin"] = true
+		}
 	}
 	metadata := current.Metadata
 	if req.Metadata != nil {
@@ -895,11 +910,42 @@ func DeleteTeam(ctx context.Context, db *sql.DB, identity string) (model.Team, e
 		return model.Team{}, err
 	}
 
+	if isTeamRootAdmin(team) {
+		return model.Team{}, fmt.Errorf("team %q is protected (traits.is_root_admin=true) and cannot be deleted", team.Slug)
+	}
+
 	if _, err := db.ExecContext(ctx, `DELETE FROM public.teams WHERE id = $1`, team.ID); err != nil {
 		return model.Team{}, err
 	}
 
 	return team, nil
+}
+
+// samePointer returns true if both uuid pointers reference the same value
+// (or are both nil). Compares by content, not address.
+func samePointer(a, b *uuid.UUID) bool {
+	if a == nil && b == nil {
+		return true
+	}
+	if a == nil || b == nil {
+		return false
+	}
+	return *a == *b
+}
+
+// isTeamRootAdmin reads team.traits.is_root_admin defensively.
+func isTeamRootAdmin(team model.Team) bool {
+	if team.Traits == nil {
+		return false
+	}
+	v, ok := team.Traits["is_root_admin"]
+	if !ok {
+		return false
+	}
+	if b, ok := v.(bool); ok {
+		return b
+	}
+	return false
 }
 
 // UpsertTeamMembership creates or updates one membership link.
@@ -1695,6 +1741,37 @@ func RevokeTeamGrant(ctx context.Context, db *sql.DB, grantID string) error {
 	if err != nil {
 		return fmt.Errorf("invalid grant_id")
 	}
+
+	// Last-grant-of-power check: refuse to revoke if it would leave the cluster
+	// without any active grant that can manage team grants.
+	var ns, name, action string
+	err = db.QueryRowContext(ctx, `
+		SELECT integration_instance_namespace, integration_instance_name, action_name
+		FROM public.team_grants WHERE id = $1
+	`, id).Scan(&ns, &name, &action)
+	if err == sql.ErrNoRows {
+		return fmt.Errorf("grant not found")
+	}
+	if err != nil {
+		return err
+	}
+	if isYggdrasilSelfManageGrant(name, action) {
+		var siblingCount int
+		err = db.QueryRowContext(ctx, `
+			SELECT COUNT(*)
+			FROM public.team_grants
+			WHERE id <> $1
+				AND integration_instance_name LIKE 'yggdrasil-self%'
+				AND action_name IN ('*', 'manage_team_sources', 'manage_team_permissions')
+		`, id).Scan(&siblingCount)
+		if err != nil {
+			return err
+		}
+		if siblingCount == 0 {
+			return fmt.Errorf("refusing to revoke last grant that controls yggdrasil-self management; cluster would have no admin")
+		}
+	}
+
 	res, err := db.ExecContext(ctx, `DELETE FROM public.team_grants WHERE id = $1`, id)
 	if err != nil {
 		return err
@@ -1707,6 +1784,20 @@ func RevokeTeamGrant(ctx context.Context, db *sql.DB, grantID string) error {
 		return fmt.Errorf("grant not found")
 	}
 	return nil
+}
+
+// isYggdrasilSelfManageGrant detects grants that confer admin power over the
+// team_grants system itself: any grant on a yggdrasil-self instance whose
+// action is wildcard or one of the meta-actions declared in the type catalog.
+func isYggdrasilSelfManageGrant(integrationInstanceName, action string) bool {
+	if !strings.HasPrefix(integrationInstanceName, "yggdrasil-self") {
+		return false
+	}
+	switch action {
+	case "*", "manage_team_sources", "manage_team_permissions":
+		return true
+	}
+	return false
 }
 
 func resolveTeamID(ctx context.Context, db *sql.DB, identity string) (string, error) {
