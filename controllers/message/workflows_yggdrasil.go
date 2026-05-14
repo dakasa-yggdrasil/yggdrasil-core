@@ -373,6 +373,29 @@ func handleCollaboratorReconcileProviderState(
 			return result
 		}
 		matched++
+
+		// Side-effect: when an observed_state proves the user is enrolled
+		// in MFA at the provider, mirror that signal onto collaborator.traits
+		// so the surface-console security panel can flip from "Sem registro"
+		// to "Informada como ativa" without re-fetching provider_state per
+		// row. The mirror is best-effort — failure to patch traits does NOT
+		// fail the reconcile, since the canonical state is still in
+		// collaborator_provider_state.
+		if mfaEnrolledFromObservedState(provider, observedState) && !traitsMFAEnrolledAlreadySet(collab.Traits) {
+			merged := cloneTraitsWithMFA(collab.Traits, time.Now().UTC())
+			id := collab.ID.String()
+			if _, err := repository.UpdateCollaborator(ctx, db, model.UpdateCollaboratorRequest{
+				ID:     id,
+				Traits: &merged,
+			}); err != nil {
+				// Surface as metadata note instead of hard-failing the step.
+				if meta := result.Metadata; meta != nil {
+					if existing, ok := meta["mfa_trait_patch_errors"].([]string); ok {
+						meta["mfa_trait_patch_errors"] = append(existing, fmt.Sprintf("%s: %v", email, err))
+					}
+				}
+			}
+		}
 	}
 
 	meta := map[string]any{
@@ -387,6 +410,69 @@ func handleCollaboratorReconcileProviderState(
 	result.Metadata = meta
 	result.FinishedAt = time.Now().UTC()
 	return result
+}
+
+// mfaEnrolledFromObservedState reports whether the observed_state payload
+// from a given provider proves the user has MFA enrolled. The mapping is
+// per-provider because each adapter normalizes the upstream API field
+// differently — keeping this co-located with the reconcile lets one
+// place own the mfa_enrolled_at trait contract instead of scattering it
+// across adapter manifests.
+//
+//	google-workspace.isEnrolledIn2Sv  — Admin SDK Directory directoryUser
+//	slack.has_2fa                     — users.list (admin scope) profile
+//
+// Returning false on unknown providers is intentional: we only mirror
+// signals we trust, never guess.
+func mfaEnrolledFromObservedState(provider string, observed map[string]any) bool {
+	if observed == nil {
+		return false
+	}
+	switch provider {
+	case "google-workspace":
+		v, ok := observed["isEnrolledIn2Sv"].(bool)
+		return ok && v
+	case "slack":
+		v, ok := observed["has_2fa"].(bool)
+		return ok && v
+	default:
+		return false
+	}
+}
+
+// traitsMFAEnrolledAlreadySet returns true when mfa_enrolled_at is already
+// stored on the collaborator (regardless of source). Re-emitting the trait
+// every reconcile tick would overwrite a precise enrolment timestamp
+// captured by another flow (SAML SSO bootstrap, explicit MFA workflow) with
+// a NOW() stamp that drifts later than the truth.
+func traitsMFAEnrolledAlreadySet(traits map[string]any) bool {
+	if traits == nil {
+		return false
+	}
+	v, ok := traits["mfa_enrolled_at"]
+	if !ok {
+		return false
+	}
+	switch s := v.(type) {
+	case string:
+		return strings.TrimSpace(s) != ""
+	case time.Time:
+		return !s.IsZero()
+	default:
+		return false
+	}
+}
+
+// cloneTraitsWithMFA returns a NEW traits map with mfa_enrolled_at set to
+// when. UpdateCollaborator replaces the whole jsonb blob (does not merge),
+// so we have to send the full merged map.
+func cloneTraitsWithMFA(existing map[string]any, when time.Time) map[string]any {
+	out := make(map[string]any, len(existing)+1)
+	for k, v := range existing {
+		out[k] = v
+	}
+	out["mfa_enrolled_at"] = when.Format(time.RFC3339)
+	return out
 }
 
 // manifestDocumentFromStepInput extracts the with.manifest value produced by
