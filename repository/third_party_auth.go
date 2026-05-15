@@ -558,6 +558,7 @@ func syncCollaboratorThirdPartyIdentityProjection(
 				third_party_identities,
 				traits,
 				metadata,
+				version,
 				created_at,
 				updated_at
 		`,
