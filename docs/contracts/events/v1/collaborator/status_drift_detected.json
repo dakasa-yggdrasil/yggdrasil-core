@@ -1,0 +1,36 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/collaborator/status_drift_detected.json",
+  "title": "collaborator.status.drift_detected payload",
+  "description": "Payload emitted when a provider reconcile observes a state that contradicts the canonical Yggdrasil collaborator.status (e.g. Google Workspace reports suspended=true but the Yggdrasil record is still status=active). Consumed by alert-on-status-drift to fan out a Heimdall warning.",
+  "type": "object",
+  "required": ["collaborator_id", "provider", "provider_signal", "yggdrasil_status"],
+  "properties": {
+    "collaborator_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID of the collaborator whose state drifts from the provider."
+    },
+    "collaborator_slug": {
+      "type": "string",
+      "description": "URL-safe identifier — convenient for alert payloads."
+    },
+    "collaborator_email": {
+      "type": "string",
+      "description": "Primary email of the collaborator — used to disambiguate in slack alerts."
+    },
+    "yggdrasil_status": {
+      "type": "string",
+      "description": "Canonical status stored on the collaborator row (typically 'active' at the time drift is detected)."
+    },
+    "provider": {
+      "type": "string",
+      "description": "Provider identifier whose observed_state contradicts the canonical status (google-workspace, slack, ...)."
+    },
+    "provider_signal": {
+      "type": "string",
+      "enum": ["suspended", "deleted"],
+      "description": "The exact signal observed on the provider that triggered the drift detection."
+    }
+  }
+}

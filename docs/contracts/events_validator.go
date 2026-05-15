@@ -67,8 +67,9 @@ func eventTypeToSchemaPath(eventType string, schemaVersion string) string {
 		"authorization.evaluated":      "events/v1/authorization/evaluated.json",
 		"buildproject.expired":         "events/v1/buildproject/expired.json",
 		"infra.alert.firing":           "events/v1/infra/alert_firing.json",
-		"collaborator.created":         "events/v1/collaborator/created.json",
-		"collaborator.offboarded":      "events/v1/collaborator/offboarded.json",
+		"collaborator.created":                "events/v1/collaborator/created.json",
+		"collaborator.offboarded":             "events/v1/collaborator/offboarded.json",
+		"collaborator.status.drift_detected":  "events/v1/collaborator/status_drift_detected.json",
 	}
 	return mapping[eventType]
 }
