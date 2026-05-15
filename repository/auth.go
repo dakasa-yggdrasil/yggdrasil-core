@@ -549,11 +549,3 @@ func scanAuthSession(row scanner) (model.AuthSession, error) {
 
 	return session, nil
 }
-
-func normalizeAuthStatus(value string) string {
-	value = strings.ToLower(strings.TrimSpace(value))
-	if value == "" {
-		return "active"
-	}
-	return value
-}
