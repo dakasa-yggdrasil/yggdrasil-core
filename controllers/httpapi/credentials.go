@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/http"
@@ -12,6 +13,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/password"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -402,3 +404,206 @@ func envIntCred(key string, def int) int {
 	}
 	return n
 }
+
+// handlePasswordChange — POST /api/v1/auth/passwords/change
+//
+// Authenticated endpoint that allows a collaborator to change their own password
+// while proving liveness via MFA inline. Steps:
+//  1. Resolve bearer session → collaborator.
+//  2. Verify current_password.
+//  3. Enforce MFA enrolled; verify supplied factor (totp_code, recovery_code, or
+//     webauthn_assertion). WebAuthn inline assertion is not yet implemented
+//     (Phase 2); supplying webauthn_assertion returns 501.
+//  4. Validate new password strength.
+//  5. Reject new == current.
+//  6. In a transaction: update hash, revoke other sessions, emit event.
+//  7. Return {password_updated_at, password_expires_at}.
+//
+// Header X-Yggdrasil-Rotation-Triggered: true sets event source = "rotation"
+// (default "voluntary").
+func (s *Server) handlePasswordChange(w http.ResponseWriter, r *http.Request) {
+	tokenStr, ok := extractAuthToken(r)
+	if !ok {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"code": "unauthenticated"})
+		return
+	}
+	session, collab, err := repository.ResolveAuthSession(r.Context(), s.db, tokenStr)
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"code": "unauthenticated"})
+		return
+	}
+
+	var req model.PasswordChangeRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
+	// Step 2: verify current password.
+	if err := repository.VerifyPassword(r.Context(), s.db, collab.ID, req.CurrentPassword); err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"code": "invalid_current_password"})
+		return
+	}
+
+	// Step 3: MFA gate.
+	if err := mfa.EnforceMFAEnrolled(r.Context(), s.db, collab.ID); err != nil {
+		if errors.Is(err, mfa.ErrMFANotEnrolled) {
+			writeJSON(w, http.StatusPreconditionRequired, map[string]any{"code": "mfa_not_enrolled"})
+			return
+		}
+		writeMappedError(w, err)
+		return
+	}
+	if err := s.verifyInlineMFAFactor(r, collab.ID, req.TOTPCode, req.RecoveryCode, req.WebAuthnAssertion); err != nil {
+		if errors.Is(err, errMFANotSupplied) {
+			writeJSON(w, http.StatusUnauthorized, map[string]any{"code": "invalid_mfa"})
+			return
+		}
+		if errors.Is(err, errWebAuthnNotImplemented) {
+			writeJSON(w, http.StatusNotImplemented, map[string]any{"code": "webauthn_not_implemented"})
+			return
+		}
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"code": "invalid_mfa"})
+		return
+	}
+
+	// Step 4: validate new password strength.
+	minLen := envIntCred("AUTH_PASSWORD_MIN_LENGTH", 12)
+	commonPasswords, _ := commonPasswordsCached()
+	if err := password.ValidateStrength(req.NewPassword, minLen, commonPasswords, []string{collab.PrimaryEmail, collab.Slug, collab.DisplayName}); err != nil {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"code": "password_too_weak", "reason": err.Error()})
+		return
+	}
+
+	// Step 5: reject if new == current.
+	if err := repository.VerifyPassword(r.Context(), s.db, collab.ID, req.NewPassword); err == nil {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"code": "password_unchanged"})
+		return
+	}
+
+	// Step 6: hash new password.
+	scheme, hash, err := password.Hash(req.NewPassword)
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	rotation := envDurationCred("AUTH_PASSWORD_ROTATION_PERIOD", 90*24*time.Hour)
+
+	// Step 6 (continued): transactional update.
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if _, err := tx.ExecContext(r.Context(), `
+		UPDATE auth_identities
+		SET password_hash        = $2,
+		    password_scheme      = $3,
+		    password_updated_at  = NOW(),
+		    password_expires_at  = NOW() + $4::interval,
+		    password_must_change = false
+		WHERE collaborator_id = $1
+	`, collab.ID, hash, string(scheme), rotation.String()); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
+	// Revoke all other active sessions; keep the current one intact.
+	if _, err := tx.ExecContext(r.Context(), `
+		UPDATE auth_sessions
+		SET status     = 'revoked',
+		    revoked_at = NOW()
+		WHERE collaborator_id = $1
+		  AND id             <> $2
+		  AND revoked_at IS NULL
+	`, collab.ID, session.ID); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
+	source := "voluntary"
+	if strings.EqualFold(r.Header.Get("X-Yggdrasil-Rotation-Triggered"), "true") {
+		source = "rotation"
+	}
+	_, _ = repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
+		Type:          repository.EventTypeCredentialPasswordChanged,
+		SchemaVersion: "v1",
+		AggregateType: "collaborator",
+		AggregateID:   collab.ID.String(),
+		Actor:         &model.EventActor{Type: "collaborator", ID: collab.ID.String()},
+		Payload: map[string]any{
+			"collaborator_id": collab.ID.String(),
+			"source":          source,
+			"ip":              r.RemoteAddr,
+		},
+	})
+
+	if err := tx.Commit(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	committed = true
+
+	// Step 7: respond with updated credential state.
+	state, _ := repository.GetPasswordCredentialState(r.Context(), s.db, collab.ID)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"password_updated_at": state.PasswordUpdatedAt,
+		"password_expires_at": state.PasswordExpiresAt,
+	})
+}
+
+// sentinel errors used by verifyInlineMFAFactor.
+var (
+	errMFANotSupplied        = errors.New("no mfa factor supplied")
+	errWebAuthnNotImplemented = errors.New("webauthn inline assertion not yet implemented (Phase 2)")
+)
+
+// verifyInlineMFAFactor verifies the first non-empty MFA factor supplied in the
+// request against the stored credentials for collabID. It is a method on
+// *Server so it can access s.db and s.envelope.
+//
+// Priority: totp_code > recovery_code > webauthn_assertion.
+// If none are supplied, errMFANotSupplied is returned.
+// WebAuthn inline assertion is a Phase 2 feature; supplying webauthn_assertion
+// returns errWebAuthnNotImplemented.
+func (s *Server) verifyInlineMFAFactor(
+	r *http.Request,
+	collabID uuid.UUID,
+	totpCode, recoveryCode string,
+	webauthnAssertion map[string]any,
+) error {
+	totpCode = strings.TrimSpace(totpCode)
+	recoveryCode = strings.TrimSpace(recoveryCode)
+
+	if totpCode != "" {
+		if s.envelope == nil {
+			return fmt.Errorf("TOTP verification unavailable: KEK not configured")
+		}
+		secret, err := repository.GetTOTPSecret(r.Context(), s.db, s.envelope, collabID)
+		if err != nil {
+			return fmt.Errorf("get totp secret: %w", err)
+		}
+		return mfa.ValidateTOTP(string(secret), totpCode)
+	}
+
+	if recoveryCode != "" {
+		return repository.VerifyAndInvalidateRecoveryCode(r.Context(), s.db, collabID, recoveryCode)
+	}
+
+	// webauthn_assertion path: blocked until Phase 2 (inline assertion verify).
+	// Return a distinct sentinel so the caller can surface 501 instead of 401.
+	if webauthnAssertion != nil {
+		return errWebAuthnNotImplemented
+	}
+
+	// No factor supplied at all.
+	return errMFANotSupplied
+}
+
