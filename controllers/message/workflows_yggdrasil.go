@@ -374,6 +374,23 @@ func handleCollaboratorReconcileProviderState(
 		}
 		matched++
 
+		// Mark the row as reconciled (last_reconciled_at, clear error_count,
+		// pending_action). When observed_state contradicts the Yggdrasil
+		// collaborator status (provider says suspended/deleted but the
+		// canonical record is still active), set last_drift_detected_at AND
+		// emit a collaborator.status.drift_detected event so an event-triggered
+		// workflow can alert. Drift detection is best-effort — neither the
+		// mark nor the emit failure aborts the reconcile.
+		drifted, providerSignal := observedShowsStatusDrift(provider, observedState, collab)
+		if err := repository.MarkProviderStateReconciled(ctx, db, collab.ID, provider, drifted); err != nil {
+			// row was just upserted — ErrProviderStateNotFound here would
+			// indicate a race with deletion that's worth noting but not
+			// fatal.
+		}
+		if drifted {
+			emitStatusDriftEvent(ctx, db, collab, provider, providerSignal, observedState)
+		}
+
 		// Side-effect: when an observed_state proves the user is enrolled
 		// in MFA at the provider, mirror that signal onto collaborator.traits
 		// so the surface-console security panel can flip from "Sem registro"
@@ -410,6 +427,72 @@ func handleCollaboratorReconcileProviderState(
 	result.Metadata = meta
 	result.FinishedAt = time.Now().UTC()
 	return result
+}
+
+// observedShowsStatusDrift returns true when the provider observed_state
+// contradicts collaborator.status. The signal is per-provider because each
+// adapter normalizes the upstream API field differently:
+//
+//	google-workspace.suspended  — Admin SDK Directory directoryUser.suspended
+//	slack.deleted               — users.list member.deleted (filtered at
+//	                              adapter today; here for forward-compat if
+//	                              the filter is loosened)
+//
+// Drift is only flagged when the canonical Yggdrasil status is "active" —
+// suspending or offboarding through Yggdrasil and then observing the same
+// state at the provider is the desired flow, not drift.
+//
+// The second return is the canonical signal name so the alert payload can
+// say WHY this is drift instead of relying on the consumer to introspect
+// observed_state.
+func observedShowsStatusDrift(provider string, observed map[string]any, collab model.Collaborator) (bool, string) {
+	if observed == nil {
+		return false, ""
+	}
+	if strings.ToLower(strings.TrimSpace(collab.Status)) != "active" {
+		return false, ""
+	}
+	switch provider {
+	case "google-workspace":
+		if v, ok := observed["suspended"].(bool); ok && v {
+			return true, "suspended"
+		}
+	case "slack":
+		if v, ok := observed["deleted"].(bool); ok && v {
+			return true, "deleted"
+		}
+	}
+	return false, ""
+}
+
+// emitStatusDriftEvent writes one collaborator.status.drift_detected event
+// into the event stream so the alert-on-status-drift event-triggered workflow
+// can react. Best-effort: failures are swallowed (the reconcile itself is the
+// canonical store; the event is just a notification path).
+func emitStatusDriftEvent(ctx context.Context, db *sql.DB, collab model.Collaborator, provider, signal string, observed map[string]any) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return
+	}
+	defer tx.Rollback()
+	payload := map[string]any{
+		"collaborator_id":    collab.ID.String(),
+		"collaborator_slug":  collab.Slug,
+		"collaborator_email": collab.PrimaryEmail,
+		"yggdrasil_status":   collab.Status,
+		"provider":           provider,
+		"provider_signal":    signal,
+	}
+	if _, err := repository.EmitEvent(ctx, tx, model.EmitEventRequest{
+		Type:          "collaborator.status.drift_detected",
+		SchemaVersion: "v1",
+		AggregateType: "collaborator",
+		AggregateID:   collab.ID.String(),
+		Payload:       payload,
+	}); err != nil {
+		return
+	}
+	_ = tx.Commit()
 }
 
 // mfaEnrolledFromObservedState reports whether the observed_state payload
