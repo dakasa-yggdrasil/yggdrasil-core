@@ -62,40 +62,22 @@ func UpsertPasswordCredential(
 	row := db.QueryRowContext(
 		ctx,
 		`
-			INSERT INTO public.collaborator_password_credentials (
-				collaborator_id,
-				status,
-				password_scheme,
-				password_hash,
-				metadata,
-				password_updated_at
-			) VALUES (
-				$1,
-				$2,
-				$3,
-				$4,
-				$5::jsonb,
-				NOW()
-			)
-			ON CONFLICT (collaborator_id)
-			DO UPDATE SET
-				status = EXCLUDED.status,
-				password_scheme = EXCLUDED.password_scheme,
-				password_hash = EXCLUDED.password_hash,
-				metadata = EXCLUDED.metadata,
+			UPDATE public.auth_identities
+			SET
+				password_scheme     = $2,
+				password_hash       = $3,
 				password_updated_at = NOW(),
-				updated_at = NOW()
+				password_metadata   = COALESCE(NULLIF($4::jsonb, 'null'::jsonb), password_metadata)
+			WHERE collaborator_id = $1
 			RETURNING
 				collaborator_id,
-				status,
 				password_scheme,
-				metadata,
+				password_metadata,
 				password_updated_at,
 				created_at,
 				updated_at
 		`,
 		collaborator.ID,
-		normalizeAuthStatus(req.Status),
 		"pbkdf2_sha256",
 		passwordHash,
 		metadata,
@@ -353,20 +335,19 @@ func getPasswordCredentialRow(
 		`
 			SELECT
 				collaborator_id,
-				status,
 				password_scheme,
 				password_hash,
-				metadata,
+				password_metadata,
 				password_updated_at,
 				created_at,
 				updated_at
-			FROM public.collaborator_password_credentials
+			FROM public.auth_identities
 			WHERE collaborator_id = $1
+			  AND password_hash IS NOT NULL
 		`,
 		collaboratorID,
 	).Scan(
 		&credential.CollaboratorID,
-		&credential.Status,
 		&credential.PasswordScheme,
 		&passwordHash,
 		&metadataRaw,
@@ -380,6 +361,8 @@ func getPasswordCredentialRow(
 		}
 		return model.PasswordCredential{}, "", err
 	}
+	// auth_identities has no status column; a row with password_hash IS NOT NULL is always "active".
+	credential.Status = "active"
 
 	credential.Metadata = map[string]any{}
 	if len(metadataRaw) > 0 {
@@ -511,9 +494,11 @@ func scanPasswordCredential(row scanner) (model.PasswordCredential, error) {
 		metadataRaw []byte
 	)
 
+	// auth_identities has no status column; a row with password_hash is always "active".
+	credential.Status = "active"
+
 	err := row.Scan(
 		&credential.CollaboratorID,
-		&credential.Status,
 		&credential.PasswordScheme,
 		&metadataRaw,
 		&credential.PasswordUpdatedAt,
