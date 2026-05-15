@@ -84,6 +84,7 @@ func CreateCollaboratorTx(ctx context.Context, tx *sql.Tx, req model.CreateColla
 				third_party_identities,
 				traits,
 				metadata,
+				version,
 				created_at,
 				updated_at
 		`,
