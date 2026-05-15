@@ -13,7 +13,7 @@ import (
 // FamilyEventsV1 identifies the events/v1 contract family.
 const FamilyEventsV1 = "events/v1"
 
-//go:embed events/v1/schema.json events/v1/manifest/*.json events/v1/product/*.json events/v1/workflow/*.json events/v1/authorization/*.json events/v1/buildproject/*.json events/v1/infra/*.json events/v1/collaborator/*.json
+//go:embed events/v1/schema.json events/v1/manifest/*.json events/v1/product/*.json events/v1/workflow/*.json events/v1/authorization/*.json events/v1/buildproject/*.json events/v1/infra/*.json events/v1/collaborator/*.json events/v1/credential/*.json
 var eventSchemaFS embed.FS
 
 var (
@@ -70,6 +70,12 @@ func eventTypeToSchemaPath(eventType string, schemaVersion string) string {
 		"collaborator.created":                "events/v1/collaborator/created.json",
 		"collaborator.offboarded":             "events/v1/collaborator/offboarded.json",
 		"collaborator.status.drift_detected":  "events/v1/collaborator/status_drift_detected.json",
+		// credential lifecycle events
+		"credential.setup_token_issued":         "events/v1/credential/setup_token_issued.json",
+		"credential.password_setup_completed":   "events/v1/credential/password_setup_completed.json",
+		"credential.password_changed":           "events/v1/credential/password_changed.json",
+		"credential.reset_token_issued":         "events/v1/credential/reset_token_issued.json",
+		"credential.password_rotation_required": "events/v1/credential/password_rotation_required.json",
 	}
 	return mapping[eventType]
 }
