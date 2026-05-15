@@ -458,3 +458,54 @@ func (s *Server) handleOpsAuditList(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"events": rows, "count": len(rows)})
 }
+
+// -----------------------------------------------------------------------------
+// GET /api/v1/ops/collaborators/missing-mfa
+// -----------------------------------------------------------------------------
+
+type opsCollaboratorMissingMFA struct {
+	ID           string     `json:"id"`
+	Slug         string     `json:"slug,omitempty"`
+	DisplayName  string     `json:"display_name,omitempty"`
+	PrimaryEmail string     `json:"primary_email,omitempty"`
+	Status       string     `json:"status"`
+	CreatedAt    time.Time  `json:"created_at"`
+	LastLoginAt  *time.Time `json:"last_login_at,omitempty"`
+}
+
+// handleOpsCollaboratorsMissingMFA returns active collaborators whose
+// auth_identities row either does not exist yet (never logged in) or has
+// mfa_enrolled_at NULL. Backs the surface-console "Compliance > MFA"
+// panel; ops uses it to nudge users into completing enrollment.
+func (s *Server) handleOpsCollaboratorsMissingMFA(w http.ResponseWriter, r *http.Request) {
+	const q = `
+		SELECT c.id::text,
+		       COALESCE(c.slug, ''),
+		       COALESCE(c.display_name, ''),
+		       COALESCE(c.primary_email, ''),
+		       c.status,
+		       c.created_at,
+		       ai.last_login_at
+		FROM public.collaborators c
+		LEFT JOIN public.auth_identities ai ON ai.collaborator_id = c.id
+		WHERE c.status = 'active'
+		  AND (ai.collaborator_id IS NULL OR ai.mfa_enrolled_at IS NULL)
+		ORDER BY c.created_at DESC
+		LIMIT 500`
+	rows, err := s.db.QueryContext(r.Context(), q)
+	if err != nil {
+		writeJSONError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	defer rows.Close()
+
+	out := []opsCollaboratorMissingMFA{}
+	for rows.Next() {
+		var c opsCollaboratorMissingMFA
+		if err := rows.Scan(&c.ID, &c.Slug, &c.DisplayName, &c.PrimaryEmail, &c.Status, &c.CreatedAt, &c.LastLoginAt); err != nil {
+			continue
+		}
+		out = append(out, c)
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"collaborators": out, "count": len(out)})
+}

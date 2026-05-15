@@ -309,6 +309,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/ops/catalog", server.handleOpsCatalog)
 	mux.HandleFunc("GET /api/v1/ops/system/health", server.handleOpsSystemHealth)
 	mux.HandleFunc("GET /api/v1/ops/audit", server.handleOpsAuditList)
+	mux.HandleFunc("GET /api/v1/ops/collaborators/missing-mfa", server.handleOpsCollaboratorsMissingMFA)
 
 	mux.HandleFunc("GET /api/v1/collaborators", server.handleCollaboratorList)
 	mux.HandleFunc("POST /api/v1/collaborators", server.handleCollaboratorCreate)
