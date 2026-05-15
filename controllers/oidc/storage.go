@@ -101,11 +101,26 @@ func (v *clientView) GrantTypes() []oidc.GrantType {
 }
 
 // LoginURL bridges the OP's "login required" signal into our third-party
-// (Google) flow. Task 8 wires the actual handler at /auth/third-party/start/google.
+// (Google) flow. The actual handler is mounted at
+// /api/v1/auth/third-party/start/{provider} on the same host that serves
+// the issuer — NOT under the issuer's path prefix. Concatenating against
+// issuerURL ("https://host/oidc") naively produced
+// "https://host/oidc/auth/third-party/start/google" and 404'd; instead we
+// drop the issuer's path component and graft the absolute API path.
 func (v *clientView) LoginURL(authReqID string) string {
 	q := url.Values{}
 	q.Set("auth_request_id", authReqID)
-	return v.issuerURL + "/auth/third-party/start/google?" + q.Encode()
+	parsed, err := url.Parse(v.issuerURL)
+	if err != nil {
+		// Fall back to naive concat — the request will 404, but at least
+		// the OP gets a syntactically valid redirect target instead of a
+		// crash. ParseRequestURI on the issuer happens at startup so this
+		// branch should be unreachable in production.
+		return v.issuerURL + "/api/v1/auth/third-party/start/google?" + q.Encode()
+	}
+	parsed.Path = "/api/v1/auth/third-party/start/google"
+	parsed.RawQuery = q.Encode()
+	return parsed.String()
 }
 
 func (v *clientView) AccessTokenType() op.AccessTokenType { return op.AccessTokenTypeJWT }
