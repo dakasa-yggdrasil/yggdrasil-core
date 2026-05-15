@@ -11,6 +11,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 
 	"golang.org/x/crypto/argon2"
 	"golang.org/x/crypto/pbkdf2"
@@ -36,14 +37,14 @@ type argon2Params struct {
 	KeyLen  uint32
 }
 
-func argonParamsFromEnv() argon2Params {
+var loadedArgonParams = sync.OnceValue(func() argon2Params {
 	return argon2Params{
 		Memory:  uint32(envInt("AUTH_PASSWORD_ARGON2ID_MEMORY_KB", 65536)),
 		Time:    uint32(envInt("AUTH_PASSWORD_ARGON2ID_TIME", 3)),
 		Threads: uint8(envInt("AUTH_PASSWORD_ARGON2ID_THREADS", 4)),
 		KeyLen:  32,
 	}
-}
+})
 
 func envInt(key string, def int) int {
 	v := strings.TrimSpace(os.Getenv(key))
@@ -59,7 +60,7 @@ func envInt(key string, def int) int {
 
 // Hash returns the active scheme and the encoded hash string.
 func Hash(plain string) (Scheme, string, error) {
-	params := argonParamsFromEnv()
+	params := loadedArgonParams()
 	salt := make([]byte, 16)
 	if _, err := rand.Read(salt); err != nil {
 		return "", "", fmt.Errorf("salt: %w", err)
@@ -88,6 +89,9 @@ func Verify(scheme Scheme, encoded, plain string) error {
 func verifyArgon2id(encoded, plain string) error {
 	parts := strings.Split(encoded, "$")
 	if len(parts) != 6 || parts[1] != "argon2id" {
+		return ErrHashCorrupt
+	}
+	if parts[2] != "v=19" {
 		return ErrHashCorrupt
 	}
 	var memory, time uint32
