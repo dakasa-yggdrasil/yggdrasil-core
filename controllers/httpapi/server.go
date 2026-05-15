@@ -211,6 +211,24 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	}
 
 	mux := http.NewServeMux()
+
+	// Routes the credentials middleware must permit even when the collaborator
+	// is locked out (password expired / MFA not enrolled). These are the
+	// endpoints that ESCAPE the locked state, plus public endpoints that don't
+	// have an authenticated user yet.
+	credentialsAllowlist := []string{
+		"/api/v1/auth/passwords/change",
+		"/api/v1/auth/logout",
+		"/api/v1/auth/session",
+		"/api/v1/auth/mfa/enroll/request",
+		"/api/v1/auth/mfa/enroll/validate",
+		"/api/v1/auth/mfa/factors/totp/begin",
+		"/api/v1/auth/mfa/factors/totp/finish",
+	}
+	guard := func(h http.HandlerFunc) http.HandlerFunc {
+		return server.requirePasswordValid(credentialsAllowlist, h)
+	}
+
 	// `GET /{$}` matches the literal root path only (Go 1.22+ ServeMux
 	// syntax). The previous `GET /` was a wildcard catch-all that
 	// conflicted with sub-routes registered through other paths — most
@@ -236,7 +254,9 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/github/webhook", server.handleGitHubWebhook)
 	mux.HandleFunc("GET /readyz", server.handleReadyz)
 	mux.HandleFunc("POST /api/v1/auth/passwords", server.handleAuthPasswordUpsert)
-	mux.HandleFunc("POST /api/v1/auth/passwords/setup-tokens", server.handleIssueSetupToken)
+	// guard: admin session required; if password is expired the admin is locked
+	// out too and must fix credentials before issuing setup tokens.
+	mux.HandleFunc("POST /api/v1/auth/passwords/setup-tokens", guard(server.handleIssueSetupToken))
 	mux.HandleFunc("POST /api/v1/auth/passwords/setup", server.handleSetupCommit)
 	mux.HandleFunc("POST /api/v1/auth/passwords/change", server.handlePasswordChange)
 	mux.HandleFunc("POST /api/v1/auth/passwords/forgot", server.handlePasswordForgot)
@@ -261,7 +281,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/auth/mfa/factors/totp/finish", server.handleMFATOTPFinish)
 	mux.HandleFunc("POST /api/v1/auth/mfa/factors/webauthn/begin", server.handleMFAWebAuthnBegin)
 	mux.HandleFunc("POST /api/v1/auth/mfa/factors/webauthn/finish", server.handleMFAWebAuthnFinish)
-	mux.HandleFunc("POST /api/v1/auth/mfa/recovery-codes", server.handleMFAGenerateRecoveryCodes)
+	mux.HandleFunc("POST /api/v1/auth/mfa/recovery-codes", guard(server.handleMFAGenerateRecoveryCodes))
 	// SCIM clients admin (rotate bearer tokens).
 	mux.HandleFunc("POST /api/v1/auth/scim/clients", server.handleSCIMClientCreate)
 	mux.HandleFunc("GET /api/v1/auth/scim/clients", server.handleSCIMClientList)
@@ -281,8 +301,8 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	scimMux := http.NewServeMux()
 	scim.NewServer(server.db).RegisterRoutes(scimMux)
 	mux.Handle("/scim/v2/", scim.BearerAuth(server.db)(scim.ReadOnlyGuard()(scimMux)))
-	mux.HandleFunc("POST /api/v1/invites", server.handleInviteCreate)
-	mux.HandleFunc("GET /api/v1/invites", server.handleInviteList)
+	mux.HandleFunc("POST /api/v1/invites", guard(server.handleInviteCreate))
+	mux.HandleFunc("GET /api/v1/invites", guard(server.handleInviteList))
 	mux.HandleFunc("GET /api/v1/invites/validate", server.handleInviteValidate)
 	mux.HandleFunc("GET /api/v1/integration-catalog", server.handleIntegrationCatalogList)
 	mux.HandleFunc("GET /api/v1/integration-catalog/{domain}/{section}/{entry}", server.handleIntegrationCatalogEntry)
@@ -386,9 +406,9 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/products/deploy-all", requireDeployToken(server.handleDeployAll))
 	mux.HandleFunc("POST /api/v1/bootstrap", requireDeployToken(server.handleBootstrap))
 	mux.HandleFunc("GET /api/v1/tenant/brand", server.handleTenantBrandGet)
-	mux.HandleFunc("PATCH /api/v1/tenant/brand", server.handleTenantBrandPatch)
-	mux.HandleFunc("GET /api/v1/me/preferences", server.handleUserPreferencesGet)
-	mux.HandleFunc("PATCH /api/v1/me/preferences", server.handleUserPreferencesPatch)
+	mux.HandleFunc("PATCH /api/v1/tenant/brand", guard(server.handleTenantBrandPatch))
+	mux.HandleFunc("GET /api/v1/me/preferences", guard(server.handleUserPreferencesGet))
+	mux.HandleFunc("PATCH /api/v1/me/preferences", guard(server.handleUserPreferencesPatch))
 	mux.HandleFunc("GET /api/v1/console/integration-catalog", server.handleIntegrationCatalogList)
 	mux.HandleFunc("GET /api/v1/console/integration-catalog/{domain}/{section}/{entry}", server.handleIntegrationCatalogEntry)
 	mux.HandleFunc("GET /api/v1/console/catalog-discovery", server.handleCatalogDiscovery)
