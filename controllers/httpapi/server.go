@@ -236,6 +236,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/github/webhook", server.handleGitHubWebhook)
 	mux.HandleFunc("GET /readyz", server.handleReadyz)
 	mux.HandleFunc("POST /api/v1/auth/passwords", server.handleAuthPasswordUpsert)
+	mux.HandleFunc("POST /api/v1/auth/passwords/setup-tokens", server.handleIssueSetupToken)
 	mux.HandleFunc("POST /api/v1/auth/login", server.handleAuthLogin)
 	mux.HandleFunc("POST /api/v1/auth/third-party/login", server.handleAuthThirdPartyLogin)
 	mux.HandleFunc("GET /api/v1/auth/third-party/start/{provider}", server.handleAuthThirdPartyStart)
