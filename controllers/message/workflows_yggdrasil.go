@@ -469,19 +469,44 @@ func observedShowsStatusDrift(provider string, observed map[string]any, collab m
 // into the event stream so the alert-on-status-drift event-triggered workflow
 // can react. Best-effort: failures are swallowed (the reconcile itself is the
 // canonical store; the event is just a notification path).
+// concurrentDriftingProvidersForCollaborator counts how many distinct
+// providers currently report drift for the given collaborator (rows in
+// collaborator_provider_state with last_drift_detected_at NOT NULL).
+// Best-effort: a query failure returns 0 so the caller keeps emitting the
+// event without the count rather than swallowing the whole drift signal.
+func concurrentDriftingProvidersForCollaborator(ctx context.Context, db *sql.DB, collaboratorID string) int {
+	const q = `
+		SELECT COUNT(DISTINCT provider)
+		FROM public.collaborator_provider_state
+		WHERE collaborator_id = $1
+		  AND last_drift_detected_at IS NOT NULL`
+	var n int
+	if err := db.QueryRowContext(ctx, q, collaboratorID).Scan(&n); err != nil {
+		return 0
+	}
+	return n
+}
+
 func emitStatusDriftEvent(ctx context.Context, db *sql.DB, collab model.Collaborator, provider, signal string, observed map[string]any) {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return
 	}
 	defer tx.Rollback()
+	concurrentCount := concurrentDriftingProvidersForCollaborator(ctx, db, collab.ID.String())
+	multiProviderDrift := "false"
+	if concurrentCount >= 2 {
+		multiProviderDrift = "true"
+	}
 	payload := map[string]any{
-		"collaborator_id":    collab.ID.String(),
-		"collaborator_slug":  collab.Slug,
-		"collaborator_email": collab.PrimaryEmail,
-		"yggdrasil_status":   collab.Status,
-		"provider":           provider,
-		"provider_signal":    signal,
+		"collaborator_id":               collab.ID.String(),
+		"collaborator_slug":             collab.Slug,
+		"collaborator_email":            collab.PrimaryEmail,
+		"yggdrasil_status":              collab.Status,
+		"provider":                      provider,
+		"provider_signal":               signal,
+		"concurrent_drifting_providers": concurrentCount,
+		"multi_provider_drift":          multiProviderDrift,
 	}
 	if _, err := repository.EmitEvent(ctx, tx, model.EmitEventRequest{
 		Type:          "collaborator.status.drift_detected",
