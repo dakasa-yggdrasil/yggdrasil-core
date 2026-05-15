@@ -240,6 +240,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/auth/passwords/setup", server.handleSetupCommit)
 	mux.HandleFunc("POST /api/v1/auth/passwords/change", server.handlePasswordChange)
 	mux.HandleFunc("POST /api/v1/auth/passwords/forgot", server.handlePasswordForgot)
+	mux.HandleFunc("POST /api/v1/auth/passwords/reset", server.handlePasswordReset)
 	mux.HandleFunc("POST /api/v1/auth/login", server.handleAuthLogin)
 	mux.HandleFunc("POST /api/v1/auth/third-party/login", server.handleAuthThirdPartyLogin)
 	mux.HandleFunc("GET /api/v1/auth/third-party/start/{provider}", server.handleAuthThirdPartyStart)

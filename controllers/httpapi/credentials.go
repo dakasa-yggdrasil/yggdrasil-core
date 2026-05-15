@@ -632,6 +632,145 @@ func (s *Server) handlePasswordForgot(w http.ResponseWriter, r *http.Request) {
 	respondAccepted()
 }
 
+// handlePasswordReset — POST /api/v1/auth/passwords/reset
+//
+// Public endpoint that completes a password-reset flow initiated by handlePasswordForgot.
+// Steps:
+//  1. Decode body → token, new_password, MFA factor.
+//  2. Consume the reset token (atomic, single-use).
+//  3. Enforce MFA enrolled; verify supplied factor (totp_code or recovery_code).
+//  4. Load collaborator profile for password-policy user tokens.
+//  5. Validate new password strength.
+//  6. In a transaction: update password hash, revoke ALL active sessions (total
+//     revoke — no current session to preserve), emit audit event.
+//  7. Outside Tx: open a brand-new auth session.
+//  8. Return {session, token, collaborator}.
+func (s *Server) handlePasswordReset(w http.ResponseWriter, r *http.Request) {
+	var req model.PasswordResetRequest
+	if err := decodeJSON(r, &req); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
+	// Step 2: consume the reset token atomically.
+	tokenHash := password.HashToken(req.Token)
+	out, err := repository.ConsumeCredentialToken(r.Context(), s.db, repository.ConsumeCredentialTokenInput{
+		TokenHash: tokenHash, Purpose: model.CredentialTokenPurposeReset,
+	})
+	if err != nil {
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"code": "reset_token_invalid"})
+		return
+	}
+	collabID, _ := uuid.Parse(out.CollaboratorID)
+
+	// Step 3: MFA gate.
+	if err := mfa.EnforceMFAEnrolled(r.Context(), s.db, collabID); err != nil {
+		writeJSON(w, http.StatusPreconditionRequired, map[string]any{"code": "mfa_not_enrolled"})
+		return
+	}
+	if err := s.verifyInlineMFAFactor(r, collabID, req.TOTPCode, req.RecoveryCode, req.WebAuthnAssertion); err != nil {
+		if errors.Is(err, errWebAuthnNotImplemented) {
+			writeJSON(w, http.StatusNotImplemented, map[string]any{"code": "webauthn_not_implemented"})
+			return
+		}
+		writeJSON(w, http.StatusUnauthorized, map[string]any{"code": "invalid_mfa"})
+		return
+	}
+
+	// Step 4: load collaborator for password-policy user tokens.
+	collab, err := repository.GetCollaborator(r.Context(), s.db, collabID.String())
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
+	// Step 5: validate new password strength.
+	commonPasswords, _ := commonPasswordsCached()
+	if err := password.ValidateStrength(req.NewPassword, envIntCred("AUTH_PASSWORD_MIN_LENGTH", 12), commonPasswords, []string{collab.PrimaryEmail, collab.Slug, collab.DisplayName}); err != nil {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"code": "password_too_weak", "reason": err.Error()})
+		return
+	}
+
+	// Step 6: hash new password.
+	scheme, hash, err := password.Hash(req.NewPassword)
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	rotation := envDurationCred("AUTH_PASSWORD_ROTATION_PERIOD", 90*24*time.Hour)
+
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	if _, err := tx.ExecContext(r.Context(), `
+		UPDATE auth_identities
+		SET password_hash        = $2,
+		    password_scheme      = $3,
+		    password_updated_at  = NOW(),
+		    password_expires_at  = NOW() + $4::interval,
+		    password_must_change = false
+		WHERE collaborator_id = $1
+	`, collabID, hash, string(scheme), rotation.String()); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
+	// Revoke ALL active sessions — total revoke (user has no current session during recovery).
+	if _, err := tx.ExecContext(r.Context(), `
+		UPDATE auth_sessions
+		SET status     = 'revoked',
+		    revoked_at = NOW()
+		WHERE collaborator_id = $1
+		  AND revoked_at IS NULL
+	`, collabID); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
+	_, _ = repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
+		Type:          repository.EventTypeCredentialPasswordChanged,
+		SchemaVersion: "v1",
+		AggregateType: "collaborator",
+		AggregateID:   collabID.String(),
+		Actor:         &model.EventActor{Type: "collaborator", ID: collabID.String()},
+		Payload: map[string]any{
+			"collaborator_id": collabID.String(),
+			"source":          "reset",
+			"ip":              r.RemoteAddr,
+		},
+	})
+
+	if err := tx.Commit(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	committed = true
+
+	// Step 7: open new session OUTSIDE the committed Tx (same pattern as handleSetupCommit).
+	sessionMeta := mergeAuthMetadata(nil, r)
+	session, sessionToken, err := repository.CreateAuthSession(r.Context(), s.db, collabID, sessionMeta, authSessionTTL())
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
+	writeAuthCookie(w, sessionToken, session.ExpiresAt)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"session":      session,
+		"token":        sessionToken,
+		"collaborator": collab,
+	})
+}
+
 // sentinel errors used by verifyInlineMFAFactor.
 var (
 	errMFANotSupplied         = errors.New("no mfa factor supplied")
