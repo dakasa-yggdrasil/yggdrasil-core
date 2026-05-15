@@ -559,9 +559,82 @@ func (s *Server) handlePasswordChange(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// handlePasswordForgot — POST /api/v1/auth/passwords/forgot
+//
+// Public, anti-enumeration endpoint for initiating a password reset. ALWAYS
+// responds 202 with the same body regardless of whether the identifier exists,
+// a rate-limit was hit, the body was malformed, or any internal error occurred.
+// This prevents account enumeration.
+//
+// Flow:
+//  1. Decode body → identifier (email or slug).
+//  2. LookupCollaboratorByIdentifier — returns (nil, nil) on no match.
+//  3. If matched and rate-limit free: GenerateToken + IssueCredentialToken
+//     (purpose=reset, TTL=24h, InvalidatePrior=true) + emit best-effort event.
+//  4. Return 202 unconditionally.
+func (s *Server) handlePasswordForgot(w http.ResponseWriter, r *http.Request) {
+	const acceptedBody = `{"status":"if_account_exists_token_was_generated"}`
+	respondAccepted := func() {
+		w.Header().Set("Content-Type", "application/json")
+		w.WriteHeader(http.StatusAccepted)
+		_, _ = w.Write([]byte(acceptedBody))
+	}
+
+	var req model.PasswordForgotRequest
+	if err := decodeJSON(r, &req); err != nil {
+		respondAccepted()
+		return
+	}
+	identifier := strings.TrimSpace(req.Identifier)
+	if identifier == "" {
+		respondAccepted()
+		return
+	}
+
+	collab, err := repository.LookupCollaboratorByIdentifier(r.Context(), s.db, identifier)
+	if err != nil || collab == nil {
+		respondAccepted()
+		return
+	}
+
+	rlKey := "forgot:" + strings.ToLower(identifier)
+	maxPerHour := envIntCred("AUTH_PASSWORD_FORGOT_RATE_LIMIT_PER_HOUR", 3)
+	if err := enforceForgotRateLimit(r.Context(), s.db, rlKey, maxPerHour, time.Hour); err != nil {
+		respondAccepted()
+		return
+	}
+
+	gen, err := password.GenerateToken()
+	if err != nil {
+		respondAccepted()
+		return
+	}
+	ttl := envDurationCred("AUTH_PASSWORD_RESET_TOKEN_TTL", 24*time.Hour)
+	issued, err := repository.IssueCredentialToken(r.Context(), s.db, repository.IssueCredentialTokenInput{
+		CollaboratorID:  collab.ID,
+		Purpose:         model.CredentialTokenPurposeReset,
+		TokenHash:       gen.Hash,
+		ExpiresAt:       time.Now().Add(ttl),
+		InvalidatePrior: true,
+		CreatedBy:       nil,
+		Metadata:        map[string]any{"rl_key": rlKey},
+	})
+	if err == nil {
+		_ = emitCredentialEvent(r.Context(), s.db, repository.EventTypeCredentialResetTokenIssued, "collaborator", collab.ID.String(), nil, map[string]any{
+			"token_id":        issued.ID,
+			"collaborator_id": collab.ID.String(),
+			"expires_at":      issued.ExpiresAt,
+			"source":          "self_service",
+			"purpose":         "reset",
+		})
+	}
+
+	respondAccepted()
+}
+
 // sentinel errors used by verifyInlineMFAFactor.
 var (
-	errMFANotSupplied        = errors.New("no mfa factor supplied")
+	errMFANotSupplied         = errors.New("no mfa factor supplied")
 	errWebAuthnNotImplemented = errors.New("webauthn inline assertion not yet implemented (Phase 2)")
 )
 
