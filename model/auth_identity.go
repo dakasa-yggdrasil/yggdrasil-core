@@ -17,9 +17,15 @@ type AuthIdentity struct {
 	MFAEnrolledAt       *time.Time           `json:"mfa_enrolled_at,omitempty"`
 	LastLoginAt         *time.Time           `json:"last_login_at,omitempty"`
 	FailedAttempts      int                  `json:"failed_attempts"`
-	LockedUntil         *time.Time           `json:"locked_until,omitempty"`
-	CreatedAt           time.Time            `json:"created_at"`
-	UpdatedAt           time.Time            `json:"updated_at"`
+	LockedUntil           *time.Time           `json:"locked_until,omitempty"`
+	PasswordHash          *string              `json:"-"`
+	PasswordScheme        *string              `json:"-"`
+	PasswordUpdatedAt     *time.Time           `json:"password_updated_at,omitempty"`
+	PasswordExpiresAt     *time.Time           `json:"password_expires_at,omitempty"`
+	PasswordMustChange    bool                 `json:"password_must_change"`
+	PasswordMetadata      map[string]any       `json:"password_metadata,omitempty"`
+	CreatedAt             time.Time            `json:"created_at"`
+	UpdatedAt             time.Time            `json:"updated_at"`
 }
 
 // WebAuthnCredential is one passkey/security-key registration.
