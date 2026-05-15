@@ -45,3 +45,6 @@ coverage.html
 
 # Task / local dev
 .task/
+
+# Git worktrees (subagent-driven development)
+.worktrees/
