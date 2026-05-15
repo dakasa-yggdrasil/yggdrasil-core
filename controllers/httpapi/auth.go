@@ -16,6 +16,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/coreauth"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	"github.com/google/uuid"
 )
 
 type authLoginResponse struct {
@@ -230,7 +231,13 @@ func (s *Server) handleAuthThirdPartyStart(w http.ResponseWriter, r *http.Reques
 	}
 
 	redirectTo := queryString(r, "redirect_to")
-	state, err := coreauth.NewThirdPartyState(provider.Name, normalizePostAuthRedirect(redirectTo))
+	// When the OIDC OP signals "login required" it calls our LoginURL with
+	// auth_request_id=<uuid>. Preserve it on the state cookie so the
+	// callback can mark the auth_request as Done() and resume the OP flow
+	// by redirecting to <issuer>/authorize/callback?id=<uuid>. Empty when
+	// the third-party login was initiated outside an OIDC flow.
+	authRequestID := queryString(r, "auth_request_id")
+	state, err := coreauth.NewThirdPartyState(provider.Name, normalizePostAuthRedirect(redirectTo), authRequestID)
 	if err != nil {
 		writeMappedError(w, err)
 		return
@@ -348,6 +355,29 @@ func (s *Server) handleAuthThirdPartyCallback(w http.ResponseWriter, r *http.Req
 
 	clearThirdPartyStateCookie(w)
 	writeAuthCookie(w, token, session.ExpiresAt)
+
+	// If this third-party login was kicked off by the OIDC OP's "login
+	// required" signal, finish the OIDC flow instead of bouncing the user
+	// to state.RedirectTo (which would land them on the Yggdrasil home
+	// page with no authorization code for the original OIDC client).
+	// Two steps:
+	//   1. Bind collaborator_id on the auth_request so authRequestView.Done()
+	//      flips to true (storage.go:248).
+	//   2. Redirect to <issuer>/authorize/callback?id=<auth_request_id> —
+	//      the path zitadel/oidc OP serves for AuthCallbackURL. The OP
+	//      then issues the authorization code and 302s back to the
+	//      original client's redirect_uri.
+	if state.AuthRequestID != "" {
+		if requestUUID, parseErr := uuid.Parse(state.AuthRequestID); parseErr == nil {
+			if bindErr := repository.BindOIDCAuthRequestCollaborator(r.Context(), s.db, requestUUID, collaborator.ID); bindErr != nil {
+				writeMappedError(w, bindErr)
+				return
+			}
+			callback := strings.TrimRight(s.oidcIssuerURL, "/") + "/authorize/callback?id=" + url.QueryEscape(state.AuthRequestID)
+			http.Redirect(w, r, callback, http.StatusFound)
+			return
+		}
+	}
 
 	redirectTo := normalizePostAuthRedirect(state.RedirectTo)
 	if queryBool(r, "response_as_json") {

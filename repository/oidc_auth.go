@@ -99,6 +99,24 @@ func GetOIDCAuthRequestByCode(ctx context.Context, db *sql.DB, code string) (mod
 	return ar, nil
 }
 
+// BindOIDCAuthRequestCollaborator stamps the collaborator_id on the
+// auth_request after the user finishes the third-party login. This is what
+// flips Done() on the request from false to true, so the OIDC OP knows the
+// user is authenticated and can resume the /authorize flow with a code.
+func BindOIDCAuthRequestCollaborator(ctx context.Context, db *sql.DB, id uuid.UUID, collaboratorID uuid.UUID) error {
+	res, err := db.ExecContext(ctx,
+		`UPDATE oidc_auth_requests SET collaborator_id=$1 WHERE id=$2 AND consumed_at IS NULL`,
+		collaboratorID, id)
+	if err != nil {
+		return fmt.Errorf("bind auth request collaborator: %w", err)
+	}
+	rows, _ := res.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("auth_request %s not found or already consumed", id)
+	}
+	return nil
+}
+
 func MarkOIDCAuthRequestConsumed(ctx context.Context, db *sql.DB, id uuid.UUID) error {
 	_, err := db.ExecContext(ctx, `UPDATE oidc_auth_requests SET consumed_at=NOW() WHERE id=$1 AND consumed_at IS NULL`, id)
 	if err != nil {

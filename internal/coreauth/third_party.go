@@ -19,10 +19,20 @@ import (
 const thirdPartyStateTokenTTL = 10 * time.Minute
 
 type ThirdPartyState struct {
-	Provider   string    `json:"provider"`
-	Nonce      string    `json:"nonce"`
-	RedirectTo string    `json:"redirect_to,omitempty"`
-	IssuedAt   time.Time `json:"issued_at"`
+	Provider   string `json:"provider"`
+	Nonce      string `json:"nonce"`
+	RedirectTo string `json:"redirect_to,omitempty"`
+	// AuthRequestID carries the OIDC OP auth_request UUID across the
+	// third-party login round-trip. The OP issues a LoginURL with this
+	// ID when it needs the user to authenticate; after the third-party
+	// callback completes, the caller uses it to mark the auth_request
+	// as Done and redirect the user back into the OP's
+	// /authorize/callback?id=<auth_request_id> path so the OIDC flow
+	// resumes with an authorization code for the original client.
+	// Empty when the third-party login was initiated outside an OIDC
+	// flow (e.g. console direct login).
+	AuthRequestID string    `json:"auth_request_id,omitempty"`
+	IssuedAt      time.Time `json:"issued_at"`
 }
 
 type OAuthDiscoveryDocument struct {
@@ -59,16 +69,17 @@ type OAuthProfile struct {
 	Claims      map[string]any
 }
 
-func NewThirdPartyState(provider, redirectTo string) (ThirdPartyState, error) {
+func NewThirdPartyState(provider, redirectTo, authRequestID string) (ThirdPartyState, error) {
 	nonceBytes := make([]byte, 24)
 	if _, err := rand.Read(nonceBytes); err != nil {
 		return ThirdPartyState{}, fmt.Errorf("generate third-party state nonce: %w", err)
 	}
 	return ThirdPartyState{
-		Provider:   strings.ToLower(strings.TrimSpace(provider)),
-		Nonce:      base64.RawURLEncoding.EncodeToString(nonceBytes),
-		RedirectTo: strings.TrimSpace(redirectTo),
-		IssuedAt:   time.Now().UTC(),
+		Provider:      strings.ToLower(strings.TrimSpace(provider)),
+		Nonce:         base64.RawURLEncoding.EncodeToString(nonceBytes),
+		RedirectTo:    strings.TrimSpace(redirectTo),
+		AuthRequestID: strings.TrimSpace(authRequestID),
+		IssuedAt:      time.Now().UTC(),
 	}, nil
 }
 
