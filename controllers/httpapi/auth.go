@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/password"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/coreauth"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -64,7 +65,23 @@ func (s *Server) handleAuthPasswordUpsert(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	credential, collaborator, err := repository.UpsertPasswordCredential(r.Context(), s.db, req)
+	minLen := envIntCred("AUTH_PASSWORD_MIN_LENGTH", 12)
+	commonPasswords, _ := commonPasswordsCached()
+	if err := password.ValidateStrength(req.Password, minLen, commonPasswords, nil); err != nil {
+		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+			"code":   "password_too_weak",
+			"reason": err.Error(),
+		})
+		return
+	}
+
+	scheme, hash, err := password.Hash(req.Password)
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
+	credential, collaborator, err := repository.UpsertPasswordCredential(r.Context(), s.db, req, string(scheme), hash)
 	if err != nil {
 		writeMappedError(w, err)
 		return

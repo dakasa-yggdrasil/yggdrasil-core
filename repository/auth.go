@@ -38,18 +38,18 @@ var (
 	ErrAuthSessionExpired         = errors.New("auth session expired")
 )
 
-// UpsertPasswordCredential creates or updates one local password credential for an existing collaborator.
+// UpsertPasswordCredential creates or updates one local password credential for
+// an existing collaborator. The caller is responsible for hashing the password
+// and validating its strength before calling this function; passwordHash and
+// passwordScheme must already be in the encoded format expected by the password
+// package (e.g. argon2id PHC string, or pbkdf2_sha256$... legacy format).
 func UpsertPasswordCredential(
 	ctx context.Context,
 	db *sql.DB,
 	req model.UpsertPasswordCredentialRequest,
+	passwordScheme, passwordHash string,
 ) (model.PasswordCredential, model.Collaborator, error) {
 	collaborator, err := resolveCollaboratorForLogin(ctx, db, req.CollaboratorID)
-	if err != nil {
-		return model.PasswordCredential{}, model.Collaborator{}, err
-	}
-
-	passwordHash, err := coreauth.HashPassword(req.Password)
 	if err != nil {
 		return model.PasswordCredential{}, model.Collaborator{}, err
 	}
@@ -78,7 +78,7 @@ func UpsertPasswordCredential(
 				updated_at
 		`,
 		collaborator.ID,
-		"pbkdf2_sha256",
+		passwordScheme,
 		passwordHash,
 		metadata,
 	)

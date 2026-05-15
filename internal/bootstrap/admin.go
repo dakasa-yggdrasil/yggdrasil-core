@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"strings"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/password"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 )
@@ -53,6 +54,10 @@ func ensureFirstAdmin(ctx context.Context, db *sql.DB, cfg Config) (bool, model.
 		return false, model.Collaborator{}, fmt.Errorf("create admin collaborator: %w", err)
 	}
 
+	scheme, hash, err := password.Hash(cfg.AdminPassword)
+	if err != nil {
+		return false, model.Collaborator{}, fmt.Errorf("hash admin password: %w", err)
+	}
 	if _, _, err := repository.UpsertPasswordCredential(ctx, db, model.UpsertPasswordCredentialRequest{
 		CollaboratorID: collab.ID.String(),
 		Password:       cfg.AdminPassword,
@@ -60,7 +65,7 @@ func ensureFirstAdmin(ctx context.Context, db *sql.DB, cfg Config) (bool, model.
 		Metadata: map[string]any{
 			"source": "bootstrap.first_run",
 		},
-	}); err != nil {
+	}, string(scheme), hash); err != nil {
 		return false, model.Collaborator{}, fmt.Errorf("set admin password: %w", err)
 	}
 

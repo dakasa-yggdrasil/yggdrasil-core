@@ -28,8 +28,8 @@ func newAuthPasswordsCmd() *cobra.Command {
 //	yggdrasil auth passwords setup-token --id <uuid>
 //
 // It issues a single-use password-setup URL for a collaborator who has not
-// yet configured a password. The caller must hold a valid admin session JWT
-// (YGGDRASIL_TOKEN) on an instance reachable at YGGDRASIL_URL.
+// yet configured a password. The caller must supply the static admin token via
+// YGGDRASIL_AUTH_ADMIN_TOKEN on an instance reachable at YGGDRASIL_URL.
 func newAuthPasswordsSetupTokenCmd() *cobra.Command {
 	var (
 		collaboratorSlug string
@@ -43,8 +43,8 @@ func newAuthPasswordsSetupTokenCmd() *cobra.Command {
 		Long: `Issue a single-use password-setup URL for a collaborator who has not yet
 configured a password.
 
-Requires a valid admin session JWT in YGGDRASIL_TOKEN and the API base URL in
-YGGDRASIL_URL.
+Requires the static admin token in YGGDRASIL_AUTH_ADMIN_TOKEN and the API
+base URL in YGGDRASIL_URL.
 
 When --collaborator (slug) is provided, the collaborator's UUID is resolved via
 GET /api/v1/collaborators/{slug} before calling the setup-tokens endpoint.
@@ -90,7 +90,7 @@ When --id (UUID) is provided, resolution is skipped.`,
 				return fmt.Errorf("build request: %w", err)
 			}
 			req.Header.Set("Content-Type", "application/json")
-			authenticateRequest(req)
+			authenticateAdminRequest(req)
 
 			resp, err := http.DefaultClient.Do(req)
 			if err != nil {
@@ -172,7 +172,7 @@ func yggdrasilURL(path string) string {
 	return base + path
 }
 
-// authenticateRequest injects the admin session JWT from YGGDRASIL_TOKEN into
+// authenticateRequest injects the session JWT from YGGDRASIL_TOKEN into
 // the Authorization header. It mirrors the operator client pattern:
 //
 //	req.Header.Set("Authorization", "Bearer "+token)
@@ -182,5 +182,16 @@ func yggdrasilURL(path string) string {
 func authenticateRequest(req *http.Request) {
 	if token := strings.TrimSpace(os.Getenv("YGGDRASIL_TOKEN")); token != "" {
 		req.Header.Set("Authorization", "Bearer "+token)
+	}
+}
+
+// authenticateAdminRequest injects the static admin token from
+// YGGDRASIL_AUTH_ADMIN_TOKEN into the X-Yggdrasil-Auth-Admin-Token header,
+// which is the header checked by authorizeAuthAdminRequest on the server.
+// If YGGDRASIL_AUTH_ADMIN_TOKEN is unset, the header is omitted and the
+// server will return 401.
+func authenticateAdminRequest(req *http.Request) {
+	if token := strings.TrimSpace(os.Getenv("YGGDRASIL_AUTH_ADMIN_TOKEN")); token != "" {
+		req.Header.Set("X-Yggdrasil-Auth-Admin-Token", token)
 	}
 }

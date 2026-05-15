@@ -23,31 +23,14 @@ import (
 // handleIssueSetupToken — POST /api/v1/auth/passwords/setup-tokens
 //
 // Admin-only endpoint that issues a single-use setup URL for a collaborator who
-// has not yet configured a password. The caller must be an authenticated session;
-// a fine-grained permission check (e.g. iam.collaborators.invite) is NOT yet
-// enforced — see CONCERN below.
-//
-// CONCERN: No permission check beyond valid session is in place. The plan calls
-// for requirePermission("iam.collaborators.invite") but the canonical permission
-// gate API has not been confirmed in this codebase. Gate by collaborator role or
-// permission before merging to production.
+// has not yet configured a password. The caller must supply the static admin
+// token via X-Yggdrasil-Auth-Admin-Token header or as a Bearer token matching
+// YGGDRASIL_AUTH_ADMIN_TOKEN — the same gate used by all other admin endpoints.
 func (s *Server) handleIssueSetupToken(w http.ResponseWriter, r *http.Request) {
-	tokenStr, ok := extractAuthToken(r)
-	if !ok {
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"code": "unauthenticated"})
+	if err := authorizeAuthAdminRequest(r); err != nil {
+		writeMappedError(w, err)
 		return
 	}
-	_, admin, err := repository.ResolveAuthSession(r.Context(), s.db, tokenStr)
-	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"code": "unauthenticated"})
-		return
-	}
-
-	// TODO(permission): enforce iam.collaborators.invite permission check here.
-	// Until the canonical requirePermission helper is identified and wired, any
-	// authenticated session can call this endpoint. Track as security concern
-	// before GA.
-	_ = admin // admin identity captured for audit; used in IssueCredentialToken.CreatedBy below
 
 	var req model.IssueSetupTokenRequest
 	if err := decodeJSON(r, &req); err != nil {
@@ -73,7 +56,7 @@ func (s *Server) handleIssueSetupToken(w http.ResponseWriter, r *http.Request) {
 		Purpose:         model.CredentialTokenPurposeSetup,
 		TokenHash:       gen.Hash,
 		ExpiresAt:       time.Now().Add(ttl),
-		CreatedBy:       &admin.ID,
+		CreatedBy:       nil,
 		InvalidatePrior: true,
 	})
 	if err != nil {
@@ -81,11 +64,10 @@ func (s *Server) handleIssueSetupToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := emitCredentialEvent(r.Context(), s.db, repository.EventTypeCredentialSetupTokenIssued, "collaborator", collabID.String(), &admin.ID, map[string]any{
+	if err := emitCredentialEvent(r.Context(), s.db, repository.EventTypeCredentialSetupTokenIssued, "collaborator", collabID.String(), nil, map[string]any{
 		"token_id":        issued.ID,
 		"collaborator_id": collabID.String(),
 		"expires_at":      issued.ExpiresAt,
-		"issued_by_id":    admin.ID.String(),
 		"purpose":         "setup",
 	}); err != nil {
 		// best-effort emit; token already persisted — do not fail the response
