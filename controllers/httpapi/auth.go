@@ -20,9 +20,13 @@ import (
 )
 
 type authLoginResponse struct {
-	Collaborator model.Collaborator `json:"collaborator"`
-	Session      model.AuthSession  `json:"session"`
-	Token        string             `json:"token"`
+	Collaborator           model.Collaborator `json:"collaborator"`
+	Session                model.AuthSession  `json:"session"`
+	Token                  string             `json:"token"`
+	PasswordChangeRequired bool               `json:"password_change_required"`
+	PasswordChangeURL      string             `json:"password_change_url,omitempty"`
+	MFAEnrollmentRequired  bool               `json:"mfa_enrollment_required"`
+	MFAEnrollURL           string             `json:"mfa_enroll_url,omitempty"`
 }
 
 type authMFARequiredResponse struct {
@@ -172,12 +176,34 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	passState, passErr := repository.GetPasswordCredentialState(r.Context(), s.db, collaborator.ID)
+	needsPwdChange := false
+	if passErr == nil {
+		needsPwdChange = passState.PasswordMustChange ||
+			(passState.PasswordExpiresAt != nil && passState.PasswordExpiresAt.Before(time.Now()))
+	}
+	// If ErrPasswordCredentialNotFound (SSO-only collaborator), treat as no
+	// password change required. Any other error is non-fatal — we still issue
+	// the session; the flags default to false.
+
+	needsMFA := identity.MFAEnrolledAt == nil
+
+	resp := authLoginResponse{
+		Collaborator:           collaborator,
+		Session:                session,
+		Token:                  token,
+		PasswordChangeRequired: needsPwdChange,
+		MFAEnrollmentRequired:  needsMFA,
+	}
+	if needsPwdChange {
+		resp.PasswordChangeURL = "/api/v1/auth/passwords/change"
+	}
+	if needsMFA {
+		resp.MFAEnrollURL = "/api/v1/auth/mfa/enroll"
+	}
+
 	writeAuthCookie(w, token, session.ExpiresAt)
-	writeJSON(w, http.StatusOK, authLoginResponse{
-		Collaborator: collaborator,
-		Session:      session,
-		Token:        token,
-	})
+	writeJSON(w, http.StatusOK, resp)
 }
 
 func authLoginFactors(identity model.AuthIdentity) []string {
