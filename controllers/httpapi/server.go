@@ -254,9 +254,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/github/webhook", server.handleGitHubWebhook)
 	mux.HandleFunc("GET /readyz", server.handleReadyz)
 	mux.HandleFunc("POST /api/v1/auth/passwords", server.handleAuthPasswordUpsert)
-	// guard: admin session required; if password is expired the admin is locked
-	// out too and must fix credentials before issuing setup tokens.
-	mux.HandleFunc("POST /api/v1/auth/passwords/setup-tokens", guard(server.handleIssueSetupToken))
+	// No guard: handler authorizes via YGGDRASIL_AUTH_ADMIN_TOKEN (static admin token),
+	// not session. Wrapping with the session-based guard would shadow that auth and
+	// reject every admin-token caller with 401 unauthenticated.
+	mux.HandleFunc("POST /api/v1/auth/passwords/setup-tokens", server.handleIssueSetupToken)
 	mux.HandleFunc("POST /api/v1/auth/passwords/setup", server.handleSetupCommit)
 	mux.HandleFunc("POST /api/v1/auth/passwords/change", server.handlePasswordChange)
 	mux.HandleFunc("POST /api/v1/auth/passwords/forgot", server.handlePasswordForgot)
