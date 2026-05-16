@@ -1,3 +1,28 @@
+// Package httpapi — emit helpers use an own-tx pattern by design.
+//
+// # Atomicity deviation (accepted, tracked)
+//
+// The spec for the lifecycle-reactor framework requires that state mutation and
+// event emission occur inside a single database transaction so that a crash
+// between the two operations cannot produce a collaborator/team whose lifecycle
+// event was never emitted.
+//
+// Achieving true same-tx atomicity would require plumbing a *sql.Tx through
+// every repository function (UpdateCollaborator, CreateTeam, DeleteTeam,
+// UpsertTeamMembership, GetCollaborator, resolveOptional*, …) — at least 54
+// call sites across the codebase — introducing substantial regression risk with
+// no net-new observable value in the current deployment topology.
+//
+// Safety net: every emit helper treats failures as non-fatal (logged as Warn).
+// A daily reconciliation cron (see internal/reconciler) cross-checks
+// collaborator/team state against event_log and re-emits any missing events,
+// providing an eventual-consistency guarantee. The same own-tx approach is
+// the pre-existing convention for credential lifecycle events in this codebase.
+//
+// If atomicity becomes a hard requirement (e.g., the reconciliation SLA is
+// tightened), the correct fix is to extract a sqlutil.Querier interface and
+// migrate all repository functions to accept it — that refactor is tracked
+// separately and must be done in isolation with full test coverage.
 package httpapi
 
 import (
