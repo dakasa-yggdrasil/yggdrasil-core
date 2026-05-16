@@ -1177,6 +1177,14 @@ func resolveIntegrationInstance(
 	return instanceManifest, instanceSpec, typeManifest, typeSpec, nil
 }
 
+// HydrateIntegrationInstanceSecrets resolves credentials_ref and any
+// secret://… refs in the spec's Credentials/Config maps. Public wrapper
+// over the package-private hydrateIntegrationInstanceSecrets so external
+// callers (e.g. webhook receiver) can use it.
+func HydrateIntegrationInstanceSecrets(ctx context.Context, db *sql.DB, spec *model.IntegrationInstanceManifestSpec) error {
+	return hydrateIntegrationInstanceSecrets(ctx, db, spec)
+}
+
 func hydrateIntegrationInstanceSecrets(ctx context.Context, db *sql.DB, spec *model.IntegrationInstanceManifestSpec) error {
 	if spec == nil || db == nil {
 		return nil

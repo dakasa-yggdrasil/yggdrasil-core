@@ -315,6 +315,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// Admin-only manual sync: operator triggers a live describe + apply for one integration_type.
 	// Auth: same YGGDRASIL_AUTH_ADMIN_TOKEN check used by POST /api/v1/auth/passwords.
 	mux.HandleFunc("POST /api/v1/integration-types/{id}/sync", server.handleIntegrationTypeSync(server.buildManifestSyncDeps()))
+	mux.HandleFunc("POST /api/v1/integrations/{instance_id}/webhook", server.handleIntegrationWebhook)
 
 	// Ops console — Phase 1 foundation
 	mux.HandleFunc("GET /api/v1/ops/surfaces", server.handleOpsSurfacesList)
