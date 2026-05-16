@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/team/created.json",
+  "title": "team.created v1",
+  "type": "object",
+  "required": ["id", "slug", "name"],
+  "properties": {
+    "id":              { "type": "string", "format": "uuid" },
+    "slug":            { "type": "string" },
+    "name":            { "type": "string" },
+    "type":            { "type": "string" },
+    "parent_team_id":  { "type": "string", "format": "uuid" }
+  },
+  "additionalProperties": false
+}

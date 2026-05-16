@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/team_membership/removed.json",
+  "title": "team_membership.removed v1",
+  "type": "object",
+  "required": ["collaborator_id", "team_id"],
+  "properties": {
+    "collaborator_id": { "type": "string", "format": "uuid" },
+    "team_id":         { "type": "string", "format": "uuid" }
+  },
+  "additionalProperties": false
+}

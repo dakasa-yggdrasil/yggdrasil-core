@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/team_membership/added.json",
+  "title": "team_membership.added v1",
+  "type": "object",
+  "required": ["collaborator_id", "team_id"],
+  "properties": {
+    "collaborator_id": { "type": "string", "format": "uuid" },
+    "team_id":         { "type": "string", "format": "uuid" },
+    "role":            { "type": "string" },
+    "source":          { "type": "string" }
+  },
+  "additionalProperties": false
+}

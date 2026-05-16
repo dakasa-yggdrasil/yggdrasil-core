@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/team/deleted.json",
+  "title": "team.deleted v1",
+  "type": "object",
+  "required": ["id", "slug"],
+  "properties": {
+    "id":   { "type": "string", "format": "uuid" },
+    "slug": { "type": "string" }
+  },
+  "additionalProperties": false
+}

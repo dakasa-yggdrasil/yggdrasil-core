@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/collaborator/role_changed.json",
+  "title": "collaborator.role_changed v1",
+  "type": "object",
+  "required": ["collaborator_id", "role_to"],
+  "properties": {
+    "collaborator_id": { "type": "string", "format": "uuid" },
+    "primary_email":   { "type": "string" },
+    "role_from":       { "type": "string" },
+    "role_to":         { "type": "string" }
+  },
+  "additionalProperties": false
+}

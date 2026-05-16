@@ -13,7 +13,7 @@ import (
 // FamilyEventsV1 identifies the events/v1 contract family.
 const FamilyEventsV1 = "events/v1"
 
-//go:embed events/v1/schema.json events/v1/manifest/*.json events/v1/product/*.json events/v1/workflow/*.json events/v1/authorization/*.json events/v1/buildproject/*.json events/v1/infra/*.json events/v1/collaborator/*.json events/v1/credential/*.json
+//go:embed events/v1/schema.json events/v1/manifest/*.json events/v1/product/*.json events/v1/workflow/*.json events/v1/authorization/*.json events/v1/buildproject/*.json events/v1/infra/*.json events/v1/collaborator/*.json events/v1/credential/*.json events/v1/team/*.json events/v1/team_membership/*.json
 var eventSchemaFS embed.FS
 
 var (
@@ -76,6 +76,18 @@ func eventTypeToSchemaPath(eventType string, schemaVersion string) string {
 		"credential.password_changed":           "events/v1/credential/password_changed.json",
 		"credential.reset_token_issued":         "events/v1/credential/reset_token_issued.json",
 		"credential.password_rotation_required": "events/v1/credential/password_rotation_required.json",
+		// collaborator lifecycle events
+		"collaborator.absence_started": "events/v1/collaborator/absence_started.json",
+		"collaborator.absence_ended":   "events/v1/collaborator/absence_ended.json",
+		"collaborator.role_changed":    "events/v1/collaborator/role_changed.json",
+		"collaborator.re_onboarded":    "events/v1/collaborator/re_onboarded.json",
+		// team events
+		"team.created": "events/v1/team/created.json",
+		"team.updated": "events/v1/team/updated.json",
+		"team.deleted": "events/v1/team/deleted.json",
+		// team membership events
+		"team_membership.added":   "events/v1/team_membership/added.json",
+		"team_membership.removed": "events/v1/team_membership/removed.json",
 	}
 	return mapping[eventType]
 }

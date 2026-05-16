@@ -1,0 +1,12 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/collaborator/absence_ended.json",
+  "title": "collaborator.absence_ended v1",
+  "type": "object",
+  "required": ["collaborator_id"],
+  "properties": {
+    "collaborator_id": { "type": "string", "format": "uuid" },
+    "primary_email":   { "type": "string" }
+  },
+  "additionalProperties": false
+}

@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/team/updated.json",
+  "title": "team.updated v1",
+  "type": "object",
+  "required": ["id", "slug", "changed_fields"],
+  "properties": {
+    "id":              { "type": "string", "format": "uuid" },
+    "slug":            { "type": "string" },
+    "changed_fields":  { "type": "object" }
+  },
+  "additionalProperties": false
+}

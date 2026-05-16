@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/collaborator/re_onboarded.json",
+  "title": "collaborator.re_onboarded v1",
+  "type": "object",
+  "required": ["collaborator_id"],
+  "properties": {
+    "collaborator_id":         { "type": "string", "format": "uuid" },
+    "primary_email":           { "type": "string" },
+    "previous_offboarded_at":  { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}
