@@ -295,7 +295,6 @@ func List(ctx context.Context, db *sql.DB, f ListFilters) ([]Identity, error) {
 	if f.Offset > 0 {
 		q += fmt.Sprintf(" OFFSET $%d", idx)
 		args = append(args, f.Offset)
-		idx++
 	}
 	rows, err := db.QueryContext(ctx, q, args...)
 	if err != nil {

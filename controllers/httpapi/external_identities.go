@@ -87,10 +87,7 @@ func (s *Server) handleExternalIdentityGet(w http.ResponseWriter, r *http.Reques
 	}
 	q := r.URL.Query()
 	activeFilter := q.Get("active")
-	activeOnly := true
-	if activeFilter == "false" || activeFilter == "all" {
-		activeOnly = false
-	}
+	activeOnly := activeFilter != "false" && activeFilter != "all"
 	filters := externalidentity.ListFilters{
 		ActiveOnly: activeOnly,
 		TypeName:   q.Get("type_name"),
