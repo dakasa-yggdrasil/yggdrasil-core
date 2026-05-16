@@ -33,7 +33,7 @@ func ResyncTick(ctx context.Context, db *sql.DB, conn *amqp.Connection) (int, er
 	rows, err := db.QueryContext(ctx, `
 		SELECT id FROM manifests
 		WHERE kind = 'integration_instance'
-		  AND deleted_at IS NULL
+		  AND active = true
 	`)
 	if err != nil {
 		return 0, fmt.Errorf("list integration_instance manifests: %w", err)
