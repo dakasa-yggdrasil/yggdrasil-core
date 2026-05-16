@@ -49,6 +49,30 @@ type dbtx interface {
 // address the INSERT will hit the UNIQUE constraint on auth_identities.username
 // (CITEXT) and return an error — callers must ensure emails are unique.
 func CreateCollaborator(ctx context.Context, db *sql.DB, req model.CreateCollaboratorRequest) (model.Collaborator, error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.Collaborator{}, fmt.Errorf("begin create_collaborator tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	created, err := CreateCollaboratorWithIdentityTx(ctx, tx, req)
+	if err != nil {
+		return model.Collaborator{}, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return model.Collaborator{}, fmt.Errorf("commit create_collaborator tx: %w", err)
+	}
+	return created, nil
+}
+
+// CreateCollaboratorWithIdentityTx inserts a collaborator row and the matching
+// auth_identities row inside an existing transaction. Distinct from
+// CreateCollaboratorTx (which is the simplified auto-provision variant that
+// strips manager_id/primary_team_id); this one mirrors the full
+// CreateCollaborator semantics so the HTTP /collaborators handler can compose
+// it with AppendLifecycleEventTx + EmitEvent in a single transaction.
+func CreateCollaboratorWithIdentityTx(ctx context.Context, tx *sql.Tx, req model.CreateCollaboratorRequest) (model.Collaborator, error) {
 	slug := normalizeSlug(req.Slug)
 	if slug == "" {
 		return model.Collaborator{}, fmt.Errorf("collaborator slug is required")
@@ -59,12 +83,12 @@ func CreateCollaborator(ctx context.Context, db *sql.DB, req model.CreateCollabo
 		return model.Collaborator{}, fmt.Errorf("collaborator display_name is required")
 	}
 
-	managerID, err := resolveOptionalCollaboratorID(ctx, db, req.ManagerID)
+	managerID, err := resolveOptionalCollaboratorIDOn(ctx, tx, req.ManagerID)
 	if err != nil {
 		return model.Collaborator{}, err
 	}
 
-	primaryTeamID, err := resolveOptionalTeamID(ctx, db, req.PrimaryTeamID)
+	primaryTeamID, err := resolveOptionalTeamIDOn(ctx, tx, req.PrimaryTeamID)
 	if err != nil {
 		return model.Collaborator{}, err
 	}
@@ -89,12 +113,6 @@ func CreateCollaborator(ctx context.Context, db *sql.DB, req model.CreateCollabo
 	if err != nil {
 		return model.Collaborator{}, err
 	}
-
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return model.Collaborator{}, fmt.Errorf("begin create_collaborator tx: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
 
 	row := tx.QueryRowContext(
 		ctx,
@@ -171,10 +189,6 @@ func CreateCollaborator(ctx context.Context, db *sql.DB, req model.CreateCollabo
 		ON CONFLICT (collaborator_id) DO NOTHING
 	`, created.ID, username); err != nil {
 		return model.Collaborator{}, fmt.Errorf("create auth_identity: %w", err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return model.Collaborator{}, fmt.Errorf("commit create_collaborator tx: %w", err)
 	}
 
 	return created, nil

@@ -1004,7 +1004,14 @@ func (s *Server) handleCollaboratorCreate(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	collaborator, err := repository.CreateCollaborator(r.Context(), s.db, req)
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeMappedError(w, fmt.Errorf("begin tx: %w", err))
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	collaborator, err := repository.CreateCollaboratorWithIdentityTx(r.Context(), tx, req)
 	if err != nil {
 		writeMappedError(w, err)
 		return
@@ -1026,7 +1033,7 @@ func (s *Server) handleCollaboratorCreate(w http.ResponseWriter, r *http.Request
 	if mid := strings.TrimSpace(req.ManagerID); mid != "" {
 		hiredPayload["manager_id"] = mid
 	}
-	if _, err := repository.AppendLifecycleEvent(r.Context(), s.db, model.AppendLifecycleEventRequest{
+	if _, err := repository.AppendLifecycleEventTx(r.Context(), tx, model.AppendLifecycleEventRequest{
 		CollaboratorID: collaborator.ID,
 		EventType:      model.LifecycleEventHired,
 		Payload:        hiredPayload,
@@ -1037,14 +1044,39 @@ func (s *Server) handleCollaboratorCreate(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	// Emit collaborator.created into event_log so event-driven workflows
-	// (e.g. reconcile-github-identities-events) fire in real time.
-	// Opened in its own tx: the collaborator row is already committed above,
-	// so rolling back the event emit does not undo the create. Failure is
-	// logged but does not block the HTTP response — the daily cron is the
-	// safety net for any missed emissions.
-	if err := emitCollaboratorCreated(r.Context(), s.db, collaborator, actorIDFromRequest(r)); err != nil {
-		s.logger.Warn("collaborator.created event emit failed (non-fatal)", zap.Error(err), zap.String("collaborator_id", collaborator.ID.String()))
+	// Emit collaborator.created canon event in the same transaction so
+	// event-driven workflows (e.g. reconcile-github-identities-events) and the
+	// collaborator/auth_identities/lifecycle rows commit atomically.
+	emitPayload := map[string]any{
+		"collaborator_id": collaborator.ID.String(),
+		"slug":            collaborator.Slug,
+		"display_name":    collaborator.DisplayName,
+	}
+	if collaborator.PrimaryEmail != "" {
+		emitPayload["primary_email"] = collaborator.PrimaryEmail
+	}
+	if collaborator.Status != "" {
+		emitPayload["status"] = collaborator.Status
+	}
+	var actor *model.EventActor
+	if actorID := actorIDFromRequest(r); actorID != "" {
+		actor = &model.EventActor{Type: "api", ID: actorID}
+	}
+	if _, err := repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
+		Type:          repository.EventTypeCollaboratorCreated,
+		SchemaVersion: "v1",
+		AggregateType: "collaborator",
+		AggregateID:   collaborator.ID.String(),
+		Actor:         actor,
+		Payload:       emitPayload,
+	}); err != nil {
+		writeMappedError(w, fmt.Errorf("emit collaborator.created: %w", err))
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeMappedError(w, fmt.Errorf("commit collaborator.created: %w", err))
+		return
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]any{"collaborator": collaborator})
@@ -1167,6 +1199,23 @@ func (s *Server) appendLifecycle(ctx context.Context, collaboratorID uuid.UUID, 
 	}
 }
 
+// appendLifecycleTx is the *sql.Tx variant used by handlers that mutate state
+// and emit canon events atomically. Unlike appendLifecycle, errors here MUST
+// fail the request — the caller's tx will roll back the state mutation along
+// with the failed lifecycle insert, preserving atomicity.
+func (s *Server) appendLifecycleTx(ctx context.Context, tx *sql.Tx, collaboratorID uuid.UUID, eventType string, payload map[string]any, actorID string) error {
+	if _, err := repository.AppendLifecycleEventTx(ctx, tx, model.AppendLifecycleEventRequest{
+		CollaboratorID: collaboratorID,
+		EventType:      eventType,
+		Payload:        payload,
+		ActorType:      model.ActorTypeAPI,
+		ActorID:        actorID,
+	}); err != nil {
+		return fmt.Errorf("append lifecycle event %s: %w", eventType, err)
+	}
+	return nil
+}
+
 func beforeEmpData(c model.Collaborator) map[string]any {
 	if c.EmploymentData == nil {
 		return map[string]any{}
@@ -1227,16 +1276,43 @@ func (s *Server) handleTeamCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	team, err := repository.CreateTeam(r.Context(), s.db, req)
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeMappedError(w, fmt.Errorf("begin tx: %w", err))
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	team, err := repository.CreateTeamTx(r.Context(), tx, req)
 	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
 
-	// Emit team.created into event_log for event-driven workflows.
-	// Non-fatal: team row is already committed; daily reconciliation is safety net.
-	if err := emitTeamCreated(r.Context(), s.db, team); err != nil {
-		s.logger.Warn("team.created event emit failed (non-fatal)", zap.Error(err), zap.String("team_id", team.ID.String()))
+	// Emit team.created canon event in the same transaction.
+	emitPayload := map[string]any{
+		"id":   team.ID.String(),
+		"slug": team.Slug,
+		"name": team.Name,
+		"type": team.Type,
+	}
+	if team.ParentTeamID != nil {
+		emitPayload["parent_team_id"] = team.ParentTeamID.String()
+	}
+	if _, err := repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
+		Type:          repository.EventTypeTeamCreated,
+		SchemaVersion: "v1",
+		AggregateType: "team",
+		AggregateID:   team.ID.String(),
+		Payload:       emitPayload,
+	}); err != nil {
+		writeMappedError(w, fmt.Errorf("emit team.created: %w", err))
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeMappedError(w, fmt.Errorf("commit team.created: %w", err))
+		return
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]any{"team": team})
@@ -1297,18 +1373,42 @@ func (s *Server) handleTeamUpdate(w http.ResponseWriter, r *http.Request) {
 		changedFields["metadata"] = *req.Metadata
 	}
 
-	team, err := repository.UpdateTeam(r.Context(), s.db, req)
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeMappedError(w, fmt.Errorf("begin tx: %w", err))
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	team, err := repository.UpdateTeamTx(r.Context(), tx, req)
 	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
 
-	// Emit team.updated into event_log for event-driven workflows.
-	// Non-fatal: state mutation is committed; daily reconciliation is safety net.
+	// Emit team.updated canon event in the same transaction (only when at
+	// least one field actually changed).
 	if len(changedFields) > 0 {
-		if err := emitTeamUpdated(r.Context(), s.db, team, changedFields); err != nil {
-			s.logger.Warn("team.updated event emit failed (non-fatal)", zap.Error(err), zap.String("team_id", team.ID.String()))
+		emitPayload := map[string]any{
+			"id":             team.ID.String(),
+			"slug":           team.Slug,
+			"changed_fields": changedFields,
 		}
+		if _, err := repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
+			Type:          repository.EventTypeTeamUpdated,
+			SchemaVersion: "v1",
+			AggregateType: "team",
+			AggregateID:   team.ID.String(),
+			Payload:       emitPayload,
+		}); err != nil {
+			writeMappedError(w, fmt.Errorf("emit team.updated: %w", err))
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeMappedError(w, fmt.Errorf("commit team.updated: %w", err))
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"team": team})
@@ -1320,17 +1420,39 @@ func (s *Server) handleTeamDelete(w http.ResponseWriter, r *http.Request) {
 		writeMappedError(w, fmt.Errorf("team id is required"))
 		return
 	}
-	team, err := repository.DeleteTeam(r.Context(), s.db, id)
+
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeMappedError(w, fmt.Errorf("begin tx: %w", err))
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	team, err := repository.DeleteTeamTx(r.Context(), tx, id)
 	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
 
-	// Emit team.deleted into event_log for event-driven workflows.
-	// Non-fatal: team row is already removed; emit captures the identity for
-	// downstream cleanup workflows. Daily reconciliation is safety net.
-	if err := emitTeamDeleted(r.Context(), s.db, team); err != nil {
-		s.logger.Warn("team.deleted event emit failed (non-fatal)", zap.Error(err), zap.String("team_id", team.ID.String()))
+	// Emit team.deleted canon event in the same transaction so the team row
+	// removal and the downstream cleanup notification commit atomically.
+	if _, err := repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
+		Type:          repository.EventTypeTeamDeleted,
+		SchemaVersion: "v1",
+		AggregateType: "team",
+		AggregateID:   team.ID.String(),
+		Payload: map[string]any{
+			"id":   team.ID.String(),
+			"slug": team.Slug,
+		},
+	}); err != nil {
+		writeMappedError(w, fmt.Errorf("emit team.deleted: %w", err))
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeMappedError(w, fmt.Errorf("commit team.deleted: %w", err))
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"team": team, "deleted": true})
@@ -1403,9 +1525,10 @@ func (s *Server) handleTeamMembershipUpsert(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// Probe previous membership so we can tell if this upsert is a transition
-	// (joining/leaving) versus a no-op or metadata edit. ListTeamMemberships
-	// accepts slugs or UUIDs through the same resolution path the upsert uses.
+	// Probe previous membership outside the tx so we can tell if this upsert is
+	// a transition (joining/leaving) versus a no-op or metadata edit. The
+	// transition detection is a stable read of the current row; running it
+	// outside the tx avoids holding a read lock across BeginTx.
 	prevActive := false
 	prev, prevErr := repository.ListTeamMemberships(r.Context(), s.db, model.ListTeamMembershipsRequest{
 		TeamID:         req.TeamID,
@@ -1420,36 +1543,76 @@ func (s *Server) handleTeamMembershipUpsert(w http.ResponseWriter, r *http.Reque
 		}
 	}
 
-	membership, err := repository.UpsertTeamMembership(r.Context(), s.db, req)
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeMappedError(w, fmt.Errorf("begin tx: %w", err))
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	membership, err := repository.UpsertTeamMembershipTx(r.Context(), tx, req)
 	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
 
 	nowActive := membership.Active
+	actorID := actorIDFromRequest(r)
+
 	switch {
 	case nowActive && !prevActive:
-		s.appendLifecycle(r.Context(), membership.CollaboratorID, model.LifecycleEventTeamJoined, map[string]any{
+		if err := s.appendLifecycleTx(r.Context(), tx, membership.CollaboratorID, model.LifecycleEventTeamJoined, map[string]any{
 			"team_id":   membership.TeamID.String(),
 			"team_slug": membership.TeamSlug,
 			"role":      membership.Role,
-		}, actorIDFromRequest(r))
-		// Emit team_membership.added into event_log for event-driven workflows.
-		if err := emitTeamMembershipAdded(r.Context(), s.db, membership, membership.Source); err != nil {
-			s.logger.Warn("team_membership.added event emit failed (non-fatal)", zap.Error(err),
-				zap.String("membership_id", membership.ID.String()))
+		}, actorID); err != nil {
+			writeMappedError(w, err)
+			return
+		}
+		// Emit team_membership.added canon event in the same transaction.
+		if _, err := repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
+			Type:          repository.EventTypeTeamMembershipAdded,
+			SchemaVersion: "v1",
+			AggregateType: "team_membership",
+			AggregateID:   membership.ID.String(),
+			Payload: map[string]any{
+				"collaborator_id": membership.CollaboratorID.String(),
+				"team_id":         membership.TeamID.String(),
+				"role":            membership.Role,
+				"source":          membership.Source,
+			},
+		}); err != nil {
+			writeMappedError(w, fmt.Errorf("emit team_membership.added: %w", err))
+			return
 		}
 	case !nowActive && prevActive:
-		s.appendLifecycle(r.Context(), membership.CollaboratorID, model.LifecycleEventTeamLeft, map[string]any{
+		if err := s.appendLifecycleTx(r.Context(), tx, membership.CollaboratorID, model.LifecycleEventTeamLeft, map[string]any{
 			"team_id":   membership.TeamID.String(),
 			"team_slug": membership.TeamSlug,
 			"role":      membership.Role,
-		}, actorIDFromRequest(r))
-		// Emit team_membership.removed into event_log for event-driven workflows.
-		if err := emitTeamMembershipRemoved(r.Context(), s.db, membership); err != nil {
-			s.logger.Warn("team_membership.removed event emit failed (non-fatal)", zap.Error(err),
-				zap.String("membership_id", membership.ID.String()))
+		}, actorID); err != nil {
+			writeMappedError(w, err)
+			return
 		}
+		// Emit team_membership.removed canon event in the same transaction.
+		if _, err := repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
+			Type:          repository.EventTypeTeamMembershipRemoved,
+			SchemaVersion: "v1",
+			AggregateType: "team_membership",
+			AggregateID:   membership.ID.String(),
+			Payload: map[string]any{
+				"collaborator_id": membership.CollaboratorID.String(),
+				"team_id":         membership.TeamID.String(),
+			},
+		}); err != nil {
+			writeMappedError(w, fmt.Errorf("emit team_membership.removed: %w", err))
+			return
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeMappedError(w, fmt.Errorf("commit team_membership upsert: %w", err))
+		return
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]any{"membership": membership})
