@@ -28,6 +28,17 @@ var validActorTypes = map[string]struct{}{
 // only — there is no UpdateLifecycleEvent or DeleteLifecycleEvent in
 // this package; corrections are new events.
 func AppendLifecycleEvent(ctx context.Context, db *sql.DB, req model.AppendLifecycleEventRequest) (model.LifecycleEvent, error) {
+	return appendLifecycleEventOn(ctx, db, req)
+}
+
+// AppendLifecycleEventTx is the *sql.Tx variant of AppendLifecycleEvent used by
+// lifecycle handlers that mutate state and emit canon events atomically. The
+// caller manages the transaction lifecycle (Begin/Commit/Rollback).
+func AppendLifecycleEventTx(ctx context.Context, tx *sql.Tx, req model.AppendLifecycleEventRequest) (model.LifecycleEvent, error) {
+	return appendLifecycleEventOn(ctx, tx, req)
+}
+
+func appendLifecycleEventOn(ctx context.Context, q lifecycleEventQuerier, req model.AppendLifecycleEventRequest) (model.LifecycleEvent, error) {
 	if req.CollaboratorID == uuid.Nil {
 		return model.LifecycleEvent{}, fmt.Errorf("collaborator_id is required")
 	}
@@ -46,7 +57,7 @@ func AppendLifecycleEvent(ctx context.Context, db *sql.DB, req model.AppendLifec
 		payload = []byte(`{}`)
 	}
 
-	row := db.QueryRowContext(ctx, `
+	row := q.QueryRowContext(ctx, `
 		INSERT INTO public.lifecycle_events (
 			collaborator_id, event_type, payload, actor_type, actor_id, effective_at
 		) VALUES ($1, $2, $3, $4, $5, COALESCE($6, NOW()))
@@ -54,6 +65,12 @@ func AppendLifecycleEvent(ctx context.Context, db *sql.DB, req model.AppendLifec
 	`, req.CollaboratorID, req.EventType, payload, req.ActorType, req.ActorID, req.EffectiveAt)
 
 	return scanLifecycleEvent(row)
+}
+
+// lifecycleEventQuerier is the minimal db/tx surface used by
+// appendLifecycleEventOn. *sql.DB and *sql.Tx both satisfy it.
+type lifecycleEventQuerier interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
 }
 
 // ListLifecycleEventsByCollaborator returns events for a collaborator

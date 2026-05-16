@@ -25,6 +25,20 @@ var (
 	ErrConcurrentUpdate = errors.New("concurrent update detected; re-fetch and retry")
 )
 
+// dbtx is the minimal Go database surface shared by *sql.DB and *sql.Tx. It
+// lets the per-row mutation functions accept either, so handlers that need
+// to combine state mutation with canon-event emission in the same transaction
+// can call the *Tx variant and pass their *sql.Tx through unchanged.
+//
+// This is package-private on purpose: callers either use the *sql.DB form
+// (auto-tx) or the *sql.Tx form (caller-managed tx); they never construct a
+// dbtx by hand.
+type dbtx interface {
+	ExecContext(ctx context.Context, query string, args ...any) (sql.Result, error)
+	QueryContext(ctx context.Context, query string, args ...any) (*sql.Rows, error)
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
 // CreateCollaborator stores one collaborator record and, in the same
 // transaction, inserts a matching auth_identities row so that
 // /auth/passwords/setup can always UPDATE an existing row (the silent-zero-rows
@@ -168,7 +182,18 @@ func CreateCollaborator(ctx context.Context, db *sql.DB, req model.CreateCollabo
 
 // UpdateCollaborator updates one collaborator record with patch semantics.
 func UpdateCollaborator(ctx context.Context, db *sql.DB, req model.UpdateCollaboratorRequest) (model.Collaborator, error) {
-	current, err := GetCollaborator(ctx, db, req.ID)
+	return updateCollaboratorOn(ctx, db, req)
+}
+
+// UpdateCollaboratorTx is the *sql.Tx variant of UpdateCollaborator. Lifecycle
+// handlers that must emit a canon event in the same transaction as the state
+// mutation pass their *sql.Tx here so both rows commit (or neither does).
+func UpdateCollaboratorTx(ctx context.Context, tx *sql.Tx, req model.UpdateCollaboratorRequest) (model.Collaborator, error) {
+	return updateCollaboratorOn(ctx, tx, req)
+}
+
+func updateCollaboratorOn(ctx context.Context, q dbtx, req model.UpdateCollaboratorRequest) (model.Collaborator, error) {
+	current, err := getCollaboratorOn(ctx, q, req.ID)
 	if err != nil {
 		return model.Collaborator{}, err
 	}
@@ -208,7 +233,7 @@ func UpdateCollaborator(ctx context.Context, db *sql.DB, req model.UpdateCollabo
 
 	managerID := current.ManagerID
 	if req.ManagerID != nil {
-		resolvedManagerID, err := resolveOptionalCollaboratorID(ctx, db, *req.ManagerID)
+		resolvedManagerID, err := resolveOptionalCollaboratorIDOn(ctx, q, *req.ManagerID)
 		if err != nil {
 			return model.Collaborator{}, err
 		}
@@ -220,7 +245,7 @@ func UpdateCollaborator(ctx context.Context, db *sql.DB, req model.UpdateCollabo
 
 	primaryTeamID := current.PrimaryTeamID
 	if req.PrimaryTeamID != nil {
-		resolvedPrimaryTeamID, err := resolveOptionalTeamID(ctx, db, *req.PrimaryTeamID)
+		resolvedPrimaryTeamID, err := resolveOptionalTeamIDOn(ctx, q, *req.PrimaryTeamID)
 		if err != nil {
 			return model.Collaborator{}, err
 		}
@@ -281,7 +306,7 @@ func UpdateCollaborator(ctx context.Context, db *sql.DB, req model.UpdateCollabo
 		expectedVersion = *req.ExpectedVersion
 	}
 
-	row := db.QueryRowContext(
+	row := q.QueryRowContext(
 		ctx,
 		`
 			UPDATE public.collaborators
@@ -354,7 +379,17 @@ func DeleteCollaborator(ctx context.Context, db *sql.DB, identity string) (model
 
 // GetCollaborator returns one collaborator by UUID or slug.
 func GetCollaborator(ctx context.Context, db *sql.DB, identity string) (model.Collaborator, error) {
-	collaborator, err := scanCollaborator(db.QueryRowContext(ctx, collaboratorLookupQuery(identity), collaboratorLookupArg(identity)))
+	return getCollaboratorOn(ctx, db, identity)
+}
+
+// GetCollaboratorTx returns one collaborator by UUID or slug inside an existing
+// transaction. Used by lifecycle handlers that load-then-mutate atomically.
+func GetCollaboratorTx(ctx context.Context, tx *sql.Tx, identity string) (model.Collaborator, error) {
+	return getCollaboratorOn(ctx, tx, identity)
+}
+
+func getCollaboratorOn(ctx context.Context, q dbtx, identity string) (model.Collaborator, error) {
+	collaborator, err := scanCollaborator(q.QueryRowContext(ctx, collaboratorLookupQuery(identity), collaboratorLookupArg(identity)))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return model.Collaborator{}, ErrCollaboratorNotFound
@@ -590,6 +625,16 @@ func buildListCollaboratorsQuery(req model.ListCollaboratorsRequest) (string, []
 
 // CreateTeam stores one team record.
 func CreateTeam(ctx context.Context, db *sql.DB, req model.CreateTeamRequest) (model.Team, error) {
+	return createTeamOn(ctx, db, req)
+}
+
+// CreateTeamTx is the *sql.Tx variant of CreateTeam used by handlers that emit
+// a team.created canon event in the same transaction.
+func CreateTeamTx(ctx context.Context, tx *sql.Tx, req model.CreateTeamRequest) (model.Team, error) {
+	return createTeamOn(ctx, tx, req)
+}
+
+func createTeamOn(ctx context.Context, q dbtx, req model.CreateTeamRequest) (model.Team, error) {
 	slug := normalizeSlug(req.Slug)
 	if slug == "" {
 		return model.Team{}, fmt.Errorf("team slug is required")
@@ -600,7 +645,7 @@ func CreateTeam(ctx context.Context, db *sql.DB, req model.CreateTeamRequest) (m
 		return model.Team{}, fmt.Errorf("team name is required")
 	}
 
-	parentTeamID, err := resolveOptionalTeamID(ctx, db, req.ParentTeamID)
+	parentTeamID, err := resolveOptionalTeamIDOn(ctx, q, req.ParentTeamID)
 	if err != nil {
 		return model.Team{}, err
 	}
@@ -618,7 +663,7 @@ func CreateTeam(ctx context.Context, db *sql.DB, req model.CreateTeamRequest) (m
 		return model.Team{}, err
 	}
 
-	row := db.QueryRowContext(
+	row := q.QueryRowContext(
 		ctx,
 		`
 			INSERT INTO public.teams (
@@ -668,7 +713,16 @@ func CreateTeam(ctx context.Context, db *sql.DB, req model.CreateTeamRequest) (m
 
 // GetTeam returns one team by UUID or slug.
 func GetTeam(ctx context.Context, db *sql.DB, identity string) (model.Team, error) {
-	team, err := scanTeam(db.QueryRowContext(ctx, teamLookupQuery(identity), teamLookupArg(identity)))
+	return getTeamOn(ctx, db, identity)
+}
+
+// GetTeamTx returns one team by UUID or slug inside an existing transaction.
+func GetTeamTx(ctx context.Context, tx *sql.Tx, identity string) (model.Team, error) {
+	return getTeamOn(ctx, tx, identity)
+}
+
+func getTeamOn(ctx context.Context, q dbtx, identity string) (model.Team, error) {
+	team, err := scanTeam(q.QueryRowContext(ctx, teamLookupQuery(identity), teamLookupArg(identity)))
 	if err != nil {
 		if errors.Is(err, sql.ErrNoRows) {
 			return model.Team{}, ErrTeamNotFound
@@ -815,7 +869,16 @@ func buildListTeamsQuery(req model.ListTeamsRequest) (string, []any) {
 
 // UpdateTeam updates one team record with patch semantics.
 func UpdateTeam(ctx context.Context, db *sql.DB, req model.UpdateTeamRequest) (model.Team, error) {
-	current, err := GetTeam(ctx, db, req.ID)
+	return updateTeamOn(ctx, db, req)
+}
+
+// UpdateTeamTx is the *sql.Tx variant of UpdateTeam.
+func UpdateTeamTx(ctx context.Context, tx *sql.Tx, req model.UpdateTeamRequest) (model.Team, error) {
+	return updateTeamOn(ctx, tx, req)
+}
+
+func updateTeamOn(ctx context.Context, q dbtx, req model.UpdateTeamRequest) (model.Team, error) {
+	current, err := getTeamOn(ctx, q, req.ID)
 	if err != nil {
 		return model.Team{}, err
 	}
@@ -856,7 +919,7 @@ func UpdateTeam(ctx context.Context, db *sql.DB, req model.UpdateTeamRequest) (m
 
 	parentTeamID := current.ParentTeamID
 	if req.ParentTeamID != nil {
-		resolvedParentTeamID, err := resolveOptionalTeamID(ctx, db, *req.ParentTeamID)
+		resolvedParentTeamID, err := resolveOptionalTeamIDOn(ctx, q, *req.ParentTeamID)
 		if err != nil {
 			return model.Team{}, err
 		}
@@ -899,7 +962,7 @@ func UpdateTeam(ctx context.Context, db *sql.DB, req model.UpdateTeamRequest) (m
 		return model.Team{}, err
 	}
 
-	row := db.QueryRowContext(
+	row := q.QueryRowContext(
 		ctx,
 		`
 			UPDATE public.teams
@@ -942,7 +1005,16 @@ func UpdateTeam(ctx context.Context, db *sql.DB, req model.UpdateTeamRequest) (m
 
 // DeleteTeam removes one team by UUID or slug.
 func DeleteTeam(ctx context.Context, db *sql.DB, identity string) (model.Team, error) {
-	team, err := GetTeam(ctx, db, identity)
+	return deleteTeamOn(ctx, db, identity)
+}
+
+// DeleteTeamTx is the *sql.Tx variant of DeleteTeam.
+func DeleteTeamTx(ctx context.Context, tx *sql.Tx, identity string) (model.Team, error) {
+	return deleteTeamOn(ctx, tx, identity)
+}
+
+func deleteTeamOn(ctx context.Context, q dbtx, identity string) (model.Team, error) {
+	team, err := getTeamOn(ctx, q, identity)
 	if err != nil {
 		return model.Team{}, err
 	}
@@ -951,7 +1023,7 @@ func DeleteTeam(ctx context.Context, db *sql.DB, identity string) (model.Team, e
 		return model.Team{}, fmt.Errorf("team %q is protected (traits.is_root_admin=true) and cannot be deleted", team.Slug)
 	}
 
-	if _, err := db.ExecContext(ctx, `DELETE FROM public.teams WHERE id = $1`, team.ID); err != nil {
+	if _, err := q.ExecContext(ctx, `DELETE FROM public.teams WHERE id = $1`, team.ID); err != nil {
 		return model.Team{}, err
 	}
 
@@ -987,12 +1059,21 @@ func isTeamRootAdmin(team model.Team) bool {
 
 // UpsertTeamMembership creates or updates one membership link.
 func UpsertTeamMembership(ctx context.Context, db *sql.DB, req model.UpsertTeamMembershipRequest) (model.TeamMembership, error) {
-	teamID, err := resolveTeamIdentityID(ctx, db, req.TeamID)
+	return upsertTeamMembershipOn(ctx, db, req)
+}
+
+// UpsertTeamMembershipTx is the *sql.Tx variant of UpsertTeamMembership.
+func UpsertTeamMembershipTx(ctx context.Context, tx *sql.Tx, req model.UpsertTeamMembershipRequest) (model.TeamMembership, error) {
+	return upsertTeamMembershipOn(ctx, tx, req)
+}
+
+func upsertTeamMembershipOn(ctx context.Context, q dbtx, req model.UpsertTeamMembershipRequest) (model.TeamMembership, error) {
+	teamID, err := resolveTeamIdentityIDOn(ctx, q, req.TeamID)
 	if err != nil {
 		return model.TeamMembership{}, err
 	}
 
-	collaboratorID, err := resolveCollaboratorIdentityID(ctx, db, req.CollaboratorID)
+	collaboratorID, err := resolveCollaboratorIdentityIDOn(ctx, q, req.CollaboratorID)
 	if err != nil {
 		return model.TeamMembership{}, err
 	}
@@ -1007,7 +1088,7 @@ func UpsertTeamMembership(ctx context.Context, db *sql.DB, req model.UpsertTeamM
 		active = *req.Active
 	}
 
-	row := db.QueryRowContext(
+	row := q.QueryRowContext(
 		ctx,
 		`
 			WITH upserted AS (
@@ -1345,11 +1426,15 @@ func teamLookupArg(identity string) any {
 }
 
 func resolveOptionalCollaboratorID(ctx context.Context, db *sql.DB, identity string) (any, error) {
+	return resolveOptionalCollaboratorIDOn(ctx, db, identity)
+}
+
+func resolveOptionalCollaboratorIDOn(ctx context.Context, q dbtx, identity string) (any, error) {
 	if strings.TrimSpace(identity) == "" {
 		return nil, nil
 	}
 
-	resolvedID, err := resolveCollaboratorIdentityID(ctx, db, identity)
+	resolvedID, err := resolveCollaboratorIdentityIDOn(ctx, q, identity)
 	if err != nil {
 		return nil, err
 	}
@@ -1357,11 +1442,15 @@ func resolveOptionalCollaboratorID(ctx context.Context, db *sql.DB, identity str
 }
 
 func resolveOptionalTeamID(ctx context.Context, db *sql.DB, identity string) (any, error) {
+	return resolveOptionalTeamIDOn(ctx, db, identity)
+}
+
+func resolveOptionalTeamIDOn(ctx context.Context, q dbtx, identity string) (any, error) {
 	if strings.TrimSpace(identity) == "" {
 		return nil, nil
 	}
 
-	resolvedID, err := resolveTeamIdentityID(ctx, db, identity)
+	resolvedID, err := resolveTeamIdentityIDOn(ctx, q, identity)
 	if err != nil {
 		return nil, err
 	}
@@ -1369,7 +1458,11 @@ func resolveOptionalTeamID(ctx context.Context, db *sql.DB, identity string) (an
 }
 
 func resolveCollaboratorIdentityID(ctx context.Context, db *sql.DB, identity string) (uuid.UUID, error) {
-	collaborator, err := GetCollaborator(ctx, db, identity)
+	return resolveCollaboratorIdentityIDOn(ctx, db, identity)
+}
+
+func resolveCollaboratorIdentityIDOn(ctx context.Context, q dbtx, identity string) (uuid.UUID, error) {
+	collaborator, err := getCollaboratorOn(ctx, q, identity)
 	if err != nil {
 		return uuid.Nil, err
 	}
@@ -1377,7 +1470,11 @@ func resolveCollaboratorIdentityID(ctx context.Context, db *sql.DB, identity str
 }
 
 func resolveTeamIdentityID(ctx context.Context, db *sql.DB, identity string) (uuid.UUID, error) {
-	team, err := GetTeam(ctx, db, identity)
+	return resolveTeamIdentityIDOn(ctx, db, identity)
+}
+
+func resolveTeamIdentityIDOn(ctx context.Context, q dbtx, identity string) (uuid.UUID, error) {
+	team, err := getTeamOn(ctx, q, identity)
 	if err != nil {
 		return uuid.Nil, err
 	}
