@@ -357,3 +357,21 @@ func integrationCatalogErrorCode(err error) string {
 	}
 	return manifestLookupErrorCode(err)
 }
+
+// ExecuteIntegration is an exported entry-point for callers outside this
+// package (e.g. the reactor-dispatcher addon) that need to drive an
+// integration execute round-trip without going through the AMQP consumer
+// plumbing.  It mirrors the path taken by integrationExecuteHandler:
+// resolve manifests → hydrate secrets → call adapter transport.
+func ExecuteIntegration(
+	ctx context.Context,
+	conn *amqp.Connection,
+	db *sql.DB,
+	req model.ExecuteIntegrationRequest,
+) (model.ExecuteIntegrationResponse, error) {
+	req = normalizeExecuteIntegrationRequest(req)
+	if err := validateExecuteIntegrationRequest(req); err != nil {
+		return model.ExecuteIntegrationResponse{}, fmt.Errorf("invalid request: %w", err)
+	}
+	return executeIntegrationRequest(ctx, conn, db, req, 0)
+}
