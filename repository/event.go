@@ -91,6 +91,13 @@ func EmitEvent(ctx context.Context, tx *sql.Tx, req model.EmitEventRequest) (uui
 		return uuid.Nil, fmt.Errorf("insert event_log: %w", err)
 	}
 
+	// Materialize reactions for canon lifecycle events. This runs in the SAME
+	// transaction so reactions and the event commit (or rollback) atomically.
+	// Non-canon events (e.g., reactor.dead_lettered, manifest.created) are a no-op.
+	if err := MaterializeReactions(ctx, tx, eventID, req.Type); err != nil {
+		return uuid.Nil, fmt.Errorf("materialize reactions: %w", err)
+	}
+
 	return eventID, nil
 }
 
