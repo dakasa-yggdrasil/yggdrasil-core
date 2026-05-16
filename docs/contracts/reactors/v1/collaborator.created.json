@@ -1,0 +1,27 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/reactors/v1/collaborator.created.json",
+  "title": "collaborator.created reactor input v1",
+  "type": "object",
+  "required": ["_context", "collaborator_id", "slug", "display_name"],
+  "properties": {
+    "_context": {
+      "type": "object",
+      "required": ["event_id", "event_type", "schema_version", "emitted_at", "attempt"],
+      "properties": {
+        "event_id":       { "type": "string", "format": "uuid" },
+        "event_type":     { "type": "string", "const": "collaborator.created" },
+        "schema_version": { "type": "string", "const": "v1" },
+        "emitted_at":     { "type": "string", "format": "date-time" },
+        "actor":          { "type": "object" },
+        "attempt":        { "type": "integer", "minimum": 1 }
+      }
+    },
+    "collaborator_id": { "type": "string", "format": "uuid" },
+    "slug":            { "type": "string" },
+    "display_name":    { "type": "string" },
+    "primary_email":   { "type": "string" },
+    "status":          { "type": "string" }
+  },
+  "additionalProperties": false
+}

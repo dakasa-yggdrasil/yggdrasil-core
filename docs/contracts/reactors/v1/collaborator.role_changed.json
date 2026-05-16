@@ -1,0 +1,26 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/reactors/v1/collaborator.role_changed.json",
+  "title": "collaborator.role_changed reactor input v1",
+  "type": "object",
+  "required": ["_context", "collaborator_id", "role_to"],
+  "properties": {
+    "_context": {
+      "type": "object",
+      "required": ["event_id", "event_type", "schema_version", "emitted_at", "attempt"],
+      "properties": {
+        "event_id":       { "type": "string", "format": "uuid" },
+        "event_type":     { "type": "string", "const": "collaborator.role_changed" },
+        "schema_version": { "type": "string", "const": "v1" },
+        "emitted_at":     { "type": "string", "format": "date-time" },
+        "actor":          { "type": "object" },
+        "attempt":        { "type": "integer", "minimum": 1 }
+      }
+    },
+    "collaborator_id": { "type": "string", "format": "uuid" },
+    "primary_email":   { "type": "string" },
+    "role_from":       { "type": "string" },
+    "role_to":         { "type": "string" }
+  },
+  "additionalProperties": false
+}

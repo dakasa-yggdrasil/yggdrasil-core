@@ -1,0 +1,25 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/reactors/v1/team.updated.json",
+  "title": "team.updated reactor input v1",
+  "type": "object",
+  "required": ["_context", "id", "slug", "changed_fields"],
+  "properties": {
+    "_context": {
+      "type": "object",
+      "required": ["event_id", "event_type", "schema_version", "emitted_at", "attempt"],
+      "properties": {
+        "event_id":       { "type": "string", "format": "uuid" },
+        "event_type":     { "type": "string", "const": "team.updated" },
+        "schema_version": { "type": "string", "const": "v1" },
+        "emitted_at":     { "type": "string", "format": "date-time" },
+        "actor":          { "type": "object" },
+        "attempt":        { "type": "integer", "minimum": 1 }
+      }
+    },
+    "id":             { "type": "string", "format": "uuid" },
+    "slug":           { "type": "string" },
+    "changed_fields": { "type": "object" }
+  },
+  "additionalProperties": false
+}

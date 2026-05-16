@@ -1,0 +1,24 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/reactors/v1/team_membership.removed.json",
+  "title": "team_membership.removed reactor input v1",
+  "type": "object",
+  "required": ["_context", "collaborator_id", "team_id"],
+  "properties": {
+    "_context": {
+      "type": "object",
+      "required": ["event_id", "event_type", "schema_version", "emitted_at", "attempt"],
+      "properties": {
+        "event_id":       { "type": "string", "format": "uuid" },
+        "event_type":     { "type": "string", "const": "team_membership.removed" },
+        "schema_version": { "type": "string", "const": "v1" },
+        "emitted_at":     { "type": "string", "format": "date-time" },
+        "actor":          { "type": "object" },
+        "attempt":        { "type": "integer", "minimum": 1 }
+      }
+    },
+    "collaborator_id": { "type": "string", "format": "uuid" },
+    "team_id":         { "type": "string", "format": "uuid" }
+  },
+  "additionalProperties": false
+}

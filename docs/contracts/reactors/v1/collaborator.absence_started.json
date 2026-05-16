@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/reactors/v1/collaborator.absence_started.json",
+  "title": "collaborator.absence_started reactor input v1",
+  "type": "object",
+  "required": ["_context", "collaborator_id", "type", "from"],
+  "properties": {
+    "_context": {
+      "type": "object",
+      "required": ["event_id", "event_type", "schema_version", "emitted_at", "attempt"],
+      "properties": {
+        "event_id":       { "type": "string", "format": "uuid" },
+        "event_type":     { "type": "string", "const": "collaborator.absence_started" },
+        "schema_version": { "type": "string", "const": "v1" },
+        "emitted_at":     { "type": "string", "format": "date-time" },
+        "actor":          { "type": "object" },
+        "attempt":        { "type": "integer", "minimum": 1 }
+      }
+    },
+    "collaborator_id": { "type": "string", "format": "uuid" },
+    "primary_email":   { "type": "string" },
+    "type":            { "type": "string", "enum": ["vacation","leave-medical","leave-parental","leave-sabbatical"] },
+    "from":            { "type": "string", "format": "date" },
+    "to":              { "type": "string", "format": "date" },
+    "duration_days":   { "type": "integer", "minimum": 1 }
+  },
+  "additionalProperties": false
+}
