@@ -13,8 +13,10 @@ import (
 	"time"
 
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/manifestsync"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc/amqp"
 )
@@ -127,6 +129,7 @@ func verifyResolvedIntegrationType(
 			typeManifest.Metadata.Name,
 			err,
 		)
+		emitContractMismatchDetectedIfNew(ctx, db, instanceManifest, typeManifest)
 		return failIntegrationDescribeHandshake(ctx, db, instanceManifest, typeManifest, model.IntegrationRuntimeStatusContractMismatch, wrappedErr, stateDetails)
 	}
 
@@ -705,4 +708,62 @@ func firstNonEmpty(values ...string) string {
 		}
 	}
 	return ""
+}
+
+// contractMismatchDebounce tracks last-emitted timestamp per instance to
+// suppress event storms during repeated mismatched handshakes.
+var (
+	contractMismatchDebounceMu     sync.Mutex
+	contractMismatchDebounce       = map[uuid.UUID]time.Time{}
+	contractMismatchDebounceWindow = 60 * time.Second
+	// clockNow is the time source; tests override it.
+	clockNow = func() time.Time { return time.Now().UTC() }
+)
+
+// emitContractMismatchDetectedIfNew persists a
+// runtime_state.contract_mismatch_detected event AND signals manifest_sync,
+// debounced to once per instance per 60s. Best-effort: failures are logged
+// and never block the handshake. When db is nil the helper returns immediately
+// without touching the debounce map.
+func emitContractMismatchDetectedIfNew(ctx context.Context, db *sql.DB, instanceManifest, typeManifest model.Manifest) {
+	if db == nil {
+		return
+	}
+	instanceID := instanceManifest.ID
+	now := clockNow()
+
+	contractMismatchDebounceMu.Lock()
+	last, seen := contractMismatchDebounce[instanceID]
+	if seen && now.Sub(last) < contractMismatchDebounceWindow {
+		contractMismatchDebounceMu.Unlock()
+		return
+	}
+	contractMismatchDebounce[instanceID] = now
+	contractMismatchDebounceMu.Unlock()
+
+	// Persist canon event (best-effort).
+	if tx, err := db.BeginTx(ctx, nil); err == nil {
+		_, emitErr := repository.EmitEvent(ctx, tx, model.EmitEventRequest{
+			Type:          repository.EventTypeRuntimeStateContractMismatchDetected,
+			AggregateType: "runtime_state",
+			AggregateID:   instanceID.String(),
+			Payload: map[string]any{
+				"instance_id":        instanceID.String(),
+				"type_id":            typeManifest.ID.String(),
+				"instance_namespace": instanceManifest.Metadata.Namespace,
+				"instance_name":      instanceManifest.Metadata.Name,
+				"type_namespace":     typeManifest.Metadata.Namespace,
+				"type_name":          typeManifest.Metadata.Name,
+				"detected_at":        now.Format(time.RFC3339),
+			},
+		})
+		if emitErr != nil {
+			_ = tx.Rollback()
+		} else {
+			_ = tx.Commit()
+		}
+	}
+
+	// In-process fast-path nudge to manifest_sync runner.
+	manifestsync.Notify(typeManifest.ID)
 }
