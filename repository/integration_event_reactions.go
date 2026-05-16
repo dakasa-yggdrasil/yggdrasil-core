@@ -29,12 +29,13 @@ func MaterializeReactions(ctx context.Context, tx *sql.Tx, eventID uuid.UUID, ev
 			(event_id, event_type, integration_instance_id, integration_type_manifest_id, capability, status, next_attempt_at)
 		SELECT $1, $2, ii.id, it.id, r->>'capability', 'pending', NOW()
 		FROM manifests ii
-		JOIN manifests it ON it.id::text = (ii.spec->>'integration_type_manifest_id')
+		JOIN manifests it ON it.kind = 'integration_type'
+		                  AND it.namespace = (ii.spec->'type_ref'->>'namespace')
+		                  AND it.name = (ii.spec->'type_ref'->>'name')
+		                  AND it.active = true
 		JOIN LATERAL jsonb_array_elements(COALESCE(it.spec->'reactors', '[]'::jsonb)) r ON r->>'event_type' = $2
 		WHERE ii.kind = 'integration_instance'
-		  AND it.kind = 'integration_type'
 		  AND ii.active = true
-		  AND it.active = true
 	`, eventID, eventType)
 	if err != nil {
 		return fmt.Errorf("materialize reactions: %w", err)
