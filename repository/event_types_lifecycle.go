@@ -21,6 +21,15 @@ const (
 	// exhausts retries. It is NOT a canon lifecycle event — the prefix
 	// "reactor.*" is reserved and the Materializer skips it (no infinite loop).
 	EventTypeReactorDeadLettered = "reactor.dead_lettered"
+
+	// Sync framework events — infrastructure, NOT canon lifecycle.
+	// The Materializer must skip these (no integration reaction allowed against
+	// manifest sync activity), enforced by the test
+	// TestSyncEventTypesAreNotCanonLifecycle.
+	EventTypeRuntimeStateContractMismatchDetected = "runtime_state.contract_mismatch_detected"
+	EventTypeIntegrationTypeSynced                = "integration_type.synced"
+	EventTypeIntegrationTypeSyncNoOp              = "integration_type.sync_no_op"
+	EventTypeIntegrationTypeSyncSkipped           = "integration_type.sync_skipped"
 )
 
 // CanonLifecycleEventTypes is the closed set of events that may have reactors.
