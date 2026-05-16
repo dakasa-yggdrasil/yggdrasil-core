@@ -25,7 +25,15 @@ var (
 	ErrConcurrentUpdate = errors.New("concurrent update detected; re-fetch and retry")
 )
 
-// CreateCollaborator stores one collaborator record.
+// CreateCollaborator stores one collaborator record and, in the same
+// transaction, inserts a matching auth_identities row so that
+// /auth/passwords/setup can always UPDATE an existing row (the silent-zero-rows
+// bug is avoided).
+//
+// Username for auth_identities is LOWER(TRIM(primary_email)); falls back to
+// slug when primary_email is empty. If two collaborators share the same email
+// address the INSERT will hit the UNIQUE constraint on auth_identities.username
+// (CITEXT) and return an error — callers must ensure emails are unique.
 func CreateCollaborator(ctx context.Context, db *sql.DB, req model.CreateCollaboratorRequest) (model.Collaborator, error) {
 	slug := normalizeSlug(req.Slug)
 	if slug == "" {
@@ -68,7 +76,13 @@ func CreateCollaborator(ctx context.Context, db *sql.DB, req model.CreateCollabo
 		return model.Collaborator{}, err
 	}
 
-	row := db.QueryRowContext(
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.Collaborator{}, fmt.Errorf("begin create_collaborator tx: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	row := tx.QueryRowContext(
 		ctx,
 		`
 			INSERT INTO public.collaborators (
@@ -126,7 +140,30 @@ func CreateCollaborator(ctx context.Context, db *sql.DB, req model.CreateCollabo
 		metadata,
 	)
 
-	return scanCollaborator(row)
+	created, err := scanCollaborator(row)
+	if err != nil {
+		return model.Collaborator{}, err
+	}
+
+	// Derive the auth_identities username from the primary email; fall back to
+	// slug when the email is absent.
+	username := strings.ToLower(strings.TrimSpace(created.PrimaryEmail))
+	if username == "" {
+		username = created.Slug
+	}
+	if _, err := tx.ExecContext(ctx, `
+		INSERT INTO public.auth_identities (collaborator_id, username)
+		VALUES ($1, $2)
+		ON CONFLICT (collaborator_id) DO NOTHING
+	`, created.ID, username); err != nil {
+		return model.Collaborator{}, fmt.Errorf("create auth_identity: %w", err)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return model.Collaborator{}, fmt.Errorf("commit create_collaborator tx: %w", err)
+	}
+
+	return created, nil
 }
 
 // UpdateCollaborator updates one collaborator record with patch semantics.
