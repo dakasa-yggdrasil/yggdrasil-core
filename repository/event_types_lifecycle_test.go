@@ -35,3 +35,37 @@ func TestSyncEventTypesAreNotCanonLifecycle(t *testing.T) {
 		}
 	}
 }
+
+func TestExternalIdentityCanonEventConstants(t *testing.T) {
+	cases := []struct {
+		got  string
+		want string
+	}{
+		{EventTypeExternalIdentityLinked, "collaborator_external_identity.linked"},
+		{EventTypeExternalIdentityUnlinked, "collaborator_external_identity.unlinked"},
+		{EventTypeExternalIdentityDriftDetected, "collaborator_external_identity.drift_detected"},
+		{EventTypeExternalIdentityUnknownExternal, "collaborator_external_identity.unknown_external"},
+		{EventTypeExternalIdentityPurged, "collaborator_external_identity.purged"},
+		{EventTypeExternalIdentityConflictDetected, "collaborator_external_identity.conflict_detected"},
+	}
+	for _, c := range cases {
+		if c.got != c.want {
+			t.Fatalf("constant mismatch: got %q want %q", c.got, c.want)
+		}
+	}
+}
+
+func TestExternalIdentityEventsAreNotCanonLifecycle(t *testing.T) {
+	for _, e := range []string{
+		EventTypeExternalIdentityLinked,
+		EventTypeExternalIdentityUnlinked,
+		EventTypeExternalIdentityDriftDetected,
+		EventTypeExternalIdentityUnknownExternal,
+		EventTypeExternalIdentityPurged,
+		EventTypeExternalIdentityConflictDetected,
+	} {
+		if IsCanonLifecycleEvent(e) {
+			t.Fatalf("event %q must NOT be in CanonLifecycleEventTypes (infrastructure event)", e)
+		}
+	}
+}

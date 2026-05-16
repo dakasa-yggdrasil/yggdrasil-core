@@ -30,6 +30,14 @@ const (
 	EventTypeIntegrationTypeSynced                = "integration_type.synced"
 	EventTypeIntegrationTypeSyncNoOp              = "integration_type.sync_no_op"
 	EventTypeIntegrationTypeSyncSkipped           = "integration_type.sync_skipped"
+
+	// External identity framework events — infrastructure, NOT canon lifecycle.
+	EventTypeExternalIdentityLinked            = "collaborator_external_identity.linked"
+	EventTypeExternalIdentityUnlinked          = "collaborator_external_identity.unlinked"
+	EventTypeExternalIdentityDriftDetected     = "collaborator_external_identity.drift_detected"
+	EventTypeExternalIdentityUnknownExternal   = "collaborator_external_identity.unknown_external"
+	EventTypeExternalIdentityPurged            = "collaborator_external_identity.purged"
+	EventTypeExternalIdentityConflictDetected  = "collaborator_external_identity.conflict_detected"
 )
 
 // CanonLifecycleEventTypes is the closed set of events that may have reactors.
