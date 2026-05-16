@@ -26,6 +26,7 @@ type IntegrationTypeManifestSpec struct {
 	Normalization    IntegrationNormalizationSpec    `json:"normalization"`
 	Execution        IntegrationExecutionSpec        `json:"execution"`
 	Extensions       IntegrationExtensionsSpec       `json:"extensions"`
+	Reactors         []IntegrationTypeReactor        `json:"reactors,omitempty"`
 }
 
 // IntegrationAdapterSpec declares how the adapter is reached by the core.
@@ -171,4 +172,12 @@ type AdapterDescribeResponse struct {
 	Normalization    IntegrationNormalizationSpec  `json:"normalization"`
 	Execution        IntegrationExecutionSpec      `json:"execution"`
 	Extensions       IntegrationExtensionsSpec     `json:"extensions"`
+}
+
+// IntegrationTypeReactor describes one event-driven reaction configuration.
+// When a canonical lifecycle event occurs, if this integration_type has a
+// reactor that matches the event type, the named capability action is invoked.
+type IntegrationTypeReactor struct {
+	EventType  string `json:"event_type"`
+	Capability string `json:"capability"`
 }
