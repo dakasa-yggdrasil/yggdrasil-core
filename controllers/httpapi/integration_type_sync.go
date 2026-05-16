@@ -81,9 +81,9 @@ func (s *Server) handleIntegrationTypeSync(deps manifestsync.Deps) http.HandlerF
 // Deps but capturing the last EmitEvent call so the HTTP handler can echo the
 // outcome back to the operator synchronously.
 type captureEmitter struct {
-	manifestsync.Deps                   // embeds interface; all 6 methods delegate automatically
-	lastEventType string
-	lastPayload   map[string]any
+	manifestsync.Deps // embeds interface; all 6 methods delegate automatically
+	lastEventType     string
+	lastPayload       map[string]any
 }
 
 // EmitEvent overrides the embedded Deps.EmitEvent to capture the outcome before
