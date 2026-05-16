@@ -13,7 +13,7 @@ import (
 // FamilyEventsV1 identifies the events/v1 contract family.
 const FamilyEventsV1 = "events/v1"
 
-//go:embed events/v1/schema.json events/v1/manifest/*.json events/v1/product/*.json events/v1/workflow/*.json events/v1/authorization/*.json events/v1/buildproject/*.json events/v1/infra/*.json events/v1/collaborator/*.json events/v1/credential/*.json events/v1/team/*.json events/v1/team_membership/*.json events/v1/reactor/*.json events/v1/runtime_state/*.json events/v1/integration_type/*.json
+//go:embed events/v1/schema.json events/v1/manifest/*.json events/v1/product/*.json events/v1/workflow/*.json events/v1/authorization/*.json events/v1/buildproject/*.json events/v1/infra/*.json events/v1/collaborator/*.json events/v1/credential/*.json events/v1/team/*.json events/v1/team_membership/*.json events/v1/reactor/*.json events/v1/runtime_state/*.json events/v1/integration_type/*.json events/v1/collaborator_external_identity/*.json
 var eventSchemaFS embed.FS
 
 var (
@@ -95,6 +95,13 @@ func eventTypeToSchemaPath(eventType string, schemaVersion string) string {
 		"integration_type.synced":                   "events/v1/integration_type/synced.json",
 		"integration_type.sync_no_op":               "events/v1/integration_type/sync_no_op.json",
 		"integration_type.sync_skipped":             "events/v1/integration_type/sync_skipped.json",
+		// external identity framework events
+		"collaborator_external_identity.linked":            "events/v1/collaborator_external_identity/linked.json",
+		"collaborator_external_identity.unlinked":          "events/v1/collaborator_external_identity/unlinked.json",
+		"collaborator_external_identity.drift_detected":    "events/v1/collaborator_external_identity/drift_detected.json",
+		"collaborator_external_identity.unknown_external": "events/v1/collaborator_external_identity/unknown_external.json",
+		"collaborator_external_identity.purged":            "events/v1/collaborator_external_identity/purged.json",
+		"collaborator_external_identity.conflict_detected": "events/v1/collaborator_external_identity/conflict_detected.json",
 	}
 	return mapping[eventType]
 }

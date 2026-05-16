@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dakasa-yggdrasil.io/contracts/events/v1/collaborator_external_identity/conflict_detected.json",
+  "title": "collaborator_external_identity.conflict_detected",
+  "description": "Attempted to write an external_id that is already active on a DIFFERENT collaborator within the same integration_instance. Neither row is mutated. Operator must reconcile.",
+  "type": "object",
+  "required": ["integration_instance_id", "external_id", "incoming_collaborator_id", "existing_collaborator_id", "detected_at"],
+  "additionalProperties": false,
+  "properties": {
+    "integration_instance_id":  { "type": "string", "format": "uuid" },
+    "external_id":              { "type": "string", "minLength": 1 },
+    "incoming_collaborator_id": { "type": "string", "format": "uuid" },
+    "existing_collaborator_id": { "type": "string", "format": "uuid" },
+    "detected_at":              { "type": "string", "format": "date-time" }
+  }
+}

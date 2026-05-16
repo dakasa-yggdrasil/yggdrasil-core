@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dakasa-yggdrasil.io/contracts/events/v1/collaborator_external_identity/drift_detected.json",
+  "title": "collaborator_external_identity.drift_detected",
+  "description": "Re-sync found an external_id present in DB but missing from the provider's live list_identities response. No auto-action — operator decides.",
+  "type": "object",
+  "required": ["identity_id", "collaborator_id", "integration_instance_id", "external_id", "detected_at"],
+  "additionalProperties": false,
+  "properties": {
+    "identity_id":             { "type": "string", "format": "uuid" },
+    "collaborator_id":         { "type": "string", "format": "uuid" },
+    "integration_instance_id": { "type": "string", "format": "uuid" },
+    "external_id":             { "type": "string", "minLength": 1 },
+    "detected_at":             { "type": "string", "format": "date-time" }
+  }
+}

@@ -1,0 +1,15 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://dakasa-yggdrasil.io/contracts/events/v1/collaborator_external_identity/unknown_external.json",
+  "title": "collaborator_external_identity.unknown_external",
+  "description": "Re-sync found an external_id in the provider's live list_identities response that does not correspond to any active identity in DB.",
+  "type": "object",
+  "required": ["integration_instance_id", "external_id", "detected_at"],
+  "additionalProperties": false,
+  "properties": {
+    "integration_instance_id": { "type": "string", "format": "uuid" },
+    "external_id":             { "type": "string", "minLength": 1 },
+    "external_metadata":       { "type": "object" },
+    "detected_at":             { "type": "string", "format": "date-time" }
+  }
+}
