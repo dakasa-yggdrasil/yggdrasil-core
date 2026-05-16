@@ -13,7 +13,7 @@ import (
 // FamilyEventsV1 identifies the events/v1 contract family.
 const FamilyEventsV1 = "events/v1"
 
-//go:embed events/v1/schema.json events/v1/manifest/*.json events/v1/product/*.json events/v1/workflow/*.json events/v1/authorization/*.json events/v1/buildproject/*.json events/v1/infra/*.json events/v1/collaborator/*.json events/v1/credential/*.json events/v1/team/*.json events/v1/team_membership/*.json
+//go:embed events/v1/schema.json events/v1/manifest/*.json events/v1/product/*.json events/v1/workflow/*.json events/v1/authorization/*.json events/v1/buildproject/*.json events/v1/infra/*.json events/v1/collaborator/*.json events/v1/credential/*.json events/v1/team/*.json events/v1/team_membership/*.json events/v1/reactor/*.json
 var eventSchemaFS embed.FS
 
 var (
@@ -88,6 +88,8 @@ func eventTypeToSchemaPath(eventType string, schemaVersion string) string {
 		// team membership events
 		"team_membership.added":   "events/v1/team_membership/added.json",
 		"team_membership.removed": "events/v1/team_membership/removed.json",
+		// reactor observability events
+		"reactor.dead_lettered": "events/v1/reactor/dead_lettered.json",
 	}
 	return mapping[eventType]
 }

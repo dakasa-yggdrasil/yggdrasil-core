@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/reactor/dead_lettered.json",
+  "title": "reactor.dead_lettered v1",
+  "type": "object",
+  "required": ["reaction_id", "event_id", "event_type", "integration_instance_id", "capability", "final_error", "attempts"],
+  "properties": {
+    "reaction_id":              { "type": "string", "format": "uuid" },
+    "event_id":                 { "type": "string", "format": "uuid" },
+    "event_type":               { "type": "string" },
+    "integration_instance_id":  { "type": "string", "format": "uuid" },
+    "capability":               { "type": "string" },
+    "final_error":              { "type": "string" },
+    "attempts":                 { "type": "integer", "minimum": 1 }
+  },
+  "additionalProperties": false
+}
