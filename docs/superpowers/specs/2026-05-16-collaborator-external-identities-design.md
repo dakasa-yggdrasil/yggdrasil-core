@@ -636,7 +636,40 @@ Cross-repo adapter commits:
 - integration-google-workspace adapter tests: full suite PASS (`TestListIdentities` 4/4 incl. pagination, reactors 29/29).
 - integration-github adapter tests: 7/7 webhook PASS, 4/4 `list_identities` PASS, 29 reactor tests PASS.
 
-### 17.3 E2E smoke procedure (post-deploy)
+### 17.3 E2E smoke results (live, 2026-05-16 ~17:42 UTC)
+
+**Production deploy:**
+- Image rolled via `upgrade-yggdrasil-core-edge` workflow → `sha-817a028` (16 commits + 2 lint fixes + 1 resync query fix).
+- Migration 00041 applied successfully on startup (`goose: successfully migrated database to version: 41`).
+- Both addons bootstrapped clean (no warnings on the post-fix image).
+
+**Smoke A — Lifecycle via API (PASSED 6/6 cenarios):**
+
+| Step | Action | Outcome | Event emitted |
+|:----:|:-------|:--------|:--------------|
+| 1 | `POST /collaborator-external-identities` | `outcome=inserted`, 201 | `linked` (re_linked=false) |
+| 2 | `GET ?collaborator_id=…` | returns 1 row, `unlinked_at=null` | — |
+| 3 | `POST` same triple | `outcome=refreshed`, 200 | `linked` (re_linked=false) |
+| 4 | `DELETE /{id}` | `outcome=unlinked`, 200 | `unlinked` |
+| 5 | `POST` same triple | `outcome=re_linked`, 200 | `linked` (re_linked=true) |
+| 6 | Conflict test: 2nd collab same ext_id | 409 + structured error | `conflict_detected` |
+| 7 | `DELETE /{id}?hard=true` | 204, row gone | — (see gap below) |
+
+All 6 lifecycle outcomes correctly identified by repository's `UpsertOutcome` enum. JSON Schema validation passed for `linked` (with/without re_linked), `unlinked`, and `conflict_detected` payloads.
+
+**Bug surfaced + fixed mid-smoke:**
+- `external_identity_resync` initial-tick failed on first pod start with `pq: column "deleted_at" does not exist`. Root cause: manifests table uses `active` boolean, not soft-delete column. Fix `817a028` swapped query to `WHERE active = true`. Post-roll, log noise gone.
+
+**Gap (deferred): hard-delete via API does NOT emit `purged` event.** The DELETE handler with `?hard=true` calls `externalidentity.HardDelete` directly without emitting; only the cleanup cron's `CleanupTick` emits `purged`. This is consistent with the spec (purged = "retained past retention by cleaner"), but operators doing manual hard-deletes won't generate an audit event. Acceptable for V1; track for V2.
+
+**Pending E2E (require external state):**
+
+- **GitHub member_added webhook** (Smoke 1): needs a real GitHub org webhook configured against `https://yggdrasil.dakasa.me/api/v1/integrations/{gh_instance_id}/webhook` with `webhook_signature_scheme: github_hmac_sha256` + `webhook_secret`. Operator action.
+- **Slack SCIM relink** (Smoke 2): needs an onboard workflow to dispatch through reactor — covered by next onboard run from Tartaro UI.
+- **Drift detection** (Smoke 3): re-sync cron tick interval is 4h default; can be forced via `YGGDRASIL_EXTERNAL_IDENTITY_RESYNC_INTERVAL=300s` or via manual `POST /api/v1/integration-types/{id}/sync` to dispatch sync (different addon — not external_identity-specific).
+- **Cleanup retention** (Smoke 4): backdate `unlinked_at` 40 days + wait 24h tick OR set `YGGDRASIL_EXTERNAL_IDENTITY_CLEANUP_INTERVAL=60s` for fast test.
+
+### 17.4 E2E smoke procedure (for future runs)
 
 Once CI rebuilds + reconciler picks up new images (~5 min per repo):
 
@@ -674,7 +707,7 @@ Once CI rebuilds + reconciler picks up new images (~5 min per repo):
 3. Wait for daily cleanup tick (or `YGGDRASIL_EXTERNAL_IDENTITY_CLEANUP_INTERVAL=60s` for quick test).
 4. Expect row gone + `external_identity.purged` event.
 
-### 17.4 Known gaps / deferred work
+### 17.5 Known gaps / deferred work
 
 1. **Drift `kind` field deferred.** `drift_detected.json` schema currently has `additionalProperties: false` with only 5 fields. To extend with `drift_kind` (`disappeared` vs `metadata_changed`) and observed/stored metadata, bump schema version and update `BuildDriftPayload`. Re-sync runner today emits only the "disappeared" case (when local row has no matching external).
 2. **Adapter unsupported-capability detection.** Re-sync runner currently catches "unsupported"/"unknown"/"not found" in the error string. Cleaner: read `discovery.capabilities` from the integration_type manifest before dispatching the RPC.
@@ -682,7 +715,7 @@ Once CI rebuilds + reconciler picks up new images (~5 min per repo):
 4. **GitHub `membership` event coverage.** T15 handles `organization.member_added/removed` only; team-scoped `membership` events are no-op. Acceptable for current Yggdrasil scope (teams are managed via repos/groups, not GitHub teams).
 5. **GHA workflow validation for ECR push.** Each adapter ships with `deploy.yml` already; first push after these commits will exercise the OIDC trust + ECR pull path. If any 403/pull-error, integration-github's pattern from `webhooks-external v0.3.2` resolution applies (memory `project_webhooks_external_v030_pending_image`).
 
-### 17.5 Production rollout sequence
+### 17.6 Production rollout sequence
 
 Per memory `feature_yggdrasil_only` + `feedback_dakasa_deploy_flow`:
 
@@ -694,19 +727,20 @@ Per memory `feature_yggdrasil_only` + `feedback_dakasa_deploy_flow`:
 6. CI builds for each adapter; reconciler picks up new images for `integration-slack`, `integration-google-workspace`, `integration-github`.
 7. Run smoke procedure §17.3.
 
-### 17.6 Success criteria status
+### 17.7 Success criteria status
 
 | Criterion | Status |
 |:----------|:-------|
 | All 4 reactor integrations can persist identities | ✅ code-complete (slack/gw/github); grafana unchanged (no users to link) |
-| GitHub V11-style scenario E2E | ⏳ pending §17.3 smoke 1 |
-| No yggdrasil-core code references provider names | ✅ verified (`grep -ri 'slack\|github\|google.workspace\|grafana' internal/externalidentity/ controllers/httpapi/integration_webhook.go addons/external_identity_*.go` → 0 matches) |
+| GitHub V11-style scenario E2E | ⏳ pending Smoke 1 (real invite + accept) |
+| No yggdrasil-core code references provider names | ✅ verified (9 hits in `hmac.go` for the literal scheme name `github_hmac_sha256` only — that's a discriminator value, not coupled logic) |
 | Adapter binary does not depend on yggdrasil-api-client | ✅ no adapter imports added; all communication via existing RabbitMQ envelope |
+| Lifecycle events (linked/unlinked/conflict_detected) work E2E | ✅ verified by Smoke A on live cluster (817a028) |
 | Re-sync runs daily | ⏳ pending first 24h post-deploy |
-| Drift events visible in event_log within 25h | ⏳ pending §17.3 smoke 3 |
+| Drift events visible in event_log within 25h | ⏳ pending Smoke 3 |
 | 85%+ test coverage in `internal/externalidentity/` | ⏳ measure post-deploy (`go test -cover ./internal/externalidentity/`) |
 
-### 17.7 Architectural neutrality verification
+### 17.8 Architectural neutrality verification
 
 A sentinel grep run on yggdrasil-core after these commits (excluding package import paths like `github.com/...`):
 
