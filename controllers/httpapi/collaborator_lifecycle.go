@@ -10,7 +10,6 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
-	"go.uber.org/zap"
 )
 
 // validOffboardReasons is the canonical set accepted by /offboard.
@@ -52,29 +51,61 @@ func (s *Server) handleCollaboratorOffboard(w http.ResponseWriter, r *http.Reque
 		writeMappedError(w, fmt.Errorf("invalid offboard reason: %q (allowed: voluntary, involuntary, contract-end, deceased)", req.Reason))
 		return
 	}
+
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeMappedError(w, fmt.Errorf("begin tx: %w", err))
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+
 	st := "offboarded"
-	collab, err := repository.UpdateCollaborator(r.Context(), s.db, model.UpdateCollaboratorRequest{ID: id, Status: &st})
+	collab, err := repository.UpdateCollaboratorTx(r.Context(), tx, model.UpdateCollaboratorRequest{ID: id, Status: &st})
 	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
-	payload := map[string]any{"reason": strings.TrimSpace(req.Reason)}
+
+	lifecyclePayload := map[string]any{"reason": strings.TrimSpace(req.Reason)}
 	if d := strings.TrimSpace(req.EndDate); d != "" {
-		payload["end_date"] = d
+		lifecyclePayload["end_date"] = d
 	}
 	if req.VoluntaryNoticeDays > 0 {
-		payload["voluntary_notice_days"] = req.VoluntaryNoticeDays
+		lifecyclePayload["voluntary_notice_days"] = req.VoluntaryNoticeDays
 	}
-	if err := appendLifecycleEvent(r, s.db, collab.ID, model.LifecycleEventOffboarded, payload); err != nil {
+	if err := appendLifecycleEventTx(r, tx, collab.ID, model.LifecycleEventOffboarded, lifecyclePayload); err != nil {
 		writeMappedError(w, err)
 		return
 	}
 
-	// Emit collaborator.offboarded into event_log for event-driven workflows.
-	// Failure is non-fatal: the offboard itself is committed; the daily cron
-	// reconciliation is the safety net for missed emissions.
-	if err := emitCollaboratorOffboarded(r.Context(), s.db, collab, strings.TrimSpace(req.Reason), strings.TrimSpace(req.EndDate)); err != nil {
-		s.logger.Warn("collaborator.offboarded event emit failed (non-fatal)", zap.Error(err), zap.String("collaborator_id", collab.ID.String()))
+	// Emit collaborator.offboarded canon event in the SAME transaction as the
+	// state mutation. Spec §lifecycle-reactor requires atomic state+emit so a
+	// crash between them cannot leave a collaborator whose canon event was
+	// silently dropped.
+	emitPayload := map[string]any{
+		"collaborator_id": collab.ID.String(),
+		"reason":          strings.TrimSpace(req.Reason),
+	}
+	if collab.PrimaryEmail != "" {
+		emitPayload["primary_email"] = collab.PrimaryEmail
+	}
+	if d := strings.TrimSpace(req.EndDate); d != "" {
+		emitPayload["end_date"] = d
+	}
+	if _, err := repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
+		Type:          repository.EventTypeCollaboratorOffboarded,
+		SchemaVersion: "v1",
+		AggregateType: "collaborator",
+		AggregateID:   collab.ID.String(),
+		Payload:       emitPayload,
+	}); err != nil {
+		writeMappedError(w, fmt.Errorf("emit collaborator.offboarded: %w", err))
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeMappedError(w, fmt.Errorf("commit collaborator.offboarded: %w", err))
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collab})
@@ -135,29 +166,55 @@ func (s *Server) handleCollaboratorReOnboard(w http.ResponseWriter, r *http.Requ
 		writeMappedError(w, err)
 		return
 	}
+
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeMappedError(w, fmt.Errorf("begin tx: %w", err))
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+
 	st := "pending_start"
-	collab, err := repository.UpdateCollaborator(r.Context(), s.db, model.UpdateCollaboratorRequest{ID: id, Status: &st})
+	collab, err := repository.UpdateCollaboratorTx(r.Context(), tx, model.UpdateCollaboratorRequest{ID: id, Status: &st})
 	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
-	payload := map[string]any{}
+
+	lifecyclePayload := map[string]any{}
 	if d := strings.TrimSpace(req.NewStartDate); d != "" {
-		payload["new_start_date"] = d
+		lifecyclePayload["new_start_date"] = d
 	}
 	if rl := strings.TrimSpace(req.Role); rl != "" {
-		payload["role"] = rl
+		lifecyclePayload["role"] = rl
 	}
-	if err := appendLifecycleEvent(r, s.db, collab.ID, model.LifecycleEventReOnboarded, payload); err != nil {
+	if err := appendLifecycleEventTx(r, tx, collab.ID, model.LifecycleEventReOnboarded, lifecyclePayload); err != nil {
 		writeMappedError(w, err)
 		return
 	}
 
-	// Emit collaborator.re_onboarded into event_log for event-driven workflows.
-	// Non-fatal: lifecycle entry above is committed; daily reconciliation is safety net.
-	// Note: previous_offboarded_at is not stored on the collaborator row; omitted from payload.
-	if err := emitCollaboratorReOnboarded(r.Context(), s.db, collab); err != nil {
-		s.logger.Warn("collaborator.re_onboarded event emit failed (non-fatal)", zap.Error(err), zap.String("collaborator_id", collab.ID.String()))
+	// Emit collaborator.re_onboarded canon event in the same transaction.
+	// Note: previous_offboarded_at is not stored on the collaborator row; omitted.
+	emitPayload := map[string]any{
+		"collaborator_id": collab.ID.String(),
+	}
+	if collab.PrimaryEmail != "" {
+		emitPayload["primary_email"] = collab.PrimaryEmail
+	}
+	if _, err := repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
+		Type:          repository.EventTypeCollaboratorReOnboarded,
+		SchemaVersion: "v1",
+		AggregateType: "collaborator",
+		AggregateID:   collab.ID.String(),
+		Payload:       emitPayload,
+	}); err != nil {
+		writeMappedError(w, fmt.Errorf("emit collaborator.re_onboarded: %w", err))
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeMappedError(w, fmt.Errorf("commit collaborator.re_onboarded: %w", err))
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collab})
@@ -185,7 +242,15 @@ func (s *Server) handleCollaboratorRoleChange(w http.ResponseWriter, r *http.Req
 		writeMappedError(w, fmt.Errorf("new_role is required"))
 		return
 	}
-	prev, err := repository.GetCollaborator(r.Context(), s.db, id)
+
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeMappedError(w, fmt.Errorf("begin tx: %w", err))
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	prev, err := repository.GetCollaboratorTx(r.Context(), tx, id)
 	if err != nil {
 		writeMappedError(w, err)
 		return
@@ -196,7 +261,7 @@ func (s *Server) handleCollaboratorRoleChange(w http.ResponseWriter, r *http.Req
 	}
 	previous, _ := employment["role"].(string)
 	employment["role"] = newRole
-	collab, err := repository.UpdateCollaborator(r.Context(), s.db, model.UpdateCollaboratorRequest{
+	collab, err := repository.UpdateCollaboratorTx(r.Context(), tx, model.UpdateCollaboratorRequest{
 		ID:             id,
 		EmploymentData: &employment,
 	})
@@ -204,19 +269,41 @@ func (s *Server) handleCollaboratorRoleChange(w http.ResponseWriter, r *http.Req
 		writeMappedError(w, err)
 		return
 	}
-	payload := map[string]any{"to": newRole}
+
+	lifecyclePayload := map[string]any{"to": newRole}
 	if previous != "" {
-		payload["from"] = previous
+		lifecyclePayload["from"] = previous
 	}
-	if err := appendLifecycleEvent(r, s.db, collab.ID, model.LifecycleEventRoleChanged, payload); err != nil {
+	if err := appendLifecycleEventTx(r, tx, collab.ID, model.LifecycleEventRoleChanged, lifecyclePayload); err != nil {
 		writeMappedError(w, err)
 		return
 	}
 
-	// Emit collaborator.role_changed into event_log for event-driven workflows.
-	// Non-fatal: lifecycle entry above is committed; daily reconciliation is safety net.
-	if err := emitCollaboratorRoleChanged(r.Context(), s.db, collab, previous, newRole); err != nil {
-		s.logger.Warn("collaborator.role_changed event emit failed (non-fatal)", zap.Error(err), zap.String("collaborator_id", collab.ID.String()))
+	// Emit collaborator.role_changed canon event in the same transaction.
+	emitPayload := map[string]any{
+		"collaborator_id": collab.ID.String(),
+		"role_to":         newRole,
+	}
+	if collab.PrimaryEmail != "" {
+		emitPayload["primary_email"] = collab.PrimaryEmail
+	}
+	if previous != "" {
+		emitPayload["role_from"] = previous
+	}
+	if _, err := repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
+		Type:          repository.EventTypeCollaboratorRoleChanged,
+		SchemaVersion: "v1",
+		AggregateType: "collaborator",
+		AggregateID:   collab.ID.String(),
+		Payload:       emitPayload,
+	}); err != nil {
+		writeMappedError(w, fmt.Errorf("emit collaborator.role_changed: %w", err))
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeMappedError(w, fmt.Errorf("commit collaborator.role_changed: %w", err))
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collab})
@@ -425,49 +512,81 @@ func (s *Server) handleCollaboratorAbsenceStart(w http.ResponseWriter, r *http.R
 		writeMappedError(w, err)
 		return
 	}
-	if _, ok := validAbsenceTypes[strings.TrimSpace(req.Type)]; !ok {
+	absType := strings.TrimSpace(req.Type)
+	if _, ok := validAbsenceTypes[absType]; !ok {
 		writeMappedError(w, fmt.Errorf("invalid absence type: %q (allowed: vacation, leave-medical, leave-parental, leave-sabbatical)", req.Type))
 		return
 	}
-	collab, err := repository.GetCollaborator(r.Context(), s.db, id)
+
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeMappedError(w, fmt.Errorf("begin tx: %w", err))
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	collab, err := repository.GetCollaboratorTx(r.Context(), tx, id)
 	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
 	// Long leaves transition active → on_leave. Vacation stays on active.
-	if req.Type != "vacation" && collab.Status == "active" {
+	if absType != "vacation" && collab.Status == "active" {
 		st := "on_leave"
-		updated, err := repository.UpdateCollaborator(r.Context(), s.db, model.UpdateCollaboratorRequest{ID: id, Status: &st})
+		updated, err := repository.UpdateCollaboratorTx(r.Context(), tx, model.UpdateCollaboratorRequest{ID: id, Status: &st})
 		if err != nil {
 			writeMappedError(w, err)
 			return
 		}
 		collab = updated
 	}
-	payload := map[string]any{"type": strings.TrimSpace(req.Type)}
+
+	lifecyclePayload := map[string]any{"type": absType}
 	if d := strings.TrimSpace(req.From); d != "" {
-		payload["from"] = d
+		lifecyclePayload["from"] = d
 	}
 	if d := strings.TrimSpace(req.To); d != "" {
-		payload["to"] = d
+		lifecyclePayload["to"] = d
 	}
 	if req.DurationDays > 0 {
-		payload["duration_days"] = req.DurationDays
+		lifecyclePayload["duration_days"] = req.DurationDays
 	}
-	if err := appendLifecycleEvent(r, s.db, collab.ID, model.LifecycleEventAbsenceStarted, payload); err != nil {
+	if err := appendLifecycleEventTx(r, tx, collab.ID, model.LifecycleEventAbsenceStarted, lifecyclePayload); err != nil {
 		writeMappedError(w, err)
 		return
 	}
 
-	// Emit collaborator.absence_started into event_log for event-driven workflows.
-	// Non-fatal: lifecycle entry above is committed; daily reconciliation is safety net.
-	if err := emitCollaboratorAbsenceStarted(r.Context(), s.db, collab,
-		strings.TrimSpace(req.Type),
-		strings.TrimSpace(req.From),
-		strings.TrimSpace(req.To),
-		req.DurationDays,
-	); err != nil {
-		s.logger.Warn("collaborator.absence_started event emit failed (non-fatal)", zap.Error(err), zap.String("collaborator_id", collab.ID.String()))
+	// Emit collaborator.absence_started canon event in the same transaction.
+	emitPayload := map[string]any{
+		"collaborator_id": collab.ID.String(),
+		"type":            absType,
+	}
+	if collab.PrimaryEmail != "" {
+		emitPayload["primary_email"] = collab.PrimaryEmail
+	}
+	if d := strings.TrimSpace(req.From); d != "" {
+		emitPayload["from"] = d
+	}
+	if d := strings.TrimSpace(req.To); d != "" {
+		emitPayload["to"] = d
+	}
+	if req.DurationDays > 0 {
+		emitPayload["duration_days"] = req.DurationDays
+	}
+	if _, err := repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
+		Type:          repository.EventTypeCollaboratorAbsenceStarted,
+		SchemaVersion: "v1",
+		AggregateType: "collaborator",
+		AggregateID:   collab.ID.String(),
+		Payload:       emitPayload,
+	}); err != nil {
+		writeMappedError(w, fmt.Errorf("emit collaborator.absence_started: %w", err))
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeMappedError(w, fmt.Errorf("commit collaborator.absence_started: %w", err))
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collab})
@@ -489,36 +608,62 @@ func (s *Server) handleCollaboratorAbsenceEnd(w http.ResponseWriter, r *http.Req
 		writeMappedError(w, err)
 		return
 	}
-	collab, err := repository.GetCollaborator(r.Context(), s.db, id)
+
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeMappedError(w, fmt.Errorf("begin tx: %w", err))
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	collab, err := repository.GetCollaboratorTx(r.Context(), tx, id)
 	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
 	if collab.Status == "on_leave" {
 		st := "active"
-		updated, err := repository.UpdateCollaborator(r.Context(), s.db, model.UpdateCollaboratorRequest{ID: id, Status: &st})
+		updated, err := repository.UpdateCollaboratorTx(r.Context(), tx, model.UpdateCollaboratorRequest{ID: id, Status: &st})
 		if err != nil {
 			writeMappedError(w, err)
 			return
 		}
 		collab = updated
 	}
-	payload := map[string]any{}
+
+	lifecyclePayload := map[string]any{}
 	if d := strings.TrimSpace(req.AbsenceEventID); d != "" {
-		payload["absence_event_id"] = d
+		lifecyclePayload["absence_event_id"] = d
 	}
 	if d := strings.TrimSpace(req.ActualEnd); d != "" {
-		payload["actual_end"] = d
+		lifecyclePayload["actual_end"] = d
 	}
-	if err := appendLifecycleEvent(r, s.db, collab.ID, model.LifecycleEventAbsenceEnded, payload); err != nil {
+	if err := appendLifecycleEventTx(r, tx, collab.ID, model.LifecycleEventAbsenceEnded, lifecyclePayload); err != nil {
 		writeMappedError(w, err)
 		return
 	}
 
-	// Emit collaborator.absence_ended into event_log for event-driven workflows.
-	// Non-fatal: lifecycle entry above is committed; daily reconciliation is safety net.
-	if err := emitCollaboratorAbsenceEnded(r.Context(), s.db, collab); err != nil {
-		s.logger.Warn("collaborator.absence_ended event emit failed (non-fatal)", zap.Error(err), zap.String("collaborator_id", collab.ID.String()))
+	// Emit collaborator.absence_ended canon event in the same transaction.
+	emitPayload := map[string]any{
+		"collaborator_id": collab.ID.String(),
+	}
+	if collab.PrimaryEmail != "" {
+		emitPayload["primary_email"] = collab.PrimaryEmail
+	}
+	if _, err := repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
+		Type:          repository.EventTypeCollaboratorAbsenceEnded,
+		SchemaVersion: "v1",
+		AggregateType: "collaborator",
+		AggregateID:   collab.ID.String(),
+		Payload:       emitPayload,
+	}); err != nil {
+		writeMappedError(w, fmt.Errorf("emit collaborator.absence_ended: %w", err))
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeMappedError(w, fmt.Errorf("commit collaborator.absence_ended: %w", err))
+		return
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collab})
@@ -579,6 +724,19 @@ func (s *Server) handleCollaboratorProviderState(w http.ResponseWriter, r *http.
 
 func appendLifecycleEvent(r *http.Request, db *sql.DB, collabID uuid.UUID, eventType string, payload map[string]any) error {
 	_, err := repository.AppendLifecycleEvent(r.Context(), db, model.AppendLifecycleEventRequest{
+		CollaboratorID: collabID,
+		EventType:      eventType,
+		Payload:        payload,
+		ActorType:      model.ActorTypeAPI,
+		ActorID:        actorIDFromRequest(r),
+	})
+	return err
+}
+
+// appendLifecycleEventTx is the *sql.Tx variant of appendLifecycleEvent used by
+// lifecycle handlers that mutate state and emit canon events atomically.
+func appendLifecycleEventTx(r *http.Request, tx *sql.Tx, collabID uuid.UUID, eventType string, payload map[string]any) error {
+	_, err := repository.AppendLifecycleEventTx(r.Context(), tx, model.AppendLifecycleEventRequest{
 		CollaboratorID: collabID,
 		EventType:      eventType,
 		Payload:        payload,
