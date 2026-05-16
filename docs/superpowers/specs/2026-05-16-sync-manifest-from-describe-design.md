@@ -491,3 +491,53 @@ managed here.
   function on instances previously blocked by `contract_mismatch`.
 - 85%+ unit + integration test coverage in `internal/manifestsync/`.
 - Zero observed cases of sync writing an invalid manifest version.
+
+---
+
+## 16. E2E smoke results (2026-05-16)
+
+Addon shipped to production at `sha-cd073df` (includes the bug fix from sha-109d859 → cd073df: `[]string` arrays in `diff_summary` were rejected by the JSON Schema validator's reflect-based type check; converted to `[]any` to match validator expectations).
+
+**Event-driven path** — proven on pod start with 5 pre-existing drifted instances:
+
+| Type | from | to | detected_at | bumped_at | gap |
+|---|---|---|---|---|---|
+| google-workspace | v8 | v9 | 04:59:19.706 | 04:59:23.333 | 3.6s |
+| slack | v6 | v7 | 04:59:19.799 | 04:59:23.331 | 3.5s |
+| schema-migrations-goose-postgres | v1 | v2 | 04:59:20.105 | 04:59:23.241 | 3.1s |
+| tartaro | v2 | v3 | 04:59:20.401 | 04:59:23.275 | 2.9s |
+| yggdrasil-self | v14 | v15 | 04:59:20.601 | 04:59:23.354 | 2.8s |
+
+All 5 transitioned `contract_mismatch` → `healthy` within ~60s on subsequent handshake cycles.
+
+> **NOTE:** The synced events for the initial 5 were NOT persisted because of the `[]string` validator bug. The bug fix landed in sha-cd073df. After redeploy, forcing a fresh drift on `slack` (re-applying v6 spec as v10) produced a clean test that confirmed the full pipeline:
+>
+> | Step | Result |
+> |---|---|
+> | Operator applies slack v10 with v6's spec (drift forced) | OK |
+> | Runtime monitor detects mismatch on next handshake (~30s) | `runtime_state.contract_mismatch_detected` emitted at 05:15:21 |
+> | Runner consumes Notify, runs SyncIntegrationType | apply v11 succeeded |
+> | Synced event emitted | `integration_type.synced` `{from_version:10, to_version:11, diff_summary:{added_actions:[], removed_actions:[], schema_changed:true, capabilities_changed:false}}` |
+> | Next handshake (~30s) | slack runtime_state `v11 healthy` |
+
+**Manual HTTP path** — proven on `grafana` (version_mismatch case):
+
+```bash
+POST /api/v1/integration-types/4633462c-3865-4a03-b456-76c648df1c81/sync
+→ HTTP 422
+→ {"error":"describe integration type global/grafana through transport \"rabbitmq\": version_mismatch...","reason":"rpc_failed","status":"skipped"}
+```
+
+`integration_type.sync_skipped` event persisted with reason=rpc_failed.
+
+**Slack no-op path** — proven on second manual trigger after auto-sync resolved:
+
+```bash
+POST /api/v1/integration-types/8de5e107-30ef-4101-a6cf-54c59f390754/sync
+→ HTTP 200
+→ {"status":"no_op"}
+```
+
+No event emitted (default `DEBUG_SYNC_NO_OP=false`).
+
+**All 5 originally-drifted manifests reached steady state**: latest active versions now match live describe responses; runtime monitor reports them healthy. Framework production-ready.
