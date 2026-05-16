@@ -8,8 +8,10 @@ import (
 	"net/http"
 	"strconv"
 	"strings"
+	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/externalidentity"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
 )
 
@@ -151,22 +153,23 @@ func parseIntOr(s string, def int) int {
 	return n
 }
 
-// Stub event emit helpers — replaced in Task 6 with real implementations
-// using internal/externalidentity/events.go builders.
 func emitLinkedEvent(ctx context.Context, db *sql.DB, identityID, collabID, instanceID uuid.UUID, externalID string, metadata map[string]any, reLinked bool) error {
-	_ = ctx
-	_ = db
-	_ = identityID
-	_ = collabID
-	_ = instanceID
-	_ = externalID
-	_ = metadata
-	_ = reLinked
-	return nil
+	return externalidentity.EmitEvent(ctx, db, repository.EventTypeExternalIdentityLinked, identityID,
+		externalidentity.BuildLinkedPayload(externalidentity.LinkedInputs{
+			IdentityID: identityID, CollaboratorID: collabID,
+			IntegrationInstanceID: instanceID, ExternalID: externalID,
+			ReLinked: reLinked, LinkedAt: time.Now().UTC(),
+			ExternalMetadata: metadata,
+		}))
 }
+
 func emitConflictEvent(ctx context.Context, db *sql.DB, e *externalidentity.ConflictError) error {
-	_ = ctx
-	_ = db
-	_ = e
-	return nil
+	return externalidentity.EmitEvent(ctx, db, repository.EventTypeExternalIdentityConflictDetected, e.IntegrationInstanceID,
+		externalidentity.BuildConflictPayload(externalidentity.ConflictInputs{
+			IntegrationInstanceID:  e.IntegrationInstanceID,
+			ExternalID:             e.ExternalID,
+			IncomingCollaboratorID: e.IncomingCollaboratorID,
+			ExistingCollaboratorID: e.ExistingCollaboratorID,
+			DetectedAt:             time.Now().UTC(),
+		}))
 }
