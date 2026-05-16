@@ -1,0 +1,29 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/integration_type/synced.json",
+  "title": "integration_type.synced v1",
+  "description": "Emitted after manifest_sync successfully applies a new integration_type version matching the live adapter describe contract.",
+  "type": "object",
+  "required": ["type_id", "type_namespace", "type_name", "from_version", "to_version", "diff_summary", "source_instance_id", "synced_at"],
+  "additionalProperties": false,
+  "properties": {
+    "type_id":            { "type": "string", "format": "uuid" },
+    "type_namespace":     { "type": "string", "minLength": 1 },
+    "type_name":          { "type": "string", "minLength": 1 },
+    "from_version":       { "type": "integer", "minimum": 1 },
+    "to_version":         { "type": "integer", "minimum": 2 },
+    "diff_summary": {
+      "type": "object",
+      "required": ["added_actions", "removed_actions", "schema_changed", "capabilities_changed"],
+      "additionalProperties": false,
+      "properties": {
+        "added_actions":        { "type": "array", "items": { "type": "string" } },
+        "removed_actions":      { "type": "array", "items": { "type": "string" } },
+        "schema_changed":       { "type": "boolean" },
+        "capabilities_changed": { "type": "boolean" }
+      }
+    },
+    "source_instance_id": { "type": "string", "format": "uuid" },
+    "synced_at":          { "type": "string", "format": "date-time" }
+  }
+}

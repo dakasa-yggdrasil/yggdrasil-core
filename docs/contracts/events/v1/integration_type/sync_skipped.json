@@ -1,0 +1,28 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/integration_type/sync_skipped.json",
+  "title": "integration_type.sync_skipped v1",
+  "description": "Emitted when manifest_sync could not complete a sync attempt. The `reason` enum is the operational signal; `error` is detail for humans.",
+  "type": "object",
+  "required": ["type_id", "type_namespace", "type_name", "reason", "attempted_at"],
+  "additionalProperties": false,
+  "properties": {
+    "type_id":               { "type": "string", "format": "uuid" },
+    "type_namespace":        { "type": "string", "minLength": 1 },
+    "type_name":             { "type": "string", "minLength": 1 },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "type_not_found",
+        "no_instances",
+        "no_describable_instance",
+        "rpc_failed",
+        "invalid_describe",
+        "apply_failed"
+      ]
+    },
+    "error":                 { "type": "string" },
+    "attempted_instance_id": { "type": ["string", "null"], "format": "uuid" },
+    "attempted_at":          { "type": "string", "format": "date-time" }
+  }
+}

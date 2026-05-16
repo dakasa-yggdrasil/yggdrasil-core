@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/runtime_state/contract_mismatch_detected.json",
+  "title": "runtime_state.contract_mismatch_detected v1",
+  "description": "Emitted by integration_health monitor when a describe handshake transitions an integration_instance to contract_mismatch status. Debounced to once per instance per 60s to avoid storms during handshake retries.",
+  "type": "object",
+  "required": ["instance_id", "type_id", "instance_namespace", "instance_name", "type_namespace", "type_name", "detected_at"],
+  "additionalProperties": false,
+  "properties": {
+    "instance_id":         { "type": "string", "format": "uuid" },
+    "type_id":             { "type": "string", "format": "uuid" },
+    "instance_namespace":  { "type": "string", "minLength": 1 },
+    "instance_name":       { "type": "string", "minLength": 1 },
+    "type_namespace":      { "type": "string", "minLength": 1 },
+    "type_name":           { "type": "string", "minLength": 1 },
+    "detected_at":         { "type": "string", "format": "date-time" }
+  }
+}

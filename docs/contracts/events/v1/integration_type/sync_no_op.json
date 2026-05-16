@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/integration_type/sync_no_op.json",
+  "title": "integration_type.sync_no_op v1",
+  "description": "Emitted when manifest_sync verifies the persisted manifest already matches live describe. Default: suppressed (set DEBUG_SYNC_NO_OP=true to emit).",
+  "type": "object",
+  "required": ["type_id", "type_namespace", "type_name", "source_instance_id", "checked_at"],
+  "additionalProperties": false,
+  "properties": {
+    "type_id":            { "type": "string", "format": "uuid" },
+    "type_namespace":     { "type": "string", "minLength": 1 },
+    "type_name":          { "type": "string", "minLength": 1 },
+    "source_instance_id": { "type": "string", "format": "uuid" },
+    "checked_at":         { "type": "string", "format": "date-time" }
+  }
+}

@@ -13,7 +13,7 @@ import (
 // FamilyEventsV1 identifies the events/v1 contract family.
 const FamilyEventsV1 = "events/v1"
 
-//go:embed events/v1/schema.json events/v1/manifest/*.json events/v1/product/*.json events/v1/workflow/*.json events/v1/authorization/*.json events/v1/buildproject/*.json events/v1/infra/*.json events/v1/collaborator/*.json events/v1/credential/*.json events/v1/team/*.json events/v1/team_membership/*.json events/v1/reactor/*.json
+//go:embed events/v1/schema.json events/v1/manifest/*.json events/v1/product/*.json events/v1/workflow/*.json events/v1/authorization/*.json events/v1/buildproject/*.json events/v1/infra/*.json events/v1/collaborator/*.json events/v1/credential/*.json events/v1/team/*.json events/v1/team_membership/*.json events/v1/reactor/*.json events/v1/runtime_state/*.json events/v1/integration_type/*.json
 var eventSchemaFS embed.FS
 
 var (
@@ -90,6 +90,11 @@ func eventTypeToSchemaPath(eventType string, schemaVersion string) string {
 		"team_membership.removed": "events/v1/team_membership/removed.json",
 		// reactor observability events
 		"reactor.dead_lettered": "events/v1/reactor/dead_lettered.json",
+		// manifest sync framework events
+		"runtime_state.contract_mismatch_detected": "events/v1/runtime_state/contract_mismatch_detected.json",
+		"integration_type.synced":                   "events/v1/integration_type/synced.json",
+		"integration_type.sync_no_op":               "events/v1/integration_type/sync_no_op.json",
+		"integration_type.sync_skipped":             "events/v1/integration_type/sync_skipped.json",
 	}
 	return mapping[eventType]
 }
