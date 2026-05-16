@@ -70,18 +70,32 @@ type contractMismatchInputs struct {
 
 // buildSyncedPayload constructs the payload map for integration_type.synced.
 // JSON keys match docs/contracts/events/v1/integration_type/synced.json.
+//
+// The added/removed slices are converted to []any rather than left as []string
+// because the event validator (contracts.ValidateEventPayload) inspects the
+// payload via reflection BEFORE json.Marshal, and its jsonschema library
+// rejects typed Go slices in a map[string]any with "invalid jsonType []string".
+// Converting to []any matches the type the validator expects after a round-trip.
 func buildSyncedPayload(in syncedInputs) map[string]any {
+	added := make([]any, len(in.Diff.AddedActions))
+	for i, a := range in.Diff.AddedActions {
+		added[i] = a
+	}
+	removed := make([]any, len(in.Diff.RemovedActions))
+	for i, a := range in.Diff.RemovedActions {
+		removed[i] = a
+	}
 	return map[string]any{
-		"type_id":           in.TypeID.String(),
-		"type_namespace":    in.TypeNamespace,
-		"type_name":         in.TypeName,
-		"from_version":      in.FromVersion,
-		"to_version":        in.ToVersion,
+		"type_id":            in.TypeID.String(),
+		"type_namespace":     in.TypeNamespace,
+		"type_name":          in.TypeName,
+		"from_version":       in.FromVersion,
+		"to_version":         in.ToVersion,
 		"source_instance_id": in.SourceInstanceID.String(),
-		"synced_at":         in.SyncedAt.UTC().Format(time.RFC3339),
+		"synced_at":          in.SyncedAt.UTC().Format(time.RFC3339),
 		"diff_summary": map[string]any{
-			"added_actions":        in.Diff.AddedActions,
-			"removed_actions":      in.Diff.RemovedActions,
+			"added_actions":        added,
+			"removed_actions":      removed,
 			"schema_changed":       in.Diff.SchemaChanged,
 			"capabilities_changed": in.Diff.CapabilitiesChanged,
 		},
