@@ -152,6 +152,14 @@ func (s *Server) handleCollaboratorReOnboard(w http.ResponseWriter, r *http.Requ
 		writeMappedError(w, err)
 		return
 	}
+
+	// Emit collaborator.re_onboarded into event_log for event-driven workflows.
+	// Non-fatal: lifecycle entry above is committed; daily reconciliation is safety net.
+	// Note: previous_offboarded_at is not stored on the collaborator row; omitted from payload.
+	if err := emitCollaboratorReOnboarded(r.Context(), s.db, collab); err != nil {
+		s.logger.Warn("collaborator.re_onboarded event emit failed (non-fatal)", zap.Error(err), zap.String("collaborator_id", collab.ID.String()))
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collab})
 }
 
@@ -204,6 +212,13 @@ func (s *Server) handleCollaboratorRoleChange(w http.ResponseWriter, r *http.Req
 		writeMappedError(w, err)
 		return
 	}
+
+	// Emit collaborator.role_changed into event_log for event-driven workflows.
+	// Non-fatal: lifecycle entry above is committed; daily reconciliation is safety net.
+	if err := emitCollaboratorRoleChanged(r.Context(), s.db, collab, previous, newRole); err != nil {
+		s.logger.Warn("collaborator.role_changed event emit failed (non-fatal)", zap.Error(err), zap.String("collaborator_id", collab.ID.String()))
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collab})
 }
 
@@ -443,6 +458,18 @@ func (s *Server) handleCollaboratorAbsenceStart(w http.ResponseWriter, r *http.R
 		writeMappedError(w, err)
 		return
 	}
+
+	// Emit collaborator.absence_started into event_log for event-driven workflows.
+	// Non-fatal: lifecycle entry above is committed; daily reconciliation is safety net.
+	if err := emitCollaboratorAbsenceStarted(r.Context(), s.db, collab,
+		strings.TrimSpace(req.Type),
+		strings.TrimSpace(req.From),
+		strings.TrimSpace(req.To),
+		req.DurationDays,
+	); err != nil {
+		s.logger.Warn("collaborator.absence_started event emit failed (non-fatal)", zap.Error(err), zap.String("collaborator_id", collab.ID.String()))
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collab})
 }
 
@@ -487,6 +514,13 @@ func (s *Server) handleCollaboratorAbsenceEnd(w http.ResponseWriter, r *http.Req
 		writeMappedError(w, err)
 		return
 	}
+
+	// Emit collaborator.absence_ended into event_log for event-driven workflows.
+	// Non-fatal: lifecycle entry above is committed; daily reconciliation is safety net.
+	if err := emitCollaboratorAbsenceEnded(r.Context(), s.db, collab); err != nil {
+		s.logger.Warn("collaborator.absence_ended event emit failed (non-fatal)", zap.Error(err), zap.String("collaborator_id", collab.ID.String()))
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collab})
 }
 
