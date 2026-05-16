@@ -457,6 +457,46 @@ func failIntegrationRuntimeCheck(
 	return cause
 }
 
+// DescribeIntegrationType performs the raw adapter describe RPC for the given
+// integration instance and returns the live IntegrationTypeManifestSpec.
+// Unlike verifyResolvedIntegrationType it has no DB side effects — it is
+// intended for callers (e.g., the manifest_sync addon) that only need the
+// live spec and handle persistence themselves.
+func DescribeIntegrationType(
+	ctx context.Context,
+	conn *amqp.Connection,
+	instanceManifest model.Manifest,
+	typeManifest model.Manifest,
+	instanceSpec model.IntegrationInstanceManifestSpec,
+	typeSpec model.IntegrationTypeManifestSpec,
+) (model.IntegrationTypeManifestSpec, error) {
+	timeout := time.Duration(typeSpec.Adapter.TimeoutSeconds) * time.Second
+	if timeout <= 0 {
+		timeout = 15 * time.Second
+	}
+	rpcCtx, cancel := context.WithTimeout(ctx, timeout)
+	defer cancel()
+
+	request := model.AdapterDescribeRequest{
+		Provider:        strings.TrimSpace(typeSpec.Provider),
+		ExpectedVersion: strings.TrimSpace(typeSpec.Adapter.Version),
+	}
+
+	var response model.AdapterDescribeResponse
+	transport := NewAdapterTransportClient(rpcamqp.New(conn))
+	if err := transport.Call(rpcCtx, integrationDescribeContract, typeSpec, instanceSpec, "describe", request, &response); err != nil {
+		return model.IntegrationTypeManifestSpec{}, fmt.Errorf(
+			"describe integration type %s/%s through transport %q: %w",
+			typeManifest.Metadata.Namespace,
+			typeManifest.Metadata.Name,
+			typeSpec.Adapter.Transport,
+			err,
+		)
+	}
+
+	return integrationTypeSpecFromDescribeResponse(response), nil
+}
+
 func integrationTypeSpecFromDescribeResponse(response model.AdapterDescribeResponse) model.IntegrationTypeManifestSpec {
 	return model.IntegrationTypeManifestSpec{
 		Provider:         response.Provider,
