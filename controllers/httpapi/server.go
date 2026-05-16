@@ -360,6 +360,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/collaborators/{id}/provider-state", server.handleCollaboratorProviderState)
 	mux.HandleFunc("POST /api/v1/collaborator-external-identities", server.handleExternalIdentityPost)
 	mux.HandleFunc("GET /api/v1/collaborator-external-identities", server.handleExternalIdentityGet)
+	mux.HandleFunc("DELETE /api/v1/collaborator-external-identities/{id}", server.handleExternalIdentityDelete)
 	mux.HandleFunc("GET /api/v1/permissions/catalog", server.handlePermissionList)
 	mux.HandleFunc("POST /api/v1/permissions/catalog", server.handlePermissionRegister)
 	mux.HandleFunc("GET /api/v1/permissions/bindings", server.handlePermissionBindingList)

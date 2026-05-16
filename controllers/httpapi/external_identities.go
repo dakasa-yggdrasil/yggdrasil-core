@@ -173,3 +173,44 @@ func emitConflictEvent(ctx context.Context, db *sql.DB, e *externalidentity.Conf
 			DetectedAt:             time.Now().UTC(),
 		}))
 }
+
+func (s *Server) handleExternalIdentityDelete(w http.ResponseWriter, r *http.Request) {
+	if err := authorizeAuthAdminRequest(r); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	raw := strings.TrimSpace(r.PathValue("id"))
+	id, err := uuid.Parse(raw)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid uuid"})
+		return
+	}
+	hard := r.URL.Query().Get("hard") == "true"
+
+	if hard {
+		if err := externalidentity.HardDelete(r.Context(), s.db, id); err != nil {
+			writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+			return
+		}
+		w.WriteHeader(http.StatusNoContent)
+		return
+	}
+
+	identity, err := externalidentity.SoftDelete(r.Context(), s.db, id)
+	if err != nil {
+		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": err.Error()})
+		return
+	}
+	unlinkedAt := time.Now().UTC()
+	if identity.UnlinkedAt != nil {
+		unlinkedAt = *identity.UnlinkedAt
+	}
+	_ = externalidentity.EmitEvent(r.Context(), s.db, repository.EventTypeExternalIdentityUnlinked, identity.ID,
+		externalidentity.BuildUnlinkedPayload(externalidentity.UnlinkedInputs{
+			IdentityID: identity.ID, CollaboratorID: identity.CollaboratorID,
+			IntegrationInstanceID: identity.IntegrationInstanceID,
+			ExternalID:            identity.ExternalID,
+			UnlinkedAt:            unlinkedAt,
+		}))
+	writeJSON(w, http.StatusOK, map[string]any{"identity_id": identity.ID.String(), "outcome": "unlinked"})
+}
