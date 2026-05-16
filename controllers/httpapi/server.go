@@ -1233,6 +1233,12 @@ func (s *Server) handleTeamCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Emit team.created into event_log for event-driven workflows.
+	// Non-fatal: team row is already committed; daily reconciliation is safety net.
+	if err := emitTeamCreated(r.Context(), s.db, team); err != nil {
+		s.logger.Warn("team.created event emit failed (non-fatal)", zap.Error(err), zap.String("team_id", team.ID.String()))
+	}
+
 	writeJSON(w, http.StatusCreated, map[string]any{"team": team})
 }
 
@@ -1263,11 +1269,48 @@ func (s *Server) handleTeamUpdate(w http.ResponseWriter, r *http.Request) {
 		writeMappedError(w, fmt.Errorf("team id is required"))
 		return
 	}
+
+	// Build changed_fields from request (only fields present in the PATCH body).
+	changedFields := map[string]any{}
+	if req.Slug != nil {
+		changedFields["slug"] = *req.Slug
+	}
+	if req.Name != nil {
+		changedFields["name"] = *req.Name
+	}
+	if req.Type != nil {
+		changedFields["type"] = *req.Type
+	}
+	if req.Status != nil {
+		changedFields["status"] = *req.Status
+	}
+	if req.ParentTeamID != nil {
+		changedFields["parent_team_id"] = *req.ParentTeamID
+	}
+	if req.Owners != nil {
+		changedFields["owners"] = *req.Owners
+	}
+	if req.Traits != nil {
+		changedFields["traits"] = *req.Traits
+	}
+	if req.Metadata != nil {
+		changedFields["metadata"] = *req.Metadata
+	}
+
 	team, err := repository.UpdateTeam(r.Context(), s.db, req)
 	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
+
+	// Emit team.updated into event_log for event-driven workflows.
+	// Non-fatal: state mutation is committed; daily reconciliation is safety net.
+	if len(changedFields) > 0 {
+		if err := emitTeamUpdated(r.Context(), s.db, team, changedFields); err != nil {
+			s.logger.Warn("team.updated event emit failed (non-fatal)", zap.Error(err), zap.String("team_id", team.ID.String()))
+		}
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{"team": team})
 }
 
@@ -1282,6 +1325,14 @@ func (s *Server) handleTeamDelete(w http.ResponseWriter, r *http.Request) {
 		writeMappedError(w, err)
 		return
 	}
+
+	// Emit team.deleted into event_log for event-driven workflows.
+	// Non-fatal: team row is already removed; emit captures the identity for
+	// downstream cleanup workflows. Daily reconciliation is safety net.
+	if err := emitTeamDeleted(r.Context(), s.db, team); err != nil {
+		s.logger.Warn("team.deleted event emit failed (non-fatal)", zap.Error(err), zap.String("team_id", team.ID.String()))
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{"team": team, "deleted": true})
 }
 
@@ -1383,12 +1434,22 @@ func (s *Server) handleTeamMembershipUpsert(w http.ResponseWriter, r *http.Reque
 			"team_slug": membership.TeamSlug,
 			"role":      membership.Role,
 		}, actorIDFromRequest(r))
+		// Emit team_membership.added into event_log for event-driven workflows.
+		if err := emitTeamMembershipAdded(r.Context(), s.db, membership, membership.Source); err != nil {
+			s.logger.Warn("team_membership.added event emit failed (non-fatal)", zap.Error(err),
+				zap.String("membership_id", membership.ID.String()))
+		}
 	case !nowActive && prevActive:
 		s.appendLifecycle(r.Context(), membership.CollaboratorID, model.LifecycleEventTeamLeft, map[string]any{
 			"team_id":   membership.TeamID.String(),
 			"team_slug": membership.TeamSlug,
 			"role":      membership.Role,
 		}, actorIDFromRequest(r))
+		// Emit team_membership.removed into event_log for event-driven workflows.
+		if err := emitTeamMembershipRemoved(r.Context(), s.db, membership); err != nil {
+			s.logger.Warn("team_membership.removed event emit failed (non-fatal)", zap.Error(err),
+				zap.String("membership_id", membership.ID.String()))
+		}
 	}
 
 	writeJSON(w, http.StatusCreated, map[string]any{"membership": membership})
