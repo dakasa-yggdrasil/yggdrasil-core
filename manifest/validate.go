@@ -89,7 +89,17 @@ func ValidateDocument(doc model.ManifestDocument) error {
 		if err != nil {
 			return err
 		}
-		return ValidateIntegrationTypeSpec(spec)
+		if err := ValidateIntegrationTypeSpec(spec); err != nil {
+			return err
+		}
+		var rawSpec map[string]any
+		if err := json.Unmarshal(doc.Spec, &rawSpec); err != nil {
+			return fmt.Errorf("integration_type spec: %w", err)
+		}
+		if err := ValidateReactors(rawSpec); err != nil {
+			return fmt.Errorf("integration_type spec: %w", err)
+		}
+		return nil
 	case "integration_instance":
 		spec, err := ParseIntegrationInstanceSpec(doc.Spec)
 		if err != nil {
