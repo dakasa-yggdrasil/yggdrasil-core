@@ -507,6 +507,15 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/audit", server.handleAuditList)
 	mux.HandleFunc("POST /api/v1/workflow-templates/{namespace}/{name}/instantiate", server.handleWorkflowTemplateInstantiate)
 
+	// Federated integration_surfaces registry (coexists with the older
+	// internal/surface system at /api/v1/ops/surfaces*). See spec
+	// 2026-05-17-integration-surfaces and the addons/integration_surface_sync
+	// addon that wires the repository + dispatcher into this server.
+	mux.HandleFunc("GET /api/v1/integration-surfaces", server.handleIntegrationSurfacesList())
+	mux.HandleFunc("GET /api/v1/integration-surfaces/{name}", server.handleIntegrationSurfaceGet())
+	mux.HandleFunc("POST /api/v1/integration-surfaces/{name}/sync", server.handleIntegrationSurfaceSync())
+	mux.HandleFunc("POST /api/v1/integrations/{instance_id}/surface-query", server.handleIntegrationSurfaceQuery())
+
 	// Opt-in OIDC OP. Skipped when no issuer is configured (the default)
 	// so tests and adopters who don't need OIDC keep a slimmer surface.
 	if server.oidcIssuerURL != "" {
