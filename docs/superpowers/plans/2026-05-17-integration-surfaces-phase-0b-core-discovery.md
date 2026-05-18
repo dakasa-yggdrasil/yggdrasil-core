@@ -2,9 +2,11 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Extend yggdrasil-core with the backend machinery for federated integration surfaces: `surface_manifests` table, `GET/POST /api/v1/surfaces*` endpoints, `OperationOnSurfaceQuery` proxy, `manifest_sync` extension reconciling surface manifests, and 4 canon events.
+**Goal:** Extend yggdrasil-core with the backend machinery for federated integration surfaces: `integration_surfaces` table, `GET/POST /api/v1/integration-surfaces*` endpoints, `OperationOnSurfaceQuery` proxy, `manifest_sync` extension reconciling integration surface manifests, and 4 canon events.
 
-**Architecture:** New domain `internal/surfaces` (types + repository + service). HTTP handlers in `controllers/httpapi/`. Manifest_sync addon extended in `internal/manifestsync/` to reconcile two collections (`integration_types`, `surface_manifests`). Operation `on_surface_query` declared in `internal/integrations/operations.go` and proxied via RabbitMQ.
+**COEXISTENCE CALLOUT:** yggdrasil-core already has a different `internal/surface/` package + `surface_manifests` table (migration 00033) + `/api/v1/ops/surfaces*` endpoints serving a server-driven UI system from the 2026-05-08 handoff. That system stays UNTOUCHED. This plan introduces a SECOND, parallel system under different identifiers: package `internal/integrationsurfaces/`, table `integration_surfaces`, paths `/api/v1/integration-surfaces*`. Do NOT modify, drop, or rename anything in the old system.
+
+**Architecture:** New domain `internal/integrationsurfaces` (types + repository + service). HTTP handlers in `controllers/httpapi/`. Manifest_sync addon extended in `internal/manifestsync/` to reconcile two collections (`integration_types`, `integration_surfaces`). Operation `on_surface_query` declared in `internal/integrations/operations.go` and proxied via RabbitMQ.
 
 **Tech Stack:** Go 1.22+, PostgreSQL (existing yggdrasil-core db), RabbitMQ (existing operations dispatch), goose migrations, standard `net/http` + chi-style routing pattern already in repo.
 
@@ -16,10 +18,10 @@
 
 ---
 
-## Task 1: Migration `00045_surface_manifests.sql`
+## Task 1: Migration `00045_integration_surfaces.sql`
 
 **Files:**
-- Create: `db/migrations/00045_surface_manifests.sql`
+- Create: `db/migrations/00045_integration_surfaces.sql`
 
 - [ ] **Step 1: Inspect highest existing migration number to confirm 00045 is next**
 
@@ -32,12 +34,12 @@ Expected: numbers up to ~00044. If 00045 is already used, renumber to next free 
 
 - [ ] **Step 2: Write migration SQL**
 
-`db/migrations/00045_surface_manifests.sql`:
+`db/migrations/00045_integration_surfaces.sql`:
 
 ```sql
 -- +goose Up
 -- +goose StatementBegin
-CREATE TABLE IF NOT EXISTS surface_manifests (
+CREATE TABLE IF NOT EXISTS integration_surfaces (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL UNIQUE,
   integration_type text,
@@ -50,19 +52,19 @@ CREATE TABLE IF NOT EXISTS surface_manifests (
     REFERENCES integration_types(name) ON DELETE SET NULL
 );
 
-CREATE INDEX IF NOT EXISTS surface_manifests_active_idx
-  ON surface_manifests (active) WHERE active;
+CREATE INDEX IF NOT EXISTS integration_surfaces_active_idx
+  ON integration_surfaces (active) WHERE active;
 
-CREATE INDEX IF NOT EXISTS surface_manifests_appears_on_idx
-  ON surface_manifests USING gin ((spec->'display'->'appears_on'));
+CREATE INDEX IF NOT EXISTS integration_surfaces_appears_on_idx
+  ON integration_surfaces USING gin ((spec->'display'->'appears_on'));
 
-CREATE INDEX IF NOT EXISTS surface_manifests_integration_type_idx
-  ON surface_manifests (integration_type) WHERE active;
+CREATE INDEX IF NOT EXISTS integration_surfaces_integration_type_idx
+  ON integration_surfaces (integration_type) WHERE active;
 -- +goose StatementEnd
 
 -- +goose Down
 -- +goose StatementBegin
-DROP TABLE IF EXISTS surface_manifests;
+DROP TABLE IF EXISTS integration_surfaces;
 -- +goose StatementEnd
 ```
 
@@ -70,7 +72,7 @@ DROP TABLE IF EXISTS surface_manifests;
 
 ```bash
 goose -dir db/migrations postgres "$DATABASE_URL" up
-psql "$DATABASE_URL" -c "\d surface_manifests"
+psql "$DATABASE_URL" -c "\d integration_surfaces"
 ```
 
 Expected: table description shows all 8 columns + 3 indexes + FK to integration_types.
@@ -78,8 +80,8 @@ Expected: table description shows all 8 columns + 3 indexes + FK to integration_
 - [ ] **Step 4: Commit**
 
 ```bash
-git add db/migrations/00045_surface_manifests.sql
-git commit -m "feat(db): surface_manifests table + indexes (gin appears_on)"
+git add db/migrations/00045_integration_surfaces.sql
+git commit -m "feat(db): integration_surfaces table + indexes (gin appears_on)"
 ```
 
 ---
@@ -87,15 +89,15 @@ git commit -m "feat(db): surface_manifests table + indexes (gin appears_on)"
 ## Task 2: Domain types
 
 **Files:**
-- Create: `internal/surfaces/types.go`
-- Create: `internal/surfaces/types_test.go`
+- Create: `internal/integrationsurfaces/types.go`
+- Create: `internal/integrationsurfaces/types_test.go`
 
 - [ ] **Step 1: Write failing test**
 
-`internal/surfaces/types_test.go`:
+`internal/integrationsurfaces/types_test.go`:
 
 ```go
-package surfaces
+package integrationsurfaces
 
 import (
 	"encoding/json"
@@ -141,15 +143,15 @@ func TestManifestSpec_AppearsOn_AllValid(t *testing.T) {
 
 - [ ] **Step 2: Run — expect FAIL**
 
-Run: `go test ./internal/surfaces/...`
+Run: `go test ./internal/integrationsurfaces/...`
 Expected: FAIL — `surfaces` package doesn't exist yet.
 
 - [ ] **Step 3: Implement types.go**
 
-`internal/surfaces/types.go`:
+`internal/integrationsurfaces/types.go`:
 
 ```go
-package surfaces
+package integrationsurfaces
 
 import "time"
 
@@ -162,7 +164,7 @@ const (
 	CategoryDomain      Category = "domain"
 )
 
-// Manifest is the persisted record in surface_manifests.
+// Manifest is the persisted record in integration_surfaces.
 type Manifest struct {
 	ID              string       `json:"id"`
 	Name            string       `json:"name"`
@@ -224,13 +226,13 @@ func IsValidSlot(slot string) bool {
 
 - [ ] **Step 4: Run — expect PASS**
 
-Run: `go test ./internal/surfaces/...`
+Run: `go test ./internal/integrationsurfaces/...`
 Expected: PASS — 2 tests.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add internal/surfaces
+git add internal/integrationsurfaces
 git commit -m "feat(surfaces): domain types — Manifest, ManifestSpec, slot enum"
 ```
 
@@ -239,22 +241,22 @@ git commit -m "feat(surfaces): domain types — Manifest, ManifestSpec, slot enu
 ## Task 3: Repository
 
 **Files:**
-- Create: `internal/surfaces/repository.go`
-- Create: `internal/surfaces/repository_test.go`
+- Create: `internal/integrationsurfaces/repository.go`
+- Create: `internal/integrationsurfaces/repository_test.go`
 
 - [ ] **Step 1: Write failing integration test (uses test DB)**
 
-`internal/surfaces/repository_test.go`:
+`internal/integrationsurfaces/repository_test.go`:
 
 ```go
-package surfaces_test
+package integrationsurfaces_test
 
 import (
 	"context"
 	"encoding/json"
 	"testing"
 
-	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/surfaces"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/integrationsurfaces"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/testutil"
 )
 
@@ -262,18 +264,18 @@ func TestRepository_UpsertAndGet(t *testing.T) {
 	ctx := context.Background()
 	db := testutil.MustOpenTestDB(t)
 	defer db.Close()
-	repo := surfaces.NewRepository(db)
+	repo := integrationsurfaces.NewRepository(db)
 
-	spec := surfaces.ManifestSpec{
-		Category: surfaces.CategoryIntegration,
-		Runtime:  surfaces.Runtime{Kind: "spa", BasePath: "/s/slack"},
-		Display:  surfaces.Display{Title: "Slack", AppearsOn: []string{"ops-integrations"}},
+	spec := integrationintegrationsurfaces.ManifestSpec{
+		Category: integrationsurfaces.CategoryIntegration,
+		Runtime:  integrationsurfaces.Runtime{Kind: "spa", BasePath: "/s/slack"},
+		Display:  integrationsurfaces.Display{Title: "Slack", AppearsOn: []string{"ops-integrations"}},
 	}
 	intType := "slack"
-	m := surfaces.Manifest{
+	m := integrationsurfaces.Manifest{
 		Name:            "surface-slack",
 		IntegrationType: &intType,
-		Category:        surfaces.CategoryIntegration,
+		Category:        integrationsurfaces.CategoryIntegration,
 		Spec:            spec,
 		Active:          true,
 	}
@@ -301,16 +303,16 @@ func TestRepository_List_FiltersByAppearsOn(t *testing.T) {
 	ctx := context.Background()
 	db := testutil.MustOpenTestDB(t)
 	defer db.Close()
-	repo := surfaces.NewRepository(db)
+	repo := integrationsurfaces.NewRepository(db)
 
-	mk := func(name string, slots []string) surfaces.Manifest {
-		return surfaces.Manifest{
+	mk := func(name string, slots []string) integrationsurfaces.Manifest {
+		return integrationsurfaces.Manifest{
 			Name:     name,
-			Category: surfaces.CategoryIntegration,
-			Spec: surfaces.ManifestSpec{
-				Category: surfaces.CategoryIntegration,
-				Runtime:  surfaces.Runtime{Kind: "spa", BasePath: "/s/" + name},
-				Display:  surfaces.Display{Title: name, AppearsOn: slots},
+			Category: integrationsurfaces.CategoryIntegration,
+			Spec: integrationintegrationsurfaces.ManifestSpec{
+				Category: integrationsurfaces.CategoryIntegration,
+				Runtime:  integrationsurfaces.Runtime{Kind: "spa", BasePath: "/s/" + name},
+				Display:  integrationsurfaces.Display{Title: name, AppearsOn: slots},
 			},
 			Active: true,
 		}
@@ -324,7 +326,7 @@ func TestRepository_List_FiltersByAppearsOn(t *testing.T) {
 		t.Fatal(err)
 	}
 
-	items, err := repo.List(ctx, surfaces.ListFilter{AppearsOn: "ops-integrations"})
+	items, err := repo.List(ctx, integrationsurfaces.ListFilter{AppearsOn: "ops-integrations"})
 	if err != nil {
 		t.Fatalf("List: %v", err)
 	}
@@ -337,11 +339,11 @@ func TestRepository_Deactivate(t *testing.T) {
 	ctx := context.Background()
 	db := testutil.MustOpenTestDB(t)
 	defer db.Close()
-	repo := surfaces.NewRepository(db)
-	m := surfaces.Manifest{
+	repo := integrationsurfaces.NewRepository(db)
+	m := integrationsurfaces.Manifest{
 		Name:     "surface-x",
-		Category: surfaces.CategoryIntegration,
-		Spec:     surfaces.ManifestSpec{Category: surfaces.CategoryIntegration, Display: surfaces.Display{Title: "X"}},
+		Category: integrationsurfaces.CategoryIntegration,
+		Spec:     integrationintegrationsurfaces.ManifestSpec{Category: integrationsurfaces.CategoryIntegration, Display: integrationsurfaces.Display{Title: "X"}},
 		Active:   true,
 	}
 	if err := repo.Upsert(ctx, &m); err != nil {
@@ -365,15 +367,15 @@ var _ = json.Marshal
 
 - [ ] **Step 2: Run — expect FAIL**
 
-Run: `go test ./internal/surfaces/...`
+Run: `go test ./internal/integrationsurfaces/...`
 Expected: FAIL — `NewRepository` / `Upsert` / `GetByName` / `List` / `Deactivate` undefined.
 
 - [ ] **Step 3: Implement repository.go**
 
-`internal/surfaces/repository.go`:
+`internal/integrationsurfaces/repository.go`:
 
 ```go
-package surfaces
+package integrationsurfaces
 
 import (
 	"context"
@@ -404,7 +406,7 @@ func (r *Repository) Upsert(ctx context.Context, m *Manifest) error {
 		return fmt.Errorf("marshal spec: %w", err)
 	}
 	const q = `
-INSERT INTO surface_manifests (name, integration_type, category, spec, active)
+INSERT INTO integration_surfaces (name, integration_type, category, spec, active)
 VALUES ($1, $2, $3, $4, $5)
 ON CONFLICT (name) DO UPDATE
 SET integration_type = EXCLUDED.integration_type,
@@ -425,7 +427,7 @@ RETURNING id, registered_at, updated_at`
 func (r *Repository) GetByName(ctx context.Context, name string) (*Manifest, error) {
 	const q = `
 SELECT id, name, integration_type, category, spec, active, registered_at, updated_at
-FROM surface_manifests
+FROM integration_surfaces
 WHERE name = $1`
 	var (
 		m       Manifest
@@ -485,7 +487,7 @@ func (r *Repository) List(ctx context.Context, f ListFilter) ([]Manifest, error)
 	}
 	q := fmt.Sprintf(`
 SELECT id, name, integration_type, category, spec, active, registered_at, updated_at
-FROM surface_manifests
+FROM integration_surfaces
 WHERE %s
 ORDER BY updated_at DESC`, where)
 
@@ -521,7 +523,7 @@ ORDER BY updated_at DESC`, where)
 
 // Deactivate flips active=false on a manifest.
 func (r *Repository) Deactivate(ctx context.Context, name string) error {
-	const q = `UPDATE surface_manifests SET active = false, updated_at = now() WHERE name = $1`
+	const q = `UPDATE integration_surfaces SET active = false, updated_at = now() WHERE name = $1`
 	res, err := r.db.ExecContext(ctx, q, name)
 	if err != nil {
 		return fmt.Errorf("deactivate: %w", err)
@@ -535,7 +537,7 @@ func (r *Repository) Deactivate(ctx context.Context, name string) error {
 
 // TouchUpdatedAt sets updated_at to now() — used during ops force-sync probes.
 func (r *Repository) TouchUpdatedAt(ctx context.Context, name string) error {
-	const q = `UPDATE surface_manifests SET updated_at = now() WHERE name = $1`
+	const q = `UPDATE integration_surfaces SET updated_at = now() WHERE name = $1`
 	res, err := r.db.ExecContext(ctx, q, name)
 	if err != nil {
 		return err
@@ -551,13 +553,13 @@ func (r *Repository) TouchUpdatedAt(ctx context.Context, name string) error {
 
 - [ ] **Step 4: Run — expect PASS**
 
-Run: `go test ./internal/surfaces/...`
+Run: `go test ./internal/integrationsurfaces/...`
 Expected: PASS — 3 tests.
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add internal/surfaces
+git add internal/integrationsurfaces
 git commit -m "feat(surfaces): repository with Upsert/GetByName/List(filtered)/Deactivate"
 ```
 
@@ -567,12 +569,12 @@ git commit -m "feat(surfaces): repository with Upsert/GetByName/List(filtered)/D
 
 **Files:**
 - Modify: `internal/events/constants.go` (add 4 event names)
-- Create: `internal/events/schemas/surface_registered.json`
-- Create: `internal/events/schemas/surface_updated.json`
-- Create: `internal/events/schemas/surface_deactivated.json`
-- Create: `internal/events/schemas/surface_drift_detected.json`
-- Create: `internal/surfaces/events.go` (typed emitters)
-- Create: `internal/surfaces/events_test.go`
+- Create: `internal/events/schemas/integration_surface_registered.json`
+- Create: `internal/events/schemas/integration_surface_updated.json`
+- Create: `internal/events/schemas/integration_surface_deactivated.json`
+- Create: `internal/events/schemas/integration_surface_drift_detected.json`
+- Create: `internal/integrationsurfaces/events.go` (typed emitters)
+- Create: `internal/integrationsurfaces/events_test.go`
 
 - [ ] **Step 1: Locate existing events constants & schema-loading style**
 
@@ -590,21 +592,21 @@ Append to the existing constants block:
 ```go
 // Surface canon events
 const (
-	SurfaceRegistered    = "surface.registered"
-	SurfaceUpdated       = "surface.updated"
-	SurfaceDeactivated   = "surface.deactivated"
-	SurfaceDriftDetected = "surface.drift_detected"
+	IntegrationSurfaceRegistered    = "integration_surface.registered"
+	IntegrationSurfaceUpdated       = "integration_surface.updated"
+	IntegrationSurfaceDeactivated   = "integration_surface.deactivated"
+	IntegrationSurfaceDriftDetected = "integration_surface.drift_detected"
 )
 ```
 
 - [ ] **Step 3: Write 4 JSON schemas (one per event)**
 
-`internal/events/schemas/surface_registered.json`:
+`internal/events/schemas/integration_surface_registered.json`:
 
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "surface.registered",
+  "title": "integration_surface.registered",
   "type": "object",
   "required": ["surface_name", "category", "registered_at", "spec"],
   "properties": {
@@ -618,12 +620,12 @@ const (
 }
 ```
 
-`internal/events/schemas/surface_updated.json`:
+`internal/events/schemas/integration_surface_updated.json`:
 
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "surface.updated",
+  "title": "integration_surface.updated",
   "type": "object",
   "required": ["surface_name", "updated_at"],
   "properties": {
@@ -637,12 +639,12 @@ const (
 }
 ```
 
-`internal/events/schemas/surface_deactivated.json`:
+`internal/events/schemas/integration_surface_deactivated.json`:
 
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "surface.deactivated",
+  "title": "integration_surface.deactivated",
   "type": "object",
   "required": ["surface_name", "reason"],
   "properties": {
@@ -653,12 +655,12 @@ const (
 }
 ```
 
-`internal/events/schemas/surface_drift_detected.json`:
+`internal/events/schemas/integration_surface_drift_detected.json`:
 
 ```json
 {
   "$schema": "http://json-schema.org/draft-07/schema#",
-  "title": "surface.drift_detected",
+  "title": "integration_surface.drift_detected",
   "type": "object",
   "required": ["surface_name", "persisted_spec_hash", "runtime_spec_hash"],
   "properties": {
@@ -672,10 +674,10 @@ const (
 
 - [ ] **Step 4: Write failing test for typed emitters**
 
-`internal/surfaces/events_test.go`:
+`internal/integrationsurfaces/events_test.go`:
 
 ```go
-package surfaces
+package integrationsurfaces
 
 import (
 	"encoding/json"
@@ -725,19 +727,19 @@ func indexOf(s, sub string) int {
 
 - [ ] **Step 5: Run — expect FAIL**
 
-Run: `go test ./internal/surfaces/...`
+Run: `go test ./internal/integrationsurfaces/...`
 Expected: FAIL — `RegisteredPayload`/`DeactivatedPayload` undefined.
 
 - [ ] **Step 6: Implement events.go**
 
-`internal/surfaces/events.go`:
+`internal/integrationsurfaces/events.go`:
 
 ```go
-package surfaces
+package integrationsurfaces
 
 import "time"
 
-// RegisteredPayload matches schemas/surface_registered.json.
+// RegisteredPayload matches schemas/integration_surface_registered.json.
 type RegisteredPayload struct {
 	SurfaceName     string         `json:"surface_name"`
 	IntegrationType *string        `json:"integration_type,omitempty"`
@@ -746,7 +748,7 @@ type RegisteredPayload struct {
 	Spec            map[string]any `json:"spec"`
 }
 
-// UpdatedPayload matches schemas/surface_updated.json.
+// UpdatedPayload matches schemas/integration_surface_updated.json.
 type UpdatedPayload struct {
 	SurfaceName     string    `json:"surface_name"`
 	IntegrationType *string   `json:"integration_type,omitempty"`
@@ -755,13 +757,13 @@ type UpdatedPayload struct {
 	UpdatedAt       time.Time `json:"updated_at"`
 }
 
-// DeactivatedPayload matches schemas/surface_deactivated.json.
+// DeactivatedPayload matches schemas/integration_surface_deactivated.json.
 type DeactivatedPayload struct {
 	SurfaceName string `json:"surface_name"`
 	Reason      string `json:"reason"`
 }
 
-// DriftDetectedPayload matches schemas/surface_drift_detected.json.
+// DriftDetectedPayload matches schemas/integration_surface_drift_detected.json.
 type DriftDetectedPayload struct {
 	SurfaceName       string `json:"surface_name"`
 	PersistedSpecHash string `json:"persisted_spec_hash"`
@@ -771,19 +773,19 @@ type DriftDetectedPayload struct {
 
 - [ ] **Step 7: Run — expect PASS**
 
-Run: `go test ./internal/surfaces/...`
+Run: `go test ./internal/integrationsurfaces/...`
 Expected: PASS — 5 tests (existing 3 + 2 new).
 
 - [ ] **Step 8: Commit**
 
 ```bash
-git add internal/events internal/surfaces/events.go internal/surfaces/events_test.go
+git add internal/events internal/integrationsurfaces/events.go internal/integrationsurfaces/events_test.go
 git commit -m "feat(events): 4 surface canon events + JSON schemas + typed payloads"
 ```
 
 ---
 
-## Task 5: Manifest_sync extension for surface_manifests
+## Task 5: Manifest_sync extension for integration_surfaces
 
 **Files:**
 - Modify: `internal/manifestsync/syncer.go` (add SurfaceManifests collection)
@@ -814,7 +816,7 @@ import (
 	"testing"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/manifestsync"
-	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/surfaces"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/integrationsurfaces"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/testutil"
 )
 
@@ -823,9 +825,9 @@ func TestReconcileSurfaceManifest_InsertsNewManifest(t *testing.T) {
 	db := testutil.MustOpenTestDB(t)
 	defer db.Close()
 
-	repo := surfaces.NewRepository(db)
+	repo := integrationsurfaces.NewRepository(db)
 	bus := testutil.NewFakeEventBus()
-	syncer := manifestsync.NewSurfaceSyncer(repo, bus)
+	syncer := manifestsync.NewIntegrationSurfaceSyncer(repo, bus)
 
 	spec := map[string]any{
 		"category": "integration",
@@ -855,8 +857,8 @@ func TestReconcileSurfaceManifest_InsertsNewManifest(t *testing.T) {
 		t.Errorf("integration_type = %v", got.IntegrationType)
 	}
 
-	if len(bus.Emitted()) != 1 || bus.Emitted()[0].Topic != "surface.registered" {
-		t.Errorf("expected 1 surface.registered emit, got %+v", bus.Emitted())
+	if len(bus.Emitted()) != 1 || bus.Emitted()[0].Topic != "integration_surface.registered" {
+		t.Errorf("expected 1 integration_surface.registered emit, got %+v", bus.Emitted())
 	}
 }
 
@@ -864,9 +866,9 @@ func TestReconcileSurfaceManifest_DetectsUpdateViaHash(t *testing.T) {
 	ctx := context.Background()
 	db := testutil.MustOpenTestDB(t)
 	defer db.Close()
-	repo := surfaces.NewRepository(db)
+	repo := integrationsurfaces.NewRepository(db)
 	bus := testutil.NewFakeEventBus()
-	syncer := manifestsync.NewSurfaceSyncer(repo, bus)
+	syncer := manifestsync.NewIntegrationSurfaceSyncer(repo, bus)
 
 	v1, _ := json.Marshal(map[string]any{
 		"apiVersion": "yggdrasil.io/v1alpha1",
@@ -931,7 +933,7 @@ func TestReconcileSurfaceManifest_HashIsStable(t *testing.T) {
 - [ ] **Step 3: Run — expect FAIL**
 
 Run: `go test ./internal/manifestsync/...`
-Expected: FAIL — `NewSurfaceSyncer` undefined.
+Expected: FAIL — `NewIntegrationSurfaceSyncer` undefined.
 
 - [ ] **Step 4: Implement surface_sync.go**
 
@@ -950,7 +952,7 @@ import (
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/events"
-	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/surfaces"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/integrationsurfaces"
 )
 
 // EventBus is the minimal interface this syncer needs.
@@ -958,22 +960,22 @@ type EventBus interface {
 	Emit(ctx context.Context, topic string, payload any) error
 }
 
-// SurfaceSyncReport describes the outcome of a single reconciliation.
-type SurfaceSyncReport struct {
+// IntegrationSurfaceSyncReport describes the outcome of a single reconciliation.
+type IntegrationSurfaceSyncReport struct {
 	SurfaceName string
 	Action      string // "inserted" | "updated" | "noop"
 	NewHash     string
 	PrevHash    string
 }
 
-// SurfaceSyncer reconciles a single surface.manifest.json blob into surface_manifests.
-type SurfaceSyncer struct {
-	repo *surfaces.Repository
+// IntegrationSurfaceSyncer reconciles a single surface.manifest.json blob into integration_surfaces.
+type IntegrationSurfaceSyncer struct {
+	repo *integrationsurfaces.Repository
 	bus  EventBus
 }
 
-func NewSurfaceSyncer(repo *surfaces.Repository, bus EventBus) *SurfaceSyncer {
-	return &SurfaceSyncer{repo: repo, bus: bus}
+func NewIntegrationSurfaceSyncer(repo *integrationsurfaces.Repository, bus EventBus) *IntegrationSurfaceSyncer {
+	return &IntegrationSurfaceSyncer{repo: repo, bus: bus}
 }
 
 type rawManifest struct {
@@ -983,33 +985,33 @@ type rawManifest struct {
 		Name            string  `json:"name"`
 		IntegrationType *string `json:"integration_type,omitempty"`
 	} `json:"metadata"`
-	Spec surfaces.ManifestSpec `json:"spec"`
+	Spec integrationintegrationsurfaces.ManifestSpec `json:"spec"`
 }
 
 // ReconcileFromBytes parses a manifest JSON and upserts it.
-func (s *SurfaceSyncer) ReconcileFromBytes(ctx context.Context, raw []byte) (SurfaceSyncReport, error) {
+func (s *IntegrationSurfaceSyncer) ReconcileFromBytes(ctx context.Context, raw []byte) (IntegrationSurfaceSyncReport, error) {
 	var rm rawManifest
 	if err := json.Unmarshal(raw, &rm); err != nil {
-		return SurfaceSyncReport{}, fmt.Errorf("parse manifest: %w", err)
+		return IntegrationSurfaceSyncReport{}, fmt.Errorf("parse manifest: %w", err)
 	}
-	if rm.Kind != "surface" {
-		return SurfaceSyncReport{}, fmt.Errorf("unexpected kind %q", rm.Kind)
+	if rm.Kind != "integration_surface" {
+		return IntegrationSurfaceSyncReport{}, fmt.Errorf("unexpected kind %q", rm.Kind)
 	}
 	if rm.Metadata.Name == "" {
-		return SurfaceSyncReport{}, errors.New("metadata.name required")
+		return IntegrationSurfaceSyncReport{}, errors.New("metadata.name required")
 	}
 
 	specBytes, err := json.Marshal(rm.Spec)
 	if err != nil {
-		return SurfaceSyncReport{}, fmt.Errorf("re-marshal spec: %w", err)
+		return IntegrationSurfaceSyncReport{}, fmt.Errorf("re-marshal spec: %w", err)
 	}
 	sum := sha256.Sum256(specBytes)
 	newHash := hex.EncodeToString(sum[:])
 
 	existing, err := s.repo.GetByName(ctx, rm.Metadata.Name)
 	switch {
-	case errors.Is(err, surfaces.ErrNotFound):
-		m := surfaces.Manifest{
+	case errors.Is(err, integrationsurfaces.ErrNotFound):
+		m := integrationsurfaces.Manifest{
 			Name:            rm.Metadata.Name,
 			IntegrationType: rm.Metadata.IntegrationType,
 			Category:        rm.Spec.Category,
@@ -1017,42 +1019,42 @@ func (s *SurfaceSyncer) ReconcileFromBytes(ctx context.Context, raw []byte) (Sur
 			Active:          true,
 		}
 		if err := s.repo.Upsert(ctx, &m); err != nil {
-			return SurfaceSyncReport{}, err
+			return IntegrationSurfaceSyncReport{}, err
 		}
-		_ = s.bus.Emit(ctx, events.SurfaceRegistered, surfaces.RegisteredPayload{
+		_ = s.bus.Emit(ctx, events.IntegrationSurfaceRegistered, integrationsurfaces.RegisteredPayload{
 			SurfaceName:     m.Name,
 			IntegrationType: m.IntegrationType,
 			Category:        m.Category,
 			RegisteredAt:    time.Now().UTC(),
 			Spec:            mustToMap(specBytes),
 		})
-		return SurfaceSyncReport{SurfaceName: m.Name, Action: "inserted", NewHash: newHash}, nil
+		return IntegrationSurfaceSyncReport{SurfaceName: m.Name, Action: "inserted", NewHash: newHash}, nil
 	case err != nil:
-		return SurfaceSyncReport{}, err
+		return IntegrationSurfaceSyncReport{}, err
 	}
 
 	prevBytes, _ := json.Marshal(existing.Spec)
 	prevSum := sha256.Sum256(prevBytes)
 	prevHash := hex.EncodeToString(prevSum[:])
 	if prevHash == newHash {
-		return SurfaceSyncReport{SurfaceName: existing.Name, Action: "noop", NewHash: newHash, PrevHash: prevHash}, nil
+		return IntegrationSurfaceSyncReport{SurfaceName: existing.Name, Action: "noop", NewHash: newHash, PrevHash: prevHash}, nil
 	}
 
 	existing.IntegrationType = rm.Metadata.IntegrationType
 	existing.Category = rm.Spec.Category
 	existing.Spec = rm.Spec
 	if err := s.repo.Upsert(ctx, existing); err != nil {
-		return SurfaceSyncReport{}, err
+		return IntegrationSurfaceSyncReport{}, err
 	}
 	prevHashCopy := prevHash
-	_ = s.bus.Emit(ctx, events.SurfaceUpdated, surfaces.UpdatedPayload{
+	_ = s.bus.Emit(ctx, events.IntegrationSurfaceUpdated, integrationsurfaces.UpdatedPayload{
 		SurfaceName:     existing.Name,
 		IntegrationType: existing.IntegrationType,
 		PrevSpecHash:    &prevHashCopy,
 		NewSpecHash:     newHash,
 		UpdatedAt:       time.Now().UTC(),
 	})
-	return SurfaceSyncReport{SurfaceName: existing.Name, Action: "updated", NewHash: newHash, PrevHash: prevHash}, nil
+	return IntegrationSurfaceSyncReport{SurfaceName: existing.Name, Action: "updated", NewHash: newHash, PrevHash: prevHash}, nil
 }
 
 func mustToMap(b []byte) map[string]any {
@@ -1067,13 +1069,13 @@ func mustToMap(b []byte) map[string]any {
 Run: `go test ./internal/manifestsync/...`
 Expected: PASS — 3 surface-related tests + existing manifest_sync tests still green.
 
-- [ ] **Step 6: Wire SurfaceSyncer into the existing reconcile loop**
+- [ ] **Step 6: Wire IntegrationSurfaceSyncer into the existing reconcile loop**
 
 Edit `internal/manifestsync/syncer.go`. Locate the addon's main reconcile loop (the one that already iterates `integration_types`) and add an analogous loop that:
 
 1. Calls integration-github via Yggdrasil workflow (existing helper) to list adapter repos.
 2. For each repo, fetches the file `surface-ui/surface.manifest.json` (if it exists; ignore 404).
-3. Passes the bytes to `SurfaceSyncer.ReconcileFromBytes(ctx, bytes)`.
+3. Passes the bytes to `IntegrationSurfaceSyncer.ReconcileFromBytes(ctx, bytes)`.
 4. Logs the report; on error, increments `surface_sync_failures_total` metric.
 
 Use this skeleton (adapt to the existing helper names in syncer.go):
@@ -1110,7 +1112,7 @@ func (s *Syncer) reconcileSurfaceManifests(ctx context.Context) error {
 }
 ```
 
-Pass a `*SurfaceSyncer` into the existing `Syncer` constructor (modify NewSyncer to accept it).
+Pass a `*IntegrationSurfaceSyncer` into the existing `Syncer` constructor (modify NewSyncer to accept it).
 
 - [ ] **Step 7: Run full manifestsync test suite**
 
@@ -1121,21 +1123,21 @@ Expected: all tests PASS (existing + 3 new surface tests).
 
 ```bash
 git add internal/manifestsync
-git commit -m "feat(manifestsync): reconcile surface_manifests alongside integration_types"
+git commit -m "feat(manifestsync): reconcile integration_surfaces alongside integration_types"
 ```
 
 ---
 
-## Task 6: HTTP handler — GET /api/v1/surfaces (list)
+## Task 6: HTTP handler — GET /api/v1/integration-surfaces (list)
 
 **Files:**
-- Create: `controllers/httpapi/surfaces.go`
-- Create: `controllers/httpapi/surfaces_test.go`
+- Create: `controllers/httpapi/integration_surfaces.go`
+- Create: `controllers/httpapi/integration_surfaces_test.go`
 - Modify: wherever the HTTP routes are registered (e.g., `controllers/httpapi/router.go`)
 
 - [ ] **Step 1: Write failing test**
 
-`controllers/httpapi/surfaces_test.go`:
+`controllers/httpapi/integration_surfaces_test.go`:
 
 ```go
 package httpapi_test
@@ -1149,32 +1151,32 @@ import (
 	"testing"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/httpapi"
-	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/surfaces"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/integrationsurfaces"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/testutil"
 )
 
-func TestSurfacesHandler_ListAll(t *testing.T) {
+func TestIntegrationSurfacesHandler_ListAll(t *testing.T) {
 	ctx := context.Background()
 	db := testutil.MustOpenTestDB(t)
 	defer db.Close()
-	repo := surfaces.NewRepository(db)
+	repo := integrationsurfaces.NewRepository(db)
 	intType := "slack"
-	if err := repo.Upsert(ctx, &surfaces.Manifest{
+	if err := repo.Upsert(ctx, &integrationsurfaces.Manifest{
 		Name:            "surface-slack",
 		IntegrationType: &intType,
-		Category:        surfaces.CategoryIntegration,
-		Spec: surfaces.ManifestSpec{
-			Category: surfaces.CategoryIntegration,
-			Runtime:  surfaces.Runtime{Kind: "spa", BasePath: "/s/slack"},
-			Display:  surfaces.Display{Title: "Slack", AppearsOn: []string{"ops-integrations"}},
+		Category:        integrationsurfaces.CategoryIntegration,
+		Spec: integrationintegrationsurfaces.ManifestSpec{
+			Category: integrationsurfaces.CategoryIntegration,
+			Runtime:  integrationsurfaces.Runtime{Kind: "spa", BasePath: "/s/slack"},
+			Display:  integrationsurfaces.Display{Title: "Slack", AppearsOn: []string{"ops-integrations"}},
 		},
 		Active: true,
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	h := httpapi.NewSurfacesHandler(repo)
-	req := httptest.NewRequest("GET", "/api/v1/surfaces", nil)
+	h := httpapi.NewIntegrationSurfacesHandler(repo)
+	req := httptest.NewRequest("GET", "/api/v1/integration-surfaces", nil)
 	w := httptest.NewRecorder()
 	h.List(w, req)
 
@@ -1182,7 +1184,7 @@ func TestSurfacesHandler_ListAll(t *testing.T) {
 		t.Fatalf("status %d, body %s", w.Code, w.Body.String())
 	}
 	var body struct {
-		Items []surfaces.Manifest `json:"items"`
+		Items []integrationsurfaces.Manifest `json:"items"`
 		Total int                 `json:"total"`
 	}
 	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
@@ -1193,32 +1195,32 @@ func TestSurfacesHandler_ListAll(t *testing.T) {
 	}
 }
 
-func TestSurfacesHandler_FilterByAppearsOn(t *testing.T) {
+func TestIntegrationSurfacesHandler_FilterByAppearsOn(t *testing.T) {
 	ctx := context.Background()
 	db := testutil.MustOpenTestDB(t)
 	defer db.Close()
-	repo := surfaces.NewRepository(db)
-	_ = repo.Upsert(ctx, &surfaces.Manifest{
+	repo := integrationsurfaces.NewRepository(db)
+	_ = repo.Upsert(ctx, &integrationsurfaces.Manifest{
 		Name:     "surface-a",
-		Category: surfaces.CategoryIntegration,
-		Spec: surfaces.ManifestSpec{
-			Category: surfaces.CategoryIntegration,
-			Display:  surfaces.Display{Title: "A", AppearsOn: []string{"ops-integrations"}},
+		Category: integrationsurfaces.CategoryIntegration,
+		Spec: integrationintegrationsurfaces.ManifestSpec{
+			Category: integrationsurfaces.CategoryIntegration,
+			Display:  integrationsurfaces.Display{Title: "A", AppearsOn: []string{"ops-integrations"}},
 		},
 		Active: true,
 	})
-	_ = repo.Upsert(ctx, &surfaces.Manifest{
+	_ = repo.Upsert(ctx, &integrationsurfaces.Manifest{
 		Name:     "surface-b",
-		Category: surfaces.CategoryIntegration,
-		Spec: surfaces.ManifestSpec{
-			Category: surfaces.CategoryIntegration,
-			Display:  surfaces.Display{Title: "B", AppearsOn: []string{"me"}},
+		Category: integrationsurfaces.CategoryIntegration,
+		Spec: integrationintegrationsurfaces.ManifestSpec{
+			Category: integrationsurfaces.CategoryIntegration,
+			Display:  integrationsurfaces.Display{Title: "B", AppearsOn: []string{"me"}},
 		},
 		Active: true,
 	})
 
-	h := httpapi.NewSurfacesHandler(repo)
-	req := httptest.NewRequest("GET", "/api/v1/surfaces?appears_on=me", nil)
+	h := httpapi.NewIntegrationSurfacesHandler(repo)
+	req := httptest.NewRequest("GET", "/api/v1/integration-surfaces?appears_on=me", nil)
 	w := httptest.NewRecorder()
 	h.List(w, req)
 
@@ -1226,7 +1228,7 @@ func TestSurfacesHandler_FilterByAppearsOn(t *testing.T) {
 		t.Fatalf("status %d", w.Code)
 	}
 	var body struct {
-		Items []surfaces.Manifest `json:"items"`
+		Items []integrationsurfaces.Manifest `json:"items"`
 	}
 	_ = json.NewDecoder(w.Body).Decode(&body)
 	if len(body.Items) != 1 || body.Items[0].Name != "surface-b" {
@@ -1234,13 +1236,13 @@ func TestSurfacesHandler_FilterByAppearsOn(t *testing.T) {
 	}
 }
 
-func TestSurfacesHandler_GetByName_404(t *testing.T) {
+func TestIntegrationSurfacesHandler_GetByName_404(t *testing.T) {
 	db := testutil.MustOpenTestDB(t)
 	defer db.Close()
-	repo := surfaces.NewRepository(db)
+	repo := integrationsurfaces.NewRepository(db)
 
-	h := httpapi.NewSurfacesHandler(repo)
-	req := httptest.NewRequest("GET", "/api/v1/surfaces/surface-zzz", nil)
+	h := httpapi.NewIntegrationSurfacesHandler(repo)
+	req := httptest.NewRequest("GET", "/api/v1/integration-surfaces/surface-zzz", nil)
 	req = req.WithContext(httpapi.WithPathParam(req.Context(), "name", "surface-zzz"))
 	w := httptest.NewRecorder()
 	h.Get(w, req)
@@ -1249,22 +1251,22 @@ func TestSurfacesHandler_GetByName_404(t *testing.T) {
 	}
 }
 
-func TestSurfacesHandler_Sync_TriggersTouch(t *testing.T) {
+func TestIntegrationSurfacesHandler_Sync_TriggersTouch(t *testing.T) {
 	ctx := context.Background()
 	db := testutil.MustOpenTestDB(t)
 	defer db.Close()
-	repo := surfaces.NewRepository(db)
-	if err := repo.Upsert(ctx, &surfaces.Manifest{
+	repo := integrationsurfaces.NewRepository(db)
+	if err := repo.Upsert(ctx, &integrationsurfaces.Manifest{
 		Name:     "surface-touch",
-		Category: surfaces.CategoryIntegration,
-		Spec:     surfaces.ManifestSpec{Category: surfaces.CategoryIntegration, Display: surfaces.Display{Title: "T"}},
+		Category: integrationsurfaces.CategoryIntegration,
+		Spec:     integrationintegrationsurfaces.ManifestSpec{Category: integrationsurfaces.CategoryIntegration, Display: integrationsurfaces.Display{Title: "T"}},
 		Active:   true,
 	}); err != nil {
 		t.Fatal(err)
 	}
 
-	h := httpapi.NewSurfacesHandler(repo)
-	req := httptest.NewRequest("POST", "/api/v1/surfaces/surface-touch/sync", strings.NewReader(""))
+	h := httpapi.NewIntegrationSurfacesHandler(repo)
+	req := httptest.NewRequest("POST", "/api/v1/integration-surfaces/surface-touch/sync", strings.NewReader(""))
 	req = req.WithContext(httpapi.WithPathParam(req.Context(), "name", "surface-touch"))
 	w := httptest.NewRecorder()
 	h.Sync(w, req)
@@ -1281,7 +1283,7 @@ Expected: FAIL.
 
 - [ ] **Step 3: Implement surfaces.go**
 
-`controllers/httpapi/surfaces.go`:
+`controllers/httpapi/integration_surfaces.go`:
 
 ```go
 package httpapi
@@ -1292,7 +1294,7 @@ import (
 	"errors"
 	"net/http"
 
-	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/surfaces"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/integrationsurfaces"
 )
 
 // pathParamKey is the context-key type used to thread URL path params from
@@ -1311,19 +1313,19 @@ func pathParam(r *http.Request, key string) string {
 	return v
 }
 
-// SurfacesHandler exposes the GET/POST endpoints over surface_manifests.
-type SurfacesHandler struct {
-	repo *surfaces.Repository
+// IntegrationSurfacesHandler exposes the GET/POST endpoints over integration_surfaces.
+type IntegrationSurfacesHandler struct {
+	repo *integrationsurfaces.Repository
 }
 
-func NewSurfacesHandler(repo *surfaces.Repository) *SurfacesHandler {
-	return &SurfacesHandler{repo: repo}
+func NewIntegrationSurfacesHandler(repo *integrationsurfaces.Repository) *IntegrationSurfacesHandler {
+	return &IntegrationSurfacesHandler{repo: repo}
 }
 
-// List handles GET /api/v1/surfaces (optionally filtered by query params).
-func (h *SurfacesHandler) List(w http.ResponseWriter, r *http.Request) {
+// List handles GET /api/v1/integration-surfaces (optionally filtered by query params).
+func (h *IntegrationSurfacesHandler) List(w http.ResponseWriter, r *http.Request) {
 	q := r.URL.Query()
-	f := surfaces.ListFilter{
+	f := integrationsurfaces.ListFilter{
 		AppearsOn:       q.Get("appears_on"),
 		IntegrationType: q.Get("integration_type"),
 		Category:        q.Get("category"),
@@ -1340,15 +1342,15 @@ func (h *SurfacesHandler) List(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-// Get handles GET /api/v1/surfaces/{name}.
-func (h *SurfacesHandler) Get(w http.ResponseWriter, r *http.Request) {
+// Get handles GET /api/v1/integration-surfaces/{name}.
+func (h *IntegrationSurfacesHandler) Get(w http.ResponseWriter, r *http.Request) {
 	name := pathParam(r, "name")
 	if name == "" {
 		writeJSONError(w, http.StatusBadRequest, "missing_name", "name path segment required")
 		return
 	}
 	m, err := h.repo.GetByName(r.Context(), name)
-	if errors.Is(err, surfaces.ErrNotFound) {
+	if errors.Is(err, integrationsurfaces.ErrNotFound) {
 		writeJSONError(w, http.StatusNotFound, "not_found", "surface manifest not found")
 		return
 	}
@@ -1359,17 +1361,17 @@ func (h *SurfacesHandler) Get(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, m)
 }
 
-// Sync handles POST /api/v1/surfaces/{name}/sync — forces a re-touch so
+// Sync handles POST /api/v1/integration-surfaces/{name}/sync — forces a re-touch so
 // downstream caches see a fresh updated_at. Actual repo-pull is done by
 // the manifest_sync addon on its next cycle (or by an out-of-band trigger).
-func (h *SurfacesHandler) Sync(w http.ResponseWriter, r *http.Request) {
+func (h *IntegrationSurfacesHandler) Sync(w http.ResponseWriter, r *http.Request) {
 	name := pathParam(r, "name")
 	if name == "" {
 		writeJSONError(w, http.StatusBadRequest, "missing_name", "name path segment required")
 		return
 	}
 	if err := h.repo.TouchUpdatedAt(r.Context(), name); err != nil {
-		if errors.Is(err, surfaces.ErrNotFound) {
+		if errors.Is(err, integrationsurfaces.ErrNotFound) {
 			writeJSONError(w, http.StatusNotFound, "not_found", "surface manifest not found")
 			return
 		}
@@ -1399,10 +1401,10 @@ NOTE: if `writeJSON`/`writeJSONError` already exist in this package, REMOVE the 
 Locate the existing router registration (likely `controllers/httpapi/router.go` or `cmd/yggdrasil-core/main.go`). Add:
 
 ```go
-sh := NewSurfacesHandler(deps.Surfaces) // wire from main.go where deps are constructed
-mux.Handle("GET /api/v1/surfaces", http.HandlerFunc(sh.List))
-mux.Handle("GET /api/v1/surfaces/{name}", withPathParam("name", sh.Get))
-mux.Handle("POST /api/v1/surfaces/{name}/sync", withPathParam("name", sh.Sync))
+sh := NewIntegrationSurfacesHandler(deps.Surfaces) // wire from main.go where deps are constructed
+mux.Handle("GET /api/v1/integration-surfaces", http.HandlerFunc(sh.List))
+mux.Handle("GET /api/v1/integration-surfaces/{name}", withPathParam("name", sh.Get))
+mux.Handle("POST /api/v1/integration-surfaces/{name}/sync", withPathParam("name", sh.Sync))
 ```
 
 Use the existing routing idiom (chi, gorilla, or net/http ServeMux Go 1.22 style — match what's already there).
@@ -1415,8 +1417,8 @@ Expected: PASS — 4 tests.
 - [ ] **Step 6: Commit**
 
 ```bash
-git add controllers/httpapi/surfaces.go controllers/httpapi/surfaces_test.go controllers/httpapi/router.go
-git commit -m "feat(httpapi): GET/POST /api/v1/surfaces* handlers"
+git add controllers/httpapi/integration_surfaces.go controllers/httpapi/integration_surfaces_test.go controllers/httpapi/router.go
+git commit -m "feat(httpapi): GET/POST /api/v1/integration-surfaces* handlers"
 ```
 
 ---
@@ -1847,16 +1849,16 @@ git commit -m "feat(drift): GET /api/v1/integration-types/{name}/drift endpoint"
 - [ ] **Step 1: Locate the constructor / dep injection site**
 
 ```bash
-grep -n "NewSurfacesHandler\|NewSurfaceQueryHandler\|router\|Mux" cmd/yggdrasil-core/main.go controllers/httpapi/router.go 2>/dev/null
+grep -n "NewIntegrationSurfacesHandler\|NewSurfaceQueryHandler\|router\|Mux" cmd/yggdrasil-core/main.go controllers/httpapi/router.go 2>/dev/null
 ```
 
 - [ ] **Step 2: Wire dependencies**
 
 Edit `cmd/yggdrasil-core/main.go` (or equivalent) so that:
 
-1. A `*surfaces.Repository` is constructed from the existing `*sql.DB`.
-2. The existing `*manifestsync.Syncer` constructor accepts a `*manifestsync.SurfaceSyncer` (constructed from the repo + existing event bus).
-3. `NewSurfacesHandler`, `NewSurfaceQueryHandler`, `NewIntegrationTypeDriftHandler` are constructed.
+1. A `*integrationsurfaces.Repository` is constructed from the existing `*sql.DB`.
+2. The existing `*manifestsync.Syncer` constructor accepts a `*manifestsync.IntegrationSurfaceSyncer` (constructed from the repo + existing event bus).
+3. `NewIntegrationSurfacesHandler`, `NewSurfaceQueryHandler`, `NewIntegrationTypeDriftHandler` are constructed.
 4. Routes are registered.
 
 Use the existing patterns in that file (typically a `deps` struct + a `registerHTTPRoutes(deps)` call).
@@ -1901,7 +1903,7 @@ GOWORK=/Users/dakasa/projects/dakasa/go.work go run ./cmd/yggdrasil-core
 
 ```bash
 curl -s -H "Authorization: Bearer $YGGDRASIL_WORKFLOW_RUN_TOKEN" \
-  http://localhost:9080/api/v1/surfaces | jq .
+  http://localhost:9080/api/v1/integration-surfaces | jq .
 ```
 
 Expected: `{"items":[],"total":0}`.
@@ -1910,7 +1912,7 @@ Expected: `{"items":[],"total":0}`.
 
 ```bash
 psql "$DATABASE_URL" <<'SQL'
-INSERT INTO surface_manifests (name, integration_type, category, spec, active)
+INSERT INTO integration_surfaces (name, integration_type, category, spec, active)
 VALUES (
   'surface-smoke',
   NULL,
@@ -1919,7 +1921,7 @@ VALUES (
   true
 );
 SQL
-curl -s http://localhost:9080/api/v1/surfaces?appears_on=ops-integrations | jq .
+curl -s http://localhost:9080/api/v1/integration-surfaces?appears_on=ops-integrations | jq .
 ```
 
 Expected: response includes `surface-smoke`.
@@ -1927,13 +1929,13 @@ Expected: response includes `surface-smoke`.
 - [ ] **Step 4: Cleanup**
 
 ```bash
-psql "$DATABASE_URL" -c "DELETE FROM surface_manifests WHERE name = 'surface-smoke';"
+psql "$DATABASE_URL" -c "DELETE FROM integration_surfaces WHERE name = 'surface-smoke';"
 ```
 
 - [ ] **Step 5: Tag the sync gate**
 
 ```bash
-git commit --allow-empty -m "chore: Phase 0b complete — surface_manifests + endpoints live"
+git commit --allow-empty -m "chore: Phase 0b complete — integration_surfaces + endpoints live"
 ```
 
 ---
@@ -1942,12 +1944,12 @@ git commit --allow-empty -m "chore: Phase 0b complete — surface_manifests + en
 
 Before Phase 1 surfaces may rely on these endpoints:
 
-1. ✅ Migration `00045_surface_manifests.sql` applied
-2. ✅ `/api/v1/surfaces` returns 200 + `{items:[], total:0}` in clean state
-3. ✅ `/api/v1/surfaces?appears_on=X` correctly filters
-4. ✅ `/api/v1/surfaces/{name}/sync` returns 202 for existing, 404 for unknown
+1. ✅ Migration `00045_integration_surfaces.sql` applied
+2. ✅ `/api/v1/integration-surfaces` returns 200 + `{items:[], total:0}` in clean state
+3. ✅ `/api/v1/integration-surfaces?appears_on=X` correctly filters
+4. ✅ `/api/v1/integration-surfaces/{name}/sync` returns 202 for existing, 404 for unknown
 5. ✅ `/api/v1/integrations/{instance_id}/surface-query` dispatches `on_surface_query` via existing AMQP layer
-6. ✅ `manifest_sync` reconciles surface_manifests when it encounters a new `surface-ui/surface.manifest.json` in any adapter repo
+6. ✅ `manifest_sync` reconciles integration_surfaces when it encounters a new `surface-ui/surface.manifest.json` in any adapter repo
 7. ✅ Canon events emit on register/update/deactivate
 8. ✅ All Go tests pass; binary builds cleanly
 
@@ -1959,7 +1961,7 @@ After all tasks complete, dispatch one final code reviewer subagent. Reviewer ch
 
 - All routes documented in spec §4.4 are registered
 - Operation constant matches spec §5.5 exactly: `on_surface_query`
-- Event constants match spec §4.3 exactly: `surface.registered`, `surface.updated`, `surface.deactivated`, `surface.drift_detected`
+- Event constants match spec §4.3 exactly: `integration_surface.registered`, `integration_surface.updated`, `integration_surface.deactivated`, `integration_surface.drift_detected`
 - All handlers return JSON with `Content-Type: application/json`
 - Errors use stable `{error, message}` shape
 - Slot filter (`appears_on`) uses `@>` jsonb operator (gin index used)
