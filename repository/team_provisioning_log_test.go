@@ -81,7 +81,7 @@ func seedIntegrationInstance(t *testing.T, db *sql.DB) uuid.UUID {
 
 func TestUpsertTeamProvisioningLogInsertsThenUpdates(t *testing.T) {
 	db := openTestDB(t)
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
 
 	teamID := seedTeam(t, db)
 	instanceID := seedIntegrationInstance(t, db)
@@ -116,7 +116,7 @@ func TestUpsertTeamProvisioningLogInsertsThenUpdates(t *testing.T) {
 	if second.LastEventType != "team.updated" {
 		t.Fatalf("expected last_event_type team.updated, got %s", second.LastEventType)
 	}
-	if !second.UpdatedAt.After(first.UpdatedAt) && !second.UpdatedAt.Equal(first.UpdatedAt) {
+	if !second.UpdatedAt.After(first.UpdatedAt) {
 		t.Fatalf("expected updated_at to advance, got first=%v second=%v", first.UpdatedAt, second.UpdatedAt)
 	}
 
@@ -128,7 +128,7 @@ func TestUpsertTeamProvisioningLogInsertsThenUpdates(t *testing.T) {
 
 func TestListTeamProvisioningLogByTeam(t *testing.T) {
 	db := openTestDB(t)
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
 
 	teamID := seedTeam(t, db)
 	instance1 := seedIntegrationInstance(t, db)

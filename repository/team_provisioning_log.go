@@ -19,7 +19,7 @@ func UpsertTeamProvisioningLog(ctx context.Context, db *sql.DB, req model.Upsert
 	if err != nil {
 		return model.TeamProvisioningLog{}, fmt.Errorf("marshal external_metadata: %w", err)
 	}
-	if len(meta) == 0 || string(meta) == "null" {
+	if string(meta) == "null" {
 		meta = []byte("{}")
 	}
 	var row model.TeamProvisioningLog
