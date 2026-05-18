@@ -631,10 +631,39 @@ func buildListCollaboratorsQuery(req model.ListCollaboratorsRequest) (string, []
 		clauses = append(clauses, fmt.Sprintf("status = $%d", len(args)))
 	}
 
+	if search := strings.TrimSpace(req.Search); search != "" {
+		// Escape % and _ so user input matches literally.
+		escaped := strings.NewReplacer("\\", "\\\\", "%", "\\%", "_", "\\_").Replace(search)
+		args = append(args, "%"+escaped+"%")
+		n := len(args)
+		clauses = append(clauses, fmt.Sprintf(
+			"(display_name ILIKE $%d OR slug ILIKE $%d OR primary_email ILIKE $%d)",
+			n, n, n,
+		))
+	}
+
 	if len(clauses) > 0 {
 		q += " WHERE " + strings.Join(clauses, " AND ")
 	}
 	return q, args
+}
+
+// CountCollaborators returns the number of rows that would be returned by
+// ListCollaborators with the same filters. Used to populate TotalEstimate
+// on paginated responses so UIs can show "showing X of Y".
+func CountCollaborators(ctx context.Context, db *sql.DB, req model.ListCollaboratorsRequest) (int64, error) {
+	q, args := buildListCollaboratorsQuery(req)
+	// Replace the SELECT clause with COUNT(*) — the FROM/WHERE half stays.
+	idx := strings.Index(q, "FROM public.collaborators")
+	if idx == -1 {
+		return 0, fmt.Errorf("buildListCollaboratorsQuery: unexpected query shape")
+	}
+	countQ := "SELECT COUNT(*) " + q[idx:]
+	var total int64
+	if err := db.QueryRowContext(ctx, countQ, args...).Scan(&total); err != nil {
+		return 0, err
+	}
+	return total, nil
 }
 
 // CreateTeam stores one team record.

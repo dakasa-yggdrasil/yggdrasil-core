@@ -1,11 +1,82 @@
 package repository
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 )
+
+func TestBuildListCollaboratorsQuerySearch(t *testing.T) {
+	cases := []struct {
+		name        string
+		req         model.ListCollaboratorsRequest
+		wantClause  string
+		wantArg     string
+		wantNoWhere bool
+	}{
+		{
+			name:        "no filters omits WHERE",
+			req:         model.ListCollaboratorsRequest{},
+			wantNoWhere: true,
+		},
+		{
+			name:       "search matches display_name slug primary_email",
+			req:        model.ListCollaboratorsRequest{Search: "maria"},
+			wantClause: "display_name ILIKE",
+			wantArg:    "%maria%",
+		},
+		{
+			name:       "escapes LIKE wildcards in user input",
+			req:        model.ListCollaboratorsRequest{Search: "50%_off"},
+			wantClause: "ILIKE",
+			wantArg:    `%50\%\_off%`,
+		},
+		{
+			name:       "combines status and search with AND",
+			req:        model.ListCollaboratorsRequest{Status: "active", Search: "ana"},
+			wantClause: "status = $1 AND",
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			q, args := buildListCollaboratorsQuery(tc.req)
+			if tc.wantNoWhere {
+				if strings.Contains(q, "WHERE") {
+					t.Fatalf("expected no WHERE clause, got: %s", q)
+				}
+				return
+			}
+			if !strings.Contains(q, tc.wantClause) {
+				t.Fatalf("query missing %q: %s", tc.wantClause, q)
+			}
+			if tc.wantArg != "" {
+				found := false
+				for _, a := range args {
+					if s, ok := a.(string); ok && s == tc.wantArg {
+						found = true
+						break
+					}
+				}
+				if !found {
+					t.Fatalf("expected arg %q in %v", tc.wantArg, args)
+				}
+			}
+		})
+	}
+}
+
+func TestCountCollaboratorsQueryShape(t *testing.T) {
+	// CountCollaborators rebuilds the listing SQL with COUNT(*). Verify the
+	// string surgery still finds the FROM clause when buildListCollaborators
+	// changes shape (e.g. someone reformats the SELECT block).
+	q, _ := buildListCollaboratorsQuery(model.ListCollaboratorsRequest{Search: "x"})
+	if !strings.Contains(q, "FROM public.collaborators") {
+		t.Fatalf("buildListCollaboratorsQuery dropped its FROM marker — CountCollaborators will break: %s", q)
+	}
+}
 
 func TestExpandAncestorTeams(t *testing.T) {
 	rootID := uuid.New()

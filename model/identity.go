@@ -131,8 +131,12 @@ type DeleteCollaboratorRequest struct {
 }
 
 // ListCollaboratorsRequest filters collaborator listing.
+// Search is a case-insensitive substring matched against display_name,
+// slug, and primary_email — used by the console "add person to team"
+// modal so 1k+ collaborators stay usable without paging through everything.
 type ListCollaboratorsRequest struct {
 	Status string `json:"status,omitempty"`
+	Search string `json:"search,omitempty"`
 }
 
 // CreateTeamRequest creates one team record.

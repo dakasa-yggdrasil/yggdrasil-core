@@ -92,7 +92,8 @@ type integrationCatalogEntryDetailResponse struct {
 }
 
 type collaboratorsResponse struct {
-	Collaborators []model.Collaborator `json:"collaborators"`
+	Collaborators []model.Collaborator       `json:"collaborators"`
+	Pagination    *model.PaginationResponse  `json:"pagination,omitempty"`
 }
 
 type teamsResponse struct {
@@ -415,6 +416,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/bootstrap", requireDeployToken(server.handleBootstrap))
 	mux.HandleFunc("GET /api/v1/tenant/brand", server.handleTenantBrandGet)
 	mux.HandleFunc("PATCH /api/v1/tenant/brand", guard(server.handleTenantBrandPatch))
+	mux.HandleFunc("GET /api/v1/me", guard(server.handleMe))
 	mux.HandleFunc("GET /api/v1/me/preferences", guard(server.handleUserPreferencesGet))
 	mux.HandleFunc("PATCH /api/v1/me/preferences", guard(server.handleUserPreferencesPatch))
 	mux.HandleFunc("GET /api/v1/console/integration-catalog", server.handleIntegrationCatalogList)
@@ -1024,14 +1026,43 @@ func (s *Server) handleManagedSecretRevoke(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) handleCollaboratorList(w http.ResponseWriter, r *http.Request) {
-	collaborators, err := repository.ListCollaborators(r.Context(), s.db, model.ListCollaboratorsRequest{
+	req := model.ListCollaboratorsRequest{
 		Status: queryString(r, "status"),
-	})
+		Search: queryString(r, "q"),
+	}
+
+	// Paginated mode kicks in when the caller asks for it explicitly.
+	// Zero limit + no cursor preserves the legacy "give me everything" shape
+	// that older console code still relies on.
+	limit := queryInt(r, "limit")
+	cursor := queryString(r, "cursor")
+	if limit > 0 || cursor != "" {
+		collaborators, page, err := repository.ListCollaboratorsPaginated(r.Context(), s.db, req, model.PaginationRequest{
+			Limit:  limit,
+			Cursor: cursor,
+		})
+		if err != nil {
+			writeMappedError(w, err)
+			return
+		}
+		// Total estimate is a separate COUNT(*) under the same WHERE — cheap
+		// at DaKasa scale (sub-1k rows) and lets the UI show "showing X of Y".
+		// Best-effort: a failure here shouldn't poison the listing.
+		if total, err := repository.CountCollaborators(r.Context(), s.db, req); err == nil {
+			page.TotalEstimate = total
+		}
+		writeJSON(w, http.StatusOK, collaboratorsResponse{
+			Collaborators: collaborators,
+			Pagination:    &page,
+		})
+		return
+	}
+
+	collaborators, err := repository.ListCollaborators(r.Context(), s.db, req)
 	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
-
 	writeJSON(w, http.StatusOK, collaboratorsResponse{Collaborators: collaborators})
 }
 
