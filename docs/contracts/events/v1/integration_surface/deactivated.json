@@ -1,0 +1,13 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/integration_surface/deactivated.json",
+  "title": "integration_surface.deactivated v1",
+  "description": "Emitted when an integration_surface manifest is deactivated (soft-deleted).",
+  "type": "object",
+  "required": ["surface_name", "reason"],
+  "additionalProperties": false,
+  "properties": {
+    "surface_name": { "type": "string", "minLength": 1 },
+    "reason":       { "type": "string", "minLength": 1 }
+  }
+}

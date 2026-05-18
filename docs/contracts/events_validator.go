@@ -13,7 +13,7 @@ import (
 // FamilyEventsV1 identifies the events/v1 contract family.
 const FamilyEventsV1 = "events/v1"
 
-//go:embed events/v1/schema.json events/v1/manifest/*.json events/v1/product/*.json events/v1/workflow/*.json events/v1/authorization/*.json events/v1/buildproject/*.json events/v1/infra/*.json events/v1/collaborator/*.json events/v1/credential/*.json events/v1/team/*.json events/v1/team_membership/*.json events/v1/reactor/*.json events/v1/runtime_state/*.json events/v1/integration_type/*.json events/v1/collaborator_external_identity/*.json
+//go:embed events/v1/schema.json events/v1/manifest/*.json events/v1/product/*.json events/v1/workflow/*.json events/v1/authorization/*.json events/v1/buildproject/*.json events/v1/infra/*.json events/v1/collaborator/*.json events/v1/credential/*.json events/v1/team/*.json events/v1/team_membership/*.json events/v1/reactor/*.json events/v1/runtime_state/*.json events/v1/integration_type/*.json events/v1/collaborator_external_identity/*.json events/v1/integration_surface/*.json
 var eventSchemaFS embed.FS
 
 var (
@@ -102,6 +102,11 @@ func eventTypeToSchemaPath(eventType string, schemaVersion string) string {
 		"collaborator_external_identity.unknown_external": "events/v1/collaborator_external_identity/unknown_external.json",
 		"collaborator_external_identity.purged":            "events/v1/collaborator_external_identity/purged.json",
 		"collaborator_external_identity.conflict_detected": "events/v1/collaborator_external_identity/conflict_detected.json",
+		// integration_surface framework events (federated surfaces)
+		"integration_surface.registered":     "events/v1/integration_surface/registered.json",
+		"integration_surface.updated":        "events/v1/integration_surface/updated.json",
+		"integration_surface.deactivated":    "events/v1/integration_surface/deactivated.json",
+		"integration_surface.drift_detected": "events/v1/integration_surface/drift_detected.json",
 	}
 	return mapping[eventType]
 }

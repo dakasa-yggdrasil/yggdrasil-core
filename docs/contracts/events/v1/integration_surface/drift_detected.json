@@ -1,0 +1,14 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/integration_surface/drift_detected.json",
+  "title": "integration_surface.drift_detected v1",
+  "description": "Emitted when the persisted integration_surface spec diverges from the runtime-reported spec.",
+  "type": "object",
+  "required": ["surface_name", "persisted_spec_hash", "runtime_spec_hash"],
+  "additionalProperties": false,
+  "properties": {
+    "surface_name":         { "type": "string", "minLength": 1 },
+    "persisted_spec_hash":  { "type": "string", "minLength": 1 },
+    "runtime_spec_hash":    { "type": "string", "minLength": 1 }
+  }
+}

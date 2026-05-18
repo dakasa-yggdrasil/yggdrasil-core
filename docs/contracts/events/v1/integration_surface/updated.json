@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/integration_surface/updated.json",
+  "title": "integration_surface.updated v1",
+  "description": "Emitted when an existing integration_surface manifest is updated to a new spec hash.",
+  "type": "object",
+  "required": ["surface_name", "new_spec_hash", "updated_at"],
+  "additionalProperties": false,
+  "properties": {
+    "surface_name":     { "type": "string", "minLength": 1 },
+    "integration_type": { "type": ["string", "null"] },
+    "prev_spec_hash":   { "type": ["string", "null"] },
+    "new_spec_hash":    { "type": "string", "minLength": 1 },
+    "updated_at":       { "type": "string", "format": "date-time" }
+  }
+}

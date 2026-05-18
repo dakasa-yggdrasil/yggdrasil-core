@@ -1,0 +1,16 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/integration_surface/registered.json",
+  "title": "integration_surface.registered v1",
+  "description": "Emitted when a new integration_surface manifest is registered by the surface syncer.",
+  "type": "object",
+  "required": ["surface_name", "category", "registered_at"],
+  "additionalProperties": false,
+  "properties": {
+    "surface_name":     { "type": "string", "minLength": 1 },
+    "integration_type": { "type": ["string", "null"] },
+    "category":         { "type": "string", "enum": ["integration", "core", "domain"] },
+    "registered_at":    { "type": "string", "format": "date-time" },
+    "spec":             { "type": "object" }
+  }
+}
