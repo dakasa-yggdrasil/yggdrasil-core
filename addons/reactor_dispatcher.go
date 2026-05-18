@@ -14,6 +14,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/externalidentity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/reactors"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/teamprovisioning"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -160,6 +161,17 @@ func (c *rabbitmqReactorCaller) Call(
 		}
 	}
 
+	// Team provisioning envelope: when on_team_created / on_team_updated
+	// returns `_yggdrasil.team_provisioned`, upsert team_provisioning_log so
+	// the reconcile cron skips this pair and /provisioning-status shows it.
+	if c.db != nil {
+		if outputMap, ok := resp.Output.(map[string]any); ok {
+			if ext, ok := teamprovisioning.ExtractFromOutput(outputMap); ok {
+				c.persistTeamProvisioning(ctx, integrationInstanceID, input, ext, capability)
+			}
+		}
+	}
+
 	return nil
 }
 
@@ -235,6 +247,45 @@ func (c *rabbitmqReactorCaller) persistExternalIdentity(
 			zap.String("identity_id", id.String()),
 			zap.Error(err),
 		)
+	}
+}
+
+// persistTeamProvisioning upserts the extracted team mirror metadata.
+// All errors are logged and swallowed — the reaction has already
+// succeeded; failing to write the log row would not undo the external
+// resource. The reconcile cron will pick the gap up next tick if needed.
+func (c *rabbitmqReactorCaller) persistTeamProvisioning(
+	ctx context.Context,
+	integrationInstanceID string,
+	input map[string]any,
+	ext teamprovisioning.Extracted,
+	eventType string,
+) {
+	teamIDStr, _ := input["id"].(string)
+	if strings.TrimSpace(teamIDStr) == "" {
+		return
+	}
+	teamID, err := uuid.Parse(teamIDStr)
+	if err != nil {
+		return
+	}
+	instanceID, err := uuid.Parse(integrationInstanceID)
+	if err != nil {
+		return
+	}
+	if _, err := repository.UpsertTeamProvisioningLog(ctx, c.db, model.UpsertTeamProvisioningLogRequest{
+		TeamID:                teamID,
+		IntegrationInstanceID: instanceID,
+		ExternalID:            ext.ExternalID,
+		ExternalMetadata:      ext.ExternalMetadata,
+		LastEventType:         eventType,
+	}); err != nil {
+		if c.logger != nil {
+			c.logger.Warn("persist team_provisioning_log failed",
+				zap.String("team_id", teamIDStr),
+				zap.String("integration_instance_id", integrationInstanceID),
+				zap.Error(err))
+		}
 	}
 }
 
