@@ -46,6 +46,27 @@ func UpsertTeamProvisioningLog(ctx context.Context, db *sql.DB, req model.Upsert
 	return row, nil
 }
 
+// GetTeamProvisioningLog returns the log row for one (team, instance) pair,
+// or a zero-value row with no error when no row exists. Used by the
+// dispatcher to inject _context.team_provisioned for team.* reactions.
+func GetTeamProvisioningLog(ctx context.Context, db *sql.DB, teamID, instanceID uuid.UUID) (model.TeamProvisioningLog, error) {
+	var r model.TeamProvisioningLog
+	err := db.QueryRowContext(ctx, `
+		SELECT id, team_id, integration_instance_id, external_id, external_metadata,
+		       last_success_at, last_event_type, created_at, updated_at
+		FROM team_provisioning_log
+		WHERE team_id = $1 AND integration_instance_id = $2
+	`, teamID, instanceID).Scan(&r.ID, &r.TeamID, &r.IntegrationInstanceID, &r.ExternalID,
+		&r.ExternalMetadata, &r.LastSuccessAt, &r.LastEventType, &r.CreatedAt, &r.UpdatedAt)
+	if err == sql.ErrNoRows {
+		return model.TeamProvisioningLog{}, nil
+	}
+	if err != nil {
+		return model.TeamProvisioningLog{}, err
+	}
+	return r, nil
+}
+
 // ListTeamProvisioningLogByTeam returns every mirror entry for a single team.
 // Used by GET /api/v1/teams/{id}/provisioning-status to render the
 // per-adapter mirror state.

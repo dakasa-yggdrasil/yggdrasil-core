@@ -137,6 +137,11 @@ func (c *rabbitmqReactorCaller) Call(
 		}
 	}
 
+	// Read-side embed: pre-populate _context.team_provisioned when dispatching
+	// a team.* reaction so adapters can target the right external resource
+	// without a fresh list call.
+	c.embedTeamProvisioned(ctx, capability, integrationInstanceID, input)
+
 	req := model.ExecuteIntegrationRequest{
 		Integration: model.ManifestSelector{
 			ManifestID: integrationInstanceID,
@@ -287,6 +292,59 @@ func (c *rabbitmqReactorCaller) persistTeamProvisioning(
 				zap.Error(err))
 		}
 	}
+}
+
+// embedTeamProvisioned reads team_provisioning_log for the (team, instance)
+// pair the reaction targets, and injects the row under
+// input._context.team_provisioned. Mirror of EmbedIntoInput from
+// externalidentity. No-op when the reaction is not a team.* event, or
+// when no log row exists yet (first-time team.created).
+//
+// Note: this dispatcher only sees `capability` (e.g. on_team_updated), not
+// the raw event_type. We treat the on_team_* prefix as the team-family
+// marker.
+func (c *rabbitmqReactorCaller) embedTeamProvisioned(
+	ctx context.Context,
+	capability string,
+	integrationInstanceID string,
+	input map[string]any,
+) {
+	if !strings.HasPrefix(capability, "on_team_") {
+		return
+	}
+	teamIDStr, _ := input["id"].(string)
+	if strings.TrimSpace(teamIDStr) == "" {
+		return
+	}
+	teamID, err := uuid.Parse(teamIDStr)
+	if err != nil {
+		return
+	}
+	instanceID, err := uuid.Parse(integrationInstanceID)
+	if err != nil {
+		return
+	}
+
+	row, err := repository.GetTeamProvisioningLog(ctx, c.db, teamID, instanceID)
+	if err != nil || row.ExternalID == "" {
+		return // no log row yet — adapter will create from scratch
+	}
+
+	ctxBlock, _ := input["_context"].(map[string]any)
+	if ctxBlock == nil {
+		ctxBlock = map[string]any{}
+		input["_context"] = ctxBlock
+	}
+	tp := map[string]any{
+		"external_id": row.ExternalID,
+	}
+	if len(row.ExternalMetadata) > 0 && string(row.ExternalMetadata) != "null" {
+		var meta map[string]any
+		if json.Unmarshal(row.ExternalMetadata, &meta) == nil && meta != nil {
+			tp["external_metadata"] = meta
+		}
+	}
+	ctxBlock["team_provisioned"] = tp
 }
 
 func envDurOrDefault(key string, def time.Duration) time.Duration {
