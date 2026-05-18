@@ -662,6 +662,14 @@ type Server struct {
 	// webauthnSessions caches in-flight WebAuthn registration challenges
 	// keyed by collaborator UUID. Phase 1 in-memory; Phase 2 moves to Redis.
 	webauthnSessions sync.Map
+	// integrationSurfacesRepo backs GET/POST /api/v1/integration-surfaces*
+	// (federated surface registry, coexists with internal/surface). Optional;
+	// when nil the handlers return 503. See addons/integration_surface_sync.go.
+	integrationSurfacesRepo IntegrationSurfacesRepo
+	// surfaceQueryDispatcher backs POST /api/v1/integrations/{id}/surface-query
+	// — proxies on_surface_query to the named integration instance. Optional;
+	// when nil the handler returns 503.
+	surfaceQueryDispatcher SurfaceQueryDispatcher
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {
