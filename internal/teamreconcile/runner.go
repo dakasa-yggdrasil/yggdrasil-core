@@ -84,6 +84,9 @@ func (r *Runner) reEmit(ctx context.Context, teamID string) error {
 	if err != nil {
 		return fmt.Errorf("get team: %w", err)
 	}
+	if team.Status != "active" {
+		return nil // raced with status change; next tick will see the same state
+	}
 
 	tx, err := r.DB.BeginTx(ctx, nil)
 	if err != nil {
