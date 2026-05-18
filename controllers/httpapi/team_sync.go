@@ -69,7 +69,7 @@ func (s *Server) handleTeamSync(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusAccepted, map[string]any{
-		"team_id":        team.ID,
+		"team_id":        team.ID.String(),
 		"events_emitted": 1,
 		"event_type":     repository.EventTypeTeamCreated,
 	})
