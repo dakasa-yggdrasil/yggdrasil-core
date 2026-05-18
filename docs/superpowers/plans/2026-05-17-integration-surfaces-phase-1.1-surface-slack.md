@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Ship `surface-slack` — the first federated standalone surface — as a sub-folder `surface-ui/` inside `integration-slack`, consuming `@yggdrasil/surface-toolkit@0.1.0` from GHCR npm. Add `on_surface_query` capability to the adapter for the custom "Canais" tab.
+**Goal:** Ship `surface-slack` — the first federated standalone surface — as a sub-folder `surface-ui/` inside `integration-slack`, consuming `@dakasa-yggdrasil/surface-toolkit@0.1.1` from GHCR npm. Add `on_surface_query` capability to the adapter for the custom "Canais" tab.
 
 **Spec reference:** `/Users/dakasa/projects/yggdrasil/yggdrasil-core/docs/superpowers/specs/2026-05-17-integration-surfaces-design.md`.
 
@@ -265,7 +265,7 @@ mkdir -p surface-ui/src/tabs surface-ui/public
     "preview": "vite preview"
   },
   "dependencies": {
-    "@yggdrasil/surface-toolkit": "^0.1.0",
+    "@dakasa-yggdrasil/surface-toolkit": "^0.1.1",
     "@tanstack/react-query": "^5.0.0",
     "@mui/material": "^6.0.0",
     "@emotion/react": "^11.0.0",
@@ -384,10 +384,10 @@ npm install
 npm run build
 ```
 
-Expected: clean. If `@yggdrasil/surface-toolkit@0.1.0` not resolvable from public npm yet, install via GHCR npm registry:
+Expected: clean. If `@dakasa-yggdrasil/surface-toolkit@0.1.1` not resolvable from public npm yet, install via GHCR npm registry:
 
 ```bash
-echo "@yggdrasil:registry=https://npm.pkg.github.com" >> .npmrc
+echo "@dakasa-yggdrasil:registry=https://npm.pkg.github.com" >> .npmrc
 # Token may be needed for private packages — see ../README for cluster secret
 npm install
 ```
@@ -413,7 +413,7 @@ git commit -m "feat(surface-ui): bootstrap Vite + React 19 + toolkit dependency"
 `surface-ui/src/tabs/SlackChannelsTab.tsx`:
 
 ```tsx
-import { useSurfaceQuery, DataTable, LoadingState, EmptyState } from "@yggdrasil/surface-toolkit";
+import { useSurfaceQuery, DataTable, LoadingState, EmptyState } from "@dakasa-yggdrasil/surface-toolkit";
 
 interface ChannelItem extends Record<string, unknown> {
   id: string;
@@ -458,7 +458,7 @@ import {
   IdentitiesTab,
   ActionsTab,
   RecentRunsTab
-} from "@yggdrasil/surface-toolkit";
+} from "@dakasa-yggdrasil/surface-toolkit";
 import { SlackChannelsTab } from "./tabs/SlackChannelsTab";
 
 const TABS = [
@@ -637,7 +637,7 @@ cd surface-ui
 docker build -t surface-slack:dev .
 ```
 
-Expected: clean. If `npm ci` fails because `@yggdrasil/surface-toolkit` isn't on the public npm registry, the `.npmrc` (Task 2 Step 8) handles GHCR auth — copy it into the build context.
+Expected: clean. If `npm ci` fails because `@dakasa-yggdrasil/surface-toolkit` isn't on the public npm registry, the `.npmrc` (Task 2 Step 8) handles GHCR auth — copy it into the build context.
 
 - [ ] **Step 4: Smoke-run the image**
 
@@ -759,7 +759,7 @@ Append to `.github/workflows/ci.yml` (or create as separate `.github/workflows/s
           cache: npm
           cache-dependency-path: surface-ui/package-lock.json
           registry-url: "https://npm.pkg.github.com"
-          scope: "@yggdrasil"
+          scope: "@dakasa-yggdrasil"
       - name: Install + build surface
         working-directory: surface-ui
         env:
