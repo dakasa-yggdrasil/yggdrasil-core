@@ -638,6 +638,20 @@ func WithSurfaceBaseURLs(baseURLs map[string]string) ServerOption {
 	}
 }
 
+// WithIntegrationSurfacesRepo injects the federated integration_surfaces
+// repository, enabling GET/POST /api/v1/integration-surfaces*. When unset
+// the handlers return 503.
+func WithIntegrationSurfacesRepo(r IntegrationSurfacesRepo) ServerOption {
+	return func(s *Server) { s.integrationSurfacesRepo = r }
+}
+
+// WithSurfaceQueryDispatcher injects the synchronous on_surface_query
+// dispatcher, enabling POST /api/v1/integrations/{instance_id}/surface-query.
+// When unset the handler returns 503.
+func WithSurfaceQueryDispatcher(d SurfaceQueryDispatcher) ServerOption {
+	return func(s *Server) { s.surfaceQueryDispatcher = d }
+}
+
 // workflowDispatchFunc dispatches a Yggdrasil workflow_run by manifest ref.
 // The default implementation wraps messagecontroller.RunWorkflow; tests
 // override the field directly with a fake to assert dispatch behaviour.

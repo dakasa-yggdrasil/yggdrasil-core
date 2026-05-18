@@ -15,6 +15,7 @@ import (
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/httpapi"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/oidc"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/integrationsurfaces"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 	surfacesvc "github.com/dakasa-yggdrasil/yggdrasil-core/internal/surface"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -68,6 +69,20 @@ func bootstrapHTTP(_ context.Context, app *runtime.ServiceApp) error {
 	surfaceTargets := surfaceTargetsFromEnv(logger)
 	if len(surfaceTargets) > 0 {
 		opts = append(opts, httpapi.WithSurfaceBaseURLs(surfaceTargets))
+	}
+	// Federated integration_surfaces (coexists with internal/surface). The
+	// integration_surface_sync addon (priority 25) stashes the repo and the
+	// synchronous dispatcher into app resources before this addon (priority
+	// 30) runs. Missing resources mean the related handlers return 503.
+	if raw, ok := app.Resource("integration_surfaces_repo"); ok {
+		if repo, ok := raw.(*integrationsurfaces.Repository); ok {
+			opts = append(opts, httpapi.WithIntegrationSurfacesRepo(repo))
+		}
+	}
+	if raw, ok := app.Resource("integration_surface_query_dispatcher"); ok {
+		if disp, ok := raw.(httpapi.SurfaceQueryDispatcher); ok {
+			opts = append(opts, httpapi.WithSurfaceQueryDispatcher(disp))
+		}
 	}
 	discovery := surfacesvc.NewDiscovery(db, surfacesvc.NewClient(nil), logger).
 		WithSource(surfaceTargetSource{db: db, fallback: surfaceTargets}).
