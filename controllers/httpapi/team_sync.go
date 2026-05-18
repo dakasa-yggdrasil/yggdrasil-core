@@ -74,3 +74,77 @@ func (s *Server) handleTeamSync(w http.ResponseWriter, r *http.Request) {
 		"event_type":     repository.EventTypeTeamCreated,
 	})
 }
+
+// handleTeamProvisioningStatus returns the per-adapter provisioning state
+// for a team: which integration_instances have a mirror (from
+// team_provisioning_log), which have a pending/failed reaction
+// (integration_event_reactions), and which were dead_lettered.
+func (s *Server) handleTeamProvisioningStatus(w http.ResponseWriter, r *http.Request) {
+	teamIDStr := r.PathValue("id")
+	teamID, err := uuid.Parse(teamIDStr)
+	if err != nil {
+		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid team id"})
+		return
+	}
+
+	provisioning, err := repository.ListTeamProvisioningLogByTeam(r.Context(), s.db, teamID)
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
+	// Reactions whose underlying event was emitted for this team.
+	reactionRows, err := s.db.QueryContext(r.Context(), `
+		SELECT r.integration_instance_id, r.capability, r.attempt,
+		       COALESCE(r.last_error, ''), r.status
+		FROM integration_event_reactions r
+		JOIN event_log e ON e.event_id = r.event_id
+		WHERE e.aggregate_type = 'team'
+		  AND e.aggregate_id = $1
+		  AND r.status IN ('pending','failed','dead_lettered')
+		ORDER BY r.id DESC
+		LIMIT 200
+	`, teamID.String())
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	defer reactionRows.Close()
+
+	type reactionView struct {
+		IntegrationInstanceID uuid.UUID `json:"integration_instance_id"`
+		Capability            string    `json:"capability"`
+		Attempt               int       `json:"attempt"`
+		LastError             string    `json:"last_error,omitempty"`
+	}
+	pending := []reactionView{}
+	deadLettered := []reactionView{}
+	for reactionRows.Next() {
+		var rx reactionView
+		var status string
+		if err := reactionRows.Scan(&rx.IntegrationInstanceID, &rx.Capability, &rx.Attempt, &rx.LastError, &status); err != nil {
+			writeMappedError(w, err)
+			return
+		}
+		if status == "dead_lettered" {
+			deadLettered = append(deadLettered, rx)
+		} else {
+			pending = append(pending, rx)
+		}
+	}
+	if err := reactionRows.Err(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
+	if provisioning == nil {
+		provisioning = []model.TeamProvisioningLog{}
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"team_id":       teamID.String(),
+		"provisioning":  provisioning,
+		"pending":       pending,
+		"dead_lettered": deadLettered,
+	})
+}
