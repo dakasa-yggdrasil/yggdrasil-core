@@ -45,3 +45,14 @@ func TestExtractFromOutput_NilInput(t *testing.T) {
 		t.Fatal("expected no extraction for nil input")
 	}
 }
+
+func TestExtractFromOutput_ExternalIDWrongType(t *testing.T) {
+	out := map[string]any{
+		"_yggdrasil": map[string]any{
+			"team_provisioned": map[string]any{"external_id": 42},
+		},
+	}
+	if _, ok := ExtractFromOutput(out); ok {
+		t.Fatal("expected extraction to fail when external_id is not a string")
+	}
+}

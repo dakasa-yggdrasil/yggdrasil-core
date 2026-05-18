@@ -281,7 +281,7 @@ func (c *rabbitmqReactorCaller) persistTeamProvisioning(
 		LastEventType:         eventType,
 	}); err != nil {
 		if c.logger != nil {
-			c.logger.Warn("persist team_provisioning_log failed",
+			c.logger.Warn("reactor: persist team_provisioning_log failed (non-fatal)",
 				zap.String("team_id", teamIDStr),
 				zap.String("integration_instance_id", integrationInstanceID),
 				zap.Error(err))
