@@ -1,7 +1,26 @@
 # Integration Surfaces — Federated Standalone Consoles
 
-**Date:** 2026-05-17
-**Status:** Draft — pending user review
+**Date:** 2026-05-17 (revised 2026-05-18)
+**Status:** Approved — naming reconciled with existing `internal/surface/` (server-driven UI from 2026-05-08 handoff). This spec covers a NEW system that COEXISTS with the existing one; see §0 for naming.
+
+## 0. Coexistence with existing server-driven UI system
+
+yggdrasil-core ships (since 2026-05-08) a server-driven UI system: table `surface_manifests` keyed by `surface_id`, polled from each adapter's `GET /surface/manifest`, exposed via `/api/v1/ops/surfaces*`. That system is alive in production and remains untouched.
+
+This spec introduces a SECOND system for **federated standalone integration surfaces**. To avoid naming collision, all identifiers in this spec use the `integration_surface` prefix/namespace:
+
+| Domain | Old (server-driven, untouched) | New (federated standalone, this spec) |
+|---|---|---|
+| Table | `surface_manifests` | `integration_surfaces` |
+| Go pkg | `internal/surface/` | `internal/integrationsurfaces/` |
+| HTTP path | `/api/v1/ops/surfaces*` | `/api/v1/integration-surfaces*` |
+| Manifest filename | `surface.manifest.json` (adapter HTTP) | `surface.manifest.json` (adapter repo) |
+| Manifest `kind` | `surface` | `integration_surface` |
+| Canon events | `surface.*` (if any) | `integration_surface.registered`, `.updated`, `.deactivated`, `.drift_detected` |
+| FE module | `src/pages/ops/Surfaces*` | `src/lib/integration-surfaces/` |
+| FE components | `Ops*Surface*` | `IntegrationSurfaceSlot`, `IntegrationSurfaceCard`, `useIntegrationSurfaces`, etc. |
+
+Spec §3–§10 below refer ONLY to the NEW system unless otherwise noted.
 **Scope:** V1 covers 8 integrations: `slack`, `google-workspace`, `github`, `grafana`, `kubernetes`, `aws`, `secrets-management`, `webhooks-external`.
 
 ---
@@ -24,11 +43,11 @@ The motivation is two-fold:
                 │                                                              │
                 │   ┌──────────────┐    ┌─────────────────┐                    │
                 │   │ surfaces     │    │ manifest_sync   │  reconciles        │
-                │   │ table        │◄───┤ addon (extended)│  surface_manifests │
+                │   │ table        │◄───┤ addon (extended)│  integration_surf. │
                 │   └──────┬───────┘    └─────────────────┘                    │
                 │          │                                                   │
                 │   ┌──────▼───────────────────┐                               │
-                │   │ /api/v1/surfaces*        │                               │
+                │   │ /api/v1/integration-surfaces*        │                               │
                 │   │ /api/v1/integrations/    │                               │
                 │   │   {id}/surface-query     │  proxies to adapter           │
                 │   └──────┬───────────────────┘                               │
@@ -57,8 +76,8 @@ The motivation is two-fold:
 
 **Discovery flow:**
 1. Adapter ships `surface-ui/surface.manifest.json` in its repo.
-2. On adapter image build (CI), workflow calls `POST /api/v1/surfaces/{name}/sync` triggering the `manifest_sync` addon to re-read the manifest from the repo (via integration-github) and upsert into the `surface_manifests` table. Emits canon `surface.registered` or `surface.updated`.
-3. Console-console pages render `<SurfaceSlot slot="..."/>`, which calls `GET /api/v1/surfaces?appears_on=<slot>`.
+2. On adapter image build (CI), workflow calls `POST /api/v1/integration-surfaces/{name}/sync` triggering the `manifest_sync` addon to re-read the manifest from the repo (via integration-github) and upsert into the `integration_surfaces` table. Emits canon `integration_surface.registered` or `integration_surface.updated`.
+3. Console-console pages render `<IntegrationSurfaceSlot slot="..."/>`, which calls `GET /api/v1/integration-surfaces?appears_on=<slot>`.
 4. Backend returns active surface manifests where `spec.display.appears_on` contains the slot AND the requesting session has the required `core_contracts`.
 5. Frontend renders one `SurfaceCard` per result. Click navigates (full page) to `spec.runtime.base_path`.
 
@@ -75,7 +94,7 @@ Each `integration-<name>/surface-ui/surface.manifest.json`:
 ```jsonc
 {
   "apiVersion": "yggdrasil.io/v1alpha1",
-  "kind": "surface",
+  "kind": "integration_surface",                       // distinguished from "surface" (old server-driven)
   "metadata": {
     "name": "surface-slack",                          // globally unique
     "namespace": "global",
@@ -149,7 +168,7 @@ V1 actively uses `console-home`, `ops-integrations`, and `colaborador-detail`. O
 | `webhooks` | needs audit_events with source=webhook |
 | `action_catalog` | needs action_catalog table |
 
-Backend cross-checks `core_contracts` against the session's policy when serving `GET /api/v1/surfaces`; surfaces whose contracts the user cannot fulfill are filtered out.
+Backend cross-checks `core_contracts` against the session's policy when serving `GET /api/v1/integration-surfaces`; surfaces whose contracts the user cannot fulfill are filtered out.
 
 ---
 
@@ -157,10 +176,10 @@ Backend cross-checks `core_contracts` against the session's policy when serving 
 
 ### 4.1 Migration (new)
 
-`db/migrations/00045_surface_manifests.sql` (renumber if collision at apply time):
+`db/migrations/00045_integration_surfaces.sql` (renumber if collision at apply time):
 
 ```sql
-CREATE TABLE surface_manifests (
+CREATE TABLE integration_surfaces (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
   name text NOT NULL UNIQUE,
   integration_type text,                              -- nullable; "core" surfaces don't have one
@@ -169,14 +188,14 @@ CREATE TABLE surface_manifests (
   active boolean NOT NULL DEFAULT true,
   registered_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now(),
-  CONSTRAINT fk_integration_type FOREIGN KEY (integration_type)
+  CONSTRAINT fk_integration_surface_type FOREIGN KEY (integration_type)
     REFERENCES integration_types(name) ON DELETE SET NULL
 );
 
-CREATE INDEX surface_manifests_active_idx ON surface_manifests (active) WHERE active;
-CREATE INDEX surface_manifests_appears_on_idx ON surface_manifests
+CREATE INDEX integration_surfaces_active_idx ON integration_surfaces (active) WHERE active;
+CREATE INDEX integration_surfaces_appears_on_idx ON integration_surfaces
   USING gin ((spec->'display'->'appears_on'));
-CREATE INDEX surface_manifests_integration_type_idx ON surface_manifests (integration_type)
+CREATE INDEX integration_surfaces_integration_type_idx ON integration_surfaces (integration_type)
   WHERE active;
 ```
 
@@ -184,7 +203,7 @@ CREATE INDEX surface_manifests_integration_type_idx ON surface_manifests (integr
 
 `internal/manifestsync/syncer.go` is extended to reconcile two collections:
 - `integration_types` (existing)
-- `surface_manifests` (new)
+- `integration_surfaces` (new — this spec)
 
 Same loop, same canon-event emission semantics, same cron priority (85). Reads `surface.manifest.json` from the adapter repo via integration-github; validates against schema (Section 3); upserts row.
 
@@ -194,10 +213,10 @@ Four new constants registered in `internal/events/`:
 
 | Event | Trigger | Payload |
 |---|---|---|
-| `surface.registered` | first time syncer sees a surface manifest | `{ surface_name, integration_type, spec, registered_at }` |
-| `surface.updated` | manifest spec hash changes | `{ surface_name, prev_version, new_version, diff }` |
-| `surface.deactivated` | adapter removes manifest or marks deprecated | `{ surface_name, reason }` |
-| `surface.drift_detected` | persisted manifest differs from runtime image's bundled manifest | `{ surface_name, persisted_version, runtime_version }` |
+| `integration_surface.registered` | first time syncer sees a surface manifest | `{ surface_name, integration_type, spec, registered_at }` |
+| `integration_surface.updated` | manifest spec hash changes | `{ surface_name, prev_version, new_version, diff }` |
+| `integration_surface.deactivated` | adapter removes manifest or marks deprecated | `{ surface_name, reason }` |
+| `integration_surface.drift_detected` | persisted manifest differs from runtime image's bundled manifest | `{ surface_name, persisted_version, runtime_version }` |
 
 Each has a JSON schema in `internal/events/schemas/`.
 
@@ -207,9 +226,9 @@ In `controllers/httpapi/surfaces.go`:
 
 | Method | Path | Purpose |
 |---|---|---|
-| GET | `/api/v1/surfaces` | list all active surfaces (paginated); supports `?appears_on=`, `?integration_type=`, `?category=` |
-| GET | `/api/v1/surfaces/{name}` | full manifest + last health probe |
-| POST | `/api/v1/surfaces/{name}/sync` | force re-read manifest from repo (operator-triggered) |
+| GET | `/api/v1/integration-surfaces` | list all active surfaces (paginated); supports `?appears_on=`, `?integration_type=`, `?category=` |
+| GET | `/api/v1/integration-surfaces/{name}` | full manifest + last health probe |
+| POST | `/api/v1/integration-surfaces/{name}/sync` | force re-read manifest from repo (operator-triggered) |
 
 Authorization: standard session middleware. List endpoint additionally filters by `core_contracts` intersected with session policy.
 
@@ -230,25 +249,25 @@ New operation constant `OperationOnSurfaceQuery` added to `internal/integrations
 
 ## 5. Console-console portal
 
-### 5.1 New components in `surface-console/src/lib/surfaces/`
+### 5.1 New components in `surface-console/src/lib/integration-surfaces/`
 
 ```
-src/lib/surfaces/
-├── SurfaceSlot.tsx          // <SurfaceSlot slot="ops-integrations" layout="grid"/>
-├── SurfaceCard.tsx          // visual card; icon + title + subtitle + badge
-├── useSurfaces.ts           // hook: fetch + cache + filter
-├── useSurfacesByMany.ts     // batch fetch for pages with multiple slots
-├── types.ts                 // SurfaceManifestT, SlotID, etc.
-└── icons/                   // built-in icon set (slack, github, ...) — falls back to generic
+src/lib/integration-surfaces/
+├── IntegrationSurfaceSlot.tsx          // <IntegrationSurfaceSlot slot="ops-integrations" layout="grid"/>
+├── IntegrationSurfaceCard.tsx          // visual card; icon + title + subtitle + badge
+├── useIntegrationSurfaces.ts           // hook: fetch + cache + filter
+├── useIntegrationSurfacesByMany.ts     // batch fetch for pages with multiple slots
+├── types.ts                            // IntegrationSurfaceManifestT, SlotID, etc.
+└── icons/                              // built-in icon set
 ```
 
 ### 5.2 Slot integration map (V1)
 
 | Console file | Modification |
 |---|---|
-| `src/pages/ops/IntegrationsPage.tsx` | replace static integration_type grid with `<SurfaceSlot slot="ops-integrations" layout="grid"/>`; keep "+ Nova instância" action |
-| `src/pages/HomePage.tsx` (or equivalent `/`) | add `<SurfaceSlot slot="console-home" layout="grid"/>` below welcome |
-| `src/pages/collaborators/CollaboratorDetailPage.tsx` | add tabs section `<SurfaceSlot slot="colaborador-detail" layout="inline" context={{collaboratorId}}/>` |
+| `src/pages/ops/IntegrationsPage.tsx` | replace static integration_type grid with `<IntegrationSurfaceSlot slot="ops-integrations" layout="grid"/>`; keep "+ Nova instância" action |
+| `src/pages/HomePage.tsx` (or equivalent `/`) | add `<IntegrationSurfaceSlot slot="console-home" layout="grid"/>` below welcome |
+| `src/pages/collaborators/CollaboratorDetailPage.tsx` | add tabs section `<IntegrationSurfaceSlot slot="colaborador-detail" layout="inline" context={{collaboratorId}}/>` |
 
 ### 5.3 Card UX
 
@@ -264,7 +283,7 @@ Each slot can pass a custom `emptyState` element. Default shows "Nenhuma surface
 
 ### 5.5 Performance
 
-- Server-side: `/api/v1/surfaces` response is cacheable (60s TTL). Cache key includes session role for permission-filtered variants.
+- Server-side: `/api/v1/integration-surfaces` response is cacheable (60s TTL). Cache key includes session role for permission-filtered variants.
 - Client-side: React Query, 5min staleTime. Pages with multiple slots batch into a single `?appears_on=<slot1>,<slot2>` request via `useSurfacesByMany`.
 
 ---
@@ -419,7 +438,7 @@ build-surface:
     - run: task surface:docker:push
     - name: Trigger surface manifest sync
       run: |
-        curl -X POST "$YGGDRASIL_URL/api/v1/surfaces/surface-<name>/sync" \
+        curl -X POST "$YGGDRASIL_URL/api/v1/integration-surfaces/surface-<name>/sync" \
           -H "Authorization: Bearer $YGGDRASIL_WORKFLOW_RUN_TOKEN"
 ```
 
@@ -472,7 +491,7 @@ Contracts (Sections 3–7) are fixed before Phase 0 starts; all 4 streams build 
 
 **Phase 0 sync gate:**
 1. `@yggdrasil/surface-toolkit@0.1.0` published and installable
-2. yggdrasil-core deployed, `GET /api/v1/surfaces` returns `[]`
+2. yggdrasil-core deployed, `GET /api/v1/integration-surfaces` returns `[]`
 3. surface-console deployed, slots render empty states
 4. Placeholder surface deployed via 0d's template, reachable at `/s/placeholder`, smoke E2E green
 
@@ -498,7 +517,7 @@ Adapter capability additions (7 of 8 — google-workspace has no custom tab V1):
 
 **Phase 1 smoke E2E:**
 1. Each surface accessible at `/s/<integration>`
-2. `GET /api/v1/surfaces` returns 8 manifests
+2. `GET /api/v1/integration-surfaces` returns 8 manifests
 3. `/ops/integrations` renders 8 cards
 4. Click each card → loads surface, mandatory tabs work
 5. Identities surfaces (slack/gw/github/grafana) list real identities
@@ -560,7 +579,7 @@ Adapter capability additions (7 of 8 — google-workspace has no custom tab V1):
 ## 11. References
 
 - [[project-collaborator-external-identities-shipped-2026-05-16]] — context for identities tab
-- [[project-manifest-sync-shipped-2026-05-16]] — addon that reconciles `surface_manifests`
+- [[project-manifest-sync-shipped-2026-05-16]] — addon that reconciles `integration_types`; this spec extends it to also reconcile the new `integration_surfaces` collection (the old `surface_manifests` table — server-driven, untouched — has its own polling discovery and is not reconciled by manifest_sync)
 - [[project-tartaro-sso-login-e2e-2026-05-15]] — cookie SSO validated cross-path
 - [[reference-yggdrasil-core-repos]] — `yggdrasil-core` is the only source of truth
 - [[feedback-yggdrasil-core-is-only-truth]] — surfaces are plugins, optional, substituble
