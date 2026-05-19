@@ -132,7 +132,13 @@ func VerifyPasswordCredential(
 
 	valid, err := coreauth.VerifyPassword(passwordHash, req.Password)
 	if err != nil {
-		return model.Collaborator{}, err
+		// Hash format/scheme errors are internal data problems (corrupt
+		// row, legacy hash, etc.) that the end user can't fix and that
+		// shouldn't leak the internal cause. Convert to the canonical
+		// invalid-credentials response so the user gets a clean retry/
+		// "esqueci senha" flow, while ops sees the raw error in stderr.
+		fmt.Printf("auth: password verify error for collaborator %s: %v\n", collaborator.ID, err)
+		return model.Collaborator{}, ErrAuthInvalidCredentials
 	}
 	if !valid {
 		return model.Collaborator{}, ErrAuthInvalidCredentials
