@@ -688,6 +688,11 @@ func createTeamOn(ctx context.Context, q dbtx, req model.CreateTeamRequest) (mod
 		return model.Team{}, fmt.Errorf("team name is required")
 	}
 
+	email, err := normalizeTeamEmail(req.Email)
+	if err != nil {
+		return model.Team{}, err
+	}
+
 	parentTeamID, err := resolveOptionalTeamIDOn(ctx, q, req.ParentTeamID)
 	if err != nil {
 		return model.Team{}, err
@@ -714,6 +719,7 @@ func createTeamOn(ctx context.Context, q dbtx, req model.CreateTeamRequest) (mod
 				name,
 				type,
 				status,
+				email,
 				parent_team_id,
 				owners,
 				traits,
@@ -723,10 +729,11 @@ func createTeamOn(ctx context.Context, q dbtx, req model.CreateTeamRequest) (mod
 				$2,
 				$3,
 				$4,
-				$5,
-				$6::jsonb,
+				NULLIF($5, ''),
+				$6,
 				$7::jsonb,
-				$8::jsonb
+				$8::jsonb,
+				$9::jsonb
 			)
 			RETURNING
 				id,
@@ -734,6 +741,7 @@ func createTeamOn(ctx context.Context, q dbtx, req model.CreateTeamRequest) (mod
 				name,
 				type,
 				status,
+				email,
 				parent_team_id,
 				owners,
 				traits,
@@ -745,6 +753,7 @@ func createTeamOn(ctx context.Context, q dbtx, req model.CreateTeamRequest) (mod
 		name,
 		normalizeTeamType(req.Type),
 		normalizeStatus(req.Status),
+		email,
 		parentTeamID,
 		owners,
 		traits,
@@ -752,6 +761,31 @@ func createTeamOn(ctx context.Context, q dbtx, req model.CreateTeamRequest) (mod
 	)
 
 	return scanTeam(row)
+}
+
+// normalizeTeamEmail trims + lowercases the email and applies a lightweight
+// RFC 5322 simplified check (one local part, one @, one domain with dot).
+// Empty input is valid → returns "" (NULL in DB). Bad input → error.
+func normalizeTeamEmail(raw string) (string, error) {
+	v := strings.ToLower(strings.TrimSpace(raw))
+	if v == "" {
+		return "", nil
+	}
+	at := strings.IndexByte(v, '@')
+	if at <= 0 || at == len(v)-1 {
+		return "", fmt.Errorf("team email %q is not a valid email", raw)
+	}
+	if strings.LastIndexByte(v, '@') != at {
+		return "", fmt.Errorf("team email %q is not a valid email (multiple '@')", raw)
+	}
+	domain := v[at+1:]
+	if !strings.Contains(domain, ".") {
+		return "", fmt.Errorf("team email %q is not a valid email (domain missing dot)", raw)
+	}
+	if strings.ContainsAny(v, " \t\n\r") {
+		return "", fmt.Errorf("team email %q is not a valid email (whitespace)", raw)
+	}
+	return v, nil
 }
 
 // GetTeam returns one team by UUID or slug.
@@ -881,6 +915,7 @@ func buildListTeamsQuery(req model.ListTeamsRequest) (string, []any) {
 			name,
 			type,
 			status,
+			email,
 			parent_team_id,
 			owners,
 			traits,
@@ -992,6 +1027,15 @@ func updateTeamOn(ctx context.Context, q dbtx, req model.UpdateTeamRequest) (mod
 		metadata = cloneJSONObject(*req.Metadata)
 	}
 
+	email := current.Email
+	if req.Email != nil {
+		normalized, err := normalizeTeamEmail(*req.Email)
+		if err != nil {
+			return model.Team{}, err
+		}
+		email = normalized
+	}
+
 	ownersRaw, err := marshalJSONArray(owners)
 	if err != nil {
 		return model.Team{}, err
@@ -1014,10 +1058,11 @@ func updateTeamOn(ctx context.Context, q dbtx, req model.UpdateTeamRequest) (mod
 				name = $3,
 				type = $4,
 				status = $5,
-				parent_team_id = $6,
-				owners = $7::jsonb,
-				traits = $8::jsonb,
-				metadata = $9::jsonb
+				email = NULLIF($6, ''),
+				parent_team_id = $7,
+				owners = $8::jsonb,
+				traits = $9::jsonb,
+				metadata = $10::jsonb
 			WHERE id = $1
 			RETURNING
 				id,
@@ -1025,6 +1070,7 @@ func updateTeamOn(ctx context.Context, q dbtx, req model.UpdateTeamRequest) (mod
 				name,
 				type,
 				status,
+				email,
 				parent_team_id,
 				owners,
 				traits,
@@ -1037,6 +1083,7 @@ func updateTeamOn(ctx context.Context, q dbtx, req model.UpdateTeamRequest) (mod
 		name,
 		teamType,
 		status,
+		email,
 		parentTeamID,
 		ownersRaw,
 		traitsRaw,
@@ -1446,6 +1493,7 @@ func teamLookupQuery(identity string) string {
 			name,
 			type,
 			status,
+			email,
 			parent_team_id,
 			owners,
 			traits,
@@ -1587,6 +1635,7 @@ func scanCollaborator(row scanner) (model.Collaborator, error) {
 func scanTeam(row scanner) (model.Team, error) {
 	var (
 		team         model.Team
+		email        sql.NullString
 		parentTeamID sql.NullString
 		owners       []byte
 		traits       []byte
@@ -1600,6 +1649,7 @@ func scanTeam(row scanner) (model.Team, error) {
 		&team.Name,
 		&team.Type,
 		&team.Status,
+		&email,
 		&parentTeamID,
 		&owners,
 		&traits,
@@ -1609,6 +1659,10 @@ func scanTeam(row scanner) (model.Team, error) {
 	)
 	if err != nil {
 		return model.Team{}, err
+	}
+
+	if email.Valid {
+		team.Email = email.String
 	}
 
 	team.ParentTeamID, err = parseNullableUUID(parentTeamID)

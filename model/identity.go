@@ -38,6 +38,10 @@ type Team struct {
 	Name         string         `json:"name"`
 	Type         string         `json:"type"`
 	Status       string         `json:"status"`
+	// Email is the team's canonical contact address. Integrations may use
+	// it to provision external resources (Google Workspace group, Slack
+	// channel email, notification targets). Empty string = unset.
+	Email        string         `json:"email,omitempty"`
 	ParentTeamID *uuid.UUID     `json:"parent_team_id,omitempty"`
 	Owners       []string       `json:"owners"`
 	Traits       map[string]any `json:"traits"`
@@ -145,6 +149,7 @@ type CreateTeamRequest struct {
 	Name         string         `json:"name"`
 	Type         string         `json:"type,omitempty"`
 	Status       string         `json:"status,omitempty"`
+	Email        string         `json:"email,omitempty"`
 	ParentTeamID string         `json:"parent_team_id,omitempty"`
 	Owners       []string       `json:"owners,omitempty"`
 	Traits       map[string]any `json:"traits,omitempty"`
@@ -158,6 +163,7 @@ type UpdateTeamRequest struct {
 	Name         *string         `json:"name,omitempty"`
 	Type         *string         `json:"type,omitempty"`
 	Status       *string         `json:"status,omitempty"`
+	Email        *string         `json:"email,omitempty"`
 	ParentTeamID *string         `json:"parent_team_id,omitempty"`
 	Owners       *[]string       `json:"owners,omitempty"`
 	Traits       *map[string]any `json:"traits,omitempty"`
