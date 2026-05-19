@@ -130,17 +130,22 @@ func VerifyPasswordCredential(
 		return model.Collaborator{}, ErrAuthInvalidCredentials
 	}
 
-	valid, err := coreauth.VerifyPassword(passwordHash, req.Password)
-	if err != nil {
-		// Hash format/scheme errors are internal data problems (corrupt
-		// row, legacy hash, etc.) that the end user can't fix and that
-		// shouldn't leak the internal cause. Convert to the canonical
-		// invalid-credentials response so the user gets a clean retry/
-		// "esqueci senha" flow, while ops sees the raw error in stderr.
-		fmt.Printf("auth: password verify error for collaborator %s: %v\n", collaborator.ID, err)
-		return model.Collaborator{}, ErrAuthInvalidCredentials
+	// Dispatch pelo scheme armazenado no DB — handleSetupCommit e
+	// handlePasswordChange escrevem via internal/auth/password (Argon2id),
+	// enquanto coreauth.VerifyPassword só sabe PBKDF2-SHA256 (legacy).
+	// O bridge (wiring.go) já faz o dispatch correto via password.Verify.
+	scheme := credential.PasswordScheme
+	if scheme == "" {
+		// Backstop: rows sem scheme explícito assumem o legacy PBKDF2
+		// pra preservar logins antigos. handleSetupCommit sempre seta.
+		scheme = "pbkdf2_sha256"
 	}
-	if !valid {
+	if err := verifyPasswordBridge(scheme, passwordHash, req.Password); err != nil {
+		// Erros de password mismatch + scheme/hash corruption todos viram
+		// invalid_credentials pro user — o detalhe técnico vai pra
+		// stderr pra ops triarem (especialmente hash corruption indica
+		// data corruption no banco).
+		fmt.Printf("auth: password verify failed for collaborator %s (scheme=%s): %v\n", collaborator.ID, scheme, err)
 		return model.Collaborator{}, ErrAuthInvalidCredentials
 	}
 
