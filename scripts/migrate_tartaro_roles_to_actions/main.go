@@ -315,8 +315,95 @@ func runMigration(ctx context.Context, cfg config, db *sql.DB, apply bool) error
 	return nil
 }
 
-// runValidate is implemented in T12.
-func runValidate(_ context.Context, cfg config, _ *sql.DB) error {
-	cfg.logger.Println("runValidate — TODO T12 implements this")
-	return errors.New("runValidate not implemented (T12)")
+func runValidate(ctx context.Context, cfg config, db *sql.DB) error {
+	cfg.logger.Println("starting validate")
+
+	rows, err := db.QueryContext(ctx, `
+		SELECT id, slug,
+		       COALESCE(traits->'tartaro_roles', '[]'::jsonb)::text   AS roles_json,
+		       COALESCE(traits->'tartaro_actions','[]'::jsonb)::text  AS actions_json
+		FROM collaborators
+		WHERE jsonb_array_length(COALESCE(traits->'tartaro_roles','[]'::jsonb)) > 0
+		   OR jsonb_array_length(COALESCE(traits->'tartaro_actions','[]'::jsonb)) > 0
+	`)
+	if err != nil {
+		return fmt.Errorf("select collaborators: %w", err)
+	}
+	defer rows.Close()
+
+	roleActionsCache := map[string][]string{}
+	driftCount, checked := 0, 0
+
+	for rows.Next() {
+		var id, slug, rolesJSON, actionsJSON string
+		if err := rows.Scan(&id, &slug, &rolesJSON, &actionsJSON); err != nil {
+			return fmt.Errorf("scan collaborator: %w", err)
+		}
+
+		var roles, actualActions []string
+		if err := json.Unmarshal([]byte(rolesJSON), &roles); err != nil {
+			cfg.logger.Printf("WARN collab=%s decode roles failed: %v", slug, err)
+			continue
+		}
+		if err := json.Unmarshal([]byte(actionsJSON), &actualActions); err != nil {
+			cfg.logger.Printf("WARN collab=%s decode actions failed: %v", slug, err)
+			continue
+		}
+
+		// Compute expected = UNION(roleActions(role) for role in roles)
+		expected := map[string]struct{}{}
+		for _, r := range roles {
+			as, ok := roleActionsCache[r]
+			if !ok {
+				as, err = fetchRoleActions(ctx, cfg, r)
+				if err != nil {
+					cfg.logger.Printf("WARN role=%s skipped: %v", r, err)
+					roleActionsCache[r] = nil // cache the miss so we don't refetch
+					continue
+				}
+				roleActionsCache[r] = as
+			}
+			for _, a := range as {
+				expected[a] = struct{}{}
+			}
+		}
+		expSlice := make([]string, 0, len(expected))
+		for a := range expected {
+			expSlice = append(expSlice, a)
+		}
+
+		if !sameStringSet(actualActions, expSlice) {
+			driftCount++
+			cfg.logger.Printf("DRIFT collab=%s slug=%s expected=%v actual=%v",
+				id, slug, expSlice, actualActions)
+		}
+		checked++
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate collaborators: %w", err)
+	}
+
+	cfg.logger.Printf("validate: checked=%d drift=%d", checked, driftCount)
+	if driftCount > 0 {
+		return fmt.Errorf("%d users have drift between tartaro_roles and tartaro_actions", driftCount)
+	}
+	return nil
+}
+
+// sameStringSet returns true when a and b have the same set of strings
+// (order/duplicates ignored).
+func sameStringSet(a, b []string) bool {
+	if len(a) != len(b) {
+		return false
+	}
+	m := map[string]struct{}{}
+	for _, s := range a {
+		m[s] = struct{}{}
+	}
+	for _, s := range b {
+		if _, ok := m[s]; !ok {
+			return false
+		}
+	}
+	return true
 }

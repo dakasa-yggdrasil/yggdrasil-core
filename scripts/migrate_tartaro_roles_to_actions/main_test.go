@@ -53,3 +53,25 @@ func indexOf(s, sub string) int {
 	}
 	return -1
 }
+
+func TestSameStringSet(t *testing.T) {
+	cases := []struct {
+		name string
+		a, b []string
+		want bool
+	}{
+		{"both empty", []string{}, []string{}, true},
+		{"same order", []string{"x", "y"}, []string{"x", "y"}, true},
+		{"different order", []string{"x", "y"}, []string{"y", "x"}, true},
+		{"different length", []string{"x"}, []string{"x", "y"}, false},
+		{"different content", []string{"x"}, []string{"y"}, false},
+		{"a empty, b populated", []string{}, []string{"x"}, false},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			if got := sameStringSet(c.a, c.b); got != c.want {
+				t.Errorf("sameStringSet(%v, %v) = %v, want %v", c.a, c.b, got, c.want)
+			}
+		})
+	}
+}
