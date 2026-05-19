@@ -453,10 +453,20 @@ func (s *Server) handleAuthSession(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Best-effort MFA enrollment lookup: ignore "not found" / lookup errors
+	// so callers without an auth_identity row (e.g. SSO-only users) still
+	// get a valid session payload. Nil MFAEnrolledAt is the safe default
+	// because the FE guard treats it as "needs enrollment".
+	var mfaEnrolledAt *time.Time
+	if identity, err := repository.GetAuthIdentityByCollaboratorID(r.Context(), s.db, collaborator.ID); err == nil {
+		mfaEnrolledAt = identity.MFAEnrolledAt
+	}
+
 	writeJSON(w, http.StatusOK, model.AuthSessionEnvelope{
 		Authenticated: true,
 		Collaborator:  &collaborator,
 		Session:       &session,
+		MFAEnrolledAt: mfaEnrolledAt,
 	})
 }
 

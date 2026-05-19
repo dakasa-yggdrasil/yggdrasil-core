@@ -31,10 +31,16 @@ type AuthSession struct {
 }
 
 // AuthSessionEnvelope is the normalized auth/session response shape returned by the HTTP API.
+//
+// MFAEnrolledAt is sourced from auth_identities.mfa_enrolled_at (which doesn't
+// live on the Collaborator row) so that clients — like surface-console — can
+// drive the MFA-enrollment guard without an extra round-trip. Nil = the user
+// has never enrolled an MFA factor yet.
 type AuthSessionEnvelope struct {
 	Authenticated bool          `json:"authenticated"`
 	Collaborator  *Collaborator `json:"collaborator,omitempty"`
 	Session       *AuthSession  `json:"session,omitempty"`
+	MFAEnrolledAt *time.Time    `json:"mfa_enrolled_at,omitempty"`
 }
 
 // UpsertPasswordCredentialRequest configures one local password for an existing collaborator.
