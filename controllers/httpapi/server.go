@@ -360,6 +360,8 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/collaborators/{id}/absence/end", server.handleCollaboratorAbsenceEnd)
 	mux.HandleFunc("GET /api/v1/collaborators/{id}/lifecycle-events", server.handleCollaboratorLifecycleEvents)
 	mux.HandleFunc("GET /api/v1/collaborators/{id}/provider-state", server.handleCollaboratorProviderState)
+	mux.HandleFunc("GET /api/v1/collaborators/{id}/effective-tartaro-actions", server.handleEffectiveTartaroActions)
+	mux.HandleFunc("POST /api/v1/collaborators/{id}/sync-tartaro-actions", server.handleSyncTartaroActions)
 	mux.HandleFunc("POST /api/v1/collaborator-external-identities", server.handleExternalIdentityPost)
 	mux.HandleFunc("GET /api/v1/collaborator-external-identities", server.handleExternalIdentityGet)
 	mux.HandleFunc("DELETE /api/v1/collaborator-external-identities/{id}", server.handleExternalIdentityDelete)
