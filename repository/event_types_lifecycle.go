@@ -16,6 +16,8 @@ const (
 	EventTypeTeamDeleted                  = "team.deleted"
 	EventTypeTeamMembershipAdded          = "team_membership.added"
 	EventTypeTeamMembershipRemoved        = "team_membership.removed"
+	EventTypeTeamGrantAdded               = "team_grant.added"
+	EventTypeTeamGrantRevoked             = "team_grant.revoked"
 
 	// EventTypeReactorDeadLettered is emitted by the Runner when a reaction
 	// exhausts retries. It is NOT a canon lifecycle event — the prefix
@@ -55,6 +57,8 @@ var CanonLifecycleEventTypes = map[string]struct{}{
 	EventTypeTeamDeleted:                {},
 	EventTypeTeamMembershipAdded:        {},
 	EventTypeTeamMembershipRemoved:      {},
+	EventTypeTeamGrantAdded:             {},
+	EventTypeTeamGrantRevoked:           {},
 }
 
 // IsCanonLifecycleEvent returns true when t is in the closed canon set.

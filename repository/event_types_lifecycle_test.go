@@ -69,3 +69,29 @@ func TestExternalIdentityEventsAreNotCanonLifecycle(t *testing.T) {
 		}
 	}
 }
+
+func TestTeamGrantEventConstants(t *testing.T) {
+	cases := []struct {
+		got  string
+		want string
+	}{
+		{EventTypeTeamGrantAdded, "team_grant.added"},
+		{EventTypeTeamGrantRevoked, "team_grant.revoked"},
+	}
+	for _, c := range cases {
+		if c.got != c.want {
+			t.Fatalf("constant mismatch: got %q want %q", c.got, c.want)
+		}
+	}
+}
+
+func TestTeamGrantEventsAreCanonLifecycle(t *testing.T) {
+	for _, e := range []string{
+		EventTypeTeamGrantAdded,
+		EventTypeTeamGrantRevoked,
+	} {
+		if !IsCanonLifecycleEvent(e) {
+			t.Fatalf("event %q must be in CanonLifecycleEventTypes", e)
+		}
+	}
+}
