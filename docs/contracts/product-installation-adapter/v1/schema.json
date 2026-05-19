@@ -144,7 +144,12 @@
         "name": { "type": "string" },
         "description": { "type": "string" },
         "resource_types": { "type": "array", "items": { "type": "string" } },
-        "idempotent": { "type": "boolean" }
+        "idempotent": { "type": "boolean" },
+        "category": {
+          "type": "string",
+          "enum": ["", "reactor", "capability", "permission"],
+          "description": "Categoria semântica: reactor (oculto em pickers), capability (operação dispatched), permission (granted via team_grant). Vazio = capability."
+        }
       },
       "additionalProperties": false
     },

@@ -337,6 +337,11 @@
         },
         "idempotent": {
           "type": "boolean"
+        },
+        "category": {
+          "type": "string",
+          "enum": ["", "reactor", "capability", "permission"],
+          "description": "Categoria semântica: reactor (hook interno, oculto em pickers), capability (operação dispatched), permission (granted via team_grant, autorizada downstream). Vazio = capability (back-compat)."
         }
       }
     },

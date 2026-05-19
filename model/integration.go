@@ -118,11 +118,21 @@ type IntegrationResourceType struct {
 }
 
 // IntegrationActionDefinition describes one action supported by one or more resource types.
+//
+// Category lets UIs (team-grant picker, console catalog) sort actions by
+// semantic role:
+//   - "reactor"    : framework hook (on_team_*, on_membership_*). Never
+//                    user-grantable; hidden from grant pickers.
+//   - "capability" : adapter operation dispatched by Yggdrasil via Execute.
+//                    Default when unset (back-compat for older adapters).
+//   - "permission" : product-level permission, NOT dispatched; granted via
+//                    team_grant and authorized by the downstream app.
 type IntegrationActionDefinition struct {
 	Name          string   `json:"name"`
 	Description   string   `json:"description,omitempty"`
 	ResourceTypes []string `json:"resource_types,omitempty"`
 	Idempotent    bool     `json:"idempotent,omitempty"`
+	Category      string   `json:"category,omitempty"`
 }
 
 // IntegrationDiscoverySpec declares how the adapter discovers external resources.
