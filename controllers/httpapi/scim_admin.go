@@ -26,7 +26,7 @@ type scimClientCreateResponse struct {
 // (GH Enterprise, AWS Identity Center, Slack). The plaintext token is returned
 // once; only its SHA-256 is persisted. Defaults: read-only on Users + Groups.
 func (s *Server) handleSCIMClientCreate(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeAuthAdminRequest(r); err != nil {
+	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return
 	}
@@ -74,7 +74,7 @@ func (s *Server) handleSCIMClientCreate(w http.ResponseWriter, r *http.Request) 
 // handleSCIMClientList returns the list of registered SCIM clients (without
 // any bearer hashes). `?include_revoked=true` shows revoked entries.
 func (s *Server) handleSCIMClientList(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeAuthAdminRequest(r); err != nil {
+	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return
 	}

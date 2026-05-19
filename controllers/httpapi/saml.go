@@ -324,7 +324,7 @@ type samlSPRegisterRequest struct {
 // handleSAMLSPRegister stores a new SAML SP entry. Trust workflows
 // (`register-saml-sp-*`) call this after they've validated the SP's metadata.
 func (s *Server) handleSAMLSPRegister(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeAuthAdminRequest(r); err != nil {
+	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return
 	}
@@ -369,7 +369,7 @@ func (s *Server) handleSAMLSPRegister(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSAMLSPList(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeAuthAdminRequest(r); err != nil {
+	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return
 	}
@@ -398,7 +398,7 @@ type samlRotateSigningCertRequest struct {
 // it active. Caller may supply PEM material directly when rotation came
 // from an external CA; otherwise we self-generate.
 func (s *Server) handleSAMLRotateSigningCert(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeAuthAdminRequest(r); err != nil {
+	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return
 	}

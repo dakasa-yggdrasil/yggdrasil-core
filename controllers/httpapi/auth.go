@@ -54,7 +54,7 @@ type thirdPartyAuthProvidersResponse struct {
 }
 
 func (s *Server) handleAuthPasswordUpsert(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeAuthAdminRequest(r); err != nil {
+	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return
 	}
@@ -487,7 +487,7 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleThirdPartyIdentityList(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeAuthAdminRequest(r); err != nil {
+	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return
 	}
@@ -506,7 +506,7 @@ func (s *Server) handleThirdPartyIdentityList(w http.ResponseWriter, r *http.Req
 }
 
 func (s *Server) handleThirdPartyIdentityUpsert(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeAuthAdminRequest(r); err != nil {
+	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return
 	}
@@ -530,7 +530,7 @@ func (s *Server) handleThirdPartyIdentityUpsert(w http.ResponseWriter, r *http.R
 }
 
 func (s *Server) handleThirdPartyIdentityDelete(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeAuthAdminRequest(r); err != nil {
+	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return
 	}
@@ -563,7 +563,7 @@ func (s *Server) handleThirdPartyAuthProviderList(w http.ResponseWriter, r *http
 }
 
 func (s *Server) handleThirdPartyAuthProviderGet(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeAuthAdminRequest(r); err != nil {
+	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return
 	}
@@ -579,7 +579,7 @@ func (s *Server) handleThirdPartyAuthProviderGet(w http.ResponseWriter, r *http.
 }
 
 func (s *Server) handleThirdPartyAuthProviderUpsert(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeAuthAdminRequest(r); err != nil {
+	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return
 	}
@@ -689,7 +689,7 @@ func parseManagedSecretWriteRef(ref string) (namespace string, name string, key 
 }
 
 func (s *Server) handleThirdPartyAuthProviderDelete(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeAuthAdminRequest(r); err != nil {
+	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return
 	}

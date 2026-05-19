@@ -128,7 +128,7 @@ func consoleBaseURL(r *http.Request) string {
 // onboarding workflow calls this after creating the collaborator + before
 // fanning out provisioning downstream.
 func (s *Server) handleMFAEnrollRequest(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeAuthAdminRequest(r); err != nil {
+	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return
 	}

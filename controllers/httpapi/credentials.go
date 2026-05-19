@@ -27,7 +27,7 @@ import (
 // token via X-Yggdrasil-Auth-Admin-Token header or as a Bearer token matching
 // YGGDRASIL_AUTH_ADMIN_TOKEN — the same gate used by all other admin endpoints.
 func (s *Server) handleIssueSetupToken(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeAuthAdminRequest(r); err != nil {
+	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return
 	}

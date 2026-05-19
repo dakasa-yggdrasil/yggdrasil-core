@@ -23,7 +23,7 @@ type postExternalIdentityRequest struct {
 }
 
 func (s *Server) handleExternalIdentityPost(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeAuthAdminRequest(r); err != nil {
+	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return
 	}
@@ -81,7 +81,7 @@ func (s *Server) handleExternalIdentityPost(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) handleExternalIdentityGet(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeAuthAdminRequest(r); err != nil {
+	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return
 	}
@@ -172,7 +172,7 @@ func emitConflictEvent(ctx context.Context, db *sql.DB, e *externalidentity.Conf
 }
 
 func (s *Server) handleExternalIdentityDelete(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeAuthAdminRequest(r); err != nil {
+	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return
 	}

@@ -31,7 +31,7 @@ import (
 //	500 {error: ...} on internal failure
 func (s *Server) handleIntegrationTypeSync(deps manifestsync.Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		if err := authorizeAuthAdminRequest(r); err != nil {
+		if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 			writeMappedError(w, err)
 			return
 		}
