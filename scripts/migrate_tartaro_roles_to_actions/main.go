@@ -15,7 +15,10 @@ package main
 
 import (
 	"context"
+	"crypto/hmac"
+	"crypto/sha256"
 	"database/sql"
+	"encoding/hex"
 	"encoding/json"
 	"errors"
 	"flag"
@@ -34,6 +37,7 @@ type config struct {
 	dbURL             string
 	tartaroOpsBaseURL string
 	tartaroOpsToken   string
+	hmacSecret        string
 	instanceNamespace string
 	instanceName      string
 	mode              string
@@ -45,6 +49,7 @@ func parseFlags() config {
 	flag.StringVar(&c.dbURL, "db-url", os.Getenv("YGGDRASIL_DB_URL"), "PostgreSQL DSN for the Yggdrasil DB")
 	flag.StringVar(&c.tartaroOpsBaseURL, "tartaro-ops-url", os.Getenv("TARTARO_OPS_URL"), "tartaro-operations base URL (e.g. https://tartaro-operations.dakasa.me)")
 	flag.StringVar(&c.tartaroOpsToken, "tartaro-ops-token", os.Getenv("TARTARO_OPS_TOKEN"), "Bearer token for tartaro-operations (optional)")
+	flag.StringVar(&c.hmacSecret, "hmac-secret", os.Getenv("DAKASA_HMAC_SECRET"), "DAKASA_HMAC_SECRET for X-Internal-Signature header on internal endpoints")
 	flag.StringVar(&c.instanceNamespace, "instance-namespace", "dakasa", "Tartaro integration_instance namespace")
 	flag.StringVar(&c.instanceName, "instance-name", "integration-tartaro-dakasa", "Tartaro integration_instance name")
 	flag.StringVar(&c.mode, "mode", "dry-run", "Mode: dry-run | validate | apply")
@@ -101,8 +106,19 @@ func main() {
 	}
 }
 
+// signInternalHMAC computes the X-Internal-Signature header for a request
+// body using the DAKASA_HMAC_SECRET. Matches the verification done by
+// dakasa-commons/security.InternalHMAC middleware.
+func signInternalHMAC(secret string, body []byte) string {
+	mac := hmac.New(sha256.New, []byte(secret))
+	mac.Write(body)
+	return hex.EncodeToString(mac.Sum(nil))
+}
+
 // fetchRoleActions GETs tartaro-operations /internal/admin/roles/{slug}/actions
-// and returns the canonical action set for that role.
+// and returns the canonical action set for that role. The endpoint is behind
+// the InternalHMAC middleware — we sign an empty body when DAKASA_HMAC_SECRET
+// is configured.
 func fetchRoleActions(ctx context.Context, cfg config, slug string) ([]string, error) {
 	u := strings.TrimRight(cfg.tartaroOpsBaseURL, "/") + "/internal/admin/roles/" + slug + "/actions"
 	req, err := http.NewRequestWithContext(ctx, http.MethodGet, u, nil)
@@ -111,6 +127,9 @@ func fetchRoleActions(ctx context.Context, cfg config, slug string) ([]string, e
 	}
 	if cfg.tartaroOpsToken != "" {
 		req.Header.Set("Authorization", "Bearer "+cfg.tartaroOpsToken)
+	}
+	if cfg.hmacSecret != "" {
+		req.Header.Set("X-Internal-Signature", signInternalHMAC(cfg.hmacSecret, nil))
 	}
 	resp, err := http.DefaultClient.Do(req)
 	if err != nil {
