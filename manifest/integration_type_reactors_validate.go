@@ -27,6 +27,8 @@ var canonLifecycleEventTypes = map[string]struct{}{
 	"team.deleted":                {},
 	"team_membership.added":       {},
 	"team_membership.removed":     {},
+	"team_grant.added":            {},
+	"team_grant.revoked":          {},
 }
 
 // ValidateReactors enforces:

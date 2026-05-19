@@ -115,6 +115,10 @@ func (s *Server) handleSyncTartaroActions(w http.ResponseWriter, r *http.Request
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// Payload must satisfy team_membership.added v1 schema:
+	// required (collaborator_id, team_id), additionalProperties:false.
+	// This is a synthetic event — no real team_id — so we use the
+	// zero UUID and encode the trigger in `source` (free-string field).
 	if _, err := repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
 		Type:          repository.EventTypeTeamMembershipAdded,
 		SchemaVersion: "v1",
@@ -122,8 +126,9 @@ func (s *Server) handleSyncTartaroActions(w http.ResponseWriter, r *http.Request
 		AggregateID:   collabID.String(),
 		Payload: map[string]any{
 			"collaborator_id": collabID.String(),
-			"synthetic":       true,
-			"trigger":         "sync-tartaro-actions",
+			"team_id":         "00000000-0000-0000-0000-000000000000",
+			"role":            "synthetic",
+			"source":          "sync-tartaro-actions",
 		},
 		Actor: &model.EventActor{Type: model.ActorTypeAPI, ID: actorIDFromRequest(r)},
 	}); err != nil {
