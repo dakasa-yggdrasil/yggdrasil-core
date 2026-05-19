@@ -36,11 +36,18 @@ type AuthSession struct {
 // live on the Collaborator row) so that clients — like surface-console — can
 // drive the MFA-enrollment guard without an extra round-trip. Nil = the user
 // has never enrolled an MFA factor yet.
+//
+// Permissions é a lista resolvida de actions yggdrasil:* que o user pode
+// executar, derivada de team_grants em instances do tipo yggdrasil-self pra
+// os times ativos do user. Um único entry "yggdrasil:*" significa god-mode
+// (grant wildcard OR traits.yggdrasil_admin=true). O FE (PermissionGate,
+// usePermission) usa essas chaves pra esconder rotas e desabilitar ações.
 type AuthSessionEnvelope struct {
 	Authenticated bool          `json:"authenticated"`
 	Collaborator  *Collaborator `json:"collaborator,omitempty"`
 	Session       *AuthSession  `json:"session,omitempty"`
 	MFAEnrolledAt *time.Time    `json:"mfa_enrolled_at,omitempty"`
+	Permissions   []string      `json:"permissions,omitempty"`
 }
 
 // UpsertPasswordCredentialRequest configures one local password for an existing collaborator.

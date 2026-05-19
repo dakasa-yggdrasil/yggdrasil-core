@@ -462,11 +462,20 @@ func (s *Server) handleAuthSession(w http.ResponseWriter, r *http.Request) {
 		mfaEnrolledAt = identity.MFAEnrolledAt
 	}
 
+	// Best-effort permission resolution. Errors fail-closed (empty list) so
+	// the FE hides actions instead of silently allowing them.
+	permissions, err := repository.ResolveYggdrasilPermissions(r.Context(), s.db, collaborator.ID, collaborator.Traits)
+	if err != nil {
+		fmt.Printf("auth.session: resolve permissions for %s: %v\n", collaborator.ID, err)
+		permissions = []string{}
+	}
+
 	writeJSON(w, http.StatusOK, model.AuthSessionEnvelope{
 		Authenticated: true,
 		Collaborator:  &collaborator,
 		Session:       &session,
 		MFAEnrolledAt: mfaEnrolledAt,
+		Permissions:   permissions,
 	})
 }
 
