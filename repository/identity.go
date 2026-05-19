@@ -1861,7 +1861,20 @@ func GrantTeamAction(ctx context.Context, db *sql.DB, req model.GrantTeamActionR
 	if err != nil {
 		return model.TeamGrant{}, err
 	}
+	return grantTeamActionOn(ctx, db, teamID, req)
+}
 
+// GrantTeamActionTx inserts (or updates) one grant inside a caller-managed transaction.
+// The teamID must already be resolved to a UUID string before calling this function.
+func GrantTeamActionTx(ctx context.Context, tx *sql.Tx, req model.GrantTeamActionRequest) (model.TeamGrant, error) {
+	teamUUID, err := resolveTeamIdentityIDOn(ctx, tx, req.TeamID)
+	if err != nil {
+		return model.TeamGrant{}, err
+	}
+	return grantTeamActionOn(ctx, tx, teamUUID.String(), req)
+}
+
+func grantTeamActionOn(ctx context.Context, q dbtx, teamID string, req model.GrantTeamActionRequest) (model.TeamGrant, error) {
 	namespace := strings.TrimSpace(req.IntegrationInstanceNamespace)
 	name := strings.TrimSpace(req.IntegrationInstanceName)
 	action := strings.TrimSpace(req.ActionName)
@@ -1885,7 +1898,7 @@ func GrantTeamAction(ctx context.Context, db *sql.DB, req model.GrantTeamActionR
 	var g model.TeamGrant
 	var scope []byte
 	var grantedByDB sql.NullString
-	err = db.QueryRowContext(ctx, `
+	err = q.QueryRowContext(ctx, `
 		INSERT INTO public.team_grants (team_id, integration_instance_namespace,
 			integration_instance_name, action_name, scope, granted_by)
 		VALUES ($1, $2, $3, $4, $5::jsonb, $6)
@@ -1914,27 +1927,56 @@ func GrantTeamAction(ctx context.Context, db *sql.DB, req model.GrantTeamActionR
 
 // RevokeTeamGrant deletes one grant by id.
 func RevokeTeamGrant(ctx context.Context, db *sql.DB, grantID string) error {
+	_, err := revokeTeamGrantOn(ctx, db, grantID)
+	return err
+}
+
+// RevokeTeamGrantTx deletes one grant by id inside a caller-managed transaction,
+// returning the deleted grant so the caller can include it in an event payload.
+func RevokeTeamGrantTx(ctx context.Context, tx *sql.Tx, grantID string) (model.TeamGrant, error) {
+	return revokeTeamGrantOn(ctx, tx, grantID)
+}
+
+func revokeTeamGrantOn(ctx context.Context, q dbtx, grantID string) (model.TeamGrant, error) {
 	id, err := uuid.Parse(strings.TrimSpace(grantID))
 	if err != nil {
-		return fmt.Errorf("invalid grant_id")
+		return model.TeamGrant{}, fmt.Errorf("invalid grant_id")
+	}
+
+	// Fetch the full grant row so callers have data for event payloads and we
+	// can run the last-grant-of-power check.
+	var g model.TeamGrant
+	var scope []byte
+	var grantedByDB sql.NullString
+	err = q.QueryRowContext(ctx, `
+		SELECT id, team_id, integration_instance_namespace, integration_instance_name,
+			action_name, scope, granted_at, granted_by
+		FROM public.team_grants WHERE id = $1
+	`, id).Scan(
+		&g.ID, &g.TeamID, &g.IntegrationInstanceNamespace, &g.IntegrationInstanceName,
+		&g.ActionName, &scope, &g.GrantedAt, &grantedByDB,
+	)
+	if err == sql.ErrNoRows {
+		return model.TeamGrant{}, fmt.Errorf("grant not found")
+	}
+	if err != nil {
+		return model.TeamGrant{}, err
+	}
+	obj, err := unmarshalJSONObject(scope)
+	if err != nil {
+		return model.TeamGrant{}, err
+	}
+	g.Scope = obj
+	if grantedByDB.Valid {
+		val := grantedByDB.String
+		g.GrantedBy = &val
 	}
 
 	// Last-grant-of-power check: refuse to revoke if it would leave the cluster
 	// without any active grant that can manage team grants.
-	var ns, name, action string
-	err = db.QueryRowContext(ctx, `
-		SELECT integration_instance_namespace, integration_instance_name, action_name
-		FROM public.team_grants WHERE id = $1
-	`, id).Scan(&ns, &name, &action)
-	if err == sql.ErrNoRows {
-		return fmt.Errorf("grant not found")
-	}
-	if err != nil {
-		return err
-	}
-	if isYggdrasilSelfManageGrant(name, action) {
+	if isYggdrasilSelfManageGrant(g.IntegrationInstanceName, g.ActionName) {
 		var siblingCount int
-		err = db.QueryRowContext(ctx, `
+		err = q.QueryRowContext(ctx, `
 			SELECT COUNT(*)
 			FROM public.team_grants
 			WHERE id <> $1
@@ -1942,25 +1984,25 @@ func RevokeTeamGrant(ctx context.Context, db *sql.DB, grantID string) error {
 				AND action_name IN ('*', 'manage_team_sources', 'manage_team_permissions')
 		`, id).Scan(&siblingCount)
 		if err != nil {
-			return err
+			return model.TeamGrant{}, err
 		}
 		if siblingCount == 0 {
-			return fmt.Errorf("refusing to revoke last grant that controls yggdrasil-self management; cluster would have no admin")
+			return model.TeamGrant{}, fmt.Errorf("refusing to revoke last grant that controls yggdrasil-self management; cluster would have no admin")
 		}
 	}
 
-	res, err := db.ExecContext(ctx, `DELETE FROM public.team_grants WHERE id = $1`, id)
+	res, err := q.ExecContext(ctx, `DELETE FROM public.team_grants WHERE id = $1`, id)
 	if err != nil {
-		return err
+		return model.TeamGrant{}, err
 	}
 	n, err := res.RowsAffected()
 	if err != nil {
-		return err
+		return model.TeamGrant{}, err
 	}
 	if n == 0 {
-		return fmt.Errorf("grant not found")
+		return model.TeamGrant{}, fmt.Errorf("grant not found")
 	}
-	return nil
+	return g, nil
 }
 
 // isYggdrasilSelfManageGrant detects grants that confer admin power over the

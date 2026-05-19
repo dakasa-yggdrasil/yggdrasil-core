@@ -1549,19 +1549,96 @@ func (s *Server) handleTeamGrantCreate(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	req.TeamID = r.PathValue("id")
-	grant, err := repository.GrantTeamAction(r.Context(), s.db, req)
+
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeMappedError(w, fmt.Errorf("begin tx: %w", err))
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	grant, err := repository.GrantTeamActionTx(r.Context(), tx, req)
 	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
+
+	payload := map[string]any{
+		"id":                             grant.ID,
+		"team_id":                        grant.TeamID,
+		"integration_instance_namespace": grant.IntegrationInstanceNamespace,
+		"integration_instance_name":      grant.IntegrationInstanceName,
+		"action_name":                    grant.ActionName,
+	}
+	if grant.Scope != nil {
+		payload["scope"] = grant.Scope
+	}
+	if grant.GrantedBy != nil {
+		payload["granted_by"] = *grant.GrantedBy
+	}
+	if _, err := repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
+		Type:          repository.EventTypeTeamGrantAdded,
+		SchemaVersion: "v1",
+		AggregateType: "team_grant",
+		AggregateID:   grant.ID,
+		Payload:       payload,
+		Actor: &model.EventActor{
+			Type: model.ActorTypeAPI,
+			ID:   actorIDFromRequest(r),
+		},
+	}); err != nil {
+		writeMappedError(w, fmt.Errorf("emit team_grant.added: %w", err))
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeMappedError(w, fmt.Errorf("commit: %w", err))
+		return
+	}
+
 	writeJSON(w, http.StatusCreated, map[string]any{"grant": grant})
 }
 
 func (s *Server) handleTeamGrantDelete(w http.ResponseWriter, r *http.Request) {
-	if err := repository.RevokeTeamGrant(r.Context(), s.db, r.PathValue("grant_id")); err != nil {
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeMappedError(w, fmt.Errorf("begin tx: %w", err))
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	grant, err := repository.RevokeTeamGrantTx(r.Context(), tx, r.PathValue("grant_id"))
+	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
+
+	if _, err := repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
+		Type:          repository.EventTypeTeamGrantRevoked,
+		SchemaVersion: "v1",
+		AggregateType: "team_grant",
+		AggregateID:   grant.ID,
+		Payload: map[string]any{
+			"id":                             grant.ID,
+			"team_id":                        grant.TeamID,
+			"integration_instance_namespace": grant.IntegrationInstanceNamespace,
+			"integration_instance_name":      grant.IntegrationInstanceName,
+			"action_name":                    grant.ActionName,
+		},
+		Actor: &model.EventActor{
+			Type: model.ActorTypeAPI,
+			ID:   actorIDFromRequest(r),
+		},
+	}); err != nil {
+		writeMappedError(w, fmt.Errorf("emit team_grant.revoked: %w", err))
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		writeMappedError(w, fmt.Errorf("commit: %w", err))
+		return
+	}
+
 	writeJSON(w, http.StatusOK, map[string]any{"ok": true})
 }
 
