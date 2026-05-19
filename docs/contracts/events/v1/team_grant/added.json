@@ -1,0 +1,17 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/team_grant/added.json",
+  "title": "team_grant.added v1",
+  "type": "object",
+  "required": ["id", "team_id", "integration_instance_namespace", "integration_instance_name", "action_name"],
+  "properties": {
+    "id":                              { "type": "string", "format": "uuid" },
+    "team_id":                         { "type": "string", "format": "uuid" },
+    "integration_instance_namespace":  { "type": "string" },
+    "integration_instance_name":       { "type": "string" },
+    "action_name":                     { "type": "string" },
+    "scope":                           { "type": ["object", "null"] },
+    "granted_by":                      { "type": "string" }
+  },
+  "additionalProperties": false
+}

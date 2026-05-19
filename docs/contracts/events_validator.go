@@ -13,7 +13,7 @@ import (
 // FamilyEventsV1 identifies the events/v1 contract family.
 const FamilyEventsV1 = "events/v1"
 
-//go:embed events/v1/schema.json events/v1/manifest/*.json events/v1/product/*.json events/v1/workflow/*.json events/v1/authorization/*.json events/v1/buildproject/*.json events/v1/infra/*.json events/v1/collaborator/*.json events/v1/credential/*.json events/v1/team/*.json events/v1/team_membership/*.json events/v1/reactor/*.json events/v1/runtime_state/*.json events/v1/integration_type/*.json events/v1/collaborator_external_identity/*.json events/v1/integration_surface/*.json
+//go:embed events/v1/schema.json events/v1/manifest/*.json events/v1/product/*.json events/v1/workflow/*.json events/v1/authorization/*.json events/v1/buildproject/*.json events/v1/infra/*.json events/v1/collaborator/*.json events/v1/credential/*.json events/v1/team/*.json events/v1/team_membership/*.json events/v1/team_grant/*.json events/v1/reactor/*.json events/v1/runtime_state/*.json events/v1/integration_type/*.json events/v1/collaborator_external_identity/*.json events/v1/integration_surface/*.json
 var eventSchemaFS embed.FS
 
 var (
@@ -88,6 +88,9 @@ func eventTypeToSchemaPath(eventType string, schemaVersion string) string {
 		// team membership events
 		"team_membership.added":   "events/v1/team_membership/added.json",
 		"team_membership.removed": "events/v1/team_membership/removed.json",
+		// team grant events
+		"team_grant.added":   "events/v1/team_grant/added.json",
+		"team_grant.revoked": "events/v1/team_grant/revoked.json",
 		// reactor observability events
 		"reactor.dead_lettered": "events/v1/reactor/dead_lettered.json",
 		// manifest sync framework events
