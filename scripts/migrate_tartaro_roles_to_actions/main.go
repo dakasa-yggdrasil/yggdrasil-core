@@ -134,14 +134,185 @@ func fetchRoleActions(ctx context.Context, cfg config, slug string) ([]string, e
 	return out.Actions, nil
 }
 
-// runMigration is implemented in T11.
-func runMigration(_ context.Context, cfg config, _ *sql.DB, apply bool) error {
+// runMigration walks collaborators with non-empty traits.tartaro_roles,
+// fetches the canonical action set per role from tartaro-operations,
+// find-or-creates a "tartaro-legacy-<role>" team with corresponding
+// team_grants, and adds the collaborator as an active member.
+// Idempotent — safe to re-run. apply=false logs intent only (dry-run).
+func runMigration(ctx context.Context, cfg config, db *sql.DB, apply bool) error {
 	mode := "dry-run"
 	if apply {
 		mode = "apply"
 	}
-	cfg.logger.Printf("runMigration mode=%s — TODO T11 implements this", mode)
-	return errors.New("runMigration not implemented (T11)")
+	cfg.logger.Printf("starting migration mode=%s", mode)
+
+	// 1. SELECT collaborators with non-empty tartaro_roles
+	rows, err := db.QueryContext(ctx, `
+		SELECT id::text, slug, COALESCE(traits->'tartaro_roles', '[]'::jsonb)::text AS roles_json
+		FROM collaborators
+		WHERE jsonb_array_length(COALESCE(traits->'tartaro_roles','[]'::jsonb)) > 0
+	`)
+	if err != nil {
+		return fmt.Errorf("select collaborators: %w", err)
+	}
+
+	type collabInfo struct {
+		id, slug string
+		roles    []string
+	}
+	var collabs []collabInfo
+	for rows.Next() {
+		var c collabInfo
+		var rolesJSON string
+		if err := rows.Scan(&c.id, &c.slug, &rolesJSON); err != nil {
+			rows.Close()
+			return fmt.Errorf("scan collaborator: %w", err)
+		}
+		if err := json.Unmarshal([]byte(rolesJSON), &c.roles); err != nil {
+			rows.Close()
+			return fmt.Errorf("decode roles for %s: %w", c.slug, err)
+		}
+		collabs = append(collabs, c)
+	}
+	rows.Close()
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("iterate collaborators: %w", err)
+	}
+	cfg.logger.Printf("found %d collaborators with tartaro_roles", len(collabs))
+
+	// 2. Resolve action sets per distinct role
+	distinctRoles := map[string]struct{}{}
+	for _, c := range collabs {
+		for _, r := range c.roles {
+			distinctRoles[r] = struct{}{}
+		}
+	}
+	actionsForRole := map[string][]string{}
+	skippedRoles := []string{}
+	for role := range distinctRoles {
+		actions, err := fetchRoleActions(ctx, cfg, role)
+		if err != nil {
+			cfg.logger.Printf("WARN role=%s skipped: %v", role, err)
+			skippedRoles = append(skippedRoles, role)
+			continue
+		}
+		actionsForRole[role] = actions
+		cfg.logger.Printf("resolved role=%s actions=%d", role, len(actions))
+	}
+
+	// 3. Find-or-create team + grants per resolved role
+	teamForRole := map[string]string{} // role -> team id (or "<dry-run>")
+	teamsCreated, grantsCreated := 0, 0
+	for role, actions := range actionsForRole {
+		teamSlug := "tartaro-legacy-" + role
+		var teamID string
+		err := db.QueryRowContext(ctx, `SELECT id::text FROM teams WHERE slug = $1`, teamSlug).Scan(&teamID)
+		if errors.Is(err, sql.ErrNoRows) {
+			if !apply {
+				cfg.logger.Printf("DRY-RUN: would create team %s", teamSlug)
+				teamForRole[role] = "<dry-run>"
+				teamsCreated++
+			} else {
+				err = db.QueryRowContext(ctx, `
+					INSERT INTO teams (slug, name, type, status)
+					VALUES ($1, $2, 'role', 'active')
+					RETURNING id::text
+				`, teamSlug, "Tartaro Legacy: "+role).Scan(&teamID)
+				if err != nil {
+					return fmt.Errorf("create team %s: %w", teamSlug, err)
+				}
+				teamForRole[role] = teamID
+				teamsCreated++
+				cfg.logger.Printf("created team %s id=%s", teamSlug, teamID)
+			}
+		} else if err != nil {
+			return fmt.Errorf("find team %s: %w", teamSlug, err)
+		} else {
+			teamForRole[role] = teamID
+		}
+
+		// Grants
+		for _, action := range actions {
+			if teamForRole[role] == "<dry-run>" {
+				cfg.logger.Printf("DRY-RUN: would grant team=%s action=%s", teamSlug, action)
+				grantsCreated++
+				continue
+			}
+			var existsID string
+			err := db.QueryRowContext(ctx, `
+				SELECT id::text FROM team_grants
+				WHERE team_id = $1::uuid
+				  AND integration_instance_namespace = $2
+				  AND integration_instance_name = $3
+				  AND action_name = $4
+			`, teamForRole[role], cfg.instanceNamespace, cfg.instanceName, action).Scan(&existsID)
+			if errors.Is(err, sql.ErrNoRows) {
+				if !apply {
+					cfg.logger.Printf("DRY-RUN: would grant team=%s action=%s", teamSlug, action)
+					grantsCreated++
+					continue
+				}
+				if _, err := db.ExecContext(ctx, `
+					INSERT INTO team_grants (team_id, integration_instance_namespace, integration_instance_name, action_name)
+					VALUES ($1::uuid, $2, $3, $4)
+				`, teamForRole[role], cfg.instanceNamespace, cfg.instanceName, action); err != nil {
+					return fmt.Errorf("grant team=%s action=%s: %w", teamSlug, action, err)
+				}
+				grantsCreated++
+				cfg.logger.Printf("granted team=%s action=%s", teamSlug, action)
+			} else if err != nil {
+				return fmt.Errorf("find grant team=%s action=%s: %w", teamSlug, action, err)
+			}
+		}
+	}
+
+	// 4. Find-or-create active memberships per (collab, role)
+	// Note: team_memberships has UNIQUE (team_id, collaborator_id) so we
+	// query for any existing row (active or not) and only insert if absent.
+	membershipsCreated := 0
+	for _, c := range collabs {
+		for _, role := range c.roles {
+			teamID, ok := teamForRole[role]
+			if !ok {
+				continue // role was skipped (not in catalog)
+			}
+			if teamID == "<dry-run>" {
+				cfg.logger.Printf("DRY-RUN: would add %s to team tartaro-legacy-%s", c.slug, role)
+				membershipsCreated++
+				continue
+			}
+			var existsID string
+			err := db.QueryRowContext(ctx, `
+				SELECT id::text FROM team_memberships
+				WHERE collaborator_id = $1::uuid AND team_id = $2::uuid
+			`, c.id, teamID).Scan(&existsID)
+			if errors.Is(err, sql.ErrNoRows) {
+				if !apply {
+					cfg.logger.Printf("DRY-RUN: would add %s to team tartaro-legacy-%s", c.slug, role)
+					membershipsCreated++
+					continue
+				}
+				if _, err := db.ExecContext(ctx, `
+					INSERT INTO team_memberships (collaborator_id, team_id, role, active, source)
+					VALUES ($1::uuid, $2::uuid, 'member', true, 'tartaro-roles-migration')
+				`, c.id, teamID); err != nil {
+					return fmt.Errorf("add membership %s->%s: %w", c.slug, teamID, err)
+				}
+				membershipsCreated++
+				cfg.logger.Printf("added %s to team tartaro-legacy-%s", c.slug, role)
+			} else if err != nil {
+				return fmt.Errorf("find membership %s->%s: %w", c.slug, teamID, err)
+			}
+		}
+	}
+
+	cfg.logger.Printf("DONE mode=%s users=%d roles_resolved=%d roles_skipped=%d teams=%d grants=%d memberships=%d",
+		mode, len(collabs), len(actionsForRole), len(skippedRoles),
+		teamsCreated, grantsCreated, membershipsCreated)
+	if len(skippedRoles) > 0 {
+		cfg.logger.Printf("skipped roles (not in tartaro-ops catalog): %v", skippedRoles)
+	}
+	return nil
 }
 
 // runValidate is implemented in T12.
