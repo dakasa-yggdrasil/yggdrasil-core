@@ -160,6 +160,15 @@ type AdapterDeclarativeApplyRequest struct {
 }
 
 // AdapterDeclarativeApplyResponse is returned by a target integration after applying objects.
+//
+// Adapters that understand image_overrides SHOULD populate
+// `Metadata["image_overrides_applied"]` with the integer count of
+// override entries that actually matched something in the rendered
+// objects. The core uses this to detect silent no-ops (e.g. kustomize
+// tree had no matching images:, so the static newTag from
+// kustomization.yaml shipped instead). Omit the key for legacy / non-
+// image-aware adapters — core treats absence as "unknown" and skips
+// the check (backwards compatible). See validateImageOverridesApplied.
 type AdapterDeclarativeApplyResponse struct {
 	Operation string                      `json:"operation,omitempty"`
 	Applied   bool                        `json:"applied"`

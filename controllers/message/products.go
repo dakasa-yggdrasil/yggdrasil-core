@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"sort"
 	"strings"
 	"time"
 
@@ -1291,6 +1292,71 @@ func (e *productTargetExecutor) applyTargetOverride(component model.ProductCompo
 	return overridden
 }
 
+// validateImageOverridesApplied surfaces silent no-ops where the
+// workflow requested image overrides but the target adapter applied
+// zero of them — typically because the kustomize tree contains no
+// `images:` entries that match the requested original refs, so the
+// adapter falls back to the static `newTag` in `kustomization.yaml`.
+// This pattern produced orphan tags `sha-9b574b1` (orchestrator) +
+// the enterprise-fe 7d6h stale bundle.
+//
+// Contract: opt-in. Adapters that understand image overrides MUST
+// populate `response.Metadata["image_overrides_applied"]` with the
+// integer count of override entries that actually matched something
+// in the rendered objects. Adapters that omit the key are treated as
+// legacy/unknown and pass through unchanged (backwards compatibility).
+//
+// Failure is restricted to the unambiguous case where the adapter
+// explicitly reports zero applied AND the request carried >=1
+// override. Partial matches pass — at least one override landed, so
+// the deploy is not a complete no-op.
+func validateImageOverridesApplied(requested map[string]string, metadata map[string]any) error {
+	if len(requested) == 0 {
+		return nil
+	}
+	if metadata == nil {
+		return nil
+	}
+	raw, ok := metadata["image_overrides_applied"]
+	if !ok {
+		return nil
+	}
+
+	var applied int64
+	switch v := raw.(type) {
+	case int:
+		applied = int64(v)
+	case int32:
+		applied = int64(v)
+	case int64:
+		applied = v
+	case float32:
+		applied = int64(v)
+	case float64:
+		applied = int64(v)
+	default:
+		// Unknown shape — be conservative, don't fail.
+		return nil
+	}
+
+	if applied > 0 {
+		return nil
+	}
+
+	// Sort the requested keys for a stable error message — easier to
+	// grep in workflow logs / Heimdall alerts.
+	keys := make([]string, 0, len(requested))
+	for k := range requested {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	return fmt.Errorf(
+		"adapter applied 0 of %d requested image_overrides — none of the requested image refs matched the rendered objects (silent no-op). Requested keys: [%s]. Check the kustomize tree (or other renderer) actually contains `images:` entries matching these refs",
+		len(requested),
+		strings.Join(keys, ", "),
+	)
+}
+
 // imageOverridesForOriginalKey returns a shallow copy of the image
 // overrides map attached to the TargetOverride identified by key (the
 // component's original target.integration_instance_ref.name before
@@ -1689,6 +1755,21 @@ func (e *productTargetExecutor) applyComponentTarget(
 	}
 	if strings.TrimSpace(response.Operation) != "" && response.Operation != "declarative_apply" {
 		return model.ProductInstallationApplyResult{}, fmt.Errorf("unexpected target adapter operation %q", response.Operation)
+	}
+
+	// Fail loud when the workflow asked for image_overrides but the
+	// adapter applied zero of them — silent no-ops would let a
+	// kustomization.yaml's static `newTag` (often a stale or orphan
+	// SHA) ship to the cluster despite a fresh push. Only opt-in
+	// adapters that report `image_overrides_applied` in metadata are
+	// validated; legacy adapters pass through unchanged.
+	if err := validateImageOverridesApplied(imageOverrides, response.Metadata); err != nil {
+		return model.ProductInstallationApplyResult{}, fmt.Errorf("component %q on target %s/%s: %w",
+			component.Name,
+			component.Target.IntegrationInstanceRef.Namespace,
+			component.Target.IntegrationInstanceRef.Name,
+			err,
+		)
 	}
 
 	metadata := cloneMap(response.Metadata)

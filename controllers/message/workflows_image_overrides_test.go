@@ -166,3 +166,100 @@ func TestImageOverridesForOriginalKey_ReturnsShallowCopy(t *testing.T) {
 		t.Fatalf("executor state leaked mutation: got %q, want b", second["a"])
 	}
 }
+
+// TestValidateImageOverridesApplied_NoOverridesRequestedNoCheck verifies
+// that when no image overrides were sent, the response metadata is not
+// scrutinised — adapter is allowed to omit the counter.
+func TestValidateImageOverridesApplied_NoOverridesRequestedNoCheck(t *testing.T) {
+	if err := validateImageOverridesApplied(nil, nil); err != nil {
+		t.Fatalf("expected nil error with empty request, got %v", err)
+	}
+	if err := validateImageOverridesApplied(map[string]string{}, map[string]any{}); err != nil {
+		t.Fatalf("expected nil error with empty overrides, got %v", err)
+	}
+}
+
+// TestValidateImageOverridesApplied_AdapterSilentNoCheck verifies legacy
+// adapters that don't report image_overrides_applied are NOT failed —
+// we only fail when adapter explicitly reports zero matches. This
+// preserves backwards compatibility while letting opt-in adapters
+// surface the silent-no-op bug.
+func TestValidateImageOverridesApplied_AdapterSilentNoCheck(t *testing.T) {
+	requested := map[string]string{"ghcr.io/dakasa-co/identities": "ghcr.io/dakasa-co/identities:sha-abc"}
+	if err := validateImageOverridesApplied(requested, nil); err != nil {
+		t.Fatalf("expected nil error when adapter omits counter, got %v", err)
+	}
+	if err := validateImageOverridesApplied(requested, map[string]any{"other": "thing"}); err != nil {
+		t.Fatalf("expected nil error when adapter metadata has no counter, got %v", err)
+	}
+}
+
+// TestValidateImageOverridesApplied_FailsOnZeroApplied is the core
+// failure case: requested 2 overrides, adapter reported 0 applied →
+// must fail loud with a descriptive error mentioning both keys.
+// This is the silent no-op flagged by
+// project_orchestrator_orphan_sha_fixed_2026_05_20: kustomize tree had
+// no matching image refs, so adapter fell back to the static newTag.
+func TestValidateImageOverridesApplied_FailsOnZeroApplied(t *testing.T) {
+	requested := map[string]string{
+		"ghcr.io/dakasa-co/identities": "ghcr.io/dakasa-co/identities:sha-abc",
+		"ghcr.io/dakasa-co/hall":       "ghcr.io/dakasa-co/hall:sha-abc",
+	}
+	metadata := map[string]any{"image_overrides_applied": 0}
+
+	err := validateImageOverridesApplied(requested, metadata)
+	if err == nil {
+		t.Fatal("expected error when adapter reports zero overrides applied")
+	}
+	msg := err.Error()
+	if !contains(msg, "image_overrides") {
+		t.Errorf("error must mention image_overrides: %q", msg)
+	}
+	if !contains(msg, "0") {
+		t.Errorf("error must mention applied=0: %q", msg)
+	}
+	if !contains(msg, "identities") || !contains(msg, "hall") {
+		t.Errorf("error must list requested keys (identities, hall): %q", msg)
+	}
+}
+
+// TestValidateImageOverridesApplied_PartialApplyOK accepts partial
+// matches — at least one override landed, so the deploy is not a
+// silent no-op. (We are conservative: a stricter "all-or-nothing" rule
+// would break renderers where some images are intentionally absent.)
+func TestValidateImageOverridesApplied_PartialApplyOK(t *testing.T) {
+	requested := map[string]string{
+		"ghcr.io/dakasa-co/identities": "ghcr.io/dakasa-co/identities:sha-abc",
+		"ghcr.io/dakasa-co/hall":       "ghcr.io/dakasa-co/hall:sha-abc",
+	}
+	metadata := map[string]any{"image_overrides_applied": 1}
+
+	if err := validateImageOverridesApplied(requested, metadata); err != nil {
+		t.Fatalf("expected nil error when at least one override applied, got %v", err)
+	}
+}
+
+// TestValidateImageOverridesApplied_FloatCounter handles JSON-decoded
+// numbers (float64 by default) — adapters reporting via JSON metadata
+// must still trigger the check correctly.
+func TestValidateImageOverridesApplied_FloatCounter(t *testing.T) {
+	requested := map[string]string{"ghcr.io/dakasa-co/x": "ghcr.io/dakasa-co/x:sha-abc"}
+	metadata := map[string]any{"image_overrides_applied": float64(0)}
+
+	if err := validateImageOverridesApplied(requested, metadata); err == nil {
+		t.Fatal("expected error with float64(0) counter")
+	}
+}
+
+func contains(haystack, needle string) bool {
+	return len(haystack) >= len(needle) && indexOf(haystack, needle) >= 0
+}
+
+func indexOf(s, substr string) int {
+	for i := 0; i+len(substr) <= len(s); i++ {
+		if s[i:i+len(substr)] == substr {
+			return i
+		}
+	}
+	return -1
+}
