@@ -13,6 +13,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 
 	amqp "github.com/rabbitmq/amqp091-go"
+	"go.uber.org/zap"
 )
 
 func init() {
@@ -40,6 +41,46 @@ func bootstrapRabbitMQ(ctx context.Context, app *runtime.ServiceApp) error {
 	}
 
 	logger, _ := Logger(app)
+
+	// AMQP self-healing — exit fast when the connection closes so the
+	// kubelet restarts the pod with a fresh dial. The previous behavior
+	// kept a stale *amqp.Connection in the rpc.Transport for hours after a
+	// rabbit restart, silently breaking every integration handshake. The
+	// integration runtime monitor's dial-fallback (see
+	// integration_describe.go acquireConnectivityChannel) only fixes the
+	// health probe path; the rpc.Transport itself is wired to the cached
+	// conn and there's no public API on yggdrasil-sdk-go/rpc/amqp to
+	// swap the connection at runtime.
+	//
+	// Crash-and-restart is correct because:
+	//   - The pod has no in-memory state that survives restart (consumers
+	//     re-subscribe from manifests, the monitor restarts its ticker).
+	//   - Kubernetes already handles the restart loop with backoff.
+	//   - It's bounded — at most one cascade per rabbit-restart event,
+	//     bounded by the configured `restartPolicy: Always`.
+	connClose := conn.NotifyClose(make(chan *amqp.Error, 1))
+	go func() {
+		amqpErr, ok := <-connClose
+		if logger != nil {
+			if ok && amqpErr != nil {
+				logger.Error(
+					"rabbitmq connection closed — exiting so kubelet restarts the pod with a fresh dial",
+					zap.Int("code", amqpErr.Code),
+					zap.String("reason", amqpErr.Reason),
+					zap.Bool("recover", amqpErr.Recover),
+					zap.Bool("server", amqpErr.Server),
+				)
+			} else {
+				logger.Error("rabbitmq connection closed (no error detail) — exiting so kubelet restarts the pod")
+			}
+		}
+		// Give in-flight requests a brief grace window, then bail. The
+		// closer chain (app.RegisterCloser) is intentionally skipped —
+		// a closed conn can't drain, and we want the pod gone fast so
+		// the new replica picks up traffic.
+		time.Sleep(2 * time.Second)
+		os.Exit(1)
+	}()
 
 	// Construct the generic rpc.Transport first. Consumers subscribe
 	// through it; the raw amqp connection stays available so handlers
