@@ -66,12 +66,20 @@ type IntegrationSchemaSpec struct {
 }
 
 // IntegrationSchemaProperty defines one typed input field used by an integration.
+//
+// MinLength enforces a minimum character count on string-typed inputs after
+// trimming surrounding whitespace. It is ignored for non-string types. The
+// presence-only `required` check on its own cannot catch empty-string
+// payloads (e.g. `image_repo: ""` expanding into `image_overrides {"":":"}`
+// that the kubernetes adapter silently no-ops); pair the two when a workflow
+// input must be a non-empty value.
 type IntegrationSchemaProperty struct {
 	Type        string `json:"type"`
 	Description string `json:"description,omitempty"`
 	Secret      bool   `json:"secret,omitempty"`
 	Enum        []any  `json:"enum,omitempty"`
 	Default     any    `json:"default,omitempty"`
+	MinLength   *int   `json:"minLength,omitempty"`
 }
 
 // IntegrationCredentialPolicySpec defines how one integration_type expects credentials to be supplied and stored.

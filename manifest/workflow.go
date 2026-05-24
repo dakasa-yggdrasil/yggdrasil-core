@@ -471,8 +471,21 @@ func validateWorkflowInputSchema(schema model.WorkflowInputSchemaSpec) error {
 func validateWorkflowInputValue(name string, property model.IntegrationSchemaProperty, value any) error {
 	switch strings.ToLower(strings.TrimSpace(property.Type)) {
 	case "", "string":
-		if _, ok := value.(string); !ok {
+		stringValue, ok := value.(string)
+		if !ok {
 			return fmt.Errorf("workflow input %q must be a string", name)
+		}
+		// minLength is a string-only constraint and is the second gate after
+		// presence (`required`). Empty payloads slip past `required` because
+		// the key IS in the map; minLength is what stops `image_repo: ""`
+		// from expanding into a no-op image_overrides `{"":":"}`. Whitespace
+		// is trimmed so " " is treated as empty — operators paste-fumbling a
+		// blank should not silently masquerade as a deploy.
+		if property.MinLength != nil {
+			minLen := *property.MinLength
+			if len(strings.TrimSpace(stringValue)) < minLen {
+				return fmt.Errorf("workflow input %q must have minLength %d", name, minLen)
+			}
 		}
 	case "boolean":
 		if _, ok := value.(bool); !ok {

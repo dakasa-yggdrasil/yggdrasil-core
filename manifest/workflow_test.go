@@ -2,6 +2,7 @@ package manifest
 
 import (
 	"encoding/json"
+	"strings"
 	"testing"
 	"time"
 
@@ -268,6 +269,136 @@ func TestMergeWorkflowInputs(t *testing.T) {
 	}
 	if nested["region"] != "southamerica-east1" {
 		t.Fatalf("region = %#v", nested["region"])
+	}
+}
+
+func TestValidateWorkflowInputsEnforcesMinLength(t *testing.T) {
+	minOne := 1
+	spec := model.WorkflowManifestSpec{
+		Trigger: model.WorkflowTriggerSpec{Mode: "manual"},
+		InputSchema: model.WorkflowInputSchemaSpec{
+			Required: []string{"image_repo"},
+			Properties: map[string]model.IntegrationSchemaProperty{
+				"image_repo": {Type: "string", MinLength: &minOne},
+			},
+		},
+		Steps: []model.WorkflowStepSpec{
+			{
+				ID: "noop",
+				Use: model.WorkflowStepUseSpec{
+					Kind:        "integration",
+					InstanceRef: &model.ManifestSelector{Name: "x", Namespace: "global"},
+					Capability:  "describe",
+				},
+			},
+		},
+	}
+
+	cases := []struct {
+		name       string
+		inputs     map[string]any
+		wantErr    bool
+		wantSubstr string
+	}{
+		{
+			name:       "empty string rejected",
+			inputs:     map[string]any{"image_repo": ""},
+			wantErr:    true,
+			wantSubstr: "minLength",
+		},
+		{
+			name:       "whitespace string rejected",
+			inputs:     map[string]any{"image_repo": "   "},
+			wantErr:    true,
+			wantSubstr: "minLength",
+		},
+		{
+			name:    "valid string accepted",
+			inputs:  map[string]any{"image_repo": "153828470928.dkr.ecr.us-east-1.amazonaws.com/dakasa/enterprise-fe"},
+			wantErr: false,
+		},
+	}
+
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateWorkflowInputs(spec, tc.inputs)
+			if tc.wantErr {
+				if err == nil {
+					t.Fatalf("expected error, got nil")
+				}
+				if tc.wantSubstr != "" && !strings.Contains(err.Error(), tc.wantSubstr) {
+					t.Fatalf("error %q does not contain %q", err.Error(), tc.wantSubstr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("unexpected error: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateWorkflowInputsMinLengthSkippedWhenFieldAbsent(t *testing.T) {
+	// Field declared with minLength but NOT required and NOT provided should
+	// not trip — the presence gate is `required`, minLength is a value-shape
+	// gate that runs only after a value materializes.
+	minOne := 1
+	spec := model.WorkflowManifestSpec{
+		Trigger: model.WorkflowTriggerSpec{Mode: "manual"},
+		InputSchema: model.WorkflowInputSchemaSpec{
+			Properties: map[string]model.IntegrationSchemaProperty{
+				"optional_repo": {Type: "string", MinLength: &minOne},
+			},
+		},
+		Steps: []model.WorkflowStepSpec{
+			{
+				ID: "noop",
+				Use: model.WorkflowStepUseSpec{
+					Kind:        "integration",
+					InstanceRef: &model.ManifestSelector{Name: "x", Namespace: "global"},
+					Capability:  "describe",
+				},
+			},
+		},
+	}
+
+	if err := ValidateWorkflowInputs(spec, map[string]any{}); err != nil {
+		t.Fatalf("unexpected error when optional field absent: %v", err)
+	}
+}
+
+func TestValidateWorkflowInputsMinLengthIgnoredForNonStringTypes(t *testing.T) {
+	// minLength is a string-only constraint; declaring it on object/array/
+	// integer types should be a no-op rather than a crash.
+	minOne := 1
+	spec := model.WorkflowManifestSpec{
+		Trigger: model.WorkflowTriggerSpec{Mode: "manual"},
+		InputSchema: model.WorkflowInputSchemaSpec{
+			Properties: map[string]model.IntegrationSchemaProperty{
+				"obj_field": {Type: "object", MinLength: &minOne},
+				"arr_field": {Type: "array", MinLength: &minOne},
+				"int_field": {Type: "integer", MinLength: &minOne},
+			},
+		},
+		Steps: []model.WorkflowStepSpec{
+			{
+				ID: "noop",
+				Use: model.WorkflowStepUseSpec{
+					Kind:        "integration",
+					InstanceRef: &model.ManifestSelector{Name: "x", Namespace: "global"},
+					Capability:  "describe",
+				},
+			},
+		},
+	}
+
+	inputs := map[string]any{
+		"obj_field": map[string]any{},
+		"arr_field": []any{},
+		"int_field": 0,
+	}
+	if err := ValidateWorkflowInputs(spec, inputs); err != nil {
+		t.Fatalf("unexpected error for non-string types with minLength: %v", err)
 	}
 }
 
