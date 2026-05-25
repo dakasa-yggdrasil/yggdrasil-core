@@ -402,6 +402,69 @@ func TestValidateWorkflowInputsMinLengthIgnoredForNonStringTypes(t *testing.T) {
 	}
 }
 
+// TestValidateWorkflowSpecAcceptsDispatchMode_Sync_Async pins the contract
+// of the new spec.dispatch_mode field added for the async-by-default
+// workflow migration (spec 2026-05-25-yggdrasil-async-dispatch-spec). The
+// validator must accept the canonical values, the empty default (legacy
+// workflows without the field), and reject typos / mixed-case nonsense.
+func TestValidateWorkflowSpecAcceptsDispatchMode_Sync_Async(t *testing.T) {
+	cases := []struct {
+		name string
+		mode string
+	}{
+		{name: "empty (default)", mode: ""},
+		{name: "sync", mode: "sync"},
+		{name: "async", mode: "async"},
+		{name: "mixed case async", mode: "ASYNC"},
+		{name: "padded sync", mode: "  sync  "},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			spec := workflowSpecFixture()
+			spec.DispatchMode = c.mode
+			if err := ValidateWorkflowSpec(spec); err != nil {
+				t.Fatalf("ValidateWorkflowSpec(dispatch_mode=%q) error: %v", c.mode, err)
+			}
+		})
+	}
+}
+
+func TestValidateWorkflowSpecRejectsUnknownDispatchMode(t *testing.T) {
+	spec := workflowSpecFixture()
+	spec.DispatchMode = "fire-and-forget"
+	if err := ValidateWorkflowSpec(spec); err == nil {
+		t.Fatal("expected unknown dispatch_mode to fail validation")
+	}
+}
+
+// TestNormalizeWorkflowDispatchMode_DefaultsToSync guards the helper used
+// by the HTTP dispatcher to decide between the sync (201) and async (202)
+// paths. Empty and whitespace must canonicalize to "sync" so legacy
+// workflows (no dispatch_mode field on disk) keep their pre-migration
+// behaviour.
+func TestNormalizeWorkflowDispatchMode_DefaultsToSync(t *testing.T) {
+	cases := []struct {
+		name string
+		mode string
+		want string
+	}{
+		{name: "empty", mode: "", want: "sync"},
+		{name: "whitespace", mode: "   ", want: "sync"},
+		{name: "async", mode: "async", want: "async"},
+		{name: "ASYNC", mode: "ASYNC", want: "async"},
+		{name: "sync", mode: "sync", want: "sync"},
+	}
+	for _, c := range cases {
+		t.Run(c.name, func(t *testing.T) {
+			spec := workflowSpecFixture()
+			spec.DispatchMode = c.mode
+			if got := NormalizeWorkflowDispatchMode(spec); got != c.want {
+				t.Fatalf("NormalizeWorkflowDispatchMode(%q) = %q, want %q", c.mode, got, c.want)
+			}
+		})
+	}
+}
+
 func workflowSpecFixture() model.WorkflowManifestSpec {
 	return model.WorkflowManifestSpec{
 		Trigger: model.WorkflowTriggerSpec{

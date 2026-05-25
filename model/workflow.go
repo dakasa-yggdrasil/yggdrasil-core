@@ -10,11 +10,26 @@ import (
 const WorkflowDispatchOperation = "dispatch_workflow"
 
 // WorkflowManifestSpec defines one orchestration workflow stored in the core.
+//
+// DispatchMode controls the default behaviour of `POST /api/v1/workflow-runs`
+// when the request does not explicitly opt into a mode. Allowed values are
+// "sync" (block until the run finishes, return 201 + full RunWorkflowResponse;
+// the historical default and still the default when the field is empty) and
+// "async" (return 202 + {run_id, status: pending, workflow} immediately, run
+// the workflow in a background goroutine, expose the final result via
+// `GET /api/v1/workflow-runs/{run_id}`). Per-request overrides — the
+// `?async=true|false` query parameter and the `X-Yggdrasil-Workflow-Mode`
+// header — always win, so ops escapes still work regardless of the manifest
+// value. Workflows whose observable step budgets exceed the ingress timeout
+// (≈30s, e.g. `deploy-via-kustomize-source` with its 180s observe poll)
+// should set this to "async" so legitimate callers see a 202 with a
+// `run_id` instead of a 502 from the gateway.
 type WorkflowManifestSpec struct {
-	Trigger     WorkflowTriggerSpec     `json:"trigger,omitempty"`
-	InputSchema WorkflowInputSchemaSpec `json:"input_schema,omitempty"`
-	Defaults    map[string]any          `json:"defaults,omitempty"`
-	Steps       []WorkflowStepSpec      `json:"steps"`
+	Trigger      WorkflowTriggerSpec     `json:"trigger,omitempty"`
+	InputSchema  WorkflowInputSchemaSpec `json:"input_schema,omitempty"`
+	Defaults     map[string]any          `json:"defaults,omitempty"`
+	DispatchMode string                  `json:"dispatch_mode,omitempty"`
+	Steps        []WorkflowStepSpec      `json:"steps"`
 }
 
 // WorkflowTriggerSpec describes how a workflow can be started.

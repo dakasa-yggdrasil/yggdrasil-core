@@ -15,6 +15,7 @@ import (
 
 var (
 	supportedWorkflowTriggerModes  = []string{"manual", "event", "schedule"}
+	supportedWorkflowDispatchModes = []string{"sync", "async"}
 	supportedWorkflowStepKinds     = []string{"integration", "product", "yggdrasil"}
 	supportedProductStepOperations = []string{
 		"materialize",
@@ -73,6 +74,14 @@ func ValidateWorkflowSpec(spec model.WorkflowManifestSpec) error {
 
 	if err := validateWorkflowTriggerDetails(triggerMode, spec.Trigger); err != nil {
 		return err
+	}
+
+	// dispatch_mode controls the default for POST /api/v1/workflow-runs when
+	// the request does not opt into a mode explicitly. Empty is treated as
+	// "sync" so the historical default for unmigrated workflows is unchanged.
+	dispatchMode := strings.ToLower(strings.TrimSpace(spec.DispatchMode))
+	if dispatchMode != "" && !slices.Contains(supportedWorkflowDispatchModes, dispatchMode) {
+		return fmt.Errorf("workflow dispatch_mode %q is unsupported (allowed: %v)", spec.DispatchMode, supportedWorkflowDispatchModes)
 	}
 
 	if err := validateWorkflowInputSchema(spec.InputSchema); err != nil {
@@ -634,6 +643,24 @@ func lookupWorkflowPath(root map[string]any, path string) (any, bool) {
 	}
 
 	return current, true
+}
+
+// WorkflowDispatchModeAsync is the manifest value that flips the default
+// behaviour of POST /api/v1/workflow-runs from sync (HTTP 201 + full
+// RunWorkflowResponse, blocking) to async (HTTP 202 + run_id, polled via
+// GET /api/v1/workflow-runs/{id}).
+const WorkflowDispatchModeAsync = "async"
+
+// NormalizeWorkflowDispatchMode returns the lower-cased dispatch_mode value
+// declared in a workflow spec, defaulting to "sync" when empty so callers
+// can compare against a stable canonical form. Unknown / invalid values
+// fall through unchanged (validation is the job of ValidateWorkflowSpec).
+func NormalizeWorkflowDispatchMode(spec model.WorkflowManifestSpec) string {
+	mode := strings.ToLower(strings.TrimSpace(spec.DispatchMode))
+	if mode == "" {
+		return "sync"
+	}
+	return mode
 }
 
 // NormalizeWorkflowStepOperation returns the normalized step operation, defaulting to the capability.
