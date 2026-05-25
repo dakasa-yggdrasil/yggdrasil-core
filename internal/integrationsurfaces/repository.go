@@ -91,7 +91,6 @@ func (r *Repository) List(ctx context.Context, f ListFilter) ([]Manifest, error)
 	if f.Category != "" {
 		where += fmt.Sprintf(" AND category = $%d", i)
 		args = append(args, f.Category)
-		i++
 	}
 
 	q := fmt.Sprintf(`

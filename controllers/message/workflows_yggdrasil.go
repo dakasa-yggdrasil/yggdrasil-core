@@ -382,11 +382,10 @@ func handleCollaboratorReconcileProviderState(
 		// workflow can alert. Drift detection is best-effort — neither the
 		// mark nor the emit failure aborts the reconcile.
 		drifted, providerSignal := observedShowsStatusDrift(provider, observedState, collab)
-		if err := repository.MarkProviderStateReconciled(ctx, db, collab.ID, provider, drifted); err != nil {
-			// row was just upserted — ErrProviderStateNotFound here would
-			// indicate a race with deletion that's worth noting but not
-			// fatal.
-		}
+		// row was just upserted — ErrProviderStateNotFound here would
+		// indicate a race with deletion that's worth noting but not
+		// fatal. Best-effort: errors are intentionally swallowed.
+		_ = repository.MarkProviderStateReconciled(ctx, db, collab.ID, provider, drifted)
 		if drifted {
 			emitStatusDriftEvent(ctx, db, collab, provider, providerSignal, observedState)
 		}

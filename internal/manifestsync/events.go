@@ -1,13 +1,8 @@
 package manifestsync
 
 import (
-	"context"
-	"database/sql"
-	"fmt"
 	"time"
 
-	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
-	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
 )
 
@@ -55,17 +50,6 @@ type noOpInputs struct {
 	TypeName         string
 	SourceInstanceID uuid.UUID
 	CheckedAt        time.Time
-}
-
-// contractMismatchInputs holds the data for a runtime_state.contract_mismatch_detected payload.
-type contractMismatchInputs struct {
-	InstanceID        uuid.UUID
-	TypeID            uuid.UUID
-	InstanceNamespace string
-	InstanceName      string
-	TypeNamespace     string
-	TypeName          string
-	DetectedAt        time.Time
 }
 
 // buildSyncedPayload constructs the payload map for integration_type.synced.
@@ -138,48 +122,6 @@ func buildNoOpPayload(in noOpInputs) map[string]any {
 		"source_instance_id": in.SourceInstanceID.String(),
 		"checked_at":         in.CheckedAt.UTC().Format(time.RFC3339),
 	}
-}
-
-// buildContractMismatchPayload constructs the payload map for
-// runtime_state.contract_mismatch_detected.
-// JSON keys match docs/contracts/events/v1/runtime_state/contract_mismatch_detected.json.
-func buildContractMismatchPayload(in contractMismatchInputs) map[string]any {
-	return map[string]any{
-		"instance_id":        in.InstanceID.String(),
-		"type_id":            in.TypeID.String(),
-		"instance_namespace": in.InstanceNamespace,
-		"instance_name":      in.InstanceName,
-		"type_namespace":     in.TypeNamespace,
-		"type_name":          in.TypeName,
-		"detected_at":        in.DetectedAt.UTC().Format(time.RFC3339),
-	}
-}
-
-// emitEvent opens a short transaction, calls repository.EmitEvent, and commits.
-// On any error the transaction is rolled back.
-// aggregateID is serialized as a string (UUID) for the aggregate_id column.
-func emitEvent(ctx context.Context, db *sql.DB, eventType string, aggregateID uuid.UUID, payload map[string]any) error {
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("emitEvent: begin tx: %w", err)
-	}
-
-	_, err = repository.EmitEvent(ctx, tx, model.EmitEventRequest{
-		Type:          eventType,
-		AggregateType: aggregateTypeFor(eventType),
-		AggregateID:   aggregateID.String(),
-		Payload:       payload,
-	})
-	if err != nil {
-		_ = tx.Rollback()
-		return fmt.Errorf("emitEvent %s: %w", eventType, err)
-	}
-
-	if err := tx.Commit(); err != nil {
-		return fmt.Errorf("emitEvent %s: commit: %w", eventType, err)
-	}
-
-	return nil
 }
 
 // aggregateTypeFor derives the aggregate_type from the dot-separated event type string.

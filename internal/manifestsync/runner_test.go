@@ -27,7 +27,7 @@ func (c *countingDeps) InvokeDescribe(ctx context.Context, _ model.Manifest, _ m
 	if c.hold != nil {
 		<-c.hold
 	}
-	return c.fakeDeps.describeSpec, c.fakeDeps.describeErr
+	return c.describeSpec, c.describeErr
 }
 
 func TestRunner_SignalsTriggerSync(t *testing.T) {

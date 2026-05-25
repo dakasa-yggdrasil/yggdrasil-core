@@ -1516,10 +1516,6 @@ func teamLookupArg(identity string) any {
 	return normalizeSlug(identity)
 }
 
-func resolveOptionalCollaboratorID(ctx context.Context, db *sql.DB, identity string) (any, error) {
-	return resolveOptionalCollaboratorIDOn(ctx, db, identity)
-}
-
 func resolveOptionalCollaboratorIDOn(ctx context.Context, q dbtx, identity string) (any, error) {
 	if strings.TrimSpace(identity) == "" {
 		return nil, nil
@@ -1530,10 +1526,6 @@ func resolveOptionalCollaboratorIDOn(ctx context.Context, q dbtx, identity strin
 		return nil, err
 	}
 	return resolvedID, nil
-}
-
-func resolveOptionalTeamID(ctx context.Context, db *sql.DB, identity string) (any, error) {
-	return resolveOptionalTeamIDOn(ctx, db, identity)
 }
 
 func resolveOptionalTeamIDOn(ctx context.Context, q dbtx, identity string) (any, error) {

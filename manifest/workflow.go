@@ -554,7 +554,7 @@ func renderWorkflowString(value string, ctx WorkflowExecutionContext) (any, erro
 		case fmt.Stringer:
 			builder.WriteString(typed.String())
 		default:
-			builder.WriteString(fmt.Sprint(typed))
+			fmt.Fprint(&builder, typed)
 		}
 		last = match[1]
 	}
