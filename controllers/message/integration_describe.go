@@ -511,6 +511,19 @@ func failIntegrationRuntimeCheck(
 // Unlike verifyResolvedIntegrationType it has no DB side effects — it is
 // intended for callers (e.g., the manifest_sync addon) that only need the
 // live spec and handle persistence themselves.
+//
+// Discovery semantics: this call deliberately omits ExpectedVersion. The
+// adapter SDK rejects describe RPCs whose ExpectedVersion does not match
+// the adapter's current version, which creates a chicken-and-egg deadlock
+// for manifest_sync when an adapter ships a new version (e.g. 1.7.0 → 1.7.1):
+// /sync wants to discover the new version, but adapter rejects because the
+// pinned typeSpec.Adapter.Version is still 1.7.0. By sending no expected
+// version we ask the adapter "what are you running?" — the merger upstream
+// (manifestsync.MergeSpec) then auto-bumps the integration_type to whatever
+// the live adapter reports, both for forward AND backward drift. Backward
+// drift = rollback, which is a legitimate operational state and the
+// integration_type should follow it. Audit trail is the
+// integration_type.synced event with from_version/to_version payload.
 func DescribeIntegrationType(
 	ctx context.Context,
 	conn *amqp.Connection,
@@ -527,8 +540,8 @@ func DescribeIntegrationType(
 	defer cancel()
 
 	request := model.AdapterDescribeRequest{
-		Provider:        strings.TrimSpace(typeSpec.Provider),
-		ExpectedVersion: strings.TrimSpace(typeSpec.Adapter.Version),
+		Provider: strings.TrimSpace(typeSpec.Provider),
+		// ExpectedVersion deliberately omitted — see function comment.
 	}
 
 	var response model.AdapterDescribeResponse

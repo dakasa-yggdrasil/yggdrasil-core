@@ -38,21 +38,35 @@ func (s *Server) handleOpsWorkflowDetail(w http.ResponseWriter, r *http.Request)
 		writeJSONError(w, http.StatusBadRequest, "missing runId")
 		return
 	}
+	// runId is the workflow_runs.id UUID. Reject non-UUID early so we
+	// return a friendly 400 instead of leaking the pq cast error as 500.
+	if _, err := uuid.Parse(runID); err != nil {
+		writeJSONError(w, http.StatusBadRequest, "runId must be a uuid")
+		return
+	}
 
+	// Column names match the workflow_runs schema (00018_workflow_runs.sql):
+	// the row id is `id` (not run_id), integration/trigger_source live in
+	// `metadata` JSON, the result blob is `result` (not outputs), and
+	// `steps` is not a stored column (intermediate progress lives in metadata
+	// for the few workflows that report it). Mirror the list endpoint's
+	// metadata->>'integration' / metadata->>'trigger_source' pattern so
+	// detail + list stay schema-consistent.
 	const q = `
-		SELECT run_id, COALESCE(workflow_name, ''), COALESCE(integration, ''),
+		SELECT id::text, COALESCE(workflow_name, ''),
+		       COALESCE(metadata->>'integration', ''),
 		       status, started_at, finished_at,
-		       COALESCE(trigger_source, 'unknown'),
+		       COALESCE(metadata->>'source', metadata->>'trigger_source', 'unknown'),
 		       COALESCE(error, ''),
 		       COALESCE(inputs::text, '{}'),
-		       COALESCE(outputs::text, '{}'),
-		       COALESCE(steps::text, '[]')
-		FROM public.workflow_runs WHERE run_id = $1`
+		       COALESCE(result::text, '{}'),
+		       COALESCE((metadata->'steps')::text, '[]')
+		FROM public.workflow_runs WHERE id = $1`
 
 	var (
-		d                opsWorkflowRunDetail
-		inputs, outputs  string
-		steps            string
+		d               opsWorkflowRunDetail
+		inputs, outputs string
+		steps           string
 	)
 	err := s.db.QueryRowContext(r.Context(), q, runID).Scan(
 		&d.RunID, &d.WorkflowName, &d.Integration, &d.Status,
@@ -120,10 +134,13 @@ func (s *Server) handleOpsWorkflowAbort(w http.ResponseWriter, r *http.Request) 
 		writeJSONError(w, http.StatusNotFound, "run not found")
 		return
 	}
-	// best-effort status flip — actual cancellation handled by the engine
+	// best-effort status flip — actual cancellation handled by the engine.
+	// workflow_runs.status CHECK only allows pending|running|succeeded|failed|
+	// cancelled (see 00018_workflow_runs.sql); use 'cancelled' here and let
+	// the ops surface display "aborted" via toOpsWorkflowStatus.
 	_, _ = s.db.ExecContext(r.Context(),
-		`UPDATE public.workflow_runs SET status='aborted', finished_at=NOW()
-		 WHERE run_id=$1 AND status IN ('pending','running','retrying')`, runID)
+		`UPDATE public.workflow_runs SET status='cancelled', finished_at=NOW()
+		 WHERE id=$1 AND status IN ('pending','running')`, runID)
 	writeJSON(w, http.StatusAccepted, map[string]string{"run_id": runID, "status": "aborted"})
 }
 
@@ -152,9 +169,12 @@ func (s *Server) handleOpsWorkflowReplay(w http.ResponseWriter, r *http.Request)
 }
 
 func (s *Server) workflowRunExists(ctx context.Context, runID string) bool {
+	if _, err := uuid.Parse(runID); err != nil {
+		return false
+	}
 	var exists bool
 	_ = s.db.QueryRowContext(ctx,
-		`SELECT EXISTS (SELECT 1 FROM public.workflow_runs WHERE run_id=$1)`,
+		`SELECT EXISTS (SELECT 1 FROM public.workflow_runs WHERE id=$1)`,
 		runID).Scan(&exists)
 	return exists
 }
