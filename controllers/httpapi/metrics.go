@@ -116,13 +116,20 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	fmt.Fprintf(w, "yggdrasil_reactor_evaluations_total{outcome=\"skipped\"} %d\n", evalSnap[metrics.ReactorEvalSkipped])
 	fmt.Fprintf(w, "yggdrasil_reactor_evaluations_total{outcome=\"error\"} %d\n", evalSnap[metrics.ReactorEvalError])
 
-	// Reactor dispatch counter: bumped exactly once per reaction row that
-	// reaches a terminal status (succeeded / failed / dead_lettered).
-	// Transient failures inside the retry loop are NOT counted here — only
-	// the final outcome — so the rate matches the heimdall-style "5220
-	// succeeded, 0 failed" view that operators use to gauge reactor health.
+	// Reactor dispatch counter: bumped once per dispatch attempt the
+	// Runner finishes.  Outcomes:
+	//   - succeeded     : adapter RPC returned OK; row marked succeeded (terminal).
+	//   - failed        : adapter RPC errored AND attempt is still retriable;
+	//                     row marked failed with next_attempt_at scheduled.  A
+	//                     single reaction id may bump this counter multiple
+	//                     times across retries (one per failed attempt).
+	//   - dead_lettered : adapter RPC errored AND backoff exhausted; row
+	//                     marked dead_lettered (terminal).
+	// Operators reading "5220 succeeded, 0 failed in 24h" should look at
+	// `succeeded` for the success rate and `dead_lettered` for true
+	// terminal failures.  Treat `failed` as a retry-pressure signal.
 	dispatchSnap := metrics.ReactorDispatchesSnapshot()
-	fmt.Fprintf(w, "# HELP yggdrasil_reactor_dispatches_total Total reactor dispatches by terminal outcome\n")
+	fmt.Fprintf(w, "# HELP yggdrasil_reactor_dispatches_total Total reactor dispatch attempts by outcome\n")
 	fmt.Fprintf(w, "# TYPE yggdrasil_reactor_dispatches_total counter\n")
 	fmt.Fprintf(w, "yggdrasil_reactor_dispatches_total{outcome=\"succeeded\"} %d\n", dispatchSnap[metrics.ReactorDispatchSucceeded])
 	fmt.Fprintf(w, "yggdrasil_reactor_dispatches_total{outcome=\"failed\"} %d\n", dispatchSnap[metrics.ReactorDispatchFailed])
