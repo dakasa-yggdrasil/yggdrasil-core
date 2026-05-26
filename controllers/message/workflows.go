@@ -8,6 +8,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -111,6 +112,13 @@ func EmitWorkflowRunCompletedEvent(
 	logger *zap.Logger,
 	response model.RunWorkflowResponse,
 ) {
+	// Side-effect: heimdall pulse workflows emit `flagged_count` in their
+	// final step output.  Capture the gauge here so /metrics reflects the
+	// most recent pulse without needing a side-channel.  We extract
+	// regardless of run status — a failed pulse may still have computed a
+	// partial flagged_count, and operators want that visibility.
+	maybeUpdateHeimdallFlaggedCount(response)
+
 	runID := uuid.NewString()
 	payload := map[string]interface{}{
 		"workflow_ref": map[string]interface{}{
@@ -1217,4 +1225,89 @@ func parseTargetOverridesFromStepInput(input map[string]any) (map[string]model.T
 	}
 
 	return overrides, nil
+}
+
+// maybeUpdateHeimdallFlaggedCount inspects the workflow run response for a
+// heimdall-* pulse and, when it finds a step whose output carries a
+// `flagged_count` field, mirrors that value into the
+// yggdrasil_heimdall_flagged_count gauge keyed by the workflow name.
+//
+// We intentionally scan every step (instead of hard-coding "batch-ci-status")
+// because future pulse workflows may rename their final step or split the
+// computation across multiple steps — we always pick the LAST step whose
+// output contains a numeric flagged_count, which matches the operator
+// intuition of "what the pulse settled on at the end".
+//
+// Step output lives in `step.Metadata["output"]` (set by executeProductWorkflowStep);
+// non-product steps (yggdrasil / for_each meta steps) carry no output and
+// are skipped harmlessly.
+//
+// The function is best-effort: any decode failure short-circuits silently.
+// A pulse that exposes no flagged_count simply leaves the gauge unchanged
+// from its previous value.
+func maybeUpdateHeimdallFlaggedCount(response model.RunWorkflowResponse) {
+	name := strings.TrimSpace(response.Workflow.Name)
+	if !strings.HasPrefix(name, "heimdall-") {
+		return
+	}
+	for i := len(response.Steps) - 1; i >= 0; i-- {
+		step := response.Steps[i]
+		if step.Metadata == nil {
+			continue
+		}
+		out, ok := step.Metadata["output"]
+		if !ok || out == nil {
+			continue
+		}
+		outMap, ok := out.(map[string]any)
+		if !ok {
+			continue
+		}
+		raw, ok := outMap["flagged_count"]
+		if !ok {
+			continue
+		}
+		if value, ok := numericFromAny(raw); ok {
+			metrics.SetHeimdallFlaggedCount(name, value)
+			return
+		}
+	}
+}
+
+// numericFromAny coerces the JSON-decoded shapes Go produces for numeric
+// fields (json.Number, float64, int variants) into a float64 suitable for
+// the gauge.  Returns (0, false) for non-numeric or NaN-ish inputs.
+func numericFromAny(v any) (float64, bool) {
+	switch x := v.(type) {
+	case float64:
+		return x, true
+	case float32:
+		return float64(x), true
+	case int:
+		return float64(x), true
+	case int32:
+		return float64(x), true
+	case int64:
+		return float64(x), true
+	case uint:
+		return float64(x), true
+	case uint32:
+		return float64(x), true
+	case uint64:
+		return float64(x), true
+	case json.Number:
+		f, err := x.Float64()
+		if err != nil {
+			return 0, false
+		}
+		return f, true
+	case string:
+		// Some adapters stringify numerics; tolerate that.
+		f, err := json.Number(x).Float64()
+		if err != nil {
+			return 0, false
+		}
+		return f, true
+	}
+	return 0, false
 }

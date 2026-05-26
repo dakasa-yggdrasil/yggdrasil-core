@@ -8,6 +8,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 )
@@ -20,11 +21,19 @@ var ErrReactionNotFound = errors.New("integration event reaction not found")
 // event_log row was just inserted with the same event_id.
 //
 // Non-canon events (e.g., reactor.dead_lettered, manifest.created) are a no-op.
+//
+// Metrics: bumps yggdrasil_reactor_evaluations_total{outcome=...} per call:
+//   - "skipped" for non-canon events,
+//   - "matched" by the rows-affected count (so a single canon event that
+//     materialises N reactions across N integration_instances counts as N
+//     matches — operators see the same fan-out the dispatcher will work),
+//   - "error" when the INSERT itself fails.
 func MaterializeReactions(ctx context.Context, tx *sql.Tx, eventID uuid.UUID, eventType string) error {
 	if !IsCanonLifecycleEvent(eventType) {
+		metrics.IncReactorEvaluation(metrics.ReactorEvalSkipped)
 		return nil
 	}
-	_, err := tx.ExecContext(ctx, `
+	res, err := tx.ExecContext(ctx, `
 		INSERT INTO integration_event_reactions
 			(event_id, event_type, integration_instance_id, integration_type_manifest_id, capability, status, next_attempt_at)
 		SELECT $1, $2, ii.id, it.id, r->>'capability', 'pending', NOW()
@@ -38,7 +47,14 @@ func MaterializeReactions(ctx context.Context, tx *sql.Tx, eventID uuid.UUID, ev
 		  AND ii.active = true
 	`, eventID, eventType)
 	if err != nil {
+		metrics.IncReactorEvaluation(metrics.ReactorEvalError)
 		return fmt.Errorf("materialize reactions: %w", err)
+	}
+	// rows-affected is best-effort: not all drivers populate it.  We treat
+	// a negative or zero count as "no fan-out" so the metric stays at 0
+	// instead of spuriously incrementing.
+	if n, raErr := res.RowsAffected(); raErr == nil && n > 0 {
+		metrics.AddReactorEvaluations(metrics.ReactorEvalMatched, uint64(n))
 	}
 	return nil
 }

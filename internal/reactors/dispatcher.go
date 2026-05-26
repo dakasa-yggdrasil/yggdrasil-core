@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -155,6 +156,7 @@ func (r *Runner) dispatchOne(ctx context.Context, c ClaimedReaction) {
 	err = r.Caller.Call(ctx, c.IntegrationInstanceID.String(), c.Capability, payload)
 	if err == nil {
 		_ = repository.MarkSucceeded(ctx, r.DB, c.ID)
+		metrics.IncReactorDispatch(metrics.ReactorDispatchSucceeded)
 		return
 	}
 
@@ -162,9 +164,17 @@ func (r *Runner) dispatchOne(ctx context.Context, c ClaimedReaction) {
 	if deadLetter {
 		_ = repository.MarkDeadLettered(ctx, r.DB, c.ID, err.Error())
 		r.emitDeadLetterEvent(ctx, c, err)
+		// Terminal: count as dead_lettered.  We do NOT also count as failed —
+		// the dispatch reached a terminal state exactly once.
+		metrics.IncReactorDispatch(metrics.ReactorDispatchDeadLettered)
 		return
 	}
 	_ = repository.MarkFailed(ctx, r.DB, c.ID, err.Error(), wait)
+	// Non-terminal failure: bumps the failed counter once per retriable
+	// failure so the rate captures the operator-visible "tried and missed"
+	// signal.  The same reaction id may bump this counter multiple times
+	// across retries; that mirrors what dispatch attempts actually do.
+	metrics.IncReactorDispatch(metrics.ReactorDispatchFailed)
 }
 
 func backoffFor(attempt int) time.Duration {

@@ -6,6 +6,8 @@ import (
 	"runtime"
 	"sync/atomic"
 	"time"
+
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
 )
 
 // Process metrics counters. Concurrent-safe via atomic ops; exposed via
@@ -100,4 +102,40 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	fmt.Fprintf(w, "# HELP yggdrasil_memory_bytes Resident heap memory (HeapAlloc)\n")
 	fmt.Fprintf(w, "# TYPE yggdrasil_memory_bytes gauge\n")
 	fmt.Fprintf(w, "yggdrasil_memory_bytes %d\n", memStats.HeapAlloc)
+
+	// Reactor evaluation counter: bumped once per (event, integration_instance)
+	// pair MaterializeReactions persists into integration_event_reactions.
+	// outcome=matched means the canon event had at least one reactor declared
+	// against it; outcome=skipped means the event was non-canon (no-op); the
+	// matched count is incremented N times when N reactions are materialised
+	// for a single event so the rate correlates to actual dispatch fan-out.
+	evalSnap := metrics.ReactorEvaluationsSnapshot()
+	fmt.Fprintf(w, "# HELP yggdrasil_reactor_evaluations_total Total reactor evaluations by outcome\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_reactor_evaluations_total counter\n")
+	fmt.Fprintf(w, "yggdrasil_reactor_evaluations_total{outcome=\"matched\"} %d\n", evalSnap[metrics.ReactorEvalMatched])
+	fmt.Fprintf(w, "yggdrasil_reactor_evaluations_total{outcome=\"skipped\"} %d\n", evalSnap[metrics.ReactorEvalSkipped])
+	fmt.Fprintf(w, "yggdrasil_reactor_evaluations_total{outcome=\"error\"} %d\n", evalSnap[metrics.ReactorEvalError])
+
+	// Reactor dispatch counter: bumped exactly once per reaction row that
+	// reaches a terminal status (succeeded / failed / dead_lettered).
+	// Transient failures inside the retry loop are NOT counted here — only
+	// the final outcome — so the rate matches the heimdall-style "5220
+	// succeeded, 0 failed" view that operators use to gauge reactor health.
+	dispatchSnap := metrics.ReactorDispatchesSnapshot()
+	fmt.Fprintf(w, "# HELP yggdrasil_reactor_dispatches_total Total reactor dispatches by terminal outcome\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_reactor_dispatches_total counter\n")
+	fmt.Fprintf(w, "yggdrasil_reactor_dispatches_total{outcome=\"succeeded\"} %d\n", dispatchSnap[metrics.ReactorDispatchSucceeded])
+	fmt.Fprintf(w, "yggdrasil_reactor_dispatches_total{outcome=\"failed\"} %d\n", dispatchSnap[metrics.ReactorDispatchFailed])
+	fmt.Fprintf(w, "yggdrasil_reactor_dispatches_total{outcome=\"dead_lettered\"} %d\n", dispatchSnap[metrics.ReactorDispatchDeadLettered])
+
+	// Heimdall flagged_count gauge: snapshot of the last value emitted by a
+	// heimdall-* workflow's `batch-ci-status` (or equivalent) step output.
+	// Keyed by workflow name so multiple pulses (CI / CD / etc.) coexist.
+	// The gauge is only populated once a pulse has completed at least once
+	// since process start — pre-pulse the family is absent (no zero rows).
+	fmt.Fprintf(w, "# HELP yggdrasil_heimdall_flagged_count Latest flagged_count from a heimdall-* pulse workflow\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_heimdall_flagged_count gauge\n")
+	for _, sample := range metrics.HeimdallFlaggedCountSnapshot() {
+		fmt.Fprintf(w, "yggdrasil_heimdall_flagged_count{pulse=\"%s\"} %v\n", sample.PulseName, sample.Value)
+	}
 }
