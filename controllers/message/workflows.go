@@ -918,6 +918,10 @@ func normalizeWorkflowIntegrationStatus(status string) string {
 		"succeeded", "success",
 		"applied", "observed", "ensured",
 		"created", "updated", "already_exists",
+		// VCS write capabilities (e.g. integration-github put_file_contents)
+		// emit "committed" as their green-path status. Same semantics as
+		// applied/created — the side effect landed in the remote system.
+		"committed",
 		"not_found", "absent", "deleted",
 		"simulated", "dry_run", "noop", "no_op":
 		return "succeeded"

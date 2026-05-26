@@ -98,6 +98,18 @@ func verifyResolvedIntegrationType(
 		if liveDetails := integrationDescribeLiveDetails(response); len(liveDetails) > 0 {
 			details["live_contract"] = liveDetails
 		}
+		// Forward-drift fast-path: when the adapter rejected our describe
+		// because its live version no longer matches the pinned
+		// typeSpec.Adapter.Version, nudge manifest_sync immediately so the
+		// integration_type manifest is auto-healed within seconds instead of
+		// waiting for the 1h cron safety-net. Best-effort: the Notify channel
+		// drops on backpressure and the runner dedups by typeID. The handshake
+		// still fails this cycle (we can't pretend an unreachable describe
+		// succeeded) — next handshake after sync will compare against the
+		// healed spec and pass.
+		if isLikelyAdapterVersionMismatch(wrappedErr) {
+			manifestsync.Notify(typeManifest.ID)
+		}
 		return failIntegrationDescribeHandshake(
 			ctx,
 			db,
@@ -411,6 +423,45 @@ func integrationDescribeLiveDetails(response model.AdapterDescribeResponse) map[
 		"normalization":     liveSpec.Normalization,
 		"execution":         liveSpec.Execution,
 		"extensions":        liveSpec.Extensions,
+	}
+}
+
+// isLikelyAdapterVersionMismatch returns true when err looks like a transport
+// failure caused by the adapter rejecting our describe RPC because its current
+// running version no longer matches the ExpectedVersion we sent (forward drift,
+// e.g. adapter shipped 1.7.0 → 1.7.1 but the pinned integration_type manifest
+// is still 1.7.0).
+//
+// The describe handshake sends ExpectedVersion (integration_describe.go:84) to
+// catch contract drift early. Adapter SDKs reject mismatching versions before
+// returning a body, so the resulting transport error is OUTSIDE the regular
+// compareIntegrationTypeSpec path that triggers manifest_sync. Without this
+// helper, forward-drift would only auto-heal via the 1h cron — operators see
+// red handshakes for up to an hour on every adapter version bump.
+//
+// When this returns true the describe handler issues a non-blocking
+// manifestsync.Notify(typeID). The runner dedups concurrent syncs per typeID
+// via a mutex map, so false positives are bounded (single redundant /sync
+// attempt) — we err on the side of triggering.
+func isLikelyAdapterVersionMismatch(err error) bool {
+	if err == nil {
+		return false
+	}
+	msg := strings.ToLower(err.Error())
+	// Keep the token list tight to the version-drift signal — generic strings
+	// like "version" alone false-positive on "validate describe request" or
+	// transport handshake errors. Each token below appears verbatim in the
+	// adapter SDK's reject path (`expected version %q but adapter is %q`) or
+	// in the raw failure code returned by adapters (`code="version_mismatch"`).
+	switch {
+	case strings.Contains(msg, "expected version") && strings.Contains(msg, "but adapter is"):
+		return true
+	case strings.Contains(msg, "version_mismatch"):
+		return true
+	case strings.Contains(msg, "expected_version mismatch"):
+		return true
+	default:
+		return false
 	}
 }
 

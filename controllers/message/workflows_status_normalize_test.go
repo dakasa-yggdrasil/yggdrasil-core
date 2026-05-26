@@ -32,6 +32,10 @@ func TestNormalizeWorkflowIntegrationStatus_IdempotentOutcomes(t *testing.T) {
 		{"created", "created", "succeeded"},
 		{"updated", "updated", "succeeded"},
 		{"already_exists", "already_exists", "succeeded"},
+		// VCS write capabilities (e.g. integration-github put_file_contents)
+		// report "committed" — same semantics as success/applied.
+		{"committed", "committed", "succeeded"},
+		{"upper committed", "COMMITTED", "succeeded"},
 
 		// Idempotent delete / cleanup outcomes — re-running a teardown
 		// against a missing object MUST NOT fail the workflow run.
