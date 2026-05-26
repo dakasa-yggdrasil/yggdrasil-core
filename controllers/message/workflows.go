@@ -899,10 +899,19 @@ func normalizeWorkflowIntegrationStatus(status string) string {
 	// "succeeded" sentinel, so we accept any reasonable green-path
 	// status here rather than forcing every adapter to emit the exact
 	// string.
+	//
+	// "not_found" / "absent" / "deleted" are idempotency-friendly outcomes
+	// of cleanup workflows: re-running a delete on a missing object must
+	// not fail the whole workflow run (otherwise re-runs of teardown jobs
+	// are unusable). "simulated" / "dry_run" likewise should not fail —
+	// these come from adapters that respect a dry-run flag and report what
+	// they *would* have done.
 	case "", "ok", "done", "completed", "dispatched",
 		"succeeded", "success",
 		"applied", "observed", "ensured",
-		"created", "updated", "already_exists":
+		"created", "updated", "already_exists",
+		"not_found", "absent", "deleted",
+		"simulated", "dry_run", "noop", "no_op":
 		return "succeeded"
 	default:
 		return "failed"
