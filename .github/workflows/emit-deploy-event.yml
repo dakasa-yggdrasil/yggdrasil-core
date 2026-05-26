@@ -37,14 +37,81 @@ jobs:
 
     steps:
       - name: Emit deploy event into yggdrasil-core
-        uses: dakasa-yggdrasil/action-emit-workflow-run@v1
-        with:
-          core_base_url: ${{ secrets.YGGDRASIL_CORE_BASE_URL }}
-          workflow_run_token: ${{ secrets.YGGDRASIL_WORKFLOW_RUN_TOKEN }}
-          workflow_namespace: ${{ vars.YGGDRASIL_WORKFLOW_NAMESPACE || 'global' }}
-          workflow_name: ${{ vars.YGGDRASIL_WORKFLOW_NAME || 'ecosystem-repository-commit' }}
-          component_kind: ${{ vars.YGGDRASIL_COMPONENT_KIND || 'product' }}
-          component_name: ${{ vars.YGGDRASIL_COMPONENT_NAME || github.event.repository.name }}
-          environment: ${{ github.event.inputs.environment || vars.YGGDRASIL_DEPLOY_ENVIRONMENT || 'production' }}
-          deploy_workflow: ${{ github.event.inputs.deploy_workflow || vars.YGGDRASIL_DEPLOY_WORKFLOW || 'deploy.yml' }}
-          ref: ${{ github.event.inputs.ref || github.ref_name }}
+        # Inlined to avoid cross-repo private-action resolution
+        # (`dakasa-yggdrasil/action-emit-workflow-run` is org-private and
+        # the runner GITHUB_TOKEN cannot resolve it). Posts the same
+        # workflow-run request the action used to send.
+        env:
+          CORE_BASE_URL: ${{ secrets.YGGDRASIL_CORE_BASE_URL }}
+          WORKFLOW_RUN_TOKEN: ${{ secrets.YGGDRASIL_WORKFLOW_RUN_TOKEN }}
+          WORKFLOW_NAMESPACE: ${{ vars.YGGDRASIL_WORKFLOW_NAMESPACE || 'global' }}
+          WORKFLOW_NAME: ${{ vars.YGGDRASIL_WORKFLOW_NAME || 'ecosystem-repository-commit' }}
+          COMPONENT_KIND: ${{ vars.YGGDRASIL_COMPONENT_KIND || 'product' }}
+          COMPONENT_NAME: ${{ vars.YGGDRASIL_COMPONENT_NAME || github.event.repository.name }}
+          ENVIRONMENT: ${{ github.event.inputs.environment || vars.YGGDRASIL_DEPLOY_ENVIRONMENT || 'production' }}
+          DEPLOY_WORKFLOW: ${{ github.event.inputs.deploy_workflow || vars.YGGDRASIL_DEPLOY_WORKFLOW || 'deploy.yml' }}
+          REF: ${{ github.event.inputs.ref || github.ref_name }}
+          REPOSITORY: ${{ github.repository }}
+          COMMIT_SHA: ${{ github.sha }}
+          ACTOR: ${{ github.actor }}
+          EVENT_NAME: ${{ github.event_name }}
+          COMMIT_MESSAGE: ${{ github.event.head_commit.message }}
+          SOURCE_RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+          SOURCE_RUN_ID: ${{ github.run_id }}
+        run: |
+          set -euo pipefail
+          if [ -z "${CORE_BASE_URL:-}" ]; then
+            echo "::error::YGGDRASIL_CORE_BASE_URL secret is not set on this repo"
+            exit 1
+          fi
+          if [ -z "${WORKFLOW_RUN_TOKEN:-}" ]; then
+            echo "::error::YGGDRASIL_WORKFLOW_RUN_TOKEN secret is not set on this repo"
+            exit 1
+          fi
+          # Build the JSON payload (jq handles escaping safely).
+          payload=$(jq -nc \
+            --arg ns       "$WORKFLOW_NAMESPACE" \
+            --arg name     "$WORKFLOW_NAME" \
+            --arg ck       "$COMPONENT_KIND" \
+            --arg cn       "$COMPONENT_NAME" \
+            --arg env      "$ENVIRONMENT" \
+            --arg dw       "$DEPLOY_WORKFLOW" \
+            --arg ref      "$REF" \
+            --arg repo     "$REPOSITORY" \
+            --arg sha      "$COMMIT_SHA" \
+            --arg actor    "$ACTOR" \
+            --arg evt      "$EVENT_NAME" \
+            --arg msg      "$COMMIT_MESSAGE" \
+            --arg run_url  "$SOURCE_RUN_URL" \
+            --arg run_id   "$SOURCE_RUN_ID" \
+            '{
+              workflow: {name: $name, namespace: $ns},
+              inputs: {
+                component_kind: $ck,
+                component_name: $cn,
+                environment: $env,
+                deploy_workflow: $dw,
+                ref: $ref,
+                repository: $repo,
+                commit_sha: $sha,
+                actor: $actor,
+                event_name: $evt,
+                commit_message: $msg,
+                source_run_url: $run_url,
+                source_run_id: $run_id
+              }
+            }')
+          echo "Payload preview (workflow=$WORKFLOW_NAMESPACE/$WORKFLOW_NAME, repo=$REPOSITORY, sha=$COMMIT_SHA)"
+          http_code=$(curl -sS -o /tmp/ygg-resp.json -w '%{http_code}' \
+            -X POST \
+            -H "Authorization: Bearer $WORKFLOW_RUN_TOKEN" \
+            -H "Content-Type: application/json" \
+            -d "$payload" \
+            "${CORE_BASE_URL%/}/api/v1/workflow-runs")
+          echo "HTTP $http_code"
+          cat /tmp/ygg-resp.json || true
+          echo
+          if [ "$http_code" -ge 400 ] 2>/dev/null; then
+            echo "::error::yggdrasil-core returned HTTP $http_code"
+            exit 1
+          fi
