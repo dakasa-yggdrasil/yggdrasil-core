@@ -1,0 +1,50 @@
+name: Emit Deploy Event
+
+on:
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Optional deploy environment override.
+        required: false
+        default: production
+        type: string
+      ref:
+        description: Optional Git ref override for the target repository deploy workflow.
+        required: false
+        default: ""
+        type: string
+      deploy_workflow:
+        description: Optional deploy workflow file override.
+        required: false
+        default: deploy.yml
+        type: string
+
+permissions:
+  contents: read
+
+jobs:
+  emit:
+    # Default-on: emit unless explicitly opted out via repo variable
+    # YGGDRASIL_DEPLOY_EMIT_ENABLED == 'false'. Previous template used
+    # `== 'true'` which silently skipped every push since the variable
+    # was never bootstrapped on consumer repos.
+    if: vars.YGGDRASIL_DEPLOY_EMIT_ENABLED != 'false'
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Emit deploy event into yggdrasil-core
+        uses: dakasa-yggdrasil/action-emit-workflow-run@v1
+        with:
+          core_base_url: ${{ secrets.YGGDRASIL_CORE_BASE_URL }}
+          workflow_run_token: ${{ secrets.YGGDRASIL_WORKFLOW_RUN_TOKEN }}
+          workflow_namespace: ${{ vars.YGGDRASIL_WORKFLOW_NAMESPACE || 'global' }}
+          workflow_name: ${{ vars.YGGDRASIL_WORKFLOW_NAME || 'ecosystem-repository-commit' }}
+          component_kind: ${{ vars.YGGDRASIL_COMPONENT_KIND || 'product' }}
+          component_name: ${{ vars.YGGDRASIL_COMPONENT_NAME || github.event.repository.name }}
+          environment: ${{ github.event.inputs.environment || vars.YGGDRASIL_DEPLOY_ENVIRONMENT || 'production' }}
+          deploy_workflow: ${{ github.event.inputs.deploy_workflow || vars.YGGDRASIL_DEPLOY_WORKFLOW || 'deploy.yml' }}
+          ref: ${{ github.event.inputs.ref || github.ref_name }}
