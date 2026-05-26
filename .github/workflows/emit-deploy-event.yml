@@ -60,13 +60,21 @@ jobs:
           SOURCE_RUN_ID: ${{ github.run_id }}
         run: |
           set -euo pipefail
+          # Graceful skip when bootstrap secrets are missing on a consumer
+          # repo: until set_actions_secret arrives in integration-github,
+          # secrets must be bootstrapped manually per repo. Treat absence
+          # as "not opted in" instead of failing CI — mirrors the soft-skip
+          # pattern in integration-webhooks-external/.github/workflows/ci.yml
+          # (Trigger surface manifest sync step). Operators still see the
+          # warning in the job log and can promote to ::error:: once the
+          # capability lands.
           if [ -z "${CORE_BASE_URL:-}" ]; then
-            echo "::error::YGGDRASIL_CORE_BASE_URL secret is not set on this repo"
-            exit 1
+            echo "::warning::YGGDRASIL_CORE_BASE_URL secret is not set on this repo; skipping deploy emit"
+            exit 0
           fi
           if [ -z "${WORKFLOW_RUN_TOKEN:-}" ]; then
-            echo "::error::YGGDRASIL_WORKFLOW_RUN_TOKEN secret is not set on this repo"
-            exit 1
+            echo "::warning::YGGDRASIL_WORKFLOW_RUN_TOKEN secret is not set on this repo; skipping deploy emit"
+            exit 0
           fi
           # Build the JSON payload (jq handles escaping safely).
           payload=$(jq -nc \
