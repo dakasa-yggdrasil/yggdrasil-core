@@ -247,6 +247,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// for console integrations that want stricter typing.
 	mux.HandleFunc("GET /api/v1/manifests", server.handleManifestListGeneric)
 	mux.HandleFunc("POST /api/v1/manifests", server.handleManifestCreateGeneric)
+	// DELETE companion: hard-delete by default, ?soft=true flips active=FALSE.
+	// Same token guard as POST /api/v1/workflow-runs via the in-handler
+	// authorizeWorkflowRunRequest call. Idempotent on not-found.
+	mux.HandleFunc("DELETE /api/v1/manifests/{id}", server.handleManifestDelete)
 	// Public publish endpoint: external sources (Grafana webhooks, K8s
 	// informers, …) drop typed events here, the addon trigger loop picks
 	// them up and fires workflows declared with trigger.mode=event. Auth

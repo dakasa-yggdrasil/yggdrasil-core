@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
@@ -519,6 +520,131 @@ func marshalLabels(labels map[string]string) ([]byte, error) {
 		return []byte("{}"), nil
 	}
 	return json.Marshal(labels)
+}
+
+// HardDeleteManifestByID removes every row sharing the logical
+// (kind, namespace, name) of the manifest version pointed to by id. This
+// matches what operators reach for after a soft-delete pass: when a
+// manifest is conceptually gone, all of its historical rows go too.
+//
+// Returns ErrManifestNotFound if no version row exists for the given id.
+// On success returns the number of rows removed (>=1 for the deleted
+// version plus any sibling versions of the same logical record).
+//
+// Wrapped in a tx so the lookup + delete cannot race a concurrent
+// CreateManifestVersion writing a new version with the same logical
+// triple between SELECT and DELETE.
+func HardDeleteManifestByID(ctx context.Context, db *sql.DB, manifestID uuid.UUID) (int64, error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	var kind, namespace, name string
+	err = tx.QueryRowContext(
+		ctx,
+		`SELECT kind, namespace, name FROM public.manifests WHERE id = $1`,
+		manifestID,
+	).Scan(&kind, &namespace, &name)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, ErrManifestNotFound
+		}
+		return 0, err
+	}
+
+	res, err := tx.ExecContext(
+		ctx,
+		`DELETE FROM public.manifests WHERE kind = $1 AND namespace = $2 AND name = $3`,
+		kind, namespace, name,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+
+	return rows, nil
+}
+
+// MarkManifestInactiveByID flips active=FALSE for every row sharing the
+// logical (kind, namespace, name) of the manifest version pointed to by
+// id. It is the soft-delete cousin of HardDeleteManifestByID: history is
+// preserved, but the logical manifest is no longer surfaced by
+// active_only=true list calls and reconcilers treat it as absent.
+//
+// Returns ErrManifestNotFound if no version row exists for the given id.
+// Returns the count of rows touched (>=0; can be 0 if all versions were
+// already inactive — still a non-error idempotent outcome).
+func MarkManifestInactiveByID(ctx context.Context, db *sql.DB, manifestID uuid.UUID) (int64, error) {
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, err
+	}
+	defer tx.Rollback()
+
+	var kind, namespace, name string
+	err = tx.QueryRowContext(
+		ctx,
+		`SELECT kind, namespace, name FROM public.manifests WHERE id = $1`,
+		manifestID,
+	).Scan(&kind, &namespace, &name)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return 0, ErrManifestNotFound
+		}
+		return 0, err
+	}
+
+	res, err := tx.ExecContext(
+		ctx,
+		`UPDATE public.manifests SET active = FALSE, updated_at = NOW() WHERE kind = $1 AND namespace = $2 AND name = $3 AND active = TRUE`,
+		kind, namespace, name,
+	)
+	if err != nil {
+		return 0, err
+	}
+
+	rows, err := res.RowsAffected()
+	if err != nil {
+		return 0, err
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, err
+	}
+
+	return rows, nil
+}
+
+// PurgeInactiveManifestsOlderThan removes manifest rows where active=FALSE
+// AND updated_at is older than the supplied cutoff. Used by the periodic
+// purge runner to bound the size of the manifests table after a wave of
+// soft-deletes.
+//
+// Returns the number of rows removed. Safe to call concurrently with
+// writes: the DELETE uses a single statement and only touches rows whose
+// active=FALSE state is durable (any concurrent CreateManifestVersion
+// for the same logical triple would set the new row's active to TRUE,
+// which is outside this DELETE's predicate).
+func PurgeInactiveManifestsOlderThan(ctx context.Context, db *sql.DB, cutoff time.Time) (int64, error) {
+	res, err := db.ExecContext(
+		ctx,
+		`DELETE FROM public.manifests WHERE active = FALSE AND updated_at < $1`,
+		cutoff,
+	)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
 }
 
 func documentActive(doc model.ManifestDocument) bool {

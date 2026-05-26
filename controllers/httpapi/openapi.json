@@ -90,6 +90,26 @@
         }
       }
     },
+    "/api/v1/manifests/{id}": {
+      "delete": {
+        "tags": ["manifests"],
+        "summary": "Delete a manifest by id (idempotent)",
+        "description": "Removes every manifest row sharing the (kind, namespace, name) of the supplied version id. Default mode hard-deletes rows; ?soft=true flips active=FALSE while preserving history. Returns 200 with already_absent=true if the id is unknown so periodic purge retries don't trip on transient races. Auth: same token guard as POST /api/v1/workflow-runs (YGGDRASIL_WORKFLOW_RUN_TOKEN).",
+        "security": [{"BearerAuth": []}, {"WorkflowToken": []}],
+        "parameters": [
+          {"name": "id", "in": "path", "required": true, "schema": {"type": "string", "format": "uuid"}, "description": "Manifest version id (the UUID returned by POST/GET)"},
+          {"name": "soft", "in": "query", "schema": {"type": "boolean", "default": false}, "description": "If true, mark active=FALSE on every version row sharing (kind, namespace, name); otherwise hard-delete those rows."}
+        ],
+        "responses": {
+          "200": {
+            "description": "Deleted (or already absent — idempotent)",
+            "content": {"application/json": {"schema": {"type": "object", "properties": {"deleted": {"type": "boolean"}, "mode": {"type": "string", "enum": ["hard", "soft"]}, "rows_affected": {"type": "integer"}, "already_absent": {"type": "boolean"}}}}}
+          },
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"}
+        }
+      }
+    },
     "/api/v1/events": {
       "post": {
         "tags": ["events"],

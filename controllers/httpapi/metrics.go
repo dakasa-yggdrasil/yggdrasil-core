@@ -24,8 +24,11 @@ var (
 	metricWebhookEventsSkippedTotal  atomic.Uint64
 	metricWebhookEventsFailedTotal   atomic.Uint64
 
-	metricManifestAppliedTotal atomic.Uint64
-	metricSecretLookupsTotal   atomic.Uint64
+	metricManifestAppliedTotal     atomic.Uint64
+	metricManifestDeletedHardTotal atomic.Uint64
+	metricManifestDeletedSoftTotal atomic.Uint64
+	metricManifestPurgedTotal      atomic.Uint64
+	metricSecretLookupsTotal       atomic.Uint64
 
 	processStartTime = time.Now().UTC()
 )
@@ -57,6 +60,30 @@ func IncWebhookEvent(outcome string) {
 // IncManifestApplied bumps the manifest-write counter (one per successful POST).
 func IncManifestApplied() { metricManifestAppliedTotal.Add(1) }
 
+// IncManifestDeleted bumps the manifest-delete counter, split by mode
+// ("hard" removes rows from the manifests table; "soft" flips
+// active=FALSE). Unknown modes are no-ops so future call sites that pass
+// a misspelled label don't silently lose audit signal in the wrong
+// bucket — operators see a flat line and notice.
+func IncManifestDeleted(mode string) {
+	switch mode {
+	case "hard":
+		metricManifestDeletedHardTotal.Add(1)
+	case "soft":
+		metricManifestDeletedSoftTotal.Add(1)
+	}
+}
+
+// IncManifestPurged bumps the periodic-purge counter; one per row the
+// background runner removed in its last sweep. Reported as a counter so
+// rate() over a window gives operators "purge throughput per minute".
+func IncManifestPurged(n int64) {
+	if n <= 0 {
+		return
+	}
+	metricManifestPurgedTotal.Add(uint64(n))
+}
+
 // IncSecretLookup bumps the secret-store lookup counter.
 func IncSecretLookup() { metricSecretLookupsTotal.Add(1) }
 
@@ -86,6 +113,15 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	fmt.Fprintf(w, "# HELP yggdrasil_manifest_applies_total Total POST /api/v1/manifests successes\n")
 	fmt.Fprintf(w, "# TYPE yggdrasil_manifest_applies_total counter\n")
 	fmt.Fprintf(w, "yggdrasil_manifest_applies_total %d\n", metricManifestAppliedTotal.Load())
+
+	fmt.Fprintf(w, "# HELP yggdrasil_manifest_deletes_total Total DELETE /api/v1/manifests/{id} successes by mode\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_manifest_deletes_total counter\n")
+	fmt.Fprintf(w, "yggdrasil_manifest_deletes_total{mode=\"hard\"} %d\n", metricManifestDeletedHardTotal.Load())
+	fmt.Fprintf(w, "yggdrasil_manifest_deletes_total{mode=\"soft\"} %d\n", metricManifestDeletedSoftTotal.Load())
+
+	fmt.Fprintf(w, "# HELP yggdrasil_manifest_purges_total Total manifest rows removed by the periodic purge runner (active=FALSE older than retention)\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_manifest_purges_total counter\n")
+	fmt.Fprintf(w, "yggdrasil_manifest_purges_total %d\n", metricManifestPurgedTotal.Load())
 
 	fmt.Fprintf(w, "# HELP yggdrasil_secret_lookups_total Total managed-secret lookups\n")
 	fmt.Fprintf(w, "# TYPE yggdrasil_secret_lookups_total counter\n")
