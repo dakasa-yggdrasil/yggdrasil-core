@@ -86,6 +86,11 @@ COPY --from=build /bin/yggdrasil-bootstrap-admin /app/yggdrasil-bootstrap-admin
 # deployment can `goose up` and bootstrap without mounting anything.
 COPY db/migrations /app/db/migrations
 COPY docs/bootstrap /app/docs/bootstrap
+# Ship the capability-naming allowlist YAML so the warn-only validator
+# (Phase 1 of the universal capability naming convention) wires up at
+# boot. Without this file present at /app/config, server.go silently
+# leaves capabilityAllowlist=nil and the validator no-ops.
+COPY config /app/config
 COPY scripts/entrypoint.sh /app/entrypoint.sh
 RUN chmod +x /app/entrypoint.sh
 
