@@ -65,12 +65,17 @@ func LoadCapabilityNamingAllowlist(path string) (*CapabilityNamingAllowlist, err
 }
 
 // Allowed reports whether name is exempt from the convention regex.
-// Reactor-category entries are unconditionally allowed regardless
-// of name (per spec §2.5 — on_* lifecycle hooks are exempt by
-// construction and entries like efi_webhook_received are
-// reactor-category historical exceptions).
+//
+// Categories that are unconditionally allowed regardless of name:
+//   - "reactor": event-driven framework hooks (on_* lifecycle, plus
+//     historical exceptions like efi_webhook_received). Per spec §2.5.
+//   - "permission": RBAC permission declarations (tartaro:*, yggdrasil:*)
+//     co-located in action_catalog. These are NOT actually-callable
+//     capabilities — they're authorization scope identifiers consumed by
+//     the policy evaluator. Cycle 2026-05-27.
 func (al *CapabilityNamingAllowlist) Allowed(name, category string) bool {
-	if strings.EqualFold(strings.TrimSpace(category), "reactor") {
+	cat := strings.ToLower(strings.TrimSpace(category))
+	if cat == "reactor" || cat == "permission" {
 		return true
 	}
 	name = strings.ToLower(strings.TrimSpace(name))
