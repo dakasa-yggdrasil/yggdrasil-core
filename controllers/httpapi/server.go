@@ -211,6 +211,24 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		opt(server)
 	}
 
+	// Load the capability-naming allowlist once at boot. Path is
+	// /app/config/ in production images; relative fallback covers
+	// local dev where /app does not exist. A missing file leaves the
+	// validator disabled silently (warn-only Phase 1 is opt-in).
+	if server.capabilityAllowlist == nil {
+		allowlistPath := os.Getenv("YGGDRASIL_CAPABILITY_NAMING_ALLOWLIST")
+		if allowlistPath == "" {
+			if _, statErr := os.Stat("/app/config/capability_naming_allowlist.yaml"); statErr == nil {
+				allowlistPath = "/app/config/capability_naming_allowlist.yaml"
+			} else {
+				allowlistPath = "config/capability_naming_allowlist.yaml"
+			}
+		}
+		if al, alErr := manifestengine.LoadCapabilityNamingAllowlist(allowlistPath); alErr == nil {
+			server.capabilityAllowlist = al
+		}
+	}
+
 	mux := http.NewServeMux()
 
 	// Routes the credentials middleware must permit even when the collaborator
@@ -705,6 +723,12 @@ type Server struct {
 	// — proxies on_surface_query to the named integration instance. Optional;
 	// when nil the handler returns 503.
 	surfaceQueryDispatcher SurfaceQueryDispatcher
+	// capabilityAllowlist holds the warn-only capability-naming validator
+	// allowlist loaded once at boot from
+	// config/capability_naming_allowlist.yaml. nil disables the validator
+	// (e.g. tests that don't exercise integration_type registration).
+	// See docs/superpowers/specs/2026-05-27-yggdrasil-integration-capability-convention.md.
+	capabilityAllowlist *manifestengine.CapabilityNamingAllowlist
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {
@@ -2335,6 +2359,28 @@ func (s *Server) handleManifestCreate(w http.ResponseWriter, r *http.Request, ki
 		return
 	}
 
+	// Phase 1 of the universal capability naming convention: warn-only
+	// regex check on integration_type ActionCatalog entries. Never
+	// blocks registration — failures surface as warnings:[...] in the
+	// response and persist to the manifest metadata JSONB column.
+	var warnings []manifestengine.Warning
+	if kind == "integration_type" {
+		warnings = s.collectIntegrationTypeWarnings(doc.Spec)
+		if len(warnings) > 0 {
+			annotations, marshalErr := json.Marshal(map[string]any{"warnings": warnings})
+			if marshalErr == nil {
+				if persistErr := repository.SetManifestMetadata(r.Context(), s.db, manifestRecord.ID, annotations); persistErr != nil {
+					// Warning persistence is non-fatal — the response
+					// still carries the warnings array. Audit the
+					// failure so operators can investigate.
+					s.recordAudit(r, "manifest.warnings_persist", kind,
+						fmt.Sprintf("%s/%s", manifestRecord.Metadata.Namespace, manifestRecord.Metadata.Name),
+						"error", map[string]any{"error": persistErr.Error()})
+				}
+			}
+		}
+	}
+
 	s.materializeAfterManifestWrite(manifestRecord)
 
 	s.recordAudit(r, "manifest.create", kind,
@@ -2342,7 +2388,27 @@ func (s *Server) handleManifestCreate(w http.ResponseWriter, r *http.Request, ki
 		"success", map[string]any{"version": manifestRecord.Version, "checksum": manifestRecord.Checksum})
 
 	IncManifestApplied()
-	writeJSON(w, http.StatusCreated, map[string]any{"manifest": manifestRecord})
+	resp := map[string]any{"manifest": manifestRecord}
+	if len(warnings) > 0 {
+		resp["warnings"] = warnings
+	}
+	writeJSON(w, http.StatusCreated, resp)
+}
+
+// collectIntegrationTypeWarnings runs the warn-only naming validator
+// against an integration_type spec. Phase 1 of the rollout — see
+// docs/superpowers/specs/2026-05-27-yggdrasil-integration-capability-convention.md.
+// Phase 2 (hard-fail) is gated on the Tier C migrations landing in
+// production.
+func (s *Server) collectIntegrationTypeWarnings(specRaw json.RawMessage) []manifestengine.Warning {
+	if s.capabilityAllowlist == nil {
+		return nil
+	}
+	spec, err := manifestengine.ParseIntegrationTypeSpec(specRaw)
+	if err != nil {
+		return nil
+	}
+	return manifestengine.ValidateActionCatalogNaming(spec.ActionCatalog, s.capabilityAllowlist)
 }
 
 func integrationInstanceDocumentFromPayload(payload consoleCreateIntegrationInstanceRequest) (model.ManifestDocument, error) {

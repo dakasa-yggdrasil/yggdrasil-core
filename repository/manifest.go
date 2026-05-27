@@ -653,3 +653,39 @@ func documentActive(doc model.ManifestDocument) bool {
 	}
 	return *doc.Metadata.Active
 }
+
+// SetManifestMetadata writes the JSON annotations blob to the manifest
+// row's metadata column. Used by the capability-naming validator
+// (warn-only Phase 1) to attach warnings to integration_type rows so
+// the console can render a conformance badge without re-running the
+// validator on every page load.
+//
+// Non-fatal at the caller — a marshalling or write error should be
+// audited and ignored; the response still carries the warnings array.
+func SetManifestMetadata(ctx context.Context, db *sql.DB, manifestID uuid.UUID, metadata json.RawMessage) error {
+	if len(metadata) == 0 {
+		metadata = json.RawMessage("{}")
+	}
+	const q = `UPDATE public.manifests SET metadata = $1::jsonb WHERE id = $2`
+	_, err := db.ExecContext(ctx, q, []byte(metadata), manifestID)
+	return err
+}
+
+// GetManifestMetadataByID returns the metadata JSONB blob for the
+// manifest identified by id. Used by tests verifying capability-name
+// warning persistence; production callers read the full Manifest via
+// scanManifest paths.
+func GetManifestMetadataByID(ctx context.Context, db *sql.DB, manifestID uuid.UUID) (json.RawMessage, error) {
+	const q = `SELECT metadata FROM public.manifests WHERE id = $1`
+	var raw []byte
+	if err := db.QueryRowContext(ctx, q, manifestID).Scan(&raw); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, ErrManifestNotFound
+		}
+		return nil, err
+	}
+	if len(raw) == 0 {
+		return json.RawMessage("{}"), nil
+	}
+	return json.RawMessage(raw), nil
+}
