@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/integration_mutation/created.json",
+  "title": "<provider>.<resource>.created v1",
+  "description": "Mutation event emitted by an adapter after a money-movement allowlist action (create_payout, create_refund, ...). Distinct from `ensured` because the action is one-shot and not idempotent declaratively. Mandatory per INTEGRATION_CONTRACT §6.5 last paragraph.",
+  "type": "object",
+  "required": ["provider", "resource", "verb", "resource_id", "instance_id"],
+  "properties": {
+    "provider":    { "type": "string", "minLength": 1, "pattern": "^[a-z][a-z0-9_]*$" },
+    "resource":    { "type": "string", "minLength": 1, "pattern": "^[a-z][a-z0-9_]*$" },
+    "verb":        { "type": "string", "const": "created" },
+    "resource_id": { "type": "string", "minLength": 1 },
+    "instance_id": { "type": "string", "minLength": 1 },
+    "observed":    { "type": "object", "additionalProperties": true },
+    "emitted_at":  { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

@@ -4,6 +4,7 @@ import (
 	"embed"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"sync"
 
@@ -13,8 +14,16 @@ import (
 // FamilyEventsV1 identifies the events/v1 contract family.
 const FamilyEventsV1 = "events/v1"
 
-//go:embed events/v1/schema.json events/v1/manifest/*.json events/v1/product/*.json events/v1/workflow/*.json events/v1/authorization/*.json events/v1/buildproject/*.json events/v1/infra/*.json events/v1/collaborator/*.json events/v1/credential/*.json events/v1/team/*.json events/v1/team_membership/*.json events/v1/team_grant/*.json events/v1/reactor/*.json events/v1/runtime_state/*.json events/v1/integration_type/*.json events/v1/collaborator_external_identity/*.json events/v1/integration_surface/*.json
+//go:embed events/v1/schema.json events/v1/manifest/*.json events/v1/product/*.json events/v1/workflow/*.json events/v1/authorization/*.json events/v1/buildproject/*.json events/v1/infra/*.json events/v1/collaborator/*.json events/v1/credential/*.json events/v1/team/*.json events/v1/team_membership/*.json events/v1/team_grant/*.json events/v1/reactor/*.json events/v1/runtime_state/*.json events/v1/integration_type/*.json events/v1/collaborator_external_identity/*.json events/v1/integration_surface/*.json events/v1/integration_mutation/*.json
 var eventSchemaFS embed.FS
+
+// integrationMutationEventTypePattern is the §6.5 mutation event grammar.
+// Kept here as a private duplicate of repository.IntegrationMutationEventTypeRegex
+// so the contracts package can stay free of repository imports (the latter
+// pulls in DB/UUID deps the validator must not require).
+var integrationMutationEventTypePattern = regexp.MustCompile(
+	`^[a-z][a-z0-9_]*\.[a-z][a-z0-9_]*\.(ensured|destroyed|created)$`,
+)
 
 var (
 	eventSchemasMu sync.RWMutex
@@ -56,8 +65,19 @@ func ValidateEventPayload(eventType string, schemaVersion string, payload interf
 
 // eventTypeToSchemaPath maps "manifest.created" → "events/v1/manifest/created.json".
 // Only MVP event types are registered here; extend this map as new types are added.
+//
+// Integration mutation events (§6.5) are open-ended (per provider × per
+// resource × per verb), so they bypass the lookup table and route to a
+// single shared schema per verb at
+// `events/v1/integration_mutation/<verb>.json`. The schema's `verb` const
+// catches mismatches between the event type and the payload's verb field.
 func eventTypeToSchemaPath(eventType string, schemaVersion string) string {
 	_ = schemaVersion // placeholder for v2+ routing when multiple versions coexist
+
+	if m := integrationMutationEventTypePattern.FindStringSubmatch(eventType); len(m) == 2 {
+		return "events/v1/integration_mutation/" + m[1] + ".json"
+	}
+
 	mapping := map[string]string{
 		"manifest.created":             "events/v1/manifest/created.json",
 		"product.installation.applied": "events/v1/product/installation_applied.json",

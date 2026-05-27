@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/integration_mutation/ensured.json",
+  "title": "<provider>.<resource>.ensured v1",
+  "description": "Mutation event emitted by an adapter after a successful ensure_<resource> call. Mandatory per INTEGRATION_CONTRACT §6.5: every ensure_* MUST emit this event so the mutation is auditable and other adapters can subscribe via the reactor framework. Payload mirrors the wire body POSTed to /api/v1/events; provider, resource, verb, resource_id and instance_id are denormalised into the payload so subscribers can route without parsing the event type.",
+  "type": "object",
+  "required": ["provider", "resource", "verb", "resource_id", "instance_id"],
+  "properties": {
+    "provider":    { "type": "string", "minLength": 1, "pattern": "^[a-z][a-z0-9_]*$" },
+    "resource":    { "type": "string", "minLength": 1, "pattern": "^[a-z][a-z0-9_]*$" },
+    "verb":        { "type": "string", "const": "ensured" },
+    "resource_id": { "type": "string", "minLength": 1 },
+    "instance_id": { "type": "string", "minLength": 1 },
+    "observed":    { "type": "object", "additionalProperties": true },
+    "emitted_at":  { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}

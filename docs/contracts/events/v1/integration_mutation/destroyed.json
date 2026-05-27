@@ -1,0 +1,18 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/integration_mutation/destroyed.json",
+  "title": "<provider>.<resource>.destroyed v1",
+  "description": "Mutation event emitted by an adapter after a successful destroy_<resource> call. Mandatory per INTEGRATION_CONTRACT §6.5. 404 from the provider counts as success and still emits this event. `observed` is optional because the resource may no longer be readable post-destroy.",
+  "type": "object",
+  "required": ["provider", "resource", "verb", "resource_id", "instance_id"],
+  "properties": {
+    "provider":    { "type": "string", "minLength": 1, "pattern": "^[a-z][a-z0-9_]*$" },
+    "resource":    { "type": "string", "minLength": 1, "pattern": "^[a-z][a-z0-9_]*$" },
+    "verb":        { "type": "string", "const": "destroyed" },
+    "resource_id": { "type": "string", "minLength": 1 },
+    "instance_id": { "type": "string", "minLength": 1 },
+    "observed":    { "type": "object", "additionalProperties": true },
+    "emitted_at":  { "type": "string", "format": "date-time" }
+  },
+  "additionalProperties": false
+}
