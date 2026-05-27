@@ -1,0 +1,110 @@
+# Prometheus alert rules for the Yggdrasil capability-naming validator.
+#
+# Status: PRE-STAGED — apply on or before 2026-06-10 (the earliest
+# Phase-2 hard-fail flip date).  The alert is safe to run during the
+# 14-day warn-only observation window opened 2026-05-27; it simply
+# detects regressions in non-conformant capability registration.
+#
+# Apply path:
+#   integration-prometheus today exposes scrape_metrics_endpoint,
+#   query_metric_value, evaluate_metric_threshold, promql_query, and
+#   promql_threshold_check — but NO ensure_alert_rule capability yet.
+#   Operator must therefore drop this file into the Prometheus
+#   rule_files: directory (or the AWS Managed Prometheus rule group)
+#   by hand.
+#
+#   Sibling followup tracked in
+#   reference_phase2_validator_flip_runbook.md §5: add
+#   ensure_alert_rule + ensure_alertmanager_config to
+#   integration-prometheus so future alert manifests can be applied
+#   through Yggdrasil (Lego principle — no broker-specific manual
+#   provisioning).
+#
+# Runbook: reference_phase2_validator_flip_runbook.md
+groups:
+  - name: yggdrasil-capability-naming-validator
+    interval: 30s
+    rules:
+      # ---- Spike detection: regression in non-conformant registration ----
+      #
+      # Fires when the warning-emission rate exceeds 10 / 5min, i.e. an
+      # average of >2 warnings/min sustained over 5 minutes.  Threshold
+      # tuned for the steady state observed during the 14-day warn-only
+      # window (re-tune on 2026-06-09 if baseline drifts).
+      #
+      # Common causes the alert catches:
+      #   * A stale CI somewhere re-publishing an old action_catalog.
+      #   * An adapter ECR image rolled back below v2.0.0 (canonical
+      #     names introduced in the cycle-2026-05-27 cutover).
+      #   * A new adapter shipped without conforming to the convention
+      #     and not yet listed in capability_naming_allowlist.yaml.
+      - alert: YggdrasilCapabilityWarningsSpike
+        expr: increase(yggdrasil_capability_warnings_total[5m]) > 10
+        for: 2m
+        labels:
+          severity: warning
+          component: yggdrasil-core-validator
+          team: platform
+        annotations:
+          summary: "Non-canonical capability names registered in last 5 minutes"
+          description: >
+            yggdrasil-core has emitted >10 capability-naming warnings in
+            the last 5 minutes.  Either an adapter regressed to legacy
+            names or a stale CI is republishing an old action_catalog.
+            Inspect the per-integration_type gauge in the dashboard to
+            find the source.
+          runbook: "https://github.com/dakasa-yggdrasil/yggdrasil-core/blob/main/monitoring/prometheus/RUNBOOK.md#yggdrasilcapabilitywarningsspike"
+          dashboard: "yggdrasil-capability-validator"
+
+      # ---- Hard-fail rejections (Phase 2 only — silent before flip) ----
+      #
+      # Fires once any manifest registration is rejected with HTTP 422.
+      # Stays silent while YGGDRASIL_VALIDATOR_PHASE=warn-only because
+      # the counter cannot increment.  After the flip, this is the
+      # operator's "is anyone hitting the wall?" signal — non-zero =
+      # someone is still trying to POST a legacy name, investigate.
+      - alert: YggdrasilCapabilityHardFailRejecting
+        expr: increase(yggdrasil_capability_rejections_total[15m]) > 0
+        for: 1m
+        labels:
+          severity: warning
+          component: yggdrasil-core-validator
+          team: platform
+        annotations:
+          summary: "Hard-fail validator is rejecting manifests (Phase 2)"
+          description: >
+            The capability-naming validator has rejected at least one
+            manifest registration in the last 15 minutes
+            (YGGDRASIL_VALIDATOR_PHASE=hard-fail).  Identify the source
+            adapter and decide whether to add the rejected name to
+            config/capability_naming_allowlist.yaml or roll the source
+            adapter forward to canonical names.
+          runbook: "https://github.com/dakasa-yggdrasil/yggdrasil-core/blob/main/monitoring/prometheus/RUNBOOK.md#yggdrasilcapabilityhardfailrejecting"
+          dashboard: "yggdrasil-capability-validator"
+
+      # ---- Catalog residual: pre-flight gate alert ----
+      #
+      # Informational-only — fires when there are still
+      # integration_types with warnings > 0 in the catalog.  Use as a
+      # pre-flight gate: operator should NOT flip
+      # YGGDRASIL_VALIDATOR_PHASE while this is firing.  The alert
+      # silences itself once every adapter is conformant (or pre-approved
+      # via the allowlist).
+      - alert: YggdrasilCapabilityCatalogResidual
+        expr: count(yggdrasil_capability_warnings > 0) > 0
+        for: 30m
+        labels:
+          severity: info
+          component: yggdrasil-core-validator
+          team: platform
+          phase_2_gate: "true"
+        annotations:
+          summary: "Catalog still has integration_types with non-conformant capability names"
+          description: >
+            {{ $value }} integration_type(s) in the catalog still emit
+            non-conformant capability names.  This MUST be 0 (or covered
+            by capability_naming_allowlist.yaml) before
+            YGGDRASIL_VALIDATOR_PHASE=hard-fail can be safely flipped.
+            Earliest flip date: 2026-06-10.
+          runbook: "https://github.com/dakasa-yggdrasil/yggdrasil-core/blob/main/monitoring/prometheus/RUNBOOK.md#yggdrasilcapabilitycatalogresidual"
+          dashboard: "yggdrasil-capability-validator"

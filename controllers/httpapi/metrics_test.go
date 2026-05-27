@@ -34,6 +34,10 @@ func TestHandleMetricsReturnsPrometheusFormat(t *testing.T) {
 		"yggdrasil_reactor_evaluations_total",
 		"yggdrasil_reactor_dispatches_total",
 		"yggdrasil_heimdall_flagged_count",
+		// Capability-naming validator family (Phase 1 + Phase 2 obs).
+		"yggdrasil_capability_warnings",
+		"yggdrasil_capability_warnings_total",
+		"yggdrasil_capability_rejections_total",
 		"# TYPE",
 		"# HELP",
 	} {

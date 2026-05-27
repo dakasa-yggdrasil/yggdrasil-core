@@ -56,6 +56,10 @@ func (c capturingArg) Match(v driver.Value) bool {
 // the capability-naming warning HTTP integration test. Mirrors
 // newManifestDeleteServer in scope but uses sqlmock so we can verify
 // the persistence UPDATE without a live Postgres.
+//
+// validatorPhase is set explicitly per test to lock the phase the
+// handler executes under (default warn-only — matches production
+// while the Phase-2 cut-over is gated on 2026-06-10).
 func newWarningsTestServer(t *testing.T) (*Server, sqlmock.Sqlmock) {
 	t.Helper()
 	db, mock, err := sqlmock.New()
@@ -68,6 +72,7 @@ func newWarningsTestServer(t *testing.T) (*Server, sqlmock.Sqlmock) {
 		serviceName:         "yggdrasil-core-test",
 		db:                  db,
 		capabilityAllowlist: loadTestAllowlist(t),
+		validatorPhase:      ValidatorPhaseWarnOnly,
 	}
 	return srv, mock
 }
@@ -250,5 +255,179 @@ func TestValidatorSmokeAgainstGrafana130(t *testing.T) {
 		if !gotValues[want] {
 			t.Errorf("expected warning for %q in Grafana smoke, got %v", want, gotValues)
 		}
+	}
+}
+
+// TestHandleManifestCreate_HardFailRejectsNonConformant exercises the
+// Phase 2 hard-fail path: with validatorPhase=hard-fail and a
+// non-conformant action_catalog, the handler MUST return HTTP 422 and
+// MUST NOT touch the manifests table.  This is the cut-over behaviour
+// gated chronologically on 2026-06-10 — see
+// reference_phase2_validator_flip_runbook.md.
+func TestHandleManifestCreate_HardFailRejectsNonConformant(t *testing.T) {
+	srv, mock := newWarningsTestServer(t)
+	srv.validatorPhase = ValidatorPhaseHardFail
+
+	rawBody, wantValues := grafanaWarningsSpec("grafana-rejected")
+
+	// CRITICAL: no SQL expectations — hard-fail short-circuits before
+	// createManifestVersion runs.  If the handler accidentally proceeds
+	// to persist, ExpectationsWereMet would still pass (no calls) but
+	// sqlmock.New() returns errors on UNEXPECTED queries — that's the
+	// guarantee.
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/manifests?kind=integration_type", bytes.NewReader(rawBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	srv.handleManifestCreateGeneric(w, req)
+
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatalf("expected 422 Unprocessable Entity, got %d (body=%s)", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Error          string                   `json:"error"`
+		ValidatorPhase string                   `json:"validator_phase"`
+		Warnings       []manifestengine.Warning `json:"warnings"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("parse response: %v", err)
+	}
+	if resp.ValidatorPhase != ValidatorPhaseHardFail {
+		t.Errorf("expected validator_phase=%q in response, got %q", ValidatorPhaseHardFail, resp.ValidatorPhase)
+	}
+	if resp.Error == "" {
+		t.Errorf("expected non-empty error message, got %q", resp.Error)
+	}
+	if len(resp.Warnings) != len(wantValues) {
+		t.Fatalf("expected %d warnings, got %d (%v)", len(wantValues), len(resp.Warnings), resp.Warnings)
+	}
+	gotCodes := map[string]string{}
+	for _, warn := range resp.Warnings {
+		gotCodes[warn.Value] = warn.Code
+	}
+	for _, want := range wantValues {
+		if gotCodes[want] != "CAPABILITY_NAME_NONCONFORMANT" {
+			t.Errorf("expected %s warning with code CAPABILITY_NAME_NONCONFORMANT, got %v", want, gotCodes)
+		}
+	}
+
+	// No DB calls expected; the sqlmock pool MUST be untouched.
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unexpected sqlmock interactions on hard-fail short-circuit: %v", err)
+	}
+}
+
+// TestHandleManifestCreate_HardFailLetsConformantThrough verifies the
+// Phase 2 path does not introduce false rejections: a manifest whose
+// action_catalog is fully canonical MUST still receive HTTP 201, exactly
+// like the warn-only case.  This catches "off-by-one" regressions where
+// the hard-fail branch fires on empty warnings slices.
+func TestHandleManifestCreate_HardFailLetsConformantThrough(t *testing.T) {
+	srv, mock := newWarningsTestServer(t)
+	srv.validatorPhase = ValidatorPhaseHardFail
+
+	// Manifest body with only canonical names — must pass even under
+	// hard-fail.
+	body := map[string]any{
+		"name":      "grafana-conformant",
+		"namespace": "default",
+		"spec": map[string]any{
+			"provider":          "grafana",
+			"adapter":           map[string]any{"transport": "http_json", "version": "2.0.0", "timeout_seconds": 30, "endpoints": map[string]any{"describe": "/describe", "execute": "/execute"}},
+			"capabilities":      []string{"describe", "execute"},
+			"credential_schema": map[string]any{"mode": "inline"},
+			"instance_schema":   map[string]any{"mode": "inline"},
+			"resource_types": []map[string]any{
+				{"name": "user", "canonical_prefix": "thirdparty.grafana.user", "identity_template": "user.{id}", "default_actions": []string{"ensure_user", "observe_users", "destroy_user"}},
+			},
+			"action_catalog": []map[string]any{
+				{"name": "ensure_user", "category": "capability", "resource_types": []string{"user"}, "idempotent": true},
+				{"name": "observe_users", "category": "capability", "resource_types": []string{"user"}, "idempotent": true},
+				{"name": "destroy_user", "category": "capability", "resource_types": []string{"user"}, "idempotent": true},
+				{"name": "on_user_provisioned", "category": "reactor", "resource_types": []string{"user"}, "idempotent": true},
+			},
+			"discovery":     map[string]any{"mode": "push", "cursor": "none"},
+			"normalization": map[string]any{"external_id_path": "id", "fallback_resource_prefix": "thirdparty.grafana.custom"},
+			"execution":     map[string]any{"idempotent_actions": []string{"ensure_user", "observe_users", "destroy_user"}},
+		},
+	}
+	rawBody, _ := json.Marshal(body)
+
+	// Conformant path takes the full persistence pipeline.
+	mock.ExpectBegin()
+	mock.ExpectQuery(`SELECT COALESCE\(MAX\(version\), 0\) \+ 1 FROM public\.manifests`).
+		WithArgs("integration_type", "default", "grafana-conformant").
+		WillReturnRows(sqlmock.NewRows([]string{"v"}).AddRow(1))
+	mock.ExpectExec(`UPDATE public\.manifests SET active = FALSE WHERE kind`).
+		WithArgs("integration_type", "default", "grafana-conformant").
+		WillReturnResult(sqlmock.NewResult(0, 0))
+
+	manifestID := uuid.New()
+	now := time.Date(2026, 6, 10, 0, 0, 0, 0, time.UTC)
+	mock.ExpectQuery(`INSERT INTO public\.manifests`).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "api_version", "kind", "namespace", "name", "version",
+			"active", "description", "labels", "spec", "checksum",
+			"created_at", "updated_at",
+		}).AddRow(
+			manifestID, "yggdrasil.io/v1alpha1", "integration_type", "default", "grafana-conformant", 1,
+			true, "", []byte("{}"), []byte("{}"), "sha256:def",
+			now, now,
+		))
+	mock.ExpectCommit()
+	// No metadata UPDATE expected — warnings slice is empty.
+
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/manifests?kind=integration_type", bytes.NewReader(rawBody))
+	req.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+
+	srv.handleManifestCreateGeneric(w, req)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201 Created for conformant manifest under hard-fail, got %d (body=%s)", w.Code, w.Body.String())
+	}
+
+	var resp struct {
+		Warnings []manifestengine.Warning `json:"warnings"`
+	}
+	if err := json.Unmarshal(w.Body.Bytes(), &resp); err != nil {
+		t.Fatalf("parse response: %v", err)
+	}
+	if len(resp.Warnings) != 0 {
+		t.Errorf("expected zero warnings on conformant manifest, got %d (%v)", len(resp.Warnings), resp.Warnings)
+	}
+
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Errorf("unmet sqlmock expectations: %v", err)
+	}
+}
+
+// TestResolveValidatorPhase covers the env-var resolution: unknown
+// values must fall back to warn-only (the SAFE default) so an operator
+// fat-fingering the env-var cannot accidentally start rejecting writes.
+func TestResolveValidatorPhase(t *testing.T) {
+	cases := []struct {
+		env  string
+		want string
+	}{
+		{env: "", want: ValidatorPhaseWarnOnly},
+		{env: "warn-only", want: ValidatorPhaseWarnOnly},
+		{env: "WARN-ONLY", want: ValidatorPhaseWarnOnly},
+		{env: "hard-fail", want: ValidatorPhaseHardFail},
+		{env: "HARD-FAIL", want: ValidatorPhaseHardFail},
+		{env: "  hard-fail  ", want: ValidatorPhaseHardFail},
+		{env: "phase-2", want: ValidatorPhaseWarnOnly},   // unknown → safe default
+		{env: "hardfail", want: ValidatorPhaseWarnOnly},  // typo → safe default
+		{env: "garbage", want: ValidatorPhaseWarnOnly},
+	}
+	for _, tc := range cases {
+		t.Run(tc.env, func(t *testing.T) {
+			t.Setenv("YGGDRASIL_VALIDATOR_PHASE", tc.env)
+			if got := resolveValidatorPhase(); got != tc.want {
+				t.Errorf("resolveValidatorPhase() with env=%q: got %q, want %q", tc.env, got, tc.want)
+			}
+		})
 	}
 }

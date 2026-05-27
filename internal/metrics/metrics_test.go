@@ -88,3 +88,51 @@ func TestSetHeimdallFlaggedCountRejectsEmptyPulseAndClampsNegative(t *testing.T)
 		t.Fatalf("expected negative value clamped to 0, got %v", samples[0].Value)
 	}
 }
+
+func TestSetCapabilityWarningsKeyedByIntegrationType(t *testing.T) {
+	ResetForTest()
+	SetCapabilityWarnings("grafana", 4)
+	SetCapabilityWarnings("aws", 0)
+	SetCapabilityWarnings("grafana", 2) // last-write-wins
+
+	samples := CapabilityWarningsSnapshot()
+	if len(samples) != 2 {
+		t.Fatalf("expected 2 samples, got %d", len(samples))
+	}
+	if samples[0].IntegrationType != "aws" || samples[0].Value != 0 {
+		t.Fatalf("first sample: got %+v, want {aws 0}", samples[0])
+	}
+	if samples[1].IntegrationType != "grafana" || samples[1].Value != 2 {
+		t.Fatalf("second sample: got %+v, want {grafana 2} (last-write-wins)", samples[1])
+	}
+}
+
+func TestSetCapabilityWarningsRejectsEmptyAndClampsNegative(t *testing.T) {
+	ResetForTest()
+	SetCapabilityWarnings("", 5) // dropped
+	SetCapabilityWarnings("stripe", -1)
+
+	samples := CapabilityWarningsSnapshot()
+	if len(samples) != 1 {
+		t.Fatalf("expected 1 sample after empty-key drop, got %d", len(samples))
+	}
+	if samples[0].Value != 0 {
+		t.Fatalf("expected negative value clamped to 0, got %v", samples[0].Value)
+	}
+}
+
+func TestAddCapabilityWarningsTotalAndIncRejections(t *testing.T) {
+	ResetForTest()
+	AddCapabilityWarningsTotal(3)
+	AddCapabilityWarningsTotal(0) // no-op
+	AddCapabilityWarningsTotal(2)
+	if got := CapabilityWarningsTotalSnapshot(); got != 5 {
+		t.Fatalf("warnings total: got %d, want 5", got)
+	}
+
+	IncCapabilityRejections()
+	IncCapabilityRejections()
+	if got := CapabilityRejectionsTotalSnapshot(); got != 2 {
+		t.Fatalf("rejections total: got %d, want 2", got)
+	}
+}

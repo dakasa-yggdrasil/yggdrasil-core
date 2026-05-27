@@ -48,6 +48,32 @@ var (
 
 	heimdallFlaggedMu sync.RWMutex
 	heimdallFlagged   = map[string]float64{}
+
+	// capabilityWarningsMu guards capabilityWarnings.  The gauge is set
+	// at most once per integration_type registration, so contention is
+	// negligible — but the validator phase flip will start rejecting
+	// manifests instead of just persisting warnings, and the operator
+	// needs a stable scrape during the cut-over so we use the same
+	// mutex+map pattern as heimdallFlagged.
+	capabilityWarningsMu sync.RWMutex
+	capabilityWarnings   = map[string]float64{}
+
+	// capabilityWarningsTotal is the rolling counter of warning rows
+	// the validator has emitted process-wide.  Distinct from the
+	// per-integration_type gauge above: the counter answers "how many
+	// non-conformant capability names have we seen ever?" so a 5m
+	// rate() against this counter gives operators the spike-detection
+	// metric the Phase-2 alert in monitoring/prometheus/alerts.yaml
+	// fires on.  Per-integration_type cardinality stays bounded; the
+	// counter is unlabeled to keep cardinality at 1.
+	capabilityWarningsTotal atomic.Uint64
+
+	// capabilityRejectionsTotal counts manifest registrations the
+	// Phase-2 hard-fail validator rejected (HTTP 422).  Stays at zero
+	// while the validator is in warn-only mode — the operator uses
+	// this to confirm hard-fail is actually live after flipping
+	// YGGDRASIL_VALIDATOR_PHASE.
+	capabilityRejectionsTotal atomic.Uint64
 )
 
 // IncReactorEvaluation bumps the evaluation counter for the given outcome.
@@ -154,6 +180,81 @@ type HeimdallFlaggedSample struct {
 	Value     float64
 }
 
+// SetCapabilityWarnings records the warning count emitted by the
+// capability-naming validator for a given integration_type during its
+// most recent POST /api/v1/manifests?kind=integration_type.  The gauge
+// is keyed by integration_type so the operator can see which adapters
+// are still producing warnings during the Phase-2 observation window.
+// Empty integration_type strings are dropped; negative counts are
+// clamped to 0.  Per-type cardinality is bounded by the number of
+// integration_type manifests in the catalog (~30 at writing).
+func SetCapabilityWarnings(integrationType string, value float64) {
+	if integrationType == "" {
+		return
+	}
+	if value < 0 {
+		value = 0
+	}
+	capabilityWarningsMu.Lock()
+	defer capabilityWarningsMu.Unlock()
+	capabilityWarnings[integrationType] = value
+}
+
+// AddCapabilityWarningsTotal bumps the unlabeled process-wide counter by
+// n.  n is the number of warnings emitted in a single validator run, so
+// the counter reflects the cumulative warning volume — not the number
+// of failed registrations.  Used by the Phase-2 spike-detection alert.
+func AddCapabilityWarningsTotal(n uint64) {
+	if n == 0 {
+		return
+	}
+	capabilityWarningsTotal.Add(n)
+}
+
+// IncCapabilityRejections bumps the manifest-rejection counter — one
+// per POST /api/v1/manifests rejected with HTTP 422 by the Phase-2
+// hard-fail validator.  Stays at zero while
+// YGGDRASIL_VALIDATOR_PHASE != "hard-fail".
+func IncCapabilityRejections() {
+	capabilityRejectionsTotal.Add(1)
+}
+
+// CapabilityWarningsSnapshot returns the latest warning gauge per
+// integration_type, sorted alphabetically so /metrics output is
+// stable across scrapes.
+func CapabilityWarningsSnapshot() []CapabilityWarningsSample {
+	capabilityWarningsMu.RLock()
+	defer capabilityWarningsMu.RUnlock()
+	keys := make([]string, 0, len(capabilityWarnings))
+	for k := range capabilityWarnings {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+	out := make([]CapabilityWarningsSample, 0, len(keys))
+	for _, k := range keys {
+		out = append(out, CapabilityWarningsSample{IntegrationType: k, Value: capabilityWarnings[k]})
+	}
+	return out
+}
+
+// CapabilityWarningsTotalSnapshot returns the process-wide counter value.
+func CapabilityWarningsTotalSnapshot() uint64 {
+	return capabilityWarningsTotal.Load()
+}
+
+// CapabilityRejectionsTotalSnapshot returns the count of manifest
+// registrations the hard-fail validator has rejected.
+func CapabilityRejectionsTotalSnapshot() uint64 {
+	return capabilityRejectionsTotal.Load()
+}
+
+// CapabilityWarningsSample is one (integration_type, count) pair
+// emitted by the /metrics endpoint.
+type CapabilityWarningsSample struct {
+	IntegrationType string
+	Value           float64
+}
+
 // ResetForTest clears all counters/gauges.  Test-only — not exposed in
 // the production /metrics surface.
 func ResetForTest() {
@@ -166,4 +267,9 @@ func ResetForTest() {
 	heimdallFlaggedMu.Lock()
 	heimdallFlagged = map[string]float64{}
 	heimdallFlaggedMu.Unlock()
+	capabilityWarningsMu.Lock()
+	capabilityWarnings = map[string]float64{}
+	capabilityWarningsMu.Unlock()
+	capabilityWarningsTotal.Store(0)
+	capabilityRejectionsTotal.Store(0)
 }

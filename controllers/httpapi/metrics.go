@@ -181,4 +181,30 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	for _, sample := range metrics.HeimdallFlaggedCountSnapshot() {
 		fmt.Fprintf(w, "yggdrasil_heimdall_flagged_count{pulse=\"%s\"} %v\n", sample.PulseName, sample.Value)
 	}
+
+	// Capability-naming validator metrics (Phase 1 warn-only + Phase 2
+	// hard-fail observation surface).  See INTEGRATION_CONTRACT §5 and
+	// the rollout runbook at
+	// ~/.claude/projects/-Users-dakasa-projects/memory/reference_phase2_validator_flip_runbook.md.
+	//   - per-type gauge surfaces *which* integration_types still emit
+	//     non-conformant names, so the operator can see the catalog-wide
+	//     residual before flipping YGGDRASIL_VALIDATOR_PHASE=hard-fail.
+	//   - unlabeled counter feeds the spike-detection alert (rate over
+	//     a 5m window catches a regression — e.g. a stale CI re-publishing
+	//     an old action_catalog).
+	//   - rejections counter stays at zero in warn-only mode; bumps once
+	//     per HTTP 422 returned in hard-fail mode.
+	fmt.Fprintf(w, "# HELP yggdrasil_capability_warnings Latest capability-naming warning count per integration_type\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_capability_warnings gauge\n")
+	for _, sample := range metrics.CapabilityWarningsSnapshot() {
+		fmt.Fprintf(w, "yggdrasil_capability_warnings{integration_type=\"%s\"} %v\n", sample.IntegrationType, sample.Value)
+	}
+
+	fmt.Fprintf(w, "# HELP yggdrasil_capability_warnings_total Total capability-naming warnings emitted process-wide\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_capability_warnings_total counter\n")
+	fmt.Fprintf(w, "yggdrasil_capability_warnings_total %d\n", metrics.CapabilityWarningsTotalSnapshot())
+
+	fmt.Fprintf(w, "# HELP yggdrasil_capability_rejections_total Total manifest registrations rejected by the hard-fail capability-naming validator (Phase 2)\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_capability_rejections_total counter\n")
+	fmt.Fprintf(w, "yggdrasil_capability_rejections_total %d\n", metrics.CapabilityRejectionsTotalSnapshot())
 }

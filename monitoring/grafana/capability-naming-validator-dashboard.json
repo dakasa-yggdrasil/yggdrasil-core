@@ -1,0 +1,283 @@
+{
+  "_meta": {
+    "title": "Yggdrasil Capability-Naming Validator (Phase 1 -> Phase 2)",
+    "purpose": "Pre-staged for the 2026-06-10 cut-over of YGGDRASIL_VALIDATOR_PHASE warn-only -> hard-fail.",
+    "runbook": "reference_phase2_validator_flip_runbook.md",
+    "metrics": [
+      "yggdrasil_capability_warnings (gauge keyed by integration_type)",
+      "yggdrasil_capability_warnings_total (process-wide counter)",
+      "yggdrasil_capability_rejections_total (Phase-2 hard-fail rejection counter, 0 in warn-only)"
+    ],
+    "apply_via": "integration-grafana.ensure_dashboard capability (canonical from v2.3.0)",
+    "datasource_uid_placeholder": "REPLACE_PROMETHEUS_DS_UID_AT_APPLY_TIME"
+  },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "target": {"limit": 100, "matchAny": false, "tags": [], "type": "dashboard"},
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "Tracks capability-naming validator output across the catalog. Use this to validate the pre-flight checklist before flipping YGGDRASIL_VALIDATOR_PHASE to hard-fail on 2026-06-10 or later.",
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Total warnings (process-wide)",
+      "description": "Cumulative count of capability-naming warnings emitted since the yggdrasil-core process started. Flat line = no new non-conformances; rising = adapters still publishing legacy names.",
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(yggdrasil_capability_warnings_total)",
+          "datasource": {"type": "prometheus", "uid": "REPLACE_PROMETHEUS_DS_UID_AT_APPLY_TIME"},
+          "legendFormat": "warnings_total"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 50}
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto",
+        "graphMode": "area",
+        "colorMode": "background"
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Hard-fail rejections (Phase 2)",
+      "description": "Manifest registrations rejected with HTTP 422 by the hard-fail validator. Stays at zero while YGGDRASIL_VALIDATOR_PHASE=warn-only. Use to confirm the flip is live after operator action.",
+      "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum(yggdrasil_capability_rejections_total)",
+          "datasource": {"type": "prometheus", "uid": "REPLACE_PROMETHEUS_DS_UID_AT_APPLY_TIME"},
+          "legendFormat": "rejections_total"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "orange", "value": 1}
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto",
+        "graphMode": "area",
+        "colorMode": "background"
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Catalog-wide residual (per integration_type)",
+      "description": "Snapshot of integration_types that still produce non-conformant capability names. Each row = one adapter the operator must clear before the hard-fail flip. PRE-FLIGHT GATE: this number must equal 0 (or <=N pre-approved exemptions) before 2026-06-10 execution.",
+      "gridPos": {"h": 6, "w": 12, "x": 12, "y": 0},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "count(yggdrasil_capability_warnings > 0)",
+          "datasource": {"type": "prometheus", "uid": "REPLACE_PROMETHEUS_DS_UID_AT_APPLY_TIME"},
+          "legendFormat": "integration_types_with_warnings"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "orange", "value": 1},
+              {"color": "red", "value": 5}
+            ]
+          },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "reduceOptions": {"calcs": ["lastNotNull"], "fields": "", "values": false},
+        "textMode": "auto",
+        "graphMode": "area",
+        "colorMode": "background"
+      }
+    },
+    {
+      "id": 4,
+      "type": "timeseries",
+      "title": "Warnings rate (5m) - spike-detection signal",
+      "description": "rate(yggdrasil_capability_warnings_total[5m]) - this is the same expression the YggdrasilCapabilityWarningsSpike Prometheus alert evaluates. Use to visually validate that the alert threshold is sane for the operator's environment.",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 6},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(yggdrasil_capability_warnings_total[5m])",
+          "datasource": {"type": "prometheus", "uid": "REPLACE_PROMETHEUS_DS_UID_AT_APPLY_TIME"},
+          "legendFormat": "warnings/sec (5m rate)"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "linear",
+            "barAlignment": 0,
+            "lineWidth": 2,
+            "fillOpacity": 10,
+            "gradientMode": "opacity",
+            "spanNulls": false,
+            "showPoints": "auto",
+            "pointSize": 5,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "warnings/sec",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"tooltip": false, "viz": false, "legend": false},
+            "thresholdsStyle": {"mode": "line"}
+          },
+          "unit": "short",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "red", "value": 0.033}
+            ]
+          }
+        }
+      },
+      "options": {
+        "tooltip": {"mode": "single", "sort": "none"},
+        "legend": {"showLegend": true, "displayMode": "list", "placement": "bottom"}
+      }
+    },
+    {
+      "id": 5,
+      "type": "timeseries",
+      "title": "Per-adapter warning count (gauge)",
+      "description": "Latest warning count from yggdrasil_capability_warnings, broken down by integration_type. One non-zero series per adapter that still emits legacy capability names. Goal: every series at zero before the 2026-06-10 flip.",
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 14},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "yggdrasil_capability_warnings",
+          "datasource": {"type": "prometheus", "uid": "REPLACE_PROMETHEUS_DS_UID_AT_APPLY_TIME"},
+          "legendFormat": "{{integration_type}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "palette-classic"},
+          "custom": {
+            "drawStyle": "line",
+            "lineInterpolation": "stepAfter",
+            "lineWidth": 2,
+            "fillOpacity": 5,
+            "gradientMode": "none",
+            "spanNulls": true,
+            "showPoints": "always",
+            "pointSize": 6,
+            "stacking": {"mode": "none", "group": "A"},
+            "axisPlacement": "auto",
+            "axisLabel": "warning count",
+            "scaleDistribution": {"type": "linear"},
+            "hideFrom": {"tooltip": false, "viz": false, "legend": false}
+          },
+          "unit": "short"
+        }
+      },
+      "options": {
+        "tooltip": {"mode": "multi", "sort": "desc"},
+        "legend": {"showLegend": true, "displayMode": "table", "placement": "right", "calcs": ["last", "max"]}
+      }
+    },
+    {
+      "id": 6,
+      "type": "table",
+      "title": "Pre-flight checklist data (integration_types still warned)",
+      "description": "Snapshot table: every integration_type with warnings > 0 must be resolved (or pre-approved as an exemption) before the operator runs the flip command.",
+      "gridPos": {"h": 10, "w": 24, "x": 0, "y": 24},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "yggdrasil_capability_warnings > 0",
+          "datasource": {"type": "prometheus", "uid": "REPLACE_PROMETHEUS_DS_UID_AT_APPLY_TIME"},
+          "format": "table",
+          "instant": true,
+          "legendFormat": "__auto"
+        }
+      ],
+      "transformations": [
+        {
+          "id": "organize",
+          "options": {
+            "excludeByName": {"Time": true, "__name__": true, "job": true, "instance": true},
+            "indexByName": {"integration_type": 0, "Value": 1},
+            "renameByName": {"Value": "warning_count"}
+          }
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "green", "value": null},
+              {"color": "yellow", "value": 1},
+              {"color": "red", "value": 5}
+            ]
+          }
+        }
+      },
+      "options": {
+        "showHeader": true,
+        "cellHeight": "sm",
+        "footer": {"show": false, "reducer": ["sum"], "fields": ""}
+      }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["yggdrasil", "validator", "phase-2", "capability-naming"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {},
+  "timezone": "",
+  "title": "Yggdrasil - Capability-Naming Validator",
+  "uid": "yggdrasil-capability-validator",
+  "version": 1,
+  "weekStart": ""
+}

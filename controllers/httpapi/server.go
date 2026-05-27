@@ -20,6 +20,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/scim"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/cryptoenvelope"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/provisioner"
@@ -227,6 +228,12 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		if al, alErr := manifestengine.LoadCapabilityNamingAllowlist(allowlistPath); alErr == nil {
 			server.capabilityAllowlist = al
 		}
+	}
+
+	// Resolve the validator phase once at boot.  WithValidatorPhase()
+	// (test-only) can override; production reads YGGDRASIL_VALIDATOR_PHASE.
+	if server.validatorPhase == "" {
+		server.validatorPhase = resolveValidatorPhase()
 	}
 
 	mux := http.NewServeMux()
@@ -729,6 +736,15 @@ type Server struct {
 	// (e.g. tests that don't exercise integration_type registration).
 	// See docs/superpowers/specs/2026-05-27-yggdrasil-integration-capability-convention.md.
 	capabilityAllowlist *manifestengine.CapabilityNamingAllowlist
+	// validatorPhase controls whether non-conformant capability names
+	// produce HTTP 422 (Phase 2 hard-fail) or HTTP 201 + warnings array
+	// (Phase 1 warn-only — the default).  Read once at boot from the
+	// YGGDRASIL_VALIDATOR_PHASE environment variable; see
+	// validator_phase.go for the resolution logic and the runbook
+	// reference_phase2_validator_flip_runbook.md for the cut-over
+	// procedure (earliest execution 2026-06-10 after the 14-day
+	// observation window that opened 2026-05-27).
+	validatorPhase string
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {
@@ -2350,6 +2366,49 @@ func (s *Server) handleManifestCreate(w http.ResponseWriter, r *http.Request, ki
 		return
 	}
 
+	// Capability-naming validator (Phase 1 warn-only / Phase 2 hard-fail).
+	// Runs BEFORE the manifest is persisted so hard-fail can reject the
+	// write cleanly — no DB churn, no audit-log misleading "success" then
+	// "rollback" pair.  The phase is read once at boot from
+	// YGGDRASIL_VALIDATOR_PHASE; default warn-only.  See
+	// validator_phase.go + reference_phase2_validator_flip_runbook.md.
+	var warnings []manifestengine.Warning
+	if kind == "integration_type" {
+		warnings = s.collectIntegrationTypeWarnings(doc.Spec)
+
+		// Always emit observability signals — the gauge per
+		// integration_type (sets to 0 for conformant ones too so the
+		// dashboard shows a zero baseline) plus the unlabeled rolling
+		// counter the spike-detection alert evaluates rate() over.
+		metrics.SetCapabilityWarnings(doc.Metadata.Name, float64(len(warnings)))
+		if len(warnings) > 0 {
+			metrics.AddCapabilityWarningsTotal(uint64(len(warnings)))
+		}
+
+		// Phase 2 hard-fail short-circuit.  When the operator has
+		// flipped YGGDRASIL_VALIDATOR_PHASE=hard-fail and the validator
+		// found non-conformant names, refuse the write with HTTP 422
+		// (Unprocessable Entity) and return the same warnings array
+		// callers already know how to surface.  Stays at zero rejections
+		// while the env-var is unset.
+		if len(warnings) > 0 && s.validatorPhase == ValidatorPhaseHardFail {
+			metrics.IncCapabilityRejections()
+			s.recordAudit(r, "manifest.create", kind,
+				fmt.Sprintf("%s/%s", doc.Metadata.Namespace, doc.Metadata.Name),
+				"rejected", map[string]any{
+					"reason":          "capability_naming_nonconformant",
+					"validator_phase": s.validatorPhase,
+					"warnings":        warnings,
+				})
+			writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
+				"error":           "manifest rejected by capability-naming validator (Phase 2 hard-fail)",
+				"validator_phase": s.validatorPhase,
+				"warnings":        warnings,
+			})
+			return
+		}
+	}
+
 	manifestRecord, err := createManifestVersion(r.Context(), s.db, doc)
 	if err != nil {
 		s.recordAudit(r, "manifest.create", kind,
@@ -2359,24 +2418,20 @@ func (s *Server) handleManifestCreate(w http.ResponseWriter, r *http.Request, ki
 		return
 	}
 
-	// Phase 1 of the universal capability naming convention: warn-only
-	// regex check on integration_type ActionCatalog entries. Never
-	// blocks registration — failures surface as warnings:[...] in the
-	// response and persist to the manifest metadata JSONB column.
-	var warnings []manifestengine.Warning
-	if kind == "integration_type" {
-		warnings = s.collectIntegrationTypeWarnings(doc.Spec)
-		if len(warnings) > 0 {
-			annotations, marshalErr := json.Marshal(map[string]any{"warnings": warnings})
-			if marshalErr == nil {
-				if persistErr := repository.SetManifestMetadata(r.Context(), s.db, manifestRecord.ID, annotations); persistErr != nil {
-					// Warning persistence is non-fatal — the response
-					// still carries the warnings array. Audit the
-					// failure so operators can investigate.
-					s.recordAudit(r, "manifest.warnings_persist", kind,
-						fmt.Sprintf("%s/%s", manifestRecord.Metadata.Namespace, manifestRecord.Metadata.Name),
-						"error", map[string]any{"error": persistErr.Error()})
-				}
+	// Persist warnings to manifests.metadata so the console can render
+	// a conformance badge without re-running the validator on every
+	// page load.  Runs in warn-only mode (Phase 2 already returned
+	// 422 above before we got here when warnings>0).
+	if kind == "integration_type" && len(warnings) > 0 {
+		annotations, marshalErr := json.Marshal(map[string]any{"warnings": warnings})
+		if marshalErr == nil {
+			if persistErr := repository.SetManifestMetadata(r.Context(), s.db, manifestRecord.ID, annotations); persistErr != nil {
+				// Warning persistence is non-fatal — the response
+				// still carries the warnings array. Audit the
+				// failure so operators can investigate.
+				s.recordAudit(r, "manifest.warnings_persist", kind,
+					fmt.Sprintf("%s/%s", manifestRecord.Metadata.Namespace, manifestRecord.Metadata.Name),
+					"error", map[string]any{"error": persistErr.Error()})
 			}
 		}
 	}
@@ -2395,11 +2450,12 @@ func (s *Server) handleManifestCreate(w http.ResponseWriter, r *http.Request, ki
 	writeJSON(w, http.StatusCreated, resp)
 }
 
-// collectIntegrationTypeWarnings runs the warn-only naming validator
-// against an integration_type spec. Phase 1 of the rollout — see
-// docs/superpowers/specs/2026-05-27-yggdrasil-integration-capability-convention.md.
-// Phase 2 (hard-fail) is gated on the Tier C migrations landing in
-// production.
+// collectIntegrationTypeWarnings runs the naming validator against an
+// integration_type spec.  Phase 1 surfaces the returned slice as
+// warnings:[...] on a 201 Created response; Phase 2 turns that same
+// slice into a 422 Unprocessable Entity refusal.  See spec
+// docs/superpowers/specs/2026-05-27-yggdrasil-integration-capability-convention.md
+// and validator_phase.go for the phase resolution.
 func (s *Server) collectIntegrationTypeWarnings(specRaw json.RawMessage) []manifestengine.Warning {
 	if s.capabilityAllowlist == nil {
 		return nil
