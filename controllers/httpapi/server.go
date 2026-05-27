@@ -236,6 +236,15 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		server.validatorPhase = resolveValidatorPhase()
 	}
 
+	// Per-IP login rate limiter (security audit 2026-05-27 A4). The
+	// burst+refill numbers are conservative (5/burst, 1/min after that)
+	// — high enough to forgive a real user fumbling their password,
+	// low enough to slow distributed brute-force significantly. Idle
+	// entries GC after 10min so the in-memory map stays small.
+	if server.loginLimiter == nil {
+		server.loginLimiter = newLoginRateLimiter(5, time.Minute, 10*time.Minute)
+	}
+
 	mux := http.NewServeMux()
 
 	// Routes the credentials middleware must permit even when the collaborator
@@ -292,7 +301,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/auth/passwords/change", server.handlePasswordChange)
 	mux.HandleFunc("POST /api/v1/auth/passwords/forgot", server.handlePasswordForgot)
 	mux.HandleFunc("POST /api/v1/auth/passwords/reset", server.handlePasswordReset)
-	mux.HandleFunc("POST /api/v1/auth/login", server.handleAuthLogin)
+	// Login is rate-limited per source IP to slow brute-force attacks
+	// (security audit 2026-05-27 A4). The middleware wraps the handler
+	// so the limiter check runs before any DB work.
+	mux.Handle("POST /api/v1/auth/login", loginRateLimit(server.loginLimiter, http.HandlerFunc(server.handleAuthLogin)))
 	mux.HandleFunc("POST /api/v1/auth/third-party/login", server.handleAuthThirdPartyLogin)
 	mux.HandleFunc("GET /api/v1/auth/third-party/start/{provider}", server.handleAuthThirdPartyStart)
 	mux.HandleFunc("GET /api/v1/auth/third-party/callback/{provider}", server.handleAuthThirdPartyCallback)
@@ -803,6 +815,10 @@ type Server struct {
 	// procedure (earliest execution 2026-06-10 after the 14-day
 	// observation window that opened 2026-05-27).
 	validatorPhase string
+	// loginLimiter caps anonymous /api/v1/auth/login attempts per
+	// source IP (security audit 2026-05-27 A4). nil disables the
+	// middleware (e.g. for narrow unit tests).
+	loginLimiter *loginRateLimiter
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {
@@ -2682,6 +2698,11 @@ func httpStatusFromError(err error) int {
 		errors.Is(err, repository.ErrAuthSessionExpired),
 		errors.Is(err, repository.ErrPasswordCredentialNotFound):
 		return http.StatusUnauthorized
+	case errors.Is(err, repository.ErrAuthAccountLocked):
+		// 423 Locked — distinct from 401 so the FE can surface
+		// "your account is temporarily locked" without revealing
+		// whether the just-tried password was correct.
+		return http.StatusLocked
 	case errors.Is(err, repository.ErrThirdPartyIdentityConflict):
 		return http.StatusConflict
 	case errors.Is(err, mfa.ErrMFANotEnrolled):

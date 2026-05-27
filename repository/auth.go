@@ -36,6 +36,20 @@ var (
 	ErrAuthInvalidCredentials     = errors.New("invalid credentials")
 	ErrAuthSessionNotFound        = errors.New("auth session not found")
 	ErrAuthSessionExpired         = errors.New("auth session expired")
+	// ErrAuthAccountLocked is returned when an account has too many
+	// recent failed login attempts and is temporarily inaccessible
+	// until LockedUntil expires (security audit 2026-05-27 A4).
+	ErrAuthAccountLocked = errors.New("account locked")
+)
+
+// loginFailureThreshold + loginLockDuration tune the lockout behavior.
+// Match the conservative defaults documented in the audit fix plan:
+// 5 failed attempts → 15-min lock. Backstop against rapid attacks even
+// after the per-IP rate limiter; brute-force at the account level
+// (e.g. credential-stuffing distributed across many IPs).
+const (
+	loginFailureThreshold = 5
+	loginLockDuration     = 15 * time.Minute
 )
 
 // UpsertPasswordCredential creates or updates one local password credential for
@@ -95,6 +109,18 @@ func UpsertPasswordCredential(
 // the collaborator when the credential is active. It intentionally does not
 // issue a session; HTTP callers layer MFA verification on top before calling
 // CreateAuthSession.
+//
+// Lockout (security audit 2026-05-27 A4): when the collaborator's
+// auth_identities.locked_until is in the future, returns
+// ErrAuthAccountLocked without checking the password (constant-time
+// refuse). On a successful password verify, resets failed_attempts to
+// 0. On a failed password verify (mismatch / corrupt hash), increments
+// failed_attempts; once the count reaches loginFailureThreshold, sets
+// locked_until to NOW()+loginLockDuration so the next attempt sees the
+// lock.
+//
+// We do NOT increment failed_attempts when the collaborator is missing
+// (would leak which emails are registered).
 func VerifyPasswordCredential(
 	ctx context.Context,
 	db *sql.DB,
@@ -117,6 +143,12 @@ func VerifyPasswordCredential(
 	}
 	if strings.ToLower(strings.TrimSpace(collaborator.Status)) != "active" {
 		return model.Collaborator{}, ErrAuthInvalidCredentials
+	}
+
+	// Lockout check BEFORE password verify so we don't leak whether
+	// the locked account's password is right.
+	if locked, err := isAccountLocked(ctx, db, collaborator.ID); err == nil && locked {
+		return model.Collaborator{}, ErrAuthAccountLocked
 	}
 
 	credential, passwordHash, err := getPasswordCredentialRow(ctx, db, collaborator.ID)
@@ -146,10 +178,88 @@ func VerifyPasswordCredential(
 		// stderr pra ops triarem (especialmente hash corruption indica
 		// data corruption no banco).
 		fmt.Printf("auth: password verify failed for collaborator %s (scheme=%s): %v\n", collaborator.ID, scheme, err)
+		// Record the failure (increment failed_attempts, set
+		// locked_until on threshold). Best-effort: a DB hiccup here
+		// must not change the 401 the user sees.
+		if locked, recordErr := recordLoginFailure(ctx, db, collaborator.ID); recordErr == nil && locked {
+			return model.Collaborator{}, ErrAuthAccountLocked
+		}
 		return model.Collaborator{}, ErrAuthInvalidCredentials
 	}
 
+	// Password matched — reset the failure counter so a streak of
+	// typos doesn't tip a real user into the lockout window.
+	_ = resetLoginFailures(ctx, db, collaborator.ID)
 	return collaborator, nil
+}
+
+// isAccountLocked returns true when auth_identities.locked_until is
+// non-NULL and in the future for this collaborator. Errors propagate
+// to the caller; a missing row counts as "not locked" (false, nil) so
+// freshly-onboarded accounts before their first auth_identities row
+// exists don't get treated as locked.
+func isAccountLocked(ctx context.Context, db *sql.DB, collaboratorID uuid.UUID) (bool, error) {
+	var lockedUntil sql.NullTime
+	row := db.QueryRowContext(ctx, `
+		SELECT locked_until
+		FROM public.auth_identities
+		WHERE collaborator_id = $1
+	`, collaboratorID)
+	if err := row.Scan(&lockedUntil); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return false, nil
+		}
+		return false, err
+	}
+	if !lockedUntil.Valid {
+		return false, nil
+	}
+	return lockedUntil.Time.After(time.Now().UTC()), nil
+}
+
+// recordLoginFailure increments failed_attempts and, when the count
+// crosses loginFailureThreshold, sets locked_until to NOW()+lockDuration.
+// Returns (locked, err) where locked=true indicates the latest
+// increment tripped the lockout (caller should surface that to the user
+// instead of a plain "invalid credentials").
+func recordLoginFailure(ctx context.Context, db *sql.DB, collaboratorID uuid.UUID) (bool, error) {
+	var failedAttempts int
+	var lockedUntil sql.NullTime
+	row := db.QueryRowContext(ctx, `
+		UPDATE public.auth_identities
+		SET
+			failed_attempts = COALESCE(failed_attempts, 0) + 1,
+			locked_until = CASE
+				WHEN COALESCE(failed_attempts, 0) + 1 >= $2
+				THEN NOW() + ($3 || ' milliseconds')::interval
+				ELSE locked_until
+			END,
+			updated_at = NOW()
+		WHERE collaborator_id = $1
+		RETURNING failed_attempts, locked_until
+	`, collaboratorID, loginFailureThreshold, fmt.Sprintf("%d", loginLockDuration.Milliseconds()))
+	if err := row.Scan(&failedAttempts, &lockedUntil); err != nil {
+		return false, err
+	}
+	if !lockedUntil.Valid {
+		return false, nil
+	}
+	return lockedUntil.Time.After(time.Now().UTC()), nil
+}
+
+// resetLoginFailures zeroes failed_attempts and clears locked_until
+// after a successful authentication.
+func resetLoginFailures(ctx context.Context, db *sql.DB, collaboratorID uuid.UUID) error {
+	_, err := db.ExecContext(ctx, `
+		UPDATE public.auth_identities
+		SET
+			failed_attempts = 0,
+			locked_until = NULL,
+			last_login_at = NOW(),
+			updated_at = NOW()
+		WHERE collaborator_id = $1
+	`, collaboratorID)
+	return err
 }
 
 // AuthenticateWithPassword validates one login and opens a new session.
