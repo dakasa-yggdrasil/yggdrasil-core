@@ -112,10 +112,11 @@ func TestValidateActionCatalogNaming_AggregatesWarnings(t *testing.T) {
 	al, _ := LoadCapabilityNamingAllowlist(filepath.Join("..", "config", "capability_naming_allowlist.yaml"))
 	catalog := []model.IntegrationActionDefinition{
 		{Name: "ensure_user", Category: "capability"},
-		{Name: "create_user", Category: "capability"},        // → warning, suggest ensure_user
-		{Name: "list_identities", Category: "capability"},    // → warning, suggest observe_identities
+		{Name: "create_user", Category: "capability"}, // → warning, suggest ensure_user
+		{Name: "list_widgets", Category: "capability"}, // → warning, suggest observe_widgets (NOT allowlisted)
 		{Name: "on_member_joined_channel", Category: "reactor"},
 		{Name: "verify_webhook_signature", Category: "capability"}, // allowlisted
+		{Name: "tartaro:read_x", Category: "permission"},           // permission-category exempt
 	}
 
 	warnings := ValidateActionCatalogNaming(catalog, al)
@@ -125,7 +126,21 @@ func TestValidateActionCatalogNaming_AggregatesWarnings(t *testing.T) {
 	if warnings[0].Field != "spec.action_catalog[1].name" || warnings[0].Value != "create_user" {
 		t.Errorf("warning[0] wrong: %+v", warnings[0])
 	}
-	if warnings[1].Field != "spec.action_catalog[2].name" || warnings[1].Value != "list_identities" {
+	if warnings[1].Field != "spec.action_catalog[2].name" || warnings[1].Value != "list_widgets" {
 		t.Errorf("warning[1] wrong: %+v", warnings[1])
+	}
+}
+
+func TestValidateCapabilityName_PermissionCategoryExempt(t *testing.T) {
+	al, _ := LoadCapabilityNamingAllowlist(filepath.Join("..", "config", "capability_naming_allowlist.yaml"))
+	// RBAC permission entries (tartaro:*, yggdrasil:*) co-located in action_catalog
+	// are not actually-callable capabilities; they should be exempt regardless of name.
+	warnings := ValidateCapabilityName("tartaro:read_user", "permission", al)
+	if len(warnings) != 0 {
+		t.Errorf("expected permission category to be exempt, got warnings %v", warnings)
+	}
+	warnings = ValidateCapabilityName("yggdrasil:manage_workflows", "permission", al)
+	if len(warnings) != 0 {
+		t.Errorf("expected permission category to be exempt for yggdrasil: scope, got %v", warnings)
 	}
 }
