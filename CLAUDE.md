@@ -1,5 +1,18 @@
 # Claude Code Context: yggdrasil-core
 
+## 🌳 Integration contract (server-side enforcement)
+
+yggdrasil-core is the **enforcement point** for the integration capability convention defined in `/Users/dakasa/projects/yggdrasil/integration-template/INTEGRATION_CONTRACT.md`. When implementing or reviewing manifest validation, registration handlers, or describe-handshake logic in this repo, treat that document as authoritative.
+
+Key invariants the validator enforces (Phase 1 warn-only via `warnings:[...]` in response, Phase 2 hard-fail at registration):
+
+- Capability names in `action_catalog[].name` MUST match `^(ensure|observe|destroy|discover|on)_[a-z][a-z0-9_]*$` OR be on the curated allowlist (pure-function helpers + money-movement actions).
+- Reactor capabilities (`category: "reactor"`) are exempt from naming validation regardless of name.
+- Resource types declared in `spec.resource_types[]` MUST list their canonical triple in `default_actions`.
+- Manifests MUST NOT inline credentials; only `credentials_ref` URI references to operator-chosen secret stores (AWS SM, GCP SM, Vault, K8s Secret, etc — Lego principle).
+
+Convention spec: `docs/superpowers/specs/2026-05-27-yggdrasil-integration-capability-convention.md` in `dakasa-system`. The allowlist + regex live in `config/capability_naming_allowlist.yaml` (TBD by the rollout plan).
+
 ## What this repo is
 
 `yggdrasil-core` is the **server / control plane** for Yggdrasil — the
