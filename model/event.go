@@ -32,14 +32,32 @@ type EventActor struct {
 
 // EmitEventRequest is the input to repository.EmitEvent.
 // Called from within a mutation transaction to guarantee atomicity.
+//
+// IdempotencyKey is optional. When set, repository.EmitEvent dedups against
+// (Type, IdempotencyKey) on event_log so the same logical mutation can be
+// re-posted without producing a duplicate row. Used by adapter pods
+// emitting <provider>.<resource>.<verb_past> mutation events per
+// INTEGRATION_CONTRACT §6.5. Maximum length 256 chars (mirrors the column).
 type EmitEventRequest struct {
-	Type          string
-	SchemaVersion string
-	AggregateType string
-	AggregateID   string
-	Actor         *EventActor
-	Payload       map[string]interface{}
-	Metadata      map[string]interface{}
+	Type           string
+	SchemaVersion  string
+	AggregateType  string
+	AggregateID    string
+	Actor          *EventActor
+	Payload        map[string]interface{}
+	Metadata       map[string]interface{}
+	IdempotencyKey string
+}
+
+// EmitEventOutcome is the rich return type for repository.EmitEventWithOutcome.
+// It exposes the inserted event ID, the number of integration_event_reactions
+// rows materialised in the same Tx (the fan-out an HTTP caller wants to
+// surface to the client), and whether the row was deduped against an
+// existing idempotency_key.
+type EmitEventOutcome struct {
+	EventID               uuid.UUID `json:"event_id"`
+	MaterializedReactions int64     `json:"materialized_reactions"`
+	Deduped               bool      `json:"deduped"`
 }
 
 // PullEventsRequest is the input to the event_stream.pull RPC.

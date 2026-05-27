@@ -20,18 +20,28 @@ var ErrReactionNotFound = errors.New("integration event reaction not found")
 // reactor declaration). Caller guarantees tx is already inside a tx where the
 // event_log row was just inserted with the same event_id.
 //
-// Non-canon events (e.g., reactor.dead_lettered, manifest.created) are a no-op.
+// Materialisation triggers for:
+//   - the closed canon lifecycle set (IsCanonLifecycleEvent), and
+//   - the open-ended integration mutation set (IsIntegrationMutationEvent)
+//     defined by INTEGRATION_CONTRACT §6.5 (<provider>.<resource>.<verb_past>).
+//
+// All other events (e.g. reactor.dead_lettered, manifest.created,
+// integration_type.synced) are a no-op so we don't infinite-loop or
+// fan-out to consumers that didn't ask for them.
+//
+// Returns the number of integration_event_reactions rows inserted (0 when
+// the event type is skipped or no instances have a matching reactor).
 //
 // Metrics: bumps yggdrasil_reactor_evaluations_total{outcome=...} per call:
-//   - "skipped" for non-canon events,
+//   - "skipped" for events outside the materialisation set,
 //   - "matched" by the rows-affected count (so a single canon event that
 //     materialises N reactions across N integration_instances counts as N
 //     matches — operators see the same fan-out the dispatcher will work),
 //   - "error" when the INSERT itself fails.
-func MaterializeReactions(ctx context.Context, tx *sql.Tx, eventID uuid.UUID, eventType string) error {
-	if !IsCanonLifecycleEvent(eventType) {
+func MaterializeReactions(ctx context.Context, tx *sql.Tx, eventID uuid.UUID, eventType string) (int64, error) {
+	if !IsCanonLifecycleEvent(eventType) && !IsIntegrationMutationEvent(eventType) {
 		metrics.IncReactorEvaluation(metrics.ReactorEvalSkipped)
-		return nil
+		return 0, nil
 	}
 	res, err := tx.ExecContext(ctx, `
 		INSERT INTO integration_event_reactions
@@ -48,15 +58,19 @@ func MaterializeReactions(ctx context.Context, tx *sql.Tx, eventID uuid.UUID, ev
 	`, eventID, eventType)
 	if err != nil {
 		metrics.IncReactorEvaluation(metrics.ReactorEvalError)
-		return fmt.Errorf("materialize reactions: %w", err)
+		return 0, fmt.Errorf("materialize reactions: %w", err)
 	}
 	// rows-affected is best-effort: not all drivers populate it.  We treat
 	// a negative or zero count as "no fan-out" so the metric stays at 0
 	// instead of spuriously incrementing.
-	if n, raErr := res.RowsAffected(); raErr == nil && n > 0 {
+	n, raErr := res.RowsAffected()
+	if raErr != nil || n < 0 {
+		n = 0
+	}
+	if n > 0 {
 		metrics.AddReactorEvaluations(metrics.ReactorEvalMatched, uint64(n))
 	}
-	return nil
+	return n, nil
 }
 
 // ClaimPendingBatch atomically claims up to `limit` pending/failed rows

@@ -12,6 +12,12 @@ import (
 	"github.com/google/uuid"
 )
 
+// MaxIdempotencyKeyLength bounds the length of EmitEventRequest.IdempotencyKey
+// to the column width (VARCHAR(256) on public.event_log). Exposed so HTTP
+// handlers can reject oversize keys with a clear 400 instead of waiting for
+// the DB constraint to surface a 500.
+const MaxIdempotencyKeyLength = 256
+
 // EmitEvent inserts an event into event_log within a caller-provided transaction.
 // MUST be called from inside an active *sql.Tx to guarantee atomicity with the
 // state mutation that generated the event. If the transaction rolls back, the
@@ -19,49 +25,83 @@ import (
 //
 // Validates the payload against the JSON Schema for the event type before insert.
 // Returns the generated UUID v7 event_id on success.
+//
+// Backwards-compatible thin wrapper over EmitEventWithOutcome — existing
+// callers that don't care about the materialised-reactions count or the
+// dedup flag stay unchanged. New endpoints that need the rich outcome
+// should call EmitEventWithOutcome directly.
 func EmitEvent(ctx context.Context, tx *sql.Tx, req model.EmitEventRequest) (uuid.UUID, error) {
+	outcome, err := EmitEventWithOutcome(ctx, tx, req)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return outcome.EventID, nil
+}
+
+// EmitEventWithOutcome is the rich-return variant of EmitEvent. It returns
+// the inserted event_id (or the existing one when the request dedups against
+// an existing idempotency_key), the number of integration_event_reactions
+// materialised in the same Tx, and whether the call was a dedup hit.
+//
+// Idempotency: when req.IdempotencyKey is non-empty, the INSERT uses
+// `ON CONFLICT (type, idempotency_key) DO NOTHING` against the partial
+// unique index `event_log_idempotency_unique_idx`. On conflict the function
+// SELECTs the original event_id and returns Deduped=true. The 24h soft
+// window noted in the spec is enforced by the existing
+// CleanupExpiredEvents addon (when the older row falls past TTL the unique
+// slot frees up automatically).
+//
+// MaterializeReactions runs inside the same Tx for fresh inserts only. On
+// dedup hits we deliberately SKIP re-materialisation: the original event
+// already materialised reactions, so re-running would double up the
+// fan-out (or fail the unique constraint on integration_event_reactions).
+func EmitEventWithOutcome(ctx context.Context, tx *sql.Tx, req model.EmitEventRequest) (model.EmitEventOutcome, error) {
 	if tx == nil {
-		return uuid.Nil, fmt.Errorf("EmitEvent requires a non-nil transaction")
+		return model.EmitEventOutcome{}, fmt.Errorf("EmitEvent requires a non-nil transaction")
 	}
 
 	req.Type = strings.TrimSpace(req.Type)
 	if req.Type == "" {
-		return uuid.Nil, fmt.Errorf("event type is required")
+		return model.EmitEventOutcome{}, fmt.Errorf("event type is required")
 	}
 	if req.SchemaVersion == "" {
 		req.SchemaVersion = "v1"
 	}
 	req.AggregateType = strings.TrimSpace(req.AggregateType)
 	if req.AggregateType == "" {
-		return uuid.Nil, fmt.Errorf("aggregate_type is required")
+		return model.EmitEventOutcome{}, fmt.Errorf("aggregate_type is required")
 	}
 	req.AggregateID = strings.TrimSpace(req.AggregateID)
 	if req.AggregateID == "" {
-		return uuid.Nil, fmt.Errorf("aggregate_id is required")
+		return model.EmitEventOutcome{}, fmt.Errorf("aggregate_id is required")
 	}
 	if req.Payload == nil {
-		return uuid.Nil, fmt.Errorf("payload is required")
+		return model.EmitEventOutcome{}, fmt.Errorf("payload is required")
+	}
+	req.IdempotencyKey = strings.TrimSpace(req.IdempotencyKey)
+	if len(req.IdempotencyKey) > MaxIdempotencyKeyLength {
+		return model.EmitEventOutcome{}, fmt.Errorf("idempotency_key exceeds %d chars", MaxIdempotencyKeyLength)
 	}
 
 	if err := contracts.ValidateEventPayload(req.Type, req.SchemaVersion, req.Payload); err != nil {
-		return uuid.Nil, err
+		return model.EmitEventOutcome{}, err
 	}
 
-	eventID, err := uuid.NewV7()
+	newEventID, err := uuid.NewV7()
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("generate event_id: %w", err)
+		return model.EmitEventOutcome{}, fmt.Errorf("generate event_id: %w", err)
 	}
 
 	payloadJSON, err := json.Marshal(req.Payload)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("marshal payload: %w", err)
+		return model.EmitEventOutcome{}, fmt.Errorf("marshal payload: %w", err)
 	}
 
 	var metadataJSON []byte
 	if req.Metadata != nil {
 		metadataJSON, err = json.Marshal(req.Metadata)
 		if err != nil {
-			return uuid.Nil, fmt.Errorf("marshal metadata: %w", err)
+			return model.EmitEventOutcome{}, fmt.Errorf("marshal metadata: %w", err)
 		}
 	}
 
@@ -73,32 +113,71 @@ func EmitEvent(ctx context.Context, tx *sql.Tx, req model.EmitEventRequest) (uui
 		if req.Actor.Context != nil {
 			actorContextJSON, err = json.Marshal(req.Actor.Context)
 			if err != nil {
-				return uuid.Nil, fmt.Errorf("marshal actor context: %w", err)
+				return model.EmitEventOutcome{}, fmt.Errorf("marshal actor context: %w", err)
 			}
 		}
 	}
 
-	_, err = tx.ExecContext(ctx, `
+	var idempotencyArg sql.NullString
+	if req.IdempotencyKey != "" {
+		idempotencyArg = sql.NullString{String: req.IdempotencyKey, Valid: true}
+	}
+
+	// Try the insert. With idempotency_key set we want ON CONFLICT to be a
+	// non-error so we can detect dedup and return the original event_id.
+	// RETURNING is gated by `xmax = 0` so we only get a row back for a real
+	// insert (xmax != 0 means the row was already there). This avoids the
+	// extra round-trip a separate SELECT would cost on the dedup path
+	// when we DO want the original — we still SELECT in the dedup branch
+	// below, but the happy path stays single-statement.
+	var insertedID uuid.UUID
+	row := tx.QueryRowContext(ctx, `
 		INSERT INTO public.event_log (
 			event_id, type, schema_version, aggregate_type, aggregate_id,
-			actor_type, actor_id, actor_context, payload, metadata
+			actor_type, actor_id, actor_context, payload, metadata, idempotency_key
 		) VALUES (
-			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10
+			$1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11
 		)
-	`, eventID, req.Type, req.SchemaVersion, req.AggregateType, req.AggregateID,
-		actorType, actorID, nullableJSON(actorContextJSON), payloadJSON, nullableJSON(metadataJSON))
+		ON CONFLICT (type, idempotency_key) WHERE idempotency_key IS NOT NULL
+		DO NOTHING
+		RETURNING event_id
+	`, newEventID, req.Type, req.SchemaVersion, req.AggregateType, req.AggregateID,
+		actorType, actorID, nullableJSON(actorContextJSON), payloadJSON, nullableJSON(metadataJSON), idempotencyArg)
+	if err := row.Scan(&insertedID); err != nil {
+		if err != sql.ErrNoRows {
+			return model.EmitEventOutcome{}, fmt.Errorf("insert event_log: %w", err)
+		}
+		// Dedup branch: row already existed for (type, idempotency_key).
+		// Fetch the original event_id so the caller can return it to the
+		// adapter; skip materialisation (the original insert already fanned
+		// out, and re-running would violate iers_unique_per_event_instance).
+		var existingID uuid.UUID
+		if err := tx.QueryRowContext(ctx, `
+			SELECT event_id FROM public.event_log
+			WHERE type = $1 AND idempotency_key = $2
+		`, req.Type, req.IdempotencyKey).Scan(&existingID); err != nil {
+			return model.EmitEventOutcome{}, fmt.Errorf("lookup deduped event: %w", err)
+		}
+		return model.EmitEventOutcome{
+			EventID:               existingID,
+			MaterializedReactions: 0,
+			Deduped:               true,
+		}, nil
+	}
+
+	// Materialize reactions for canon lifecycle events and §6.5 mutation
+	// events. This runs in the SAME transaction so reactions and the event
+	// commit (or rollback) atomically. Events outside both sets are a no-op.
+	materialized, err := MaterializeReactions(ctx, tx, insertedID, req.Type)
 	if err != nil {
-		return uuid.Nil, fmt.Errorf("insert event_log: %w", err)
+		return model.EmitEventOutcome{}, fmt.Errorf("materialize reactions: %w", err)
 	}
 
-	// Materialize reactions for canon lifecycle events. This runs in the SAME
-	// transaction so reactions and the event commit (or rollback) atomically.
-	// Non-canon events (e.g., reactor.dead_lettered, manifest.created) are a no-op.
-	if err := MaterializeReactions(ctx, tx, eventID, req.Type); err != nil {
-		return uuid.Nil, fmt.Errorf("materialize reactions: %w", err)
-	}
-
-	return eventID, nil
+	return model.EmitEventOutcome{
+		EventID:               insertedID,
+		MaterializedReactions: materialized,
+		Deduped:               false,
+	}, nil
 }
 
 // PullEvents returns a batch of events starting from the given cursor, respecting
