@@ -73,8 +73,15 @@ func newWarningsTestServer(t *testing.T) (*Server, sqlmock.Sqlmock) {
 }
 
 // grafanaWarningsSpec is the manifest body the integration test POSTs.
-// Returns the JSON-encoded payload and the four non-conformant action
+// Returns the JSON-encoded payload and the non-conformant action
 // names expected to trip the validator.
+//
+// Note: list_identities was added to the allowlist in cycle 2026-05-27
+// as a compat alias of observe_identities (kept under the v0.5.x shim
+// window so the core re-sync cron does not break during cutover). The
+// fixture now uses delete_user as the second non-conformant entry —
+// canonical observe alias is destroy_user, a TRUE rename candidate
+// across multiple adapters in the residual table.
 func grafanaWarningsSpec(name string) (raw []byte, nonConformant []string) {
 	body := map[string]any{
 		"name":      name,
@@ -91,16 +98,16 @@ func grafanaWarningsSpec(name string) (raw []byte, nonConformant []string) {
 			"action_catalog": []map[string]any{
 				{"name": "ensure_folder", "category": "capability", "resource_types": []string{"user"}, "idempotent": true},
 				{"name": "create_user", "category": "capability", "resource_types": []string{"user"}, "idempotent": true},
-				{"name": "list_identities", "category": "capability", "resource_types": []string{"user"}, "idempotent": true},
+				{"name": "delete_user", "category": "capability", "resource_types": []string{"user"}, "idempotent": true},
 				{"name": "on_user_provisioned", "category": "reactor", "resource_types": []string{"user"}, "idempotent": true},
 			},
 			"discovery":     map[string]any{"mode": "push", "cursor": "none"},
 			"normalization": map[string]any{"external_id_path": "id", "fallback_resource_prefix": "thirdparty.grafana.custom"},
-			"execution":     map[string]any{"idempotent_actions": []string{"ensure_folder", "create_user", "list_identities"}},
+			"execution":     map[string]any{"idempotent_actions": []string{"ensure_folder", "create_user", "delete_user"}},
 		},
 	}
 	raw, _ = json.Marshal(body)
-	return raw, []string{"create_user", "list_identities"}
+	return raw, []string{"create_user", "delete_user"}
 }
 
 // TestHandleManifestCreate_IntegrationType_WarningsSurfaced is an
@@ -180,8 +187,8 @@ func TestHandleManifestCreate_IntegrationType_WarningsSurfaced(t *testing.T) {
 		if warn.Value == "create_user" && !strings.Contains(warn.Message, "ensure_user") {
 			t.Errorf("expected suggestion to mention ensure_user, got %q", warn.Message)
 		}
-		if warn.Value == "list_identities" && !strings.Contains(warn.Message, "observe_identities") {
-			t.Errorf("expected suggestion to mention observe_identities, got %q", warn.Message)
+		if warn.Value == "delete_user" && !strings.Contains(warn.Message, "destroy_user") {
+			t.Errorf("expected suggestion to mention destroy_user, got %q", warn.Message)
 		}
 	}
 
@@ -207,11 +214,16 @@ func TestHandleManifestCreate_IntegrationType_WarningsSurfaced(t *testing.T) {
 }
 
 // TestValidatorSmokeAgainstGrafana130 runs the validator against the
-// shipped Grafana v1.3.0 action_catalog (per spec §1.1 + §7 Tier B)
+// historical Grafana v1.3.0 action_catalog (per spec §1.1 + §7 Tier B)
 // and asserts the validator flags exactly the expected
 // non-conformances. This is the rollout's first real-world
-// regression test — the names below come straight from
-// integration-grafana's spec.go on the v1.3.0 tag.
+// regression test.
+//
+// Note (cycle 2026-05-27): list_identities is now allowlisted as a
+// compat alias of observe_identities (kept under the v0.5.x shim
+// window), so it no longer triggers a warning. The other three
+// non-conformant names remain residual rename candidates documented
+// in the post-sweep table.
 func TestValidatorSmokeAgainstGrafana130(t *testing.T) {
 	al := loadTestAllowlist(t)
 
@@ -226,7 +238,7 @@ func TestValidatorSmokeAgainstGrafana130(t *testing.T) {
 	}
 
 	warnings := manifestengine.ValidateActionCatalogNaming(grafanaCatalog, al)
-	wantValues := []string{"create_user", "update_user_role", "create_team", "list_identities"}
+	wantValues := []string{"create_user", "update_user_role", "create_team"}
 	if len(warnings) != len(wantValues) {
 		t.Fatalf("expected %d warnings (one per non-conformant), got %d (%v)", len(wantValues), len(warnings), warnings)
 	}
