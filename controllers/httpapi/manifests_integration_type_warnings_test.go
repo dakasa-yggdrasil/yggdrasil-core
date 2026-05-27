@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"database/sql/driver"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -25,6 +26,29 @@ func loadTestAllowlist(t *testing.T) *manifestengine.CapabilityNamingAllowlist {
 		t.Fatalf("load allowlist: %v", err)
 	}
 	return al
+}
+
+// capturingArg implements sqlmock's driver.Value matcher contract,
+// always matching but also copying the raw argument bytes into the
+// caller-owned dst so the test can verify the persisted shape after
+// the UPDATE has fired.
+type capturingArg struct {
+	dst *[]byte
+}
+
+// Match copies the inbound argument into dst when it is a byte slice
+// or a string, then always reports a match — the test layer asserts
+// on the captured bytes after handler return.
+func (c capturingArg) Match(v driver.Value) bool {
+	switch b := v.(type) {
+	case []byte:
+		buf := make([]byte, len(b))
+		copy(buf, b)
+		*c.dst = buf
+	case string:
+		*c.dst = []byte(b)
+	}
+	return true
 }
 
 // newWarningsTestServer wires the minimal mux + Server with sqlmock for
@@ -114,9 +138,11 @@ func TestHandleManifestCreate_IntegrationType_WarningsSurfaced(t *testing.T) {
 		))
 	mock.ExpectCommit()
 
-	// 4. Warnings persist UPDATE — argument capture lets us verify shape.
+	// 4. Warnings persist UPDATE — argument capture lets us verify the
+	// shape of the metadata JSONB blob that lands in the manifests row.
+	var persistedMetadata []byte
 	mock.ExpectExec(`UPDATE public\.manifests SET metadata = \$1::jsonb WHERE id = \$2`).
-		WithArgs(sqlmock.AnyArg(), manifestID).
+		WithArgs(capturingArg{dst: &persistedMetadata}, manifestID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/manifests?kind=integration_type", bytes.NewReader(rawBody))
@@ -160,5 +186,21 @@ func TestHandleManifestCreate_IntegrationType_WarningsSurfaced(t *testing.T) {
 
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Errorf("unmet sqlmock expectations: %v", err)
+	}
+
+	// Persistence assertion (Task 17): the warnings must reach the
+	// manifests.metadata column so the console can render a conformance
+	// badge without re-running the validator on every page load.
+	if len(persistedMetadata) == 0 {
+		t.Fatalf("expected metadata JSON to be persisted, got empty bytes")
+	}
+	var stored struct {
+		Warnings []manifestengine.Warning `json:"warnings"`
+	}
+	if err := json.Unmarshal(persistedMetadata, &stored); err != nil {
+		t.Fatalf("parse persisted metadata: %v (raw=%s)", err, string(persistedMetadata))
+	}
+	if len(stored.Warnings) != len(wantValues) {
+		t.Fatalf("expected %d warnings persisted, got %d (raw=%s)", len(wantValues), len(stored.Warnings), string(persistedMetadata))
 	}
 }
