@@ -14,6 +14,7 @@ import (
 	"github.com/google/uuid"
 
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 )
 
 // loadTestAllowlist returns the seeded allowlist from the repo's
@@ -202,5 +203,40 @@ func TestHandleManifestCreate_IntegrationType_WarningsSurfaced(t *testing.T) {
 	}
 	if len(stored.Warnings) != len(wantValues) {
 		t.Fatalf("expected %d warnings persisted, got %d (raw=%s)", len(wantValues), len(stored.Warnings), string(persistedMetadata))
+	}
+}
+
+// TestValidatorSmokeAgainstGrafana130 runs the validator against the
+// shipped Grafana v1.3.0 action_catalog (per spec §1.1 + §7 Tier B)
+// and asserts the validator flags exactly the expected
+// non-conformances. This is the rollout's first real-world
+// regression test — the names below come straight from
+// integration-grafana's spec.go on the v1.3.0 tag.
+func TestValidatorSmokeAgainstGrafana130(t *testing.T) {
+	al := loadTestAllowlist(t)
+
+	// The exact list from spec §1.1 + §7 Tier B Grafana table.
+	grafanaCatalog := []model.IntegrationActionDefinition{
+		{Name: "ensure_folder", Category: "capability"},
+		{Name: "create_user", Category: "capability"},
+		{Name: "update_user_role", Category: "capability"},
+		{Name: "create_team", Category: "capability"},
+		{Name: "list_identities", Category: "capability"},
+		{Name: "observe_datasource_health", Category: "capability"},
+	}
+
+	warnings := manifestengine.ValidateActionCatalogNaming(grafanaCatalog, al)
+	wantValues := []string{"create_user", "update_user_role", "create_team", "list_identities"}
+	if len(warnings) != len(wantValues) {
+		t.Fatalf("expected %d warnings (one per non-conformant), got %d (%v)", len(wantValues), len(warnings), warnings)
+	}
+	gotValues := map[string]bool{}
+	for _, w := range warnings {
+		gotValues[w.Value] = true
+	}
+	for _, want := range wantValues {
+		if !gotValues[want] {
+			t.Errorf("expected warning for %q in Grafana smoke, got %v", want, gotValues)
+		}
 	}
 }
