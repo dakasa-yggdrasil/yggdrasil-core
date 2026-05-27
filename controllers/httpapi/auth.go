@@ -813,15 +813,28 @@ func authSessionCookieDomain() string {
 	return strings.TrimSpace(os.Getenv("AUTH_SESSION_COOKIE_DOMAIN"))
 }
 
+// authSessionCookieSecure resolves the Secure flag for the session cookie.
+//
+// SECURITY (audit 2026-05-27 A3): the default MUST be `true`. yggdrasil
+// is deployed behind TLS in every production tenant (yggdrasil.dakasa.me
+// + ingress termination), so the session cookie should never traverse
+// plaintext. The previous default-false meant that a misconfigured
+// deployment (empty env var) would silently emit cookies usable over
+// HTTP — exactly what an attacker on a coffee-shop WiFi can exploit.
+//
+// Local-dev escape hatch: set AUTH_SESSION_COOKIE_SECURE=false explicitly
+// when running yggdrasil-core on plain HTTP (e.g. docker-compose without
+// TLS termination). Any other value — including an unparseable garbage
+// string — falls back to the secure default (fail-closed).
 func authSessionCookieSecure() bool {
 	value := strings.TrimSpace(os.Getenv("AUTH_SESSION_COOKIE_SECURE"))
 	if value == "" {
-		return false
+		return true
 	}
 
 	parsed, err := strconv.ParseBool(value)
 	if err != nil {
-		return false
+		return true
 	}
 	return parsed
 }
