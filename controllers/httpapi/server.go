@@ -583,6 +583,20 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 			return
 		}
 
+		// Workflow-run token path: CLI tools, adapter callers and
+		// workflow steps authenticate with a shared static token. Accept
+		// it as an alternative to the session cookie so the audit-flagged
+		// leaking GETs (security audit 2026-05-27 A2) can still be
+		// consumed by automation that doesn't carry a session.
+		if authorizeWorkflowRunRequest(r) == nil {
+			if strings.TrimSpace(os.Getenv("YGGDRASIL_WORKFLOW_RUN_TOKEN")) != "" {
+				// Token was present AND matched — treat as authenticated
+				// without attaching collaborator claims (no human actor).
+				next.ServeHTTP(w, r)
+				return
+			}
+		}
+
 		token, ok := extractAuthToken(r)
 		if !ok {
 			writeJSONError(w, http.StatusUnauthorized, "unauthenticated")
@@ -609,13 +623,57 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 	})
 }
 
+// requiresAuthenticatedConsoleAPI returns true when the path must be gated
+// by either a console session OR a workflow-run token. The list was
+// expanded by the 2026-05-27 security audit (A2) to cover endpoints that
+// previously leaked internal infra config to anonymous callers — secrets
+// catalog, integration topology, permission catalog/bindings, workflow
+// catalog, manifests, surfaces, products, audit log.
+//
+// Public allowlist (no auth required): health endpoints, OIDC discovery,
+// password/login/MFA flows, tenant brand, /api/v1/auth/* — covered by
+// the simple negative check at the call site (path not in this prefix
+// list → public).
 func requiresAuthenticatedConsoleAPI(path string) bool {
 	for _, prefix := range []string{
+		// Original gated prefixes (console UI surface).
 		"/api/v1/ops",
 		"/api/v1/console",
 		"/api/v1/collaborators",
 		"/api/v1/teams",
 		"/api/v1/team-memberships",
+		// 2026-05-27 audit A2 expansion — endpoints leaking infra data.
+		"/api/v1/secrets",
+		"/api/v1/permissions",
+		"/api/v1/workflows",
+		"/api/v1/workflow-runs",
+		"/api/v1/workflow-templates",
+		"/api/v1/manifests",
+		"/api/v1/integration-instances",
+		"/api/v1/integration-runtime-states",
+		"/api/v1/integration-catalog",
+		"/api/v1/integration-types",
+		"/api/v1/integration-surfaces",
+		"/api/v1/integrations",
+		"/api/v1/repository-bindings",
+		"/api/v1/guardian-policies",
+		"/api/v1/guardian-approvals",
+		"/api/v1/guardian-memories",
+		"/api/v1/remediation-bundles",
+		"/api/v1/remediation-contracts",
+		"/api/v1/surfaces",
+		"/api/v1/products",
+		"/api/v1/audit",
+		"/api/v1/reconciler",
+		"/api/v1/catalog",
+		"/api/v1/collaborator-external-identities",
+		"/api/v1/me",
+		// Note: /api/v1/invites NOT gated here — handleInviteValidate
+		// is intentionally public (validates from email), and
+		// handleInviteCreate/List self-gate via extractAuthToken.
+		"/api/v1/events",
+		"/api/v1/provision",
+		"/api/v1/bootstrap",
 	} {
 		if path == prefix || strings.HasPrefix(path, prefix+"/") {
 			return true
