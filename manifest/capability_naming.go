@@ -7,6 +7,8 @@ import (
 	"strings"
 
 	"gopkg.in/yaml.v3"
+
+	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 )
 
 // capabilityNamePattern is the canonical convention regex from
@@ -157,4 +159,26 @@ func suggestCanonicalName(name string) string {
 		return "destroy_" + strings.TrimPrefix(name, "cancel_")
 	}
 	return ""
+}
+
+// ValidateActionCatalogNaming scans every entry of catalog and
+// returns an aggregated warnings slice with the per-entry index
+// already encoded into Field (spec.action_catalog[i].name).
+//
+// Phase 1 callers (handleManifestCreate for kind=integration_type)
+// invoke this after the existing ValidateIntegrationTypeSpec returns
+// nil — the regex check NEVER blocks registration in this phase.
+func ValidateActionCatalogNaming(
+	catalog []model.IntegrationActionDefinition,
+	allowlist *CapabilityNamingAllowlist,
+) []Warning {
+	out := make([]Warning, 0)
+	for i, action := range catalog {
+		warns := ValidateCapabilityName(action.Name, action.Category, allowlist)
+		for _, w := range warns {
+			w.Field = fmt.Sprintf("spec.action_catalog[%d].name", i)
+			out = append(out, w)
+		}
+	}
+	return out
 }

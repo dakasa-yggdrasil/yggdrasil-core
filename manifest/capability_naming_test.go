@@ -4,6 +4,8 @@ import (
 	"path/filepath"
 	"strings"
 	"testing"
+
+	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 )
 
 func TestLoadCapabilityNamingAllowlist_Exact(t *testing.T) {
@@ -103,5 +105,27 @@ func TestValidateCapabilityName_ReactorCategoryExempt(t *testing.T) {
 	warnings := ValidateCapabilityName("totally_made_up_name", "reactor", al)
 	if len(warnings) != 0 {
 		t.Errorf("expected reactor category to be exempt, got warnings %v", warnings)
+	}
+}
+
+func TestValidateActionCatalogNaming_AggregatesWarnings(t *testing.T) {
+	al, _ := LoadCapabilityNamingAllowlist(filepath.Join("..", "config", "capability_naming_allowlist.yaml"))
+	catalog := []model.IntegrationActionDefinition{
+		{Name: "ensure_user", Category: "capability"},
+		{Name: "create_user", Category: "capability"},        // → warning, suggest ensure_user
+		{Name: "list_identities", Category: "capability"},    // → warning, suggest observe_identities
+		{Name: "on_member_joined_channel", Category: "reactor"},
+		{Name: "verify_webhook_signature", Category: "capability"}, // allowlisted
+	}
+
+	warnings := ValidateActionCatalogNaming(catalog, al)
+	if len(warnings) != 2 {
+		t.Fatalf("expected 2 warnings, got %d (%v)", len(warnings), warnings)
+	}
+	if warnings[0].Field != "spec.action_catalog[1].name" || warnings[0].Value != "create_user" {
+		t.Errorf("warning[0] wrong: %+v", warnings[0])
+	}
+	if warnings[1].Field != "spec.action_catalog[2].name" || warnings[1].Value != "list_identities" {
+		t.Errorf("warning[1] wrong: %+v", warnings[1])
 	}
 }
