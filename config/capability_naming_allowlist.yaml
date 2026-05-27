@@ -1,0 +1,64 @@
+# config/capability_naming_allowlist.yaml
+#
+# Capability names that are intentionally exempt from the universal
+# naming convention regex ^(ensure|observe|destroy|discover|on)_.
+# Source of truth: docs/superpowers/specs/2026-05-27-yggdrasil-integration-capability-convention.md §5.1
+#
+# Adding to this file requires a PR with a comment explaining why
+# the op is action-shaped rather than resource-shaped (Section 3
+# heuristic). Entries are exact match unless they end with `*`,
+# in which case the prefix matches.
+
+exact:
+  # Pure-function helpers
+  - verify_webhook_signature
+  - verify_signature
+  - send_email
+  - send_sms
+  - dispatch_workflow
+  - merge_pull_request
+  - trigger_workflow
+  - approve_deployment
+  - close_issue
+  - reopen_issue
+
+  # RabbitMQ topology — pre-convention but Crossplane-shaped
+  - apply_topology_spec
+  - describe_topology
+  - purge_queue
+  - publish_message
+  - delete_queue
+
+  # Kubernetes
+  - apply_manifest
+
+  # AWS one-shot actions and ops deferred to v2.0.0
+  - start_instance_refresh
+  - s3_put_object
+  - get_ecr_authorization_token
+  - set_ecr_lifecycle_policy
+  - upsert_secrets_manager_secret
+  - restore_secret
+
+  # Reactors not using on_* prefix (historical, category=reactor exempts at code path)
+  - on_surface_query
+  - efi_webhook_received
+  - stripe_webhook_received
+  - nfse_webhook_received
+
+  # Financial money-movement actions (irreversible, not resource-shaped)
+  - handle_chargeback
+  - refund_charge
+  - create_payout
+  - create_refund
+
+  # EFI ops kept while v2.0.0 deferred (historical, will be renamed)
+  - get_charge_status
+  - get_statement
+
+prefix:
+  # Math helpers: calculate_iss, calculate_pis, calculate_cofins, …
+  - calculate_
+
+  # AWS Identity Center — bulk rename deferred to a separate v2.0.0
+  - identity_center_
