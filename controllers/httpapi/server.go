@@ -2354,6 +2354,18 @@ func (s *Server) handleManifestList(w http.ResponseWriter, r *http.Request, kind
 }
 
 func (s *Server) handleManifestCreate(w http.ResponseWriter, r *http.Request, kind string) {
+	// Auth gate (security audit 2026-05-27 A1 fix): manifest writes are
+	// administrative operations that bypass console permission grants.
+	// We accept either YGGDRASIL_WORKFLOW_RUN_TOKEN (workflow/admin caller)
+	// or a valid console session (a human operator already authenticated
+	// by the requireAuthenticatedConsoleAPIs middleware whose claims live
+	// in the request context). Without one, the call is anonymous and
+	// MUST be refused.
+	if !s.manifestWriteAuthorized(r) {
+		writeMappedError(w, errWorkflowRunUnauthorized)
+		return
+	}
+
 	var payload consoleCreateManifestRequest
 	if err := decodeJSON(r, &payload); err != nil {
 		writeMappedError(w, err)

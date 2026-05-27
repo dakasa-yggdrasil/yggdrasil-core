@@ -33,8 +33,11 @@ import (
 // audit row keyed on action=manifest.delete so operators can replay
 // what was removed and by whom from the audit_log table.
 func (s *Server) handleManifestDelete(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeWorkflowRunRequest(r); err != nil {
-		writeMappedError(w, err)
+	// Auth gate: accept either YGGDRASIL_WORKFLOW_RUN_TOKEN (workflow caller)
+	// or a valid console session — matches the POST /api/v1/manifests
+	// auth posture (security audit 2026-05-27 A1).
+	if !s.manifestWriteAuthorized(r) {
+		writeMappedError(w, errWorkflowRunUnauthorized)
 		return
 	}
 

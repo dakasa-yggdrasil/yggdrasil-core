@@ -260,6 +260,33 @@ func authorizeWorkflowRunRequest(r *http.Request) error {
 	return errWorkflowRunUnauthorized
 }
 
+// manifestWriteAuthorized centralises the auth gate for manifest writes
+// (POST /api/v1/manifests, DELETE /api/v1/manifests/{id}, and every
+// kind-specific wrapper that funnels through handleManifestCreate).
+//
+// Accepts:
+//   - YGGDRASIL_WORKFLOW_RUN_TOKEN (workflow/admin caller) via the
+//     X-Yggdrasil-Workflow-Token header or Authorization: Bearer.
+//   - A valid console session whose claims are already attached to the
+//     context by the requiresAuthenticatedConsoleAPIs middleware.
+//   - When YGGDRASIL_WORKFLOW_RUN_TOKEN is unset (dev/test), it stays
+//     open — same convention as authorizeWorkflowRunRequest. Production
+//     deploys MUST set the env var (verified by the security audit
+//     reference_yggdrasil_dakasa_me_deep_audit_2026_05_27.md).
+//
+// Returns true when the caller is authorized; the handler should refuse
+// the request when this returns false.
+func (s *Server) manifestWriteAuthorized(r *http.Request) bool {
+	// Console session path: middleware already validated the cookie and
+	// attached claims. Trust it.
+	if _, ok := claimsFromContext(r.Context()); ok {
+		return true
+	}
+	// Token path (shared env var) — also stays open when the env var is
+	// unset to preserve the dev/test contract.
+	return authorizeWorkflowRunRequest(r) == nil
+}
+
 func bearerToken(value string) string {
 	value = strings.TrimSpace(value)
 	if value == "" {
