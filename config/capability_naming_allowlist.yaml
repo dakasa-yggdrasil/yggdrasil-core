@@ -3,16 +3,24 @@
 # Capability names that are intentionally exempt from the universal
 # naming convention regex ^(ensure|observe|destroy|discover|on)_.
 # Source of truth: docs/superpowers/specs/2026-05-27-yggdrasil-integration-capability-convention.md §5.1
+# Heuristic: INTEGRATION_CONTRACT.md §6 (Resource vs Action vs Reactor vs Helper).
 #
 # Adding to this file requires a PR with a comment explaining why
 # the op is action-shaped rather than resource-shaped (Section 3
 # heuristic). Entries are exact match unless they end with `*`,
 # in which case the prefix matches.
+#
+# Categories `reactor` and `permission` are auto-exempt by the validator
+# (capability_naming.go Allowed()): reactors are event-driven framework
+# hooks; permissions are RBAC declarations co-located in action_catalog
+# (not actually-callable capabilities). See category list at the bottom.
 
 exact:
-  # Pure-function helpers
+  # ---- Pure-function helpers (no provider call, no side effect) ----
   - verify_webhook_signature
   - verify_signature
+
+  # ---- Pre-existing allowlist (preserved) ----
   - send_email
   - send_sms
   - dispatch_workflow
@@ -56,9 +64,170 @@ exact:
   - get_charge_status
   - get_statement
 
+  # ============================================================
+  # NEW 2026-05-27 sweep (cycle): legitimate action/helper exemptions
+  # ============================================================
+
+  # ---- ai-runtime: pure inference actions (no resource) ----
+  - chat_completion
+  - embed_text
+  - transcribe_audio
+
+  # ---- aws: action-shaped reads / decision helpers / one-shot writes ----
+  # cost-explorer + ECR read helpers
+  - cost_explorer_recommendations
+  - list_ecr_images
+  - list_ebs_snapshots_orphans
+  - list_rds_snapshots_orphans
+  - release_elastic_ip
+
+  # ---- database-admin-postgres: SQL action helpers ----
+  - alter_user_password
+  - drop_user
+  - grant_privileges
+  - execute_sql
+  - select_rows
+
+  # ---- gcp: build/deploy orchestration helpers ----
+  - build_project
+  - build_and_deploy_entity
+  - deploy_entity
+
+  # ---- github: action-shaped capabilities ----
+  - catalog_discover
+  - grant_team_repository_access
+  - classify_workflow_failure
+  - read_file_from_repo
+  - put_file_contents
+  - invite_user_to_org_by_email
+  - cancel_org_invitation_by_email
+  - configure_saml_sso
+  - enforce_saml_sso
+  - sync_enterprise_organization_installations
+  - disable_pr_auto_assign
+  - enable_pr_auto_assign
+
+  # ---- google-workspace: action / membership helpers ----
+  - assign_saml_sso
+  - provision_mailbox
+  - assign_groups
+  - create_calendar_invite
+  - list_user_groups
+
+  # ---- grafana: config action helpers (also covered by configure_saml_sso above) ----
+  - test_saml_login
+  - deactivate_user
+  - add_user_to_team
+  - remove_user_from_team
+
+  # ---- heimdall: pure compute / audit-log helpers ----
+  - assess_ecosystem
+  - recommend_improvements
+  - triage_critical_error
+  - auto_remediate_critical
+  - optimize_cost
+  - recommend_pod_affinity
+  - synthesize_remediation_workflow
+  - record_guardian_memory
+  - query_guardian_memory
+  - compute_action_confidence
+  - evaluate_safety_gates
+  - kill_switch_check
+  - rollback_synthesized_workflow
+  - propose_code_fix
+  - enrich_snapshot_with_logs
+  - recommend_notification_target
+  - compute_finops_priority
+
+  # ---- kubernetes: action helpers / observations on existing objects ----
+  - declarative_apply
+  - wait_until_rollout_complete
+  - validate_pdb_present
+  - cross_reference_pvcs_to_pods
+  - mark_pod_spot_eligible
+  - patch_configmap
+
+  # ---- loki: log query helpers (no resource state) ----
+  - query_logs
+  - tail_recent_logs
+  - find_log_anomalies
+  - top_n_streams_by_cardinality
+
+  # ---- nfeio: action-shaped per CHANGELOG (file URLs + bulk + template-mgmt) ----
+  - retrieve_pdf
+  - retrieve_xml
+  - manage_template
+  - bulk_issue
+
+  # ---- prometheus: pure query/eval helpers (no resource) ----
+  - scrape_metrics_endpoint
+  - query_metric_value
+  - evaluate_metric_threshold
+  - promql_query
+  - promql_threshold_check
+
+  # ---- schema-migrations-goose-postgres: migration apply/rollback helpers ----
+  - apply_migrations_spec
+  - rollback_migration
+
+  # ---- secrets-management (aws + gcp): rotation/read actions (value-bearing) ----
+  - rotate_secret
+  - read_secret
+
+  # ---- slack: user state / messaging actions ----
+  - apply_user
+  - invite_to_workspace
+  - post_message
+  - read_user
+  - scim_apply_user
+  - set_custom_profile_fields
+  - set_presence
+  - set_user_status
+  - register_saml_sp
+
+  # ---- stripe: per CHANGELOG action-shaped ----
+  - create_setup_intent
+  - manage_connect_account
+
+  # ---- yggdrasil-self: dispatch / read / control actions ----
+  - dispatch_workflow_run
+  - post_slack_message
+  - read_runtime_states
+  - suspend_collaborator
+
+  # ---- Compat alias for observe_identities (deprecated; kept under v0.5.x
+  #      shim window so the core re-sync cron does not break during cutover).
+  #      Used by database-admin-postgres, github, google-workspace,
+  #      secrets-management-aws-secrets-manager. ----
+  - list_identities
+
+  # ---- Installation render helpers (ai-runtime, grafana-kubernetes,
+  #      rabbitmq-kubernetes, manifest-sources-kustomize) ----
+  - generate_installation
+  - reconcile_installation
+
 prefix:
   # Math helpers: calculate_iss, calculate_pis, calculate_cofins, …
   - calculate_
 
   # AWS Identity Center — bulk rename deferred to a separate v2.0.0
   - identity_center_
+
+  # ---- NEW 2026-05-27 sweep prefix expansions ----
+
+  # AWS audit_*: decision-only read helpers that surface candidates for
+  # operator review (e.g. audit_kms_keys_unused, audit_security_groups_orphan).
+  # Not strictly observe_<resource_type> shape because they carry policy
+  # semantics (filter by age/utilization/encryption status). Action-shaped reads.
+  - audit_
+
+  # AWS apply_* + schema-migrations apply_* + slack apply_user:
+  # one-shot config writes that don't create resources with stable IDs
+  # (e.g. apply_iam_password_policy sets an account-wide setting).
+  # apply_topology_spec / apply_manifest already listed above as exact —
+  # this prefix subsumes them. Action-shaped writes.
+  - apply_
+
+  # github scim_*: SCIM domain-bound user-lifecycle ops (RFC 7644).
+  # SCIM has its own naming conventions; treat as action helpers.
+  - scim_
