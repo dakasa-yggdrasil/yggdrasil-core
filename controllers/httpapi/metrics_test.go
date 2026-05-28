@@ -43,6 +43,8 @@ func TestHandleMetricsReturnsPrometheusFormat(t *testing.T) {
 		"yggdrasil_auth_mfa_verify_total",
 		"yggdrasil_auth_sessions_created_total",
 		"yggdrasil_auth_sessions_revoked_total",
+		// Phase-4 CSRF rejection family (audit ref A7).
+		"yggdrasil_csrf_rejected_total",
 		"# TYPE",
 		"# HELP",
 	} {
@@ -116,5 +118,34 @@ func TestHandleMetrics_HeimdallGaugeRender(t *testing.T) {
 	body := w.Body.String()
 	if !strings.Contains(body, `yggdrasil_heimdall_flagged_count{pulse="heimdall-ci-pulse"} 7`) {
 		t.Fatalf("missing heimdall gauge sample in body:\n%s", body)
+	}
+}
+
+// TestHandleMetrics_CSRFCountersRender exercises the (outcome, mode) label
+// pairs the audit 2026-05-27 A7 family emits: 2 outcomes × 2 modes = 4
+// stable lines, even before any rejections have happened. After bumping
+// warn|missing_token by 3 and enforce|token_mismatch by 1 the rendered
+// body must reflect those exact numbers.
+func TestHandleMetrics_CSRFCountersRender(t *testing.T) {
+	metrics.ResetForTest()
+	metrics.IncCSRFRejected(metrics.CSRFRejectedMissingToken, metrics.CSRFModeWarn)
+	metrics.IncCSRFRejected(metrics.CSRFRejectedMissingToken, metrics.CSRFModeWarn)
+	metrics.IncCSRFRejected(metrics.CSRFRejectedMissingToken, metrics.CSRFModeWarn)
+	metrics.IncCSRFRejected(metrics.CSRFRejectedTokenMismatch, metrics.CSRFModeEnforce)
+
+	server := &Server{logger: zap.NewNop()}
+	w := httptest.NewRecorder()
+	server.handleMetrics(w, httptest.NewRequest("GET", "/metrics", nil))
+
+	body := w.Body.String()
+	for _, expected := range []string{
+		`yggdrasil_csrf_rejected_total{outcome="missing_token",mode="warn"} 3`,
+		`yggdrasil_csrf_rejected_total{outcome="missing_token",mode="enforce"} 0`,
+		`yggdrasil_csrf_rejected_total{outcome="token_mismatch",mode="warn"} 0`,
+		`yggdrasil_csrf_rejected_total{outcome="token_mismatch",mode="enforce"} 1`,
+	} {
+		if !strings.Contains(body, expected) {
+			t.Errorf("expected %q in body:\n%s", expected, body)
+		}
 	}
 }

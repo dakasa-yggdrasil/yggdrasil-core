@@ -608,7 +608,16 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		mux.Handle(prefix+"/", server.consoleHandler)
 	}
 
-	return server.withLogging(server.requireAuthenticatedConsoleAPIs(mux)), nil
+	// Pipeline (outermost → innermost):
+	//   withLogging          — access log
+	//   requireAuthenticatedConsoleAPIs — session/bearer resolution
+	//   csrfMiddleware       — X-CSRF-Token enforcement on mutating routes
+	//   mux                  — route dispatch
+	//
+	// CSRF runs AFTER session resolution so it sees claims; it runs
+	// BEFORE route dispatch so handlers never need to think about it.
+	// Audit 2026-05-27 A7.
+	return server.withLogging(server.requireAuthenticatedConsoleAPIs(server.csrfMiddleware(mux))), nil
 }
 
 func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler {

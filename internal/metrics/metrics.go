@@ -128,6 +128,17 @@ var (
 	// (logout, admin revoke, password rotation, offboard).
 	authSessionsCreatedTotal atomic.Uint64
 	authSessionsRevokedTotal atomic.Uint64
+
+	// CSRF rejection counters. Two outcome buckets (missing_token,
+	// token_mismatch) × two mode buckets (warn, enforce). Operators
+	// chart `rate(yggdrasil_csrf_rejected_total{mode="warn"}[5m])` to
+	// pace the FE rollout (warn-mode bumps converge to zero as
+	// surface-console adopts the header) and to confirm the flip to
+	// enforce mode doesn't 403-storm legitimate traffic.
+	//
+	// Audit ref: A7 (no CSRF token for state-changing endpoints).
+	csrfRejectedMu    sync.RWMutex
+	csrfRejectedCount = map[string]uint64{}
 )
 
 // IncReactorEvaluation bumps the evaluation counter for the given outcome.
@@ -392,6 +403,57 @@ func AuthSessionsCreatedTotalSnapshot() uint64 { return authSessionsCreatedTotal
 // AuthSessionsRevokedTotalSnapshot returns the cumulative session-revoked counter.
 func AuthSessionsRevokedTotalSnapshot() uint64 { return authSessionsRevokedTotal.Load() }
 
+// CSRF rejection outcomes. Closed set so the Prometheus label cardinality
+// stays bounded at 4 (2 outcomes × 2 modes).
+const (
+	CSRFRejectedMissingToken  = "missing_token"
+	CSRFRejectedTokenMismatch = "token_mismatch"
+	CSRFModeWarn              = "warn"
+	CSRFModeEnforce           = "enforce"
+)
+
+// IncCSRFRejected bumps the CSRF rejection counter for (outcome, mode).
+// Both labels are closed-set; unknown combinations are no-ops to keep
+// cardinality bounded.
+//
+// outcome ∈ {missing_token, token_mismatch}
+// mode    ∈ {warn, enforce}
+func IncCSRFRejected(outcome, mode string) {
+	if outcome != CSRFRejectedMissingToken && outcome != CSRFRejectedTokenMismatch {
+		return
+	}
+	if mode != CSRFModeWarn && mode != CSRFModeEnforce {
+		return
+	}
+	key := outcome + "|" + mode
+	csrfRejectedMu.Lock()
+	defer csrfRejectedMu.Unlock()
+	csrfRejectedCount[key]++
+}
+
+// CSRFRejectedSnapshot returns the counter values keyed by "outcome|mode".
+// Deterministic ordering not required here (the /metrics renderer sorts).
+func CSRFRejectedSnapshot() map[string]uint64 {
+	csrfRejectedMu.RLock()
+	defer csrfRejectedMu.RUnlock()
+	out := make(map[string]uint64, len(csrfRejectedCount))
+	for k, v := range csrfRejectedCount {
+		out[k] = v
+	}
+	// Ensure every closed-set key is present, so /metrics emits a stable
+	// 4-line family even before any rejections happen — operators can
+	// build dashboards without "no datapoints" gaps.
+	for _, outcome := range []string{CSRFRejectedMissingToken, CSRFRejectedTokenMismatch} {
+		for _, mode := range []string{CSRFModeWarn, CSRFModeEnforce} {
+			k := outcome + "|" + mode
+			if _, ok := out[k]; !ok {
+				out[k] = 0
+			}
+		}
+	}
+	return out
+}
+
 // ResetForTest clears all counters/gauges.  Test-only — not exposed in
 // the production /metrics surface.
 func ResetForTest() {
@@ -422,4 +484,7 @@ func ResetForTest() {
 	authMFAVerifyFailedWebAuthn.Store(0)
 	authSessionsCreatedTotal.Store(0)
 	authSessionsRevokedTotal.Store(0)
+	csrfRejectedMu.Lock()
+	csrfRejectedCount = map[string]uint64{}
+	csrfRejectedMu.Unlock()
 }

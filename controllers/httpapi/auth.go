@@ -275,6 +275,10 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeAuthCookie(w, token, session.ExpiresAt)
+	// §A7: companion CSRF cookie. Frontend reads it (non-HttpOnly) or the
+	// /auth/session envelope's csrf_token field to populate its
+	// X-CSRF-Token header on subsequent mutations.
+	writeCSRFCookie(w, computeCSRFToken(session.ID), session.ExpiresAt)
 	writeJSON(w, http.StatusOK, resp)
 }
 
@@ -313,6 +317,7 @@ func (s *Server) handleAuthThirdPartyLogin(w http.ResponseWriter, r *http.Reques
 	}
 
 	writeAuthCookie(w, token, session.ExpiresAt)
+	writeCSRFCookie(w, computeCSRFToken(session.ID), session.ExpiresAt)
 	writeJSON(w, http.StatusOK, authThirdPartyLoginResponse{
 		Collaborator: collaborator,
 		Identity:     identity,
@@ -453,6 +458,7 @@ func (s *Server) handleAuthThirdPartyCallback(w http.ResponseWriter, r *http.Req
 
 	clearThirdPartyStateCookie(w)
 	writeAuthCookie(w, token, session.ExpiresAt)
+	writeCSRFCookie(w, computeCSRFToken(session.ID), session.ExpiresAt)
 
 	// If this third-party login was kicked off by the OIDC OP's "login
 	// required" signal, finish the OIDC flow instead of bouncing the user
@@ -501,6 +507,7 @@ func (s *Server) handleAuthSession(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if isAuthUnauthorizedError(err) {
 			clearAuthCookie(w)
+			clearCSRFCookie(w)
 			writeJSON(w, http.StatusUnauthorized, model.AuthSessionEnvelope{Authenticated: false})
 			return
 		}
@@ -531,12 +538,20 @@ func (s *Server) handleAuthSession(w http.ResponseWriter, r *http.Request) {
 		permissions = []string{}
 	}
 
+	// §A7: emit the per-session CSRF token so the SPA can mirror it in the
+	// X-CSRF-Token request header. Also (re)write the cookie so a browser
+	// that lost the cookie (cleared by user / extension) gets it back on
+	// the first /auth/session call.
+	csrfToken := computeCSRFToken(session.ID)
+	writeCSRFCookie(w, csrfToken, session.ExpiresAt)
+
 	writeJSON(w, http.StatusOK, model.AuthSessionEnvelope{
 		Authenticated: true,
 		Collaborator:  &collaborator,
 		Session:       &session,
 		MFAEnrolledAt: mfaEnrolledAt,
 		Permissions:   permissions,
+		CSRFToken:     csrfToken,
 	})
 }
 
@@ -544,6 +559,7 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	token, ok := extractAuthToken(r)
 	if !ok {
 		clearAuthCookie(w)
+		clearCSRFCookie(w)
 		writeJSON(w, http.StatusOK, model.AuthSessionEnvelope{Authenticated: false})
 		return
 	}
@@ -552,6 +568,7 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		if isAuthUnauthorizedError(err) {
 			clearAuthCookie(w)
+			clearCSRFCookie(w)
 			writeJSON(w, http.StatusOK, model.AuthSessionEnvelope{Authenticated: false})
 			return
 		}
@@ -580,6 +597,7 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 	s.dispatchBackchannelLogoutForSession(r.Context(), session.ID)
 
 	clearAuthCookie(w)
+	clearCSRFCookie(w)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"authenticated": false,
 		"session":       session,

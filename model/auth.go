@@ -65,6 +65,15 @@ type AuthSessionEnvelope struct {
 	Session       *AuthSession  `json:"session,omitempty"`
 	MFAEnrolledAt *time.Time    `json:"mfa_enrolled_at,omitempty"`
 	Permissions   []string      `json:"permissions,omitempty"`
+	// CSRFToken is the per-session CSRF token derived deterministically
+	// from session.id + a server-side HMAC secret (audit 2026-05-27 A7).
+	// Frontend mirrors this value in the X-CSRF-Token request header on
+	// every state-changing request (POST/PUT/DELETE/PATCH). The middleware
+	// recomputes the HMAC server-side and rejects mismatches — defense in
+	// depth on top of SameSite=Strict (A6).
+	//
+	// Emitted only when Authenticated=true.
+	CSRFToken string `json:"csrf_token,omitempty"`
 }
 
 // UpsertPasswordCredentialRequest configures one local password for an existing collaborator.

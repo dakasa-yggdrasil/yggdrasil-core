@@ -247,4 +247,18 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	fmt.Fprintf(w, "# HELP yggdrasil_auth_sessions_revoked_total Total auth sessions revoked (logout + admin + password rotation + offboard)\n")
 	fmt.Fprintf(w, "# TYPE yggdrasil_auth_sessions_revoked_total counter\n")
 	fmt.Fprintf(w, "yggdrasil_auth_sessions_revoked_total %d\n", metrics.AuthSessionsRevokedTotalSnapshot())
+
+	// CSRF rejection counter, faceted by (outcome, mode). The mode label
+	// lets dashboards separate "would-have-failed in warn-mode" (training
+	// signal for the FE rollout) from "actually 403'd in enforce-mode"
+	// (real attack or surface drift). Stays at zero on a happy cluster.
+	csrfSnap := metrics.CSRFRejectedSnapshot()
+	fmt.Fprintf(w, "# HELP yggdrasil_csrf_rejected_total Total CSRF token validations that failed (audit 2026-05-27 A7)\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_csrf_rejected_total counter\n")
+	for _, outcome := range []string{metrics.CSRFRejectedMissingToken, metrics.CSRFRejectedTokenMismatch} {
+		for _, mode := range []string{metrics.CSRFModeWarn, metrics.CSRFModeEnforce} {
+			fmt.Fprintf(w, "yggdrasil_csrf_rejected_total{outcome=\"%s\",mode=\"%s\"} %d\n",
+				outcome, mode, csrfSnap[outcome+"|"+mode])
+		}
+	}
 }
