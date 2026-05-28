@@ -248,6 +248,18 @@ func authorizeWorkflowRunRequest(r *http.Request) error {
 		return nil
 	}
 
+	// Console session path: the request reached this handler only because
+	// requireAuthenticatedConsoleAPIs validated the cookie AND
+	// requireOpsPermissionFunc(permManageWorkflows, …) confirmed the
+	// caller has permission to dispatch workflows. Trust the claims that
+	// the middleware attached — same pattern as manifestWriteAuthorized.
+	// Without this, every session-cookie caller (the entire console UI
+	// triggerWorkflow path) lands here with no header and gets a 401,
+	// even though they're already gated upstream.
+	if _, ok := claimsFromContext(r.Context()); ok {
+		return nil
+	}
+
 	candidates := []string{
 		strings.TrimSpace(r.Header.Get("X-Yggdrasil-Workflow-Token")),
 		bearerToken(r.Header.Get("Authorization")),
