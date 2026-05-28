@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -175,9 +177,16 @@ func VerifyPasswordCredential(
 	if err := verifyPasswordBridge(scheme, passwordHash, req.Password); err != nil {
 		// Erros de password mismatch + scheme/hash corruption todos viram
 		// invalid_credentials pro user — o detalhe técnico vai pra
-		// stderr pra ops triarem (especialmente hash corruption indica
-		// data corruption no banco).
-		fmt.Printf("auth: password verify failed for collaborator %s (scheme=%s): %v\n", collaborator.ID, scheme, err)
+		// stderr (structured key=value, ops can grep) pra triagem,
+		// especialmente hash corruption que indica data corruption no
+		// banco.
+		// Audit ref: B8/G2 — switched from fmt.Printf to structured log
+		// so an aggregator like Loki can parse fields without regex.
+		structuredLog("auth.password.verify_failed",
+			"collaborator_id", collaborator.ID.String(),
+			"scheme", scheme,
+			"error", err.Error(),
+		)
 		// Record the failure (increment failed_attempts, set
 		// locked_until on threshold). Best-effort: a DB hiccup here
 		// must not change the 401 the user sees.
@@ -346,6 +355,97 @@ func ResolveAuthSession(
 	return session, collaborator, nil
 }
 
+// ListActiveSessionsForCollaborator returns every status='active' AND
+// non-expired session for one collaborator, ordered by created_at DESC
+// (newest first).  Used by `GET /api/v1/me/sessions` so the user can
+// review and revoke.
+//
+// Audit ref: C8 (no self-service listing).
+func ListActiveSessionsForCollaborator(ctx context.Context, db *sql.DB, collaboratorID uuid.UUID) ([]model.AuthSessionView, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT
+			id,
+			collaborator_id,
+			status,
+			last_seen_at,
+			expires_at,
+			created_at,
+			COALESCE(user_agent, '') AS user_agent,
+			COALESCE(host(ip_address), '') AS ip_address,
+			COALESCE(device_fingerprint, '') AS device_fingerprint
+		FROM public.auth_sessions
+		WHERE collaborator_id = $1
+		  AND status = 'active'
+		  AND expires_at > NOW()
+		ORDER BY COALESCE(last_seen_at, created_at) DESC, created_at DESC
+	`, collaboratorID)
+	if err != nil {
+		return nil, fmt.Errorf("list active sessions: %w", err)
+	}
+	defer rows.Close()
+
+	var out []model.AuthSessionView
+	for rows.Next() {
+		var v model.AuthSessionView
+		if err := rows.Scan(
+			&v.ID,
+			&v.CollaboratorID,
+			&v.Status,
+			&v.LastSeenAt,
+			&v.ExpiresAt,
+			&v.CreatedAt,
+			&v.UserAgent,
+			&v.IPAddress,
+			&v.DeviceFingerprint,
+		); err != nil {
+			return nil, fmt.Errorf("scan active session: %w", err)
+		}
+		out = append(out, v)
+	}
+	return out, rows.Err()
+}
+
+// RevokeSessionByIDForCollaborator revokes ONE specific session by id,
+// but only if it belongs to the supplied collaborator (defense in
+// depth: the handler already checks ownership, but the SQL also
+// constrains so an off-by-one in the handler can't escalate).
+//
+// Returns the revoked session row or nil if no matching row was
+// found / already revoked. Returning nil + nil error is the canonical
+// "not found" so the handler can emit 404.
+//
+// Audit ref: C8 (self-service revoke endpoint).
+func RevokeSessionByIDForCollaborator(ctx context.Context, db *sql.DB, sessionID, collaboratorID uuid.UUID) (*model.AuthSession, error) {
+	row := db.QueryRowContext(ctx, `
+		UPDATE public.auth_sessions
+		SET status = 'revoked',
+		    revoked_at = NOW(),
+		    updated_at = NOW()
+		WHERE id = $1
+		  AND collaborator_id = $2
+		  AND status = 'active'
+		RETURNING
+			id,
+			collaborator_id,
+			status,
+			metadata,
+			last_seen_at,
+			expires_at,
+			revoked_at,
+			created_at,
+			updated_at
+	`, sessionID, collaboratorID)
+
+	s, err := scanAuthSession(row)
+	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	return &s, nil
+}
+
 // RevokeAuthSession revokes one active session token.
 func RevokeAuthSession(ctx context.Context, db *sql.DB, token string) (model.AuthSession, error) {
 	session, err := getAuthSessionByTokenHash(ctx, db, coreauth.HashSessionToken(strings.TrimSpace(token)))
@@ -495,6 +595,27 @@ func getPasswordCredentialRow(
 	return credential, passwordHash, nil
 }
 
+// maxActiveSessionsPerCollaborator caps the number of simultaneously
+// active `auth_sessions` rows for one collaborator. Above the cap, the
+// oldest sessions (by created_at ASC) are LRU-evicted (marked revoked)
+// in the same transaction as the new INSERT so the row count strictly
+// equals the cap immediately after createAuthSession returns.
+//
+// Audit ref: C4 (42 active sessions for one user; no cap, no eviction).
+// Override at boot via YGGDRASIL_AUTH_SESSION_CAP env (positive int);
+// default 20 is enough for power users (laptop + desktop + 2 phones +
+// 2 tablets + N CI/CLI tokens + headroom).
+const maxActiveSessionsPerCollaborator = 20
+
+func sessionCapForCollaborator() int {
+	if v := os.Getenv("YGGDRASIL_AUTH_SESSION_CAP"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return maxActiveSessionsPerCollaborator
+}
+
 func createAuthSession(
 	ctx context.Context,
 	db *sql.DB,
@@ -505,6 +626,29 @@ func createAuthSession(
 	if ttl <= 0 {
 		ttl = 30 * 24 * time.Hour
 	}
+
+	// C4: LRU-evict the oldest sessions when this collaborator already
+	// holds the cap. The eviction runs BEFORE the INSERT so the post-
+	// insert row count is exactly the cap (no race). We revoke the
+	// oldest N rows beyond `cap-1` so the new row brings us to exactly
+	// `cap`. Best-effort: if eviction fails the auth still succeeds —
+	// the cap is hygiene, not gating.
+	cap := sessionCapForCollaborator()
+	_, _ = db.ExecContext(ctx, `
+		WITH excess AS (
+			SELECT id FROM public.auth_sessions
+			WHERE collaborator_id = $1
+			  AND status = 'active'
+			  AND expires_at > NOW()
+			ORDER BY COALESCE(last_seen_at, created_at) ASC, created_at ASC
+			OFFSET $2
+		)
+		UPDATE public.auth_sessions
+		SET status = 'revoked',
+		    revoked_at = NOW(),
+		    updated_at = NOW()
+		WHERE id IN (SELECT id FROM excess)
+	`, collaboratorID, cap-1)
 
 	token, tokenHash, err := coreauth.GenerateSessionToken()
 	if err != nil {

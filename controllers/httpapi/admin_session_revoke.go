@@ -15,6 +15,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"go.uber.org/zap"
@@ -142,6 +143,19 @@ func (s *Server) handleAdminCollaboratorRevokeSessions(w http.ResponseWriter, r 
 	// Fire RFC 8417 back-channel logout for every OIDC client linked to
 	// this collaborator (goroutine — caller doesn't wait).
 	s.dispatchBackchannelLogoutForCollaborator(r.Context(), collab.ID)
+
+	// §A5/G1: emit canonical session.revoked audit row tagged with the
+	// admin actor that initiated the break-glass revoke. Distinct from
+	// the user-initiated logout — operators triaging incidents pivot on
+	// "who broke glass?". Each revoked session also bumps the metric.
+	for i := int64(0); i < revoked; i++ {
+		metrics.IncAuthSessionRevoked()
+	}
+	s.recordAuthAuditCollaborator(r, AuditAuthSessionRevoked, collab.ID, AuditOutcomeSuccess, map[string]any{
+		"revoked":       int(revoked),
+		"revocation_id": rev.ID.String(),
+		"reason":        "admin_revoke",
+	})
 
 	writeJSON(w, http.StatusOK, adminRevokeSessionsResponse{
 		CollaboratorID: collab.ID.String(),

@@ -7,6 +7,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
 	"golang.org/x/time/rate"
 )
 
@@ -103,6 +104,7 @@ func loginRateLimit(limiter *loginRateLimiter, next http.Handler) http.Handler {
 		ip := loginClientIP(r)
 		blocked, retryAfter := limiter.checkOrConsume(ip)
 		if blocked {
+			metrics.IncAuthLogin(metrics.AuthLoginRateLimited)
 			if retryAfter > 0 {
 				w.Header().Set("Retry-After", retryAfterHeaderValue(retryAfter))
 			}

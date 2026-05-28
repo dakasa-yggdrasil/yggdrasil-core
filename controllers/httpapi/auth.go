@@ -15,6 +15,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/password"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/coreauth"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -104,6 +105,26 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	req.Metadata = mergeAuthMetadata(req.Metadata, r)
 	collaborator, err := repository.VerifyPasswordCredential(r.Context(), s.db, req)
 	if err != nil {
+		// §A5/G1: emit audit on password verification failure. We
+		// stay anonymous for unknown identifiers (no enumeration via
+		// the audit table); known collaborators get their ID tagged.
+		// Account lockout has its own distinct code so the dashboard
+		// can separate "wrong password" from "too many wrong passwords
+		// in window".
+		action := AuditAuthLoginFailed
+		metricOutcome := metrics.AuthLoginFailed
+		if errors.Is(err, repository.ErrAuthAccountLocked) {
+			action = AuditAuthLoginAccountLocked
+			metricOutcome = metrics.AuthLoginAccountLocked
+		}
+		metrics.IncAuthLogin(metricOutcome)
+		actorID := ""
+		if collaborator.ID != uuid.Nil {
+			actorID = collaborator.ID.String()
+		}
+		s.recordAuthAudit(r, action, actorID, AuditOutcomeFailure, map[string]any{
+			"identifier_hint": redactIdentifier(req.Identifier),
+		})
 		writeMappedError(w, err)
 		return
 	}
@@ -134,6 +155,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	req.TOTPCode = strings.TrimSpace(req.TOTPCode)
 	req.RecoveryCode = strings.TrimSpace(req.RecoveryCode)
 	if req.TOTPCode == "" && req.RecoveryCode == "" {
+		metrics.IncAuthLogin(metrics.AuthLoginMFARequired)
 		writeJSON(w, http.StatusAccepted, authMFARequiredResponse{
 			Error:        "mfa_required",
 			Code:         "mfa_required",
@@ -161,12 +183,20 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		if err := mfa.ValidateTOTP(string(secret), req.TOTPCode); err != nil {
+			metrics.IncAuthMFAVerify(metrics.AuthMFAVerifyFailed, metrics.AuthMFAFactorTOTP)
+			s.recordAuthAuditCollaborator(r, AuditAuthMFAVerifyFailed, collaborator.ID, AuditOutcomeFailure, map[string]any{
+				"factor": "totp",
+			})
 			writeJSON(w, http.StatusUnauthorized, map[string]string{
 				"error": "invalid totp code",
 				"code":  "invalid_totp",
 			})
 			return
 		}
+		metrics.IncAuthMFAVerify(metrics.AuthMFAVerifySucceeded, metrics.AuthMFAFactorTOTP)
+		s.recordAuthAuditCollaborator(r, AuditAuthMFAVerifySucceeded, collaborator.ID, AuditOutcomeSuccess, map[string]any{
+			"factor": "totp",
+		})
 	} else {
 		if !identity.HasRecoveryCodes {
 			writeJSON(w, http.StatusUnauthorized, map[string]string{
@@ -177,6 +207,10 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		}
 		if err := repository.VerifyAndInvalidateRecoveryCode(r.Context(), s.db, collaborator.ID, req.RecoveryCode); err != nil {
 			if errors.Is(err, mfa.ErrInvalidRecoveryCode) {
+				metrics.IncAuthMFAVerify(metrics.AuthMFAVerifyFailed, metrics.AuthMFAFactorRecoveryCode)
+				s.recordAuthAuditCollaborator(r, AuditAuthMFAVerifyFailed, collaborator.ID, AuditOutcomeFailure, map[string]any{
+					"factor": "recovery_code",
+				})
 				writeJSON(w, http.StatusUnauthorized, map[string]string{
 					"error": "invalid recovery code",
 					"code":  "invalid_recovery_code",
@@ -186,6 +220,10 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 			writeMappedError(w, err)
 			return
 		}
+		metrics.IncAuthMFAVerify(metrics.AuthMFAVerifySucceeded, metrics.AuthMFAFactorRecoveryCode)
+		s.recordAuthAuditCollaborator(r, AuditAuthMFAVerifySucceeded, collaborator.ID, AuditOutcomeSuccess, map[string]any{
+			"factor": "recovery_code",
+		})
 	}
 
 	session, token, err := repository.CreateAuthSession(r.Context(), s.db, collaborator.ID, req.Metadata, authSessionTTL())
@@ -193,6 +231,22 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		writeMappedError(w, err)
 		return
 	}
+
+	// §A5/G1: emit BOTH the session-created event and the login-succeeded
+	// event. They're distinct because session.created can also happen via
+	// SSO/SCIM provisioning paths; login.succeeded is exclusively the
+	// password-flow terminal "the user authenticated end-to-end" signal.
+	metrics.IncAuthLogin(metrics.AuthLoginSucceeded)
+	metrics.IncAuthSessionCreated()
+	s.recordAuthAuditCollaborator(r, AuditAuthSessionCreated, collaborator.ID, AuditOutcomeSuccess, map[string]any{
+		"session_id":  session.ID.String(),
+		"expires_at":  session.ExpiresAt.Format(time.RFC3339),
+		"mfa_method":  loginMFAMethod(req),
+	})
+	s.recordAuthAuditCollaborator(r, AuditAuthLoginSucceeded, collaborator.ID, AuditOutcomeSuccess, map[string]any{
+		"session_id": session.ID.String(),
+		"mfa_method": loginMFAMethod(req),
+	})
 
 	passState, passErr := repository.GetPasswordCredentialState(r.Context(), s.db, collaborator.ID)
 	needsPwdChange := false
@@ -467,7 +521,13 @@ func (s *Server) handleAuthSession(w http.ResponseWriter, r *http.Request) {
 	// the FE hides actions instead of silently allowing them.
 	permissions, err := repository.ResolveYggdrasilPermissions(r.Context(), s.db, collaborator.ID, collaborator.Traits)
 	if err != nil {
-		fmt.Printf("auth.session: resolve permissions for %s: %v\n", collaborator.ID, err)
+		// Audit ref: B4/B8/G2 — switched from fmt.Printf to structured
+		// zap so the Loki aggregator can parse fields.
+		if s.logger != nil {
+			s.logger.Warn("auth.session: resolve permissions failed",
+				zap.String("collaborator_id", collaborator.ID.String()),
+				zap.Error(err))
+		}
 		permissions = []string{}
 	}
 
@@ -498,6 +558,14 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		writeMappedError(w, err)
 		return
 	}
+
+	// §A5/G1: emit audit_events row before the §13 revocation row +
+	// back-channel dispatch. Logout is a state-mutating action: the
+	// audit trail is the user-visible "I logged out at 14:32" timeline.
+	metrics.IncAuthSessionRevoked()
+	s.recordAuthAuditCollaborator(r, AuditAuthLogout, session.CollaboratorID, AuditOutcomeSuccess, map[string]any{
+		"session_id": session.ID.String(),
+	})
 
 	// §13 INTEGRATION_CONTRACT: record the revocation in the central
 	// authority table + emit the canon event + dispatch RFC 8417
@@ -655,6 +723,44 @@ func (s *Server) dispatchBackchannelLogoutForCollaborator(_ context.Context, col
 			zap.String("collaborator_id", collaboratorID.String()),
 			zap.Int("clients", len(results)))
 	}()
+}
+
+// loginMFAMethod returns the canonical label for the MFA factor the
+// caller used (or "none" if neither was supplied — which is the path
+// where MFA is required but the caller hasn't yet challenged).
+func loginMFAMethod(req model.LoginWithPasswordRequest) string {
+	if strings.TrimSpace(req.TOTPCode) != "" {
+		return "totp"
+	}
+	if strings.TrimSpace(req.RecoveryCode) != "" {
+		return "recovery_code"
+	}
+	return "none"
+}
+
+// redactIdentifier returns a hash-stable hint of the login identifier
+// for audit metadata WITHOUT leaking the full email/slug into a row
+// that a low-privilege ops operator can read. We keep the first 2
+// chars + an asterisk run + the @domain part for emails; bare slugs
+// keep the first 2 chars. Pre-redaction lengths < 4 collapse to "*".
+func redactIdentifier(s string) string {
+	s = strings.TrimSpace(s)
+	if s == "" {
+		return ""
+	}
+	if len(s) < 4 {
+		return "*"
+	}
+	if at := strings.IndexByte(s, '@'); at > 0 {
+		local := s[:at]
+		domain := s[at:]
+		head := local
+		if len(head) > 2 {
+			head = head[:2]
+		}
+		return head + "***" + domain
+	}
+	return s[:2] + "***"
 }
 
 // clientIP best-effort extracts the source IP from the request for

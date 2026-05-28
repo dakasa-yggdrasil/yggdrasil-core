@@ -30,6 +30,36 @@ const (
 	ReactorEvalError   = "error"
 )
 
+// Auth login outcomes. Closed set so the Prometheus label cardinality
+// is bounded at 5; unknown values dropped to avoid label-explosion.
+//
+// Audit ref: G3 (no Prometheus metrics on auth flows). Operators need
+// these to alert on:
+//   - succeeded rate dropping (outage or surge in lockouts)
+//   - failed rate spiking (brute-force in progress)
+//   - rate_limited bursts (DDoS or misconfigured client)
+//   - mfa_required as a denominator for "% of users with MFA on"
+const (
+	AuthLoginSucceeded     = "succeeded"
+	AuthLoginFailed        = "failed"
+	AuthLoginRateLimited   = "rate_limited"
+	AuthLoginAccountLocked = "account_locked"
+	AuthLoginMFARequired   = "mfa_required"
+)
+
+// MFA verify outcomes. Closed set.
+const (
+	AuthMFAVerifySucceeded = "succeeded"
+	AuthMFAVerifyFailed    = "failed"
+)
+
+// MFA factor labels for the verify counter. Closed set.
+const (
+	AuthMFAFactorTOTP         = "totp"
+	AuthMFAFactorRecoveryCode = "recovery_code"
+	AuthMFAFactorWebAuthn     = "webauthn"
+)
+
 // Reactor dispatch outcomes. Same closed-set discipline as evaluations.
 const (
 	ReactorDispatchSucceeded   = "succeeded"
@@ -74,6 +104,30 @@ var (
 	// this to confirm hard-fail is actually live after flipping
 	// YGGDRASIL_VALIDATOR_PHASE.
 	capabilityRejectionsTotal atomic.Uint64
+
+	// Auth login outcome counters. Each /api/v1/auth/login attempt
+	// terminates in exactly one of these buckets so sum() over the
+	// family equals the total attempt count.
+	authLoginSucceeded     atomic.Uint64
+	authLoginFailed        atomic.Uint64
+	authLoginRateLimited   atomic.Uint64
+	authLoginAccountLocked atomic.Uint64
+	authLoginMFARequired   atomic.Uint64
+
+	// Auth MFA verify outcome counters, labeled by factor.
+	authMFAVerifySucceededTOTP         atomic.Uint64
+	authMFAVerifySucceededRecoveryCode atomic.Uint64
+	authMFAVerifySucceededWebAuthn     atomic.Uint64
+	authMFAVerifyFailedTOTP            atomic.Uint64
+	authMFAVerifyFailedRecoveryCode    atomic.Uint64
+	authMFAVerifyFailedWebAuthn        atomic.Uint64
+
+	// Auth session create / revoke counters. Created counts the moment
+	// `auth_sessions` row is inserted (across login + SSO + admin
+	// flows); revoked counts each row transitioned to status=revoked
+	// (logout, admin revoke, password rotation, offboard).
+	authSessionsCreatedTotal atomic.Uint64
+	authSessionsRevokedTotal atomic.Uint64
 )
 
 // IncReactorEvaluation bumps the evaluation counter for the given outcome.
@@ -255,6 +309,89 @@ type CapabilityWarningsSample struct {
 	Value           float64
 }
 
+// IncAuthLogin bumps the auth login counter for the given outcome.
+// Outcome must be one of AuthLogin* constants; unknown values are
+// dropped to keep label cardinality bounded.
+//
+// Operators chart `rate(yggdrasil_auth_login_total[5m])` faceted by
+// outcome to detect:
+//   - failed rate spikes (brute-force)
+//   - rate_limited bursts (DDoS / misconfigured client)
+//   - account_locked rate (threshold over noise floor → real attack)
+//   - succeeded falling to zero (outage / hash corruption regression)
+func IncAuthLogin(outcome string) {
+	switch outcome {
+	case AuthLoginSucceeded:
+		authLoginSucceeded.Add(1)
+	case AuthLoginFailed:
+		authLoginFailed.Add(1)
+	case AuthLoginRateLimited:
+		authLoginRateLimited.Add(1)
+	case AuthLoginAccountLocked:
+		authLoginAccountLocked.Add(1)
+	case AuthLoginMFARequired:
+		authLoginMFARequired.Add(1)
+	}
+}
+
+// IncAuthMFAVerify bumps the MFA verify counter for (outcome, factor).
+// Both labels are closed-set; unknown combinations are no-ops.
+func IncAuthMFAVerify(outcome, factor string) {
+	switch {
+	case outcome == AuthMFAVerifySucceeded && factor == AuthMFAFactorTOTP:
+		authMFAVerifySucceededTOTP.Add(1)
+	case outcome == AuthMFAVerifySucceeded && factor == AuthMFAFactorRecoveryCode:
+		authMFAVerifySucceededRecoveryCode.Add(1)
+	case outcome == AuthMFAVerifySucceeded && factor == AuthMFAFactorWebAuthn:
+		authMFAVerifySucceededWebAuthn.Add(1)
+	case outcome == AuthMFAVerifyFailed && factor == AuthMFAFactorTOTP:
+		authMFAVerifyFailedTOTP.Add(1)
+	case outcome == AuthMFAVerifyFailed && factor == AuthMFAFactorRecoveryCode:
+		authMFAVerifyFailedRecoveryCode.Add(1)
+	case outcome == AuthMFAVerifyFailed && factor == AuthMFAFactorWebAuthn:
+		authMFAVerifyFailedWebAuthn.Add(1)
+	}
+}
+
+// IncAuthSessionCreated bumps the lifetime counter of session-create
+// events.  Used to compute "session create rate" and serves as the
+// numerator of the daily active sessions if combined with retention.
+func IncAuthSessionCreated() { authSessionsCreatedTotal.Add(1) }
+
+// IncAuthSessionRevoked bumps the lifetime counter of session-revoke
+// events (logout + admin + password rotation + offboard).
+func IncAuthSessionRevoked() { authSessionsRevokedTotal.Add(1) }
+
+// AuthLoginSnapshot returns the counter values keyed by outcome label.
+func AuthLoginSnapshot() map[string]uint64 {
+	return map[string]uint64{
+		AuthLoginSucceeded:     authLoginSucceeded.Load(),
+		AuthLoginFailed:        authLoginFailed.Load(),
+		AuthLoginRateLimited:   authLoginRateLimited.Load(),
+		AuthLoginAccountLocked: authLoginAccountLocked.Load(),
+		AuthLoginMFARequired:   authLoginMFARequired.Load(),
+	}
+}
+
+// AuthMFAVerifySnapshot returns the verify-counter values keyed by
+// "outcome|factor" for deterministic /metrics rendering.
+func AuthMFAVerifySnapshot() map[string]uint64 {
+	return map[string]uint64{
+		AuthMFAVerifySucceeded + "|" + AuthMFAFactorTOTP:         authMFAVerifySucceededTOTP.Load(),
+		AuthMFAVerifySucceeded + "|" + AuthMFAFactorRecoveryCode: authMFAVerifySucceededRecoveryCode.Load(),
+		AuthMFAVerifySucceeded + "|" + AuthMFAFactorWebAuthn:     authMFAVerifySucceededWebAuthn.Load(),
+		AuthMFAVerifyFailed + "|" + AuthMFAFactorTOTP:            authMFAVerifyFailedTOTP.Load(),
+		AuthMFAVerifyFailed + "|" + AuthMFAFactorRecoveryCode:    authMFAVerifyFailedRecoveryCode.Load(),
+		AuthMFAVerifyFailed + "|" + AuthMFAFactorWebAuthn:        authMFAVerifyFailedWebAuthn.Load(),
+	}
+}
+
+// AuthSessionsCreatedTotalSnapshot returns the cumulative session-created counter.
+func AuthSessionsCreatedTotalSnapshot() uint64 { return authSessionsCreatedTotal.Load() }
+
+// AuthSessionsRevokedTotalSnapshot returns the cumulative session-revoked counter.
+func AuthSessionsRevokedTotalSnapshot() uint64 { return authSessionsRevokedTotal.Load() }
+
 // ResetForTest clears all counters/gauges.  Test-only — not exposed in
 // the production /metrics surface.
 func ResetForTest() {
@@ -272,4 +409,17 @@ func ResetForTest() {
 	capabilityWarningsMu.Unlock()
 	capabilityWarningsTotal.Store(0)
 	capabilityRejectionsTotal.Store(0)
+	authLoginSucceeded.Store(0)
+	authLoginFailed.Store(0)
+	authLoginRateLimited.Store(0)
+	authLoginAccountLocked.Store(0)
+	authLoginMFARequired.Store(0)
+	authMFAVerifySucceededTOTP.Store(0)
+	authMFAVerifySucceededRecoveryCode.Store(0)
+	authMFAVerifySucceededWebAuthn.Store(0)
+	authMFAVerifyFailedTOTP.Store(0)
+	authMFAVerifyFailedRecoveryCode.Store(0)
+	authMFAVerifyFailedWebAuthn.Store(0)
+	authSessionsCreatedTotal.Store(0)
+	authSessionsRevokedTotal.Store(0)
 }

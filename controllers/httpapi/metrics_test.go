@@ -38,6 +38,11 @@ func TestHandleMetricsReturnsPrometheusFormat(t *testing.T) {
 		"yggdrasil_capability_warnings",
 		"yggdrasil_capability_warnings_total",
 		"yggdrasil_capability_rejections_total",
+		// Phase-3 auth observability family (audit ref G3).
+		"yggdrasil_auth_login_total",
+		"yggdrasil_auth_mfa_verify_total",
+		"yggdrasil_auth_sessions_created_total",
+		"yggdrasil_auth_sessions_revoked_total",
 		"# TYPE",
 		"# HELP",
 	} {

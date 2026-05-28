@@ -572,6 +572,11 @@ func (s *Server) handlePasswordChange(w http.ResponseWriter, r *http.Request) {
 	// change response shouldn't wait on slow clients.
 	s.dispatchBackchannelLogoutForCollaborator(r.Context(), collab.ID)
 
+	// §A5/G1: emit canonical password.changed audit row. Distinct from
+	// the session.revoked rows the §13 path emits — surfaces want to
+	// pivot on "password changed for X" without scanning session logs.
+	s.recordAuthAuditCollaborator(r, AuditAuthPasswordChanged, collab.ID, AuditOutcomeSuccess, nil)
+
 	// Step 7: respond with updated credential state.
 	state, _ := repository.GetPasswordCredentialState(r.Context(), s.db, collab.ID)
 	writeJSON(w, http.StatusOK, map[string]any{

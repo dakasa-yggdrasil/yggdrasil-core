@@ -207,4 +207,44 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	fmt.Fprintf(w, "# HELP yggdrasil_capability_rejections_total Total manifest registrations rejected by the hard-fail capability-naming validator (Phase 2)\n")
 	fmt.Fprintf(w, "# TYPE yggdrasil_capability_rejections_total counter\n")
 	fmt.Fprintf(w, "yggdrasil_capability_rejections_total %d\n", metrics.CapabilityRejectionsTotalSnapshot())
+
+	// Auth login attempts, faceted by terminal outcome. Each call to
+	// POST /api/v1/auth/login terminates in exactly one bucket so sum()
+	// equals the total attempt count.  Phase-3 audit G3 was "no auth
+	// metrics" — operators chart `rate(...[5m])` to alert on failure
+	// spikes, rate-limit bursts, and lockout floods.
+	loginSnap := metrics.AuthLoginSnapshot()
+	fmt.Fprintf(w, "# HELP yggdrasil_auth_login_total Total /api/v1/auth/login attempts by terminal outcome\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_auth_login_total counter\n")
+	fmt.Fprintf(w, "yggdrasil_auth_login_total{outcome=\"succeeded\"} %d\n", loginSnap[metrics.AuthLoginSucceeded])
+	fmt.Fprintf(w, "yggdrasil_auth_login_total{outcome=\"failed\"} %d\n", loginSnap[metrics.AuthLoginFailed])
+	fmt.Fprintf(w, "yggdrasil_auth_login_total{outcome=\"rate_limited\"} %d\n", loginSnap[metrics.AuthLoginRateLimited])
+	fmt.Fprintf(w, "yggdrasil_auth_login_total{outcome=\"account_locked\"} %d\n", loginSnap[metrics.AuthLoginAccountLocked])
+	fmt.Fprintf(w, "yggdrasil_auth_login_total{outcome=\"mfa_required\"} %d\n", loginSnap[metrics.AuthLoginMFARequired])
+
+	// MFA verify counter, faceted by (outcome, factor). Failures are
+	// the leading indicator of an MFA bypass attempt — operators alert
+	// when failure rate per factor crosses a baseline.
+	mfaSnap := metrics.AuthMFAVerifySnapshot()
+	fmt.Fprintf(w, "# HELP yggdrasil_auth_mfa_verify_total Total MFA verify attempts by outcome and factor\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_auth_mfa_verify_total counter\n")
+	for _, factor := range []string{metrics.AuthMFAFactorTOTP, metrics.AuthMFAFactorRecoveryCode, metrics.AuthMFAFactorWebAuthn} {
+		for _, outcome := range []string{metrics.AuthMFAVerifySucceeded, metrics.AuthMFAVerifyFailed} {
+			fmt.Fprintf(w, "yggdrasil_auth_mfa_verify_total{outcome=\"%s\",factor=\"%s\"} %d\n",
+				outcome, factor, mfaSnap[outcome+"|"+factor])
+		}
+	}
+
+	// Session lifecycle counters. created bumps once per auth_sessions
+	// INSERT (login + SSO + admin); revoked bumps once per row
+	// transitioned to status=revoked.  rate(revoked) >> rate(created)
+	// after an outage means stuck sessions; the opposite means an
+	// orphaned-session pile-up.
+	fmt.Fprintf(w, "# HELP yggdrasil_auth_sessions_created_total Total auth sessions issued (login + SSO + admin)\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_auth_sessions_created_total counter\n")
+	fmt.Fprintf(w, "yggdrasil_auth_sessions_created_total %d\n", metrics.AuthSessionsCreatedTotalSnapshot())
+
+	fmt.Fprintf(w, "# HELP yggdrasil_auth_sessions_revoked_total Total auth sessions revoked (logout + admin + password rotation + offboard)\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_auth_sessions_revoked_total counter\n")
+	fmt.Fprintf(w, "yggdrasil_auth_sessions_revoked_total %d\n", metrics.AuthSessionsRevokedTotalSnapshot())
 }
