@@ -30,19 +30,12 @@ type mfaEnrollResponse struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
-// mfaEnrollRequiredResponse is RETAINED but no longer used directly on
-// the wire — writeMFAEnrollRequired now emits the canonical Problem+JSON
-// envelope with `enroll_url`, `expires_at`, and `collaborator` carried
-// as RFC 7807 extension fields. The struct is kept for documentation +
-// callers that bind to its fields in unit tests.
-type mfaEnrollRequiredResponse struct {
-	Error        string              `json:"error"`
-	Code         string              `json:"code"`
-	Message      string              `json:"message"`
-	EnrollURL    string              `json:"enroll_url"`
-	ExpiresAt    time.Time           `json:"expires_at"`
-	Collaborator *model.Collaborator `json:"collaborator,omitempty"`
-}
+// Note: mfaEnrollRequiredResponse (a typed envelope) was removed in the
+// §14-close migration (2026-05-28). The MFA enroll-required response is
+// now emitted as a canonical RFC 7807 Problem+JSON via
+// httperr.WriteProblem in writeMFAEnrollRequired — enroll_url,
+// expires_at, and collaborator are carried as extension fields. Read
+// docs/error_codes.md for the wire shape.
 
 // hashEnrollToken returns the SHA-256 of the raw token (lower-cased hex).
 // Repository persists only the hash; the raw token lives in the URL.
