@@ -51,6 +51,11 @@ func (s *Server) requirePasswordValid(allowlist []string, next http.HandlerFunc)
 			return
 		}
 
+		// F4: prime the request-scoped cache so downstream handlers
+		// (recordAuthAudit, ops_rbac_middleware, etc.) skip the
+		// repeated GetCollaborator round-trip.
+		setCollaboratorInCache(r.Context(), collaborator)
+
 		// Load the auth_identity to check MFA enrollment status.
 		identity, err := repository.GetAuthIdentityByCollaboratorID(r.Context(), s.db, collaborator.ID)
 		if err != nil {

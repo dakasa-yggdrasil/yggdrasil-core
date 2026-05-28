@@ -180,9 +180,11 @@ func (s *Server) collaboratorHasOpsPermission(ctx context.Context, collabIDStr, 
 
 	// Load the collaborator traits so god-mode via traits.yggdrasil_admin
 	// is honoured. Best-effort: missing collaborator → empty traits, fall
-	// through to team_grants resolution.
+	// through to team_grants resolution. F4: request-scoped cache —
+	// middleware_credentials already primed the row, this is a map
+	// lookup not a SQL query.
 	var traits map[string]any
-	if c, cErr := repository.GetCollaborator(ctx, s.db, collabIDStr); cErr == nil {
+	if c, cErr := getCollaboratorCached(ctx, s.db, collabIDStr); cErr == nil {
 		traits = c.Traits
 	}
 

@@ -22,6 +22,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/cryptoenvelope"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/reqcache"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/provisioner"
@@ -732,14 +733,20 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 
 	// Pipeline (outermost → innermost):
 	//   withLogging          — access log
+	//   reqcache.Middleware  — per-request memoization cache for hot lookups
 	//   requireAuthenticatedConsoleAPIs — session/bearer resolution
 	//   csrfMiddleware       — X-CSRF-Token enforcement on mutating routes
 	//   mux                  — route dispatch
 	//
 	// CSRF runs AFTER session resolution so it sees claims; it runs
 	// BEFORE route dispatch so handlers never need to think about it.
-	// Audit 2026-05-27 A7.
-	return server.withLogging(server.requireAuthenticatedConsoleAPIs(server.csrfMiddleware(mux))), nil
+	// reqcache.Middleware sits BETWEEN logging and auth so the
+	// session-resolution path is the FIRST writer to the cache
+	// (collaborator row from session token is reused by every
+	// downstream handler / middleware in the same request).
+	//
+	// Audit 2026-05-27 A7 (CSRF) + 2026-05-28 F4 (reqcache).
+	return server.withLogging(reqcache.Middleware(server.requireAuthenticatedConsoleAPIs(server.csrfMiddleware(mux)))), nil
 }
 
 func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler {

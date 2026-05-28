@@ -686,8 +686,8 @@ func (s *Server) recordSessionRevocation(
 		payload["session_id"] = jti.String()
 	}
 	// Best-effort enrich with primary_email so adapter reactors can
-	// match on identity without an extra DB lookup.
-	if collab, err := repository.GetCollaborator(ctx, s.db, collaboratorID.String()); err == nil {
+	// match on identity without an extra DB lookup. F4: cached lookup.
+	if collab, err := getCollaboratorCached(ctx, s.db, collaboratorID.String()); err == nil {
 		if collab.PrimaryEmail != "" {
 			payload["primary_email"] = collab.PrimaryEmail
 		}

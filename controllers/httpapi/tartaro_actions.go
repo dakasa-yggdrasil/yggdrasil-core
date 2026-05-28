@@ -31,7 +31,7 @@ func (s *Server) handleEffectiveTartaroActions(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	collab, err := repository.GetCollaborator(r.Context(), s.db, collabIDStr)
+	collab, err := getCollaboratorCached(r.Context(), s.db, collabIDStr)
 	if err != nil {
 		writeMappedError(w, err)
 		return
@@ -103,7 +103,7 @@ func (s *Server) handleSyncTartaroActions(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	if _, err := repository.GetCollaborator(r.Context(), s.db, collabIDStr); err != nil {
+	if _, err := getCollaboratorCached(r.Context(), s.db, collabIDStr); err != nil {
 		writeMappedError(w, err)
 		return
 	}
