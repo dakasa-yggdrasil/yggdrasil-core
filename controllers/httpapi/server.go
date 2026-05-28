@@ -360,29 +360,46 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/integration-types/{id}/sync", server.handleIntegrationTypeSync(server.buildManifestSyncDeps()))
 	mux.HandleFunc("POST /api/v1/integrations/{instance_id}/webhook", server.handleIntegrationWebhook)
 
-	// Ops console — Phase 1 foundation
-	mux.HandleFunc("GET /api/v1/ops/surfaces", server.handleOpsSurfacesList)
-	mux.HandleFunc("GET /api/v1/ops/surface-targets", server.handleOpsSurfaceTargetsList)
-	mux.HandleFunc("PUT /api/v1/ops/surface-targets/{id}", server.handleOpsSurfaceTargetUpsert)
-	mux.HandleFunc("DELETE /api/v1/ops/surface-targets/{id}", server.handleOpsSurfaceTargetDelete)
-	mux.HandleFunc("POST /api/v1/ops/surface-targets/{id}/refresh", server.handleOpsSurfaceTargetRefresh)
-	mux.HandleFunc("GET /api/v1/ops/surfaces/{id}/manifest", server.handleOpsSurfaceManifest)
-	mux.HandleFunc("GET /api/v1/ops/surfaces/{id}/data/{viewId}", server.handleOpsSurfaceData)
-	mux.HandleFunc("POST /api/v1/ops/surfaces/{id}/action/{actionId}", server.handleOpsSurfaceAction)
-	mux.HandleFunc("GET /api/v1/ops/workflows", server.handleOpsWorkflowsList)
-	mux.HandleFunc("GET /api/v1/ops/workflows/{runId}", server.handleOpsWorkflowDetail)
-	mux.HandleFunc("POST /api/v1/ops/workflows/{runId}/retry", server.handleOpsWorkflowRetry)
-	mux.HandleFunc("POST /api/v1/ops/workflows/{runId}/abort", server.handleOpsWorkflowAbort)
-	mux.HandleFunc("POST /api/v1/ops/workflows/{runId}/replay", server.handleOpsWorkflowReplay)
-	mux.HandleFunc("GET /api/v1/ops/approvals", server.handleOpsApprovalsList)
-	mux.HandleFunc("POST /api/v1/ops/approvals/{id}/approve", server.handleOpsApprovalDecide("approved"))
-	mux.HandleFunc("POST /api/v1/ops/approvals/{id}/reject", server.handleOpsApprovalDecide("rejected"))
-	mux.HandleFunc("GET /api/v1/ops/drift", server.handleOpsDriftList)
-	mux.HandleFunc("POST /api/v1/ops/drift/{id}/reconcile", server.handleOpsDriftReconcile)
-	mux.HandleFunc("GET /api/v1/ops/catalog", server.handleOpsCatalog)
-	mux.HandleFunc("GET /api/v1/ops/system/health", server.handleOpsSystemHealth)
-	mux.HandleFunc("GET /api/v1/ops/audit", server.handleOpsAuditList)
-	mux.HandleFunc("GET /api/v1/ops/collaborators/missing-mfa", server.handleOpsCollaboratorsMissingMFA)
+	// Ops console — Phase 1 foundation (RBAC-gated since Phase 5B 2026-05-28).
+	// Mirror of /api/v1/console/* enforcement: surface-console's lib/ops/api.ts
+	// hits these routes for the surface-runtime and workflow ops dashboards;
+	// every route now goes through requireOpsPermissionFunc(perm, …) so the
+	// backend is the source of truth for authorization (INTEGRATION_CONTRACT
+	// §12). Single `YGGDRASIL_CONSOLE_RBAC_ENFORCE` env switch governs both
+	// namespaces, so the Phase-5 observation window covers Phase 5B too.
+	//
+	// Mapping:
+	//   - surfaces/surface-targets: read = view_integrations; mutate = manage_integrations
+	//   - workflows: view = view_ops; dispatch/retry/abort/replay = manage_workflows
+	//   - approvals / drift: view = view_ops; decide / reconcile = manage_workflows
+	//     (these are workflow primitives, same class as guardian-approvals)
+	//   - catalog: view_integrations (the FE renders it from the same registry
+	//     as /api/v1/console/integration-catalog)
+	//   - system/health: view_ops (operator dashboard, read-only)
+	//   - audit: view_audit
+	//   - collaborators/missing-mfa: view_people (PII listing of identities)
+	mux.HandleFunc("GET /api/v1/ops/surfaces", server.requireOpsPermissionFunc(permViewIntegrations, server.handleOpsSurfacesList))
+	mux.HandleFunc("GET /api/v1/ops/surface-targets", server.requireOpsPermissionFunc(permViewIntegrations, server.handleOpsSurfaceTargetsList))
+	mux.HandleFunc("PUT /api/v1/ops/surface-targets/{id}", server.requireOpsPermissionFunc(permManageIntegrations, server.handleOpsSurfaceTargetUpsert))
+	mux.HandleFunc("DELETE /api/v1/ops/surface-targets/{id}", server.requireOpsPermissionFunc(permManageIntegrations, server.handleOpsSurfaceTargetDelete))
+	mux.HandleFunc("POST /api/v1/ops/surface-targets/{id}/refresh", server.requireOpsPermissionFunc(permManageIntegrations, server.handleOpsSurfaceTargetRefresh))
+	mux.HandleFunc("GET /api/v1/ops/surfaces/{id}/manifest", server.requireOpsPermissionFunc(permViewIntegrations, server.handleOpsSurfaceManifest))
+	mux.HandleFunc("GET /api/v1/ops/surfaces/{id}/data/{viewId}", server.requireOpsPermissionFunc(permViewIntegrations, server.handleOpsSurfaceData))
+	mux.HandleFunc("POST /api/v1/ops/surfaces/{id}/action/{actionId}", server.requireOpsPermissionFunc(permManageIntegrations, server.handleOpsSurfaceAction))
+	mux.HandleFunc("GET /api/v1/ops/workflows", server.requireOpsPermissionFunc(permViewOps, server.handleOpsWorkflowsList))
+	mux.HandleFunc("GET /api/v1/ops/workflows/{runId}", server.requireOpsPermissionFunc(permViewOps, server.handleOpsWorkflowDetail))
+	mux.HandleFunc("POST /api/v1/ops/workflows/{runId}/retry", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsWorkflowRetry))
+	mux.HandleFunc("POST /api/v1/ops/workflows/{runId}/abort", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsWorkflowAbort))
+	mux.HandleFunc("POST /api/v1/ops/workflows/{runId}/replay", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsWorkflowReplay))
+	mux.HandleFunc("GET /api/v1/ops/approvals", server.requireOpsPermissionFunc(permViewOps, server.handleOpsApprovalsList))
+	mux.HandleFunc("POST /api/v1/ops/approvals/{id}/approve", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsApprovalDecide("approved")))
+	mux.HandleFunc("POST /api/v1/ops/approvals/{id}/reject", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsApprovalDecide("rejected")))
+	mux.HandleFunc("GET /api/v1/ops/drift", server.requireOpsPermissionFunc(permViewOps, server.handleOpsDriftList))
+	mux.HandleFunc("POST /api/v1/ops/drift/{id}/reconcile", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsDriftReconcile))
+	mux.HandleFunc("GET /api/v1/ops/catalog", server.requireOpsPermissionFunc(permViewIntegrations, server.handleOpsCatalog))
+	mux.HandleFunc("GET /api/v1/ops/system/health", server.requireOpsPermissionFunc(permViewOps, server.handleOpsSystemHealth))
+	mux.HandleFunc("GET /api/v1/ops/audit", server.requireOpsPermissionFunc(permViewAudit, server.handleOpsAuditList))
+	mux.HandleFunc("GET /api/v1/ops/collaborators/missing-mfa", server.requireOpsPermissionFunc(permViewPeople, server.handleOpsCollaboratorsMissingMFA))
 
 	mux.HandleFunc("GET /api/v1/collaborators", server.handleCollaboratorList)
 	mux.HandleFunc("POST /api/v1/collaborators", server.handleCollaboratorCreate)

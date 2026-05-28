@@ -81,6 +81,127 @@ func TestConsoleRoutesAreFullyMapped(t *testing.T) {
 	}
 }
 
+// TestOpsRoutesAreFullyMapped is the Phase 5B drift-prevention mirror of
+// TestConsoleRoutesAreFullyMapped. It scans server.go for every
+// `mux.HandleFunc("METHOD /api/v1/ops/...`, expects each line to be
+// wrapped in `requireOpsPermissionFunc(perm<X>, …)`, and fails when a
+// new ops route lands without a permission wrapper.
+//
+// Why two tests instead of one: the /api/v1/ops/* namespace is the
+// older console-style surface (~22 routes); /api/v1/console/* is the
+// newer canonical namespace (~89 routes). Keeping the assertions split
+// makes regressions on either group surface in the failing-test name
+// without ambiguity.
+func TestOpsRoutesAreFullyMapped(t *testing.T) {
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatalf("runtime.Caller(0) failed")
+	}
+	serverPath := filepath.Join(filepath.Dir(thisFile), "server.go")
+	f, err := os.Open(serverPath)
+	if err != nil {
+		t.Fatalf("open server.go: %v", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	// Matches `mux.HandleFunc("<METHOD> /api/v1/ops/...`
+	routeRe := regexp.MustCompile(`mux\.HandleFunc\("[A-Z]+ /api/v1/ops/[^"]*"`)
+	wrapperRe := regexp.MustCompile(`server\.requireOpsPermissionFunc\(perm[A-Za-z]+,`)
+
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	var routeCount int
+	var missing []string
+	for scanner.Scan() {
+		line := scanner.Text()
+		if !routeRe.MatchString(line) {
+			continue
+		}
+		routeCount++
+		if !wrapperRe.MatchString(line) {
+			missing = append(missing, strings.TrimSpace(line))
+		}
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+
+	if routeCount == 0 {
+		t.Fatalf("regex did not match any ops routes — server.go shape changed; update TestOpsRoutesAreFullyMapped")
+	}
+	if len(missing) > 0 {
+		t.Errorf("%d /api/v1/ops/* route(s) lack requireOpsPermissionFunc wrapping (audit §3.1 + INTEGRATION_CONTRACT §12 — Phase 5B):\n  %s",
+			len(missing), strings.Join(missing, "\n  "))
+	}
+
+	// Phase 5B inventory found 22 ops routes. Allow a band [18, 40] — narrower
+	// would be brittle (each PR that adds an ops route would have to bump),
+	// wider defeats the purpose of catching subtree deletions.
+	if routeCount < 18 || routeCount > 40 {
+		t.Errorf("ops route count = %d, expected ~22 — investigate before merging", routeCount)
+	}
+}
+
+// TestOpsRoutesUseCanonicalPermissions is the Phase 5B mirror for the
+// /api/v1/ops/* namespace. Catches the same class of drift on the
+// older namespace (a route wrapped with a perm constant not declared
+// in ops_rbac_catalog.go).
+func TestOpsRoutesUseCanonicalPermissions(t *testing.T) {
+	canonical := map[string]struct{}{
+		"permViewPeople":            {},
+		"permCreateCollaborator":    {},
+		"permEditCollaborator":      {},
+		"permOffboardCollaborator":  {},
+		"permIssueSetupToken":       {},
+		"permViewTeams":             {},
+		"permCreateTeam":            {},
+		"permEditTeam":              {},
+		"permManageTeamPermissions": {},
+		"permViewIntegrations":      {},
+		"permManageIntegrations":    {},
+		"permManageSecrets":         {},
+		"permViewAudit":             {},
+		"permManageAuthProviders":   {},
+		"permViewOps":               {},
+		"permManageWorkflows":       {},
+		"permManageOrganization":    {},
+	}
+
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatalf("runtime.Caller(0) failed")
+	}
+	serverPath := filepath.Join(filepath.Dir(thisFile), "server.go")
+	f, err := os.Open(serverPath)
+	if err != nil {
+		t.Fatalf("open server.go: %v", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	permRe := regexp.MustCompile(`requireOpsPermissionFunc\((perm[A-Za-z]+),`)
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		// Restrict to ops route registrations only; comments in server.go
+		// also contain the /api/v1/ops/ literal as prose and should not match.
+		if !strings.Contains(line, `mux.HandleFunc("`) || !strings.Contains(line, "/api/v1/ops/") {
+			continue
+		}
+		matches := permRe.FindStringSubmatch(line)
+		if len(matches) < 2 {
+			continue
+		}
+		perm := matches[1]
+		if _, ok := canonical[perm]; !ok {
+			t.Errorf("non-canonical permission %q used in ops route — add to ops_rbac_catalog.go or fix the wiring:\n  %s",
+				perm, strings.TrimSpace(line))
+		}
+	}
+}
+
 // TestManageSecretsIsDistinctFromManageIntegrations locks the Phase 5B
 // permission split — the two constants must not collapse to the same
 // value (a tempting bug if someone refactors the catalog).
