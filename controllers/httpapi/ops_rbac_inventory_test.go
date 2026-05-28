@@ -81,8 +81,25 @@ func TestConsoleRoutesAreFullyMapped(t *testing.T) {
 	}
 }
 
+// TestManageSecretsIsDistinctFromManageIntegrations locks the Phase 5B
+// permission split — the two constants must not collapse to the same
+// value (a tempting bug if someone refactors the catalog).
+func TestManageSecretsIsDistinctFromManageIntegrations(t *testing.T) {
+	if permManageSecrets == permManageIntegrations {
+		t.Fatalf("permission split regression: permManageSecrets == permManageIntegrations (both = %q). Secret custody has HIGHER blast radius than integration provisioning; keep them separate.", permManageSecrets)
+	}
+	if permManageSecrets == "" {
+		t.Fatalf("permManageSecrets is empty — Phase 5B split must define a non-empty constant")
+	}
+	want := "yggdrasil:manage_secrets"
+	if permManageSecrets != want {
+		t.Fatalf("permManageSecrets = %q, want %q (must match surface-console's PERMS.ManageSecrets and integration-yggdrasil-self action_catalog)", permManageSecrets, want)
+	}
+}
+
 // TestConsoleRoutesUseCanonicalPermissions verifies each route uses
-// only the 16 canonical permissions defined in ops_rbac_catalog.go.
+// only the 17 canonical permissions defined in ops_rbac_catalog.go
+// (16 from Phase 5 + manage_secrets from Phase 5B).
 // Catches drift where someone defines a new perm constant without
 // adding it to the catalog (which would then drift from surface-console's
 // PERMS).
@@ -99,6 +116,7 @@ func TestConsoleRoutesUseCanonicalPermissions(t *testing.T) {
 		"permManageTeamPermissions": {},
 		"permViewIntegrations":      {},
 		"permManageIntegrations":    {},
+		"permManageSecrets":         {},
 		"permViewAudit":             {},
 		"permManageAuthProviders":   {},
 		"permViewOps":               {},

@@ -561,19 +561,29 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/console/products", server.requireOpsPermissionFunc(permViewOps, server.handleProductList))
 	mux.HandleFunc("POST /api/v1/console/products", server.requireOpsPermissionFunc(permManageWorkflows, server.handleProductCreate))
 
-	// Managed secrets — view = manage_integrations (secrets are integration-adjacent;
-	// viewing them = privileged config). All write operations = manage_integrations.
-	// NOTE: secrets are the most sensitive surface. After observation, consider
-	// splitting into a dedicated yggdrasil:manage_secrets permission. For now,
-	// reuse manage_integrations to avoid a catalog-side migration in this cycle.
-	mux.HandleFunc("GET /api/v1/console/secrets", server.requireOpsPermissionFunc(permManageIntegrations, server.handleManagedSecretList))
-	mux.HandleFunc("GET /api/v1/console/secrets/{namespace}/{name}", server.requireOpsPermissionFunc(permManageIntegrations, server.handleManagedSecretGet))
-	mux.HandleFunc("POST /api/v1/console/secrets", server.requireOpsPermissionFunc(permManageIntegrations, server.handleManagedSecretCreate))
-	mux.HandleFunc("POST /api/v1/console/secrets/{namespace}/{name}/rotate", server.requireOpsPermissionFunc(permManageIntegrations, server.handleManagedSecretRotate))
-	mux.HandleFunc("POST /api/v1/console/secrets/{namespace}/{name}/disable", server.requireOpsPermissionFunc(permManageIntegrations, server.handleManagedSecretDisable))
-	mux.HandleFunc("POST /api/v1/console/secrets/{namespace}/{name}/revoke", server.requireOpsPermissionFunc(permManageIntegrations, server.handleManagedSecretRevoke))
-	mux.HandleFunc("POST /api/v1/console/secrets/materialize-all", server.requireOpsPermissionFunc(permManageIntegrations, server.handleMaterializeAll))
-	mux.HandleFunc("POST /api/v1/console/secrets/{namespace}/{name}/materialize", server.requireOpsPermissionFunc(permManageIntegrations, server.handleMaterializeOne))
+	// Managed secrets — Phase 5B split (2026-05-28).
+	//
+	// Previously gated by manage_integrations alongside integration provisioning,
+	// the secret surface now uses the dedicated yggdrasil:manage_secrets
+	// permission. Rationale: secret read/rotate has a HIGHER blast radius than
+	// integration-instance configuration. An integration admin can register a
+	// stripe instance with a `credentials_ref` URI WITHOUT inheriting the right
+	// to read the underlying cluster secret. Operators who need full custody
+	// receive BOTH permissions; the default integration-admin role does not.
+	//
+	// All routes (list/get/create/rotate/disable/revoke/materialize) use the
+	// same gate — Phase 5 did not separate read from mutate inside the secret
+	// namespace, and Phase 5B preserves that. The audit hook at
+	// /api/v1/console/secrets/{namespace}/{name}/disable etc. still tags
+	// audit_events via the existing ops_audit middleware.
+	mux.HandleFunc("GET /api/v1/console/secrets", server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretList))
+	mux.HandleFunc("GET /api/v1/console/secrets/{namespace}/{name}", server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretGet))
+	mux.HandleFunc("POST /api/v1/console/secrets", server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretCreate))
+	mux.HandleFunc("POST /api/v1/console/secrets/{namespace}/{name}/rotate", server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretRotate))
+	mux.HandleFunc("POST /api/v1/console/secrets/{namespace}/{name}/disable", server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretDisable))
+	mux.HandleFunc("POST /api/v1/console/secrets/{namespace}/{name}/revoke", server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretRevoke))
+	mux.HandleFunc("POST /api/v1/console/secrets/materialize-all", server.requireOpsPermissionFunc(permManageSecrets, server.handleMaterializeAll))
+	mux.HandleFunc("POST /api/v1/console/secrets/{namespace}/{name}/materialize", server.requireOpsPermissionFunc(permManageSecrets, server.handleMaterializeOne))
 
 	// Reconciler status (read-only) → view_ops.
 	mux.HandleFunc("GET /api/v1/console/reconciler/status", server.requireOpsPermissionFunc(permViewOps, server.handleReconcilerStatus))

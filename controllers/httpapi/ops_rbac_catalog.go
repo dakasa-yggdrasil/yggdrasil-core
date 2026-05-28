@@ -17,7 +17,7 @@ package httpapi
 // server.go and fails when a /api/v1/console/* registration lacks a
 // permission wrapper.
 //
-// Permission catalog (17 entries — canonical, single source):
+// Permission catalog (18 entries — canonical, single source):
 //   - ViewPeople            yggdrasil:view_people
 //   - CreateCollaborator    yggdrasil:create_collaborator
 //   - EditCollaborator      yggdrasil:edit_collaborator
@@ -29,6 +29,7 @@ package httpapi
 //   - ManageTeamPermissions yggdrasil:manage_team_permissions
 //   - ViewIntegrations      yggdrasil:view_integrations
 //   - ManageIntegrations    yggdrasil:manage_integrations
+//   - ManageSecrets         yggdrasil:manage_secrets       ← Phase 5B split
 //   - ViewAudit             yggdrasil:view_audit
 //   - ManageAuthProviders   yggdrasil:manage_auth_providers
 //   - ViewOps               yggdrasil:view_ops
@@ -41,13 +42,21 @@ package httpapi
 //   - POST/PATCH/DELETE → manage:<area> (the "edit_" naming in the catalog)
 //   - operations on lifecycle (suspend/offboard/role-change/…) → the most
 //     specific permission available (e.g. offboard_collaborator)
-//   - secrets / repository_bindings / provision / bootstrap → manage_integrations
-//     (these are integration-adjacent infrastructure)
+//   - secrets read/rotate/disable/revoke/materialize → manage_secrets
+//     (HIGH-risk: distinct from manage_integrations because read/rotate
+//     cluster secrets has a different blast radius than provisioning
+//     integration instances — Phase 5B split.)
+//   - repository_bindings / provision / bootstrap → manage_integrations
+//     (these are integration-adjacent infrastructure but NOT secret
+//     custody)
 //   - guardian/remediation → manage_workflows (they ARE workflow primitives)
 //   - reconciler → view_ops (read-only)
 //   - permissions endpoints → manage_team_permissions
 //   - oidc-clients endpoints → manage_auth_providers
 //   - audit / audit list → view_audit
+//   - ops/* mirrors console/* equivalents (Phase 5B): surfaces = view/manage
+//     integrations; workflow runs = view_ops / manage_workflows; approvals,
+//     drift, catalog, system/health, audit → most-specific perm.
 
 // Permission constants — keep aligned with surface-console PERMS.
 const (
@@ -62,6 +71,7 @@ const (
 	permManageTeamPermissions = "yggdrasil:manage_team_permissions"
 	permViewIntegrations      = "yggdrasil:view_integrations"
 	permManageIntegrations    = "yggdrasil:manage_integrations"
+	permManageSecrets         = "yggdrasil:manage_secrets"
 	permViewAudit             = "yggdrasil:view_audit"
 	permManageAuthProviders   = "yggdrasil:manage_auth_providers"
 	permViewOps               = "yggdrasil:view_ops"
