@@ -641,6 +641,25 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// is bootstrap-class infrastructure; only org admins should run it.
 	mux.HandleFunc("POST /api/v1/console/provision/aws", server.requireOpsPermissionFunc(permManageOrganization, server.handleProvisionAWS))
 
+	// Phase 6 aggregator endpoints — audit 2026-05-27 §2.1-§2.4.
+	//
+	// Replace the N-round-trip patterns identified in the co-design audit
+	// with single-call aggregates. Each gates on a dedicated permission
+	// (or composite) and returns a denormalized response shape matching
+	// what the surface page renders, so the FE drops merge logic.
+	//
+	//   overview-summary      → replaces 6 OverviewPage queries
+	//   teams/{id}/edit-context → replaces 3 TeamEditPage queries
+	//   surfaces/{id}/configure-context → replaces 3 OpsIntegrationsPage detail queries
+	//
+	// The collaborators-enriched response (4th aggregate) is delivered by
+	// extending the EXISTING /api/v1/console/collaborators handler rather
+	// than registering a new route — the FE just stops issuing the side
+	// queries.
+	mux.HandleFunc("GET /api/v1/console/overview-summary", server.requireOpsPermissionFunc(permViewOverview, server.handleConsoleOverviewSummary))
+	mux.HandleFunc("GET /api/v1/console/teams/{id}/edit-context", server.requireOpsPermissionFunc(permViewTeams, server.handleConsoleTeamEditContext))
+	mux.HandleFunc("GET /api/v1/ops/surfaces/{id}/configure-context", server.requireOpsPermissionFunc(permViewIntegrations, server.handleOpsSurfaceConfigureContext))
+
 	// Product deploy + bootstrap routes — already gated by requireDeployToken
 	// (machine-only deploy automation, no human actor); RBAC is layered on
 	// top so that IF a human session reaches them they STILL need
@@ -1286,6 +1305,12 @@ func (s *Server) handleCollaboratorList(w http.ResponseWriter, r *http.Request) 
 		Search: queryString(r, "q"),
 	}
 
+	// Phase 6 aggregate (audit 2026-05-27 §2.3): when the caller asks for
+	// `?enriched=true`, the response carries denormalized team_names,
+	// primary_role, last_login_at, mfa_enrolled directly on each
+	// collaborator. This kills the 3-query pattern in CollaboratorListPage.
+	enriched := queryBool(r, "enriched")
+
 	// Paginated mode kicks in when the caller asks for it explicitly.
 	// Zero limit + no cursor preserves the legacy "give me everything" shape
 	// that older console code still relies on.
@@ -1306,6 +1331,14 @@ func (s *Server) handleCollaboratorList(w http.ResponseWriter, r *http.Request) 
 		if total, err := repository.CountCollaborators(r.Context(), s.db, req); err == nil {
 			page.TotalEstimate = total
 		}
+		if enriched {
+			rows, _ := enrichCollaborators(r.Context(), s.db, collaborators)
+			writeJSON(w, http.StatusOK, collaboratorEnrichedResponse{
+				Collaborators: rows,
+				Pagination:    &page,
+			})
+			return
+		}
 		writeJSON(w, http.StatusOK, collaboratorsResponse{
 			Collaborators: collaborators,
 			Pagination:    &page,
@@ -1316,6 +1349,11 @@ func (s *Server) handleCollaboratorList(w http.ResponseWriter, r *http.Request) 
 	collaborators, err := repository.ListCollaborators(r.Context(), s.db, req)
 	if err != nil {
 		writeMappedError(w, err)
+		return
+	}
+	if enriched {
+		rows, _ := enrichCollaborators(r.Context(), s.db, collaborators)
+		writeJSON(w, http.StatusOK, collaboratorEnrichedResponse{Collaborators: rows})
 		return
 	}
 	writeJSON(w, http.StatusOK, collaboratorsResponse{Collaborators: collaborators})

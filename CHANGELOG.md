@@ -2,6 +2,22 @@
 
 All notable changes to yggdrasil-core are documented here.
 
+## [2.17.0] - 2026-05-28
+
+### Added
+- **§2.1 Phase 6: aggregate endpoints to kill the round-trip explosion**. The 2026-05-27 co-design audit identified four hotspots where surface-console fired 3-6 separate requests per page mount to merge data the BE could trivially denormalize. Phase 6 ships four aggregates:
+  - `GET /api/v1/console/overview-summary` (gate: `yggdrasil:view_overview`, NEW) — replaces 6 queries on OverviewPage (collaborators + teams + saml SPs + scim clients + system health + audit). Single round-trip returns people/teams/identity counts, db+migration health, and the last 10 audit events. The 30s polling that previously fanned to health+audit collapses to one refetch.
+  - `GET /api/v1/console/teams/{id}/edit-context` (gate: `view_teams`) — replaces 3 dataset-wide queries on TeamEditPage (fetchTeams + fetchCollaborators + fetchTeamMemberships). Returns team + parent_options (descendant filter applied server-side) + owner_candidates (capped at 500, with `member_of_this_team` pre-flagged) + active_memberships scoped to THIS team + per-member other_memberships for the DangerZone preview. The FE drops collectDescendants(), member-merge logic, and the helper maps.
+  - `GET /api/v1/console/collaborators?enriched=true` (gate: `view_people`, existing handler extended) — replaces 3 queries on CollaboratorListPage (collaborators + teams + memberships). Each record carries denormalized `team_names[]`, `primary_role`, `last_login_at`, `mfa_enrolled`. The `?enriched=true` flag keeps the legacy shape default for CLI/ops callers; the FE refactor opts in.
+  - `GET /api/v1/ops/surfaces/{id}/configure-context` (gate: `view_integrations`) — replaces 3 sequential dependent queries on the OpsIntegrationsPage configure modal (surface manifest + catalog list + catalog entry detail). Server-side catalog walker matches the surface id by plugin_name exact / entry exact / plugin_name substring. Returns surface + matched catalog entry + integration_type manifest + current instance in one envelope.
+  - **NEW permission `yggdrasil:view_overview`** added to `ops_rbac_catalog.go`, `surface-console/lib/auth/permissions.ts`, AND `integration-yggdrasil-self/internal/adapter/spec.go` `action_catalog` (the source of truth for grantable permissions in TeamPermissionsBox). Drift-prevention test `TestConsoleRoutesUseCanonicalPermissions` now includes it.
+
+### Notes
+- Section-level visibility inside the overview aggregate is honoured by the existing `PermissionGate` wrappers on the FE; the BE returns the same counters regardless of section-specific permissions (the gate decides whether to render). If finer-grained section omission becomes desirable, the next cycle can shape the response per caller permission set.
+- The `?enriched=true` flag is the opt-in for the new shape. Legacy callers without the flag keep the existing `{collaborators: [...]}` envelope unchanged.
+- All four routes pass through `requireOpsPermissionFunc(perm, ...)` (the Phase 5 wrapper) and the existing `TestConsoleRoutesAreFullyMapped` / `TestOpsRoutesAreFullyMapped` drift-prevention assertions cover them.
+- Surface-console refactor lands in the same cycle: OverviewPage, TeamEditPage, CollaboratorListPage, and the OpsIntegrationsPage configure modal each now do ONE request per page mount instead of the 3-6 they did before. Vitest fixtures updated accordingly (mocks added for the new aggregate URLs).
+
 ## [2.16.0] - 2026-05-28
 
 ### Added

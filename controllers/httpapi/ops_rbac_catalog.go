@@ -17,7 +17,7 @@ package httpapi
 // server.go and fails when a /api/v1/console/* registration lacks a
 // permission wrapper.
 //
-// Permission catalog (18 entries — canonical, single source):
+// Permission catalog (19 entries — canonical, single source):
 //   - ViewPeople            yggdrasil:view_people
 //   - CreateCollaborator    yggdrasil:create_collaborator
 //   - EditCollaborator      yggdrasil:edit_collaborator
@@ -35,6 +35,7 @@ package httpapi
 //   - ViewOps               yggdrasil:view_ops
 //   - ManageWorkflows       yggdrasil:manage_workflows
 //   - ManageOrganization    yggdrasil:manage_organization
+//   - ViewOverview          yggdrasil:view_overview        ← Phase 6 aggregator
 //   - (god mode)            yggdrasil:*  ← handled inside the middleware
 //
 // Mapping principles:
@@ -77,4 +78,13 @@ const (
 	permViewOps               = "yggdrasil:view_ops"
 	permManageWorkflows       = "yggdrasil:manage_workflows"
 	permManageOrganization    = "yggdrasil:manage_organization"
+	// Phase 6 aggregator (audit 2026-05-27 §2.1): the OverviewPage aggregate
+	// reaches into 6 separate subsystems (people, teams, identity providers,
+	// system health, recent audit) and would otherwise require every viewer
+	// to own all six view_* permissions. The single view_overview keeps
+	// the "I'm allowed to see the homepage" decision in one place; the
+	// aggregate handler still respects the visibility of individual
+	// sections by data-shaping (sections omitted when their owning
+	// permission is missing — see console_overview_summary.go).
+	permViewOverview          = "yggdrasil:view_overview"
 )

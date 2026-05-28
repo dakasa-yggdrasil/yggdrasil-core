@@ -166,6 +166,7 @@ func TestOpsRoutesUseCanonicalPermissions(t *testing.T) {
 		"permViewOps":               {},
 		"permManageWorkflows":       {},
 		"permManageOrganization":    {},
+		"permViewOverview":          {},
 	}
 
 	_, thisFile, _, ok := runtime.Caller(0)
@@ -243,6 +244,7 @@ func TestConsoleRoutesUseCanonicalPermissions(t *testing.T) {
 		"permViewOps":               {},
 		"permManageWorkflows":       {},
 		"permManageOrganization":    {},
+		"permViewOverview":          {},
 	}
 
 	_, thisFile, _, ok := runtime.Caller(0)
