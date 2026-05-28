@@ -103,10 +103,61 @@ func (s *Server) handleCollaboratorOffboard(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
+	// §13 INTEGRATION_CONTRACT: offboarding terminates EVERY active
+	// session immediately + propagates to OIDC clients + adapter reactors
+	// via the canon session.terminated event. The session revoke + the
+	// canon event happen in the SAME tx as the offboard mutation so a
+	// crash between cannot leave a "soft-offboarded" collaborator with
+	// live sessions.
+	if _, err := tx.ExecContext(r.Context(), `
+		UPDATE auth_sessions
+		SET status = 'revoked',
+		    revoked_at = NOW(),
+		    updated_at = NOW()
+		WHERE collaborator_id = $1 AND revoked_at IS NULL
+	`, collab.ID); err != nil {
+		writeMappedError(w, fmt.Errorf("revoke sessions on offboard: %w", err))
+		return
+	}
+
+	rev, revErr := repository.InsertSessionRevocation(r.Context(), s.db, tx, repository.InsertSessionRevocationRequest{
+		CollaboratorID: collab.ID,
+		SessionJTI:     nil,
+		Reason:         repository.SessionRevocationReasonOffboarded,
+		Metadata:       map[string]any{"offboard_reason": strings.TrimSpace(req.Reason)},
+	})
+	if revErr != nil {
+		writeMappedError(w, fmt.Errorf("record offboard revocation: %w", revErr))
+		return
+	}
+	sessionPayload := map[string]any{
+		"collaborator_id": collab.ID.String(),
+		"reason":          repository.SessionRevocationReasonOffboarded,
+		"revocation_id":   rev.ID.String(),
+	}
+	if collab.PrimaryEmail != "" {
+		sessionPayload["primary_email"] = collab.PrimaryEmail
+	}
+	if _, err := repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
+		Type:           repository.EventTypeCollaboratorSessionTerminated,
+		SchemaVersion:  "v1",
+		AggregateType:  "collaborator",
+		AggregateID:    collab.ID.String(),
+		Payload:        sessionPayload,
+		IdempotencyKey: "session.terminated." + rev.ID.String(),
+	}); err != nil {
+		writeMappedError(w, fmt.Errorf("emit session.terminated on offboard: %w", err))
+		return
+	}
+
 	if err := tx.Commit(); err != nil {
 		writeMappedError(w, fmt.Errorf("commit collaborator.offboarded: %w", err))
 		return
 	}
+
+	// Fire RFC 8417 back-channel logout post-commit so the response stays
+	// snappy even when downstream OIDC clients are slow.
+	s.dispatchBackchannelLogoutForCollaborator(r.Context(), collab.ID)
 
 	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collab})
 }

@@ -7,6 +7,12 @@ package repository
 const (
 	EventTypeCollaboratorCreated          = "collaborator.created"
 	EventTypeCollaboratorOffboarded       = "collaborator.offboarded"
+	// EventTypeCollaboratorSessionTerminated is the §13 INTEGRATION_CONTRACT
+	// canon event emitted on every session revocation (logout / admin revoke
+	// / password rotation / offboarding). Adapters listen via reactor
+	// capability `on_collaborator_session_terminated` to mirror the
+	// revocation upstream (revoke OAuth token, expire SSO session, etc.).
+	EventTypeCollaboratorSessionTerminated = "collaborator.session.terminated"
 	EventTypeCollaboratorAbsenceStarted   = "collaborator.absence_started"
 	EventTypeCollaboratorAbsenceEnded     = "collaborator.absence_ended"
 	EventTypeCollaboratorRoleChanged      = "collaborator.role_changed"
@@ -46,12 +52,13 @@ const (
 // The Materializer consults this set; the manifest validator rejects reactor
 // declarations using any event_type outside it.
 var CanonLifecycleEventTypes = map[string]struct{}{
-	EventTypeCollaboratorCreated:        {},
-	EventTypeCollaboratorOffboarded:     {},
-	EventTypeCollaboratorAbsenceStarted: {},
-	EventTypeCollaboratorAbsenceEnded:   {},
-	EventTypeCollaboratorRoleChanged:    {},
-	EventTypeCollaboratorReOnboarded:    {},
+	EventTypeCollaboratorCreated:           {},
+	EventTypeCollaboratorOffboarded:        {},
+	EventTypeCollaboratorSessionTerminated: {},
+	EventTypeCollaboratorAbsenceStarted:    {},
+	EventTypeCollaboratorAbsenceEnded:      {},
+	EventTypeCollaboratorRoleChanged:       {},
+	EventTypeCollaboratorReOnboarded:       {},
 	EventTypeTeamCreated:                {},
 	EventTypeTeamUpdated:                {},
 	EventTypeTeamDeleted:                {},

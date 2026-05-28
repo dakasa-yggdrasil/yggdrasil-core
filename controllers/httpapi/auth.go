@@ -18,6 +18,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 type authLoginResponse struct {
@@ -498,11 +499,179 @@ func (s *Server) handleAuthLogout(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// §13 INTEGRATION_CONTRACT: record the revocation in the central
+	// authority table + emit the canon event + dispatch RFC 8417
+	// back-channel logout to every OIDC client linked to this session.
+	// Best-effort — auth flow ALREADY succeeded (session row revoked
+	// above), so we never fail the HTTP response on these steps.
+	jti := session.ID
+	s.recordSessionRevocation(r, session.CollaboratorID, &jti, repository.SessionRevocationReasonLogout, map[string]any{
+		"source_ip":  clientIP(r),
+		"user_agent": r.UserAgent(),
+	})
+	s.dispatchBackchannelLogoutForSession(r.Context(), session.ID)
+
 	clearAuthCookie(w)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"authenticated": false,
 		"session":       session,
 	})
+}
+
+// recordSessionRevocation persists a §13 revocation row + emits the canon
+// `collaborator.session.terminated` event in the same transaction so a
+// crash between the two leaves no orphan. Failures are logged (never
+// surfaced to the HTTP response — the auth state mutation that prompted
+// this call has already committed).
+//
+// jti=nil revokes ALL sessions for the collaborator since revoked_at
+// (admin revoke / password rotation / offboarding). jti=set revokes
+// exactly one session (logout from one device).
+func (s *Server) recordSessionRevocation(
+	r *http.Request,
+	collaboratorID uuid.UUID,
+	jti *uuid.UUID,
+	reason string,
+	metadata map[string]any,
+) {
+	ctx := r.Context()
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		s.logger.Warn("session_revocation: begin tx",
+			zap.String("collaborator_id", collaboratorID.String()),
+			zap.Error(err))
+		return
+	}
+	committed := false
+	defer func() {
+		if !committed {
+			_ = tx.Rollback()
+		}
+	}()
+
+	rev, err := repository.InsertSessionRevocation(ctx, s.db, tx, repository.InsertSessionRevocationRequest{
+		CollaboratorID: collaboratorID,
+		SessionJTI:     jti,
+		Reason:         reason,
+		Metadata:       metadata,
+	})
+	if err != nil {
+		s.logger.Warn("session_revocation: insert",
+			zap.String("collaborator_id", collaboratorID.String()),
+			zap.String("reason", reason),
+			zap.Error(err))
+		return
+	}
+
+	payload := map[string]any{
+		"collaborator_id": collaboratorID.String(),
+		"reason":          reason,
+		"revocation_id":   rev.ID.String(),
+		"emitted_at":      time.Now().UTC().Format(time.RFC3339),
+	}
+	if jti != nil {
+		payload["session_id"] = jti.String()
+	}
+	// Best-effort enrich with primary_email so adapter reactors can
+	// match on identity without an extra DB lookup.
+	if collab, err := repository.GetCollaborator(ctx, s.db, collaboratorID.String()); err == nil {
+		if collab.PrimaryEmail != "" {
+			payload["primary_email"] = collab.PrimaryEmail
+		}
+	}
+
+	// Idempotency: (revocation_id) is unique-by-construction; including it
+	// in the key means a retry never produces a duplicate event row.
+	idempotency := "session.terminated." + rev.ID.String()
+	if _, err := repository.EmitEvent(ctx, tx, model.EmitEventRequest{
+		Type:           repository.EventTypeCollaboratorSessionTerminated,
+		SchemaVersion:  "v1",
+		AggregateType:  "collaborator",
+		AggregateID:    collaboratorID.String(),
+		Payload:        payload,
+		IdempotencyKey: idempotency,
+	}); err != nil {
+		s.logger.Warn("session_revocation: emit event",
+			zap.String("revocation_id", rev.ID.String()),
+			zap.Error(err))
+		return
+	}
+
+	if err := tx.Commit(); err != nil {
+		s.logger.Warn("session_revocation: commit",
+			zap.String("revocation_id", rev.ID.String()),
+			zap.Error(err))
+		return
+	}
+	committed = true
+}
+
+// dispatchBackchannelLogoutForSession fires the RFC 8417 logout_token
+// POST to every OIDC client linked to this session in a goroutine so the
+// HTTP logout response doesn't block on slow clients.
+//
+// The goroutine uses a fresh background context — the request context
+// is cancelled the moment we return to the client, but the dispatch must
+// still run to completion. A timeout on the background context bounds
+// total work.
+func (s *Server) dispatchBackchannelLogoutForSession(_ context.Context, sessionID uuid.UUID) {
+	if s.backchannelDispatcher == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		results, err := s.backchannelDispatcher.DispatchForSession(ctx, sessionID)
+		if err != nil {
+			s.logger.Warn("backchannel logout dispatch failed",
+				zap.String("session_id", sessionID.String()),
+				zap.Error(err))
+			return
+		}
+		s.logger.Info("backchannel logout dispatched",
+			zap.String("session_id", sessionID.String()),
+			zap.Int("clients", len(results)))
+	}()
+}
+
+// dispatchBackchannelLogoutForCollaborator is the global variant used by
+// admin revoke / password rotation / offboarding flows. Same goroutine
+// shape; broader scope (every link, regardless of session).
+func (s *Server) dispatchBackchannelLogoutForCollaborator(_ context.Context, collaboratorID uuid.UUID) {
+	if s.backchannelDispatcher == nil {
+		return
+	}
+	go func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		results, err := s.backchannelDispatcher.DispatchForCollaborator(ctx, collaboratorID)
+		if err != nil {
+			s.logger.Warn("backchannel logout dispatch (collaborator) failed",
+				zap.String("collaborator_id", collaboratorID.String()),
+				zap.Error(err))
+			return
+		}
+		s.logger.Info("backchannel logout (collaborator) dispatched",
+			zap.String("collaborator_id", collaboratorID.String()),
+			zap.Int("clients", len(results)))
+	}()
+}
+
+// clientIP best-effort extracts the source IP from the request for
+// audit metadata. Trusts X-Forwarded-For only when set by the ingress
+// (we don't inspect a chain).
+func clientIP(r *http.Request) string {
+	if v := strings.TrimSpace(r.Header.Get("X-Forwarded-For")); v != "" {
+		// First entry in XFF chain is the original client per RFC 7239.
+		if idx := strings.Index(v, ","); idx >= 0 {
+			return strings.TrimSpace(v[:idx])
+		}
+		return v
+	}
+	if v := strings.TrimSpace(r.Header.Get("X-Real-IP")); v != "" {
+		return v
+	}
+	return strings.TrimSpace(r.RemoteAddr)
 }
 
 func (s *Server) handleThirdPartyIdentityList(w http.ResponseWriter, r *http.Request) {

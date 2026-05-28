@@ -571,7 +571,23 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		if err := oidc.MountOIDC(context.Background(), mux, server.db, server.oidcIssuerURL); err != nil {
 			return nil, fmt.Errorf("mount oidc: %w", err)
 		}
+		// §13 INTEGRATION_CONTRACT: wire the back-channel logout dispatcher
+		// alongside the OIDC OP so /logout (and admin revoke) propagates
+		// session termination to every registered OIDC client. Storage is
+		// re-built here (cheap — no caches) so the dispatcher owns its own
+		// reference independent of the op.Provider's internal Storage.
+		server.backchannelDispatcher = oidc.NewBackchannelDispatcher(
+			oidc.NewStorage(server.db, server.oidcIssuerURL),
+			server.oidcIssuerURL,
+		)
 	}
+
+	// §13 INTEGRATION_CONTRACT: RFC 7662 introspection + admin session
+	// revocation routes. Both require admin-token auth (see
+	// authorizeAuthAdminRequest); the introspection handler is also
+	// callable by manifest_token holders so legacy SSO clients can poll.
+	mux.HandleFunc("POST /api/v1/oidc/introspect", server.handleOIDCIntrospect)
+	mux.HandleFunc("POST /api/v1/admin/collaborators/{id}/revoke-sessions", server.handleAdminCollaboratorRevokeSessions)
 
 	// Opt-in console SPA. Mounted under <prefix>/ (e.g. /console/) with
 	// the prefix-with-and-without-trailing-slash both routing through.
@@ -819,6 +835,11 @@ type Server struct {
 	// source IP (security audit 2026-05-27 A4). nil disables the
 	// middleware (e.g. for narrow unit tests).
 	loginLimiter *loginRateLimiter
+	// backchannelDispatcher fires RFC 8417 logout_token POSTs to every
+	// OIDC client linked to a terminated session (§13 INTEGRATION_CONTRACT).
+	// nil disables back-channel dispatch — useful for tests or deploys
+	// that don't run OIDC. Set when OIDC routes mount (see MountOIDC).
+	backchannelDispatcher *oidc.BackchannelDispatcher
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {

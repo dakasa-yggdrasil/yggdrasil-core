@@ -1,0 +1,46 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://yggdrasil.io/contracts/events/v1/collaborator/session_terminated.json",
+  "title": "collaborator.session.terminated payload",
+  "description": "Payload emitted when a collaborator's session is terminated server-side. Drives RFC 8417 back-channel logout dispatch + downstream reactor invocations (Slack, Google Workspace, GitHub, Grafana, …) so the revocation propagates to every consumer with a live delegated session for the user. §13 INTEGRATION_CONTRACT.",
+  "type": "object",
+  "required": ["collaborator_id", "reason"],
+  "properties": {
+    "collaborator_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "UUID of the collaborator whose session was terminated."
+    },
+    "primary_email": {
+      "type": "string",
+      "description": "Primary email address of the collaborator, for provider identity matching."
+    },
+    "session_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "yggdrasil auth_session.id that was revoked. Omitted when the revocation is global (admin revoke / password rotation / offboarding) and not tied to a single session."
+    },
+    "reason": {
+      "type": "string",
+      "enum": [
+        "logout",
+        "admin_revoked",
+        "password_rotated",
+        "offboarded",
+        "session_expired",
+        "mfa_reset"
+      ],
+      "description": "Canonical revocation reason. Stable strings — adapters keying off this in reactors must support every value."
+    },
+    "revocation_id": {
+      "type": "string",
+      "format": "uuid",
+      "description": "ID of the session_revocation row that records this event server-side. Useful for correlating audit + back-channel dispatch outcome."
+    },
+    "emitted_at": {
+      "type": "string",
+      "format": "date-time",
+      "description": "ISO 8601 timestamp the event was emitted."
+    }
+  }
+}

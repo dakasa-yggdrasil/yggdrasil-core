@@ -527,11 +527,50 @@ func (s *Server) handlePasswordChange(w http.ResponseWriter, r *http.Request) {
 		},
 	})
 
+	// §13 INTEGRATION_CONTRACT: record the global session revocation so
+	// every OIDC client + adapter reactor sees that the password rotation
+	// invalidated outstanding tokens for this collaborator. session_jti=NULL
+	// = "everything except this current session" matches the UPDATE above.
+	rev, revErr := repository.InsertSessionRevocation(r.Context(), s.db, tx, repository.InsertSessionRevocationRequest{
+		CollaboratorID: collab.ID,
+		SessionJTI:     nil,
+		Reason:         repository.SessionRevocationReasonPasswordRotated,
+		Metadata: map[string]any{
+			"source": source,
+			"ip":     r.RemoteAddr,
+			"keep_session_id": session.ID.String(),
+		},
+	})
+	if revErr == nil {
+		sessionPayload := map[string]any{
+			"collaborator_id": collab.ID.String(),
+			"reason":          repository.SessionRevocationReasonPasswordRotated,
+			"revocation_id":   rev.ID.String(),
+			"emitted_at":      time.Now().UTC().Format(time.RFC3339),
+		}
+		if collab.PrimaryEmail != "" {
+			sessionPayload["primary_email"] = collab.PrimaryEmail
+		}
+		_, _ = repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
+			Type:           repository.EventTypeCollaboratorSessionTerminated,
+			SchemaVersion:  "v1",
+			AggregateType:  "collaborator",
+			AggregateID:    collab.ID.String(),
+			Payload:        sessionPayload,
+			IdempotencyKey: "session.terminated." + rev.ID.String(),
+		})
+	}
+
 	if err := tx.Commit(); err != nil {
 		writeMappedError(w, err)
 		return
 	}
 	committed = true
+
+	// §13 INTEGRATION_CONTRACT: fire RFC 8417 back-channel logout to every
+	// OIDC client linked to this collaborator. Goroutine — the password
+	// change response shouldn't wait on slow clients.
+	s.dispatchBackchannelLogoutForCollaborator(r.Context(), collab.ID)
 
 	// Step 7: respond with updated credential state.
 	state, _ := repository.GetPasswordCredentialState(r.Context(), s.db, collab.ID)

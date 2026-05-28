@@ -116,3 +116,31 @@ func TestValidateEventPayload_WorkflowRunCompleted_Valid(t *testing.T) {
 		t.Fatalf("expected valid payload, got error: %v", err)
 	}
 }
+
+// TestValidateEventPayload_CollaboratorSessionTerminated_Valid covers the
+// §13 INTEGRATION_CONTRACT canon event. Required fields are
+// collaborator_id + reason; everything else is optional context.
+func TestValidateEventPayload_CollaboratorSessionTerminated_Valid(t *testing.T) {
+	payload := map[string]interface{}{
+		"collaborator_id": "018f2b4a-1234-7abc-def0-123456789012",
+		"primary_email":   "user@example.com",
+		"session_id":      "00000000-0000-0000-0000-000000000001",
+		"reason":          "logout",
+		"revocation_id":   "00000000-0000-0000-0000-000000000002",
+		"emitted_at":      "2026-05-27T12:00:00Z",
+	}
+	if err := ValidateEventPayload("collaborator.session.terminated", "v1", payload); err != nil {
+		t.Fatalf("expected valid payload, got error: %v", err)
+	}
+}
+
+func TestValidateEventPayload_CollaboratorSessionTerminated_InvalidReason(t *testing.T) {
+	payload := map[string]interface{}{
+		"collaborator_id": "018f2b4a-1234-7abc-def0-123456789012",
+		"reason":          "not_a_reason",
+	}
+	err := ValidateEventPayload("collaborator.session.terminated", "v1", payload)
+	if err == nil {
+		t.Fatal("expected validation error for unknown reason value")
+	}
+}

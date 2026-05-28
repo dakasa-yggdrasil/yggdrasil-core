@@ -89,6 +89,7 @@ func eventTypeToSchemaPath(eventType string, schemaVersion string) string {
 		"infra.alert.firing":           "events/v1/infra/alert_firing.json",
 		"collaborator.created":                "events/v1/collaborator/created.json",
 		"collaborator.offboarded":             "events/v1/collaborator/offboarded.json",
+		"collaborator.session.terminated":     "events/v1/collaborator/session_terminated.json",
 		"collaborator.status.drift_detected":  "events/v1/collaborator/status_drift_detected.json",
 		// credential lifecycle events
 		"credential.setup_token_issued":         "events/v1/credential/setup_token_issued.json",

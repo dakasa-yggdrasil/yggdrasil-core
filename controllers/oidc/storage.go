@@ -394,6 +394,11 @@ func (s *Storage) CreateAccessAndRefreshTokens(
 		if err := repository.CreateOIDCRefreshToken(ctx, s.db, rec); err != nil {
 			return "", "", time.Time{}, fmt.Errorf("create refresh: %w", err)
 		}
+		// §13 INTEGRATION_CONTRACT: record the link so future session
+		// revocations (logout / admin revoke / password rotation) can
+		// fan out RFC 8417 back-channel logout to this client. Failures
+		// here are best-effort — the token was already minted.
+		_, _ = repository.UpsertOIDCSessionLink(ctx, s.db, collabID, clientID, nil)
 	} else {
 		// Refresh Flow: rotate atomically. Repository signals "already
 		// revoked or missing" by returning a sentinel-shaped error; on
@@ -496,8 +501,23 @@ func (s *Storage) TokenRequestByRefreshToken(ctx context.Context, refreshToken s
 }
 
 // TerminateSession revokes all live refresh tokens issued for the given
-// client/user pair. Access tokens are stateless (JWTs) — they expire on
-// their own; we cannot recall them.
+// client/user pair AND records a §13 session_revocation row so RFC 7662
+// introspection sees the JWT access tokens as inactive immediately. We
+// USED to bail with "access tokens are stateless (JWTs) — we cannot
+// recall them"; with the central session_revocation table introspection
+// callers can now correctly answer "is this token still valid?".
+//
+// The OIDC OP calls this from the end_session endpoint (RP-initiated
+// logout) AND from RevokeToken when the resource server explicitly
+// revokes a token chain. Either entry point therefore propagates to:
+//
+//   1. oidc_refresh_tokens — the refresh chain is killed
+//   2. session_revocation — JWT access tokens become inactive on
+//      next introspection lookup for this (collaborator, client) pair
+//
+// Mark the OIDC session link terminated so the back-channel dispatcher
+// doesn't re-fire (TerminateSession is itself called BY back-channel
+// flows in some clients).
 func (s *Storage) TerminateSession(ctx context.Context, userID string, clientID string) error {
 	parsed, err := uuid.Parse(userID)
 	if err != nil {
@@ -509,6 +529,32 @@ func (s *Storage) TerminateSession(ctx context.Context, userID string, clientID 
 	`, parsed, clientID)
 	if err != nil {
 		return fmt.Errorf("terminate session: %w", err)
+	}
+
+	// §13: record session_revocation so introspection sees the access
+	// tokens as inactive even though they're stateless JWTs. Per-client
+	// scope = jti=NULL but reason carries the client_id in metadata so
+	// the audit trail captures it.
+	_, _ = repository.InsertSessionRevocation(ctx, s.db, nil, repository.InsertSessionRevocationRequest{
+		CollaboratorID: parsed,
+		SessionJTI:     nil,
+		Reason:         repository.SessionRevocationReasonLogout,
+		Metadata: map[string]any{
+			"source":    "oidc.terminate_session",
+			"client_id": clientID,
+		},
+	})
+
+	// Mark the session link terminated for this client so subsequent
+	// back-channel dispatchers don't re-fire against an already-logged-out
+	// client. Idempotent — no-op when no row matches.
+	links, err := repository.ListActiveOIDCSessionLinksForCollaborator(ctx, s.db, parsed)
+	if err == nil {
+		for _, l := range links {
+			if l.ClientID == clientID {
+				_ = repository.MarkOIDCSessionLinkTerminated(ctx, s.db, l.ID)
+			}
+		}
 	}
 	return nil
 }

@@ -95,3 +95,16 @@ func TestTeamGrantEventsAreCanonLifecycle(t *testing.T) {
 		}
 	}
 }
+
+// TestSessionTerminatedIsCanonLifecycle asserts the §13 INTEGRATION_CONTRACT
+// invariant: collaborator.session.terminated is in the canon set so adapter
+// reactors declared against it (Slack on_collaborator_session_terminated,
+// GWS, GitHub, Grafana) materialize properly.
+func TestSessionTerminatedIsCanonLifecycle(t *testing.T) {
+	if EventTypeCollaboratorSessionTerminated != "collaborator.session.terminated" {
+		t.Fatalf("constant drift: got %q", EventTypeCollaboratorSessionTerminated)
+	}
+	if !IsCanonLifecycleEvent(EventTypeCollaboratorSessionTerminated) {
+		t.Fatal("session.terminated must be in CanonLifecycleEventTypes")
+	}
+}

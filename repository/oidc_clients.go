@@ -15,7 +15,9 @@ var ErrOIDCClientNotFound = errors.New("oidc client not found")
 func GetOIDCClientByID(ctx context.Context, db *sql.DB, clientID string) (model.OIDCClient, error) {
 	row := db.QueryRowContext(ctx, `
 		SELECT client_id, client_secret_hash, redirect_uris, post_logout_redirect_uris,
-		       scopes, grant_types, pkce_required, created_at
+		       scopes, grant_types, pkce_required,
+		       COALESCE(backchannel_logout_uri, ''),
+		       created_at
 		FROM oidc_clients
 		WHERE client_id = $1
 	`, clientID)
@@ -28,6 +30,7 @@ func GetOIDCClientByID(ctx context.Context, db *sql.DB, clientID string) (model.
 		pq.Array(&c.Scopes),
 		pq.Array(&c.GrantTypes),
 		&c.PKCERequired,
+		&c.BackchannelLogoutURI,
 		&c.CreatedAt,
 	)
 	if errors.Is(err, sql.ErrNoRows) {
@@ -40,19 +43,26 @@ func GetOIDCClientByID(ctx context.Context, db *sql.DB, clientID string) (model.
 }
 
 func UpsertOIDCClient(ctx context.Context, db *sql.DB, c model.OIDCClient) error {
+	// nullable text column: empty string → NULL keeps the column semantically
+	// "opted out of back-channel logout" instead of "registered as empty".
+	var bcl any
+	if c.BackchannelLogoutURI != "" {
+		bcl = c.BackchannelLogoutURI
+	}
 	_, err := db.ExecContext(ctx, `
 		INSERT INTO oidc_clients (
 			client_id, client_secret_hash, redirect_uris, post_logout_redirect_uris,
-			scopes, grant_types, pkce_required
+			scopes, grant_types, pkce_required, backchannel_logout_uri
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
 		ON CONFLICT (client_id) DO UPDATE SET
 			client_secret_hash = EXCLUDED.client_secret_hash,
 			redirect_uris = EXCLUDED.redirect_uris,
 			post_logout_redirect_uris = EXCLUDED.post_logout_redirect_uris,
 			scopes = EXCLUDED.scopes,
 			grant_types = EXCLUDED.grant_types,
-			pkce_required = EXCLUDED.pkce_required
+			pkce_required = EXCLUDED.pkce_required,
+			backchannel_logout_uri = EXCLUDED.backchannel_logout_uri
 	`,
 		c.ClientID,
 		c.ClientSecretHash,
@@ -61,6 +71,7 @@ func UpsertOIDCClient(ctx context.Context, db *sql.DB, c model.OIDCClient) error
 		pq.Array(c.Scopes),
 		pq.Array(c.GrantTypes),
 		c.PKCERequired,
+		bcl,
 	)
 	if err != nil {
 		return fmt.Errorf("upsert oidc client: %w", err)
