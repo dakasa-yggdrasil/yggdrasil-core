@@ -2,6 +2,20 @@
 
 All notable changes to yggdrasil-core are documented here.
 
+## [2.10.0] - 2026-05-28
+
+### Added
+- **A6: SameSite=Strict default for the session cookie.** `writeAuthCookie` and `clearAuthCookie` now emit `SameSite=Strict` by default (was `Lax`). For an admin IDP this kills the broadest CSRF surface — the cookie won't ride any cross-site request, top-level navigations included. Operators can override via `AUTH_SESSION_COOKIE_SAMESITE` (Strict/Lax/None, case-insensitive); the third-party OAuth state cookie keeps Lax intentionally because the IdP callback is a cross-site navigation.
+- **A7: Per-session CSRF token defense (warn-only enforce).** Per-session token derived as `base64url(HMAC-SHA256(YGGDRASIL_CSRF_HMAC_SECRET, session.id))` — stateless, deterministic, no migration. Surfaced via a non-HttpOnly `yggdrasil_csrf_token` cookie AND the `csrf_token` field on `GET /auth/session`. New `csrfMiddleware` (wired between session resolution and route dispatch) recomputes the HMAC and rejects mismatched/missing `X-CSRF-Token` headers on POST/PUT/DELETE/PATCH. Mode gated by `YGGDRASIL_CSRF_ENFORCE` (default `warn` so the surface-console rollout can ship its matching client without 403-storming production). New metric family `yggdrasil_csrf_rejected_total{outcome,mode}`.
+- **A10: Per-client OIDC AccessTokenLifetime override.** Migration 00048 adds nullable `oidc_clients.access_token_lifetime_seconds` (CHECK bounded to [60, 86400]). NULL = use the global 15-minute default; positive int = use that lifetime in seconds. Admin endpoint `PATCH /api/v1/admin/oidc-clients/{id}` (admin-token auth) lets operators set/clear the override per client; high-trust clients can opt down to 60–300s so a leaked JWT is short-lived. The override flows through `clientView.AccessTokenLifetime()` and is read fresh per request — no clientView caching.
+
+### Fixed
+- **A9: hardened OIDC redirect_uri exact-match guarantee.** Pinned the existing protection (zitadel/oidc/v3's `slices.Contains` validator + our clientView NOT implementing `op.HasRedirectGlobs`) with a 7-test suite covering attacker URI families (prefix attacks, host suffix attacks, scheme downgrades, double-slash hijacks, protocol-relative URIs, `javascript:` pseudo-schemes, path/query/fragment append fuzz) plus a sentinel that breaks if a future refactor adds glob support to clientView. Also documented the security rules in `storage.go::RedirectURIs`. No production code change — the protection was already correct; this commit prevents regression.
+
+### Notes
+- A7 ships in warn-only mode. The matching `X-CSRF-Token` emission lands in surface-console (separate cycle); after that rolls, flip `YGGDRASIL_CSRF_ENFORCE=enforce` on the Deployment env to start returning 403 + Problem+JSON on missing/invalid tokens.
+- A10 admin endpoint is PATCH-only — full OIDC client lifecycle (create/delete) stays out of scope for the audit. Clients are still bootstrapped via manifests / direct `UpsertOIDCClient` calls.
+
 ## [2.9.2] - 2026-05-27
 
 ### Added
