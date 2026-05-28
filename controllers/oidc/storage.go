@@ -58,7 +58,27 @@ func newClientView(c model.OIDCClient, issuerURL string) *clientView {
 	return &clientView{c: c, issuerURL: issuerURL}
 }
 
-func (v *clientView) GetID() string                    { return v.c.ClientID }
+func (v *clientView) GetID() string { return v.c.ClientID }
+
+// RedirectURIs surfaces the client's registered redirect URI allowlist.
+// SECURITY (audit 2026-05-27 A9): the zitadel/oidc OP validates inbound
+// `redirect_uri` query params via exact slice membership against this
+// return value (vendor/.../op/auth_request.go::checkURIAgainstRedirects
+// uses `slices.Contains`). Returning the raw slice keeps the contract
+// exact-match — no prefix matching, no glob expansion.
+//
+// To preserve this property:
+//
+//  1. NEVER make this method return a transformed list (e.g. by
+//     appending wildcards or normalizing paths). Do that work at
+//     registration time (UpsertOIDCClient) so storage is the source of
+//     truth.
+//  2. NEVER implement op.HasRedirectGlobs on clientView. Glob matching
+//     opens open-redirect holes when patterns are sloppy
+//     (`https://*.dakasa.me/*` would accept evil.dakasa.me).
+//     redirect_uri_exact_match_test.go pins this invariant.
+//  3. PostLogoutRedirectURIs follows the same exact-match contract via
+//     op.ValidateEndSessionPostLogoutRedirectURI; same rules apply.
 func (v *clientView) RedirectURIs() []string           { return v.c.RedirectURIs }
 func (v *clientView) PostLogoutRedirectURIs() []string { return v.c.PostLogoutRedirectURIs }
 
