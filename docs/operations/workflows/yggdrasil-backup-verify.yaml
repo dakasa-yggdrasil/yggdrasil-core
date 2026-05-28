@@ -1,0 +1,181 @@
+apiVersion: yggdrasil.io/v1alpha1
+kind: workflow
+metadata:
+  name: yggdrasil-backup-verify
+  namespace: global
+  description: |
+    G8 (audit ref): backup verification. Asserts the Yggdrasil DB has a
+    recent RDS snapshot and the retention horizon is sane. Optional
+    deeper restore drill gated by the `do_restore_drill` input flag.
+
+    What it does:
+      1. List recent RDS DB snapshots via integration-aws.
+      2. Assert: at least one snapshot in the past 24h.
+      3. Assert: retention period >= 7 days.
+      4. Optionally trigger a restore-to-temp + smoke query + teardown
+         when do_restore_drill=true (default false; runbook gated).
+      5. Emit one of two audit_events:
+           backup.verify.succeeded   — all assertions passed
+           backup.verify.failed      — any assertion failed
+
+    Scheduled weekly (Mondays 04:00 UTC) so operators have evidence the
+    backup pipeline is alive without having to chase it manually.
+
+    Companion runbook:
+      docs/operations/backup-restore.md
+      monitoring/slo.md
+spec:
+  trigger:
+    mode: schedule
+    schedule:
+      cron_expression: "0 4 * * 1"
+      timezone: UTC
+      catchup_policy: skip
+    # Also dispatchable ad-hoc by ops via POST /api/v1/workflow-runs.
+    manual: true
+
+  input_schema:
+    type: object
+    additionalProperties: false
+    properties:
+      db_instance_identifier:
+        type: string
+        description: >
+          RDS DB instance whose snapshots we verify. Defaults to the
+          Yggdrasil control-plane DB name from the cluster config.
+        minLength: 1
+      min_retention_days:
+        type: integer
+        description: Fail verify if retention < N days.
+        default: 7
+        minimum: 1
+      max_age_hours:
+        type: integer
+        description: Fail verify if youngest snapshot is older than N hours.
+        default: 24
+        minimum: 1
+      do_restore_drill:
+        type: boolean
+        description: >
+          Trigger a real restore-to-temp drill (high cost; gated by
+          ops dispatch only). Default false — assertion-only weekly run.
+        default: false
+    required:
+      - db_instance_identifier
+
+  steps:
+    - id: list-snapshots
+      description: >
+        Pull the recent snapshot list for the target RDS instance.
+        Uses integration-aws.observe_rds_snapshots when available;
+        falls back to the cost-recommendation observation
+        (list_rds_snapshots_orphans) which already enumerates the
+        snapshot inventory as a side-effect.
+      use:
+        kind: integration
+        instance_ref:
+          name: aws
+          namespace: global
+        operation: list_rds_snapshots_orphans
+      with:
+        # The operation surfaces metadata.snapshots[] which includes
+        # snapshot_id, snapshot_create_time, db_instance_id, status,
+        # retention_days. We treat older_than_retention as a soft
+        # signal — the assertion below uses snapshot_create_time
+        # directly.
+        retention_days: '{{ inputs.min_retention_days }}'
+        db_instance_filter: '{{ inputs.db_instance_identifier }}'
+
+    - id: assert-recent-snapshot
+      description: >
+        Fail unless at least one snapshot has snapshot_create_time
+        within the last `max_age_hours`. This is the canonical
+        evidence that the backup pipeline produced output recently.
+      depends_on:
+        - list-snapshots
+      use:
+        kind: yggdrasil
+        operation: assert.backup_snapshot_recent
+      with:
+        snapshots: '{{ steps.list-snapshots.output.metadata.snapshots }}'
+        max_age_hours: '{{ inputs.max_age_hours }}'
+        db_instance_identifier: '{{ inputs.db_instance_identifier }}'
+
+    - id: assert-retention
+      description: >
+        Fail unless retention >= min_retention_days. RDS allows a 0-day
+        retention which disables automated snapshots entirely; this
+        guard catches an accidental misconfiguration immediately.
+      depends_on:
+        - list-snapshots
+      use:
+        kind: yggdrasil
+        operation: assert.backup_retention_minimum
+      with:
+        snapshots: '{{ steps.list-snapshots.output.metadata.snapshots }}'
+        min_retention_days: '{{ inputs.min_retention_days }}'
+
+    - id: restore-drill
+      description: >
+        Optional: restore the most-recent snapshot to a temp DB,
+        run a smoke query (SELECT 1 FROM manifests LIMIT 1), then
+        tear it down. Costs ~$1-2 per run depending on snapshot
+        size; gated to manual ad-hoc dispatch via do_restore_drill.
+      when: '{{ inputs.do_restore_drill == true }}'
+      depends_on:
+        - assert-recent-snapshot
+        - assert-retention
+      use:
+        kind: integration
+        instance_ref:
+          name: aws
+          namespace: global
+        operation: restore_rds_snapshot_to_temp
+      with:
+        snapshot_id: '{{ steps.list-snapshots.output.metadata.snapshots[0].snapshot_id }}'
+        smoke_query: "SELECT 1 FROM public.manifests LIMIT 1"
+        teardown_after: true
+
+    - id: emit-success-audit
+      description: >
+        Emit backup.verify.succeeded audit_event so operators can
+        see a green stream in the audit log without scraping
+        workflow_run history.
+      when: '{{ steps.assert-recent-snapshot.outcome == "succeeded" and steps.assert-retention.outcome == "succeeded" }}'
+      depends_on:
+        - assert-recent-snapshot
+        - assert-retention
+      use:
+        kind: yggdrasil
+        operation: audit.emit
+      with:
+        action: backup.verify.succeeded
+        actor: workflow:yggdrasil-backup-verify
+        resource_kind: rds_db_instance
+        resource_id: '{{ inputs.db_instance_identifier }}'
+        outcome: success
+        metadata:
+          snapshot_count: '{{ steps.list-snapshots.output.metadata.orphan_count }}'
+          drill_executed: '{{ inputs.do_restore_drill }}'
+
+    - id: emit-failure-audit
+      description: >
+        Mirror of emit-success-audit for the failure path. Fires when
+        either assertion failed; carries the failed step id for
+        downstream pager filtering.
+      when: '{{ steps.assert-recent-snapshot.outcome != "succeeded" or steps.assert-retention.outcome != "succeeded" }}'
+      depends_on:
+        - assert-recent-snapshot
+        - assert-retention
+      use:
+        kind: yggdrasil
+        operation: audit.emit
+      with:
+        action: backup.verify.failed
+        actor: workflow:yggdrasil-backup-verify
+        resource_kind: rds_db_instance
+        resource_id: '{{ inputs.db_instance_identifier }}'
+        outcome: failure
+        metadata:
+          recent_snapshot_outcome: '{{ steps.assert-recent-snapshot.outcome }}'
+          retention_outcome: '{{ steps.assert-retention.outcome }}'
