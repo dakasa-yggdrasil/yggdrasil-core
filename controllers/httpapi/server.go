@@ -20,6 +20,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/scim"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/cryptoenvelope"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -2695,13 +2696,154 @@ func writeJSON(w http.ResponseWriter, status int, payload any) {
 	_ = json.NewEncoder(w).Encode(payload)
 }
 
+// writeJSONError emits a §14 RFC 7807 Problem+JSON envelope with the
+// `error` legacy field PRESERVED for backward compatibility. The two
+// shapes share one body — clients reading `code` get the structured
+// path; clients reading `error` keep working until the next major bump
+// removes the legacy field.
+//
+// The Content-Type is application/problem+json so RFC 7807-aware
+// clients (FE Problem+JSON middlewares, k8s.io/apimachinery, etc.) parse
+// it directly.
 func writeJSONError(w http.ResponseWriter, status int, msg string) {
-	writeJSON(w, status, map[string]string{"error": msg})
+	writeProblemEnvelope(w, status, codeFromGenericMessage(status, msg), httpStatusTitle(status), msg, "")
 }
 
+// writeMappedError preserves the legacy entry point used by ~250 call
+// sites while transparently emitting the §14 envelope. The `code` is
+// derived from the typed error class (errors.Is chain) when possible,
+// falling back to a category-based default when the error is anonymous.
+//
+// Existing callers do NOT need to change — both `error` and `code`
+// fields appear in the body. New handlers should prefer
+// httperr.WriteProblem directly for richer extras (instance, errors[]).
 func writeMappedError(w http.ResponseWriter, err error) {
 	status := httpStatusFromError(err)
-	writeJSON(w, status, errorResponse{Error: strings.TrimSpace(err.Error())})
+	code := codeFromError(err, status)
+	writeProblemEnvelope(w, status, code, httpStatusTitle(status), strings.TrimSpace(err.Error()), "")
+}
+
+// writeProblemEnvelope is the shared body writer for both writeJSONError
+// and writeMappedError. The wire shape:
+//
+//   Content-Type: application/problem+json
+//   {
+//     "type":   "https://yggdrasil.dakasa.me/errors/<code>",
+//     "title":  "<HTTP status text>",
+//     "status": <code>,
+//     "code":   "<machine-readable code>",
+//     "detail": "<original message>",
+//     "error":  "<original message>"    // LEGACY — preserved for one minor
+//                                       // version so consumers can migrate
+//   }
+//
+// The legacy `error` key is THE ONE backward-compat hack §14 explicitly
+// permits (see contract: "code is added alongside for one minor version,
+// then the legacy field is removed"). It is the only field outside the
+// RFC 7807 reserved set, so RFC-7807 parsers ignore it gracefully.
+func writeProblemEnvelope(w http.ResponseWriter, status int, code, title, detail, instance string) {
+	p := &httperr.Problem{
+		Status:   status,
+		Code:     code,
+		Title:    title,
+		Detail:   detail,
+		Instance: instance,
+		Extra: map[string]interface{}{
+			// LEGACY backward-compat. Drops in the next minor.
+			"error": detail,
+		},
+	}
+	httperr.Write(w, p)
+}
+
+// codeFromError maps the existing typed errors into the §14 stable
+// `code` namespace. Falls back to a category derived from the HTTP
+// status when the error is unknown.
+func codeFromError(err error, status int) string {
+	switch {
+	case err == nil:
+		return ""
+	case errors.Is(err, messagecontroller.ErrAdapterTransportUnavailable):
+		return httperr.CodeIntegrationUnavailable
+	case errors.Is(err, errWorkflowRunUnauthorized),
+		errors.Is(err, errAuthAdminUnauthorized):
+		return httperr.CodeAuthUnauthenticated
+	case errors.Is(err, repository.ErrAuthInvalidCredentials):
+		return httperr.CodeAuthInvalidCredentials
+	case errors.Is(err, repository.ErrAuthSessionNotFound):
+		return httperr.CodeAuthSessionNotFound
+	case errors.Is(err, repository.ErrAuthSessionExpired):
+		return httperr.CodeAuthSessionExpired
+	case errors.Is(err, repository.ErrPasswordCredentialNotFound):
+		return httperr.CodeAuthInvalidCredentials
+	case errors.Is(err, repository.ErrAuthAccountLocked):
+		return httperr.CodeAuthAccountLocked
+	case errors.Is(err, mfa.ErrMFANotEnrolled):
+		return httperr.CodeAuthMFANotEnrolled
+	case errors.Is(err, repository.ErrManifestNotFound):
+		return httperr.CodeManifestNotFound
+	case errors.Is(err, repository.ErrThirdPartyIdentityConflict):
+		return httperr.CodeManifestConflict
+	case errors.Is(err, repository.ErrCollaboratorNotFound),
+		errors.Is(err, repository.ErrTeamNotFound),
+		errors.Is(err, repository.ErrManagedSecretNotFound),
+		errors.Is(err, repository.ErrThirdPartyIdentityNotFound),
+		errors.Is(err, repository.ErrThirdPartyAuthProviderNotFound),
+		errors.Is(err, repository.ErrMFAEnrollTokenNotFound):
+		return httperr.CodeIntegrationNotFound
+	case errors.Is(err, errAutoProvisionRejected):
+		return httperr.CodePermissionDenied
+	}
+	return codeFromGenericMessage(status, err.Error())
+}
+
+// codeFromGenericMessage is the last-resort code resolution for plain
+// string errors that bypass the typed-error path. Categorizes by HTTP
+// status class.
+func codeFromGenericMessage(status int, msg string) string {
+	switch {
+	case status == http.StatusUnauthorized:
+		return httperr.CodeAuthUnauthenticated
+	case status == http.StatusForbidden:
+		return httperr.CodePermissionDenied
+	case status == http.StatusNotFound:
+		return httperr.CodeIntegrationNotFound
+	case status == http.StatusConflict:
+		return httperr.CodeManifestConflict
+	case status == http.StatusLocked:
+		return httperr.CodeAuthAccountLocked
+	case status == http.StatusTooManyRequests:
+		return httperr.CodeRateLimitExceeded
+	case status == http.StatusPreconditionRequired:
+		return httperr.CodeAuthMFARequired
+	case status >= 400 && status < 500:
+		// "decode request body", "validation", "required", etc.
+		lowered := strings.ToLower(msg)
+		switch {
+		case strings.Contains(lowered, "required"):
+			return httperr.CodeMissingField
+		case strings.Contains(lowered, "validation"):
+			return httperr.CodeManifestValidationFailed
+		case strings.Contains(lowered, "parse"),
+			strings.Contains(lowered, "decode"),
+			strings.Contains(lowered, "malformed"):
+			return httperr.CodeMalformedBody
+		}
+		return httperr.CodeInvalidInput
+	case status >= 500:
+		return httperr.CodeInternal
+	}
+	return httperr.CodeInternal
+}
+
+// httpStatusTitle returns the HTTP status text the response advertises
+// in Problem.Title. Falls back to a generic string when http.StatusText
+// returns "" (custom statuses).
+func httpStatusTitle(status int) string {
+	if t := http.StatusText(status); t != "" {
+		return t
+	}
+	return "Error"
 }
 
 func httpStatusFromError(err error) int {
