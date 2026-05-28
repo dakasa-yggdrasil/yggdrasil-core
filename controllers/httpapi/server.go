@@ -471,95 +471,157 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// §13 RFC 8417 back-channel logout.
 	mux.HandleFunc("GET /api/v1/me/sessions", guard(server.handleMeSessionsList))
 	mux.HandleFunc("DELETE /api/v1/me/sessions/{id}", guard(server.handleMeSessionsRevoke))
-	mux.HandleFunc("GET /api/v1/console/integration-catalog", server.handleIntegrationCatalogList)
-	mux.HandleFunc("GET /api/v1/console/integration-catalog/{domain}/{section}/{entry}", server.handleIntegrationCatalogEntry)
-	mux.HandleFunc("GET /api/v1/console/catalog-discovery", server.handleCatalogDiscovery)
-	mux.HandleFunc("POST /api/v1/console/catalog-discovery/register", server.handleCatalogDiscoveryRegister)
-	mux.HandleFunc("GET /api/v1/console/integration-instances", server.handleIntegrationInstanceList)
-	mux.HandleFunc("POST /api/v1/console/integration-instances", server.handleIntegrationInstanceCreate)
-	mux.HandleFunc("GET /api/v1/console/collaborators", server.handleCollaboratorList)
-	mux.HandleFunc("POST /api/v1/console/collaborators", server.handleCollaboratorCreate)
-	mux.HandleFunc("GET /api/v1/console/collaborators/{id}", server.handleCollaboratorGet)
-	mux.HandleFunc("PATCH /api/v1/console/collaborators/{id}", server.handleCollaboratorUpdate)
-	mux.HandleFunc("DELETE /api/v1/console/collaborators/{id}", server.handleCollaboratorDelete)
-	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/offboard", server.handleCollaboratorOffboard)
-	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/suspend", server.handleCollaboratorSuspend)
-	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/unsuspend", server.handleCollaboratorUnsuspend)
-	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/re-onboard", server.handleCollaboratorReOnboard)
-	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/role-change", server.handleCollaboratorRoleChange)
-	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/team-add", server.handleCollaboratorTeamAdd)
-	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/team-remove", server.handleCollaboratorTeamRemove)
-	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/attribute-set", server.handleCollaboratorAttributeSet)
-	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/manager-change", server.handleCollaboratorManagerChange)
-	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/absence/start", server.handleCollaboratorAbsenceStart)
-	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/absence/end", server.handleCollaboratorAbsenceEnd)
-	mux.HandleFunc("GET /api/v1/console/collaborators/{id}/lifecycle-events", server.handleCollaboratorLifecycleEvents)
-	mux.HandleFunc("GET /api/v1/console/collaborators/{id}/provider-state", server.handleCollaboratorProviderState)
-	mux.HandleFunc("GET /api/v1/console/permissions/catalog", server.handlePermissionList)
-	mux.HandleFunc("POST /api/v1/console/permissions/catalog", server.handlePermissionRegister)
-	mux.HandleFunc("GET /api/v1/console/permissions/bindings", server.handlePermissionBindingList)
-	mux.HandleFunc("POST /api/v1/console/permissions/bindings", server.handlePermissionBindingCreate)
-	mux.HandleFunc("POST /api/v1/console/permissions/evaluate", server.handlePermissionEvaluate)
-	mux.HandleFunc("GET /api/v1/console/teams", server.handleTeamList)
-	mux.HandleFunc("POST /api/v1/console/teams", server.handleTeamCreate)
-	mux.HandleFunc("GET /api/v1/console/teams/{id}", server.handleTeamGet)
-	mux.HandleFunc("PATCH /api/v1/console/teams/{id}", server.handleTeamUpdate)
-	mux.HandleFunc("DELETE /api/v1/console/teams/{id}", server.handleTeamDelete)
-	mux.HandleFunc("POST /api/v1/console/teams/{id}/sync", server.handleTeamSync)
-	mux.HandleFunc("GET /api/v1/console/teams/{id}/provisioning-status", server.handleTeamProvisioningStatus)
-	mux.HandleFunc("GET /api/v1/console/teams/{id}/grants", server.handleTeamGrantList)
-	mux.HandleFunc("POST /api/v1/console/teams/{id}/grants", server.handleTeamGrantCreate)
-	mux.HandleFunc("DELETE /api/v1/console/teams/{id}/grants/{grant_id}", server.handleTeamGrantDelete)
-	mux.HandleFunc("GET /api/v1/console/teams/{id}/available-sources", server.handleTeamAvailableSources)
-	mux.HandleFunc("GET /api/v1/console/team-memberships", server.handleTeamMembershipList)
-	mux.HandleFunc("POST /api/v1/console/team-memberships", server.handleTeamMembershipUpsert)
-	mux.HandleFunc("GET /api/v1/console/auth/third-party-identities", server.handleThirdPartyIdentityList)
-	mux.HandleFunc("POST /api/v1/console/auth/third-party-identities", server.handleThirdPartyIdentityUpsert)
-	mux.HandleFunc("DELETE /api/v1/console/auth/third-party-identities/{provider}/{subject}", server.handleThirdPartyIdentityDelete)
-	mux.HandleFunc("GET /api/v1/console/auth/providers", server.handleThirdPartyAuthProviderList)
-	mux.HandleFunc("POST /api/v1/console/auth/providers", server.handleThirdPartyAuthProviderUpsert)
-	mux.HandleFunc("GET /api/v1/console/auth/providers/{provider}", server.handleThirdPartyAuthProviderGet)
-	mux.HandleFunc("DELETE /api/v1/console/auth/providers/{provider}", server.handleThirdPartyAuthProviderDelete)
-	mux.HandleFunc("POST /api/v1/console/auth/scim/clients", server.handleSCIMClientCreate)
-	mux.HandleFunc("GET /api/v1/console/auth/scim/clients", server.handleSCIMClientList)
-	mux.HandleFunc("POST /api/v1/console/auth/saml/service-providers", server.handleSAMLSPRegister)
-	mux.HandleFunc("GET /api/v1/console/auth/saml/service-providers", server.handleSAMLSPList)
-	mux.HandleFunc("POST /api/v1/console/auth/saml/rotate-signing-cert", server.handleSAMLRotateSigningCert)
-	mux.HandleFunc("GET /api/v1/console/products", server.handleProductList)
-	mux.HandleFunc("POST /api/v1/console/products", server.handleProductCreate)
-	mux.HandleFunc("GET /api/v1/console/secrets", server.handleManagedSecretList)
-	mux.HandleFunc("GET /api/v1/console/secrets/{namespace}/{name}", server.handleManagedSecretGet)
-	mux.HandleFunc("POST /api/v1/console/secrets", server.handleManagedSecretCreate)
-	mux.HandleFunc("POST /api/v1/console/secrets/{namespace}/{name}/rotate", server.handleManagedSecretRotate)
-	mux.HandleFunc("POST /api/v1/console/secrets/{namespace}/{name}/disable", server.handleManagedSecretDisable)
-	mux.HandleFunc("POST /api/v1/console/secrets/{namespace}/{name}/revoke", server.handleManagedSecretRevoke)
-	mux.HandleFunc("POST /api/v1/console/secrets/materialize-all", server.handleMaterializeAll)
-	mux.HandleFunc("POST /api/v1/console/secrets/{namespace}/{name}/materialize", server.handleMaterializeOne)
-	mux.HandleFunc("GET /api/v1/console/reconciler/status", server.handleReconcilerStatus)
-	mux.HandleFunc("GET /api/v1/console/repository-bindings", server.handleRepositoryBindingList)
-	mux.HandleFunc("POST /api/v1/console/repository-bindings", server.handleRepositoryBindingCreate)
-	mux.HandleFunc("GET /api/v1/console/guardian-policies", server.handleGuardianPolicyList)
-	mux.HandleFunc("POST /api/v1/console/guardian-policies", server.handleGuardianPolicyCreate)
-	mux.HandleFunc("GET /api/v1/console/guardian-approvals", server.handleGuardianApprovalList)
-	mux.HandleFunc("POST /api/v1/console/guardian-approvals", server.handleGuardianApprovalCreate)
-	mux.HandleFunc("POST /api/v1/console/guardian-approvals/{namespace}/{name}/decision", server.handleGuardianApprovalDecision)
-	mux.HandleFunc("GET /api/v1/console/guardian-memories", server.handleGuardianMemoryList)
-	mux.HandleFunc("GET /api/v1/console/remediation-bundles", server.handleRemediationBundleList)
-	mux.HandleFunc("POST /api/v1/console/remediation-bundles", server.handleRemediationBundleCreate)
-	mux.HandleFunc("POST /api/v1/console/guardian-memories/review", server.handleGuardianMemoryReview)
-	mux.HandleFunc("GET /api/v1/console/remediation-contracts", server.handleRemediationContractList)
-	mux.HandleFunc("POST /api/v1/console/remediation-contracts", server.handleRemediationContractCreate)
-	mux.HandleFunc("GET /api/v1/console/surfaces", server.handleSurfaceList)
-	mux.HandleFunc("POST /api/v1/console/surfaces", server.handleSurfaceCreate)
-	mux.HandleFunc("GET /api/v1/console/workflows", server.handleWorkflowList)
-	mux.HandleFunc("POST /api/v1/console/workflows", server.handleWorkflowCreate)
-	mux.HandleFunc("POST /api/v1/console/workflow-runs", server.handleWorkflowRun)
-	mux.HandleFunc("GET /api/v1/console/workflow-runs/{run_id}", server.handleWorkflowRunGet)
-	mux.HandleFunc("POST /api/v1/console/integrations/install", server.handleInstallIntegration)
-	mux.HandleFunc("POST /api/v1/console/provision/aws", server.handleProvisionAWS)
-	mux.HandleFunc("POST /api/v1/console/products/{namespace}/{name}/deploy", requireDeployToken(server.handleDeployProduct))
-	mux.HandleFunc("POST /api/v1/console/products/deploy-all", requireDeployToken(server.handleDeployAll))
-	mux.HandleFunc("POST /api/v1/console/bootstrap", requireDeployToken(server.handleBootstrap))
+	// Phase 5 (2026-05-28) — RBAC enforcement on /api/v1/console/* routes.
+	// Every route below is gated by `server.requireOpsPermissionFunc(perm, h)`,
+	// which checks the caller's permission list (resolved from team_grants on
+	// yggdrasil-self) against `perm`. See ops_rbac_middleware.go for the
+	// warn/enforce two-phase rollout (`YGGDRASIL_CONSOLE_RBAC_ENFORCE`) and
+	// ops_rbac_catalog.go for the permission constants. INTEGRATION_CONTRACT §12.
+	//
+	// Mapping: GET → view:<area>; POST/PATCH/DELETE → manage:<area> (or the
+	// specific operation permission, e.g. offboard_collaborator).
+
+	// Integration catalog & instances — read = view_integrations, write = manage_integrations.
+	mux.HandleFunc("GET /api/v1/console/integration-catalog", server.requireOpsPermissionFunc(permViewIntegrations, server.handleIntegrationCatalogList))
+	mux.HandleFunc("GET /api/v1/console/integration-catalog/{domain}/{section}/{entry}", server.requireOpsPermissionFunc(permViewIntegrations, server.handleIntegrationCatalogEntry))
+	mux.HandleFunc("GET /api/v1/console/catalog-discovery", server.requireOpsPermissionFunc(permViewIntegrations, server.handleCatalogDiscovery))
+	mux.HandleFunc("POST /api/v1/console/catalog-discovery/register", server.requireOpsPermissionFunc(permManageIntegrations, server.handleCatalogDiscoveryRegister))
+	mux.HandleFunc("GET /api/v1/console/integration-instances", server.requireOpsPermissionFunc(permViewIntegrations, server.handleIntegrationInstanceList))
+	mux.HandleFunc("POST /api/v1/console/integration-instances", server.requireOpsPermissionFunc(permManageIntegrations, server.handleIntegrationInstanceCreate))
+
+	// Collaborators — list/read = view_people, create = create_collaborator,
+	// update = edit_collaborator, delete/offboard = offboard_collaborator,
+	// suspend / role-change / team / attr / manager / absence = edit_collaborator
+	// (they all mutate a collaborator's current state; offboard_collaborator
+	// stays specific because it's a terminal lifecycle event).
+	mux.HandleFunc("GET /api/v1/console/collaborators", server.requireOpsPermissionFunc(permViewPeople, server.handleCollaboratorList))
+	mux.HandleFunc("POST /api/v1/console/collaborators", server.requireOpsPermissionFunc(permCreateCollaborator, server.handleCollaboratorCreate))
+	mux.HandleFunc("GET /api/v1/console/collaborators/{id}", server.requireOpsPermissionFunc(permViewPeople, server.handleCollaboratorGet))
+	mux.HandleFunc("PATCH /api/v1/console/collaborators/{id}", server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorUpdate))
+	mux.HandleFunc("DELETE /api/v1/console/collaborators/{id}", server.requireOpsPermissionFunc(permOffboardCollaborator, server.handleCollaboratorDelete))
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/offboard", server.requireOpsPermissionFunc(permOffboardCollaborator, server.handleCollaboratorOffboard))
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/suspend", server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorSuspend))
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/unsuspend", server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorUnsuspend))
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/re-onboard", server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorReOnboard))
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/role-change", server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorRoleChange))
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/team-add", server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorTeamAdd))
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/team-remove", server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorTeamRemove))
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/attribute-set", server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorAttributeSet))
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/manager-change", server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorManagerChange))
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/absence/start", server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorAbsenceStart))
+	mux.HandleFunc("POST /api/v1/console/collaborators/{id}/absence/end", server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorAbsenceEnd))
+	mux.HandleFunc("GET /api/v1/console/collaborators/{id}/lifecycle-events", server.requireOpsPermissionFunc(permViewPeople, server.handleCollaboratorLifecycleEvents))
+	mux.HandleFunc("GET /api/v1/console/collaborators/{id}/provider-state", server.requireOpsPermissionFunc(permViewPeople, server.handleCollaboratorProviderState))
+
+	// Permissions catalog/bindings — read = manage_team_permissions (this is
+	// admin-side surface, viewing the catalog implies the user is configuring
+	// permissions). Evaluate = read-only check, still gated.
+	mux.HandleFunc("GET /api/v1/console/permissions/catalog", server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionList))
+	mux.HandleFunc("POST /api/v1/console/permissions/catalog", server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionRegister))
+	mux.HandleFunc("GET /api/v1/console/permissions/bindings", server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionBindingList))
+	mux.HandleFunc("POST /api/v1/console/permissions/bindings", server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionBindingCreate))
+	mux.HandleFunc("POST /api/v1/console/permissions/evaluate", server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionEvaluate))
+
+	// Teams — list/read = view_teams; create = create_team; update/sync = edit_team;
+	// delete = edit_team (no separate destroy_team permission today); grants = manage_team_permissions.
+	mux.HandleFunc("GET /api/v1/console/teams", server.requireOpsPermissionFunc(permViewTeams, server.handleTeamList))
+	mux.HandleFunc("POST /api/v1/console/teams", server.requireOpsPermissionFunc(permCreateTeam, server.handleTeamCreate))
+	mux.HandleFunc("GET /api/v1/console/teams/{id}", server.requireOpsPermissionFunc(permViewTeams, server.handleTeamGet))
+	mux.HandleFunc("PATCH /api/v1/console/teams/{id}", server.requireOpsPermissionFunc(permEditTeam, server.handleTeamUpdate))
+	mux.HandleFunc("DELETE /api/v1/console/teams/{id}", server.requireOpsPermissionFunc(permEditTeam, server.handleTeamDelete))
+	mux.HandleFunc("POST /api/v1/console/teams/{id}/sync", server.requireOpsPermissionFunc(permEditTeam, server.handleTeamSync))
+	mux.HandleFunc("GET /api/v1/console/teams/{id}/provisioning-status", server.requireOpsPermissionFunc(permViewTeams, server.handleTeamProvisioningStatus))
+	mux.HandleFunc("GET /api/v1/console/teams/{id}/grants", server.requireOpsPermissionFunc(permManageTeamPermissions, server.handleTeamGrantList))
+	mux.HandleFunc("POST /api/v1/console/teams/{id}/grants", server.requireOpsPermissionFunc(permManageTeamPermissions, server.handleTeamGrantCreate))
+	mux.HandleFunc("DELETE /api/v1/console/teams/{id}/grants/{grant_id}", server.requireOpsPermissionFunc(permManageTeamPermissions, server.handleTeamGrantDelete))
+	mux.HandleFunc("GET /api/v1/console/teams/{id}/available-sources", server.requireOpsPermissionFunc(permViewTeams, server.handleTeamAvailableSources))
+
+	// Team memberships — list = view_teams; upsert = edit_team.
+	mux.HandleFunc("GET /api/v1/console/team-memberships", server.requireOpsPermissionFunc(permViewTeams, server.handleTeamMembershipList))
+	mux.HandleFunc("POST /api/v1/console/team-memberships", server.requireOpsPermissionFunc(permEditTeam, server.handleTeamMembershipUpsert))
+
+	// Auth / third-party identities & providers — manage_auth_providers
+	// (read AND write both gated on manage scope: surface-console hides
+	// these screens unless the user can administer them).
+	mux.HandleFunc("GET /api/v1/console/auth/third-party-identities", server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyIdentityList))
+	mux.HandleFunc("POST /api/v1/console/auth/third-party-identities", server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyIdentityUpsert))
+	mux.HandleFunc("DELETE /api/v1/console/auth/third-party-identities/{provider}/{subject}", server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyIdentityDelete))
+	mux.HandleFunc("GET /api/v1/console/auth/providers", server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyAuthProviderList))
+	mux.HandleFunc("POST /api/v1/console/auth/providers", server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyAuthProviderUpsert))
+	mux.HandleFunc("GET /api/v1/console/auth/providers/{provider}", server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyAuthProviderGet))
+	mux.HandleFunc("DELETE /api/v1/console/auth/providers/{provider}", server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyAuthProviderDelete))
+	mux.HandleFunc("POST /api/v1/console/auth/scim/clients", server.requireOpsPermissionFunc(permManageAuthProviders, server.handleSCIMClientCreate))
+	mux.HandleFunc("GET /api/v1/console/auth/scim/clients", server.requireOpsPermissionFunc(permManageAuthProviders, server.handleSCIMClientList))
+	mux.HandleFunc("POST /api/v1/console/auth/saml/service-providers", server.requireOpsPermissionFunc(permManageAuthProviders, server.handleSAMLSPRegister))
+	mux.HandleFunc("GET /api/v1/console/auth/saml/service-providers", server.requireOpsPermissionFunc(permManageAuthProviders, server.handleSAMLSPList))
+	mux.HandleFunc("POST /api/v1/console/auth/saml/rotate-signing-cert", server.requireOpsPermissionFunc(permManageAuthProviders, server.handleSAMLRotateSigningCert))
+
+	// Products — list = view_ops; create = manage_workflows (products are
+	// deployment workflows; create_product == author a new deploy graph).
+	mux.HandleFunc("GET /api/v1/console/products", server.requireOpsPermissionFunc(permViewOps, server.handleProductList))
+	mux.HandleFunc("POST /api/v1/console/products", server.requireOpsPermissionFunc(permManageWorkflows, server.handleProductCreate))
+
+	// Managed secrets — view = manage_integrations (secrets are integration-adjacent;
+	// viewing them = privileged config). All write operations = manage_integrations.
+	// NOTE: secrets are the most sensitive surface. After observation, consider
+	// splitting into a dedicated yggdrasil:manage_secrets permission. For now,
+	// reuse manage_integrations to avoid a catalog-side migration in this cycle.
+	mux.HandleFunc("GET /api/v1/console/secrets", server.requireOpsPermissionFunc(permManageIntegrations, server.handleManagedSecretList))
+	mux.HandleFunc("GET /api/v1/console/secrets/{namespace}/{name}", server.requireOpsPermissionFunc(permManageIntegrations, server.handleManagedSecretGet))
+	mux.HandleFunc("POST /api/v1/console/secrets", server.requireOpsPermissionFunc(permManageIntegrations, server.handleManagedSecretCreate))
+	mux.HandleFunc("POST /api/v1/console/secrets/{namespace}/{name}/rotate", server.requireOpsPermissionFunc(permManageIntegrations, server.handleManagedSecretRotate))
+	mux.HandleFunc("POST /api/v1/console/secrets/{namespace}/{name}/disable", server.requireOpsPermissionFunc(permManageIntegrations, server.handleManagedSecretDisable))
+	mux.HandleFunc("POST /api/v1/console/secrets/{namespace}/{name}/revoke", server.requireOpsPermissionFunc(permManageIntegrations, server.handleManagedSecretRevoke))
+	mux.HandleFunc("POST /api/v1/console/secrets/materialize-all", server.requireOpsPermissionFunc(permManageIntegrations, server.handleMaterializeAll))
+	mux.HandleFunc("POST /api/v1/console/secrets/{namespace}/{name}/materialize", server.requireOpsPermissionFunc(permManageIntegrations, server.handleMaterializeOne))
+
+	// Reconciler status (read-only) → view_ops.
+	mux.HandleFunc("GET /api/v1/console/reconciler/status", server.requireOpsPermissionFunc(permViewOps, server.handleReconcilerStatus))
+
+	// Repository bindings — view = view_integrations; create = manage_integrations.
+	mux.HandleFunc("GET /api/v1/console/repository-bindings", server.requireOpsPermissionFunc(permViewIntegrations, server.handleRepositoryBindingList))
+	mux.HandleFunc("POST /api/v1/console/repository-bindings", server.requireOpsPermissionFunc(permManageIntegrations, server.handleRepositoryBindingCreate))
+
+	// Guardian (policy + approvals + memories + remediation) — these are
+	// workflow primitives. View = view_ops; create/decision/review = manage_workflows.
+	mux.HandleFunc("GET /api/v1/console/guardian-policies", server.requireOpsPermissionFunc(permViewOps, server.handleGuardianPolicyList))
+	mux.HandleFunc("POST /api/v1/console/guardian-policies", server.requireOpsPermissionFunc(permManageWorkflows, server.handleGuardianPolicyCreate))
+	mux.HandleFunc("GET /api/v1/console/guardian-approvals", server.requireOpsPermissionFunc(permViewOps, server.handleGuardianApprovalList))
+	mux.HandleFunc("POST /api/v1/console/guardian-approvals", server.requireOpsPermissionFunc(permManageWorkflows, server.handleGuardianApprovalCreate))
+	mux.HandleFunc("POST /api/v1/console/guardian-approvals/{namespace}/{name}/decision", server.requireOpsPermissionFunc(permManageWorkflows, server.handleGuardianApprovalDecision))
+	mux.HandleFunc("GET /api/v1/console/guardian-memories", server.requireOpsPermissionFunc(permViewOps, server.handleGuardianMemoryList))
+	mux.HandleFunc("GET /api/v1/console/remediation-bundles", server.requireOpsPermissionFunc(permViewOps, server.handleRemediationBundleList))
+	mux.HandleFunc("POST /api/v1/console/remediation-bundles", server.requireOpsPermissionFunc(permManageWorkflows, server.handleRemediationBundleCreate))
+	mux.HandleFunc("POST /api/v1/console/guardian-memories/review", server.requireOpsPermissionFunc(permManageWorkflows, server.handleGuardianMemoryReview))
+	mux.HandleFunc("GET /api/v1/console/remediation-contracts", server.requireOpsPermissionFunc(permViewOps, server.handleRemediationContractList))
+	mux.HandleFunc("POST /api/v1/console/remediation-contracts", server.requireOpsPermissionFunc(permManageWorkflows, server.handleRemediationContractCreate))
+
+	// Surfaces (federated surface manifests) — view = view_integrations;
+	// create = manage_integrations.
+	mux.HandleFunc("GET /api/v1/console/surfaces", server.requireOpsPermissionFunc(permViewIntegrations, server.handleSurfaceList))
+	mux.HandleFunc("POST /api/v1/console/surfaces", server.requireOpsPermissionFunc(permManageIntegrations, server.handleSurfaceCreate))
+
+	// Workflows + workflow-runs — view = view_ops; create/dispatch = manage_workflows.
+	mux.HandleFunc("GET /api/v1/console/workflows", server.requireOpsPermissionFunc(permViewOps, server.handleWorkflowList))
+	mux.HandleFunc("POST /api/v1/console/workflows", server.requireOpsPermissionFunc(permManageWorkflows, server.handleWorkflowCreate))
+	mux.HandleFunc("POST /api/v1/console/workflow-runs", server.requireOpsPermissionFunc(permManageWorkflows, server.handleWorkflowRun))
+	mux.HandleFunc("GET /api/v1/console/workflow-runs/{run_id}", server.requireOpsPermissionFunc(permViewOps, server.handleWorkflowRunGet))
+
+	// Integrations install (privileged setup) → manage_integrations.
+	mux.HandleFunc("POST /api/v1/console/integrations/install", server.requireOpsPermissionFunc(permManageIntegrations, server.handleInstallIntegration))
+
+	// Cloud provision (cluster admin-only) → manage_organization. AWS provision
+	// is bootstrap-class infrastructure; only org admins should run it.
+	mux.HandleFunc("POST /api/v1/console/provision/aws", server.requireOpsPermissionFunc(permManageOrganization, server.handleProvisionAWS))
+
+	// Product deploy + bootstrap routes — already gated by requireDeployToken
+	// (machine-only deploy automation, no human actor); RBAC is layered on
+	// top so that IF a human session reaches them they STILL need
+	// manage_workflows / manage_organization. The deploy token path bypasses
+	// RBAC by virtue of having no claims (see middleware).
+	mux.HandleFunc("POST /api/v1/console/products/{namespace}/{name}/deploy", server.requireOpsPermissionFunc(permManageWorkflows, requireDeployToken(server.handleDeployProduct)))
+	mux.HandleFunc("POST /api/v1/console/products/deploy-all", server.requireOpsPermissionFunc(permManageWorkflows, requireDeployToken(server.handleDeployAll)))
+	mux.HandleFunc("POST /api/v1/console/bootstrap", server.requireOpsPermissionFunc(permManageOrganization, requireDeployToken(server.handleBootstrap)))
 	mux.HandleFunc("GET /api/v1/audit", server.handleAuditList)
 	mux.HandleFunc("POST /api/v1/workflow-templates/{namespace}/{name}/instantiate", server.handleWorkflowTemplateInstantiate)
 
