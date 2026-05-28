@@ -14,6 +14,20 @@ type IntegrationTypeManifestSpec struct {
 	Provider              string                          `json:"provider"`
 	FamilyRef             *ManifestSelector               `json:"family_ref,omitempty"`
 	ImplementedOperations []string                        `json:"implemented_operations,omitempty"`
+	// Domain is the business-purpose bucket the adapter belongs to.
+	// Drives client-side grouping in /ops/integrations and equivalent
+	// surfaces. Closed enum (see INTEGRATION_CONTRACT §17): identity,
+	// payments, observability, infrastructure, data, platform.
+	// Empty = the surface falls back to "platform" until the adapter
+	// declares its own. Validator warns when missing (Phase A) and
+	// rejects in Phase B; this lets in-flight adapters land their
+	// declaration without breaking registration.
+	Domain string `json:"domain,omitempty"`
+	// Dashboard points operators at the provider's own management UI
+	// when the integration is configured outside Yggdrasil
+	// (Stripe / EFI / NFE.io and similar). Optional; absent when the
+	// adapter ships its own federated surface or runs purely internal.
+	Dashboard             *IntegrationDashboardSpec       `json:"dashboard,omitempty"`
 	Adapter               IntegrationAdapterSpec          `json:"adapter"`
 	Capabilities          []string                        `json:"capabilities"`
 	CredentialPolicy      IntegrationCredentialPolicySpec `json:"credential_policy,omitempty"`
@@ -27,6 +41,15 @@ type IntegrationTypeManifestSpec struct {
 	Execution        IntegrationExecutionSpec        `json:"execution"`
 	Extensions       IntegrationExtensionsSpec       `json:"extensions"`
 	Reactors         []IntegrationTypeReactor        `json:"reactors,omitempty"`
+}
+
+// IntegrationDashboardSpec links to the provider's own UI for
+// integrations whose primary management surface lives outside
+// Yggdrasil. Surfaced as an "Abrir <provider>" CTA on the
+// /ops/integrations card.
+type IntegrationDashboardSpec struct {
+	URL   string `json:"url"`
+	Label string `json:"label,omitempty"`
 }
 
 // IntegrationAdapterSpec declares how the adapter is reached by the core.

@@ -26,7 +26,19 @@ var (
 	supportedIntegrationSchemaTypes    = []string{"string", "number", "integer", "boolean", "object", "array"}
 	supportedIntegrationDiscoveryModes = []string{"pull", "push", "hybrid"}
 	supportedIntegrationCursorModes    = []string{"none", "full", "incremental"}
-	integrationNamePattern             = regexp.MustCompile(`^[a-z0-9][a-z0-9._:-]*$`)
+	// Closed enum codified in INTEGRATION_CONTRACT §17. Drives the
+	// purpose-based grouping in /ops/integrations and equivalent
+	// surfaces. Empty domain is accepted in Phase A (the consumer
+	// falls back to "platform"); Phase B will hard-fail.
+	supportedIntegrationDomains = []string{
+		"identity",
+		"payments",
+		"observability",
+		"infrastructure",
+		"data",
+		"platform",
+	}
+	integrationNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._:-]*$`)
 )
 
 // ParseIntegrationTypeSpec parses the raw spec payload into the typed integration type manifest.
@@ -46,6 +58,33 @@ func ValidateIntegrationTypeSpec(spec model.IntegrationTypeManifestSpec) error {
 	}
 	if !integrationNamePattern.MatchString(provider) {
 		return fmt.Errorf("integration_type provider %q is invalid", spec.Provider)
+	}
+
+	// Domain is optional in Phase A — empty falls back to "platform"
+	// on the client. When declared it MUST match the closed enum
+	// (INTEGRATION_CONTRACT §17). Phase B will reject empty too.
+	if domain := strings.TrimSpace(spec.Domain); domain != "" {
+		if !slices.Contains(supportedIntegrationDomains, domain) {
+			return fmt.Errorf(
+				"integration_type domain %q is invalid; expected one of %v",
+				spec.Domain, supportedIntegrationDomains,
+			)
+		}
+	}
+
+	// Dashboard is optional; when present URL must be non-empty (label
+	// defaults to "Abrir <provider>" on the client when missing).
+	if spec.Dashboard != nil {
+		if strings.TrimSpace(spec.Dashboard.URL) == "" {
+			return fmt.Errorf("integration_type dashboard.url is required when dashboard is declared")
+		}
+		if !strings.HasPrefix(spec.Dashboard.URL, "https://") &&
+			!strings.HasPrefix(spec.Dashboard.URL, "http://") {
+			return fmt.Errorf(
+				"integration_type dashboard.url %q must be an http(s) URL",
+				spec.Dashboard.URL,
+			)
+		}
 	}
 
 	if spec.FamilyRef != nil {
