@@ -148,6 +148,15 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		logger = zap.NewNop()
 	}
 
+	// Audit 2026-05-27 A12 — fail-loud at boot if security-critical env
+	// vars are missing in production. A silent fallback to known-public
+	// dev strings (AUTH_THIRD_PARTY_STATE_SECRET, YGGDRASIL_CSRF_HMAC_SECRET)
+	// would let a misconfigured deploy roll out looking healthy while the
+	// security envelope is wide open.
+	if err := validateBootSecrets(); err != nil {
+		return nil, err
+	}
+
 	server := &Server{
 		serviceName: serviceName,
 		db:          db,
