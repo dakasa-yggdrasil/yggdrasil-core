@@ -623,6 +623,11 @@ func integrationTypeSpecFromDescribeResponse(response model.AdapterDescribeRespo
 		Normalization:    response.Normalization,
 		Execution:        response.Execution,
 		Extensions:       response.Extensions,
+		// Reactors come from the adapter's describe response. On initial
+		// registration / first sync MergeSpec adopts them; once the operator
+		// overrides via the manifest catalog, MergeSpec keeps the operator's
+		// reactors instead.
+		Reactors: response.Reactors,
 	}
 }
 

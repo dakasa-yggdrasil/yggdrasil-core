@@ -204,3 +204,30 @@ func TestIntegrationDescribeFailureStatus(t *testing.T) {
 		})
 	}
 }
+
+// Regression: ensure the live → spec conversion carries adapter-declared
+// reactors through to the resulting spec. Without this, even if an adapter
+// emits `reactors[]` in its describe response, manifest_sync's merge sees
+// an empty live spec.Reactors and never seeds the field.
+func TestIntegrationTypeSpecFromDescribeResponse_CarriesReactors(t *testing.T) {
+	response := model.AdapterDescribeResponse{
+		Provider:     "slack",
+		Capabilities: []string{"describe", "execute"},
+		ActionCatalog: []model.IntegrationActionDefinition{
+			{Name: "on_collaborator_session_terminated", Category: "reactor"},
+		},
+		Reactors: []model.IntegrationTypeReactor{
+			{EventType: "collaborator.session.terminated", Capability: "on_collaborator_session_terminated"},
+		},
+	}
+	spec := integrationTypeSpecFromDescribeResponse(response)
+	if len(spec.Reactors) != 1 {
+		t.Fatalf("expected 1 reactor in derived spec, got %d", len(spec.Reactors))
+	}
+	if spec.Reactors[0].EventType != "collaborator.session.terminated" {
+		t.Fatalf("expected event_type=collaborator.session.terminated, got %q", spec.Reactors[0].EventType)
+	}
+	if spec.Reactors[0].Capability != "on_collaborator_session_terminated" {
+		t.Fatalf("expected capability=on_collaborator_session_terminated, got %q", spec.Reactors[0].Capability)
+	}
+}

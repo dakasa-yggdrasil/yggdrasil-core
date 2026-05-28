@@ -2,6 +2,14 @@
 
 All notable changes to yggdrasil-core are documented here.
 
+## [2.9.2] - 2026-05-27
+
+### Added
+- **Adapter-declared reactors** (`AdapterDescribeResponse.Reactors`). Adapters can now declare their canonical reactor subscriptions in `Describe()` instead of operators having to POST `spec.reactors[]` to the manifest catalog after registration. `integrationTypeSpecFromDescribeResponse` carries `response.Reactors` through to the live spec, and `manifestsync.MergeSpec` adopts them when the current spec has no operator-managed reactors. Operator overrides still win when explicitly set — initial registration / fresh sync seeds from the adapter, post-override the operator's value is preserved verbatim.
+
+### Notes
+- Backwards-compatible: adapters that don't emit `reactors[]` continue to work; only adapters that opt in to the new field get auto-seeded reactor subscriptions on registration.
+
 ## [2.9.1] - 2026-05-27
 
 ### Fixed

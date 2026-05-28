@@ -231,6 +231,13 @@ type AdapterDescribeRequest struct {
 }
 
 // AdapterDescribeResponse is the normalized response returned by one adapter implementation.
+//
+// `Reactors` is optional — when populated, the adapter declares which canonical
+// lifecycle events it subscribes to (event_type → capability mapping). On
+// initial manifest registration / first sync, manifest_sync adopts the
+// adapter-declared reactors verbatim. Once an operator overrides the reactor
+// set via the manifest catalog, the operator's value wins (see
+// `internal/manifestsync/merge.go::MergeSpec`).
 type AdapterDescribeResponse struct {
 	Provider         string                        `json:"provider"`
 	Adapter          IntegrationAdapterSpec        `json:"adapter"`
@@ -243,6 +250,7 @@ type AdapterDescribeResponse struct {
 	Normalization    IntegrationNormalizationSpec  `json:"normalization"`
 	Execution        IntegrationExecutionSpec      `json:"execution"`
 	Extensions       IntegrationExtensionsSpec     `json:"extensions"`
+	Reactors         []IntegrationTypeReactor      `json:"reactors,omitempty"`
 }
 
 // IntegrationTypeReactor describes one event-driven reaction configuration.

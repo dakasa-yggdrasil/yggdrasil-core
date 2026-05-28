@@ -19,16 +19,30 @@ type Diff struct {
 }
 
 // MergeSpec produces the new integration_type spec to persist when drift is
-// detected: live as the base, with operator-managed `Reactors` preserved
-// verbatim from the currently-active manifest.
+// detected: live as the base, with operator-managed `Reactors` taking
+// precedence when the operator has already configured them.
 //
-// Today `Reactors` is the only operator-managed field. If new operator-owned
-// fields are introduced, extend this function (and document it in the spec
+// Reactor precedence:
+//
+//  1. If `current.Reactors` is non-empty, the operator has explicitly
+//     configured reactors — keep current.Reactors and ignore live.Reactors.
+//     This preserves operator overrides across manifest_sync cycles.
+//  2. If `current.Reactors` is empty (e.g. initial registration or first
+//     sync after the adapter starts emitting reactor entries), adopt
+//     `live.Reactors`. This lets adapters seed their canonical reactor
+//     subscriptions (e.g. on_collaborator_session_terminated) without
+//     requiring a manual catalog patch on every fresh install.
+//
+// Other fields come from `live` verbatim. If new operator-owned fields
+// are introduced, extend this function (and document it in the spec
 // at docs/superpowers/specs/2026-05-16-sync-manifest-from-describe-design.md
 // section 5.1).
 func MergeSpec(current, live model.IntegrationTypeManifestSpec) (model.IntegrationTypeManifestSpec, Diff) {
 	out := live
-	out.Reactors = current.Reactors // operator-managed; never sourced from live
+	if len(current.Reactors) > 0 {
+		out.Reactors = current.Reactors // operator override wins
+	}
+	// else: keep live.Reactors (adapter-declared defaults seed the manifest)
 
 	return out, computeDiff(current, out)
 }
