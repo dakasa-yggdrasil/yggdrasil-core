@@ -15,6 +15,7 @@ type IntegrationSurfacesRepo interface {
 	List(ctx context.Context, f integrationsurfaces.ListFilter) ([]integrationsurfaces.Manifest, error)
 	GetByName(ctx context.Context, name string) (*integrationsurfaces.Manifest, error)
 	Touch(ctx context.Context, name string) error
+	Deactivate(ctx context.Context, name string) error
 }
 
 // SurfaceQueryDispatcher abstracts the synchronous RPC executor that
@@ -70,6 +71,40 @@ func (s *Server) handleIntegrationSurfaceGet() http.HandlerFunc {
 			return
 		}
 		writeJSON(w, http.StatusOK, m)
+	}
+}
+
+// handleIntegrationSurfaceDeactivate flips active=false on a federated
+// integration surface row. Used to retire surfaces whose backing
+// integration_type was archived/deleted (the syncer only Upserts, so
+// orphaned active=true rows would otherwise linger forever and surface
+// in /ops/integrations + console-home "Surfaces em execução" listings —
+// confusing for non-technical operators who see stale entries with no
+// way to clean them up).
+//
+// The repository.Deactivate is a soft-delete (active=false); a future
+// resync can revive the row via Upsert if the integration_type is
+// re-registered. Gated by permManageIntegrations at the mux.
+func (s *Server) handleIntegrationSurfaceDeactivate() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.integrationSurfacesRepo == nil {
+			writeJSONError(w, http.StatusServiceUnavailable, "integration surfaces repository not configured")
+			return
+		}
+		name := strings.TrimSpace(r.PathValue("name"))
+		if name == "" {
+			writeJSONError(w, http.StatusBadRequest, "missing name")
+			return
+		}
+		if err := s.integrationSurfacesRepo.Deactivate(r.Context(), name); err != nil {
+			if errors.Is(err, integrationsurfaces.ErrNotFound) {
+				writeJSONError(w, http.StatusNotFound, "integration surface not found")
+				return
+			}
+			writeMappedError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, map[string]any{"deactivated": true, "name": name})
 	}
 }
 

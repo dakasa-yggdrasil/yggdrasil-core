@@ -708,6 +708,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/integration-surfaces", server.handleIntegrationSurfacesList())
 	mux.HandleFunc("GET /api/v1/integration-surfaces/{name}", server.handleIntegrationSurfaceGet())
 	mux.HandleFunc("POST /api/v1/integration-surfaces/{name}/sync", server.handleIntegrationSurfaceSync())
+	mux.HandleFunc("DELETE /api/v1/integration-surfaces/{name}", server.requireOpsPermissionFunc(permManageIntegrations, server.handleIntegrationSurfaceDeactivate()))
 	mux.HandleFunc("POST /api/v1/integrations/{instance_id}/surface-query", server.handleIntegrationSurfaceQuery())
 
 	// Opt-in OIDC OP. Skipped when no issuer is configured (the default)
