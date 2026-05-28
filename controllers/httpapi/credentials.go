@@ -15,6 +15,7 @@ import (
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/password"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -39,7 +40,11 @@ func (s *Server) handleIssueSetupToken(w http.ResponseWriter, r *http.Request) {
 	}
 	collabID, err := uuid.Parse(req.CollaboratorID)
 	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"code": "invalid_collaborator_id"})
+		httperr.WriteProblem(w, http.StatusBadRequest,
+			httperr.CodeInvalidInput,
+			"Invalid input",
+			"collaborator_id is not a valid UUID",
+			httperr.WithInstance(r.URL.Path))
 		return
 	}
 	ttl := time.Duration(req.ExpiresInSeconds) * time.Second
@@ -153,29 +158,43 @@ func (s *Server) handleSetupCommit(w http.ResponseWriter, r *http.Request) {
 
 	// Whitelist-validate profile keys via secondary decode into map.
 	if extras := unknownSetupProfileFields(bodyBytes); len(extras) > 0 {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
-			"code":     "setup_unknown_fields",
-			"rejected": extras,
-		})
+		httperr.WriteProblem(w, http.StatusUnprocessableEntity,
+			httperr.CodeUnknownFields,
+			"Unknown fields",
+			"profile contains fields outside the allowed whitelist",
+			httperr.WithInstance(r.URL.Path),
+			httperr.WithExtra("rejected", extras))
 		return
 	}
 
 	if strings.TrimSpace(req.Token) == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"code": "token_required"})
+		httperr.WriteProblem(w, http.StatusBadRequest,
+			httperr.CodeMissingField,
+			"Missing field",
+			"token is required",
+			httperr.WithInstance(r.URL.Path),
+			httperr.WithFieldError("token", "required", "token is required"))
 		return
 	}
 	if strings.TrimSpace(req.NewPassword) == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"code": "password_required"})
+		httperr.WriteProblem(w, http.StatusBadRequest,
+			httperr.CodeMissingField,
+			"Missing field",
+			"new_password is required",
+			httperr.WithInstance(r.URL.Path),
+			httperr.WithFieldError("new_password", "required", "new_password is required"))
 		return
 	}
 
 	// Quick length pre-check before touching the DB.
 	minLen := envIntCred("AUTH_PASSWORD_MIN_LENGTH", 12)
 	if len(req.NewPassword) < minLen {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
-			"code":   "password_too_weak",
-			"reason": "too_short",
-		})
+		httperr.WriteProblem(w, http.StatusUnprocessableEntity,
+			httperr.CodeAuthPasswordTooWeak,
+			"Password too weak",
+			"password does not meet the minimum length requirement",
+			httperr.WithInstance(r.URL.Path),
+			httperr.WithExtra("reason", "too_short"))
 		return
 	}
 
@@ -205,7 +224,11 @@ func (s *Server) handleSetupCommit(w http.ResponseWriter, r *http.Request) {
 	var tokenID, collabID uuid.UUID
 	var expiresAt time.Time
 	if err := row.Scan(&tokenID, &collabID, &expiresAt); err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"code": "setup_token_invalid"})
+		httperr.WriteProblem(w, http.StatusUnauthorized,
+			httperr.CodeAuthSetupTokenInvalid,
+			"Invalid setup token",
+			"the setup token is invalid, expired, or already consumed",
+			httperr.WithInstance(r.URL.Path))
 		return
 	}
 
@@ -220,10 +243,12 @@ func (s *Server) handleSetupCommit(w http.ResponseWriter, r *http.Request) {
 	commonPasswords, _ := commonPasswordsCached()
 	userTokens := []string{collab.PrimaryEmail, collab.Slug, collab.DisplayName}
 	if err := password.ValidateStrength(req.NewPassword, minLen, commonPasswords, userTokens); err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
-			"code":   "password_too_weak",
-			"reason": err.Error(),
-		})
+		httperr.WriteProblem(w, http.StatusUnprocessableEntity,
+			httperr.CodeAuthPasswordTooWeak,
+			"Password too weak",
+			err.Error(),
+			httperr.WithInstance(r.URL.Path),
+			httperr.WithExtra("reason", err.Error()))
 		return
 	}
 
@@ -406,12 +431,20 @@ func envIntCred(key string, def int) int {
 func (s *Server) handlePasswordChange(w http.ResponseWriter, r *http.Request) {
 	tokenStr, ok := extractAuthToken(r)
 	if !ok {
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"code": "unauthenticated"})
+		httperr.WriteProblem(w, http.StatusUnauthorized,
+			httperr.CodeAuthUnauthenticated,
+			"Unauthenticated",
+			"a valid session token is required",
+			httperr.WithInstance(r.URL.Path))
 		return
 	}
 	session, collab, err := repository.ResolveAuthSession(r.Context(), s.db, tokenStr)
 	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"code": "unauthenticated"})
+		httperr.WriteProblem(w, http.StatusUnauthorized,
+			httperr.CodeAuthUnauthenticated,
+			"Unauthenticated",
+			"the provided session token is invalid or expired",
+			httperr.WithInstance(r.URL.Path))
 		return
 	}
 
@@ -423,14 +456,22 @@ func (s *Server) handlePasswordChange(w http.ResponseWriter, r *http.Request) {
 
 	// Step 2: verify current password.
 	if err := repository.VerifyPassword(r.Context(), s.db, collab.ID, req.CurrentPassword); err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"code": "invalid_current_password"})
+		httperr.WriteProblem(w, http.StatusUnauthorized,
+			httperr.CodeAuthInvalidCurrentPassword,
+			"Invalid current password",
+			"current_password does not match the stored credential",
+			httperr.WithInstance(r.URL.Path))
 		return
 	}
 
 	// Step 3: MFA gate.
 	if err := mfa.EnforceMFAEnrolled(r.Context(), s.db, collab.ID); err != nil {
 		if errors.Is(err, mfa.ErrMFANotEnrolled) {
-			writeJSON(w, http.StatusPreconditionRequired, map[string]any{"code": "mfa_not_enrolled"})
+			httperr.WriteProblem(w, http.StatusPreconditionRequired,
+				httperr.CodeAuthMFANotEnrolled,
+				"MFA not enrolled",
+				"a second factor must be enrolled before changing the password",
+				httperr.WithInstance(r.URL.Path))
 			return
 		}
 		writeMappedError(w, err)
@@ -438,14 +479,26 @@ func (s *Server) handlePasswordChange(w http.ResponseWriter, r *http.Request) {
 	}
 	if err := s.verifyInlineMFAFactor(r, collab.ID, req.TOTPCode, req.RecoveryCode, req.WebAuthnAssertion); err != nil {
 		if errors.Is(err, errMFANotSupplied) {
-			writeJSON(w, http.StatusUnauthorized, map[string]any{"code": "invalid_mfa"})
+			httperr.WriteProblem(w, http.StatusUnauthorized,
+				httperr.CodeAuthMFAInvalid,
+				"Invalid MFA",
+				"no MFA factor was supplied",
+				httperr.WithInstance(r.URL.Path))
 			return
 		}
 		if errors.Is(err, errWebAuthnNotImplemented) {
-			writeJSON(w, http.StatusNotImplemented, map[string]any{"code": "webauthn_not_implemented"})
+			httperr.WriteProblem(w, http.StatusNotImplemented,
+				httperr.CodeAuthWebAuthnNotImplemented,
+				"WebAuthn not implemented",
+				"inline WebAuthn assertion verification is not yet implemented (Phase 2)",
+				httperr.WithInstance(r.URL.Path))
 			return
 		}
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"code": "invalid_mfa"})
+		httperr.WriteProblem(w, http.StatusUnauthorized,
+			httperr.CodeAuthMFAInvalid,
+			"Invalid MFA",
+			"the supplied MFA factor could not be verified",
+			httperr.WithInstance(r.URL.Path))
 		return
 	}
 
@@ -453,13 +506,22 @@ func (s *Server) handlePasswordChange(w http.ResponseWriter, r *http.Request) {
 	minLen := envIntCred("AUTH_PASSWORD_MIN_LENGTH", 12)
 	commonPasswords, _ := commonPasswordsCached()
 	if err := password.ValidateStrength(req.NewPassword, minLen, commonPasswords, []string{collab.PrimaryEmail, collab.Slug, collab.DisplayName}); err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"code": "password_too_weak", "reason": err.Error()})
+		httperr.WriteProblem(w, http.StatusUnprocessableEntity,
+			httperr.CodeAuthPasswordTooWeak,
+			"Password too weak",
+			err.Error(),
+			httperr.WithInstance(r.URL.Path),
+			httperr.WithExtra("reason", err.Error()))
 		return
 	}
 
 	// Step 5: reject if new == current.
 	if err := repository.VerifyPassword(r.Context(), s.db, collab.ID, req.NewPassword); err == nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"code": "password_unchanged"})
+		httperr.WriteProblem(w, http.StatusUnprocessableEntity,
+			httperr.CodeAuthPasswordUnchanged,
+			"Password unchanged",
+			"the new password is identical to the current one",
+			httperr.WithInstance(r.URL.Path))
 		return
 	}
 
@@ -684,22 +746,38 @@ func (s *Server) handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 		TokenHash: tokenHash, Purpose: model.CredentialTokenPurposeReset,
 	})
 	if err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"code": "reset_token_invalid"})
+		httperr.WriteProblem(w, http.StatusUnauthorized,
+			httperr.CodeAuthResetTokenInvalid,
+			"Invalid reset token",
+			"the reset token is invalid, expired, or already consumed",
+			httperr.WithInstance(r.URL.Path))
 		return
 	}
 	collabID, _ := uuid.Parse(out.CollaboratorID)
 
 	// Step 3: MFA gate.
 	if err := mfa.EnforceMFAEnrolled(r.Context(), s.db, collabID); err != nil {
-		writeJSON(w, http.StatusPreconditionRequired, map[string]any{"code": "mfa_not_enrolled"})
+		httperr.WriteProblem(w, http.StatusPreconditionRequired,
+			httperr.CodeAuthMFANotEnrolled,
+			"MFA not enrolled",
+			"a second factor must be enrolled before resetting the password",
+			httperr.WithInstance(r.URL.Path))
 		return
 	}
 	if err := s.verifyInlineMFAFactor(r, collabID, req.TOTPCode, req.RecoveryCode, req.WebAuthnAssertion); err != nil {
 		if errors.Is(err, errWebAuthnNotImplemented) {
-			writeJSON(w, http.StatusNotImplemented, map[string]any{"code": "webauthn_not_implemented"})
+			httperr.WriteProblem(w, http.StatusNotImplemented,
+				httperr.CodeAuthWebAuthnNotImplemented,
+				"WebAuthn not implemented",
+				"inline WebAuthn assertion verification is not yet implemented (Phase 2)",
+				httperr.WithInstance(r.URL.Path))
 			return
 		}
-		writeJSON(w, http.StatusUnauthorized, map[string]any{"code": "invalid_mfa"})
+		httperr.WriteProblem(w, http.StatusUnauthorized,
+			httperr.CodeAuthMFAInvalid,
+			"Invalid MFA",
+			"the supplied MFA factor could not be verified",
+			httperr.WithInstance(r.URL.Path))
 		return
 	}
 
@@ -713,7 +791,12 @@ func (s *Server) handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 	// Step 5: validate new password strength.
 	commonPasswords, _ := commonPasswordsCached()
 	if err := password.ValidateStrength(req.NewPassword, envIntCred("AUTH_PASSWORD_MIN_LENGTH", 12), commonPasswords, []string{collab.PrimaryEmail, collab.Slug, collab.DisplayName}); err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{"code": "password_too_weak", "reason": err.Error()})
+		httperr.WriteProblem(w, http.StatusUnprocessableEntity,
+			httperr.CodeAuthPasswordTooWeak,
+			"Password too weak",
+			err.Error(),
+			httperr.WithInstance(r.URL.Path),
+			httperr.WithExtra("reason", err.Error()))
 		return
 	}
 

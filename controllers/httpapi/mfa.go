@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -29,6 +30,11 @@ type mfaEnrollResponse struct {
 	ExpiresAt time.Time `json:"expires_at"`
 }
 
+// mfaEnrollRequiredResponse is RETAINED but no longer used directly on
+// the wire — writeMFAEnrollRequired now emits the canonical Problem+JSON
+// envelope with `enroll_url`, `expires_at`, and `collaborator` carried
+// as RFC 7807 extension fields. The struct is kept for documentation +
+// callers that bind to its fields in unit tests.
 type mfaEnrollRequiredResponse struct {
 	Error        string              `json:"error"`
 	Code         string              `json:"code"`
@@ -91,14 +97,14 @@ func (s *Server) writeMFAEnrollRequired(w http.ResponseWriter, r *http.Request, 
 		writeMappedError(w, err)
 		return
 	}
-	writeJSON(w, http.StatusPreconditionRequired, mfaEnrollRequiredResponse{
-		Error:        "mfa_not_enrolled",
-		Code:         "mfa_not_enrolled",
-		Message:      "MFA enrollment is required before a session can be issued.",
-		EnrollURL:    enroll.EnrollURL,
-		ExpiresAt:    enroll.ExpiresAt,
-		Collaborator: &collab,
-	})
+	httperr.WriteProblem(w, http.StatusPreconditionRequired,
+		httperr.CodeAuthMFANotEnrolled,
+		"MFA not enrolled",
+		"MFA enrollment is required before a session can be issued.",
+		httperr.WithInstance(r.URL.Path),
+		httperr.WithExtra("enroll_url", enroll.EnrollURL),
+		httperr.WithExtra("expires_at", enroll.ExpiresAt),
+		httperr.WithExtra("collaborator", collab))
 }
 
 func consoleBaseURL(r *http.Request) string {
@@ -139,7 +145,12 @@ func (s *Server) handleMFAEnrollRequest(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 	if req.CollaboratorEmail == "" {
-		writeJSON(w, http.StatusBadRequest, map[string]string{"error": "collaborator_email required"})
+		httperr.WriteProblem(w, http.StatusBadRequest,
+			httperr.CodeMissingField,
+			"Missing field",
+			"collaborator_email is required",
+			httperr.WithInstance(r.URL.Path),
+			httperr.WithFieldError("collaborator_email", "required", "collaborator_email is required"))
 		return
 	}
 	collab, err := repository.GetCollaboratorByPrimaryEmail(r.Context(), s.db, req.CollaboratorEmail)
@@ -184,7 +195,10 @@ type totpFinishRequest struct {
 
 func (s *Server) requireEnvelope(w http.ResponseWriter) bool {
 	if s.envelope == nil {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{"error": "YGGDRASIL_AUTH_KEK_BASE64 not configured"})
+		httperr.WriteProblem(w, http.StatusServiceUnavailable,
+			httperr.CodeAuthKEKNotConfigured,
+			"KEK not configured",
+			"YGGDRASIL_AUTH_KEK_BASE64 is not configured; MFA secrets-at-rest unavailable")
 		return false
 	}
 	return true
@@ -244,7 +258,12 @@ func (s *Server) handleMFATOTPFinish(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if err := mfa.ValidateTOTP(string(secret), req.Code); err != nil {
-		writeJSON(w, http.StatusUnauthorized, map[string]string{"error": "invalid totp code"})
+		httperr.WriteProblem(w, http.StatusUnauthorized,
+			httperr.CodeAuthMFAInvalid,
+			"Invalid MFA",
+			"invalid TOTP code",
+			httperr.WithInstance(r.URL.Path),
+			httperr.WithExtra("factor", "totp"))
 		return
 	}
 	codes, hashes, err := mfa.GenerateRecoveryCodes()
@@ -315,7 +334,11 @@ func (s *Server) handleMFAWebAuthnFinish(w http.ResponseWriter, r *http.Request)
 	// Phase 1 stub: implement end-to-end with go-webauthn FinishRegistration
 	// once the credential storage shape is finalised. Returning 501 keeps
 	// the wire contract alive without persisting half-validated credentials.
-	writeJSON(w, http.StatusNotImplemented, map[string]string{"error": "webauthn finish not yet implemented (Phase 2)"})
+	httperr.WriteProblem(w, http.StatusNotImplemented,
+		httperr.CodeAuthWebAuthnNotImplemented,
+		"WebAuthn not implemented",
+		"WebAuthn finish is not yet implemented (Phase 2)",
+		httperr.WithInstance(r.URL.Path))
 }
 
 func webauthnRelyingPartyID() string {

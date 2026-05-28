@@ -15,6 +15,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/password"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/coreauth"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -70,10 +71,12 @@ func (s *Server) handleAuthPasswordUpsert(w http.ResponseWriter, r *http.Request
 	minLen := envIntCred("AUTH_PASSWORD_MIN_LENGTH", 12)
 	commonPasswords, _ := commonPasswordsCached()
 	if err := password.ValidateStrength(req.Password, minLen, commonPasswords, nil); err != nil {
-		writeJSON(w, http.StatusUnprocessableEntity, map[string]any{
-			"code":   "password_too_weak",
-			"reason": err.Error(),
-		})
+		httperr.WriteProblem(w, http.StatusUnprocessableEntity,
+			httperr.CodeAuthPasswordTooWeak,
+			"Password too weak",
+			err.Error(),
+			httperr.WithInstance(r.URL.Path),
+			httperr.WithExtra("reason", err.Error()))
 		return
 	}
 
@@ -145,10 +148,11 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 	factors := authLoginFactors(identity)
 	if len(factors) == 0 {
-		writeJSON(w, http.StatusBadRequest, map[string]string{
-			"error": "mfa enrollment has no factor available for login",
-			"code":  "mfa_factor_unavailable",
-		})
+		httperr.WriteProblem(w, http.StatusBadRequest,
+			httperr.CodeAuthMFAFactorUnavailable,
+			"MFA factor unavailable",
+			"MFA enrollment has no factor available for login",
+			httperr.WithInstance(r.URL.Path))
 		return
 	}
 
@@ -156,9 +160,13 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	req.RecoveryCode = strings.TrimSpace(req.RecoveryCode)
 	if req.TOTPCode == "" && req.RecoveryCode == "" {
 		metrics.IncAuthLogin(metrics.AuthLoginMFARequired)
+		// §14 NOTE: this is 202 Accepted (not 4xx), so it uses the
+		// success-path writer. The `code` value uses the canonical
+		// dotted namespace (auth.mfa_required) so surface-console's
+		// i18n table can resolve it the same way it resolves errors.
 		writeJSON(w, http.StatusAccepted, authMFARequiredResponse{
 			Error:        "mfa_required",
-			Code:         "mfa_required",
+			Code:         httperr.CodeAuthMFARequired,
 			Message:      "MFA verification is required before a session can be issued.",
 			Factors:      factors,
 			Collaborator: &collaborator,
@@ -168,10 +176,12 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 	if req.TOTPCode != "" {
 		if !identity.HasTOTP {
-			writeJSON(w, http.StatusBadRequest, map[string]string{
-				"error": "mfa enrollment has no TOTP factor available for login",
-				"code":  "mfa_totp_unavailable",
-			})
+			httperr.WriteProblem(w, http.StatusBadRequest,
+				httperr.CodeAuthMFAFactorUnavailable,
+				"MFA factor unavailable",
+				"MFA enrollment has no TOTP factor available for login",
+				httperr.WithInstance(r.URL.Path),
+				httperr.WithExtra("factor", "totp"))
 			return
 		}
 		if !s.requireEnvelope(w) {
@@ -187,10 +197,12 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 			s.recordAuthAuditCollaborator(r, AuditAuthMFAVerifyFailed, collaborator.ID, AuditOutcomeFailure, map[string]any{
 				"factor": "totp",
 			})
-			writeJSON(w, http.StatusUnauthorized, map[string]string{
-				"error": "invalid totp code",
-				"code":  "invalid_totp",
-			})
+			httperr.WriteProblem(w, http.StatusUnauthorized,
+				httperr.CodeAuthMFAInvalid,
+				"Invalid MFA",
+				"invalid TOTP code",
+				httperr.WithInstance(r.URL.Path),
+				httperr.WithExtra("factor", "totp"))
 			return
 		}
 		metrics.IncAuthMFAVerify(metrics.AuthMFAVerifySucceeded, metrics.AuthMFAFactorTOTP)
@@ -199,10 +211,12 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		})
 	} else {
 		if !identity.HasRecoveryCodes {
-			writeJSON(w, http.StatusUnauthorized, map[string]string{
-				"error": "invalid recovery code",
-				"code":  "invalid_recovery_code",
-			})
+			httperr.WriteProblem(w, http.StatusUnauthorized,
+				httperr.CodeAuthMFAInvalid,
+				"Invalid MFA",
+				"invalid recovery code",
+				httperr.WithInstance(r.URL.Path),
+				httperr.WithExtra("factor", "recovery_code"))
 			return
 		}
 		if err := repository.VerifyAndInvalidateRecoveryCode(r.Context(), s.db, collaborator.ID, req.RecoveryCode); err != nil {
@@ -211,10 +225,12 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 				s.recordAuthAuditCollaborator(r, AuditAuthMFAVerifyFailed, collaborator.ID, AuditOutcomeFailure, map[string]any{
 					"factor": "recovery_code",
 				})
-				writeJSON(w, http.StatusUnauthorized, map[string]string{
-					"error": "invalid recovery code",
-					"code":  "invalid_recovery_code",
-				})
+				httperr.WriteProblem(w, http.StatusUnauthorized,
+					httperr.CodeAuthMFAInvalid,
+					"Invalid MFA",
+					"invalid recovery code",
+					httperr.WithInstance(r.URL.Path),
+					httperr.WithExtra("factor", "recovery_code"))
 				return
 			}
 			writeMappedError(w, err)

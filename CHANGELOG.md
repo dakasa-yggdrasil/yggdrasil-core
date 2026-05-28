@@ -2,6 +2,26 @@
 
 All notable changes to yggdrasil-core are documented here.
 
+## [2.18.0] - 2026-05-28
+
+### Changed
+- **§14 RFC 7807 Problem+JSON migration: closed for auth/MFA/password handlers.** Phase 2B-core (commit `e202e3d`) migrated the universal `writeMappedError` / `writeJSONError` writers; Phase 2B-close lands the remaining 25 hand-rolled `writeJSON(w, status, map[string]any{...,"code":...})` sites in `auth.go`, `mfa.go`, `credentials.go`, and `middleware_credentials.go`. Every error response (4xx/5xx) on these handlers now emits `Content-Type: application/problem+json` with a stable dotted `code` field. Sites migrated:
+  - `auth.go`: password-strength validation (handleAuthPasswordUpsert), MFA factor unavailable (login), TOTP-unavailable + invalid TOTP + recovery-code paths, MFA-required dotted-code on the 202 challenge envelope.
+  - `mfa.go`: `requireEnvelope` (KEK missing → `auth.kek_not_configured`), `writeMFAEnrollRequired` (now Problem+JSON with enroll_url/expires_at/collaborator as extensions), `handleMFAEnrollRequest` missing email, `handleMFATOTPFinish` invalid TOTP, `handleMFAWebAuthnFinish` 501 stub.
+  - `credentials.go`: setup-token invalid UUID, setup-commit token/password required + unknown_fields + password_too_weak (×2) + setup_token_invalid; password-change unauthenticated (×2) + invalid_current_password + mfa_not_enrolled + invalid_mfa + webauthn_not_implemented + password_too_weak + password_unchanged; password-reset reset_token_invalid + mfa_not_enrolled + webauthn_not_implemented + invalid_mfa + password_too_weak.
+  - `middleware_credentials.go`: unauthenticated (×2) + mfa_enrollment_required + password_change_required.
+
+### Added
+- **11 new error codes** in `internal/httperr/problem.go` + `docs/error_codes.md` (`auth.mfa_invalid`, `auth.mfa_factor_unavailable`, `auth.webauthn_not_implemented`, `auth.password_too_weak`, `auth.password_unchanged`, `auth.password_change_required`, `auth.invalid_current_password`, `auth.setup_token_invalid`, `auth.reset_token_invalid`, `auth.kek_not_configured`, `input.unknown_fields`).
+- **Typed-error mapping** in `codeFromError` for `mfa.ErrInvalidRecoveryCode` (→ `auth.mfa_invalid`) and `repository.ErrMFAEnrollTokenAlreadyConsumed` / `ErrMFAEnrollTokenExpired` (→ `auth.setup_token_invalid`).
+- **Lint script** `scripts/lint-no-legacy-error-envelopes.sh` that hard-fails on regression in the §14-closed file set (auth/mfa/credentials/middleware_credentials) and warns on the pending file set (invites, saml, scim_admin, integration_webhook, workflow_runs, external_identities, team_sync, tartaro_actions, integration_type_sync). Wire into CI to lock the closure.
+- **Phase 14 test suite** `controllers/httpapi/phase14_auth_problem_test.go` — 9 focused unit tests asserting the Problem+JSON wire shape on each migrated branch.
+
+### Notes
+- The MFA-required 202 response (handleAuthLogin mid-flow challenge) is intentionally NOT migrated to Problem+JSON because 202 Accepted is a success-class status; the `code` field on that body is now updated to use the canonical `auth.mfa_required` dotted form so surface-console's i18n table resolves it the same way it resolves errors.
+- Surface-console i18n table (`src/lib/errors/i18n.ts`) extended with pt-BR + en-US translations for every new code; vitest now covers all 31 codes (up from 20) and the catalog drift-prevention assertion is updated accordingly.
+- INTEGRATION_CONTRACT.md §14 updated with the migration status table and the regression guard snippet.
+
 ## [2.17.0] - 2026-05-28
 
 ### Added

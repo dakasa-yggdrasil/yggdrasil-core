@@ -113,13 +113,23 @@ func (p *Problem) typeOrDefault() string {
 // internal. Add new categories at the end of the const block.
 const (
 	// auth.*
-	CodeAuthInvalidCredentials = "auth.invalid_credentials"
-	CodeAuthAccountLocked      = "auth.account_locked"
-	CodeAuthMFARequired        = "auth.mfa_required"
-	CodeAuthMFANotEnrolled     = "auth.mfa_not_enrolled"
-	CodeAuthSessionExpired     = "auth.session_expired"
-	CodeAuthSessionNotFound    = "auth.session_not_found"
-	CodeAuthUnauthenticated    = "auth.unauthenticated"
+	CodeAuthInvalidCredentials      = "auth.invalid_credentials"
+	CodeAuthAccountLocked           = "auth.account_locked"
+	CodeAuthMFARequired             = "auth.mfa_required"
+	CodeAuthMFANotEnrolled          = "auth.mfa_not_enrolled"
+	CodeAuthMFAInvalid              = "auth.mfa_invalid"
+	CodeAuthMFAFactorUnavailable    = "auth.mfa_factor_unavailable"
+	CodeAuthSessionExpired          = "auth.session_expired"
+	CodeAuthSessionNotFound         = "auth.session_not_found"
+	CodeAuthUnauthenticated         = "auth.unauthenticated"
+	CodeAuthWebAuthnNotImplemented  = "auth.webauthn_not_implemented"
+	CodeAuthPasswordTooWeak         = "auth.password_too_weak"
+	CodeAuthPasswordUnchanged       = "auth.password_unchanged"
+	CodeAuthPasswordChangeRequired  = "auth.password_change_required"
+	CodeAuthInvalidCurrentPassword  = "auth.invalid_current_password"
+	CodeAuthSetupTokenInvalid       = "auth.setup_token_invalid"
+	CodeAuthResetTokenInvalid       = "auth.reset_token_invalid"
+	CodeAuthKEKNotConfigured        = "auth.kek_not_configured"
 
 	// permission.*
 	CodePermissionDenied = "permission.denied"
@@ -141,9 +151,10 @@ const (
 	CodeRateLimitExceeded = "rate_limit.exceeded"
 
 	// input.*
-	CodeInvalidInput  = "input.invalid"
-	CodeMissingField  = "input.missing_field"
-	CodeMalformedBody = "input.malformed_body"
+	CodeInvalidInput   = "input.invalid"
+	CodeMissingField   = "input.missing_field"
+	CodeMalformedBody  = "input.malformed_body"
+	CodeUnknownFields  = "input.unknown_fields"
 
 	// internal.*
 	CodeInternal = "internal.error"

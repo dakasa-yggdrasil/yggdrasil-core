@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 )
 
@@ -32,13 +33,21 @@ func (s *Server) requirePasswordValid(allowlist []string, next http.HandlerFunc)
 
 		token, ok := extractAuthToken(r)
 		if !ok {
-			writeJSON(w, http.StatusUnauthorized, map[string]any{"code": "unauthenticated"})
+			httperr.WriteProblem(w, http.StatusUnauthorized,
+				httperr.CodeAuthUnauthenticated,
+				"Unauthenticated",
+				"a valid session token is required",
+				httperr.WithInstance(r.URL.Path))
 			return
 		}
 
 		_, collaborator, err := repository.ResolveAuthSession(r.Context(), s.db, token)
 		if err != nil {
-			writeJSON(w, http.StatusUnauthorized, map[string]any{"code": "unauthenticated"})
+			httperr.WriteProblem(w, http.StatusUnauthorized,
+				httperr.CodeAuthUnauthenticated,
+				"Unauthenticated",
+				"the provided session token is invalid or expired",
+				httperr.WithInstance(r.URL.Path))
 			return
 		}
 
@@ -50,10 +59,12 @@ func (s *Server) requirePasswordValid(allowlist []string, next http.HandlerFunc)
 		}
 
 		if identity.MFAEnrolledAt == nil {
-			writeJSON(w, http.StatusForbidden, map[string]any{
-				"code":       "mfa_enrollment_required",
-				"enroll_url": "/api/v1/auth/mfa/enroll",
-			})
+			httperr.WriteProblem(w, http.StatusForbidden,
+				httperr.CodeAuthMFANotEnrolled,
+				"MFA enrollment required",
+				"a second factor must be enrolled before accessing this resource",
+				httperr.WithInstance(r.URL.Path),
+				httperr.WithExtra("enroll_url", "/api/v1/auth/mfa/enroll"))
 			return
 		}
 
@@ -74,11 +85,13 @@ func (s *Server) requirePasswordValid(allowlist []string, next http.HandlerFunc)
 				if pwState.PasswordMustChange && !expired {
 					reason = "admin_forced"
 				}
-				writeJSON(w, http.StatusForbidden, map[string]any{
-					"code":       "password_change_required",
-					"change_url": "/api/v1/auth/passwords/change",
-					"reason":     reason,
-				})
+				httperr.WriteProblem(w, http.StatusForbidden,
+					httperr.CodeAuthPasswordChangeRequired,
+					"Password change required",
+					"the current password must be changed before continuing",
+					httperr.WithInstance(r.URL.Path),
+					httperr.WithExtra("change_url", "/api/v1/auth/passwords/change"),
+					httperr.WithExtra("reason", reason))
 				return
 			}
 		}

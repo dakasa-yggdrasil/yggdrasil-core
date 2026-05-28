@@ -2927,6 +2927,11 @@ func codeFromError(err error, status int) string {
 		return httperr.CodeAuthAccountLocked
 	case errors.Is(err, mfa.ErrMFANotEnrolled):
 		return httperr.CodeAuthMFANotEnrolled
+	case errors.Is(err, mfa.ErrInvalidRecoveryCode):
+		return httperr.CodeAuthMFAInvalid
+	case errors.Is(err, repository.ErrMFAEnrollTokenAlreadyConsumed),
+		errors.Is(err, repository.ErrMFAEnrollTokenExpired):
+		return httperr.CodeAuthSetupTokenInvalid
 	case errors.Is(err, repository.ErrManifestNotFound):
 		return httperr.CodeManifestNotFound
 	case errors.Is(err, repository.ErrThirdPartyIdentityConflict):
