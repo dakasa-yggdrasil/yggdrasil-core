@@ -1005,7 +1005,7 @@ func writeAuthCookie(w http.ResponseWriter, token string, expiresAt time.Time) {
 		Path:     "/",
 		Expires:  expiresAt,
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: authSessionCookieSameSite(),
 		Secure:   authSessionCookieSecure(),
 		Domain:   authSessionCookieDomain(),
 	})
@@ -1019,7 +1019,7 @@ func clearAuthCookie(w http.ResponseWriter) {
 		MaxAge:   -1,
 		Expires:  time.Unix(0, 0).UTC(),
 		HttpOnly: true,
-		SameSite: http.SameSiteLaxMode,
+		SameSite: authSessionCookieSameSite(),
 		Secure:   authSessionCookieSecure(),
 		Domain:   authSessionCookieDomain(),
 	})
@@ -1088,6 +1088,40 @@ func authSessionCookieDomain() string {
 	return strings.TrimSpace(os.Getenv("AUTH_SESSION_COOKIE_DOMAIN"))
 }
 
+// authSessionCookieSameSite resolves the SameSite attribute for the session
+// cookie.
+//
+// SECURITY (audit 2026-05-27 A6): the default is `Strict`. Yggdrasil is an
+// admin-class IDP where every meaningful state-changing request originates
+// from the same-site SPA at yggdrasil.dakasa.me. `Strict` keeps the cookie
+// off cross-site requests entirely (top-level navigations included), which
+// kills the broadest class of CSRF attacks at the browser layer with no
+// runtime cost. The earlier default `Lax` allowed top-level cross-site
+// POSTs/GETs to carry the cookie — narrow but real attack surface for an
+// admin panel.
+//
+// Operators who federate yggdrasil onto a host that legitimately receives
+// cross-site top-level entry can downgrade to `Lax` (e.g. a marketing site
+// that deep-links into the admin console). `None` requires Secure=true and
+// is intentionally permitted but discouraged — it disables SameSite
+// protection entirely.
+//
+// Unparseable / unknown values fall back to the secure default `Strict`
+// (fail-closed).
+func authSessionCookieSameSite() http.SameSite {
+	value := strings.TrimSpace(os.Getenv("AUTH_SESSION_COOKIE_SAMESITE"))
+	switch strings.ToLower(value) {
+	case "strict", "":
+		return http.SameSiteStrictMode
+	case "lax":
+		return http.SameSiteLaxMode
+	case "none":
+		return http.SameSiteNoneMode
+	default:
+		return http.SameSiteStrictMode
+	}
+}
+
 // authSessionCookieSecure resolves the Secure flag for the session cookie.
 //
 // SECURITY (audit 2026-05-27 A3): the default MUST be `true`. yggdrasil
@@ -1138,6 +1172,14 @@ func authThirdPartyStateCookieName() string {
 	return "yggdrasil_third_party_state"
 }
 
+// Third-party state cookie keeps SameSite=Lax intentionally — the third-party
+// OAuth callback comes back as a TOP-LEVEL navigation from the IdP origin
+// (google.com → yggdrasil.dakasa.me). SameSite=Strict would strip the cookie
+// on that cross-site navigation and break the OIDC callback. Lax allows
+// top-level navigations to send the cookie while still blocking cross-site
+// subresource requests, which is the right invariant for an OAuth state
+// nonce. The session cookie (writeAuthCookie) uses Strict because it only
+// rides existing same-site navigations once logged in.
 func writeThirdPartyStateCookie(w http.ResponseWriter, token string) {
 	http.SetCookie(w, &http.Cookie{
 		Name:     authThirdPartyStateCookieName(),
