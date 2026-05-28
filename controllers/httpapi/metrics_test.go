@@ -45,6 +45,8 @@ func TestHandleMetricsReturnsPrometheusFormat(t *testing.T) {
 		"yggdrasil_auth_sessions_revoked_total",
 		// Phase-4 CSRF rejection family (audit ref A7).
 		"yggdrasil_csrf_rejected_total",
+		// Phase-5 RBAC denial family (audit ref §3.1).
+		"yggdrasil_console_rbac_denied_total",
 		"# TYPE",
 		"# HELP",
 	} {
@@ -143,6 +145,35 @@ func TestHandleMetrics_CSRFCountersRender(t *testing.T) {
 		`yggdrasil_csrf_rejected_total{outcome="missing_token",mode="enforce"} 0`,
 		`yggdrasil_csrf_rejected_total{outcome="token_mismatch",mode="warn"} 0`,
 		`yggdrasil_csrf_rejected_total{outcome="token_mismatch",mode="enforce"} 1`,
+	} {
+		if !strings.Contains(body, expected) {
+			t.Errorf("expected %q in body:\n%s", expected, body)
+		}
+	}
+}
+
+// TestHandleMetrics_RBACDeniedCountersRender exercises the Phase-5 RBAC
+// family (audit ref §3.1, contract §12). Unlike the CSRF family the
+// permission label is open-set (driven by what surface-console asks
+// for), so we only assert the lines we actually programmed. After
+// bumping view_people|warn by 2 and offboard|enforce by 1 the rendered
+// body must reflect those exact numbers.
+func TestHandleMetrics_RBACDeniedCountersRender(t *testing.T) {
+	metrics.ResetForTest()
+	metrics.IncRBACDenied("yggdrasil:view_people", metrics.RBACModeWarn)
+	metrics.IncRBACDenied("yggdrasil:view_people", metrics.RBACModeWarn)
+	metrics.IncRBACDenied("yggdrasil:offboard_collaborator", metrics.RBACModeEnforce)
+
+	server := &Server{logger: zap.NewNop()}
+	w := httptest.NewRecorder()
+	server.handleMetrics(w, httptest.NewRequest("GET", "/metrics", nil))
+
+	body := w.Body.String()
+	for _, expected := range []string{
+		`yggdrasil_console_rbac_denied_total{permission="yggdrasil:view_people",mode="warn"} 2`,
+		`yggdrasil_console_rbac_denied_total{permission="yggdrasil:offboard_collaborator",mode="enforce"} 1`,
+		`# HELP yggdrasil_console_rbac_denied_total`,
+		`# TYPE yggdrasil_console_rbac_denied_total counter`,
 	} {
 		if !strings.Contains(body, expected) {
 			t.Errorf("expected %q in body:\n%s", expected, body)

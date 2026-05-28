@@ -261,4 +261,32 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 				outcome, mode, csrfSnap[outcome+"|"+mode])
 		}
 	}
+
+	// RBAC denial counter, faceted by (permission, mode). Like CSRF, the
+	// mode label separates "warn (would-have-rejected)" from "enforce
+	// (actually rejected)". The permission label is dynamic — only the
+	// permissions surface-console actually asks for show up; pre-populating
+	// the full action_catalog would clutter the surface and force a metric
+	// update every time a permission gets added in the integration-yggdrasil-self
+	// adapter. Audit ref: §3.1 + INTEGRATION_CONTRACT §12.
+	rbacSnap := metrics.RBACDeniedSnapshot()
+	fmt.Fprintf(w, "# HELP yggdrasil_console_rbac_denied_total Total /api/v1/console/* RBAC denials by permission and mode (audit 2026-05-27 §3.1, contract §12)\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_console_rbac_denied_total counter\n")
+	for key, count := range rbacSnap {
+		// key shape: "permission|mode"
+		idx := -1
+		for i := len(key) - 1; i >= 0; i-- {
+			if key[i] == '|' {
+				idx = i
+				break
+			}
+		}
+		if idx < 0 {
+			continue
+		}
+		permission := key[:idx]
+		mode := key[idx+1:]
+		fmt.Fprintf(w, "yggdrasil_console_rbac_denied_total{permission=\"%s\",mode=\"%s\"} %d\n",
+			permission, mode, count)
+	}
 }

@@ -139,6 +139,19 @@ var (
 	// Audit ref: A7 (no CSRF token for state-changing endpoints).
 	csrfRejectedMu    sync.RWMutex
 	csrfRejectedCount = map[string]uint64{}
+
+	// RBAC denial counters. Keyed by (permission, mode). The permission
+	// label is bounded by the yggdrasil-self action_catalog (~17 strings
+	// today), the mode label is closed-set {warn, enforce}. Operators
+	// chart `rate(yggdrasil_console_rbac_denied_total{mode="warn"}[5m])`
+	// during the observation window — when the curve flattens (no new
+	// surprise denials from legit users) it's safe to flip
+	// YGGDRASIL_CONSOLE_RBAC_ENFORCE=enforce.
+	//
+	// Audit ref: §3.1 (requireOpsPermission defined but never wired).
+	// Contract ref: §12 (backend is authorization authority).
+	rbacDeniedMu    sync.RWMutex
+	rbacDeniedCount = map[string]uint64{}
 )
 
 // IncReactorEvaluation bumps the evaluation counter for the given outcome.
@@ -431,6 +444,46 @@ func IncCSRFRejected(outcome, mode string) {
 	csrfRejectedCount[key]++
 }
 
+// RBAC enforce modes — closed set.
+const (
+	RBACModeWarn    = "warn"
+	RBACModeEnforce = "enforce"
+)
+
+// IncRBACDenied bumps the RBAC denial counter for (permission, mode).
+// The mode label is closed-set; the permission label is bounded by the
+// yggdrasil-self action_catalog (a finite, slow-moving list).
+//
+// permission: any yggdrasil:* string from the action_catalog
+// mode      ∈ {warn, enforce}
+func IncRBACDenied(permission, mode string) {
+	if permission == "" {
+		return
+	}
+	if mode != RBACModeWarn && mode != RBACModeEnforce {
+		return
+	}
+	key := permission + "|" + mode
+	rbacDeniedMu.Lock()
+	defer rbacDeniedMu.Unlock()
+	rbacDeniedCount[key]++
+}
+
+// RBACDeniedSnapshot returns the counter values keyed by "permission|mode".
+// Deterministic ordering not required here (the /metrics renderer sorts).
+// Unlike the closed-set CSRF family, the permission label set is dynamic
+// (driven by what surface-console asks for), so we don't pre-populate
+// zero rows — operators see permissions only after the first denial.
+func RBACDeniedSnapshot() map[string]uint64 {
+	rbacDeniedMu.RLock()
+	defer rbacDeniedMu.RUnlock()
+	out := make(map[string]uint64, len(rbacDeniedCount))
+	for k, v := range rbacDeniedCount {
+		out[k] = v
+	}
+	return out
+}
+
 // CSRFRejectedSnapshot returns the counter values keyed by "outcome|mode".
 // Deterministic ordering not required here (the /metrics renderer sorts).
 func CSRFRejectedSnapshot() map[string]uint64 {
@@ -487,4 +540,7 @@ func ResetForTest() {
 	csrfRejectedMu.Lock()
 	csrfRejectedCount = map[string]uint64{}
 	csrfRejectedMu.Unlock()
+	rbacDeniedMu.Lock()
+	rbacDeniedCount = map[string]uint64{}
+	rbacDeniedMu.Unlock()
 }

@@ -16,6 +16,23 @@ import (
 
 const opsAuditTimeout = 5 * time.Second
 
+// opsCollaboratorID extracts the collaborator id from the verified JWT
+// claims attached by requireAuthenticatedConsoleAPIs / bearerOrSession.
+// Used by the ops_audit middleware. Returns "" when no claims are
+// present (workflow-run-token caller).
+func opsCollaboratorID(r *http.Request) string {
+	claims, ok := claimsFromContext(r.Context())
+	if !ok {
+		return ""
+	}
+	for _, key := range []string{"collaborator_id", "sub"} {
+		if v, ok := claims[key].(string); ok && v != "" {
+			return v
+		}
+	}
+	return ""
+}
+
 // opsAuditEntry is a denormalised payload for the audit middleware.
 // CollaboratorID is required, the rest is best-effort metadata.
 type opsAuditEntry struct {
