@@ -13,7 +13,6 @@ import (
 // becomes a compile error rather than a silent cache miss.
 const (
 	reqcacheKindCollaborator = "collaborator"
-	reqcacheKindAuthIdentity = "auth_identity"
 )
 
 // getCollaboratorCached returns the collaborator with the given id,
@@ -42,9 +41,3 @@ func setCollaboratorInCache(ctx context.Context, collab model.Collaborator) {
 	reqcache.Set(ctx, reqcacheKindCollaborator, collab.ID.String(), collab)
 }
 
-// invalidateCollaboratorCache forces the next getCollaboratorCached
-// call to hit the DB. Use after a mutation when downstream code in
-// the SAME request expects to see the post-write row.
-func invalidateCollaboratorCache(ctx context.Context, id string) {
-	reqcache.Delete(ctx, reqcacheKindCollaborator, id)
-}
