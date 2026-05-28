@@ -1,0 +1,56 @@
+# Yggdrasil SLO recording rules.
+#
+# Audit ref: G9. Ship via integration-prometheus (or operator equivalent)
+# alongside the existing capability-naming-validator alerts. Filename
+# mirrors the Grafana convention so a single Yggdrasil workflow can
+# apply both in one pass.
+#
+# Recording rules pre-aggregate the SLI numerators / denominators so
+# the alert rules below stay readable and the dashboard queries cheap.
+
+groups:
+- name: yggdrasil-slo-recording
+  interval: 30s
+  rules:
+  # Write API availability — workflow_runs is the canonical control-plane
+  # success/failure pivot.
+  - record: yggdrasil:workflow_availability_ratio:rate5m
+    expr: |
+      sum(rate(yggdrasil_workflow_runs_total{status="succeeded"}[5m]))
+      /
+      clamp_min(sum(rate(yggdrasil_workflow_runs_total[5m])), 0.001)
+
+  - record: yggdrasil:workflow_availability_ratio:rate1h
+    expr: |
+      sum(rate(yggdrasil_workflow_runs_total{status="succeeded"}[1h]))
+      /
+      clamp_min(sum(rate(yggdrasil_workflow_runs_total[1h])), 0.001)
+
+  - record: yggdrasil:workflow_availability_ratio:rate6h
+    expr: |
+      sum(rate(yggdrasil_workflow_runs_total{status="succeeded"}[6h]))
+      /
+      clamp_min(sum(rate(yggdrasil_workflow_runs_total[6h])), 0.001)
+
+  # Auth API availability — excludes rate_limited (bot/abuse) from the
+  # denominator to avoid noisy targets after a wave of credential-stuffing
+  # attempts.
+  - record: yggdrasil:auth_success_ratio:rate5m
+    expr: |
+      sum(rate(yggdrasil_auth_login_total{outcome="succeeded"}[5m]))
+      /
+      clamp_min(sum(rate(yggdrasil_auth_login_total{outcome!="rate_limited"}[5m])), 0.001)
+
+  - record: yggdrasil:auth_success_ratio:rate1h
+    expr: |
+      sum(rate(yggdrasil_auth_login_total{outcome="succeeded"}[1h]))
+      /
+      clamp_min(sum(rate(yggdrasil_auth_login_total{outcome!="rate_limited"}[1h])), 0.001)
+
+  # Reactor dispatch health — surfaces async failures that don't show up
+  # in workflow_runs (reactor evaluation -> dispatch is the gap).
+  - record: yggdrasil:reactor_dispatch_success_ratio:rate5m
+    expr: |
+      sum(rate(yggdrasil_reactor_dispatches_total{outcome="succeeded"}[5m]))
+      /
+      clamp_min(sum(rate(yggdrasil_reactor_dispatches_total[5m])), 0.001)

@@ -1,0 +1,275 @@
+{
+  "_meta": {
+    "title": "Yggdrasil-core SLO",
+    "purpose": "G9 close: SLO + error-budget dashboard for yggdrasil-core. Companions: monitoring/slo.md (SLI definitions) + monitoring/prometheus/yggdrasil-slo-{recording-rules,alerts}.yaml.",
+    "audit_ref": "G9",
+    "metrics": [
+      "yggdrasil_workflow_runs_total (counter by status)",
+      "yggdrasil_auth_login_total (counter by outcome)",
+      "yggdrasil_auth_mfa_verify_total (counter by outcome,factor)",
+      "yggdrasil_auth_sessions_created_total (counter)",
+      "yggdrasil_auth_sessions_revoked_total (counter)",
+      "yggdrasil_reactor_dispatches_total (counter by outcome)",
+      "yggdrasil:workflow_availability_ratio:rate5m (recording rule)",
+      "yggdrasil:auth_success_ratio:rate5m (recording rule)"
+    ],
+    "apply_via": "integration-grafana.ensure_dashboard capability",
+    "datasource_uid_placeholder": "REPLACE_PROMETHEUS_DS_UID_AT_APPLY_TIME"
+  },
+  "annotations": {
+    "list": [
+      {
+        "builtIn": 1,
+        "datasource": {"type": "grafana", "uid": "-- Grafana --"},
+        "enable": true,
+        "hide": true,
+        "iconColor": "rgba(0, 211, 255, 1)",
+        "name": "Annotations & Alerts",
+        "target": {"limit": 100, "matchAny": false, "tags": [], "type": "dashboard"},
+        "type": "dashboard"
+      }
+    ]
+  },
+  "description": "yggdrasil-core SLO + error-budget dashboard. Targets: 99.9% availability (90d) on write API and auth API.",
+  "editable": true,
+  "graphTooltip": 1,
+  "panels": [
+    {
+      "id": 1,
+      "type": "stat",
+      "title": "Write API availability (5m)",
+      "description": "yggdrasil_workflow_runs_total{succeeded}/total over the last 5m. Target: 99.9%.",
+      "gridPos": {"h": 6, "w": 6, "x": 0, "y": 0},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "yggdrasil:workflow_availability_ratio:rate5m",
+          "datasource": {"type": "prometheus", "uid": "REPLACE_PROMETHEUS_DS_UID_AT_APPLY_TIME"},
+          "legendFormat": "availability"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "unit": "percentunit",
+          "decimals": 4,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 0.99},
+              {"color": "green", "value": 0.999}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 2,
+      "type": "stat",
+      "title": "Auth API success ratio (5m)",
+      "description": "Login success / non-rate-limited attempts over the last 5m. Target: 99.9%.",
+      "gridPos": {"h": 6, "w": 6, "x": 6, "y": 0},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "yggdrasil:auth_success_ratio:rate5m",
+          "datasource": {"type": "prometheus", "uid": "REPLACE_PROMETHEUS_DS_UID_AT_APPLY_TIME"},
+          "legendFormat": "auth_success"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "unit": "percentunit",
+          "decimals": 4,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 0.99},
+              {"color": "green", "value": 0.999}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 3,
+      "type": "stat",
+      "title": "Reactor dispatch success (5m)",
+      "description": "Reactor dispatches succeeded / total over 5m. Below 95% triggers a ticket-class alert (15m persistence).",
+      "gridPos": {"h": 6, "w": 6, "x": 12, "y": 0},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "yggdrasil:reactor_dispatch_success_ratio:rate5m",
+          "datasource": {"type": "prometheus", "uid": "REPLACE_PROMETHEUS_DS_UID_AT_APPLY_TIME"},
+          "legendFormat": "reactor_success"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "unit": "percentunit",
+          "decimals": 3,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 0.95},
+              {"color": "green", "value": 0.99}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 4,
+      "type": "stat",
+      "title": "Error budget remaining (30d, write)",
+      "description": "Approximation: 1 - (1 - availability_30d)/0.001. Negative values mean budget exhausted.",
+      "gridPos": {"h": 6, "w": 6, "x": 18, "y": 0},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "1 - ((1 - sum(rate(yggdrasil_workflow_runs_total{status=\"succeeded\"}[30d])) / clamp_min(sum(rate(yggdrasil_workflow_runs_total[30d])), 0.001)) / 0.001)",
+          "datasource": {"type": "prometheus", "uid": "REPLACE_PROMETHEUS_DS_UID_AT_APPLY_TIME"},
+          "legendFormat": "budget_remaining"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "color": {"mode": "thresholds"},
+          "unit": "percentunit",
+          "decimals": 1,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {"color": "red", "value": null},
+              {"color": "orange", "value": 0.25},
+              {"color": "green", "value": 0.5}
+            ]
+          }
+        }
+      }
+    },
+    {
+      "id": 10,
+      "type": "timeseries",
+      "title": "Workflow runs by status (rate, 5m)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 6},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (status) (rate(yggdrasil_workflow_runs_total[5m]))",
+          "datasource": {"type": "prometheus", "uid": "REPLACE_PROMETHEUS_DS_UID_AT_APPLY_TIME"},
+          "legendFormat": "{{status}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "smooth"},
+          "unit": "ops"
+        }
+      }
+    },
+    {
+      "id": 11,
+      "type": "timeseries",
+      "title": "Auth login outcomes (rate, 5m)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 6},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome) (rate(yggdrasil_auth_login_total[5m]))",
+          "datasource": {"type": "prometheus", "uid": "REPLACE_PROMETHEUS_DS_UID_AT_APPLY_TIME"},
+          "legendFormat": "{{outcome}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "smooth"},
+          "unit": "ops"
+        }
+      }
+    },
+    {
+      "id": 20,
+      "type": "timeseries",
+      "title": "Reactor dispatches by outcome (rate, 5m)",
+      "gridPos": {"h": 8, "w": 12, "x": 0, "y": 14},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome) (rate(yggdrasil_reactor_dispatches_total[5m]))",
+          "datasource": {"type": "prometheus", "uid": "REPLACE_PROMETHEUS_DS_UID_AT_APPLY_TIME"},
+          "legendFormat": "{{outcome}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "smooth"},
+          "unit": "ops"
+        }
+      }
+    },
+    {
+      "id": 21,
+      "type": "timeseries",
+      "title": "Sessions created vs revoked (rate, 5m)",
+      "gridPos": {"h": 8, "w": 12, "x": 12, "y": 14},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "rate(yggdrasil_auth_sessions_created_total[5m])",
+          "datasource": {"type": "prometheus", "uid": "REPLACE_PROMETHEUS_DS_UID_AT_APPLY_TIME"},
+          "legendFormat": "created"
+        },
+        {
+          "refId": "B",
+          "expr": "rate(yggdrasil_auth_sessions_revoked_total[5m])",
+          "datasource": {"type": "prometheus", "uid": "REPLACE_PROMETHEUS_DS_UID_AT_APPLY_TIME"},
+          "legendFormat": "revoked"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "smooth"},
+          "unit": "ops"
+        }
+      }
+    },
+    {
+      "id": 30,
+      "type": "timeseries",
+      "title": "MFA verify by outcome+factor (rate, 5m)",
+      "gridPos": {"h": 8, "w": 24, "x": 0, "y": 22},
+      "targets": [
+        {
+          "refId": "A",
+          "expr": "sum by (outcome, factor) (rate(yggdrasil_auth_mfa_verify_total[5m]))",
+          "datasource": {"type": "prometheus", "uid": "REPLACE_PROMETHEUS_DS_UID_AT_APPLY_TIME"},
+          "legendFormat": "{{outcome}}/{{factor}}"
+        }
+      ],
+      "fieldConfig": {
+        "defaults": {
+          "custom": {"drawStyle": "line", "fillOpacity": 10, "lineInterpolation": "smooth"},
+          "unit": "ops"
+        }
+      }
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 38,
+  "style": "dark",
+  "tags": ["yggdrasil", "slo", "auth", "reactors"],
+  "templating": {"list": []},
+  "time": {"from": "now-6h", "to": "now"},
+  "timepicker": {},
+  "timezone": "browser",
+  "title": "Yggdrasil-core SLO",
+  "uid": "yggdrasil-core-slo",
+  "version": 1
+}

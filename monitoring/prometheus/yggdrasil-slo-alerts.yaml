@@ -1,0 +1,70 @@
+# Yggdrasil SLO error-budget burn alerts.
+#
+# Audit ref: G9. Two-tier multi-window pattern per Google SRE workbook
+# Chapter 5 — pages on fast burn, tickets on sustained burn.
+#
+# Targets:
+#   * Write API availability: 99.9% (90d window)
+#     -> 1h fast-burn fires at 14.4x = 2% of monthly budget burned in 1h
+#     -> 6h sustained-burn fires at  6x = 5% of monthly budget burned in 6h
+#   * Auth API availability: 99.9% (90d window) — same thresholds.
+
+groups:
+- name: yggdrasil-slo-burn
+  rules:
+  - alert: YggdrasilWriteAPIErrorBudgetBurnFast
+    expr: |
+      (1 - yggdrasil:workflow_availability_ratio:rate1h) > (14.4 * 0.001)
+    for: 5m
+    labels:
+      severity: page
+      service: yggdrasil-core
+      slo: write_api_availability
+    annotations:
+      summary: "Write API burning error budget fast (>14.4x SLO target)"
+      description: |
+        Workflow success ratio over the last 1h is < {{ printf "%.3f" (sub 1 (mulf 14.4 0.001)) }}.
+        At this rate the 90d error budget burns in <2 days.
+      runbook: "monitoring/slo.md"
+
+  - alert: YggdrasilWriteAPIErrorBudgetBurnSustained
+    expr: |
+      (1 - yggdrasil:workflow_availability_ratio:rate6h) > (6 * 0.001)
+    for: 30m
+    labels:
+      severity: ticket
+      service: yggdrasil-core
+      slo: write_api_availability
+    annotations:
+      summary: "Write API burning error budget at sustained rate (>6x SLO target)"
+      description: |
+        Workflow success ratio over the last 6h indicates 5% of the
+        monthly error budget has burned. Investigate before page-class
+        threshold trips.
+
+  - alert: YggdrasilAuthAPIErrorBudgetBurnFast
+    expr: |
+      (1 - yggdrasil:auth_success_ratio:rate1h) > (14.4 * 0.001)
+    for: 5m
+    labels:
+      severity: page
+      service: yggdrasil-core
+      slo: auth_api_availability
+    annotations:
+      summary: "Auth API burning error budget fast (>14.4x SLO target)"
+      description: |
+        Login success ratio (excluding rate-limit) over 1h is < {{ printf "%.3f" (sub 1 (mulf 14.4 0.001)) }}.
+
+  - alert: YggdrasilReactorDispatchFailures
+    expr: |
+      yggdrasil:reactor_dispatch_success_ratio:rate5m < 0.95
+    for: 15m
+    labels:
+      severity: ticket
+      service: yggdrasil-core
+    annotations:
+      summary: "Reactor dispatch success < 95% over 5m window"
+      description: |
+        Sustained dispatch failures indicate either a downstream adapter
+        outage or a malformed reactor manifest. Check
+        yggdrasil_reactor_dispatches_total{outcome="failed"}.
