@@ -2,7 +2,7 @@
 
 All notable changes to yggdrasil-core are documented here.
 
-## [2.10.0] - 2026-05-28
+## [2.14.0] - 2026-05-28
 
 ### Added
 - **A6: SameSite=Strict default for the session cookie.** `writeAuthCookie` and `clearAuthCookie` now emit `SameSite=Strict` by default (was `Lax`). For an admin IDP this kills the broadest CSRF surface — the cookie won't ride any cross-site request, top-level navigations included. Operators can override via `AUTH_SESSION_COOKIE_SAMESITE` (Strict/Lax/None, case-insensitive); the third-party OAuth state cookie keeps Lax intentionally because the IdP callback is a cross-site navigation.
