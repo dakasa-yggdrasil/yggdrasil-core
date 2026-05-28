@@ -19,19 +19,29 @@ type Diff struct {
 }
 
 // MergeSpec produces the new integration_type spec to persist when drift is
-// detected: live as the base, with operator-managed `Reactors` taking
+// detected: live as the base, with operator-managed fields taking
 // precedence when the operator has already configured them.
 //
-// Reactor precedence:
+// Operator-owned fields (preserved across sync if present in `current`):
 //
-//  1. If `current.Reactors` is non-empty, the operator has explicitly
-//     configured reactors — keep current.Reactors and ignore live.Reactors.
-//     This preserves operator overrides across manifest_sync cycles.
-//  2. If `current.Reactors` is empty (e.g. initial registration or first
-//     sync after the adapter starts emitting reactor entries), adopt
-//     `live.Reactors`. This lets adapters seed their canonical reactor
-//     subscriptions (e.g. on_collaborator_session_terminated) without
-//     requiring a manual catalog patch on every fresh install.
+//   - Reactors (since the framework launched). If `current.Reactors` is
+//     non-empty, the operator has explicitly configured reactors —
+//     keep current.Reactors and ignore live.Reactors. This preserves
+//     operator overrides across manifest_sync cycles. If empty, adopt
+//     `live.Reactors` so adapters can seed their canonical reactor
+//     subscriptions on a fresh install.
+//
+//   - Domain (INTEGRATION_CONTRACT §17, since 2026-05-28). Adapters
+//     declare their `spec.domain` slug via YAML/JSON manifest at
+//     registration time, NOT via the adapter Describe() RPC (the
+//     family/contract.AdapterDescribeResponse type does not carry
+//     Domain). When manifest_sync re-syncs from the live adapter it
+//     would otherwise blank the operator's declaration; we preserve
+//     `current.Domain` whenever non-empty.
+//
+//   - Dashboard (§17 paired field). Same logic — adapters declare
+//     `spec.dashboard` in their static manifest, not in Describe().
+//     Preserve `current.Dashboard` whenever set.
 //
 // Other fields come from `live` verbatim. If new operator-owned fields
 // are introduced, extend this function (and document it in the spec
@@ -43,6 +53,18 @@ func MergeSpec(current, live model.IntegrationTypeManifestSpec) (model.Integrati
 		out.Reactors = current.Reactors // operator override wins
 	}
 	// else: keep live.Reactors (adapter-declared defaults seed the manifest)
+
+	// §17 — Domain and Dashboard live in the operator-managed manifest
+	// (the YAML/JSON file POSTed at registration), not in the adapter's
+	// runtime Describe() response. Preserve them across sync so the
+	// manifest_sync addon does not silently blank the operator's
+	// taxonomy declaration on every cron tick.
+	if current.Domain != "" {
+		out.Domain = current.Domain
+	}
+	if current.Dashboard != nil {
+		out.Dashboard = current.Dashboard
+	}
 
 	return out, computeDiff(current, out)
 }

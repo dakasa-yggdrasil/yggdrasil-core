@@ -111,3 +111,52 @@ func TestMergeSpec_NoReactorsAnywhere(t *testing.T) {
 	got, _ := MergeSpec(current, live)
 	assert.Nil(t, got.Reactors, "no reactors anywhere means no reactors in result")
 }
+
+// INTEGRATION_CONTRACT §17 — Domain and Dashboard are operator-managed
+// fields declared in the registered manifest, not in the adapter's
+// runtime Describe() response. manifest_sync must preserve them.
+
+func TestMergeSpec_PreservesDomainWhenLiveBlanksIt(t *testing.T) {
+	// Adapter's Describe() does not include Domain (Phase A) — the
+	// runtime contract type omits the field entirely. The operator's
+	// manifest had it set; sync must not blank it.
+	current := model.IntegrationTypeManifestSpec{
+		Domain: "payments",
+	}
+	live := model.IntegrationTypeManifestSpec{
+		// Domain absent — runtime Describe never emits it.
+	}
+	got, _ := MergeSpec(current, live)
+	assert.Equal(t, "payments", got.Domain, "operator-declared domain must survive sync")
+}
+
+func TestMergeSpec_AdoptsLiveDomainWhenCurrentEmpty(t *testing.T) {
+	// If somehow live carries Domain (e.g. an adapter that augments its
+	// Describe in a future SDK), accept it when current is empty.
+	current := model.IntegrationTypeManifestSpec{}
+	live := model.IntegrationTypeManifestSpec{Domain: "platform"}
+	got, _ := MergeSpec(current, live)
+	assert.Equal(t, "platform", got.Domain, "live domain seeds when current is empty")
+}
+
+func TestMergeSpec_PreservesDashboardWhenLiveBlanksIt(t *testing.T) {
+	dashboard := &model.IntegrationDashboardSpec{
+		URL:   "https://dashboard.stripe.com",
+		Label: "Abrir Stripe",
+	}
+	current := model.IntegrationTypeManifestSpec{Dashboard: dashboard}
+	live := model.IntegrationTypeManifestSpec{} // Dashboard nil
+	got, _ := MergeSpec(current, live)
+	require.NotNil(t, got.Dashboard, "operator-declared dashboard must survive sync")
+	assert.Equal(t, "https://dashboard.stripe.com", got.Dashboard.URL)
+	assert.Equal(t, "Abrir Stripe", got.Dashboard.Label)
+}
+
+func TestMergeSpec_AdoptsLiveDashboardWhenCurrentEmpty(t *testing.T) {
+	dashboard := &model.IntegrationDashboardSpec{URL: "https://app.nfe.io"}
+	current := model.IntegrationTypeManifestSpec{}
+	live := model.IntegrationTypeManifestSpec{Dashboard: dashboard}
+	got, _ := MergeSpec(current, live)
+	require.NotNil(t, got.Dashboard)
+	assert.Equal(t, "https://app.nfe.io", got.Dashboard.URL)
+}
