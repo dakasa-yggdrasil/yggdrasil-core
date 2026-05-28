@@ -2,6 +2,17 @@
 
 All notable changes to yggdrasil-core are documented here.
 
+## [2.16.0] - 2026-05-28
+
+### Added
+- **§3.1 / §12 Phase 5B: backend RBAC enforcement extended to `/api/v1/ops/*` (22 routes, warn-only)**. The older console-style `/api/v1/ops/*` namespace — referenced by surface-console's `lib/ops/api.ts` for surfaces, workflow-runs, approvals, drift, catalog, system health, audit, and missing-MFA probes — was OUT of scope for Phase 5 and shipped with zero backend RBAC. Phase 5B wires every ops route through `server.requireOpsPermissionFunc(perm, handler)` using the same middleware as Phase 5. The single `YGGDRASIL_CONSOLE_RBAC_ENFORCE` env switch governs both namespaces, so the existing observation window covers both. Mapping mirrors `/api/v1/console/*`: surfaces and surface-targets gate on `view_integrations` / `manage_integrations`, workflow runs on `view_ops` / `manage_workflows`, approvals and drift on `view_ops` / `manage_workflows`, catalog on `view_integrations`, system/health on `view_ops`, audit on `view_audit`, missing-MFA on `view_people`. New drift-prevention test `TestOpsRoutesAreFullyMapped` mirrors `TestConsoleRoutesAreFullyMapped` so the regex-scanner safety net covers both namespaces.
+- **Dedicated `yggdrasil:manage_secrets` permission (Phase 5B split)**. Secret read/rotate/disable/revoke/materialize routes (`/api/v1/console/secrets/*`) were previously gated by `manage_integrations`, coupling secret custody to integration provisioning. The Phase 5B split separates them because the blast radius differs: an integration admin can register a stripe instance with a `credentials_ref` URI WITHOUT inheriting the right to read the underlying cluster secret. Operators who need full custody now receive BOTH permissions; the default integration-admin role does not. The new constant lands in `controllers/httpapi/ops_rbac_catalog.go` (Go), `surface-console/src/lib/auth/permissions.ts` (TS), and `integration-yggdrasil-self/internal/adapter/spec.go` `action_catalog` (the source of truth for grantable permissions in TeamPermissionsBox). New `TestManageSecretsIsDistinctFromManageIntegrations` locks the split.
+
+### Notes
+- This cycle continues warn-only mode (`YGGDRASIL_CONSOLE_RBAC_ENFORCE` unset = `warn`). Same flip semantics as Phase 5 — observe `yggdrasil_console_rbac_denied_total{permission,mode="warn"}` for legit users, then flip to `enforce`. Runbook in `~/.claude/projects/-Users-dakasa-projects/memory/reference_phase5_rbac_enforce_runbook.md` applies unchanged.
+- Existing god-mode (`yggdrasil:*`) and traits.yggdrasil_admin bypasses match any yggdrasil:* permission, so cluster admins are unaffected by the split.
+- Secret-custody operators with only `manage_integrations` who relied on the old coupling MUST be granted the new `manage_secrets` permission before the enforce flip (warn-mode period exists precisely so this drift surfaces in metrics before it becomes a 403 storm).
+
 ## [2.15.0] - 2026-05-28
 
 ### Added
