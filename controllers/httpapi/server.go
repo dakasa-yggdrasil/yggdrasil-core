@@ -865,6 +865,12 @@ func requiresAuthenticatedConsoleAPI(path string) bool {
 		// Note: /api/v1/invites NOT gated here — handleInviteValidate
 		// is intentionally public (validates from email), and
 		// handleInviteCreate/List self-gate via extractAuthToken.
+		// Note: /api/v1/tenant/brand stays OUT of this allowlist —
+		// the GET is intentionally public (LoginPage and signup
+		// surfaces fetch it pre-session). The PATCH self-gates in
+		// handleTenantBrandPatch, requiring an explicit session OR
+		// a verified workflow-run-token. Don't widen the prefix here
+		// or the public GET breaks.
 		"/api/v1/events",
 		"/api/v1/provision",
 		"/api/v1/bootstrap",
