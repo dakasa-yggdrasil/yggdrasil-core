@@ -1,0 +1,94 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "workflow",
+  "metadata": {
+    "name": "oidc-client-set-backchannel-logout-uri",
+    "namespace": "global",
+    "description": "Apply the RFC 8417 backchannel_logout_uri on an existing oidc_clients row. Targets yggdrasil-core's own Postgres via integration-database-admin; the operator passes the admin DSN per-call so no hardcoded coupling to a specific cluster's secret store survives.",
+    "labels": {
+      "bootstrap_source": "yggdrasil-core",
+      "workflow_type": "oidc-config",
+      "workflow_trigger": "manual"
+    }
+  },
+  "spec": {
+    "dispatch_mode": "sync",
+    "trigger": {
+      "mode": "manual"
+    },
+    "input_schema": {
+      "required": [
+        "client_id",
+        "backchannel_logout_uri",
+        "admin_dsn",
+        "tenant",
+        "actor",
+        "reason"
+      ],
+      "properties": {
+        "client_id": {
+          "type": "string",
+          "minLength": 1,
+          "description": "OIDC client_id (PK in oidc_clients). Example: 'tartaro'."
+        },
+        "backchannel_logout_uri": {
+          "type": "string",
+          "minLength": 1,
+          "description": "HTTPS endpoint where yggdrasil-core POSTs the signed logout_token. RFC 8417 §2.5. Example: 'https://tartaro.dakasa.me/tartaro/oidc/back-channel-logout'."
+        },
+        "admin_dsn": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Privileged Postgres DSN for the yggdrasil-core database. Should be resolved from the operator's secret store before invocation (e.g. dsn_ref in the workflow_run inputs)."
+        },
+        "tenant": {
+          "type": "string",
+          "minLength": 1,
+          "description": "AdminTarget tenant label (audit context, NOT a Postgres role). Example: 'yggdrasil-core-prod'."
+        },
+        "actor": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Caller identity stamped onto the SET LOCAL app.actor inside the txn for trigger-level audit."
+        },
+        "reason": {
+          "type": "string",
+          "minLength": 1,
+          "description": "Human-readable reason for the change (logged into SET LOCAL app.reason). Example: 'register tartaro back-channel logout receiver 2026-05-27'."
+        }
+      }
+    },
+    "steps": [
+      {
+        "id": "apply-backchannel-uri",
+        "description": "Single parameterized UPDATE wrapped in a transaction with app.actor/app.reason SET LOCAL so DB triggers see the change context.",
+        "use": {
+          "kind": "integration",
+          "instance_ref": {
+            "namespace": "global",
+            "name": "database-admin-postgres"
+          },
+          "capability": "execute_sql"
+        },
+        "with": {
+          "target": {
+            "engine": "postgres",
+            "dsn": "{{ inputs.admin_dsn }}",
+            "tenant": "{{ inputs.tenant }}"
+          },
+          "sql": "UPDATE public.oidc_clients SET backchannel_logout_uri = $1 WHERE client_id = $2",
+          "parameters": [
+            "{{ inputs.backchannel_logout_uri }}",
+            "{{ inputs.client_id }}"
+          ],
+          "actor": "{{ inputs.actor }}",
+          "reason": "{{ inputs.reason }}"
+        },
+        "retry": {
+          "max_attempts": 1,
+          "backoff_seconds": 0
+        }
+      }
+    ]
+  }
+}
