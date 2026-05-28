@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
@@ -19,6 +20,17 @@ func bootstrapPostgres(ctx context.Context, app *runtime.ServiceApp) error {
 	if err != nil {
 		return fmt.Errorf("open postgres: %w", err)
 	}
+
+	// psql.Open() already applied the pool config from env; surface the
+	// effective values to stderr so operators can grep startup logs for
+	// "pg_pool" and confirm tuning.  Keeps the addon log surface flat —
+	// no zap dependency at this layer.
+	cfg := psql.LoadPoolConfig()
+	fmt.Fprintf(
+		os.Stderr,
+		"addon=postgres pg_pool max_open=%d min_idle=%d max_lifetime=%s max_idle_time=%s\n",
+		cfg.MaxOpenConns, cfg.MinOpenConns, cfg.MaxConnLifetime, cfg.MaxConnIdleTime,
+	)
 
 	pingCtx, cancel := context.WithTimeout(ctx, 5*time.Second)
 	defer cancel()
