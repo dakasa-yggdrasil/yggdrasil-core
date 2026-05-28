@@ -68,12 +68,12 @@ func teamEditContextRowsForListMemberships(teamID, collabID uuid.UUID) *sqlmock.
 // returns team + parent options + owner candidates with member flag +
 // active memberships scoped to this team.
 //
-// The query plan inside the handler ends up calling 7 SQL queries (not
-// 4 like the comment suggests), because ListTeamMemberships internally
-// re-resolves the team UUID via GetTeam, and the per-member walk
-// re-resolves each collaborator UUID via GetCollaborator. The test
-// sets those expectations explicitly so sqlmock can match in
-// declaration order.
+// The query plan after F2 (batch member walk) is 6 SQL queries:
+// GetTeam(slug) -> ListTeams -> ListCollaborators ->
+// resolveTeamIdentityID(uuid) -> ListTeamMemberships(team scope) ->
+// ListTeamMembershipsByCollaboratorIDs(IN list). The old N+1 was
+// one ListTeamMemberships per member; the batched version is ONE
+// query regardless of member count.
 func TestHandleConsoleTeamEditContext_HappyPath(t *testing.T) {
 	db, mock, err := sqlmock.New()
 	if err != nil {
@@ -111,12 +111,9 @@ func TestHandleConsoleTeamEditContext_HappyPath(t *testing.T) {
 	mock.ExpectQuery(`FROM\s+public\.team_memberships`).
 		WillReturnRows(teamEditContextRowsForListMemberships(teamID, collabID))
 
-	// 6. resolveCollaboratorIdentityID(uuid) — internal GetCollaborator by id.
-	mock.ExpectQuery(`FROM\s+public\.collaborators\s+WHERE\s+id = \$1`).
-		WillReturnRows(teamEditContextRowsForListCollaborators(collabID, "alice", "Alice Allen", "alice@example.com"))
-
-	// 7. Per-member: team_memberships scoped to collabID.
-	mock.ExpectQuery(`FROM\s+public\.team_memberships`).
+	// 6. F2: ONE batched IN($1,…) lookup of OTHER memberships for every
+	// member of this team. Replaces the previous N-per-member loop.
+	mock.ExpectQuery(`tm\.collaborator_id IN \(\$1\)`).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "team_id", "team_slug", "collaborator_id", "collaborator_slug",
 			"role", "active", "source", "starts_at", "ends_at", "metadata",

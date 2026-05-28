@@ -6,6 +6,7 @@ import (
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	"github.com/google/uuid"
 )
 
 // Phase 6 aggregator — audit 2026-05-27 §2.2.
@@ -163,24 +164,24 @@ func (s *Server) handleConsoleTeamEditContext(w http.ResponseWriter, r *http.Req
 	}
 
 	// Build the per-collaborator "other memberships" map (DangerZone
-	// preview).  We only run this query when there are members — saves
-	// a db trip on empty teams.
+	// preview).  F2 audit: previously fired ONE
+	// ListTeamMemberships(CollaboratorID=...) query PER member — a 50-member
+	// team produced 50 SQL round-trips for the same DangerZone snippet.
+	// Now ONE batched IN(...) query reads all members' memberships at
+	// once; we group server-side and skip the inner loop's round-trip cost.
 	otherByCollab := map[string][]consoleOtherMembership{}
 	if len(memberships) > 0 {
 		teamByID := make(map[string]model.Team, len(allTeams))
 		for _, t := range allTeams {
 			teamByID[t.ID.String()] = t
 		}
+		memberUUIDs := make([]uuid.UUID, 0, len(memberships))
 		for _, m := range memberships {
-			others, err := repository.ListTeamMemberships(ctx, s.db, model.ListTeamMembershipsRequest{
-				CollaboratorID: m.CollaboratorID.String(),
-				ActiveOnly:     true,
-			})
-			if err != nil {
-				continue
-			}
-			rows := []consoleOtherMembership{}
-			for _, o := range others {
+			memberUUIDs = append(memberUUIDs, m.CollaboratorID)
+		}
+		allOthers, err := repository.ListTeamMembershipsByCollaboratorIDs(ctx, s.db, memberUUIDs, true)
+		if err == nil {
+			for _, o := range allOthers {
 				if o.TeamID == team.ID {
 					continue
 				}
@@ -188,15 +189,13 @@ func (s *Server) handleConsoleTeamEditContext(w http.ResponseWriter, r *http.Req
 				if !ok {
 					continue
 				}
-				rows = append(rows, consoleOtherMembership{
+				key := o.CollaboratorID.String()
+				otherByCollab[key] = append(otherByCollab[key], consoleOtherMembership{
 					TeamID:   ref.ID.String(),
 					TeamSlug: ref.Slug,
 					TeamName: ref.Name,
 					TeamType: ref.Type,
 				})
-			}
-			if len(rows) > 0 {
-				otherByCollab[m.CollaboratorID.String()] = rows
 			}
 		}
 	}

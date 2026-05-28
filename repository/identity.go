@@ -1330,6 +1330,78 @@ func ListTeamMemberships(ctx context.Context, db *sql.DB, req model.ListTeamMemb
 	return memberships, nil
 }
 
+// ListTeamMembershipsByCollaboratorIDs returns active team memberships
+// for the supplied collaborator UUIDs in ONE SQL round-trip (vs the
+// caller looping ListTeamMemberships(CollaboratorID=...) N times — an
+// O(N) trip count that bit the team-edit-context handler before F2).
+//
+// Returns rows grouped lexicographically by team_slug then collaborator
+// slug (same order ListTeamMemberships emits, so callers can swap with
+// no surprise). When ids is empty, returns an empty slice.
+//
+// activeOnly: when true, filters tm.active = TRUE — matches the
+// ActiveOnly flag on ListTeamMembershipsRequest.
+//
+// Audit ref: backlog F2 perf cycle 2026-05-28.
+func ListTeamMembershipsByCollaboratorIDs(
+	ctx context.Context,
+	db *sql.DB,
+	ids []uuid.UUID,
+	activeOnly bool,
+) ([]model.TeamMembership, error) {
+	if len(ids) == 0 {
+		return nil, nil
+	}
+
+	args := make([]any, 0, len(ids))
+	placeholders := make([]string, 0, len(ids))
+	for i, id := range ids {
+		args = append(args, id)
+		placeholders = append(placeholders, fmt.Sprintf("$%d", i+1))
+	}
+
+	q := `
+		SELECT
+			tm.id,
+			tm.team_id,
+			t.slug,
+			tm.collaborator_id,
+			c.slug,
+			tm.role,
+			tm.active,
+			tm.source,
+			tm.starts_at,
+			tm.ends_at,
+			tm.metadata,
+			tm.created_at,
+			tm.updated_at
+		FROM public.team_memberships tm
+		JOIN public.teams t ON t.id = tm.team_id
+		JOIN public.collaborators c ON c.id = tm.collaborator_id
+		WHERE tm.collaborator_id IN (` + strings.Join(placeholders, ",") + `)
+	`
+	if activeOnly {
+		q += " AND tm.active = TRUE"
+	}
+	q += " ORDER BY t.slug, c.slug"
+
+	rows, err := db.QueryContext(ctx, q, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	var out []model.TeamMembership
+	for rows.Next() {
+		m, err := scanTeamMembership(rows)
+		if err != nil {
+			return nil, err
+		}
+		out = append(out, m)
+	}
+	return out, rows.Err()
+}
+
 // ResolveAuthorizationSubjects expands one collaborator into the effective RBAC subjects and active teams.
 func ResolveAuthorizationSubjects(ctx context.Context, db *sql.DB, collaboratorIdentity string) (model.Collaborator, []model.Team, []model.RBACSubject, error) {
 	collaborator, err := GetCollaborator(ctx, db, collaboratorIdentity)
