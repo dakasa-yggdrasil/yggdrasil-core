@@ -2,6 +2,20 @@
 
 All notable changes to yggdrasil-core are documented here.
 
+## [2.15.0] - 2026-05-28
+
+### Added
+- **§3.1 / §12: backend RBAC enforcement on `/api/v1/console/*` (warn-only)**. The `requireOpsPermission` middleware existed as dead code (`//nolint:unused`) until this cycle — surface-console's `usePermission()` was the ONLY gating layer, which the 2026-05-27 co-design audit ranked as the #1 critical co-design finding. INTEGRATION_CONTRACT §12 (backend is authorization authority) is now enforced server-side. All 89 `/api/v1/console/*` routes are wrapped with `server.requireOpsPermissionFunc(perm, handler)`. Permission resolution reuses `repository.ResolveYggdrasilPermissions` so the BE check is byte-for-byte consistent with what `/api/v1/auth/session` returns to the SPA. Mode gated by `YGGDRASIL_CONSOLE_RBAC_ENFORCE`:
+  - `warn` (default): missing permission → log + bump counter + set `X-RBAC-Warn: <permission>` response header + ALLOW through. Lets ops compare surface-console's `usePermission()` catalog against backend enforcement for 24-48h before flipping.
+  - `enforce`: missing permission → HTTP 403 + Problem+JSON `code: permission.denied` + denial audit row. Same A7 CSRF rollout pattern.
+
+  God-mode (`yggdrasil:*`) short-circuits the check. New metric family `yggdrasil_console_rbac_denied_total{permission,mode}` lets ops chart `rate(...{mode="warn"}[5m])` during observation. Drift-prevention test (`TestConsoleRoutesAreFullyMapped`) scans `server.go` and fails when a new console route lands without a permission wrapper.
+
+### Notes
+- This cycle ships in warn-only mode. After the 24-48h observation window converges (no false-positive warn bumps from legit users on stable workflows), flip `YGGDRASIL_CONSOLE_RBAC_ENFORCE=enforce` on the Deployment env to start returning 403 on missing permissions. Runbook: `~/.claude/projects/-Users-dakasa-projects/memory/reference_phase5_rbac_enforce_runbook.md`.
+- Scope: 89 `/api/v1/console/*` routes. The 25 `/api/v1/ops/*` routes (older console-style namespace, also referenced by surface-console) are NOT yet wired — they're tracked as Phase 5B follow-up. Pre-Phase 5 audit posture had ZERO BE enforcement on either namespace; the console namespace was the primary FE entry point (humans), so it ships first.
+- The `requireOpsPermission` middleware was previously documented as querying `role_permission_bindings`. That was a stub never wired to production; this cycle rewrites it to use `team_grants` via `ResolveYggdrasilPermissions` (the only production permission path).
+
 ## [2.14.0] - 2026-05-28
 
 ### Added
