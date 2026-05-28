@@ -50,11 +50,16 @@ func GetTenantBrand(ctx context.Context, db *sql.DB) (model.TenantBrand, error) 
 	return brand, nil
 }
 
+// UpdateTenantBrand upserts the singleton tenant_brand_settings row.
+//
+// updatedBy is a *uuid.UUID — nil when the caller is a workflow-run-token
+// or admin-token (no session). The column is nullable; preserving the
+// "no human attributed" signal keeps the audit story honest.
 func UpdateTenantBrand(
 	ctx context.Context,
 	db *sql.DB,
 	req model.UpdateTenantBrandRequest,
-	updatedBy uuid.UUID,
+	updatedBy *uuid.UUID,
 ) (model.TenantBrand, error) {
 	brand, err := normalizeTenantBrandRequest(req)
 	if err != nil {
@@ -125,7 +130,7 @@ func UpdateTenantBrand(
 		nullString(brand.LogoURL),
 		nullString(brand.SupportEmail),
 		catalogJSON,
-		updatedBy,
+		nullUUID(updatedBy),
 	)
 
 	updated, err := scanTenantBrand(row)
@@ -263,6 +268,17 @@ func nullString(value string) any {
 		return nil
 	}
 	return value
+}
+
+// nullUUID converts a nullable UUID pointer to a SQL-friendly value.
+// nil → SQL NULL (preserved by the nullable `updated_by` column for
+// workflow-run-token / admin-token initiated PATCHes). non-nil → the
+// raw UUID.
+func nullUUID(value *uuid.UUID) any {
+	if value == nil {
+		return nil
+	}
+	return *value
 }
 
 func isHexColor(value string) bool {
