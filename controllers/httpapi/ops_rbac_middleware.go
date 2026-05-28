@@ -6,6 +6,7 @@ import (
 	"os"
 	"strings"
 
+	safego "github.com/dakasa-yggdrasil/yggdrasil-core/internal/goroutine"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -203,7 +204,7 @@ func (s *Server) collaboratorHasOpsPermission(ctx context.Context, collabIDStr, 
 
 // recordOpsAuditDenied writes a denied row in audit_events. Best-effort.
 func (s *Server) recordOpsAuditDenied(r *http.Request, collabID, perm string) {
-	go func() {
+	safego.SafeGo("ops_rbac_audit_denied", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), opsAuditTimeout)
 		defer cancel()
 		_ = s.recordOpsAuditEntry(ctx, opsAuditEntry{
@@ -213,6 +214,6 @@ func (s *Server) recordOpsAuditDenied(r *http.Request, collabID, perm string) {
 			TargetID:       perm,
 			ResultStatus:   "denied",
 		})
-	}()
+	})
 }
 

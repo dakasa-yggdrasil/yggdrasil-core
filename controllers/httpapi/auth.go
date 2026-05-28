@@ -15,8 +15,10 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/password"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/coreauth"
+	safego "github.com/dakasa-yggdrasil/yggdrasil-core/internal/goroutine"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/privacy"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -729,7 +731,7 @@ func (s *Server) dispatchBackchannelLogoutForSession(_ context.Context, sessionI
 	if s.backchannelDispatcher == nil {
 		return
 	}
-	go func() {
+	safego.SafeGo("backchannel_logout_session", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		results, err := s.backchannelDispatcher.DispatchForSession(ctx, sessionID)
@@ -742,7 +744,7 @@ func (s *Server) dispatchBackchannelLogoutForSession(_ context.Context, sessionI
 		s.logger.Info("backchannel logout dispatched",
 			zap.String("session_id", sessionID.String()),
 			zap.Int("clients", len(results)))
-	}()
+	})
 }
 
 // dispatchBackchannelLogoutForCollaborator is the global variant used by
@@ -752,7 +754,7 @@ func (s *Server) dispatchBackchannelLogoutForCollaborator(_ context.Context, col
 	if s.backchannelDispatcher == nil {
 		return
 	}
-	go func() {
+	safego.SafeGo("backchannel_logout_collaborator", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 		defer cancel()
 		results, err := s.backchannelDispatcher.DispatchForCollaborator(ctx, collaboratorID)
@@ -765,7 +767,7 @@ func (s *Server) dispatchBackchannelLogoutForCollaborator(_ context.Context, col
 		s.logger.Info("backchannel logout (collaborator) dispatched",
 			zap.String("collaborator_id", collaboratorID.String()),
 			zap.Int("clients", len(results)))
-	}()
+	})
 }
 
 // loginMFAMethod returns the canonical label for the MFA factor the
@@ -786,6 +788,11 @@ func loginMFAMethod(req model.LoginWithPasswordRequest) string {
 // that a low-privilege ops operator can read. We keep the first 2
 // chars + an asterisk run + the @domain part for emails; bare slugs
 // keep the first 2 chars. Pre-redaction lengths < 4 collapse to "*".
+//
+// Audit ref: G5 — email path is delegated to privacy.MaskEmail so the
+// repository-wide redaction convention stays in lockstep with the
+// `gi***@dakasa.me` pattern. The slug path stays local because slugs
+// don't have @ separators and short slugs need a stricter collapse.
 func redactIdentifier(s string) string {
 	s = strings.TrimSpace(s)
 	if s == "" {
@@ -794,14 +801,8 @@ func redactIdentifier(s string) string {
 	if len(s) < 4 {
 		return "*"
 	}
-	if at := strings.IndexByte(s, '@'); at > 0 {
-		local := s[:at]
-		domain := s[at:]
-		head := local
-		if len(head) > 2 {
-			head = head[:2]
-		}
-		return head + "***" + domain
+	if strings.IndexByte(s, '@') > 0 {
+		return privacy.MaskEmail(s)
 	}
 	return s[:2] + "***"
 }

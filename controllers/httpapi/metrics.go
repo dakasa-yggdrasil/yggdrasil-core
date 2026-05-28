@@ -310,4 +310,17 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprintf(w, "yggdrasil_reconcile_failures_total{kind=\"%s\"} %d\n",
 			kind, reconcileSnap[kind])
 	}
+
+	// Goroutine panic counter, faceted by SafeGo call-site name. Bumped
+	// each time internal/goroutine.SafeGo recovers a panic. Stays at
+	// zero on a happy cluster; any non-zero value means a fire-and-forget
+	// path is silently failing and operators must investigate.
+	//
+	// Audit ref: 2026-05-28 F7 (background goroutine bounds).
+	panicSnap := metrics.GoroutinePanicsSnapshot()
+	fmt.Fprintf(w, "# HELP yggdrasil_goroutine_panics_total Total panics recovered by internal/goroutine.SafeGo, faceted by call-site name (audit 2026-05-28 F7)\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_goroutine_panics_total counter\n")
+	for name, count := range panicSnap {
+		fmt.Fprintf(w, "yggdrasil_goroutine_panics_total{name=\"%s\"} %d\n", name, count)
+	}
 }

@@ -177,6 +177,16 @@ func (d *Discovery) runOnce(ctx context.Context, parallelism int) {
 		go func() {
 			defer wg.Done()
 			defer func() { <-sem }()
+			defer func() {
+				if rec := recover(); rec != nil {
+					metrics.IncGoroutinePanic("surface_refresh_one")
+					if d.logger != nil {
+						d.logger.Error("surface refresh panic recovered",
+							zap.Any("panic", rec),
+							zap.String("surface", tt.ID))
+					}
+				}
+			}()
 			if err := d.RefreshOne(ctx, tt); err != nil {
 				d.logger.Warn("surface refresh failed", zap.String("surface", tt.ID), zap.Error(err))
 			}

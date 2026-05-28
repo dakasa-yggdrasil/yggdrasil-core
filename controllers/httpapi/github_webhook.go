@@ -13,6 +13,7 @@ import (
 	"os"
 	"strings"
 
+	safego "github.com/dakasa-yggdrasil/yggdrasil-core/internal/goroutine"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"go.uber.org/zap"
@@ -160,7 +161,7 @@ func (s *Server) handlePushEvent(w http.ResponseWriter, r *http.Request, body []
 
 		// Fire-and-forget dispatch in a goroutine so the webhook can ack
 		// the push promptly. Errors are logged for operator inspection.
-		go func() {
+		safego.SafeGo("webhook_dispatch", func() {
 			if err := s.dispatchWorkflow(context.Background(), ref, inputs); err != nil {
 				s.logger.Error("webhook dispatch failed",
 					zap.String("workflow", ref.Namespace+"/"+ref.Name),
@@ -168,7 +169,7 @@ func (s *Server) handlePushEvent(w http.ResponseWriter, r *http.Request, body []
 					zap.Error(err),
 				)
 			}
-		}()
+		})
 
 		IncWebhookEvent("accepted")
 		writeJSON(w, http.StatusAccepted, map[string]any{

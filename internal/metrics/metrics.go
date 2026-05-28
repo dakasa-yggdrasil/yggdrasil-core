@@ -172,6 +172,25 @@ var (
 	// Audit ref: 2026-05-27 G4 / F2 (permission reconcile loop noise).
 	reconcileFailuresMu    sync.RWMutex
 	reconcileFailuresCount = map[string]uint64{}
+
+	// Goroutine panic counter — bumped every time a fire-and-forget
+	// goroutine wrapped by internal/goroutine.SafeGo recovers from a
+	// panic. Label `name` identifies the call-site (audit_emit,
+	// backchannel_dispatch, …) so operators can pinpoint which
+	// background path is dying without scraping container logs.
+	//
+	// Without this metric a panicking goroutine kills the whole process
+	// (Go default) — yet the operator only sees an OOMKilled-like
+	// CrashLoopBackOff with no signal as to root cause. The wrapper +
+	// metric pair gives both safety and observability.
+	//
+	// Cardinality is bounded by the (small, slow-moving) set of
+	// SafeGo call-sites in the codebase. Unknown / empty names are
+	// dropped so a typo doesn't explode the label space.
+	//
+	// Audit ref: 2026-05-28 F7 (background goroutine bounds).
+	goroutinePanicsMu    sync.RWMutex
+	goroutinePanicsCount = map[string]uint64{}
 )
 
 // Reconcile failure `kind` labels — closed set, additions require
@@ -533,6 +552,35 @@ func IncReconcileFailure(kind string) {
 	reconcileFailuresCount[kind]++
 }
 
+// IncGoroutinePanic bumps the panic counter for the given SafeGo call-site
+// name. Empty names are dropped to keep the label space sane.  The closed
+// set is intentionally NOT enforced here — SafeGo call-sites are added
+// incrementally as the codebase evolves and forcing a constant table here
+// would create churn for every new background goroutine.
+//
+// Audit ref: 2026-05-28 F7.
+func IncGoroutinePanic(name string) {
+	if name == "" {
+		return
+	}
+	goroutinePanicsMu.Lock()
+	defer goroutinePanicsMu.Unlock()
+	goroutinePanicsCount[name]++
+}
+
+// GoroutinePanicsSnapshot returns the panic counter values keyed by call-site
+// name. Unlike the closed-set families, ordering is up to the /metrics
+// renderer (which sorts).
+func GoroutinePanicsSnapshot() map[string]uint64 {
+	goroutinePanicsMu.RLock()
+	defer goroutinePanicsMu.RUnlock()
+	out := make(map[string]uint64, len(goroutinePanicsCount))
+	for k, v := range goroutinePanicsCount {
+		out[k] = v
+	}
+	return out
+}
+
 // ReconcileFailuresSnapshot returns the counter values keyed by kind.
 // Every closed-set kind is present (zero-padded) so /metrics emits a
 // stable family — operators build dashboards without "no datapoints"
@@ -613,4 +661,7 @@ func ResetForTest() {
 	reconcileFailuresMu.Lock()
 	reconcileFailuresCount = map[string]uint64{}
 	reconcileFailuresMu.Unlock()
+	goroutinePanicsMu.Lock()
+	goroutinePanicsCount = map[string]uint64{}
+	goroutinePanicsMu.Unlock()
 }

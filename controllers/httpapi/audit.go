@@ -6,6 +6,7 @@ import (
 	"strconv"
 	"time"
 
+	safego "github.com/dakasa-yggdrasil/yggdrasil-core/internal/goroutine"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 )
@@ -63,7 +64,7 @@ func (s *Server) handleAuditList(w http.ResponseWriter, r *http.Request) {
 func (s *Server) recordAudit(r *http.Request, action, kind, resourceID, outcome string, metadata map[string]any) {
 	actor := actorFromRequest(r)
 	traceparent := r.Header.Get("traceparent")
-	go func() {
+	safego.SafeGo("audit_emit", func() {
 		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 		defer cancel()
 		if err := repository.RecordAuditEvent(ctx, s.db, model.AuditEvent{
@@ -81,7 +82,7 @@ func (s *Server) recordAudit(r *http.Request, action, kind, resourceID, outcome 
 				"error", err.Error(),
 			)
 		}
-	}()
+	})
 }
 
 func actorFromRequest(r *http.Request) string {

@@ -9,6 +9,7 @@ import (
 	"net/http"
 	"time"
 
+	safego "github.com/dakasa-yggdrasil/yggdrasil-core/internal/goroutine"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -87,7 +88,7 @@ func (s *Server) withOpsAudit(action, targetKind, targetIDPattern string) func(h
 
 			targetID := resolvePathPattern(r, targetIDPattern)
 
-			go func() {
+			safego.SafeGo("ops_audit_middleware", func() {
 				ctx, cancel := context.WithTimeout(context.Background(), opsAuditTimeout)
 				defer cancel()
 				_ = s.recordOpsAuditEntry(ctx, opsAuditEntry{
@@ -100,7 +101,7 @@ func (s *Server) withOpsAudit(action, targetKind, targetIDPattern string) func(h
 					RequestBody:    reqBody,
 					Result:         parseJSONOrEmpty(rec.body.Bytes()),
 				})
-			}()
+			})
 		})
 	}
 }

@@ -102,6 +102,14 @@ func (r *Runner) tickOnce(ctx context.Context) error {
 		wg.Add(1)
 		go func() {
 			defer func() {
+				if rec := recover(); rec != nil {
+					metrics.IncGoroutinePanic("reactor_dispatch_one")
+					if r.Logger != nil {
+						r.Logger.Error("reactor dispatch panic recovered",
+							zap.Any("panic", rec),
+							zap.String("reaction_id", c.ID.String()))
+					}
+				}
 				<-sem
 				wg.Done()
 			}()

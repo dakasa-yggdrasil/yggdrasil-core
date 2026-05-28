@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"time"
 
+	safego "github.com/dakasa-yggdrasil/yggdrasil-core/internal/goroutine"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -74,9 +75,9 @@ func (s *Server) recordAuthAudit(
 		metadata[k] = v
 	}
 
-	go func() {
+	safego.SafeGo("audit_auth_emit", func() {
 		_ = s.recordAuthAuditSync(r, actor, action, collaboratorID, outcome, metadata)
-	}()
+	})
 }
 
 // recordAuthAuditSync is the synchronous helper used both by the
