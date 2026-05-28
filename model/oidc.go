@@ -19,8 +19,15 @@ type OIDCClient struct {
 	// Empty when the client hasn't opted into back-channel logout — in that
 	// case the client is expected to call /api/v1/oidc/introspect per request
 	// (RFC 7662 fallback). §13 INTEGRATION_CONTRACT.
-	BackchannelLogoutURI string    `json:"backchannel_logout_uri,omitempty"`
-	CreatedAt            time.Time `json:"created_at"`
+	BackchannelLogoutURI string `json:"backchannel_logout_uri,omitempty"`
+	// AccessTokenLifetimeSeconds: per-client opt-in override for the OP's
+	// AccessTokenLifetime when minting JWT access tokens (audit 2026-05-27 A10).
+	// nil → use the global default (controllers/oidc/storage.go::AccessTokenLifetime).
+	// Bounded [60, 86400] by a DB CHECK constraint. High-trust clients can opt
+	// down (60–300s) so a leaked JWT is short-lived; nothing forces a client to
+	// use the override.
+	AccessTokenLifetimeSeconds *int      `json:"access_token_lifetime_seconds,omitempty"`
+	CreatedAt                  time.Time `json:"created_at"`
 }
 
 // OIDCSessionLink ties one yggdrasil auth_session to one OIDC client so the

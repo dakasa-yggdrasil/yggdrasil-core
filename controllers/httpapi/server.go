@@ -595,6 +595,11 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// callable by manifest_token holders so legacy SSO clients can poll.
 	mux.HandleFunc("POST /api/v1/oidc/introspect", server.handleOIDCIntrospect)
 	mux.HandleFunc("POST /api/v1/admin/collaborators/{id}/revoke-sessions", server.handleAdminCollaboratorRevokeSessions)
+	// Audit 2026-05-27 A10: per-client OIDC AccessTokenLifetime override.
+	// PATCH only — high-trust admin-token endpoint; full client lifecycle
+	// (POST/DELETE) stays out of scope for this audit. Clients are still
+	// created via bootstrap manifests / direct UpsertOIDCClient calls.
+	mux.HandleFunc("PATCH /api/v1/admin/oidc-clients/{id}", server.handleAdminOIDCClientPatch)
 
 	// Opt-in console SPA. Mounted under <prefix>/ (e.g. /console/) with
 	// the prefix-with-and-without-trailing-slash both routing through.

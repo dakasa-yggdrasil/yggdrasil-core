@@ -145,7 +145,21 @@ func (v *clientView) LoginURL(authReqID string) string {
 
 func (v *clientView) AccessTokenType() op.AccessTokenType { return op.AccessTokenTypeJWT }
 func (v *clientView) IDTokenLifetime() time.Duration      { return IDTokenLifetime }
-func (v *clientView) AccessTokenLifetime() time.Duration  { return AccessTokenLifetime }
+
+// AccessTokenLifetime returns the per-client override when set, otherwise
+// the global default (audit 2026-05-27 A10). The DB CHECK constraint
+// (migration 00048) bounds the value to [60, 86400] so we don't need to
+// re-validate here. Zero or negative values from a misconfigured row
+// would silently fall back to the global default — fail-open is the
+// right move when the only consequence is "longer-than-intended token
+// lifetime" instead of an outage.
+func (v *clientView) AccessTokenLifetime() time.Duration {
+	if v.c.AccessTokenLifetimeSeconds != nil && *v.c.AccessTokenLifetimeSeconds > 0 {
+		return time.Duration(*v.c.AccessTokenLifetimeSeconds) * time.Second
+	}
+	return AccessTokenLifetime
+}
+
 func (v *clientView) AuthorizationCodeLifetime() time.Duration {
 	return AuthorizationCodeLifetime
 }
