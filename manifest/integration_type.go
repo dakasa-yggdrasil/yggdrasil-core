@@ -25,20 +25,15 @@ var (
 	supportedGuardianSupportModes      = []string{"none", "light", "full"}
 	supportedIntegrationSchemaTypes    = []string{"string", "number", "integer", "boolean", "object", "array"}
 	supportedIntegrationDiscoveryModes = []string{"pull", "push", "hybrid"}
-	supportedIntegrationCursorModes    = []string{"none", "full", "incremental"}
-	// Closed enum codified in INTEGRATION_CONTRACT §17. Drives the
-	// purpose-based grouping in /ops/integrations and equivalent
-	// surfaces. Empty domain is accepted in Phase A (the consumer
-	// falls back to "platform"); Phase B will hard-fail.
-	supportedIntegrationDomains = []string{
-		"identity",
-		"payments",
-		"observability",
-		"infrastructure",
-		"data",
-		"platform",
-	}
-	integrationNamePattern = regexp.MustCompile(`^[a-z0-9][a-z0-9._:-]*$`)
+	supportedIntegrationCursorModes = []string{"none", "full", "incremental"}
+	// integrationDomainPattern — free slug. NOT a closed enum because
+	// each tenant defines its own taxonomy in
+	// tenant_brand.spec.integration_domain_catalog. The adapter
+	// declares whatever bucket fits its purpose; the tenant decides
+	// how to label and order it. Surfaces fall back to humanizing
+	// the raw slug when the tenant catalog has no entry.
+	integrationDomainPattern = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
+	integrationNamePattern   = regexp.MustCompile(`^[a-z0-9][a-z0-9._:-]*$`)
 )
 
 // ParseIntegrationTypeSpec parses the raw spec payload into the typed integration type manifest.
@@ -60,14 +55,17 @@ func ValidateIntegrationTypeSpec(spec model.IntegrationTypeManifestSpec) error {
 		return fmt.Errorf("integration_type provider %q is invalid", spec.Provider)
 	}
 
-	// Domain is optional in Phase A — empty falls back to "platform"
-	// on the client. When declared it MUST match the closed enum
-	// (INTEGRATION_CONTRACT §17). Phase B will reject empty too.
+	// Domain is an optional free slug declared by the adapter. NOT
+	// validated against a closed enum — each tenant maps domains to
+	// section labels via tenant_brand.spec.integration_domain_catalog
+	// (INTEGRATION_CONTRACT §17). Empty falls back to humanized raw
+	// slug or to "platform" on the consumer. Phase B will require
+	// presence but never the value (still a free slug).
 	if domain := strings.TrimSpace(spec.Domain); domain != "" {
-		if !slices.Contains(supportedIntegrationDomains, domain) {
+		if !integrationDomainPattern.MatchString(domain) {
 			return fmt.Errorf(
-				"integration_type domain %q is invalid; expected one of %v",
-				spec.Domain, supportedIntegrationDomains,
+				"integration_type domain %q is invalid; expected slug matching %s",
+				spec.Domain, integrationDomainPattern,
 			)
 		}
 	}

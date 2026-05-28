@@ -59,19 +59,42 @@ type TenantBrand struct {
 	AccentOverride string     `json:"accent_override,omitempty"`
 	LogoURL        string     `json:"logo_url,omitempty"`
 	SupportEmail   string     `json:"support_email,omitempty"`
-	UpdatedBy      *uuid.UUID `json:"updated_by,omitempty"`
-	CreatedAt      time.Time  `json:"created_at,omitempty"`
-	UpdatedAt      time.Time  `json:"updated_at,omitempty"`
+	// IntegrationDomainCatalog is the tenant's own taxonomy for the
+	// integration_type.spec.domain field. Each tenant declares how it
+	// wants integrations grouped on /ops/integrations and similar
+	// surfaces. When empty the consumer falls back to a built-in
+	// suggestion list. Adapters always declare a free-slug domain
+	// (INTEGRATION_CONTRACT §17) and the tenant maps slugs to
+	// section labels here — DaKasa uses identity / payments / …;
+	// another company might use vendas / contabilidade / suporte.
+	IntegrationDomainCatalog []IntegrationDomainCatalogEntry `json:"integration_domain_catalog,omitempty"`
+	UpdatedBy                *uuid.UUID                      `json:"updated_by,omitempty"`
+	CreatedAt                time.Time                       `json:"created_at,omitempty"`
+	UpdatedAt                time.Time                       `json:"updated_at,omitempty"`
+}
+
+// IntegrationDomainCatalogEntry is one section the tenant wants to
+// show on /ops/integrations. `Slug` matches the value an adapter
+// declares in integration_type.spec.domain; the rest is presentation.
+type IntegrationDomainCatalogEntry struct {
+	Slug     string `json:"slug"`
+	Overline string `json:"overline,omitempty"`
+	Title    string `json:"title"`
+	Subtitle string `json:"subtitle,omitempty"`
+	// Order — lower wins. Optional; entries with the same value (or
+	// no value) keep their declaration order.
+	Order int `json:"order,omitempty"`
 }
 
 type UpdateTenantBrandRequest struct {
-	Name           string `json:"name"`
-	ShortName      string `json:"short_name"`
-	ProductLabel   string `json:"product_label"`
-	Locale         string `json:"locale"`
-	AccentOverride string `json:"accent_override,omitempty"`
-	LogoURL        string `json:"logo_url,omitempty"`
-	SupportEmail   string `json:"support_email,omitempty"`
+	Name                     string                          `json:"name"`
+	ShortName                string                          `json:"short_name"`
+	ProductLabel             string                          `json:"product_label"`
+	Locale                   string                          `json:"locale"`
+	AccentOverride           string                          `json:"accent_override,omitempty"`
+	LogoURL                  string                          `json:"logo_url,omitempty"`
+	SupportEmail             string                          `json:"support_email,omitempty"`
+	IntegrationDomainCatalog []IntegrationDomainCatalogEntry `json:"integration_domain_catalog,omitempty"`
 }
 
 func DefaultTenantBrand() TenantBrand {
