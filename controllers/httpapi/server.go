@@ -465,6 +465,12 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/me", guard(server.handleMe))
 	mux.HandleFunc("GET /api/v1/me/preferences", guard(server.handleUserPreferencesGet))
 	mux.HandleFunc("PATCH /api/v1/me/preferences", guard(server.handleUserPreferencesPatch))
+	// C8: self-service session list + revoke.  The list returns every
+	// active session for the caller; revoke kills ONE session (NOT the
+	// current one — use POST /auth/logout for that) and fans out the
+	// §13 RFC 8417 back-channel logout.
+	mux.HandleFunc("GET /api/v1/me/sessions", guard(server.handleMeSessionsList))
+	mux.HandleFunc("DELETE /api/v1/me/sessions/{id}", guard(server.handleMeSessionsRevoke))
 	mux.HandleFunc("GET /api/v1/console/integration-catalog", server.handleIntegrationCatalogList)
 	mux.HandleFunc("GET /api/v1/console/integration-catalog/{domain}/{section}/{entry}", server.handleIntegrationCatalogEntry)
 	mux.HandleFunc("GET /api/v1/console/catalog-discovery", server.handleCatalogDiscovery)

@@ -30,6 +30,23 @@ type AuthSession struct {
 	UpdatedAt      time.Time      `json:"updated_at"`
 }
 
+// AuthSessionView is the listing shape used by `GET /api/v1/me/sessions`
+// — adds the device columns from the SQL row so a user can recognize
+// "the laptop I left at the conference" by user_agent / IP.
+//
+// Token hashes are NEVER included. ID is opaque (UUID, not the token).
+type AuthSessionView struct {
+	ID                uuid.UUID  `json:"id"`
+	CollaboratorID    uuid.UUID  `json:"collaborator_id"`
+	Status            string     `json:"status"`
+	LastSeenAt        *time.Time `json:"last_seen_at,omitempty"`
+	ExpiresAt         time.Time  `json:"expires_at"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UserAgent         string     `json:"user_agent,omitempty"`
+	IPAddress         string     `json:"ip_address,omitempty"`
+	DeviceFingerprint string     `json:"device_fingerprint,omitempty"`
+}
+
 // AuthSessionEnvelope is the normalized auth/session response shape returned by the HTTP API.
 //
 // MFAEnrolledAt is sourced from auth_identities.mfa_enrolled_at (which doesn't
