@@ -12,6 +12,7 @@ import (
 	s3types "github.com/aws/aws-sdk-go-v2/service/s3/types"
 	"github.com/aws/aws-sdk-go-v2/service/ses"
 	"github.com/aws/aws-sdk-go-v2/service/sns"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/privacy"
 	"go.uber.org/zap"
 )
 
@@ -94,11 +95,14 @@ func (p *AWSProvisioner) ProvisionAll(ctx context.Context, req ProvisionRequest)
 	}
 
 	// --- SES ---
+	// Email is masked (privacy.MaskEmail) before logging — operators
+	// need to see the @domain (for tenant-targeted phishing triage) but
+	// the local-part is reduced to its first two chars + "***".
 	if err := p.EnsureSESIdentity(ctx, req.SESEmail); err != nil {
 		result.Errors = append(result.Errors, fmt.Sprintf("ses: %v", err))
-		p.logger.Error("provision ses identity failed", zap.String("email", req.SESEmail), zap.Error(err))
+		p.logger.Error("provision ses identity failed", zap.String("email", privacy.MaskEmail(req.SESEmail)), zap.Error(err))
 	} else {
-		p.logger.Info("ses identity ensured", zap.String("email", req.SESEmail))
+		p.logger.Info("ses identity ensured", zap.String("email", privacy.MaskEmail(req.SESEmail)))
 	}
 
 	// --- SNS ---
