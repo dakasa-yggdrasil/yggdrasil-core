@@ -85,7 +85,9 @@ cmd/                         # auxiliary CLIs (operator, validate-manifests, …
   `external_identity_cleanup`, `password_rotation`, `manifest-sync`,
   `manifest_purge`, `reactor-dispatcher`, `workflow_scheduler`,
   `workflow_event_triggers`, `team-reconcile`, `team_provisioning`,
-  `heimdall_inbox_writer`, `heimdall_inbox_dispatcher`, `buildproject_lifecycle`.
+  `heimdall_inbox_writer`, `heimdall_inbox_dispatcher`, `buildproject_lifecycle`,
+  `expired_sessions_cleaner`, `audit_events_retention`,
+  `stale_workflow_runs_cleaner`.
 
 ## HTTP API (most relevant routes)
 
