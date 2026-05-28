@@ -37,6 +37,13 @@ func TestNormalizeWorkflowIntegrationStatus_IdempotentOutcomes(t *testing.T) {
 		{"committed", "committed", "succeeded"},
 		{"upper committed", "COMMITTED", "succeeded"},
 
+		// SQL execute capabilities (database-admin execute_sql) report
+		// "executed" with rows_affected metadata. Same semantics as
+		// committed/applied — the state change landed.
+		{"executed", "executed", "succeeded"},
+		{"upper executed", "EXECUTED", "succeeded"},
+		{"padded executed", "  executed  ", "succeeded"},
+
 		// Idempotent delete / cleanup outcomes — re-running a teardown
 		// against a missing object MUST NOT fail the workflow run.
 		{"not_found", "not_found", "succeeded"},

@@ -2,6 +2,11 @@
 
 All notable changes to yggdrasil-core are documented here.
 
+## [2.9.1] - 2026-05-27
+
+### Fixed
+- **Workflow status normalization accepts `executed`** (Phase 2C follow-up). The bootstrap workflow `oidc-client-set-backchannel-logout-uri` (database-admin-postgres `execute_sql`) returned cosmetic `failed` even though the SQL UPDATE succeeded (`rows_affected: 1`). `executed` now collapses to the success bucket alongside `committed`/`applied`/`created` in `controllers/message/workflows.go::normalizeWorkflowIntegrationStatus`. Same semantics — the state change landed.
+
 ## [2.9.0] - 2026-04-25
 
 ### Added

@@ -922,6 +922,13 @@ func normalizeWorkflowIntegrationStatus(status string) string {
 		// emit "committed" as their green-path status. Same semantics as
 		// applied/created — the side effect landed in the remote system.
 		"committed",
+		// SQL execute capabilities (e.g. database-admin-postgres execute_sql)
+		// emit "executed" with `rows_affected` metadata. The state change
+		// landed; same semantics as committed/applied. Without this, bootstrap
+		// workflows like `oidc-client-set-backchannel-logout-uri` that wrap a
+		// single SQL UPDATE return cosmetic `failed` even though the row was
+		// updated (verified 2026-05-27 Phase 2C smoke).
+		"executed",
 		"not_found", "absent", "deleted",
 		"simulated", "dry_run", "noop", "no_op":
 		return "succeeded"
