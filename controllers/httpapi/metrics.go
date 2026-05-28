@@ -289,4 +289,25 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprintf(w, "yggdrasil_console_rbac_denied_total{permission=\"%s\",mode=\"%s\"} %d\n",
 			permission, mode, count)
 	}
+
+	// Reconcile failure counter, faceted by kind (closed set). Bumped
+	// each time a background loop hits a non-retryable error. The
+	// motivating noise was the permission-catalog duplicate-key warning
+	// firing every 30s in production logs without a single visible
+	// metric — operators chart
+	// `rate(yggdrasil_reconcile_failures_total{kind="permission_catalog"}[5m])`
+	// to confirm the rate is shrinking (or alert when it grows).
+	//
+	// Audit ref: 2026-05-27 G4 / F2.
+	reconcileSnap := metrics.ReconcileFailuresSnapshot()
+	fmt.Fprintf(w, "# HELP yggdrasil_reconcile_failures_total Total background reconcile failures by kind (audit 2026-05-27 G4)\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_reconcile_failures_total counter\n")
+	for _, kind := range []string{
+		metrics.ReconcileKindPermissionCatalog,
+		metrics.ReconcileKindSecretMaterialize,
+		metrics.ReconcileKindManifestApply,
+	} {
+		fmt.Fprintf(w, "yggdrasil_reconcile_failures_total{kind=\"%s\"} %d\n",
+			kind, reconcileSnap[kind])
+	}
 }

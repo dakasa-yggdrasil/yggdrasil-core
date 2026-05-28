@@ -47,6 +47,8 @@ func TestHandleMetricsReturnsPrometheusFormat(t *testing.T) {
 		"yggdrasil_csrf_rejected_total",
 		// Phase-5 RBAC denial family (audit ref §3.1).
 		"yggdrasil_console_rbac_denied_total",
+		// Phase-6 reconcile failure family (audit ref G4).
+		"yggdrasil_reconcile_failures_total",
 		"# TYPE",
 		"# HELP",
 	} {

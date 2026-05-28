@@ -152,6 +152,34 @@ var (
 	// Contract ref: §12 (backend is authorization authority).
 	rbacDeniedMu    sync.RWMutex
 	rbacDeniedCount = map[string]uint64{}
+
+	// Reconcile failure counter — bumped each time a background
+	// reconciler (permission catalog sync from surface_manifests, secrets
+	// materialization, etc.) hits a non-retryable error.  The current
+	// failure mode that motivated this metric is the noisy
+	// `permission reconcile failed: insert perm github.teams.write: pq:
+	// duplicate key value violates unique constraint
+	// "permissions_catalog_name_unique"` log line that fires every 30s
+	// on a happy cluster (G4 audit) — operators couldn't tell from logs
+	// alone whether the count was growing, shrinking, or static. With
+	// this counter `rate(yggdrasil_reconcile_failures_total{kind="X"}[5m])`
+	// answers the question directly.
+	//
+	// Label cardinality: `kind` is a closed set (permission_catalog,
+	// secret_materialize, manifest_apply, …) drawn from the constants
+	// below so unknown values are dropped.
+	//
+	// Audit ref: 2026-05-27 G4 / F2 (permission reconcile loop noise).
+	reconcileFailuresMu    sync.RWMutex
+	reconcileFailuresCount = map[string]uint64{}
+)
+
+// Reconcile failure `kind` labels — closed set, additions require
+// updating ResetForTest below so unit tests don't leak.
+const (
+	ReconcileKindPermissionCatalog = "permission_catalog"
+	ReconcileKindSecretMaterialize = "secret_materialize"
+	ReconcileKindManifestApply     = "manifest_apply"
 )
 
 // IncReactorEvaluation bumps the evaluation counter for the given outcome.
@@ -484,6 +512,45 @@ func RBACDeniedSnapshot() map[string]uint64 {
 	return out
 }
 
+// IncReconcileFailure bumps the failure counter for the given reconcile
+// kind.  Unknown kinds are dropped to keep label cardinality bounded.
+// Callers SHOULD also log the underlying error (we don't capture detail
+// here — that's what structured logs are for); this metric only answers
+// "is the loop failing more / less / at all?".
+//
+// Audit ref: 2026-05-27 G4 / F2.
+func IncReconcileFailure(kind string) {
+	switch kind {
+	case ReconcileKindPermissionCatalog,
+		ReconcileKindSecretMaterialize,
+		ReconcileKindManifestApply:
+		// recognized
+	default:
+		return
+	}
+	reconcileFailuresMu.Lock()
+	defer reconcileFailuresMu.Unlock()
+	reconcileFailuresCount[kind]++
+}
+
+// ReconcileFailuresSnapshot returns the counter values keyed by kind.
+// Every closed-set kind is present (zero-padded) so /metrics emits a
+// stable family — operators build dashboards without "no datapoints"
+// gaps before the first failure happens.
+func ReconcileFailuresSnapshot() map[string]uint64 {
+	reconcileFailuresMu.RLock()
+	defer reconcileFailuresMu.RUnlock()
+	out := make(map[string]uint64, 3)
+	for _, k := range []string{
+		ReconcileKindPermissionCatalog,
+		ReconcileKindSecretMaterialize,
+		ReconcileKindManifestApply,
+	} {
+		out[k] = reconcileFailuresCount[k]
+	}
+	return out
+}
+
 // CSRFRejectedSnapshot returns the counter values keyed by "outcome|mode".
 // Deterministic ordering not required here (the /metrics renderer sorts).
 func CSRFRejectedSnapshot() map[string]uint64 {
@@ -543,4 +610,7 @@ func ResetForTest() {
 	rbacDeniedMu.Lock()
 	rbacDeniedCount = map[string]uint64{}
 	rbacDeniedMu.Unlock()
+	reconcileFailuresMu.Lock()
+	reconcileFailuresCount = map[string]uint64{}
+	reconcileFailuresMu.Unlock()
 }

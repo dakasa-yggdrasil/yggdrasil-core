@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"go.uber.org/zap"
@@ -116,6 +117,10 @@ func (d *Discovery) RefreshOne(ctx context.Context, t AdapterTarget) error {
 			perms[i] = SurfacePerm{ID: p.ID, Label: p.Label}
 		}
 		if err := d.reconciler.Reconcile(ctx, manifest.Surface, perms); err != nil {
+			// Audit G4: bump the failure counter alongside the log so
+			// operators can chart the rate via Prometheus instead of
+			// grep'ing logs.
+			metrics.IncReconcileFailure(metrics.ReconcileKindPermissionCatalog)
 			d.logger.Warn("permission reconcile failed",
 				zap.String("surface", manifest.Surface), zap.Error(err))
 		}
