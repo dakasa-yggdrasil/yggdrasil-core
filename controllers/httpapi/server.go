@@ -488,7 +488,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/products/deploy-all", requireDeployToken(server.handleDeployAll))
 	mux.HandleFunc("POST /api/v1/bootstrap", requireDeployToken(server.handleBootstrap))
 	mux.HandleFunc("GET /api/v1/tenant/brand", server.handleTenantBrandGet)
-	mux.HandleFunc("PATCH /api/v1/tenant/brand", guard(server.handleTenantBrandPatch))
+	mux.HandleFunc("PATCH /api/v1/tenant/brand", server.requireOpsPermissionFunc(permManageOrganization, server.handleTenantBrandPatch))
 	mux.HandleFunc("GET /api/v1/me", guard(server.handleMe))
 	mux.HandleFunc("GET /api/v1/me/preferences", guard(server.handleUserPreferencesGet))
 	mux.HandleFunc("PATCH /api/v1/me/preferences", guard(server.handleUserPreferencesPatch))

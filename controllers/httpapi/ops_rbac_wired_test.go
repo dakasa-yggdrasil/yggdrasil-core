@@ -84,6 +84,12 @@ func TestWiredConsoleRoutes_WarnModeDoesNotBlock(t *testing.T) {
 		{"workflow_runs_create", "POST", "/api/v1/console/workflow-runs", permManageWorkflows, nil},
 		{"auth_providers_list", "GET", "/api/v1/console/auth/providers", permManageAuthProviders, nil},
 		{"provision_aws", "POST", "/api/v1/console/provision/aws", permManageOrganization, nil},
+		// Regression: PATCH /api/v1/tenant/brand was the lone route that
+		// bypassed the RBAC middleware via a hardcoded role-string check
+		// (admin/owner/director/...). Founders + god-mode (yggdrasil:*)
+		// got rejected. The route is now wired through
+		// requireOpsPermissionFunc(permManageOrganization).
+		{"tenant_brand_patch", "PATCH", "/api/v1/tenant/brand", permManageOrganization, nil},
 	}
 
 	for _, g := range groups {
@@ -134,6 +140,7 @@ func TestWiredConsoleRoutes_EnforceModeRejects(t *testing.T) {
 		{"workflow_runs_create", "POST", "/api/v1/console/workflow-runs", permManageWorkflows, nil},
 		{"provision_aws", "POST", "/api/v1/console/provision/aws", permManageOrganization, nil},
 		{"auth_providers_list", "GET", "/api/v1/console/auth/providers", permManageAuthProviders, nil},
+		{"tenant_brand_patch", "PATCH", "/api/v1/tenant/brand", permManageOrganization, nil},
 	}
 
 	for _, g := range groups {
