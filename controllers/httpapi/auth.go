@@ -343,6 +343,15 @@ func (s *Server) handleAuthThirdPartyLogin(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) handleAuthThirdPartyStart(w http.ResponseWriter, r *http.Request) {
+	// A15: deny unknown query params on this third-party start endpoint.
+	// `redirect_to` and `auth_request_id` are the only legit knobs; any
+	// other param is a smuggling probe (e.g. `?bypass_state=1`,
+	// `?force_provider=...`) that we want to reject loudly rather than
+	// silently ignore.
+	if !rejectUnknownQueryParams(w, r, "redirect_to", "auth_request_id") {
+		return
+	}
+
 	provider, err := s.resolveAuthProvider(r.Context(), r.PathValue("provider"))
 	if err != nil {
 		writeMappedError(w, err)
@@ -819,6 +828,10 @@ func (s *Server) handleThirdPartyIdentityList(w http.ResponseWriter, r *http.Req
 		writeMappedError(w, err)
 		return
 	}
+	// A15: only the documented filter params are accepted.
+	if !rejectUnknownQueryParams(w, r, "collaborator_id", "provider", "status") {
+		return
+	}
 
 	identities, err := repository.ListThirdPartyIdentities(r.Context(), s.db, model.ListThirdPartyIdentitiesRequest{
 		CollaboratorID: queryString(r, "collaborator_id"),
@@ -879,6 +892,10 @@ func (s *Server) handleThirdPartyIdentityDelete(w http.ResponseWriter, r *http.R
 }
 
 func (s *Server) handleThirdPartyAuthProviderList(w http.ResponseWriter, r *http.Request) {
+	// A15: only the documented filter params are accepted.
+	if !rejectUnknownQueryParams(w, r, "type", "status") {
+		return
+	}
 	providers, err := repository.ListThirdPartyAuthProviders(r.Context(), s.db, model.ListThirdPartyAuthProvidersRequest{
 		Type:   queryString(r, "type"),
 		Status: queryString(r, "status"),
