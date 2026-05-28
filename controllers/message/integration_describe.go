@@ -729,16 +729,46 @@ func normalizeIntegrationSchemaSpec(spec model.IntegrationSchemaSpec) model.Inte
 
 	properties := make(map[string]model.IntegrationSchemaProperty, len(spec.Properties))
 	for name, property := range spec.Properties {
-		properties[normalizeIntegrationToken(name)] = model.IntegrationSchemaProperty{
-			Type:        normalizeIntegrationToken(property.Type),
-			Description: strings.TrimSpace(property.Description),
-			Secret:      property.Secret,
-			Enum:        property.Enum,
-			Default:     property.Default,
+		// Preserve UI metadata (§15 INTEGRATION_CONTRACT) — surfaces depend on
+		// these fields to render forms generically. Re-building the struct
+		// field-by-field used to drop everything outside the original five
+		// validation fields; now we forward every UI hint adapter authors
+		// supply, after light normalization of the keys we do own.
+		normalized := model.IntegrationSchemaProperty{
+			Type:              normalizeIntegrationToken(property.Type),
+			Description:       strings.TrimSpace(property.Description),
+			Secret:            property.Secret,
+			Enum:              property.Enum,
+			Default:           property.Default,
+			MinLength:         property.MinLength,
+			Label:             strings.TrimSpace(property.Label),
+			LabelLocale:       cloneStringMap(property.LabelLocale),
+			Placeholder:       strings.TrimSpace(property.Placeholder),
+			PlaceholderLocale: cloneStringMap(property.PlaceholderLocale),
+			DescriptionLocale: cloneStringMap(property.DescriptionLocale),
+			Group:             strings.TrimSpace(property.Group),
+			GroupLocale:       cloneStringMap(property.GroupLocale),
+			Order:             property.Order,
+			Sensitive:         property.Sensitive,
+			DependsOn:         cloneSchemaDependency(property.DependsOn),
+			Format:            strings.TrimSpace(property.Format),
+			Pattern:           property.Pattern,
+			MaxLength:         property.MaxLength,
 		}
+		properties[normalizeIntegrationToken(name)] = normalized
 	}
 	spec.Properties = properties
 	return spec
+}
+
+func cloneSchemaDependency(in *model.IntegrationSchemaDependency) *model.IntegrationSchemaDependency {
+	if in == nil {
+		return nil
+	}
+	return &model.IntegrationSchemaDependency{
+		Field: strings.TrimSpace(in.Field),
+		Value: in.Value,
+	}
 }
 
 func normalizeIntegrationResourceTypes(resourceTypes []model.IntegrationResourceType) []model.IntegrationResourceType {

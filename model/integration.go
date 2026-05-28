@@ -73,6 +73,31 @@ type IntegrationSchemaSpec struct {
 // payloads (e.g. `image_repo: ""` expanding into `image_overrides {"":":"}`
 // that the kubernetes adapter silently no-ops); pair the two when a workflow
 // input must be a non-empty value.
+//
+// UI metadata (§15 of INTEGRATION_CONTRACT.md) lets surfaces render forms
+// generically without per-provider hardcoding:
+//
+//   - Label, LabelLocale: human-readable field label + per-locale translations.
+//     Surfaces fall back to the property key when neither is set.
+//   - Placeholder, PlaceholderLocale: HTML form placeholder hint.
+//   - DescriptionLocale: per-locale translations of Description.
+//   - Group, GroupLocale: declares which form section this field belongs to,
+//     so a surface can render fields grouped instead of as a flat list.
+//   - Order: presentation order within the group (lowest first). Ties broken
+//     alphabetically by property key.
+//   - Sensitive: when true, surfaces render as password fields. Independent
+//     of Secret (which signals "the value is itself a secret"); a value can
+//     be Sensitive without being a Secret (e.g. PIN) and vice versa.
+//   - DependsOn: conditional visibility. The field only appears when another
+//     field has a specific value (e.g. mtls_enabled=true reveals cert fields).
+//   - Format: a JSON Schema "format" hint (e.g. "uri", "email", "uuid",
+//     "password"). Surfaces use this to pick the right input widget.
+//   - Pattern: regex string. Surfaces use for client-side preview validation;
+//     server still re-validates.
+//   - MaxLength: maximum character count for string inputs (mirrors MinLength).
+//
+// All UI metadata fields are optional; existing manifests without them keep
+// working unchanged (the new fields are omitempty across JSON and YAML).
 type IntegrationSchemaProperty struct {
 	Type        string `json:"type"`
 	Description string `json:"description,omitempty"`
@@ -80,6 +105,34 @@ type IntegrationSchemaProperty struct {
 	Enum        []any  `json:"enum,omitempty"`
 	Default     any    `json:"default,omitempty"`
 	MinLength   *int   `json:"minLength,omitempty"`
+
+	// UI metadata (§15) — optional, drives generic form rendering in surfaces.
+	Label             string                       `json:"label,omitempty"             yaml:"label,omitempty"`
+	LabelLocale       map[string]string            `json:"label_locale,omitempty"      yaml:"label_locale,omitempty"`
+	Placeholder       string                       `json:"placeholder,omitempty"       yaml:"placeholder,omitempty"`
+	PlaceholderLocale map[string]string            `json:"placeholder_locale,omitempty" yaml:"placeholder_locale,omitempty"`
+	DescriptionLocale map[string]string            `json:"description_locale,omitempty" yaml:"description_locale,omitempty"`
+	Group             string                       `json:"group,omitempty"             yaml:"group,omitempty"`
+	GroupLocale       map[string]string            `json:"group_locale,omitempty"      yaml:"group_locale,omitempty"`
+	Order             int                          `json:"order,omitempty"             yaml:"order,omitempty"`
+	Sensitive         bool                         `json:"sensitive,omitempty"         yaml:"sensitive,omitempty"`
+	DependsOn         *IntegrationSchemaDependency `json:"depends_on,omitempty"        yaml:"depends_on,omitempty"`
+	Format            string                       `json:"format,omitempty"            yaml:"format,omitempty"`
+	Pattern           string                       `json:"pattern,omitempty"           yaml:"pattern,omitempty"`
+	MaxLength         *int                         `json:"max_length,omitempty"        yaml:"max_length,omitempty"`
+}
+
+// IntegrationSchemaDependency expresses a conditional-visibility relationship
+// between two properties on the same schema. The dependent property is shown
+// to the user (and required, if its `required` flag is set) only when the
+// referenced Field has the specified Value in the current form state.
+//
+// Field MUST refer to another property declared in the same schema's
+// Properties map. Surfaces consume this to drive show/hide logic without
+// per-provider hardcoded branches.
+type IntegrationSchemaDependency struct {
+	Field string `json:"field" yaml:"field"`
+	Value any    `json:"value" yaml:"value"`
 }
 
 // IntegrationCredentialPolicySpec defines how one integration_type expects credentials to be supplied and stored.
