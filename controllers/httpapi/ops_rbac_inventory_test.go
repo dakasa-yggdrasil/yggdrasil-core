@@ -290,3 +290,160 @@ func TestConsoleRoutesUseCanonicalPermissions(t *testing.T) {
 		}
 	}
 }
+
+// TestNoUngatedMutatingRoutes is the durable guardrail for RBAC sweep #2
+// (2026-05-28). It scans server.go for every mutating route registration
+// (POST/PATCH/PUT/DELETE on /api/v1/* OR /scim/* OR /saml/*) and validates
+// each carries ONE of:
+//
+//   - requireOpsPermissionFunc(perm…  → canonical RBAC gate
+//   - requireDeployToken(…             → deploy-token / machine-only path
+//   - Membership in the documented allowlist below
+//
+// INTEGRATION_CONTRACT §12: backend is the authorization authority. Any
+// new mutating route that lands without a gate must explicitly justify
+// itself by joining the allowlist, with a comment explaining WHY the
+// route is workflow-token-only / self-scoped / webhook / admin-token.
+//
+// Stop conditions: if a future cycle adopts a default-deny middleware
+// (the whole mux returns 403 unless the route opts in), this test
+// becomes vacuous — keep it anyway because the allowlist is still the
+// canonical inventory of the exemptions that need to exist.
+func TestNoUngatedMutatingRoutes(t *testing.T) {
+	// Allowlist: routes that intentionally do NOT use requireOpsPermissionFunc.
+	// Each entry MUST have a justification comment.
+	allowlist := map[string]string{
+		// Manifest CRUD — workflow-token via authorizeWorkflowRunRequest in-handler.
+		`POST /api/v1/manifests`:        "workflow-token via in-handler authorizeWorkflowRunRequest",
+		`DELETE /api/v1/manifests/{id}`: "workflow-token via in-handler authorizeWorkflowRunRequest",
+
+		// Event publishing — webhook-style, token-only via same helper.
+		`POST /api/v1/events`: "workflow-token webhook publish",
+
+		// Webhook receivers — external callers (no claims), HMAC-validated in-handler.
+		`POST /api/v1/github/webhook`:                       "external GitHub webhook, HMAC-validated",
+		`POST /api/v1/integrations/{instance_id}/webhook`:   "external provider webhook, per-instance HMAC",
+		`POST /api/v1/integration-surfaces/{name}/sync`:     "workflow-token, manifest-sync addon",
+		`POST /api/v1/integrations/{instance_id}/surface-query`: "workflow-token, manifest-sync addon",
+
+		// Integration type sync — admin-token via in-handler check.
+		`POST /api/v1/integration-types/{id}/sync`: "admin-token via in-handler authorizeAuthAdminRequest",
+
+		// Authentication flow endpoints (login/password/MFA) — pre-session.
+		`POST /api/v1/auth/passwords`:                              "admin-token via in-handler check",
+		`POST /api/v1/auth/passwords/setup-tokens`:                 "admin-token via in-handler check",
+		`POST /api/v1/auth/passwords/setup`:                        "pre-session setup-token flow",
+		`POST /api/v1/auth/passwords/change`:                       "self password change",
+		`POST /api/v1/auth/passwords/forgot`:                       "pre-session, rate-limited",
+		`POST /api/v1/auth/passwords/reset`:                        "reset-token flow, pre-session",
+		`POST /api/v1/auth/login`:                                  "pre-session, rate-limited",
+		`POST /api/v1/auth/third-party/login`:                      "pre-session third-party",
+		`POST /api/v1/auth/logout`:                                 "self logout",
+		`POST /api/v1/auth/mfa/enroll/request`:                     "pre-session enroll",
+		`POST /api/v1/auth/mfa/factors/totp/begin`:                 "self MFA enroll",
+		`POST /api/v1/auth/mfa/factors/totp/finish`:                "self MFA enroll",
+		`POST /api/v1/auth/mfa/factors/webauthn/begin`:             "self MFA enroll",
+		`POST /api/v1/auth/mfa/factors/webauthn/finish`:            "self MFA enroll",
+		`POST /api/v1/auth/mfa/recovery-codes`:                     "self MFA recovery, guard()",
+
+		// SAML protocol endpoints — RFC 7522/8417 protocol callers, signature-validated.
+		`POST /saml/sso`: "SAML protocol callback, IdP-signed",
+		`POST /saml/slo`: "SAML protocol callback, IdP-signed",
+
+		// Self-scoped routes — caller acts on their own session/preferences.
+		`PATCH /api/v1/me/preferences`:    "self",
+		`DELETE /api/v1/me/sessions/{id}`: "self via guard()",
+
+		// Admin-token / OIDC protocol endpoints.
+		`POST /api/v1/oidc/introspect`:                            "RFC 7662, bearer-or-manifest-token",
+		`POST /api/v1/admin/collaborators/{id}/revoke-sessions`:   "admin-token only",
+		`PATCH /api/v1/admin/oidc-clients/{id}`:                   "admin-token only",
+	}
+
+	_, thisFile, _, ok := runtime.Caller(0)
+	if !ok {
+		t.Fatalf("runtime.Caller(0) failed")
+	}
+	serverPath := filepath.Join(filepath.Dir(thisFile), "server.go")
+	f, err := os.Open(serverPath)
+	if err != nil {
+		t.Fatalf("open server.go: %v", err)
+	}
+	defer func() { _ = f.Close() }()
+
+	// Pattern that matches a mutating route registration. Captures
+	// METHOD and PATH separately. Also accepts mux.Handle( for the
+	// loginRateLimit wrapper.
+	routeRe := regexp.MustCompile(`mux\.(?:HandleFunc|Handle)\("(POST|PATCH|PUT|DELETE) (/[^"]+)"`)
+	wrapperRe := regexp.MustCompile(`requireOpsPermissionFunc\(perm[A-Za-z]+,`)
+	deployTokenRe := regexp.MustCompile(`requireDeployToken\(`)
+
+	scanner := bufio.NewScanner(f)
+	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
+
+	type ungated struct {
+		key  string
+		line string
+	}
+	var (
+		mutatingCount int
+		gatedCount    int
+		exemptCount   int
+		ungatedFound  []ungated
+	)
+
+	for scanner.Scan() {
+		line := scanner.Text()
+		m := routeRe.FindStringSubmatch(line)
+		if m == nil {
+			continue
+		}
+		method, path := m[1], m[2]
+		// Skip /console/ routes: covered by TestConsoleRoutesAreFullyMapped.
+		if strings.HasPrefix(path, "/api/v1/console/") {
+			gatedCount++
+			mutatingCount++
+			continue
+		}
+		// Skip /ops/ routes: covered by TestOpsRoutesAreFullyMapped.
+		if strings.HasPrefix(path, "/api/v1/ops/") {
+			gatedCount++
+			mutatingCount++
+			continue
+		}
+		mutatingCount++
+		key := method + " " + path
+		if wrapperRe.MatchString(line) {
+			gatedCount++
+			continue
+		}
+		if deployTokenRe.MatchString(line) {
+			gatedCount++
+			continue
+		}
+		if _, ok := allowlist[key]; ok {
+			exemptCount++
+			continue
+		}
+		ungatedFound = append(ungatedFound, ungated{key: key, line: strings.TrimSpace(line)})
+	}
+	if err := scanner.Err(); err != nil {
+		t.Fatalf("scan: %v", err)
+	}
+
+	if mutatingCount == 0 {
+		t.Fatalf("regex matched zero mutating routes — server.go shape changed; update TestNoUngatedMutatingRoutes")
+	}
+
+	if len(ungatedFound) > 0 {
+		var lines []string
+		for _, u := range ungatedFound {
+			lines = append(lines, "  "+u.key+"\n    "+u.line)
+		}
+		t.Errorf("%d mutating /api/v1/* route(s) lack RBAC gate (INTEGRATION_CONTRACT §12) — wrap in requireOpsPermissionFunc(perm…) or add to the documented allowlist with justification:\n%s",
+			len(ungatedFound), strings.Join(lines, "\n"))
+	}
+
+	t.Logf("mutating routes scanned=%d gated=%d allowlist-exempt=%d ungated=%d",
+		mutatingCount, gatedCount, exemptCount, len(ungatedFound))
+}

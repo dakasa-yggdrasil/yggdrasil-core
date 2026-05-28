@@ -48,8 +48,10 @@ func generateInviteCode() string {
 // Body: { "roles": ["admin", "risk", ...], "ttlMinutes": 1440 (optional) }
 // Response: { "invite": { code, roles, createdBy, createdAt, expiresAt } }
 //
-// Authenticated. We intentionally do not enforce role gating here —
-// tartaro-fe is responsible for hiding the UI for non-admins.
+// Authorization: gated server-side by requireOpsPermissionFunc(permCreateCollaborator)
+// at the route registration site in server.go (RBAC sweep #2, 2026-05-28).
+// INTEGRATION_CONTRACT §12 — backend is the authorization authority; the SPA
+// hiding non-admin affordances is defense-in-depth, not the primary gate.
 func (s *Server) handleInviteCreate(w http.ResponseWriter, r *http.Request) {
 	token, ok := extractAuthToken(r)
 	if !ok {
