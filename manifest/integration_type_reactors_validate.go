@@ -16,19 +16,20 @@ var (
 // (repository/topology.go imports manifest).
 // Invariant: keep in sync with repository/event_types_lifecycle.go.
 var canonLifecycleEventTypes = map[string]struct{}{
-	"collaborator.created":        {},
-	"collaborator.offboarded":     {},
-	"collaborator.absence_started": {},
-	"collaborator.absence_ended":  {},
-	"collaborator.role_changed":   {},
-	"collaborator.re_onboarded":   {},
-	"team.created":                {},
-	"team.updated":                {},
-	"team.deleted":                {},
-	"team_membership.added":       {},
-	"team_membership.removed":     {},
-	"team_grant.added":            {},
-	"team_grant.revoked":          {},
+	"collaborator.created":            {},
+	"collaborator.offboarded":         {},
+	"collaborator.session.terminated": {},
+	"collaborator.absence_started":    {},
+	"collaborator.absence_ended":      {},
+	"collaborator.role_changed":       {},
+	"collaborator.re_onboarded":       {},
+	"team.created":                    {},
+	"team.updated":                    {},
+	"team.deleted":                    {},
+	"team_membership.added":           {},
+	"team_membership.removed":         {},
+	"team_grant.added":                {},
+	"team_grant.revoked":              {},
 }
 
 // ValidateReactors enforces:
