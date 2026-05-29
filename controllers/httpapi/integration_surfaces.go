@@ -182,7 +182,14 @@ func (s *Server) handleIntegrationSurfaceGet() http.HandlerFunc {
 			writeMappedError(w, err)
 			return
 		}
-		writeJSON(w, http.StatusOK, m)
+		// Apply the same icon enrichment as the list endpoint so single-
+		// surface GETs (used by surface-detail panels) get the brand mark
+		// flowing in from the integration_type. Without this, a refresh on
+		// /ops/integrations/<surface-name> would fall back to the letter
+		// chip while the list view shows the real icon — inconsistent.
+		one := []integrationsurfaces.Manifest{*m}
+		s.enrichSurfacesWithTypeIcons(r.Context(), one)
+		writeJSON(w, http.StatusOK, one[0])
 	}
 }
 
