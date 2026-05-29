@@ -241,6 +241,32 @@ func MarkMFAEnrolled(ctx context.Context, db *sql.DB, collaboratorID uuid.UUID, 
 	return nil
 }
 
+// CountRecoveryCodesRemaining returns the number of unused recovery
+// codes the user still has. Used by /me/mfa to surface "you have N
+// codes left" + nudge the user to regenerate when N drops low.
+//
+// Returns 0 + nil error when the identity row is missing (no row =
+// no codes — caller treats as "go enroll first"). Returns 0 + error
+// on actual DB failure.
+func CountRecoveryCodesRemaining(ctx context.Context, db *sql.DB, collaboratorID uuid.UUID) (int, error) {
+	var n sql.NullInt64
+	err := db.QueryRowContext(ctx, `
+		SELECT array_length(recovery_codes_hashes, 1)
+		FROM public.auth_identities
+		WHERE collaborator_id = $1
+	`, collaboratorID).Scan(&n)
+	if errors.Is(err, sql.ErrNoRows) {
+		return 0, nil
+	}
+	if err != nil {
+		return 0, fmt.Errorf("count recovery_codes_hashes: %w", err)
+	}
+	if !n.Valid {
+		return 0, nil
+	}
+	return int(n.Int64), nil
+}
+
 // IsMFAEnrolled is the invariant gate used by the auth flow. Returns false for
 // unknown identity (callers treat as "not enrolled").
 func IsMFAEnrolled(ctx context.Context, db *sql.DB, collaboratorID uuid.UUID) (bool, error) {

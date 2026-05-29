@@ -301,7 +301,15 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 }
 
 func authLoginFactors(identity model.AuthIdentity) []string {
-	factors := make([]string, 0, 2)
+	factors := make([]string, 0, 3)
+	// Order matters for the LoginPage default — WebAuthn is the most
+	// frictionless second factor (one biometric tap) so we surface it
+	// first when available. TOTP next. Recovery codes last because
+	// they're single-use and the user only reaches for one when their
+	// primary device is gone.
+	if len(identity.WebAuthnCredentials) > 0 {
+		factors = append(factors, "webauthn")
+	}
 	if identity.HasTOTP {
 		factors = append(factors, "totp")
 	}

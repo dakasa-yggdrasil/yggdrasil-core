@@ -12,7 +12,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"sync"
 	"time"
 
 	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
@@ -28,6 +27,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/provisioner"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/reconciler"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	"github.com/go-webauthn/webauthn/webauthn"
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
@@ -256,6 +256,25 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		server.loginLimiter = newLoginRateLimiter(5, time.Minute, 10*time.Minute)
 	}
 
+	// WebAuthn boot — registration ceremony session store + the lib's
+	// engine bound to the relying-party id/origins. We fail soft: a
+	// missing/invalid config leaves both fields nil and the handlers
+	// return 503 rather than stubbing fake challenges.
+	if server.webauthnSessions == nil {
+		server.webauthnSessions = mfa.NewSessionStore(5 * time.Minute)
+	}
+	if server.webauthnEngine == nil {
+		if engine, err := mfa.NewWebAuthn(mfa.Config{
+			RPDisplayName: webauthnRPDisplayName(),
+			RPID:          webauthnRelyingPartyID(),
+			Origins:       webauthnAllowedOrigins(),
+		}); err == nil {
+			server.webauthnEngine = engine
+		} else if server.logger != nil {
+			server.logger.Warn("webauthn engine boot failed; passkey endpoints will 503", zap.Error(err))
+		}
+	}
+
 	mux := http.NewServeMux()
 
 	// Routes the credentials middleware must permit even when the collaborator
@@ -270,6 +289,15 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		"/api/v1/auth/mfa/enroll/validate",
 		"/api/v1/auth/mfa/factors/totp/begin",
 		"/api/v1/auth/mfa/factors/totp/finish",
+		// WebAuthn enroll begin/finish + login begin/finish — same
+		// "escape" semantics as the TOTP enroll routes (must work
+		// against locked-out users so they can configure MFA before
+		// the session unlocks). The login routes are public anyway —
+		// they don't require a session by definition.
+		"/api/v1/auth/mfa/factors/webauthn/begin",
+		"/api/v1/auth/mfa/factors/webauthn/finish",
+		"/api/v1/auth/mfa/webauthn/login/begin",
+		"/api/v1/auth/mfa/webauthn/login/finish",
 	}
 	guard := func(h http.HandlerFunc) http.HandlerFunc {
 		return server.requirePasswordValid(credentialsAllowlist, h)
@@ -340,6 +368,15 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/auth/mfa/factors/totp/finish", server.handleMFATOTPFinish)
 	mux.HandleFunc("POST /api/v1/auth/mfa/factors/webauthn/begin", server.handleMFAWebAuthnBegin)
 	mux.HandleFunc("POST /api/v1/auth/mfa/factors/webauthn/finish", server.handleMFAWebAuthnFinish)
+	// WebAuthn login (passkey 2nd factor) — POSTed by LoginPage AFTER the
+	// password step returned 202 mfa_required with `webauthn` in factors.
+	mux.HandleFunc("POST /api/v1/auth/mfa/webauthn/login/begin", server.handleMFAWebAuthnLoginBegin)
+	mux.HandleFunc("POST /api/v1/auth/mfa/webauthn/login/finish", server.handleMFAWebAuthnLoginFinish)
+	// Authenticated factor management (rename, remove). List is also
+	// available via GET /api/v1/auth/mfa/factors.
+	mux.HandleFunc("GET /api/v1/auth/mfa/factors", guard(server.handleMFAFactorsList))
+	mux.HandleFunc("PATCH /api/v1/auth/mfa/factors/webauthn/{credential_id}", guard(server.handleMFAWebAuthnRename))
+	mux.HandleFunc("DELETE /api/v1/auth/mfa/factors/webauthn/{credential_id}", guard(server.handleMFAWebAuthnDelete))
 	mux.HandleFunc("POST /api/v1/auth/mfa/recovery-codes", guard(server.handleMFAGenerateRecoveryCodes))
 	// SCIM clients admin (rotate bearer tokens) — RBAC sweep #2.
 	mux.HandleFunc("POST /api/v1/auth/scim/clients", server.requireOpsPermissionFunc(permManageAuthProviders, server.handleSCIMClientCreate))
@@ -977,9 +1014,21 @@ type Server struct {
 	// YGGDRASIL_AUTH_KEK_BASE64 (32 raw bytes base64-encoded). When unset
 	// MFA enroll handlers refuse with 503 — secrets-at-rest is mandatory.
 	envelope *cryptoenvelope.Envelope
-	// webauthnSessions caches in-flight WebAuthn registration challenges
-	// keyed by collaborator UUID. Phase 1 in-memory; Phase 2 moves to Redis.
-	webauthnSessions sync.Map
+	// webauthnSessions caches in-flight WebAuthn ceremony session blobs
+	// (challenge + RP metadata) keyed by mfa.RegistrationKey(collabID) or
+	// mfa.LoginKey(collabID). Phase 2 in-memory; Phase 3 swaps for a
+	// Redis-backed store when HPA goes on. Each ceremony entry TTLs at
+	// 5min — long enough for a slow biometric prompt, short enough that
+	// abandoned ceremonies can't replay an hour later. The store auto-
+	// reaps expired entries on every Get/Put call.
+	webauthnSessions *mfa.SessionStore
+	// webauthnEngine is the configured *webauthn.WebAuthn instance — the
+	// lib's entry point for Begin/Finish registration + login. RP
+	// metadata (RPID, RPDisplayName, RPOrigins) baked in once at boot
+	// from env (YGGDRASIL_WEBAUTHN_RP_ID + YGGDRASIL_WEBAUTHN_ORIGINS).
+	// nil only when boot couldn't resolve a valid config — handlers then
+	// 503 instead of stubbing a fake challenge.
+	webauthnEngine *webauthn.WebAuthn
 	// integrationSurfacesRepo backs GET/POST /api/v1/integration-surfaces*
 	// (federated surface registry, coexists with internal/surface). Optional;
 	// when nil the handlers return 503. See addons/integration_surface_sync.go.

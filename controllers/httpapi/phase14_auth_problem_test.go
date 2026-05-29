@@ -111,16 +111,21 @@ func TestPhase14RequireEnvelopeReturnsProblem(t *testing.T) {
 }
 
 // TestPhase14WebAuthnFinishReturnsProblem covers handleMFAWebAuthnFinish
-// (Phase 1 stub returning 501). Was: writeJSON map[string]string{"error":
-// "webauthn finish not yet implemented (Phase 2)"}; expected:
-// Problem+JSON with code=auth.webauthn_not_implemented.
+// when the engine isn't configured (no RPID/Origins env, no test wiring).
+//
+// 2026-05-28: the handler is no longer a 501 stub — it's a real
+// FinishRegistration path against go-webauthn. When the engine is nil
+// the handler returns 503 + auth.webauthn_not_implemented (kept as the
+// canonical "passkey not available" code so existing surface translations
+// keep working). The surface's response treats 503 the same as 501 —
+// both prompt the user toward TOTP.
 func TestPhase14WebAuthnFinishReturnsProblem(t *testing.T) {
 	srv := &Server{logger: zap.NewNop()}
 	req := newRequest(http.MethodPost, "/api/v1/auth/mfa/factors/webauthn/finish", `{}`)
 	rec := httptest.NewRecorder()
 	srv.handleMFAWebAuthnFinish(rec, req)
-	if rec.Code != http.StatusNotImplemented {
-		t.Errorf("status: got %d want 501", rec.Code)
+	if rec.Code != http.StatusServiceUnavailable {
+		t.Errorf("status: got %d want 503", rec.Code)
 	}
 	body := decodeProblem(t, rec)
 	if got := body["code"]; got != httperr.CodeAuthWebAuthnNotImplemented {

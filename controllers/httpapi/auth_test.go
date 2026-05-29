@@ -414,18 +414,41 @@ func TestAuthSurfaceBaseURLUsesForwardedHostWhenSurfaceHeaderIsMissing(t *testin
 func TestAuthLoginFactorsExposeOnlyImplementedLoginFactors(t *testing.T) {
 	t.Parallel()
 
+	// Cycle 2026-05-28: WebAuthn passkey login flow shipped end-to-end
+	// (real BeginLogin/FinishLogin via go-webauthn). When the user has
+	// any registered passkey the factor MUST appear in the login factors
+	// envelope — surface-console renders the "verificar com chave de
+	// acesso" tab based on this list. Order: webauthn > totp > recovery
+	// because passkeys are the most frictionless second factor.
 	got := authLoginFactors(model.AuthIdentity{
 		HasTOTP:             true,
 		HasRecoveryCodes:    true,
 		WebAuthnCredentials: []model.WebAuthnCredential{{ID: "security-key"}},
 	})
-	want := []string{"totp", "recovery_code"}
+	want := []string{"webauthn", "totp", "recovery_code"}
 	if len(got) != len(want) {
 		t.Fatalf("factors = %#v, want %#v", got, want)
 	}
 	for i := range want {
 		if got[i] != want[i] {
 			t.Fatalf("factors = %#v, want %#v", got, want)
+		}
+	}
+
+	// Sanity: without any passkey the legacy list (totp + recovery) is
+	// preserved so users that haven't enrolled a passkey don't see a
+	// dead webauthn tab.
+	got = authLoginFactors(model.AuthIdentity{
+		HasTOTP:          true,
+		HasRecoveryCodes: true,
+	})
+	wantLegacy := []string{"totp", "recovery_code"}
+	if len(got) != len(wantLegacy) {
+		t.Fatalf("no-passkey factors = %#v, want %#v", got, wantLegacy)
+	}
+	for i := range wantLegacy {
+		if got[i] != wantLegacy[i] {
+			t.Fatalf("no-passkey factors = %#v, want %#v", got, wantLegacy)
 		}
 	}
 }

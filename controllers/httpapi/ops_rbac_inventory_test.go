@@ -344,6 +344,16 @@ func TestNoUngatedMutatingRoutes(t *testing.T) {
 		`POST /api/v1/auth/mfa/factors/totp/finish`:                "self MFA enroll",
 		`POST /api/v1/auth/mfa/factors/webauthn/begin`:             "self MFA enroll",
 		`POST /api/v1/auth/mfa/factors/webauthn/finish`:            "self MFA enroll",
+		// WebAuthn login flow — pre-session, BLOCKED password re-verify inside
+		// the handler before assertion verification. Same authority shape as
+		// POST /api/v1/auth/login (password+totp); cannot be RBAC-gated
+		// because the caller is anonymous until the assertion finishes.
+		`POST /api/v1/auth/mfa/webauthn/login/begin`:               "pre-session passkey challenge, password re-verified in handler",
+		`POST /api/v1/auth/mfa/webauthn/login/finish`:              "pre-session passkey verify, password re-verified in handler",
+		// Authenticated passkey rename/remove — self-only via guard()
+		// (session required + requireSessionCollaborator pins the row).
+		`PATCH /api/v1/auth/mfa/factors/webauthn/{credential_id}`:  "self via guard() — rename own passkey",
+		`DELETE /api/v1/auth/mfa/factors/webauthn/{credential_id}`: "self via guard() — remove own passkey",
 		`POST /api/v1/auth/mfa/recovery-codes`:                     "self MFA recovery, guard()",
 
 		// SAML protocol endpoints — RFC 7522/8417 protocol callers, signature-validated.
