@@ -160,3 +160,51 @@ func TestMergeSpec_AdoptsLiveDashboardWhenCurrentEmpty(t *testing.T) {
 	require.NotNil(t, got.Dashboard)
 	assert.Equal(t, "https://app.nfe.io", got.Dashboard.URL)
 }
+
+// INTEGRATION_CONTRACT §15 amplification — Display and Icon are
+// adapter presentation hints declared in the static manifest, not in
+// Describe(). manifest_sync must preserve them across cron ticks.
+
+func TestMergeSpec_PreservesDisplayWhenLiveBlanksIt(t *testing.T) {
+	display := &model.IntegrationDisplaySpec{
+		Subtitle: "Pagamentos, clientes, assinaturas e webhooks via Stripe.",
+		SubtitleLocale: map[string]string{
+			"pt-BR": "Pagamentos, clientes, assinaturas e webhooks via Stripe.",
+			"en-US": "Payments, customers, subscriptions and webhooks via Stripe.",
+		},
+	}
+	current := model.IntegrationTypeManifestSpec{Display: display}
+	live := model.IntegrationTypeManifestSpec{} // Display nil
+	got, _ := MergeSpec(current, live)
+	require.NotNil(t, got.Display, "operator-declared display must survive sync")
+	assert.Equal(t, "Pagamentos, clientes, assinaturas e webhooks via Stripe.", got.Display.Subtitle)
+	assert.Equal(t, "Payments, customers, subscriptions and webhooks via Stripe.", got.Display.SubtitleLocale["en-US"])
+}
+
+func TestMergeSpec_PreservesIconWhenLiveBlanksIt(t *testing.T) {
+	icon := &model.IntegrationIconSpec{
+		URL:       "data:image/svg+xml;utf8,<svg/>",
+		Accent:    "#635bff",
+		AriaLabel: "Stripe",
+	}
+	current := model.IntegrationTypeManifestSpec{Icon: icon}
+	live := model.IntegrationTypeManifestSpec{} // Icon nil
+	got, _ := MergeSpec(current, live)
+	require.NotNil(t, got.Icon, "operator-declared icon must survive sync")
+	assert.Equal(t, "#635bff", got.Icon.Accent)
+	assert.Equal(t, "Stripe", got.Icon.AriaLabel)
+}
+
+func TestMergeSpec_AdoptsLiveDisplayAndIconWhenCurrentEmpty(t *testing.T) {
+	// If a future SDK augments Describe() to carry Display/Icon (e.g.
+	// as seed-on-first-registration), accept them when current empty.
+	display := &model.IntegrationDisplaySpec{Subtitle: "X"}
+	icon := &model.IntegrationIconSpec{URL: "https://example/x.svg", Accent: "#123456"}
+	current := model.IntegrationTypeManifestSpec{}
+	live := model.IntegrationTypeManifestSpec{Display: display, Icon: icon}
+	got, _ := MergeSpec(current, live)
+	require.NotNil(t, got.Display)
+	assert.Equal(t, "X", got.Display.Subtitle)
+	require.NotNil(t, got.Icon)
+	assert.Equal(t, "#123456", got.Icon.Accent)
+}

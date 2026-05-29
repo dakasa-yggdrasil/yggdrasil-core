@@ -62,6 +62,99 @@ func TestValidateIntegrationTypeSpecRejectsCredentialPolicyConflict(t *testing.T
 	}
 }
 
+// §15 amplification — Display/Icon optional but validated.
+
+func TestValidateIntegrationTypeSpec_AcceptsValidDisplay(t *testing.T) {
+	spec := integrationTypeSpecFixture()
+	spec.Display = &model.IntegrationDisplaySpec{
+		Subtitle: "Código, revisões e acesso aos repositórios.",
+		SubtitleLocale: map[string]string{
+			"pt-BR": "Código, revisões e acesso aos repositórios.",
+			"en-US": "Code, reviews, and repository access.",
+		},
+	}
+	if err := ValidateIntegrationTypeSpec(spec); err != nil {
+		t.Fatalf("expected display block to be accepted, got: %v", err)
+	}
+}
+
+func TestValidateIntegrationTypeSpec_RejectsDisplayWithoutSubtitle(t *testing.T) {
+	spec := integrationTypeSpecFixture()
+	spec.Display = &model.IntegrationDisplaySpec{}
+	if err := ValidateIntegrationTypeSpec(spec); err == nil {
+		t.Fatal("expected empty display block to be rejected")
+	}
+}
+
+func TestValidateIntegrationTypeSpec_RejectsInvalidLocaleKey(t *testing.T) {
+	spec := integrationTypeSpecFixture()
+	spec.Display = &model.IntegrationDisplaySpec{
+		SubtitleLocale: map[string]string{"PT_BR": "x"},
+	}
+	if err := ValidateIntegrationTypeSpec(spec); err == nil {
+		t.Fatal("expected invalid locale key to be rejected")
+	}
+}
+
+func TestValidateIntegrationTypeSpec_AcceptsValidIcon(t *testing.T) {
+	spec := integrationTypeSpecFixture()
+	spec.Icon = &model.IntegrationIconSpec{
+		URL:       "data:image/svg+xml;utf8,<svg/>",
+		Accent:    "#7c8cff",
+		AriaLabel: "GitHub",
+	}
+	if err := ValidateIntegrationTypeSpec(spec); err != nil {
+		t.Fatalf("expected icon block to be accepted, got: %v", err)
+	}
+}
+
+func TestValidateIntegrationTypeSpec_AcceptsHTTPSIcon(t *testing.T) {
+	spec := integrationTypeSpecFixture()
+	spec.Icon = &model.IntegrationIconSpec{
+		URL: "https://example.com/logo.svg",
+	}
+	if err := ValidateIntegrationTypeSpec(spec); err != nil {
+		t.Fatalf("expected https icon URL to be accepted, got: %v", err)
+	}
+}
+
+func TestValidateIntegrationTypeSpec_AcceptsRelativeIcon(t *testing.T) {
+	spec := integrationTypeSpecFixture()
+	spec.Icon = &model.IntegrationIconSpec{
+		URL: "/brand/github.svg",
+	}
+	if err := ValidateIntegrationTypeSpec(spec); err != nil {
+		t.Fatalf("expected relative icon URL to be accepted, got: %v", err)
+	}
+}
+
+func TestValidateIntegrationTypeSpec_RejectsIconWithBadURL(t *testing.T) {
+	spec := integrationTypeSpecFixture()
+	spec.Icon = &model.IntegrationIconSpec{URL: "ftp://nope.example/x.svg"}
+	if err := ValidateIntegrationTypeSpec(spec); err == nil {
+		t.Fatal("expected non-http/data/relative icon URL to be rejected")
+	}
+}
+
+func TestValidateIntegrationTypeSpec_RejectsIconWithBadAccent(t *testing.T) {
+	spec := integrationTypeSpecFixture()
+	spec.Icon = &model.IntegrationIconSpec{
+		URL:    "/brand/x.svg",
+		Accent: "purple",
+	}
+	if err := ValidateIntegrationTypeSpec(spec); err == nil {
+		t.Fatal("expected non-hex accent to be rejected")
+	}
+}
+
+func TestValidateIntegrationTypeSpec_RejectsIconWithMissingURL(t *testing.T) {
+	spec := integrationTypeSpecFixture()
+	spec.Icon = &model.IntegrationIconSpec{Accent: "#abcdef"}
+	if err := ValidateIntegrationTypeSpec(spec); err == nil {
+		t.Fatal("expected icon without URL to be rejected")
+	}
+}
+
 func TestIntegrationTypeDocumentValidation(t *testing.T) {
 	raw, err := json.Marshal(integrationTypeSpecFixture())
 	if err != nil {

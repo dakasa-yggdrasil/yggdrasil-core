@@ -34,6 +34,13 @@ var (
 	// the raw slug when the tenant catalog has no entry.
 	integrationDomainPattern = regexp.MustCompile(`^[a-z][a-z0-9_-]*$`)
 	integrationNamePattern   = regexp.MustCompile(`^[a-z0-9][a-z0-9._:-]*$`)
+	// integrationLocalePattern — BCP-47-ish: lowercase 2-letter language
+	// optionally followed by `-` and uppercase 2-letter region. Covers
+	// the locales surfaces ship (`pt-BR`, `en-US`, `es`, `fr`, ...).
+	integrationLocalePattern = regexp.MustCompile(`^[a-z]{2}(-[A-Z]{2})?$`)
+	// integrationHexColorPattern — `#RRGGBB` hex. Optional alpha not
+	// allowed; surfaces handle alpha via CSS.
+	integrationHexColorPattern = regexp.MustCompile(`^#[0-9A-Fa-f]{6}$`)
 )
 
 // ParseIntegrationTypeSpec parses the raw spec payload into the typed integration type manifest.
@@ -85,6 +92,17 @@ func ValidateIntegrationTypeSpec(spec model.IntegrationTypeManifestSpec) error {
 		}
 	}
 
+	// Display + Icon are §15 amplification: adapter-declared
+	// presentation hints that drive surfaces with zero per-provider
+	// hardcoding. Both optional in Phase A; expected to become
+	// mandatory once all 25 adapters land them.
+	if err := validateIntegrationDisplay(spec.Display); err != nil {
+		return err
+	}
+	if err := validateIntegrationIcon(spec.Icon); err != nil {
+		return err
+	}
+
 	if spec.FamilyRef != nil {
 		if err := validateManifestSelector("integration_type family_ref", *spec.FamilyRef); err != nil {
 			return err
@@ -133,6 +151,72 @@ func ValidateIntegrationTypeSpec(spec model.IntegrationTypeManifestSpec) error {
 		return err
 	}
 
+	return nil
+}
+
+// validateIntegrationDisplay enforces §15 amplification rules on the
+// adapter-declared display block: when present, Subtitle (or at
+// least one entry of SubtitleLocale) must be non-empty trimmed text;
+// every key in SubtitleLocale must look like a BCP-47 locale tag.
+func validateIntegrationDisplay(display *model.IntegrationDisplaySpec) error {
+	if display == nil {
+		return nil
+	}
+	subtitle := strings.TrimSpace(display.Subtitle)
+	hasLocale := false
+	for locale, text := range display.SubtitleLocale {
+		if !integrationLocalePattern.MatchString(locale) {
+			return fmt.Errorf(
+				"integration_type display.subtitle_locale key %q is not a BCP-47 locale",
+				locale,
+			)
+		}
+		if strings.TrimSpace(text) == "" {
+			return fmt.Errorf(
+				"integration_type display.subtitle_locale[%s] cannot be empty",
+				locale,
+			)
+		}
+		hasLocale = true
+	}
+	if subtitle == "" && !hasLocale {
+		return fmt.Errorf("integration_type display.subtitle (or at least one subtitle_locale entry) is required when display is declared")
+	}
+	return nil
+}
+
+// validateIntegrationIcon enforces §15 amplification rules on the
+// adapter-declared icon block: URL must be http(s), `data:`, or a
+// relative path starting with `/`; Accent (when present) must be a
+// `#RRGGBB` hex color.
+func validateIntegrationIcon(icon *model.IntegrationIconSpec) error {
+	if icon == nil {
+		return nil
+	}
+	url := strings.TrimSpace(icon.URL)
+	if url == "" {
+		return fmt.Errorf("integration_type icon.url is required when icon is declared")
+	}
+	switch {
+	case strings.HasPrefix(url, "https://"),
+		strings.HasPrefix(url, "http://"),
+		strings.HasPrefix(url, "data:"),
+		strings.HasPrefix(url, "/"):
+		// OK.
+	default:
+		return fmt.Errorf(
+			"integration_type icon.url %q must be http(s)://, data:, or start with /",
+			icon.URL,
+		)
+	}
+	if accent := strings.TrimSpace(icon.Accent); accent != "" {
+		if !integrationHexColorPattern.MatchString(accent) {
+			return fmt.Errorf(
+				"integration_type icon.accent %q must match #RRGGBB",
+				icon.Accent,
+			)
+		}
+	}
 	return nil
 }
 

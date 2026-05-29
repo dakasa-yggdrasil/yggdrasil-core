@@ -43,6 +43,13 @@ type Diff struct {
 //     `spec.dashboard` in their static manifest, not in Describe().
 //     Preserve `current.Dashboard` whenever set.
 //
+//   - Display + Icon (§15 amplification, since 2026-05-28). Adapter
+//     presentation hints (`spec.display` + `spec.icon`) ship in the
+//     static manifest; the runtime AdapterDescribeResponse type does
+//     not carry them. Preserve `current.Display` / `current.Icon`
+//     whenever set so the cron sync does not blank operator-declared
+//     branding on every tick.
+//
 // Other fields come from `live` verbatim. If new operator-owned fields
 // are introduced, extend this function (and document it in the spec
 // at docs/superpowers/specs/2026-05-16-sync-manifest-from-describe-design.md
@@ -64,6 +71,16 @@ func MergeSpec(current, live model.IntegrationTypeManifestSpec) (model.Integrati
 	}
 	if current.Dashboard != nil {
 		out.Dashboard = current.Dashboard
+	}
+
+	// §15 amplification — Display + Icon are adapter presentation
+	// hints declared in the static manifest, NOT in Describe(). Same
+	// "preserve when non-empty, adopt when empty" pattern as Domain.
+	if current.Display != nil {
+		out.Display = current.Display
+	}
+	if current.Icon != nil {
+		out.Icon = current.Icon
 	}
 
 	return out, computeDiff(current, out)

@@ -28,6 +28,15 @@ type IntegrationTypeManifestSpec struct {
 	// (Stripe / EFI / NFE.io and similar). Optional; absent when the
 	// adapter ships its own federated surface or runs purely internal.
 	Dashboard             *IntegrationDashboardSpec       `json:"dashboard,omitempty"`
+	// Display carries operator-readable presentation hints declared by
+	// the adapter. Surfaces consume these directly so generic form +
+	// card rendering can avoid `if normalized.includes("X")` switches
+	// on type name (§15 amplification, INTEGRATION_CONTRACT).
+	Display               *IntegrationDisplaySpec         `json:"display,omitempty"`
+	// Icon is the visual mark + accent color the adapter declares to
+	// drive per-integration branding in surfaces. Replaces per-provider
+	// component lookups (BrandLogos.tsx) in console code.
+	Icon                  *IntegrationIconSpec            `json:"icon,omitempty"`
 	Adapter               IntegrationAdapterSpec          `json:"adapter"`
 	Capabilities          []string                        `json:"capabilities"`
 	CredentialPolicy      IntegrationCredentialPolicySpec `json:"credential_policy,omitempty"`
@@ -50,6 +59,31 @@ type IntegrationTypeManifestSpec struct {
 type IntegrationDashboardSpec struct {
 	URL   string `json:"url"`
 	Label string `json:"label,omitempty"`
+}
+
+// IntegrationDisplaySpec describes operator-readable presentation
+// hints declared by the adapter. Subtitle is the one-line role
+// description that appears under the integration name on cards and
+// drawers; SubtitleLocale provides per-locale overrides keyed by
+// BCP-47 tag (`pt-BR`, `en-US`, ...). Surfaces pick the matching
+// locale for the active tenant and fall back to Subtitle when none
+// matches. §15 amplification — surface MUST NOT hardcode role copy
+// per integration type.
+type IntegrationDisplaySpec struct {
+	Subtitle       string            `json:"subtitle,omitempty"`
+	SubtitleLocale map[string]string `json:"subtitle_locale,omitempty"`
+}
+
+// IntegrationIconSpec declares the visual mark and accent color the
+// adapter wants surfaces to use. URL may be an http(s) URL, a
+// `data:` URI (preferred — no external CDN dependency), or a
+// relative path starting with `/` (served from the surface bundle).
+// Accent is a hex color `#RRGGBB`. AriaLabel is an accessible name
+// override (defaults to the adapter provider when empty).
+type IntegrationIconSpec struct {
+	URL       string `json:"url"`
+	Accent    string `json:"accent,omitempty"`
+	AriaLabel string `json:"aria_label,omitempty"`
 }
 
 // IntegrationAdapterSpec declares how the adapter is reached by the core.
@@ -130,19 +164,29 @@ type IntegrationSchemaProperty struct {
 	MinLength   *int   `json:"minLength,omitempty"`
 
 	// UI metadata (§15) — optional, drives generic form rendering in surfaces.
-	Label             string                       `json:"label,omitempty"             yaml:"label,omitempty"`
-	LabelLocale       map[string]string            `json:"label_locale,omitempty"      yaml:"label_locale,omitempty"`
-	Placeholder       string                       `json:"placeholder,omitempty"       yaml:"placeholder,omitempty"`
-	PlaceholderLocale map[string]string            `json:"placeholder_locale,omitempty" yaml:"placeholder_locale,omitempty"`
-	DescriptionLocale map[string]string            `json:"description_locale,omitempty" yaml:"description_locale,omitempty"`
-	Group             string                       `json:"group,omitempty"             yaml:"group,omitempty"`
-	GroupLocale       map[string]string            `json:"group_locale,omitempty"      yaml:"group_locale,omitempty"`
-	Order             int                          `json:"order,omitempty"             yaml:"order,omitempty"`
-	Sensitive         bool                         `json:"sensitive,omitempty"         yaml:"sensitive,omitempty"`
-	DependsOn         *IntegrationSchemaDependency `json:"depends_on,omitempty"        yaml:"depends_on,omitempty"`
-	Format            string                       `json:"format,omitempty"            yaml:"format,omitempty"`
-	Pattern           string                       `json:"pattern,omitempty"           yaml:"pattern,omitempty"`
-	MaxLength         *int                         `json:"max_length,omitempty"        yaml:"max_length,omitempty"`
+	Label                   string                       `json:"label,omitempty"                    yaml:"label,omitempty"`
+	LabelLocale             map[string]string            `json:"label_locale,omitempty"             yaml:"label_locale,omitempty"`
+	Placeholder             string                       `json:"placeholder,omitempty"              yaml:"placeholder,omitempty"`
+	PlaceholderLocale       map[string]string            `json:"placeholder_locale,omitempty"       yaml:"placeholder_locale,omitempty"`
+	DescriptionLocale       map[string]string            `json:"description_locale,omitempty"       yaml:"description_locale,omitempty"`
+	Group                   string                       `json:"group,omitempty"                    yaml:"group,omitempty"`
+	GroupLocale             map[string]string            `json:"group_locale,omitempty"             yaml:"group_locale,omitempty"`
+	Order                   int                          `json:"order,omitempty"                    yaml:"order,omitempty"`
+	Sensitive               bool                         `json:"sensitive,omitempty"                yaml:"sensitive,omitempty"`
+	DependsOn               *IntegrationSchemaDependency `json:"depends_on,omitempty"               yaml:"depends_on,omitempty"`
+	Format                  string                       `json:"format,omitempty"                   yaml:"format,omitempty"`
+	Pattern                 string                       `json:"pattern,omitempty"                  yaml:"pattern,omitempty"`
+	MaxLength               *int                         `json:"max_length,omitempty"               yaml:"max_length,omitempty"`
+	// EnumDescriptions maps each enum value (as string) to a human label.
+	// Surfaces use it to render "<value> — <label>" without per-provider
+	// OPTION_LABELS tables. §15.
+	EnumDescriptions        map[string]string            `json:"enum_descriptions,omitempty"        yaml:"enum_descriptions,omitempty"`
+	// EnumDescriptionsLocale lets the adapter ship per-locale enum labels:
+	//   enum_descriptions_locale:
+	//     pt-BR: { aws: "AWS", gcp: "Google Cloud" }
+	//     en-US: { aws: "AWS", gcp: "Google Cloud" }
+	// Outer key is BCP-47 locale; inner map mirrors EnumDescriptions.
+	EnumDescriptionsLocale  map[string]map[string]string `json:"enum_descriptions_locale,omitempty" yaml:"enum_descriptions_locale,omitempty"`
 }
 
 // IntegrationSchemaDependency expresses a conditional-visibility relationship
