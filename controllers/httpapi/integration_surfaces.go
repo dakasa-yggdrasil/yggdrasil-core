@@ -2,12 +2,14 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/integrationsurfaces"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 )
 
 // IntegrationSurfacesRepo is the slice of *integrationsurfaces.Repository the handlers need.
@@ -43,10 +45,94 @@ func (s *Server) handleIntegrationSurfacesList() http.HandlerFunc {
 			writeMappedError(w, err)
 			return
 		}
+		// §15 Lego principle: surfaces inherit display.icon from their
+		// parent integration_type when they didn't declare their own.
+		// The integration_type manifest is the canonical owner of brand
+		// UI metadata (spec.icon.url is the data URI). The console must
+		// not hardcode slug→asset mappings — it only renders what flows
+		// down from the adapter manifest.
+		s.enrichSurfacesWithTypeIcons(r.Context(), items)
 		writeJSON(w, http.StatusOK, map[string]any{
 			"items": items,
 			"total": len(items),
 		})
+	}
+}
+
+// enrichSurfacesWithTypeIcons fills in display.icon (as a data URI or
+// absolute URL) from the linked integration_type's spec.icon.url for
+// every surface that didn't ship its own icon. One SQL query +
+// in-memory join, so cost stays bounded by the number of distinct
+// integration_types referenced — not by surface count.
+//
+// Surfaces that already declared display.icon win; this is purely
+// additive backfill. Surfaces without integration_type (core/domain
+// categories) are left untouched.
+func (s *Server) enrichSurfacesWithTypeIcons(
+	ctx context.Context,
+	surfaces []integrationsurfaces.Manifest,
+) {
+	if s.db == nil || len(surfaces) == 0 {
+		return
+	}
+	// Collect the integration_type names whose icon we need.
+	needed := map[string]struct{}{}
+	for _, sf := range surfaces {
+		if sf.Spec.Display.Icon != "" {
+			continue
+		}
+		if sf.IntegrationType == nil || *sf.IntegrationType == "" {
+			continue
+		}
+		needed[*sf.IntegrationType] = struct{}{}
+	}
+	if len(needed) == 0 {
+		return
+	}
+	mans, err := repository.ListManifests(ctx, s.db, model.ListManifestFilters{Kind: "integration_type"})
+	if err != nil {
+		// Soft-fail: a partial enrichment is fine. The console renders
+		// the letter fallback when icon is empty.
+		return
+	}
+	byName := make(map[string]string, len(mans))
+	for _, m := range mans {
+		name := m.Metadata.Name
+		if name == "" {
+			continue
+		}
+		if _, ok := needed[name]; !ok {
+			continue
+		}
+		// spec.icon.url lives inside the raw JSON spec. Decode just
+		// the icon block — full spec parsing would couple this handler
+		// to the integration_type schema, which is owned by the §15
+		// validator, not by us.
+		var spec struct {
+			Icon struct {
+				URL string `json:"url"`
+			} `json:"icon"`
+		}
+		if err := json.Unmarshal(m.Spec, &spec); err != nil {
+			continue
+		}
+		url := strings.TrimSpace(spec.Icon.URL)
+		if url == "" {
+			continue
+		}
+		byName[name] = url
+	}
+	for i := range surfaces {
+		sf := &surfaces[i]
+		if sf.Spec.Display.Icon != "" {
+			continue
+		}
+		if sf.IntegrationType == nil {
+			continue
+		}
+		if url, ok := byName[*sf.IntegrationType]; ok {
+			sf.Spec.Display.Icon = url
+		}
 	}
 }
 
