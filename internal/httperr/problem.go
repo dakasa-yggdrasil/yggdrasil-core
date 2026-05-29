@@ -133,6 +133,9 @@ const (
 	CodeAuthPasswordChangeRequired  = "auth.password_change_required"
 	CodeAuthInvalidCurrentPassword  = "auth.invalid_current_password"
 	CodeAuthSetupTokenInvalid       = "auth.setup_token_invalid"
+	CodeAuthSetupTokenAlreadyUsed   = "auth.setup_token_already_used"
+	CodeAuthSetupTokenExpired       = "auth.setup_token_expired"
+	CodeAuthSetupIdentityMissing    = "auth.setup_identity_missing"
 	CodeAuthResetTokenInvalid       = "auth.reset_token_invalid"
 	CodeAuthKEKNotConfigured        = "auth.kek_not_configured"
 

@@ -337,6 +337,9 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// reject every admin-token caller with 401 unauthenticated.
 	mux.HandleFunc("POST /api/v1/auth/passwords/setup-tokens", server.handleIssueSetupToken)
 	mux.HandleFunc("POST /api/v1/auth/passwords/setup", server.handleSetupCommit)
+	// Preflight: fail fast before the user fills out the form. Same auth model
+	// as /setup (the token itself is the credential).
+	mux.HandleFunc("GET /api/v1/auth/passwords/setup/preflight", server.handleSetupPreflight)
 	// /passwords/change accepts the current password to derive the new one
 	// — same brute-force surface as /login, so the per-IP gate applies.
 	mux.Handle("POST /api/v1/auth/passwords/change",

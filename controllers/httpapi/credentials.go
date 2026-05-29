@@ -92,6 +92,124 @@ func buildSetupURL(base, raw string) string {
 	return fmt.Sprintf("%s/setup?token=%s", base, raw)
 }
 
+// setupTokenRejection describes why a setup token is unusable; nil means usable.
+// It maps 1:1 onto httperr.WriteProblem so both `preflight` and `commit` produce
+// identical wire responses for the same underlying state.
+type setupTokenRejection struct {
+	status int
+	code   string
+	title  string
+	detail string
+	extras map[string]any
+}
+
+// rowQuerier is implemented by both *sql.DB and *sql.Tx — lets the lookup run
+// inside a transaction (commit path, with FOR UPDATE) or stand-alone (preflight).
+type rowQuerier interface {
+	QueryRowContext(ctx context.Context, query string, args ...any) *sql.Row
+}
+
+// lookupSetupToken inspects a setup token without consuming it. Pass forUpdate=true
+// when the caller is inside a Tx that will mutate the row next; preflight uses
+// forUpdate=false to keep the call lock-free.
+func lookupSetupToken(ctx context.Context, q rowQuerier, rawToken string, forUpdate bool) (tokenID, collabID uuid.UUID, expiresAt time.Time, rej *setupTokenRejection) {
+	tokenHash := password.HashToken(rawToken)
+	lockClause := ""
+	if forUpdate {
+		lockClause = " FOR UPDATE"
+	}
+	var consumedAt sql.NullTime
+	err := q.QueryRowContext(ctx, `
+		SELECT id, collaborator_id, expires_at, consumed_at
+		FROM auth_credential_tokens
+		WHERE token_hash = $1 AND purpose = 'setup'`+lockClause,
+		tokenHash).Scan(&tokenID, &collabID, &expiresAt, &consumedAt)
+	if errors.Is(err, sql.ErrNoRows) {
+		return uuid.Nil, uuid.Nil, time.Time{}, &setupTokenRejection{
+			status: http.StatusUnauthorized,
+			code:   httperr.CodeAuthSetupTokenInvalid,
+			title:  "Invalid setup link",
+			detail: "this setup link is not recognised — please request a new one from your administrator",
+		}
+	}
+	if err != nil {
+		return uuid.Nil, uuid.Nil, time.Time{}, &setupTokenRejection{
+			status: http.StatusInternalServerError,
+			code:   httperr.CodeInternal,
+			title:  "Internal error",
+			detail: "failed to load setup token state",
+		}
+	}
+	if consumedAt.Valid {
+		return uuid.Nil, uuid.Nil, time.Time{}, &setupTokenRejection{
+			status: http.StatusConflict,
+			code:   httperr.CodeAuthSetupTokenAlreadyUsed,
+			title:  "Setup link already used",
+			detail: "this link has already been used and your password is set — sign in with your email and password, or request a password reset if you forgot it",
+			extras: map[string]any{"consumed_at": consumedAt.Time.UTC().Format(time.RFC3339)},
+		}
+	}
+	if time.Now().After(expiresAt) {
+		return uuid.Nil, uuid.Nil, time.Time{}, &setupTokenRejection{
+			status: http.StatusUnauthorized,
+			code:   httperr.CodeAuthSetupTokenExpired,
+			title:  "Setup link expired",
+			detail: "this setup link has expired — please request a new one from your administrator",
+			extras: map[string]any{"expired_at": expiresAt.UTC().Format(time.RFC3339)},
+		}
+	}
+	return tokenID, collabID, expiresAt, nil
+}
+
+// writeSetupTokenRejection translates a rejection into a problem+json response.
+func writeSetupTokenRejection(w http.ResponseWriter, instance string, rej *setupTokenRejection) {
+	opts := []httperr.Option{httperr.WithInstance(instance)}
+	for k, v := range rej.extras {
+		opts = append(opts, httperr.WithExtra(k, v))
+	}
+	httperr.WriteProblem(w, rej.status, rej.code, rej.title, rej.detail, opts...)
+}
+
+// handleSetupPreflight — GET /api/v1/auth/passwords/setup/preflight?token=…
+//
+// Cheap, read-only check the frontend calls *before* rendering the setup form.
+// Lets the UI show "this link was already used, sign in instead" without ever
+// asking the user to type a password that will be rejected anyway.
+//
+// Does not consume the token. Same authentication model as the POST commit:
+// the token is the credential.
+func (s *Server) handleSetupPreflight(w http.ResponseWriter, r *http.Request) {
+	raw := strings.TrimSpace(r.URL.Query().Get("token"))
+	if raw == "" {
+		httperr.WriteProblem(w, http.StatusBadRequest,
+			httperr.CodeMissingField,
+			"Missing field",
+			"token query parameter is required",
+			httperr.WithInstance(r.URL.Path),
+			httperr.WithFieldError("token", "required", "token is required"))
+		return
+	}
+	_, collabID, expiresAt, rej := lookupSetupToken(r.Context(), s.db, raw, false)
+	if rej != nil {
+		writeSetupTokenRejection(w, r.URL.Path, rej)
+		return
+	}
+	// Best-effort: fetch the collaborator so the UI can greet by name. If the
+	// load fails the preflight still succeeds — the commit will error loudly.
+	resp := map[string]any{
+		"status":     "ready",
+		"expires_at": expiresAt.UTC().Format(time.RFC3339),
+	}
+	if collab, err := repository.GetCollaborator(r.Context(), s.db, collabID.String()); err == nil {
+		resp["collaborator"] = map[string]any{
+			"id":            collab.ID,
+			"display_name":  collab.DisplayName,
+			"primary_email": collab.PrimaryEmail,
+		}
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
 func envDurationCred(key string, def time.Duration) time.Duration {
 	v := strings.TrimSpace(os.Getenv(key))
 	if v == "" {
@@ -210,25 +328,19 @@ func (s *Server) handleSetupCommit(w http.ResponseWriter, r *http.Request) {
 		}
 	}()
 
-	// Step 1: Consume the token atomically.
-	tokenHash := password.HashToken(req.Token)
-	row := tx.QueryRowContext(r.Context(), `
-		UPDATE auth_credential_tokens
-		SET consumed_at = NOW()
-		WHERE token_hash = $1
-		  AND purpose = 'setup'
-		  AND consumed_at IS NULL
-		  AND expires_at > NOW()
-		RETURNING id, collaborator_id, expires_at
-	`, tokenHash)
-	var tokenID, collabID uuid.UUID
-	var expiresAt time.Time
-	if err := row.Scan(&tokenID, &collabID, &expiresAt); err != nil {
-		httperr.WriteProblem(w, http.StatusUnauthorized,
-			httperr.CodeAuthSetupTokenInvalid,
-			"Invalid setup token",
-			"the setup token is invalid, expired, or already consumed",
-			httperr.WithInstance(r.URL.Path))
+	// Step 1: Inspect + consume the token. lookupSetupToken returns identical
+	// problem responses to /setup/preflight, so a frontend that already passed
+	// preflight will hit this only when there's a true race.
+	tokenID, collabID, _, rej := lookupSetupToken(r.Context(), tx, req.Token, true)
+	if rej != nil {
+		writeSetupTokenRejection(w, r.URL.Path, rej)
+		return
+	}
+	// Mark consumed now — still inside the tx, so any later failure rolls back.
+	if _, err := tx.ExecContext(r.Context(),
+		`UPDATE auth_credential_tokens SET consumed_at = NOW() WHERE id = $1`,
+		tokenID); err != nil {
+		writeMappedError(w, err)
 		return
 	}
 
@@ -261,7 +373,7 @@ func (s *Server) handleSetupCommit(w http.ResponseWriter, r *http.Request) {
 
 	// Step 5 + 6: Update auth_identities with hash + expiry.
 	rotation := envDurationCred("AUTH_PASSWORD_ROTATION_PERIOD", 90*24*time.Hour)
-	if _, err := tx.ExecContext(r.Context(), `
+	res, err := tx.ExecContext(r.Context(), `
 		UPDATE auth_identities
 		SET password_hash        = $2,
 		    password_scheme      = $3,
@@ -269,8 +381,21 @@ func (s *Server) handleSetupCommit(w http.ResponseWriter, r *http.Request) {
 		    password_expires_at  = NOW() + $4::interval,
 		    password_must_change = false
 		WHERE collaborator_id = $1
-	`, collabID, hash, string(scheme), rotation.String()); err != nil {
+	`, collabID, hash, string(scheme), rotation.String())
+	if err != nil {
 		writeMappedError(w, err)
+		return
+	}
+	// Without this check, a missing auth_identity row (provisioning gap) would
+	// silently commit with no password written — token consumed, user locked
+	// out, no obvious failure. Surface it instead.
+	if n, _ := res.RowsAffected(); n == 0 {
+		httperr.WriteProblem(w, http.StatusInternalServerError,
+			httperr.CodeAuthSetupIdentityMissing,
+			"Auth identity missing",
+			"no auth identity exists for this collaborator yet — provisioning is incomplete; contact an administrator",
+			httperr.WithInstance(r.URL.Path),
+			httperr.WithExtra("collaborator_id", collabID.String()))
 		return
 	}
 

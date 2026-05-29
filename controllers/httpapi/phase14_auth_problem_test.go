@@ -248,3 +248,20 @@ func TestPhase14IssueSetupTokenAlwaysEmitsProblem(t *testing.T) {
 	}
 	decodeProblem(t, rec) // shape gate
 }
+
+// TestSetupPreflightMissingToken covers the cheap query-parameter validation
+// path. The DB-dependent states (invalid / already_used / expired) require
+// integration tests with a real Postgres and are covered by e2e.
+func TestSetupPreflightMissingToken(t *testing.T) {
+	srv := &Server{logger: zap.NewNop()}
+	req := newRequest(http.MethodGet, "/api/v1/auth/passwords/setup/preflight", "")
+	rec := httptest.NewRecorder()
+	srv.handleSetupPreflight(rec, req)
+	if rec.Code != http.StatusBadRequest {
+		t.Errorf("status: got %d want 400", rec.Code)
+	}
+	body := decodeProblem(t, rec)
+	if got := body["code"]; got != httperr.CodeMissingField {
+		t.Errorf("code: got %v want %v", got, httperr.CodeMissingField)
+	}
+}
