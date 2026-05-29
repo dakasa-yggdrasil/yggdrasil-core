@@ -59,15 +59,41 @@ func (s *Server) handleIntegrationSurfacesList() http.HandlerFunc {
 	}
 }
 
-// enrichSurfacesWithTypeIcons fills in display.icon (as a data URI or
-// absolute URL) from the linked integration_type's spec.icon.url for
-// every surface that didn't ship its own icon. One SQL query +
-// in-memory join, so cost stays bounded by the number of distinct
-// integration_types referenced — not by surface count.
+// surfaceIconIsRenderable returns true when display.icon already holds
+// a value the SPA can render verbatim — a data URI, an absolute URL,
+// or an absolute path (something the adapter or operator explicitly
+// stamped). Bare slugs like "slack" or empty strings count as "the
+// adapter just hinted at its integration_type"; those still need
+// enrichment from the integration_type manifest.
+func surfaceIconIsRenderable(v string) bool {
+	if v == "" {
+		return false
+	}
+	if strings.HasPrefix(v, "data:") {
+		return true
+	}
+	if strings.HasPrefix(v, "http://") || strings.HasPrefix(v, "https://") {
+		return true
+	}
+	if strings.HasPrefix(v, "/") {
+		return true
+	}
+	return false
+}
+
+// enrichSurfacesWithTypeIcons rewrites display.icon to a data URI or
+// absolute URL whenever the field was either empty or a bare slug.
+// One SQL query + in-memory join, so cost stays bounded by the number
+// of distinct integration_types referenced — not by surface count.
 //
-// Surfaces that already declared display.icon win; this is purely
-// additive backfill. Surfaces without integration_type (core/domain
-// categories) are left untouched.
+// The "bare slug" case is the common one in production today:
+// adapters declare `display.icon: "slack"` as a hint, expecting the
+// SPA to map it to a brand asset. That mapping is anti-Lego console
+// hardcoding; the canonical source of brand icons is the
+// integration_type manifest's spec.icon.url, so we backfill from
+// there. Surfaces that already shipped a real renderable icon (data
+// URI / URL / absolute path) win. Surfaces without integration_type
+// (core/domain categories) are left untouched.
 func (s *Server) enrichSurfacesWithTypeIcons(
 	ctx context.Context,
 	surfaces []integrationsurfaces.Manifest,
@@ -78,7 +104,7 @@ func (s *Server) enrichSurfacesWithTypeIcons(
 	// Collect the integration_type names whose icon we need.
 	needed := map[string]struct{}{}
 	for _, sf := range surfaces {
-		if sf.Spec.Display.Icon != "" {
+		if surfaceIconIsRenderable(sf.Spec.Display.Icon) {
 			continue
 		}
 		if sf.IntegrationType == nil || *sf.IntegrationType == "" {
@@ -124,7 +150,7 @@ func (s *Server) enrichSurfacesWithTypeIcons(
 	}
 	for i := range surfaces {
 		sf := &surfaces[i]
-		if sf.Spec.Display.Icon != "" {
+		if surfaceIconIsRenderable(sf.Spec.Display.Icon) {
 			continue
 		}
 		if sf.IntegrationType == nil {
