@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
@@ -14,6 +15,7 @@ import (
 type IntegrationSurfacesRepo interface {
 	List(ctx context.Context, f integrationsurfaces.ListFilter) ([]integrationsurfaces.Manifest, error)
 	GetByName(ctx context.Context, name string) (*integrationsurfaces.Manifest, error)
+	Upsert(ctx context.Context, m *integrationsurfaces.Manifest) error
 	Touch(ctx context.Context, name string) error
 	Deactivate(ctx context.Context, name string) error
 }
@@ -73,6 +75,56 @@ func (s *Server) handleIntegrationSurfaceGet() http.HandlerFunc {
 			return
 		}
 		if err != nil {
+			writeMappedError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, m)
+	}
+}
+
+// handleIntegrationSurfaceUpdateIcon updates display.icon on one
+// surface manifest. Surfaces are independent entities — they don't
+// inherit a brand mark from their adapter. This endpoint is the
+// supported path for operators to stamp the icon (data URI or
+// absolute URL) on a surface row without having to round-trip
+// through the adapter's Describe + manifest-sync.
+//
+// Body: {"icon":"<url>"} where icon is a data URI, an https:// URL,
+// or an absolute path. Empty string clears the field; anything else
+// is stored verbatim and the SPA renders it as-is.
+type surfaceIconUpdateReq struct {
+	Icon string `json:"icon"`
+}
+
+func (s *Server) handleIntegrationSurfaceUpdateIcon() http.HandlerFunc {
+	return func(w http.ResponseWriter, r *http.Request) {
+		if s.integrationSurfacesRepo == nil {
+			writeJSONError(w, http.StatusServiceUnavailable, "integration surfaces repository not configured")
+			return
+		}
+		name := strings.TrimSpace(r.PathValue("name"))
+		if name == "" {
+			writeJSONError(w, http.StatusBadRequest, "missing name")
+			return
+		}
+		var req surfaceIconUpdateReq
+		dec := json.NewDecoder(r.Body)
+		dec.DisallowUnknownFields()
+		if err := dec.Decode(&req); err != nil {
+			writeJSONError(w, http.StatusBadRequest, "invalid body: "+err.Error())
+			return
+		}
+		m, err := s.integrationSurfacesRepo.GetByName(r.Context(), name)
+		if errors.Is(err, integrationsurfaces.ErrNotFound) {
+			writeJSONError(w, http.StatusNotFound, "integration surface not found")
+			return
+		}
+		if err != nil {
+			writeMappedError(w, err)
+			return
+		}
+		m.Spec.Display.Icon = strings.TrimSpace(req.Icon)
+		if err := s.integrationSurfacesRepo.Upsert(r.Context(), m); err != nil {
 			writeMappedError(w, err)
 			return
 		}
