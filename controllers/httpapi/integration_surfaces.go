@@ -2,14 +2,12 @@ package httpapi
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"net/http"
 	"strings"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/integrationsurfaces"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
-	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 )
 
 // IntegrationSurfacesRepo is the slice of *integrationsurfaces.Repository the handlers need.
@@ -45,120 +43,16 @@ func (s *Server) handleIntegrationSurfacesList() http.HandlerFunc {
 			writeMappedError(w, err)
 			return
 		}
-		// §15 Lego principle: surfaces inherit display.icon from their
-		// parent integration_type when they didn't declare their own.
-		// The integration_type manifest is the canonical owner of brand
-		// UI metadata (spec.icon.url is the data URI). The console must
-		// not hardcode slug→asset mappings — it only renders what flows
-		// down from the adapter manifest.
-		s.enrichSurfacesWithTypeIcons(r.Context(), items)
+		// Surfaces are independent of their adapter (an adapter can have
+		// zero, one, or many surfaces, and a surface can exist without
+		// any adapter coupling at all). The surface declares its own
+		// display.icon in its manifest; nothing here inherits from the
+		// linked integration_type. Operators backfill via the manifest
+		// PATCH API, not via type-driven enrichment.
 		writeJSON(w, http.StatusOK, map[string]any{
 			"items": items,
 			"total": len(items),
 		})
-	}
-}
-
-// surfaceIconIsRenderable returns true when display.icon already holds
-// a value the SPA can render verbatim — a data URI, an absolute URL,
-// or an absolute path (something the adapter or operator explicitly
-// stamped). Bare slugs like "slack" or empty strings count as "the
-// adapter just hinted at its integration_type"; those still need
-// enrichment from the integration_type manifest.
-func surfaceIconIsRenderable(v string) bool {
-	if v == "" {
-		return false
-	}
-	if strings.HasPrefix(v, "data:") {
-		return true
-	}
-	if strings.HasPrefix(v, "http://") || strings.HasPrefix(v, "https://") {
-		return true
-	}
-	if strings.HasPrefix(v, "/") {
-		return true
-	}
-	return false
-}
-
-// enrichSurfacesWithTypeIcons rewrites display.icon to a data URI or
-// absolute URL whenever the field was either empty or a bare slug.
-// One SQL query + in-memory join, so cost stays bounded by the number
-// of distinct integration_types referenced — not by surface count.
-//
-// The "bare slug" case is the common one in production today:
-// adapters declare `display.icon: "slack"` as a hint, expecting the
-// SPA to map it to a brand asset. That mapping is anti-Lego console
-// hardcoding; the canonical source of brand icons is the
-// integration_type manifest's spec.icon.url, so we backfill from
-// there. Surfaces that already shipped a real renderable icon (data
-// URI / URL / absolute path) win. Surfaces without integration_type
-// (core/domain categories) are left untouched.
-func (s *Server) enrichSurfacesWithTypeIcons(
-	ctx context.Context,
-	surfaces []integrationsurfaces.Manifest,
-) {
-	if s.db == nil || len(surfaces) == 0 {
-		return
-	}
-	// Collect the integration_type names whose icon we need.
-	needed := map[string]struct{}{}
-	for _, sf := range surfaces {
-		if surfaceIconIsRenderable(sf.Spec.Display.Icon) {
-			continue
-		}
-		if sf.IntegrationType == nil || *sf.IntegrationType == "" {
-			continue
-		}
-		needed[*sf.IntegrationType] = struct{}{}
-	}
-	if len(needed) == 0 {
-		return
-	}
-	mans, err := repository.ListManifests(ctx, s.db, model.ListManifestFilters{Kind: "integration_type"})
-	if err != nil {
-		// Soft-fail: a partial enrichment is fine. The console renders
-		// the letter fallback when icon is empty.
-		return
-	}
-	byName := make(map[string]string, len(mans))
-	for _, m := range mans {
-		name := m.Metadata.Name
-		if name == "" {
-			continue
-		}
-		if _, ok := needed[name]; !ok {
-			continue
-		}
-		// spec.icon.url lives inside the raw JSON spec. Decode just
-		// the icon block — full spec parsing would couple this handler
-		// to the integration_type schema, which is owned by the §15
-		// validator, not by us.
-		var spec struct {
-			Icon struct {
-				URL string `json:"url"`
-			} `json:"icon"`
-		}
-		if err := json.Unmarshal(m.Spec, &spec); err != nil {
-			continue
-		}
-		url := strings.TrimSpace(spec.Icon.URL)
-		if url == "" {
-			continue
-		}
-		byName[name] = url
-	}
-	for i := range surfaces {
-		sf := &surfaces[i]
-		if surfaceIconIsRenderable(sf.Spec.Display.Icon) {
-			continue
-		}
-		if sf.IntegrationType == nil {
-			continue
-		}
-		if url, ok := byName[*sf.IntegrationType]; ok {
-			sf.Spec.Display.Icon = url
-		}
 	}
 }
 
@@ -182,14 +76,7 @@ func (s *Server) handleIntegrationSurfaceGet() http.HandlerFunc {
 			writeMappedError(w, err)
 			return
 		}
-		// Apply the same icon enrichment as the list endpoint so single-
-		// surface GETs (used by surface-detail panels) get the brand mark
-		// flowing in from the integration_type. Without this, a refresh on
-		// /ops/integrations/<surface-name> would fall back to the letter
-		// chip while the list view shows the real icon — inconsistent.
-		one := []integrationsurfaces.Manifest{*m}
-		s.enrichSurfacesWithTypeIcons(r.Context(), one)
-		writeJSON(w, http.StatusOK, one[0])
+		writeJSON(w, http.StatusOK, m)
 	}
 }
 
