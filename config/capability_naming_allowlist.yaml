@@ -194,6 +194,13 @@ exact:
   - post_slack_message
   - read_runtime_states
   - suspend_collaborator
+  # Manifest CRUD: the yggdrasil-self adapter exposes manifest-level
+  # primitives (create/list/delete). delete_manifest is the only one that
+  # doesn't fit the destroy_<resource> shape because "manifest" is a
+  # framework concept (versioned blob keyed by kind+namespace+name), not
+  # a provider-owned resource. Renaming to destroy_manifest would be a
+  # breaking change for every workflow that calls it.
+  - delete_manifest
 
   # ---- Compat alias for observe_identities (deprecated; kept under v0.5.x
   #      shim window so the core re-sync cron does not break during cutover).
