@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -985,6 +986,9 @@ func updateTeamOn(ctx context.Context, q dbtx, req model.UpdateTeamRequest) (mod
 	teamType := current.Type
 	if req.Type != nil {
 		teamType = normalizeTeamType(*req.Type)
+		if protected && teamType != current.Type {
+			return model.Team{}, fmt.Errorf("team %q is protected (traits.is_root_admin=true); type cannot be changed", current.Slug)
+		}
 	}
 
 	status := current.Status
@@ -1013,6 +1017,15 @@ func updateTeamOn(ctx context.Context, q dbtx, req model.UpdateTeamRequest) (mod
 	owners := current.Owners
 	if req.Owners != nil {
 		owners = normalizeStringList(*req.Owners)
+		// The Yggdrasil root-admin team is intentionally leaderless:
+		// it represents the god-mode role itself, not a person who
+		// owns it. Allowing an owner here would let a single
+		// collaborator claim privileged authority over the root role,
+		// which is exactly the centralization the team exists to
+		// prevent. Reject any non-empty owners on the protected team.
+		if protected && len(owners) > 0 {
+			return model.Team{}, fmt.Errorf("team %q is protected (traits.is_root_admin=true); leadership/owners are not allowed", current.Slug)
+		}
 	}
 	traits := current.Traits
 	if req.Traits != nil {
@@ -1025,6 +1038,13 @@ func updateTeamOn(ctx context.Context, q dbtx, req model.UpdateTeamRequest) (mod
 	metadata := current.Metadata
 	if req.Metadata != nil {
 		metadata = cloneJSONObject(*req.Metadata)
+		// Lock metadata for the protected team — operator-facing fields
+		// flow through name + email only. Description / extra metadata
+		// could be used to mask the team's purpose, so keep it pinned
+		// to whatever was bootstrapped.
+		if protected && !sameJSONObject(current.Metadata, metadata) {
+			return model.Team{}, fmt.Errorf("team %q is protected (traits.is_root_admin=true); metadata cannot be changed (only name + email)", current.Slug)
+		}
 	}
 
 	email := current.Email
@@ -1861,6 +1881,21 @@ func marshalJSONObject(value map[string]any) ([]byte, error) {
 	return json.Marshal(value)
 }
 
+// sameJSONObject returns true when both objects serialise to the same
+// JSON bytes. Used by protected-team validators to detect "the operator
+// re-sent the existing object" vs a real mutation attempt, so a no-op
+// update with the same metadata doesn't trip the protection error.
+// Compares via marshal so we don't have to walk nested map structures
+// manually; the team metadata payloads are O(KB) at most.
+func sameJSONObject(a, b map[string]any) bool {
+	aRaw, errA := marshalJSONObject(a)
+	bRaw, errB := marshalJSONObject(b)
+	if errA != nil || errB != nil {
+		return false
+	}
+	return bytes.Equal(aRaw, bRaw)
+}
+
 func marshalJSONArray(value []string) ([]byte, error) {
 	if value == nil {
 		return []byte("[]"), nil
@@ -2003,6 +2038,17 @@ func grantTeamActionOn(ctx context.Context, q dbtx, teamID string, req model.Gra
 		action = "*"
 	}
 
+	// Root admin grants are intrinsic to that team's role and frozen via the
+	// HTTP path. Bootstrap and migration scripts insert grants via direct SQL
+	// and bypass this path on purpose. See [[project-yggdrasil-phase3-close]].
+	team, err := getTeamOn(ctx, q, teamID)
+	if err != nil {
+		return model.TeamGrant{}, err
+	}
+	if isTeamRootAdmin(team) {
+		return model.TeamGrant{}, fmt.Errorf("team %q is protected (traits.is_root_admin=true); grants on the root admin team are frozen", team.Slug)
+	}
+
 	scopeRaw, err := marshalJSONObject(req.Scope)
 	if err != nil {
 		return model.TeamGrant{}, err
@@ -2088,6 +2134,16 @@ func revokeTeamGrantOn(ctx context.Context, q dbtx, grantID string) (model.TeamG
 	if grantedByDB.Valid {
 		val := grantedByDB.String
 		g.GrantedBy = &val
+	}
+
+	// Root admin grants frozen: pair the create-side lock at grantTeamActionOn.
+	// Bootstrap/migrations write directly via SQL and bypass this path.
+	team, err := getTeamOn(ctx, q, g.TeamID)
+	if err != nil {
+		return model.TeamGrant{}, err
+	}
+	if isTeamRootAdmin(team) {
+		return model.TeamGrant{}, fmt.Errorf("team %q is protected (traits.is_root_admin=true); grants on the root admin team are frozen", team.Slug)
 	}
 
 	// Last-grant-of-power check: refuse to revoke if it would leave the cluster
