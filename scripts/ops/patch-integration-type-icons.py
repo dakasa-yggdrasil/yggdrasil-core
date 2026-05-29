@@ -13,8 +13,14 @@ import urllib.error
 import sys
 import os
 
-YGG_URL = "https://yggdrasil.dakasa.me"
-TOKEN = "ys_xCblmjUvQSjkhlApq3GVYgkH8_0CVp_BAlFxMmOWUN4"
+YGG_URL = os.environ.get("YGGDRASIL_BASE_URL", "").rstrip("/")
+TOKEN = os.environ.get("YGGDRASIL_WORKFLOW_RUN_TOKEN", "")
+if not YGG_URL or not TOKEN:
+    sys.stderr.write(
+        "missing env: set YGGDRASIL_BASE_URL + YGGDRASIL_WORKFLOW_RUN_TOKEN.\n"
+        "The token is in cluster secret 'yggdrasil-secrets'.\n"
+    )
+    sys.exit(2)
 
 
 def svg_data_uri(svg: str) -> str:
