@@ -337,7 +337,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// reject every admin-token caller with 401 unauthenticated.
 	mux.HandleFunc("POST /api/v1/auth/passwords/setup-tokens", server.handleIssueSetupToken)
 	mux.HandleFunc("POST /api/v1/auth/passwords/setup", server.handleSetupCommit)
-	mux.HandleFunc("POST /api/v1/auth/passwords/change", server.handlePasswordChange)
+	// /passwords/change accepts the current password to derive the new one
+	// — same brute-force surface as /login, so the per-IP gate applies.
+	mux.Handle("POST /api/v1/auth/passwords/change",
+		loginRateLimit(server.loginLimiter, http.HandlerFunc(server.handlePasswordChange)))
 	mux.HandleFunc("POST /api/v1/auth/passwords/forgot", server.handlePasswordForgot)
 	mux.HandleFunc("POST /api/v1/auth/passwords/reset", server.handlePasswordReset)
 	// Login is rate-limited per source IP to slow brute-force attacks
@@ -370,8 +373,15 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/auth/mfa/factors/webauthn/finish", server.handleMFAWebAuthnFinish)
 	// WebAuthn login (passkey 2nd factor) — POSTed by LoginPage AFTER the
 	// password step returned 202 mfa_required with `webauthn` in factors.
-	mux.HandleFunc("POST /api/v1/auth/mfa/webauthn/login/begin", server.handleMFAWebAuthnLoginBegin)
-	mux.HandleFunc("POST /api/v1/auth/mfa/webauthn/login/finish", server.handleMFAWebAuthnLoginFinish)
+	//
+	// Both endpoints take the user identifier and the finish endpoint also
+	// takes the password — same brute-force surface as /api/v1/auth/login.
+	// They MUST sit behind the same per-IP rate limiter or an attacker can
+	// detour through the passkey flow to skip the gate on /login.
+	mux.Handle("POST /api/v1/auth/mfa/webauthn/login/begin",
+		loginRateLimit(server.loginLimiter, http.HandlerFunc(server.handleMFAWebAuthnLoginBegin)))
+	mux.Handle("POST /api/v1/auth/mfa/webauthn/login/finish",
+		loginRateLimit(server.loginLimiter, http.HandlerFunc(server.handleMFAWebAuthnLoginFinish)))
 	// Authenticated factor management (rename, remove). List is also
 	// available via GET /api/v1/auth/mfa/factors.
 	mux.HandleFunc("GET /api/v1/auth/mfa/factors", guard(server.handleMFAFactorsList))
