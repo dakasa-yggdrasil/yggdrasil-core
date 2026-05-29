@@ -49,14 +49,24 @@ func (s *Server) handleOpsWorkflowDetail(w http.ResponseWriter, r *http.Request)
 	// the row id is `id` (not run_id), integration/trigger_source live in
 	// `metadata` JSON, the result blob is `result` (not outputs), and
 	// `steps` is not a stored column (intermediate progress lives in metadata
-	// for the few workflows that report it). Mirror the list endpoint's
-	// metadata->>'integration' / metadata->>'trigger_source' pattern so
-	// detail + list stay schema-consistent.
+	// for the few workflows that report it). Integration + source use the
+	// same multi-key COALESCE chain as the list endpoint — see
+	// repository.ListOpsWorkflowRuns for the rationale (writers stamp
+	// `triggered_by`, not `source`/`integration`).
 	const q = `
 		SELECT id::text, COALESCE(workflow_name, ''),
-		       COALESCE(metadata->>'integration', ''),
+		       COALESCE(
+		           NULLIF(metadata->>'integration', ''),
+		           split_part(COALESCE(workflow_name, ''), '-', 1),
+		           ''
+		       ),
 		       status, started_at, finished_at,
-		       COALESCE(metadata->>'source', metadata->>'trigger_source', 'unknown'),
+		       COALESCE(
+		           NULLIF(metadata->>'source', ''),
+		           NULLIF(metadata->>'trigger_source', ''),
+		           NULLIF(metadata->>'triggered_by', ''),
+		           'unknown'
+		       ),
 		       COALESCE(error, ''),
 		       COALESCE(inputs::text, '{}'),
 		       COALESCE(result::text, '{}'),

@@ -41,10 +41,36 @@ func ListOpsWorkflowRuns(ctx context.Context, db *sql.DB, filter model.ListOpsWo
 		where = "WHERE " + strings.Join(clauses, " AND ")
 	}
 
+	// Integration + source fields ride along workflow_runs.metadata, but
+	// the three writers that create runs (workflow_scheduler,
+	// workflow_event_triggers, heimdall_inbox_dispatcher) all stamp
+	// `triggered_by` and none of them stamp `integration` or `source`.
+	// The /ops/workflows listing fed off the never-written keys and
+	// surfaced "Sem integração / Sem origem" on every row.
+	//
+	// Resolution chain (first non-empty wins):
+	//   integration:
+	//     metadata->>'integration' (legacy + manual ops UI)
+	//     → first dash-segment of workflow_name (heimdall-cycle-stale-pulse → heimdall)
+	//   source:
+	//     metadata->>'source'        (explicit override from an operator)
+	//     → metadata->>'trigger_source' (legacy key from older code paths)
+	//     → metadata->>'triggered_by'   (canonical key all live writers use)
+	//     → 'unknown' (safe default)
 	q := `SELECT id::text, COALESCE(workflow_name, ''),
-	             COALESCE(metadata->>'integration', ''), status,
+	             COALESCE(
+	                 NULLIF(metadata->>'integration', ''),
+	                 split_part(COALESCE(workflow_name, ''), '-', 1),
+	                 ''
+	             ),
+	             status,
 	             started_at, finished_at,
-	             COALESCE(metadata->>'source', metadata->>'trigger_source', 'unknown'),
+	             COALESCE(
+	                 NULLIF(metadata->>'source', ''),
+	                 NULLIF(metadata->>'trigger_source', ''),
+	                 NULLIF(metadata->>'triggered_by', ''),
+	                 'unknown'
+	             ),
 	             COALESCE(error, '')
 	      FROM public.workflow_runs ` + where + `
 	      ORDER BY COALESCE(started_at, NOW()) DESC LIMIT ` + limitArg
