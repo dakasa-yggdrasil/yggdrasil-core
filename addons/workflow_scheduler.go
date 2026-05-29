@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"os"
 	"strconv"
 	"strings"
@@ -345,12 +346,34 @@ func dispatchScheduledRun(
 	// {name,namespace,...} body into them); the spec JSON column does not
 	// re-encode them in metadata. Reading from spec->metadata returns NULL
 	// for every row and Scan fails on NULL→string.
-	if err := db.QueryRowContext(ctx, `
-		SELECT namespace, name
-		FROM public.manifests
-		WHERE id = $1 AND kind = 'workflow' AND active = TRUE
-	`, manifestID).Scan(&namespace, &name); err != nil {
-		return err
+	//
+	// Retry on ErrNoRows: a previous scheduler pass picked the workflow
+	// out of the candidates list (manifest was active=TRUE then). If we
+	// hit "no rows" here it usually means an Upsert was mid-transaction
+	// on the same id when we ran — the row vanishes from the snapshot
+	// for a few ms. One short retry handles the common race without
+	// masking genuine deletions; a second miss is treated as
+	// "manifest not found" the same way as before.
+	lookup := func() error {
+		return db.QueryRowContext(ctx, `
+			SELECT namespace, name
+			FROM public.manifests
+			WHERE id = $1 AND kind = 'workflow' AND active = TRUE
+		`, manifestID).Scan(&namespace, &name)
+	}
+	if err := lookup(); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			select {
+			case <-ctx.Done():
+				return ctx.Err()
+			case <-time.After(150 * time.Millisecond):
+			}
+			if err2 := lookup(); err2 != nil {
+				return err2
+			}
+		} else {
+			return err
+		}
 	}
 
 	inputs := map[string]any{}

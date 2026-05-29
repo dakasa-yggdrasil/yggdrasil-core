@@ -3039,6 +3039,17 @@ func codeFromError(err error, status int) string {
 	case errors.Is(err, errAutoProvisionRejected):
 		return httperr.CodePermissionDenied
 	}
+	// Protected-team invariants get a dedicated code so the FE can
+	// surface the right copy ("essa equipe é a raiz e não pode ser
+	// alterada"). httpStatusFromError already maps these to 422.
+	if status == http.StatusUnprocessableEntity {
+		msg := strings.ToLower(err.Error())
+		if strings.Contains(msg, "is protected (traits.is_root_admin=true)") ||
+			strings.Contains(msg, "grants on the root admin team are frozen") ||
+			strings.Contains(msg, "leadership/owners are not allowed") {
+			return "team.protected"
+		}
+	}
 	return codeFromGenericMessage(status, err.Error())
 }
 
@@ -3131,6 +3142,19 @@ func httpStatusFromError(err error) int {
 	}
 
 	message := strings.ToLower(strings.TrimSpace(err.Error()))
+
+	// Protected-team invariants (root-admin lock, see repository/identity.go)
+	// surface as plain fmt.Errorf strings instead of typed errors. They
+	// represent intentional refusals — the operator's request is well-formed
+	// but conflicts with a policy invariant — so 422 fits better than 500
+	// (the previous default) and avoids leaking the policy text as a
+	// generic internal error to non-technical operators.
+	if strings.Contains(message, "is protected (traits.is_root_admin=true)") ||
+		strings.Contains(message, "grants on the root admin team are frozen") ||
+		strings.Contains(message, "leadership/owners are not allowed") {
+		return http.StatusUnprocessableEntity
+	}
+
 	for _, fragment := range []string{
 		"required",
 		"invalid",
