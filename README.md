@@ -82,7 +82,8 @@ that execute the actual work are a plug-in choice — yours.
 - 🔐 **OAuth/OIDC edges** — GitHub, Google, custom OIDC configurable from
   YAML. Replace the login page as a surface.
 - 📦 **Self-hosted, one-command bootstrap** — `yggdrasil init` brings up a
-  full stack in ~1 minute. Helm chart for production.
+  full stack in ~1 minute. Promote to production Kubernetes with a
+  manifest-first `yggdrasil deploy control-plane` (no Helm chart needed).
 
 ## Architecture at a glance
 
@@ -232,25 +233,47 @@ yggdrasil logs <run-id>
 
 ## Production deployment
 
-Use the included Helm chart for Kubernetes. The chart bundles Postgres + RabbitMQ
-subcharts (Bitnami) and supports plugging in external managed instances:
+Production install is **manifest-first** — there is no Helm chart to
+template. You promote the seed (Compose) stack to a Kubernetes control
+plane by writing a `control_plane` manifest and applying it through the
+seed:
 
-```sh
-helm dependency build chart
-helm install yggdrasil chart \
-  --namespace yggdrasil \
-  --create-namespace \
-  --set ingress.enabled=true \
-  --set "ingress.hosts[0].host=yggdrasil.example.com" \
-  --set ingress.className=nginx
+```yaml
+# control-plane.yaml
+apiVersion: yggdrasil.io/v1alpha1
+kind: control_plane
+metadata:
+  name: primary
+  namespace: global
+spec:
+  image: ghcr.io/dakasa-yggdrasil/yggdrasil-core:v1.0.0
+  replicas: 2
+  postgres:
+    mode: external
+    external:
+      host: my-db.internal
+      database: yggdrasil
+      username: yggdrasil
+      password_ref: secret://yggdrasil-db/password
+      ssl_mode: require
+  ingress:
+    enabled: true
+    host: yggdrasil.example.com
+    class_name: nginx
+  kubernetes:
+    namespace: yggdrasil
+    cluster_ref: { namespace: global, name: production-cluster }
 ```
 
-Retrieve the auto-generated admin password:
-
 ```sh
-kubectl get secret --namespace yggdrasil yggdrasil-yggdrasil-core-secrets \
-  -o jsonpath='{.data.admin-password}' | base64 -d
+yggdrasil deploy control-plane -f control-plane.yaml
 ```
+
+The seed's `yggdrasil-deploy-control-plane` workflow renders the
+Kubernetes objects (Deployment, Service, Ingress, optional bundled
+Postgres) and applies them through the `integration-kubernetes` adapter,
+running migrations via `integration-schema-migrations`. Every deploy knob
+is a versioned, audited manifest field — not a `{{ .Values… }}` override.
 
 Full guide: [docs/deployment.md](docs/deployment.md).
 
@@ -259,6 +282,39 @@ Full guide: [docs/deployment.md](docs/deployment.md).
 Curated, versioned, installable in one command. See
 [docs/catalog.md](docs/catalog.md) for the full list and the schema each
 integration exposes.
+
+Every integration follows the same four-layer model — a **family**
+(contract) implemented by one or more **types** (providers), each
+deployed as one or more **instances**:
+
+```mermaid
+graph TD
+    subgraph Families["integration_family — the contract"]
+        F1["kubernetes"]
+        F2["secrets-management"]
+        F3["rabbitmq"]
+        F4["grafana"]
+    end
+    subgraph Types["integration_type — a provider implementation"]
+        T1["kubernetes"]
+        T2a["aws-secrets-manager"]
+        T2b["gcp-secret-manager"]
+        T3a["topology"]
+        T3b["runtime"]
+        T4["runtime"]
+    end
+    subgraph Instances["integration_instance — a deployed config"]
+        I1["prod-cluster"]
+        I2["prod-aws-sm"]
+        I3["prod-rabbit"]
+    end
+    F1 --> T1 --> I1
+    F2 --> T2a --> I2
+    F2 --> T2b
+    F3 --> T3a --> I3
+    F3 --> T3b
+    F4 --> T4
+```
 
 | Integration | Provider(s) | Install |
 |---|---|---|
@@ -271,6 +327,7 @@ integration exposes.
 | **schema-migrations** | goose / Postgres | `yggdrasil install dakasa-yggdrasil/integration-schema-migrations` |
 | **secrets-management** | AWS Secrets Manager + GCP Secret Manager | `yggdrasil install dakasa-yggdrasil/integration-secrets-management` |
 | **database-admin** | Postgres declarative DB / role / grant | `yggdrasil install dakasa-yggdrasil/integration-database-admin` |
+| **manifest-sources** | Render a source location into K8s objects (kustomize) | `yggdrasil install dakasa-yggdrasil/integration-manifest-sources` |
 
 ### Build your own integration or surface
 
@@ -331,7 +388,7 @@ minutes from zero to published.
 - [Yggdrasil + GitHub Actions / GitLab CI](docs/ecosystem/ci-cd.md)
 
 ### 🏗 Running in production — [**docs/operations/**](docs/operations/)
-- [Deployment (Compose, Helm, bare-metal)](docs/deployment.md)
+- [Deployment (Compose seed, `control_plane` to K8s, bare-metal)](docs/deployment.md)
 - [Scaling](docs/operations/scaling.md)
 - [Observability](docs/operations/observability.md)
 - [Backup & restore](docs/operations/backup-restore.md)
@@ -360,9 +417,9 @@ Roadmap:
 
 - [x] Workflow engine + manifest catalog
 - [x] CLI: init, login, apply, get, describe, logs, status, auth
-- [x] Helm chart + Compose for self-hosted
+- [x] Manifest-first deploy (`control_plane`) + Compose seed for self-hosted
 - [x] OAuth/OIDC providers (GitHub, Google)
-- [x] 9-integration baseline catalog (k8s, aws, gcp, github, grafana, rabbitmq, schema-migrations, secrets-management, database-admin)
+- [x] Baseline catalog seeded on first boot (k8s, aws, gcp, github, grafana, rabbitmq, schema-migrations, secrets-management, database-admin, manifest-sources)
 - [ ] First-class web console
 - [ ] Multi-tenant SaaS mode
 

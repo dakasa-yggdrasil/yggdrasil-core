@@ -1,6 +1,18 @@
-# Addons
+# Addons (code generator)
 
-`yggdrasil-core` keeps the base service intentionally small. Infrastructure-heavy pieces are generated on demand through `go run ./scripts/addons`.
+> **Two things are called "addons" in this repo — don't confuse them.**
+> This page documents the **scaffolding generator** (`go run ./scripts/addons`),
+> a build-time tool that writes boilerplate service files. `… list` enumerates
+> the generator templates below; `… add --name <addon>` materializes one.
+>
+> It is **not** the runtime addon registry in `addons/registry.go`, which
+> auto-registers the live subsystems (`postgres`, `http`, `rabbitmq`,
+> `reconciler`, `workflow_scheduler`, `manifest-sync`, …) that `addons.Apply()`
+> boots at startup — see [architecture.md](./architecture.md) for that model.
+
+`yggdrasil-core` keeps the base service intentionally small. Infrastructure-heavy
+boilerplate is generated on demand through `go run ./scripts/addons add --name <addon>`.
+Available generator templates live under `scripts/addons/templates/`.
 
 ## Available addons
 

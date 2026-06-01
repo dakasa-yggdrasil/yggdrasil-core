@@ -20,6 +20,22 @@ yggdrasil install dakasa-yggdrasil/integration-kubernetes --provider kubernetes
 
 Operations: `declarative_apply`, `apply_manifest`, `observe_objects`.
 
+### manifest-sources
+
+**Family**: turn a source location into a rendered Kubernetes object
+set. The family is the contract; providers implement subsets via
+`implemented_operations`.
+**Providers**: `kustomize` (future: `helm`, `jsonnet`, `kpt`).
+**When to install**: when you want workflows to render and reconcile
+installations from a git/source path rather than inline manifests.
+
+```sh
+yggdrasil install dakasa-yggdrasil/integration-manifest-sources --provider kustomize
+```
+
+Operations: `generate_installation`, `reconcile_installation`,
+`discover_installation_state`.
+
 ### secrets-management
 
 **Family**: store, rotate, and fetch secrets.

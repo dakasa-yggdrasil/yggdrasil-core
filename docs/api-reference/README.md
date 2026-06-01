@@ -30,7 +30,13 @@ The OpenAPI spec is also served by the running instance at `GET /openapi.json` (
 | GET | `/api/v1/manifests?kind=<kind>` | List manifests (filterable by `namespace`, `name`) |
 | POST | `/api/v1/manifests?kind=<kind>` | Create a new version of one manifest |
 
-Supported `kind` values: `integration_family`, `integration_type`, `integration_instance`, `workflow`, `surface`, `repository_binding`, `secret_intent`, `product`, `control_plane`, `rbac`, `policy`, `guardian_*`, `remediation_*`.
+Supported `kind` values (the authoritative list is the switch in
+`manifest/validate.go`): `integration_family`, `integration_type`,
+`integration_instance`, `integration_quickstart`, `workflow`,
+`workflow_template`, `surface`, `repository_binding`, `resource`,
+`product`, `control_plane`, `tenant`, `ephemeral_environment`, `rbac`,
+`policy`, `guardian_policy`, `guardian_approval`, `guardian_memory`,
+`remediation_bundle`, `remediation_contract`.
 
 ### Integration runtime
 

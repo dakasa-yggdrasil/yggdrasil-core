@@ -45,6 +45,13 @@ checksum-based, and the history is queryable.
 | `guardian_policy` / `guardian_approval` / `guardian_memory` | Approval workflow and its history |
 | `remediation_bundle` / `remediation_contract` | Incident response workflow pieces |
 | `resource` | Tracked entity discovered in an integration (a S3 bucket, a Slack channel) |
+| `workflow_template` | Parameterized workflow blueprint instantiated on demand (`POST .../instantiate`) |
+| `control_plane` | Declares the production deployment shape (image, replicas, Postgres, ingress, transports) for `yggdrasil deploy control-plane` |
+| `tenant` | Tenancy boundary for multi-tenant deployments |
+| `ephemeral_environment` | Short-lived environment definition (preview / PR envs) |
+
+> The authoritative kind list is the switch in `manifest/validate.go` —
+> every kind above maps to a `Validate…Spec` function there.
 
 ## Integrations: family, type, instance, provider
 
@@ -90,6 +97,22 @@ runtime, dispatches the operation through the adapter (over whichever
 transport the integration_type declares — HTTP, AMQP, or a pluggable
 backend; see [features/transports.md](./features/transports.md)),
 and records the step result.
+
+The four layers, with real catalog names:
+
+```mermaid
+graph LR
+    Step["workflow step<br/>family: schema-migrations"]
+    Fam["integration_family<br/>schema-migrations"]
+    Type["integration_type<br/>schema-migrations-goose-postgres"]
+    Inst["integration_instance<br/>staging-db"]
+    Adapter["adapter pod<br/>(goose over Postgres DSN)"]
+
+    Step -->|resolve| Fam
+    Fam -->|active provider| Type
+    Type -->|active config| Inst
+    Inst -->|rpc.Transport| Adapter
+```
 
 ## Workflows and steps
 

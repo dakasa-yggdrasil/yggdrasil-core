@@ -53,12 +53,14 @@ modes:
 1. **Managed secrets** — `client_secret_ref: my-oauth-secret`
    resolves to a row in `managed_secret`. Secrets are encrypted at
    rest with a key bound to the deployment.
-2. **External secret** — `valueFrom: { secretKeyRef: ... }` in the
-   Helm-rendered Deployment pulls from a Kubernetes Secret managed
-   outside the chart.
-3. **Environment variables** — for Helm deployments, `extraEnv` can
-   reference secrets the cluster owns. `yggdrasil init` (compose
-   mode) stores secrets in the local `.env` file (0600).
+2. **External secret** — `password_ref: secret://…` (and the
+   equivalent `*_ref` fields) on a `control_plane` manifest resolve to
+   a Kubernetes Secret the cluster owns; the rendered Deployment mounts
+   it via `secretKeyRef`.
+3. **Environment variables** — the `control_plane`-rendered Deployment
+   injects config as env; sensitive values come from referenced
+   Secrets, never inline. `yggdrasil init` (compose mode) stores
+   secrets in the local `.env` file (0600).
 
 Adapters in `integration-*` repos consume credentials at RPC call
 time from `integration_instance.credentials`, which itself uses the
@@ -68,8 +70,11 @@ same reference mechanism.
 
 `yggdrasil-core` only needs outbound to:
 
-- Postgres (internal).
-- RabbitMQ (internal).
+- Postgres (internal) — the only always-required dependency.
+- RabbitMQ (internal) — only when an integration declares the
+  `rabbitmq` transport (opt-in; HTTP-only otherwise).
+- HTTP integration adapters (internal) — when integrations use the
+  default `http_json` transport.
 - OAuth/OIDC provider token endpoints (when OIDC is configured).
 - GitHub API (when `yggdrasil install` is triggered against a
   private repo).
@@ -87,9 +92,9 @@ cookie name and domain are configurable
 ## Container security
 
 The `yggdrasil-core` image runs as non-root (uid 65532, enforced by
-the Helm chart's `podSecurityContext`). Capabilities are dropped;
-privilege escalation is denied. No shell is shipped in the image —
-only the binary.
+the `podSecurityContext` on the `control_plane`-rendered Deployment).
+Capabilities are dropped; privilege escalation is denied. No shell is
+shipped in the image — only the binary.
 
 ## Responsible disclosure
 

@@ -69,7 +69,7 @@ These guides show how it composes with what you already run.
 
 | I want to... | Read |
 |---|---|
-| Deploy (Compose, Helm, bare-metal) | [deployment.md](./deployment.md) |
+| Deploy (Compose seed, `control_plane` to K8s, bare-metal) | [deployment.md](./deployment.md) |
 | Use the CLI | [cli.md](./cli.md) |
 | Upgrade | [upgrade.md](./upgrade.md) |
 | Understand the versioning policy | [versioning.md](./versioning.md) |
