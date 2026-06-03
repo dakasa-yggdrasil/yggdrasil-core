@@ -2,7 +2,7 @@
 
 ## 🌳 Integration contract (server-side enforcement)
 
-yggdrasil-core is the **enforcement point** for the integration capability convention defined in `/Users/dakasa/projects/yggdrasil/integration-template/INTEGRATION_CONTRACT.md`. When implementing or reviewing manifest validation, registration handlers, or describe-handshake logic in this repo, treat that document as authoritative.
+yggdrasil-core is the **enforcement point** for the integration capability convention defined in `../integration-template/INTEGRATION_CONTRACT.md`. When implementing or reviewing manifest validation, registration handlers, or describe-handshake logic in this repo, treat that document as authoritative.
 
 Key invariants the validator enforces (Phase 1 warn-only via `warnings:[...]` in response, Phase 2 hard-fail at registration):
 
