@@ -95,6 +95,31 @@
           "type": "string",
           "default": "x-access-token",
           "description": "Username paired with github_token (default 'x-access-token')."
+        },
+        "auth_mode": {
+          "type": "string",
+          "description": "Clone auth mode. Empty/default uses the static github_token; 'github_app' mints a fresh installation token at clone time."
+        },
+        "app_id": {
+          "type": "string",
+          "description": "GitHub App ID (auth_mode=github_app)."
+        },
+        "installation_id": {
+          "type": "string",
+          "description": "GitHub App installation ID; flat fallback when organization_installations has no entry for the repo owner."
+        },
+        "organization_installations": {
+          "type": "object",
+          "description": "Map of repo owner (org) -> GitHub App installation ID, so one instance can clone across orgs (e.g. dakasa-co + dakasa-yggdrasil)."
+        },
+        "api_base_url": {
+          "type": "string",
+          "description": "GitHub API base URL for minting installation tokens (default https://api.github.com)."
+        },
+        "private_key": {
+          "type": "string",
+          "secret": true,
+          "description": "GitHub App private key (PEM); used to mint an installation token at clone time when auth_mode=github_app. Prefer a secret:// reference."
         }
       }
     },
@@ -105,6 +130,11 @@
           "type": "string",
           "secret": true,
           "description": "Optional PAT or GitHub App installation token for private repos."
+        },
+        "private_key": {
+          "type": "string",
+          "secret": true,
+          "description": "GitHub App private key (PEM) used when auth_mode=github_app to mint a fresh installation token at clone time."
         }
       }
     },
