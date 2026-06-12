@@ -362,6 +362,33 @@ func (s *Server) handleAuthThirdPartyStart(w http.ResponseWriter, r *http.Reques
 		return
 	}
 
+	// When the OIDC OP signals "login required" it calls our LoginURL with
+	// auth_request_id=<uuid>. Single sign-on reuse: if the collaborator
+	// already holds a valid Yggdrasil session, complete the OIDC flow against
+	// that existing session instead of round-tripping through the upstream
+	// IdP again. Without this, every /oidc/authorize re-prompts (the OP only
+	// learns the subject after a fresh callback), so authorizing an app twice
+	// in a row asks the user to log in twice. This runs BEFORE provider
+	// resolution so a reused session skips the upstream-IdP work entirely, and
+	// mirrors what SAML's samlSessionProvider.GetSession already does. A
+	// missing or invalid session falls through to the normal IdP round-trip.
+	authRequestID := queryString(r, "auth_request_id")
+	if authRequestID != "" {
+		if requestUUID, parseErr := uuid.Parse(authRequestID); parseErr == nil {
+			if token, ok := extractAuthToken(r); ok {
+				if session, _, resolveErr := repository.ResolveAuthSession(r.Context(), s.db, token); resolveErr == nil {
+					if bindErr := repository.BindOIDCAuthRequestCollaborator(r.Context(), s.db, requestUUID, session.CollaboratorID); bindErr != nil {
+						writeMappedError(w, bindErr)
+						return
+					}
+					callback := strings.TrimRight(s.oidcIssuerURL, "/") + "/authorize/callback?id=" + url.QueryEscape(authRequestID)
+					http.Redirect(w, r, callback, http.StatusFound)
+					return
+				}
+			}
+		}
+	}
+
 	provider, err := s.resolveAuthProvider(r.Context(), r.PathValue("provider"))
 	if err != nil {
 		writeMappedError(w, err)
@@ -369,12 +396,7 @@ func (s *Server) handleAuthThirdPartyStart(w http.ResponseWriter, r *http.Reques
 	}
 
 	redirectTo := queryString(r, "redirect_to")
-	// When the OIDC OP signals "login required" it calls our LoginURL with
-	// auth_request_id=<uuid>. Preserve it on the state cookie so the
-	// callback can mark the auth_request as Done() and resume the OP flow
-	// by redirecting to <issuer>/authorize/callback?id=<uuid>. Empty when
-	// the third-party login was initiated outside an OIDC flow.
-	authRequestID := queryString(r, "auth_request_id")
+
 	state, err := coreauth.NewThirdPartyState(provider.Name, normalizePostAuthRedirect(redirectTo), authRequestID)
 	if err != nil {
 		writeMappedError(w, err)
