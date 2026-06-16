@@ -777,6 +777,16 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 			oidc.NewStorage(server.db, server.oidcIssuerURL),
 			server.oidcIssuerURL,
 		)
+		// Opt-in: accept OIDC JWTs this OP issued on the console gate, in
+		// addition to opaque session tokens. Inert unless
+		// YGGDRASIL_CONSOLE_JWT_AUDIENCES lists at least one allowed client
+		// audience (the privilege boundary). Built from the same in-process
+		// signing key set the OP publishes at /jwks — no external JWKS fetch.
+		server.consoleJWTVerifier = newOPJWTVerifier(
+			oidc.NewStorage(server.db, server.oidcIssuerURL),
+			server.oidcIssuerURL,
+			parseConsoleJWTAudiences(os.Getenv("YGGDRASIL_CONSOLE_JWT_AUDIENCES")),
+		)
 	}
 
 	// §13 INTEGRATION_CONTRACT: RFC 7662 introspection + admin session
@@ -839,6 +849,33 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 				// without attaching collaborator claims (no human actor).
 				next.ServeHTTP(w, r)
 				return
+			}
+		}
+
+		// OIDC JWT bearer path (opt-in via consoleJWTVerifier). Accept a JWT
+		// this OP issued as an alternative to the opaque session token, so
+		// services holding a collaborator's cookie JWT (e.g. the tartaro-api
+		// proxy) can call console APIs as that collaborator. ADDITIVE: when no
+		// verifier is configured, or the bearer isn't a valid OP JWT (e.g. it's
+		// an opaque ys_ token passed as Bearer), we fall through to the session
+		// path below — existing behavior is unchanged.
+		if s.consoleJWTVerifier != nil {
+			if jwtClaims, ok := tryBearerHeader(r, s.consoleJWTVerifier); ok {
+				sub, _ := jwtClaims["sub"].(string)
+				if sub != "" {
+					// Normalize to the SAME claim keys the session path sets,
+					// so downstream handlers / permission checks are agnostic
+					// to whether the caller used a session token or a JWT.
+					norm := map[string]any{
+						"collaborator_id": sub,
+						"sub":             sub,
+					}
+					if sid, ok := jwtClaims["sid"].(string); ok && sid != "" {
+						norm["session_id"] = sid
+					}
+					next.ServeHTTP(w, r.WithContext(contextWithClaims(r.Context(), norm)))
+					return
+				}
 			}
 		}
 
@@ -1075,6 +1112,15 @@ type Server struct {
 	// nil disables back-channel dispatch — useful for tests or deploys
 	// that don't run OIDC. Set when OIDC routes mount (see MountOIDC).
 	backchannelDispatcher *oidc.BackchannelDispatcher
+	// consoleJWTVerifier, when non-nil, lets the console auth gate accept an
+	// OIDC JWT this OP issued (verified in-process via the signing key set) as
+	// an ADDITIVE alternative to the opaque session token. nil = disabled
+	// (default): the gate behaves exactly as before. Enabled only when the OP
+	// issuer is set AND YGGDRASIL_CONSOLE_JWT_AUDIENCES lists at least one
+	// allowed client audience — see newOPJWTVerifier. This is what lets the
+	// tartaro-api proxy forward a collaborator's cookie JWT to /api/v1/* and
+	// have it authenticate as that collaborator.
+	consoleJWTVerifier *opJWTVerifier
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {
