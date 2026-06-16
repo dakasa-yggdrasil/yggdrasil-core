@@ -797,6 +797,9 @@ func (s *Storage) populateUserInfo(
 	}
 	if scopesContains(scopes, oidc.ScopeProfile) {
 		userInfo.Name = displayName
+		if pic, perr := buildPictureClaim(ctx, s.db, cid); perr == nil && pic != "" {
+			userInfo.Picture = pic
+		}
 	}
 	if scopesContains(scopes, "roles") {
 		teams, terr := buildTeamsClaim(ctx, s.db, cid)
@@ -823,7 +826,9 @@ func (s *Storage) populateUserInfo(
 func (s *Storage) GetPrivateClaimsFromScopes(
 	ctx context.Context, userID, clientID string, scopes []string,
 ) (map[string]any, error) {
-	if !scopesContains(scopes, "roles") {
+	wantRoles := scopesContains(scopes, "roles")
+	wantProfile := scopesContains(scopes, oidc.ScopeProfile)
+	if !wantRoles && !wantProfile {
 		return nil, nil
 	}
 	cid, _, _, err := loadCollaboratorForUserinfo(ctx, s.db, userID)
@@ -832,19 +837,32 @@ func (s *Storage) GetPrivateClaimsFromScopes(
 		// upstream when introduced. Empty private claims is valid.
 		return nil, nil
 	}
-	teams, err := buildTeamsClaim(ctx, s.db, cid)
-	if err != nil {
+	out := map[string]any{}
+	// "picture" is a standard profile-scope claim; surface it on the JWT so
+	// resource servers (and the commons OIDC verifier → /session) can read
+	// the avatar without an extra /userinfo round-trip.
+	if wantProfile {
+		if pic, perr := buildPictureClaim(ctx, s.db, cid); perr == nil && pic != "" {
+			out["picture"] = pic
+		}
+	}
+	if wantRoles {
+		teams, err := buildTeamsClaim(ctx, s.db, cid)
+		if err == nil {
+			out["teams"] = teams
+		}
+		if role, err := buildRoleClaim(ctx, s.db, cid); err == nil && role != "" {
+			out["role"] = role
+		}
+		if perms, err := buildPermissionsClaim(ctx, s.db, cid); err == nil && len(perms) > 0 {
+			out["permissions"] = perms
+		}
+		if attrs, err := buildAttributesClaim(ctx, s.db, cid); err == nil && len(attrs) > 0 {
+			out["attributes"] = attrs
+		}
+	}
+	if len(out) == 0 {
 		return nil, nil
-	}
-	out := map[string]any{"teams": teams}
-	if role, err := buildRoleClaim(ctx, s.db, cid); err == nil && role != "" {
-		out["role"] = role
-	}
-	if perms, err := buildPermissionsClaim(ctx, s.db, cid); err == nil && len(perms) > 0 {
-		out["permissions"] = perms
-	}
-	if attrs, err := buildAttributesClaim(ctx, s.db, cid); err == nil && len(attrs) > 0 {
-		out["attributes"] = attrs
 	}
 	return out, nil
 }
