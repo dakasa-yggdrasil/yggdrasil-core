@@ -82,14 +82,6 @@ func (s *Server) handlePushEvent(w http.ResponseWriter, r *http.Request, body []
 		return
 	}
 
-	if !s.isBrokerAvailable() {
-		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
-			"error":  "workflow_dispatch_unavailable",
-			"detail": "broker-degraded; webhook will be retried by GitHub",
-		})
-		return
-	}
-
 	binding, err := repository.FindBindingByRepository(r.Context(), s.db, push.Repository.FullName)
 	if errors.Is(err, repository.ErrBindingNotFound) {
 		IncWebhookEvent("skipped")
@@ -166,6 +158,18 @@ func (s *Server) handlePushEvent(w http.ResponseWriter, r *http.Request, body []
 			zap.String("binding", binding.Metadata.Namespace+"/"+binding.Metadata.Name),
 			zap.String("workflow", ref.Namespace+"/"+ref.Name),
 		)
+
+		// Guard against dispatch when the operator has configured a broker
+		// (BROKER_URL set) but the cached connection is down. When BROKER_URL
+		// is unset the server runs in IdP-only mode and dispatch proceeds
+		// without a broker (e.g. tests, local dev).
+		if strings.TrimSpace(os.Getenv("BROKER_URL")) != "" && !s.isBrokerAvailable() {
+			writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+				"error":  "workflow_dispatch_unavailable",
+				"detail": "broker-degraded; webhook will be retried by GitHub",
+			})
+			return
+		}
 
 		// Fire-and-forget dispatch in a goroutine so the webhook can ack
 		// the push promptly. Errors are logged for operator inspection.
