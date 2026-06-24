@@ -30,14 +30,22 @@ func bootstrapRabbitMQ(ctx context.Context, app *runtime.ServiceApp) error {
 		return nil
 	}
 
-	db, ok := Postgres(app)
-	if !ok {
-		return fmt.Errorf("postgres addon is not available")
-	}
-
 	conn, err := amqp.Dial(brokerURL)
 	if err != nil {
-		return fmt.Errorf("connect rabbitmq: %w", err)
+		logger, _ := Logger(app)
+		if logger != nil {
+			logger.Warn("rabbitmq unreachable at boot; starting broker-degraded (IdP/auth + wake only, workflow dispatch disabled)",
+				zap.String("broker_url", brokerURL), zap.Error(err))
+		}
+		app.SetResource("rabbitmq", (*amqp.Connection)(nil))
+		app.SetResource("rpc_transport", nil)
+		return nil
+	}
+
+	db, ok := Postgres(app)
+	if !ok {
+		_ = conn.Close()
+		return fmt.Errorf("postgres addon is not available")
 	}
 
 	logger, _ := Logger(app)
