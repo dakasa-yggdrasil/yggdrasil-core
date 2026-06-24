@@ -40,6 +40,13 @@ type Runner struct {
 	Parallelism    int
 	StuckThreshold time.Duration
 
+	// BrokerAvailable, when set, is called at the start of each tick.
+	// If it returns false the tick is skipped entirely: no reactions are
+	// claimed, so rows remain pending and are replayed as soon as the
+	// broker recovers. When nil, the runner always proceeds (backward-
+	// compatible default for callers that do not set it).
+	BrokerAvailable func() bool
+
 	// claimBatch is overridable in tests.
 	claimBatch func(ctx context.Context, limit int) ([]ClaimedReaction, error)
 }
@@ -80,6 +87,16 @@ func (r *Runner) defaults() {
 }
 
 func (r *Runner) tickOnce(ctx context.Context) error {
+	// Skip the entire tick when the broker is known to be unavailable.
+	// Reactions are NOT claimed so they remain pending and replay
+	// immediately after the broker recovers — skip, not fail.
+	if r.BrokerAvailable != nil && !r.BrokerAvailable() {
+		if r.Logger != nil {
+			r.Logger.Warn("reactor runner: broker unavailable — skipping tick, reactions left for replay")
+		}
+		return nil
+	}
+
 	if r.DB != nil {
 		if _, err := repository.HealStuckInProgress(ctx, r.DB, r.StuckThreshold); err != nil && r.Logger != nil {
 			r.Logger.Warn("heal stuck failed", zap.Error(err))

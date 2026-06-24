@@ -60,6 +60,13 @@ func bootstrapReactorDispatcher(ctx context.Context, app *runtime.ServiceApp) er
 		BatchSize:      envIntOrDefault("REACTOR_RUNNER_BATCH_SIZE", 50),
 		Parallelism:    envIntOrDefault("REACTOR_RUNNER_PARALLELISM", 10),
 		StuckThreshold: envDurOrDefault("REACTOR_STUCK_THRESHOLD", 10*time.Minute),
+		// BrokerAvailable gates each tick: when the connection is nil or
+		// closed (boot-degraded or mid-run disconnect) the runner skips
+		// claiming reactions. Rows stay pending and are replayed as soon
+		// as the broker reconnects and a fresh connection is provided.
+		BrokerAvailable: func() bool {
+			return conn != nil && !conn.IsClosed()
+		},
 	}
 
 	go func() {
