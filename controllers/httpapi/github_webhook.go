@@ -82,6 +82,14 @@ func (s *Server) handlePushEvent(w http.ResponseWriter, r *http.Request, body []
 		return
 	}
 
+	if !s.isBrokerAvailable() {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error":  "workflow_dispatch_unavailable",
+			"detail": "broker-degraded; webhook will be retried by GitHub",
+		})
+		return
+	}
+
 	binding, err := repository.FindBindingByRepository(r.Context(), s.db, push.Repository.FullName)
 	if errors.Is(err, repository.ErrBindingNotFound) {
 		IncWebhookEvent("skipped")
