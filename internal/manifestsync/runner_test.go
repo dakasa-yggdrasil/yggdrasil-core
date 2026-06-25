@@ -99,6 +99,38 @@ func TestRunner_CronFires(t *testing.T) {
 	}, 500*time.Millisecond, 10*time.Millisecond)
 }
 
+// TestRunner_SkipsSyncWhenBrokerUnavailable asserts that when BrokerLive
+// returns false the runner does NOT invoke a sync for either the event-driven
+// Notify path or the cron sweep. SyncIntegrationType → InvokeDescribe issues a
+// broker RPC (conn.Channel()); a nil/closed connection there panics the
+// process. The runner must skip — leaving the integration_type unchanged for
+// the next live tick — never dispatch through a dead broker.
+func TestRunner_SkipsSyncWhenBrokerUnavailable(t *testing.T) {
+	resetNotifyChannelForTest(t)
+
+	f := &countingDeps{fakeDeps: *newFakeWithHappyPath()}
+	typeIDs := []uuid.UUID{f.typeManifest.ID}
+	r := &Runner{
+		Deps:         f,
+		CronInterval: 20 * time.Millisecond,
+		EnumerateTypeIDs: func(_ context.Context) ([]uuid.UUID, error) {
+			return typeIDs, nil
+		},
+		BrokerLive: func() bool { return false }, // broker down
+	}
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go r.Run(ctx)
+
+	// Drive both paths: a Notify signal and several cron ticks.
+	Notify(f.typeManifest.ID)
+	time.Sleep(150 * time.Millisecond)
+
+	assert.EqualValues(t, 0, f.calls.Load(),
+		"InvokeDescribe must not be called while the broker is unavailable (Notify + cron both gated)")
+}
+
 func TestRunner_DisabledByKillSwitch(t *testing.T) {
 	resetNotifyChannelForTest(t)
 	t.Setenv("MANIFEST_SYNC_ENABLED", "false")
