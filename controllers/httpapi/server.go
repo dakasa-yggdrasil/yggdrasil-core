@@ -366,6 +366,12 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/auth/providers/{provider}", server.handleThirdPartyAuthProviderGet)
 	mux.HandleFunc("DELETE /api/v1/auth/providers/{provider}", server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyAuthProviderDelete))
 	mux.HandleFunc("GET /api/v1/auth/session", server.handleAuthSession)
+	// ForwardAuth probe for the surface ingress (/s/*). Gated by
+	// requireAuthenticatedConsoleAPIs (see requiresAuthenticatedConsoleAPI):
+	// resolves the session cookie OR an OP-issued bearer JWT and answers
+	// 200 (+ identity headers) / 401 so Traefik's ForwardAuth middleware
+	// can guard the operator/AI surfaces.
+	mux.HandleFunc("GET /api/v1/auth/verify", server.handleAuthVerify)
 	mux.HandleFunc("POST /api/v1/auth/logout", server.handleAuthLogout)
 	// MFA enroll endpoints (universal MFA mandatory invariant).
 	mux.HandleFunc("POST /api/v1/auth/mfa/enroll/request", server.handleMFAEnrollRequest)
@@ -918,6 +924,13 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 // list → public).
 func requiresAuthenticatedConsoleAPI(path string) bool {
 	for _, prefix := range []string{
+		// ForwardAuth target: the Traefik surface middleware calls
+		// GET /api/v1/auth/verify to decide whether a /s/* request is
+		// authenticated. It is the ONE /api/v1/auth/* path that must be
+		// gated (the rest — login/MFA/session — are public by design), so
+		// the gate resolves the session cookie / OP-issued JWT and returns
+		// 401 to ForwardAuth when the caller is anonymous.
+		"/api/v1/auth/verify",
 		// Original gated prefixes (console UI surface).
 		"/api/v1/ops",
 		"/api/v1/console",
