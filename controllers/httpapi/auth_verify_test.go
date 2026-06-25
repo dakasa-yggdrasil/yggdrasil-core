@@ -17,16 +17,12 @@ import (
 // misconfiguration (the middleware forgot to copy the headers) and must
 // fail closed, instead of mistaking it for a privileged identity.
 
-func TestAuthVerify_UnauthenticatedRejected(t *testing.T) {
-	s := &Server{}
-	gated := s.requireAuthenticatedConsoleAPIs(http.HandlerFunc(s.handleAuthVerify))
-
-	r := httptest.NewRequest(http.MethodGet, "/api/v1/auth/verify", nil)
-	w := httptest.NewRecorder()
-	gated.ServeHTTP(w, r)
-
-	if w.Code != http.StatusUnauthorized {
-		t.Fatalf("anonymous /api/v1/auth/verify: got %d, want %d (endpoint must be gated for ForwardAuth)", w.Code, http.StatusUnauthorized)
+// After Task 1, /api/v1/auth/verify is NO LONGER in the console gate
+// allowlist — it self-gates inside handleAuthVerify. This asserts the gate
+// passes the path straight through (the handler, not the gate, decides 200/401).
+func TestAuthVerify_NotInConsoleGateAllowlist(t *testing.T) {
+	if requiresAuthenticatedConsoleAPI("/api/v1/auth/verify") {
+		t.Fatal("/api/v1/auth/verify must NOT be gated by requireAuthenticatedConsoleAPIs; handleAuthVerify self-gates")
 	}
 }
 

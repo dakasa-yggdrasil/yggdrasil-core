@@ -924,13 +924,15 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 // list → public).
 func requiresAuthenticatedConsoleAPI(path string) bool {
 	for _, prefix := range []string{
-		// ForwardAuth target: the Traefik surface middleware calls
-		// GET /api/v1/auth/verify to decide whether a /s/* request is
-		// authenticated. It is the ONE /api/v1/auth/* path that must be
-		// gated (the rest — login/MFA/session — are public by design), so
-		// the gate resolves the session cookie / OP-issued JWT and returns
-		// 401 to ForwardAuth when the caller is anonymous.
-		"/api/v1/auth/verify",
+		// NOTE: /api/v1/auth/verify is intentionally NOT gated here. It is
+		// the Traefik ForwardAuth target for the surfaces (/s/*) and is
+		// self-contained (see handleAuthVerify): it validates a session
+		// cookie OR a Bearer JWT scoped to the audience passed by the
+		// middleware (?aud=<surface>), so a surface-scoped token (e.g.
+		// aud=dakasa-ai) can authenticate the núcleo WITHOUT being accepted
+		// by the console gate. Gating it here would force surface tokens
+		// through the console audience allowlist and defeat the scope.
+		//
 		// Original gated prefixes (console UI surface).
 		"/api/v1/ops",
 		"/api/v1/console",
