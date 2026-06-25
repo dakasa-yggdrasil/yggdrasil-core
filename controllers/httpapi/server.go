@@ -793,6 +793,16 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 			server.oidcIssuerURL,
 			parseConsoleJWTAudiences(os.Getenv("YGGDRASIL_CONSOLE_JWT_AUDIENCES")),
 		)
+		// Surface ForwardAuth verifier: audience-agnostic, validated per-request
+		// against the middleware's ?aud= param (see handleAuthVerify). Built
+		// from the same in-process OP signing key set as consoleJWTVerifier.
+		server.surfaceJWTVerifier = newSurfaceJWTVerifier(
+			oidc.NewStorage(server.db, server.oidcIssuerURL),
+			server.oidcIssuerURL,
+		)
+		if server.surfaceJWTVerifier != nil {
+			server.surfaceVerify = server.surfaceJWTVerifier.VerifyForAudience
+		}
 	}
 
 	// §13 INTEGRATION_CONTRACT: RFC 7662 introspection + admin session
@@ -886,7 +896,12 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 		}
 
 		token, ok := extractAuthToken(r)
-		if !ok {
+		if !ok || s.db == nil {
+			// No session token, or no DB to resolve it against → fail closed.
+			// The s.db nil-guard keeps the gate from panicking deep in
+			// database/sql when a Bearer that is NOT an accepted console JWT
+			// (e.g. a surface-scoped aud=dakasa-ai token, or any opaque token)
+			// reaches the session path on a Server built without a DB.
 			writeJSONError(w, http.StatusUnauthorized, "unauthenticated")
 			return
 		}
@@ -924,13 +939,15 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 // list → public).
 func requiresAuthenticatedConsoleAPI(path string) bool {
 	for _, prefix := range []string{
-		// ForwardAuth target: the Traefik surface middleware calls
-		// GET /api/v1/auth/verify to decide whether a /s/* request is
-		// authenticated. It is the ONE /api/v1/auth/* path that must be
-		// gated (the rest — login/MFA/session — are public by design), so
-		// the gate resolves the session cookie / OP-issued JWT and returns
-		// 401 to ForwardAuth when the caller is anonymous.
-		"/api/v1/auth/verify",
+		// NOTE: /api/v1/auth/verify is intentionally NOT gated here. It is
+		// the Traefik ForwardAuth target for the surfaces (/s/*) and is
+		// self-contained (see handleAuthVerify): it validates a session
+		// cookie OR a Bearer JWT scoped to the audience passed by the
+		// middleware (?aud=<surface>), so a surface-scoped token (e.g.
+		// aud=dakasa-ai) can authenticate the núcleo WITHOUT being accepted
+		// by the console gate. Gating it here would force surface tokens
+		// through the console audience allowlist and defeat the scope.
+		//
 		// Original gated prefixes (console UI surface).
 		"/api/v1/ops",
 		"/api/v1/console",
@@ -1134,6 +1151,20 @@ type Server struct {
 	// tartaro-api proxy forward a collaborator's cookie JWT to /api/v1/* and
 	// have it authenticate as that collaborator.
 	consoleJWTVerifier *opJWTVerifier
+	// surfaceJWTVerifier, when non-nil, lets handleAuthVerify validate a Bearer
+	// JWT for the surface ForwardAuth path against the audience the middleware
+	// passes via ?aud=<surface>. Unlike consoleJWTVerifier it has no boot-time
+	// audience allowlist — the audience is per-request — so it can authenticate
+	// surface-scoped tokens (e.g. aud=dakasa-ai for the núcleo) WITHOUT widening
+	// the console gate. nil = disabled (OIDC OP not mounted); the cookie path in
+	// handleAuthVerify still works.
+	surfaceJWTVerifier *opJWTVerifier
+	// surfaceVerify is the audience-scoped Bearer validator handleAuthVerify
+	// calls. In production it is set (in New) to surfaceJWTVerifier.VerifyForAudience;
+	// tests inject a fake. nil → the Bearer surface path is skipped (cookie path
+	// still works). Keeping it a func makes the handler unit-testable without a
+	// DB or real OP keys.
+	surfaceVerify func(ctx context.Context, token, expectedAud string) (map[string]any, error)
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {

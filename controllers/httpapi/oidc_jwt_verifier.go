@@ -47,13 +47,51 @@ type opJWTVerifier struct {
 
 var errJWTVerify = errors.New("oidc jwt verification failed")
 
-// Verify implements jwtVerifier.
+// Verify implements jwtVerifier: validates against the boot-time audience
+// allowlist (the console gate path). Unchanged contract.
 func (v *opJWTVerifier) Verify(ctx context.Context, token string) (map[string]any, error) {
 	if v == nil || v.issuer == "" || len(v.audiences) == 0 {
 		// Not configured → never authenticates (additive, opt-in by design).
 		return nil, errJWTVerify
 	}
+	claims, err := v.verifyClaims(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	if !audienceAllowed(claims["aud"], v.audiences) {
+		return nil, errJWTVerify
+	}
+	return claims, nil
+}
 
+// VerifyForAudience validates the SAME way as Verify (RS256 signature against a
+// current OP key + iss + exp) but checks `aud == expectedAud` instead of the
+// boot-time allowlist. This is the surface path: the expected audience comes
+// from the ForwardAuth middleware's ?aud= param (server-controlled, not the
+// client), so a token can be scoped to one surface (e.g. aud=dakasa-ai) without
+// being on any global console allowlist. A blank expectedAud fails closed.
+func (v *opJWTVerifier) VerifyForAudience(ctx context.Context, token, expectedAud string) (map[string]any, error) {
+	if v == nil || v.issuer == "" {
+		return nil, errJWTVerify
+	}
+	if strings.TrimSpace(expectedAud) == "" {
+		return nil, errJWTVerify
+	}
+	claims, err := v.verifyClaims(ctx, token)
+	if err != nil {
+		return nil, err
+	}
+	if !audienceAllowed(claims["aud"], map[string]struct{}{expectedAud: {}}) {
+		return nil, errJWTVerify
+	}
+	return claims, nil
+}
+
+// verifyClaims runs the audience-independent half of verification: RS256
+// signature against a current OP signing key, iss == configured issuer, and
+// exp in the future. Audience is the caller's concern (Verify uses the
+// allowlist; VerifyForAudience uses a single expected value).
+func (v *opJWTVerifier) verifyClaims(ctx context.Context, token string) (map[string]any, error) {
 	jws, err := jose.ParseSigned(token, []jose.SignatureAlgorithm{jose.RS256})
 	if err != nil || len(jws.Signatures) == 0 {
 		return nil, errJWTVerify
@@ -87,14 +125,10 @@ func (v *opJWTVerifier) Verify(ctx context.Context, token string) (map[string]an
 	if err := json.Unmarshal(payload, &claims); err != nil {
 		return nil, errJWTVerify
 	}
-
 	if iss, _ := claims["iss"].(string); iss != v.issuer {
 		return nil, errJWTVerify
 	}
 	if !expInFuture(claims["exp"], v.now().Add(-v.leeway)) {
-		return nil, errJWTVerify
-	}
-	if !audienceAllowed(claims["aud"], v.audiences) {
 		return nil, errJWTVerify
 	}
 	return claims, nil
@@ -174,5 +208,34 @@ func newOPJWTVerifier(storage *oidc.Storage, issuer string, audiences []string) 
 		audiences: auds,
 		now:       time.Now,
 		leeway:    30 * time.Second,
+	}
+}
+
+// newSurfaceJWTVerifier builds an audience-AGNOSTIC verifier for the surface
+// ForwardAuth path. Unlike newOPJWTVerifier it carries no boot-time audience
+// allowlist: the expected audience is supplied per-request via
+// VerifyForAudience (from the ForwardAuth middleware's ?aud= param). Returns
+// nil — disabling the Bearer surface path — when storage is nil or the issuer
+// is empty. The cookie path in handleAuthVerify is unaffected by a nil here.
+func newSurfaceJWTVerifier(storage *oidc.Storage, issuer string) *opJWTVerifier {
+	if storage == nil || strings.TrimSpace(issuer) == "" {
+		return nil
+	}
+	return &opJWTVerifier{
+		keys: func(ctx context.Context) ([]verifyPublicKey, error) {
+			ks, err := storage.KeySet(ctx)
+			if err != nil {
+				return nil, err
+			}
+			out := make([]verifyPublicKey, 0, len(ks))
+			for _, k := range ks {
+				out = append(out, k) // op.Key satisfies verifyPublicKey
+			}
+			return out, nil
+		},
+		issuer: strings.TrimSpace(issuer),
+		// audiences intentionally nil: VerifyForAudience checks per-request.
+		now:    time.Now,
+		leeway: 30 * time.Second,
 	}
 }
