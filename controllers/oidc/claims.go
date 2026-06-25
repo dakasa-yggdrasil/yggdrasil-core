@@ -120,6 +120,49 @@ func buildPermissionsClaim(ctx context.Context, db *sql.DB, collaboratorID uuid.
 	return out, rows.Err()
 }
 
+// buildPictureClaim resolves the collaborator's avatar URL for the standard
+// OIDC "picture" claim, best-effort. Precedence (first non-empty wins):
+//  1. personal_data ->> 'avatar_url'
+//  2. personal_data -> 'profile' ->> 'avatar_url'
+//  3. the first linked third-party identity's avatar_url (relational
+//     collaborator_third_party_identities table, oldest link first; falls
+//     back to the third_party_identities JSONB column on the collaborators
+//     row when it carries an array shape).
+//
+// Returns "" (never an error that fails the mint) when no avatar is found or
+// the lookup hits a missing-column/missing-table older deployment.
+func buildPictureClaim(ctx context.Context, db *sql.DB, collaboratorID uuid.UUID) (string, error) {
+	var picture string
+	err := db.QueryRowContext(ctx, `
+		SELECT COALESCE(
+			NULLIF(c.personal_data ->> 'avatar_url', ''),
+			NULLIF(c.personal_data -> 'profile' ->> 'avatar_url', ''),
+			NULLIF((
+				SELECT tpi.avatar_url
+				FROM public.collaborator_third_party_identities tpi
+				WHERE tpi.collaborator_id = c.id
+				  AND COALESCE(tpi.avatar_url, '') <> ''
+				ORDER BY tpi.created_at ASC
+				LIMIT 1
+			), ''),
+			NULLIF(CASE
+				WHEN jsonb_typeof(c.third_party_identities) = 'array'
+				THEN c.third_party_identities -> 0 ->> 'avatar_url'
+				ELSE NULL
+			END, ''),
+			''
+		)
+		FROM public.collaborators c
+		WHERE c.id = $1
+	`, collaboratorID).Scan(&picture)
+	if err != nil {
+		// Missing column / table on an older deployment, or no row: degrade
+		// to no picture rather than failing the whole token mint.
+		return "", nil
+	}
+	return picture, nil
+}
+
 // buildAttributesClaim returns the collaborator's traits JSONB as a typed map.
 func buildAttributesClaim(ctx context.Context, db *sql.DB, collaboratorID uuid.UUID) (map[string]any, error) {
 	var raw []byte
