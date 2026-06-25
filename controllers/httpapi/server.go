@@ -1126,16 +1126,23 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	// cascaded into /readyz → 503 → Traefik 404 for every external caller.
 	// Surface the state via `rabbitmq_status` but stay ready.
 	rabbitmqStatus := "ok"
-	if strings.TrimSpace(os.Getenv("BROKER_URL")) != "" {
-		if s.rabbitmq == nil || s.rabbitmq.IsClosed() {
-			rabbitmqStatus = "degraded"
-		}
+	if strings.TrimSpace(os.Getenv("BROKER_URL")) != "" && !s.isBrokerAvailable() {
+		rabbitmqStatus = "degraded"
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
 		"status":          "ready",
 		"rabbitmq_status": rabbitmqStatus,
 	})
+}
+
+// isBrokerAvailable reports whether the workflow/event path can dispatch.
+// It is the single source of truth for broker liveness: BROKER_URL must be
+// configured AND the cached connection must be open. With BROKER_URL unset
+// the floor runs IdP-only and this is intentionally false.
+func (s *Server) isBrokerAvailable() bool {
+	return strings.TrimSpace(os.Getenv("BROKER_URL")) != "" &&
+		s.rabbitmq != nil && !s.rabbitmq.IsClosed()
 }
 
 func (s *Server) handleIntegrationCatalogList(w http.ResponseWriter, r *http.Request) {

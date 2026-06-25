@@ -39,3 +39,41 @@ func TestRunnerDefaults(t *testing.T) {
 	}
 	_ = uuid.New
 }
+
+// TestRunnerTickSkipsWhenBrokerUnavailable asserts that when BrokerAvailable
+// returns false the runner skips the tick entirely — no reactions are claimed,
+// no dispatches are attempted, and the rows remain in 'pending' for replay.
+func TestRunnerTickSkipsWhenBrokerUnavailable(t *testing.T) {
+	caller := &mockCaller{}
+	claimed := false
+
+	r := &Runner{
+		DB:       nil,
+		Interval: time.Second,
+		Caller:   caller,
+		BrokerAvailable: func() bool { return false },
+	}
+	r.claimBatch = func(ctx context.Context, limit int) ([]ClaimedReaction, error) {
+		claimed = true
+		return []ClaimedReaction{
+			{
+				ID:                    uuid.New(),
+				EventID:               uuid.New(),
+				EventType:             "test.event",
+				IntegrationInstanceID: uuid.New(),
+				Capability:            "on_something",
+				Attempt:               0,
+			},
+		}, nil
+	}
+
+	if err := r.tickOnce(context.Background()); err != nil {
+		t.Fatalf("tickOnce: unexpected error: %v", err)
+	}
+	if claimed {
+		t.Error("claimBatch was called — reactions should not be claimed when broker is unavailable")
+	}
+	if caller.called > 0 {
+		t.Errorf("Caller.Call was invoked %d times — should be 0 when broker is unavailable", caller.called)
+	}
+}

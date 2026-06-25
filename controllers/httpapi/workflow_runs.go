@@ -39,6 +39,14 @@ func (s *Server) handleWorkflowRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	if !s.isBrokerAvailable() {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error":  "workflow_dispatch_unavailable",
+			"detail": "control-plane is broker-degraded; workflow dispatch is temporarily disabled",
+		})
+		return
+	}
+
 	var req model.RunWorkflowRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeMappedError(w, err)
@@ -69,6 +77,14 @@ func (s *Server) handleWorkflowRun(w http.ResponseWriter, r *http.Request) {
 // On completion (success or failure) the goroutine updates the same row
 // so a subsequent GET can return the full RunWorkflowResponse.
 func (s *Server) dispatchAsyncWorkflowRun(w http.ResponseWriter, r *http.Request, req model.RunWorkflowRequest) {
+	if !s.isBrokerAvailable() {
+		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
+			"error":  "workflow_dispatch_unavailable",
+			"detail": "control-plane is broker-degraded; workflow dispatch is temporarily disabled",
+		})
+		return
+	}
+
 	runID := uuid.New()
 	if err := repository.InsertWorkflowRun(r.Context(), s.db, runID, req.Workflow, req.Inputs, req.Metadata); err != nil {
 		writeMappedError(w, err)

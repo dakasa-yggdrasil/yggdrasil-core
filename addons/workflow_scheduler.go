@@ -237,6 +237,22 @@ func processScheduledWorkflow(
 		}
 	}
 
+	// Broker gate — CRITICAL: this check happens BEFORE schedule_state is
+	// advanced. The state advance (UpsertWorkflowScheduleState below) is what
+	// "consumes" this cron tick; if we advanced it while the broker is down,
+	// the run would never dispatch and the tick would be lost forever (next
+	// pass observes a later nextFire). By skipping here — leaving lastFired
+	// untouched — the SAME tick re-fires on the next pass once the broker is
+	// back. nil conn = boot-degraded; closed conn = runtime drop; both skip.
+	if !brokerLive(conn) {
+		if logger != nil {
+			logger.Warn("workflow_scheduler: broker unavailable — skipping tick, schedule_state left for replay",
+				zap.String("manifest_id", manifestID),
+				zap.Time("due_for", nextFire))
+		}
+		return nil
+	}
+
 	// Compute the fire time AFTER this one for the next state row.
 	nextAfterFire := sched.Next(nextFire.In(loc))
 
@@ -303,9 +319,17 @@ func processScheduledWorkflow(
 	// Without this step the scheduler is purely passive — it records "this
 	// cron tick elapsed" and emits an event into the log, but no consumer
 	// materialises a workflow_run, leaving every scheduled workflow armed
-	// but never triggered. Conn nil means slim/dev mode (no AMQP) — skip
-	// dispatch silently; the operator can still POST runs explicitly.
-	if conn == nil {
+	// but never triggered.
+	//
+	// We re-check brokerLive here (not just the gate above) to close the
+	// narrow window where the broker drops between the gate and this commit:
+	// the schedule_state row is already committed (the tick legitimately
+	// fired), but the connection may now be nil/closed, so dispatching would
+	// deref a dead conn in the bare goroutine below and panic. Skip dispatch
+	// in that case — the audit event records the fire and an operator can
+	// replay via POST /api/v1/workflow-runs. Also covers slim/dev mode
+	// (no AMQP), where conn is the boot-degraded typed-nil.
+	if !brokerLive(conn) {
 		return nil
 	}
 	if err := dispatchScheduledRun(ctx, db, conn, logger, manifestID, schedule, nextFire); err != nil {

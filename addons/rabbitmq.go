@@ -30,56 +30,46 @@ func bootstrapRabbitMQ(ctx context.Context, app *runtime.ServiceApp) error {
 		return nil
 	}
 
-	db, ok := Postgres(app)
-	if !ok {
-		return fmt.Errorf("postgres addon is not available")
-	}
-
 	conn, err := amqp.Dial(brokerURL)
 	if err != nil {
-		return fmt.Errorf("connect rabbitmq: %w", err)
+		logger, _ := Logger(app)
+		if logger != nil {
+			logger.Warn("rabbitmq unreachable at boot; starting broker-degraded (IdP/auth + wake only, workflow dispatch disabled)",
+				zap.String("broker_url", brokerURL), zap.Error(err))
+		}
+		app.SetResource("rabbitmq", (*amqp.Connection)(nil))
+		app.SetResource("rpc_transport", nil)
+		return nil
+	}
+
+	db, ok := Postgres(app)
+	if !ok {
+		_ = conn.Close()
+		return fmt.Errorf("postgres addon is not available")
 	}
 
 	logger, _ := Logger(app)
 
-	// AMQP self-healing — exit fast when the connection closes so the
-	// kubelet restarts the pod with a fresh dial. The previous behavior
-	// kept a stale *amqp.Connection in the rpc.Transport for hours after a
-	// rabbit restart, silently breaking every integration handshake. The
-	// integration runtime monitor's dial-fallback (see
-	// integration_describe.go acquireConnectivityChannel) only fixes the
-	// health probe path; the rpc.Transport itself is wired to the cached
-	// conn and there's no public API on yggdrasil-sdk-go/rpc/amqp to
-	// swap the connection at runtime.
-	//
-	// Crash-and-restart is correct because:
-	//   - The pod has no in-memory state that survives restart (consumers
-	//     re-subscribe from manifests, the monitor restarts its ticker).
-	//   - Kubernetes already handles the restart loop with backoff.
-	//   - It's bounded — at most one cascade per rabbit-restart event,
-	//     bounded by the configured `restartPolicy: Always`.
+	// Broker connectivity lost. We DO NOT exit: the IdP/auth and wake
+	// paths do not need the broker, so the process stays up and serves
+	// them. The workflow/event path degrades (returns 503) via
+	// Server.isBrokerAvailable() until the connection is restored.
 	connClose := conn.NotifyClose(make(chan *amqp.Error, 1))
 	go func() {
 		amqpErr, ok := <-connClose
 		if logger != nil {
 			if ok && amqpErr != nil {
 				logger.Error(
-					"rabbitmq connection closed — exiting so kubelet restarts the pod with a fresh dial",
+					"rabbitmq connection lost; workflow dispatch degraded (process stays up)",
 					zap.Int("code", amqpErr.Code),
 					zap.String("reason", amqpErr.Reason),
 					zap.Bool("recover", amqpErr.Recover),
 					zap.Bool("server", amqpErr.Server),
 				)
 			} else {
-				logger.Error("rabbitmq connection closed (no error detail) — exiting so kubelet restarts the pod")
+				logger.Error("rabbitmq connection lost; workflow dispatch degraded (process stays up)")
 			}
 		}
-		// Give in-flight requests a brief grace window, then bail. The
-		// closer chain (app.RegisterCloser) is intentionally skipped —
-		// a closed conn can't drain, and we want the pod gone fast so
-		// the new replica picks up traffic.
-		time.Sleep(2 * time.Second)
-		os.Exit(1)
 	}()
 
 	// Construct the generic rpc.Transport first. Consumers subscribe
@@ -116,6 +106,15 @@ func bootstrapRabbitMQ(ctx context.Context, app *runtime.ServiceApp) error {
 }
 
 // RabbitMQ returns the shared RabbitMQ connection when the addon is installed.
+//
+// IMPORTANT: when the broker is unreachable at boot the addon installs the
+// resource key with a TYPED-NIL value (see bootstrapRabbitMQ's soft-fail
+// path: app.SetResource("rabbitmq", (*amqp.Connection)(nil))). In that case
+// this accessor returns (nil, true) — the `ok` is true because the key
+// exists, but the connection is nil. Callers that start a background loop
+// dispatching through the broker MUST therefore also check the connection is
+// live (use brokerLive) and not rely on `ok` alone; otherwise a bare
+// goroutine would dereference a nil *amqp.Connection and panic the process.
 func RabbitMQ(app *runtime.ServiceApp) (*amqp.Connection, bool) {
 	resource, ok := app.Resource("rabbitmq")
 	if !ok {
@@ -124,6 +123,26 @@ func RabbitMQ(app *runtime.ServiceApp) (*amqp.Connection, bool) {
 
 	conn, ok := resource.(*amqp.Connection)
 	return conn, ok
+}
+
+// brokerLive reports whether the AMQP connection is usable right now: it must
+// be non-nil AND not closed. This is the single canonical gate every addon
+// background loop checks immediately before dispatching through the broker.
+//
+// It covers BOTH failure modes in one expression:
+//   - boot-degraded: the broker was unreachable at boot, so the resource holds
+//     a typed-nil *amqp.Connection (conn == nil).
+//   - runtime-drop:  the broker was live at boot but the connection later
+//     closed (conn != nil but conn.IsClosed()).
+//
+// The `conn != nil` guard short-circuits before conn.IsClosed(), which would
+// itself panic on a nil receiver (it reads atomic state on the struct).
+//
+// Mirrors the reactor Runner's BrokerAvailable gate; when false the caller
+// must SKIP — leaving DB rows / schedule state / events pending for replay
+// after the broker recovers — never mark the work failed and never consume it.
+func brokerLive(conn *amqp.Connection) bool {
+	return conn != nil && !conn.IsClosed()
 }
 
 // RPCTransport returns the generic rpc.Transport when the addon is

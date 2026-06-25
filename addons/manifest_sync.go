@@ -37,8 +37,12 @@ func bootstrapManifestSync(ctx context.Context, app *runtime.ServiceApp) error {
 	if !ok {
 		return nil
 	}
+	// RabbitMQ(app) returns (nil, true) when the broker was unreachable at
+	// boot, so `ok` alone does not mean we have a usable connection. Without
+	// this nil guard the cron/event goroutines would call InvokeDescribe →
+	// conn.Channel() on a nil *amqp.Connection → panic, crashing the process.
 	conn, ok := RabbitMQ(app)
-	if !ok {
+	if !ok || conn == nil {
 		return nil
 	}
 	logger, _ := Logger(app)
@@ -53,6 +57,10 @@ func bootstrapManifestSync(ctx context.Context, app *runtime.ServiceApp) error {
 		Deps:             deps,
 		CronInterval:     envDurOrDefault("MANIFEST_SYNC_INTERVAL", 1*time.Hour),
 		EnumerateTypeIDs: deps.enumerateAllIntegrationTypeIDs,
+		// Gate every sync on broker liveness — re-evaluated per tick so a
+		// runtime drop (conn closes after a healthy boot) skips the sync
+		// instead of dispatching a describe RPC through a dead connection.
+		BrokerLive: func() bool { return brokerLive(conn) },
 	}
 
 	go func() {
