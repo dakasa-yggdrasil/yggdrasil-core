@@ -210,3 +210,32 @@ func newOPJWTVerifier(storage *oidc.Storage, issuer string, audiences []string) 
 		leeway:    30 * time.Second,
 	}
 }
+
+// newSurfaceJWTVerifier builds an audience-AGNOSTIC verifier for the surface
+// ForwardAuth path. Unlike newOPJWTVerifier it carries no boot-time audience
+// allowlist: the expected audience is supplied per-request via
+// VerifyForAudience (from the ForwardAuth middleware's ?aud= param). Returns
+// nil — disabling the Bearer surface path — when storage is nil or the issuer
+// is empty. The cookie path in handleAuthVerify is unaffected by a nil here.
+func newSurfaceJWTVerifier(storage *oidc.Storage, issuer string) *opJWTVerifier {
+	if storage == nil || strings.TrimSpace(issuer) == "" {
+		return nil
+	}
+	return &opJWTVerifier{
+		keys: func(ctx context.Context) ([]verifyPublicKey, error) {
+			ks, err := storage.KeySet(ctx)
+			if err != nil {
+				return nil, err
+			}
+			out := make([]verifyPublicKey, 0, len(ks))
+			for _, k := range ks {
+				out = append(out, k) // op.Key satisfies verifyPublicKey
+			}
+			return out, nil
+		},
+		issuer: strings.TrimSpace(issuer),
+		// audiences intentionally nil: VerifyForAudience checks per-request.
+		now:    time.Now,
+		leeway: 30 * time.Second,
+	}
+}

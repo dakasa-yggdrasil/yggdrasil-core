@@ -129,3 +129,14 @@ func TestVerifyForAudience_NilVerifier(t *testing.T) {
 		t.Fatal("nil verifier must fail closed")
 	}
 }
+
+func TestNewSurfaceJWTVerifier_NilWhenUnconfigured(t *testing.T) {
+	// No storage / blank issuer → nil (disabled), same fail-closed posture as
+	// newOPJWTVerifier.
+	if v := newSurfaceJWTVerifier(nil, "https://yggdrasil.dakasa.me/oidc"); v != nil {
+		t.Error("nil storage must yield a nil verifier")
+	}
+	if v := newSurfaceJWTVerifier(nil, ""); v != nil {
+		t.Error("blank issuer must yield a nil verifier")
+	}
+}

@@ -793,6 +793,13 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 			server.oidcIssuerURL,
 			parseConsoleJWTAudiences(os.Getenv("YGGDRASIL_CONSOLE_JWT_AUDIENCES")),
 		)
+		// Surface ForwardAuth verifier: audience-agnostic, validated per-request
+		// against the middleware's ?aud= param (see handleAuthVerify). Built
+		// from the same in-process OP signing key set as consoleJWTVerifier.
+		server.surfaceJWTVerifier = newSurfaceJWTVerifier(
+			oidc.NewStorage(server.db, server.oidcIssuerURL),
+			server.oidcIssuerURL,
+		)
 	}
 
 	// §13 INTEGRATION_CONTRACT: RFC 7662 introspection + admin session
@@ -1136,6 +1143,14 @@ type Server struct {
 	// tartaro-api proxy forward a collaborator's cookie JWT to /api/v1/* and
 	// have it authenticate as that collaborator.
 	consoleJWTVerifier *opJWTVerifier
+	// surfaceJWTVerifier, when non-nil, lets handleAuthVerify validate a Bearer
+	// JWT for the surface ForwardAuth path against the audience the middleware
+	// passes via ?aud=<surface>. Unlike consoleJWTVerifier it has no boot-time
+	// audience allowlist — the audience is per-request — so it can authenticate
+	// surface-scoped tokens (e.g. aud=dakasa-ai for the núcleo) WITHOUT widening
+	// the console gate. nil = disabled (OIDC OP not mounted); the cookie path in
+	// handleAuthVerify still works.
+	surfaceJWTVerifier *opJWTVerifier
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {
