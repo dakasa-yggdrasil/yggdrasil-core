@@ -50,6 +50,10 @@ func main() {
 	}
 	defer func() { _ = db.Close() }()
 
+	if err := waitForPostgres(db.Ping, 90*time.Second, 3*time.Second); err != nil {
+		panic(err)
+	}
+
 	if err := goose.SetDialect("postgres"); err != nil {
 		panic(err)
 	}
@@ -77,6 +81,29 @@ func usage() {
 
 func openDB() (*sql.DB, error) {
 	return sql.Open("postgres", psql.LoadConfig().DSN())
+}
+
+var errPostgresUnreachable = errors.New("postgres unreachable")
+
+// waitForPostgres polls ping until it succeeds or the timeout elapses,
+// sleeping interval between attempts. It always attempts at least once.
+// Returns errPostgresUnreachable (wrapping the last ping error) on timeout.
+// This lets the entrypoint wait for a not-yet-ready Postgres instead of
+// panicking and forcing a pod restart loop.
+func waitForPostgres(ping func() error, timeout, interval time.Duration) error {
+	deadline := time.Now().Add(timeout)
+	var lastErr error
+	for {
+		if err := ping(); err == nil {
+			return nil
+		} else {
+			lastErr = err
+		}
+		if !time.Now().Before(deadline) {
+			return fmt.Errorf("%w after %s: %v", errPostgresUnreachable, timeout, lastErr)
+		}
+		time.Sleep(interval)
+	}
 }
 
 func migrationNameFromArgs(args []string) string {
