@@ -94,6 +94,21 @@ func runHeimdallInboxDispatcherLoop(
 // the throughput; bursts that exceed it land in the inbox and drain at
 // the dispatcher's pace without overwhelming downstream goroutines.
 func runHeimdallInboxDispatcherPass(ctx context.Context, db *sql.DB, conn *amqp.Connection, logger *zap.Logger) {
+	// Broker gate — skip the ENTIRE pass when the broker is unavailable.
+	// The pass marks the inbox row processed_at = NOW() (committing the tx)
+	// BEFORE it would dispatch; if we ran it with a dead broker the row would
+	// be consumed (no longer "pending") yet never executed, losing the alert.
+	// Bailing here leaves processed_at IS NULL so the row is re-picked on the
+	// next live pass — replay, not loss. nil conn = boot-degraded; closed =
+	// runtime drop. (The post-commit conn==nil branch below is now only the
+	// slim/dev fallback for the unreachable mid-pass-drop race.)
+	if !brokerLive(conn) {
+		if logger != nil {
+			logger.Warn("heimdall_inbox_dispatcher: broker unavailable — skipping pass, inbox row left pending for replay")
+		}
+		return
+	}
+
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		if logger != nil {
@@ -197,12 +212,14 @@ func runHeimdallInboxDispatcherPass(ctx context.Context, db *sql.DB, conn *amqp.
 		return
 	}
 
-	if conn == nil {
-		// Slim mode (no AMQP) — the run row is in the table for inspection
-		// but no goroutine will execute it. That matches dispatchAsync
-		// behavior in slim/dev mode.
+	if !brokerLive(conn) {
+		// Slim mode (no AMQP) or a broker drop between the top gate and this
+		// point — the run row is in the table for inspection but no goroutine
+		// will execute it. Matches dispatchAsync behavior in slim/dev mode.
+		// Re-checking brokerLive (nil OR closed) keeps the bare goroutine
+		// below from calling conn.Channel() on a dead connection.
 		if logger != nil {
-			logger.Info("heimdall_inbox_dispatcher: marked processed (slim mode, no AMQP)",
+			logger.Info("heimdall_inbox_dispatcher: marked processed (broker unavailable, no dispatch)",
 				zap.String("inbox_id", inboxID), zap.String("run_id", runID.String()))
 		}
 		return

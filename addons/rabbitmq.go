@@ -106,6 +106,15 @@ func bootstrapRabbitMQ(ctx context.Context, app *runtime.ServiceApp) error {
 }
 
 // RabbitMQ returns the shared RabbitMQ connection when the addon is installed.
+//
+// IMPORTANT: when the broker is unreachable at boot the addon installs the
+// resource key with a TYPED-NIL value (see bootstrapRabbitMQ's soft-fail
+// path: app.SetResource("rabbitmq", (*amqp.Connection)(nil))). In that case
+// this accessor returns (nil, true) — the `ok` is true because the key
+// exists, but the connection is nil. Callers that start a background loop
+// dispatching through the broker MUST therefore also check the connection is
+// live (use brokerLive) and not rely on `ok` alone; otherwise a bare
+// goroutine would dereference a nil *amqp.Connection and panic the process.
 func RabbitMQ(app *runtime.ServiceApp) (*amqp.Connection, bool) {
 	resource, ok := app.Resource("rabbitmq")
 	if !ok {
@@ -114,6 +123,26 @@ func RabbitMQ(app *runtime.ServiceApp) (*amqp.Connection, bool) {
 
 	conn, ok := resource.(*amqp.Connection)
 	return conn, ok
+}
+
+// brokerLive reports whether the AMQP connection is usable right now: it must
+// be non-nil AND not closed. This is the single canonical gate every addon
+// background loop checks immediately before dispatching through the broker.
+//
+// It covers BOTH failure modes in one expression:
+//   - boot-degraded: the broker was unreachable at boot, so the resource holds
+//     a typed-nil *amqp.Connection (conn == nil).
+//   - runtime-drop:  the broker was live at boot but the connection later
+//     closed (conn != nil but conn.IsClosed()).
+//
+// The `conn != nil` guard short-circuits before conn.IsClosed(), which would
+// itself panic on a nil receiver (it reads atomic state on the struct).
+//
+// Mirrors the reactor Runner's BrokerAvailable gate; when false the caller
+// must SKIP — leaving DB rows / schedule state / events pending for replay
+// after the broker recovers — never mark the work failed and never consume it.
+func brokerLive(conn *amqp.Connection) bool {
+	return conn != nil && !conn.IsClosed()
 }
 
 // RPCTransport returns the generic rpc.Transport when the addon is

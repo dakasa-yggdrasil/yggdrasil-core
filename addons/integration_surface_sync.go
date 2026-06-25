@@ -66,7 +66,11 @@ func newSurfaceQueryDispatcher(conn *amqp.Connection, db *sql.DB) *surfaceQueryD
 }
 
 func (d *surfaceQueryDispatcher) Execute(ctx context.Context, req model.ExecuteIntegrationRequest) (any, error) {
-	if d.conn == nil {
+	// Guard nil AND closed: ExecuteIntegration calls conn.Channel(), which
+	// panics on a nil receiver and errors on a closed one. Returning the
+	// "unavailable" error keeps the surface-query handler at a clean 503
+	// instead of letting a dead conn surface as a panic on the request path.
+	if !brokerLive(d.conn) {
 		return nil, fmt.Errorf("rabbitmq connection unavailable")
 	}
 	resp, err := messagecontroller.ExecuteIntegration(ctx, d.conn, d.db, req)

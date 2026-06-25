@@ -389,12 +389,18 @@ func processMatchedTrigger(
 		return fmt.Errorf("emit workflow.event.matched: %w", err)
 	}
 
-	// RabbitMQ is required for actual dispatch (RunWorkflow publishes
-	// step messages). Without it, the matched event still records the
-	// hit so an operator can replay later, but we don't try to run.
-	if conn == nil {
+	// RabbitMQ is required for actual dispatch (RunWorkflow publishes step
+	// messages). When the broker is unavailable we still record the match
+	// (workflow.event.matched committed above) so an operator can replay
+	// later, but we do NOT dispatch — and we do NOT mark anything failed.
+	//
+	// brokerLive guards nil (boot-degraded typed-nil conn) AND closed
+	// (runtime drop) in one check, so the dispatcher's bare goroutine never
+	// receives a dead connection and never panics on conn.Channel(). This is
+	// the canonical degrade-not-die gate for this loop.
+	if !brokerLive(conn) {
 		if logger != nil {
-			logger.Warn("workflow_event_triggers: skip dispatch — no rabbitmq connection",
+			logger.Warn("workflow_event_triggers: skip dispatch — rabbitmq connection unavailable",
 				zap.String("workflow_manifest_id", trigger.manifestID),
 				zap.String("event_id", event.EventID.String()))
 		}

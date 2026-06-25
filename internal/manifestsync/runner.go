@@ -18,6 +18,15 @@ type Runner struct {
 	// each cron tick. Required when CronInterval > 0.
 	EnumerateTypeIDs func(ctx context.Context) ([]uuid.UUID, error)
 
+	// BrokerLive, when set, is consulted before every sync (both the
+	// event-driven Notify path and the cron sweep). When it returns false the
+	// sync is skipped: SyncIntegrationType calls InvokeDescribe → a broker RPC
+	// (conn.Channel()), which panics on a nil/closed connection. Skipping
+	// leaves the integration_type unchanged so the next live tick re-syncs it.
+	// When nil the runner always proceeds (backward-compatible default for
+	// callers — e.g. tests — that do not wire it).
+	BrokerLive func() bool
+
 	mu      sync.Mutex
 	typeMtx map[uuid.UUID]*sync.Mutex
 }
@@ -46,9 +55,15 @@ func (r *Runner) Run(ctx context.Context) error {
 			return ctx.Err()
 
 		case id := <-notifyCh:
+			if r.brokerUnavailable() {
+				continue
+			}
 			go r.runOne(ctx, id)
 
 		case <-cronCh:
+			if r.brokerUnavailable() {
+				continue
+			}
 			ids, err := r.EnumerateTypeIDs(ctx)
 			if err != nil {
 				continue
@@ -60,7 +75,21 @@ func (r *Runner) Run(ctx context.Context) error {
 	}
 }
 
+// brokerUnavailable reports whether the broker is known to be down. The gate
+// lives on BOTH the select arm (so we never spawn a goroutine) and the
+// goroutine body (so a drop between dispatch and execution is still caught) —
+// the runOne re-check closes the race where the conn dies in that window.
+func (r *Runner) brokerUnavailable() bool {
+	return r.BrokerLive != nil && !r.BrokerLive()
+}
+
 func (r *Runner) runOne(ctx context.Context, id uuid.UUID) {
+	// Re-check liveness inside the goroutine: the broker can drop between the
+	// dispatch decision and the actual InvokeDescribe RPC. Skipping here keeps
+	// the bare goroutine from calling conn.Channel() on a dead connection.
+	if r.brokerUnavailable() {
+		return
+	}
 	m := r.lockFor(id)
 	m.Lock()
 	defer m.Unlock()
