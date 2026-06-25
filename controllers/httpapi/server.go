@@ -896,7 +896,12 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 		}
 
 		token, ok := extractAuthToken(r)
-		if !ok {
+		if !ok || s.db == nil {
+			// No session token, or no DB to resolve it against → fail closed.
+			// The s.db nil-guard keeps the gate from panicking deep in
+			// database/sql when a Bearer that is NOT an accepted console JWT
+			// (e.g. a surface-scoped aud=dakasa-ai token, or any opaque token)
+			// reaches the session path on a Server built without a DB.
 			writeJSONError(w, http.StatusUnauthorized, "unauthenticated")
 			return
 		}
