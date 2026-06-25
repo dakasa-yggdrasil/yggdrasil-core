@@ -800,6 +800,9 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 			oidc.NewStorage(server.db, server.oidcIssuerURL),
 			server.oidcIssuerURL,
 		)
+		if server.surfaceJWTVerifier != nil {
+			server.surfaceVerify = server.surfaceJWTVerifier.VerifyForAudience
+		}
 	}
 
 	// §13 INTEGRATION_CONTRACT: RFC 7662 introspection + admin session
@@ -1151,6 +1154,12 @@ type Server struct {
 	// the console gate. nil = disabled (OIDC OP not mounted); the cookie path in
 	// handleAuthVerify still works.
 	surfaceJWTVerifier *opJWTVerifier
+	// surfaceVerify is the audience-scoped Bearer validator handleAuthVerify
+	// calls. In production it is set (in New) to surfaceJWTVerifier.VerifyForAudience;
+	// tests inject a fake. nil → the Bearer surface path is skipped (cookie path
+	// still works). Keeping it a func makes the handler unit-testable without a
+	// DB or real OP keys.
+	surfaceVerify func(ctx context.Context, token, expectedAud string) (map[string]any, error)
 }
 
 func (s *Server) withLogging(next http.Handler) http.Handler {
