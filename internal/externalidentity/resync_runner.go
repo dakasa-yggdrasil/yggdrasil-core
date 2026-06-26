@@ -30,25 +30,8 @@ import (
 // Returns the number of instances processed (for tests/telemetry). Errors
 // processing one instance are logged-and-skipped; the tick keeps going.
 func ResyncTick(ctx context.Context, db *sql.DB, conn *amqp.Connection) (int, error) {
-	rows, err := db.QueryContext(ctx, `
-		SELECT id FROM manifests
-		WHERE kind = 'integration_instance'
-		  AND active = true
-	`)
+	instances, err := listResyncInstances(ctx, db)
 	if err != nil {
-		return 0, fmt.Errorf("list integration_instance manifests: %w", err)
-	}
-	defer rows.Close()
-
-	var instances []uuid.UUID
-	for rows.Next() {
-		var id uuid.UUID
-		if err := rows.Scan(&id); err != nil {
-			return 0, err
-		}
-		instances = append(instances, id)
-	}
-	if err := rows.Err(); err != nil {
 		return 0, err
 	}
 
@@ -62,6 +45,49 @@ func ResyncTick(ctx context.Context, db *sql.DB, conn *amqp.Connection) (int, er
 		processed++
 	}
 	return processed, nil
+}
+
+// listResyncInstances returns the IDs of active integration_instance manifests whose
+// integration_type actually declares the list_identities capability — in its
+// action_catalog or its capabilities list. This honors ResyncTick's contract (only
+// identity-source instances are probed) and, critically, avoids dispatching
+// list_identities to adapters that don't support it: such a dispatch reaches the adapter
+// and is rejected with unsupported_capability, which the adapter logs at error level and
+// Heimdall then surfaces as a spurious "adapter contract mismatch" (observed for the
+// ai-guardian fleet, whose type declares no list_identities). The JSONB containment uses
+// `@>`, so action_catalog entries carrying extra fields (description, category, …) still
+// match on name; type_ref is resolved by (namespace, name), the canonical instance→type
+// linkage used throughout the manifest catalog.
+func listResyncInstances(ctx context.Context, db *sql.DB) ([]uuid.UUID, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT ii.id
+		FROM manifests ii
+		JOIN manifests it
+		  ON it.kind = 'integration_type'
+		 AND it.active = true
+		 AND it.namespace = (ii.spec->'type_ref'->>'namespace')
+		 AND it.name      = (ii.spec->'type_ref'->>'name')
+		WHERE ii.kind = 'integration_instance'
+		  AND ii.active = true
+		  AND (
+		        it.spec->'action_catalog' @> jsonb_build_array(jsonb_build_object('name', 'list_identities'))
+		     OR it.spec->'capabilities'   @> '["list_identities"]'::jsonb
+		      )
+	`)
+	if err != nil {
+		return nil, fmt.Errorf("list integration_instance manifests: %w", err)
+	}
+	defer rows.Close()
+
+	var instances []uuid.UUID
+	for rows.Next() {
+		var id uuid.UUID
+		if err := rows.Scan(&id); err != nil {
+			return nil, err
+		}
+		instances = append(instances, id)
+	}
+	return instances, rows.Err()
 }
 
 func resyncInstance(ctx context.Context, db *sql.DB, conn *amqp.Connection, instanceID uuid.UUID) error {
