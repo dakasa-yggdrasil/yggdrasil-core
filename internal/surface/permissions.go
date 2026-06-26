@@ -38,8 +38,18 @@ func (r *PermissionsReconciler) Reconcile(ctx context.Context, surfaceID string,
 		return fmt.Errorf("delete prev perms %s: %w", surfaceID, err)
 	}
 	for _, p := range perms {
+		// Idempotent on (name) — mirrors repository.RegisterPermission. A
+		// permission name is globally unique (permissions_catalog_name_unique),
+		// so when the same name is already registered (e.g. by another surface
+		// or a bootstrap path) a plain INSERT collides with 23505 and the whole
+		// reconcile rolls back, failing every tick (~30s) forever. Last-writer-
+		// wins: this surface takes ownership and refreshes the description.
 		if _, err := tx.ExecContext(ctx,
-			`INSERT INTO public.permissions_catalog (name, description, registered_by) VALUES ($1, $2, $3)`,
+			`INSERT INTO public.permissions_catalog (name, description, registered_by) VALUES ($1, $2, $3)
+			 ON CONFLICT (name) DO UPDATE SET
+			     description   = EXCLUDED.description,
+			     registered_by = EXCLUDED.registered_by,
+			     updated_at    = NOW()`,
 			p.ID, p.Label, surfaceID,
 		); err != nil {
 			return fmt.Errorf("insert perm %s: %w", p.ID, err)
