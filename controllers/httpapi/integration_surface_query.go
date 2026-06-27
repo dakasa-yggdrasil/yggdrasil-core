@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"strings"
 
+	sdksurface "github.com/dakasa-yggdrasil/yggdrasil-sdk-go/surface"
+
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 )
 
@@ -35,14 +37,28 @@ func (s *Server) handleIntegrationSurfaceQuery() http.HandlerFunc {
 			writeJSONError(w, http.StatusBadRequest, "query_name required")
 			return
 		}
+		input := map[string]any{
+			"query_name": body.QueryName,
+			"params":     body.Params,
+		}
+		// SECURITY: stamp the SERVER-VERIFIED caller onto the outbound envelope so
+		// caller-scoped adapter reads (e.g. CLT "Meu RH") can scope by it instead
+		// of a spoofable client-supplied id. The collaborator id is taken from the
+		// session claims attached by requireAuthenticatedConsoleAPIs — NEVER from
+		// the request body/params. Token/automation callers have no collaborator
+		// claim: omit the field rather than stamping an empty string (the adapter
+		// treats absence as "no verified caller"). See
+		// surface.InputVerifiedCallerID for the contract.
+		if claims, ok := claimsFromContext(r.Context()); ok {
+			if collabID, _ := claims["collaborator_id"].(string); strings.TrimSpace(collabID) != "" {
+				input[sdksurface.InputVerifiedCallerID] = collabID
+			}
+		}
 		req := model.ExecuteIntegrationRequest{
 			Integration: model.ManifestSelector{ManifestID: instanceID},
 			Operation:   model.OperationOnSurfaceQuery,
 			Capability:  model.OperationOnSurfaceQuery,
-			Input: map[string]any{
-				"query_name": body.QueryName,
-				"params":     body.Params,
-			},
+			Input:       input,
 		}
 		resp, err := s.surfaceQueryDispatcher.Execute(r.Context(), req)
 		if err != nil {
