@@ -24,12 +24,22 @@ type Diff struct {
 //
 // Operator-owned fields (preserved across sync if present in `current`):
 //
-//   - Reactors (since the framework launched). If `current.Reactors` is
-//     non-empty, the operator has explicitly configured reactors —
-//     keep current.Reactors and ignore live.Reactors. This preserves
-//     operator overrides across manifest_sync cycles. If empty, adopt
-//     `live.Reactors` so adapters can seed their canonical reactor
-//     subscriptions on a fresh install.
+//   - Reactors — UNION of adapter-declared and operator-declared
+//     reactors (since 2026-06-27). The adapter's live-declared reactors
+//     (`live.Reactors`) are ALWAYS present in the result; any
+//     operator-declared reactor in `current.Reactors` that the adapter
+//     does NOT declare is appended. Dedup is by the (EventType,
+//     Capability) pair, with the adapter (live) entry winning on a
+//     collision.
+//
+//     This replaces the old "operator override fully wins" semantics,
+//     which had a sharp edge: an INCOMPLETE operator override (e.g. a
+//     single stored reactor) dropped ALL the adapter's other declared
+//     reactors. In prod, github had only `session.terminated` stored
+//     while the adapter declared 10, so its membership/team reactors
+//     never materialized after a manifest_sync tick. Unioning keeps the
+//     adapter's full canonical subscription set intact while still
+//     honoring operator-only additions on top.
 //
 //   - Domain (INTEGRATION_CONTRACT §17, since 2026-05-28). Adapters
 //     declare their `spec.domain` slug via YAML/JSON manifest at
@@ -56,10 +66,11 @@ type Diff struct {
 // section 5.1).
 func MergeSpec(current, live model.IntegrationTypeManifestSpec) (model.IntegrationTypeManifestSpec, Diff) {
 	out := live
-	if len(current.Reactors) > 0 {
-		out.Reactors = current.Reactors // operator override wins
-	}
-	// else: keep live.Reactors (adapter-declared defaults seed the manifest)
+	// Reactors — UNION: the adapter's live-declared reactors are always
+	// kept; operator-declared reactors not already present (by the
+	// (event_type, capability) pair) are appended. An incomplete operator
+	// override therefore no longer drops the adapter's other reactors.
+	out.Reactors = unionReactors(live.Reactors, current.Reactors)
 
 	// §17 — Domain and Dashboard live in the operator-managed manifest
 	// (the YAML/JSON file POSTed at registration), not in the adapter's
@@ -84,6 +95,42 @@ func MergeSpec(current, live model.IntegrationTypeManifestSpec) (model.Integrati
 	}
 
 	return out, computeDiff(current, out)
+}
+
+// unionReactors returns the union of the adapter-declared (`live`) and
+// operator-declared (`current`) reactor sets, deduplicated by the
+// (EventType, Capability) pair. The live entries come first and win on a
+// collision; operator-only entries (those whose pair is not already in
+// live) are appended in their original order. Returns nil when both
+// inputs are empty so a manifest with no reactors anywhere stays nil
+// rather than becoming an empty slice.
+func unionReactors(live, current []model.IntegrationTypeReactor) []model.IntegrationTypeReactor {
+	if len(live) == 0 && len(current) == 0 {
+		return nil
+	}
+	type reactorKey struct {
+		eventType  string
+		capability string
+	}
+	seen := make(map[reactorKey]struct{}, len(live)+len(current))
+	out := make([]model.IntegrationTypeReactor, 0, len(live)+len(current))
+	for _, r := range live {
+		k := reactorKey{eventType: r.EventType, capability: r.Capability}
+		if _, dup := seen[k]; dup {
+			continue
+		}
+		seen[k] = struct{}{}
+		out = append(out, r)
+	}
+	for _, r := range current {
+		k := reactorKey{eventType: r.EventType, capability: r.Capability}
+		if _, dup := seen[k]; dup {
+			continue
+		}
+		seen[k] = struct{}{}
+		out = append(out, r)
+	}
+	return out
 }
 
 func computeDiff(before, after model.IntegrationTypeManifestSpec) Diff {

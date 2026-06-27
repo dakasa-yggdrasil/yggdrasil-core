@@ -64,10 +64,13 @@ func TestMergeSpec_CapabilitiesChangedFlag(t *testing.T) {
 	assert.True(t, diff.CapabilitiesChanged)
 }
 
-func TestMergeSpec_OperatorReactorsBeatLive(t *testing.T) {
-	// When the operator has already configured reactors, those win even if
-	// the adapter's describe response also declares some. Operator override
-	// always beats adapter-declared defaults.
+func TestMergeSpec_UnionsOperatorAndLiveReactors(t *testing.T) {
+	// UNION semantics (since 2026-06-27): operator-declared reactors no
+	// longer REPLACE the adapter's set; they are unioned with it. The
+	// adapter's live-declared reactor is always present, and the
+	// operator-only reactor (a different (event_type, capability) pair) is
+	// appended. This is the regression guard that an incomplete operator
+	// override no longer drops the adapter's reactors.
 	current := model.IntegrationTypeManifestSpec{
 		Reactors: []model.IntegrationTypeReactor{{EventType: "e1", Capability: "c1"}},
 	}
@@ -75,8 +78,10 @@ func TestMergeSpec_OperatorReactorsBeatLive(t *testing.T) {
 		Reactors: []model.IntegrationTypeReactor{{EventType: "e2", Capability: "c2"}},
 	}
 	got, _ := MergeSpec(current, live)
-	require.Len(t, got.Reactors, 1)
-	assert.Equal(t, "e1", got.Reactors[0].EventType, "operator's reactors must win over adapter-declared")
+	require.Len(t, got.Reactors, 2, "union must contain both adapter and operator reactors")
+	// Live (adapter) entries come first.
+	assert.Equal(t, "e2", got.Reactors[0].EventType, "adapter-declared reactor must be present")
+	assert.Equal(t, "e1", got.Reactors[1].EventType, "operator-only reactor must be appended")
 }
 
 func TestMergeSpec_AdopsLiveReactorsWhenCurrentEmpty(t *testing.T) {
@@ -99,6 +104,47 @@ func TestMergeSpec_AdopsLiveReactorsWhenCurrentEmpty(t *testing.T) {
 	require.Len(t, got.Reactors, 1)
 	assert.Equal(t, "collaborator.session.terminated", got.Reactors[0].EventType)
 	assert.Equal(t, "on_collaborator_session_terminated", got.Reactors[0].Capability)
+}
+
+func TestMergeSpec_UnionsReactorsNotReplace(t *testing.T) {
+	// Regression guard for the prod incident: an INCOMPLETE operator
+	// override (1 stored reactor) must NOT drop the adapter's other
+	// declared reactors. The adapter declares 3 reactors (one of which
+	// the operator also stored); the merged result must carry all 3 from
+	// the adapter (union, no replacement). A reactor the operator declared
+	// that the adapter does NOT declare must also be preserved.
+	overlap := model.IntegrationTypeReactor{EventType: "session.terminated", Capability: "on_session_terminated"}
+	operatorOnly := model.IntegrationTypeReactor{EventType: "custom.audit", Capability: "on_custom_audit"}
+
+	current := model.IntegrationTypeManifestSpec{
+		// Operator stored only the overlap reactor plus a bespoke one the
+		// adapter never declares.
+		Reactors: []model.IntegrationTypeReactor{overlap, operatorOnly},
+	}
+	live := model.IntegrationTypeManifestSpec{
+		// Adapter declares its full canonical set of 3 (incl. the overlap).
+		Reactors: []model.IntegrationTypeReactor{
+			overlap,
+			{EventType: "team.created", Capability: "on_team_created"},
+			{EventType: "team_membership.added", Capability: "on_team_membership_added"},
+		},
+	}
+
+	got, _ := MergeSpec(current, live)
+
+	// All 3 adapter reactors are present (the incomplete override did not
+	// drop the membership/team reactors), plus the 1 operator-only reactor,
+	// with the overlap deduped → 4 total.
+	require.Len(t, got.Reactors, 4, "union must keep all adapter reactors plus operator-only, deduped")
+
+	have := map[string]bool{}
+	for _, r := range got.Reactors {
+		have[r.EventType+"|"+r.Capability] = true
+	}
+	assert.True(t, have["session.terminated|on_session_terminated"], "overlap reactor present once")
+	assert.True(t, have["team.created|on_team_created"], "adapter team.created reactor must NOT be dropped")
+	assert.True(t, have["team_membership.added|on_team_membership_added"], "adapter membership reactor must NOT be dropped")
+	assert.True(t, have["custom.audit|on_custom_audit"], "operator-only reactor must be preserved")
 }
 
 func TestMergeSpec_NoReactorsAnywhere(t *testing.T) {
