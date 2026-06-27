@@ -378,21 +378,59 @@ func (c *rabbitmqReactorCaller) embedTeamContext(
 	}
 
 	// _context.team_provisioned — the external group the team was mirrored to.
-	// No-op when no log row exists yet (adapter creates from scratch).
+	// Primary path: the team_provisioning_log row for this (team, instance).
+	// This covers team.created / team.updated and team_membership.* where the
+	// row still exists.
 	row, err := repository.GetTeamProvisioningLog(ctx, c.db, teamID, instanceID)
-	if err != nil || row.ExternalID == "" {
+	if err == nil && row.ExternalID != "" {
+		tp := map[string]any{
+			"external_id": row.ExternalID,
+		}
+		if len(row.ExternalMetadata) > 0 && string(row.ExternalMetadata) != "null" {
+			var meta map[string]any
+			if json.Unmarshal(row.ExternalMetadata, &meta) == nil && meta != nil {
+				tp["external_metadata"] = meta
+			}
+		}
+		ctxBlock["team_provisioned"] = tp
 		return
 	}
-	tp := map[string]any{
-		"external_id": row.ExternalID,
+
+	// Fallback path (team.deleted): the team row — and with it, the
+	// team_provisioning_log rows (ON DELETE CASCADE, migration 00043) — is
+	// already gone by the time this async reaction runs, so the log lookup
+	// returns empty. handleTeamDelete snapshots the external_ids into the
+	// team.deleted event payload under `provisioned[<instance_id>]` precisely
+	// for this case. Read the per-instance captured value so on_team_deleted
+	// still has the external_id to deprovision instead of orphaning it.
+	if tp, ok := provisionedFromInput(input, integrationInstanceID); ok {
+		ctxBlock["team_provisioned"] = tp
 	}
-	if len(row.ExternalMetadata) > 0 && string(row.ExternalMetadata) != "null" {
-		var meta map[string]any
-		if json.Unmarshal(row.ExternalMetadata, &meta) == nil && meta != nil {
-			tp["external_metadata"] = meta
-		}
+}
+
+// provisionedFromInput extracts the captured team_provisioned block for one
+// integration instance from input["provisioned"][instanceID]. The shape is
+// {"<instance_id>": {"external_id": "...", "external_metadata": {...}}, ...}
+// as written by handleTeamDelete. Returns (nil, false) when absent or the
+// entry has no external_id.
+func provisionedFromInput(input map[string]any, instanceID string) (map[string]any, bool) {
+	prov, ok := input["provisioned"].(map[string]any)
+	if !ok {
+		return nil, false
 	}
-	ctxBlock["team_provisioned"] = tp
+	entry, ok := prov[instanceID].(map[string]any)
+	if !ok {
+		return nil, false
+	}
+	extID, _ := entry["external_id"].(string)
+	if strings.TrimSpace(extID) == "" {
+		return nil, false
+	}
+	tp := map[string]any{"external_id": extID}
+	if meta, ok := entry["external_metadata"].(map[string]any); ok && meta != nil {
+		tp["external_metadata"] = meta
+	}
+	return tp, true
 }
 
 func envDurOrDefault(key string, def time.Duration) time.Duration {

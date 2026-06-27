@@ -148,3 +148,75 @@ func TestEmbedTeamContext_MembershipKeysOnTeamID(t *testing.T) {
 		t.Fatalf("_context.team_provisioned.external_id = %v, want %q", got, "grp-ext-123")
 	}
 }
+
+// TestProvisionedFromInput_FallbackForTeamDeleted proves the team.deleted
+// fallback: when the team_provisioning_log row is gone (cascade), the
+// captured external_ids in input["provisioned"][instance_id] are surfaced
+// as the team_provisioned block so on_team_deleted can still deprovision.
+// Pure helper — no DB required.
+func TestProvisionedFromInput_FallbackForTeamDeleted(t *testing.T) {
+	instanceA := uuid.New().String()
+	instanceB := uuid.New().String()
+
+	// Payload shape handleTeamDelete writes into the team.deleted event:
+	// provisioned keyed by integration_instance_id.
+	input := map[string]any{
+		"id":   uuid.New().String(),
+		"slug": "deleted-team",
+		"provisioned": map[string]any{
+			instanceA: map[string]any{
+				"external_id":       "gh-team-42",
+				"external_metadata": map[string]any{"org": "dakasa-co"},
+			},
+			instanceB: map[string]any{
+				"external_id": "slack-C123",
+			},
+		},
+	}
+
+	// Instance A: has external_id + metadata.
+	tpA, ok := provisionedFromInput(input, instanceA)
+	if !ok {
+		t.Fatalf("expected provisionedFromInput to resolve instance A")
+	}
+	if tpA["external_id"] != "gh-team-42" {
+		t.Fatalf("instance A external_id = %v, want gh-team-42", tpA["external_id"])
+	}
+	metaA, ok := tpA["external_metadata"].(map[string]any)
+	if !ok || metaA["org"] != "dakasa-co" {
+		t.Fatalf("instance A external_metadata = %v, want {org: dakasa-co}", tpA["external_metadata"])
+	}
+
+	// Instance B: external_id only, no metadata.
+	tpB, ok := provisionedFromInput(input, instanceB)
+	if !ok {
+		t.Fatalf("expected provisionedFromInput to resolve instance B")
+	}
+	if tpB["external_id"] != "slack-C123" {
+		t.Fatalf("instance B external_id = %v, want slack-C123", tpB["external_id"])
+	}
+	if _, has := tpB["external_metadata"]; has {
+		t.Fatalf("instance B must not carry external_metadata when absent in input")
+	}
+
+	// Unknown instance: not present in provisioned → (nil, false).
+	if _, ok := provisionedFromInput(input, uuid.New().String()); ok {
+		t.Fatalf("unknown instance must not resolve")
+	}
+
+	// No provisioned key at all (team.created/updated path) → (nil, false).
+	if _, ok := provisionedFromInput(map[string]any{"id": "x"}, instanceA); ok {
+		t.Fatalf("missing provisioned key must not resolve")
+	}
+
+	// Entry present but external_id empty → (nil, false) so we don't inject
+	// a useless empty team_provisioned block.
+	emptyInput := map[string]any{
+		"provisioned": map[string]any{
+			instanceA: map[string]any{"external_id": ""},
+		},
+	}
+	if _, ok := provisionedFromInput(emptyInput, instanceA); ok {
+		t.Fatalf("empty external_id must not resolve")
+	}
+}

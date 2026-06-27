@@ -1986,6 +1986,44 @@ func (s *Server) handleTeamDelete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Capture the provisioned external_ids BEFORE the delete. The
+	// team_provisioning_log rows have ON DELETE CASCADE on team_id
+	// (migration 00043), so deleting the team wipes them — but the async
+	// on_team_deleted reaction needs each external_id to deprovision the
+	// mirrored resource (GitHub team, Slack channel, ...). The dispatcher's
+	// log lookup returns empty after the cascade, so we snapshot the rows
+	// here and carry them in the team.deleted event payload under
+	// `provisioned`, keyed by integration_instance_id. embedTeamContext
+	// falls back to this payload when the log row is gone.
+	team0, err := repository.GetTeam(r.Context(), s.db, id)
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	provisioned := map[string]any{}
+	if logs, err := repository.ListTeamProvisioningLogByTeam(r.Context(), s.db, team0.ID); err != nil {
+		// Non-fatal: deprovisioning may be incomplete for this delete, but
+		// the team removal must still proceed. The reconcile cron and the
+		// adapter's own list path remain as backstops.
+		s.logger.Warn("team delete: list provisioning log failed (non-fatal); external mirrors may not deprovision",
+			zap.String("team_id", team0.ID.String()),
+			zap.Error(err))
+	} else {
+		for _, lg := range logs {
+			if strings.TrimSpace(lg.ExternalID) == "" {
+				continue
+			}
+			entry := map[string]any{"external_id": lg.ExternalID}
+			if len(lg.ExternalMetadata) > 0 && string(lg.ExternalMetadata) != "null" {
+				var meta map[string]any
+				if json.Unmarshal(lg.ExternalMetadata, &meta) == nil && meta != nil {
+					entry["external_metadata"] = meta
+				}
+			}
+			provisioned[lg.IntegrationInstanceID.String()] = entry
+		}
+	}
+
 	tx, err := s.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		writeMappedError(w, fmt.Errorf("begin tx: %w", err))
@@ -2001,15 +2039,21 @@ func (s *Server) handleTeamDelete(w http.ResponseWriter, r *http.Request) {
 
 	// Emit team.deleted canon event in the same transaction so the team row
 	// removal and the downstream cleanup notification commit atomically.
+	deletedPayload := map[string]any{
+		"id":   team.ID.String(),
+		"slug": team.Slug,
+	}
+	if len(provisioned) > 0 {
+		// Per-instance captured external_ids so on_team_deleted can
+		// deprovision despite the cascade having wiped the log rows.
+		deletedPayload["provisioned"] = provisioned
+	}
 	if _, err := repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
 		Type:          repository.EventTypeTeamDeleted,
 		SchemaVersion: "v1",
 		AggregateType: "team",
 		AggregateID:   team.ID.String(),
-		Payload: map[string]any{
-			"id":   team.ID.String(),
-			"slug": team.Slug,
-		},
+		Payload:       deletedPayload,
 	}); err != nil {
 		writeMappedError(w, fmt.Errorf("emit team.deleted: %w", err))
 		return

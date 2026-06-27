@@ -6,7 +6,20 @@
   "required": ["id", "slug"],
   "properties": {
     "id":   { "type": "string", "format": "uuid" },
-    "slug": { "type": "string" }
+    "slug": { "type": "string" },
+    "provisioned": {
+      "description": "Per-integration-instance snapshot of the external mirrors that existed when the team was deleted, captured before the team_provisioning_log ON DELETE CASCADE wipes the rows. Keyed by integration_instance_id. Carried so the async on_team_deleted reaction can deprovision the external resource (which it cannot otherwise read back).",
+      "type": "object",
+      "additionalProperties": {
+        "type": "object",
+        "required": ["external_id"],
+        "properties": {
+          "external_id":       { "type": "string" },
+          "external_metadata": { "type": "object" }
+        },
+        "additionalProperties": false
+      }
+    }
   },
   "additionalProperties": false
 }
