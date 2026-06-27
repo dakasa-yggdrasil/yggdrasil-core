@@ -143,6 +143,44 @@ func TestExternalIdentityConflict(t *testing.T) {
 	assert.Equal(t, extID, conflict.ExternalID)
 }
 
+// TestAutoLinkExternalEmitsConflictDetected ensures the resync auto-linker,
+// on hitting a pre-existing link owned by a DIFFERENT collaborator, emits a
+// conflict_detected event — observability parity with the webhook linker
+// (controllers/httpapi/integration_webhook.go) — and still returns true so the
+// caller does not go on to re-flag the external_id as unknown_external.
+func TestAutoLinkExternalEmitsConflictDetected(t *testing.T) {
+	if os.Getenv("DB_URL") == "" {
+		t.Skip("DB_URL not set; skipping resync auto-link conflict test")
+	}
+	ctx := context.Background()
+	db := openTestDB(t)
+	t.Cleanup(func() { db.Close() })
+
+	collabA := seedCollaborator(t, db)
+	collabB := seedCollaborator(t, db)
+	instanceID := uuid.New()
+	extID := "U_AUTOLINK_CONFLICT_" + uuid.NewString()[:8]
+	t.Cleanup(func() {
+		db.Exec(`DELETE FROM collaborator_external_identities WHERE integration_instance_id = $1`, instanceID)
+		db.Exec(`DELETE FROM event_log WHERE aggregate_id = $1`, instanceID.String())
+	})
+
+	// Pre-existing link: extID already belongs to collabA in this instance.
+	_, _, err := Upsert(ctx, db, UpsertInput{
+		CollaboratorID: collabA, IntegrationInstanceID: instanceID,
+		ExternalID: extID, ExternalMetadata: map[string]any{},
+	})
+	require.NoError(t, err)
+
+	// Auto-link attempt for a DIFFERENT collaborator (collabB) → conflict.
+	linked := autoLinkExternal(ctx, db, instanceID, collabB, extID, map[string]any{}, time.Now().UTC())
+	assert.True(t, linked, "conflict must be treated as handled (skip), returning true")
+
+	// Parity with the webhook linker: a conflict_detected event must be emitted,
+	// aggregated on the integration_instance (as BuildConflictPayload records).
+	assertEventEmitted(t, db, instanceID, repository.EventTypeExternalIdentityConflictDetected)
+}
+
 // assertEventEmitted checks that at least one event of the given type was
 // written to event_log for the given aggregate ID.
 func assertEventEmitted(t *testing.T, db *sql.DB, aggregateID uuid.UUID, eventType string) {

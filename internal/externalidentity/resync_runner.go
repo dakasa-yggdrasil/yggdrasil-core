@@ -312,9 +312,19 @@ func autoLinkExternal(ctx context.Context, db *sql.DB, instanceID, collab uuid.U
 	})
 	if err != nil {
 		// Conflict: another collaborator owns this external_id — skip without
-		// emitting unknown_external (do not claim it for a different collab).
+		// emitting unknown_external (do not claim it for a different collab),
+		// but DO emit conflict_detected for observability parity with the
+		// webhook linker (controllers/httpapi/integration_webhook.go).
 		var cerr *ConflictError
 		if errors.As(err, &cerr) {
+			_ = EmitEvent(ctx, db, repository.EventTypeExternalIdentityConflictDetected, cerr.IntegrationInstanceID,
+				BuildConflictPayload(ConflictInputs{
+					IntegrationInstanceID:  cerr.IntegrationInstanceID,
+					ExternalID:             cerr.ExternalID,
+					IncomingCollaboratorID: cerr.IncomingCollaboratorID,
+					ExistingCollaboratorID: cerr.ExistingCollaboratorID,
+					DetectedAt:             now,
+				}))
 			return true
 		}
 		// Real upsert failure → fall through to unknown_external (best-effort).
