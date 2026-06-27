@@ -761,7 +761,14 @@ func createTeamOn(ctx context.Context, q dbtx, req model.CreateTeamRequest) (mod
 		metadata,
 	)
 
-	return scanTeam(row)
+	team, err := scanTeam(row)
+	if err != nil {
+		return model.Team{}, err
+	}
+	if err := ensureOwnerMemberships(ctx, q, team.ID.String(), normalizeStringList(req.Owners)); err != nil {
+		return model.Team{}, err
+	}
+	return team, nil
 }
 
 // normalizeTeamEmail trims + lowercases the email and applies a lightweight
@@ -1110,7 +1117,39 @@ func updateTeamOn(ctx context.Context, q dbtx, req model.UpdateTeamRequest) (mod
 		metadataRaw,
 	)
 
-	return scanTeam(row)
+	team, err := scanTeam(row)
+	if err != nil {
+		return model.Team{}, err
+	}
+	if err := ensureOwnerMemberships(ctx, q, team.ID.String(), owners); err != nil {
+		return model.Team{}, err
+	}
+	// Deactivate the auto-created membership of any owner that was removed from
+	// teams.owners by this update. Un-leading is NOT the same as removing someone
+	// from the team — so we only touch rows that exist SOLELY because of ownership
+	// (source='owner-sync'). A collaborator who was a real member BEFORE becoming
+	// an owner has source≠'owner-sync', so their row (and its org-rank role) is
+	// left fully intact: they stay an active member.
+	newOwners := make(map[string]struct{}, len(owners))
+	for _, owner := range owners {
+		newOwners[owner] = struct{}{}
+	}
+	for _, old := range normalizeStringList(current.Owners) {
+		if _, stillOwner := newOwners[old]; stillOwner {
+			continue
+		}
+		collaboratorID, err := resolveCollaboratorIdentityIDOn(ctx, q, old)
+		if err != nil {
+			return model.Team{}, fmt.Errorf("deactivate removed owner: resolve %s: %w", old, err)
+		}
+		if _, err := q.ExecContext(ctx, `
+			UPDATE public.team_memberships SET active = false, updated_at = NOW()
+			WHERE team_id = $1 AND collaborator_id = $2 AND source = 'owner-sync'
+		`, team.ID.String(), collaboratorID); err != nil {
+			return model.Team{}, fmt.Errorf("deactivate removed owner %s: %w", old, err)
+		}
+	}
+	return team, nil
 }
 
 // DeleteTeam removes one team by UUID or slug.
@@ -1272,6 +1311,43 @@ func upsertTeamMembershipOn(ctx context.Context, q dbtx, req model.UpsertTeamMem
 	)
 
 	return scanTeamMembership(row)
+}
+
+// ensureOwnerMemberships guarantees every team owner has an ACTIVE
+// team_memberships row, WITHOUT clobbering an existing membership's role or
+// source. A team "owner" (stored in the teams.owners JSONB array) is the source
+// of leadership, but every reader (RBAC, /me) joins through team_memberships —
+// so an owner with no membership row is invisible.
+//
+// team_memberships.role holds a meaningful org-rank value ('founder',
+// 'base-employee', …) that is independent of leadership; leadership itself is
+// sourced from teams.owners, not from role. So this helper must NOT overwrite
+// role: the ON CONFLICT clause only (re)activates the existing row. role='lead'
+// is therefore set ONLY on the INSERT path — i.e. for a brand-new owner who had
+// no prior membership at all. An owner who was already a 'founder'/'base-employee'
+// member keeps that role and is merely (re)activated.
+//
+// Call this in the SAME transaction as the owners write (CreateTeam/UpdateTeam)
+// so the membership and the owners array can never diverge.
+func ensureOwnerMemberships(ctx context.Context, q dbtx, teamID string, owners []string) error {
+	for _, owner := range owners {
+		if strings.TrimSpace(owner) == "" {
+			continue
+		}
+		collaboratorID, err := resolveCollaboratorIdentityIDOn(ctx, q, owner)
+		if err != nil {
+			return fmt.Errorf("ensure owner membership: resolve %s: %w", owner, err)
+		}
+		if _, err := q.ExecContext(ctx, `
+			INSERT INTO public.team_memberships (team_id, collaborator_id, role, active, source)
+			VALUES ($1, $2, 'lead', true, 'owner-sync')
+			ON CONFLICT ON CONSTRAINT team_memberships_unique_link
+			DO UPDATE SET active = true, updated_at = NOW()
+		`, teamID, collaboratorID); err != nil {
+			return fmt.Errorf("ensure owner membership %s: %w", owner, err)
+		}
+	}
+	return nil
 }
 
 // ListTeamMemberships returns memberships filtered by team/collaborator.
