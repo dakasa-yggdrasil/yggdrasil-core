@@ -14,7 +14,23 @@
         "schema_version": { "type": "string", "const": "v1" },
         "emitted_at":     { "type": "string", "format": "date-time" },
         "actor":          { "type": "object" },
-        "attempt":        { "type": "integer", "minimum": 1 }
+        "attempt":        { "type": "integer", "minimum": 1 },
+        "team": {
+          "type": "object",
+          "required": ["id", "slug"],
+          "properties": {
+            "id":   { "type": "string", "format": "uuid" },
+            "slug": { "type": "string" }
+          }
+        },
+        "team_provisioned": {
+          "type": "object",
+          "required": ["external_id"],
+          "properties": {
+            "external_id":       { "type": "string" },
+            "external_metadata": { "type": "object" }
+          }
+        }
       }
     },
     "collaborator_id": { "type": "string", "format": "uuid" },

@@ -144,10 +144,11 @@ func (c *rabbitmqReactorCaller) Call(
 		}
 	}
 
-	// Read-side embed: pre-populate _context.team_provisioned when dispatching
-	// a team.* reaction so adapters can target the right external resource
-	// without a fresh list call.
-	c.embedTeamProvisioned(ctx, capability, integrationInstanceID, input)
+	// Read-side embed: pre-populate the canonical team _context (team{id,slug}
+	// + team_provisioned) when dispatching a team-family reaction so adapters
+	// can resolve the team slug and target the right external resource without
+	// a fresh list call. Covers both team.* and team_membership.* capabilities.
+	c.embedTeamContext(ctx, capability, integrationInstanceID, input)
 
 	req := model.ExecuteIntegrationRequest{
 		Integration: model.ManifestSelector{
@@ -301,16 +302,29 @@ func (c *rabbitmqReactorCaller) persistTeamProvisioning(
 	}
 }
 
-// embedTeamProvisioned reads team_provisioning_log for the (team, instance)
-// pair the reaction targets, and injects the row under
-// input._context.team_provisioned. Mirror of EmbedIntoInput from
-// externalidentity. No-op when the reaction is not a team.* event, or
-// when no log row exists yet (first-time team.created).
+// embedTeamContext injects the canonical team _context every team-family
+// reaction must carry so adapter handlers can resolve their target uniformly:
 //
-// Note: this dispatcher only sees `capability` (e.g. on_team_updated), not
-// the raw event_type. We treat the on_team_* prefix as the team-family
-// marker.
-func (c *rabbitmqReactorCaller) embedTeamProvisioned(
+//   - input._context.team             = {id, slug}        (the Yggdrasil team)
+//   - input._context.team_provisioned = {external_id, …}  (the external group)
+//
+// The team id is resolved from input["id"] OR input["team_id"]: team.created /
+// updated / deleted payloads carry the team under `id`, while
+// team_membership.added / removed payloads carry it under `team_id` (and have
+// no `id`). Trying both keys is what makes membership reactions enrich at all.
+//
+// The team block is injected even when there is no team_provisioning_log row
+// yet (the slug must always reach the handler). The team_provisioned block is
+// a no-op when no log row exists (first-time team.created — adapter creates the
+// external resource from scratch). Both blocks share a single _context map.
+//
+// This is best-effort read-side enrichment: every error is logged non-fatally
+// and skips only its own block; the reaction's outcome is never affected.
+//
+// Note: this dispatcher only sees `capability` (e.g. on_team_updated /
+// on_team_membership_added), not the raw event_type. We treat the on_team_*
+// prefix as the team-family marker (covers both team.* and team_membership.*).
+func (c *rabbitmqReactorCaller) embedTeamContext(
 	ctx context.Context,
 	capability string,
 	integrationInstanceID string,
@@ -319,8 +333,15 @@ func (c *rabbitmqReactorCaller) embedTeamProvisioned(
 	if !strings.HasPrefix(capability, "on_team_") {
 		return
 	}
+
+	// Resolve the team id from `id` (team.* payloads) OR `team_id`
+	// (team_membership.* payloads). Try id first, then team_id.
 	teamIDStr, _ := input["id"].(string)
 	if strings.TrimSpace(teamIDStr) == "" {
+		teamIDStr, _ = input["team_id"].(string)
+	}
+	teamIDStr = strings.TrimSpace(teamIDStr)
+	if teamIDStr == "" {
 		return
 	}
 	teamID, err := uuid.Parse(teamIDStr)
@@ -332,15 +353,35 @@ func (c *rabbitmqReactorCaller) embedTeamProvisioned(
 		return
 	}
 
-	row, err := repository.GetTeamProvisioningLog(ctx, c.db, teamID, instanceID)
-	if err != nil || row.ExternalID == "" {
-		return // no log row yet — adapter will create from scratch
-	}
-
+	// Single _context map shared by both blocks (create if absent).
 	ctxBlock, _ := input["_context"].(map[string]any)
 	if ctxBlock == nil {
 		ctxBlock = map[string]any{}
 		input["_context"] = ctxBlock
+	}
+
+	// _context.team — always injected so the handler can read team_slug, even
+	// when no provisioning-log row exists yet. GetTeam resolves by id-or-slug.
+	team, err := repository.GetTeam(ctx, c.db, teamIDStr)
+	if err != nil {
+		if c.logger != nil {
+			c.logger.Warn("reactor: team lookup for _context failed (non-fatal)",
+				zap.String("team_id", teamIDStr),
+				zap.String("integration_instance_id", integrationInstanceID),
+				zap.Error(err))
+		}
+	} else {
+		ctxBlock["team"] = map[string]any{
+			"id":   team.ID.String(),
+			"slug": team.Slug,
+		}
+	}
+
+	// _context.team_provisioned — the external group the team was mirrored to.
+	// No-op when no log row exists yet (adapter creates from scratch).
+	row, err := repository.GetTeamProvisioningLog(ctx, c.db, teamID, instanceID)
+	if err != nil || row.ExternalID == "" {
+		return
 	}
 	tp := map[string]any{
 		"external_id": row.ExternalID,
