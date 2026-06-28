@@ -1065,6 +1065,15 @@ func WithSurfaceQueryDispatcher(d SurfaceQueryDispatcher) ServerOption {
 	return func(s *Server) { s.surfaceQueryDispatcher = d }
 }
 
+// WithSurfaceQueryPermSource injects the opt-in view-access gate's permission
+// source for the surface-query handler. When unset (the default) NO query is
+// gated — every surface that worked before keeps working (zero-lockout). When
+// set, queries whose surface manifest declares spec.queries[].requires_permission
+// are enforced; queries that declare none stay ungated.
+func WithSurfaceQueryPermSource(src SurfaceQueryPermSource) ServerOption {
+	return func(s *Server) { s.surfaceQueryPermSource = src }
+}
+
 // workflowDispatchFunc dispatches a Yggdrasil workflow_run by manifest ref.
 // The default implementation wraps messagecontroller.RunWorkflow; tests
 // override the field directly with a fake to assert dispatch behaviour.
@@ -1118,6 +1127,20 @@ type Server struct {
 	// — proxies on_surface_query to the named integration instance. Optional;
 	// when nil the handler returns 503.
 	surfaceQueryDispatcher SurfaceQueryDispatcher
+	// surfaceQueryPermSource resolves the permission (if any) a surface declares
+	// for a given (instance_id, query_name) — the OPT-IN view-access gate. A nil
+	// source, or a query that declares NO permission, leaves the query UNGATED
+	// (backward-compat / zero-lockout: every surface that worked before this gate
+	// keeps working, and the CLT my-* self-service reads stay open). Wired by the
+	// integration-surface-sync addon from the surface manifest's spec.queries[].
+	// requires_permission; tests inject a fake. See handleIntegrationSurfaceQuery.
+	surfaceQueryPermSource SurfaceQueryPermSource
+	// callerPermResolver yields the verified caller's effective yggdrasil/grant
+	// permissions for the view-access gate. nil falls back to the production
+	// resolver (repository.ResolveYggdrasilPermissions over s.db, the SAME list
+	// /me and the ops RBAC gate use). Tests inject a fake so the handler's gating
+	// logic is exercised without a live DB.
+	callerPermResolver func(ctx context.Context, collaboratorID string) ([]string, error)
 	// capabilityAllowlist holds the warn-only capability-naming validator
 	// allowlist loaded once at boot from
 	// config/capability_naming_allowlist.yaml. nil disables the validator

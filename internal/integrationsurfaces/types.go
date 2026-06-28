@@ -28,6 +28,29 @@ type ManifestSpec struct {
 	Display       Display          `json:"display"`
 	CoreContracts []string         `json:"core_contracts,omitempty"`
 	Capabilities  []CapabilitySpec `json:"capabilities,omitempty"`
+	// Queries is the OPTIONAL per-query view-access declaration for the surface's
+	// on_surface_query reads. It is the manifest source of truth for the opt-in
+	// gate enforced by yggdrasil-core's surface-query handler: a query listed here
+	// with a non-empty requires_permission is gated; any query NOT listed (or
+	// listed with an empty requires_permission) stays UNGATED — backward-compat /
+	// zero-lockout, so every surface that worked before and every self-service
+	// read (e.g. CLT my-*) keeps working untouched. Surfaces declare perms, they
+	// do not invent them (INTEGRATION_CONTRACT §15.3); requires_permission MUST be
+	// one of spec.permissions[].id from the same surface manifest.
+	Queries []SurfaceQuerySpec `json:"queries,omitempty"`
+}
+
+// SurfaceQuerySpec optionally binds one on_surface_query query_name to the
+// permission a caller must hold to read it. Omitting the entry (or leaving
+// requires_permission empty) means the query is ungated.
+type SurfaceQuerySpec struct {
+	// Name is the on_surface_query query_name (e.g. "list-employees").
+	Name string `json:"name"`
+	// RequiresPermission is the permission id the caller must hold to read this
+	// query. Empty ⇒ the query is ungated. The gate ALSO honours any permission
+	// in this permission's namespace plus admin perms, mirroring the SPA's
+	// canViewSurface (surface-toolkit/SurfaceViewGate.tsx).
+	RequiresPermission string `json:"requires_permission,omitempty"`
 }
 
 type Runtime struct {

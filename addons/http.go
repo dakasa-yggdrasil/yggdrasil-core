@@ -84,6 +84,14 @@ func bootstrapHTTP(_ context.Context, app *runtime.ServiceApp) error {
 			opts = append(opts, httpapi.WithSurfaceQueryDispatcher(disp))
 		}
 	}
+	// Opt-in surface-query view-access gate. The source resolves a query's
+	// declared permission from its surface manifest (spec.queries[].
+	// requires_permission); it returns "ungated" for every query that declares
+	// none, so wiring it is behaviour-neutral for all current surfaces (zero
+	// lockout) and only enforces once a manifest opts a query in.
+	if src := httpapi.NewDBSurfaceQueryPermSource(db); src != nil {
+		opts = append(opts, httpapi.WithSurfaceQueryPermSource(src))
+	}
 	discovery := surfacesvc.NewDiscovery(db, surfacesvc.NewClient(nil), logger).
 		WithSource(surfaceTargetSource{db: db, fallback: surfaceTargets}).
 		WithReconciler(surfacesvc.NewPermissionsReconciler(db, logger))
