@@ -1525,10 +1525,70 @@ func (s *Server) handleManagedSecretRevoke(w http.ResponseWriter, r *http.Reques
 	})
 }
 
+// collaboratorDirectoryEntry is the MINIMAL, PII-free projection of a
+// collaborator: only what a lower-trust consumer needs to render a name.
+// It deliberately omits primary_email, personal_data, employment_data,
+// third_party_identities (which carry OIDC subject ids), traits and metadata.
+type collaboratorDirectoryEntry struct {
+	ID            uuid.UUID  `json:"id"`
+	Slug          string     `json:"slug"`
+	Status        string     `json:"status"`
+	DisplayName   string     `json:"display_name"`
+	PrimaryTeamID *uuid.UUID `json:"primary_team_id,omitempty"`
+	AvatarURL     string     `json:"avatar_url,omitempty"`
+}
+
+type collaboratorDirectoryResponse struct {
+	Collaborators []collaboratorDirectoryEntry `json:"collaborators"`
+}
+
+// directoryAvatarURL extracts ONLY the avatar image URL from the third-party
+// identities blob — never the subject/email/other identity fields.
+func directoryAvatarURL(tpi map[string]any) string {
+	for _, provider := range []string{"google", "github"} {
+		if p, ok := tpi[provider].(map[string]any); ok {
+			if u, ok := p["avatar_url"].(string); ok && u != "" {
+				return u
+			}
+		}
+	}
+	return ""
+}
+
+func toDirectoryEntries(cs []model.Collaborator) []collaboratorDirectoryEntry {
+	out := make([]collaboratorDirectoryEntry, 0, len(cs))
+	for _, c := range cs {
+		out = append(out, collaboratorDirectoryEntry{
+			ID:            c.ID,
+			Slug:          c.Slug,
+			Status:        c.Status,
+			DisplayName:   c.DisplayName,
+			PrimaryTeamID: c.PrimaryTeamID,
+			AvatarURL:     directoryAvatarURL(c.ThirdPartyIdentities),
+		})
+	}
+	return out
+}
+
 func (s *Server) handleCollaboratorList(w http.ResponseWriter, r *http.Request) {
 	req := model.ListCollaboratorsRequest{
 		Status: queryString(r, "status"),
 		Search: queryString(r, "q"),
+	}
+
+	// Directory view (least-privilege): minimal name-resolution projection with
+	// NO PII. Consumed by lower-trust callers like the tartaro-api /collaborators
+	// proxy, which only needs id -> display_name to stop rendering raw UUIDs.
+	// The full object (email, employment, third-party subjects) stays behind the
+	// default view for the admin console.
+	if queryString(r, "view") == "directory" {
+		collaborators, err := repository.ListCollaborators(r.Context(), s.db, req)
+		if err != nil {
+			writeMappedError(w, err)
+			return
+		}
+		writeJSON(w, http.StatusOK, collaboratorDirectoryResponse{Collaborators: toDirectoryEntries(collaborators)})
+		return
 	}
 
 	// Phase 6 aggregate (audit 2026-05-27 §2.3): when the caller asks for
