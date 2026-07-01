@@ -722,7 +722,7 @@ func (s *Storage) KeySet(ctx context.Context) ([]op.Key, error) {
 		// identical to `Public() any`, so it silently fell back to publishing the
 		// PRIVATE key — which go-jose rejects with "unsupported key type/format",
 		// making every console/surface OP-JWT verification fail (401).
-		var pub any = priv
+		pub := priv
 		if signer, ok := priv.(crypto.Signer); ok {
 			pub = signer.Public()
 		}
