@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -59,6 +60,11 @@ func (v *opJWTVerifier) Verify(ctx context.Context, token string) (map[string]an
 		return nil, err
 	}
 	if !audienceAllowed(claims["aud"], v.audiences) {
+		auds := make([]string, 0, len(v.audiences))
+		for a := range v.audiences {
+			auds = append(auds, a)
+		}
+		log.Printf("[CONSOLE-JWT-DBG] audience NOT allowed: token.aud=%v verifier.audiences=%v", claims["aud"], auds)
 		return nil, errJWTVerify
 	}
 	return claims, nil
@@ -94,17 +100,24 @@ func (v *opJWTVerifier) VerifyForAudience(ctx context.Context, token, expectedAu
 func (v *opJWTVerifier) verifyClaims(ctx context.Context, token string) (map[string]any, error) {
 	jws, err := jose.ParseSigned(token, []jose.SignatureAlgorithm{jose.RS256})
 	if err != nil || len(jws.Signatures) == 0 {
+		log.Printf("[CONSOLE-JWT-DBG] parse fail: err=%v sigs=%d", err, len(jws.Signatures))
 		return nil, errJWTVerify
 	}
 	kid := jws.Signatures[0].Header.KeyID
 
 	keys, err := v.keys(ctx)
 	if err != nil {
+		log.Printf("[CONSOLE-JWT-DBG] keys load error: %v", err)
 		return nil, fmt.Errorf("load op signing keys: %w", err)
+	}
+	availKids := make([]string, 0, len(keys))
+	for _, k := range keys {
+		availKids = append(availKids, k.ID())
 	}
 
 	var payload []byte
 	verified := false
+	var lastVerr error
 	for _, k := range keys {
 		// With a kid present, only the matching key is eligible; without one,
 		// try every active key to tolerate rotation overlap.
@@ -115,23 +128,41 @@ func (v *opJWTVerifier) verifyClaims(ctx context.Context, token string) (map[str
 			payload = p
 			verified = true
 			break
+		} else {
+			lastVerr = verr
 		}
 	}
 	if !verified {
+		log.Printf("[CONSOLE-JWT-DBG] sig NOT verified: token.kid=%q avail.kids=%v keyType=%T lastVerr=%v", kid, availKids, keyTypeOf(keys, kid), lastVerr)
 		return nil, errJWTVerify
 	}
 
 	var claims map[string]any
 	if err := json.Unmarshal(payload, &claims); err != nil {
+		log.Printf("[CONSOLE-JWT-DBG] claims unmarshal fail: %v", err)
 		return nil, errJWTVerify
 	}
 	if iss, _ := claims["iss"].(string); iss != v.issuer {
+		log.Printf("[CONSOLE-JWT-DBG] iss mismatch: token.iss=%q verifier.iss=%q", iss, v.issuer)
 		return nil, errJWTVerify
 	}
 	if !expInFuture(claims["exp"], v.now().Add(-v.leeway)) {
+		log.Printf("[CONSOLE-JWT-DBG] exp check fail: token.exp=%v now=%v", claims["exp"], v.now().Unix())
 		return nil, errJWTVerify
 	}
+	log.Printf("[CONSOLE-JWT-DBG] verifyClaims OK: kid=%q iss=%q aud=%v", kid, claims["iss"], claims["aud"])
 	return claims, nil
+}
+
+// keyTypeOf is a debug helper: returns the Go type of the public key that would
+// be used to verify the given kid (or "<no-match>"). Temporary diagnostic.
+func keyTypeOf(keys []verifyPublicKey, kid string) string {
+	for _, k := range keys {
+		if k.ID() == kid {
+			return fmt.Sprintf("%T", k.Key())
+		}
+	}
+	return "<no-match>"
 }
 
 func expInFuture(raw any, now time.Time) bool {
