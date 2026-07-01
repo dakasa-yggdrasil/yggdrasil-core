@@ -6,6 +6,7 @@ package oidc
 
 import (
 	"context"
+	"crypto"
 	"crypto/rand"
 	"crypto/x509"
 	"database/sql"
@@ -714,14 +715,16 @@ func (s *Storage) KeySet(ctx context.Context) ([]op.Key, error) {
 		if perr != nil {
 			return nil, perr
 		}
-		// Extract the public part. RSA: priv.Public(). Other key types
-		// would need similar treatment when added.
-		type publicKeyer interface{ Public() any }
-		var pub any
-		if pp, ok := priv.(publicKeyer); ok {
-			pub = pp.Public()
-		} else {
-			pub = priv
+		// Extract the public part via crypto.Signer, which *rsa.PrivateKey,
+		// *ecdsa.PrivateKey and ed25519.PrivateKey all implement. The previous
+		// `interface{ Public() any }` assertion NEVER matched: *rsa.PrivateKey's
+		// method is `Public() crypto.PublicKey` (a named type), which is not
+		// identical to `Public() any`, so it silently fell back to publishing the
+		// PRIVATE key — which go-jose rejects with "unsupported key type/format",
+		// making every console/surface OP-JWT verification fail (401).
+		var pub any = priv
+		if signer, ok := priv.(crypto.Signer); ok {
+			pub = signer.Public()
 		}
 		out = append(out, &publicKeyView{id: kid, pubKey: pub})
 	}
