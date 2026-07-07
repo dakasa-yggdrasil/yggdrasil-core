@@ -218,7 +218,10 @@
         "discovery": { "$ref": "#/$defs/integrationDiscoverySpec" },
         "normalization": { "$ref": "#/$defs/integrationNormalizationSpec" },
         "execution": { "$ref": "#/$defs/integrationExecutionSpec" },
-        "extensions": { "$ref": "#/$defs/integrationExtensionsSpec" }
+        "extensions": { "$ref": "#/$defs/integrationExtensionsSpec" },
+        "domain": {},
+        "display": {},
+        "icon": {}
       },
       "additionalProperties": false
     },
