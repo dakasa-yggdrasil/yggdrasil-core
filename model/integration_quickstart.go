@@ -104,7 +104,7 @@ type QuickstartValidate struct {
 
 // QuickstartStep mirrors one entry in the compiled workflow's spec.steps.
 // The fields parallel WorkflowStep but with template-friendly types — the
-// processor renders {{ inputs.X }} and {{ steps.Y.outputs.Z }} placeholders
+// processor renders {{ inputs.X }} and {{ steps.Y.metadata.output.Z }} placeholders
 // then writes the resolved values into a real WorkflowStep.
 type QuickstartStep struct {
 	ID          string                 `json:"id"`
@@ -119,7 +119,7 @@ type QuickstartStep struct {
 	With map[string]any `json:"with,omitempty"`
 
 	// OutputTo names a key under which subsequent steps can reference this
-	// step's result via {{ steps.<id>.outputs.<OutputTo> }}. Optional.
+	// step's result via {{ steps.<id>.metadata.output.<OutputTo> }}. Optional.
 	OutputTo string `json:"output_to,omitempty"`
 
 	Retry          *WorkflowRetrySpec `json:"retry,omitempty"`

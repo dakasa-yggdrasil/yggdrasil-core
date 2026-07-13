@@ -22,7 +22,7 @@ import (
 //     when none is declared;
 //   - append the smoke_test as the last step (depends_on the last real step).
 //
-// Templates ({{ inputs.X }}, {{ steps.Y.outputs.Z }}) are NOT rendered here.
+// Templates ({{ inputs.X }}, {{ steps.Y.metadata.output.Z }}) are NOT rendered here.
 // The workflow engine has a mature resolver — we leave the strings intact so
 // (a) the rendering is centralized and (b) DryRun output stays expressive.
 func CompileQuickstartToWorkflow(
