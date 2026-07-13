@@ -929,6 +929,16 @@ func normalizeWorkflowIntegrationStatus(status string) string {
 		// single SQL UPDATE return cosmetic `failed` even though the row was
 		// updated (verified 2026-05-27 Phase 2C smoke).
 		"executed",
+		// secrets-management read-family capabilities emit their operation
+		// verb as the green-path status: read_secret → "read", observe_secret
+		// → "described", rotate_secret → "rotated" (providers/*/adapter/spec.go
+		// successResponse). The value was fetched / described / rotated
+		// successfully; same single-"succeeded" contract as observed/ensured.
+		// Without this, the tártaro eco-create step fetch-eco-authz-amqp (a
+		// read_secret of dakasa/validation/eco-authz) returns cosmetic `failed`
+		// even though the secret was read — the FIRST read_secret ever run in a
+		// workflow step, so this gap had never surfaced (verified 2026-07-13).
+		"read", "described", "rotated",
 		"not_found", "absent", "deleted",
 		"simulated", "dry_run", "noop", "no_op":
 		return "succeeded"

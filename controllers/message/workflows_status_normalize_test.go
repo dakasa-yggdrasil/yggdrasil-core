@@ -44,6 +44,15 @@ func TestNormalizeWorkflowIntegrationStatus_IdempotentOutcomes(t *testing.T) {
 		{"upper executed", "EXECUTED", "succeeded"},
 		{"padded executed", "  executed  ", "succeeded"},
 
+		// secrets-management read-family verbs: read_secret → "read",
+		// observe_secret → "described", rotate_secret → "rotated". The
+		// value was fetched / described / rotated successfully.
+		{"read", "read", "succeeded"},
+		{"upper read", "READ", "succeeded"},
+		{"padded read", "  read  ", "succeeded"},
+		{"described", "described", "succeeded"},
+		{"rotated", "rotated", "succeeded"},
+
 		// Idempotent delete / cleanup outcomes — re-running a teardown
 		// against a missing object MUST NOT fail the workflow run.
 		{"not_found", "not_found", "succeeded"},
