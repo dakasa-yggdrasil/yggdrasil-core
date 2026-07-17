@@ -48,3 +48,10 @@ coverage.html
 
 # Git worktrees (subagent-driven development)
 .worktrees/
+
+# --- Spec-driven scratch (ADR-0001) ---
+# Brainstorming / plans / handoffs are local-only working artifacts. Durable architectural
+# decisions live in docs/adr/ (tracked). See AGENTS.md § Spec-driven docs.
+docs/superpowers/
+docs/**/HANDOFF*.md
+docs/HANDOFF*.md
