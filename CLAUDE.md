@@ -161,22 +161,6 @@ Dockerfile is multi-stage:
 2. Cross-compile build stage on `$BUILDPLATFORM`.
 3. Alpine runtime + `kubectl` installed for integration-surface-sync.
 
-## Recent meaningful commits (last ~10 days)
-
-- `5d088fa` 📝 sync `docs/api-reference/openapi.json` with embedded controllers
-- `1682b46` 🐛 ci(emit-deploy): graceful skip when bootstrap secrets missing
-- `29bb983` ♻️ Periodic purge of soft-deleted manifests >30d old (`manifest_purge` addon)
-- `5cbdecb` ✨ DELETE /api/v1/manifests/{id} handler (soft=true OR hard)
-- `0539356` 🐛 forward-drift fast-path + accept `committed` as workflow success
-- `75c06b2` ci: inline Emit Deploy Event (drop cross-repo private action dep)
-- `b899942` ci: add Emit Deploy Event workflow (default-on gate)
-- `ccd6361` Instrument reactor_* and heimdall_flagged_count metrics
-- `38bbcf7` 🐛 workflow steps treat not_found/simulated as success (idempotent delete ops)
-- `88de3ff` 🐛 fix ops/workflows detail 500 + manifest_sync forward-drift deadlock
-- `094a67b` ✨ workflow_runs: per-workflow dispatch_mode field (sync/async)
-- `f4b5774` 🐛 workflow/dispatch: enforce minLength on input_schema string fields
-- `9d30e34` 🐛 fix(amqp): exit fast when rabbit connection closes — kubelet self-heals
-
 ## Validation
 
 ```bash
@@ -213,7 +197,7 @@ real `manifest/*.json` files.
 - `dakasa-yggdrasil/yggdrasil-core` is the **only deployable source**
   (the `services/yggdrasil-core/` submodule inside the
   `dakasa-yggdrasil/yggdrasil` monorepo is observe-only — see
-  `~/.claude/projects/-Users-dakasa-projects/memory/reference_yggdrasil_core_repos.md`).
+  your Claude Code project memory dir, note `reference_yggdrasil_core_repos`).
 - Cluster pulls from ECR Pull-Through-Cache of GHCR, not GHCR direct
   (see memory `[Yggdrasil integrations live in GHCR, not ECR]` for the
   inverse note about adapters).

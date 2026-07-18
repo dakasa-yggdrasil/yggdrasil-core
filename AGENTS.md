@@ -21,3 +21,5 @@ durable decision, record that as an ADR; the handoff itself is disposable.
 
 **Staleness:** a recalled memory or a `docs/superpowers/` scratch spec may be outdated — verify
 against the current-status ADR and the code before asserting it as fact.
+
+**Context files are durable-only (freshness discipline).** `CLAUDE.md` and `AGENTS.md` hold only current-state, durable instructions and policies — things expected to stay true. They MUST NOT accumulate time-bound content: no "recent work" or session-log sections, no dated phase/deploy status, no commit SHAs cited as progress, no machine-specific absolute paths. That content rots inside a durable file. Route a lasting decision to an ADR (`docs/adr/`, immutable, point-in-time); route transient status to gitignored `docs/superpowers/` scratch. Enforced in CI by `.github/workflows/context-freshness.yml` (fails on reintroduced time-bound sections and on structurally-broken ADRs).

@@ -1,0 +1,75 @@
+name: Context Freshness (ADR + durable context)
+
+# Blindagem against stale/legacy AI context (ADR-0215): CLAUDE.md / AGENTS.md must hold only
+# durable current-state; decisions live in docs/adr/ (immutable), transient status in gitignored
+# docs/superpowers/ scratch. Fails on reintroduced time-bound rot and on structurally-broken ADRs.
+
+on:
+  pull_request:
+    paths: ['**/CLAUDE.md', '**/AGENTS.md', '**/docs/adr/**']
+  push:
+    branches: [main]
+    paths: ['**/CLAUDE.md', '**/AGENTS.md', '**/docs/adr/**']
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Lint durable context files + ADR integrity
+        run: |
+          python3 - <<'PY'
+          import re, subprocess, sys
+          tracked = subprocess.run(['git','ls-files'], capture_output=True, text=True).stdout.splitlines()
+
+          # 1) Durable-context files (CLAUDE.md / AGENTS.md, excluding scratch): forbid time-bound rot.
+          ctx = [f for f in tracked
+                 if re.search(r'(^|/)(CLAUDE|AGENTS)\.md$', f) and '/docs/superpowers/' not in f]
+          FORBID = [
+            (re.compile(r'^#{1,6}\s.*(Recent\s+(Significant\s+)?Work|Active Handoff)', re.I),
+             'time-bound "Recent Work"/Handoff section header — put lasting decisions in an ADR (docs/adr/), transient status in docs/superpowers/ scratch'),
+            (re.compile(r'\bsessions?\s+20\d\d-\d\d-\d\d'),
+             'dated session log — context files hold durable current-state only'),
+            (re.compile(r'(/home/[A-Za-z0-9._-]+/\.claude|-home-[a-z0-9]+-[a-z0-9]+-)'),
+             'machine-specific absolute path — wrong on any other machine; reference the memory dir generically'),
+          ]
+          errors = []
+          for f in ctx:
+              for i, line in enumerate(open(f, encoding='utf-8', errors='ignore').read().splitlines(), 1):
+                  for rx, why in FORBID:
+                      if rx.search(line):
+                          errors.append(f'{f}:{i}: {why}\n      > {line.strip()[:110]}')
+
+          # 2) ADR structural + supersession integrity (ADRs may cite historical dates/SHAs in their
+          #    immutable body — that is allowed; only structure and supersession links are checked).
+          adrs = [f for f in tracked if re.search(r'(^|/)docs/adr/\d{4}-[^/]*\.md$', f)]
+          by_dir = {}
+          for f in adrs:
+              t = open(f, encoding='utf-8', errors='ignore').read()
+              d = f.rsplit('/', 1)[0]
+              by_dir.setdefault(d, {})
+              m = re.search(r'#\s*ADR-(\d{4}):', t)
+              if not m:
+                  errors.append(f'{f}: missing "# ADR-NNNN:" title header'); continue
+              by_dir[d][m.group(1)] = f
+              for sec in ('## Context', '## Decision', '## Consequences'):
+                  if sec not in t:
+                      errors.append(f'{f}: missing "{sec}" section')
+              if not re.search(r'\*\*Status:\*\*\s*(Proposed|Accepted|Superseded by \d{4}|Deprecated)', t):
+                  errors.append(f'{f}: missing or invalid **Status:** (Proposed|Accepted|Superseded by NNNN|Deprecated)')
+          for f in adrs:
+              t = open(f, encoding='utf-8', errors='ignore').read()
+              d = f.rsplit('/', 1)[0]
+              m = re.search(r'Superseded by (\d{4})', t)
+              if m and m.group(1) not in by_dir.get(d, {}):
+                  errors.append(f'{f}: "Superseded by {m.group(1)}" points to an ADR that does not exist in {d}/')
+
+          if errors:
+              print(f"::error::Context-freshness lint failed ({len(errors)} issue(s))")
+              print("\n".join(errors))
+              print("\nRule (ADR-0001 / ADR-0215): CLAUDE.md and AGENTS.md are durable-only. "
+                    "Lasting decisions -> docs/adr/ (immutable, supersede-not-edit); transient status "
+                    "-> docs/superpowers/ scratch (gitignored). See AGENTS.md § Spec-driven docs.")
+              sys.exit(1)
+          print(f"✅ {len(ctx)} context file(s) durable-only; {len(adrs)} ADR(s) structurally valid.")
+          PY
