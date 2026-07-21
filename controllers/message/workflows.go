@@ -918,6 +918,18 @@ func normalizeWorkflowIntegrationStatus(status string) string {
 		"succeeded", "success",
 		"applied", "observed", "ensured",
 		"created", "updated", "already_exists",
+		// Idempotent-in-value ensure_ capabilities emit "unchanged" when the
+		// resource already exists and its value is REUSED verbatim rather than
+		// re-written — e.g. integration-secrets-management ensure_secret with a
+		// random_string/random_bytes_b64/template/external_ref generation adopts
+		// the live secret unchanged (task #104, providers/*/adapter/spec.go
+		// successResponse). Same green-path semantics as already_exists/updated:
+		// the desired state is satisfied, nothing had to change. Without this,
+		// re-converging an EXISTING environment fails cosmetically — e.g.
+		// re-running dev-up/dakasa-eco-create against a live eco dies at
+		// secret-db-password because the preserved per-env secret returns
+		// "unchanged" (verified 2026-07-21).
+		"unchanged",
 		// VCS write capabilities (e.g. integration-github put_file_contents)
 		// emit "committed" as their green-path status. Same semantics as
 		// applied/created — the side effect landed in the remote system.

@@ -32,6 +32,14 @@ func TestNormalizeWorkflowIntegrationStatus_IdempotentOutcomes(t *testing.T) {
 		{"created", "created", "succeeded"},
 		{"updated", "updated", "succeeded"},
 		{"already_exists", "already_exists", "succeeded"},
+		// Idempotent-in-value ensure_ capabilities (secrets-management
+		// ensure_secret, task #104) report "unchanged" when the existing
+		// value is reused verbatim. Same green-path as already_exists —
+		// without it, re-converging an existing eco fails at
+		// secret-db-password (verified 2026-07-21).
+		{"unchanged", "unchanged", "succeeded"},
+		{"upper unchanged", "UNCHANGED", "succeeded"},
+		{"padded unchanged", "  unchanged  ", "succeeded"},
 		// VCS write capabilities (e.g. integration-github put_file_contents)
 		// report "committed" — same semantics as success/applied.
 		{"committed", "committed", "succeeded"},
