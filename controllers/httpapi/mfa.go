@@ -213,7 +213,7 @@ func (s *Server) handleMFATOTPBegin(w http.ResponseWriter, r *http.Request) {
 		writeMappedError(w, err)
 		return
 	}
-	collab, err := s.resolveCollaboratorFromEnrollToken(r.Context(), req.Token)
+	collab, err := s.resolveEnrollCollaborator(r, req.Token)
 	if err != nil {
 		writeMappedError(w, err)
 		return
@@ -247,7 +247,7 @@ func (s *Server) handleMFATOTPFinish(w http.ResponseWriter, r *http.Request) {
 		writeMappedError(w, err)
 		return
 	}
-	collab, err := s.resolveCollaboratorFromEnrollToken(r.Context(), req.Token)
+	collab, err := s.resolveEnrollCollaborator(r, req.Token)
 	if err != nil {
 		writeMappedError(w, err)
 		return
@@ -275,9 +275,13 @@ func (s *Server) handleMFATOTPFinish(w http.ResponseWriter, r *http.Request) {
 		writeMappedError(w, err)
 		return
 	}
-	if err := repository.ConsumeMFAEnrollToken(r.Context(), s.db, hashEnrollToken(req.Token)); err != nil {
-		writeMappedError(w, err)
-		return
+	// Session-mode enrollment (no magic-link token) has nothing to consume;
+	// only the token flow burns the single-use enroll token.
+	if strings.TrimSpace(req.Token) != "" {
+		if err := repository.ConsumeMFAEnrollToken(r.Context(), s.db, hashEnrollToken(req.Token)); err != nil {
+			writeMappedError(w, err)
+			return
+		}
 	}
 	if err := repository.MarkMFAEnrolled(r.Context(), s.db, collab.ID, time.Now()); err != nil {
 		writeMappedError(w, err)
@@ -450,7 +454,7 @@ func (s *Server) handleMFAWebAuthnBegin(w http.ResponseWriter, r *http.Request) 
 		return
 	}
 
-	collab, err := s.resolveWebAuthnCollaborator(r, req.Token)
+	collab, err := s.resolveEnrollCollaborator(r, req.Token)
 	if err != nil {
 		writeMappedError(w, err)
 		return
@@ -534,7 +538,7 @@ func (s *Server) handleMFAWebAuthnFinish(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	collab, err := s.resolveWebAuthnCollaborator(r, req.Token)
+	collab, err := s.resolveEnrollCollaborator(r, req.Token)
 	if err != nil {
 		writeMappedError(w, err)
 		return
@@ -662,11 +666,15 @@ func (s *Server) handleMFAWebAuthnFinish(w http.ResponseWriter, r *http.Request)
 	})
 }
 
-// resolveWebAuthnCollaborator pivots on the magic-link token: when
+// resolveEnrollCollaborator pivots on the magic-link token: when
 // non-empty we resolve from the token; otherwise from the session
-// cookie. This lets the same backend handler serve both /enroll (first-
-// time) and /me/mfa (add another device).
-func (s *Server) resolveWebAuthnCollaborator(r *http.Request, token string) (model.Collaborator, error) {
+// cookie. This lets the same enroll handlers serve both the magic-link
+// flow (/enroll, first-time, no session yet) and the session flow
+// (post-setup redirect + the console guard that bounces every no-MFA
+// session to /mfa/enroll, plus /me/mfa "add another device"). Shared by
+// the WebAuthn and TOTP enroll endpoints so neither strands a logged-in
+// collaborator who arrived without a token.
+func (s *Server) resolveEnrollCollaborator(r *http.Request, token string) (model.Collaborator, error) {
 	if strings.TrimSpace(token) != "" {
 		return s.resolveCollaboratorFromEnrollToken(r.Context(), token)
 	}
