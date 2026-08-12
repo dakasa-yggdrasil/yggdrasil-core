@@ -380,31 +380,77 @@ func (s *Server) handleCollaboratorTeamAdd(w http.ResponseWriter, r *http.Reques
 		writeMappedError(w, fmt.Errorf("team_id is required"))
 		return
 	}
-	collab, err := repository.GetCollaborator(r.Context(), s.db, id)
+	roleInTeam := strings.TrimSpace(req.RoleInTeam)
+	if roleInTeam == "" {
+		roleInTeam = "member"
+	}
+
+	// The upsert, the lifecycle audit row AND the team_membership.added canon
+	// event all land in ONE transaction. This is the same atomic state+emit
+	// contract handleTeamMembershipUpsert honors (server.go). Emitting the
+	// canon event is NOT optional bookkeeping: it is what drives the tartaro
+	// reactor to (re)materialize the collaborator's tartaro_actions trait and
+	// what the ground-truth effective-actions endpoint reflects. The previous
+	// version wrote only public.lifecycle_events (not a reactor source), so a
+	// team added through this path never propagated to effective access and
+	// the collaborator kept getting 403 until a manual sync.
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeMappedError(w, fmt.Errorf("begin tx: %w", err))
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	collab, err := repository.GetCollaboratorTx(r.Context(), tx, id)
 	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
 	active := true
-	roleInTeam := strings.TrimSpace(req.RoleInTeam)
-	if roleInTeam == "" {
-		roleInTeam = "member"
-	}
-	if _, err := repository.UpsertTeamMembership(r.Context(), s.db, model.UpsertTeamMembershipRequest{
+	membership, err := repository.UpsertTeamMembershipTx(r.Context(), tx, model.UpsertTeamMembershipRequest{
 		TeamID:         strings.TrimSpace(req.TeamID),
 		CollaboratorID: collab.ID.String(),
 		Role:           roleInTeam,
 		Active:         &active,
 		Source:         "lifecycle",
+	})
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
+	actorID := actorIDFromRequest(r)
+	if err := s.appendLifecycleTx(r.Context(), tx, collab.ID, model.LifecycleEventTeamJoined, map[string]any{
+		"team_id":      membership.TeamID.String(),
+		"team_slug":    membership.TeamSlug,
+		"role_in_team": roleInTeam,
+	}, actorID); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
+	if _, err := repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
+		Type:          repository.EventTypeTeamMembershipAdded,
+		SchemaVersion: "v1",
+		AggregateType: "team_membership",
+		AggregateID:   membership.ID.String(),
+		Payload: map[string]any{
+			"collaborator_id": membership.CollaboratorID.String(),
+			"team_id":         membership.TeamID.String(),
+			"role":            membership.Role,
+			"source":          membership.Source,
+		},
+		Actor: &model.EventActor{Type: model.ActorTypeAPI, ID: actorID},
 	}); err != nil {
-		writeMappedError(w, err)
+		writeMappedError(w, fmt.Errorf("emit team_membership.added: %w", err))
 		return
 	}
-	payload := map[string]any{"team_id": req.TeamID, "role_in_team": roleInTeam}
-	if err := appendLifecycleEvent(r, s.db, collab.ID, model.LifecycleEventTeamJoined, payload); err != nil {
-		writeMappedError(w, err)
+
+	if err := tx.Commit(); err != nil {
+		writeMappedError(w, fmt.Errorf("commit team-add: %w", err))
 		return
 	}
+
 	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collab})
 }
 
@@ -423,25 +469,65 @@ func (s *Server) handleCollaboratorTeamRemove(w http.ResponseWriter, r *http.Req
 		writeMappedError(w, fmt.Errorf("team_id is required"))
 		return
 	}
-	collab, err := repository.GetCollaborator(r.Context(), s.db, id)
+
+	// Same atomic state+emit contract as the add path. Emitting
+	// team_membership.removed in-tx is what makes an ungrant reactive: the
+	// tartaro reactor recomputes the trait and the effective-actions endpoint
+	// drops the revoked team's actions immediately, rather than the removal
+	// silently never propagating.
+	tx, err := s.db.BeginTx(r.Context(), nil)
+	if err != nil {
+		writeMappedError(w, fmt.Errorf("begin tx: %w", err))
+		return
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	collab, err := repository.GetCollaboratorTx(r.Context(), tx, id)
 	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
 	inactive := false
-	if _, err := repository.UpsertTeamMembership(r.Context(), s.db, model.UpsertTeamMembershipRequest{
+	membership, err := repository.UpsertTeamMembershipTx(r.Context(), tx, model.UpsertTeamMembershipRequest{
 		TeamID:         strings.TrimSpace(req.TeamID),
 		CollaboratorID: collab.ID.String(),
 		Active:         &inactive,
 		Source:         "lifecycle",
+	})
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
+	actorID := actorIDFromRequest(r)
+	if err := s.appendLifecycleTx(r.Context(), tx, collab.ID, model.LifecycleEventTeamLeft, map[string]any{
+		"team_id":   membership.TeamID.String(),
+		"team_slug": membership.TeamSlug,
+	}, actorID); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
+	if _, err := repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
+		Type:          repository.EventTypeTeamMembershipRemoved,
+		SchemaVersion: "v1",
+		AggregateType: "team_membership",
+		AggregateID:   membership.ID.String(),
+		Payload: map[string]any{
+			"collaborator_id": membership.CollaboratorID.String(),
+			"team_id":         membership.TeamID.String(),
+		},
+		Actor: &model.EventActor{Type: model.ActorTypeAPI, ID: actorID},
 	}); err != nil {
-		writeMappedError(w, err)
+		writeMappedError(w, fmt.Errorf("emit team_membership.removed: %w", err))
 		return
 	}
-	if err := appendLifecycleEvent(r, s.db, collab.ID, model.LifecycleEventTeamLeft, map[string]any{"team_id": req.TeamID}); err != nil {
-		writeMappedError(w, err)
+
+	if err := tx.Commit(); err != nil {
+		writeMappedError(w, fmt.Errorf("commit team-remove: %w", err))
 		return
 	}
+
 	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collab})
 }
 
