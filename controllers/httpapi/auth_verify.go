@@ -48,6 +48,15 @@ func (s *Server) handleAuthVerify(w http.ResponseWriter, r *http.Request) {
 	if token, ok := extractAuthToken(r); ok && s.db != nil {
 		session, collaborator, err := repository.ResolveAuthSession(r.Context(), s.db, token)
 		if err == nil {
+			// Universal-MFA invariant: an MFA-less session must not
+			// authenticate the operator/AI surfaces behind ForwardAuth.
+			// Fail closed — a missing auth_identity row (nil MFAEnrolledAt)
+			// is treated as not-enrolled and denied.
+			identity, _ := repository.GetAuthIdentityByCollaboratorID(r.Context(), s.db, collaborator.ID)
+			if identity.MFAEnrolledAt == nil {
+				http.Error(w, "unauthorized", http.StatusUnauthorized)
+				return
+			}
 			writeVerifyIdentity(w, map[string]any{
 				"sub":             collaborator.ID.String(),
 				"collaborator_id": collaborator.ID.String(),

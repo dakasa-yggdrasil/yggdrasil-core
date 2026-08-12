@@ -351,6 +351,20 @@ func (s *Server) handleSetupCommit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Step 2b: A non-active collaborator (suspended / offboarded) must not
+	// complete password setup and receive a session. Reject before writing
+	// the credential — the deferred Rollback un-consumes the token, so a
+	// re-activated account can still use the same link.
+	if !collaboratorEligibleForSetup(collab.Status) {
+		httperr.WriteProblem(w, http.StatusForbidden,
+			httperr.CodeAuthAccountInactive,
+			"Account not active",
+			"this account is not active and cannot complete password setup; contact your administrator",
+			httperr.WithInstance(r.URL.Path),
+			httperr.WithExtra("status", collab.Status))
+		return
+	}
+
 	// Step 3: Full policy check with user tokens.
 	commonPasswords, _ := commonPasswordsCached()
 	userTokens := []string{collab.PrimaryEmail, collab.Slug, collab.DisplayName}
@@ -451,8 +465,29 @@ func (s *Server) handleSetupCommit(w http.ResponseWriter, r *http.Request) {
 	}
 	committed = true
 
-	// Step 8/11: Open session OUTSIDE the committed transaction, then re-fetch collaborator
-	// to pick up any profile changes made inside the Tx.
+	// Step 8/11: MFA gate BEFORE minting any session. A collaborator who has
+	// never enrolled a second factor MUST NOT receive a general session from
+	// the setup flow — that would bypass the universal-MFA invariant exactly
+	// like a password login does (handleAuthLogin returns 428 with no
+	// cookie). Instead we return the enroll-required envelope carrying a
+	// usable enroll token; the client redirects into /mfa/enroll and only
+	// obtains a real session once MFA is marked enrolled.
+	//
+	// Re-fetch collaborator to pick up any profile changes made inside the Tx.
+	collab, _ = repository.GetCollaborator(r.Context(), s.db, collabID.String())
+	identity, err := repository.GetAuthIdentityByCollaboratorID(r.Context(), s.db, collabID)
+	if err != nil {
+		// Fail closed: without a confirmed MFA state we do not mint a session.
+		writeMappedError(w, err)
+		return
+	}
+	if identity.MFAEnrolledAt == nil {
+		// 428 + enroll link, NO session cookie. Mirrors handleAuthLogin.
+		s.writeMFAEnrollRequired(w, r, collab)
+		return
+	}
+
+	// MFA already enrolled: open a session OUTSIDE the committed transaction.
 	sessionMeta := mergeAuthMetadata(nil, r)
 	session, sessionToken, err := repository.CreateAuthSession(r.Context(), s.db, collabID, sessionMeta, authSessionTTL())
 	if err != nil {
@@ -460,23 +495,30 @@ func (s *Server) handleSetupCommit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	collab, _ = repository.GetCollaborator(r.Context(), s.db, collabID.String())
-	identity, _ := repository.GetAuthIdentityByCollaboratorID(r.Context(), s.db, collabID)
-
-	needsMFA := identity.MFAEnrolledAt == nil
-
 	resp := map[string]any{
 		"session":                 session,
 		"token":                   sessionToken,
 		"collaborator":            collab,
-		"mfa_enrollment_required": needsMFA,
-	}
-	if needsMFA {
-		resp["mfa_enroll_url"] = "/api/v1/auth/mfa/enroll"
+		"mfa_enrollment_required": false,
 	}
 
 	writeAuthCookie(w, sessionToken, session.ExpiresAt)
+	writeCSRFCookie(w, computeCSRFToken(session.ID), session.ExpiresAt)
 	writeJSON(w, http.StatusOK, resp)
+}
+
+// collaboratorEligibleForSetup reports whether a collaborator in the given
+// status may complete first-time password setup. Allowlist (fail closed):
+// only "active" and the onboarding state "pending_start" (plus the empty
+// default, which normalizes to active) qualify. Suspended / offboarded /
+// on_leave accounts are rejected.
+func collaboratorEligibleForSetup(status string) bool {
+	switch strings.ToLower(strings.TrimSpace(status)) {
+	case "", "active", "pending_start":
+		return true
+	default:
+		return false
+	}
 }
 
 // readAndCloseBody reads the entire request body and closes it.
@@ -723,8 +765,8 @@ func (s *Server) handlePasswordChange(w http.ResponseWriter, r *http.Request) {
 		SessionJTI:     nil,
 		Reason:         repository.SessionRevocationReasonPasswordRotated,
 		Metadata: map[string]any{
-			"source": source,
-			"ip":     r.RemoteAddr,
+			"source":          source,
+			"ip":              r.RemoteAddr,
 			"keep_session_id": session.ID.String(),
 		},
 	})
@@ -1052,4 +1094,3 @@ func (s *Server) verifyInlineMFAFactor(
 	// No factor supplied at all.
 	return errMFANotSupplied
 }
-

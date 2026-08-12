@@ -138,6 +138,7 @@ const (
 	CodeAuthSetupIdentityMissing    = "auth.setup_identity_missing"
 	CodeAuthResetTokenInvalid       = "auth.reset_token_invalid"
 	CodeAuthKEKNotConfigured        = "auth.kek_not_configured"
+	CodeAuthAccountInactive         = "auth.account_inactive"
 
 	// permission.*
 	CodePermissionDenied = "permission.denied"

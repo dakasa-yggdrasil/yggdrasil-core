@@ -95,8 +95,8 @@ type integrationCatalogEntryDetailResponse struct {
 }
 
 type collaboratorsResponse struct {
-	Collaborators []model.Collaborator       `json:"collaborators"`
-	Pagination    *model.PaginationResponse  `json:"pagination,omitempty"`
+	Collaborators []model.Collaborator      `json:"collaborators"`
+	Pagination    *model.PaginationResponse `json:"pagination,omitempty"`
 }
 
 type teamsResponse struct {
@@ -917,6 +917,26 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 			return
 		}
 
+		// Universal-MFA invariant: a human session whose collaborator has not
+		// enrolled a second factor must NOT reach console/ops routes. It may
+		// only hit the enroll / session / logout / password-change surface
+		// until MFA is enrolled. This catches any MFA-less session that
+		// predates the session-mint gate (login/setup) or was created by
+		// another path (SCIM/SSO/legacy). Fail closed: a missing auth_identity
+		// row counts as not-enrolled.
+		if !mfaEnrollmentExemptPath(r.URL.Path) {
+			identity, mfaErr := repository.GetAuthIdentityByCollaboratorID(r.Context(), s.db, collaborator.ID)
+			if mfaErr != nil && !errors.Is(mfaErr, repository.ErrAuthIdentityNotFound) {
+				writeMappedError(w, mfaErr)
+				return
+			}
+			if identity.MFAEnrolledAt == nil {
+				writeProblemJSON(w, http.StatusForbidden, httperr.CodeAuthMFANotEnrolled,
+					"MFA enrollment is required before accessing this resource.")
+				return
+			}
+		}
+
 		claims := map[string]any{
 			"collaborator_id": collaborator.ID.String(),
 			"session_id":      session.ID.String(),
@@ -924,6 +944,27 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 		}
 		next.ServeHTTP(w, r.WithContext(contextWithClaims(r.Context(), claims)))
 	})
+}
+
+// mfaEnrollmentExemptPath reports whether a gated path is reachable by a
+// human session that has not yet enrolled MFA — the minimal surface needed
+// to enroll a factor, inspect the session, change the password, or log out.
+// Everything else is blocked until MFA is enrolled. These prefixes are
+// mostly outside the console gate already (under /api/v1/auth/*), but the
+// allowlist keeps the invariant robust if a gated prefix ever overlaps.
+func mfaEnrollmentExemptPath(path string) bool {
+	for _, prefix := range []string{
+		"/api/v1/auth/session",
+		"/api/v1/auth/mfa/enroll",
+		"/api/v1/auth/mfa/factors",
+		"/api/v1/auth/passwords/change",
+		"/api/v1/auth/logout",
+	} {
+		if path == prefix || strings.HasPrefix(path, prefix+"/") {
+			return true
+		}
+	}
+	return false
 }
 
 // requiresAuthenticatedConsoleAPI returns true when the path must be gated
@@ -3203,16 +3244,16 @@ func writeMappedError(w http.ResponseWriter, err error) {
 // writeProblemEnvelope is the shared body writer for both writeJSONError
 // and writeMappedError. The wire shape:
 //
-//   Content-Type: application/problem+json
-//   {
-//     "type":   "https://yggdrasil.dakasa.me/errors/<code>",
-//     "title":  "<HTTP status text>",
-//     "status": <code>,
-//     "code":   "<machine-readable code>",
-//     "detail": "<original message>",
-//     "error":  "<original message>"    // LEGACY — preserved for one minor
-//                                       // version so consumers can migrate
-//   }
+//	Content-Type: application/problem+json
+//	{
+//	  "type":   "https://yggdrasil.dakasa.me/errors/<code>",
+//	  "title":  "<HTTP status text>",
+//	  "status": <code>,
+//	  "code":   "<machine-readable code>",
+//	  "detail": "<original message>",
+//	  "error":  "<original message>"    // LEGACY — preserved for one minor
+//	                                    // version so consumers can migrate
+//	}
 //
 // The legacy `error` key is THE ONE backward-compat hack §14 explicitly
 // permits (see contract: "code is added alongside for one minor version,
