@@ -1,0 +1,61 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_type",
+  "metadata": {
+    "name": "yggdrasil-self",
+    "namespace": "global",
+    "description": "Yggdrasil self-management integration type. Team grants on its instance resolve into yggdrasil:* ops permissions for non-admin collaborators.",
+    "labels": {
+      "bootstrap_source": "yggdrasil-core",
+      "provider": "yggdrasil-self",
+      "yggdrasil.io/catalog-domain": "platform",
+      "yggdrasil.io/catalog-entry": "self",
+      "yggdrasil.io/catalog-section": "operations"
+    }
+  },
+  "spec": {
+    "provider": "yggdrasil-self",
+    "domain": "platform",
+    "adapter": {
+      "version": "1.0.0",
+      "transport": "http_json",
+      "timeout_seconds": 30,
+      "endpoints": {
+        "describe": "/rpc/describe",
+        "execute": "/rpc/execute"
+      }
+    },
+    "capabilities": [
+      "describe",
+      "execute"
+    ],
+    "credential_schema": {
+      "mode": "none"
+    },
+    "credential_policy": {
+      "source": "none"
+    },
+    "instance_schema": {
+      "mode": "none"
+    },
+    "discovery": {
+      "mode": "push",
+      "cursor": "none"
+    },
+    "normalization": {
+      "external_id_path": "name",
+      "fallback_resource_prefix": "yggdrasil.self.custom"
+    },
+    "resource_types": [
+      {
+        "name": "control_plane",
+        "discoverable": false,
+        "canonical_prefix": "yggdrasil.self.control_plane",
+        "identity_template": "control_plane.{name}",
+        "default_actions": [
+          "dispatch_workflow_run"
+        ]
+      }
+    ]
+  }
+}
