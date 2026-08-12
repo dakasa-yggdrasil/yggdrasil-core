@@ -3,17 +3,35 @@ package httpapi
 import (
 	"fmt"
 	"net/http"
+	"os"
 	"sort"
+	"strings"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
 )
 
-const (
-	tartaroInstanceNamespace = "dakasa"
-	tartaroInstanceName      = "integration-tartaro-dakasa"
+// tartaroInstance{Namespace,Name} identify the Tartaro integration instance
+// whose team_grants materialize the tartaro_actions trait. A grant whose
+// instance does not match is ignored (see ListTeamGrants filtering below), so
+// a wrong name silently zeroes EVERY collaborator's effective tartaro actions,
+// which reads as a blanket 403 on Tartaro. The live instance is
+// tartaro-dakasa-validation (the only registered Tartaro integration_instance);
+// the previous hardcoded "integration-tartaro-dakasa" never existed, so no
+// team grant ever matched. Defaults to the live instance and is env-overridable
+// so another cluster can point at its own instance without a rebuild.
+var (
+	tartaroInstanceNamespace = tartaroInstanceEnvOr("YGGDRASIL_TARTARO_INSTANCE_NAMESPACE", "dakasa")
+	tartaroInstanceName      = tartaroInstanceEnvOr("YGGDRASIL_TARTARO_INSTANCE_NAME", "tartaro-dakasa-validation")
 )
+
+func tartaroInstanceEnvOr(key, def string) string {
+	if v := strings.TrimSpace(os.Getenv(key)); v != "" {
+		return v
+	}
+	return def
+}
 
 type effectivePerTeam struct {
 	TeamID   string   `json:"team_id"`
