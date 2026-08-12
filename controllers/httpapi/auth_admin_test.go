@@ -28,25 +28,33 @@ func TestAuthorizeAuthAdminRequestAcceptsAdminHeader(t *testing.T) {
 	}
 }
 
-func TestAuthorizeAuthAdminRequestFallsBackToWorkflowToken(t *testing.T) {
+// SECURITY (account-takeover chain, 2026-08-11): the broadly-distributed
+// YGGDRASIL_WORKFLOW_RUN_TOKEN must NOT act as auth-admin. Only the dedicated
+// YGGDRASIL_AUTH_ADMIN_TOKEN authorizes the static-token path; presenting the
+// workflow-run token as a Bearer is rejected.
+func TestAuthorizeAuthAdminRequestRejectsWorkflowToken(t *testing.T) {
 	t.Setenv("YGGDRASIL_AUTH_ADMIN_TOKEN", "")
 	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "workflow-secret")
 
 	req := httptest.NewRequest("POST", "/api/v1/auth/mfa/enroll/request", nil)
 	req.Header.Set("Authorization", "Bearer workflow-secret")
-	if err := authorizeAuthAdminRequest(req, nil); err != nil {
-		t.Fatalf("expected workflow bearer token to authorize request, got %v", err)
+	if err := authorizeAuthAdminRequest(req, nil); !errors.Is(err, errAuthAdminUnauthorized) {
+		t.Fatalf("expected workflow-run token to be rejected, got %v", err)
 	}
 }
 
-func TestAuthorizeAuthAdminRequestAcceptsAuthenticatedConsoleContext(t *testing.T) {
+// SECURITY (account-takeover chain, 2026-08-11): a bare authenticated console
+// context is NOT admin. Presence of claims proves authentication only; the
+// resolved collaborator must hold a REAL admin capability. Without a db to
+// resolve that capability the request fails closed.
+func TestAuthorizeAuthAdminRequestRejectsBareConsoleContext(t *testing.T) {
 	t.Setenv("YGGDRASIL_AUTH_ADMIN_TOKEN", "")
 	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "")
 
 	req := httptest.NewRequest("POST", "/api/v1/console/auth/providers", nil)
 	req = req.WithContext(contextWithClaims(req.Context(), map[string]any{"sub": "collab-1"}))
-	if err := authorizeAuthAdminRequest(req, nil); err != nil {
-		t.Fatalf("expected console-authenticated request to authorize, got %v", err)
+	if err := authorizeAuthAdminRequest(req, nil); !errors.Is(err, errAuthAdminUnauthorized) {
+		t.Fatalf("expected bare console context to be rejected (no admin capability resolvable), got %v", err)
 	}
 }
 
