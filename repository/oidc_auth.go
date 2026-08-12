@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/password"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
@@ -68,9 +69,12 @@ func GetOIDCAuthRequestByID(ctx context.Context, db *sql.DB, id uuid.UUID) (mode
 
 // GetOIDCAuthRequestByCode looks up the auth request via its issued
 // authorization code, joining oidc_auth_codes → oidc_auth_requests in a
-// single query. Returns ErrOIDCAuthCodeNotFound when no row matches.
-// Does NOT consume the code — callers that intend to exchange must call
-// ConsumeOIDCAuthCode separately within the same flow.
+// single query. Returns ErrOIDCAuthCodeNotFound when no row matches OR when
+// the code has already been consumed or has expired: an authorization code
+// is single-use and short-lived (RFC 6749 §4.1.2, §10.5), so a consumed or
+// expired code must be indistinguishable from a code that never existed.
+// The caller enforces the single-use guarantee atomically via
+// ConsumeOIDCAuthCode on the same exchange; this filter is defense in depth.
 func GetOIDCAuthRequestByCode(ctx context.Context, db *sql.DB, code string) (model.OIDCAuthRequest, error) {
 	var ar model.OIDCAuthRequest
 	var codeCh, codeChMethod, state, nonce sql.NullString
@@ -81,6 +85,8 @@ func GetOIDCAuthRequestByCode(ctx context.Context, db *sql.DB, code string) (mod
 		FROM oidc_auth_codes c
 		JOIN oidc_auth_requests ar ON ar.id = c.auth_request_id
 		WHERE c.code = $1
+		  AND c.consumed_at IS NULL
+		  AND c.expires_at > NOW()
 	`, code).Scan(
 		&ar.ID, &ar.ClientID, &ar.CollaboratorID, &ar.RedirectURI, pq.Array(&ar.Scopes),
 		&codeCh, &codeChMethod, &state, &nonce,
@@ -169,11 +175,22 @@ func ConsumeOIDCAuthCode(ctx context.Context, db *sql.DB, code string) (model.OI
 	return got, nil
 }
 
+// Refresh tokens are opaque bearer secrets. We never persist them in the
+// clear: only the SHA-256 hash (password.HashToken) is stored in the `token`
+// column, and the parent link (`rotated_from`) stores the hash of the parent
+// token so the recursive revoke-chain join stays consistent. Callers pass raw
+// tokens throughout; hashing is confined to this repository layer.
+//
+// NOTE (one-time invalidation): switching from cleartext to hashed storage
+// means any refresh-token rows written before this change no longer match a
+// hashed lookup. Existing OIDC sessions must silently re-authenticate on their
+// next refresh. This is a deliberate, documented one-time cost; no schema
+// migration is required because the column type (TEXT) is unchanged.
 func CreateOIDCRefreshToken(ctx context.Context, db *sql.DB, r model.OIDCRefreshToken) error {
 	_, err := db.ExecContext(ctx, `
 		INSERT INTO oidc_refresh_tokens (token, collaborator_id, client_id, scopes, expires_at, rotated_from)
 		VALUES ($1, $2, $3, $4, $5, $6)
-	`, r.Token, r.CollaboratorID, r.ClientID, pq.Array(r.Scopes), r.ExpiresAt, r.RotatedFrom)
+	`, password.HashToken(r.Token), r.CollaboratorID, r.ClientID, pq.Array(r.Scopes), r.ExpiresAt, hashNullableToken(r.RotatedFrom))
 	if err != nil {
 		return fmt.Errorf("create refresh token: %w", err)
 	}
@@ -185,7 +202,7 @@ func GetOIDCRefreshToken(ctx context.Context, db *sql.DB, token string) (model.O
 	err := db.QueryRowContext(ctx, `
 		SELECT token, collaborator_id, client_id, scopes, expires_at, rotated_from, revoked_at, created_at
 		FROM oidc_refresh_tokens WHERE token = $1
-	`, token).Scan(&r.Token, &r.CollaboratorID, &r.ClientID, pq.Array(&r.Scopes),
+	`, password.HashToken(token)).Scan(&r.Token, &r.CollaboratorID, &r.ClientID, pq.Array(&r.Scopes),
 		&r.ExpiresAt, &r.RotatedFrom, &r.RevokedAt, &r.CreatedAt)
 	if errors.Is(err, sql.ErrNoRows) {
 		return model.OIDCRefreshToken{}, ErrOIDCRefreshTokenNotFound
@@ -194,6 +211,15 @@ func GetOIDCRefreshToken(ctx context.Context, db *sql.DB, token string) (model.O
 		return model.OIDCRefreshToken{}, fmt.Errorf("get refresh token: %w", err)
 	}
 	return r, nil
+}
+
+// hashNullableToken hashes a nullable raw token pointer for storage, leaving
+// NULL as NULL. Used for the `rotated_from` self-reference.
+func hashNullableToken(raw *string) any {
+	if raw == nil {
+		return nil
+	}
+	return password.HashToken(*raw)
 }
 
 // RotateOIDCRefreshToken revokes the old token and inserts the new one in
@@ -207,21 +233,25 @@ func RotateOIDCRefreshToken(ctx context.Context, db *sql.DB, oldToken string, ne
 	}
 	defer tx.Rollback()
 
+	oldHash := password.HashToken(oldToken)
 	res, err := tx.ExecContext(ctx, `
 		UPDATE oidc_refresh_tokens SET revoked_at=NOW()
 		WHERE token = $1 AND revoked_at IS NULL
-	`, oldToken)
+	`, oldHash)
 	if err != nil {
 		return fmt.Errorf("revoke old: %w", err)
 	}
 	if rows, _ := res.RowsAffected(); rows == 0 {
 		return errors.New("old refresh token already revoked or missing")
 	}
+	// Store hashes only: the new token's `rotated_from` points at the hash of
+	// the old token so RevokeOIDCRefreshChainByRoot's recursive join (which
+	// compares hashed columns) stays consistent.
 	if _, err := tx.ExecContext(ctx, `
 		INSERT INTO oidc_refresh_tokens (token, collaborator_id, client_id, scopes, expires_at, rotated_from)
 		VALUES ($1, $2, $3, $4, $5, $6)
-	`, newToken.Token, newToken.CollaboratorID, newToken.ClientID,
-		pq.Array(newToken.Scopes), newToken.ExpiresAt, newToken.RotatedFrom); err != nil {
+	`, password.HashToken(newToken.Token), newToken.CollaboratorID, newToken.ClientID,
+		pq.Array(newToken.Scopes), newToken.ExpiresAt, oldHash); err != nil {
 		return fmt.Errorf("create new: %w", err)
 	}
 	return tx.Commit()
@@ -239,7 +269,7 @@ func RevokeOIDCRefreshChainByRoot(ctx context.Context, db *sql.DB, root string) 
 		)
 		UPDATE oidc_refresh_tokens SET revoked_at = NOW()
 		WHERE token IN (SELECT token FROM chain) AND revoked_at IS NULL
-	`, root)
+	`, password.HashToken(root))
 	if err != nil {
 		return 0, fmt.Errorf("revoke chain: %w", err)
 	}
