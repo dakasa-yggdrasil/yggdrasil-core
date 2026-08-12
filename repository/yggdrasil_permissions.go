@@ -39,6 +39,17 @@ func ResolveYggdrasilPermissions(
 		}
 	}
 
+	// Resolution mirrors the canonical manifest resolvers
+	// (repository.MaterializeReactions, internal/teamreconcile.ListUnprovisionedPairs):
+	// join by the real namespace/name COLUMNS (migration 00001, written by
+	// InsertManifest), NOT the metadata annotations blob (migration 00045),
+	// which InsertManifest never populates and therefore always resolves EMPTY.
+	// The integration_type is matched by the instance spec type_ref
+	// (namespace,name) - stored instances write type_ref as namespace/name with
+	// no id - and restricted to the yggdrasil-self type. A manifest_id path is
+	// COALESCEd in for selectors that serialize the id key (model.ManifestSelector
+	// emits "manifest_id"). Both sides require active=true so tombstoned
+	// versions never leak a grant.
 	rows, err := db.QueryContext(ctx, `
 		SELECT DISTINCT tg.action_name
 		FROM public.team_grants tg
@@ -47,12 +58,18 @@ func ResolveYggdrasilPermissions(
 		 AND tm.active = true
 		JOIN public.manifests mi
 		  ON mi.kind = 'integration_instance'
-		 AND mi.metadata->>'namespace' = tg.integration_instance_namespace
-		 AND mi.metadata->>'name'      = tg.integration_instance_name
+		 AND mi.active = true
+		 AND mi.namespace = tg.integration_instance_namespace
+		 AND mi.name      = tg.integration_instance_name
 		JOIN public.manifests mt
-		  ON mt.id = (mi.spec->'type_ref'->>'id')::uuid
-		 AND mt.kind = 'integration_type'
-		 AND mt.metadata->>'name' = 'yggdrasil-self'
+		  ON mt.kind = 'integration_type'
+		 AND mt.active = true
+		 AND mt.name = 'yggdrasil-self'
+		 AND (
+		       (mt.namespace = (mi.spec->'type_ref'->>'namespace')
+		         AND mt.name = (mi.spec->'type_ref'->>'name'))
+		    OR mt.id = NULLIF(mi.spec->'type_ref'->>'manifest_id', '')::uuid
+		 )
 		WHERE tm.collaborator_id = $1
 	`, collaboratorID)
 	if err != nil {

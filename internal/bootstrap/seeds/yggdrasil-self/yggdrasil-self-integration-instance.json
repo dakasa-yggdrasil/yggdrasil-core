@@ -1,0 +1,32 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_instance",
+  "metadata": {
+    "name": "yggdrasil-self",
+    "namespace": "global",
+    "description": "Canonical yggdrasil-self control-plane instance. team_grants reference (namespace=global, name=yggdrasil-self) so ResolveYggdrasilPermissions can materialise yggdrasil:* ops permissions.",
+    "labels": {
+      "bootstrap_source": "yggdrasil-core",
+      "provider": "yggdrasil-self"
+    }
+  },
+  "spec": {
+    "type_ref": {
+      "name": "yggdrasil-self",
+      "namespace": "global"
+    },
+    "status": "active",
+    "owners": [
+      "team:platform"
+    ],
+    "credentials": {},
+    "config": {},
+    "discovery": {
+      "enabled": false,
+      "mode": "manual"
+    },
+    "execution": {
+      "default_dry_run": false
+    }
+  }
+}

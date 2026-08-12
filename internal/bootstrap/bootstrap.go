@@ -55,8 +55,8 @@ type Config struct {
 // Result summarizes what Run did, letting callers log or assert a useful
 // message without parsing stdout.
 type Result struct {
-	AdminCreated     bool
-	AdminCollaborator *model.Collaborator
+	AdminCreated       bool
+	AdminCollaborator  *model.Collaborator
 	ManifestsValidated int
 	ManifestsCreated   int
 	ManifestsSkipped   int
@@ -72,6 +72,16 @@ type Result struct {
 // a partially-initialized state.
 func Run(ctx context.Context, db *sql.DB, cfg Config) (Result, error) {
 	var result Result
+
+	// Always provision the canonical yggdrasil-self integration_type +
+	// integration_instance. Without an instance at (global, yggdrasil-self)
+	// every non-god team_grant resolves EMPTY, so a fresh install must have
+	// it before any grant is issued. Idempotent (checksum-dedup), so it is
+	// safe on every process start and independent of the admin/manifest
+	// branches below.
+	if err := ensureYggdrasilSelf(ctx, db); err != nil {
+		return result, fmt.Errorf("ensure yggdrasil-self: %w", err)
+	}
 
 	if cfg.AdminUsername != "" {
 		created, collab, err := ensureFirstAdmin(ctx, db, cfg)
