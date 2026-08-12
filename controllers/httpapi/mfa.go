@@ -358,6 +358,18 @@ func webauthnCredentialsToLibCredentials(creds []model.WebAuthnCredential) []wa.
 			AttestationType:   c.AttestationType,
 			AttestationFormat: c.AttestationFormat,
 			Transport:         transports,
+			// Restore the immutable Backup Eligibility (and current Backup
+			// State) recorded at registration. go-webauthn's login validation
+			// rejects an assertion whose BE flag disagrees with the stored
+			// credential ("Backup Eligible flag inconsistency detected"), so a
+			// synced/backup-eligible passkey (iCloud Keychain, Google Password
+			// Manager, 1Password) fails EVERY login if we leave Flags at its
+			// zero value here. Persisted in libCredentialToModel; must be
+			// mapped back on read.
+			Flags: wa.CredentialFlags{
+				BackupEligible: c.BackupEligible,
+				BackupState:    c.BackupState,
+			},
 			Authenticator: wa.Authenticator{
 				AAGUID:    aaguid,
 				SignCount: c.SignCount,
