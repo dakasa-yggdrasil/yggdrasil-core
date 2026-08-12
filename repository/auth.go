@@ -44,15 +44,36 @@ var (
 	ErrAuthAccountLocked = errors.New("account locked")
 )
 
-// loginFailureThreshold + loginLockDuration tune the lockout behavior.
-// Match the conservative defaults documented in the audit fix plan:
-// 5 failed attempts → 15-min lock. Backstop against rapid attacks even
-// after the per-IP rate limiter; brute-force at the account level
-// (e.g. credential-stuffing distributed across many IPs).
-const (
-	loginFailureThreshold = 5
-	loginLockDuration     = 15 * time.Minute
+// loginFailureThreshold + loginLockDuration tune the account-level lockout,
+// a backstop behind the per-IP login rate limiter against credential-stuffing
+// spread across many IPs. Defaults now forgive ordinary fumbling (10 failed
+// attempts) and release quickly (5-min lock) instead of the original tight
+// 5-attempt / 15-min values, which locked a real user (or a developer
+// exercising the flow) out for a quarter hour after a handful of typos.
+// Both are env-overridable so an operator can tighten prod or loosen a
+// shared test env: YGGDRASIL_LOGIN_FAILURE_THRESHOLD, YGGDRASIL_LOGIN_LOCK_MINUTES.
+var (
+	loginFailureThreshold = loginFailureThresholdFromEnv()
+	loginLockDuration     = loginLockDurationFromEnv()
 )
+
+func loginFailureThresholdFromEnv() int {
+	if v := strings.TrimSpace(os.Getenv("YGGDRASIL_LOGIN_FAILURE_THRESHOLD")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return n
+		}
+	}
+	return 10
+}
+
+func loginLockDurationFromEnv() time.Duration {
+	if v := strings.TrimSpace(os.Getenv("YGGDRASIL_LOGIN_LOCK_MINUTES")); v != "" {
+		if n, err := strconv.Atoi(v); err == nil && n > 0 {
+			return time.Duration(n) * time.Minute
+		}
+	}
+	return 5 * time.Minute
+}
 
 // UpsertPasswordCredential creates or updates one local password credential for
 // an existing collaborator. The caller is responsible for hashing the password

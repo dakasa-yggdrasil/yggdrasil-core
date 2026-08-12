@@ -247,13 +247,16 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		server.validatorPhase = resolveValidatorPhase()
 	}
 
-	// Per-IP login rate limiter (security audit 2026-05-27 A4). The
-	// burst+refill numbers are conservative (5/burst, 1/min after that)
-	// — high enough to forgive a real user fumbling their password,
-	// low enough to slow distributed brute-force significantly. Idle
-	// entries GC after 10min so the in-memory map stays small.
+	// Per-IP login rate limiter (security audit 2026-05-27 A4). Defaults
+	// give an IP a roomy 20-attempt burst then one refill every 6s
+	// (10/min sustained) — high enough to forgive a real user fumbling
+	// their password AND a passkey sign-in that spends two tokens
+	// (begin + finish), low enough to keep distributed brute-force a
+	// real cost. Both knobs are env-overridable (YGGDRASIL_LOGIN_RATE_BURST,
+	// YGGDRASIL_LOGIN_RATE_REFILL_SECONDS). Idle entries GC after 10min so
+	// the in-memory map stays small.
 	if server.loginLimiter == nil {
-		server.loginLimiter = newLoginRateLimiter(5, time.Minute, 10*time.Minute)
+		server.loginLimiter = newLoginRateLimiter(loginRateBurst(), loginRateRefill(), 10*time.Minute)
 	}
 
 	// WebAuthn boot — registration ceremony session store + the lib's
