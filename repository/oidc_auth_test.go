@@ -105,11 +105,13 @@ func TestRefreshTokenRotationAndReplayChainRevoke(t *testing.T) {
 	db := dbForOIDCTest(t)
 	defer db.Close()
 	// Pre-clean residue from prior runs (defer db.Close() preempts t.Cleanup).
-	_, _ = db.ExecContext(context.Background(), `DELETE FROM oidc_refresh_tokens WHERE token IN ('r1','r2','r3')`)
+	// Refresh tokens are stored hashed, so delete by client scope rather than
+	// by raw token value.
+	_, _ = db.ExecContext(context.Background(), `DELETE FROM oidc_refresh_tokens WHERE client_id='auth-test-client'`)
 	ensureTestClient(t, db)
 	collabID := ensureTestCollaborator(t, db)
 	t.Cleanup(func() {
-		_, _ = db.ExecContext(context.Background(), `DELETE FROM oidc_refresh_tokens WHERE token IN ('r1','r2','r3')`)
+		_, _ = db.ExecContext(context.Background(), `DELETE FROM oidc_refresh_tokens WHERE client_id='auth-test-client'`)
 	})
 
 	r1 := model.OIDCRefreshToken{

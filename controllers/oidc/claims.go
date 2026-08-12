@@ -6,8 +6,10 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/monitoring"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 // loadCollaboratorForUserinfo fetches the minimal collaborator profile we
@@ -82,42 +84,68 @@ func buildRoleClaim(ctx context.Context, db *sql.DB, collaboratorID uuid.UUID) (
 }
 
 // buildPermissionsClaim resolves the effective permission set for a
-// collaborator by joining their primary role + every team membership against
-// role_permission_bindings. Returns sorted-distinct slugs.
+// collaborator by matching their primary role + every active team membership
+// against role_permission_bindings, then returning the bound permission names
+// (sorted, distinct).
+//
+// Schema (migration 00025): role_permission_bindings(role, permission_name)
+// binds a free-form `role` string to a permission name; permissions_catalog
+// keys permissions by `name` (there is no `slug`, `permission_id`, `subject`,
+// or `revoked_at` column). `role` is matched against both the collaborator's
+// own `collaborators.role` and their team slugs, since either can be granted
+// permissions. permission_name is an FK into permissions_catalog(name), so a
+// bound permission always exists in the catalog.
+//
+// A query error here is a real fault (the tables are part of the baseline
+// schema), so we LOG at error level rather than silently swallowing it. A
+// missing "permissions" claim would otherwise be invisible in every JWT.
 func buildPermissionsClaim(ctx context.Context, db *sql.DB, collaboratorID uuid.UUID) ([]string, error) {
 	rows, err := db.QueryContext(ctx, `
-		WITH subjects AS (
-			SELECT 'role:' || NULLIF(c.role, '') AS subject
+		WITH subject_roles AS (
+			SELECT NULLIF(c.role, '') AS role
 			FROM public.collaborators c
 			WHERE c.id = $1 AND COALESCE(c.role, '') <> ''
 			UNION
-			SELECT 'team:' || t.slug AS subject
+			SELECT t.slug AS role
 			FROM public.team_memberships tm
 			JOIN public.teams t ON t.id = tm.team_id
 			WHERE tm.collaborator_id = $1 AND tm.active = TRUE
 		)
-		SELECT DISTINCT pc.slug
+		SELECT DISTINCT rpb.permission_name
 		FROM public.role_permission_bindings rpb
-		JOIN public.permissions_catalog pc ON pc.id = rpb.permission_id
-		JOIN subjects s ON s.subject = rpb.subject
-		WHERE rpb.revoked_at IS NULL
-		ORDER BY pc.slug
+		JOIN subject_roles sr ON sr.role = rpb.role
+		ORDER BY rpb.permission_name
 	`, collaboratorID)
 	if err != nil {
-		// Permission catalog tables may not exist in older deployments; treat
-		// as empty rather than failing the whole token mint.
-		return []string{}, nil
+		logPermissionsClaimError(collaboratorID, err)
+		return nil, fmt.Errorf("query permissions: %w", err)
 	}
 	defer rows.Close()
 	out := make([]string, 0)
 	for rows.Next() {
-		var slug string
-		if err := rows.Scan(&slug); err != nil {
+		var name string
+		if err := rows.Scan(&name); err != nil {
+			logPermissionsClaimError(collaboratorID, err)
 			return nil, fmt.Errorf("scan permission: %w", err)
 		}
-		out = append(out, slug)
+		out = append(out, name)
 	}
-	return out, rows.Err()
+	if err := rows.Err(); err != nil {
+		logPermissionsClaimError(collaboratorID, err)
+		return nil, fmt.Errorf("permissions rows.Err: %w", err)
+	}
+	return out, nil
+}
+
+// logPermissionsClaimError emits an error-level log when permission resolution
+// fails, so a broken "permissions" claim is loud instead of silently absent.
+// No-op when the observability addon has not installed a logger.
+func logPermissionsClaimError(collaboratorID uuid.UUID, err error) {
+	if logger := monitoring.GetLogger(); logger != nil {
+		logger.Error("oidc: buildPermissionsClaim failed to resolve permissions",
+			zap.String("collaborator_id", collaboratorID.String()),
+			zap.Error(err))
+	}
 }
 
 // buildPictureClaim resolves the collaborator's avatar URL for the standard

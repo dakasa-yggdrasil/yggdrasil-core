@@ -328,13 +328,24 @@ func (s *Storage) AuthRequestByID(ctx context.Context, id string) (op.AuthReques
 	return newAuthRequestView(ar), nil
 }
 
-// AuthRequestByCode resolves an auth request via its issued code. The OP
-// calls this in the token endpoint to recover the original request before
-// issuing access/refresh tokens. Code consumption (single-use enforcement)
-// happens separately via repository.ConsumeOIDCAuthCode.
+// AuthRequestByCode resolves an auth request via its issued code and enforces
+// single-use. The OP calls this in the token endpoint to recover the original
+// request before issuing access/refresh tokens.
+//
+// SECURITY (oidc-auth-code-replay): an authorization code is single-use
+// (RFC 6749 §4.1.2 / §10.5). We first fetch the request via
+// GetOIDCAuthRequestByCode (which already rejects consumed/expired codes as
+// defense in depth), then atomically consume the code via ConsumeOIDCAuthCode.
+// The consume is the authoritative gate: two concurrent exchanges of the same
+// code both pass the fetch, but only one wins the serializable consume; the
+// loser gets ErrOIDCAuthCodeAlreadyUsed and the exchange fails. A replayed
+// (already-consumed) code fails the fetch outright.
 func (s *Storage) AuthRequestByCode(ctx context.Context, code string) (op.AuthRequest, error) {
 	ar, err := repository.GetOIDCAuthRequestByCode(ctx, s.db, code)
 	if err != nil {
+		return nil, err
+	}
+	if _, err := repository.ConsumeOIDCAuthCode(ctx, s.db, code); err != nil {
 		return nil, err
 	}
 	return newAuthRequestView(ar), nil
