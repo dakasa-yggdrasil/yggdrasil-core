@@ -152,6 +152,28 @@ export YGGDRASIL_BOOTSTRAP_ADMIN_USERNAME=admin \
        YGGDRASIL_BOOTSTRAP_MANIFESTS_PATH=/app/docs/bootstrap/seeds
 ```
 
+Reviewed first-party native tools can be registered as public OIDC clients at
+startup:
+
+```sh
+export YGGDRASIL_OIDC_PUBLIC_CLIENTS_JSON='[
+  {
+    "client_id": "dakasa-cli",
+    "redirect_uris": ["http://127.0.0.1:47819/callback"],
+    "scopes": ["openid", "email", "profile", "roles"],
+    "grant_types": ["authorization_code", "refresh_token"],
+    "pkce_required": true,
+    "access_token_lifetime_seconds": 900
+  }
+]'
+```
+
+The value is strict JSON. Public clients never have a client secret, require
+PKCE, and accept HTTP redirects only on localhost or a loopback IP. Invalid
+entries and collisions with existing confidential clients fail startup before
+the OIDC server is mounted. See
+[ADR-0011](./adr/0011-bootstrap-internal-public-oidc-clients-declaratively.md).
+
 Manage the process with systemd, supervisord, or whatever fits your
 environment. Register the adapter instances manually via
 `yggdrasil apply -f <instance.yaml>` if you want the deploy
