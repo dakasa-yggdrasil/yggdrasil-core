@@ -7,7 +7,7 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 1570001687ebb59d7c68b21fecda32fd36da49dd
-verified_at: 2026-08-05
-by: rollout (docs-freshness convention)
-note: Establishes the stamp. Not yet AI-reconciled.
+verified_at_commit: f290b2a3151310bb9c4cad0c0ffa71fe6526c8e3
+verified_at: 2026-08-25
+by: local repository reconciliation
+note: Reconciled declarative PKCE-only public OIDC client bootstrap and deployment guidance.
