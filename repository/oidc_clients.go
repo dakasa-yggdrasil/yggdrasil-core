@@ -11,6 +11,11 @@ import (
 )
 
 var ErrOIDCClientNotFound = errors.New("oidc client not found")
+var ErrOIDCClientTypeConflict = errors.New("oidc client already exists as a confidential client")
+
+type oidcClientExecutor interface {
+	ExecContext(context.Context, string, ...any) (sql.Result, error)
+}
 
 func GetOIDCClientByID(ctx context.Context, db *sql.DB, clientID string) (model.OIDCClient, error) {
 	row := db.QueryRowContext(ctx, `
@@ -91,6 +96,53 @@ func UpsertOIDCClient(ctx context.Context, db *sql.DB, c model.OIDCClient) error
 	)
 	if err != nil {
 		return fmt.Errorf("upsert oidc client: %w", err)
+	}
+	return nil
+}
+
+// UpsertOIDCPublicClient creates or refreshes an environment-managed public
+// client without ever replacing a confidential client's secret. A deployment
+// typo that reuses an existing confidential client id therefore fails closed.
+func UpsertOIDCPublicClient(ctx context.Context, db oidcClientExecutor, c model.OIDCClient) error {
+	if c.ClientSecretHash != "" {
+		return fmt.Errorf("public oidc client must not include a client secret")
+	}
+	var accessTokenTTL any
+	if c.AccessTokenLifetimeSeconds != nil {
+		accessTokenTTL = *c.AccessTokenLifetimeSeconds
+	}
+	result, err := db.ExecContext(ctx, `
+		INSERT INTO oidc_clients (
+			client_id, client_secret_hash, redirect_uris, post_logout_redirect_uris,
+			scopes, grant_types, pkce_required, access_token_lifetime_seconds
+		)
+		VALUES ($1, '', $2, $3, $4, $5, $6, $7)
+		ON CONFLICT (client_id) DO UPDATE SET
+			redirect_uris = EXCLUDED.redirect_uris,
+			post_logout_redirect_uris = EXCLUDED.post_logout_redirect_uris,
+			scopes = EXCLUDED.scopes,
+			grant_types = EXCLUDED.grant_types,
+			pkce_required = EXCLUDED.pkce_required,
+			access_token_lifetime_seconds = EXCLUDED.access_token_lifetime_seconds
+		WHERE oidc_clients.client_secret_hash = ''
+	`,
+		c.ClientID,
+		pq.Array(c.RedirectURIs),
+		pq.Array(c.PostLogoutRedirectURIs),
+		pq.Array(c.Scopes),
+		pq.Array(c.GrantTypes),
+		c.PKCERequired,
+		accessTokenTTL,
+	)
+	if err != nil {
+		return fmt.Errorf("upsert public oidc client: %w", err)
+	}
+	rows, err := result.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("inspect public oidc client upsert: %w", err)
+	}
+	if rows == 0 {
+		return ErrOIDCClientTypeConflict
 	}
 	return nil
 }

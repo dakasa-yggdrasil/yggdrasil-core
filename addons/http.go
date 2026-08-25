@@ -26,7 +26,7 @@ func init() {
 	Register("http", bootstrapHTTP, 30)
 }
 
-func bootstrapHTTP(_ context.Context, app *runtime.ServiceApp) error {
+func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 	db, ok := Postgres(app)
 	if !ok {
 		return fmt.Errorf("postgres addon is not available")
@@ -60,7 +60,10 @@ func bootstrapHTTP(_ context.Context, app *runtime.ServiceApp) error {
 	// across multi-pod startup races via FOR UPDATE on the singleton
 	// oidc_provider_settings row.
 	if issuer := strings.TrimSpace(os.Getenv("YGGDRASIL_OIDC_ISSUER")); issuer != "" {
-		if _, ensureErr := oidc.EnsureSigningKey(context.Background(), db); ensureErr != nil {
+		if ensureErr := oidc.EnsureConfiguredPublicClients(ctx, db, os.Getenv("YGGDRASIL_OIDC_PUBLIC_CLIENTS_JSON")); ensureErr != nil {
+			return fmt.Errorf("oidc public client bootstrap: %w", ensureErr)
+		}
+		if _, ensureErr := oidc.EnsureSigningKey(ctx, db); ensureErr != nil {
 			return fmt.Errorf("oidc signing key bootstrap: %w", ensureErr)
 		}
 		opts = append(opts, httpapi.WithOIDCIssuer(issuer))

@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**10 decisions.**
+**11 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -20,3 +20,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0008](0008-integration-surfaces-federated-per-adapter-admin-spas-discov.md) | Integration Surfaces — federated per-adapter admin SPAs discovered by manifest and slot | Accepted | 2026-05-17 | yggdrasil-core, surface-console, surface-template, per-`integration-<name>` adapter repos |
 | [0009](0009-replace-per-user-tartaro-rbac-roles-with-team-scoped-action.md) | Replace per-user Tartaro RBAC roles with team-scoped action grants materialized via the reactor framework | Accepted | 2026-05-18 | yggdrasil-core (canon events + team_grant endpoints), integration-tartaro-dakasa, dakasa-tartaro-fe (tartaro-operations, tartaro-api and sibling services), dakasa-commons |
 | [0010](0010-team-mirroring-reactors-ack-via-a-reserved-envelope-into-a-p.md) | Team-mirroring reactors ack via a reserved envelope into a provisioning log, self-healed by an anti-join reconcile sweep | Accepted | 2026-05-18 | yggdrasil-core (reactor dispatcher extension), integration-slack, integration-github, integration-google-workspace |
+| [0011](0011-bootstrap-internal-public-oidc-clients-declaratively.md) | Bootstrap internal public OIDC clients declaratively | Accepted | 2026-08-25 | yggdrasil-core / internal OIDC client lifecycle |
