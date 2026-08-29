@@ -93,9 +93,16 @@ func authorizationPolicyInput(subjects []model.RBACSubject, input map[string]any
 		input = map[string]any{}
 	}
 
-	normalized := make(map[string]any, len(input)+1)
+	normalized := make(map[string]any, len(input)+2)
+	rawInput := make(map[string]any, len(input))
 	for key, value := range input {
 		normalized[key] = value
+		rawInput[key] = value
+	}
+	// Policy manifests describe runtime values under input.*. Preserve the
+	// historical flat keys while also exposing that canonical namespace.
+	if _, exists := normalized["input"]; !exists {
+		normalized["input"] = rawInput
 	}
 
 	var subjectData map[string]any

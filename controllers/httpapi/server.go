@@ -862,13 +862,13 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 		// it as an alternative to the session cookie so the audit-flagged
 		// leaking GETs (security audit 2026-05-27 A2) can still be
 		// consumed by automation that doesn't carry a session.
-		if authorizeWorkflowRunRequest(r) == nil {
-			if strings.TrimSpace(os.Getenv("YGGDRASIL_WORKFLOW_RUN_TOKEN")) != "" {
-				// Token was present AND matched — treat as authenticated
-				// without attaching collaborator claims (no human actor).
-				next.ServeHTTP(w, r)
-				return
-			}
+		if actor, err := authenticateWorkflowRunRequest(r); err == nil &&
+			(actor.Subject.ID != "" || actor.CollaboratorID != "") {
+			// A configured legacy or scoped workflow token matched. Scoped
+			// tokens are path-limited by authenticateWorkflowRunRequest, so they
+			// cannot inherit this gate on manifest/admin endpoints.
+			next.ServeHTTP(w, r)
+			return
 		}
 
 		// OIDC JWT bearer path (opt-in via consoleJWTVerifier). Accept a JWT
@@ -892,7 +892,9 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 					if sid, ok := jwtClaims["sid"].(string); ok && sid != "" {
 						norm["session_id"] = sid
 					}
-					next.ServeHTTP(w, r.WithContext(contextWithClaims(r.Context(), norm)))
+					ctx := contextWithClaims(r.Context(), norm)
+					ctx = contextWithCSRFBearerAuth(ctx)
+					next.ServeHTTP(w, r.WithContext(ctx))
 					return
 				}
 			}
@@ -2589,10 +2591,12 @@ func (s *Server) handleGuardianApprovalDecision(w http.ResponseWriter, r *http.R
 	spec = manifestengine.NormalizeGuardianApprovalSpec(spec)
 
 	status := strings.ToLower(strings.TrimSpace(req.Status))
-	switch status {
-	case model.GuardianApprovalStatusApproved, model.GuardianApprovalStatusRejected:
-	default:
-		writeMappedError(w, fmt.Errorf("guardian approval status %q is unsupported", req.Status))
+	if err := validateGuardianApprovalDecisionTransition(spec.Status, status); err != nil {
+		if errors.Is(err, errGuardianApprovalAlreadyDecided) {
+			writeProblemJSON(w, http.StatusConflict, "approval.already_decided", err.Error())
+		} else {
+			writeMappedError(w, err)
+		}
 		return
 	}
 
@@ -2634,6 +2638,22 @@ func (s *Server) handleGuardianApprovalDecision(w http.ResponseWriter, r *http.R
 	// including the approved one). The core's responsibility ends at
 	// persisting the decision.
 	writeJSON(w, http.StatusCreated, map[string]any{"manifest": updatedManifest})
+}
+
+var errGuardianApprovalAlreadyDecided = errors.New("guardian approval was already decided")
+
+func validateGuardianApprovalDecisionTransition(current, requested string) error {
+	current = strings.ToLower(strings.TrimSpace(current))
+	requested = strings.ToLower(strings.TrimSpace(requested))
+	if current != model.GuardianApprovalStatusPending {
+		return fmt.Errorf("%w with status %q", errGuardianApprovalAlreadyDecided, current)
+	}
+	switch requested {
+	case model.GuardianApprovalStatusApproved, model.GuardianApprovalStatusRejected:
+		return nil
+	default:
+		return fmt.Errorf("guardian approval status %q is unsupported", requested)
+	}
 }
 
 func guardianApprovalMetadataInput(manifestRecord model.Manifest, status string) model.ManifestMetadataInput {

@@ -56,13 +56,12 @@ func TestComputeCSRFToken_SecretRotation(t *testing.T) {
 	}
 }
 
-// TestCSRFEnforceMode_DefaultsToWarn: a fresh deploy starts in warn mode
-// so the surface-console rollout doesn't 403-storm. Flip explicitly via
-// YGGDRASIL_CSRF_ENFORCE=enforce once both sides ship.
-func TestCSRFEnforceMode_DefaultsToWarn(t *testing.T) {
+// TestCSRFEnforceMode_DefaultsToEnforce locks down fail-closed production
+// behavior when the deployment omits the rollout switch.
+func TestCSRFEnforceMode_DefaultsToEnforce(t *testing.T) {
 	t.Setenv("YGGDRASIL_CSRF_ENFORCE", "")
-	if got := csrfEnforceMode(); got != "warn" {
-		t.Fatalf("default mode: expected warn, got %q", got)
+	if got := csrfEnforceMode(); got != "enforce" {
+		t.Fatalf("default mode: expected enforce, got %q", got)
 	}
 }
 
@@ -75,13 +74,18 @@ func TestCSRFEnforceMode_RespectsExplicitEnforce(t *testing.T) {
 	}
 }
 
-// TestCSRFEnforceMode_GarbageDefaultsWarn: unknown values fall back to
-// warn (fail-open during partial rollouts; the metric still records the
-// would-have-failure so operators see the signal).
-func TestCSRFEnforceMode_GarbageDefaultsWarn(t *testing.T) {
+// TestCSRFEnforceMode_GarbageDefaultsEnforce: typos cannot disable CSRF.
+func TestCSRFEnforceMode_GarbageDefaultsEnforce(t *testing.T) {
 	t.Setenv("YGGDRASIL_CSRF_ENFORCE", "panic")
+	if got := csrfEnforceMode(); got != "enforce" {
+		t.Fatalf("garbage mode should fall back to enforce, got %q", got)
+	}
+}
+
+func TestCSRFEnforceMode_RespectsExplicitWarn(t *testing.T) {
+	t.Setenv("YGGDRASIL_CSRF_ENFORCE", "warn")
 	if got := csrfEnforceMode(); got != "warn" {
-		t.Fatalf("garbage mode should fall back to warn, got %q", got)
+		t.Fatalf("explicit warn: expected warn, got %q", got)
 	}
 }
 
@@ -116,8 +120,8 @@ func TestCSRFMethodRequiresToken(t *testing.T) {
 	}
 }
 
-// TestCSRFPathExempt covers the exemption allowlist: login/logout/setup,
-// workflow_run automation, and admin-token endpoints. A regression here
+// TestCSRFPathExempt covers the exemption allowlist. Machine-token callers
+// bypass by identity, not URL, so dual-auth routes stay protected. A regression here
 // would either 403-storm legitimate automation (false positive) or open
 // a CSRF hole in the SPA-routed endpoints (false negative).
 func TestCSRFPathExempt(t *testing.T) {
@@ -134,13 +138,12 @@ func TestCSRFPathExempt(t *testing.T) {
 		{"/api/v1/auth/passwords/reset", true},
 		{"/api/v1/auth/passwords/forgot", true},
 		{"/api/v1/auth/mfa/enroll/request", true},
-		// Workflow-run / webhook automation.
-		{"/api/v1/workflow-runs", true},
-		{"/api/v1/manifests", true},
-		{"/api/v1/events", true},
+		// Webhook automation stays exempt; dual-auth routes do not.
+		{"/api/v1/workflow-runs", false},
+		{"/api/v1/manifests", false},
+		{"/api/v1/events", false},
 		{"/api/v1/github/webhook", true},
-		// Admin-token endpoints.
-		{"/api/v1/admin/collaborators/abc/revoke-sessions", true},
+		{"/api/v1/admin/collaborators/abc/revoke-sessions", false},
 		// SAML SP-initiated POSTs are cross-site by spec.
 		{"/saml/sso", true},
 		{"/saml/slo", true},
@@ -333,9 +336,8 @@ func TestCSRFMiddleware_POSTMissingTokenWarn(t *testing.T) {
 	}
 }
 
-// TestCSRFMiddleware_ExemptPathPassesEnforce: the bearer-auth automation
-// paths are exempt from the SPA CSRF model. Otherwise every adapter would
-// 403 in enforce mode.
+// TestCSRFMiddleware_ExemptPathPassesEnforce covers only genuinely public or
+// cross-site endpoints. Machine callers bypass by authenticated identity.
 func TestCSRFMiddleware_ExemptPathPassesEnforce(t *testing.T) {
 	metrics.ResetForTest()
 	t.Setenv("YGGDRASIL_CSRF_ENFORCE", "enforce")
@@ -349,10 +351,8 @@ func TestCSRFMiddleware_ExemptPathPassesEnforce(t *testing.T) {
 
 	for _, path := range []string{
 		"/api/v1/auth/login",
-		"/api/v1/workflow-runs",
-		"/api/v1/manifests",
-		"/api/v1/events",
-		"/api/v1/admin/collaborators/abc/revoke-sessions",
+		"/api/v1/github/webhook",
+		"/saml/sso",
 	} {
 		called = false
 		req := httptest.NewRequest(http.MethodPost, path, strings.NewReader(`{}`))
@@ -364,6 +364,63 @@ func TestCSRFMiddleware_ExemptPathPassesEnforce(t *testing.T) {
 		if !called {
 			t.Errorf("exempt path %q should pass through CSRF middleware in enforce mode", path)
 		}
+	}
+}
+
+func TestCSRFMiddleware_SessionWorkflowRunRequiresToken(t *testing.T) {
+	metrics.ResetForTest()
+	t.Setenv("YGGDRASIL_CSRF_ENFORCE", "enforce")
+
+	srv := &Server{logger: zap.NewNop()}
+	handler := srv.csrfMiddleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("session-authenticated workflow dispatch must not bypass CSRF by URL")
+	}))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workflow-runs", strings.NewReader(`{}`))
+	req = req.WithContext(contextWithClaims(req.Context(), map[string]any{"session_id": uuid.NewString()}))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("session workflow run without CSRF token: expected 403, got %d", w.Code)
+	}
+}
+
+func TestCSRFMiddleware_VerifiedBearerPassesWithoutSessionToken(t *testing.T) {
+	metrics.ResetForTest()
+	t.Setenv("YGGDRASIL_CSRF_ENFORCE", "enforce")
+
+	srv := &Server{logger: zap.NewNop()}
+	called := false
+	handler := srv.csrfMiddleware(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workflow-runs", strings.NewReader(`{}`))
+	ctx := contextWithClaims(req.Context(), map[string]any{"collaborator_id": uuid.NewString()})
+	req = req.WithContext(contextWithCSRFBearerAuth(ctx))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if !called || w.Code != http.StatusOK {
+		t.Fatalf("verified bearer should bypass cookie CSRF; called=%v status=%d", called, w.Code)
+	}
+}
+
+func TestCSRFMiddleware_InvalidSessionFailsClosed(t *testing.T) {
+	metrics.ResetForTest()
+	t.Setenv("YGGDRASIL_CSRF_ENFORCE", "enforce")
+
+	srv := &Server{logger: zap.NewNop()}
+	handler := srv.csrfMiddleware(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("invalid session identity must fail closed")
+	}))
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/me/preferences", strings.NewReader(`{}`))
+	req = req.WithContext(contextWithClaims(req.Context(), map[string]any{"session_id": "not-a-uuid"}))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, req)
+	if w.Code != http.StatusForbidden {
+		t.Fatalf("invalid session: expected 403, got %d", w.Code)
+	}
+	if got := metrics.CSRFRejectedSnapshot()[metrics.CSRFRejectedInvalidSession+"|"+metrics.CSRFModeEnforce]; got != 1 {
+		t.Fatalf("invalid_session metric: expected 1, got %d", got)
 	}
 }
 

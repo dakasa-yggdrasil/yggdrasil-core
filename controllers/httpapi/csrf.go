@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/base64"
@@ -39,13 +40,11 @@ import (
 //   - GET / HEAD / OPTIONS (state-changing methods only)
 //   - Public endpoints (/api/v1/auth/login, /auth/passwords/setup, etc.)
 //     where the caller has no session yet
-//   - Workflow-run token / manifest-token paths — those carry their own
-//     bearer auth and are called by automation, not browsers
 //   - Webhook receivers — third-party callers can't echo our header
 //
 // Mode is gated by `YGGDRASIL_CSRF_ENFORCE`:
 //
-//   - "warn" (default): missing/invalid header logs a warning + bumps a
+//   - "warn": missing/invalid header logs a warning + bumps a
 //     metric but still passes the request through. Lets us roll the
 //     backend independent of surface-console; flip to enforce once both
 //     sides ship the matching change.
@@ -59,6 +58,21 @@ const csrfTokenCookieName = "yggdrasil_csrf_token"
 
 // csrfHeaderName is the request header the SPA must echo on mutating calls.
 const csrfHeaderName = "X-CSRF-Token"
+
+// ctxKeyCSRFBearerAuth marks a request authenticated by a verified OIDC
+// bearer JWT. It deliberately differs from session-cookie claims: bearer
+// credentials are not attached automatically by a browser and therefore do
+// not participate in the cookie-CSRF threat model.
+type ctxKeyCSRFBearerAuth struct{}
+
+func contextWithCSRFBearerAuth(ctx context.Context) context.Context {
+	return context.WithValue(ctx, ctxKeyCSRFBearerAuth{}, true)
+}
+
+func csrfBearerAuthFromContext(ctx context.Context) bool {
+	marked, _ := ctx.Value(ctxKeyCSRFBearerAuth{}).(bool)
+	return marked
+}
 
 // csrfSecret returns the HMAC key for deriving CSRF tokens.
 //
@@ -120,17 +134,15 @@ func clearCSRFCookie(w http.ResponseWriter) {
 }
 
 // csrfEnforceMode resolves the enforcement mode (warn or enforce).
-// Default warn so a partial rollout (backend ships first, surface-console
-// later) doesn't 403-storm legitimate traffic.
+// Only an explicit "warn" opts out. Missing or invalid configuration fails
+// closed so a deployment typo cannot silently disable the protection.
 func csrfEnforceMode() string {
 	value := strings.ToLower(strings.TrimSpace(os.Getenv("YGGDRASIL_CSRF_ENFORCE")))
 	switch value {
-	case "enforce":
-		return "enforce"
-	case "warn", "":
+	case "warn":
 		return "warn"
 	default:
-		return "warn"
+		return "enforce"
 	}
 }
 
@@ -149,8 +161,10 @@ func csrfMethodRequiresToken(method string) bool {
 // SPA-session CSRF model. Login/logout aren't gated because the caller
 // has no session yet (login) or just terminated it (logout). Setup +
 // password reset use one-time bearer tokens from email links. The
-// workflow_run / webhook routes carry their own bearer auth and are
-// hit by non-browser automation that can't echo X-CSRF-Token.
+// Machine callers do not need path exemptions: authenticated bearer/token
+// requests carry no browser-session claims (or the explicit bearer marker)
+// and are bypassed by identity below. This is important because several of
+// the same URLs also accept browser sessions and must remain CSRF-protected.
 func csrfPathExempt(path string) bool {
 	exemptPrefixes := []string{
 		"/api/v1/auth/login",
@@ -167,22 +181,9 @@ func csrfPathExempt(path string) bool {
 		// Third-party flows kick off as top-level navigations; the OAuth
 		// state cookie carries CSRF protection for the callback.
 		"/api/v1/auth/third-party/",
-		// Bearer-token endpoints: workflow-run automation + webhook
-		// receivers don't echo our header. They have their own auth.
-		"/api/v1/workflow-runs",
-		"/api/v1/manifests",
-		"/api/v1/events",
+		// Webhook receivers don't echo our header. They carry their own
+		// signature/token authentication and are not browser-session routes.
 		"/api/v1/github/webhook",
-		"/api/v1/integration-types/",
-		"/api/v1/products/",
-		"/api/v1/bootstrap",
-		"/api/v1/provision",
-		"/api/v1/secrets/materialize-all",
-		"/api/v1/oidc/introspect",
-		"/api/v1/admin/", // admin-token endpoints (revoke-sessions etc.)
-		// Catalog discovery register comes from adapter automation, not
-		// the SPA.
-		"/api/v1/catalog/discovery/register",
 		// Saml endpoints: SP-initiated SSO POST is cross-site by spec.
 		"/saml/sso",
 		"/saml/slo",
@@ -203,7 +204,7 @@ func csrfPathExempt(path string) bool {
 //
 //  1. If method isn't state-changing → pass.
 //  2. If path is exempt → pass.
-//  3. If caller has no session (workflow_run_token / unauthenticated) → pass.
+//  3. If caller has no session, or uses a verified bearer JWT → pass.
 //  4. Recompute the expected CSRF token from session_id.
 //  5. Compare against `X-CSRF-Token` header (constant-time).
 //  6. On mismatch / missing: warn-mode logs + bumps metric; enforce-mode
@@ -218,6 +219,10 @@ func (s *Server) csrfMiddleware(next http.Handler) http.Handler {
 			next.ServeHTTP(w, r)
 			return
 		}
+		if csrfBearerAuthFromContext(r.Context()) {
+			next.ServeHTTP(w, r)
+			return
+		}
 		claims, ok := claimsFromContext(r.Context())
 		if !ok {
 			// No session → no CSRF token to check. Token-authed
@@ -228,15 +233,10 @@ func (s *Server) csrfMiddleware(next http.Handler) http.Handler {
 		sessionIDStr, _ := claims["session_id"].(string)
 		sessionID, err := uuid.Parse(sessionIDStr)
 		if err != nil {
-			// Defensive: a session without a parseable id is a bug
-			// upstream. Don't 403-storm — log and pass.
-			if s.logger != nil {
-				s.logger.Warn("csrf: session_id in claims not a UUID",
-					zap.String("path", r.URL.Path),
-					zap.String("session_id", sessionIDStr),
-				)
+			s.csrfFail(w, r, "invalid_session", "csrf.invalid_session", "The active session identity is invalid")
+			if csrfEnforceMode() != "enforce" {
+				next.ServeHTTP(w, r)
 			}
-			next.ServeHTTP(w, r)
 			return
 		}
 

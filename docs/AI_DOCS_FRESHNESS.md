@@ -7,7 +7,7 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: f290b2a3151310bb9c4cad0c0ffa71fe6526c8e3
-verified_at: 2026-08-25
-by: local repository reconciliation
-note: Reconciled declarative PKCE-only public OIDC client bootstrap and deployment guidance.
+verified_at_commit: 8db53232e4a2a73d65b78d617182ced154b63126
+verified_at: 2026-08-29
+by: Codex feature-linked audit
+note: Reconciled fail-closed RBAC and CSRF, approval immutability, scoped workflow identities, and manifest-backed dispatch authorization.

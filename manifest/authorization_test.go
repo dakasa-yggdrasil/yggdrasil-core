@@ -286,3 +286,58 @@ func TestEvaluateAuthorizationSubjectsResolveTeamAccess(t *testing.T) {
 		t.Fatalf("expected resolved subjects, got %#v", response.ResolvedSubjects)
 	}
 }
+
+func TestAuthorizationPolicyInputExposesCanonicalInputNamespace(t *testing.T) {
+	got := authorizationPolicyInput(
+		[]model.RBACSubject{{Type: "service", ID: "cd-bot"}},
+		map[string]any{"environment": "validation"},
+	)
+	nested, ok := got["input"].(map[string]any)
+	if !ok {
+		t.Fatalf("input namespace missing: %#v", got)
+	}
+	if nested["environment"] != "validation" {
+		t.Fatalf("input.environment mismatch: %#v", nested)
+	}
+	if got["environment"] != "validation" {
+		t.Fatalf("historical flat key must remain available: %#v", got)
+	}
+}
+
+func TestEvaluateAuthorizationDeniesScopedServiceOutsideValidation(t *testing.T) {
+	rbac := model.RBACManifestSpec{
+		Roles: []model.RBACRole{{
+			Name:  "cd-dispatcher",
+			Rules: []model.RBACRule{{Effect: "allow", Resources: []string{"workflow:dakasa:dakasa-deploy-component"}, Actions: []string{"run"}}},
+		}},
+		Bindings: []model.RBACBinding{{
+			Name: "cd-bot", Subjects: []model.RBACSubject{{Type: "service", ID: "github-actions-cd-bot"}}, Roles: []string{"cd-dispatcher"},
+		}},
+	}
+	policy := &model.PolicyManifestSpec{Rules: []model.PolicyRule{
+		{
+			Name: "allow-validation", Effect: "allow", Resources: []string{"workflow:dakasa:dakasa-deploy-component"}, Actions: []string{"run"},
+			Conditions: []model.PolicyCondition{{Key: "input.environment", Operator: "eq", Value: "validation"}},
+		},
+		{
+			Name: "deny-outside-validation", Effect: "deny", Resources: []string{"workflow:dakasa:dakasa-deploy-component"}, Actions: []string{"run"},
+			Conditions: []model.PolicyCondition{
+				{Key: "subject.id", Operator: "eq", Value: "github-actions-cd-bot"},
+				{Key: "input.environment", Operator: "neq", Value: "validation"},
+			},
+		},
+	}}
+	subject := model.RBACSubject{Type: "service", ID: "github-actions-cd-bot"}
+
+	allowed, err := EvaluateAuthorization(rbac, policy, subject, "workflow:dakasa:dakasa-deploy-component", "run", map[string]any{"environment": "validation"})
+	if err != nil || !allowed.Allowed {
+		t.Fatalf("validation dispatch should be allowed: response=%#v err=%v", allowed, err)
+	}
+	denied, err := EvaluateAuthorization(rbac, policy, subject, "workflow:dakasa:dakasa-deploy-component", "run", map[string]any{"environment": "production"})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if denied.Allowed || denied.Decision != "deny" {
+		t.Fatalf("production dispatch must be denied: %#v", denied)
+	}
+}

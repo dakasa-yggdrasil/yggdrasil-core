@@ -248,12 +248,22 @@ func (s *Server) handleOpsApprovalDecide(decision string) http.HandlerFunc {
 			writeJSONError(w, http.StatusBadRequest, "missing id")
 			return
 		}
-		_, err := s.db.ExecContext(r.Context(),
+		result, err := s.db.ExecContext(r.Context(),
 			`UPDATE public.guardian_approvals
 			 SET status=$2, decided_at=NOW()
 			 WHERE id=$1 AND status='pending'`, id, decision)
 		if err != nil {
-			writeJSONError(w, http.StatusNotFound, "approval not found")
+			writeMappedError(w, err)
+			return
+		}
+		rows, err := result.RowsAffected()
+		if err != nil {
+			writeMappedError(w, err)
+			return
+		}
+		if rows != 1 {
+			writeProblemJSON(w, http.StatusNotFound, "approval.not_found",
+				"The pending approval does not exist or was already decided.")
 			return
 		}
 		writeJSON(w, http.StatusOK, map[string]string{"id": id, "status": decision})
@@ -265,13 +275,13 @@ func (s *Server) handleOpsApprovalDecide(decision string) http.HandlerFunc {
 // -----------------------------------------------------------------------------
 
 type opsDriftObject struct {
-	ID           string         `json:"id"`
-	ResourceKind string         `json:"resource_kind"`
-	Name         string         `json:"name"`
-	Integration  string         `json:"integration"`
-	Severity     string         `json:"severity,omitempty"`
-	LastReconcileAt *time.Time  `json:"last_reconcile_at,omitempty"`
-	Diff         map[string]any `json:"diff,omitempty"`
+	ID              string         `json:"id"`
+	ResourceKind    string         `json:"resource_kind"`
+	Name            string         `json:"name"`
+	Integration     string         `json:"integration"`
+	Severity        string         `json:"severity,omitempty"`
+	LastReconcileAt *time.Time     `json:"last_reconcile_at,omitempty"`
+	Diff            map[string]any `json:"diff,omitempty"`
 }
 
 func (s *Server) handleOpsDriftList(w http.ResponseWriter, r *http.Request) {

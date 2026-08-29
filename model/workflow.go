@@ -25,11 +25,20 @@ const WorkflowDispatchOperation = "dispatch_workflow"
 // should set this to "async" so legitimate callers see a 202 with a
 // `run_id` instead of a 502 from the gateway.
 type WorkflowManifestSpec struct {
-	Trigger      WorkflowTriggerSpec     `json:"trigger,omitempty"`
-	InputSchema  WorkflowInputSchemaSpec `json:"input_schema,omitempty"`
-	Defaults     map[string]any          `json:"defaults,omitempty"`
-	DispatchMode string                  `json:"dispatch_mode,omitempty"`
-	Steps        []WorkflowStepSpec      `json:"steps"`
+	Trigger       WorkflowTriggerSpec        `json:"trigger,omitempty"`
+	InputSchema   WorkflowInputSchemaSpec    `json:"input_schema,omitempty"`
+	Defaults      map[string]any             `json:"defaults,omitempty"`
+	DispatchMode  string                     `json:"dispatch_mode,omitempty"`
+	Authorization *WorkflowAuthorizationSpec `json:"authorization,omitempty"`
+	Steps         []WorkflowStepSpec         `json:"steps"`
+}
+
+// WorkflowAuthorizationSpec opts one workflow into manifest-backed dispatch
+// authorization. RBAC is mandatory when the block exists; Policy optionally
+// refines the RBAC allow decision using the merged workflow inputs.
+type WorkflowAuthorizationSpec struct {
+	RBAC   ManifestSelector  `json:"rbac"`
+	Policy *ManifestSelector `json:"policy,omitempty"`
 }
 
 // WorkflowTriggerSpec describes how a workflow can be started.
@@ -37,8 +46,8 @@ type WorkflowManifestSpec struct {
 // the Schedule sub-object is required. When Mode is "event", the Event
 // sub-object is required. Manual mode uses neither.
 type WorkflowTriggerSpec struct {
-	Mode     string                     `json:"mode,omitempty"`
-	Enabled  *bool                      `json:"enabled,omitempty"`
+	Mode     string                       `json:"mode,omitempty"`
+	Enabled  *bool                        `json:"enabled,omitempty"`
 	Schedule *WorkflowScheduleTriggerSpec `json:"schedule,omitempty"`
 	Event    *WorkflowEventTriggerSpec    `json:"event,omitempty"`
 }
@@ -63,11 +72,11 @@ type WorkflowScheduleTriggerSpec struct {
 // are emitted. Debounce consolidates bursts of matching events into a single
 // dispatch.
 type WorkflowEventTriggerSpec struct {
-	Types           []string                `json:"types"`
+	Types           []string                      `json:"types"`
 	AggregateFilter *WorkflowEventAggregateFilter `json:"aggregate_filter,omitempty"`
 	PayloadFilters  []WorkflowEventPayloadFilter  `json:"payload_filters,omitempty"`
-	DebounceSeconds int                     `json:"debounce_seconds,omitempty"`
-	DefaultInputs   map[string]any          `json:"default_inputs,omitempty"`
+	DebounceSeconds int                           `json:"debounce_seconds,omitempty"`
+	DefaultInputs   map[string]any                `json:"default_inputs,omitempty"`
 }
 
 // WorkflowEventAggregateFilter scopes an event trigger by aggregate type
@@ -104,15 +113,15 @@ type WorkflowInputSchemaSpec struct {
 // unresolvable template) fails the step fail-loud so broken workflows
 // surface early.
 type WorkflowStepSpec struct {
-	ID             string                `json:"id"`
-	Description    string                `json:"description,omitempty"`
-	Condition      string                `json:"condition,omitempty"`
-	Use            WorkflowStepUseSpec   `json:"use"`
-	With           map[string]any        `json:"with,omitempty"`
-	DependsOn      []string              `json:"depends_on,omitempty"`
-	Retry          WorkflowRetrySpec     `json:"retry,omitempty"`
-	TimeoutSeconds int                   `json:"timeout_seconds,omitempty"`
-	ForEach        *WorkflowForEachSpec  `json:"for_each,omitempty"`
+	ID             string               `json:"id"`
+	Description    string               `json:"description,omitempty"`
+	Condition      string               `json:"condition,omitempty"`
+	Use            WorkflowStepUseSpec  `json:"use"`
+	With           map[string]any       `json:"with,omitempty"`
+	DependsOn      []string             `json:"depends_on,omitempty"`
+	Retry          WorkflowRetrySpec    `json:"retry,omitempty"`
+	TimeoutSeconds int                  `json:"timeout_seconds,omitempty"`
+	ForEach        *WorkflowForEachSpec `json:"for_each,omitempty"`
 }
 
 // WorkflowForEachSpec turns a step into a series of iterations driven by

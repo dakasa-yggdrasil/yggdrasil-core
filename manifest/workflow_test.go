@@ -437,6 +437,22 @@ func TestValidateWorkflowSpecRejectsUnknownDispatchMode(t *testing.T) {
 	}
 }
 
+func TestValidateWorkflowSpecAuthorizationSelectors(t *testing.T) {
+	spec := workflowSpecFixture()
+	spec.Authorization = &model.WorkflowAuthorizationSpec{
+		RBAC:   model.ManifestSelector{Namespace: "dakasa", Name: "dakasa-validation-rbac"},
+		Policy: &model.ManifestSelector{Namespace: "dakasa", Name: "dakasa-validation-policy"},
+	}
+	if err := ValidateWorkflowSpec(spec); err != nil {
+		t.Fatalf("valid workflow authorization: %v", err)
+	}
+
+	spec.Authorization.RBAC = model.ManifestSelector{}
+	if err := ValidateWorkflowSpec(spec); err == nil {
+		t.Fatal("authorization block without RBAC selector must fail")
+	}
+}
+
 // TestNormalizeWorkflowDispatchMode_DefaultsToSync guards the helper used
 // by the HTTP dispatcher to decide between the sync (201) and async (202)
 // paths. Empty and whitespace must canonicalize to "sync" so legacy

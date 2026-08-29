@@ -2,7 +2,12 @@ package httpapi
 
 import (
 	"context"
+	"crypto/subtle"
+	"database/sql"
+	"encoding/json"
 	"errors"
+	"fmt"
+	"io"
 	"net/http"
 	"os"
 	"strings"
@@ -13,9 +18,23 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 var errWorkflowRunUnauthorized = errors.New("workflow run unauthorized")
+var errWorkflowAuthorizationDenied = errors.New("workflow dispatch authorization denied")
+
+const legacyWorkflowRunSubjectID = "legacy-workflow-run-token"
+
+type workflowRunActor struct {
+	CollaboratorID string
+	Subject        model.RBACSubject
+}
+
+type workflowRunScopedToken struct {
+	Token   string            `json:"token"`
+	Subject model.RBACSubject `json:"subject"`
+}
 
 // handleWorkflowRun routes between sync and async execution. The default
 // is sync (HTTP 201 with the full RunWorkflowResponse) for back-compat.
@@ -34,7 +53,8 @@ var errWorkflowRunUnauthorized = errors.New("workflow run unauthorized")
 //     `dispatch_mode: async` to keep callers from hitting 502s.
 //  3. Sync (the historical default) when neither (1) nor (2) is set.
 func (s *Server) handleWorkflowRun(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeWorkflowRunRequest(r); err != nil {
+	actor, err := authenticateWorkflowRunRequest(r)
+	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
@@ -50,6 +70,14 @@ func (s *Server) handleWorkflowRun(w http.ResponseWriter, r *http.Request) {
 	var req model.RunWorkflowRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeMappedError(w, err)
+		return
+	}
+	if err := s.authorizeWorkflowDispatch(r.Context(), req, actor); err != nil {
+		if errors.Is(err, errWorkflowAuthorizationDenied) {
+			writeProblemJSON(w, http.StatusForbidden, "workflow.authorization_denied", err.Error())
+		} else {
+			writeMappedError(w, err)
+		}
 		return
 	}
 
@@ -228,23 +256,29 @@ func (s *Server) resolveWorkflowRunAsync(r *http.Request, req model.RunWorkflowR
 // RunWorkflow so the mode decision matches the manifest the runner will
 // actually execute (same manifest_id / namespace / name / version path).
 func (s *Server) lookupWorkflowSpec(ctx context.Context, req model.RunWorkflowRequest) (model.WorkflowManifestSpec, error) {
+	_, spec, err := s.lookupWorkflowManifestSpec(ctx, req)
+	return spec, err
+}
+
+func (s *Server) lookupWorkflowManifestSpec(ctx context.Context, req model.RunWorkflowRequest) (model.Manifest, model.WorkflowManifestSpec, error) {
 	selector := req.Workflow
 
 	if id := strings.TrimSpace(selector.ManifestID); id != "" {
 		parsed, err := uuid.Parse(id)
 		if err != nil {
-			return model.WorkflowManifestSpec{}, err
+			return model.Manifest{}, model.WorkflowManifestSpec{}, err
 		}
 		record, err := repository.GetManifestByID(ctx, s.db, parsed)
 		if err != nil {
-			return model.WorkflowManifestSpec{}, err
+			return model.Manifest{}, model.WorkflowManifestSpec{}, err
 		}
-		return manifestengine.ParseWorkflowSpec(record.Spec)
+		spec, err := manifestengine.ParseWorkflowSpec(record.Spec)
+		return record, spec, err
 	}
 
 	name := strings.TrimSpace(selector.Name)
 	if name == "" {
-		return model.WorkflowManifestSpec{}, errors.New("workflow name is required when manifest_id is not provided")
+		return model.Manifest{}, model.WorkflowManifestSpec{}, errors.New("workflow name is required when manifest_id is not provided")
 	}
 	namespace := strings.TrimSpace(selector.Namespace)
 	if namespace == "" {
@@ -253,16 +287,18 @@ func (s *Server) lookupWorkflowSpec(ctx context.Context, req model.RunWorkflowRe
 
 	record, err := repository.ResolveManifest(ctx, s.db, "workflow", namespace, name, selector.Version, true)
 	if err != nil {
-		return model.WorkflowManifestSpec{}, err
+		return model.Manifest{}, model.WorkflowManifestSpec{}, err
 	}
-	return manifestengine.ParseWorkflowSpec(record.Spec)
+	spec, err := manifestengine.ParseWorkflowSpec(record.Spec)
+	return record, spec, err
 }
 
 func authorizeWorkflowRunRequest(r *http.Request) error {
-	expected := strings.TrimSpace(os.Getenv("YGGDRASIL_WORKFLOW_RUN_TOKEN"))
-	if expected == "" {
-		return nil
-	}
+	_, err := authenticateWorkflowRunRequest(r)
+	return err
+}
+
+func authenticateWorkflowRunRequest(r *http.Request) (workflowRunActor, error) {
 
 	// Console session path: the request reached this handler only because
 	// requireAuthenticatedConsoleAPIs validated the cookie AND
@@ -272,20 +308,248 @@ func authorizeWorkflowRunRequest(r *http.Request) error {
 	// Without this, every session-cookie caller (the entire console UI
 	// triggerWorkflow path) lands here with no header and gets a 401,
 	// even though they're already gated upstream.
-	if _, ok := claimsFromContext(r.Context()); ok {
-		return nil
+	if claims, ok := claimsFromContext(r.Context()); ok {
+		collaboratorID, _ := claims["collaborator_id"].(string)
+		if strings.TrimSpace(collaboratorID) == "" {
+			return workflowRunActor{}, errWorkflowRunUnauthorized
+		}
+		return workflowRunActor{CollaboratorID: strings.TrimSpace(collaboratorID)}, nil
 	}
 
 	candidates := []string{
 		strings.TrimSpace(r.Header.Get("X-Yggdrasil-Workflow-Token")),
 		bearerToken(r.Header.Get("Authorization")),
 	}
+	scopedTokens, err := workflowRunScopedTokensFromEnv()
+	if err != nil {
+		return workflowRunActor{}, err
+	}
 	for _, candidate := range candidates {
-		if candidate != "" && candidate == expected {
-			return nil
+		for _, scoped := range scopedTokens {
+			if workflowRunScopedTokenPath(r.URL.Path) && constantTimeTokenEqual(candidate, scoped.Token) {
+				return workflowRunActor{Subject: scoped.Subject}, nil
+			}
 		}
 	}
-	return errWorkflowRunUnauthorized
+
+	expected := strings.TrimSpace(os.Getenv("YGGDRASIL_WORKFLOW_RUN_TOKEN"))
+	for _, candidate := range candidates {
+		if constantTimeTokenEqual(candidate, expected) {
+			return workflowRunActor{Subject: legacyWorkflowRunSubject()}, nil
+		}
+	}
+
+	if expected == "" && len(scopedTokens) == 0 {
+		// Local development convention: no configured credential keeps the
+		// endpoint open. Protected workflows still reject this anonymous actor.
+		return workflowRunActor{}, nil
+	}
+	return workflowRunActor{}, errWorkflowRunUnauthorized
+}
+
+func workflowRunScopedTokenPath(path string) bool {
+	return path == "/api/v1/workflow-runs" ||
+		strings.HasPrefix(path, "/api/v1/workflow-runs/") ||
+		path == "/api/v1/console/workflow-runs" ||
+		strings.HasPrefix(path, "/api/v1/console/workflow-runs/")
+}
+
+func workflowRunScopedTokensFromEnv() ([]workflowRunScopedToken, error) {
+	raw := strings.TrimSpace(os.Getenv("YGGDRASIL_WORKFLOW_RUN_SCOPED_TOKENS_JSON"))
+	if raw == "" {
+		return nil, nil
+	}
+	var tokens []workflowRunScopedToken
+	decoder := json.NewDecoder(strings.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&tokens); err != nil {
+		return nil, fmt.Errorf("parse YGGDRASIL_WORKFLOW_RUN_SCOPED_TOKENS_JSON: %w", err)
+	}
+	var trailing any
+	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
+		return nil, errors.New("YGGDRASIL_WORKFLOW_RUN_SCOPED_TOKENS_JSON contains trailing JSON")
+	}
+	if len(tokens) == 0 {
+		return nil, errors.New("YGGDRASIL_WORKFLOW_RUN_SCOPED_TOKENS_JSON must contain at least one token")
+	}
+	seen := map[string]struct{}{}
+	for i := range tokens {
+		tokens[i].Token = strings.TrimSpace(tokens[i].Token)
+		tokens[i].Subject.Type = strings.ToLower(strings.TrimSpace(tokens[i].Subject.Type))
+		tokens[i].Subject.ID = strings.TrimSpace(tokens[i].Subject.ID)
+		if tokens[i].Token == "" || tokens[i].Subject.Type == "" || tokens[i].Subject.ID == "" {
+			return nil, fmt.Errorf("scoped workflow token %d requires token, subject.type and subject.id", i)
+		}
+		if _, duplicate := seen[tokens[i].Token]; duplicate {
+			return nil, fmt.Errorf("scoped workflow token %d duplicates an earlier credential", i)
+		}
+		seen[tokens[i].Token] = struct{}{}
+	}
+	return tokens, nil
+}
+
+func legacyWorkflowRunSubject() model.RBACSubject {
+	subjectType := strings.ToLower(strings.TrimSpace(os.Getenv("YGGDRASIL_WORKFLOW_RUN_LEGACY_SUBJECT_TYPE")))
+	if subjectType == "" {
+		subjectType = "service"
+	}
+	subjectID := strings.TrimSpace(os.Getenv("YGGDRASIL_WORKFLOW_RUN_LEGACY_SUBJECT_ID"))
+	if subjectID == "" {
+		subjectID = legacyWorkflowRunSubjectID
+	}
+	return model.RBACSubject{Type: subjectType, ID: subjectID}
+}
+
+func constantTimeTokenEqual(candidate, expected string) bool {
+	if candidate == "" || expected == "" || len(candidate) != len(expected) {
+		return false
+	}
+	return subtle.ConstantTimeCompare([]byte(candidate), []byte(expected)) == 1
+}
+
+func (s *Server) authorizeWorkflowDispatch(ctx context.Context, req model.RunWorkflowRequest, actor workflowRunActor) error {
+	workflowManifest, workflowSpec, err := s.lookupWorkflowManifestSpec(ctx, req)
+	if err != nil {
+		return err
+	}
+	if workflowSpec.Authorization == nil {
+		return nil
+	}
+
+	authz := workflowSpec.Authorization
+	rbacManifest, err := resolveWorkflowAuthorizationManifest(ctx, s.db, "rbac", authz.RBAC)
+	if err != nil {
+		return err
+	}
+	rbacSpec, err := manifestengine.ParseRBACSpec(rbacManifest.Spec)
+	if err != nil {
+		return err
+	}
+
+	var policyManifest model.Manifest
+	var policySpec *model.PolicyManifestSpec
+	if authz.Policy != nil {
+		policyManifest, err = resolveWorkflowAuthorizationManifest(ctx, s.db, "policy", *authz.Policy)
+		if err != nil {
+			return err
+		}
+		parsed, err := manifestengine.ParsePolicySpec(policyManifest.Spec)
+		if err != nil {
+			return err
+		}
+		policySpec = &parsed
+	}
+
+	subjects := make([]model.RBACSubject, 0, 4)
+	input := cloneWorkflowAuthorizationInput(manifestengine.MergeWorkflowInputs(workflowSpec, req.Inputs))
+	evaluationReq := model.EvaluateAuthorizationRequest{
+		RBAC:     authz.RBAC,
+		Policy:   authz.Policy,
+		Resource: "workflow:" + workflowManifest.Metadata.Namespace + ":" + workflowManifest.Metadata.Name,
+		Action:   "run",
+		Input:    input,
+	}
+
+	var collaboratorRef *model.CollaboratorReference
+	var teamRefs []model.TeamReference
+	if actor.CollaboratorID != "" {
+		collaborator, teams, resolved, err := repository.ResolveAuthorizationSubjects(ctx, s.db, actor.CollaboratorID)
+		if err != nil {
+			return err
+		}
+		subjects = append(subjects, resolved...)
+		evaluationReq.CollaboratorID = actor.CollaboratorID
+		input = workflowAuthorizationContextInput(input, collaborator, teams)
+		evaluationReq.Input = input
+		collaboratorRef = &model.CollaboratorReference{ID: collaborator.ID, Slug: collaborator.Slug, Status: collaborator.Status}
+		teamRefs = workflowAuthorizationTeamReferences(teams)
+	} else if actor.Subject.Type != "" && actor.Subject.ID != "" {
+		subjects = append(subjects, actor.Subject)
+		evaluationReq.Subject = actor.Subject
+	} else {
+		return fmt.Errorf("%w: protected workflow requires an authenticated subject", errWorkflowAuthorizationDenied)
+	}
+
+	response, err := manifestengine.EvaluateAuthorizationSubjects(rbacSpec, policySpec, subjects, evaluationReq.Resource, evaluationReq.Action, input)
+	if err != nil {
+		return err
+	}
+	response.Collaborator = collaboratorRef
+	response.Teams = teamRefs
+	response.RBAC.Manifest = workflowManifestReference(rbacManifest)
+	if response.Policy != nil {
+		response.Policy.Manifest = workflowManifestReference(policyManifest)
+	}
+	messagecontroller.EmitAuthorizationEvaluatedEvent(ctx, s.db, s.logger, evaluationReq, response, rbacManifest, policyManifest)
+
+	if s.logger != nil {
+		s.logger.Info("workflow dispatch authorization evaluated",
+			zap.String("resource", evaluationReq.Resource),
+			zap.String("decision", string(response.Decision)),
+			zap.Strings("matched_roles", response.RBAC.MatchedRoles),
+		)
+	}
+	if !response.Allowed {
+		return fmt.Errorf("%w for %s", errWorkflowAuthorizationDenied, evaluationReq.Resource)
+	}
+	return nil
+}
+
+func resolveWorkflowAuthorizationManifest(ctx context.Context, db *sql.DB, kind string, selector model.ManifestSelector) (model.Manifest, error) {
+	if id := strings.TrimSpace(selector.ManifestID); id != "" {
+		parsed, err := uuid.Parse(id)
+		if err != nil {
+			return model.Manifest{}, fmt.Errorf("invalid %s authorization manifest id", kind)
+		}
+		return repository.GetManifestByID(ctx, db, parsed)
+	}
+	name := strings.TrimSpace(selector.Name)
+	if name == "" {
+		return model.Manifest{}, fmt.Errorf("%s authorization manifest name is required", kind)
+	}
+	namespace := strings.TrimSpace(selector.Namespace)
+	if namespace == "" {
+		namespace = "global"
+	}
+	return repository.ResolveManifest(ctx, db, kind, namespace, name, selector.Version, true)
+}
+
+func cloneWorkflowAuthorizationInput(input map[string]any) map[string]any {
+	out := make(map[string]any, len(input))
+	for key, value := range input {
+		out[key] = value
+	}
+	return out
+}
+
+func workflowAuthorizationContextInput(input map[string]any, collaborator model.Collaborator, teams []model.Team) map[string]any {
+	input["collaborator"] = map[string]any{
+		"id": collaborator.ID.String(), "slug": collaborator.Slug, "status": collaborator.Status,
+		"display_name": collaborator.DisplayName, "primary_email": collaborator.PrimaryEmail,
+		"personal_data": collaborator.PersonalData, "employment_data": collaborator.EmploymentData,
+		"third_party_identities": collaborator.ThirdPartyIdentities, "traits": collaborator.Traits, "metadata": collaborator.Metadata,
+	}
+	items := make([]map[string]any, 0, len(teams))
+	for _, team := range teams {
+		items = append(items, map[string]any{
+			"id": team.ID.String(), "slug": team.Slug, "name": team.Name, "type": team.Type,
+			"status": team.Status, "owners": team.Owners, "traits": team.Traits, "metadata": team.Metadata,
+		})
+	}
+	input["teams"] = items
+	return input
+}
+
+func workflowAuthorizationTeamReferences(teams []model.Team) []model.TeamReference {
+	refs := make([]model.TeamReference, 0, len(teams))
+	for _, team := range teams {
+		refs = append(refs, model.TeamReference{ID: team.ID, Slug: team.Slug, Name: team.Name, Type: team.Type})
+	}
+	return refs
+}
+
+func workflowManifestReference(record model.Manifest) model.ManifestReference {
+	return model.ManifestReference{ID: record.ID, Kind: record.Kind, Namespace: record.Metadata.Namespace, Name: record.Metadata.Name, Version: record.Version}
 }
 
 // manifestWriteAuthorized centralises the auth gate for manifest writes

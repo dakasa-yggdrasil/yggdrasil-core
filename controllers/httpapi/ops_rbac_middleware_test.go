@@ -14,14 +14,12 @@ import (
 	"go.uber.org/zap"
 )
 
-// TestRBACEnforceMode_DefaultsToWarn locks down the rollout default. A
-// fresh deploy must be warn-mode so surface-console RBAC drift can be
-// observed without 403-storming legit users mid-rollout. Mirror of the
-// A7 CSRF default behaviour.
-func TestRBACEnforceMode_DefaultsToWarn(t *testing.T) {
+// TestRBACEnforceMode_DefaultsToEnforce locks down fail-closed production
+// behavior when the deployment omits the rollout switch.
+func TestRBACEnforceMode_DefaultsToEnforce(t *testing.T) {
 	t.Setenv("YGGDRASIL_CONSOLE_RBAC_ENFORCE", "")
-	if got := rbacEnforceMode(); got != "warn" {
-		t.Fatalf("default mode: expected warn, got %q", got)
+	if got := rbacEnforceMode(); got != "enforce" {
+		t.Fatalf("default mode: expected enforce, got %q", got)
 	}
 }
 
@@ -34,12 +32,18 @@ func TestRBACEnforceMode_RespectsExplicitEnforce(t *testing.T) {
 	}
 }
 
-// TestRBACEnforceMode_GarbageDefaultsWarn: unknown values fall back to
-// warn (fail-open during partial rollouts).
-func TestRBACEnforceMode_GarbageDefaultsWarn(t *testing.T) {
+// TestRBACEnforceMode_GarbageDefaultsEnforce: typos cannot disable RBAC.
+func TestRBACEnforceMode_GarbageDefaultsEnforce(t *testing.T) {
 	t.Setenv("YGGDRASIL_CONSOLE_RBAC_ENFORCE", "panic")
+	if got := rbacEnforceMode(); got != "enforce" {
+		t.Fatalf("garbage mode should fall back to enforce, got %q", got)
+	}
+}
+
+func TestRBACEnforceMode_RespectsExplicitWarn(t *testing.T) {
+	t.Setenv("YGGDRASIL_CONSOLE_RBAC_ENFORCE", "warn")
 	if got := rbacEnforceMode(); got != "warn" {
-		t.Fatalf("garbage mode should fall back to warn, got %q", got)
+		t.Fatalf("explicit warn: expected warn, got %q", got)
 	}
 }
 
@@ -137,6 +141,28 @@ func TestRequireOpsPermission_NoClaimsPassesThroughWorkflowToken(t *testing.T) {
 	}
 	if w.Code != http.StatusOK {
 		t.Fatalf("status: expected 200, got %d", w.Code)
+	}
+}
+
+func TestRequireOpsPermission_ClaimsWithoutCollaboratorFailClosed(t *testing.T) {
+	metrics.ResetForTest()
+	srv, _ := rbacTestSetup(t)
+
+	handler := srv.requireOpsPermission("yggdrasil:view_people")(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+		t.Fatal("malformed human claims must not inherit the machine-token bypass")
+	}))
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/console/collaborators", nil)
+	r = r.WithContext(contextWithClaims(r.Context(), map[string]any{
+		"session_id": uuid.NewString(),
+	}))
+	w := httptest.NewRecorder()
+	handler.ServeHTTP(w, r)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("claims without collaborator: expected 401, got %d", w.Code)
+	}
+	if !strings.Contains(w.Body.String(), `"code":"auth.unauthenticated"`) {
+		t.Fatalf("claims without collaborator: unexpected body %s", w.Body.String())
 	}
 }
 
