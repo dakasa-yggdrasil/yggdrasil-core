@@ -83,6 +83,16 @@ func ValidateWorkflowSpec(spec model.WorkflowManifestSpec) error {
 	if dispatchMode != "" && !slices.Contains(supportedWorkflowDispatchModes, dispatchMode) {
 		return fmt.Errorf("workflow dispatch_mode %q is unsupported (allowed: %v)", spec.DispatchMode, supportedWorkflowDispatchModes)
 	}
+	if spec.Authorization != nil {
+		if err := validateManifestSelector("workflow authorization rbac", spec.Authorization.RBAC); err != nil {
+			return err
+		}
+		if spec.Authorization.Policy != nil {
+			if err := validateManifestSelector("workflow authorization policy", *spec.Authorization.Policy); err != nil {
+				return err
+			}
+		}
+	}
 
 	if err := validateWorkflowInputSchema(spec.InputSchema); err != nil {
 		return err

@@ -126,7 +126,7 @@ func TestHandleMetrics_HeimdallGaugeRender(t *testing.T) {
 }
 
 // TestHandleMetrics_CSRFCountersRender exercises the (outcome, mode) label
-// pairs the audit 2026-05-27 A7 family emits: 2 outcomes × 2 modes = 4
+// pairs the audit family emits: 3 outcomes × 2 modes = 6
 // stable lines, even before any rejections have happened. After bumping
 // warn|missing_token by 3 and enforce|token_mismatch by 1 the rendered
 // body must reflect those exact numbers.
@@ -147,6 +147,8 @@ func TestHandleMetrics_CSRFCountersRender(t *testing.T) {
 		`yggdrasil_csrf_rejected_total{outcome="missing_token",mode="enforce"} 0`,
 		`yggdrasil_csrf_rejected_total{outcome="token_mismatch",mode="warn"} 0`,
 		`yggdrasil_csrf_rejected_total{outcome="token_mismatch",mode="enforce"} 1`,
+		`yggdrasil_csrf_rejected_total{outcome="invalid_session",mode="warn"} 0`,
+		`yggdrasil_csrf_rejected_total{outcome="invalid_session",mode="enforce"} 0`,
 	} {
 		if !strings.Contains(body, expected) {
 			t.Errorf("expected %q in body:\n%s", expected, body)

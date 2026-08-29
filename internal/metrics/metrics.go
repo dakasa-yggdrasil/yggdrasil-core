@@ -62,8 +62,8 @@ const (
 
 // Reactor dispatch outcomes. Same closed-set discipline as evaluations.
 const (
-	ReactorDispatchSucceeded   = "succeeded"
-	ReactorDispatchFailed      = "failed"
+	ReactorDispatchSucceeded    = "succeeded"
+	ReactorDispatchFailed       = "failed"
 	ReactorDispatchDeadLettered = "dead_lettered"
 )
 
@@ -464,22 +464,23 @@ func AuthSessionsCreatedTotalSnapshot() uint64 { return authSessionsCreatedTotal
 func AuthSessionsRevokedTotalSnapshot() uint64 { return authSessionsRevokedTotal.Load() }
 
 // CSRF rejection outcomes. Closed set so the Prometheus label cardinality
-// stays bounded at 4 (2 outcomes × 2 modes).
+// stays bounded at 6 (3 outcomes × 2 modes).
 const (
-	CSRFRejectedMissingToken  = "missing_token"
-	CSRFRejectedTokenMismatch = "token_mismatch"
-	CSRFModeWarn              = "warn"
-	CSRFModeEnforce           = "enforce"
+	CSRFRejectedMissingToken   = "missing_token"
+	CSRFRejectedTokenMismatch  = "token_mismatch"
+	CSRFRejectedInvalidSession = "invalid_session"
+	CSRFModeWarn               = "warn"
+	CSRFModeEnforce            = "enforce"
 )
 
 // IncCSRFRejected bumps the CSRF rejection counter for (outcome, mode).
 // Both labels are closed-set; unknown combinations are no-ops to keep
 // cardinality bounded.
 //
-// outcome ∈ {missing_token, token_mismatch}
+// outcome ∈ {missing_token, token_mismatch, invalid_session}
 // mode    ∈ {warn, enforce}
 func IncCSRFRejected(outcome, mode string) {
-	if outcome != CSRFRejectedMissingToken && outcome != CSRFRejectedTokenMismatch {
+	if outcome != CSRFRejectedMissingToken && outcome != CSRFRejectedTokenMismatch && outcome != CSRFRejectedInvalidSession {
 		return
 	}
 	if mode != CSRFModeWarn && mode != CSRFModeEnforce {
@@ -609,9 +610,9 @@ func CSRFRejectedSnapshot() map[string]uint64 {
 		out[k] = v
 	}
 	// Ensure every closed-set key is present, so /metrics emits a stable
-	// 4-line family even before any rejections happen — operators can
+	// 6-line family even before any rejections happen — operators can
 	// build dashboards without "no datapoints" gaps.
-	for _, outcome := range []string{CSRFRejectedMissingToken, CSRFRejectedTokenMismatch} {
+	for _, outcome := range []string{CSRFRejectedMissingToken, CSRFRejectedTokenMismatch, CSRFRejectedInvalidSession} {
 		for _, mode := range []string{CSRFModeWarn, CSRFModeEnforce} {
 			k := outcome + "|" + mode
 			if _, ok := out[k]; !ok {

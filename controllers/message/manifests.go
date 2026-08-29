@@ -12,21 +12,21 @@ import (
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
-	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
 )
 
 const (
-	queueManifestValidate            = "yggdrasil-core.manifest.validate"
-	queueManifestCreate              = "yggdrasil-core.manifest.create"
-	queueManifestList                = "yggdrasil-core.manifest.list"
-	queueManifestGet                 = "yggdrasil-core.manifest.get"
-	queueManifestRBACEvaluate        = "yggdrasil-core.manifest.rbac.evaluate"
-	queueManifestPolicyEval          = "yggdrasil-core.manifest.policy.evaluate"
-	queueAuthorizationEval           = "yggdrasil-core.authorization.evaluate"
-	queueCollaboratorReconcileState  = "yggdrasil-core.collaborator.reconcile_provider_state"
+	queueManifestValidate           = "yggdrasil-core.manifest.validate"
+	queueManifestCreate             = "yggdrasil-core.manifest.create"
+	queueManifestList               = "yggdrasil-core.manifest.list"
+	queueManifestGet                = "yggdrasil-core.manifest.get"
+	queueManifestRBACEvaluate       = "yggdrasil-core.manifest.rbac.evaluate"
+	queueManifestPolicyEval         = "yggdrasil-core.manifest.policy.evaluate"
+	queueAuthorizationEval          = "yggdrasil-core.authorization.evaluate"
+	queueCollaboratorReconcileState = "yggdrasil-core.collaborator.reconcile_provider_state"
 )
 
 type rpcError struct {
@@ -430,16 +430,16 @@ func authorizationEvaluateHandler(conn *amqp.Connection, db *sql.DB, logger *zap
 		// Emit authorization.evaluated event (best-effort, post-decision).
 		// The authorization evaluation is pure compute + DB reads; the event
 		// records the decision for audit trail.
-		emitAuthorizationEvaluatedEvent(ctx, db, logger, req, response, rbacManifest, policyManifest)
+		EmitAuthorizationEvaluatedEvent(ctx, db, logger, req, response, rbacManifest, policyManifest)
 
 		return replySuccess(ctx, d, response, logger)
 	}
 }
 
-// emitAuthorizationEvaluatedEvent records an authorization decision in the
+// EmitAuthorizationEvaluatedEvent records an authorization decision in the
 // core event stream. Best-effort: failures are logged but do not affect the
 // caller response.
-func emitAuthorizationEvaluatedEvent(
+func EmitAuthorizationEvaluatedEvent(
 	ctx context.Context,
 	db *sql.DB,
 	logger *zap.Logger,

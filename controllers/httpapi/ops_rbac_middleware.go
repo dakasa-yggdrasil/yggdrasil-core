@@ -15,7 +15,6 @@ import (
 
 // (was //nolint:unused — middleware was dead code until 2026-05-28 Phase 5 wiring.)
 
-
 // Phase 5 RBAC wiring — audit 2026-05-27 §3.1.
 //
 // requireOpsPermission gates a route behind ONE yggdrasil:* permission.
@@ -23,9 +22,10 @@ import (
 // usePermission() was the ONLY enforcement layer and trivially bypassable
 // via curl. INTEGRATION_CONTRACT §12 is now enforced server-side.
 //
-// Two-phase enforcement mirrors the A7 CSRF rollout pattern:
+// Enforcement is fail-closed by default. An explicit warn mode remains for
+// short, operator-controlled compatibility windows:
 //
-//   - YGGDRASIL_CONSOLE_RBAC_ENFORCE=warn (default): a missing permission
+//   - YGGDRASIL_CONSOLE_RBAC_ENFORCE=warn: a missing permission
 //     LOGS, increments the `yggdrasil_console_rbac_denied_total{mode=warn}`
 //     counter, sets the `X-RBAC-Warn: <permission>` response header, and
 //     ALLOWS the request to continue to the handler. Lets ops compare
@@ -48,18 +48,16 @@ type ctxKeyOpsPermission struct{}
 const rbacWarnHeader = "X-RBAC-Warn"
 
 // rbacEnforceMode resolves the enforcement mode (warn or enforce).
-// Default warn so a partial rollout (backend ships first, surface-console
-// later) doesn't 403-storm legitimate traffic — matches the A7 CSRF
-// pattern. Unknown values fall back to warn.
+// Only an explicit "warn" opts out of enforcement. Missing or invalid
+// configuration fails closed so a deployment typo cannot silently disable
+// server-side authorization.
 func rbacEnforceMode() string {
 	value := strings.ToLower(strings.TrimSpace(os.Getenv("YGGDRASIL_CONSOLE_RBAC_ENFORCE")))
 	switch value {
-	case "enforce":
-		return "enforce"
-	case "warn", "":
+	case "warn":
 		return "warn"
 	default:
-		return "warn"
+		return "enforce"
 	}
 }
 
@@ -95,10 +93,10 @@ func (s *Server) requireOpsPermission(perm string) func(http.Handler) http.Handl
 
 			collabID, _ := claims["collaborator_id"].(string)
 			if collabID == "" {
-				// Defensive: claims present but no collaborator id. Treat as
-				// unauth — the auth middleware shouldn't normally let this
-				// happen but a token-only path could.
-				next.ServeHTTP(w, r)
+				// Claims are proof that this is a human-auth path. A malformed
+				// identity must never inherit the machine-caller bypass.
+				writeProblemJSON(w, http.StatusUnauthorized, "auth.unauthenticated",
+					"The authenticated actor identity is missing or invalid.")
 				return
 			}
 
@@ -218,4 +216,3 @@ func (s *Server) recordOpsAuditDenied(r *http.Request, collabID, perm string) {
 		})
 	})
 }
-

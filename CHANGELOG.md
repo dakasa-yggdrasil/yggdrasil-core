@@ -2,6 +2,19 @@
 
 All notable changes to yggdrasil-core are documented here.
 
+## [2.18.1] - 2026-08-29
+
+### Security
+- **RBAC and CSRF now fail closed by default.** The May compatibility window is complete: an unset or invalid `YGGDRASIL_CONSOLE_RBAC_ENFORCE` / `YGGDRASIL_CSRF_ENFORCE` now resolves to `enforce`. Operators may still opt into a short observation window with the explicit value `warn`.
+- **Dual-auth mutation routes no longer bypass CSRF by URL.** Browser sessions that dispatch workflows, write manifests/events, or call admin-style mutation paths must provide the session-bound CSRF token. Verified OIDC bearer JWTs and token-authenticated machine callers remain outside the cookie-CSRF model and continue without a browser token.
+- **Malformed human identities fail closed.** RBAC rejects claims without `collaborator_id`, and CSRF rejects claims without a valid UUID `session_id`; neither case can inherit a machine-caller bypass.
+- **Approval decisions are compare-and-set.** The ops queue now rejects a missing/already-decided row instead of reporting a false success, and manifest approvals cannot be flipped after leaving `pending`.
+- **Workflow dispatch can enforce catalog RBAC + Policy.** A workflow may declare `spec.authorization.rbac` and optional `policy`; dispatch then evaluates the human collaborator or a scoped machine-token subject against `workflow:<namespace>:<name>` / `run`, records `authorization.evaluated`, and denies before execution. Scoped tokens are accepted only on workflow-run URLs, while the legacy shared token receives the honest coarse subject `service:legacy-workflow-run-token` (configurable by env).
+- **Policy input namespacing is live.** Runtime input remains available at historical flat keys and is also exposed under `input.*`, activating policies such as `input.environment` that were previously always not-applicable.
+
+### Observability
+- Added the closed-set CSRF rejection outcome `invalid_session`, expanding the stable metric family to six `(outcome, mode)` series.
+
 ## [2.18.0] - 2026-05-28
 
 ### Changed

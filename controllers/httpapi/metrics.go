@@ -255,7 +255,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	csrfSnap := metrics.CSRFRejectedSnapshot()
 	fmt.Fprintf(w, "# HELP yggdrasil_csrf_rejected_total Total CSRF token validations that failed (audit 2026-05-27 A7)\n")
 	fmt.Fprintf(w, "# TYPE yggdrasil_csrf_rejected_total counter\n")
-	for _, outcome := range []string{metrics.CSRFRejectedMissingToken, metrics.CSRFRejectedTokenMismatch} {
+	for _, outcome := range []string{metrics.CSRFRejectedMissingToken, metrics.CSRFRejectedTokenMismatch, metrics.CSRFRejectedInvalidSession} {
 		for _, mode := range []string{metrics.CSRFModeWarn, metrics.CSRFModeEnforce} {
 			fmt.Fprintf(w, "yggdrasil_csrf_rejected_total{outcome=\"%s\",mode=\"%s\"} %d\n",
 				outcome, mode, csrfSnap[outcome+"|"+mode])

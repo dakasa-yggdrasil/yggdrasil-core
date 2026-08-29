@@ -105,7 +105,14 @@ v2.x relies on simple shared-token auth gated by env vars. Endpoints requiring a
 
 | Endpoint | Env var | Header(s) accepted |
 |---|---|---|
-| `POST /api/v1/workflow-runs` | `YGGDRASIL_WORKFLOW_TOKEN` (optional; if unset, no auth) | `X-Yggdrasil-Workflow-Token: <token>` or `Authorization: Bearer <token>` |
+| `POST /api/v1/workflow-runs` | `YGGDRASIL_WORKFLOW_RUN_TOKEN` (legacy, optional in local dev) or `YGGDRASIL_WORKFLOW_RUN_SCOPED_TOKENS_JSON` | `X-Yggdrasil-Workflow-Token: <token>` or `Authorization: Bearer <token>` |
+
+Workflows may opt into manifest-backed dispatch authorization with
+`spec.authorization.rbac` and optional `spec.authorization.policy`. The legacy
+token evaluates as `service/legacy-workflow-run-token` (overridable with
+`YGGDRASIL_WORKFLOW_RUN_LEGACY_SUBJECT_TYPE` and `_ID`). Scoped-token entries
+carry an explicit subject and are accepted only on workflow-run URLs; store the
+JSON in a Secret because it contains raw credentials.
 | `POST /api/v1/products/.../deploy` (returns 410 anyway) | `YGGDRASIL_DEPLOY_TOKEN` | `Authorization: Bearer <token>` |
 
 `POST /api/v1/manifests` is **not** gated in v2.x — adopters expose the API behind their own ingress policy. RBAC enforcement (Phase 3) will add per-user/per-tenant gating server-side.
