@@ -17,8 +17,8 @@ import (
 // serviceSpec defines the environment variables a service needs.
 type serviceSpec struct {
 	name           string
-	port           string            // HTTP listen port (SERVICE_NAME derived from name)
-	dbName         string            // empty = stateless, no DB vars
+	port           string // HTTP listen port (SERVICE_NAME derived from name)
+	dbName         string // empty = stateless, no DB vars
 	needsS3        bool
 	needsSES       bool
 	needsSNS       bool
@@ -78,7 +78,7 @@ func allServices() []serviceSpec {
 		{name: "tartaro-notify", port: "8094",
 			needsYggdrasil: true, needsSES: true, corsScope: "tartaro"},
 		{name: "tartaro-rta", port: "3200",
-			needsYggdrasil: true, corsScope: "tartaro"},
+			needsYggdrasil: true, needsHMAC: true, corsScope: "tartaro"},
 	}
 }
 
