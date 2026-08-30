@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"strings"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -15,6 +16,11 @@ import (
 // ErrWorkflowRunNotFound is returned by GetWorkflowRun when the id has no
 // matching row. Callers map this to HTTP 404.
 var ErrWorkflowRunNotFound = errors.New("workflow run not found")
+
+// ErrWorkflowRunIdempotencyConflict means a caller reused one stable key for a
+// different workflow. Returning the original run in that case would make the
+// caller believe the requested provider action was accepted when it was not.
+var ErrWorkflowRunIdempotencyConflict = errors.New("workflow run idempotency key already belongs to another workflow")
 
 // InsertWorkflowRun creates one workflow_runs row in pending status. Used
 // as the first step of an async run — the goroutine that executes the
@@ -45,6 +51,72 @@ func InsertWorkflowRun(
 		return fmt.Errorf("insert workflow_run: %w", err)
 	}
 	return nil
+}
+
+// InsertWorkflowRunIdempotent persists an async workflow run once when
+// metadata.idempotency_key is present. It returns the already-persisted run id
+// on a retry, allowing the HTTP layer to skip starting a second goroutine. With
+// no key it preserves the historical always-create behavior.
+func InsertWorkflowRunIdempotent(
+	ctx context.Context,
+	db *sql.DB,
+	id uuid.UUID,
+	selector model.ManifestSelector,
+	inputs map[string]any,
+	metadata map[string]any,
+) (persistedID uuid.UUID, deduped bool, err error) {
+	key := workflowRunIdempotencyKey(metadata)
+	if key == "" {
+		if err := InsertWorkflowRun(ctx, db, id, selector, inputs, metadata); err != nil {
+			return uuid.Nil, false, err
+		}
+		return id, false, nil
+	}
+
+	inputsJSON := mustEncodeJSON(inputs, "{}")
+	metadataJSON := mustEncodeJSON(metadata, "{}")
+	var version any
+	if selector.Version != nil {
+		version = *selector.Version
+	}
+
+	const insert = `
+		INSERT INTO public.workflow_runs
+			(id, workflow_namespace, workflow_name, workflow_version, status, inputs, metadata)
+		VALUES ($1, $2, $3, $4, 'pending', $5::jsonb, $6::jsonb)
+		ON CONFLICT ((metadata ->> 'idempotency_key'))
+			WHERE NULLIF(metadata ->> 'idempotency_key', '') IS NOT NULL
+		DO NOTHING
+		RETURNING id
+	`
+	if scanErr := db.QueryRowContext(ctx, insert, id, selector.Namespace, selector.Name, version, inputsJSON, metadataJSON).Scan(&persistedID); scanErr == nil {
+		return persistedID, false, nil
+	} else if !errors.Is(scanErr, sql.ErrNoRows) {
+		return uuid.Nil, false, fmt.Errorf("insert idempotent workflow_run: %w", scanErr)
+	}
+
+	var namespace, name string
+	const existing = `
+		SELECT id, workflow_namespace, workflow_name
+		FROM public.workflow_runs
+		WHERE metadata ->> 'idempotency_key' = $1
+		LIMIT 1
+	`
+	if err := db.QueryRowContext(ctx, existing, key).Scan(&persistedID, &namespace, &name); err != nil {
+		return uuid.Nil, false, fmt.Errorf("lookup idempotent workflow_run: %w", err)
+	}
+	if namespace != selector.Namespace || name != selector.Name {
+		return uuid.Nil, false, fmt.Errorf("%w: key %q is bound to %s/%s", ErrWorkflowRunIdempotencyConflict, key, namespace, name)
+	}
+	return persistedID, true, nil
+}
+
+func workflowRunIdempotencyKey(metadata map[string]any) string {
+	if metadata == nil {
+		return ""
+	}
+	key, _ := metadata["idempotency_key"].(string)
+	return strings.TrimSpace(key)
 }
 
 // MarkWorkflowRunRunning records that execution has started. Idempotent —

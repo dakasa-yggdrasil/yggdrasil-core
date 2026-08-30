@@ -2633,9 +2633,9 @@ func (s *Server) handleGuardianApprovalDecision(w http.ResponseWriter, r *http.R
 	// The core used to drive Heimdall-specific side effects here —
 	// updating guardian_memory records, remediation bundles, and
 	// dispatching the approved action. Those side effects now live
-	// in the guardian integration that observes this approval via
-	// the event stream (manifest.created emits for every new version,
-	// including the approved one). The core's responsibility ends at
+	// in the guardian integration. Approval create/decision writes use the
+	// manifest-version HTTP path, which emits no event, so the Guardian apply
+	// pulse intentionally polls the catalog. The core's responsibility ends at
 	// persisting the decision.
 	writeJSON(w, http.StatusCreated, map[string]any{"manifest": updatedManifest})
 }

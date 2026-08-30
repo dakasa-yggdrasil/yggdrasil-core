@@ -125,7 +125,12 @@ Endpoints that can return many items (`/api/v1/manifests`, `/api/v1/workflow-run
 
 Manifest creation (`POST /api/v1/manifests`) is idempotent on `(kind, namespace, name)` — re-posting the same `spec` produces a new version with identical `checksum`; clients deduplicate by checksum.
 
-Workflow runs are not idempotent: re-posting `POST /api/v1/workflow-runs` produces a new run. Adopters wanting idempotency post an `idempotency_key` in `metadata` and de-duplicate client-side via `GET /api/v1/workflow-runs?metadata.idempotency_key=<key>`.
+Workflow runs preserve the historical always-create behavior unless the caller
+opts into both durable async dispatch (`?async=true`) and a stable
+`metadata.idempotency_key`. In that mode the first request returns `202` and
+persists the run; retries return `200` with the same `run_id` and `deduped:true`
+without starting another provider execution. Reusing a key for a different
+workflow returns `409 workflow_run_idempotency_conflict`.
 
 ## Compatibility commitments
 

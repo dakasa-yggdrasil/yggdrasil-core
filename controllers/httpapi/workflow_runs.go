@@ -113,9 +113,27 @@ func (s *Server) dispatchAsyncWorkflowRun(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	runID := uuid.New()
-	if err := repository.InsertWorkflowRun(r.Context(), s.db, runID, req.Workflow, req.Inputs, req.Metadata); err != nil {
+	runID, deduped, err := repository.InsertWorkflowRunIdempotent(r.Context(), s.db, uuid.New(), req.Workflow, req.Inputs, req.Metadata)
+	if err != nil {
+		if errors.Is(err, repository.ErrWorkflowRunIdempotencyConflict) {
+			writeJSON(w, http.StatusConflict, map[string]any{
+				"error":  "workflow_run_idempotency_conflict",
+				"detail": err.Error(),
+			})
+			return
+		}
 		writeMappedError(w, err)
+		return
+	}
+	if deduped {
+		// The original goroutine owns execution. A retry only receives the
+		// durable run identity and must never start the provider action again.
+		writeJSON(w, http.StatusOK, map[string]any{
+			"run_id":   runID.String(),
+			"status":   "accepted",
+			"workflow": req.Workflow,
+			"deduped":  true,
+		})
 		return
 	}
 
@@ -157,6 +175,7 @@ func (s *Server) dispatchAsyncWorkflowRun(w http.ResponseWriter, r *http.Request
 		"run_id":   runID.String(),
 		"status":   "pending",
 		"workflow": req.Workflow,
+		"deduped":  false,
 	})
 }
 
