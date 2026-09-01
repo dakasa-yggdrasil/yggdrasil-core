@@ -173,6 +173,29 @@ func TestCompareIntegrationTypeSpecDetectsMismatch(t *testing.T) {
 	}
 }
 
+func TestCompareIntegrationTypeSpecTreatsEmptySchemaCollectionsAsOmitted(t *testing.T) {
+	expected := model.IntegrationTypeManifestSpec{
+		CredentialSchema: model.IntegrationSchemaSpec{
+			Mode:       "none",
+			Required:   []string{},
+			Properties: map[string]model.IntegrationSchemaProperty{},
+		},
+		InstanceSchema: model.IntegrationSchemaSpec{
+			Mode:       "none",
+			Required:   []string{},
+			Properties: map[string]model.IntegrationSchemaProperty{},
+		},
+	}
+	actual := model.IntegrationTypeManifestSpec{
+		CredentialSchema: model.IntegrationSchemaSpec{Mode: "none"},
+		InstanceSchema:   model.IntegrationSchemaSpec{Mode: "none"},
+	}
+
+	if err := compareIntegrationTypeSpec(expected, actual); err != nil {
+		t.Fatalf("compareIntegrationTypeSpec() error = %v", err)
+	}
+}
+
 func TestIntegrationDescribeFailureStatus(t *testing.T) {
 	tests := []struct {
 		name   string

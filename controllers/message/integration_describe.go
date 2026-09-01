@@ -13,13 +13,13 @@ import (
 	"sync"
 	"time"
 
-	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/manifestsync"
+	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc/amqp"
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
-	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc/amqp"
 )
 
 const integrationDescribeCacheTTL = 30 * time.Second
@@ -729,6 +729,11 @@ func normalizeIntegrationSchemaSpec(spec model.IntegrationSchemaSpec) model.Inte
 	spec.Required = normalizeIntegrationTokens(spec.Required)
 
 	if len(spec.Properties) == 0 {
+		// An explicitly empty object and an omitted object carry the same
+		// schema contract. Canonicalize both to nil before reflect.DeepEqual;
+		// otherwise they serialize identically because of omitempty while the
+		// describe handshake still reports a misleading contract mismatch.
+		spec.Properties = nil
 		return spec
 	}
 
