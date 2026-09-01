@@ -1428,15 +1428,7 @@ func (s *Server) handleIntegrationInstanceCreate(w http.ResponseWriter, r *http.
 		writeMappedError(w, err)
 		return
 	}
-	if err := manifestengine.ValidateIntegrationInstanceCredentialStorage(instanceSpec, typeSpec); err != nil {
-		writeMappedError(w, err)
-		return
-	}
-	if err := hydrateIntegrationInstanceInputSecrets(r.Context(), s.db, &instanceSpec); err != nil {
-		writeMappedError(w, err)
-		return
-	}
-	if err := manifestengine.ValidateHydratedIntegrationInstanceInputs(instanceSpec, typeSpec); err != nil {
+	if err := s.validateIntegrationInstanceInputs(r.Context(), instanceSpec, typeSpec); err != nil {
 		writeMappedError(w, err)
 		return
 	}
@@ -3025,6 +3017,31 @@ func (s *Server) handleManifestCreate(w http.ResponseWriter, r *http.Request, ki
 		return
 	}
 
+	// The generic manifest endpoint is also an integration_instance write
+	// surface. Keep its policy checks aligned with the typed endpoint: resolve
+	// the referenced integration_type, enforce its credential storage policy,
+	// hydrate managed-secret references in memory, and validate the resulting
+	// credentials/config against the type schemas before persisting anything.
+	// Without this gate, callers could bypass source=secret_ref by posting
+	// inline credentials through /api/v1/manifests?kind=integration_instance.
+	if strings.EqualFold(strings.TrimSpace(kind), "integration_instance") {
+		instanceSpec, parseErr := manifestengine.ParseIntegrationInstanceSpec(doc.Spec)
+		if parseErr != nil {
+			writeMappedError(w, parseErr)
+			return
+		}
+
+		_, typeSpec, resolveErr := s.resolveIntegrationTypeSpec(r.Context(), instanceSpec.TypeRef)
+		if resolveErr != nil {
+			writeMappedError(w, resolveErr)
+			return
+		}
+		if validationErr := s.validateIntegrationInstanceInputs(r.Context(), instanceSpec, typeSpec); validationErr != nil {
+			writeMappedError(w, validationErr)
+			return
+		}
+	}
+
 	// Capability-naming validator (Phase 1 warn-only / Phase 2 hard-fail).
 	// Runs BEFORE the manifest is persisted so hard-fail can reject the
 	// write cleanly — no DB churn, no audit-log misleading "success" then
@@ -3634,6 +3651,24 @@ func (s *Server) materializeIntegrationInstanceCredentials(
 	payload.Credentials = nil
 	payload.CredentialsRef = fmt.Sprintf("secret://%s/%s", secret.Namespace, secret.Name)
 	return nil
+}
+
+// validateIntegrationInstanceInputs applies the referenced integration_type's
+// credential storage policy and its hydrated credential/config schemas. The
+// instance spec is passed by value so secret hydration remains validation-only:
+// resolved values are never written back into the manifest document.
+func (s *Server) validateIntegrationInstanceInputs(
+	ctx context.Context,
+	instanceSpec model.IntegrationInstanceManifestSpec,
+	typeSpec model.IntegrationTypeManifestSpec,
+) error {
+	if err := manifestengine.ValidateIntegrationInstanceCredentialStorage(instanceSpec, typeSpec); err != nil {
+		return err
+	}
+	if err := hydrateIntegrationInstanceInputSecrets(ctx, s.db, &instanceSpec); err != nil {
+		return err
+	}
+	return manifestengine.ValidateHydratedIntegrationInstanceInputs(instanceSpec, typeSpec)
 }
 
 func (s *Server) materializeIntegrationInstanceSecretConfig(
