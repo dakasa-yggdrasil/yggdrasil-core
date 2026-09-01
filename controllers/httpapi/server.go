@@ -329,8 +329,9 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("DELETE /api/v1/manifests/{id}", server.handleManifestDelete)
 	// Public publish endpoint: external sources (Grafana webhooks, K8s
 	// informers, …) drop typed events here, the addon trigger loop picks
-	// them up and fires workflows declared with trigger.mode=event. Auth
-	// reuses the same shared-token helper as POST /api/v1/workflow-runs.
+	// them up and fires workflows declared with trigger.mode=event. Prefer the
+	// route-scoped event-publish token; the workflow token is a compatibility
+	// fallback during migration.
 	mux.HandleFunc("POST /api/v1/events", server.handleEventPublish)
 	mux.HandleFunc("POST /api/v1/github/webhook", server.handleGitHubWebhook)
 	mux.HandleFunc("GET /readyz", server.handleReadyz)
@@ -853,6 +854,15 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !requiresAuthenticatedConsoleAPI(r.URL.Path) {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Mutation adapters receive a write-only credential. Accept it only on
+		// the event publish endpoint; authorizeWorkflowRunRequest intentionally
+		// does not know this token, so it cannot cross into catalog, workflow or
+		// administrative APIs.
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/events" && authorizeEventPublishRequest(r) == nil {
 			next.ServeHTTP(w, r)
 			return
 		}

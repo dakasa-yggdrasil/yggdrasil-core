@@ -239,9 +239,13 @@ func runWorkflow(
 
 	for index, step := range orderedSteps {
 		stepResults, failedID := runStepIterations(ctx, conn, db, workflowRef, step, executionCtx, req)
-		response.Steps = append(response.Steps, stepResults...)
 		for _, r := range stepResults {
+			// Keep the provider response intact only inside this run so a following
+			// step can persist a one-time generated secret. The public response,
+			// workflow_runs.result receives the redacted copy below. Completion
+			// events are derived only from that public response.
 			executionCtx.Steps[r.ID] = r
+			response.Steps = append(response.Steps, redactSensitiveWorkflowStepResult(r))
 		}
 
 		// A condition-skipped step is recorded as "skipped" but the workflow

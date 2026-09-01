@@ -114,8 +114,8 @@
       "post": {
         "tags": ["events"],
         "summary": "Publish an event into the event stream",
-        "description": "Two-shape endpoint. (1) Generic events from control-plane writers (manifest sync, workflow_event_triggers cursor) post the legacy shape with `type`, `aggregate_type`, `aggregate_id`, `payload`. (2) Adapter pods emit INTEGRATION_CONTRACT 6.5 mutation events with `event_type`, `provider`, `resource`, `verb`, `resource_id`, `instance_id`, `idempotency`, `observed`, `emitted_at` — one per successful ensure_*/destroy_*/allowlisted-create_*. Mutation events dedup against `(event_type, idempotency)` within the event_retention_policy TTL: re-posting returns 200 with the original event_id instead of duplicating the row.",
-        "security": [{"BearerAuth": []}, {"WorkflowToken": []}],
+        "description": "Two-shape endpoint. (1) Generic events from control-plane writers (manifest sync, workflow_event_triggers cursor) post the legacy shape with `type`, `aggregate_type`, `aggregate_id`, `payload`. (2) Adapter pods emit INTEGRATION_CONTRACT 6.5 mutation events with `event_type`, `provider`, `resource`, `verb`, `resource_id`, `instance_id`, `idempotency`, `observed`, `emitted_at` — one per successful ensure_*/destroy_*/allowlisted-create_*. Mutation events dedup against `(event_type, idempotency)` within the event_retention_policy TTL: re-posting returns 200 with the original event_id instead of duplicating the row. Prefer the route-scoped event-publish token; the workflow token remains a compatibility fallback.",
+        "security": [{"BearerAuth": []}, {"EventPublishToken": []}, {"WorkflowToken": []}],
         "requestBody": {
           "required": true,
           "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PublishEventRequest"}}}
@@ -245,8 +245,9 @@
   },
   "components": {
     "securitySchemes": {
-      "BearerAuth": {"type": "http", "scheme": "bearer", "description": "Bearer token in Authorization header"},
-      "WorkflowToken": {"type": "apiKey", "in": "header", "name": "X-Yggdrasil-Workflow-Token", "description": "Optional shared token gating /api/v1/workflow-runs (env YGGDRASIL_WORKFLOW_TOKEN)"}
+      "BearerAuth": {"type": "http", "scheme": "bearer", "description": "Route-appropriate token in the Authorization header"},
+      "EventPublishToken": {"type": "apiKey", "in": "header", "name": "X-Yggdrasil-Event-Token", "description": "Dedicated token scoped to POST /api/v1/events (env YGGDRASIL_EVENT_PUBLISH_TOKEN)"},
+      "WorkflowToken": {"type": "apiKey", "in": "header", "name": "X-Yggdrasil-Workflow-Token", "description": "Shared workflow token (env YGGDRASIL_WORKFLOW_RUN_TOKEN); accepted by POST /api/v1/events only as a compatibility fallback"}
     },
     "schemas": {
       "ServiceBanner": {"type": "object", "properties": {"service": {"type": "string"}, "status": {"type": "string"}}},

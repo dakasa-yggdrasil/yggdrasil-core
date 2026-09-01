@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
 	"strings"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -63,14 +64,10 @@ type eventPublishRequest struct {
 //     shape carries the §6.5 fields and is translated into the generic
 //     model.EmitEventRequest below.
 //
-// Auth: deferred to authorizeWorkflowRunRequest, the same env-token guard
-// that protects POST /api/v1/workflow-runs. POST /api/v1/manifests today
-// has no in-handler auth — but reusing the manifest pattern verbatim would
-// leave the endpoint open, and the spec asks for a 401 path. Borrowing the
-// existing workflow-runs helper means no new auth scheme is invented; the
-// same YGGDRASIL_WORKFLOW_RUN_TOKEN env var gates both. When the env var is
-// unset (dev / tests without configured auth) the endpoint is open, exactly
-// like /api/v1/workflow-runs.
+// Auth: a dedicated YGGDRASIL_EVENT_PUBLISH_TOKEN limits adapter credentials
+// to this write-only surface. The legacy workflow-run token remains accepted
+// for compatibility. When neither credential is configured (dev/tests), the
+// endpoint stays open like /api/v1/workflow-runs.
 //
 // Status codes:
 //   - 201 Created: fresh insert (both shapes).
@@ -84,7 +81,7 @@ type eventPublishRequest struct {
 // run repository.EmitEventWithOutcome inside it, commit. On any error map
 // via writeMappedError so the same status-code logic applies.
 func (s *Server) handleEventPublish(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeWorkflowRunRequest(r); err != nil {
+	if err := authorizeEventPublishRequest(r); err != nil {
 		writeMappedError(w, err)
 		return
 	}
@@ -131,6 +128,41 @@ func (s *Server) handleEventPublish(w http.ResponseWriter, r *http.Request) {
 		"materialized_reactions": outcome.MaterializedReactions,
 		"deduped":                outcome.Deduped,
 	})
+}
+
+func authorizeEventPublishRequest(r *http.Request) error {
+	if claims, ok := claimsFromContext(r.Context()); ok {
+		if collaboratorID, _ := claims["collaborator_id"].(string); strings.TrimSpace(collaboratorID) != "" {
+			return nil
+		}
+	}
+
+	candidates := []string{
+		strings.TrimSpace(r.Header.Get("X-Yggdrasil-Event-Token")),
+		strings.TrimSpace(r.Header.Get("X-Yggdrasil-Workflow-Token")),
+		bearerToken(r.Header.Get("Authorization")),
+	}
+	eventToken := strings.TrimSpace(os.Getenv("YGGDRASIL_EVENT_PUBLISH_TOKEN"))
+	for _, candidate := range candidates {
+		if constantTimeTokenEqual(candidate, eventToken) {
+			return nil
+		}
+	}
+
+	actor, workflowErr := authenticateWorkflowRunRequest(r)
+	if workflowErr == nil {
+		if actor.Subject.ID != "" || actor.CollaboratorID != "" {
+			return nil
+		}
+		// Preserve the historical no-token convenience only outside production.
+		// Production boot validation rejects this configuration as well, but the
+		// request-time check keeps the route closed even when a handler is mounted
+		// without going through Server.New.
+		if eventToken == "" && devEnvAllowsFallback() {
+			return nil
+		}
+	}
+	return errWorkflowRunUnauthorized
 }
 
 // buildEmitEventRequestFromPublish translates the wire shape into the

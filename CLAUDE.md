@@ -91,7 +91,8 @@ cmd/                         # auxiliary CLIs (operator, validate-manifests, …
 
 ## HTTP API (most relevant routes)
 
-Bearer token via `YGGDRASIL_WORKFLOW_RUN_TOKEN` for write routes;
+Bearer token via `YGGDRASIL_WORKFLOW_RUN_TOKEN` for control-plane write
+routes; route-scoped `YGGDRASIL_EVENT_PUBLISH_TOKEN` for event publishing;
 session cookie for console; SCIM tokens for SCIM endpoints.
 
 ```
@@ -133,10 +134,12 @@ with `?kind=X` in the query string.
 - `/api/v1/auth/session` — current session.
 - MFA via TOTP/WebAuthn/recovery codes (`auth/mfa/...`).
 - SCIM v2 at `/api/v1/auth/scim/*`.
-- Bearer auth via `YGGDRASIL_WORKFLOW_RUN_TOKEN` for workflow dispatch
-  routes (POST /api/v1/workflow-runs, POST /api/v1/events, POST
-  /api/v1/manifests, integration_type sync). Token comes from
-  the cluster secret `yggdrasil-secrets` key `YGGDRASIL_WORKFLOW_RUN_TOKEN`.
+- Bearer auth via `YGGDRASIL_WORKFLOW_RUN_TOKEN` for workflow dispatch and
+  control-plane routes (POST /api/v1/workflow-runs, POST /api/v1/manifests,
+  integration_type sync). `POST /api/v1/events` prefers the route-scoped
+  `YGGDRASIL_EVENT_PUBLISH_TOKEN` and temporarily accepts the workflow token
+  for compatibility. Tokens come from deployment-managed secrets, never
+  manifests.
 
 ## CI / image flow
 
