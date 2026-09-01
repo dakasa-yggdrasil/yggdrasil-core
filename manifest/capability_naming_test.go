@@ -14,10 +14,28 @@ func TestLoadCapabilityNamingAllowlist_Exact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadCapabilityNamingAllowlist failed: %v", err)
 	}
-	for _, want := range []string{"verify_webhook_signature", "publish_message", "create_refund"} {
+	for _, want := range []string{"verify_webhook_signature", "publish_message", "create_refund", "recover_webhook_destination_secret"} {
 		if !al.Allowed(want, "capability") {
 			t.Errorf("expected %q to be allowed (exact match)", want)
 		}
+	}
+}
+
+func TestLoadCapabilityNamingAllowlist_DiditSecretRecoveryIsExactOnly(t *testing.T) {
+	path := filepath.Join("..", "config", "capability_naming_allowlist.yaml")
+	al, err := LoadCapabilityNamingAllowlist(path)
+	if err != nil {
+		t.Fatalf("LoadCapabilityNamingAllowlist failed: %v", err)
+	}
+
+	if !al.Allowed("recover_webhook_destination_secret", "capability") {
+		t.Fatal("expected Didit create-only secret recovery to be allowlisted")
+	}
+	if al.Allowed("recover_webhook_destination_secret_extra", "capability") {
+		t.Fatal("Didit secret recovery exemption must remain an exact match")
+	}
+	if warnings := ValidateCapabilityName("recover_webhook_destination_secret", "capability", al); len(warnings) != 0 {
+		t.Fatalf("expected no naming warning for Didit secret recovery, got %v", warnings)
 	}
 }
 
