@@ -7,7 +7,7 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: e9be81d1839b1be13a53ce91cd8d979417ec201e
+verified_at_commit: 841906015b51edcefa66a1d43deef8fd09efe07b
 verified_at: 2026-09-01
-by: Codex sensitive-output security audit
-note: Reconciled transient workflow secret redaction and route-scoped adapter event publishing.
+by: Codex Didit capability allowlist audit
+note: Reconciled the exact create-only webhook secret recovery naming exemption; no broader prose changed.
