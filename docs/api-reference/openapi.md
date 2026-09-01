@@ -35,6 +35,13 @@ Every manifest persisted by Yggdrasil shares the same outer shape:
 
 The server validates `spec` against the kind-specific validator, attaches a UUID, and stores a new version. Existing versions of the same `(kind, namespace, name)` tuple are deactivated unless the new request explicitly sets `active: false`.
 
+An `integration_instance` write also resolves its referenced
+`integration_type` before persistence. The generic manifests endpoint
+and the typed integration-instances endpoint both enforce the type's
+credential policy, hydrate secret references in memory for validation,
+and validate credentials and config against the type schemas. Resolved
+secret values are not persisted in the manifest.
+
 ## Manifest selectors
 
 Several endpoints accept a `ManifestSelector` to identify a target manifest. You can use any one of:

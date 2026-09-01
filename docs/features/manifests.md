@@ -69,6 +69,14 @@ Response:
 The CLI's `yggdrasil apply -f file.yaml` is a thin wrapper that POSTs
 the same shape — multi-doc YAML supported via `---` separators.
 
+For `kind=integration_instance`, the generic endpoint and the typed
+`POST /api/v1/integration-instances` endpoint apply the same contract
+before persistence. The core resolves `spec.type_ref`, enforces the
+referenced `integration_type` credential policy, resolves any managed
+secret references in memory, and validates the hydrated credentials
+and config against the type schemas. Hydrated values are used only for
+validation and are never written back into the manifest.
+
 ### GET /api/v1/manifests?kind=<kind>&namespace=<ns>&name=<name>
 
 Returns `{ "manifests": [...] }` filtered by query params. The CLI's
@@ -137,10 +145,11 @@ Postgres backup. See
 - A spec violates kind-specific validation (e.g. a workflow step with
   an unknown `kind`). Surfaces as an HTTP 400 + structured error;
   the apply does NOT silently succeed.
-- A required dependency is missing (e.g. an `integration_instance`
-  references a `type_ref` that does not exist). The check happens at
-  read time, not write time, so referential integrity bugs surface
-  during workflow runs — not on apply.
+- An `integration_instance` references a `type_ref` that does not
+  exist, violates the type's credential policy, or fails its hydrated
+  input schemas. Both integration-instance write endpoints reject the
+  request before persistence. Selectors used by other manifest kinds
+  can still be resolved later during execution.
 
 ## Pitfalls
 
