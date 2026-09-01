@@ -93,13 +93,13 @@ publish endpoint:
 
 ```http
 POST /api/v1/events
-Authorization: Bearer <YGGDRASIL_WORKFLOW_RUN_TOKEN>
+Authorization: Bearer <YGGDRASIL_EVENT_PUBLISH_TOKEN>
 Content-Type: application/json
 ```
 
 ```bash
 curl -X POST https://yggdrasil.example.com/api/v1/events \
-  -H "Authorization: Bearer ${YGGDRASIL_WORKFLOW_RUN_TOKEN}" \
+  -H "Authorization: Bearer ${YGGDRASIL_EVENT_PUBLISH_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{
     "type": "infra.alert.firing",
@@ -133,11 +133,14 @@ Schema registered for `<type>` in `docs/contracts/events/v1/`; new
 event types must register a schema before the API will accept them
 (returns `400` with the diagnostic otherwise).
 
-**Auth.** Same shared token as `POST /api/v1/workflow-runs`. Set
-`YGGDRASIL_WORKFLOW_RUN_TOKEN` in the deployment env; clients send
-it in `Authorization: Bearer …` or `X-Yggdrasil-Workflow-Token`.
-When the env var is unset the endpoint is open (dev mode), exactly
-like `/api/v1/workflow-runs`.
+**Auth.** Set a dedicated `YGGDRASIL_EVENT_PUBLISH_TOKEN` and give event
+writers only that credential. Clients send it in `Authorization: Bearer …`
+or `X-Yggdrasil-Event-Token`. The legacy `YGGDRASIL_WORKFLOW_RUN_TOKEN`
+remains accepted through `Authorization: Bearer …` or
+`X-Yggdrasil-Workflow-Token` during migration. Production refuses to boot
+without either credential and rejects a dedicated token that duplicates a
+broader workflow, deploy, or auth-admin token. When both are unset outside
+production, the endpoint remains open for local development and tests.
 
 ## Reactive workflows
 

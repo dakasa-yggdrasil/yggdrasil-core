@@ -101,11 +101,19 @@ All non-2xx responses share:
 
 ## Auth
 
-v2.x relies on simple shared-token auth gated by env vars. Endpoints requiring auth and the env var that gates them:
+v2.x relies on environment-backed static credentials, including route-scoped
+tokens where a caller needs only one write surface. Endpoints requiring auth
+and the env var that gates them:
 
 | Endpoint | Env var | Header(s) accepted |
 |---|---|---|
 | `POST /api/v1/workflow-runs` | `YGGDRASIL_WORKFLOW_RUN_TOKEN` (legacy, optional in local dev) or `YGGDRASIL_WORKFLOW_RUN_SCOPED_TOKENS_JSON` | `X-Yggdrasil-Workflow-Token: <token>` or `Authorization: Bearer <token>` |
+| `POST /api/v1/events` | `YGGDRASIL_EVENT_PUBLISH_TOKEN` (preferred) or `YGGDRASIL_WORKFLOW_RUN_TOKEN` (legacy fallback) | `X-Yggdrasil-Event-Token: <token>`, `X-Yggdrasil-Workflow-Token: <token>`, or `Authorization: Bearer <token>` |
+
+Production requires at least one event-publish credential during the legacy
+compatibility window. A configured dedicated event token must differ from all
+workflow, deploy, and auth-admin static tokens; the core rejects collisions at
+boot so the event credential cannot be replayed on a broader route.
 
 Workflows may opt into manifest-backed dispatch authorization with
 `spec.authorization.rbac` and optional `spec.authorization.policy`. The legacy

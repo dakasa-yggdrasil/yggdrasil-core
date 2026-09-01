@@ -159,6 +159,30 @@ Syntax: `{{ <path> }}`. The renderer is recursive — strings, maps,
 slices are all walked. Unresolvable templates fail the step
 loud-and-explicit (no silent empty-string substitution).
 
+### Sensitive integration outputs
+
+An integration that returns a provider-generated secret exactly once marks
+its paths relative to `metadata.output`:
+
+```json
+{
+  "output": {
+    "resource_id": "webhook-123",
+    "secret_shared_key": "one-time-value"
+  },
+  "sensitive_output_paths": ["secret_shared_key"]
+}
+```
+
+The engine keeps the original value only in the current run's in-memory
+execution context, so the immediately following step can persist it through a
+secret-store integration. Synchronous responses and asynchronous
+`workflow_runs.result` contain `[REDACTED]` at each declared path;
+`workflow.run.completed` is derived from that public response and currently
+contains no step output. A malformed or missing path in a declared list
+redacts the entire output fail-closed. Never place the generated value in
+workflow inputs, dispatch metadata, errors, logs, or mutation events.
+
 ## Wire shape
 
 ### POST /api/v1/workflow-runs

@@ -317,8 +317,9 @@ func TestNoUngatedMutatingRoutes(t *testing.T) {
 		`POST /api/v1/manifests`:        "workflow-token via in-handler authorizeWorkflowRunRequest",
 		`DELETE /api/v1/manifests/{id}`: "workflow-token via in-handler authorizeWorkflowRunRequest",
 
-		// Event publishing — webhook-style, token-only via same helper.
-		`POST /api/v1/events`: "workflow-token webhook publish",
+		// Event publishing — webhook-style, route-scoped event token with a
+		// legacy workflow-token compatibility path.
+		`POST /api/v1/events`: "event-publish token or legacy workflow-token",
 
 		// Webhook receivers — external callers (no claims), HMAC-validated in-handler.
 		`POST /api/v1/github/webhook`:                       "external GitHub webhook, HMAC-validated",
