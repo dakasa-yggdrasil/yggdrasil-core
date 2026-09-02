@@ -287,6 +287,13 @@ func (v *authRequestView) Done() bool { return v.userID != "" }
 // session is already authenticated (we receive empty string for fresh
 // authorize calls and set collaborator_id later).
 func (s *Storage) CreateAuthRequest(ctx context.Context, req *oidc.AuthRequest, userID string) (op.AuthRequest, error) {
+	client, err := repository.GetOIDCClientByID(ctx, s.db, req.ClientID)
+	if err != nil {
+		return nil, err
+	}
+	if err := validateRequiredPKCE(client, req); err != nil {
+		return nil, err
+	}
 	ar := model.OIDCAuthRequest{
 		ClientID:            req.ClientID,
 		RedirectURI:         req.RedirectURI,
@@ -312,6 +319,28 @@ func (s *Storage) CreateAuthRequest(ctx context.Context, req *oidc.AuthRequest, 
 	ar.ID = id
 	ar.CreatedAt = time.Now() // approximation; row's created_at is authoritative
 	return newAuthRequestView(ar), nil
+}
+
+// validateRequiredPKCE closes the confidential-client gap in the upstream OP:
+// zitadel verifies a supplied challenge for every client during code exchange,
+// but it requires a challenge only for public clients. The persisted
+// pkce_required flag is our stronger registration contract, so enforce it
+// before any authorization request is written regardless of auth method.
+func validateRequiredPKCE(client model.OIDCClient, req *oidc.AuthRequest) error {
+	if !client.PKCERequired {
+		return nil
+	}
+	if strings.TrimSpace(req.CodeChallenge) == "" {
+		return oidc.ErrInvalidRequest().WithDescription("code_challenge is required for this client")
+	}
+	if req.CodeChallengeMethod != oidc.CodeChallengeMethodS256 {
+		return oidc.ErrInvalidRequest().WithDescription("code_challenge_method must be S256 for this client")
+	}
+	decoded, err := base64.RawURLEncoding.DecodeString(req.CodeChallenge)
+	if err != nil || len(decoded) != crypto.SHA256.Size() {
+		return oidc.ErrInvalidRequest().WithDescription("code_challenge must be a valid S256 challenge")
+	}
+	return nil
 }
 
 // AuthRequestByID looks up a previously created auth request. Called by
@@ -557,9 +586,9 @@ func (s *Storage) TokenRequestByRefreshToken(ctx context.Context, refreshToken s
 // logout) AND from RevokeToken when the resource server explicitly
 // revokes a token chain. Either entry point therefore propagates to:
 //
-//   1. oidc_refresh_tokens — the refresh chain is killed
-//   2. session_revocation — JWT access tokens become inactive on
-//      next introspection lookup for this (collaborator, client) pair
+//  1. oidc_refresh_tokens — the refresh chain is killed
+//  2. session_revocation — JWT access tokens become inactive on
+//     next introspection lookup for this (collaborator, client) pair
 //
 // Mark the OIDC session link terminated so the back-channel dispatcher
 // doesn't re-fire (TerminateSession is itself called BY back-channel

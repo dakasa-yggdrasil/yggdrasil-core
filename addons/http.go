@@ -27,6 +27,10 @@ func init() {
 }
 
 func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
+	issuer := strings.TrimSpace(os.Getenv("YGGDRASIL_OIDC_ISSUER"))
+	if strings.TrimSpace(os.Getenv("YGGDRASIL_OIDC_CLIENTS_FILE")) != "" && issuer == "" {
+		return fmt.Errorf("oidc confidential client bootstrap requires YGGDRASIL_OIDC_ISSUER")
+	}
 	db, ok := Postgres(app)
 	if !ok {
 		return fmt.Errorf("postgres addon is not available")
@@ -59,9 +63,9 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 	// key: oidc signing key not found". The Ensure* call is idempotent
 	// across multi-pod startup races via FOR UPDATE on the singleton
 	// oidc_provider_settings row.
-	if issuer := strings.TrimSpace(os.Getenv("YGGDRASIL_OIDC_ISSUER")); issuer != "" {
-		if ensureErr := oidc.EnsureConfiguredPublicClients(ctx, db, os.Getenv("YGGDRASIL_OIDC_PUBLIC_CLIENTS_JSON")); ensureErr != nil {
-			return fmt.Errorf("oidc public client bootstrap: %w", ensureErr)
+	if issuer != "" {
+		if ensureErr := ensureConfiguredOIDCClients(ctx, db, logger); ensureErr != nil {
+			return ensureErr
 		}
 		if _, ensureErr := oidc.EnsureSigningKey(ctx, db); ensureErr != nil {
 			return fmt.Errorf("oidc signing key bootstrap: %w", ensureErr)
@@ -142,6 +146,20 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 	app.RegisterCloser(func(ctx context.Context) error {
 		return server.Shutdown(ctx)
 	})
+	return nil
+}
+
+func ensureConfiguredOIDCClients(ctx context.Context, db *sql.DB, logger *zap.Logger) error {
+	if clientsFile := strings.TrimSpace(os.Getenv("YGGDRASIL_OIDC_CLIENTS_FILE")); clientsFile != "" {
+		result, err := oidc.EnsureConfiguredConfidentialClientsFromFile(ctx, db, clientsFile)
+		if err != nil {
+			return fmt.Errorf("oidc confidential client bootstrap: %w", err)
+		}
+		logger.Info("configured confidential OIDC clients", zap.Int("client_count", len(result.ClientIDs)))
+	}
+	if err := oidc.EnsureConfiguredPublicClients(ctx, db, os.Getenv("YGGDRASIL_OIDC_PUBLIC_CLIENTS_JSON")); err != nil {
+		return fmt.Errorf("oidc public client bootstrap: %w", err)
+	}
 	return nil
 }
 

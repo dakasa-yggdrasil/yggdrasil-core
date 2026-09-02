@@ -6,11 +6,13 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
 	"github.com/google/uuid"
 
+	oidccontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/oidc"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/controlplane"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -31,6 +33,9 @@ import (
 //     and returns its rendered Kubernetes objects as step metadata.
 //   - collaborator.reconcile_provider_state — matches a batch of provider identities
 //     to collaborators by primary_email and upserts collaborator_provider_state rows.
+//   - oidc_client.verify_bootstrap_file — proves that the persisted clients match
+//     the server-local, read-only confidential-client Secret file. It accepts no
+//     input, performs no mutation, and returns only public client identifiers.
 //
 // On success, step.Metadata carries operation-specific fields (see the
 // per-handler doc comments).
@@ -51,11 +56,46 @@ func executeYggdrasilWorkflowStep(
 		return handleControlPlaneRender(ctx, db, result, renderedInput)
 	case "collaborator.reconcile_provider_state":
 		return handleCollaboratorReconcileProviderState(ctx, db, result, renderedInput)
+	case "oidc_client.verify_bootstrap_file":
+		return handleOIDCClientVerifyBootstrapFile(ctx, db, result, renderedInput)
 	default:
 		result.Error = fmt.Sprintf("unsupported yggdrasil step operation %q", operation)
 		result.FinishedAt = time.Now().UTC()
 		return result
 	}
+}
+
+func handleOIDCClientVerifyBootstrapFile(
+	ctx context.Context,
+	db *sql.DB,
+	result model.WorkflowRunStepResult,
+	renderedInput map[string]any,
+) model.WorkflowRunStepResult {
+	if len(renderedInput) != 0 {
+		result.Error = "oidc_client.verify_bootstrap_file accepts no input; client material must come only from the server-local mounted Secret file"
+		result.FinishedAt = time.Now().UTC()
+		return result
+	}
+	path := strings.TrimSpace(os.Getenv("YGGDRASIL_OIDC_CLIENTS_FILE"))
+	if path == "" {
+		result.Error = "oidc_client.verify_bootstrap_file: YGGDRASIL_OIDC_CLIENTS_FILE is not configured"
+		result.FinishedAt = time.Now().UTC()
+		return result
+	}
+	verified, err := oidccontroller.VerifyConfiguredConfidentialClientsFromFile(ctx, db, path)
+	if err != nil {
+		result.Error = fmt.Sprintf("oidc_client.verify_bootstrap_file: %v", err)
+		result.FinishedAt = time.Now().UTC()
+		return result
+	}
+	result.Status = "succeeded"
+	result.Metadata = map[string]any{
+		"managed_client_count": len(verified.ClientIDs),
+		"managed_client_ids":   verified.ClientIDs,
+		"source":               "server_local_mounted_file",
+	}
+	result.FinishedAt = time.Now().UTC()
+	return result
 }
 
 // handleApplyManifest persists with.manifest through the same pipeline

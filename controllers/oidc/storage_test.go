@@ -4,15 +4,151 @@ import (
 	"context"
 	"database/sql"
 	"os"
+	"strings"
 	"testing"
 	"time"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
 	"github.com/zitadel/oidc/v3/pkg/oidc"
+	"github.com/zitadel/oidc/v3/pkg/op"
 )
+
+func TestValidateRequiredPKCEAppliesToConfidentialClients(t *testing.T) {
+	client := model.OIDCClient{
+		ClientID:         "confidential-client",
+		ClientSecretHash: "$2b$12$hash-is-present-so-this-client-is-confidential",
+		PKCERequired:     true,
+	}
+	verifier := "a-valid-length-code-verifier-with-at-least-43-characters"
+	challenge := oidc.NewSHACodeChallenge(verifier)
+
+	tests := []struct {
+		name    string
+		request *oidc.AuthRequest
+		wantErr bool
+	}{
+		{name: "missing challenge", request: &oidc.AuthRequest{}, wantErr: true},
+		{
+			name: "plain challenge",
+			request: &oidc.AuthRequest{
+				CodeChallenge:       challenge,
+				CodeChallengeMethod: oidc.CodeChallengeMethodPlain,
+			},
+			wantErr: true,
+		},
+		{
+			name: "malformed S256 challenge",
+			request: &oidc.AuthRequest{
+				CodeChallenge:       "not-a-sha256-challenge",
+				CodeChallengeMethod: oidc.CodeChallengeMethodS256,
+			},
+			wantErr: true,
+		},
+		{
+			name: "valid S256 challenge",
+			request: &oidc.AuthRequest{
+				CodeChallenge:       challenge,
+				CodeChallengeMethod: oidc.CodeChallengeMethodS256,
+			},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := validateRequiredPKCE(client, tc.request)
+			if tc.wantErr && err == nil {
+				t.Fatal("expected PKCE validation error")
+			}
+			if !tc.wantErr && err != nil {
+				t.Fatalf("unexpected PKCE validation error: %v", err)
+			}
+		})
+	}
+
+	if err := op.AuthorizeCodeChallenge(verifier, &oidc.CodeChallenge{
+		Challenge: challenge,
+		Method:    oidc.CodeChallengeMethodS256,
+	}); err != nil {
+		t.Fatalf("the upstream code exchange must verify a supplied confidential-client challenge: %v", err)
+	}
+	if err := op.AuthorizeCodeChallenge("wrong-verifier", &oidc.CodeChallenge{
+		Challenge: challenge,
+		Method:    oidc.CodeChallengeMethodS256,
+	}); err == nil {
+		t.Fatal("the upstream code exchange accepted the wrong verifier")
+	}
+}
+
+func TestValidateRequiredPKCELeavesOptOutClientUnchanged(t *testing.T) {
+	client := model.OIDCClient{ClientID: "legacy-client", PKCERequired: false}
+	if err := validateRequiredPKCE(client, &oidc.AuthRequest{}); err != nil {
+		t.Fatalf("PKCE opt-out client changed behavior: %v", err)
+	}
+}
+
+func TestAuthorizeStorageRejectsConfidentialClientWithoutS256PKCEBeforeInsert(t *testing.T) {
+	tests := []struct {
+		name      string
+		challenge string
+		method    oidc.CodeChallengeMethod
+		want      string
+	}{
+		{name: "missing", want: "code_challenge is required"},
+		{
+			name:      "plain",
+			challenge: oidc.NewSHACodeChallenge("a-valid-length-code-verifier-with-at-least-43-characters"),
+			method:    oidc.CodeChallengeMethodPlain,
+			want:      "code_challenge_method must be S256",
+		},
+	}
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			mock.ExpectQuery("SELECT client_id, client_secret_hash").
+				WithArgs("confidential-client").
+				WillReturnRows(sqlmock.NewRows([]string{
+					"client_id", "client_secret_hash", "redirect_uris", "post_logout_redirect_uris",
+					"scopes", "grant_types", "pkce_required", "backchannel_logout_uri",
+					"access_token_lifetime_seconds", "created_at",
+				}).AddRow(
+					"confidential-client",
+					"$2b$12$hash-is-present-so-this-client-is-confidential",
+					"{https://x.test/callback}",
+					"{https://x.test/login}",
+					"{openid}",
+					"{authorization_code}",
+					true,
+					"",
+					nil,
+					time.Now().UTC(),
+				))
+
+			storage := NewStorage(db, "https://yggdrasil.test/oidc")
+			_, err = storage.CreateAuthRequest(context.Background(), &oidc.AuthRequest{
+				ClientID:            "confidential-client",
+				RedirectURI:         "https://x.test/callback",
+				Scopes:              oidc.SpaceDelimitedArray{"openid"},
+				ResponseType:        oidc.ResponseTypeCode,
+				CodeChallenge:       tc.challenge,
+				CodeChallengeMethod: tc.method,
+			}, "")
+			if err == nil || !strings.Contains(err.Error(), tc.want) {
+				t.Fatalf("expected authorize rejection containing %q, got %v", tc.want, err)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
 
 func dbForStorageTest(t *testing.T) *sql.DB {
 	t.Helper()
@@ -153,6 +289,7 @@ func TestStorage_CreateAndGetAuthRequestByID(t *testing.T) {
 	})
 
 	s := NewStorage(db, "https://yggdrasil.test")
+	challenge := oidc.NewSHACodeChallenge("storage-test-code-verifier-6b1")
 	ar, err := s.CreateAuthRequest(context.Background(), &oidc.AuthRequest{
 		ClientID:            "storage-test-client",
 		RedirectURI:         "https://x.test/cb",
@@ -160,7 +297,7 @@ func TestStorage_CreateAndGetAuthRequestByID(t *testing.T) {
 		ResponseType:        oidc.ResponseTypeCode,
 		State:               "state-1",
 		Nonce:               "nonce-1",
-		CodeChallenge:       "challenge-abc",
+		CodeChallenge:       challenge,
 		CodeChallengeMethod: oidc.CodeChallengeMethodS256,
 	}, collabID.String())
 	if err != nil {
@@ -179,7 +316,7 @@ func TestStorage_CreateAndGetAuthRequestByID(t *testing.T) {
 		t.Errorf("Done() should be true when subject set")
 	}
 	cc := ar.GetCodeChallenge()
-	if cc == nil || cc.Challenge != "challenge-abc" || cc.Method != oidc.CodeChallengeMethodS256 {
+	if cc == nil || cc.Challenge != challenge || cc.Method != oidc.CodeChallengeMethodS256 {
 		t.Errorf("PKCE not surfaced: %+v", cc)
 	}
 
@@ -207,10 +344,12 @@ func TestStorage_SaveAuthCode_AndAuthRequestByCode(t *testing.T) {
 
 	s := NewStorage(db, "https://yggdrasil.test")
 	ar, err := s.CreateAuthRequest(context.Background(), &oidc.AuthRequest{
-		ClientID:    "storage-test-client",
-		RedirectURI: "https://x.test/cb",
-		Scopes:      oidc.SpaceDelimitedArray{"openid"},
-		State:       "code-state",
+		ClientID:            "storage-test-client",
+		RedirectURI:         "https://x.test/cb",
+		Scopes:              oidc.SpaceDelimitedArray{"openid"},
+		State:               "code-state",
+		CodeChallenge:       oidc.NewSHACodeChallenge("storage-test-code-verifier-6b2"),
+		CodeChallengeMethod: oidc.CodeChallengeMethodS256,
 	}, collabID.String())
 	if err != nil {
 		t.Fatalf("CreateAuthRequest: %v", err)
@@ -499,9 +638,11 @@ func TestStorage_DeleteAuthRequest_MarksConsumed(t *testing.T) {
 
 	s := NewStorage(db, "https://yggdrasil.test")
 	ar, err := s.CreateAuthRequest(context.Background(), &oidc.AuthRequest{
-		ClientID:    "storage-test-client",
-		RedirectURI: "https://x.test/cb",
-		Scopes:      oidc.SpaceDelimitedArray{"openid"},
+		ClientID:            "storage-test-client",
+		RedirectURI:         "https://x.test/cb",
+		Scopes:              oidc.SpaceDelimitedArray{"openid"},
+		CodeChallenge:       oidc.NewSHACodeChallenge("storage-test-code-verifier-6b3"),
+		CodeChallengeMethod: oidc.CodeChallengeMethodS256,
 	}, collabID.String())
 	if err != nil {
 		t.Fatalf("CreateAuthRequest: %v", err)

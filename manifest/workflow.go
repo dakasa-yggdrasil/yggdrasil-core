@@ -33,6 +33,7 @@ var (
 		"apply_manifest",
 		"control_plane.render",
 		"collaborator.reconcile_provider_state",
+		"oidc_client.verify_bootstrap_file",
 	}
 	workflowTemplatePattern = regexp.MustCompile(`{{\s*([^{}]+?)\s*}}`)
 )
@@ -432,6 +433,10 @@ func validateWorkflowStep(step model.WorkflowStepSpec) error {
 			}
 			if _, hasProvider := step.With["provider"]; !hasProvider {
 				return fmt.Errorf("yggdrasil step collaborator.reconcile_provider_state requires with.provider")
+			}
+		case "oidc_client.verify_bootstrap_file":
+			if len(step.With) != 0 {
+				return fmt.Errorf("yggdrasil step oidc_client.verify_bootstrap_file accepts no with input")
 			}
 		}
 	}

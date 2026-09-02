@@ -17,7 +17,11 @@ type oidcClientExecutor interface {
 	ExecContext(context.Context, string, ...any) (sql.Result, error)
 }
 
-func GetOIDCClientByID(ctx context.Context, db *sql.DB, clientID string) (model.OIDCClient, error) {
+type oidcClientQuerier interface {
+	QueryRowContext(context.Context, string, ...any) *sql.Row
+}
+
+func GetOIDCClientByID(ctx context.Context, db oidcClientQuerier, clientID string) (model.OIDCClient, error) {
 	row := db.QueryRowContext(ctx, `
 		SELECT client_id, client_secret_hash, redirect_uris, post_logout_redirect_uris,
 		       scopes, grant_types, pkce_required,
@@ -54,7 +58,7 @@ func GetOIDCClientByID(ctx context.Context, db *sql.DB, clientID string) (model.
 	return c, nil
 }
 
-func UpsertOIDCClient(ctx context.Context, db *sql.DB, c model.OIDCClient) error {
+func UpsertOIDCClient(ctx context.Context, db oidcClientExecutor, c model.OIDCClient) error {
 	// nullable text column: empty string → NULL keeps the column semantically
 	// "opted out of back-channel logout" instead of "registered as empty".
 	var bcl any
