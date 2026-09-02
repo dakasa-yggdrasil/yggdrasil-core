@@ -174,6 +174,43 @@ entries and collisions with existing confidential clients fail startup before
 the OIDC server is mounted. See
 [ADR-0011](./adr/0011-bootstrap-internal-public-oidc-clients-declaratively.md).
 
+Server-side applications can be reconciled as confidential OIDC clients from a
+read-only mounted Secret file. Keep the plaintext client secret in the relying
+application only; the Core file contains its bcrypt verifier:
+
+```sh
+export YGGDRASIL_OIDC_CLIENTS_FILE=/var/run/secrets/yggdrasil/oidc-clients/clients.json
+```
+
+```json
+{
+  "version": 1,
+  "clients": [
+    {
+      "client_id": "internal-web",
+      "client_type": "confidential",
+      "client_secret_hash": "$2b$12$<bcrypt-verifier>",
+      "token_endpoint_auth_method": "client_secret_basic",
+      "redirect_uris": ["https://internal.example.com/auth/oidc/callback"],
+      "post_logout_redirect_uris": ["https://internal.example.com/login"],
+      "scopes": ["openid", "email", "profile"],
+      "grant_types": ["authorization_code", "refresh_token"],
+      "pkce_required": true,
+      "pkce_code_challenge_method": "S256"
+    }
+  ]
+}
+```
+
+The file must be regular and non-writable. Core validates the complete document,
+requires HTTPS and a bcrypt cost of at least 12, reconciles and reads back every
+row in one transaction, and fails startup before mounting the OIDC provider on
+any mismatch. The input-free in-process workflow operation
+`oidc_client.verify_bootstrap_file` can compare the same file to persisted state;
+it accepts no client material, performs no mutation, and reports only public
+client identifiers. See
+[ADR-0014](./adr/0014-bootstrap-confidential-oidc-clients-from-read-only-secret-files.md).
+
 Manage the process with systemd, supervisord, or whatever fits your
 environment. Register the adapter instances manually via
 `yggdrasil apply -f <instance.yaml>` if you want the deploy

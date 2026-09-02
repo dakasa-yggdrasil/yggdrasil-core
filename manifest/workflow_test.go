@@ -62,6 +62,27 @@ func TestValidateWorkflowSpecAcceptsYggdrasilApplyManifest(t *testing.T) {
 	}
 }
 
+func TestValidateWorkflowSpecAcceptsInputFreeOIDCClientReconcile(t *testing.T) {
+	spec := model.WorkflowManifestSpec{
+		Trigger: model.WorkflowTriggerSpec{Mode: "manual"},
+		Steps: []model.WorkflowStepSpec{{
+			ID: "reconcile-oidc-clients",
+			Use: model.WorkflowStepUseSpec{
+				Kind:      "yggdrasil",
+				Operation: "oidc_client.verify_bootstrap_file",
+			},
+		}},
+	}
+
+	if err := ValidateWorkflowSpec(spec); err != nil {
+		t.Fatalf("ValidateWorkflowSpec(input-free OIDC client reconcile) error: %v", err)
+	}
+	spec.Steps[0].With = map[string]any{"client_secret_hash": "forbidden"}
+	if err := ValidateWorkflowSpec(spec); err == nil {
+		t.Fatal("expected OIDC client reconcile workflow input to be rejected")
+	}
+}
+
 func TestValidateWorkflowSpecRejectsYggdrasilWithUnknownOperation(t *testing.T) {
 	spec := model.WorkflowManifestSpec{
 		Trigger: model.WorkflowTriggerSpec{Mode: "manual"},

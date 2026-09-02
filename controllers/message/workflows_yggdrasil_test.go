@@ -115,6 +115,55 @@ func TestExecuteYggdrasilWorkflowStep_UnsupportedOperationFails(t *testing.T) {
 	}
 }
 
+func TestExecuteYggdrasilWorkflowStep_OIDCClientReconcileRejectsInput(t *testing.T) {
+	step := model.WorkflowStepSpec{
+		ID: "reconcile-oidc-client",
+		Use: model.WorkflowStepUseSpec{
+			Kind:      "yggdrasil",
+			Operation: "oidc_client.verify_bootstrap_file",
+		},
+	}
+	result := model.WorkflowRunStepResult{
+		ID:        step.ID,
+		Kind:      "yggdrasil",
+		Operation: step.Use.Operation,
+		Status:    "failed",
+	}
+
+	got := executeYggdrasilWorkflowStep(
+		context.Background(),
+		nil,
+		step,
+		result,
+		map[string]any{"client_secret_hash": "must-not-cross-the-workflow-boundary"},
+	)
+	if got.Status != "failed" || got.Error == "" {
+		t.Fatalf("expected fail-closed secret input rejection, got %#v", got)
+	}
+}
+
+func TestExecuteYggdrasilWorkflowStep_OIDCClientReconcileRequiresMountedFile(t *testing.T) {
+	t.Setenv("YGGDRASIL_OIDC_CLIENTS_FILE", "")
+	step := model.WorkflowStepSpec{
+		ID: "reconcile-oidc-client",
+		Use: model.WorkflowStepUseSpec{
+			Kind:      "yggdrasil",
+			Operation: "oidc_client.verify_bootstrap_file",
+		},
+	}
+	result := model.WorkflowRunStepResult{
+		ID:        step.ID,
+		Kind:      "yggdrasil",
+		Operation: step.Use.Operation,
+		Status:    "failed",
+	}
+
+	got := executeYggdrasilWorkflowStep(context.Background(), nil, step, result, nil)
+	if got.Status != "failed" || got.Error == "" {
+		t.Fatalf("expected missing mounted-file configuration to fail, got %#v", got)
+	}
+}
+
 // TestExecuteYggdrasilWorkflowStep_BadManifestFails guards that a step
 // with a malformed with.manifest (object missing, wrong type) fails at
 // input shaping — before any DB interaction. This gives us a DB-free
