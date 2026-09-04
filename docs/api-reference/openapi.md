@@ -73,7 +73,7 @@ Workflows can interpolate values into step inputs using `{{ ... }}` syntax. Thre
 - `push.head_commit.message`
 - `push.pusher.name`
 
-Unknown `push.*` placeholders return `500`. Unmatched `{{ ... }}` patterns from other namespaces (e.g. `{{ env.HOME }}`) are passed through unchanged for forward compatibility.
+Unknown `push.*` placeholders return `500`. Any other `{{ ... }}` whose leading segment is not a recognised namespace (`inputs`, `steps`, `metadata`, `auth`, `workflow`, `each`) is treated as a downstream renderer's own token and passed through unchanged. That is what lets a `declarative_apply` step carry opaque ConfigMap blobs to Kubernetes verbatim: Grafana dashboard legends (`{{service}}`, `{{status}}`), Prometheus and Alertmanager rule annotations (`{{ $value }}`, `{{ $labels.db }}`), and Grafana contact point templates (`{{ .GroupKey }}`). A path *under* a recognised namespace that does not resolve (a typo such as `{{ inputs.tyop }}`) still fails loudly with `could not be resolved`.
 
 ## Webhook signature verification
 
