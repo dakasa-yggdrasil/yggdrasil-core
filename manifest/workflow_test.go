@@ -256,6 +256,66 @@ func TestRenderWorkflowInput(t *testing.T) {
 	}
 }
 
+// TestRenderWorkflowInputPassesThroughDownstreamTemplates locks the carve-out
+// that lets a declarative_apply ship ConfigMap blobs (Grafana dashboards,
+// Prometheus rules) whose `data` legitimately contains `{{ }}` tokens meant for
+// the blob's OWN renderer, not for Yggdrasil. Before this gate the prod
+// monitoring deploy aborted at render with `workflow template "{{ }}" could not
+// be resolved` the moment a `{{service}}` legend or a `{{ }}` comment reached
+// renderWorkflowString.
+func TestRenderWorkflowInputPassesThroughDownstreamTemplates(t *testing.T) {
+	ctx := WorkflowExecutionContext{
+		Inputs: map[string]any{"image_tag": "sha-abc123"},
+	}
+
+	rendered, err := RenderWorkflowInput(map[string]any{
+		// Yggdrasil template: MUST still resolve.
+		"image":  "{{ inputs.image_tag }}",
+		"deploy": "rolling out {{ inputs.image_tag }} now",
+		// Grafana dashboard legends (no dot): MUST pass through verbatim.
+		"legend":   "{{service}}",
+		"legendSp": "{{ status }}",
+		"compound": "{{service}} success",
+		// Prometheus / Alertmanager rule annotations: MUST pass through.
+		"promValue": "{{ $value }}s behind",
+		"promLabel": "on {{ $labels.db }}",
+		// Grafana contact point / Alertmanager Go template (dot): pass through.
+		"alertKey": "{{ .GroupKey }}",
+		// Empty token (a comment artifact like `interpolates {{ }} tokens`).
+		"emptyTok": "engine interpolates {{ }} tokens",
+	}, ctx)
+	if err != nil {
+		t.Fatalf("RenderWorkflowInput error: %v", err)
+	}
+
+	scope := rendered.(map[string]any)
+	for _, tc := range []struct{ key, want string }{
+		{"image", "sha-abc123"},
+		{"deploy", "rolling out sha-abc123 now"},
+		{"legend", "{{ service }}"},
+		{"legendSp", "{{ status }}"},
+		{"compound", "{{ service }} success"},
+		{"promValue", "{{ $value }}s behind"},
+		{"promLabel", "on {{ $labels.db }}"},
+		{"alertKey", "{{ .GroupKey }}"},
+		{"emptyTok", "engine interpolates {{  }} tokens"},
+	} {
+		if got := scope[tc.key]; got != tc.want {
+			t.Fatalf("%s = %#v, want %q", tc.key, got, tc.want)
+		}
+	}
+}
+
+// TestRenderWorkflowInputStillErrorsOnBadYggdrasilPath keeps the typo safety net:
+// a token whose leading segment IS a Yggdrasil root but whose deeper path does
+// not resolve must still fail loudly (not silently pass through).
+func TestRenderWorkflowInputStillErrorsOnBadYggdrasilPath(t *testing.T) {
+	ctx := WorkflowExecutionContext{Inputs: map[string]any{"image_tag": "sha-abc123"}}
+	if _, err := RenderWorkflowInput("{{ inputs.does_not_exist }}", ctx); err == nil {
+		t.Fatal("expected error for an unresolved inputs.* path")
+	}
+}
+
 func TestMergeWorkflowInputs(t *testing.T) {
 	spec := workflowSpecFixture()
 	spec.Defaults = map[string]any{
