@@ -577,20 +577,52 @@ func renderWorkflowString(value string, ctx WorkflowExecutionContext) (any, erro
 	return builder.String(), nil
 }
 
+// workflowTemplateRoots is the set of context roots a Yggdrasil template path
+// may begin with. workflowTemplateValue treats a token whose leading segment is
+// absent from this set as a downstream renderer's template (Grafana / Prometheus
+// / Alertmanager) and ships it back untouched.
+var workflowTemplateRoots = map[string]bool{
+	"inputs":   true,
+	"metadata": true,
+	"auth":     true,
+	"workflow": true,
+	"steps":    true,
+	"each":     true,
+}
+
+// workflowTemplateLeadingSegment returns the first path segment of a trimmed
+// template body: the text before the first path separator (`.`), index (`[`),
+// pipe (`|`), or whitespace. For "inputs.image_tag" it is "inputs"; for
+// "service", "$value", ".GroupKey", or "" it is a value absent from
+// workflowTemplateRoots, which routes those to the pass-through.
+func workflowTemplateLeadingSegment(trimmed string) string {
+	for i, r := range trimmed {
+		if r == '.' || r == '[' || r == '|' || r == ' ' || r == '\t' {
+			return trimmed[:i]
+		}
+	}
+	return trimmed
+}
+
 func workflowTemplateValue(path string, ctx WorkflowExecutionContext) (any, bool) {
 	trimmed := strings.TrimSpace(path)
 
-	// Pass-through for non-Yggdrasil templates. Yggdrasil paths always
-	// begin with a root key from the context (`inputs`, `steps`,
-	// `metadata`, `auth`, `workflow`, `each`). Anything starting with
-	// "." is intended for a downstream renderer (e.g. Grafana templates
-	// like `{{ .GroupKey }}` or `{{ . | toJson }}` that the
-	// integration-grafana adapter ships verbatim into a Grafana contact
-	// point's message body) and must survive the Yggdrasil pre-render
-	// untouched. Without this carve-out the workflow fails with
-	// "could not be resolved" before the manifest ever reaches the
-	// adapter, which is the symptom that drove this gate in.
-	if strings.HasPrefix(trimmed, ".") {
+	// Pass-through for non-Yggdrasil templates. A Yggdrasil path always
+	// begins with a context root key (`inputs`, `steps`, `metadata`,
+	// `auth`, `workflow`, `each`). Anything whose leading segment is not
+	// one of those is a downstream renderer's token that only shares the
+	// `{{ }}` delimiter, and must survive the Yggdrasil pre-render untouched
+	// so it reaches its own engine verbatim. Real cases that ship inside a
+	// declarative_apply ConfigMap blob:
+	//   - Grafana dashboard legends: {{service}}, {{status}}, {{queue}}
+	//   - Grafana contact point / Alertmanager: {{ .GroupKey }}, {{ . | toJson }}
+	//   - Prometheus / Alertmanager rule annotations: {{ $value }}, {{ $labels.db }}
+	// Without this carve-out a Grafana dashboard or a Prometheus rules file
+	// fails declarative_apply with "could not be resolved" before the objects
+	// ever reach Kubernetes. The `.`-prefixed form was the original, narrower
+	// version of this rule; the leading-segment test generalises it so a bare
+	// `{{service}}` legend (no dot) and a `{{ $value }}` annotation pass too.
+	if leading := workflowTemplateLeadingSegment(trimmed); !workflowTemplateRoots[leading] {
 		return "{{ " + trimmed + " }}", true
 	}
 
