@@ -188,10 +188,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		// executed, but `SELECT * FROM workflow_runs WHERE workflow_name
 		// = 'deploy-via-kustomize-source'` showed nothing from today —
 		// silent unobservable deploys.
-		req := model.RunWorkflowRequest{Workflow: ref, Inputs: inputs}
 		runID := uuid.New()
-		if err := repository.InsertWorkflowRun(ctx, server.db, runID, req.Workflow, req.Inputs, req.Metadata); err != nil {
-			return fmt.Errorf("insert workflow_run: %w", err)
+		req, err := messagecontroller.PrepareAndInsertWorkflowRun(ctx, server.db, runID, model.RunWorkflowRequest{Workflow: ref, Inputs: inputs})
+		if err != nil {
+			return fmt.Errorf("prepare and insert workflow_run: %w", err)
 		}
 		startedAt := time.Now().UTC()
 		_ = repository.MarkWorkflowRunRunning(ctx, server.db, runID, startedAt)

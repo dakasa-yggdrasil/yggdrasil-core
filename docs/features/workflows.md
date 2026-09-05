@@ -20,6 +20,7 @@ spec:
     mode: manual                  # manual | event | schedule
 
   input_schema:
+    additionalProperties: false  # reject undeclared top-level inputs
     required: [service, env]
     properties:
       service: { type: string }
@@ -103,6 +104,11 @@ sort, fail-fast on cycle), then walks the order. Each step:
 A failed step aborts the run immediately. A `skipped` step (false
 condition) does not — downstream steps continue.
 
+For asynchronous runs, the same manifest and input validation happens before
+the pending `workflow_runs` row is created. Schemas remain open by default;
+set `input_schema.additionalProperties: false` when every accepted top-level
+input is declared in `properties`.
+
 ## Step kinds
 
 ### `kind: integration`
@@ -158,6 +164,36 @@ Inputs to template rendering:
 Syntax: `{{ <path> }}`. The renderer is recursive — strings, maps,
 slices are all walked. Unresolvable templates fail the step
 loud-and-explicit (no silent empty-string substitution).
+
+### Sensitive workflow inputs
+
+Prefer a `credentials_ref` or another secret reference over passing secret
+material as a workflow input. When a workflow genuinely needs an input value
+only during its current execution, classify its property with `secret: true`
+or `sensitive: true`:
+
+```yaml
+input_schema:
+  additionalProperties: false
+  required: [bootstrap_token]
+  properties:
+    bootstrap_token: { type: string, secret: true }
+```
+
+The in-memory execution copy retains the original value so
+`{{ inputs.bootstrap_token }}` still renders. Asynchronous
+`workflow_runs.inputs` stores `[REDACTED]` instead. Durable history is not a
+secret recovery or replay mechanism. The current engine never rebuilds a run
+from that column: a process restart leaves the in-memory value unavailable and
+the stale-run cleaner eventually cancels the orphaned run. Retries must provide
+the sensitive value again. Any future durable-resume implementation must reject
+the marker and require a new value or a resolvable secret reference.
+
+The classification applies to `inputs`, not arbitrary request `metadata` or an
+event payload that was already durably recorded at its source. Do not duplicate
+secret material into those fields. An adapter that returns a secret must also
+declare its `sensitive_output_paths`; input classification cannot infer or
+sanitize an unmarked adapter response.
 
 ### Sensitive integration outputs
 

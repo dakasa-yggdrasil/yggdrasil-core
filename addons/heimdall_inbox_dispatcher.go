@@ -161,15 +161,18 @@ func runHeimdallInboxDispatcherPass(ctx context.Context, db *sql.DB, conn *amqp.
 	}
 	inputs := map[string]any{"event": payloadMap}
 	metadata := map[string]any{
-		"triggered_by":      heimdallInboxDispatcherSource,
-		"inbox_id":          inboxID,
-		"source_event_id":   sourceEventID,
-		"matched_event_id":  sourceEventID,
+		"triggered_by":       heimdallInboxDispatcherSource,
+		"inbox_id":           inboxID,
+		"source_event_id":    sourceEventID,
+		"matched_event_id":   sourceEventID,
 		"matched_event_type": "infra.alert.firing",
 	}
-
-	if err := repository.InsertWorkflowRun(ctx, db, runID, selector, inputs, metadata); err != nil {
-		// Couldn't even register the pending row — bump failure and back off.
+	executionReq, err := messagecontroller.PrepareAndInsertWorkflowRun(ctx, db, runID, model.RunWorkflowRequest{
+		Workflow: selector,
+		Inputs:   inputs,
+		Metadata: metadata,
+	})
+	if err != nil {
 		_, _ = tx.ExecContext(ctx, `
 			UPDATE public.heimdall_inbox
 			SET failure_count = failure_count + 1,
@@ -179,7 +182,7 @@ func runHeimdallInboxDispatcherPass(ctx context.Context, db *sql.DB, conn *amqp.
 		`, inboxID, err.Error())
 		_ = tx.Commit()
 		if logger != nil {
-			logger.Warn("heimdall_inbox_dispatcher: insert workflow_run failed",
+			logger.Warn("heimdall_inbox_dispatcher: prepare or insert workflow_run failed",
 				zap.String("inbox_id", inboxID), zap.Error(err))
 		}
 		return
@@ -229,11 +232,7 @@ func runHeimdallInboxDispatcherPass(ctx context.Context, db *sql.DB, conn *amqp.
 		bg := context.Background()
 		startedAt := time.Now().UTC()
 		_ = repository.MarkWorkflowRunRunning(bg, db, runID, startedAt)
-		response, runErr := messagecontroller.RunWorkflow(bg, conn, db, model.RunWorkflowRequest{
-			Workflow: selector,
-			Inputs:   inputs,
-			Metadata: metadata,
-		})
+		response, runErr := messagecontroller.RunWorkflow(bg, conn, db, executionReq)
 		status := "succeeded"
 		errMsg := ""
 		var resultPayload []byte

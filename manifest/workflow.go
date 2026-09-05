@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -152,6 +153,18 @@ func ValidateWorkflowInputs(spec model.WorkflowManifestSpec, inputs map[string]a
 	inputs = MergeWorkflowInputs(spec, inputs)
 	if inputs == nil {
 		inputs = map[string]any{}
+	}
+	if spec.InputSchema.AdditionalProperties != nil && !*spec.InputSchema.AdditionalProperties {
+		undeclared := make([]string, 0)
+		for name := range inputs {
+			if _, declared := spec.InputSchema.Properties[name]; !declared {
+				undeclared = append(undeclared, name)
+			}
+		}
+		if len(undeclared) > 0 {
+			sort.Strings(undeclared)
+			return fmt.Errorf("workflow inputs %q must be declared in input_schema.properties", undeclared)
+		}
 	}
 
 	required := map[string]struct{}{}
