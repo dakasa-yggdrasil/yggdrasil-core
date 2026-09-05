@@ -206,18 +206,79 @@ its paths relative to `metadata.output`:
     "resource_id": "webhook-123",
     "secret_shared_key": "one-time-value"
   },
-  "sensitive_output_paths": ["secret_shared_key"]
+  "metadata": {
+    "sensitive_output_paths": ["secret_shared_key"]
+  }
 }
 ```
 
-The engine keeps the original value only in the current run's in-memory
-execution context, so the immediately following step can persist it through a
-secret-store integration. Synchronous responses and asynchronous
-`workflow_runs.result` contain `[REDACTED]` at each declared path;
-`workflow.run.completed` is derived from that public response and currently
-contains no step output. A malformed or missing path in a declared list
-redacts the entire output fail-closed. Never place the generated value in
-workflow inputs, dispatch metadata, errors, logs, or mutation events.
+The engine never puts the original value in the general workflow execution
+context. It creates a private one-step lease only when the actual topological
+next step has this exact shape:
+
+```yaml
+- id: persist-webhook-secret
+  depends_on: [provision-webhook]
+  use:
+    kind: integration
+    family: secrets-management
+    operation: ensure_secret
+  with:
+    secret:
+      secret_id: stripe/webhook
+      generation:
+        strategy: manual
+        manual:
+          value: "{{ steps.provision-webhook.metadata.output.secret_shared_key }}"
+```
+
+V1 permits one top-level string path and one consumer. Producer and sink must be
+adjacent, the sink must depend on exactly the producer, neither step may use
+`condition` or `for_each`, and the sink's resolved integration type must declare
+the `secrets-management` family and implement `ensure_secret`. The template must
+be the complete value of
+`secret.generation.manual.value`; concatenation, nesting, aliases, and a second
+consumer prevent the Core handshake from being issued. A producer must use one
+attempt; v1 does not retry provider creation after an ambiguous response. The
+idempotent secret sink may retry. Producer operation and capability must agree;
+sink operation and capability must both normalize to `ensure_secret`.
+`secret.secret_id` must render to a concrete non-empty string and
+`secret.generation.strategy` must be the literal `manual`.
+
+For an eligible pair, the Core injects `supports_sensitive_output_paths` and a
+derived `sensitive_output_sink` block into producer request metadata. It injects
+`sensitive_input_lease` into the sink request. These three top-level metadata
+keys are reserved: public or direct integration execute requests containing any
+of them fail before adapter dispatch.
+
+Only an authorized workflow producer call may return a response that declares
+`sensitive_output_paths`. A public/direct or unrelated internal execute call
+that receives such a response fails generically and returns no adapter output.
+
+The producer response path list must exactly equal the Core-authorized path.
+Missing, empty, malformed, duplicate, extra, non-string, or unresolvable paths
+fail with `sensitive_output_contract_violation`, discard the adapter metadata,
+and redact the complete output. Returning the authorized source field without a
+declaration also fails closed; a source-free ordinary/no-op response creates no
+lease. A valid producer result is copied and redacted before it enters
+`WorkflowExecutionContext.Steps`, the synchronous response, or asynchronous
+`workflow_runs.result`.
+
+Only the designated sink input renderer receives the leased value. Integration
+selection, conditions, fan-out, and every later step see the redacted context.
+Sink retries reuse that one rendered input. The resolved sink instance/type ID
+and version must still match the preauthorized sink. HTTP error bodies and AMQP
+adapter messages are removed from eligible producer and leased-sink errors, and
+the adapter's sink response is discarded. Only explicit `created`, `updated`,
+or `unchanged` evidence for the requested operation/capability produces the
+fixed, value-free receipt. The lease is cleared after sink success, failure,
+cancellation, or panic propagation.
+
+`workflow.run.completed` is derived from the public response and currently
+contains no step output. Never place a generated secret in workflow inputs,
+dispatch metadata, errors, logs, resources, adoption responses, or mutation
+events. This contract limits application reachability and serialization; it
+does not claim physical zeroization of immutable Go strings.
 
 ## Wire shape
 

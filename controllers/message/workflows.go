@@ -301,16 +301,43 @@ func runWorkflow(
 		Workflow: workflowRef,
 		Steps:    map[string]model.WorkflowRunStepResult{},
 	}
+	var activeSensitiveLease *sensitiveOutputLease
+	defer func() {
+		if activeSensitiveLease != nil {
+			activeSensitiveLease.clear()
+		}
+	}()
 
 	for index, step := range orderedSteps {
-		stepResults, failedID := runStepIterations(ctx, conn, db, workflowRef, step, executionCtx, req)
-		for _, r := range stepResults {
-			// Keep the provider response intact only inside this run so a following
-			// step can persist a one-time generated secret. The public response,
-			// workflow_runs.result receives the redacted copy below. Completion
-			// events are derived only from that public response.
-			executionCtx.Steps[r.ID] = r
-			response.Steps = append(response.Steps, redactSensitiveWorkflowStepResult(r))
+		security := workflowStepExecutionSecurity{inputLease: activeSensitiveLease}
+		if activeSensitiveLease == nil {
+			security.producerPlan = authorizeSensitiveOutputPlan(ctx, db, orderedSteps, index, executionCtx)
+		}
+
+		var stepResults []model.WorkflowRunStepResult
+		var failedID string
+		if activeSensitiveLease != nil {
+			stepResults, failedID = runWithSensitiveOutputLease(activeSensitiveLease, func() ([]model.WorkflowRunStepResult, string) {
+				return runStepIterations(ctx, conn, db, workflowRef, step, executionCtx, req, security)
+			})
+			activeSensitiveLease = nil
+		} else {
+			stepResults, failedID = runStepIterations(ctx, conn, db, workflowRef, step, executionCtx, req, security)
+		}
+
+		for resultIndex, rawResult := range stepResults {
+			safeResult, lease := secureSensitiveProducerResult(rawResult, security.producerPlan)
+			// Drop the raw result reference before it can enter the shared template
+			// context, the public response, a completion event, or workflow_runs.
+			stepResults[resultIndex] = safeResult
+			executionCtx.Steps[safeResult.ID] = safeResult
+			response.Steps = append(response.Steps, safeResult)
+			if lease != nil {
+				activeSensitiveLease = lease
+			}
+			if safeResult.Status == "failed" {
+				failedID = safeResult.ID
+			}
 		}
 
 		// A condition-skipped step is recorded as "skipped" but the workflow
@@ -328,6 +355,12 @@ func runWorkflow(
 			return response, nil
 		}
 	}
+	if activeSensitiveLease != nil {
+		response = failWorkflowWithUnconsumedSensitiveOutput(response, activeSensitiveLease)
+		activeSensitiveLease = nil
+		response.FinishedAt = time.Now().UTC()
+		return response, nil
+	}
 
 	response.FinishedAt = time.Now().UTC()
 	return response, nil
@@ -341,6 +374,7 @@ func executeWorkflowStep(
 	step model.WorkflowStepSpec,
 	executionCtx manifestengine.WorkflowExecutionContext,
 	req model.RunWorkflowRequest,
+	security workflowStepExecutionSecurity,
 ) model.WorkflowRunStepResult {
 	stepID := normalizeWorkflowStepID(step.ID)
 	result := model.WorkflowRunStepResult{
@@ -350,6 +384,12 @@ func executeWorkflowStep(
 		Capability: manifestengine.NormalizeWorkflowStepCapability(step),
 		Status:     "failed",
 		StartedAt:  time.Now().UTC(),
+	}
+	if security.inputLease != nil && !security.inputLease.accepts(step) {
+		result.Error = errSensitiveOutputSink.Error()
+		result.Attempts = 1
+		result.FinishedAt = time.Now().UTC()
+		return result
 	}
 
 	// Condition gate: skip the step when Condition evaluates to false.
@@ -375,12 +415,25 @@ func executeWorkflowStep(
 		}
 	}
 
-	renderedInput, err := renderWorkflowStepInput(step, executionCtx)
+	var renderedInput map[string]any
+	var err error
+	if security.inputLease != nil {
+		renderedInput, err = renderSensitiveOutputSinkInput(step, executionCtx, security.inputLease)
+	} else {
+		renderedInput, err = renderWorkflowStepInput(step, executionCtx)
+	}
 	if err != nil {
-		result.Error = err.Error()
+		if security.inputLease != nil {
+			result.Error = errSensitiveOutputSink.Error()
+		} else {
+			result.Error = err.Error()
+		}
 		result.Attempts = 1
 		result.FinishedAt = time.Now().UTC()
 		return result
+	}
+	if security.inputLease != nil {
+		defer clearSensitiveRenderedInput(renderedInput, security.inputLease.value)
 	}
 
 	// Branch on step kind: product steps have their own execution path that
@@ -407,7 +460,11 @@ func executeWorkflowStep(
 	// bottoms out with a confusing "manifest not found".
 	resolvedUse, err := renderWorkflowStepUse(step.Use, executionCtx)
 	if err != nil {
-		result.Error = fmt.Errorf("render step use block: %w", err).Error()
+		if security.inputLease != nil {
+			result.Error = errSensitiveOutputSink.Error()
+		} else {
+			result.Error = fmt.Errorf("render step use block: %w", err).Error()
+		}
 		result.Attempts = 1
 		result.FinishedAt = time.Now().UTC()
 		return result
@@ -420,13 +477,24 @@ func executeWorkflowStep(
 		)
 	}
 	if err != nil {
-		result.Error = err.Error()
+		if security.inputLease != nil {
+			result.Error = errSensitiveOutputSink.Error()
+		} else {
+			result.Error = err.Error()
+		}
 		result.Attempts = 1
 		result.FinishedAt = time.Now().UTC()
 		return result
 	}
 	result.IntegrationInstance = manifestReferencePointer(manifestReferenceFromRecord(instanceManifest))
 	result.IntegrationType = manifestReferencePointer(manifestReferenceFromRecord(typeManifest))
+	if security.inputLease != nil && (!isSensitiveOutputSinkType(typeSpec) ||
+		!security.inputLease.matchesResolvedSink(instanceManifest, typeManifest)) {
+		result.Error = errSensitiveOutputSink.Error()
+		result.Attempts = 1
+		result.FinishedAt = time.Now().UTC()
+		return result
+	}
 
 	maxAttempts := workflowStepAttempts(step)
 	for attempt := 1; attempt <= maxAttempts; attempt++ {
@@ -468,20 +536,49 @@ func executeWorkflowStep(
 				ref := manifestReferenceFromRecord(instanceManifest)
 				integrationSel = model.ManifestSelector{Namespace: ref.Namespace, Name: ref.Name}
 			}
+			metadata := map[string]any{
+				"workflow": workflowRef,
+				"step_id":  result.ID,
+				"source":   "workflow.run",
+			}
+			if security.producerPlan != nil {
+				metadata = mergeStringAnyMaps(metadata, security.producerPlan.producerMetadata())
+			}
+			if security.inputLease != nil {
+				metadata = mergeStringAnyMaps(metadata, security.inputLease.sinkMetadata())
+			}
+			dispatchInput := cloneAuthorizationInput(renderedInput)
+			if security.inputLease != nil {
+				// Keep a single reachable input graph for the leased call. The
+				// deferred scrub above then covers the exact map reused by retries;
+				// a shallow clone would retain an alias to the nested secret leaf.
+				dispatchInput = renderedInput
+			}
 			executeReq := model.ExecuteIntegrationRequest{
 				Integration: integrationSel,
 				Operation:   result.Operation,
 				Capability:  result.Capability,
-				Input:       cloneAuthorizationInput(renderedInput),
+				Input:       dispatchInput,
 				Auth:        workflowDispatchAuthToMap(req.Auth),
-				Metadata: map[string]any{
-					"workflow": workflowRef,
-					"step_id":  result.ID,
-					"source":   "workflow.run",
-				},
+				Metadata:    metadata,
 			}
 
-			executeResp, err := executeIntegrationThroughResolved(
+			executionPolicy := integrationExecutionPolicy{}
+			if security.producerPlan != nil {
+				executionPolicy = integrationExecutionPolicy{
+					detailFreeErrors:     true,
+					safeError:            errSensitiveOutputProducer,
+					allowSensitiveOutput: true,
+				}
+			}
+			if security.inputLease != nil {
+				executionPolicy = integrationExecutionPolicy{
+					detailFreeErrors:        true,
+					safeError:               errSensitiveOutputSink,
+					requireExplicitResponse: true,
+				}
+			}
+			executeResp, err := executeIntegrationThroughResolvedWithPolicy(
 				ctx,
 				conn,
 				executeReq,
@@ -490,8 +587,18 @@ func executeWorkflowStep(
 				typeManifest,
 				typeSpec,
 				workflowStepTimeout(step, typeSpec),
+				executionPolicy,
 			)
 			if err == nil {
+				if security.inputLease != nil {
+					var succeeded bool
+					result, succeeded = secureSensitiveOutputSinkResponse(result, executeResp)
+					if succeeded {
+						result.FinishedAt = time.Now().UTC()
+						return result
+					}
+					break
+				}
 				result.Status = normalizeWorkflowIntegrationStatus(executeResp.Status)
 				result.Metadata = mergeStringAnyMaps(executeResp.Metadata, map[string]any{
 					"integration_status": executeResp.Status,
@@ -504,7 +611,11 @@ func executeWorkflowStep(
 
 				result.Error = fmt.Sprintf("integration returned status %q", executeResp.Status)
 			} else {
-				result.Error = err.Error()
+				if security.inputLease != nil {
+					result.Error = errSensitiveOutputSink.Error()
+				} else {
+					result.Error = err.Error()
+				}
 			}
 		}
 
@@ -513,7 +624,11 @@ func executeWorkflowStep(
 		}
 
 		if err := sleepWithContext(ctx, workflowStepBackoff(step)); err != nil {
-			result.Error = err.Error()
+			if security.inputLease != nil {
+				result.Error = errSensitiveOutputSink.Error()
+			} else {
+				result.Error = err.Error()
+			}
 			break
 		}
 	}
@@ -541,9 +656,14 @@ func runStepIterations(
 	step model.WorkflowStepSpec,
 	executionCtx manifestengine.WorkflowExecutionContext,
 	req model.RunWorkflowRequest,
+	security workflowStepExecutionSecurity,
 ) ([]model.WorkflowRunStepResult, string) {
+	if security.inputLease != nil && !security.inputLease.accepts(step) {
+		result := executeWorkflowStep(ctx, conn, db, workflowRef, step, executionCtx, req, security)
+		return []model.WorkflowRunStepResult{result}, result.ID
+	}
 	if step.ForEach == nil || strings.TrimSpace(step.ForEach.Items) == "" {
-		result := executeWorkflowStep(ctx, conn, db, workflowRef, step, executionCtx, req)
+		result := executeWorkflowStep(ctx, conn, db, workflowRef, step, executionCtx, req, security)
 		failed := ""
 		if result.Status == "failed" {
 			failed = result.ID
@@ -606,7 +726,7 @@ func runStepIterations(
 		iterStep.ID = fmt.Sprintf("%s[%d]", baseID, idx)
 		iterStep.ForEach = nil
 
-		result := executeWorkflowStep(ctx, conn, db, workflowRef, iterStep, iterCtx, req)
+		result := executeWorkflowStep(ctx, conn, db, workflowRef, iterStep, iterCtx, req, workflowStepExecutionSecurity{})
 		results = append(results, result)
 		if result.Status == "failed" {
 			return results, result.ID
