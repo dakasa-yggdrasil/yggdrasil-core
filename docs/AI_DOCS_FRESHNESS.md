@@ -7,7 +7,7 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 0bf4e7213e7881282d3f4b187e4cbfd7f44db9de
+verified_at_commit: f0ae5c54f86fb855ae8fe4d76b4356c08acba4cd
 verified_at: 2026-09-05
-by: AMQP dependency security reconciliation
-note: Reconciled the changelog with the v1.13.0 frame-allocation bound and confirmed Core's amqp.Dial call sites do not opt into the new experimental automatic recovery behavior.
+by: Codex
+note: Reconciled workflow, adapter contract, ADR, and capability naming docs with the private one-step sensitive output lease.
