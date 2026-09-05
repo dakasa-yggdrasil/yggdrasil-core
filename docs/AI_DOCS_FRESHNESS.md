@@ -7,7 +7,7 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 6f83ab03d8c931c11ebc785bf782a2cdb219a83a
+verified_at_commit: 0bf4e7213e7881282d3f4b187e4cbfd7f44db9de
 verified_at: 2026-09-05
-by: managed-secret HTTP read hardening
-note: Reconciled docs/features/secrets.md and docs/operations/security-hardening.md with metadata-only managed-secret views that expose key names but never raw values or value-derived masks.
+by: AMQP dependency security reconciliation
+note: Reconciled the changelog with the v1.13.0 frame-allocation bound and confirmed Core's amqp.Dial call sites do not opt into the new experimental automatic recovery behavior.
