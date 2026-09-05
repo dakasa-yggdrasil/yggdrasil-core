@@ -61,6 +61,12 @@ POST /api/v1/secrets
 Response carries the metadata only. The `value` is never returned
 once the row is written.
 
+Every managed-secret HTTP response follows the same boundary. It may include
+the sorted key names needed for inventory, but it never includes raw values or
+value-derived masks. A mask still leaks length and suffix bytes, so the API does
+not expose `data` or `masked_data`, and an `include_values` query cannot widen
+the response. Secret material is resolved only inside the Core-to-adapter path.
+
 ### Reference from a manifest
 
 ```yaml

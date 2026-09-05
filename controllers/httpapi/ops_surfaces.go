@@ -318,7 +318,7 @@ func (s *Server) persistOpsSurfaceConfiguration(ctx context.Context, surfaceID, 
 		"accepted": true,
 		"status":   "stored",
 		"message":  "Configuração salva. Os segredos foram guardados como managed_secret do Yggdrasil.",
-		"secret":   model.BuildManagedSecretView(secret, false),
+		"secret":   model.BuildManagedSecretView(secret),
 		"received": redactOpsSurfacePayload(payload, secretFields),
 	}, nil
 }

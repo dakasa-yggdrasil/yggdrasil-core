@@ -85,6 +85,9 @@ Beyond the features page:
 - **Per-collaborator automation accounts.** When a CI job needs to
   call Yggdrasil, give it its own collaborator with scoped RBAC, not
   a human's token.
+- **Metadata-only secret reads.** Managed-secret HTTP views expose key names
+  for inventory but never raw values or masks derived from them. Treat any
+  `data`, `masked_data`, length, or suffix in a read response as a regression.
 
 ## Adapter security
 
