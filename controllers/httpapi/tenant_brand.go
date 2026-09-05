@@ -27,16 +27,14 @@ func (s *Server) handleTenantBrandGet(w http.ResponseWriter, r *http.Request) {
 //   - /api/v1/tenant/* is INTENTIONALLY public on the prefix middleware
 //     because the GET feeds LoginPage and other unauthenticated surfaces.
 //     The PATCH therefore self-gates in this handler.
-//   - Accept either:
-//       (a) a valid console session (collaborator resolves cleanly), or
-//       (b) a verified workflow-run-token (via authorizeWorkflowRunRequest).
+//   - Accept a valid console session whose collaborator resolves cleanly.
 //   - "No token at all" is rejected with 401. Never accept the absence
 //     of a credential as a valid state — RBAC's "bypass when no claims"
 //     short-circuit is for paths that the upstream middleware already
 //     authenticated, which is NOT the case for /api/v1/tenant/*.
 //
-// updated_by is the session collaborator ID when (a); nil when (b), since
-// the workflow-run-token caller is machine automation with no human actor.
+// updated_by is always the session collaborator ID. Workflow credentials are
+// dispatch-only and never authorize tenant or other administrative writes.
 func (s *Server) handleTenantBrandPatch(w http.ResponseWriter, r *http.Request) {
 	var updatedBy *uuid.UUID
 	sessionResolved := false
@@ -51,9 +49,8 @@ func (s *Server) handleTenantBrandPatch(w http.ResponseWriter, r *http.Request) 
 			updatedBy = &id
 			sessionResolved = true
 		case isAuthUnauthorizedError(err):
-			// Token presented but isn't a session token — could be
-			// the workflow-run-token (header-based) or admin token.
-			// Fall through to the workflow-run check below.
+			// Token presented but is not a session token. Static workflow,
+			// deploy, event, and auth-admin credentials do not authorize this route.
 		default:
 			writeMappedError(w, err)
 			return
@@ -61,22 +58,14 @@ func (s *Server) handleTenantBrandPatch(w http.ResponseWriter, r *http.Request) 
 	}
 
 	if !sessionResolved {
-		// No session resolved — require the workflow-run-token to
-		// have been presented and verified. authorizeWorkflowRunRequest
-		// returns nil when the request carries the matching
-		// X-Yggdrasil-Workflow-Token / bearer token; non-nil means
-		// neither credential authorizes the call.
-		if err := authorizeWorkflowRunRequest(r); err != nil {
-			// If we saw a Cookie-bound token earlier that didn't
-			// validate, clear it so the next request lands cleanly
-			// on the login flow instead of replaying the stale value.
-			if tokenPresented {
-				clearAuthCookie(w)
-			}
-			writeJSONError(w, http.StatusUnauthorized, "unauthenticated")
-			return
+		// If we saw a Cookie-bound token earlier that did not validate, clear it
+		// so the next request lands cleanly on the login flow instead of replaying
+		// the stale value.
+		if tokenPresented {
+			clearAuthCookie(w)
 		}
-		// Workflow-run-token caller — updatedBy stays nil (no human).
+		writeJSONError(w, http.StatusUnauthorized, "unauthenticated")
+		return
 	}
 
 	var req model.UpdateTenantBrandRequest

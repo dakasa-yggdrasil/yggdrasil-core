@@ -177,3 +177,25 @@ func TestRequireAuthenticatedConsoleAPIs_AllowsPublicAuthRoutes(t *testing.T) {
 		t.Fatal("public auth route should pass through")
 	}
 }
+
+func TestRequiresAuthenticatedConsoleRequestSeparatesPublicAndAdminAuthRoutes(t *testing.T) {
+	for _, test := range []struct {
+		method string
+		path   string
+		want   bool
+	}{
+		{method: http.MethodPost, path: "/api/v1/auth/login"},
+		{method: http.MethodGet, path: "/api/v1/auth/providers"},
+		{method: http.MethodPost, path: "/api/v1/auth/providers", want: true},
+		{method: http.MethodDelete, path: "/api/v1/auth/providers/google", want: true},
+		{method: http.MethodPost, path: "/api/v1/auth/third-party-identities", want: true},
+		{method: http.MethodDelete, path: "/api/v1/auth/third-party-identities/google/sub", want: true},
+		{method: http.MethodPost, path: "/api/v1/auth/scim/clients", want: true},
+		{method: http.MethodPost, path: "/api/v1/auth/saml/service-providers", want: true},
+		{method: http.MethodPost, path: "/api/v1/auth/saml/rotate-signing-cert", want: true},
+	} {
+		if got := requiresAuthenticatedConsoleRequest(test.method, test.path); got != test.want {
+			t.Fatalf("%s %s protected=%v, want %v", test.method, test.path, got, test.want)
+		}
+	}
+}

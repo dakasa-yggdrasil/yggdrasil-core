@@ -6,7 +6,6 @@ import (
 	"net/http/httptest"
 	"os"
 	"testing"
-	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"go.uber.org/zap"
@@ -16,12 +15,9 @@ import (
 // fix from 2026-05-28: PATCH /api/v1/tenant/brand intentionally lives
 // outside the requireAuthenticatedConsoleAPIs allowlist (the GET is
 // public, fed by the pre-session LoginPage), so the handler MUST
-// self-gate. A request that carries neither a session token nor the
-// workflow-run-token has to receive 401 — not silently fall through
-// with updatedBy=nil.
+// self-gate. A request without a valid session has to receive 401 — not
+// silently fall through with updatedBy=nil.
 func TestTenantBrandPatch_RejectsAnonymous(t *testing.T) {
-	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "test-workflow-token")
-
 	db, _, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("sqlmock.New: %v", err)
@@ -43,32 +39,15 @@ func TestTenantBrandPatch_RejectsAnonymous(t *testing.T) {
 	}
 }
 
-// TestTenantBrandPatch_AcceptsWorkflowRunToken proves the
-// machine-credential path works when the request carries a verified
-// X-Yggdrasil-Workflow-Token header that matches the configured value.
-// updated_by is expected to stay nil (no human actor); the row write
-// itself is intercepted by sqlmock so the test only exercises the auth
-// gate, not the SQL contract.
-func TestTenantBrandPatch_AcceptsWorkflowRunToken(t *testing.T) {
-	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "test-workflow-token")
+// Workflow credentials are dispatch-only and cannot mutate tenant settings.
+func TestTenantBrandPatch_RejectsValidLegacyWorkflowRunToken(t *testing.T) {
+	setTestLegacyWorkflowCredential(t, "test-workflow-token")
 
-	db, mock, err := sqlmock.New()
+	db, _, err := sqlmock.New()
 	if err != nil {
 		t.Fatalf("sqlmock.New: %v", err)
 	}
 	defer func() { _ = db.Close() }()
-
-	mock.ExpectQuery(`INSERT INTO public\.tenant_brand_settings`).
-		WillReturnRows(sqlmock.NewRows([]string{
-			"name", "short_name", "product_label", "locale",
-			"accent_override", "logo_url", "support_email",
-			"integration_domain_catalog", "updated_by",
-			"created_at", "updated_at",
-		}).AddRow(
-			"DaKasa", "DK", "Yggdrasil", "pt-BR",
-			nil, nil, nil, []byte("[]"), nil,
-			time.Now(), time.Now(),
-		))
 
 	srv := &Server{db: db, logger: zap.NewNop()}
 
@@ -80,14 +59,14 @@ func TestTenantBrandPatch_AcceptsWorkflowRunToken(t *testing.T) {
 
 	srv.handleTenantBrandPatch(w, r)
 
-	if w.Code != http.StatusOK {
-		t.Fatalf("workflow-token PATCH must return 200, got %d (body=%s)",
+	if w.Code != http.StatusUnauthorized {
+		t.Fatalf("workflow-token PATCH must return 401, got %d (body=%s)",
 			w.Code, w.Body.String())
 	}
 }
 
-// TestTenantBrandPatch_RejectsWrongWorkflowRunToken makes sure a
-// non-matching token is treated the same as no token.
+// TestTenantBrandPatch_RejectsWrongWorkflowRunToken makes sure an unrelated
+// static bearer is treated the same as no session.
 func TestTenantBrandPatch_RejectsWrongWorkflowRunToken(t *testing.T) {
 	_ = os.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "expected-token")
 	t.Cleanup(func() { _ = os.Unsetenv("YGGDRASIL_WORKFLOW_RUN_TOKEN") })

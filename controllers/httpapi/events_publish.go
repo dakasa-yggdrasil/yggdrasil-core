@@ -2,10 +2,11 @@ package httpapi
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
-	"os"
 	"strings"
+	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -39,35 +40,44 @@ type eventPublishRequest struct {
 	Metadata      map[string]any    `json:"metadata,omitempty"`
 
 	// §6.5 mutation shape.
-	EventType   string                 `json:"event_type,omitempty"`
-	Provider    string                 `json:"provider,omitempty"`
-	Resource    string                 `json:"resource,omitempty"`
-	Verb        string                 `json:"verb,omitempty"`
-	ResourceID  string                 `json:"resource_id,omitempty"`
-	InstanceID  string                 `json:"instance_id,omitempty"`
-	Idempotency string                 `json:"idempotency,omitempty"`
-	Observed    map[string]any         `json:"observed,omitempty"`
-	EmittedAt   string                 `json:"emitted_at,omitempty"`
+	EventType   string         `json:"event_type,omitempty"`
+	Provider    string         `json:"provider,omitempty"`
+	Resource    string         `json:"resource,omitempty"`
+	Verb        string         `json:"verb,omitempty"`
+	ResourceID  string         `json:"resource_id,omitempty"`
+	InstanceID  string         `json:"instance_id,omitempty"`
+	Idempotency string         `json:"idempotency,omitempty"`
+	Observed    map[string]any `json:"observed,omitempty"`
+	EmittedAt   string         `json:"emitted_at,omitempty"`
 }
 
-// handleEventPublish is the public publish endpoint two classes of caller
-// hit:
+var errEventPublishAuthorizationDenied = errors.New("event publish authorization denied")
+
+const (
+	eventPublisherMachinePrincipalMetadataKey = "yggdrasil.io/publisher_machine_principal_id"
+	legacyEventPublisherPrincipalID           = "legacy-event-publish-bridge"
+)
+
+type eventPublishActor struct {
+	MachinePrincipal *eventPublisherPrincipal
+	LegacyMigration  bool
+}
+
+// handleEventPublish is the adapter mutation-event endpoint. Adapter pods
+// (every `dakasa-yggdrasil/integration-*`) emit one mutation event per
+// successful `ensure_*` / `destroy_*` / allowlist-`create_*` call per
+// INTEGRATION_CONTRACT §6.5. The wire shape carries the §6.5 fields and is
+// translated into the generic model.EmitEventRequest below. The historical
+// generic wire shape remains available only in the entirely unconfigured
+// non-production posture; trusted control-plane paths emit generic events
+// in-process rather than through a machine HTTP credential.
 //
-//   - **Control-plane writers** (workflow_event_triggers cursor, integration
-//     sync framework, GitHub webhook) drop typed events with the generic
-//     wire shape. The trigger loop in addons/workflow_event_triggers picks
-//     them up and dispatches workflows configured with trigger.mode=event.
-//
-//   - **Adapter pods** (every `dakasa-yggdrasil/integration-*`) emit one
-//     mutation event per successful `ensure_*` / `destroy_*` /
-//     allowlist-`create_*` call per INTEGRATION_CONTRACT §6.5. The wire
-//     shape carries the §6.5 fields and is translated into the generic
-//     model.EmitEventRequest below.
-//
-// Auth: a dedicated YGGDRASIL_EVENT_PUBLISH_TOKEN limits adapter credentials
-// to this write-only surface. The legacy workflow-run token remains accepted
-// for compatibility. When neither credential is configured (dev/tests), the
-// endpoint stays open like /api/v1/workflow-runs.
+// Auth: hashed event-publisher principals are the durable path and are accepted
+// only on this write-only surface. YGGDRASIL_EVENT_PUBLISH_TOKEN remains a
+// mutation-only plaintext migration bridge for existing adapters. Human
+// sessions and workflow credentials are never accepted. With no event
+// credential outside production, an anonymous request remains available for
+// local development.
 //
 // Status codes:
 //   - 201 Created: fresh insert (both shapes).
@@ -81,7 +91,8 @@ type eventPublishRequest struct {
 // run repository.EmitEventWithOutcome inside it, commit. On any error map
 // via writeMappedError so the same status-code logic applies.
 func (s *Server) handleEventPublish(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeEventPublishRequest(r); err != nil {
+	actor, err := authenticateEventPublishRequest(r)
+	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
@@ -91,6 +102,11 @@ func (s *Server) handleEventPublish(w http.ResponseWriter, r *http.Request) {
 		writeMappedError(w, err)
 		return
 	}
+	if err := authorizeEventPublishPayload(payload, actor); err != nil {
+		writeProblemJSON(w, http.StatusForbidden, "event.authorization_denied", err.Error())
+		return
+	}
+	payload = bindEventPublishActor(payload, actor)
 
 	emitReq, err := buildEmitEventRequestFromPublish(payload)
 	if err != nil {
@@ -131,38 +147,97 @@ func (s *Server) handleEventPublish(w http.ResponseWriter, r *http.Request) {
 }
 
 func authorizeEventPublishRequest(r *http.Request) error {
-	if claims, ok := claimsFromContext(r.Context()); ok {
-		if collaboratorID, _ := claims["collaborator_id"].(string); strings.TrimSpace(collaboratorID) != "" {
-			return nil
-		}
+	_, err := authenticateEventPublishRequest(r)
+	return err
+}
+
+func authenticateEventPublishRequest(r *http.Request) (eventPublishActor, error) {
+	if r.Method != http.MethodPost || r.URL.Path != "/api/v1/events" {
+		return eventPublishActor{}, errWorkflowRunUnauthorized
+	}
+	// This machine-only route is not wrapped in an event-publish RBAC
+	// permission. A verified console session must therefore not become an
+	// implicit generic event publisher merely because bearerOrSession attached
+	// claims to the request context.
+	if _, ok := claimsFromContext(r.Context()); ok {
+		return eventPublishActor{}, errWorkflowRunUnauthorized
 	}
 
 	candidates := []string{
 		strings.TrimSpace(r.Header.Get("X-Yggdrasil-Event-Token")),
-		strings.TrimSpace(r.Header.Get("X-Yggdrasil-Workflow-Token")),
 		bearerToken(r.Header.Get("Authorization")),
 	}
-	eventToken := strings.TrimSpace(os.Getenv("YGGDRASIL_EVENT_PUBLISH_TOKEN"))
+	principals, err := eventPublisherPrincipalsFromEnv()
+	if err != nil {
+		return eventPublishActor{}, err
+	}
 	for _, candidate := range candidates {
-		if constantTimeTokenEqual(candidate, eventToken) {
-			return nil
+		if principal := activeEventPublisherPrincipal(candidate, principals, time.Now().UTC()); principal != nil {
+			return eventPublishActor{MachinePrincipal: principal}, nil
 		}
 	}
 
-	actor, workflowErr := authenticateWorkflowRunRequest(r)
-	if workflowErr == nil {
-		if actor.Subject.ID != "" || actor.CollaboratorID != "" {
-			return nil
-		}
-		// Preserve the historical no-token convenience only outside production.
-		// Production boot validation rejects this configuration as well, but the
-		// request-time check keeps the route closed even when a handler is mounted
-		// without going through Server.New.
-		if eventToken == "" && devEnvAllowsFallback() {
-			return nil
+	// Plaintext compatibility bridge. It is accepted only when operators opt in
+	// explicitly with a future expiry, remains route-limited here, and is not
+	// consulted by workflow, manifest, auth-admin, deploy, or generic ops gates.
+	legacy, err := legacyEventPublishCredentialFromEnv(time.Now().UTC())
+	if err != nil {
+		return eventPublishActor{}, err
+	}
+	if legacy.Active {
+		for _, candidate := range candidates {
+			if constantTimeTokenEqual(candidate, legacy.Token) {
+				return eventPublishActor{LegacyMigration: true}, nil
+			}
 		}
 	}
-	return errWorkflowRunUnauthorized
+
+	// Preserve anonymous local development only when the event auth surface is
+	// entirely unconfigured and the caller did not present a credential that
+	// belongs to some other scope.
+	if !legacy.Configured && len(principals) == 0 && !requestPresentsStaticCredential(r) && devEnvAllowsFallback() {
+		return eventPublishActor{}, nil
+	}
+	return eventPublishActor{}, errWorkflowRunUnauthorized
+}
+
+func authorizeEventPublishPayload(req eventPublishRequest, actor eventPublishActor) error {
+	if actor.LegacyMigration && strings.TrimSpace(req.EventType) == "" {
+		return fmt.Errorf("%w: legacy event bridge cannot publish generic events", errEventPublishAuthorizationDenied)
+	}
+	if actor.MachinePrincipal == nil {
+		return nil
+	}
+	if strings.TrimSpace(req.EventType) == "" {
+		return fmt.Errorf("%w: machine event principals cannot publish generic events", errEventPublishAuthorizationDenied)
+	}
+	if !eventPublisherPrincipalAllows(actor.MachinePrincipal, req.Provider, req.InstanceID, req.EventType) {
+		return fmt.Errorf("%w: machine event principal is not allowed for this provider, instance, and event type", errEventPublishAuthorizationDenied)
+	}
+	return nil
+}
+
+func bindEventPublishActor(req eventPublishRequest, actor eventPublishActor) eventPublishRequest {
+	metadata := make(map[string]any, len(req.Metadata)+1)
+	for key, value := range req.Metadata {
+		metadata[key] = value
+	}
+	delete(metadata, eventPublisherMachinePrincipalMetadataKey)
+	if actor.MachinePrincipal != nil {
+		req.Actor = &model.EventActor{Type: "service", ID: actor.MachinePrincipal.PrincipalID}
+		metadata[eventPublisherMachinePrincipalMetadataKey] = actor.MachinePrincipal.PrincipalID
+	} else if actor.LegacyMigration {
+		// The migration bridge is broad by design, but it must still leave a
+		// non-spoofable server-authored identity in the event audit record.
+		req.Actor = &model.EventActor{Type: "service", ID: legacyEventPublisherPrincipalID}
+		metadata[eventPublisherMachinePrincipalMetadataKey] = legacyEventPublisherPrincipalID
+	}
+	if len(metadata) == 0 {
+		req.Metadata = nil
+	} else {
+		req.Metadata = metadata
+	}
+	return req
 }
 
 // buildEmitEventRequestFromPublish translates the wire shape into the
@@ -228,21 +303,21 @@ func buildEmitEventRequestFromGeneric(req eventPublishRequest) (model.EmitEventR
 // expects. The translation is mechanical:
 //
 //   - Type            ← event_type (regex-validated against the
-//                       <provider>.<resource>.<verb_past> grammar)
+//     <provider>.<resource>.<verb_past> grammar)
 //   - SchemaVersion   ← "v1"
 //   - AggregateType   ← <provider>_<resource> (snake-case denormalisation
-//                       so PullEvents filters by aggregate_type work
-//                       cleanly for adapter audit consumers)
+//     so PullEvents filters by aggregate_type work
+//     cleanly for adapter audit consumers)
 //   - AggregateID     ← resource_id
 //   - Payload         ← {provider, resource, verb, resource_id,
-//                        instance_id, observed?, emitted_at?} (matches the
-//                        shared events/v1/integration_mutation/<verb>.json
-//                        schema; observed/emitted_at omitted when blank so
-//                        additionalProperties:false stays happy)
+//     instance_id, observed?, emitted_at?} (matches the
+//     shared events/v1/integration_mutation/<verb>.json
+//     schema; observed/emitted_at omitted when blank so
+//     additionalProperties:false stays happy)
 //   - IdempotencyKey  ← idempotency (REQUIRED — adapters supplying empty
-//                       are rejected with a 400)
+//     are rejected with a 400)
 //   - Metadata        ← {idempotency, instance_id, source} for
-//                       observability beyond the payload itself
+//     observability beyond the payload itself
 func buildEmitEventRequestFromMutation(req eventPublishRequest) (model.EmitEventRequest, error) {
 	eventType := strings.TrimSpace(req.EventType)
 	if eventType == "" {

@@ -91,9 +91,11 @@ cmd/                         # auxiliary CLIs (operator, validate-manifests, …
 
 ## HTTP API (most relevant routes)
 
-Bearer token via `YGGDRASIL_WORKFLOW_RUN_TOKEN` for control-plane write
-routes; route-scoped `YGGDRASIL_EVENT_PUBLISH_TOKEN` for event publishing;
-session cookie for console; SCIM tokens for SCIM endpoints.
+Hashed workflow machine principals for exact workflow dispatch/poll scopes;
+hashed event-publisher principals for event publishing; a dedicated deploy
+token for deployment automation; session cookie for console and manifest
+writes; SCIM tokens for SCIM endpoints. Plaintext workflow/event credentials
+exist only as explicit migration bridges.
 
 ```
 GET    /healthz                                  liveness
@@ -134,24 +136,31 @@ with `?kind=X` in the query string.
 - `/api/v1/auth/session` — current session.
 - MFA via TOTP/WebAuthn/recovery codes (`auth/mfa/...`).
 - SCIM v2 at `/api/v1/auth/scim/*`.
-- Bearer auth via `YGGDRASIL_WORKFLOW_RUN_TOKEN` for workflow dispatch and
-  control-plane routes (POST /api/v1/workflow-runs, POST /api/v1/manifests,
-  integration_type sync). `POST /api/v1/events` prefers the route-scoped
-  `YGGDRASIL_EVENT_PUBLISH_TOKEN` and temporarily accepts the workflow token
-  for compatibility. Tokens come from deployment-managed secrets, never
-  manifests.
+- Workflow automation uses bearer tokens whose SHA-256 digests and exact
+  namespace/name allowlists live in
+  `YGGDRASIL_WORKFLOW_MACHINE_PRINCIPALS_JSON`. Machine principals can only
+  dispatch their allowlisted workflows when the manifest declares
+  `spec.authorization`, whose RBAC/policy decision is an additional mandatory
+  restriction. They must select the current active workflow by namespace/name;
+  manifest-id and explicit-version selectors are rejected. Their dispatch is
+  always async and they can poll only their own runs.
+- Event writers use independent hashed principals in
+  `YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON`, with exact
+  `{provider,instance_id,event_type}` mutation-event scopes, accepted only by
+  `POST /api/v1/events`. Machine event principals cannot publish generic
+  events, and human console sessions are not accepted on this route.
+  `YGGDRASIL_EVENT_PUBLISH_TOKEN` is an explicit, expiring, mutation-only
+  plaintext bridge with a reserved server-authored actor.
+- `YGGDRASIL_WORKFLOW_RUN_TOKEN` is a workflow-route-only migration bridge and
+  is rejected unless explicitly enabled with a future expiry. Workflow
+  credentials never authorize events, manifests, deploy, secrets, console,
+  auth-admin, or generic ops routes.
 
 ## CI / image flow
 
 - `.github/workflows/release.yml` — builds + pushes to GHCR on
   push-to-main and on `v*` tags. Tags emitted: `sha-<short>`,
   `edge` (main), `latest` (release tag), `vX.Y.Z`.
-- `.github/workflows/emit-deploy-event.yml` — POSTs a `workflow-runs`
-  request to `${YGGDRASIL_CORE_BASE_URL}` so the running cluster
-  reconciles the new image. **Soft-skip pattern** (commit `1682b46`):
-  if `YGGDRASIL_CORE_BASE_URL` / `YGGDRASIL_WORKFLOW_RUN_TOKEN`
-  repo secrets are missing, the job logs `::warning::` and exits 0
-  (default-on enable: `vars.YGGDRASIL_DEPLOY_EMIT_ENABLED != 'false'`).
 - `.github/workflows/workflow.yml` — go test, golangci-lint, addons
   list smoke.
 

@@ -63,23 +63,36 @@ func authorizeAuthAdminRequest(r *http.Request, db *sql.DB) error {
 		}
 	}
 
-	// Path 3: static machine admin token (constant-time compare). Only the
-	// dedicated YGGDRASIL_AUTH_ADMIN_TOKEN authorizes — the broadly-shared
-	// workflow-run token must never act as auth-admin.
-	expected := strings.TrimSpace(os.Getenv("YGGDRASIL_AUTH_ADMIN_TOKEN"))
-	if expected != "" {
-		candidates := []string{
-			strings.TrimSpace(r.Header.Get("X-Yggdrasil-Auth-Admin-Token")),
-			bearerToken(r.Header.Get("Authorization")),
-		}
-		for _, candidate := range candidates {
-			if candidate != "" && subtle.ConstantTimeCompare([]byte(candidate), []byte(expected)) == 1 {
-				return nil
-			}
-		}
+	// Path 3: static machine admin token. Only the dedicated
+	// YGGDRASIL_AUTH_ADMIN_TOKEN authorizes; workflow credentials must never act
+	// as auth-admin.
+	if requestHasStaticAuthAdminCredential(r) {
+		return nil
 	}
 
 	return errAuthAdminUnauthorized
+}
+
+// requestHasStaticAuthAdminCredential isolates the purpose-built non-human
+// auth-admin path from session authorization. The outer console gate uses this
+// narrower predicate so an administrator's cookie still travels through the
+// normal MFA, CSRF, claims, and RBAC pipeline instead of inheriting the
+// no-claims machine bypass.
+func requestHasStaticAuthAdminCredential(r *http.Request) bool {
+	expected := strings.TrimSpace(os.Getenv("YGGDRASIL_AUTH_ADMIN_TOKEN"))
+	if expected == "" {
+		return false
+	}
+	candidates := []string{
+		strings.TrimSpace(r.Header.Get("X-Yggdrasil-Auth-Admin-Token")),
+		bearerToken(r.Header.Get("Authorization")),
+	}
+	for _, candidate := range candidates {
+		if candidate != "" && subtle.ConstantTimeCompare([]byte(candidate), []byte(expected)) == 1 {
+			return true
+		}
+	}
+	return false
 }
 
 // claimsCollaboratorUUID pulls the collaborator UUID out of a claims map,

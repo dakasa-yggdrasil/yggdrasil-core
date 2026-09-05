@@ -66,7 +66,7 @@ jobs:
       - uses: dakasa-yggdrasil/action-emit-workflow-run@v1
         with:
           core-url: ${{ secrets.YGGDRASIL_CORE_URL }}
-          workflow-run-token: ${{ secrets.YGGDRASIL_WORKFLOW_RUN_TOKEN }}
+          workflow-run-token: ${{ secrets.YGGDRASIL_WORKFLOW_MACHINE_TOKEN }}
           workflow-namespace: global
           workflow-name: post-deploy-notify
           inputs-json: |
@@ -76,6 +76,20 @@ jobs:
               "environment": "${{ inputs.environment }}"
             }
 ```
+
+`YGGDRASIL_WORKFLOW_MACHINE_TOKEN` is the caller-side raw bearer; the core
+stores only its SHA-256 digest in a machine-principal entry whose exact
+workflow allowlist includes `global/post-deploy-notify`. Do not configure the
+raw token in the core JSON and do not reuse it for another route family. The
+target workflow must also declare `spec.authorization` whose RBAC grants the
+machine subject `service:<principal_id>` action `run` on
+`workflow:global:post-deploy-notify`.
+
+The workflow allowlist does not constrain inputs by itself. If inputs can
+select a repository, workflow file, ref, environment, secret reference, or
+other execution target, keep that callback quarantined until a typed workflow
+or its authorization policy binds those values exactly for the principal.
+Core intentionally ships no default-on generic deploy emitter.
 
 For GitLab, an equivalent snippet using `curl` in the
 `.gitlab-ci.yml` `after_script`. For Buildkite, a plugin.
@@ -132,9 +146,11 @@ Choose by use case; both are supported.
   CI or read repo secrets must live as managed secrets in
   Yggdrasil, injected at call time via `credentials_ref`. Never
   inline.
-- **Match the callback identity to the workflow.** When CI calls
-  back, use a per-pipeline short-lived token or a constrained
-  `workflow-run-token` — not a human's credential.
+- **Match the callback identity to the workflow.** When CI calls back, use a
+  short-lived machine bearer whose server-side principal has an exact
+  namespace/name workflow allowlist, and grant its `service:<principal_id>`
+  subject through the workflow's required `spec.authorization` — not a global
+  or human credential.
 - **Keep the workflow minimal.** "Yggdrasil workflows that re-
   implement CI" is the most common anti-pattern. If the step is
   "run tests and then build an image", do it in the CI tool; don't

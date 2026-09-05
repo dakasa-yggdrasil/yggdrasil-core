@@ -140,6 +140,33 @@ func TestResolveWorkflowRunAsync_ExplicitOptInBeatsManifestSync(t *testing.T) {
 	}
 }
 
+func TestResolveWorkflowRunAsyncForActor_MachineCannotOptOut(t *testing.T) {
+	s := &Server{}
+	req := model.RunWorkflowRequest{
+		Workflow: model.ManifestSelector{Name: "machine-workflow", Namespace: "dakasa"},
+	}
+	actor := workflowRunActor{
+		MachinePrincipalID: "ci-dakasa",
+		MachinePrincipal: &workflowMachinePrincipal{
+			PrincipalID: "ci-dakasa",
+		},
+	}
+
+	for _, rawURL := range []string{
+		"http://x/api/v1/workflow-runs?async=false",
+		"http://x/api/v1/workflow-runs?async=0",
+		"http://x/api/v1/workflow-runs",
+	} {
+		httpReq := httptest.NewRequest(http.MethodPost, rawURL, nil)
+		if rawURL == "http://x/api/v1/workflow-runs" {
+			httpReq.Header.Set("X-Yggdrasil-Workflow-Mode", "sync")
+		}
+		if !s.resolveWorkflowRunAsyncForActor(httpReq, req, actor) {
+			t.Fatalf("hashed machine principal selected sync path for %s", rawURL)
+		}
+	}
+}
+
 func TestDispatchAsyncWorkflowRunRejectsUndeclaredInputBeforeInsert(t *testing.T) {
 	t.Setenv("BROKER_URL", "amqp://unit-test")
 	db, mock, err := sqlmock.New()
@@ -169,7 +196,7 @@ func TestDispatchAsyncWorkflowRunRejectsUndeclaredInputBeforeInsert(t *testing.T
 			"declared":   "ok",
 			"undeclared": "raw-value-must-not-appear",
 		},
-	})
+	}, workflowRunActor{})
 
 	if recorder.Code != http.StatusBadRequest {
 		t.Fatalf("status = %d, want 400; body=%s", recorder.Code, recorder.Body.String())

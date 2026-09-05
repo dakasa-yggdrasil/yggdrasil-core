@@ -219,6 +219,37 @@ contains no step output. A malformed or missing path in a declared list
 redacts the entire output fail-closed. Never place the generated value in
 workflow inputs, dispatch metadata, errors, logs, or mutation events.
 
+## Machine dispatch boundary
+
+Non-human callers use a raw bearer kept in their own secret store. The core
+configuration stores only its SHA-256 digest in
+`YGGDRASIL_WORKFLOW_MACHINE_PRINCIPALS_JSON`, together with lifecycle and
+rotation metadata and a non-empty list of exact workflow `{namespace,name}`
+pairs. Wildcards are rejected. The server resolves the selected manifest and
+enforces that allowlist on every dispatch. A workflow without
+`spec.authorization` is denied to machine callers; its declared RBAC and
+optional policy are evaluated afterward as an additional mandatory gate.
+Machine callers must select by namespace/name and resolve only the current
+active workflow. The API rejects `manifest_id` and explicit `version` selectors
+for these callers so an allowed logical name cannot be redirected to an older
+or inactive contract.
+
+Do not send a `principal_id` or creator identity in request metadata. Hashed
+machine dispatch is always asynchronous, even if the request supplies
+`?async=false` or a `sync` header. The server overwrites the reserved
+`yggdrasil.io/creator_machine_principal_id` field with the authenticated
+principal. Poll the returned id with the same bearer: machine callers receive
+only their own runs, while both foreign and absent ids return 404. A stable
+`metadata.idempotency_key` is scoped by the server to the authenticated
+principal before persistence, so another principal cannot receive the run id
+through a retry. The original key remains available only to the live execution
+copy.
+
+Workflow credentials are valid only for the canonical dispatch and poll
+routes. They cannot publish events or access manifests, deploy, secrets,
+`/console`, generic `/ops`, tenant, or auth-admin APIs. See
+[ADR-0016](../adr/0016-scope-machine-principals-by-route-workflow-and-run-ownership.md).
+
 ## Wire shape
 
 ### POST /api/v1/workflow-runs
@@ -228,11 +259,21 @@ workflow inputs, dispatch metadata, errors, logs, or mutation events.
   "workflow": { "namespace": "global", "name": "deploy-service" },
   "inputs": { "service": "billing", "env": "prod" },
   "auth":   { "token": "..." },
-  "metadata": { "source": "github-action", "request_id": "..." }
+  "metadata": {
+    "source": "github-action",
+    "request_id": "...",
+    "idempotency_key": "deploy-service:commit-sha"
+  }
 }
 ```
 
-Response (synchronous mode):
+Send the machine bearer through `X-Yggdrasil-Workflow-Token` or
+`Authorization: Bearer ...`. Machine dispatch is durably asynchronous without
+requiring `?async=true`; a sync opt-out is ignored. The first request returns
+`202` with `run_id` and `deduped:false`; an idempotent retry returns `200` with
+the same owned `run_id` and `deduped:true`.
+
+Response (synchronous mode, human or time-bounded migration callers only):
 
 ```json
 {

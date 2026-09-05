@@ -108,29 +108,51 @@ All non-2xx responses share:
 
 ## Auth
 
-v2.x relies on environment-backed static credentials, including route-scoped
-tokens where a caller needs only one write surface. Endpoints requiring auth
-and the env var that gates them:
+Non-human routes use environment-backed, route-scoped credentials. Machine
+principal inventories store only SHA-256 digests; raw bearers remain in caller
+secret stores. Endpoints requiring auth and the configuration that gates them:
 
 | Endpoint | Env var | Header(s) accepted |
 |---|---|---|
-| `POST /api/v1/workflow-runs` | `YGGDRASIL_WORKFLOW_RUN_TOKEN` (legacy, optional in local dev) or `YGGDRASIL_WORKFLOW_RUN_SCOPED_TOKENS_JSON` | `X-Yggdrasil-Workflow-Token: <token>` or `Authorization: Bearer <token>` |
-| `POST /api/v1/events` | `YGGDRASIL_EVENT_PUBLISH_TOKEN` (preferred) or `YGGDRASIL_WORKFLOW_RUN_TOKEN` (legacy fallback) | `X-Yggdrasil-Event-Token: <token>`, `X-Yggdrasil-Workflow-Token: <token>`, or `Authorization: Bearer <token>` |
+| `POST /api/v1/workflow-runs`, `GET /api/v1/workflow-runs/{run_id}` | `YGGDRASIL_WORKFLOW_MACHINE_PRINCIPALS_JSON`; explicit time-bounded `YGGDRASIL_WORKFLOW_RUN_TOKEN` migration bridge | `X-Yggdrasil-Workflow-Token: <bearer>` or `Authorization: Bearer <bearer>` |
+| `POST /api/v1/events` | `YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON`; explicit time-bounded `YGGDRASIL_EVENT_PUBLISH_TOKEN` migration bridge | `X-Yggdrasil-Event-Token: <bearer>` or `Authorization: Bearer <bearer>` |
+| Manifest reads/writes, `/console`, `/ops`, secrets | Console session; permission middleware applies where registered | Session cookie or console bearer |
+| Provider, SCIM, and SAML auth-administration mutations | `YGGDRASIL_AUTH_ADMIN_TOKEN` or an authorized console session | `X-Yggdrasil-Auth-Admin-Token: <token>`, matching bearer, or console session |
+| Direct deploy, deploy-all, bootstrap, integration-install API routes | `YGGDRASIL_DEPLOY_TOKEN` | `X-Deploy-Token: <token>` or `Authorization: Bearer <token>` |
+| Equivalent `/api/v1/console/*` deploy routes | Authorized console session after RBAC | Session cookie or console bearer |
 
-Production requires at least one event-publish credential during the legacy
-compatibility window. A configured dedicated event token must differ from all
-workflow, deploy, and auth-admin static tokens; the core rejects collisions at
-boot so the event credential cannot be replayed on a broader route.
+Production requires an active, unexpired workflow principal and an independent
+event principal (or the corresponding explicit legacy bridge). The core
+rejects malformed, wildcarded, duplicate, expired-only, and credential-reusing
+configuration at boot, without printing credentials or digests. Hashed event
+principals may not reuse the plaintext event bridge bearer, because principal
+expiry or revocation must not downgrade that bearer to bridge authority.
 
-Workflows may opt into manifest-backed dispatch authorization with
-`spec.authorization.rbac` and optional `spec.authorization.policy`. The legacy
-token evaluates as `service/legacy-workflow-run-token` (overridable with
-`YGGDRASIL_WORKFLOW_RUN_LEGACY_SUBJECT_TYPE` and `_ID`). Scoped-token entries
-carry an explicit subject and are accepted only on workflow-run URLs; store the
-JSON in a Secret because it contains raw credentials.
-| `POST /api/v1/products/.../deploy` (returns 410 anyway) | `YGGDRASIL_DEPLOY_TOKEN` | `Authorization: Bearer <token>` |
+Every workflow machine principal has a mandatory exact namespace/name
+allowlist. Machine dispatch is denied when the workflow has no authorization
+block; `spec.authorization.rbac` and optional `spec.authorization.policy` are
+additional mandatory restrictions. Machine selectors use logical
+namespace/name resolution (including the normal default namespace) and only
+the current active workflow; `manifest_id` and explicit `version` are rejected.
+Async creation records the authenticated
+principal server-side; all hashed machine dispatch is therefore forced async,
+even when `async=false` or a `sync` header is supplied. Machine polling returns
+only owned runs and hides foreign ids as 404. `metadata.idempotency_key` is also
+principal-scoped before persistence.
 
-`POST /api/v1/manifests` is **not** gated in v2.x — adopters expose the API behind their own ingress policy. RBAC enforcement (Phase 3) will add per-user/per-tenant gating server-side.
+Every hashed event publisher has a non-empty `allowed_events` list of exact
+`{provider,instance_id,event_type}` mutation triples. It cannot publish the
+generic event shape or another publisher's scope; actor identity and reserved
+publisher metadata are server-authored. Console sessions are not accepted on
+this machine route. The plaintext bridge is mutation-only and its actor is
+replaced with the reserved `legacy-event-publish-bridge` service identity.
+
+The legacy workflow bridge requires
+`YGGDRASIL_WORKFLOW_RUN_LEGACY_ENABLED=true` and a future RFC3339
+`YGGDRASIL_WORKFLOW_RUN_LEGACY_EXPIRES_AT`. The event bridge likewise requires
+`YGGDRASIL_EVENT_PUBLISH_LEGACY_ENABLED=true` and a future RFC3339
+`YGGDRASIL_EVENT_PUBLISH_LEGACY_EXPIRES_AT`. The former raw-token
+`YGGDRASIL_WORKFLOW_RUN_SCOPED_TOKENS_JSON` configuration is rejected.
 
 ## Pagination
 
@@ -140,12 +162,16 @@ Endpoints that can return many items (`/api/v1/manifests`, `/api/v1/workflow-run
 
 Manifest creation (`POST /api/v1/manifests`) is idempotent on `(kind, namespace, name)` — re-posting the same `spec` produces a new version with identical `checksum`; clients deduplicate by checksum.
 
-Workflow runs preserve the historical always-create behavior unless the caller
-opts into both durable async dispatch (`?async=true`) and a stable
-`metadata.idempotency_key`. In that mode the first request returns `202` and
-persists the run; retries return `200` with the same `run_id` and `deduped:true`
-without starting another provider execution. Reusing a key for a different
-workflow returns `409 workflow_run_idempotency_conflict`.
+Human and migration workflow runs preserve the historical always-create
+behavior unless the caller opts into both durable async dispatch
+(`?async=true`) and a stable `metadata.idempotency_key`. Hashed machine
+principals are always routed through durable async dispatch. The first request
+returns `202` and persists the run; retries return `200` with the same `run_id`
+and `deduped:true` without starting another provider execution. Reusing a key
+for a different workflow returns `409 workflow_run_idempotency_conflict`.
+
+For machine principals, the persisted key is a server-derived digest scoped to
+the authenticated principal. A retry cannot return another principal's run id.
 
 ## Compatibility commitments
 

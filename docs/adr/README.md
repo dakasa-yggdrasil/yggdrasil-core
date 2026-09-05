@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**15 decisions.**
+**16 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -22,6 +22,7 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0010](0010-team-mirroring-reactors-ack-via-a-reserved-envelope-into-a-p.md) | Team-mirroring reactors ack via a reserved envelope into a provisioning log, self-healed by an anti-join reconcile sweep | Accepted | 2026-05-18 | yggdrasil-core (reactor dispatcher extension), integration-slack, integration-github, integration-google-workspace |
 | [0011](0011-bootstrap-internal-public-oidc-clients-declaratively.md) | Bootstrap internal public OIDC clients declaratively | Accepted | 2026-08-25 | yggdrasil-core / internal OIDC client lifecycle |
 | [0012](0012-keep-sensitive-integration-outputs-transient-between-workflow-steps.md) | Keep sensitive integration outputs transient between workflow steps | Accepted | 2026-09-01 | yggdrasil-core / workflow execution and integration adapter contract |
-| [0013](0013-scope-adapter-mutation-event-credentials-to-event-publishing.md) | Scope adapter mutation-event credentials to event publishing | Accepted | 2026-09-01 | yggdrasil-core / adapter authentication |
+| [0013](0013-scope-adapter-mutation-event-credentials-to-event-publishing.md) | Scope adapter mutation-event credentials to event publishing | Superseded | 2026-09-01 | yggdrasil-core / adapter authentication |
 | [0014](0014-bootstrap-confidential-oidc-clients-from-read-only-secret-files.md) | Bootstrap confidential OIDC clients from read-only Secret files | Accepted | 2026-09-02 | yggdrasil-core / confidential OIDC client lifecycle |
 | [0015](0015-validate-and-redact-workflow-inputs-before-async-persistence.md) | Validate and redact workflow inputs before async persistence | Accepted | 2026-09-04 | yggdrasil-core / workflow dispatch and durable run evidence |
+| [0016](0016-scope-machine-principals-by-route-workflow-and-run-ownership.md) | Scope machine principals by route, workflow, and run ownership | Accepted | 2026-09-05 | yggdrasil-core / non-human HTTP authentication and workflow dispatch |
