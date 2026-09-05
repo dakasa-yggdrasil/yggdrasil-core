@@ -23,7 +23,11 @@ spec:
     additionalProperties: false  # reject undeclared top-level inputs
     required: [service, env]
     properties:
-      service: { type: string }
+      service:
+        type: string
+        minLength: 1
+        maxLength: 63
+        pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
       env:     { type: string }
       ref:     { type: string }
 
@@ -107,7 +111,13 @@ condition) does not — downstream steps continue.
 For asynchronous runs, the same manifest and input validation happens before
 the pending `workflow_runs` row is created. Schemas remain open by default;
 set `input_schema.additionalProperties: false` when every accepted top-level
-input is declared in `properties`.
+input is declared in `properties`. String properties enforce `minLength`,
+`maxLength`, and `pattern` against the effective inputs after defaults are
+merged and before persistence or dispatch. `maxLength` counts Unicode code
+points. Patterns use Go's RE2-compatible regular expressions and follow JSON
+Schema search semantics, so anchor them with `^` and `$` when the whole value
+must match. Invalid patterns and contradictory length bounds make the workflow
+manifest invalid.
 
 ## Step kinds
 

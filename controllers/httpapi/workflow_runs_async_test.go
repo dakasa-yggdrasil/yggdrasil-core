@@ -214,3 +214,71 @@ func TestDispatchAsyncWorkflowRunRejectsUndeclaredInputBeforeInsert(t *testing.T
 		t.Fatal(err)
 	}
 }
+
+func TestDispatchAsyncWorkflowRunEnforcesStringSchemaBeforeInsert(t *testing.T) {
+	t.Setenv("BROKER_URL", "amqp://unit-test")
+	tests := []struct {
+		name       string
+		workflow   string
+		spec       string
+		value      string
+		wantSubstr string
+	}{
+		{
+			name:     "pattern mismatch",
+			workflow: "digest-pattern-workflow",
+			spec: `{
+				"trigger":{"mode":"manual"},
+				"input_schema":{"properties":{"image_digest":{"type":"string","pattern":"^sha256:[0-9a-f]{64}$"}}},
+				"steps":[{"id":"observe","use":{"kind":"integration","instance_ref":{"namespace":"dakasa","name":"example"},"operation":"observe_state"}}]
+			}`,
+			value:      "sha256:do-not-echo",
+			wantSubstr: "must match pattern",
+		},
+		{
+			name:     "maximum length exceeded",
+			workflow: "digest-length-workflow",
+			spec: `{
+				"trigger":{"mode":"manual"},
+				"input_schema":{"properties":{"image_digest":{"type":"string","maxLength":3}}},
+				"steps":[{"id":"observe","use":{"kind":"integration","instance_ref":{"namespace":"dakasa","name":"example"},"operation":"observe_state"}}]
+			}`,
+			value:      "do-not-echo",
+			wantSubstr: "maxLength 3",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			t.Cleanup(func() { _ = db.Close() })
+
+			expectWorkflowAuthorizationManifest(mock, "workflow", tc.workflow, tc.spec)
+			server := &Server{db: db, rabbitmq: &amqp.Connection{}}
+			recorder := httptest.NewRecorder()
+			request := httptest.NewRequest(http.MethodPost, "/api/v1/workflow-runs?async=true", nil)
+			server.dispatchAsyncWorkflowRun(recorder, request, model.RunWorkflowRequest{
+				Workflow: model.ManifestSelector{Namespace: "dakasa", Name: tc.workflow},
+				Inputs:   map[string]any{"image_digest": tc.value},
+			}, workflowRunActor{})
+
+			if recorder.Code != http.StatusBadRequest {
+				t.Fatalf("status = %d, want 400; body=%s", recorder.Code, recorder.Body.String())
+			}
+			if !strings.Contains(recorder.Body.String(), tc.wantSubstr) {
+				t.Fatalf("body = %s, want %q", recorder.Body.String(), tc.wantSubstr)
+			}
+			if strings.Contains(recorder.Body.String(), tc.value) {
+				t.Fatalf("validation response leaked rejected input value: %s", recorder.Body.String())
+			}
+			// No INSERT expectation: a schema violation must fail before durable
+			// persistence or background dispatch is attempted.
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

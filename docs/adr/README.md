@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**16 decisions.**
+**17 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -26,3 +26,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0014](0014-bootstrap-confidential-oidc-clients-from-read-only-secret-files.md) | Bootstrap confidential OIDC clients from read-only Secret files | Accepted | 2026-09-02 | yggdrasil-core / confidential OIDC client lifecycle |
 | [0015](0015-validate-and-redact-workflow-inputs-before-async-persistence.md) | Validate and redact workflow inputs before async persistence | Accepted | 2026-09-04 | yggdrasil-core / workflow dispatch and durable run evidence |
 | [0016](0016-scope-machine-principals-by-route-workflow-and-run-ownership.md) | Scope machine principals by route, workflow, and run ownership | Accepted | 2026-09-05 | yggdrasil-core / non-human HTTP authentication and workflow dispatch |
+| [0017](0017-enforce-workflow-string-pattern-and-maximum-length-at-ingress.md) | Enforce workflow string pattern and maximum length at ingress | Accepted | 2026-09-05 | yggdrasil-core / workflow input validation |
