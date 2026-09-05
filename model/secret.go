@@ -85,8 +85,6 @@ type ManagedSecretView struct {
 	Status        string                      `json:"status"`
 	Version       int                         `json:"version"`
 	Keys          []string                    `json:"keys,omitempty"`
-	Data          map[string]string           `json:"data,omitempty"`
-	MaskedData    map[string]string           `json:"masked_data,omitempty"`
 	Metadata      map[string]any              `json:"metadata,omitempty"`
 	Rotation      ManagedSecretRotationPolicy `json:"rotation,omitempty"`
 	RotationDue   bool                        `json:"rotation_due,omitempty"`
@@ -97,8 +95,10 @@ type ManagedSecretView struct {
 	UpdatedAt     time.Time                   `json:"updated_at"`
 }
 
-// BuildManagedSecretView returns one redacted or full HTTP-safe representation of a managed secret.
-func BuildManagedSecretView(secret ManagedSecret, includeValues bool) ManagedSecretView {
+// BuildManagedSecretView returns a metadata-only HTTP-safe representation of a
+// managed secret. Values and value-derived masks never belong in this type:
+// masks disclose secret length and suffix bytes even when raw data is omitted.
+func BuildManagedSecretView(secret ManagedSecret) ManagedSecretView {
 	view := ManagedSecretView{
 		ID:            secret.ID,
 		Namespace:     secret.Namespace,
@@ -120,31 +120,11 @@ func BuildManagedSecretView(secret ManagedSecret, includeValues bool) ManagedSec
 	}
 
 	view.Keys = make([]string, 0, len(secret.Data))
-	view.MaskedData = make(map[string]string, len(secret.Data))
-	if includeValues {
-		view.Data = make(map[string]string, len(secret.Data))
-	}
-
-	for key, value := range secret.Data {
+	for key := range secret.Data {
 		view.Keys = append(view.Keys, key)
-		view.MaskedData[key] = maskManagedSecretValue(value)
-		if includeValues {
-			view.Data[key] = value
-		}
 	}
 	sort.Strings(view.Keys)
 	return view
-}
-
-func maskManagedSecretValue(value string) string {
-	value = strings.TrimSpace(value)
-	if value == "" {
-		return ""
-	}
-	if len(value) <= 4 {
-		return "****"
-	}
-	return strings.Repeat("*", len(value)-4) + value[len(value)-4:]
 }
 
 // IsExpired reports whether the secret should no longer be used.

@@ -1454,10 +1454,9 @@ func (s *Server) handleManagedSecretList(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
-	includeValues := queryBool(r, "include_values")
 	items := make([]model.ManagedSecretView, 0, len(secrets))
 	for _, secret := range secrets {
-		items = append(items, model.BuildManagedSecretView(secret, includeValues))
+		items = append(items, model.BuildManagedSecretView(secret))
 	}
 
 	writeJSON(w, http.StatusOK, managedSecretsResponse{Secrets: items})
@@ -1474,7 +1473,7 @@ func (s *Server) handleManagedSecretGet(w http.ResponseWriter, r *http.Request) 
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"secret": model.BuildManagedSecretView(secret, queryBool(r, "include_values")),
+		"secret": model.BuildManagedSecretView(secret),
 	})
 }
 
@@ -1494,7 +1493,7 @@ func (s *Server) handleManagedSecretCreate(w http.ResponseWriter, r *http.Reques
 	s.materializeAfterWrite(secret)
 
 	writeJSON(w, http.StatusCreated, map[string]any{
-		"secret": model.BuildManagedSecretView(secret, queryBool(r, "include_values")),
+		"secret": model.BuildManagedSecretView(secret),
 	})
 }
 
@@ -1521,7 +1520,7 @@ func (s *Server) handleManagedSecretRotate(w http.ResponseWriter, r *http.Reques
 	s.materializeAfterWrite(secret)
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"secret": model.BuildManagedSecretView(secret, queryBool(r, "include_values")),
+		"secret": model.BuildManagedSecretView(secret),
 	})
 }
 
@@ -1545,7 +1544,7 @@ func (s *Server) handleManagedSecretDisable(w http.ResponseWriter, r *http.Reque
 	s.materializeAfterWrite(secret)
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"secret": model.BuildManagedSecretView(secret, queryBool(r, "include_values")),
+		"secret": model.BuildManagedSecretView(secret),
 	})
 }
 
@@ -1569,7 +1568,7 @@ func (s *Server) handleManagedSecretRevoke(w http.ResponseWriter, r *http.Reques
 	s.materializeAfterWrite(secret)
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"secret": model.BuildManagedSecretView(secret, queryBool(r, "include_values")),
+		"secret": model.BuildManagedSecretView(secret),
 	})
 }
 
