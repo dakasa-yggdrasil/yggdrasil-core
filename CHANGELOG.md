@@ -7,6 +7,29 @@ All notable changes to yggdrasil-core are documented here.
 ### Security
 - **AMQP frame allocation is bounded before payload allocation.** `github.com/rabbitmq/amqp091-go` is upgraded from v1.10.0 to v1.13.0, the first release patched for GHSA-6c5v-hqjr-5xxp. Core continues to use `amqp.Dial`, so the library's new experimental automatic connection and topology recovery remains disabled unless explicitly configured later.
 
+- Added hash-only workflow machine principals with exact workflow allowlists,
+  lifecycle/rotation metadata, constant-time bearer verification, server-owned
+  async run identity, owner-only polling, principal-scoped idempotency, and a
+  fail-closed requirement for manifest RBAC authorization. Machine callers may
+  select only the current active workflow by namespace/name; manifest-id and
+  explicit-version selectors are rejected.
+- Added independent hash-only event-publisher principals accepted only by
+  `POST /api/v1/events`, scoped to exact provider/instance/event triples;
+  machine publishers cannot submit generic events. Workflow credentials no
+  longer authorize events, manifests, deploy, secrets, console, auth-admin,
+  tenant, or generic ops APIs.
+- Limited the plaintext workflow and event credentials to explicit, expiring
+  migration bridges; production boot now validates independent workflow/event
+  credentials and rejects malformed configuration or any credential reuse
+  between a hashed principal and a plaintext bridge, including within the event
+  scope.
+- Protected durable asynchronous workflow execution with the repository's
+  panic-safe goroutine launcher and records a generic failed run on panic.
+- Removed the default-on repository-generic deploy emitter; automatic emission
+  stays quarantined until both its caller and workflow inputs are purpose-bound.
+- Preserved the dedicated auth-admin credential only on the exact provider,
+  SCIM, and SAML mutation routes while keeping workflow credentials excluded.
+
 ## [2.18.1] - 2026-08-29
 
 ### Security

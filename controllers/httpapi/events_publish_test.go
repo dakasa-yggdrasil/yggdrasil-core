@@ -179,8 +179,8 @@ func TestHandleEventPublish_ValidationErrors(t *testing.T) {
 	}
 
 	cases := []struct {
-		name       string
-		mutate     func(map[string]any)
+		name        string
+		mutate      func(map[string]any)
 		errFragment string
 	}{
 		{
@@ -236,7 +236,8 @@ func TestHandleEventPublish_ValidationErrors(t *testing.T) {
 }
 
 func TestHandleEventPublish_RejectsUnauthorized(t *testing.T) {
-	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "shared-token")
+	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "")
+	setTestLegacyEventPublishCredential(t, "event-publish-token")
 	db := dbForEventPublishTest(t)
 	defer db.Close()
 	cleanEventLogForPublishTest(t, db)
@@ -248,6 +249,15 @@ func TestHandleEventPublish_RejectsUnauthorized(t *testing.T) {
 		"aggregate_id":   "018f2b4a-1234-7abc-def0-123456789015",
 		"payload":        validManifestCreatedPayloadForPublish(),
 	}
+	mutationBody := map[string]any{
+		"event_type":  "aws.bucket.ensured",
+		"provider":    "aws",
+		"resource":    "bucket",
+		"verb":        "ensured",
+		"resource_id": "event-auth-test-bucket",
+		"instance_id": "aws-primary",
+		"idempotency": "event-auth-test-bucket:ensured",
+	}
 
 	t.Run("missing token", func(t *testing.T) {
 		w := doPublish(t, h, body, nil)
@@ -257,14 +267,14 @@ func TestHandleEventPublish_RejectsUnauthorized(t *testing.T) {
 	})
 
 	t.Run("wrong token", func(t *testing.T) {
-		w := doPublish(t, h, body, map[string]string{"X-Yggdrasil-Workflow-Token": "wrong"})
+		w := doPublish(t, h, body, map[string]string{"X-Yggdrasil-Event-Token": "wrong"})
 		if w.Code != http.StatusUnauthorized {
 			t.Fatalf("status: got %d, want %d (body=%s)", w.Code, http.StatusUnauthorized, w.Body.String())
 		}
 	})
 
 	t.Run("correct token via header", func(t *testing.T) {
-		w := doPublish(t, h, body, map[string]string{"X-Yggdrasil-Workflow-Token": "shared-token"})
+		w := doPublish(t, h, mutationBody, map[string]string{"X-Yggdrasil-Event-Token": "event-publish-token"})
 		if w.Code != http.StatusCreated {
 			t.Fatalf("status: got %d, want %d (body=%s)", w.Code, http.StatusCreated, w.Body.String())
 		}

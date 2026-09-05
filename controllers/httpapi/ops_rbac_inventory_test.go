@@ -313,13 +313,14 @@ func TestNoUngatedMutatingRoutes(t *testing.T) {
 	// Allowlist: routes that intentionally do NOT use requireOpsPermissionFunc.
 	// Each entry MUST have a justification comment.
 	allowlist := map[string]string{
-		// Manifest CRUD — workflow-token via authorizeWorkflowRunRequest in-handler.
-		`POST /api/v1/manifests`:        "workflow-token via in-handler authorizeWorkflowRunRequest",
-		`DELETE /api/v1/manifests/{id}`: "workflow-token via in-handler authorizeWorkflowRunRequest",
+		// Manifest CRUD — console session through the outer auth gate plus the
+		// in-handler manifest-write check; workflow credentials are rejected.
+		`POST /api/v1/manifests`:        "console session plus in-handler manifest-write authorization",
+		`DELETE /api/v1/manifests/{id}`: "console session plus in-handler manifest-write authorization",
 
-		// Event publishing — webhook-style, route-scoped event token with a
-		// legacy workflow-token compatibility path.
-		`POST /api/v1/events`: "event-publish token or legacy workflow-token",
+		// Event publishing — exact-scope hashed publisher or the explicit,
+		// expiring event-only migration bridge.
+		`POST /api/v1/events`: "scoped event publisher or explicit expiring legacy event bridge",
 
 		// Webhook receivers — external callers (no claims), HMAC-validated in-handler.
 		`POST /api/v1/github/webhook`:                       "external GitHub webhook, HMAC-validated",

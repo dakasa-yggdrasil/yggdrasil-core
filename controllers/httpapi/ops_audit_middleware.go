@@ -20,7 +20,7 @@ const opsAuditTimeout = 5 * time.Second
 // opsCollaboratorID extracts the collaborator id from the verified JWT
 // claims attached by requireAuthenticatedConsoleAPIs / bearerOrSession.
 // Used by the ops_audit middleware. Returns "" when no claims are
-// present (workflow-run-token caller).
+// present (purpose-built machine automation caller).
 func opsCollaboratorID(r *http.Request) string {
 	claims, ok := claimsFromContext(r.Context())
 	if !ok {

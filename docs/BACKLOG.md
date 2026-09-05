@@ -189,43 +189,6 @@ falling back to Abordagem A (ConfigMap + restart).
 
 ---
 
-## 6. `handleWorkflowRun` authorization integration with RBAC + Policy
-
-**What:** `controllers/httpapi/workflow_runs.go:36`
-`authorizeWorkflowRunRequest` currently does simple bearer-token
-comparison against the `YGGDRASIL_WORKFLOW_RUN_TOKEN` environment
-variable. It does NOT route the request through the
-`authorizationEvaluateHandler` (at
-`controllers/message/manifests.go:304`) which combines RBAC and Policy
-via `EvaluateAuthorizationRequest`.
-
-**Why it matters:** DaKasa Bloco 4.2 commits 3 governance manifests
-(RBAC with 4 roles + 4 bindings, Policy with 3 conditional rules,
-Guardian Policy with approval_required autonomy). These are
-authoritative in the catalog but bypassed at the CD entrypoint — the
-bearer token on `POST /api/v1/workflow-runs` is the only enforcement
-point. The Policy `cd-dispatcher-validation-only` (which restricts
-the CD bot to `environment == "validation"`) is dead until this
-integration lands.
-
-**Where the work lives:** In this repo, `controllers/httpapi/`.
-
-**Proposed shape:**
-1. Extract the subject from the incoming bearer token (via a new
-   token-to-subject lookup, or via signed JWT claims if we move to
-   JWT tokens).
-2. Construct an `EvaluateAuthorizationRequest` with
-   `resource: "workflow:<namespace>:<name>"`,
-   `action: "run"`, and `input: <workflow inputs from request body>`.
-3. Short-circuit with HTTP 403 when `allow=false`.
-4. Log the matched RBAC roles + Policy rules on allowed requests
-   (audit trail via Event Stream — already built).
-
-**Blocked consumer:** DaKasa Bloco 4.2 runtime enforcement at the CD
-entrypoint.
-
----
-
 ## Adding entries to this file
 
 When landing a feature whose *consumer side* depends on work in another

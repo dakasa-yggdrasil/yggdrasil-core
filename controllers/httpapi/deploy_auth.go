@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"crypto/subtle"
 	"net/http"
 	"os"
 	"strings"
@@ -11,41 +10,74 @@ import (
 // Accepted credentials, in order:
 //   - a valid console session (claims attached upstream by
 //     requireAuthenticatedConsoleAPIs + RBAC-checked on the /console routes), or
-//   - the deploy token from YGGDRASIL_DEPLOY_TOKEN, or — as a fallback so these
-//     routes are never silently unauthenticated just because the dedicated token
-//     wasn't provisioned — the shared YGGDRASIL_WORKFLOW_RUN_TOKEN.
+//   - the dedicated deploy token from YGGDRASIL_DEPLOY_TOKEN.
+//
 // Client sends the token as Authorization: Bearer <token> or X-Deploy-Token: <token>.
-// Only when NEITHER token is configured AND there is no session do we allow-all
-// (true local dev). In any provisioned environment the deploy surface is closed.
+// Workflow credentials are never accepted. Only a credential-free request with
+// no deploy token configured outside production gets the local-dev allow-all.
 func requireDeployToken(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		// A valid console session is sufficient (the /console deploy routes are
-		// already RBAC-gated upstream); don't also demand the static token.
-		if _, ok := claimsFromContext(r.Context()); ok {
+		if authorizeDeployRequest(r) == nil {
 			next(w, r)
 			return
 		}
-
-		expected := os.Getenv("YGGDRASIL_DEPLOY_TOKEN")
-		if expected == "" {
-			expected = os.Getenv("YGGDRASIL_WORKFLOW_RUN_TOKEN")
-		}
-		if expected == "" {
-			// Neither token configured AND no session — local dev allow-all.
-			next(w, r)
-			return
-		}
-
-		token := extractDeployToken(r)
-		if token == "" || subtle.ConstantTimeCompare([]byte(token), []byte(expected)) != 1 {
-			writeJSON(w, http.StatusUnauthorized, errorResponse{
-				Error: "unauthorized: valid deploy token or console session required",
-			})
-			return
-		}
-
-		next(w, r)
+		writeJSON(w, http.StatusUnauthorized, errorResponse{
+			Error: "unauthorized: valid deploy token or console session required",
+		})
 	}
+}
+
+func authorizeDeployRequest(r *http.Request) error {
+	if !deployCredentialPath(r.Method, r.URL.Path) {
+		return errWorkflowRunUnauthorized
+	}
+	// A valid console session is sufficient only on /console deploy routes,
+	// because those handlers are already RBAC-gated upstream. The direct API
+	// routes have no equivalent permission wrapper and therefore require the
+	// dedicated deploy credential even when claims are present.
+	if claims, ok := claimsFromContext(r.Context()); ok && strings.HasPrefix(r.URL.Path, "/api/v1/console/") {
+		if collaboratorID, _ := claims["collaborator_id"].(string); strings.TrimSpace(collaboratorID) != "" {
+			return nil
+		}
+	}
+
+	expected := strings.TrimSpace(os.Getenv("YGGDRASIL_DEPLOY_TOKEN"))
+	token := extractDeployToken(r)
+	if expected == "" {
+		if token == "" && !requestPresentsStaticCredential(r) && devEnvAllowsFallback() {
+			return nil
+		}
+		return errWorkflowRunUnauthorized
+	}
+	if !constantTimeTokenEqual(token, expected) {
+		return errWorkflowRunUnauthorized
+	}
+	return nil
+}
+
+func deployCredentialPath(method, path string) bool {
+	if method != http.MethodPost {
+		return false
+	}
+	switch path {
+	case "/api/v1/products/deploy-all",
+		"/api/v1/bootstrap",
+		"/api/v1/integrations/install",
+		"/api/v1/console/products/deploy-all",
+		"/api/v1/console/bootstrap",
+		"/api/v1/console/integrations/install":
+		return true
+	}
+	parts := strings.Split(strings.Trim(path, "/"), "/")
+	if len(parts) == 7 && parts[0] == "api" && parts[1] == "v1" &&
+		parts[2] == "console" && parts[3] == "products" && parts[6] == "deploy" {
+		return parts[4] != "" && parts[5] != ""
+	}
+	if len(parts) == 6 && parts[0] == "api" && parts[1] == "v1" &&
+		parts[2] == "products" && parts[5] == "deploy" {
+		return parts[3] != "" && parts[4] != ""
+	}
+	return false
 }
 
 func extractDeployToken(r *http.Request) string {

@@ -1,11 +1,11 @@
 # ADR-0013: Scope adapter mutation-event credentials to event publishing
 
-- **Status:** Accepted
+- **Status:** Superseded by 0016
 - **Date:** 2026-09-01
 - **Deciders:** DaKasa Platform
 - **Scope:** yggdrasil-core / adapter authentication
 - **Supersedes:** —
-- **Superseded by:** —
+- **Superseded by:** ADR-0016
 
 ## Context
 
