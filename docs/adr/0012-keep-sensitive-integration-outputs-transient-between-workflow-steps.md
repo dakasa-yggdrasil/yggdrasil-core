@@ -1,6 +1,6 @@
 # ADR-0012: Keep sensitive integration outputs transient between workflow steps
 
-- **Status:** Superseded
+- **Status:** Superseded by 0016
 - **Date:** 2026-09-01
 - **Deciders:** DaKasa Platform
 - **Scope:** yggdrasil-core / workflow execution and integration adapter contract
