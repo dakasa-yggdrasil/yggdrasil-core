@@ -97,8 +97,9 @@ type WorkflowEventPayloadFilter struct {
 
 // WorkflowInputSchemaSpec validates runtime inputs passed to a workflow run.
 type WorkflowInputSchemaSpec struct {
-	Required   []string                             `json:"required,omitempty"`
-	Properties map[string]IntegrationSchemaProperty `json:"properties,omitempty"`
+	Required             []string                             `json:"required,omitempty"`
+	Properties           map[string]IntegrationSchemaProperty `json:"properties,omitempty"`
+	AdditionalProperties *bool                                `json:"additionalProperties,omitempty"`
 }
 
 // WorkflowStepSpec defines one ordered step inside a workflow.
@@ -170,8 +171,9 @@ type RunWorkflowRequest struct {
 	Metadata map[string]any       `json:"metadata,omitempty"`
 }
 
-// WorkflowRunRecord persists one async workflow execution. The HTTP layer
-// returns this shape from GET /api/v1/workflow-runs/{id}.
+// WorkflowRunRecord persists evidence for one async workflow execution. The
+// HTTP layer returns this shape from GET /api/v1/workflow-runs/{id}; the engine
+// does not rehydrate execution from Inputs.
 type WorkflowRunRecord struct {
 	ID                uuid.UUID            `json:"id"`
 	WorkflowNamespace string               `json:"workflow_namespace"`

@@ -409,14 +409,11 @@ func processMatchedTrigger(
 
 	runID := uuid.New()
 	req := buildEventTriggerRunRequest(trigger, event)
-
-	// Persist the pending row up front so callers polling
-	// /api/v1/workflow-runs/{run_id} immediately see something. This
-	// happens on the leader-loop's path so any failure here returns
-	// loud rather than starting a goroutine that silently drops.
-	if err := repository.InsertWorkflowRun(ctx, db, runID, req.Workflow, req.Inputs, req.Metadata); err != nil {
-		return fmt.Errorf("insert workflow_run: %w", err)
+	preparedReq, err := messagecontroller.PrepareAndInsertWorkflowRun(ctx, db, runID, req)
+	if err != nil {
+		return fmt.Errorf("prepare and insert workflow_run: %w", err)
 	}
+	req = preparedReq
 
 	dispatch(ctx, db, conn, runID, req)
 	return nil

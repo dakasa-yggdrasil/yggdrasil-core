@@ -113,7 +113,7 @@ func (s *Server) dispatchAsyncWorkflowRun(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	runID, deduped, err := repository.InsertWorkflowRunIdempotent(r.Context(), s.db, uuid.New(), req.Workflow, req.Inputs, req.Metadata)
+	req, runID, deduped, err := messagecontroller.PrepareAndInsertWorkflowRunIdempotent(r.Context(), s.db, uuid.New(), req)
 	if err != nil {
 		if errors.Is(err, repository.ErrWorkflowRunIdempotencyConflict) {
 			writeJSON(w, http.StatusConflict, map[string]any{

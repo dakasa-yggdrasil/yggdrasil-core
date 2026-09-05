@@ -483,6 +483,64 @@ func TestValidateWorkflowInputsMinLengthIgnoredForNonStringTypes(t *testing.T) {
 	}
 }
 
+func TestParseWorkflowSpecPreservesAdditionalPropertiesFalse(t *testing.T) {
+	spec, err := ParseWorkflowSpec(json.RawMessage(`{
+		"input_schema": {
+			"additionalProperties": false,
+			"properties": {"declared": {"type": "string"}}
+		}
+	}`))
+	if err != nil {
+		t.Fatalf("ParseWorkflowSpec error: %v", err)
+	}
+	if spec.InputSchema.AdditionalProperties == nil {
+		t.Fatal("additionalProperties=false was discarded")
+	}
+	if *spec.InputSchema.AdditionalProperties {
+		t.Fatal("additionalProperties = true, want false")
+	}
+}
+
+func TestValidateWorkflowInputsRejectsUndeclaredWhenSchemaIsClosed(t *testing.T) {
+	additionalProperties := false
+	spec := model.WorkflowManifestSpec{
+		InputSchema: model.WorkflowInputSchemaSpec{
+			AdditionalProperties: &additionalProperties,
+			Properties: map[string]model.IntegrationSchemaProperty{
+				"declared": {Type: "string"},
+			},
+		},
+	}
+
+	err := ValidateWorkflowInputs(spec, map[string]any{
+		"declared": "ok",
+		"zeta":     "must-not-persist",
+		"alpha":    "must-not-persist",
+	})
+	if err == nil {
+		t.Fatal("expected undeclared inputs to fail")
+	}
+	if !strings.Contains(err.Error(), `["alpha" "zeta"]`) {
+		t.Fatalf("error = %q, want stable sorted undeclared field names", err)
+	}
+}
+
+func TestValidateWorkflowInputsKeepsLegacyOpenSchemaCompatibility(t *testing.T) {
+	for _, additionalProperties := range []*bool{nil, func() *bool { value := true; return &value }()} {
+		spec := model.WorkflowManifestSpec{
+			InputSchema: model.WorkflowInputSchemaSpec{
+				AdditionalProperties: additionalProperties,
+				Properties: map[string]model.IntegrationSchemaProperty{
+					"declared": {Type: "string"},
+				},
+			},
+		}
+		if err := ValidateWorkflowInputs(spec, map[string]any{"undeclared": "legacy-compatible"}); err != nil {
+			t.Fatalf("additionalProperties=%v unexpectedly rejected open-schema input: %v", additionalProperties, err)
+		}
+	}
+}
+
 // TestValidateWorkflowSpecAcceptsDispatchMode_Sync_Async pins the contract
 // of the new spec.dispatch_mode field added for the async-by-default
 // workflow migration (spec 2026-05-25-yggdrasil-async-dispatch-spec). The

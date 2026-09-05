@@ -46,9 +46,10 @@ import (
 // legit run we have (deploy-via-kustomize-source ~3.5 min). Override via
 // YGGDRASIL_WORKFLOW_RUNS_STALE_TIMEOUT_SECONDS.
 //
-// We deliberately do NOT delete rows here — they stay for audit/replay
-// and the existing manifest_purge / event_log_cleaner addons handle
-// retention separately.
+// We deliberately do NOT delete rows here — they stay as durable audit
+// evidence. The engine does not resume execution from workflow_runs.inputs;
+// replay of a sensitive run requires freshly supplied values. The existing
+// manifest_purge / event_log_cleaner addons handle retention separately.
 
 func init() {
 	Register("stale_workflow_runs_cleaner", bootstrapStaleWorkflowRunsCleaner, 50)

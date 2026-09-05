@@ -12,10 +12,10 @@ import (
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
-	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
 )
 
 const (
@@ -171,26 +171,91 @@ func RunWorkflow(
 	db *sql.DB,
 	req model.RunWorkflowRequest,
 ) (model.RunWorkflowResponse, error) {
-	req = normalizeRunWorkflowRequest(req)
-	if err := validateRunWorkflowRequest(req); err != nil {
-		return model.RunWorkflowResponse{}, err
-	}
-
-	workflowManifest, spec, err := resolveWorkflowManifestSpec(ctx, db, req.Workflow)
+	workflowManifest, spec, preparedReq, err := prepareWorkflowRun(ctx, db, req)
 	if err != nil {
 		return model.RunWorkflowResponse{}, err
 	}
 
+	return runWorkflow(ctx, conn, db, workflowManifest, spec, preparedReq)
+}
+
+// PrepareAndInsertWorkflowRun validates a workflow request before creating its
+// durable asynchronous run row. The returned request keeps merged sensitive
+// values in memory for template rendering; only a redacted copy of the
+// caller-supplied inputs reaches workflow_runs.inputs.
+func PrepareAndInsertWorkflowRun(
+	ctx context.Context,
+	db *sql.DB,
+	runID uuid.UUID,
+	req model.RunWorkflowRequest,
+) (model.RunWorkflowRequest, error) {
+	preparedReq, persistedInputs, err := prepareWorkflowRunForPersistence(ctx, db, req)
+	if err != nil {
+		return model.RunWorkflowRequest{}, err
+	}
+	if err := repository.InsertWorkflowRun(ctx, db, runID, preparedReq.Workflow, persistedInputs, preparedReq.Metadata); err != nil {
+		return model.RunWorkflowRequest{}, err
+	}
+	return preparedReq, nil
+}
+
+// PrepareAndInsertWorkflowRunIdempotent is the idempotency-key variant of
+// PrepareAndInsertWorkflowRun used by the async HTTP dispatcher.
+func PrepareAndInsertWorkflowRunIdempotent(
+	ctx context.Context,
+	db *sql.DB,
+	runID uuid.UUID,
+	req model.RunWorkflowRequest,
+) (preparedReq model.RunWorkflowRequest, persistedID uuid.UUID, deduped bool, err error) {
+	preparedReq, persistedInputs, err := prepareWorkflowRunForPersistence(ctx, db, req)
+	if err != nil {
+		return model.RunWorkflowRequest{}, uuid.Nil, false, err
+	}
+	persistedID, deduped, err = repository.InsertWorkflowRunIdempotent(ctx, db, runID, preparedReq.Workflow, persistedInputs, preparedReq.Metadata)
+	if err != nil {
+		return model.RunWorkflowRequest{}, uuid.Nil, false, err
+	}
+	return preparedReq, persistedID, deduped, nil
+}
+
+func prepareWorkflowRunForPersistence(
+	ctx context.Context,
+	db *sql.DB,
+	req model.RunWorkflowRequest,
+) (preparedReq model.RunWorkflowRequest, persistedInputs map[string]any, err error) {
+	requestedInputs := req.Inputs
+	_, spec, preparedReq, err := prepareWorkflowRun(ctx, db, req)
+	if err != nil {
+		return model.RunWorkflowRequest{}, nil, err
+	}
+	return preparedReq, redactSensitiveWorkflowInputs(spec, requestedInputs), nil
+}
+
+func prepareWorkflowRun(
+	ctx context.Context,
+	db *sql.DB,
+	req model.RunWorkflowRequest,
+) (model.Manifest, model.WorkflowManifestSpec, model.RunWorkflowRequest, error) {
+	req = normalizeRunWorkflowRequest(req)
+	if err := validateRunWorkflowRequest(req); err != nil {
+		return model.Manifest{}, model.WorkflowManifestSpec{}, model.RunWorkflowRequest{}, err
+	}
+
+	workflowManifest, spec, err := resolveWorkflowManifestSpec(ctx, db, req.Workflow)
+	if err != nil {
+		return model.Manifest{}, model.WorkflowManifestSpec{}, model.RunWorkflowRequest{}, err
+	}
+
 	if err := manifestengine.ValidateWorkflowSpec(spec); err != nil {
-		return model.RunWorkflowResponse{}, err
+		return model.Manifest{}, model.WorkflowManifestSpec{}, model.RunWorkflowRequest{}, err
 	}
 	mergedInputs := manifestengine.MergeWorkflowInputs(spec, req.Inputs)
 	if err := manifestengine.ValidateWorkflowInputs(spec, mergedInputs); err != nil {
-		return model.RunWorkflowResponse{}, err
+		return model.Manifest{}, model.WorkflowManifestSpec{}, model.RunWorkflowRequest{}, err
 	}
 	req.Inputs = mergedInputs
 
-	return runWorkflow(ctx, conn, db, workflowManifest, spec, req)
+	return workflowManifest, spec, req, nil
 }
 
 func resolveWorkflowManifestSpec(ctx context.Context, db *sql.DB, selector model.ManifestSelector) (model.Manifest, model.WorkflowManifestSpec, error) {

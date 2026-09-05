@@ -412,15 +412,16 @@ func dispatchScheduledRun(
 
 	runID := uuid.New()
 	selector := model.ManifestSelector{Namespace: namespace, Name: name}
-	if err := repository.InsertWorkflowRun(ctx, db, runID, selector, inputs, metadata); err != nil {
-		return err
-	}
-
 	req := model.RunWorkflowRequest{
 		Workflow: selector,
 		Inputs:   inputs,
 		Metadata: metadata,
 	}
+	preparedReq, err := messagecontroller.PrepareAndInsertWorkflowRun(ctx, db, runID, req)
+	if err != nil {
+		return err
+	}
+	req = preparedReq
 
 	go func() {
 		bg := context.Background()

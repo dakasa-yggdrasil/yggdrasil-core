@@ -3,9 +3,12 @@ package httpapi
 import (
 	"net/http"
 	"net/http/httptest"
+	"strings"
 	"testing"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 // TestIsAsyncWorkflowRunRequest_QueryParam verifies the route that selects
@@ -134,5 +137,53 @@ func TestResolveWorkflowRunAsync_ExplicitOptInBeatsManifestSync(t *testing.T) {
 	httpReq := httptest.NewRequest(http.MethodPost, "http://x/api/v1/workflow-runs?async=true", nil)
 	if !s.resolveWorkflowRunAsync(httpReq, req) {
 		t.Fatal("explicit ?async=true must force async even when the manifest would have chosen sync")
+	}
+}
+
+func TestDispatchAsyncWorkflowRunRejectsUndeclaredInputBeforeInsert(t *testing.T) {
+	t.Setenv("BROKER_URL", "amqp://unit-test")
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	expectWorkflowAuthorizationManifest(mock, "workflow", "closed-workflow", `{
+		"trigger":{"mode":"manual"},
+		"input_schema":{
+			"additionalProperties":false,
+			"properties":{"declared":{"type":"string"}}
+		},
+		"steps":[{
+			"id":"observe",
+			"use":{"kind":"integration","instance_ref":{"namespace":"dakasa","name":"example"},"operation":"observe_state"}
+		}]
+	}`)
+
+	server := &Server{db: db, rabbitmq: &amqp.Connection{}}
+	recorder := httptest.NewRecorder()
+	request := httptest.NewRequest(http.MethodPost, "/api/v1/workflow-runs?async=true", nil)
+	server.dispatchAsyncWorkflowRun(recorder, request, model.RunWorkflowRequest{
+		Workflow: model.ManifestSelector{Namespace: "dakasa", Name: "closed-workflow"},
+		Inputs: map[string]any{
+			"declared":   "ok",
+			"undeclared": "raw-value-must-not-appear",
+		},
+	})
+
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status = %d, want 400; body=%s", recorder.Code, recorder.Body.String())
+	}
+	if !strings.Contains(recorder.Body.String(), "must be declared") {
+		t.Fatalf("body = %s, want closed-schema validation error", recorder.Body.String())
+	}
+	if strings.Contains(recorder.Body.String(), "raw-value-must-not-appear") {
+		t.Fatalf("validation response leaked rejected input value: %s", recorder.Body.String())
+	}
+	// There is intentionally no INSERT expectation. If dispatch attempts to
+	// persist before validation, sqlmock returns an unexpected-call error and
+	// the handler cannot produce the asserted validation response.
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }
