@@ -2,6 +2,11 @@
 
 All notable changes to yggdrasil-core are documented here.
 
+## [Unreleased]
+
+### Security
+- **AMQP frame allocation is bounded before payload allocation.** `github.com/rabbitmq/amqp091-go` is upgraded from v1.10.0 to v1.13.0, the first release patched for GHSA-6c5v-hqjr-5xxp. Core continues to use `amqp.Dial`, so the library's new experimental automatic connection and topology recovery remains disabled unless explicitly configured later.
+
 ## [2.18.1] - 2026-08-29
 
 ### Security
