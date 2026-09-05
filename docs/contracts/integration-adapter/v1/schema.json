@@ -680,6 +680,7 @@
         },
         "metadata": {
           "type": "object",
+          "description": "Arbitrary caller metadata except Core-reserved workflow runtime keys supports_sensitive_output_paths, sensitive_output_sink, and sensitive_input_lease.",
           "additionalProperties": true
         },
         "integration": {

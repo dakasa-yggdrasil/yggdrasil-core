@@ -14,7 +14,7 @@ func TestLoadCapabilityNamingAllowlist_Exact(t *testing.T) {
 	if err != nil {
 		t.Fatalf("LoadCapabilityNamingAllowlist failed: %v", err)
 	}
-	for _, want := range []string{"verify_webhook_signature", "publish_message", "create_refund", "recover_webhook_destination_secret"} {
+	for _, want := range []string{"verify_webhook_signature", "publish_message", "create_refund", "recover_webhook_destination_secret", "provision_webhook_endpoint"} {
 		if !al.Allowed(want, "capability") {
 			t.Errorf("expected %q to be allowed (exact match)", want)
 		}
@@ -130,7 +130,7 @@ func TestValidateActionCatalogNaming_AggregatesWarnings(t *testing.T) {
 	al, _ := LoadCapabilityNamingAllowlist(filepath.Join("..", "config", "capability_naming_allowlist.yaml"))
 	catalog := []model.IntegrationActionDefinition{
 		{Name: "ensure_user", Category: "capability"},
-		{Name: "create_user", Category: "capability"}, // → warning, suggest ensure_user
+		{Name: "create_user", Category: "capability"},  // → warning, suggest ensure_user
 		{Name: "list_widgets", Category: "capability"}, // → warning, suggest observe_widgets (NOT allowlisted)
 		{Name: "on_member_joined_channel", Category: "reactor"},
 		{Name: "verify_webhook_signature", Category: "capability"}, // allowlisted

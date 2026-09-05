@@ -179,6 +179,10 @@ exact:
   # one-time value for immediate persistence instead of reconciling a resource.
   - recover_webhook_destination_secret
 
+  # Stripe: create-only webhook endpoint action. Normal ensure adopts or
+  # updates because the signing secret is returned only by this guarded action.
+  - provision_webhook_endpoint
+
   # ---- slack: user state / messaging actions ----
   - apply_user
   - invite_to_workspace

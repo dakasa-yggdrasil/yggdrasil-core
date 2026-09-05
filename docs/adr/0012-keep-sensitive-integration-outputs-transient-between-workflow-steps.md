@@ -1,11 +1,11 @@
 # ADR-0012: Keep sensitive integration outputs transient between workflow steps
 
-- **Status:** Accepted
+- **Status:** Superseded
 - **Date:** 2026-09-01
 - **Deciders:** DaKasa Platform
 - **Scope:** yggdrasil-core / workflow execution and integration adapter contract
 - **Supersedes:** —
-- **Superseded by:** —
+- **Superseded by:** [ADR-0016](0016-constrain-provider-generated-secrets-to-one-step-private-leases.md)
 
 ## Context
 

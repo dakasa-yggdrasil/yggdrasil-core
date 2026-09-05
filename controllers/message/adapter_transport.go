@@ -12,12 +12,25 @@ import (
 	"strings"
 
 	contractdocs "github.com/dakasa-yggdrasil/yggdrasil-core/docs/contracts"
-	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
 )
 
 // ErrAdapterTransportUnavailable is returned when the configured adapter transport cannot be reached.
 var ErrAdapterTransportUnavailable = errors.New("adapter transport is unavailable")
+
+var errAdapterCallFailed = errors.New("adapter_call_failed")
+
+type adapterCallPolicy struct {
+	detailFreeErrors bool
+}
+
+func (policy adapterCallPolicy) sanitizeError(err error) error {
+	if err != nil && policy.detailFreeErrors {
+		return errAdapterCallFailed
+	}
+	return err
+}
 
 // AdapterTransportClient executes one adapter contract call through the transport declared by integration_type.
 type AdapterTransportClient interface {
@@ -44,6 +57,10 @@ type adapterTransportClient struct {
 // integrations still dial adapter URLs directly (they don't route
 // through the core's rpc transport).
 func NewAdapterTransportClient(transport rpc.Transport) AdapterTransportClient {
+	return newAdapterTransportClient(transport)
+}
+
+func newAdapterTransportClient(transport rpc.Transport) *adapterTransportClient {
 	return &adapterTransportClient{
 		rpcTransport: transport,
 		httpClient:   &http.Client{},
@@ -59,7 +76,23 @@ func (c *adapterTransportClient) Call(
 	request any,
 	response any,
 ) error {
+	return c.callWithPolicy(ctx, contract, typeSpec, instanceSpec, capability, request, response, adapterCallPolicy{})
+}
+
+func (c *adapterTransportClient) callWithPolicy(
+	ctx context.Context,
+	contract rpcContractSpec,
+	typeSpec model.IntegrationTypeManifestSpec,
+	instanceSpec model.IntegrationInstanceManifestSpec,
+	capability string,
+	request any,
+	response any,
+	policy adapterCallPolicy,
+) error {
 	if err := contractdocs.Validate(contract.Family, contract.RequestDef, request); err != nil {
+		if policy.detailFreeErrors {
+			return policy.sanitizeError(err)
+		}
 		return fmt.Errorf("validate %s request: %w", contract.Label, err)
 	}
 
@@ -71,18 +104,19 @@ func (c *adapterTransportClient) Call(
 			return fmt.Errorf("adapter queue for capability %q is required", capability)
 		}
 		if c.rpcTransport == nil {
-			return fmt.Errorf("%w: rpc transport is not configured", ErrAdapterTransportUnavailable)
+			err := fmt.Errorf("%w: rpc transport is not configured", ErrAdapterTransportUnavailable)
+			return policy.sanitizeError(err)
 		}
-		if err := callRPC(ctx, c.rpcTransport, queue, request, response); err != nil {
-			return err
+		if err := callRPCWithPolicy(ctx, c.rpcTransport, queue, request, response, policy); err != nil {
+			return policy.sanitizeError(err)
 		}
 	case "http_json":
 		endpoint := adapterEndpointForCapability(typeSpec.Adapter.Endpoints, capability)
 		if endpoint == "" {
 			return fmt.Errorf("adapter endpoint for capability %q is required", capability)
 		}
-		if err := c.callHTTPJSON(ctx, endpoint, instanceSpec, request, response); err != nil {
-			return err
+		if err := c.callHTTPJSONWithPolicy(ctx, endpoint, instanceSpec, request, response, policy); err != nil {
+			return policy.sanitizeError(err)
 		}
 	default:
 		return fmt.Errorf("integration transport %q is unsupported", typeSpec.Adapter.Transport)
@@ -90,52 +124,71 @@ func (c *adapterTransportClient) Call(
 
 	if response != nil && contract.ResponseDef != "" {
 		if err := contractdocs.Validate(contract.Family, contract.ResponseDef, response); err != nil {
+			if policy.detailFreeErrors {
+				return policy.sanitizeError(err)
+			}
 			return fmt.Errorf("validate %s response: %w", contract.Label, err)
 		}
 	}
 	return nil
 }
 
-func (c *adapterTransportClient) callHTTPJSON(
+func (c *adapterTransportClient) callHTTPJSONWithPolicy(
 	ctx context.Context,
 	endpoint string,
 	instanceSpec model.IntegrationInstanceManifestSpec,
 	request any,
 	response any,
+	policy adapterCallPolicy,
 ) error {
 	baseURL, err := adapterBaseURL(instanceSpec)
 	if err != nil {
-		return err
+		return policy.sanitizeError(err)
 	}
 
 	targetURL, err := resolveAdapterEndpointURL(baseURL, endpoint)
 	if err != nil {
-		return err
+		return policy.sanitizeError(err)
 	}
 
 	body, err := json.Marshal(request)
 	if err != nil {
+		if policy.detailFreeErrors {
+			return policy.sanitizeError(err)
+		}
 		return fmt.Errorf("marshal http adapter request: %w", err)
 	}
 
 	httpReq, err := http.NewRequestWithContext(ctx, http.MethodPost, targetURL, bytes.NewReader(body))
 	if err != nil {
+		if policy.detailFreeErrors {
+			return policy.sanitizeError(err)
+		}
 		return fmt.Errorf("build http adapter request: %w", err)
 	}
 	httpReq.Header.Set("Content-Type", "application/json")
 
 	httpResp, err := c.httpClient.Do(httpReq)
 	if err != nil {
+		if policy.detailFreeErrors {
+			return policy.sanitizeError(err)
+		}
 		return fmt.Errorf("%w: call http adapter endpoint %q: %v", ErrAdapterTransportUnavailable, targetURL, err)
 	}
 	defer func() { _ = httpResp.Body.Close() }()
 
 	responseBody, err := io.ReadAll(httpResp.Body)
 	if err != nil {
+		if policy.detailFreeErrors {
+			return policy.sanitizeError(err)
+		}
 		return fmt.Errorf("read http adapter response: %w", err)
 	}
 
 	if httpResp.StatusCode >= http.StatusBadRequest {
+		if policy.detailFreeErrors {
+			return policy.sanitizeError(errors.New("http adapter returned non-success status"))
+		}
 		message := strings.TrimSpace(string(responseBody))
 		if message == "" {
 			message = http.StatusText(httpResp.StatusCode)
@@ -149,9 +202,12 @@ func (c *adapterTransportClient) callHTTPJSON(
 	// envelope the adapter actually produced.
 	inner, err := unwrapSDKHTTPEnvelope(responseBody)
 	if err != nil {
+		if policy.detailFreeErrors {
+			return policy.sanitizeError(err)
+		}
 		return fmt.Errorf("unwrap adapter http envelope: %w", err)
 	}
-	return decodeRPCBody(inner, response)
+	return decodeRPCBodyWithPolicy(inner, response, policy)
 }
 
 // unwrapSDKHTTPEnvelope peels the {content_type, body} wrapper that
