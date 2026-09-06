@@ -60,6 +60,11 @@ type Diff struct {
 //     whenever set so the cron sync does not blank operator-declared
 //     branding on every tick.
 //
+//   - CredentialPolicy. Credential sourcing is declared in the registered
+//     manifest and is deliberately absent from the runtime Describe contract.
+//     Preserve a non-empty current policy so a sync cannot silently fall back
+//     to compatibility defaults such as inline credentials.
+//
 // Other fields come from `live` verbatim. If new operator-owned fields
 // are introduced, extend this function (and document it in the spec
 // at docs/superpowers/specs/2026-05-16-sync-manifest-from-describe-design.md
@@ -92,6 +97,13 @@ func MergeSpec(current, live model.IntegrationTypeManifestSpec) (model.Integrati
 	}
 	if current.Icon != nil {
 		out.Icon = current.Icon
+	}
+
+	// CredentialPolicy is manifest-owned and not reported by Describe(). Keep
+	// the declared policy while still allowing a future live value to seed an
+	// integration type that has no policy yet.
+	if current.CredentialPolicy != (model.IntegrationCredentialPolicySpec{}) {
+		out.CredentialPolicy = current.CredentialPolicy
 	}
 
 	return out, computeDiff(current, out)

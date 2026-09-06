@@ -127,6 +127,23 @@ func TestSyncIntegrationType_AppliesFamilyContractFromDescribe(t *testing.T) {
 	assert.Equal(t, []string{"ensure_secret", "observe_secrets"}, applied.ImplementedOperations)
 }
 
+func TestSyncIntegrationType_PreservesManifestCredentialPolicyWhenDescribeOmitsIt(t *testing.T) {
+	f := newFakeWithHappyPath()
+	f.typeSpec.CredentialPolicy = model.IntegrationCredentialPolicySpec{Source: "secret_ref"}
+
+	err := SyncIntegrationType(context.Background(), f, f.typeManifest.ID)
+	require.NoError(t, err)
+	require.NotNil(t, f.appliedDoc, "expected live contract changes to be applied")
+
+	var applied model.IntegrationTypeManifestSpec
+	require.NoError(t, json.Unmarshal(f.appliedDoc.Spec, &applied))
+	assert.Equal(t, model.IntegrationCredentialPolicySpec{Source: "secret_ref"}, applied.CredentialPolicy)
+	assert.Equal(t, "1.2.0", applied.Adapter.Version,
+		"runtime adapter contract must still update from Describe")
+	assert.Equal(t, []model.IntegrationActionDefinition{{Name: "new_op"}}, applied.ActionCatalog,
+		"runtime action catalog must still update from Describe")
+}
+
 func TestSyncIntegrationType_NoInstances_EmitsSkippedNoInstances(t *testing.T) {
 	f := newFakeWithHappyPath()
 	f.instances = nil
