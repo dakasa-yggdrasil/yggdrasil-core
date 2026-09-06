@@ -429,6 +429,15 @@
         "provider": {
           "type": "string"
         },
+        "family_ref": {
+          "$ref": "#/$defs/manifestSelector"
+        },
+        "implemented_operations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "adapter": {
           "$ref": "#/$defs/integrationAdapterSpec"
         },
@@ -574,6 +583,15 @@
       "properties": {
         "provider": {
           "type": "string"
+        },
+        "family_ref": {
+          "$ref": "#/$defs/manifestSelector"
+        },
+        "implemented_operations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
         },
         "adapter": {
           "$ref": "#/$defs/integrationAdapterSpec"

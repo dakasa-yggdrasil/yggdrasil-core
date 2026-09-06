@@ -25,6 +25,32 @@ func TestValidateIntegrationExecuteContract(t *testing.T) {
 	}
 }
 
+func TestValidateIntegrationDescribeContractCarriesFamilyFields(t *testing.T) {
+	spec := sampleIntegrationTypeSpec()
+	response := model.AdapterDescribeResponse{
+		Provider: spec.Provider,
+		FamilyRef: &model.ManifestSelector{
+			Namespace: "dakasa",
+			Name:      "secrets-management",
+		},
+		ImplementedOperations: []string{"ensure_secret", "observe_secrets"},
+		Adapter:               spec.Adapter,
+		Capabilities:          spec.Capabilities,
+		CredentialSchema:      spec.CredentialSchema,
+		InstanceSchema:        spec.InstanceSchema,
+		ResourceTypes:         spec.ResourceTypes,
+		ActionCatalog:         spec.ActionCatalog,
+		Discovery:             spec.Discovery,
+		Normalization:         spec.Normalization,
+		Execution:             spec.Execution,
+		Extensions:            spec.Extensions,
+	}
+
+	if err := Validate(FamilyIntegrationAdapterV1, "adapterDescribeResponse", response); err != nil {
+		t.Fatalf("Validate(adapterDescribeResponse) error = %v", err)
+	}
+}
+
 func TestValidateProductInstallationContracts(t *testing.T) {
 	req := model.AdapterGenerateInstallationRequest{
 		Operation:  "generate_installation",
