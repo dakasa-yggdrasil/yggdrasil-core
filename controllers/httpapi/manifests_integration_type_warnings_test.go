@@ -319,17 +319,19 @@ func TestHandleManifestCreate_HardFailRejectsNonConformant(t *testing.T) {
 	}
 }
 
-// TestHandleManifestCreate_HardFailLetsConformantThrough verifies the
-// Phase 2 path does not introduce false rejections: a manifest whose
-// action_catalog is fully canonical MUST still receive HTTP 201, exactly
-// like the warn-only case.  This catches "off-by-one" regressions where
-// the hard-fail branch fires on empty warnings slices.
-func TestHandleManifestCreate_HardFailLetsConformantThrough(t *testing.T) {
+// TestHandleManifestCreate_HardFailLetsCanonicalAndAllowlistedThrough verifies
+// the Phase 2 path does not introduce false rejections: a manifest whose
+// action_catalog combines canonical names with an exact action-shaped
+// exemption MUST still receive HTTP 201, exactly like the warn-only case.
+// This also catches "off-by-one" regressions where the hard-fail branch fires
+// on empty warnings slices.
+func TestHandleManifestCreate_HardFailLetsCanonicalAndAllowlistedThrough(t *testing.T) {
 	srv, mock := newWarningsTestServer(t)
 	srv.validatorPhase = ValidatorPhaseHardFail
 
-	// Manifest body with only canonical names — must pass even under
-	// hard-fail.
+	// pod_exec is deliberately non-idempotent and has no durable provider-side
+	// resource identity, so the contract requires an exact action exemption
+	// rather than a misleading ensure_/observe_/destroy_ rename.
 	body := map[string]any{
 		"name":      "grafana-conformant",
 		"namespace": "default",
@@ -340,12 +342,13 @@ func TestHandleManifestCreate_HardFailLetsConformantThrough(t *testing.T) {
 			"credential_schema": map[string]any{"mode": "inline"},
 			"instance_schema":   map[string]any{"mode": "inline"},
 			"resource_types": []map[string]any{
-				{"name": "user", "canonical_prefix": "thirdparty.grafana.user", "identity_template": "user.{id}", "default_actions": []string{"ensure_user", "observe_users", "destroy_user"}},
+				{"name": "user", "canonical_prefix": "thirdparty.grafana.user", "identity_template": "user.{id}", "default_actions": []string{"ensure_user", "observe_users", "destroy_user", "pod_exec"}},
 			},
 			"action_catalog": []map[string]any{
 				{"name": "ensure_user", "category": "capability", "resource_types": []string{"user"}, "idempotent": true},
 				{"name": "observe_users", "category": "capability", "resource_types": []string{"user"}, "idempotent": true},
 				{"name": "destroy_user", "category": "capability", "resource_types": []string{"user"}, "idempotent": true},
+				{"name": "pod_exec", "category": "capability", "resource_types": []string{"user"}, "idempotent": false},
 				{"name": "on_user_provisioned", "category": "reactor", "resource_types": []string{"user"}, "idempotent": true},
 			},
 			"discovery":     map[string]any{"mode": "push", "cursor": "none"},
@@ -418,8 +421,8 @@ func TestResolveValidatorPhase(t *testing.T) {
 		{env: "hard-fail", want: ValidatorPhaseHardFail},
 		{env: "HARD-FAIL", want: ValidatorPhaseHardFail},
 		{env: "  hard-fail  ", want: ValidatorPhaseHardFail},
-		{env: "phase-2", want: ValidatorPhaseWarnOnly},   // unknown → safe default
-		{env: "hardfail", want: ValidatorPhaseWarnOnly},  // typo → safe default
+		{env: "phase-2", want: ValidatorPhaseWarnOnly},  // unknown → safe default
+		{env: "hardfail", want: ValidatorPhaseWarnOnly}, // typo → safe default
 		{env: "garbage", want: ValidatorPhaseWarnOnly},
 	}
 	for _, tc := range cases {
