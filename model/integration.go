@@ -299,6 +299,11 @@ type AdapterDescribeRequest struct {
 
 // AdapterDescribeResponse is the normalized response returned by one adapter implementation.
 //
+// `FamilyRef` and `ImplementedOperations` let a provider advertise the
+// integration_family contract it implements. Manifest sync carries the pair
+// into IntegrationTypeManifestSpec so family-targeted workflow dispatch keeps
+// resolving after a live adapter reconciliation.
+//
 // `Reactors` is optional — when populated, the adapter declares which canonical
 // lifecycle events it subscribes to (event_type → capability mapping). On
 // initial manifest registration / first sync, manifest_sync adopts the
@@ -306,18 +311,20 @@ type AdapterDescribeRequest struct {
 // set via the manifest catalog, the operator's value wins (see
 // `internal/manifestsync/merge.go::MergeSpec`).
 type AdapterDescribeResponse struct {
-	Provider         string                        `json:"provider"`
-	Adapter          IntegrationAdapterSpec        `json:"adapter"`
-	Capabilities     []string                      `json:"capabilities"`
-	CredentialSchema IntegrationSchemaSpec         `json:"credential_schema"`
-	InstanceSchema   IntegrationSchemaSpec         `json:"instance_schema"`
-	ResourceTypes    []IntegrationResourceType     `json:"resource_types"`
-	ActionCatalog    []IntegrationActionDefinition `json:"action_catalog,omitempty"`
-	Discovery        IntegrationDiscoverySpec      `json:"discovery"`
-	Normalization    IntegrationNormalizationSpec  `json:"normalization"`
-	Execution        IntegrationExecutionSpec      `json:"execution"`
-	Extensions       IntegrationExtensionsSpec     `json:"extensions"`
-	Reactors         []IntegrationTypeReactor      `json:"reactors,omitempty"`
+	Provider              string                        `json:"provider"`
+	FamilyRef             *ManifestSelector             `json:"family_ref,omitempty"`
+	ImplementedOperations []string                      `json:"implemented_operations,omitempty"`
+	Adapter               IntegrationAdapterSpec        `json:"adapter"`
+	Capabilities          []string                      `json:"capabilities"`
+	CredentialSchema      IntegrationSchemaSpec         `json:"credential_schema"`
+	InstanceSchema        IntegrationSchemaSpec         `json:"instance_schema"`
+	ResourceTypes         []IntegrationResourceType     `json:"resource_types"`
+	ActionCatalog         []IntegrationActionDefinition `json:"action_catalog,omitempty"`
+	Discovery             IntegrationDiscoverySpec      `json:"discovery"`
+	Normalization         IntegrationNormalizationSpec  `json:"normalization"`
+	Execution             IntegrationExecutionSpec      `json:"execution"`
+	Extensions            IntegrationExtensionsSpec     `json:"extensions"`
+	Reactors              []IntegrationTypeReactor      `json:"reactors,omitempty"`
 }
 
 // IntegrationTypeReactor describes one event-driven reaction configuration.

@@ -64,6 +64,23 @@ func TestMergeSpec_CapabilitiesChangedFlag(t *testing.T) {
 	assert.True(t, diff.CapabilitiesChanged)
 }
 
+func TestMergeSpec_CarriesLiveFamilyContract(t *testing.T) {
+	current := model.IntegrationTypeManifestSpec{}
+	live := model.IntegrationTypeManifestSpec{
+		FamilyRef: &model.ManifestSelector{
+			Namespace: "dakasa",
+			Name:      "secrets-management",
+		},
+		ImplementedOperations: []string{"ensure_secret", "observe_secrets"},
+	}
+
+	got, _ := MergeSpec(current, live)
+	require.NotNil(t, got.FamilyRef)
+	assert.Equal(t, "dakasa", got.FamilyRef.Namespace)
+	assert.Equal(t, "secrets-management", got.FamilyRef.Name)
+	assert.Equal(t, []string{"ensure_secret", "observe_secrets"}, got.ImplementedOperations)
+}
+
 func TestMergeSpec_UnionsOperatorAndLiveReactors(t *testing.T) {
 	// UNION semantics (since 2026-06-27): operator-declared reactors no
 	// longer REPLACE the adapter's set; they are unioned with it. The

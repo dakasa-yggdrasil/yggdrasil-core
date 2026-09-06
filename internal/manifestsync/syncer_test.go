@@ -2,6 +2,7 @@ package manifestsync
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -104,6 +105,26 @@ func TestSyncIntegrationType_HappyPath_AppliesAndEmitsSynced(t *testing.T) {
 	assert.Equal(t, "integration_type.synced", f.emittedType)
 	assert.EqualValues(t, 7, f.emittedPayload["from_version"])
 	assert.EqualValues(t, 8, f.emittedPayload["to_version"])
+}
+
+func TestSyncIntegrationType_AppliesFamilyContractFromDescribe(t *testing.T) {
+	f := newFakeWithHappyPath()
+	f.describeSpec.FamilyRef = &model.ManifestSelector{
+		Namespace: "dakasa",
+		Name:      "secrets-management",
+	}
+	f.describeSpec.ImplementedOperations = []string{"ensure_secret", "observe_secrets"}
+
+	err := SyncIntegrationType(context.Background(), f, f.typeManifest.ID)
+	require.NoError(t, err)
+	require.NotNil(t, f.appliedDoc, "expected family-aware manifest version applied")
+
+	var applied model.IntegrationTypeManifestSpec
+	require.NoError(t, json.Unmarshal(f.appliedDoc.Spec, &applied))
+	require.NotNil(t, applied.FamilyRef)
+	assert.Equal(t, "dakasa", applied.FamilyRef.Namespace)
+	assert.Equal(t, "secrets-management", applied.FamilyRef.Name)
+	assert.Equal(t, []string{"ensure_secret", "observe_secrets"}, applied.ImplementedOperations)
 }
 
 func TestSyncIntegrationType_NoInstances_EmitsSkippedNoInstances(t *testing.T) {
