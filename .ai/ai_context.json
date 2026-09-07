@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-09-05T06:00:37-03:00",
+  "generated_at": "2026-09-06T21:20:50-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 597,
+    ".go": 600,
     ".json": 143,
     ".py": 1,
     ".sql": 51,
@@ -11,8 +11,8 @@
     ".yml": 21
   },
   "provenance": {
-    "commit": "2dab0c1fcdbb8117a218cf78f4f59ce56cdd59ec",
-    "dirty": false,
+    "commit": "17e0f3dc3d4ade90f3ef24bb877b5bd314e42a44",
+    "dirty": true,
     "files": [
       {
         "path": ".dakasa/service-config.json",
@@ -75,7 +75,7 @@
     {
       "path": "model",
       "files": 55,
-      "kb": 208
+      "kb": 209
     },
     {
       "path": "db/migrations",
@@ -84,8 +84,8 @@
     },
     {
       "path": "controllers/message",
-      "files": 43,
-      "kb": 410
+      "files": 46,
+      "kb": 483
     },
     {
       "path": "addons",
@@ -160,12 +160,12 @@
       "kb": 62
     },
     {
-      "path": "controllers/httpapi/auth.go",
-      "kb": 47
+      "path": "controllers/message/workflows.go",
+      "kb": 50
     },
     {
-      "path": "controllers/message/workflows.go",
-      "kb": 46
+      "path": "controllers/httpapi/auth.go",
+      "kb": 47
     }
   ],
   "contracts": {
