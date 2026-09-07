@@ -38,8 +38,8 @@ func TestRedactSensitiveWorkflowStepResultRedactsDeclaredPathsWithoutMutatingExe
 		t.Fatalf("redaction scope = %v, want paths", got)
 	}
 
-	// The workflow engine must retain the original value in memory so the next
-	// step can persist it into the configured secret store.
+	// Redaction remains a pure copy operation. The workflow engine stores only the
+	// returned redacted copy; lease extraction owns the short-lived original.
 	originalOutput := original.Metadata["output"].(map[string]any)
 	if got := originalOutput["secret_shared_key"]; got != "one-time-secret" {
 		t.Fatalf("execution result was mutated: got %v", got)

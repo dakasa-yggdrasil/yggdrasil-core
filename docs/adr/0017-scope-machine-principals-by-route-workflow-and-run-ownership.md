@@ -1,4 +1,4 @@
-# ADR-0016: Scope machine principals by route, workflow, and run ownership
+# ADR-0017: Scope machine principals by route, workflow, and run ownership
 
 - **Status:** Accepted
 - **Date:** 2026-09-05

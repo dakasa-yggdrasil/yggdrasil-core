@@ -429,6 +429,15 @@
         "provider": {
           "type": "string"
         },
+        "family_ref": {
+          "$ref": "#/$defs/manifestSelector"
+        },
+        "implemented_operations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "adapter": {
           "$ref": "#/$defs/integrationAdapterSpec"
         },
@@ -575,6 +584,15 @@
         "provider": {
           "type": "string"
         },
+        "family_ref": {
+          "$ref": "#/$defs/manifestSelector"
+        },
+        "implemented_operations": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
         "adapter": {
           "$ref": "#/$defs/integrationAdapterSpec"
         },
@@ -680,6 +698,7 @@
         },
         "metadata": {
           "type": "object",
+          "description": "Arbitrary caller metadata except Core-reserved workflow runtime keys supports_sensitive_output_paths, sensitive_output_sink, and sensitive_input_lease.",
           "additionalProperties": true
         },
         "integration": {

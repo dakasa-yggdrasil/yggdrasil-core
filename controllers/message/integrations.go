@@ -11,10 +11,10 @@ import (
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
-	amqp "github.com/rabbitmq/amqp091-go"
-	"go.uber.org/zap"
 	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
 	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
+	"go.uber.org/zap"
 )
 
 const (
@@ -251,6 +251,47 @@ func executeIntegrationThroughResolved(
 	typeSpec model.IntegrationTypeManifestSpec,
 	timeoutOverride time.Duration,
 ) (model.ExecuteIntegrationResponse, error) {
+	return executeIntegrationThroughResolvedWithPolicy(
+		ctx,
+		conn,
+		req,
+		instanceManifest,
+		instanceSpec,
+		typeManifest,
+		typeSpec,
+		timeoutOverride,
+		integrationExecutionPolicy{},
+	)
+}
+
+type integrationExecutionPolicy struct {
+	detailFreeErrors        bool
+	safeError               error
+	allowSensitiveOutput    bool
+	requireExplicitResponse bool
+}
+
+func (policy integrationExecutionPolicy) sanitizeError(err error) error {
+	if err != nil && policy.detailFreeErrors {
+		if policy.safeError != nil {
+			return policy.safeError
+		}
+		return errSensitiveOutputSink
+	}
+	return err
+}
+
+func executeIntegrationThroughResolvedWithPolicy(
+	ctx context.Context,
+	conn *amqp.Connection,
+	req model.ExecuteIntegrationRequest,
+	instanceManifest model.Manifest,
+	instanceSpec model.IntegrationInstanceManifestSpec,
+	typeManifest model.Manifest,
+	typeSpec model.IntegrationTypeManifestSpec,
+	timeoutOverride time.Duration,
+	policy integrationExecutionPolicy,
+) (model.ExecuteIntegrationResponse, error) {
 	timeout := defaultWorkflowStepTimeout
 	if typeSpec.Adapter.TimeoutSeconds > 0 {
 		timeout = time.Duration(typeSpec.Adapter.TimeoutSeconds) * time.Second
@@ -277,20 +318,50 @@ func executeIntegrationThroughResolved(
 	}
 
 	var response model.AdapterExecuteIntegrationResponse
-	transport := NewAdapterTransportClient(rpcamqp.New(conn))
-	if err := transport.Call(rpcCtx, integrationExecuteContract, typeSpec, instanceSpec, "execute", request, &response); err != nil {
+	transport := newAdapterTransportClient(rpcamqp.New(conn))
+	if err := transport.callWithPolicy(
+		rpcCtx,
+		integrationExecuteContract,
+		typeSpec,
+		instanceSpec,
+		"execute",
+		request,
+		&response,
+		adapterCallPolicy{detailFreeErrors: policy.detailFreeErrors},
+	); err != nil {
+		if policy.detailFreeErrors {
+			return model.ExecuteIntegrationResponse{}, policy.sanitizeError(err)
+		}
 		return model.ExecuteIntegrationResponse{}, fmt.Errorf("call integration execute transport %q: %w", typeSpec.Adapter.Transport, err)
+	}
+	if _, declared := response.Metadata["sensitive_output_paths"]; declared && !policy.allowSensitiveOutput {
+		return model.ExecuteIntegrationResponse{}, errSensitiveOutputContract
 	}
 
 	if operation := strings.TrimSpace(response.Operation); operation != "" && operation != req.Operation {
-		return model.ExecuteIntegrationResponse{}, fmt.Errorf("unexpected adapter operation %q", response.Operation)
+		err := fmt.Errorf("unexpected adapter operation %q", response.Operation)
+		if policy.detailFreeErrors {
+			return model.ExecuteIntegrationResponse{}, policy.sanitizeError(err)
+		}
+		return model.ExecuteIntegrationResponse{}, err
+	} else if policy.requireExplicitResponse && operation == "" {
+		return model.ExecuteIntegrationResponse{}, policy.sanitizeError(errors.New("adapter response operation is required"))
 	}
 	if capability := strings.TrimSpace(response.Capability); capability != "" && capability != req.Capability {
-		return model.ExecuteIntegrationResponse{}, fmt.Errorf("unexpected adapter capability %q", response.Capability)
+		err := fmt.Errorf("unexpected adapter capability %q", response.Capability)
+		if policy.detailFreeErrors {
+			return model.ExecuteIntegrationResponse{}, policy.sanitizeError(err)
+		}
+		return model.ExecuteIntegrationResponse{}, err
+	} else if policy.requireExplicitResponse && capability == "" {
+		return model.ExecuteIntegrationResponse{}, policy.sanitizeError(errors.New("adapter response capability is required"))
 	}
 
 	status := strings.TrimSpace(response.Status)
 	if status == "" {
+		if policy.requireExplicitResponse {
+			return model.ExecuteIntegrationResponse{}, policy.sanitizeError(errors.New("adapter response status is required"))
+		}
 		status = "succeeded"
 	}
 
@@ -333,6 +404,9 @@ func validateExecuteIntegrationRequest(req model.ExecuteIntegrationRequest) erro
 	}
 	if strings.TrimSpace(req.Operation) == "" && strings.TrimSpace(req.Capability) == "" {
 		return fmt.Errorf("integration operation or capability is required")
+	}
+	if err := validateReservedIntegrationMetadata(req.Metadata); err != nil {
+		return err
 	}
 	return nil
 }

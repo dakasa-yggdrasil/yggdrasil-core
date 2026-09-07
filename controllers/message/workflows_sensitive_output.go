@@ -10,9 +10,9 @@ import (
 const redactedWorkflowOutputValue = "[REDACTED]"
 
 // redactSensitiveWorkflowStepResult removes adapter-declared one-time secrets
-// from every durable or externally returned workflow representation while the
-// original result remains available in the in-memory execution context for a
-// following secret-store step.
+// from every durable, externally returned, or general workflow-context
+// representation. The one-step lease path keeps the original value only in its
+// private per-run lease object.
 //
 // Adapters declare paths relative to metadata.output using
 // metadata.sensitive_output_paths. Paths may be dot-delimited or JSON Pointer

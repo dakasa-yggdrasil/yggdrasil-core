@@ -64,6 +64,39 @@ func TestMergeSpec_CapabilitiesChangedFlag(t *testing.T) {
 	assert.True(t, diff.CapabilitiesChanged)
 }
 
+func TestMergeSpec_CarriesLiveFamilyContract(t *testing.T) {
+	current := model.IntegrationTypeManifestSpec{}
+	live := model.IntegrationTypeManifestSpec{
+		FamilyRef: &model.ManifestSelector{
+			Namespace: "dakasa",
+			Name:      "secrets-management",
+		},
+		ImplementedOperations: []string{"ensure_secret", "observe_secrets"},
+	}
+
+	got, _ := MergeSpec(current, live)
+	require.NotNil(t, got.FamilyRef)
+	assert.Equal(t, "dakasa", got.FamilyRef.Namespace)
+	assert.Equal(t, "secrets-management", got.FamilyRef.Name)
+	assert.Equal(t, []string{"ensure_secret", "observe_secrets"}, got.ImplementedOperations)
+}
+
+func TestMergeSpec_PreservesManifestCredentialPolicyWhenDescribeOmitsIt(t *testing.T) {
+	current := model.IntegrationTypeManifestSpec{
+		CredentialPolicy: model.IntegrationCredentialPolicySpec{Source: "secret_ref"},
+		ActionCatalog:    []model.IntegrationActionDefinition{{Name: "old_op"}},
+	}
+	live := model.IntegrationTypeManifestSpec{
+		ActionCatalog: []model.IntegrationActionDefinition{{Name: "new_op"}},
+	}
+
+	got, _ := MergeSpec(current, live)
+
+	assert.Equal(t, model.IntegrationCredentialPolicySpec{Source: "secret_ref"}, got.CredentialPolicy)
+	assert.Equal(t, []model.IntegrationActionDefinition{{Name: "new_op"}}, got.ActionCatalog,
+		"runtime-owned contract fields must still come from Describe")
+}
+
 func TestMergeSpec_UnionsOperatorAndLiveReactors(t *testing.T) {
 	// UNION semantics (since 2026-06-27): operator-declared reactors no
 	// longer REPLACE the adapter's set; they are unioned with it. The

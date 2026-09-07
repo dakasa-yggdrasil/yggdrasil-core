@@ -1,4 +1,4 @@
-# ADR-0017: Enforce workflow string pattern and maximum length at ingress
+# ADR-0018: Enforce workflow string pattern and maximum length at ingress
 
 - **Status:** Accepted
 - **Date:** 2026-09-05
@@ -58,4 +58,4 @@ a run is persisted or dispatched.
 ## Related
 
 - ADR-0015 (validate and redact workflow inputs before async persistence)
-- ADR-0016 (scope machine principals by route, workflow, and run ownership)
+- ADR-0017 (scope machine principals by route, workflow, and run ownership)

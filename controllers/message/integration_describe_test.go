@@ -254,3 +254,28 @@ func TestIntegrationTypeSpecFromDescribeResponse_CarriesReactors(t *testing.T) {
 		t.Fatalf("expected capability=on_collaborator_session_terminated, got %q", spec.Reactors[0].Capability)
 	}
 }
+
+func TestIntegrationTypeSpecFromDescribeResponse_CarriesFamilyContract(t *testing.T) {
+	response := model.AdapterDescribeResponse{
+		Provider: "aws-secrets-manager",
+		FamilyRef: &model.ManifestSelector{
+			Namespace: "dakasa",
+			Name:      "secrets-management",
+		},
+		ImplementedOperations: []string{"ensure_secret", "observe_secrets"},
+	}
+
+	spec := integrationTypeSpecFromDescribeResponse(response)
+	if spec.FamilyRef == nil {
+		t.Fatal("expected family_ref in derived spec")
+	}
+	if spec.FamilyRef.Namespace != "dakasa" || spec.FamilyRef.Name != "secrets-management" {
+		t.Fatalf("unexpected family_ref in derived spec: %#v", spec.FamilyRef)
+	}
+	if len(spec.ImplementedOperations) != 2 {
+		t.Fatalf("expected 2 implemented_operations in derived spec, got %d", len(spec.ImplementedOperations))
+	}
+	if spec.ImplementedOperations[0] != "ensure_secret" || spec.ImplementedOperations[1] != "observe_secrets" {
+		t.Fatalf("unexpected implemented_operations in derived spec: %#v", spec.ImplementedOperations)
+	}
+}
