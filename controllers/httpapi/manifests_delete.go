@@ -18,11 +18,10 @@ import (
 // (soft absent/false) hard-deletes every such row from the manifests
 // table.
 //
-// Auth: deferred to authorizeWorkflowRunRequest, same env-token guard
-// that protects POST /api/v1/workflow-runs and POST /api/v1/events. When
-// YGGDRASIL_WORKFLOW_RUN_TOKEN is unset (dev / tests) the endpoint is
-// open — same convention as those neighbours so adopters don't need to
-// learn a new auth flow for a destructive op.
+// Auth: a verified console session authorizes production use. Workflow and
+// event credentials never authorize destructive manifest operations. The
+// credential-free non-production posture retains the local-development
+// allow-all convention.
 //
 // Idempotency: a request that targets an already-absent id returns 200
 // with {"deleted": true, "already_absent": true}. This matches the
@@ -33,9 +32,8 @@ import (
 // audit row keyed on action=manifest.delete so operators can replay
 // what was removed and by whom from the audit_log table.
 func (s *Server) handleManifestDelete(w http.ResponseWriter, r *http.Request) {
-	// Auth gate: accept either YGGDRASIL_WORKFLOW_RUN_TOKEN (workflow caller)
-	// or a valid console session — matches the POST /api/v1/manifests
-	// auth posture (security audit 2026-05-27 A1).
+	// Auth gate matches POST /api/v1/manifests: console session in provisioned
+	// environments, with no workflow-machine shortcut.
 	if !s.manifestWriteAuthorized(r) {
 		writeMappedError(w, errWorkflowRunUnauthorized)
 		return

@@ -1,9 +1,11 @@
 package httpapi
 
 import (
+	"crypto/sha256"
 	"fmt"
 	"os"
 	"strings"
+	"time"
 )
 
 // Boot-time validation of security-critical env vars. Called once by
@@ -51,6 +53,23 @@ func validateBootSecrets() error {
 	}
 
 	var issues []string
+	now := time.Now().UTC()
+	workflowPrincipals, workflowPrincipalsErr := workflowMachinePrincipalsFromEnv()
+	if workflowPrincipalsErr != nil {
+		issues = append(issues, workflowPrincipalsErr.Error())
+	}
+	eventPrincipals, eventPrincipalsErr := eventPublisherPrincipalsFromEnv()
+	if eventPrincipalsErr != nil {
+		issues = append(issues, eventPrincipalsErr.Error())
+	}
+	legacyWorkflow, legacyWorkflowErr := legacyWorkflowCredentialFromEnv(now)
+	if legacyWorkflowErr != nil {
+		issues = append(issues, legacyWorkflowErr.Error())
+	}
+	legacyEvent, legacyEventErr := legacyEventPublishCredentialFromEnv(now)
+	if legacyEventErr != nil {
+		issues = append(issues, legacyEventErr.Error())
+	}
 
 	// A12 — third-party OAuth state secret. Falls back to the constant
 	// "yggdrasil-dev-third-party-state-secret" in auth.go if empty,
@@ -69,44 +88,75 @@ func validateBootSecrets() error {
 			"YGGDRASIL_CSRF_HMAC_SECRET (CSRF token HMAC; production fallback is a public dev string)")
 	}
 
-	// Adapter mutation events must never be anonymously writable in
-	// production. Keep the legacy workflow token as a migration fallback, but
-	// require at least one credential that POST /api/v1/events actually accepts.
-	eventToken := strings.TrimSpace(os.Getenv("YGGDRASIL_EVENT_PUBLISH_TOKEN"))
+	// Production needs independent workflow-dispatch and event-publish
+	// credentials. The global workflow token is accepted only as an explicit,
+	// time-bounded workflow-route migration bridge; it never satisfies event
+	// publishing. Hashed machine principals are the durable path.
+	eventToken := strings.TrimSpace(os.Getenv(legacyEventPublishTokenEnv))
 	legacyWorkflowToken := strings.TrimSpace(os.Getenv("YGGDRASIL_WORKFLOW_RUN_TOKEN"))
-	if eventToken == "" && legacyWorkflowToken == "" {
+	if workflowPrincipalsErr == nil && legacyWorkflowErr == nil &&
+		usableWorkflowMachinePrincipalCount(workflowPrincipals, now) == 0 && !legacyWorkflow.Active {
 		issues = append(issues,
-			"YGGDRASIL_EVENT_PUBLISH_TOKEN or YGGDRASIL_WORKFLOW_RUN_TOKEN (event publishing must not be anonymous in production)")
+			"YGGDRASIL_WORKFLOW_MACHINE_PRINCIPALS_JSON needs an active, unexpired principal or the explicit legacy workflow migration credential must be active")
+	}
+	if eventPrincipalsErr == nil && legacyEventErr == nil &&
+		usableEventPublisherPrincipalCount(eventPrincipals, now) == 0 && !legacyEvent.Active {
+		issues = append(issues, fmt.Sprintf(
+			"%s needs an active, unexpired principal or %s must be explicitly enabled with %s=true and an active %s",
+			eventPublisherPrincipalsEnv,
+			legacyEventPublishTokenEnv,
+			legacyEventPublishEnabledEnv,
+			legacyEventPublishExpiryEnv,
+		))
 	}
 
-	// A dedicated event token is useful only if its literal value cannot be
-	// replayed as a broader Bearer credential. Refuse credential reuse at boot
-	// rather than silently collapsing the route-level scope promised by
-	// ADR-0013. Never include credential values in the diagnostic.
-	if eventToken != "" {
-		for _, other := range []struct {
-			name  string
-			value string
-		}{
-			{name: "YGGDRASIL_WORKFLOW_RUN_TOKEN", value: legacyWorkflowToken},
-			{name: "YGGDRASIL_DEPLOY_TOKEN", value: strings.TrimSpace(os.Getenv("YGGDRASIL_DEPLOY_TOKEN"))},
-			{name: "YGGDRASIL_AUTH_ADMIN_TOKEN", value: strings.TrimSpace(os.Getenv("YGGDRASIL_AUTH_ADMIN_TOKEN"))},
-		} {
-			if other.value != "" && eventToken == other.value {
-				issues = append(issues,
-					fmt.Sprintf("YGGDRASIL_EVENT_PUBLISH_TOKEN must differ from %s", other.name))
+	// Hash both plaintext bridges only inside the process and compare every
+	// scope in constant time. Diagnostics name configuration locations but never
+	// include credentials or digests.
+	plaintextScopes := []struct {
+		name  string
+		value string
+	}{
+		{name: "YGGDRASIL_WORKFLOW_RUN_TOKEN", value: legacyWorkflowToken},
+		{name: legacyEventPublishTokenEnv, value: eventToken},
+		{name: "YGGDRASIL_DEPLOY_TOKEN", value: strings.TrimSpace(os.Getenv("YGGDRASIL_DEPLOY_TOKEN"))},
+		{name: "YGGDRASIL_AUTH_ADMIN_TOKEN", value: strings.TrimSpace(os.Getenv("YGGDRASIL_AUTH_ADMIN_TOKEN"))},
+	}
+	for left := range plaintextScopes {
+		for right := left + 1; right < len(plaintextScopes); right++ {
+			if plaintextScopes[left].value != "" && plaintextScopes[right].value != "" &&
+				constantTimeTokenEqual(plaintextScopes[left].value, plaintextScopes[right].value) {
+				issues = append(issues, fmt.Sprintf("%s must differ from %s", plaintextScopes[left].name, plaintextScopes[right].name))
 			}
 		}
+	}
 
-		scopedTokens, err := workflowRunScopedTokensFromEnv()
-		if err != nil {
-			issues = append(issues,
-				"YGGDRASIL_WORKFLOW_RUN_SCOPED_TOKENS_JSON must be valid to verify event-token isolation")
-		} else {
-			for index, scoped := range scopedTokens {
-				if eventToken == scoped.Token {
-					issues = append(issues,
-						fmt.Sprintf("YGGDRASIL_EVENT_PUBLISH_TOKEN must differ from scoped workflow token at index %d", index))
+	if workflowPrincipalsErr == nil {
+		for index, principal := range workflowPrincipals {
+			for _, other := range plaintextScopes {
+				if digestMatchesPlaintext(principal.TokenSHA256, other.value) {
+					issues = append(issues, fmt.Sprintf("%s entry %d credential must differ from %s", workflowMachinePrincipalsEnv, index, other.name))
+				}
+			}
+		}
+	}
+	if eventPrincipalsErr == nil {
+		for index, principal := range eventPrincipals {
+			for _, other := range plaintextScopes {
+				// Even the event bridge must use a distinct bearer. Reuse would create
+				// a downgrade: once the hashed principal expires or is revoked, the
+				// same bearer could fall through to the broader migration bridge.
+				if digestMatchesPlaintext(principal.TokenSHA256, other.value) {
+					issues = append(issues, fmt.Sprintf("%s entry %d credential must differ from %s", eventPublisherPrincipalsEnv, index, other.name))
+				}
+			}
+		}
+	}
+	if workflowPrincipalsErr == nil && eventPrincipalsErr == nil {
+		for workflowIndex, workflowPrincipal := range workflowPrincipals {
+			for eventIndex, eventPrincipal := range eventPrincipals {
+				if machineCredentialDigestsCollide(workflowPrincipal.TokenSHA256, eventPrincipal.TokenSHA256) {
+					issues = append(issues, fmt.Sprintf("%s entry %d credential must differ from %s entry %d", workflowMachinePrincipalsEnv, workflowIndex, eventPublisherPrincipalsEnv, eventIndex))
 				}
 			}
 		}
@@ -120,4 +170,9 @@ func validateBootSecrets() error {
 		os.Getenv("YGGDRASIL_ENV"),
 		strings.Join(issues, "\n  - "),
 	)
+}
+
+func digestMatchesPlaintext(digest [sha256.Size]byte, plaintext string) bool {
+	configuredDigest, ok := digestForConfiguredToken(plaintext)
+	return ok && machineCredentialDigestsCollide(digest, configuredDigest)
 }

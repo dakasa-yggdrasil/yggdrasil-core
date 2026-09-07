@@ -448,17 +448,234 @@ func TestValidateWorkflowInputsMinLengthSkippedWhenFieldAbsent(t *testing.T) {
 	}
 }
 
-func TestValidateWorkflowInputsMinLengthIgnoredForNonStringTypes(t *testing.T) {
-	// minLength is a string-only constraint; declaring it on object/array/
-	// integer types should be a no-op rather than a crash.
+func TestParseWorkflowSpecPreservesWorkflowMaxLengthAliases(t *testing.T) {
+	tests := []struct {
+		name string
+		raw  json.RawMessage
+	}{
+		{
+			name: "canonical JSON Schema maxLength",
+			raw:  json.RawMessage(`{"input_schema":{"properties":{"image_digest":{"type":"string","maxLength":71}}}}`),
+		},
+		{
+			name: "legacy integration max_length",
+			raw:  json.RawMessage(`{"input_schema":{"properties":{"image_digest":{"type":"string","max_length":71}}}}`),
+		},
+		{
+			name: "matching aliases",
+			raw:  json.RawMessage(`{"input_schema":{"properties":{"image_digest":{"type":"string","maxLength":71,"max_length":71}}}}`),
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			spec, err := ParseWorkflowSpec(tc.raw)
+			if err != nil {
+				t.Fatalf("ParseWorkflowSpec() error = %v", err)
+			}
+			got := spec.InputSchema.Properties["image_digest"].MaxLength
+			if got == nil || *got != 71 {
+				t.Fatalf("MaxLength = %v, want 71", got)
+			}
+		})
+	}
+}
+
+func TestParseWorkflowSpecRejectsConflictingMaxLengthAliases(t *testing.T) {
+	_, err := ParseWorkflowSpec(json.RawMessage(`{
+		"input_schema": {
+			"properties": {
+				"image_digest": {"type":"string", "maxLength":71, "max_length":72}
+			}
+		}
+	}`))
+	if err == nil || !strings.Contains(err.Error(), "conflicting maxLength and max_length") {
+		t.Fatalf("ParseWorkflowSpec() error = %v, want conflicting alias rejection", err)
+	}
+}
+
+func TestValidateWorkflowInputsEnforcesPatternAndMaxLength(t *testing.T) {
+	maxDigestLength := 71
+	spec := model.WorkflowManifestSpec{
+		InputSchema: model.WorkflowInputSchemaSpec{
+			Properties: map[string]model.IntegrationSchemaProperty{
+				"image_digest": {
+					Type:      "string",
+					Pattern:   `^sha256:[0-9a-f]{64}$`,
+					MaxLength: &maxDigestLength,
+				},
+			},
+		},
+	}
+
+	tests := []struct {
+		name       string
+		value      string
+		wantErr    bool
+		wantSubstr string
+	}{
+		{
+			name:  "exact lowercase digest accepted",
+			value: "sha256:" + strings.Repeat("a", 64),
+		},
+		{
+			name:       "wrong algorithm rejected by pattern",
+			value:      "sha255:" + strings.Repeat("a", 64),
+			wantErr:    true,
+			wantSubstr: "must match pattern",
+		},
+		{
+			name:       "uppercase digest rejected by pattern",
+			value:      "sha256:" + strings.Repeat("A", 64),
+			wantErr:    true,
+			wantSubstr: "must match pattern",
+		},
+		{
+			name:       "non hexadecimal digest rejected by pattern",
+			value:      "sha256:" + strings.Repeat("g", 64),
+			wantErr:    true,
+			wantSubstr: "must match pattern",
+		},
+		{
+			name:       "short digest rejected by pattern",
+			value:      "sha256:" + strings.Repeat("a", 63),
+			wantErr:    true,
+			wantSubstr: "must match pattern",
+		},
+		{
+			name:       "overlong digest rejected before dispatch",
+			value:      "sha256:" + strings.Repeat("a", 65),
+			wantErr:    true,
+			wantSubstr: "maxLength 71",
+		},
+		{
+			name:       "full image URI rejected before dispatch",
+			value:      "registry.example/dakasa/service@sha256:" + strings.Repeat("a", 64),
+			wantErr:    true,
+			wantSubstr: "maxLength 71",
+		},
+		{
+			name:       "image tag rejected by pattern",
+			value:      "sha-main",
+			wantErr:    true,
+			wantSubstr: "must match pattern",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			err := ValidateWorkflowInputs(spec, map[string]any{"image_digest": tc.value})
+			if tc.wantErr {
+				if err == nil || !strings.Contains(err.Error(), tc.wantSubstr) {
+					t.Fatalf("ValidateWorkflowInputs() error = %v, want %q", err, tc.wantSubstr)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatalf("ValidateWorkflowInputs() unexpected error = %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateWorkflowInputsMaxLengthCountsUnicodeCodePoints(t *testing.T) {
+	maxTwo := 2
+	spec := model.WorkflowManifestSpec{
+		InputSchema: model.WorkflowInputSchemaSpec{
+			Properties: map[string]model.IntegrationSchemaProperty{
+				"label": {Type: "string", MaxLength: &maxTwo},
+			},
+		},
+	}
+	if err := ValidateWorkflowInputs(spec, map[string]any{"label": "éé"}); err != nil {
+		t.Fatalf("two Unicode code points should fit maxLength=2: %v", err)
+	}
+	if err := ValidateWorkflowInputs(spec, map[string]any{"label": "ééé"}); err == nil || !strings.Contains(err.Error(), "maxLength 2") {
+		t.Fatalf("three Unicode code points should exceed maxLength=2, got %v", err)
+	}
+}
+
+func TestValidateWorkflowInputsEnforcesStringConstraintsOnDefaults(t *testing.T) {
+	maxThree := 3
+	for _, tc := range []struct {
+		name       string
+		value      string
+		wantSubstr string
+	}{
+		{name: "maximum length", value: "toolong", wantSubstr: "maxLength 3"},
+		{name: "pattern", value: "ABC", wantSubstr: "must match pattern"},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := model.WorkflowManifestSpec{
+				Defaults: map[string]any{"label": tc.value},
+				InputSchema: model.WorkflowInputSchemaSpec{
+					Properties: map[string]model.IntegrationSchemaProperty{
+						"label": {Type: "string", Pattern: `^[a-z]+$`, MaxLength: &maxThree},
+					},
+				},
+			}
+
+			err := ValidateWorkflowInputs(spec, nil)
+			if err == nil || !strings.Contains(err.Error(), tc.wantSubstr) {
+				t.Fatalf("ValidateWorkflowInputs() error = %v, want merged default error %q", err, tc.wantSubstr)
+			}
+		})
+	}
+}
+
+func TestValidateWorkflowSpecRejectsInvalidStringConstraints(t *testing.T) {
+	tests := []struct {
+		name       string
+		property   model.IntegrationSchemaProperty
+		wantSubstr string
+	}{
+		{
+			name:       "invalid pattern",
+			property:   model.IntegrationSchemaProperty{Type: "string", Pattern: "["},
+			wantSubstr: "invalid pattern",
+		},
+		{
+			name: "negative maxLength",
+			property: func() model.IntegrationSchemaProperty {
+				value := -1
+				return model.IntegrationSchemaProperty{Type: "string", MaxLength: &value}
+			}(),
+			wantSubstr: "maxLength cannot be negative",
+		},
+		{
+			name: "minLength above maxLength",
+			property: func() model.IntegrationSchemaProperty {
+				minValue, maxValue := 3, 2
+				return model.IntegrationSchemaProperty{Type: "string", MinLength: &minValue, MaxLength: &maxValue}
+			}(),
+			wantSubstr: "minLength cannot exceed maxLength",
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			spec := workflowSpecFixture()
+			spec.InputSchema.Properties["ref"] = tc.property
+			err := ValidateWorkflowSpec(spec)
+			if err == nil || !strings.Contains(err.Error(), tc.wantSubstr) {
+				t.Fatalf("ValidateWorkflowSpec() error = %v, want %q", err, tc.wantSubstr)
+			}
+		})
+	}
+}
+
+func TestValidateWorkflowInputsStringConstraintsIgnoredForNonStringTypes(t *testing.T) {
+	// String-only constraints on object/array/integer types retain the existing
+	// no-op behavior rather than changing integration schema compatibility.
 	minOne := 1
+	maxOne := 1
 	spec := model.WorkflowManifestSpec{
 		Trigger: model.WorkflowTriggerSpec{Mode: "manual"},
 		InputSchema: model.WorkflowInputSchemaSpec{
 			Properties: map[string]model.IntegrationSchemaProperty{
-				"obj_field": {Type: "object", MinLength: &minOne},
-				"arr_field": {Type: "array", MinLength: &minOne},
-				"int_field": {Type: "integer", MinLength: &minOne},
+				"obj_field": {Type: "object", MinLength: &minOne, MaxLength: &maxOne, Pattern: "["},
+				"arr_field": {Type: "array", MinLength: &minOne, MaxLength: &maxOne, Pattern: "["},
+				"int_field": {Type: "integer", MinLength: &minOne, MaxLength: &maxOne, Pattern: "["},
 			},
 		},
 		Steps: []model.WorkflowStepSpec{

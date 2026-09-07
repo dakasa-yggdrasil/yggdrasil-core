@@ -8,21 +8,21 @@
 //
 // Wire shape per RFC 7662 §2.1:
 //
-//   POST /api/v1/oidc/introspect
-//   Authorization: Bearer <admin-token-or-manifest-token>
-//   Content-Type: application/x-www-form-urlencoded
+//	POST /api/v1/oidc/introspect
+//	Authorization: Bearer <auth-admin-or-console-token>
+//	Content-Type: application/x-www-form-urlencoded
 //
-//   token=<opaque-or-jwt-token>
+//	token=<opaque-or-jwt-token>
 //
 // Response per RFC 7662 §2.2 — `active` ALWAYS present, additional claims
 // only when active=true:
 //
-//   200 OK
-//   Content-Type: application/json
+//	200 OK
+//	Content-Type: application/json
 //
-//   {"active": true,  "sub": "...", "iat": 1234567890, "exp": ..., "client_id": "..."}
-//   or
-//   {"active": false}
+//	{"active": true,  "sub": "...", "iat": 1234567890, "exp": ..., "client_id": "..."}
+//	or
+//	{"active": false}
 package httpapi
 
 import (
@@ -58,10 +58,10 @@ type introspectResponse struct {
 // Future enhancement: parse the JWT, extract sub+jti+iat, and use
 // IsSessionRevoked to test against §13 revocations.
 //
-// Authorization: requires the same shared admin/workflow token used by
-// other admin endpoints — RFC 7662 §2.1 mandates resource servers
-// authenticate themselves to the AS, and our shared-token model is the
-// open-spec-friendly choice (no provider-specific OAuth client_credentials).
+// Authorization: requires the dedicated auth-admin credential or a console
+// identity with a real admin capability. Workflow machine credentials are
+// dispatch-only and never authorize introspection. RFC 7662 §2.1 requires the
+// resource server to authenticate to the AS.
 func (s *Server) handleOIDCIntrospect(w http.ResponseWriter, r *http.Request) {
 	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		// Per RFC 7662 §2.3 the AS MUST NOT echo token validity to

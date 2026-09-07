@@ -4,15 +4,17 @@ This directory stores bootstrap `workflow` manifests that the core can import as
 
 Current bootstrap workflows:
 
-- `ecosystem-repository-commit.json`
+- `ecosystem-repository-commit.json` (historical, quarantined)
 - `github-dispatch.json`
 
 `github-dispatch` is a transitional wrapper around the GitHub integration. It lets edge services call `yggdrasil-core.workflow.run` while the legacy topology model still emits repository/workflow pairs.
 
-`ecosystem-repository-commit` is the first dog-food deployment template. GitHub
-Actions in product, surface, or integration repositories can emit one commit
-event into `yggdrasil-core`, and the workflow will dispatch the target
-repository `deploy.yml` through the global GitHub integration.
+`ecosystem-repository-commit` is retained only as a historical bootstrap
+template. Its repository, workflow, ref, and environment are caller-selected,
+and it has no `spec.authorization`, so hashed machine principals cannot invoke
+it. Core ships no automatic emitter for it. Keep it quarantined until it is
+replaced by a purpose-bound caller and typed workflow with an exact input
+policy.
 
 Real deployment workflows are expected to live in the core as normal `workflow` manifests, typically labeled with:
 

@@ -9,6 +9,7 @@ import (
 	"strconv"
 	"strings"
 	"time"
+	"unicode/utf8"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/robfig/cron/v3"
@@ -60,6 +61,35 @@ func ParseWorkflowSpec(raw json.RawMessage) (model.WorkflowManifestSpec, error) 
 	var spec model.WorkflowManifestSpec
 	if err := json.Unmarshal(raw, &spec); err != nil {
 		return model.WorkflowManifestSpec{}, fmt.Errorf("parse workflow spec: %w", err)
+	}
+
+	// Workflow input schemas follow JSON Schema's camel-case maxLength key,
+	// while IntegrationSchemaProperty historically serializes the same UI
+	// hint as max_length for integration surfaces. Decode the workflow-only
+	// alias without changing that existing integration API contract.
+	var jsonSchemaAliases struct {
+		InputSchema struct {
+			Properties map[string]struct {
+				MaxLength *int `json:"maxLength"`
+			} `json:"properties"`
+		} `json:"input_schema"`
+	}
+	if err := json.Unmarshal(raw, &jsonSchemaAliases); err != nil {
+		return model.WorkflowManifestSpec{}, fmt.Errorf("parse workflow input schema aliases: %w", err)
+	}
+	for name, alias := range jsonSchemaAliases.InputSchema.Properties {
+		if alias.MaxLength == nil {
+			continue
+		}
+		property, exists := spec.InputSchema.Properties[name]
+		if !exists {
+			continue
+		}
+		if property.MaxLength != nil && *property.MaxLength != *alias.MaxLength {
+			return model.WorkflowManifestSpec{}, fmt.Errorf("workflow input_schema property %q declares conflicting maxLength and max_length values", name)
+		}
+		property.MaxLength = alias.MaxLength
+		spec.InputSchema.Properties[name] = property
 	}
 	return spec, nil
 }
@@ -492,6 +522,19 @@ func validateWorkflowInputSchema(schema model.WorkflowInputSchemaSpec) error {
 		if !slices.Contains(supportedIntegrationSchemaTypes, propertyType) {
 			return fmt.Errorf("workflow input_schema property %q has unsupported type %q", name, property.Type)
 		}
+		if propertyType == "string" {
+			if property.MaxLength != nil && *property.MaxLength < 0 {
+				return fmt.Errorf("workflow input_schema property %q maxLength cannot be negative", name)
+			}
+			if property.MinLength != nil && property.MaxLength != nil && *property.MinLength > *property.MaxLength {
+				return fmt.Errorf("workflow input_schema property %q minLength cannot exceed maxLength", name)
+			}
+			if property.Pattern != "" {
+				if _, err := regexp.Compile(property.Pattern); err != nil {
+					return fmt.Errorf("workflow input_schema property %q has invalid pattern %q: %w", name, property.Pattern, err)
+				}
+			}
+		}
 	}
 
 	if len(schema.Properties) > 0 {
@@ -522,6 +565,24 @@ func validateWorkflowInputValue(name string, property model.IntegrationSchemaPro
 			minLen := *property.MinLength
 			if len(strings.TrimSpace(stringValue)) < minLen {
 				return fmt.Errorf("workflow input %q must have minLength %d", name, minLen)
+			}
+		}
+		if property.MaxLength != nil {
+			maxLen := *property.MaxLength
+			if maxLen < 0 {
+				return fmt.Errorf("workflow input %q has invalid negative maxLength %d", name, maxLen)
+			}
+			if utf8.RuneCountInString(stringValue) > maxLen {
+				return fmt.Errorf("workflow input %q must have maxLength %d", name, maxLen)
+			}
+		}
+		if property.Pattern != "" {
+			pattern, err := regexp.Compile(property.Pattern)
+			if err != nil {
+				return fmt.Errorf("workflow input %q has invalid pattern %q: %w", name, property.Pattern, err)
+			}
+			if !pattern.MatchString(stringValue) {
+				return fmt.Errorf("workflow input %q must match pattern %q", name, property.Pattern)
 			}
 		}
 	case "boolean":
