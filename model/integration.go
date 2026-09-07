@@ -149,9 +149,12 @@ type IntegrationSchemaSpec struct {
 //     field has a specific value (e.g. mtls_enabled=true reveals cert fields).
 //   - Format: a JSON Schema "format" hint (e.g. "uri", "email", "uuid",
 //     "password"). Surfaces use this to pick the right input widget.
-//   - Pattern: regex string. Surfaces use for client-side preview validation;
-//     server still re-validates.
+//   - Pattern: regex string. Surfaces use it for client-side preview validation;
+//     workflow input schemas also enforce it server-side before persistence or
+//     dispatch.
 //   - MaxLength: maximum character count for string inputs (mirrors MinLength).
+//     Integration schemas serialize this UI hint as max_length; workflow input
+//     schemas accept JSON Schema's canonical maxLength spelling as well.
 //
 // All UI metadata fields are optional; existing manifests without them keep
 // working unchanged (the new fields are omitempty across JSON and YAML).
@@ -299,6 +302,11 @@ type AdapterDescribeRequest struct {
 
 // AdapterDescribeResponse is the normalized response returned by one adapter implementation.
 //
+// `FamilyRef` and `ImplementedOperations` let a provider advertise the
+// integration_family contract it implements. Manifest sync carries the pair
+// into IntegrationTypeManifestSpec so family-targeted workflow dispatch keeps
+// resolving after a live adapter reconciliation.
+//
 // `Reactors` is optional — when populated, the adapter declares which canonical
 // lifecycle events it subscribes to (event_type → capability mapping). On
 // initial manifest registration / first sync, manifest_sync adopts the
@@ -306,18 +314,20 @@ type AdapterDescribeRequest struct {
 // set via the manifest catalog, the operator's value wins (see
 // `internal/manifestsync/merge.go::MergeSpec`).
 type AdapterDescribeResponse struct {
-	Provider         string                        `json:"provider"`
-	Adapter          IntegrationAdapterSpec        `json:"adapter"`
-	Capabilities     []string                      `json:"capabilities"`
-	CredentialSchema IntegrationSchemaSpec         `json:"credential_schema"`
-	InstanceSchema   IntegrationSchemaSpec         `json:"instance_schema"`
-	ResourceTypes    []IntegrationResourceType     `json:"resource_types"`
-	ActionCatalog    []IntegrationActionDefinition `json:"action_catalog,omitempty"`
-	Discovery        IntegrationDiscoverySpec      `json:"discovery"`
-	Normalization    IntegrationNormalizationSpec  `json:"normalization"`
-	Execution        IntegrationExecutionSpec      `json:"execution"`
-	Extensions       IntegrationExtensionsSpec     `json:"extensions"`
-	Reactors         []IntegrationTypeReactor      `json:"reactors,omitempty"`
+	Provider              string                        `json:"provider"`
+	FamilyRef             *ManifestSelector             `json:"family_ref,omitempty"`
+	ImplementedOperations []string                      `json:"implemented_operations,omitempty"`
+	Adapter               IntegrationAdapterSpec        `json:"adapter"`
+	Capabilities          []string                      `json:"capabilities"`
+	CredentialSchema      IntegrationSchemaSpec         `json:"credential_schema"`
+	InstanceSchema        IntegrationSchemaSpec         `json:"instance_schema"`
+	ResourceTypes         []IntegrationResourceType     `json:"resource_types"`
+	ActionCatalog         []IntegrationActionDefinition `json:"action_catalog,omitempty"`
+	Discovery             IntegrationDiscoverySpec      `json:"discovery"`
+	Normalization         IntegrationNormalizationSpec  `json:"normalization"`
+	Execution             IntegrationExecutionSpec      `json:"execution"`
+	Extensions            IntegrationExtensionsSpec     `json:"extensions"`
+	Reactors              []IntegrationTypeReactor      `json:"reactors,omitempty"`
 }
 
 // IntegrationTypeReactor describes one event-driven reaction configuration.

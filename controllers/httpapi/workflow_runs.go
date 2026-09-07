@@ -2,18 +2,16 @@ package httpapi
 
 import (
 	"context"
-	"crypto/subtle"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"fmt"
-	"io"
 	"net/http"
 	"os"
 	"strings"
 	"time"
 
 	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
+	safego "github.com/dakasa-yggdrasil/yggdrasil-core/internal/goroutine"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -24,16 +22,16 @@ import (
 var errWorkflowRunUnauthorized = errors.New("workflow run unauthorized")
 var errWorkflowAuthorizationDenied = errors.New("workflow dispatch authorization denied")
 
+var launchAsyncWorkflowRun = safego.SafeGo
+
 const legacyWorkflowRunSubjectID = "legacy-workflow-run-token"
 
 type workflowRunActor struct {
-	CollaboratorID string
-	Subject        model.RBACSubject
-}
-
-type workflowRunScopedToken struct {
-	Token   string            `json:"token"`
-	Subject model.RBACSubject `json:"subject"`
+	CollaboratorID     string
+	Subject            model.RBACSubject
+	MachinePrincipalID string
+	MachinePrincipal   *workflowMachinePrincipal
+	LegacyMigration    bool
 }
 
 // handleWorkflowRun routes between sync and async execution. The default
@@ -45,13 +43,16 @@ type workflowRunScopedToken struct {
 //
 // Resolution precedence for the dispatch mode:
 //
-//  1. Explicit per-request opt-in/out via `?async=true|false|1|0|yes|no`
+//  1. Hashed machine principals always use durable async dispatch. A request
+//     cannot opt out because ownership, idempotency isolation, and polling
+//     redaction are established only by the persisted run path.
+//  2. Explicit per-request opt-in/out via `?async=true|false|1|0|yes|no`
 //     or the `X-Yggdrasil-Workflow-Mode: async|sync` header. Ops escape
-//     hatch — always wins regardless of the manifest value.
-//  2. The workflow manifest's `spec.dispatch_mode` field. Workflows whose
+//     hatch for human and migration callers — wins over the manifest value.
+//  3. The workflow manifest's `spec.dispatch_mode` field. Workflows whose
 //     observable step budgets exceed the ingress timeout declare
 //     `dispatch_mode: async` to keep callers from hitting 502s.
-//  3. Sync (the historical default) when neither (1) nor (2) is set.
+//  4. Sync (the historical default) when neither (2) nor (3) is set.
 func (s *Server) handleWorkflowRun(w http.ResponseWriter, r *http.Request) {
 	actor, err := authenticateWorkflowRunRequest(r)
 	if err != nil {
@@ -81,8 +82,8 @@ func (s *Server) handleWorkflowRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if s.resolveWorkflowRunAsync(r, req) {
-		s.dispatchAsyncWorkflowRun(w, r, req)
+	if s.resolveWorkflowRunAsyncForActor(r, req, actor) {
+		s.dispatchAsyncWorkflowRun(w, r, req, actor)
 		return
 	}
 
@@ -104,7 +105,7 @@ func (s *Server) handleWorkflowRun(w http.ResponseWriter, r *http.Request) {
 // run_id, and kicks off a background goroutine that runs the workflow.
 // On completion (success or failure) the goroutine updates the same row
 // so a subsequent GET can return the full RunWorkflowResponse.
-func (s *Server) dispatchAsyncWorkflowRun(w http.ResponseWriter, r *http.Request, req model.RunWorkflowRequest) {
+func (s *Server) dispatchAsyncWorkflowRun(w http.ResponseWriter, r *http.Request, req model.RunWorkflowRequest, actor workflowRunActor) {
 	if !s.isBrokerAvailable() {
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
 			"error":  "workflow_dispatch_unavailable",
@@ -113,7 +114,8 @@ func (s *Server) dispatchAsyncWorkflowRun(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	req, runID, deduped, err := messagecontroller.PrepareAndInsertWorkflowRunIdempotent(r.Context(), s.db, uuid.New(), req)
+	boundReq, originalIdempotencyKey := bindWorkflowRunMachineActor(req, actor)
+	req, runID, deduped, err := messagecontroller.PrepareAndInsertWorkflowRunIdempotent(r.Context(), s.db, uuid.New(), boundReq)
 	if err != nil {
 		if errors.Is(err, repository.ErrWorkflowRunIdempotencyConflict) {
 			writeJSON(w, http.StatusConflict, map[string]any{
@@ -125,7 +127,24 @@ func (s *Server) dispatchAsyncWorkflowRun(w http.ResponseWriter, r *http.Request
 		writeMappedError(w, err)
 		return
 	}
+	if originalIdempotencyKey != "" {
+		// The database sees a principal-scoped digest so its existing unique
+		// index cannot deduplicate across machine identities. Execution keeps the
+		// caller's original value in memory for backwards-compatible templates.
+		req.Metadata["idempotency_key"] = originalIdempotencyKey
+	}
 	if deduped {
+		if actor.MachinePrincipalID != "" {
+			owned, ownershipErr := repository.WorkflowRunOwnedByMachinePrincipal(r.Context(), s.db, runID, actor.MachinePrincipalID)
+			if ownershipErr != nil {
+				writeMappedError(w, ownershipErr)
+				return
+			}
+			if !owned {
+				writeJSON(w, http.StatusNotFound, map[string]any{"error": "workflow run not found"})
+				return
+			}
+		}
 		// The original goroutine owns execution. A retry only receives the
 		// durable run identity and must never start the provider action again.
 		writeJSON(w, http.StatusOK, map[string]any{
@@ -137,9 +156,10 @@ func (s *Server) dispatchAsyncWorkflowRun(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	go func(req model.RunWorkflowRequest, runID uuid.UUID) {
+	launchAsyncWorkflowRun("workflow_run_async", func() {
 		bg, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
 		defer cancel()
+		defer markAsyncWorkflowRunFailedOnPanic(s.db, runID)
 
 		startedAt := time.Now().UTC()
 		_ = repository.MarkWorkflowRunRunning(bg, s.db, runID, startedAt)
@@ -169,7 +189,7 @@ func (s *Server) dispatchAsyncWorkflowRun(w http.ResponseWriter, r *http.Request
 			messagecontroller.EmitWorkflowRunCompletedEvent(bg, s.db, s.logger, response)
 		}
 		_ = repository.FinalizeWorkflowRun(bg, s.db, runID, status, resultPayload, errMsg, time.Now().UTC())
-	}(req, runID)
+	})
 
 	writeJSON(w, http.StatusAccepted, map[string]any{
 		"run_id":   runID.String(),
@@ -179,11 +199,55 @@ func (s *Server) dispatchAsyncWorkflowRun(w http.ResponseWriter, r *http.Request
 	})
 }
 
+const asyncWorkflowRunPanicError = "asynchronous workflow execution panicked"
+
+// markAsyncWorkflowRunFailedOnPanic prevents a recovered worker panic from
+// leaving a durable run stuck in pending/running forever. It records a generic
+// client-safe failure with a fresh short context, then re-panics so SafeGo owns
+// process protection, stack logging, and the low-cardinality panic metric.
+func markAsyncWorkflowRunFailedOnPanic(db *sql.DB, runID uuid.UUID) {
+	recovered := recover()
+	if recovered == nil {
+		return
+	}
+	if db != nil {
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+		_ = repository.FinalizeWorkflowRun(ctx, db, runID, "failed", nil, asyncWorkflowRunPanicError, time.Now().UTC())
+	}
+	panic(recovered)
+}
+
+// bindWorkflowRunMachineActor establishes the asynchronous ownership boundary
+// before persistence. The authenticated principal always wins over client
+// metadata, including when a caller attempts to spoof or erase the reserved
+// field. Machine idempotency keys are persisted as a principal-scoped digest so
+// the existing unique index cannot return another principal's run id.
+func bindWorkflowRunMachineActor(req model.RunWorkflowRequest, actor workflowRunActor) (model.RunWorkflowRequest, string) {
+	metadata := make(map[string]any, len(req.Metadata)+1)
+	for key, value := range req.Metadata {
+		metadata[key] = value
+	}
+	delete(metadata, repository.WorkflowRunCreatorMachinePrincipalMetadataKey)
+
+	originalIdempotencyKey := ""
+	if actor.MachinePrincipalID != "" {
+		metadata[repository.WorkflowRunCreatorMachinePrincipalMetadataKey] = actor.MachinePrincipalID
+		if key, ok := metadata["idempotency_key"].(string); ok && strings.TrimSpace(key) != "" {
+			originalIdempotencyKey = key
+			metadata["idempotency_key"] = scopedMachineWorkflowIdempotencyKey(actor.MachinePrincipalID, key)
+		}
+	}
+	req.Metadata = metadata
+	return req, originalIdempotencyKey
+}
+
 // handleWorkflowRunGet exposes the persisted record for a previous async
 // run. Returns 404 when the id is unknown so pollers can distinguish a
 // transient error from a missing run.
 func (s *Server) handleWorkflowRunGet(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeWorkflowRunRequest(r); err != nil {
+	actor, err := authenticateWorkflowRunRequest(r)
+	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
@@ -195,7 +259,12 @@ func (s *Server) handleWorkflowRunGet(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	rec, err := repository.GetWorkflowRun(r.Context(), s.db, id)
+	var rec model.WorkflowRunRecord
+	if actor.MachinePrincipalID != "" {
+		rec, err = repository.GetWorkflowRunForMachinePrincipal(r.Context(), s.db, id, actor.MachinePrincipalID)
+	} else {
+		rec, err = repository.GetWorkflowRun(r.Context(), s.db, id)
+	}
 	if errors.Is(err, repository.ErrWorkflowRunNotFound) {
 		writeJSON(w, http.StatusNotFound, map[string]any{"error": "workflow run not found"})
 		return
@@ -269,6 +338,17 @@ func (s *Server) resolveWorkflowRunAsync(r *http.Request, req model.RunWorkflowR
 	return manifestengine.NormalizeWorkflowDispatchMode(spec) == manifestengine.WorkflowDispatchModeAsync
 }
 
+// resolveWorkflowRunAsyncForActor closes the durable ownership boundary for
+// hashed machine principals. Those principals may never select the synchronous
+// path, including with an explicit `?async=false` or `sync` header. Human and
+// time-bounded legacy callers retain the historical resolver semantics.
+func (s *Server) resolveWorkflowRunAsyncForActor(r *http.Request, req model.RunWorkflowRequest, actor workflowRunActor) bool {
+	if actor.MachinePrincipal != nil || actor.MachinePrincipalID != "" {
+		return true
+	}
+	return s.resolveWorkflowRunAsync(r, req)
+}
+
 // lookupWorkflowSpec resolves the persisted workflow manifest for a run
 // request so handleWorkflowRun can read its declared dispatch_mode. It
 // intentionally mirrors the resolution rules used by messagecontroller.
@@ -339,26 +419,35 @@ func authenticateWorkflowRunRequest(r *http.Request) (workflowRunActor, error) {
 		strings.TrimSpace(r.Header.Get("X-Yggdrasil-Workflow-Token")),
 		bearerToken(r.Header.Get("Authorization")),
 	}
-	scopedTokens, err := workflowRunScopedTokensFromEnv()
+	machinePrincipals, err := workflowMachinePrincipalsFromEnv()
 	if err != nil {
 		return workflowRunActor{}, err
 	}
-	for _, candidate := range candidates {
-		for _, scoped := range scopedTokens {
-			if workflowRunScopedTokenPath(r.URL.Path) && constantTimeTokenEqual(candidate, scoped.Token) {
-				return workflowRunActor{Subject: scoped.Subject}, nil
+	legacy, err := legacyWorkflowCredentialFromEnv(time.Now().UTC())
+	if err != nil {
+		return workflowRunActor{}, err
+	}
+	if workflowRunMachineCredentialPath(r.Method, r.URL.Path) {
+		for _, candidate := range candidates {
+			if principal := activeWorkflowMachinePrincipal(candidate, machinePrincipals, time.Now().UTC()); principal != nil {
+				return workflowRunActor{
+					Subject:            model.RBACSubject{Type: "service", ID: principal.PrincipalID},
+					MachinePrincipalID: principal.PrincipalID,
+					MachinePrincipal:   principal,
+				}, nil
 			}
 		}
 	}
 
-	expected := strings.TrimSpace(os.Getenv("YGGDRASIL_WORKFLOW_RUN_TOKEN"))
-	for _, candidate := range candidates {
-		if constantTimeTokenEqual(candidate, expected) {
-			return workflowRunActor{Subject: legacyWorkflowRunSubject()}, nil
+	if workflowRunMachineCredentialPath(r.Method, r.URL.Path) && legacy.Active {
+		for _, candidate := range candidates {
+			if constantTimeTokenEqual(candidate, legacy.Token) {
+				return workflowRunActor{Subject: legacyWorkflowRunSubject(), LegacyMigration: true}, nil
+			}
 		}
 	}
 
-	if expected == "" && len(scopedTokens) == 0 {
+	if !legacy.Configured && len(machinePrincipals) == 0 && !requestPresentsStaticCredential(r) && devEnvAllowsFallback() {
 		// Local development convention: no configured credential keeps the
 		// endpoint open. Protected workflows still reject this anonymous actor.
 		return workflowRunActor{}, nil
@@ -366,45 +455,19 @@ func authenticateWorkflowRunRequest(r *http.Request) (workflowRunActor, error) {
 	return workflowRunActor{}, errWorkflowRunUnauthorized
 }
 
-func workflowRunScopedTokenPath(path string) bool {
-	return path == "/api/v1/workflow-runs" ||
-		strings.HasPrefix(path, "/api/v1/workflow-runs/") ||
-		path == "/api/v1/console/workflow-runs" ||
-		strings.HasPrefix(path, "/api/v1/console/workflow-runs/")
-}
-
-func workflowRunScopedTokensFromEnv() ([]workflowRunScopedToken, error) {
-	raw := strings.TrimSpace(os.Getenv("YGGDRASIL_WORKFLOW_RUN_SCOPED_TOKENS_JSON"))
-	if raw == "" {
-		return nil, nil
+func workflowRunMachineCredentialPath(method, path string) bool {
+	if method == http.MethodPost && path == "/api/v1/workflow-runs" {
+		return true
 	}
-	var tokens []workflowRunScopedToken
-	decoder := json.NewDecoder(strings.NewReader(raw))
-	decoder.DisallowUnknownFields()
-	if err := decoder.Decode(&tokens); err != nil {
-		return nil, fmt.Errorf("parse YGGDRASIL_WORKFLOW_RUN_SCOPED_TOKENS_JSON: %w", err)
+	if method != http.MethodGet {
+		return false
 	}
-	var trailing any
-	if err := decoder.Decode(&trailing); !errors.Is(err, io.EOF) {
-		return nil, errors.New("YGGDRASIL_WORKFLOW_RUN_SCOPED_TOKENS_JSON contains trailing JSON")
+	const pollPrefix = "/api/v1/workflow-runs/"
+	if !strings.HasPrefix(path, pollPrefix) {
+		return false
 	}
-	if len(tokens) == 0 {
-		return nil, errors.New("YGGDRASIL_WORKFLOW_RUN_SCOPED_TOKENS_JSON must contain at least one token")
-	}
-	seen := map[string]struct{}{}
-	for i := range tokens {
-		tokens[i].Token = strings.TrimSpace(tokens[i].Token)
-		tokens[i].Subject.Type = strings.ToLower(strings.TrimSpace(tokens[i].Subject.Type))
-		tokens[i].Subject.ID = strings.TrimSpace(tokens[i].Subject.ID)
-		if tokens[i].Token == "" || tokens[i].Subject.Type == "" || tokens[i].Subject.ID == "" {
-			return nil, fmt.Errorf("scoped workflow token %d requires token, subject.type and subject.id", i)
-		}
-		if _, duplicate := seen[tokens[i].Token]; duplicate {
-			return nil, fmt.Errorf("scoped workflow token %d duplicates an earlier credential", i)
-		}
-		seen[tokens[i].Token] = struct{}{}
-	}
-	return tokens, nil
+	runID := strings.TrimPrefix(path, pollPrefix)
+	return runID != "" && !strings.Contains(runID, "/")
 }
 
 func legacyWorkflowRunSubject() model.RBACSubject {
@@ -419,19 +482,34 @@ func legacyWorkflowRunSubject() model.RBACSubject {
 	return model.RBACSubject{Type: subjectType, ID: subjectID}
 }
 
-func constantTimeTokenEqual(candidate, expected string) bool {
-	if candidate == "" || expected == "" || len(candidate) != len(expected) {
-		return false
-	}
-	return subtle.ConstantTimeCompare([]byte(candidate), []byte(expected)) == 1
-}
-
 func (s *Server) authorizeWorkflowDispatch(ctx context.Context, req model.RunWorkflowRequest, actor workflowRunActor) error {
+	if actor.MachinePrincipal != nil {
+		if strings.TrimSpace(req.Workflow.ManifestID) != "" {
+			return fmt.Errorf("%w: machine dispatch must select the current active workflow by namespace and name; manifest_id is not allowed", errWorkflowAuthorizationDenied)
+		}
+		if req.Workflow.Version != nil {
+			return fmt.Errorf("%w: machine dispatch must select the current active workflow by namespace and name; version is not allowed", errWorkflowAuthorizationDenied)
+		}
+	}
 	workflowManifest, workflowSpec, err := s.lookupWorkflowManifestSpec(ctx, req)
 	if err != nil {
 		return err
 	}
+	if actor.MachinePrincipal != nil && !workflowMachinePrincipalAllows(
+		actor.MachinePrincipal,
+		workflowManifest.Metadata.Namespace,
+		workflowManifest.Metadata.Name,
+	) {
+		return fmt.Errorf("%w: machine principal is not allowed for workflow:%s:%s",
+			errWorkflowAuthorizationDenied,
+			workflowManifest.Metadata.Namespace,
+			workflowManifest.Metadata.Name,
+		)
+	}
 	if workflowSpec.Authorization == nil {
+		if actor.MachinePrincipal != nil {
+			return fmt.Errorf("%w: machine dispatch requires workflow spec.authorization", errWorkflowAuthorizationDenied)
+		}
 		return nil
 	}
 
@@ -576,14 +654,14 @@ func workflowManifestReference(record model.Manifest) model.ManifestReference {
 // kind-specific wrapper that funnels through handleManifestCreate).
 //
 // Accepts:
-//   - YGGDRASIL_WORKFLOW_RUN_TOKEN (workflow/admin caller) via the
-//     X-Yggdrasil-Workflow-Token header or Authorization: Bearer.
 //   - A valid console session whose claims are already attached to the
 //     context by the requiresAuthenticatedConsoleAPIs middleware.
-//   - When YGGDRASIL_WORKFLOW_RUN_TOKEN is unset (dev/test), it stays
-//     open — same convention as authorizeWorkflowRunRequest. Production
-//     deploys MUST set the env var (verified by the security audit
-//     reference_yggdrasil_dakasa_me_deep_audit_2026_05_27.md).
+//   - When every machine/static credential is unset outside production, the
+//     historical local-development allow-all behavior remains available.
+//
+// Workflow credentials are intentionally rejected here. Machine workflow
+// principals and the time-bounded legacy migration token authorize only
+// workflow dispatch and polling, never manifest writes.
 //
 // Returns true when the caller is authorized; the handler should refuse
 // the request when this returns false.
@@ -593,8 +671,9 @@ func (s *Server) manifestWriteAuthorized(r *http.Request) bool {
 	if _, ok := claimsFromContext(r.Context()); ok {
 		return true
 	}
-	// Token path (shared env var) — also stays open when the env var is
-	// unset to preserve the dev/test contract.
+	// In the credential-free local-development posture only, preserve the
+	// historical open endpoint. Any configured workflow credential is scoped to
+	// workflow-run paths by authenticateWorkflowRunRequest and is rejected here.
 	return authorizeWorkflowRunRequest(r) == nil
 }
 
@@ -607,4 +686,23 @@ func bearerToken(value string) string {
 		return ""
 	}
 	return strings.TrimSpace(value[len("Bearer "):])
+}
+
+func requestPresentsStaticCredential(r *http.Request) bool {
+	for _, header := range []string{
+		"Authorization",
+		"X-Yggdrasil-Workflow-Token",
+		"X-Yggdrasil-Event-Token",
+		"X-Yggdrasil-Auth-Admin-Token",
+		"X-Deploy-Token",
+		"X-Session-Token",
+	} {
+		if strings.TrimSpace(r.Header.Get(header)) != "" {
+			return true
+		}
+	}
+	if cookie, err := r.Cookie(authSessionCookieName()); err == nil && strings.TrimSpace(cookie.Value) != "" {
+		return true
+	}
+	return false
 }

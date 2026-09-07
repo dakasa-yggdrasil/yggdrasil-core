@@ -2,6 +2,7 @@ package manifestsync
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"testing"
 	"time"
@@ -104,6 +105,43 @@ func TestSyncIntegrationType_HappyPath_AppliesAndEmitsSynced(t *testing.T) {
 	assert.Equal(t, "integration_type.synced", f.emittedType)
 	assert.EqualValues(t, 7, f.emittedPayload["from_version"])
 	assert.EqualValues(t, 8, f.emittedPayload["to_version"])
+}
+
+func TestSyncIntegrationType_AppliesFamilyContractFromDescribe(t *testing.T) {
+	f := newFakeWithHappyPath()
+	f.describeSpec.FamilyRef = &model.ManifestSelector{
+		Namespace: "dakasa",
+		Name:      "secrets-management",
+	}
+	f.describeSpec.ImplementedOperations = []string{"ensure_secret", "observe_secrets"}
+
+	err := SyncIntegrationType(context.Background(), f, f.typeManifest.ID)
+	require.NoError(t, err)
+	require.NotNil(t, f.appliedDoc, "expected family-aware manifest version applied")
+
+	var applied model.IntegrationTypeManifestSpec
+	require.NoError(t, json.Unmarshal(f.appliedDoc.Spec, &applied))
+	require.NotNil(t, applied.FamilyRef)
+	assert.Equal(t, "dakasa", applied.FamilyRef.Namespace)
+	assert.Equal(t, "secrets-management", applied.FamilyRef.Name)
+	assert.Equal(t, []string{"ensure_secret", "observe_secrets"}, applied.ImplementedOperations)
+}
+
+func TestSyncIntegrationType_PreservesManifestCredentialPolicyWhenDescribeOmitsIt(t *testing.T) {
+	f := newFakeWithHappyPath()
+	f.typeSpec.CredentialPolicy = model.IntegrationCredentialPolicySpec{Source: "secret_ref"}
+
+	err := SyncIntegrationType(context.Background(), f, f.typeManifest.ID)
+	require.NoError(t, err)
+	require.NotNil(t, f.appliedDoc, "expected live contract changes to be applied")
+
+	var applied model.IntegrationTypeManifestSpec
+	require.NoError(t, json.Unmarshal(f.appliedDoc.Spec, &applied))
+	assert.Equal(t, model.IntegrationCredentialPolicySpec{Source: "secret_ref"}, applied.CredentialPolicy)
+	assert.Equal(t, "1.2.0", applied.Adapter.Version,
+		"runtime adapter contract must still update from Describe")
+	assert.Equal(t, []model.IntegrationActionDefinition{{Name: "new_op"}}, applied.ActionCatalog,
+		"runtime action catalog must still update from Describe")
 }
 
 func TestSyncIntegrationType_NoInstances_EmitsSkippedNoInstances(t *testing.T) {

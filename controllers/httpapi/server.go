@@ -324,14 +324,14 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/manifests", server.handleManifestListGeneric)
 	mux.HandleFunc("POST /api/v1/manifests", server.handleManifestCreateGeneric)
 	// DELETE companion: hard-delete by default, ?soft=true flips active=FALSE.
-	// Same token guard as POST /api/v1/workflow-runs via the in-handler
-	// authorizeWorkflowRunRequest call. Idempotent on not-found.
+	// Manifest writes accept console sessions only; workflow credentials are
+	// dispatch/poll-only. Idempotent on not-found.
 	mux.HandleFunc("DELETE /api/v1/manifests/{id}", server.handleManifestDelete)
-	// Public publish endpoint: external sources (Grafana webhooks, K8s
-	// informers, …) drop typed events here, the addon trigger loop picks
-	// them up and fires workflows declared with trigger.mode=event. Prefer the
-	// route-scoped event-publish token; the workflow token is a compatibility
-	// fallback during migration.
+	// Adapter mutation publish endpoint. The addon trigger loop consumes the
+	// resulting events and can fire workflows declared with trigger.mode=event.
+	// Hashed event publisher principals are the durable credential; the plaintext
+	// event token remains a mutation-only migration bridge. Workflow credentials
+	// and human sessions never publish through this route.
 	mux.HandleFunc("POST /api/v1/events", server.handleEventPublish)
 	mux.HandleFunc("POST /api/v1/github/webhook", server.handleGitHubWebhook)
 	mux.HandleFunc("GET /readyz", server.handleReadyz)
@@ -361,8 +361,8 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// RBAC sweep #2 (2026-05-28) — /api/v1/auth/* mutations now gated server-side
 	// under permManageAuthProviders, matching the /api/v1/console/auth/* gate.
 	// INTEGRATION_CONTRACT §12: backend is the authorization authority — the
-	// SPA "hides the UI" defense is not sufficient. Workflow-token automation
-	// (no claims attached) is allowed through by the middleware unchanged.
+	// SPA "hides the UI" defense is not sufficient. Purpose-built automation
+	// credentials pass only on their exact route families.
 	mux.HandleFunc("POST /api/v1/auth/third-party-identities", server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyIdentityUpsert))
 	mux.HandleFunc("DELETE /api/v1/auth/third-party-identities/{provider}/{subject}", server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyIdentityDelete))
 	mux.HandleFunc("GET /api/v1/auth/providers", server.handleThirdPartyAuthProviderList)
@@ -425,8 +425,8 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// RBAC sweep #2 (2026-05-28) — POST /api/v1/invites gated under
 	// permCreateCollaborator. The legacy comment "tartaro-fe is responsible
 	// for hiding the UI for non-admins" violated INTEGRATION_CONTRACT §12
-	// (backend is the authorization authority). Workflow-token automation
-	// continues to bypass via the no-claims path.
+	// (backend is the authorization authority). Static automation credentials
+	// remain constrained by the outer route-specific authentication gate.
 	mux.HandleFunc("POST /api/v1/invites", server.requireOpsPermissionFunc(permCreateCollaborator, guard(server.handleInviteCreate)))
 	mux.HandleFunc("GET /api/v1/invites", guard(server.handleInviteList))
 	mux.HandleFunc("GET /api/v1/invites/validate", server.handleInviteValidate)
@@ -486,9 +486,8 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// RBAC sweep #2 (2026-05-28) — every /api/v1/* mutating route that
 	// duplicates a /api/v1/console/* route is now wrapped in the canonical
 	// permission gate. INTEGRATION_CONTRACT §12: backend is the
-	// authorization authority. Workflow-token automation (no claims
-	// attached) is allowed through by the middleware unchanged, so
-	// CI/CD and adapter callers keep working.
+	// authorization authority. No-claims automation can reach only the exact
+	// event, deploy, or workflow-run routes authorized by the outer gate.
 	mux.HandleFunc("GET /api/v1/collaborators", server.handleCollaboratorList)
 	mux.HandleFunc("POST /api/v1/collaborators", server.requireOpsPermissionFunc(permCreateCollaborator, server.handleCollaboratorCreate))
 	mux.HandleFunc("GET /api/v1/collaborators/{id}", server.handleCollaboratorGet)
@@ -853,7 +852,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 
 func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if !requiresAuthenticatedConsoleAPI(r.URL.Path) {
+		if !requiresAuthenticatedConsoleRequest(r.Method, r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -867,16 +866,37 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 			return
 		}
 
-		// Workflow-run token path: CLI tools, adapter callers and
-		// workflow steps authenticate with a shared static token. Accept
-		// it as an alternative to the session cookie so the audit-flagged
-		// leaking GETs (security audit 2026-05-27 A2) can still be
-		// consumed by automation that doesn't carry a session.
+		// The dedicated auth-admin credential remains valid on the exact
+		// provider/SCIM/SAML administration mutations. These paths were added to
+		// the outer console gate to stop workflow credentials from inheriting the
+		// no-claims RBAC bypass, so the purpose-built credential must cross here
+		// explicitly. Each destination handler revalidates it in-handler.
+		if authAdministrationMutation(r.Method, r.URL.Path) &&
+			requestHasStaticAuthAdminCredential(r) &&
+			authorizeAuthAdminRequest(r, s.db) == nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Dedicated deploy automation is accepted only on the exact deploy,
+		// bootstrap, and integration-install routes. Keeping this separate lets
+		// workflow credentials remain dispatch-only without breaking the
+		// purpose-built YGGDRASIL_DEPLOY_TOKEN path.
+		if deployCredentialPath(r.Method, r.URL.Path) && authorizeDeployRequest(r) == nil {
+			next.ServeHTTP(w, r)
+			return
+		}
+
+		// Workflow machine-credential path. Hashed principals and the
+		// time-bounded legacy migration token are accepted only on exact
+		// workflow-run dispatch/poll URLs; they never cross into generic ops,
+		// manifests, secrets, catalog, deploy, or administrative APIs.
 		if actor, err := authenticateWorkflowRunRequest(r); err == nil &&
-			(actor.Subject.ID != "" || actor.CollaboratorID != "") {
-			// A configured legacy or scoped workflow token matched. Scoped
-			// tokens are path-limited by authenticateWorkflowRunRequest, so they
-			// cannot inherit this gate on manifest/admin endpoints.
+			(actor.Subject.ID != "" || actor.CollaboratorID != "" ||
+				workflowRunMachineCredentialPath(r.Method, r.URL.Path)) {
+			// A configured machine principal or legacy migration credential
+			// matched after path scoping, or the exact workflow route is using
+			// the credential-free non-production compatibility posture.
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -961,6 +981,57 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 	})
 }
 
+// requiresAuthenticatedConsoleRequest closes method-specific administration
+// paths that share the otherwise-public /api/v1/auth namespace. Login,
+// discovery, reset, and enrollment bootstrap routes stay public; provider,
+// SCIM-client, and SAML configuration mutations require a resolved console
+// identity before their permission middleware runs. This prevents a no-claims
+// machine caller from inheriting requireOpsPermission's already-authenticated
+// automation bypass.
+func requiresAuthenticatedConsoleRequest(method, path string) bool {
+	if authAdministrationMutation(method, path) {
+		return true
+	}
+	return requiresAuthenticatedConsoleAPI(path)
+}
+
+func authAdministrationMutation(method, path string) bool {
+	switch {
+	case method == http.MethodPost && path == "/api/v1/auth/third-party-identities":
+		return true
+	case method == http.MethodDelete && hasExactPathSegments(path, "/api/v1/auth/third-party-identities/", 2):
+		return true
+	case method == http.MethodPost && path == "/api/v1/auth/providers":
+		return true
+	case method == http.MethodDelete && hasExactPathSegments(path, "/api/v1/auth/providers/", 1):
+		return true
+	case method == http.MethodPost && path == "/api/v1/auth/scim/clients":
+		return true
+	case method == http.MethodPost && path == "/api/v1/auth/saml/service-providers":
+		return true
+	case method == http.MethodPost && path == "/api/v1/auth/saml/rotate-signing-cert":
+		return true
+	default:
+		return false
+	}
+}
+
+func hasExactPathSegments(path, prefix string, count int) bool {
+	if !strings.HasPrefix(path, prefix) {
+		return false
+	}
+	segments := strings.Split(strings.TrimPrefix(path, prefix), "/")
+	if len(segments) != count {
+		return false
+	}
+	for _, segment := range segments {
+		if segment == "" {
+			return false
+		}
+	}
+	return true
+}
+
 // mfaEnrollmentExemptPath reports whether a gated path is reachable by a
 // human session that has not yet enrolled MFA — the minimal surface needed
 // to enroll a factor, inspect the session, change the password, or log out.
@@ -983,7 +1054,7 @@ func mfaEnrollmentExemptPath(path string) bool {
 }
 
 // requiresAuthenticatedConsoleAPI returns true when the path must be gated
-// by either a console session OR a workflow-run token. The list was
+// by a console session or a purpose-built route credential. The list was
 // expanded by the 2026-05-27 security audit (A2) to cover endpoints that
 // previously leaked internal infra config to anonymous callers — secrets
 // catalog, integration topology, permission catalog/bindings, workflow
@@ -1042,8 +1113,7 @@ func requiresAuthenticatedConsoleAPI(path string) bool {
 		// Note: /api/v1/tenant/brand stays OUT of this allowlist —
 		// the GET is intentionally public (LoginPage and signup
 		// surfaces fetch it pre-session). The PATCH self-gates in
-		// handleTenantBrandPatch, requiring an explicit session OR
-		// a verified workflow-run-token. Don't widen the prefix here
+		// handleTenantBrandPatch, requiring an explicit session. Don't widen the prefix here
 		// or the public GET breaks.
 		"/api/v1/events",
 		"/api/v1/provision",
@@ -2994,11 +3064,9 @@ func (s *Server) handleManifestList(w http.ResponseWriter, r *http.Request, kind
 func (s *Server) handleManifestCreate(w http.ResponseWriter, r *http.Request, kind string) {
 	// Auth gate (security audit 2026-05-27 A1 fix): manifest writes are
 	// administrative operations that bypass console permission grants.
-	// We accept either YGGDRASIL_WORKFLOW_RUN_TOKEN (workflow/admin caller)
-	// or a valid console session (a human operator already authenticated
-	// by the requireAuthenticatedConsoleAPIs middleware whose claims live
-	// in the request context). Without one, the call is anonymous and
-	// MUST be refused.
+	// A valid console session must already be authenticated by the middleware
+	// and represented in request context claims. Workflow credentials are
+	// dispatch-only and never authorize this administrative write.
 	if !s.manifestWriteAuthorized(r) {
 		writeMappedError(w, errWorkflowRunUnauthorized)
 		return

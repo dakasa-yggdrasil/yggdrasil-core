@@ -1,8 +1,10 @@
 package httpapi
 
 import (
+	"encoding/json"
 	"strings"
 	"testing"
+	"time"
 )
 
 const testEventPublishToken = "dedicated-event-publish-token"
@@ -12,9 +14,14 @@ func setValidProductionBootEnvironment(t *testing.T, environment string) {
 	t.Setenv("YGGDRASIL_ENV", environment)
 	t.Setenv("AUTH_THIRD_PARTY_STATE_SECRET", "real-state-secret-good-strong-len")
 	t.Setenv("YGGDRASIL_CSRF_HMAC_SECRET", "real-csrf-secret-good-strong-len")
-	t.Setenv("YGGDRASIL_EVENT_PUBLISH_TOKEN", testEventPublishToken)
-	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "legacy-workflow-token")
-	t.Setenv("YGGDRASIL_WORKFLOW_RUN_SCOPED_TOKENS_JSON", `[{"token":"scoped-workflow-token","subject":{"type":"service","id":"scoped-workflow-test"}}]`)
+	setTestLegacyEventPublishCredential(t, testEventPublishToken)
+	t.Setenv(eventPublisherPrincipalsEnv, "")
+	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "")
+	t.Setenv("YGGDRASIL_WORKFLOW_RUN_LEGACY_ENABLED", "")
+	t.Setenv("YGGDRASIL_WORKFLOW_RUN_LEGACY_EXPIRES_AT", "")
+	t.Setenv(legacyScopedWorkflowTokensEnv, "")
+	t.Setenv(workflowMachinePrincipalsEnv, testWorkflowMachinePrincipalsJSON(t, "scoped-workflow-token", "scoped-workflow-test",
+		machineWorkflowRef{Namespace: "dakasa", Name: "deploy-validation"}))
 	t.Setenv("YGGDRASIL_DEPLOY_TOKEN", "deploy-token")
 	t.Setenv("YGGDRASIL_AUTH_ADMIN_TOKEN", "auth-admin-token")
 }
@@ -98,37 +105,62 @@ func TestValidateBootSecrets_ProductionPassesProdAlias(t *testing.T) {
 	}
 }
 
-func TestValidateBootSecrets_ProductionRequiresEventOrLegacyToken(t *testing.T) {
+func TestValidateBootSecrets_ProductionRequiresIndependentEventCredential(t *testing.T) {
 	setValidProductionBootEnvironment(t, "production")
-	t.Setenv("YGGDRASIL_EVENT_PUBLISH_TOKEN", "")
-	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "")
+	t.Setenv(legacyEventPublishTokenEnv, "")
+	t.Setenv(legacyEventPublishEnabledEnv, "")
+	t.Setenv(legacyEventPublishExpiryEnv, "")
+	t.Setenv(eventPublisherPrincipalsEnv, "")
 
 	err := validateBootSecrets()
 	if err == nil {
 		t.Fatal("production with anonymous event publishing: expected non-nil error")
 	}
-	for _, name := range []string{"YGGDRASIL_EVENT_PUBLISH_TOKEN", "YGGDRASIL_WORKFLOW_RUN_TOKEN"} {
+	for _, name := range []string{"YGGDRASIL_EVENT_PUBLISH_TOKEN", eventPublisherPrincipalsEnv} {
 		if !strings.Contains(err.Error(), name) {
 			t.Errorf("error must name %s, got: %v", name, err)
 		}
 	}
 }
 
-func TestValidateBootSecrets_ProductionKeepsLegacyEventTokenCompatibility(t *testing.T) {
+func TestValidateBootSecrets_ProductionRejectsWorkflowTokenAsEventCredential(t *testing.T) {
 	setValidProductionBootEnvironment(t, "production")
-	t.Setenv("YGGDRASIL_EVENT_PUBLISH_TOKEN", "")
+	t.Setenv(legacyEventPublishTokenEnv, "")
+	t.Setenv(legacyEventPublishEnabledEnv, "")
+	t.Setenv(legacyEventPublishExpiryEnv, "")
+	t.Setenv(eventPublisherPrincipalsEnv, "")
+	setTestLegacyWorkflowCredential(t, "legacy-workflow-token")
 
-	if err := validateBootSecrets(); err != nil {
-		t.Fatalf("production with only the legacy workflow token should remain compatible: %v", err)
+	if err := validateBootSecrets(); err == nil {
+		t.Fatal("production accepted a workflow token as the event-publish credential")
 	}
 }
 
-func TestValidateBootSecrets_ProductionAcceptsDedicatedEventTokenWithoutLegacy(t *testing.T) {
+func TestValidateBootSecrets_ProductionAcceptsExplicitUnexpiredLegacyEventBridge(t *testing.T) {
 	setValidProductionBootEnvironment(t, "production")
-	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "")
 
 	if err := validateBootSecrets(); err != nil {
-		t.Fatalf("production with a dedicated event token should pass: %v", err)
+		t.Fatalf("production with an explicit unexpired legacy event bridge should pass: %v", err)
+	}
+}
+
+func TestValidateBootSecrets_ProductionRejectsImplicitOrExpiredLegacyEventBridge(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		enabled   string
+		expiresAt string
+	}{
+		{name: "not explicitly enabled", enabled: "", expiresAt: "2099-01-01T00:00:00Z"},
+		{name: "expired", enabled: "true", expiresAt: "2020-01-01T00:00:00Z"},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			setValidProductionBootEnvironment(t, "production")
+			t.Setenv(legacyEventPublishEnabledEnv, test.enabled)
+			t.Setenv(legacyEventPublishExpiryEnv, test.expiresAt)
+			if err := validateBootSecrets(); err == nil {
+				t.Fatal("invalid legacy event bridge satisfied production boot")
+			}
+		})
 	}
 }
 
@@ -146,7 +178,11 @@ func TestValidateBootSecrets_ProductionRejectsEventTokenCollisions(t *testing.T)
 	for _, test := range tests {
 		t.Run(test.name, func(t *testing.T) {
 			setValidProductionBootEnvironment(t, "production")
-			t.Setenv(test.collidingEnv, testEventPublishToken)
+			if test.collidingEnv == "YGGDRASIL_WORKFLOW_RUN_TOKEN" {
+				setTestLegacyWorkflowCredential(t, testEventPublishToken)
+			} else {
+				t.Setenv(test.collidingEnv, testEventPublishToken)
+			}
 
 			err := validateBootSecrets()
 			if err == nil {
@@ -162,31 +198,146 @@ func TestValidateBootSecrets_ProductionRejectsEventTokenCollisions(t *testing.T)
 	}
 }
 
-func TestValidateBootSecrets_ProductionRejectsEventTokenCollisionWithScopedWorkflowToken(t *testing.T) {
+func TestValidateBootSecrets_ProductionRejectsEventTokenCollisionWithWorkflowMachinePrincipal(t *testing.T) {
 	setValidProductionBootEnvironment(t, "production")
-	t.Setenv("YGGDRASIL_WORKFLOW_RUN_SCOPED_TOKENS_JSON", `[{"token":"dedicated-event-publish-token","subject":{"type":"service","id":"colliding-workflow"}}]`)
+	t.Setenv(workflowMachinePrincipalsEnv, testWorkflowMachinePrincipalsJSON(t, testEventPublishToken, "colliding-workflow",
+		machineWorkflowRef{Namespace: "dakasa", Name: "deploy-validation"}))
 
 	err := validateBootSecrets()
 	if err == nil {
 		t.Fatal("event token collision with a scoped workflow token: expected non-nil error")
 	}
-	if !strings.Contains(err.Error(), "scoped workflow token") {
-		t.Fatalf("error must identify the scoped workflow collision, got: %v", err)
+	if !strings.Contains(err.Error(), workflowMachinePrincipalsEnv) {
+		t.Fatalf("error must identify the workflow machine-principal collision, got: %v", err)
 	}
 	if strings.Contains(err.Error(), testEventPublishToken) {
 		t.Fatalf("boot error leaked credential value: %v", err)
 	}
 }
 
-func TestValidateBootSecrets_ProductionFailsClosedOnMalformedScopedTokenConfig(t *testing.T) {
+func TestValidateBootSecrets_ProductionRejectsLegacyEventBridgeCollisionWithHashedEventPrincipal(t *testing.T) {
+	for _, test := range []struct {
+		name      string
+		status    string
+		expiresAt time.Time
+	}{
+		{name: "active", status: "active", expiresAt: time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{name: "revoked", status: "revoked", expiresAt: time.Date(2099, 1, 1, 0, 0, 0, 0, time.UTC)},
+		{name: "expired", status: "active", expiresAt: time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			setValidProductionBootEnvironment(t, "production")
+			raw, marshalErr := json.Marshal([]eventPublisherPrincipalConfig{{
+				PrincipalID: "adapter-aws",
+				Status:      test.status,
+				ExpiresAt:   test.expiresAt,
+				RotationID:  "test-rotation-event-collision",
+				TokenSHA256: testTokenSHA256(testEventPublishToken),
+				AllowedEvents: []eventPublisherEventRef{{
+					Provider:   "aws",
+					InstanceID: "aws-primary",
+					EventType:  "aws.bucket.ensured",
+				}},
+			}})
+			if marshalErr != nil {
+				t.Fatal(marshalErr)
+			}
+			t.Setenv(eventPublisherPrincipalsEnv, string(raw))
+
+			err := validateBootSecrets()
+			if err == nil {
+				t.Fatal("legacy event bridge reused by a hashed event principal was accepted")
+			}
+			for _, name := range []string{eventPublisherPrincipalsEnv, legacyEventPublishTokenEnv} {
+				if !strings.Contains(err.Error(), name) {
+					t.Fatalf("collision error must name %s, got: %v", name, err)
+				}
+			}
+			if strings.Contains(err.Error(), testEventPublishToken) || strings.Contains(err.Error(), testTokenSHA256(testEventPublishToken)) {
+				t.Fatalf("boot diagnostic leaked credential material: %v", err)
+			}
+		})
+	}
+}
+
+func TestValidateBootSecrets_ProductionFailsClosedOnRawScopedTokenConfig(t *testing.T) {
 	setValidProductionBootEnvironment(t, "production")
-	t.Setenv("YGGDRASIL_WORKFLOW_RUN_SCOPED_TOKENS_JSON", "not-json")
+	t.Setenv(legacyScopedWorkflowTokensEnv, `[{"token":"raw-token"}]`)
 
 	err := validateBootSecrets()
 	if err == nil {
-		t.Fatal("malformed scoped token configuration: expected non-nil error")
+		t.Fatal("raw scoped token configuration: expected non-nil error")
 	}
-	if !strings.Contains(err.Error(), "YGGDRASIL_WORKFLOW_RUN_SCOPED_TOKENS_JSON") {
-		t.Fatalf("error must identify malformed scoped token configuration, got: %v", err)
+	if !strings.Contains(err.Error(), legacyScopedWorkflowTokensEnv) {
+		t.Fatalf("error must identify raw scoped token configuration, got: %v", err)
+	}
+}
+
+func TestValidateBootSecrets_ProductionAcceptsOnlyHashedMachinePrincipals(t *testing.T) {
+	setValidProductionBootEnvironment(t, "production")
+	t.Setenv(legacyEventPublishTokenEnv, "")
+	t.Setenv(legacyEventPublishEnabledEnv, "")
+	t.Setenv(legacyEventPublishExpiryEnv, "")
+	t.Setenv(eventPublisherPrincipalsEnv, testEventPublisherPrincipalsJSON(t, "event-machine-token", "adapter-aws"))
+
+	if err := validateBootSecrets(); err != nil {
+		t.Fatalf("independent hashed workflow and event principals should boot without global legacy tokens: %v", err)
+	}
+}
+
+func TestValidateBootSecrets_ProductionRejectsCrossScopeMachineCredentialReuse(t *testing.T) {
+	setValidProductionBootEnvironment(t, "production")
+	t.Setenv(legacyEventPublishTokenEnv, "")
+	t.Setenv(legacyEventPublishEnabledEnv, "")
+	t.Setenv(legacyEventPublishExpiryEnv, "")
+	t.Setenv(eventPublisherPrincipalsEnv, testEventPublisherPrincipalsJSON(t, "same-machine-token", "adapter-aws"))
+	t.Setenv(workflowMachinePrincipalsEnv, testWorkflowMachinePrincipalsJSON(t, "same-machine-token", "ci-dakasa",
+		machineWorkflowRef{Namespace: "dakasa", Name: "deploy-validation"}))
+
+	err := validateBootSecrets()
+	if err == nil {
+		t.Fatal("cross-scope machine credential reuse was accepted")
+	}
+	for _, name := range []string{workflowMachinePrincipalsEnv, eventPublisherPrincipalsEnv} {
+		if !strings.Contains(err.Error(), name) {
+			t.Fatalf("collision error must name %s, got: %v", name, err)
+		}
+	}
+	if strings.Contains(err.Error(), "same-machine-token") || strings.Contains(err.Error(), testTokenSHA256("same-machine-token")) {
+		t.Fatalf("boot diagnostic leaked credential material: %v", err)
+	}
+}
+
+func TestValidateBootSecrets_ProductionRejectsInvalidMachinePrincipalConfig(t *testing.T) {
+	setValidProductionBootEnvironment(t, "production")
+	t.Setenv(workflowMachinePrincipalsEnv, `[{"principal_id":"ci","status":"active","expires_at":"2099-01-01T00:00:00Z","rotation_id":"r1","rotated_at":"2026-09-05T00:00:00Z","token_sha256":"`+testTokenSHA256("workflow")+`","allowed_workflows":[{"namespace":"dakasa","name":"*"}]}]`)
+
+	err := validateBootSecrets()
+	if err == nil {
+		t.Fatal("production boot accepted wildcard workflow allowlist")
+	}
+	if !strings.Contains(err.Error(), "wildcards") {
+		t.Fatalf("boot error did not identify exact-allowlist violation: %v", err)
+	}
+}
+
+func TestValidateBootSecrets_ProductionAcceptsExplicitUnexpiredLegacyWorkflowBridge(t *testing.T) {
+	setValidProductionBootEnvironment(t, "production")
+	t.Setenv(workflowMachinePrincipalsEnv, "")
+	setTestLegacyWorkflowCredential(t, "legacy-workflow-test-token")
+
+	if err := validateBootSecrets(); err != nil {
+		t.Fatalf("explicit unexpired workflow migration bridge rejected: %v", err)
+	}
+}
+
+func TestValidateBootSecrets_ProductionRejectsExpiredLegacyAsOnlyWorkflowCredential(t *testing.T) {
+	setValidProductionBootEnvironment(t, "production")
+	t.Setenv(workflowMachinePrincipalsEnv, "")
+	setTestLegacyWorkflowCredential(t, "legacy-workflow-test-token")
+	t.Setenv("YGGDRASIL_WORKFLOW_RUN_LEGACY_EXPIRES_AT", "2020-01-01T00:00:00Z")
+
+	if err := validateBootSecrets(); err == nil {
+		t.Fatal("expired legacy workflow bridge satisfied production boot")
 	}
 }

@@ -612,17 +612,19 @@ func DescribeIntegrationType(
 
 func integrationTypeSpecFromDescribeResponse(response model.AdapterDescribeResponse) model.IntegrationTypeManifestSpec {
 	return model.IntegrationTypeManifestSpec{
-		Provider:         response.Provider,
-		Adapter:          response.Adapter,
-		Capabilities:     response.Capabilities,
-		CredentialSchema: response.CredentialSchema,
-		InstanceSchema:   response.InstanceSchema,
-		ResourceTypes:    response.ResourceTypes,
-		ActionCatalog:    response.ActionCatalog,
-		Discovery:        response.Discovery,
-		Normalization:    response.Normalization,
-		Execution:        response.Execution,
-		Extensions:       response.Extensions,
+		Provider:              response.Provider,
+		FamilyRef:             response.FamilyRef,
+		ImplementedOperations: response.ImplementedOperations,
+		Adapter:               response.Adapter,
+		Capabilities:          response.Capabilities,
+		CredentialSchema:      response.CredentialSchema,
+		InstanceSchema:        response.InstanceSchema,
+		ResourceTypes:         response.ResourceTypes,
+		ActionCatalog:         response.ActionCatalog,
+		Discovery:             response.Discovery,
+		Normalization:         response.Normalization,
+		Execution:             response.Execution,
+		Extensions:            response.Extensions,
 		// Reactors come from the adapter's describe response. On initial
 		// registration / first sync MergeSpec adopts them; once the operator
 		// overrides via the manifest catalog, MergeSpec keeps the operator's

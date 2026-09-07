@@ -85,32 +85,31 @@ durable than tailing `event_log` directly — combine with the outbox
 pattern (NOTIFY for "new events available", outbox query for actual
 read).
 
-## Publishing events from outside
+## Publishing mutation events from outside
 
-Reactive sources — Grafana webhooks, Kubernetes informers, custom
-shell scripts — drop typed events into the stream over the public
-publish endpoint:
+Integration adapters publish their successful mutations over the dedicated
+machine endpoint:
 
 ```http
 POST /api/v1/events
-Authorization: Bearer <YGGDRASIL_EVENT_PUBLISH_TOKEN>
+Authorization: Bearer <event-publisher bearer>
 Content-Type: application/json
 ```
 
 ```bash
 curl -X POST https://yggdrasil.example.com/api/v1/events \
-  -H "Authorization: Bearer ${YGGDRASIL_EVENT_PUBLISH_TOKEN}" \
+  -H "Authorization: Bearer ${YGGDRASIL_EVENT_PUBLISHER_TOKEN}" \
   -H "Content-Type: application/json" \
   -d '{
-    "type": "infra.alert.firing",
-    "schema_version": "v1",
-    "aggregate_type": "alert",
-    "aggregate_id": "grafana/abc-123",
-    "payload": {
-      "alert": { "summary": "node disk over 90%", "severity": "critical" },
-      "labels": { "service": "yggdrasil-core" }
-    },
-    "actor": { "type": "system", "id": "grafana" }
+    "event_type": "aws.bucket.ensured",
+    "provider": "aws",
+    "resource": "bucket",
+    "verb": "ensured",
+    "resource_id": "assets-prod",
+    "instance_id": "aws-primary",
+    "idempotency": "ensure-assets-prod-v7",
+    "observed": {"region": "sa-east-1"},
+    "emitted_at": "2026-09-05T12:00:00Z"
   }'
 ```
 
@@ -120,27 +119,48 @@ Returns `201 Created` with the generated event id:
 { "event_id": "01935e3d-9c91-7c10-8deb-b6f1abcdef01" }
 ```
 
-The endpoint is idempotent at the API level only: every successful
-call appends a new row. Callers that need at-most-once delivery
-should either dedup at the source or pin a stable
-`(aggregate_type, aggregate_id)` and let the consumer dedup.
+Mutation publication is idempotent on `(event_type, idempotency)` within the
+configured retention window. Generic control-plane events are emitted from
+trusted in-process paths; hashed publishers, the plaintext migration bridge,
+and human console sessions cannot submit that generic shape over this route.
 
-**Validation.** `type`, `aggregate_type`, `aggregate_id` and
-`payload` are required. `payload` MUST be a JSON object so workflows
-can reference `{{ inputs.event.<field> }}`. `schema_version` defaults
-to `"v1"` when omitted. The payload is validated against the JSON
-Schema registered for `<type>` in `docs/contracts/events/v1/`; new
-event types must register a schema before the API will accept them
-(returns `400` with the diagnostic otherwise).
+**Mutation validation.** `event_type`, `provider`, `resource`, `verb`,
+`resource_id`, `instance_id`, and `idempotency` are required. The denormalized
+provider/resource/verb fields must agree with the canonical
+`<provider>.<resource>.<ensured|destroyed|created>` event type, and the
+authenticated principal must contain the exact provider/instance/event triple.
 
-**Auth.** Set a dedicated `YGGDRASIL_EVENT_PUBLISH_TOKEN` and give event
-writers only that credential. Clients send it in `Authorization: Bearer …`
-or `X-Yggdrasil-Event-Token`. The legacy `YGGDRASIL_WORKFLOW_RUN_TOKEN`
-remains accepted through `Authorization: Bearer …` or
-`X-Yggdrasil-Workflow-Token` during migration. Production refuses to boot
-without either credential and rejects a dedicated token that duplicates a
-broader workflow, deploy, or auth-admin token. When both are unset outside
-production, the endpoint remains open for local development and tests.
+**Generic local-compatibility validation.** Only when the event auth surface is
+entirely unconfigured outside production, the historical generic HTTP shape
+remains available for development and tests. In that posture, `type`,
+`aggregate_type`, `aggregate_id`, and `payload` are required; `payload` must be
+a JSON object and `schema_version` defaults to `"v1"`. The payload is validated
+against the registered event JSON Schema. Production machine credentials never
+authorize this shape.
+
+**Auth.** Give each event writer a bearer whose SHA-256 digest is configured in
+`YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON` with `principal_id`, lifecycle,
+expiry, rotation metadata, and a non-empty `allowed_events` list of exact
+`{provider,instance_id,event_type}` mutation triples. The JSON never contains
+the raw bearer and cannot contain workflow scopes or wildcards. A machine
+publisher cannot submit the generic event shape or another principal's
+provider, instance, or event type; the server overwrites its event actor and
+reserved publisher metadata from the authenticated identity. Clients send the
+bearer in `Authorization: Bearer …` or `X-Yggdrasil-Event-Token`.
+
+`YGGDRASIL_EVENT_PUBLISH_TOKEN` remains only as a plaintext event-route bridge
+for existing adapters. It is rejected unless
+`YGGDRASIL_EVENT_PUBLISH_LEGACY_ENABLED=true` and
+`YGGDRASIL_EVENT_PUBLISH_LEGACY_EXPIRES_AT` is a future RFC3339 timestamp. It is
+mutation-only, and the server overwrites any supplied actor with the reserved
+`legacy-event-publish-bridge` service identity. Human console sessions and
+workflow credentials are never accepted. Production refuses to boot without
+an active event principal or that explicit, unexpired bridge and rejects any
+collision with workflow, deploy, auth-admin, or hashed event-principal
+credentials. The bridge and hashed publishers must use distinct bearers so a
+principal cannot fall back to bridge authority after expiry or revocation. When
+the event surface is entirely unconfigured outside production, it remains open
+for credential-free local development and tests.
 
 ## Reactive workflows
 

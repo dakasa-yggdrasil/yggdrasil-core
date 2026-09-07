@@ -22,6 +22,12 @@ var ErrWorkflowRunNotFound = errors.New("workflow run not found")
 // caller believe the requested provider action was accepted when it was not.
 var ErrWorkflowRunIdempotencyConflict = errors.New("workflow run idempotency key already belongs to another workflow")
 
+// WorkflowRunCreatorMachinePrincipalMetadataKey is reserved for the HTTP
+// authentication layer. Clients cannot choose it: the server removes any
+// supplied value and writes the authenticated machine principal id before an
+// asynchronous run crosses the durable boundary.
+const WorkflowRunCreatorMachinePrincipalMetadataKey = "yggdrasil.io/creator_machine_principal_id"
+
 // InsertWorkflowRun creates one workflow_runs row in pending status. Used
 // as the first step of an async run — the goroutine that executes the
 // workflow updates the same row to running → succeeded/failed.
@@ -170,13 +176,50 @@ func GetWorkflowRun(ctx context.Context, db *sql.DB, id uuid.UUID) (model.Workfl
 		FROM public.workflow_runs
 		WHERE id = $1
 	`
+	return getWorkflowRun(ctx, db, q, id)
+}
+
+// GetWorkflowRunForMachinePrincipal returns a run only when its immutable
+// server-authored metadata identifies the authenticated machine principal.
+// Missing and foreign runs deliberately share ErrWorkflowRunNotFound so callers
+// cannot use polling as an ownership oracle.
+func GetWorkflowRunForMachinePrincipal(ctx context.Context, db *sql.DB, id uuid.UUID, principalID string) (model.WorkflowRunRecord, error) {
+	const q = `
+		SELECT id, workflow_namespace, workflow_name, workflow_version, status,
+		       inputs, metadata, result, error, started_at, finished_at, created_at, updated_at
+		FROM public.workflow_runs
+		WHERE id = $1
+		  AND metadata ->> 'yggdrasil.io/creator_machine_principal_id' = $2
+	`
+	return getWorkflowRun(ctx, db, q, id, strings.TrimSpace(principalID))
+}
+
+// WorkflowRunOwnedByMachinePrincipal is the narrow ownership check used before
+// an idempotent retry is allowed to return an existing run id.
+func WorkflowRunOwnedByMachinePrincipal(ctx context.Context, db *sql.DB, id uuid.UUID, principalID string) (bool, error) {
+	const q = `
+		SELECT EXISTS (
+			SELECT 1
+			FROM public.workflow_runs
+			WHERE id = $1
+			  AND metadata ->> 'yggdrasil.io/creator_machine_principal_id' = $2
+		)
+	`
+	var owned bool
+	if err := db.QueryRowContext(ctx, q, id, strings.TrimSpace(principalID)).Scan(&owned); err != nil {
+		return false, fmt.Errorf("query workflow_run ownership: %w", err)
+	}
+	return owned, nil
+}
+
+func getWorkflowRun(ctx context.Context, db *sql.DB, query string, args ...any) (model.WorkflowRunRecord, error) {
 	var rec model.WorkflowRunRecord
 	var inputsRaw, metadataRaw []byte
 	var resultRaw, errMsg sql.NullString
 	var startedAt, finishedAt sql.NullTime
 	var version sql.NullInt32
 
-	err := db.QueryRowContext(ctx, q, id).Scan(
+	err := db.QueryRowContext(ctx, query, args...).Scan(
 		&rec.ID, &rec.WorkflowNamespace, &rec.WorkflowName, &version, &rec.Status,
 		&inputsRaw, &metadataRaw, &resultRaw, &errMsg,
 		&startedAt, &finishedAt, &rec.CreatedAt, &rec.UpdatedAt,

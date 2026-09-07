@@ -52,9 +52,9 @@ func GetTenantBrand(ctx context.Context, db *sql.DB) (model.TenantBrand, error) 
 
 // UpdateTenantBrand upserts the singleton tenant_brand_settings row.
 //
-// updatedBy is a *uuid.UUID — nil when the caller is a workflow-run-token
-// or admin-token (no session). The column is nullable; preserving the
-// "no human attributed" signal keeps the audit story honest.
+// updatedBy is a *uuid.UUID. HTTP mutations require a console session and pass
+// its collaborator id; the nullable form remains for internal repository
+// callers and existing rows.
 func UpdateTenantBrand(
 	ctx context.Context,
 	db *sql.DB,
@@ -271,9 +271,7 @@ func nullString(value string) any {
 }
 
 // nullUUID converts a nullable UUID pointer to a SQL-friendly value.
-// nil → SQL NULL (preserved by the nullable `updated_by` column for
-// workflow-run-token / admin-token initiated PATCHes). non-nil → the
-// raw UUID.
+// nil → SQL NULL (preserved for internal callers). non-nil → the raw UUID.
 func nullUUID(value *uuid.UUID) any {
 	if value == nil {
 		return nil

@@ -50,7 +50,7 @@ Supported `kind` values (the authoritative list is the switch in
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/v1/workflow-runs` | Run a workflow synchronously |
+| POST | `/api/v1/workflow-runs` | Run a workflow; hashed machine callers are always asynchronous |
 
 ### Webhooks
 

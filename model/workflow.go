@@ -17,13 +17,14 @@ const WorkflowDispatchOperation = "dispatch_workflow"
 // the historical default and still the default when the field is empty) and
 // "async" (return 202 + {run_id, status: pending, workflow} immediately, run
 // the workflow in a background goroutine, expose the final result via
-// `GET /api/v1/workflow-runs/{run_id}`). Per-request overrides — the
-// `?async=true|false` query parameter and the `X-Yggdrasil-Workflow-Mode`
-// header — always win, so ops escapes still work regardless of the manifest
-// value. Workflows whose observable step budgets exceed the ingress timeout
-// (≈30s, e.g. `deploy-via-kustomize-source` with its 180s observe poll)
-// should set this to "async" so legitimate callers see a 202 with a
-// `run_id` instead of a 502 from the gateway.
+// `GET /api/v1/workflow-runs/{run_id}`). For human and time-bounded migration
+// callers, per-request overrides — the `?async=true|false` query parameter and
+// the `X-Yggdrasil-Workflow-Mode` header — win over the manifest value. Hashed
+// machine principals are always forced async so durable ownership and scoped
+// idempotency cannot be bypassed. Workflows whose observable step budgets
+// exceed the ingress timeout (≈30s, e.g. `deploy-via-kustomize-source` with its
+// 180s observe poll) should set this to "async" so legitimate non-machine
+// callers see a 202 with a `run_id` instead of a 502 from the gateway.
 type WorkflowManifestSpec struct {
 	Trigger       WorkflowTriggerSpec        `json:"trigger,omitempty"`
 	InputSchema   WorkflowInputSchemaSpec    `json:"input_schema,omitempty"`

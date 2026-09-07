@@ -12,6 +12,11 @@ HTTP, AMQP, or any registered `rpc.Transport` (see
 declares its addressing (queues for AMQP, endpoints for HTTP, etc.) in
 the `describe` response.
 
+An adapter that implements an `integration_family` includes both
+`family_ref` and `implemented_operations` in its `describe` response. The Core
+carries those fields into the live `integration_type` spec during manifest
+sync, preserving family-targeted workflow resolution.
+
 Important:
 
 - This is a wire contract.

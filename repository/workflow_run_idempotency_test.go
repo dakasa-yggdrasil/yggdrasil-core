@@ -4,6 +4,7 @@ import (
 	"context"
 	"errors"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -75,5 +76,64 @@ func TestInsertWorkflowRunIdempotentRejectsKeyReuseForDifferentWorkflow(t *testi
 		map[string]any{"idempotency_key": "guardian:approval-1"})
 	if !errors.Is(err, ErrWorkflowRunIdempotencyConflict) {
 		t.Fatalf("err=%v, want ErrWorkflowRunIdempotencyConflict", err)
+	}
+}
+
+func TestGetWorkflowRunForMachinePrincipalReturnsOnlyOwnedRun(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	id := uuid.New()
+	now := time.Now().UTC()
+	rows := sqlmock.NewRows([]string{
+		"id", "workflow_namespace", "workflow_name", "workflow_version", "status",
+		"inputs", "metadata", "result", "error", "started_at", "finished_at", "created_at", "updated_at",
+	}).AddRow(id, "dakasa", "deploy", nil, "pending", []byte(`{}`),
+		[]byte(`{"yggdrasil.io/creator_machine_principal_id":"ci-a"}`), nil, nil, nil, nil, now, now)
+	mock.ExpectQuery(`metadata ->> 'yggdrasil\.io/creator_machine_principal_id' = \$2`).
+		WithArgs(id, "ci-a").
+		WillReturnRows(rows)
+
+	record, err := GetWorkflowRunForMachinePrincipal(context.Background(), db, id, "ci-a")
+	if err != nil {
+		t.Fatal(err)
+	}
+	if record.ID != id {
+		t.Fatalf("record id=%s, want %s", record.ID, id)
+	}
+
+	foreignID := uuid.New()
+	mock.ExpectQuery(`metadata ->> 'yggdrasil\.io/creator_machine_principal_id' = \$2`).
+		WithArgs(foreignID, "ci-b").
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "workflow_namespace", "workflow_name", "workflow_version", "status",
+			"inputs", "metadata", "result", "error", "started_at", "finished_at", "created_at", "updated_at",
+		}))
+	if _, err := GetWorkflowRunForMachinePrincipal(context.Background(), db, foreignID, "ci-b"); !errors.Is(err, ErrWorkflowRunNotFound) {
+		t.Fatalf("foreign run err=%v, want ErrWorkflowRunNotFound", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestWorkflowRunOwnedByMachinePrincipal(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	id := uuid.New()
+	mock.ExpectQuery(`SELECT EXISTS`).WithArgs(id, "ci-a").WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+	owned, err := WorkflowRunOwnedByMachinePrincipal(context.Background(), db, id, "ci-a")
+	if err != nil || !owned {
+		t.Fatalf("owned=%v err=%v", owned, err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -53,9 +53,9 @@ func seedManifestForDelete(t *testing.T, h http.Handler, name string) string {
 		"name":      name,
 		"namespace": "delete-test",
 		"spec": map[string]any{
-			"category": "application",
-			"class":    "platform",
-			"lifecycle": map[string]any{},
+			"category":   "application",
+			"class":      "platform",
+			"lifecycle":  map[string]any{},
 			"components": []any{},
 		},
 	}
@@ -212,11 +212,12 @@ func TestHandleManifestDelete_InvalidID(t *testing.T) {
 	}
 }
 
-// TestHandleManifestDelete_AuthRequired guards the token-gated path: when
-// YGGDRASIL_WORKFLOW_RUN_TOKEN is set, callers without the matching
-// header receive 401.
+// TestHandleManifestDelete_AuthRequired guards the authenticated path: a
+// configured workflow machine principal does not turn manifest deletion into
+// a machine-token route, and anonymous/wrong-token requests receive 401.
 func TestHandleManifestDelete_AuthRequired(t *testing.T) {
-	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "secret-token")
+	t.Setenv(workflowMachinePrincipalsEnv, testWorkflowMachinePrincipalsJSON(t, "machine-token", "ci",
+		machineWorkflowRef{Namespace: "dakasa", Name: "deploy"}))
 	server := &Server{serviceName: "yggdrasil-core-test", db: nil}
 	mux := http.NewServeMux()
 	mux.HandleFunc("DELETE /api/v1/manifests/{id}", server.handleManifestDelete)

@@ -37,7 +37,7 @@ var quickstartFetcher = fetchQuickstartManifest
 //	  "dry_run":      false
 //	}
 func (s *Server) handleInstallIntegration(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeWorkflowRunRequest(r); err != nil {
+	if err := authorizeDeployRequest(r); err != nil {
 		writeMappedError(w, err)
 		return
 	}

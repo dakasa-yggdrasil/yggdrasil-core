@@ -70,8 +70,8 @@ func rbacEnforceMode() string {
 // guaranteed-consistent with what the FE knows about.
 //
 // Bypass cases:
-//   - no claims attached → workflow-run-token caller (machine automation
-//     authorized upstream by requireAuthenticatedConsoleAPIs). Allow.
+//   - no claims attached → purpose-built machine automation already
+//     authorized for this exact route by requireAuthenticatedConsoleAPIs. Allow.
 //   - god-mode (`yggdrasil:*`) → allow without DB roundtrip per permission.
 //
 // Failure mode:
@@ -84,9 +84,9 @@ func (s *Server) requireOpsPermission(perm string) func(http.Handler) http.Handl
 		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			claims, ok := claimsFromContext(r.Context())
 			if !ok {
-				// No claims attached → workflow-run-token / automation caller
-				// already authorized by requireAuthenticatedConsoleAPIs. The
-				// RBAC check applies only to human-actor sessions.
+				// No claims attached → purpose-built automation already
+				// authorized for this exact route by requireAuthenticatedConsoleAPIs.
+				// The permission check applies only to human-actor sessions.
 				next.ServeHTTP(w, r)
 				return
 			}
