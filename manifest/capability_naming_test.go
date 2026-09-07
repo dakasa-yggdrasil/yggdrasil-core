@@ -39,6 +39,27 @@ func TestLoadCapabilityNamingAllowlist_DiditSecretRecoveryIsExactOnly(t *testing
 	}
 }
 
+func TestLoadCapabilityNamingAllowlist_KubernetesPodExecIsExactOnly(t *testing.T) {
+	path := filepath.Join("..", "config", "capability_naming_allowlist.yaml")
+	al, err := LoadCapabilityNamingAllowlist(path)
+	if err != nil {
+		t.Fatalf("LoadCapabilityNamingAllowlist failed: %v", err)
+	}
+
+	if !al.Allowed("pod_exec", "capability") {
+		t.Fatal("expected the Kubernetes one-shot pod exec action to be allowlisted")
+	}
+	if al.Allowed("pod_exec_unbounded", "capability") {
+		t.Fatal("Kubernetes pod exec exemption must remain an exact match")
+	}
+	if warnings := ValidateCapabilityName("pod_exec", "capability", al); len(warnings) != 0 {
+		t.Fatalf("expected no naming warning for Kubernetes pod exec, got %v", warnings)
+	}
+	if warnings := ValidateCapabilityName("pod_exec_unbounded", "capability", al); len(warnings) != 1 {
+		t.Fatalf("expected the non-allowlisted variant to remain non-conformant, got %v", warnings)
+	}
+}
+
 func TestLoadCapabilityNamingAllowlist_Prefix(t *testing.T) {
 	path := filepath.Join("..", "config", "capability_naming_allowlist.yaml")
 	al, err := LoadCapabilityNamingAllowlist(path)

@@ -146,6 +146,10 @@ exact:
   - cross_reference_pvcs_to_pods
   - mark_pod_spot_eligible
   - patch_configmap
+  # Arbitrary command execution in an already-running Pod is a one-shot,
+  # explicitly non-idempotent action with no durable resource identity. An
+  # ensure_/observe_/destroy_ prefix would therefore misrepresent its contract.
+  - pod_exec
 
   # ---- loki: log query helpers (no resource state) ----
   - query_logs
