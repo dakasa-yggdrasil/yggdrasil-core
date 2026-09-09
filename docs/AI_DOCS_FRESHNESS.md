@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: de81ef641904c791754063e628a41abbab798a74
-verified_diff_sha256: d49f29e2f4416687fb5436adcb1299e8ee0a654daa14c6dc6f70434b7b78a2c4
+verified_at_commit: 1e0641146b79bb9e26682af42d45278d17918eae
+verified_diff_sha256: 7b706309fa87aef2cdfc5d1e5f31a6bf607abdb2eb62212263f25d1b79231ceb
 reconciler_schema: 1
-verified_at: 2026-09-06
+verified_at: 2026-09-09
 by: Codex
-note: Reconciled the explicit Kubernetes pod_exec capability naming exception after merging current machine-principal authorization.
+note: Reconciled the nullable team email projection in human authorization subject expansion, active-membership filters, ancestor preservation, and fail-closed lookup behavior. No auth policy or schema changes.
