@@ -7,7 +7,7 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: f0ae5c54f86fb855ae8fe4d76b4356c08acba4cd
-verified_at: 2026-09-05
+verified_at_commit: 5ef5501857bd4862675326346653ef91932ba02a
+verified_at: 2026-09-09
 by: Codex
-note: Reconciled workflow, adapter contract, ADR, and capability naming docs with the private one-step sensitive output lease.
+note: Reconciled the live-baseline authorization hotfix with the full nullable team-email projection, active membership filters, ancestor expansion, and fail-closed behavior. No migration, workflow, credential, dependency, or authorization-policy change is included.
