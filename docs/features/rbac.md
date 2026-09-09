@@ -54,6 +54,12 @@ spec:
 5. **Result.** Allowed, denied, or `not_applicable` (no rule matched
    at all — treated as deny by the upstream pipeline).
 
+Subject expansion loads the full team record, including its nullable email,
+before following ancestors. Only active memberships in active teams whose
+membership dates are currently valid enter the direct-team set. A database
+lookup or row-decoding failure stops authorization; it must never fall back to
+an incomplete subject set or bypass the workflow's authorization requirement.
+
 The evaluator response is structured so audits show *why*:
 
 ```json

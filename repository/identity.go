@@ -1544,6 +1544,7 @@ func listDirectAuthorizationTeams(ctx context.Context, db *sql.DB, collaboratorI
 				t.name,
 				t.type,
 				t.status,
+				t.email,
 				t.parent_team_id,
 				t.owners,
 				t.traits,
