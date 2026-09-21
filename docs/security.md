@@ -146,6 +146,44 @@ evaluation phases happen in order after the machine allowlist check:
 Both phases record a `authorization.evaluated` event — the audit
 trail is complete.
 
+## Audit trail
+
+Every audited outcome of the HTTP API is one row in `audit_events`
+(migration 00017). Four writers in `controllers/httpapi` produce them: the
+handler audit (`recordAudit`: manifest create and delete, warnings
+persistence, workflow template instantiation), the auth audit
+(`recordAuthAuditSync`: the closed `auth.*` action set for login, MFA,
+session, and password outcomes), the directory machine-read audit described
+above, and the ops permission gate (`recordOpsAuditDenied`: one
+`ops.permission.denied` row per call `requireOpsPermission` refuses in
+enforce mode, through the ops row shape of migration 00031). The
+OIDC provider writes its `resource_kind=oidc` rows from `controllers/oidc`.
+All of them are fire-and-forget (an insert failure is logged and never gates
+the request) except the directory writer, which is synchronous and
+fail-closed.
+
+Two request headers reach the fixed-width columns of a row, and neither
+reaches them raw (ADR-0020). A row's `trace_id` and `span_id` come only from
+a well-formed W3C `traceparent` header, through the one parser
+`recordAudit`, `recordAuthAuditSync`, and the directory writer share
+(`internal/tracecontext`). The optional `X-Yggdrasil-Actor` header, which
+lets a caller declare the actor a `recordAudit` row is attributed to, is
+stored only when it is `user:<id>` or `service:<name>` (ASCII) and at most
+255 characters, the width of `actor`; otherwise the row is attributed to
+the credential (`service:bearer-token` or `anonymous`). Any other value,
+including an oversized one, is dropped rather than truncated or stored, so
+a caller cannot pick a header the `VARCHAR(64)`, `VARCHAR(32)`, or
+`VARCHAR(255)` columns reject and thereby erase the audit line of its own
+login, MFA attempt, or manifest write. The declared actor is bounded, not
+verified: the server does not check it against the credential.
+
+The ops audit middleware `withOpsAudit`, which would store `X-Correlation-ID`
+in `correlation_id`, is not attached to any route, and the live ops writer
+reads no request header. `correlation_id` is `TEXT`, but its btree index
+(`audit_events_correlation_idx`, migration 00031) rejects values of about
+2.7 KB or more while the server accepts headers up to the 1 MiB default, so
+that header needs the same bounding before the middleware is ever attached.
+
 ## Secrets
 
 Never embedded in manifests directly. Three supported referencing

@@ -684,9 +684,9 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	//
 	// All routes (list/get/create/rotate/disable/revoke/materialize) use the
 	// same gate — Phase 5 did not separate read from mutate inside the secret
-	// namespace, and Phase 5B preserves that. The audit hook at
-	// /api/v1/console/secrets/{namespace}/{name}/disable etc. still tags
-	// audit_events via the existing ops_audit middleware.
+	// namespace, and Phase 5B preserves that. No audit middleware is attached
+	// to these routes (withOpsAudit has no caller); the only audit_events row
+	// the gate writes is the ops.permission.denied row of a refused call.
 	mux.HandleFunc("GET /api/v1/console/secrets", server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretList))
 	mux.HandleFunc("GET /api/v1/console/secrets/{namespace}/{name}", server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretGet))
 	mux.HandleFunc("POST /api/v1/console/secrets", server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretCreate))

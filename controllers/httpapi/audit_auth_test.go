@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"database/sql/driver"
 	"net/http/httptest"
 	"regexp"
 	"strings"
@@ -125,5 +126,119 @@ func TestAuditAuthActionCodes_AreStableConstants(t *testing.T) {
 		if !strings.HasPrefix(constant, "auth.") {
 			t.Fatalf("audit code MUST be under the auth.* namespace: %q", constant)
 		}
+	}
+}
+
+// auditEventInsert is the exact statement repository.RecordAuditEvent runs;
+// the trace tests match it so a change in the column list is caught.
+const auditEventInsert = `
+		INSERT INTO public.audit_events
+			(actor, action, resource_kind, resource_id, outcome, tenant_slug, metadata, trace_id, span_id)
+		VALUES ($1, $2, $3, $4, $5, NULLIF($6, ''), $7::jsonb, NULLIF($8, ''), NULLIF($9, ''))
+	`
+
+// auditColumn stands in for one VARCHAR column of audit_events (migration
+// 00017: trace_id VARCHAR(64), span_id VARCHAR(32)). Postgres rejects the
+// whole row when a value does not fit, so a value wider than the column is a
+// mismatch here for the same reason it is a lost row in production; the
+// matcher also pins the exact value the writer must store.
+type auditColumn struct {
+	want  string
+	width int
+}
+
+func (c auditColumn) Match(v driver.Value) bool {
+	s, ok := v.(string)
+	return ok && len(s) <= c.width && s == c.want
+}
+
+func auditTraceColumns(traceID, spanID string) (sqlmock.Argument, sqlmock.Argument) {
+	return auditColumn{want: traceID, width: 64}, auditColumn{want: spanID, width: 32}
+}
+
+// auditActorColumn stands in for audit_events.actor (migration 00017:
+// VARCHAR(255) NOT NULL) the same way: a declared actor wider than the column
+// is a lost row in production.
+func auditActorColumn(want string) sqlmock.Argument {
+	return auditColumn{want: want, width: 255}
+}
+
+// TestRecordAuthAuditSync_OversizedTraceparentStillLandsTheRow proves that a
+// traceparent the audit_events columns cannot hold does not suppress the
+// login trail: the writer drops the malformed reference and the row is
+// inserted with an empty trace_id and span_id. Storing the raw header made
+// Postgres refuse the row (value too long for type character varying(64)),
+// so a caller could erase its own auth.login or auth.mfa audit line by
+// sending a 200 character header.
+func TestRecordAuthAuditSync_OversizedTraceparentStillLandsTheRow(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New error: %v", err)
+	}
+	defer db.Close()
+
+	collabID := uuid.NewString()
+	traceCol, spanCol := auditTraceColumns("", "")
+	mock.ExpectExec(regexp.QuoteMeta(auditEventInsert)).WithArgs(
+		"user:"+collabID,
+		AuditAuthMFAVerifySucceeded,
+		"collaborator",
+		collabID,
+		AuditOutcomeSuccess,
+		"",
+		sqlmock.AnyArg(),
+		traceCol,
+		spanCol,
+	).WillReturnResult(sqlmock.NewResult(1, 1))
+
+	s := &Server{db: db}
+	r := httptest.NewRequest("POST", "/api/v1/auth/mfa/verify", nil)
+	r.Header.Set("traceparent", strings.Repeat("a", 200))
+
+	if err := s.recordAuthAuditSync(r, "user:"+collabID, AuditAuthMFAVerifySucceeded, collabID, AuditOutcomeSuccess, nil); err != nil {
+		t.Fatalf("the audit row was suppressed by the traceparent header: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+// TestRecordAuthAuditSync_WellFormedTraceparentFillsTraceAndSpan proves the
+// other half of the contract: a valid W3C header lands its trace-id and
+// parent-id in the row, split into the two columns, never the header itself.
+func TestRecordAuthAuditSync_WellFormedTraceparentFillsTraceAndSpan(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New error: %v", err)
+	}
+	defer db.Close()
+
+	collabID := uuid.NewString()
+	traceCol, spanCol := auditTraceColumns("0af7651916cd43dd8448eb211c80319c", "b7ad6b7169203331")
+	mock.ExpectExec(regexp.QuoteMeta(auditEventInsert)).WithArgs(
+		"user:"+collabID,
+		AuditAuthLoginSucceeded,
+		"collaborator",
+		collabID,
+		AuditOutcomeSuccess,
+		"",
+		sqlmock.AnyArg(),
+		traceCol,
+		spanCol,
+	).WillReturnResult(sqlmock.NewResult(1, 1))
+
+	s := &Server{db: db}
+	r := httptest.NewRequest("POST", "/api/v1/auth/login", nil)
+	r.Header.Set("traceparent", "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01")
+
+	if err := s.recordAuthAuditSync(r, "user:"+collabID, AuditAuthLoginSucceeded, collabID, AuditOutcomeSuccess, nil); err != nil {
+		t.Fatalf("recordAuthAuditSync error: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
 	}
 }
