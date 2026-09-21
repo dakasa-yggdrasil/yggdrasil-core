@@ -157,6 +157,12 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	if err := validateBootSecrets(); err != nil {
 		return nil, err
 	}
+	// The directory machine inventory fails closed in every environment: a
+	// malformed entry must not boot a server that silently refuses (or, worse,
+	// mis-scopes) a service credential the operator believes is configured.
+	if _, err := directoryMachinePrincipalsFromEnv(); err != nil {
+		return nil, err
+	}
 
 	server := &Server{
 		serviceName: serviceName,
@@ -901,6 +907,19 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 			return
 		}
 
+		// Directory machine-read path (ADR-0019). A hashed directory principal
+		// is accepted only on the three exact collaborator read routes and is
+		// served entirely here with a minimal projection. Once a request marks
+		// itself as a directory machine attempt (dedicated header present, or a
+		// bearer whose digest matches a configured directory principal in any
+		// lifecycle state) it never continues to the console JWT or session
+		// paths: malformed, expired, revoked, out-of-scope, and wrong-route
+		// attempts fail closed here and no collaborator claims are attached.
+		if claim := directoryMachineClaimFor(r); claim.claimed {
+			s.serveDirectoryMachineRequest(w, r, claim)
+			return
+		}
+
 		// OIDC JWT bearer path (opt-in via consoleJWTVerifier). Accept a JWT
 		// this OP issued as an alternative to the opaque session token, so
 		// services holding a collaborator's cookie JWT (e.g. the tartaro-api
@@ -1267,6 +1286,11 @@ type Server struct {
 	// /me and the ops RBAC gate use). Tests inject a fake so the handler's gating
 	// logic is exercised without a live DB.
 	callerPermResolver func(ctx context.Context, collaboratorID string) ([]string, error)
+	// directoryAuditSink replaces the durable audit_events writer for the
+	// directory machine-read path. nil (production) persists through
+	// repository.RecordAuditEvent; tests inject a capturing sink so audit
+	// content is asserted synchronously without a database.
+	directoryAuditSink func(model.AuditEvent)
 	// capabilityAllowlist holds the warn-only capability-naming validator
 	// allowlist loaded once at boot from
 	// config/capability_naming_allowlist.yaml. nil disables the validator

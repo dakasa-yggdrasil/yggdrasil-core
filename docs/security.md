@@ -68,6 +68,30 @@ manifests, secrets (including
 `include_values=true`), `/console`, generic `/ops`, deploy, tenant, or
 auth-admin routes.
 
+Directory readers use a third, isolated inventory,
+`YGGDRASIL_DIRECTORY_MACHINE_PRINCIPALS_JSON` (ADR-0019), with the same hash,
+lifecycle, and rotation fields plus a non-empty `capabilities` list drawn from
+`directory.lookup_email`, `directory.read`, and `directory.effective_actions`,
+and, only with the last one, a non-empty `allowed_tartaro_instances` list of
+exact `{namespace,name}` references. The credential travels in
+`X-Yggdrasil-Directory-Token` or as a bearer and is accepted only on
+`GET /api/v1/collaborators?q=<one exact email>&status=active[&limit=1..100]`,
+`GET /api/v1/collaborators/{canonical uuid}`, and
+`GET /api/v1/collaborators/{canonical uuid}/effective-tartaro-actions`, each
+gated by its own capability and, for effective actions, by the configured
+Tartaro instance being allowlisted. A request that names itself as a directory
+attempt is served by the directory branch alone: it never reaches console
+session or JWT resolution, never receives collaborator claims, and answers 401
+for missing, unknown, expired, disabled, or revoked credentials and 403 for
+any other method, path spelling, route family, missing capability, or
+unlisted instance. Responses carry only `id`, `primary_email`,
+`display_name`, and `status`, or `collaborator_id` and
+`computed_tartaro_actions`; inactive collaborators read as absent. Each
+attributable outcome writes a `directory.machine_read` audit row without the
+credential, the query string, or any email. Boot fails on a malformed
+directory inventory in every environment, and production boot rejects a
+directory digest shared with any other credential scope.
+
 `YGGDRASIL_AUTH_ADMIN_TOKEN` remains a purpose-built credential for the exact
 provider, SCIM, and SAML administration mutations that support machine
 bootstrap. Only that static credential may use the outer route bypass, and the

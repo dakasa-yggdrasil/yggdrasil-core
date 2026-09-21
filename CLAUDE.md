@@ -151,6 +151,14 @@ with `?kind=X` in the query string.
   events, and human console sessions are not accepted on this route.
   `YGGDRASIL_EVENT_PUBLISH_TOKEN` is an explicit, expiring, mutation-only
   plaintext bridge with a reserved server-authored actor.
+- Directory readers use a third hashed inventory,
+  `YGGDRASIL_DIRECTORY_MACHINE_PRINCIPALS_JSON` (ADR-0019), scoped by exact
+  `capabilities` (`directory.lookup_email`, `directory.read`,
+  `directory.effective_actions`) and, for effective actions, an exact
+  `allowed_tartaro_instances` allowlist. They are accepted only on the three
+  exact collaborator GET read routes, served by their own gate branch with
+  minimal projections, never receive collaborator claims, and fail closed
+  (401/403) everywhere else. See `docs/security.md` for the contract.
 - `YGGDRASIL_WORKFLOW_RUN_TOKEN` is a workflow-route-only migration bridge and
   is rejected unless explicitly enabled with a future expiry. Workflow
   credentials never authorize events, manifests, deploy, secrets, console,
