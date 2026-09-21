@@ -155,10 +155,17 @@ retire the old entry); there is no mint endpoint and no automatic renewal.
   trait; the console drift view is not narrowed.
 - The audit store is on the read path. An `audit_events` outage makes the
   directory read unavailable (500) instead of serving unaudited data;
-  consumers already treat 5xx as retry-later, never as a verdict. Operators
-  alert on `rate(yggdrasil_directory_audit_failures_total[5m]) > 0`, which
-  is exactly the rate of those 500s, and read the `reason` label to tell a
-  slow store from one that rejects rows.
+  consumers already treat 5xx as retry-later, never as a verdict. The repo
+  ships the alert rule `YggdrasilDirectoryAuditWithheld` in
+  `monitoring/prometheus/yggdrasil-directory-audit-alerts.yaml`: its
+  expression `rate(yggdrasil_directory_audit_failures_total[5m]) > 0` is
+  exactly the rate of those 500s, it pages once that rate stays non-zero for
+  five minutes, and it fires per `reason` series, so the alert itself tells a
+  missing writer from a slow store from one that rejects rows. Like the
+  sibling rule files, the operator loads it into the Prometheus that scrapes
+  the core's `/metrics`; nothing in this repository applies it, and
+  `controllers/httpapi/directory_audit_alert_rule_test.go` keeps the rule
+  bound to the family and the reason set the binary renders.
 - The inventory is a boot-time value. Rotating a directory credential means
   updating `YGGDRASIL_DIRECTORY_MACHINE_PRINCIPALS_JSON` and restarting the
   core; a running process never picks up the change, and never loses its
