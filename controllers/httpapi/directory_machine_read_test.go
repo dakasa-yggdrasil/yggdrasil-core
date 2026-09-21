@@ -370,7 +370,15 @@ func TestDirectoryMachineGetHidesAbsentAndInactiveCollaborators(t *testing.T) {
 				if recorder.Code != http.StatusNotFound {
 					t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 				}
-				if decodeDirectoryBody(t, recorder)["code"] != "integration.not_found" {
+				// The Social client (tartaro-social internal/identity) treats a
+				// 404 as Core's word about the collaborator only under this
+				// exact media type with this exact code; any other 404 is the
+				// directory being unavailable. Pin both so a drift here is
+				// caught on this side of the contract.
+				if got := recorder.Header().Get("Content-Type"); got != httperr.ContentType {
+					t.Fatalf("content-type=%q want %q", got, httperr.ContentType)
+				}
+				if decodeDirectoryBody(t, recorder)["code"] != httperr.CodeIntegrationNotFound {
 					t.Fatalf("body=%s", recorder.Body.String())
 				}
 				assertNoSensitiveContent(t, recorder.Body.String())
