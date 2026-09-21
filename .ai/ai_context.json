@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-09-21T08:13:25-03:00",
+  "generated_at": "2026-09-21T14:44:51-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 607,
+    ".go": 611,
     ".json": 143,
     ".py": 1,
     ".sql": 51,
@@ -11,7 +11,7 @@
     ".yml": 21
   },
   "provenance": {
-    "commit": "f4fa9b573bb6803c70db015e2bc59b979e492d47",
+    "commit": "aebbce16934a4c75eafe06670786dd2026041526",
     "dirty": true,
     "files": [
       {
@@ -59,8 +59,8 @@
   "top_dirs": [
     {
       "path": "controllers/httpapi",
-      "files": 141,
-      "kb": 1320
+      "files": 143,
+      "kb": 1327
     },
     {
       "path": "repository",
@@ -157,7 +157,7 @@
     },
     {
       "path": "controllers/httpapi/directory_machine_read_test.go",
-      "kb": 66
+      "kb": 65
     },
     {
       "path": "repository/identity.go",
