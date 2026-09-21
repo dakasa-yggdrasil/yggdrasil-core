@@ -1,0 +1,46 @@
+# Prometheus alert rules for the directory machine-read audit path
+# (ADR-0019).
+#
+# The three collaborator directory read routes store their
+# directory.machine_read audit row synchronously and fail closed: when the
+# row cannot be stored the outcome is withheld behind a 500 "directory audit
+# is unavailable" and yggdrasil_directory_audit_failures_total{reason} is
+# incremented exactly once. rate() of that counter is therefore exactly the
+# rate of those 500s, and the reason label tells a missing writer
+# (store_unconfigured) from a slow store (insert_timeout) and from one that
+# rejects rows (insert_failed).
+#
+# Apply path: the same as the sibling rule files in this directory. The core
+# ships no ServiceMonitor or scrape annotation; the operator loads this file
+# into the rule_files: directory (or the managed rule group) of the
+# Prometheus that scrapes the core's /metrics endpoint. Nothing in this
+# repository applies it.
+#
+# controllers/httpapi/directory_audit_alert_rule_test.go pins this file to
+# the family the binary renders on /metrics and to the closed reason set.
+#
+# Runbook: docs/adr/0019-scope-directory-machine-principals-to-exact-collaborator-read-routes.md
+groups:
+  - name: yggdrasil-directory-audit
+    rules:
+      # One alert per reason series: the plain rate() keeps the reason
+      # label, so the firing alert already says which failure it is.
+      - alert: YggdrasilDirectoryAuditWithheld
+        expr: rate(yggdrasil_directory_audit_failures_total[5m]) > 0
+        for: 5m
+        labels:
+          severity: page
+          service: yggdrasil-core
+        annotations:
+          summary: "Directory reads are being withheld because the audit row cannot be stored"
+          description: >
+            yggdrasil-core has been answering directory machine reads with
+            500 "directory audit is unavailable" for five minutes
+            (reason={{ $labels.reason }}). Consumers treat that 5xx as
+            retry-later, so no approval or publication that depends on a
+            directory read proceeds until the audit_events store accepts
+            rows again. store_unconfigured: the server booted without an
+            audit writer. insert_timeout: the synchronous write deadline
+            fired, the store is slow. insert_failed: the store rejected the
+            row.
+          runbook: "https://github.com/dakasa-yggdrasil/yggdrasil-core/blob/main/docs/adr/0019-scope-directory-machine-principals-to-exact-collaborator-read-routes.md"

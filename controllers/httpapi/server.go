@@ -157,18 +157,24 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	if err := validateBootSecrets(); err != nil {
 		return nil, err
 	}
-	// The directory machine inventory fails closed in every environment: a
-	// malformed entry must not boot a server that silently refuses (or, worse,
-	// mis-scopes) a service credential the operator believes is configured.
-	if _, err := directoryMachinePrincipalsFromEnv(); err != nil {
+	// The directory machine inventory (ADR-0019) is loaded and validated
+	// here, once, and fails closed in every environment: a malformed entry
+	// must not boot a server that silently refuses (or, worse, mis-scopes) a
+	// service credential the operator believes is configured. The request
+	// path matches against this copy and never reads the environment again,
+	// so the inventory a request sees is exactly the one this boot validated.
+	// An absent inventory is nil: no directory principal exists.
+	directoryPrincipals, err := directoryMachinePrincipalsFromEnv()
+	if err != nil {
 		return nil, err
 	}
 
 	server := &Server{
-		serviceName: serviceName,
-		db:          db,
-		rabbitmq:    conn,
-		logger:      logger,
+		serviceName:                serviceName,
+		db:                         db,
+		rabbitmq:                   conn,
+		logger:                     logger,
+		directoryMachinePrincipals: directoryPrincipals,
 	}
 	// Optional: auth secrets envelope. KEK is 32 raw bytes base64-encoded
 	// in YGGDRASIL_AUTH_KEK_BASE64; if absent the MFA HTTP layer fails
@@ -871,7 +877,7 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 		// console JWT and session paths, and no collaborator claims are ever
 		// attached. Requests that do not name themselves keep today's
 		// behavior on every route.
-		if claim := directoryMachineClaimFor(r); claim.claimed {
+		if claim := s.directoryMachineClaimFor(r); claim.claimed {
 			s.serveDirectoryMachineRequest(w, r, claim)
 			return
 		}
@@ -1291,6 +1297,15 @@ type Server struct {
 	// /me and the ops RBAC gate use). Tests inject a fake so the handler's gating
 	// logic is exercised without a live DB.
 	callerPermResolver func(ctx context.Context, collaboratorID string) ([]string, error)
+	// directoryMachinePrincipals is the directory machine inventory
+	// (ADR-0019) that New loaded and validated from
+	// YGGDRASIL_DIRECTORY_MACHINE_PRINCIPALS_JSON once at boot. The gate
+	// matches every request against this copy and never reads the
+	// environment again, so a request can only ever see the inventory the
+	// boot validated. nil means no directory principal is configured: the
+	// dedicated header is refused as unknown and a bearer is never a
+	// directory attempt.
+	directoryMachinePrincipals []directoryMachinePrincipal
 	// directoryAuditSink replaces the durable audit_events writer for the
 	// directory machine-read path. nil (production) persists synchronously
 	// through repository.RecordAuditEvent before the outcome is answered;

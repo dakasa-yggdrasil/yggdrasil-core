@@ -323,4 +323,23 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	for name, count := range panicSnap {
 		fmt.Fprintf(w, "yggdrasil_goroutine_panics_total{name=\"%s\"} %d\n", name, count)
 	}
+
+	// Directory audit failure counter, faceted by reason (closed set). The
+	// directory machine-read path (ADR-0019) writes its audit row before it
+	// answers and withholds the outcome as 500 "directory audit is
+	// unavailable" when the row cannot be stored; each such 500 bumps one
+	// bucket here. Stays at zero on a happy cluster. A non-zero rate means
+	// the directory is refusing to answer for lack of a trail, and the
+	// reason says whether the store is missing, slow, or rejecting rows.
+	directoryAuditSnap := metrics.DirectoryAuditFailuresSnapshot()
+	fmt.Fprintf(w, "# HELP yggdrasil_directory_audit_failures_total Total directory.machine_read outcomes withheld because the audit row could not be stored, by reason (ADR-0019)\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_directory_audit_failures_total counter\n")
+	for _, reason := range []string{
+		metrics.DirectoryAuditFailureStoreUnconfigured,
+		metrics.DirectoryAuditFailureInsertTimeout,
+		metrics.DirectoryAuditFailureInsertFailed,
+	} {
+		fmt.Fprintf(w, "yggdrasil_directory_audit_failures_total{reason=\"%s\"} %d\n",
+			reason, directoryAuditSnap[reason])
+	}
 }

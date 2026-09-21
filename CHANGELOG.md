@@ -48,7 +48,18 @@ All notable changes to yggdrasil-core are documented here.
   from a well-formed W3C `traceparent`, and a directory `principal_id` is
   bounded to 247 characters so the audit actor fits its column. Boot rejects
   a malformed inventory in every environment and, in production, any digest
-  shared with another credential scope.
+  shared with another credential scope. The inventory is loaded and
+  validated once in `New()` and held by the server; the request path matches
+  credentials against that copy and never rereads the environment, so a
+  rotation written to a running process takes effect at the next boot and a
+  malformed inventory can only refuse the boot, never a request. New metric
+  family `yggdrasil_directory_audit_failures_total{reason}` counts each
+  withheld outcome once, with the closed set `store_unconfigured` (no audit
+  writer), `insert_timeout` (the synchronous write deadline fired), and
+  `insert_failed` (the store rejected the row); the alert rule
+  `YggdrasilDirectoryAuditWithheld` on `rate(...[5m]) > 0` ships in
+  `monitoring/prometheus/yggdrasil-directory-audit-alerts.yaml` for the
+  operator to load next to the sibling rule files.
 - **AMQP frame allocation is bounded before payload allocation.** `github.com/rabbitmq/amqp091-go` is upgraded from v1.10.0 to v1.13.0, the first release patched for GHSA-6c5v-hqjr-5xxp. Core continues to use `amqp.Dial`, so the library's new experimental automatic connection and topology recovery remains disabled unless explicitly configured later.
 
 - Added hash-only workflow machine principals with exact workflow allowlists,

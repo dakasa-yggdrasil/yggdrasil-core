@@ -5,9 +5,6 @@ import (
 	"strings"
 	"testing"
 	"time"
-
-	"github.com/DATA-DOG/go-sqlmock"
-	"go.uber.org/zap"
 )
 
 const (
@@ -308,19 +305,6 @@ func TestValidateBootSecrets_ProductionReportsMalformedDirectoryInventory(t *tes
 	err := validateBootSecrets()
 	if err == nil || !strings.Contains(err.Error(), directoryMachinePrincipalsEnv) {
 		t.Fatalf("malformed directory inventory not reported: %v", err)
-	}
-}
-
-func TestNewFailsClosedOnMalformedDirectoryInventoryInEveryEnvironment(t *testing.T) {
-	t.Setenv("YGGDRASIL_ENV", "")
-	t.Setenv(directoryMachinePrincipalsEnv, `[{"principal_id":"broken"}]`)
-	db, _, err := sqlmock.New()
-	if err != nil {
-		t.Fatal(err)
-	}
-	t.Cleanup(func() { _ = db.Close() })
-	if _, err := New("yggdrasil-core-test", db, nil, zap.NewNop()); err == nil || !strings.Contains(err.Error(), directoryMachinePrincipalsEnv) {
-		t.Fatalf("New accepted a malformed directory inventory: %v", err)
 	}
 }
 

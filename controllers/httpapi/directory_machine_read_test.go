@@ -71,6 +71,18 @@ func clearMachineCredentialEnv(t *testing.T) {
 	t.Setenv("YGGDRASIL_CONSOLE_JWT_AUDIENCES", "")
 }
 
+// loadDirectoryPrincipalsForTest loads the inventory the current environment
+// declares, the way New does once at boot, for tests that build a bare Server
+// instead of booting one.
+func loadDirectoryPrincipalsForTest(t *testing.T) []directoryMachinePrincipal {
+	t.Helper()
+	principals, err := directoryMachinePrincipalsFromEnv()
+	if err != nil {
+		t.Fatalf("directory inventory: %v", err)
+	}
+	return principals
+}
+
 // newDirectoryGateServer boots the real HTTP server (New: full middleware
 // pipeline plus the real mux and handlers) over a sqlmock database, with the
 // audit writer replaced by an in-process capture.
@@ -708,10 +720,6 @@ func TestDirectoryMachineRequestNeverReachesConsoleHandlers(t *testing.T) {
 		{name: "garbage in dedicated header on public route", env: func(t *testing.T) {
 			configureDirectoryPrincipal(t, allDirectoryCapabilities(), testTartaroInstance)
 		}, method: http.MethodGet, target: "/healthz", carrier: "header", token: "garbage", wantStatus: 401},
-		{name: "dedicated header with malformed inventory", env: func(t *testing.T) {
-			clearMachineCredentialEnv(t)
-			t.Setenv(directoryMachinePrincipalsEnv, `[{"principal_id":"broken"}]`)
-		}, method: http.MethodGet, target: "/api/v1/collaborators/" + id.String(), carrier: "header", token: testDirectoryToken, wantStatus: 401},
 		{name: "valid token on directory route with no database", env: func(t *testing.T) {
 			configureDirectoryPrincipal(t, allDirectoryCapabilities(), testTartaroInstance)
 		}, method: http.MethodGet, target: "/api/v1/collaborators/" + id.String(), carrier: "header", token: testDirectoryToken, wantStatus: 500},
@@ -719,7 +727,7 @@ func TestDirectoryMachineRequestNeverReachesConsoleHandlers(t *testing.T) {
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
 			tc.env(t)
-			server := &Server{logger: zap.NewNop()}
+			server := &Server{logger: zap.NewNop(), directoryMachinePrincipals: loadDirectoryPrincipalsForTest(t)}
 			gate := server.requireAuthenticatedConsoleAPIs(http.HandlerFunc(func(_ http.ResponseWriter, r *http.Request) {
 				claims, _ := claimsFromContext(r.Context())
 				t.Fatalf("directory machine request reached the console handler chain (claims=%v)", claims)

@@ -103,12 +103,22 @@ Yggdrasil would authorize. Any database failure answers a fixed 500
 attributable outcome writes a `directory.machine_read` audit row before it is
 answered; the write is synchronous and fail-closed, so when the row cannot be
 stored the outcome is withheld and the request answers 500 `internal.error`
-(`directory audit is unavailable`) instead. The row never carries the
+(`directory audit is unavailable`) instead. Each withheld outcome is counted
+once in the Prometheus counter `yggdrasil_directory_audit_failures_total`
+on `/metrics`, labeled `reason` with `store_unconfigured` (the server has no
+audit writer), `insert_timeout` (the synchronous write deadline fired), or
+`insert_failed` (the store rejected the row), so an audit store outage on the
+read path is visible without reading logs. The row never carries the
 credential, the query string, or any email; its trace reference comes only
 from a well-formed W3C `traceparent`, and a directory `principal_id` is
-bounded to 247 characters so the audit actor fits its column. Boot fails on a
-malformed directory inventory in every environment, and production boot
-rejects a directory digest shared with any other credential scope.
+bounded to 247 characters so the audit actor fits its column. The inventory
+is loaded and validated once at boot and held by the server; the request
+path matches credentials against that copy and never reads the environment
+again, so a malformed inventory can only refuse the boot, never a request,
+and a rotation written to the environment of a running process takes effect
+only at the next boot. Boot fails on a malformed directory inventory in every
+environment, and production boot rejects a directory digest shared with any
+other credential scope.
 
 `YGGDRASIL_AUTH_ADMIN_TOKEN` remains a purpose-built credential for the exact
 provider, SCIM, and SAML administration mutations that support machine
