@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"fmt"
 	"net/http"
 	"os"
@@ -55,22 +56,75 @@ func (s *Server) handleEffectiveTartaroActions(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	memberships, err := repository.ListTeamMemberships(r.Context(), s.db, model.ListTeamMembershipsRequest{
-		CollaboratorID: collabID.String(),
-		ActiveOnly:     true,
-	})
+	effective, err := s.computeEffectiveTartaroActions(r.Context(), collabID)
 	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
 
+	traitActions := parseTraitActions(collab.Traits)
+	drift := !equalSortedStrings(traitActions, effective.Computed)
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"collaborator_id":          collabID,
+		"trait_tartaro_actions":    traitActions,
+		"effective_via_teams":      effective.PerTeam,
+		"computed_tartaro_actions": effective.Computed,
+		"drift":                    drift,
+	})
+}
+
+// effectiveTartaroActionsResult is the ground-truth computation of one
+// collaborator's Tartaro actions on the configured instance: the per-team
+// breakdown and the sorted union.
+type effectiveTartaroActionsResult struct {
+	PerTeam  []effectivePerTeam
+	Computed []string
+}
+
+// computeEffectiveTartaroActions walks the collaborator's active team
+// memberships and their grants on the configured Tartaro instance. Grants on
+// any other instance and wildcard grants are ignored, exactly as the console
+// route has always done. The membership set is the one the tartaro reactor
+// materializes into the trait (tm.active only), so the console drift view
+// compares like with like.
+func (s *Server) computeEffectiveTartaroActions(ctx context.Context, collabID uuid.UUID) (effectiveTartaroActionsResult, error) {
+	memberships, err := repository.ListTeamMemberships(ctx, s.db, model.ListTeamMembershipsRequest{
+		CollaboratorID: collabID.String(),
+		ActiveOnly:     true,
+	})
+	if err != nil {
+		return effectiveTartaroActionsResult{}, err
+	}
+	return s.tartaroActionsFromMemberships(ctx, memberships)
+}
+
+// computeAuthorizedTartaroActions is the directory machine oracle's variant.
+// A machine consumer treats the result as proof that a human may act, so it
+// walks only memberships that Yggdrasil's own RBAC projection would honor at
+// this moment (repository.ListAuthorizationTeamMemberships: membership
+// active, team active, inside the starts_at/ends_at window) and then applies
+// the same grant walk as the console computation. An expired, not-yet-started,
+// or deactivated-team membership therefore contributes no action here even
+// while the materialized trait or the console drift view still lists it.
+func (s *Server) computeAuthorizedTartaroActions(ctx context.Context, collabID uuid.UUID) (effectiveTartaroActionsResult, error) {
+	memberships, err := repository.ListAuthorizationTeamMemberships(ctx, s.db, collabID)
+	if err != nil {
+		return effectiveTartaroActionsResult{}, err
+	}
+	return s.tartaroActionsFromMemberships(ctx, memberships)
+}
+
+// tartaroActionsFromMemberships is the grant walk shared by both
+// computations: per membership, the grants of that team on the configured
+// Tartaro instance, wildcards skipped, plus the sorted union.
+func (s *Server) tartaroActionsFromMemberships(ctx context.Context, memberships []model.TeamMembership) (effectiveTartaroActionsResult, error) {
 	perTeam := make([]effectivePerTeam, 0, len(memberships))
 	union := map[string]struct{}{}
 	for _, m := range memberships {
-		grants, err := repository.ListTeamGrants(r.Context(), s.db, model.ListTeamGrantsRequest{TeamID: m.TeamID.String()})
+		grants, err := repository.ListTeamGrants(ctx, s.db, model.ListTeamGrantsRequest{TeamID: m.TeamID.String()})
 		if err != nil {
-			writeMappedError(w, err)
-			return
+			return effectiveTartaroActionsResult{}, err
 		}
 		var actions []string
 		for _, g := range grants {
@@ -99,16 +153,7 @@ func (s *Server) handleEffectiveTartaroActions(w http.ResponseWriter, r *http.Re
 	}
 	sort.Strings(computed)
 
-	traitActions := parseTraitActions(collab.Traits)
-	drift := !equalSortedStrings(traitActions, computed)
-
-	writeJSON(w, http.StatusOK, map[string]any{
-		"collaborator_id":          collabID,
-		"trait_tartaro_actions":    traitActions,
-		"effective_via_teams":      perTeam,
-		"computed_tartaro_actions": computed,
-		"drift":                    drift,
-	})
+	return effectiveTartaroActionsResult{PerTeam: perTeam, Computed: computed}, nil
 }
 
 // handleSyncTartaroActions emits a synthetic team_membership.added event

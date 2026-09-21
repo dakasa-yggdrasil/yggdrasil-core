@@ -62,6 +62,13 @@ func validateBootSecrets() error {
 	if eventPrincipalsErr != nil {
 		issues = append(issues, eventPrincipalsErr.Error())
 	}
+	// Directory principals are optional (a deployment without a directory
+	// consumer configures none), but when present they must parse and must
+	// not share a credential with any other scope.
+	directoryPrincipals, directoryPrincipalsErr := directoryMachinePrincipalsFromEnv()
+	if directoryPrincipalsErr != nil {
+		issues = append(issues, directoryPrincipalsErr.Error())
+	}
 	legacyWorkflow, legacyWorkflowErr := legacyWorkflowCredentialFromEnv(now)
 	if legacyWorkflowErr != nil {
 		issues = append(issues, legacyWorkflowErr.Error())
@@ -157,6 +164,32 @@ func validateBootSecrets() error {
 			for eventIndex, eventPrincipal := range eventPrincipals {
 				if machineCredentialDigestsCollide(workflowPrincipal.TokenSHA256, eventPrincipal.TokenSHA256) {
 					issues = append(issues, fmt.Sprintf("%s entry %d credential must differ from %s entry %d", workflowMachinePrincipalsEnv, workflowIndex, eventPublisherPrincipalsEnv, eventIndex))
+				}
+			}
+		}
+	}
+	if directoryPrincipalsErr == nil {
+		for index, principal := range directoryPrincipals {
+			// A directory read credential must never double as any plaintext
+			// bridge or as a workflow/event principal: reuse would let a
+			// read-only leak dispatch, publish, deploy, or administer.
+			for _, other := range plaintextScopes {
+				if digestMatchesPlaintext(principal.TokenSHA256, other.value) {
+					issues = append(issues, fmt.Sprintf("%s entry %d credential must differ from %s", directoryMachinePrincipalsEnv, index, other.name))
+				}
+			}
+			if workflowPrincipalsErr == nil {
+				for workflowIndex, workflowPrincipal := range workflowPrincipals {
+					if machineCredentialDigestsCollide(principal.TokenSHA256, workflowPrincipal.TokenSHA256) {
+						issues = append(issues, fmt.Sprintf("%s entry %d credential must differ from %s entry %d", directoryMachinePrincipalsEnv, index, workflowMachinePrincipalsEnv, workflowIndex))
+					}
+				}
+			}
+			if eventPrincipalsErr == nil {
+				for eventIndex, eventPrincipal := range eventPrincipals {
+					if machineCredentialDigestsCollide(principal.TokenSHA256, eventPrincipal.TokenSHA256) {
+						issues = append(issues, fmt.Sprintf("%s entry %d credential must differ from %s entry %d", directoryMachinePrincipalsEnv, index, eventPublisherPrincipalsEnv, eventIndex))
+					}
 				}
 			}
 		}

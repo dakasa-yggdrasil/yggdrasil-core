@@ -5,6 +5,35 @@ All notable changes to yggdrasil-core are documented here.
 ## [Unreleased]
 
 ### Security
+- **Directory machine principals for exact collaborator reads (ADR-0019).**
+  A third hashed inventory, `YGGDRASIL_DIRECTORY_MACHINE_PRINCIPALS_JSON`,
+  lets a purpose-bound service resolve one exact active email, read one
+  collaborator by canonical id, and read effective Tartaro actions on an
+  allowlisted instance, each behind its own capability. The credential is
+  accepted only on those three GET routes, served with minimal projections
+  (`id`, `primary_email`, `display_name`, `status`; `collaborator_id`,
+  `computed_tartaro_actions`), never becomes a collaborator, and fails closed
+  with 401/403 on expired, revoked, out-of-scope, wrong-method, path-variant,
+  broad-query, and foreign-route attempts. The directory claim is decided
+  before the gate's public pass-through on every request, so a directory
+  attempt on a public route, on a non-canonical spelling the mux would
+  redirect, or on an unknown route is refused by the same branch and never
+  reaches a handler, a redirect, or a 404; callers that do not name
+  themselves as directory attempts keep every route's existing behavior.
+  Effective actions come only from memberships the RBAC projection honors
+  now (active membership, active team, inside the `starts_at`/`ends_at`
+  window; one predicate shared with the RBAC subject resolver), so the
+  machine answer is never wider than what Yggdrasil authorizes; the console
+  drift view is unchanged. Database failures on the machine path answer a
+  fixed 500 `internal.error` without the driver text. Every attributable
+  outcome is audited as `directory.machine_read` synchronously and
+  fail-closed: the row is stored before the outcome is answered and, when it
+  cannot be, the outcome (data included) is withheld behind a 500. The row
+  never carries credential, query, or email; `trace_id`/`span_id` come only
+  from a well-formed W3C `traceparent`, and a directory `principal_id` is
+  bounded to 247 characters so the audit actor fits its column. Boot rejects
+  a malformed inventory in every environment and, in production, any digest
+  shared with another credential scope.
 - **AMQP frame allocation is bounded before payload allocation.** `github.com/rabbitmq/amqp091-go` is upgraded from v1.10.0 to v1.13.0, the first release patched for GHSA-6c5v-hqjr-5xxp. Core continues to use `amqp.Dial`, so the library's new experimental automatic connection and topology recovery remains disabled unless explicitly configured later.
 
 - Added hash-only workflow machine principals with exact workflow allowlists,

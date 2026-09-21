@@ -157,6 +157,12 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	if err := validateBootSecrets(); err != nil {
 		return nil, err
 	}
+	// The directory machine inventory fails closed in every environment: a
+	// malformed entry must not boot a server that silently refuses (or, worse,
+	// mis-scopes) a service credential the operator believes is configured.
+	if _, err := directoryMachinePrincipalsFromEnv(); err != nil {
+		return nil, err
+	}
 
 	server := &Server{
 		serviceName: serviceName,
@@ -852,6 +858,24 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 
 func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Directory machine-read path (ADR-0019) is decided first, on every
+		// request, before the public pass-through and before any other
+		// credential family. A request that names itself as a directory
+		// attempt (dedicated header present, or a bearer whose digest matches
+		// a configured directory principal in any lifecycle state) is served
+		// entirely by the directory branch: the three exact collaborator read
+		// routes with a minimal projection, and 401/403 on everything else,
+		// including public routes, non-canonical spellings the mux would
+		// redirect, unknown routes, and the routes of the other credential
+		// families. It never continues to a handler, to the mux, or to the
+		// console JWT and session paths, and no collaborator claims are ever
+		// attached. Requests that do not name themselves keep today's
+		// behavior on every route.
+		if claim := directoryMachineClaimFor(r); claim.claimed {
+			s.serveDirectoryMachineRequest(w, r, claim)
+			return
+		}
+
 		if !requiresAuthenticatedConsoleRequest(r.Method, r.URL.Path) {
 			next.ServeHTTP(w, r)
 			return
@@ -1267,6 +1291,12 @@ type Server struct {
 	// /me and the ops RBAC gate use). Tests inject a fake so the handler's gating
 	// logic is exercised without a live DB.
 	callerPermResolver func(ctx context.Context, collaboratorID string) ([]string, error)
+	// directoryAuditSink replaces the durable audit_events writer for the
+	// directory machine-read path. nil (production) persists synchronously
+	// through repository.RecordAuditEvent before the outcome is answered;
+	// tests inject a capturing sink so audit content is asserted without a
+	// database, and a failing sink to prove the outcome is withheld.
+	directoryAuditSink func(model.AuditEvent) error
 	// capabilityAllowlist holds the warn-only capability-naming validator
 	// allowlist loaded once at boot from
 	// config/capability_naming_allowlist.yaml. nil disables the validator

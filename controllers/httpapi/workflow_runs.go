@@ -694,6 +694,7 @@ func requestPresentsStaticCredential(r *http.Request) bool {
 		"X-Yggdrasil-Workflow-Token",
 		"X-Yggdrasil-Event-Token",
 		"X-Yggdrasil-Auth-Admin-Token",
+		directoryMachineTokenHeader,
 		"X-Deploy-Token",
 		"X-Session-Token",
 	} {
