@@ -76,8 +76,12 @@ attribute); none of them serves its public body, its redirect, or a 404 to
 such a request. Callers that do not name themselves as directory attempts
 (anonymous, session, console JWT, bearers matching no directory digest) keep
 every route's existing behavior, including the mux's cleaned-path redirect,
-so human console behavior is unchanged. The claim check loads the inventory
-only when a request carries the dedicated header or a bearer.
+so human console behavior is unchanged. The inventory is loaded and validated
+once, at boot, and held by the server; the claim check matches the presented
+credential against that copy and never reads the environment on the request
+path, so a malformed inventory can only refuse the boot, never a request, and
+a rotation written to the environment of a running process takes effect only
+at the next boot.
 
 The email lookup requires exactly `q=<one exact email>` and `status=active`,
 accepts an optional `limit` between 1 and 100, and rejects every other query
@@ -120,8 +124,15 @@ outcome, including a 200 with data, is withheld and the request answers 500
 `internal.error` with the fixed body `directory audit is unavailable`. The
 only directory response that ever leaves without its row is that 500, which
 is logged at error level with the principal, capability, target, outcome, and
-reason. The row never carries the credential, the query string, or an email
-address; its `trace_id` and `span_id` come only from a well-formed W3C
+reason, and counted once in the Prometheus counter
+`yggdrasil_directory_audit_failures_total` on `/metrics`, labeled `reason`
+with `store_unconfigured` (the server has no audit writer), `insert_timeout`
+(the synchronous write deadline fired, whether the driver reports the
+deadline or its own cancellation), or `insert_failed` (the store rejected the
+row). The counter observes the refusal and never changes it: there is no
+throttle, retry, or fallback writer. The row never carries the credential,
+the query string, or an email address; its `trace_id` and `span_id` come only
+from a well-formed W3C
 `traceparent` header (anything else is dropped, never stored), and a
 directory `principal_id` is bounded at boot to 247 characters so the actor
 `service:<principal_id>` fits its column, because a row the database rejects
@@ -144,7 +155,14 @@ retire the old entry); there is no mint endpoint and no automatic renewal.
   trait; the console drift view is not narrowed.
 - The audit store is on the read path. An `audit_events` outage makes the
   directory read unavailable (500) instead of serving unaudited data;
-  consumers already treat 5xx as retry-later, never as a verdict.
+  consumers already treat 5xx as retry-later, never as a verdict. Operators
+  alert on `rate(yggdrasil_directory_audit_failures_total[5m]) > 0`, which
+  is exactly the rate of those 500s, and read the `reason` label to tell a
+  slow store from one that rejects rows.
+- The inventory is a boot-time value. Rotating a directory credential means
+  updating `YGGDRASIL_DIRECTORY_MACHINE_PRINCIPALS_JSON` and restarting the
+  core; a running process never picks up the change, and never loses its
+  validated inventory to a bad edit of the environment either.
 - The console routes keep their existing behavior for human sessions and
   console JWTs; the directory branch is additive and only short-circuits
   requests that name themselves as machine attempts.
