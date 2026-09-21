@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: f9a20b3d3aae45c5158b61e9559e9bf0b4200f99
-verified_diff_sha256: 51e8f75061f9aaea5215ec65facb700909b5f0378dd8ded89721e4bbef14d77f
+verified_at_commit: a064227af33bc363efb182dbed03827fb7e86e60
+verified_diff_sha256: a9f0025039826786926959a91e25a4052c3074539463c3c45ef5e55143735cb6
 reconciler_schema: 1
 verified_at: 2026-09-21
 by: Claude
-note: Reconciled the directory machine principal contract (ADR-0019) including the non-canonical path rule: a doubled-slash or dot-segment spelling that escapes the gate prefixes is refused by the directory branch (401/403, audited) before the mux can answer its cleaned-path redirect; anonymous, session, console JWT, and unknown-bearer callers keep the redirect. Regenerated .ai/ai_context.json and docs/REPO_SUMMARY.generated.md. No change to human console routes.
+note: Reconciled the directory machine principal contract (ADR-0019) after the adversarial review: the directory claim is decided before the public pass-through on every request (public, non-canonical, and unknown routes are refused and audited; the mux redirect is kept only for callers that are not directory attempts), the directory.machine_read row is written synchronously and fail-closed (no outcome without its row; trace ids only from a well-formed W3C traceparent; principal_id bounded to 247), effective actions use the RBAC membership predicate (active team, starts_at/ends_at window) shared with the RBAC subject resolver, and database failures answer a fixed 500 internal.error. Console routes are unchanged for human callers. Regenerated .ai/ai_context.json and docs/REPO_SUMMARY.generated.md.

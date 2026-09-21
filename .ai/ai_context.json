@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-09-21T02:34:01-03:00",
+  "generated_at": "2026-09-21T07:09:43-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 606,
+    ".go": 607,
     ".json": 143,
     ".py": 1,
     ".sql": 51,
@@ -11,7 +11,7 @@
     ".yml": 21
   },
   "provenance": {
-    "commit": "f9a20b3d3aae45c5158b61e9559e9bf0b4200f99",
+    "commit": "a064227af33bc363efb182dbed03827fb7e86e60",
     "dirty": true,
     "files": [
       {
@@ -24,7 +24,7 @@
       },
       {
         "path": "CLAUDE.md",
-        "sha256": "95f3374af1e2aa623b32fe10893b57e9cab2e4255411f97bef1742cd221f947d"
+        "sha256": "0494d63389e60e27577913c5fa5a8e23ff38cb5e901d1aa7dc69800a0ead19fd"
       },
       {
         "path": "README.md",
@@ -60,12 +60,12 @@
     {
       "path": "controllers/httpapi",
       "files": 141,
-      "kb": 1294
+      "kb": 1320
     },
     {
       "path": "repository",
-      "files": 89,
-      "kb": 571
+      "files": 90,
+      "kb": 576
     },
     {
       "path": "manifest",
@@ -156,16 +156,16 @@
       "kb": 74
     },
     {
+      "path": "controllers/httpapi/directory_machine_read_test.go",
+      "kb": 66
+    },
+    {
       "path": "repository/identity.go",
       "kb": 62
     },
     {
       "path": "controllers/message/workflows.go",
       "kb": 50
-    },
-    {
-      "path": "controllers/httpapi/auth.go",
-      "kb": 47
     }
   ],
   "contracts": {
