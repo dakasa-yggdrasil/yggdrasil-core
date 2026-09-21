@@ -69,9 +69,11 @@ that `net/http`'s `ServeMux` would otherwise answer with a redirect to the
 clean path (`/api/v1//collaborators`, `/api/v1/./collaborators/{id}`,
 `//api/v1/collaborators`), and canonical spellings that match no registered
 pattern (`/API/v1/collaborators`) all answer 401 or 403 from the directory
-branch with the usual audit row when the request names itself as a directory
-attempt; none of them serves its public body, its redirect, or a 404 to such a
-request. Callers that do not name themselves as directory attempts
+branch when the request names itself as a directory attempt, with the usual
+audit row when the credential matched a configured principal (a dedicated
+header whose value matches no principal is the plain 401 and has nothing to
+attribute); none of them serves its public body, its redirect, or a 404 to
+such a request. Callers that do not name themselves as directory attempts
 (anonymous, session, console JWT, bearers matching no directory digest) keep
 every route's existing behavior, including the mux's cleaned-path redirect,
 so human console behavior is unchanged. The claim check loads the inventory
