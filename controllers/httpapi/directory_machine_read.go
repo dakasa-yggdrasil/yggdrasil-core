@@ -58,7 +58,6 @@ func (route directoryMachineRoute) capability() string {
 type directoryMachineClaim struct {
 	claimed   bool
 	principal *directoryMachinePrincipal
-	configErr error
 }
 
 // directoryMachineClaimFor decides whether the request must be served by the
@@ -68,28 +67,20 @@ type directoryMachineClaim struct {
 // console session. A plain bearer marks the request only when its digest
 // matches a configured directory principal; an unknown bearer keeps today's
 // console behavior for OIDC JWTs and opaque session tokens.
-func directoryMachineClaimFor(r *http.Request) directoryMachineClaim {
-	header := strings.TrimSpace(r.Header.Get(directoryMachineTokenHeader))
-	bearer := bearerToken(r.Header.Get("Authorization"))
-	if header == "" && bearer == "" {
-		// Nothing a directory principal could travel in. The gate asks this
-		// on every request, so the inventory is not loaded for anonymous,
-		// cookie, or basic-auth traffic.
-		return directoryMachineClaim{}
+//
+// The credential is matched against s.directoryMachinePrincipals, the
+// inventory New loaded and validated once at boot. The environment is never
+// read on the request path, so a malformed inventory can only refuse the
+// boot, never a request, and an inventory rotated in the environment of a
+// running process takes effect only at the next boot. With no inventory the
+// header matches nothing (refused as unknown) and a bearer is not a directory
+// attempt.
+func (s *Server) directoryMachineClaimFor(r *http.Request) directoryMachineClaim {
+	if header := strings.TrimSpace(r.Header.Get(directoryMachineTokenHeader)); header != "" {
+		return directoryMachineClaim{claimed: true, principal: directoryMachinePrincipalByCredential(header, s.directoryMachinePrincipals)}
 	}
-
-	principals, err := directoryMachinePrincipalsFromEnv()
-	if err != nil {
-		// The inventory is unusable. A request that named itself through the
-		// dedicated header is refused; a bare bearer cannot be attributed to
-		// this path without digests, so it continues to the console gate.
-		return directoryMachineClaim{claimed: header != "", configErr: err}
-	}
-	if header != "" {
-		return directoryMachineClaim{claimed: true, principal: directoryMachinePrincipalByCredential(header, principals)}
-	}
-	if bearer != "" {
-		if principal := directoryMachinePrincipalByCredential(bearer, principals); principal != nil {
+	if bearer := bearerToken(r.Header.Get("Authorization")); bearer != "" {
+		if principal := directoryMachinePrincipalByCredential(bearer, s.directoryMachinePrincipals); principal != nil {
 			return directoryMachineClaim{claimed: true, principal: principal}
 		}
 	}
@@ -233,14 +224,6 @@ func projectDirectoryCollaborator(collaborator model.Collaborator) directoryColl
 // synchronously and, when the row cannot be written, answers 500 itself so
 // no data and no verdict leave without their trail.
 func (s *Server) serveDirectoryMachineRequest(w http.ResponseWriter, r *http.Request, claim directoryMachineClaim) {
-	if claim.configErr != nil {
-		if s.logger != nil {
-			s.logger.Error("directory machine principals configuration is invalid; refusing machine directory request",
-				zap.String("method", r.Method), zap.String("path", r.URL.Path), zap.Error(claim.configErr))
-		}
-		writeProblemJSON(w, http.StatusUnauthorized, httperr.CodeAuthUnauthenticated, "directory credential is missing, unknown, expired, or not active")
-		return
-	}
 	principal := claim.principal
 	if usable, reason := directoryMachinePrincipalUsable(principal, time.Now().UTC()); !usable {
 		if !s.auditDirectoryMachineOutcome(w, r, principal, "", "", "denied", reason) {
