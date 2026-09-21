@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 1e0641146b79bb9e26682af42d45278d17918eae
-verified_diff_sha256: 7b706309fa87aef2cdfc5d1e5f31a6bf607abdb2eb62212263f25d1b79231ceb
+verified_at_commit: 13a6eccb00b0da33371bbd4c528ba208f61270e2
+verified_diff_sha256: 6d1b1cad6a52859f76ca0dfe5cc6235fbf82384a8286d86a71d3f41bf278c946
 reconciler_schema: 1
-verified_at: 2026-09-09
-by: Codex
-note: Reconciled the nullable team email projection in human authorization subject expansion, active-membership filters, ancestor preservation, and fail-closed lookup behavior. No auth policy or schema changes.
+verified_at: 2026-09-20
+by: Claude
+note: Reconciled the directory machine principal contract (ADR-0019): third hashed inventory with exact capabilities and Tartaro instance allowlist, the three exact collaborator read routes with minimal projections, fail-closed 401/403/400 behavior, audit shape, and boot validation. No change to human console routes.
