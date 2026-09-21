@@ -433,33 +433,13 @@ func (s *Server) serveDirectoryEffectiveActions(w http.ResponseWriter, r *http.R
 // while its outcome is being recorded does not erase the row.
 const directoryAuditWriteTimeout = 5 * time.Second
 
-// traceparentPattern is the W3C Trace Context header form:
-// version-traceid-parentid-flags, all lowercase hex. Anything else is not a
-// trace reference and is dropped rather than stored, so a caller cannot
-// choose a value the audit_events columns reject.
-var traceparentPattern = regexp.MustCompile(`^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$`)
-
-// directoryTraceIDs returns the trace-id and parent-id of a well-formed W3C
-// traceparent header, or empty strings when the header is absent, malformed,
-// uses the reserved version ff, or carries an all-zero id.
-func directoryTraceIDs(header string) (traceID, spanID string) {
-	header = strings.TrimSpace(header)
-	if !traceparentPattern.MatchString(header) {
-		return "", ""
-	}
-	parts := strings.Split(header, "-")
-	if parts[0] == "ff" || parts[1] == strings.Repeat("0", 32) || parts[2] == strings.Repeat("0", 16) {
-		return "", ""
-	}
-	return parts[1], parts[2]
-}
-
 // directoryMachineAuditEvent builds the audit row for one machine outcome. It
 // carries the principal, rotation, capability, method, path, target
 // collaborator id, outcome, and reason. It never carries the credential, the
 // query string, or any email address: the lookup email lives only in the
 // query, which is deliberately not recorded. The trace reference is taken
-// from a valid W3C traceparent only.
+// from a valid W3C traceparent only (requestTraceIDs, shared by every audit
+// writer).
 func directoryMachineAuditEvent(r *http.Request, principal *directoryMachinePrincipal, capability, targetID, outcome, reason string) model.AuditEvent {
 	metadata := map[string]any{
 		"principal_id": principal.PrincipalID,
@@ -473,7 +453,7 @@ func directoryMachineAuditEvent(r *http.Request, principal *directoryMachinePrin
 	if reason != "" {
 		metadata["reason"] = reason
 	}
-	traceID, spanID := directoryTraceIDs(r.Header.Get("traceparent"))
+	traceID, spanID := requestTraceIDs(r)
 	return model.AuditEvent{
 		Actor:        directoryAuditActorPrefix + principal.PrincipalID,
 		Action:       directoryMachineAuditAction,

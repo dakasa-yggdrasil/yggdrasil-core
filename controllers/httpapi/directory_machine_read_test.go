@@ -1292,34 +1292,6 @@ func TestDirectoryMachineAuditFailureWithholdsTheOutcome(t *testing.T) {
 	})
 }
 
-func TestDirectoryTraceIDs(t *testing.T) {
-	cases := []struct {
-		header    string
-		wantTrace string
-		wantSpan  string
-	}{
-		{header: ""},
-		{header: "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01", wantTrace: "0af7651916cd43dd8448eb211c80319c", wantSpan: "b7ad6b7169203331"},
-		{header: "  00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01  ", wantTrace: "0af7651916cd43dd8448eb211c80319c", wantSpan: "b7ad6b7169203331"},
-		{header: "00-0AF7651916CD43DD8448EB211C80319C-B7AD6B7169203331-01"},
-		{header: "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01-extra"},
-		{header: "ff-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"},
-		{header: "00-00000000000000000000000000000000-b7ad6b7169203331-01"},
-		{header: "00-0af7651916cd43dd8448eb211c80319c-0000000000000000-01"},
-		{header: strings.Repeat("0", 65)},
-		{header: "00-0af7651916cd43dd8448eb211c80319c\t-b7ad6b7169203331-01"},
-	}
-	for _, tc := range cases {
-		trace, span := directoryTraceIDs(tc.header)
-		if trace != tc.wantTrace || span != tc.wantSpan {
-			t.Fatalf("directoryTraceIDs(%q)=(%q,%q), want (%q,%q)", tc.header, trace, span, tc.wantTrace, tc.wantSpan)
-		}
-		if len(trace) > 64 || len(span) > 32 {
-			t.Fatalf("directoryTraceIDs(%q) exceeds the audit_events columns", tc.header)
-		}
-	}
-}
-
 func TestDirectoryMachineRepositoryErrorsAnswerAFixed500(t *testing.T) {
 	// A database error on the machine path is always the same 500 body. The
 	// driver text never reaches the principal and never picks the status: the

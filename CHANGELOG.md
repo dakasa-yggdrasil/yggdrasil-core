@@ -5,6 +5,17 @@ All notable changes to yggdrasil-core are documented here.
 ## [Unreleased]
 
 ### Security
+- **Audit trace references come only from a well-formed W3C `traceparent`
+  (ADR-0020).** The handler audit (`recordAudit`) and the auth audit
+  (`recordAuthAuditSync`, every `auth.*` login, MFA, session, and password
+  row) copied the raw `traceparent` header into `trace_id VARCHAR(64)`; a
+  header longer than the column made Postgres reject the whole row and, because
+  those writers are fire-and-forget, the audit line of the action itself was
+  lost. One shared parser (`internal/tracecontext.ParseTraceparent`, wrapped
+  by `requestTraceIDs`) now feeds every writer, the directory machine-read
+  writer included: a valid header fills `trace_id` and `span_id`, anything
+  else leaves both empty and the row still lands. sqlmock tests pin both
+  outcomes for each writer.
 - **Directory machine principals for exact collaborator reads (ADR-0019).**
   A third hashed inventory, `YGGDRASIL_DIRECTORY_MACHINE_PRINCIPALS_JSON`,
   lets a purpose-bound service resolve one exact active email, read one

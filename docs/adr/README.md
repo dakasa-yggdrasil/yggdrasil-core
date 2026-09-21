@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**19 decisions.**
+**20 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -29,3 +29,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0017](0017-scope-machine-principals-by-route-workflow-and-run-ownership.md) | Scope machine principals by route, workflow, and run ownership | Accepted | 2026-09-05 | yggdrasil-core / non-human HTTP authentication and workflow dispatch |
 | [0018](0018-enforce-workflow-string-pattern-and-maximum-length-at-ingress.md) | Enforce workflow string pattern and maximum length at ingress | Accepted | 2026-09-05 | yggdrasil-core / workflow input validation |
 | [0019](0019-scope-directory-machine-principals-to-exact-collaborator-read-routes.md) | Scope directory machine principals to exact collaborator read routes | Accepted | 2026-09-20 | yggdrasil-core / non-human directory read authentication |
+| [0020](0020-accept-audit-trace-references-only-from-a-well-formed-traceparent.md) | Accept audit trace references only from a well-formed traceparent | Accepted | 2026-09-21 | yggdrasil-core / audit_events writers |

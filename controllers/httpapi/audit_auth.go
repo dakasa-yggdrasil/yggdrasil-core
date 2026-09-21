@@ -50,8 +50,9 @@ const (
 //   - metadata is enriched with source IP + user agent + the supplied
 //     extras
 //
-// Fire-and-forget: the underlying recordAudit goroutine swallows DB
-// errors. Audit MUST NOT gate the request that triggered it.
+// Fire-and-forget: the insert runs on its own goroutine (recordAuthAuditSync)
+// and a DB error is logged, never returned. Audit MUST NOT gate the request
+// that triggered it.
 //
 // §13 INTEGRATION_CONTRACT: every state-mutating auth action emits one
 // row here. Listed actions are the closed set of `auth.*` codes above.
@@ -91,18 +92,15 @@ func (s *Server) recordAuthAuditSync(
 	if s.db == nil {
 		return nil
 	}
-	// Late import avoidance — repository pkg already imported elsewhere.
-	traceparent := ""
-	if r != nil {
-		traceparent = r.Header.Get("traceparent")
-	}
+	traceID, spanID := requestTraceIDs(r)
 	ev := model.AuditEvent{
 		Actor:        actor,
 		Action:       action,
 		ResourceKind: "collaborator",
 		ResourceID:   collaboratorID,
 		Outcome:      outcome,
-		TraceID:      traceparent,
+		TraceID:      traceID,
+		SpanID:       spanID,
 		Metadata:     metadata,
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)

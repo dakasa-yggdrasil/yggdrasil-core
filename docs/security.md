@@ -146,6 +146,26 @@ evaluation phases happen in order after the machine allowlist check:
 Both phases record a `authorization.evaluated` event — the audit
 trail is complete.
 
+## Audit trail
+
+Every audited outcome of the HTTP API is one row in `audit_events`
+(migration 00017), written by one of three writers: the handler audit
+(`recordAudit`: manifest create and delete, warnings persistence, workflow
+template instantiation), the auth audit (`recordAuthAuditSync`: the closed
+`auth.*` action set for login, MFA, session, and password outcomes), and the
+directory machine-read audit described above. The first two are
+fire-and-forget (an insert failure is logged and never gates the request);
+the directory writer is synchronous and fail-closed.
+
+A row's `trace_id` and `span_id` come only from a well-formed W3C
+`traceparent` header, through the one parser every writer shares
+(`internal/tracecontext`, ADR-0020). Any other value, including an oversized
+one, is dropped rather than truncated or stored, so a caller cannot pick a
+header the `VARCHAR(64)` and `VARCHAR(32)` columns reject and thereby erase
+the audit line of its own login or MFA attempt. The ops routes also store
+`X-Correlation-ID` in `correlation_id` through their own middleware; that
+value never reaches the trace columns.
+
 ## Secrets
 
 Never embedded in manifests directly. Three supported referencing
