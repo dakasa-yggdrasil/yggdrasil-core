@@ -49,6 +49,8 @@ func TestHandleMetricsReturnsPrometheusFormat(t *testing.T) {
 		"yggdrasil_console_rbac_denied_total",
 		// Phase-6 reconcile failure family (audit ref G4).
 		"yggdrasil_reconcile_failures_total",
+		// Directory audit failure family (ADR-0019).
+		"yggdrasil_directory_audit_failures_total",
 		"# TYPE",
 		"# HELP",
 	} {

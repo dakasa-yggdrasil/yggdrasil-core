@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -413,8 +414,9 @@ func (s *Server) serveDirectoryEffectiveActions(w http.ResponseWriter, r *http.R
 
 // directoryAuditWriteTimeout bounds the synchronous audit insert. The write
 // is detached from the request's cancellation so a caller that disconnects
-// while its outcome is being recorded does not erase the row.
-const directoryAuditWriteTimeout = 5 * time.Second
+// while its outcome is being recorded does not erase the row. A variable
+// only so a test can shorten it to prove the timeout classification.
+var directoryAuditWriteTimeout = 5 * time.Second
 
 // directoryMachineAuditEvent builds the audit row for one machine outcome. It
 // carries the principal, rotation, capability, method, path, target
@@ -455,27 +457,33 @@ func directoryMachineAuditEvent(r *http.Request, principal *directoryMachinePrin
 // row cannot be stored (no audit store, or the insert fails) the caller's
 // verdict, including a 200 with data, is withheld and this function answers
 // 500 itself, so the only directory responses that ever leave without their
-// row are that 500. A request with no matched principal has nothing to
-// attribute and is not audited.
+// row are that 500. Each withheld outcome bumps
+// yggdrasil_directory_audit_failures_total once, labeled with why the row
+// could not be stored, and is logged with the outcome it withheld. A request
+// with no matched principal has nothing to attribute and is not audited.
 func (s *Server) auditDirectoryMachineOutcome(w http.ResponseWriter, r *http.Request, principal *directoryMachinePrincipal, capability, targetID, outcome, reason string) bool {
 	if principal == nil {
 		return true
 	}
 	event := directoryMachineAuditEvent(r, principal, capability, targetID, outcome, reason)
 	var err error
+	deadlineExpired := false
 	switch {
 	case s.directoryAuditSink != nil:
 		err = s.directoryAuditSink(event)
 	case s.db == nil:
-		err = errors.New("directory audit store is not configured")
+		err = errDirectoryAuditStoreUnconfigured
 	default:
 		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), directoryAuditWriteTimeout)
 		defer cancel()
 		err = repository.RecordAuditEvent(ctx, s.db, event)
+		deadlineExpired = errors.Is(ctx.Err(), context.DeadlineExceeded)
 	}
 	if err == nil {
 		return true
 	}
+	failure := directoryAuditFailureReason(err, deadlineExpired)
+	metrics.IncDirectoryAuditFailure(failure)
 	if s.logger != nil {
 		s.logger.Error("directory machine audit insert failed; withholding the outcome",
 			zap.String("principal_id", principal.PrincipalID),
@@ -483,10 +491,34 @@ func (s *Server) auditDirectoryMachineOutcome(w http.ResponseWriter, r *http.Req
 			zap.String("collaborator_id", targetID),
 			zap.String("outcome", outcome),
 			zap.String("reason", reason),
+			zap.String("audit_failure", failure),
 			zap.Error(err))
 	}
 	writeProblemJSON(w, http.StatusInternalServerError, httperr.CodeInternal, "directory audit is unavailable")
 	return false
+}
+
+// errDirectoryAuditStoreUnconfigured is the failure of a server that has
+// neither a database nor an in-process sink to store the row in.
+var errDirectoryAuditStoreUnconfigured = errors.New("directory audit store is not configured")
+
+// directoryAuditFailureReason classifies one failed audit write for
+// yggdrasil_directory_audit_failures_total. A missing store is its own
+// reason. The write is a timeout when the synchronous deadline fired,
+// whether the driver reports the deadline itself or its own cancellation
+// error after the deadline cancelled the statement (lib/pq answers
+// "canceling statement due to user request", so the deadline is read from
+// the write context, not only from the error). Every other error is an
+// insert failure.
+func directoryAuditFailureReason(err error, deadlineExpired bool) string {
+	switch {
+	case errors.Is(err, errDirectoryAuditStoreUnconfigured):
+		return metrics.DirectoryAuditFailureStoreUnconfigured
+	case deadlineExpired || errors.Is(err, context.DeadlineExceeded):
+		return metrics.DirectoryAuditFailureInsertTimeout
+	default:
+		return metrics.DirectoryAuditFailureInsertFailed
+	}
 }
 
 // withDirectoryAuditSink replaces the durable audit writer with an in-process

@@ -1,13 +1,19 @@
 package httpapi
 
 import (
+	"context"
 	"database/sql"
+	"errors"
+	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
 )
@@ -149,6 +155,161 @@ func TestNewRefusesEveryMalformedDirectoryInventoryShapeInEveryEnvironment(t *te
 					t.Fatalf("boot error leaks credential material: %v", err)
 				}
 			})
+		}
+	}
+}
+
+func TestDirectoryAuditFailureReasonClassification(t *testing.T) {
+	cases := []struct {
+		name            string
+		err             error
+		deadlineExpired bool
+		want            string
+	}{
+		{name: "store unconfigured", err: errDirectoryAuditStoreUnconfigured, want: metrics.DirectoryAuditFailureStoreUnconfigured},
+		{name: "wrapped deadline", err: fmt.Errorf("insert audit_event: %w", context.DeadlineExceeded), want: metrics.DirectoryAuditFailureInsertTimeout},
+		{name: "deadline text without the sentinel", err: errors.New("insert audit_event: " + context.DeadlineExceeded.Error()), want: metrics.DirectoryAuditFailureInsertFailed},
+		{name: "driver cancellation after the deadline fired", err: errors.New("pq: canceling statement due to user request"), deadlineExpired: true, want: metrics.DirectoryAuditFailureInsertTimeout},
+		{name: "constraint violation", err: errors.New("pq: value too long for type character varying(255)"), want: metrics.DirectoryAuditFailureInsertFailed},
+		{name: "connection refused", err: errors.New("dial tcp: connection refused"), want: metrics.DirectoryAuditFailureInsertFailed},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			if got := directoryAuditFailureReason(tc.err, tc.deadlineExpired); got != tc.want {
+				t.Fatalf("reason=%q, want %q", got, tc.want)
+			}
+		})
+	}
+}
+
+func TestDirectoryMachineAuditFailureIsCountedByReason(t *testing.T) {
+	// Every outcome withheld for lack of an audit row bumps exactly one
+	// bucket of yggdrasil_directory_audit_failures_total, labeled with why
+	// the row could not be stored. A stored row bumps nothing.
+	id := uuid.New()
+	collaboratorQuery := func(mock sqlmock.Sqlmock) {
+		mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
+			WillReturnRows(directoryCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "active", "Ana Souza", testLookupEmail))
+	}
+	wantOnly := func(t *testing.T, reason string, count uint64) {
+		t.Helper()
+		snap := metrics.DirectoryAuditFailuresSnapshot()
+		for key, value := range snap {
+			want := uint64(0)
+			if key == reason {
+				want = count
+			}
+			if value != want {
+				t.Fatalf("yggdrasil_directory_audit_failures_total{reason=%q}=%d, want %d (snapshot %v)", key, value, want, snap)
+			}
+		}
+	}
+	withheld := func(t *testing.T, recorder *httptest.ResponseRecorder) {
+		t.Helper()
+		if recorder.Code != http.StatusInternalServerError || !strings.Contains(recorder.Body.String(), "directory audit is unavailable") || strings.Contains(recorder.Body.String(), id.String()) {
+			t.Fatalf("status=%d body=%s, want the withheld 500", recorder.Code, recorder.Body.String())
+		}
+	}
+
+	t.Run("insert rejected by the store", func(t *testing.T) {
+		metrics.ResetForTest()
+		configureDirectoryPrincipal(t, []string{directoryCapabilityRead})
+		handler, mock := newDirectoryGateServerWithDurableAudit(t)
+		collaboratorQuery(mock)
+		mock.ExpectExec(`INSERT INTO public\.audit_events`).WillReturnError(errors.New("pq: value too long for type character varying(255)"))
+
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, directoryRequest(http.MethodGet, "/api/v1/collaborators/"+id.String(), "header", testDirectoryToken))
+		withheld(t, recorder)
+		wantOnly(t, metrics.DirectoryAuditFailureInsertFailed, 1)
+		if err := mock.ExpectationsWereMet(); err != nil {
+			t.Fatal(err)
+		}
+	})
+
+	t.Run("insert that outlives the write deadline", func(t *testing.T) {
+		// sqlmock answers a cancelled statement with its own error, as
+		// lib/pq does; the classification must still read the deadline off
+		// the write context instead of trusting the driver text.
+		metrics.ResetForTest()
+		previous := directoryAuditWriteTimeout
+		directoryAuditWriteTimeout = 20 * time.Millisecond
+		t.Cleanup(func() { directoryAuditWriteTimeout = previous })
+		configureDirectoryPrincipal(t, []string{directoryCapabilityRead})
+		handler, mock := newDirectoryGateServerWithDurableAudit(t)
+		collaboratorQuery(mock)
+		mock.ExpectExec(`INSERT INTO public\.audit_events`).WillDelayFor(500 * time.Millisecond).WillReturnResult(sqlmock.NewResult(0, 1))
+
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, directoryRequest(http.MethodGet, "/api/v1/collaborators/"+id.String(), "header", testDirectoryToken))
+		withheld(t, recorder)
+		wantOnly(t, metrics.DirectoryAuditFailureInsertTimeout, 1)
+	})
+
+	t.Run("no store at all", func(t *testing.T) {
+		metrics.ResetForTest()
+		configureDirectoryPrincipal(t, []string{directoryCapabilityRead})
+		server := &Server{logger: zap.NewNop(), directoryMachinePrincipals: loadDirectoryPrincipalsForTest(t)}
+		gate := server.requireAuthenticatedConsoleAPIs(http.HandlerFunc(func(http.ResponseWriter, *http.Request) {
+			t.Fatal("directory request reached the console handler chain")
+		}))
+
+		recorder := httptest.NewRecorder()
+		gate.ServeHTTP(recorder, directoryRequest(http.MethodGet, "/api/v1/collaborators/"+id.String(), "header", testDirectoryToken))
+		withheld(t, recorder)
+		wantOnly(t, metrics.DirectoryAuditFailureStoreUnconfigured, 1)
+	})
+
+	t.Run("sink refusals count as insert failures and accumulate", func(t *testing.T) {
+		metrics.ResetForTest()
+		configureDirectoryPrincipal(t, []string{directoryCapabilityRead})
+		handler, mock := newDirectoryGateServerWithOptions(t, withDirectoryAuditSink(func(model.AuditEvent) error {
+			return errors.New("sink refused the row")
+		}))
+		for range 3 {
+			collaboratorQuery(mock)
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, directoryRequest(http.MethodGet, "/api/v1/collaborators/"+id.String(), "header", testDirectoryToken))
+			withheld(t, recorder)
+		}
+		wantOnly(t, metrics.DirectoryAuditFailureInsertFailed, 3)
+	})
+
+	t.Run("stored row bumps nothing", func(t *testing.T) {
+		metrics.ResetForTest()
+		configureDirectoryPrincipal(t, []string{directoryCapabilityRead})
+		handler, mock := newDirectoryGateServerWithDurableAudit(t)
+		collaboratorQuery(mock)
+		mock.ExpectExec(`INSERT INTO public\.audit_events`).WillReturnResult(sqlmock.NewResult(0, 1))
+
+		recorder := httptest.NewRecorder()
+		handler.ServeHTTP(recorder, directoryRequest(http.MethodGet, "/api/v1/collaborators/"+id.String(), "header", testDirectoryToken))
+		if recorder.Code != http.StatusOK {
+			t.Fatalf("status=%d body=%s, want 200", recorder.Code, recorder.Body.String())
+		}
+		wantOnly(t, "", 0)
+	})
+}
+
+func TestHandleMetricsRendersDirectoryAuditFailuresByReason(t *testing.T) {
+	metrics.ResetForTest()
+	metrics.IncDirectoryAuditFailure(metrics.DirectoryAuditFailureInsertFailed)
+	metrics.IncDirectoryAuditFailure(metrics.DirectoryAuditFailureInsertFailed)
+	metrics.IncDirectoryAuditFailure(metrics.DirectoryAuditFailureInsertTimeout)
+
+	server := &Server{logger: zap.NewNop()}
+	recorder := httptest.NewRecorder()
+	server.handleMetrics(recorder, httptest.NewRequest(http.MethodGet, "/metrics", nil))
+
+	body := recorder.Body.String()
+	for _, expected := range []string{
+		"# TYPE yggdrasil_directory_audit_failures_total counter",
+		`yggdrasil_directory_audit_failures_total{reason="store_unconfigured"} 0`,
+		`yggdrasil_directory_audit_failures_total{reason="insert_timeout"} 1`,
+		`yggdrasil_directory_audit_failures_total{reason="insert_failed"} 2`,
+	} {
+		if !strings.Contains(body, expected) {
+			t.Fatalf("expected %q in body:\n%s", expected, body)
 		}
 	}
 }

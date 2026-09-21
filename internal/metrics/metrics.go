@@ -67,6 +67,27 @@ const (
 	ReactorDispatchDeadLettered = "dead_lettered"
 )
 
+// Directory audit failure reasons (ADR-0019). Closed set so the label
+// cardinality is bounded at 3; unknown values are dropped.
+//
+// The directory machine-read path stores its directory.machine_read audit
+// row synchronously and withholds the outcome (500 "directory audit is
+// unavailable") when the row cannot be stored. Each withheld outcome bumps
+// exactly one bucket here, so
+// `rate(yggdrasil_directory_audit_failures_total[5m])` is the rate at which
+// the directory is refusing to answer for lack of a trail, and the reason
+// says whether the store is missing, slow, or rejecting rows:
+//   - store_unconfigured: the server has no audit writer at all.
+//   - insert_timeout: the write did not finish inside the synchronous
+//     write deadline (the context deadline fired, whether the driver
+//     reports the deadline itself or its own cancellation error).
+//   - insert_failed: the store answered any other error.
+const (
+	DirectoryAuditFailureStoreUnconfigured = "store_unconfigured"
+	DirectoryAuditFailureInsertTimeout     = "insert_timeout"
+	DirectoryAuditFailureInsertFailed      = "insert_failed"
+)
+
 var (
 	reactorEvalMatched atomic.Uint64
 	reactorEvalSkipped atomic.Uint64
@@ -191,6 +212,15 @@ var (
 	// Audit ref: 2026-05-28 F7 (background goroutine bounds).
 	goroutinePanicsMu    sync.RWMutex
 	goroutinePanicsCount = map[string]uint64{}
+
+	// Directory audit failure counters, one per closed-set reason. Every
+	// directory.machine_read outcome the server withheld because its audit
+	// row could not be stored lands in exactly one bucket, so sum() over
+	// the family equals the number of "directory audit is unavailable"
+	// responses since process start.
+	directoryAuditFailureStoreUnconfigured atomic.Uint64
+	directoryAuditFailureInsertTimeout     atomic.Uint64
+	directoryAuditFailureInsertFailed      atomic.Uint64
 )
 
 // Reconcile failure `kind` labels — closed set, additions require
@@ -582,6 +612,34 @@ func GoroutinePanicsSnapshot() map[string]uint64 {
 	return out
 }
 
+// IncDirectoryAuditFailure bumps the directory audit failure counter for
+// the given reason. Reason must be one of the DirectoryAuditFailure*
+// constants; unknown values are dropped so cardinality stays bounded.
+// The caller has already logged the underlying error with the principal
+// and outcome it withheld; this counter only answers "how often, and is
+// the store missing, slow, or rejecting?".
+func IncDirectoryAuditFailure(reason string) {
+	switch reason {
+	case DirectoryAuditFailureStoreUnconfigured:
+		directoryAuditFailureStoreUnconfigured.Add(1)
+	case DirectoryAuditFailureInsertTimeout:
+		directoryAuditFailureInsertTimeout.Add(1)
+	case DirectoryAuditFailureInsertFailed:
+		directoryAuditFailureInsertFailed.Add(1)
+	}
+}
+
+// DirectoryAuditFailuresSnapshot returns the counter values keyed by
+// reason. Every closed-set reason is present (zero-padded) so /metrics
+// emits a stable three-line family before the first failure happens.
+func DirectoryAuditFailuresSnapshot() map[string]uint64 {
+	return map[string]uint64{
+		DirectoryAuditFailureStoreUnconfigured: directoryAuditFailureStoreUnconfigured.Load(),
+		DirectoryAuditFailureInsertTimeout:     directoryAuditFailureInsertTimeout.Load(),
+		DirectoryAuditFailureInsertFailed:      directoryAuditFailureInsertFailed.Load(),
+	}
+}
+
 // ReconcileFailuresSnapshot returns the counter values keyed by kind.
 // Every closed-set kind is present (zero-padded) so /metrics emits a
 // stable family — operators build dashboards without "no datapoints"
@@ -665,4 +723,7 @@ func ResetForTest() {
 	goroutinePanicsMu.Lock()
 	goroutinePanicsCount = map[string]uint64{}
 	goroutinePanicsMu.Unlock()
+	directoryAuditFailureStoreUnconfigured.Store(0)
+	directoryAuditFailureInsertTimeout.Store(0)
+	directoryAuditFailureInsertFailed.Store(0)
 }
