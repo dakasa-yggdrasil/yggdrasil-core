@@ -21,6 +21,15 @@ const (
 	directoryCapabilityLookupEmail      = "directory.lookup_email"
 	directoryCapabilityRead             = "directory.read"
 	directoryCapabilityEffectiveActions = "directory.effective_actions"
+
+	// directoryAuditActorPrefix is the audit actor prefix of a directory
+	// principal. audit_events.actor is VARCHAR(255), so a principal_id is
+	// bounded at boot to what fits behind the prefix; otherwise every audit
+	// insert for that principal would be rejected by the database and the
+	// row the contract promises could never be written.
+	directoryAuditActorPrefix         = "service:"
+	directoryAuditActorMaxLen         = 255
+	directoryMachinePrincipalIDMaxLen = directoryAuditActorMaxLen - len(directoryAuditActorPrefix)
 )
 
 // tartaroInstanceRef names one Tartaro integration instance by its exact
@@ -97,6 +106,10 @@ func directoryMachinePrincipalsFromEnv() ([]directoryMachinePrincipal, error) {
 		)
 		if err != nil {
 			return nil, err
+		}
+		if len(base.principalID) > directoryMachinePrincipalIDMaxLen {
+			return nil, fmt.Errorf("%s entry %d requires principal_id of at most %d characters so the audit actor %s<principal_id> fits its column",
+				directoryMachinePrincipalsEnv, index, directoryMachinePrincipalIDMaxLen, directoryAuditActorPrefix)
 		}
 		if _, duplicate := seenIDs[base.principalID]; duplicate {
 			return nil, fmt.Errorf("%s entry %d duplicates principal_id", directoryMachinePrincipalsEnv, index)

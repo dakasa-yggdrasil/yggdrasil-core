@@ -1,8 +1,11 @@
 package httpapi
 
 import (
+	"context"
 	"database/sql"
+	"database/sql/driver"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
@@ -13,6 +16,7 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
@@ -32,10 +36,11 @@ type directoryAuditCapture struct {
 	events []model.AuditEvent
 }
 
-func (c *directoryAuditCapture) add(event model.AuditEvent) {
+func (c *directoryAuditCapture) add(event model.AuditEvent) error {
 	c.mu.Lock()
 	defer c.mu.Unlock()
 	c.events = append(c.events, event)
+	return nil
 }
 
 func (c *directoryAuditCapture) snapshot() []model.AuditEvent {
@@ -67,20 +72,59 @@ func clearMachineCredentialEnv(t *testing.T) {
 }
 
 // newDirectoryGateServer boots the real HTTP server (New: full middleware
-// pipeline plus the real mux and handlers) over a sqlmock database.
+// pipeline plus the real mux and handlers) over a sqlmock database, with the
+// audit writer replaced by an in-process capture.
 func newDirectoryGateServer(t *testing.T) (http.Handler, sqlmock.Sqlmock, *directoryAuditCapture) {
+	t.Helper()
+	capture := &directoryAuditCapture{}
+	handler, mock := newDirectoryGateServerWithOptions(t, withDirectoryAuditSink(capture.add))
+	return handler, mock, capture
+}
+
+// newDirectoryGateServerWithDurableAudit boots the same server with the
+// production audit writer, so the audit INSERT itself is exercised against
+// sqlmock.
+func newDirectoryGateServerWithDurableAudit(t *testing.T) (http.Handler, sqlmock.Sqlmock) {
+	t.Helper()
+	return newDirectoryGateServerWithOptions(t)
+}
+
+func newDirectoryGateServerWithOptions(t *testing.T, options ...ServerOption) (http.Handler, sqlmock.Sqlmock) {
 	t.Helper()
 	db, mock, err := sqlmock.New()
 	if err != nil {
 		t.Fatal(err)
 	}
 	t.Cleanup(func() { _ = db.Close() })
-	capture := &directoryAuditCapture{}
-	handler, err := New("yggdrasil-core-test", db, nil, zap.NewNop(), withDirectoryAuditSink(capture.add))
+	handler, err := New("yggdrasil-core-test", db, nil, zap.NewNop(), options...)
 	if err != nil {
 		t.Fatalf("boot real server: %v", err)
 	}
-	return handler, mock, capture
+	return handler, mock
+}
+
+// authorizationMembershipColumns are the columns ListAuthorizationTeamMemberships scans.
+func authorizationMembershipColumns() []string {
+	return []string{
+		"id", "team_id", "team_slug", "collaborator_id", "collaborator_slug",
+		"role", "active", "source", "starts_at", "ends_at", "metadata",
+		"created_at", "updated_at",
+	}
+}
+
+// authorizationMembershipsQuery matches only a memberships query that carries
+// the authorization predicate: an active membership of an active team inside
+// its starts_at/ends_at window. A query that lists tm.active memberships
+// alone does not match, so the directory oracle cannot silently fall back to
+// the broader materialized set.
+const authorizationMembershipsQuery = `FROM public\.team_memberships tm\s+JOIN public\.teams t ON t\.id = tm\.team_id\s+JOIN public\.collaborators c ON c\.id = tm\.collaborator_id\s+WHERE\s+tm\.collaborator_id = \$1\s+AND tm\.active = TRUE\s+AND t\.status = 'active'\s+AND \(tm\.starts_at IS NULL OR tm\.starts_at <= NOW\(\)\)\s+AND \(tm\.ends_at IS NULL OR tm\.ends_at >= NOW\(\)\)`
+
+func teamColumns() []string {
+	return []string{"id", "slug", "name", "type", "status", "email", "parent_team_id", "owners", "traits", "metadata", "created_at", "updated_at"}
+}
+
+func teamGrantColumns() []string {
+	return []string{"id", "team_id", "integration_instance_namespace", "integration_instance_name", "action_name", "scope", "granted_at", "granted_by"}
 }
 
 func configureDirectoryPrincipal(t *testing.T, capabilities []string, instances ...tartaroInstanceRef) {
@@ -349,28 +393,18 @@ func TestDirectoryMachineEffectiveActionsOnAllowedInstance(t *testing.T) {
 	id := uuid.New()
 	teamID := uuid.New()
 
-	// Machine handler loads the collaborator, then the shared computation
-	// resolves the collaborator again, lists memberships, resolves the team
-	// and lists its grants.
+	// Machine handler loads the collaborator, then the directory oracle lists
+	// the memberships that confer authority now (authorization predicate),
+	// resolves the team and lists its grants.
 	mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
 		WillReturnRows(directoryCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "active", "Ana Souza", testLookupEmail))
-	mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
-		WillReturnRows(directoryCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "active", "Ana Souza", testLookupEmail))
-	mock.ExpectQuery(`FROM public\.team_memberships tm`).WithArgs(id).
-		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "team_id", "team_slug", "collaborator_id", "collaborator_slug",
-			"role", "active", "source", "starts_at", "ends_at", "metadata",
-			"created_at", "updated_at",
-		}).AddRow(uuid.New().String(), teamID.String(), "social", id.String(), "ana-souza",
+	mock.ExpectQuery(authorizationMembershipsQuery).WithArgs(id).
+		WillReturnRows(sqlmock.NewRows(authorizationMembershipColumns()).AddRow(uuid.New().String(), teamID.String(), "social", id.String(), "ana-souza",
 			"member", true, "manual", nil, nil, []byte("{}"), time.Now(), time.Now()))
 	mock.ExpectQuery(`FROM public\.teams\s+WHERE id = \$1`).WithArgs(teamID).
-		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "slug", "name", "type", "status", "email", "parent_team_id", "owners", "traits", "metadata", "created_at", "updated_at",
-		}).AddRow(teamID.String(), "social", "Social", "functional", "active", nil, nil, []byte("[]"), []byte("{}"), []byte("{}"), time.Now(), time.Now()))
+		WillReturnRows(sqlmock.NewRows(teamColumns()).AddRow(teamID.String(), "social", "Social", "functional", "active", nil, nil, []byte("[]"), []byte("{}"), []byte("{}"), time.Now(), time.Now()))
 	mock.ExpectQuery(`FROM public\.team_grants`).WithArgs(teamID.String()).
-		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "team_id", "integration_instance_namespace", "integration_instance_name", "action_name", "scope", "granted_at", "granted_by",
-		}).
+		WillReturnRows(sqlmock.NewRows(teamGrantColumns()).
 			AddRow(uuid.New().String(), teamID.String(), "dakasa", "tartaro-dakasa-validation", "publish_social_post", []byte("{}"), time.Now(), nil).
 			AddRow(uuid.New().String(), teamID.String(), "dakasa", "tartaro-dakasa-validation", "*", []byte("{}"), time.Now(), nil).
 			AddRow(uuid.New().String(), teamID.String(), "dakasa", "other-instance", "delete_everything", []byte("{}"), time.Now(), nil).
@@ -642,21 +676,30 @@ func TestDirectoryMachineRequestNeverReachesConsoleHandlers(t *testing.T) {
 		token      string
 		wantStatus int
 	}{
+		// This bare Server has no database and no audit sink, so every
+		// outcome that can be attributed to the configured principal is
+		// withheld as 500 (audit unavailable) instead of being answered.
 		{name: "valid token on unrelated route", env: func(t *testing.T) {
 			configureDirectoryPrincipal(t, allDirectoryCapabilities(), testTartaroInstance)
-		}, method: http.MethodGet, target: "/api/v1/ops/audit", carrier: "bearer", token: testDirectoryToken, wantStatus: 403},
+		}, method: http.MethodGet, target: "/api/v1/ops/audit", carrier: "bearer", token: testDirectoryToken, wantStatus: 500},
+		{name: "valid token on public route", env: func(t *testing.T) {
+			configureDirectoryPrincipal(t, allDirectoryCapabilities(), testTartaroInstance)
+		}, method: http.MethodGet, target: "/api/v1/tenant/brand", carrier: "header", token: testDirectoryToken, wantStatus: 500},
 		{name: "expired token on directory route", env: func(t *testing.T) {
 			clearMachineCredentialEnv(t)
 			config := testDirectoryPrincipalConfig(testDirectoryToken, testDirectoryPrincipalID, []string{directoryCapabilityRead})
 			config.ExpiresAt = time.Date(2020, 1, 1, 0, 0, 0, 0, time.UTC)
 			config.RotatedAt = time.Time{}
 			t.Setenv(directoryMachinePrincipalsEnv, testDirectoryMachinePrincipalsJSON(t, config))
-		}, method: http.MethodGet, target: "/api/v1/collaborators/" + id.String(), carrier: "bearer", token: testDirectoryToken, wantStatus: 401},
+		}, method: http.MethodGet, target: "/api/v1/collaborators/" + id.String(), carrier: "bearer", token: testDirectoryToken, wantStatus: 500},
 		{name: "garbage in dedicated header", env: func(t *testing.T) {
 			configureDirectoryPrincipal(t, allDirectoryCapabilities(), testTartaroInstance)
 		}, method: http.MethodGet, target: "/api/v1/collaborators/" + id.String(), carrier: "header", token: "garbage", wantStatus: 401},
 		{name: "dedicated header without any inventory", env: clearMachineCredentialEnv,
 			method: http.MethodGet, target: "/api/v1/collaborators/" + id.String(), carrier: "header", token: testDirectoryToken, wantStatus: 401},
+		{name: "garbage in dedicated header on public route", env: func(t *testing.T) {
+			configureDirectoryPrincipal(t, allDirectoryCapabilities(), testTartaroInstance)
+		}, method: http.MethodGet, target: "/healthz", carrier: "header", token: "garbage", wantStatus: 401},
 		{name: "dedicated header with malformed inventory", env: func(t *testing.T) {
 			clearMachineCredentialEnv(t)
 			t.Setenv(directoryMachinePrincipalsEnv, `[{"principal_id":"broken"}]`)
@@ -779,14 +822,22 @@ func TestDirectoryCredentialCannotDispatchPublishOrDeploy(t *testing.T) {
 				t.Setenv(eventPublisherPrincipalsEnv, testEventPublisherPrincipalsJSON(t, testForeignEventToken, "adapter"))
 				t.Setenv("YGGDRASIL_DEPLOY_TOKEN", testForeignDeployToken)
 				t.Setenv("YGGDRASIL_AUTH_ADMIN_TOKEN", testForeignAuthAdminToken)
-				handler, mock, _ := newDirectoryGateServer(t)
+				handler, mock, capture := newDirectoryGateServer(t)
 
 				recorder := httptest.NewRecorder()
 				handler.ServeHTTP(recorder, directoryRequest(tc.method, tc.target, carrier, testDirectoryToken))
 
-				if recorder.Code != http.StatusForbidden && recorder.Code != http.StatusUnauthorized {
-					t.Fatalf("status=%d body=%s, want a refusal", recorder.Code, recorder.Body.String())
+				// The directory claim is decided before every other credential
+				// family, so a request that names itself as a directory attempt
+				// is refused by the directory branch with exactly one status,
+				// whichever foreign credentials are configured.
+				if recorder.Code != http.StatusForbidden {
+					t.Fatalf("status=%d body=%s, want 403", recorder.Code, recorder.Body.String())
 				}
+				if decodeDirectoryBody(t, recorder)["code"] != "permission.denied" {
+					t.Fatalf("body=%s", recorder.Body.String())
+				}
+				requireSingleAudit(t, capture, "denied", "", "", "route_not_allowed")
 				if err := mock.ExpectationsWereMet(); err != nil {
 					t.Fatal(err)
 				}
@@ -842,6 +893,9 @@ func nonCanonicalDirectoryTargets(id uuid.UUID) []string {
 }
 
 func TestDirectoryMachineNonCanonicalPathsFailClosedBeforeTheMuxRedirect(t *testing.T) {
+	// The mux would answer these spellings with a redirect to the clean
+	// path. The directory claim is decided before the mux runs, so a
+	// directory attempt on them is refused like any other path variant.
 	id := uuid.New()
 	for _, carrier := range []string{"header", "bearer"} {
 		for _, target := range nonCanonicalDirectoryTargets(id) {
@@ -948,27 +1002,80 @@ func TestNonCanonicalPathsKeepTheMuxRedirectForEveryOtherCaller(t *testing.T) {
 	}
 }
 
-func TestDirectoryMachineUnknownRouteSpellingAnswers404WithoutData(t *testing.T) {
-	// A canonical path that matches no registered pattern is not redirected
-	// and is not gated: the mux answers 404 with no collaborator data and no
-	// directory audit row, whichever credential the caller presents.
+func TestDirectoryMachineRefusesPublicAndUnknownRoutes(t *testing.T) {
+	// The directory claim is decided before the gate's public pass-through,
+	// so a request that names itself as a directory attempt is refused by the
+	// directory branch on every route family: public console routes, the
+	// session endpoint, the ForwardAuth target, discovery documents, SCIM,
+	// auth administration reads, and canonical spellings that match no
+	// registered pattern. None of them reaches a handler, the mux redirect,
+	// or the 404, and each attempt is audited.
+	targets := []string{
+		"/healthz",
+		"/readyz",
+		"/metrics",
+		"/api/v1/tenant/brand",
+		"/api/v1/auth/session",
+		"/api/v1/auth/verify?aud=dakasa-ai",
+		"/api/v1/auth/providers",
+		"/api/v1/auth/scim/clients",
+		"/api/v1/invites/validate?token=x",
+		"/.well-known/openid-configuration",
+		"/scim/v2",
+		"/scim/v2/Users",
+		"/console/",
+		"/API/v1/collaborators",
+		"/api/v1/collaborators-export",
+		"/no-such-route",
+	}
 	for _, carrier := range []string{"header", "bearer"} {
-		t.Run(carrier, func(t *testing.T) {
+		for _, target := range targets {
+			t.Run(carrier+" "+target, func(t *testing.T) {
+				configureDirectoryPrincipal(t, allDirectoryCapabilities(), testTartaroInstance)
+				handler, mock, capture := newDirectoryGateServer(t)
+
+				recorder := httptest.NewRecorder()
+				handler.ServeHTTP(recorder, directoryRequest(http.MethodGet, target, carrier, testDirectoryToken))
+
+				if recorder.Code != http.StatusForbidden {
+					t.Fatalf("status=%d body=%s, want 403", recorder.Code, recorder.Body.String())
+				}
+				if location := recorder.Header().Get("Location"); location != "" {
+					t.Fatalf("directory attempt was redirected to %q", location)
+				}
+				if decodeDirectoryBody(t, recorder)["code"] != "permission.denied" {
+					t.Fatalf("body=%s", recorder.Body.String())
+				}
+				assertNoSensitiveContent(t, recorder.Body.String())
+				requireSingleAudit(t, capture, "denied", "", "", "route_not_allowed")
+				if err := mock.ExpectationsWereMet(); err != nil {
+					t.Fatal(err)
+				}
+			})
+		}
+	}
+}
+
+func TestDirectoryMachineUnknownHeaderOnPublicRouteAnswers401(t *testing.T) {
+	// The dedicated header marks the request as a directory attempt even on a
+	// public route, so an unknown value is refused as unauthenticated instead
+	// of being served by the public handler.
+	for _, target := range []string{"/healthz", "/api/v1/auth/session", "/api/v1/tenant/brand"} {
+		t.Run(target, func(t *testing.T) {
 			configureDirectoryPrincipal(t, allDirectoryCapabilities(), testTartaroInstance)
 			handler, mock, capture := newDirectoryGateServer(t)
 
 			recorder := httptest.NewRecorder()
-			handler.ServeHTTP(recorder, directoryRequest(http.MethodGet, "/API/v1/collaborators", carrier, testDirectoryToken))
+			handler.ServeHTTP(recorder, directoryRequest(http.MethodGet, target, "header", "wrong-"+testDirectoryToken))
 
-			if recorder.Code != http.StatusNotFound {
-				t.Fatalf("status=%d body=%s, want 404", recorder.Code, recorder.Body.String())
+			if recorder.Code != http.StatusUnauthorized {
+				t.Fatalf("status=%d body=%s, want 401", recorder.Code, recorder.Body.String())
 			}
-			if location := recorder.Header().Get("Location"); location != "" {
-				t.Fatalf("unknown route was redirected to %q", location)
+			if decodeDirectoryBody(t, recorder)["code"] != "auth.unauthenticated" {
+				t.Fatalf("body=%s", recorder.Body.String())
 			}
-			assertNoSensitiveContent(t, recorder.Body.String())
 			if events := capture.snapshot(); len(events) != 0 {
-				t.Fatalf("unknown route produced directory audit rows: %+v", events)
+				t.Fatalf("unknown credential produced directory audit rows: %+v", events)
 			}
 			if err := mock.ExpectationsWereMet(); err != nil {
 				t.Fatal(err)
@@ -977,37 +1084,353 @@ func TestDirectoryMachineUnknownRouteSpellingAnswers404WithoutData(t *testing.T)
 	}
 }
 
-func TestNonCanonicalRequestPathMirrorsTheMux(t *testing.T) {
-	cases := []struct {
-		target string
-		want   bool
+func TestPublicRoutesKeepTheirBehaviorForCallersThatAreNotDirectoryAttempts(t *testing.T) {
+	// Anonymous callers and bearers matching no directory digest are not
+	// short-circuited on public routes: the universal claim check must not
+	// change what /healthz answers to everyone else.
+	for _, tc := range []struct {
+		name    string
+		carrier string
+		token   string
 	}{
-		{"/api/v1/collaborators", false},
-		{"/api/v1/collaborators/", false},
-		{"/", false},
-		{"/api/v1/collaborators?q=x", false},
-		{"/api/v1/collaborators/%2e%2e/x", false},
-		{"/api/v1//collaborators", true},
-		{"//api/v1/collaborators", true},
-		{"/api/v1/./collaborators", true},
-		{"/api/v1/../v1/collaborators", true},
-		{"/api/v1/collaborators/.", true},
-		{"/api/v1/collaborators//", true},
+		{name: "anonymous", carrier: ""},
+		{name: "unknown bearer", carrier: "bearer", token: "wrong-" + testDirectoryToken},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			configureDirectoryPrincipal(t, allDirectoryCapabilities(), testTartaroInstance)
+			handler, mock, capture := newDirectoryGateServer(t)
+
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, directoryRequest(http.MethodGet, "/healthz", tc.carrier, tc.token))
+
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s, want 200", recorder.Code, recorder.Body.String())
+			}
+			if events := capture.snapshot(); len(events) != 0 {
+				t.Fatalf("public route produced directory audit rows: %+v", events)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+// auditMetadataArg matches the JSONB metadata argument of the audit insert
+// and asserts what it carries and what it must never carry.
+type auditMetadataArg struct {
+	t         *testing.T
+	wantKeys  map[string]string
+	forbidden []string
+}
+
+func (a auditMetadataArg) Match(value driver.Value) bool {
+	raw, ok := value.([]byte)
+	if !ok {
+		a.t.Errorf("audit metadata argument is %T, want []byte", value)
+		return false
+	}
+	var metadata map[string]any
+	if err := json.Unmarshal(raw, &metadata); err != nil {
+		a.t.Errorf("audit metadata is not JSON: %s", raw)
+		return false
+	}
+	for key, want := range a.wantKeys {
+		if metadata[key] != want {
+			a.t.Errorf("audit metadata[%s]=%v, want %q (%s)", key, metadata[key], want, raw)
+			return false
+		}
+	}
+	for _, secret := range a.forbidden {
+		if strings.Contains(string(raw), secret) {
+			a.t.Errorf("audit metadata carries %q: %s", secret, raw)
+			return false
+		}
+	}
+	return true
+}
+
+func TestDirectoryMachineAuditRowIsWrittenDurablyBeforeTheResponse(t *testing.T) {
+	// No in-process sink: the row goes through repository.RecordAuditEvent
+	// into audit_events, in order, before the 200 is written. The trace
+	// reference is stored only when the traceparent header is well formed;
+	// an oversized or malformed value is dropped instead of being sent to a
+	// column that would reject the whole row.
+	validTraceparent := "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"
+	cases := []struct {
+		name        string
+		traceparent string
+		wantTrace   string
+		wantSpan    string
+	}{
+		{name: "no traceparent"},
+		{name: "w3c traceparent", traceparent: validTraceparent, wantTrace: "0af7651916cd43dd8448eb211c80319c", wantSpan: "b7ad6b7169203331"},
+		{name: "oversized traceparent", traceparent: strings.Repeat("a", 200)},
+		{name: "oversized but prefixed traceparent", traceparent: validTraceparent + strings.Repeat("-00", 20)},
+		{name: "malformed traceparent", traceparent: "trace me please"},
+		{name: "reserved version", traceparent: "ff-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"},
+		{name: "all zero trace id", traceparent: "00-00000000000000000000000000000000-b7ad6b7169203331-01"},
 	}
 	for _, tc := range cases {
-		req := httptest.NewRequest(http.MethodGet, tc.target, nil)
-		if got := nonCanonicalRequestPath(req); got != tc.want {
-			t.Fatalf("%s: nonCanonical=%v, want %v", tc.target, got, tc.want)
-		}
-		// The mux itself must agree: a non-canonical spelling is answered
-		// with a redirect, a canonical one is dispatched or answered 404.
-		mux := http.NewServeMux()
-		mux.HandleFunc("GET /api/v1/collaborators", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+		t.Run(tc.name, func(t *testing.T) {
+			configureDirectoryPrincipal(t, []string{directoryCapabilityRead})
+			handler, mock := newDirectoryGateServerWithDurableAudit(t)
+			id := uuid.New()
+			mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
+				WillReturnRows(directoryCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "active", "Ana Souza", testLookupEmail))
+			mock.ExpectExec(`INSERT INTO public\.audit_events`).
+				WithArgs(
+					"service:"+testDirectoryPrincipalID,
+					directoryMachineAuditAction,
+					"collaborator",
+					id.String(),
+					"success",
+					"",
+					auditMetadataArg{t: t, wantKeys: map[string]string{
+						"principal_id": testDirectoryPrincipalID,
+						"rotation_id":  "test-rotation-directory-1",
+						"capability":   directoryCapabilityRead,
+						"method":       http.MethodGet,
+						"path":         "/api/v1/collaborators/" + id.String(),
+					}, forbidden: []string{testDirectoryToken, testLookupEmail, "traceparent"}},
+					tc.wantTrace,
+					tc.wantSpan,
+				).
+				WillReturnResult(sqlmock.NewResult(0, 1))
+
+			req := directoryRequest(http.MethodGet, "/api/v1/collaborators/"+id.String(), "header", testDirectoryToken)
+			if tc.traceparent != "" {
+				req.Header.Set("traceparent", tc.traceparent)
+			}
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, req)
+
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+			}
+			assertMinimalProjection(t, decodeDirectoryBody(t, recorder)["collaborator"].(map[string]any), id, testLookupEmail)
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatalf("audit row was not written before the response: %v", err)
+			}
+		})
+	}
+}
+
+func TestDirectoryMachineAuditFailureWithholdsTheOutcome(t *testing.T) {
+	// When the audit row cannot be stored, the outcome is not answered: a
+	// read that would succeed serves no data, and a refusal is replaced by
+	// the same 500, so no verdict ever leaves without its row.
+	id := uuid.New()
+	cases := []struct {
+		name   string
+		target string
+		expect func(sqlmock.Sqlmock)
+	}{
+		{name: "successful read", target: "/api/v1/collaborators/" + id.String(), expect: func(mock sqlmock.Sqlmock) {
+			mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
+				WillReturnRows(directoryCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "active", "Ana Souza", testLookupEmail))
+			mock.ExpectExec(`INSERT INTO public\.audit_events`).WillReturnError(errors.New("pq: value too long for type character varying(64)"))
+		}},
+		{name: "successful lookup", target: "/api/v1/collaborators?q=" + testLookupEmail + "&status=active", expect: func(mock sqlmock.Sqlmock) {
+			mock.ExpectQuery(`LOWER\(primary_email\) = LOWER\(\$1\)`).WithArgs(testLookupEmail, directoryLookupAmbiguityProbe).
+				WillReturnRows(directoryCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "active", "Ana Souza", testLookupEmail))
+			mock.ExpectExec(`INSERT INTO public\.audit_events`).WillReturnError(errors.New("pq: the database system is shutting down"))
+		}},
+		{name: "refused route", target: "/api/v1/ops/audit", expect: func(mock sqlmock.Sqlmock) {
+			mock.ExpectExec(`INSERT INTO public\.audit_events`).WillReturnError(errors.New("pq: the database system is shutting down"))
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			configureDirectoryPrincipal(t, allDirectoryCapabilities(), testTartaroInstance)
+			handler, mock := newDirectoryGateServerWithDurableAudit(t)
+			tc.expect(mock)
+
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, directoryRequest(http.MethodGet, tc.target, "header", testDirectoryToken))
+
+			if recorder.Code != http.StatusInternalServerError {
+				t.Fatalf("status=%d body=%s, want 500", recorder.Code, recorder.Body.String())
+			}
+			body := decodeDirectoryBody(t, recorder)
+			if body["code"] != httperr.CodeInternal || body["detail"] != "directory audit is unavailable" {
+				t.Fatalf("body=%s", recorder.Body.String())
+			}
+			for _, leaked := range []string{id.String(), "Ana Souza", testLookupEmail, "collaborators", "pq:", "varying"} {
+				if strings.Contains(recorder.Body.String(), leaked) {
+					t.Fatalf("outcome leaked %q despite the missing audit row: %s", leaked, recorder.Body.String())
+				}
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+
+	t.Run("failing sink", func(t *testing.T) {
+		configureDirectoryPrincipal(t, []string{directoryCapabilityRead})
+		handler, mock := newDirectoryGateServerWithOptions(t, withDirectoryAuditSink(func(model.AuditEvent) error {
+			return errors.New("sink refused the row")
+		}))
+		mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
+			WillReturnRows(directoryCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "active", "Ana Souza", testLookupEmail))
+
 		recorder := httptest.NewRecorder()
-		mux.ServeHTTP(recorder, req)
-		redirected := recorder.Code == http.StatusMovedPermanently || recorder.Code == http.StatusTemporaryRedirect
-		if redirected != tc.want {
-			t.Fatalf("%s: mux status=%d, nonCanonical=%v", tc.target, recorder.Code, tc.want)
+		handler.ServeHTTP(recorder, directoryRequest(http.MethodGet, "/api/v1/collaborators/"+id.String(), "header", testDirectoryToken))
+
+		if recorder.Code != http.StatusInternalServerError || strings.Contains(recorder.Body.String(), id.String()) {
+			t.Fatalf("status=%d body=%s, want 500 without data", recorder.Code, recorder.Body.String())
 		}
+	})
+}
+
+func TestDirectoryTraceIDs(t *testing.T) {
+	cases := []struct {
+		header    string
+		wantTrace string
+		wantSpan  string
+	}{
+		{header: ""},
+		{header: "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01", wantTrace: "0af7651916cd43dd8448eb211c80319c", wantSpan: "b7ad6b7169203331"},
+		{header: "  00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01  ", wantTrace: "0af7651916cd43dd8448eb211c80319c", wantSpan: "b7ad6b7169203331"},
+		{header: "00-0AF7651916CD43DD8448EB211C80319C-B7AD6B7169203331-01"},
+		{header: "00-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01-extra"},
+		{header: "ff-0af7651916cd43dd8448eb211c80319c-b7ad6b7169203331-01"},
+		{header: "00-00000000000000000000000000000000-b7ad6b7169203331-01"},
+		{header: "00-0af7651916cd43dd8448eb211c80319c-0000000000000000-01"},
+		{header: strings.Repeat("0", 65)},
+		{header: "00-0af7651916cd43dd8448eb211c80319c\t-b7ad6b7169203331-01"},
+	}
+	for _, tc := range cases {
+		trace, span := directoryTraceIDs(tc.header)
+		if trace != tc.wantTrace || span != tc.wantSpan {
+			t.Fatalf("directoryTraceIDs(%q)=(%q,%q), want (%q,%q)", tc.header, trace, span, tc.wantTrace, tc.wantSpan)
+		}
+		if len(trace) > 64 || len(span) > 32 {
+			t.Fatalf("directoryTraceIDs(%q) exceeds the audit_events columns", tc.header)
+		}
+	}
+}
+
+func TestDirectoryMachineRepositoryErrorsAnswerAFixed500(t *testing.T) {
+	// A database error on the machine path is always the same 500 body. The
+	// driver text never reaches the principal and never picks the status: the
+	// generic mapper would answer 400 for a message containing "invalid" and
+	// echo the message.
+	id := uuid.New()
+	driverErr := errors.New(`pq: invalid input syntax for type uuid: "x"; canceling statement due to statement timeout`)
+	cases := []struct {
+		name       string
+		target     string
+		capability string
+		reason     string
+		expect     func(sqlmock.Sqlmock)
+	}{
+		{name: "lookup", target: "/api/v1/collaborators?q=" + testLookupEmail + "&status=active", capability: directoryCapabilityLookupEmail, reason: "lookup_failed", expect: func(mock sqlmock.Sqlmock) {
+			mock.ExpectQuery(`LOWER\(primary_email\) = LOWER\(\$1\)`).WithArgs(testLookupEmail, directoryLookupAmbiguityProbe).WillReturnError(driverErr)
+		}},
+		{name: "get", target: "/api/v1/collaborators/" + id.String(), capability: directoryCapabilityRead, reason: "lookup_failed", expect: func(mock sqlmock.Sqlmock) {
+			mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).WillReturnError(driverErr)
+		}},
+		{name: "effective actions load", target: "/api/v1/collaborators/" + id.String() + "/effective-tartaro-actions", capability: directoryCapabilityEffectiveActions, reason: "lookup_failed", expect: func(mock sqlmock.Sqlmock) {
+			mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).WillReturnError(driverErr)
+		}},
+		{name: "effective actions memberships", target: "/api/v1/collaborators/" + id.String() + "/effective-tartaro-actions", capability: directoryCapabilityEffectiveActions, reason: "effective_actions_failed", expect: func(mock sqlmock.Sqlmock) {
+			mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
+				WillReturnRows(directoryCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "active", "Ana Souza", testLookupEmail))
+			mock.ExpectQuery(authorizationMembershipsQuery).WithArgs(id).WillReturnError(driverErr)
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			configureDirectoryPrincipal(t, allDirectoryCapabilities(), testTartaroInstance)
+			handler, mock, capture := newDirectoryGateServer(t)
+			tc.expect(mock)
+
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, directoryRequest(http.MethodGet, tc.target, "header", testDirectoryToken))
+
+			if recorder.Code != http.StatusInternalServerError {
+				t.Fatalf("status=%d body=%s, want 500", recorder.Code, recorder.Body.String())
+			}
+			body := decodeDirectoryBody(t, recorder)
+			if body["code"] != httperr.CodeInternal || body["detail"] != "directory is unavailable" {
+				t.Fatalf("body=%s", recorder.Body.String())
+			}
+			for _, leaked := range []string{"pq:", "invalid", "syntax", "timeout", "statement"} {
+				if strings.Contains(recorder.Body.String(), leaked) {
+					t.Fatalf("driver detail leaked %q: %s", leaked, recorder.Body.String())
+				}
+			}
+			targetID := ""
+			if strings.Contains(tc.target, id.String()) {
+				targetID = id.String()
+			}
+			event := requireSingleAudit(t, capture, "error", tc.capability, targetID, tc.reason)
+			assertAuditNeverCarries(t, []model.AuditEvent{event}, "pq:", "syntax")
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestDirectoryMachineEffectiveActionsReadOnlyMembershipsThatAuthorizeNow(t *testing.T) {
+	// The oracle asks the database only for memberships under the
+	// authorization predicate (active membership, active team, inside the
+	// starts_at/ends_at window). A collaborator whose memberships are all
+	// expired, not yet started, or on a deactivated team has no row under
+	// that predicate, so no grant is read and the answer is empty. The
+	// sqlmock expectation matches the predicate text, so a computation that
+	// falls back to plain tm.active memberships does not pass here.
+	configureDirectoryPrincipal(t, []string{directoryCapabilityEffectiveActions}, testTartaroInstance)
+	handler, mock, capture := newDirectoryGateServer(t)
+	id := uuid.New()
+	mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
+		WillReturnRows(directoryCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "active", "Ana Souza", testLookupEmail))
+	mock.ExpectQuery(authorizationMembershipsQuery).WithArgs(id).
+		WillReturnRows(sqlmock.NewRows(authorizationMembershipColumns()))
+
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, directoryRequest(http.MethodGet, "/api/v1/collaborators/"+id.String()+"/effective-tartaro-actions", "header", testDirectoryToken))
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if got := strings.TrimSpace(recorder.Body.String()); got != `{"collaborator_id":"`+id.String()+`","computed_tartaro_actions":[]}` {
+		t.Fatalf("body=%s, want an empty action list", got)
+	}
+	requireSingleAudit(t, capture, "success", directoryCapabilityEffectiveActions, id.String(), "")
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("the oracle did not use the authorization predicate: %v", err)
+	}
+}
+
+func TestConsoleEffectiveActionsKeepTheMaterializedMembershipSet(t *testing.T) {
+	// The console drift view compares the reactor's trait against the same
+	// tm.active membership set the reactor materializes from; it must not
+	// adopt the directory oracle's predicate or every windowed membership
+	// would read as drift.
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+	id := uuid.New()
+	mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
+		WillReturnRows(directoryCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "active", "Ana Souza", testLookupEmail))
+	mock.ExpectQuery(`FROM public\.team_memberships tm\s+JOIN public\.teams t ON t\.id = tm\.team_id\s+JOIN public\.collaborators c ON c\.id = tm\.collaborator_id\s+WHERE tm\.collaborator_id = \$1 AND tm\.active = TRUE\s+ORDER BY`).WithArgs(id).
+		WillReturnRows(sqlmock.NewRows(authorizationMembershipColumns()))
+
+	server := &Server{db: db, logger: zap.NewNop()}
+	result, err := server.computeEffectiveTartaroActions(context.Background(), id)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Computed) != 0 || len(result.PerTeam) != 0 {
+		t.Fatalf("result=%+v", result)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }

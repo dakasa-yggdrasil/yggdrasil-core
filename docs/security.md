@@ -79,24 +79,36 @@ exact `{namespace,name}` references. The credential travels in
 `GET /api/v1/collaborators/{canonical uuid}`, and
 `GET /api/v1/collaborators/{canonical uuid}/effective-tartaro-actions`, each
 gated by its own capability and, for effective actions, by the configured
-Tartaro instance being allowlisted. A request that names itself as a directory
-attempt is served by the directory branch alone: it never reaches console
-session or JWT resolution, never receives collaborator claims, and answers 401
-for missing, unknown, expired, disabled, or revoked credentials and 403 for
-any other method, path spelling, route family, missing capability, or
-unlisted instance. That includes non-canonical spellings (a doubled slash or
-a dot segment) that do not match the gate prefixes: the gate recognizes them
-before its public pass-through and the directory branch refuses a directory
-attempt on them, so the mux never answers such an attempt with its
-cleaned-path redirect. Callers that do not name themselves as directory
-attempts keep the redirect, which carries no data and no credential.
-Responses carry only `id`, `primary_email`,
+Tartaro instance being allowlisted. The outer gate decides the directory
+claim first, on every request, before its public pass-through and before any
+other credential family, so a request that names itself as a directory
+attempt is served by the directory branch alone on any path: it never reaches
+a handler, the mux, console session or JWT resolution, never receives
+collaborator claims, and answers 401 for missing, unknown, expired, disabled,
+or revoked credentials and 403 for any other method, path spelling, route
+family, missing capability, or unlisted instance. That includes public routes
+(`/healthz`, `/api/v1/tenant/brand`, `/api/v1/auth/session`,
+`/api/v1/auth/verify`, discovery documents, SCIM), non-canonical spellings
+the mux would otherwise redirect to a clean path, and canonical spellings that
+match no route: none serves its body, its redirect, or a 404 to a directory
+attempt. Callers that do not name themselves as directory attempts keep every
+route's existing behavior. Responses carry only `id`, `primary_email`,
 `display_name`, and `status`, or `collaborator_id` and
-`computed_tartaro_actions`; inactive collaborators read as absent. Each
-attributable outcome writes a `directory.machine_read` audit row without the
-credential, the query string, or any email. Boot fails on a malformed
-directory inventory in every environment, and production boot rejects a
-directory digest shared with any other credential scope.
+`computed_tartaro_actions`; inactive collaborators read as absent. The
+effective actions are computed only from memberships the RBAC projection
+honors now (membership active, team active, inside the `starts_at`/`ends_at`
+window, one shared predicate), so the machine answer is never wider than what
+Yggdrasil would authorize. Any database failure answers a fixed 500
+`internal.error` (`directory is unavailable`) without the driver text. Each
+attributable outcome writes a `directory.machine_read` audit row before it is
+answered; the write is synchronous and fail-closed, so when the row cannot be
+stored the outcome is withheld and the request answers 500 `internal.error`
+(`directory audit is unavailable`) instead. The row never carries the
+credential, the query string, or any email; its trace reference comes only
+from a well-formed W3C `traceparent`, and a directory `principal_id` is
+bounded to 247 characters so the audit actor fits its column. Boot fails on a
+malformed directory inventory in every environment, and production boot
+rejects a directory digest shared with any other credential scope.
 
 `YGGDRASIL_AUTH_ADMIN_TOKEN` remains a purpose-built credential for the exact
 provider, SCIM, and SAML administration mutations that support machine

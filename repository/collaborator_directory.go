@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/google/uuid"
 )
 
 // ListActiveCollaboratorsByPrimaryEmail returns active collaborators whose
@@ -65,4 +66,54 @@ func ListActiveCollaboratorsByPrimaryEmail(ctx context.Context, db *sql.DB, emai
 		return nil, err
 	}
 	return collaborators, nil
+}
+
+// ListAuthorizationTeamMemberships returns the collaborator's team
+// memberships that confer authority right now, under exactly the predicate
+// the RBAC subject projection applies (authorizationMembershipPredicate):
+// membership active, team active, NOW() inside the starts_at/ends_at window.
+// It is the membership source of the directory machine oracle, so a machine
+// caller never reads actions from an expired, not-yet-started, or
+// deactivated-team membership that Yggdrasil's own authorization would refuse.
+func ListAuthorizationTeamMemberships(ctx context.Context, db *sql.DB, collaboratorID uuid.UUID) ([]model.TeamMembership, error) {
+	rows, err := db.QueryContext(ctx, `
+		SELECT
+			tm.id,
+			tm.team_id,
+			t.slug,
+			tm.collaborator_id,
+			c.slug,
+			tm.role,
+			tm.active,
+			tm.source,
+			tm.starts_at,
+			tm.ends_at,
+			tm.metadata,
+			tm.created_at,
+			tm.updated_at
+		FROM public.team_memberships tm
+		JOIN public.teams t ON t.id = tm.team_id
+		JOIN public.collaborators c ON c.id = tm.collaborator_id
+		WHERE
+			tm.collaborator_id = $1
+			AND `+authorizationMembershipPredicate+`
+		ORDER BY t.slug, c.slug
+	`, collaboratorID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	memberships := []model.TeamMembership{}
+	for rows.Next() {
+		membership, err := scanTeamMembership(rows)
+		if err != nil {
+			return nil, err
+		}
+		memberships = append(memberships, membership)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	return memberships, nil
 }

@@ -1534,6 +1534,18 @@ func ResolveAuthorizationSubjects(ctx context.Context, db *sql.DB, collaboratorI
 	return collaborator, teams, subjects, nil
 }
 
+// authorizationMembershipPredicate is the single definition of a team
+// membership that confers authority right now: the membership is active, the
+// team is active, and NOW() falls inside the optional starts_at/ends_at
+// window. The RBAC subject projection (listDirectAuthorizationTeams) and the
+// directory machine oracle (ListAuthorizationTeamMemberships) share it so the
+// two views of "who is authorized" cannot drift. It expects the aliases
+// tm (team_memberships) and t (teams).
+const authorizationMembershipPredicate = `tm.active = TRUE
+				AND t.status = 'active'
+				AND (tm.starts_at IS NULL OR tm.starts_at <= NOW())
+				AND (tm.ends_at IS NULL OR tm.ends_at >= NOW())`
+
 func listDirectAuthorizationTeams(ctx context.Context, db *sql.DB, collaboratorID uuid.UUID) ([]model.Team, error) {
 	rows, err := db.QueryContext(
 		ctx,
@@ -1555,10 +1567,7 @@ func listDirectAuthorizationTeams(ctx context.Context, db *sql.DB, collaboratorI
 			JOIN public.teams t ON t.id = tm.team_id
 			WHERE
 				tm.collaborator_id = $1
-				AND tm.active = TRUE
-				AND t.status = 'active'
-				AND (tm.starts_at IS NULL OR tm.starts_at <= NOW())
-				AND (tm.ends_at IS NULL OR tm.ends_at >= NOW())
+				AND `+authorizationMembershipPredicate+`
 			ORDER BY t.name, t.slug
 		`,
 		collaboratorID,

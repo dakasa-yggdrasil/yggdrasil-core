@@ -6,13 +6,11 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
-	"path"
 	"regexp"
 	"strconv"
 	"strings"
 	"time"
 
-	safego "github.com/dakasa-yggdrasil/yggdrasil-core/internal/goroutine"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -73,6 +71,12 @@ type directoryMachineClaim struct {
 func directoryMachineClaimFor(r *http.Request) directoryMachineClaim {
 	header := strings.TrimSpace(r.Header.Get(directoryMachineTokenHeader))
 	bearer := bearerToken(r.Header.Get("Authorization"))
+	if header == "" && bearer == "" {
+		// Nothing a directory principal could travel in. The gate asks this
+		// on every request, so the inventory is not loaded for anonymous,
+		// cookie, or basic-auth traffic.
+		return directoryMachineClaim{}
+	}
 
 	principals, err := directoryMachinePrincipalsFromEnv()
 	if err != nil {
@@ -121,35 +125,6 @@ func directoryMachineRouteFor(r *http.Request) (directoryMachineRoute, string) {
 		}
 	}
 	return directoryRouteNone, ""
-}
-
-// muxCleanPath mirrors the canonical form net/http's ServeMux computes before
-// dispatch: path.Clean plus the trailing slash the mux preserves. A request
-// whose escaped path differs from this form never matches a registered
-// pattern; the mux answers it with a redirect to the clean spelling instead.
-func muxCleanPath(p string) string {
-	if p == "" {
-		return "/"
-	}
-	if p[0] != '/' {
-		p = "/" + p
-	}
-	cleaned := path.Clean(p)
-	if p[len(p)-1] == '/' && cleaned != "/" {
-		cleaned += "/"
-	}
-	return cleaned
-}
-
-// nonCanonicalRequestPath reports whether the mux would redirect this request
-// to a cleaned spelling of its path: a doubled slash, a dot segment, or a
-// missing leading slash. Such a spelling can escape the console gate prefixes
-// while its clean form is gated, so the gate checks it before its public
-// pass-through: a directory machine attempt on it is a path variant and fails
-// closed instead of receiving the redirect.
-func nonCanonicalRequestPath(r *http.Request) bool {
-	escaped := r.URL.EscapedPath()
-	return muxCleanPath(escaped) != escaped
 }
 
 // canonicalCollaboratorUUID accepts only the lowercase hyphenated form so a
@@ -252,6 +227,11 @@ func projectDirectoryCollaborator(collaborator model.Collaborator) directoryColl
 // delegates to the console handlers, never attaches collaborator claims, and
 // answers every failure itself, so a directory principal cannot be treated as
 // a human collaborator by any downstream middleware or handler.
+//
+// Every outcome that can be attributed to a configured principal is audited
+// before it is answered: auditDirectoryMachineOutcome writes the row
+// synchronously and, when the row cannot be written, answers 500 itself so
+// no data and no verdict leave without their trail.
 func (s *Server) serveDirectoryMachineRequest(w http.ResponseWriter, r *http.Request, claim directoryMachineClaim) {
 	if claim.configErr != nil {
 		if s.logger != nil {
@@ -263,8 +243,8 @@ func (s *Server) serveDirectoryMachineRequest(w http.ResponseWriter, r *http.Req
 	}
 	principal := claim.principal
 	if usable, reason := directoryMachinePrincipalUsable(principal, time.Now().UTC()); !usable {
-		if principal != nil {
-			s.recordDirectoryMachineAudit(r, principal, "", "", "denied", reason)
+		if !s.auditDirectoryMachineOutcome(w, r, principal, "", "", "denied", reason) {
+			return
 		}
 		writeProblemJSON(w, http.StatusUnauthorized, httperr.CodeAuthUnauthenticated, "directory credential is missing, unknown, expired, or not active")
 		return
@@ -272,19 +252,25 @@ func (s *Server) serveDirectoryMachineRequest(w http.ResponseWriter, r *http.Req
 
 	route, collaboratorID := directoryMachineRouteFor(r)
 	if route == directoryRouteNone {
-		s.recordDirectoryMachineAudit(r, principal, "", "", "denied", "route_not_allowed")
+		if !s.auditDirectoryMachineOutcome(w, r, principal, "", "", "denied", "route_not_allowed") {
+			return
+		}
 		writeProblemJSON(w, http.StatusForbidden, httperr.CodePermissionDenied, "directory principal is not authorized for this route")
 		return
 	}
 	capability := route.capability()
 	if !directoryMachinePrincipalHasCapability(principal, capability) {
-		s.recordDirectoryMachineAudit(r, principal, capability, collaboratorID, "denied", "capability_missing")
+		if !s.auditDirectoryMachineOutcome(w, r, principal, capability, collaboratorID, "denied", "capability_missing") {
+			return
+		}
 		writeProblemJSON(w, http.StatusForbidden, httperr.CodePermissionDenied, "directory principal lacks the "+capability+" capability")
 		return
 	}
 	if route == directoryRouteEffectiveActions &&
 		!directoryMachinePrincipalAllowsTartaroInstance(principal, tartaroInstanceNamespace, tartaroInstanceName) {
-		s.recordDirectoryMachineAudit(r, principal, capability, collaboratorID, "denied", "tartaro_instance_not_allowed")
+		if !s.auditDirectoryMachineOutcome(w, r, principal, capability, collaboratorID, "denied", "tartaro_instance_not_allowed") {
+			return
+		}
 		writeProblemJSON(w, http.StatusForbidden, httperr.CodePermissionDenied, "directory principal is not allowed on the configured Tartaro instance")
 		return
 	}
@@ -304,25 +290,27 @@ func (s *Server) serveDirectoryMachineRequest(w http.ResponseWriter, r *http.Req
 func (s *Server) serveDirectoryLookupEmail(w http.ResponseWriter, r *http.Request, principal *directoryMachinePrincipal) {
 	email, err := parseDirectoryLookupQuery(r.URL.RawQuery)
 	if err != nil {
-		s.recordDirectoryMachineAudit(r, principal, directoryCapabilityLookupEmail, "", "denied", "invalid_query")
+		if !s.auditDirectoryMachineOutcome(w, r, principal, directoryCapabilityLookupEmail, "", "denied", "invalid_query") {
+			return
+		}
 		writeProblemJSON(w, http.StatusBadRequest, httperr.CodeInvalidInput, err.Error())
 		return
 	}
 	if s.db == nil {
-		s.recordDirectoryMachineAudit(r, principal, directoryCapabilityLookupEmail, "", "error", "database_unavailable")
-		writeProblemJSON(w, http.StatusInternalServerError, httperr.CodeInternal, "directory is unavailable")
+		s.writeDirectoryRepositoryFailure(w, r, principal, directoryCapabilityLookupEmail, "", "database_unavailable", errors.New("directory database is not configured"))
 		return
 	}
 	collaborators, err := repository.ListActiveCollaboratorsByPrimaryEmail(r.Context(), s.db, email, directoryLookupAmbiguityProbe)
 	if err != nil {
-		s.recordDirectoryMachineAudit(r, principal, directoryCapabilityLookupEmail, "", "error", "lookup_failed")
-		writeMappedError(w, err)
+		s.writeDirectoryRepositoryFailure(w, r, principal, directoryCapabilityLookupEmail, "", "lookup_failed", err)
 		return
 	}
 	if len(collaborators) > 1 {
 		// Two active rows for one address violates the unique index. Do not
 		// choose; the caller must not act on an ambiguous identity.
-		s.recordDirectoryMachineAudit(r, principal, directoryCapabilityLookupEmail, "", "error", "ambiguous_identity")
+		if !s.auditDirectoryMachineOutcome(w, r, principal, directoryCapabilityLookupEmail, "", "error", "ambiguous_identity") {
+			return
+		}
 		writeProblemJSON(w, http.StatusInternalServerError, httperr.CodeInternal, "directory identity is ambiguous")
 		return
 	}
@@ -334,7 +322,9 @@ func (s *Server) serveDirectoryLookupEmail(w http.ResponseWriter, r *http.Reques
 		targetID = collaborator.ID.String()
 		outcome = "success"
 	}
-	s.recordDirectoryMachineAudit(r, principal, directoryCapabilityLookupEmail, targetID, outcome, "")
+	if !s.auditDirectoryMachineOutcome(w, r, principal, directoryCapabilityLookupEmail, targetID, outcome, "") {
+		return
+	}
 	writeJSON(w, http.StatusOK, response)
 }
 
@@ -343,7 +333,7 @@ func (s *Server) serveDirectoryLookupEmail(w http.ResponseWriter, r *http.Reques
 // indistinguishable from an absent one for a machine caller.
 func (s *Server) loadActiveDirectoryCollaborator(ctx context.Context, collaboratorID string) (model.Collaborator, string, error) {
 	if s.db == nil {
-		return model.Collaborator{}, "database_unavailable", errors.New("directory is unavailable")
+		return model.Collaborator{}, "database_unavailable", errors.New("directory database is not configured")
 	}
 	collaborator, err := repository.GetCollaborator(ctx, s.db, collaboratorID)
 	if err != nil {
@@ -361,20 +351,42 @@ func (s *Server) loadActiveDirectoryCollaborator(ctx context.Context, collaborat
 func (s *Server) writeDirectoryLoadFailure(w http.ResponseWriter, r *http.Request, principal *directoryMachinePrincipal, capability, collaboratorID, reason string, err error) {
 	switch reason {
 	case "not_found", "inactive":
-		s.recordDirectoryMachineAudit(r, principal, capability, collaboratorID, "not_found", reason)
+		if !s.auditDirectoryMachineOutcome(w, r, principal, capability, collaboratorID, "not_found", reason) {
+			return
+		}
 		writeMappedError(w, repository.ErrCollaboratorNotFound)
-	case "database_unavailable":
-		s.recordDirectoryMachineAudit(r, principal, capability, collaboratorID, "error", reason)
-		writeProblemJSON(w, http.StatusInternalServerError, httperr.CodeInternal, "directory is unavailable")
 	default:
-		s.recordDirectoryMachineAudit(r, principal, capability, collaboratorID, "error", reason)
-		writeMappedError(w, err)
+		s.writeDirectoryRepositoryFailure(w, r, principal, capability, collaboratorID, reason, err)
 	}
+}
+
+// writeDirectoryRepositoryFailure answers every repository or database
+// failure on the machine path with the same fixed 500 body. The driver text
+// is never sent to the principal and never chooses the status: the generic
+// writeMappedError maps message fragments such as "invalid" to 400 and echoes
+// the message, which would leak internals to a least-privilege caller and
+// misreport a failed read as a contract violation. The detail goes to the log
+// and the fixed reason to the audit row.
+func (s *Server) writeDirectoryRepositoryFailure(w http.ResponseWriter, r *http.Request, principal *directoryMachinePrincipal, capability, collaboratorID, reason string, err error) {
+	if s.logger != nil {
+		s.logger.Error("directory machine read failed",
+			zap.String("principal_id", principal.PrincipalID),
+			zap.String("capability", capability),
+			zap.String("collaborator_id", collaboratorID),
+			zap.String("reason", reason),
+			zap.Error(err))
+	}
+	if !s.auditDirectoryMachineOutcome(w, r, principal, capability, collaboratorID, "error", reason) {
+		return
+	}
+	writeProblemJSON(w, http.StatusInternalServerError, httperr.CodeInternal, "directory is unavailable")
 }
 
 func (s *Server) serveDirectoryCollaboratorGet(w http.ResponseWriter, r *http.Request, principal *directoryMachinePrincipal, collaboratorID string) {
 	if r.URL.RawQuery != "" {
-		s.recordDirectoryMachineAudit(r, principal, directoryCapabilityRead, collaboratorID, "denied", "invalid_query")
+		if !s.auditDirectoryMachineOutcome(w, r, principal, directoryCapabilityRead, collaboratorID, "denied", "invalid_query") {
+			return
+		}
 		writeProblemJSON(w, http.StatusBadRequest, httperr.CodeInvalidInput, "query parameters are not accepted on this route")
 		return
 	}
@@ -383,13 +395,17 @@ func (s *Server) serveDirectoryCollaboratorGet(w http.ResponseWriter, r *http.Re
 		s.writeDirectoryLoadFailure(w, r, principal, directoryCapabilityRead, collaboratorID, reason, err)
 		return
 	}
-	s.recordDirectoryMachineAudit(r, principal, directoryCapabilityRead, collaboratorID, "success", "")
+	if !s.auditDirectoryMachineOutcome(w, r, principal, directoryCapabilityRead, collaboratorID, "success", "") {
+		return
+	}
 	writeJSON(w, http.StatusOK, directoryCollaboratorResponse{Collaborator: projectDirectoryCollaborator(collaborator)})
 }
 
 func (s *Server) serveDirectoryEffectiveActions(w http.ResponseWriter, r *http.Request, principal *directoryMachinePrincipal, collaboratorID string) {
 	if r.URL.RawQuery != "" {
-		s.recordDirectoryMachineAudit(r, principal, directoryCapabilityEffectiveActions, collaboratorID, "denied", "invalid_query")
+		if !s.auditDirectoryMachineOutcome(w, r, principal, directoryCapabilityEffectiveActions, collaboratorID, "denied", "invalid_query") {
+			return
+		}
 		writeProblemJSON(w, http.StatusBadRequest, httperr.CodeInvalidInput, "query parameters are not accepted on this route")
 		return
 	}
@@ -398,28 +414,53 @@ func (s *Server) serveDirectoryEffectiveActions(w http.ResponseWriter, r *http.R
 		s.writeDirectoryLoadFailure(w, r, principal, directoryCapabilityEffectiveActions, collaboratorID, reason, err)
 		return
 	}
-	effective, err := s.computeEffectiveTartaroActions(r.Context(), collaborator.ID)
+	effective, err := s.computeAuthorizedTartaroActions(r.Context(), collaborator.ID)
 	if err != nil {
-		s.recordDirectoryMachineAudit(r, principal, directoryCapabilityEffectiveActions, collaboratorID, "error", "effective_actions_failed")
-		writeMappedError(w, err)
+		s.writeDirectoryRepositoryFailure(w, r, principal, directoryCapabilityEffectiveActions, collaboratorID, "effective_actions_failed", err)
 		return
 	}
-	s.recordDirectoryMachineAudit(r, principal, directoryCapabilityEffectiveActions, collaboratorID, "success", "")
+	if !s.auditDirectoryMachineOutcome(w, r, principal, directoryCapabilityEffectiveActions, collaboratorID, "success", "") {
+		return
+	}
 	writeJSON(w, http.StatusOK, directoryEffectiveActionsResponse{
 		CollaboratorID:         collaborator.ID.String(),
 		ComputedTartaroActions: effective.Computed,
 	})
 }
 
-// recordDirectoryMachineAudit persists one audit row per machine outcome. The
-// row carries the principal, rotation, capability, method, path, target
+// directoryAuditWriteTimeout bounds the synchronous audit insert. The write
+// is detached from the request's cancellation so a caller that disconnects
+// while its outcome is being recorded does not erase the row.
+const directoryAuditWriteTimeout = 5 * time.Second
+
+// traceparentPattern is the W3C Trace Context header form:
+// version-traceid-parentid-flags, all lowercase hex. Anything else is not a
+// trace reference and is dropped rather than stored, so a caller cannot
+// choose a value the audit_events columns reject.
+var traceparentPattern = regexp.MustCompile(`^[0-9a-f]{2}-[0-9a-f]{32}-[0-9a-f]{16}-[0-9a-f]{2}$`)
+
+// directoryTraceIDs returns the trace-id and parent-id of a well-formed W3C
+// traceparent header, or empty strings when the header is absent, malformed,
+// uses the reserved version ff, or carries an all-zero id.
+func directoryTraceIDs(header string) (traceID, spanID string) {
+	header = strings.TrimSpace(header)
+	if !traceparentPattern.MatchString(header) {
+		return "", ""
+	}
+	parts := strings.Split(header, "-")
+	if parts[0] == "ff" || parts[1] == strings.Repeat("0", 32) || parts[2] == strings.Repeat("0", 16) {
+		return "", ""
+	}
+	return parts[1], parts[2]
+}
+
+// directoryMachineAuditEvent builds the audit row for one machine outcome. It
+// carries the principal, rotation, capability, method, path, target
 // collaborator id, outcome, and reason. It never carries the credential, the
 // query string, or any email address: the lookup email lives only in the
-// query, which is deliberately not recorded.
-func (s *Server) recordDirectoryMachineAudit(r *http.Request, principal *directoryMachinePrincipal, capability, targetID, outcome, reason string) {
-	if principal == nil {
-		return
-	}
+// query, which is deliberately not recorded. The trace reference is taken
+// from a valid W3C traceparent only.
+func directoryMachineAuditEvent(r *http.Request, principal *directoryMachinePrincipal, capability, targetID, outcome, reason string) model.AuditEvent {
 	metadata := map[string]any{
 		"principal_id": principal.PrincipalID,
 		"rotation_id":  principal.RotationID,
@@ -432,37 +473,64 @@ func (s *Server) recordDirectoryMachineAudit(r *http.Request, principal *directo
 	if reason != "" {
 		metadata["reason"] = reason
 	}
-	event := model.AuditEvent{
-		Actor:        "service:" + principal.PrincipalID,
+	traceID, spanID := directoryTraceIDs(r.Header.Get("traceparent"))
+	return model.AuditEvent{
+		Actor:        directoryAuditActorPrefix + principal.PrincipalID,
 		Action:       directoryMachineAuditAction,
 		ResourceKind: "collaborator",
 		ResourceID:   targetID,
 		Outcome:      outcome,
-		TraceID:      r.Header.Get("traceparent"),
+		TraceID:      traceID,
+		SpanID:       spanID,
 		Metadata:     metadata,
 	}
-	if s.directoryAuditSink != nil {
-		s.directoryAuditSink(event)
-		return
+}
+
+// auditDirectoryMachineOutcome persists the audit row for one attributable
+// outcome before that outcome is answered, and reports whether the caller may
+// now write its response. The write is synchronous and fail-closed: when the
+// row cannot be stored (no audit store, or the insert fails) the caller's
+// verdict, including a 200 with data, is withheld and this function answers
+// 500 itself, so the only directory responses that ever leave without their
+// row are that 500. A request with no matched principal has nothing to
+// attribute and is not audited.
+func (s *Server) auditDirectoryMachineOutcome(w http.ResponseWriter, r *http.Request, principal *directoryMachinePrincipal, capability, targetID, outcome, reason string) bool {
+	if principal == nil {
+		return true
 	}
-	if s.db == nil {
-		return
-	}
-	safego.SafeGo("directory_machine_audit", func() {
-		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	event := directoryMachineAuditEvent(r, principal, capability, targetID, outcome, reason)
+	var err error
+	switch {
+	case s.directoryAuditSink != nil:
+		err = s.directoryAuditSink(event)
+	case s.db == nil:
+		err = errors.New("directory audit store is not configured")
+	default:
+		ctx, cancel := context.WithTimeout(context.WithoutCancel(r.Context()), directoryAuditWriteTimeout)
 		defer cancel()
-		if err := repository.RecordAuditEvent(ctx, s.db, event); err != nil && s.logger != nil {
-			s.logger.Warn("directory machine audit insert failed",
-				zap.String("principal_id", principal.PrincipalID),
-				zap.String("outcome", outcome),
-				zap.Error(err))
-		}
-	})
+		err = repository.RecordAuditEvent(ctx, s.db, event)
+	}
+	if err == nil {
+		return true
+	}
+	if s.logger != nil {
+		s.logger.Error("directory machine audit insert failed; withholding the outcome",
+			zap.String("principal_id", principal.PrincipalID),
+			zap.String("capability", capability),
+			zap.String("collaborator_id", targetID),
+			zap.String("outcome", outcome),
+			zap.String("reason", reason),
+			zap.Error(err))
+	}
+	writeProblemJSON(w, http.StatusInternalServerError, httperr.CodeInternal, "directory audit is unavailable")
+	return false
 }
 
 // withDirectoryAuditSink replaces the durable audit writer with an in-process
-// sink. Tests use it to assert audit content synchronously without a database.
-func withDirectoryAuditSink(sink func(model.AuditEvent)) ServerOption {
+// sink. Tests use it to assert audit content synchronously without a database
+// and to simulate a failing store; a sink error withholds the outcome exactly
+// as a failed insert does.
+func withDirectoryAuditSink(sink func(model.AuditEvent) error) ServerOption {
 	return func(s *Server) {
 		s.directoryAuditSink = sink
 	}

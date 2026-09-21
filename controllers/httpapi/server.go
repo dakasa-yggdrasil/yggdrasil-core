@@ -858,21 +858,25 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 
 func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		// Directory machine-read path (ADR-0019) is decided first, on every
+		// request, before the public pass-through and before any other
+		// credential family. A request that names itself as a directory
+		// attempt (dedicated header present, or a bearer whose digest matches
+		// a configured directory principal in any lifecycle state) is served
+		// entirely by the directory branch: the three exact collaborator read
+		// routes with a minimal projection, and 401/403 on everything else,
+		// including public routes, non-canonical spellings the mux would
+		// redirect, unknown routes, and the routes of the other credential
+		// families. It never continues to a handler, to the mux, or to the
+		// console JWT and session paths, and no collaborator claims are ever
+		// attached. Requests that do not name themselves keep today's
+		// behavior on every route.
+		if claim := directoryMachineClaimFor(r); claim.claimed {
+			s.serveDirectoryMachineRequest(w, r, claim)
+			return
+		}
+
 		if !requiresAuthenticatedConsoleRequest(r.Method, r.URL.Path) {
-			// A non-canonical spelling (doubled slash, dot segment) escapes
-			// the gate prefixes even when its clean form is gated, and the
-			// mux would answer it with a redirect to that clean path. A
-			// directory machine attempt (ADR-0019) must not receive the
-			// redirect: the spelling is a path variant, so the directory
-			// branch refuses it here, before the mux can canonicalize,
-			// exactly as it refuses every other variant. Every other caller
-			// keeps the mux's redirect.
-			if nonCanonicalRequestPath(r) {
-				if claim := directoryMachineClaimFor(r); claim.claimed {
-					s.serveDirectoryMachineRequest(w, r, claim)
-					return
-				}
-			}
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -918,19 +922,6 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 			// matched after path scoping, or the exact workflow route is using
 			// the credential-free non-production compatibility posture.
 			next.ServeHTTP(w, r)
-			return
-		}
-
-		// Directory machine-read path (ADR-0019). A hashed directory principal
-		// is accepted only on the three exact collaborator read routes and is
-		// served entirely here with a minimal projection. Once a request marks
-		// itself as a directory machine attempt (dedicated header present, or a
-		// bearer whose digest matches a configured directory principal in any
-		// lifecycle state) it never continues to the console JWT or session
-		// paths: malformed, expired, revoked, out-of-scope, and wrong-route
-		// attempts fail closed here and no collaborator claims are attached.
-		if claim := directoryMachineClaimFor(r); claim.claimed {
-			s.serveDirectoryMachineRequest(w, r, claim)
 			return
 		}
 
@@ -1301,10 +1292,11 @@ type Server struct {
 	// logic is exercised without a live DB.
 	callerPermResolver func(ctx context.Context, collaboratorID string) ([]string, error)
 	// directoryAuditSink replaces the durable audit_events writer for the
-	// directory machine-read path. nil (production) persists through
-	// repository.RecordAuditEvent; tests inject a capturing sink so audit
-	// content is asserted synchronously without a database.
-	directoryAuditSink func(model.AuditEvent)
+	// directory machine-read path. nil (production) persists synchronously
+	// through repository.RecordAuditEvent before the outcome is answered;
+	// tests inject a capturing sink so audit content is asserted without a
+	// database, and a failing sink to prove the outcome is withheld.
+	directoryAuditSink func(model.AuditEvent) error
 	// capabilityAllowlist holds the warn-only capability-naming validator
 	// allowlist loaded once at boot from
 	// config/capability_naming_allowlist.yaml. nil disables the validator

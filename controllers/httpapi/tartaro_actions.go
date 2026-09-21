@@ -85,8 +85,9 @@ type effectiveTartaroActionsResult struct {
 // computeEffectiveTartaroActions walks the collaborator's active team
 // memberships and their grants on the configured Tartaro instance. Grants on
 // any other instance and wildcard grants are ignored, exactly as the console
-// route has always done; the directory machine path shares this computation
-// so both callers see the same action set.
+// route has always done. The membership set is the one the tartaro reactor
+// materializes into the trait (tm.active only), so the console drift view
+// compares like with like.
 func (s *Server) computeEffectiveTartaroActions(ctx context.Context, collabID uuid.UUID) (effectiveTartaroActionsResult, error) {
 	memberships, err := repository.ListTeamMemberships(ctx, s.db, model.ListTeamMembershipsRequest{
 		CollaboratorID: collabID.String(),
@@ -95,7 +96,29 @@ func (s *Server) computeEffectiveTartaroActions(ctx context.Context, collabID uu
 	if err != nil {
 		return effectiveTartaroActionsResult{}, err
 	}
+	return s.tartaroActionsFromMemberships(ctx, memberships)
+}
 
+// computeAuthorizedTartaroActions is the directory machine oracle's variant.
+// A machine consumer treats the result as proof that a human may act, so it
+// walks only memberships that Yggdrasil's own RBAC projection would honor at
+// this moment (repository.ListAuthorizationTeamMemberships: membership
+// active, team active, inside the starts_at/ends_at window) and then applies
+// the same grant walk as the console computation. An expired, not-yet-started,
+// or deactivated-team membership therefore contributes no action here even
+// while the materialized trait or the console drift view still lists it.
+func (s *Server) computeAuthorizedTartaroActions(ctx context.Context, collabID uuid.UUID) (effectiveTartaroActionsResult, error) {
+	memberships, err := repository.ListAuthorizationTeamMemberships(ctx, s.db, collabID)
+	if err != nil {
+		return effectiveTartaroActionsResult{}, err
+	}
+	return s.tartaroActionsFromMemberships(ctx, memberships)
+}
+
+// tartaroActionsFromMemberships is the grant walk shared by both
+// computations: per membership, the grants of that team on the configured
+// Tartaro instance, wildcards skipped, plus the sorted union.
+func (s *Server) tartaroActionsFromMemberships(ctx context.Context, memberships []model.TeamMembership) (effectiveTartaroActionsResult, error) {
 	perTeam := make([]effectivePerTeam, 0, len(memberships))
 	union := map[string]struct{}{}
 	for _, m := range memberships {

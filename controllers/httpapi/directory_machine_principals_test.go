@@ -177,6 +177,14 @@ func TestDirectoryMachinePrincipalConfigRejectsInvalidEntries(t *testing.T) {
 			c.TokenSHA256 = strings.Repeat("0", 64)
 			return c
 		}()), want: "all-zero digest"},
+		{name: "principal id too long for the audit actor column", raw: testDirectoryMachinePrincipalsJSON(t, func() directoryMachinePrincipalConfig {
+			// 248 characters pass the shared 256 limit but "service:" + id is
+			// 256, one more than audit_events.actor holds, so every audit row
+			// for this principal would be refused by the database.
+			c := valid
+			c.PrincipalID = strings.Repeat("p", directoryMachinePrincipalIDMaxLen+1)
+			return c
+		}()), want: "principal_id of at most 247 characters"},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -313,5 +321,23 @@ func TestNewFailsClosedOnMalformedDirectoryInventoryInEveryEnvironment(t *testin
 	t.Cleanup(func() { _ = db.Close() })
 	if _, err := New("yggdrasil-core-test", db, nil, zap.NewNop()); err == nil || !strings.Contains(err.Error(), directoryMachinePrincipalsEnv) {
 		t.Fatalf("New accepted a malformed directory inventory: %v", err)
+	}
+}
+
+func TestDirectoryMachinePrincipalIDFitsTheAuditActorColumn(t *testing.T) {
+	// The longest accepted principal_id still yields an actor that fits
+	// audit_events.actor VARCHAR(255); the shared 256-character base limit
+	// alone would let "service:" + principal_id overflow it.
+	config := testDirectoryPrincipalConfig(testDirectoryToken, strings.Repeat("p", directoryMachinePrincipalIDMaxLen), []string{directoryCapabilityRead})
+	t.Setenv(directoryMachinePrincipalsEnv, testDirectoryMachinePrincipalsJSON(t, config))
+	principals, err := directoryMachinePrincipalsFromEnv()
+	if err != nil {
+		t.Fatalf("longest valid principal_id rejected: %v", err)
+	}
+	if len(principals) != 1 {
+		t.Fatalf("principals=%d", len(principals))
+	}
+	if actor := directoryAuditActorPrefix + principals[0].PrincipalID; len(actor) != 255 {
+		t.Fatalf("actor length=%d, want exactly the column width", len(actor))
 	}
 }

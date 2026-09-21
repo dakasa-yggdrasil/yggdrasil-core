@@ -51,32 +51,31 @@ GET method, a canonical lowercase hyphenated UUID, and no other path spelling.
 The credential travels in `X-Yggdrasil-Directory-Token` or as an
 `Authorization: Bearer` value. A request that presents the dedicated header,
 or a bearer whose digest matches a configured directory principal in any
-lifecycle state, is a directory machine attempt and is served entirely by the
-directory branch of the outer gate: it never continues to console JWT or
-session resolution, never receives collaborator claims, and never reaches the
-console handlers or their permission middleware. Missing, unknown, expired,
+lifecycle state, is a directory machine attempt. The outer gate decides that
+claim first, on every request, before its public pass-through and before any
+other credential family, and a claimed request is served entirely by the
+directory branch: it never continues to console JWT or session resolution,
+never receives collaborator claims, and never reaches any handler, the mux,
+or their permission middleware, on any path. Missing, unknown, expired,
 disabled, or revoked credentials answer 401; a valid credential on any other
-method, path variant, or route family, on a route whose capability the
+method, path spelling, or route family, on a route whose capability the
 principal lacks, or on effective actions when the server's configured Tartaro
 instance is not in the principal's allowlist, answers 403.
 
-Path variants include non-canonical spellings that the prefix gate does not
-match: a doubled slash or a dot segment (`/api/v1//collaborators`,
-`/api/v1/./collaborators/{id}`, `//api/v1/collaborators`). `net/http`'s
-`ServeMux` canonicalizes such a path and answers a redirect to the clean
-spelling (301 through Go 1.25, 307 from Go 1.26) before any handler runs. The
-redirect carries no data and no credential, but it is an invitation to retry
-the gated path and it contradicts the 403 promised above, so the gate does
-not let a directory attempt reach it: before the public pass-through, a
-request whose escaped path differs from the mux's canonical form is checked
-for a directory claim, and a claimed request is served by the directory
-branch, which answers 401 or 403 exactly as for any other variant and writes
-the usual audit row. Callers that do not name themselves as directory
-attempts (anonymous, session, console JWT, bearers matching no directory
-digest) keep the mux's redirect, so human console behavior is unchanged. A
-canonical spelling that matches no registered pattern (for example
-`/API/v1/collaborators`) is not gated and not redirected; the mux answers 404
-with no data and no directory audit row.
+"Any other route family" is literal. Public routes (`/healthz`,
+`/api/v1/tenant/brand`, `/api/v1/auth/session`, `/api/v1/auth/verify`, the
+discovery documents, SCIM, auth administration reads), non-canonical spellings
+that `net/http`'s `ServeMux` would otherwise answer with a redirect to the
+clean path (`/api/v1//collaborators`, `/api/v1/./collaborators/{id}`,
+`//api/v1/collaborators`), and canonical spellings that match no registered
+pattern (`/API/v1/collaborators`) all answer 401 or 403 from the directory
+branch with the usual audit row when the request names itself as a directory
+attempt; none of them serves its public body, its redirect, or a 404 to such a
+request. Callers that do not name themselves as directory attempts
+(anonymous, session, console JWT, bearers matching no directory digest) keep
+every route's existing behavior, including the mux's cleaned-path redirect,
+so human console behavior is unchanged. The claim check loads the inventory
+only when a request carries the dedicated header or a bearer.
 
 The email lookup requires exactly `q=<one exact email>` and `status=active`,
 accepts an optional `limit` between 1 and 100, and rejects every other query
@@ -89,15 +88,45 @@ that is not `active` as absent (404). Responses use purpose-built projections:
 `id`, `primary_email`, `display_name`, and `status` for identity, and
 `collaborator_id` plus `computed_tartaro_actions` for effective actions. No
 personal, employment, provider, trait, metadata, per-team, or drift data is
-returned. The effective-actions computation is the same code the console
-route uses.
+returned.
 
-Every attributable outcome writes one `directory.machine_read` audit row with
-actor `service:<principal_id>`, the capability, the target collaborator id,
-the outcome, and a reason. The row never carries the credential, the query
-string, or an email address. Rotation and revocation are operator actions on
-the inventory (add a new digest with a fresh `rotation_id`, then retire the
-old entry); there is no mint endpoint and no automatic renewal.
+The effective-actions route is an authorization oracle for a machine
+consumer, so it walks only memberships that Yggdrasil's own RBAC projection
+honors at the moment of the read: the membership is active, the team is
+active, and the request time falls inside the membership's optional
+`starts_at`/`ends_at` window. That predicate is a single definition shared
+with the RBAC subject resolver (`repository.authorizationMembershipPredicate`),
+so the two views of "who is authorized now" cannot drift. The grant walk over
+those teams (grants on the configured instance, wildcards ignored, sorted
+union) is the same code the console route uses. The console drift view keeps
+the broader active-membership set that the tartaro reactor materializes into
+the `tartaro_actions` trait, so it still compares like with like; the machine
+answer is therefore never wider than what Yggdrasil would authorize and may be
+narrower than the materialized trait for an expired, not-yet-started, or
+deactivated-team membership.
+
+Any repository or database failure on the machine path answers 500
+`internal.error` with the fixed body `directory is unavailable`; the driver
+text is logged and never sent, and it never selects the status.
+
+Every attributable outcome (one whose credential matched a configured
+principal) writes one `directory.machine_read` audit row with actor
+`service:<principal_id>`, the capability, the target collaborator id, the
+outcome, and a reason, and the write is synchronous and fail-closed: the row
+is stored before the outcome is answered, and when it cannot be stored the
+outcome, including a 200 with data, is withheld and the request answers 500
+`internal.error` with the fixed body `directory audit is unavailable`. The
+only directory response that ever leaves without its row is that 500, which
+is logged at error level with the principal, capability, target, outcome, and
+reason. The row never carries the credential, the query string, or an email
+address; its `trace_id` and `span_id` come only from a well-formed W3C
+`traceparent` header (anything else is dropped, never stored), and a
+directory `principal_id` is bounded at boot to 247 characters so the actor
+`service:<principal_id>` fits its column, because a row the database rejects
+is a row that was never written. A credential that matches no principal has
+nothing to attribute and writes no row. Rotation and revocation are operator
+actions on the inventory (add a new digest with a fresh `rotation_id`, then
+retire the old entry); there is no mint endpoint and no automatic renewal.
 
 ## Consequences
 
@@ -108,7 +137,12 @@ old entry); there is no mint endpoint and no automatic renewal.
   session.
 - Reading an approver's effective actions never grants the service those
   actions; the consumer remains responsible for evaluating the live human
-  actor on every decision.
+  actor on every decision. The answer honors the membership window and team
+  status, so it can be narrower than the materialized `tartaro_actions`
+  trait; the console drift view is not narrowed.
+- The audit store is on the read path. An `audit_events` outage makes the
+  directory read unavailable (500) instead of serving unaudited data;
+  consumers already treat 5xx as retry-later, never as a verdict.
 - The console routes keep their existing behavior for human sessions and
   console JWTs; the directory branch is additive and only short-circuits
   requests that name themselves as machine attempts.

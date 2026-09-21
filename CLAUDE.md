@@ -157,8 +157,12 @@ with `?kind=X` in the query string.
   `directory.effective_actions`) and, for effective actions, an exact
   `allowed_tartaro_instances` allowlist. They are accepted only on the three
   exact collaborator GET read routes, served by their own gate branch with
-  minimal projections, never receive collaborator claims, and fail closed
-  (401/403) everywhere else. See `docs/security.md` for the contract.
+  minimal projections (decided before the public pass-through, on every
+  request), never receive collaborator claims, fail closed (401/403)
+  everywhere else, and are audited synchronously and fail-closed (no outcome
+  is answered without its `directory.machine_read` row). Effective actions
+  use the RBAC membership predicate (active team, membership window). See
+  `docs/security.md` for the contract.
 - `YGGDRASIL_WORKFLOW_RUN_TOKEN` is a workflow-route-only migration bridge and
   is rejected unless explicitly enabled with a future expiry. Workflow
   credentials never authorize events, manifests, deploy, secrets, console,
