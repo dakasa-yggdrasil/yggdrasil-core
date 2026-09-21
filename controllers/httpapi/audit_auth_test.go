@@ -156,6 +156,13 @@ func auditTraceColumns(traceID, spanID string) (sqlmock.Argument, sqlmock.Argume
 	return auditColumn{want: traceID, width: 64}, auditColumn{want: spanID, width: 32}
 }
 
+// auditActorColumn stands in for audit_events.actor (migration 00017:
+// VARCHAR(255) NOT NULL) the same way: a declared actor wider than the column
+// is a lost row in production.
+func auditActorColumn(want string) sqlmock.Argument {
+	return auditColumn{want: want, width: 255}
+}
+
 // TestRecordAuthAuditSync_OversizedTraceparentStillLandsTheRow proves that a
 // traceparent the audit_events columns cannot hold does not suppress the
 // login trail: the writer drops the malformed reference and the row is

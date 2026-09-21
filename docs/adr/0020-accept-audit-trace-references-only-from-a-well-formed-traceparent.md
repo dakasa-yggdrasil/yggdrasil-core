@@ -27,6 +27,16 @@ audited is lost. A caller could erase its own `auth.login.*` or `auth.mfa.*`
 line by sending a 65 character header. Three copies of the same rule would
 also drift.
 
+`recordAudit` reads a second caller-controlled header the same way: the
+optional `X-Yggdrasil-Actor`, which lets a caller declare the actor its row is
+attributed to, was copied raw into `actor VARCHAR(255) NOT NULL`. A 256
+character value is rejected by Postgres exactly like the oversized trace
+reference (verified the same way), so every caller allowed on
+`POST /api/v1/manifests`, `DELETE /api/v1/manifests/{id}`, and the workflow
+template instantiation route could erase the audit line of its own write.
+No client in the DaKasa workspace sends that header; the server is its only
+reader.
+
 ## Decision
 
 One parser, `internal/tracecontext.ParseTraceparent`, is the only source of
@@ -45,20 +55,46 @@ stored, so the header alone can never make the database reject an audit row.
   else leaves both NULL. No other column is derived from the header.
 - The parser rejects exactly what the directory parser of ADR-0019 rejected;
   its cases moved to the shared package with it.
+- The declared actor follows the same rule. `recordAudit` stores the
+  `X-Yggdrasil-Actor` value only when it is in the vocabulary
+  `model.AuditEvent` documents, `user:<id>` or `service:<name>` (ASCII
+  `[A-Za-z0-9._:@/-]` after the prefix), and at most 255 characters, the
+  width of `actor`. Any other value, including an oversized one, is dropped
+  and the row is attributed to the actor derived from the credential
+  (`service:bearer-token` or `anonymous`), never truncated and never stored.
 
 ## Consequences
 
 - An oversized or malformed `traceparent` no longer suppresses the audit row
   of a login, an MFA verification, a manifest write, or a template
-  instantiation. sqlmock tests pin that a 200 character header lands the row
-  with empty trace columns and that a valid header fills them.
+  instantiation, and an oversized or malformed `X-Yggdrasil-Actor` no longer
+  suppresses the row of a manifest write or a template instantiation. sqlmock
+  tests pin that a 200 character trace header and a 256 character actor
+  header land the row with empty trace columns and the credential-derived
+  actor, that a valid trace header fills both trace columns, and that the
+  same holds through the asynchronous `recordAudit` entry point the handlers
+  call.
 - A caller that used `traceparent` to carry a non-W3C correlation value loses
   it from `audit_events`. Such values were already rejected when longer than
-  64 characters and are now dropped at every length. `X-Correlation-ID` on
-  the ops routes is unaffected: the ops middleware stores it in the unbounded
-  `correlation_id` column and never in `trace_id`.
-- The OIDC audit writer records no trace reference today and is not changed
-  by this decision.
+  64 characters and are now dropped at every length. A caller that declared
+  an actor outside the `user:` / `service:` vocabulary is now recorded as its
+  credential instead; no client in the workspace did.
+- The declared actor is still not verified against the credential: a caller
+  may attribute its row to any `user:<id>` it names. This decision bounds the
+  value to what the column holds; attribution stays as it was.
+- The ops audit middleware `withOpsAudit`, which would read
+  `X-Correlation-ID` into `correlation_id`, is not attached to any route
+  (`controllers/httpapi/ops_audit_middleware.go` is marked `//nolint:unused`
+  and nothing calls it). The live ops writer, `recordOpsAuditDenied`
+  (`ops.permission.denied`), reads no request header. `correlation_id` is
+  `TEXT` but its btree index `audit_events_correlation_idx` (migration 00031)
+  rejects values of about 2.7 KB or more (`index row size ... exceeds btree
+  version 4 maximum 2704`, verified against Postgres 16), and the server sets
+  no `MaxHeaderBytes` below that, so attaching the middleware requires the
+  same bounding of that header first.
+- The OIDC audit writer (`controllers/oidc/audit.go`) derives its actor from
+  the token's collaborator and records no trace reference; it reads no
+  request header and is not changed by this decision.
 
 ## Related
 

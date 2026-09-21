@@ -3,6 +3,7 @@ package httpapi
 import (
 	"context"
 	"net/http"
+	"regexp"
 	"strconv"
 	"time"
 
@@ -70,10 +71,11 @@ func (s *Server) recordAudit(r *http.Request, action, kind, resourceID, outcome 
 }
 
 // requestAuditEvent builds the audit row for one handler outcome. The actor
-// comes from the request headers and the trace reference only from a
-// well-formed W3C traceparent (requestTraceIDs), never from the raw header:
-// a header the audit_events columns cannot hold would otherwise make the
-// database reject the whole row.
+// comes from the request headers through actorFromRequest and the trace
+// reference only from a well-formed W3C traceparent (requestTraceIDs); no
+// caller-controlled header reaches the row raw, because a value the
+// audit_events columns cannot hold would make the database reject the whole
+// row.
 func requestAuditEvent(r *http.Request, action, kind, resourceID, outcome string, metadata map[string]any) model.AuditEvent {
 	traceID, spanID := requestTraceIDs(r)
 	return model.AuditEvent{
@@ -104,12 +106,39 @@ func (s *Server) recordAuditSync(event model.AuditEvent) error {
 	return err
 }
 
+// auditActorHeader lets a caller declare the actor an audit row is attributed
+// to, in the vocabulary model.AuditEvent documents: "user:<id>" or
+// "service:<name>". The value is stored as sent, so it is accepted only when
+// it has that shape and fits audit_events.actor (VARCHAR(255), migration
+// 00017); anything else is dropped and the actor is derived from the
+// credential instead. Stored raw, a header wider than the column made
+// Postgres reject the whole row, which erased the audit line of the very
+// manifest write or template instantiation being recorded.
+const (
+	auditActorHeader = "X-Yggdrasil-Actor"
+	auditActorMaxLen = 255
+)
+
+var auditActorPattern = regexp.MustCompile(`^(user|service):[A-Za-z0-9._:@/-]+$`)
+
 func actorFromRequest(r *http.Request) string {
-	if v := r.Header.Get("X-Yggdrasil-Actor"); v != "" {
+	if v := declaredAuditActor(r.Header.Get(auditActorHeader)); v != "" {
 		return v
 	}
 	if tok := bearerToken(r.Header.Get("Authorization")); tok != "" {
 		return "service:bearer-token"
 	}
 	return "anonymous"
+}
+
+// declaredAuditActor returns the header value when it is an actor the row can
+// hold, or an empty string when it is absent, too wide for the column, or
+// outside the documented "user:<id>" / "service:<name>" shape. The pattern is
+// ASCII only, so the byte length it checks is the character length Postgres
+// measures.
+func declaredAuditActor(v string) string {
+	if v == "" || len(v) > auditActorMaxLen || !auditActorPattern.MatchString(v) {
+		return ""
+	}
+	return v
 }

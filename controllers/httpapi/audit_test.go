@@ -99,3 +99,88 @@ func TestRequestTraceIDs_NilRequest(t *testing.T) {
 		t.Fatalf("requestTraceIDs(nil)=(%q,%q), want empty", trace, span)
 	}
 }
+
+// TestRecordAudit_OversizedActorHeaderStillLandsTheRow proves that an
+// X-Yggdrasil-Actor header the actor column cannot hold does not suppress the
+// row: the declared actor is dropped and the row is attributed to the
+// credential. Stored raw, a 256 character header made Postgres refuse the
+// row (value too long for type character varying(255)), the same way an
+// oversized traceparent did.
+func TestRecordAudit_OversizedActorHeaderStillLandsTheRow(t *testing.T) {
+	t.Parallel()
+
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatalf("sqlmock.New error: %v", err)
+	}
+	defer db.Close()
+
+	traceCol, spanCol := auditTraceColumns("", "")
+	mock.ExpectExec(regexp.QuoteMeta(auditEventInsert)).WithArgs(
+		auditActorColumn("service:bearer-token"),
+		"manifest.delete",
+		"manifest",
+		"3f6c1b2e-9a4d-4c8e-b1f0-5d2a7c9e8b11",
+		"success",
+		"",
+		sqlmock.AnyArg(),
+		traceCol,
+		spanCol,
+	).WillReturnResult(sqlmock.NewResult(1, 1))
+
+	s := &Server{db: db}
+	r := httptest.NewRequest("DELETE", "/api/v1/manifests/3f6c1b2e-9a4d-4c8e-b1f0-5d2a7c9e8b11", nil)
+	r.Header.Set("Authorization", "Bearer machine-credential")
+	r.Header.Set("X-Yggdrasil-Actor", "user:"+strings.Repeat("a", 251))
+
+	event := requestAuditEvent(r, "manifest.delete", "manifest", "3f6c1b2e-9a4d-4c8e-b1f0-5d2a7c9e8b11", "success", nil)
+	if err := s.recordAuditSync(event); err != nil {
+		t.Fatalf("the audit row was suppressed by the actor header: %v", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("unmet expectations: %v", err)
+	}
+}
+
+// TestActorFromRequest pins which declared actors reach the row as sent and
+// which are dropped in favour of the actor derived from the credential.
+func TestActorFromRequest(t *testing.T) {
+	t.Parallel()
+
+	widestUser := "user:" + strings.Repeat("a", 250) // 255 characters, the actor column width
+	cases := []struct {
+		name   string
+		actor  string
+		bearer bool
+		want   string
+	}{
+		{name: "absent with bearer", bearer: true, want: "service:bearer-token"},
+		{name: "absent without credential", want: "anonymous"},
+		{name: "user id kept", actor: "user:3f6c1b2e-9a4d-4c8e-b1f0-5d2a7c9e8b11", want: "user:3f6c1b2e-9a4d-4c8e-b1f0-5d2a7c9e8b11"},
+		{name: "service name kept", actor: "service:manifest-sync@cluster/prod", bearer: true, want: "service:manifest-sync@cluster/prod"},
+		{name: "widest value the column holds kept", actor: widestUser, want: widestUser},
+		{name: "one character past the column dropped", actor: widestUser + "a", bearer: true, want: "service:bearer-token"},
+		{name: "one character past the column dropped to anonymous", actor: widestUser + "a", want: "anonymous"},
+		{name: "no prefix dropped", actor: "operator", bearer: true, want: "service:bearer-token"},
+		{name: "uppercase prefix dropped", actor: "User:operator", want: "anonymous"},
+		{name: "empty id dropped", actor: "user:", want: "anonymous"},
+		{name: "whitespace dropped", actor: "user:op erator", want: "anonymous"},
+		{name: "non ascii dropped", actor: "user:opérateur", want: "anonymous"},
+		{name: "quote dropped", actor: `service:x"y`, want: "anonymous"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			t.Parallel()
+			r := httptest.NewRequest("POST", "/api/v1/manifests?kind=workflow", nil)
+			if tc.actor != "" {
+				r.Header.Set("X-Yggdrasil-Actor", tc.actor)
+			}
+			if tc.bearer {
+				r.Header.Set("Authorization", "Bearer machine-credential")
+			}
+			if got := actorFromRequest(r); got != tc.want {
+				t.Fatalf("actorFromRequest()=%q, want %q", got, tc.want)
+			}
+		})
+	}
+}
