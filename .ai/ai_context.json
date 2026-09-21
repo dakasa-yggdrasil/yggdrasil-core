@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-09-06T21:39:32-03:00",
+  "generated_at": "2026-09-21T02:34:01-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 600,
+    ".go": 606,
     ".json": 143,
     ".py": 1,
     ".sql": 51,
@@ -11,7 +11,7 @@
     ".yml": 21
   },
   "provenance": {
-    "commit": "de81ef641904c791754063e628a41abbab798a74",
+    "commit": "f9a20b3d3aae45c5158b61e9559e9bf0b4200f99",
     "dirty": true,
     "files": [
       {
@@ -24,7 +24,7 @@
       },
       {
         "path": "CLAUDE.md",
-        "sha256": "c0432207b766fa49ae0bc56d905ba0d3131c5754c68ad6a21c6e16ccda6a10d0"
+        "sha256": "95f3374af1e2aa623b32fe10893b57e9cab2e4255411f97bef1742cd221f947d"
       },
       {
         "path": "README.md",
@@ -59,13 +59,13 @@
   "top_dirs": [
     {
       "path": "controllers/httpapi",
-      "files": 137,
-      "kb": 1202
+      "files": 141,
+      "kb": 1294
     },
     {
       "path": "repository",
-      "files": 87,
-      "kb": 563
+      "files": 89,
+      "kb": 571
     },
     {
       "path": "manifest",
@@ -149,7 +149,7 @@
     },
     {
       "path": "controllers/httpapi/server.go",
-      "kb": 162
+      "kb": 164
     },
     {
       "path": "controllers/message/products.go",
