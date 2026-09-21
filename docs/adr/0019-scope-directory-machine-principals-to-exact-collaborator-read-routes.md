@@ -60,6 +60,24 @@ method, path variant, or route family, on a route whose capability the
 principal lacks, or on effective actions when the server's configured Tartaro
 instance is not in the principal's allowlist, answers 403.
 
+Path variants include non-canonical spellings that the prefix gate does not
+match: a doubled slash or a dot segment (`/api/v1//collaborators`,
+`/api/v1/./collaborators/{id}`, `//api/v1/collaborators`). `net/http`'s
+`ServeMux` canonicalizes such a path and answers a redirect to the clean
+spelling (301 through Go 1.25, 307 from Go 1.26) before any handler runs. The
+redirect carries no data and no credential, but it is an invitation to retry
+the gated path and it contradicts the 403 promised above, so the gate does
+not let a directory attempt reach it: before the public pass-through, a
+request whose escaped path differs from the mux's canonical form is checked
+for a directory claim, and a claimed request is served by the directory
+branch, which answers 401 or 403 exactly as for any other variant and writes
+the usual audit row. Callers that do not name themselves as directory
+attempts (anonymous, session, console JWT, bearers matching no directory
+digest) keep the mux's redirect, so human console behavior is unchanged. A
+canonical spelling that matches no registered pattern (for example
+`/API/v1/collaborators`) is not gated and not redirected; the mux answers 404
+with no data and no directory audit row.
+
 The email lookup requires exactly `q=<one exact email>` and `status=active`,
 accepts an optional `limit` between 1 and 100, and rejects every other query
 parameter, wildcard, substring, or malformed address with 400 before touching

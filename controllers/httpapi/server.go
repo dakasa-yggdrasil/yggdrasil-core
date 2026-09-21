@@ -859,6 +859,20 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if !requiresAuthenticatedConsoleRequest(r.Method, r.URL.Path) {
+			// A non-canonical spelling (doubled slash, dot segment) escapes
+			// the gate prefixes even when its clean form is gated, and the
+			// mux would answer it with a redirect to that clean path. A
+			// directory machine attempt (ADR-0019) must not receive the
+			// redirect: the spelling is a path variant, so the directory
+			// branch refuses it here, before the mux can canonicalize,
+			// exactly as it refuses every other variant. Every other caller
+			// keeps the mux's redirect.
+			if nonCanonicalRequestPath(r) {
+				if claim := directoryMachineClaimFor(r); claim.claimed {
+					s.serveDirectoryMachineRequest(w, r, claim)
+					return
+				}
+			}
 			next.ServeHTTP(w, r)
 			return
 		}

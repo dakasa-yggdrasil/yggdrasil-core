@@ -14,7 +14,11 @@ All notable changes to yggdrasil-core are documented here.
   (`id`, `primary_email`, `display_name`, `status`; `collaborator_id`,
   `computed_tartaro_actions`), never becomes a collaborator, and fails closed
   with 401/403 on expired, revoked, out-of-scope, wrong-method, path-variant,
-  broad-query, and foreign-route attempts. Every attributable outcome is
+  broad-query, and foreign-route attempts. A non-canonical spelling (doubled
+  slash, dot segment) that escapes the gate prefixes is refused by the same
+  branch before the mux can answer its cleaned-path redirect; only callers
+  that do not name themselves as directory attempts keep that redirect.
+  Every attributable outcome is
   audited as `directory.machine_read` without credential, query, or email.
   Boot rejects a malformed inventory in every environment and, in
   production, any digest shared with another credential scope.

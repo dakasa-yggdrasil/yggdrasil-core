@@ -84,7 +84,13 @@ attempt is served by the directory branch alone: it never reaches console
 session or JWT resolution, never receives collaborator claims, and answers 401
 for missing, unknown, expired, disabled, or revoked credentials and 403 for
 any other method, path spelling, route family, missing capability, or
-unlisted instance. Responses carry only `id`, `primary_email`,
+unlisted instance. That includes non-canonical spellings (a doubled slash or
+a dot segment) that do not match the gate prefixes: the gate recognizes them
+before its public pass-through and the directory branch refuses a directory
+attempt on them, so the mux never answers such an attempt with its
+cleaned-path redirect. Callers that do not name themselves as directory
+attempts keep the redirect, which carries no data and no credential.
+Responses carry only `id`, `primary_email`,
 `display_name`, and `status`, or `collaborator_id` and
 `computed_tartaro_actions`; inactive collaborators read as absent. Each
 attributable outcome writes a `directory.machine_read` audit row without the

@@ -821,37 +821,193 @@ func TestDirectoryMachineRouteClassification(t *testing.T) {
 	}
 }
 
-func TestDirectoryMachineUncleanPathsNeverServeDirectoryData(t *testing.T) {
-	// These spellings never match the gated prefix, so they reach the mux,
-	// which redirects to the clean (gated) path or answers 404. Neither path
-	// may serve collaborator data or produce a directory audit row.
-	cases := []struct {
-		target     string
-		wantStatus int
-	}{
-		{target: "/api/v1//collaborators", wantStatus: http.StatusTemporaryRedirect},
-		{target: "/API/v1/collaborators", wantStatus: http.StatusNotFound},
+// nonCanonicalDirectoryTargets are spellings the mux would canonicalize and
+// redirect (doubled slash, dot segment) that never match the gate prefixes.
+// Before the gate learned to recognize them, they bypassed every credential
+// branch and reached the mux, whose cleaned-path redirect invited the caller
+// to retry the gated path.
+func nonCanonicalDirectoryTargets(id uuid.UUID) []string {
+	return []string{
+		"/api/v1//collaborators",
+		"/api/v1//collaborators?q=" + testLookupEmail + "&status=active",
+		"//api/v1/collaborators?q=" + testLookupEmail + "&status=active",
+		"/api//v1/collaborators/" + id.String(),
+		"/api/v1/./collaborators/" + id.String(),
+		"/api/v1/../v1/collaborators/" + id.String() + "/effective-tartaro-actions",
+		"/api/v1//collaborators/" + id.String() + "/effective-tartaro-actions",
+		"/api/v1/../v1/secrets",
+		"/api/v1//ops/audit",
+		"/api//v1/auth/verify",
 	}
-	for _, tc := range cases {
-		for _, carrier := range []string{"header", "bearer"} {
-			t.Run(carrier+" "+tc.target, func(t *testing.T) {
+}
+
+func TestDirectoryMachineNonCanonicalPathsFailClosedBeforeTheMuxRedirect(t *testing.T) {
+	id := uuid.New()
+	for _, carrier := range []string{"header", "bearer"} {
+		for _, target := range nonCanonicalDirectoryTargets(id) {
+			t.Run(carrier+" "+target, func(t *testing.T) {
 				configureDirectoryPrincipal(t, allDirectoryCapabilities(), testTartaroInstance)
 				handler, mock, capture := newDirectoryGateServer(t)
 
 				recorder := httptest.NewRecorder()
-				handler.ServeHTTP(recorder, directoryRequest(http.MethodGet, tc.target, carrier, testDirectoryToken))
+				handler.ServeHTTP(recorder, directoryRequest(http.MethodGet, target, carrier, testDirectoryToken))
 
-				if recorder.Code != tc.wantStatus {
-					t.Fatalf("status=%d body=%s, want %d", recorder.Code, recorder.Body.String(), tc.wantStatus)
+				if recorder.Code != http.StatusForbidden {
+					t.Fatalf("status=%d body=%s, want 403", recorder.Code, recorder.Body.String())
+				}
+				if location := recorder.Header().Get("Location"); location != "" {
+					t.Fatalf("directory attempt on a non-canonical path was redirected to %q", location)
+				}
+				if decodeDirectoryBody(t, recorder)["code"] != "permission.denied" {
+					t.Fatalf("body=%s", recorder.Body.String())
 				}
 				assertNoSensitiveContent(t, recorder.Body.String())
-				if events := capture.snapshot(); len(events) != 0 {
-					t.Fatalf("unclean path produced directory audit rows: %+v", events)
-				}
+				requireSingleAudit(t, capture, "denied", "", "", "route_not_allowed")
 				if err := mock.ExpectationsWereMet(); err != nil {
 					t.Fatal(err)
 				}
 			})
+		}
+	}
+}
+
+func TestDirectoryMachineUnknownHeaderOnNonCanonicalPathAnswers401(t *testing.T) {
+	// The dedicated header marks the request as a directory attempt even when
+	// its value matches nothing, so an unknown credential on a non-canonical
+	// spelling is refused as unauthenticated instead of being redirected.
+	id := uuid.New()
+	for _, target := range nonCanonicalDirectoryTargets(id) {
+		t.Run(target, func(t *testing.T) {
+			configureDirectoryPrincipal(t, allDirectoryCapabilities(), testTartaroInstance)
+			handler, mock, capture := newDirectoryGateServer(t)
+
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, directoryRequest(http.MethodGet, target, "header", "wrong-"+testDirectoryToken))
+
+			if recorder.Code != http.StatusUnauthorized {
+				t.Fatalf("status=%d body=%s, want 401", recorder.Code, recorder.Body.String())
+			}
+			if location := recorder.Header().Get("Location"); location != "" {
+				t.Fatalf("unknown directory header on a non-canonical path was redirected to %q", location)
+			}
+			if events := capture.snapshot(); len(events) != 0 {
+				t.Fatalf("unknown credential produced directory audit rows: %+v", events)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestNonCanonicalPathsKeepTheMuxRedirectForEveryOtherCaller(t *testing.T) {
+	// The directory branch short-circuits only requests that name themselves
+	// as directory attempts. Anonymous callers and bearers that match no
+	// directory digest keep the mux's cleaned-path redirect, which carries no
+	// data, no credential, and no directory audit row. net/http answers that
+	// redirect with 301 through Go 1.25 and 307 from Go 1.26; the contract
+	// under test is the redirect to the clean path, not the toolchain's code.
+	cases := []struct {
+		name         string
+		carrier      string
+		token        string
+		target       string
+		wantLocation string
+	}{
+		{name: "anonymous", carrier: "", target: "/api/v1//collaborators", wantLocation: "/api/v1/collaborators"},
+		{name: "anonymous with query", carrier: "", target: "/api/v1//collaborators?status=active", wantLocation: "/api/v1/collaborators?status=active"},
+		{name: "unknown bearer", carrier: "bearer", token: "wrong-" + testDirectoryToken, target: "/api/v1//collaborators", wantLocation: "/api/v1/collaborators"},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			configureDirectoryPrincipal(t, allDirectoryCapabilities(), testTartaroInstance)
+			handler, mock, capture := newDirectoryGateServer(t)
+
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, directoryRequest(http.MethodGet, tc.target, tc.carrier, tc.token))
+
+			if recorder.Code != http.StatusMovedPermanently && recorder.Code != http.StatusTemporaryRedirect {
+				t.Fatalf("status=%d body=%s, want the mux redirect", recorder.Code, recorder.Body.String())
+			}
+			if location := recorder.Header().Get("Location"); location != tc.wantLocation {
+				t.Fatalf("Location=%q, want %q", location, tc.wantLocation)
+			}
+			for _, secret := range []string{testDirectoryToken, "Bearer", directoryMachineTokenHeader} {
+				if strings.Contains(recorder.Header().Get("Location"), secret) || strings.Contains(recorder.Body.String(), secret) {
+					t.Fatalf("redirect carries %q: %s", secret, recorder.Body.String())
+				}
+			}
+			assertNoSensitiveContent(t, recorder.Body.String())
+			if events := capture.snapshot(); len(events) != 0 {
+				t.Fatalf("redirect produced directory audit rows: %+v", events)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestDirectoryMachineUnknownRouteSpellingAnswers404WithoutData(t *testing.T) {
+	// A canonical path that matches no registered pattern is not redirected
+	// and is not gated: the mux answers 404 with no collaborator data and no
+	// directory audit row, whichever credential the caller presents.
+	for _, carrier := range []string{"header", "bearer"} {
+		t.Run(carrier, func(t *testing.T) {
+			configureDirectoryPrincipal(t, allDirectoryCapabilities(), testTartaroInstance)
+			handler, mock, capture := newDirectoryGateServer(t)
+
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, directoryRequest(http.MethodGet, "/API/v1/collaborators", carrier, testDirectoryToken))
+
+			if recorder.Code != http.StatusNotFound {
+				t.Fatalf("status=%d body=%s, want 404", recorder.Code, recorder.Body.String())
+			}
+			if location := recorder.Header().Get("Location"); location != "" {
+				t.Fatalf("unknown route was redirected to %q", location)
+			}
+			assertNoSensitiveContent(t, recorder.Body.String())
+			if events := capture.snapshot(); len(events) != 0 {
+				t.Fatalf("unknown route produced directory audit rows: %+v", events)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestNonCanonicalRequestPathMirrorsTheMux(t *testing.T) {
+	cases := []struct {
+		target string
+		want   bool
+	}{
+		{"/api/v1/collaborators", false},
+		{"/api/v1/collaborators/", false},
+		{"/", false},
+		{"/api/v1/collaborators?q=x", false},
+		{"/api/v1/collaborators/%2e%2e/x", false},
+		{"/api/v1//collaborators", true},
+		{"//api/v1/collaborators", true},
+		{"/api/v1/./collaborators", true},
+		{"/api/v1/../v1/collaborators", true},
+		{"/api/v1/collaborators/.", true},
+		{"/api/v1/collaborators//", true},
+	}
+	for _, tc := range cases {
+		req := httptest.NewRequest(http.MethodGet, tc.target, nil)
+		if got := nonCanonicalRequestPath(req); got != tc.want {
+			t.Fatalf("%s: nonCanonical=%v, want %v", tc.target, got, tc.want)
+		}
+		// The mux itself must agree: a non-canonical spelling is answered
+		// with a redirect, a canonical one is dispatched or answered 404.
+		mux := http.NewServeMux()
+		mux.HandleFunc("GET /api/v1/collaborators", func(w http.ResponseWriter, _ *http.Request) { w.WriteHeader(http.StatusNoContent) })
+		recorder := httptest.NewRecorder()
+		mux.ServeHTTP(recorder, req)
+		redirected := recorder.Code == http.StatusMovedPermanently || recorder.Code == http.StatusTemporaryRedirect
+		if redirected != tc.want {
+			t.Fatalf("%s: mux status=%d, nonCanonical=%v", tc.target, recorder.Code, tc.want)
 		}
 	}
 }

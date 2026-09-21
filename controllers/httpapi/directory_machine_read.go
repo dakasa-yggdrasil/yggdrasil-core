@@ -6,6 +6,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"path"
 	"regexp"
 	"strconv"
 	"strings"
@@ -120,6 +121,35 @@ func directoryMachineRouteFor(r *http.Request) (directoryMachineRoute, string) {
 		}
 	}
 	return directoryRouteNone, ""
+}
+
+// muxCleanPath mirrors the canonical form net/http's ServeMux computes before
+// dispatch: path.Clean plus the trailing slash the mux preserves. A request
+// whose escaped path differs from this form never matches a registered
+// pattern; the mux answers it with a redirect to the clean spelling instead.
+func muxCleanPath(p string) string {
+	if p == "" {
+		return "/"
+	}
+	if p[0] != '/' {
+		p = "/" + p
+	}
+	cleaned := path.Clean(p)
+	if p[len(p)-1] == '/' && cleaned != "/" {
+		cleaned += "/"
+	}
+	return cleaned
+}
+
+// nonCanonicalRequestPath reports whether the mux would redirect this request
+// to a cleaned spelling of its path: a doubled slash, a dot segment, or a
+// missing leading slash. Such a spelling can escape the console gate prefixes
+// while its clean form is gated, so the gate checks it before its public
+// pass-through: a directory machine attempt on it is a path variant and fails
+// closed instead of receiving the redirect.
+func nonCanonicalRequestPath(r *http.Request) bool {
+	escaped := r.URL.EscapedPath()
+	return muxCleanPath(escaped) != escaped
 }
 
 // canonicalCollaboratorUUID accepts only the lowercase hyphenated form so a
