@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net/http"
 	"net/url"
+	"slices"
 	"strings"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -62,7 +63,8 @@ func MountOIDC(ctx context.Context, mux *http.ServeMux, db *sql.DB, issuerURL st
 		GrantTypeRefreshToken:    true,
 		RequestObjectSupported:   false,
 	}
-	provider, err := op.NewProvider(cfg, storage, op.StaticIssuer(issuerURL))
+	provider, err := op.NewProvider(cfg, storage, op.StaticIssuer(issuerURL),
+		op.WithHttpInterceptors(exactAuthorizeRedirects(storage)))
 	if err != nil {
 		return fmt.Errorf("oidc new provider: %w", err)
 	}
@@ -92,6 +94,43 @@ func MountOIDC(ctx context.Context, mux *http.ServeMux, db *sql.DB, issuerURL st
 	}
 
 	return nil
+}
+
+// exactAuthorizeRedirects preserves ADR-0011's exact allowlist before the OP
+// validates scopes, response types or other parameters. The upstream native
+// validator accepts other loopback hosts, schemes and ports for the same path;
+// checking only in CreateAuthRequest would still let earlier errors redirect
+// to those unregistered addresses. Rejections here never issue a redirect.
+func exactAuthorizeRedirects(storage op.Storage) op.HttpInterceptor {
+	return func(next http.Handler) http.Handler {
+		return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			if r.URL.Path != op.DefaultEndpoints.Authorization.Relative() {
+				next.ServeHTTP(w, r)
+				return
+			}
+			if err := r.ParseForm(); err != nil || len(r.Form["client_id"]) != 1 ||
+				len(r.Form["redirect_uri"]) != 1 || r.Form.Get("client_id") == "" || r.Form.Get("redirect_uri") == "" {
+				http.Error(w, "client_id and redirect_uri must each be provided once", http.StatusBadRequest)
+				return
+			}
+			// The OP decoder matches field names case-insensitively. Reject
+			// aliases so it cannot select a different client or redirect than
+			// the canonical values checked here.
+			for key := range r.Form {
+				if (strings.EqualFold(key, "client_id") && key != "client_id") ||
+					(strings.EqualFold(key, "redirect_uri") && key != "redirect_uri") {
+					http.Error(w, "client_id and redirect_uri must use canonical parameter names", http.StatusBadRequest)
+					return
+				}
+			}
+			client, err := storage.GetClientByClientID(r.Context(), r.Form.Get("client_id"))
+			if err != nil || client == nil || !slices.Contains(client.RedirectURIs(), r.Form.Get("redirect_uri")) {
+				http.Error(w, "redirect_uri is not registered for this client", http.StatusBadRequest)
+				return
+			}
+			next.ServeHTTP(w, r)
+		})
+	}
 }
 
 // deriveCryptoKey returns a deterministic 32-byte key derived from the

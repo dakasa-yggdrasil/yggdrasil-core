@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: c728edab734bbcc7200b3e3b506b8d0b1dee2123
-verified_diff_sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+verified_at_commit: 1ba55fda95bbf2d4b445b3c04decfcb0f55270c7
+verified_diff_sha256: 4a3e8ce6b085b31dc7c46ba2a57c6a55be33d2b6a1cc0dc1071a41900bb54de3
 reconciler_schema: 1
-verified_at: 2026-09-21
-by: Claude
-note: Reviewed the /metrics documentation rebased onto main after #51 and #52: docs/operations/observability.md states the endpoint and scrape contract the code proves and catalogs the 24 families rendered by handleMetrics (types, closed label sets, call sites, recommended expressions), with yggdrasil_directory_audit_failures_total now on main; documentation only.
+verified_at: 2026-09-22
+by: Codex
+note: Reconciled deployment.md with native HTTP loopback classification, mandatory S256 PKCE, exact authorization redirects and the deliberately unchanged loopback logout behavior. This fixes the authorization path described by ADR-0011 without changing its Decision. No production rollout is claimed.
