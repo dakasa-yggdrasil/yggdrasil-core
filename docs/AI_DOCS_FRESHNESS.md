@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: c728edab734bbcc7200b3e3b506b8d0b1dee2123
-verified_diff_sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+verified_at_commit: be89ef9f6d9c4bd8ddf5e2c20b21e3d7e0bd8beb
+verified_diff_sha256: 09cf3002eb3ffa2f824b489d9107566fd5a57241cb22f2fa13a76eb26de5d5c4
 reconciler_schema: 1
-verified_at: 2026-09-21
-by: Claude
-note: Reviewed the /metrics documentation rebased onto main after #51 and #52: docs/operations/observability.md states the endpoint and scrape contract the code proves and catalogs the 24 families rendered by handleMetrics (types, closed label sets, call sites, recommended expressions), with yggdrasil_directory_audit_failures_total now on main; documentation only.
+verified_at: 2026-09-22
+by: Codex
+note: Reconciled deployment.md with the mandatory PostgreSQL-backed native OIDC protocol gate. Real external identity-provider login remains a separate acceptance step; no production rollout is asserted.

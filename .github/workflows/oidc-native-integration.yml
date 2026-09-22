@@ -1,0 +1,76 @@
+name: Native OIDC protocol integration
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  native-oidc-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: oidc-integration-test-only
+          POSTGRES_DB: oidc_native_integration
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d oidc_native_integration"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      GOWORK: "off"
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: oidc_native_integration
+      DB_USER: postgres
+      DB_PASSWORD: oidc-integration-test-only
+      DB_SSLMODE: disable
+      DB_URL: postgres://postgres:oidc-integration-test-only@127.0.0.1:5432/oidc_native_integration?sslmode=disable
+      REQUIRE_OIDC_NATIVE_INTEGRATION: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Apply all production migrations to ephemeral PostgreSQL
+        run: go run ./scripts/goose up
+      - name: Exercise native authorization, PKCE tokens and userinfo
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -json -count=1 -timeout=5m ./controllers/oidc -run '^TestNativeLoopbackProtocolIntegration$' | tee native-oidc-results.jsonl
+      - name: Require the protocol gate and every scenario to have executed
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+
+          events = [json.loads(line) for line in Path("native-oidc-results.jsonl").read_text().splitlines() if line.strip()]
+          root = "TestNativeLoopbackProtocolIntegration"
+          scenarios = {"success_get", "success_post", "wrong_verifier", "code_replay", "token_redirect_mismatch", "unregistered_redirect"}
+          expected = {root} | {f"{root}/{name}" for name in scenarios}
+          passed = {event.get("Test") for event in events if event.get("Action") == "pass"}
+          skipped = {event.get("Test") for event in events if event.get("Action") == "skip"}
+          missing = expected - passed
+          if missing or skipped:
+              raise SystemExit(f"Native OIDC gate did not run completely: missing={sorted(missing)}, skipped={sorted(skipped)}")
+          print("Native OIDC PostgreSQL protocol gate passed every scenario. External identity-provider login remains a separate acceptance step.")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: native-oidc-protocol-results
+          path: native-oidc-results.jsonl
+          if-no-files-found: warn

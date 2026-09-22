@@ -174,6 +174,21 @@ entries and collisions with existing confidential clients fail startup before
 the OIDC server is mounted. See
 [ADR-0011](./adr/0011-bootstrap-internal-public-oidc-clients-declaratively.md).
 
+Clients whose redirect list consists entirely of HTTP loopback callbacks use
+the native application flow. The registered scheme, host, port, path and query
+must still match exactly; dynamic ports are not enabled. PKCE S256 remains
+mandatory. Keep browser clients with HTTPS redirects in a separate registration.
+Native loopback clients must omit loopback `post_logout_redirect_uris`; those
+registrations retain the browser-client behavior until the native logout flow
+can enforce the same exact allowlist. HTTPS remote logout redirects remain
+supported. No development-mode setting or client secret is needed.
+
+The `Native OIDC protocol integration` CI workflow migrates an ephemeral
+PostgreSQL instance and exercises authorization, a real loopback callback, PKCE
+code exchange, signed ID tokens and userinfo. It rejects skipped scenarios.
+External identity-provider authentication uses a controlled test boundary;
+complete the real browser/CLI login as a separate acceptance check after rollout.
+
 Server-side applications can be reconciled as confidential OIDC clients from a
 read-only mounted Secret file. Keep the plaintext client secret in the relying
 application only; the Core file contains its bcrypt verifier:

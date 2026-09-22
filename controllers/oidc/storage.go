@@ -15,6 +15,7 @@ import (
 	"errors"
 	"fmt"
 	"net/url"
+	"slices"
 	"strings"
 	"time"
 
@@ -62,11 +63,9 @@ func newClientView(c model.OIDCClient, issuerURL string) *clientView {
 func (v *clientView) GetID() string { return v.c.ClientID }
 
 // RedirectURIs surfaces the client's registered redirect URI allowlist.
-// SECURITY (audit 2026-05-27 A9): the zitadel/oidc OP validates inbound
-// `redirect_uri` query params via exact slice membership against this
-// return value (vendor/.../op/auth_request.go::checkURIAgainstRedirects
-// uses `slices.Contains`). Returning the raw slice keeps the contract
-// exact-match — no prefix matching, no glob expansion.
+// exactAuthorizeRedirects and CreateAuthRequest enforce exact membership
+// against this list, including native clients for which the upstream OP
+// otherwise relaxes loopback matching. No normalization or glob expansion.
 //
 // To preserve this property:
 //
@@ -83,13 +82,38 @@ func (v *clientView) GetID() string { return v.c.ClientID }
 func (v *clientView) RedirectURIs() []string           { return v.c.RedirectURIs }
 func (v *clientView) PostLogoutRedirectURIs() []string { return v.c.PostLogoutRedirectURIs }
 
-// ApplicationType: confidential (has secret hash) → Web; otherwise UserAgent.
-// Public clients aren't used in MVP but the path stays correct.
+// ApplicationType preserves web clients and enables reviewed PKCE loopback
+// clients to use the native HTTP callback flow described in ADR-0011.
 func (v *clientView) ApplicationType() op.ApplicationType {
 	if v.c.ClientSecretHash != "" {
 		return op.ApplicationTypeWeb
 	}
+	if isNativeLoopbackClient(v.c) {
+		return op.ApplicationTypeNative
+	}
 	return op.ApplicationTypeUserAgent
+}
+
+func isNativeLoopbackClient(c model.OIDCClient) bool {
+	if c.ClientSecretHash != "" || !c.PKCERequired || len(c.RedirectURIs) == 0 {
+		return false
+	}
+	for _, uri := range c.RedirectURIs {
+		parsed, err := url.Parse(uri)
+		if err != nil || parsed.Scheme != "http" || parsed.Host == "" ||
+			parsed.User != nil || parsed.Fragment != "" || !isLoopbackHost(parsed.Hostname()) {
+			return false
+		}
+	}
+	// The upstream native logout validator also relaxes loopback matching.
+	// Do not enable native mode for those registrations until that separate
+	// endpoint can preserve the exact post-logout allowlist too.
+	for _, uri := range c.PostLogoutRedirectURIs {
+		if _, loopback := op.HTTPLoopbackOrLocalhost(uri); loopback {
+			return false
+		}
+	}
+	return true
 }
 
 // AuthMethod mirrors ApplicationType: Basic when there's a secret, None
@@ -290,6 +314,11 @@ func (s *Storage) CreateAuthRequest(ctx context.Context, req *oidc.AuthRequest, 
 	client, err := repository.GetOIDCClientByID(ctx, s.db, req.ClientID)
 	if err != nil {
 		return nil, err
+	}
+	// Recheck the current registration before persisting any auth request.
+	// The HTTP guard also runs before the OP can redirect validation errors.
+	if !slices.Contains(client.RedirectURIs, req.RedirectURI) {
+		return nil, oidc.ErrInvalidRequestRedirectURI().WithDescription("redirect_uri is not registered for this client")
 	}
 	if err := validateRequiredPKCE(client, req); err != nil {
 		return nil, err
