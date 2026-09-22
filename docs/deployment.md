@@ -183,6 +183,12 @@ registrations retain the browser-client behavior until the native logout flow
 can enforce the same exact allowlist. HTTPS remote logout redirects remain
 supported. No development-mode setting or client secret is needed.
 
+The `Native OIDC protocol integration` CI workflow migrates an ephemeral
+PostgreSQL instance and exercises authorization, a real loopback callback, PKCE
+code exchange, signed ID tokens and userinfo. It rejects skipped scenarios.
+External identity-provider authentication uses a controlled test boundary;
+complete the real browser/CLI login as a separate acceptance check after rollout.
+
 Server-side applications can be reconciled as confidential OIDC clients from a
 read-only mounted Secret file. Keep the plaintext client secret in the relying
 application only; the Core file contains its bcrypt verifier:

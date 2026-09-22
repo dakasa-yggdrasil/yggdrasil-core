@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 1ba55fda95bbf2d4b445b3c04decfcb0f55270c7
-verified_diff_sha256: 4a3e8ce6b085b31dc7c46ba2a57c6a55be33d2b6a1cc0dc1071a41900bb54de3
+verified_at_commit: be89ef9f6d9c4bd8ddf5e2c20b21e3d7e0bd8beb
+verified_diff_sha256: 09cf3002eb3ffa2f824b489d9107566fd5a57241cb22f2fa13a76eb26de5d5c4
 reconciler_schema: 1
 verified_at: 2026-09-22
 by: Codex
-note: Reconciled deployment.md with native HTTP loopback classification, mandatory S256 PKCE, exact authorization redirects and the deliberately unchanged loopback logout behavior. This fixes the authorization path described by ADR-0011 without changing its Decision. No production rollout is claimed.
+note: Reconciled deployment.md with the mandatory PostgreSQL-backed native OIDC protocol gate. Real external identity-provider login remains a separate acceptance step; no production rollout is asserted.
