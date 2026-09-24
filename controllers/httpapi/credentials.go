@@ -1201,6 +1201,10 @@ func (s *Server) handleResetPreflight(w http.ResponseWriter, r *http.Request) {
 		"password_policy": passwordPolicyView(),
 		"mfa_enrolled":    st.MFAEnrolled,
 		"factors":         inlineResetFactors(st),
+		// A passkey cannot be proven on this form yet, but it still works at
+		// the login: such an account needs a plain access link, not a factor
+		// wipe. The page words its advice from this.
+		"has_passkey": st.PasskeyCount > 0,
 	}
 	if collab, err := repository.GetCollaborator(r.Context(), s.db, collabID.String()); err == nil {
 		resp["collaborator"] = collaboratorIdentityView(collab)
