@@ -116,7 +116,7 @@
       "post": {
         "tags": ["events"],
         "summary": "Publish an event into the event stream",
-        "description": "Two-shape endpoint. Generic control-plane events use `type`, `aggregate_type`, `aggregate_id`, `payload` from trusted in-process paths or credential-free local development. Adapter pods emit INTEGRATION_CONTRACT 6.5 mutation events with `event_type`, `provider`, `resource`, `verb`, `resource_id`, `instance_id`, `idempotency`, `observed`, `emitted_at` — one per successful ensure_*/destroy_*/allowlisted-create_*. Mutation events dedup against `(event_type, idempotency)` within the event_retention_policy TTL: re-posting returns 200 with the original event_id instead of duplicating the row. Hashed machine publishers may submit only mutation events in their exact configured provider/instance/event scopes. The explicit time-bounded plaintext bridge is also mutation-only and receives a reserved server-authored actor. Human console sessions and workflow credentials are never accepted.",
+        "description": "Two-shape endpoint. Generic control-plane events use `type`, `aggregate_type`, `aggregate_id`, `payload` from trusted in-process paths or credential-free local development. Adapter pods emit INTEGRATION_CONTRACT 6.5 mutation events with `event_type`, `provider`, `resource`, `verb`, `resource_id`, `instance_id`, `idempotency`, `observed`, `emitted_at`, one per successful ensure_*/destroy_*/allowlisted-create_*. Mutation events dedup against `(event_type, idempotency)` within the event_retention_policy TTL: re-posting returns 200 with the original event_id instead of duplicating the row. Hashed machine publishers may submit only mutation events their grants cover. A grant whose instance_id has no `/` is exact and matches the event's instance_id as an opaque string with no database access. A grant `<namespace>/<name>` is logical (ADR-0021): it matches only after Core resolves the event's instance_id (the canonical UUID of any not-yet-purged version, or a literal `<namespace>/<name>`, never a bare name) to an integration_instance with an active version whose active integration_type provider equals the event provider. The server stamps `yggdrasil.io/publisher_grant_form` and, for a logical grant, `yggdrasil.io/publisher_instance_namespace`, `_name`, `_manifest_id` and `_version` into the event metadata, and drops any client value under `yggdrasil.io/publisher_`. The explicit time-bounded plaintext bridge is also mutation-only and receives a reserved server-authored actor. Human console sessions and workflow credentials are never accepted.",
         "security": [{"BearerAuth": []}, {"EventPublishToken": []}],
         "requestBody": {
           "required": true,
@@ -127,7 +127,8 @@
           "200": {"description": "Mutation event deduped (idempotency hit); body carries the original event_id and deduped:true", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/PublishEventResponse"}}}},
           "400": {"$ref": "#/components/responses/BadRequest"},
           "401": {"$ref": "#/components/responses/Unauthorized"},
-          "403": {"description": "Event is generic for a machine or migration credential, or outside the hashed publisher's exact scope"}
+          "403": {"description": "event.authorization_denied: the event is generic for a machine or migration credential, or no exact or logical grant of the hashed publisher covers its provider, instance and event type. Not found, not granted and a wrong type provider share one identical body.", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/EventPublishProblem"}}}},
+          "503": {"description": "event.authorization_unavailable: a logical grant needed the integration instance lookup and the database did not answer. The detail is fixed; retry later.", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/EventPublishProblem"}}}}
         }
       }
     },
@@ -272,7 +273,7 @@
   "components": {
     "securitySchemes": {
       "BearerAuth": {"type": "http", "scheme": "bearer", "description": "Route-appropriate console session or machine bearer in the Authorization header"},
-      "EventPublishToken": {"type": "apiKey", "in": "header", "name": "X-Yggdrasil-Event-Token", "description": "Mutation-event publisher bearer whose SHA-256 digest and exact scopes are configured in YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON, or the explicit time-bounded mutation-only plaintext migration bridge"},
+      "EventPublishToken": {"type": "apiKey", "in": "header", "name": "X-Yggdrasil-Event-Token", "description": "Mutation-event publisher bearer whose SHA-256 digest and exact or logical grants are configured in YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON, or the explicit time-bounded mutation-only plaintext migration bridge"},
       "WorkflowToken": {"type": "apiKey", "in": "header", "name": "X-Yggdrasil-Workflow-Token", "description": "Workflow machine bearer whose SHA-256 digest and exact allowlist are configured in YGGDRASIL_WORKFLOW_MACHINE_PRINCIPALS_JSON, or the explicit time-bounded legacy workflow bridge"}
     },
     "schemas": {
@@ -504,6 +505,7 @@
           "deduped": {"type": "boolean", "description": "True when the mutation event hit the (event_type, idempotency) unique slot — body carries the original event_id"}
         }
       },
+      "EventPublishProblem": {"type": "object", "description": "RFC 7807 problem body of the event publish authorization decision", "properties": {"type": {"type": "string"}, "title": {"type": "string"}, "status": {"type": "integer"}, "code": {"type": "string", "enum": ["event.authorization_denied", "event.authorization_unavailable"]}, "detail": {"type": "string"}}},
       "ErrorResponse": {"type": "object", "properties": {"error": {"type": "string"}, "deprecation": {"type": "string"}}},
       "DeprecationResponse": {"type": "object", "properties": {"error": {"type": "string"}, "deprecation": {"type": "string", "example": "yggdrasil v2.0.0"}}}
     },

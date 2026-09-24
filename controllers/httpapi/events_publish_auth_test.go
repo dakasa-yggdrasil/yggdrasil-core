@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"context"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -9,7 +10,16 @@ import (
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"go.uber.org/zap"
 )
+
+// eventPublishServerFromEnv builds a Server the way New does for the event
+// surface: it parses the current environment once. Tests that change the
+// environment call it again, exactly as a Core restart would.
+func eventPublishServerFromEnv(t *testing.T) *Server {
+	t.Helper()
+	return &Server{logger: zap.NewNop(), eventPublishAuth: loadEventPublishAuthConfig()}
+}
 
 func setEventPublishAuthEnvironment(t *testing.T, eventToken, workflowToken string) {
 	t.Helper()
@@ -37,7 +47,7 @@ func TestAuthorizeEventPublishRequestAcceptsDedicatedToken(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/events", nil)
 	req.Header.Set("Authorization", "Bearer event-only-token")
-	if err := authorizeEventPublishRequest(req); err != nil {
+	if err := eventPublishServerFromEnv(t).authorizeEventPublishRequest(req); err != nil {
 		t.Fatalf("dedicated event token rejected: %v", err)
 	}
 }
@@ -48,15 +58,15 @@ func TestLegacyEventPublishCredentialIsExplicitAndTimeBound(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/events", nil)
 	req.Header.Set("Authorization", "Bearer legacy-event-token")
-	if err := authorizeEventPublishRequest(req); err == nil {
+	if err := eventPublishServerFromEnv(t).authorizeEventPublishRequest(req); err == nil {
 		t.Fatal("legacy event credential without explicit migration settings was accepted")
 	}
 
 	setTestLegacyEventPublishCredential(t, "legacy-event-token")
-	if err := authorizeEventPublishRequest(req); err != nil {
+	if err := eventPublishServerFromEnv(t).authorizeEventPublishRequest(req); err != nil {
 		t.Fatalf("explicit unexpired legacy event credential rejected: %v", err)
 	}
-	actor, err := authenticateEventPublishRequest(req)
+	actor, err := eventPublishServerFromEnv(t).authenticateEventPublishRequest(req)
 	if err != nil {
 		t.Fatalf("authenticate explicit legacy event credential: %v", err)
 	}
@@ -65,7 +75,7 @@ func TestLegacyEventPublishCredentialIsExplicitAndTimeBound(t *testing.T) {
 	}
 
 	t.Setenv(legacyEventPublishExpiryEnv, "2020-01-01T00:00:00Z")
-	if err := authorizeEventPublishRequest(req); err == nil {
+	if err := eventPublishServerFromEnv(t).authorizeEventPublishRequest(req); err == nil {
 		t.Fatal("expired legacy event credential was accepted")
 	}
 }
@@ -80,7 +90,7 @@ func TestEventPublishRejectsHumanSessionBeforePersistence(t *testing.T) {
 		"collaborator_id": "ordinary-collaborator",
 	}))
 	recorder := httptest.NewRecorder()
-	(&Server{}).handleEventPublish(recorder, req)
+	eventPublishServerFromEnv(t).handleEventPublish(recorder, req)
 
 	if recorder.Code != http.StatusUnauthorized {
 		t.Fatalf("status=%d, want %d; body=%s", recorder.Code, http.StatusUnauthorized, recorder.Body.String())
@@ -95,14 +105,14 @@ func TestLegacyEventBridgeRejectsGenericAndBindsReservedMutationActor(t *testing
 	))
 	req.Header.Set("Authorization", "Bearer legacy-event-token")
 	recorder := httptest.NewRecorder()
-	(&Server{}).handleEventPublish(recorder, req)
+	eventPublishServerFromEnv(t).handleEventPublish(recorder, req)
 	if recorder.Code != http.StatusForbidden {
 		t.Fatalf("generic legacy publish status=%d, want %d; body=%s", recorder.Code, http.StatusForbidden, recorder.Body.String())
 	}
 
 	authReq := httptest.NewRequest(http.MethodPost, "/api/v1/events", nil)
 	authReq.Header.Set("Authorization", "Bearer legacy-event-token")
-	actor, err := authenticateEventPublishRequest(authReq)
+	actor, err := eventPublishServerFromEnv(t).authenticateEventPublishRequest(authReq)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -115,7 +125,8 @@ func TestLegacyEventBridgeRejectsGenericAndBindsReservedMutationActor(t *testing
 			eventPublisherMachinePrincipalMetadataKey: "spoofed",
 		},
 	}
-	if err := authorizeEventPublishPayload(mutation, actor); err != nil {
+	actor, err = (&Server{}).authorizeEventPublishPayload(context.Background(), mutation, actor)
+	if err != nil {
 		t.Fatalf("legacy mutation payload rejected: %v", err)
 	}
 	bound := bindEventPublishActor(mutation, actor)
@@ -145,7 +156,7 @@ func TestAuthorizeEventPublishRequestFailsClosedWhenDedicatedTokenConfigured(t *
 		if token != "" {
 			req.Header.Set("Authorization", "Bearer "+token)
 		}
-		if err := authorizeEventPublishRequest(req); err == nil {
+		if err := eventPublishServerFromEnv(t).authorizeEventPublishRequest(req); err == nil {
 			t.Fatalf("token %q unexpectedly authorized", token)
 		}
 	}
@@ -156,7 +167,7 @@ func TestAuthorizeEventPublishRequestRejectsLegacyWorkflowToken(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/events", nil)
 	req.Header.Set("X-Yggdrasil-Workflow-Token", "workflow-token")
-	if err := authorizeEventPublishRequest(req); err == nil {
+	if err := eventPublishServerFromEnv(t).authorizeEventPublishRequest(req); err == nil {
 		t.Fatal("legacy workflow token authorized event publishing")
 	}
 }
@@ -169,7 +180,7 @@ func TestHashedEventPublisherPrincipalIsIsolatedFromWorkflowPrincipal(t *testing
 
 	eventReq := httptest.NewRequest(http.MethodPost, "/api/v1/events", nil)
 	eventReq.Header.Set("Authorization", "Bearer adapter-event-token")
-	if err := authorizeEventPublishRequest(eventReq); err != nil {
+	if err := eventPublishServerFromEnv(t).authorizeEventPublishRequest(eventReq); err != nil {
 		t.Fatalf("hashed event publisher rejected: %v", err)
 	}
 
@@ -181,7 +192,7 @@ func TestHashedEventPublisherPrincipalIsIsolatedFromWorkflowPrincipal(t *testing
 
 	eventReq = httptest.NewRequest(http.MethodPost, "/api/v1/events", nil)
 	eventReq.Header.Set("Authorization", "Bearer workflow-ci-token")
-	if err := authorizeEventPublishRequest(eventReq); err == nil {
+	if err := eventPublishServerFromEnv(t).authorizeEventPublishRequest(eventReq); err == nil {
 		t.Fatal("workflow machine credential authorized event publishing")
 	}
 }
@@ -201,7 +212,7 @@ func TestHashedEventPublisherPrincipalIsExactRouteOnly(t *testing.T) {
 	} {
 		req := httptest.NewRequest(test.method, test.path, nil)
 		req.Header.Set("Authorization", "Bearer adapter-event-token")
-		if got := authorizeEventPublishRequest(req) == nil; got != test.wantOK {
+		if got := eventPublishServerFromEnv(t).authorizeEventPublishRequest(req) == nil; got != test.wantOK {
 			t.Fatalf("%s %s authorized=%v, want %v", test.method, test.path, got, test.wantOK)
 		}
 	}
@@ -239,14 +250,18 @@ func TestHashedEventPublisherPrincipalIsBoundToExactMutationScope(t *testing.T) 
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/events", nil)
 	req.Header.Set("Authorization", "Bearer aws-primary-token")
-	actor, err := authenticateEventPublishRequest(req)
+	actor, err := eventPublishServerFromEnv(t).authenticateEventPublishRequest(req)
 	if err != nil {
 		t.Fatal(err)
 	}
 
 	allowed := eventPublishRequest{Provider: "aws", InstanceID: "aws-primary", EventType: "aws.bucket.ensured"}
-	if err := authorizeEventPublishPayload(allowed, actor); err != nil {
+	actor, err = (&Server{}).authorizeEventPublishPayload(context.Background(), allowed, actor)
+	if err != nil {
 		t.Fatalf("exact event scope rejected: %v", err)
+	}
+	if actor.GrantForm != eventGrantFormExact || actor.Instance != nil {
+		t.Fatalf("exact grant decision = %+v", actor)
 	}
 	for _, denied := range []eventPublishRequest{
 		{Type: "deployment.completed"},
@@ -254,7 +269,7 @@ func TestHashedEventPublisherPrincipalIsBoundToExactMutationScope(t *testing.T) 
 		{Provider: "aws", InstanceID: "aws-primary", EventType: "aws.bucket.destroyed"},
 		{Provider: "gcp", InstanceID: "aws-primary", EventType: "gcp.bucket.ensured"},
 	} {
-		if err := authorizeEventPublishPayload(denied, actor); err == nil {
+		if _, err := (&Server{}).authorizeEventPublishPayload(context.Background(), denied, actor); err == nil {
 			t.Fatalf("out-of-scope event was accepted: %+v", denied)
 		}
 	}
@@ -297,7 +312,7 @@ func TestHandleEventPublishRejectsGenericAndForeignScopeBeforePersistence(t *tes
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/events", strings.NewReader(test.body))
 			req.Header.Set("Authorization", "Bearer adapter-event-token")
 			recorder := httptest.NewRecorder()
-			(&Server{}).handleEventPublish(recorder, req)
+			eventPublishServerFromEnv(t).handleEventPublish(recorder, req)
 			if recorder.Code != http.StatusForbidden {
 				t.Fatalf("status=%d, want %d; body=%s", recorder.Code, http.StatusForbidden, recorder.Body.String())
 			}
@@ -312,7 +327,7 @@ func TestAuthorizeEventPublishRequestKeepsNoTokenNonProductionCompatibility(t *t
 			setEventPublishAuthEnvironment(t, "", "")
 
 			req := httptest.NewRequest(http.MethodPost, "/api/v1/events", nil)
-			if err := authorizeEventPublishRequest(req); err != nil {
+			if err := eventPublishServerFromEnv(t).authorizeEventPublishRequest(req); err != nil {
 				t.Fatalf("non-production no-token compatibility rejected: %v", err)
 			}
 		})
@@ -324,7 +339,7 @@ func TestAuthorizeEventPublishRequestRejectsNoTokenInProduction(t *testing.T) {
 	setEventPublishAuthEnvironment(t, "", "")
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/events", nil)
-	if err := authorizeEventPublishRequest(req); err == nil {
+	if err := eventPublishServerFromEnv(t).authorizeEventPublishRequest(req); err == nil {
 		t.Fatal("production event publishing was anonymous")
 	}
 }
@@ -333,7 +348,7 @@ func TestConsoleGateAcceptsHashedEventPrincipalOnlyOnPostEventPublish(t *testing
 	setEventPublishAuthEnvironment(t, "", "workflow-token")
 	t.Setenv(eventPublisherPrincipalsEnv, testEventPublisherPrincipalsJSON(t, "event-only-token", "adapter-aws"))
 
-	srv := &Server{}
+	srv := eventPublishServerFromEnv(t)
 	tests := []struct {
 		name       string
 		method     string

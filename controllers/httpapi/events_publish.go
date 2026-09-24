@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net/http"
 	"strings"
-	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -61,6 +60,11 @@ const (
 type eventPublishActor struct {
 	MachinePrincipal *eventPublisherPrincipal
 	LegacyMigration  bool
+	// GrantForm and Instance are set by authorizeEventPublishPayload: the
+	// grant form that admitted a machine principal ("exact" or "logical"),
+	// and for a logical grant the resolved instance identity (ADR-0021).
+	GrantForm string
+	Instance  *repository.IntegrationInstanceIdentity
 }
 
 // handleEventPublish is the adapter mutation-event endpoint. Adapter pods
@@ -77,7 +81,10 @@ type eventPublishActor struct {
 // mutation-only plaintext migration bridge for existing adapters. Human
 // sessions and workflow credentials are never accepted. With no event
 // credential outside production, an anonymous request remains available for
-// local development.
+// local development. A principal's grant is either exact (compared as an
+// opaque string, no database access) or logical, "<namespace>/<name>", which
+// Core matches only after resolving the event's instance_id to the logical
+// integration instance (ADR-0021).
 //
 // Status codes:
 //   - 201 Created: fresh insert (both shapes).
@@ -86,12 +93,20 @@ type eventPublishActor struct {
 //   - 400 Bad Request: validation failure (missing field, non-conformant
 //     event_type, payload not a JSON object, schema validation, …).
 //   - 401 Unauthorized: token gate.
+//   - 403 Forbidden: `event.authorization_denied`. The principal may not
+//     publish this payload: a generic event, or a mutation event whose
+//     (provider, instance_id, event_type) matches no exact grant and no
+//     logical grant (ADR-0021). One detail covers not found, not granted and
+//     wrong provider.
+//   - 503 Service Unavailable: `event.authorization_unavailable`. A logical
+//     grant needed the manifests lookup and the database did not answer. The
+//     detail is fixed; the database error is only logged.
 //
 // Persistence mirrors handleManifestCreateGeneric: open a *sql.Tx on s.db,
 // run repository.EmitEventWithOutcome inside it, commit. On any error map
 // via writeMappedError so the same status-code logic applies.
 func (s *Server) handleEventPublish(w http.ResponseWriter, r *http.Request) {
-	actor, err := authenticateEventPublishRequest(r)
+	actor, err := s.authenticateEventPublishRequest(r)
 	if err != nil {
 		writeMappedError(w, err)
 		return
@@ -102,7 +117,12 @@ func (s *Server) handleEventPublish(w http.ResponseWriter, r *http.Request) {
 		writeMappedError(w, err)
 		return
 	}
-	if err := authorizeEventPublishPayload(payload, actor); err != nil {
+	actor, err = s.authorizeEventPublishPayload(r.Context(), payload, actor)
+	if errors.Is(err, errEventPublishAuthorizationUnavailable) {
+		writeProblemJSON(w, http.StatusServiceUnavailable, "event.authorization_unavailable", eventPublishUnavailableDetail)
+		return
+	}
+	if err != nil {
 		writeProblemJSON(w, http.StatusForbidden, "event.authorization_denied", err.Error())
 		return
 	}
@@ -146,86 +166,28 @@ func (s *Server) handleEventPublish(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
-func authorizeEventPublishRequest(r *http.Request) error {
-	_, err := authenticateEventPublishRequest(r)
-	return err
-}
-
-func authenticateEventPublishRequest(r *http.Request) (eventPublishActor, error) {
-	if r.Method != http.MethodPost || r.URL.Path != "/api/v1/events" {
-		return eventPublishActor{}, errWorkflowRunUnauthorized
-	}
-	// This machine-only route is not wrapped in an event-publish RBAC
-	// permission. A verified console session must therefore not become an
-	// implicit generic event publisher merely because bearerOrSession attached
-	// claims to the request context.
-	if _, ok := claimsFromContext(r.Context()); ok {
-		return eventPublishActor{}, errWorkflowRunUnauthorized
-	}
-
-	candidates := []string{
-		strings.TrimSpace(r.Header.Get("X-Yggdrasil-Event-Token")),
-		bearerToken(r.Header.Get("Authorization")),
-	}
-	principals, err := eventPublisherPrincipalsFromEnv()
-	if err != nil {
-		return eventPublishActor{}, err
-	}
-	for _, candidate := range candidates {
-		if principal := activeEventPublisherPrincipal(candidate, principals, time.Now().UTC()); principal != nil {
-			return eventPublishActor{MachinePrincipal: principal}, nil
-		}
-	}
-
-	// Plaintext compatibility bridge. It is accepted only when operators opt in
-	// explicitly with a future expiry, remains route-limited here, and is not
-	// consulted by workflow, manifest, auth-admin, deploy, or generic ops gates.
-	legacy, err := legacyEventPublishCredentialFromEnv(time.Now().UTC())
-	if err != nil {
-		return eventPublishActor{}, err
-	}
-	if legacy.Active {
-		for _, candidate := range candidates {
-			if constantTimeTokenEqual(candidate, legacy.Token) {
-				return eventPublishActor{LegacyMigration: true}, nil
-			}
-		}
-	}
-
-	// Preserve anonymous local development only when the event auth surface is
-	// entirely unconfigured and the caller did not present a credential that
-	// belongs to some other scope.
-	if !legacy.Configured && len(principals) == 0 && !requestPresentsStaticCredential(r) && devEnvAllowsFallback() {
-		return eventPublishActor{}, nil
-	}
-	return eventPublishActor{}, errWorkflowRunUnauthorized
-}
-
-func authorizeEventPublishPayload(req eventPublishRequest, actor eventPublishActor) error {
-	if actor.LegacyMigration && strings.TrimSpace(req.EventType) == "" {
-		return fmt.Errorf("%w: legacy event bridge cannot publish generic events", errEventPublishAuthorizationDenied)
-	}
-	if actor.MachinePrincipal == nil {
-		return nil
-	}
-	if strings.TrimSpace(req.EventType) == "" {
-		return fmt.Errorf("%w: machine event principals cannot publish generic events", errEventPublishAuthorizationDenied)
-	}
-	if !eventPublisherPrincipalAllows(actor.MachinePrincipal, req.Provider, req.InstanceID, req.EventType) {
-		return fmt.Errorf("%w: machine event principal is not allowed for this provider, instance, and event type", errEventPublishAuthorizationDenied)
-	}
-	return nil
-}
-
 func bindEventPublishActor(req eventPublishRequest, actor eventPublishActor) eventPublishRequest {
-	metadata := make(map[string]any, len(req.Metadata)+1)
+	metadata := make(map[string]any, len(req.Metadata)+6)
 	for key, value := range req.Metadata {
+		// The whole yggdrasil.io/publisher_* namespace is server-authored,
+		// including keys this version does not stamp.
+		if strings.HasPrefix(key, eventPublisherReservedMetadataPrefix) {
+			continue
+		}
 		metadata[key] = value
 	}
-	delete(metadata, eventPublisherMachinePrincipalMetadataKey)
 	if actor.MachinePrincipal != nil {
 		req.Actor = &model.EventActor{Type: "service", ID: actor.MachinePrincipal.PrincipalID}
 		metadata[eventPublisherMachinePrincipalMetadataKey] = actor.MachinePrincipal.PrincipalID
+		if actor.GrantForm != "" {
+			metadata[eventPublisherGrantFormMetadataKey] = actor.GrantForm
+		}
+		if actor.Instance != nil {
+			metadata[eventPublisherInstanceNamespaceMetadataKey] = actor.Instance.Namespace
+			metadata[eventPublisherInstanceNameMetadataKey] = actor.Instance.Name
+			metadata[eventPublisherInstanceManifestIDMetadataKey] = actor.Instance.ActiveManifestID.String()
+			metadata[eventPublisherInstanceVersionMetadataKey] = actor.Instance.ActiveVersion
+		}
 	} else if actor.LegacyMigration {
 		// The migration bridge is broad by design, but it must still leave a
 		// non-spoofable server-authored identity in the event audit record.

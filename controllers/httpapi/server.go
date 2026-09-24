@@ -169,12 +169,25 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		return nil, err
 	}
 
+	// The event publisher surface (ADR-0017, ADR-0021) is parsed here, once,
+	// and the gate and the handler share this copy. Unlike the directory
+	// inventory it does not fail boot on its own: with YGGDRASIL_ENV unset
+	// validateBootSecrets does not run, and a Core that refuses to start
+	// takes the whole control plane down. A refused inventory keeps today's
+	// posture instead: Core serves, and every event publish answers 401.
+	eventPublishAuth := loadEventPublishAuthConfig()
+	if eventPublishAuth.err != nil {
+		logger.Error("event publisher credential surface refused; every POST /api/v1/events fails closed until Core restarts with a valid inventory",
+			zap.Error(eventPublishAuth.err))
+	}
+
 	server := &Server{
 		serviceName:                serviceName,
 		db:                         db,
 		rabbitmq:                   conn,
 		logger:                     logger,
 		directoryMachinePrincipals: directoryPrincipals,
+		eventPublishAuth:           eventPublishAuth,
 	}
 	// Optional: auth secrets envelope. KEK is 32 raw bytes base64-encoded
 	// in YGGDRASIL_AUTH_KEK_BASE64; if absent the MFA HTTP layer fails
@@ -899,7 +912,7 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 		// the event publish endpoint; authorizeWorkflowRunRequest intentionally
 		// does not know this token, so it cannot cross into catalog, workflow or
 		// administrative APIs.
-		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/events" && authorizeEventPublishRequest(r) == nil {
+		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/events" && s.authorizeEventPublishRequest(r) == nil {
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -1314,6 +1327,14 @@ type Server struct {
 	// dedicated header is refused as unknown and a bearer is never a
 	// directory attempt.
 	directoryMachinePrincipals []directoryMachinePrincipal
+	// eventPublishAuth is the event publisher credential surface New loaded
+	// once. nil (a Server not built by New) authenticates nothing.
+	eventPublishAuth *eventPublishAuthConfig
+	// eventInstanceResolver replaces the manifests lookup of logical event
+	// grants (ADR-0021) in tests. It receives an already parsed reference, so
+	// a wire value that is not resolvable never reaches it. nil (production)
+	// queries s.db.
+	eventInstanceResolver func(ctx context.Context, ref eventInstanceRef) (repository.IntegrationInstanceIdentity, error)
 	// directoryAuditSink replaces the durable audit_events writer for the
 	// directory machine-read path. nil (production) persists synchronously
 	// through repository.RecordAuditEvent before the outcome is answered;
