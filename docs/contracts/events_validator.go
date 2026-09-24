@@ -97,6 +97,7 @@ func eventTypeToSchemaPath(eventType string, schemaVersion string) string {
 		"credential.password_changed":           "events/v1/credential/password_changed.json",
 		"credential.reset_token_issued":         "events/v1/credential/reset_token_issued.json",
 		"credential.password_rotation_required": "events/v1/credential/password_rotation_required.json",
+		"credential.mfa_reset":                  "events/v1/credential/mfa_reset.json",
 		// collaborator lifecycle events
 		"collaborator.absence_started": "events/v1/collaborator/absence_started.json",
 		"collaborator.absence_ended":   "events/v1/collaborator/absence_ended.json",

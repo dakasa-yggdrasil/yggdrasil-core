@@ -9,4 +9,5 @@ const (
 	EventTypeCredentialPasswordChanged          = "credential.password_changed"
 	EventTypeCredentialResetTokenIssued         = "credential.reset_token_issued"
 	EventTypeCredentialPasswordRotationRequired = "credential.password_rotation_required"
+	EventTypeCredentialMFAReset                 = "credential.mfa_reset"
 )

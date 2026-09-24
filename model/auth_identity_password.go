@@ -3,12 +3,19 @@ package model
 type IssueSetupTokenRequest struct {
 	CollaboratorID   string `json:"collaborator_id"`
 	ExpiresInSeconds int    `json:"expires_in_seconds,omitempty"`
+	// ResetMFA clears every enrolled second factor (TOTP, passkeys, recovery
+	// codes) and revokes the collaborator's sessions before the link is
+	// issued. It is the admin recovery path for someone who lost both the
+	// password and the second factor: the link then walks them through a new
+	// password and a fresh MFA enrollment.
+	ResetMFA bool `json:"reset_mfa,omitempty"`
 }
 
 type IssueSetupTokenResponse struct {
 	TokenID   string `json:"token_id"`
 	SetupURL  string `json:"setup_url"`
 	ExpiresAt string `json:"expires_at"`
+	MFAReset  bool   `json:"mfa_reset,omitempty"`
 }
 
 type SetupProfile struct {

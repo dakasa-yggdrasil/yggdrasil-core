@@ -15,10 +15,12 @@ import (
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/password"
+	safego "github.com/dakasa-yggdrasil/yggdrasil-core/internal/goroutine"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 // handleIssueSetupToken — POST /api/v1/auth/passwords/setup-tokens
@@ -28,7 +30,8 @@ import (
 // token via X-Yggdrasil-Auth-Admin-Token header or as a Bearer token matching
 // YGGDRASIL_AUTH_ADMIN_TOKEN — the same gate used by all other admin endpoints.
 func (s *Server) handleIssueSetupToken(w http.ResponseWriter, r *http.Request) {
-	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
+	principal, err := resolveAuthAdminPrincipal(r, s.db)
+	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
@@ -51,32 +54,77 @@ func (s *Server) handleIssueSetupToken(w http.ResponseWriter, r *http.Request) {
 	if ttl <= 0 {
 		ttl = envDurationCred("AUTH_PASSWORD_SETUP_TOKEN_TTL", 48*time.Hour)
 	}
+
 	gen, err := password.GenerateToken()
 	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
-	issued, err := repository.IssueCredentialToken(r.Context(), s.db, repository.IssueCredentialTokenInput{
+	var createdBy *uuid.UUID
+	if principal.CollaboratorID != uuid.Nil {
+		adminID := principal.CollaboratorID
+		createdBy = &adminID
+	}
+	tokenInput := repository.IssueCredentialTokenInput{
 		CollaboratorID:  collabID,
 		Purpose:         model.CredentialTokenPurposeSetup,
 		TokenHash:       gen.Hash,
 		ExpiresAt:       time.Now().Add(ttl),
-		CreatedBy:       nil,
+		CreatedBy:       createdBy,
 		InvalidatePrior: true,
-	})
+	}
+	if req.ResetMFA {
+		// Read back by the setup preflight so the page greets a returning
+		// person, not a first access.
+		tokenInput.Metadata = map[string]any{"mfa_reset": true}
+	}
+
+	var issued model.CredentialToken
+	if req.ResetMFA {
+		// Full recovery (lost second factor, with or without the password):
+		// the factor and password wipe, the session fan-out, the audit event
+		// and the new link commit together, so the account is never left
+		// without factors and without a link, or with the old password
+		// still opening an enrollment.
+		issued, err = s.resetMFAAndIssueSetupLink(r, collabID, tokenInput, principal)
+	} else {
+		issued, err = repository.IssueCredentialToken(r.Context(), s.db, tokenInput)
+	}
 	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
 
-	if err := emitCredentialEvent(r.Context(), s.db, repository.EventTypeCredentialSetupTokenIssued, "collaborator", collabID.String(), nil, map[string]any{
+	issuedPayload := map[string]any{
 		"token_id":        issued.ID,
 		"collaborator_id": collabID.String(),
-		"expires_at":      issued.ExpiresAt,
+		"expires_at":      issued.ExpiresAt.UTC().Format(time.RFC3339),
 		"purpose":         "setup",
-	}); err != nil {
-		// best-effort emit; token already persisted — do not fail the response
-		_ = err
+	}
+	if createdBy != nil {
+		issuedPayload["issued_by_id"] = createdBy.String()
+	}
+	if req.ResetMFA {
+		issuedPayload["mfa_reset"] = true
+	}
+	if err := emitCredentialEvent(r.Context(), s.db, repository.EventTypeCredentialSetupTokenIssued, "collaborator", collabID.String(), createdBy, issuedPayload); err != nil {
+		// Best effort: the token is already persisted and the response must
+		// not fail, but a lost audit event has to be visible.
+		s.logWarn("credential.setup_token_issued emit failed",
+			zap.String("collaborator_id", collabID.String()), zap.Error(err))
+	}
+
+	if req.ResetMFA {
+		s.dispatchBackchannelLogoutForCollaborator(r.Context(), collabID)
+		metadata := map[string]any{
+			"source_ip":  clientIP(r),
+			"user_agent": r.UserAgent(),
+			"source":     "admin_setup_link",
+		}
+		actor := principal.auditActor()
+		safego.SafeGo("audit_auth_mfa_reset", func() {
+			_ = s.recordAuthAuditSync(r, actor, AuditAuthMFAReset, collabID.String(), AuditOutcomeSuccess, metadata)
+		})
 	}
 
 	setupURL := buildSetupURL(os.Getenv("YGGDRASIL_PUBLIC_BASE_URL"), gen.Raw)
@@ -84,7 +132,125 @@ func (s *Server) handleIssueSetupToken(w http.ResponseWriter, r *http.Request) {
 		TokenID:   issued.ID,
 		SetupURL:  setupURL,
 		ExpiresAt: issued.ExpiresAt.UTC().Format(time.RFC3339),
+		MFAReset:  req.ResetMFA,
 	})
+}
+
+// resetMFAAndIssueSetupLink wipes the collaborator's second factors and
+// password, revokes everything opened with them (§13 fan-out), records the
+// attributed credential.mfa_reset event and issues the setup link, all in
+// one transaction: a factor wipe that is not audited, or that leaves the
+// account without a link, must not happen.
+func (s *Server) resetMFAAndIssueSetupLink(r *http.Request, collabID uuid.UUID, in repository.IssueCredentialTokenInput, principal authAdminPrincipal) (model.CredentialToken, error) {
+	ctx := r.Context()
+	collab, err := repository.GetCollaborator(ctx, s.db, collabID.String())
+	if err != nil {
+		return model.CredentialToken{}, err
+	}
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.CredentialToken{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	// Lock order: the per-collaborator issuance lock, then the setup token
+	// rows, then the auth_identities row. handleSetupCommit takes token row
+	// then auth_identities and never the issuance lock, so no cycle forms,
+	// and two concurrent recoveries run one after the other.
+	issued, err := repository.IssueCredentialTokenTx(ctx, tx, in)
+	if err != nil {
+		return model.CredentialToken{}, err
+	}
+	// Record whether this wipe actually replaced a credential. The wipe also
+	// clears password_updated_at, so afterwards nothing on the account tells
+	// a returning person from a new hire; only the issuance can. A full
+	// recovery clicked on an account that was never set up stays a first
+	// access. Read after the token rows are locked, before auth_identities,
+	// to keep handleSetupCommit's lock order.
+	prior, err := repository.GetCredentialAccountState(ctx, tx, collabID)
+	if err != nil {
+		return model.CredentialToken{}, err
+	}
+	// Same definition of "a credential existed" as handleSetupCommit: a
+	// password or an enrolled factor. A TOTP secret from an abandoned
+	// enrollment, leftover codes or a passkey without mfa_enrolled_at never
+	// opened a session, so wiping them does not make someone a returning user.
+	if prior.HasPassword || prior.MFAEnrolled {
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE auth_credential_tokens SET metadata = metadata || '{"replaced_credential": true}'::jsonb WHERE id = $1`,
+			issued.ID); err != nil {
+			return model.CredentialToken{}, err
+		}
+	}
+	if err := repository.ResetMFAFactors(ctx, tx, collabID); err != nil {
+		return model.CredentialToken{}, err
+	}
+	if err := s.revokeForCredentialReplacement(ctx, tx, collab, repository.SessionRevocationReasonMFAReset, map[string]any{
+		"source": "admin_setup_link",
+		"by":     principal.auditActor(),
+	}); err != nil {
+		return model.CredentialToken{}, err
+	}
+	payload := map[string]any{
+		"collaborator_id": collabID.String(),
+		"source":          "admin_setup_link",
+	}
+	if principal.CollaboratorID != uuid.Nil {
+		payload["issued_by_id"] = principal.CollaboratorID.String()
+	}
+	if _, err := repository.EmitEvent(ctx, tx, model.EmitEventRequest{
+		Type:          repository.EventTypeCredentialMFAReset,
+		SchemaVersion: "v1",
+		AggregateType: "collaborator",
+		AggregateID:   collabID.String(),
+		Actor:         principal.eventActor(r),
+		Payload:       payload,
+	}); err != nil {
+		return model.CredentialToken{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return model.CredentialToken{}, err
+	}
+	return issued, nil
+}
+
+// revokeForCredentialReplacement is the §13 INTEGRATION_CONTRACT fan-out for
+// every path that replaces a credential through a link (setup re-access,
+// self-service reset, admin MFA reset): console sessions and OIDC refresh
+// tokens are revoked, a global session_revocation row tells introspection
+// and adapters, and collaborator.session_terminated is emitted. The caller
+// fires the back-channel logout after its commit.
+func (s *Server) revokeForCredentialReplacement(ctx context.Context, tx *sql.Tx, collab model.Collaborator, reason string, metadata map[string]any) error {
+	if _, err := repository.RevokeAllAuthSessions(ctx, tx, collab.ID); err != nil {
+		return err
+	}
+	rev, err := repository.InsertSessionRevocation(ctx, s.db, tx, repository.InsertSessionRevocationRequest{
+		CollaboratorID: collab.ID,
+		SessionJTI:     nil,
+		Reason:         reason,
+		Metadata:       metadata,
+	})
+	if err != nil {
+		return err
+	}
+	sessionPayload := map[string]any{
+		"collaborator_id": collab.ID.String(),
+		"reason":          reason,
+		"revocation_id":   rev.ID.String(),
+		"emitted_at":      time.Now().UTC().Format(time.RFC3339),
+	}
+	if collab.PrimaryEmail != "" {
+		sessionPayload["primary_email"] = collab.PrimaryEmail
+	}
+	_, err = repository.EmitEvent(ctx, tx, model.EmitEventRequest{
+		Type:           repository.EventTypeCollaboratorSessionTerminated,
+		SchemaVersion:  "v1",
+		AggregateType:  "collaborator",
+		AggregateID:    collab.ID.String(),
+		Payload:        sessionPayload,
+		IdempotencyKey: "session.terminated." + rev.ID.String(),
+	})
+	return err
 }
 
 func buildSetupURL(base, raw string) string {
@@ -124,6 +290,13 @@ func lookupSetupToken(ctx context.Context, q rowQuerier, rawToken string, forUpd
 		FROM auth_credential_tokens
 		WHERE token_hash = $1 AND purpose = 'setup'`+lockClause,
 		tokenHash).Scan(&tokenID, &collabID, &expiresAt, &consumedAt)
+	return classifySetupToken(tokenID, collabID, expiresAt, consumedAt, err)
+}
+
+// classifySetupToken maps the lookup outcome of a setup token onto its
+// problem response (nil when usable). Split from the query so the mapping is
+// testable without a database.
+func classifySetupToken(tokenID, collabID uuid.UUID, expiresAt time.Time, consumedAt sql.NullTime, err error) (uuid.UUID, uuid.UUID, time.Time, *setupTokenRejection) {
 	if errors.Is(err, sql.ErrNoRows) {
 		return uuid.Nil, uuid.Nil, time.Time{}, &setupTokenRejection{
 			status: http.StatusUnauthorized,
@@ -170,11 +343,103 @@ func writeSetupTokenRejection(w http.ResponseWriter, instance string, rej *setup
 	httperr.WriteProblem(w, rej.status, rej.code, rej.title, rej.detail, opts...)
 }
 
+// lookupResetToken inspects a self-service reset token without consuming it.
+// Every unusable state answers 401 auth.reset_token_invalid (the code the
+// console already handles); `reason` tells the page which copy to show.
+func lookupResetToken(ctx context.Context, q rowQuerier, rawToken string) (tokenID, collabID uuid.UUID, expiresAt time.Time, rej *setupTokenRejection) {
+	var consumedAt sql.NullTime
+	err := q.QueryRowContext(ctx, `
+		SELECT id, collaborator_id, expires_at, consumed_at
+		FROM auth_credential_tokens
+		WHERE token_hash = $1 AND purpose = 'reset'`,
+		password.HashToken(rawToken)).Scan(&tokenID, &collabID, &expiresAt, &consumedAt)
+	return classifyResetToken(tokenID, collabID, expiresAt, consumedAt, err, time.Now())
+}
+
+func classifyResetToken(tokenID, collabID uuid.UUID, expiresAt time.Time, consumedAt sql.NullTime, err error, now time.Time) (uuid.UUID, uuid.UUID, time.Time, *setupTokenRejection) {
+	invalid := func(reason, detail string) *setupTokenRejection {
+		return &setupTokenRejection{
+			status: http.StatusUnauthorized,
+			code:   httperr.CodeAuthResetTokenInvalid,
+			title:  "Invalid reset token",
+			detail: detail,
+			extras: map[string]any{"reason": reason},
+		}
+	}
+	switch {
+	case errors.Is(err, sql.ErrNoRows):
+		return uuid.Nil, uuid.Nil, time.Time{}, invalid("not_found", "this reset link is not recognised; request a new one")
+	case err != nil:
+		return uuid.Nil, uuid.Nil, time.Time{}, &setupTokenRejection{
+			status: http.StatusInternalServerError,
+			code:   httperr.CodeInternal,
+			title:  "Internal error",
+			detail: "failed to load reset token state",
+		}
+	case consumedAt.Valid:
+		return uuid.Nil, uuid.Nil, time.Time{}, invalid("already_used", "this reset link was already used or replaced by a newer one; request a new one")
+	case now.After(expiresAt):
+		return uuid.Nil, uuid.Nil, time.Time{}, invalid("expired", "this reset link has expired; request a new one")
+	}
+	return tokenID, collabID, expiresAt, nil
+}
+
+// passwordPolicyView is the part of the password policy a form can check
+// live. The identity and common-password rules still run server-side; the
+// console mirrors the identity rule from the collaborator fields it gets.
+func passwordPolicyView() map[string]any {
+	return map[string]any{
+		"min_length":          envIntCred("AUTH_PASSWORD_MIN_LENGTH", 12),
+		"rejects_identity":    true,
+		"rejects_common_list": true,
+	}
+}
+
+// passwordPolicyReason maps a ValidateStrength error onto the stable
+// `reason` the forms translate (too_short / contains_identity / too_common).
+func passwordPolicyReason(err error) string {
+	switch {
+	case errors.Is(err, password.ErrPasswordTooShort):
+		return "too_short"
+	case errors.Is(err, password.ErrPasswordContainsIdentity):
+		return "contains_identity"
+	case errors.Is(err, password.ErrPasswordTooCommon):
+		return "too_common"
+	default:
+		return "policy"
+	}
+}
+
+func writePasswordPolicyProblem(w http.ResponseWriter, instance string, err error) {
+	httperr.WriteProblem(w, http.StatusUnprocessableEntity,
+		httperr.CodeAuthPasswordTooWeak,
+		"Password too weak",
+		err.Error(),
+		httperr.WithInstance(instance),
+		httperr.WithExtra("reason", passwordPolicyReason(err)))
+}
+
+// collaboratorIdentityView is what a recovery page shows and what the
+// console needs to mirror the "no personal identifiers" rule live.
+func collaboratorIdentityView(collab model.Collaborator) map[string]any {
+	return map[string]any{
+		"id":            collab.ID,
+		"display_name":  collab.DisplayName,
+		"primary_email": collab.PrimaryEmail,
+		"slug":          collab.Slug,
+	}
+}
+
 // handleSetupPreflight — GET /api/v1/auth/passwords/setup/preflight?token=…
 //
 // Cheap, read-only check the frontend calls *before* rendering the setup form.
 // Lets the UI show "this link was already used, sign in instead" without ever
 // asking the user to type a password that will be rejected anyway.
+//
+// It also reports the account posture so one page can serve both journeys a
+// setup link carries: a first access (no password yet) and an admin-issued
+// re-access for an existing account (has_password), plus whether the person
+// will be asked to enroll a second factor or to sign in with it afterwards.
 //
 // Does not consume the token. Same authentication model as the POST commit:
 // the token is the credential.
@@ -194,17 +459,44 @@ func (s *Server) handleSetupPreflight(w http.ResponseWriter, r *http.Request) {
 		writeSetupTokenRejection(w, r.URL.Path, rej)
 		return
 	}
-	// Best-effort: fetch the collaborator so the UI can greet by name. If the
-	// load fails the preflight still succeeds — the commit will error loudly.
+	// Best-effort: fetch the collaborator and credential posture so the UI can
+	// greet by name and pick the right journey. If a load fails the preflight
+	// still succeeds; the commit will error loudly.
 	resp := map[string]any{
-		"status":     "ready",
-		"expires_at": expiresAt.UTC().Format(time.RFC3339),
+		"status":          "ready",
+		"expires_at":      expiresAt.UTC().Format(time.RFC3339),
+		"password_policy": passwordPolicyView(),
 	}
 	if collab, err := repository.GetCollaborator(r.Context(), s.db, collabID.String()); err == nil {
-		resp["collaborator"] = map[string]any{
-			"id":            collab.ID,
-			"display_name":  collab.DisplayName,
-			"primary_email": collab.PrimaryEmail,
+		resp["collaborator"] = collaboratorIdentityView(collab)
+	}
+	if st, err := repository.GetCredentialAccountState(r.Context(), s.db, collabID); err == nil {
+		// A full-recovery link arrives with no password and no factor, like a
+		// brand-new account; `recovery` lets the page greet a returning person
+		// as such instead of as a first access.
+		//
+		// The flag follows the account, not only the presented token: a plain
+		// access link issued after a full recovery replaces the recovery link
+		// but the person is still returning. It keys on replaced_credential,
+		// which a full recovery stamps only when it wiped an existing password
+		// or factor, so a recovery clicked on a never-configured account keeps
+		// the first-access journey. The person may re-enroll a factor before
+		// the password (enroll link, third-party login), so only a password
+		// ends the recovery; the console words the rest from mfa_enrolled.
+		var recovery bool
+		if !st.HasPassword {
+			_ = s.db.QueryRowContext(r.Context(), `
+				SELECT EXISTS (
+					SELECT 1 FROM auth_credential_tokens
+					WHERE collaborator_id = $1
+					  AND purpose = 'setup'
+					  AND metadata @> '{"replaced_credential": true}'::jsonb
+				)`, collabID).Scan(&recovery)
+		}
+		resp["account"] = map[string]any{
+			"has_password": st.HasPassword,
+			"mfa_enrolled": st.MFAEnrolled,
+			"recovery":     recovery,
 		}
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -247,18 +539,16 @@ func emitCredentialEvent(ctx context.Context, db *sql.DB, evtType, aggType, aggI
 // handleSetupCommit — POST /api/v1/auth/passwords/setup
 //
 // Atomically redeems a single-use setup token, sets the collaborator's password,
-// optionally updates profile fields, emits an audit event, commits the transaction,
-// then opens a new auth session outside the transaction and returns it to the caller.
+// optionally updates profile fields, revokes older sessions, emits an audit
+// event and commits. It never opens a session itself:
 //
-// Session creation is intentionally deferred until after the Tx commits: this
-// avoids holding a session-side write lock inside the same serializable Tx and
-// mirrors the pattern used by handleAuthLogin. The only risk is a partial failure
-// (token consumed, session not created) on a fatal DB error after Commit, which is
-// acceptable because the collaborator can contact support.
+//   - no second factor enrolled: 428 auth.mfa_not_enrolled with enroll_url
+//     (the bootstrap path; the session is issued by the MFA enrollment);
+//   - second factor enrolled: 200 {status: password_set, next: login}; the
+//     person signs in with the new password and the factor they already have.
 //
-// MFA enrollment: the handler does NOT require MFA to already be enrolled (this is
-// the bootstrap path). The response carries mfa_enrollment_required=true when the
-// collaborator has never enrolled, so the client can redirect to /api/v1/auth/mfa/enroll.
+// A rejected password (422) or an inactive account (403) rolls the
+// transaction back, so the link stays usable.
 func (s *Server) handleSetupCommit(w http.ResponseWriter, r *http.Request) {
 	// Read body once; we need to decode twice.
 	bodyBytes, err := readAndCloseBody(r)
@@ -369,12 +659,9 @@ func (s *Server) handleSetupCommit(w http.ResponseWriter, r *http.Request) {
 	commonPasswords, _ := commonPasswordsCached()
 	userTokens := []string{collab.PrimaryEmail, collab.Slug, collab.DisplayName}
 	if err := password.ValidateStrength(req.NewPassword, minLen, commonPasswords, userTokens); err != nil {
-		httperr.WriteProblem(w, http.StatusUnprocessableEntity,
-			httperr.CodeAuthPasswordTooWeak,
-			"Password too weak",
-			err.Error(),
-			httperr.WithInstance(r.URL.Path),
-			httperr.WithExtra("reason", err.Error()))
+		// Deferred Rollback un-consumes the token: a rejected password never
+		// costs the person their link.
+		writePasswordPolicyProblem(w, r.URL.Path, err)
 		return
 	}
 
@@ -385,7 +672,21 @@ func (s *Server) handleSetupCommit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 5 + 6: Update auth_identities with hash + expiry.
+	// Step 4b: remember whether this link replaces an existing credential.
+	// A re-access (lost password) owes the §13 revocation fan-out; a first
+	// access has nothing to revoke and must not emit a spurious
+	// session.terminated.
+	prior, err := repository.GetCredentialAccountState(r.Context(), tx, collabID)
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	replacesCredential := prior.HasPassword || prior.MFAEnrolled
+
+	// Step 5 + 6: Update auth_identities with hash + expiry. The lockout is
+	// cleared too: the link holder was vouched for by an admin, and an
+	// enrolled account is sent straight to the login, where a lockout left
+	// over from guessing the forgotten password would refuse them.
 	rotation := envDurationCred("AUTH_PASSWORD_ROTATION_PERIOD", 90*24*time.Hour)
 	res, err := tx.ExecContext(r.Context(), `
 		UPDATE auth_identities
@@ -393,7 +694,9 @@ func (s *Server) handleSetupCommit(w http.ResponseWriter, r *http.Request) {
 		    password_scheme      = $3,
 		    password_updated_at  = NOW(),
 		    password_expires_at  = NOW() + $4::interval,
-		    password_must_change = false
+		    password_must_change = false,
+		    failed_attempts      = 0,
+		    locked_until         = NULL
 		WHERE collaborator_id = $1
 	`, collabID, hash, string(scheme), rotation.String())
 	if err != nil {
@@ -439,6 +742,19 @@ func (s *Server) handleSetupCommit(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
+	// Step 8: Sessions and tokens opened with the previous password must not
+	// outlive it. On an admin-issued re-access (lost password) this signs
+	// every old device and relying party out; a first access has none.
+	if replacesCredential {
+		if err := s.revokeForCredentialReplacement(r.Context(), tx, collab, repository.SessionRevocationReasonPasswordRotated, map[string]any{
+			"source": "setup_link",
+			"ip":     r.RemoteAddr,
+		}); err != nil {
+			writeMappedError(w, err)
+			return
+		}
+	}
+
 	// Step 9: Emit audit event inside the transaction.
 	_, _ = repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
 		Type:          repository.EventTypeCredentialPasswordSetupCompleted,
@@ -464,47 +780,41 @@ func (s *Server) handleSetupCommit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	committed = true
+	if replacesCredential {
+		s.dispatchBackchannelLogoutForCollaborator(r.Context(), collabID)
+	}
 
-	// Step 8/11: MFA gate BEFORE minting any session. A collaborator who has
-	// never enrolled a second factor MUST NOT receive a general session from
-	// the setup flow — that would bypass the universal-MFA invariant exactly
-	// like a password login does (handleAuthLogin returns 428 with no
-	// cookie). Instead we return the enroll-required envelope carrying a
-	// usable enroll token; the client redirects into /mfa/enroll and only
-	// obtains a real session once MFA is marked enrolled.
+	// Step 11: the setup link never mints a session on its own. A link is
+	// possession of a URL, and a URL travels through chat and email; it must
+	// not stand in for the second factor.
+	//
+	//   - No second factor yet (first access, or an admin MFA reset): 428 +
+	//     enroll link and NO cookie, mirroring handleAuthLogin. The session
+	//     only exists once MFA is enrolled.
+	//   - Second factor enrolled (admin-issued re-access for someone who lost
+	//     the password): 200 with next=login and NO cookie. The person signs
+	//     in with the new password and proves the factor they already have.
+	//     Minting a session here let the link holder skip MFA entirely.
 	//
 	// Re-fetch collaborator to pick up any profile changes made inside the Tx.
 	collab, _ = repository.GetCollaborator(r.Context(), s.db, collabID.String())
 	identity, err := repository.GetAuthIdentityByCollaboratorID(r.Context(), s.db, collabID)
 	if err != nil {
-		// Fail closed: without a confirmed MFA state we do not mint a session.
+		// Fail closed: without a confirmed MFA state we do not go further.
 		writeMappedError(w, err)
 		return
 	}
 	if identity.MFAEnrolledAt == nil {
-		// 428 + enroll link, NO session cookie. Mirrors handleAuthLogin.
 		s.writeMFAEnrollRequired(w, r, collab)
 		return
 	}
 
-	// MFA already enrolled: open a session OUTSIDE the committed transaction.
-	sessionMeta := mergeAuthMetadata(nil, r)
-	session, sessionToken, err := repository.CreateAuthSession(r.Context(), s.db, collabID, sessionMeta, authSessionTTL())
-	if err != nil {
-		writeMappedError(w, err)
-		return
-	}
-
-	resp := map[string]any{
-		"session":                 session,
-		"token":                   sessionToken,
-		"collaborator":            collab,
+	writeJSON(w, http.StatusOK, map[string]any{
+		"status":                  "password_set",
+		"next":                    "login",
 		"mfa_enrollment_required": false,
-	}
-
-	writeAuthCookie(w, sessionToken, session.ExpiresAt)
-	writeCSRFCookie(w, computeCSRFToken(session.ID), session.ExpiresAt)
-	writeJSON(w, http.StatusOK, resp)
+		"collaborator":            collaboratorIdentityView(collab),
+	})
 }
 
 // collaboratorEligibleForSetup reports whether a collaborator in the given
@@ -519,6 +829,15 @@ func collaboratorEligibleForSetup(status string) bool {
 	default:
 		return false
 	}
+}
+
+// collaboratorCanSignIn is the status rule of the password login
+// (repository.VerifyPasswordCredential): only "active" signs in. Self-service
+// reset mints a session, so it follows this rule and not the wider setup
+// allowlist; otherwise a pending_start account (a re-hire before the start
+// date still holding old factors) would get a session the login refuses.
+func collaboratorCanSignIn(status string) bool {
+	return strings.ToLower(strings.TrimSpace(status)) == "active"
 }
 
 // readAndCloseBody reads the entire request body and closes it.
@@ -847,7 +1166,8 @@ func (s *Server) handlePasswordForgot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	collab, err := repository.LookupCollaboratorByIdentifier(r.Context(), s.db, identifier)
-	if err != nil || collab == nil {
+	if err != nil || collab == nil || !collaboratorCanSignIn(collab.Status) {
+		// Accounts that cannot sign in get no link either; same 202.
 		respondAccepted()
 		return
 	}
@@ -875,52 +1195,154 @@ func (s *Server) handlePasswordForgot(w http.ResponseWriter, r *http.Request) {
 		Metadata:        map[string]any{"rl_key": rlKey},
 	})
 	if err == nil {
-		_ = emitCredentialEvent(r.Context(), s.db, repository.EventTypeCredentialResetTokenIssued, "collaborator", collab.ID.String(), nil, map[string]any{
+		if emitErr := emitCredentialEvent(r.Context(), s.db, repository.EventTypeCredentialResetTokenIssued, "collaborator", collab.ID.String(), nil, map[string]any{
 			"token_id":        issued.ID,
 			"collaborator_id": collab.ID.String(),
-			"expires_at":      issued.ExpiresAt,
+			"expires_at":      issued.ExpiresAt.UTC().Format(time.RFC3339),
 			"source":          "self_service",
 			"purpose":         "reset",
-		})
+		}); emitErr != nil {
+			s.logWarn("credential.reset_token_issued emit failed",
+				zap.String("collaborator_id", collab.ID.String()), zap.Error(emitErr))
+		}
+		// Delivery is what makes this flow real: without it the token was
+		// created and never reached anyone. The send runs in the background
+		// so the 202 timing does not reveal whether the account exists.
+		if cfg, ok := loadPasswordResetEmailConfig(); ok {
+			s.dispatchPasswordResetEmail(cfg, *collab, gen.Raw, ttl)
+		}
 	}
 
 	respondAccepted()
 }
 
+// handleForgotOptions: GET /api/v1/auth/passwords/forgot/options
+//
+// Tells the login page whether self-service reset can actually deliver a
+// link. When it cannot, the page sends the person to an administrator
+// instead of a form that silently goes nowhere. Carries no account data.
+func (s *Server) handleForgotOptions(w http.ResponseWriter, r *http.Request) {
+	_, ok := loadPasswordResetEmailConfig()
+	writeJSON(w, http.StatusOK, map[string]any{
+		"email_delivery":  ok,
+		"reset_token_ttl": envDurationCred("AUTH_PASSWORD_RESET_TOKEN_TTL", 24*time.Hour).String(),
+	})
+}
+
+// handleResetPreflight: GET /api/v1/auth/passwords/reset/preflight?token=…
+//
+// Read-only check the reset page runs before rendering the form: is the link
+// usable, and which second factor can the person prove inline? Passkeys are
+// not accepted inline yet, so an account whose only factor is a passkey gets
+// factors=[] and the page routes them to an administrator. The token is the
+// credential, as on the setup preflight.
+func (s *Server) handleResetPreflight(w http.ResponseWriter, r *http.Request) {
+	raw := strings.TrimSpace(r.URL.Query().Get("token"))
+	if raw == "" {
+		httperr.WriteProblem(w, http.StatusBadRequest,
+			httperr.CodeMissingField,
+			"Missing field",
+			"token query parameter is required",
+			httperr.WithInstance(r.URL.Path),
+			httperr.WithFieldError("token", "required", "token is required"))
+		return
+	}
+	_, collabID, expiresAt, rej := lookupResetToken(r.Context(), s.db, raw)
+	if rej != nil {
+		writeSetupTokenRejection(w, r.URL.Path, rej)
+		return
+	}
+	collab, err := repository.GetCollaborator(r.Context(), s.db, collabID.String())
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	if !collaboratorCanSignIn(collab.Status) {
+		httperr.WriteProblem(w, http.StatusForbidden,
+			httperr.CodeAuthAccountInactive,
+			"Account not active",
+			"this account is not active and cannot reset its password; contact your administrator",
+			httperr.WithInstance(r.URL.Path))
+		return
+	}
+	st, err := repository.GetCredentialAccountState(r.Context(), s.db, collabID)
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	resp := map[string]any{
+		"status":          "ready",
+		"expires_at":      expiresAt.UTC().Format(time.RFC3339),
+		"password_policy": passwordPolicyView(),
+		"collaborator":    collaboratorIdentityView(collab),
+		"mfa_enrolled":    st.MFAEnrolled,
+		"factors":         inlineResetFactors(st),
+		// A passkey cannot be proven on this form yet, but it still works at
+		// the login: such an account needs a plain access link, not a factor
+		// wipe. The page words its advice from this.
+		"has_passkey": st.PasskeyCount > 0,
+	}
+	writeJSON(w, http.StatusOK, resp)
+}
+
+// inlineResetFactors lists the second factors the reset form can collect.
+func inlineResetFactors(st repository.CredentialAccountState) []string {
+	factors := []string{}
+	if !st.MFAEnrolled {
+		return factors
+	}
+	if st.HasTOTP {
+		factors = append(factors, "totp")
+	}
+	if st.HasRecoveryCodes {
+		factors = append(factors, "recovery_code")
+	}
+	return factors
+}
+
 // handlePasswordReset — POST /api/v1/auth/passwords/reset
 //
-// Public endpoint that completes a password-reset flow initiated by handlePasswordForgot.
-// Steps:
+// Public endpoint that completes a password-reset flow initiated by
+// handlePasswordForgot. The link survives the person's mistakes: the token
+// is consumed only once every check has passed.
+//
 //  1. Decode body → token, new_password, MFA factor.
-//  2. Consume the reset token (atomic, single-use).
-//  3. Enforce MFA enrolled; verify supplied factor (totp_code or recovery_code).
-//  4. Load collaborator profile for password-policy user tokens.
-//  5. Validate new password strength.
-//  6. In a transaction: update password hash, revoke ALL active sessions (total
-//     revoke — no current session to preserve), emit audit event.
-//  7. Outside Tx: open a brand-new auth session.
-//  8. Return {session, token, collaborator}.
+//  2. Look the token up WITHOUT consuming it (401 reset_token_invalid + reason).
+//  3. Enforce MFA enrolled (428 otherwise: recovery goes through an admin).
+//  4. Refuse inactive accounts (403) and validate the new password
+//     (422 + reason); the token stays intact.
+//  5. Reserve one of resetMFAMaxAttempts atomically, then verify the factor.
+//     A wrong code answers 401 + attempts_remaining and the last failure
+//     burns the link, which keeps a 6-digit code from being guessed through
+//     an intercepted link (the reservation is what makes the cap hold under
+//     concurrent requests).
+//  6. Consume the token atomically (a concurrent use loses here).
+//  7. In a transaction: update the password hash, revoke ALL sessions, emit
+//     the audit event.
+//  8. Outside the Tx: open a new session with its CSRF cookie.
 func (s *Server) handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 	var req model.PasswordResetRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeMappedError(w, err)
 		return
 	}
-
-	// Step 2: consume the reset token atomically.
-	tokenHash := password.HashToken(req.Token)
-	out, err := repository.ConsumeCredentialToken(r.Context(), s.db, repository.ConsumeCredentialTokenInput{
-		TokenHash: tokenHash, Purpose: model.CredentialTokenPurposeReset,
-	})
-	if err != nil {
-		httperr.WriteProblem(w, http.StatusUnauthorized,
-			httperr.CodeAuthResetTokenInvalid,
-			"Invalid reset token",
-			"the reset token is invalid, expired, or already consumed",
-			httperr.WithInstance(r.URL.Path))
+	req.Token = strings.TrimSpace(req.Token)
+	if req.Token == "" {
+		httperr.WriteProblem(w, http.StatusBadRequest,
+			httperr.CodeMissingField,
+			"Missing field",
+			"token is required",
+			httperr.WithInstance(r.URL.Path),
+			httperr.WithFieldError("token", "required", "token is required"))
 		return
 	}
-	collabID, _ := uuid.Parse(out.CollaboratorID)
+
+	// Step 2: inspect the token; nothing is consumed yet.
+	tokenID, collabID, _, rej := lookupResetToken(r.Context(), s.db, req.Token)
+	if rej != nil {
+		writeSetupTokenRejection(w, r.URL.Path, rej)
+		return
+	}
 
 	// Step 3: MFA gate.
 	if err := mfa.EnforceMFAEnrolled(r.Context(), s.db, collabID); err != nil {
@@ -929,6 +1351,68 @@ func (s *Server) handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 			"MFA not enrolled",
 			"a second factor must be enrolled before resetting the password",
 			httperr.WithInstance(r.URL.Path))
+		return
+	}
+
+	// Step 4: account status and password policy, before touching the
+	// factor or the token. Offboarding and suspension do not invalidate an
+	// outstanding reset link, so a live link must not reopen an account the
+	// login and the setup commit already refuse.
+	collab, err := repository.GetCollaborator(r.Context(), s.db, collabID.String())
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	if !collaboratorCanSignIn(collab.Status) {
+		httperr.WriteProblem(w, http.StatusForbidden,
+			httperr.CodeAuthAccountInactive,
+			"Account not active",
+			"this account is not active and cannot reset its password; contact your administrator",
+			httperr.WithInstance(r.URL.Path),
+			httperr.WithExtra("status", collab.Status))
+		return
+	}
+	commonPasswords, _ := commonPasswordsCached()
+	if err := password.ValidateStrength(req.NewPassword, envIntCred("AUTH_PASSWORD_MIN_LENGTH", 12), commonPasswords, []string{collab.PrimaryEmail, collab.Slug, collab.DisplayName}); err != nil {
+		writePasswordPolicyProblem(w, r.URL.Path, err)
+		return
+	}
+
+	// Step 5: second factor. Only a TOTP or recovery code can be proven
+	// here, so anything else is answered before an attempt is spent.
+	if strings.TrimSpace(req.TOTPCode) == "" && strings.TrimSpace(req.RecoveryCode) == "" {
+		if req.WebAuthnAssertion != nil {
+			httperr.WriteProblem(w, http.StatusNotImplemented,
+				httperr.CodeAuthWebAuthnNotImplemented,
+				"WebAuthn not implemented",
+				"inline WebAuthn assertion verification is not yet implemented (Phase 2)",
+				httperr.WithInstance(r.URL.Path))
+			return
+		}
+		httperr.WriteProblem(w, http.StatusBadRequest,
+			httperr.CodeMissingField,
+			"Missing field",
+			"totp_code or recovery_code is required",
+			httperr.WithInstance(r.URL.Path),
+			httperr.WithFieldError("totp_code", "required", "totp_code or recovery_code is required"))
+		return
+	}
+	// The attempt is reserved atomically BEFORE the check, so concurrent
+	// requests cannot all slip under the cap.
+	attempts, err := repository.ReserveResetTokenMFAAttempt(r.Context(), s.db, tokenID, resetMFAMaxAttempts)
+	if errors.Is(err, repository.ErrResetAttemptsExhausted) {
+		httperr.WriteProblem(w, http.StatusUnauthorized,
+			httperr.CodeAuthResetTokenInvalid,
+			"Invalid reset token",
+			"this reset link has no attempts left; request a new one",
+			httperr.WithInstance(r.URL.Path),
+			httperr.WithExtra("reason", "already_used"),
+			httperr.WithExtra("attempts_remaining", 0))
+		return
+	}
+	if err != nil {
+		// Fail closed: an attempt that cannot be counted is not verified.
+		writeMappedError(w, err)
 		return
 	}
 	if err := s.verifyInlineMFAFactor(r, collabID, req.TOTPCode, req.RecoveryCode, req.WebAuthnAssertion); err != nil {
@@ -940,34 +1424,37 @@ func (s *Server) handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 				httperr.WithInstance(r.URL.Path))
 			return
 		}
+		remaining := resetMFAMaxAttempts - attempts
+		if remaining <= 0 {
+			remaining = 0
+			// The last reserved attempt failed: close the link. The reserve
+			// step already refuses further attempts even if this write fails.
+			if burnErr := repository.BurnCredentialToken(r.Context(), s.db, tokenID); burnErr != nil {
+				s.logWarn("reset link burn failed", zap.String("token_id", tokenID.String()), zap.Error(burnErr))
+			}
+		}
 		httperr.WriteProblem(w, http.StatusUnauthorized,
 			httperr.CodeAuthMFAInvalid,
 			"Invalid MFA",
 			"the supplied MFA factor could not be verified",
-			httperr.WithInstance(r.URL.Path))
-		return
-	}
-
-	// Step 4: load collaborator for password-policy user tokens.
-	collab, err := repository.GetCollaborator(r.Context(), s.db, collabID.String())
-	if err != nil {
-		writeMappedError(w, err)
-		return
-	}
-
-	// Step 5: validate new password strength.
-	commonPasswords, _ := commonPasswordsCached()
-	if err := password.ValidateStrength(req.NewPassword, envIntCred("AUTH_PASSWORD_MIN_LENGTH", 12), commonPasswords, []string{collab.PrimaryEmail, collab.Slug, collab.DisplayName}); err != nil {
-		httperr.WriteProblem(w, http.StatusUnprocessableEntity,
-			httperr.CodeAuthPasswordTooWeak,
-			"Password too weak",
-			err.Error(),
 			httperr.WithInstance(r.URL.Path),
-			httperr.WithExtra("reason", err.Error()))
+			httperr.WithExtra("attempts_remaining", remaining))
 		return
 	}
 
-	// Step 6: hash new password.
+	// Step 6: consume the token atomically.
+	if _, err := repository.ConsumeCredentialToken(r.Context(), s.db, repository.ConsumeCredentialTokenInput{
+		TokenHash: password.HashToken(req.Token), Purpose: model.CredentialTokenPurposeReset,
+	}); err != nil {
+		httperr.WriteProblem(w, http.StatusUnauthorized,
+			httperr.CodeAuthResetTokenInvalid,
+			"Invalid reset token",
+			"the reset token is invalid, expired, or already consumed",
+			httperr.WithInstance(r.URL.Path),
+			httperr.WithExtra("reason", "already_used"))
+		return
+	}
+
 	scheme, hash, err := password.Hash(req.NewPassword)
 	if err != nil {
 		writeMappedError(w, err)
@@ -975,6 +1462,7 @@ func (s *Server) handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 	}
 	rotation := envDurationCred("AUTH_PASSWORD_ROTATION_PERIOD", 90*24*time.Hour)
 
+	// Step 7.
 	tx, err := s.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		writeMappedError(w, err)
@@ -993,21 +1481,21 @@ func (s *Server) handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 		    password_scheme      = $3,
 		    password_updated_at  = NOW(),
 		    password_expires_at  = NOW() + $4::interval,
-		    password_must_change = false
+		    password_must_change = false,
+		    failed_attempts      = 0,
+		    locked_until         = NULL
 		WHERE collaborator_id = $1
 	`, collabID, hash, string(scheme), rotation.String()); err != nil {
 		writeMappedError(w, err)
 		return
 	}
 
-	// Revoke ALL active sessions — total revoke (user has no current session during recovery).
-	if _, err := tx.ExecContext(r.Context(), `
-		UPDATE auth_sessions
-		SET status     = 'revoked',
-		    revoked_at = NOW()
-		WHERE collaborator_id = $1
-		  AND revoked_at IS NULL
-	`, collabID); err != nil {
+	// Revoke everything opened with the old password: console sessions, OIDC
+	// refresh tokens, plus the §13 revocation row and session.terminated.
+	if err := s.revokeForCredentialReplacement(r.Context(), tx, collab, repository.SessionRevocationReasonPasswordRotated, map[string]any{
+		"source": "self_service_reset",
+		"ip":     r.RemoteAddr,
+	}); err != nil {
 		writeMappedError(w, err)
 		return
 	}
@@ -1030,8 +1518,11 @@ func (s *Server) handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	committed = true
+	s.dispatchBackchannelLogoutForCollaborator(r.Context(), collabID)
 
-	// Step 7: open new session OUTSIDE the committed Tx (same pattern as handleSetupCommit).
+	// Step 8: open a new session OUTSIDE the committed Tx, with the same
+	// cookie pair a password login sets (the console needs the CSRF cookie
+	// for its first mutation).
 	sessionMeta := mergeAuthMetadata(nil, r)
 	session, sessionToken, err := repository.CreateAuthSession(r.Context(), s.db, collabID, sessionMeta, authSessionTTL())
 	if err != nil {
@@ -1040,12 +1531,17 @@ func (s *Server) handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeAuthCookie(w, sessionToken, session.ExpiresAt)
+	writeCSRFCookie(w, computeCSRFToken(session.ID), session.ExpiresAt)
 	writeJSON(w, http.StatusOK, map[string]any{
 		"session":      session,
 		"token":        sessionToken,
 		"collaborator": collab,
 	})
 }
+
+// resetMFAMaxAttempts is how many second-factor proofs one reset link
+// accepts; the link is burned when the last one fails.
+const resetMFAMaxAttempts = 5
 
 // sentinel errors used by verifyInlineMFAFactor.
 var (

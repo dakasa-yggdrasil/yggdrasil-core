@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: be89ef9f6d9c4bd8ddf5e2c20b21e3d7e0bd8beb
-verified_diff_sha256: 09cf3002eb3ffa2f824b489d9107566fd5a57241cb22f2fa13a76eb26de5d5c4
+verified_at_commit: b290c94f99bf199bb7bb03720c7394dcc1026f3b
+verified_diff_sha256: f527888f5fbd1f95e3225641a59a8ecf8f9aacbbd2b972c4b324b52f20b5bc0e
 reconciler_schema: 1
-verified_at: 2026-09-22
-by: Codex
-note: Reconciled deployment.md with the mandatory PostgreSQL-backed native OIDC protocol gate. Real external identity-provider login remains a separate acceptance step; no production rollout is asserted.
+verified_at: 2026-09-23
+by: Claude
+note: Reconciled security.md (access links, recovery journeys, reset_mfa password wipe, section 13 fan-out, reset status rule and attempt reservation, issuance lock, recovery flag, created_by) and error_codes.md (policy, reset token and MFA reasons) with the credential handlers after four review rounds. No production rollout is claimed.

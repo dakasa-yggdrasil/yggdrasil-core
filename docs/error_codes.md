@@ -39,18 +39,18 @@ ones (the FE i18n key is the code string).
 | `auth.account_locked` | 423 | Account locked | Conta bloqueada após várias tentativas. | Brute-force lockout — locked_until extra field carries the unlock timestamp |
 | `auth.mfa_required` | 428 (4xx) / 202 (login flow signalling) | MFA required | Verificação em duas etapas é obrigatória. | The factors[] extra field lists supported methods. Note: handleAuthLogin emits this with HTTP 202 (MFA challenge mid-flow), not as an error — the surface treats it as a state transition |
 | `auth.mfa_not_enrolled` | 428 / 403 | MFA not enrolled | Você precisa cadastrar duas etapas antes de continuar. | enroll_url extra field carries the next step |
-| `auth.mfa_invalid` | 401 | Invalid MFA | Código de verificação inválido. | `factor` extra field carries the failing factor (totp/recovery_code) |
+| `auth.mfa_invalid` | 401 | Invalid MFA | Código de verificação inválido. | `factor` extra field carries the failing factor (totp/recovery_code); on `/auth/passwords/reset`, `attempts_remaining` says how many wrong factors the link still absorbs |
 | `auth.mfa_factor_unavailable` | 400 | MFA factor unavailable | Fator MFA indisponível para esta conta. | Login attempted with a factor not enrolled (e.g. TOTP code but TOTP never set up); `factor` extra field names which |
 | `auth.session_expired` | 401 | Session expired | Sua sessão expirou. Faça login novamente. | |
 | `auth.session_not_found` | 401 | Session not found | Sessão não encontrada. | Token was deleted/expired before request |
 | `auth.unauthenticated` | 401 | Unauthenticated | Faça login para continuar. | Generic unauth — missing/bad token |
 | `auth.webauthn_not_implemented` | 501 | WebAuthn not implemented | Verificação WebAuthn ainda não implementada. | Phase 1 stub — inline WebAuthn assertion landing in Phase 2 |
-| `auth.password_too_weak` | 422 | Password too weak | A senha não atende aos requisitos. | `reason` extra field carries the specific violation (too_short, common_password, contains_user_token, etc.) |
+| `auth.password_too_weak` | 422 | Password too weak | A senha não atende aos requisitos. | `reason` extra field carries the violation: `too_short`, `contains_identity` (email parts including the domain, slug, display-name words), `too_common` (top-1000 list) |
 | `auth.password_unchanged` | 422 | Password unchanged | A nova senha deve ser diferente da atual. | |
 | `auth.password_change_required` | 403 | Password change required | Você precisa trocar sua senha. | `change_url` and `reason` (rotation_expired / admin_forced) carry next step |
 | `auth.invalid_current_password` | 401 | Invalid current password | Senha atual incorreta. | Self-service password change — distinct from `auth.invalid_credentials` (login) so the surface can surface the right field |
 | `auth.setup_token_invalid` | 401 | Invalid setup token | Token de configuração inválido ou expirado. | Single-use bootstrap setup token consumed or expired |
-| `auth.reset_token_invalid` | 401 | Invalid reset token | Token de recuperação inválido ou expirado. | Single-use password-reset token consumed or expired |
+| `auth.reset_token_invalid` | 401 | Invalid reset token | Token de recuperação inválido ou expirado. | `reason` extra field: `not_found`, `already_used` (consumed, replaced by a newer link, or burned after 5 wrong factors), `expired` |
 | `auth.kek_not_configured` | 503 | KEK not configured | Servidor não configurado para MFA (envelope ausente). | YGGDRASIL_AUTH_KEK_BASE64 missing — MFA secrets-at-rest unavailable. Operator config error |
 | `permission.denied` | 403 | Permission denied | Você não tem permissão para esta ação. | required extra field carries the missing permission |
 | `manifest.validation_failed` | 422 | Validation failed | O manifesto enviado tem erros de validação. | errors[] extra field lists per-field problems |

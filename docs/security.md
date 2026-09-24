@@ -30,6 +30,74 @@ The first admin on a fresh install is provisioned by the
 `first_run_bootstrap` addon. Once the DB has any collaborator, the
 addon becomes a no-op — it cannot be coerced into overwriting.
 
+### Access links and account recovery
+
+No link ever stands in for the second factor. A link proves possession
+of a URL, and URLs travel through chat and email.
+
+| Situation | Path | What the link can do |
+|---|---|---|
+| First access | Admin issues a setup link (`POST /auth/passwords/setup-tokens`) | Sets the password, then answers `428 mfa_not_enrolled` with an enroll link; the session only exists after enrollment |
+| Lost password, has the second factor | Self-service: `POST /auth/passwords/forgot` emails a reset link; `POST /auth/passwords/reset` takes the new password plus a TOTP or recovery code | Opens a session only after the factor is proven; revokes every older session |
+| Lost password, self-service unavailable | Admin issues a setup link for the existing account | Sets the password and revokes older sessions, then answers `200 {next: "login"}` with no cookie: the person signs in with the new password and their factor |
+| Lost second factor (with or without the password) | Admin issues a setup link with `reset_mfa: true` | Wipes TOTP, passkeys, recovery codes **and the password** in the same transaction that issues the link, so the old password stops working at once (otherwise a leaked password could enroll its own authenticator before the owner opens the link); then behaves as a first access. Audited as `credential.mfa_reset` and `auth.mfa.reset` with the acting admin (or `service:auth-admin-token`) |
+
+Link rules:
+
+- Setup and reset links are single-use and replace any earlier link of
+  the same purpose. A rejected password (`422`, with `reason` in
+  `too_short`, `contains_identity`, `too_common`) never consumes the link.
+- Every path that replaces a credential through a link (setup re-access,
+  reset, `reset_mfa`) runs the §13 fan-out: console sessions and OIDC
+  refresh tokens are revoked, a `session_revocation` row is written,
+  `collaborator.session.terminated` is emitted and back-channel logout
+  fires. A first access has nothing to revoke and emits nothing.
+- A setup link clears the login lockout (`failed_attempts`,
+  `locked_until`): the next step for an enrolled account is the login.
+- `/auth/passwords/forgot` and `/auth/passwords/reset` follow the login's
+  status rule (only `active` signs in): other statuses, including
+  `pending_start`, get no link and a `403` on the reset and its preflight.
+  The setup commit keeps admitting `pending_start` because it opens no
+  session.
+- `/auth/passwords/reset` sits behind the per-IP login rate limit and
+  reserves one of five second-factor attempts atomically before checking
+  the code, so concurrent requests cannot exceed the cap. A request with
+  no TOTP or recovery code (or only a passkey assertion, `501`) is
+  answered before any attempt is spent. A wrong code keeps the link
+  alive (`attempts_remaining` in the `401`); the fifth failure burns it.
+- `GET /auth/passwords/setup/preflight` and
+  `GET /auth/passwords/reset/preflight` validate a link without
+  consuming it and report the account posture and the password policy,
+  so the console can pick the right journey before asking for anything.
+  The setup preflight's `account.recovery` marks an account whose existing
+  password or factor a full recovery wiped (the issuance records
+  `replaced_credential`; the wipe itself leaves nothing to tell a returning
+  person from a new hire) while it has no password yet, even when a later
+  plain access link replaced the recovery one or the person re-enrolled a
+  factor first; the
+  reset preflight's `has_passkey` tells a passkey-only account (needs a
+  plain access link) from one with no factor left.
+- Link issuance takes a per-collaborator transaction lock, so two
+  concurrent issuances (two admins, a double submit) run one after the
+  other and the newer link always replaces the older one.
+- `auth_credential_tokens.created_by` records the issuing admin and is set
+  to NULL if that admin is deleted.
+- `GET /auth/passwords/forgot/options` reports whether self-service
+  reset can deliver email; when it cannot, the console sends people to
+  an administrator instead of a form that goes nowhere.
+
+Reset email delivery goes through an integration instance that exposes
+`send_email` (`integration-aws` SES or `integration-google-workspace`),
+never a provider SDK in the core:
+
+| Variable | Meaning |
+|---|---|
+| `AUTH_EMAIL_INTEGRATION` | `<namespace>/<name>` of the `send_email` instance. Unset: self-service reset is reported unavailable |
+| `AUTH_EMAIL_FROM` | Sender address. Optional; the adapter falls back to its instance config |
+| `YGGDRASIL_CONSOLE_URL` / `YGGDRASIL_PUBLIC_BASE_URL` | Origin of the link in the email. Required: the core never builds an emailed link from the request `Host` or `X-Forwarded-Host`, which would let an anonymous `/forgot` call mail a real token to an attacker's domain |
+| `AUTH_PASSWORD_RESET_TOKEN_TTL` | Reset link lifetime (default `24h`) |
+| `AUTH_PASSWORD_SETUP_TOKEN_TTL` | Setup link lifetime (default `48h`) |
+
 ### Non-human principals
 
 Workflow automation is configured through
