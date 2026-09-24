@@ -69,10 +69,15 @@ Link rules:
   `GET /auth/passwords/reset/preflight` validate a link without
   consuming it and report the account posture and the password policy,
   so the console can pick the right journey before asking for anything.
-  The setup preflight's `account.recovery` marks a full-recovery link,
-  which otherwise looks like a first access (no password, no factor); the
+  The setup preflight's `account.recovery` marks an account returning from
+  a full recovery (no password now and a full-recovery link on record),
+  which otherwise looks like a first access, even when a later plain
+  access link replaced the recovery one; the
   reset preflight's `has_passkey` tells a passkey-only account (needs a
   plain access link) from one with no factor left.
+- Link issuance takes a per-collaborator transaction lock, so two
+  concurrent issuances (two admins, a double submit) run one after the
+  other and the newer link always replaces the older one.
 - `auth_credential_tokens.created_by` records the issuing admin and is set
   to NULL if that admin is deleted.
 - `GET /auth/passwords/forgot/options` reports whether self-service
