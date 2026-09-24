@@ -153,15 +153,18 @@ A grant is exact or logical (ADR-0021):
 | Grant `instance_id` | Matches | Database |
 |---|---|---|
 | No `/` (version UUID or bare name) | The event's `instance_id` as an opaque string | Never |
-| `<namespace>/<name>` | After Core resolves the event's `instance_id` (any not-yet-purged version UUID in canonical lowercase form, or a literal `<namespace>/<name>`; never a bare name) to an `integration_instance` with an active version whose active `integration_type` provider equals the event `provider` | Two indexed point lookups, only after the bearer matched and only when the principal holds a logical grant for that provider and event type |
+| `<namespace>/<name>` | After Core resolves the event's `instance_id` (any not-yet-purged version UUID in canonical lowercase form, or a literal `<namespace>/<name>`; never a bare name) to an `integration_instance` with an active version whose active `integration_type` provider equals the event `provider` | One read-only statement (one round trip), only after the bearer matched and only when the principal holds a logical grant for that provider and event type |
 
 `POST /api/v1/events` answers `403 event.authorization_denied` with one
 identical body when the instance is not found, not granted, or of another
-provider, and `503 event.authorization_unavailable` with a fixed detail when
-the lookup fails. Core loads the inventory once at start; a malformed logical
-grant refuses the whole inventory, and then every event publish answers `401`
-until a restart with a valid one (with `YGGDRASIL_ENV=production` Core refuses
-to boot instead).
+provider (also when the wire value carries a control character, which never
+reaches the database), and `503 event.authorization_unavailable` with a fixed
+detail when the lookup fails. Core loads the inventory once at start; a
+malformed grant or a set-but-blank variable refuses the whole inventory, and
+then every event publish answers `401` until a restart with a valid one (with
+`YGGDRASIL_ENV=production` Core refuses to boot instead). Refused legacy
+bridge settings switch off only the bridge and the anonymous development
+posture.
 
 The legacy workflow bridge requires
 `YGGDRASIL_WORKFLOW_RUN_LEGACY_ENABLED=true` and a future RFC3339

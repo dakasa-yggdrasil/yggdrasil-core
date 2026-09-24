@@ -14,17 +14,26 @@ All notable changes to yggdrasil-core are documented here.
   whose active `integration_type` provider equals the event `provider`. So a
   re-applied instance manifest no longer invalidates its publisher's grant.
   Grants without `/` keep today's exact, database-free match, which runs
-  first; the lookup (two indexed point reads, 3 second bound) happens only
-  after the bearer matched and only when the principal holds a logical grant
-  for that provider and event type. Not found, not granted and wrong provider
-  share one `403 event.authorization_denied` body; a lookup failure answers
-  `503 event.authorization_unavailable` with a fixed detail. A malformed
+  first; the lookup (one read-only statement resolving instance and type
+  together, 3 second bound) happens only after the bearer matched and only
+  when the principal holds a logical grant for that provider and event type.
+  Not found, not granted and wrong provider share one
+  `403 event.authorization_denied` body and one round trip; a wire value with
+  a control character is refused before any query. A lookup failure answers
+  `503 event.authorization_unavailable` with a fixed detail (a request the
+  caller cancelled is logged at debug level, not as an outage). A malformed
   logical grant refuses the whole inventory. The inventory is now parsed once
   at start and shared by the gate and the handler; a refused inventory fails
   boot with `YGGDRASIL_ENV=production` and otherwise is logged at error level
   while every event publish answers `401` (the handler no longer echoes the
-  parser diagnostics). The server strips every client-supplied
-  `yggdrasil.io/publisher_*` metadata key and stamps
+  parser diagnostics). **Behavior change:** a
+  `YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON` that is set but blank is now a
+  refused inventory instead of "no principals", which with no legacy bridge
+  and `YGGDRASIL_ENV` unset used to open anonymous publishing; unset the
+  variable to mean "no principals". Refused legacy bridge settings switch off
+  only the bridge and the anonymous posture; hashed principals keep working.
+  The server strips every client-supplied `yggdrasil.io/publisher_*` metadata
+  key (compared without regard to case or surrounding whitespace) and stamps
   `yggdrasil.io/publisher_grant_form` plus, for a logical grant, the resolved
   instance namespace, name, active manifest id and version;
   `payload.instance_id` is unchanged. `eventPublisherPrincipalDeclares` lets an

@@ -153,10 +153,14 @@ Clients send the bearer in `Authorization: Bearer …` or
 
 Core parses this inventory once at start (ADR-0021). The outer gate and the
 handler share that parsed copy, so a changed inventory takes effect only after
-a Core restart. A refused inventory (any malformed grant refuses all of it)
-fails boot when `YGGDRASIL_ENV=production`. With `YGGDRASIL_ENV` unset, Core
-logs the refusal at error level, keeps serving, and answers every event
-publish with `401`.
+a Core restart. An inventory is refused when any grant is malformed (one bad
+grant refuses all of it) or when the variable is set but blank; only a truly
+unset variable means "no principals". A refused inventory fails boot when
+`YGGDRASIL_ENV=production`. With `YGGDRASIL_ENV` unset, Core logs the refusal
+at error level, keeps serving, and answers every event publish with `401`.
+Refused legacy bridge settings (below) are separate: they switch off only the
+bridge and the anonymous development posture, and hashed principals keep
+working.
 
 ### Exact and logical grants
 
@@ -166,10 +170,11 @@ The shape of the grant's `instance_id` decides how Core matches it
 | Grant `instance_id` | Form | How it matches | Database access |
 |---|---|---|---|
 | No `/` (a per-version instance manifest UUID or a bare instance name) | exact | Opaque string equality with the event's `instance_id` | None |
-| `<namespace>/<name>` | logical | The event's `instance_id` is resolved to the logical integration instance first, then that namespace/name is looked up in the principal's logical grants | Two indexed point lookups |
+| `<namespace>/<name>` | logical | The event's `instance_id` is resolved to the logical integration instance first, then that namespace/name is looked up in the principal's logical grants | One read-only statement (one round trip) |
 
 A logical grant must be exactly `<namespace>/<name>`: one `/`, both parts
-non-empty, lowercase, no whitespace and no wildcard characters. A malformed one
+non-empty, lowercase, no whitespace, no control characters and no wildcard
+characters. A malformed one
 refuses the whole inventory. Duplicates are checked after trimming. An exact
 grant and its logical twin may coexist, which is how an inventory moves from
 UUID grants to logical ones.
@@ -178,8 +183,10 @@ Core tries the exact match first, in memory. It tries the logical match only
 when the principal holds a logical grant for the event's provider and
 event type. Then the event's `instance_id` must be either the canonical
 lowercase UUID of any version of an `integration_instance` manifest that has
-not been purged yet, or a literal `<namespace>/<name>`. A bare instance name is
-never resolved: it only matches an exact grant. The resolved instance must
+not been purged yet, or a literal `<namespace>/<name>` under the same rules as
+a grant (so a control character, NUL included, answers `403` without a
+query). A bare instance name is never resolved: it only matches an exact
+grant. The resolved instance must
 have an active version (its `spec.status`, `disabled` included, is not
 consulted), and the `provider` of the active `integration_type` its active
 version points to must equal the event's `provider`, compared as-is.
@@ -193,20 +200,20 @@ sequenceDiagram
   C->>C: bearer digest matches a loaded principal
   C->>C: exact (provider, instance_id, event_type) granted? accept, no DB
   C->>C: logical grant for (provider, event_type)? if not, 403
-  C->>DB: instance_id to the active integration_instance version
-  C->>DB: active integration_type provider
-  DB-->>C: namespace, name, active id and version, type provider
+  C->>DB: one statement: instance_id to the active integration_instance version, joined onto its active integration_type candidates
+  DB-->>C: namespace, name, active id and version, type candidates
   C->>C: provider matches and namespace/name granted? accept, else 403
 ```
 
 | Outcome | Status | `code` |
 |---|---|---|
-| Not found, not granted, or the type provider differs | `403` | `event.authorization_denied` (one identical body for all three) |
-| The lookup failed (database error or the 3 second bound) | `503` | `event.authorization_unavailable` (fixed detail, the database error is only logged) |
+| Not found, not granted, or the type provider differs | `403` | `event.authorization_denied` (one identical body for all three, and one round trip whether the instance exists or not) |
+| The lookup failed (database error or the 3 second bound) | `503` | `event.authorization_unavailable` (fixed detail, the database error is only logged; a caller that cancelled mid-lookup is logged at debug level, not as an outage) |
 
 Core stamps the verified identity into reserved event metadata. Client values
-for any `yggdrasil.io/publisher_*` key are dropped first. `payload.instance_id`
-keeps what the adapter sent.
+for any `yggdrasil.io/publisher_*` key are dropped first, matched without regard
+to case or surrounding whitespace. `payload.instance_id` keeps what the adapter
+sent.
 
 | Metadata key | Exact grant | Logical grant |
 |---|---|---|

@@ -152,9 +152,11 @@ with `?kind=X` in the query string.
   logical grant that matches only after Core resolves the event's
   `instance_id` (any not-purged version UUID or a literal namespace/name,
   never a bare name) to an instance with an active version whose active type
-  provider equals the event provider (ADR-0021). Not found and not granted
-  share one 403; a lookup failure is 503 `event.authorization_unavailable`.
-  Core loads the inventory once at start. Machine event principals cannot
+  provider equals the event provider (ADR-0021), in one statement. Not found
+  and not granted share one 403; a lookup failure is 503
+  `event.authorization_unavailable`. Core loads the inventory once at start;
+  a set-but-blank inventory variable is refused like a malformed one (only an
+  unset variable means "no principals"). Machine event principals cannot
   publish generic events, and human console sessions are not accepted on
   this route.
   `YGGDRASIL_EVENT_PUBLISH_TOKEN` is an explicit, expiring, mutation-only

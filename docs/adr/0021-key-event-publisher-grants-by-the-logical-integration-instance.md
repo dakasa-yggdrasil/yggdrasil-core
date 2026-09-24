@@ -41,7 +41,7 @@ flowchart TD
   C -- no --> D403[403 event.authorization_denied]
   C -- yes --> E{instance_id is a canonical UUID or a strict namespace/name?}
   E -- no --> D403
-  E -- yes --> F[resolve the active instance version and its active type provider]
+  E -- yes --> F[one statement: the active instance version and its active type candidates]
   F -- database error or timeout --> D503[503 event.authorization_unavailable]
   F -- not found --> D403
   F -- found --> G{type provider equals event provider and namespace/name granted?}
@@ -53,7 +53,8 @@ flowchart TD
    and lives in the exact map, compared as an opaque string, never touching
    the database. A grant containing `/` is logical, is parsed as exactly
    `<namespace>/<name>` (one `/`, both parts non-empty, lowercase, no
-   whitespace, no wildcard characters, bounded length) and never lands in the
+   whitespace, no control characters, no wildcard characters, bounded length)
+   and never lands in the
    exact map, so a literal `namespace/name` on the wire can never match
    without the database checks. A malformed logical grant refuses the whole
    inventory, as any other parse error already did.
@@ -69,7 +70,9 @@ flowchart TD
    not yet purged, or a literal `<namespace>/<name>` accepted by the same
    strict parser. **A bare instance name on the wire is never resolved; it
    only matches an exact grant.** Uppercase, braced, URN and unhyphenated UUID
-   spellings are not resolvable and never reach the database.
+   spellings, and a namespace/name carrying a control character (NUL
+   included), are not resolvable and never reach the database; they answer
+   `403`.
 5. **What the resolved instance must satisfy.** The logical instance must have
    an active version. Its `spec.status` is not consulted, so a `disabled`
    instance with an active version is accepted. The `provider` of the active
@@ -78,22 +81,31 @@ flowchart TD
    adapter whose event provider differs from its type provider keeps exact
    grants). The resolved namespace/name must then be one of the principal's
    logical grants for that provider and event type. The `type_ref` forms are
-   the ones execution accepts, with one difference: the referenced type row
-   must be the active one.
-6. **Two lookups, not one.** dakasa-system ADR-0280 describes one lookup per
-   logical event. The implementation does two indexed point lookups: the
-   instance (primary key on the wire version, then
-   `manifests_single_active_uidx` for the active version, or that index alone
-   for a literal namespace/name) and the type provider. Both run under one
-   3 second bound on the request context. Both are read-only.
-7. **Errors.** Not found, not granted and wrong provider return one identical
-   `403` body with code `event.authorization_denied` and one fixed detail, so
-   the route cannot be used to probe the catalog. A database failure or
-   timeout returns `503` with code `event.authorization_unavailable` and a
-   fixed detail; the database error is logged, never echoed.
+   the ones execution accepts, with two differences: the referenced type row
+   must be the active one, and an unusual spelling finds no type (a
+   `manifest_id` in braced, URN or unhyphenated form, or a value padded with
+   whitespace other than plain spaces).
+6. **One statement per logical event.** As dakasa-system ADR-0280 describes,
+   resolution is one read-only statement, one round trip: the instance
+   (primary key on the wire version, then `manifests_single_active_uidx` for
+   the active version, or that index alone for a literal namespace/name)
+   joined laterally onto the active `integration_type` rows its `type_ref`
+   may name. Go then picks the type exactly as execution would. The statement
+   runs under a 3 second bound on the request context.
+7. **Errors and timing.** Not found, not granted and wrong provider return
+   one identical `403` body with code `event.authorization_denied` and one
+   fixed detail. Because instance and type resolve in the same statement,
+   "not found" and "found but denied" both cost exactly one round trip; the
+   remaining difference is the database work of one index probe, so latency
+   no longer carries an extra query for an existing instance. A database
+   failure or timeout returns `503` with code
+   `event.authorization_unavailable` and a fixed detail; the database error
+   is logged at error level, never echoed. A request whose caller cancelled
+   it during the lookup is logged at debug level, not as an outage.
 8. **Metadata.** Core drops every client-supplied metadata key under
-   `yggdrasil.io/publisher_`, including keys this version does not stamp, then
-   stamps the verified identity:
+   `yggdrasil.io/publisher_`, including keys this version does not stamp and
+   compared without regard to case or surrounding whitespace, so a look-alike
+   key cannot sit next to a stamped one. Then it stamps the verified identity:
 
    | Key | Exact grant | Logical grant |
    |---|---|---|
@@ -108,14 +120,20 @@ flowchart TD
 9. **Loading.** `New` parses the event publisher inventory and the legacy
    bridge settings once. The outer gate and the handler use that same parsed
    copy and never read those variables again; the bridge expiry is still
-   evaluated per request. A refused inventory fails boot when
-   `YGGDRASIL_ENV=production`, because `validateBootSecrets` already rejects
-   it. When `YGGDRASIL_ENV` is unset (DaKasa production does not set it), a
-   refused inventory is logged at error level and does not stop boot, because
-   a Core that refuses to start takes the whole control plane down; every
-   event publish then answers `401` until Core restarts with a valid
-   inventory. A `Server` not built by `New` authenticates no event publisher
-   and never falls into the anonymous development posture.
+   evaluated per request. An inventory is refused when it is malformed or
+   when `YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON` is set but blank: only a
+   truly unset variable means "no principals", which keeps the credential-free
+   development posture outside production. A refused inventory fails boot
+   when `YGGDRASIL_ENV=production`, because `validateBootSecrets` already
+   rejects it. When `YGGDRASIL_ENV` is unset (DaKasa production does not set
+   it), a refused inventory is logged at error level and does not stop boot,
+   because a Core that refuses to start takes the whole control plane down;
+   every event publish then answers `401` until Core restarts with a valid
+   inventory. Refused legacy bridge settings are kept apart: they switch off
+   only the plaintext bridge and the anonymous posture, and the hashed
+   principals keep authenticating, as before load-once. A `Server` not built
+   by `New` authenticates no event publisher and never falls into the
+   anonymous development posture.
 10. **Inventory checks.** `eventPublisherPrincipalDeclares` reports whether a
     parsed principal declares a grant in either form, without resolving
     anything, so an operator's CI can run Core's own parser over a rendered
@@ -139,17 +157,23 @@ flowchart TD
 - The provider check reads the live type provider, which the adapter describe
   auto-heal of ADR-0006 can rewrite. A provider rename in an adapter changes
   which events its instance's logical grants admit.
-- A `type_ref.manifest_id` pinned to an inactive type version is denied, which
-  is stricter than execution. No known instance uses that form.
+- A `type_ref` pinned to an inactive type version, by `manifest_id` or by
+  `version`, is denied, and a non-canonical spelling of either field finds
+  no type. Both are stricter than execution. No known instance uses those
+  forms.
+- A deployment that meant "no event principals" by setting the inventory
+  variable to an empty string must now unset it instead.
 - Core must run a build carrying this decision before any logical grant is
   written to the inventory: an older Core parses `namespace/name` as a literal
   exact grant that no adapter sends.
 - A slash in an exact grant now means logical. No exact grant in use contains
   one.
-- The unit job has no PostgreSQL. sqlmock pins the SQL text and the
-  predicates it must carry, but it cannot prove the self-join semantics (an
-  old version resolving to the active one, a tombstone, a hard delete, a kind
-  mismatch). That proof needs a real database run.
+- The unit job has no PostgreSQL, so sqlmock there pins the SQL text and the
+  predicates it must carry. The semantics (an old version resolving to the
+  active one, a tombstone, a hard delete, a kind mismatch, an inactive pinned
+  type) are proven by a `DB_URL`-gated test that the `native-oidc-postgres`
+  CI job runs against its migrated PostgreSQL, where a missing database is a
+  failure rather than a skip.
 
 ## Related
 

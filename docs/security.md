@@ -142,19 +142,28 @@ name) to an `integration_instance` with an active version whose active
 `integration_type` has the event's `provider`. Core tries that lookup only
 after the bearer digest matched and only when the principal holds a logical
 grant for the event's provider and event type, so an anonymous or
-out-of-scope caller cannot make it query. Not found, not granted and a wrong
-provider return one identical `403 event.authorization_denied` body, so the
-route cannot be used to probe the catalog. A database failure fails closed
-with `503 event.authorization_unavailable` and a fixed detail; the database
-error is only logged. The server strips every client-supplied
-`yggdrasil.io/publisher_*` metadata key and stamps the grant form and, for a
-logical grant, the resolved instance namespace, name, active manifest id and
-version. Core loads the inventory once at start and the gate and handler share
-that copy; a malformed logical grant refuses the whole inventory, which fails
-boot with `YGGDRASIL_ENV=production` and otherwise leaves every event publish
-answering `401` until a restart with a valid inventory. Recreating a deleted
-instance name under the same provider inherits its logical grants, so a hard
-delete needs a review of the grants that name it. Workflow credentials never authorize
+out-of-scope caller cannot make it query, and a wire value with a control
+character (NUL included) is refused before any query. Not found, not granted
+and a wrong provider return one identical `403 event.authorization_denied`
+body. Instance and type resolve in one statement, so "not found" and "found
+but denied" cost the same single round trip; only the database work of one
+index probe differs. A database failure fails closed with
+`503 event.authorization_unavailable` and a fixed detail; the database error
+is only logged, and a caller that cancelled mid-lookup is logged at debug
+level rather than as an outage. The server strips every client-supplied
+`yggdrasil.io/publisher_*` metadata key, compared without regard to case or
+surrounding whitespace, and stamps the grant form and, for a logical grant,
+the resolved instance namespace, name, active manifest id and version. Core
+loads the inventory once at start and the gate and handler share that copy.
+A malformed grant, or a variable that is set but blank, refuses the whole
+inventory, which fails boot with `YGGDRASIL_ENV=production` and otherwise
+leaves every event publish answering `401` until a restart with a valid
+inventory; only a truly unset variable means "no principals" and keeps the
+credential-free development posture. Refused legacy bridge settings switch
+off only the bridge and that anonymous posture; hashed principals keep
+working. Recreating a deleted instance name under the same provider inherits
+its logical grants, so a hard delete needs a review of the grants that name
+it. Workflow credentials never authorize
 manifests, secrets (including
 `include_values=true`), `/console`, generic `/ops`, deploy, tenant, or
 auth-admin routes.
