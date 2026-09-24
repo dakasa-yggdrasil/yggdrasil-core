@@ -1,21 +1,21 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-09-21T20:51:48-03:00_
+_Generated from HEAD at: 2026-09-24T15:37:27-03:00_
 
 ## Languages
 
-- `.go`: 615 files
-- `.json`: 143 files
+- `.go`: 625 files
+- `.json`: 144 files
 - `.py`: 1 files
-- `.sql`: 51 files
+- `.sql`: 52 files
 - `.yaml`: 9 files
-- `.yml`: 21 files
+- `.yml`: 22 files
 
 ## Contracts & Artifacts
 
 - API Spec: **false**  ((not configured))
 - Event Schemas: **0**  (events/contracts,docs/events/contracts)
-- DB Migrations: **50**  (db/migrations)
+- DB Migrations: **51**  (db/migrations)
 
 ## Docs
 
@@ -24,15 +24,15 @@ _Generated from HEAD at: 2026-09-21T20:51:48-03:00_
 
 ## Top Directories by File Count
 
-- controllers/httpapi: 146 files (1356.1 KB)
-- repository: 90 files (576.4 KB)
+- controllers/httpapi: 150 files (1451.5 KB)
+- repository: 94 files (610.5 KB)
 - manifest: 55 files (354.0 KB)
-- model: 55 files (209.5 KB)
-- db/migrations: 50 files (90.0 KB)
+- model: 55 files (209.9 KB)
+- db/migrations: 51 files (91.1 KB)
 - controllers/message: 46 files (483.0 KB)
 - addons: 35 files (176.4 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
-- controllers/oidc: 20 files (152.3 KB)
+- controllers/oidc: 22 files (188.9 KB)
 - docs/bootstrap/seeds/integrations: 20 files (87.4 KB)
 - internal/externalidentity: 15 files (61.5 KB)
 - docs/contracts/reactors/v1: 11 files (12.7 KB)
@@ -46,16 +46,16 @@ _Generated from HEAD at: 2026-09-21T20:51:48-03:00_
 - docs/bootstrap/manifests/products/certificate-cert-manager.json: 696.5 KB
 - docs/bootstrap/manifests/products/observability-loki.json: 542.9 KB
 - docs/bootstrap/manifests/products/message-broker-rabbitmq.json: 531.8 KB
-- controllers/httpapi/server.go: 165.5 KB
+- controllers/httpapi/server.go: 167.5 KB
 - controllers/message/products.go: 74.3 KB
 - controllers/httpapi/directory_machine_read_test.go: 65.8 KB
 - repository/identity.go: 62.9 KB
-- controllers/message/workflows.go: 50.0 KB
+- controllers/httpapi/credentials.go: 57.3 KB
 
 ## Ops & Messaging
 
-- K8s/Config files scanned: **4**
-- Manifests (k8s-ish): **4**
+- K8s/Config files scanned: **5**
+- Manifests (k8s-ish): **5**
 
 ## Dependencies
 
@@ -154,16 +154,16 @@ _Generated from HEAD at: 2026-09-21T20:51:48-03:00_
 - go.uber.org/zap v1.27.1
 - go.yaml.in/yaml/v2 v2.4.3 // indirect
 - go.yaml.in/yaml/v3 v3.0.4 // indirect
-- golang.org/x/crypto v0.52.0
-- golang.org/x/net v0.55.0 // indirect
+- golang.org/x/crypto v0.55.0
+- golang.org/x/net v0.58.0 // indirect
 - golang.org/x/oauth2 v0.36.0 // indirect
-- golang.org/x/sync v0.20.0 // indirect
-- golang.org/x/sys v0.45.0 // indirect
-- golang.org/x/term v0.43.0 // indirect
-- golang.org/x/text v0.37.0 // indirect
+- golang.org/x/sync v0.22.0 // indirect
+- golang.org/x/sys v0.47.0 // indirect
+- golang.org/x/term v0.45.0 // indirect
+- golang.org/x/text v0.41.0 // indirect
 - golang.org/x/time v0.9.0
 - google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect
-- google.golang.org/grpc v1.83.1 // indirect
+- google.golang.org/grpc v1.83.2 // indirect
 - google.golang.org/protobuf v1.36.11 // indirect
 - gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect
 - gopkg.in/inf.v0 v0.9.1 // indirect

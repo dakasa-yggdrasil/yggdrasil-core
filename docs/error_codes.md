@@ -58,6 +58,8 @@ ones (the FE i18n key is the code string).
 | `manifest.conflict` | 409 | Conflict | Conflito com manifesto existente. | |
 | `integration.not_found` | 404 | Not found | Recurso não encontrado. | Generic 404 fallback |
 | `integration.unavailable` | 503 | Integration unavailable | A integração está temporariamente indisponível. | Adapter transport down |
+| `event.authorization_denied` | 403 | Event publish denied | Esta credencial não pode publicar este evento. | `POST /api/v1/events` only. The authenticated publisher may not publish this payload: a generic event from a machine or migration credential, or a mutation event no exact or logical grant covers (ADR-0017, ADR-0021). Not found, not granted and a wrong type provider share one identical body |
+| `event.authorization_unavailable` | 503 | Event publish authorization unavailable | Autorização de publicação de evento indisponível. Tente novamente. | `POST /api/v1/events` only. A logical grant needed the integration instance lookup and the database failed or exceeded its 3 second bound (ADR-0021). Fixed detail; the database error is only logged. Safe to retry |
 | `workflow.not_found` | 404 | Workflow not found | Workflow não encontrado. | |
 | `workflow.invalid` | 400 | Invalid workflow | Workflow inválido. | |
 | `rate_limit.exceeded` | 429 | Rate limit exceeded | Muitas tentativas. Tente novamente em alguns instantes. | retry_after extra field |

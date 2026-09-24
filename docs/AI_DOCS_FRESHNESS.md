@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: b290c94f99bf199bb7bb03720c7394dcc1026f3b
-verified_diff_sha256: f527888f5fbd1f95e3225641a59a8ecf8f9aacbbd2b972c4b324b52f20b5bc0e
+verified_at_commit: 649c278fcedafe4c7ec7bb0cf63209070d7026b7
+verified_diff_sha256: d0bcc40e6e755538c0d09f19adc83fba7d030da2cc0688db06ca0d1907d53dae
 reconciler_schema: 1
-verified_at: 2026-09-23
+verified_at: 2026-09-24
 by: Claude
-note: Reconciled security.md (access links, recovery journeys, reset_mfa password wipe, section 13 fan-out, reset status rule and attempt reservation, issuance lock, recovery flag, created_by) and error_codes.md (policy, reset token and MFA reasons) with the credential handlers after four review rounds. No production rollout is claimed.
+note: Reconciled ADR-0021 (logical event publisher grants) with the code after the adversarial review: one resolution statement per logical event, control characters, set-but-blank inventory refusal, separate legacy bridge refusal, cancellation logging, case-insensitive metadata stripping and the PostgreSQL proof in the native-oidc-postgres job. features/events.md, security.md, api-reference openapi.md and both openapi.json copies, error_codes.md, CHANGELOG, the CLAUDE.md event writers bullet and the ADR index match. Generated AI context refreshed. No production rollout is claimed.

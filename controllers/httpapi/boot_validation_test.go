@@ -15,7 +15,7 @@ func setValidProductionBootEnvironment(t *testing.T, environment string) {
 	t.Setenv("AUTH_THIRD_PARTY_STATE_SECRET", "real-state-secret-good-strong-len")
 	t.Setenv("YGGDRASIL_CSRF_HMAC_SECRET", "real-csrf-secret-good-strong-len")
 	setTestLegacyEventPublishCredential(t, testEventPublishToken)
-	t.Setenv(eventPublisherPrincipalsEnv, "")
+	unsetEnvForTest(t, eventPublisherPrincipalsEnv)
 	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "")
 	t.Setenv("YGGDRASIL_WORKFLOW_RUN_LEGACY_ENABLED", "")
 	t.Setenv("YGGDRASIL_WORKFLOW_RUN_LEGACY_EXPIRES_AT", "")
@@ -110,7 +110,7 @@ func TestValidateBootSecrets_ProductionRequiresIndependentEventCredential(t *tes
 	t.Setenv(legacyEventPublishTokenEnv, "")
 	t.Setenv(legacyEventPublishEnabledEnv, "")
 	t.Setenv(legacyEventPublishExpiryEnv, "")
-	t.Setenv(eventPublisherPrincipalsEnv, "")
+	unsetEnvForTest(t, eventPublisherPrincipalsEnv)
 
 	err := validateBootSecrets()
 	if err == nil {
@@ -123,12 +123,27 @@ func TestValidateBootSecrets_ProductionRequiresIndependentEventCredential(t *tes
 	}
 }
 
+// ADR-0021: a set but blank event publisher inventory is refused, not read as
+// "no principals", so production boot fails even with an active bridge.
+func TestValidateBootSecrets_ProductionRefusesBlankEventInventory(t *testing.T) {
+	setValidProductionBootEnvironment(t, "production")
+	t.Setenv(eventPublisherPrincipalsEnv, " \n")
+
+	err := validateBootSecrets()
+	if err == nil {
+		t.Fatal("production boot accepted a set but blank event publisher inventory")
+	}
+	if !strings.Contains(err.Error(), eventPublisherPrincipalsEnv) {
+		t.Fatalf("boot error must name %s, got: %v", eventPublisherPrincipalsEnv, err)
+	}
+}
+
 func TestValidateBootSecrets_ProductionRejectsWorkflowTokenAsEventCredential(t *testing.T) {
 	setValidProductionBootEnvironment(t, "production")
 	t.Setenv(legacyEventPublishTokenEnv, "")
 	t.Setenv(legacyEventPublishEnabledEnv, "")
 	t.Setenv(legacyEventPublishExpiryEnv, "")
-	t.Setenv(eventPublisherPrincipalsEnv, "")
+	unsetEnvForTest(t, eventPublisherPrincipalsEnv)
 	setTestLegacyWorkflowCredential(t, "legacy-workflow-token")
 
 	if err := validateBootSecrets(); err == nil {

@@ -128,7 +128,9 @@ and human console sessions cannot submit that generic shape over this route.
 `resource_id`, `instance_id`, and `idempotency` are required. The denormalized
 provider/resource/verb fields must agree with the canonical
 `<provider>.<resource>.<ensured|destroyed|created>` event type, and the
-authenticated principal must contain the exact provider/instance/event triple.
+authenticated principal must hold a grant for the event: an exact
+provider/instance/event triple, or a logical grant for the integration
+instance the `instance_id` resolves to (see "Exact and logical grants" below).
 
 **Generic local-compatibility validation.** Only when the event auth surface is
 entirely unconfigured outside production, the historical generic HTTP shape
@@ -140,13 +142,93 @@ authorize this shape.
 
 **Auth.** Give each event writer a bearer whose SHA-256 digest is configured in
 `YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON` with `principal_id`, lifecycle,
-expiry, rotation metadata, and a non-empty `allowed_events` list of exact
-`{provider,instance_id,event_type}` mutation triples. The JSON never contains
+expiry, rotation metadata, and a non-empty `allowed_events` list of
+`{provider,instance_id,event_type}` mutation grants. The JSON never contains
 the raw bearer and cannot contain workflow scopes or wildcards. A machine
 publisher cannot submit the generic event shape or another principal's
 provider, instance, or event type; the server overwrites its event actor and
-reserved publisher metadata from the authenticated identity. Clients send the
-bearer in `Authorization: Bearer …` or `X-Yggdrasil-Event-Token`.
+every `yggdrasil.io/publisher_*` metadata key from the authenticated identity.
+Clients send the bearer in `Authorization: Bearer …` or
+`X-Yggdrasil-Event-Token`.
+
+Core parses this inventory once at start (ADR-0021). The outer gate and the
+handler share that parsed copy, so a changed inventory takes effect only after
+a Core restart. An inventory is refused when any grant is malformed (one bad
+grant refuses all of it) or when the variable is set but blank; only a truly
+unset variable means "no principals". A refused inventory fails boot when
+`YGGDRASIL_ENV=production`. With `YGGDRASIL_ENV` unset, Core logs the refusal
+at error level, keeps serving, and answers every event publish with `401`.
+Refused legacy bridge settings (below) are separate: they switch off only the
+bridge and the anonymous development posture, and hashed principals keep
+working.
+
+### Exact and logical grants
+
+The shape of the grant's `instance_id` decides how Core matches it
+(ADR-0021).
+
+| Grant `instance_id` | Form | How it matches | Database access |
+|---|---|---|---|
+| No `/` (a per-version instance manifest UUID or a bare instance name) | exact | Opaque string equality with the event's `instance_id` | None |
+| `<namespace>/<name>` | logical | The event's `instance_id` is resolved to the logical integration instance first, then that namespace/name is looked up in the principal's logical grants | One read-only statement (one round trip) |
+
+A logical grant must be exactly `<namespace>/<name>`: one `/`, both parts
+non-empty, lowercase, no whitespace, no control characters and no wildcard
+characters. A malformed one
+refuses the whole inventory. Duplicates are checked after trimming. An exact
+grant and its logical twin may coexist, which is how an inventory moves from
+UUID grants to logical ones.
+
+Core tries the exact match first, in memory. It tries the logical match only
+when the principal holds a logical grant for the event's provider and
+event type. Then the event's `instance_id` must be either the canonical
+lowercase UUID of any version of an `integration_instance` manifest that has
+not been purged yet, or a literal `<namespace>/<name>` under the same rules as
+a grant (so a control character, NUL included, answers `403` without a
+query). A bare instance name is never resolved: it only matches an exact
+grant. The resolved instance must
+have an active version (its `spec.status`, `disabled` included, is not
+consulted), and the `provider` of the active `integration_type` its active
+version points to must equal the event's `provider`, compared as-is.
+
+```mermaid
+sequenceDiagram
+  participant A as Adapter
+  participant C as Core
+  participant DB as public.manifests
+  A->>C: POST /api/v1/events (bearer, instance_id)
+  C->>C: bearer digest matches a loaded principal
+  C->>C: exact (provider, instance_id, event_type) granted? accept, no DB
+  C->>C: logical grant for (provider, event_type)? if not, 403
+  C->>DB: one statement: instance_id to the active integration_instance version, joined onto its active integration_type candidates
+  DB-->>C: namespace, name, active id and version, type candidates
+  C->>C: provider matches and namespace/name granted? accept, else 403
+```
+
+| Outcome | Status | `code` |
+|---|---|---|
+| Not found, not granted, or the type provider differs | `403` | `event.authorization_denied` (one identical body for all three, and one round trip whether the instance exists or not) |
+| The lookup failed (database error or the 3 second bound) | `503` | `event.authorization_unavailable` (fixed detail, the database error is only logged; a caller that cancelled mid-lookup is logged at debug level, not as an outage) |
+
+Core stamps the verified identity into reserved event metadata. Client values
+for any `yggdrasil.io/publisher_*` key are dropped first, matched without regard
+to case or surrounding whitespace. `payload.instance_id` keeps what the adapter
+sent.
+
+| Metadata key | Exact grant | Logical grant |
+|---|---|---|
+| `yggdrasil.io/publisher_machine_principal_id` | principal id | principal id |
+| `yggdrasil.io/publisher_grant_form` | `exact` | `logical` |
+| `yggdrasil.io/publisher_instance_namespace` | not set | instance namespace |
+| `yggdrasil.io/publisher_instance_name` | not set | instance name |
+| `yggdrasil.io/publisher_instance_manifest_id` | not set | id of the active version |
+| `yggdrasil.io/publisher_instance_version` | not set | version of the active version |
+
+Re-applying an instance manifest does not invalidate its logical grants.
+Deleting the instance revokes them without a restart, and recreating a deleted
+name under the same provider inherits them, so a hard delete needs a review of
+the grants that name it. An old-version UUID resolves only until the manifest
+purge removes that version.
 
 `YGGDRASIL_EVENT_PUBLISH_TOKEN` remains only as a plaintext event-route bridge
 for existing adapters. It is rejected unless

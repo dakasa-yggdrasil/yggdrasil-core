@@ -64,8 +64,9 @@ func validManifestCreatedPayloadForPublish() map[string]any {
 // SPA, etc.
 func newEventPublishServer(db *sql.DB) http.Handler {
 	server := &Server{
-		serviceName: "yggdrasil-core-test",
-		db:          db,
+		serviceName:      "yggdrasil-core-test",
+		db:               db,
+		eventPublishAuth: loadEventPublishAuthConfig(),
 	}
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /api/v1/events", server.handleEventPublish)

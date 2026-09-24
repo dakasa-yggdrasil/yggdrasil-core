@@ -68,6 +68,16 @@ jobs:
               raise SystemExit(f"Native OIDC gate did not run completely: missing={sorted(missing)}, skipped={sorted(skipped)}")
           print("Native OIDC PostgreSQL protocol gate passed every scenario. External identity-provider login remains a separate acceptance step.")
           PY
+      # ADR-0021: the logical event publisher grant resolver joins any
+      # instance version onto the active one and onto the active
+      # integration_type. sqlmock only pins its SQL text; this proves the
+      # semantics against the same migrated schema. The REQUIRE flag turns a
+      # missing DB_URL into a failure instead of a skip.
+      - name: Resolve logical integration instances against the migrated schema
+        if: ${{ !cancelled() }}
+        env:
+          REQUIRE_INSTANCE_IDENTITY_DB_TEST: "true"
+        run: go test -count=1 -timeout=5m -v -run '^TestIntegrationInstanceIdentityAgainstPostgres$' ./repository
       - uses: actions/upload-artifact@v4
         if: always()
         with:

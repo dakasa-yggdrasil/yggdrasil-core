@@ -11,6 +11,7 @@ import (
 	"os"
 	"strings"
 	"time"
+	"unicode"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 )
@@ -65,14 +66,39 @@ type workflowMachinePrincipal struct {
 	AllowedWorkflows map[machineWorkflowRef]struct{}
 }
 
+// eventPublisherLogicalRef is a grant whose instance_id names the logical
+// integration instance as "<namespace>/<name>" (ADR-0021). It only ever
+// matches after Core resolved the event's instance_id against the manifests
+// table, never by string comparison with the wire value.
+type eventPublisherLogicalRef struct {
+	Provider  string
+	Namespace string
+	Name      string
+	EventType string
+}
+
+type eventPublisherProviderEvent struct {
+	Provider  string
+	EventType string
+}
+
 type eventPublisherPrincipal struct {
-	PrincipalID   string
-	Status        string
-	ExpiresAt     time.Time
-	RotationID    string
-	RotatedAt     time.Time
-	TokenSHA256   [sha256.Size]byte
+	PrincipalID string
+	Status      string
+	ExpiresAt   time.Time
+	RotationID  string
+	RotatedAt   time.Time
+	TokenSHA256 [sha256.Size]byte
+	// AllowedEvents holds exact grants only: an instance_id without "/"
+	// (a per-version manifest UUID or a bare instance name), compared as an
+	// opaque string with no database access.
 	AllowedEvents map[eventPublisherEventRef]struct{}
+	// LogicalEvents holds the "<namespace>/<name>" grants.
+	LogicalEvents map[eventPublisherLogicalRef]struct{}
+	// logicalProviderEvents indexes LogicalEvents by (provider, event_type)
+	// so the handler can decide, in memory, whether a database lookup may
+	// happen at all.
+	logicalProviderEvents map[eventPublisherProviderEvent]struct{}
 }
 
 type legacyWorkflowCredential struct {
@@ -172,6 +198,13 @@ func workflowMachinePrincipalsFromEnv() ([]workflowMachinePrincipal, error) {
 }
 
 func eventPublisherPrincipalsFromEnv() ([]eventPublisherPrincipal, error) {
+	// A variable that is present but blank is a refused inventory, never "no
+	// principals": with no legacy bridge that would open the anonymous
+	// development posture wherever YGGDRASIL_ENV is unset. Only a variable
+	// that is truly unset means the event surface is unconfigured.
+	if raw, present := os.LookupEnv(eventPublisherPrincipalsEnv); present && strings.TrimSpace(raw) == "" {
+		return nil, fmt.Errorf("%s is set but blank; unset it or configure at least one principal", eventPublisherPrincipalsEnv)
+	}
 	rawConfigured := strings.TrimSpace(os.Getenv(eventPublisherPrincipalsEnv)) != ""
 	var configs []eventPublisherPrincipalConfig
 	if err := decodeMachinePrincipalConfig(eventPublisherPrincipalsEnv, &configs); err != nil {
@@ -211,9 +244,11 @@ func eventPublisherPrincipalsFromEnv() ([]eventPublisherPrincipal, error) {
 			return nil, fmt.Errorf("%s entry %d duplicates a credential digest", eventPublisherPrincipalsEnv, index)
 		}
 		if len(config.AllowedEvents) == 0 {
-			return nil, fmt.Errorf("%s entry %d requires at least one exact allowed_events item", eventPublisherPrincipalsEnv, index)
+			return nil, fmt.Errorf("%s entry %d requires at least one allowed_events item", eventPublisherPrincipalsEnv, index)
 		}
 		allowedEvents := make(map[eventPublisherEventRef]struct{}, len(config.AllowedEvents))
+		logicalEvents := make(map[eventPublisherLogicalRef]struct{})
+		logicalProviderEvents := make(map[eventPublisherProviderEvent]struct{})
 		for eventIndex, event := range config.AllowedEvents {
 			event.Provider = strings.TrimSpace(event.Provider)
 			event.InstanceID = strings.TrimSpace(event.InstanceID)
@@ -231,19 +266,34 @@ func eventPublisherPrincipalsFromEnv() ([]eventPublisherPrincipal, error) {
 			if parsedProvider != event.Provider {
 				return nil, fmt.Errorf("%s entry %d allowed_events item %d provider must match event_type", eventPublisherPrincipalsEnv, index, eventIndex)
 			}
+			if strings.Contains(event.InstanceID, "/") {
+				namespace, name, err := parseLogicalInstanceRef(event.InstanceID)
+				if err != nil {
+					return nil, fmt.Errorf("%s entry %d allowed_events item %d instance_id %v", eventPublisherPrincipalsEnv, index, eventIndex, err)
+				}
+				logical := eventPublisherLogicalRef{Provider: event.Provider, Namespace: namespace, Name: name, EventType: event.EventType}
+				if _, duplicate := logicalEvents[logical]; duplicate {
+					return nil, fmt.Errorf("%s entry %d duplicates an allowed_events item", eventPublisherPrincipalsEnv, index)
+				}
+				logicalEvents[logical] = struct{}{}
+				logicalProviderEvents[eventPublisherProviderEvent{Provider: event.Provider, EventType: event.EventType}] = struct{}{}
+				continue
+			}
 			if _, duplicate := allowedEvents[event]; duplicate {
 				return nil, fmt.Errorf("%s entry %d duplicates an allowed_events item", eventPublisherPrincipalsEnv, index)
 			}
 			allowedEvents[event] = struct{}{}
 		}
 		principals = append(principals, eventPublisherPrincipal{
-			PrincipalID:   base.principalID,
-			Status:        base.status,
-			ExpiresAt:     base.expiresAt,
-			RotationID:    base.rotationID,
-			RotatedAt:     base.rotatedAt,
-			TokenSHA256:   base.tokenSHA256,
-			AllowedEvents: allowedEvents,
+			PrincipalID:           base.principalID,
+			Status:                base.status,
+			ExpiresAt:             base.expiresAt,
+			RotationID:            base.rotationID,
+			RotatedAt:             base.rotatedAt,
+			TokenSHA256:           base.tokenSHA256,
+			AllowedEvents:         allowedEvents,
+			LogicalEvents:         logicalEvents,
+			logicalProviderEvents: logicalProviderEvents,
 		})
 		seenIDs[base.principalID] = struct{}{}
 		seenHashes[base.tokenSHA256] = struct{}{}
@@ -374,6 +424,9 @@ func activeEventPublisherPrincipal(candidate string, principals []eventPublisher
 	return matched
 }
 
+// eventPublisherPrincipalAllows is the exact, database-free check. A wire
+// instance_id that contains "/" never matches here: slash-form grants live in
+// LogicalEvents and only match through resolution.
 func eventPublisherPrincipalAllows(principal *eventPublisherPrincipal, provider, instanceID, eventType string) bool {
 	if principal == nil {
 		return false
@@ -384,6 +437,90 @@ func eventPublisherPrincipalAllows(principal *eventPublisherPrincipal, provider,
 		EventType:  strings.TrimSpace(eventType),
 	}]
 	return allowed
+}
+
+// eventPublisherPrincipalHasLogicalGrant reports whether the principal holds
+// any "<namespace>/<name>" grant for this provider and event type. It gates
+// the database lookup.
+func eventPublisherPrincipalHasLogicalGrant(principal *eventPublisherPrincipal, provider, eventType string) bool {
+	if principal == nil {
+		return false
+	}
+	_, ok := principal.logicalProviderEvents[eventPublisherProviderEvent{
+		Provider:  strings.TrimSpace(provider),
+		EventType: strings.TrimSpace(eventType),
+	}]
+	return ok
+}
+
+// eventPublisherPrincipalAllowsLogical checks a resolved logical instance.
+func eventPublisherPrincipalAllowsLogical(principal *eventPublisherPrincipal, provider, namespace, name, eventType string) bool {
+	if principal == nil {
+		return false
+	}
+	_, allowed := principal.LogicalEvents[eventPublisherLogicalRef{
+		Provider:  strings.TrimSpace(provider),
+		Namespace: namespace,
+		Name:      name,
+		EventType: strings.TrimSpace(eventType),
+	}]
+	return allowed
+}
+
+// eventPublisherPrincipalDeclares reports whether the inventory declares the
+// grant in either form, exact or logical, without resolving anything. It
+// exists for inventory checks (an operator's CI can run Core's parser over a
+// rendered inventory and ask whether every declared grant survived); request
+// authorization must use eventPublisherPrincipalAllows and the resolved
+// logical path, never this.
+func eventPublisherPrincipalDeclares(principal *eventPublisherPrincipal, provider, instanceID, eventType string) bool {
+	instanceID = strings.TrimSpace(instanceID)
+	if !strings.Contains(instanceID, "/") {
+		return eventPublisherPrincipalAllows(principal, provider, instanceID, eventType)
+	}
+	namespace, name, err := parseLogicalInstanceRef(instanceID)
+	if err != nil {
+		return false
+	}
+	return eventPublisherPrincipalAllowsLogical(principal, provider, namespace, name, eventType)
+}
+
+// maxLogicalInstanceRefLength bounds a "<namespace>/<name>" value; it is far
+// above any real manifest identity and keeps hostile wire values cheap.
+const maxLogicalInstanceRefLength = 512
+
+// parseLogicalInstanceRef accepts exactly "<namespace>/<name>": one "/", both
+// parts non-empty, already lowercase, no whitespace, no control characters,
+// no wildcard syntax. It is
+// strict rather than normalizing so the spelling in a grant is exactly the
+// identity it matches. The same parser validates grants at load and literal
+// wire values at request time.
+func parseLogicalInstanceRef(value string) (string, string, error) {
+	if value == "" || len(value) > maxLogicalInstanceRefLength {
+		return "", "", errors.New("must be <namespace>/<name> of bounded length")
+	}
+	if strings.Count(value, "/") != 1 {
+		return "", "", errors.New("must contain exactly one \"/\"")
+	}
+	if value != strings.ToLower(value) {
+		return "", "", errors.New("must be lowercase")
+	}
+	if strings.IndexFunc(value, unicode.IsSpace) >= 0 {
+		return "", "", errors.New("must not contain whitespace")
+	}
+	// Control characters (NUL included) never reach PostgreSQL: the wire
+	// value is refused here as not resolvable, which answers 403.
+	if strings.IndexFunc(value, unicode.IsControl) >= 0 {
+		return "", "", errors.New("must not contain control characters")
+	}
+	if containsWildcard(value) {
+		return "", "", errors.New("must be exact and cannot contain wildcards")
+	}
+	namespace, name, _ := strings.Cut(value, "/")
+	if namespace == "" || name == "" {
+		return "", "", errors.New("requires a non-empty namespace and name")
+	}
+	return namespace, name, nil
 }
 
 func workflowMachinePrincipalAllows(principal *workflowMachinePrincipal, namespace, name string) bool {

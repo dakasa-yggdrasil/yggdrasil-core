@@ -140,12 +140,31 @@ even when `async=false` or a `sync` header is supplied. Machine polling returns
 only owned runs and hides foreign ids as 404. `metadata.idempotency_key` is also
 principal-scoped before persistence.
 
-Every hashed event publisher has a non-empty `allowed_events` list of exact
-`{provider,instance_id,event_type}` mutation triples. It cannot publish the
-generic event shape or another publisher's scope; actor identity and reserved
-publisher metadata are server-authored. Console sessions are not accepted on
-this machine route. The plaintext bridge is mutation-only and its actor is
-replaced with the reserved `legacy-event-publish-bridge` service identity.
+Every hashed event publisher has a non-empty `allowed_events` list of
+`{provider,instance_id,event_type}` mutation grants. It cannot publish the
+generic event shape or another publisher's scope; actor identity and every
+`yggdrasil.io/publisher_*` metadata key are server-authored. Console sessions
+are not accepted on this machine route. The plaintext bridge is mutation-only
+and its actor is replaced with the reserved `legacy-event-publish-bridge`
+service identity.
+
+A grant is exact or logical (ADR-0021):
+
+| Grant `instance_id` | Matches | Database |
+|---|---|---|
+| No `/` (version UUID or bare name) | The event's `instance_id` as an opaque string | Never |
+| `<namespace>/<name>` | After Core resolves the event's `instance_id` (any not-yet-purged version UUID in canonical lowercase form, or a literal `<namespace>/<name>`; never a bare name) to an `integration_instance` with an active version whose active `integration_type` provider equals the event `provider` | One read-only statement (one round trip), only after the bearer matched and only when the principal holds a logical grant for that provider and event type |
+
+`POST /api/v1/events` answers `403 event.authorization_denied` with one
+identical body when the instance is not found, not granted, or of another
+provider (also when the wire value carries a control character, which never
+reaches the database), and `503 event.authorization_unavailable` with a fixed
+detail when the lookup fails. Core loads the inventory once at start; a
+malformed grant or a set-but-blank variable refuses the whole inventory, and
+then every event publish answers `401` until a restart with a valid one (with
+`YGGDRASIL_ENV=production` Core refuses to boot instead). Refused legacy
+bridge settings switch off only the bridge and the anonymous development
+posture.
 
 The legacy workflow bridge requires
 `YGGDRASIL_WORKFLOW_RUN_LEGACY_ENABLED=true` and a future RFC3339
