@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-09-24T14:49:28-03:00",
+  "generated_at": "2026-09-24T15:37:27-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 624,
+    ".go": 625,
     ".json": 144,
     ".py": 1,
     ".sql": 52,
@@ -11,7 +11,7 @@
     ".yml": 22
   },
   "provenance": {
-    "commit": "a27d7e08716a003e000781958fc9357e38f8c259",
+    "commit": "649c278fcedafe4c7ec7bb0cf63209070d7026b7",
     "dirty": true,
     "files": [
       {
@@ -24,7 +24,7 @@
       },
       {
         "path": "CLAUDE.md",
-        "sha256": "1ac8973aebd074e24a1d07dff9078253f16f00b86fa3e0c7c4ac966b77782055"
+        "sha256": "28c1ac2002afc5c3857cd10a4b4da4c4adeea83e2cc6203baec50565c7f61942"
       },
       {
         "path": "README.md",
@@ -60,12 +60,12 @@
     {
       "path": "controllers/httpapi",
       "files": 150,
-      "kb": 1439
+      "kb": 1451
     },
     {
       "path": "repository",
-      "files": 93,
-      "kb": 599
+      "files": 94,
+      "kb": 610
     },
     {
       "path": "manifest",
