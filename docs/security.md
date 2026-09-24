@@ -125,13 +125,36 @@ before being recovered and counted. Foreign and absent runs both return 404.
 Event writers use a separate
 `YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON` inventory with the same hash and
 lifecycle fields, no workflow allowlist, and a non-empty `allowed_events` list
-of exact `{provider,instance_id,event_type}` mutation triples. Machine event
+of `{provider,instance_id,event_type}` mutation grants. Machine event
 principals are accepted only on `POST /api/v1/events`, cannot publish the
 generic event shape, and have their actor identity bound by the server;
 human console sessions are rejected because this machine route has no event
 publish RBAC wrapper. The plaintext event bridge is also mutation-only and is
 bound to the reserved `legacy-event-publish-bridge` service actor. Workflow and
-event credentials are mutually isolated. Workflow credentials never authorize
+event credentials are mutually isolated.
+
+A grant is exact or logical (ADR-0021). An exact grant (an `instance_id`
+without `/`) is compared as an opaque string and never touches the database.
+A logical grant names the integration instance as `<namespace>/<name>` and
+matches only after Core resolved the event's `instance_id` (the canonical UUID
+of any not-yet-purged version, or a literal `<namespace>/<name>`; never a bare
+name) to an `integration_instance` with an active version whose active
+`integration_type` has the event's `provider`. Core tries that lookup only
+after the bearer digest matched and only when the principal holds a logical
+grant for the event's provider and event type, so an anonymous or
+out-of-scope caller cannot make it query. Not found, not granted and a wrong
+provider return one identical `403 event.authorization_denied` body, so the
+route cannot be used to probe the catalog. A database failure fails closed
+with `503 event.authorization_unavailable` and a fixed detail; the database
+error is only logged. The server strips every client-supplied
+`yggdrasil.io/publisher_*` metadata key and stamps the grant form and, for a
+logical grant, the resolved instance namespace, name, active manifest id and
+version. Core loads the inventory once at start and the gate and handler share
+that copy; a malformed logical grant refuses the whole inventory, which fails
+boot with `YGGDRASIL_ENV=production` and otherwise leaves every event publish
+answering `401` until a restart with a valid inventory. Recreating a deleted
+instance name under the same provider inherits its logical grants, so a hard
+delete needs a review of the grants that name it. Workflow credentials never authorize
 manifests, secrets (including
 `include_values=true`), `/console`, generic `/ops`, deploy, tenant, or
 auth-admin routes.

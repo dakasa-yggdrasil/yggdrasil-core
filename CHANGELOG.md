@@ -5,6 +5,31 @@ All notable changes to yggdrasil-core are documented here.
 ## [Unreleased]
 
 ### Security
+- **Event publisher grants keyed by the logical integration instance
+  (ADR-0021).** A grant in `YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON` whose
+  `instance_id` is `<namespace>/<name>` is now a logical grant: it matches
+  only after Core resolves the event's `instance_id` (the canonical UUID of
+  any not-yet-purged version, or a literal `<namespace>/<name>`; a bare name
+  is never resolved) to an `integration_instance` with an active version
+  whose active `integration_type` provider equals the event `provider`. So a
+  re-applied instance manifest no longer invalidates its publisher's grant.
+  Grants without `/` keep today's exact, database-free match, which runs
+  first; the lookup (two indexed point reads, 3 second bound) happens only
+  after the bearer matched and only when the principal holds a logical grant
+  for that provider and event type. Not found, not granted and wrong provider
+  share one `403 event.authorization_denied` body; a lookup failure answers
+  `503 event.authorization_unavailable` with a fixed detail. A malformed
+  logical grant refuses the whole inventory. The inventory is now parsed once
+  at start and shared by the gate and the handler; a refused inventory fails
+  boot with `YGGDRASIL_ENV=production` and otherwise is logged at error level
+  while every event publish answers `401` (the handler no longer echoes the
+  parser diagnostics). The server strips every client-supplied
+  `yggdrasil.io/publisher_*` metadata key and stamps
+  `yggdrasil.io/publisher_grant_form` plus, for a logical grant, the resolved
+  instance namespace, name, active manifest id and version;
+  `payload.instance_id` is unchanged. `eventPublisherPrincipalDeclares` lets an
+  operator's CI check that every declared grant, exact or logical, survived
+  Core's parser without resolving anything.
 - **Audit trace references come only from a well-formed W3C `traceparent`
   (ADR-0020).** The handler audit (`recordAudit`) and the auth audit
   (`recordAuthAuditSync`, every `auth.*` login, MFA, session, and password

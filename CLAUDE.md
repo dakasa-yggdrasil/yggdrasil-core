@@ -145,10 +145,18 @@ with `?kind=X` in the query string.
   manifest-id and explicit-version selectors are rejected. Their dispatch is
   always async and they can poll only their own runs.
 - Event writers use independent hashed principals in
-  `YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON`, with exact
-  `{provider,instance_id,event_type}` mutation-event scopes, accepted only by
-  `POST /api/v1/events`. Machine event principals cannot publish generic
-  events, and human console sessions are not accepted on this route.
+  `YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON`, with
+  `{provider,instance_id,event_type}` mutation-event grants, accepted only by
+  `POST /api/v1/events`. A grant whose `instance_id` has no `/` is exact
+  (opaque string match, no database access); `<namespace>/<name>` is a
+  logical grant that matches only after Core resolves the event's
+  `instance_id` (any not-purged version UUID or a literal namespace/name,
+  never a bare name) to an instance with an active version whose active type
+  provider equals the event provider (ADR-0021). Not found and not granted
+  share one 403; a lookup failure is 503 `event.authorization_unavailable`.
+  Core loads the inventory once at start. Machine event principals cannot
+  publish generic events, and human console sessions are not accepted on
+  this route.
   `YGGDRASIL_EVENT_PUBLISH_TOKEN` is an explicit, expiring, mutation-only
   plaintext bridge with a reserved server-authored actor.
 - Directory readers use a third hashed inventory,
