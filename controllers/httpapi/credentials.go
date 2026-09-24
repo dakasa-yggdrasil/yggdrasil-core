@@ -161,6 +161,23 @@ func (s *Server) resetMFAAndIssueSetupLink(r *http.Request, collabID uuid.UUID, 
 	if err != nil {
 		return model.CredentialToken{}, err
 	}
+	// Record whether this wipe actually replaced a credential. The wipe also
+	// clears password_updated_at, so afterwards nothing on the account tells
+	// a returning person from a new hire; only the issuance can. A full
+	// recovery clicked on an account that was never set up stays a first
+	// access. Read after the token rows are locked, before auth_identities,
+	// to keep handleSetupCommit's lock order.
+	prior, err := repository.GetCredentialAccountState(ctx, tx, collabID)
+	if err != nil {
+		return model.CredentialToken{}, err
+	}
+	if prior.HasPassword || prior.MFAEnrolled || prior.HasTOTP || prior.HasRecoveryCodes || prior.PasskeyCount > 0 {
+		if _, err := tx.ExecContext(ctx,
+			`UPDATE auth_credential_tokens SET metadata = metadata || '{"replaced_credential": true}'::jsonb WHERE id = $1`,
+			issued.ID); err != nil {
+			return model.CredentialToken{}, err
+		}
+	}
 	if err := repository.ResetMFAFactors(ctx, tx, collabID); err != nil {
 		return model.CredentialToken{}, err
 	}
@@ -456,17 +473,19 @@ func (s *Server) handleSetupPreflight(w http.ResponseWriter, r *http.Request) {
 		//
 		// The flag follows the account, not only the presented token: a plain
 		// access link issued after a full recovery replaces the recovery link
-		// but the person is still returning. Only a full recovery clears an
-		// existing password, so "no password now + a recovery on record" never
-		// matches a real first access.
+		// but the person is still returning. It keys on replaced_credential,
+		// which a full recovery stamps only when it wiped an existing password
+		// or factor, so a recovery clicked on a never-configured account keeps
+		// the first-access journey. Once anything is set again (password or
+		// factor) the account is no longer mid-recovery.
 		var recovery bool
-		if !st.HasPassword {
+		if !st.HasPassword && !st.MFAEnrolled {
 			_ = s.db.QueryRowContext(r.Context(), `
 				SELECT EXISTS (
 					SELECT 1 FROM auth_credential_tokens
 					WHERE collaborator_id = $1
 					  AND purpose = 'setup'
-					  AND COALESCE((metadata->>'mfa_reset')::boolean, false)
+					  AND metadata @> '{"replaced_credential": true}'::jsonb
 				)`, collabID).Scan(&recovery)
 		}
 		resp["account"] = map[string]any{
