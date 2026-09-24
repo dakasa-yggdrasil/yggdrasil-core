@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-09-21T20:51:48-03:00",
+  "generated_at": "2026-09-24T14:49:28-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 615,
-    ".json": 143,
+    ".go": 624,
+    ".json": 144,
     ".py": 1,
-    ".sql": 51,
+    ".sql": 52,
     ".yaml": 9,
-    ".yml": 21
+    ".yml": 22
   },
   "provenance": {
-    "commit": "c728edab734bbcc7200b3e3b506b8d0b1dee2123",
+    "commit": "a27d7e08716a003e000781958fc9357e38f8c259",
     "dirty": true,
     "files": [
       {
@@ -24,7 +24,7 @@
       },
       {
         "path": "CLAUDE.md",
-        "sha256": "0494d63389e60e27577913c5fa5a8e23ff38cb5e901d1aa7dc69800a0ead19fd"
+        "sha256": "1ac8973aebd074e24a1d07dff9078253f16f00b86fa3e0c7c4ac966b77782055"
       },
       {
         "path": "README.md",
@@ -48,7 +48,7 @@
       },
       {
         "path": "go.mod",
-        "sha256": "80c141f59630ad87ac845932780db0ec0addfa8289374710881d070369b3b4dc"
+        "sha256": "361a07f565cda4307e50288bc74f7683aaa5cf709c8e1785db9c5eaace179ac1"
       }
     ]
   },
@@ -59,13 +59,13 @@
   "top_dirs": [
     {
       "path": "controllers/httpapi",
-      "files": 146,
-      "kb": 1356
+      "files": 150,
+      "kb": 1439
     },
     {
       "path": "repository",
-      "files": 90,
-      "kb": 576
+      "files": 93,
+      "kb": 599
     },
     {
       "path": "manifest",
@@ -79,8 +79,8 @@
     },
     {
       "path": "db/migrations",
-      "files": 50,
-      "kb": 90
+      "files": 51,
+      "kb": 91
     },
     {
       "path": "controllers/message",
@@ -99,8 +99,8 @@
     },
     {
       "path": "controllers/oidc",
-      "files": 20,
-      "kb": 152
+      "files": 22,
+      "kb": 188
     },
     {
       "path": "docs/bootstrap/seeds/integrations",
@@ -149,7 +149,7 @@
     },
     {
       "path": "controllers/httpapi/server.go",
-      "kb": 165
+      "kb": 167
     },
     {
       "path": "controllers/message/products.go",
@@ -164,8 +164,8 @@
       "kb": 62
     },
     {
-      "path": "controllers/message/workflows.go",
-      "kb": 50
+      "path": "controllers/httpapi/credentials.go",
+      "kb": 57
     }
   ],
   "contracts": {
@@ -174,7 +174,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 50,
+    "migrations": 51,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {
@@ -277,16 +277,16 @@
       "go.uber.org/zap v1.27.1",
       "go.yaml.in/yaml/v2 v2.4.3 // indirect",
       "go.yaml.in/yaml/v3 v3.0.4 // indirect",
-      "golang.org/x/crypto v0.52.0",
-      "golang.org/x/net v0.55.0 // indirect",
+      "golang.org/x/crypto v0.55.0",
+      "golang.org/x/net v0.58.0 // indirect",
       "golang.org/x/oauth2 v0.36.0 // indirect",
-      "golang.org/x/sync v0.20.0 // indirect",
-      "golang.org/x/sys v0.45.0 // indirect",
-      "golang.org/x/term v0.43.0 // indirect",
-      "golang.org/x/text v0.37.0 // indirect",
+      "golang.org/x/sync v0.22.0 // indirect",
+      "golang.org/x/sys v0.47.0 // indirect",
+      "golang.org/x/term v0.45.0 // indirect",
+      "golang.org/x/text v0.41.0 // indirect",
       "golang.org/x/time v0.9.0",
       "google.golang.org/genproto/googleapis/rpc v0.0.0-20260526163538-3dc84a4a5aaa // indirect",
-      "google.golang.org/grpc v1.83.1 // indirect",
+      "google.golang.org/grpc v1.83.2 // indirect",
       "google.golang.org/protobuf v1.36.11 // indirect",
       "gopkg.in/evanphx/json-patch.v4 v4.13.0 // indirect",
       "gopkg.in/inf.v0 v0.9.1 // indirect",
@@ -305,7 +305,7 @@
     ]
   },
   "ops": {
-    "config_files": 4,
-    "k8s_manifests": 4
+    "config_files": 5,
+    "k8s_manifests": 5
   }
 }
