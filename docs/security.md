@@ -40,16 +40,25 @@ of a URL, and URLs travel through chat and email.
 | First access | Admin issues a setup link (`POST /auth/passwords/setup-tokens`) | Sets the password, then answers `428 mfa_not_enrolled` with an enroll link; the session only exists after enrollment |
 | Lost password, has the second factor | Self-service: `POST /auth/passwords/forgot` emails a reset link; `POST /auth/passwords/reset` takes the new password plus a TOTP or recovery code | Opens a session only after the factor is proven; revokes every older session |
 | Lost password, self-service unavailable | Admin issues a setup link for the existing account | Sets the password and revokes older sessions, then answers `200 {next: "login"}` with no cookie: the person signs in with the new password and their factor |
-| Lost password and second factor | Admin issues a setup link with `reset_mfa: true` | Wipes TOTP, passkeys and recovery codes (audited as `credential.mfa_reset`), then behaves as a first access |
+| Lost second factor (with or without the password) | Admin issues a setup link with `reset_mfa: true` | Wipes TOTP, passkeys, recovery codes **and the password** in the same transaction that issues the link, so the old password stops working at once (otherwise a leaked password could enroll its own authenticator before the owner opens the link); then behaves as a first access. Audited as `credential.mfa_reset` and `auth.mfa.reset` with the acting admin (or `service:auth-admin-token`) |
 
 Link rules:
 
 - Setup and reset links are single-use and replace any earlier link of
   the same purpose. A rejected password (`422`, with `reason` in
   `too_short`, `contains_identity`, `too_common`) never consumes the link.
-- On `/auth/passwords/reset` a wrong second factor keeps the link alive
-  but counts against it; the fifth failure burns it
-  (`attempts_remaining` in the `401`).
+- Every path that replaces a credential through a link (setup re-access,
+  reset, `reset_mfa`) runs the §13 fan-out: console sessions and OIDC
+  refresh tokens are revoked, a `session_revocation` row is written,
+  `collaborator.session.terminated` is emitted and back-channel logout
+  fires. A first access has nothing to revoke and emits nothing.
+- A setup link clears the login lockout (`failed_attempts`,
+  `locked_until`): the next step for an enrolled account is the login.
+- `/auth/passwords/reset` refuses suspended or offboarded accounts (`403`),
+  sits behind the per-IP login rate limit, and reserves one of five
+  second-factor attempts atomically before checking the code, so
+  concurrent requests cannot exceed the cap. A wrong code keeps the link
+  alive (`attempts_remaining` in the `401`); the fifth failure burns it.
 - `GET /auth/passwords/setup/preflight` and
   `GET /auth/passwords/reset/preflight` validate a link without
   consuming it and report the account posture and the password policy,
