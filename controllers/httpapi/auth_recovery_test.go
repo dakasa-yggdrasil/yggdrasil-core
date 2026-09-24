@@ -306,3 +306,19 @@ func TestResolveAuthAdminPrincipalStaticToken(t *testing.T) {
 		t.Fatalf("static token: principal=%+v err=%v", p, err)
 	}
 }
+
+// Self-service reset mints a session, so it must follow the login's status
+// rule, not the wider setup allowlist (which admits pending_start).
+func TestCollaboratorCanSignInMatchesTheLoginRule(t *testing.T) {
+	for status, want := range map[string]bool{
+		"active": true, " Active ": true,
+		"pending_start": false, "": false, "suspended": false, "offboarded": false, "on_leave": false,
+	} {
+		if got := collaboratorCanSignIn(status); got != want {
+			t.Errorf("collaboratorCanSignIn(%q) = %v, want %v", status, got, want)
+		}
+	}
+	if !collaboratorEligibleForSetup("pending_start") {
+		t.Error("the setup commit (no session) must keep admitting pending_start")
+	}
+}

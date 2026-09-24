@@ -73,6 +73,11 @@ func (s *Server) handleIssueSetupToken(w http.ResponseWriter, r *http.Request) {
 		CreatedBy:       createdBy,
 		InvalidatePrior: true,
 	}
+	if req.ResetMFA {
+		// Read back by the setup preflight so the page greets a returning
+		// person, not a first access.
+		tokenInput.Metadata = map[string]any{"mfa_reset": true}
+	}
 
 	var issued model.CredentialToken
 	if req.ResetMFA {
@@ -148,6 +153,12 @@ func (s *Server) resetMFAAndIssueSetupLink(r *http.Request, collabID uuid.UUID, 
 	}
 	defer func() { _ = tx.Rollback() }()
 
+	// Lock order matches handleSetupCommit (setup token rows first, then the
+	// auth_identities row), so the two cannot deadlock on the same account.
+	issued, err := repository.IssueCredentialTokenTx(ctx, tx, in)
+	if err != nil {
+		return model.CredentialToken{}, err
+	}
 	if err := repository.ResetMFAFactors(ctx, tx, collabID); err != nil {
 		return model.CredentialToken{}, err
 	}
@@ -172,10 +183,6 @@ func (s *Server) resetMFAAndIssueSetupLink(r *http.Request, collabID uuid.UUID, 
 		Actor:         principal.eventActor(r),
 		Payload:       payload,
 	}); err != nil {
-		return model.CredentialToken{}, err
-	}
-	issued, err := repository.IssueCredentialTokenTx(ctx, tx, in)
-	if err != nil {
 		return model.CredentialToken{}, err
 	}
 	if err := tx.Commit(); err != nil {
@@ -424,7 +431,7 @@ func (s *Server) handleSetupPreflight(w http.ResponseWriter, r *http.Request) {
 			httperr.WithFieldError("token", "required", "token is required"))
 		return
 	}
-	_, collabID, expiresAt, rej := lookupSetupToken(r.Context(), s.db, raw, false)
+	tokenID, collabID, expiresAt, rej := lookupSetupToken(r.Context(), s.db, raw, false)
 	if rej != nil {
 		writeSetupTokenRejection(w, r.URL.Path, rej)
 		return
@@ -441,9 +448,17 @@ func (s *Server) handleSetupPreflight(w http.ResponseWriter, r *http.Request) {
 		resp["collaborator"] = collaboratorIdentityView(collab)
 	}
 	if st, err := repository.GetCredentialAccountState(r.Context(), s.db, collabID); err == nil {
+		// A full-recovery link arrives with no password and no factor, like a
+		// brand-new account; `recovery` lets the page greet a returning person
+		// as such instead of as a first access.
+		var recovery bool
+		_ = s.db.QueryRowContext(r.Context(),
+			`SELECT COALESCE((metadata->>'mfa_reset')::boolean, false) FROM auth_credential_tokens WHERE id = $1`,
+			tokenID).Scan(&recovery)
 		resp["account"] = map[string]any{
 			"has_password": st.HasPassword,
 			"mfa_enrolled": st.MFAEnrolled,
+			"recovery":     recovery,
 		}
 	}
 	writeJSON(w, http.StatusOK, resp)
@@ -778,6 +793,15 @@ func collaboratorEligibleForSetup(status string) bool {
 	}
 }
 
+// collaboratorCanSignIn is the status rule of the password login
+// (repository.VerifyPasswordCredential): only "active" signs in. Self-service
+// reset mints a session, so it follows this rule and not the wider setup
+// allowlist; otherwise a pending_start account (a re-hire before the start
+// date still holding old factors) would get a session the login refuses.
+func collaboratorCanSignIn(status string) bool {
+	return strings.ToLower(strings.TrimSpace(status)) == "active"
+}
+
 // readAndCloseBody reads the entire request body and closes it.
 func readAndCloseBody(r *http.Request) ([]byte, error) {
 	defer r.Body.Close()
@@ -1104,8 +1128,8 @@ func (s *Server) handlePasswordForgot(w http.ResponseWriter, r *http.Request) {
 	}
 
 	collab, err := repository.LookupCollaboratorByIdentifier(r.Context(), s.db, identifier)
-	if err != nil || collab == nil || !collaboratorEligibleForSetup(collab.Status) {
-		// Suspended / offboarded accounts get no link either; same 202.
+	if err != nil || collab == nil || !collaboratorCanSignIn(collab.Status) {
+		// Accounts that cannot sign in get no link either; same 202.
 		respondAccepted()
 		return
 	}
@@ -1190,6 +1214,19 @@ func (s *Server) handleResetPreflight(w http.ResponseWriter, r *http.Request) {
 		writeSetupTokenRejection(w, r.URL.Path, rej)
 		return
 	}
+	collab, err := repository.GetCollaborator(r.Context(), s.db, collabID.String())
+	if err != nil {
+		writeMappedError(w, err)
+		return
+	}
+	if !collaboratorCanSignIn(collab.Status) {
+		httperr.WriteProblem(w, http.StatusForbidden,
+			httperr.CodeAuthAccountInactive,
+			"Account not active",
+			"this account is not active and cannot reset its password; contact your administrator",
+			httperr.WithInstance(r.URL.Path))
+		return
+	}
 	st, err := repository.GetCredentialAccountState(r.Context(), s.db, collabID)
 	if err != nil {
 		writeMappedError(w, err)
@@ -1199,15 +1236,13 @@ func (s *Server) handleResetPreflight(w http.ResponseWriter, r *http.Request) {
 		"status":          "ready",
 		"expires_at":      expiresAt.UTC().Format(time.RFC3339),
 		"password_policy": passwordPolicyView(),
+		"collaborator":    collaboratorIdentityView(collab),
 		"mfa_enrolled":    st.MFAEnrolled,
 		"factors":         inlineResetFactors(st),
 		// A passkey cannot be proven on this form yet, but it still works at
 		// the login: such an account needs a plain access link, not a factor
 		// wipe. The page words its advice from this.
 		"has_passkey": st.PasskeyCount > 0,
-	}
-	if collab, err := repository.GetCollaborator(r.Context(), s.db, collabID.String()); err == nil {
-		resp["collaborator"] = collaboratorIdentityView(collab)
 	}
 	writeJSON(w, http.StatusOK, resp)
 }
@@ -1290,7 +1325,7 @@ func (s *Server) handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 		writeMappedError(w, err)
 		return
 	}
-	if !collaboratorEligibleForSetup(collab.Status) {
+	if !collaboratorCanSignIn(collab.Status) {
 		httperr.WriteProblem(w, http.StatusForbidden,
 			httperr.CodeAuthAccountInactive,
 			"Account not active",
@@ -1305,8 +1340,27 @@ func (s *Server) handlePasswordReset(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Step 5: second factor. The attempt is reserved atomically BEFORE the
-	// check, so concurrent requests cannot all slip under the cap.
+	// Step 5: second factor. Only a TOTP or recovery code can be proven
+	// here, so anything else is answered before an attempt is spent.
+	if strings.TrimSpace(req.TOTPCode) == "" && strings.TrimSpace(req.RecoveryCode) == "" {
+		if req.WebAuthnAssertion != nil {
+			httperr.WriteProblem(w, http.StatusNotImplemented,
+				httperr.CodeAuthWebAuthnNotImplemented,
+				"WebAuthn not implemented",
+				"inline WebAuthn assertion verification is not yet implemented (Phase 2)",
+				httperr.WithInstance(r.URL.Path))
+			return
+		}
+		httperr.WriteProblem(w, http.StatusBadRequest,
+			httperr.CodeMissingField,
+			"Missing field",
+			"totp_code or recovery_code is required",
+			httperr.WithInstance(r.URL.Path),
+			httperr.WithFieldError("totp_code", "required", "totp_code or recovery_code is required"))
+		return
+	}
+	// The attempt is reserved atomically BEFORE the check, so concurrent
+	// requests cannot all slip under the cap.
 	attempts, err := repository.ReserveResetTokenMFAAttempt(r.Context(), s.db, tokenID, resetMFAMaxAttempts)
 	if errors.Is(err, repository.ErrResetAttemptsExhausted) {
 		httperr.WriteProblem(w, http.StatusUnauthorized,
