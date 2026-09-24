@@ -54,15 +54,27 @@ Link rules:
   fires. A first access has nothing to revoke and emits nothing.
 - A setup link clears the login lockout (`failed_attempts`,
   `locked_until`): the next step for an enrolled account is the login.
-- `/auth/passwords/reset` refuses suspended or offboarded accounts (`403`),
-  sits behind the per-IP login rate limit, and reserves one of five
-  second-factor attempts atomically before checking the code, so
-  concurrent requests cannot exceed the cap. A wrong code keeps the link
+- `/auth/passwords/forgot` and `/auth/passwords/reset` follow the login's
+  status rule (only `active` signs in): other statuses, including
+  `pending_start`, get no link and a `403` on the reset and its preflight.
+  The setup commit keeps admitting `pending_start` because it opens no
+  session.
+- `/auth/passwords/reset` sits behind the per-IP login rate limit and
+  reserves one of five second-factor attempts atomically before checking
+  the code, so concurrent requests cannot exceed the cap. A request with
+  no TOTP or recovery code (or only a passkey assertion, `501`) is
+  answered before any attempt is spent. A wrong code keeps the link
   alive (`attempts_remaining` in the `401`); the fifth failure burns it.
 - `GET /auth/passwords/setup/preflight` and
   `GET /auth/passwords/reset/preflight` validate a link without
   consuming it and report the account posture and the password policy,
   so the console can pick the right journey before asking for anything.
+  The setup preflight's `account.recovery` marks a full-recovery link,
+  which otherwise looks like a first access (no password, no factor); the
+  reset preflight's `has_passkey` tells a passkey-only account (needs a
+  plain access link) from one with no factor left.
+- `auth_credential_tokens.created_by` records the issuing admin and is set
+  to NULL if that admin is deleted.
 - `GET /auth/passwords/forgot/options` reports whether self-service
   reset can deliver email; when it cannot, the console sends people to
   an administrator instead of a form that goes nowhere.
