@@ -9,6 +9,7 @@ import (
 	"os"
 	"strings"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
 )
@@ -35,6 +36,44 @@ var errAuthAdminUnauthorized = errors.New("auth admin unauthorized")
 // db may be nil (older test paths); when nil, the capability paths are
 // skipped and authorization only succeeds via the static admin-token header.
 func authorizeAuthAdminRequest(r *http.Request, db *sql.DB) error {
+	_, err := resolveAuthAdminPrincipal(r, db)
+	return err
+}
+
+// authAdminPrincipal is who an auth-admin request was authorized as, so a
+// break-glass action (a factor wipe, a setup link for someone else) can be
+// attributed in the event log and the audit trail.
+type authAdminPrincipal struct {
+	// CollaboratorID is the acting admin; uuid.Nil for the static machine
+	// token (YGGDRASIL_AUTH_ADMIN_TOKEN), which has no human behind it.
+	CollaboratorID uuid.UUID
+}
+
+// auditActor renders the principal in the audit_events actor format.
+func (p authAdminPrincipal) auditActor() string {
+	if p.CollaboratorID == uuid.Nil {
+		return "service:auth-admin-token"
+	}
+	return "user:" + p.CollaboratorID.String()
+}
+
+// eventActor renders the principal as the event_log actor, with the source
+// address and user agent of the request that acted.
+func (p authAdminPrincipal) eventActor(r *http.Request) *model.EventActor {
+	actor := &model.EventActor{Type: "service", ID: "auth-admin-token"}
+	if p.CollaboratorID != uuid.Nil {
+		actor = &model.EventActor{Type: "collaborator", ID: p.CollaboratorID.String()}
+	}
+	actor.Context = map[string]interface{}{
+		"source_ip":  clientIP(r),
+		"user_agent": r.UserAgent(),
+	}
+	return actor
+}
+
+// resolveAuthAdminPrincipal applies the same three paths as
+// authorizeAuthAdminRequest and reports which one authorized the request.
+func resolveAuthAdminPrincipal(r *http.Request, db *sql.DB) (authAdminPrincipal, error) {
 	ctx := r.Context()
 
 	// Path 1: claims attached by the console auth middleware. Require a REAL
@@ -43,7 +82,7 @@ func authorizeAuthAdminRequest(r *http.Request, db *sql.DB) error {
 	if claims, ok := claimsFromContext(ctx); ok && db != nil {
 		if id := claimsCollaboratorUUID(claims); id != uuid.Nil {
 			if held, err := collaboratorHoldsAuthAdmin(ctx, db, id); err == nil && held {
-				return nil
+				return authAdminPrincipal{CollaboratorID: id}, nil
 			}
 		}
 	}
@@ -57,7 +96,7 @@ func authorizeAuthAdminRequest(r *http.Request, db *sql.DB) error {
 		if token, has := extractAuthToken(r); has {
 			if _, collab, err := repository.ResolveAuthSession(ctx, db, token); err == nil {
 				if held, err := collaboratorHoldsAuthAdmin(ctx, db, collab.ID); err == nil && held {
-					return nil
+					return authAdminPrincipal{CollaboratorID: collab.ID}, nil
 				}
 			}
 		}
@@ -67,10 +106,10 @@ func authorizeAuthAdminRequest(r *http.Request, db *sql.DB) error {
 	// YGGDRASIL_AUTH_ADMIN_TOKEN authorizes; workflow credentials must never act
 	// as auth-admin.
 	if requestHasStaticAuthAdminCredential(r) {
-		return nil
+		return authAdminPrincipal{}, nil
 	}
 
-	return errAuthAdminUnauthorized
+	return authAdminPrincipal{}, errAuthAdminUnauthorized
 }
 
 // requestHasStaticAuthAdminCredential isolates the purpose-built non-human

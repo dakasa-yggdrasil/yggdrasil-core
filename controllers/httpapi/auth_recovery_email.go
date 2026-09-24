@@ -98,10 +98,7 @@ func passwordResetEmail(brand model.TenantBrand, displayName, link string, ttl t
 	if product == "" {
 		product = "Yggdrasil"
 	}
-	hours := int(ttl.Round(time.Hour) / time.Hour)
-	if hours < 1 {
-		hours = 1
-	}
+	ptValidity, enValidity := linkValidity(ttl)
 	name := strings.TrimSpace(displayName)
 	support := strings.TrimSpace(brand.SupportEmail)
 
@@ -113,7 +110,7 @@ func passwordResetEmail(brand model.TenantBrand, displayName, link string, ttl t
 		var b strings.Builder
 		fmt.Fprintf(&b, "%s\n\n", greeting)
 		fmt.Fprintf(&b, "Recebemos um pedido para redefinir a sua senha do %s.\n\n", product)
-		fmt.Fprintf(&b, "Abra o link abaixo para escolher uma nova senha. Ele vale por %d horas e só funciona uma vez:\n\n%s\n\n", hours, link)
+		fmt.Fprintf(&b, "Abra o link abaixo para escolher uma nova senha. Ele vale por %s e só funciona uma vez:\n\n%s\n\n", ptValidity, link)
 		b.WriteString("Para concluir, você vai confirmar com a sua verificação em duas etapas (app autenticador ou código de emergência). Ao trocar a senha, todas as sessões abertas são encerradas.\n\n")
 		b.WriteString("Se não foi você, ignore este e-mail. A sua senha atual continua valendo.")
 		if support != "" {
@@ -129,13 +126,34 @@ func passwordResetEmail(brand model.TenantBrand, displayName, link string, ttl t
 	var b strings.Builder
 	fmt.Fprintf(&b, "%s\n\n", greeting)
 	fmt.Fprintf(&b, "We received a request to reset your %s password.\n\n", product)
-	fmt.Fprintf(&b, "Open the link below to choose a new password. It is valid for %d hours and works only once:\n\n%s\n\n", hours, link)
+	fmt.Fprintf(&b, "Open the link below to choose a new password. It is valid for %s and works only once:\n\n%s\n\n", enValidity, link)
 	b.WriteString("To finish, you will confirm with your second factor (authenticator app or a recovery code). Changing the password signs out every open session.\n\n")
 	b.WriteString("If this was not you, ignore this email. Your current password keeps working.")
 	if support != "" {
 		fmt.Fprintf(&b, "\n\nQuestions: %s", support)
 	}
 	return fmt.Sprintf("Reset your %s password", product), b.String()
+}
+
+// linkValidity renders how long a link lasts, in Portuguese and English,
+// never promising more than the real TTL (whole hours when it divides
+// evenly, minutes otherwise).
+func linkValidity(ttl time.Duration) (pt, en string) {
+	if ttl < time.Minute {
+		ttl = time.Minute
+	}
+	if ttl%time.Hour == 0 {
+		h := int(ttl / time.Hour)
+		if h == 1 {
+			return "1 hora", "1 hour"
+		}
+		return fmt.Sprintf("%d horas", h), fmt.Sprintf("%d hours", h)
+	}
+	m := int(ttl / time.Minute)
+	if m == 1 {
+		return "1 minuto", "1 minute"
+	}
+	return fmt.Sprintf("%d minutos", m), fmt.Sprintf("%d minutes", m)
 }
 
 // dispatchPasswordResetEmail sends the reset link in the background so the

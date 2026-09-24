@@ -361,7 +361,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.Handle("POST /api/v1/auth/passwords/change",
 		loginRateLimit(server.loginLimiter, http.HandlerFunc(server.handlePasswordChange)))
 	mux.HandleFunc("POST /api/v1/auth/passwords/forgot", server.handlePasswordForgot)
-	mux.HandleFunc("POST /api/v1/auth/passwords/reset", server.handlePasswordReset)
+	// /reset checks a second factor against a link, so it gets the same
+	// per-IP brute-force gate as /login on top of the per-link attempt cap.
+	mux.Handle("POST /api/v1/auth/passwords/reset",
+		loginRateLimit(server.loginLimiter, http.HandlerFunc(server.handlePasswordReset)))
 	// Recovery pages: whether self-service reset can deliver a link, and a
 	// read-only check of a reset link (same model as the setup preflight:
 	// the token is the credential).

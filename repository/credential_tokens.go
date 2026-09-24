@@ -39,6 +39,21 @@ func IssueCredentialToken(ctx context.Context, db *sql.DB, in IssueCredentialTok
 	}
 	defer tx.Rollback()
 
+	t, err := IssueCredentialTokenTx(ctx, tx, in)
+	if err != nil {
+		return t, err
+	}
+	if err := tx.Commit(); err != nil {
+		return t, fmt.Errorf("commit: %w", err)
+	}
+	return t, nil
+}
+
+// IssueCredentialTokenTx is IssueCredentialToken inside the caller's
+// transaction, for flows that must issue the link atomically with another
+// change (the admin MFA reset issues its setup link in the same commit as
+// the factor wipe, so neither can exist without the other).
+func IssueCredentialTokenTx(ctx context.Context, tx *sql.Tx, in IssueCredentialTokenInput) (model.CredentialToken, error) {
 	if in.InvalidatePrior {
 		if _, err := tx.ExecContext(ctx, `
             UPDATE auth_credential_tokens
@@ -76,9 +91,6 @@ func IssueCredentialToken(ctx context.Context, db *sql.DB, in IssueCredentialTok
 	if in.CreatedBy != nil {
 		cb := in.CreatedBy.String()
 		t.CreatedBy = &cb
-	}
-	if err := tx.Commit(); err != nil {
-		return t, fmt.Errorf("commit: %w", err)
 	}
 	return t, nil
 }

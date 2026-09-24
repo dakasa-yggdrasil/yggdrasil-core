@@ -30,6 +30,7 @@ const (
 	AuditAuthSessionCreated     = "auth.session.created"
 	AuditAuthSessionRevoked     = "auth.session.revoked"
 	AuditAuthPasswordChanged    = "auth.password.changed"
+	AuditAuthMFAReset           = "auth.mfa.reset"
 	AuditAuthThirdPartyLogin    = "auth.third_party.login.succeeded"
 )
 

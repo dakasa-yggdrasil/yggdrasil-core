@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/docs/contracts"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/password"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -208,5 +209,100 @@ func TestPasswordResetMissingToken(t *testing.T) {
 	(&Server{}).handlePasswordReset(w, req)
 	if w.Code != http.StatusBadRequest {
 		t.Fatalf("status=%d body=%s", w.Code, w.Body.String())
+	}
+}
+
+func TestLinkValidityNeverOverPromises(t *testing.T) {
+	cases := []struct {
+		ttl    time.Duration
+		pt, en string
+	}{
+		{24 * time.Hour, "24 horas", "24 hours"},
+		{time.Hour, "1 hora", "1 hour"},
+		{30 * time.Minute, "30 minutos", "30 minutes"},
+		{90 * time.Minute, "90 minutos", "90 minutes"},
+		{time.Minute, "1 minuto", "1 minute"},
+	}
+	for _, tc := range cases {
+		pt, en := linkValidity(tc.ttl)
+		if pt != tc.pt || en != tc.en {
+			t.Errorf("%s: got (%q, %q), want (%q, %q)", tc.ttl, pt, en, tc.pt, tc.en)
+		}
+	}
+}
+
+// The credential events are schema-validated inside EmitEvent; a payload
+// the schema rejects is silently lost (best-effort emits) or rolls back the
+// admin reset (in-transaction emit). Pin the exact shapes the handlers build.
+func TestCredentialEventPayloadsMatchTheirSchemas(t *testing.T) {
+	adminID := uuid.New().String()
+	expires := time.Now().Add(48 * time.Hour).UTC().Format(time.RFC3339)
+	cases := []struct {
+		eventType string
+		payload   map[string]any
+	}{
+		{repository.EventTypeCredentialSetupTokenIssued, map[string]any{
+			"token_id": uuid.New().String(), "collaborator_id": uuid.New().String(),
+			"expires_at": expires, "purpose": "setup", "issued_by_id": adminID, "mfa_reset": true,
+		}},
+		{repository.EventTypeCredentialResetTokenIssued, map[string]any{
+			"token_id": uuid.New().String(), "collaborator_id": uuid.New().String(),
+			"expires_at": expires, "source": "self_service", "purpose": "reset",
+		}},
+		{repository.EventTypeCredentialMFAReset, map[string]any{
+			"collaborator_id": uuid.New().String(), "source": "admin_setup_link", "issued_by_id": adminID,
+		}},
+		{repository.EventTypeCollaboratorSessionTerminated, map[string]any{
+			"collaborator_id": uuid.New().String(), "reason": repository.SessionRevocationReasonMFAReset,
+			"revocation_id": uuid.New().String(), "emitted_at": expires, "primary_email": "lucas@example.com",
+		}},
+	}
+	for _, tc := range cases {
+		if err := contracts.ValidateEventPayload(tc.eventType, "v1", tc.payload); err != nil {
+			t.Errorf("%s: %v", tc.eventType, err)
+		}
+	}
+	// A raw time.Time is what used to be sent: the schema must keep refusing
+	// it, which is why the handlers format the timestamp.
+	if err := contracts.ValidateEventPayload(repository.EventTypeCredentialSetupTokenIssued, "v1", map[string]any{
+		"token_id": uuid.New().String(), "collaborator_id": uuid.New().String(),
+		"expires_at": time.Now(), "purpose": "setup",
+	}); err == nil {
+		t.Error("a time.Time expires_at should not validate")
+	}
+}
+
+func TestAuthAdminPrincipalAttribution(t *testing.T) {
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passwords/setup-tokens", nil)
+	r.Header.Set("User-Agent", "ops-cli")
+
+	machine := authAdminPrincipal{}
+	if machine.auditActor() != "service:auth-admin-token" {
+		t.Fatalf("machine audit actor: %q", machine.auditActor())
+	}
+	if a := machine.eventActor(r); a.Type != "service" || a.ID != "auth-admin-token" || a.Context["user_agent"] != "ops-cli" {
+		t.Fatalf("machine event actor: %+v", a)
+	}
+
+	id := uuid.New()
+	human := authAdminPrincipal{CollaboratorID: id}
+	if human.auditActor() != "user:"+id.String() {
+		t.Fatalf("human audit actor: %q", human.auditActor())
+	}
+	if a := human.eventActor(r); a.Type != "collaborator" || a.ID != id.String() {
+		t.Fatalf("human event actor: %+v", a)
+	}
+}
+
+func TestResolveAuthAdminPrincipalStaticToken(t *testing.T) {
+	t.Setenv("YGGDRASIL_AUTH_ADMIN_TOKEN", "s3cret-admin")
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/auth/passwords/setup-tokens", nil)
+	if _, err := resolveAuthAdminPrincipal(r, nil); err == nil {
+		t.Fatal("a request without credentials must not be authorized")
+	}
+	r.Header.Set("X-Yggdrasil-Auth-Admin-Token", "s3cret-admin")
+	p, err := resolveAuthAdminPrincipal(r, nil)
+	if err != nil || p.CollaboratorID != uuid.Nil {
+		t.Fatalf("static token: principal=%+v err=%v", p, err)
 	}
 }
