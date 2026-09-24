@@ -153,8 +153,10 @@ func (s *Server) resetMFAAndIssueSetupLink(r *http.Request, collabID uuid.UUID, 
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	// Lock order matches handleSetupCommit (setup token rows first, then the
-	// auth_identities row), so the two cannot deadlock on the same account.
+	// Lock order: the per-collaborator issuance lock, then the setup token
+	// rows, then the auth_identities row. handleSetupCommit takes token row
+	// then auth_identities and never the issuance lock, so no cycle forms,
+	// and two concurrent recoveries run one after the other.
 	issued, err := repository.IssueCredentialTokenTx(ctx, tx, in)
 	if err != nil {
 		return model.CredentialToken{}, err
@@ -431,7 +433,7 @@ func (s *Server) handleSetupPreflight(w http.ResponseWriter, r *http.Request) {
 			httperr.WithFieldError("token", "required", "token is required"))
 		return
 	}
-	tokenID, collabID, expiresAt, rej := lookupSetupToken(r.Context(), s.db, raw, false)
+	_, collabID, expiresAt, rej := lookupSetupToken(r.Context(), s.db, raw, false)
 	if rej != nil {
 		writeSetupTokenRejection(w, r.URL.Path, rej)
 		return
@@ -451,10 +453,22 @@ func (s *Server) handleSetupPreflight(w http.ResponseWriter, r *http.Request) {
 		// A full-recovery link arrives with no password and no factor, like a
 		// brand-new account; `recovery` lets the page greet a returning person
 		// as such instead of as a first access.
+		//
+		// The flag follows the account, not only the presented token: a plain
+		// access link issued after a full recovery replaces the recovery link
+		// but the person is still returning. Only a full recovery clears an
+		// existing password, so "no password now + a recovery on record" never
+		// matches a real first access.
 		var recovery bool
-		_ = s.db.QueryRowContext(r.Context(),
-			`SELECT COALESCE((metadata->>'mfa_reset')::boolean, false) FROM auth_credential_tokens WHERE id = $1`,
-			tokenID).Scan(&recovery)
+		if !st.HasPassword {
+			_ = s.db.QueryRowContext(r.Context(), `
+				SELECT EXISTS (
+					SELECT 1 FROM auth_credential_tokens
+					WHERE collaborator_id = $1
+					  AND purpose = 'setup'
+					  AND COALESCE((metadata->>'mfa_reset')::boolean, false)
+				)`, collabID).Scan(&recovery)
+		}
 		resp["account"] = map[string]any{
 			"has_password": st.HasPassword,
 			"mfa_enrolled": st.MFAEnrolled,

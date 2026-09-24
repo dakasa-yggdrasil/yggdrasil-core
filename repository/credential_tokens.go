@@ -54,6 +54,16 @@ func IssueCredentialToken(ctx context.Context, db *sql.DB, in IssueCredentialTok
 // change (the admin MFA reset issues its setup link in the same commit as
 // the factor wipe, so neither can exist without the other).
 func IssueCredentialTokenTx(ctx context.Context, tx *sql.Tx, in IssueCredentialTokenInput) (model.CredentialToken, error) {
+	// Serialize issuers per collaborator. Under READ COMMITTED the invalidate
+	// below cannot see a token a concurrent issuer just inserted, so two
+	// issuances (two admins, a double submit) would both stay live. The lock
+	// is taken before any row lock and the setup/reset commits never take it,
+	// so it adds no lock cycle. Released at commit or rollback.
+	if _, err := tx.ExecContext(ctx,
+		`SELECT pg_advisory_xact_lock(hashtextextended('auth_credential_tokens:' || $1::text, 0))`,
+		in.CollaboratorID.String()); err != nil {
+		return model.CredentialToken{}, fmt.Errorf("lock credential issuance: %w", err)
+	}
 	if in.InvalidatePrior {
 		if _, err := tx.ExecContext(ctx, `
             UPDATE auth_credential_tokens
