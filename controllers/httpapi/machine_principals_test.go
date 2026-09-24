@@ -4,9 +4,21 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"os"
 	"testing"
 	"time"
 )
+
+// unsetEnvForTest removes key for the duration of the test and restores its
+// previous state afterwards. t.Setenv(key, "") is not the same thing: a set
+// but blank event publisher inventory is a refused inventory (ADR-0021).
+func unsetEnvForTest(t *testing.T, key string) {
+	t.Helper()
+	t.Setenv(key, "")
+	if err := os.Unsetenv(key); err != nil {
+		t.Fatal(err)
+	}
+}
 
 func testTokenSHA256(token string) string {
 	digest := sha256.Sum256([]byte(token))

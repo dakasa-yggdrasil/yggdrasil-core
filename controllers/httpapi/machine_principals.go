@@ -198,6 +198,13 @@ func workflowMachinePrincipalsFromEnv() ([]workflowMachinePrincipal, error) {
 }
 
 func eventPublisherPrincipalsFromEnv() ([]eventPublisherPrincipal, error) {
+	// A variable that is present but blank is a refused inventory, never "no
+	// principals": with no legacy bridge that would open the anonymous
+	// development posture wherever YGGDRASIL_ENV is unset. Only a variable
+	// that is truly unset means the event surface is unconfigured.
+	if raw, present := os.LookupEnv(eventPublisherPrincipalsEnv); present && strings.TrimSpace(raw) == "" {
+		return nil, fmt.Errorf("%s is set but blank; unset it or configure at least one principal", eventPublisherPrincipalsEnv)
+	}
 	rawConfigured := strings.TrimSpace(os.Getenv(eventPublisherPrincipalsEnv)) != ""
 	var configs []eventPublisherPrincipalConfig
 	if err := decodeMachinePrincipalConfig(eventPublisherPrincipalsEnv, &configs); err != nil {
@@ -483,7 +490,8 @@ func eventPublisherPrincipalDeclares(principal *eventPublisherPrincipal, provide
 const maxLogicalInstanceRefLength = 512
 
 // parseLogicalInstanceRef accepts exactly "<namespace>/<name>": one "/", both
-// parts non-empty, already lowercase, no whitespace, no wildcard syntax. It is
+// parts non-empty, already lowercase, no whitespace, no control characters,
+// no wildcard syntax. It is
 // strict rather than normalizing so the spelling in a grant is exactly the
 // identity it matches. The same parser validates grants at load and literal
 // wire values at request time.
@@ -499,6 +507,11 @@ func parseLogicalInstanceRef(value string) (string, string, error) {
 	}
 	if strings.IndexFunc(value, unicode.IsSpace) >= 0 {
 		return "", "", errors.New("must not contain whitespace")
+	}
+	// Control characters (NUL included) never reach PostgreSQL: the wire
+	// value is refused here as not resolvable, which answers 403.
+	if strings.IndexFunc(value, unicode.IsControl) >= 0 {
+		return "", "", errors.New("must not contain control characters")
 	}
 	if containsWildcard(value) {
 		return "", "", errors.New("must be exact and cannot contain wildcards")

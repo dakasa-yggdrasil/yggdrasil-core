@@ -7,6 +7,8 @@ import (
 	"errors"
 	"net/http"
 	"net/http/httptest"
+	"os"
+	"strconv"
 	"strings"
 	"testing"
 
@@ -14,6 +16,8 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
 // Logical event publisher grants (ADR-0021): a grant whose instance_id is
@@ -149,6 +153,8 @@ func TestEventPublisherConfigRejectsMalformedLogicalGrants(t *testing.T) {
 		"dakasa/ kubernetes-dakasa-production",
 		"dakasa /kubernetes-dakasa-production",
 		"dakasa/kubernetes-*",
+		"dakasa/kubernetes-dakasa-production\x00",
+		"dakasa/kube\x07rnetes",
 	} {
 		t.Run(instanceID, func(t *testing.T) {
 			// One malformed grant refuses the whole inventory, next to a
@@ -332,7 +338,12 @@ func TestLogicalResolutionFailureAnswers503WithoutDetail(t *testing.T) {
 	server, _ := logicalServer(t, func(eventInstanceRef) (repository.IntegrationInstanceIdentity, error) {
 		return repository.IntegrationInstanceIdentity{}, errors.New("pq: connection refused to 10.0.0.5")
 	})
+	core, logs := observer.New(zapcore.DebugLevel)
+	server.logger = zap.New(core)
 	recorder := publishWith(server, mutationBody(logicalTestActiveID.String(), nil))
+	if logs.FilterLevelExact(zapcore.ErrorLevel).Len() != 1 {
+		t.Fatalf("a database failure must be logged once at error level, got %v", logs.All())
+	}
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
@@ -362,6 +373,9 @@ func unresolvableWireValues() []string {
 		"Dakasa/kubernetes-dakasa-production",
 		"dakasa/a/b",
 		"dakasa/",
+		"dakasa/kubernetes-dakasa-production\x00",
+		"dakasa/kubernetes\x1b-dakasa-production",
+		"\x00dakasa/kubernetes-dakasa-production",
 	}
 }
 
@@ -467,7 +481,7 @@ func TestEventPublisherSurfaceIsLoadedOnceByNew(t *testing.T) {
 		t.Fatal(err)
 	}
 	// Removing the inventory after start must change nothing until a restart.
-	t.Setenv(eventPublisherPrincipalsEnv, "")
+	unsetEnvForTest(t, eventPublisherPrincipalsEnv)
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/events", strings.NewReader(
 		`{"type":"deployment.completed","aggregate_type":"deployment","aggregate_id":"one","payload":{}}`))
 	req.Header.Set("Authorization", "Bearer "+logicalTestToken)
@@ -535,5 +549,204 @@ func TestServerNotBuiltByNewAuthenticatesNoEventPublisher(t *testing.T) {
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/events", nil)
 	if err := (&Server{}).authorizeEventPublishRequest(req); err == nil {
 		t.Fatal("a Server without a loaded event surface fell into the anonymous posture")
+	}
+}
+
+func TestControlCharactersInALogicalWireValueAnswer403WithoutALookup(t *testing.T) {
+	setLogicalEventPrincipal(t, logicalGrant(logicalTestInstance))
+	server, calls := logicalServer(t, func(eventInstanceRef) (repository.IntegrationInstanceIdentity, error) {
+		return activeKubernetesInstance(), nil
+	})
+	for _, wire := range []string{logicalTestInstance + "\x00", "dakasa/kubernetes\x00-dakasa-production"} {
+		recorder := publishWith(server, mutationBody(wire, nil))
+		if recorder.Code != http.StatusForbidden {
+			t.Fatalf("%q: status=%d, want 403; body=%s", wire, recorder.Code, recorder.Body.String())
+		}
+	}
+	if *calls != 0 {
+		t.Fatalf("instance lookups=%d, want 0: a control character reached the lookup", *calls)
+	}
+}
+
+func TestCancelledRequestDuringTheLookupIsNotLoggedAsAnOutage(t *testing.T) {
+	setLogicalEventPrincipal(t, logicalGrant(logicalTestInstance))
+	server, calls := logicalServer(t, func(eventInstanceRef) (repository.IntegrationInstanceIdentity, error) {
+		return repository.IntegrationInstanceIdentity{}, context.Canceled
+	})
+	core, logs := observer.New(zapcore.DebugLevel)
+	server.logger = zap.New(core)
+	actor := authenticatedLogicalActor(t, server)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	cancel()
+	_, err := server.authorizeEventPublishPayload(ctx, eventPublishRequest{
+		EventType: logicalTestEventType, Provider: "kubernetes", InstanceID: logicalTestActiveID.String(),
+	}, actor)
+	if !errors.Is(err, errEventPublishAuthorizationUnavailable) || *calls != 1 {
+		t.Fatalf("err=%v calls=%d", err, *calls)
+	}
+	if logs.FilterLevelExact(zapcore.ErrorLevel).Len() != 0 {
+		t.Fatalf("a cancelled request was logged as an outage: %v", logs.All())
+	}
+	if logs.FilterLevelExact(zapcore.DebugLevel).Len() != 1 {
+		t.Fatalf("a cancelled request must leave one debug line, got %v", logs.All())
+	}
+}
+
+func TestReservedPublisherMetadataIgnoresCaseAndWhitespace(t *testing.T) {
+	for _, key := range []string{
+		"yggdrasil.io/publisher_instance_name",
+		"Yggdrasil.IO/Publisher_Instance_Name",
+		" yggdrasil.io/publisher_grant_form",
+		"YGGDRASIL.IO/PUBLISHER_MACHINE_PRINCIPAL_ID\t",
+		"yggdrasil.io/publisher_future_key",
+	} {
+		if !isReservedPublisherMetadataKey(key) {
+			t.Fatalf("%q was not treated as reserved", key)
+		}
+	}
+	for _, key := range []string{"trace", "yggdrasil.io/publisher", "yggdrasil.io/other_key", "x-yggdrasil.io/publisher_grant_form"} {
+		if isReservedPublisherMetadataKey(key) {
+			t.Fatalf("%q was treated as reserved", key)
+		}
+	}
+
+	identity := activeKubernetesInstance()
+	bound := bindEventPublishActor(eventPublishRequest{Metadata: map[string]any{
+		"Yggdrasil.IO/Publisher_Instance_Name":         "spoofed",
+		" yggdrasil.io/publisher_grant_form":           "exact",
+		"YGGDRASIL.IO/PUBLISHER_MACHINE_PRINCIPAL_ID ": "spoofed",
+		"trace": "kept",
+	}}, eventPublishActor{
+		MachinePrincipal: &eventPublisherPrincipal{PrincipalID: "integration-kubernetes-adapter"},
+		GrantForm:        eventGrantFormLogical,
+		Instance:         &identity,
+	})
+	for key, value := range bound.Metadata {
+		if key == "trace" {
+			continue
+		}
+		if key != strings.ToLower(strings.TrimSpace(key)) {
+			t.Fatalf("a look-alike client key survived next to the stamped ones: %q=%v", key, value)
+		}
+	}
+	if bound.Metadata[eventPublisherGrantFormMetadataKey] != eventGrantFormLogical || len(bound.Metadata) != 7 {
+		t.Fatalf("metadata=%v", bound.Metadata)
+	}
+}
+
+func TestBlankEventInventoryIsRefusedWhileAnUnsetOneKeepsTheDevPosture(t *testing.T) {
+	for _, blank := range []string{"", " ", "\n\t "} {
+		t.Run("blank "+strconv.Quote(blank), func(t *testing.T) {
+			setEventPublishAuthEnvironment(t, "", "")
+			t.Setenv("YGGDRASIL_ENV", "")
+			t.Setenv(eventPublisherPrincipalsEnv, blank)
+			if _, err := eventPublisherPrincipalsFromEnv(); err == nil || !strings.Contains(err.Error(), eventPublisherPrincipalsEnv) {
+				t.Fatalf("a set but blank inventory was not refused: %v", err)
+			}
+			server := eventPublishServerFromEnv(t)
+			if server.eventPublishAuth.err == nil {
+				t.Fatal("the loaded surface kept a blank inventory")
+			}
+			if err := server.authorizeEventPublishRequest(httptest.NewRequest(http.MethodPost, "/api/v1/events", nil)); err == nil {
+				t.Fatal("a blank inventory opened the anonymous posture")
+			}
+		})
+	}
+
+	t.Run("unset", func(t *testing.T) {
+		setEventPublishAuthEnvironment(t, "", "")
+		t.Setenv("YGGDRASIL_ENV", "")
+		if _, present := os.LookupEnv(eventPublisherPrincipalsEnv); present {
+			t.Fatal("the helper did not unset the inventory")
+		}
+		if err := eventPublishServerFromEnv(t).authorizeEventPublishRequest(httptest.NewRequest(http.MethodPost, "/api/v1/events", nil)); err != nil {
+			t.Fatalf("an unset inventory lost the development posture: %v", err)
+		}
+	})
+}
+
+func TestBlankEventInventoryFailsEveryPublishThroughTheGate(t *testing.T) {
+	clearMachineCredentialEnv(t)
+	t.Setenv(eventPublisherPrincipalsEnv, "  ")
+	db, _, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	handler, err := New("yggdrasil-core-test", db, nil, zap.NewNop())
+	if err != nil {
+		t.Fatalf("a blank event inventory must not stop boot when YGGDRASIL_ENV is unset: %v", err)
+	}
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, httptest.NewRequest(http.MethodPost, "/api/v1/events", strings.NewReader(
+		`{"type":"deployment.completed","aggregate_type":"deployment","aggregate_id":"one","payload":{}}`)))
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("anonymous publish with a blank inventory: status=%d, want 401; body=%s", recorder.Code, recorder.Body.String())
+	}
+}
+
+func TestRefusedLegacyBridgeSettingsKeepEventPrincipalsWorking(t *testing.T) {
+	clearMachineCredentialEnv(t)
+	t.Setenv(eventPublisherPrincipalsEnv, testEventPublisherPrincipalsJSON(t, "adapter-event-token", "adapter-aws"))
+	t.Setenv(legacyEventPublishTokenEnv, "legacy-event-token")
+	t.Setenv(legacyEventPublishEnabledEnv, "true")
+	t.Setenv(legacyEventPublishExpiryEnv, "next tuesday")
+
+	server := eventPublishServerFromEnv(t)
+	if server.eventPublishAuth.err != nil || server.eventPublishAuth.legacyErr == nil {
+		t.Fatalf("err=%v legacyErr=%v, want only the bridge refused", server.eventPublishAuth.err, server.eventPublishAuth.legacyErr)
+	}
+	if err := server.authorizeEventPublishRequest(publishRequest("adapter-event-token")); err != nil {
+		t.Fatalf("a refused bridge setting locked out the hashed principal: %v", err)
+	}
+	if err := server.authorizeEventPublishRequest(publishRequest("legacy-event-token")); err == nil {
+		t.Fatal("the bridge with refused settings still authenticated")
+	}
+
+	// Through New and the full middleware chain: the principal still
+	// authenticates (then its generic event is refused with 403), and the
+	// bridge bearer falls through to the session path, which refuses it.
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	handler, err := New("yggdrasil-core-test", db, nil, zap.NewNop())
+	if err != nil {
+		t.Fatalf("refused bridge settings must not stop boot when YGGDRASIL_ENV is unset: %v", err)
+	}
+	generic := `{"type":"deployment.completed","aggregate_type":"deployment","aggregate_id":"one","payload":{}}`
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/events", strings.NewReader(generic))
+	req.Header.Set("Authorization", "Bearer adapter-event-token")
+	recorder := httptest.NewRecorder()
+	handler.ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("principal: status=%d, want 403 (authenticated, generic refused); body=%s", recorder.Code, recorder.Body.String())
+	}
+	mock.ExpectQuery(`FROM public\.auth_sessions`).WillReturnError(sql.ErrNoRows)
+	req = httptest.NewRequest(http.MethodPost, "/api/v1/events", strings.NewReader(mutationBody("aws-primary", nil)))
+	req.Header.Set("Authorization", "Bearer legacy-event-token")
+	recorder = httptest.NewRecorder()
+	handler.ServeHTTP(recorder, req)
+	if recorder.Code != http.StatusUnauthorized {
+		t.Fatalf("bridge: status=%d, want 401; body=%s", recorder.Code, recorder.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestRefusedLegacyBridgeSettingsRefuseTheAnonymousPosture(t *testing.T) {
+	setEventPublishAuthEnvironment(t, "", "")
+	t.Setenv("YGGDRASIL_ENV", "")
+	// A token without the explicit opt-in is refused bridge settings.
+	t.Setenv(legacyEventPublishTokenEnv, "legacy-event-token")
+	server := eventPublishServerFromEnv(t)
+	if server.eventPublishAuth.err != nil || server.eventPublishAuth.legacyErr == nil {
+		t.Fatalf("err=%v legacyErr=%v", server.eventPublishAuth.err, server.eventPublishAuth.legacyErr)
+	}
+	if err := server.authorizeEventPublishRequest(httptest.NewRequest(http.MethodPost, "/api/v1/events", nil)); err == nil {
+		t.Fatal("refused bridge settings opened the anonymous posture")
 	}
 }

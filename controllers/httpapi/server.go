@@ -177,8 +177,12 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// posture instead: Core serves, and every event publish answers 401.
 	eventPublishAuth := loadEventPublishAuthConfig()
 	if eventPublishAuth.err != nil {
-		logger.Error("event publisher credential surface refused; every POST /api/v1/events fails closed until Core restarts with a valid inventory",
+		logger.Error("event publisher inventory refused; every POST /api/v1/events answers 401 until Core restarts with a valid inventory",
 			zap.Error(eventPublishAuth.err))
+	}
+	if eventPublishAuth.legacyErr != nil {
+		logger.Error("legacy event publish bridge settings refused; the bridge and anonymous event publishing are off, event principals keep working",
+			zap.Error(eventPublishAuth.legacyErr))
 	}
 
 	server := &Server{

@@ -30,7 +30,7 @@ func setEventPublishAuthEnvironment(t *testing.T, eventToken, workflowToken stri
 	} else {
 		setTestLegacyEventPublishCredential(t, eventToken)
 	}
-	t.Setenv(eventPublisherPrincipalsEnv, "")
+	unsetEnvForTest(t, eventPublisherPrincipalsEnv)
 	t.Setenv(workflowMachinePrincipalsEnv, "")
 	t.Setenv(legacyScopedWorkflowTokensEnv, "")
 	if workflowToken == "" {

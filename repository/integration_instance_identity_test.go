@@ -2,6 +2,7 @@ package repository
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"strings"
 	"testing"
@@ -9,6 +10,8 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/google/uuid"
 )
+
+var instanceIdentityColumns = []string{"id", "namespace", "name", "version", "type_ref", "candidates"}
 
 func newIdentityMock(t *testing.T) (sqlmock.Sqlmock, func() (IntegrationInstanceIdentity, error), uuid.UUID) {
 	t.Helper()
@@ -23,18 +26,33 @@ func newIdentityMock(t *testing.T) (sqlmock.Sqlmock, func() (IntegrationInstance
 	}, wire
 }
 
-func instanceRows(activeID uuid.UUID, typeRef string) *sqlmock.Rows {
-	return sqlmock.NewRows([]string{"id", "namespace", "name", "version", "type_ref"}).
-		AddRow(activeID, "dakasa", "kubernetes-dakasa-production", 51, []byte(typeRef))
+func typeCandidates(t *testing.T, candidates ...integrationTypeCandidate) []byte {
+	t.Helper()
+	if candidates == nil {
+		candidates = []integrationTypeCandidate{}
+	}
+	raw, err := json.Marshal(candidates)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return raw
+}
+
+func kubernetesType(id uuid.UUID, namespace string, version int, provider string) integrationTypeCandidate {
+	return integrationTypeCandidate{ID: id, Namespace: namespace, Name: "kubernetes", Version: version, Provider: provider}
+}
+
+func instanceRows(activeID uuid.UUID, typeRef string, candidates []byte) *sqlmock.Rows {
+	return sqlmock.NewRows(instanceIdentityColumns).
+		AddRow(activeID, "dakasa", "kubernetes-dakasa-production", 51, []byte(typeRef), candidates)
 }
 
 func TestResolveIntegrationInstanceByManifestIDReturnsTheActiveVersionAndTypeProvider(t *testing.T) {
 	mock, resolve, wire := newIdentityMock(t)
 	activeID := uuid.New()
 	mock.ExpectQuery(resolveIntegrationInstanceByManifestIDQuery).WithArgs(wire).
-		WillReturnRows(instanceRows(activeID, `{"namespace":"global","name":"kubernetes"}`))
-	mock.ExpectQuery(resolveIntegrationTypeProviderByNameQuery).WithArgs("global", "kubernetes").
-		WillReturnRows(sqlmock.NewRows([]string{"provider"}).AddRow("kubernetes"))
+		WillReturnRows(instanceRows(activeID, `{"namespace":"global","name":"kubernetes"}`,
+			typeCandidates(t, kubernetesType(uuid.New(), "global", 3, "kubernetes"))))
 
 	identity, err := resolve()
 	if err != nil {
@@ -52,40 +70,36 @@ func TestResolveIntegrationInstanceByManifestIDReturnsTheActiveVersionAndTypePro
 func TestResolveIntegrationInstanceTypeRefFormsMirrorExecution(t *testing.T) {
 	typeID := uuid.New()
 	for _, test := range []struct {
-		name    string
-		typeRef string
-		expect  func(sqlmock.Sqlmock)
+		name       string
+		typeRef    string
+		candidates []integrationTypeCandidate
 	}{
 		{
 			name:    "namespace defaults to global and is normalized",
 			typeRef: `{"name":" Kubernetes "}`,
-			expect: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(resolveIntegrationTypeProviderByNameQuery).WithArgs("global", "kubernetes").
-					WillReturnRows(sqlmock.NewRows([]string{"provider"}).AddRow("kubernetes"))
+			candidates: []integrationTypeCandidate{
+				kubernetesType(uuid.New(), "platform", 1, "helm"),
+				kubernetesType(uuid.New(), "global", 4, "kubernetes"),
 			},
 		},
 		{
-			name:    "pinned version",
-			typeRef: `{"namespace":"global","name":"kubernetes","version":7}`,
-			expect: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(resolveIntegrationTypeProviderByNameVersionQuery).WithArgs("global", "kubernetes", 7).
-					WillReturnRows(sqlmock.NewRows([]string{"provider"}).AddRow("kubernetes"))
-			},
+			name:       "pinned version that is the active one",
+			typeRef:    `{"namespace":"global","name":"kubernetes","version":7}`,
+			candidates: []integrationTypeCandidate{kubernetesType(uuid.New(), "global", 7, "kubernetes")},
 		},
 		{
-			name:    "manifest id",
-			typeRef: `{"manifest_id":"` + typeID.String() + `"}`,
-			expect: func(mock sqlmock.Sqlmock) {
-				mock.ExpectQuery(resolveIntegrationTypeProviderByIDQuery).WithArgs(typeID).
-					WillReturnRows(sqlmock.NewRows([]string{"provider"}).AddRow("kubernetes"))
+			name:    "manifest id wins over a name",
+			typeRef: `{"manifest_id":"` + typeID.String() + `","name":"other"}`,
+			candidates: []integrationTypeCandidate{
+				{ID: uuid.New(), Namespace: "global", Name: "other", Version: 1, Provider: "helm"},
+				kubernetesType(typeID, "global", 2, "kubernetes"),
 			},
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			mock, resolve, wire := newIdentityMock(t)
 			mock.ExpectQuery(resolveIntegrationInstanceByManifestIDQuery).WithArgs(wire).
-				WillReturnRows(instanceRows(uuid.New(), test.typeRef))
-			test.expect(mock)
+				WillReturnRows(instanceRows(uuid.New(), test.typeRef, typeCandidates(t, test.candidates...)))
 			if identity, err := resolve(); err != nil || identity.TypeProvider != "kubernetes" {
 				t.Fatalf("identity=%+v err=%v", identity, err)
 			}
@@ -97,54 +111,68 @@ func TestResolveIntegrationInstanceTypeRefFormsMirrorExecution(t *testing.T) {
 }
 
 func TestResolveIntegrationInstanceNotResolvableCases(t *testing.T) {
+	typeID := uuid.New()
 	for _, test := range []struct {
-		name   string
-		expect func(sqlmock.Sqlmock, uuid.UUID)
+		name string
+		rows func(t *testing.T) *sqlmock.Rows
 	}{
 		{
 			// No row: absent, purged, not an integration_instance, or no active version.
 			name: "no active instance",
-			expect: func(mock sqlmock.Sqlmock, wire uuid.UUID) {
-				mock.ExpectQuery(resolveIntegrationInstanceByManifestIDQuery).WithArgs(wire).
-					WillReturnRows(sqlmock.NewRows([]string{"id", "namespace", "name", "version", "type_ref"}))
-			},
+			rows: func(*testing.T) *sqlmock.Rows { return sqlmock.NewRows(instanceIdentityColumns) },
 		},
 		{
 			name: "no active integration_type",
-			expect: func(mock sqlmock.Sqlmock, wire uuid.UUID) {
-				mock.ExpectQuery(resolveIntegrationInstanceByManifestIDQuery).WithArgs(wire).
-					WillReturnRows(instanceRows(uuid.New(), `{"namespace":"global","name":"kubernetes"}`))
-				mock.ExpectQuery(resolveIntegrationTypeProviderByNameQuery).WithArgs("global", "kubernetes").
-					WillReturnRows(sqlmock.NewRows([]string{"provider"}))
+			rows: func(t *testing.T) *sqlmock.Rows {
+				return instanceRows(uuid.New(), `{"namespace":"global","name":"kubernetes"}`, typeCandidates(t))
+			},
+		},
+		{
+			name: "type only in another namespace",
+			rows: func(t *testing.T) *sqlmock.Rows {
+				return instanceRows(uuid.New(), `{"name":"kubernetes"}`, typeCandidates(t, kubernetesType(uuid.New(), "platform", 1, "kubernetes")))
+			},
+		},
+		{
+			// Only the active type version is a candidate, so a pin to any
+			// other version cannot match.
+			name: "pinned version is not the active one",
+			rows: func(t *testing.T) *sqlmock.Rows {
+				return instanceRows(uuid.New(), `{"namespace":"global","name":"kubernetes","version":1}`, typeCandidates(t, kubernetesType(uuid.New(), "global", 2, "kubernetes")))
+			},
+		},
+		{
+			name: "manifest id of no active type",
+			rows: func(t *testing.T) *sqlmock.Rows {
+				return instanceRows(uuid.New(), `{"manifest_id":"`+typeID.String()+`"}`, typeCandidates(t, kubernetesType(uuid.New(), "global", 2, "kubernetes")))
 			},
 		},
 		{
 			name: "type without provider",
-			expect: func(mock sqlmock.Sqlmock, wire uuid.UUID) {
-				mock.ExpectQuery(resolveIntegrationInstanceByManifestIDQuery).WithArgs(wire).
-					WillReturnRows(instanceRows(uuid.New(), `{"namespace":"global","name":"kubernetes"}`))
-				mock.ExpectQuery(resolveIntegrationTypeProviderByNameQuery).WithArgs("global", "kubernetes").
-					WillReturnRows(sqlmock.NewRows([]string{"provider"}).AddRow(""))
+			rows: func(t *testing.T) *sqlmock.Rows {
+				return instanceRows(uuid.New(), `{"namespace":"global","name":"kubernetes"}`, typeCandidates(t, kubernetesType(uuid.New(), "global", 2, " ")))
 			},
 		},
 		{
-			name: "missing type_ref never queries a type",
-			expect: func(mock sqlmock.Sqlmock, wire uuid.UUID) {
-				mock.ExpectQuery(resolveIntegrationInstanceByManifestIDQuery).WithArgs(wire).
-					WillReturnRows(instanceRows(uuid.New(), `null`))
+			name: "missing type_ref",
+			rows: func(t *testing.T) *sqlmock.Rows {
+				return sqlmock.NewRows(instanceIdentityColumns).AddRow(uuid.New(), "dakasa", "kubernetes-dakasa-production", 51, nil, typeCandidates(t))
 			},
 		},
 		{
-			name: "malformed type_ref manifest_id never queries a type",
-			expect: func(mock sqlmock.Sqlmock, wire uuid.UUID) {
-				mock.ExpectQuery(resolveIntegrationInstanceByManifestIDQuery).WithArgs(wire).
-					WillReturnRows(instanceRows(uuid.New(), `{"manifest_id":"not-a-uuid"}`))
+			name: "null type_ref",
+			rows: func(t *testing.T) *sqlmock.Rows { return instanceRows(uuid.New(), `null`, typeCandidates(t)) },
+		},
+		{
+			name: "malformed type_ref manifest_id",
+			rows: func(t *testing.T) *sqlmock.Rows {
+				return instanceRows(uuid.New(), `{"manifest_id":"not-a-uuid"}`, typeCandidates(t, kubernetesType(uuid.New(), "global", 2, "kubernetes")))
 			},
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
 			mock, resolve, wire := newIdentityMock(t)
-			test.expect(mock, wire)
+			mock.ExpectQuery(resolveIntegrationInstanceByManifestIDQuery).WithArgs(wire).WillReturnRows(test.rows(t))
 			if _, err := resolve(); !errors.Is(err, ErrIntegrationInstanceNotResolvable) {
 				t.Fatalf("err=%v, want ErrIntegrationInstanceNotResolvable", err)
 			}
@@ -172,11 +200,10 @@ func TestResolveIntegrationInstanceByNameUsesTheActiveVersion(t *testing.T) {
 	}
 	defer db.Close()
 	mock.ExpectQuery(resolveIntegrationInstanceByNameQuery).WithArgs("dakasa", "kubernetes-dakasa-production").
-		WillReturnRows(instanceRows(uuid.New(), `{"namespace":"global","name":"kubernetes"}`))
-	mock.ExpectQuery(resolveIntegrationTypeProviderByNameQuery).WithArgs("global", "kubernetes").
-		WillReturnRows(sqlmock.NewRows([]string{"provider"}).AddRow("kubernetes"))
-	if _, err := ResolveIntegrationInstanceByName(context.Background(), db, "dakasa", "kubernetes-dakasa-production"); err != nil {
-		t.Fatal(err)
+		WillReturnRows(instanceRows(uuid.New(), `{"namespace":"global","name":"kubernetes"}`,
+			typeCandidates(t, kubernetesType(uuid.New(), "global", 3, "kubernetes"))))
+	if identity, err := ResolveIntegrationInstanceByName(context.Background(), db, "dakasa", "kubernetes-dakasa-production"); err != nil || identity.TypeProvider != "kubernetes" {
+		t.Fatalf("identity=%+v err=%v", identity, err)
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
@@ -190,7 +217,7 @@ func TestResolveIntegrationInstanceByNameNotResolvable(t *testing.T) {
 	}
 	defer db.Close()
 	mock.ExpectQuery(resolveIntegrationInstanceByNameQuery).WithArgs("dakasa", "kubernetes-dakasa-production").
-		WillReturnRows(sqlmock.NewRows([]string{"id", "namespace", "name", "version", "type_ref"}))
+		WillReturnRows(sqlmock.NewRows(instanceIdentityColumns))
 	if _, err := ResolveIntegrationInstanceByName(context.Background(), db, "dakasa", "kubernetes-dakasa-production"); !errors.Is(err, ErrIntegrationInstanceNotResolvable) {
 		t.Fatalf("err=%v, want ErrIntegrationInstanceNotResolvable", err)
 	}
@@ -200,45 +227,44 @@ func TestResolveIntegrationInstanceByNameNotResolvable(t *testing.T) {
 }
 
 // sqlmock matches the query text but cannot execute it, so the predicates
-// that carry the ADR-0021 semantics are pinned here as text. A real
-// PostgreSQL run is still the only proof of the self-join behavior.
+// that carry the ADR-0021 semantics are pinned here as text. The DB_URL-gated
+// integration_instance_identity_pg_test.go runs the same statements against
+// PostgreSQL with every production migration applied.
 func TestIntegrationInstanceResolutionQueriesPinTheirPredicates(t *testing.T) {
+	typeCandidatePredicates := []string{
+		"LEFT JOIN LATERAL",
+		"ty.kind = 'integration_type'",
+		"AND ty.active = TRUE",
+		"ty.id::text = lower(btrim(a.spec -> 'type_ref' ->> 'manifest_id'))",
+		"OR ty.name = lower(btrim(a.spec -> 'type_ref' ->> 'name'))",
+		"COALESCE(t.candidates, '[]'::jsonb)",
+	}
 	for _, test := range []struct {
 		name  string
 		query string
 		want  []string
 	}{
 		{
-			name:  "any version id resolves to the active version of the same logical instance",
+			name:  "any version id resolves to the active version of the same logical instance, type included",
 			query: resolveIntegrationInstanceByManifestIDQuery,
-			want: []string{
+			want: append([]string{
 				"WHERE v.id = $1",
 				"AND v.kind = 'integration_instance'",
 				"ON a.kind = v.kind",
 				"AND a.namespace = v.namespace",
 				"AND a.name = v.name",
 				"AND a.active = TRUE",
-			},
+			}, typeCandidatePredicates...),
 		},
 		{
-			name:  "a literal namespace/name resolves only to its active version",
+			name:  "a literal namespace/name resolves only to its active version, type included",
 			query: resolveIntegrationInstanceByNameQuery,
-			want:  []string{"a.kind = 'integration_instance'", "AND a.namespace = $1", "AND a.name = $2", "AND a.active = TRUE"},
-		},
-		{
-			name:  "type by id must be the active integration_type",
-			query: resolveIntegrationTypeProviderByIDQuery,
-			want:  []string{"WHERE id = $1", "AND kind = 'integration_type'", "AND active = TRUE"},
-		},
-		{
-			name:  "type by name must be the active integration_type",
-			query: resolveIntegrationTypeProviderByNameQuery,
-			want:  []string{"kind = 'integration_type'", "AND namespace = $1", "AND name = $2", "AND active = TRUE"},
-		},
-		{
-			name:  "type by pinned version must still be the active integration_type",
-			query: resolveIntegrationTypeProviderByNameVersionQuery,
-			want:  []string{"kind = 'integration_type'", "AND namespace = $1", "AND name = $2", "AND version = $3", "AND active = TRUE"},
+			want: append([]string{
+				"a.kind = 'integration_instance'",
+				"AND a.namespace = $1",
+				"AND a.name = $2",
+				"AND a.active = TRUE",
+			}, typeCandidatePredicates...),
 		},
 	} {
 		t.Run(test.name, func(t *testing.T) {
@@ -247,8 +273,14 @@ func TestIntegrationInstanceResolutionQueriesPinTheirPredicates(t *testing.T) {
 					t.Fatalf("query lost %q:\n%s", fragment, test.query)
 				}
 			}
-			if strings.Contains(strings.ToUpper(test.query), "INSERT") || strings.Contains(strings.ToUpper(test.query), "UPDATE") {
-				t.Fatalf("resolution must be read-only:\n%s", test.query)
+			upper := strings.ToUpper(test.query)
+			for _, write := range []string{"INSERT", "UPDATE", "DELETE"} {
+				if strings.Contains(upper, write) {
+					t.Fatalf("resolution must be read-only:\n%s", test.query)
+				}
+			}
+			if strings.Count(test.query, "SELECT") != 2 {
+				t.Fatalf("resolution must stay one statement with one type subquery:\n%s", test.query)
 			}
 		})
 	}

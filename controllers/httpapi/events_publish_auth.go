@@ -19,14 +19,21 @@ import (
 // this same copy and never read those variables again, so the inventory a
 // request sees is exactly the one this process loaded.
 //
-// A refused inventory does not stop boot when YGGDRASIL_ENV is unset (then
-// validateBootSecrets does not run): err is kept, New logs it at error level,
-// and every event request fails closed with 401. With YGGDRASIL_ENV=production
-// validateBootSecrets refuses the same inventory before New gets here.
+// A refused inventory (malformed, or set but blank) does not stop boot when
+// YGGDRASIL_ENV is unset (then validateBootSecrets does not run): err is kept,
+// New logs it at error level, and every event request fails closed with 401.
+// With YGGDRASIL_ENV=production validateBootSecrets refuses the same
+// inventory before New gets here.
+//
+// Refused legacy bridge settings are kept apart in legacyErr: they switch off
+// only the plaintext bridge and the anonymous development posture, while the
+// hashed principals keep authenticating, as they did before the load-once
+// change.
 type eventPublishAuthConfig struct {
 	principals []eventPublisherPrincipal
-	legacy     legacyEventPublishCredential
 	err        error
+	legacy     legacyEventPublishCredential
+	legacyErr  error
 }
 
 func loadEventPublishAuthConfig() *eventPublishAuthConfig {
@@ -34,11 +41,12 @@ func loadEventPublishAuthConfig() *eventPublishAuthConfig {
 	if err != nil {
 		return &eventPublishAuthConfig{err: err}
 	}
-	legacy, err := legacyEventPublishCredentialFromEnv(time.Now().UTC())
-	if err != nil {
-		return &eventPublishAuthConfig{err: err}
+	config := &eventPublishAuthConfig{principals: principals}
+	config.legacy, config.legacyErr = legacyEventPublishCredentialFromEnv(time.Now().UTC())
+	if config.legacyErr != nil {
+		config.legacy = legacyEventPublishCredential{}
 	}
-	return &eventPublishAuthConfig{principals: principals, legacy: legacy}
+	return config
 }
 
 // legacyActive re-evaluates the bridge expiry on every request; only the parse
@@ -109,6 +117,12 @@ func (s *Server) authenticateEventPublishRequest(r *http.Request) (eventPublishA
 		}
 	}
 
+	// Refused bridge settings switch off the bridge and the anonymous
+	// posture below, never the principals matched above.
+	if config.legacyErr != nil {
+		return eventPublishActor{}, errWorkflowRunUnauthorized
+	}
+
 	// Plaintext compatibility bridge. It is accepted only when operators opt in
 	// explicitly with a future expiry, remains route-limited here, and is not
 	// consulted by workflow, manifest, auth-admin, deploy, or generic ops gates.
@@ -168,9 +182,16 @@ func (s *Server) authorizeEventPublishPayload(ctx context.Context, req eventPubl
 	}
 	if err != nil {
 		if s.logger != nil {
-			s.logger.Error("event publisher instance resolution failed; answering 503",
-				zap.String("principal_id", principal.PrincipalID),
-				zap.Error(err))
+			if errors.Is(ctx.Err(), context.Canceled) {
+				// The caller went away during the lookup. That is not a
+				// database outage, so it is not reported as one.
+				s.logger.Debug("event publisher instance resolution abandoned: request cancelled",
+					zap.String("principal_id", principal.PrincipalID))
+			} else {
+				s.logger.Error("event publisher instance resolution failed; answering 503",
+					zap.String("principal_id", principal.PrincipalID),
+					zap.Error(err))
+			}
 		}
 		return actor, errEventPublishAuthorizationUnavailable
 	}
@@ -212,9 +233,10 @@ func parseEventInstanceRef(wire string) (eventInstanceRef, bool) {
 	return eventInstanceRef{ManifestID: id}, true
 }
 
-// resolveEventInstance resolves a wire instance_id to the logical instance.
-// An unparseable value never reaches the database. The lookup is bounded by
-// eventInstanceResolutionTimeout.
+// resolveEventInstance resolves a wire instance_id to the logical instance
+// and its active type provider in one statement, so "not found" and "found"
+// both cost one round trip. An unparseable value never reaches the database.
+// The lookup is bounded by eventInstanceResolutionTimeout.
 func (s *Server) resolveEventInstance(ctx context.Context, wire string) (repository.IntegrationInstanceIdentity, error) {
 	ref, ok := parseEventInstanceRef(wire)
 	if !ok {

@@ -57,7 +57,7 @@ func clearMachineCredentialEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("YGGDRASIL_ENV", "")
 	t.Setenv(workflowMachinePrincipalsEnv, "")
-	t.Setenv(eventPublisherPrincipalsEnv, "")
+	unsetEnvForTest(t, eventPublisherPrincipalsEnv)
 	t.Setenv(directoryMachinePrincipalsEnv, "")
 	t.Setenv(legacyScopedWorkflowTokensEnv, "")
 	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "")

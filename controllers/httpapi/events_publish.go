@@ -170,8 +170,10 @@ func bindEventPublishActor(req eventPublishRequest, actor eventPublishActor) eve
 	metadata := make(map[string]any, len(req.Metadata)+6)
 	for key, value := range req.Metadata {
 		// The whole yggdrasil.io/publisher_* namespace is server-authored,
-		// including keys this version does not stamp.
-		if strings.HasPrefix(key, eventPublisherReservedMetadataPrefix) {
+		// including keys this version does not stamp. The comparison ignores
+		// case and surrounding whitespace so a look-alike key cannot sit
+		// next to the stamped one.
+		if isReservedPublisherMetadataKey(key) {
 			continue
 		}
 		metadata[key] = value
@@ -200,6 +202,13 @@ func bindEventPublishActor(req eventPublishRequest, actor eventPublishActor) eve
 		req.Metadata = metadata
 	}
 	return req
+}
+
+// isReservedPublisherMetadataKey reports whether key falls in the
+// server-authored yggdrasil.io/publisher_* namespace, ignoring case and
+// surrounding whitespace.
+func isReservedPublisherMetadataKey(key string) bool {
+	return strings.HasPrefix(strings.ToLower(strings.TrimSpace(key)), eventPublisherReservedMetadataPrefix)
 }
 
 // buildEmitEventRequestFromPublish translates the wire shape into the
