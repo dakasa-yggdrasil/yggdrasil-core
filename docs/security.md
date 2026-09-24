@@ -72,8 +72,9 @@ Link rules:
   The setup preflight's `account.recovery` marks an account whose existing
   password or factor a full recovery wiped (the issuance records
   `replaced_credential`; the wipe itself leaves nothing to tell a returning
-  person from a new hire) while it has no password and no factor yet, even
-  when a later plain access link replaced the recovery one; the
+  person from a new hire) while it has no password yet, even when a later
+  plain access link replaced the recovery one or the person re-enrolled a
+  factor first; the
   reset preflight's `has_passkey` tells a passkey-only account (needs a
   plain access link) from one with no factor left.
 - Link issuance takes a per-collaborator transaction lock, so two

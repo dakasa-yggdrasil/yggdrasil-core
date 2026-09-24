@@ -171,7 +171,11 @@ func (s *Server) resetMFAAndIssueSetupLink(r *http.Request, collabID uuid.UUID, 
 	if err != nil {
 		return model.CredentialToken{}, err
 	}
-	if prior.HasPassword || prior.MFAEnrolled || prior.HasTOTP || prior.HasRecoveryCodes || prior.PasskeyCount > 0 {
+	// Same definition of "a credential existed" as handleSetupCommit: a
+	// password or an enrolled factor. A TOTP secret from an abandoned
+	// enrollment, leftover codes or a passkey without mfa_enrolled_at never
+	// opened a session, so wiping them does not make someone a returning user.
+	if prior.HasPassword || prior.MFAEnrolled {
 		if _, err := tx.ExecContext(ctx,
 			`UPDATE auth_credential_tokens SET metadata = metadata || '{"replaced_credential": true}'::jsonb WHERE id = $1`,
 			issued.ID); err != nil {
@@ -476,10 +480,11 @@ func (s *Server) handleSetupPreflight(w http.ResponseWriter, r *http.Request) {
 		// but the person is still returning. It keys on replaced_credential,
 		// which a full recovery stamps only when it wiped an existing password
 		// or factor, so a recovery clicked on a never-configured account keeps
-		// the first-access journey. Once anything is set again (password or
-		// factor) the account is no longer mid-recovery.
+		// the first-access journey. The person may re-enroll a factor before
+		// the password (enroll link, third-party login), so only a password
+		// ends the recovery; the console words the rest from mfa_enrolled.
 		var recovery bool
-		if !st.HasPassword && !st.MFAEnrolled {
+		if !st.HasPassword {
 			_ = s.db.QueryRowContext(r.Context(), `
 				SELECT EXISTS (
 					SELECT 1 FROM auth_credential_tokens
