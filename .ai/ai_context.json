@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-09-24T15:37:27-03:00",
+  "generated_at": "2026-09-24T21:22:47-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 625,
+    ".go": 630,
     ".json": 144,
     ".py": 1,
     ".sql": 52,
@@ -11,7 +11,7 @@
     ".yml": 22
   },
   "provenance": {
-    "commit": "649c278fcedafe4c7ec7bb0cf63209070d7026b7",
+    "commit": "f9315076cb78bd477fad7c7463010fa9424a5da7",
     "dirty": true,
     "files": [
       {
@@ -24,11 +24,11 @@
       },
       {
         "path": "CLAUDE.md",
-        "sha256": "28c1ac2002afc5c3857cd10a4b4da4c4adeea83e2cc6203baec50565c7f61942"
+        "sha256": "78fc28fe4f306430fac95c139d122b034d8d3dd194a9fbc8a520a08791e09335"
       },
       {
         "path": "README.md",
-        "sha256": "03e81317f2f71e6843fc870365999549c850e0ee26fe054597196ee456889662"
+        "sha256": "d16cc7c9421c31fa483077161e239184cf9712b7a343d3d6d9a302afb1831467"
       },
       {
         "path": "Taskfile.yml",
@@ -44,7 +44,7 @@
       },
       {
         "path": "docker-compose.yml",
-        "sha256": "60136b1fc738c72eac58c722a0c6a063ca92cdd42b31cb0357de50cbfb17cb19"
+        "sha256": "9414b0d05528064be188cad1b847c66c8be83c4efd83fc7a9e4f9fd43515095f"
       },
       {
         "path": "go.mod",
@@ -59,8 +59,8 @@
   "top_dirs": [
     {
       "path": "controllers/httpapi",
-      "files": 150,
-      "kb": 1451
+      "files": 154,
+      "kb": 1521
     },
     {
       "path": "repository",
@@ -149,7 +149,7 @@
     },
     {
       "path": "controllers/httpapi/server.go",
-      "kb": 167
+      "kb": 169
     },
     {
       "path": "controllers/message/products.go",

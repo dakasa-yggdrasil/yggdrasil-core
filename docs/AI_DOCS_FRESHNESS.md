@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 649c278fcedafe4c7ec7bb0cf63209070d7026b7
-verified_diff_sha256: d0bcc40e6e755538c0d09f19adc83fba7d030da2cc0688db06ca0d1907d53dae
+verified_at_commit: f9315076cb78bd477fad7c7463010fa9424a5da7
+verified_diff_sha256: 341b83fc9ae1a8709086283be7756bb379cac9785c0b57e0533dcb0ee6b8557b
 reconciler_schema: 1
 verified_at: 2026-09-24
 by: Claude
-note: Reconciled ADR-0021 (logical event publisher grants) with the code after the adversarial review: one resolution statement per logical event, control characters, set-but-blank inventory refusal, separate legacy bridge refusal, cancellation logging, case-insensitive metadata stripping and the PostgreSQL proof in the native-oidc-postgres job. features/events.md, security.md, api-reference openapi.md and both openapi.json copies, error_codes.md, CHANGELOG, the CLAUDE.md event writers bullet and the ADR index match. Generated AI context refreshed. No production rollout is claimed.
+note: Reconciled ADR-0022 (workflow-run credential surface loaded once, set-but-blank workflow inventory refused, per-surface refusal of cross-scope digest collisions, bridge refusals kept apart from principals, explicit development YGGDRASIL_ENV for the credential-free workflow, manifest-write and event posture, boot summary, durable legacy bridge audit, metrics and run stamp) with the code. security.md, features/workflows.md, features/events.md, api-reference openapi.md and both openapi.json copies, operations/observability.md (two new families), quickstart.md, deployment.md, README, CHANGELOG (breaking), the CLAUDE.md auth bullets and the ADR index match. Generated AI context refreshed. No production rollout is claimed.
