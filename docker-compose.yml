@@ -11,6 +11,10 @@ services:
     environment:
       PATH: /usr/local/go/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin
       PORT: "9080"
+      # Local development posture (ADR-0022): the credential-free workflow,
+      # manifest and event access this slice relies on needs an explicit
+      # development YGGDRASIL_ENV. Never reuse this value for a shared Core.
+      YGGDRASIL_ENV: ${YGGDRASIL_ENV:-development}
       DB_NAME: ${POSTGRES_CORE_DB}
       DB_HOST: yggdrasil-postgres
       DB_PORT: "5432"

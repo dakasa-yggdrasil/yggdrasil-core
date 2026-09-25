@@ -132,9 +132,12 @@ authenticated principal must hold a grant for the event: an exact
 provider/instance/event triple, or a logical grant for the integration
 instance the `instance_id` resolves to (see "Exact and logical grants" below).
 
-**Generic local-compatibility validation.** Only when the event auth surface is
-entirely unconfigured outside production, the historical generic HTTP shape
-remains available for development and tests. In that posture, `type`,
+**Generic local-compatibility validation.** Only in the credential-free
+development posture, where nothing is configured on the event auth surface
+AND `YGGDRASIL_ENV` is set explicitly to `dev`, `development`, `local` or
+`test` (ADR-0022), the historical generic HTTP shape remains available for
+development and tests. An unset `YGGDRASIL_ENV` keeps it closed and the
+request answers `401`. In that posture, `type`,
 `aggregate_type`, `aggregate_id`, and `payload` are required; `payload` must be
 a JSON object and `schema_version` defaults to `"v1"`. The payload is validated
 against the registered event JSON Schema. Production machine credentials never
@@ -158,6 +161,9 @@ grant refuses all of it) or when the variable is set but blank; only a truly
 unset variable means "no principals". A refused inventory fails boot when
 `YGGDRASIL_ENV=production`. With `YGGDRASIL_ENV` unset, Core logs the refusal
 at error level, keeps serving, and answers every event publish with `401`.
+An event principal whose digest a directory principal also holds keeps
+publishing: Core then serves an empty directory inventory instead
+(ADR-0022).
 Refused legacy bridge settings (below) are separate: they switch off only the
 bridge and the anonymous development posture, and hashed principals keep
 working.
@@ -241,8 +247,10 @@ an active event principal or that explicit, unexpired bridge and rejects any
 collision with workflow, deploy, auth-admin, or hashed event-principal
 credentials. The bridge and hashed publishers must use distinct bearers so a
 principal cannot fall back to bridge authority after expiry or revocation. When
-the event surface is entirely unconfigured outside production, it remains open
-for credential-free local development and tests.
+the event surface is entirely unconfigured and `YGGDRASIL_ENV` is explicitly
+`dev`, `development`, `local` or `test` (ADR-0022), it remains open for
+credential-free local development and tests; an unset `YGGDRASIL_ENV` keeps it
+closed.
 
 ## Reactive workflows
 

@@ -135,9 +135,11 @@ func (s *Server) authenticateEventPublishRequest(r *http.Request) (eventPublishA
 	}
 
 	// Preserve anonymous local development only when the event auth surface is
-	// entirely unconfigured and the caller did not present a credential that
-	// belongs to some other scope.
-	if !config.legacy.Configured && len(config.principals) == 0 && !requestPresentsStaticCredential(r) && devEnvAllowsFallback() {
+	// entirely unconfigured, the caller did not present a credential that
+	// belongs to some other scope, and YGGDRASIL_ENV explicitly names a
+	// development environment (ADR-0022). An unset YGGDRASIL_ENV, as in
+	// DaKasa production, keeps the posture closed.
+	if !config.legacy.Configured && len(config.principals) == 0 && !requestPresentsStaticCredential(r) && machineAnonymousAllowed() {
 		return eventPublishActor{}, nil
 	}
 	return eventPublishActor{}, errWorkflowRunUnauthorized

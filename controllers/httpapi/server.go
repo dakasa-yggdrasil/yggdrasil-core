@@ -12,6 +12,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"sync"
 	"time"
 
 	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
@@ -184,15 +185,43 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		logger.Error("legacy event publish bridge settings refused; the bridge and anonymous event publishing are off, event principals keep working",
 			zap.Error(eventPublishAuth.legacyErr))
 	}
+	var eventPrincipals []eventPublisherPrincipal
+	if eventPublishAuth.err == nil {
+		eventPrincipals = eventPublishAuth.principals
+	}
+
+	// ADR-0022: a directory digest that an event principal or a plaintext
+	// credential also holds refuses the directory surface without stopping
+	// boot. The directory gate runs first and would otherwise claim that
+	// bearer and answer 403 to its other scope; with an empty directory set
+	// the bearer reaches its own scope and directory reads answer 401 until
+	// the inventory is fixed. The parse itself stays fatal (above).
+	directoryErr := directoryMachinePrincipalCollisions(directoryPrincipals, eventPrincipals)
+	servedDirectoryPrincipals := directoryPrincipals
+	if directoryErr != nil {
+		servedDirectoryPrincipals = nil
+	}
 
 	server := &Server{
 		serviceName:                serviceName,
 		db:                         db,
 		rabbitmq:                   conn,
 		logger:                     logger,
-		directoryMachinePrincipals: directoryPrincipals,
+		directoryMachinePrincipals: servedDirectoryPrincipals,
 		eventPublishAuth:           eventPublishAuth,
 	}
+	// The workflow-run surface (ADR-0022) is loaded here, once, like the
+	// event and directory surfaces: the gate, the dispatch and poll
+	// handlers and the manifest-write check share this copy. Like the event
+	// surface it never stops boot on its own (validateBootSecrets does, with
+	// YGGDRASIL_ENV=production); a refused surface answers 401 to every
+	// machine request and never falls into the anonymous posture. The boot
+	// summary is logged on every start so an operator can read what this
+	// process accepts without reading its environment.
+	server.workflowRunAuthOnce.Do(func() {
+		server.workflowRunAuth = loadWorkflowRunAuthConfig(eventPrincipals, directoryPrincipals)
+	})
+	logWorkflowRunCredentialSurface(logger, server.workflowRunAuth, directoryErr, time.Now().UTC())
 	// Optional: auth secrets envelope. KEK is 32 raw bytes base64-encoded
 	// in YGGDRASIL_AUTH_KEK_BASE64; if absent the MFA HTTP layer fails
 	// loud rather than persisting unencrypted TOTP/WebAuthn material.
@@ -936,7 +965,9 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 		// Dedicated deploy automation is accepted only on the exact deploy,
 		// bootstrap, and integration-install routes. Keeping this separate lets
 		// workflow credentials remain dispatch-only without breaking the
-		// purpose-built YGGDRASIL_DEPLOY_TOKEN path.
+		// purpose-built YGGDRASIL_DEPLOY_TOKEN path. A credential-free request
+		// passes here only with no deploy token configured and an explicit
+		// development YGGDRASIL_ENV (ADR-0022).
 		if deployCredentialPath(r.Method, r.URL.Path) && authorizeDeployRequest(r) == nil {
 			next.ServeHTTP(w, r)
 			return
@@ -946,12 +977,15 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 		// time-bounded legacy migration token are accepted only on exact
 		// workflow-run dispatch/poll URLs; they never cross into generic ops,
 		// manifests, secrets, catalog, deploy, or administrative APIs.
-		if actor, err := authenticateWorkflowRunRequest(r); err == nil &&
+		if actor, err := s.authenticateWorkflowRunRequest(r); err == nil &&
 			(actor.Subject.ID != "" || actor.CollaboratorID != "" ||
 				workflowRunMachineCredentialPath(r.Method, r.URL.Path)) {
 			// A configured machine principal or legacy migration credential
 			// matched after path scoping, or the exact workflow route is using
-			// the credential-free non-production compatibility posture.
+			// the credential-free development posture: nothing configured on
+			// the workflow surface and YGGDRASIL_ENV set explicitly to dev,
+			// development, local or test (ADR-0022). An unset YGGDRASIL_ENV
+			// keeps that posture closed.
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -1334,6 +1368,20 @@ type Server struct {
 	// eventPublishAuth is the event publisher credential surface New loaded
 	// once. nil (a Server not built by New) authenticates nothing.
 	eventPublishAuth *eventPublishAuthConfig
+	// workflowRunAuth is the workflow-run machine credential surface
+	// (ADR-0022). New fills it eagerly inside workflowRunAuthOnce; a Server
+	// built as a literal fills it on first use through workflowRunAuthConfig,
+	// and a literal that sets it keeps what it set. Read it only through
+	// workflowRunAuthConfig.
+	workflowRunAuth     *workflowRunAuthConfig
+	workflowRunAuthOnce sync.Once
+	// legacyBridgeAuditSink replaces the durable audit_events writer for the
+	// workflow_run.legacy_bridge rows (ADR-0022). nil (production) writes
+	// through repository.RecordAuditEvent; tests inject a capturing sink.
+	legacyBridgeAuditSink func(model.AuditEvent) error
+	// legacyWorkflowBridgePolls remembers the run ids whose legacy poll was
+	// already audited in this process.
+	legacyWorkflowBridgePolls legacyWorkflowBridgePollSet
 	// eventInstanceResolver replaces the manifests lookup of logical event
 	// grants (ADR-0021) in tests. It receives an already parsed reference, so
 	// a wire value that is not resolvable never reaches it. nil (production)

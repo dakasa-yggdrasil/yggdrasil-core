@@ -316,6 +316,25 @@ principal before persistence, so another principal cannot receive the run id
 through a retry. The original key remains available only to the live execution
 copy.
 
+Core reads the principals inventory and the legacy bridge settings once at
+start (ADR-0022), so a rotation takes effect at the next restart. A malformed
+inventory, a variable that is set but blank, or a digest another credential
+scope also holds refuses the whole workflow surface: every machine dispatch
+and poll answers 401 and the refusal is logged at start, next to an info
+summary (`workflow run credential surface loaded`) that names the principals
+and the bridge state without any digest. Unset the variable to mean "no
+principals". Calling the workflow-run routes with no credential at all works
+only on a Core with nothing configured and `YGGDRASIL_ENV` set to `dev`,
+`development`, `local` or `test`.
+
+The time-bounded `YGGDRASIL_WORKFLOW_RUN_TOKEN` bridge keeps working until it
+is retired, but every request it authenticates is logged
+(`legacy workflow-run bridge accepted`), counted in
+`yggdrasil_workflow_run_legacy_bridge_requests_total{route}`, and audited as a
+`workflow_run.legacy_bridge` row; an asynchronous run it dispatched carries
+`yggdrasil.io/creator_legacy_workflow_bridge=true` in its metadata. Those
+records identify the callers that still need to move to a principal.
+
 Workflow credentials are valid only for the canonical dispatch and poll
 routes. They cannot publish events or access manifests, deploy, secrets,
 `/console`, generic `/ops`, tenant, or auth-admin APIs. See

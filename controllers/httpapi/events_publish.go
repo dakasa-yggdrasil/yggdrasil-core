@@ -72,16 +72,20 @@ type eventPublishActor struct {
 // successful `ensure_*` / `destroy_*` / allowlist-`create_*` call per
 // INTEGRATION_CONTRACT §6.5. The wire shape carries the §6.5 fields and is
 // translated into the generic model.EmitEventRequest below. The historical
-// generic wire shape remains available only in the entirely unconfigured
-// non-production posture; trusted control-plane paths emit generic events
-// in-process rather than through a machine HTTP credential.
+// generic wire shape remains available only in the credential-free
+// development posture (nothing configured on the event surface and
+// YGGDRASIL_ENV set explicitly to dev, development, local or test, ADR-0022);
+// trusted control-plane paths emit generic events in-process rather than
+// through a machine HTTP credential.
 //
 // Auth: hashed event-publisher principals are the durable path and are accepted
 // only on this write-only surface. YGGDRASIL_EVENT_PUBLISH_TOKEN remains a
 // mutation-only plaintext migration bridge for existing adapters. Human
-// sessions and workflow credentials are never accepted. With no event
-// credential outside production, an anonymous request remains available for
-// local development. A principal's grant is either exact (compared as an
+// sessions and workflow credentials are never accepted. An anonymous request
+// is accepted only when no event credential is configured AND YGGDRASIL_ENV
+// names a development environment explicitly (dev, development, local or
+// test, ADR-0022); an unset YGGDRASIL_ENV answers 401. A principal's grant is
+// either exact (compared as an
 // opaque string, no database access) or logical, "<namespace>/<name>", which
 // Core matches only after resolving the event's instance_id to the logical
 // integration instance (ADR-0021).

@@ -31,7 +31,7 @@ func setEventPublishAuthEnvironment(t *testing.T, eventToken, workflowToken stri
 		setTestLegacyEventPublishCredential(t, eventToken)
 	}
 	unsetEnvForTest(t, eventPublisherPrincipalsEnv)
-	t.Setenv(workflowMachinePrincipalsEnv, "")
+	unsetEnvForTest(t, workflowMachinePrincipalsEnv)
 	t.Setenv(legacyScopedWorkflowTokensEnv, "")
 	if workflowToken == "" {
 		t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "")
@@ -143,7 +143,7 @@ func TestDedicatedEventTokenCannotAuthorizeWorkflowRuns(t *testing.T) {
 
 	req := httptest.NewRequest(http.MethodPost, "/api/v1/workflow-runs", nil)
 	req.Header.Set("Authorization", "Bearer event-only-token")
-	if err := authorizeWorkflowRunRequest(req); err == nil {
+	if err := (&Server{}).authorizeWorkflowRunRequest(req); err == nil {
 		t.Fatal("event-only token authorized a workflow run")
 	}
 }
@@ -186,7 +186,7 @@ func TestHashedEventPublisherPrincipalIsIsolatedFromWorkflowPrincipal(t *testing
 
 	workflowReq := httptest.NewRequest(http.MethodPost, "/api/v1/workflow-runs", nil)
 	workflowReq.Header.Set("Authorization", "Bearer adapter-event-token")
-	if err := authorizeWorkflowRunRequest(workflowReq); err == nil {
+	if err := (&Server{}).authorizeWorkflowRunRequest(workflowReq); err == nil {
 		t.Fatal("event publisher credential authorized workflow dispatch")
 	}
 
@@ -321,7 +321,10 @@ func TestHandleEventPublishRejectsGenericAndForeignScopeBeforePersistence(t *tes
 }
 
 func TestAuthorizeEventPublishRequestKeepsNoTokenNonProductionCompatibility(t *testing.T) {
-	for _, environment := range []string{"", "dev", "test"} {
+	// ADR-0022: only an explicit development YGGDRASIL_ENV keeps the
+	// credential-free posture; TestEventAnonymousPostureRequiresExplicitDevelopmentEnv
+	// covers the values that close it.
+	for _, environment := range []string{"dev", "development", "local", "test"} {
 		t.Run(environment, func(t *testing.T) {
 			t.Setenv("YGGDRASIL_ENV", environment)
 			setEventPublishAuthEnvironment(t, "", "")

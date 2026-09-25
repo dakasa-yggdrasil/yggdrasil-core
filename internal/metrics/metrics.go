@@ -88,6 +88,20 @@ const (
 	DirectoryAuditFailureInsertFailed      = "insert_failed"
 )
 
+// Legacy workflow-run bridge routes (ADR-0022). Closed set so the label
+// cardinality is bounded at 2; unknown values are dropped.
+//
+// Every request the plaintext YGGDRASIL_WORKFLOW_RUN_TOKEN bridge
+// authenticates bumps exactly one bucket, so
+// `increase(yggdrasil_workflow_run_legacy_bridge_requests_total[7d])` is the
+// number of requests that still depend on the bridge:
+//   - dispatch: POST /api/v1/workflow-runs.
+//   - poll: GET /api/v1/workflow-runs/{run_id}.
+const (
+	WorkflowRunLegacyBridgeRouteDispatch = "dispatch"
+	WorkflowRunLegacyBridgeRoutePoll     = "poll"
+)
+
 var (
 	reactorEvalMatched atomic.Uint64
 	reactorEvalSkipped atomic.Uint64
@@ -221,6 +235,15 @@ var (
 	directoryAuditFailureStoreUnconfigured atomic.Uint64
 	directoryAuditFailureInsertTimeout     atomic.Uint64
 	directoryAuditFailureInsertFailed      atomic.Uint64
+
+	// Legacy workflow-run bridge counters (ADR-0022): one per closed-set
+	// route for accepted legacy requests, plus the number of
+	// workflow_run.legacy_bridge audit rows that could not be stored. The
+	// audit write is best effort, so a failure never refuses the request;
+	// this counter is what tells an operator the durable trail has a gap.
+	workflowRunLegacyBridgeDispatch      atomic.Uint64
+	workflowRunLegacyBridgePoll          atomic.Uint64
+	workflowRunLegacyBridgeAuditFailures atomic.Uint64
 )
 
 // Reconcile failure `kind` labels — closed set, additions require
@@ -640,6 +663,41 @@ func DirectoryAuditFailuresSnapshot() map[string]uint64 {
 	}
 }
 
+// IncWorkflowRunLegacyBridgeRequest bumps the accepted legacy workflow-run
+// bridge counter for the given route. Route must be one of the
+// WorkflowRunLegacyBridgeRoute* constants; unknown values are dropped so
+// cardinality stays bounded.
+func IncWorkflowRunLegacyBridgeRequest(route string) {
+	switch route {
+	case WorkflowRunLegacyBridgeRouteDispatch:
+		workflowRunLegacyBridgeDispatch.Add(1)
+	case WorkflowRunLegacyBridgeRoutePoll:
+		workflowRunLegacyBridgePoll.Add(1)
+	}
+}
+
+// WorkflowRunLegacyBridgeRequestsSnapshot returns the counter values keyed
+// by route. Both closed-set routes are present (zero-padded) so /metrics
+// emits a stable two-line family before the first legacy request.
+func WorkflowRunLegacyBridgeRequestsSnapshot() map[string]uint64 {
+	return map[string]uint64{
+		WorkflowRunLegacyBridgeRouteDispatch: workflowRunLegacyBridgeDispatch.Load(),
+		WorkflowRunLegacyBridgeRoutePoll:     workflowRunLegacyBridgePoll.Load(),
+	}
+}
+
+// IncWorkflowRunLegacyBridgeAuditFailure counts one workflow_run.legacy_bridge
+// audit row that could not be stored.
+func IncWorkflowRunLegacyBridgeAuditFailure() {
+	workflowRunLegacyBridgeAuditFailures.Add(1)
+}
+
+// WorkflowRunLegacyBridgeAuditFailuresSnapshot returns the audit failure
+// counter.
+func WorkflowRunLegacyBridgeAuditFailuresSnapshot() uint64 {
+	return workflowRunLegacyBridgeAuditFailures.Load()
+}
+
 // ReconcileFailuresSnapshot returns the counter values keyed by kind.
 // Every closed-set kind is present (zero-padded) so /metrics emits a
 // stable family — operators build dashboards without "no datapoints"
@@ -726,4 +784,7 @@ func ResetForTest() {
 	directoryAuditFailureStoreUnconfigured.Store(0)
 	directoryAuditFailureInsertTimeout.Store(0)
 	directoryAuditFailureInsertFailed.Store(0)
+	workflowRunLegacyBridgeDispatch.Store(0)
+	workflowRunLegacyBridgePoll.Store(0)
+	workflowRunLegacyBridgeAuditFailures.Store(0)
 }

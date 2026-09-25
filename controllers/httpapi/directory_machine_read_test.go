@@ -56,7 +56,7 @@ func (c *directoryAuditCapture) snapshot() []model.AuditEvent {
 func clearMachineCredentialEnv(t *testing.T) {
 	t.Helper()
 	t.Setenv("YGGDRASIL_ENV", "")
-	t.Setenv(workflowMachinePrincipalsEnv, "")
+	unsetEnvForTest(t, workflowMachinePrincipalsEnv)
 	unsetEnvForTest(t, eventPublisherPrincipalsEnv)
 	t.Setenv(directoryMachinePrincipalsEnv, "")
 	t.Setenv(legacyScopedWorkflowTokensEnv, "")

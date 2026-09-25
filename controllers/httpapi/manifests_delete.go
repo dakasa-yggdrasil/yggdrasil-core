@@ -20,8 +20,10 @@ import (
 //
 // Auth: a verified console session authorizes production use. Workflow and
 // event credentials never authorize destructive manifest operations. The
-// credential-free non-production posture retains the local-development
-// allow-all convention.
+// local-development allow-all convention survives only in the credential-free
+// development posture: nothing configured on the workflow surface and
+// YGGDRASIL_ENV set explicitly to dev, development, local or test (ADR-0022).
+// An unset YGGDRASIL_ENV keeps it closed.
 //
 // Idempotency: a request that targets an already-absent id returns 200
 // with {"deleted": true, "already_absent": true}. This matches the

@@ -70,6 +70,12 @@ services:
     restart: unless-stopped
     environment:
       PORT: "9080"
+      # Local, single-user posture (ADR-0022): with no machine credential
+      # configured, anonymous workflow dispatch, manifest writes and event
+      # publishing need an explicit development YGGDRASIL_ENV. Set
+      # YGGDRASIL_ENV in .env to anything else (for example "staging") to
+      # keep them closed on a host other people can reach.
+      YGGDRASIL_ENV: ${YGGDRASIL_ENV:-development}
       DB_HOST: postgres
       DB_PORT: "5432"
       DB_NAME: ${POSTGRES_DB:-yggdrasil}

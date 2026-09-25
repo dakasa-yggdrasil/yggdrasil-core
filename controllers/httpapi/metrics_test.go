@@ -51,6 +51,10 @@ func TestHandleMetricsReturnsPrometheusFormat(t *testing.T) {
 		"yggdrasil_reconcile_failures_total",
 		// Directory audit failure family (ADR-0019).
 		"yggdrasil_directory_audit_failures_total",
+		// Legacy workflow-run bridge families (ADR-0022).
+		"yggdrasil_workflow_run_legacy_bridge_requests_total{route=\"dispatch\"}",
+		"yggdrasil_workflow_run_legacy_bridge_requests_total{route=\"poll\"}",
+		"yggdrasil_workflow_run_legacy_bridge_audit_failures_total",
 		"# TYPE",
 		"# HELP",
 	} {

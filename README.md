@@ -189,6 +189,13 @@ seeds the baseline integration catalog, creates an admin user, and saves a
 context to `~/.yggdrasil/config.yaml`. Total time: ~1 minute on a warm
 machine.
 
+A core accepts credential-free workflow dispatch, event publishing and
+integration installs only with `YGGDRASIL_ENV` set to `dev`,
+`development`, `local` or `test` and no machine or deploy credential
+configured (ADR-0022). Keep that posture on
+your own machine; anywhere else, leave `YGGDRASIL_ENV` unset or set it to
+another value and use scoped machine principals.
+
 ### 3. Add an integration
 
 ```sh

@@ -114,7 +114,7 @@ func TestAuthorizeAuthAdminRequestAcceptsSessionCookieOutsideAllowlist(t *testin
 func TestConsoleAuthGateAcceptsDedicatedAuthAdminCredentialOnExactMutations(t *testing.T) {
 	t.Setenv("YGGDRASIL_AUTH_ADMIN_TOKEN", "dedicated-auth-admin-token")
 	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "")
-	t.Setenv(workflowMachinePrincipalsEnv, "")
+	unsetEnvForTest(t, workflowMachinePrincipalsEnv)
 	t.Setenv(legacyScopedWorkflowTokensEnv, "")
 
 	routes := []struct {
@@ -188,7 +188,7 @@ func TestConsoleAuthGateRejectsWorkflowCredentialsOnAuthAdminMutations(t *testin
 			name:  "legacy migration credential",
 			token: "legacy-workflow-token",
 			setEnv: func(t *testing.T) {
-				t.Setenv(workflowMachinePrincipalsEnv, "")
+				unsetEnvForTest(t, workflowMachinePrincipalsEnv)
 				setTestLegacyWorkflowCredential(t, "legacy-workflow-token")
 			},
 		},
@@ -221,7 +221,7 @@ func TestConsoleAuthGateRejectsWorkflowCredentialsOnAuthAdminMutations(t *testin
 func TestConsoleAuthGateDoesNotBypassRBACForLowPrivilegeSessionOnAuthMutation(t *testing.T) {
 	t.Setenv("YGGDRASIL_AUTH_ADMIN_TOKEN", "dedicated-auth-admin-token")
 	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "")
-	t.Setenv(workflowMachinePrincipalsEnv, "")
+	unsetEnvForTest(t, workflowMachinePrincipalsEnv)
 	t.Setenv(legacyScopedWorkflowTokensEnv, "")
 	t.Setenv("YGGDRASIL_CONSOLE_RBAC_ENFORCE", "enforce")
 

@@ -77,7 +77,7 @@ func TestHandleManifestCreateGeneric_RejectsValidLegacyWorkflowToken(t *testing.
 // unset. Server.New still places the real route behind console authentication.
 func TestHandleManifestCreateGeneric_AllowsOpenWhenTokenUnset(t *testing.T) {
 	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "")
-	t.Setenv(workflowMachinePrincipalsEnv, "")
+	unsetEnvForTest(t, workflowMachinePrincipalsEnv)
 	t.Setenv(legacyScopedWorkflowTokensEnv, "")
 	server := &Server{serviceName: "yggdrasil-core-test", db: nil}
 	mux := http.NewServeMux()
