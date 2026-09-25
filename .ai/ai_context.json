@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-09-24T21:22:47-03:00",
+  "generated_at": "2026-09-25T00:15:18-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 630,
@@ -11,7 +11,7 @@
     ".yml": 22
   },
   "provenance": {
-    "commit": "f9315076cb78bd477fad7c7463010fa9424a5da7",
+    "commit": "7622a8b6c5102d68e6bc1008f6c418097ec6ee46",
     "dirty": true,
     "files": [
       {
@@ -24,11 +24,11 @@
       },
       {
         "path": "CLAUDE.md",
-        "sha256": "78fc28fe4f306430fac95c139d122b034d8d3dd194a9fbc8a520a08791e09335"
+        "sha256": "201caac94b57c3a18b31dc9e9c0f4751b8a935eefc28926ad1cf9f7f8e7780b5"
       },
       {
         "path": "README.md",
-        "sha256": "d16cc7c9421c31fa483077161e239184cf9712b7a343d3d6d9a302afb1831467"
+        "sha256": "4993dc3573aa407b328b4e902f58ce136812e5ab178964da7935a40962169040"
       },
       {
         "path": "Taskfile.yml",
@@ -60,7 +60,7 @@
     {
       "path": "controllers/httpapi",
       "files": 154,
-      "kb": 1521
+      "kb": 1529
     },
     {
       "path": "repository",
@@ -149,7 +149,7 @@
     },
     {
       "path": "controllers/httpapi/server.go",
-      "kb": 169
+      "kb": 170
     },
     {
       "path": "controllers/message/products.go",
