@@ -3,7 +3,7 @@
 - **Status:** Accepted
 - **Date:** 2026-09-24
 - **Deciders:** DaKasa Platform
-- **Scope:** yggdrasil-core / workflow-run, event and directory machine authentication (`/api/v1/workflow-runs`, `/api/v1/events`, manifest writes, directory reads)
+- **Scope:** yggdrasil-core / workflow-run, event and directory machine authentication (`/api/v1/workflow-runs`, `/api/v1/events`, manifest writes, directory reads) and the credential-free posture of the deploy-family routes (integration install, bootstrap, product deploy)
 - **Supersedes:** none
 - **Superseded by:** none
 
@@ -33,7 +33,12 @@ retires the workflow bridge, depends on closing the gaps below first.
    CSRF and OAuth-state secrets `validateBootSecrets` requires are not
    configured there. Only the configured bridge and principals kept that
    posture closed. Once the bridge is retired, a blank or missing inventory
-   would open anonymous dispatch on the production control plane.
+   would open anonymous dispatch on the production control plane. The
+   deploy-family routes (integration install, bootstrap and product deploy,
+   direct and console) followed the same loose rule through
+   `devEnvAllowsFallback`: with `YGGDRASIL_DEPLOY_TOKEN` unset, any
+   `YGGDRASIL_ENV` other than `production` or `prod` accepted a request that
+   presented no credential.
 4. **Refused bridge settings locked principals out.** A bridge error (for
    example the token still present after `LEGACY_ENABLED` was deleted)
    returned before principal matching, so a half-applied retirement answered
@@ -107,12 +112,14 @@ posture only to an explicitly named development environment.
 
 6. **The credential-free posture needs an explicit development
    environment.** Anonymous workflow dispatch and polling, anonymous manifest
-   writes (which go through the same check) and anonymous event publishing
+   writes (which go through the same check), anonymous event publishing and
+   anonymous requests to the deploy-family routes (`authorizeDeployRequest`:
+   integration install, bootstrap and product deploy, direct and console)
    require `YGGDRASIL_ENV`, trimmed and lowercased, to be one of `dev`,
-   `development`, `local` or `test`, on top of an unconfigured surface. An
-   unset or any other value keeps them closed. `devEnvAllowsFallback` is
-   unchanged, so the CSRF, OAuth-state and deploy-token development fallbacks
-   are out of scope here.
+   `development`, `local` or `test`, on top of an unconfigured surface (for
+   the deploy-family routes, no `YGGDRASIL_DEPLOY_TOKEN`). An unset or any
+   other value keeps them closed. `devEnvAllowsFallback` itself is unchanged,
+   so the CSRF and OAuth-state development fallbacks are out of scope here.
 7. **Bridge use is observable and durable.** Every request the bridge
    authenticates, counted in the dispatch and poll handlers only (never twice
    through the gate), leaves:
@@ -145,13 +152,17 @@ posture only to an explicitly named development environment.
 ## Consequences
 
 - **Breaking:** a Core without an explicit development `YGGDRASIL_ENV` no
-  longer accepts anonymous workflow dispatch, manifest writes or event
-  publishes. Every deployment that relied on credential-free access (local
+  longer accepts anonymous workflow dispatch, manifest writes, event
+  publishes, or integration install, bootstrap and product deploy requests.
+  Every deployment that relied on credential-free access (local
   compose, `yggdrasil init`, validation, ephemeral and e2e environments) must
   set `YGGDRASIL_ENV` before it runs a build carrying this decision.
 - On a Core that already has its bridge and principals configured, nothing a
-  caller can observe changes. What changes is the boot summary, the error
-  lines, the legacy metrics and the `workflow_run.legacy_bridge` rows.
+  workflow-run or event caller can observe changes. What changes is the boot
+  summary, the error lines, the legacy metrics and the
+  `workflow_run.legacy_bridge` rows. If that Core also has no
+  `YGGDRASIL_DEPLOY_TOKEN` and no explicit development `YGGDRASIL_ENV`, its
+  deploy-family routes stop accepting credential-free requests.
 - A workflow inventory changed in the environment of a running process takes
   effect only at the next restart. Kubernetes already fixes a container's
   environment at start, so this states what was true in production.
@@ -165,8 +176,13 @@ posture only to an explicitly named development environment.
 - A directory digest shared with an event principal or a plaintext credential
   now switches the directory reads off outside production, where it used to
   go unnoticed; production boot still refuses it.
-- The deploy-token development fallback and the CSRF and OAuth-state
-  fallbacks still follow `devEnvAllowsFallback` and need their own decision.
+- The CSRF and OAuth-state development fallbacks still follow
+  `devEnvAllowsFallback` and need their own decision. The deploy-family
+  routes no longer do: on a Core without `YGGDRASIL_DEPLOY_TOKEN` and without
+  an explicit development `YGGDRASIL_ENV`, a credential-free integration
+  install, bootstrap or product deploy answers `401`, so automation there
+  needs the deploy token, and people need a console session on the
+  RBAC-checked `/api/v1/console/*` routes.
 
 ## Related
 

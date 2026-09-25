@@ -188,9 +188,14 @@ with `?kind=X` in the query string.
   credentials never authorize events, manifests, deploy, secrets, console,
   auth-admin, or generic ops routes.
 - The credential-free machine posture (anonymous workflow dispatch, manifest
-  writes, event publishing) needs a surface with nothing configured AND
-  `YGGDRASIL_ENV` explicitly `dev`, `development`, `local` or `test`
-  (ADR-0022); an unset `YGGDRASIL_ENV` keeps it closed. The httpapi tests set
+  writes, event publishing, and the deploy-family routes behind
+  `authorizeDeployRequest`: integration install, bootstrap, product deploy)
+  needs a surface with nothing configured (for the deploy-family routes, no
+  `YGGDRASIL_DEPLOY_TOKEN`) AND `YGGDRASIL_ENV` explicitly `dev`,
+  `development`, `local` or `test` (ADR-0022); an unset `YGGDRASIL_ENV` keeps
+  it closed. `devEnvAllowsFallback` now decides only whether production boot
+  validation runs, which is what refuses the CSRF and OAuth-state development
+  fallbacks. The httpapi tests set
   `YGGDRASIL_ENV=test` in `TestMain`; a test asserting the closed posture sets
   or unsets it itself.
 

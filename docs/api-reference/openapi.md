@@ -123,9 +123,11 @@ secret stores. Endpoints requiring auth and the configuration that gates them:
 
 Core loads the workflow, event and directory inventories once at start
 (ADR-0021, ADR-0022). A request with no credential reaches the workflow-run
-routes, manifest writes or the event route only when nothing is configured
-for that surface and `YGGDRASIL_ENV` is explicitly `dev`, `development`,
-`local` or `test`; otherwise it answers `401`. A workflow inventory that is
+routes, manifest writes, the event route or the deploy-family routes (direct
+and console deploy, deploy-all, bootstrap and integration install) only when
+nothing is configured for that surface (for the deploy-family routes, no
+`YGGDRASIL_DEPLOY_TOKEN`) and `YGGDRASIL_ENV` is explicitly `dev`,
+`development`, `local` or `test`; otherwise it answers `401`. A workflow inventory that is
 malformed, set but blank, or shares a digest with another credential scope
 refuses the workflow surface: every machine dispatch and poll answers `401`.
 Refused workflow bridge settings switch off only the bridge; hashed

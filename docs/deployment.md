@@ -48,9 +48,9 @@ services — so every workflow that needs them resolves a live
 instance from the catalog.
 
 The core in this stack runs with `YGGDRASIL_ENV=development` (override it
-in `.env`). With no machine credential configured, that is the only posture
-in which Core accepts credential-free workflow dispatch, manifest writes and
-event publishing (ADR-0022). Set `YGGDRASIL_ENV` to anything else, for
+in `.env`). With no machine or deploy credential configured, that is the
+only posture in which Core accepts credential-free workflow dispatch,
+manifest writes, event publishing and integration installs (ADR-0022). Set `YGGDRASIL_ENV` to anything else, for
 example `staging`, on a host other people can reach, and give automation a
 scoped machine principal instead.
 
@@ -147,9 +147,10 @@ export DB_HOST=localhost DB_PORT=5432 DB_NAME=yggdrasil \
 ```
 
 The HTTP API is always served on `PORT`. A bare-metal core without
-`YGGDRASIL_ENV` refuses credential-free workflow dispatch, manifest writes
-and event publishing (ADR-0022); export `YGGDRASIL_ENV=development` only on a
-single-user machine, and configure machine principals everywhere else.
+`YGGDRASIL_ENV` refuses credential-free workflow dispatch, manifest writes,
+event publishing and integration installs (ADR-0022); export
+`YGGDRASIL_ENV=development` only on a single-user machine, and configure
+machine principals and `YGGDRASIL_DEPLOY_TOKEN` everywhere else.
 Additional `rpc.Transport` backends are opt-in. Set their env vars only if you need them (e.g.
 `BROKER_URL=amqp://user:pass@localhost:5672/` enables the AMQP
 backend; other transports expose their own config variable).

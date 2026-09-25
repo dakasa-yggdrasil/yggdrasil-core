@@ -91,6 +91,14 @@ that declares:
   register instance).
 - A read-only smoke operation that proves the RPC wiring works.
 
+The install request needs `YGGDRASIL_DEPLOY_TOKEN` (as `X-Deploy-Token` or a
+bearer) on `POST /api/v1/integrations/install`, or a console session with the
+integration-management permission on `POST /api/v1/console/integrations/install`.
+A request with no credential is accepted only when no deploy token is
+configured and `YGGDRASIL_ENV` is explicitly `dev`, `development`, `local` or
+`test` (ADR-0022); otherwise Core answers `401` before it fetches, compiles or
+runs anything.
+
 ## Adapter wire contract
 
 Every adapter implements three handlers minimum, addressable either as

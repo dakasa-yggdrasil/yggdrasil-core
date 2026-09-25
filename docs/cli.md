@@ -206,5 +206,5 @@ body, or the raw payload otherwise.
 | `YGGDRASIL_CONFIG` | Override config file path. |
 | `YGGDRASIL_CONTEXT` | Override active context. |
 | `YGGDRASIL_URL` | Fallback server URL for `install` when no context. |
-| `YGGDRASIL_DEPLOY_TOKEN` | Dedicated bearer for `install`. Workflow machine credentials are dispatch-only. |
+| `YGGDRASIL_DEPLOY_TOKEN` | Dedicated bearer for `install`. Required unless the core runs with an explicit development `YGGDRASIL_ENV` and no deploy token configured (ADR-0022). Workflow machine credentials are dispatch-only. |
 | `GITHUB_TOKEN` | Used by `install` to fetch private quickstart manifests. |

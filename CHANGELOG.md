@@ -6,15 +6,20 @@ All notable changes to yggdrasil-core are documented here.
 
 ### Security
 - **BREAKING: a Core without an explicit development `YGGDRASIL_ENV` no
-  longer accepts anonymous workflow dispatch, manifest writes or event
-  publishes (ADR-0022).** The credential-free machine posture now needs
+  longer accepts anonymous workflow dispatch, manifest writes, event
+  publishes, or integration install, bootstrap and product deploy requests
+  (ADR-0022).** The credential-free machine posture now needs
   `YGGDRASIL_ENV` set to `dev`, `development`, `local` or `test` (trimmed,
-  any case) on top of a surface with nothing configured; an unset or any
-  other value answers `401`. Set it on every local, validation, ephemeral or
-  e2e Core that relied on that posture. The repository compose files now set
-  `YGGDRASIL_ENV` to `development`; the `yggdrasil init` compose asset must
-  ship the same before the next release tag. The CSRF, OAuth-state and
-  deploy-token development fallbacks are unchanged.
+  any case) on top of a surface with nothing configured (for the
+  deploy-family routes, no `YGGDRASIL_DEPLOY_TOKEN`); an unset or any other
+  value answers `401`. `POST /api/v1/integrations/install` and its console
+  twin therefore need `YGGDRASIL_DEPLOY_TOKEN` (the one `yggdrasil install`
+  sends on the direct route) or, on the console route, a console session on
+  such a Core. Set `YGGDRASIL_ENV` on every local,
+  validation, ephemeral or e2e Core that relied on that posture. The
+  repository compose files now set `YGGDRASIL_ENV` to `development`; the
+  `yggdrasil init` compose asset must ship the same before the next release
+  tag. The CSRF and OAuth-state development fallbacks are unchanged.
 - **The workflow-run credential surface is loaded once (ADR-0022).**
   `YGGDRASIL_WORKFLOW_MACHINE_PRINCIPALS_JSON` and the legacy
   `YGGDRASIL_WORKFLOW_RUN_TOKEN` bridge settings are parsed once at start,

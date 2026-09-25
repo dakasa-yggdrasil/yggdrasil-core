@@ -141,10 +141,13 @@ count, principal ids, earliest expiry, the bridge state and whether anything
 was refused, never a credential or a digest.
 
 The credential-free development posture (anonymous workflow dispatch and
-polling, anonymous manifest writes, anonymous event publishing) requires both
-a surface with nothing configured and `YGGDRASIL_ENV` set explicitly to
-`dev`, `development`, `local` or `test` (ADR-0022). An unset `YGGDRASIL_ENV`,
-as on a production Core that does not set it, keeps every one of them closed.
+polling, anonymous manifest writes, anonymous event publishing, and
+anonymous integration install, bootstrap and product deploy requests)
+requires both a surface with nothing configured and `YGGDRASIL_ENV` set
+explicitly to `dev`, `development`, `local` or `test` (ADR-0022). For the
+deploy-family routes "nothing configured" means no `YGGDRASIL_DEPLOY_TOKEN`.
+An unset `YGGDRASIL_ENV`, as on a production Core that does not set it,
+keeps every one of them closed.
 
 Event writers use a separate
 `YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON` inventory with the same hash and
