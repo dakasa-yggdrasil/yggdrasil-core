@@ -143,7 +143,13 @@ with `?kind=X` in the query string.
   `spec.authorization`, whose RBAC/policy decision is an additional mandatory
   restriction. They must select the current active workflow by namespace/name;
   manifest-id and explicit-version selectors are rejected. Their dispatch is
-  always async and they can poll only their own runs.
+  always async and they can poll only their own runs. Core loads that
+  inventory and the legacy bridge settings once at start (ADR-0022): a
+  set-but-blank inventory, a malformed one, or a workflow digest shared with a
+  directory principal, an event principal or a plaintext credential refuses
+  the workflow surface (every machine dispatch and poll answers 401), and
+  refused bridge settings switch off only the bridge. `New` logs each refusal
+  and a digest-free `workflow run credential surface loaded` summary.
 - Event writers use independent hashed principals in
   `YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON`, with
   `{provider,instance_id,event_type}` mutation-event grants, accepted only by
@@ -174,9 +180,19 @@ with `?kind=X` in the query string.
   use the RBAC membership predicate (active team, membership window). See
   `docs/security.md` for the contract.
 - `YGGDRASIL_WORKFLOW_RUN_TOKEN` is a workflow-route-only migration bridge and
-  is rejected unless explicitly enabled with a future expiry. Workflow
+  is rejected unless explicitly enabled with a future expiry. Every request it
+  authenticates is logged, counted in
+  `yggdrasil_workflow_run_legacy_bridge_requests_total`, audited as a
+  `workflow_run.legacy_bridge` row, and its async runs carry
+  `yggdrasil.io/creator_legacy_workflow_bridge=true` (ADR-0022). Workflow
   credentials never authorize events, manifests, deploy, secrets, console,
   auth-admin, or generic ops routes.
+- The credential-free machine posture (anonymous workflow dispatch, manifest
+  writes, event publishing) needs a surface with nothing configured AND
+  `YGGDRASIL_ENV` explicitly `dev`, `development`, `local` or `test`
+  (ADR-0022); an unset `YGGDRASIL_ENV` keeps it closed. The httpapi tests set
+  `YGGDRASIL_ENV=test` in `TestMain`; a test asserting the closed posture sets
+  or unsets it itself.
 
 ## CI / image flow
 

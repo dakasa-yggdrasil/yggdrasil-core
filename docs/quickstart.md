@@ -62,6 +62,12 @@ kubectl -n yggdrasil port-forward svc/yggdrasil-public 9080:9080 &
 export YGG_URL=http://localhost:9080
 ```
 
+The `curl` calls below send no credential. Core accepts that only when no
+machine credential is configured and `YGGDRASIL_ENV` is explicitly `dev`,
+`development`, `local` or `test` (ADR-0022). A Core with `YGGDRASIL_ENV`
+unset or set to anything else answers `401`; use a console session or a
+scoped machine principal there.
+
 ## Step 3 — Verify health
 
 ```bash

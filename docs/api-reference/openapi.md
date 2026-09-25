@@ -121,6 +121,16 @@ secret stores. Endpoints requiring auth and the configuration that gates them:
 | Direct deploy, deploy-all, bootstrap, integration-install API routes | `YGGDRASIL_DEPLOY_TOKEN` | `X-Deploy-Token: <token>` or `Authorization: Bearer <token>` |
 | Equivalent `/api/v1/console/*` deploy routes | Authorized console session after RBAC | Session cookie or console bearer |
 
+Core loads the workflow, event and directory inventories once at start
+(ADR-0021, ADR-0022). A request with no credential reaches the workflow-run
+routes, manifest writes or the event route only when nothing is configured
+for that surface and `YGGDRASIL_ENV` is explicitly `dev`, `development`,
+`local` or `test`; otherwise it answers `401`. A workflow inventory that is
+malformed, set but blank, or shares a digest with another credential scope
+refuses the workflow surface: every machine dispatch and poll answers `401`.
+Refused workflow bridge settings switch off only the bridge; hashed
+principals keep working.
+
 Production requires an active, unexpired workflow principal and an independent
 event principal (or the corresponding explicit legacy bridge). The core
 rejects malformed, wildcarded, duplicate, expired-only, and credential-reusing
@@ -168,7 +178,10 @@ posture.
 
 The legacy workflow bridge requires
 `YGGDRASIL_WORKFLOW_RUN_LEGACY_ENABLED=true` and a future RFC3339
-`YGGDRASIL_WORKFLOW_RUN_LEGACY_EXPIRES_AT`. The event bridge likewise requires
+`YGGDRASIL_WORKFLOW_RUN_LEGACY_EXPIRES_AT`. Every request it authenticates is
+logged, counted in `yggdrasil_workflow_run_legacy_bridge_requests_total` and
+audited as `workflow_run.legacy_bridge`, and its asynchronous runs carry
+`yggdrasil.io/creator_legacy_workflow_bridge=true` (ADR-0022). The event bridge likewise requires
 `YGGDRASIL_EVENT_PUBLISH_LEGACY_ENABLED=true` and a future RFC3339
 `YGGDRASIL_EVENT_PUBLISH_LEGACY_EXPIRES_AT`. The former raw-token
 `YGGDRASIL_WORKFLOW_RUN_SCOPED_TOKENS_JSON` configuration is rejected.

@@ -122,6 +122,30 @@ the caller asks for `async=false` or a `sync` header. The async worker uses the
 panic-safe goroutine wrapper; a panic records only a generic failed-run error
 before being recovered and counted. Foreign and absent runs both return 404.
 
+Core loads the workflow surface (the inventory and the legacy bridge
+settings) once at start and the gate, the dispatch and poll handlers and the
+manifest-write check share that copy (ADR-0022); only the bridge expiry is
+evaluated per request, so a changed inventory takes effect at the next
+restart. A malformed inventory, a variable that is set but blank, the raw
+scoped-token format, or a workflow digest that a directory principal, an
+event principal or a plaintext credential (`YGGDRASIL_WORKFLOW_RUN_TOKEN`,
+`YGGDRASIL_EVENT_PUBLISH_TOKEN`, `YGGDRASIL_DEPLOY_TOKEN`,
+`YGGDRASIL_AUTH_ADMIN_TOKEN`) also holds refuses the workflow surface in every
+environment: every machine request to the workflow-run routes answers 401
+until a restart with a valid inventory, and nothing falls into the anonymous
+posture. Refused bridge settings switch off only the bridge and the anonymous
+posture; hashed principals keep working. At every start Core logs each
+refusal at error level and one info summary,
+`workflow run credential surface loaded`, with the principal count, usable
+count, principal ids, earliest expiry, the bridge state and whether anything
+was refused, never a credential or a digest.
+
+The credential-free development posture (anonymous workflow dispatch and
+polling, anonymous manifest writes, anonymous event publishing) requires both
+a surface with nothing configured and `YGGDRASIL_ENV` set explicitly to
+`dev`, `development`, `local` or `test` (ADR-0022). An unset `YGGDRASIL_ENV`,
+as on a production Core that does not set it, keeps every one of them closed.
+
 Event writers use a separate
 `YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON` inventory with the same hash and
 lifecycle fields, no workflow allowlist, and a non-empty `allowed_events` list
@@ -158,8 +182,9 @@ loads the inventory once at start and the gate and handler share that copy.
 A malformed grant, or a variable that is set but blank, refuses the whole
 inventory, which fails boot with `YGGDRASIL_ENV=production` and otherwise
 leaves every event publish answering `401` until a restart with a valid
-inventory; only a truly unset variable means "no principals" and keeps the
-credential-free development posture. Refused legacy bridge settings switch
+inventory; only a truly unset variable means "no principals", and the
+credential-free development posture additionally needs an explicit
+development `YGGDRASIL_ENV` (ADR-0022). Refused legacy bridge settings switch
 off only the bridge and that anonymous posture; hashed principals keep
 working. Recreating a deleted instance name under the same provider inherits
 its logical grants, so a hard delete needs a review of the grants that name
@@ -218,7 +243,11 @@ again, so a malformed inventory can only refuse the boot, never a request,
 and a rotation written to the environment of a running process takes effect
 only at the next boot. Boot fails on a malformed directory inventory in every
 environment, and production boot rejects a directory digest shared with any
-other credential scope.
+other credential scope. Outside production, a directory digest shared with an
+event principal or a plaintext credential makes Core serve an empty directory
+inventory instead (ADR-0022): the shared bearer reaches its own scope, and
+directory reads answer 401 until the inventory is fixed. A digest shared with
+a workflow principal refuses the workflow surface.
 
 `YGGDRASIL_AUTH_ADMIN_TOKEN` remains a purpose-built credential for the exact
 provider, SCIM, and SAML administration mutations that support machine
@@ -229,7 +258,14 @@ through the normal MFA, CSRF, claims, and RBAC pipeline.
 The old plaintext `YGGDRASIL_WORKFLOW_RUN_TOKEN` is accepted only when
 `YGGDRASIL_WORKFLOW_RUN_LEGACY_ENABLED=true` and
 `YGGDRASIL_WORKFLOW_RUN_LEGACY_EXPIRES_AT` is a future RFC3339 timestamp. It
-remains workflow dispatch/poll-only. `YGGDRASIL_EVENT_PUBLISH_TOKEN` is the
+remains workflow dispatch/poll-only. Every request it authenticates is
+recorded (ADR-0022): a warning line `legacy workflow-run bridge accepted`
+with the route, workflow or run id, subject, user agent and address, one
+bump of `yggdrasil_workflow_run_legacy_bridge_requests_total{route}`, and a
+`workflow_run.legacy_bridge` audit row (dispatches always, polls once per run
+id per process). An asynchronous run it dispatched carries the
+server-authored metadata `yggdrasil.io/creator_legacy_workflow_bridge=true`,
+and a client value for that key is always dropped. `YGGDRASIL_EVENT_PUBLISH_TOKEN` is the
 separate plaintext event-only migration bridge and requires
 `YGGDRASIL_EVENT_PUBLISH_LEGACY_ENABLED=true` plus a future RFC3339
 `YGGDRASIL_EVENT_PUBLISH_LEGACY_EXPIRES_AT`. Production boot requires an
@@ -259,18 +295,23 @@ trail is complete.
 ## Audit trail
 
 Every audited outcome of the HTTP API is one row in `audit_events`
-(migration 00017). Four writers in `controllers/httpapi` produce them: the
+(migration 00017). Five writers in `controllers/httpapi` produce them: the
 handler audit (`recordAudit`: manifest create and delete, warnings
 persistence, workflow template instantiation), the auth audit
 (`recordAuthAuditSync`: the closed `auth.*` action set for login, MFA,
 session, and password outcomes), the directory machine-read audit described
-above, and the ops permission gate (`recordOpsAuditDenied`: one
+above, the ops permission gate (`recordOpsAuditDenied`: one
 `ops.permission.denied` row per call `requireOpsPermission` refuses in
-enforce mode, through the ops row shape of migration 00031). The
+enforce mode, through the ops row shape of migration 00031), and the legacy
+workflow-run bridge audit (`workflow_run.legacy_bridge`, ADR-0022). The
 OIDC provider writes its `resource_kind=oidc` rows from `controllers/oidc`.
-All of them are fire-and-forget (an insert failure is logged and never gates
-the request) except the directory writer, which is synchronous and
-fail-closed.
+The handler, auth, ops and OIDC writers are fire-and-forget (an insert
+failure is logged and never gates the request). The directory writer is
+synchronous and fail-closed. The legacy bridge writer is synchronous with a
+2 second bound and best effort: a failure bumps
+`yggdrasil_workflow_run_legacy_bridge_audit_failures_total`, is logged, and
+the request is still served, so the rows are the durable record of who still
+uses the bridge.
 
 Two request headers reach the fixed-width columns of a row, and neither
 reaches them raw (ADR-0020). A row's `trace_id` and `span_id` come only from

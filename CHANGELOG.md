@@ -5,6 +5,50 @@ All notable changes to yggdrasil-core are documented here.
 ## [Unreleased]
 
 ### Security
+- **BREAKING: a Core without an explicit development `YGGDRASIL_ENV` no
+  longer accepts anonymous workflow dispatch, manifest writes or event
+  publishes (ADR-0022).** The credential-free machine posture now needs
+  `YGGDRASIL_ENV` set to `dev`, `development`, `local` or `test` (trimmed,
+  any case) on top of a surface with nothing configured; an unset or any
+  other value answers `401`. Set it on every local, validation, ephemeral or
+  e2e Core that relied on that posture. The repository compose files now set
+  `YGGDRASIL_ENV` to `development`; the `yggdrasil init` compose asset must
+  ship the same before the next release tag. The CSRF, OAuth-state and
+  deploy-token development fallbacks are unchanged.
+- **The workflow-run credential surface is loaded once (ADR-0022).**
+  `YGGDRASIL_WORKFLOW_MACHINE_PRINCIPALS_JSON` and the legacy
+  `YGGDRASIL_WORKFLOW_RUN_TOKEN` bridge settings are parsed once at start,
+  like the event and directory surfaces, and shared by the gate, the dispatch
+  and poll handlers and the manifest-write check; only the bridge expiry is
+  evaluated per request. **Behavior change:** a workflow inventory that is set
+  but blank is refused instead of meaning "no principals"; unset the variable
+  instead. A refused inventory answers `401` to every machine request on the
+  workflow-run routes and never falls into the anonymous posture. Refused
+  bridge settings (for example the token without
+  `YGGDRASIL_WORKFLOW_RUN_LEGACY_ENABLED=true`) switch off only the bridge and
+  the anonymous posture: hashed principals keep working. A workflow digest
+  shared with a directory principal, an event principal or a plaintext
+  credential (`YGGDRASIL_WORKFLOW_RUN_TOKEN`, `YGGDRASIL_EVENT_PUBLISH_TOKEN`,
+  `YGGDRASIL_DEPLOY_TOKEN`, `YGGDRASIL_AUTH_ADMIN_TOKEN`) refuses the workflow
+  surface in every environment; a directory digest shared with an event
+  principal or a plaintext credential serves an empty directory inventory
+  (directory reads answer `401`) without stopping boot. `New` logs each
+  refusal at error level and always an info summary,
+  `workflow run credential surface loaded`, with counts, principal ids,
+  dates and booleans, never digests.
+- **Legacy workflow-run bridge use is logged, counted, audited and stamped
+  (ADR-0022).** Every request the bridge authenticates logs
+  `legacy workflow-run bridge accepted` (route, workflow or run id, subject,
+  user agent, address), bumps
+  `yggdrasil_workflow_run_legacy_bridge_requests_total{route}` and writes a
+  `workflow_run.legacy_bridge` row to `audit_events` (dispatches always, polls
+  once per run id per process). The row is written synchronously with a
+  2 second bound and best effort: a failure bumps
+  `yggdrasil_workflow_run_legacy_bridge_audit_failures_total` and is logged,
+  and the request is still served. Asynchronous runs the bridge dispatched
+  carry the server-authored metadata
+  `yggdrasil.io/creator_legacy_workflow_bridge=true`; a client value for that
+  key is always dropped.
 - **Event publisher grants keyed by the logical integration instance
   (ADR-0021).** A grant in `YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON` whose
   `instance_id` is `<namespace>/<name>` is now a logical grant: it matches
