@@ -982,7 +982,10 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 				workflowRunMachineCredentialPath(r.Method, r.URL.Path)) {
 			// A configured machine principal or legacy migration credential
 			// matched after path scoping, or the exact workflow route is using
-			// the credential-free non-production compatibility posture.
+			// the credential-free development posture: nothing configured on
+			// the workflow surface and YGGDRASIL_ENV set explicitly to dev,
+			// development, local or test (ADR-0022). An unset YGGDRASIL_ENV
+			// keeps that posture closed.
 			next.ServeHTTP(w, r)
 			return
 		}

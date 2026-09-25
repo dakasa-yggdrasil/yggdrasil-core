@@ -132,9 +132,12 @@ authenticated principal must hold a grant for the event: an exact
 provider/instance/event triple, or a logical grant for the integration
 instance the `instance_id` resolves to (see "Exact and logical grants" below).
 
-**Generic local-compatibility validation.** Only when the event auth surface is
-entirely unconfigured outside production, the historical generic HTTP shape
-remains available for development and tests. In that posture, `type`,
+**Generic local-compatibility validation.** Only in the credential-free
+development posture, where nothing is configured on the event auth surface
+AND `YGGDRASIL_ENV` is set explicitly to `dev`, `development`, `local` or
+`test` (ADR-0022), the historical generic HTTP shape remains available for
+development and tests. An unset `YGGDRASIL_ENV` keeps it closed and the
+request answers `401`. In that posture, `type`,
 `aggregate_type`, `aggregate_id`, and `payload` are required; `payload` must be
 a JSON object and `schema_version` defaults to `"v1"`. The payload is validated
 against the registered event JSON Schema. Production machine credentials never

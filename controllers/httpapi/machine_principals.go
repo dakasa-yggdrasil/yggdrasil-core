@@ -208,9 +208,11 @@ func workflowMachinePrincipalsFromEnv() ([]workflowMachinePrincipal, error) {
 
 func eventPublisherPrincipalsFromEnv() ([]eventPublisherPrincipal, error) {
 	// A variable that is present but blank is a refused inventory, never "no
-	// principals": with no legacy bridge that would open the anonymous
-	// development posture wherever YGGDRASIL_ENV is unset. Only a variable
-	// that is truly unset means the event surface is unconfigured.
+	// principals". Read as unconfigured, it would open the anonymous
+	// development posture on a Core whose YGGDRASIL_ENV explicitly names a
+	// development environment (ADR-0022) and hide a broken secret everywhere
+	// else. Only a variable that is truly unset means the event surface is
+	// unconfigured.
 	if raw, present := os.LookupEnv(eventPublisherPrincipalsEnv); present && strings.TrimSpace(raw) == "" {
 		return nil, fmt.Errorf("%s is set but blank; unset it or configure at least one principal", eventPublisherPrincipalsEnv)
 	}
