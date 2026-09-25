@@ -13,8 +13,12 @@ import (
 //   - the dedicated deploy token from YGGDRASIL_DEPLOY_TOKEN.
 //
 // Client sends the token as Authorization: Bearer <token> or X-Deploy-Token: <token>.
-// Workflow credentials are never accepted. Only a credential-free request with
-// no deploy token configured outside production gets the local-dev allow-all.
+// Workflow credentials are never accepted. A request that presents no
+// credential passes only in the credential-free development posture: no
+// deploy token configured AND YGGDRASIL_ENV set explicitly to dev,
+// development, local or test (ADR-0022). An unset YGGDRASIL_ENV, which is how
+// a production Core may run, keeps these routes closed, so an unconfigured
+// deploy token can never open integration install to anonymous callers.
 func requireDeployToken(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if authorizeDeployRequest(r) == nil {
@@ -44,7 +48,11 @@ func authorizeDeployRequest(r *http.Request) error {
 	expected := strings.TrimSpace(os.Getenv("YGGDRASIL_DEPLOY_TOKEN"))
 	token := extractDeployToken(r)
 	if expected == "" {
-		if token == "" && !requestPresentsStaticCredential(r) && devEnvAllowsFallback() {
+		// machineAnonymousAllowed, not devEnvAllowsFallback: the CSRF and
+		// OAuth-state fallbacks treat an unset YGGDRASIL_ENV as development,
+		// but these routes compile and run caller-defined workflows, so an
+		// unset value must fail closed (ADR-0022).
+		if token == "" && !requestPresentsStaticCredential(r) && machineAnonymousAllowed() {
 			return nil
 		}
 		return errWorkflowRunUnauthorized

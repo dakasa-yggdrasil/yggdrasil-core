@@ -965,7 +965,9 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 		// Dedicated deploy automation is accepted only on the exact deploy,
 		// bootstrap, and integration-install routes. Keeping this separate lets
 		// workflow credentials remain dispatch-only without breaking the
-		// purpose-built YGGDRASIL_DEPLOY_TOKEN path.
+		// purpose-built YGGDRASIL_DEPLOY_TOKEN path. A credential-free request
+		// passes here only with no deploy token configured and an explicit
+		// development YGGDRASIL_ENV (ADR-0022).
 		if deployCredentialPath(r.Method, r.URL.Path) && authorizeDeployRequest(r) == nil {
 			next.ServeHTTP(w, r)
 			return
