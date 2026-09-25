@@ -5,5 +5,9 @@ services:
     build:
       context: ..
       dockerfile: Dockerfile
+    environment:
+      # The functional stack runs credential-free; ADR-0022 needs the
+      # development environment to be explicit for that posture.
+      YGGDRASIL_ENV: development
     ports:
       - "9080:9080"
