@@ -150,7 +150,7 @@ The HTTP API is always served on `PORT`. A bare-metal core without
 `YGGDRASIL_ENV` refuses credential-free workflow dispatch, manifest writes
 and event publishing (ADR-0022); export `YGGDRASIL_ENV=development` only on a
 single-user machine, and configure machine principals everywhere else.
-Additional `rpc.Transport` backends are opt-in — set their env vars only if you need them (e.g.
+Additional `rpc.Transport` backends are opt-in. Set their env vars only if you need them (e.g.
 `BROKER_URL=amqp://user:pass@localhost:5672/` enables the AMQP
 backend; other transports expose their own config variable).
 
