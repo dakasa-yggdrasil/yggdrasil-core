@@ -99,8 +99,6 @@ func validateBootSecrets() error {
 	// credentials. The global workflow token is accepted only as an explicit,
 	// time-bounded workflow-route migration bridge; it never satisfies event
 	// publishing. Hashed machine principals are the durable path.
-	eventToken := strings.TrimSpace(os.Getenv(legacyEventPublishTokenEnv))
-	legacyWorkflowToken := strings.TrimSpace(os.Getenv("YGGDRASIL_WORKFLOW_RUN_TOKEN"))
 	if workflowPrincipalsErr == nil && legacyWorkflowErr == nil &&
 		usableWorkflowMachinePrincipalCount(workflowPrincipals, now) == 0 && !legacyWorkflow.Active {
 		issues = append(issues,
@@ -120,15 +118,7 @@ func validateBootSecrets() error {
 	// Hash both plaintext bridges only inside the process and compare every
 	// scope in constant time. Diagnostics name configuration locations but never
 	// include credentials or digests.
-	plaintextScopes := []struct {
-		name  string
-		value string
-	}{
-		{name: "YGGDRASIL_WORKFLOW_RUN_TOKEN", value: legacyWorkflowToken},
-		{name: legacyEventPublishTokenEnv, value: eventToken},
-		{name: "YGGDRASIL_DEPLOY_TOKEN", value: strings.TrimSpace(os.Getenv("YGGDRASIL_DEPLOY_TOKEN"))},
-		{name: "YGGDRASIL_AUTH_ADMIN_TOKEN", value: strings.TrimSpace(os.Getenv("YGGDRASIL_AUTH_ADMIN_TOKEN"))},
-	}
+	plaintextScopes := plaintextMachineCredentialScopes()
 	for left := range plaintextScopes {
 		for right := left + 1; right < len(plaintextScopes); right++ {
 			if plaintextScopes[left].value != "" && plaintextScopes[right].value != "" &&
@@ -203,6 +193,27 @@ func validateBootSecrets() error {
 		os.Getenv("YGGDRASIL_ENV"),
 		strings.Join(issues, "\n  - "),
 	)
+}
+
+// plaintextMachineCredential is one plaintext credential Core reads from its
+// environment, named by the variable that carries it.
+type plaintextMachineCredential struct {
+	name  string
+	value string
+}
+
+// plaintextMachineCredentialScopes returns the trimmed plaintext credentials
+// Core reads: both migration bridges, the deploy token and the auth-admin
+// token. validateBootSecrets compares them in production; ADR-0022 also
+// compares the workflow and directory digests against them at load, in
+// every environment. The values never leave the process.
+func plaintextMachineCredentialScopes() []plaintextMachineCredential {
+	return []plaintextMachineCredential{
+		{name: "YGGDRASIL_WORKFLOW_RUN_TOKEN", value: strings.TrimSpace(os.Getenv("YGGDRASIL_WORKFLOW_RUN_TOKEN"))},
+		{name: legacyEventPublishTokenEnv, value: strings.TrimSpace(os.Getenv(legacyEventPublishTokenEnv))},
+		{name: "YGGDRASIL_DEPLOY_TOKEN", value: strings.TrimSpace(os.Getenv("YGGDRASIL_DEPLOY_TOKEN"))},
+		{name: "YGGDRASIL_AUTH_ADMIN_TOKEN", value: strings.TrimSpace(os.Getenv("YGGDRASIL_AUTH_ADMIN_TOKEN"))},
+	}
 }
 
 func digestMatchesPlaintext(digest [sha256.Size]byte, plaintext string) bool {

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"encoding/json"
+	"strconv"
 	"strings"
 	"testing"
 	"time"
@@ -338,7 +339,7 @@ func TestValidateBootSecrets_ProductionRejectsInvalidMachinePrincipalConfig(t *t
 
 func TestValidateBootSecrets_ProductionAcceptsExplicitUnexpiredLegacyWorkflowBridge(t *testing.T) {
 	setValidProductionBootEnvironment(t, "production")
-	t.Setenv(workflowMachinePrincipalsEnv, "")
+	unsetEnvForTest(t, workflowMachinePrincipalsEnv)
 	setTestLegacyWorkflowCredential(t, "legacy-workflow-test-token")
 
 	if err := validateBootSecrets(); err != nil {
@@ -348,11 +349,32 @@ func TestValidateBootSecrets_ProductionAcceptsExplicitUnexpiredLegacyWorkflowBri
 
 func TestValidateBootSecrets_ProductionRejectsExpiredLegacyAsOnlyWorkflowCredential(t *testing.T) {
 	setValidProductionBootEnvironment(t, "production")
-	t.Setenv(workflowMachinePrincipalsEnv, "")
+	unsetEnvForTest(t, workflowMachinePrincipalsEnv)
 	setTestLegacyWorkflowCredential(t, "legacy-workflow-test-token")
 	t.Setenv("YGGDRASIL_WORKFLOW_RUN_LEGACY_EXPIRES_AT", "2020-01-01T00:00:00Z")
 
 	if err := validateBootSecrets(); err == nil {
 		t.Fatal("expired legacy workflow bridge satisfied production boot")
+	}
+}
+
+// ADR-0022: a workflow inventory that is set but blank is refused, in
+// production as everywhere else, even when the legacy bridge alone would
+// satisfy the workflow credential requirement.
+func TestValidateBootSecrets_ProductionRefusesBlankWorkflowInventory(t *testing.T) {
+	for _, blank := range []string{"", "  ", "\n"} {
+		t.Run(strconv.Quote(blank), func(t *testing.T) {
+			setValidProductionBootEnvironment(t, "production")
+			setTestLegacyWorkflowCredential(t, "legacy-workflow-test-token")
+			t.Setenv(workflowMachinePrincipalsEnv, blank)
+
+			err := validateBootSecrets()
+			if err == nil {
+				t.Fatal("production boot accepted a set but blank workflow inventory")
+			}
+			if !strings.Contains(err.Error(), workflowMachinePrincipalsEnv+" is set but blank") {
+				t.Fatalf("boot error must name the blank inventory, got: %v", err)
+			}
+		})
 	}
 }

@@ -54,13 +54,14 @@ type workflowRunActor struct {
 //     `dispatch_mode: async` to keep callers from hitting 502s.
 //  4. Sync (the historical default) when neither (2) nor (3) is set.
 func (s *Server) handleWorkflowRun(w http.ResponseWriter, r *http.Request) {
-	actor, err := authenticateWorkflowRunRequest(r)
+	actor, err := s.authenticateWorkflowRunRequest(r)
 	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
 
 	if !s.isBrokerAvailable() {
+		s.recordLegacyWorkflowBridgeDispatch(r, actor, model.ManifestSelector{})
 		writeJSON(w, http.StatusServiceUnavailable, map[string]string{
 			"error":  "workflow_dispatch_unavailable",
 			"detail": "control-plane is broker-degraded; workflow dispatch is temporarily disabled",
@@ -70,9 +71,15 @@ func (s *Server) handleWorkflowRun(w http.ResponseWriter, r *http.Request) {
 
 	var req model.RunWorkflowRequest
 	if err := decodeJSON(r, &req); err != nil {
+		s.recordLegacyWorkflowBridgeDispatch(r, actor, model.ManifestSelector{})
 		writeMappedError(w, err)
 		return
 	}
+	// ADR-0022: every dispatch the legacy bridge authenticated is logged,
+	// counted and audited before anything else can refuse it, so a caller
+	// that still depends on the bridge is visible even when its dispatch
+	// then fails.
+	s.recordLegacyWorkflowBridgeDispatch(r, actor, req.Workflow)
 	if err := s.authorizeWorkflowDispatch(r.Context(), req, actor); err != nil {
 		if errors.Is(err, errWorkflowAuthorizationDenied) {
 			writeProblemJSON(w, http.StatusForbidden, "workflow.authorization_denied", err.Error())
@@ -222,13 +229,19 @@ func markAsyncWorkflowRunFailedOnPanic(db *sql.DB, runID uuid.UUID) {
 // before persistence. The authenticated principal always wins over client
 // metadata, including when a caller attempts to spoof or erase the reserved
 // field. Machine idempotency keys are persisted as a principal-scoped digest so
-// the existing unique index cannot return another principal's run id.
+// the existing unique index cannot return another principal's run id. The
+// legacy bridge stamp (ADR-0022) is reserved the same way: the client value is
+// always dropped, and only a dispatch the bridge authenticated is stamped.
 func bindWorkflowRunMachineActor(req model.RunWorkflowRequest, actor workflowRunActor) (model.RunWorkflowRequest, string) {
-	metadata := make(map[string]any, len(req.Metadata)+1)
+	metadata := make(map[string]any, len(req.Metadata)+2)
 	for key, value := range req.Metadata {
 		metadata[key] = value
 	}
 	delete(metadata, repository.WorkflowRunCreatorMachinePrincipalMetadataKey)
+	delete(metadata, repository.WorkflowRunCreatorLegacyBridgeMetadataKey)
+	if actor.LegacyMigration {
+		metadata[repository.WorkflowRunCreatorLegacyBridgeMetadataKey] = "true"
+	}
 
 	originalIdempotencyKey := ""
 	if actor.MachinePrincipalID != "" {
@@ -246,7 +259,7 @@ func bindWorkflowRunMachineActor(req model.RunWorkflowRequest, actor workflowRun
 // run. Returns 404 when the id is unknown so pollers can distinguish a
 // transient error from a missing run.
 func (s *Server) handleWorkflowRunGet(w http.ResponseWriter, r *http.Request) {
-	actor, err := authenticateWorkflowRunRequest(r)
+	actor, err := s.authenticateWorkflowRunRequest(r)
 	if err != nil {
 		writeMappedError(w, err)
 		return
@@ -254,6 +267,15 @@ func (s *Server) handleWorkflowRunGet(w http.ResponseWriter, r *http.Request) {
 
 	idStr := r.PathValue("run_id")
 	id, err := uuid.Parse(strings.TrimSpace(idStr))
+	if actor.LegacyMigration {
+		// ADR-0022: every legacy poll is counted; its log line and audit
+		// row are written once per canonical run id per process.
+		runRef := ""
+		if err == nil {
+			runRef = id.String()
+		}
+		s.recordLegacyWorkflowBridgePoll(r, actor, runRef)
+	}
 	if err != nil {
 		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid run_id"})
 		return
@@ -392,12 +414,26 @@ func (s *Server) lookupWorkflowManifestSpec(ctx context.Context, req model.RunWo
 	return record, spec, err
 }
 
-func authorizeWorkflowRunRequest(r *http.Request) error {
-	_, err := authenticateWorkflowRunRequest(r)
+func (s *Server) authorizeWorkflowRunRequest(r *http.Request) error {
+	_, err := s.authenticateWorkflowRunRequest(r)
 	return err
 }
 
-func authenticateWorkflowRunRequest(r *http.Request) (workflowRunActor, error) {
+// authenticateWorkflowRunRequest resolves the caller of the workflow-run
+// routes against the surface this process loaded (ADR-0022), in this order:
+//  1. console claims attached by the gate (humans, unchanged);
+//  2. a refused workflow surface answers 401 to every machine request;
+//  3. an active, unexpired hashed principal, on the exact dispatch and poll
+//     routes only;
+//  4. refused bridge settings answer 401 (after the principals, so they never
+//     lock a principal out);
+//  5. the active legacy bridge, on the same routes;
+//  6. the credential-free posture, only with nothing configured, no
+//     credential presented and an explicit development YGGDRASIL_ENV.
+//
+// Refusals carry no parser or collision diagnostics; those stay in the boot
+// log.
+func (s *Server) authenticateWorkflowRunRequest(r *http.Request) (workflowRunActor, error) {
 
 	// Console session path: the request reached this handler only because
 	// requireAuthenticatedConsoleAPIs validated the cookie AND
@@ -415,21 +451,22 @@ func authenticateWorkflowRunRequest(r *http.Request) (workflowRunActor, error) {
 		return workflowRunActor{CollaboratorID: strings.TrimSpace(collaboratorID)}, nil
 	}
 
+	config := s.workflowRunAuthConfig()
+	if config == nil || config.err != nil {
+		// A refused inventory or a cross-scope digest collision: never a
+		// match, never the anonymous posture.
+		return workflowRunActor{}, errWorkflowRunUnauthorized
+	}
+
+	now := time.Now().UTC()
 	candidates := []string{
 		strings.TrimSpace(r.Header.Get("X-Yggdrasil-Workflow-Token")),
 		bearerToken(r.Header.Get("Authorization")),
 	}
-	machinePrincipals, err := workflowMachinePrincipalsFromEnv()
-	if err != nil {
-		return workflowRunActor{}, err
-	}
-	legacy, err := legacyWorkflowCredentialFromEnv(time.Now().UTC())
-	if err != nil {
-		return workflowRunActor{}, err
-	}
-	if workflowRunMachineCredentialPath(r.Method, r.URL.Path) {
+	machinePath := workflowRunMachineCredentialPath(r.Method, r.URL.Path)
+	if machinePath {
 		for _, candidate := range candidates {
-			if principal := activeWorkflowMachinePrincipal(candidate, machinePrincipals, time.Now().UTC()); principal != nil {
+			if principal := activeWorkflowMachinePrincipal(candidate, config.principals, now); principal != nil {
 				return workflowRunActor{
 					Subject:            model.RBACSubject{Type: "service", ID: principal.PrincipalID},
 					MachinePrincipalID: principal.PrincipalID,
@@ -439,17 +476,24 @@ func authenticateWorkflowRunRequest(r *http.Request) (workflowRunActor, error) {
 		}
 	}
 
-	if workflowRunMachineCredentialPath(r.Method, r.URL.Path) && legacy.Active {
+	// Refused bridge settings switch off the bridge and the anonymous
+	// posture below, never the principals matched above.
+	if config.legacyErr != nil {
+		return workflowRunActor{}, errWorkflowRunUnauthorized
+	}
+
+	if machinePath && config.legacyActive(now) {
 		for _, candidate := range candidates {
-			if constantTimeTokenEqual(candidate, legacy.Token) {
+			if constantTimeTokenEqual(candidate, config.legacy.Token) {
 				return workflowRunActor{Subject: legacyWorkflowRunSubject(), LegacyMigration: true}, nil
 			}
 		}
 	}
 
-	if !legacy.Configured && len(machinePrincipals) == 0 && !requestPresentsStaticCredential(r) && devEnvAllowsFallback() {
-		// Local development convention: no configured credential keeps the
-		// endpoint open. Protected workflows still reject this anonymous actor.
+	if !requestPresentsStaticCredential(r) && config.anonymousAllowed() {
+		// Local development convention: an explicit development
+		// YGGDRASIL_ENV with no configured credential keeps the endpoint
+		// open. Protected workflows still reject this anonymous actor.
 		return workflowRunActor{}, nil
 	}
 	return workflowRunActor{}, errWorkflowRunUnauthorized
@@ -656,8 +700,9 @@ func workflowManifestReference(record model.Manifest) model.ManifestReference {
 // Accepts:
 //   - A valid console session whose claims are already attached to the
 //     context by the requiresAuthenticatedConsoleAPIs middleware.
-//   - When every machine/static credential is unset outside production, the
-//     historical local-development allow-all behavior remains available.
+//   - When every workflow credential is unset and YGGDRASIL_ENV explicitly
+//     names a development environment (ADR-0022), the historical
+//     local-development allow-all behavior remains available.
 //
 // Workflow credentials are intentionally rejected here. Machine workflow
 // principals and the time-bounded legacy migration token authorize only
@@ -674,7 +719,7 @@ func (s *Server) manifestWriteAuthorized(r *http.Request) bool {
 	// In the credential-free local-development posture only, preserve the
 	// historical open endpoint. Any configured workflow credential is scoped to
 	// workflow-run paths by authenticateWorkflowRunRequest and is rejected here.
-	return authorizeWorkflowRunRequest(r) == nil
+	return s.authorizeWorkflowRunRequest(r) == nil
 }
 
 func bearerToken(value string) string {

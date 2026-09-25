@@ -656,7 +656,9 @@ func TestBlankEventInventoryIsRefusedWhileAnUnsetOneKeepsTheDevPosture(t *testin
 
 	t.Run("unset", func(t *testing.T) {
 		setEventPublishAuthEnvironment(t, "", "")
-		t.Setenv("YGGDRASIL_ENV", "")
+		// ADR-0022: the development posture also needs YGGDRASIL_ENV to name
+		// a development environment explicitly.
+		t.Setenv("YGGDRASIL_ENV", "dev")
 		if _, present := os.LookupEnv(eventPublisherPrincipalsEnv); present {
 			t.Fatal("the helper did not unset the inventory")
 		}

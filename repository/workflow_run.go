@@ -28,6 +28,13 @@ var ErrWorkflowRunIdempotencyConflict = errors.New("workflow run idempotency key
 // asynchronous run crosses the durable boundary.
 const WorkflowRunCreatorMachinePrincipalMetadataKey = "yggdrasil.io/creator_machine_principal_id"
 
+// WorkflowRunCreatorLegacyBridgeMetadataKey is reserved for the HTTP
+// authentication layer too (ADR-0022). The server removes any client value
+// and writes "true" when the plaintext legacy workflow-run bridge
+// authenticated the asynchronous dispatch, so a durable query can count the
+// runs that still depend on the bridge.
+const WorkflowRunCreatorLegacyBridgeMetadataKey = "yggdrasil.io/creator_legacy_workflow_bridge"
+
 // InsertWorkflowRun creates one workflow_runs row in pending status. Used
 // as the first step of an async run — the goroutine that executes the
 // workflow updates the same row to running → succeeded/failed.

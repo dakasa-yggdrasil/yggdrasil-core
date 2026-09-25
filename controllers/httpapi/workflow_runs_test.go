@@ -21,7 +21,7 @@ func TestAuthorizeWorkflowRunRequestAllowsMissingTokenWhenUnset(t *testing.T) {
 	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "")
 
 	req := httptest.NewRequest("POST", "http://yggdrasil-core:9080/api/v1/workflow-runs", nil)
-	if err := authorizeWorkflowRunRequest(req); err != nil {
+	if err := (&Server{}).authorizeWorkflowRunRequest(req); err != nil {
 		t.Fatalf("expected request to be allowed without configured token, got %v", err)
 	}
 }
@@ -29,7 +29,7 @@ func TestAuthorizeWorkflowRunRequestAllowsMissingTokenWhenUnset(t *testing.T) {
 func TestAuthenticatedConsoleGateKeepsCredentialFreeWorkflowDevCompatibilityExact(t *testing.T) {
 	t.Setenv("YGGDRASIL_ENV", "dev")
 	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "")
-	t.Setenv(workflowMachinePrincipalsEnv, "")
+	unsetEnvForTest(t, workflowMachinePrincipalsEnv)
 	t.Setenv(legacyScopedWorkflowTokensEnv, "")
 
 	srv := &Server{}
@@ -59,7 +59,7 @@ func TestAuthorizeWorkflowRunRequestAcceptsSharedHeader(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "http://yggdrasil-core:9080/api/v1/workflow-runs", nil)
 	req.Header.Set("X-Yggdrasil-Workflow-Token", "shared-token")
-	if err := authorizeWorkflowRunRequest(req); err != nil {
+	if err := (&Server{}).authorizeWorkflowRunRequest(req); err != nil {
 		t.Fatalf("expected request to be authorized by explicit header, got %v", err)
 	}
 }
@@ -69,7 +69,7 @@ func TestAuthorizeWorkflowRunRequestAcceptsBearerToken(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "http://yggdrasil-core:9080/api/v1/workflow-runs", nil)
 	req.Header.Set("Authorization", "Bearer shared-token")
-	if err := authorizeWorkflowRunRequest(req); err != nil {
+	if err := (&Server{}).authorizeWorkflowRunRequest(req); err != nil {
 		t.Fatalf("expected request to be authorized by bearer token, got %v", err)
 	}
 }
@@ -79,7 +79,7 @@ func TestAuthorizeWorkflowRunRequestRejectsInvalidToken(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "http://yggdrasil-core:9080/api/v1/workflow-runs", nil)
 	req.Header.Set("X-Yggdrasil-Workflow-Token", "wrong-token")
-	if err := authorizeWorkflowRunRequest(req); err == nil {
+	if err := (&Server{}).authorizeWorkflowRunRequest(req); err == nil {
 		t.Fatalf("expected invalid token to be rejected")
 	}
 }
@@ -91,7 +91,7 @@ func TestAuthenticateWorkflowRunRequestResolvesHashedMachinePrincipal(t *testing
 
 	req := httptest.NewRequest("POST", "http://yggdrasil-core:9080/api/v1/workflow-runs", nil)
 	req.Header.Set("Authorization", "Bearer cd-secret")
-	actor, err := authenticateWorkflowRunRequest(req)
+	actor, err := (&Server{}).authenticateWorkflowRunRequest(req)
 	if err != nil {
 		t.Fatalf("hashed workflow principal: %v", err)
 	}
@@ -107,7 +107,7 @@ func TestWorkflowMachinePrincipalCannotAuthorizeManifestWrites(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "http://yggdrasil-core:9080/api/v1/manifests", nil)
 	req.Header.Set("Authorization", "Bearer cd-secret")
-	if err := authorizeWorkflowRunRequest(req); err == nil {
+	if err := (&Server{}).authorizeWorkflowRunRequest(req); err == nil {
 		t.Fatal("workflow machine credential must not authorize manifest writes")
 	}
 }
@@ -118,7 +118,7 @@ func TestRawScopedWorkflowTokenConfigFailsClosed(t *testing.T) {
 
 	req := httptest.NewRequest("POST", "http://yggdrasil-core:9080/api/v1/workflow-runs", nil)
 	req.Header.Set("Authorization", "Bearer shared-token")
-	if _, err := authenticateWorkflowRunRequest(req); err == nil {
+	if _, err := (&Server{}).authenticateWorkflowRunRequest(req); err == nil {
 		t.Fatal("raw scoped-token configuration must fail closed, even for the legacy token")
 	}
 }
@@ -185,12 +185,12 @@ func TestLegacyWorkflowCredentialIsExplicitTimeBoundAndPathLimited(t *testing.T)
 
 	workflowReq := httptest.NewRequest(http.MethodPost, "/api/v1/workflow-runs", nil)
 	workflowReq.Header.Set("Authorization", "Bearer legacy-test-token")
-	if err := authorizeWorkflowRunRequest(workflowReq); err == nil {
+	if err := (&Server{}).authorizeWorkflowRunRequest(workflowReq); err == nil {
 		t.Fatal("legacy token without explicit migration settings was accepted")
 	}
 
 	setTestLegacyWorkflowCredential(t, "legacy-test-token")
-	if err := authorizeWorkflowRunRequest(workflowReq); err != nil {
+	if err := (&Server{}).authorizeWorkflowRunRequest(workflowReq); err != nil {
 		t.Fatalf("explicit unexpired legacy migration credential rejected: %v", err)
 	}
 	for _, path := range []string{
@@ -202,13 +202,13 @@ func TestLegacyWorkflowCredentialIsExplicitTimeBoundAndPathLimited(t *testing.T)
 	} {
 		req := httptest.NewRequest(http.MethodPost, path, nil)
 		req.Header.Set("Authorization", "Bearer legacy-test-token")
-		if err := authorizeWorkflowRunRequest(req); err == nil {
+		if err := (&Server{}).authorizeWorkflowRunRequest(req); err == nil {
 			t.Fatalf("legacy workflow credential escaped to %s", path)
 		}
 	}
 
 	t.Setenv("YGGDRASIL_WORKFLOW_RUN_LEGACY_EXPIRES_AT", "2020-01-01T00:00:00Z")
-	if err := authorizeWorkflowRunRequest(workflowReq); err == nil {
+	if err := (&Server{}).authorizeWorkflowRunRequest(workflowReq); err == nil {
 		t.Fatal("expired legacy workflow credential was accepted")
 	}
 }

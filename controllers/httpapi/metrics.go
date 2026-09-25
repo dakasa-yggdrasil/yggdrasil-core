@@ -342,4 +342,25 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 		fmt.Fprintf(w, "yggdrasil_directory_audit_failures_total{reason=\"%s\"} %d\n",
 			reason, directoryAuditSnap[reason])
 	}
+
+	// Legacy workflow-run bridge families (ADR-0022). Every request the
+	// plaintext YGGDRASIL_WORKFLOW_RUN_TOKEN bridge authenticates bumps one
+	// route bucket, so
+	// `sum(increase(yggdrasil_workflow_run_legacy_bridge_requests_total[7d]))`
+	// is the traffic that still depends on the bridge. The durable record is
+	// the workflow_run.legacy_bridge audit row; the second family counts the
+	// rows that could not be stored, so a gap in that trail is visible.
+	legacyBridgeSnap := metrics.WorkflowRunLegacyBridgeRequestsSnapshot()
+	fmt.Fprintf(w, "# HELP yggdrasil_workflow_run_legacy_bridge_requests_total Total workflow-run requests authenticated by the legacy YGGDRASIL_WORKFLOW_RUN_TOKEN bridge, by route (ADR-0022)\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_workflow_run_legacy_bridge_requests_total counter\n")
+	for _, route := range []string{
+		metrics.WorkflowRunLegacyBridgeRouteDispatch,
+		metrics.WorkflowRunLegacyBridgeRoutePoll,
+	} {
+		fmt.Fprintf(w, "yggdrasil_workflow_run_legacy_bridge_requests_total{route=\"%s\"} %d\n",
+			route, legacyBridgeSnap[route])
+	}
+	fmt.Fprintf(w, "# HELP yggdrasil_workflow_run_legacy_bridge_audit_failures_total Total workflow_run.legacy_bridge audit rows that could not be stored (ADR-0022)\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_workflow_run_legacy_bridge_audit_failures_total counter\n")
+	fmt.Fprintf(w, "yggdrasil_workflow_run_legacy_bridge_audit_failures_total %d\n", metrics.WorkflowRunLegacyBridgeAuditFailuresSnapshot())
 }

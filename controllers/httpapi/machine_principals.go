@@ -123,6 +123,15 @@ func workflowMachinePrincipalsFromEnv() ([]workflowMachinePrincipal, error) {
 	if strings.TrimSpace(os.Getenv(legacyScopedWorkflowTokensEnv)) != "" {
 		return nil, fmt.Errorf("%s is no longer accepted because it contains raw credentials; configure %s with token_sha256 digests", legacyScopedWorkflowTokensEnv, workflowMachinePrincipalsEnv)
 	}
+	// A variable that is present but blank is a refused inventory, never "no
+	// principals" (ADR-0022), exactly as for the event inventory: an
+	// ExternalSecret key that resolved to an empty string, or a mask meant
+	// for another variable, must not read as "unconfigured" and reopen the
+	// anonymous posture. Only a variable that is truly unset means the
+	// workflow surface has no principals.
+	if raw, present := os.LookupEnv(workflowMachinePrincipalsEnv); present && strings.TrimSpace(raw) == "" {
+		return nil, fmt.Errorf("%s is set but blank; unset it or configure at least one principal", workflowMachinePrincipalsEnv)
+	}
 
 	rawConfigured := strings.TrimSpace(os.Getenv(workflowMachinePrincipalsEnv)) != ""
 	var configs []workflowMachinePrincipalConfig
