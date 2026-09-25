@@ -6,15 +6,15 @@ All notable changes to yggdrasil-core are documented here.
 
 ### Security
 - **BREAKING: a Core without an explicit development `YGGDRASIL_ENV` no
-  longer accepts anonymous workflow dispatch, manifest writes, event
-  publishes, or integration install, bootstrap and product deploy requests
+  longer accepts anonymous workflow dispatch, event publishes, or
+  integration install, bootstrap and product deploy requests
   (ADR-0022).** The credential-free machine posture now needs
   `YGGDRASIL_ENV` set to `dev`, `development`, `local` or `test` (trimmed,
   any case) on top of a surface with nothing configured (for the
   deploy-family routes, no `YGGDRASIL_DEPLOY_TOKEN`); an unset or any other
   value answers `401`. `POST /api/v1/integrations/install` and its console
-  twin therefore need `YGGDRASIL_DEPLOY_TOKEN` (the one `yggdrasil install`
-  sends on the direct route) or, on the console route, a console session on
+  twin therefore need `YGGDRASIL_DEPLOY_TOKEN` (pass it to `yggdrasil install` with
+  `--token` on the direct route) or, on the console route, a console session on
   such a Core. Set `YGGDRASIL_ENV` on every local,
   validation, ephemeral or e2e Core that relied on that posture. The
   repository compose files now set `YGGDRASIL_ENV` to `development`; the

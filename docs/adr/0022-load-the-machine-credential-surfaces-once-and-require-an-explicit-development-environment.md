@@ -27,7 +27,9 @@ retires the workflow bridge, depends on closing the gaps below first.
 3. **The anonymous posture followed from that.** Outside
    `YGGDRASIL_ENV=production|prod`, a Core with no workflow credential
    configured accepted anonymous workflow dispatch of any workflow without
-   `spec.authorization`, unscoped polling and anonymous manifest writes. The
+   `spec.authorization`, unscoped polling, and its manifest-write check treated an anonymous caller
+   as authorized (the outer console gate still refused anonymous manifest
+   writes over HTTP in every environment). The
    event surface had the same rule. DaKasa production runs with
    `YGGDRASIL_ENV` unset: setting `production` would fail boot, because the
    CSRF and OAuth-state secrets `validateBootSecrets` requires are not
@@ -152,8 +154,8 @@ posture only to an explicitly named development environment.
 ## Consequences
 
 - **Breaking:** a Core without an explicit development `YGGDRASIL_ENV` no
-  longer accepts anonymous workflow dispatch, manifest writes, event
-  publishes, or integration install, bootstrap and product deploy requests.
+  longer accepts anonymous workflow dispatch, event publishes, or
+  integration install, bootstrap and product deploy requests.
   Every deployment that relied on credential-free access (local
   compose, `yggdrasil init`, validation, ephemeral and e2e environments) must
   set `YGGDRASIL_ENV` before it runs a build carrying this decision.

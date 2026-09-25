@@ -123,7 +123,7 @@ secret stores. Endpoints requiring auth and the configuration that gates them:
 
 Core loads the workflow, event and directory inventories once at start
 (ADR-0021, ADR-0022). A request with no credential reaches the workflow-run
-routes, manifest writes, the event route or the deploy-family routes (direct
+routes, the event route or the deploy-family routes (direct
 and console deploy, deploy-all, bootstrap and integration install) only when
 nothing is configured for that surface (for the deploy-family routes, no
 `YGGDRASIL_DEPLOY_TOKEN`) and `YGGDRASIL_ENV` is explicitly `dev`,

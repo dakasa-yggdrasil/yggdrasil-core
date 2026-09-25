@@ -141,7 +141,7 @@ count, principal ids, earliest expiry, the bridge state and whether anything
 was refused, never a credential or a digest.
 
 The credential-free development posture (anonymous workflow dispatch and
-polling, anonymous manifest writes, anonymous event publishing, and
+polling, anonymous event publishing, and
 anonymous integration install, bootstrap and product deploy requests)
 requires both a surface with nothing configured and `YGGDRASIL_ENV` set
 explicitly to `dev`, `development`, `local` or `test` (ADR-0022). For the
