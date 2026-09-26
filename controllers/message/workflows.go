@@ -259,16 +259,16 @@ func prepareWorkflowRun(
 }
 
 // ResolveActiveWorkflowManifestSpec resolves the workflow definition used by a
-// dispatch. Exact manifest_id selectors may address historical catalog rows, so
-// they require an explicit active-state check after resolution. Logical version
-// selectors already resolve with activeOnly=true; the defensive check keeps all
-// selector forms on the same fail-closed contract.
+// dispatch. Exact manifest_id selectors may address any catalog kind and any
+// historical row, so they require explicit kind and active-state checks after
+// resolution. Logical version selectors already constrain both in SQL; the
+// defensive checks keep all selector forms on the same fail-closed contract.
 func ResolveActiveWorkflowManifestSpec(ctx context.Context, db *sql.DB, selector model.ManifestSelector) (model.Manifest, model.WorkflowManifestSpec, error) {
 	workflowManifest, err := resolveManifestForKind(ctx, db, "workflow", selector.ManifestID, selector.Namespace, selector.Name, selector.Version)
 	if err != nil {
 		return model.Manifest{}, model.WorkflowManifestSpec{}, err
 	}
-	if !workflowManifest.Metadata.Active {
+	if !strings.EqualFold(strings.TrimSpace(workflowManifest.Kind), "workflow") || !workflowManifest.Metadata.Active {
 		return model.Manifest{}, model.WorkflowManifestSpec{}, repository.ErrManifestNotFound
 	}
 
