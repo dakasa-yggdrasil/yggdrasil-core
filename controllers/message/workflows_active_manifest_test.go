@@ -37,6 +37,29 @@ func TestResolveActiveWorkflowManifestSpecRejectsInactiveManifestID(t *testing.T
 	}
 }
 
+func TestResolveActiveWorkflowManifestSpecRejectsActiveNonWorkflowManifestID(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() { _ = db.Close() })
+
+	manifestID := uuid.New()
+	mock.ExpectQuery(`(?s)FROM public\.manifests\s+WHERE id = \$1`).
+		WithArgs(manifestID).
+		WillReturnRows(manifestRowsForKind(manifestID, "policy", 8, true))
+
+	_, _, err = ResolveActiveWorkflowManifestSpec(context.Background(), db, model.ManifestSelector{
+		ManifestID: manifestID.String(),
+	})
+	if !errors.Is(err, repository.ErrManifestNotFound) {
+		t.Fatalf("error = %v, want ErrManifestNotFound for non-workflow manifest_id", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
 func TestResolveActiveWorkflowManifestSpecKeepsExactActivePins(t *testing.T) {
 	for _, test := range []struct {
 		name     string
@@ -51,7 +74,7 @@ func TestResolveActiveWorkflowManifestSpecKeepsExactActivePins(t *testing.T) {
 			expect: func(mock sqlmock.Sqlmock, id uuid.UUID, version int) {
 				mock.ExpectQuery(`(?s)FROM public\.manifests\s+WHERE id = \$1`).
 					WithArgs(id).
-					WillReturnRows(workflowManifestRows(id, version, true))
+					WillReturnRows(manifestRowsForKind(id, "WoRkFlOw", version, true))
 			},
 		},
 		{
@@ -105,7 +128,7 @@ func TestResolveActiveWorkflowManifestSpecRejectsInactiveExplicitVersion(t *test
 	version := 7
 	mock.ExpectQuery(`(?s)FROM public\.manifests\s+WHERE kind = \$1 AND namespace = \$2 AND name = \$3\s+AND version = \$4 AND active = TRUE`).
 		WithArgs("workflow", "dakasa", "lifecycle", version).
-		WillReturnRows(workflowManifestRows(uuid.New(), version, false))
+		WillReturnRows(sqlmock.NewRows(workflowManifestColumns()))
 
 	_, _, err = ResolveActiveWorkflowManifestSpec(context.Background(), db, model.ManifestSelector{
 		Namespace: "dakasa",
@@ -121,14 +144,15 @@ func TestResolveActiveWorkflowManifestSpecRejectsInactiveExplicitVersion(t *test
 }
 
 func workflowManifestRows(id uuid.UUID, version int, active bool) *sqlmock.Rows {
+	return manifestRowsForKind(id, "workflow", version, active)
+}
+
+func manifestRowsForKind(id uuid.UUID, kind string, version int, active bool) *sqlmock.Rows {
 	now := time.Now().UTC()
-	return sqlmock.NewRows([]string{
-		"id", "api_version", "kind", "namespace", "name", "version", "active",
-		"description", "labels", "spec", "checksum", "created_at", "updated_at",
-	}).AddRow(
+	return sqlmock.NewRows(workflowManifestColumns()).AddRow(
 		id,
 		"yggdrasil.io/v1alpha1",
-		"workflow",
+		kind,
 		"dakasa",
 		"lifecycle",
 		version,
@@ -140,4 +164,11 @@ func workflowManifestRows(id uuid.UUID, version int, active bool) *sqlmock.Rows 
 		now,
 		now,
 	)
+}
+
+func workflowManifestColumns() []string {
+	return []string{
+		"id", "api_version", "kind", "namespace", "name", "version", "active",
+		"description", "labels", "spec", "checksum", "created_at", "updated_at",
+	}
 }
