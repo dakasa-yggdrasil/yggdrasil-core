@@ -241,7 +241,7 @@ func prepareWorkflowRun(
 		return model.Manifest{}, model.WorkflowManifestSpec{}, model.RunWorkflowRequest{}, err
 	}
 
-	workflowManifest, spec, err := resolveWorkflowManifestSpec(ctx, db, req.Workflow)
+	workflowManifest, spec, err := ResolveActiveWorkflowManifestSpec(ctx, db, req.Workflow)
 	if err != nil {
 		return model.Manifest{}, model.WorkflowManifestSpec{}, model.RunWorkflowRequest{}, err
 	}
@@ -258,10 +258,18 @@ func prepareWorkflowRun(
 	return workflowManifest, spec, req, nil
 }
 
-func resolveWorkflowManifestSpec(ctx context.Context, db *sql.DB, selector model.ManifestSelector) (model.Manifest, model.WorkflowManifestSpec, error) {
+// ResolveActiveWorkflowManifestSpec resolves the workflow definition used by a
+// dispatch. Exact manifest_id selectors may address historical catalog rows, so
+// they require an explicit active-state check after resolution. Logical version
+// selectors already resolve with activeOnly=true; the defensive check keeps all
+// selector forms on the same fail-closed contract.
+func ResolveActiveWorkflowManifestSpec(ctx context.Context, db *sql.DB, selector model.ManifestSelector) (model.Manifest, model.WorkflowManifestSpec, error) {
 	workflowManifest, err := resolveManifestForKind(ctx, db, "workflow", selector.ManifestID, selector.Namespace, selector.Name, selector.Version)
 	if err != nil {
 		return model.Manifest{}, model.WorkflowManifestSpec{}, err
+	}
+	if !workflowManifest.Metadata.Active {
+		return model.Manifest{}, model.WorkflowManifestSpec{}, repository.ErrManifestNotFound
 	}
 
 	spec, err := manifestengine.ParseWorkflowSpec(workflowManifest.Spec)

@@ -85,6 +85,13 @@ flowchart TB
     Dispatch --> Yggdrasil
 ```
 
+Dispatch resolves only the active workflow record. An exact `manifest_id` or
+`version` remains a valid pin when it identifies the currently active version,
+but the same selector is refused after a newer version replaces it or the
+workflow is deactivated. To roll back, re-apply the older specification so the
+catalog creates a new active version; do not dispatch an inactive historical
+row directly.
+
 The engine builds an execution order from `depends_on` (topological
 sort, fail-fast on cycle), then walks the order. Each step:
 
