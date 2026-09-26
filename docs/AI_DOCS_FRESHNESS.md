@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 76af0769c85ce851a8252086c7eba2363679466a
-verified_diff_sha256: f9e5c2ac8e5587d6822ad5d71ad56b09841f0cd6379ed78d6630c6dda2753d51
+verified_at_commit: db67358053327108baa695343eae96f55d2d7dbc
+verified_diff_sha256: 6f9dbc25cdf2f817888346a080c89c42accbca16bf7e006dcfe62338c7c08844
 reconciler_schema: 1
 verified_at: 2026-09-26
 by: Codex
-note: Reconciled the inactive workflow dispatch guard with the code. features/workflows.md now documents that manifest_id and version pins are accepted only while the selected workflow record is active, and the shared resolver doc-comment matches the HTTP and message execution paths. No production rollout is claimed.
+note: Reconciled the inactive workflow dispatch guard with the code after independent review. features/workflows.md documents that manifest_id and version pins are accepted only while the selected workflow record is active; the shared resolver additionally requires a case-insensitive workflow kind match, and its doc-comment matches the HTTP and message execution paths. No production rollout is claimed.
