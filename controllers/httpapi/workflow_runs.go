@@ -382,36 +382,7 @@ func (s *Server) lookupWorkflowSpec(ctx context.Context, req model.RunWorkflowRe
 }
 
 func (s *Server) lookupWorkflowManifestSpec(ctx context.Context, req model.RunWorkflowRequest) (model.Manifest, model.WorkflowManifestSpec, error) {
-	selector := req.Workflow
-
-	if id := strings.TrimSpace(selector.ManifestID); id != "" {
-		parsed, err := uuid.Parse(id)
-		if err != nil {
-			return model.Manifest{}, model.WorkflowManifestSpec{}, err
-		}
-		record, err := repository.GetManifestByID(ctx, s.db, parsed)
-		if err != nil {
-			return model.Manifest{}, model.WorkflowManifestSpec{}, err
-		}
-		spec, err := manifestengine.ParseWorkflowSpec(record.Spec)
-		return record, spec, err
-	}
-
-	name := strings.TrimSpace(selector.Name)
-	if name == "" {
-		return model.Manifest{}, model.WorkflowManifestSpec{}, errors.New("workflow name is required when manifest_id is not provided")
-	}
-	namespace := strings.TrimSpace(selector.Namespace)
-	if namespace == "" {
-		namespace = "global"
-	}
-
-	record, err := repository.ResolveManifest(ctx, s.db, "workflow", namespace, name, selector.Version, true)
-	if err != nil {
-		return model.Manifest{}, model.WorkflowManifestSpec{}, err
-	}
-	spec, err := manifestengine.ParseWorkflowSpec(record.Spec)
-	return record, spec, err
+	return messagecontroller.ResolveActiveWorkflowManifestSpec(ctx, s.db, req.Workflow)
 }
 
 func (s *Server) authorizeWorkflowRunRequest(r *http.Request) error {
