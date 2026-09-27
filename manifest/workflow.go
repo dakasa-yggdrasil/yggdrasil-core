@@ -33,6 +33,7 @@ var (
 	// controllers/message/workflows_yggdrasil.go.
 	supportedYggdrasilStepOperations = []string{
 		"apply_manifest",
+		"assert",
 		"control_plane.render",
 		"collaborator.reconcile_provider_state",
 		"oidc_client.verify_bootstrap_file",
@@ -433,12 +434,11 @@ func validateWorkflowStep(step model.WorkflowStepSpec) error {
 			return fmt.Errorf("product step must not set use.instance_ref (use with.product_ref instead)")
 		}
 	case "yggdrasil":
-		// Yggdrasil steps run in-process against the core's own manifest
-		// store: they persist a manifest document carried in with.manifest
-		// through the same normalize/validate/persist pipeline that the
-		// HTTP and AMQP manifest handlers use. They are resolution-free —
+		// Yggdrasil steps run in-process against the core. Some operations
+		// persist through the standard manifest pipeline; others are pure,
+		// read-only workflow helpers. They are resolution-free:
 		// there is no integration instance to select and no provider to
-		// pin — so instance_ref/family/provider_ref must all be empty.
+		// pin, so instance_ref/family/provider_ref must all be empty.
 		operation := strings.ToLower(strings.TrimSpace(step.Use.Operation))
 		if operation == "" {
 			return fmt.Errorf("yggdrasil step requires use.operation")
@@ -462,6 +462,10 @@ func validateWorkflowStep(step model.WorkflowStepSpec) error {
 			}
 			if _, hasManifest := step.With["manifest"]; !hasManifest {
 				return fmt.Errorf("yggdrasil step requires with.manifest")
+			}
+		case "assert":
+			if _, err := ParseWorkflowAssertInput(step.With); err != nil {
+				return err
 			}
 		case "control_plane.render":
 			if step.With == nil {
