@@ -156,6 +156,22 @@ func CheckUnboundEnvironment() error {
 	return nil
 }
 
+// CheckRepositoryBindingDispatchEnvironment refuses GitHub webhook dispatch
+// through repository_binding manifests while the emergency lock is active.
+// A repository binding selects a stored workflow but does not authenticate a
+// caller or satisfy that workflow's authorization policy, so an allowlisted
+// name cannot make this ingress trusted.
+func CheckRepositoryBindingDispatchEnvironment() error {
+	policy, err := LoadFromEnvironment()
+	if err != nil {
+		return fmt.Errorf("%w: emergency lock configuration is invalid", ErrLocked)
+	}
+	if policy.Enforced() {
+		return fmt.Errorf("%w: repository-binding workflow dispatch is disabled", ErrLocked)
+	}
+	return nil
+}
+
 // CheckManifestMutationEnvironment refuses external manifest mutation while
 // the emergency lock is active. Keeping the catalog fixed prevents an
 // authorized writer from replacing an allowlisted workflow, its RBAC policy,

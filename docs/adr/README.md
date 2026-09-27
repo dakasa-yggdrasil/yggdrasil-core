@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**24 decisions.**
+**25 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -32,5 +32,6 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0020](0020-accept-audit-trace-references-only-from-a-well-formed-traceparent.md) | Accept audit trace references only from a well-formed traceparent | Accepted | 2026-09-21 | yggdrasil-core / audit_events writers |
 | [0021](0021-key-event-publisher-grants-by-the-logical-integration-instance.md) | Key event publisher grants by the logical integration instance | Accepted | 2026-09-24 | yggdrasil-core / event publisher authorization (`POST /api/v1/events`) |
 | [0022](0022-load-the-machine-credential-surfaces-once-and-require-an-explicit-development-environment.md) | Load the machine credential surfaces once and require an explicit development environment | Accepted | 2026-09-24 | yggdrasil-core / workflow-run, event and directory machine authentication; deploy-family anonymous posture |
-| [0023](0023-gate-emergency-workflow-dispatch-with-an-exact-process-wide-allowlist.md) | Gate emergency workflow dispatch with an exact process-wide allowlist | Accepted | 2026-09-26 | yggdrasil-core / workflow dispatch, manifest mutation, integration execution, reactors, and AMQP queues |
+| [0023](0023-gate-emergency-workflow-dispatch-with-an-exact-process-wide-allowlist.md) | Gate emergency workflow dispatch with an exact process-wide allowlist | Superseded by 0025 | 2026-09-26 | yggdrasil-core / workflow dispatch, manifest mutation, integration execution, reactors, and AMQP queues |
 | [0024](0024-fail-workflows-loudly-on-final-state-assertion-drift.md) | Fail workflows loudly on final-state assertion drift | Accepted | 2026-09-27 | yggdrasil-core / workflow manifest validation and in-process workflow execution |
+| [0025](0025-block-repository-binding-webhook-dispatch-during-emergency-lock.md) | Block repository-binding webhook dispatch during the emergency lock | Accepted | 2026-09-27 | yggdrasil-core / GitHub webhook repository bindings and emergency workflow dispatch |

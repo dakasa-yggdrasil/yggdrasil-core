@@ -4,9 +4,9 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"net/http/httptest"
-	"regexp"
 	"strings"
 	"testing"
 
@@ -148,21 +148,9 @@ func TestManifestMutationHandlersReturnStableLockResponse(t *testing.T) {
 }
 
 func TestGitHubWebhookChecksLockBeforeAcknowledgingDispatch(t *testing.T) {
-	t.Setenv(workflowdispatchlock.EnvName, `{"mode":"enforce","allowed_workflows":[{"namespace":"dakasa","name":"fixed-unlock"}]}`)
+	t.Setenv(workflowdispatchlock.EnvName, `{"mode":"enforce","allowed_workflows":[{"namespace":"acme","name":"deploy"}]}`)
 	server, mock, cleanup := newWebhookTestServer(t)
 	defer cleanup()
-
-	const spec = `{
-		"component_kind":"product","component_name":"x","repository":"acme/widget",
-		"deploy":{
-			"workflow_kind":"yggdrasil",
-			"workflow_ref":{"namespace":"acme","name":"deploy"},
-			"branch_filter":["main"]
-		}
-	}`
-	mock.ExpectQuery(regexp.QuoteMeta(findBindingQuery)).
-		WithArgs("acme/widget").
-		WillReturnRows(bindingRows(spec))
 
 	dispatched := false
 	server.dispatchWorkflow = func(context.Context, model.ManifestSelector, map[string]any) error {
@@ -173,8 +161,36 @@ func TestGitHubWebhookChecksLockBeforeAcknowledgingDispatch(t *testing.T) {
 	if recorder.Code != http.StatusServiceUnavailable {
 		t.Fatalf("status = %d, body = %s", recorder.Code, recorder.Body.String())
 	}
+	if !strings.Contains(recorder.Body.String(), httperr.CodeWorkflowDispatchLocked) {
+		t.Fatalf("body = %s, want stable lock code", recorder.Body.String())
+	}
 	if dispatched {
 		t.Fatal("locked webhook started asynchronous dispatch")
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("locked webhook queried repository bindings: %v", err)
+	}
+}
+
+func TestRepositoryBindingDispatchRechecksLockBeforeExecutor(t *testing.T) {
+	t.Setenv(workflowdispatchlock.EnvName, `{"mode":"enforce","allowed_workflows":[{"namespace":"acme","name":"deploy"}]}`)
+	server := &Server{}
+	dispatched := false
+	server.dispatchWorkflow = func(context.Context, model.ManifestSelector, map[string]any) error {
+		dispatched = true
+		return nil
+	}
+
+	err := server.dispatchRepositoryBindingWorkflow(
+		context.Background(),
+		model.ManifestSelector{Namespace: "acme", Name: "deploy"},
+		nil,
+	)
+	if !errors.Is(err, workflowdispatchlock.ErrLocked) {
+		t.Fatalf("error = %v, want ErrLocked", err)
+	}
+	if dispatched {
+		t.Fatal("locked repository-binding dispatch reached executor")
 	}
 }
 

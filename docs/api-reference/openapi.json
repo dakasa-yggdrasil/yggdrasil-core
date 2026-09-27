@@ -204,7 +204,7 @@
       "post": {
         "tags": ["webhooks"],
         "summary": "GitHub push webhook receiver",
-        "description": "Verifies the X-Hub-Signature-256 HMAC, looks up the `repository_binding` for `repository.full_name`, applies branch and path filters, and dispatches the bound workflow. Returns 200 with `status: skipped` when no binding is configured (so a webhook on an unmapped repo is harmless).",
+        "description": "Verifies the X-Hub-Signature-256 HMAC, looks up the `repository_binding` for `repository.full_name`, applies branch and path filters, and dispatches the bound workflow. Returns 200 with `status: skipped` when no binding is configured (so a webhook on an unmapped repo is harmless). While the emergency workflow dispatch lock is enforced, push dispatch returns 503 before binding lookup even when the bound workflow is allowlisted.",
         "parameters": [
           {"name": "X-GitHub-Event", "in": "header", "required": true, "schema": {"type": "string", "enum": ["push", "ping"]}},
           {"name": "X-Hub-Signature-256", "in": "header", "schema": {"type": "string", "example": "sha256=abc..."}}
@@ -215,7 +215,8 @@
           "202": {"description": "Workflow dispatched", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/WebhookDispatchResponse"}}}},
           "400": {"$ref": "#/components/responses/BadRequest"},
           "401": {"description": "Invalid HMAC signature", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
-          "501": {"description": "github_actions dispatch is reserved (not implemented in v2.0.0)", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}
+          "501": {"description": "github_actions dispatch is reserved (not implemented in v2.0.0)", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
+          "503": {"description": "Emergency workflow dispatch lock refuses repository-binding push dispatch", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}}
         }
       }
     },

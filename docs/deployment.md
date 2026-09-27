@@ -174,6 +174,11 @@ provision and read back the exact workflows, RBAC, policies, and integration
 instances needed during the window. The unlock workflow must write the complete
 mode-off object through its fixed Deployment target.
 
+GitHub push dispatch through `repository_binding` manifests is disabled for the
+entire enforce window, even when the bound workflow appears in the allowlist.
+Start an emergency workflow only through an independently authenticated and
+authorized workflow-run route or a reviewed trusted in-process caller.
+
 The current AWS adapter adoption uses this allowlist for its first window. After
 unlock, wait for manifest sync to publish and prove the new adapter capability.
 Use a separate activation and freeze proof for the ECR policy window, allowing

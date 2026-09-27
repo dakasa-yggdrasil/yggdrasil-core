@@ -11,6 +11,7 @@ import (
 	"testing"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"go.uber.org/zap"
 )
@@ -162,6 +163,7 @@ func TestPushEventPathFilterMismatchReturns200Skip(t *testing.T) {
 }
 
 func TestPushEventDispatchesYggdrasilWorkflow(t *testing.T) {
+	t.Setenv(workflowdispatchlock.EnvName, `{"mode":"off","allowed_workflows":[]}`)
 	server, mock, cleanup := newWebhookTestServer(t)
 	defer cleanup()
 
@@ -183,11 +185,11 @@ func TestPushEventDispatchesYggdrasilWorkflow(t *testing.T) {
 		WillReturnRows(bindingRows(spec))
 
 	var (
-		wg          sync.WaitGroup
-		gotRef      model.ManifestSelector
-		gotInputs   map[string]any
-		gotCalled   bool
-		dispatchMu  sync.Mutex
+		wg         sync.WaitGroup
+		gotRef     model.ManifestSelector
+		gotInputs  map[string]any
+		gotCalled  bool
+		dispatchMu sync.Mutex
 	)
 	wg.Add(1)
 	server.dispatchWorkflow = func(ctx context.Context, ref model.ManifestSelector, inputs map[string]any) error {

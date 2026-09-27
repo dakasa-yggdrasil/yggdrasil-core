@@ -77,6 +77,15 @@ func (s *Server) handleGitHubWebhook(w http.ResponseWriter, r *http.Request) {
 // 200 with status "skipped" (so a webhook installation on an unmapped repo
 // is harmless rather than an error).
 func (s *Server) handlePushEvent(w http.ResponseWriter, r *http.Request, body []byte) {
+	// A repository binding carries no authenticated caller identity. Refuse the
+	// entire ingress while the emergency lock is enforced, even when the bound
+	// workflow itself appears in the exact allowlist. Check before parsing or
+	// querying so a locked push cannot reach any dispatch preparation state.
+	if err := workflowdispatchlock.CheckRepositoryBindingDispatchEnvironment(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
+
 	var push githubPushEvent
 	if err := json.Unmarshal(body, &push); err != nil {
 		writeJSON(w, http.StatusBadRequest, errorResponse{Error: "invalid push payload"})
@@ -151,10 +160,6 @@ func (s *Server) handlePushEvent(w http.ResponseWriter, r *http.Request, body []
 			Namespace: deploy.WorkflowRef.Namespace,
 			Name:      deploy.WorkflowRef.Name,
 		}
-		if err := workflowdispatchlock.CheckEnvironment(ref.Namespace, ref.Name); err != nil {
-			writeMappedError(w, err)
-			return
-		}
 
 		s.logger.Info("github push dispatching workflow",
 			zap.String("repo", push.Repository.FullName),
@@ -177,9 +182,10 @@ func (s *Server) handlePushEvent(w http.ResponseWriter, r *http.Request, body []
 		}
 
 		// Fire-and-forget dispatch in a goroutine so the webhook can ack
-		// the push promptly. Errors are logged for operator inspection.
+		// the push promptly. The guarded wrapper rechecks the channel before
+		// the executor can create a durable run.
 		safego.SafeGo("webhook_dispatch", func() {
-			if err := s.dispatchWorkflow(context.Background(), ref, inputs); err != nil {
+			if err := s.dispatchRepositoryBindingWorkflow(context.Background(), ref, inputs); err != nil {
 				s.logger.Error("webhook dispatch failed",
 					zap.String("workflow", ref.Namespace+"/"+ref.Name),
 					zap.String("repo", push.Repository.FullName),
@@ -206,6 +212,18 @@ func (s *Server) handlePushEvent(w http.ResponseWriter, r *http.Request, body []
 			Error: "unsupported workflow_kind: " + deploy.WorkflowKind,
 		})
 	}
+}
+
+// dispatchRepositoryBindingWorkflow guards the asynchronous boundary between
+// the webhook acknowledgement and the executor that persists workflow_runs.
+// Kubernetes environment values are stable for a process, but retaining this
+// check makes the no-persistence contract explicit and fail-closed for every
+// caller of the repository-binding dispatch path.
+func (s *Server) dispatchRepositoryBindingWorkflow(ctx context.Context, ref model.ManifestSelector, inputs map[string]any) error {
+	if err := workflowdispatchlock.CheckRepositoryBindingDispatchEnvironment(); err != nil {
+		return err
+	}
+	return s.dispatchWorkflow(ctx, ref, inputs)
 }
 
 // validateWebhookSignature checks the X-Hub-Signature-256 header.
