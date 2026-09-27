@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: db67358053327108baa695343eae96f55d2d7dbc
-verified_diff_sha256: 6f9dbc25cdf2f817888346a080c89c42accbca16bf7e006dcfe62338c7c08844
+verified_at_commit: c05f5960a9a8e5c7204e8d80503241175756ef54
+verified_diff_sha256: fc0624654b6b97761275a61fe19b8fdf5a10d2cfe1d21318a0355a664ec67ac3
 reconciler_schema: 1
 verified_at: 2026-09-26
 by: Codex
-note: Reconciled the inactive workflow dispatch guard with the code after independent review. features/workflows.md documents that manifest_id and version pins are accepted only while the selected workflow record is active; the shared resolver additionally requires a case-insensitive workflow kind match, and its doc-comment matches the HTTP and message execution paths. No production rollout is claimed.
+note: Reconciled the exact emergency dispatch lock after independent review. ADR-0023, workflow, deployment, and security docs cover the process-wide gate, paused ingress, external mutation freeze, queue proof, fixed unlock, and separate AWS adapter and ECR policy windows. Generated AI context was refreshed from the source commit. No production rollout is claimed.
