@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-09-27T01:17:21-03:00",
+  "generated_at": "2026-09-27T01:41:29-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 644,
+    ".go": 646,
     ".json": 144,
     ".py": 1,
     ".sql": 52,
@@ -11,7 +11,7 @@
     ".yml": 22
   },
   "provenance": {
-    "commit": "83d8f424f0eaf5379d398886bd40bf9b0245f54f",
+    "commit": "322cfe32786d96c410b2a4982d7c39be5e46e617",
     "dirty": true,
     "files": [
       {
@@ -59,8 +59,8 @@
   "top_dirs": [
     {
       "path": "controllers/httpapi",
-      "files": 155,
-      "kb": 1544
+      "files": 157,
+      "kb": 1556
     },
     {
       "path": "repository",

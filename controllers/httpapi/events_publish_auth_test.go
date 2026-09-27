@@ -206,6 +206,7 @@ func TestHashedEventPublisherPrincipalIsExactRouteOnly(t *testing.T) {
 		wantOK bool
 	}{
 		{method: http.MethodPost, path: "/api/v1/events", wantOK: true},
+		{method: http.MethodPost, path: eventPublisherAuthorizationPath, wantOK: true},
 		{method: http.MethodGet, path: "/api/v1/events"},
 		{method: http.MethodPost, path: "/api/v1/events/child"},
 		{method: http.MethodPost, path: "/api/v1/manifests"},

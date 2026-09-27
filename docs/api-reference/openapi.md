@@ -127,6 +127,7 @@ secret stores. Endpoints requiring auth and the configuration that gates them:
 |---|---|---|
 | `POST /api/v1/workflow-runs`, `GET /api/v1/workflow-runs/{run_id}` | `YGGDRASIL_WORKFLOW_MACHINE_PRINCIPALS_JSON`; explicit time-bounded `YGGDRASIL_WORKFLOW_RUN_TOKEN` migration bridge | `X-Yggdrasil-Workflow-Token: <bearer>` or `Authorization: Bearer <bearer>` |
 | `POST /api/v1/events` | `YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON`; explicit time-bounded `YGGDRASIL_EVENT_PUBLISH_TOKEN` migration bridge | `X-Yggdrasil-Event-Token: <bearer>` or `Authorization: Bearer <bearer>` |
+| `POST /api/v1/events/authorization` | Active hashed principal in `YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON`; legacy bridge is rejected | `X-Yggdrasil-Event-Token: <bearer>` or `Authorization: Bearer <bearer>` |
 | Manifest reads/writes, `/console`, `/ops`, secrets | Console session; permission middleware applies where registered | Session cookie or console bearer |
 | Provider, SCIM, and SAML auth-administration mutations | `YGGDRASIL_AUTH_ADMIN_TOKEN` or an authorized console session | `X-Yggdrasil-Auth-Admin-Token: <token>`, matching bearer, or console session |
 | Direct deploy, deploy-all, bootstrap, integration-install API routes | `YGGDRASIL_DEPLOY_TOKEN` | `X-Deploy-Token: <token>` or `Authorization: Bearer <token>` |
@@ -188,6 +189,13 @@ then every event publish answers `401` until a restart with a valid one (with
 `YGGDRASIL_ENV=production` Core refuses to boot instead). Refused legacy
 bridge settings switch off only the bridge and the anonymous development
 posture.
+
+`POST /api/v1/events/authorization` accepts only
+`{provider,instance_id,event_type}` and runs the same decision without writing
+an event. A success returns the matched principal/grant plus the total grant
+count and canonical grant-set SHA-256; it never returns the bearer or its
+configured digest. The preimage is the lexicographically sorted JSON array of
+the principal's `{provider,instance_id,event_type}` grants (ADR-0026).
 
 The legacy workflow bridge requires
 `YGGDRASIL_WORKFLOW_RUN_LEGACY_ENABLED=true` and a future RFC3339

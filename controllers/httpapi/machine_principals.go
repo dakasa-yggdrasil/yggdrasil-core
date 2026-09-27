@@ -9,6 +9,7 @@ import (
 	"fmt"
 	"io"
 	"os"
+	"sort"
 	"strings"
 	"time"
 	"unicode"
@@ -310,6 +311,43 @@ func eventPublisherPrincipalsFromEnv() ([]eventPublisherPrincipal, error) {
 		seenHashes[base.tokenSHA256] = struct{}{}
 	}
 	return principals, nil
+}
+
+// eventPublisherGrantSetFingerprint returns a stable digest of every effective
+// grant carried by one already-validated principal. It deliberately excludes
+// the credential digest, lifecycle timestamps and rotation metadata: callers
+// can compare the authorization set without receiving any credential material.
+//
+// The canonical preimage is a JSON array sorted by provider, instance_id and
+// event_type. Exact and logical grants use the same public wire shape, with a
+// logical instance rendered as "<namespace>/<name>".
+func eventPublisherGrantSetFingerprint(principal *eventPublisherPrincipal) (int, string) {
+	if principal == nil {
+		return 0, ""
+	}
+	grants := make([]eventPublisherEventRef, 0, len(principal.AllowedEvents)+len(principal.LogicalEvents))
+	for grant := range principal.AllowedEvents {
+		grants = append(grants, grant)
+	}
+	for grant := range principal.LogicalEvents {
+		grants = append(grants, eventPublisherEventRef{
+			Provider:   grant.Provider,
+			InstanceID: grant.Namespace + "/" + grant.Name,
+			EventType:  grant.EventType,
+		})
+	}
+	sort.Slice(grants, func(i, j int) bool {
+		if grants[i].Provider != grants[j].Provider {
+			return grants[i].Provider < grants[j].Provider
+		}
+		if grants[i].InstanceID != grants[j].InstanceID {
+			return grants[i].InstanceID < grants[j].InstanceID
+		}
+		return grants[i].EventType < grants[j].EventType
+	})
+	raw, _ := json.Marshal(grants) // eventPublisherEventRef contains only strings.
+	sum := sha256.Sum256(raw)
+	return len(grants), hex.EncodeToString(sum[:])
 }
 
 func decodeMachinePrincipalConfig(envName string, target any) error {

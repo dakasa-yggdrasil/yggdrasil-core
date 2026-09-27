@@ -87,7 +87,7 @@ func (s *Server) authorizeEventPublishRequest(r *http.Request) error {
 }
 
 func (s *Server) authenticateEventPublishRequest(r *http.Request) (eventPublishActor, error) {
-	if r.Method != http.MethodPost || r.URL.Path != "/api/v1/events" {
+	if r.Method != http.MethodPost || (r.URL.Path != "/api/v1/events" && r.URL.Path != eventPublisherAuthorizationPath) {
 		return eventPublishActor{}, errWorkflowRunUnauthorized
 	}
 	// This machine-only route is not wrapped in an event-publish RBAC

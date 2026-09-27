@@ -132,6 +132,22 @@
         }
       }
     },
+    "/api/v1/events/authorization": {
+      "post": {
+        "tags": ["events"],
+        "summary": "Prove the effective grant of an event publisher without publishing",
+        "description": "Authenticates an active hashed event-publisher principal, applies the same exact/logical grant decision as POST /api/v1/events and performs no persistence. Legacy migration, workflow and console credentials are rejected. The response excludes bearer material and configured credential digests; grant_set_sha256 covers the complete lexicographically sorted grant set (ADR-0026).",
+        "security": [{"EventPublishToken": []}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"type": "object", "additionalProperties": false, "required": ["provider", "instance_id", "event_type"], "properties": {"provider": {"type": "string"}, "instance_id": {"type": "string"}, "event_type": {"type": "string"}}}}}},
+        "responses": {
+          "200": {"description": "The authenticated principal holds the queried grant", "content": {"application/json": {"schema": {"type": "object", "required": ["allowed", "principal_id", "provider", "instance_id", "event_type", "grant_form", "grant_count", "grant_set_sha256", "principal_expires_at"], "properties": {"allowed": {"type": "boolean", "enum": [true]}, "principal_id": {"type": "string"}, "provider": {"type": "string"}, "instance_id": {"type": "string"}, "event_type": {"type": "string"}, "grant_form": {"type": "string", "enum": ["exact", "logical"]}, "grant_count": {"type": "integer", "minimum": 1}, "grant_set_sha256": {"type": "string", "pattern": "^[0-9a-f]{64}$"}, "principal_expires_at": {"type": "string", "format": "date-time"}}}}}},
+          "400": {"$ref": "#/components/responses/BadRequest"},
+          "401": {"$ref": "#/components/responses/Unauthorized"},
+          "403": {"description": "event.authorization_denied: the credential is not a hashed principal or the queried tuple is not granted", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/EventPublishProblem"}}}},
+          "503": {"description": "event.authorization_unavailable: a logical grant lookup failed", "content": {"application/problem+json": {"schema": {"$ref": "#/components/schemas/EventPublishProblem"}}}}
+        }
+      }
+    },
     "/api/v1/integration-instances": {
       "get": {
         "tags": ["integrations"],

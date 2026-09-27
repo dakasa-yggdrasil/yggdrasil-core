@@ -1,10 +1,10 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-09-27T01:17:21-03:00_
+_Generated from HEAD at: 2026-09-27T01:41:29-03:00_
 
 ## Languages
 
-- `.go`: 644 files
+- `.go`: 646 files
 - `.json`: 144 files
 - `.py`: 1 files
 - `.sql`: 52 files
@@ -24,7 +24,7 @@ _Generated from HEAD at: 2026-09-27T01:17:21-03:00_
 
 ## Top Directories by File Count
 
-- controllers/httpapi: 155 files (1544.8 KB)
+- controllers/httpapi: 157 files (1556.6 KB)
 - repository: 94 files (610.9 KB)
 - manifest: 57 files (360.5 KB)
 - model: 55 files (209.9 KB)
@@ -46,7 +46,7 @@ _Generated from HEAD at: 2026-09-27T01:17:21-03:00_
 - docs/bootstrap/manifests/products/certificate-cert-manager.json: 696.5 KB
 - docs/bootstrap/manifests/products/observability-loki.json: 542.9 KB
 - docs/bootstrap/manifests/products/message-broker-rabbitmq.json: 531.8 KB
-- controllers/httpapi/server.go: 171.5 KB
+- controllers/httpapi/server.go: 171.9 KB
 - controllers/message/products.go: 75.4 KB
 - controllers/httpapi/directory_machine_read_test.go: 65.8 KB
 - repository/identity.go: 62.9 KB
