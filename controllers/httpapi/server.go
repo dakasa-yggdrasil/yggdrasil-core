@@ -392,6 +392,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// event token remains a mutation-only migration bridge. Workflow credentials
 	// and human sessions never publish through this route.
 	mux.HandleFunc("POST /api/v1/events", server.handleEventPublish)
+	// Read-only proof for the bearer held by an adapter. It performs the same
+	// exact/logical grant decision as event publishing but never persists an
+	// event and never returns bearer material or its configured digest.
+	mux.HandleFunc("POST "+eventPublisherAuthorizationPath, server.handleEventPublisherAuthorization)
 	mux.HandleFunc("POST /api/v1/github/webhook", server.handleGitHubWebhook)
 	mux.HandleFunc("GET /readyz", server.handleReadyz)
 	mux.HandleFunc("POST /api/v1/auth/passwords", server.handleAuthPasswordUpsert)
@@ -946,7 +950,9 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 		// the event publish endpoint; authorizeWorkflowRunRequest intentionally
 		// does not know this token, so it cannot cross into catalog, workflow or
 		// administrative APIs.
-		if r.Method == http.MethodPost && r.URL.Path == "/api/v1/events" && s.authorizeEventPublishRequest(r) == nil {
+		if r.Method == http.MethodPost &&
+			(r.URL.Path == "/api/v1/events" || r.URL.Path == eventPublisherAuthorizationPath) &&
+			s.authorizeEventPublishRequest(r) == nil {
 			next.ServeHTTP(w, r)
 			return
 		}
