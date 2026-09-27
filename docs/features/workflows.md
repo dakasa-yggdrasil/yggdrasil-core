@@ -376,8 +376,10 @@ routes. They cannot publish events or access manifests, deploy, secrets,
 
 ## Emergency dispatch lock
 
-`YGGDRASIL_WORKFLOW_DISPATCH_LOCK_JSON` can temporarily reduce every stored
-workflow dispatch source to an exact namespace and name allowlist:
+`YGGDRASIL_WORKFLOW_DISPATCH_LOCK_JSON` can temporarily reduce authenticated
+and trusted in-process workflow dispatch sources to an exact namespace and name
+allowlist. GitHub push dispatch through `repository_binding` manifests is
+disabled completely during the same window:
 
 ```json
 {
@@ -396,13 +398,22 @@ validation in every environment. Unset and
 `{"mode":"off","allowed_workflows":[]}` preserve normal dispatch.
 
 Core resolves the active workflow first and checks that resolved namespace and
-name before input validation, durable run insertion, and execution. The check
-applies to human and machine HTTP dispatch, the scheduler, event triggers,
-Heimdall inbox, webhook bindings, and any queued run that reaches the handler
-directly. GitHub webhook dispatch performs the check before returning `202`.
-The lock does not replace caller authorization or workflow policy. An
-allowlisted workflow still needs every credential, RBAC, policy, condition, and
-input check it normally requires.
+name before input validation, durable run insertion, and execution. The exact
+workflow check applies to human and machine HTTP dispatch, the scheduler, event
+triggers, Heimdall inbox, and any queued run that reaches the handler directly.
+
+GitHub push dispatch has a stricter rule. While enforcement is active, Core
+returns `503 workflow.dispatch_locked` before parsing the push payload or
+querying a repository binding, even when the bound workflow is allowlisted. The
+asynchronous wrapper checks again before calling the executor that can insert a
+durable run. Invalid configured lock JSON fails the same way. Unset and explicit
+off modes preserve normal webhook routing.
+
+The lock does not replace caller authorization or workflow policy. For a
+dispatch source that authenticates a caller, an allowlisted workflow still
+needs every credential, RBAC, policy, condition, and input check that source
+normally requires. Scheduler, event-trigger, and Heimdall dispatch retain their
+existing system trigger authority and must also name an allowlisted workflow.
 
 The scheduler leaves a blocked tick unconsumed. Heimdall leaves a blocked inbox
 row pending without incrementing failures. A matching blocked event keeps the
@@ -422,8 +433,10 @@ point also fails closed, which blocks webhook integrations, surface queries,
 catalog discovery, password recovery email, external identity resync, and
 future direct callers that lack a stored workflow identity. An allowlisted
 stored workflow still executes its integration steps through the resolved
-in-process dispatcher. Start emergency workflows through HTTP or another
-trusted in-process caller while the lock is active.
+in-process dispatcher. Start emergency workflows through the independently
+authenticated `POST /api/v1/workflow-runs` route or another reviewed trusted
+in-process caller while the lock is active. Repository bindings cannot start
+them.
 
 The same window freezes external manifest mutation. Manifest create and delete,
 workflow-template apply, non-dry-run integration install, manual integration
@@ -492,7 +505,7 @@ paused queue is nonempty or cannot be inventoried. Purge or quarantine each late
 RPC explicitly, since processing it after unlock can execute an old request
 without a live caller. Locked startup fails if `BROKER_URL` is absent or
 RabbitMQ cannot be reached, because queue verification is then impossible. See
-[ADR-0023](../adr/0023-gate-emergency-workflow-dispatch-with-an-exact-process-wide-allowlist.md).
+[ADR-0025](../adr/0025-block-repository-binding-webhook-dispatch-during-emergency-lock.md).
 
 ## Wire shape
 

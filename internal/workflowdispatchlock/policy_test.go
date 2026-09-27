@@ -83,6 +83,28 @@ func TestCheckUnboundEnvironmentRefusesEveryRequestWhileEnforced(t *testing.T) {
 	}
 }
 
+func TestCheckRepositoryBindingDispatchEnvironmentRefusesAllowlistedWorkflowIngress(t *testing.T) {
+	t.Setenv(EnvName, `{"mode":"enforce","allowed_workflows":[{"namespace":"dakasa","name":"fixed-unlock"}]}`)
+	if err := CheckEnvironment("dakasa", "fixed-unlock"); err != nil {
+		t.Fatalf("allowlisted workflow check = %v, want nil", err)
+	}
+	if err := CheckRepositoryBindingDispatchEnvironment(); !errors.Is(err, ErrLocked) {
+		t.Fatalf("repository-binding check = %v, want ErrLocked", err)
+	}
+}
+
+func TestCheckRepositoryBindingDispatchEnvironmentAllowsExplicitOffAndRefusesInvalidPolicy(t *testing.T) {
+	t.Setenv(EnvName, `{"mode":"off","allowed_workflows":[]}`)
+	if err := CheckRepositoryBindingDispatchEnvironment(); err != nil {
+		t.Fatalf("explicit off check = %v, want nil", err)
+	}
+
+	t.Setenv(EnvName, `{`)
+	if err := CheckRepositoryBindingDispatchEnvironment(); !errors.Is(err, ErrLocked) {
+		t.Fatalf("invalid policy check = %v, want ErrLocked", err)
+	}
+}
+
 func TestCheckManifestMutationEnvironmentRefusesEnforcedAndInvalidPolicy(t *testing.T) {
 	for _, config := range []string{
 		`{"mode":"enforce","allowed_workflows":[{"namespace":"dakasa","name":"fixed-unlock"}]}`,

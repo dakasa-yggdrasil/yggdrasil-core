@@ -1,11 +1,11 @@
 # ADR-0023: Gate emergency workflow dispatch with an exact process-wide allowlist
 
-- **Status:** Accepted
+- **Status:** Superseded by 0025
 - **Date:** 2026-09-26
 - **Deciders:** DaKasa Platform
 - **Scope:** yggdrasil-core / workflow dispatch, control-plane mutation, manifest mutation, integration execution, reactors, scheduler, event triggers, Heimdall inbox, reconciler, and AMQP queues
 - **Supersedes:** none
-- **Superseded by:** none
+- **Superseded by:** [ADR-0025](0025-block-repository-binding-webhook-dispatch-during-emergency-lock.md)
 
 ## Context
 

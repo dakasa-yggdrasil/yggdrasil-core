@@ -56,7 +56,7 @@ Supported `kind` values (the authoritative list is the switch in
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/v1/github/webhook` | GitHub push events; routes via `repository_binding` lookup |
+| POST | `/api/v1/github/webhook` | GitHub push events; routes via `repository_binding` lookup when the emergency dispatch lock is off |
 
 ### Secrets (managed store)
 

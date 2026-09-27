@@ -123,12 +123,19 @@ panic-safe goroutine wrapper; a panic records only a generic failed-run error
 before being recovered and counted. Foreign and absent runs both return 404.
 
 `YGGDRASIL_WORKFLOW_DISPATCH_LOCK_JSON` is a separate emergency restriction
-over every workflow caller, including authenticated humans, machine principals,
-internal triggers, and queued workflow runs. In `mode: enforce`, only exact
-stored workflow namespace and name pairs proceed. The lock grants nothing: an
-allowlisted workflow must still satisfy its normal authentication,
-`spec.authorization`, RBAC, policy, condition, and input checks. A refusal maps
+over authenticated humans, machine principals, internal triggers, and queued
+workflow runs. In `mode: enforce`, only exact stored workflow namespace and name
+pairs proceed through those sources. GitHub push dispatch through a
+`repository_binding` is blocked completely, including when its workflow is in
+the allowlist, because the webhook has no workflow-run principal that can
+satisfy caller authorization. The handler refuses it before binding lookup and
+checks again before the asynchronous executor can persist a run. A refusal maps
 to HTTP `503` with code `workflow.dispatch_locked`.
+
+The allowlist grants nothing. Authenticated dispatch must still satisfy its
+normal authentication, `spec.authorization`, RBAC, policy, condition, and input
+checks. Scheduler, event-trigger, and Heimdall paths retain their existing
+system trigger authority and remain constrained by the exact allowlist.
 
 The parser rejects blank or malformed configured JSON, unknown fields, trailing
 values, wildcard or duplicate pairs, surrounding whitespace, and an empty
@@ -173,7 +180,7 @@ Core passively requires each paused queue to exist as durable topology at locked
 startup. The RPC SDK currently publishes without mandatory routing or persistent
 delivery, and late RPC reply queues can expire. A nonempty or unknown paused
 queue blocks unlock until the operator explicitly purges or quarantines it. See
-ADR-0023. Locked startup fails when `BROKER_URL` is absent or RabbitMQ cannot be
+ADR-0025. Locked startup fails when `BROKER_URL` is absent or RabbitMQ cannot be
 reached, because Core cannot verify the queue contract.
 
 Core loads the workflow surface (the inventory and the legacy bridge

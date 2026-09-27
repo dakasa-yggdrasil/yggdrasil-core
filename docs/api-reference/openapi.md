@@ -85,6 +85,17 @@ Forge a signature:
 SIG=$(printf '%s' "$BODY" | openssl dgst -sha256 -hmac "$WEBHOOK_SECRET" | awk '{print "sha256="$2}')
 ```
 
+## Emergency dispatch lock
+
+When `YGGDRASIL_WORKFLOW_DISPATCH_LOCK_JSON` is in `mode: enforce`, GitHub push
+dispatch through `repository_binding` manifests returns `503` with code
+`workflow.dispatch_locked`. This applies even when the bound workflow is in the
+emergency allowlist. Core refuses the push before binding lookup and rechecks
+before the asynchronous executor can create a workflow run. Invalid configured
+lock JSON also fails closed. Unset and explicit `mode: off` preserve normal
+webhook behavior; `ping` and ignored event types remain non-dispatching `200`
+responses.
+
 ## Skip semantics
 
 The webhook returns `200` with a `status: skipped` body in three cases that are *not* errors:
