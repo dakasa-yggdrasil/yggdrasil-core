@@ -155,6 +155,63 @@ Additional `rpc.Transport` backends are opt-in. Set their env vars only if you n
 `BROKER_URL=amqp://user:pass@localhost:5672/` enables the AMQP
 backend; other transports expose their own config variable).
 
+For a bounded incident or maintenance window, the optional emergency workflow
+lock accepts strict JSON:
+
+```sh
+export YGGDRASIL_WORKFLOW_DISPATCH_LOCK_JSON='{
+  "mode":"enforce",
+  "allowed_workflows":[
+    {"namespace":"dakasa","name":"bump-integration-aws-sha-d1d632c"},
+    {"namespace":"dakasa","name":"unlock-yggdrasil-workflow-dispatch-production"}
+  ]
+}'
+```
+
+An unset variable or `{"mode":"off","allowed_workflows":[]}` keeps normal
+dispatch. Boot fails on invalid configured JSON in every environment. Before enforcing,
+provision and read back the exact workflows, RBAC, policies, and integration
+instances needed during the window. The unlock workflow must write the complete
+mode-off object through its fixed Deployment target.
+
+The current AWS adapter adoption uses this allowlist for its first window. After
+unlock, wait for manifest sync to publish and prove the new adapter capability.
+Use a separate activation and freeze proof for the ECR policy window, allowing
+only `dakasa/apply-dakasa-ecr-lifecycle-policies` and the fixed unlock workflow.
+
+Wait for the complete Core rollout and termination of every older ReplicaSet
+pod. Then attest zero pending or running durable workflow runs. The workflow
+dispatch, workflow run, integration execute, catalog discover, and manifest
+create queues must each report zero consumers, ready messages, and
+unacknowledged messages at adoption. Check the product materialize, reconcile,
+apply, observe, and uninstall queues with the same rule. For the current
+one-replica adoption, the read-only
+`yggdrasil-core.product.installation_state.discover` queue must report one
+consumer, zero ready messages, and zero unacknowledged messages. Drain and
+observe adapter queues because Core cannot recall work already delivered to
+them.
+
+Locked Core pods passively require every paused queue to exist as durable
+topology. The RPC publisher is transient and non-mandatory, so this is not a
+durable replay promise. Stop publishers before adoption. If any paused queue is
+nonempty or cannot be inventoried, keep the lock enforced and explicitly purge
+or quarantine the late requests before running the fixed unlock workflow. See
+[Emergency dispatch lock](./features/workflows.md#emergency-dispatch-lock).
+Locked startup fails when `BROKER_URL` is absent or RabbitMQ cannot be reached,
+because Core cannot verify the paused queues in that state.
+
+Periodic manifest sync stays paused while the lock is enforced. Locked startup
+fails if any first-run bootstrap variable below is configured; with all of them
+unset, the first-run addon is a no-op.
+
+The locked process also leaves the AWS provisioner and Kubernetes reconciler
+stopped. Direct AWS provisioning, managed-secret mutation, Kubernetes secret
+materialization, third-party provider and identity changes, and operator
+surface actions return HTTP 503 with `workflow.dispatch_locked`. The lock does
+not freeze every Core database table; normal collaborator, team, session,
+credential, audit, retention, and housekeeping contracts continue, and every
+workflow dispatch still reevaluates ordinary authorization.
+
 For first-run bootstrap add:
 
 ```sh

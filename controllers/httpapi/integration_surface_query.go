@@ -4,12 +4,14 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"net/http"
 	"strings"
 
 	sdksurface "github.com/dakasa-yggdrasil/yggdrasil-sdk-go/surface"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/integrationsurfaces"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -120,6 +122,10 @@ func (s *Server) handleIntegrationSurfaceQuery() http.HandlerFunc {
 		}
 		resp, err := s.surfaceQueryDispatcher.Execute(r.Context(), req)
 		if err != nil {
+			if errors.Is(err, workflowdispatchlock.ErrLocked) {
+				writeMappedError(w, err)
+				return
+			}
 			writeJSON(w, http.StatusBadGateway, map[string]any{
 				"error":   "adapter_dispatch_failed",
 				"message": err.Error(),

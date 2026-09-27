@@ -19,6 +19,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/privacy"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -257,9 +258,9 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	metrics.IncAuthLogin(metrics.AuthLoginSucceeded)
 	metrics.IncAuthSessionCreated()
 	s.recordAuthAuditCollaborator(r, AuditAuthSessionCreated, collaborator.ID, AuditOutcomeSuccess, map[string]any{
-		"session_id":  session.ID.String(),
-		"expires_at":  session.ExpiresAt.Format(time.RFC3339),
-		"mfa_method":  loginMFAMethod(req),
+		"session_id": session.ID.String(),
+		"expires_at": session.ExpiresAt.Format(time.RFC3339),
+		"mfa_method": loginMFAMethod(req),
 	})
 	s.recordAuthAuditCollaborator(r, AuditAuthLoginSucceeded, collaborator.ID, AuditOutcomeSuccess, map[string]any{
 		"session_id": session.ID.String(),
@@ -878,6 +879,10 @@ func (s *Server) handleThirdPartyIdentityList(w http.ResponseWriter, r *http.Req
 }
 
 func (s *Server) handleThirdPartyIdentityUpsert(w http.ResponseWriter, r *http.Request) {
+	if err := workflowdispatchlock.CheckControlPlaneMutationEnvironment(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
 	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return
@@ -902,6 +907,10 @@ func (s *Server) handleThirdPartyIdentityUpsert(w http.ResponseWriter, r *http.R
 }
 
 func (s *Server) handleThirdPartyIdentityDelete(w http.ResponseWriter, r *http.Request) {
+	if err := workflowdispatchlock.CheckControlPlaneMutationEnvironment(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
 	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return
@@ -955,6 +964,10 @@ func (s *Server) handleThirdPartyAuthProviderGet(w http.ResponseWriter, r *http.
 }
 
 func (s *Server) handleThirdPartyAuthProviderUpsert(w http.ResponseWriter, r *http.Request) {
+	if err := workflowdispatchlock.CheckControlPlaneMutationEnvironment(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
 	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return
@@ -1065,6 +1078,10 @@ func parseManagedSecretWriteRef(ref string) (namespace string, name string, key 
 }
 
 func (s *Server) handleThirdPartyAuthProviderDelete(w http.ResponseWriter, r *http.Request) {
+	if err := workflowdispatchlock.CheckControlPlaneMutationEnvironment(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
 	if err := authorizeAuthAdminRequest(r, s.db); err != nil {
 		writeMappedError(w, err)
 		return

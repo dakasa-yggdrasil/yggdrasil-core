@@ -11,6 +11,7 @@ import (
 
 	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/manifestsync"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -32,6 +33,10 @@ import (
 func (s *Server) handleIntegrationTypeSync(deps manifestsync.Deps) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
 		if err := authorizeAuthAdminRequest(r, s.db); err != nil {
+			writeMappedError(w, err)
+			return
+		}
+		if err := workflowdispatchlock.CheckManifestMutationEnvironment(); err != nil {
 			writeMappedError(w, err)
 			return
 		}

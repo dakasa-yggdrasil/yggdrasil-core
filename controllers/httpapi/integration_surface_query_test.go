@@ -11,6 +11,8 @@ import (
 	"testing"
 
 	"github.com/DATA-DOG/go-sqlmock"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 )
 
@@ -152,6 +154,24 @@ func TestSurfaceQuery_DispatchErrorIs502(t *testing.T) {
 	srv.handleIntegrationSurfaceQuery()(w, req)
 	if w.Code != http.StatusBadGateway {
 		t.Errorf("status %d, want 502", w.Code)
+	}
+}
+
+func TestSurfaceQuery_DispatchLockIs503WithStableCode(t *testing.T) {
+	srv := &Server{surfaceQueryDispatcher: &fakeDispatcher{err: workflowdispatchlock.ErrLocked}}
+	req := surfaceQueryReq("clt-instance", "my-employment", "base-employee", map[string]any{"query_name": "my-employment"})
+	w := httptest.NewRecorder()
+	srv.handleIntegrationSurfaceQuery()(w, req)
+
+	if w.Code != http.StatusServiceUnavailable {
+		t.Fatalf("status = %d, want 503; body %s", w.Code, w.Body.String())
+	}
+	var problem map[string]any
+	if err := json.Unmarshal(w.Body.Bytes(), &problem); err != nil {
+		t.Fatal(err)
+	}
+	if problem["code"] != httperr.CodeWorkflowDispatchLocked {
+		t.Fatalf("code = %v, want %q", problem["code"], httperr.CodeWorkflowDispatchLocked)
 	}
 }
 

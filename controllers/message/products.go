@@ -9,13 +9,14 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
-	amqp "github.com/rabbitmq/amqp091-go"
-	"go.uber.org/zap"
 	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
 	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc/amqp"
+	amqp "github.com/rabbitmq/amqp091-go"
+	"go.uber.org/zap"
 )
 
 const (
@@ -28,6 +29,17 @@ const (
 )
 
 func productConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) []ConsumerConfig {
+	policy, err := workflowdispatchlock.LoadFromEnvironment()
+	if err != nil || policy.Enforced() {
+		return []ConsumerConfig{
+			{
+				Queue:   queueProductInstallationStateDiscover,
+				Timeout: 30 * time.Second,
+				QoS:     5,
+				Handler: productDiscoverInstallationStateHandler(conn, db, logger),
+			},
+		}
+	}
 	return []ConsumerConfig{
 		{
 			Queue:   queueProductMaterialize,
@@ -70,6 +82,9 @@ func productConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) []C
 
 func productMaterializeHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
 	return func(ctx context.Context, d rpc.Delivery) error {
+		if err := workflowdispatchlock.CheckUnboundEnvironment(); err != nil {
+			return replyFailure(ctx, d, "workflow_dispatch_locked", err, logger)
+		}
 		var req model.MaterializeProductRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
 			return replyFailure(ctx, d, "bad_request", err, logger)
@@ -112,6 +127,9 @@ func productMaterializeHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Lo
 
 func productReconcileInstallationHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
 	return func(ctx context.Context, d rpc.Delivery) error {
+		if err := workflowdispatchlock.CheckUnboundEnvironment(); err != nil {
+			return replyFailure(ctx, d, "workflow_dispatch_locked", err, logger)
+		}
 		var req model.ReconcileProductInstallationRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
 			return replyFailure(ctx, d, "bad_request", err, logger)
@@ -183,6 +201,9 @@ func productDiscoverInstallationStateHandler(conn *amqp.Connection, db *sql.DB, 
 
 func productApplyInstallationHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
 	return func(ctx context.Context, d rpc.Delivery) error {
+		if err := workflowdispatchlock.CheckUnboundEnvironment(); err != nil {
+			return replyFailure(ctx, d, "workflow_dispatch_locked", err, logger)
+		}
 		var req model.ApplyProductInstallationRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
 			return replyFailure(ctx, d, "bad_request", err, logger)
@@ -336,6 +357,9 @@ func emitProductInstallationAppliedEvent(
 
 func productObserveInstallationHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
 	return func(ctx context.Context, d rpc.Delivery) error {
+		if err := workflowdispatchlock.CheckUnboundEnvironment(); err != nil {
+			return replyFailure(ctx, d, "workflow_dispatch_locked", err, logger)
+		}
 		var req model.ObserveProductInstallationRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
 			return replyFailure(ctx, d, "bad_request", err, logger)
@@ -375,6 +399,9 @@ func productObserveInstallationHandler(conn *amqp.Connection, db *sql.DB, logger
 // surfaces it fail-loud rather than silently succeeding.
 func productUninstallInstallationHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
 	return func(ctx context.Context, d rpc.Delivery) error {
+		if err := workflowdispatchlock.CheckUnboundEnvironment(); err != nil {
+			return replyFailure(ctx, d, "workflow_dispatch_locked", err, logger)
+		}
 		var req model.UninstallProductInstallationRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
 			return replyFailure(ctx, d, "bad_request", err, logger)

@@ -8,9 +8,9 @@ import (
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
 	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc/amqp"
-	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
@@ -22,7 +22,11 @@ func init() {
 
 func bootstrapRabbitMQ(ctx context.Context, app *runtime.ServiceApp) error {
 	brokerURL := os.Getenv("BROKER_URL")
+	lockPaused := workflowDispatchLockPaused()
 	if brokerURL == "" {
+		if lockPaused {
+			return fmt.Errorf("workflow dispatch lock requires BROKER_URL so paused queues can be verified")
+		}
 		logger, _ := Logger(app)
 		if logger != nil {
 			logger.Info("rabbitmq addon skipped because BROKER_URL is not set")
@@ -32,6 +36,9 @@ func bootstrapRabbitMQ(ctx context.Context, app *runtime.ServiceApp) error {
 
 	conn, err := amqp.Dial(brokerURL)
 	if err != nil {
+		if lockPaused {
+			return fmt.Errorf("workflow dispatch lock requires RabbitMQ queue verification: %w", err)
+		}
 		logger, _ := Logger(app)
 		if logger != nil {
 			logger.Warn("rabbitmq unreachable at boot; starting broker-degraded (IdP/auth + wake only, workflow dispatch disabled)",
@@ -49,6 +56,12 @@ func bootstrapRabbitMQ(ctx context.Context, app *runtime.ServiceApp) error {
 	}
 
 	logger, _ := Logger(app)
+	if lockPaused {
+		if err := requireDispatchLockQueues(conn, message.DispatchLockPausedQueues()); err != nil {
+			_ = conn.Close()
+			return err
+		}
+	}
 
 	// Broker connectivity lost. We DO NOT exit: the IdP/auth and wake
 	// paths do not need the broker, so the process stays up and serves
@@ -102,6 +115,29 @@ func bootstrapRabbitMQ(ctx context.Context, app *runtime.ServiceApp) error {
 	// integration (Heimdall or a custom one) subscribes to the
 	// event stream and runs its own sweep loop.
 
+	return nil
+}
+
+type passiveQueueDeclarer interface {
+	QueueDeclarePassive(name string, durable, autoDelete, exclusive, noWait bool, args amqp.Table) (amqp.Queue, error)
+}
+
+func requireDispatchLockQueues(conn *amqp.Connection, queues []string) error {
+	channel, err := conn.Channel()
+	if err != nil {
+		return fmt.Errorf("verify dispatch-lock queues: open channel: %w", err)
+	}
+	defer channel.Close()
+
+	return requireDispatchLockQueuesOnChannel(channel, queues)
+}
+
+func requireDispatchLockQueuesOnChannel(channel passiveQueueDeclarer, queues []string) error {
+	for _, queue := range queues {
+		if _, err := channel.QueueDeclarePassive(queue, true, false, false, false, nil); err != nil {
+			return fmt.Errorf("verify dispatch-lock queue %q: %w", queue, err)
+		}
+	}
 	return nil
 }
 
@@ -171,4 +207,3 @@ func integrationRuntimeMonitorInterval() time.Duration {
 
 	return time.Duration(seconds) * time.Second
 }
-

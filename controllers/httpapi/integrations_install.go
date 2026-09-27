@@ -11,6 +11,7 @@ import (
 	"time"
 
 	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"sigs.k8s.io/yaml"
@@ -100,6 +101,10 @@ func (s *Server) handleInstallIntegration(w http.ResponseWriter, r *http.Request
 	if req.DryRun {
 		resp.CompiledWorkflow = &workflow
 		writeJSON(w, http.StatusOK, resp)
+		return
+	}
+	if err := workflowdispatchlock.CheckManifestMutationEnvironment(); err != nil {
+		writeMappedError(w, err)
 		return
 	}
 

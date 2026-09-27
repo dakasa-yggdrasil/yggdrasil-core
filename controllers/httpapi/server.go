@@ -23,6 +23,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/reqcache"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/provisioner"
@@ -155,7 +156,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// dev strings (AUTH_THIRD_PARTY_STATE_SECRET, YGGDRASIL_CSRF_HMAC_SECRET)
 	// would let a misconfigured deploy roll out looking healthy while the
 	// security envelope is wide open.
-	if err := validateBootSecrets(); err != nil {
+	if err := ValidateBootConfiguration(); err != nil {
 		return nil, err
 	}
 	// The directory machine inventory (ADR-0019) is loaded and validated
@@ -1572,6 +1573,10 @@ func (s *Server) handleCatalogDiscovery(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handleCatalogDiscoveryRegister(w http.ResponseWriter, r *http.Request) {
+	if err := workflowdispatchlock.CheckManifestMutationEnvironment(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
 	var req catalogDiscoveryRegisterRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeMappedError(w, err)
@@ -1592,6 +1597,10 @@ func (s *Server) handleIntegrationInstanceList(w http.ResponseWriter, r *http.Re
 }
 
 func (s *Server) handleIntegrationInstanceCreate(w http.ResponseWriter, r *http.Request) {
+	if err := workflowdispatchlock.CheckManifestMutationEnvironment(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
 	var payload consoleCreateIntegrationInstanceRequest
 	if err := decodeJSON(r, &payload); err != nil {
 		writeMappedError(w, err)
@@ -1674,6 +1683,10 @@ func (s *Server) handleManagedSecretGet(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handleManagedSecretCreate(w http.ResponseWriter, r *http.Request) {
+	if err := workflowdispatchlock.CheckControlPlaneMutationEnvironment(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
 	var req model.UpsertManagedSecretRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeMappedError(w, err)
@@ -1694,6 +1707,10 @@ func (s *Server) handleManagedSecretCreate(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) handleManagedSecretRotate(w http.ResponseWriter, r *http.Request) {
+	if err := workflowdispatchlock.CheckControlPlaneMutationEnvironment(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
 	var req rotateManagedSecretRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeMappedError(w, err)
@@ -1721,6 +1738,10 @@ func (s *Server) handleManagedSecretRotate(w http.ResponseWriter, r *http.Reques
 }
 
 func (s *Server) handleManagedSecretDisable(w http.ResponseWriter, r *http.Request) {
+	if err := workflowdispatchlock.CheckControlPlaneMutationEnvironment(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
 	var req updateManagedSecretRequest
 	if err := decodeOptionalJSON(r, &req); err != nil {
 		writeMappedError(w, err)
@@ -1745,6 +1766,10 @@ func (s *Server) handleManagedSecretDisable(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) handleManagedSecretRevoke(w http.ResponseWriter, r *http.Request) {
+	if err := workflowdispatchlock.CheckControlPlaneMutationEnvironment(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
 	var req updateManagedSecretRequest
 	if err := decodeOptionalJSON(r, &req); err != nil {
 		writeMappedError(w, err)
@@ -2679,6 +2704,10 @@ func (s *Server) handleRemediationBundleCreate(w http.ResponseWriter, r *http.Re
 }
 
 func (s *Server) handleGuardianMemoryReview(w http.ResponseWriter, r *http.Request) {
+	if err := workflowdispatchlock.CheckManifestMutationEnvironment(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
 	var req guardianMemoryReviewRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeMappedError(w, err)
@@ -2758,6 +2787,10 @@ func (s *Server) handleGuardianMemoryReview(w http.ResponseWriter, r *http.Reque
 }
 
 func (s *Server) handleGuardianApprovalDecision(w http.ResponseWriter, r *http.Request) {
+	if err := workflowdispatchlock.CheckManifestMutationEnvironment(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
 	var req guardianApprovalDecisionRequest
 	if err := decodeJSON(r, &req); err != nil {
 		writeMappedError(w, err)
@@ -3197,6 +3230,10 @@ func (s *Server) handleManifestCreate(w http.ResponseWriter, r *http.Request, ki
 		writeMappedError(w, errWorkflowRunUnauthorized)
 		return
 	}
+	if err := workflowdispatchlock.CheckManifestMutationEnvironment(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
 
 	var payload consoleCreateManifestRequest
 	if err := decodeJSON(r, &payload); err != nil {
@@ -3526,6 +3563,8 @@ func codeFromError(err error, status int) string {
 		return ""
 	case errors.Is(err, messagecontroller.ErrAdapterTransportUnavailable):
 		return httperr.CodeIntegrationUnavailable
+	case errors.Is(err, workflowdispatchlock.ErrLocked):
+		return httperr.CodeWorkflowDispatchLocked
 	case errors.Is(err, errWorkflowRunUnauthorized),
 		errors.Is(err, errAuthAdminUnauthorized):
 		return httperr.CodeAuthUnauthenticated
@@ -3628,6 +3667,8 @@ func httpStatusFromError(err error) int {
 	case err == nil:
 		return http.StatusOK
 	case errors.Is(err, messagecontroller.ErrAdapterTransportUnavailable):
+		return http.StatusServiceUnavailable
+	case errors.Is(err, workflowdispatchlock.ErrLocked):
 		return http.StatusServiceUnavailable
 	case errors.Is(err, errWorkflowRunUnauthorized):
 		return http.StatusUnauthorized

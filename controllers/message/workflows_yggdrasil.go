@@ -14,6 +14,7 @@ import (
 
 	oidccontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/oidc"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/controlplane"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -111,6 +112,11 @@ func handleApplyManifest(
 	result model.WorkflowRunStepResult,
 	renderedInput map[string]any,
 ) model.WorkflowRunStepResult {
+	if err := workflowdispatchlock.CheckManifestMutationEnvironment(); err != nil {
+		result.Error = err.Error()
+		result.FinishedAt = time.Now().UTC()
+		return result
+	}
 	doc, err := manifestDocumentFromStepInput(renderedInput)
 	if err != nil {
 		result.Error = err.Error()

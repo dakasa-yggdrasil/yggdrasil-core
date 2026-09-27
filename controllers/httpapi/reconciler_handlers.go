@@ -3,6 +3,7 @@ package httpapi
 import (
 	"net/http"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"go.uber.org/zap"
@@ -10,6 +11,10 @@ import (
 
 // handleMaterializeOne materializes a single managed secret into Kubernetes.
 func (s *Server) handleMaterializeOne(w http.ResponseWriter, r *http.Request) {
+	if err := workflowdispatchlock.CheckControlPlaneMutationEnvironment(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
 	if s.reconciler == nil {
 		writeJSON(w, http.StatusServiceUnavailable, errorResponse{Error: "reconciler is not available"})
 		return
@@ -41,6 +46,10 @@ func (s *Server) handleMaterializeOne(w http.ResponseWriter, r *http.Request) {
 
 // handleMaterializeAll lists all active managed secrets and materializes each.
 func (s *Server) handleMaterializeAll(w http.ResponseWriter, r *http.Request) {
+	if err := workflowdispatchlock.CheckControlPlaneMutationEnvironment(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
 	if s.reconciler == nil {
 		writeJSON(w, http.StatusServiceUnavailable, errorResponse{Error: "reconciler is not available"})
 		return

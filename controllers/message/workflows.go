@@ -4,11 +4,13 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -25,6 +27,13 @@ const (
 )
 
 func workflowConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) []ConsumerConfig {
+	policy, err := workflowdispatchlock.LoadFromEnvironment()
+	if err != nil || policy.Enforced() {
+		// Leaving both queues without a consumer prevents this process from
+		// ACKing and dropping a refusal. Late RPCs require explicit inventory
+		// and purge or quarantine before an unlocked process may start.
+		return nil
+	}
 	return []ConsumerConfig{
 		{
 			Queue:   queueWorkflowDispatch,
@@ -43,6 +52,13 @@ func workflowConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) []
 
 func workflowDispatchHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
 	return func(ctx context.Context, d rpc.Delivery) error {
+		// This legacy queue carries a downstream repository/workflow name, not
+		// an unforgeable reference to a stored Yggdrasil workflow manifest.
+		// Caller supplied metadata cannot satisfy the emergency allowlist.
+		if err := workflowdispatchlock.CheckUnboundEnvironment(); err != nil {
+			return replyFailure(ctx, d, "workflow_dispatch_locked", err, logger)
+		}
+
 		var req model.DispatchWorkflowRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
 			return replyFailure(ctx, d, "bad_request", err, logger)
@@ -77,7 +93,9 @@ func workflowRunHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) C
 		response, err := RunWorkflow(ctx, conn, db, req)
 		if err != nil {
 			code := integrationAwareErrorCode(err, "workflow_run_failed")
-			if manifestLookupErrorCode(err) != "internal_error" {
+			if errors.Is(err, workflowdispatchlock.ErrLocked) {
+				code = "workflow_dispatch_locked"
+			} else if manifestLookupErrorCode(err) != "internal_error" {
 				code = manifestLookupErrorCode(err)
 			} else if strings.Contains(strings.ToLower(strings.TrimSpace(err.Error())), "required") ||
 				strings.Contains(strings.ToLower(strings.TrimSpace(err.Error())), "invalid") ||
@@ -243,6 +261,9 @@ func prepareWorkflowRun(
 
 	workflowManifest, spec, err := ResolveActiveWorkflowManifestSpec(ctx, db, req.Workflow)
 	if err != nil {
+		return model.Manifest{}, model.WorkflowManifestSpec{}, model.RunWorkflowRequest{}, err
+	}
+	if err := workflowdispatchlock.CheckEnvironment(workflowManifest.Metadata.Namespace, workflowManifest.Metadata.Name); err != nil {
 		return model.Manifest{}, model.WorkflowManifestSpec{}, model.RunWorkflowRequest{}, err
 	}
 

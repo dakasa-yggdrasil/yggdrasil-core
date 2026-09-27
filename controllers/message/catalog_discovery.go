@@ -8,6 +8,7 @@ import (
 	"slices"
 	"strings"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -79,6 +80,9 @@ func DiscoverCatalog(
 	db *sql.DB,
 	req model.DiscoverCatalogRequest,
 ) (model.DiscoverCatalogResponse, error) {
+	if err := workflowdispatchlock.CheckUnboundEnvironment(); err != nil {
+		return model.DiscoverCatalogResponse{}, err
+	}
 	return discoverCatalog(ctx, conn, db, req)
 }
 

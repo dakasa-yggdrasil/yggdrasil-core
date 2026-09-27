@@ -6,6 +6,8 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 )
 
 const testEventPublishToken = "dedicated-event-publish-token"
@@ -25,6 +27,7 @@ func setValidProductionBootEnvironment(t *testing.T, environment string) {
 		machineWorkflowRef{Namespace: "dakasa", Name: "deploy-validation"}))
 	t.Setenv("YGGDRASIL_DEPLOY_TOKEN", "deploy-token")
 	t.Setenv("YGGDRASIL_AUTH_ADMIN_TOKEN", "auth-admin-token")
+	unsetEnvForTest(t, workflowdispatchlock.EnvName)
 }
 
 // Audit 2026-05-27 A12: production boots MUST fail loud when
@@ -103,6 +106,29 @@ func TestValidateBootSecrets_ProductionPassesProdAlias(t *testing.T) {
 	setValidProductionBootEnvironment(t, "prod")
 	if err := validateBootSecrets(); err != nil {
 		t.Fatalf("prod alias with valid security configuration: expected nil, got %v", err)
+	}
+}
+
+func TestValidateBootConfigurationRejectsInvalidWorkflowDispatchLockInProduction(t *testing.T) {
+	setValidProductionBootEnvironment(t, "production")
+	t.Setenv(workflowdispatchlock.EnvName, `{"mode":"enforce","allowed_workflows":[]}`)
+
+	err := ValidateBootConfiguration()
+	if err == nil {
+		t.Fatal("production boot accepted an empty workflow dispatch allowlist")
+	}
+	if !strings.Contains(err.Error(), workflowdispatchlock.EnvName) {
+		t.Fatalf("boot error must identify the workflow dispatch lock: %v", err)
+	}
+}
+
+func TestValidateBootConfigurationRejectsInvalidWorkflowDispatchLockOutsideProduction(t *testing.T) {
+	t.Setenv("YGGDRASIL_ENV", "development")
+	t.Setenv(workflowdispatchlock.EnvName, `{`)
+
+	err := ValidateBootConfiguration()
+	if err == nil || !strings.Contains(err.Error(), workflowdispatchlock.EnvName) {
+		t.Fatalf("boot validation error = %v, want invalid workflow dispatch lock", err)
 	}
 }
 

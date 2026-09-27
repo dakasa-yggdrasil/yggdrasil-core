@@ -347,6 +347,126 @@ routes. They cannot publish events or access manifests, deploy, secrets,
 `/console`, generic `/ops`, tenant, or auth-admin APIs. See
 [ADR-0017](../adr/0017-scope-machine-principals-by-route-workflow-and-run-ownership.md).
 
+## Emergency dispatch lock
+
+`YGGDRASIL_WORKFLOW_DISPATCH_LOCK_JSON` can temporarily reduce every stored
+workflow dispatch source to an exact namespace and name allowlist:
+
+```json
+{
+  "mode": "enforce",
+  "allowed_workflows": [
+    {"namespace": "dakasa", "name": "bump-integration-aws-sha-d1d632c"},
+    {"namespace": "dakasa", "name": "unlock-yggdrasil-workflow-dispatch-production"}
+  ]
+}
+```
+
+The variable is strict. A blank value, malformed or trailing JSON, an unknown
+field or mode, a wildcard, a duplicate, surrounding whitespace, or an empty
+enforce list is invalid. Invalid configured JSON denies dispatch and fails boot
+validation in every environment. Unset and
+`{"mode":"off","allowed_workflows":[]}` preserve normal dispatch.
+
+Core resolves the active workflow first and checks that resolved namespace and
+name before input validation, durable run insertion, and execution. The check
+applies to human and machine HTTP dispatch, the scheduler, event triggers,
+Heimdall inbox, webhook bindings, and any queued run that reaches the handler
+directly. GitHub webhook dispatch performs the check before returning `202`.
+The lock does not replace caller authorization or workflow policy. An
+allowlisted workflow still needs every credential, RBAC, policy, condition, and
+input check it normally requires.
+
+The scheduler leaves a blocked tick unconsumed. Heimdall leaves a blocked inbox
+row pending without incrementing failures. A matching blocked event keeps the
+shared event cursor unchanged; allowed matches already completed in that batch
+deduplicate when the batch is read again. This preserves replay after unlock,
+but one blocked event can delay later event-trigger work during the freeze.
+
+During enforce mode, Core registers no consumers for
+`yggdrasil-core.workflow.dispatch`, `yggdrasil-core.workflow.run`, or
+`yggdrasil-core.integration.execute`. It also omits
+`yggdrasil-core.catalog.discover` and product materialize, reconcile, apply,
+observe, and uninstall. Invalid lock JSON has the same consumer posture. The
+legacy workflow dispatch payload and generic integration, catalog discovery, or
+product payloads have no unforgeable allowed-workflow identity, so caller
+supplied metadata is never authority. The exported in-process integration entry
+point also fails closed, which blocks webhook integrations, surface queries,
+catalog discovery, password recovery email, external identity resync, and
+future direct callers that lack a stored workflow identity. An allowlisted
+stored workflow still executes its integration steps through the resolved
+in-process dispatcher. Start emergency workflows through HTTP or another
+trusted in-process caller while the lock is active.
+
+The same window freezes external manifest mutation. Manifest create and delete,
+workflow-template apply, non-dry-run integration install, manual integration
+type sync, Guardian memory review, Guardian approval decisions, and AMQP
+`manifest.create` cannot persist. Core leaves the `manifest.create` queue without
+a consumer while read and validation consumers continue. This prevents a writer
+from replacing an allowlisted workflow, RBAC, policy, or integration instance
+under a trusted name. An allowlisted workflow cannot use the in-process
+`apply_manifest` operation to change the catalog. Periodic adapter manifest
+sync does not start. Locked
+startup fails explicitly if any first-run bootstrap environment variable is
+configured; when they are all unset, the first-run addon is a no-op. Integration
+install dry runs and workflow-template previews remain available.
+
+Direct control-plane mutations are frozen in the same process. AWS provisioning,
+managed-secret create, rotate, disable, and revoke, explicit Kubernetes secret
+materialization, third-party provider and identity changes, and operator
+surface actions return the stable lock response before reading their request
+body or writing state. The AWS provisioner and Kubernetes reconciler do not
+start, so they cannot mutate provider resources, Secrets, or ConfigMaps in the
+background. These paths have no stored workflow identity and cannot use the
+allowlist.
+
+This is not a global database maintenance mode. Collaborator, team, session,
+ordinary credential, audit, retention, and housekeeping state continue to use
+their normal contracts. Core evaluates authorization again for every dispatch.
+An identity or membership change can revoke an operator during the window, but
+it never grants a workflow through the emergency allowlist.
+
+The reactor dispatcher does not start, so pending reactions remain unclaimed.
+Database-backed scheduler ticks, event matches, Heimdall rows, and reactions
+remain available to replay after an unlocked process starts. Held RabbitMQ RPCs
+have no replay guarantee and require explicit inventory before unlock.
+
+Activate the lock only after registering and reading back every fixed workflow,
+RBAC, policy, and integration instance needed in the window. The fixed unlock
+workflow must target the Core Deployment and write the complete
+`{"mode":"off","allowed_workflows":[]}` value. It accepts no caller-selected
+patch and requires a named human.
+
+The current AWS adapter adoption uses two independent lock windows. The first
+allows only the adapter bump and unlock workflows. After unlock, normal manifest
+sync must publish and prove the new adapter capability. The second window allows
+only the ECR policy and unlock workflows. Each window needs a new activation,
+rollout, readback, and freeze proof.
+
+The activation proof requires the full Core rollout to complete, every pod from
+an older ReplicaSet to terminate, and durable workflow runs to show zero pending
+and zero running. At adoption, `workflow.dispatch`, `workflow.run`,
+`integration.execute`, `catalog.discover`, and `manifest.create` must each show
+zero consumers, zero ready messages, and zero unacknowledged messages. The same
+proof covers product materialize, reconcile, apply, observe, and uninstall. For
+the current
+one-replica adoption, the read-only
+`yggdrasil-core.product.installation_state.discover` queue remains consumed and
+must show one consumer, zero ready messages, and zero unacknowledged messages.
+Drain and observe adapter queues too. The lock does not cancel a workflow that
+already passed preparation or recall an adapter request already delivered
+outside Core.
+
+Locked startup passively verifies that every paused queue already exists as a
+durable queue. Core does not create missing topology. The current RPC SDK uses
+transient, non-mandatory publishes, and a request's reply queue may expire while
+the request is held. Stop publishers before adoption. Do not unlock when any
+paused queue is nonempty or cannot be inventoried. Purge or quarantine each late
+RPC explicitly, since processing it after unlock can execute an old request
+without a live caller. Locked startup fails if `BROKER_URL` is absent or
+RabbitMQ cannot be reached, because queue verification is then impossible. See
+[ADR-0023](../adr/0023-gate-emergency-workflow-dispatch-with-an-exact-process-wide-allowlist.md).
+
 ## Wire shape
 
 ### POST /api/v1/workflow-runs

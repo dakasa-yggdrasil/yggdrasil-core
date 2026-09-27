@@ -5,8 +5,10 @@ import (
 	"database/sql"
 	"encoding/json"
 	"os"
+	"strings"
 	"testing"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 	_ "github.com/lib/pq"
@@ -186,6 +188,23 @@ func TestExecuteYggdrasilWorkflowStep_BadManifestFails(t *testing.T) {
 	}
 	if got.Error == "" {
 		t.Fatal("expected non-empty error describing bad manifest shape")
+	}
+}
+
+func TestExecuteYggdrasilApplyManifestCannotMutateCatalogWhileLocked(t *testing.T) {
+	t.Setenv(workflowdispatchlock.EnvName, `{"mode":"enforce","allowed_workflows":[{"namespace":"dakasa","name":"fixed-unlock"}]}`)
+	step := model.WorkflowStepSpec{
+		ID: "register-instance",
+		Use: model.WorkflowStepUseSpec{
+			Kind:      "yggdrasil",
+			Operation: "apply_manifest",
+		},
+	}
+	result := model.WorkflowRunStepResult{ID: step.ID, Kind: "yggdrasil", Operation: step.Use.Operation, Status: "failed"}
+
+	got := executeYggdrasilWorkflowStep(context.Background(), nil, step, result, nil)
+	if got.Status != "failed" || !strings.Contains(got.Error, workflowdispatchlock.ErrLocked.Error()) {
+		t.Fatalf("locked apply_manifest result = %#v", got)
 	}
 }
 

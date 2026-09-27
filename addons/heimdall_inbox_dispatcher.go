@@ -10,6 +10,7 @@ import (
 
 	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -94,6 +95,15 @@ func runHeimdallInboxDispatcherLoop(
 // the throughput; bursts that exceed it land in the inbox and drain at
 // the dispatcher's pace without overwhelming downstream goroutines.
 func runHeimdallInboxDispatcherPass(ctx context.Context, db *sql.DB, conn *amqp.Connection, logger *zap.Logger) {
+	// Refuse before selecting or updating an inbox row. Lock refusals are not
+	// poison messages and must not consume the retry budget.
+	if err := workflowdispatchlock.CheckEnvironment(heimdallInboxReactNamespace, heimdallInboxReactWorkflow); err != nil {
+		if logger != nil {
+			logger.Info("heimdall_inbox_dispatcher: inbox held by emergency lock")
+		}
+		return
+	}
+
 	// Broker gate — skip the ENTIRE pass when the broker is unavailable.
 	// The pass marks the inbox row processed_at = NOW() (committing the tx)
 	// BEFORE it would dispatch; if we ran it with a dead broker the row would
