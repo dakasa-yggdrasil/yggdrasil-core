@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: d7f2c6d4fb40bdc3977afed30c85c7d005620d1c
-verified_diff_sha256: 6587871cb9f4ff21152b066c64826ca76874d0a49b7589308889c24c0d322291
+verified_at_commit: 83d8f424f0eaf5379d398886bd40bf9b0245f54f
+verified_diff_sha256: a890d125a63bee3daff92a73b7a46d2f0d5f3f760e5c0cc5bb30bd33b464a669
 reconciler_schema: 1
 verified_at: 2026-09-27
 by: Codex
-note: Reconciled the fail-loud read-only workflow assertion contract. ADR-0024 and the workflow guide define its closed equal and nonempty schema, exact comparison, failure behavior, and value-redaction boundary. Generated AI context was refreshed from the exact functional source commit. No production rollout is claimed.
+note: Reconciled the emergency lock contract after closing repository-binding webhook dispatch. ADR-0025, the workflow guide, security guidance, API references, deployment guidance, and observability guidance now document the pre-lookup refusal and pre-persistence recheck. Generated AI context was refreshed from the exact functional source commit. No production rollout is claimed.
