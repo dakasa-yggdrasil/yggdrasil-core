@@ -220,7 +220,7 @@
       "post": {
         "tags": ["webhooks"],
         "summary": "GitHub push webhook receiver",
-        "description": "Verifies the X-Hub-Signature-256 HMAC, looks up the `repository_binding` for `repository.full_name`, applies branch and path filters, and dispatches the bound workflow. Returns 200 with `status: skipped` when no binding is configured (so a webhook on an unmapped repo is harmless). While the emergency workflow dispatch lock is enforced, push dispatch returns 503 before binding lookup even when the bound workflow is allowlisted.",
+        "description": "Verifies the X-Hub-Signature-256 HMAC, looks up the `repository_binding` for `repository.full_name`, applies branch and path filters, and dispatches the bound workflow. Returns 200 with `status: skipped` when no binding is configured (so a webhook on an unmapped repo is harmless). A repository binding cannot dispatch a workflow that declares `spec.authorization` because the webhook carries no authenticated Core actor. While the emergency workflow dispatch lock is enforced, push dispatch returns 503 before binding lookup even when the bound workflow is allowlisted.",
         "parameters": [
           {"name": "X-GitHub-Event", "in": "header", "required": true, "schema": {"type": "string", "enum": ["push", "ping"]}},
           {"name": "X-Hub-Signature-256", "in": "header", "schema": {"type": "string", "example": "sha256=abc..."}}

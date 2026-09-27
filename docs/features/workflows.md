@@ -374,6 +374,23 @@ routes. They cannot publish events or access manifests, deploy, secrets,
 `/console`, generic `/ops`, tenant, or auth-admin APIs. See
 [ADR-0017](../adr/0017-scope-machine-principals-by-route-workflow-and-run-ownership.md).
 
+### Channels without a Core actor
+
+The AMQP `yggdrasil-core.workflow.run` queue and GitHub push dispatch through a
+`repository_binding` do not carry an authenticated Core actor that can satisfy
+workflow RBAC or policy. They reject every workflow that declares
+`spec.authorization`. The AMQP reply uses
+`workflow_authenticated_actor_required`; repository-binding dispatch refuses
+before inserting a `workflow_runs` row.
+
+The guard and executor use the same resolved manifest and parsed spec. Core
+does not check one active version and then resolve the logical workflow name a
+second time for execution. Workflows without `spec.authorization` retain their
+existing behavior on both channels. To protect such a workflow, move its caller
+to authenticated `POST /api/v1/workflow-runs` dispatch before adding the
+authorization block. See
+[ADR-0027](../adr/0027-require-authenticated-actor-channels-for-authorized-workflows.md).
+
 ## Emergency dispatch lock
 
 `YGGDRASIL_WORKFLOW_DISPATCH_LOCK_JSON` can temporarily reduce authenticated

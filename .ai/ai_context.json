@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-09-27T01:41:29-03:00",
+  "generated_at": "2026-09-27T02:18:44-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 646,
+    ".go": 647,
     ".json": 144,
     ".py": 1,
     ".sql": 52,
@@ -11,7 +11,7 @@
     ".yml": 22
   },
   "provenance": {
-    "commit": "322cfe32786d96c410b2a4982d7c39be5e46e617",
+    "commit": "845701d1b6af4034b08a996831115bba43cdd597",
     "dirty": true,
     "files": [
       {
@@ -78,14 +78,14 @@
       "kb": 209
     },
     {
+      "path": "controllers/message",
+      "files": 51,
+      "kb": 516
+    },
+    {
       "path": "db/migrations",
       "files": 51,
       "kb": 91
-    },
-    {
-      "path": "controllers/message",
-      "files": 50,
-      "kb": 507
     },
     {
       "path": "addons",

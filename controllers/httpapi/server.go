@@ -248,14 +248,13 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		// = 'deploy-via-kustomize-source'` showed nothing from today —
 		// silent unobservable deploys.
 		runID := uuid.New()
-		req, err := messagecontroller.PrepareAndInsertWorkflowRun(ctx, server.db, runID, model.RunWorkflowRequest{Workflow: ref, Inputs: inputs})
-		if err != nil {
-			return fmt.Errorf("prepare and insert workflow_run: %w", err)
-		}
-		startedAt := time.Now().UTC()
-		_ = repository.MarkWorkflowRunRunning(ctx, server.db, runID, startedAt)
-
-		response, runErr := messagecontroller.RunWorkflow(ctx, server.rabbitmq, server.db, req)
+		response, runErr := messagecontroller.PrepareInsertAndRunWorkflowFromUnauthenticatedChannel(
+			ctx,
+			server.rabbitmq,
+			server.db,
+			runID,
+			model.RunWorkflowRequest{Workflow: ref, Inputs: inputs},
+		)
 
 		status := "succeeded"
 		errMsg := ""
