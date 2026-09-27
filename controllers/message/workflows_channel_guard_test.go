@@ -126,7 +126,7 @@ func TestRepositoryBindingRunExecutesTheCheckedLegacySpec(t *testing.T) {
 	expectActorlessChannelWorkflow(mock, actorlessLegacyWorkflowSpec)
 	runID := uuid.New()
 	mock.ExpectExec(`INSERT INTO public\.workflow_runs`).
-		WithArgs(runID, "dakasa", "lifecycle", nil, `{}`, `{}`).
+		WithArgs(runID, "dakasa", "lifecycle", nil, `null`, `{}`).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 	mock.ExpectExec(`UPDATE public\.workflow_runs\s+SET status = 'running'`).
 		WithArgs(runID, sqlmock.AnyArg()).
