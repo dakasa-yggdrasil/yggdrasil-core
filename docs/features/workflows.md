@@ -73,7 +73,7 @@ flowchart TB
     subgraph StepKinds["Step kinds"]
         Integration[kind=integration → transport dispatch]
         Product[kind=product → in-process handler]
-        Yggdrasil[kind=yggdrasil → in-process catalog write]
+        Yggdrasil[kind=yggdrasil → in-process core operation]
     end
 
     Trigger --> Engine
@@ -105,8 +105,8 @@ sort, fail-fast on cycle), then walks the order. Each step:
      `rpc.Transport`), await reply.
    - `product` → run an in-process product handler (apply, observe,
      uninstall).
-   - `yggdrasil` → write a manifest into the catalog
-     (used for one-shot `register-instance` style steps).
+   - `yggdrasil` → run an in-process core operation, including catalog
+     writes and read-only workflow assertions.
 4. **Retries** per `retry.max_attempts` with optional
    `retry.backoff_seconds`.
 5. **Records** the result (status, attempts, error, metadata,
@@ -146,11 +146,10 @@ catalog — see [products.md](./products.md).
 
 ### `kind: yggdrasil`
 
-Writes a manifest against the core's own catalog. The single
-operation today is `apply_manifest` — the step's `with.manifest`
-field is the manifest document. This is what
-`integration_quickstart` install flows use to register the freshly
-installed instance:
+Runs an operation inside Core without resolving an integration instance.
+`apply_manifest` writes the step's `with.manifest` document to the catalog.
+This is what `integration_quickstart` install flows use to register the
+freshly installed instance:
 
 ```yaml
 - id: register-instance
@@ -163,8 +162,36 @@ installed instance:
       spec: { type_ref: { ... } }
 ```
 
-Loopback into the same core, in the same DB transaction the run
-runs in.
+Loopback into the same core, in the same DB transaction the run uses.
+
+`assert` is the read-only final-state guard for workflows that must fail when
+observed state differs from the intended state. Its `with` object is closed:
+it accepts only `equal` and `nonempty` arrays, requires at least one check,
+and requires every check name to be non-empty and unique across both arrays.
+`equal` uses exact Go value equality without string or numeric coercion.
+`nonempty` accepts strings, arrays, slices, and maps, and fails for nil, empty,
+or scalar values.
+
+```yaml
+- id: assert-final-policy
+  depends_on: [observe-final-policy]
+  use: { kind: yggdrasil, operation: assert }
+  with:
+    equal:
+      - name: final_policy_spec
+        actual: "{{ steps.observe-final-policy.metadata.spec }}"
+        expected: "{{ steps.apply-policy.metadata.spec }}"
+    nonempty:
+      - name: final_policy_uid
+        value: "{{ steps.observe-final-policy.metadata.uid }}"
+      - name: final_policy_resource_version
+        value: "{{ steps.observe-final-policy.metadata.resource_version }}"
+```
+
+Unlike `condition`, which records `skipped` when false, a failed assertion
+fails the step and stops the workflow. Assertion errors identify only the
+check name. Successful metadata contains only check names and counts. Rendered
+`actual`, `expected`, and `value` data is never copied into errors or metadata.
 
 ## Template rendering
 
