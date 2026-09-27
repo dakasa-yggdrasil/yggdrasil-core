@@ -26,6 +26,11 @@ const (
 	defaultWorkflowStepTimeout = 20 * time.Second
 )
 
+// ErrWorkflowAuthenticatedActorRequired refuses protected workflows on
+// dispatch channels that cannot establish a Core actor and evaluate the
+// workflow's RBAC and policy authorization.
+var ErrWorkflowAuthenticatedActorRequired = errors.New("workflow spec.authorization requires an authenticated actor")
+
 func workflowConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) []ConsumerConfig {
 	policy, err := workflowdispatchlock.LoadFromEnvironment()
 	if err != nil || policy.Enforced() {
@@ -90,11 +95,13 @@ func workflowRunHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) C
 			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
-		response, err := RunWorkflow(ctx, conn, db, req)
+		response, err := RunWorkflowFromUnauthenticatedChannel(ctx, conn, db, req)
 		if err != nil {
 			code := integrationAwareErrorCode(err, "workflow_run_failed")
 			if errors.Is(err, workflowdispatchlock.ErrLocked) {
 				code = "workflow_dispatch_locked"
+			} else if errors.Is(err, ErrWorkflowAuthenticatedActorRequired) {
+				code = "workflow_authenticated_actor_required"
 			} else if manifestLookupErrorCode(err) != "internal_error" {
 				code = manifestLookupErrorCode(err)
 			} else if strings.Contains(strings.ToLower(strings.TrimSpace(err.Error())), "required") ||
@@ -195,6 +202,65 @@ func RunWorkflow(
 	}
 
 	return runWorkflow(ctx, conn, db, workflowManifest, spec, preparedReq)
+}
+
+// RunWorkflowFromUnauthenticatedChannel executes a workflow only when its
+// resolved spec has no authorization contract. The authorization check and
+// execution share the exact same resolved manifest and parsed spec, so an
+// active-version change cannot swap a protected workflow in after the check.
+func RunWorkflowFromUnauthenticatedChannel(
+	ctx context.Context,
+	conn *amqp.Connection,
+	db *sql.DB,
+	req model.RunWorkflowRequest,
+) (model.RunWorkflowResponse, error) {
+	workflowManifest, spec, preparedReq, err := prepareWorkflowRunFromUnauthenticatedChannel(ctx, db, req)
+	if err != nil {
+		return model.RunWorkflowResponse{}, err
+	}
+
+	return runWorkflow(ctx, conn, db, workflowManifest, spec, preparedReq)
+}
+
+// PrepareInsertAndRunWorkflowFromUnauthenticatedChannel is the durable-run
+// variant used by repository-binding webhook dispatch. It rejects protected
+// workflows before inserting workflow_runs, then executes the same resolved
+// manifest and spec that passed the channel check.
+func PrepareInsertAndRunWorkflowFromUnauthenticatedChannel(
+	ctx context.Context,
+	conn *amqp.Connection,
+	db *sql.DB,
+	runID uuid.UUID,
+	req model.RunWorkflowRequest,
+) (model.RunWorkflowResponse, error) {
+	requestedInputs := req.Inputs
+	workflowManifest, spec, preparedReq, err := prepareWorkflowRunFromUnauthenticatedChannel(ctx, db, req)
+	if err != nil {
+		return model.RunWorkflowResponse{}, err
+	}
+
+	persistedInputs := redactSensitiveWorkflowInputs(spec, requestedInputs)
+	if err := repository.InsertWorkflowRun(ctx, db, runID, preparedReq.Workflow, persistedInputs, preparedReq.Metadata); err != nil {
+		return model.RunWorkflowResponse{}, err
+	}
+	_ = repository.MarkWorkflowRunRunning(ctx, db, runID, time.Now().UTC())
+
+	return runWorkflow(ctx, conn, db, workflowManifest, spec, preparedReq)
+}
+
+func prepareWorkflowRunFromUnauthenticatedChannel(
+	ctx context.Context,
+	db *sql.DB,
+	req model.RunWorkflowRequest,
+) (model.Manifest, model.WorkflowManifestSpec, model.RunWorkflowRequest, error) {
+	workflowManifest, spec, preparedReq, err := prepareWorkflowRun(ctx, db, req)
+	if err != nil {
+		return model.Manifest{}, model.WorkflowManifestSpec{}, model.RunWorkflowRequest{}, err
+	}
+	if spec.Authorization != nil {
+		return model.Manifest{}, model.WorkflowManifestSpec{}, model.RunWorkflowRequest{}, ErrWorkflowAuthenticatedActorRequired
+	}
+	return workflowManifest, spec, preparedReq, nil
 }
 
 // PrepareAndInsertWorkflowRun validates a workflow request before creating its

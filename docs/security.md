@@ -137,6 +137,16 @@ normal authentication, `spec.authorization`, RBAC, policy, condition, and input
 checks. Scheduler, event-trigger, and Heimdall paths retain their existing
 system trigger authority and remain constrained by the exact allowlist.
 
+The AMQP `yggdrasil-core.workflow.run` queue and GitHub push dispatch through a
+`repository_binding` have no authenticated Core actor. Both reject workflows
+with `spec.authorization`; caller-supplied request fields and a valid webhook
+signature cannot stand in for RBAC identity. The guard and executor share the
+same resolved manifest and parsed spec, and repository-binding refusal occurs
+before a durable workflow run is inserted. Workflows without an authorization
+block remain compatible on these channels. Protected automation must use the
+authenticated workflow-run route or a separately reviewed trusted in-process
+source.
+
 The parser rejects blank or malformed configured JSON, unknown fields, trailing
 values, wildcard or duplicate pairs, surrounding whitespace, and an empty
 enforce list. Invalid configuration denies at runtime and fails boot validation
