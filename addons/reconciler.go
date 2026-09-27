@@ -15,6 +15,13 @@ func init() {
 }
 
 func bootstrapReconciler(ctx context.Context, app *runtime.ServiceApp) error {
+	if workflowDispatchLockPaused() {
+		// The reconciler writes Secrets and ConfigMaps directly through the
+		// Kubernetes API. Leave it stopped so only allowlisted stored workflows
+		// can produce external mutations during the emergency window.
+		return nil
+	}
+
 	db, ok := Postgres(app)
 	if !ok {
 		return nil // reconciler is optional if postgres is not available

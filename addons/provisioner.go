@@ -13,6 +13,13 @@ func init() {
 }
 
 func bootstrapProvisioner(ctx context.Context, app *runtime.ServiceApp) error {
+	if workflowDispatchLockPaused() {
+		// Direct AWS provisioning has no stored workflow identity. Keep the
+		// provider client out of the locked process as a second barrier behind
+		// the HTTP mutation guard.
+		return nil
+	}
+
 	db, ok := Postgres(app)
 	if !ok {
 		return nil // provisioner is optional if postgres is not available

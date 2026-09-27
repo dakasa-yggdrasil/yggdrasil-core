@@ -7,6 +7,7 @@ import (
 	"regexp"
 	"strings"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -113,6 +114,10 @@ func (s *Server) handleWorkflowTemplateInstantiate(w http.ResponseWriter, r *htt
 	}
 
 	if req.Apply {
+		if err := workflowdispatchlock.CheckManifestMutationEnvironment(); err != nil {
+			writeMappedError(w, err)
+			return
+		}
 		doc := model.ManifestDocument{
 			APIVersion: "yggdrasil.io/v1alpha1",
 			Kind:       "workflow",

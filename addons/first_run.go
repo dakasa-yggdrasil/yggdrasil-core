@@ -8,6 +8,7 @@ import (
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/bootstrap"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	"go.uber.org/zap"
 )
 
@@ -41,6 +42,24 @@ func init() {
 func bootstrapFirstRun(ctx context.Context, app *runtime.ServiceApp) error {
 	adminUsername := strings.TrimSpace(os.Getenv(envBootstrapAdminUsername))
 	manifestsPath := strings.TrimSpace(os.Getenv(envBootstrapManifestsPath))
+	policy, err := workflowdispatchlock.LoadFromEnvironment()
+	if err != nil {
+		return err
+	}
+	if policy.Enforced() {
+		for _, envName := range []string{
+			envBootstrapAdminUsername,
+			envBootstrapAdminPassword,
+			envBootstrapAdminEmail,
+			envBootstrapAdminDisplayName,
+			envBootstrapManifestsPath,
+		} {
+			if _, configured := os.LookupEnv(envName); configured {
+				return fmt.Errorf("first_run_bootstrap is configured through %s while workflow dispatch lock is enforced", envName)
+			}
+		}
+		return nil
+	}
 
 	if adminUsername == "" && manifestsPath == "" {
 		// Nothing requested; early-exit so the addon costs zero on

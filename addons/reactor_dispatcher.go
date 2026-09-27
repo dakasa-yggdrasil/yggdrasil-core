@@ -14,8 +14,8 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/externalidentity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/reactors"
-	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/teamprovisioning"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/teamprovisioning"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -37,6 +37,12 @@ func init() {
 //	REACTOR_RUNNER_PARALLELISM  — concurrent dispatches per tick. Default 10.
 //	REACTOR_STUCK_THRESHOLD     — in-progress age before re-queuing. Default 10m.
 func bootstrapReactorDispatcher(ctx context.Context, app *runtime.ServiceApp) error {
+	if workflowDispatchLockPaused() {
+		// Do not start the runner. Pending reactions stay unclaimed until an
+		// unlocked process replaces this pod.
+		return nil
+	}
+
 	db, ok := Postgres(app)
 	if !ok {
 		// Postgres addon not enabled — nothing to do.

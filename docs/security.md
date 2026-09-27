@@ -122,6 +122,60 @@ the caller asks for `async=false` or a `sync` header. The async worker uses the
 panic-safe goroutine wrapper; a panic records only a generic failed-run error
 before being recovered and counted. Foreign and absent runs both return 404.
 
+`YGGDRASIL_WORKFLOW_DISPATCH_LOCK_JSON` is a separate emergency restriction
+over every workflow caller, including authenticated humans, machine principals,
+internal triggers, and queued workflow runs. In `mode: enforce`, only exact
+stored workflow namespace and name pairs proceed. The lock grants nothing: an
+allowlisted workflow must still satisfy its normal authentication,
+`spec.authorization`, RBAC, policy, condition, and input checks. A refusal maps
+to HTTP `503` with code `workflow.dispatch_locked`.
+
+The parser rejects blank or malformed configured JSON, unknown fields, trailing
+values, wildcard or duplicate pairs, surrounding whitespace, and an empty
+enforce list. Invalid configuration denies at runtime and fails boot validation
+in every environment. Enforce and invalid modes register no consumers for AMQP
+workflow dispatch, workflow run, generic integration execute, catalog discovery,
+or product mutation. Caller supplied metadata is never accepted as allowlist
+proof.
+
+Enforce mode also freezes external manifest create and delete, applied workflow
+templates, non-dry-run integration install, manual integration type sync,
+Guardian memory review, Guardian approval decisions, and the AMQP manifest
+create consumer. Read surfaces continue. Periodic adapter manifest sync and the
+reactor dispatcher stay stopped. Locked startup fails when any first-run
+bootstrap environment variable is configured; with all of them unset, the
+first-run addon is a no-op. These controls prevent external replacement of an
+allowlisted workflow or its manifest-backed authorities. An allowlisted
+workflow cannot use the in-process `apply_manifest` operation while locked. The
+exported in-process integration entry point also refuses execution, so webhook
+integrations, surface queries, password recovery email, external identity
+resync, and future direct callers cannot bypass the lock without a stored
+workflow identity. The operational gate must prove the full Core rollout
+replaced every old pod, durable workflow runs are idle, paused Core queues are
+empty and consumer-free, and adapter queues are drained before the lock is
+adopted. For the current one-replica adoption, the read-only
+`yggdrasil-core.product.installation_state.discover` queue remains enabled and
+must show one consumer, zero ready messages, and zero unacknowledged messages.
+
+Direct AWS provisioning, managed-secret mutation, explicit Kubernetes secret
+materialization, third-party provider and identity changes, and operator
+surface actions also fail with the stable lock response. The AWS provisioner
+and Kubernetes reconciler do not start while the lock is enforced or invalid,
+so they cannot update provider resources, Secrets, or ConfigMaps outside an
+allowlisted stored workflow.
+
+The lock is not a global database maintenance mode. Collaborator, team,
+session, ordinary credential, audit, retention, and housekeeping state remain
+under their normal contracts. Core evaluates ordinary authentication and
+authorization on every dispatch; the emergency allowlist never grants either.
+
+Core passively requires each paused queue to exist as durable topology at locked
+startup. The RPC SDK currently publishes without mandatory routing or persistent
+delivery, and late RPC reply queues can expire. A nonempty or unknown paused
+queue blocks unlock until the operator explicitly purges or quarantines it. See
+ADR-0023. Locked startup fails when `BROKER_URL` is absent or RabbitMQ cannot be
+reached, because Core cannot verify the queue contract.
+
 Core loads the workflow surface (the inventory and the legacy bridge
 settings) once at start and the gate, the dispatch and poll handlers and the
 manifest-write check share that copy (ADR-0022); only the bridge expiry is

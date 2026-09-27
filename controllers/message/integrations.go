@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
@@ -29,13 +30,26 @@ const (
 )
 
 func integrationConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) []ConsumerConfig {
-	return []ConsumerConfig{
-		{
-			Queue:   queueIntegrationExecute,
-			Timeout: 30 * time.Second,
-			QoS:     10,
-			Handler: integrationExecuteHandler(conn, db, logger),
-		},
+	consumers := make([]ConsumerConfig, 0, 8)
+	policy, err := workflowdispatchlock.LoadFromEnvironment()
+	if err == nil && !policy.Enforced() {
+		consumers = append(consumers,
+			ConsumerConfig{
+				Queue:   queueIntegrationExecute,
+				Timeout: 30 * time.Second,
+				QoS:     10,
+				Handler: integrationExecuteHandler(conn, db, logger),
+			},
+			ConsumerConfig{
+				Queue:   queueCatalogDiscover,
+				Timeout: 30 * time.Second,
+				QoS:     10,
+				Handler: catalogDiscoverHandler(conn, db, logger),
+			},
+		)
+	}
+
+	return append(consumers, []ConsumerConfig{
 		{
 			Queue:   queueIntegrationStatusGet,
 			Timeout: 10 * time.Second,
@@ -72,17 +86,15 @@ func integrationConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger)
 			QoS:     10,
 			Handler: integrationCatalogListHandler(conn, db, logger),
 		},
-		{
-			Queue:   queueCatalogDiscover,
-			Timeout: 30 * time.Second,
-			QoS:     10,
-			Handler: catalogDiscoverHandler(conn, db, logger),
-		},
-	}
+	}...)
 }
 
 func integrationExecuteHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
 	return func(ctx context.Context, d rpc.Delivery) error {
+		if err := workflowdispatchlock.CheckUnboundEnvironment(); err != nil {
+			return replyFailure(ctx, d, "workflow_dispatch_locked", err, logger)
+		}
+
 		var req model.ExecuteIntegrationRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
 			return replyFailure(ctx, d, "bad_request", err, logger)
@@ -210,6 +222,9 @@ func integrationCatalogListHandler(conn *amqp.Connection, db *sql.DB, logger *za
 
 func catalogDiscoverHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
 	return func(ctx context.Context, d rpc.Delivery) error {
+		if err := workflowdispatchlock.CheckUnboundEnvironment(); err != nil {
+			return replyFailure(ctx, d, "workflow_dispatch_locked", err, logger)
+		}
 		req := model.DiscoverCatalogRequest{}
 		if len(bytesTrimSpace(d.Body)) > 0 {
 			if err := json.Unmarshal(d.Body, &req); err != nil {
@@ -443,6 +458,13 @@ func ExecuteIntegration(
 	db *sql.DB,
 	req model.ExecuteIntegrationRequest,
 ) (model.ExecuteIntegrationResponse, error) {
+	// Exported in-process callers do not carry an unforgeable reference to the
+	// stored workflow that authorized them. This covers webhooks, surface
+	// queries, recovery email, external-identity resync, and future direct
+	// callers without blocking integration steps of an allowed stored workflow.
+	if err := workflowdispatchlock.CheckUnboundEnvironment(); err != nil {
+		return model.ExecuteIntegrationResponse{}, err
+	}
 	req = normalizeExecuteIntegrationRequest(req)
 	if err := validateExecuteIntegrationRequest(req); err != nil {
 		return model.ExecuteIntegrationResponse{}, fmt.Errorf("invalid request: %w", err)

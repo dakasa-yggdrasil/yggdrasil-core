@@ -12,7 +12,7 @@ import (
 	"github.com/google/uuid"
 )
 
-const activeWorkflowSpec = `{"trigger":{"mode":"manual"},"steps":[]}`
+const activeWorkflowSpec = `{"trigger":{"mode":"manual"},"steps":[{"id":"observe","use":{"kind":"integration","instance_ref":{"namespace":"dakasa","name":"example"},"operation":"observe_state"}}]}`
 
 func TestResolveActiveWorkflowManifestSpecRejectsInactiveManifestID(t *testing.T) {
 	db, mock, err := sqlmock.New()

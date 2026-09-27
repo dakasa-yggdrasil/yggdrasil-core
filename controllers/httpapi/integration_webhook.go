@@ -12,6 +12,7 @@ import (
 
 	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/externalidentity"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -100,6 +101,10 @@ func (s *Server) handleIntegrationWebhook(w http.ResponseWriter, r *http.Request
 		},
 	})
 	if err != nil {
+		if errors.Is(err, workflowdispatchlock.ErrLocked) {
+			writeMappedError(w, err)
+			return
+		}
 		writeJSON(w, http.StatusInternalServerError, map[string]any{"error": "adapter on_webhook failed: " + err.Error()})
 		return
 	}

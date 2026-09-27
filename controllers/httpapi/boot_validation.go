@@ -6,10 +6,13 @@ import (
 	"os"
 	"strings"
 	"time"
+
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 )
 
-// Boot-time validation of security-critical env vars. Called once by
-// Server.New() before the mux is wired.  Misconfigurations that would
+// Boot-time validation of security-critical env vars. Called by the boot
+// validation addon before stateful addons and again by Server.New() before the
+// mux is wired. Misconfigurations that would
 // silently weaken security in production (e.g. an empty
 // AUTH_THIRD_PARTY_STATE_SECRET that falls back to a known-public
 // dev string) MUST halt the boot — silent fallbacks let a deploy roll
@@ -36,6 +39,16 @@ func devEnvAllowsFallback() bool {
 	default:
 		return true
 	}
+}
+
+// ValidateBootConfiguration validates the emergency policy in every
+// environment, then runs the production-only security checks. It executes
+// before addons that can register consumers or mutate persisted state.
+func ValidateBootConfiguration() error {
+	if _, err := workflowdispatchlock.LoadFromEnvironment(); err != nil {
+		return fmt.Errorf("boot-validation failed: %w", err)
+	}
+	return validateBootSecrets()
 }
 
 // validateBootSecrets returns a non-nil error if a security-critical env var

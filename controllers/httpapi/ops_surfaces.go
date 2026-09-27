@@ -15,6 +15,7 @@ import (
 	"unicode"
 
 	surfaceclient "github.com/dakasa-yggdrasil/yggdrasil-core/internal/surface"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 )
@@ -212,6 +213,10 @@ func (s *Server) handleOpsSurfaceData(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleOpsSurfaceAction(w http.ResponseWriter, r *http.Request) {
+	if err := workflowdispatchlock.CheckControlPlaneMutationEnvironment(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
 	id := r.PathValue("id")
 	actionID := r.PathValue("actionId")
 	if strings.TrimSpace(id) == "" || strings.TrimSpace(actionID) == "" {

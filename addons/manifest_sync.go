@@ -10,9 +10,9 @@ import (
 	"time"
 
 	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
-	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/manifestsync"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
+	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -33,6 +33,10 @@ func init() {
 //	MANIFEST_SYNC_INTERVAL         — cron cadence (e.g. "1h"). Default 1h
 //	MANIFEST_SYNC_DESCRIBE_TIMEOUT — per-RPC timeout (e.g. "10s"). Default 10s
 func bootstrapManifestSync(ctx context.Context, app *runtime.ServiceApp) error {
+	if workflowDispatchLockPaused() {
+		return nil
+	}
+
 	db, ok := Postgres(app)
 	if !ok {
 		return nil

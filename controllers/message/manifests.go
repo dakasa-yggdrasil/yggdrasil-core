@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -41,19 +42,26 @@ type rpcResponse struct {
 }
 
 func manifestConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) []ConsumerConfig {
-	return []ConsumerConfig{
+	consumers := []ConsumerConfig{
 		{
 			Queue:   queueManifestValidate,
 			Timeout: 10 * time.Second,
 			QoS:     10,
 			Handler: manifestValidateHandler(conn, logger),
 		},
-		{
+	}
+
+	policy, err := workflowdispatchlock.LoadFromEnvironment()
+	if err == nil && !policy.Enforced() {
+		consumers = append(consumers, ConsumerConfig{
 			Queue:   queueManifestCreate,
 			Timeout: 10 * time.Second,
 			QoS:     5,
 			Handler: manifestCreateHandler(conn, db, logger),
-		},
+		})
+	}
+
+	return append(consumers, []ConsumerConfig{
 		{
 			Queue:   queueManifestList,
 			Timeout: 10 * time.Second,
@@ -90,7 +98,7 @@ func manifestConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) []
 			QoS:     5,
 			Handler: collaboratorReconcileProviderStateHandler(conn, db, logger),
 		},
-	}
+	}...)
 }
 
 func manifestValidateHandler(conn *amqp.Connection, logger *zap.Logger) ConsumerHandler {
@@ -120,6 +128,10 @@ func manifestValidateHandler(conn *amqp.Connection, logger *zap.Logger) Consumer
 
 func manifestCreateHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
 	return func(ctx context.Context, d rpc.Delivery) error {
+		if err := workflowdispatchlock.CheckManifestMutationEnvironment(); err != nil {
+			return replyFailure(ctx, d, "workflow_dispatch_locked", err, logger)
+		}
+
 		var doc model.ManifestDocument
 		if err := json.Unmarshal(d.Body, &doc); err != nil {
 			return replyFailure(ctx, d, manifestPersistCodeBadRequest, err, logger)

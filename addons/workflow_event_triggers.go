@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"os"
 	"path"
@@ -14,6 +15,7 @@ import (
 
 	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -162,6 +164,17 @@ func runWorkflowEventTriggersPass(
 				continue
 			}
 			if err := processMatchedTrigger(ctx, db, conn, logger, dispatch, trigger, event); err != nil {
+				if errors.Is(err, workflowdispatchlock.ErrLocked) {
+					if logger != nil {
+						logger.Info("workflow_event_triggers: cursor held by emergency lock",
+							zap.String("workflow", trigger.namespace+"/"+trigger.name),
+							zap.String("event_id", event.EventID.String()))
+					}
+					// Do not advance the shared cursor. Allowed matches already
+					// emitted in this batch deduplicate on the next pass, while
+					// the blocked pair remains available after unlock.
+					return
+				}
 				if logger != nil {
 					logger.Warn("workflow_event_triggers: process match failed",
 						zap.String("workflow_manifest_id", trigger.manifestID),
@@ -372,6 +385,12 @@ func processMatchedTrigger(
 	trigger eventTriggerWorkflow,
 	event model.Event,
 ) error {
+	// Check before workflow.event.matched is committed. That event is the
+	// dedup marker, so writing it while locked would discard the trigger.
+	if err := workflowdispatchlock.CheckEnvironment(trigger.namespace, trigger.name); err != nil {
+		return err
+	}
+
 	already, err := repository.HasWorkflowEventMatched(ctx, db, trigger.manifestID, event.EventID.String())
 	if err != nil {
 		return fmt.Errorf("dedup check: %w", err)

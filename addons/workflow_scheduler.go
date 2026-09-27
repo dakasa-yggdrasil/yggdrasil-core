@@ -12,6 +12,7 @@ import (
 
 	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -84,7 +85,7 @@ func runWorkflowSchedulerLoop(
 // deterministic testing.
 func runWorkflowSchedulerPass(ctx context.Context, db *sql.DB, conn *amqp.Connection, logger *zap.Logger) {
 	rows, err := db.QueryContext(ctx, `
-		SELECT id, spec
+		SELECT id, namespace, name, spec
 		FROM public.manifests
 		WHERE kind = 'workflow'
 		  AND active = TRUE
@@ -100,6 +101,8 @@ func runWorkflowSchedulerPass(ctx context.Context, db *sql.DB, conn *amqp.Connec
 
 	type scheduledWorkflow struct {
 		manifestID string
+		namespace  string
+		name       string
 		schedule   *model.WorkflowScheduleTriggerSpec
 		enabled    bool
 	}
@@ -107,10 +110,12 @@ func runWorkflowSchedulerPass(ctx context.Context, db *sql.DB, conn *amqp.Connec
 	var candidates []scheduledWorkflow
 	for rows.Next() {
 		var (
-			id   string
-			spec []byte
+			id        string
+			namespace string
+			name      string
+			spec      []byte
 		)
-		if err := rows.Scan(&id, &spec); err != nil {
+		if err := rows.Scan(&id, &namespace, &name, &spec); err != nil {
 			if logger != nil {
 				logger.Warn("workflow_scheduler: scan failed", zap.Error(err))
 			}
@@ -141,6 +146,8 @@ func runWorkflowSchedulerPass(ctx context.Context, db *sql.DB, conn *amqp.Connec
 
 		candidates = append(candidates, scheduledWorkflow{
 			manifestID: id,
+			namespace:  namespace,
+			name:       name,
 			schedule:   wfSpec.Trigger.Schedule,
 			enabled:    enabled,
 		})
@@ -154,7 +161,7 @@ func runWorkflowSchedulerPass(ctx context.Context, db *sql.DB, conn *amqp.Connec
 
 	now := time.Now().UTC()
 	for _, wf := range candidates {
-		if err := processScheduledWorkflow(ctx, db, conn, logger, wf.manifestID, wf.schedule, now); err != nil {
+		if err := processScheduledWorkflow(ctx, db, conn, logger, wf.manifestID, wf.namespace, wf.name, wf.schedule, now); err != nil {
 			if logger != nil {
 				logger.Warn("workflow_scheduler: process failed",
 					zap.String("manifest_id", wf.manifestID),
@@ -174,9 +181,22 @@ func processScheduledWorkflow(
 	conn *amqp.Connection,
 	logger *zap.Logger,
 	manifestID string,
+	namespace string,
+	name string,
 	schedule *model.WorkflowScheduleTriggerSpec,
 	now time.Time,
 ) error {
+	// Refuse before reading or advancing schedule_state. The same due tick is
+	// therefore available for replay after the emergency lock is disabled.
+	if err := workflowdispatchlock.CheckEnvironment(namespace, name); err != nil {
+		if logger != nil {
+			logger.Info("workflow_scheduler: dispatch held by emergency lock",
+				zap.String("manifest_id", manifestID),
+				zap.String("workflow", namespace+"/"+name))
+		}
+		return nil
+	}
+
 	parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 	sched, err := parser.Parse(schedule.CronExpression)
 	if err != nil {

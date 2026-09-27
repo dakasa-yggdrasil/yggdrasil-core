@@ -14,6 +14,7 @@ import (
 	"strings"
 
 	safego "github.com/dakasa-yggdrasil/yggdrasil-core/internal/goroutine"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"go.uber.org/zap"
@@ -149,6 +150,10 @@ func (s *Server) handlePushEvent(w http.ResponseWriter, r *http.Request, body []
 		ref := model.ManifestSelector{
 			Namespace: deploy.WorkflowRef.Namespace,
 			Name:      deploy.WorkflowRef.Name,
+		}
+		if err := workflowdispatchlock.CheckEnvironment(ref.Namespace, ref.Name); err != nil {
+			writeMappedError(w, err)
+			return
 		}
 
 		s.logger.Info("github push dispatching workflow",

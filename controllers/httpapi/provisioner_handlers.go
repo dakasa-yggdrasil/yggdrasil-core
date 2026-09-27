@@ -3,6 +3,7 @@ package httpapi
 import (
 	"net/http"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/provisioner"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -13,6 +14,10 @@ import (
 // generation for a namespace. After secrets are stored it triggers a
 // reconciler materialize-all to push them to Kubernetes.
 func (s *Server) handleProvisionAWS(w http.ResponseWriter, r *http.Request) {
+	if err := workflowdispatchlock.CheckControlPlaneMutationEnvironment(); err != nil {
+		writeMappedError(w, err)
+		return
+	}
 	if s.provisioner == nil {
 		writeJSON(w, http.StatusServiceUnavailable, errorResponse{
 			Error: "aws provisioner is not available (missing credentials or addon not loaded)",

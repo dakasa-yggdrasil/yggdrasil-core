@@ -6,6 +6,7 @@ import (
 	"net/http"
 	"strings"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
 )
@@ -38,6 +39,10 @@ func (s *Server) handleManifestDelete(w http.ResponseWriter, r *http.Request) {
 	// environments, with no workflow-machine shortcut.
 	if !s.manifestWriteAuthorized(r) {
 		writeMappedError(w, errWorkflowRunUnauthorized)
+		return
+	}
+	if err := workflowdispatchlock.CheckManifestMutationEnvironment(); err != nil {
+		writeMappedError(w, err)
 		return
 	}
 
