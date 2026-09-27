@@ -95,8 +95,7 @@ func TestManifestDocumentFromStepInput_RejectsEmptyManifest(t *testing.T) {
 }
 
 // TestExecuteYggdrasilWorkflowStep_UnsupportedOperationFails guards the
-// contract that the only in-process yggdrasil operation today is
-// apply_manifest. New operations require matching dispatcher wiring.
+// contract that an unknown in-process yggdrasil operation fails closed.
 func TestExecuteYggdrasilWorkflowStep_UnsupportedOperationFails(t *testing.T) {
 	step := model.WorkflowStepSpec{
 		ID: "mystery",

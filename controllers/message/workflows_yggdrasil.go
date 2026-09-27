@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"reflect"
 	"strings"
 	"time"
 
@@ -28,13 +29,15 @@ import (
 //
 // Supported operations:
 //
-//   - apply_manifest                       — persists with.manifest through the standard
+//   - apply_manifest: persists with.manifest through the standard
 //     normalize/validate/persist/emit pipeline. See handleApplyManifest.
-//   - control_plane.render                 — loads a `control_plane` manifest by ref
+//   - assert: compares rendered values or requires them
+//     to be non-empty, failing the workflow without exposing those values.
+//   - control_plane.render: loads a `control_plane` manifest by ref
 //     and returns its rendered Kubernetes objects as step metadata.
-//   - collaborator.reconcile_provider_state — matches a batch of provider identities
+//   - collaborator.reconcile_provider_state: matches a batch of provider identities
 //     to collaborators by primary_email and upserts collaborator_provider_state rows.
-//   - oidc_client.verify_bootstrap_file — proves that the persisted clients match
+//   - oidc_client.verify_bootstrap_file: proves that the persisted clients match
 //     the server-local, read-only confidential-client Secret file. It accepts no
 //     input, performs no mutation, and returns only public client identifiers.
 //
@@ -53,6 +56,8 @@ func executeYggdrasilWorkflowStep(
 	switch operation {
 	case "apply_manifest":
 		return handleApplyManifest(ctx, db, result, renderedInput)
+	case "assert":
+		return handleWorkflowAssert(result, renderedInput)
 	case "control_plane.render":
 		return handleControlPlaneRender(ctx, db, result, renderedInput)
 	case "collaborator.reconcile_provider_state":
@@ -63,6 +68,66 @@ func executeYggdrasilWorkflowStep(
 		result.Error = fmt.Sprintf("unsupported yggdrasil step operation %q", operation)
 		result.FinishedAt = time.Now().UTC()
 		return result
+	}
+}
+
+func handleWorkflowAssert(
+	result model.WorkflowRunStepResult,
+	renderedInput map[string]any,
+) model.WorkflowRunStepResult {
+	result.Metadata = nil
+	parsed, err := manifest.ParseWorkflowAssertInput(renderedInput)
+	if err != nil {
+		result.Error = err.Error()
+		result.FinishedAt = time.Now().UTC()
+		return result
+	}
+
+	equalNames := make([]string, 0, len(parsed.Equal))
+	for _, check := range parsed.Equal {
+		if !reflect.DeepEqual(check.Actual, check.Expected) {
+			result.Error = fmt.Sprintf("assert equal check %q failed", check.Name)
+			result.FinishedAt = time.Now().UTC()
+			return result
+		}
+		equalNames = append(equalNames, check.Name)
+	}
+
+	nonemptyNames := make([]string, 0, len(parsed.Nonempty))
+	for _, check := range parsed.Nonempty {
+		if !workflowAssertValueIsNonempty(check.Value) {
+			result.Error = fmt.Sprintf("assert nonempty check %q failed", check.Name)
+			result.FinishedAt = time.Now().UTC()
+			return result
+		}
+		nonemptyNames = append(nonemptyNames, check.Name)
+	}
+
+	result.Status = "succeeded"
+	result.Error = ""
+	result.Metadata = map[string]any{
+		"equal_count":     len(equalNames),
+		"equal_names":     equalNames,
+		"nonempty_count":  len(nonemptyNames),
+		"nonempty_names":  nonemptyNames,
+		"assertion_count": len(equalNames) + len(nonemptyNames),
+	}
+	result.FinishedAt = time.Now().UTC()
+	return result
+}
+
+func workflowAssertValueIsNonempty(value any) bool {
+	if value == nil {
+		return false
+	}
+	reflected := reflect.ValueOf(value)
+	switch reflected.Kind() {
+	case reflect.String, reflect.Array:
+		return reflected.Len() > 0
+	case reflect.Slice, reflect.Map:
+		return !reflected.IsNil() && reflected.Len() > 0
+	default:
+		return false
 	}
 }
 
