@@ -201,8 +201,9 @@ with `?kind=X` in the query string.
 
 ## CI / image flow
 
-- `.github/workflows/release.yml` — builds + pushes to GHCR on
-  push-to-main and on `v*` tags. Tags emitted: `sha-<short>`,
+- `.github/workflows/release.yml`: builds `linux/amd64` and
+  `linux/arm64` and pushes to GHCR only, on push-to-main, on `v*`
+  tags and on manual dispatch. Tags emitted: `sha-<short>`,
   `edge` (main), `latest` (release tag), `vX.Y.Z`.
 - `.github/workflows/workflow.yml` — go test, golangci-lint, addons
   list smoke.
@@ -253,9 +254,28 @@ real `manifest/*.json` files.
   (the `services/yggdrasil-core/` submodule inside the
   `dakasa-yggdrasil/yggdrasil` monorepo is observe-only — see
   your Claude Code project memory dir, note `reference_yggdrasil_core_repos`).
-- Cluster pulls from ECR Pull-Through-Cache of GHCR, not GHCR direct
-  (see memory `[Yggdrasil integrations live in GHCR, not ECR]` for the
-  inverse note about adapters).
-- Rolling new image into the running cluster: dispatch
-  `upgrade-yggdrasil-core-edge` workflow against the
-  yggdrasil-self instance with `inputs.image=<ECR/PTC sha-tag>`.
+- The DaKasa cluster pulls Core from the ECR pull-through cache of
+  GHCR, not GHCR direct: `ghcr/dakasa-yggdrasil/yggdrasil-core` in the
+  us-east-1 registry, pinned by OCI index digest, pull secret
+  `ecr-pull-fresh`. Do not assume adapters work the same way: most
+  `integration-*` repos push from their own `release.yml` straight to
+  their own ECR repository in sa-east-1 through GitHub Actions OIDC
+  (repo variable `AWS_ECR_PUSH_ROLE_ARN`), and the cluster pulls those
+  cross-region with `ecr-pull-sa-east-1`. A few push to the us-east-1
+  registry or publish only to GHCR, so read the adapter's `release.yml`
+  and the image its deploy references before assuming one.
+- Rolling a new Core image into production is a dakasa-system change,
+  not a dispatch from this repo. Each Core release adds one
+  `pin-yggdrasil-core-<sha7>-production` workflow
+  under `yggdrasil/dakasa/workflows/`, retires the previous pin to an
+  inactive tombstone, and moves `deploy/infra/base/yggdrasil/deployment.yaml`
+  and `yggdrasil/dakasa/control-planes/yggdrasil.json` to the new OCI
+  index digest in the same change. CI there lets exactly one active
+  workflow in the catalog set the Core image, and only to that digest.
+  The catalog is not live Brain state: after merge the new pin is
+  registered and read back, and the previously registered pin is
+  soft-deleted before an authorized human dispatches the new one. It
+  changes the `core` image as its last step, because Core restarts
+  itself.
+  `upgrade-yggdrasil-core-edge` (mutable `:edge`) is inactive there and
+  is not a rollout path.
