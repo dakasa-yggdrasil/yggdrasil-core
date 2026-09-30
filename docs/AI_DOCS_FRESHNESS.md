@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 845701d1b6af4034b08a996831115bba43cdd597
-verified_diff_sha256: 56dd8639174aae64b74795ea350ee7ce5f601b1323bbd91ec92f9e8f161b49ab
+verified_at_commit: 60d4f5aa5cb2fb54f99573e8316016d235feff4c
+verified_diff_sha256: 4de239e8a312274a506438de399a37c2ba52744b1a42a32e464f309fbdf6004f
 reconciler_schema: 1
-verified_at: 2026-09-27
+verified_at: 2026-09-30
 by: Codex
-note: Reconciled the actor-channel guard for authorized workflows. ADR-0027, the workflow and security references, both OpenAPI copies, and generated AI context now describe the exact functional source commit. No production rollout is claimed.
+note: Reconciled scheduled workflow terminal status and completion event documentation against the scheduler fix. The event now carries the persisted scheduled run ID after finalization; no production rollout is claimed.

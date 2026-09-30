@@ -115,6 +115,13 @@ sort, fail-fast on cycle), then walks the order. Each step:
 A failed step aborts the run immediately. A `skipped` step (false
 condition) does not — downstream steps continue.
 
+For scheduled runs, Core persists the terminal status from the workflow
+response. A failed step returns a typed `failed` response even when execution
+returns no Go error. After the run row is finalized, Core emits
+`workflow.run.completed` with the persisted `run_id` and
+`triggered_by: schedule`. A failure before a typed response exists is recorded
+on the run row without a completion event.
+
 For asynchronous runs, the same manifest and input validation happens before
 the pending `workflow_runs` row is created. Schemas remain open by default;
 set `input_schema.additionalProperties: false` when every accepted top-level

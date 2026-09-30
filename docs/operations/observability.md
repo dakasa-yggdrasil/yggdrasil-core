@@ -154,7 +154,9 @@ emits at this commit and the fields worth deriving from:
 - `workflow.run.completed` (payload `status`, `started_at`,
   `finished_at`, `step_count`): run count and success ratio that
   survive restarts, run latency (`finished_at` minus `started_at`) and
-  step count. The payload carries no per-step entries or timestamps.
+  step count. Scheduled runs emit after durable finalization; their
+  `run_id` matches `workflow_runs.id` and `triggered_by` is `schedule`.
+  The payload carries no per-step entries or timestamps.
 - `authorization.evaluated` (payload `decision`): deny ratio.
 - `manifest.created` (payload `kind`, `namespace`, `name`, `version`):
   manifests persisted through the message path only, that is the AMQP
