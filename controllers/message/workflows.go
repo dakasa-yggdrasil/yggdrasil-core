@@ -137,6 +137,32 @@ func EmitWorkflowRunCompletedEvent(
 	logger *zap.Logger,
 	response model.RunWorkflowResponse,
 ) {
+	emitWorkflowRunCompletedEvent(ctx, db, logger, response, uuid.New(), "manual", "")
+}
+
+// EmitScheduledWorkflowRunCompletedEvent uses the persisted workflow_runs ID
+// so consumers can join the completion event to the scheduled run. The event
+// contract's trigger source is "schedule", regardless of the internal addon
+// name recorded in the run's metadata.
+func EmitScheduledWorkflowRunCompletedEvent(
+	ctx context.Context,
+	db *sql.DB,
+	logger *zap.Logger,
+	response model.RunWorkflowResponse,
+	runID uuid.UUID,
+) {
+	emitWorkflowRunCompletedEvent(ctx, db, logger, response, runID, "schedule", runID.String())
+}
+
+func emitWorkflowRunCompletedEvent(
+	ctx context.Context,
+	db *sql.DB,
+	logger *zap.Logger,
+	response model.RunWorkflowResponse,
+	runID uuid.UUID,
+	triggeredBy string,
+	idempotencyKey string,
+) {
 	// Side-effect: heimdall pulse workflows emit `flagged_count` in their
 	// final step output.  Capture the gauge here so /metrics reflects the
 	// most recent pulse without needing a side-channel.  We extract
@@ -144,7 +170,6 @@ func EmitWorkflowRunCompletedEvent(
 	// partial flagged_count, and operators want that visibility.
 	maybeUpdateHeimdallFlaggedCount(response)
 
-	runID := uuid.NewString()
 	payload := map[string]interface{}{
 		"workflow_ref": map[string]interface{}{
 			"id":        response.Workflow.ID.String(),
@@ -152,12 +177,12 @@ func EmitWorkflowRunCompletedEvent(
 			"namespace": response.Workflow.Namespace,
 			"version":   response.Workflow.Version,
 		},
-		"run_id":       runID,
+		"run_id":       runID.String(),
 		"status":       response.Status,
 		"started_at":   response.StartedAt.Format(time.RFC3339),
 		"finished_at":  response.FinishedAt.Format(time.RFC3339),
 		"step_count":   len(response.Steps),
-		"triggered_by": "manual",
+		"triggered_by": triggeredBy,
 	}
 
 	tx, err := db.BeginTx(ctx, nil)
@@ -170,11 +195,12 @@ func EmitWorkflowRunCompletedEvent(
 	defer tx.Rollback()
 
 	if _, err := repository.EmitEvent(ctx, tx, model.EmitEventRequest{
-		Type:          "workflow.run.completed",
-		SchemaVersion: "v1",
-		AggregateType: "workflow_run",
-		AggregateID:   runID,
-		Payload:       payload,
+		Type:           "workflow.run.completed",
+		SchemaVersion:  "v1",
+		AggregateType:  "workflow_run",
+		AggregateID:    runID.String(),
+		IdempotencyKey: idempotencyKey,
+		Payload:        payload,
 	}); err != nil {
 		if logger != nil {
 			logger.Warn("emit workflow.run.completed: emit failed", zap.Error(err))
