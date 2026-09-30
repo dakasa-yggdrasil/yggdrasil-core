@@ -448,18 +448,10 @@ func dispatchScheduledRun(
 		startedAt := time.Now().UTC()
 		_ = repository.MarkWorkflowRunRunning(bg, db, runID, startedAt)
 		response, runErr := messagecontroller.RunWorkflow(bg, conn, db, req)
-		status := "succeeded"
-		errMsg := ""
-		var resultPayload []byte
-		if runErr != nil {
-			status = "failed"
-			errMsg = runErr.Error()
-		} else {
-			if buf, err := json.Marshal(response); err == nil {
-				resultPayload = buf
-			}
+		if err := finishScheduledWorkflowRun(bg, db, logger, runID, response, runErr); err != nil && logger != nil {
+			logger.Warn("workflow_scheduler: finalize run failed",
+				zap.String("run_id", runID.String()), zap.Error(err))
 		}
-		_ = repository.FinalizeWorkflowRun(bg, db, runID, status, resultPayload, errMsg, time.Now().UTC())
 	}()
 
 	if logger != nil {
@@ -468,6 +460,41 @@ func dispatchScheduledRun(
 			zap.String("namespace", namespace),
 			zap.String("name", name),
 			zap.String("run_id", runID.String()))
+	}
+	return nil
+}
+
+// A failed workflow step returns a typed response with a nil Go error. Keep
+// the durable row's status in sync with that response, then publish a
+// completion event only after the row has reached its terminal state.
+func finishScheduledWorkflowRun(
+	ctx context.Context,
+	db *sql.DB,
+	logger *zap.Logger,
+	runID uuid.UUID,
+	response model.RunWorkflowResponse,
+	runErr error,
+) error {
+	status := "succeeded"
+	errMsg := ""
+	var resultPayload any
+	if runErr != nil {
+		status = "failed"
+		errMsg = runErr.Error()
+	} else {
+		resultPayload = response
+		if strings.EqualFold(response.Status, "failed") {
+			status = "failed"
+			if failedStep, ok := response.Metadata["failed_step"].(string); ok && failedStep != "" {
+				errMsg = "step " + failedStep + " failed"
+			}
+		}
+	}
+	if err := repository.FinalizeWorkflowRun(ctx, db, runID, status, resultPayload, errMsg, time.Now().UTC()); err != nil {
+		return err
+	}
+	if runErr == nil {
+		messagecontroller.EmitScheduledWorkflowRunCompletedEvent(ctx, db, logger, response, runID)
 	}
 	return nil
 }
