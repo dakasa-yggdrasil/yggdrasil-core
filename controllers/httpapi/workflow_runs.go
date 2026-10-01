@@ -163,12 +163,20 @@ func (s *Server) dispatchAsyncWorkflowRun(w http.ResponseWriter, r *http.Request
 				return
 			}
 		}
+		persistedWorkflow, receiptErr := repository.GetWorkflowRunReceipt(r.Context(), s.db, runID)
+		if receiptErr != nil {
+			writeMappedError(w, receiptErr)
+			return
+		}
 		// The original goroutine owns execution. A retry only receives the
 		// durable run identity and must never start the provider action again.
+		// Read its version from the row: this request might have resolved a
+		// newer active manifest since the original dispatch. "accepted" is
+		// the retry receipt state; poll the run for its execution status.
 		writeJSON(w, http.StatusOK, map[string]any{
 			"run_id":   runID.String(),
 			"status":   "accepted",
-			"workflow": req.Workflow,
+			"workflow": persistedWorkflow,
 			"deduped":  true,
 		})
 		return

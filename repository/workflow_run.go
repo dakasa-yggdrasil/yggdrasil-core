@@ -219,6 +219,31 @@ func WorkflowRunOwnedByMachinePrincipal(ctx context.Context, db *sql.DB, id uuid
 	return owned, nil
 }
 
+// GetWorkflowRunReceipt reads only the durable fields needed for an
+// idempotent retry receipt. A retry may resolve a newer active manifest than
+// the original run, so its request selector cannot describe that old run.
+// workflow_runs does not retain the manifest UUID; callers must not invent it.
+func GetWorkflowRunReceipt(ctx context.Context, db *sql.DB, id uuid.UUID) (model.ManifestSelector, error) {
+	const q = `
+		SELECT workflow_namespace, workflow_name, workflow_version
+		FROM public.workflow_runs
+		WHERE id = $1
+	`
+	var selector model.ManifestSelector
+	var version sql.NullInt32
+	if err := db.QueryRowContext(ctx, q, id).Scan(&selector.Namespace, &selector.Name, &version); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return model.ManifestSelector{}, ErrWorkflowRunNotFound
+		}
+		return model.ManifestSelector{}, fmt.Errorf("query workflow_run receipt: %w", err)
+	}
+	if version.Valid {
+		v := int(version.Int32)
+		selector.Version = &v
+	}
+	return selector, nil
+}
+
 func getWorkflowRun(ctx context.Context, db *sql.DB, query string, args ...any) (model.WorkflowRunRecord, error) {
 	var rec model.WorkflowRunRecord
 	var inputsRaw, metadataRaw []byte

@@ -220,7 +220,11 @@ behavior unless the caller opts into both durable async dispatch
 (`?async=true`) and a stable `metadata.idempotency_key`. Hashed machine
 principals are always routed through durable async dispatch. The first request
 returns `202` and persists the run; retries return `200` with the same `run_id`
-and `deduped:true` without starting another provider execution. Reusing a key
+and `deduped:true` without starting another provider execution. The retry's
+`workflow` namespace, name, and version come from that stored run. Its
+`manifest_id` is omitted because the run row does not retain it. Retry
+`status: accepted` is a receipt, so poll the run endpoint for its current
+execution status. Reusing a key
 for a different workflow returns `409 workflow_run_idempotency_conflict`.
 
 For machine principals, the persisted key is a server-derived digest scoped to

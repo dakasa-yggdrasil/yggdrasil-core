@@ -552,7 +552,10 @@ Send the machine bearer through `X-Yggdrasil-Workflow-Token` or
 `Authorization: Bearer ...`. Machine dispatch is durably asynchronous without
 requiring `?async=true`; a sync opt-out is ignored. The first request returns
 `202` with `run_id` and `deduped:false`; an idempotent retry returns `200` with
-the same owned `run_id` and `deduped:true`.
+the same owned `run_id` and `deduped:true`. On retry, `workflow` describes the
+stored run's namespace, name, and version without a manifest ID. The
+`status: accepted` value is a receipt; poll the run endpoint for its execution
+status.
 
 Response (synchronous mode, human or time-bounded migration callers only):
 
