@@ -34,8 +34,10 @@ requires `spec.authorization`, explicit manual trigger mode with
 dispatch token. Its entire spec has one step, `list-collaborators`, with no
 other integration or product operation; the producer condition may be absent
 or literal `false` while its source is staged. ADR-0027 then rejects actorless
-AMQP and repository-binding dispatch; an authenticated HTTP caller must pass
-the workflow's RBAC/policy contract. The HTTP handler binds both synchronous
+AMQP and repository-binding dispatch; a human console-session caller must pass
+the workflow's RBAC/policy contract. Machine-principal async dispatch adds
+server-authored run metadata, so this zero-metadata operation refuses that
+channel. The HTTP handler binds both synchronous
 and asynchronous execution to the exact manifest ID that passed this
 authorization check. Async dispatch checks the snapshot constraints before
 inserting `workflow_runs`.

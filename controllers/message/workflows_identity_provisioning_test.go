@@ -12,6 +12,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 )
 
 func provisioningTestManifest() model.Manifest {
@@ -133,6 +134,7 @@ func TestIdentityProvisioningSnapshotRequiresExactActiveAuthorizedManualManifest
 	}
 	for _, req := range []model.RunWorkflowRequest{
 		{Metadata: map[string]any{"caller_note": "private-person@example.invalid"}},
+		{Metadata: map[string]any{repository.WorkflowRunCreatorMachinePrincipalMetadataKey: "machine-reader"}},
 		{Inputs: map[string]any{"email": "private-person@example.invalid"}},
 	} {
 		if _, err := runWorkflow(context.Background(), nil, nil, workflow, spec, req); err != errIdentityProvisioningUnavailable {

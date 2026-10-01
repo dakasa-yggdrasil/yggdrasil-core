@@ -51,4 +51,12 @@ func TestProvisioningSnapshotManifestRequiresAuthorizedManualChannel(t *testing.
 	if err := ValidateWorkflowSpec(withWrite); err == nil {
 		t.Fatal("snapshot manifest with an additional provider step was accepted")
 	}
+	for _, nonliteralID := range []string{" List-Collaborators ", "LIST-COLLABORATORS"} {
+		withAlias := spec
+		withAlias.Steps = append([]model.WorkflowStepSpec(nil), spec.Steps...)
+		withAlias.Steps[0].ID = nonliteralID
+		if err := ValidateWorkflowSpec(withAlias); err == nil {
+			t.Fatalf("snapshot step alias %q was accepted", nonliteralID)
+		}
+	}
 }

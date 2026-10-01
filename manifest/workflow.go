@@ -468,7 +468,7 @@ func validateWorkflowStep(step model.WorkflowStepSpec) error {
 		case "collaborator.provisioning_snapshot":
 			if len(step.With) != 0 || step.ForEach != nil ||
 				(strings.TrimSpace(step.Condition) != "" && strings.TrimSpace(step.Condition) != "false") ||
-				normalizeIntegrationName(step.ID) != "list-collaborators" {
+				step.ID != "list-collaborators" {
 				return fmt.Errorf("yggdrasil step collaborator.provisioning_snapshot requires id list-collaborators and accepts no with or for_each")
 			}
 		case "apply_manifest":
