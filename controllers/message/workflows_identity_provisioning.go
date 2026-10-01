@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/collaboratorstate"
+	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 )
@@ -22,16 +23,6 @@ const (
 
 var errIdentityProvisioningUnavailable = errors.New("identity provisioning snapshot is unavailable")
 
-func usesIdentityProvisioningSnapshot(spec model.WorkflowManifestSpec) bool {
-	for _, step := range spec.Steps {
-		if strings.EqualFold(strings.TrimSpace(step.Use.Kind), "yggdrasil") &&
-			strings.EqualFold(strings.TrimSpace(step.Use.Operation), "collaborator.provisioning_snapshot") {
-			return true
-		}
-	}
-	return false
-}
-
 // Pin an immutable active manifest and require an authenticated actor channel.
 // ADR-0027 rejects spec.authorization on actorless AMQP and webhook paths.
 // Manual dispatch carries no caller-supplied data into durable run evidence.
@@ -40,7 +31,7 @@ func authorizeIdentityProvisioningSnapshot(
 	spec model.WorkflowManifestSpec,
 	req model.RunWorkflowRequest,
 ) error {
-	if !usesIdentityProvisioningSnapshot(spec) {
+	if !manifestengine.WorkflowUsesIdentityProvisioningSnapshot(spec) {
 		return nil
 	}
 	if len(spec.Steps) != 1 {

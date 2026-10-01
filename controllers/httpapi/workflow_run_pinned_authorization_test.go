@@ -87,3 +87,34 @@ func TestProtectedWorkflowAuthorizationReturnsTheEvaluatedManifestID(t *testing.
 		t.Fatal(err)
 	}
 }
+
+func TestIdentitySnapshotRejectsLegacyBridgeSyncBeforeRBAC(t *testing.T) {
+	clearWorkflowRunAuthEnv(t)
+	setTestLegacyWorkflowCredential(t, "legacy-snapshot-token")
+	t.Setenv("BROKER_URL", "amqp://unit-test")
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	const spec = `{"authorization":{"rbac":{"namespace":"dakasa","name":"bridge-permissive-rbac"}},"trigger":{"mode":"manual","enabled":false},"steps":[{"id":"list-collaborators","use":{"kind":"yggdrasil","operation":"collaborator.provisioning_snapshot"}}]}`
+	expectWorkflowAuthorizationManifest(mock, "workflow", "reconcile-identity-providers", spec)
+
+	server := &Server{
+		db: db, rabbitmq: &amqp.Connection{},
+		legacyBridgeAuditSink: func(model.AuditEvent) error { return nil },
+	}
+	req := httptest.NewRequest(http.MethodPost, "/api/v1/workflow-runs?async=false",
+		strings.NewReader(`{"workflow":{"namespace":"dakasa","name":"reconcile-identity-providers"}}`))
+	req.Header.Set("Authorization", "Bearer legacy-snapshot-token")
+	recorder := httptest.NewRecorder()
+	server.handleWorkflowRun(recorder, req)
+	if recorder.Code != http.StatusForbidden {
+		t.Fatalf("legacy bridge snapshot status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	// The only SQL lookup is the workflow manifest. The legacy service actor
+	// cannot reach RBAC evaluation, snapshot reads, or workflow execution.
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}

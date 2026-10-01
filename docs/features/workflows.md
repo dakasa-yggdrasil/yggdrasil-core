@@ -208,7 +208,8 @@ workflow's RBAC/policy and an exact active manifest ID pinned by Core's
 `YGGDRASIL_IDENTITY_PROVISIONING_WORKFLOW_MANIFEST_ID`. The step reads a
 bounded projection of collaborator IDs, canonical statuses, and primary
 emails; its only public metadata is `total_count`. It refuses invalid or
-duplicated identities and never dispatches provider adapters. See
+duplicated identities, denies service credentials even if RBAC grants them,
+and never dispatches provider adapters. See
 [ADR-0028](../adr/0028-pin-confidential-provisioning-snapshots-to-one-active-workflow.md).
 
 ## Template rendering

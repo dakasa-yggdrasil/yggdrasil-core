@@ -534,6 +534,10 @@ func (s *Server) authorizeWorkflowDispatchManifest(ctx context.Context, req mode
 	if err != nil {
 		return model.Manifest{}, err
 	}
+	if manifestengine.WorkflowUsesIdentityProvisioningSnapshot(workflowSpec) &&
+		(strings.TrimSpace(actor.CollaboratorID) == "" || actor.LegacyMigration || actor.MachinePrincipal != nil) {
+		return model.Manifest{}, fmt.Errorf("%w: collaborator snapshot requires a human console session", errWorkflowAuthorizationDenied)
+	}
 	if actor.MachinePrincipal != nil && !workflowMachinePrincipalAllows(
 		actor.MachinePrincipal,
 		workflowManifest.Metadata.Namespace,

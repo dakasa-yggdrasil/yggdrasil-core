@@ -138,7 +138,7 @@ func ValidateWorkflowSpec(spec model.WorkflowManifestSpec) error {
 	}
 
 	stepNames := map[string]struct{}{}
-	provisioningSnapshot := false
+	provisioningSnapshot := WorkflowUsesIdentityProvisioningSnapshot(spec)
 	for _, step := range spec.Steps {
 		id := normalizeIntegrationName(step.ID)
 		if id == "" {
@@ -154,10 +154,6 @@ func ValidateWorkflowSpec(spec model.WorkflowManifestSpec) error {
 
 		if err := validateWorkflowStep(step); err != nil {
 			return fmt.Errorf("workflow step %q: %w", id, err)
-		}
-		if strings.EqualFold(strings.TrimSpace(step.Use.Kind), "yggdrasil") &&
-			strings.EqualFold(strings.TrimSpace(step.Use.Operation), "collaborator.provisioning_snapshot") {
-			provisioningSnapshot = true
 		}
 	}
 	if provisioningSnapshot && (spec.Authorization == nil || strings.TrimSpace(spec.Trigger.Mode) == "" ||
@@ -186,6 +182,18 @@ func ValidateWorkflowSpec(spec model.WorkflowManifestSpec) error {
 	}
 
 	return nil
+}
+
+// WorkflowUsesIdentityProvisioningSnapshot identifies the privileged Core-local
+// read so ingress and execution apply the same channel restrictions.
+func WorkflowUsesIdentityProvisioningSnapshot(spec model.WorkflowManifestSpec) bool {
+	for _, step := range spec.Steps {
+		if strings.EqualFold(strings.TrimSpace(step.Use.Kind), "yggdrasil") &&
+			strings.EqualFold(strings.TrimSpace(step.Use.Operation), "collaborator.provisioning_snapshot") {
+			return true
+		}
+	}
+	return false
 }
 
 // ValidateWorkflowInputs validates runtime inputs against the workflow input schema.
