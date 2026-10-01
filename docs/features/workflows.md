@@ -200,6 +200,17 @@ fails the step and stops the workflow. Assertion errors identify only the
 check name. Successful metadata contains only check names and counts. Rendered
 `actual`, `expected`, and `value` data is never copied into errors or metadata.
 
+`collaborator.provisioning_snapshot` is a Core-local, read-only check for one
+DaKasa identity workflow. It accepts only the literal `list-collaborators`
+step in a single-step manual workflow with `spec.authorization` and a disabled
+trigger. Dispatch requires a human console session authorized by the
+workflow's RBAC/policy and an exact active manifest ID pinned by Core's
+`YGGDRASIL_IDENTITY_PROVISIONING_WORKFLOW_MANIFEST_ID`. The step reads a
+bounded projection of collaborator IDs, canonical statuses, and primary
+emails; its only public metadata is `total_count`. It refuses invalid or
+duplicated identities and never dispatches provider adapters. See
+[ADR-0028](../adr/0028-pin-confidential-provisioning-snapshots-to-one-active-workflow.md).
+
 ## Template rendering
 
 Inputs to template rendering:
