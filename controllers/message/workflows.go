@@ -367,6 +367,9 @@ func prepareWorkflowRun(
 		return model.Manifest{}, model.WorkflowManifestSpec{}, model.RunWorkflowRequest{}, err
 	}
 	req.Inputs = mergedInputs
+	if err := authorizeIdentityProvisioningSnapshot(workflowManifest, spec, req); err != nil {
+		return model.Manifest{}, model.WorkflowManifestSpec{}, model.RunWorkflowRequest{}, err
+	}
 
 	return workflowManifest, spec, req, nil
 }
@@ -401,6 +404,9 @@ func runWorkflow(
 	spec model.WorkflowManifestSpec,
 	req model.RunWorkflowRequest,
 ) (model.RunWorkflowResponse, error) {
+	if err := authorizeIdentityProvisioningSnapshot(workflowManifest, spec, req); err != nil {
+		return model.RunWorkflowResponse{}, err
+	}
 	orderedSteps, err := manifestengine.WorkflowExecutionOrder(spec)
 	if err != nil {
 		return model.RunWorkflowResponse{}, err
@@ -430,7 +436,7 @@ func runWorkflow(
 	}()
 
 	for index, step := range orderedSteps {
-		security := workflowStepExecutionSecurity{inputLease: activeSensitiveLease}
+		security := workflowStepExecutionSecurity{inputLease: activeSensitiveLease, workflow: workflowManifest}
 		if activeSensitiveLease == nil {
 			security.producerPlan = authorizeSensitiveOutputPlan(ctx, db, orderedSteps, index, executionCtx)
 		}
@@ -562,6 +568,9 @@ func executeWorkflowStep(
 	// rather than going through an integration adapter. Yggdrasil steps
 	// persist manifests against the core's own store, also in-process.
 	if result.Kind == "yggdrasil" {
+		if result.Operation == "collaborator.provisioning_snapshot" {
+			return executeIdentityProvisioningSnapshot(ctx, db, security.workflow, result)
+		}
 		return executeYggdrasilWorkflowStep(ctx, db, step, result, renderedInput)
 	}
 	if result.Kind == "product" {

@@ -29,12 +29,12 @@ var (
 	}
 	// yggdrasil step operations run in-process against the core's own
 	// manifest store or pure-render helpers rather than dispatching to
-	// an adapter. New entries here require a matching handler in
-	// controllers/message/workflows_yggdrasil.go.
+	// an adapter. New entries here require a matching in-process handler.
 	supportedYggdrasilStepOperations = []string{
 		"apply_manifest",
 		"assert",
 		"control_plane.render",
+		"collaborator.provisioning_snapshot",
 		"collaborator.reconcile_provider_state",
 		"oidc_client.verify_bootstrap_file",
 	}
@@ -138,6 +138,7 @@ func ValidateWorkflowSpec(spec model.WorkflowManifestSpec) error {
 	}
 
 	stepNames := map[string]struct{}{}
+	provisioningSnapshot := WorkflowUsesIdentityProvisioningSnapshot(spec)
 	for _, step := range spec.Steps {
 		id := normalizeIntegrationName(step.ID)
 		if id == "" {
@@ -154,6 +155,10 @@ func ValidateWorkflowSpec(spec model.WorkflowManifestSpec) error {
 		if err := validateWorkflowStep(step); err != nil {
 			return fmt.Errorf("workflow step %q: %w", id, err)
 		}
+	}
+	if provisioningSnapshot && (spec.Authorization == nil || strings.TrimSpace(spec.Trigger.Mode) == "" ||
+		triggerMode != "manual" || spec.Trigger.Enabled == nil || *spec.Trigger.Enabled || len(spec.Steps) != 1) {
+		return fmt.Errorf("workflow collaborator.provisioning_snapshot requires authorization, disabled manual trigger, and one read-only step")
 	}
 
 	for _, step := range spec.Steps {
@@ -177,6 +182,18 @@ func ValidateWorkflowSpec(spec model.WorkflowManifestSpec) error {
 	}
 
 	return nil
+}
+
+// WorkflowUsesIdentityProvisioningSnapshot identifies the privileged Core-local
+// read so ingress and execution apply the same channel restrictions.
+func WorkflowUsesIdentityProvisioningSnapshot(spec model.WorkflowManifestSpec) bool {
+	for _, step := range spec.Steps {
+		if strings.EqualFold(strings.TrimSpace(step.Use.Kind), "yggdrasil") &&
+			strings.EqualFold(strings.TrimSpace(step.Use.Operation), "collaborator.provisioning_snapshot") {
+			return true
+		}
+	}
+	return false
 }
 
 // ValidateWorkflowInputs validates runtime inputs against the workflow input schema.
@@ -456,6 +473,12 @@ func validateWorkflowStep(step model.WorkflowStepSpec) error {
 			return fmt.Errorf("yggdrasil step must not set use.provider_ref")
 		}
 		switch operation {
+		case "collaborator.provisioning_snapshot":
+			if len(step.With) != 0 || step.ForEach != nil ||
+				(strings.TrimSpace(step.Condition) != "" && strings.TrimSpace(step.Condition) != "false") ||
+				step.ID != "list-collaborators" {
+				return fmt.Errorf("yggdrasil step collaborator.provisioning_snapshot requires id list-collaborators and accepts no with or for_each")
+			}
 		case "apply_manifest":
 			if step.With == nil {
 				return fmt.Errorf("yggdrasil step requires with.manifest")

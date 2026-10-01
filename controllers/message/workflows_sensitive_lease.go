@@ -65,6 +65,7 @@ type sensitiveOutputLease struct {
 type workflowStepExecutionSecurity struct {
 	producerPlan *sensitiveOutputPlan
 	inputLease   *sensitiveOutputLease
+	workflow     model.Manifest
 }
 
 func (lease *sensitiveOutputLease) clear() {

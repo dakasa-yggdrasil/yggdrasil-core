@@ -137,3 +137,34 @@ func TestWorkflowRunOwnedByMachinePrincipal(t *testing.T) {
 		t.Fatal(err)
 	}
 }
+
+func TestGetWorkflowRunReceiptUsesPersistedFieldsAndFailsClosedWhenMissing(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+
+	runID := uuid.New()
+	mock.ExpectQuery(`SELECT workflow_namespace, workflow_name, workflow_version`).WithArgs(runID).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"workflow_namespace", "workflow_name", "workflow_version",
+		}).AddRow("dakasa", "deploy", 1))
+	selector, err := GetWorkflowRunReceipt(context.Background(), db, runID)
+	if err != nil || selector.Namespace != "dakasa" || selector.Name != "deploy" ||
+		selector.ManifestID != "" || selector.Version == nil || *selector.Version != 1 {
+		t.Fatalf("receipt selector=%#v err=%v", selector, err)
+	}
+
+	missingID := uuid.New()
+	mock.ExpectQuery(`SELECT workflow_namespace, workflow_name, workflow_version`).WithArgs(missingID).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"workflow_namespace", "workflow_name", "workflow_version",
+		}))
+	if _, err := GetWorkflowRunReceipt(context.Background(), db, missingID); !errors.Is(err, ErrWorkflowRunNotFound) {
+		t.Fatalf("missing receipt err=%v, want ErrWorkflowRunNotFound", err)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
