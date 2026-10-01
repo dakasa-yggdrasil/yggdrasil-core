@@ -416,14 +416,28 @@ func TestAuthorizeWorkflowDispatchEvaluatesCatalogPolicy(t *testing.T) {
 	}
 }
 
-func expectWorkflowAuthorizationManifest(mock sqlmock.Sqlmock, kind, name, spec string) {
+func expectWorkflowAuthorizationManifest(mock sqlmock.Sqlmock, kind, name, spec string) uuid.UUID {
+	now := time.Now().UTC()
+	manifestID := uuid.New()
+	rows := sqlmock.NewRows([]string{
+		"id", "api_version", "kind", "namespace", "name", "version", "active",
+		"description", "labels", "spec", "checksum", "created_at", "updated_at",
+	}).AddRow(manifestID, "yggdrasil.io/v1alpha1", kind, "dakasa", name, 1, true,
+		"", []byte(`{}`), []byte(spec), "sha256:test", now, now)
+	mock.ExpectQuery(`FROM public\.manifests`).
+		WithArgs(kind, "dakasa", name).
+		WillReturnRows(rows)
+	return manifestID
+}
+
+func expectWorkflowAuthorizationManifestByID(mock sqlmock.Sqlmock, id uuid.UUID, kind, name, spec string) {
 	now := time.Now().UTC()
 	rows := sqlmock.NewRows([]string{
 		"id", "api_version", "kind", "namespace", "name", "version", "active",
 		"description", "labels", "spec", "checksum", "created_at", "updated_at",
-	}).AddRow(uuid.New(), "yggdrasil.io/v1alpha1", kind, "dakasa", name, 1, true,
+	}).AddRow(id, "yggdrasil.io/v1alpha1", kind, "dakasa", name, 1, true,
 		"", []byte(`{}`), []byte(spec), "sha256:test", now, now)
-	mock.ExpectQuery(`FROM public\.manifests`).
-		WithArgs(kind, "dakasa", name).
+	mock.ExpectQuery(`FROM public\.manifests\s+WHERE id = \$1`).
+		WithArgs(id).
 		WillReturnRows(rows)
 }

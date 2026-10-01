@@ -80,13 +80,24 @@ func (s *Server) handleWorkflowRun(w http.ResponseWriter, r *http.Request) {
 	// that still depends on the bridge is visible even when its dispatch
 	// then fails.
 	s.recordLegacyWorkflowBridgeDispatch(r, actor, req.Workflow)
-	if err := s.authorizeWorkflowDispatch(r.Context(), req, actor); err != nil {
+	authorizedWorkflow, err := s.authorizeWorkflowDispatchManifest(r.Context(), req, actor)
+	if err != nil {
 		if errors.Is(err, errWorkflowAuthorizationDenied) {
 			writeProblemJSON(w, http.StatusForbidden, "workflow.authorization_denied", err.Error())
 		} else {
 			writeMappedError(w, err)
 		}
 		return
+	}
+	// Authorization and execution must resolve the same immutable row. Keep
+	// namespace/name/version for durable run evidence, but the internal ID
+	// pins both sync and async execution after the actor has been evaluated.
+	version := authorizedWorkflow.Version
+	req.Workflow = model.ManifestSelector{
+		ManifestID: authorizedWorkflow.ID.String(),
+		Namespace:  authorizedWorkflow.Metadata.Namespace,
+		Name:       authorizedWorkflow.Metadata.Name,
+		Version:    &version,
 	}
 
 	if s.resolveWorkflowRunAsyncForActor(r, req, actor) {
@@ -498,24 +509,29 @@ func legacyWorkflowRunSubject() model.RBACSubject {
 }
 
 func (s *Server) authorizeWorkflowDispatch(ctx context.Context, req model.RunWorkflowRequest, actor workflowRunActor) error {
+	_, err := s.authorizeWorkflowDispatchManifest(ctx, req, actor)
+	return err
+}
+
+func (s *Server) authorizeWorkflowDispatchManifest(ctx context.Context, req model.RunWorkflowRequest, actor workflowRunActor) (model.Manifest, error) {
 	if actor.MachinePrincipal != nil {
 		if strings.TrimSpace(req.Workflow.ManifestID) != "" {
-			return fmt.Errorf("%w: machine dispatch must select the current active workflow by namespace and name; manifest_id is not allowed", errWorkflowAuthorizationDenied)
+			return model.Manifest{}, fmt.Errorf("%w: machine dispatch must select the current active workflow by namespace and name; manifest_id is not allowed", errWorkflowAuthorizationDenied)
 		}
 		if req.Workflow.Version != nil {
-			return fmt.Errorf("%w: machine dispatch must select the current active workflow by namespace and name; version is not allowed", errWorkflowAuthorizationDenied)
+			return model.Manifest{}, fmt.Errorf("%w: machine dispatch must select the current active workflow by namespace and name; version is not allowed", errWorkflowAuthorizationDenied)
 		}
 	}
 	workflowManifest, workflowSpec, err := s.lookupWorkflowManifestSpec(ctx, req)
 	if err != nil {
-		return err
+		return model.Manifest{}, err
 	}
 	if actor.MachinePrincipal != nil && !workflowMachinePrincipalAllows(
 		actor.MachinePrincipal,
 		workflowManifest.Metadata.Namespace,
 		workflowManifest.Metadata.Name,
 	) {
-		return fmt.Errorf("%w: machine principal is not allowed for workflow:%s:%s",
+		return model.Manifest{}, fmt.Errorf("%w: machine principal is not allowed for workflow:%s:%s",
 			errWorkflowAuthorizationDenied,
 			workflowManifest.Metadata.Namespace,
 			workflowManifest.Metadata.Name,
@@ -523,19 +539,19 @@ func (s *Server) authorizeWorkflowDispatch(ctx context.Context, req model.RunWor
 	}
 	if workflowSpec.Authorization == nil {
 		if actor.MachinePrincipal != nil {
-			return fmt.Errorf("%w: machine dispatch requires workflow spec.authorization", errWorkflowAuthorizationDenied)
+			return model.Manifest{}, fmt.Errorf("%w: machine dispatch requires workflow spec.authorization", errWorkflowAuthorizationDenied)
 		}
-		return nil
+		return workflowManifest, nil
 	}
 
 	authz := workflowSpec.Authorization
 	rbacManifest, err := resolveWorkflowAuthorizationManifest(ctx, s.db, "rbac", authz.RBAC)
 	if err != nil {
-		return err
+		return model.Manifest{}, err
 	}
 	rbacSpec, err := manifestengine.ParseRBACSpec(rbacManifest.Spec)
 	if err != nil {
-		return err
+		return model.Manifest{}, err
 	}
 
 	var policyManifest model.Manifest
@@ -543,11 +559,11 @@ func (s *Server) authorizeWorkflowDispatch(ctx context.Context, req model.RunWor
 	if authz.Policy != nil {
 		policyManifest, err = resolveWorkflowAuthorizationManifest(ctx, s.db, "policy", *authz.Policy)
 		if err != nil {
-			return err
+			return model.Manifest{}, err
 		}
 		parsed, err := manifestengine.ParsePolicySpec(policyManifest.Spec)
 		if err != nil {
-			return err
+			return model.Manifest{}, err
 		}
 		policySpec = &parsed
 	}
@@ -567,7 +583,7 @@ func (s *Server) authorizeWorkflowDispatch(ctx context.Context, req model.RunWor
 	if actor.CollaboratorID != "" {
 		collaborator, teams, resolved, err := repository.ResolveAuthorizationSubjects(ctx, s.db, actor.CollaboratorID)
 		if err != nil {
-			return err
+			return model.Manifest{}, err
 		}
 		subjects = append(subjects, resolved...)
 		evaluationReq.CollaboratorID = actor.CollaboratorID
@@ -579,12 +595,12 @@ func (s *Server) authorizeWorkflowDispatch(ctx context.Context, req model.RunWor
 		subjects = append(subjects, actor.Subject)
 		evaluationReq.Subject = actor.Subject
 	} else {
-		return fmt.Errorf("%w: protected workflow requires an authenticated subject", errWorkflowAuthorizationDenied)
+		return model.Manifest{}, fmt.Errorf("%w: protected workflow requires an authenticated subject", errWorkflowAuthorizationDenied)
 	}
 
 	response, err := manifestengine.EvaluateAuthorizationSubjects(rbacSpec, policySpec, subjects, evaluationReq.Resource, evaluationReq.Action, input)
 	if err != nil {
-		return err
+		return model.Manifest{}, err
 	}
 	response.Collaborator = collaboratorRef
 	response.Teams = teamRefs
@@ -602,9 +618,9 @@ func (s *Server) authorizeWorkflowDispatch(ctx context.Context, req model.RunWor
 		)
 	}
 	if !response.Allowed {
-		return fmt.Errorf("%w for %s", errWorkflowAuthorizationDenied, evaluationReq.Resource)
+		return model.Manifest{}, fmt.Errorf("%w for %s", errWorkflowAuthorizationDenied, evaluationReq.Resource)
 	}
-	return nil
+	return workflowManifest, nil
 }
 
 func resolveWorkflowAuthorizationManifest(ctx context.Context, db *sql.DB, kind string, selector model.ManifestSelector) (model.Manifest, error) {

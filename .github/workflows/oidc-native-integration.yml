@@ -78,6 +78,11 @@ jobs:
         env:
           REQUIRE_INSTANCE_IDENTITY_DB_TEST: "true"
         run: go test -count=1 -timeout=5m -v -run '^TestIntegrationInstanceIdentityAgainstPostgres$' ./repository
+      - name: Prove provisioning snapshot revocation against migrated PostgreSQL
+        if: ${{ !cancelled() }}
+        env:
+          REQUIRE_PROVISIONING_SNAPSHOT_DB_TEST: "true"
+        run: go test -count=1 -timeout=5m -v -run '^TestProvisioningSnapshotRevocationAgainstPostgres$' ./repository
       - uses: actions/upload-artifact@v4
         if: always()
         with:

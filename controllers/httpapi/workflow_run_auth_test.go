@@ -675,11 +675,11 @@ func TestLegacyBridgeUseIsLoggedCountedAuditedAndStamped(t *testing.T) {
 	}
 	t.Cleanup(func() { _ = db.Close() })
 	spec := `{"steps":[{"id":"observe","use":{"kind":"integration","instance_ref":{"namespace":"dakasa","name":"example"},"operation":"observe_state"}}]}`
-	// One lookup authorizes the dispatch, one prepares the persisted run.
-	expectWorkflowAuthorizationManifest(mock, "workflow", "deploy", spec)
-	expectWorkflowAuthorizationManifest(mock, "workflow", "deploy", spec)
+	// Authorize by logical name, then prepare the exact authorized manifest ID.
+	authorizedID := expectWorkflowAuthorizationManifest(mock, "workflow", "deploy", spec)
+	expectWorkflowAuthorizationManifestByID(mock, authorizedID, "workflow", "deploy", spec)
 	mock.ExpectExec(`INSERT INTO public\.workflow_runs`).
-		WithArgs(sqlmock.AnyArg(), "dakasa", "deploy", nil, sqlmock.AnyArg(), legacyBridgeStampArg{}).
+		WithArgs(sqlmock.AnyArg(), "dakasa", "deploy", 1, sqlmock.AnyArg(), legacyBridgeStampArg{}).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	originalLauncher := launchAsyncWorkflowRun

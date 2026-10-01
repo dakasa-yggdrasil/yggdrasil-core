@@ -13,10 +13,7 @@ import (
 type CollaboratorProvisioningIdentity struct {
 	ID           uuid.UUID
 	Status       string
-	DisplayName  string
 	PrimaryEmail string
-	GivenName    string
-	FamilyName   string
 }
 
 // ListCollaboratorProvisioningIdentities reads at most limit+1 rows so the
@@ -24,22 +21,30 @@ type CollaboratorProvisioningIdentity struct {
 func ListCollaboratorProvisioningIdentities(
 	ctx context.Context,
 	db *sql.DB,
+	workflowID uuid.UUID,
 	limit int,
 ) ([]CollaboratorProvisioningIdentity, error) {
-	rows, err := db.QueryContext(ctx, `
-		SELECT id, status, display_name, primary_email,
-			COALESCE(
-				NULLIF(personal_data->'profile'->>'given_name', ''),
-				NULLIF(personal_data->'profile'->>'first_name', ''),
-				NULLIF(personal_data->>'given_name', ''),
-				personal_data->>'first_name', ''
-			),
-			COALESCE(
-				NULLIF(personal_data->'profile'->>'family_name', ''),
-				NULLIF(personal_data->'profile'->>'last_name', ''),
-				NULLIF(personal_data->>'family_name', ''),
-				personal_data->>'last_name', ''
-			)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, err
+	}
+	defer tx.Rollback()
+
+	// The row lock makes this read linearize with manifest replacement:
+	// activation/deactivation updates the same row and must wait until the
+	// projection has been read. Under READ COMMITTED, a concurrent update
+	// that wins first makes this exact-ID query return no row.
+	var activeID uuid.UUID
+	if err := tx.QueryRowContext(ctx, `
+		SELECT id FROM public.manifests
+		WHERE id = $1 AND kind = 'workflow' AND namespace = 'dakasa'
+			AND name = 'reconcile-identity-providers' AND active = TRUE
+		FOR SHARE
+	`, workflowID).Scan(&activeID); err != nil {
+		return nil, err
+	}
+	rows, err := tx.QueryContext(ctx, `
+		SELECT id, status, primary_email
 		FROM public.collaborators
 		ORDER BY id
 		LIMIT $1
@@ -55,16 +60,19 @@ func ListCollaboratorProvisioningIdentities(
 		if err := rows.Scan(
 			&identity.ID,
 			&identity.Status,
-			&identity.DisplayName,
 			&identity.PrimaryEmail,
-			&identity.GivenName,
-			&identity.FamilyName,
 		); err != nil {
 			return nil, err
 		}
 		identities = append(identities, identity)
 	}
 	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+	if err := rows.Close(); err != nil {
+		return nil, err
+	}
+	if err := tx.Commit(); err != nil {
 		return nil, err
 	}
 	return identities, nil

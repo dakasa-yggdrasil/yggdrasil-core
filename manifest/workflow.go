@@ -138,6 +138,7 @@ func ValidateWorkflowSpec(spec model.WorkflowManifestSpec) error {
 	}
 
 	stepNames := map[string]struct{}{}
+	provisioningSnapshot := false
 	for _, step := range spec.Steps {
 		id := normalizeIntegrationName(step.ID)
 		if id == "" {
@@ -154,6 +155,14 @@ func ValidateWorkflowSpec(spec model.WorkflowManifestSpec) error {
 		if err := validateWorkflowStep(step); err != nil {
 			return fmt.Errorf("workflow step %q: %w", id, err)
 		}
+		if strings.EqualFold(strings.TrimSpace(step.Use.Kind), "yggdrasil") &&
+			strings.EqualFold(strings.TrimSpace(step.Use.Operation), "collaborator.provisioning_snapshot") {
+			provisioningSnapshot = true
+		}
+	}
+	if provisioningSnapshot && (spec.Authorization == nil || strings.TrimSpace(spec.Trigger.Mode) == "" ||
+		triggerMode != "manual" || spec.Trigger.Enabled == nil || *spec.Trigger.Enabled || len(spec.Steps) != 1) {
+		return fmt.Errorf("workflow collaborator.provisioning_snapshot requires authorization, disabled manual trigger, and one read-only step")
 	}
 
 	for _, step := range spec.Steps {
@@ -168,29 +177,6 @@ func ValidateWorkflowSpec(spec model.WorkflowManifestSpec) error {
 			}
 			if dependency == id {
 				return fmt.Errorf("workflow step %q cannot depend on itself", id)
-			}
-		}
-		if step.ForEach != nil && strings.HasPrefix(strings.TrimSpace(step.ForEach.Items), "private://") {
-			if !strings.EqualFold(strings.TrimSpace(step.Use.Kind), "integration") ||
-				NormalizeWorkflowStepOperation(step) == model.WorkflowDispatchOperation ||
-				strings.TrimSpace(step.ForEach.As) != "collaborator" {
-				return fmt.Errorf("workflow step %q private for_each requires a collaborator integration operation", id)
-			}
-			producerID := strings.TrimPrefix(strings.TrimSpace(step.ForEach.Items), "private://")
-			if producerID != "list-collaborators/collaborators" {
-				return fmt.Errorf("workflow step %q has unsupported private for_each source", id)
-			}
-			producerFound := false
-			for _, candidate := range spec.Steps {
-				if normalizeIntegrationName(candidate.ID) == "list-collaborators" &&
-					strings.EqualFold(strings.TrimSpace(candidate.Use.Kind), "yggdrasil") &&
-					strings.EqualFold(strings.TrimSpace(candidate.Use.Operation), "collaborator.provisioning_snapshot") {
-					producerFound = true
-					break
-				}
-			}
-			if !producerFound || !slices.Contains(step.DependsOn, "list-collaborators") {
-				return fmt.Errorf("workflow step %q private for_each requires direct dependency on list-collaborators", id)
 			}
 		}
 	}

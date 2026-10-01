@@ -429,20 +429,14 @@ func runWorkflow(
 		Steps:    map[string]model.WorkflowRunStepResult{},
 	}
 	var activeSensitiveLease *sensitiveOutputLease
-	privateState := &identityProvisioningPrivateState{}
 	defer func() {
-		privateState.clear()
 		if activeSensitiveLease != nil {
 			activeSensitiveLease.clear()
 		}
 	}()
 
 	for index, step := range orderedSteps {
-		security := workflowStepExecutionSecurity{
-			inputLease:   activeSensitiveLease,
-			workflow:     workflowManifest,
-			privateState: privateState,
-		}
+		security := workflowStepExecutionSecurity{inputLease: activeSensitiveLease, workflow: workflowManifest}
 		if activeSensitiveLease == nil {
 			security.producerPlan = authorizeSensitiveOutputPlan(ctx, db, orderedSteps, index, executionCtx)
 		}
@@ -575,7 +569,7 @@ func executeWorkflowStep(
 	// persist manifests against the core's own store, also in-process.
 	if result.Kind == "yggdrasil" {
 		if result.Operation == "collaborator.provisioning_snapshot" {
-			return executeIdentityProvisioningSnapshot(ctx, db, security.workflow, result, security.privateState)
+			return executeIdentityProvisioningSnapshot(ctx, db, security.workflow, result)
 		}
 		return executeYggdrasilWorkflowStep(ctx, db, step, result, renderedInput)
 	}
@@ -714,12 +708,6 @@ func executeWorkflowStep(
 					requireExplicitResponse: true,
 				}
 			}
-			if security.privateItem {
-				executionPolicy = integrationExecutionPolicy{
-					detailFreeErrors: true,
-					safeError:        errIdentityProvisioningUnavailable,
-				}
-			}
 			executeResp, err := executeIntegrationThroughResolvedWithPolicy(
 				ctx,
 				conn,
@@ -818,18 +806,7 @@ func runStepIterations(
 		asName = "item"
 	}
 
-	var rendered any
-	var err error
-	privateItems := strings.TrimSpace(step.ForEach.Items) == identityProvisioningSource
-	if privateItems {
-		if security.privateState == nil || !security.privateState.ready {
-			err = errIdentityProvisioningUnavailable
-		} else {
-			rendered = security.privateState.collaborators
-		}
-	} else {
-		rendered, err = manifestengine.RenderWorkflowInput(step.ForEach.Items, executionCtx)
-	}
+	rendered, err := manifestengine.RenderWorkflowInput(step.ForEach.Items, executionCtx)
 	if err != nil {
 		now := time.Now().UTC()
 		baseID := normalizeWorkflowStepID(step.ID)
@@ -879,15 +856,7 @@ func runStepIterations(
 		iterStep.ID = fmt.Sprintf("%s[%d]", baseID, idx)
 		iterStep.ForEach = nil
 
-		iterationSecurity := workflowStepExecutionSecurity{}
-		if privateItems {
-			iterationSecurity = security
-			iterationSecurity.privateItem = true
-		}
-		result := executeWorkflowStep(ctx, conn, db, workflowRef, iterStep, iterCtx, req, iterationSecurity)
-		if privateItems {
-			result = redactIdentityProvisioningIteration(result)
-		}
+		result := executeWorkflowStep(ctx, conn, db, workflowRef, iterStep, iterCtx, req, workflowStepExecutionSecurity{})
 		results = append(results, result)
 		if result.Status == "failed" {
 			return results, result.ID

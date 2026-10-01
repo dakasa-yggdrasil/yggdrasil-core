@@ -17,29 +17,10 @@ import (
 
 const (
 	identityProvisioningManifestIDEnv = "YGGDRASIL_IDENTITY_PROVISIONING_WORKFLOW_MANIFEST_ID"
-	identityProvisioningSource        = "private://list-collaborators/collaborators"
 	identityProvisioningMaxPeople     = 1000
 )
 
 var errIdentityProvisioningUnavailable = errors.New("identity provisioning snapshot is unavailable")
-
-// This state belongs to one invocation of runWorkflow. It is not reachable
-// through WorkflowExecutionContext, a result, an event, or workflow_runs.
-type identityProvisioningPrivateState struct {
-	collaborators []any
-	ready         bool
-}
-
-func (state *identityProvisioningPrivateState) clear() {
-	if state == nil {
-		return
-	}
-	for i := range state.collaborators {
-		state.collaborators[i] = nil
-	}
-	state.collaborators = nil
-	state.ready = false
-}
 
 func usesIdentityProvisioningSnapshot(spec model.WorkflowManifestSpec) bool {
 	for _, step := range spec.Steps {
@@ -51,9 +32,9 @@ func usesIdentityProvisioningSnapshot(spec model.WorkflowManifestSpec) bool {
 	return false
 }
 
-// The deployment pins one immutable manifest row, not a logical name or a
-// version selector. Replacing the active version cannot inherit this grant.
-// No adapter credential participates in this read.
+// Pin an immutable active manifest and require an authenticated actor channel.
+// ADR-0027 rejects spec.authorization on actorless AMQP and webhook paths.
+// Manual dispatch carries no caller-supplied data into durable run evidence.
 func authorizeIdentityProvisioningSnapshot(
 	workflow model.Manifest,
 	spec model.WorkflowManifestSpec,
@@ -62,42 +43,26 @@ func authorizeIdentityProvisioningSnapshot(
 	if !usesIdentityProvisioningSnapshot(spec) {
 		return nil
 	}
+	if len(spec.Steps) != 1 {
+		return errIdentityProvisioningUnavailable
+	}
+	step := spec.Steps[0]
+	if step.ID != "list-collaborators" || !strings.EqualFold(strings.TrimSpace(step.Use.Kind), "yggdrasil") ||
+		strings.ToLower(strings.TrimSpace(step.Use.Operation)) != "collaborator.provisioning_snapshot" ||
+		len(step.With) != 0 || step.ForEach != nil || len(step.DependsOn) != 0 ||
+		(strings.TrimSpace(step.Condition) != "" && strings.TrimSpace(step.Condition) != "false") {
+		return errIdentityProvisioningUnavailable
+	}
 	pinnedID, err := uuid.Parse(strings.TrimSpace(os.Getenv(identityProvisioningManifestIDEnv)))
 	if err != nil || pinnedID == uuid.Nil || workflow.ID != pinnedID ||
 		!strings.EqualFold(strings.TrimSpace(workflow.Kind), "workflow") ||
 		!workflow.Metadata.Active || workflow.Metadata.Namespace != "dakasa" ||
 		workflow.Metadata.Name != "reconcile-identity-providers" ||
-		strings.TrimSpace(req.Auth.Token) != "" {
+		spec.Authorization == nil ||
+		!strings.EqualFold(strings.TrimSpace(spec.Trigger.Mode), "manual") ||
+		spec.Trigger.Enabled == nil || *spec.Trigger.Enabled ||
+		len(req.Inputs) != 0 || len(req.Metadata) != 0 || strings.TrimSpace(req.Auth.Token) != "" {
 		return errIdentityProvisioningUnavailable
-	}
-	// Async runs persist both fields before execution. This contract permits
-	// only boolean controls and the scheduler's fixed, non-personal evidence.
-	for _, value := range req.Inputs {
-		if _, ok := value.(bool); !ok {
-			return errIdentityProvisioningUnavailable
-		}
-	}
-	for key, value := range req.Metadata {
-		text, ok := value.(string)
-		if !ok {
-			return errIdentityProvisioningUnavailable
-		}
-		switch key {
-		case "triggered_by":
-			if text != "workflow_scheduler" {
-				return errIdentityProvisioningUnavailable
-			}
-		case "manifest_id":
-			if text != workflow.ID.String() {
-				return errIdentityProvisioningUnavailable
-			}
-		case "scheduled_for":
-			if _, err := time.Parse(time.RFC3339, text); err != nil {
-				return errIdentityProvisioningUnavailable
-			}
-		default:
-			return errIdentityProvisioningUnavailable
-		}
 	}
 	return nil
 }
@@ -107,11 +72,10 @@ func executeIdentityProvisioningSnapshot(
 	db *sql.DB,
 	workflow model.Manifest,
 	result model.WorkflowRunStepResult,
-	state *identityProvisioningPrivateState,
 ) model.WorkflowRunStepResult {
 	result.Attempts = 1
 	pinnedID, err := uuid.Parse(strings.TrimSpace(os.Getenv(identityProvisioningManifestIDEnv)))
-	if state == nil || db == nil || err != nil || pinnedID == uuid.Nil ||
+	if db == nil || err != nil || pinnedID == uuid.Nil ||
 		workflow.ID != pinnedID || !strings.EqualFold(strings.TrimSpace(workflow.Kind), "workflow") ||
 		!workflow.Metadata.Active ||
 		workflow.Metadata.Namespace != "dakasa" || workflow.Metadata.Name != "reconcile-identity-providers" ||
@@ -120,59 +84,34 @@ func executeIdentityProvisioningSnapshot(
 		result.FinishedAt = time.Now().UTC()
 		return result
 	}
-	identities, err := repository.ListCollaboratorProvisioningIdentities(ctx, db, identityProvisioningMaxPeople)
+	// The repository locks and rechecks this exact manifest row in the same
+	// transaction as the projection. A replacement between dispatch and read
+	// cannot inherit the old pin or leak a stale snapshot.
+	identities, err := repository.ListCollaboratorProvisioningIdentities(ctx, db, workflow.ID, identityProvisioningMaxPeople)
 	if err != nil || len(identities) > identityProvisioningMaxPeople {
 		result.Error = errIdentityProvisioningUnavailable.Error()
 		result.FinishedAt = time.Now().UTC()
 		return result
 	}
-	items := make([]any, 0, len(identities))
+	seenEmails := make(map[string]struct{}, len(identities))
 	for _, person := range identities {
 		status := collaboratorstate.Status(person.Status)
-		if !collaboratorstate.IsKnown(status) {
+		email := strings.TrimSpace(person.PrimaryEmail)
+		emailKey := strings.ToLower(email)
+		if !collaboratorstate.IsKnown(status) || email == "" {
 			result.Error = errIdentityProvisioningUnavailable.Error()
 			result.FinishedAt = time.Now().UTC()
 			return result
 		}
-		items = append(items, map[string]any{
-			"id":     person.ID.String(),
-			"status": person.Status,
-			"provider_desired": map[string]any{
-				"primary_email": person.PrimaryEmail,
-				"display_name":  person.DisplayName,
-				"given_name":    person.GivenName,
-				"family_name":   person.FamilyName,
-				"external_id":   person.ID.String(),
-			},
-		})
+		if _, duplicate := seenEmails[emailKey]; duplicate {
+			result.Error = errIdentityProvisioningUnavailable.Error()
+			result.FinishedAt = time.Now().UTC()
+			return result
+		}
+		seenEmails[emailKey] = struct{}{}
 	}
-	state.collaborators = items
-	state.ready = true
 	result.Status = "succeeded"
-	result.Metadata = map[string]any{"total_count": len(items)}
+	result.Metadata = map[string]any{"total_count": len(identities)}
 	result.FinishedAt = time.Now().UTC()
 	return result
-}
-
-// An integration can echo its input in output, metadata, status or an error.
-// Keep only engine-owned identifiers, attempts, times and the terminal state.
-func redactIdentityProvisioningIteration(raw model.WorkflowRunStepResult) model.WorkflowRunStepResult {
-	status := raw.Status
-	if status != "succeeded" && status != "skipped" {
-		status = "failed"
-	}
-	safe := model.WorkflowRunStepResult{
-		ID:         raw.ID,
-		Kind:       raw.Kind,
-		Operation:  raw.Operation,
-		Capability: raw.Capability,
-		Status:     status,
-		Attempts:   raw.Attempts,
-		StartedAt:  raw.StartedAt,
-		FinishedAt: raw.FinishedAt,
-	}
-	if status == "failed" {
-		safe.Error = "identity provisioning iteration failed"
-	}
-	return safe
 }
