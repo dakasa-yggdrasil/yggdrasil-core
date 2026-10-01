@@ -29,12 +29,12 @@ var (
 	}
 	// yggdrasil step operations run in-process against the core's own
 	// manifest store or pure-render helpers rather than dispatching to
-	// an adapter. New entries here require a matching handler in
-	// controllers/message/workflows_yggdrasil.go.
+	// an adapter. New entries here require a matching in-process handler.
 	supportedYggdrasilStepOperations = []string{
 		"apply_manifest",
 		"assert",
 		"control_plane.render",
+		"collaborator.provisioning_snapshot",
 		"collaborator.reconcile_provider_state",
 		"oidc_client.verify_bootstrap_file",
 	}
@@ -168,6 +168,29 @@ func ValidateWorkflowSpec(spec model.WorkflowManifestSpec) error {
 			}
 			if dependency == id {
 				return fmt.Errorf("workflow step %q cannot depend on itself", id)
+			}
+		}
+		if step.ForEach != nil && strings.HasPrefix(strings.TrimSpace(step.ForEach.Items), "private://") {
+			if !strings.EqualFold(strings.TrimSpace(step.Use.Kind), "integration") ||
+				NormalizeWorkflowStepOperation(step) == model.WorkflowDispatchOperation ||
+				strings.TrimSpace(step.ForEach.As) != "collaborator" {
+				return fmt.Errorf("workflow step %q private for_each requires a collaborator integration operation", id)
+			}
+			producerID := strings.TrimPrefix(strings.TrimSpace(step.ForEach.Items), "private://")
+			if producerID != "list-collaborators/collaborators" {
+				return fmt.Errorf("workflow step %q has unsupported private for_each source", id)
+			}
+			producerFound := false
+			for _, candidate := range spec.Steps {
+				if normalizeIntegrationName(candidate.ID) == "list-collaborators" &&
+					strings.EqualFold(strings.TrimSpace(candidate.Use.Kind), "yggdrasil") &&
+					strings.EqualFold(strings.TrimSpace(candidate.Use.Operation), "collaborator.provisioning_snapshot") {
+					producerFound = true
+					break
+				}
+			}
+			if !producerFound || !slices.Contains(step.DependsOn, "list-collaborators") {
+				return fmt.Errorf("workflow step %q private for_each requires direct dependency on list-collaborators", id)
 			}
 		}
 	}
@@ -456,6 +479,12 @@ func validateWorkflowStep(step model.WorkflowStepSpec) error {
 			return fmt.Errorf("yggdrasil step must not set use.provider_ref")
 		}
 		switch operation {
+		case "collaborator.provisioning_snapshot":
+			if len(step.With) != 0 || step.ForEach != nil ||
+				(strings.TrimSpace(step.Condition) != "" && strings.TrimSpace(step.Condition) != "false") ||
+				normalizeIntegrationName(step.ID) != "list-collaborators" {
+				return fmt.Errorf("yggdrasil step collaborator.provisioning_snapshot requires id list-collaborators and accepts no with or for_each")
+			}
 		case "apply_manifest":
 			if step.With == nil {
 				return fmt.Errorf("yggdrasil step requires with.manifest")
