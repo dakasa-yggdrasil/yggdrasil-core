@@ -41,7 +41,9 @@ to reactions through foreign keys.
 3. Continue materializing normal events during a pause. The claim query
    resolves each reaction's historical instance UUID to the currently active
    version of the same logical instance, requires its current `type_ref` to
-   match the historical integration type's logical `(namespace, name)`, checks
+   resolve to the historical integration type's logical `(namespace, name)`
+   using the execution selector precedence (`manifest_id`, else
+   `namespace/name` with `global` as default namespace), checks
    the policy before incrementing `attempt`, and locks only reaction rows. If
    there is no active version or its type identity changed, nothing is claimed.
    Dispatch rechecks the policy, active version and type identity before

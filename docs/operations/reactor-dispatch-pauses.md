@@ -55,7 +55,9 @@ The worker also compares the reaction's historical integration type
 of the same type can drain the backlog. If the instance was repointed to a
 different type, historical reactions stay pending without another attempt;
 they must be reviewed and resolved by an operator before replay. They are
-never sent to the new adapter.
+never sent to the new adapter. The comparison follows execution resolution:
+`manifest_id` wins when present, otherwise `namespace/name` is used with
+`global` as the default namespace.
 
 `/metrics` exposes `yggdrasil_reactor_paused_backlog_reactions`,
 `yggdrasil_reactor_paused_backlog_oldest_age_seconds`, and
@@ -93,11 +95,29 @@ JOIN public.manifests active_ii
  AND active_ii.namespace = old_ii.namespace
  AND active_ii.name = old_ii.name
  AND active_ii.active = TRUE
+CROSS JOIN LATERAL (
+  SELECT NULLIF(btrim(active_ii.spec->'type_ref'->>'manifest_id'), '') AS manifest_id,
+         COALESCE(NULLIF(lower(btrim(active_ii.spec->'type_ref'->>'namespace')), ''), 'global') AS type_namespace,
+         lower(btrim(active_ii.spec->'type_ref'->>'name')) AS type_name
+) active_ref
+LEFT JOIN public.manifests selected_it
+  ON selected_it.id = CASE
+    WHEN active_ref.manifest_id ~* '^([0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$'
+    THEN active_ref.manifest_id::uuid
+  END
+ AND selected_it.kind = 'integration_type'
 WHERE old_ii.kind = 'integration_instance'
   AND old_ii.namespace = $1 AND old_ii.name = $2
   AND r.status IN ('pending', 'failed', 'in_progress')
-  AND (active_ii.spec->'type_ref'->>'namespace' IS DISTINCT FROM old_it.namespace
-       OR active_ii.spec->'type_ref'->>'name' IS DISTINCT FROM old_it.name)
+  AND (
+    (active_ref.manifest_id IS NOT NULL
+     AND (selected_it.namespace IS DISTINCT FROM old_it.namespace
+          OR selected_it.name IS DISTINCT FROM old_it.name))
+    OR
+    (active_ref.manifest_id IS NULL
+     AND (active_ref.type_namespace IS DISTINCT FROM old_it.namespace
+          OR active_ref.type_name IS DISTINCT FROM old_it.name))
+  )
 GROUP BY r.event_type, r.status
 ORDER BY r.event_type, r.status;
 ```

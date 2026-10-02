@@ -294,7 +294,7 @@ func TestReactorPausePostgresBlocksTypeRefDrift(t *testing.T) {
 
 	// The same instance name can be re-applied with a different type. Its
 	// historical A reaction must not invoke B's adapter or credentials.
-	seedIdentityManifest(t, db, "integration_type", namespace, "other_adapter", true,
+	typeB := seedIdentityManifest(t, db, "integration_type", namespace, "other_adapter", true,
 		map[string]any{"reactors": []map[string]string{{"event_type": "team.created", "capability": "on_team_created"}}})
 	seedIdentityManifest(t, db, "integration_instance", namespace, instanceV1.Metadata.Name, true,
 		map[string]any{"type_ref": map[string]string{"namespace": namespace, "name": "other_adapter"}})
@@ -333,5 +333,40 @@ func TestReactorPausePostgresBlocksTypeRefDrift(t *testing.T) {
 	var status string
 	if err := db.QueryRow(`SELECT status, attempt FROM public.integration_event_reactions WHERE id=$1`, reactionID).Scan(&status, &attempt); err != nil || status != "pending" || attempt != 0 {
 		t.Fatalf("cross-type backlog status=%q attempt=%d err=%v", status, attempt, err)
+	}
+
+	// Execution gives manifest_id precedence over the co-present name. A
+	// mixed selector that names A but points to B must remain blocked.
+	seedIdentityManifest(t, db, "integration_instance", namespace, instanceV1.Metadata.Name, true,
+		map[string]any{"type_ref": map[string]string{
+			"namespace": namespace, "name": typeV1.Metadata.Name, "manifest_id": typeB.ID.String(),
+		}})
+	claims, err = ClaimPendingBatch(ctx, db, 1)
+	if err != nil || len(claims) != 0 {
+		t.Fatalf("mixed A-name/B-id claim=%+v err=%v", claims, err)
+	}
+
+	// Conversely, an ID of the same historical logical type is safe even
+	// when the name fields point elsewhere; the resolver uses that A ID.
+	instanceByID := seedIdentityManifest(t, db, "integration_instance", namespace, instanceV1.Metadata.Name, true,
+		map[string]any{"type_ref": map[string]string{
+			"namespace": namespace, "name": typeB.Metadata.Name, "manifest_id": typeV2.ID.String(),
+		}})
+	claims, err = ClaimPendingBatch(ctx, db, 1)
+	if err != nil || len(claims) != 1 || claims[0].ID != reactionID || claims[0].DispatchInstanceID != instanceByID.ID {
+		t.Fatalf("same-type manifest ID claim=%+v err=%v", claims, err)
+	}
+	if activeID, allowed, err := ReactionDispatchAllowed(ctx, db, reactionID, claims[0].Attempt); err != nil || !allowed || activeID != instanceByID.ID {
+		t.Fatalf("same-type manifest ID recheck active=%s allowed=%v err=%v", activeID, allowed, err)
+	}
+	seedIdentityManifest(t, db, "integration_instance", namespace, instanceV1.Metadata.Name, true,
+		map[string]any{"type_ref": map[string]string{
+			"namespace": namespace, "name": typeV1.Metadata.Name, "manifest_id": typeB.ID.String(),
+		}})
+	if _, allowed, err := ReactionDispatchAllowed(ctx, db, reactionID, claims[0].Attempt); err != nil || allowed {
+		t.Fatalf("mixed A-name/B-id recheck allowed=%v err=%v", allowed, err)
+	}
+	if err := ReleaseClaim(ctx, db, reactionID, claims[0].Attempt, claims[0].PriorStatus, claims[0].PriorLastError); err != nil {
+		t.Fatalf("release mixed selector claim: %v", err)
 	}
 }

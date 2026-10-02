@@ -164,11 +164,27 @@ func ReactionDispatchAllowed(ctx context.Context, db *sql.DB, reactionID uuid.UU
 		 AND active_ii.namespace = old_ii.namespace
 		 AND active_ii.name = old_ii.name
 		 AND active_ii.active = TRUE
-		 AND active_ii.spec->'type_ref'->>'namespace' = old_it.namespace
-		 AND active_ii.spec->'type_ref'->>'name' = old_it.name
+		CROSS JOIN LATERAL (
+		  SELECT NULLIF(btrim(active_ii.spec->'type_ref'->>'manifest_id'), '') AS manifest_id,
+		         COALESCE(NULLIF(lower(btrim(active_ii.spec->'type_ref'->>'namespace')), ''), 'global') AS type_namespace,
+		         lower(btrim(active_ii.spec->'type_ref'->>'name')) AS type_name
+		) active_ref
+		LEFT JOIN public.manifests selected_it
+		  ON selected_it.id = CASE
+		    WHEN active_ref.manifest_id ~* '^([0-9a-f]{32}|[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})$'
+		    THEN active_ref.manifest_id::uuid
+		  END
+		 AND selected_it.kind = 'integration_type'
 		LEFT JOIN public.integration_reactor_dispatch_policies p
 		  ON p.namespace = active_ii.namespace AND p.name = active_ii.name
 		WHERE r.id = $1 AND r.status = 'in_progress' AND r.attempt = $2
+		  AND (
+		    (active_ref.manifest_id IS NOT NULL
+		     AND selected_it.namespace = old_it.namespace AND selected_it.name = old_it.name)
+		    OR
+		    (active_ref.manifest_id IS NULL
+		     AND active_ref.type_namespace = old_it.namespace AND active_ref.type_name = old_it.name)
+		  )
 	`, reactionID, attempt).Scan(&activeID, &allowed)
 	if errors.Is(err, sql.ErrNoRows) {
 		return uuid.Nil, false, nil
