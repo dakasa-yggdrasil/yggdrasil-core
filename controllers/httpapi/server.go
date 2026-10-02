@@ -381,6 +381,8 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// for console integrations that want stricter typing.
 	mux.HandleFunc("GET /api/v1/manifests", server.handleManifestListGeneric)
 	mux.HandleFunc("POST /api/v1/manifests", server.handleManifestCreateGeneric)
+	mux.HandleFunc("GET /api/v1/ops/integration-instances/{namespace}/{name}/reactor-dispatch", server.requireReactorPolicyPermissionFunc(permViewIntegrations, server.handleReactorDispatchPolicyGet))
+	mux.HandleFunc("PUT /api/v1/ops/integration-instances/{namespace}/{name}/reactor-dispatch", server.requireReactorPolicyPermissionFunc(permManageIntegrations, server.handleReactorDispatchPolicyPut))
 	// DELETE companion: hard-delete by default, ?soft=true flips active=FALSE.
 	// Manifest writes accept console sessions only; workflow credentials are
 	// dispatch/poll-only. Idempotent on not-found.
