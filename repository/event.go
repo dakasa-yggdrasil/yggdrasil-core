@@ -56,6 +56,24 @@ func EmitEvent(ctx context.Context, tx *sql.Tx, req model.EmitEventRequest) (uui
 // already materialised reactions, so re-running would double up the
 // fan-out (or fail the unique constraint on integration_event_reactions).
 func EmitEventWithOutcome(ctx context.Context, tx *sql.Tx, req model.EmitEventRequest) (model.EmitEventOutcome, error) {
+	return emitEventWithOutcome(ctx, tx, req, false)
+}
+
+// EmitTeamReconcileEvent persists a synthetic team.created event while
+// suppressing materialization for currently paused destinations. The team
+// reconciler will revisit those gaps after the pause is lifted.
+func EmitTeamReconcileEvent(ctx context.Context, tx *sql.Tx, req model.EmitEventRequest) (uuid.UUID, error) {
+	if req.Type != EventTypeTeamCreated {
+		return uuid.Nil, fmt.Errorf("team reconcile event must be team.created")
+	}
+	outcome, err := emitEventWithOutcome(ctx, tx, req, true)
+	if err != nil {
+		return uuid.Nil, err
+	}
+	return outcome.EventID, nil
+}
+
+func emitEventWithOutcome(ctx context.Context, tx *sql.Tx, req model.EmitEventRequest, suppressPaused bool) (model.EmitEventOutcome, error) {
 	if tx == nil {
 		return model.EmitEventOutcome{}, fmt.Errorf("EmitEvent requires a non-nil transaction")
 	}
@@ -168,7 +186,7 @@ func EmitEventWithOutcome(ctx context.Context, tx *sql.Tx, req model.EmitEventRe
 	// Materialize reactions for canon lifecycle events and §6.5 mutation
 	// events. This runs in the SAME transaction so reactions and the event
 	// commit (or rollback) atomically. Events outside both sets are a no-op.
-	materialized, err := MaterializeReactions(ctx, tx, insertedID, req.Type)
+	materialized, err := materializeReactions(ctx, tx, insertedID, req.Type, suppressPaused)
 	if err != nil {
 		return model.EmitEventOutcome{}, fmt.Errorf("materialize reactions: %w", err)
 	}
@@ -382,9 +400,14 @@ func CleanupExpiredEvents(ctx context.Context, db *sql.DB) (int64, error) {
 	for _, p := range policies {
 		sqlPattern := wildcardToLike(p.pattern)
 		result, err := db.ExecContext(ctx, `
-			DELETE FROM public.event_log
+			DELETE FROM public.event_log e
 			WHERE type LIKE $1
 			  AND emitted_at < NOW() - ($2::text || ' days')::interval
+			  AND NOT EXISTS (
+			    SELECT 1 FROM public.integration_event_reactions r
+			    WHERE r.event_id = e.event_id
+			      AND r.status IN ('pending', 'failed', 'in_progress')
+			  )
 		`, sqlPattern, fmt.Sprintf("%d", p.days))
 		if err != nil {
 			return totalDeleted, fmt.Errorf("delete events for pattern %q: %w", p.pattern, err)

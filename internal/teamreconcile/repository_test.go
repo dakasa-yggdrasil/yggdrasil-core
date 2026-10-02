@@ -149,3 +149,84 @@ func TestListUnprovisionedPairsFindsGap(t *testing.T) {
 		t.Fatal("expected github pair in unprovisioned list")
 	}
 }
+
+func TestReactorPauseTeamReconcileSkipsAndResumesGap(t *testing.T) {
+	db := openTestDB(t)
+	t.Cleanup(func() { _ = db.Close() })
+	ctx := context.Background()
+	actorID := uuid.New()
+	teamID := seedTeam(t, db)
+	instanceID := seedIntegrationInstanceWithTeamReactor(t, db)
+	var namespace, name string
+	if err := db.QueryRow(`SELECT namespace, name FROM public.manifests WHERE id = $1`, instanceID).Scan(&namespace, &name); err != nil {
+		t.Fatalf("lookup instance: %v", err)
+	}
+	t.Cleanup(func() {
+		_, _ = db.Exec(`DELETE FROM public.integration_reactor_dispatch_policies WHERE namespace = $1 AND name = $2`, namespace, name)
+		_, _ = db.Exec(`DELETE FROM public.event_log WHERE type = 'team.created' AND aggregate_id = $1`, teamID.String())
+	})
+	if _, err := repository.ReplaceIntegrationReactorDispatchPolicy(ctx, db, namespace, name, []string{repository.EventTypeTeamCreated}, 0, actorID); err != nil {
+		t.Fatalf("pause team reactor: %v", err)
+	}
+	assertPair := func(want bool) {
+		t.Helper()
+		pairs, err := ListUnprovisionedPairs(ctx, db)
+		if err != nil {
+			t.Fatalf("list pairs: %v", err)
+		}
+		found := false
+		for _, p := range pairs {
+			if p.TeamID == teamID && p.IntegrationInstanceID == instanceID {
+				found = true
+			}
+		}
+		if found != want {
+			t.Fatalf("gap found=%v, want %v", found, want)
+		}
+	}
+	assertPair(false)
+	if err := (&Runner{DB: db}).tick(ctx); err != nil {
+		t.Fatalf("paused reconcile tick: %v", err)
+	}
+	var count int
+	if err := db.QueryRow(`SELECT COUNT(*) FROM public.event_log WHERE type = 'team.created' AND aggregate_id = $1`, teamID.String()).Scan(&count); err != nil || count != 0 {
+		t.Fatalf("paused synthetic events=%d, err=%v", count, err)
+	}
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatalf("begin normal team event: %v", err)
+	}
+	normalID, err := repository.EmitEvent(ctx, tx, model.EmitEventRequest{
+		Type:          repository.EventTypeTeamCreated,
+		AggregateType: "team",
+		AggregateID:   teamID.String(),
+		Payload:       map[string]any{"id": teamID.String(), "slug": "pause-ci", "name": "Pause CI"},
+	})
+	if err != nil {
+		_ = tx.Rollback()
+		t.Fatalf("emit normal team event: %v", err)
+	}
+	if err := tx.Commit(); err != nil {
+		t.Fatalf("commit normal team event: %v", err)
+	}
+	if _, err := repository.ReplaceIntegrationReactorDispatchPolicy(ctx, db, namespace, name, []string{}, 1, actorID); err != nil {
+		t.Fatalf("resume team reactor: %v", err)
+	}
+	assertPair(false) // the durable normal reaction must drain before reconcile
+	if err := (&Runner{DB: db}).tick(ctx); err != nil {
+		t.Fatalf("resumed reconcile tick: %v", err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM public.event_log WHERE type = 'team.created' AND aggregate_id = $1`, teamID.String()).Scan(&count); err != nil || count != 1 {
+		t.Fatalf("normal backlog amplified on resume: events=%d, err=%v", count, err)
+	}
+	if _, err := db.Exec(`UPDATE public.integration_event_reactions SET status='dead_lettered' WHERE event_id=$1`, normalID); err != nil {
+		t.Fatalf("mark normal reaction terminal: %v", err)
+	}
+	assertPair(true)
+	if err := (&Runner{DB: db}).tick(ctx); err != nil {
+		t.Fatalf("terminal gap reconcile tick: %v", err)
+	}
+	if err := db.QueryRow(`SELECT COUNT(*) FROM public.event_log WHERE type = 'team.created' AND aggregate_id = $1`, teamID.String()).Scan(&count); err != nil || count != 2 {
+		t.Fatalf("terminal gap not reconciled: events=%d, err=%v", count, err)
+	}
+}

@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**27 decisions.**
+**28 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -37,3 +37,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0025](0025-block-repository-binding-webhook-dispatch-during-emergency-lock.md) | Block repository-binding webhook dispatch during the emergency lock | Accepted | 2026-09-27 | yggdrasil-core / GitHub webhook repository bindings and emergency workflow dispatch |
 | [0026](0026-expose-a-non-persisting-event-grant-readback.md) | Expose a non-persisting event grant readback | Accepted | 2026-09-27 | yggdrasil-core / event publisher authorization |
 | [0027](0027-require-authenticated-actor-channels-for-authorized-workflows.md) | Require authenticated actor channels for authorized workflows | Accepted | 2026-09-27 | yggdrasil-core / workflow dispatch channel authorization |
+| [0029](0029-pause-reactor-dispatch-by-logical-integration-instance.md) | Pause reactor dispatch by logical integration instance | Accepted | 2026-10-02 | yggdrasil-core / integration reactor dispatch |

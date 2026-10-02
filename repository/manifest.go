@@ -638,7 +638,13 @@ func MarkManifestInactiveByID(ctx context.Context, db *sql.DB, manifestID uuid.U
 func PurgeInactiveManifestsOlderThan(ctx context.Context, db *sql.DB, cutoff time.Time) (int64, error) {
 	res, err := db.ExecContext(
 		ctx,
-		`DELETE FROM public.manifests WHERE active = FALSE AND updated_at < $1`,
+		`DELETE FROM public.manifests m
+		 WHERE m.active = FALSE AND m.updated_at < $1
+		   AND NOT EXISTS (
+		     SELECT 1 FROM public.integration_event_reactions r
+		     WHERE (r.integration_instance_id = m.id OR r.integration_type_manifest_id = m.id)
+		       AND r.status IN ('pending', 'failed', 'in_progress')
+		   )`,
 		cutoff,
 	)
 	if err != nil {

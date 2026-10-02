@@ -1,0 +1,55 @@
+name: Selective reactor pause integration
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  reactor-pause-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: reactor-pause-ci-only
+          POSTGRES_DB: reactor_pause_integration
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U postgres -d reactor_pause_integration"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 12
+    env:
+      GOWORK: "off"
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: reactor_pause_integration
+      DB_USER: postgres
+      DB_PASSWORD: reactor-pause-ci-only
+      DB_SSLMODE: disable
+      DB_URL: postgres://postgres:reactor-pause-ci-only@127.0.0.1:5432/reactor_pause_integration?sslmode=disable
+      REQUIRE_REACTOR_PAUSE_DB_TEST: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Apply production migrations to ephemeral PostgreSQL
+        run: go run ./scripts/goose up
+      - name: Verify durable pause, replay, claim race and retention
+        run: go test -count=1 -timeout=5m -v -run '^TestReactorPausePostgres' ./repository
+      - name: Verify dispatcher active-instance and pre-RPC pause gates
+        run: go test -count=1 -timeout=5m -v -run '^TestReactorPauseDispatcher' ./internal/reactors
+      - name: Verify team reconcile suppresses and resumes paused gaps
+        run: go test -count=1 -timeout=5m -v -run '^TestReactorPauseTeamReconcile' ./internal/teamreconcile
+      - name: Verify exact names and operator permission
+        run: go test -count=1 -timeout=5m -v -run '^Test(ValidatePausedReactorEventTypesExact|ReactorDispatchPolicyPutRequiresManageIntegrations|ReactorDispatchPolicyPermissionsAllowAuthorizedSession)$' ./controllers/httpapi

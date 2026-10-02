@@ -163,6 +163,39 @@
         "responses": {"201": {"description": "Created"}, "400": {"$ref": "#/components/responses/BadRequest"}}
       }
     },
+    "/api/v1/ops/integration-instances/{namespace}/{name}/reactor-dispatch": {
+      "parameters": [
+        {"name": "namespace", "in": "path", "required": true, "schema": {"type": "string"}, "description": "Logical integration instance namespace"},
+        {"name": "name", "in": "path", "required": true, "schema": {"type": "string"}, "description": "Logical integration instance name"}
+      ],
+      "get": {
+        "tags": ["integrations"],
+        "summary": "Read the operator-owned reactor dispatch pause for an active integration instance",
+        "description": "Requires yggdrasil:view_integrations. An active instance without a policy returns an empty paused_event_types list and revision 0. The policy is keyed by logical namespace/name and survives manifest version changes and deletion.",
+        "security": [{"BearerAuth": []}],
+        "responses": {
+          "200": {"description": "Current exact pause set and revision", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReactorDispatchPolicy"}}}},
+          "401": {"description": "Verified console session required"},
+          "403": {"description": "Missing yggdrasil:view_integrations permission"},
+          "404": {"description": "No active integration instance has this logical name"}
+        }
+      },
+      "put": {
+        "tags": ["integrations"],
+        "summary": "Atomically replace the exact reactor dispatch pause set",
+        "description": "Requires yggdrasil:manage_integrations and a verified console collaborator ID. The expected_revision compare-and-swap prevents lost updates; GET and reconsider the policy after a 409. The replacement and success audit row commit together. An empty paused_event_types list resumes dispatch. This is not a strict drain: an adapter call can start after PUT returns if the policy changes between the last worker recheck and RPC start.",
+        "security": [{"BearerAuth": []}],
+        "requestBody": {"required": true, "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReactorDispatchPolicyReplaceRequest"}}}},
+        "responses": {
+          "200": {"description": "Replacement committed with a new revision and audit row", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ReactorDispatchPolicy"}}}},
+          "400": {"description": "Missing or invalid fields, event names, duplicates, or more than 128 event types"},
+          "401": {"description": "Verified console session with a valid collaborator ID required"},
+          "403": {"description": "Missing yggdrasil:manage_integrations permission"},
+          "404": {"description": "No active integration instance has this logical name"},
+          "409": {"description": "expected_revision does not match the current policy revision; GET again"}
+        }
+      }
+    },
     "/api/v1/integration-runtime-states": {
       "get": {
         "tags": ["integrations"],
@@ -296,6 +329,26 @@
     "schemas": {
       "ServiceBanner": {"type": "object", "properties": {"service": {"type": "string"}, "status": {"type": "string"}}},
       "ReadyResponse": {"type": "object", "required": ["status"], "properties": {"status": {"type": "string", "enum": ["ready", "not_ready"]}, "rabbitmq_status": {"type": "string", "enum": ["ok", "degraded"]}, "reason": {"type": "string"}, "error": {"type": "string"}}},
+      "ReactorDispatchPolicy": {
+        "type": "object",
+        "required": ["namespace", "name", "paused_event_types", "revision"],
+        "properties": {
+          "namespace": {"type": "string"},
+          "name": {"type": "string"},
+          "paused_event_types": {"type": "array", "items": {"type": "string"}, "uniqueItems": true, "maxItems": 128, "description": "Sorted exact event names whose reactor dispatch is paused"},
+          "revision": {"type": "integer", "format": "int64", "minimum": 0, "description": "0 when no policy has been written; increments on every successful replacement"},
+          "updated_at": {"type": "string", "format": "date-time", "description": "Timestamp of the last policy replacement when available"}
+        }
+      },
+      "ReactorDispatchPolicyReplaceRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": ["paused_event_types", "expected_revision"],
+        "properties": {
+          "paused_event_types": {"type": "array", "items": {"type": "string", "description": "Exact canonical lifecycle name or integration mutation name <provider>.<resource>.(ensured|destroyed|created)"}, "uniqueItems": true, "maxItems": 128, "description": "Full replacement set; [] resumes every event type"},
+          "expected_revision": {"type": "integer", "format": "int64", "minimum": 0, "description": "Current revision from GET; required for compare-and-swap"}
+        }
+      },
       "ManifestMetadata": {
         "type": "object",
         "required": ["name", "namespace"],
