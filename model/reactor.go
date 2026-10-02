@@ -33,6 +33,9 @@ type IntegrationEventReaction struct {
 	EventID                   uuid.UUID      `json:"event_id"`
 	EventType                 string         `json:"event_type"`
 	IntegrationInstanceID     uuid.UUID      `json:"integration_instance_id"`
+	DispatchInstanceID        uuid.UUID      `json:"-"`
+	PriorStatus               ReactionStatus `json:"-"`
+	PriorLastError            string         `json:"-"`
 	IntegrationTypeManifestID uuid.UUID      `json:"integration_type_manifest_id"`
 	Capability                string         `json:"capability"`
 	Status                    ReactionStatus `json:"status"`

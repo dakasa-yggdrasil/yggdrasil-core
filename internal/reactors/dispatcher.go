@@ -26,19 +26,24 @@ type ClaimedReaction struct {
 	EventID               uuid.UUID
 	EventType             string
 	IntegrationInstanceID uuid.UUID
+	DispatchInstanceID    uuid.UUID
+	PriorStatus           model.ReactionStatus
+	PriorLastError        string
 	Capability            string
 	Attempt               int
 }
 
 // Runner is the background worker that drives the reactor dispatch loop.
 type Runner struct {
-	DB             *sql.DB
-	Logger         *zap.Logger
-	Caller         Caller
-	Interval       time.Duration
-	BatchSize      int
-	Parallelism    int
-	StuckThreshold time.Duration
+	DB                 *sql.DB
+	Logger             *zap.Logger
+	Caller             Caller
+	Interval           time.Duration
+	BatchSize          int
+	Parallelism        int
+	StuckThreshold     time.Duration
+	BacklogInterval    time.Duration
+	nextBacklogRefresh time.Time
 
 	// BrokerAvailable, when set, is called at the start of each tick.
 	// If it returns false the tick is skipped entirely: no reactions are
@@ -84,9 +89,25 @@ func (r *Runner) defaults() {
 	if r.StuckThreshold == 0 {
 		r.StuckThreshold = 10 * time.Minute
 	}
+	if r.BacklogInterval == 0 {
+		r.BacklogInterval = time.Minute
+	}
 }
 
 func (r *Runner) tickOnce(ctx context.Context) error {
+	if r.DB != nil && !time.Now().Before(r.nextBacklogRefresh) {
+		r.nextBacklogRefresh = time.Now().Add(r.BacklogInterval)
+		refreshCtx, cancel := context.WithTimeout(ctx, 3*time.Second)
+		count, age, err := repository.PausedReactionBacklog(refreshCtx, r.DB)
+		cancel()
+		if err != nil {
+			if r.Logger != nil {
+				r.Logger.Warn("paused reactor backlog refresh failed", zap.Error(err))
+			}
+		} else {
+			metrics.SetReactorPausedBacklog(count, age, time.Now())
+		}
+	}
 	// Skip the entire tick when the broker is known to be unavailable.
 	// Reactions are NOT claimed so they remain pending and replay
 	// immediately after the broker recovers — skip, not fail.
@@ -149,6 +170,9 @@ func (r *Runner) realClaim(ctx context.Context, limit int) ([]ClaimedReaction, e
 			EventID:               x.EventID,
 			EventType:             x.EventType,
 			IntegrationInstanceID: x.IntegrationInstanceID,
+			DispatchInstanceID:    x.DispatchInstanceID,
+			PriorStatus:           x.PriorStatus,
+			PriorLastError:        x.PriorLastError,
 			Capability:            x.Capability,
 			Attempt:               x.Attempt,
 		})
@@ -157,17 +181,29 @@ func (r *Runner) realClaim(ctx context.Context, limit int) ([]ClaimedReaction, e
 }
 
 func (r *Runner) dispatchOne(ctx context.Context, c ClaimedReaction) {
+	if !r.claimDispatchAllowed(ctx, c) {
+		return
+	}
 	rawPayload, emittedAt, actor, err := repository.FetchEventForReactor(ctx, r.DB, c.EventID)
 	if err != nil {
-		_ = repository.MarkFailed(ctx, r.DB, c.ID, fmt.Sprintf("fetch event: %v", err), backoffFor(c.Attempt))
+		if !r.claimDispatchAllowed(ctx, c) {
+			return
+		}
+		_ = repository.MarkFailed(ctx, r.DB, c.ID, c.Attempt, fmt.Sprintf("fetch event: %v", err), backoffFor(c.Attempt))
 		return
 	}
 	payload, err := BuildReactorPayload(c.EventID, c.EventType, "v1", rawPayload, emittedAt, actor, c.Attempt)
 	if err != nil {
-		_ = repository.MarkFailed(ctx, r.DB, c.ID, fmt.Sprintf("build payload: %v", err), backoffFor(c.Attempt))
+		if !r.claimDispatchAllowed(ctx, c) {
+			return
+		}
+		_ = repository.MarkFailed(ctx, r.DB, c.ID, c.Attempt, fmt.Sprintf("build payload: %v", err), backoffFor(c.Attempt))
 		return
 	}
 
+	if !r.claimDispatchAllowed(ctx, c) {
+		return
+	}
 	if r.Logger != nil {
 		r.Logger.Info("reactor dispatched",
 			zap.String("reaction_id", c.ID.String()),
@@ -178,28 +214,61 @@ func (r *Runner) dispatchOne(ctx context.Context, c ClaimedReaction) {
 		)
 	}
 
-	err = r.Caller.Call(ctx, c.IntegrationInstanceID.String(), c.Capability, payload)
+	err = r.Caller.Call(ctx, c.DispatchInstanceID.String(), c.Capability, payload)
 	if err == nil {
-		_ = repository.MarkSucceeded(ctx, r.DB, c.ID)
+		if err := repository.MarkSucceeded(ctx, r.DB, c.ID, c.Attempt); err != nil {
+			if r.Logger != nil {
+				r.Logger.Warn("reactor success claim no longer current", zap.Error(err), zap.String("reaction_id", c.ID.String()))
+			}
+			return
+		}
 		metrics.IncReactorDispatch(metrics.ReactorDispatchSucceeded)
 		return
 	}
 
 	wait, deadLetter := BackoffFor(c.Attempt)
 	if deadLetter {
-		_ = repository.MarkDeadLettered(ctx, r.DB, c.ID, err.Error())
+		if markErr := repository.MarkDeadLettered(ctx, r.DB, c.ID, c.Attempt, err.Error()); markErr != nil {
+			if r.Logger != nil {
+				r.Logger.Warn("reactor dead-letter claim no longer current", zap.Error(markErr), zap.String("reaction_id", c.ID.String()))
+			}
+			return
+		}
 		r.emitDeadLetterEvent(ctx, c, err)
 		// Terminal: count as dead_lettered.  We do NOT also count as failed —
 		// the dispatch reached a terminal state exactly once.
 		metrics.IncReactorDispatch(metrics.ReactorDispatchDeadLettered)
 		return
 	}
-	_ = repository.MarkFailed(ctx, r.DB, c.ID, err.Error(), wait)
+	if markErr := repository.MarkFailed(ctx, r.DB, c.ID, c.Attempt, err.Error(), wait); markErr != nil {
+		if r.Logger != nil {
+			r.Logger.Warn("reactor failure claim no longer current", zap.Error(markErr), zap.String("reaction_id", c.ID.String()))
+		}
+		return
+	}
 	// Non-terminal failure: bumps the failed counter once per retriable
 	// failure so the rate captures the operator-visible "tried and missed"
 	// signal.  The same reaction id may bump this counter multiple times
 	// across retries; that mirrors what dispatch attempts actually do.
 	metrics.IncReactorDispatch(metrics.ReactorDispatchFailed)
+}
+
+// claimDispatchAllowed runs immediately after claim and immediately before
+// RPC. A pause, logical deletion, or active-version replacement returns the
+// row to the queue without consuming an attempt. A policy read failure is a
+// dispatch stop, never permission to send an adapter call.
+func (r *Runner) claimDispatchAllowed(ctx context.Context, c ClaimedReaction) bool {
+	activeID, allowed, policyErr := repository.ReactionDispatchAllowed(ctx, r.DB, c.ID, c.Attempt)
+	if policyErr == nil && allowed && activeID == c.DispatchInstanceID {
+		return true
+	}
+	if err := repository.ReleaseClaim(ctx, r.DB, c.ID, c.Attempt, c.PriorStatus, c.PriorLastError); err != nil && r.Logger != nil {
+		r.Logger.Warn("release blocked reactor claim failed", zap.Error(err), zap.String("reaction_id", c.ID.String()))
+	}
+	if policyErr != nil && r.Logger != nil {
+		r.Logger.Warn("reactor policy recheck failed", zap.Error(policyErr), zap.String("reaction_id", c.ID.String()))
+	}
+	return false
 }
 
 func backoffFor(attempt int) time.Duration {

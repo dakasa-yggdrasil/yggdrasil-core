@@ -20,6 +20,7 @@ import (
 	"sort"
 	"sync"
 	"sync/atomic"
+	"time"
 )
 
 // Reactor evaluation outcomes. The set is closed; callers passing any
@@ -110,6 +111,10 @@ var (
 	reactorDispatchSucceeded    atomic.Uint64
 	reactorDispatchFailed       atomic.Uint64
 	reactorDispatchDeadLettered atomic.Uint64
+
+	reactorPausedBacklogCount              atomic.Int64
+	reactorPausedBacklogOldestAgeSeconds   atomic.Uint64
+	reactorPausedBacklogRefreshUnixSeconds atomic.Int64
 
 	heimdallFlaggedMu sync.RWMutex
 	heimdallFlagged   = map[string]float64{}
@@ -331,6 +336,27 @@ func ReactorDispatchesSnapshot() map[string]uint64 {
 		ReactorDispatchFailed:       reactorDispatchFailed.Load(),
 		ReactorDispatchDeadLettered: reactorDispatchDeadLettered.Load(),
 	}
+}
+
+// SetReactorPausedBacklog stores the latest DB-backed aggregate. Age is
+// represented as integer seconds; the refresh timestamp distinguishes a true
+// zero from a gauge that has not been sampled yet.
+func SetReactorPausedBacklog(count int64, oldestAgeSeconds float64, refreshedAt time.Time) {
+	if count < 0 {
+		count = 0
+	}
+	if oldestAgeSeconds < 0 {
+		oldestAgeSeconds = 0
+	}
+	reactorPausedBacklogCount.Store(count)
+	reactorPausedBacklogOldestAgeSeconds.Store(uint64(oldestAgeSeconds))
+	reactorPausedBacklogRefreshUnixSeconds.Store(refreshedAt.Unix())
+}
+
+func ReactorPausedBacklogSnapshot() (int64, uint64, int64) {
+	return reactorPausedBacklogCount.Load(),
+		reactorPausedBacklogOldestAgeSeconds.Load(),
+		reactorPausedBacklogRefreshUnixSeconds.Load()
 }
 
 // HeimdallFlaggedCountSnapshot returns the latest flagged_count per pulse
@@ -748,6 +774,9 @@ func ResetForTest() {
 	reactorDispatchSucceeded.Store(0)
 	reactorDispatchFailed.Store(0)
 	reactorDispatchDeadLettered.Store(0)
+	reactorPausedBacklogCount.Store(0)
+	reactorPausedBacklogOldestAgeSeconds.Store(0)
+	reactorPausedBacklogRefreshUnixSeconds.Store(0)
 	heimdallFlaggedMu.Lock()
 	heimdallFlagged = map[string]float64{}
 	heimdallFlaggedMu.Unlock()

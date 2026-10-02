@@ -171,6 +171,17 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	fmt.Fprintf(w, "yggdrasil_reactor_dispatches_total{outcome=\"failed\"} %d\n", dispatchSnap[metrics.ReactorDispatchFailed])
 	fmt.Fprintf(w, "yggdrasil_reactor_dispatches_total{outcome=\"dead_lettered\"} %d\n", dispatchSnap[metrics.ReactorDispatchDeadLettered])
 
+	pausedCount, pausedOldestAge, pausedRefresh := metrics.ReactorPausedBacklogSnapshot()
+	fmt.Fprintf(w, "# HELP yggdrasil_reactor_paused_backlog_reactions Nonterminal reactions held by selective reactor pauses\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_reactor_paused_backlog_reactions gauge\n")
+	fmt.Fprintf(w, "yggdrasil_reactor_paused_backlog_reactions %d\n", pausedCount)
+	fmt.Fprintf(w, "# HELP yggdrasil_reactor_paused_backlog_oldest_age_seconds Age of the oldest reaction held by a selective pause\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_reactor_paused_backlog_oldest_age_seconds gauge\n")
+	fmt.Fprintf(w, "yggdrasil_reactor_paused_backlog_oldest_age_seconds %d\n", pausedOldestAge)
+	fmt.Fprintf(w, "# HELP yggdrasil_reactor_paused_backlog_refresh_timestamp_seconds Last successful database refresh of paused backlog gauges, or zero before first refresh\n")
+	fmt.Fprintf(w, "# TYPE yggdrasil_reactor_paused_backlog_refresh_timestamp_seconds gauge\n")
+	fmt.Fprintf(w, "yggdrasil_reactor_paused_backlog_refresh_timestamp_seconds %d\n", pausedRefresh)
+
 	// Heimdall flagged_count gauge: snapshot of the last value emitted by a
 	// heimdall-* workflow's `batch-ci-status` (or equivalent) step output.
 	// Keyed by workflow name so multiple pulses (CI / CD / etc.) coexist.
