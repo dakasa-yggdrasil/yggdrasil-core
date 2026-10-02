@@ -40,9 +40,11 @@ to reactions through foreign keys.
    audit row commit in one transaction or neither commits.
 3. Continue materializing normal events during a pause. The claim query
    resolves each reaction's historical instance UUID to the currently active
-   version of the same logical instance, checks the policy before incrementing
-   `attempt`, and locks only reaction rows. If there is no active version,
-   nothing is claimed. Dispatch rechecks the policy and active version before
+   version of the same logical instance, requires its current `type_ref` to
+   match the historical integration type's logical `(namespace, name)`, checks
+   the policy before incrementing `attempt`, and locks only reaction rows. If
+   there is no active version or its type identity changed, nothing is claimed.
+   Dispatch rechecks the policy, active version and type identity before
    processing and before the adapter RPC; a newly blocked claim returns to
    its prior pending or failed state without spending an attempt. This is a
    best-effort dispatch boundary, not a strict drain: PUT can commit after
@@ -68,6 +70,11 @@ to reactions through foreign keys.
   change between claim and the pre-RPC check requeues the reaction. The
   existing team provisioning log remains keyed by version UUID; this policy
   does not migrate those records.
+- A historical reaction is never sent to a different integration type after
+  an instance is repointed. It remains pending for manual review, with an
+  aggregate, payload-free type mismatch query in the operations runbook.
+  Upgrading the same logical integration type to a new manifest version is
+  compatible with replay.
 - A hard manifest delete remains an explicit destructive operation that can
   cascade to reactions. The periodic cleaners protect replay automatically.
 - Policies survive deletion deliberately, so recreating the same logical

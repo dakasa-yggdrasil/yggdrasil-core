@@ -50,6 +50,13 @@ paused destinations. On resume, unresolved gaps become eligible only when
 there is no nonterminal ordinary `team.created` reaction for that team and
 logical instance.
 
+The worker also compares the reaction's historical integration type
+`namespace/name` with the active instance's current `type_ref`. A new version
+of the same type can drain the backlog. If the instance was repointed to a
+different type, historical reactions stay pending without another attempt;
+they must be reviewed and resolved by an operator before replay. They are
+never sent to the new adapter.
+
 `/metrics` exposes `yggdrasil_reactor_paused_backlog_reactions`,
 `yggdrasil_reactor_paused_backlog_oldest_age_seconds`, and
 `yggdrasil_reactor_paused_backlog_refresh_timestamp_seconds`. They are
@@ -68,6 +75,29 @@ JOIN public.manifests old_ii ON old_ii.id = r.integration_instance_id
 WHERE old_ii.kind = 'integration_instance'
   AND old_ii.namespace = $1 AND old_ii.name = $2
   AND r.status IN ('pending', 'failed', 'in_progress')
+GROUP BY r.event_type, r.status
+ORDER BY r.event_type, r.status;
+```
+
+To find reactions blocked by a change of integration type for that instance,
+use this aggregate query. It returns no event payload or team identifier:
+
+```sql
+SELECT r.event_type, r.status, COUNT(*) AS reactions,
+       MIN(r.created_at) AS oldest_created_at
+FROM public.integration_event_reactions r
+JOIN public.manifests old_ii ON old_ii.id = r.integration_instance_id
+JOIN public.manifests old_it ON old_it.id = r.integration_type_manifest_id
+JOIN public.manifests active_ii
+  ON active_ii.kind = 'integration_instance'
+ AND active_ii.namespace = old_ii.namespace
+ AND active_ii.name = old_ii.name
+ AND active_ii.active = TRUE
+WHERE old_ii.kind = 'integration_instance'
+  AND old_ii.namespace = $1 AND old_ii.name = $2
+  AND r.status IN ('pending', 'failed', 'in_progress')
+  AND (active_ii.spec->'type_ref'->>'namespace' IS DISTINCT FROM old_it.namespace
+       OR active_ii.spec->'type_ref'->>'name' IS DISTINCT FROM old_it.name)
 GROUP BY r.event_type, r.status
 ORDER BY r.event_type, r.status;
 ```

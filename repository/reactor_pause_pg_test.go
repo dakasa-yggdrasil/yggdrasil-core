@@ -283,3 +283,55 @@ func TestReactorPausePostgresRetentionGuards(t *testing.T) {
 		t.Fatalf("terminal event retained=%v, err=%v", eventExists, err)
 	}
 }
+
+func TestReactorPausePostgresBlocksTypeRefDrift(t *testing.T) {
+	db := openReactorPauseDB(t)
+	ctx := context.Background()
+	typeV1, instanceV1 := seedReactorPauseManifests(t, db)
+	eventID := emitReactorPauseTeamEvent(t, db, false)
+	reactionID, _ := reactionForEvent(t, db, eventID)
+	namespace := instanceV1.Metadata.Namespace
+
+	// The same instance name can be re-applied with a different type. Its
+	// historical A reaction must not invoke B's adapter or credentials.
+	seedIdentityManifest(t, db, "integration_type", namespace, "other_adapter", true,
+		map[string]any{"reactors": []map[string]string{{"event_type": "team.created", "capability": "on_team_created"}}})
+	seedIdentityManifest(t, db, "integration_instance", namespace, instanceV1.Metadata.Name, true,
+		map[string]any{"type_ref": map[string]string{"namespace": namespace, "name": "other_adapter"}})
+	claims, err := ClaimPendingBatch(ctx, db, 1)
+	if err != nil || len(claims) != 0 {
+		t.Fatalf("cross-type claim=%+v err=%v", claims, err)
+	}
+	_, attempt := reactionForEvent(t, db, eventID)
+	if attempt != 0 {
+		t.Fatalf("cross-type mismatch consumed attempt=%d", attempt)
+	}
+
+	// Upgrading A's manifest version is safe: the reaction's type identity
+	// matches even though its historical type UUID is no longer active.
+	typeV2 := seedIdentityManifest(t, db, "integration_type", namespace, typeV1.Metadata.Name, true,
+		map[string]any{"reactors": []map[string]string{{"event_type": "team.created", "capability": "on_team_created"}}})
+	if typeV1.ID == typeV2.ID {
+		t.Fatal("expected a new same-type manifest version")
+	}
+	instanceV3 := seedIdentityManifest(t, db, "integration_instance", namespace, instanceV1.Metadata.Name, true,
+		map[string]any{"type_ref": map[string]string{"namespace": namespace, "name": typeV1.Metadata.Name}})
+	claims, err = ClaimPendingBatch(ctx, db, 1)
+	if err != nil || len(claims) != 1 || claims[0].ID != reactionID || claims[0].DispatchInstanceID != instanceV3.ID {
+		t.Fatalf("same-type upgrade claim=%+v err=%v", claims, err)
+	}
+
+	// A type switch after claim is also blocked by the pre-RPC recheck.
+	seedIdentityManifest(t, db, "integration_instance", namespace, instanceV1.Metadata.Name, true,
+		map[string]any{"type_ref": map[string]string{"namespace": namespace, "name": "other_adapter"}})
+	if _, allowed, err := ReactionDispatchAllowed(ctx, db, reactionID, claims[0].Attempt); err != nil || allowed {
+		t.Fatalf("cross-type recheck allowed=%v err=%v", allowed, err)
+	}
+	if err := ReleaseClaim(ctx, db, reactionID, claims[0].Attempt, claims[0].PriorStatus, claims[0].PriorLastError); err != nil {
+		t.Fatalf("release cross-type claim: %v", err)
+	}
+	var status string
+	if err := db.QueryRow(`SELECT status, attempt FROM public.integration_event_reactions WHERE id=$1`, reactionID).Scan(&status, &attempt); err != nil || status != "pending" || attempt != 0 {
+		t.Fatalf("cross-type backlog status=%q attempt=%d err=%v", status, attempt, err)
+	}
+}

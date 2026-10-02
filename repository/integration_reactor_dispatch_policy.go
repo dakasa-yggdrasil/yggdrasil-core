@@ -156,11 +156,16 @@ func ReactionDispatchAllowed(ctx context.Context, db *sql.DB, reactionID uuid.UU
 		JOIN public.manifests old_ii
 		  ON old_ii.id = r.integration_instance_id
 		 AND old_ii.kind = 'integration_instance'
+		JOIN public.manifests old_it
+		  ON old_it.id = r.integration_type_manifest_id
+		 AND old_it.kind = 'integration_type'
 		JOIN public.manifests active_ii
 		  ON active_ii.kind = old_ii.kind
 		 AND active_ii.namespace = old_ii.namespace
 		 AND active_ii.name = old_ii.name
 		 AND active_ii.active = TRUE
+		 AND active_ii.spec->'type_ref'->>'namespace' = old_it.namespace
+		 AND active_ii.spec->'type_ref'->>'name' = old_it.name
 		LEFT JOIN public.integration_reactor_dispatch_policies p
 		  ON p.namespace = active_ii.namespace AND p.name = active_ii.name
 		WHERE r.id = $1 AND r.status = 'in_progress' AND r.attempt = $2
