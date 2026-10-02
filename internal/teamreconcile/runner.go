@@ -104,7 +104,7 @@ func (r *Runner) reEmit(ctx context.Context, teamID string) error {
 		payload["parent_team_id"] = team.ParentTeamID.String()
 	}
 
-	if _, err := repository.EmitEvent(ctx, tx, model.EmitEventRequest{
+	if _, err := repository.EmitTeamReconcileEvent(ctx, tx, model.EmitEventRequest{
 		Type:          repository.EventTypeTeamCreated,
 		SchemaVersion: "v1",
 		AggregateType: "team",
