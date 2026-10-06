@@ -24,14 +24,15 @@ type DirectorySnapshotPage struct {
 }
 
 type DirectoryCollaborator struct {
-	ID            string    `json:"id"`
-	Slug          string    `json:"slug"`
-	DisplayName   string    `json:"display_name"`
-	Status        string    `json:"status"`
-	ManagerID     *string   `json:"manager_id,omitempty"`
-	PrimaryTeamID *string   `json:"primary_team_id,omitempty"`
-	Version       int       `json:"version"`
-	UpdatedAt     time.Time `json:"updated_at"`
+	PhoneProfileRequired bool      `json:"phone_profile_required"`
+	ID                   string    `json:"id"`
+	Slug                 string    `json:"slug"`
+	DisplayName          string    `json:"display_name"`
+	Status               string    `json:"status"`
+	ManagerID            *string   `json:"manager_id,omitempty"`
+	PrimaryTeamID        *string   `json:"primary_team_id,omitempty"`
+	Version              int       `json:"version"`
+	UpdatedAt            time.Time `json:"updated_at"`
 }
 
 type DirectoryTeam struct {
@@ -48,7 +49,7 @@ type DirectoryTeam struct {
 // Membership preserves the canonical Core authority window. Active membership
 // in an active team confers authority at ObservedAt when StartsAt<=ObservedAt
 // and EndsAt>=ObservedAt (nil bounds are open). Collaborator lifecycle remains
-// separate; a consumer must not charge an on_leave/suspended/offboarded person.
+// separate; membership never changes a collaborator lifecycle status.
 type DirectoryMembership struct {
 	ID             string     `json:"id"`
 	TeamID         string     `json:"team_id"`
