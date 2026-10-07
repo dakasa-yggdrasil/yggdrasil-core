@@ -3,7 +3,6 @@ package repository
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
 	"errors"
 	"sort"
 	"time"
@@ -34,6 +33,13 @@ type DirectorySnapshot struct {
 }
 
 func LoadDirectorySnapshot(ctx context.Context, db *sql.DB, instances []string, phones bool, envelope *cryptoenvelope.Envelope) (DirectorySnapshot, error) {
+	return LoadDirectorySnapshotAt(ctx, db, instances, phones, envelope, time.Time{})
+}
+
+// LoadDirectorySnapshotAt uses the authenticated first-page observation time
+// for derived leadership. A continuation cannot cross a membership window
+// merely because its independent read transaction started later.
+func LoadDirectorySnapshotAt(ctx context.Context, db *sql.DB, instances []string, phones bool, envelope *cryptoenvelope.Envelope, observedAt time.Time) (DirectorySnapshot, error) {
 	s := DirectorySnapshot{Collaborators: []model.DirectoryCollaborator{}, Teams: []model.DirectoryTeam{}, Memberships: []model.DirectoryMembership{}, ExternalIdentities: []model.DirectoryExternalIdentity{}}
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	if err != nil {
@@ -42,6 +48,9 @@ func LoadDirectorySnapshot(ctx context.Context, db *sql.DB, instances []string, 
 	defer func() { _ = tx.Rollback() }()
 	if tx.QueryRowContext(ctx, `SELECT transaction_timestamp()`).Scan(&s.ObservedAt) != nil {
 		return s, ErrDirectorySnapshotInvalid
+	}
+	if !observedAt.IsZero() {
+		s.ObservedAt = observedAt.UTC()
 	}
 	rows, err := tx.QueryContext(ctx, `SELECT id::text,slug,display_name,status,manager_id::text,primary_team_id::text,version,updated_at,phone_profile_required FROM public.collaborators ORDER BY id LIMIT 10001`)
 	if err != nil {
@@ -61,20 +70,16 @@ func LoadDirectorySnapshot(ctx context.Context, db *sql.DB, instances []string, 
 		return s, ErrDirectorySnapshotInvalid
 	}
 	s.ObservedAt = s.ObservedAt.UTC()
-	owners := map[string][]string{}
-	rows, err = tx.QueryContext(ctx, `SELECT id::text,slug,name,type,status,parent_team_id::text,owners,updated_at FROM public.teams ORDER BY id LIMIT 10001`)
+	rows, err = tx.QueryContext(ctx, `SELECT id::text,slug,name,type,status,parent_team_id::text,updated_at FROM public.teams ORDER BY id LIMIT 10001`)
 	if err != nil {
 		return s, ErrDirectorySnapshotInvalid
 	}
 	for rows.Next() {
 		var t model.DirectoryTeam
-		var raw []byte
-		var refs []string
-		if rows.Scan(&t.ID, &t.Slug, &t.Name, &t.Type, &t.Status, &t.ParentTeamID, &raw, &t.UpdatedAt) != nil || json.Unmarshal(raw, &refs) != nil || refs == nil {
+		if rows.Scan(&t.ID, &t.Slug, &t.Name, &t.Type, &t.Status, &t.ParentTeamID, &t.UpdatedAt) != nil {
 			_ = rows.Close()
 			return s, ErrDirectorySnapshotInvalid
 		}
-		owners[t.ID] = refs
 		t.OwnerIDs = []string{}
 		s.Teams = append(s.Teams, t)
 	}
@@ -83,13 +88,13 @@ func LoadDirectorySnapshot(ctx context.Context, db *sql.DB, instances []string, 
 	if err != nil || len(s.Teams) > directoryPeopleBound {
 		return s, ErrDirectorySnapshotInvalid
 	}
-	rows, err = tx.QueryContext(ctx, `SELECT id::text,team_id::text,collaborator_id::text,active,starts_at,ends_at,updated_at FROM public.team_memberships ORDER BY id LIMIT 100001`)
+	rows, err = tx.QueryContext(ctx, `SELECT id::text,team_id::text,collaborator_id::text,active,starts_at,ends_at,updated_at,is_lead FROM public.team_memberships ORDER BY id LIMIT 100001`)
 	if err != nil {
 		return s, ErrDirectorySnapshotInvalid
 	}
 	for rows.Next() {
 		var m model.DirectoryMembership
-		if rows.Scan(&m.ID, &m.TeamID, &m.CollaboratorID, &m.Active, &m.StartsAt, &m.EndsAt, &m.UpdatedAt) != nil {
+		if rows.Scan(&m.ID, &m.TeamID, &m.CollaboratorID, &m.Active, &m.StartsAt, &m.EndsAt, &m.UpdatedAt, &m.IsLead) != nil {
 			_ = rows.Close()
 			return s, ErrDirectorySnapshotInvalid
 		}
@@ -119,9 +124,10 @@ func LoadDirectorySnapshot(ctx context.Context, db *sql.DB, instances []string, 
 			return s, ErrDirectorySnapshotInvalid
 		}
 	}
-	if err := validateDirectoryGraph(&s, owners); err != nil {
+	if err := validateDirectoryGraph(&s); err != nil {
 		return s, err
 	}
+	deriveDirectoryLeadership(&s)
 	if phones {
 		if envelope == nil {
 			return s, ErrPhoneUnavailable
@@ -178,7 +184,7 @@ func directoryCanonicalID(id string) bool {
 	return err == nil && u != uuid.Nil && u.String() == id
 }
 
-func validateDirectoryGraph(s *DirectorySnapshot, owners map[string][]string) error {
+func validateDirectoryGraph(s *DirectorySnapshot) error {
 	people := map[string]model.DirectoryCollaborator{}
 	slugs := map[string]string{}
 	teams := map[string]model.DirectoryTeam{}
@@ -218,23 +224,6 @@ func validateDirectoryGraph(s *DirectorySnapshot, owners map[string][]string) er
 			}
 		}
 	}
-	for i := range s.Teams {
-		ids := map[string]bool{}
-		for _, ref := range owners[s.Teams[i].ID] {
-			id := slugs[ref]
-			if parsed, err := uuid.Parse(ref); err == nil {
-				id = parsed.String()
-			}
-			if _, ok := people[id]; !ok {
-				return ErrDirectorySnapshotInvalid
-			}
-			ids[id] = true
-		}
-		for id := range ids {
-			s.Teams[i].OwnerIDs = append(s.Teams[i].OwnerIDs, id)
-		}
-		sort.Strings(s.Teams[i].OwnerIDs)
-	}
 	seen := map[string]bool{}
 	for _, m := range s.Memberships {
 		if !directoryCanonicalID(m.ID) || seen[m.ID] || m.UpdatedAt.IsZero() {
@@ -262,6 +251,30 @@ func validateDirectoryGraph(s *DirectorySnapshot, owners map[string][]string) er
 		}
 	}
 	return nil
+}
+
+func deriveDirectoryLeadership(s *DirectorySnapshot) {
+	teams := map[string]int{}
+	seen := map[string]bool{}
+	for i := range s.Teams {
+		teams[s.Teams[i].ID] = i
+		s.Teams[i].OwnerIDs = []string{}
+	}
+	for _, m := range s.Memberships {
+		i, present := teams[m.TeamID]
+		if !present || !m.IsLead || !m.Active || s.Teams[i].Status != "active" ||
+			m.StartsAt != nil && m.StartsAt.After(s.ObservedAt) || m.EndsAt != nil && m.EndsAt.Before(s.ObservedAt) {
+			continue
+		}
+		key := m.TeamID + ":" + m.CollaboratorID
+		if !seen[key] {
+			s.Teams[i].OwnerIDs = append(s.Teams[i].OwnerIDs, m.CollaboratorID)
+			seen[key] = true
+		}
+	}
+	for i := range s.Teams {
+		sort.Strings(s.Teams[i].OwnerIDs)
+	}
 }
 
 func acyclicDirectory(edges map[string]*string) bool {

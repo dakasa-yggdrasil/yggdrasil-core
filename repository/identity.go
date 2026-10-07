@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"sort"
 	"strings"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/collaboratorstate"
@@ -18,6 +19,8 @@ import (
 var (
 	ErrCollaboratorNotFound                = errors.New("collaborator not found")
 	ErrTeamNotFound                        = errors.New("team not found")
+	ErrLeadershipAssertionRequired         = errors.New("explicit leadership assertion is required; updates also require the current expected_updated_at after reloading and reviewing leadership")
+	ErrLeadershipVersionConflict           = errors.New("team changed since leadership was reviewed; reload the team and review leadership")
 	ErrInvalidCollaboratorStatusTransition = errors.New("invalid collaborator status transition")
 	// ErrConcurrentUpdate is returned by UpdateCollaborator when the row's
 	// version column changed between the initial load and the UPDATE — i.e.,
@@ -680,7 +683,19 @@ func CountCollaborators(ctx context.Context, db *sql.DB, req model.ListCollabora
 
 // CreateTeam stores one team record.
 func CreateTeam(ctx context.Context, db *sql.DB, req model.CreateTeamRequest) (model.Team, error) {
-	return createTeamOn(ctx, db, req)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.Team{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	team, err := createTeamOn(ctx, tx, req)
+	if err != nil {
+		return model.Team{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return model.Team{}, err
+	}
+	return team, nil
 }
 
 // CreateTeamTx is the *sql.Tx variant of CreateTeam used by handlers that emit
@@ -690,6 +705,12 @@ func CreateTeamTx(ctx context.Context, tx *sql.Tx, req model.CreateTeamRequest) 
 }
 
 func createTeamOn(ctx context.Context, q dbtx, req model.CreateTeamRequest) (model.Team, error) {
+	if len(normalizeStringList(req.Owners)) > 0 && !req.AssertLeadership {
+		return model.Team{}, ErrLeadershipAssertionRequired
+	}
+	if protected, _ := req.Traits["is_root_admin"].(bool); protected && len(normalizeStringList(req.Owners)) > 0 {
+		return model.Team{}, fmt.Errorf("leadership/owners are not allowed on a root-admin team")
+	}
 	slug := normalizeSlug(req.Slug)
 	if slug == "" {
 		return model.Team{}, fmt.Errorf("team slug is required")
@@ -966,7 +987,19 @@ func buildListTeamsQuery(req model.ListTeamsRequest) (string, []any) {
 
 // UpdateTeam updates one team record with patch semantics.
 func UpdateTeam(ctx context.Context, db *sql.DB, req model.UpdateTeamRequest) (model.Team, error) {
-	return updateTeamOn(ctx, db, req)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.Team{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	team, err := updateTeamOn(ctx, tx, req)
+	if err != nil {
+		return model.Team{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return model.Team{}, err
+	}
+	return team, nil
 }
 
 // UpdateTeamTx is the *sql.Tx variant of UpdateTeam.
@@ -975,12 +1008,28 @@ func UpdateTeamTx(ctx context.Context, tx *sql.Tx, req model.UpdateTeamRequest) 
 }
 
 func updateTeamOn(ctx context.Context, q dbtx, req model.UpdateTeamRequest) (model.Team, error) {
-	current, err := getTeamOn(ctx, q, req.ID)
+	// Serialize partial team writes before merging omitted fields. NO KEY
+	// UPDATE remains compatible with a concurrent membership's FK KEY SHARE,
+	// avoiding a team-row/member-row lock inversion on new membership inserts.
+	current, err := scanTeam(q.QueryRowContext(ctx, teamLookupQuery(req.ID)+" FOR NO KEY UPDATE", teamLookupArg(req.ID)))
 	if err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return model.Team{}, ErrTeamNotFound
+		}
 		return model.Team{}, err
 	}
 
 	protected := isTeamRootAdmin(current)
+	if req.Owners != nil {
+		if !req.AssertLeadership || req.ExpectedUpdatedAt == nil {
+			return model.Team{}, ErrLeadershipAssertionRequired
+		}
+		if !req.ExpectedUpdatedAt.Equal(current.UpdatedAt) {
+			return model.Team{}, ErrLeadershipVersionConflict
+		}
+	} else if req.AssertLeadership {
+		return model.Team{}, ErrLeadershipAssertionRequired
+	}
 
 	slug := current.Slug
 	if req.Slug != nil {
@@ -1051,6 +1100,20 @@ func updateTeamOn(ctx context.Context, q dbtx, req model.UpdateTeamRequest) (mod
 		if protected {
 			// Don't allow unsetting the flag — root-admin protection is self-defending.
 			traits["is_root_admin"] = true
+		}
+	}
+	if effectiveRoot, _ := traits["is_root_admin"].(bool); effectiveRoot {
+		if len(owners) > 0 {
+			return model.Team{}, fmt.Errorf("leadership/owners are not allowed on a root-admin team")
+		}
+		if !protected {
+			var hasLeadership bool
+			if err := q.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.team_memberships WHERE team_id=$1 AND is_lead)`, current.ID).Scan(&hasLeadership); err != nil {
+				return model.Team{}, err
+			}
+			if hasLeadership {
+				return model.Team{}, fmt.Errorf("leadership/owners are not allowed when assigning the root-admin trait")
+			}
 		}
 	}
 	metadata := current.Metadata
@@ -1132,32 +1195,11 @@ func updateTeamOn(ctx context.Context, q dbtx, req model.UpdateTeamRequest) (mod
 	if err != nil {
 		return model.Team{}, err
 	}
-	if err := ensureOwnerMemberships(ctx, q, team.ID.String(), owners); err != nil {
-		return model.Team{}, err
-	}
-	// Deactivate the auto-created membership of any owner that was removed from
-	// teams.owners by this update. Un-leading is NOT the same as removing someone
-	// from the team — so we only touch rows that exist SOLELY because of ownership
-	// (source='owner-sync'). A collaborator who was a real member BEFORE becoming
-	// an owner has source≠'owner-sync', so their row (and its org-rank role) is
-	// left fully intact: they stay an active member.
-	newOwners := make(map[string]struct{}, len(owners))
-	for _, owner := range owners {
-		newOwners[owner] = struct{}{}
-	}
-	for _, old := range normalizeStringList(current.Owners) {
-		if _, stillOwner := newOwners[old]; stillOwner {
-			continue
-		}
-		collaboratorID, err := resolveCollaboratorIdentityIDOn(ctx, q, old)
-		if err != nil {
-			return model.Team{}, fmt.Errorf("deactivate removed owner: resolve %s: %w", old, err)
-		}
-		if _, err := q.ExecContext(ctx, `
-			UPDATE public.team_memberships SET active = false, updated_at = NOW()
-			WHERE team_id = $1 AND collaborator_id = $2 AND source = 'owner-sync'
-		`, team.ID.String(), collaboratorID); err != nil {
-			return model.Team{}, fmt.Errorf("deactivate removed owner %s: %w", old, err)
+	// An unrelated partial update must not reassert historical owners input
+	// after leadership was explicitly revoked or a membership deactivated.
+	if req.Owners != nil {
+		if err := ensureOwnerMemberships(ctx, q, team.ID.String(), owners); err != nil {
+			return model.Team{}, err
 		}
 	}
 	return team, nil
@@ -1291,7 +1333,8 @@ func upsertTeamMembershipOn(ctx context.Context, q dbtx, req model.UpsertTeamMem
 					ends_at,
 					metadata,
 					created_at,
-					updated_at
+					updated_at,
+					is_lead
 			)
 			SELECT
 				u.id,
@@ -1306,7 +1349,8 @@ func upsertTeamMembershipOn(ctx context.Context, q dbtx, req model.UpsertTeamMem
 				u.ends_at,
 				u.metadata,
 				u.created_at,
-				u.updated_at
+				u.updated_at,
+				u.is_lead
 			FROM upserted u
 			JOIN public.teams t ON t.id = u.team_id
 			JOIN public.collaborators c ON c.id = u.collaborator_id
@@ -1324,38 +1368,47 @@ func upsertTeamMembershipOn(ctx context.Context, q dbtx, req model.UpsertTeamMem
 	return scanTeamMembership(row)
 }
 
-// ensureOwnerMemberships guarantees every team owner has an ACTIVE
-// team_memberships row, WITHOUT clobbering an existing membership's role or
-// source. A team "owner" (stored in the teams.owners JSONB array) is the source
-// of leadership, but every reader (RBAC, /me) joins through team_memberships —
-// so an owner with no membership row is invisible.
-//
-// team_memberships.role holds a meaningful org-rank value ('founder',
-// 'base-employee', …) that is independent of leadership; leadership itself is
-// sourced from teams.owners, not from role. So this helper must NOT overwrite
-// role: the ON CONFLICT clause only (re)activates the existing row. role='lead'
-// is therefore set ONLY on the INSERT path — i.e. for a brand-new owner who had
-// no prior membership at all. An owner who was already a 'founder'/'base-employee'
-// member keeps that role and is merely (re)activated.
-//
-// Call this in the SAME transaction as the owners write (CreateTeam/UpdateTeam)
-// so the membership and the owners array can never diverge.
+// ensureOwnerMemberships materializes an explicit leadership assertion into
+// typed membership state in the caller's team-write transaction. Role/source
+// remain independent rank/RBAC data. Readers use is_lead and the authority
+// window, never owners input or a free-form role. Nil owners updates never call
+// this helper; explicit empty input revokes all leadership for the team.
 func ensureOwnerMemberships(ctx context.Context, q dbtx, teamID string, owners []string) error {
+	ids := []string{}
+	seen := map[string]bool{}
 	for _, owner := range owners {
 		if strings.TrimSpace(owner) == "" {
 			continue
 		}
 		collaboratorID, err := resolveCollaboratorIdentityIDOn(ctx, q, owner)
 		if err != nil {
-			return fmt.Errorf("ensure owner membership: resolve %s: %w", owner, err)
+			return fmt.Errorf("resolve leadership identity: %w", err)
 		}
+		if !seen[collaboratorID.String()] {
+			seen[collaboratorID.String()] = true
+			ids = append(ids, collaboratorID.String())
+		}
+	}
+	sort.Strings(ids)
+	// Compare canonical IDs rather than raw slug/UUID aliases. Revocation
+	// clears the bit while keeping ordinary membership/rank/source intact;
+	// preserve the prior removal behavior for rows created solely by ownership.
+	if _, err := q.ExecContext(ctx, `UPDATE public.team_memberships SET is_lead=FALSE,
+		active=CASE WHEN source='owner-sync' THEN FALSE ELSE active END,updated_at=NOW()
+		WHERE team_id=$1 AND NOT(collaborator_id=ANY($2::uuid[]))
+		AND (is_lead OR (source='owner-sync' AND active))`, teamID, pq.Array(ids)); err != nil {
+		return err
+	}
+	for _, collaboratorID := range ids {
 		if _, err := q.ExecContext(ctx, `
-			INSERT INTO public.team_memberships (team_id, collaborator_id, role, active, source)
-			VALUES ($1, $2, 'lead', true, 'owner-sync')
+			INSERT INTO public.team_memberships (team_id, collaborator_id, role, active, source,is_lead)
+			VALUES ($1, $2, 'lead', true, 'owner-sync',true)
 			ON CONFLICT ON CONSTRAINT team_memberships_unique_link
-			DO UPDATE SET active = true, updated_at = NOW()
+			DO UPDATE SET
+			active=CASE WHEN team_memberships.is_lead THEN team_memberships.active ELSE TRUE END,
+			is_lead=true, updated_at = NOW()
 		`, teamID, collaboratorID); err != nil {
-			return fmt.Errorf("ensure owner membership %s: %w", owner, err)
+			return fmt.Errorf("synchronize leadership membership: %w", err)
 		}
 	}
 	return nil
@@ -1377,7 +1430,8 @@ func ListTeamMemberships(ctx context.Context, db *sql.DB, req model.ListTeamMemb
 			tm.ends_at,
 			tm.metadata,
 			tm.created_at,
-			tm.updated_at
+			tm.updated_at,
+			tm.is_lead
 		FROM public.team_memberships tm
 		JOIN public.teams t ON t.id = tm.team_id
 		JOIN public.collaborators c ON c.id = tm.collaborator_id
@@ -1481,7 +1535,8 @@ func ListTeamMembershipsByCollaboratorIDs(
 			tm.ends_at,
 			tm.metadata,
 			tm.created_at,
-			tm.updated_at
+			tm.updated_at,
+			tm.is_lead
 		FROM public.team_memberships tm
 		JOIN public.teams t ON t.id = tm.team_id
 		JOIN public.collaborators c ON c.id = tm.collaborator_id
@@ -1888,6 +1943,7 @@ func scanTeamMembership(row scanner) (model.TeamMembership, error) {
 		&metadata,
 		&membership.CreatedAt,
 		&membership.UpdatedAt,
+		&membership.IsLead,
 	)
 	if err != nil {
 		return model.TeamMembership{}, err

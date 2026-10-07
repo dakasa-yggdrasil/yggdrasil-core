@@ -56,11 +56,11 @@ func teamEditContextRowsForListMemberships(teamID, collabID uuid.UUID) *sqlmock.
 	return sqlmock.NewRows([]string{
 		"id", "team_id", "team_slug", "collaborator_id", "collaborator_slug",
 		"role", "active", "source", "starts_at", "ends_at", "metadata",
-		"created_at", "updated_at",
+		"created_at", "updated_at", "is_lead",
 	}).AddRow(
 		uuid.New().String(), teamID.String(), "engineering", collabID.String(), "alice",
 		"member", true, "manual", nil, nil, []byte("{}"),
-		time.Now(), time.Now(),
+		time.Now(), time.Now(), false,
 	)
 }
 
@@ -117,11 +117,11 @@ func TestHandleConsoleTeamEditContext_HappyPath(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "team_id", "team_slug", "collaborator_id", "collaborator_slug",
 			"role", "active", "source", "starts_at", "ends_at", "metadata",
-			"created_at", "updated_at",
+			"created_at", "updated_at", "is_lead",
 		}).AddRow(
 			uuid.New().String(), otherID.String(), "design", collabID.String(), "alice",
 			"member", true, "manual", nil, nil, []byte("{}"),
-			time.Now(), time.Now(),
+			time.Now(), time.Now(), false,
 		))
 
 	s := &Server{db: db, logger: zap.NewNop()}
@@ -192,7 +192,7 @@ func TestHandleConsoleTeamEditContext_EmptyMembersDoesNotRunPerMemberQuery(t *te
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "team_id", "team_slug", "collaborator_id", "collaborator_slug",
 			"role", "active", "source", "starts_at", "ends_at", "metadata",
-			"created_at", "updated_at",
+			"created_at", "updated_at", "is_lead",
 		}))
 	// NO per-member query expected because there are no memberships.
 
@@ -261,7 +261,7 @@ func TestHandleConsoleTeamEditContext_FieldNames(t *testing.T) {
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "team_id", "team_slug", "collaborator_id", "collaborator_slug",
 			"role", "active", "source", "starts_at", "ends_at", "metadata",
-			"created_at", "updated_at",
+			"created_at", "updated_at", "is_lead",
 		}))
 
 	s := &Server{db: db, logger: zap.NewNop()}

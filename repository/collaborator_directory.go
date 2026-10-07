@@ -90,7 +90,8 @@ func ListAuthorizationTeamMemberships(ctx context.Context, db *sql.DB, collabora
 			tm.ends_at,
 			tm.metadata,
 			tm.created_at,
-			tm.updated_at
+			tm.updated_at,
+			tm.is_lead
 		FROM public.team_memberships tm
 		JOIN public.teams t ON t.id = tm.team_id
 		JOIN public.collaborators c ON c.id = tm.collaborator_id

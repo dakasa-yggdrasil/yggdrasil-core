@@ -3601,6 +3601,12 @@ func writeProblemEnvelope(w http.ResponseWriter, status int, code, title, detail
 // `code` namespace. Falls back to a category derived from the HTTP
 // status when the error is unknown.
 func codeFromError(err error, status int) string {
+	if errors.Is(err, repository.ErrLeadershipAssertionRequired) {
+		return "team.leadership_assertion_required"
+	}
+	if errors.Is(err, repository.ErrLeadershipVersionConflict) {
+		return "team.leadership_conflict"
+	}
 	switch {
 	case err == nil:
 		return ""
@@ -3707,6 +3713,10 @@ func httpStatusTitle(status int) string {
 
 func httpStatusFromError(err error) int {
 	switch {
+	case errors.Is(err, repository.ErrLeadershipAssertionRequired):
+		return http.StatusUnprocessableEntity
+	case errors.Is(err, repository.ErrLeadershipVersionConflict):
+		return http.StatusConflict
 	case err == nil:
 		return http.StatusOK
 	case errors.Is(err, messagecontroller.ErrAdapterTransportUnavailable):

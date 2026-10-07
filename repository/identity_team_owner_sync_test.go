@@ -32,9 +32,10 @@ func TestCreateTeam_NewOwnerBecomesLeadMember(t *testing.T) {
 	})
 
 	team, err := CreateTeam(ctx, db, model.CreateTeamRequest{
-		Slug:   "t-newlead-" + collab.ID.String()[:8],
-		Name:   "new lead owner sync",
-		Owners: []string{collab.ID.String()},
+		Slug:             "t-newlead-" + collab.ID.String()[:8],
+		Name:             "new lead owner sync",
+		Owners:           []string{collab.ID.String()},
+		AssertLeadership: true,
 	})
 	if err != nil {
 		t.Fatalf("create team: %v", err)
@@ -63,6 +64,9 @@ func TestCreateTeam_NewOwnerBecomesLeadMember(t *testing.T) {
 	}
 	if found.Role != "lead" {
 		t.Fatalf("expected brand-new owner membership role 'lead', got %q", found.Role)
+	}
+	if !found.IsLead {
+		t.Fatal("explicit owner assertion did not set typed leadership")
 	}
 	if !found.Active {
 		t.Fatalf("expected new owner membership to be active, got active=false")
@@ -120,8 +124,10 @@ func TestCreateTeam_PreservesExistingMemberRole(t *testing.T) {
 	// Now promote them to owner via UpdateTeam.
 	owners := []string{collab.ID.String()}
 	if _, err := UpdateTeam(ctx, db, model.UpdateTeamRequest{
-		ID:     team.ID.String(),
-		Owners: &owners,
+		ID:                team.ID.String(),
+		AssertLeadership:  true,
+		ExpectedUpdatedAt: &team.UpdatedAt,
+		Owners:            &owners,
 	}); err != nil {
 		t.Fatalf("update team to add owner: %v", err)
 	}
@@ -145,6 +151,9 @@ func TestCreateTeam_PreservesExistingMemberRole(t *testing.T) {
 	}
 	if found.Role != "member" {
 		t.Fatalf("expected existing member role to be PRESERVED as 'member' (not clobbered to 'lead'), got %q", found.Role)
+	}
+	if !found.IsLead {
+		t.Fatal("explicit owner assertion did not set typed leadership")
 	}
 	if !found.Active {
 		t.Fatalf("expected promoted member membership to be active, got active=false")
@@ -176,9 +185,10 @@ func TestUpdateTeam_RemovedOwnerDeactivatesOwnerSyncMembership(t *testing.T) {
 	})
 
 	team, err := CreateTeam(ctx, db, model.CreateTeamRequest{
-		Slug:   "t-deactivate-" + collab.ID.String()[:8],
-		Name:   "deactivate owner sync",
-		Owners: []string{collab.ID.String()},
+		Slug:             "t-deactivate-" + collab.ID.String()[:8],
+		Name:             "deactivate owner sync",
+		Owners:           []string{collab.ID.String()},
+		AssertLeadership: true,
 	})
 	if err != nil {
 		t.Fatalf("create team: %v", err)
@@ -189,10 +199,16 @@ func TestUpdateTeam_RemovedOwnerDeactivatesOwnerSyncMembership(t *testing.T) {
 	})
 
 	// Remove the owner via UpdateTeam (Owners=[]).
+	team, err = GetTeam(ctx, db, team.ID.String())
+	if err != nil {
+		t.Fatal(err)
+	}
 	emptyOwners := []string{}
 	if _, err := UpdateTeam(ctx, db, model.UpdateTeamRequest{
-		ID:     team.ID.String(),
-		Owners: &emptyOwners,
+		ID:                team.ID.String(),
+		AssertLeadership:  true,
+		ExpectedUpdatedAt: &team.UpdatedAt,
+		Owners:            &emptyOwners,
 	}); err != nil {
 		t.Fatalf("update team to remove owner: %v", err)
 	}
@@ -213,6 +229,9 @@ func TestUpdateTeam_RemovedOwnerDeactivatesOwnerSyncMembership(t *testing.T) {
 	}
 	if found == nil {
 		t.Fatalf("expected the owner-sync membership row for %s to still exist (deactivated, not deleted), got %d memberships: %+v", collab.ID, len(memberships), memberships)
+	}
+	if found.IsLead {
+		t.Fatal("removed owner retained typed leadership")
 	}
 	if found.Active {
 		t.Fatalf("expected removed owner's owner-sync membership to be deactivated (active=false), got active=true")
@@ -270,15 +289,23 @@ func TestUpdateTeam_RemovedOwnerPreservesManualMembership(t *testing.T) {
 	// Promote to owner, then remove as owner.
 	owners := []string{collab.ID.String()}
 	if _, err := UpdateTeam(ctx, db, model.UpdateTeamRequest{
-		ID:     team.ID.String(),
-		Owners: &owners,
+		ID:                team.ID.String(),
+		AssertLeadership:  true,
+		ExpectedUpdatedAt: &team.UpdatedAt,
+		Owners:            &owners,
 	}); err != nil {
 		t.Fatalf("update team to add owner: %v", err)
 	}
+	team, err = GetTeam(ctx, db, team.ID.String())
+	if err != nil {
+		t.Fatal(err)
+	}
 	emptyOwners := []string{}
 	if _, err := UpdateTeam(ctx, db, model.UpdateTeamRequest{
-		ID:     team.ID.String(),
-		Owners: &emptyOwners,
+		ID:                team.ID.String(),
+		AssertLeadership:  true,
+		ExpectedUpdatedAt: &team.UpdatedAt,
+		Owners:            &emptyOwners,
 	}); err != nil {
 		t.Fatalf("update team to remove owner: %v", err)
 	}
@@ -299,6 +326,9 @@ func TestUpdateTeam_RemovedOwnerPreservesManualMembership(t *testing.T) {
 	}
 	if found == nil {
 		t.Fatalf("expected the manual membership for %s to survive owner removal, got %d memberships: %+v", collab.ID, len(memberships), memberships)
+	}
+	if found.IsLead {
+		t.Fatal("removed manual owner retained typed leadership")
 	}
 	if !found.Active {
 		t.Fatalf("expected manual membership to remain active after owner removal (source≠'owner-sync'), got active=false")

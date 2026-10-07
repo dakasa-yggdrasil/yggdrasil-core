@@ -164,7 +164,7 @@ func TestDirectorySnapshotReferencesAndDeclarationStatesPostgres(t *testing.T) {
 	ctx := context.Background()
 	t.Setenv(contactphone.EnrollmentPolicyEnv, "false")
 	a, b := phoneFixture(t, db, false), phoneFixture(t, db, false)
-	team, err := CreateTeam(ctx, db, model.CreateTeamRequest{Slug: "phone-team-" + uuid.NewString(), Name: "Contact CI Team", Owners: []string{a.Slug}})
+	team, err := CreateTeam(ctx, db, model.CreateTeamRequest{Slug: "phone-team-" + uuid.NewString(), Name: "Contact CI Team", AssertLeadership: true, Owners: []string{a.Slug}})
 	if err != nil {
 		t.Fatal("team fixture failed")
 	}

@@ -1,6 +1,9 @@
 package model
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -67,6 +70,7 @@ type TeamMembership struct {
 	Metadata         map[string]any `json:"metadata"`
 	CreatedAt        time.Time      `json:"created_at"`
 	UpdatedAt        time.Time      `json:"updated_at"`
+	IsLead           bool           `json:"is_lead"`
 }
 
 // CollaboratorReference is the lightweight collaborator identity used in authorization responses.
@@ -150,29 +154,56 @@ type ListCollaboratorsRequest struct {
 
 // CreateTeamRequest creates one team record.
 type CreateTeamRequest struct {
-	Slug         string         `json:"slug"`
-	Name         string         `json:"name"`
-	Type         string         `json:"type,omitempty"`
-	Status       string         `json:"status,omitempty"`
-	Email        string         `json:"email,omitempty"`
-	ParentTeamID string         `json:"parent_team_id,omitempty"`
-	Owners       []string       `json:"owners,omitempty"`
-	Traits       map[string]any `json:"traits,omitempty"`
-	Metadata     map[string]any `json:"metadata,omitempty"`
+	AssertLeadership bool           `json:"assert_leadership,omitempty"`
+	Slug             string         `json:"slug"`
+	Name             string         `json:"name"`
+	Type             string         `json:"type,omitempty"`
+	Status           string         `json:"status,omitempty"`
+	Email            string         `json:"email,omitempty"`
+	ParentTeamID     string         `json:"parent_team_id,omitempty"`
+	Owners           []string       `json:"owners,omitempty"`
+	Traits           map[string]any `json:"traits,omitempty"`
+	Metadata         map[string]any `json:"metadata,omitempty"`
 }
 
 // UpdateTeamRequest updates one team record with patch semantics.
 type UpdateTeamRequest struct {
-	ID           string          `json:"id"`
-	Slug         *string         `json:"slug,omitempty"`
-	Name         *string         `json:"name,omitempty"`
-	Type         *string         `json:"type,omitempty"`
-	Status       *string         `json:"status,omitempty"`
-	Email        *string         `json:"email,omitempty"`
-	ParentTeamID *string         `json:"parent_team_id,omitempty"`
-	Owners       *[]string       `json:"owners,omitempty"`
-	Traits       *map[string]any `json:"traits,omitempty"`
-	Metadata     *map[string]any `json:"metadata,omitempty"`
+	AssertLeadership  bool            `json:"assert_leadership,omitempty"`
+	ExpectedUpdatedAt *time.Time      `json:"expected_updated_at,omitempty"`
+	ID                string          `json:"id"`
+	Slug              *string         `json:"slug,omitempty"`
+	Name              *string         `json:"name,omitempty"`
+	Type              *string         `json:"type,omitempty"`
+	Status            *string         `json:"status,omitempty"`
+	Email             *string         `json:"email,omitempty"`
+	ParentTeamID      *string         `json:"parent_team_id,omitempty"`
+	Owners            *[]string       `json:"owners,omitempty"`
+	Traits            *map[string]any `json:"traits,omitempty"`
+	Metadata          *map[string]any `json:"metadata,omitempty"`
+}
+
+// UnmarshalJSON keeps owners omitted distinct from an explicit empty set.
+// Null is not an assertion and must not turn a stale full update into an
+// ordinary patch that happens to ignore its leadership field.
+func (r *UpdateTeamRequest) UnmarshalJSON(data []byte) error {
+	type plain UpdateTeamRequest
+	var decoded plain
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&decoded); err != nil {
+		return err
+	}
+	var fields struct {
+		Owners json.RawMessage `json:"owners"`
+	}
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	if bytes.Equal(bytes.TrimSpace(fields.Owners), []byte("null")) {
+		return fmt.Errorf("owners must be an array; omit owners for ordinary updates")
+	}
+	*r = UpdateTeamRequest(decoded)
+	return nil
 }
 
 // GetTeamRequest fetches one team by UUID or slug.

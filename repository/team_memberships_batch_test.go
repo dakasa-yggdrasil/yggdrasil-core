@@ -58,12 +58,12 @@ func TestListTeamMembershipsByCollaboratorIDs_OneRoundTrip(t *testing.T) {
 	)).WithArgs(collab1, collab2).WillReturnRows(sqlmock.NewRows([]string{
 		"id", "team_id", "team_slug", "collaborator_id", "collab_slug",
 		"role", "active", "source", "starts_at", "ends_at", "metadata",
-		"created_at", "updated_at",
+		"created_at", "updated_at", "is_lead",
 	}).
 		AddRow(memb1, team1, "engineering", collab1, "alice",
-			"member", true, "manual", now, nil, []byte("{}"), now, now).
+			"member", true, "manual", now, nil, []byte("{}"), now, now, false).
 		AddRow(memb2, team2, "platform", collab2, "bob",
-			"lead", true, "manual", now, nil, []byte("{}"), now, now))
+			"lead", true, "manual", now, nil, []byte("{}"), now, now, true))
 
 	out, err := ListTeamMembershipsByCollaboratorIDs(
 		context.Background(), db, []uuid.UUID{collab1, collab2}, true,
@@ -101,7 +101,7 @@ func TestListTeamMembershipsByCollaboratorIDs_ActiveOnlyFalse_OmitsFilter(t *tes
 	)).WithArgs(collab1).WillReturnRows(sqlmock.NewRows([]string{
 		"id", "team_id", "team_slug", "collaborator_id", "collab_slug",
 		"role", "active", "source", "starts_at", "ends_at", "metadata",
-		"created_at", "updated_at",
+		"created_at", "updated_at", "is_lead",
 	}))
 
 	_, err = ListTeamMembershipsByCollaboratorIDs(

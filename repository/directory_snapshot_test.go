@@ -14,37 +14,36 @@ import (
 	"github.com/google/uuid"
 )
 
-func graphFixture() (DirectorySnapshot, map[string][]string) {
+func graphFixture() DirectorySnapshot {
 	at := time.Date(2026, 10, 6, 12, 0, 0, 0, time.UTC)
 	a, b, team := uuid.NewString(), uuid.NewString(), uuid.NewString()
 	s := DirectorySnapshot{ObservedAt: at, Collaborators: []model.DirectoryCollaborator{
 		{ID: a, Slug: "person-a", DisplayName: "Person A", Status: "active", UpdatedAt: at},
 		{ID: b, Slug: "person-b", DisplayName: "Person B", Status: "on_leave", ManagerID: &a, UpdatedAt: at},
-	}, Teams: []model.DirectoryTeam{{ID: team, Slug: "team", Name: "Team", Type: "team", Status: "active", OwnerIDs: []string{}, UpdatedAt: at}}, Memberships: []model.DirectoryMembership{{ID: uuid.NewString(), TeamID: team, CollaboratorID: b, Active: true, UpdatedAt: at}}, ExternalIdentities: []model.DirectoryExternalIdentity{}}
-	return s, map[string][]string{team: {"person-a", a}}
+	}, Teams: []model.DirectoryTeam{{ID: team, Slug: "team", Name: "Team", Type: "team", Status: "active", OwnerIDs: []string{}, UpdatedAt: at}}, Memberships: []model.DirectoryMembership{{ID: uuid.NewString(), TeamID: team, CollaboratorID: b, Active: true, IsLead: true, UpdatedAt: at}}, ExternalIdentities: []model.DirectoryExternalIdentity{}}
+	return s
 }
 
-func TestDirectoryGraphRejectsCyclesAndResolvesOwners(t *testing.T) {
-	s, owners := graphFixture()
-	if err := validateDirectoryGraph(&s, owners); err != nil {
+func TestDirectoryGraphRejectsCyclesAndDerivesTypedLeaders(t *testing.T) {
+	s := graphFixture()
+	if err := validateDirectoryGraph(&s); err != nil {
 		t.Fatal(err)
 	}
-	if len(s.Teams[0].OwnerIDs) != 1 || s.Teams[0].OwnerIDs[0] != s.Collaborators[0].ID {
-		t.Fatal("owner aliases did not collapse to one canonical identity")
+	deriveDirectoryLeadership(&s)
+	if len(s.Teams[0].OwnerIDs) != 1 || s.Teams[0].OwnerIDs[0] != s.Collaborators[1].ID {
+		t.Fatal("typed lead did not resolve to its canonical membership identity")
 	}
 	if s.Collaborators[1].Status != "on_leave" {
 		t.Fatal("leave status was replaced with absent or active")
 	}
-	for _, kind := range []string{"manager cycle", "team cycle", "dangling owner", "dangling primary team", "invalid window"} {
+	for _, kind := range []string{"manager cycle", "team cycle", "dangling primary team", "invalid window"} {
 		t.Run(kind, func(t *testing.T) {
-			s, owners := graphFixture()
+			s := graphFixture()
 			switch kind {
 			case "manager cycle":
 				s.Collaborators[0].ManagerID = &s.Collaborators[1].ID
 			case "team cycle":
 				s.Teams[0].ParentTeamID = &s.Teams[0].ID
-			case "dangling owner":
-				owners[s.Teams[0].ID] = []string{"missing"}
 			case "dangling primary team":
 				id := uuid.NewString()
 				s.Collaborators[0].PrimaryTeamID = &id
@@ -53,7 +52,7 @@ func TestDirectoryGraphRejectsCyclesAndResolvesOwners(t *testing.T) {
 				s.Memberships[0].StartsAt = &later
 				s.Memberships[0].EndsAt = &s.ObservedAt
 			}
-			if !errors.Is(validateDirectoryGraph(&s, owners), ErrDirectorySnapshotInvalid) {
+			if !errors.Is(validateDirectoryGraph(&s), ErrDirectorySnapshotInvalid) {
 				t.Fatal("invalid graph accepted")
 			}
 		})
@@ -61,8 +60,8 @@ func TestDirectoryGraphRejectsCyclesAndResolvesOwners(t *testing.T) {
 }
 
 func TestDirectoryPaginationCountsAllKindsAndNeverClaimsEarlierPages(t *testing.T) {
-	s, owners := graphFixture()
-	if validateDirectoryGraph(&s, owners) != nil {
+	s := graphFixture()
+	if validateDirectoryGraph(&s) != nil {
 		t.Fatal("fixture invalid")
 	}
 	offset := 0
@@ -89,7 +88,7 @@ func TestDirectoryPaginationCountsAllKindsAndNeverClaimsEarlierPages(t *testing.
 }
 
 func TestDeclaredPhonesExposeMissingAndAmbiguousWithoutDestinations(t *testing.T) {
-	s, _ := graphFixture()
+	s := graphFixture()
 	contacts := map[string]model.DirectoryPhoneContact{}
 	for _, c := range s.Collaborators {
 		contacts[c.ID] = model.DirectoryPhoneContact{CollaboratorID: c.ID, PhoneE164: "+12025550100", State: "declared", Assurance: "declared", Version: 1}

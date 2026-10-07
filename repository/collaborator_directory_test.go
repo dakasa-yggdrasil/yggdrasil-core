@@ -29,7 +29,8 @@ const authorizationTeamMembershipsQuery = `
 		tm.ends_at,
 		tm.metadata,
 		tm.created_at,
-		tm.updated_at
+		tm.updated_at,
+		tm.is_lead
 	FROM public.team_memberships tm
 	JOIN public.teams t ON t.id = tm.team_id
 	JOIN public.collaborators c ON c.id = tm.collaborator_id
@@ -54,8 +55,8 @@ func TestListAuthorizationTeamMembershipsAppliesTheAuthorizationPredicate(t *tes
 	mock.ExpectQuery(authorizationTeamMembershipsQuery).WithArgs(collaboratorID).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "team_id", "team_slug", "collaborator_id", "collaborator_slug",
-			"role", "active", "source", "starts_at", "ends_at", "metadata", "created_at", "updated_at",
-		}).AddRow(uuid.New(), teamID, "social", collaboratorID, "ana-souza", "member", true, "manual", nil, endsAt, []byte(`{}`), now, now)).
+			"role", "active", "source", "starts_at", "ends_at", "metadata", "created_at", "updated_at", "is_lead",
+		}).AddRow(uuid.New(), teamID, "social", collaboratorID, "ana-souza", "member", true, "manual", nil, endsAt, []byte(`{}`), now, now, false)).
 		RowsWillBeClosed()
 
 	memberships, err := ListAuthorizationTeamMemberships(context.Background(), db, collaboratorID)
@@ -80,7 +81,7 @@ func TestListAuthorizationTeamMembershipsReturnsAnEmptySliceWithoutRows(t *testi
 	mock.ExpectQuery(authorizationTeamMembershipsQuery).WithArgs(collaboratorID).
 		WillReturnRows(sqlmock.NewRows([]string{
 			"id", "team_id", "team_slug", "collaborator_id", "collaborator_slug",
-			"role", "active", "source", "starts_at", "ends_at", "metadata", "created_at", "updated_at",
+			"role", "active", "source", "starts_at", "ends_at", "metadata", "created_at", "updated_at", "is_lead",
 		}))
 
 	memberships, err := ListAuthorizationTeamMemberships(context.Background(), db, collaboratorID)

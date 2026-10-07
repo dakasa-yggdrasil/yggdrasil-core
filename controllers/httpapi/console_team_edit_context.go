@@ -24,10 +24,13 @@ import (
 // Permission gate: yggdrasil:view_teams.
 
 type consoleTeamEditContext struct {
-	Team             model.Team             `json:"team"`
-	ParentOptions    []consoleTeamSlimRef   `json:"parent_options"`
-	OwnerCandidates  []consoleTeamCollab    `json:"owner_candidates"`
+	Team              model.Team             `json:"team"`
+	ParentOptions     []consoleTeamSlimRef   `json:"parent_options"`
+	OwnerCandidates   []consoleTeamCollab    `json:"owner_candidates"`
 	ActiveMemberships []model.TeamMembership `json:"active_memberships"`
+	// Formal assignments include inactive/future/expired memberships. A full
+	// leadership replacement must not silently drop an undisplayed assignment.
+	LeadershipMemberships []model.TeamMembership `json:"leadership_memberships"`
 	// AllMembershipsForCollaborators carries the OTHER memberships for
 	// each collaborator currently in THIS team — required by the
 	// DangerZone preview to compute "solo vs multi-team" splits without
@@ -69,16 +72,16 @@ type consoleOtherMembership struct {
 // handleConsoleTeamEditContext serves /api/v1/console/teams/{id}/edit-context.
 //
 // Implementation:
-//   1. Resolve the team by id-or-slug.
-//   2. Load ALL teams (still a dataset op, but bounded by org size — at
-//      DaKasa scale ~200 rows) so parent_options + DangerZone destination
-//      options can be computed.  This is the SINGLE remaining "list" call;
-//      we can't avoid showing the operator a tree-aware picker.
-//   3. Load collaborators (limited to 500 — the §2.2 cap).
-//   4. Load memberships SCOPED to this team only.
-//   5. For each membership, fetch the OTHER memberships of that
-//      collaborator (bounded by the count of members in THIS team — usually
-//      under 50).
+//  1. Resolve the team by id-or-slug.
+//  2. Load ALL teams (still a dataset op, but bounded by org size — at
+//     DaKasa scale ~200 rows) so parent_options + DangerZone destination
+//     options can be computed.  This is the SINGLE remaining "list" call;
+//     we can't avoid showing the operator a tree-aware picker.
+//  3. Load collaborators (limited to 500 — the §2.2 cap).
+//  4. Load memberships SCOPED to this team only.
+//  5. For each membership, fetch the OTHER memberships of that
+//     collaborator (bounded by the count of members in THIS team — usually
+//     under 50).
 //
 // Total queries: 4 (vs the 3 the FE previously made — but each is
 // O(team size) instead of O(org size)).
@@ -135,13 +138,23 @@ func (s *Server) handleConsoleTeamEditContext(w http.ResponseWriter, r *http.Req
 
 	// Active memberships SCOPED to this team. The previous FE call
 	// fetched ALL memberships and filtered client-side.
-	memberships, err := repository.ListTeamMemberships(ctx, s.db, model.ListTeamMembershipsRequest{
+	allMemberships, err := repository.ListTeamMemberships(ctx, s.db, model.ListTeamMembershipsRequest{
 		TeamID:     team.ID.String(),
-		ActiveOnly: true,
+		ActiveOnly: false,
 	})
 	if err != nil {
 		writeMappedError(w, err)
 		return
+	}
+	memberships := []model.TeamMembership{}
+	leadershipMemberships := []model.TeamMembership{}
+	for _, m := range allMemberships {
+		if m.Active {
+			memberships = append(memberships, m)
+		}
+		if m.IsLead {
+			leadershipMemberships = append(leadershipMemberships, m)
+		}
 	}
 
 	memberIDs := make(map[string]bool, len(memberships))
@@ -205,6 +218,7 @@ func (s *Server) handleConsoleTeamEditContext(w http.ResponseWriter, r *http.Req
 		ParentOptions:                  parentOptions,
 		OwnerCandidates:                candidates,
 		ActiveMemberships:              memberships,
+		LeadershipMemberships:          leadershipMemberships,
 		OtherMembershipsByCollaborator: otherByCollab,
 	}
 	if resp.ActiveMemberships == nil {

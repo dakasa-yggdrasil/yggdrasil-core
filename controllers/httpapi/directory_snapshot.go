@@ -198,7 +198,11 @@ func (s *Server) serveDirectorySnapshot(w http.ResponseWriter, r *http.Request, 
 	sort.Strings(instances)
 	ctx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
 	defer cancel()
-	data, err := repository.LoadDirectorySnapshot(ctx, s.db, instances, phones, s.envelope)
+	var observedAt time.Time
+	if cursor != nil {
+		observedAt = cursor.ObservedAt
+	}
+	data, err := repository.LoadDirectorySnapshotAt(ctx, s.db, instances, phones, s.envelope, observedAt)
 	if err != nil {
 		deny(http.StatusServiceUnavailable, "directory.unavailable", "snapshot_invalid", "Directory snapshot is unavailable.")
 		return

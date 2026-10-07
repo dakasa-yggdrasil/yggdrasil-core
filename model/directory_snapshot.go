@@ -55,6 +55,7 @@ type DirectoryMembership struct {
 	TeamID         string     `json:"team_id"`
 	CollaboratorID string     `json:"collaborator_id"`
 	Active         bool       `json:"active"`
+	IsLead         bool       `json:"is_lead"`
 	StartsAt       *time.Time `json:"starts_at,omitempty"`
 	EndsAt         *time.Time `json:"ends_at,omitempty"`
 	UpdatedAt      time.Time  `json:"updated_at"`
