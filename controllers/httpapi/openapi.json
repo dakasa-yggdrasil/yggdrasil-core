@@ -452,7 +452,17 @@
         "responses": {
           "200": {
             "description": "Audited operator contact read",
-          "headers": {"Cache-Control": {"description": "Contact responses cannot be cached", "schema": {"type": "string", "enum": ["no-store"]}}},
+            "headers": {
+              "Cache-Control": {
+                "description": "Contact responses cannot be cached",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "no-store"
+                  ]
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -513,7 +523,17 @@
         "responses": {
           "200": {
             "description": "Authorized observation",
-          "headers": {"Cache-Control": {"description": "Contact responses cannot be cached", "schema": {"type": "string", "enum": ["no-store"]}}},
+            "headers": {
+              "Cache-Control": {
+                "description": "Contact responses cannot be cached",
+                "schema": {
+                  "type": "string",
+                  "enum": [
+                    "no-store"
+                  ]
+                }
+              }
+            },
             "content": {
               "application/json": {
                 "schema": {
@@ -533,6 +553,9 @@
           },
           "503": {
             "description": "Encrypted contact unavailable"
+          },
+          "409": {
+            "description": "contact.version_conflict; existing declaration preserved, no previous value disclosed."
           }
         },
         "description": "Declared provenance only. Existing edit_collaborator permission; operator_assertion provenance. Returns the new value only.",
@@ -552,7 +575,7 @@
           "content": {
             "application/json": {
               "schema": {
-                "$ref": "#/components/schemas/PhoneDeclaration"
+                "$ref": "#/components/schemas/OperatorPhoneDeclaration"
               }
             }
           }
@@ -967,7 +990,8 @@
             "items": {
               "type": "string",
               "format": "uuid"
-            }
+            },
+            "description": "Canonical IDs derived only from active typed leadership and inclusive windows at observed_at."
           },
           "updated_at": {
             "type": "string",
@@ -1013,6 +1037,10 @@
           "updated_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "is_lead": {
+            "type": "boolean",
+            "description": "Explicit typed formal leadership; role and owners input are not authority."
           }
         },
         "required": [
@@ -1020,7 +1048,8 @@
           "team_id",
           "collaborator_id",
           "active",
-          "updated_at"
+          "updated_at",
+          "is_lead"
         ]
       },
       "DirectoryExternalIdentity": {
@@ -1185,6 +1214,45 @@
           "memberships",
           "external_identities"
         ]
+      },
+      "OperatorPhoneDeclaration": {
+        "type": "object",
+        "properties": {
+          "phone_e164": {
+            "type": "string",
+            "pattern": "^\\+[1-9][0-9]{1,14}$",
+            "maxLength": 16
+          },
+          "expected_version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 0,
+            "description": "Operator-only CAS;0 requires no declaration. Conflict preserves the current contact without disclosing it."
+          }
+        },
+        "required": [
+          "phone_e164"
+        ]
+      },
+      "TeamLeadershipUpdate": {
+        "type": "object",
+        "description": "Partial team update. Any owners array requires explicit intent and the exact reviewed timestamp; omit owners for an ordinary patch. No membership lifecycle CAS is implied.",
+        "properties": {
+          "owners": {
+            "type": "array",
+            "items": {
+              "type": "string"
+            },
+            "description": "Explicit canonical identity replacement; empty revokes, null is invalid."
+          },
+          "assert_leadership": {
+            "type": "boolean"
+          },
+          "expected_updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
       }
     },
     "responses": {

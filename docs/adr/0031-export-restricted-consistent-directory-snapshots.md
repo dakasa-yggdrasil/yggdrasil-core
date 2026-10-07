@@ -1,11 +1,11 @@
 # ADR-0031: Export restricted consistent directory snapshots
 
-- **Status:** Accepted
+- **Status:** Superseded by 0032
 - **Date:** 2026-10-06
 - **Deciders:** DaKasa Platform
 - **Scope:** yggdrasil-core / directory machine reads
 - **Supersedes:** 0019
-- **Superseded by:** none
+- **Superseded by:** 0032
 
 ## Context
 

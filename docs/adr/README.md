@@ -38,4 +38,6 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0026](0026-expose-a-non-persisting-event-grant-readback.md) | Expose a non-persisting event grant readback | Accepted | 2026-09-27 | yggdrasil-core / event publisher authorization |
 | [0027](0027-require-authenticated-actor-channels-for-authorized-workflows.md) | Require authenticated actor channels for authorized workflows | Accepted | 2026-09-27 | yggdrasil-core / workflow dispatch channel authorization |
 | [0030](0030-own-declared-phone-contacts-and-new-human-profile-completion.md) | Own declared phone contacts and new human profile completion | Accepted | 2026-10-06 | yggdrasil-core / collaborator contact and enrollment |
-| [0031](0031-export-restricted-consistent-directory-snapshots.md) | Export restricted consistent directory snapshots | Accepted | 2026-10-06 | yggdrasil-core / directory machine reads |
+| [0031](0031-export-restricted-consistent-directory-snapshots.md) | Export restricted consistent directory snapshots | Superseded by 0032 | 2026-10-06 | yggdrasil-core / directory machine reads |
+| [0032](0032-materialize-explicit-typed-team-leadership.md) | Materialize explicit typed team leadership | Accepted | 2026-10-07 | yggdrasil-core / team writers and directory leadership |
+| [0033](0033-preserve-current-declarations-during-conditional-contact-writes.md) | Preserve current declarations during conditional contact writes | Accepted | 2026-10-07 | yggdrasil-core / operator contact declaration |

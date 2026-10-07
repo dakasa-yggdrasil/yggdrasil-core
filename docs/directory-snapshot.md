@@ -24,7 +24,13 @@ policy off does not clear an already persisted completion requirement.
 PUT accepts `{phone_e164:string}` and records `self_profile` provenance.
 `PUT /api/v1/console/collaborators/{id}/contact/phone` uses the existing edit
 permission and records `operator_assertion` with the authenticated actor. It
-returns the newly declared value, never the previous value.
+returns the newly declared value, never the previous value. An optional operator-only
+`expected_version` integer (>=0) performs a conditional declaration: zero requires
+no typed contact, and a positive value must match the current declaration version.
+Core locks the collaborator before checking or sealing;409 `contact.version_conflict`
+preserves the existing declaration and emits no successful declaration audit. This
+needs no contact-read grant and never returns the previous value. Self PUT rejects
+this operator-only field; existing interactive self writes keep their semantics.
 Operator GET on that route requires the exact `yggdrasil:view_contact_phones`
 grant through a current active team/membership and active Yggdrasil-self instance.
 Wildcard/admin authority and RBAC warn mode do not imply this sensitive grant;
@@ -55,15 +61,16 @@ Schema 1 response:
 | `complete`, `next_cursor` | Terminal-page flag and authenticated continuation |
 | `contacts_included` | Whether the separately authorized contact projection is present |
 | `collaborators` | UUID, slug, display name, lifecycle, manager, primary team, version, update time, `phone_profile_required` |
-| `teams` | UUID, slug/name, free-text type/status, parent, resolved owner UUIDs, update time |
-| `memberships` | UUID, team/person UUIDs, active flag, start/end boundaries, update time |
+| `teams` | UUID, slug/name, free-text type/status, parent, derived formal leader UUIDs, update time |
+| `memberships` | UUID, team/person UUIDs, active flag, required `is_lead` boolean, start/end boundaries, update time |
 | `external_identities` | UUID, person UUID, exact instance UUID, external ID, update time |
 | `phone_contacts` | One typed contact state per person, only with phone capability |
 
 Collaborator lifecycle is `pending_start|active|on_leave|suspended|offboarded`.
 Collaborator version 0 is valid. Team type conveys no authority; only exact
-active status is active. Formal leadership is resolved team owners and the
-manager chain, never job title, membership role or primary-team hint.
+active status is active. Formal team leadership derives only from typed `is_lead` membership authority;
+manager relationships come from the canonical manager chain. Raw owners input,
+job title, membership role and primary-team hints provide no fallback.
 Membership authority uses `active` plus an active team and inclusive
 `starts_at <= observed_at <= ends_at`; nil boundaries are open.
 
@@ -92,10 +99,27 @@ phones, cursors, ciphertext, credentials or arbitrary data in logs/errors.
 
 ## Cutover prerequisites
 
-Apply migration 53 through the normal migration owner, configure envelope and
+Apply migrations 53 and54 through the normal migration owner, configure envelope and
 snapshot HMAC keys, review separate machine capabilities/instance allowlist and
 any human contact-read grant, deploy both Core and Console, then enable required
 new-profile policy. Do not enroll existing humans again. Any backfill is a
 separate authorized operation with declared provenance; live values never enter
 repository artifacts or command output. CI proves the real migrated PostgreSQL
 contact/profile/snapshot scenarios; local tests are prohibited.
+
+## Explicit leadership writes
+
+Migration54 defaults `is_lead=false` without inferring existing owners/ranks.
+Creation with nonempty owners requires `assert_leadership:true`, with no previous
+version. An existing-team update containing any owners array requires that intent
+and the exact `expected_updated_at`; absence of intent/version refuses422
+`team.leadership_assertion_required`, stale version refuses409
+`team.leadership_conflict`. Null owners is invalid, an empty array explicitly
+revokes leadership, and omitted owners preserves compatible ordinary patch
+behavior. All supported HTTP/AMQP/local writers use the same transaction and CAS.
+The edit-context `leadership_memberships` includes the complete formal set, even
+inactive/future/expired leaders. Existing typed leaders retained in a replacement
+keep their actual current active state and role/source/windows. New false-to-true
+assertions can deliberately activate a membership. Root-admin access teams stay
+leaderless. Reviewed repairs need the new Core/Console deployed before directory
+activation; unrelated old-form updates are never silent assertions. See ADR0032.
