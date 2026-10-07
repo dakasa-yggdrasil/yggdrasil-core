@@ -143,6 +143,7 @@ func TestHumanPhoneEnrollmentHTTPPostgres(t *testing.T) {
 		r := httptest.NewRequest(method, path, strings.NewReader(body))
 		r.AddCookie(&http.Cookie{Name: authSessionCookieName(), Value: tok})
 		r.Header.Set("X-CSRF-Token", computeCSRFToken(sid))
+		r.Header.Set("X-Actor", "spoofed-contact-actor")
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, r)
 		return w
@@ -198,7 +199,7 @@ func TestHumanPhoneEnrollmentHTTPPostgres(t *testing.T) {
 	operatorPath := "/api/v1/console/collaborators/" + provisional.ID.String() + "/contact/phone"
 	w = request(http.MethodPut, operatorPath, `{"phone_e164":"+12025550103","expected_version":0}`, token, session.ID)
 	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "contact.version_conflict") || strings.Contains(w.Body.String(), "+12025550102") {
-		t.Fatal("conditional operator backfill overwrote/disclosed self declaration")
+		t.Fatalf("conditional operator backfill refused/disclosed unexpectedly; HTTP status=%d", w.Code)
 	}
 	var version int64
 	var source string
@@ -215,6 +216,13 @@ func TestHumanPhoneEnrollmentHTTPPostgres(t *testing.T) {
 	w = request(http.MethodPut, operatorPath, `{"phone_e164":"+12025550103","expected_version":1}`, token, session.ID)
 	if w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal("matched operator declaration failed without a read grant")
+	}
+	var declaredBy, auditActor string
+	if db.QueryRow(`SELECT declared_by FROM collaborator_phone_contacts WHERE collaborator_id=$1`, provisional.ID).Scan(&declaredBy) != nil || declaredBy != "collaborator:"+actor.ID.String() {
+		t.Fatal("operator declaration provenance trusted a caller header")
+	}
+	if db.QueryRow(`SELECT actor FROM audit_events WHERE action='collaborator.phone_declared' AND resource_id=$1 ORDER BY created_at DESC LIMIT 1`, provisional.ID.String()).Scan(&auditActor) != nil || auditActor != declaredBy {
+		t.Fatal("operator declaration audit lost authenticated provenance")
 	}
 	w = request(http.MethodPut, "/api/v1/me/contact/phone", `{"phone_e164":"+12025550102","expected_version":null}`, token, session.ID)
 	if w.Code != http.StatusUnprocessableEntity {

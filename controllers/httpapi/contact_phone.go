@@ -144,7 +144,16 @@ func (s *Server) handleOperatorPhonePut(w http.ResponseWriter, r *http.Request) 
 		writePhoneError(w, contactphone.ErrInvalid)
 		return
 	}
-	s.writePhoneDeclaration(w, r, id, actorIDFromRequest(r), "operator_assertion")
+	claims, ok := claimsFromContext(r.Context())
+	actorID, _ := claims["collaborator_id"].(string)
+	actor, parseErr := uuid.Parse(actorID)
+	if !ok || parseErr != nil || actor == uuid.Nil {
+		writeProblemJSON(w, http.StatusUnauthorized, httperr.CodeAuthUnauthenticated, "A human identity is required.")
+		return
+	}
+	// Declaration provenance belongs to the authenticated human, never to a
+	// caller-supplied X-Actor header used by older lifecycle routes.
+	s.writePhoneDeclaration(w, r, id, "collaborator:"+actor.String(), "operator_assertion")
 }
 
 func (s *Server) writePhoneDeclaration(w http.ResponseWriter, r *http.Request, id uuid.UUID, actor, source string) {
