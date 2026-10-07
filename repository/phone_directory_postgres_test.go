@@ -261,13 +261,17 @@ func TestDeclaredPhoneReadRequiresExactGrantPostgres(t *testing.T) {
 	if _, err := UpdateCollaborator(ctx, db, model.UpdateCollaboratorRequest{ID: c.ID.String(), Traits: &traits}); err != nil {
 		t.Fatal("admin fixture failed")
 	}
-	if yes, err := HasExactPhoneContactRead(ctx, db, c.ID); err != nil || yes {
+	if yes, err := HasExactPhoneContactRead(ctx, db, c.ID); err != nil {
+		t.Fatal("sensitive grant query unavailable against canonical schema")
+	} else if yes {
 		t.Fatal("wildcard or admin trait became an implicit contact-read grant")
 	}
 	if _, err := GrantTeamAction(ctx, db, model.GrantTeamActionRequest{TeamID: team.ID.String(), IntegrationInstanceNamespace: namespace, IntegrationInstanceName: name, ActionName: "yggdrasil:view_contact_phones"}); err != nil {
 		t.Fatal("exact grant fixture failed")
 	}
-	if yes, err := HasExactPhoneContactRead(ctx, db, c.ID); err != nil || !yes {
+	if yes, err := HasExactPhoneContactRead(ctx, db, c.ID); err != nil {
+		t.Fatal("sensitive grant query unavailable against canonical schema")
+	} else if !yes {
 		t.Fatal("explicit contact-read grant not honoured")
 	}
 	future := time.Now().Add(time.Hour)

@@ -12,8 +12,8 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/password"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/contactphone"
-	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/password"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
