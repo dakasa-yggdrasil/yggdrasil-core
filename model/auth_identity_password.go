@@ -19,6 +19,7 @@ type IssueSetupTokenResponse struct {
 }
 
 type SetupProfile struct {
+	PhoneE164    *string        `json:"phone_e164,omitempty"`
 	DisplayName  *string        `json:"display_name,omitempty"`
 	Timezone     *string        `json:"timezone,omitempty"`
 	PersonalData map[string]any `json:"personal_data,omitempty"`

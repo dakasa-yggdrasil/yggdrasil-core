@@ -74,6 +74,9 @@ func CreateCollaborator(ctx context.Context, db *sql.DB, req model.CreateCollabo
 // CreateCollaborator semantics so the HTTP /collaborators handler can compose
 // it with AppendLifecycleEventTx + EmitEvent in a single transaction.
 func CreateCollaboratorWithIdentityTx(ctx context.Context, tx *sql.Tx, req model.CreateCollaboratorRequest) (model.Collaborator, error) {
+	if err := validateNewPhone(req); err != nil {
+		return model.Collaborator{}, err
+	}
 	slug := normalizeSlug(req.Slug)
 	if slug == "" {
 		return model.Collaborator{}, fmt.Errorf("collaborator slug is required")
@@ -190,6 +193,14 @@ func CreateCollaboratorWithIdentityTx(ctx context.Context, tx *sql.Tx, req model
 		ON CONFLICT (collaborator_id) DO NOTHING
 	`, created.ID, username); err != nil {
 		return model.Collaborator{}, fmt.Errorf("create auth_identity: %w", err)
+	}
+
+	if err := initializePhoneEnrollmentTx(ctx, tx, req, created.ID); err != nil {
+		return model.Collaborator{}, err
+	}
+	created.PhoneProfileRequired = phoneRequirementAfterCreation(req)
+	if req.PhoneE164 != "" {
+		created.Version++ // The declaration also updates the collaborator row.
 	}
 
 	return created, nil
@@ -1798,6 +1809,8 @@ func scanCollaborator(row scanner) (model.Collaborator, error) {
 	if collaborator.Metadata, err = unmarshalJSONObject(metadata); err != nil {
 		return model.Collaborator{}, err
 	}
+	collaborator.PhoneProfileRequired, _ = collaborator.Metadata[phoneRequirementProjectionKey].(bool)
+	delete(collaborator.Metadata, phoneRequirementProjectionKey)
 
 	return collaborator, nil
 }

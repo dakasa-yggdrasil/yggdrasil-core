@@ -14,6 +14,8 @@ import (
 // explicitly. UpdateCollaborator transparently uses the loaded value for its
 // own conflict check via repository.ErrConcurrentUpdate.
 type Collaborator struct {
+	// Derived from the database-owned projection; never accepted from clients.
+	PhoneProfileRequired bool           `json:"-"`
 	ID                   uuid.UUID      `json:"id"`
 	Slug                 string         `json:"slug"`
 	Status               string         `json:"status"`
@@ -33,11 +35,11 @@ type Collaborator struct {
 
 // Team is the canonical internal group used to aggregate collaborators.
 type Team struct {
-	ID           uuid.UUID      `json:"id"`
-	Slug         string         `json:"slug"`
-	Name         string         `json:"name"`
-	Type         string         `json:"type"`
-	Status       string         `json:"status"`
+	ID     uuid.UUID `json:"id"`
+	Slug   string    `json:"slug"`
+	Name   string    `json:"name"`
+	Type   string    `json:"type"`
+	Status string    `json:"status"`
 	// Email is the team's canonical contact address. Integrations may use
 	// it to provision external resources (Google Workspace group, Slack
 	// channel email, notification targets). Empty string = unset.
@@ -84,6 +86,9 @@ type TeamReference struct {
 
 // CreateCollaboratorRequest creates one collaborator record.
 type CreateCollaboratorRequest struct {
+	PhoneE164            string         `json:"phone_e164,omitempty"`
+	PhoneDeclaredBy      string         `json:"-"`
+	ProvisionalPhone     bool           `json:"-"`
 	Slug                 string         `json:"slug"`
 	Status               string         `json:"status,omitempty"`
 	DisplayName          string         `json:"display_name"`
@@ -208,24 +213,24 @@ type ListTeamMembershipsRequest struct {
 // TeamGrant binds one team to an action of one integration_instance.
 // action_name = "*" means wildcard (all actions of that integration_instance).
 type TeamGrant struct {
-	ID                            string         `json:"id"`
-	TeamID                        string         `json:"team_id"`
-	IntegrationInstanceNamespace  string         `json:"integration_instance_namespace"`
-	IntegrationInstanceName       string         `json:"integration_instance_name"`
-	ActionName                    string         `json:"action_name"`
-	Scope                         map[string]any `json:"scope"`
-	GrantedAt                     time.Time      `json:"granted_at"`
-	GrantedBy                     *string        `json:"granted_by,omitempty"`
+	ID                           string         `json:"id"`
+	TeamID                       string         `json:"team_id"`
+	IntegrationInstanceNamespace string         `json:"integration_instance_namespace"`
+	IntegrationInstanceName      string         `json:"integration_instance_name"`
+	ActionName                   string         `json:"action_name"`
+	Scope                        map[string]any `json:"scope"`
+	GrantedAt                    time.Time      `json:"granted_at"`
+	GrantedBy                    *string        `json:"granted_by,omitempty"`
 }
 
 // GrantTeamActionRequest grants one team an action of one integration_instance.
 type GrantTeamActionRequest struct {
-	TeamID                        string         `json:"team_id"`
-	IntegrationInstanceNamespace  string         `json:"integration_instance_namespace"`
-	IntegrationInstanceName       string         `json:"integration_instance_name"`
-	ActionName                    string         `json:"action_name,omitempty"`
-	Scope                         map[string]any `json:"scope,omitempty"`
-	GrantedBy                     string         `json:"granted_by,omitempty"`
+	TeamID                       string         `json:"team_id"`
+	IntegrationInstanceNamespace string         `json:"integration_instance_namespace"`
+	IntegrationInstanceName      string         `json:"integration_instance_name"`
+	ActionName                   string         `json:"action_name,omitempty"`
+	Scope                        map[string]any `json:"scope,omitempty"`
+	GrantedBy                    string         `json:"granted_by,omitempty"`
 }
 
 // ListTeamGrantsRequest filters grants by team.

@@ -39,6 +39,9 @@ func (s *Server) handleAuthVerify(w http.ResponseWriter, r *http.Request) {
 	// Path 1: surface-scoped Bearer JWT.
 	if expectedAud := r.URL.Query().Get("aud"); expectedAud != "" && s.surfaceVerify != nil {
 		if claims, ok := s.tryBearerForAudience(r, expectedAud); ok {
+			if sub, _ := claims["sub"].(string); sub != "" && !s.allowPhoneProfileID(w, r, sub) {
+				return
+			}
 			writeVerifyIdentity(w, claims)
 			return
 		}
@@ -48,6 +51,9 @@ func (s *Server) handleAuthVerify(w http.ResponseWriter, r *http.Request) {
 	if token, ok := extractAuthToken(r); ok && s.db != nil {
 		session, collaborator, err := repository.ResolveAuthSession(r.Context(), s.db, token)
 		if err == nil {
+			if !s.allowPhoneProfile(w, r, collaborator) {
+				return
+			}
 			// Universal-MFA invariant: an MFA-less session must not
 			// authenticate the operator/AI surfaces behind ForwardAuth.
 			// Fail closed — a missing auth_identity row (nil MFAEnrolledAt)

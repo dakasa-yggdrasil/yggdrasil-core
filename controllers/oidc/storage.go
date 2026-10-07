@@ -383,6 +383,11 @@ func (s *Storage) AuthRequestByID(ctx context.Context, id string) (op.AuthReques
 	if err != nil {
 		return nil, err
 	}
+	if ar.CollaboratorID != nil {
+		if err := repository.RequirePhoneProfileComplete(ctx, s.db, *ar.CollaboratorID); err != nil {
+			return nil, err
+		}
+	}
 	return newAuthRequestView(ar), nil
 }
 
@@ -403,6 +408,11 @@ func (s *Storage) AuthRequestByCode(ctx context.Context, code string) (op.AuthRe
 	if err != nil {
 		return nil, err
 	}
+	if ar.CollaboratorID != nil {
+		if err := repository.RequirePhoneProfileComplete(ctx, s.db, *ar.CollaboratorID); err != nil {
+			return nil, err
+		}
+	}
 	if _, err := repository.ConsumeOIDCAuthCode(ctx, s.db, code); err != nil {
 		return nil, err
 	}
@@ -416,6 +426,16 @@ func (s *Storage) SaveAuthCode(ctx context.Context, id string, code string) erro
 	parsed, err := uuid.Parse(id)
 	if err != nil {
 		return errors.New("invalid auth request id")
+	}
+	ar, err := repository.GetOIDCAuthRequestByID(ctx, s.db, parsed)
+	if err != nil {
+		return err
+	}
+	if ar.CollaboratorID == nil {
+		return repository.ErrPhoneProfileRequired
+	}
+	if err := repository.RequirePhoneProfileComplete(ctx, s.db, *ar.CollaboratorID); err != nil {
+		return err
 	}
 	return repository.SaveOIDCAuthCode(ctx, s.db, code, parsed, time.Now().Add(AuthorizationCodeLifetime))
 }
@@ -448,6 +468,9 @@ func generateOpaqueToken() (string, error) {
 // "jti" the OP embeds in the access JWT — opaque, not persisted because
 // access tokens are stateless.
 func (s *Storage) CreateAccessToken(ctx context.Context, request op.TokenRequest) (string, time.Time, error) {
+	if err := s.requireCompletedPhoneProfile(ctx, request.GetSubject()); err != nil {
+		return "", time.Time{}, err
+	}
 	id, err := generateOpaqueToken()
 	if err != nil {
 		return "", time.Time{}, err
@@ -478,6 +501,10 @@ func (s *Storage) CreateAccessAndRefreshTokens(
 	collabID, perr := uuid.Parse(request.GetSubject())
 	if perr != nil {
 		return "", "", time.Time{}, fmt.Errorf("token subject is not a UUID: %w", perr)
+	}
+
+	if err := repository.RequirePhoneProfileComplete(ctx, s.db, collabID); err != nil {
+		return "", "", time.Time{}, err
 	}
 
 	// Determine client_id from the request; the concrete type is one of
@@ -957,3 +984,11 @@ func (s *Storage) Health(ctx context.Context) error {
 
 // _ ensures the interface is satisfied at compile time.
 var _ op.Storage = (*Storage)(nil)
+
+func (s *Storage) requireCompletedPhoneProfile(ctx context.Context, subject string) error {
+	id, err := uuid.Parse(subject)
+	if err != nil {
+		return repository.ErrPhoneUnavailable
+	}
+	return repository.RequirePhoneProfileComplete(ctx, s.db, id)
+}

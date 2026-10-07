@@ -42,10 +42,11 @@ func ensureFirstAdmin(ctx context.Context, db *sql.DB, cfg Config) (bool, model.
 	}
 
 	collab, err := repository.CreateCollaborator(ctx, db, model.CreateCollaboratorRequest{
-		Slug:         strings.ToLower(strings.TrimSpace(cfg.AdminUsername)),
-		Status:       "active",
-		DisplayName:  displayName,
-		PrimaryEmail: strings.TrimSpace(cfg.AdminEmail),
+		ProvisionalPhone: true,
+		Slug:             strings.ToLower(strings.TrimSpace(cfg.AdminUsername)),
+		Status:           "active",
+		DisplayName:      displayName,
+		PrimaryEmail:     strings.TrimSpace(cfg.AdminEmail),
 		Metadata: map[string]any{
 			"source": "bootstrap.first_run",
 		},

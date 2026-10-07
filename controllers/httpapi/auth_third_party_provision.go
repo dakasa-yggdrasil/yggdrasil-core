@@ -107,10 +107,11 @@ func provisionCollaboratorFromClaim(ctx context.Context, db *sql.DB, email, disp
 	defer func() { _ = tx.Rollback() }()
 
 	created, err := repository.CreateCollaboratorTx(ctx, tx, model.CreateCollaboratorRequest{
-		Slug:         uuid.NewString(),
-		Status:       "active",
-		DisplayName:  displayName,
-		PrimaryEmail: email,
+		ProvisionalPhone: true,
+		Slug:             uuid.NewString(),
+		Status:           "active",
+		DisplayName:      displayName,
+		PrimaryEmail:     email,
 	})
 	if err != nil {
 		// Recover from the concurrent-INSERT race: another callback for the

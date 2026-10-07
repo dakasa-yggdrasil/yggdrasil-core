@@ -62,6 +62,7 @@ package httpapi
 // Permission constants — keep aligned with surface-console PERMS.
 const (
 	permViewPeople            = "yggdrasil:view_people"
+	permViewContactPhones     = "yggdrasil:view_contact_phones"
 	permCreateCollaborator    = "yggdrasil:create_collaborator"
 	permEditCollaborator      = "yggdrasil:edit_collaborator"
 	permOffboardCollaborator  = "yggdrasil:offboard_collaborator"
@@ -86,5 +87,5 @@ const (
 	// aggregate handler still respects the visibility of individual
 	// sections by data-shaping (sections omitted when their owning
 	// permission is missing — see console_overview_summary.go).
-	permViewOverview          = "yggdrasil:view_overview"
+	permViewOverview = "yggdrasil:view_overview"
 )
