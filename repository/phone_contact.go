@@ -180,11 +180,13 @@ func HasExactPhoneContactRead(ctx context.Context, db dbtx, id uuid.UUID) (bool,
 		 JOIN public.teams t ON t.id=tm.team_id
 		 JOIN public.collaborators c ON c.id=tm.collaborator_id AND c.status='active'
 		 JOIN public.manifests mi ON mi.kind='integration_instance' AND mi.active
-		  AND mi.deleted_at IS NULL AND mi.namespace=tg.integration_instance_namespace AND mi.name=tg.integration_instance_name
+		  AND mi.namespace=tg.integration_instance_namespace AND mi.name=tg.integration_instance_name
 		 JOIN public.manifests mt ON mt.kind='integration_type' AND mt.active
-		  AND mt.deleted_at IS NULL AND mt.name='yggdrasil-self'
+		  AND mt.name='yggdrasil-self'
 		  AND ((mt.namespace=mi.spec->'type_ref'->>'namespace' AND mt.name=mi.spec->'type_ref'->>'name')
-		    OR mt.id=NULLIF(mi.spec->'type_ref'->>'manifest_id','')::uuid)
+		    OR EXISTS(SELECT 1 FROM public.manifests ref
+		      WHERE ref.id=NULLIF(mi.spec->'type_ref'->>'manifest_id','')::uuid
+		      AND ref.kind='integration_type' AND ref.namespace=mt.namespace AND ref.name=mt.name))
 		 WHERE tm.collaborator_id=$1 AND tg.action_name='yggdrasil:view_contact_phones'
 		 AND `+authorizationMembershipPredicate+`
 		)`, id).Scan(&granted)
