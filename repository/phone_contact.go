@@ -16,6 +16,7 @@ var (
 	ErrPhoneRequired        = errors.New("phone_e164 is required for a new human collaborator")
 	ErrPhoneUnavailable     = errors.New("phone contact is unavailable")
 	ErrPhoneProfileRequired = errors.New("phone profile completion is required")
+	ErrPhoneVersionConflict = errors.New("phone contact declaration changed")
 )
 
 const phoneRequirementProjectionKey = "_yggdrasil_phone_profile_required"
@@ -29,6 +30,20 @@ type sealedPhone struct {
 // ciphertext/DEK swap across rows cannot silently change a recipient. Audit
 // contains only identity and declaration state, never values or fingerprints.
 func SetPhoneContactTx(ctx context.Context, tx *sql.Tx, envelope *cryptoenvelope.Envelope, id uuid.UUID, phone, actor, source string) (model.PhoneContact, error) {
+	return setPhoneContactTx(ctx, tx, envelope, id, phone, actor, source, nil)
+}
+
+// SetPhoneContactIfVersionTx is an operator-only conditional declaration.
+// Version zero means no typed contact exists; it does not read/decrypt the old
+// contact or grant the operator permission to disclose it.
+func SetPhoneContactIfVersionTx(ctx context.Context, tx *sql.Tx, envelope *cryptoenvelope.Envelope, id uuid.UUID, phone, actor string, expectedVersion int64) (model.PhoneContact, error) {
+	if expectedVersion < 0 {
+		return model.PhoneContact{}, contactphone.ErrInvalid
+	}
+	return setPhoneContactTx(ctx, tx, envelope, id, phone, actor, "operator_assertion", &expectedVersion)
+}
+
+func setPhoneContactTx(ctx context.Context, tx *sql.Tx, envelope *cryptoenvelope.Envelope, id uuid.UUID, phone, actor, source string, expectedVersion *int64) (model.PhoneContact, error) {
 	if err := contactphone.Validate(phone); err != nil {
 		return model.PhoneContact{}, err
 	}
@@ -39,6 +54,16 @@ func SetPhoneContactTx(ctx context.Context, tx *sql.Tx, envelope *cryptoenvelope
 	var present uuid.UUID
 	if err := tx.QueryRowContext(ctx, `SELECT id FROM public.collaborators WHERE id=$1 FOR UPDATE`, id).Scan(&present); err != nil {
 		return model.PhoneContact{}, ErrPhoneUnavailable
+	}
+	if expectedVersion != nil {
+		var version int64
+		err := tx.QueryRowContext(ctx, `SELECT version FROM public.collaborator_phone_contacts WHERE collaborator_id=$1`, id).Scan(&version)
+		if err != nil && !errors.Is(err, sql.ErrNoRows) {
+			return model.PhoneContact{}, ErrPhoneUnavailable
+		}
+		if version != *expectedVersion {
+			return model.PhoneContact{}, ErrPhoneVersionConflict
+		}
 	}
 	plaintext, err := json.Marshal(sealedPhone{CollaboratorID: id.String(), PhoneE164: phone})
 	if err != nil {

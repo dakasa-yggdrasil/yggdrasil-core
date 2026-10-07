@@ -195,6 +195,32 @@ func TestHumanPhoneEnrollmentHTTPPostgres(t *testing.T) {
 	if w.Code != http.StatusForbidden || strings.Contains(w.Body.String(), "+12025550102") || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal("wildcard/admin/warn bypassed exact contact-read authority")
 	}
+	operatorPath := "/api/v1/console/collaborators/" + provisional.ID.String() + "/contact/phone"
+	w = request(http.MethodPut, operatorPath, `{"phone_e164":"+12025550103","expected_version":0}`, token, session.ID)
+	if w.Code != http.StatusConflict || !strings.Contains(w.Body.String(), "contact.version_conflict") || strings.Contains(w.Body.String(), "+12025550102") {
+		t.Fatal("conditional operator backfill overwrote/disclosed self declaration")
+	}
+	var version int64
+	var source string
+	if db.QueryRow(`SELECT version,declaration_source FROM collaborator_phone_contacts WHERE collaborator_id=$1`, provisional.ID).Scan(&version, &source) != nil || version != 1 || source != "self_profile" {
+		t.Fatal("HTTP conflict changed contact authority")
+	}
+
+	for _, invalidVersion := range []string{"null", "-1", "1.5"} {
+		w = request(http.MethodPut, operatorPath, `{"phone_e164":"+12025550103","expected_version":`+invalidVersion+`}`, token, session.ID)
+		if w.Code != http.StatusUnprocessableEntity {
+			t.Fatal("operator accepted a noncanonical conditional version")
+		}
+	}
+	w = request(http.MethodPut, operatorPath, `{"phone_e164":"+12025550103","expected_version":1}`, token, session.ID)
+	if w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("matched operator declaration failed without a read grant")
+	}
+	w = request(http.MethodPut, "/api/v1/me/contact/phone", `{"phone_e164":"+12025550102","expected_version":null}`, token, session.ID)
+	if w.Code != http.StatusUnprocessableEntity {
+		t.Fatal("self route accepted operator-only conditional field")
+	}
+
 }
 
 func TestDirectorySnapshotHTTPRevisionPostgres(t *testing.T) {

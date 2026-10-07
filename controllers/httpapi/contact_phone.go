@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -149,11 +150,39 @@ func (s *Server) handleOperatorPhonePut(w http.ResponseWriter, r *http.Request) 
 func (s *Server) writePhoneDeclaration(w http.ResponseWriter, r *http.Request, id uuid.UUID, actor, source string) {
 	w.Header().Set("Cache-Control", "no-store")
 	var body struct {
-		PhoneE164 string `json:"phone_e164"`
+		PhoneE164       string `json:"phone_e164"`
+		ExpectedVersion *int64 `json:"expected_version,omitempty"`
 	}
 	dec := json.NewDecoder(io.LimitReader(r.Body, 1025))
 	dec.DisallowUnknownFields()
-	if dec.Decode(&body) != nil || !errors.Is(dec.Decode(&struct{}{}), io.EOF) || contactphone.Validate(body.PhoneE164) != nil {
+	var decodeErr error
+	if source == "operator_assertion" {
+		var operator struct {
+			PhoneE164       string          `json:"phone_e164"`
+			ExpectedVersion json.RawMessage `json:"expected_version,omitempty"`
+		}
+		decodeErr = dec.Decode(&operator)
+		body.PhoneE164 = operator.PhoneE164
+		if len(operator.ExpectedVersion) > 0 {
+			var expected int64
+			if bytes.Equal(bytes.TrimSpace(operator.ExpectedVersion), []byte("null")) {
+				decodeErr = contactphone.ErrInvalid
+			} else if err := json.Unmarshal(operator.ExpectedVersion, &expected); err != nil {
+				decodeErr = contactphone.ErrInvalid
+			} else {
+				body.ExpectedVersion = &expected
+			}
+		}
+	} else {
+		// Self-profile writes keep their original contract. Even null for the
+		// new operator-only field is an unknown field on this route.
+		var self struct {
+			PhoneE164 string `json:"phone_e164"`
+		}
+		decodeErr = dec.Decode(&self)
+		body.PhoneE164 = self.PhoneE164
+	}
+	if decodeErr != nil || !errors.Is(dec.Decode(&struct{}{}), io.EOF) || contactphone.Validate(body.PhoneE164) != nil || body.ExpectedVersion != nil && *body.ExpectedVersion < 0 {
 		writePhoneError(w, contactphone.ErrInvalid)
 		return
 	}
@@ -167,7 +196,12 @@ func (s *Server) writePhoneDeclaration(w http.ResponseWriter, r *http.Request, i
 		return
 	}
 	defer func() { _ = tx.Rollback() }()
-	phone, err := repository.SetPhoneContactTx(r.Context(), tx, s.envelope, id, body.PhoneE164, actor, source)
+	var phone model.PhoneContact
+	if body.ExpectedVersion != nil {
+		phone, err = repository.SetPhoneContactIfVersionTx(r.Context(), tx, s.envelope, id, body.PhoneE164, actor, *body.ExpectedVersion)
+	} else {
+		phone, err = repository.SetPhoneContactTx(r.Context(), tx, s.envelope, id, body.PhoneE164, actor, source)
+	}
 	if err != nil {
 		writePhoneError(w, err)
 		return
@@ -180,6 +214,10 @@ func (s *Server) writePhoneDeclaration(w http.ResponseWriter, r *http.Request, i
 }
 
 func writePhoneError(w http.ResponseWriter, err error) {
+	if errors.Is(err, repository.ErrPhoneVersionConflict) {
+		writeProblemJSON(w, http.StatusConflict, "contact.version_conflict", "A contact declaration already exists or changed; review before updating it.")
+		return
+	}
 	if errors.Is(err, contactphone.ErrInvalid) || errors.Is(err, repository.ErrPhoneRequired) {
 		writeProblemJSON(w, http.StatusUnprocessableEntity, httperr.CodeInvalidInput, "Supply a canonical international phone contact in phone_e164.")
 		return
