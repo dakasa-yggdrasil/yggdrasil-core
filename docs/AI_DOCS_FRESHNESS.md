@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: d44054fbacd671c3cfcd137274e9f031d6885a39
-verified_diff_sha256: 133f74ed0358ee9e7ee6b60b9d348bb3c43757fca24311f4a8e3c4a8f6a9a19a
+verified_at_commit: 75e84f754a6114c90013672a9e0860ab8a7b5769
+verified_diff_sha256: b20aaa6107f790f9eb356fa7cf8ba13c1c4ed89f05be1f1b3d158723739753b3
 reconciler_schema: 1
 verified_at: 2026-10-06
 by: Codex
-note: Reviewed current profile authority in JWT fixtures and the exact sensitive/self-owned route inventory exceptions after CI2. Runtime contact/snapshot contracts remain unchanged and all eight PostgreSQL roots executed. No deployment or live contact/grant mutation is claimed.
+note: Independent review covered the Core snapshot/profile/encryption/audit and paired Console seams. Fixed effective-credential continuity and no-store contact responses, preserving DTO/authority and prior strict gate results. Updated contract/OpenAPI mirror; final exact-head CI remains required. No live contact/grant/provider mutation or deployment is claimed.
