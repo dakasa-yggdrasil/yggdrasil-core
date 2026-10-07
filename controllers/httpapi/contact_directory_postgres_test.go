@@ -170,8 +170,12 @@ func TestHumanPhoneEnrollmentHTTPPostgres(t *testing.T) {
 	}
 	// Its own completion seam is available without borrowing an operator's
 	// permissions or making a no-MFA session an ordinary authenticated actor.
+	w = request(http.MethodGet, "/api/v1/me/contact/phone", "", pToken, pSession.ID)
+	if w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("own contact read can be cached or is unavailable during completion")
+	}
 	w = request(http.MethodPut, "/api/v1/me/contact/phone", `{"phone_e164":"+12025550102"}`, pToken, pSession.ID)
-	if w.Code != http.StatusOK {
+	if w.Code != http.StatusOK || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal("provisional identity cannot complete its own contact")
 	}
 	w = request(http.MethodGet, "/api/v1/console/teams", "", pToken, pSession.ID)
@@ -188,7 +192,7 @@ func TestHumanPhoneEnrollmentHTTPPostgres(t *testing.T) {
 	// warn-mode and root wildcard do not become sensitive contact-read grants.
 	t.Setenv("YGGDRASIL_CONSOLE_RBAC_ENFORCE", "warn")
 	w = request(http.MethodGet, "/api/v1/console/collaborators/"+provisional.ID.String()+"/contact/phone", "", token, session.ID)
-	if w.Code != http.StatusForbidden || strings.Contains(w.Body.String(), "+12025550102") {
+	if w.Code != http.StatusForbidden || strings.Contains(w.Body.String(), "+12025550102") || w.Header().Get("Cache-Control") != "no-store" {
 		t.Fatal("wildcard/admin/warn bypassed exact contact-read authority")
 	}
 }

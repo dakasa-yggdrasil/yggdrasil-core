@@ -47,6 +47,7 @@ func (s *Server) allowPhoneProfileID(w http.ResponseWriter, r *http.Request, id 
 }
 
 func (s *Server) handleSelfPhoneGet(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	_, c, ok := s.resolveCurrentCollaborator(w, r)
 	if !ok {
 		return
@@ -67,6 +68,7 @@ func (s *Server) handleSelfPhoneGet(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleSelfPhonePut(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	_, c, ok := s.resolveCurrentCollaborator(w, r)
 	if !ok {
 		return
@@ -82,6 +84,7 @@ func (s *Server) handleSelfPhonePut(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleOperatorPhoneGet(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil || id == uuid.Nil {
 		writePhoneError(w, contactphone.ErrInvalid)
@@ -134,6 +137,7 @@ func (s *Server) handleOperatorPhoneGet(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) handleOperatorPhonePut(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Cache-Control", "no-store")
 	id, err := uuid.Parse(r.PathValue("id"))
 	if err != nil || id == uuid.Nil {
 		writePhoneError(w, contactphone.ErrInvalid)
@@ -143,6 +147,7 @@ func (s *Server) handleOperatorPhonePut(w http.ResponseWriter, r *http.Request) 
 }
 
 func (s *Server) writePhoneDeclaration(w http.ResponseWriter, r *http.Request, id uuid.UUID, actor, source string) {
+	w.Header().Set("Cache-Control", "no-store")
 	var body struct {
 		PhoneE164 string `json:"phone_e164"`
 	}
