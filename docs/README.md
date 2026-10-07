@@ -23,6 +23,7 @@ Start here depending on what you're doing.
 | RBAC | [features/rbac.md](./features/rbac.md) |
 | Policy | [features/policy.md](./features/policy.md) |
 | Sessions & OAuth/OIDC | [features/sessions.md](./features/sessions.md) |
+| Declared contacts & restricted directory | [directory-snapshot.md](./directory-snapshot.md) |
 | Events & audit | [features/events.md](./features/events.md) |
 | Surfaces | [features/surfaces.md](./features/surfaces.md) |
 | Products | [features/products.md](./features/products.md) |

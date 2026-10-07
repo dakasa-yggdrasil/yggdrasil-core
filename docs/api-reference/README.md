@@ -14,6 +14,11 @@ The OpenAPI spec is also served by the running instance at `GET /openapi.json` (
 
 ## Endpoint index
 
+The [restricted directory/contact contract](../directory-snapshot.md) defines
+`GET /api/v1/directory/snapshot`, own `GET/PUT /api/v1/me/contact/phone` and exact
+operator `GET/PUT /api/v1/console/collaborators/{id}/contact/phone`, including
+pagination, separate phone capability and provisional enrollment restrictions.
+
 ### Health
 
 | Method | Path | Purpose |

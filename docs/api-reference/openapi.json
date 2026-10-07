@@ -285,13 +285,293 @@
           "410": {"description": "Gone — use repository_binding + workflow dispatch", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/DeprecationResponse"}}}}
         }
       }
+    },
+    "/api/v1/directory/snapshot": {
+      "get": {
+        "summary": "Collect a restricted consistent directory snapshot",
+        "description": "Requires directory.snapshot; include_phone also requires directory.contacts.phone. Collect all contiguous pages under one revision and observed_at before replacing a projection. 409 discards the incomplete read. Phone declaration is not verification or messaging consent. See docs/directory-snapshot.md.",
+        "security": [
+          {
+            "DirectoryToken": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "query",
+            "name": "limit",
+            "schema": {
+              "type": "integer",
+              "minimum": 1,
+              "maximum": 200,
+              "default": 100
+            }
+          },
+          {
+            "in": "query",
+            "name": "include_phone",
+            "schema": {
+              "type": "boolean",
+              "default": false
+            }
+          },
+          {
+            "in": "query",
+            "name": "cursor",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized observation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/DirectorySnapshotPage"
+                }
+              }
+            }
+          },
+          "400": {
+            "description": "Invalid query"
+          },
+          "401": {
+            "description": "Unusable credential"
+          },
+          "403": {
+            "description": "Missing snapshot/contact capability"
+          },
+          "409": {
+            "description": "directory.snapshot_changed; restart at offset0"
+          },
+          "500": {
+            "description": "Snapshot or synchronous audit unavailable"
+          }
+        }
+      }
+    },
+    "/api/v1/me/contact/phone": {
+      "get": {
+        "summary": "Own declared phone read",
+        "security": [
+          {
+            "HumanSession": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized observation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnPhoneContact"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Missing exact capability or human grant"
+          },
+          "422": {
+            "description": "Invalid canonical input"
+          },
+          "503": {
+            "description": "Encrypted contact unavailable"
+          }
+        },
+        "description": "Declared provenance only. Bound to the current human; pending own completion can precede MFA, existing profile reads/edits require MFA."
+      },
+      "put": {
+        "summary": "Own declared phone declaration",
+        "security": [
+          {
+            "HumanSession": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized observation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnPhoneContact"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Missing exact capability or human grant"
+          },
+          "422": {
+            "description": "Invalid canonical input"
+          },
+          "503": {
+            "description": "Encrypted contact unavailable"
+          }
+        },
+        "description": "Declared provenance only. Bound to the current human; pending own completion can precede MFA, existing profile reads/edits require MFA.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhoneDeclaration"
+              }
+            }
+          }
+        }
+      }
+    },
+    "/api/v1/console/collaborators/{id}/contact/phone": {
+      "get": {
+        "summary": "Operator declared phone read",
+        "security": [
+          {
+            "HumanSession": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Audited operator contact read",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "phone_contact": {
+                      "allOf": [
+                        {
+                          "$ref": "#/components/schemas/DeclaredPhoneContact"
+                        }
+                      ],
+                      "nullable": true
+                    }
+                  },
+                  "required": [
+                    "phone_contact"
+                  ]
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Missing exact capability or human grant"
+          },
+          "422": {
+            "description": "Invalid canonical input"
+          },
+          "503": {
+            "description": "Encrypted contact unavailable"
+          }
+        },
+        "description": "Declared provenance only. Requires exact yggdrasil:view_contact_phones; wildcard/admin/warn does not grant this sensitive read.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ]
+      },
+      "put": {
+        "summary": "Operator declared phone declaration",
+        "security": [
+          {
+            "HumanSession": []
+          },
+          {
+            "BearerAuth": []
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Authorized observation",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/OwnPhoneContact"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Unauthenticated"
+          },
+          "403": {
+            "description": "Missing exact capability or human grant"
+          },
+          "422": {
+            "description": "Invalid canonical input"
+          },
+          "503": {
+            "description": "Encrypted contact unavailable"
+          }
+        },
+        "description": "Declared provenance only. Existing edit_collaborator permission; operator_assertion provenance. Returns the new value only.",
+        "parameters": [
+          {
+            "in": "path",
+            "name": "id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/PhoneDeclaration"
+              }
+            }
+          }
+        }
+      }
     }
   },
   "components": {
     "securitySchemes": {
       "BearerAuth": {"type": "http", "scheme": "bearer", "description": "Route-appropriate console session or machine bearer in the Authorization header"},
       "EventPublishToken": {"type": "apiKey", "in": "header", "name": "X-Yggdrasil-Event-Token", "description": "Mutation-event publisher bearer whose SHA-256 digest and exact or logical grants are configured in YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON, or the explicit time-bounded mutation-only plaintext migration bridge"},
-      "WorkflowToken": {"type": "apiKey", "in": "header", "name": "X-Yggdrasil-Workflow-Token", "description": "Workflow machine bearer whose SHA-256 digest and exact allowlist are configured in YGGDRASIL_WORKFLOW_MACHINE_PRINCIPALS_JSON, or the explicit time-bounded legacy workflow bridge"}
+      "WorkflowToken": {"type": "apiKey", "in": "header", "name": "X-Yggdrasil-Workflow-Token", "description": "Workflow machine bearer whose SHA-256 digest and exact allowlist are configured in YGGDRASIL_WORKFLOW_MACHINE_PRINCIPALS_JSON, or the explicit time-bounded legacy workflow bridge"},
+      "DirectoryToken": {
+        "type": "apiKey",
+        "in": "header",
+        "name": "X-Yggdrasil-Directory-Token",
+        "description": "Restricted directory-machine inventory; never a human session."
+      },
+      "HumanSession": {
+        "type": "apiKey",
+        "in": "cookie",
+        "name": "yggdrasil_session",
+        "description": "Default opaque human session cookie; deployment may configure its name."
+      }
     },
     "schemas": {
       "ServiceBanner": {"type": "object", "properties": {"service": {"type": "string"}, "status": {"type": "string"}}},
@@ -524,7 +804,383 @@
       },
       "EventPublishProblem": {"type": "object", "description": "RFC 7807 problem body of the event publish authorization decision", "properties": {"type": {"type": "string"}, "title": {"type": "string"}, "status": {"type": "integer"}, "code": {"type": "string", "enum": ["event.authorization_denied", "event.authorization_unavailable"]}, "detail": {"type": "string"}}},
       "ErrorResponse": {"type": "object", "properties": {"error": {"type": "string"}, "deprecation": {"type": "string"}}},
-      "DeprecationResponse": {"type": "object", "properties": {"error": {"type": "string"}, "deprecation": {"type": "string", "example": "yggdrasil v2.0.0"}}}
+      "DeprecationResponse": {"type": "object", "properties": {"error": {"type": "string"}, "deprecation": {"type": "string", "example": "yggdrasil v2.0.0"}}},
+      "DeclaredPhoneContact": {
+        "type": "object",
+        "properties": {
+          "collaborator_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "phone_e164": {
+            "type": "string",
+            "pattern": "^\\+[1-9][0-9]{1,14}$",
+            "maxLength": 16
+          },
+          "assurance": {
+            "type": "string",
+            "enum": [
+              "declared"
+            ]
+          },
+          "declaration_source": {
+            "type": "string",
+            "enum": [
+              "self_profile",
+              "operator_assertion"
+            ]
+          },
+          "declared_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "collaborator_id",
+          "phone_e164",
+          "assurance",
+          "declaration_source",
+          "declared_at",
+          "version"
+        ]
+      },
+      "OwnPhoneContact": {
+        "type": "object",
+        "properties": {
+          "required": {
+            "type": "boolean"
+          },
+          "phone_contact": {
+            "allOf": [
+              {
+                "$ref": "#/components/schemas/DeclaredPhoneContact"
+              }
+            ],
+            "nullable": true
+          }
+        },
+        "required": [
+          "required"
+        ]
+      },
+      "PhoneDeclaration": {
+        "type": "object",
+        "properties": {
+          "phone_e164": {
+            "type": "string",
+            "pattern": "^\\+[1-9][0-9]{1,14}$",
+            "maxLength": 16
+          }
+        },
+        "required": [
+          "phone_e164"
+        ]
+      },
+      "DirectoryCollaborator": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "display_name": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "pending_start",
+              "active",
+              "on_leave",
+              "suspended",
+              "offboarded"
+            ]
+          },
+          "manager_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "primary_team_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "phone_profile_required": {
+            "type": "boolean"
+          },
+          "version": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "display_name",
+          "status",
+          "phone_profile_required",
+          "version",
+          "updated_at"
+        ]
+      },
+      "DirectoryTeam": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "slug": {
+            "type": "string"
+          },
+          "name": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "status": {
+            "type": "string"
+          },
+          "parent_team_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "owner_ids": {
+            "type": "array",
+            "items": {
+              "type": "string",
+              "format": "uuid"
+            }
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "slug",
+          "name",
+          "type",
+          "status",
+          "owner_ids",
+          "updated_at"
+        ]
+      },
+      "DirectoryMembership": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "team_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "collaborator_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "active": {
+            "type": "boolean"
+          },
+          "starts_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "ends_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "team_id",
+          "collaborator_id",
+          "active",
+          "updated_at"
+        ]
+      },
+      "DirectoryExternalIdentity": {
+        "type": "object",
+        "properties": {
+          "id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "collaborator_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "integration_instance_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "external_id": {
+            "type": "string"
+          },
+          "updated_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        },
+        "required": [
+          "id",
+          "collaborator_id",
+          "integration_instance_id",
+          "external_id",
+          "updated_at"
+        ]
+      },
+      "DirectoryPhoneContact": {
+        "type": "object",
+        "properties": {
+          "collaborator_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "missing",
+              "declared",
+              "ambiguous"
+            ]
+          },
+          "phone_e164": {
+            "type": "string",
+            "pattern": "^\\+[1-9][0-9]{1,14}$",
+            "maxLength": 16
+          },
+          "assurance": {
+            "type": "string",
+            "enum": [
+              "declared"
+            ]
+          },
+          "declaration_source": {
+            "type": "string",
+            "enum": [
+              "self_profile",
+              "operator_assertion"
+            ]
+          },
+          "declared_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "version": {
+            "type": "integer",
+            "format": "int64",
+            "minimum": 1
+          }
+        },
+        "required": [
+          "collaborator_id",
+          "state"
+        ]
+      },
+      "DirectorySnapshotPage": {
+        "type": "object",
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "enum": [
+              1
+            ]
+          },
+          "revision": {
+            "type": "string"
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "offset": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "limit": {
+            "type": "integer",
+            "minimum": 1,
+            "maximum": 200
+          },
+          "total_records": {
+            "type": "integer",
+            "minimum": 0
+          },
+          "complete": {
+            "type": "boolean"
+          },
+          "next_cursor": {
+            "type": "string"
+          },
+          "contacts_included": {
+            "type": "boolean"
+          },
+          "collaborators": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DirectoryCollaborator"
+            }
+          },
+          "teams": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DirectoryTeam"
+            }
+          },
+          "memberships": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DirectoryMembership"
+            }
+          },
+          "external_identities": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DirectoryExternalIdentity"
+            }
+          },
+          "phone_contacts": {
+            "type": "array",
+            "items": {
+              "$ref": "#/components/schemas/DirectoryPhoneContact"
+            }
+          }
+        },
+        "required": [
+          "schema_version",
+          "revision",
+          "observed_at",
+          "offset",
+          "limit",
+          "total_records",
+          "complete",
+          "contacts_included",
+          "collaborators",
+          "teams",
+          "memberships",
+          "external_identities"
+        ]
+      }
     },
     "responses": {
       "BadRequest": {"description": "Invalid request", "content": {"application/json": {"schema": {"$ref": "#/components/schemas/ErrorResponse"}}}},
