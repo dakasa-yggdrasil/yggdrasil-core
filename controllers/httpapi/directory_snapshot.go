@@ -79,8 +79,7 @@ func snapshotAuthority(p *directoryMachinePrincipal, phones bool) []byte {
 	// operator replaces its digest without changing rotation metadata. It never
 	// becomes a JSON field, cursor, revision, audit or log value: only the MAC
 	// computed with the separate snapshot integrity secret leaves this process.
-	authority := make([]byte, 0, sha256.Size+len(body))
-	authority = append(authority, p.TokenSHA256[:]...)
+	authority := append([]byte(nil), p.TokenSHA256[:]...)
 	return append(authority, body...)
 }
 
