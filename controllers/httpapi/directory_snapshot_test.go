@@ -18,6 +18,18 @@ import (
 	"github.com/google/uuid"
 )
 
+// Existing JWT harnesses must model the current collaborator read rather than
+// treating a correctly signed old token as proof of completed profile state.
+func expectCurrentPhoneProfile(mock sqlmock.Sqlmock, id string, pending bool) {
+	metadata, _ := json.Marshal(map[string]bool{"_yggdrasil_phone_profile_required": pending})
+	mock.ExpectQuery(`(?i)FROM\s+public\.collaborators`).WithArgs(id).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "slug", "status", "display_name", "primary_email", "manager_id", "primary_team_id",
+			"personal_data", "employment_data", "third_party_identities", "traits", "metadata", "version", "created_at", "updated_at",
+		}).AddRow(id, "profile-ci", "active", "Profile CI", "person@example.test", nil, nil,
+			[]byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), metadata, 0, time.Now(), time.Now()))
+}
+
 func TestPhoneProfileBootRequiresConfiguredEncryption(t *testing.T) {
 	db, _, err := sqlmock.New()
 	if err != nil {

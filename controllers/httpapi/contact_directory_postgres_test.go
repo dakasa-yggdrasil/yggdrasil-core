@@ -147,7 +147,11 @@ func TestHumanPhoneEnrollmentHTTPPostgres(t *testing.T) {
 		h.ServeHTTP(w, r)
 		return w
 	}
-	w := request(http.MethodPost, "/api/v1/collaborators", `{"slug":"phone-http-refused","display_name":"Refused HTTP"}`, token, session.ID)
+	w := request(http.MethodPut, "/api/v1/me/contact/phone", `{"phone_e164":"+12025550102"}`, "", uuid.Nil)
+	if w.Code != http.StatusUnauthorized {
+		t.Fatal("anonymous caller declared a self contact")
+	}
+	w = request(http.MethodPost, "/api/v1/collaborators", `{"slug":"phone-http-refused","display_name":"Refused HTTP"}`, token, session.ID)
 	if w.Code != http.StatusUnprocessableEntity {
 		t.Fatal("HTTP accepted a human without required phone")
 	}

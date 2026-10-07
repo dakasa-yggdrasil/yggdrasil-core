@@ -48,6 +48,7 @@ func TestConsoleRoutesAreFullyMapped(t *testing.T) {
 	scanner.Buffer(make([]byte, 0, 64*1024), 1024*1024)
 
 	var routeCount int
+	var exactContactReaders int
 	var missing []string
 	for scanner.Scan() {
 		line := scanner.Text()
@@ -55,6 +56,14 @@ func TestConsoleRoutesAreFullyMapped(t *testing.T) {
 			continue
 		}
 		routeCount++
+		// ADR-0030: this new sensitive read has its own exact-grant check,
+		// independent of generic RBAC wildcard/admin/warn behavior. Recognize
+		// only this exact route+handler, backed by real HTTP/PostgreSQL refusal
+		// tests; no other console route gains an exception.
+		if strings.TrimSpace(line) == `mux.HandleFunc("GET /api/v1/console/collaborators/{id}/contact/phone", server.handleOperatorPhoneGet)` {
+			exactContactReaders++
+			continue
+		}
 		if !wrapperRe.MatchString(line) {
 			missing = append(missing, strings.TrimSpace(line))
 		}
@@ -65,6 +74,9 @@ func TestConsoleRoutesAreFullyMapped(t *testing.T) {
 
 	if routeCount == 0 {
 		t.Fatalf("regex did not match any console routes — server.go shape changed; update TestConsoleRoutesAreFullyMapped")
+	}
+	if exactContactReaders != 1 {
+		t.Fatal("exact contact-reader authority registration changed")
 	}
 	if len(missing) > 0 {
 		t.Errorf("%d /api/v1/console/* route(s) lack requireOpsPermissionFunc wrapping (audit §3.1 + INTEGRATION_CONTRACT §12):\n  %s",
@@ -323,35 +335,35 @@ func TestNoUngatedMutatingRoutes(t *testing.T) {
 		`POST /api/v1/events`: "scoped event publisher or explicit expiring legacy event bridge",
 
 		// Webhook receivers — external callers (no claims), HMAC-validated in-handler.
-		`POST /api/v1/github/webhook`:                       "external GitHub webhook, HMAC-validated",
-		`POST /api/v1/integrations/{instance_id}/webhook`:   "external provider webhook, per-instance HMAC",
-		`POST /api/v1/integration-surfaces/{name}/sync`:     "workflow-token, manifest-sync addon",
+		`POST /api/v1/github/webhook`:                           "external GitHub webhook, HMAC-validated",
+		`POST /api/v1/integrations/{instance_id}/webhook`:       "external provider webhook, per-instance HMAC",
+		`POST /api/v1/integration-surfaces/{name}/sync`:         "workflow-token, manifest-sync addon",
 		`POST /api/v1/integrations/{instance_id}/surface-query`: "workflow-token, manifest-sync addon",
 
 		// Integration type sync — admin-token via in-handler check.
 		`POST /api/v1/integration-types/{id}/sync`: "admin-token via in-handler authorizeAuthAdminRequest",
 
 		// Authentication flow endpoints (login/password/MFA) — pre-session.
-		`POST /api/v1/auth/passwords`:                              "admin-token via in-handler check",
-		`POST /api/v1/auth/passwords/setup-tokens`:                 "admin-token via in-handler check",
-		`POST /api/v1/auth/passwords/setup`:                        "pre-session setup-token flow",
-		`POST /api/v1/auth/passwords/change`:                       "self password change",
-		`POST /api/v1/auth/passwords/forgot`:                       "pre-session, rate-limited",
-		`POST /api/v1/auth/passwords/reset`:                        "reset-token flow, pre-session",
-		`POST /api/v1/auth/login`:                                  "pre-session, rate-limited",
-		`POST /api/v1/auth/third-party/login`:                      "pre-session third-party",
-		`POST /api/v1/auth/logout`:                                 "self logout",
-		`POST /api/v1/auth/mfa/enroll/request`:                     "pre-session enroll",
-		`POST /api/v1/auth/mfa/factors/totp/begin`:                 "self MFA enroll",
-		`POST /api/v1/auth/mfa/factors/totp/finish`:                "self MFA enroll",
-		`POST /api/v1/auth/mfa/factors/webauthn/begin`:             "self MFA enroll",
-		`POST /api/v1/auth/mfa/factors/webauthn/finish`:            "self MFA enroll",
+		`POST /api/v1/auth/passwords`:                   "admin-token via in-handler check",
+		`POST /api/v1/auth/passwords/setup-tokens`:      "admin-token via in-handler check",
+		`POST /api/v1/auth/passwords/setup`:             "pre-session setup-token flow",
+		`POST /api/v1/auth/passwords/change`:            "self password change",
+		`POST /api/v1/auth/passwords/forgot`:            "pre-session, rate-limited",
+		`POST /api/v1/auth/passwords/reset`:             "reset-token flow, pre-session",
+		`POST /api/v1/auth/login`:                       "pre-session, rate-limited",
+		`POST /api/v1/auth/third-party/login`:           "pre-session third-party",
+		`POST /api/v1/auth/logout`:                      "self logout",
+		`POST /api/v1/auth/mfa/enroll/request`:          "pre-session enroll",
+		`POST /api/v1/auth/mfa/factors/totp/begin`:      "self MFA enroll",
+		`POST /api/v1/auth/mfa/factors/totp/finish`:     "self MFA enroll",
+		`POST /api/v1/auth/mfa/factors/webauthn/begin`:  "self MFA enroll",
+		`POST /api/v1/auth/mfa/factors/webauthn/finish`: "self MFA enroll",
 		// WebAuthn login flow — pre-session, BLOCKED password re-verify inside
 		// the handler before assertion verification. Same authority shape as
 		// POST /api/v1/auth/login (password+totp); cannot be RBAC-gated
 		// because the caller is anonymous until the assertion finishes.
-		`POST /api/v1/auth/mfa/webauthn/login/begin`:               "pre-session passkey challenge, password re-verified in handler",
-		`POST /api/v1/auth/mfa/webauthn/login/finish`:              "pre-session passkey verify, password re-verified in handler",
+		`POST /api/v1/auth/mfa/webauthn/login/begin`:  "pre-session passkey challenge, password re-verified in handler",
+		`POST /api/v1/auth/mfa/webauthn/login/finish`: "pre-session passkey verify, password re-verified in handler",
 		// Authenticated passkey rename/remove — self-only via guard()
 		// (session required + requireSessionCollaborator pins the row).
 		`PATCH /api/v1/auth/mfa/factors/webauthn/{credential_id}`:  "self via guard() — rename own passkey",
@@ -364,12 +376,13 @@ func TestNoUngatedMutatingRoutes(t *testing.T) {
 
 		// Self-scoped routes — caller acts on their own session/preferences.
 		`PATCH /api/v1/me/preferences`:    "self",
+		`PUT /api/v1/me/contact/phone`:    "self via guard(), no target ID; exact pending completion seam, otherwise MFA",
 		`DELETE /api/v1/me/sessions/{id}`: "self via guard()",
 
 		// Admin-token / OIDC protocol endpoints.
-		`POST /api/v1/oidc/introspect`:                            "RFC 7662, bearer-or-manifest-token",
-		`POST /api/v1/admin/collaborators/{id}/revoke-sessions`:   "admin-token only",
-		`PATCH /api/v1/admin/oidc-clients/{id}`:                   "admin-token only",
+		`POST /api/v1/oidc/introspect`:                          "RFC 7662, bearer-or-manifest-token",
+		`POST /api/v1/admin/collaborators/{id}/revoke-sessions`: "admin-token only",
+		`PATCH /api/v1/admin/oidc-clients/{id}`:                 "admin-token only",
 	}
 
 	_, thisFile, _, ok := runtime.Caller(0)
@@ -434,6 +447,10 @@ func TestNoUngatedMutatingRoutes(t *testing.T) {
 			continue
 		}
 		if _, ok := allowlist[key]; ok {
+			if key == "PUT /api/v1/me/contact/phone" && strings.TrimSpace(line) != `mux.HandleFunc("PUT /api/v1/me/contact/phone", guard(server.handleSelfPhonePut))` {
+				ungatedFound = append(ungatedFound, ungated{key: key, line: strings.TrimSpace(line)})
+				continue
+			}
 			exemptCount++
 			continue
 		}
