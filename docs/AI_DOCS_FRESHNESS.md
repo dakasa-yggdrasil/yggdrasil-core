@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 60d4f5aa5cb2fb54f99573e8316016d235feff4c
-verified_diff_sha256: 4de239e8a312274a506438de399a37c2ba52744b1a42a32e464f309fbdf6004f
+verified_at_commit: 1685e6b7e9df8336b6f37c9416f563d7c130c117
+verified_diff_sha256: 7caa2131f4787d19e7e10158201896c54fc51fa0866ad886db9edf897b3aea4b
 reconciler_schema: 1
-verified_at: 2026-09-30
+verified_at: 2026-10-06
 by: Codex
-note: Reconciled scheduled workflow terminal status and completion event documentation against the scheduler fix. The event now carries the persisted scheduled run ID after finalization; no production rollout is claimed.
+note: Reviewed declared contact provenance, server-side provisional access and recovery, exact sensitive grants, capability-bound consistent snapshots, migration53 private projection and synchronized OpenAPI. Contract and cutover docs reflect committed source; no deployment or contact/grant mutation is claimed.
