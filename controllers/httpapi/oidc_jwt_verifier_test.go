@@ -10,6 +10,7 @@ import (
 	"testing"
 	"time"
 
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 	jose "github.com/go-jose/go-jose/v4"
 )
 
@@ -179,7 +180,13 @@ func TestRequireAuthenticatedConsoleAPIs_AcceptsOPJWT(t *testing.T) {
 	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "")
 	priv, _ := rsa.GenerateKey(rand.Reader, 2048)
 	now := time.Unix(1_700_000_000, 0)
-	s := &Server{consoleJWTVerifier: newTestVerifier(priv, "kid-1", now)}
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	expectCurrentPhoneProfile(mock, "11111111-1111-1111-1111-111111111111", false)
+	s := &Server{db: db, consoleJWTVerifier: newTestVerifier(priv, "kid-1", now)}
 
 	var gotCollab string
 	next := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
@@ -200,6 +207,9 @@ func TestRequireAuthenticatedConsoleAPIs_AcceptsOPJWT(t *testing.T) {
 	}
 	if gotCollab != "11111111-1111-1111-1111-111111111111" {
 		t.Errorf("collaborator_id should come from JWT sub, got %q", gotCollab)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }
 

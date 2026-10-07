@@ -377,7 +377,11 @@ func (s *Server) handleAuthThirdPartyStart(w http.ResponseWriter, r *http.Reques
 	if authRequestID != "" {
 		if requestUUID, parseErr := uuid.Parse(authRequestID); parseErr == nil {
 			if token, ok := extractAuthToken(r); ok {
-				if session, _, resolveErr := repository.ResolveAuthSession(r.Context(), s.db, token); resolveErr == nil {
+				if session, collaborator, resolveErr := repository.ResolveAuthSession(r.Context(), s.db, token); resolveErr == nil {
+					if collaborator.PhoneProfileRequired {
+						http.Redirect(w, r, "/profile/contact", http.StatusFound)
+						return
+					}
 					if bindErr := repository.BindOIDCAuthRequestCollaborator(r.Context(), s.db, requestUUID, session.CollaboratorID); bindErr != nil {
 						writeMappedError(w, bindErr)
 						return
@@ -518,6 +522,11 @@ func (s *Server) handleAuthThirdPartyCallback(w http.ResponseWriter, r *http.Req
 	writeAuthCookie(w, token, session.ExpiresAt)
 	writeCSRFCookie(w, computeCSRFToken(session.ID), session.ExpiresAt)
 
+	if collaborator.PhoneProfileRequired {
+		http.Redirect(w, r, "/profile/contact", http.StatusFound)
+		return
+	}
+
 	// If this third-party login was kicked off by the OIDC OP's "login
 	// required" signal, finish the OIDC flow instead of bouncing the user
 	// to state.RedirectTo (which would land them on the Yggdrasil home
@@ -604,12 +613,13 @@ func (s *Server) handleAuthSession(w http.ResponseWriter, r *http.Request) {
 	writeCSRFCookie(w, csrfToken, session.ExpiresAt)
 
 	writeJSON(w, http.StatusOK, model.AuthSessionEnvelope{
-		Authenticated: true,
-		Collaborator:  &collaborator,
-		Session:       &session,
-		MFAEnrolledAt: mfaEnrolledAt,
-		Permissions:   permissions,
-		CSRFToken:     csrfToken,
+		Authenticated:        true,
+		PhoneProfileRequired: collaborator.PhoneProfileRequired,
+		Collaborator:         &collaborator,
+		Session:              &session,
+		MFAEnrolledAt:        mfaEnrolledAt,
+		Permissions:          permissions,
+		CSRFToken:            csrfToken,
 	})
 }
 

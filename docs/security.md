@@ -268,15 +268,17 @@ manifests, secrets (including
 auth-admin routes.
 
 Directory readers use a third, isolated inventory,
-`YGGDRASIL_DIRECTORY_MACHINE_PRINCIPALS_JSON` (ADR-0019), with the same hash,
+`YGGDRASIL_DIRECTORY_MACHINE_PRINCIPALS_JSON` (ADR-0031, retaining ADR-0019's legacy route boundaries), with the same hash,
 lifecycle, and rotation fields plus a non-empty `capabilities` list drawn from
-`directory.lookup_email`, `directory.read`, and `directory.effective_actions`,
-and, only with the last one, a non-empty `allowed_tartaro_instances` list of
+`directory.lookup_email`, `directory.read`, `directory.effective_actions`,
+`directory.snapshot`, and `directory.contacts.phone`,
+and, exactly with `directory.effective_actions`, a non-empty `allowed_tartaro_instances` list of
 exact `{namespace,name}` references. The credential travels in
 `X-Yggdrasil-Directory-Token` or as a bearer and is accepted only on
 `GET /api/v1/collaborators?q=<one exact email>&status=active[&limit=1..100]`,
 `GET /api/v1/collaborators/{canonical uuid}`, and
-`GET /api/v1/collaborators/{canonical uuid}/effective-tartaro-actions`, each
+`GET /api/v1/collaborators/{canonical uuid}/effective-tartaro-actions`, and
+`GET /api/v1/directory/snapshot`, each
 gated by its own capability and, for effective actions, by the configured
 Tartaro instance being allowlisted. The outer gate decides the directory
 claim first, on every request, before its public pass-through and before any
@@ -291,7 +293,7 @@ family, missing capability, or unlisted instance. That includes public routes
 the mux would otherwise redirect to a clean path, and canonical spellings that
 match no route: none serves its body, its redirect, or a 404 to a directory
 attempt. Callers that do not name themselves as directory attempts keep every
-route's existing behavior. Responses carry only `id`, `primary_email`,
+route's existing behavior. The legacy collaborator responses carry only `id`, `primary_email`,
 `display_name`, and `status`, or `collaborator_id` and
 `computed_tartaro_actions`; inactive collaborators read as absent. The
 effective actions are computed only from memberships the RBAC projection
@@ -322,6 +324,22 @@ event principal or a plaintext credential makes Core serve an empty directory
 inventory instead (ADR-0022): the shared bearer reaches its own scope, and
 directory reads answer 401 until the inventory is fixed. A digest shared with
 a workflow principal refuses the workflow surface.
+
+The new [restricted snapshot contract](directory-snapshot.md) is a separate
+typed projection of lifecycle, hierarchy and membership windows. It omits
+generic personal/employment data and email. Exact external integration UUID
+allowlists constrain linked identities, and phone reads require their separate
+capability. HMAC-bound revision/cursors include current effective machine
+authority and a stable first-page observation time; drift discards the incomplete
+read. A declared contact is never messaging consent or verified ownership.
+
+New-human phone completion (ADR-0030) defaults off until coordinated cutover.
+When enabled, provisional bootstrap/OIDC profiles cannot use ordinary API or
+native credentials before completing their own typed contact. Existing recovery
+is not made dependent on a phone. Human operator contact GET requires an exact
+`yggdrasil:view_contact_phones` grant; wildcard/admin/warn posture does not imply
+that sensitive grant. Contact ciphertext/values/cursors are absent from audits
+and error logs. Legacy generic personal data is unchanged by this feature.
 
 `YGGDRASIL_AUTH_ADMIN_TOKEN` remains a purpose-built credential for the exact
 provider, SCIM, and SAML administration mutations that support machine

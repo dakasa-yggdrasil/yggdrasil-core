@@ -19,6 +19,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/oidc"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/scim"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/contactphone"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/cryptoenvelope"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
@@ -166,6 +167,13 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// path matches against this copy and never reads the environment again,
 	// so the inventory a request sees is exactly the one this boot validated.
 	// An absent inventory is nil: no directory principal exists.
+	if required, err := contactphone.EnrollmentRequired(); err != nil {
+		return nil, err
+	} else if required {
+		if _, err := contactphone.EnvelopeFromEnv(); err != nil {
+			return nil, err
+		}
+	}
 	directoryPrincipals, err := directoryMachinePrincipalsFromEnv()
 	if err != nil {
 		return nil, err
@@ -223,6 +231,11 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		server.workflowRunAuth = loadWorkflowRunAuthConfig(eventPrincipals, directoryPrincipals)
 	})
 	logWorkflowRunCredentialSurface(logger, server.workflowRunAuth, directoryErr, time.Now().UTC())
+	server.snapshotHMACSecret, err = directorySnapshotSecret(directoryPrincipals)
+	if err != nil {
+		return nil, err
+	}
+
 	// Optional: auth secrets envelope. KEK is 32 raw bytes base64-encoded
 	// in YGGDRASIL_AUTH_KEK_BASE64; if absent the MFA HTTP layer fails
 	// loud rather than persisting unencrypted TOTP/WebAuthn material.
@@ -343,6 +356,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// endpoints that ESCAPE the locked state, plus public endpoints that don't
 	// have an authenticated user yet.
 	credentialsAllowlist := []string{
+		"/api/v1/me/contact/phone",
 		"/api/v1/auth/passwords/change",
 		"/api/v1/auth/logout",
 		"/api/v1/auth/session",
@@ -637,6 +651,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/bootstrap", requireDeployToken(server.handleBootstrap))
 	mux.HandleFunc("GET /api/v1/tenant/brand", server.handleTenantBrandGet)
 	mux.HandleFunc("PATCH /api/v1/tenant/brand", server.requireOpsPermissionFunc(permManageOrganization, server.handleTenantBrandPatch))
+	mux.HandleFunc("GET /api/v1/me/contact/phone", guard(server.handleSelfPhoneGet))
+	mux.HandleFunc("PUT /api/v1/me/contact/phone", guard(server.handleSelfPhonePut))
+	mux.HandleFunc("GET /api/v1/console/collaborators/{id}/contact/phone", server.handleOperatorPhoneGet)
+	mux.HandleFunc("PUT /api/v1/console/collaborators/{id}/contact/phone", server.requireOpsPermissionFunc(permEditCollaborator, server.handleOperatorPhonePut))
 	mux.HandleFunc("GET /api/v1/me", guard(server.handleMe))
 	mux.HandleFunc("GET /api/v1/me/preferences", guard(server.handleUserPreferencesGet))
 	mux.HandleFunc("PATCH /api/v1/me/preferences", guard(server.handleUserPreferencesPatch))
@@ -992,6 +1010,9 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 			// the workflow surface and YGGDRASIL_ENV set explicitly to dev,
 			// development, local or test (ADR-0022). An unset YGGDRASIL_ENV
 			// keeps that posture closed.
+			if actor.CollaboratorID != "" && !s.allowPhoneProfileID(w, r, actor.CollaboratorID) {
+				return
+			}
 			next.ServeHTTP(w, r)
 			return
 		}
@@ -1007,6 +1028,9 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 			if jwtClaims, ok := tryBearerHeader(r, s.consoleJWTVerifier); ok {
 				sub, _ := jwtClaims["sub"].(string)
 				if sub != "" {
+					if !s.allowPhoneProfileID(w, r, sub) {
+						return
+					}
 					// Normalize to the SAME claim keys the session path sets,
 					// so downstream handlers / permission checks are agnostic
 					// to whether the caller used a session token or a JWT.
@@ -1047,6 +1071,10 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 			return
 		}
 
+		if !s.allowPhoneProfile(w, r, collaborator) {
+			return
+		}
+
 		// Universal-MFA invariant: a human session whose collaborator has not
 		// enrolled a second factor must NOT reach console/ops routes. It may
 		// only hit the enroll / session / logout / password-change surface
@@ -1054,7 +1082,8 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 		// predates the session-mint gate (login/setup) or was created by
 		// another path (SCIM/SSO/legacy). Fail closed: a missing auth_identity
 		// row counts as not-enrolled.
-		if !mfaEnrollmentExemptPath(r.URL.Path) {
+		pendingOwnContact := collaborator.PhoneProfileRequired && r.URL.Path == "/api/v1/me/contact/phone"
+		if !mfaEnrollmentExemptPath(r.URL.Path) && !pendingOwnContact {
 			identity, mfaErr := repository.GetAuthIdentityByCollaboratorID(r.Context(), s.db, collaborator.ID)
 			if mfaErr != nil && !errors.Is(mfaErr, repository.ErrAuthIdentityNotFound) {
 				writeMappedError(w, mfaErr)
@@ -1175,6 +1204,7 @@ func requiresAuthenticatedConsoleAPI(path string) bool {
 		"/api/v1/console",
 		"/api/v1/collaborators",
 		"/api/v1/teams",
+		"/api/v1/me",
 		"/api/v1/team-memberships",
 		// 2026-05-27 audit A2 expansion — endpoints leaking infra data.
 		"/api/v1/secrets",
@@ -1302,6 +1332,8 @@ type workflowDispatchFunc func(ctx context.Context, ref model.ManifestSelector, 
 
 // Server exposes the synchronous HTTP surface of yggdrasil-core.
 type Server struct {
+	snapshotHMACSecret []byte
+
 	serviceName      string
 	db               *sql.DB
 	rabbitmq         *amqp.Connection
@@ -1925,6 +1957,7 @@ func (s *Server) handleCollaboratorCreate(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	req.PhoneDeclaredBy = actorIDFromRequest(r)
 	tx, err := s.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		writeMappedError(w, fmt.Errorf("begin tx: %w", err))
@@ -3521,6 +3554,11 @@ func writeJSONError(w http.ResponseWriter, status int, msg string) {
 // fields appear in the body. New handlers should prefer
 // httperr.WriteProblem directly for richer extras (instance, errors[]).
 func writeMappedError(w http.ResponseWriter, err error) {
+	if errors.Is(err, repository.ErrPhoneRequired) || errors.Is(err, repository.ErrPhoneUnavailable) || errors.Is(err, contactphone.ErrInvalid) {
+		writePhoneError(w, err)
+		return
+	}
+
 	status := httpStatusFromError(err)
 	code := codeFromError(err, status)
 	writeProblemEnvelope(w, status, code, httpStatusTitle(status), strings.TrimSpace(err.Error()), "")
@@ -3563,6 +3601,12 @@ func writeProblemEnvelope(w http.ResponseWriter, status int, code, title, detail
 // `code` namespace. Falls back to a category derived from the HTTP
 // status when the error is unknown.
 func codeFromError(err error, status int) string {
+	if errors.Is(err, repository.ErrLeadershipAssertionRequired) {
+		return "team.leadership_assertion_required"
+	}
+	if errors.Is(err, repository.ErrLeadershipVersionConflict) {
+		return "team.leadership_conflict"
+	}
 	switch {
 	case err == nil:
 		return ""
@@ -3669,6 +3713,10 @@ func httpStatusTitle(status int) string {
 
 func httpStatusFromError(err error) int {
 	switch {
+	case errors.Is(err, repository.ErrLeadershipAssertionRequired):
+		return http.StatusUnprocessableEntity
+	case errors.Is(err, repository.ErrLeadershipVersionConflict):
+		return http.StatusConflict
 	case err == nil:
 		return http.StatusOK
 	case errors.Is(err, messagecontroller.ErrAdapterTransportUnavailable):

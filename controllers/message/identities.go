@@ -10,9 +10,9 @@ import (
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
-	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
 )
 
 const (
@@ -307,6 +307,10 @@ func teamMembershipListHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Lo
 
 func identityErrorCode(err error) string {
 	switch {
+	case errors.Is(err, repository.ErrLeadershipAssertionRequired):
+		return "leadership_assertion_required"
+	case errors.Is(err, repository.ErrLeadershipVersionConflict):
+		return "leadership_version_conflict"
 	case errors.Is(err, repository.ErrCollaboratorNotFound), errors.Is(err, repository.ErrTeamNotFound):
 		return "not_found"
 	default:

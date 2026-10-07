@@ -5,6 +5,8 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+
+	sqlmock "github.com/DATA-DOG/go-sqlmock"
 )
 
 // GET /api/v1/auth/verify is the target of the Traefik ForwardAuth middleware
@@ -30,12 +32,19 @@ func TestAuthVerify_NotInConsoleGateAllowlist(t *testing.T) {
 
 // With ?aud set + a valid Bearer for that audience, the self-contained handler
 // answers 200 + human identity headers. Uses a fake surface verifier so the
-// test is env- and DB-independent.
+// verifier is deterministic; current profile authority remains a DB read.
 func TestAuthVerify_BearerAudienceMatch(t *testing.T) {
-	s := &Server{surfaceJWTVerifier: nil} // replaced below via the seam
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	const subject = "00000000-0000-4000-8000-000000000009"
+	expectCurrentPhoneProfile(mock, subject, false)
+	s := &Server{db: db, surfaceJWTVerifier: nil} // replaced below via the seam
 	s.surfaceVerify = func(_ context.Context, token, aud string) (map[string]any, error) {
 		if token == "good-token" && aud == "dakasa-ai" {
-			return map[string]any{"sub": "collab-9", "collaborator_id": "collab-9", "sid": "sess-x"}, nil
+			return map[string]any{"sub": subject, "collaborator_id": subject, "sid": "sess-x"}, nil
 		}
 		return nil, errInvalidFakeToken
 	}
@@ -51,11 +60,14 @@ func TestAuthVerify_BearerAudienceMatch(t *testing.T) {
 	if got := w.Header().Get("X-Auth-Kind"); got != "human" {
 		t.Errorf("X-Auth-Kind: got %q, want human", got)
 	}
-	if got := w.Header().Get("X-Auth-Subject"); got != "collab-9" {
-		t.Errorf("X-Auth-Subject: got %q, want collab-9", got)
+	if got := w.Header().Get("X-Auth-Subject"); got != subject {
+		t.Errorf("X-Auth-Subject: got %q, want canonical subject", got)
 	}
 	if got := w.Header().Get("X-Auth-Session-Id"); got != "sess-x" {
 		t.Errorf("X-Auth-Session-Id: got %q, want sess-x", got)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }
 
@@ -71,6 +83,29 @@ func TestAuthVerify_BearerAudienceMismatch(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("bearer aud-mismatch: got %d, want 401", w.Code)
+	}
+}
+
+func TestAuthVerifySignedIdentityCannotBypassPendingPhoneProfile(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	const subject = "00000000-0000-4000-8000-000000000009"
+	expectCurrentPhoneProfile(mock, subject, true)
+	s := &Server{db: db, surfaceVerify: func(context.Context, string, string) (map[string]any, error) {
+		return map[string]any{"sub": subject}, nil
+	}}
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/auth/verify?aud=surface-ci", nil)
+	r.Header.Set("Authorization", "Bearer signed-fixture")
+	w := httptest.NewRecorder()
+	s.handleAuthVerify(w, r)
+	if w.Code != http.StatusForbidden || w.Header().Get("X-Auth-Kind") != "" {
+		t.Fatal("signed identity crossed pending profile ForwardAuth boundary")
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }
 

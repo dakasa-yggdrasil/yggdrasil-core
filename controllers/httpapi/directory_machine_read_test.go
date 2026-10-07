@@ -120,7 +120,7 @@ func authorizationMembershipColumns() []string {
 	return []string{
 		"id", "team_id", "team_slug", "collaborator_id", "collaborator_slug",
 		"role", "active", "source", "starts_at", "ends_at", "metadata",
-		"created_at", "updated_at",
+		"created_at", "updated_at", "is_lead",
 	}
 }
 
@@ -420,7 +420,7 @@ func TestDirectoryMachineEffectiveActionsOnAllowedInstance(t *testing.T) {
 		WillReturnRows(directoryCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "active", "Ana Souza", testLookupEmail))
 	mock.ExpectQuery(authorizationMembershipsQuery).WithArgs(id).
 		WillReturnRows(sqlmock.NewRows(authorizationMembershipColumns()).AddRow(uuid.New().String(), teamID.String(), "social", id.String(), "ana-souza",
-			"member", true, "manual", nil, nil, []byte("{}"), time.Now(), time.Now()))
+			"member", true, "manual", nil, nil, []byte("{}"), time.Now(), time.Now(), false))
 	mock.ExpectQuery(`FROM public\.teams\s+WHERE id = \$1`).WithArgs(teamID).
 		WillReturnRows(sqlmock.NewRows(teamColumns()).AddRow(teamID.String(), "social", "Social", "functional", "active", nil, nil, []byte("[]"), []byte("{}"), []byte("{}"), time.Now(), time.Now()))
 	mock.ExpectQuery(`FROM public\.team_grants`).WithArgs(teamID.String()).

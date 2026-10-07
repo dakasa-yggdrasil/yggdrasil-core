@@ -1,11 +1,11 @@
 # ADR-0019: Scope directory machine principals to exact collaborator read routes
 
-- **Status:** Accepted
+- **Status:** Superseded by 0031
 - **Date:** 2026-09-20
 - **Deciders:** DaKasa Platform
 - **Scope:** yggdrasil-core / non-human directory read authentication
 - **Supersedes:** none
-- **Superseded by:** none
+- **Superseded by:** 0031
 
 ## Context
 

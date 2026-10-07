@@ -16,6 +16,9 @@ import (
 // users start without a manager or primary team; those fields are wired by an admin later
 // via UpdateCollaborator. If you need those fields, do a follow-up update after Commit.
 func CreateCollaboratorTx(ctx context.Context, tx *sql.Tx, req model.CreateCollaboratorRequest) (model.Collaborator, error) {
+	if err := validateNewPhone(req); err != nil {
+		return model.Collaborator{}, err
+	}
 	slug := normalizeSlug(req.Slug)
 	if slug == "" {
 		return model.Collaborator{}, fmt.Errorf("collaborator slug is required")
@@ -99,7 +102,18 @@ func CreateCollaboratorTx(ctx context.Context, tx *sql.Tx, req model.CreateColla
 		metadata,
 	)
 
-	return scanCollaborator(row)
+	created, err := scanCollaborator(row)
+	if err != nil {
+		return model.Collaborator{}, err
+	}
+	if err := initializePhoneEnrollmentTx(ctx, tx, req, created.ID); err != nil {
+		return model.Collaborator{}, err
+	}
+	created.PhoneProfileRequired = phoneRequirementAfterCreation(req)
+	if req.PhoneE164 != "" {
+		created.Version++
+	}
+	return created, nil
 }
 
 // AddCollaboratorToTeamBySlugTx inserts a team_memberships row linking the

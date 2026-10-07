@@ -423,10 +423,11 @@ func writePasswordPolicyProblem(w http.ResponseWriter, instance string, err erro
 // console needs to mirror the "no personal identifiers" rule live.
 func collaboratorIdentityView(collab model.Collaborator) map[string]any {
 	return map[string]any{
-		"id":            collab.ID,
-		"display_name":  collab.DisplayName,
-		"primary_email": collab.PrimaryEmail,
-		"slug":          collab.Slug,
+		"id":                     collab.ID,
+		"display_name":           collab.DisplayName,
+		"primary_email":          collab.PrimaryEmail,
+		"slug":                   collab.Slug,
+		"phone_profile_required": collab.PhoneProfileRequired,
 	}
 }
 
@@ -682,6 +683,24 @@ func (s *Server) handleSetupCommit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	replacesCredential := prior.HasPassword || prior.MFAEnrolled
+	if collab.PhoneProfileRequired && !replacesCredential {
+		var recovery bool
+		if err := tx.QueryRowContext(r.Context(), `SELECT metadata @> '{"replaced_credential":true}'::jsonb FROM public.auth_credential_tokens WHERE id=$1 AND purpose='setup'`, tokenID).Scan(&recovery); err != nil {
+			writePhoneError(w, repository.ErrPhoneUnavailable)
+			return
+		}
+		replacesCredential = recovery
+	}
+
+	if req.Profile != nil && req.Profile.PhoneE164 != nil {
+		if _, err := repository.SetPhoneContactTx(r.Context(), tx, s.envelope, collabID, *req.Profile.PhoneE164, "collaborator:"+collabID.String(), "self_profile"); err != nil {
+			writePhoneError(w, err)
+			return
+		}
+	} else if collab.PhoneProfileRequired && !replacesCredential {
+		writePhoneError(w, repository.ErrPhoneRequired)
+		return
+	}
 
 	// Step 5 + 6: Update auth_identities with hash + expiry. The lockout is
 	// cleared too: the link holder was vouched for by an admin, and an
@@ -865,6 +884,7 @@ func unknownSetupProfileFields(body []byte) []string {
 		"display_name":  {},
 		"timezone":      {},
 		"personal_data": {},
+		"phone_e164":    {},
 	}
 	var extras []string
 	for k := range profile {

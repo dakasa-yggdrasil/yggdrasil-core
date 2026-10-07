@@ -230,6 +230,7 @@ func TestConsoleAuthGateDoesNotBypassRBACForLowPrivilegeSessionOnAuthMutation(t 
 	// Human claims never enter the static-token bypass. The route's existing
 	// permission wrapper evaluates manage_auth_providers, which this
 	// low-privilege collaborator does not hold.
+	expectCurrentPhoneProfile(mock, collaboratorID.String(), false)
 	programCollaboratorWithPermissions(mock, collaboratorID, nil)
 
 	called := false

@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 60d4f5aa5cb2fb54f99573e8316016d235feff4c
-verified_diff_sha256: 4de239e8a312274a506438de399a37c2ba52744b1a42a32e464f309fbdf6004f
+verified_at_commit: b9cec1904d71584f583d049f5b57cef5391c4899
+verified_diff_sha256: 569e48f9449604588e9c0e55d94f37916f0fccb7b7df2073e9325970b4acbf94
 reconciler_schema: 1
-verified_at: 2026-09-30
+verified_at: 2026-10-07
 by: Codex
-note: Reconciled scheduled workflow terminal status and completion event documentation against the scheduler fix. The event now carries the persisted scheduled run ID after finalization; no production rollout is claimed.
+note: Reviewed the authenticated operator-provenance fix after the actual HTTP PostgreSQL regression exposed the legacy header lookup. X-Actor cannot attribute contact declarations; typed leadership, CAS/MFA/grants, independent phone completion and all mirrored contracts remain unchanged. Independent delta review approved; exact-head remote CI15 roots/no skips remains required. No live mutation or deployment is claimed.

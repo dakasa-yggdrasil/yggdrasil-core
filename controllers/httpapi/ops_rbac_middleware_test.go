@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
@@ -86,15 +87,13 @@ func programCollaboratorWithPermissions(mock sqlmock.Sqlmock, collabID uuid.UUID
 	mock.ExpectQuery(`(?i)FROM\s+public\.collaborators`).
 		WithArgs(collabID.String()).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "slug", "display_name", "primary_email", "status", "role",
-			"manager_id", "absence_started_at", "absence_ended_at",
-			"personal_data", "employment_data", "preferences", "traits", "metadata",
-			"created_at", "updated_at",
+			"id", "slug", "status", "display_name", "primary_email", "manager_id", "primary_team_id",
+			"personal_data", "employment_data", "third_party_identities", "traits", "metadata",
+			"version", "created_at", "updated_at",
 		}).AddRow(
-			collabID.String(), "test-user", "Test User", "test@example.com", "active", "engineer",
-			nil, nil, nil,
+			collabID.String(), "test-user", "active", "Test User", "test@example.com", nil, nil,
 			[]byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"),
-			"2026-01-01T00:00:00Z", "2026-01-01T00:00:00Z",
+			0, time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC), time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC),
 		))
 
 	// 2) ResolveYggdrasilPermissions's team_grants query.

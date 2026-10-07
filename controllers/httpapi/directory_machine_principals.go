@@ -3,6 +3,7 @@ package httpapi
 import (
 	"crypto/sha256"
 	"fmt"
+	"github.com/google/uuid"
 	"os"
 	"strings"
 	"time"
@@ -20,6 +21,8 @@ const (
 
 	directoryCapabilityLookupEmail      = "directory.lookup_email"
 	directoryCapabilityRead             = "directory.read"
+	directoryCapabilitySnapshot         = "directory.snapshot"
+	directoryCapabilityPhoneContacts    = "directory.contacts.phone"
 	directoryCapabilityEffectiveActions = "directory.effective_actions"
 
 	// directoryAuditActorPrefix is the audit actor prefix of a directory
@@ -40,30 +43,32 @@ type tartaroInstanceRef struct {
 }
 
 type directoryMachinePrincipalConfig struct {
-	PrincipalID             string               `json:"principal_id"`
-	Status                  string               `json:"status"`
-	ExpiresAt               time.Time            `json:"expires_at"`
-	RotationID              string               `json:"rotation_id"`
-	RotatedAt               time.Time            `json:"rotated_at"`
-	TokenSHA256             string               `json:"token_sha256"`
-	Capabilities            []string             `json:"capabilities"`
-	AllowedTartaroInstances []tartaroInstanceRef `json:"allowed_tartaro_instances"`
+	AllowedExternalIdentityInstances []string             `json:"allowed_external_identity_instances,omitempty"`
+	PrincipalID                      string               `json:"principal_id"`
+	Status                           string               `json:"status"`
+	ExpiresAt                        time.Time            `json:"expires_at"`
+	RotationID                       string               `json:"rotation_id"`
+	RotatedAt                        time.Time            `json:"rotated_at"`
+	TokenSHA256                      string               `json:"token_sha256"`
+	Capabilities                     []string             `json:"capabilities"`
+	AllowedTartaroInstances          []tartaroInstanceRef `json:"allowed_tartaro_instances"`
 }
 
 type directoryMachinePrincipal struct {
-	PrincipalID             string
-	Status                  string
-	ExpiresAt               time.Time
-	RotationID              string
-	RotatedAt               time.Time
-	TokenSHA256             [sha256.Size]byte
-	Capabilities            map[string]struct{}
-	AllowedTartaroInstances map[tartaroInstanceRef]struct{}
+	AllowedExternalIdentityInstances map[string]struct{}
+	PrincipalID                      string
+	Status                           string
+	ExpiresAt                        time.Time
+	RotationID                       string
+	RotatedAt                        time.Time
+	TokenSHA256                      [sha256.Size]byte
+	Capabilities                     map[string]struct{}
+	AllowedTartaroInstances          map[tartaroInstanceRef]struct{}
 }
 
 func knownDirectoryCapability(name string) bool {
 	switch name {
-	case directoryCapabilityLookupEmail, directoryCapabilityRead, directoryCapabilityEffectiveActions:
+	case directoryCapabilityLookupEmail, directoryCapabilityRead, directoryCapabilityEffectiveActions, directoryCapabilitySnapshot, directoryCapabilityPhoneContacts:
 		return true
 	default:
 		return false
@@ -125,9 +130,9 @@ func directoryMachinePrincipalsFromEnv() ([]directoryMachinePrincipal, error) {
 		for capabilityIndex, capability := range config.Capabilities {
 			capability = strings.TrimSpace(capability)
 			if !knownDirectoryCapability(capability) {
-				return nil, fmt.Errorf("%s entry %d capabilities item %d must be one of %s, %s, %s",
+				return nil, fmt.Errorf("%s entry %d capabilities item %d must be one of %s, %s, %s, %s, %s",
 					directoryMachinePrincipalsEnv, index, capabilityIndex,
-					directoryCapabilityLookupEmail, directoryCapabilityRead, directoryCapabilityEffectiveActions)
+					directoryCapabilityLookupEmail, directoryCapabilityRead, directoryCapabilityEffectiveActions, directoryCapabilitySnapshot, directoryCapabilityPhoneContacts)
 			}
 			if _, duplicate := capabilities[capability]; duplicate {
 				return nil, fmt.Errorf("%s entry %d duplicates a capabilities item", directoryMachinePrincipalsEnv, index)
@@ -162,15 +167,37 @@ func directoryMachinePrincipalsFromEnv() ([]directoryMachinePrincipal, error) {
 			instances[instance] = struct{}{}
 		}
 
+		externalInstances := map[string]struct{}{}
+		if _, phone := capabilities[directoryCapabilityPhoneContacts]; phone {
+			if _, snapshot := capabilities[directoryCapabilitySnapshot]; !snapshot {
+				return nil, fmt.Errorf("%s entry %d phone capability requires directory.snapshot", directoryMachinePrincipalsEnv, index)
+			}
+		}
+		if len(config.AllowedExternalIdentityInstances) > 0 {
+			if _, snapshot := capabilities[directoryCapabilitySnapshot]; !snapshot {
+				return nil, fmt.Errorf("%s entry %d external identities require directory.snapshot", directoryMachinePrincipalsEnv, index)
+			}
+		}
+		for _, id := range config.AllowedExternalIdentityInstances {
+			parsed, err := uuid.Parse(id)
+			if err != nil || parsed == uuid.Nil || parsed.String() != id {
+				return nil, fmt.Errorf("%s entry %d external identity instances must be canonical UUIDs", directoryMachinePrincipalsEnv, index)
+			}
+			if _, duplicate := externalInstances[id]; duplicate {
+				return nil, fmt.Errorf("%s entry %d duplicates an external identity instance", directoryMachinePrincipalsEnv, index)
+			}
+			externalInstances[id] = struct{}{}
+		}
 		principals = append(principals, directoryMachinePrincipal{
-			PrincipalID:             base.principalID,
-			Status:                  base.status,
-			ExpiresAt:               base.expiresAt,
-			RotationID:              base.rotationID,
-			RotatedAt:               base.rotatedAt,
-			TokenSHA256:             base.tokenSHA256,
-			Capabilities:            capabilities,
-			AllowedTartaroInstances: instances,
+			AllowedExternalIdentityInstances: externalInstances,
+			PrincipalID:                      base.principalID,
+			Status:                           base.status,
+			ExpiresAt:                        base.expiresAt,
+			RotationID:                       base.rotationID,
+			RotatedAt:                        base.rotatedAt,
+			TokenSHA256:                      base.tokenSHA256,
+			Capabilities:                     capabilities,
+			AllowedTartaroInstances:          instances,
 		})
 		seenIDs[base.principalID] = struct{}{}
 		seenHashes[base.tokenSHA256] = struct{}{}

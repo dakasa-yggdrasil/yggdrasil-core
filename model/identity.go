@@ -1,6 +1,9 @@
 package model
 
 import (
+	"bytes"
+	"encoding/json"
+	"fmt"
 	"time"
 
 	"github.com/google/uuid"
@@ -14,6 +17,8 @@ import (
 // explicitly. UpdateCollaborator transparently uses the loaded value for its
 // own conflict check via repository.ErrConcurrentUpdate.
 type Collaborator struct {
+	// Derived from the database-owned projection; never accepted from clients.
+	PhoneProfileRequired bool           `json:"-"`
 	ID                   uuid.UUID      `json:"id"`
 	Slug                 string         `json:"slug"`
 	Status               string         `json:"status"`
@@ -33,11 +38,11 @@ type Collaborator struct {
 
 // Team is the canonical internal group used to aggregate collaborators.
 type Team struct {
-	ID           uuid.UUID      `json:"id"`
-	Slug         string         `json:"slug"`
-	Name         string         `json:"name"`
-	Type         string         `json:"type"`
-	Status       string         `json:"status"`
+	ID     uuid.UUID `json:"id"`
+	Slug   string    `json:"slug"`
+	Name   string    `json:"name"`
+	Type   string    `json:"type"`
+	Status string    `json:"status"`
 	// Email is the team's canonical contact address. Integrations may use
 	// it to provision external resources (Google Workspace group, Slack
 	// channel email, notification targets). Empty string = unset.
@@ -65,6 +70,7 @@ type TeamMembership struct {
 	Metadata         map[string]any `json:"metadata"`
 	CreatedAt        time.Time      `json:"created_at"`
 	UpdatedAt        time.Time      `json:"updated_at"`
+	IsLead           bool           `json:"is_lead"`
 }
 
 // CollaboratorReference is the lightweight collaborator identity used in authorization responses.
@@ -84,6 +90,9 @@ type TeamReference struct {
 
 // CreateCollaboratorRequest creates one collaborator record.
 type CreateCollaboratorRequest struct {
+	PhoneE164            string         `json:"phone_e164,omitempty"`
+	PhoneDeclaredBy      string         `json:"-"`
+	ProvisionalPhone     bool           `json:"-"`
 	Slug                 string         `json:"slug"`
 	Status               string         `json:"status,omitempty"`
 	DisplayName          string         `json:"display_name"`
@@ -145,29 +154,56 @@ type ListCollaboratorsRequest struct {
 
 // CreateTeamRequest creates one team record.
 type CreateTeamRequest struct {
-	Slug         string         `json:"slug"`
-	Name         string         `json:"name"`
-	Type         string         `json:"type,omitempty"`
-	Status       string         `json:"status,omitempty"`
-	Email        string         `json:"email,omitempty"`
-	ParentTeamID string         `json:"parent_team_id,omitempty"`
-	Owners       []string       `json:"owners,omitempty"`
-	Traits       map[string]any `json:"traits,omitempty"`
-	Metadata     map[string]any `json:"metadata,omitempty"`
+	AssertLeadership bool           `json:"assert_leadership,omitempty"`
+	Slug             string         `json:"slug"`
+	Name             string         `json:"name"`
+	Type             string         `json:"type,omitempty"`
+	Status           string         `json:"status,omitempty"`
+	Email            string         `json:"email,omitempty"`
+	ParentTeamID     string         `json:"parent_team_id,omitempty"`
+	Owners           []string       `json:"owners,omitempty"`
+	Traits           map[string]any `json:"traits,omitempty"`
+	Metadata         map[string]any `json:"metadata,omitempty"`
 }
 
 // UpdateTeamRequest updates one team record with patch semantics.
 type UpdateTeamRequest struct {
-	ID           string          `json:"id"`
-	Slug         *string         `json:"slug,omitempty"`
-	Name         *string         `json:"name,omitempty"`
-	Type         *string         `json:"type,omitempty"`
-	Status       *string         `json:"status,omitempty"`
-	Email        *string         `json:"email,omitempty"`
-	ParentTeamID *string         `json:"parent_team_id,omitempty"`
-	Owners       *[]string       `json:"owners,omitempty"`
-	Traits       *map[string]any `json:"traits,omitempty"`
-	Metadata     *map[string]any `json:"metadata,omitempty"`
+	AssertLeadership  bool            `json:"assert_leadership,omitempty"`
+	ExpectedUpdatedAt *time.Time      `json:"expected_updated_at,omitempty"`
+	ID                string          `json:"id"`
+	Slug              *string         `json:"slug,omitempty"`
+	Name              *string         `json:"name,omitempty"`
+	Type              *string         `json:"type,omitempty"`
+	Status            *string         `json:"status,omitempty"`
+	Email             *string         `json:"email,omitempty"`
+	ParentTeamID      *string         `json:"parent_team_id,omitempty"`
+	Owners            *[]string       `json:"owners,omitempty"`
+	Traits            *map[string]any `json:"traits,omitempty"`
+	Metadata          *map[string]any `json:"metadata,omitempty"`
+}
+
+// UnmarshalJSON keeps owners omitted distinct from an explicit empty set.
+// Null is not an assertion and must not turn a stale full update into an
+// ordinary patch that happens to ignore its leadership field.
+func (r *UpdateTeamRequest) UnmarshalJSON(data []byte) error {
+	type plain UpdateTeamRequest
+	var decoded plain
+	decoder := json.NewDecoder(bytes.NewReader(data))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(&decoded); err != nil {
+		return err
+	}
+	var fields struct {
+		Owners json.RawMessage `json:"owners"`
+	}
+	if err := json.Unmarshal(data, &fields); err != nil {
+		return err
+	}
+	if bytes.Equal(bytes.TrimSpace(fields.Owners), []byte("null")) {
+		return fmt.Errorf("owners must be an array; omit owners for ordinary updates")
+	}
+	*r = UpdateTeamRequest(decoded)
+	return nil
 }
 
 // GetTeamRequest fetches one team by UUID or slug.
@@ -208,24 +244,24 @@ type ListTeamMembershipsRequest struct {
 // TeamGrant binds one team to an action of one integration_instance.
 // action_name = "*" means wildcard (all actions of that integration_instance).
 type TeamGrant struct {
-	ID                            string         `json:"id"`
-	TeamID                        string         `json:"team_id"`
-	IntegrationInstanceNamespace  string         `json:"integration_instance_namespace"`
-	IntegrationInstanceName       string         `json:"integration_instance_name"`
-	ActionName                    string         `json:"action_name"`
-	Scope                         map[string]any `json:"scope"`
-	GrantedAt                     time.Time      `json:"granted_at"`
-	GrantedBy                     *string        `json:"granted_by,omitempty"`
+	ID                           string         `json:"id"`
+	TeamID                       string         `json:"team_id"`
+	IntegrationInstanceNamespace string         `json:"integration_instance_namespace"`
+	IntegrationInstanceName      string         `json:"integration_instance_name"`
+	ActionName                   string         `json:"action_name"`
+	Scope                        map[string]any `json:"scope"`
+	GrantedAt                    time.Time      `json:"granted_at"`
+	GrantedBy                    *string        `json:"granted_by,omitempty"`
 }
 
 // GrantTeamActionRequest grants one team an action of one integration_instance.
 type GrantTeamActionRequest struct {
-	TeamID                        string         `json:"team_id"`
-	IntegrationInstanceNamespace  string         `json:"integration_instance_namespace"`
-	IntegrationInstanceName       string         `json:"integration_instance_name"`
-	ActionName                    string         `json:"action_name,omitempty"`
-	Scope                         map[string]any `json:"scope,omitempty"`
-	GrantedBy                     string         `json:"granted_by,omitempty"`
+	TeamID                       string         `json:"team_id"`
+	IntegrationInstanceNamespace string         `json:"integration_instance_namespace"`
+	IntegrationInstanceName      string         `json:"integration_instance_name"`
+	ActionName                   string         `json:"action_name,omitempty"`
+	Scope                        map[string]any `json:"scope,omitempty"`
+	GrantedBy                    string         `json:"granted_by,omitempty"`
 }
 
 // ListTeamGrantsRequest filters grants by team.

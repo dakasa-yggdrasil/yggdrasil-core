@@ -4,7 +4,8 @@ package httpapi
 //
 // This file maps every /api/v1/console/* route to the canonical
 // yggdrasil:* permission that gates it. Permission names match
-// surface-console's PERMS catalog (lib/auth/permissions.ts) one-for-one,
+// surface-console's PERMS catalog (lib/auth/permissions.ts), except the new
+// explicit contact-read permission enforced inside its sensitive handler,
 // which in turn matches the integration-yggdrasil-self action_catalog
 // (internal/adapter/spec.go).
 //
@@ -17,8 +18,9 @@ package httpapi
 // server.go and fails when a /api/v1/console/* registration lacks a
 // permission wrapper.
 //
-// Permission catalog (19 entries — canonical, single source):
+// Permission catalog (20 entries — canonical, single source):
 //   - ViewPeople            yggdrasil:view_people
+//   - ViewContactPhones     yggdrasil:view_contact_phones (exact grant only; no wildcard/admin/warn fallback)
 //   - CreateCollaborator    yggdrasil:create_collaborator
 //   - EditCollaborator      yggdrasil:edit_collaborator
 //   - OffboardCollaborator  yggdrasil:offboard_collaborator
@@ -62,6 +64,7 @@ package httpapi
 // Permission constants — keep aligned with surface-console PERMS.
 const (
 	permViewPeople            = "yggdrasil:view_people"
+	permViewContactPhones     = "yggdrasil:view_contact_phones"
 	permCreateCollaborator    = "yggdrasil:create_collaborator"
 	permEditCollaborator      = "yggdrasil:edit_collaborator"
 	permOffboardCollaborator  = "yggdrasil:offboard_collaborator"
@@ -86,5 +89,5 @@ const (
 	// aggregate handler still respects the visibility of individual
 	// sections by data-shaping (sections omitted when their owning
 	// permission is missing — see console_overview_summary.go).
-	permViewOverview          = "yggdrasil:view_overview"
+	permViewOverview = "yggdrasil:view_overview"
 )

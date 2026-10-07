@@ -35,6 +35,7 @@ type directoryMachineRoute int
 
 const (
 	directoryRouteNone directoryMachineRoute = iota
+	directoryRouteSnapshot
 	directoryRouteLookupEmail
 	directoryRouteGet
 	directoryRouteEffectiveActions
@@ -42,6 +43,8 @@ const (
 
 func (route directoryMachineRoute) capability() string {
 	switch route {
+	case directoryRouteSnapshot:
+		return directoryCapabilitySnapshot
 	case directoryRouteLookupEmail:
 		return directoryCapabilityLookupEmail
 	case directoryRouteGet:
@@ -99,6 +102,9 @@ func directoryMachineRouteFor(r *http.Request) (directoryMachineRoute, string) {
 	path := r.URL.Path
 	if r.URL.EscapedPath() != path {
 		return directoryRouteNone, ""
+	}
+	if path == "/api/v1/directory/snapshot" {
+		return directoryRouteSnapshot, ""
 	}
 	segments := strings.Split(path, "/")
 	if len(segments) < 4 || segments[0] != "" || segments[1] != "api" || segments[2] != "v1" || segments[3] != "collaborators" {
@@ -260,6 +266,8 @@ func (s *Server) serveDirectoryMachineRequest(w http.ResponseWriter, r *http.Req
 	}
 
 	switch route {
+	case directoryRouteSnapshot:
+		s.serveDirectorySnapshot(w, r, principal)
 	case directoryRouteLookupEmail:
 		s.serveDirectoryLookupEmail(w, r, principal)
 	case directoryRouteGet:

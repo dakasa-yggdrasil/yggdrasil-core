@@ -128,3 +128,15 @@ canonical entry points are:
 - §14 of `INTEGRATION_CONTRACT.md` in integration-template
 - 2026-05-27 co-design audit (humanizer-table sprawl analysis):
   `~/.claude/projects/-Users-dakasa-projects/memory/reference_yggdrasil_ui_backend_codesign_audit_2026_05_27.md` §1.9
+
+
+## Reviewed leadership and conditional contact writes
+
+| Code | HTTP | Meaning |
+| --- | --- | --- |
+| `team.leadership_assertion_required` | 422 | Explicit intent is required; updates also need the reviewed team timestamp. Reload/review before asserting. |
+| `team.leadership_conflict` | 409 | The team changed since leadership review. No partial team/leadership write commits. |
+| `contact.version_conflict` | 409 | A typed declaration exists or its version changed. Existing contact/provenance is preserved; no previous value is returned. |
+
+AMQP identity writes use `leadership_assertion_required` and
+`leadership_version_conflict` for the same shared repository refusals.
