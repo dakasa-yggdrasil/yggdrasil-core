@@ -78,9 +78,41 @@ jobs:
         env:
           REQUIRE_INSTANCE_IDENTITY_DB_TEST: "true"
         run: go test -count=1 -timeout=5m -v -run '^TestIntegrationInstanceIdentityAgainstPostgres$' ./repository
+      - name: Exercise declared contacts and complete directory snapshots
+        if: ${{ !cancelled() }}
+        env:
+          REQUIRE_DIRECTORY_CONTACT_POSTGRES: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          # The directory reads the complete identity graph. Sequential package
+          # execution keeps intentionally corrupt graph fixtures isolated.
+          go test -json -p 1 -count=1 -timeout=5m ./repository ./controllers/httpapi ./controllers/oidc -run '^Test(DeclaredPhoneAuthority|DeclaredPhoneLegacyProjection|DirectorySnapshotReferencesAndDeclarationStates|DeclaredPhoneReadRequiresExactGrant|HumanPhoneEnrollmentHTTP|DirectorySnapshotHTTPRevision|PhoneProfileSetupRecoveryHTTP|PhoneProfileNativeIssuance)Postgres$' | tee contact-directory-results.jsonl
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          expected = {
+              "TestDeclaredPhoneAuthorityPostgres",
+              "TestDeclaredPhoneLegacyProjectionPostgres",
+              "TestDirectorySnapshotReferencesAndDeclarationStatesPostgres",
+              "TestDeclaredPhoneReadRequiresExactGrantPostgres",
+              "TestHumanPhoneEnrollmentHTTPPostgres",
+              "TestDirectorySnapshotHTTPRevisionPostgres",
+              "TestPhoneProfileNativeIssuancePostgres",
+              "TestPhoneProfileSetupRecoveryHTTPPostgres",
+          }
+          events = [json.loads(line) for line in Path("contact-directory-results.jsonl").read_text().splitlines() if line.strip()]
+          passed = {event.get("Test") for event in events if event.get("Action") == "pass"}
+          skipped = {event.get("Test") for event in events if event.get("Action") == "skip"}
+          if expected - passed or skipped:
+              raise SystemExit(f"Directory gate incomplete: missing={sorted(expected - passed)}, skipped={sorted(skipped)}")
+          print("All declared-contact and directory PostgreSQL scenarios executed.")
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: native-oidc-protocol-results
-          path: native-oidc-results.jsonl
+          path: |
+            native-oidc-results.jsonl
+            contact-directory-results.jsonl
           if-no-files-found: warn
