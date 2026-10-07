@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 75e84f754a6114c90013672a9e0860ab8a7b5769
-verified_diff_sha256: b20aaa6107f790f9eb356fa7cf8ba13c1c4ed89f05be1f1b3d158723739753b3
+verified_at_commit: 9b395025ba138c36a642ca24bb9cbdad1a920acf
+verified_diff_sha256: bd55ddba1871aeeb4547c76b0c2efa1a06909cfca7d3700c7b984a8808695fcf
 reconciler_schema: 1
 verified_at: 2026-10-06
 by: Codex
-note: Independent review covered the Core snapshot/profile/encryption/audit and paired Console seams. Fixed effective-credential continuity and no-store contact responses, preserving DTO/authority and prior strict gate results. Updated contract/OpenAPI mirror; final exact-head CI remains required. No live contact/grant/provider mutation or deployment is claimed.
+note: Reviewed the safe authority buffer allocation after the CodeQL finding; effective-credential MAC binding, no-store contact responses and paired contracts remain unchanged. Functional, lint and all required PostgreSQL gates passed the prior head; final security/CI verdict remains required. No live contact/grant/provider mutation or deployment is claimed.
