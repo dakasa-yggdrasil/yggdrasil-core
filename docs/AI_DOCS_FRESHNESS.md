@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 9b395025ba138c36a642ca24bb9cbdad1a920acf
-verified_diff_sha256: bd55ddba1871aeeb4547c76b0c2efa1a06909cfca7d3700c7b984a8808695fcf
+verified_at_commit: 84bf95028dbc58512ae3be6a4609319e50931343
+verified_diff_sha256: 555bd1f004a3453db76fd9643061e9ac9e58c2299f1de21ffd843aecc1a88d73
 reconciler_schema: 1
-verified_at: 2026-10-06
+verified_at: 2026-10-07
 by: Codex
-note: Reviewed the safe authority buffer allocation after the CodeQL finding; effective-credential MAC binding, no-store contact responses and paired contracts remain unchanged. Functional, lint and all required PostgreSQL gates passed the prior head; final security/CI verdict remains required. No live contact/grant/provider mutation or deployment is claimed.
+note: Reviewed committed typed leadership, explicit intent and team-row CAS, complete formal editor state, frozen snapshot time, conditional operator contact declarations, ADRs0032/0033 and mirrored OpenAPI. Required PostgreSQL coverage now demands15 authority roots with no skips. Static review and formatting only; final remote CI remains required. No live contact/owner/grant mutation or deployment is claimed.
