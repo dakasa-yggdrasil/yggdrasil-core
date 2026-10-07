@@ -75,7 +75,13 @@ func snapshotAuthority(p *directoryMachinePrincipal, phones bool) []byte {
 		Caps, External, Tartaro []string
 		Phones                  bool
 	}{p.PrincipalID, p.Status, p.RotationID, p.ExpiresAt, p.RotatedAt, caps, external, tartaro, phones})
-	return body
+	// Fixed-length internal keying binds the effective credential even when an
+	// operator replaces its digest without changing rotation metadata. It never
+	// becomes a JSON field, cursor, revision, audit or log value: only the MAC
+	// computed with the separate snapshot integrity secret leaves this process.
+	authority := make([]byte, 0, sha256.Size+len(body))
+	authority = append(authority, p.TokenSHA256[:]...)
+	return append(authority, body...)
 }
 
 func snapshotMAC(key []byte, domain string, authority, body []byte) []byte {

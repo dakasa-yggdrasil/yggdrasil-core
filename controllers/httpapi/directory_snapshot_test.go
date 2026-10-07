@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/json"
 	"net/http"
 	"net/http/httptest"
@@ -108,6 +109,26 @@ func TestSnapshotRevisionIncludesEnrollmentState(t *testing.T) {
 	p.RotationID = "new-rotation"
 	if first == snapshotRevision(key, snapshotAuthority(p, false), s) {
 		t.Fatal("rotation did not change the revision")
+	}
+}
+
+func TestSnapshotCursorAndRevisionBindEffectiveCredentialReplacement(t *testing.T) {
+	p := snapshotPrincipalForTest(t, false)
+	key := []byte(strings.Repeat("s", 32))
+	at := time.Now().UTC()
+	s := repository.DirectorySnapshot{}
+	firstRevision := snapshotRevision(key, snapshotAuthority(p, false), s)
+	cursor := encodeSnapshotCursor(key, snapshotAuthority(p, false), directorySnapshotCursor{
+		Revision: firstRevision, Offset: 1, Limit: 100, ObservedAt: at, ExpiresAt: at.Add(snapshotTTL),
+	})
+	// Accepted configuration replacement with unchanged identity, capabilities,
+	// allowlists and rotation metadata still changes the actual credential.
+	p.TokenSHA256 = sha256.Sum256([]byte("replacement-test-only-credential"))
+	if firstRevision == snapshotRevision(key, snapshotAuthority(p, false), s) {
+		t.Fatal("credential replacement preserved the previous revision")
+	}
+	if _, err := decodeSnapshotCursor(key, snapshotAuthority(p, false), cursor, at); err == nil {
+		t.Fatal("replacement credential accepted the previous cursor")
 	}
 }
 
