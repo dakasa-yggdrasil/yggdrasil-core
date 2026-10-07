@@ -30,6 +30,7 @@ grant through a current active team/membership and active Yggdrasil-self instanc
 Wildcard/admin authority and RBAC warn mode do not imply this sensitive grant;
 no existing grant is automatically added. Grant and contact read share a
 repeatable-read snapshot, and a successful audit write precedes disclosure.
+Contact reads and declaration responses use `Cache-Control:no-store`.
 
 The typed registry is encrypted and separate from legacy generic
 `personal_data`, which may already contain older contact information. This
@@ -78,6 +79,8 @@ loads one bounded complete graph in a read-only repeatable-read transaction.
 Invalid references/cycles and exceeded bounds fail closed without truncation.
 Revision binds data and effective principal identity/lifecycle/capabilities/
 allowlists, including rotation. `observed_at` stays stable across the cursor.
+The effective credential is also bound internally even if rotation metadata is
+unchanged; its digest is never a public JSON, log, audit or cursor field.
 Drift answers 409 `directory.snapshot_changed`; discard the incomplete read
 and restart at offset 0. Credential/capability refusals are 401/403.
 

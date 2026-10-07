@@ -325,6 +325,7 @@
         "responses": {
           "200": {
             "description": "Authorized observation",
+          "headers": {"Cache-Control": {"description": "Contact responses cannot be cached", "schema": {"type": "string", "enum": ["no-store"]}}},
             "content": {
               "application/json": {
                 "schema": {
@@ -365,6 +366,7 @@
         "responses": {
           "200": {
             "description": "Authorized observation",
+          "headers": {"Cache-Control": {"description": "Contact responses cannot be cached", "schema": {"type": "string", "enum": ["no-store"]}}},
             "content": {
               "application/json": {
                 "schema": {
@@ -401,6 +403,7 @@
         "responses": {
           "200": {
             "description": "Authorized observation",
+          "headers": {"Cache-Control": {"description": "Contact responses cannot be cached", "schema": {"type": "string", "enum": ["no-store"]}}},
             "content": {
               "application/json": {
                 "schema": {
@@ -449,6 +452,7 @@
         "responses": {
           "200": {
             "description": "Audited operator contact read",
+          "headers": {"Cache-Control": {"description": "Contact responses cannot be cached", "schema": {"type": "string", "enum": ["no-store"]}}},
             "content": {
               "application/json": {
                 "schema": {
@@ -509,6 +513,7 @@
         "responses": {
           "200": {
             "description": "Authorized observation",
+          "headers": {"Cache-Control": {"description": "Contact responses cannot be cached", "schema": {"type": "string", "enum": ["no-store"]}}},
             "content": {
               "application/json": {
                 "schema": {
