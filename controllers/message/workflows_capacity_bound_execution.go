@@ -261,7 +261,16 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 			}
 			continue
 		}
-		if actual.Observation.State != "running" || actual.Observation.DeletionRequestedAt != nil || capacity.NativePodMatchesCheckpoint(p, cp, actual.Observation, time.Now().UTC()) != nil || actual.Observation.StartedAt == nil || !actual.Observation.StartedAt.Equal(cp.ContainerStartedAt) {
+		// The termination observer deliberately reports State=unknown until a
+		// successful current termination. A matched running container alone is
+		// insufficient: re-read its actual SDK origin and admission before
+		// treating this retained process as alive for a reservation decision.
+		if actual.Observation.ContainerState != "running" || actual.Observation.DeletionRequestedAt != nil || capacity.NativePodMatchesCheckpoint(p, cp, actual.Observation, time.Now().UTC()) != nil || actual.Observation.StartedAt == nil || !actual.Observation.StartedAt.Equal(cp.ContainerStartedAt) {
+			retirementPending = true
+			continue
+		}
+		live, e := observeAdmission(checkpointPod(cp))
+		if e != nil || capacity.NativeProcessAdmissionCheckpoint(p, cp, live, time.Now().UTC()) != nil || live.Admission.State != "roots_open" || !live.Observation.AdmissionReady {
 			retirementPending = true
 		}
 	}
