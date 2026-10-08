@@ -154,15 +154,25 @@ func PrepareMutationPlan(p model.CapacityPolicySpec, issue model.CapacityMutatio
 var mutationProjectionSchemaPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 
 func canonicalMutationProjection(spec model.CapacityMutationSpecV1) ([]byte, error) {
-	raw, err := json.Marshal(spec)
-	if err != nil {
-		return nil, err
+	// Select the closed contract explicitly. Do not serialize generic workflow
+	// metadata or an entire deserialized container into an authority digest.
+	fields := map[string]any{
+		"schema_version":          spec.SchemaVersion,
+		"capability":              spec.Capability,
+		"integration_instance_id": spec.IntegrationInstanceID,
+		"scope_checksum":          spec.ScopeChecksum,
+		"profile_checksum":        spec.ProfileChecksum,
+		"admission_checksum":      spec.AdmissionChecksum,
+		"profile_name":            spec.ProfileName,
+		"slot":                    spec.Slot,
+		"native_name":             spec.NativeName,
+		"bootstrap_sha256":        spec.BootstrapSHA256,
 	}
-	decoder := json.NewDecoder(bytes.NewReader(raw))
-	decoder.UseNumber()
-	var fields map[string]any
-	if err = decoder.Decode(&fields); err != nil {
-		return nil, err
+	if spec.ExpectedResourceID != "" {
+		fields["expected_resource_id"] = spec.ExpectedResourceID
+	}
+	if spec.ExpectedResourceCreatedAt != "" {
+		fields["expected_resource_created_at"] = spec.ExpectedResourceCreatedAt
 	}
 	return json.Marshal(fields)
 }
