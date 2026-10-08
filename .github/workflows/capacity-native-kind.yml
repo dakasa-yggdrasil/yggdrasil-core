@@ -58,7 +58,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: dakasa-yggdrasil/integration-kubernetes
-          ref: 5542c4cf852fcff35f4b775944a0627a7afcf08b
+          ref: 77ffa8d828823b40d84eff0bd8b34400b3681a44
           path: .ci-native-kubernetes
           token: ${{ steps.native-token.outputs.token }}
           persist-credentials: false
@@ -75,18 +75,55 @@ jobs:
       - name: Compile actual Kubernetes main and fixed metric source
         run: |
           set -euo pipefail
-          test "$(git -C .ci-native-kubernetes rev-parse HEAD)" = 5542c4cf852fcff35f4b775944a0627a7afcf08b
+          test "$(git -C .ci-native-kubernetes rev-parse HEAD)" = 77ffa8d828823b40d84eff0bd8b34400b3681a44
           (cd .ci-native-kubernetes && go build -race -o "$RUNNER_TEMP/native-kubernetes-main" .)
           cp scripts/ci/capacity_metric_source_fixture_test.go.tmpl .ci-native-prometheus/internal/adapter/capacity_core_metric_source_test.go
           (cd .ci-native-prometheus && go test -c -o "$RUNNER_TEMP/native-metric-source" ./internal/adapter)
           echo "CAPACITY_KUBERNETES_MAIN_BINARY=$RUNNER_TEMP/native-kubernetes-main" >> "$GITHUB_ENV"
           echo "CAPACITY_METRIC_FIXTURE_BINARY=$RUNNER_TEMP/native-metric-source" >> "$GITHUB_ENV"
-      - name: Build exact qualified SDK fixture source
+      - name: Verify immutable qualified schema two SDK fixture source
+        run: |
+          python3 - <<'PYVERIFY'
+          import hashlib,json,subprocess
+          from pathlib import Path
+          root=Path('.ci-native-kubernetes/.github/fixtures/native-admission')
+          provenance=json.loads((root/'SOURCE.json').read_text())
+          assert provenance['source_commit']=='a26bc0f92a5b1996f7b416f51b753e25428267ca'
+          expected={
+              'lifecycle/group.go': ('c7ef064846963da580d56be16bdd14d4075bc46e','447b82fb82fb5cdce8657cde1a5e49a5db697ee84477f5b8a1c2e961a5ce687c'),
+              'lifecycle/native_termination.go': ('11254b5e449ec8aeb288b04aaec14fc61e773391','e0f72674b30ba9af028924fe24e16292c4a9137ed284eda3542bf59f2a72d519'),
+              'lifecycle/native_admission.go': ('1a21cc11ac082854422c1c2d65308289e3e352b7','3f606c500b3bc4b455fcd2b90df0f59a603c1a3ed079e842b3b861630f43442e'),
+              'README.md': ('d8e6168817b69c72e7d8abdb39292eeb35ab8b2e','6f135b68ac4acffef58ceb77a21413f9e12d52b5eb5cf8f33b37d97382751171')}
+          assert {e['path']:(e['git_blob'],e['sha256']) for e in provenance['files']}==expected
+          for entry in provenance['files']:
+              path=root/'commons'/entry['path']
+              assert hashlib.sha256(path.read_bytes()).hexdigest()==entry['sha256']
+              assert subprocess.check_output(['git','hash-object',str(path)],text=True).strip()==entry['git_blob']
+          PYVERIFY
+      - name: Verify immutable qualified frozen schema one SDK fixture source
         run: |
           set -euo pipefail
-          mkdir -p "$RUNNER_TEMP/native-fixture"
-          git -C .ci-native-kubernetes archive HEAD .github/fixtures/native-receipt | tar -x --strip-components=3 -C "$RUNNER_TEMP/native-fixture"
-          docker build -t docker.io/library/native-receipt-fixture:head "$RUNNER_TEMP/native-fixture"
+          python3 - <<'PYVERIFY'
+          import hashlib,json,subprocess
+          from pathlib import Path
+          root=Path('.ci-native-kubernetes/.github/fixtures/native-receipt')
+          provenance=json.loads((root/'SOURCE.json').read_text())
+          assert provenance['source_commit']=='37be80bb81dd0009cb1265cba6dfbae5203af778'
+          expected={'lifecycle/group.go': ('c7ef064846963da580d56be16bdd14d4075bc46e', '447b82fb82fb5cdce8657cde1a5e49a5db697ee84477f5b8a1c2e961a5ce687c'), 'lifecycle/native_termination.go': ('11254b5e449ec8aeb288b04aaec14fc61e773391', 'e0f72674b30ba9af028924fe24e16292c4a9137ed284eda3542bf59f2a72d519'), 'README.md': ('d8e6168817b69c72e7d8abdb39292eeb35ab8b2e', '6f135b68ac4acffef58ceb77a21413f9e12d52b5eb5cf8f33b37d97382751171')}
+          assert {e['path']:(e['git_blob'],e['sha256']) for e in provenance['files']} == expected
+          for entry in provenance['files']:
+              path=root/'commons'/entry['path']
+              assert hashlib.sha256(path.read_bytes()).hexdigest()==entry['sha256']
+              assert subprocess.check_output(['git','hash-object',str(path)],text=True).strip()==entry['git_blob']
+          PYVERIFY
+      - name: Build exact qualified schema two and frozen schema one fixture sources
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/native-fixture" "$RUNNER_TEMP/old-native-fixture"
+          git -C .ci-native-kubernetes archive HEAD .github/fixtures/native-admission | tar -x --strip-components=3 -C "$RUNNER_TEMP/native-fixture"
+          git -C .ci-native-kubernetes archive HEAD .github/fixtures/native-receipt | tar -x --strip-components=3 -C "$RUNNER_TEMP/old-native-fixture"
+          docker build -t docker.io/library/native-admission-fixture:head "$RUNNER_TEMP/native-fixture"
+          docker build -t docker.io/library/native-receipt-fixture:head "$RUNNER_TEMP/old-native-fixture"
       - uses: helm/kind-action@v1.12.0
         with:
           cluster_name: native-core
@@ -94,12 +131,19 @@ jobs:
       - name: Pin the actual native OCI manifest
         run: |
           set -euo pipefail
-          kind load docker-image docker.io/library/native-receipt-fixture:head --name native-core
-          digest=$(docker exec native-core-control-plane ctr -n k8s.io images ls | awk '$1 == "docker.io/library/native-receipt-fixture:head" { print $3 }')
-          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-          docker exec native-core-control-plane ctr -n k8s.io images tag docker.io/library/native-receipt-fixture:head "docker.io/library/native-receipt-fixture@$digest"
-          echo "NATIVE_FIXTURE_IMAGE=docker.io/library/native-receipt-fixture@$digest" >> "$GITHUB_ENV"
-          echo "NATIVE_FIXTURE_DIGEST=$digest" >> "$GITHUB_ENV"
+          for fixture in native-admission-fixture native-receipt-fixture; do
+            kind load docker-image "docker.io/library/$fixture:head" --name native-core
+            digest=$(docker exec native-core-control-plane ctr -n k8s.io images ls | awk -v ref="docker.io/library/$fixture:head" '$1 == ref { print $3 }')
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+            docker exec native-core-control-plane ctr -n k8s.io images tag "docker.io/library/$fixture:head" "docker.io/library/$fixture@$digest"
+            if [ "$fixture" = native-admission-fixture ]; then
+              echo "NATIVE_FIXTURE_IMAGE=docker.io/library/$fixture@$digest" >> "$GITHUB_ENV"
+              echo "NATIVE_FIXTURE_DIGEST=$digest" >> "$GITHUB_ENV"
+            else
+              echo "NATIVE_OLD_FIXTURE_IMAGE=docker.io/library/$fixture@$digest" >> "$GITHUB_ENV"
+              echo "NATIVE_OLD_FIXTURE_DIGEST=$digest" >> "$GITHUB_ENV"
+            fi
+          done
           echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
       - name: Apply production migrations
         run: go run ./scripts/goose up
@@ -108,12 +152,13 @@ jobs:
           REQUIRE_CAPACITY_NATIVE_KIND: "true"
         run: |
           set -euo pipefail
-          go test -race -count=1 -timeout=8m -json ./controllers/httpapi -run '^TestCapacityNativeKinDHTTP$' | tee native-core-results.json
+          go test -race -count=1 -timeout=14m -json ./controllers/httpapi -run '^TestCapacityNativeKinDHTTP$' | tee native-core-results.json
           python3 - <<'PY'
           import json
           events=[json.loads(line) for line in open('native-core-results.json') if line.strip()]
           required='TestCapacityNativeKinDHTTP'
-          if not any(e.get('Test')==required and e.get('Action')=='pass' for e in events): raise SystemExit('actual protected native Core case missing or failed')
+          for case in [required,required+'/complete_baseline_controller_retirement',required+'/mixed_schema_one_frozen_bootstrap']:
+              if not any(e.get('Test')==case and e.get('Action')=='pass' for e in events): raise SystemExit('actual protected native Core case missing or failed: '+case)
           if any(e.get('Test')==required and e.get('Action') in ['skip','fail'] for e in events): raise SystemExit('actual protected native Core case skipped or failed')
           PY
       - name: Build the actual production Core Dockerfile from committed HEAD

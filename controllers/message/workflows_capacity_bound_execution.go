@@ -319,8 +319,21 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 			}
 			cp.State = "protected"
 		}
+	}
+	// Project the complete finite candidate roster before awaiting native file
+	// refreshes. Only actual SDK observations authorize the second phase; the
+	// enclosing protected invocation deadline returns unknown on expiry.
+	_, checkpoints, err = store.NativeLedger(ctx, policy, intent)
+	if err != nil {
+		return intent, err
+	}
+	for _, pod := range current.Pods {
+		cp, exists := findCheckpoint(pod.PodUID)
+		if !exists || (cp.State != "protected" && cp.State != "admitted") {
+			return intent, errCapacityBoundAssessment
+		}
 		var actual model.AdapterCapacityPodAdmissionResponse
-		for attempt := 0; attempt < 20; attempt++ {
+		for {
 			actual, err = observeAdmission(checkpointPod(cp))
 			if err != nil {
 				return intent, err
@@ -330,9 +343,6 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 			}
 			if actual.Admission.State != "waiting_projection" && actual.Admission.State != "projection_observed" {
 				return intent, errCapacityBoundAssessment
-			}
-			if attempt == 19 {
-				return intent, fmt.Errorf("actual native projection/startup acknowledgement pending")
 			}
 			select {
 			case <-ctx.Done():
