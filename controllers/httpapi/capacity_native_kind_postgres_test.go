@@ -219,6 +219,9 @@ func TestCapacityNativeKinDHTTP(t *testing.T) {
 	noNativeInputs := false
 	create("workflow", "execute", model.WorkflowManifestSpec{Trigger: model.WorkflowTriggerSpec{Mode: "manual"}, Authorization: &model.WorkflowAuthorizationSpec{RBAC: model.ManifestSelector{Namespace: realm, Name: "native-rbac"}}, InputSchema: model.WorkflowInputSchemaSpec{Properties: map[string]model.IntegrationSchemaProperty{}, AdditionalProperties: &noNativeInputs}, Steps: []model.WorkflowStepSpec{{ID: "native", TimeoutSeconds: 180, Retry: model.WorkflowRetrySpec{MaxAttempts: 1}, Use: model.WorkflowStepUseSpec{Kind: "yggdrasil", Operation: "capacity.execute_bound"}, With: map[string]any{"policy": map[string]string{"namespace": realm, "name": "native-policy"}}}}})
 	policy := create("capacity_policy", "native-policy", p)
+	if err := manifest.ValidateCapacityPolicySpec(p); err != nil {
+		t.Fatalf("actual native operator binding: %v", err)
+	}
 	// Read through the same real Core resolution and SDK transport before the
 	// protected workflow. Failures stay private to CI diagnostics, not API output.
 	for _, check := range []struct {
@@ -235,6 +238,32 @@ func TestCapacityNativeKinDHTTP(t *testing.T) {
 			t.Fatalf("actual native read preflight %s: %v", check.operation, err)
 		}
 		t.Logf("actual native read preflight %s status=%s", check.operation, result.Status)
+		switch check.operation {
+		case capacity.ObserveMetricRange:
+			var source model.CapacityMetricRangeObservation
+			if err := capacity.DecodeNativeCapacity(result.Output, &source); err != nil {
+				t.Fatalf("actual metric closed source: %v", err)
+			}
+			if _, err := capacity.BoundMetricEvidence(p, p.AssessmentBinding.Signals[0], source, time.Now().UTC()); err != nil {
+				t.Fatalf("actual metric binding: %v", err)
+			}
+		case capacity.ObserveHPAEnvelope:
+			var source model.CapacityHPAEnvelopeResponse
+			if err := capacity.DecodeNativeCapacity(result.Output, &source); err != nil {
+				t.Fatalf("actual HPA closed source: %v", err)
+			}
+			if _, err := capacity.BoundHPASnapshot(p, source, time.Now().UTC()); err != nil {
+				t.Fatalf("actual HPA binding: %v %#v", err, source.Observation)
+			}
+		case capacity.ObserveNativePodInventory:
+			var source model.AdapterCapacityPodInventoryResponse
+			if err := capacity.DecodeNativeCapacity(result.Output, &source); err != nil {
+				t.Fatalf("actual native inventory closed source: %v", err)
+			}
+			if err := capacity.NativePodInventory(p, source, time.Now().UTC()); err != nil {
+				t.Fatalf("actual native inventory binding: %v", err)
+			}
+		}
 	}
 	post := func(token string, input any) (int, map[string]any) {
 		raw, _ := json.Marshal(input)
