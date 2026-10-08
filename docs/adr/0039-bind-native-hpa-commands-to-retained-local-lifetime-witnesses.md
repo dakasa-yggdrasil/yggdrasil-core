@@ -1,8 +1,6 @@
-# 0039 - Bind native HPA commands to retained local lifetime witnesses
+# ADR-0039: Bind native HPA commands to retained local lifetime witnesses
 
-## Status
-
-Proposed
+**Status:** Proposed
 
 ## Context
 
