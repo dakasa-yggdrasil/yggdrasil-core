@@ -1,6 +1,6 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-08T14:54:53-03:00_
+_Generated from HEAD at: 2026-10-08T15:05:40-03:00_
 
 ## Languages
 
@@ -24,10 +24,10 @@ _Generated from HEAD at: 2026-10-08T14:54:53-03:00_
 
 ## Top Directories by File Count
 
-- controllers/httpapi: 167 files (1704.7 KB)
-- repository: 115 files (887.8 KB)
-- model: 64 files (261.8 KB)
-- controllers/message: 60 files (606.1 KB)
+- controllers/httpapi: 167 files (1705.8 KB)
+- repository: 115 files (897.6 KB)
+- model: 64 files (261.9 KB)
+- controllers/message: 60 files (610.1 KB)
 - manifest: 59 files (363.5 KB)
 - db/migrations: 57 files (100.1 KB)
 - addons: 42 files (198.3 KB)
