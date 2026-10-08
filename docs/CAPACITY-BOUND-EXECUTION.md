@@ -21,6 +21,9 @@ HPA tracking generation is monotonic in the native HPA; Core intent generation i
 separate and binds Pod challenges. A first Core intent does not overwrite a higher
 native HPA generation. Only min/max reservation bounds and tracking annotations
 change. Current replicas, useful stock, warm readiness and VM floors are untouched.
+Native HPA metadata generation can be zero because the Kubernetes HPA REST strategy
+does not increment it on create/update. Exact UID/resourceVersion and the positive
+owner envelope generation remain mandatory. This is not a zero-as-wildcard rule.
 
 A reduction records a complete native baseline UID roster and its selected Pod
 checkpoints in one transaction. Protection precedes the HPA write. Each challenge

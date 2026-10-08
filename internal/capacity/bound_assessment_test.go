@@ -47,6 +47,36 @@ func TestBoundAssessmentPreservesReservedPodUnitAndStrictSourceQuality(t *testin
 	}
 }
 
+func TestNativeHPAMetadataGenerationZeroKeepsExactFences(t *testing.T) {
+	p, hpa, _, now := boundAssessmentFixture()
+	hpa.Observation.APIGeneration = 0
+	if _, err := BoundHPASnapshot(p, hpa, now); err != nil {
+		t.Fatal("native HPA metadata generation zero was fabricated as invalid", err)
+	}
+	for _, field := range []string{"uid", "rv", "workload_uid", "workload_rv", "envelope_generation", "negative_metadata"} {
+		t.Run(field, func(t *testing.T) {
+			changed := hpa
+			switch field {
+			case "uid":
+				changed.Observation.HPAUID = "another-hpa"
+			case "rv":
+				changed.Observation.ResourceVersion = ""
+			case "workload_uid":
+				changed.Observation.WorkloadUID = "another-workload"
+			case "workload_rv":
+				changed.Observation.WorkloadResourceVersion = ""
+			case "envelope_generation":
+				changed.Observation.EnvelopeGeneration = 0
+			case "negative_metadata":
+				changed.Observation.APIGeneration = -1
+			}
+			if _, err := BoundHPASnapshot(p, changed, now); err == nil {
+				t.Fatal("HPA metadata zero weakened an independent identity/version fence")
+			}
+		})
+	}
+}
+
 func TestBoundAssessmentRefusesUnitMixingAndCallerExecution(t *testing.T) {
 	for _, mode := range []string{"execution", "vm_mutations", "profile_migration", "unit", "signal_missing", "signal_duplicate", "adapter_revision", "binding_hash"} {
 		t.Run(mode, func(t *testing.T) {
