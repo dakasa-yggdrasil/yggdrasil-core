@@ -15,7 +15,10 @@ Repeating the write can overspend, conflict with deletion or violate the floor.
 ## Decision
 
 Bind each non-secret canonical adapter dry-run spec to an operator-approved
-profile/slot digest, exact instance/type checksums and adapter principal. Issue
+closed typed profile/slot projection and matching digest, exact instance/type
+checksums and adapter principal. Compare requested fields to that immutable
+projection. Hash only approved fields; a destruction digest additionally binds
+the exact immutable tuple read from the locked membership ledger. Issue
 grants only inside the policy's active authenticated workflow and private live
 executor lease. PostgreSQL holds one unresolved grant per logical native slot
 and counts live membership plus reservations against the intended envelope.
@@ -40,6 +43,11 @@ intents while any grant remains unresolved.
 
 Represent this authority as `core_mutation_grants`, with no fabricated native
 provider fencing token. It is distinct from existing provider-CAS recovery.
+
+Persist canonical applied integration events atomically with confirmed native
+membership. Snapshot provider/resource routing from the exact registered type
+and capability pair at issuance. Accepted transport is not an applied event;
+exact confirmation retries produce no duplicate event or reaction.
 
 ## Consequences
 

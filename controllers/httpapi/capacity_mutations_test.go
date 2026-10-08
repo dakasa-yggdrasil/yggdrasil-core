@@ -150,16 +150,20 @@ func TestCapacityMutationHTTPPostgres(t *testing.T) {
 		return m
 	}
 	wf := create("workflow", "scale", map[string]any{"authorization": map[string]any{"rbac": map[string]string{"namespace": ns, "name": "rbac"}}})
-	ty := create("integration_type", "type", map[string]string{"provider": "fixture"})
+	ty := create("integration_type", "type", map[string]any{"provider": "fixture", "capabilities": []string{"ensure_server", "destroy_server"}})
 	in := create("integration_instance", "instance", map[string]any{"type_ref": model.ManifestSelector{ManifestID: ty.ID.String()}})
 	now := time.Now().UTC()
 	scope := strings.Repeat("a", 64)
 	b := model.CapacityMutationBinding{Name: "fleet", IntegrationInstanceID: in.ID.String(), IntegrationChecksum: in.Checksum, IntegrationTypeID: ty.ID.String(), IntegrationTypeChecksum: ty.Checksum, AdapterPrincipalID: "fixture-adapter", ScopeChecksum: scope, ProfileName: "base", EnsureCapability: "ensure_server", DestroyCapability: "destroy_server", ProtectedSlots: 2, MaxSlots: 3}
 	plans := map[int]model.CapacityMutationIssue{}
 	for slot := 1; slot <= 3; slot++ {
-		raw, _ := json.Marshal(map[string]any{"schema_version": "fixture_slot_v1", "capability": "ensure_server", "integration_instance_id": in.ID.String(), "scope_checksum": scope, "profile_name": "base", "slot": slot, "profile_checksum": strings.Repeat("c", 64), "admission_checksum": strings.Repeat("d", 64), "native_name": fmt.Sprintf("node-%d", slot), "bootstrap_sha256": strings.Repeat("b", 64)})
+		raw, _ := json.Marshal(map[string]any{"schema_version": "capacity_vm_slot_v1", "capability": "ensure_server", "integration_instance_id": in.ID.String(), "scope_checksum": scope, "profile_name": "base", "slot": slot, "profile_checksum": strings.Repeat("c", 64), "admission_checksum": strings.Repeat("d", 64), "native_name": fmt.Sprintf("node-%d", slot), "bootstrap_sha256": strings.Repeat("b", 64)})
 		plans[slot] = model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: raw}
-		b.Slots = append(b.Slots, model.CapacityMutationSlotBinding{Slot: slot, DesiredSpecSHA256: fmt.Sprintf("%x", sha256.Sum256(raw))})
+		var approved *model.CapacityMutationSpecV1
+		if err := json.Unmarshal(raw, &approved); err != nil {
+			t.Fatal(err)
+		}
+		b.Slots = append(b.Slots, model.CapacityMutationSlotBinding{Slot: slot, DesiredSpecSHA256: fmt.Sprintf("%x", sha256.Sum256(raw)), DesiredSpec: approved})
 	}
 	p := model.CapacityPolicySpec{Environment: "production", Domain: "fleet", Dimension: "slots", TargetIdentity: "fixture/fleet", Owner: "fixture", Workflow: model.ManifestSelector{Namespace: ns, Name: "scale"}, Currency: "EUR", Floor: 2, Ceiling: 3, Step: 1, MaxEvidenceAgeSeconds: 60, MinSamples: 3, MaxSampleGapSeconds: 30, DownHoldSeconds: 1, LeaseSeconds: 120, ExecutionEnabled: true, Signals: []model.CapacitySignalRule{{Name: "pressure", SourceIdentity: "fixture/prom", Unit: "ratio", UpAbove: 0.8, DownBelow: 0.3}}, Profiles: []model.CapacityProfile{{Name: "base", Provider: "fixture", Region: "fixture", MinUnits: 2, MaxUnits: 3, QuoteValidUntil: now.Add(time.Hour), ValidationValidUntil: now.Add(time.Hour), ValidationRef: "fixture:qualification"}}, MutationBindings: []model.CapacityMutationBinding{b}}
 	policy := create("capacity_policy", "fleet", p)

@@ -31,8 +31,9 @@ type CapacityMutationRejection struct {
 }
 
 type CapacityMutationSlotBinding struct {
-	Slot              int    `json:"slot"`
-	DesiredSpecSHA256 string `json:"desired_spec_sha256"`
+	Slot              int                     `json:"slot"`
+	DesiredSpecSHA256 string                  `json:"desired_spec_sha256"`
+	DesiredSpec       *CapacityMutationSpecV1 `json:"desired_spec"`
 }
 
 type CapacityMutationIssue struct {

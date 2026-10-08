@@ -11,6 +11,7 @@ import (
 	"fmt"
 	"regexp"
 	"slices"
+	"strings"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
@@ -35,6 +36,8 @@ type capacityMutationRecord struct {
 	SettlementTokenSHA256 string                               `json:"settlement_token_sha256,omitempty"`
 	Settlement            *model.CapacityMutationSettleRequest `json:"settlement,omitempty"`
 	Proof                 *model.CapacityMutationProof         `json:"proof,omitempty"`
+	EventProvider         string                               `json:"event_provider"`
+	EventResource         string                               `json:"event_resource"`
 }
 
 type capacityResourceSlot struct {
@@ -169,6 +172,10 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 		if err = checkMutationIntegration(ctx, tx, b); err != nil {
 			return err
 		}
+		provider, resource, err := capacityMutationEventIdentity(ctx, tx, b)
+		if err != nil {
+			return err
+		}
 		if b.ProfileName != intent.Decision.Profile || !capacityProfileCurrent(p, intent.Decision, now) {
 			return ErrCapacityConflict
 		}
@@ -177,6 +184,19 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 		}
 		if plan.Capability == b.DestroyCapability && (intent.Phase != "drained" || !capacityIntentReduction(intent)) {
 			return ErrCapacityConflict
+		}
+		slot, exists, err := loadMutationSlot(ctx, tx, policy.Metadata.Namespace, p, b, plan.Slot)
+		if err != nil {
+			return err
+		}
+		if plan.Capability == b.DestroyCapability {
+			if !exists || slot.ResourceID == "" {
+				return ErrCapacityConflict
+			}
+			plan, err = capacity.BindMutationDestroyPlan(plan, slot.ResourceID, slot.ResourceCreatedAt)
+			if err != nil {
+				return ErrCapacityConflict
+			}
 		}
 		// Never-redeemed permissions have never authorized an SDK send. Only
 		// those may expire without a remote mutation receipt.
@@ -197,10 +217,6 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 			return nil
 		}
 		if !errors.Is(err, sql.ErrNoRows) {
-			return err
-		}
-		slot, exists, err := loadMutationSlot(ctx, tx, policy.Metadata.Namespace, p, b, plan.Slot)
-		if err != nil {
 			return err
 		}
 		var foreign int
@@ -241,7 +257,7 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 			expires = *intent.LeaseExpiresAt
 		}
 		result = model.CapacityMutationGrant{GrantID: uuid.NewString(), BindingName: b.Name, IntegrationInstanceID: b.IntegrationInstanceID, ScopeChecksum: b.ScopeChecksum, ProfileName: b.ProfileName, Slot: plan.Slot, Capability: plan.Capability, RequestSHA256: plan.RequestSHA256, ExpectedResourceID: plan.ExpectedResourceID, ExpectedResourceCreatedAt: plan.ExpectedResourceCreatedAt, ExpiresAt: expires, State: "issued"}
-		record := capacityMutationRecord{Grant: result, Binding: b, PolicyID: policy.ID, PolicyChecksum: policy.Checksum, WorkflowID: s.WorkflowID, Generation: generation, FencingToken: fence, LeaseOwner: owner, ExecutorID: s.ExecutorID, CreatedAt: now}
+		record := capacityMutationRecord{Grant: result, Binding: b, PolicyID: policy.ID, PolicyChecksum: policy.Checksum, WorkflowID: s.WorkflowID, Generation: generation, FencingToken: fence, LeaseOwner: owner, ExecutorID: s.ExecutorID, CreatedAt: now, EventProvider: provider, EventResource: resource}
 		data, err = json.Marshal(record)
 		if err != nil {
 			return err
@@ -522,7 +538,7 @@ func validMutationIdentity(id, created string, required bool) bool {
 		return !required && id == "" && created == ""
 	}
 	date, err := time.Parse(time.RFC3339Nano, created)
-	return len(id) <= 256 && err == nil && !date.IsZero()
+	return len(id) <= 128 && err == nil && !date.IsZero()
 }
 
 func validMutationActions(first string, next []string, required bool) bool {
@@ -620,6 +636,14 @@ func (s CapacityStore) ConfirmMutation(ctx context.Context, policy model.Manifes
 		if err := lockNativeMutationSlot(ctx, tx, b, g.Slot); err != nil {
 			return err
 		}
+		if record.PolicyID == policy.ID && record.PolicyChecksum == policy.Checksum && record.WorkflowID == s.WorkflowID && g.State == "confirmed" && record.Proof != nil {
+			previous, _ := json.Marshal(record.Proof)
+			requested, _ := json.Marshal(proof)
+			if string(previous) == string(requested) {
+				result = g
+				return nil
+			}
+		}
 		if record.PolicyID != policy.ID || record.PolicyChecksum != policy.Checksum || record.WorkflowID != s.WorkflowID || g.State != "settled" || record.Settlement == nil || !record.Settlement.TransportCompleted || proof.BindingName != b.Name || proof.Slot != g.Slot || proof.RequestSHA256 != g.RequestSHA256 || !validMutationProof(p, proof, now) || !proof.ActionsTerminal || !proof.ActionsSuccessful || len(proof.ActionIDs) == 0 || len(proof.ActionIDs) > 64 {
 			return ErrCapacityConflict
 		}
@@ -685,7 +709,47 @@ func (s CapacityStore) ConfirmMutation(ctx context.Context, policy model.Manifes
 		record.Grant.State = "confirmed"
 		record.Proof = &proof
 		result = record.Grant
-		return saveMutationGrant(ctx, tx, record)
+		if err = saveMutationGrant(ctx, tx, record); err != nil {
+			return err
+		}
+		return emitCapacityMutationEvent(ctx, tx, policy.Metadata.Namespace, p, record, proof, now)
 	})
 	return result, err
+}
+
+// Snapshot event routing from the exact registered type at issuance. Recovery
+// does not depend on a later active type or reinterpret an old native effect.
+func capacityMutationEventIdentity(ctx context.Context, tx *sql.Tx, b model.CapacityMutationBinding) (string, string, error) {
+	var raw []byte
+	if err := tx.QueryRowContext(ctx, `SELECT spec FROM public.manifests WHERE id=$1 AND checksum=$2 AND kind='integration_type' FOR SHARE`, b.IntegrationTypeID, b.IntegrationTypeChecksum).Scan(&raw); err != nil {
+		return "", "", err
+	}
+	var spec model.IntegrationTypeManifestSpec
+	if err := json.Unmarshal(raw, &spec); err != nil {
+		return "", "", err
+	}
+	resource := strings.TrimPrefix(b.EnsureCapability, "ensure_")
+	if !mutationAuxiliaryKindPattern.MatchString(spec.Provider) || !mutationAuxiliaryKindPattern.MatchString(resource) || len(spec.Provider)+len(resource)+1 > 64 || b.DestroyCapability != "destroy_"+resource || !slices.Contains(spec.Capabilities, b.EnsureCapability) || !slices.Contains(spec.Capabilities, b.DestroyCapability) {
+		return "", "", ErrCapacityConflict
+	}
+	return spec.Provider, resource, nil
+}
+
+func emitCapacityMutationEvent(ctx context.Context, tx *sql.Tx, namespace string, p model.CapacityPolicySpec, record capacityMutationRecord, proof model.CapacityMutationProof, now time.Time) error {
+	verb := "ensured"
+	if record.Grant.Capability == record.Binding.DestroyCapability {
+		verb = "destroyed"
+	}
+	if !mutationAuxiliaryKindPattern.MatchString(record.EventProvider) || !mutationAuxiliaryKindPattern.MatchString(record.EventResource) {
+		return ErrCapacityConflict
+	}
+	_, err := EmitEvent(ctx, tx, model.EmitEventRequest{
+		Type:          record.EventProvider + "." + record.EventResource + "." + verb,
+		SchemaVersion: "v1", AggregateType: record.EventProvider + "_" + record.EventResource, AggregateID: proof.ResourceID,
+		Actor:          &model.EventActor{Type: "workflow", ID: record.WorkflowID.String()},
+		IdempotencyKey: "capacity-mutation/" + record.Grant.GrantID,
+		Payload:        map[string]any{"provider": record.EventProvider, "resource": record.EventResource, "verb": verb, "resource_id": proof.ResourceID, "instance_id": record.Grant.IntegrationInstanceID, "emitted_at": now.Format(time.RFC3339Nano), "observed": map[string]any{"grant_id": record.Grant.GrantID, "scope_checksum": record.Grant.ScopeChecksum, "profile_name": record.Grant.ProfileName, "slot": record.Grant.Slot, "resource_created_at": proof.ResourceCreatedAt, "action_ids": proof.ActionIDs, "receipt_ref": proof.ReceiptRef}},
+		Metadata:       map[string]any{"namespace": namespace, "environment": p.Environment, "domain": p.Domain, "dimension": p.Dimension, "instance_id": record.Grant.IntegrationInstanceID, "source": "integration_mutation", "idempotency": "capacity-mutation/" + record.Grant.GrantID},
+	})
+	return err
 }

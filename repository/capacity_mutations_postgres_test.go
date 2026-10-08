@@ -46,7 +46,7 @@ func mutationPostgresFixture(t *testing.T, register bool) mutationFixture {
 		return m
 	}
 	wf := create("workflow", "scale-api", map[string]any{"authorization": map[string]any{"rbac": map[string]string{"namespace": original.Metadata.Namespace, "name": "scale-rbac"}}})
-	ty := create("integration_type", "fleet-type", map[string]any{"provider": "fixture", "revision": "1"})
+	ty := create("integration_type", "fleet-type", map[string]any{"provider": "fixture", "revision": "1", "capabilities": []string{"ensure_server", "destroy_server"}})
 	instance := create("integration_instance", "fleet", map[string]any{"type_ref": model.ManifestSelector{ManifestID: ty.ID.String()}})
 	var p model.CapacityPolicySpec
 	if err := json.Unmarshal(original.Spec, &p); err != nil {
@@ -56,8 +56,12 @@ func mutationPostgresFixture(t *testing.T, register bool) mutationFixture {
 	b := model.CapacityMutationBinding{Name: "burst", IntegrationInstanceID: instance.ID.String(), IntegrationChecksum: instance.Checksum, IntegrationTypeID: ty.ID.String(), IntegrationTypeChecksum: ty.Checksum, AdapterPrincipalID: "fleet-adapter", ScopeChecksum: strings.Repeat("a", 64), ProfileName: "base", EnsureCapability: "ensure_server", DestroyCapability: "destroy_server", ProtectedSlots: 2, MaxSlots: 20}
 	plans := map[int]model.CapacityMutationIssue{}
 	for slot := 1; slot <= b.MaxSlots; slot++ {
-		raw, _ := json.Marshal(map[string]any{"schema_version": "fixture_slot_v1", "capability": b.EnsureCapability, "integration_instance_id": b.IntegrationInstanceID, "scope_checksum": b.ScopeChecksum, "profile_name": b.ProfileName, "profile_checksum": strings.Repeat("c", 64), "admission_checksum": strings.Repeat("d", 64), "slot": slot, "native_name": fmt.Sprintf("node-%d", slot), "bootstrap_sha256": strings.Repeat("b", 64)})
-		b.Slots = append(b.Slots, model.CapacityMutationSlotBinding{Slot: slot, DesiredSpecSHA256: fmt.Sprintf("%x", sha256.Sum256(raw))})
+		raw, _ := json.Marshal(map[string]any{"schema_version": "capacity_vm_slot_v1", "capability": b.EnsureCapability, "integration_instance_id": b.IntegrationInstanceID, "scope_checksum": b.ScopeChecksum, "profile_name": b.ProfileName, "profile_checksum": strings.Repeat("c", 64), "admission_checksum": strings.Repeat("d", 64), "slot": slot, "native_name": fmt.Sprintf("node-%d", slot), "bootstrap_sha256": strings.Repeat("b", 64)})
+		var approved *model.CapacityMutationSpecV1
+		if err := json.Unmarshal(raw, &approved); err != nil {
+			t.Fatal(err)
+		}
+		b.Slots = append(b.Slots, model.CapacityMutationSlotBinding{Slot: slot, DesiredSpecSHA256: fmt.Sprintf("%x", sha256.Sum256(raw)), DesiredSpec: approved})
 		plans[slot] = model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: raw}
 	}
 	alt := b
@@ -73,7 +77,11 @@ func mutationPostgresFixture(t *testing.T, register bool) mutationFixture {
 		spec["native_name"] = fmt.Sprintf("alternate-%d", slot)
 		raw, _ := json.Marshal(spec)
 		alternate[slot] = model.CapacityMutationIssue{BindingName: alt.Name, DesiredSpec: raw}
-		alt.Slots = append(alt.Slots, model.CapacityMutationSlotBinding{Slot: slot, DesiredSpecSHA256: fmt.Sprintf("%x", sha256.Sum256(raw))})
+		var approved *model.CapacityMutationSpecV1
+		if err := json.Unmarshal(raw, &approved); err != nil {
+			t.Fatal(err)
+		}
+		alt.Slots = append(alt.Slots, model.CapacityMutationSlotBinding{Slot: slot, DesiredSpecSHA256: fmt.Sprintf("%x", sha256.Sum256(raw)), DesiredSpec: approved})
 	}
 	profile := p.Profiles[0]
 	profile.Name = alt.ProfileName
@@ -92,6 +100,9 @@ func mutationPostgresFixture(t *testing.T, register bool) mutationFixture {
 	}
 	f := mutationFixture{db: db, policy: policy, store: store, a: a, intent: intent, binding: b, plans: plans, alternate: alternate, created: time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano)}
 	t.Cleanup(func() {
+		if _, err := db.ExecContext(ctx, `DELETE FROM public.event_log WHERE metadata->>'namespace'=$1`, policy.Metadata.Namespace); err != nil {
+			t.Error(err)
+		}
 		for _, table := range []string{"capacity_mutation_grants", "capacity_resource_slots"} {
 			if _, err := db.ExecContext(ctx, `DELETE FROM public.`+table+` WHERE namespace=$1`, policy.Metadata.Namespace); err != nil {
 				t.Error(err)
@@ -420,6 +431,10 @@ func TestCapacityMutationPostgres(t *testing.T) {
 		if _, err := f.store.SettleMutation(ctx, f.binding.AdapterPrincipalID, nonce, settle); err != nil {
 			t.Fatal(err)
 		}
+		var auditCount int
+		if err := f.db.QueryRowContext(ctx, `SELECT count(*) FROM public.event_log WHERE idempotency_key=$1`, "capacity-mutation/"+g.GrantID).Scan(&auditCount); err != nil || auditCount != 0 {
+			t.Fatal("accepted transport emitted an applied event", auditCount, err)
+		}
 		proof.ResourceCreatedAt = settle.ResourceCreatedAt
 		proof.ObservedCreationGrantID = g.GrantID
 		proof.ActionIDs = []string{"native-action"}
@@ -442,6 +457,16 @@ func TestCapacityMutationPostgres(t *testing.T) {
 		result, err := f.store.ConfirmMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, proof)
 		if err != nil || result.State != "confirmed" {
 			t.Fatal(result, err)
+		}
+		if _, err = f.store.ConfirmMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, proof); err != nil {
+			t.Fatal("exact confirmation replay", err)
+		}
+		var eventType, aggregateType, resourceID, instanceID string
+		if err := f.db.QueryRowContext(ctx, `SELECT type,aggregate_type,payload->>'resource_id',payload->>'instance_id' FROM public.event_log WHERE idempotency_key=$1`, "capacity-mutation/"+g.GrantID).Scan(&eventType, &aggregateType, &resourceID, &instanceID); err != nil || eventType != "fixture.server.ensured" || aggregateType != "fixture_server" || resourceID != proof.ResourceID || instanceID != f.binding.IntegrationInstanceID {
+			t.Fatal("canonical native event", eventType, resourceID, err)
+		}
+		if err := f.db.QueryRowContext(ctx, `SELECT count(*) FROM public.event_log WHERE idempotency_key=$1`, "capacity-mutation/"+g.GrantID).Scan(&auditCount); err != nil || auditCount != 1 {
+			t.Fatal("duplicate confirmation event", auditCount, err)
 		}
 	})
 	t.Run("historical_recovery_confirms_after_pause", func(t *testing.T) {
@@ -540,6 +565,10 @@ func TestCapacityMutationPostgres(t *testing.T) {
 		deleted.AuxiliaryAbsent = []model.CapacityMutationAuxiliaryResource{{Kind: "primary_ip", ID: "ip-fixture"}}
 		if _, err = f.store.ConfirmMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, deleted); err != nil {
 			t.Fatal(err)
+		}
+		var applied int
+		if err = f.db.QueryRowContext(ctx, `SELECT count(*) FROM public.event_log WHERE idempotency_key=$1 AND type='fixture.server.destroyed' AND payload->>'resource_id'=$2`, "capacity-mutation/"+g.GrantID, deleted.ResourceID).Scan(&applied); err != nil || applied != 1 {
+			t.Fatal("canonical deletion event", applied, err)
 		}
 		if err = f.store.RecordMutationSlot(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, f.plans[4], f.proof(t, 4)); !errors.Is(err, ErrCapacityConflict) {
 			t.Fatal("tombstone silently readopted", err)

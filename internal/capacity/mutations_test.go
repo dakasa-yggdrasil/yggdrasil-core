@@ -19,10 +19,17 @@ func TestCapacityMutationClosedProjection(t *testing.T) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	p := model.CapacityPolicySpec{MutationBindings: []model.CapacityMutationBinding{{Name: "fleet", IntegrationInstanceID: id, ScopeChecksum: spec.ScopeChecksum, ProfileName: "burst", MaxSlots: 1, EnsureCapability: "ensure_vm", DestroyCapability: "destroy_vm", Slots: []model.CapacityMutationSlotBinding{{Slot: 1, DesiredSpecSHA256: fmt.Sprintf("%x", sha256.Sum256(canonical))}}}}}
+	approved := spec
+	p := model.CapacityPolicySpec{MutationBindings: []model.CapacityMutationBinding{{Name: "fleet", IntegrationInstanceID: id, ScopeChecksum: spec.ScopeChecksum, ProfileName: "burst", MaxSlots: 1, EnsureCapability: "ensure_vm", DestroyCapability: "destroy_vm", Slots: []model.CapacityMutationSlotBinding{{Slot: 1, DesiredSpecSHA256: fmt.Sprintf("%x", sha256.Sum256(canonical)), DesiredSpec: &approved}}}}}
 	issue := model.CapacityMutationIssue{BindingName: "fleet", DesiredSpec: canonical}
 	if _, err = PrepareMutationPlan(p, issue); err != nil {
 		t.Fatal("approved closed projection", err)
+	}
+	missing := p
+	missing.MutationBindings = append([]model.CapacityMutationBinding(nil), p.MutationBindings...)
+	missing.MutationBindings[0].Slots = []model.CapacityMutationSlotBinding{{Slot: 1, DesiredSpecSHA256: p.MutationBindings[0].Slots[0].DesiredSpecSHA256}}
+	if _, err := PrepareMutationPlan(missing, issue); err == nil {
+		t.Fatal("digest-only slot silently admitted")
 	}
 	for _, key := range []string{"password", "credentials", "token", "cloud_init", "extra"} {
 		t.Run("unknown_"+key, func(t *testing.T) {
@@ -42,11 +49,26 @@ func TestCapacityMutationClosedProjection(t *testing.T) {
 			t.Fatal("malformed or noninteger projection admitted")
 		}
 	}
+	for _, nativeName := range []string{"__GENERATE__:postgres", "with spaces", "a/b", strings.Repeat("n", 64)} {
+		changed := approved
+		changed.NativeName = nativeName
+		raw, _ := json.Marshal(changed)
+		if _, err := PrepareMutationPlan(p, model.CapacityMutationIssue{BindingName: "fleet", DesiredSpec: raw}); err == nil {
+			t.Fatal("noncanonical native name admitted", nativeName)
+		}
+	}
 	spec.Capability = "destroy_vm"
 	spec.ExpectedResourceID = "immutable-native-id"
 	spec.ExpectedResourceCreatedAt = time.Now().UTC().Format(time.RFC3339Nano)
 	issue.DesiredSpec, _ = json.Marshal(spec)
 	destroy, err := PrepareMutationPlan(p, issue)
+	if err != nil || destroy.RequestSHA256 != "" {
+		t.Fatal("runtime tuple supplied a destroy digest before ledger binding", destroy, err)
+	}
+	if _, err := BindMutationDestroyPlan(destroy, "replacement-id", spec.ExpectedResourceCreatedAt); err == nil {
+		t.Fatal("caller identity replaced registered immutable membership")
+	}
+	destroy, err = BindMutationDestroyPlan(destroy, spec.ExpectedResourceID, spec.ExpectedResourceCreatedAt)
 	if err != nil || destroy.RequestSHA256 == p.MutationBindings[0].Slots[0].DesiredSpecSHA256 || destroy.ExpectedResourceID != spec.ExpectedResourceID {
 		t.Fatal("destroy tuple must bind a distinct digest of the approved base", destroy, err)
 	}

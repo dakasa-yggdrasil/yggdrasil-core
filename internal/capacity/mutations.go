@@ -37,6 +37,10 @@ func ValidateMutationBindings(p model.CapacityPolicySpec) error {
 			return fmt.Errorf("capacity mutation binding requires exact identity, digests, principal and capability pair")
 		}
 		key := b.IntegrationInstanceID + "/" + b.ScopeChecksum + "/" + b.ProfileName
+		resource := strings.TrimPrefix(b.EnsureCapability, "ensure_")
+		if !mutationProjectionSchemaPattern.MatchString(resource) || b.DestroyCapability != "destroy_"+resource {
+			return fmt.Errorf("capacity mutation capabilities require one canonical resource pair")
+		}
 		if targets[key] || b.ProtectedSlots < 0 || b.MaxSlots < b.ProtectedSlots || b.MaxSlots > p.Ceiling || len(b.Slots) != b.MaxSlots {
 			return fmt.Errorf("capacity mutation binding requires unique bounded scope and every approved slot")
 		}
@@ -53,6 +57,9 @@ func ValidateMutationBindings(p model.CapacityPolicySpec) error {
 		for _, slot := range b.Slots {
 			if slot.Slot < 1 || slot.Slot > b.MaxSlots || slots[slot.Slot] || !ValidDigest(slot.DesiredSpecSHA256) {
 				return fmt.Errorf("capacity mutation slot requires unique exact desired spec digest")
+			}
+			if _, err := approvedMutationProjection(b, slot); err != nil {
+				return err
 			}
 			slots[slot.Slot] = true
 		}
@@ -81,6 +88,7 @@ type MutationPlan struct {
 	ExpectedResourceID        string
 	ExpectedResourceCreatedAt string
 	CanonicalSpec             []byte
+	ApprovedSpec              model.CapacityMutationSpecV1
 }
 
 // PrepareMutationPlan binds a provider's dry-run projection to an operator slot
@@ -103,7 +111,7 @@ func PrepareMutationPlan(p model.CapacityPolicySpec, issue model.CapacityMutatio
 	if err := d.Decode(&spec); err != nil || spec == nil {
 		return plan, fmt.Errorf("capacity mutation desired spec must be an object")
 	}
-	if d.Decode(new(any)) != io.EOF || !mutationProjectionSchemaPattern.MatchString(spec.SchemaVersion) || spec.NativeName == "" || len(spec.NativeName) > 256 || !ValidDigest(spec.ProfileChecksum) || !ValidDigest(spec.AdmissionChecksum) || !ValidDigest(spec.BootstrapSHA256) {
+	if d.Decode(new(any)) != io.EOF || !validMutationProjection(*spec) {
 		return plan, fmt.Errorf("capacity mutation desired spec requires a bounded closed non-secret projection")
 	}
 	if spec.IntegrationInstanceID != b.IntegrationInstanceID || spec.ScopeChecksum != b.ScopeChecksum || spec.ProfileName != b.ProfileName {
@@ -120,7 +128,7 @@ func PrepareMutationPlan(p model.CapacityPolicySpec, issue model.CapacityMutatio
 	plan.ExpectedResourceID = spec.ExpectedResourceID
 	plan.ExpectedResourceCreatedAt = spec.ExpectedResourceCreatedAt
 	if plan.Capability == b.DestroyCapability {
-		if plan.Slot <= b.ProtectedSlots || plan.ExpectedResourceID == "" || len(plan.ExpectedResourceID) > 256 {
+		if plan.Slot <= b.ProtectedSlots || plan.ExpectedResourceID == "" || len(plan.ExpectedResourceID) > 128 {
 			return plan, fmt.Errorf("capacity destruction requires an unprotected immutable resource")
 		}
 		created, err := time.Parse(time.RFC3339Nano, plan.ExpectedResourceCreatedAt)
@@ -130,21 +138,22 @@ func PrepareMutationPlan(p model.CapacityPolicySpec, issue model.CapacityMutatio
 	} else if spec.ExpectedResourceID != "" || spec.ExpectedResourceCreatedAt != "" {
 		return plan, fmt.Errorf("capacity creation cannot supply a destroy identity")
 	}
-	var err error
-	plan.CanonicalSpec, err = canonicalMutationProjection(*spec)
-	if err != nil {
-		return plan, err
-	}
-	plan.RequestSHA256 = fmt.Sprintf("%x", sha256.Sum256(plan.CanonicalSpec))
 	spec.ExpectedResourceID, spec.ExpectedResourceCreatedAt = "", ""
 	spec.Capability = b.EnsureCapability
-	base, err := canonicalMutationProjection(*spec)
-	if err != nil {
-		return plan, err
-	}
-	wanted := fmt.Sprintf("%x", sha256.Sum256(base))
 	for _, slot := range b.Slots {
-		if slot.Slot == plan.Slot && slot.DesiredSpecSHA256 == wanted {
+		if slot.Slot == plan.Slot {
+			approved, err := approvedMutationProjection(b, slot)
+			if err != nil {
+				return plan, err
+			}
+			if *spec != *slot.DesiredSpec {
+				return plan, fmt.Errorf("capacity mutation desired spec is not the operator-approved slot revision")
+			}
+			plan.ApprovedSpec = *slot.DesiredSpec
+			plan.CanonicalSpec = approved
+			if plan.Capability == b.EnsureCapability {
+				plan.RequestSHA256 = slot.DesiredSpecSHA256
+			}
 			return plan, nil
 		}
 	}
@@ -152,6 +161,46 @@ func PrepareMutationPlan(p model.CapacityPolicySpec, issue model.CapacityMutatio
 }
 
 var mutationProjectionSchemaPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+var mutationNativeNamePattern = regexp.MustCompile(`^[a-z0-9]([a-z0-9-]{0,61}[a-z0-9])?$`)
+var mutationProfileNamePattern = regexp.MustCompile(`^[a-z][a-z0-9_-]{0,63}$`)
+
+func validMutationProjection(spec model.CapacityMutationSpecV1) bool {
+	return spec.SchemaVersion == "capacity_vm_slot_v1" && mutationNativeNamePattern.MatchString(spec.NativeName) && mutationProfileNamePattern.MatchString(spec.ProfileName) && ValidDigest(spec.ProfileChecksum) && ValidDigest(spec.AdmissionChecksum) && ValidDigest(spec.BootstrapSHA256)
+}
+
+func approvedMutationProjection(b model.CapacityMutationBinding, slot model.CapacityMutationSlotBinding) ([]byte, error) {
+	spec := slot.DesiredSpec
+	if spec == nil || !validMutationProjection(*spec) || spec.Capability != b.EnsureCapability || spec.IntegrationInstanceID != b.IntegrationInstanceID || spec.ScopeChecksum != b.ScopeChecksum || spec.ProfileName != b.ProfileName || spec.Slot != slot.Slot || spec.ExpectedResourceID != "" || spec.ExpectedResourceCreatedAt != "" {
+		return nil, fmt.Errorf("capacity mutation slot requires its exact closed approved ensure projection")
+	}
+	raw, err := canonicalMutationProjection(*spec)
+	if err != nil {
+		return nil, err
+	}
+	if fmt.Sprintf("%x", sha256.Sum256(raw)) != slot.DesiredSpecSHA256 {
+		return nil, fmt.Errorf("capacity mutation approved projection digest mismatch")
+	}
+	return raw, nil
+}
+
+// BindMutationDestroyPlan is called only after the store has loaded its exact
+// immutable slot tuple under the native-slot lock. The runtime tuple must match
+// but never supplies bytes for the authoritative request digest.
+func BindMutationDestroyPlan(plan MutationPlan, resourceID, createdAt string) (MutationPlan, error) {
+	if plan.Capability != plan.Binding.DestroyCapability || resourceID == "" || resourceID != plan.ExpectedResourceID || createdAt != plan.ExpectedResourceCreatedAt {
+		return plan, fmt.Errorf("capacity mutation destroy identity does not match registered membership")
+	}
+	spec := plan.ApprovedSpec
+	spec.Capability = plan.Binding.DestroyCapability
+	spec.ExpectedResourceID, spec.ExpectedResourceCreatedAt = resourceID, createdAt
+	raw, err := canonicalMutationProjection(spec)
+	if err != nil {
+		return plan, err
+	}
+	plan.CanonicalSpec = raw
+	plan.RequestSHA256 = fmt.Sprintf("%x", sha256.Sum256(raw))
+	return plan, nil
+}
 
 func canonicalMutationProjection(spec model.CapacityMutationSpecV1) ([]byte, error) {
 	// Select the closed contract explicitly. Do not serialize generic workflow

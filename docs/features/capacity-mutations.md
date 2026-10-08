@@ -9,7 +9,9 @@ and logical membership; provider adapters own fixed SDK payloads and native read
 
 Each binding names its instance UUID/checksum, type UUID/checksum, adapter
 principal, stable native scope checksum, profile, ensure/destroy capability pair,
-protected/max slots and every slot's canonical ensure-spec SHA-256. These are
+protected/max slots and every slot's closed `desired_spec` plus canonical
+ensure-spec `desired_spec_sha256`. Core validates the approved projection and
+its digest together; digest-only slots authorize nothing. These are
 operator declarations, not caller-generated admission facts. Instance/type rows
 must remain exact and active when issuing or redeeming. Dynamic prices and query
 times must not change logical scope; current physical/admission revisions belong
@@ -18,12 +20,16 @@ in the non-secret desired spec and its digest.
 The closed `capacity_vm_slot_v1` projection has only `schema_version`,
 `capability`, `integration_instance_id`, `scope_checksum`, `profile_checksum`,
 `admission_checksum`, `profile_name`, integer `slot`, `native_name`,
-`bootstrap_sha256` and optional expected destroy identity. Unknown fields are
+`bootstrap_sha256` and optional expected destroy identity. Native names are
+lowercase DNS labels up to63 characters. Unknown fields are
 refused before hashing. Core never hashes arbitrary credential-bearing JSON.
-Canonical JSON sorts object keys and preserves integer numbers. For a
-destroy plan, Core compares the approved ensure base after removing only the
-expected immutable resource tuple and replacing the capability with ensure.
-The actual destroy digest still binds that exact tuple. A dry run cannot approve
+Canonical JSON sorts object keys and preserves integer numbers. The requested
+typed fields must match the immutable operator-approved projection exactly;
+only that approved projection supplies bytes for the authority digest.
+For destruction, Core loads the immutable resource tuple from its locked slot
+ledger, checks the caller tuple for equality, then hashes the approved projection
+with that registered tuple and destroy capability. The runtime workflow
+metadata never supplies hashed authority bytes. A dry run cannot approve
 its own changed spec. Provider-specific identity/payload construction stays in
 the adapter.
 
@@ -112,8 +118,9 @@ An owning adapter can settle after lease expiry, policy replacement or execution
 pause. Accepted transport does not establish native action completion. A fresh
 protected confirmation requires owned/spec-verified exact resource identity,
 all recorded primary/next action IDs present in a complete terminal successful
-action proof, and prior owning transport settlement. Creation confirmation
-requires `observed_creation_grant_id` equal to the exact grant and creation time
+action proof, and prior owning transport settlement. Native resource IDs are
+bounded to128 characters, matching the canonical event aggregate boundary.
+Creation confirmation requires `observed_creation_grant_id` equal to the exact grant and creation time
 within its bounded chronology. Lost create responses may
 recover only from complete native reads bound to the exact creation grant label;
 empty/partial action lists or a reused name are insufficient. Delete confirmation
@@ -121,6 +128,15 @@ also requires exact native absence, after its recorded delete action completes,
 and fresh `auxiliary_absent:[{kind,id}]` proof for every required auxiliary.
 Provider-specific discovery and cleanup of paid IP/volume/LB resources stays
 with the adapter; a vanished server alone does not prove billing stopped.
+
+Confirmation also emits the canonical `<provider>.<resource>.ensured` or
+`.destroyed` event in the same PostgreSQL transaction as membership and grant
+confirmation. Routing derives from the exact registered type and canonical
+capability pair captured when issuing. Event payloads expose immutable resource,
+instance and native receipt facts, with a stable grant idempotency key; private
+lease, executor and settlement credentials are absent. Accepted/uncertain SDK
+responses emit no applied event. Exact confirmation retries return the stored
+confirmation without producing another event or materialized reaction.
 
 Every outstanding `issued`, `redeemed` or `settled` grant blocks intent promotion,
 reconciliation and abort. Only never-redeemed expired grants can retire without
