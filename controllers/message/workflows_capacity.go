@@ -25,15 +25,16 @@ func newCapacityInvocationContext(ctx context.Context) context.Context {
 }
 
 type capacityWorkflowInput struct {
-	Policy        model.ManifestSelector        `json:"policy"`
-	Assessment    model.CapacityAssessment      `json:"assessment"`
-	Generation    int64                         `json:"generation"`
-	FencingToken  int64                         `json:"fencing_token"`
-	LeaseOwner    string                        `json:"lease_owner"`
-	Phase         string                        `json:"phase"`
-	Proof         model.CapacityTransitionProof `json:"proof"`
-	Mutation      model.CapacityMutationIssue   `json:"mutation"`
-	MutationProof model.CapacityMutationProof   `json:"mutation_proof"`
+	Policy        model.ManifestSelector          `json:"policy"`
+	Assessment    model.CapacityAssessment        `json:"assessment"`
+	Generation    int64                           `json:"generation"`
+	FencingToken  int64                           `json:"fencing_token"`
+	LeaseOwner    string                          `json:"lease_owner"`
+	Phase         string                          `json:"phase"`
+	Proof         model.CapacityTransitionProof   `json:"proof"`
+	Mutation      model.CapacityMutationIssue     `json:"mutation"`
+	MutationProof model.CapacityMutationProof     `json:"mutation_proof"`
+	Compensation  model.CapacityCompensationIssue `json:"compensation"`
 }
 
 // Capacity operations are available only inside the exact protected workflow
@@ -56,7 +57,7 @@ func executeCapacityWorkflowStep(ctx context.Context, db *sql.DB, workflowRef mo
 	if err = decoder.Decode(&parsed); err != nil {
 		return fail(fmt.Errorf("capacity input: %w", err))
 	}
-	recoveryOperation := result.Operation == "capacity.recover" || result.Operation == "capacity.renew_recovery" || result.Operation == "capacity.reconcile" || result.Operation == "capacity.confirm_mutation" || result.Operation == "capacity.record_slot"
+	recoveryOperation := result.Operation == "capacity.recover" || result.Operation == "capacity.renew_recovery" || result.Operation == "capacity.reconcile" || result.Operation == "capacity.confirm_mutation" || result.Operation == "capacity.record_slot" || result.Operation == "capacity.confirm_compensation"
 	if parsed.Policy.ManifestID != "" || (!recoveryOperation && parsed.Policy.Version != nil) || (parsed.Policy.Version != nil && *parsed.Policy.Version < 1) || strings.TrimSpace(parsed.Policy.Namespace) == "" || strings.TrimSpace(parsed.Policy.Name) == "" {
 		return fail(fmt.Errorf("capacity policy requires exact active logical namespace/name"))
 	}
@@ -90,6 +91,10 @@ func executeCapacityWorkflowStep(ctx context.Context, db *sql.DB, workflowRef mo
 	var intent model.CapacityIntent
 	var output any
 	switch result.Operation {
+	case "capacity.grant_compensation":
+		output, err = store.IssueCompensation(ctx, policy, parsed.Compensation)
+	case "capacity.confirm_compensation":
+		output, err = store.ConfirmCompensation(ctx, policy, parsed.MutationProof)
 	case "capacity.grant_mutation":
 		output, err = store.IssueMutation(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, parsed.Mutation)
 	case "capacity.record_slot":

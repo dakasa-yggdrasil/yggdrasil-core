@@ -164,6 +164,43 @@ units must lie inside the original same-profile change and protected envelope.
 This closes an observed ledger result, allowing a new assessed generation rather
 than leaving a successful partial expansion permanently stuck.
 
+## Separately authorized failed-create compensation
+
+`capacity.grant_compensation` is a separate active protected workflow authority,
+not a conversion of an original recovery lease. The current policy must opt in
+with `mutation_bindings[].compensation_enabled:true`, and global execution,
+policy, exact instance/type and workflow gates must all remain active. Configure
+the adapter's own cleanup gate before creating resources on that exact immutable
+instance revision. A new instance/type manifest version has a new UUID; this
+contract does not implicitly migrate or delegate a historical fleet to it.
+
+The child binds an exact settled failed create, immutable provider ID/creation
+time, original creation-grant label, and complete terminal failed native action
+chain. The failed object must never have entered registered serving membership.
+The fixed workflow supplies `compensation_identity_verified`, not a false claim
+that a partially provisioned object satisfies its complete physical spec. Fresh
+complete healthy registered capacity must still meet the floor; admission must
+be closed, routing withdrawn and native/business inflight explicitly zero.
+Unknown owning transport, unknown/running actions, replacements, registered
+objects and incomplete inventory cannot admit cleanup.
+
+The failed parent remains `compensating` and reserves its original create budget
+while the one-time child occupies the native send slot. Public grant/redemption
+DTOs bind and echo `compensation_of`. Replay never reacquires a send, and elapsed
+time never expires the parent or a redeemed child. Only never-redeemed expired
+children can be replaced through a new active protected invocation and fresh
+proofs. Ordinary destroy still refuses protected slots; the opt-in compensation
+exception affects only this exact never-registered failed object and independently
+checks the remaining aggregate floor.
+
+`capacity.confirm_compensation` can record readback after pause. It requires the
+child's owning settlement, exact successful completed delete chain, immutable
+resource absence and absence of every recorded paid auxiliary resource. It
+atomically tombstones the slot, marks parent `compensated` and child `confirmed`,
+and emits one canonical destroyed event. It never emits an ensured event or adds
+serving capacity. Compensation cannot support `no_mutation_verified` abort;
+the original read-only epoch closes through its distinct observed outcome.
+
 CI exercises real production migrations and PostgreSQL16/race: concurrent
 issuance/redemption, same-attempt lost replies, private nonce/scope, pause and
 historical recovery, pending-create/delete budgets, exact membership, floor,

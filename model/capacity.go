@@ -153,5 +153,8 @@ type CapacityTransitionProof struct {
 	MutationAuthorityKind string `json:"mutation_authority_kind,omitempty"`
 	// Partial recovery also requires a complete native inventory. The store
 	// independently matches its freshly reread immutable membership ledger.
-	MembershipComplete bool `json:"membership_complete,omitempty"`
+	MembershipComplete    bool `json:"membership_complete,omitempty"`
+	AdmissionClosed       bool `json:"admission_closed,omitempty"`
+	RoutingWithdrawn      bool `json:"routing_withdrawn,omitempty"`
+	NativeActionsInflight *int `json:"native_actions_inflight,omitempty"`
 }

@@ -837,7 +837,22 @@
             "format": "date-time"
           },
           "state": {
-            "type": "string"
+            "type": "string",
+            "enum": [
+              "issued",
+              "redeemed",
+              "settled",
+              "confirmed",
+              "rejected",
+              "expired",
+              "compensating",
+              "compensated"
+            ]
+          },
+          "compensation_of": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Exact failed parent grant for separately authorized cleanup; omitted for ordinary capacity grants."
           }
         }
       },
@@ -896,6 +911,11 @@
           "expected_resource_created_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "compensation_of": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Exact failed parent grant for separately authorized cleanup; omitted for ordinary capacity grants."
           }
         }
       },
@@ -932,6 +952,11 @@
           "expires_at": {
             "type": "string",
             "format": "date-time"
+          },
+          "compensation_of": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Exact failed parent grant for separately authorized cleanup; omitted for ordinary capacity grants."
           }
         }
       },

@@ -145,7 +145,7 @@ func (f mutationFixture) issue(t *testing.T, slot int) model.CapacityMutationGra
 }
 
 func mutationRedeem(g model.CapacityMutationGrant, nonce string) model.CapacityMutationRedeemRequest {
-	return model.CapacityMutationRedeemRequest{GrantID: g.GrantID, AttemptID: uuid.NewString(), SettlementTokenSHA256: fmt.Sprintf("%x", sha256.Sum256([]byte(nonce))), Capability: g.Capability, IntegrationInstanceID: g.IntegrationInstanceID, ScopeChecksum: g.ScopeChecksum, ProfileName: g.ProfileName, Slot: g.Slot, RequestSHA256: g.RequestSHA256, ExpectedResourceID: g.ExpectedResourceID, ExpectedResourceCreatedAt: g.ExpectedResourceCreatedAt}
+	return model.CapacityMutationRedeemRequest{GrantID: g.GrantID, AttemptID: uuid.NewString(), SettlementTokenSHA256: fmt.Sprintf("%x", sha256.Sum256([]byte(nonce))), Capability: g.Capability, IntegrationInstanceID: g.IntegrationInstanceID, ScopeChecksum: g.ScopeChecksum, ProfileName: g.ProfileName, Slot: g.Slot, RequestSHA256: g.RequestSHA256, ExpectedResourceID: g.ExpectedResourceID, ExpectedResourceCreatedAt: g.ExpectedResourceCreatedAt, CompensationOf: g.CompensationOf}
 }
 
 func mutationSettlement(r model.CapacityMutationRedeemRequest, created string) model.CapacityMutationSettleRequest {

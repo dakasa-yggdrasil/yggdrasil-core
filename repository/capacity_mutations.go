@@ -22,22 +22,23 @@ import (
 var ErrCapacityMutationAuthorization = errors.New("capacity mutation authorization denied")
 
 type capacityMutationRecord struct {
-	Grant                 model.CapacityMutationGrant          `json:"grant"`
-	Binding               model.CapacityMutationBinding        `json:"binding"`
-	PolicyID              uuid.UUID                            `json:"policy_id"`
-	PolicyChecksum        string                               `json:"policy_checksum"`
-	WorkflowID            uuid.UUID                            `json:"workflow_id"`
-	Generation            int64                                `json:"generation"`
-	FencingToken          int64                                `json:"fencing_token"`
-	LeaseOwner            string                               `json:"lease_owner"`
-	ExecutorID            string                               `json:"executor_id"`
-	CreatedAt             time.Time                            `json:"created_at"`
-	AttemptID             string                               `json:"attempt_id,omitempty"`
-	SettlementTokenSHA256 string                               `json:"settlement_token_sha256,omitempty"`
-	Settlement            *model.CapacityMutationSettleRequest `json:"settlement,omitempty"`
-	Proof                 *model.CapacityMutationProof         `json:"proof,omitempty"`
-	EventProvider         string                               `json:"event_provider"`
-	EventResource         string                               `json:"event_resource"`
+	Grant                  model.CapacityMutationGrant          `json:"grant"`
+	Binding                model.CapacityMutationBinding        `json:"binding"`
+	PolicyID               uuid.UUID                            `json:"policy_id"`
+	PolicyChecksum         string                               `json:"policy_checksum"`
+	WorkflowID             uuid.UUID                            `json:"workflow_id"`
+	Generation             int64                                `json:"generation"`
+	FencingToken           int64                                `json:"fencing_token"`
+	LeaseOwner             string                               `json:"lease_owner"`
+	ExecutorID             string                               `json:"executor_id"`
+	CreatedAt              time.Time                            `json:"created_at"`
+	AttemptID              string                               `json:"attempt_id,omitempty"`
+	SettlementTokenSHA256  string                               `json:"settlement_token_sha256,omitempty"`
+	Settlement             *model.CapacityMutationSettleRequest `json:"settlement,omitempty"`
+	Proof                  *model.CapacityMutationProof         `json:"proof,omitempty"`
+	EventProvider          string                               `json:"event_provider"`
+	EventResource          string                               `json:"event_resource"`
+	CompensationDrainProof *model.CapacityTransitionProof       `json:"compensation_drain_proof,omitempty"`
 }
 
 type capacityResourceSlot struct {
@@ -208,7 +209,7 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 			return err
 		}
 		var data []byte
-		err = tx.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE integration_instance_id=$1 AND scope_checksum=$2 AND profile_name=$3 AND slot=$4 AND state IN ('issued','redeemed','settled') FOR UPDATE`, b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName, plan.Slot).Scan(&data)
+		err = tx.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE integration_instance_id=$1 AND scope_checksum=$2 AND profile_name=$3 AND slot=$4 AND state IN ('issued','redeemed','settled','compensating') FOR UPDATE`, b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName, plan.Slot).Scan(&data)
 		if err == nil {
 			var old capacityMutationRecord
 			if err = json.Unmarshal(data, &old); err != nil {
@@ -234,7 +235,7 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND resource_id<>''`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&live); err != nil {
 			return err
 		}
-		if err = tx.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE state IN ('issued','redeemed','settled') AND grant_record->'grant'->>'capability' ~ '^ensure_'),count(*) FILTER(WHERE state IN ('issued','redeemed','settled') AND grant_record->'grant'->>'capability' ~ '^destroy_'),count(*) FILTER(WHERE generation=$5 AND state<>'expired' AND state<>'rejected') FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, generation).Scan(&pending, &pendingDestroy, &started); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE state IN ('issued','redeemed','settled','compensating') AND grant_record->'grant'->>'capability' ~ '^ensure_'),count(*) FILTER(WHERE state IN ('issued','redeemed','settled') AND grant_record->'grant'->>'capability' ~ '^destroy_' AND COALESCE(grant_record->'grant'->>'compensation_of','')=''),count(*) FILTER(WHERE generation=$5 AND state<>'expired' AND state<>'rejected') FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, generation).Scan(&pending, &pendingDestroy, &started); err != nil {
 			return err
 		}
 		if started == 0 && live != intent.BaselineSnapshot.Units {
@@ -366,10 +367,11 @@ func (s CapacityStore) RedeemMutation(ctx context.Context, principal string, r m
 	}
 	err := s.callbackTransaction(ctx, r.GrantID, func(tx *sql.Tx, record *capacityMutationRecord, ns string, scope model.CapacityPolicySpec, now time.Time) error {
 		g, b := record.Grant, record.Binding
-		if principal != b.AdapterPrincipalID || r.Capability != g.Capability || r.IntegrationInstanceID != g.IntegrationInstanceID || r.ScopeChecksum != g.ScopeChecksum || r.ProfileName != g.ProfileName || r.Slot != g.Slot || r.RequestSHA256 != g.RequestSHA256 || r.ExpectedResourceID != g.ExpectedResourceID || r.ExpectedResourceCreatedAt != g.ExpectedResourceCreatedAt {
+		if principal != b.AdapterPrincipalID || r.Capability != g.Capability || r.IntegrationInstanceID != g.IntegrationInstanceID || r.ScopeChecksum != g.ScopeChecksum || r.ProfileName != g.ProfileName || r.Slot != g.Slot || r.RequestSHA256 != g.RequestSHA256 || r.ExpectedResourceID != g.ExpectedResourceID || r.ExpectedResourceCreatedAt != g.ExpectedResourceCreatedAt || r.CompensationOf != g.CompensationOf {
 			return ErrCapacityMutationAuthorization
 		}
 		response.ExpiresAt = g.ExpiresAt.Format(time.RFC3339Nano)
+		response.CompensationOf = g.CompensationOf
 		// This includes a replay with the original attempt ID. A lost reply
 		// cannot reacquire permission to send another native mutation.
 		if g.State != "issued" {
@@ -403,6 +405,9 @@ func (s CapacityStore) RedeemMutation(ctx context.Context, principal string, r m
 		}
 		if !active {
 			return ErrCapacityConflict
+		}
+		if g.CompensationOf != "" {
+			return redeemCompensation(ctx, tx, record, p, now, r, &response)
 		}
 		intent, err := loadCapacityIntent(ctx, tx, ns, scope, true)
 		if err != nil {
@@ -605,7 +610,7 @@ func (s CapacityStore) RecordMutationSlot(ctx context.Context, policy model.Mani
 			}
 		}
 		var count, history int
-		if err = tx.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE state IN ('issued','redeemed','settled')),count(*) FROM public.capacity_mutation_grants WHERE integration_instance_id=$1 AND scope_checksum=$2 AND profile_name=$3 AND slot=$4`, b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName, plan.Slot).Scan(&count, &history); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE state IN ('issued','redeemed','settled','compensating')),count(*) FROM public.capacity_mutation_grants WHERE integration_instance_id=$1 AND scope_checksum=$2 AND profile_name=$3 AND slot=$4`, b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName, plan.Slot).Scan(&count, &history); err != nil {
 			return err
 		}
 		if count != 0 {
@@ -651,7 +656,7 @@ func (s CapacityStore) ConfirmMutation(ctx context.Context, policy model.Manifes
 				return nil
 			}
 		}
-		if record.PolicyID != policy.ID || record.PolicyChecksum != policy.Checksum || record.WorkflowID != s.WorkflowID || g.State != "settled" || record.Settlement == nil || !record.Settlement.TransportCompleted || proof.BindingName != b.Name || proof.Slot != g.Slot || proof.RequestSHA256 != g.RequestSHA256 || !validMutationProof(p, proof, now) || !proof.ActionsTerminal || !proof.ActionsSuccessful || len(proof.ActionIDs) == 0 || len(proof.ActionIDs) > 64 {
+		if record.PolicyID != policy.ID || record.PolicyChecksum != policy.Checksum || record.WorkflowID != s.WorkflowID || g.CompensationOf != "" || g.State != "settled" || record.Settlement == nil || !record.Settlement.TransportCompleted || proof.BindingName != b.Name || proof.Slot != g.Slot || proof.RequestSHA256 != g.RequestSHA256 || !validMutationProof(p, proof, now) || !proof.ActionsTerminal || !proof.ActionsSuccessful || proof.ActionsFailed || len(proof.ActionIDs) == 0 || len(proof.ActionIDs) > 64 {
 			return ErrCapacityConflict
 		}
 		seen := map[string]bool{}

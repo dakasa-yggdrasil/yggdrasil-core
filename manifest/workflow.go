@@ -48,6 +48,8 @@ var (
 		"capacity.grant_mutation",
 		"capacity.record_slot",
 		"capacity.confirm_mutation",
+		"capacity.grant_compensation",
+		"capacity.confirm_compensation",
 	}
 	workflowTemplatePattern = regexp.MustCompile(`{{\s*([^{}]+?)\s*}}`)
 )

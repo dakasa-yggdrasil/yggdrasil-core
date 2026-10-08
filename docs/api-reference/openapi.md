@@ -8,7 +8,9 @@ The optional `/api/v1/capacity/mutations` surface accepts only independently
 configured hashed adapter principals. Redeem returns one transport permission;
 every replay is read-only. Settlement requires the private owning nonce and
 does not establish native completion. Scoped receipt reads preserve exact
-resource, action and paid auxiliary identity across recovery. See
+resource, action and paid auxiliary identity across recovery. A separately
+authorized failed-create cleanup binds and echoes `compensation_of`; it never
+converts historical recovery into write permission. See
 [durable provider mutation authority](../features/capacity-mutations.md) for
 binding, lifecycle, deletion and default-off requirements.
 

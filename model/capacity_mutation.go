@@ -22,6 +22,7 @@ type CapacityMutationBinding struct {
 	MaxSlots                int                           `json:"max_slots"`
 	Slots                   []CapacityMutationSlotBinding `json:"slots"`
 	DefinitiveRejections    []CapacityMutationRejection   `json:"definitive_rejections,omitempty"`
+	CompensationEnabled     bool                          `json:"compensation_enabled,omitempty"`
 }
 
 type CapacityMutationRejection struct {
@@ -39,6 +40,15 @@ type CapacityMutationSlotBinding struct {
 type CapacityMutationIssue struct {
 	BindingName string          `json:"binding_name"`
 	DesiredSpec json.RawMessage `json:"desired_spec"`
+}
+
+// Compensation is a separate active workflow authority. A historical recovery
+// lease never authorizes its provider write.
+type CapacityCompensationIssue struct {
+	ParentGrantID string                  `json:"parent_grant_id"`
+	Mutation      CapacityMutationIssue   `json:"mutation"`
+	FailedProof   CapacityMutationProof   `json:"failed_proof"`
+	DrainProof    CapacityTransitionProof `json:"drain_proof"`
 }
 
 // CapacityMutationSpecV1 is the closed non-secret slot projection shared with
@@ -73,14 +83,16 @@ type CapacityMutationRedeemRequest struct {
 	RequestSHA256             string `json:"request_sha256"`
 	ExpectedResourceID        string `json:"expected_resource_id,omitempty"`
 	ExpectedResourceCreatedAt string `json:"expected_resource_created_at,omitempty"`
+	CompensationOf            string `json:"compensation_of,omitempty"`
 }
 
 type CapacityMutationRedeemResponse struct {
-	Mode          string `json:"mode"`
-	GrantID       string `json:"grant_id"`
-	AttemptID     string `json:"attempt_id"`
-	RequestSHA256 string `json:"request_sha256"`
-	ExpiresAt     string `json:"expires_at"`
+	Mode           string `json:"mode"`
+	GrantID        string `json:"grant_id"`
+	AttemptID      string `json:"attempt_id"`
+	RequestSHA256  string `json:"request_sha256"`
+	ExpiresAt      string `json:"expires_at"`
+	CompensationOf string `json:"compensation_of,omitempty"`
 }
 
 type CapacityMutationSettleRequest struct {
@@ -119,6 +131,7 @@ type CapacityMutationGrant struct {
 	ExpectedResourceCreatedAt string    `json:"expected_resource_created_at,omitempty"`
 	ExpiresAt                 time.Time `json:"expires_at"`
 	State                     string    `json:"state"`
+	CompensationOf            string    `json:"compensation_of,omitempty"`
 }
 
 type CapacityMutationReceipt struct {
@@ -138,20 +151,22 @@ type CapacityMutationReceipt struct {
 // fresh adapter reads. Transport completion, provider action completion, and
 // product readiness are distinct facts; this proof addresses only the first two.
 type CapacityMutationProof struct {
-	GrantID                 string                              `json:"grant_id"`
-	BindingName             string                              `json:"binding_name"`
-	Slot                    int                                 `json:"slot"`
-	ResourceID              string                              `json:"resource_id"`
-	ResourceCreatedAt       string                              `json:"resource_created_at"`
-	RequestSHA256           string                              `json:"request_sha256"`
-	ObservedAt              time.Time                           `json:"observed_at"`
-	ReceiptRef              string                              `json:"receipt_ref"`
-	OwnerVerified           bool                                `json:"owner_verified"`
-	SpecVerified            bool                                `json:"spec_verified"`
-	ResourceAbsent          bool                                `json:"resource_absent"`
-	ActionIDs               []string                            `json:"action_ids"`
-	ActionsTerminal         bool                                `json:"actions_terminal"`
-	ActionsSuccessful       bool                                `json:"actions_successful"`
-	ObservedCreationGrantID string                              `json:"observed_creation_grant_id,omitempty"`
-	AuxiliaryAbsent         []CapacityMutationAuxiliaryResource `json:"auxiliary_absent,omitempty"`
+	GrantID                      string                              `json:"grant_id"`
+	BindingName                  string                              `json:"binding_name"`
+	Slot                         int                                 `json:"slot"`
+	ResourceID                   string                              `json:"resource_id"`
+	ResourceCreatedAt            string                              `json:"resource_created_at"`
+	RequestSHA256                string                              `json:"request_sha256"`
+	ObservedAt                   time.Time                           `json:"observed_at"`
+	ReceiptRef                   string                              `json:"receipt_ref"`
+	OwnerVerified                bool                                `json:"owner_verified"`
+	SpecVerified                 bool                                `json:"spec_verified"`
+	ResourceAbsent               bool                                `json:"resource_absent"`
+	ActionIDs                    []string                            `json:"action_ids"`
+	ActionsTerminal              bool                                `json:"actions_terminal"`
+	ActionsSuccessful            bool                                `json:"actions_successful"`
+	ActionsFailed                bool                                `json:"actions_failed,omitempty"`
+	CompensationIdentityVerified bool                                `json:"compensation_identity_verified,omitempty"`
+	ObservedCreationGrantID      string                              `json:"observed_creation_grant_id,omitempty"`
+	AuxiliaryAbsent              []CapacityMutationAuxiliaryResource `json:"auxiliary_absent,omitempty"`
 }

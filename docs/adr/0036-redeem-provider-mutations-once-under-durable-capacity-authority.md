@@ -19,8 +19,8 @@ closed typed profile/slot projection and matching digest, exact instance/type
 checksums and adapter principal. Compare requested fields to that immutable
 projection. Hash only approved fields; a destruction digest additionally binds
 the exact immutable tuple read from the locked membership ledger. Issue
-grants only inside the policy's active authenticated workflow and private live
-executor lease. PostgreSQL holds one unresolved grant per logical native slot
+ordinary grants only inside the policy's active authenticated workflow and private
+live executor lease. PostgreSQL holds one unresolved send per logical native slot
 and counts live membership plus reservations against the intended envelope.
 Register existing membership from fresh protected native reads; never adopt
 replacement or overwrite a deletion tombstone implicitly.
@@ -48,6 +48,15 @@ Persist canonical applied integration events atomically with confirmed native
 membership. Snapshot provider/resource routing from the exact registered type
 and capability pair at issuance. Accepted transport is not an applied event;
 exact confirmation retries produce no duplicate event or reaction.
+
+Admit failed-create compensation only through a separate active opt-in protected
+workflow authority. Bind the exact settled failed parent and never-registered
+immutable native object, complete failed actions, remaining healthy floor and
+explicit routing/admission/native/business drain. Preserve the parent's create
+reservation while a one-time child performs cleanup; historical recovery remains
+read-only. Confirm child transport/action/resource/paid-auxiliary absence before
+retiring the parent and emitting one destroyed event. An immutable instance/type
+version change is not implicit authorization to adopt historical fleet ownership.
 
 ## Consequences
 

@@ -94,6 +94,16 @@ type MutationPlan struct {
 // PrepareMutationPlan binds a provider's dry-run projection to an operator slot
 // digest. Core never constructs SDK payloads or learns credential/bootstrap data.
 func PrepareMutationPlan(p model.CapacityPolicySpec, issue model.CapacityMutationIssue) (MutationPlan, error) {
+	return prepareMutationPlan(p, issue, false)
+}
+
+// A compensation still uses the approved destroy projection and immutable
+// tuple. Only its separate durable parent authority can relax a protected slot.
+func PrepareCompensationPlan(p model.CapacityPolicySpec, issue model.CapacityMutationIssue) (MutationPlan, error) {
+	return prepareMutationPlan(p, issue, true)
+}
+
+func prepareMutationPlan(p model.CapacityPolicySpec, issue model.CapacityMutationIssue, compensation bool) (MutationPlan, error) {
 	var plan MutationPlan
 	for _, b := range p.MutationBindings {
 		if b.Name == issue.BindingName {
@@ -121,6 +131,9 @@ func PrepareMutationPlan(p model.CapacityPolicySpec, issue model.CapacityMutatio
 	if plan.Capability != b.EnsureCapability && plan.Capability != b.DestroyCapability {
 		return plan, fmt.Errorf("capacity mutation capability is not approved")
 	}
+	if compensation && (!b.CompensationEnabled || plan.Capability != b.DestroyCapability) {
+		return plan, fmt.Errorf("capacity compensation requires an explicitly enabled destroy binding")
+	}
 	plan.Slot = spec.Slot
 	if plan.Slot < 1 || plan.Slot > b.MaxSlots {
 		return plan, fmt.Errorf("capacity mutation slot is outside the approved envelope")
@@ -128,7 +141,7 @@ func PrepareMutationPlan(p model.CapacityPolicySpec, issue model.CapacityMutatio
 	plan.ExpectedResourceID = spec.ExpectedResourceID
 	plan.ExpectedResourceCreatedAt = spec.ExpectedResourceCreatedAt
 	if plan.Capability == b.DestroyCapability {
-		if plan.Slot <= b.ProtectedSlots || plan.ExpectedResourceID == "" || len(plan.ExpectedResourceID) > 128 {
+		if (!compensation && plan.Slot <= b.ProtectedSlots) || plan.ExpectedResourceID == "" || len(plan.ExpectedResourceID) > 128 {
 			return plan, fmt.Errorf("capacity destruction requires an unprotected immutable resource")
 		}
 		created, err := time.Parse(time.RFC3339Nano, plan.ExpectedResourceCreatedAt)

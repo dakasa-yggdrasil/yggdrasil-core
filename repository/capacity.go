@@ -446,7 +446,7 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 			return model.CapacityIntent{}, err
 		}
 		var unresolved int
-		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN ('issued','redeemed','settled')`, next.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&unresolved); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN ('issued','redeemed','settled','compensating')`, next.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&unresolved); err != nil {
 			return model.CapacityIntent{}, err
 		}
 		if unresolved != 0 {
@@ -463,7 +463,7 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 		}
 		if next.Phase == "aborted" {
 			var mutations int
-			if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5 AND state='confirmed'`, next.Namespace, p.Environment, p.Domain, p.Dimension, next.Generation).Scan(&mutations); err != nil {
+			if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5 AND state IN ('confirmed','compensated')`, next.Namespace, p.Environment, p.Domain, p.Dimension, next.Generation).Scan(&mutations); err != nil {
 				return model.CapacityIntent{}, err
 			}
 			if mutations != 0 {
