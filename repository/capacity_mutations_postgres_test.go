@@ -57,6 +57,7 @@ func mutationPostgresFixtureWithBaseline(t *testing.T, register bool, floor, uni
 		t.Fatal(err)
 	}
 	p.LeaseSeconds, p.Floor, a.Snapshot.Units = 120, floor, units
+	p.Profiles[0].MinUnits = floor
 	b := model.CapacityMutationBinding{Name: "burst", IntegrationInstanceID: instance.ID.String(), IntegrationChecksum: instance.Checksum, IntegrationTypeID: ty.ID.String(), IntegrationTypeChecksum: ty.Checksum, AdapterPrincipalID: "fleet-adapter", ScopeChecksum: strings.Repeat("a", 64), ProfileName: "base", EnsureCapability: "ensure_server", DestroyCapability: "destroy_server", ProtectedSlots: floor, MaxSlots: 20}
 	plans := map[int]model.CapacityMutationIssue{}
 	for slot := 1; slot <= b.MaxSlots; slot++ {
