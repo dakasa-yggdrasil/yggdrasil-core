@@ -27,6 +27,27 @@ func TestBoundNativeBindingAndCanonicalInput(t *testing.T) {
 		}
 	}
 }
+
+func TestNativeCapacityOptionalPointerNullRemainsUnknown(t *testing.T) {
+	var inventory model.AdapterCapacityPodInventoryResponse
+	if err := DecodeNativeCapacity(json.RawMessage(`{"pods":[{"receipt":null,"exit_code":null,"started_at":null}]}`), &inventory); err != nil || len(inventory.Pods) != 1 || inventory.Pods[0].Receipt != nil || inventory.Pods[0].ExitCode != nil || inventory.Pods[0].StartedAt != nil {
+		t.Fatal("missing native optional facts became an object or a value", err)
+	}
+	p, _, _, now := boundAssessmentFixture()
+	if NativePodWitness(p, model.CapacityNativePodCheckpoint{}, inventory.Pods[0], now) == nil {
+		t.Fatal("optional null native facts certified a terminated lifetime")
+	}
+	for _, raw := range []string{`{"receipt":false}`, `{"receipt":"done"}`, `{"receipt":{"SCHEMA_VERSION":1}}`, `{"receipt":{"schema_verſion":1}}`} {
+		var observation model.NativeTerminationObservation
+		if DecodeNativeCapacity(json.RawMessage(raw), &observation) == nil {
+			t.Fatal("nonnull native receipt bypassed closed object validation", raw)
+		}
+	}
+	var required model.AdapterObserveCapacityPodTerminationRequest
+	if DecodeNativeCapacity(json.RawMessage(`{"challenge":null}`), &required) == nil {
+		t.Fatal("required challenge was normalized from null")
+	}
+}
 func TestBoundNativeWitnessRequiresCurrentFullLifetime(t *testing.T) {
 	p, _, _, now := boundAssessmentFixture()
 	p.HPAExecutionBinding = &model.CapacityHPAExecutionBinding{AdapterPrincipalID: "native", Mode: HPAExecutionMode, PodTerminationBinding: "api", ContainerName: "api", ImageDigest: "sha256:" + strings.Repeat("a", 64), Lanes: []string{"listener", "workers"}, ProjectionDirectory: "/native"}
@@ -40,7 +61,7 @@ func TestBoundNativeWitnessRequiresCurrentFullLifetime(t *testing.T) {
 	challenge := model.NativePodTerminationChallenge{SchemaVersion: 1, Namespace: p.AssessmentBinding.Snapshot.Namespace, PodName: "api-1", PodUID: podUID, WorkloadUID: p.AssessmentBinding.Snapshot.WorkloadUID, ContainerName: "api", ImageDigest: p.HPAExecutionBinding.ImageDigest, IntentGeneration: 1, DrainNonce: uuid.NewString(), IssuedAt: now.Add(-2 * time.Second), LaneRosterSHA256: NativeRosterDigest(p.HPAExecutionBinding.Lanes)}
 	raw, _ := json.Marshal(challenge)
 	checkpoint := model.CapacityNativePodCheckpoint{Namespace: challenge.Namespace, PodName: challenge.PodName, PodUID: podUID, PodGeneration: 0, WorkloadUID: challenge.WorkloadUID, ContainerName: "api", ContainerID: "containerd://actual", ContainerStartedAt: start, ImageDigest: challenge.ImageDigest, IntentGeneration: 1, DrainNonce: challenge.DrainNonce, Challenge: raw, State: "terminating"}
-	for _, mode := range []string{"exact", "nonzero", "restart", "old_container", "failed", "incomplete", "nonce", "generation", "missing_time", "missing_exit", "missing_finalizer"} {
+	for _, mode := range []string{"exact", "nonzero", "restart", "old_container", "failed", "incomplete", "nonce", "generation", "missing_time", "missing_exit", "missing_receipt", "missing_finalizer"} {
 		t.Run(mode, func(t *testing.T) {
 			o := model.NativeTerminationObservation{BindingName: "api", Namespace: challenge.Namespace, PodName: challenge.PodName, PodUID: podUID, PodGeneration: 0, PodResourceVersion: "4", WorkloadUID: challenge.WorkloadUID, ContainerName: "api", ContainerID: checkpoint.ContainerID, ImageDigest: challenge.ImageDigest, ImageID: "fixture@" + challenge.ImageDigest, ContainerState: "terminated", State: "terminated", ExitCode: &code, Signal: &signal, StartedAt: &start, FinishedAt: &finished, DeletionRequestedAt: &deleted, Protected: true, ObservedAt: now, ReceiptSHA256: strings.Repeat("b", 64), Receipt: &model.NativePodTerminationReceipt{NativePodTerminationChallenge: challenge, JoinedAt: now.Add(-time.Second), Lanes: map[string]string{"listener": "done", "workers": "inactive"}}}
 			switch mode {
@@ -63,6 +84,8 @@ func TestBoundNativeWitnessRequiresCurrentFullLifetime(t *testing.T) {
 				o.FinishedAt = nil
 			case "missing_exit":
 				o.ExitCode = nil
+			case "missing_receipt":
+				o.Receipt = nil
 			case "missing_finalizer":
 				o.Protected = false
 			}

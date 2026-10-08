@@ -23,6 +23,11 @@ func DecodeNativeCapacity(value any, out any) error {
 }
 func nativeCapacityClosedJSON(raw []byte, typ reflect.Type) error {
 	for typ.Kind() == reflect.Pointer {
+		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
+			// Optional native facts stay absent. Completion and permission
+			// validators independently require the relevant facts to exist.
+			return nil
+		}
 		typ = typ.Elem()
 	}
 	if typ.Kind() == reflect.Slice {
