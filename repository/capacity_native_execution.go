@@ -122,7 +122,7 @@ func (s CapacityStore) ConfirmNativeCommand(ctx context.Context, policy model.Ma
 			}
 			observed := response.Observation
 			if command.Phase == "release" {
-				if checkpoint.State != "confirmed" || checkpoint.ConfirmedAt == nil || len(checkpoint.NativeTerminationReceipt) == 0 || (observed.State != "absent" && observed.State != "replaced" && !(observed.State == "unprotected" && observed.PodUID == checkpoint.PodUID)) {
+				if checkpoint.State != "confirmed" || checkpoint.ConfirmedAt == nil || len(checkpoint.NativeTerminationReceipt) == 0 || (observed.State != "absent" && observed.State != "replaced" && (observed.State != "unprotected" || observed.PodUID != checkpoint.PodUID)) {
 					return ErrCapacityConflict
 				}
 				checkpoint.State = "released"
