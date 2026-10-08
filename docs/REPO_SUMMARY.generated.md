@@ -1,13 +1,13 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-08T06:34:26-03:00_
+_Generated from HEAD at: 2026-10-08T07:01:49-03:00_
 
 ## Languages
 
-- `.go`: 688 files
+- `.go`: 690 files
 - `.json`: 144 files
 - `.py`: 1 files
-- `.sql`: 56 files
+- `.sql`: 57 files
 - `.yaml`: 9 files
 - `.yml`: 23 files
 
@@ -15,7 +15,7 @@ _Generated from HEAD at: 2026-10-08T06:34:26-03:00_
 
 - API Spec: **false**  ((not configured))
 - Event Schemas: **0**  (events/contracts,docs/events/contracts)
-- DB Migrations: **55**  (db/migrations)
+- DB Migrations: **56**  (db/migrations)
 
 ## Docs
 
@@ -24,12 +24,12 @@ _Generated from HEAD at: 2026-10-08T06:34:26-03:00_
 
 ## Top Directories by File Count
 
-- controllers/httpapi: 164 files (1664.7 KB)
-- repository: 106 files (790.3 KB)
-- model: 60 files (232.8 KB)
-- manifest: 59 files (363.2 KB)
-- db/migrations: 55 files (97.4 KB)
-- controllers/message: 54 files (530.9 KB)
+- controllers/httpapi: 164 files (1665.6 KB)
+- repository: 108 files (817.2 KB)
+- model: 60 files (234.0 KB)
+- manifest: 59 files (363.3 KB)
+- db/migrations: 56 files (98.5 KB)
+- controllers/message: 54 files (531.2 KB)
 - addons: 42 files (198.3 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
 - controllers/oidc: 23 files (193.4 KB)
@@ -48,8 +48,8 @@ _Generated from HEAD at: 2026-10-08T06:34:26-03:00_
 - docs/bootstrap/manifests/products/message-broker-rabbitmq.json: 531.8 KB
 - controllers/httpapi/server.go: 173.9 KB
 - controllers/message/products.go: 75.4 KB
-- controllers/httpapi/openapi.json: 67.7 KB
-- docs/api-reference/openapi.json: 67.7 KB
+- controllers/httpapi/openapi.json: 68.6 KB
+- docs/api-reference/openapi.json: 68.6 KB
 - controllers/httpapi/directory_machine_read_test.go: 65.8 KB
 
 ## Ops & Messaging
