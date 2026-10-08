@@ -33,6 +33,13 @@ metadata never supplies hashed authority bytes. A dry run cannot approve
 its own changed spec. Provider-specific identity/payload construction stays in
 the adapter.
 
+Control-plane `__GENERATE__:<label>` values are rendering instructions, never
+generated passwords. The closed slot projection rejects those markers, secret
+fields and unapproved values before fingerprinting. Its SHA-256 is an integrity
+fingerprint of public infrastructure identity; it is not a password verifier.
+Control-plane deployment must materialize actual secrets separately before
+applying a rendered Secret object.
+
 `capacity.record_slot` records an existing exact immutable native ID/creation
 time from fresh owned/spec-verified adapter reads. Complete registered live
 membership must match the immutable intent baseline before the first mutation.

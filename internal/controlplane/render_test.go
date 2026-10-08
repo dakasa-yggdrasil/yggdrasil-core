@@ -1,10 +1,24 @@
 package controlplane
 
 import (
+	"strings"
 	"testing"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 )
+
+func TestRenderedCredentialInstructionsPreserveWireMarkers(t *testing.T) {
+	postgres, _, _ := renderBundledPostgres("fixture", nil)
+	pgData := postgres["stringData"].(map[string]any)
+	if pgData["POSTGRES_PASSWORD"] != "__GENERATE__:postgres" || pgData["DB_PASSWORD"] != pgData["POSTGRES_PASSWORD"] {
+		t.Fatal("PostgreSQL instruction changed or renderer invented a credential")
+	}
+	amqp, _, _ := renderBundledRabbitMQ("fixture", nil)
+	amqpData := amqp["stringData"].(map[string]any)
+	if amqpData["RABBITMQ_DEFAULT_PASS"] != "__GENERATE__:amqp" || !strings.Contains(amqpData["BROKER_URL"].(string), ":__GENERATE__:amqp@") {
+		t.Fatal("Broker instruction and connection reference disagree")
+	}
+}
 
 func baseSpec() model.ControlPlaneManifestSpec {
 	return model.ControlPlaneManifestSpec{
