@@ -2,8 +2,8 @@
 
 Records the source commit reconciled with the changed runtime contracts.
 
-verified_at_commit: 8aaa3dbcd048e74c50d5f082aa8864270118ccfc
-verified_diff_sha256: baa6ee36b34556f4938853b1553a8e0552afb6ffbdcdef97572c30f22d36090a
+verified_at_commit: 1c11cc2b555c9697cc0a83449e26860f7ab13118
+verified_diff_sha256: 39cfd74ca91b5a7afd9544a65e6ac867d339f0b1d97245836728890dd5c837e2
 reconciler_schema: 1
 verified_at: 2026-10-08
 by: Codex
