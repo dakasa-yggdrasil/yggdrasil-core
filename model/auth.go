@@ -89,9 +89,12 @@ type UpsertPasswordCredentialRequest struct {
 // receive mfa_required until a supported MFA factor is supplied for enrolled
 // identities.
 type LoginWithPasswordRequest struct {
-	Identifier   string         `json:"identifier"`
-	Password     string         `json:"password"`
-	TOTPCode     string         `json:"totp_code,omitempty"`
-	RecoveryCode string         `json:"recovery_code,omitempty"`
-	Metadata     map[string]any `json:"metadata,omitempty"`
+	Identifier        string         `json:"identifier"`
+	Password          string         `json:"password"`
+	TOTPCode          string         `json:"totp_code,omitempty"`
+	RecoveryCode      string         `json:"recovery_code,omitempty"`
+	OTPChannel        string         `json:"otp_channel,omitempty"`
+	OTPChallengeToken string         `json:"otp_challenge_token,omitempty"`
+	OTPCode           string         `json:"otp_code,omitempty"`
+	Metadata          map[string]any `json:"metadata,omitempty"`
 }

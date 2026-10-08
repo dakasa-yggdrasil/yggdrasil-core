@@ -445,8 +445,8 @@ type mfaWebAuthnEnrollBeginRequest struct {
 // AttestationResponse as a raw json.RawMessage so we can hand the same
 // bytes back to protocol.ParseCredentialCreationResponseBody.
 type mfaWebAuthnEnrollFinishRequest struct {
-	Token              string          `json:"token,omitempty"`
-	Name               string          `json:"name,omitempty"`
+	Token               string          `json:"token,omitempty"`
+	Name                string          `json:"name,omitempty"`
 	AttestationResponse json.RawMessage `json:"attestation_response"`
 }
 
@@ -655,9 +655,9 @@ func (s *Server) handleMFAWebAuthnFinish(w http.ResponseWriter, r *http.Request)
 
 	// Audit + metric.
 	s.recordAuthAuditCollaborator(r, AuditAuthMFAEnrolled, collab.ID, AuditOutcomeSuccess, map[string]any{
-		"factor":      "webauthn",
-		"device_name": record.Name,
-		"device_kind": record.DeviceKind,
+		"factor":             "webauthn",
+		"device_name":        record.Name,
+		"device_kind":        record.DeviceKind,
 		"credential_id_hint": shortCredID(record.ID),
 	})
 
@@ -672,9 +672,9 @@ func (s *Server) handleMFAWebAuthnFinish(w http.ResponseWriter, r *http.Request)
 			CreatedAt:      record.CreatedAt,
 			LastUsedAt:     record.LastUsedAt,
 		},
-		"mfa_enrolled":      true,
-		"codes":             recoveryCodes,
-		"displayed_once":    len(recoveryCodes) > 0,
+		"mfa_enrolled":   true,
+		"codes":          recoveryCodes,
+		"displayed_once": len(recoveryCodes) > 0,
 	})
 }
 
@@ -898,7 +898,7 @@ func (s *Server) handleMFAWebAuthnLoginFinish(w http.ResponseWriter, r *http.Req
 
 	metrics.IncAuthMFAVerify(metrics.AuthMFAVerifySucceeded, metrics.AuthMFAFactorWebAuthn)
 	s.recordAuthAuditCollaborator(r, AuditAuthMFAVerifySucceeded, collab.ID, AuditOutcomeSuccess, map[string]any{
-		"factor": "webauthn",
+		"factor":             "webauthn",
 		"credential_id_hint": shortCredID(credID),
 	})
 
@@ -942,12 +942,19 @@ func (s *Server) handleMFAFactorsList(w http.ResponseWriter, r *http.Request) {
 		writeMappedError(w, err)
 		return
 	}
+	options, err := s.contactMFAOptions(r.Context(), collabID)
+	if err != nil {
+		writeContactMFAError(w, r, err)
+		return
+	}
 	identity, err := repository.GetAuthIdentityByCollaboratorID(r.Context(), s.db, collabID)
 	if err != nil {
 		// Treat missing auth_identity as "nothing enrolled".
 		if errors.Is(err, repository.ErrAuthIdentityNotFound) {
 			writeJSON(w, http.StatusOK, map[string]any{
-				"totp": map[string]any{"enrolled": false},
+				"totp":                     map[string]any{"enrolled": false},
+				"email":                    options["email"],
+				"sms":                      options["sms"],
 				"webauthn_credentials":     []webauthnUserView{},
 				"recovery_codes_remaining": 0,
 			})
@@ -966,6 +973,8 @@ func (s *Server) handleMFAFactorsList(w http.ResponseWriter, r *http.Request) {
 	}
 	writeJSON(w, http.StatusOK, map[string]any{
 		"totp":                     totp,
+		"email":                    options["email"],
+		"sms":                      options["sms"],
 		"webauthn_credentials":     webauthnCredentialsToViews(identity.WebAuthnCredentials),
 		"recovery_codes_remaining": recovery,
 	})
@@ -1042,21 +1051,11 @@ func (s *Server) handleMFAWebAuthnDelete(w http.ResponseWriter, r *http.Request)
 		writeJSONError(w, http.StatusBadRequest, "credential_id is required")
 		return
 	}
-	identity, err := repository.GetAuthIdentityByCollaboratorID(r.Context(), s.db, collabID)
-	if err != nil {
-		writeMappedError(w, err)
-		return
-	}
-	// Last-factor protection.
-	if !identity.HasTOTP && len(identity.WebAuthnCredentials) <= 1 {
-		httperr.WriteProblem(w, http.StatusConflict,
-			httperr.CodeAuthWebAuthnLastFactor,
-			"Last factor",
-			"this is your only MFA factor; add another (TOTP or a new passkey) before removing this one",
-			httperr.WithInstance(r.URL.Path))
-		return
-	}
 	if err := repository.RemoveWebAuthnCredential(r.Context(), s.db, collabID, credID); err != nil {
+		if errors.Is(err, repository.ErrLastMFAFactor) {
+			httperr.WriteProblem(w, http.StatusConflict, httperr.CodeAuthWebAuthnLastFactor, "Last factor", "Add another MFA factor before removing this one.", httperr.WithInstance(r.URL.Path))
+			return
+		}
 		if errors.Is(err, repository.ErrWebAuthnCredentialNotFound) {
 			httperr.WriteProblem(w, http.StatusNotFound,
 				httperr.CodeAuthWebAuthnNotFound,

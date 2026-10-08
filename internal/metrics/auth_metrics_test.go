@@ -51,9 +51,20 @@ func TestAuthMFAVerifyCounters_LabelByOutcomeAndFactor(t *testing.T) {
 	IncAuthMFAVerify(AuthMFAVerifyFailed, AuthMFAFactorTOTP)
 	IncAuthMFAVerify(AuthMFAVerifySucceeded, AuthMFAFactorRecoveryCode)
 	IncAuthMFAVerify(AuthMFAVerifyFailed, AuthMFAFactorWebAuthn)
+	for _, factor := range []string{AuthMFAFactorEmail, AuthMFAFactorSMS} {
+		IncAuthMFAVerify(AuthMFAVerifySucceeded, factor)
+		IncAuthMFAVerify(AuthMFAVerifyFailed, factor)
+	}
 	IncAuthMFAVerify("bogus", AuthMFAFactorTOTP) // dropped
 
 	snap := AuthMFAVerifySnapshot()
+	for _, factor := range []string{AuthMFAFactorEmail, AuthMFAFactorSMS} {
+		for _, outcome := range []string{AuthMFAVerifySucceeded, AuthMFAVerifyFailed} {
+			if got := snap[outcome+"|"+factor]; got != 1 {
+				t.Errorf("%s|%s = %d, want 1", outcome, factor, got)
+			}
+		}
+	}
 	if got := snap[AuthMFAVerifySucceeded+"|"+AuthMFAFactorTOTP]; got != 2 {
 		t.Errorf("succeeded|totp = %d, want 2", got)
 	}

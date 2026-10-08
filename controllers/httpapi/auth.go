@@ -109,7 +109,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.Metadata = mergeAuthMetadata(req.Metadata, r)
-	collaborator, err := repository.VerifyPasswordCredential(r.Context(), s.db, req)
+	collaborator, passwordBinding, err := repository.VerifyPasswordCredentialForContactOTP(r.Context(), s.db, req)
 	if err != nil {
 		// §A5/G1: emit audit on password verification failure. We
 		// stay anonymous for unknown identifiers (no enumeration via
@@ -149,7 +149,12 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		writeMappedError(w, err)
 		return
 	}
-	factors := authLoginFactors(identity)
+	contactOptions, err := s.contactMFAOptions(r.Context(), collaborator.ID)
+	if err != nil {
+		writeContactMFAError(w, r, err)
+		return
+	}
+	factors := authContactLoginFactors(identity, contactOptions)
 	if len(factors) == 0 {
 		httperr.WriteProblem(w, http.StatusBadRequest,
 			httperr.CodeAuthMFAFactorUnavailable,
@@ -161,7 +166,8 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 	req.TOTPCode = strings.TrimSpace(req.TOTPCode)
 	req.RecoveryCode = strings.TrimSpace(req.RecoveryCode)
-	if req.TOTPCode == "" && req.RecoveryCode == "" {
+	req.OTPCode = strings.TrimSpace(req.OTPCode)
+	if req.TOTPCode == "" && req.RecoveryCode == "" && req.OTPCode == "" {
 		metrics.IncAuthLogin(metrics.AuthLoginMFARequired)
 		// §14 NOTE: this is 202 Accepted (not 4xx), so it uses the
 		// success-path writer. The `code` value uses the canonical
@@ -177,6 +183,8 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var session model.AuthSession
+	var token string
 	if req.TOTPCode != "" {
 		if !identity.HasTOTP {
 			httperr.WriteProblem(w, http.StatusBadRequest,
@@ -212,7 +220,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		s.recordAuthAuditCollaborator(r, AuditAuthMFAVerifySucceeded, collaborator.ID, AuditOutcomeSuccess, map[string]any{
 			"factor": "totp",
 		})
-	} else {
+	} else if req.RecoveryCode != "" {
 		if !identity.HasRecoveryCodes {
 			httperr.WriteProblem(w, http.StatusUnauthorized,
 				httperr.CodeAuthMFAInvalid,
@@ -243,12 +251,20 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		s.recordAuthAuditCollaborator(r, AuditAuthMFAVerifySucceeded, collaborator.ID, AuditOutcomeSuccess, map[string]any{
 			"factor": "recovery_code",
 		})
+	} else {
+		session, token, err = s.verifyContactLoginOTP(r, collaborator.ID, passwordBinding, req)
+		if err != nil {
+			writeContactMFAError(w, r, err)
+			return
+		}
 	}
 
-	session, token, err := repository.CreateAuthSession(r.Context(), s.db, collaborator.ID, req.Metadata, authSessionTTL())
-	if err != nil {
-		writeMappedError(w, err)
-		return
+	if session.ID == uuid.Nil {
+		session, token, err = repository.CreateAuthSession(r.Context(), s.db, collaborator.ID, req.Metadata, authSessionTTL())
+		if err != nil {
+			writeMappedError(w, err)
+			return
+		}
 	}
 
 	// §A5/G1: emit BOTH the session-created event and the login-succeeded
@@ -299,6 +315,22 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	// X-CSRF-Token header on subsequent mutations.
 	writeCSRFCookie(w, computeCSRFToken(session.ID), session.ExpiresAt)
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func authContactLoginFactors(identity model.AuthIdentity, options map[string]contactMFAOption) []string {
+	factors := authLoginFactors(identity)
+	if identity.HasRecoveryCodes {
+		factors = factors[:len(factors)-1]
+	}
+	for _, channel := range []string{"email", "sms"} {
+		if options[channel].Available && options[channel].Enrolled {
+			factors = append(factors, channel)
+		}
+	}
+	if identity.HasRecoveryCodes {
+		factors = append(factors, "recovery_code")
+	}
+	return factors
 }
 
 func authLoginFactors(identity model.AuthIdentity) []string {
@@ -820,6 +852,9 @@ func loginMFAMethod(req model.LoginWithPasswordRequest) string {
 	}
 	if strings.TrimSpace(req.RecoveryCode) != "" {
 		return "recovery_code"
+	}
+	if strings.TrimSpace(req.OTPCode) != "" && (req.OTPChannel == "email" || req.OTPChannel == "sms") {
+		return req.OTPChannel
 	}
 	return "none"
 }
