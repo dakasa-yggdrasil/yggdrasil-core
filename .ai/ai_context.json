@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-08T15:22:39-03:00",
+  "generated_at": "2026-10-08T15:32:17-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 718,
@@ -11,7 +11,7 @@
     ".yml": 24
   },
   "provenance": {
-    "commit": "1c11cc2b555c9697cc0a83449e26860f7ab13118",
+    "commit": "fd03ccea5b34881f8531934792254743f72c7d83",
     "dirty": true,
     "files": [
       {
@@ -115,7 +115,7 @@
     {
       "path": "internal/capacity",
       "files": 12,
-      "kb": 85
+      "kb": 87
     }
   ],
   "top_files_by_size": [
@@ -308,7 +308,7 @@
     "config_files": 7,
     "k8s_manifests": 7
   },
-  "verified_at_commit": "1c11cc2b555c9697cc0a83449e26860f7ab13118",
-  "verified_diff_sha256": "39cfd74ca91b5a7afd9544a65e6ac867d339f0b1d97245836728890dd5c837e2",
+  "verified_at_commit": "fd03ccea5b34881f8531934792254743f72c7d83",
+  "verified_diff_sha256": "9c9a1da1e91baf017a06c0deff608808728272bb09e0051d073e0255dd4ae051",
   "reconciler_schema": 1
 }

@@ -1,6 +1,6 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-08T15:22:39-03:00_
+_Generated from HEAD at: 2026-10-08T15:32:17-03:00_
 
 ## Languages
 
@@ -35,7 +35,7 @@ _Generated from HEAD at: 2026-10-08T15:22:39-03:00_
 - controllers/oidc: 23 files (193.4 KB)
 - docs/bootstrap/seeds/integrations: 20 files (87.4 KB)
 - internal/externalidentity: 15 files (61.5 KB)
-- internal/capacity: 12 files (85.9 KB)
+- internal/capacity: 12 files (87.4 KB)
 
 ## Heaviest Files
 
