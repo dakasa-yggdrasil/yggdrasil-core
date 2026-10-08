@@ -72,19 +72,34 @@ func ReadContactBinding(ctx context.Context, db DBQuerier, id uuid.UUID, channel
 	return privateContactDigest(fmt.Sprintf("%s\x00sms\x00%d\x00%s", id, version, declaredAt.UTC().Format(time.RFC3339Nano))), nil
 }
 
-// ReadContactLoginBinding ties a challenge to the password proved at begin.
-// Legacy credentials without password_updated_at remain protected. Only the
-// digest leaves the repository; the password hash is never serialized/logged.
+// ContactLoginBindingForVersion binds the owner and its random credential
+// epoch, without deriving anything from password material. An invalid epoch
+// fails closed; the migration generates one for every identity.
+func ContactLoginBindingForVersion(id uuid.UUID, version string) string {
+	epoch, err := uuid.Parse(version)
+	if err != nil || epoch == uuid.Nil || id == uuid.Nil {
+		return ""
+	}
+	return "login-password:" + id.String() + ":" + epoch.String()
+}
+
+// ReadContactLoginBinding reads the random epoch of a password-bearing active
+// identity. Legacy credentials without password_updated_at remain protected.
 func ReadContactLoginBinding(ctx context.Context, db DBQuerier, id uuid.UUID) (string, error) {
-	var hash string
-	err := db.QueryRowContext(ctx, `SELECT COALESCE(a.password_hash,'') FROM public.auth_identities a JOIN public.collaborators c ON c.id=a.collaborator_id WHERE a.collaborator_id=$1 AND c.status='active'`, id).Scan(&hash)
-	if errors.Is(err, sql.ErrNoRows) || err == nil && hash == "" {
+	var version string
+	var hasPassword bool
+	err := db.QueryRowContext(ctx, `SELECT a.mfa_password_version::text,COALESCE(a.password_hash,'')<>'' FROM public.auth_identities a JOIN public.collaborators c ON c.id=a.collaborator_id WHERE a.collaborator_id=$1 AND c.status='active'`, id).Scan(&version, &hasPassword)
+	if errors.Is(err, sql.ErrNoRows) || err == nil && !hasPassword {
 		return "", ErrContactOTPInvalid
 	}
 	if err != nil {
 		return "", fmt.Errorf("read MFA password binding: %w", err)
 	}
-	return "login-password:" + privateContactDigest(id.String()+"\x00"+hash), nil
+	binding := ContactLoginBindingForVersion(id, version)
+	if binding == "" {
+		return "", ErrContactOTPInvalid
+	}
+	return binding, nil
 }
 
 // lockContactOwnerTx establishes the shared collaborator -> auth identity lock
@@ -119,7 +134,7 @@ func validateContactContextTx(ctx context.Context, tx *sql.Tx, id uuid.UUID, pur
 			return ErrContactOTPInvalid
 		}
 		var locked bool
-		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(locked_until>NOW(),FALSE) FROM public.auth_identities WHERE collaborator_id=$1`, id).Scan(&locked); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT COALESCE(locked_until>clock_timestamp(),FALSE) FROM public.auth_identities WHERE collaborator_id=$1`, id).Scan(&locked); err != nil {
 			return fmt.Errorf("read MFA credential posture: %w", err)
 		}
 		if locked {
@@ -137,7 +152,7 @@ func validateContactContextTx(ctx context.Context, tx *sql.Tx, id uuid.UUID, pur
 		if len(hash) != 64 {
 			return ErrContactOTPInvalid
 		}
-		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.mfa_enroll_tokens t JOIN public.auth_identities a ON a.collaborator_id=t.collaborator_id WHERE t.collaborator_id=$1 AND t.token_hash=$2 AND t.consumed_at IS NULL AND t.expires_at>NOW() AND a.mfa_enrolled_at IS NULL)`, id, hash).Scan(&exists); err != nil {
+		if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.mfa_enroll_tokens t JOIN public.auth_identities a ON a.collaborator_id=t.collaborator_id WHERE t.collaborator_id=$1 AND t.token_hash=$2 AND t.consumed_at IS NULL AND t.expires_at>clock_timestamp() AND a.mfa_enrolled_at IS NULL)`, id, hash).Scan(&exists); err != nil {
 			return fmt.Errorf("read MFA enrollment authority: %w", err)
 		}
 	case strings.HasPrefix(binding, "session:"):
@@ -147,7 +162,7 @@ func validateContactContextTx(ctx context.Context, tx *sql.Tx, id uuid.UUID, pur
 		}
 		// The row lock prevents revocation between proof and factor persistence.
 		var found uuid.UUID
-		err = tx.QueryRowContext(ctx, `SELECT id FROM public.auth_sessions WHERE id=$1 AND collaborator_id=$2 AND status='active' AND revoked_at IS NULL AND expires_at>NOW() FOR UPDATE`, sessionID, id).Scan(&found)
+		err = tx.QueryRowContext(ctx, `SELECT id FROM public.auth_sessions WHERE id=$1 AND collaborator_id=$2 AND status='active' AND revoked_at IS NULL AND expires_at>clock_timestamp() FOR UPDATE`, sessionID, id).Scan(&found)
 		if errors.Is(err, sql.ErrNoRows) {
 			return ErrContactOTPInvalid
 		}
@@ -257,7 +272,7 @@ func ActivateContactOTP(ctx context.Context, db *sql.DB, tokenHash string) error
 	if current != binding {
 		return ErrContactOTPInvalid
 	}
-	res, err := tx.ExecContext(ctx, `UPDATE public.auth_mfa_contact_challenges SET delivered_at=NOW() WHERE token_hash=$1 AND delivered_at IS NULL AND consumed_at IS NULL AND expires_at>NOW()`, tokenHash)
+	res, err := tx.ExecContext(ctx, `UPDATE public.auth_mfa_contact_challenges SET delivered_at=NOW() WHERE token_hash=$1 AND delivered_at IS NULL AND consumed_at IS NULL AND expires_at>clock_timestamp()`, tokenHash)
 	if err != nil {
 		return fmt.Errorf("activate contact OTP: %w", err)
 	}
@@ -294,7 +309,7 @@ func reserveAndVerifyContactOTPTx(ctx context.Context, tx *sql.Tx, id uuid.UUID,
 		}
 	}
 	var codeHash string
-	err = tx.QueryRowContext(ctx, `UPDATE public.auth_mfa_contact_challenges SET attempts=attempts+1 WHERE token_hash=$1 AND collaborator_id=$2 AND channel=$3 AND purpose=$4 AND context_binding=$5 AND contact_binding=$6 AND delivered_at IS NOT NULL AND consumed_at IS NULL AND expires_at>NOW() AND attempts<5 RETURNING code_hash`, mfa.HashContactOTPToken(rawToken), id, channel, purpose, contextBinding, current).Scan(&codeHash)
+	err = tx.QueryRowContext(ctx, `UPDATE public.auth_mfa_contact_challenges SET attempts=attempts+1 WHERE token_hash=$1 AND collaborator_id=$2 AND channel=$3 AND purpose=$4 AND context_binding=$5 AND contact_binding=$6 AND delivered_at IS NOT NULL AND consumed_at IS NULL AND expires_at>clock_timestamp() AND attempts<5 RETURNING code_hash`, mfa.HashContactOTPToken(rawToken), id, channel, purpose, contextBinding, current).Scan(&codeHash)
 	if errors.Is(err, sql.ErrNoRows) {
 		return false, ErrContactOTPInvalid
 	}
@@ -311,7 +326,7 @@ func reserveAndVerifyContactOTPTx(ctx context.Context, tx *sql.Tx, id uuid.UUID,
 }
 
 func finishContactOTPAttempt(tx *sql.Tx, spent bool, err error) error {
-	if err != nil && !(spent && errors.Is(err, ErrContactOTPInvalid)) {
+	if err != nil && (!spent || !errors.Is(err, ErrContactOTPInvalid)) {
 		return err
 	}
 	if commitErr := tx.Commit(); commitErr != nil {
@@ -346,11 +361,11 @@ func VerifyContactOTPAndCreateSession(ctx context.Context, db *sql.DB, id uuid.U
 	if err := lockContactOwnerTx(ctx, tx, id); err != nil {
 		return model.AuthSession{}, "", err
 	}
-	var hash, scheme string
-	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(password_hash,''),COALESCE(NULLIF(password_scheme,''),'pbkdf2_sha256') FROM public.auth_identities WHERE collaborator_id=$1`, id).Scan(&hash, &scheme); err != nil {
+	var hash, scheme, version string
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(password_hash,''),COALESCE(NULLIF(password_scheme,''),'pbkdf2_sha256'),mfa_password_version::text FROM public.auth_identities WHERE collaborator_id=$1`, id).Scan(&hash, &scheme, &version); err != nil {
 		return model.AuthSession{}, "", fmt.Errorf("read locked contact OTP password: %w", err)
 	}
-	if hash == "" || contextBinding != "login-password:"+privateContactDigest(id.String()+"\x00"+hash) {
+	if hash == "" || contextBinding == "" || contextBinding != ContactLoginBindingForVersion(id, version) {
 		return model.AuthSession{}, "", ErrContactOTPInvalid
 	}
 	if strings.TrimSpace(req.Password) == "" || verifyPasswordBridge(scheme, hash, req.Password) != nil {
@@ -392,7 +407,7 @@ func VerifyAndEnrollContactOTP(ctx context.Context, db *sql.DB, id uuid.UUID, ch
 		return finishContactOTPAttempt(tx, spent, err)
 	}
 	if strings.HasPrefix(contextBinding, "enroll-token:") {
-		res, err := tx.ExecContext(ctx, `UPDATE public.mfa_enroll_tokens SET consumed_at=NOW() WHERE token_hash=$1 AND collaborator_id=$2 AND consumed_at IS NULL AND expires_at>NOW()`, strings.TrimPrefix(contextBinding, "enroll-token:"), id)
+		res, err := tx.ExecContext(ctx, `UPDATE public.mfa_enroll_tokens SET consumed_at=NOW() WHERE token_hash=$1 AND collaborator_id=$2 AND consumed_at IS NULL AND expires_at>clock_timestamp()`, strings.TrimPrefix(contextBinding, "enroll-token:"), id)
 		if err != nil {
 			return fmt.Errorf("consume contact MFA enrollment authority: %w", err)
 		}

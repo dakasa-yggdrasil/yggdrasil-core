@@ -1,5 +1,25 @@
 -- +goose Up
 -- +goose StatementBegin
+-- Authentication challenges bind to a random credential epoch, never to a
+-- derivative of password material. Legacy nullable password timestamps do not
+-- affect this epoch, and restoring an older hash cannot restore old proofs.
+ALTER TABLE public.auth_identities
+    ADD COLUMN IF NOT EXISTS mfa_password_version UUID NOT NULL DEFAULT gen_random_uuid();
+
+CREATE OR REPLACE FUNCTION public.rotate_mfa_password_version()
+RETURNS TRIGGER LANGUAGE plpgsql AS $$
+BEGIN
+    IF NEW.password_hash IS DISTINCT FROM OLD.password_hash THEN
+        NEW.mfa_password_version := gen_random_uuid();
+    END IF;
+    RETURN NEW;
+END;
+$$;
+DROP TRIGGER IF EXISTS auth_identities_mfa_password_version ON public.auth_identities;
+CREATE TRIGGER auth_identities_mfa_password_version
+    BEFORE UPDATE OF password_hash ON public.auth_identities
+    FOR EACH ROW EXECUTE FUNCTION public.rotate_mfa_password_version();
+
 CREATE TABLE IF NOT EXISTS public.auth_mfa_contact_factors (
     collaborator_id UUID NOT NULL REFERENCES public.collaborators(id) ON DELETE CASCADE,
     channel TEXT NOT NULL CHECK (channel IN ('email', 'sms')),
@@ -52,6 +72,9 @@ CREATE TRIGGER collaborators_changed_email_mfa
 
 -- +goose Down
 -- +goose StatementBegin
+DROP TRIGGER IF EXISTS auth_identities_mfa_password_version ON public.auth_identities;
+DROP FUNCTION IF EXISTS public.rotate_mfa_password_version();
+ALTER TABLE public.auth_identities DROP COLUMN IF EXISTS mfa_password_version;
 DROP TRIGGER IF EXISTS collaborators_changed_email_mfa ON public.collaborators;
 DROP FUNCTION IF EXISTS public.invalidate_changed_email_mfa();
 DROP TABLE IF EXISTS public.auth_mfa_contact_challenges;

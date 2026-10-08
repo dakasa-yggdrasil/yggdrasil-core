@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 5981a6b1fd14a586535af74e3715671de4ac5c94
-verified_diff_sha256: b0c02ff7da34c8944008642c6c5c726efff956f69fb3fa0f30b04df7f02bd989
+verified_at_commit: 8b92e677deb3fc3d7752a2c319b7eb0d4ca602c6
+verified_diff_sha256: 0903f49dbb729eb9905037ef32403cf4ee612982684fcee1ece21412cd0a6505
 reconciler_schema: 1
 verified_at: 2026-10-08
 by: Codex
-note: Reviewed contact OTP MFA plus the readiness correction. Factor removal counts only configured contacts and decryptable SMS recipients; possession, directory declarations, provider acceptance and human receipt remain separate. CI runs the tests. No production activation is claimed.
+note: Reconciled contact OTP MFA with random credential epochs instead of password-derived fingerprints. Password replacement and restoration cannot revive proofs, expiration uses the current database clock after locks, and owner-only route authority is documented in the existing inventory. CI remains the only test execution environment.

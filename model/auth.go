@@ -8,13 +8,14 @@ import (
 
 // PasswordCredential stores one local password auth configuration for a collaborator.
 type PasswordCredential struct {
-	CollaboratorID    uuid.UUID      `json:"collaborator_id"`
-	Status            string         `json:"status"`
-	PasswordScheme    string         `json:"password_scheme"`
-	Metadata          map[string]any `json:"metadata,omitempty"`
-	PasswordUpdatedAt time.Time      `json:"password_updated_at"`
-	CreatedAt         time.Time      `json:"created_at"`
-	UpdatedAt         time.Time      `json:"updated_at"`
+	MFAPasswordVersion string         `json:"-"`
+	CollaboratorID     uuid.UUID      `json:"collaborator_id"`
+	Status             string         `json:"status"`
+	PasswordScheme     string         `json:"password_scheme"`
+	Metadata           map[string]any `json:"metadata,omitempty"`
+	PasswordUpdatedAt  time.Time      `json:"password_updated_at"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
 }
 
 // AuthSession is the persisted session state stored by the core.

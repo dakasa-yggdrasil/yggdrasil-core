@@ -149,8 +149,8 @@ func VerifyPasswordCredential(ctx context.Context, db *sql.DB, req model.LoginWi
 	return collaborator, err
 }
 
-// VerifyPasswordCredentialForContactOTP returns a binding to the exact hash
-// that was verified, rather than re-reading a potentially replaced password.
+// VerifyPasswordCredentialForContactOTP returns a binding to the credential version
+// read alongside the verified hash, so a replaced password cannot reuse proof.
 func VerifyPasswordCredentialForContactOTP(
 	ctx context.Context,
 	db *sql.DB,
@@ -227,7 +227,7 @@ func VerifyPasswordCredentialForContactOTP(
 	// Password matched — reset the failure counter so a streak of
 	// typos doesn't tip a real user into the lockout window.
 	_ = resetLoginFailures(ctx, db, collaborator.ID)
-	return collaborator, "login-password:" + privateContactDigest(collaborator.ID.String()+"\x00"+passwordHash), nil
+	return collaborator, ContactLoginBindingForVersion(collaborator.ID, credential.MFAPasswordVersion), nil
 }
 
 // isAccountLocked returns true when auth_identities.locked_until is
@@ -588,6 +588,7 @@ func getPasswordCredentialRow(
 				password_hash,
 				password_metadata,
 				COALESCE(password_updated_at, created_at),
+				mfa_password_version::text,
 				created_at,
 				updated_at
 			FROM public.auth_identities
@@ -601,6 +602,7 @@ func getPasswordCredentialRow(
 		&passwordHash,
 		&metadataRaw,
 		&credential.PasswordUpdatedAt,
+		&credential.MFAPasswordVersion,
 		&credential.CreatedAt,
 		&credential.UpdatedAt,
 	)

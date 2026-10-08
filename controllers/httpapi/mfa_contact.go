@@ -220,17 +220,18 @@ func (s *Server) contactOTPRecipient(ctx context.Context, id uuid.UUID, channel 
 		return "", "", err
 	}
 	var recipient string
-	if channel == "email" {
+	switch channel {
+	case "email":
 		if err := tx.QueryRowContext(ctx, `SELECT primary_email FROM public.collaborators WHERE id=$1`, id).Scan(&recipient); err != nil {
 			return "", "", err
 		}
-	} else if channel == "sms" {
+	case "sms":
 		phone, err := repository.GetPhoneContact(ctx, tx, s.envelope, id)
 		if err != nil || phone == nil {
 			return "", "", repository.ErrContactUnavailable
 		}
 		recipient = phone.PhoneE164
-	} else {
+	default:
 		return "", "", repository.ErrContactUnavailable
 	}
 	if err := tx.Commit(); err != nil {

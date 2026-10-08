@@ -16,7 +16,7 @@ already sends an email link.
 
 Keep contact MFA possession in separate state and bind every proof to the
 canonical collaborator, current contact, purpose and enrollment authority
-or exact password hash. Activate only after atomic consumption of a delivered
+or exact random credential version. Activate only after atomic consumption of a delivered
 OTP. Bind email to the normalized primary email and SMS to its typed contact
 declaration version/time. Use configured `send_email`/`send_sms` integrations.
 

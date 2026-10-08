@@ -358,6 +358,13 @@ func TestNoUngatedMutatingRoutes(t *testing.T) {
 		`POST /api/v1/auth/mfa/factors/totp/finish`:     "self MFA enroll",
 		`POST /api/v1/auth/mfa/factors/webauthn/begin`:  "self MFA enroll",
 		`POST /api/v1/auth/mfa/factors/webauthn/finish`: "self MFA enroll",
+		// Contact OTP enrollment is owner-only via an exact enrollment link
+		// or a live session with enforced CSRF. Real HTTP/PostgreSQL tests
+		// cover absent/replayed authority and never allow recipient selection.
+		`POST /api/v1/auth/mfa/factors/contact/begin`:       "owner-bound enrollment authority + CSRF in session mode, rate-limited",
+		`POST /api/v1/auth/mfa/factors/contact/finish`:      "atomic owner/contact/link proof, CSRF in session mode, rate-limited",
+		`POST /api/v1/auth/mfa/contact/login/begin`:         "pre-session, password verified before sending to canonical enrolled contact",
+		`DELETE /api/v1/auth/mfa/factors/contact/{channel}`: "self via guard + live owner session/CSRF, atomic last-factor protection",
 		// WebAuthn login flow — pre-session, BLOCKED password re-verify inside
 		// the handler before assertion verification. Same authority shape as
 		// POST /api/v1/auth/login (password+totp); cannot be RBAC-gated

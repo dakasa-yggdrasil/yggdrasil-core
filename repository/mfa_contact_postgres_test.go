@@ -133,6 +133,26 @@ func contactOTPRequireInvalid(t *testing.T, err error) {
 	}
 }
 
+func TestContactLoginBindingForVersion(t *testing.T) {
+	id := uuid.MustParse("01a12f00-bafe-4f00-a800-111111111111")
+	version := "01a12f00-bafe-4f00-a800-222222222222"
+	want := "login-password:01a12f00-bafe-4f00-a800-111111111111:01a12f00-bafe-4f00-a800-222222222222"
+	if ContactLoginBindingForVersion(id, version) != want {
+		t.Fatal("credential version context does not identify its owner and random epoch")
+	}
+	if ContactLoginBindingForVersion(uuid.New(), version) == want || ContactLoginBindingForVersion(id, uuid.NewString()) == want {
+		t.Fatal("changing the owner or random credential epoch did not change its context")
+	}
+	for _, invalid := range []string{"", "not-a-uuid", uuid.Nil.String()} {
+		if ContactLoginBindingForVersion(id, invalid) != "" {
+			t.Fatal("invalid credential epoch did not fail closed")
+		}
+	}
+	if ContactLoginBindingForVersion(uuid.Nil, version) != "" {
+		t.Fatal("an ownerless credential context did not fail closed")
+	}
+}
+
 func TestMFAContactOTPPostgres(t *testing.T) {
 	db := contactOTPPostgres(t)
 	t.Setenv(contactphone.EnrollmentPolicyEnv, "false")
@@ -308,6 +328,55 @@ func TestMFAContactOTPPostgres(t *testing.T) {
 		if !errors.Is(err, ErrContactOTPRateLimited) {
 			t.Fatal("sixth hourly send bypassed the shared sending budget")
 		}
+	})
+
+	t.Run("password_epoch_rotates_and_never_revives", func(t *testing.T) {
+		c, _ := contactOTPFixture(t, db)
+		other, _ := contactOTPFixture(t, db)
+		binding := contactOTPSeedFactor(t, db, c.ID, "email")
+		original := contactOTPLoginBinding(t, db, c.ID)
+		if original == contactOTPLoginBinding(t, db, other.ID) {
+			t.Fatal("different owners received the same credential context")
+		}
+		token, code := contactOTPIssue(t, db, c.ID, "email", "login", original, binding, true)
+		if _, err := db.Exec(`UPDATE public.auth_identities SET password_hash=password_hash WHERE collaborator_id=$1`, c.ID); err != nil {
+			t.Fatal("unchanged credential epoch fixture failed")
+		}
+		if contactOTPLoginBinding(t, db, c.ID) != original {
+			t.Fatal("an unchanged password hash rotated its credential epoch")
+		}
+		if _, err := db.Exec(`UPDATE public.auth_identities SET password_hash='replacement-fixture-password-hash' WHERE collaborator_id=$1`, c.ID); err != nil {
+			t.Fatal("replacement credential epoch fixture failed")
+		}
+		replaced := contactOTPLoginBinding(t, db, c.ID)
+		if replaced == original {
+			t.Fatal("password hash replacement did not rotate the random epoch")
+		}
+		if _, err := db.Exec(`UPDATE public.auth_identities SET password_hash='fixture-password-hash' WHERE collaborator_id=$1`, c.ID); err != nil {
+			t.Fatal("restored credential epoch fixture failed")
+		}
+		restored := contactOTPLoginBinding(t, db, c.ID)
+		if restored == original || restored == replaced {
+			t.Fatal("restoring an old password hash restored an old credential epoch")
+		}
+		contactOTPRequireInvalid(t, VerifyContactOTP(ctx, db, c.ID, "email", "login", original, binding, token, code))
+		var beforeReset, afterReset string
+		if db.QueryRow(`SELECT mfa_password_version::text FROM public.auth_identities WHERE collaborator_id=$1`, c.ID).Scan(&beforeReset) != nil {
+			t.Fatal("pre-reset credential epoch fixture unavailable")
+		}
+		reset, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			t.Fatal("credential epoch reset transaction failed")
+		}
+		defer func() { _ = reset.Rollback() }()
+		if ResetMFAFactors(ctx, reset, c.ID) != nil || reset.Commit() != nil {
+			t.Fatal("credential epoch reset failed")
+		}
+		if db.QueryRow(`SELECT mfa_password_version::text FROM public.auth_identities WHERE collaborator_id=$1`, c.ID).Scan(&afterReset) != nil || beforeReset == afterReset {
+			t.Fatal("full reset did not rotate the random password epoch")
+		}
+		_, err = ReadContactLoginBinding(ctx, db, c.ID)
+		contactOTPRequireInvalid(t, err)
 	})
 
 	t.Run("concurrent_single_consume", func(t *testing.T) {

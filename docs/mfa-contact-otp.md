@@ -66,7 +66,7 @@ sending. Complete `POST /api/v1/auth/login` using `identifier`, `password`,
 `otp_channel`, `otp_challenge_token`, `otp_code`.
 
 Proof consumption and session creation commit together, bound to the exact
-verified password hash. Credential replacement or administrative MFA reset
+verified credential version. Credential replacement or administrative MFA reset
 cannot reopen an old proof after revocation. Only HTTP `200` establishes a
 session.
 
