@@ -81,6 +81,30 @@ func NativePodWitness(p model.CapacityPolicySpec, checkpoint model.CapacityNativ
 	return nil
 }
 
+// This confirms only removal of the already-witnessed exact protection target.
+// Absence and replacement are not a new native lifetime or released capacity.
+func NativePodReleaseTarget(p model.CapacityPolicySpec, checkpoint model.CapacityNativePodCheckpoint, observed model.NativeTerminationObservation, now time.Time) error {
+	if p.HPAExecutionBinding == nil || p.AssessmentBinding == nil || observed.BindingName != p.HPAExecutionBinding.PodTerminationBinding || observed.Namespace != checkpoint.Namespace || observed.Namespace != p.AssessmentBinding.Snapshot.Namespace || observed.PodName != checkpoint.PodName || observed.ContainerName != checkpoint.ContainerName || observed.ContainerName != p.HPAExecutionBinding.ContainerName || observed.ImageDigest != checkpoint.ImageDigest || observed.ImageDigest != p.HPAExecutionBinding.ImageDigest || !Fresh(observed.ObservedAt, now, p.MaxEvidenceAgeSeconds) || observed.Protected {
+		return fmt.Errorf("native release target is stale or outside the exact lifetime binding")
+	}
+	switch observed.State {
+	case "absent":
+		if observed.Reason == "native_name_absent" && observed.PodUID == "" {
+			return nil
+		}
+	case "replaced":
+		uid, err := uuid.Parse(observed.PodUID)
+		if observed.Reason == "native_uid_replaced" && err == nil && uid != uuid.Nil && uid.String() == observed.PodUID && observed.PodUID != checkpoint.PodUID {
+			return nil
+		}
+	case "unprotected":
+		if observed.Reason == "native_capacity_finalizer_absent" && NativePodMatchesCheckpoint(p, checkpoint, observed, now) == nil && observed.StartedAt != nil && observed.StartedAt.Equal(checkpoint.ContainerStartedAt) {
+			return nil
+		}
+	}
+	return fmt.Errorf("native release lacks a fresh exact removal observation")
+}
+
 func nativeJoinTimestamp(joined, finished time.Time) bool {
 	if joined.IsZero() || finished.IsZero() {
 		return false
