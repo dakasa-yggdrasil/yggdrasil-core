@@ -24,6 +24,7 @@ const maxCapacityGeneration int64 = 9007199254740991
 type CapacityStore struct {
 	DB               *sql.DB
 	ExecutionEnabled bool
+	AdmissionOnly    bool
 	WorkflowID       uuid.UUID
 	ExecutorID       string
 }
@@ -422,7 +423,8 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	}
 	if s.WorkflowID != uuid.Nil {
 		var workflowActive bool
-		if err = tx.QueryRowContext(ctx, `SELECT active FROM public.manifests WHERE id=$1 AND kind='workflow' AND namespace=$2 AND name=$3 FOR SHARE`, s.WorkflowID, p.Workflow.Namespace, p.Workflow.Name).Scan(&workflowActive); err != nil {
+		workflow := nativeCapacityWorkflow(p, s.AdmissionOnly)
+		if err = tx.QueryRowContext(ctx, `SELECT active FROM public.manifests WHERE id=$1 AND kind='workflow' AND namespace=$2 AND name=$3 FOR SHARE`, s.WorkflowID, workflow.Namespace, workflow.Name).Scan(&workflowActive); err != nil {
 			return model.CapacityIntent{}, err
 		}
 		if !workflowActive {
@@ -537,7 +539,7 @@ func parseCapacityPolicy(policy model.Manifest) (model.CapacityPolicySpec, error
 }
 
 func pendingCapacityPhase(phase string) bool {
-	return phase != "native_completed" && phase != "hold" && phase != "promoted" && phase != "reconciled" && phase != "reconciled_partial" && phase != "reconciled_failed_floor" && phase != "aborted"
+	return phase != "envelope_applied" && phase != "native_completed" && phase != "hold" && phase != "promoted" && phase != "reconciled" && phase != "reconciled_partial" && phase != "reconciled_failed_floor" && phase != "aborted"
 }
 func sameCapacityResources(a, b model.CapacitySnapshot) bool {
 	return sameCapacityResourceIdentity(a, b) && a.WorkloadResourceVersion == b.WorkloadResourceVersion

@@ -18,7 +18,7 @@ import (
 var errCapacityBoundAssessment = fmt.Errorf("protected bound capacity assessment refused")
 
 func capacityBoundOperation(op string) bool {
-	return op == "capacity.observe_bound_assessment" || op == "capacity.assess_bound" || op == "capacity.execute_bound"
+	return op == "capacity.observe_bound_assessment" || op == "capacity.assess_bound" || op == "capacity.execute_bound" || op == "capacity.admit_bound"
 }
 
 type capacityResolvedObservationAdapter struct {
@@ -86,10 +86,15 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 		return fail()
 	}
 	p, err := manifest.ParseCapacityPolicySpec(policy.Spec)
-	if err != nil || manifest.ValidateCapacityPolicySpec(p) != nil || p.AssessmentBinding == nil || workflowRef.Kind != "workflow" || workflowRef.Namespace != p.Workflow.Namespace || workflowRef.Name != p.Workflow.Name {
+	admissionOnly := result.Operation == "capacity.admit_bound"
+	expectedWorkflow := p.Workflow
+	if admissionOnly && p.HPAExecutionBinding != nil {
+		expectedWorkflow = p.HPAExecutionBinding.AdmissionWorkflow
+	}
+	if err != nil || manifest.ValidateCapacityPolicySpec(p) != nil || p.AssessmentBinding == nil || workflowRef.Kind != "workflow" || workflowRef.Namespace != expectedWorkflow.Namespace || workflowRef.Name != expectedWorkflow.Name {
 		return fail()
 	}
-	wf, err := repository.ResolveManifest(ctx, db, "workflow", p.Workflow.Namespace, p.Workflow.Name, nil, true)
+	wf, err := repository.ResolveManifest(ctx, db, "workflow", expectedWorkflow.Namespace, expectedWorkflow.Name, nil, true)
 	if err != nil || wf.ID != workflowRef.ID || wf.Version != workflowRef.Version {
 		return fail()
 	}
@@ -117,6 +122,31 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 		return r.Status, nil
 	}
 	b := p.AssessmentBinding
+	if admissionOnly {
+		if p.HPAExecutionBinding == nil || p.HPAExecutionBinding.Mode != capacity.HPALifetimeExecutionMode || !p.ExecutionEnabled || os.Getenv("YGGDRASIL_CAPACITY_ADMISSION_ENABLED") != "true" {
+			return fail()
+		}
+		var hpa model.CapacityHPAEnvelopeResponse
+		status, err := read(b.Snapshot.Adapter, capacity.ObserveHPAEnvelope, map[string]any{"namespace": b.Snapshot.Namespace, "hpa_name": b.Snapshot.HPAName}, &hpa)
+		if err != nil || status != "observed" {
+			return fail()
+		}
+		executor, _ := ctx.Value(capacityInvocationKey{}).(string)
+		store := repository.CapacityStore{DB: db, ExecutionEnabled: true, AdmissionOnly: true, WorkflowID: wf.ID, ExecutorID: executor}
+		intent, err := runCapacityBoundExecution(ctx, store, policy, p, model.CapacityIntent{}, model.CapacityAssessment{}, hpa, read)
+		if err != nil {
+			return fail()
+		}
+		intent.LeaseOwner, intent.LeaseExecutorID = "", ""
+		var membership model.AdapterCapacityPodAdmissionCandidatesResponse
+		status, err = read(b.Snapshot.Adapter, capacity.ObserveNativePodAdmissionCandidates, map[string]any{"binding_name": p.HPAExecutionBinding.PodTerminationBinding}, &membership)
+		if err != nil || status != "observed" || capacity.NativeAdmissionCandidates(p, membership, time.Now().UTC()) != nil {
+			return fail()
+		}
+		result.Metadata = map[string]any{"mode": "native_candidate_admission_v2", "intent": intent, "unqualified_baseline_lifetimes": membership.Unqualified, "pressure_execution_enabled": false, "useful_capacity_known": false, "warm_resources_known": false}
+		result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
+		return result
+	}
 	assessment := model.CapacityAssessment{}
 	for _, binding := range b.Signals {
 		var metric model.CapacityMetricRangeObservation

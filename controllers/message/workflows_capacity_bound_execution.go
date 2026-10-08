@@ -4,73 +4,117 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"time"
+
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
-	"sort"
-	"time"
 )
 
 type capacityBoundPrivateCall func(model.CapacityObservationAdapterBinding, string, map[string]any, any) (string, error)
 
-// All targets, reads, challenges and requests are constructed in this private
-// invocation. Workflow input supplies only the logical policy reference.
+// The fixed invocation owns every read and command. Reservations and retained
+// process lifetimes are separate: controllers select victims; Core never issues
+// Pod DELETE. Hold invocations still reconcile every immutable lifetime origin.
 func runCapacityBoundExecution(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, intent model.CapacityIntent, assessment model.CapacityAssessment, hpa model.CapacityHPAEnvelopeResponse, call capacityBoundPrivateCall) (model.CapacityIntent, error) {
-	if intent.Phase == "hold" || intent.Phase == "native_completed" {
-		return intent, nil
+	if p.HPAExecutionBinding == nil || p.HPAExecutionBinding.Mode != capacity.HPALifetimeExecutionMode {
+		return intent, errCapacityBoundAssessment
 	}
 	var err error
-	if intent.Phase == "proposed" {
-		intent, err = store.Claim(ctx, policy, intent.Generation, assessment)
+	if store.AdmissionOnly {
+		intent, err = store.AcquireNativeAdmissionExecution(ctx, policy, hpa)
 	} else {
-		intent, err = store.ResumeNativeExecution(ctx, policy, intent.Generation)
+		intent, err = store.AcquireNativeLifetimeExecution(ctx, policy, intent, assessment)
 	}
 	if err != nil {
 		return intent, err
 	}
-	binding := p.AssessmentBinding.Snapshot.Adapter
-	observeHPA := func() (model.CapacityHPAEnvelopeResponse, error) {
-		var response model.CapacityHPAEnvelopeResponse
-		status, e := call(binding, capacity.ObserveHPAEnvelope, map[string]any{"namespace": p.AssessmentBinding.Snapshot.Namespace, "hpa_name": p.AssessmentBinding.Snapshot.HPAName}, &response)
-		if e != nil || status != "observed" {
-			return response, errCapacityBoundAssessment
-		}
-		return response, nil
+	if err := store.ArchiveNativeTerminalHistory(ctx, policy, intent); err != nil {
+		return intent, err
 	}
-	observePod := func(checkpoint model.CapacityNativePodCheckpoint) (model.AdapterCapacityPodTerminationResponse, error) {
-		var response model.AdapterCapacityPodTerminationResponse
-		request, e := boundPodObservationRequest(p, checkpoint)
-		if e != nil {
-			return response, e
-		}
+	binding := p.AssessmentBinding.Snapshot.Adapter
+	read := func(operation string, request any, out any) error {
 		input, e := boundPrivateMap(request)
 		if e != nil {
-			return response, e
+			return e
 		}
-		status, e := call(binding, capacity.ObserveNativePodTermination, input, &response)
+		status, e := call(binding, operation, input, out)
 		if e != nil || status != "observed" {
-			return response, errCapacityBoundAssessment
+			return errCapacityBoundAssessment
 		}
-		return response, nil
+		return nil
 	}
-	inventory := func() (model.AdapterCapacityPodInventoryResponse, error) {
-		var response model.AdapterCapacityPodInventoryResponse
-		status, e := call(binding, capacity.ObserveNativePodInventory, map[string]any{"binding_name": p.HPAExecutionBinding.PodTerminationBinding}, &response)
-		if e != nil || status != "observed" || capacity.NativePodInventory(p, response, time.Now().UTC()) != nil {
-			return response, errCapacityBoundAssessment
+	observeHPA := func() (model.CapacityHPAEnvelopeResponse, error) {
+		var out model.CapacityHPAEnvelopeResponse
+		e := read(capacity.ObserveHPAEnvelope, map[string]any{"namespace": p.AssessmentBinding.Snapshot.Namespace, "hpa_name": p.AssessmentBinding.Snapshot.HPAName}, &out)
+		return out, e
+	}
+	type inventoryView struct {
+		Pods   []model.NativeTerminationObservation
+		Native *model.AdapterCapacityPodInventoryResponse
+	}
+	inventory := func() (inventoryView, error) {
+		if store.AdmissionOnly {
+			var out model.AdapterCapacityPodAdmissionCandidatesResponse
+			e := read(capacity.ObserveNativePodAdmissionCandidates, model.AdapterObserveCapacityPodInventoryRequest{BindingName: p.HPAExecutionBinding.PodTerminationBinding}, &out)
+			if e != nil || capacity.NativeAdmissionCandidates(p, out, time.Now().UTC()) != nil {
+				return inventoryView{}, errCapacityBoundAssessment
+			}
+			return inventoryView{Pods: out.Candidates}, nil
 		}
-		return response, nil
+		var out model.AdapterCapacityPodInventoryResponse
+		e := read(capacity.ObserveNativePodInventory, model.AdapterObserveCapacityPodInventoryRequest{BindingName: p.HPAExecutionBinding.PodTerminationBinding}, &out)
+		if e != nil || capacity.NativePodInventory(p, out, time.Now().UTC()) != nil {
+			return inventoryView{}, errCapacityBoundAssessment
+		}
+		return inventoryView{Pods: out.Pods, Native: &out}, nil
+	}
+	observePod := func(cp model.CapacityNativePodCheckpoint) (model.AdapterCapacityPodTerminationResponse, error) {
+		var out model.AdapterCapacityPodTerminationResponse
+		req, e := boundPodObservationRequest(p, cp)
+		if e == nil {
+			e = read(capacity.ObserveNativePodTermination, req, &out)
+		}
+		return out, e
+	}
+	observeAdmission := func(pod model.NativeTerminationObservation) (model.AdapterCapacityPodAdmissionResponse, error) {
+		var out model.AdapterCapacityPodAdmissionResponse
+		if pod.StartedAt == nil {
+			return out, errCapacityBoundAssessment
+		}
+		req := model.AdapterObserveCapacityPodAdmissionRequest{BindingName: p.HPAExecutionBinding.PodTerminationBinding, PodName: pod.PodName, ExpectedPodUID: pod.PodUID, ExpectedPodGeneration: pod.PodGeneration, ExpectedContainerID: pod.ContainerID, ExpectedContainerStartedAt: *pod.StartedAt, ExpectedRestartCount: pod.RestartCount}
+		e := read(capacity.ObserveNativePodAdmission, req, &out)
+		if e != nil || capacity.NativeProcessAdmission(p, out, time.Now().UTC()) != nil {
+			return out, errCapacityBoundAssessment
+		}
+		return out, nil
+	}
+	checkpointPod := func(cp model.CapacityNativePodCheckpoint) model.NativeTerminationObservation {
+		start := cp.ContainerStartedAt
+		return model.NativeTerminationObservation{PodName: cp.PodName, PodUID: cp.PodUID, PodGeneration: cp.PodGeneration, ContainerID: cp.ContainerID, StartedAt: &start, RestartCount: cp.RestartCount}
 	}
 	commands, checkpoints, err := store.NativeLedger(ctx, policy, intent)
 	if err != nil {
 		return intent, err
 	}
-	// No new command is issued while any old send outcome is unresolved.
+	findCheckpoint := func(uid string) (model.CapacityNativePodCheckpoint, bool) {
+		for _, cp := range checkpoints {
+			if cp.PodUID == uid {
+				return cp, true
+			}
+		}
+		return model.CapacityNativePodCheckpoint{}, false
+	}
+	// Old redeemed outcomes permit native GET and durable readback only. They
+	// never acquire new send permission merely because a lease/generation moved.
 	for _, command := range commands {
 		if command.State == "confirmed" || command.State == "refused_no_redemption" {
 			continue
 		}
 		if command.State == "issued" {
+			if command.IntentGeneration != intent.Generation {
+				return intent, fmt.Errorf("historical issued native outcome requires readonly recovery")
+			}
 			refused, e := store.RevokeUnredeemedNativeCommand(ctx, policy, intent, command.CommandID)
 			if e != nil {
 				return intent, e
@@ -81,38 +125,32 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 			command.State = "redeemed"
 		}
 		if command.State != "redeemed" && command.State != "uncertain" {
-			return intent, fmt.Errorf("native command requires readonly reconciliation")
+			return intent, errCapacityBoundAssessment
 		}
+		var observed any
 		if command.Operation == capacity.EnsureBoundHPAEnvelope {
-			observed, e := observeHPA()
-			if e != nil {
-				return intent, e
-			}
-			err = store.ConfirmNativeCommand(ctx, policy, intent, command.CommandID, observed)
+			observed, err = observeHPA()
 		} else {
-			var expected struct {
-				ExpectedPodUID string `json:"expected_pod_uid"`
+			var target struct {
+				UID string `json:"expected_pod_uid"`
 			}
-			if json.Unmarshal(command.Request, &expected) != nil {
+			if json.Unmarshal(command.Request, &target) != nil {
 				return intent, errCapacityBoundAssessment
 			}
-			found := false
-			for _, checkpoint := range checkpoints {
-				if checkpoint.PodUID == expected.ExpectedPodUID {
-					found = true
-					observed, e := observePod(checkpoint)
-					if e != nil {
-						return intent, e
-					}
-					err = store.ConfirmNativeCommand(ctx, policy, intent, command.CommandID, observed)
-					break
-				}
-			}
-			if !found {
+			cp, ok := findCheckpoint(target.UID)
+			if !ok {
 				return intent, errCapacityBoundAssessment
+			}
+			if command.Phase == "admit" {
+				observed, err = observeAdmission(checkpointPod(cp))
+			} else {
+				observed, err = observePod(cp)
 			}
 		}
 		if err != nil {
+			return intent, err
+		}
+		if err = store.ConfirmNativeCommand(ctx, policy, intent, command.CommandID, observed); err != nil {
 			return intent, err
 		}
 	}
@@ -120,27 +158,264 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 	if err != nil {
 		return intent, err
 	}
-	hasCommand := func(operation, phase, uid string) bool {
-		for _, c := range commands {
-			if c.State == "confirmed" && c.Operation == operation && c.Phase == phase {
-				if operation == capacity.EnsureBoundHPAEnvelope {
-					return true
-				}
-				var req struct {
-					ExpectedPodUID string `json:"expected_pod_uid"`
-				}
-				if json.Unmarshal(c.Request, &req) == nil && req.ExpectedPodUID == uid {
-					return true
-				}
+	hasEnvelope := func() bool {
+		for _, command := range commands {
+			if command.IntentGeneration == intent.Generation && command.Operation == capacity.EnsureBoundHPAEnvelope && command.State == "confirmed" {
+				return true
 			}
 		}
 		return false
 	}
-	refreshRequest := func(request any, observation any) (any, error) {
-		switch req := request.(type) {
-		case model.CapacityNativeHPARequest:
-			observed, ok := observation.(model.CapacityHPAEnvelopeResponse)
-			if !ok || observed.Observation.EnvelopeGeneration >= intent.NativeHPAGeneration {
+	// A finite retry is possible only after the old token was atomically proven
+	// unredeemed. Each subsequent request uses new actual native reads.
+	execute := func(operation, subject string, request any, refresh func(any) (any, error), after func() (any, error)) error {
+		for sequence := 0; sequence < 4; sequence++ {
+			fresh, e := refresh(request)
+			if e != nil {
+				return e
+			}
+			request = fresh
+			input, e := boundPrivateMap(request)
+			if e != nil {
+				return e
+			}
+			raw, e := json.Marshal(input)
+			if e != nil {
+				return e
+			}
+			command, token, e := store.IssueNativeCommand(ctx, policy, intent, operation, subject, raw)
+			if e != nil {
+				return e
+			}
+			input["authority_token"] = token
+			var discarded map[string]any
+			_, _ = call(binding, operation, input, &discarded)
+			refused, e := store.RevokeUnredeemedNativeCommand(ctx, policy, intent, command.CommandID)
+			if e != nil {
+				return e
+			}
+			if refused {
+				continue
+			}
+			if e = store.MarkNativeCommandUncertain(ctx, command.CommandID); e != nil {
+				return e
+			}
+			observed, e := after()
+			if e != nil {
+				return e
+			}
+			if e = store.ConfirmNativeCommand(ctx, policy, intent, command.CommandID, observed); e != nil {
+				return e
+			}
+			command.State = "confirmed"
+			commands = append(commands, command)
+			return nil
+		}
+		return fmt.Errorf("native phase exhausted four unredeemed permissions")
+	}
+	release := func(cp model.CapacityNativePodCheckpoint) error {
+		observed, e := observePod(cp)
+		if e != nil {
+			return e
+		}
+		if capacity.NativePodWitness(p, cp, observed.Observation, time.Now().UTC()) != nil {
+			return fmt.Errorf("current retained native termination remains unknown")
+		}
+		if e = store.ConfirmNativePodWitness(ctx, policy, intent, cp.PodUID, observed); e != nil {
+			return e
+		}
+		cp.State, cp.PodResourceVersion = "confirmed", observed.Observation.PodResourceVersion
+		base, e := boundPodObservationRequest(p, cp)
+		if e != nil {
+			return e
+		}
+		no := false
+		req := model.AdapterDestroyCapacityPodDrainProtectionRequest{AdapterObserveCapacityPodTerminationRequest: base, ExpectedPodResourceVersion: cp.PodResourceVersion, DryRun: &no}
+		return execute(capacity.DestroyNativePodProtection, cp.PodUID, req, func(value any) (any, error) {
+			request := value.(model.AdapterDestroyCapacityPodDrainProtectionRequest)
+			actual, e := observePod(cp)
+			if e != nil || capacity.NativePodWitness(p, cp, actual.Observation, time.Now().UTC()) != nil {
+				return nil, errCapacityBoundAssessment
+			}
+			if e = store.ConfirmNativePodWitness(ctx, policy, intent, cp.PodUID, actual); e != nil {
+				return nil, e
+			}
+			request.ExpectedPodResourceVersion = actual.Observation.PodResourceVersion
+			return request, nil
+		}, func() (any, error) { return observePod(cp) })
+	}
+	// First reconcile all controller-selected retirements, including origins
+	// created by older reservation decisions. Unknown/lost lifetimes are retained.
+	retirementPending := false
+	for _, cp := range checkpoints {
+		if cp.State == "released" || cp.State == "planned" {
+			continue
+		}
+		actual, e := observePod(cp)
+		if e != nil {
+			return intent, e
+		}
+		if capacity.NativePodWitness(p, cp, actual.Observation, time.Now().UTC()) == nil {
+			if e = release(cp); e != nil {
+				return intent, e
+			}
+			continue
+		}
+		if actual.Observation.State != "running" || actual.Observation.DeletionRequestedAt != nil || capacity.NativePodMatchesCheckpoint(p, cp, actual.Observation, time.Now().UTC()) != nil || actual.Observation.StartedAt == nil || !actual.Observation.StartedAt.Equal(cp.ContainerStartedAt) {
+			retirementPending = true
+		}
+	}
+	if retirementPending && !store.AdmissionOnly {
+		if intent.Decision.Action == "hold" {
+			if err = store.CompleteNativeReservationDecision(ctx, policy, intent); err == nil {
+				return store.Observe(ctx, policy)
+			}
+		}
+		return intent, fmt.Errorf("retained native lifetime is retiring or unknown; no reservation mutation permitted")
+	}
+	current, err := inventory()
+	if err != nil {
+		return intent, err
+	}
+	_, checkpoints, err = store.NativeLedger(ctx, policy, intent)
+	if err != nil {
+		return intent, err
+	}
+	for _, pod := range current.Pods {
+		cp, exists := findCheckpoint(pod.PodUID)
+		if !exists {
+			boot, e := observeAdmission(pod)
+			if e != nil {
+				return intent, e
+			}
+			cp, e = store.RegisterNativeLifetime(ctx, policy, intent, boot)
+			if e != nil {
+				return intent, e
+			}
+			checkpoints = append(checkpoints, cp)
+		}
+		if cp.State == "released" {
+			return intent, fmt.Errorf("released native UID reappeared; origin cannot be revived")
+		}
+		if capacity.NativePodMatchesCheckpoint(p, cp, pod, time.Now().UTC()) != nil || pod.StartedAt == nil || !pod.StartedAt.Equal(cp.ContainerStartedAt) || pod.DeletionRequestedAt != nil {
+			return intent, fmt.Errorf("current native process differs from retained origin")
+		}
+		if cp.State == "planned" {
+			req, e := boundPodDrainRequest(p, cp, "protect")
+			if e != nil {
+				return intent, e
+			}
+			e = execute(capacity.EnsureNativePodDrain, cp.PodUID, req, func(value any) (any, error) {
+				request := value.(model.AdapterEnsureCapacityPodDrainRequest)
+				actual, e := observeAdmission(checkpointPod(cp))
+				if e != nil || actual.Admission.ProcessNonce != cp.ProcessNonce || actual.Admission.State != "waiting_projection" {
+					return nil, errCapacityBoundAssessment
+				}
+				request.ExpectedPodResourceVersion = actual.Observation.PodResourceVersion
+				return request, nil
+			}, func() (any, error) { return observePod(cp) })
+			if e != nil {
+				return intent, e
+			}
+			cp.State = "protected"
+		}
+		var actual model.AdapterCapacityPodAdmissionResponse
+		for attempt := 0; attempt < 20; attempt++ {
+			actual, err = observeAdmission(checkpointPod(cp))
+			if err != nil {
+				return intent, err
+			}
+			if actual.Admission.State == "roots_open" {
+				break
+			}
+			if actual.Admission.State != "waiting_projection" && actual.Admission.State != "projection_observed" {
+				return intent, errCapacityBoundAssessment
+			}
+			if attempt == 19 {
+				return intent, fmt.Errorf("actual native projection/startup acknowledgement pending")
+			}
+			select {
+			case <-ctx.Done():
+				return intent, ctx.Err()
+			case <-time.After(100 * time.Millisecond):
+			}
+		}
+		if err = store.AcknowledgeNativeProjection(ctx, policy, intent, cp.PodUID, actual); err != nil {
+			return intent, err
+		}
+		if cp.State == "protected" {
+			cp.PodResourceVersion = actual.Observation.PodResourceVersion
+			req, e := boundPodDrainRequest(p, cp, "admit")
+			if e != nil {
+				return intent, e
+			}
+			e = execute(capacity.EnsureNativePodDrain, cp.PodUID, req, func(value any) (any, error) {
+				request := value.(model.AdapterEnsureCapacityPodDrainRequest)
+				fresh, e := observeAdmission(checkpointPod(cp))
+				if e != nil || capacity.NativeProcessAdmissionCheckpoint(p, cp, fresh, time.Now().UTC()) != nil || fresh.Admission.State != "roots_open" {
+					return nil, errCapacityBoundAssessment
+				}
+				if e = store.AcknowledgeNativeProjection(ctx, policy, intent, cp.PodUID, fresh); e != nil {
+					return nil, e
+				}
+				request.ExpectedPodResourceVersion = fresh.Observation.PodResourceVersion
+				return request, nil
+			}, func() (any, error) { return observeAdmission(checkpointPod(cp)) })
+			if e != nil {
+				return intent, e
+			}
+		}
+	}
+	// Re-read complete membership and every actual SDK admission at the HPA
+	// boundary. Birth protection/readiness gates retain concurrent new Pods.
+	qualifyBaseline := func(hpa model.CapacityHPAEnvelopeResponse) error {
+		baseline, e := inventory()
+		if e != nil {
+			return e
+		}
+		_, checkpoints, e = store.NativeLedger(ctx, policy, intent)
+		if e != nil {
+			return e
+		}
+		acks := map[string]model.AdapterCapacityPodAdmissionResponse{}
+		for _, pod := range baseline.Pods {
+			cp, ok := findCheckpoint(pod.PodUID)
+			if !ok || cp.State != "admitted" {
+				return errCapacityBoundAssessment
+			}
+			actual, e := observeAdmission(pod)
+			if e != nil || capacity.NativeProcessAdmissionCheckpoint(p, cp, actual, time.Now().UTC()) != nil || !actual.Observation.AdmissionReady {
+				return errCapacityBoundAssessment
+			}
+			acks[pod.PodUID] = actual
+		}
+		if baseline.Native == nil {
+			return errCapacityBoundAssessment
+		}
+		return store.PlanNativeReservationEnvelope(ctx, policy, intent, hpa, *baseline.Native, acks)
+	}
+	if !store.AdmissionOnly && intent.Decision.Action != "hold" && !hasEnvelope() {
+		hpa, err = observeHPA()
+		if err != nil {
+			return intent, err
+		}
+		if err = qualifyBaseline(hpa); err != nil {
+			return intent, err
+		}
+		intent.NativeHPAGeneration = hpa.Observation.EnvelopeGeneration + 1
+		if intent.NativeHPAGeneration < intent.Generation {
+			intent.NativeHPAGeneration = intent.Generation
+		}
+		no := false
+		mode := "upshift"
+		if intent.Decision.Units < hpa.Observation.MinReplicas {
+			mode = "downshift"
+		}
+		req := model.CapacityNativeHPARequest{Namespace: p.AssessmentBinding.Snapshot.Namespace, HPAName: p.AssessmentBinding.Snapshot.HPAName, ExpectedUID: hpa.Observation.HPAUID, ExpectedResourceVersion: hpa.Observation.ResourceVersion, ExpectedWorkloadUID: hpa.Observation.WorkloadUID, ExpectedWorkloadResourceVersion: hpa.Observation.WorkloadResourceVersion, Owner: p.AssessmentBinding.Snapshot.Owner, Generation: intent.NativeHPAGeneration, IdempotencyKey: fmt.Sprintf("native:%s:%d", policy.ID, intent.Generation), MinReplicas: intent.Decision.Units, MaxReplicas: hpa.Observation.MaxReplicas, Adopt: hpa.Observation.Owner == "", DryRun: &no, Mode: mode}
+		err = execute(capacity.EnsureBoundHPAEnvelope, req.ExpectedUID, req, func(value any) (any, error) {
+			request := value.(model.CapacityNativeHPARequest)
+			freshHPA, e := observeHPA()
+			if e != nil || freshHPA.Observation.EnvelopeGeneration >= intent.NativeHPAGeneration {
 				return nil, errCapacityBoundAssessment
 			}
 			fresh := model.CapacityAssessment{}
@@ -156,8 +431,7 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 				}
 				fresh.Evidence = append(fresh.Evidence, evidence)
 			}
-			var e error
-			fresh.Snapshot, e = capacity.BoundHPASnapshot(p, observed, time.Now().UTC())
+			fresh.Snapshot, e = capacity.BoundHPASnapshot(p, freshHPA, time.Now().UTC())
 			if e != nil || capacity.ValidateAssessment(p, fresh, time.Now().UTC()) != nil {
 				return nil, errCapacityBoundAssessment
 			}
@@ -165,275 +439,22 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 			if e != nil || decision.Action != intent.Decision.Action || decision.Units != intent.Decision.Units {
 				return nil, errCapacityBoundAssessment
 			}
-			req.ExpectedResourceVersion, req.ExpectedWorkloadResourceVersion = observed.Observation.ResourceVersion, observed.Observation.WorkloadResourceVersion
-			return req, nil
-		case model.AdapterEnsureCapacityPodDrainRequest:
-			observed, ok := observation.(model.AdapterCapacityPodTerminationResponse)
-			if !ok {
-				return nil, errCapacityBoundAssessment
+			if e = qualifyBaseline(freshHPA); e != nil {
+				return nil, e
 			}
-			pod := observed.Observation
-			if req.Phase == "protect" {
-				fresh, e := inventory()
-				if e != nil {
-					return nil, e
-				}
-				found := false
-				for _, current := range fresh.Pods {
-					if current.PodUID == req.ExpectedPodUID {
-						pod, found = current, true
-					}
-				}
-				if !found {
-					return nil, errCapacityBoundAssessment
-				}
-			}
-			for _, checkpoint := range checkpoints {
-				if checkpoint.PodUID == req.ExpectedPodUID {
-					if capacity.NativePodMatchesCheckpoint(p, checkpoint, pod, time.Now().UTC()) != nil || pod.ContainerState != "running" || pod.StartedAt == nil || !pod.StartedAt.Equal(checkpoint.ContainerStartedAt) || pod.DeletionRequestedAt != nil || (req.Phase == "terminate" && !pod.Protected) {
-						return nil, errCapacityBoundAssessment
-					}
-					req.ExpectedPodResourceVersion = pod.PodResourceVersion
-					return req, nil
-				}
-			}
-		case model.AdapterDestroyCapacityPodDrainProtectionRequest:
-			observed, ok := observation.(model.AdapterCapacityPodTerminationResponse)
-			if !ok {
-				return nil, errCapacityBoundAssessment
-			}
-			for _, checkpoint := range checkpoints {
-				if checkpoint.PodUID == req.ExpectedPodUID {
-					if capacity.NativePodWitness(p, checkpoint, observed.Observation, time.Now().UTC()) != nil {
-						return nil, errCapacityBoundAssessment
-					}
-					if e := store.ConfirmNativePodWitness(ctx, policy, intent, checkpoint.PodUID, observed); e != nil {
-						return nil, e
-					}
-					req.ExpectedPodResourceVersion = observed.Observation.PodResourceVersion
-					return req, nil
-				}
-			}
-		}
-		return nil, errCapacityBoundAssessment
-	}
-	execute := func(operation, subject string, request any, observe func() (any, error)) error {
-		for sequence := 0; sequence < 4; sequence++ {
-			observed, e := observe()
-			if e != nil {
-				return e
-			}
-			request, e = refreshRequest(request, observed)
-			if e != nil {
-				return e
-			}
-			input, e := boundPrivateMap(request)
-			if e != nil {
-				return e
-			}
-			raw, e := json.Marshal(input)
-			if e != nil {
-				return e
-			}
-			command, token, e := store.IssueNativeCommand(ctx, policy, intent, operation, subject, raw)
-			if e != nil {
-				return e
-			}
-			input["authority_token"] = token
-			var discarded map[string]any
-			// A transport result is not a native mutation result. Always reconcile with
-			// an independent fixed native read, including after a lost RPC response.
-			_, sendErr := call(binding, operation, input, &discarded)
-			_ = sendErr
-			refused, e := store.RevokeUnredeemedNativeCommand(ctx, policy, intent, command.CommandID)
-			if e != nil {
-				return e
-			}
-			if refused {
-				continue
-			}
-			if e := store.MarkNativeCommandUncertain(ctx, command.CommandID); e != nil {
-				return e
-			}
-			observed, e = observe()
-			if e != nil {
-				return e
-			}
-			if e := store.ConfirmNativeCommand(ctx, policy, intent, command.CommandID, observed); e != nil {
-				return e
-			}
-			command.State = "confirmed"
-			commands = append(commands, command)
-			return nil
-		}
-		return fmt.Errorf("native phase exhausted its finite unredeemed permissions")
-	}
-	if intent.NativePodBaseline == nil {
-		baseline, e := inventory()
-		if e != nil {
-			return intent, e
-		}
-
-		for _, pod := range baseline.Pods {
-			intent.NativePodBaseline = append(intent.NativePodBaseline, pod.PodUID)
-		}
-		// A reservation reduction selects a bounded set of existing lifetimes.
-		// The complete baseline remains retained so unobserved controller removals
-		// block completion. New Deployment replacements are not released capacity.
-		count := intent.BaselineSnapshot.Units - intent.Decision.Units
-		if count > 0 {
-			running := []model.NativeTerminationObservation{}
-			for _, pod := range baseline.Pods {
-				if pod.State == "running" && pod.DeletionRequestedAt == nil {
-					running = append(running, pod)
-				}
-			}
-			if count > len(running)-p.AssessmentBinding.Snapshot.ProtectedFloor {
-				return intent, errCapacityBoundAssessment
-			}
-			sort.Slice(running, func(i, j int) bool { return running[i].PodUID < running[j].PodUID })
-			for _, pod := range running[:count] {
-				challenge, e := capacity.NativePodChallenge(p, intent, pod, time.Now().UTC())
-				if e != nil {
-					return intent, e
-				}
-				raw, _ := json.Marshal(challenge)
-				checkpoint := model.CapacityNativePodCheckpoint{Namespace: pod.Namespace, PodName: pod.PodName, PodUID: pod.PodUID, PodResourceVersion: pod.PodResourceVersion, PodGeneration: pod.PodGeneration, WorkloadUID: pod.WorkloadUID, ContainerName: pod.ContainerName, ContainerID: pod.ContainerID, ContainerStartedAt: *pod.StartedAt, ImageDigest: pod.ImageDigest, RestartCount: pod.RestartCount, IntentGeneration: intent.Generation, DrainNonce: challenge.DrainNonce, Challenge: raw, State: "planned"}
-
-				checkpoints = append(checkpoints, checkpoint)
-			}
-		}
-		if e := store.SaveNativePodPlan(ctx, policy, intent, baseline, hpa, checkpoints); e != nil {
-			return intent, e
-		}
-		intent.NativeHPAGeneration = hpa.Observation.EnvelopeGeneration + 1
-		if intent.NativeHPAGeneration < intent.Generation {
-			intent.NativeHPAGeneration = intent.Generation
-		}
-	}
-	for index, checkpoint := range checkpoints {
-		if checkpoint.State != "planned" {
-			continue
-		}
-		request, e := boundPodDrainRequest(p, checkpoint, "protect")
-		if e != nil {
-			return intent, e
-		}
-		if hasCommand(capacity.EnsureNativePodDrain, "protect", checkpoint.PodUID) {
-			return intent, errCapacityBoundAssessment
-		}
-		if e := execute(capacity.EnsureNativePodDrain, checkpoint.PodUID, request, func() (any, error) { return observePod(checkpoint) }); e != nil {
-			return intent, e
-		}
-		checkpoint.State = "protected"
-		observed, e := observePod(checkpoint)
-		if e != nil {
-			return intent, e
-		}
-		checkpoint.PodResourceVersion = observed.Observation.PodResourceVersion
-		checkpoints[index] = checkpoint
-	}
-	if !hasCommand(capacity.EnsureBoundHPAEnvelope, "envelope", "") {
-		hpa, err = observeHPA()
+			request.ExpectedResourceVersion, request.ExpectedWorkloadResourceVersion = freshHPA.Observation.ResourceVersion, freshHPA.Observation.WorkloadResourceVersion
+			return request, nil
+		}, func() (any, error) { return observeHPA() })
 		if err != nil {
 			return intent, err
 		}
-		snapshot, err := capacity.BoundHPASnapshot(p, hpa, time.Now().UTC())
-		if err != nil {
-			return intent, err
-		}
-		// Revalidate pressure at the actual mutation boundary; changed pressure
-		// never grants a stale new reduction during recovery.
-		assessment.Snapshot = snapshot
-		if capacity.ValidateAssessment(p, assessment, time.Now().UTC()) != nil {
-			return intent, errCapacityBoundAssessment
-		}
-		decision, e := capacity.Assess(p, assessment, intent.Decision.Clock, time.Now().UTC())
-		if e != nil || decision.Action != intent.Decision.Action || decision.Units != intent.Decision.Units {
-			return intent, errCapacityBoundAssessment
-		}
-		no := false
-		mode := "upshift"
-		if intent.Decision.Units < hpa.Observation.MinReplicas {
-			mode = "downshift"
-		}
-		req := model.CapacityNativeHPARequest{Namespace: p.AssessmentBinding.Snapshot.Namespace, HPAName: p.AssessmentBinding.Snapshot.HPAName, ExpectedUID: hpa.Observation.HPAUID, ExpectedResourceVersion: hpa.Observation.ResourceVersion, ExpectedWorkloadUID: hpa.Observation.WorkloadUID, ExpectedWorkloadResourceVersion: hpa.Observation.WorkloadResourceVersion, Owner: p.AssessmentBinding.Snapshot.Owner, Generation: intent.NativeHPAGeneration, IdempotencyKey: fmt.Sprintf("native:%s:%d", policy.ID, intent.Generation), MinReplicas: intent.Decision.Units, MaxReplicas: hpa.Observation.MaxReplicas, Adopt: hpa.Observation.Owner == "", DryRun: &no, Mode: mode}
-		if e := execute(capacity.EnsureBoundHPAEnvelope, req.ExpectedUID, req, func() (any, error) { return observeHPA() }); e != nil {
-			return intent, e
-		}
 	}
-	_, checkpoints, err = store.NativeLedger(ctx, policy, intent)
-	if err != nil {
-		return intent, err
-	}
-	for _, checkpoint := range checkpoints {
-		if checkpoint.State == "released" {
-			continue
-		}
-		observed, e := observePod(checkpoint)
-		if e != nil {
-			return intent, e
-		}
-		if checkpoint.State == "protected" {
-			checkpoint.PodResourceVersion = observed.Observation.PodResourceVersion
-			req, e := boundPodDrainRequest(p, checkpoint, "terminate")
-			if e != nil {
-				return intent, e
-			}
-			if e := execute(capacity.EnsureNativePodDrain, checkpoint.PodUID, req, func() (any, error) { return observePod(checkpoint) }); e != nil {
-				return intent, e
-			}
-			checkpoint.State = "terminating"
-		}
-		for checkpoint.State == "terminating" {
-			observed, e = observePod(checkpoint)
-			if e != nil {
-				return intent, e
-			}
-			if capacity.NativePodWitness(p, checkpoint, observed.Observation, time.Now().UTC()) == nil {
-				if e := store.ConfirmNativePodWitness(ctx, policy, intent, checkpoint.PodUID, observed); e != nil {
-					return intent, e
-				}
-				checkpoint.State = "confirmed"
-				checkpoint.PodResourceVersion = observed.Observation.PodResourceVersion
-				break
-			}
-			select {
-			case <-ctx.Done():
-				return intent, fmt.Errorf("native current lifetime remains unknown")
-			case <-time.After(time.Second):
-			}
-		}
-		if checkpoint.State == "confirmed" {
-			// Refresh the exact current terminated resourceVersion before permission.
-			observed, e = observePod(checkpoint)
-			if e != nil {
-				return intent, e
-			}
-			if e := store.ConfirmNativePodWitness(ctx, policy, intent, checkpoint.PodUID, observed); e != nil {
-				return intent, e
-			}
-			checkpoint.PodResourceVersion = observed.Observation.PodResourceVersion
-			base, e := boundPodObservationRequest(p, checkpoint)
-			if e != nil {
-				return intent, e
-			}
-			no := false
-			request := model.AdapterDestroyCapacityPodDrainProtectionRequest{AdapterObserveCapacityPodTerminationRequest: base, ExpectedPodResourceVersion: checkpoint.PodResourceVersion, DryRun: &no}
-			if e := execute(capacity.DestroyNativePodProtection, checkpoint.PodUID, request, func() (any, error) { return observePod(checkpoint) }); e != nil {
-				return intent, e
-			}
-		}
-	}
-	finalInventory, err := inventory()
-	if err != nil {
-		return intent, err
-	}
-	if err := store.CompleteNativeExecution(ctx, policy, intent, finalInventory); err != nil {
+	if err = store.CompleteNativeReservationDecision(ctx, policy, intent); err != nil {
 		return intent, err
 	}
 	return store.Observe(ctx, policy)
 }
+
 func boundPrivateMap(value any) (map[string]any, error) {
 	raw, err := json.Marshal(value)
 	if err != nil {
@@ -444,15 +465,15 @@ func boundPrivateMap(value any) (map[string]any, error) {
 	delete(out, "authority_token")
 	return out, err
 }
-func boundPodObservationRequest(p model.CapacityPolicySpec, checkpoint model.CapacityNativePodCheckpoint) (model.AdapterObserveCapacityPodTerminationRequest, error) {
+func boundPodObservationRequest(p model.CapacityPolicySpec, cp model.CapacityNativePodCheckpoint) (model.AdapterObserveCapacityPodTerminationRequest, error) {
 	var challenge model.NativePodTerminationChallenge
-	if json.Unmarshal(checkpoint.Challenge, &challenge) != nil {
+	if json.Unmarshal(cp.Challenge, &challenge) != nil {
 		return model.AdapterObserveCapacityPodTerminationRequest{}, errCapacityBoundAssessment
 	}
-	return model.AdapterObserveCapacityPodTerminationRequest{BindingName: p.HPAExecutionBinding.PodTerminationBinding, PodName: checkpoint.PodName, ExpectedPodUID: checkpoint.PodUID, ExpectedPodGeneration: checkpoint.PodGeneration, ExpectedContainerID: checkpoint.ContainerID, ExpectedContainerStartedAt: checkpoint.ContainerStartedAt, ExpectedRestartCount: checkpoint.RestartCount, Challenge: challenge}, nil
+	return model.AdapterObserveCapacityPodTerminationRequest{BindingName: p.HPAExecutionBinding.PodTerminationBinding, PodName: cp.PodName, ExpectedPodUID: cp.PodUID, ExpectedPodGeneration: cp.PodGeneration, ExpectedContainerID: cp.ContainerID, ExpectedContainerStartedAt: cp.ContainerStartedAt, ExpectedRestartCount: cp.RestartCount, Challenge: challenge}, nil
 }
-func boundPodDrainRequest(p model.CapacityPolicySpec, checkpoint model.CapacityNativePodCheckpoint, phase string) (model.AdapterEnsureCapacityPodDrainRequest, error) {
-	base, err := boundPodObservationRequest(p, checkpoint)
+func boundPodDrainRequest(p model.CapacityPolicySpec, cp model.CapacityNativePodCheckpoint, phase string) (model.AdapterEnsureCapacityPodDrainRequest, error) {
+	base, err := boundPodObservationRequest(p, cp)
 	no := false
-	return model.AdapterEnsureCapacityPodDrainRequest{BindingName: base.BindingName, PodName: base.PodName, ExpectedPodUID: base.ExpectedPodUID, ExpectedPodGeneration: base.ExpectedPodGeneration, ExpectedPodResourceVersion: checkpoint.PodResourceVersion, ExpectedContainerID: base.ExpectedContainerID, ExpectedContainerStartedAt: base.ExpectedContainerStartedAt, ExpectedRestartCount: base.ExpectedRestartCount, Challenge: base.Challenge, Phase: phase, DryRun: &no}, err
+	return model.AdapterEnsureCapacityPodDrainRequest{BindingName: base.BindingName, PodName: base.PodName, ExpectedPodUID: base.ExpectedPodUID, ExpectedPodGeneration: base.ExpectedPodGeneration, ExpectedPodResourceVersion: cp.PodResourceVersion, ExpectedContainerID: base.ExpectedContainerID, ExpectedContainerStartedAt: base.ExpectedContainerStartedAt, ExpectedRestartCount: base.ExpectedRestartCount, Challenge: base.Challenge, Phase: phase, DryRun: &no}, err
 }

@@ -38,6 +38,9 @@ func (s CapacityStore) NativeLedger(ctx context.Context, policy model.Manifest, 
 	if err != nil || p.HPAExecutionBinding == nil || intent.PolicyID != policy.ID || intent.PolicyChecksum != policy.Checksum {
 		return nil, nil, ErrCapacityConflict
 	}
+	if p.HPAExecutionBinding.Mode == capacity.HPALifetimeExecutionMode {
+		return nativeLifetimeLedger(ctx, s.DB, policy, p, s.AdmissionOnly)
+	}
 	commands := []model.CapacityNativeCommand{}
 	checkpoints := []model.CapacityNativePodCheckpoint{}
 	rows, err := s.DB.QueryContext(ctx, `SELECT command_record FROM public.capacity_native_commands WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5 ORDER BY updated_at,id`, intent.Namespace, p.Environment, p.Domain, p.Dimension, intent.Generation)
@@ -80,7 +83,7 @@ func (s CapacityStore) ConfirmNativeCommand(ctx context.Context, policy model.Ma
 			return err
 		}
 		var command model.CapacityNativeCommand
-		if json.Unmarshal(raw, &command) != nil || command.PolicyID != policy.ID || command.PolicyChecksum != policy.Checksum || command.IntentGeneration != current.Generation || command.Namespace != current.Namespace || command.Environment != p.Environment || command.Domain != p.Domain || command.Dimension != p.Dimension || command.Adapter != p.AssessmentBinding.Snapshot.Adapter || (command.State != "redeemed" && command.State != "uncertain") {
+		if json.Unmarshal(raw, &command) != nil || command.PolicyID != policy.ID || command.PolicyChecksum != policy.Checksum || (command.IntentGeneration != current.Generation && p.HPAExecutionBinding.Mode != capacity.HPALifetimeExecutionMode) || command.Namespace != current.Namespace || command.Environment != p.Environment || command.Domain != p.Domain || command.Dimension != p.Dimension || command.Adapter != p.AssessmentBinding.Snapshot.Adapter || (command.State != "redeemed" && command.State != "uncertain") {
 			return ErrCapacityConflict
 		}
 		if err := checkMutationIntegration(ctx, tx, nativeObservationMutationBinding(command.Adapter)); err != nil {
@@ -93,11 +96,17 @@ func (s CapacityStore) ConfirmNativeCommand(ctx context.Context, policy model.Ma
 		if command.Operation == capacity.EnsureBoundHPAEnvelope {
 			var expected model.CapacityNativeHPARequest
 			var observed model.CapacityHPAEnvelopeResponse
-			if capacity.DecodeNativeCapacity(json.RawMessage(command.Request), &expected) != nil || capacity.DecodeNativeCapacity(readback, &observed) != nil || nativeEnvelopeMatches(p, current, expected, observed, now) != nil {
+			if capacity.DecodeNativeCapacity(json.RawMessage(command.Request), &expected) != nil || capacity.DecodeNativeCapacity(readback, &observed) != nil {
+				return ErrCapacityConflict
+			}
+			exact := current
+			if p.HPAExecutionBinding.Mode == capacity.HPALifetimeExecutionMode {
+				exact.NativeHPAGeneration, exact.Decision.Units = expected.Generation, expected.MinReplicas
+			}
+			if nativeEnvelopeMatches(p, exact, expected, observed, now) != nil {
 				return ErrCapacityConflict
 			}
 		} else {
-			var checkpointRaw []byte
 			var req model.AdapterEnsureCapacityPodDrainRequest
 			var release model.AdapterDestroyCapacityPodDrainProtectionRequest
 			subject := ""
@@ -112,12 +121,26 @@ func (s CapacityStore) ConfirmNativeCommand(ctx context.Context, policy model.Ma
 				}
 				subject = req.ExpectedPodUID
 			}
-			if err := tx.QueryRowContext(ctx, `SELECT checkpoint_record FROM public.capacity_native_pod_checkpoints WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5 AND pod_uid=$6 FOR UPDATE`, current.Namespace, p.Environment, p.Domain, p.Dimension, current.Generation, subject).Scan(&checkpointRaw); err != nil {
+			checkpoint, err := nativeLifetimeCheckpoint(ctx, tx, p, current, subject)
+			if err != nil {
 				return err
 			}
-			var checkpoint model.CapacityNativePodCheckpoint
 			var response model.AdapterCapacityPodTerminationResponse
-			if json.Unmarshal(checkpointRaw, &checkpoint) != nil || capacity.DecodeNativeCapacity(readback, &response) != nil || response.Operation != capacity.ObserveNativePodTermination || response.Status != "observed" {
+			if command.Phase == "admit" {
+				var admitted model.AdapterCapacityPodAdmissionResponse
+				if capacity.DecodeNativeCapacity(readback, &admitted) != nil || capacity.NativeProcessAdmissionCheckpoint(p, checkpoint, admitted, now) != nil || admitted.Admission.State != "roots_open" || !admitted.Observation.AdmissionReady || len(checkpoint.ProjectionAcknowledgement) == 0 || len(checkpoint.RootAcknowledgement) == 0 {
+					return ErrCapacityConflict
+				}
+				checkpoint.State, checkpoint.PodResourceVersion, checkpoint.RootAcknowledgement = "admitted", admitted.Observation.PodResourceVersion, rawReadback
+				if err := updateNativeLifetimeCheckpoint(ctx, tx, p, current, checkpoint, now); err != nil {
+					return err
+				}
+				command.State, command.NativeReadback, command.UpdatedAt = "confirmed", rawReadback, now
+				raw, _ = json.Marshal(command)
+				_, err := tx.ExecContext(ctx, `UPDATE public.capacity_native_commands SET state='confirmed',command_record=$2,updated_at=$3 WHERE id=$1`, commandID, raw, now)
+				return err
+			}
+			if capacity.DecodeNativeCapacity(readback, &response) != nil || response.Operation != capacity.ObserveNativePodTermination || response.Status != "observed" {
 				return ErrCapacityConflict
 			}
 			observed := response.Observation
@@ -143,8 +166,7 @@ func (s CapacityStore) ConfirmNativeCommand(ctx context.Context, policy model.Ma
 				}
 				checkpoint.PodResourceVersion = observed.PodResourceVersion
 			}
-			checkpointRaw, _ = json.Marshal(checkpoint)
-			if _, err := tx.ExecContext(ctx, `UPDATE public.capacity_native_pod_checkpoints SET checkpoint_record=$7,updated_at=$8 WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5 AND pod_uid=$6`, current.Namespace, p.Environment, p.Domain, p.Dimension, current.Generation, subject, checkpointRaw, now); err != nil {
+			if err := updateNativeLifetimeCheckpoint(ctx, tx, p, current, checkpoint, now); err != nil {
 				return err
 			}
 		}
@@ -170,12 +192,15 @@ func nativeEnvelopeMatches(p model.CapacityPolicySpec, intent model.CapacityInte
 }
 func (s CapacityStore) ConfirmNativePodWitness(ctx context.Context, policy model.Manifest, intent model.CapacityIntent, uid string, response model.AdapterCapacityPodTerminationResponse) error {
 	return s.mutationTransaction(ctx, policy, false, intent.Generation, intent.FencingToken, intent.LeaseOwner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
-		var raw []byte
-		if err := tx.QueryRowContext(ctx, `SELECT checkpoint_record FROM public.capacity_native_pod_checkpoints WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5 AND pod_uid=$6 FOR UPDATE`, current.Namespace, p.Environment, p.Domain, p.Dimension, current.Generation, uid).Scan(&raw); err != nil {
+		checkpoint, err := nativeLifetimeCheckpoint(ctx, tx, p, current, uid)
+		if err != nil {
 			return err
 		}
-		var checkpoint model.CapacityNativePodCheckpoint
-		if json.Unmarshal(raw, &checkpoint) != nil || (checkpoint.State != "terminating" && checkpoint.State != "confirmed") || response.Operation != capacity.ObserveNativePodTermination || response.Status != "observed" || capacity.NativePodWitness(p, checkpoint, response.Observation, now) != nil {
+		validState := checkpoint.State == "terminating" || checkpoint.State == "confirmed"
+		if p.HPAExecutionBinding.Mode == capacity.HPALifetimeExecutionMode {
+			validState = validState || checkpoint.State == "protected" || checkpoint.State == "admitted"
+		}
+		if !validState || response.Operation != capacity.ObserveNativePodTermination || response.Status != "observed" || capacity.NativePodWitness(p, checkpoint, response.Observation, now) != nil {
 			return ErrCapacityConflict
 		}
 		if err := checkMutationIntegration(ctx, tx, nativeObservationMutationBinding(p.AssessmentBinding.Snapshot.Adapter)); err != nil {
@@ -185,9 +210,7 @@ func (s CapacityStore) ConfirmNativePodWitness(ctx context.Context, policy model
 		checkpoint.ConfirmedAt = &now
 		checkpoint.PodResourceVersion = response.Observation.PodResourceVersion
 		checkpoint.NativeTerminationReceipt, _ = json.Marshal(response)
-		raw, _ = json.Marshal(checkpoint)
-		_, err := tx.ExecContext(ctx, `UPDATE public.capacity_native_pod_checkpoints SET checkpoint_record=$7,updated_at=$8 WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5 AND pod_uid=$6`, current.Namespace, p.Environment, p.Domain, p.Dimension, current.Generation, uid, raw, now)
-		return err
+		return updateNativeLifetimeCheckpoint(ctx, tx, p, current, checkpoint, now)
 	})
 }
 func (s CapacityStore) CompleteNativeExecution(ctx context.Context, policy model.Manifest, intent model.CapacityIntent, inventory model.AdapterCapacityPodInventoryResponse) error {
@@ -295,14 +318,22 @@ func validateNativeCommandRequest(ctx context.Context, tx *sql.Tx, p model.Capac
 		if subject != b.HPAUID || req.Namespace != b.Namespace || req.HPAName != b.HPAName || req.ExpectedUID != b.HPAUID || req.ExpectedWorkloadUID != b.WorkloadUID || req.Owner != b.Owner || req.Generation != current.NativeHPAGeneration || req.MinReplicas != current.Decision.Units || req.MaxReplicas < req.MinReplicas || req.MaxReplicas > b.MaximumReplicas || req.MinReplicas < b.ProtectedFloor || req.DryRun == nil || *req.DryRun || req.ExpectedResourceVersion == "" || req.ExpectedWorkloadResourceVersion == "" || req.IdempotencyKey == "" {
 			return ErrCapacityMutationAuthorization
 		}
+		if p.HPAExecutionBinding.Mode == capacity.HPALifetimeExecutionMode {
+			if len(current.NativePodBaseline) < p.Floor {
+				return ErrCapacityConflict
+			}
+			var unresolved int
+			if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_lifetimes WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND checkpoint_record->>'state' NOT IN ('admitted','released')`, current.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&unresolved); err != nil || unresolved != 0 {
+				return ErrCapacityConflict
+			}
+		}
 		return nil
 	}
-	var checkpointRaw []byte
-	if err := tx.QueryRowContext(ctx, `SELECT checkpoint_record FROM public.capacity_native_pod_checkpoints WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5 AND pod_uid=$6 FOR UPDATE`, current.Namespace, p.Environment, p.Domain, p.Dimension, current.Generation, subject).Scan(&checkpointRaw); err != nil {
+	checkpoint, err := nativeLifetimeCheckpoint(ctx, tx, p, current, subject)
+	if err != nil {
 		return err
 	}
-	var checkpoint model.CapacityNativePodCheckpoint
-	if json.Unmarshal(checkpointRaw, &checkpoint) != nil || checkpoint.PodUID != subject || checkpoint.IntentGeneration != current.Generation || checkpoint.Namespace != p.AssessmentBinding.Snapshot.Namespace || checkpoint.WorkloadUID != p.AssessmentBinding.Snapshot.WorkloadUID || checkpoint.ContainerName != p.HPAExecutionBinding.ContainerName || checkpoint.ImageDigest != p.HPAExecutionBinding.ImageDigest {
+	if checkpoint.PodUID != subject || (checkpoint.IntentGeneration != current.Generation && p.HPAExecutionBinding.Mode != capacity.HPALifetimeExecutionMode) || checkpoint.Namespace != p.AssessmentBinding.Snapshot.Namespace || checkpoint.WorkloadUID != p.AssessmentBinding.Snapshot.WorkloadUID || checkpoint.ContainerName != p.HPAExecutionBinding.ContainerName || checkpoint.ImageDigest != p.HPAExecutionBinding.ImageDigest {
 		return ErrCapacityConflict
 	}
 	var challenge model.NativePodTerminationChallenge
@@ -314,7 +345,7 @@ func validateNativeCommandRequest(ctx context.Context, tx *sql.Tx, p model.Capac
 		challenge = req.Challenge
 	} else {
 		var req model.AdapterEnsureCapacityPodDrainRequest
-		if capacity.DecodeNativeCapacity(raw, &req) != nil || req.Phase != phase || req.ExpectedPodUID != subject || req.PodName != checkpoint.PodName || req.ExpectedPodGeneration != checkpoint.PodGeneration || req.ExpectedContainerID != checkpoint.ContainerID || !req.ExpectedContainerStartedAt.Equal(checkpoint.ContainerStartedAt) || req.ExpectedRestartCount != checkpoint.RestartCount || req.BindingName != p.HPAExecutionBinding.PodTerminationBinding || req.ExpectedPodResourceVersion == "" || req.DryRun == nil || *req.DryRun || (phase == "protect" && checkpoint.State != "planned") || (phase == "terminate" && checkpoint.State != "protected") {
+		if capacity.DecodeNativeCapacity(raw, &req) != nil || req.Phase != phase || req.ExpectedPodUID != subject || req.PodName != checkpoint.PodName || req.ExpectedPodGeneration != checkpoint.PodGeneration || req.ExpectedContainerID != checkpoint.ContainerID || !req.ExpectedContainerStartedAt.Equal(checkpoint.ContainerStartedAt) || req.ExpectedRestartCount != checkpoint.RestartCount || req.BindingName != p.HPAExecutionBinding.PodTerminationBinding || req.ExpectedPodResourceVersion == "" || req.DryRun == nil || *req.DryRun || (phase == "protect" && checkpoint.State != "planned") || (phase == "terminate" && checkpoint.State != "protected") || (phase == "admit" && (checkpoint.State != "protected" || len(checkpoint.ProjectionAcknowledgement) == 0 || len(checkpoint.RootAcknowledgement) == 0)) || (p.HPAExecutionBinding.Mode == capacity.HPALifetimeExecutionMode && phase == "terminate") {
 			return ErrCapacityConflict
 		}
 		challenge = req.Challenge

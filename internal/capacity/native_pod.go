@@ -41,7 +41,7 @@ func NativePodIdentity(p model.CapacityPolicySpec, pod model.NativeTerminationOb
 	b := p.HPAExecutionBinding
 	s := p.AssessmentBinding
 	id, err := uuid.Parse(pod.PodUID)
-	if b == nil || s == nil || err != nil || id.String() != pod.PodUID || pod.PodName == "" || pod.PodGeneration < 0 || pod.PodResourceVersion == "" || pod.Namespace != s.Snapshot.Namespace || pod.WorkloadUID != s.Snapshot.WorkloadUID || pod.ContainerName != b.ContainerName || pod.ContainerID == "" || pod.ImageDigest != b.ImageDigest || !strings.HasSuffix(pod.ImageID, b.ImageDigest) || pod.RestartCount < 0 || !Fresh(pod.ObservedAt, now, p.MaxEvidenceAgeSeconds) {
+	if b == nil || s == nil || err != nil || id == uuid.Nil || id.String() != pod.PodUID || pod.PodName == "" || pod.PodGeneration < 0 || pod.PodResourceVersion == "" || pod.Namespace != s.Snapshot.Namespace || pod.WorkloadUID != s.Snapshot.WorkloadUID || pod.ContainerName != b.ContainerName || pod.ContainerID == "" || pod.ImageDigest != b.ImageDigest || !strings.HasSuffix(pod.ImageID, b.ImageDigest) || pod.RestartCount < 0 || !Fresh(pod.ObservedAt, now, p.MaxEvidenceAgeSeconds) {
 		return fmt.Errorf("native Pod identity unavailable or drifted")
 	}
 	return nil
@@ -67,6 +67,9 @@ func NativePodWitness(p model.CapacityPolicySpec, checkpoint model.CapacityNativ
 		return fmt.Errorf("private challenge unavailable")
 	}
 	receipt := observed.Receipt
+	if p.HPAExecutionBinding.Mode == HPALifetimeExecutionMode && (challenge.SchemaVersion != 2 || challenge.ProcessNonce != checkpoint.ProcessNonce || !NativeProcessNonce(checkpoint.ProcessNonce) || (receipt.RootAdmission != "never_opened" && receipt.RootAdmission != "previously_opened")) {
+		return fmt.Errorf("current process nonce and real root admission history unavailable")
+	}
 	rawExpected, _ := json.Marshal(challenge)
 	rawActual, _ := json.Marshal(receipt.NativePodTerminationChallenge)
 	if string(rawExpected) != string(rawActual) || receipt.IntentGeneration != checkpoint.IntentGeneration || receipt.DrainNonce != checkpoint.DrainNonce || receipt.LaneRosterSHA256 != NativeRosterDigest(p.HPAExecutionBinding.Lanes) || receipt.JoinedAt.Before(challenge.IssuedAt) || !nativeJoinTimestamp(receipt.JoinedAt, *observed.FinishedAt) || len(receipt.Lanes) != len(p.HPAExecutionBinding.Lanes) || len(observed.ReceiptSHA256) != 64 {
@@ -98,7 +101,7 @@ func NativePodReleaseTarget(p model.CapacityPolicySpec, checkpoint model.Capacit
 			return nil
 		}
 	case "unprotected":
-		if observed.Reason == "native_capacity_finalizer_absent" && NativePodMatchesCheckpoint(p, checkpoint, observed, now) == nil && observed.StartedAt != nil && observed.StartedAt.Equal(checkpoint.ContainerStartedAt) {
+		if observed.Reason == "native_capacity_finalizer_absent" && NativePodMatchesCheckpoint(p, checkpoint, observed, now) == nil && observed.ContainerState == "terminated" && observed.StartedAt != nil && observed.StartedAt.Equal(checkpoint.ContainerStartedAt) {
 			return nil
 		}
 	}

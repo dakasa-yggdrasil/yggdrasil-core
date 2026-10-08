@@ -10,13 +10,16 @@ import (
 // Bound execution remains optional and defaults disabled. It never authorizes
 // VM mutations through a reserved HPA envelope policy.
 type CapacityHPAExecutionBinding struct {
-	AdapterPrincipalID    string   `json:"adapter_principal_id"`
-	Mode                  string   `json:"mode"`
-	PodTerminationBinding string   `json:"pod_termination_binding"`
-	ContainerName         string   `json:"container_name"`
-	ImageDigest           string   `json:"image_digest"`
-	Lanes                 []string `json:"lanes"`
-	ProjectionDirectory   string   `json:"projection_directory"`
+	AdapterPrincipalID    string           `json:"adapter_principal_id"`
+	Mode                  string           `json:"mode"`
+	PodTerminationBinding string           `json:"pod_termination_binding"`
+	ContainerName         string           `json:"container_name"`
+	ImageDigest           string           `json:"image_digest"`
+	Lanes                 []string         `json:"lanes"`
+	ProjectionDirectory   string           `json:"projection_directory"`
+	AdmissionMode         string           `json:"admission_mode,omitempty"`
+	AdmissionPort         int              `json:"admission_port,omitempty"`
+	AdmissionWorkflow     ManifestSelector `json:"admission_workflow,omitempty"`
 }
 
 // Native commands are fixed server-authored, one-send envelopes. Their private
@@ -49,28 +52,41 @@ type CapacityNativeCommand struct {
 	ExpiresAt            time.Time                         `json:"expires_at"`
 	NativeReadback       json.RawMessage                   `json:"native_readback"`
 	UpdatedAt            time.Time                         `json:"updated_at"`
+	OriginPolicy         json.RawMessage                   `json:"origin_policy,omitempty"`
+	OriginPolicySHA256   string                            `json:"origin_policy_sha256,omitempty"`
+	AdmissionOnly        bool                              `json:"admission_only,omitempty"`
 }
 
 // This is a private durable target checkpoint, not caller proof. A same-name
 // replacement or restarted current container never matches the old lifetime.
 type CapacityNativePodCheckpoint struct {
-	Namespace                string          `json:"namespace"`
-	PodName                  string          `json:"pod_name"`
-	PodUID                   string          `json:"pod_uid"`
-	PodResourceVersion       string          `json:"pod_resource_version"`
-	PodGeneration            int64           `json:"pod_generation"`
-	WorkloadUID              string          `json:"workload_uid"`
-	ContainerName            string          `json:"container_name"`
-	ContainerID              string          `json:"container_id"`
-	ContainerStartedAt       time.Time       `json:"container_started_at"`
-	ImageDigest              string          `json:"image_digest"`
-	RestartCount             int32           `json:"restart_count"`
-	IntentGeneration         int64           `json:"intent_generation"`
-	DrainNonce               string          `json:"drain_nonce"`
-	Challenge                json.RawMessage `json:"challenge"`
-	State                    string          `json:"state"`
-	NativeTerminationReceipt json.RawMessage `json:"native_termination_receipt"`
-	ConfirmedAt              *time.Time      `json:"confirmed_at"`
+	Namespace                 string          `json:"namespace"`
+	PodName                   string          `json:"pod_name"`
+	PodUID                    string          `json:"pod_uid"`
+	PodResourceVersion        string          `json:"pod_resource_version"`
+	PodGeneration             int64           `json:"pod_generation"`
+	WorkloadUID               string          `json:"workload_uid"`
+	ContainerName             string          `json:"container_name"`
+	ContainerID               string          `json:"container_id"`
+	ContainerStartedAt        time.Time       `json:"container_started_at"`
+	ImageDigest               string          `json:"image_digest"`
+	RestartCount              int32           `json:"restart_count"`
+	IntentGeneration          int64           `json:"intent_generation"`
+	DrainNonce                string          `json:"drain_nonce"`
+	Challenge                 json.RawMessage `json:"challenge"`
+	OriginChallengeBytes      []byte          `json:"origin_challenge_bytes"`
+	OriginChallengeSHA256     string          `json:"origin_challenge_sha256"`
+	State                     string          `json:"state"`
+	NativeTerminationReceipt  json.RawMessage `json:"native_termination_receipt"`
+	ConfirmedAt               *time.Time      `json:"confirmed_at"`
+	PolicyID                  uuid.UUID       `json:"policy_id"`
+	PolicyChecksum            string          `json:"policy_checksum"`
+	BindingSHA256             string          `json:"binding_sha256"`
+	ProcessNonce              string          `json:"process_nonce"`
+	ProjectionAcknowledgement json.RawMessage `json:"projection_acknowledgement"`
+	RootAcknowledgement       json.RawMessage `json:"root_acknowledgement"`
+	OriginPolicy              json.RawMessage `json:"origin_policy"`
+	OriginPolicySHA256        string          `json:"origin_policy_sha256"`
 }
 
 type CapacityNativeAuthorityRedeemRequest struct {

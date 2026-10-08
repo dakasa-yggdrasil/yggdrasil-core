@@ -133,7 +133,7 @@ func (s *Server) serveCapacityMutationRequest(w http.ResponseWriter, r *http.Req
 	ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
 	defer cancel()
 	r = r.WithContext(ctx)
-	store := repository.CapacityStore{DB: s.db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true"}
+	store := repository.CapacityStore{DB: s.db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true", AdmissionOnly: os.Getenv("YGGDRASIL_CAPACITY_ADMISSION_ENABLED") == "true"}
 	if s.db == nil {
 		mutationHTTPError(w, fmt.Errorf("database unavailable"))
 		return

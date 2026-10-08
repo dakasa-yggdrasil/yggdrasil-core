@@ -54,6 +54,9 @@ func (s CapacityStore) IssueNativeCommand(ctx context.Context, policy model.Mani
 		if current.PolicyID != policy.ID || current.PolicyChecksum != policy.Checksum || current.RecoveryOnly || current.LeaseExecutorID != s.ExecutorID {
 			return ErrCapacityConflict
 		}
+		if s.AdmissionOnly && (operation == capacity.EnsureBoundHPAEnvelope || phase == "terminate") {
+			return ErrCapacityMutationAuthorization
+		}
 		if err := lockNativeBoundOwner(ctx, tx, policy, p, subject); err != nil {
 			return err
 		}
@@ -67,9 +70,21 @@ func (s CapacityStore) IssueNativeCommand(ctx context.Context, policy model.Mani
 		if pending != 0 {
 			return ErrCapacityConflict
 		}
+		if p.HPAExecutionBinding.Mode == capacity.HPALifetimeExecutionMode {
+			var retained int
+			if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_commands WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, current.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&retained); err != nil || retained >= maxNativeRetainedCommands {
+				return ErrCapacityConflict
+			}
+		}
 		var previous, refused int
-		if err := tx.QueryRowContext(ctx, `SELECT count(*),count(*) FILTER(WHERE state='refused_no_redemption') FROM public.capacity_native_commands WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5 AND operation=$6 AND subject_uid=$7 AND phase=$8`, current.Namespace, p.Environment, p.Domain, p.Dimension, current.Generation, operation, subject, phase).Scan(&previous, &refused); err != nil {
-			return err
+		var sequenceErr error
+		if p.HPAExecutionBinding.Mode == capacity.HPALifetimeExecutionMode && operation != capacity.EnsureBoundHPAEnvelope {
+			sequenceErr = tx.QueryRowContext(ctx, `SELECT count(*),count(*) FILTER(WHERE state='refused_no_redemption') FROM public.capacity_native_commands WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND operation=$5 AND subject_uid=$6 AND phase=$7`, current.Namespace, p.Environment, p.Domain, p.Dimension, operation, subject, phase).Scan(&previous, &refused)
+		} else {
+			sequenceErr = tx.QueryRowContext(ctx, `SELECT count(*),count(*) FILTER(WHERE state='refused_no_redemption') FROM public.capacity_native_commands WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5 AND operation=$6 AND subject_uid=$7 AND phase=$8`, current.Namespace, p.Environment, p.Domain, p.Dimension, current.Generation, operation, subject, phase).Scan(&previous, &refused)
+		}
+		if sequenceErr != nil {
+			return sequenceErr
 		}
 		if previous != refused || previous >= maxNativeCommandSequences {
 			return ErrCapacityConflict
@@ -79,12 +94,11 @@ func (s CapacityStore) IssueNativeCommand(ctx context.Context, policy model.Mani
 			return err
 		}
 		if operation == capacity.DestroyNativePodProtection {
-			var checkpointRaw []byte
-			if err := tx.QueryRowContext(ctx, `SELECT checkpoint_record FROM public.capacity_native_pod_checkpoints WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5 AND pod_uid=$6 FOR UPDATE`, current.Namespace, p.Environment, p.Domain, p.Dimension, current.Generation, subject).Scan(&checkpointRaw); err != nil {
+			checkpoint, err := nativeLifetimeCheckpoint(ctx, tx, p, current, subject)
+			if err != nil {
 				return err
 			}
-			var checkpoint model.CapacityNativePodCheckpoint
-			if json.Unmarshal(checkpointRaw, &checkpoint) != nil || checkpoint.PodUID != subject || checkpoint.IntentGeneration != current.Generation || checkpoint.State != "confirmed" || checkpoint.ConfirmedAt == nil || len(checkpoint.NativeTerminationReceipt) == 0 {
+			if checkpoint.PodUID != subject || (checkpoint.IntentGeneration != current.Generation && p.HPAExecutionBinding.Mode != capacity.HPALifetimeExecutionMode) || checkpoint.State != "confirmed" || checkpoint.ConfirmedAt == nil || len(checkpoint.NativeTerminationReceipt) == 0 {
 				return ErrCapacityConflict
 			}
 		}
@@ -97,9 +111,19 @@ func (s CapacityStore) IssueNativeCommand(ctx context.Context, policy model.Mani
 			Request:  request, RequestSHA256: hex.EncodeToString(requestDigest[:]), State: "issued", AuthorityTokenSHA256: hex.EncodeToString(tokenDigest[:]),
 			CreatedAt: now, ExpiresAt: *current.LeaseExpiresAt, UpdatedAt: now,
 		}
+		if p.HPAExecutionBinding.Mode == capacity.HPALifetimeExecutionMode {
+			command.OriginPolicy = append(json.RawMessage(nil), policy.Spec...)
+			command.OriginPolicySHA256 = nativeCanonicalArchiveSHA(command.OriginPolicy)
+			command.AdmissionOnly = s.AdmissionOnly
+		}
 		raw, err := json.Marshal(command)
 		if err != nil {
 			return err
+		}
+		if p.HPAExecutionBinding.Mode == capacity.HPALifetimeExecutionMode {
+			if _, err := tx.ExecContext(ctx, `INSERT INTO public.capacity_native_command_identities(id,namespace,environment,domain,dimension,generation,operation,subject_uid,phase,sequence,authority_token_sha256,request_sha256)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, command.CommandID, command.Namespace, command.Environment, command.Domain, command.Dimension, command.IntentGeneration, command.Operation, subject, command.Phase, command.Sequence, command.AuthorityTokenSHA256, command.RequestSHA256); err != nil {
+				return err
+			}
 		}
 		result, err := tx.ExecContext(ctx, `INSERT INTO public.capacity_native_commands (id,namespace,environment,domain,dimension,generation,operation,subject_uid,state,authority_token_sha256,command_record,updated_at,phase,sequence) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (namespace,environment,domain,dimension,generation,operation,subject_uid,phase,sequence) DO NOTHING`, command.CommandID, command.Namespace, command.Environment, command.Domain, command.Dimension, command.IntentGeneration, command.Operation, subject, command.State, command.AuthorityTokenSHA256, raw, now, phase, command.Sequence)
 		if err != nil {
@@ -156,7 +180,7 @@ func (s CapacityStore) RevokeUnredeemedNativeCommand(ctx context.Context, policy
 // the private invocation's opaque command token. Replays cannot send again.
 func (s CapacityStore) RedeemNativeCommand(ctx context.Context, principal string, request model.CapacityNativeAuthorityRedeemRequest) (model.CapacityNativeAuthorityPermit, error) {
 	var permit model.CapacityNativeAuthorityPermit
-	if s.DB == nil || !s.ExecutionEnabled || principal == "" || len(request.AuthorityToken) != 64 || !nativeCapacityOperation(request.Capability) {
+	if s.DB == nil || (!s.ExecutionEnabled && !s.AdmissionOnly) || principal == "" || len(request.AuthorityToken) != 64 || !nativeCapacityOperation(request.Capability) {
 		return permit, ErrCapacityMutationAuthorization
 	}
 	decoded, err := hex.DecodeString(request.AuthorityToken)
@@ -189,6 +213,9 @@ func (s CapacityStore) RedeemNativeCommand(ctx context.Context, principal string
 	if json.Unmarshal(raw, &command) != nil || command.CommandID != initial.CommandID || command.State != "issued" || command.AdapterPrincipalID != principal || command.Adapter.IntegrationInstanceID != request.IntegrationInstanceID || command.Adapter.IntegrationTypeID != request.IntegrationTypeID || command.Operation != request.Capability || command.RequestSHA256 != request.RequestSHA256 {
 		return permit, ErrCapacityMutationAuthorization
 	}
+	if (!command.AdmissionOnly && !s.ExecutionEnabled) || (command.AdmissionOnly && (!s.AdmissionOnly || command.Operation == capacity.EnsureBoundHPAEnvelope || command.Phase == "terminate")) {
+		return permit, ErrCapacityMutationAuthorization
+	}
 	var policyRaw []byte
 	var checksum string
 	var active bool
@@ -199,7 +226,8 @@ func (s CapacityStore) RedeemNativeCommand(ctx context.Context, principal string
 	if json.Unmarshal(policyRaw, &p) != nil || capacity.ValidatePolicy(p) != nil || p.HPAExecutionBinding == nil || p.AssessmentBinding == nil || !p.ExecutionEnabled || p.HPAExecutionBinding.AdapterPrincipalID != principal || p.AssessmentBinding.Snapshot.Adapter != command.Adapter {
 		return permit, ErrCapacityMutationAuthorization
 	}
-	if err := tx.QueryRowContext(ctx, `SELECT active FROM public.manifests WHERE id=$1 AND kind='workflow' AND namespace=$2 AND name=$3 AND jsonb_typeof(spec->'authorization')='object' FOR SHARE`, command.WorkflowID, p.Workflow.Namespace, p.Workflow.Name).Scan(&active); err != nil || !active {
+	workflow := nativeCapacityWorkflow(p, command.AdmissionOnly)
+	if err := tx.QueryRowContext(ctx, `SELECT active FROM public.manifests WHERE id=$1 AND kind='workflow' AND namespace=$2 AND name=$3 AND jsonb_typeof(spec->'authorization')='object' FOR SHARE`, command.WorkflowID, workflow.Namespace, workflow.Name).Scan(&active); err != nil || !active {
 		return permit, ErrCapacityMutationAuthorization
 	}
 	if err := checkMutationIntegration(ctx, tx, nativeObservationMutationBinding(command.Adapter)); err != nil {
@@ -273,7 +301,7 @@ func canonicalNativeCommandRequest(operation string, raw json.RawMessage) (json.
 	phase := "envelope"
 	if operation == capacity.EnsureNativePodDrain {
 		value, ok := fields["phase"].(string)
-		if !ok || (value != "protect" && value != "terminate") {
+		if !ok || (value != "protect" && value != "terminate" && value != "admit") {
 			return nil, "", ErrCapacityMutationAuthorization
 		}
 		phase = value

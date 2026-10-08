@@ -94,7 +94,8 @@ func (s CapacityStore) mutationTransaction(ctx context.Context, policy model.Man
 		return ErrCapacityConflict
 	}
 	policyActive := active
-	if err = tx.QueryRowContext(ctx, `SELECT active FROM public.manifests WHERE id=$1 AND kind='workflow' AND namespace=$2 AND name=$3 AND jsonb_typeof(spec->'authorization')='object' FOR SHARE`, s.WorkflowID, p.Workflow.Namespace, p.Workflow.Name).Scan(&active); err != nil {
+	workflow := nativeCapacityWorkflow(p, s.AdmissionOnly)
+	if err = tx.QueryRowContext(ctx, `SELECT active FROM public.manifests WHERE id=$1 AND kind='workflow' AND namespace=$2 AND name=$3 AND jsonb_typeof(spec->'authorization')='object' FOR SHARE`, s.WorkflowID, workflow.Namespace, workflow.Name).Scan(&active); err != nil {
 		return err
 	}
 	if !active {

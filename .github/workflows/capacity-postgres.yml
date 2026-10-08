@@ -102,7 +102,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message ./controllers/httpapi -run '^TestCapacity(Intent.*|Workflow|Mutation.*)Postgres$' | tee capacity-results.jsonl
+          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message ./controllers/httpapi -run '^TestCapacity(Intent.*|Workflow|Mutation.*|NativeLifetime)Postgres$' | tee capacity-results.jsonl
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -134,6 +134,8 @@ jobs:
           expected |= {native_http} | {native_http+"/"+name for name in ("default_deny","canonical_members","instance_capability_and_hash_fences","single_use_redemption")}
           bound_execution="TestCapacityMutationBoundExecutionPostgres"
           expected |= {bound_execution} | {bound_execution+"/"+name for name in ("finite_unredeemed_permission_budget","redemption_and_revocation_share_one_fence","unredeemed_token_revocation_and_history","single_send_and_canonical_request","principal_scope_and_single_redemption","lost_reply_blocks_new_write_and_terminal","native_readback_and_restart_recovery")}
+          lifetime="TestCapacityNativeLifetimePostgres"
+          expected |= {lifetime} | {lifetime+"/"+name for name in ("jsonb_origin_and_actual_ack","terminal_archive_repeated_rollouts","alive_and_uncertain_never_archived","partial_terminal_never_archived")}
           native = "TestCapacityMutationNativeWorkflowPostgres"
           expected |= {native} | {native + "/" + name for name in (
               "readonly_real_adapter_inventory_has_no_authority",

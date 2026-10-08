@@ -14,6 +14,8 @@ type CapacityPodTerminationTarget struct {
 	ImageDigest         string   `json:"image_digest"`
 	Lanes               []string `json:"lanes"`
 	ProjectionDirectory string   `json:"projection_directory"`
+	AdmissionMode       string   `json:"admission_mode,omitempty"`
+	AdmissionPort       int      `json:"admission_port,omitempty"`
 }
 
 // This public closed wire shape matches the independently qualified producer.
@@ -30,12 +32,47 @@ type NativePodTerminationChallenge struct {
 	DrainNonce       string    `json:"drain_nonce"`
 	IssuedAt         time.Time `json:"issued_at"`
 	LaneRosterSHA256 string    `json:"lane_roster_sha256"`
+	ProcessNonce     string    `json:"process_nonce,omitempty"`
 }
 
 type NativePodTerminationReceipt struct {
 	NativePodTerminationChallenge
-	JoinedAt time.Time         `json:"joined_at"`
-	Lanes    map[string]string `json:"lanes"`
+	JoinedAt      time.Time         `json:"joined_at"`
+	Lanes         map[string]string `json:"lanes"`
+	RootAdmission string            `json:"root_admission,omitempty"`
+}
+
+// This frame is read from the exact native Pod proxy, never an execution input.
+type NativeProcessAdmissionObservation struct {
+	SchemaVersion    int                            `json:"schema_version"`
+	Namespace        string                         `json:"namespace"`
+	PodName          string                         `json:"pod_name"`
+	PodUID           string                         `json:"pod_uid"`
+	ImageDigest      string                         `json:"image_digest"`
+	LaneRosterSHA256 string                         `json:"lane_roster_sha256"`
+	ProcessNonce     string                         `json:"process_nonce"`
+	ObservedAt       time.Time                      `json:"observed_at"`
+	State            string                         `json:"state"`
+	Challenge        *NativePodTerminationChallenge `json:"challenge,omitempty"`
+	ChallengeSHA256  string                         `json:"challenge_sha256,omitempty"`
+}
+
+type AdapterObserveCapacityPodAdmissionRequest struct {
+	BindingName                string    `json:"binding_name"`
+	PodName                    string    `json:"pod_name"`
+	ExpectedPodUID             string    `json:"expected_pod_uid"`
+	ExpectedPodGeneration      int64     `json:"expected_pod_generation"`
+	ExpectedContainerID        string    `json:"expected_container_id"`
+	ExpectedContainerStartedAt time.Time `json:"expected_container_started_at"`
+	ExpectedRestartCount       int32     `json:"expected_restart_count"`
+}
+
+type AdapterCapacityPodAdmissionResponse struct {
+	Operation   string                            `json:"operation"`
+	Status      string                            `json:"status"`
+	Observation NativeTerminationObservation      `json:"observation"`
+	Admission   NativeProcessAdmissionObservation `json:"admission"`
+	Metadata    map[string]any                    `json:"metadata"`
 }
 
 type AdapterObserveCapacityPodTerminationRequest struct {
@@ -96,6 +133,7 @@ type NativeTerminationObservation struct {
 	FinishedAt              *time.Time                   `json:"finished_at"`
 	DeletionRequestedAt     *time.Time                   `json:"deletion_requested_at"`
 	Protected               bool                         `json:"protected"`
+	AdmissionReady          bool                         `json:"admission_ready"`
 	State                   string                       `json:"state"`
 	Reason                  string                       `json:"reason"`
 	Receipt                 *NativePodTerminationReceipt `json:"receipt"`
@@ -124,6 +162,23 @@ type AdapterCapacityPodInventoryResponse struct {
 	ListResourceVersion     string                         `json:"list_resource_version"`
 	Complete                bool                           `json:"complete"`
 	Pods                    []NativeTerminationObservation `json:"pods"`
+	ObservedAt              time.Time                      `json:"observed_at"`
+	Metadata                map[string]any                 `json:"metadata"`
+}
+
+// Complete is native LIST coverage, never qualification of the old baseline.
+// Unqualified lifetimes retain no invented process nonce or readiness receipt.
+type AdapterCapacityPodAdmissionCandidatesResponse struct {
+	Operation               string                         `json:"operation"`
+	Status                  string                         `json:"status"`
+	BindingName             string                         `json:"binding_name"`
+	Namespace               string                         `json:"namespace"`
+	WorkloadUID             string                         `json:"workload_uid"`
+	WorkloadResourceVersion string                         `json:"workload_resource_version"`
+	ListResourceVersion     string                         `json:"list_resource_version"`
+	Complete                bool                           `json:"complete"`
+	Candidates              []NativeTerminationObservation `json:"candidates"`
+	Unqualified             []NativeTerminationObservation `json:"unqualified"`
 	ObservedAt              time.Time                      `json:"observed_at"`
 	Metadata                map[string]any                 `json:"metadata"`
 }
