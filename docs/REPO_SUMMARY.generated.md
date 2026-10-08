@@ -1,10 +1,10 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-08T05:32:50-03:00_
+_Generated from HEAD at: 2026-10-08T05:48:51-03:00_
 
 ## Languages
 
-- `.go`: 687 files
+- `.go`: 688 files
 - `.json`: 144 files
 - `.py`: 1 files
 - `.sql`: 56 files
@@ -24,9 +24,9 @@ _Generated from HEAD at: 2026-10-08T05:32:50-03:00_
 
 ## Top Directories by File Count
 
-- controllers/httpapi: 164 files (1650.8 KB)
-- repository: 106 files (774.7 KB)
-- model: 60 files (229.7 KB)
+- controllers/httpapi: 164 files (1664.4 KB)
+- repository: 106 files (777.5 KB)
+- model: 60 files (232.5 KB)
 - manifest: 59 files (363.2 KB)
 - db/migrations: 55 files (97.4 KB)
 - controllers/message: 54 files (530.8 KB)
@@ -48,9 +48,9 @@ _Generated from HEAD at: 2026-10-08T05:32:50-03:00_
 - docs/bootstrap/manifests/products/message-broker-rabbitmq.json: 531.8 KB
 - controllers/httpapi/server.go: 173.9 KB
 - controllers/message/products.go: 75.4 KB
+- controllers/httpapi/openapi.json: 67.7 KB
+- docs/api-reference/openapi.json: 67.7 KB
 - controllers/httpapi/directory_machine_read_test.go: 65.8 KB
-- repository/identity.go: 65.2 KB
-- controllers/httpapi/credentials.go: 58.2 KB
 
 ## Ops & Messaging
 

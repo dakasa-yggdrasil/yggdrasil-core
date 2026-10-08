@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-08T05:32:50-03:00",
+  "generated_at": "2026-10-08T05:48:51-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 687,
+    ".go": 688,
     ".json": 144,
     ".py": 1,
     ".sql": 56,
@@ -11,7 +11,7 @@
     ".yml": 23
   },
   "provenance": {
-    "commit": "06f2145daf424108aba2c940b455546fcefadf71",
+    "commit": "b18bd3f056b8de44518108b89afe76c9a4221c72",
     "dirty": true,
     "files": [
       {
@@ -60,17 +60,17 @@
     {
       "path": "controllers/httpapi",
       "files": 164,
-      "kb": 1650
+      "kb": 1664
     },
     {
       "path": "repository",
       "files": 106,
-      "kb": 774
+      "kb": 777
     },
     {
       "path": "model",
       "files": 60,
-      "kb": 229
+      "kb": 232
     },
     {
       "path": "manifest",
@@ -156,16 +156,16 @@
       "kb": 75
     },
     {
+      "path": "controllers/httpapi/openapi.json",
+      "kb": 67
+    },
+    {
+      "path": "docs/api-reference/openapi.json",
+      "kb": 67
+    },
+    {
       "path": "controllers/httpapi/directory_machine_read_test.go",
       "kb": 65
-    },
-    {
-      "path": "repository/identity.go",
-      "kb": 65
-    },
-    {
-      "path": "controllers/httpapi/credentials.go",
-      "kb": 58
     }
   ],
   "contracts": {
