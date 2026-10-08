@@ -17,6 +17,14 @@ must remain exact and active when issuing or redeeming. Dynamic prices and query
 times must not change logical scope; current physical/admission revisions belong
 in the non-secret desired spec and its digest.
 
+The registered type must pass the normal integration-type validator, expose
+the `execute` transport capability and declare both exact ensure/destroy
+actions in `action_catalog` for the same resource type and its
+`default_actions`. Resource actions are not top-level transport capabilities.
+Permission/reactor categories, unscoped actions and unrelated resources cannot
+authorize native mutations. CI exercises the actual Hetzner type contract as
+well as PostgreSQL refusal before any grant reservation.
+
 The closed `capacity_vm_slot_v1` projection has only `schema_version`,
 `capability`, `integration_instance_id`, `scope_checksum`, `profile_checksum`,
 `admission_checksum`, `profile_name`, integer `slot`, `native_name`,

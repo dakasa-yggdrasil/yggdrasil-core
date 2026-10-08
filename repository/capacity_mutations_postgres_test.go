@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 )
@@ -50,7 +51,16 @@ func mutationPostgresFixtureWithBaseline(t *testing.T, register bool, floor, uni
 		return m
 	}
 	wf := create("workflow", "scale-api", map[string]any{"authorization": map[string]any{"rbac": map[string]string{"namespace": original.Metadata.Namespace, "name": "scale-rbac"}}})
-	ty := create("integration_type", "fleet-type", map[string]any{"provider": "fixture", "revision": "1", "capabilities": []string{"ensure_server", "destroy_server"}})
+	typeSpec := mutationTypeFixture()
+	rawType, err := json.Marshal(typeSpec)
+	if err != nil {
+		t.Fatal(err)
+	}
+	parsedType, err := manifest.ParseIntegrationTypeSpec(rawType)
+	if err != nil || manifest.ValidateIntegrationTypeSpec(parsedType) != nil {
+		t.Fatal("mutation fixture must be registration-valid", err)
+	}
+	ty := create("integration_type", "fleet-type", typeSpec)
 	instance := create("integration_instance", "fleet", map[string]any{"type_ref": model.ManifestSelector{ManifestID: ty.ID.String()}})
 	var p model.CapacityPolicySpec
 	if err := json.Unmarshal(original.Spec, &p); err != nil {

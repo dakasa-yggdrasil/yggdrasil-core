@@ -46,7 +46,9 @@ provider fencing token. It is distinct from existing provider-CAS recovery.
 
 Persist canonical applied integration events atomically with confirmed native
 membership. Snapshot provider/resource routing from the exact registered type
-and capability pair at issuance. Accepted transport is not an applied event;
+and action pair at issuance. Validate the normal type contract, its `execute`
+transport and both catalog/default actions for the same resource. Resource
+actions never become top-level transport capabilities. Accepted transport is not an applied event;
 exact confirmation retries produce no duplicate event or reaction.
 
 Admit failed-create compensation only through a separate active opt-in protected

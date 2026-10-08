@@ -15,6 +15,7 @@ import (
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 )
@@ -743,13 +744,40 @@ func capacityMutationEventIdentity(ctx context.Context, tx *sql.Tx, b model.Capa
 	if err := tx.QueryRowContext(ctx, `SELECT spec FROM public.manifests WHERE id=$1 AND checksum=$2 AND kind='integration_type' FOR SHARE`, b.IntegrationTypeID, b.IntegrationTypeChecksum).Scan(&raw); err != nil {
 		return "", "", err
 	}
-	var spec model.IntegrationTypeManifestSpec
-	if err := json.Unmarshal(raw, &spec); err != nil {
-		return "", "", err
+	return capacityMutationTypeIdentity(raw, b)
+}
+
+func capacityMutationTypeIdentity(raw []byte, b model.CapacityMutationBinding) (string, string, error) {
+	spec, err := manifest.ParseIntegrationTypeSpec(raw)
+	if err != nil || manifest.ValidateIntegrationTypeSpec(spec) != nil {
+		return "", "", ErrCapacityConflict
 	}
 	resource := strings.TrimPrefix(b.EnsureCapability, "ensure_")
-	if !mutationAuxiliaryKindPattern.MatchString(spec.Provider) || !mutationAuxiliaryKindPattern.MatchString(resource) || len(spec.Provider)+len(resource)+1 > 64 || b.DestroyCapability != "destroy_"+resource || !slices.Contains(spec.Capabilities, b.EnsureCapability) || !slices.Contains(spec.Capabilities, b.DestroyCapability) {
+	if !mutationAuxiliaryKindPattern.MatchString(spec.Provider) || !mutationAuxiliaryKindPattern.MatchString(resource) || len(spec.Provider)+len(resource)+1 > 64 || b.EnsureCapability != "ensure_"+resource || b.DestroyCapability != "destroy_"+resource || !slices.Contains(spec.Capabilities, "execute") {
 		return "", "", ErrCapacityConflict
+	}
+	// Transport capabilities are describe/read/execute, not resource actions.
+	// Both mutations must be exact dispatched actions for the same declared
+	// resource. A permission, reactor or unrelated default action is no grant.
+	declared := false
+	for _, rt := range spec.ResourceTypes {
+		if rt.Name == resource && slices.Contains(rt.DefaultActions, b.EnsureCapability) && slices.Contains(rt.DefaultActions, b.DestroyCapability) {
+			declared = true
+		}
+	}
+	if !declared {
+		return "", "", ErrCapacityConflict
+	}
+	for _, name := range []string{b.EnsureCapability, b.DestroyCapability} {
+		found := false
+		for _, action := range spec.ActionCatalog {
+			if action.Name == name && (action.Category == "" || action.Category == "capability") && slices.Contains(action.ResourceTypes, resource) {
+				found = true
+			}
+		}
+		if !found {
+			return "", "", ErrCapacityConflict
+		}
 	}
 	return spec.Provider, resource, nil
 }
