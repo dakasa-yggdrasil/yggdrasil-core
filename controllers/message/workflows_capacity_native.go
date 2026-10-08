@@ -85,9 +85,10 @@ func executeCapacityNativeWorkflowStep(ctx context.Context, conn *amqp.Connectio
 		return fail()
 	}
 	required := []string{capacity.VMObserveInventory}
-	if result.Operation == "capacity.observe_failed_vm_creation" {
+	switch result.Operation {
+	case "capacity.observe_failed_vm_creation":
 		required = []string{capacity.VMObserveFailedCreation}
-	} else if result.Operation == "capacity.confirm_native_mutation" {
+	case "capacity.confirm_native_mutation":
 		required = []string{capacity.VMObserveServer, capacity.VMObserveAction}
 	}
 	revision := model.CapacityObservationAdapterBinding{IntegrationInstanceID: b.IntegrationInstanceID, InstanceChecksum: b.IntegrationChecksum, IntegrationTypeID: b.IntegrationTypeID, TypeChecksum: b.IntegrationTypeChecksum}

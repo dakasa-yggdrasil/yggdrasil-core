@@ -285,13 +285,14 @@ func TestCapacityMutationBoundAssessmentPostgres(t *testing.T) {
 			raw, _ := json.Marshal(metricType)
 			var bad model.IntegrationTypeManifestSpec
 			decode(json.RawMessage(raw), &bad)
-			if kind == "permission_alias" {
+			switch kind {
+			case "permission_alias":
 				for i := range bad.ActionCatalog {
 					if bad.ActionCatalog[i].Name == capacity.ObserveMetricRange {
 						bad.ActionCatalog[i].Category = "permission"
 					}
 				}
-			} else if kind == "missing" {
+			case "missing":
 				var actions []model.IntegrationActionDefinition
 				for _, a := range bad.ActionCatalog {
 					if a.Name != capacity.ObserveMetricRange {
