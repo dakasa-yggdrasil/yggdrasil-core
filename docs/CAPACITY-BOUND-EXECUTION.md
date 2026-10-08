@@ -77,3 +77,5 @@ Source and ledger tests do not certify native controller scheduling; the actual
 SDK/Kubernetes/Core combined KinD adversary and each service's actual startup
 joins are mandatory qualification. This change introduces no deployment, purchase,
 production activation or VM floor mutation.
+
+A released exact native UID can remain in LIST while an independently owned finalizer retains its already witnessed current termination. The executor re-reads the strict native removal target before excluding that UID from live root admission; Running, restarted or reprotected lifetimes never revive a released origin. While the released UID remains listed, only an unchanged HOLD can complete. New reservation and admission mutations remain refused. The native KinD controller adversary retains a foreign finalizer, requires removal of only the capacity finalizer and replays HOLD before the fixture removes its own finalizer. None of these observations establishes released VM capacity or provider quiescence.

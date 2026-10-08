@@ -501,6 +501,14 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool) {
 		}
 		nativeKindCommand(t, ctx, "-n", realm, "annotate", "pod", name, "controller.kubernetes.io/pod-deletion-cost="+cost, "--overwrite")
 	}
+	// Retain the actual terminal native object with an independently owned
+	// finalizer. Core must remove only its own protection and keep HOLD readable.
+	const fixtureFinalizer = "qualification.dakasa.io/held-native-deletion"
+	victim := nativeKindGet(t, ctx, "-n", realm, "get", "pod", victimName, "-o", "json")
+	victimMeta := victim["metadata"].(map[string]any)
+	retainedFinalizers := append(victimMeta["finalizers"].([]any), fixtureFinalizer)
+	patchFinalizers, _ := json.Marshal([]map[string]any{{"op": "test", "path": "/metadata/uid", "value": victimUID}, {"op": "test", "path": "/metadata/resourceVersion", "value": victimMeta["resourceVersion"]}, {"op": "replace", "path": "/metadata/finalizers", "value": retainedFinalizers}})
+	nativeKindCommand(t, ctx, "-n", realm, "patch", "pod", victimName, "--type=json", "-p", string(patchFinalizers))
 	// The envelope min is a reservation, not a scale command. This native CI
 	// action asks the real Deployment/ReplicaSet controller to reduce replicas.
 	// The cost is only an adversary input; actual victim UID proves selection.
@@ -539,6 +547,19 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool) {
 		t.Fatal("actual current SDK2 termination receipt unavailable", status)
 	}
 	run("execute", true)
+	retained := nativeKindGet(t, ctx, "-n", realm, "get", "pod", victimName, "-o", "json")
+	retainedMeta := retained["metadata"].(map[string]any)
+	remainingFinalizers := retainedMeta["finalizers"].([]any)
+	if retainedMeta["uid"] != victimUID || len(remainingFinalizers) != 1 || remainingFinalizers[0] != fixtureFinalizer {
+		t.Fatal("Core removed foreign protection or retained its own finalizer")
+	}
+	run("execute", true)
+	// The fixture removes only its own native finalizer after the actual
+	// read-only HOLD. This is cleanup, never a Core Pod DELETE/capacity witness.
+	retained = nativeKindGet(t, ctx, "-n", realm, "get", "pod", victimName, "-o", "json")
+	retainedMeta = retained["metadata"].(map[string]any)
+	patchFinalizers, _ = json.Marshal([]map[string]any{{"op": "test", "path": "/metadata/uid", "value": victimUID}, {"op": "test", "path": "/metadata/resourceVersion", "value": retainedMeta["resourceVersion"]}, {"op": "test", "path": "/metadata/finalizers", "value": []string{fixtureFinalizer}}, {"op": "replace", "path": "/metadata/finalizers", "value": []string{}}})
+	nativeKindCommand(t, ctx, "-n", realm, "patch", "pod", victimName, "--type=json", "-p", string(patchFinalizers))
 	var released, grants int
 	if db.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_lifetimes WHERE namespace=$1 AND checkpoint_record->>'state'='released' AND checkpoint_record->>'confirmed_at' IS NOT NULL`, realm).Scan(&released) != nil || released != 1 {
 		t.Fatal("missing durable exact controller-selected lifetime ACK", released)

@@ -290,6 +290,8 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 	if err != nil {
 		return intent, err
 	}
+	activePods := make([]model.NativeTerminationObservation, 0, len(current.Pods))
+	releasedStillListed := false
 	for _, pod := range current.Pods {
 		cp, exists := findCheckpoint(pod.PodUID)
 		if !exists {
@@ -304,8 +306,18 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 			checkpoints = append(checkpoints, cp)
 		}
 		if cp.State == "released" {
-			return intent, fmt.Errorf("released native UID reappeared; origin cannot be revived")
+			// Removing our finalizer need not remove this native object: another
+			// finalizer may still retain its already witnessed current termination.
+			// Only an exact fresh removal target can skip business-root admission;
+			// a Running/restarted/reprotected UID can never revive this origin.
+			actual, e := observePod(cp)
+			if e != nil || capacity.NativePodReleaseTarget(p, cp, actual.Observation, time.Now().UTC()) != nil {
+				return intent, fmt.Errorf("released native UID is not an exact terminal removal target")
+			}
+			releasedStillListed = true
+			continue
 		}
+		activePods = append(activePods, pod)
 		if capacity.NativePodMatchesCheckpoint(p, cp, pod, time.Now().UTC()) != nil || pod.StartedAt == nil || !pod.StartedAt.Equal(cp.ContainerStartedAt) || pod.DeletionRequestedAt != nil {
 			return intent, fmt.Errorf("current native process differs from retained origin")
 		}
@@ -328,6 +340,10 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 			}
 			cp.State = "protected"
 		}
+	}
+	current.Pods = activePods
+	if releasedStillListed && (store.AdmissionOnly || intent.Decision.Action != "hold") {
+		return intent, fmt.Errorf("released native object remains listed; no new reservation or admission mutation permitted")
 	}
 	// Project the complete finite candidate roster before awaiting native file
 	// refreshes. Only actual SDK observations authorize the second phase; the
