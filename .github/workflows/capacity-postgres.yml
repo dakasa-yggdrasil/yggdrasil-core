@@ -1,0 +1,69 @@
+name: Capacity intent PostgreSQL protocol
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  capacity-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: capacity-ci-only
+          POSTGRES_DB: capacity_integration
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d capacity_integration"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      GOWORK: "off"
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: capacity_integration
+      DB_USER: postgres
+      DB_PASSWORD: capacity-ci-only
+      DB_SSLMODE: disable
+      DB_URL: postgres://postgres:capacity-ci-only@127.0.0.1:5432/capacity_integration?sslmode=disable
+      REQUIRE_CAPACITY_POSTGRES: "true"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Apply production migrations
+        run: go run ./scripts/goose up
+      - name: Exercise durable decisions, concurrency, restart and fencing
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message -run '^TestCapacity(Intent|Workflow)Postgres$' | tee capacity-results.jsonl
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          events = [json.loads(line) for line in Path("capacity-results.jsonl").read_text().splitlines() if line.strip()]
+          root = "TestCapacityIntentPostgres"
+          expected = {root} | {root + "/" + name for name in (
+              "concurrent_assess_and_claim", "phase_receipts_and_promotion",
+              "shadow_and_inactive_policy", "dimension_ownership_and_stale_evidence")}
+          workflow = "TestCapacityWorkflowPostgres"
+          expected |= {workflow} | {workflow + "/" + name for name in (
+              "exact_active_protected_workflow", "shadow_claim_is_blocked",
+              "actorless_dispatch_is_blocked", "unprotected_runtime_is_blocked")}
+          passed = {event.get("Test") for event in events if event.get("Action") == "pass"}
+          skipped = {event.get("Test") for event in events if event.get("Action") == "skip"}
+          if expected - passed or skipped:
+              raise SystemExit(f"Capacity gate incomplete: missing={sorted(expected-passed)}, skipped={sorted(skipped)}")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capacity-protocol-results
+          path: capacity-results.jsonl
+          if-no-files-found: error

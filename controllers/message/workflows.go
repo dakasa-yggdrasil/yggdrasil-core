@@ -562,6 +562,9 @@ func executeWorkflowStep(
 	// rather than going through an integration adapter. Yggdrasil steps
 	// persist manifests against the core's own store, also in-process.
 	if result.Kind == "yggdrasil" {
+		if strings.HasPrefix(result.Operation, "capacity.") {
+			return executeCapacityWorkflowStep(ctx, db, workflowRef, result, renderedInput)
+		}
 		return executeYggdrasilWorkflowStep(ctx, db, step, result, renderedInput)
 	}
 	if result.Kind == "product" {

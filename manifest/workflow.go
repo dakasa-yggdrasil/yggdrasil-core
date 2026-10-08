@@ -37,6 +37,11 @@ var (
 		"control_plane.render",
 		"collaborator.reconcile_provider_state",
 		"oidc_client.verify_bootstrap_file",
+		"capacity.assess",
+		"capacity.observe",
+		"capacity.claim",
+		"capacity.renew",
+		"capacity.advance",
 	}
 	workflowTemplatePattern = regexp.MustCompile(`{{\s*([^{}]+?)\s*}}`)
 )
@@ -139,6 +144,9 @@ func ValidateWorkflowSpec(spec model.WorkflowManifestSpec) error {
 
 	stepNames := map[string]struct{}{}
 	for _, step := range spec.Steps {
+		if strings.EqualFold(step.Use.Kind, "yggdrasil") && strings.HasPrefix(strings.ToLower(strings.TrimSpace(step.Use.Operation)), "capacity.") && spec.Authorization == nil {
+			return fmt.Errorf("capacity steps require workflow authorization")
+		}
 		id := normalizeIntegrationName(step.ID)
 		if id == "" {
 			return fmt.Errorf("workflow step id is required")

@@ -173,3 +173,10 @@ This scaffolds from [integration-template](https://github.com/dakasa-yggdrasil/i
 workflow, all wired to your module path.
 
 Full 30-minute walkthrough: [extending.md](./extending.md).
+
+## Capacity policy protocol
+
+The provider-neutral `capacity_policy` kind binds one dimension to a protected
+workflow and persists decisions, fenced leases and phase receipts. Both execution
+switches default to disabled. See [bounded capacity intents](features/capacity-intents.md)
+for strict evidence, native-controller boundaries and remote acceptance requirements.
