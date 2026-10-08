@@ -66,6 +66,7 @@ jobs:
               "concurrent_issue_and_single_redemption", "lost_reply_same_attempt_is_read_only",
               "settlement_nonce_scope_pause_and_private_receipt", "unresolved_mutation_blocks_terminal_and_expiry_reissue",
               "native_action_cannot_replace_transport_settlement", "historical_recovery_confirms_after_pause",
+              "partial_recovery_matches_fresh_membership_and_allows_new_intent",
               "floor_drain_pending_delete_budget_and_tombstone", "policy_instance_type_and_executor_fences",
               "complete_membership_and_bound_plan_required")}
           expected |= {mutation + "/policy_instance_type_and_executor_fences/" + name for name in ("policy", "instance", "type", "executor")}

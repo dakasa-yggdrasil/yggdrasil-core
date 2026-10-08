@@ -91,6 +91,7 @@ func (s CapacityStore) mutationTransaction(ctx context.Context, policy model.Man
 	if checksum != policy.Checksum || (!historical && !active) {
 		return ErrCapacityConflict
 	}
+	policyActive := active
 	if err = tx.QueryRowContext(ctx, `SELECT active FROM public.manifests WHERE id=$1 AND kind='workflow' AND namespace=$2 AND name=$3 AND jsonb_typeof(spec->'authorization')='object' FOR SHARE`, s.WorkflowID, p.Workflow.Namespace, p.Workflow.Name).Scan(&active); err != nil {
 		return err
 	}
@@ -104,6 +105,9 @@ func (s CapacityStore) mutationTransaction(ctx context.Context, policy model.Man
 	intent, err := loadCapacityIntent(ctx, tx, policy.Metadata.Namespace, p, true)
 	if err != nil {
 		return err
+	}
+	if !policyActive && !intent.RecoveryOnly {
+		return ErrCapacityConflict
 	}
 	if historical && intent.RecoveryOnly {
 		err = s.checkRecoveryLease(policy, &intent, generation, fence, owner, now)
@@ -580,9 +584,10 @@ func validMutationAuxiliaries(resources []model.CapacityMutationAuxiliaryResourc
 }
 
 // RecordMutationSlot registers an exact existing native tuple from a protected
-// fresh read. It never adopts drift, overwrites a tombstone, or performs a write.
+// fresh read. Recovery can refresh only an existing exact tuple, never register
+// new membership. It never adopts drift, overwrites a tombstone or calls WAN.
 func (s CapacityStore) RecordMutationSlot(ctx context.Context, policy model.Manifest, generation, fence int64, owner string, issue model.CapacityMutationIssue, proof model.CapacityMutationProof) error {
-	return s.mutationTransaction(ctx, policy, false, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, _ model.CapacityIntent, now time.Time) error {
+	return s.mutationTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, intent model.CapacityIntent, now time.Time) error {
 		plan, err := capacity.PrepareMutationPlan(p, issue)
 		if err != nil {
 			return err
@@ -594,8 +599,10 @@ func (s CapacityStore) RecordMutationSlot(ctx context.Context, policy model.Mani
 		if plan.Capability != b.EnsureCapability || proof.ResourceAbsent || proof.BindingName != b.Name || proof.Slot != plan.Slot || proof.RequestSHA256 != plan.RequestSHA256 || !validMutationProof(p, proof, now) {
 			return ErrCapacityConflict
 		}
-		if err = checkMutationIntegration(ctx, tx, b); err != nil {
-			return err
+		if !intent.RecoveryOnly {
+			if err = checkMutationIntegration(ctx, tx, b); err != nil {
+				return err
+			}
 		}
 		var count, history int
 		if err = tx.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE state IN ('issued','redeemed','settled')),count(*) FROM public.capacity_mutation_grants WHERE integration_instance_id=$1 AND scope_checksum=$2 AND profile_name=$3 AND slot=$4`, b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName, plan.Slot).Scan(&count, &history); err != nil {
@@ -608,7 +615,7 @@ func (s CapacityStore) RecordMutationSlot(ctx context.Context, policy model.Mani
 		if err != nil {
 			return err
 		}
-		if !exists && history != 0 {
+		if !exists && (history != 0 || intent.RecoveryOnly) {
 			return ErrCapacityConflict
 		}
 		if exists && (old.Tombstone || old.ResourceID != proof.ResourceID || old.ResourceCreatedAt != proof.ResourceCreatedAt || old.DesiredSpecSHA256 != plan.RequestSHA256) {

@@ -506,6 +506,95 @@ func TestCapacityMutationPostgres(t *testing.T) {
 			t.Fatal(result, err)
 		}
 	})
+	t.Run("partial_recovery_matches_fresh_membership_and_allows_new_intent", func(t *testing.T) {
+		f := mutationPostgresFixture(t, true)
+		g := f.issue(t, 5)
+		nonce := uuid.NewString()
+		r := mutationRedeem(g, nonce)
+		if _, err := f.store.RedeemMutation(ctx, f.binding.AdapterPrincipalID, r); err != nil {
+			t.Fatal(err)
+		}
+		settled := mutationSettlement(r, f.created)
+		if _, err := f.store.SettleMutation(ctx, f.binding.AdapterPrincipalID, nonce, settled); err != nil {
+			t.Fatal(err)
+		}
+		native := f.proof(t, 5)
+		native.GrantID, native.ResourceCreatedAt, native.ObservedCreationGrantID = g.GrantID, settled.ResourceCreatedAt, g.GrantID
+		native.ActionsTerminal, native.ActionsSuccessful = true, true
+		native.ActionIDs = []string{"native-action", "bootstrap-action"}
+		if _, err := f.store.ConfirmMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, native); err != nil {
+			t.Fatal(err)
+		}
+		unsent := f.issue(t, 6)
+		if _, err := f.db.ExecContext(ctx, `UPDATE public.capacity_intents SET intent=jsonb_set(intent,'{lease_expires_at}',to_jsonb($2::text)) WHERE namespace=$1`, f.policy.Metadata.Namespace, time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)); err != nil {
+			t.Fatal(err)
+		}
+		recovery := f.store
+		recovery.ExecutionEnabled, recovery.ExecutorID = false, uuid.NewString()
+		lease, err := recovery.Recover(ctx, f.policy, 1, freshCapacityTestAssessment(f.a, 5))
+		if err != nil {
+			t.Fatal(err)
+		}
+		zero := 0
+		proof := model.CapacityTransitionProof{Assessment: freshCapacityTestAssessment(f.a, 5), ObservedAt: time.Now().UTC(), ReceiptRef: "fixture:complete-partial-inventory", Healthy: true, Inflight: &zero, MutationInflight: &zero, MutationAuthorityKind: "core_mutation_grants", MembershipComplete: true}
+		if _, err := recovery.Reconcile(ctx, f.policy, 1, lease.FencingToken, lease.LeaseOwner, "reconciled_partial", proof); err == nil {
+			t.Fatal("partial recovery ignored an outstanding permission")
+		}
+		if _, err := f.db.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET expires_at=$2 WHERE id=$1`, unsent.GrantID, time.Now().Add(-time.Second)); err != nil {
+			t.Fatal(err)
+		}
+		for _, scenario := range []string{"incomplete", "wrong_count", "outside_change", "no_mutation", "provider_fence"} {
+			bad := proof
+			switch scenario {
+			case "incomplete":
+				bad.MembershipComplete = false
+			case "wrong_count":
+				bad.Assessment.Snapshot.Units = 4
+			case "outside_change":
+				bad.Assessment.Snapshot.Units = 7
+			case "no_mutation":
+				bad.NoMutationVerified = true
+			case "provider_fence":
+				bad.ProviderFencingToken = lease.FencingToken
+			}
+			if _, err := recovery.Reconcile(ctx, f.policy, 1, lease.FencingToken, lease.LeaseOwner, "reconciled_partial", bad); err == nil {
+				t.Fatal("partial recovery accepted unsafe proof", scenario)
+			}
+		}
+		if _, err := f.db.ExecContext(ctx, `UPDATE public.capacity_resource_slots SET slot_record=jsonb_set(slot_record,'{observed_at}',to_jsonb($2::text)) WHERE namespace=$1 AND slot=1`, f.policy.Metadata.Namespace, time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano)); err != nil {
+			t.Fatal(err)
+		}
+		if _, err := recovery.Reconcile(ctx, f.policy, 1, lease.FencingToken, lease.LeaseOwner, "reconciled_partial", proof); err == nil {
+			t.Fatal("partial recovery accepted stale membership")
+		}
+		if err := recovery.RecordMutationSlot(ctx, f.policy, 1, lease.FencingToken, lease.LeaseOwner, f.plans[7], f.proof(t, 7)); err == nil {
+			t.Fatal("recovery registered a new native tuple")
+		}
+		for slot := 1; slot <= 5; slot++ {
+			observed := f.proof(t, slot)
+			if slot == 5 {
+				observed.ResourceCreatedAt = settled.ResourceCreatedAt
+			}
+			if err := recovery.RecordMutationSlot(ctx, f.policy, 1, lease.FencingToken, lease.LeaseOwner, f.plans[slot], observed); err != nil {
+				t.Fatal("read-only recovery did not refresh exact membership", slot, err)
+			}
+		}
+		partial, err := recovery.Reconcile(ctx, f.policy, 1, lease.FencingToken, lease.LeaseOwner, "reconciled_partial", proof)
+		if err != nil || partial.Phase != "reconciled_partial" || partial.Assessment.Snapshot.Units != 5 || partial.LeaseOwner != "" || partial.Decision.ExecutionPermitted {
+			t.Fatal("partial observed state did not close safely", partial, err)
+		}
+		if _, err := recovery.RenewRecovery(ctx, f.policy, 1, lease.FencingToken, lease.LeaseOwner); !errors.Is(err, ErrCapacityConflict) {
+			t.Fatal("partial terminal state retained authority", err)
+		}
+		// Advance only the persisted cooldown clock, never wall-clock sleeps.
+		if _, err := f.db.ExecContext(ctx, `UPDATE public.capacity_intents SET intent=jsonb_set(intent,'{decision,clock,last_action_at}',to_jsonb($2::text)) WHERE namespace=$1`, f.policy.Metadata.Namespace, time.Now().Add(-time.Minute).UTC().Format(time.RFC3339Nano)); err != nil {
+			t.Fatal(err)
+		}
+		next, err := f.store.Assess(ctx, f.policy, freshCapacityTestAssessment(f.a, 5))
+		if err != nil || next.Generation != 2 || next.Phase != "proposed" || next.Decision.Units != 7 {
+			t.Fatal("partial state prevented a separately assessed new generation", next, err)
+		}
+	})
 	t.Run("floor_drain_pending_delete_budget_and_tombstone", func(t *testing.T) {
 		f := mutationPostgresFixture(t, true)
 		// A fixture records a requested reduction. The real Advance method,

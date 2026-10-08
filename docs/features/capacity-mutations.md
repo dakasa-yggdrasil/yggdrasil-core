@@ -154,6 +154,16 @@ Grant/slot history remains authoritative; history retention does not prune it.
 claims native provider CAS, cancellation, absence of external writers, bootstrap,
 application warmth, business drain, capacity or canary readiness.
 
+Interrupted partial changes can finish as `reconciled_partial` only after every
+grant has resolved and the fixed observer supplies complete native membership.
+The store independently checks the live slot count, profile and freshness against
+the observed units. Recovery can refresh exact existing tuples with
+`capacity.record_slot`, including under an inactive original policy revision;
+first registration, replacement and provider writes remain forbidden. The actual
+units must lie inside the original same-profile change and protected envelope.
+This closes an observed ledger result, allowing a new assessed generation rather
+than leaving a successful partial expansion permanently stuck.
+
 CI exercises real production migrations and PostgreSQL16/race: concurrent
 issuance/redemption, same-attempt lost replies, private nonce/scope, pause and
 historical recovery, pending-create/delete budgets, exact membership, floor,

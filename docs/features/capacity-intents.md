@@ -58,7 +58,7 @@ for protected workflows.
 | `capacity.advance` | Lease tuple, `phase`, `proof` | Persisted phase or error |
 | `capacity.recover` | Original `policy` revision, `generation`, fresh `assessment` | Recovery-only fenced lease |
 | `capacity.renew_recovery` | Original policy revision and recovery lease tuple | Extended recovery-only lease |
-| `capacity.reconcile` | Original policy revision, lease tuple, `phase`, terminal `proof` | `reconciled` or `aborted` observed outcome |
+| `capacity.reconcile` | Original policy revision, lease tuple, `phase`, terminal `proof` | `reconciled`, `reconciled_partial` or `aborted` observed outcome |
 
 Optional [durable provider mutation grants](capacity-mutations.md) add protected
 `capacity.record_slot`, `capacity.grant_mutation` and `capacity.confirm_mutation`.
@@ -140,8 +140,17 @@ A protected floor repair can reconcile with fresh snapshot-only evidence while
 demand telemetry is absent, retaining all health, fencing and mutation-quiescence
 requirements. This exception never authorizes reduction or certifies skipped
 business/canary checks. Other reconciliation outcomes require the complete metric
-contract. Partial provider state matching neither the baseline nor the intended
-capacity remains unfinished and requires explicit operator repair.
+contract. With Core mutation grants, `reconciled_partial` can close an interrupted
+same-profile change at its actual observed capacity. It requires
+`membership_complete:true` from a complete fixed native observer, actual units
+inside both the original baseline/target interval and the protected envelope,
+zero unresolved grants, and a matching freshly reread immutable slot ledger.
+Recovery `capacity.record_slot` refreshes only existing exact tuples; it cannot
+register or replace membership. Partial reconciliation preserves the original
+decision and records its distinct terminal outcome, releases the recovery lease,
+and allows a separately assessed new generation after cooldown. It does not
+certify canary/promotion or permit another write under the recovery lease.
+Other partial provider state remains unfinished and requires explicit repair.
 A single GET, a lease timeout or an empty job queue does not prove provider
 mutation quiescence. Obtain independent authoritative fencing/cancellation and
 settlement receipts through the protected workflow before closing the generation.

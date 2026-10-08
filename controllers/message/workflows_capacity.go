@@ -56,7 +56,7 @@ func executeCapacityWorkflowStep(ctx context.Context, db *sql.DB, workflowRef mo
 	if err = decoder.Decode(&parsed); err != nil {
 		return fail(fmt.Errorf("capacity input: %w", err))
 	}
-	recoveryOperation := result.Operation == "capacity.recover" || result.Operation == "capacity.renew_recovery" || result.Operation == "capacity.reconcile" || result.Operation == "capacity.confirm_mutation"
+	recoveryOperation := result.Operation == "capacity.recover" || result.Operation == "capacity.renew_recovery" || result.Operation == "capacity.reconcile" || result.Operation == "capacity.confirm_mutation" || result.Operation == "capacity.record_slot"
 	if parsed.Policy.ManifestID != "" || (!recoveryOperation && parsed.Policy.Version != nil) || (parsed.Policy.Version != nil && *parsed.Policy.Version < 1) || strings.TrimSpace(parsed.Policy.Namespace) == "" || strings.TrimSpace(parsed.Policy.Name) == "" {
 		return fail(fmt.Errorf("capacity policy requires exact active logical namespace/name"))
 	}

@@ -151,4 +151,7 @@ type CapacityTransitionProof struct {
 	// core_mutation_grants names Core's durable at-most-one-send ledger;
 	// it must not be represented as a native provider CAS/fencing token.
 	MutationAuthorityKind string `json:"mutation_authority_kind,omitempty"`
+	// Partial recovery also requires a complete native inventory. The store
+	// independently matches its freshly reread immutable membership ledger.
+	MembershipComplete bool `json:"membership_complete,omitempty"`
 }
