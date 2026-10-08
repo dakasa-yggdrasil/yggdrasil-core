@@ -184,6 +184,15 @@ be closed, routing withdrawn and native/business inflight explicitly zero.
 Unknown owning transport, unknown/running actions, replacements, registered
 objects and incomplete inventory cannot admit cleanup.
 
+A wholly lost create response may leave the owning transport settled as
+`uncertain` with no native tuple or action IDs. Cleanup requires a distinct fresh
+native readback bound to the exact original grant label, immutable resource
+identity and `action_history_complete:true`. Every known transport action must
+still be covered, and any known original tuple must match. The ledger stores this
+proof separately; the private receipt exposes `native_readback` without replacing
+its original transport fields. Missing or uncertain transport/action identities
+cannot be recovered from current absence, a reused name or a partial action list.
+
 The failed parent remains `compensating` and reserves its original create budget
 while the one-time child occupies the native send slot. Public grant/redemption
 DTOs bind and echo `compensation_of`. Replay never reacquires a send, and elapsed

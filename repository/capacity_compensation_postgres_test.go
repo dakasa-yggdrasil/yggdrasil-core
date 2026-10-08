@@ -16,12 +16,17 @@ import (
 
 func TestCapacityMutationCompensationPostgres(t *testing.T) {
 	ctx := context.Background()
-	for _, protected := range []bool{false, true} {
-		name := "unprotected_failed_create"
-		if protected {
-			name = "protected_failed_create_without_serving_membership"
-		}
-		t.Run(name, func(t *testing.T) {
+	for _, scenario := range []struct {
+		name                 string
+		protected, lostReply bool
+	}{
+		{"unprotected_failed_create", false, false},
+		{"protected_failed_create_without_serving_membership", true, false},
+		{"lost_create_reply_uses_separate_native_readback", false, true},
+		{"protected_lost_create_reply", true, true},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			protected, lostReply := scenario.protected, scenario.lostReply
 			f := mutationPostgresFixture(t, !protected)
 			failedSlot := 5
 			if protected {
@@ -37,11 +42,17 @@ func TestCapacityMutationCompensationPostgres(t *testing.T) {
 				t.Fatal(err)
 			}
 			settlement := mutationSettlement(r, f.created)
+			nativeResourceID, nativeCreatedAt := settlement.ResourceID, settlement.ResourceCreatedAt
+			if lostReply {
+				settlement.Outcome, settlement.ResourceID, settlement.ResourceCreatedAt, settlement.ActionID = "uncertain", "", "", ""
+				settlement.NextActionIDs, settlement.AuxiliaryResources, settlement.AuxiliaryInventoryComplete = nil, nil, false
+			}
 			if _, err := f.store.SettleMutation(ctx, f.binding.AdapterPrincipalID, nonce, settlement); err != nil {
 				t.Fatal(err)
 			}
 			failed := f.proof(t, failedSlot)
-			failed.GrantID, failed.ResourceCreatedAt, failed.ObservedCreationGrantID = parent.GrantID, settlement.ResourceCreatedAt, parent.GrantID
+			failed.GrantID, failed.ResourceID, failed.ResourceCreatedAt, failed.ObservedCreationGrantID = parent.GrantID, nativeResourceID, nativeCreatedAt, parent.GrantID
+			failed.ActionHistoryComplete = lostReply
 			failed.ActionsTerminal, failed.ActionsFailed, failed.SpecVerified, failed.CompensationIdentityVerified = true, true, false, true
 			failed.ActionIDs = []string{"native-action", "bootstrap-action"}
 			var desired model.CapacityMutationSpecV1
@@ -49,7 +60,7 @@ func TestCapacityMutationCompensationPostgres(t *testing.T) {
 				t.Fatal(err)
 			}
 			desired.Capability = f.binding.DestroyCapability
-			desired.ExpectedResourceID, desired.ExpectedResourceCreatedAt = settlement.ResourceID, settlement.ResourceCreatedAt
+			desired.ExpectedResourceID, desired.ExpectedResourceCreatedAt = nativeResourceID, nativeCreatedAt
 			// The canonical projection is sorted explicitly by the production planner.
 			desiredRaw, _ := json.Marshal(desired)
 			zero := 0
@@ -85,7 +96,7 @@ func TestCapacityMutationCompensationPostgres(t *testing.T) {
 			if _, err := paused.IssueCompensation(ctx, current, issue); !errors.Is(err, ErrCapacityDisabled) {
 				t.Fatal("paused process admitted cleanup", err)
 			}
-			for _, scenario := range []string{"unknown_action", "successful_action", "wrong_parent", "wrong_creation_label", "missing_identity", "running_business", "running_native", "open_admission", "routed", "incomplete_inventory", "below_floor", "wrong_tuple"} {
+			for _, scenario := range []string{"unknown_action", "successful_action", "wrong_parent", "wrong_creation_label", "missing_identity", "running_business", "running_native", "open_admission", "routed", "incomplete_inventory", "below_floor", "wrong_tuple", "incomplete_action_history"} {
 				bad := issue
 				switch scenario {
 				case "unknown_action":
@@ -113,7 +124,13 @@ func TestCapacityMutationCompensationPostgres(t *testing.T) {
 				case "below_floor":
 					bad.DrainProof.Assessment.Snapshot.Units = 1
 				case "wrong_tuple":
+					bad.Mutation.DesiredSpec = json.RawMessage(string(desiredRaw))
 					bad.FailedProof.ResourceID = "replacement"
+				case "incomplete_action_history":
+					if !lostReply {
+						continue
+					}
+					bad.FailedProof.ActionHistoryComplete = false
 				}
 				if _, err := issuer.IssueCompensation(ctx, current, bad); err == nil {
 					t.Fatal("unsafe compensation admitted", scenario)
@@ -164,7 +181,7 @@ func TestCapacityMutationCompensationPostgres(t *testing.T) {
 			if _, err := issuer.ConfirmCompensation(ctx, current, deleted); err == nil {
 				t.Fatal("native absence replaced owning transport settlement")
 			}
-			deleteSettlement := mutationSettlement(redemption, settlement.ResourceCreatedAt)
+			deleteSettlement := mutationSettlement(redemption, nativeCreatedAt)
 			if _, err := issuer.SettleMutation(ctx, f.binding.AdapterPrincipalID, childNonce, deleteSettlement); err != nil {
 				t.Fatal(err)
 			}
@@ -188,6 +205,13 @@ func TestCapacityMutationCompensationPostgres(t *testing.T) {
 			parentReceipt, err := issuer.MutationReceipt(ctx, f.binding.AdapterPrincipalID, parent.GrantID)
 			if err != nil || parentReceipt.Grant.State != "compensated" {
 				t.Fatal("parent reservation remained unresolved", parentReceipt, err)
+			}
+			if parentReceipt.NativeReadback == nil || parentReceipt.NativeReadback.ResourceID != nativeResourceID || parentReceipt.NativeReadback.ResourceCreatedAt != nativeCreatedAt || parentReceipt.ResourceID != settlement.ResourceID || parentReceipt.ResourceCreatedAt != settlement.ResourceCreatedAt || parentReceipt.ActionID != settlement.ActionID || parentReceipt.Outcome != settlement.Outcome {
+				t.Fatal("native readback overwrote or escaped owning transport evidence", parentReceipt)
+			}
+			var eventParent string
+			if err := f.db.QueryRowContext(ctx, `SELECT payload->'observed'->>'compensation_of' FROM public.event_log WHERE metadata->>'namespace'=$1 AND type='fixture.server.destroyed'`, f.policy.Metadata.Namespace).Scan(&eventParent); err != nil || eventParent != parent.GrantID {
+				t.Fatal("destroyed event lost compensation lineage", eventParent, err)
 			}
 			var serving, ensured, destroyed int
 			if err := f.db.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE namespace=$1 AND resource_id<>''`, f.policy.Metadata.Namespace).Scan(&serving); err != nil {

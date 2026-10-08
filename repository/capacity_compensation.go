@@ -99,7 +99,16 @@ func completeMutationActionProof(record capacityMutationRecord, proof model.Capa
 
 func validFailedCreationProof(p model.CapacityPolicySpec, record capacityMutationRecord, proof model.CapacityMutationProof, now time.Time) bool {
 	g, b := record.Grant, record.Binding
-	if record.Settlement == nil || record.Settlement.ResourceID == "" || g.Capability != b.EnsureCapability || g.CompensationOf != "" || proof.GrantID != g.GrantID || proof.BindingName != b.Name || proof.Slot != g.Slot || proof.RequestSHA256 != g.RequestSHA256 || proof.ResourceID != record.Settlement.ResourceID || proof.ResourceCreatedAt != record.Settlement.ResourceCreatedAt || !proof.OwnerVerified || !proof.CompensationIdentityVerified || proof.ResourceAbsent || proof.ObservedCreationGrantID != g.GrantID || !proof.ActionsFailed || proof.ActionsSuccessful || !completeMutationActionProof(record, proof) || !capacity.Fresh(proof.ObservedAt, now, p.MaxEvidenceAgeSeconds) || proof.ReceiptRef == "" || len(proof.ReceiptRef) > 512 || !validMutationIdentity(proof.ResourceID, proof.ResourceCreatedAt, true) {
+	if record.Settlement == nil || (record.Settlement.Outcome != "accepted" && record.Settlement.Outcome != "uncertain") || g.Capability != b.EnsureCapability || g.CompensationOf != "" || proof.GrantID != g.GrantID || proof.BindingName != b.Name || proof.Slot != g.Slot || proof.RequestSHA256 != g.RequestSHA256 || !proof.OwnerVerified || !proof.CompensationIdentityVerified || proof.ResourceAbsent || proof.ObservedCreationGrantID != g.GrantID || !proof.ActionsFailed || proof.ActionsSuccessful || !completeMutationActionProof(record, proof) || !capacity.Fresh(proof.ObservedAt, now, p.MaxEvidenceAgeSeconds) || proof.ReceiptRef == "" || len(proof.ReceiptRef) > 512 || !validMutationIdentity(proof.ResourceID, proof.ResourceCreatedAt, true) {
+		return false
+	}
+	// Unknown transport identity is not rewritten. A separate exact native
+	// readback may recover it, but only a complete failed action history can
+	// discharge the ambiguity of a lost or uncertain create response.
+	if record.Settlement.ResourceID != "" && (proof.ResourceID != record.Settlement.ResourceID || proof.ResourceCreatedAt != record.Settlement.ResourceCreatedAt) {
+		return false
+	}
+	if (record.Settlement.Outcome == "uncertain" || record.Settlement.ResourceID == "" || record.Settlement.ActionID == "") && !proof.ActionHistoryComplete {
 		return false
 	}
 	created, _ := time.Parse(time.RFC3339Nano, proof.ResourceCreatedAt)
@@ -154,12 +163,12 @@ func (s CapacityStore) IssueCompensation(ctx context.Context, policy model.Manif
 		if (parent.Grant.State != "settled" && parent.Grant.State != "compensating") || !sameCompensationBinding(b, parent.Binding) || parent.Grant.Slot != plan.Slot || !validFailedCreationProof(p, parent, issue.FailedProof, now) {
 			return ErrCapacityConflict
 		}
-		plan, err = capacity.BindMutationDestroyPlan(plan, parent.Settlement.ResourceID, parent.Settlement.ResourceCreatedAt)
+		plan, err = capacity.BindMutationDestroyPlan(plan, issue.FailedProof.ResourceID, issue.FailedProof.ResourceCreatedAt)
 		if err != nil {
 			return ErrCapacityConflict
 		}
 		var registered int
-		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE integration_instance_id=$1 AND resource_id=$2`, b.IntegrationInstanceID, parent.Settlement.ResourceID).Scan(&registered); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE integration_instance_id=$1 AND resource_id=$2`, b.IntegrationInstanceID, issue.FailedProof.ResourceID).Scan(&registered); err != nil {
 			return err
 		}
 		if registered != 0 {
@@ -184,6 +193,15 @@ func (s CapacityStore) IssueCompensation(ctx context.Context, policy model.Manif
 			}
 			if existing.PolicyID != policy.ID || existing.PolicyChecksum != policy.Checksum || existing.WorkflowID != s.WorkflowID || existing.ExecutorID != s.ExecutorID || existing.Grant.RequestSHA256 != plan.RequestSHA256 {
 				return ErrCapacityConflict
+			}
+			if existing.Grant.State == "issued" {
+				parent.Proof, existing.CompensationDrainProof = &issue.FailedProof, &issue.DrainProof
+				if err = saveMutationGrant(ctx, tx, parent); err != nil {
+					return err
+				}
+				if err = saveMutationGrant(ctx, tx, existing); err != nil {
+					return err
+				}
 			}
 			result = existing.Grant
 			return nil
@@ -224,7 +242,7 @@ func redeemCompensation(ctx context.Context, tx *sql.Tx, record *capacityMutatio
 	if err := json.Unmarshal(raw, &parent); err != nil {
 		return err
 	}
-	if parent.Grant.State != "compensating" || parent.Proof == nil || !validFailedCreationProof(p, parent, *parent.Proof, now) || parent.Settlement == nil || parent.Settlement.ResourceID != g.ExpectedResourceID || parent.Settlement.ResourceCreatedAt != g.ExpectedResourceCreatedAt || !sameCompensationBinding(record.Binding, parent.Binding) {
+	if parent.Grant.State != "compensating" || parent.Proof == nil || !validFailedCreationProof(p, parent, *parent.Proof, now) || parent.Proof.ResourceID != g.ExpectedResourceID || parent.Proof.ResourceCreatedAt != g.ExpectedResourceCreatedAt || !sameCompensationBinding(record.Binding, parent.Binding) {
 		return ErrCapacityConflict
 	}
 	var ns string
@@ -277,7 +295,7 @@ func (s CapacityStore) ConfirmCompensation(ctx context.Context, policy model.Man
 		if err != nil {
 			return err
 		}
-		if parent.Grant.State != "compensating" || parent.Settlement == nil || parent.Settlement.ResourceID != g.ExpectedResourceID || parent.Settlement.ResourceCreatedAt != g.ExpectedResourceCreatedAt || !sameCompensationBinding(b, parent.Binding) {
+		if parent.Grant.State != "compensating" || parent.Proof == nil || parent.Proof.ResourceID != g.ExpectedResourceID || parent.Proof.ResourceCreatedAt != g.ExpectedResourceCreatedAt || !sameCompensationBinding(b, parent.Binding) {
 			return ErrCapacityConflict
 		}
 		var registered int

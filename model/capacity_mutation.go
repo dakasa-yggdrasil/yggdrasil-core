@@ -135,6 +135,9 @@ type CapacityMutationGrant struct {
 }
 
 type CapacityMutationReceipt struct {
+	// NativeReadback is a separately admitted failed-create observation. The
+	// owning transport fields below remain immutable, including unknown IDs.
+	NativeReadback             *CapacityMutationProof              `json:"native_readback,omitempty"`
 	Grant                      CapacityMutationGrant               `json:"grant"`
 	AttemptID                  string                              `json:"attempt_id,omitempty"`
 	Outcome                    string                              `json:"outcome,omitempty"`
@@ -165,6 +168,7 @@ type CapacityMutationProof struct {
 	ActionIDs                    []string                            `json:"action_ids"`
 	ActionsTerminal              bool                                `json:"actions_terminal"`
 	ActionsSuccessful            bool                                `json:"actions_successful"`
+	ActionHistoryComplete        bool                                `json:"action_history_complete,omitempty"`
 	ActionsFailed                bool                                `json:"actions_failed,omitempty"`
 	CompensationIdentityVerified bool                                `json:"compensation_identity_verified,omitempty"`
 	ObservedCreationGrantID      string                              `json:"observed_creation_grant_id,omitempty"`

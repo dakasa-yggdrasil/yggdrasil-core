@@ -446,6 +446,13 @@ func (s CapacityStore) MutationReceipt(ctx context.Context, principal, id string
 		return result, ErrCapacityMutationAuthorization
 	}
 	result.Grant, result.AttemptID = record.Grant, record.AttemptID
+	if (record.Grant.State == "compensating" || record.Grant.State == "compensated") && record.Grant.CompensationOf == "" && record.Proof != nil {
+		// Decode into a separate value so callers cannot mutate ledger evidence.
+		proof := *record.Proof
+		proof.ActionIDs = append([]string(nil), proof.ActionIDs...)
+		proof.AuxiliaryAbsent = append([]model.CapacityMutationAuxiliaryResource(nil), proof.AuxiliaryAbsent...)
+		result.NativeReadback = &proof
+	}
 	if record.Settlement != nil {
 		r := record.Settlement
 		result.Outcome, result.TransportCompleted, result.ResourceID, result.ResourceCreatedAt, result.ActionID, result.NextActionIDs = r.Outcome, r.TransportCompleted, r.ResourceID, r.ResourceCreatedAt, r.ActionID, append([]string(nil), r.NextActionIDs...)
@@ -755,12 +762,16 @@ func emitCapacityMutationEvent(ctx context.Context, tx *sql.Tx, namespace string
 	if !mutationAuxiliaryKindPattern.MatchString(record.EventProvider) || !mutationAuxiliaryKindPattern.MatchString(record.EventResource) {
 		return ErrCapacityConflict
 	}
+	observed := map[string]any{"grant_id": record.Grant.GrantID, "scope_checksum": record.Grant.ScopeChecksum, "profile_name": record.Grant.ProfileName, "slot": record.Grant.Slot, "resource_created_at": proof.ResourceCreatedAt, "action_ids": proof.ActionIDs, "receipt_ref": proof.ReceiptRef}
+	if record.Grant.CompensationOf != "" {
+		observed["compensation_of"] = record.Grant.CompensationOf
+	}
 	_, err := EmitEvent(ctx, tx, model.EmitEventRequest{
 		Type:          record.EventProvider + "." + record.EventResource + "." + verb,
 		SchemaVersion: "v1", AggregateType: record.EventProvider + "_" + record.EventResource, AggregateID: proof.ResourceID,
 		Actor:          &model.EventActor{Type: "workflow", ID: record.WorkflowID.String()},
 		IdempotencyKey: "capacity-mutation/" + record.Grant.GrantID,
-		Payload:        map[string]any{"provider": record.EventProvider, "resource": record.EventResource, "verb": verb, "resource_id": proof.ResourceID, "instance_id": record.Grant.IntegrationInstanceID, "emitted_at": now.Format(time.RFC3339Nano), "observed": map[string]any{"grant_id": record.Grant.GrantID, "scope_checksum": record.Grant.ScopeChecksum, "profile_name": record.Grant.ProfileName, "slot": record.Grant.Slot, "resource_created_at": proof.ResourceCreatedAt, "action_ids": proof.ActionIDs, "receipt_ref": proof.ReceiptRef}},
+		Payload:        map[string]any{"provider": record.EventProvider, "resource": record.EventResource, "verb": verb, "resource_id": proof.ResourceID, "instance_id": record.Grant.IntegrationInstanceID, "emitted_at": now.Format(time.RFC3339Nano), "observed": observed},
 		Metadata:       map[string]any{"namespace": namespace, "environment": p.Environment, "domain": p.Domain, "dimension": p.Dimension, "instance_id": record.Grant.IntegrationInstanceID, "source": "integration_mutation", "idempotency": "capacity-mutation/" + record.Grant.GrantID},
 	})
 	return err
