@@ -231,10 +231,11 @@ func (s CapacityStore) ArchivedNativeLifetime(ctx context.Context, policy model.
 	releases := 0
 	seen := map[string]bool{}
 	for _, command := range bundle.Commands {
-		if seen[command.CommandID] || command.Namespace != policy.Metadata.Namespace || command.PolicyID != cp.PolicyID || command.PolicyChecksum != cp.PolicyChecksum || command.Environment != p.Environment || command.Domain != p.Domain || command.Dimension != p.Dimension || (command.State != "confirmed" && command.State != "refused_no_redemption") {
+		commandID := command.CommandID.String()
+		if !capacity.NativeProcessNonce(commandID) || seen[commandID] || command.Namespace != policy.Metadata.Namespace || command.PolicyID != cp.PolicyID || command.PolicyChecksum != cp.PolicyChecksum || command.Environment != p.Environment || command.Domain != p.Domain || command.Dimension != p.Dimension || (command.State != "confirmed" && command.State != "refused_no_redemption") {
 			return zero, false, ErrCapacityConflict
 		}
-		seen[command.CommandID] = true
+		seen[commandID] = true
 		if command.Phase != "release" || command.State != "confirmed" {
 			continue
 		}
