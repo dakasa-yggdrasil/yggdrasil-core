@@ -9,27 +9,28 @@ import (
 // CapacityPolicySpec is an operator-owned, provider-neutral capacity envelope.
 // Price records and validation references are declarations, not live stock receipts.
 type CapacityPolicySpec struct {
-	Environment           string                    `json:"environment"`
-	Domain                string                    `json:"domain"`
-	Dimension             string                    `json:"dimension"`
-	TargetIdentity        string                    `json:"target_identity"`
-	Owner                 string                    `json:"owner"`
-	Workflow              ManifestSelector          `json:"workflow"`
-	Currency              string                    `json:"currency"`
-	Floor                 int                       `json:"floor"`
-	Ceiling               int                       `json:"ceiling"`
-	Step                  int                       `json:"step"`
-	MaxEvidenceAgeSeconds int                       `json:"max_evidence_age_seconds"`
-	MinSamples            int                       `json:"min_samples"`
-	MaxSampleGapSeconds   int                       `json:"max_sample_gap_seconds"`
-	UpHoldSeconds         int                       `json:"up_hold_seconds"`
-	DownHoldSeconds       int                       `json:"down_hold_seconds"`
-	CooldownSeconds       int                       `json:"cooldown_seconds"`
-	LeaseSeconds          int                       `json:"lease_seconds"`
-	ExecutionEnabled      bool                      `json:"execution_enabled"`
-	Signals               []CapacitySignalRule      `json:"signals"`
-	Profiles              []CapacityProfile         `json:"profiles"`
-	MutationBindings      []CapacityMutationBinding `json:"mutation_bindings,omitempty"`
+	Environment           string                          `json:"environment"`
+	Domain                string                          `json:"domain"`
+	Dimension             string                          `json:"dimension"`
+	TargetIdentity        string                          `json:"target_identity"`
+	Owner                 string                          `json:"owner"`
+	Workflow              ManifestSelector                `json:"workflow"`
+	Currency              string                          `json:"currency"`
+	Floor                 int                             `json:"floor"`
+	Ceiling               int                             `json:"ceiling"`
+	Step                  int                             `json:"step"`
+	MaxEvidenceAgeSeconds int                             `json:"max_evidence_age_seconds"`
+	MinSamples            int                             `json:"min_samples"`
+	MaxSampleGapSeconds   int                             `json:"max_sample_gap_seconds"`
+	UpHoldSeconds         int                             `json:"up_hold_seconds"`
+	DownHoldSeconds       int                             `json:"down_hold_seconds"`
+	CooldownSeconds       int                             `json:"cooldown_seconds"`
+	LeaseSeconds          int                             `json:"lease_seconds"`
+	ExecutionEnabled      bool                            `json:"execution_enabled"`
+	Signals               []CapacitySignalRule            `json:"signals"`
+	Profiles              []CapacityProfile               `json:"profiles"`
+	MutationBindings      []CapacityMutationBinding       `json:"mutation_bindings,omitempty"`
+	AssessmentBinding     *CapacityBoundAssessmentBinding `json:"assessment_binding,omitempty"`
 }
 
 type CapacitySignalRule struct {

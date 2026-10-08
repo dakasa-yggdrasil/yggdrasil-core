@@ -22,8 +22,12 @@ import (
 )
 
 func capacityNativeFixture(t *testing.T, input any) map[string]any {
+	return capacitySourceFixture(t, "CAPACITY_NATIVE_FIXTURE_BINARY", "TestCapacityCoreNativeFixtureProducer", input)
+}
+
+func capacitySourceFixture(t *testing.T, binaryEnv, rootTest string, input any) map[string]any {
 	t.Helper()
-	binary := os.Getenv("CAPACITY_NATIVE_FIXTURE_BINARY")
+	binary := os.Getenv(binaryEnv)
 	if binary == "" {
 		t.Fatal("remote real-adapter fixture binary is required")
 	}
@@ -35,7 +39,7 @@ func capacityNativeFixture(t *testing.T, input any) map[string]any {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, binary, "-test.run=^TestCapacityCoreNativeFixtureProducer$", "-test.count=1")
+	cmd := exec.CommandContext(ctx, binary, "-test.run=^"+rootTest+"$", "-test.count=1")
 	cmd.Env = append(os.Environ(), "CAPACITY_NATIVE_INPUT_FILE="+in, "CAPACITY_NATIVE_OUTPUT_FILE="+out)
 	if logs, err := cmd.CombinedOutput(); err != nil {
 		t.Fatalf("reviewed native fixture producer failed: %v %s", err, logs)
@@ -111,10 +115,11 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 	mode := "inventory"
 	var receipt model.CapacityMutationReceipt
 	nativeCreated := ""
-	rpcCalls := 0
+	rpcCalls, describeCalls := 0, 0
 	server := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
 		if r.URL.Path == "/describe" {
+			describeCalls++
 			json.NewEncoder(w).Encode(describe)
 			return
 		}
@@ -346,6 +351,39 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 		}
 		if run(ctx, "capacity.observe_vm_inventory", input()).Status == "succeeded" {
 			t.Fatal("type revision drift accepted")
+		}
+	})
+	t.Run("native_catalog_refuses_before_private_hydration", func(t *testing.T) {
+		var bad model.IntegrationTypeManifestSpec
+		raw, _ := json.Marshal(typeSpec)
+		json.Unmarshal(raw, &bad)
+		for i := range bad.ActionCatalog {
+			if bad.ActionCatalog[i].Name == "observe_fleet_inventory" {
+				bad.ActionCatalog[i].Category = "permission"
+			}
+		}
+		typeRaw, _ := json.Marshal(bad)
+		typeDigest := fmt.Sprintf("%x", sha256.Sum256(typeRaw))
+		var spec model.IntegrationInstanceManifestSpec
+		json.Unmarshal(instance.Spec, &spec)
+		spec.CredentialsRef = "capacity-test://must-not-hydrate"
+		instanceRaw, _ := json.Marshal(spec)
+		instanceDigest := fmt.Sprintf("%x", sha256.Sum256(instanceRaw))
+		if _, err = db.ExecContext(ctx, `UPDATE public.manifests SET spec=$2::jsonb,checksum=$3 WHERE id=$1`, tid, typeRaw, typeDigest); err != nil {
+			t.Fatal(err)
+		}
+		if _, err = db.ExecContext(ctx, `UPDATE public.manifests SET spec=$2::jsonb,checksum=$3,active=true WHERE id=$1`, iid, instanceRaw, instanceDigest); err != nil {
+			t.Fatal(err)
+		}
+		var nativePolicy model.CapacityPolicySpec
+		json.Unmarshal(policy.Spec, &nativePolicy)
+		nativePolicy.MutationBindings[0].IntegrationChecksum = instanceDigest
+		nativePolicy.MutationBindings[0].IntegrationTypeChecksum = typeDigest
+		badPolicy := create(uuid.New(), "capacity_policy", "native-catalog-denied", nativePolicy)
+		before, beforeDescribe := rpcCalls, describeCalls
+		value := map[string]any{"policy": map[string]any{"namespace": ns, "name": badPolicy.Metadata.Name}, "binding_name": b.Name}
+		if run(ctx, "capacity.observe_vm_inventory", value).Status == "succeeded" || rpcCalls != before || describeCalls != beforeDescribe {
+			t.Fatal("native invalid capability reached private transport")
 		}
 	})
 }

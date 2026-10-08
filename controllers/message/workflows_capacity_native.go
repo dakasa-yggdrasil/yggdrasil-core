@@ -84,25 +84,18 @@ func executeCapacityNativeWorkflowStep(ctx context.Context, conn *amqp.Connectio
 	if writes && store.ValidateNativeObservationLease(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner) != nil {
 		return fail()
 	}
-	// Resolve the exact active instance before hydrating any private fields.
-	instance, err := resolveManifestForKind(ctx, db, "integration_instance", b.IntegrationInstanceID, "", "", nil)
-	if err != nil || instance.Kind != "integration_instance" || !instance.Metadata.Active || instance.ID.String() != b.IntegrationInstanceID || instance.Checksum != b.IntegrationChecksum {
-		return fail()
+	required := []string{capacity.VMObserveInventory}
+	if result.Operation == "capacity.observe_failed_vm_creation" {
+		required = []string{capacity.VMObserveFailedCreation}
+	} else if result.Operation == "capacity.confirm_native_mutation" {
+		required = []string{capacity.VMObserveServer, capacity.VMObserveAction}
 	}
-	// Reject an alias that now resolves another type before private hydration
-	// or the resolver's live Describe handshake reaches its transport.
-	unhydrated, err := manifest.ParseIntegrationInstanceSpec(instance.Spec)
+	revision := model.CapacityObservationAdapterBinding{IntegrationInstanceID: b.IntegrationInstanceID, InstanceChecksum: b.IntegrationChecksum, IntegrationTypeID: b.IntegrationTypeID, TypeChecksum: b.IntegrationTypeChecksum}
+	resolved, err := resolveCapacityObservationAdapterWithResolver(ctx, conn, db, revision, required, resolveIntegrationInstance)
 	if err != nil {
 		return fail()
 	}
-	boundType, err := resolveManifestForKind(ctx, db, "integration_type", unhydrated.TypeRef.ManifestID, unhydrated.TypeRef.Namespace, unhydrated.TypeRef.Name, unhydrated.TypeRef.Version)
-	if err != nil || boundType.Kind != "integration_type" || !boundType.Metadata.Active || boundType.ID.String() != b.IntegrationTypeID || boundType.Checksum != b.IntegrationTypeChecksum {
-		return fail()
-	}
-	im, is, tm, ts, err := resolveIntegrationInstance(ctx, conn, db, model.ManifestSelector{ManifestID: b.IntegrationInstanceID})
-	if err != nil || im.Kind != "integration_instance" || !im.Metadata.Active || im.ID != instance.ID || im.Checksum != b.IntegrationChecksum || tm.Kind != "integration_type" || !tm.Metadata.Active || tm.ID.String() != b.IntegrationTypeID || tm.Checksum != b.IntegrationTypeChecksum || manifest.ValidateIntegrationTypeSpec(ts) != nil {
-		return fail()
-	}
+	im, is, tm, ts := resolved.instance, resolved.instanceSpec, resolved.typ, resolved.typeSpec
 	read := func(operation string, fixed map[string]any, out any) (string, error) {
 		if !capacityNativeCatalogOperation(ts, operation) {
 			return "", errCapacityNativeObservation

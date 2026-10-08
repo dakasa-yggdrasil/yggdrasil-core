@@ -69,6 +69,9 @@ func executeCapacityWorkflowStep(ctx context.Context, db *sql.DB, workflowRef mo
 	if err != nil {
 		return fail(err)
 	}
+	if p.AssessmentBinding != nil && result.Operation != "capacity.observe" {
+		return fail(fmt.Errorf("bound HPA policies require fixed source assessment and currently support shadow observation only"))
+	}
 	if workflowRef.Kind != "workflow" || workflowRef.Namespace != p.Workflow.Namespace || workflowRef.Name != p.Workflow.Name {
 		return fail(fmt.Errorf("capacity policy does not authorize this workflow"))
 	}

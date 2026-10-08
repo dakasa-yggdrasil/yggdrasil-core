@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**33 decisions.**
+**34 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -45,3 +45,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0035](0035-prune-expired-capacity-history-without-changing-intent-authority.md) | Prune expired capacity history without changing intent authority | Proposed | 2026-10-08 | yggdrasil-core / capacity event maintenance |
 | [0036](0036-redeem-provider-mutations-once-under-durable-capacity-authority.md) | Redeem provider mutations once under durable capacity authority | Proposed | 2026-10-08 | yggdrasil-core / provider-neutral capacity mutations |
 | [0037](0037-produce-native-vm-proofs-through-fixed-protected-observers.md) | Produce native VM proofs through fixed protected observers | Proposed | 2026-10-08 | yggdrasil-core / native VM observation and mutation readback |
+| [0038](0038-bind-shadow-pod-assessments-to-fixed-native-and-metric-sources.md) | Bind shadow pod assessments to fixed native and metric sources | Proposed | 2026-10-08 | yggdrasil-core / fixed reserved pod source assessment |

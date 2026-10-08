@@ -42,7 +42,10 @@ jobs:
           app-id: ${{ vars.YGGDRASIL_APP_ID }}
           private-key: ${{ secrets.YGGDRASIL_APP_PEM }}
           owner: dakasa-yggdrasil
-          repositories: integration-hetzner
+          repositories: |
+            integration-hetzner
+            integration-prometheus
+            integration-kubernetes
           permission-contents: read
       - name: Checkout reviewed native adapter source
         uses: actions/checkout@v4
@@ -50,6 +53,22 @@ jobs:
           repository: dakasa-yggdrasil/integration-hetzner
           ref: cddc784604e7bdb26717c36c2cff242558a781aa
           path: .ci-native-hetzner
+          token: ${{ steps.native-token.outputs.token }}
+          persist-credentials: false
+      - name: Checkout reviewed fixed metric source
+        uses: actions/checkout@v4
+        with:
+          repository: dakasa-yggdrasil/integration-prometheus
+          ref: 50069ab20de576e2818fac0df99050919678f4db
+          path: .ci-bound-prometheus
+          token: ${{ steps.native-token.outputs.token }}
+          persist-credentials: false
+      - name: Checkout reviewed native HPA source
+        uses: actions/checkout@v4
+        with:
+          repository: dakasa-yggdrasil/integration-kubernetes
+          ref: a386344e36383b0a23c3c82c5d05a5a176b0e0af
+          path: .ci-bound-kubernetes
           token: ${{ steps.native-token.outputs.token }}
           persist-credentials: false
       - uses: actions/setup-go@v5
@@ -65,6 +84,18 @@ jobs:
           cd .ci-native-hetzner
           go test -c -o "$RUNNER_TEMP/capacity-native-fixture" ./internal/adapter
           echo "CAPACITY_NATIVE_FIXTURE_BINARY=$RUNNER_TEMP/capacity-native-fixture" >> "$GITHUB_ENV"
+      - name: Compile actual metric and HPA source producers in remote CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C .ci-bound-prometheus rev-parse HEAD)" = 50069ab20de576e2818fac0df99050919678f4db
+          test "$(git -C .ci-bound-kubernetes rev-parse HEAD)" = a386344e36383b0a23c3c82c5d05a5a176b0e0af
+          cp scripts/ci/capacity_metric_source_fixture_test.go.tmpl .ci-bound-prometheus/internal/adapter/capacity_core_metric_source_test.go
+          cp scripts/ci/capacity_hpa_source_fixture_test.go.tmpl .ci-bound-kubernetes/internal/adapter/capacity_core_hpa_source_test.go
+          (cd .ci-bound-prometheus && go test -c -o "$RUNNER_TEMP/capacity-metric-fixture" ./internal/adapter)
+          (cd .ci-bound-kubernetes && go test -c -o "$RUNNER_TEMP/capacity-hpa-fixture" ./internal/adapter)
+          echo "CAPACITY_METRIC_FIXTURE_BINARY=$RUNNER_TEMP/capacity-metric-fixture" >> "$GITHUB_ENV"
+          echo "CAPACITY_HPA_FIXTURE_BINARY=$RUNNER_TEMP/capacity-hpa-fixture" >> "$GITHUB_ENV"
       - name: Apply production migrations
         run: go run ./scripts/goose up
       - name: Exercise durable decisions, concurrency, restart and fencing
@@ -107,7 +138,17 @@ jobs:
               "complete_inventory_registers_through_existing_lease",
               "native_reads_confirm_once_without_readiness_claim",
               "lost_failed_creation_is_explicit_unresolved_member",
-              "paused_instance_and_old_type_refuse_current_reads")}
+              "paused_instance_and_old_type_refuse_current_reads",
+              "native_catalog_refuses_before_private_hydration")}
+          bound = "TestCapacityMutationBoundAssessmentPostgres"
+          expected |= {bound} | {bound + "/" + name for name in (
+              "actual_metric_and_hpa_producers_measure_only_reserved_minimum",
+              "missing_stale_cardinality_and_nonfinite_sources_hold_without_zero",
+              "caller_assessment_and_old_actuation_paths_are_blocked",
+              "foreign_uid_missing_rv_and_wrong_hash_refuse",
+              "shadow_binding_rejects_vm_units_and_profile_migration",
+              "catalog_refusal_precedes_private_hydration_and_describe",
+              "inactive_instance_and_type_revision_refuse_without_source_calls")}
           compensation = "TestCapacityMutationCompensationPostgres"
           expected |= {compensation} | {compensation + "/" + name for name in (
               "unprotected_failed_create", "protected_failed_create_without_serving_membership",

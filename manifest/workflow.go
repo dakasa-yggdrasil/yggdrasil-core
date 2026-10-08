@@ -54,6 +54,8 @@ var (
 		"capacity.observe_failed_vm_creation",
 		"capacity.record_vm_inventory",
 		"capacity.confirm_native_mutation",
+		"capacity.observe_bound_assessment",
+		"capacity.assess_bound",
 	}
 	workflowTemplatePattern = regexp.MustCompile(`{{\s*([^{}]+?)\s*}}`)
 )

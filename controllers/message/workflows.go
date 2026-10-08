@@ -564,6 +564,9 @@ func executeWorkflowStep(
 	// persist manifests against the core's own store, also in-process.
 	if result.Kind == "yggdrasil" {
 		if strings.HasPrefix(result.Operation, "capacity.") {
+			if capacityBoundOperation(result.Operation) {
+				return executeCapacityBoundWorkflowStep(ctx, conn, db, workflowRef, result, renderedInput)
+			}
 			if capacityNativeOperation(result.Operation) {
 				return executeCapacityNativeWorkflowStep(ctx, conn, db, workflowRef, result, renderedInput)
 			}
