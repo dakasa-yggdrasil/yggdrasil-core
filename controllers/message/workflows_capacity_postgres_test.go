@@ -27,7 +27,7 @@ func TestCapacityWorkflowPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	ns := "capacity-workflow-" + uuid.NewString()
-	ctx := context.Background()
+	ctx := newCapacityInvocationContext(context.Background())
 	t.Cleanup(func() {
 		for _, q := range []string{`DELETE FROM public.capacity_intent_events WHERE namespace=$1`, `DELETE FROM public.capacity_intents WHERE namespace=$1`, `DELETE FROM public.manifests WHERE namespace=$1`} {
 			if _, err := db.ExecContext(ctx, q, ns); err != nil {
@@ -90,6 +90,43 @@ func TestCapacityWorkflowPostgres(t *testing.T) {
 		_, err := RunWorkflowFromUnauthenticatedChannel(ctx, nil, db, model.RunWorkflowRequest{Workflow: model.ManifestSelector{Namespace: ns, Name: "scale"}})
 		if !errors.Is(err, ErrWorkflowAuthenticatedActorRequired) {
 			t.Fatalf("actorless channel: %v", err)
+		}
+	})
+	t.Run("invocation_cannot_steal_lease", func(t *testing.T) {
+		t.Setenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED", "true")
+		p.ExecutionEnabled = true
+		create("capacity_policy", "api", p)
+		ctxA := newCapacityInvocationContext(context.Background())
+		ctxB := newCapacityInvocationContext(context.Background())
+		assessment := executeCapacityWorkflowStep(ctxA, db, ref, base, input)
+		if assessment.Status != "succeeded" {
+			t.Fatalf("%+v", assessment)
+		}
+		claim := base
+		claim.Operation = "capacity.claim"
+		lease := executeCapacityWorkflowStep(ctxA, db, ref, claim, map[string]any{"policy": input["policy"], "assessment": a, "generation": assessment.Metadata["generation"]})
+		if lease.Status != "succeeded" {
+			t.Fatalf("%+v", lease)
+		}
+		if lease.Metadata["lease_executor_id"] != nil && lease.Metadata["lease_executor_id"] != "" {
+			t.Fatal("executor ID was exposed")
+		}
+		observe := base
+		observe.Operation = "capacity.observe"
+		observed := executeCapacityWorkflowStep(ctxB, db, ref, observe, map[string]any{"policy": input["policy"]})
+		if observed.Status != "succeeded" || (observed.Metadata["lease_owner"] != nil && observed.Metadata["lease_owner"] != "") {
+			t.Fatalf("observe leaked lease: %+v", observed)
+		}
+		renew := base
+		renew.Operation = "capacity.renew"
+		renewInput := map[string]any{"policy": input["policy"], "generation": lease.Metadata["generation"], "fencing_token": lease.Metadata["fencing_token"], "lease_owner": lease.Metadata["lease_owner"]}
+		stolen := executeCapacityWorkflowStep(ctxB, db, ref, renew, renewInput)
+		if stolen.Status == "succeeded" {
+			t.Fatal("another invocation reused a live lease")
+		}
+		owned := executeCapacityWorkflowStep(ctxA, db, ref, renew, renewInput)
+		if owned.Status != "succeeded" {
+			t.Fatalf("owning invocation lost lease: %+v", owned)
 		}
 	})
 	t.Run("unprotected_runtime_is_blocked", func(t *testing.T) {

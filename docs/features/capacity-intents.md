@@ -32,8 +32,10 @@ never permits reduction.
 Profiles declare provider, region, supported unit range, cost per unit in the
 policy's single currency, dated quote and validation references, and preparation
 time. Selection minimizes declared cost among eligible profiles. A profile's
-minimum cannot exceed the requested count, so reduction cannot turn into an
-oversized migration. Quotes are operator data, not live availability guarantees
+minimum cannot exceed the requested count during ordinary scaling, so reduction
+cannot turn into an oversized migration. Floor repair may use a larger validated
+profile minimum; its total effective count is included in price comparison.
+Quotes are operator data, not live availability guarantees
 or automatic FX conversion. A profile change requests `prepare`; it never moves
 traffic or data by itself. Forecasting and time-to-headroom can be additional
 pressure signals, but this planner does not calculate a forecast.
@@ -54,12 +56,21 @@ for protected workflows.
 | `capacity.claim` | `policy`, `generation`, fresh `assessment` | Server-generated `lease_owner`, `fencing_token`, expiry |
 | `capacity.renew` | `policy`, `generation`, `fencing_token`, `lease_owner` | Extended database-time lease |
 | `capacity.advance` | Lease tuple, `phase`, `proof` | Persisted phase or error |
+| `capacity.recover` | Original `policy` revision, `generation`, fresh `assessment` | Recovery-only fenced lease |
+| `capacity.renew_recovery` | Original policy revision and recovery lease tuple | Extended recovery-only lease |
+| `capacity.reconcile` | Original policy revision, lease tuple, `phase`, terminal `proof` | `reconciled` or `aborted` observed outcome |
 
 `YGGDRASIL_CAPACITY_EXECUTION_ENABLED=true` and policy `execution_enabled=true`
-are both required for claim, renewal and phase changes. Assessment works in
-shadow mode. `decision.execution_permitted` is eligibility under both switches,
-not proof that a provider changed anything. Workflow receipts and lease metadata
-belong to the protected run and must not be published as public metrics.
+are both required for normal claim, renewal and phase changes. Assessment works
+in shadow mode. Recovery-only operations record already-started outcomes under
+the exact protected workflow; they do not authorize fresh actuation.
+`decision.execution_permitted` is eligibility under both switches,
+not proof that a provider changed anything. Each lease is bound to a private
+server-generated invocation UUID that inputs and metadata cannot supply.
+`capacity.observe` hides the lease nonce, and another invocation cannot renew or
+advance a live lease even if it knows the nonce. After a restart, recover through
+lease expiry and a new fence. Workflow receipts and lease metadata belong to the
+protected run and must not be published as public metrics.
 
 ```mermaid
 stateDiagram-v2
@@ -87,10 +98,11 @@ contract; it cannot attest the truth of a misconfigured workflow's assertions.
 
 PostgreSQL advisory and row locks serialize initial creation, assessments,
 claims and phase changes. Repeated matching unclaimed proposals retain one
-generation. An unclaimed proposal may be superseded safely. Once claimed, a
-generation remains outstanding until observed completion. Expired leases allow
-recovery of that same generation with a new token. Stale owners cannot renew or
-advance it. Invalid/unknown provider outcomes remain unfinished; no automatic
+generation. An unclaimed proposal may be superseded safely. Ordinary claims
+accept only unclaimed proposals. Once started, an expired lease can only obtain
+a recovery-only epoch; it cannot reopen acquisition or normal phase advancement.
+A generation remains outstanding until observed completion. Stale owners cannot
+renew or advance it. Invalid/unknown provider outcomes remain unfinished; no automatic
 resource deletion, rollback or claim of successful drain follows a timeout.
 
 A fixed workflow must check/renew the lease immediately before provider writes,
@@ -105,14 +117,39 @@ Native Kubernetes `ensure_capacity_envelope` changes an allowlisted HPA's bounds
 with server-owned floor/ceiling and explicit adoption. It does not patch
 Deployment replicas or generated HPAs. Its observer's UID/RV, workload UID/RV and
 drift fields are diagnostics, not readiness, source freshness or drain proof.
-The workflow must assemble those receipts independently. This Core protocol
-does not yet install that workflow or enable an adapter instance.
+The workflow must assemble those receipts independently. `snapshot.units` must
+describe the precise controlled capacity variable, for example an HPA's maximum
+bound, rather than whichever live replica count happens to be convenient. Its
+meaning must remain fixed for the policy dimension. This Core protocol does not
+yet install that workflow or enable an adapter instance.
+
+Recovery is distinct from retrying provider mutations. `capacity.recover` can
+bind the original immutable `policy.version`, even after a new revision becomes
+active, and always returns `execution_permitted=false`. `capacity.reconcile`
+records observed completion without asserting skipped readiness/canary phases
+ran. `reconciled` requires the observed intended capacity; `aborted` additionally
+requires the immutable baseline and explicit `no_mutation_verified`. Terminal
+recovery requires `mutation_inflight=0` and `provider_fencing_token` equal to the
+current recovery token. Business drain also requires zero business inflight.
+A protected floor repair can reconcile with fresh snapshot-only evidence while
+demand telemetry is absent, retaining all health, fencing and mutation-quiescence
+requirements. This exception never authorizes reduction or certifies skipped
+business/canary checks. Other reconciliation outcomes require the complete metric
+contract. Partial provider state matching neither the baseline nor the intended
+capacity remains unfinished and requires explicit operator repair.
+A single GET, a lease timeout or an empty job queue does not prove provider
+mutation quiescence. Obtain independent authoritative fencing/cancellation and
+settlement receipts through the protected workflow before closing the generation.
+Pass the Core fencing token as the adapter's generation; passing only the intent
+generation would not fence lease recovery. These are workflow contract assertions,
+not an automatic multi-provider cancellation engine.
 
 `capacity_intent_events` records generation, fencing token, phase and public
 receipt reference without lease bearer values. Configure an operator-owned
 retention job for this table before enabling continuous actuation; this patch
-does not add a scheduled retention job. Never revise an unresolved policy while
-provider work is uncertain. Recover under its original active revision first.
+does not add a scheduled retention job. Policy revisions cannot replace an
+outstanding generation. Reconcile it through its original immutable revision
+with recovery-only authorization before planning under the new revision.
 
 ## Acceptance and limitations
 

@@ -40,6 +40,10 @@ through the profile's declared preparation horizon.
 - A Core lease is not atomic with a provider API. An expired owner can still be
   executing remotely. Fixed workflows must renew before mutation, pass fencing
   tokens and idempotency keys, and reconcile uncertain writes through readback.
+- Recovery-only leases can record authoritative completion or verified no-effect
+  outcomes under the original immutable policy after quote expiry or revision.
+  They require mutation quiescence and provider fencing receipts, authorize no
+  new acquisition and do not imply that skipped canary phases were executed.
 - Receipt fields are assertions by a protected operator-owned workflow, not
   cryptographic provider attestation. Core does not invent health or drain probes.
 - Resource replacement, traffic switching and cross-provider data migration

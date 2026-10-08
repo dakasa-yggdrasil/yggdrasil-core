@@ -76,7 +76,7 @@ func Assess(p model.CapacityPolicySpec, a model.CapacityAssessment, previous mod
 		return holdUnknown(d, "current_profile_unknown"), nil
 	}
 	if s.Units < p.Floor {
-		profile, exists := cheapestEligible(p, p.Floor, now)
+		profile, exists := selectEligibleProfile(p, p.Floor, now, true)
 		if !exists {
 			d.Reason = "validated_profile_unavailable"
 			return d, nil
@@ -130,7 +130,7 @@ func Assess(p model.CapacityPolicySpec, a model.CapacityAssessment, previous mod
 		if d.Clock.UpSince.IsZero() {
 			d.Clock.UpSince = now
 		}
-		if now.Sub(d.Clock.UpSince) < time.Duration(p.UpHoldSeconds)*time.Second || windowStart.After(d.Clock.UpSince) {
+		if now.Sub(d.Clock.UpSince) < time.Duration(p.UpHoldSeconds)*time.Second || windowStart.After(now.Add(-time.Duration(p.UpHoldSeconds)*time.Second)) {
 			d.Reason = "up_window_pending"
 			return d, nil
 		}
@@ -139,7 +139,7 @@ func Assess(p model.CapacityPolicySpec, a model.CapacityAssessment, previous mod
 		if d.Clock.DownSince.IsZero() {
 			d.Clock.DownSince = now
 		}
-		if now.Sub(d.Clock.DownSince) < time.Duration(p.DownHoldSeconds)*time.Second || windowStart.After(d.Clock.DownSince) {
+		if now.Sub(d.Clock.DownSince) < time.Duration(p.DownHoldSeconds)*time.Second || windowStart.After(now.Add(-time.Duration(p.DownHoldSeconds)*time.Second)) {
 			d.Reason = "down_window_pending"
 			return d, nil
 		}
@@ -151,7 +151,7 @@ func Assess(p model.CapacityPolicySpec, a model.CapacityAssessment, previous mod
 		d.Reason = "cooldown"
 		return d, nil
 	}
-	wanted := s.Units
+	var wanted int
 	if up {
 		wanted = min(p.Ceiling, s.Units+p.Step)
 	} else {
@@ -196,11 +196,15 @@ func knownProfile(p model.CapacityPolicySpec, name string) bool {
 }
 
 func cheapestEligible(p model.CapacityPolicySpec, units int, now time.Time) (model.CapacityProfile, bool) {
+	return selectEligibleProfile(p, units, now, false)
+}
+
+func selectEligibleProfile(p model.CapacityPolicySpec, units int, now time.Time, floorRepair bool) (model.CapacityProfile, bool) {
 	var selected model.CapacityProfile
 	found := false
 	for _, candidate := range p.Profiles {
 		horizon := now.Add(time.Duration(candidate.ReadinessSeconds) * time.Second)
-		if candidate.MinUnits > units || candidate.MaxUnits < units || !candidate.QuoteValidUntil.After(horizon) || !candidate.ValidationValidUntil.After(horizon) {
+		if (!floorRepair && candidate.MinUnits > units) || candidate.MaxUnits < units || !candidate.QuoteValidUntil.After(horizon) || !candidate.ValidationValidUntil.After(horizon) {
 			continue
 		}
 		cost := candidate.UnitMonthlyCostMinor * int64(max(units, candidate.MinUnits))

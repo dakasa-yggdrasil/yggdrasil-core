@@ -43,7 +43,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message -run '^TestCapacity(Intent|Workflow)Postgres$' | tee capacity-results.jsonl
+          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message -run '^TestCapacity(Intent.*|Workflow)Postgres$' | tee capacity-results.jsonl
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -55,7 +55,9 @@ jobs:
           workflow = "TestCapacityWorkflowPostgres"
           expected |= {workflow} | {workflow + "/" + name for name in (
               "exact_active_protected_workflow", "shadow_claim_is_blocked",
-              "actorless_dispatch_is_blocked", "unprotected_runtime_is_blocked")}
+              "actorless_dispatch_is_blocked", "invocation_cannot_steal_lease", "unprotected_runtime_is_blocked")}
+          expected |= {"TestCapacityIntentExecutorAndReadbackPrivacyPostgres", "TestCapacityIntentExpiredQuoteAndHistoricalRecoveryPostgres", "TestCapacityIntentAbortRequiresMutationFenceProofPostgres"}
+          expected |= {"TestCapacityIntentDrainRequiresExplicitZeroInflightPostgres", "TestCapacityIntentFloorReadbackWithoutDemandMetricsPostgres"}
           passed = {event.get("Test") for event in events if event.get("Action") == "pass"}
           skipped = {event.get("Test") for event in events if event.get("Action") == "skip"}
           if expected - passed or skipped:

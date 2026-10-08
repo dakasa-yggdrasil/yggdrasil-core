@@ -42,6 +42,9 @@ var (
 		"capacity.claim",
 		"capacity.renew",
 		"capacity.advance",
+		"capacity.recover",
+		"capacity.renew_recovery",
+		"capacity.reconcile",
 	}
 	workflowTemplatePattern = regexp.MustCompile(`{{\s*([^{}]+?)\s*}}`)
 )
@@ -144,7 +147,7 @@ func ValidateWorkflowSpec(spec model.WorkflowManifestSpec) error {
 
 	stepNames := map[string]struct{}{}
 	for _, step := range spec.Steps {
-		if strings.EqualFold(step.Use.Kind, "yggdrasil") && strings.HasPrefix(strings.ToLower(strings.TrimSpace(step.Use.Operation)), "capacity.") && spec.Authorization == nil {
+		if strings.EqualFold(strings.TrimSpace(step.Use.Kind), "yggdrasil") && strings.HasPrefix(strings.ToLower(strings.TrimSpace(step.Use.Operation)), "capacity.") && spec.Authorization == nil {
 			return fmt.Errorf("capacity steps require workflow authorization")
 		}
 		id := normalizeIntegrationName(step.ID)

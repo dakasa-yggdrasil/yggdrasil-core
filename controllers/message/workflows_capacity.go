@@ -13,7 +13,16 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	"github.com/google/uuid"
 )
+
+type capacityInvocationKey struct{}
+
+// The invocation identity is process-generated and lives in an unexported
+// context key. Caller inputs and metadata cannot supply or restore it.
+func newCapacityInvocationContext(ctx context.Context) context.Context {
+	return context.WithValue(ctx, capacityInvocationKey{}, uuid.NewString())
+}
 
 type capacityWorkflowInput struct {
 	Policy       model.ManifestSelector        `json:"policy"`
@@ -45,10 +54,11 @@ func executeCapacityWorkflowStep(ctx context.Context, db *sql.DB, workflowRef mo
 	if err = decoder.Decode(&parsed); err != nil {
 		return fail(fmt.Errorf("capacity input: %w", err))
 	}
-	if parsed.Policy.ManifestID != "" || parsed.Policy.Version != nil || strings.TrimSpace(parsed.Policy.Namespace) == "" || strings.TrimSpace(parsed.Policy.Name) == "" {
+	recoveryOperation := result.Operation == "capacity.recover" || result.Operation == "capacity.renew_recovery" || result.Operation == "capacity.reconcile"
+	if parsed.Policy.ManifestID != "" || (!recoveryOperation && parsed.Policy.Version != nil) || (parsed.Policy.Version != nil && *parsed.Policy.Version < 1) || strings.TrimSpace(parsed.Policy.Namespace) == "" || strings.TrimSpace(parsed.Policy.Name) == "" {
 		return fail(fmt.Errorf("capacity policy requires exact active logical namespace/name"))
 	}
-	policy, err := repository.ResolveManifest(ctx, db, "capacity_policy", parsed.Policy.Namespace, parsed.Policy.Name, nil, true)
+	policy, err := repository.ResolveManifest(ctx, db, "capacity_policy", parsed.Policy.Namespace, parsed.Policy.Name, parsed.Policy.Version, !recoveryOperation)
 	if err != nil {
 		return fail(err)
 	}
@@ -73,7 +83,8 @@ func executeCapacityWorkflowStep(ctx context.Context, db *sql.DB, workflowRef mo
 	if spec.Authorization == nil {
 		return fail(fmt.Errorf("capacity requires an authenticated, manifest-authorized workflow"))
 	}
-	store := repository.CapacityStore{DB: db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true", WorkflowID: wf.ID}
+	executorID, _ := ctx.Value(capacityInvocationKey{}).(string)
+	store := repository.CapacityStore{DB: db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true", WorkflowID: wf.ID, ExecutorID: executorID}
 	var intent model.CapacityIntent
 	switch result.Operation {
 	case "capacity.assess":
@@ -86,12 +97,19 @@ func executeCapacityWorkflowStep(ctx context.Context, db *sql.DB, workflowRef mo
 		intent, err = store.Renew(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner)
 	case "capacity.advance":
 		intent, err = store.Advance(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, parsed.Phase, parsed.Proof)
+	case "capacity.recover":
+		intent, err = store.Recover(ctx, policy, parsed.Generation, parsed.Assessment)
+	case "capacity.renew_recovery":
+		intent, err = store.RenewRecovery(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner)
+	case "capacity.reconcile":
+		intent, err = store.Reconcile(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, parsed.Phase, parsed.Proof)
 	default:
 		return fail(fmt.Errorf("unsupported capacity operation"))
 	}
 	if err != nil {
 		return fail(err)
 	}
+	intent.LeaseExecutorID = ""
 	// Convert to plain JSON metadata so subsequent templates use the same map
 	// representation as adapter responses. It stays within this protected run.
 	data, err = json.Marshal(intent)

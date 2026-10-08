@@ -1,6 +1,10 @@
 package model
 
-import "time"
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
 
 // CapacityPolicySpec is an operator-owned, provider-neutral capacity envelope.
 // Price records and validation references are declarations, not live stock receipts.
@@ -109,20 +113,24 @@ type CapacityDecision struct {
 
 // CapacityIntent is one durable generation per logical domain/dimension.
 type CapacityIntent struct {
-	Namespace      string             `json:"namespace"`
-	PolicyName     string             `json:"policy_name"`
-	PolicyChecksum string             `json:"policy_checksum"`
-	Environment    string             `json:"environment"`
-	Domain         string             `json:"domain"`
-	Dimension      string             `json:"dimension"`
-	Generation     int64              `json:"generation"`
-	FencingToken   int64              `json:"fencing_token"`
-	Phase          string             `json:"phase"`
-	LeaseOwner     string             `json:"lease_owner,omitempty"`
-	LeaseExpiresAt *time.Time         `json:"lease_expires_at,omitempty"`
-	Decision       CapacityDecision   `json:"decision"`
-	Assessment     CapacityAssessment `json:"assessment"`
-	UpdatedAt      time.Time          `json:"updated_at"`
+	Namespace        string             `json:"namespace"`
+	PolicyName       string             `json:"policy_name"`
+	PolicyID         uuid.UUID          `json:"policy_id"`
+	PolicyChecksum   string             `json:"policy_checksum"`
+	Environment      string             `json:"environment"`
+	Domain           string             `json:"domain"`
+	Dimension        string             `json:"dimension"`
+	Generation       int64              `json:"generation"`
+	FencingToken     int64              `json:"fencing_token"`
+	Phase            string             `json:"phase"`
+	LeaseOwner       string             `json:"lease_owner,omitempty"`
+	LeaseExecutorID  string             `json:"lease_executor_id,omitempty"`
+	LeaseExpiresAt   *time.Time         `json:"lease_expires_at,omitempty"`
+	RecoveryOnly     bool               `json:"recovery_only"`
+	BaselineSnapshot CapacitySnapshot   `json:"baseline_snapshot"`
+	Decision         CapacityDecision   `json:"decision"`
+	Assessment       CapacityAssessment `json:"assessment"`
+	UpdatedAt        time.Time          `json:"updated_at"`
 }
 
 // CapacityTransitionProof is a receipt assembled by the policy's protected
@@ -133,5 +141,10 @@ type CapacityTransitionProof struct {
 	ObservedAt time.Time          `json:"observed_at"`
 	ReceiptRef string             `json:"receipt_ref"`
 	Healthy    bool               `json:"healthy"`
-	Inflight   int                `json:"inflight"`
+	Inflight   *int               `json:"inflight"`
+	// Recovery proof is distinct from business inflight work. Its assertions
+	// must come from the fixed workflow's provider fencing/quiescence receipt.
+	MutationInflight     *int  `json:"mutation_inflight,omitempty"`
+	ProviderFencingToken int64 `json:"provider_fencing_token,omitempty"`
+	NoMutationVerified   bool  `json:"no_mutation_verified,omitempty"`
 }

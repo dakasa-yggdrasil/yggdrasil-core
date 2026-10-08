@@ -105,6 +105,13 @@ func TestCapacityPlannerFloorProfilesAndShadow(t *testing.T) {
 	if d.Action != "expand" || d.Units != p.Floor {
 		t.Fatalf("floor was not restored: %+v", d)
 	}
+	p.Profiles[0].MinUnits = 3
+	a.Evidence = nil
+	d, _ = Assess(p, a, model.CapacityClockState{}, now)
+	if d.Action != "expand" || d.Units != 3 {
+		t.Fatalf("floor repair ignored eligible minimum: %+v", d)
+	}
+	p.Profiles[0].MinUnits = 2
 	p.ExecutionEnabled = false
 	d, _ = Assess(p, a, model.CapacityClockState{}, now)
 	if d.ExecutionPermitted {
@@ -139,5 +146,32 @@ func TestCapacityPlannerPolicyAndGapReset(t *testing.T) {
 	d, _ = Assess(p, a, d.Clock, later)
 	if d.Action != "hold" || !d.Clock.UpSince.Equal(later) {
 		t.Fatal("policy change inherited hysteresis")
+	}
+}
+
+func TestCapacityPlannerSlidingWindowOvershoot(t *testing.T) {
+	now := time.Now().UTC()
+	p, a := fixture(now)
+	p.MaxSampleGapSeconds = 60
+	d, _ := Assess(p, a, model.CapacityClockState{}, now)
+	later := now.Add(31 * time.Second)
+	a = refresh(a, later, 0.9)
+	a.Evidence[0].WindowStart = later.Add(-30 * time.Second)
+	d, _ = Assess(p, a, d.Clock, later)
+	if d.Action != "expand" {
+		t.Fatalf("sliding window requires exact polling time: %+v", d)
+	}
+	p, a = fixture(now)
+	a = refresh(a, now, 0.1)
+	a.Evidence[0].WindowStart = now.Add(-120 * time.Second)
+	d, _ = Assess(p, a, model.CapacityClockState{}, now)
+	for _, seconds := range []int{30, 60, 90, 119, 121} {
+		at := now.Add(time.Duration(seconds) * time.Second)
+		a = refresh(a, at, 0.1)
+		a.Evidence[0].WindowStart = at.Add(-120 * time.Second)
+		d, _ = Assess(p, a, d.Clock, at)
+	}
+	if d.Action != "drain" {
+		t.Fatalf("sliding surplus window never completed: %+v", d)
 	}
 }
