@@ -276,8 +276,8 @@ func (s CapacityStore) Reconcile(ctx context.Context, policy model.Manifest, gen
 		if err := s.checkRecoveryLease(policy, old, generation, fence, owner, now); err != nil {
 			return model.CapacityIntent{}, "", err
 		}
-		if outcome != "reconciled" && outcome != "reconciled_partial" && outcome != "aborted" {
-			return model.CapacityIntent{}, "", fmt.Errorf("capacity recovery requires reconciled, reconciled_partial or aborted outcome")
+		if outcome != "reconciled" && outcome != "reconciled_partial" && outcome != "reconciled_failed_floor" && outcome != "aborted" {
+			return model.CapacityIntent{}, "", fmt.Errorf("capacity recovery requires reconciled, reconciled_partial, reconciled_failed_floor or aborted outcome")
 		}
 		if proof.ReceiptRef == "" || len(proof.ReceiptRef) > 512 || !capacity.Fresh(proof.ObservedAt, now, p.MaxEvidenceAgeSeconds) || !proof.Healthy || proof.Inflight == nil || *proof.Inflight < 0 || proof.MutationInflight == nil || *proof.MutationInflight != 0 {
 			return model.CapacityIntent{}, "", fmt.Errorf("capacity recovery requires fresh healthy proof, current provider fencing and explicitly zero outstanding mutations")
@@ -315,6 +315,12 @@ func (s CapacityStore) Reconcile(ctx context.Context, policy model.Manifest, gen
 			}
 			wantedUnits = units
 		}
+		if outcome == "reconciled_failed_floor" {
+			if proof.MutationAuthorityKind != "core_mutation_grants" || !proof.MembershipComplete || proof.NoMutationVerified || old.Decision.Reason != "protected_floor_recovery" || capacityIntentReduction(*old) || old.BaselineSnapshot.Units >= p.Floor || old.BaselineSnapshot.Profile != wantedProfile || proof.Assessment.Snapshot.Profile != old.BaselineSnapshot.Profile || proof.Assessment.Snapshot.Units != old.BaselineSnapshot.Units {
+				return model.CapacityIntent{}, "", fmt.Errorf("failed floor recovery requires complete unchanged healthy baseline below the protected floor")
+			}
+			wantedProfile, wantedUnits = old.BaselineSnapshot.Profile, old.BaselineSnapshot.Units
+		}
 		if outcome == "aborted" {
 			if !proof.NoMutationVerified {
 				return model.CapacityIntent{}, "", fmt.Errorf("capacity abort requires explicit no_mutation_verified provider proof")
@@ -326,6 +332,7 @@ func (s CapacityStore) Reconcile(ctx context.Context, policy model.Manifest, gen
 		}
 		next := *old
 		next.Phase, next.Assessment, next.UpdatedAt = outcome, proof.Assessment, now
+		next.FloorDegraded = outcome == "reconciled_failed_floor"
 		next.Decision.ExecutionPermitted = false
 		next.LeaseOwner, next.LeaseExecutorID, next.LeaseExpiresAt = "", "", nil
 		next.Decision.Clock.LastActionAt = now
@@ -440,7 +447,7 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	if err != nil {
 		return model.CapacityIntent{}, err
 	}
-	if next.Phase == "promoted" || next.Phase == "reconciled" || next.Phase == "reconciled_partial" || next.Phase == "aborted" {
+	if next.Phase == "promoted" || next.Phase == "reconciled" || next.Phase == "reconciled_partial" || next.Phase == "reconciled_failed_floor" || next.Phase == "aborted" {
 		// Only never-redeemed permissions can expire without remote proof.
 		if _, err = tx.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET state='expired',grant_record=jsonb_set(grant_record,'{grant,state}','"expired"'),updated_at=$5 WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state='issued' AND expires_at<=$5`, next.Namespace, p.Environment, p.Domain, p.Dimension, now); err != nil {
 			return model.CapacityIntent{}, err
@@ -452,13 +459,22 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 		if unresolved != 0 {
 			return model.CapacityIntent{}, fmt.Errorf("%w: unresolved provider mutation authority", ErrCapacityConflict)
 		}
-		if next.Phase == "reconciled_partial" {
+		if next.Phase == "reconciled_partial" || next.Phase == "reconciled_failed_floor" {
 			var live, fresh, matchingProfile int
 			if err = tx.QueryRowContext(ctx, `SELECT count(*),count(*) FILTER(WHERE (slot_record->>'observed_at')::timestamptz BETWEEN $5 AND $6),count(*) FILTER(WHERE profile_name=$7) FROM public.capacity_resource_slots WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND resource_id<>''`, next.Namespace, p.Environment, p.Domain, p.Dimension, now.Add(-time.Duration(p.MaxEvidenceAgeSeconds)*time.Second), now.Add(5*time.Second), next.Assessment.Snapshot.Profile).Scan(&live, &fresh, &matchingProfile); err != nil {
 				return model.CapacityIntent{}, err
 			}
 			if live != next.Assessment.Snapshot.Units || fresh != live || matchingProfile != live {
 				return model.CapacityIntent{}, fmt.Errorf("%w: partial recovery inventory does not match fresh immutable native membership", ErrCapacityConflict)
+			}
+		}
+		if next.Phase == "reconciled_failed_floor" {
+			var ensured int
+			if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5 AND state='confirmed' AND grant_record->'grant'->>'capability'=grant_record->'binding'->>'ensure_capability'`, next.Namespace, p.Environment, p.Domain, p.Dimension, next.Generation).Scan(&ensured); err != nil {
+				return model.CapacityIntent{}, err
+			}
+			if ensured != 0 {
+				return model.CapacityIntent{}, fmt.Errorf("%w: failed floor baseline cannot discard a confirmed serving creation", ErrCapacityConflict)
 			}
 		}
 		if next.Phase == "aborted" {
@@ -521,7 +537,7 @@ func parseCapacityPolicy(policy model.Manifest) (model.CapacityPolicySpec, error
 }
 
 func pendingCapacityPhase(phase string) bool {
-	return phase != "hold" && phase != "promoted" && phase != "reconciled" && phase != "reconciled_partial" && phase != "aborted"
+	return phase != "hold" && phase != "promoted" && phase != "reconciled" && phase != "reconciled_partial" && phase != "reconciled_failed_floor" && phase != "aborted"
 }
 func sameCapacityResources(a, b model.CapacitySnapshot) bool {
 	return sameCapacityResourceIdentity(a, b) && a.WorkloadResourceVersion == b.WorkloadResourceVersion

@@ -108,6 +108,11 @@ func validFailedCreationProof(p model.CapacityPolicySpec, record capacityMutatio
 	if record.Settlement.ResourceID != "" && (proof.ResourceID != record.Settlement.ResourceID || proof.ResourceCreatedAt != record.Settlement.ResourceCreatedAt) {
 		return false
 	}
+	// Once admitted, native readback pins one lifetime independently of an
+	// unknown transport response or a child's never-redeemed expiration.
+	if record.Proof != nil && (proof.ResourceID != record.Proof.ResourceID || proof.ResourceCreatedAt != record.Proof.ResourceCreatedAt || proof.ObservedCreationGrantID != record.Proof.ObservedCreationGrantID || proof.RequestSHA256 != record.Proof.RequestSHA256) {
+		return false
+	}
 	if (record.Settlement.Outcome == "uncertain" || record.Settlement.ResourceID == "" || record.Settlement.ActionID == "") && !proof.ActionHistoryComplete {
 		return false
 	}
@@ -115,8 +120,8 @@ func validFailedCreationProof(p model.CapacityPolicySpec, record capacityMutatio
 	return !created.Before(record.CreatedAt.Add(-5*time.Second)) && !created.After(proof.ObservedAt.Add(5*time.Second))
 }
 
-func validateCompensationDrain(ctx context.Context, tx *sql.Tx, namespace string, p model.CapacityPolicySpec, proof model.CapacityTransitionProof, now time.Time) error {
-	if !proof.Healthy || !proof.MembershipComplete || !proof.AdmissionClosed || !proof.RoutingWithdrawn || proof.Inflight == nil || *proof.Inflight != 0 || proof.NativeActionsInflight == nil || *proof.NativeActionsInflight != 0 || !capacity.Fresh(proof.ObservedAt, now, p.MaxEvidenceAgeSeconds) || proof.ReceiptRef == "" || len(proof.ReceiptRef) > 512 || proof.Assessment.Snapshot.Units < p.Floor {
+func validateCompensationDrain(ctx context.Context, tx *sql.Tx, namespace string, p model.CapacityPolicySpec, proof model.CapacityTransitionProof, now time.Time, generation int64) error {
+	if !proof.Healthy || !proof.MembershipComplete || !proof.AdmissionClosed || !proof.RoutingWithdrawn || proof.Inflight == nil || *proof.Inflight != 0 || proof.NativeActionsInflight == nil || *proof.NativeActionsInflight != 0 || !capacity.Fresh(proof.ObservedAt, now, p.MaxEvidenceAgeSeconds) || proof.ReceiptRef == "" || len(proof.ReceiptRef) > 512 {
 		return fmt.Errorf("%w: compensation requires fresh healthy protected membership, closed admission, withdrawn routing and zero native/business work", ErrCapacityConflict)
 	}
 	if err := capacity.ValidateSnapshot(p, proof.Assessment, now); err != nil {
@@ -126,8 +131,14 @@ func validateCompensationDrain(ctx context.Context, tx *sql.Tx, namespace string
 	if err != nil {
 		return err
 	}
-	if !validCapacityBaseline(p, intent) || !sameCapacityResourceIdentity(intent.BaselineSnapshot, proof.Assessment.Snapshot) {
+	if intent.Generation != generation || !validCapacityBaseline(p, intent) || !sameCapacityResourceIdentity(intent.BaselineSnapshot, proof.Assessment.Snapshot) {
 		return ErrCapacityConflict
+	}
+	// Cleaning a never-serving failed create cannot remove healthy members.
+	// A failed floor repair may therefore preserve its exact degraded baseline
+	// instead of deadlocking on a floor it was already trying to restore.
+	if proof.Assessment.Snapshot.Units < p.Floor && (intent.Decision.Reason != "protected_floor_recovery" || capacityIntentReduction(intent) || intent.BaselineSnapshot.Units >= p.Floor || proof.Assessment.Snapshot.Units != intent.BaselineSnapshot.Units || proof.Assessment.Snapshot.Profile != intent.BaselineSnapshot.Profile || intent.Decision.Profile != intent.BaselineSnapshot.Profile) {
+		return fmt.Errorf("%w: failed floor cleanup cannot lose healthy baseline membership", ErrCapacityConflict)
 	}
 	var live, fresh, sameProfile int
 	if err := tx.QueryRowContext(ctx, `SELECT count(*),count(*) FILTER(WHERE (slot_record->>'observed_at')::timestamptz BETWEEN $5 AND $6),count(*) FILTER(WHERE profile_name=$7) FROM public.capacity_resource_slots WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND resource_id<>''`, namespace, p.Environment, p.Domain, p.Dimension, now.Add(-time.Duration(p.MaxEvidenceAgeSeconds)*time.Second), now.Add(5*time.Second), proof.Assessment.Snapshot.Profile).Scan(&live, &fresh, &sameProfile); err != nil {
@@ -178,7 +189,7 @@ func (s CapacityStore) IssueCompensation(ctx context.Context, policy model.Manif
 		if err != nil || (exists && slot.ResourceID != "") {
 			return ErrCapacityConflict
 		}
-		if err = validateCompensationDrain(ctx, tx, policy.Metadata.Namespace, p, issue.DrainProof, now); err != nil {
+		if err = validateCompensationDrain(ctx, tx, policy.Metadata.Namespace, p, issue.DrainProof, now, parent.Generation); err != nil {
 			return err
 		}
 		if _, err = tx.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET state='expired',grant_record=jsonb_set(grant_record,'{grant,state}','"expired"'),updated_at=$2 WHERE state='issued' AND expires_at<=$2 AND grant_record->'grant'->>'compensation_of'=$1`, parent.Grant.GrantID, now); err != nil {
@@ -249,7 +260,7 @@ func redeemCompensation(ctx context.Context, tx *sql.Tx, record *capacityMutatio
 	if err := tx.QueryRowContext(ctx, `SELECT namespace FROM public.capacity_mutation_grants WHERE id=$1`, g.GrantID).Scan(&ns); err != nil {
 		return err
 	}
-	if err := validateCompensationDrain(ctx, tx, ns, p, *record.CompensationDrainProof, now); err != nil {
+	if err := validateCompensationDrain(ctx, tx, ns, p, *record.CompensationDrainProof, now, parent.Generation); err != nil {
 		return err
 	}
 	record.AttemptID, record.SettlementTokenSHA256, record.Grant.State = request.AttemptID, request.SettlementTokenSHA256, "redeemed"

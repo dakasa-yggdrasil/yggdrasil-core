@@ -128,6 +128,7 @@ type CapacityIntent struct {
 	LeaseExecutorID  string             `json:"lease_executor_id,omitempty"`
 	LeaseExpiresAt   *time.Time         `json:"lease_expires_at,omitempty"`
 	RecoveryOnly     bool               `json:"recovery_only"`
+	FloorDegraded    bool               `json:"floor_degraded,omitempty"`
 	BaselineSnapshot CapacitySnapshot   `json:"baseline_snapshot"`
 	Decision         CapacityDecision   `json:"decision"`
 	Assessment       CapacityAssessment `json:"assessment"`

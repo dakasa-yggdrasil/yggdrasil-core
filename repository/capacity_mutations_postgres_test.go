@@ -31,6 +31,10 @@ type mutationFixture struct {
 }
 
 func mutationPostgresFixture(t *testing.T, register bool) mutationFixture {
+	return mutationPostgresFixtureWithBaseline(t, register, 2, 4)
+}
+
+func mutationPostgresFixtureWithBaseline(t *testing.T, register bool, floor, units int) mutationFixture {
 	t.Helper()
 	db, original, a := capacityPostgresFixture(t)
 	ctx := context.Background()
@@ -52,8 +56,8 @@ func mutationPostgresFixture(t *testing.T, register bool) mutationFixture {
 	if err := json.Unmarshal(original.Spec, &p); err != nil {
 		t.Fatal(err)
 	}
-	p.LeaseSeconds = 120
-	b := model.CapacityMutationBinding{Name: "burst", IntegrationInstanceID: instance.ID.String(), IntegrationChecksum: instance.Checksum, IntegrationTypeID: ty.ID.String(), IntegrationTypeChecksum: ty.Checksum, AdapterPrincipalID: "fleet-adapter", ScopeChecksum: strings.Repeat("a", 64), ProfileName: "base", EnsureCapability: "ensure_server", DestroyCapability: "destroy_server", ProtectedSlots: 2, MaxSlots: 20}
+	p.LeaseSeconds, p.Floor, a.Snapshot.Units = 120, floor, units
+	b := model.CapacityMutationBinding{Name: "burst", IntegrationInstanceID: instance.ID.String(), IntegrationChecksum: instance.Checksum, IntegrationTypeID: ty.ID.String(), IntegrationTypeChecksum: ty.Checksum, AdapterPrincipalID: "fleet-adapter", ScopeChecksum: strings.Repeat("a", 64), ProfileName: "base", EnsureCapability: "ensure_server", DestroyCapability: "destroy_server", ProtectedSlots: floor, MaxSlots: 20}
 	plans := map[int]model.CapacityMutationIssue{}
 	for slot := 1; slot <= b.MaxSlots; slot++ {
 		raw, _ := json.Marshal(map[string]any{"schema_version": "capacity_vm_slot_v1", "capability": b.EnsureCapability, "integration_instance_id": b.IntegrationInstanceID, "scope_checksum": b.ScopeChecksum, "profile_name": b.ProfileName, "profile_checksum": strings.Repeat("c", 64), "admission_checksum": strings.Repeat("d", 64), "slot": slot, "native_name": fmt.Sprintf("node-%d", slot), "bootstrap_sha256": strings.Repeat("b", 64)})
@@ -110,7 +114,7 @@ func mutationPostgresFixture(t *testing.T, register bool) mutationFixture {
 		}
 	})
 	if register {
-		for slot := 1; slot <= 4; slot++ {
+		for slot := 1; slot <= units; slot++ {
 			f.record(t, slot)
 		}
 	}

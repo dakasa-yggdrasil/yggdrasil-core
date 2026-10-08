@@ -155,6 +155,35 @@ func TestCapacityMutationCompensationPostgres(t *testing.T) {
 			if first, second := <-failures, <-failures; first != nil || second != nil || child.GrantID != repeated.GrantID || child.CompensationOf != parent.GrantID {
 				t.Fatal("compensation issuance was not singular", child, repeated, first, second)
 			}
+			if lostReply {
+				// An expired, never-redeemed child may be replaced, but the parent
+				// native lifetime cannot be changed even with its original label.
+				if _, err := f.db.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET expires_at=$2::text::timestamptz,grant_record=jsonb_set(grant_record,'{grant,expires_at}',to_jsonb($2::text)) WHERE id=$1`, child.GrantID, time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)); err != nil {
+					t.Fatal(err)
+				}
+				replacement := issue
+				replacement.FailedProof.ResourceID = "replacement-lifetime"
+				changed := desired
+				changed.ExpectedResourceID = replacement.FailedProof.ResourceID
+				replacement.Mutation.DesiredSpec, _ = json.Marshal(changed)
+				if _, err := issuer.IssueCompensation(ctx, current, replacement); !errors.Is(err, ErrCapacityConflict) {
+					t.Fatal("expired child replaced pinned parent lifetime", err)
+				}
+				replacement = issue
+				created, _ := time.Parse(time.RFC3339Nano, nativeCreatedAt)
+				replacement.FailedProof.ResourceCreatedAt = created.Add(time.Second).Format(time.RFC3339Nano)
+				changed = desired
+				changed.ExpectedResourceCreatedAt = replacement.FailedProof.ResourceCreatedAt
+				replacement.Mutation.DesiredSpec, _ = json.Marshal(changed)
+				if _, err := issuer.IssueCompensation(ctx, current, replacement); !errors.Is(err, ErrCapacityConflict) {
+					t.Fatal("expired child changed pinned creation time", err)
+				}
+				reissued, err := issuer.IssueCompensation(ctx, current, issue)
+				if err != nil || reissued.GrantID == child.GrantID || reissued.ExpectedResourceID != nativeResourceID || reissued.ExpectedResourceCreatedAt != nativeCreatedAt {
+					t.Fatal("same immutable lifetime could not reissue unused child", reissued, err)
+				}
+				child = reissued
+			}
 			stranger := issuer
 			stranger.ExecutorID = uuid.NewString()
 			if _, err := stranger.IssueCompensation(ctx, current, issue); !errors.Is(err, ErrCapacityConflict) {

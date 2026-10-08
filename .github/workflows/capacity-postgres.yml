@@ -70,7 +70,7 @@ jobs:
               "floor_drain_pending_delete_budget_and_tombstone", "policy_instance_type_and_executor_fences",
               "complete_membership_and_bound_plan_required")}
           expected |= {mutation + "/policy_instance_type_and_executor_fences/" + name for name in ("policy", "instance", "type", "executor")}
-          expected |= {"TestCapacityMutationHTTPPostgres"}
+          expected |= {"TestCapacityMutationHTTPPostgres", "TestCapacityMutationFailedFloorRecoveryPostgres"}
           compensation = "TestCapacityMutationCompensationPostgres"
           expected |= {compensation} | {compensation + "/" + name for name in (
               "unprotected_failed_create", "protected_failed_create_without_serving_membership",

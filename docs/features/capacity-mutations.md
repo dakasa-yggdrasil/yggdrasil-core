@@ -179,7 +179,10 @@ time, original creation-grant label, and complete terminal failed native action
 chain. The failed object must never have entered registered serving membership.
 The fixed workflow supplies `compensation_identity_verified`, not a false claim
 that a partially provisioned object satisfies its complete physical spec. Fresh
-complete healthy registered capacity must still meet the floor; admission must
+complete healthy registered capacity must still meet the floor; a failed floor
+repair may instead preserve its exact unchanged healthy baseline below the floor.
+The failed object is not registered, so cleanup removes zero serving members.
+Admission must
 be closed, routing withdrawn and native/business inflight explicitly zero.
 Unknown owning transport, unknown/running actions, replacements, registered
 objects and incomplete inventory cannot admit cleanup.
@@ -200,7 +203,7 @@ time never expires the parent or a redeemed child. Only never-redeemed expired
 children can be replaced through a new active protected invocation and fresh
 proofs. Ordinary destroy still refuses protected slots; the opt-in compensation
 exception affects only this exact never-registered failed object and independently
-checks the remaining aggregate floor.
+checks the remaining aggregate floor or the exact unchanged failed-floor baseline.
 
 `capacity.confirm_compensation` can record readback after pause. It requires the
 child's owning settlement, exact successful completed delete chain, immutable
@@ -216,3 +219,12 @@ historical recovery, pending-create/delete budgets, exact membership, floor,
 drain, tombstone, instance/type/executor drift and terminal-intent blocking.
 An actual callback pipeline runs request/reply/redemption/settlement/readback
 against PostgreSQL, with no local test or provider activation.
+
+A failed floor repair can close as `reconciled_failed_floor` only with complete
+fresh exact baseline membership, no unresolved grants and no confirmed serving
+creation in that generation. Its receipt explicitly sets `floor_degraded:true`;
+the target remains the original floor and execution permission is false. This is
+neither promotion nor a claim that the floor was restored. It releases the closed
+recovery lease, allowing a separately assessed new floor repair without waiting
+for ordinary demand cooldown. Baseline loss, profile changes, incomplete
+inventory and ordinary below-floor deletion remain refused.

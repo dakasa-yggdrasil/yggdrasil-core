@@ -58,7 +58,7 @@ for protected workflows.
 | `capacity.advance` | Lease tuple, `phase`, `proof` | Persisted phase or error |
 | `capacity.recover` | Original `policy` revision, `generation`, fresh `assessment` | Recovery-only fenced lease |
 | `capacity.renew_recovery` | Original policy revision and recovery lease tuple | Extended recovery-only lease |
-| `capacity.reconcile` | Original policy revision, lease tuple, `phase`, terminal `proof` | `reconciled`, `reconciled_partial` or `aborted` observed outcome |
+| `capacity.reconcile` | Original policy revision, lease tuple, `phase`, terminal `proof` | `reconciled`, `reconciled_partial`, `reconciled_failed_floor` or `aborted` observed outcome |
 
 Optional [durable provider mutation grants](capacity-mutations.md) add protected
 `capacity.record_slot`, `capacity.grant_mutation` and `capacity.confirm_mutation`.
@@ -199,3 +199,10 @@ intent/lease preservation assertions. It does not certify load capacity or provi
 failover. Before activation, verify observer projections, fixed workflows,
 native HPA ownership, source coverage, emergency pause, provider mutation/replay,
 warm-up, canary routing, drain and rollback in a remote ephemeral environment.
+
+Failed floor repair is a distinct terminal readback: `reconciled_failed_floor`
+requires Core mutation authority, complete unchanged healthy baseline below the
+floor, zero unresolved grants and no confirmed serving creation in its generation.
+The receipt sets `floor_degraded:true` and retains the original floor target with
+execution disarmed. A fresh independent floor repair can then be assessed; no
+historical recovery lease is converted into write permission.
