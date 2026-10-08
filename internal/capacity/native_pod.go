@@ -69,7 +69,7 @@ func NativePodWitness(p model.CapacityPolicySpec, checkpoint model.CapacityNativ
 	receipt := observed.Receipt
 	rawExpected, _ := json.Marshal(challenge)
 	rawActual, _ := json.Marshal(receipt.NativePodTerminationChallenge)
-	if string(rawExpected) != string(rawActual) || receipt.IntentGeneration != checkpoint.IntentGeneration || receipt.DrainNonce != checkpoint.DrainNonce || receipt.LaneRosterSHA256 != NativeRosterDigest(p.HPAExecutionBinding.Lanes) || receipt.JoinedAt.Before(challenge.IssuedAt) || receipt.JoinedAt.After(*observed.FinishedAt) || len(receipt.Lanes) != len(p.HPAExecutionBinding.Lanes) || len(observed.ReceiptSHA256) != 64 {
+	if string(rawExpected) != string(rawActual) || receipt.IntentGeneration != checkpoint.IntentGeneration || receipt.DrainNonce != checkpoint.DrainNonce || receipt.LaneRosterSHA256 != NativeRosterDigest(p.HPAExecutionBinding.Lanes) || receipt.JoinedAt.Before(challenge.IssuedAt) || !nativeJoinTimestamp(receipt.JoinedAt, *observed.FinishedAt) || len(receipt.Lanes) != len(p.HPAExecutionBinding.Lanes) || len(observed.ReceiptSHA256) != 64 {
 		return fmt.Errorf("exact complete native challenge receipt unavailable")
 	}
 	for _, lane := range p.HPAExecutionBinding.Lanes {
@@ -79,4 +79,14 @@ func NativePodWitness(p model.CapacityPolicySpec, checkpoint model.CapacityNativ
 		}
 	}
 	return nil
+}
+
+func nativeJoinTimestamp(joined, finished time.Time) bool {
+	if joined.IsZero() || finished.IsZero() {
+		return false
+	}
+	if finished.Nanosecond() == 0 {
+		return !joined.Truncate(time.Second).After(finished)
+	}
+	return !joined.After(finished)
 }
