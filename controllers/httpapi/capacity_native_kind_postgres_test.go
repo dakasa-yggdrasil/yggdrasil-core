@@ -561,8 +561,12 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool) {
 	patchFinalizers, _ = json.Marshal([]map[string]any{{"op": "test", "path": "/metadata/uid", "value": victimUID}, {"op": "test", "path": "/metadata/resourceVersion", "value": retainedMeta["resourceVersion"]}, {"op": "test", "path": "/metadata/finalizers", "value": []string{fixtureFinalizer}}, {"op": "replace", "path": "/metadata/finalizers", "value": []string{}}})
 	nativeKindCommand(t, ctx, "-n", realm, "patch", "pod", victimName, "--type=json", "-p", string(patchFinalizers))
 	var released, grants int
-	if db.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_lifetimes WHERE namespace=$1 AND checkpoint_record->>'state'='released' AND checkpoint_record->>'confirmed_at' IS NOT NULL`, realm).Scan(&released) != nil || released != 1 {
+	if db.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM public.capacity_native_lifetimes WHERE namespace=$1 AND checkpoint_record->>'state'='released' AND checkpoint_record->>'confirmed_at' IS NOT NULL)+(SELECT count(*) FROM public.capacity_native_lifetime_archive WHERE namespace=$1 AND bundle_record->'checkpoint'->>'state'='released' AND bundle_record->'checkpoint'->>'confirmed_at' IS NOT NULL)`, realm).Scan(&released) != nil || released != 1 {
 		t.Fatal("missing durable exact controller-selected lifetime ACK", released)
+	}
+	var permanentReleases int
+	if db.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_command_identities WHERE namespace=$1 AND subject_uid=$2 AND phase='release'`, realm, victimUID).Scan(&permanentReleases) != nil || permanentReleases != 1 {
+		t.Fatal("archived terminal HOLD replayed or lost one-use release identity", permanentReleases)
 	}
 	if db.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_commands WHERE namespace=$1 AND phase='terminate'`, realm).Scan(&releases) != nil || releases != 0 {
 		t.Fatal("lifetime executor issued a selected Pod DELETE")

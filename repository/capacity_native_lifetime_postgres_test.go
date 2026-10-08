@@ -208,6 +208,18 @@ func TestCapacityNativeLifetimePostgres(t *testing.T) {
 		if hot != 0 || archived != maxNativeRetainedLifetimes+1 || identities != 2*archived {
 			t.Fatalf("hot quota permanently exhausted or identity lost: %d %d %d", hot, archived, identities)
 		}
+		terminal, found, err := store.ArchivedNativeLifetime(context.Background(), policy, first.Observation.PodUID)
+		if err != nil || !found || terminal.State != "released" || terminal.PodUID != first.Observation.PodUID || terminal.Namespace != p.AssessmentBinding.Snapshot.Namespace || terminal.ConfirmedAt == nil || len(terminal.NativeTerminationReceipt) == 0 {
+			t.Fatal("readonly immutable terminal archive unavailable", found, err)
+		}
+		if _, found, err := store.ArchivedNativeLifetime(context.Background(), policy, uuid.NewString()); err != nil || found {
+			t.Fatal("missing native UID invented archived origin", found, err)
+		}
+		foreignPolicy := policy
+		foreignPolicy.Checksum = strings.Repeat("f", 64)
+		if _, _, err := store.ArchivedNativeLifetime(context.Background(), foreignPolicy, first.Observation.PodUID); err == nil {
+			t.Fatal("archive readonly lookup accepted a different policy checksum")
+		}
 		if _, err := store.RegisterNativeLifetime(context.Background(), policy, intent, first); err == nil {
 			t.Fatal("archived native UID origin revived")
 		}

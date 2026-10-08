@@ -195,3 +195,64 @@ func (s CapacityStore) ArchiveNativeTerminalHistory(ctx context.Context, policy 
 		return nil
 	})
 }
+
+// ArchivedNativeLifetime reads one permanent terminal origin for a UID still
+// present in a bounded native LIST. It never restores a hot record or issues
+// permission; a fresh native removal-target read remains separately required.
+func (s CapacityStore) ArchivedNativeLifetime(ctx context.Context, policy model.Manifest, uid string) (model.CapacityNativePodCheckpoint, bool, error) {
+	var zero model.CapacityNativePodCheckpoint
+	p, err := parseCapacityPolicy(policy)
+	if err != nil || s.DB == nil || !capacity.NativeProcessNonce(uid) || p.HPAExecutionBinding == nil || p.HPAExecutionBinding.Mode != capacity.HPALifetimeExecutionMode {
+		return zero, false, ErrCapacityConflict
+	}
+	var raw []byte
+	var bundleDigest, originDigest string
+	var originGeneration int64
+	err = s.DB.QueryRowContext(ctx, `SELECT bundle_record,bundle_sha256,origin_sha256,origin_generation FROM public.capacity_native_lifetime_archive WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND pod_uid=$5`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, uid).Scan(&raw, &bundleDigest, &originDigest, &originGeneration)
+	if err == sql.ErrNoRows {
+		return zero, false, nil
+	}
+	if err != nil {
+		return zero, false, err
+	}
+	var bundle struct {
+		Checkpoint model.CapacityNativePodCheckpoint `json:"checkpoint"`
+		Commands   []model.CapacityNativeCommand     `json:"commands"`
+	}
+	if len(raw) > 2<<20 || nativeCanonicalArchiveSHA(raw) != bundleDigest || json.Unmarshal(raw, &bundle) != nil || len(bundle.Commands) == 0 || len(bundle.Commands) > 64 {
+		return zero, false, ErrCapacityConflict
+	}
+	cp := bundle.Checkpoint
+	var origin model.CapacityPolicySpec
+	var witness model.AdapterCapacityPodTerminationResponse
+	if cp.State != "released" || cp.PodUID != uid || cp.Namespace != p.AssessmentBinding.Snapshot.Namespace || cp.PolicyID != policy.ID || cp.PolicyChecksum != policy.Checksum || cp.BindingSHA256 != capacity.NativeLifetimeBindingSHA256(p) || cp.IntentGeneration != originGeneration || cp.OriginChallengeSHA256 != originDigest || nativeArchiveSHA(cp.OriginChallengeBytes) != originDigest || cp.ConfirmedAt == nil || nativeCanonicalArchiveSHA(cp.OriginPolicy) != cp.OriginPolicySHA256 || json.Unmarshal(cp.OriginPolicy, &origin) != nil || capacity.ValidatePolicy(origin) != nil || origin.Environment != p.Environment || origin.Domain != p.Domain || origin.Dimension != p.Dimension || origin.Owner != p.Owner || cp.BindingSHA256 != capacity.NativeLifetimeBindingSHA256(origin) || capacity.DecodeNativeCapacity(cp.NativeTerminationReceipt, &witness) != nil || capacity.NativePodWitness(origin, cp, witness.Observation, *cp.ConfirmedAt) != nil {
+		return zero, false, ErrCapacityConflict
+	}
+	releases := 0
+	seen := map[string]bool{}
+	for _, command := range bundle.Commands {
+		if seen[command.CommandID] || command.Namespace != policy.Metadata.Namespace || command.PolicyID != cp.PolicyID || command.PolicyChecksum != cp.PolicyChecksum || command.Environment != p.Environment || command.Domain != p.Domain || command.Dimension != p.Dimension || (command.State != "confirmed" && command.State != "refused_no_redemption") {
+			return zero, false, ErrCapacityConflict
+		}
+		seen[command.CommandID] = true
+		if command.Phase != "release" || command.State != "confirmed" {
+			continue
+		}
+		var released model.AdapterCapacityPodTerminationResponse
+		if command.Operation != capacity.DestroyNativePodProtection || capacity.DecodeNativeCapacity(command.NativeReadback, &released) != nil || released.Operation != capacity.ObserveNativePodTermination || released.Status != "observed" || capacity.NativePodReleaseTarget(origin, cp, released.Observation, command.UpdatedAt) != nil {
+			return zero, false, ErrCapacityConflict
+		}
+		var archivedCommand []byte
+		var commandDigest string
+		err = s.DB.QueryRowContext(ctx, `SELECT a.command_record,a.record_sha256 FROM public.capacity_native_command_archive a JOIN public.capacity_native_command_identities i ON i.id=a.id WHERE i.id=$1 AND i.namespace=$2 AND i.environment=$3 AND i.domain=$4 AND i.dimension=$5 AND i.subject_uid=$6 AND i.operation=$7 AND i.phase='release' AND i.authority_token_sha256=$8 AND i.request_sha256=$9`, command.CommandID, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, uid, capacity.DestroyNativePodProtection, command.AuthorityTokenSHA256, command.RequestSHA256).Scan(&archivedCommand, &commandDigest)
+		expected, _ := json.Marshal(command)
+		if err != nil || nativeCanonicalArchiveSHA(archivedCommand) != commandDigest || commandDigest != nativeCanonicalArchiveSHA(expected) {
+			return zero, false, ErrCapacityConflict
+		}
+		releases++
+	}
+	if releases != 1 {
+		return zero, false, ErrCapacityConflict
+	}
+	return cp, true, nil
+}

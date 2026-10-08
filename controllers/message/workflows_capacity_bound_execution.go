@@ -295,6 +295,15 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 	for _, pod := range current.Pods {
 		cp, exists := findCheckpoint(pod.PodUID)
 		if !exists {
+			// A permanent terminal archive can still correspond to a native
+			// object held by foreign finalizers. Read it; never restore its origin.
+			var e error
+			cp, exists, e = store.ArchivedNativeLifetime(ctx, policy, pod.PodUID)
+			if e != nil {
+				return intent, e
+			}
+		}
+		if !exists {
 			boot, e := observeAdmission(pod)
 			if e != nil {
 				return intent, e
