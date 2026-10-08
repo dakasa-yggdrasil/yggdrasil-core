@@ -133,7 +133,7 @@ jobs:
           native_http="TestCapacityMutationNativeHTTPPostgres"
           expected |= {native_http} | {native_http+"/"+name for name in ("default_deny","canonical_members","instance_capability_and_hash_fences","single_use_redemption")}
           bound_execution="TestCapacityMutationBoundExecutionPostgres"
-          expected |= {bound_execution} | {bound_execution+"/"+name for name in ("single_send_and_canonical_request","principal_scope_and_single_redemption","lost_reply_blocks_new_write_and_terminal","native_readback_and_restart_recovery")}
+          expected |= {bound_execution} | {bound_execution+"/"+name for name in ("finite_unredeemed_permission_budget","redemption_and_revocation_share_one_fence","unredeemed_token_revocation_and_history","single_send_and_canonical_request","principal_scope_and_single_redemption","lost_reply_blocks_new_write_and_terminal","native_readback_and_restart_recovery")}
           native = "TestCapacityMutationNativeWorkflowPostgres"
           expected |= {native} | {native + "/" + name for name in (
               "readonly_real_adapter_inventory_has_no_authority",

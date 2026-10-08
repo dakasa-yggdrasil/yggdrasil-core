@@ -25,7 +25,10 @@ func nativeCapacityOperation(operation string) bool {
 	return operation == capacity.EnsureBoundHPAEnvelope || operation == capacity.EnsureNativePodDrain || operation == capacity.DestroyNativePodProtection
 }
 
-// IssueNativeCommand creates exactly one private permission per native phase.
+const maxNativeCommandSequences = 4
+
+// IssueNativeCommand creates a fresh one-use permission for a native phase.
+// A new sequence requires every previous permission to be proven unredeemed.
 // No network call occurs while the transaction holds dimension and row locks.
 // The plaintext command token is returned only to the fixed private invocation.
 func (s CapacityStore) IssueNativeCommand(ctx context.Context, policy model.Manifest, intent model.CapacityIntent, operation, subject string, request json.RawMessage) (model.CapacityNativeCommand, string, error) {
@@ -64,6 +67,13 @@ func (s CapacityStore) IssueNativeCommand(ctx context.Context, policy model.Mani
 		if pending != 0 {
 			return ErrCapacityConflict
 		}
+		var previous, refused int
+		if err := tx.QueryRowContext(ctx, `SELECT count(*),count(*) FILTER(WHERE state='refused_no_redemption') FROM public.capacity_native_commands WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5 AND operation=$6 AND subject_uid=$7 AND phase=$8`, current.Namespace, p.Environment, p.Domain, p.Dimension, current.Generation, operation, subject, phase).Scan(&previous, &refused); err != nil {
+			return err
+		}
+		if previous != refused || previous >= maxNativeCommandSequences {
+			return ErrCapacityConflict
+		}
 		binding := p.AssessmentBinding.Snapshot.Adapter
 		if err := checkMutationIntegration(ctx, tx, nativeObservationMutationBinding(binding)); err != nil {
 			return err
@@ -83,14 +93,15 @@ func (s CapacityStore) IssueNativeCommand(ctx context.Context, policy model.Mani
 			Namespace: current.Namespace, Environment: p.Environment, Domain: p.Domain, Dimension: p.Dimension,
 			IntentGeneration: current.Generation, FencingToken: current.FencingToken, LeaseOwner: current.LeaseOwner, ExecutorID: s.ExecutorID,
 			Adapter: binding, AdapterPrincipalID: p.HPAExecutionBinding.AdapterPrincipalID, Operation: operation, Phase: phase,
-			Request: request, RequestSHA256: hex.EncodeToString(requestDigest[:]), State: "issued", AuthorityTokenSHA256: hex.EncodeToString(tokenDigest[:]),
+			Sequence: previous + 1,
+			Request:  request, RequestSHA256: hex.EncodeToString(requestDigest[:]), State: "issued", AuthorityTokenSHA256: hex.EncodeToString(tokenDigest[:]),
 			CreatedAt: now, ExpiresAt: *current.LeaseExpiresAt, UpdatedAt: now,
 		}
 		raw, err := json.Marshal(command)
 		if err != nil {
 			return err
 		}
-		result, err := tx.ExecContext(ctx, `INSERT INTO public.capacity_native_commands (id,namespace,environment,domain,dimension,generation,operation,subject_uid,state,authority_token_sha256,command_record,updated_at,phase) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13) ON CONFLICT (namespace,environment,domain,dimension,generation,operation,subject_uid,phase) DO NOTHING`, command.CommandID, command.Namespace, command.Environment, command.Domain, command.Dimension, command.IntentGeneration, command.Operation, subject, command.State, command.AuthorityTokenSHA256, raw, now, phase)
+		result, err := tx.ExecContext(ctx, `INSERT INTO public.capacity_native_commands (id,namespace,environment,domain,dimension,generation,operation,subject_uid,state,authority_token_sha256,command_record,updated_at,phase,sequence) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14) ON CONFLICT (namespace,environment,domain,dimension,generation,operation,subject_uid,phase,sequence) DO NOTHING`, command.CommandID, command.Namespace, command.Environment, command.Domain, command.Dimension, command.IntentGeneration, command.Operation, subject, command.State, command.AuthorityTokenSHA256, raw, now, phase, command.Sequence)
 		if err != nil {
 			return err
 		}
@@ -104,6 +115,41 @@ func (s CapacityStore) IssueNativeCommand(ctx context.Context, policy model.Mani
 		return model.CapacityNativeCommand{}, "", err
 	}
 	return command, token, nil
+}
+
+// RevokeUnredeemedNativeCommand shares the dimension lock and row lock used by
+// redemption. A late adapter can no longer redeem a revoked token. If redemption
+// won the race, no retry authority is returned and only native readback remains.
+// Request, identity, token hash and prior command records are never replaced.
+func (s CapacityStore) RevokeUnredeemedNativeCommand(ctx context.Context, policy model.Manifest, intent model.CapacityIntent, commandID uuid.UUID) (bool, error) {
+	refused := false
+	err := s.mutationTransaction(ctx, policy, false, intent.Generation, intent.FencingToken, intent.LeaseOwner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
+		if p.HPAExecutionBinding == nil || p.AssessmentBinding == nil || current.LeaseExecutorID != s.ExecutorID || commandID == uuid.Nil {
+			return ErrCapacityMutationAuthorization
+		}
+		var raw []byte
+		if err := tx.QueryRowContext(ctx, `SELECT command_record FROM public.capacity_native_commands WHERE id=$1 FOR UPDATE`, commandID).Scan(&raw); err != nil {
+			return err
+		}
+		var command model.CapacityNativeCommand
+		if json.Unmarshal(raw, &command) != nil || command.PolicyID != policy.ID || command.PolicyChecksum != policy.Checksum || command.IntentGeneration != current.Generation || command.Namespace != current.Namespace || command.Environment != p.Environment || command.Domain != p.Domain || command.Dimension != p.Dimension || command.Adapter != p.AssessmentBinding.Snapshot.Adapter {
+			return ErrCapacityConflict
+		}
+		if command.State != "issued" || command.AttemptID != uuid.Nil || command.RedeemedBy != "" {
+			return nil
+		}
+		command.State, command.UpdatedAt = "refused_no_redemption", now
+		raw, err := json.Marshal(command)
+		if err != nil {
+			return err
+		}
+		if _, err := tx.ExecContext(ctx, `UPDATE public.capacity_native_commands SET state=$2,command_record=$3,updated_at=$4 WHERE id=$1`, commandID, command.State, raw, now); err != nil {
+			return err
+		}
+		refused = true
+		return nil
+	})
+	return refused, err
 }
 
 // RedeemNativeCommand requires both the adapter's exact machine principal and

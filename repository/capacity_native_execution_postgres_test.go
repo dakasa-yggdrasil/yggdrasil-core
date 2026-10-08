@@ -69,10 +69,129 @@ func TestCapacityMutationBoundExecutionPostgres(t *testing.T) {
 	raw, _ := json.Marshal(req)
 	var command model.CapacityNativeCommand
 	var token string
+	newRevocationScope := func(t *testing.T) (model.Manifest, model.CapacityIntent, model.CapacityNativeHPARequest, model.AdapterCapacityPodInventoryResponse) {
+		t.Helper()
+		encoded, _ := json.Marshal(p)
+		var isolated model.CapacityPolicySpec
+		if json.Unmarshal(encoded, &isolated) != nil {
+			t.Fatal("isolated policy")
+		}
+		isolated.Domain = "revoke-" + uuid.NewString()
+		isolated.TargetIdentity += "/" + isolated.Domain
+		isolated.AssessmentBinding.Snapshot.HPAUID, isolated.AssessmentBinding.Snapshot.WorkloadUID = uuid.NewString(), uuid.NewString()
+		m := create("capacity_policy", isolated.Domain, isolated)
+		fresh := a
+		fresh.Snapshot.TargetIdentity = isolated.TargetIdentity
+		fresh.Snapshot.ResourceUID, fresh.Snapshot.WorkloadUID = isolated.AssessmentBinding.Snapshot.HPAUID, isolated.AssessmentBinding.Snapshot.WorkloadUID
+		i, err := store.Assess(ctx, m, fresh)
+		if err != nil {
+			t.Fatal(err)
+		}
+		i, err = store.Claim(ctx, m, i.Generation, fresh)
+		if err != nil {
+			t.Fatal(err)
+		}
+		nativeHPA, nativeInventory := hpa, inventory
+		nativeHPA.Observation.HPAUID, nativeHPA.Observation.WorkloadUID = fresh.Snapshot.ResourceUID, fresh.Snapshot.WorkloadUID
+		nativeInventory.WorkloadUID = fresh.Snapshot.WorkloadUID
+		if err := store.SaveNativePodPlan(ctx, m, i, nativeInventory, nativeHPA, nil); err != nil {
+			t.Fatal(err)
+		}
+		i.NativeHPAGeneration, i.NativePodBaseline = 8, []string{}
+		r := req
+		r.ExpectedUID, r.ExpectedWorkloadUID, r.MinReplicas = fresh.Snapshot.ResourceUID, fresh.Snapshot.WorkloadUID, i.Decision.Units
+		return m, i, r, nativeInventory
+	}
+	t.Run("finite_unredeemed_permission_budget", func(t *testing.T) {
+		m, i, r, nativeInventory := newRevocationScope(t)
+		for sequence := 1; sequence <= 4; sequence++ {
+			r.ExpectedResourceVersion = fmt.Sprint(sequence + 20)
+			body, _ := json.Marshal(r)
+			c, permission, err := store.IssueNativeCommand(ctx, m, i, capacity.EnsureBoundHPAEnvelope, r.ExpectedUID, body)
+			if err != nil || c.Sequence != sequence {
+				t.Fatal("bounded sequence missing", sequence, err)
+			}
+			refused, err := store.RevokeUnredeemedNativeCommand(ctx, m, i, c.CommandID)
+			if err != nil || !refused {
+				t.Fatal("unredeemed sequence retained authority", err)
+			}
+			if _, err := store.RedeemNativeCommand(ctx, "native-adapter", model.CapacityNativeAuthorityRedeemRequest{AuthorityToken: permission, IntegrationInstanceID: instance.ID.String(), IntegrationTypeID: typ.ID.String(), Capability: capacity.EnsureBoundHPAEnvelope, RequestSHA256: c.RequestSHA256}); err == nil {
+				t.Fatal("history token remained redeemable")
+			}
+		}
+		body, _ := json.Marshal(r)
+		if _, _, err := store.IssueNativeCommand(ctx, m, i, capacity.EnsureBoundHPAEnvelope, r.ExpectedUID, body); err == nil {
+			t.Fatal("fifth phase permission escaped the fixed budget")
+		}
+		commands, _, err := store.NativeLedger(ctx, m, i)
+		if err != nil || len(commands) != 4 || store.CompleteNativeExecution(ctx, m, i, nativeInventory) == nil {
+			t.Fatal("refusal history disappeared or became native completion", err)
+		}
+	})
+	t.Run("redemption_and_revocation_share_one_fence", func(t *testing.T) {
+		m, i, r, _ := newRevocationScope(t)
+		body, _ := json.Marshal(r)
+		c, permission, err := store.IssueNativeCommand(ctx, m, i, capacity.EnsureBoundHPAEnvelope, r.ExpectedUID, body)
+		if err != nil {
+			t.Fatal(err)
+		}
+		start := make(chan struct{})
+		var wg sync.WaitGroup
+		var redeemed, refused atomic.Int32
+		wg.Add(2)
+		go func() {
+			defer wg.Done()
+			<-start
+			if _, err := store.RedeemNativeCommand(ctx, "native-adapter", model.CapacityNativeAuthorityRedeemRequest{AuthorityToken: permission, IntegrationInstanceID: instance.ID.String(), IntegrationTypeID: typ.ID.String(), Capability: capacity.EnsureBoundHPAEnvelope, RequestSHA256: c.RequestSHA256}); err == nil {
+				redeemed.Add(1)
+			}
+		}()
+		go func() {
+			defer wg.Done()
+			<-start
+			if revoked, err := store.RevokeUnredeemedNativeCommand(ctx, m, i, c.CommandID); err != nil {
+				t.Error(err)
+			} else if revoked {
+				refused.Add(1)
+			}
+		}()
+		close(start)
+		wg.Wait()
+		if redeemed.Load()+refused.Load() != 1 {
+			t.Fatal("redemption and retry authority both won", redeemed.Load(), refused.Load())
+		}
+		commands, _, err := store.NativeLedger(ctx, m, i)
+		if err != nil || len(commands) != 1 || (redeemed.Load() == 1 && (commands[0].State != "redeemed" || commands[0].AttemptID == uuid.Nil || commands[0].RedeemedBy != "native-adapter")) || (refused.Load() == 1 && (commands[0].State != "refused_no_redemption" || commands[0].AttemptID != uuid.Nil || commands[0].RedeemedBy != "")) {
+			t.Fatal("durable fence differs from the winning authority", err)
+		}
+	})
+	t.Run("unredeemed_token_revocation_and_history", func(t *testing.T) {
+		first, permission, err := store.IssueNativeCommand(ctx, policy, intent, capacity.EnsureBoundHPAEnvelope, req.ExpectedUID, raw)
+		if err != nil {
+			t.Fatal(err)
+		}
+		refused, err := store.RevokeUnredeemedNativeCommand(ctx, policy, intent, first.CommandID)
+		if err != nil || !refused {
+			t.Fatal("unredeemed permission was not atomically revoked", err)
+		}
+		if _, err := store.RedeemNativeCommand(ctx, "native-adapter", model.CapacityNativeAuthorityRedeemRequest{AuthorityToken: permission, IntegrationInstanceID: instance.ID.String(), IntegrationTypeID: typ.ID.String(), Capability: capacity.EnsureBoundHPAEnvelope, RequestSHA256: first.RequestSHA256}); err == nil {
+			t.Fatal("late revoked token acquired native permission")
+		}
+		commands, _, err := store.NativeLedger(ctx, policy, intent)
+		if err != nil || len(commands) != 1 || commands[0].State != "refused_no_redemption" || commands[0].CommandID != first.CommandID || commands[0].RequestSHA256 != first.RequestSHA256 || commands[0].AuthorityTokenSHA256 != first.AuthorityTokenSHA256 || commands[0].AttemptID != uuid.Nil || commands[0].RedeemedBy != "" {
+			t.Fatal("revocation replaced history or fabricated an attempt", err)
+		}
+		if store.CompleteNativeExecution(ctx, policy, intent, inventory) == nil {
+			t.Fatal("no native write became completion")
+		}
+	})
 	t.Run("single_send_and_canonical_request", func(t *testing.T) {
 		command, token, err = store.IssueNativeCommand(ctx, policy, intent, capacity.EnsureBoundHPAEnvelope, req.ExpectedUID, raw)
 		if err != nil {
 			t.Fatal(err)
+		}
+		if command.Sequence != 2 {
+			t.Fatal("revoked history did not bound the new sequence")
 		}
 		if _, _, err := store.IssueNativeCommand(ctx, policy, intent, capacity.EnsureBoundHPAEnvelope, req.ExpectedUID, raw); err == nil {
 			t.Fatal("command sent twice")
@@ -102,6 +221,9 @@ func TestCapacityMutationBoundExecutionPostgres(t *testing.T) {
 		wg.Wait()
 		if successes.Load() != 1 {
 			t.Fatal("one-use redemption", successes.Load())
+		}
+		if refused, err := store.RevokeUnredeemedNativeCommand(ctx, policy, intent, command.CommandID); err != nil || refused {
+			t.Fatal("redeemed lifetime acquired retry authority", err)
 		}
 	})
 	t.Run("lost_reply_blocks_new_write_and_terminal", func(t *testing.T) {

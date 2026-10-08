@@ -67,8 +67,18 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 	}
 	// No new command is issued while any old send outcome is unresolved.
 	for _, command := range commands {
-		if command.State == "confirmed" {
+		if command.State == "confirmed" || command.State == "refused_no_redemption" {
 			continue
+		}
+		if command.State == "issued" {
+			refused, e := store.RevokeUnredeemedNativeCommand(ctx, policy, intent, command.CommandID)
+			if e != nil {
+				return intent, e
+			}
+			if refused {
+				continue
+			}
+			command.State = "redeemed"
 		}
 		if command.State != "redeemed" && command.State != "uncertain" {
 			return intent, fmt.Errorf("native command requires readonly reconciliation")
@@ -112,7 +122,7 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 	}
 	hasCommand := func(operation, phase, uid string) bool {
 		for _, c := range commands {
-			if c.Operation == operation && c.Phase == phase {
+			if c.State == "confirmed" && c.Operation == operation && c.Phase == phase {
 				if operation == capacity.EnsureBoundHPAEnvelope {
 					return true
 				}
@@ -126,38 +136,137 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 		}
 		return false
 	}
+	refreshRequest := func(request any, observation any) (any, error) {
+		switch req := request.(type) {
+		case model.CapacityNativeHPARequest:
+			observed, ok := observation.(model.CapacityHPAEnvelopeResponse)
+			if !ok || observed.Observation.EnvelopeGeneration >= intent.NativeHPAGeneration {
+				return nil, errCapacityBoundAssessment
+			}
+			fresh := model.CapacityAssessment{}
+			for _, signal := range p.AssessmentBinding.Signals {
+				var metric model.CapacityMetricRangeObservation
+				status, e := call(signal.Adapter, capacity.ObserveMetricRange, map[string]any{"binding": signal.BindingName}, &metric)
+				if e != nil || status != "succeeded" {
+					return nil, errCapacityBoundAssessment
+				}
+				evidence, e := capacity.BoundMetricEvidence(p, signal, metric, time.Now().UTC())
+				if e != nil {
+					return nil, e
+				}
+				fresh.Evidence = append(fresh.Evidence, evidence)
+			}
+			var e error
+			fresh.Snapshot, e = capacity.BoundHPASnapshot(p, observed, time.Now().UTC())
+			if e != nil || capacity.ValidateAssessment(p, fresh, time.Now().UTC()) != nil {
+				return nil, errCapacityBoundAssessment
+			}
+			decision, e := capacity.Assess(p, fresh, intent.Decision.Clock, time.Now().UTC())
+			if e != nil || decision.Action != intent.Decision.Action || decision.Units != intent.Decision.Units {
+				return nil, errCapacityBoundAssessment
+			}
+			req.ExpectedResourceVersion, req.ExpectedWorkloadResourceVersion = observed.Observation.ResourceVersion, observed.Observation.WorkloadResourceVersion
+			return req, nil
+		case model.AdapterEnsureCapacityPodDrainRequest:
+			observed, ok := observation.(model.AdapterCapacityPodTerminationResponse)
+			if !ok {
+				return nil, errCapacityBoundAssessment
+			}
+			pod := observed.Observation
+			if req.Phase == "protect" {
+				fresh, e := inventory()
+				if e != nil {
+					return nil, e
+				}
+				found := false
+				for _, current := range fresh.Pods {
+					if current.PodUID == req.ExpectedPodUID {
+						pod, found = current, true
+					}
+				}
+				if !found {
+					return nil, errCapacityBoundAssessment
+				}
+			}
+			for _, checkpoint := range checkpoints {
+				if checkpoint.PodUID == req.ExpectedPodUID {
+					if capacity.NativePodMatchesCheckpoint(p, checkpoint, pod, time.Now().UTC()) != nil || pod.ContainerState != "running" || pod.StartedAt == nil || !pod.StartedAt.Equal(checkpoint.ContainerStartedAt) || pod.DeletionRequestedAt != nil || (req.Phase == "terminate" && !pod.Protected) {
+						return nil, errCapacityBoundAssessment
+					}
+					req.ExpectedPodResourceVersion = pod.PodResourceVersion
+					return req, nil
+				}
+			}
+		case model.AdapterDestroyCapacityPodDrainProtectionRequest:
+			observed, ok := observation.(model.AdapterCapacityPodTerminationResponse)
+			if !ok {
+				return nil, errCapacityBoundAssessment
+			}
+			for _, checkpoint := range checkpoints {
+				if checkpoint.PodUID == req.ExpectedPodUID {
+					if capacity.NativePodWitness(p, checkpoint, observed.Observation, time.Now().UTC()) != nil {
+						return nil, errCapacityBoundAssessment
+					}
+					if e := store.ConfirmNativePodWitness(ctx, policy, intent, checkpoint.PodUID, observed); e != nil {
+						return nil, e
+					}
+					req.ExpectedPodResourceVersion = observed.Observation.PodResourceVersion
+					return req, nil
+				}
+			}
+		}
+		return nil, errCapacityBoundAssessment
+	}
 	execute := func(operation, subject string, request any, observe func() (any, error)) error {
-		input, e := boundPrivateMap(request)
-		if e != nil {
-			return e
+		for sequence := 0; sequence < 4; sequence++ {
+			observed, e := observe()
+			if e != nil {
+				return e
+			}
+			request, e = refreshRequest(request, observed)
+			if e != nil {
+				return e
+			}
+			input, e := boundPrivateMap(request)
+			if e != nil {
+				return e
+			}
+			raw, e := json.Marshal(input)
+			if e != nil {
+				return e
+			}
+			command, token, e := store.IssueNativeCommand(ctx, policy, intent, operation, subject, raw)
+			if e != nil {
+				return e
+			}
+			input["authority_token"] = token
+			var discarded map[string]any
+			// A transport result is not a native mutation result. Always reconcile with
+			// an independent fixed native read, including after a lost RPC response.
+			_, sendErr := call(binding, operation, input, &discarded)
+			_ = sendErr
+			refused, e := store.RevokeUnredeemedNativeCommand(ctx, policy, intent, command.CommandID)
+			if e != nil {
+				return e
+			}
+			if refused {
+				continue
+			}
+			if e := store.MarkNativeCommandUncertain(ctx, command.CommandID); e != nil {
+				return e
+			}
+			observed, e = observe()
+			if e != nil {
+				return e
+			}
+			if e := store.ConfirmNativeCommand(ctx, policy, intent, command.CommandID, observed); e != nil {
+				return e
+			}
+			command.State = "confirmed"
+			commands = append(commands, command)
+			return nil
 		}
-		raw, e := json.Marshal(input)
-		if e != nil {
-			return e
-		}
-		command, token, e := store.IssueNativeCommand(ctx, policy, intent, operation, subject, raw)
-		if e != nil {
-			return e
-		}
-		input["authority_token"] = token
-		var discarded map[string]any
-		// A transport result is not a native mutation result. Always reconcile with
-		// an independent fixed native read, including after a lost RPC response.
-		_, sendErr := call(binding, operation, input, &discarded)
-		_ = sendErr
-		if e := store.MarkNativeCommandUncertain(ctx, command.CommandID); e != nil {
-			return e
-		}
-		observed, e := observe()
-		if e != nil {
-			return e
-		}
-		if e := store.ConfirmNativeCommand(ctx, policy, intent, command.CommandID, observed); e != nil {
-			return e
-		}
-		command.State = "confirmed"
-		commands = append(commands, command)
-		return nil
+		return fmt.Errorf("native phase exhausted its finite unredeemed permissions")
 	}
 	if intent.NativePodBaseline == nil {
 		baseline, e := inventory()

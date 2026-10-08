@@ -7,6 +7,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -218,6 +219,23 @@ func TestCapacityNativeKinDHTTP(t *testing.T) {
 	noNativeInputs := false
 	create("workflow", "execute", model.WorkflowManifestSpec{Trigger: model.WorkflowTriggerSpec{Mode: "manual"}, Authorization: &model.WorkflowAuthorizationSpec{RBAC: model.ManifestSelector{Namespace: realm, Name: "native-rbac"}}, InputSchema: model.WorkflowInputSchemaSpec{Properties: map[string]model.IntegrationSchemaProperty{}, AdditionalProperties: &noNativeInputs}, Steps: []model.WorkflowStepSpec{{ID: "native", TimeoutSeconds: 180, Retry: model.WorkflowRetrySpec{MaxAttempts: 1}, Use: model.WorkflowStepUseSpec{Kind: "yggdrasil", Operation: "capacity.execute_bound"}, With: map[string]any{"policy": map[string]string{"namespace": realm, "name": "native-policy"}}}}})
 	policy := create("capacity_policy", "native-policy", p)
+	// Read through the same real Core resolution and SDK transport before the
+	// protected workflow. Failures stay private to CI diagnostics, not API output.
+	for _, check := range []struct {
+		instance  model.Manifest
+		operation string
+		input     map[string]any
+	}{
+		{metricIM, capacity.ObserveMetricRange, map[string]any{"binding": "admission"}},
+		{instance, capacity.ObserveHPAEnvelope, map[string]any{"namespace": realm, "hpa_name": "api"}},
+		{instance, capacity.ObserveNativePodInventory, map[string]any{"binding_name": "api-native"}},
+	} {
+		result, err := message.ExecuteIntegration(ctx, conn, db, model.ExecuteIntegrationRequest{Integration: model.ManifestSelector{ManifestID: check.instance.ID.String()}, Operation: check.operation, Capability: check.operation, Input: check.input})
+		if err != nil {
+			t.Fatalf("actual native read preflight %s: %v", check.operation, err)
+		}
+		t.Logf("actual native read preflight %s status=%s", check.operation, result.Status)
+	}
 	post := func(token string, input any) (int, map[string]any) {
 		raw, _ := json.Marshal(input)
 		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, core.URL+"/api/v1/workflow-runs", bytes.NewReader(raw))

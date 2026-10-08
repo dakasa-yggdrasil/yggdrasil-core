@@ -207,11 +207,14 @@ func (s CapacityStore) CompleteNativeExecution(ctx context.Context, policy model
 				}
 			}
 		}
-		var all, unresolved int
-		if err := tx.QueryRowContext(ctx, `SELECT count(*),count(*) FILTER(WHERE state<>'confirmed') FROM public.capacity_native_commands WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5`, current.Namespace, p.Environment, p.Domain, p.Dimension, current.Generation).Scan(&all, &unresolved); err != nil {
+		var confirmed, unresolved, lifetimes int
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE state='confirmed'),count(*) FILTER(WHERE state NOT IN ('confirmed','refused_no_redemption')) FROM public.capacity_native_commands WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5`, current.Namespace, p.Environment, p.Domain, p.Dimension, current.Generation).Scan(&confirmed, &unresolved); err != nil {
 			return err
 		}
-		if all == 0 || unresolved != 0 {
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_pod_checkpoints WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5`, current.Namespace, p.Environment, p.Domain, p.Dimension, current.Generation).Scan(&lifetimes); err != nil {
+			return err
+		}
+		if confirmed != 1+3*lifetimes || unresolved != 0 {
 			return ErrCapacityConflict
 		}
 		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_pod_checkpoints WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5 AND checkpoint_record->>'state'<>'released'`, current.Namespace, p.Environment, p.Domain, p.Dimension, current.Generation).Scan(&unresolved); err != nil {

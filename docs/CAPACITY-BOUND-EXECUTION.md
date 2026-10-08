@@ -33,11 +33,19 @@ Each transport outcome is reconciled with an independent fixed native read. Lost
 responses never grant another send. A restarted invocation waits for lease expiry
 and then resumes only the same durable generation; unresolved commands block all
 new commands. Historical commands retain their original executor and evidence.
+An issued token can be revoked under the same dimension and row locks as
+redemption only while it has no attempt or redeeming actor. Revocation invalidates
+the old token and retains its request, identity and hash. A fixed phase permits at
+most four such command sequences. Each new sequence uses fresh native reads with
+the same lifetime and challenge; an HPA sequence also refreshes every pressure
+source. A redeemed or uncertain command remains read-only until its native outcome
+is confirmed. A resourceVersion refusal never relaxes the native CAS.
 
 Current native Terminated exit-zero state and the complete bounded canonical local
 receipt are stored durably before finalizer acknowledgement is issued. Previous
 container termination, timeout, Close and missing metrics cannot confirm a lifetime.
-Completion requires every command confirmed, every selected checkpoint released and
+Completion requires the one real HPA confirmation and all three real confirmations
+per selected lifetime, every selected checkpoint released and
 no missing baseline Pod outside the confirmed roster. A controller removal without
 its exact retained witness leaves the operation pending. Direct deletion may create
 a Deployment replacement; this protocol does not infer released fleet capacity.

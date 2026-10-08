@@ -38,6 +38,7 @@ type CapacityNativeCommand struct {
 	Adapter              CapacityObservationAdapterBinding `json:"adapter"`
 	Operation            string                            `json:"operation"`
 	Phase                string                            `json:"phase"`
+	Sequence             int                               `json:"sequence"`
 	Request              json.RawMessage                   `json:"request"`
 	RequestSHA256        string                            `json:"request_sha256"`
 	State                string                            `json:"state"`

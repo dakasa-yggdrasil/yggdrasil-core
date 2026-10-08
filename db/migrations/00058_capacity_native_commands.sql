@@ -8,12 +8,13 @@ CREATE TABLE IF NOT EXISTS public.capacity_native_commands (
     generation BIGINT NOT NULL,
     operation TEXT NOT NULL,
     phase TEXT NOT NULL,
+    sequence INTEGER NOT NULL CHECK (sequence BETWEEN 1 AND 4),
     subject_uid TEXT NOT NULL DEFAULT '',
     state TEXT NOT NULL,
     authority_token_sha256 TEXT NOT NULL UNIQUE,
     command_record JSONB NOT NULL,
     updated_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
-    UNIQUE (namespace, environment, domain, dimension, generation, operation, subject_uid, phase)
+    UNIQUE (namespace, environment, domain, dimension, generation, operation, subject_uid, phase, sequence)
 );
 CREATE INDEX IF NOT EXISTS capacity_native_commands_scope_idx
     ON public.capacity_native_commands (namespace, environment, domain, dimension, generation, state);
