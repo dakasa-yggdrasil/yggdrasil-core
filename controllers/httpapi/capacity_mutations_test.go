@@ -13,6 +13,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -150,7 +151,22 @@ func TestCapacityMutationHTTPPostgres(t *testing.T) {
 		return m
 	}
 	wf := create("workflow", "scale", map[string]any{"authorization": map[string]any{"rbac": map[string]string{"namespace": ns, "name": "rbac"}}})
-	ty := create("integration_type", "type", map[string]any{"provider": "fixture", "capabilities": []string{"ensure_server", "destroy_server"}})
+	typeSpec := model.IntegrationTypeManifestSpec{
+		Provider:         "fixture",
+		Adapter:          model.IntegrationAdapterSpec{Transport: "rabbitmq", Version: "0.1.0", TimeoutSeconds: 65, Queues: model.IntegrationAdapterQueue{Describe: "fixture.describe", Execute: "fixture.execute"}},
+		Capabilities:     []string{"describe", "execute"},
+		CredentialSchema: model.IntegrationSchemaSpec{Mode: "none"},
+		InstanceSchema:   model.IntegrationSchemaSpec{Mode: "none"},
+		ResourceTypes:    []model.IntegrationResourceType{{Name: "server", CanonicalPrefix: "thirdparty.fixture.server", IdentityTemplate: "server.{id}", DefaultActions: []string{"ensure_server", "destroy_server"}}},
+		ActionCatalog:    []model.IntegrationActionDefinition{{Name: "ensure_server", ResourceTypes: []string{"server"}, Idempotent: true}, {Name: "destroy_server", ResourceTypes: []string{"server"}, Idempotent: true}},
+		Discovery:        model.IntegrationDiscoverySpec{Mode: "push", Cursor: "none"},
+		Normalization:    model.IntegrationNormalizationSpec{ExternalIDPath: "id", FallbackResourcePrefix: "thirdparty.fixture.custom"},
+		Execution:        model.IntegrationExecutionSpec{SupportsDryRun: true, IdempotentActions: []string{"ensure_server", "destroy_server"}},
+	}
+	if err := manifest.ValidateIntegrationTypeSpec(typeSpec); err != nil {
+		t.Fatal("HTTP mutation fixture must be registration-valid", err)
+	}
+	ty := create("integration_type", "type", typeSpec)
 	in := create("integration_instance", "instance", map[string]any{"type_ref": model.ManifestSelector{ManifestID: ty.ID.String()}})
 	now := time.Now().UTC()
 	scope := strings.Repeat("a", 64)
