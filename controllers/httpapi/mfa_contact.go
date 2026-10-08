@@ -153,7 +153,7 @@ func (s *Server) handleMFAContactLoginBegin(w http.ResponseWriter, r *http.Reque
 		writeMappedError(w, err)
 		return
 	}
-	collab, binding, err := repository.VerifyPasswordCredentialForContactOTP(r.Context(), s.db, model.LoginWithPasswordRequest{Identifier: req.Identifier, Password: req.Password})
+	collab, binding, err := repository.VerifyLoginCredentialsWithMFAVersion(r.Context(), s.db, model.LoginWithPasswordRequest{Identifier: req.Identifier, Password: req.Password})
 	if err != nil {
 		writeMappedError(w, err)
 		return

@@ -109,7 +109,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.Metadata = mergeAuthMetadata(req.Metadata, r)
-	collaborator, passwordBinding, err := repository.VerifyPasswordCredentialForContactOTP(r.Context(), s.db, req)
+	collaborator, passwordBinding, err := repository.VerifyLoginCredentialsWithMFAVersion(r.Context(), s.db, req)
 	if err != nil {
 		// §A5/G1: emit audit on password verification failure. We
 		// stay anonymous for unknown identifiers (no enumeration via

@@ -12,4 +12,4 @@ verified_diff_sha256: 0903f49dbb729eb9905037ef32403cf4ee612982684fcee1ece21412cd
 reconciler_schema: 1
 verified_at: 2026-10-08
 by: Codex
-note: Reconciled contact OTP MFA with random credential epochs instead of password-derived fingerprints. Password replacement and restoration cannot revive proofs, expiration uses the current database clock after locks, and owner-only route authority is documented in the existing inventory. CI remains the only test execution environment.
+note: Contact OTP uses random credential epochs and current-time expiration. The verifier API is named for its returned identity and version; SARIF traced a false password classification from its previous name into public collaborator UUID fingerprints. Real passwords remain Argon2/legacy-verified, CodeQL stays enabled, and final CI gates must pass.

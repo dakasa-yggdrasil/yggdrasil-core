@@ -145,13 +145,13 @@ func UpsertPasswordCredential(
 // We do NOT increment failed_attempts when the collaborator is missing
 // (would leak which emails are registered).
 func VerifyPasswordCredential(ctx context.Context, db *sql.DB, req model.LoginWithPasswordRequest) (model.Collaborator, error) {
-	collaborator, _, err := VerifyPasswordCredentialForContactOTP(ctx, db, req)
+	collaborator, _, err := VerifyLoginCredentialsWithMFAVersion(ctx, db, req)
 	return collaborator, err
 }
 
-// VerifyPasswordCredentialForContactOTP returns a binding to the credential version
+// VerifyLoginCredentialsWithMFAVersion returns a binding to the credential version
 // read alongside the verified hash, so a replaced password cannot reuse proof.
-func VerifyPasswordCredentialForContactOTP(
+func VerifyLoginCredentialsWithMFAVersion(
 	ctx context.Context,
 	db *sql.DB,
 	req model.LoginWithPasswordRequest,
