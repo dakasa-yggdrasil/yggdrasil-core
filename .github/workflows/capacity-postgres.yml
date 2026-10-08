@@ -43,7 +43,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message -run '^TestCapacity(Intent.*|Workflow)Postgres$' | tee capacity-results.jsonl
+          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message ./controllers/httpapi -run '^TestCapacity(Intent.*|Workflow|Mutation.*)Postgres$' | tee capacity-results.jsonl
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -59,6 +59,17 @@ jobs:
           expected |= {"TestCapacityIntentExecutorAndReadbackPrivacyPostgres", "TestCapacityIntentExpiredQuoteAndHistoricalRecoveryPostgres", "TestCapacityIntentAbortRequiresMutationFenceProofPostgres"}
           expected |= {"TestCapacityIntentDrainRequiresExplicitZeroInflightPostgres", "TestCapacityIntentFloorReadbackWithoutDemandMetricsPostgres"}
           expected |= {"TestCapacityIntentRetentionPostgres"}
+          mutation = "TestCapacityMutationPostgres"
+          expected |= {mutation} | {mutation + "/" + name for name in (
+              "global_slot_registration_cannot_cross_policy_realms", "native_profiles_have_independent_slot_identities",
+              "paused_unredeemed_expiry_can_reconcile_without_native_fence",
+              "concurrent_issue_and_single_redemption", "lost_reply_same_attempt_is_read_only",
+              "settlement_nonce_scope_pause_and_private_receipt", "unresolved_mutation_blocks_terminal_and_expiry_reissue",
+              "native_action_cannot_replace_transport_settlement", "historical_recovery_confirms_after_pause",
+              "floor_drain_pending_delete_budget_and_tombstone", "policy_instance_type_and_executor_fences",
+              "complete_membership_and_bound_plan_required")}
+          expected |= {mutation + "/policy_instance_type_and_executor_fences/" + name for name in ("policy", "instance", "type", "executor")}
+          expected |= {"TestCapacityMutationHTTPPostgres"}
           passed = {event.get("Test") for event in events if event.get("Action") == "pass"}
           skipped = {event.get("Test") for event in events if event.get("Action") == "skip"}
           if expected - passed or skipped:

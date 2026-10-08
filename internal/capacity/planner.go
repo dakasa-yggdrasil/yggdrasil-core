@@ -58,7 +58,7 @@ func ValidatePolicy(p model.CapacityPolicySpec) error {
 		}
 		names[profile.Name] = true
 	}
-	return nil
+	return ValidateMutationBindings(p)
 }
 
 // Assess requires every declared signal and a matching current resource snapshot.

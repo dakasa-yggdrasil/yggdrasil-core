@@ -19,7 +19,7 @@ func TestCapacityPolicyStrictDecode(t *testing.T) {
 }
 
 func TestCapacityWorkflowRequiresAuthorization(t *testing.T) {
-	for _, operation := range []string{"capacity.assess", "capacity.observe", "capacity.claim", "capacity.renew", "capacity.advance", "capacity.recover", "capacity.renew_recovery", "capacity.reconcile"} {
+	for _, operation := range []string{"capacity.assess", "capacity.observe", "capacity.claim", "capacity.renew", "capacity.advance", "capacity.recover", "capacity.renew_recovery", "capacity.reconcile", "capacity.grant_mutation", "capacity.record_slot", "capacity.confirm_mutation"} {
 		spec := model.WorkflowManifestSpec{Trigger: model.WorkflowTriggerSpec{Mode: "manual"}, Steps: []model.WorkflowStepSpec{{ID: "capacity", Use: model.WorkflowStepUseSpec{Kind: "yggdrasil", Operation: operation}}}}
 		if err := ValidateWorkflowSpec(spec); err == nil {
 			t.Fatal("actorless capacity workflow accepted")

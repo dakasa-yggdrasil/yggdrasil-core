@@ -231,6 +231,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		server.workflowRunAuth = loadWorkflowRunAuthConfig(eventPrincipals, directoryPrincipals)
 	})
 	logWorkflowRunCredentialSurface(logger, server.workflowRunAuth, directoryErr, time.Now().UTC())
+	server.capacityMutationPrincipals, err = loadCapacityMutationPrincipals(server.workflowRunAuth.principals, eventPrincipals, directoryPrincipals)
+	if err != nil {
+		return nil, err
+	}
 	server.snapshotHMACSecret, err = directorySnapshotSecret(directoryPrincipals)
 	if err != nil {
 		return nil, err
@@ -940,6 +944,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 
 func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if principal := s.capacityMutationCredential(r); principal != nil || capacityMutationPath(r.URL.Path) {
+			s.serveCapacityMutationRequest(w, r, principal)
+			return
+		}
 		// Directory machine-read path (ADR-0019) is decided first, on every
 		// request, before the public pass-through and before any other
 		// credential family. A request that names itself as a directory
@@ -1332,7 +1340,8 @@ type workflowDispatchFunc func(ctx context.Context, ref model.ManifestSelector, 
 
 // Server exposes the synchronous HTTP surface of yggdrasil-core.
 type Server struct {
-	snapshotHMACSecret []byte
+	capacityMutationPrincipals []capacityMutationPrincipal
+	snapshotHMACSecret         []byte
 
 	serviceName      string
 	db               *sql.DB

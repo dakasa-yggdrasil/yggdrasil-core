@@ -60,6 +60,11 @@ for protected workflows.
 | `capacity.renew_recovery` | Original policy revision and recovery lease tuple | Extended recovery-only lease |
 | `capacity.reconcile` | Original policy revision, lease tuple, `phase`, terminal `proof` | `reconciled` or `aborted` observed outcome |
 
+Optional [durable provider mutation grants](capacity-mutations.md) add protected
+`capacity.record_slot`, `capacity.grant_mutation` and `capacity.confirm_mutation`.
+They require explicit approved slot bindings and a separate exact adapter
+callback inventory. They do not enable an actuator or a scheduler.
+
 `YGGDRASIL_CAPACITY_EXECUTION_ENABLED=true` and policy `execution_enabled=true`
 are both required for normal claim, renewal and phase changes. Assessment works
 in shadow mode. Recovery-only operations record already-started outcomes under

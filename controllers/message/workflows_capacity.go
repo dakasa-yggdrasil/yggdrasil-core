@@ -25,13 +25,15 @@ func newCapacityInvocationContext(ctx context.Context) context.Context {
 }
 
 type capacityWorkflowInput struct {
-	Policy       model.ManifestSelector        `json:"policy"`
-	Assessment   model.CapacityAssessment      `json:"assessment"`
-	Generation   int64                         `json:"generation"`
-	FencingToken int64                         `json:"fencing_token"`
-	LeaseOwner   string                        `json:"lease_owner"`
-	Phase        string                        `json:"phase"`
-	Proof        model.CapacityTransitionProof `json:"proof"`
+	Policy        model.ManifestSelector        `json:"policy"`
+	Assessment    model.CapacityAssessment      `json:"assessment"`
+	Generation    int64                         `json:"generation"`
+	FencingToken  int64                         `json:"fencing_token"`
+	LeaseOwner    string                        `json:"lease_owner"`
+	Phase         string                        `json:"phase"`
+	Proof         model.CapacityTransitionProof `json:"proof"`
+	Mutation      model.CapacityMutationIssue   `json:"mutation"`
+	MutationProof model.CapacityMutationProof   `json:"mutation_proof"`
 }
 
 // Capacity operations are available only inside the exact protected workflow
@@ -54,7 +56,7 @@ func executeCapacityWorkflowStep(ctx context.Context, db *sql.DB, workflowRef mo
 	if err = decoder.Decode(&parsed); err != nil {
 		return fail(fmt.Errorf("capacity input: %w", err))
 	}
-	recoveryOperation := result.Operation == "capacity.recover" || result.Operation == "capacity.renew_recovery" || result.Operation == "capacity.reconcile"
+	recoveryOperation := result.Operation == "capacity.recover" || result.Operation == "capacity.renew_recovery" || result.Operation == "capacity.reconcile" || result.Operation == "capacity.confirm_mutation"
 	if parsed.Policy.ManifestID != "" || (!recoveryOperation && parsed.Policy.Version != nil) || (parsed.Policy.Version != nil && *parsed.Policy.Version < 1) || strings.TrimSpace(parsed.Policy.Namespace) == "" || strings.TrimSpace(parsed.Policy.Name) == "" {
 		return fail(fmt.Errorf("capacity policy requires exact active logical namespace/name"))
 	}
@@ -86,7 +88,15 @@ func executeCapacityWorkflowStep(ctx context.Context, db *sql.DB, workflowRef mo
 	executorID, _ := ctx.Value(capacityInvocationKey{}).(string)
 	store := repository.CapacityStore{DB: db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true", WorkflowID: wf.ID, ExecutorID: executorID}
 	var intent model.CapacityIntent
+	var output any
 	switch result.Operation {
+	case "capacity.grant_mutation":
+		output, err = store.IssueMutation(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, parsed.Mutation)
+	case "capacity.record_slot":
+		err = store.RecordMutationSlot(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, parsed.Mutation, parsed.MutationProof)
+		output = map[string]any{"recorded": err == nil}
+	case "capacity.confirm_mutation":
+		output, err = store.ConfirmMutation(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, parsed.MutationProof)
 	case "capacity.assess":
 		intent, err = store.Assess(ctx, policy, parsed.Assessment)
 	case "capacity.observe":
@@ -110,9 +120,12 @@ func executeCapacityWorkflowStep(ctx context.Context, db *sql.DB, workflowRef mo
 		return fail(err)
 	}
 	intent.LeaseExecutorID = ""
+	if output == nil {
+		output = intent
+	}
 	// Convert to plain JSON metadata so subsequent templates use the same map
 	// representation as adapter responses. It stays within this protected run.
-	data, err = json.Marshal(intent)
+	data, err = json.Marshal(output)
 	if err != nil {
 		return fail(err)
 	}

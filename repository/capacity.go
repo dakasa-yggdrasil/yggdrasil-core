@@ -279,8 +279,15 @@ func (s CapacityStore) Reconcile(ctx context.Context, policy model.Manifest, gen
 		if outcome != "reconciled" && outcome != "aborted" {
 			return model.CapacityIntent{}, "", fmt.Errorf("capacity recovery requires reconciled or aborted outcome")
 		}
-		if proof.ReceiptRef == "" || len(proof.ReceiptRef) > 512 || !capacity.Fresh(proof.ObservedAt, now, p.MaxEvidenceAgeSeconds) || !proof.Healthy || proof.Inflight == nil || *proof.Inflight < 0 || proof.MutationInflight == nil || *proof.MutationInflight != 0 || proof.ProviderFencingToken != fence {
+		if proof.ReceiptRef == "" || len(proof.ReceiptRef) > 512 || !capacity.Fresh(proof.ObservedAt, now, p.MaxEvidenceAgeSeconds) || !proof.Healthy || proof.Inflight == nil || *proof.Inflight < 0 || proof.MutationInflight == nil || *proof.MutationInflight != 0 {
 			return model.CapacityIntent{}, "", fmt.Errorf("capacity recovery requires fresh healthy proof, current provider fencing and explicitly zero outstanding mutations")
+		}
+		if proof.MutationAuthorityKind == "core_mutation_grants" {
+			if len(p.MutationBindings) == 0 || proof.ProviderFencingToken != 0 {
+				return model.CapacityIntent{}, "", fmt.Errorf("Core mutation authority requires approved bindings and must not invent a provider fencing token")
+			}
+		} else if proof.MutationAuthorityKind != "" || proof.ProviderFencingToken != fence {
+			return model.CapacityIntent{}, "", fmt.Errorf("capacity recovery requires exact mutation authority")
 		}
 		// Floor repair admitted without demand metrics may record its observed
 		// result during telemetry loss. This only closes a readback ledger fact;
@@ -425,6 +432,28 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	next, receipt, err := mutate(p, previous, now.UTC())
 	if err != nil {
 		return model.CapacityIntent{}, err
+	}
+	if next.Phase == "promoted" || next.Phase == "reconciled" || next.Phase == "aborted" {
+		// Only never-redeemed permissions can expire without remote proof.
+		if _, err = tx.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET state='expired',grant_record=jsonb_set(grant_record,'{grant,state}','"expired"'),updated_at=$5 WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state='issued' AND expires_at<=$5`, next.Namespace, p.Environment, p.Domain, p.Dimension, now); err != nil {
+			return model.CapacityIntent{}, err
+		}
+		var unresolved int
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN ('issued','redeemed','settled')`, next.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&unresolved); err != nil {
+			return model.CapacityIntent{}, err
+		}
+		if unresolved != 0 {
+			return model.CapacityIntent{}, fmt.Errorf("%w: unresolved provider mutation authority", ErrCapacityConflict)
+		}
+		if next.Phase == "aborted" {
+			var mutations int
+			if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5 AND state='confirmed'`, next.Namespace, p.Environment, p.Domain, p.Dimension, next.Generation).Scan(&mutations); err != nil {
+				return model.CapacityIntent{}, err
+			}
+			if mutations != 0 {
+				return model.CapacityIntent{}, fmt.Errorf("%w: a confirmed provider mutation cannot be certified as no mutation", ErrCapacityConflict)
+			}
+		}
 	}
 	data, err := json.Marshal(next)
 	if err != nil {

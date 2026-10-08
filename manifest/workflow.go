@@ -45,6 +45,9 @@ var (
 		"capacity.recover",
 		"capacity.renew_recovery",
 		"capacity.reconcile",
+		"capacity.grant_mutation",
+		"capacity.record_slot",
+		"capacity.confirm_mutation",
 	}
 	workflowTemplatePattern = regexp.MustCompile(`{{\s*([^{}]+?)\s*}}`)
 )
