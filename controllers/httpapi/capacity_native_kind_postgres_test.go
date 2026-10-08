@@ -119,11 +119,21 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool) {
 	dep := nativeKindGet(t, ctx, "-n", realm, "get", "deployment", "api", "-o", "json")
 	workloadUID := dep["metadata"].(map[string]any)["uid"].(string)
 	if mixed {
-		// Pause rollout ownership before creating the source-fixed candidate
-		// ReplicaSet. Its real controller births the new Pod; the old running
-		// SDK1 baseline remains retained and never acquires an invented nonce.
+		// Pause the real Deployment then update its existing native ReplicaSet
+		// template. Its actual controller adds one current SDK2 candidate while
+		// all three already booted SDK1 Pods retain their original spec/lifetime.
 		nativeKindCommand(t, ctx, "-n", realm, "rollout", "pause", "deployment/api")
-		nativeKindApply(t, ctx, map[string]any{"apiVersion": "apps/v1", "kind": "ReplicaSet", "metadata": map[string]any{"namespace": realm, "name": "sdk2-candidate", "ownerReferences": []map[string]any{{"apiVersion": "apps/v1", "kind": "Deployment", "name": "api", "uid": workloadUID, "controller": true, "blockOwnerDeletion": true}}}, "spec": map[string]any{"replicas": 1, "selector": map[string]any{"matchLabels": map[string]string{"app": "native-core", "candidate": "sdk2"}}, "template": map[string]any{"metadata": map[string]any{"labels": map[string]string{"app": "native-core", "candidate": "sdk2"}, "finalizers": []string{nativeFinalizer}}, "spec": nativeTemplate["spec"]}}})
+		sets := nativeKindGet(t, ctx, "-n", realm, "get", "replicasets", "-l", "app=native-core", "-o", "json")["items"].([]any)
+		if len(sets) != 1 {
+			t.Fatal("exact real baseline ReplicaSet unavailable")
+		}
+		rs := sets[0].(map[string]any)
+		rsName := rs["metadata"].(map[string]any)["name"].(string)
+		labels := rs["spec"].(map[string]any)["template"].(map[string]any)["metadata"].(map[string]any)["labels"].(map[string]any)
+		labels["candidate"] = "sdk2"
+		patch, _ := json.Marshal(map[string]any{"spec": map[string]any{"template": map[string]any{"metadata": map[string]any{"labels": labels, "finalizers": []string{nativeFinalizer}}, "spec": nativeTemplate["spec"]}}})
+		nativeKindCommand(t, ctx, "-n", realm, "patch", "replicaset", rsName, "--type=merge", "-p", string(patch))
+		nativeKindCommand(t, ctx, "-n", realm, "scale", "deployment/api", "--replicas=4")
 		nativeKindAwait(t, ctx, func() bool {
 			objects := nativeKindGet(t, ctx, "-n", realm, "get", "pods", "-l", "candidate=sdk2", "-o", "json")["items"].([]any)
 			if len(objects) != 1 {
@@ -368,7 +378,7 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool) {
 			if db.QueryRowContext(ctx, `SELECT status,COALESCE(result,'{}'::jsonb) FROM public.workflow_runs WHERE id=$1`, runID).Scan(&status, &result) != nil {
 				return false
 			}
-			if status == "running" || status == "queued" {
+			if status == "pending" || status == "running" || status == "queued" {
 				return false
 			}
 			if (status == "succeeded") != succeed {
