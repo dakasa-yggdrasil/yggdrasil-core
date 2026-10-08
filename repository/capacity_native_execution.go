@@ -302,13 +302,13 @@ func validateNativeCommandRequest(ctx context.Context, tx *sql.Tx, p model.Capac
 		return err
 	}
 	var checkpoint model.CapacityNativePodCheckpoint
-	if json.Unmarshal(checkpointRaw, &checkpoint) != nil {
+	if json.Unmarshal(checkpointRaw, &checkpoint) != nil || checkpoint.PodUID != subject || checkpoint.IntentGeneration != current.Generation || checkpoint.Namespace != p.AssessmentBinding.Snapshot.Namespace || checkpoint.WorkloadUID != p.AssessmentBinding.Snapshot.WorkloadUID || checkpoint.ContainerName != p.HPAExecutionBinding.ContainerName || checkpoint.ImageDigest != p.HPAExecutionBinding.ImageDigest {
 		return ErrCapacityConflict
 	}
 	var challenge model.NativePodTerminationChallenge
 	if phase == "release" {
 		var req model.AdapterDestroyCapacityPodDrainProtectionRequest
-		if capacity.DecodeNativeCapacity(raw, &req) != nil || checkpoint.State != "confirmed" || req.ExpectedPodUID != subject || req.ExpectedPodGeneration != checkpoint.PodGeneration || req.ExpectedContainerID != checkpoint.ContainerID || !req.ExpectedContainerStartedAt.Equal(checkpoint.ContainerStartedAt) || req.ExpectedRestartCount != checkpoint.RestartCount || req.BindingName != p.HPAExecutionBinding.PodTerminationBinding || req.ExpectedPodResourceVersion != checkpoint.PodResourceVersion || req.DryRun == nil || *req.DryRun {
+		if capacity.DecodeNativeCapacity(raw, &req) != nil || checkpoint.State != "confirmed" || req.PodName != checkpoint.PodName || req.ExpectedPodUID != subject || req.ExpectedPodGeneration != checkpoint.PodGeneration || req.ExpectedContainerID != checkpoint.ContainerID || !req.ExpectedContainerStartedAt.Equal(checkpoint.ContainerStartedAt) || req.ExpectedRestartCount != checkpoint.RestartCount || req.BindingName != p.HPAExecutionBinding.PodTerminationBinding || req.ExpectedPodResourceVersion != checkpoint.PodResourceVersion || req.DryRun == nil || *req.DryRun {
 			return ErrCapacityConflict
 		}
 		challenge = req.Challenge
