@@ -2,9 +2,9 @@
 
 Records the source commit reconciled with the changed runtime contracts.
 
-verified_at_commit: f171f4bf6cdab76c385985ea4469d5509de963af
-verified_diff_sha256: b660b17502802e649381abb00fd65a950f63945625a49e1c44d1971aae0d5c1e
+verified_at_commit: 0289db108d5f3634b1559ce25eaa3555e524e03e
+verified_diff_sha256: 811c384f1f8f89863b7a9f417889b2f5bcbaaae089a326f6a62187ee4e565eb5
 reconciler_schema: 1
 verified_at: 2026-10-08
 by: Codex
-note: Reviewed closed VM observation producers, exact active instance/type and catalog bindings, protected inventory registration, original transport and native action readback, unresolved failed creation membership and honest physical-versus-useful capacity limits. Proposed ADR0037 describes connected operations. Actual pinned private adapter fixtures and PostgreSQL16/race are required in remote CI; no provider purchase or production activation occurred.
+note: Reviewed fixed exact-revision Prometheus and native HPA source bindings, all mandatory closed evidence mappings, shadow-only reserved pod minimum semantics, VM unit separation and catalog validation before private hydration. Proposed ADR0038 and feature docs describe blocked caller paths and remaining useful-capacity/executor/platform qualifications. Actual reviewed native source fixtures and PostgreSQL16/race execute only in CI; no provider or production activation occurred.
