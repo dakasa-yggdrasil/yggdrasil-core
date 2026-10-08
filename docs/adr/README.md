@@ -42,3 +42,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0032](0032-materialize-explicit-typed-team-leadership.md) | Materialize explicit typed team leadership | Accepted | 2026-10-07 | yggdrasil-core / team writers and directory leadership |
 | [0033](0033-preserve-current-declarations-during-conditional-contact-writes.md) | Preserve current declarations during conditional contact writes | Accepted | 2026-10-07 | yggdrasil-core / operator contact declaration |
 | [0034](0034-persist-bounded-capacity-intents-under-protected-workflows.md) | Persist bounded capacity intents under protected workflows | Proposed | 2026-10-08 | yggdrasil-core / capacity protocol |
+| [0035](0035-prune-expired-capacity-history-without-changing-intent-authority.md) | Prune expired capacity history without changing intent authority | Proposed | 2026-10-08 | yggdrasil-core / capacity event maintenance |

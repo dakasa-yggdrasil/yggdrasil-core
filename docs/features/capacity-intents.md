@@ -145,11 +145,33 @@ generation would not fence lease recovery. These are workflow contract assertion
 not an automatic multi-provider cancellation engine.
 
 `capacity_intent_events` records generation, fencing token, phase and public
-receipt reference without lease bearer values. Configure an operator-owned
-retention job for this table before enabling continuous actuation; this patch
-does not add a scheduled retention job. Policy revisions cannot replace an
+receipt reference without lease bearer values. Policy revisions cannot replace an
 outstanding generation. Reconcile it through its original immutable revision
 with recovery-only authorization before planning under the new revision.
+
+## Bounded historical retention
+
+The `capacity_events_retention` addon is disabled unless the process explicitly
+sets `YGGDRASIL_CAPACITY_EVENT_RETENTION_ENABLED=true`. It removes only expired
+capacity event rows that have a matching current intent and are at least two
+generations behind it. Current and immediately previous generations, orphan
+history, and all authoritative intent/lease state remain retained. This protects
+unfinished recovery and the most recent change history even past the time limit.
+
+| Setting | Default when enabled | Accepted range |
+|---|---|---|
+| `YGGDRASIL_CAPACITY_EVENT_RETENTION_DAYS` | 90 days | 30..3650 days |
+| `YGGDRASIL_CAPACITY_EVENT_RETENTION_BATCH` | 1000 rows | 1..1000 rows |
+| `YGGDRASIL_CAPACITY_EVENT_RETENTION_INTERVAL_SECONDS` | 900 seconds | 60..86400 seconds |
+
+Invalid enabled settings stop initialization. Each tick performs one batch with
+a five-second context and `FOR UPDATE SKIP LOCKED`; replicas delete disjoint
+event rows. There is no startup sweep or unbounded catch-up loop. Shutdown cancels
+and joins the panic-safe worker. The existing time index supports expiration
+selection, but protected long-lived generations may still dominate retained
+history. Monitor table size and the sweep logs; retention is not a hard storage
+cap. Choose the review horizon before enabling it. It does not collect, delete,
+cancel or fence any provider resource and is independent of capacity execution.
 
 ## Acceptance and limitations
 
@@ -157,7 +179,9 @@ GitHub CI runs planner and manifest regressions, plus a PostgreSQL 16 protocol
 gate with all production migrations, race detection and a no-skips receipt. It
 proves concurrent assessment/claim, restart/readback, lease expiry/stale owner,
 phase/promotion guards, shadow mode, active policy ownership and protected
-workflow channel/revision checks. It does not certify load capacity or provider
+workflow channel/revision checks. Historical retention runs against actual
+PostgreSQL with overlapping replica batches, bounded deletion and exact live
+intent/lease preservation assertions. It does not certify load capacity or provider
 failover. Before activation, verify observer projections, fixed workflows,
 native HPA ownership, source coverage, emergency pause, provider mutation/replay,
 warm-up, canary routing, drain and rollback in a remote ephemeral environment.

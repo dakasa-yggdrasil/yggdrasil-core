@@ -58,6 +58,7 @@ jobs:
               "actorless_dispatch_is_blocked", "invocation_cannot_steal_lease", "unprotected_runtime_is_blocked")}
           expected |= {"TestCapacityIntentExecutorAndReadbackPrivacyPostgres", "TestCapacityIntentExpiredQuoteAndHistoricalRecoveryPostgres", "TestCapacityIntentAbortRequiresMutationFenceProofPostgres"}
           expected |= {"TestCapacityIntentDrainRequiresExplicitZeroInflightPostgres", "TestCapacityIntentFloorReadbackWithoutDemandMetricsPostgres"}
+          expected |= {"TestCapacityIntentRetentionPostgres"}
           passed = {event.get("Test") for event in events if event.get("Action") == "pass"}
           skipped = {event.get("Test") for event in events if event.get("Action") == "skip"}
           if expected - passed or skipped:
