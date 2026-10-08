@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"os"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
@@ -17,7 +18,7 @@ import (
 var errCapacityBoundAssessment = fmt.Errorf("protected bound capacity assessment refused")
 
 func capacityBoundOperation(op string) bool {
-	return op == "capacity.observe_bound_assessment" || op == "capacity.assess_bound"
+	return op == "capacity.observe_bound_assessment" || op == "capacity.assess_bound" || op == "capacity.execute_bound"
 }
 
 type capacityResolvedObservationAdapter struct {
@@ -54,7 +55,7 @@ func resolveCapacityObservationAdapterWithResolver(ctx context.Context, conn *am
 		return out, errCapacityBoundAssessment
 	}
 	for _, operation := range operations {
-		if !capacityNativeCatalogOperation(rawType, operation) {
+		if !capacityBoundCatalogOperation(rawType, operation) {
 			return out, errCapacityBoundAssessment
 		}
 	}
@@ -77,7 +78,7 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 	var parsed struct {
 		Policy model.ManifestSelector `json:"policy"`
 	}
-	if db == nil || !capacityBoundOperation(result.Operation) || capacity.DecodeVMObservation(input, &parsed) != nil || parsed.Policy.ManifestID != "" || parsed.Policy.Version != nil || parsed.Policy.Namespace == "" || parsed.Policy.Name == "" {
+	if db == nil || !capacityBoundOperation(result.Operation) || capacity.DecodeNativeCapacity(input, &parsed) != nil || parsed.Policy.ManifestID != "" || parsed.Policy.Version != nil || parsed.Policy.Namespace == "" || parsed.Policy.Name == "" {
 		return fail()
 	}
 	policy, err := repository.ResolveManifest(ctx, db, "capacity_policy", parsed.Policy.Namespace, parsed.Policy.Name, nil, true)
@@ -106,11 +107,11 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 			}
 			resolved[binding] = a
 		}
-		if !capacityNativeCatalogOperation(a.typeSpec, op) {
+		if !capacityBoundCatalogOperation(a.typeSpec, op) {
 			return "", errCapacityBoundAssessment
 		}
 		r, e := executeIntegrationThroughResolvedWithPolicy(ctx, conn, model.ExecuteIntegrationRequest{Operation: op, Capability: op, Input: fixed}, a.instance, a.instanceSpec, a.typ, a.typeSpec, 35*time.Second, integrationExecutionPolicy{detailFreeErrors: true, safeError: errCapacityBoundAssessment, requireExplicitResponse: true})
-		if e != nil || capacity.DecodeVMObservation(r.Output, out) != nil {
+		if e != nil || capacity.DecodeNativeCapacity(r.Output, out) != nil {
 			return "", errCapacityBoundAssessment
 		}
 		return r.Status, nil
@@ -141,12 +142,22 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 	// A source may become stale while later reads run. The policy's planner
 	// checks the complete assembled window at the moment of assessment.
 	receipt := model.CapacityBoundAssessmentReceipt{Mode: b.Snapshot.Mode, Unit: b.Snapshot.Unit, Assessment: assessment}
-	if result.Operation == "capacity.assess_bound" {
+	if result.Operation == "capacity.assess_bound" || result.Operation == "capacity.execute_bound" {
 		executor, _ := ctx.Value(capacityInvocationKey{}).(string)
-		store := repository.CapacityStore{DB: db, ExecutionEnabled: false, WorkflowID: wf.ID, ExecutorID: executor}
+		store := repository.CapacityStore{DB: db, ExecutionEnabled: result.Operation == "capacity.execute_bound" && os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true", WorkflowID: wf.ID, ExecutorID: executor}
 		intent, e := store.Assess(ctx, policy, assessment)
 		if e != nil {
 			return fail()
+		}
+		if result.Operation == "capacity.execute_bound" {
+			if p.HPAExecutionBinding == nil || !p.ExecutionEnabled || !store.ExecutionEnabled {
+				return fail()
+			}
+			intent, e = runCapacityBoundExecution(ctx, store, policy, p, intent, assessment, hpa, read)
+			if e != nil {
+				return fail()
+			}
+			receipt.ExecutionEnabled = true
 		}
 		intent.LeaseOwner, intent.LeaseExecutorID = "", ""
 		receipt.Intent = &intent
@@ -157,4 +168,33 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 	}
 	result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
 	return result
+}
+
+func capacityBoundCatalogOperation(ts model.IntegrationTypeManifestSpec, operation string) bool {
+	if capacityNativeCatalogOperation(ts, operation) {
+		return true
+	}
+	if operation != capacity.EnsureBoundHPAEnvelope && operation != capacity.EnsureNativePodDrain && operation != capacity.DestroyNativePodProtection {
+		return false
+	}
+	for _, capability := range ts.Capabilities {
+		if capability == "execute" {
+			for _, action := range ts.ActionCatalog {
+				if action.Name == operation && !action.Idempotent {
+					for _, resource := range ts.ResourceTypes {
+						for _, kind := range action.ResourceTypes {
+							if kind == resource.Name {
+								for _, allowed := range resource.DefaultActions {
+									if allowed == operation {
+										return true
+									}
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+	}
+	return false
 }

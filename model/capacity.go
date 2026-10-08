@@ -31,6 +31,7 @@ type CapacityPolicySpec struct {
 	Profiles              []CapacityProfile               `json:"profiles"`
 	MutationBindings      []CapacityMutationBinding       `json:"mutation_bindings,omitempty"`
 	AssessmentBinding     *CapacityBoundAssessmentBinding `json:"assessment_binding,omitempty"`
+	HPAExecutionBinding   *CapacityHPAExecutionBinding    `json:"hpa_execution_binding,omitempty"`
 }
 
 type CapacitySignalRule struct {
@@ -115,25 +116,27 @@ type CapacityDecision struct {
 
 // CapacityIntent is one durable generation per logical domain/dimension.
 type CapacityIntent struct {
-	Namespace        string             `json:"namespace"`
-	PolicyName       string             `json:"policy_name"`
-	PolicyID         uuid.UUID          `json:"policy_id"`
-	PolicyChecksum   string             `json:"policy_checksum"`
-	Environment      string             `json:"environment"`
-	Domain           string             `json:"domain"`
-	Dimension        string             `json:"dimension"`
-	Generation       int64              `json:"generation"`
-	FencingToken     int64              `json:"fencing_token"`
-	Phase            string             `json:"phase"`
-	LeaseOwner       string             `json:"lease_owner,omitempty"`
-	LeaseExecutorID  string             `json:"lease_executor_id,omitempty"`
-	LeaseExpiresAt   *time.Time         `json:"lease_expires_at,omitempty"`
-	RecoveryOnly     bool               `json:"recovery_only"`
-	FloorDegraded    bool               `json:"floor_degraded,omitempty"`
-	BaselineSnapshot CapacitySnapshot   `json:"baseline_snapshot"`
-	Decision         CapacityDecision   `json:"decision"`
-	Assessment       CapacityAssessment `json:"assessment"`
-	UpdatedAt        time.Time          `json:"updated_at"`
+	Namespace           string             `json:"namespace"`
+	PolicyName          string             `json:"policy_name"`
+	PolicyID            uuid.UUID          `json:"policy_id"`
+	PolicyChecksum      string             `json:"policy_checksum"`
+	Environment         string             `json:"environment"`
+	Domain              string             `json:"domain"`
+	Dimension           string             `json:"dimension"`
+	Generation          int64              `json:"generation"`
+	FencingToken        int64              `json:"fencing_token"`
+	Phase               string             `json:"phase"`
+	LeaseOwner          string             `json:"lease_owner,omitempty"`
+	LeaseExecutorID     string             `json:"lease_executor_id,omitempty"`
+	LeaseExpiresAt      *time.Time         `json:"lease_expires_at,omitempty"`
+	RecoveryOnly        bool               `json:"recovery_only"`
+	FloorDegraded       bool               `json:"floor_degraded,omitempty"`
+	NativeHPAGeneration int64              `json:"native_hpa_generation"`
+	NativePodBaseline   []string           `json:"native_pod_baseline"`
+	BaselineSnapshot    CapacitySnapshot   `json:"baseline_snapshot"`
+	Decision            CapacityDecision   `json:"decision"`
+	Assessment          CapacityAssessment `json:"assessment"`
+	UpdatedAt           time.Time          `json:"updated_at"`
 }
 
 // CapacityTransitionProof is a receipt assembled by the policy's protected

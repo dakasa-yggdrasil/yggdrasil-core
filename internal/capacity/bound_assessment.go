@@ -20,16 +20,19 @@ func validObservationAdapter(b model.CapacityObservationAdapterBinding) bool {
 	return e1 == nil && e2 == nil && instance != uuid.Nil && typ != uuid.Nil && instance.String() == b.IntegrationInstanceID && typ.String() == b.IntegrationTypeID && ValidDigest(b.InstanceChecksum) && ValidDigest(b.TypeChecksum)
 }
 
-// This initial bound mode is assessment-only. VM membership cannot be compared
-// with its pod envelope; old caller-provided actuation cannot use it either.
+// Bound HPA units remain separate from VM membership. Fixed native execution
+// requires its own closed operator binding; caller-provided actuation is refused.
 func ValidateBoundAssessmentBinding(p model.CapacityPolicySpec) error {
 	if p.AssessmentBinding == nil {
+		if p.HPAExecutionBinding != nil {
+			return fmt.Errorf("native HPA execution requires exact bound assessment sources")
+		}
 		return nil
 	}
 	b := p.AssessmentBinding
 	s := b.Snapshot
-	if s.Mode != HPAMinimumSnapshotMode || s.Unit != ReservedPodEnvelopeUnit || p.Dimension != ReservedPodEnvelopeUnit || p.ExecutionEnabled || len(p.MutationBindings) != 0 || len(p.Profiles) != 1 || s.Profile != p.Profiles[0].Name || s.Owner != p.Owner || s.ProtectedFloor != p.Floor || s.MaximumReplicas != p.Ceiling || !validObservationAdapter(s.Adapter) {
-		return fmt.Errorf("bound HPA assessment requires shadow-only reserved pod units, one profile and no VM mutations")
+	if s.Mode != HPAMinimumSnapshotMode || s.Unit != ReservedPodEnvelopeUnit || p.Dimension != ReservedPodEnvelopeUnit || (p.ExecutionEnabled && p.HPAExecutionBinding == nil) || len(p.MutationBindings) != 0 || len(p.Profiles) != 1 || s.Profile != p.Profiles[0].Name || s.Owner != p.Owner || s.ProtectedFloor != p.Floor || s.MaximumReplicas != p.Ceiling || !validObservationAdapter(s.Adapter) {
+		return fmt.Errorf("bound HPA assessment requires reserved pod units, one profile, no VM mutations and explicit native execution binding")
 	}
 	for _, name := range []string{s.Namespace, s.HPAName, s.HPAUID, s.WorkloadName, s.WorkloadUID, s.Owner, s.Profile} {
 		if strings.TrimSpace(name) != name || name == "" || len(name) > 253 || strings.ContainsAny(name, "/\r\n\t") {
@@ -53,7 +56,7 @@ func ValidateBoundAssessmentBinding(p model.CapacityPolicySpec) error {
 		}
 		seen[signal.Name], targets[key] = true, true
 	}
-	return nil
+	return ValidateHPAExecutionBinding(p)
 }
 
 func BoundHPASnapshot(p model.CapacityPolicySpec, r model.CapacityHPAEnvelopeResponse, now time.Time) (model.CapacitySnapshot, error) {

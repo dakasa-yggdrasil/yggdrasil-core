@@ -140,6 +140,22 @@ func (s *Server) serveCapacityMutationRequest(w http.ResponseWriter, r *http.Req
 	}
 	route := r.URL.Path
 	switch {
+	case r.Method == http.MethodPost && route == capacityMutationBasePath+"/native/redeem":
+		var payload model.CapacityNativeAuthorityRedeemRequest
+		if err := decodeCapacityNativeAuthorityJSON(w, r, &payload); err != nil {
+			writeProblemJSON(w, 400, "capacity.mutation_invalid", "a closed canonical native authority request is required")
+			return
+		}
+		if payload.IntegrationInstanceID != p.instanceID || !p.capabilities[payload.Capability] {
+			mutationHTTPError(w, repository.ErrCapacityMutationAuthorization)
+			return
+		}
+		response, err := store.RedeemNativeCommand(ctx, p.base.principalID, payload)
+		if err != nil {
+			mutationHTTPError(w, err)
+			return
+		}
+		writeJSON(w, 200, response)
 	case r.Method == http.MethodPost && route == capacityMutationBasePath+"/redeem":
 		var payload model.CapacityMutationRedeemRequest
 		if err := decodeCapacityMutationJSON(w, r, &payload); err != nil {
@@ -226,4 +242,38 @@ func mutationHTTPError(w http.ResponseWriter, err error) {
 	default:
 		writeProblemJSON(w, 503, "capacity.mutation_unavailable", "durable mutation authority is unavailable; do not send a provider mutation")
 	}
+}
+
+// Canonical ASCII members avoid encoding/json case and Unicode alias matching
+// at the new private permission surface. The legacy callback wire stays intact.
+func decodeCapacityNativeAuthorityJSON(w http.ResponseWriter, r *http.Request, out *model.CapacityNativeAuthorityRedeemRequest) error {
+	r.Body = http.MaxBytesReader(w, r.Body, 32768)
+	allowed := map[string]bool{"authority_token": true, "integration_instance_id": true, "integration_type_id": true, "capability": true, "request_sha256": true}
+	decoder := json.NewDecoder(r.Body)
+	opening, err := decoder.Token()
+	if err != nil || opening != json.Delim('{') {
+		return fmt.Errorf("closed native authority object required")
+	}
+	fields := map[string]json.RawMessage{}
+	for decoder.More() {
+		token, err := decoder.Token()
+		name, ok := token.(string)
+		if err != nil || !ok || !allowed[name] || fields[name] != nil {
+			return fmt.Errorf("noncanonical native authority member")
+		}
+		var value json.RawMessage
+		if decoder.Decode(&value) != nil {
+			return fmt.Errorf("incomplete native authority member")
+		}
+		fields[name] = value
+	}
+	closing, err := decoder.Token()
+	if err != nil || closing != json.Delim('}') || len(fields) != len(allowed) || decoder.Decode(new(any)) != io.EOF {
+		return fmt.Errorf("incomplete native authority object")
+	}
+	raw, err := json.Marshal(fields)
+	if err != nil {
+		return err
+	}
+	return json.Unmarshal(raw, out)
 }

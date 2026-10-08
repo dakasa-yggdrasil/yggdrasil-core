@@ -537,7 +537,7 @@ func parseCapacityPolicy(policy model.Manifest) (model.CapacityPolicySpec, error
 }
 
 func pendingCapacityPhase(phase string) bool {
-	return phase != "hold" && phase != "promoted" && phase != "reconciled" && phase != "reconciled_partial" && phase != "reconciled_failed_floor" && phase != "aborted"
+	return phase != "native_completed" && phase != "hold" && phase != "promoted" && phase != "reconciled" && phase != "reconciled_partial" && phase != "reconciled_failed_floor" && phase != "aborted"
 }
 func sameCapacityResources(a, b model.CapacitySnapshot) bool {
 	return sameCapacityResourceIdentity(a, b) && a.WorkloadResourceVersion == b.WorkloadResourceVersion
