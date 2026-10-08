@@ -278,7 +278,7 @@ func (s CapacityStore) SaveNativePodPlan(ctx context.Context, policy model.Manif
 			current.NativePodBaseline = []string{}
 		}
 		raw, _ := json.Marshal(current)
-		_, err := tx.ExecContext(ctx, `UPDATE public.capacity_intents SET intent=$5,updated_at=$6 WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, current.Namespace, p.Environment, p.Domain, p.Dimension, raw, now)
+		_, err = tx.ExecContext(ctx, `UPDATE public.capacity_intents SET intent=$5,updated_at=$6 WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, current.Namespace, p.Environment, p.Domain, p.Dimension, raw, now)
 		return err
 	})
 }

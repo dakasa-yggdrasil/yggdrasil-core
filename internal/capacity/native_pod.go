@@ -8,6 +8,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 	"sort"
+	"strings"
 	"time"
 )
 
@@ -40,7 +41,7 @@ func NativePodIdentity(p model.CapacityPolicySpec, pod model.NativeTerminationOb
 	b := p.HPAExecutionBinding
 	s := p.AssessmentBinding
 	id, err := uuid.Parse(pod.PodUID)
-	if b == nil || s == nil || err != nil || id.String() != pod.PodUID || pod.PodName == "" || pod.PodGeneration < 0 || pod.PodResourceVersion == "" || pod.Namespace != s.Snapshot.Namespace || pod.WorkloadUID != s.Snapshot.WorkloadUID || pod.ContainerName != b.ContainerName || pod.ContainerID == "" || pod.ImageDigest != b.ImageDigest || pod.RestartCount < 0 || !Fresh(pod.ObservedAt, now, p.MaxEvidenceAgeSeconds) {
+	if b == nil || s == nil || err != nil || id.String() != pod.PodUID || pod.PodName == "" || pod.PodGeneration < 0 || pod.PodResourceVersion == "" || pod.Namespace != s.Snapshot.Namespace || pod.WorkloadUID != s.Snapshot.WorkloadUID || pod.ContainerName != b.ContainerName || pod.ContainerID == "" || pod.ImageDigest != b.ImageDigest || !strings.HasSuffix(pod.ImageID, b.ImageDigest) || pod.RestartCount < 0 || !Fresh(pod.ObservedAt, now, p.MaxEvidenceAgeSeconds) {
 		return fmt.Errorf("native Pod identity unavailable or drifted")
 	}
 	return nil
