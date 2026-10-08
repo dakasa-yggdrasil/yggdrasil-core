@@ -1,10 +1,10 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-08T07:58:41-03:00_
+_Generated from HEAD at: 2026-10-08T08:45:57-03:00_
 
 ## Languages
 
-- `.go`: 693 files
+- `.go`: 700 files
 - `.json`: 145 files
 - `.py`: 1 files
 - `.sql`: 57 files
@@ -25,11 +25,11 @@ _Generated from HEAD at: 2026-10-08T07:58:41-03:00_
 ## Top Directories by File Count
 
 - controllers/httpapi: 164 files (1669.8 KB)
-- repository: 111 files (841.6 KB)
-- model: 60 files (234.4 KB)
-- manifest: 59 files (363.3 KB)
+- repository: 112 files (846.4 KB)
+- model: 61 files (242.9 KB)
+- manifest: 59 files (363.4 KB)
+- controllers/message: 57 files (564.5 KB)
 - db/migrations: 56 files (98.5 KB)
-- controllers/message: 54 files (531.2 KB)
 - addons: 42 files (198.3 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
 - controllers/oidc: 23 files (193.4 KB)

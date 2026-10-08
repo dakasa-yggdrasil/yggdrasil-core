@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-08T07:58:41-03:00",
+  "generated_at": "2026-10-08T08:45:57-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 693,
+    ".go": 700,
     ".json": 145,
     ".py": 1,
     ".sql": 57,
@@ -11,7 +11,7 @@
     ".yml": 23
   },
   "provenance": {
-    "commit": "603d3c20f5546657249058c19dfd1faeefa454e9",
+    "commit": "f171f4bf6cdab76c385985ea4469d5509de963af",
     "dirty": true,
     "files": [
       {
@@ -64,13 +64,13 @@
     },
     {
       "path": "repository",
-      "files": 111,
-      "kb": 841
+      "files": 112,
+      "kb": 846
     },
     {
       "path": "model",
-      "files": 60,
-      "kb": 234
+      "files": 61,
+      "kb": 242
     },
     {
       "path": "manifest",
@@ -78,14 +78,14 @@
       "kb": 363
     },
     {
+      "path": "controllers/message",
+      "files": 57,
+      "kb": 564
+    },
+    {
       "path": "db/migrations",
       "files": 56,
       "kb": 98
-    },
-    {
-      "path": "controllers/message",
-      "files": 54,
-      "kb": 531
     },
     {
       "path": "addons",
@@ -308,7 +308,7 @@
     "config_files": 6,
     "k8s_manifests": 6
   },
-  "verified_at_commit": "603d3c20f5546657249058c19dfd1faeefa454e9",
-  "verified_diff_sha256": "3a9d34d1b739c7707c2525fa6ea4fa6aa105f8a2c5114e34faf86495a3cd7503",
+  "verified_at_commit": "f171f4bf6cdab76c385985ea4469d5509de963af",
+  "verified_diff_sha256": "b660b17502802e649381abb00fd65a950f63945625a49e1c44d1971aae0d5c1e",
   "reconciler_schema": 1
 }
