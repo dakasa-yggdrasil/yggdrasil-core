@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/base64"
 	"errors"
 	"os"
 	"strings"
@@ -137,6 +138,7 @@ func TestMFAContactOTPPostgres(t *testing.T) {
 	t.Setenv(contactphone.EnrollmentPolicyEnv, "false")
 	t.Setenv("AUTH_EMAIL_INTEGRATION", "mfa-tests/mail")
 	t.Setenv("AUTH_SMS_INTEGRATION", "mfa-tests/text")
+	t.Setenv("YGGDRASIL_AUTH_KEK_BASE64", base64.StdEncoding.EncodeToString([]byte(strings.Repeat("k", 32))))
 	ctx := context.Background()
 
 	t.Run("delivered_enrollment_replay", func(t *testing.T) {
@@ -563,6 +565,27 @@ func TestMFAContactOTPPostgres(t *testing.T) {
 		t.Setenv("AUTH_EMAIL_INTEGRATION", "missing-selector-slash")
 		if !errors.Is(RemoveWebAuthnCredential(ctx, db, c.ID, "fixture-last-passkey"), ErrLastMFAFactor) {
 			t.Fatal("unconfigured contacts permitted removal of the last usable passkey")
+		}
+	})
+	t.Run("undecryptable_sms_does_not_count_as_alternate", func(t *testing.T) {
+		c, _ := contactOTPFixture(t, db)
+		contactOTPSeedFactor(t, db, c.ID, "email")
+		contactOTPSetPhone(t, db, c.ID, "+12025550129")
+		contactOTPSeedFactor(t, db, c.ID, "sms")
+		for _, key := range []string{"", base64.StdEncoding.EncodeToString([]byte(strings.Repeat("x", 32)))} {
+			t.Setenv("YGGDRASIL_AUTH_KEK_BASE64", key)
+			if !errors.Is(DisableContactMFAFactor(ctx, db, c.ID, "email"), ErrLastMFAFactor) {
+				t.Fatal("unreadable SMS permitted removal of the last usable contact factor")
+			}
+		}
+		if _, err := db.Exec(`DELETE FROM public.auth_mfa_contact_factors WHERE collaborator_id=$1 AND channel='email'`, c.ID); err != nil {
+			t.Fatal("SMS-only guard fixture failed")
+		}
+		if _, err := db.Exec(`UPDATE public.auth_identities SET webauthn_credentials='[{"id":"fixture-last-passkey"}]'::jsonb WHERE collaborator_id=$1`, c.ID); err != nil {
+			t.Fatal("passkey guard fixture failed")
+		}
+		if !errors.Is(RemoveWebAuthnCredential(ctx, db, c.ID, "fixture-last-passkey"), ErrLastMFAFactor) {
+			t.Fatal("unreadable SMS permitted removal of the last usable passkey")
 		}
 	})
 }

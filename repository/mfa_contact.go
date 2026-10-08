@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/contactphone"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 )
@@ -464,11 +465,28 @@ func ConfiguredContactMFAFactors(ctx context.Context, db dbtx, id uuid.UUID) ([]
 	}
 	out := make([]model.MFAContactFactor, 0, len(factors))
 	for _, factor := range factors {
-		if _, _, configured := mfa.ContactDeliverySelector(factor.Channel); configured {
+		if contactMFADeliveryReady(ctx, db, id, factor.Channel) {
 			out = append(out, factor)
 		}
 	}
 	return out, nil
+}
+
+// Configuration alone cannot make an encrypted SMS contact usable. This
+// matches the HTTP availability check without contacting a message provider.
+func contactMFADeliveryReady(ctx context.Context, db dbtx, id uuid.UUID, channel string) bool {
+	if _, _, configured := mfa.ContactDeliverySelector(channel); !configured {
+		return false
+	}
+	if channel == "sms" {
+		envelope, err := contactphone.EnvelopeFromEnv()
+		if err != nil {
+			return false
+		}
+		phone, err := GetPhoneContact(ctx, db, envelope, id)
+		return err == nil && phone != nil
+	}
+	return true
 }
 
 func CountConfiguredContactMFAFactorsTx(ctx context.Context, tx *sql.Tx, id uuid.UUID) (int, error) {
@@ -503,7 +521,7 @@ func DisableContactMFAFactor(ctx context.Context, db *sql.DB, id uuid.UUID, chan
 			removesEnrolled = true
 			continue
 		}
-		if _, _, configured := mfa.ContactDeliverySelector(factor.Channel); configured {
+		if contactMFADeliveryReady(ctx, tx, id, factor.Channel) {
 			remainingConfigured++
 		}
 	}

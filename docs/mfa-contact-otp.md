@@ -51,7 +51,8 @@ commit together. Session mode permits adding more factors.
 `DELETE /api/v1/auth/mfa/factors/contact/{email|sms}` requires the owner
 session and CSRF proof, invalidates outstanding codes for that channel and
 refuses removal of the last current primary factor. Passkey removal uses
-the same transaction locks and counts current contact factors.
+the same transaction locks and counts only configured, usable contact
+factors, including the ability to decrypt the SMS recipient.
 
 ## Password login
 

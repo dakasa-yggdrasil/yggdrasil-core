@@ -149,6 +149,8 @@ jobs:
               "reset_serializes_before_session_issuance",
               "concurrent_last_primary_guard",
               "unconfigured_contact_does_not_count_as_alternate",
+
+              "undecryptable_sms_does_not_count_as_alternate",
           }
           expected = {root} | {f"{root}/{name}" for name in scenarios} | {
               "TestContactOTPSecrets", "TestContactOTPHMACRFC4231", "TestContactOTPStrictCodeShape",
