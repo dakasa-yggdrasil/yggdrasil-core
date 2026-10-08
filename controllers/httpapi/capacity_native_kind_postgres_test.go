@@ -382,6 +382,27 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool) {
 				return false
 			}
 			if (status == "succeeded") != succeed {
+				// Keep exact native diagnostics in this isolated CI fixture. The
+				// production protected endpoint retains its detail-free refusal.
+				store := repository.CapacityStore{DB: db}
+				intent, observeErr := store.Observe(ctx, policy)
+				t.Logf("native intent phase=%s decision=%s generation=%d observe=%v", intent.Phase, intent.Decision.Action, intent.Generation, observeErr)
+				_, checkpoints, ledgerErr := store.NativeLedger(ctx, policy, intent)
+				t.Logf("native retained origins=%d ledger=%v", len(checkpoints), ledgerErr)
+				var inventory model.AdapterCapacityPodInventoryResponse
+				native, nativeErr := message.ExecuteIntegration(ctx, conn, db, model.ExecuteIntegrationRequest{Integration: model.ManifestSelector{ManifestID: instance.ID.String()}, Operation: capacity.ObserveNativePodInventory, Capability: capacity.ObserveNativePodInventory, Input: map[string]any{"binding_name": "api-native"}})
+				decodeErr := capacity.DecodeNativeCapacity(native.Output, &inventory)
+				t.Logf("native complete inventory status=%s transport=%v decode=%v binding=%v", native.Status, nativeErr, decodeErr, capacity.NativePodInventory(p, inventory, time.Now().UTC()))
+				for _, cp := range checkpoints {
+					request := model.AdapterObserveCapacityPodAdmissionRequest{BindingName: "api-native", PodName: cp.PodName, ExpectedPodUID: cp.PodUID, ExpectedPodGeneration: cp.PodGeneration, ExpectedContainerID: cp.ContainerID, ExpectedContainerStartedAt: cp.ContainerStartedAt, ExpectedRestartCount: cp.RestartCount}
+					raw, _ := json.Marshal(request)
+					var input map[string]any
+					_ = json.Unmarshal(raw, &input)
+					native, readErr := message.ExecuteIntegration(ctx, conn, db, model.ExecuteIntegrationRequest{Integration: model.ManifestSelector{ManifestID: instance.ID.String()}, Operation: capacity.ObserveNativePodAdmission, Capability: capacity.ObserveNativePodAdmission, Input: input})
+					var ack model.AdapterCapacityPodAdmissionResponse
+					decodeErr := capacity.DecodeNativeCapacity(native.Output, &ack)
+					t.Logf("native origin pod=%s state=%s read=%v decode=%v checkpoint=%v roots=%s readiness=%t", cp.PodName, cp.State, readErr, decodeErr, capacity.NativeProcessAdmissionCheckpoint(p, cp, ack, time.Now().UTC()), ack.Admission.State, ack.Observation.AdmissionReady)
+				}
 				t.Fatalf("actual native workflow %s status=%s: %s", workflow, status, result)
 			}
 			return true
