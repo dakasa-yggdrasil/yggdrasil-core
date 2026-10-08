@@ -130,6 +130,8 @@ jobs:
               "complete_membership_and_bound_plan_required")}
           expected |= {mutation + "/policy_instance_type_and_executor_fences/" + name for name in ("policy", "instance", "type", "executor")}
           expected |= {"TestCapacityMutationHTTPPostgres", "TestCapacityMutationFailedFloorRecoveryPostgres"}
+          native_http="TestCapacityMutationNativeHTTPPostgres"
+          expected |= {native_http} | {native_http+"/"+name for name in ("default_deny","canonical_members","instance_capability_and_hash_fences","single_use_redemption")}
           bound_execution="TestCapacityMutationBoundExecutionPostgres"
           expected |= {bound_execution} | {bound_execution+"/"+name for name in ("single_send_and_canonical_request","principal_scope_and_single_redemption","lost_reply_blocks_new_write_and_terminal","native_readback_and_restart_recovery")}
           native = "TestCapacityMutationNativeWorkflowPostgres"
