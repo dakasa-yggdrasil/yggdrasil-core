@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-09-27T02:18:44-03:00",
+  "generated_at": "2026-10-08T04:38:36-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 647,
+    ".go": 681,
     ".json": 144,
     ".py": 1,
-    ".sql": 52,
+    ".sql": 55,
     ".yaml": 9,
-    ".yml": 22
+    ".yml": 23
   },
   "provenance": {
-    "commit": "845701d1b6af4034b08a996831115bba43cdd597",
+    "commit": "2a21cac854dfcca8f26a2a4afd28a5253a22080f",
     "dirty": true,
     "files": [
       {
@@ -24,7 +24,7 @@
       },
       {
         "path": "CLAUDE.md",
-        "sha256": "201caac94b57c3a18b31dc9e9c0f4751b8a935eefc28926ad1cf9f7f8e7780b5"
+        "sha256": "a49274d3d808cc995f2bdfaf5cd0347b2cde3eaf7dfce3e162593220cae54bab"
       },
       {
         "path": "README.md",
@@ -59,38 +59,38 @@
   "top_dirs": [
     {
       "path": "controllers/httpapi",
-      "files": 157,
-      "kb": 1556
+      "files": 162,
+      "kb": 1627
     },
     {
       "path": "repository",
-      "files": 94,
-      "kb": 610
+      "files": 104,
+      "kb": 716
     },
     {
       "path": "manifest",
-      "files": 57,
-      "kb": 360
+      "files": 59,
+      "kb": 363
     },
     {
       "path": "model",
-      "files": 55,
-      "kb": 209
+      "files": 59,
+      "kb": 223
     },
     {
       "path": "controllers/message",
-      "files": 51,
-      "kb": 516
+      "files": 54,
+      "kb": 530
     },
     {
       "path": "db/migrations",
-      "files": 51,
-      "kb": 91
+      "files": 54,
+      "kb": 95
     },
     {
       "path": "addons",
-      "files": 39,
-      "kb": 187
+      "files": 42,
+      "kb": 198
     },
     {
       "path": "docs/bootstrap/manifests/integrations",
@@ -99,8 +99,8 @@
     },
     {
       "path": "controllers/oidc",
-      "files": 22,
-      "kb": 188
+      "files": 23,
+      "kb": 193
     },
     {
       "path": "docs/bootstrap/seeds/integrations",
@@ -149,7 +149,7 @@
     },
     {
       "path": "controllers/httpapi/server.go",
-      "kb": 171
+      "kb": 173
     },
     {
       "path": "controllers/message/products.go",
@@ -161,11 +161,11 @@
     },
     {
       "path": "repository/identity.go",
-      "kb": 62
+      "kb": 65
     },
     {
       "path": "controllers/httpapi/credentials.go",
-      "kb": 57
+      "kb": 58
     }
   ],
   "contracts": {
@@ -174,7 +174,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 51,
+    "migrations": 54,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {
@@ -305,7 +305,7 @@
     ]
   },
   "ops": {
-    "config_files": 5,
-    "k8s_manifests": 5
+    "config_files": 6,
+    "k8s_manifests": 6
   }
 }

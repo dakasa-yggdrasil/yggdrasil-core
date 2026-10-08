@@ -1,21 +1,21 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-09-27T02:18:44-03:00_
+_Generated from HEAD at: 2026-10-08T04:38:36-03:00_
 
 ## Languages
 
-- `.go`: 647 files
+- `.go`: 681 files
 - `.json`: 144 files
 - `.py`: 1 files
-- `.sql`: 52 files
+- `.sql`: 55 files
 - `.yaml`: 9 files
-- `.yml`: 22 files
+- `.yml`: 23 files
 
 ## Contracts & Artifacts
 
 - API Spec: **false**  ((not configured))
 - Event Schemas: **0**  (events/contracts,docs/events/contracts)
-- DB Migrations: **51**  (db/migrations)
+- DB Migrations: **54**  (db/migrations)
 
 ## Docs
 
@@ -24,15 +24,15 @@ _Generated from HEAD at: 2026-09-27T02:18:44-03:00_
 
 ## Top Directories by File Count
 
-- controllers/httpapi: 157 files (1556.6 KB)
-- repository: 94 files (610.9 KB)
-- manifest: 57 files (360.5 KB)
-- model: 55 files (209.9 KB)
-- controllers/message: 51 files (516.0 KB)
-- db/migrations: 51 files (91.1 KB)
-- addons: 39 files (187.6 KB)
+- controllers/httpapi: 162 files (1627.7 KB)
+- repository: 104 files (716.7 KB)
+- manifest: 59 files (363.1 KB)
+- model: 59 files (223.4 KB)
+- controllers/message: 54 files (530.0 KB)
+- db/migrations: 54 files (95.3 KB)
+- addons: 42 files (198.3 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
-- controllers/oidc: 22 files (188.9 KB)
+- controllers/oidc: 23 files (193.4 KB)
 - docs/bootstrap/seeds/integrations: 20 files (87.4 KB)
 - internal/externalidentity: 15 files (61.5 KB)
 - docs/contracts/reactors/v1: 11 files (12.7 KB)
@@ -46,16 +46,16 @@ _Generated from HEAD at: 2026-09-27T02:18:44-03:00_
 - docs/bootstrap/manifests/products/certificate-cert-manager.json: 696.5 KB
 - docs/bootstrap/manifests/products/observability-loki.json: 542.9 KB
 - docs/bootstrap/manifests/products/message-broker-rabbitmq.json: 531.8 KB
-- controllers/httpapi/server.go: 171.7 KB
+- controllers/httpapi/server.go: 173.5 KB
 - controllers/message/products.go: 75.4 KB
 - controllers/httpapi/directory_machine_read_test.go: 65.8 KB
-- repository/identity.go: 62.9 KB
-- controllers/httpapi/credentials.go: 57.3 KB
+- repository/identity.go: 65.2 KB
+- controllers/httpapi/credentials.go: 58.2 KB
 
 ## Ops & Messaging
 
-- K8s/Config files scanned: **5**
-- Manifests (k8s-ish): **5**
+- K8s/Config files scanned: **6**
+- Manifests (k8s-ish): **6**
 
 ## Dependencies
 
