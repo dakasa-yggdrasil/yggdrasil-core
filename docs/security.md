@@ -8,9 +8,9 @@ network boundaries in a self-hosted deployment.
 Two paths, both converging on a session row + bearer token after MFA:
 
 1. **Password** — `/api/v1/auth/login`. Credentials checked against
-   `password_credential` table. A valid password returns
+   `auth_identities` table. A valid password returns
    `mfa_required` until the caller supplies a valid `totp_code` or
-   single-use `recovery_code`; a session is not issued from password
+   single-use `recovery_code`, passkey proof or enrolled email/SMS OTP; a session is not issued from password
    alone.
 2. **OAuth/OIDC** — `/api/v1/auth/third-party/start/<provider>` →
    redirect to the provider → `/api/v1/auth/third-party/callback/
@@ -20,7 +20,9 @@ Two paths, both converging on a session row + bearer token after MFA:
 
 MFA enrollment is mandatory. If a collaborator has no MFA enrollment,
 auth paths return `mfa_not_enrolled` and the console guides the user
-through TOTP enrollment before any session can be created.
+through factor enrollment before any session can be created. Email/SMS
+require possession proof bound to the current canonical contact. See
+[contact OTP MFA](./mfa-contact-otp.md) for configuration, API and limits.
 
 Sessions carry a server-side expiry (`AUTH_SESSION_TTL_HOURS`, 720
 default = 30 days). Revocation is immediate via
@@ -40,7 +42,7 @@ of a URL, and URLs travel through chat and email.
 | First access | Admin issues a setup link (`POST /auth/passwords/setup-tokens`) | Sets the password, then answers `428 mfa_not_enrolled` with an enroll link; the session only exists after enrollment |
 | Lost password, has the second factor | Self-service: `POST /auth/passwords/forgot` emails a reset link; `POST /auth/passwords/reset` takes the new password plus a TOTP or recovery code | Opens a session only after the factor is proven; revokes every older session |
 | Lost password, self-service unavailable | Admin issues a setup link for the existing account | Sets the password and revokes older sessions, then answers `200 {next: "login"}` with no cookie: the person signs in with the new password and their factor |
-| Lost second factor (with or without the password) | Admin issues a setup link with `reset_mfa: true` | Wipes TOTP, passkeys, recovery codes **and the password** in the same transaction that issues the link, so the old password stops working at once (otherwise a leaked password could enroll its own authenticator before the owner opens the link); then behaves as a first access. Audited as `credential.mfa_reset` and `auth.mfa.reset` with the acting admin (or `service:auth-admin-token`) |
+| Lost second factor (with or without the password) | Admin issues a setup link with `reset_mfa: true` | Wipes TOTP, passkeys, email/SMS factors and challenges, recovery codes **and the password** in the same transaction that issues the link, so the old password stops working at once (otherwise a leaked password could enroll its own authenticator before the owner opens the link); then behaves as a first access. Audited as `credential.mfa_reset` and `auth.mfa.reset` with the acting admin (or `service:auth-admin-token`) |
 
 Link rules:
 

@@ -362,6 +362,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		"/api/v1/auth/session",
 		"/api/v1/auth/mfa/enroll/request",
 		"/api/v1/auth/mfa/enroll/validate",
+		"/api/v1/auth/mfa/contact/options",
+		"/api/v1/auth/mfa/factors/contact/begin",
+		"/api/v1/auth/mfa/factors/contact/finish",
+		"/api/v1/auth/mfa/contact/login/begin",
 		"/api/v1/auth/mfa/factors/totp/begin",
 		"/api/v1/auth/mfa/factors/totp/finish",
 		// WebAuthn enroll begin/finish + login begin/finish — same
@@ -466,6 +470,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/auth/mfa/enroll/validate", server.handleMFAEnrollValidate)
 	mux.HandleFunc("POST /api/v1/auth/mfa/factors/totp/begin", server.handleMFATOTPBegin)
 	mux.HandleFunc("POST /api/v1/auth/mfa/factors/totp/finish", server.handleMFATOTPFinish)
+	mux.HandleFunc("GET /api/v1/auth/mfa/contact/options", server.handleMFAContactOptions)
+	mux.Handle("POST /api/v1/auth/mfa/factors/contact/begin", loginRateLimit(server.loginLimiter, http.HandlerFunc(server.handleMFAContactBegin)))
+	mux.Handle("POST /api/v1/auth/mfa/factors/contact/finish", loginRateLimit(server.loginLimiter, http.HandlerFunc(server.handleMFAContactFinish)))
+	mux.Handle("POST /api/v1/auth/mfa/contact/login/begin", loginRateLimit(server.loginLimiter, http.HandlerFunc(server.handleMFAContactLoginBegin)))
 	mux.HandleFunc("POST /api/v1/auth/mfa/factors/webauthn/begin", server.handleMFAWebAuthnBegin)
 	mux.HandleFunc("POST /api/v1/auth/mfa/factors/webauthn/finish", server.handleMFAWebAuthnFinish)
 	// WebAuthn login (passkey 2nd factor) — POSTed by LoginPage AFTER the
@@ -482,6 +490,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// Authenticated factor management (rename, remove). List is also
 	// available via GET /api/v1/auth/mfa/factors.
 	mux.HandleFunc("GET /api/v1/auth/mfa/factors", guard(server.handleMFAFactorsList))
+	mux.HandleFunc("DELETE /api/v1/auth/mfa/factors/contact/{channel}", guard(server.handleMFAContactDelete))
 	mux.HandleFunc("PATCH /api/v1/auth/mfa/factors/webauthn/{credential_id}", guard(server.handleMFAWebAuthnRename))
 	mux.HandleFunc("DELETE /api/v1/auth/mfa/factors/webauthn/{credential_id}", guard(server.handleMFAWebAuthnDelete))
 	mux.HandleFunc("POST /api/v1/auth/mfa/recovery-codes", guard(server.handleMFAGenerateRecoveryCodes))
@@ -1166,6 +1175,7 @@ func mfaEnrollmentExemptPath(path string) bool {
 	for _, prefix := range []string{
 		"/api/v1/auth/session",
 		"/api/v1/auth/mfa/enroll",
+		"/api/v1/auth/mfa/contact/options",
 		"/api/v1/auth/mfa/factors",
 		"/api/v1/auth/passwords/change",
 		"/api/v1/auth/logout",

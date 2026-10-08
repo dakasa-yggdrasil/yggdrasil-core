@@ -8,13 +8,14 @@ import (
 
 // PasswordCredential stores one local password auth configuration for a collaborator.
 type PasswordCredential struct {
-	CollaboratorID    uuid.UUID      `json:"collaborator_id"`
-	Status            string         `json:"status"`
-	PasswordScheme    string         `json:"password_scheme"`
-	Metadata          map[string]any `json:"metadata,omitempty"`
-	PasswordUpdatedAt time.Time      `json:"password_updated_at"`
-	CreatedAt         time.Time      `json:"created_at"`
-	UpdatedAt         time.Time      `json:"updated_at"`
+	MFAPasswordVersion string         `json:"-"`
+	CollaboratorID     uuid.UUID      `json:"collaborator_id"`
+	Status             string         `json:"status"`
+	PasswordScheme     string         `json:"password_scheme"`
+	Metadata           map[string]any `json:"metadata,omitempty"`
+	PasswordUpdatedAt  time.Time      `json:"password_updated_at"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
 }
 
 // AuthSession is the persisted session state stored by the core.
@@ -89,9 +90,12 @@ type UpsertPasswordCredentialRequest struct {
 // receive mfa_required until a supported MFA factor is supplied for enrolled
 // identities.
 type LoginWithPasswordRequest struct {
-	Identifier   string         `json:"identifier"`
-	Password     string         `json:"password"`
-	TOTPCode     string         `json:"totp_code,omitempty"`
-	RecoveryCode string         `json:"recovery_code,omitempty"`
-	Metadata     map[string]any `json:"metadata,omitempty"`
+	Identifier        string         `json:"identifier"`
+	Password          string         `json:"password"`
+	TOTPCode          string         `json:"totp_code,omitempty"`
+	RecoveryCode      string         `json:"recovery_code,omitempty"`
+	OTPChannel        string         `json:"otp_channel,omitempty"`
+	OTPChallengeToken string         `json:"otp_challenge_token,omitempty"`
+	OTPCode           string         `json:"otp_code,omitempty"`
+	Metadata          map[string]any `json:"metadata,omitempty"`
 }

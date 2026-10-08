@@ -115,6 +115,66 @@ jobs:
               raise SystemExit(f"Directory gate incomplete: missing={sorted(expected - passed)}, skipped={sorted(skipped)}")
           print("All declared-contact and directory PostgreSQL scenarios executed.")
           PY
+      - name: Prove contact OTP MFA against the migrated PostgreSQL schema
+        if: ${{ !cancelled() }}
+        env:
+          REQUIRE_MFA_CONTACT_POSTGRES: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -json -p 1 -count=1 -timeout=5m ./repository ./controllers/httpapi ./internal/auth/mfa -run '^Test(MFAContactOTPPostgres|MFAContactOTPHTTPPostgres|ContactOTPSecrets|ContactOTPHMACRFC4231|ContactOTPStrictCodeShape|ContactDeliverySelector|ContactLoginBindingForVersion)$' | tee mfa-contact-results.jsonl
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = "TestMFAContactOTPPostgres"
+          scenarios = {
+              "delivered_enrollment_replay",
+              "wrong_attempt_budget",
+              "cross_owner_channel_purpose_context",
+              "contact_change_invalidates_factor_and_challenge",
+              "contact_change_invalidates_factor_and_challenge/email",
+              "contact_change_invalidates_factor_and_challenge/sms",
+              "enrollment_link_authority_and_replay",
+              "email_round_trip_does_not_revive_proof",
+              "send_limits_failed_sends_and_purposes",
+              "password_epoch_rotates_and_never_revives",
+              "concurrent_single_consume",
+              "concurrent_single_send",
+              "expired_revoked_suspended_password_changed",
+              "expired_revoked_suspended_password_changed/expired",
+              "expired_revoked_suspended_password_changed/suspended",
+              "expired_revoked_suspended_password_changed/password",
+              "expired_revoked_suspended_password_changed/session_revoked",
+              "last_primary_factor_and_reset",
+              "atomic_session_and_replay",
+              "reset_serializes_before_session_issuance",
+              "concurrent_last_primary_guard",
+              "unconfigured_contact_does_not_count_as_alternate",
+
+              "undecryptable_sms_does_not_count_as_alternate",
+          }
+          expected = {root} | {f"{root}/{name}" for name in scenarios} | {
+              "TestContactOTPSecrets", "TestContactOTPHMACRFC4231", "TestContactOTPStrictCodeShape",
+              "TestContactDeliverySelector",
+              "TestContactLoginBindingForVersion",
+              "TestMFAContactOTPHTTPPostgres",
+          }
+          http_root = "TestMFAContactOTPHTTPPostgres"
+          expected |= {f"{http_root}/{name}" for name in {
+              "email_enrollment_and_password_login", "sms_enrollment_and_password_login",
+              "failed_delivery_never_activates_or_discloses_a_challenge",
+              "failed_delivery_never_activates_or_discloses_a_challenge/failed",
+              "failed_delivery_never_activates_or_discloses_a_challenge/pending",
+              "failed_delivery_never_activates_or_discloses_a_challenge/provider_error",
+              "session_enrollment_requires_live_csrf_even_in_warn_mode",
+          }}
+          events = [json.loads(line) for line in Path("mfa-contact-results.jsonl").read_text().splitlines() if line.strip()]
+          passed = {event.get("Test") for event in events if event.get("Action") == "pass"}
+          skipped = {event.get("Test") for event in events if event.get("Action") == "skip"}
+          if expected - passed or skipped:
+              raise SystemExit(f"Contact MFA PostgreSQL gate incomplete: missing={sorted(expected - passed)}, skipped={sorted(skipped)}")
+          print("Contact OTP MFA PostgreSQL and cryptographic gates executed every required scenario.")
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -122,4 +182,5 @@ jobs:
           path: |
             native-oidc-results.jsonl
             contact-directory-results.jsonl
+            mfa-contact-results.jsonl
           if-no-files-found: warn

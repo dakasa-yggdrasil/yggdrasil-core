@@ -41,3 +41,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0031](0031-export-restricted-consistent-directory-snapshots.md) | Export restricted consistent directory snapshots | Superseded by 0032 | 2026-10-06 | yggdrasil-core / directory machine reads |
 | [0032](0032-materialize-explicit-typed-team-leadership.md) | Materialize explicit typed team leadership | Accepted | 2026-10-07 | yggdrasil-core / team writers and directory leadership |
 | [0033](0033-preserve-current-declarations-during-conditional-contact-writes.md) | Preserve current declarations during conditional contact writes | Accepted | 2026-10-07 | yggdrasil-core / operator contact declaration |
+| [0034](0034-bind-delivered-mfa-codes-to-canonical-contact-possession.md) | Bind delivered MFA codes to canonical contact possession | Proposed | 2026-10-08 | yggdrasil-core / collaborator authentication |

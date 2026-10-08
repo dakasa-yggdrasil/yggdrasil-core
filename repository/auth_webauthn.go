@@ -136,23 +136,27 @@ func UpdateWebAuthnSignCount(ctx context.Context, db *sql.DB, collaboratorID uui
 // RemoveWebAuthnCredential deletes one credential from the JSONB array.
 // Returns ErrWebAuthnCredentialNotFound when credID doesn't match.
 //
-// Caller is responsible for the "don't strand the user without any
-// factor" invariant — this helper unconditionally removes whichever
-// credential matches.
+// The last-primary-factor guard runs under the same lock order as contact
+// factor removal, so concurrent removals cannot strand the collaborator.
 func RemoveWebAuthnCredential(ctx context.Context, db *sql.DB, collaboratorID uuid.UUID, credID string) error {
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
 		return fmt.Errorf("begin webauthn remove: %w", err)
 	}
 	defer func() { _ = tx.Rollback() }()
+	var owner uuid.UUID
+	if err := tx.QueryRowContext(ctx, `SELECT id FROM public.collaborators WHERE id=$1 FOR UPDATE`, collaboratorID).Scan(&owner); err != nil {
+		return fmt.Errorf("lock collaborator for webauthn removal: %w", err)
+	}
 
 	var blob []byte
+	var hasTOTP bool
 	err = tx.QueryRowContext(ctx, `
-		SELECT webauthn_credentials
+		SELECT webauthn_credentials, totp_secret_ciphertext IS NOT NULL
 		FROM public.auth_identities
 		WHERE collaborator_id = $1
 		FOR UPDATE
-	`, collaboratorID).Scan(&blob)
+	`, collaboratorID).Scan(&blob, &hasTOTP)
 	if errors.Is(err, sql.ErrNoRows) {
 		return ErrAuthIdentityNotFound
 	}
@@ -172,6 +176,13 @@ func RemoveWebAuthnCredential(ctx context.Context, db *sql.DB, collaboratorID uu
 	}
 	if !found {
 		return ErrWebAuthnCredentialNotFound
+	}
+	contacts, err := ConfiguredContactMFAFactors(ctx, tx, collaboratorID)
+	if err != nil {
+		return err
+	}
+	if !hasTOTP && len(out) == 0 && len(contacts) == 0 {
+		return ErrLastMFAFactor
 	}
 
 	newBlob, err := json.Marshal(out)

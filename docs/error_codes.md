@@ -41,6 +41,8 @@ ones (the FE i18n key is the code string).
 | `auth.mfa_not_enrolled` | 428 / 403 | MFA not enrolled | Você precisa cadastrar duas etapas antes de continuar. | enroll_url extra field carries the next step |
 | `auth.mfa_invalid` | 401 | Invalid MFA | Código de verificação inválido. | `factor` extra field carries the failing factor (totp/recovery_code); on `/auth/passwords/reset`, `attempts_remaining` says how many wrong factors the link still absorbs |
 | `auth.mfa_factor_unavailable` | 400 | MFA factor unavailable | Fator MFA indisponível para esta conta. | Login attempted with a factor not enrolled (e.g. TOTP code but TOTP never set up); `factor` extra field names which |
+| `auth.mfa_delivery_unavailable` | 503 | MFA delivery unavailable | Envio do código indisponível. Use outro método ou fale com o administrador. | Missing delivery/contact, failed or uncertain provider acceptance; no provider body is exposed |
+| `auth.mfa_last_factor` | 409 | Last factor | Adicione outro método antes de remover este. | Atomic primary-factor removal guard; recovery codes are not primary factors |
 | `auth.session_expired` | 401 | Session expired | Sua sessão expirou. Faça login novamente. | |
 | `auth.session_not_found` | 401 | Session not found | Sessão não encontrada. | Token was deleted/expired before request |
 | `auth.unauthenticated` | 401 | Unauthenticated | Faça login para continuar. | Generic unauth — missing/bad token |

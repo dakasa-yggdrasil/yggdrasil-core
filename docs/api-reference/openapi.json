@@ -21,6 +21,352 @@
     {"name": "products", "description": "Informational product manifests (deploy is via repository_binding in v2.0.0+)"}
   ],
   "paths": {
+    "/api/v1/auth/mfa/contact/options": {
+      "get": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Inspect canonical contact MFA availability",
+        "description": "Enrollment link token or owner session required. Contact values are not returned.",
+        "parameters": [
+          {
+            "name": "token",
+            "in": "query",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Contact options",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "email": {
+                      "type": "object",
+                      "properties": {
+                        "available": {
+                          "type": "boolean"
+                        },
+                        "enrolled": {
+                          "type": "boolean"
+                        }
+                      }
+                    },
+                    "sms": {
+                      "type": "object",
+                      "properties": {
+                        "available": {
+                          "type": "boolean"
+                        },
+                        "enrolled": {
+                          "type": "boolean"
+                        }
+                      }
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Enrollment authority required"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mfa/factors/contact/begin": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Send a contact MFA enrollment code",
+        "description": "Enrollment token or live session + X-CSRF-Token. Recipient is canonical server state.",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string"
+                  },
+                  "channel": {
+                    "type": "string",
+                    "enum": [
+                      "email",
+                      "sms"
+                    ]
+                  }
+                },
+                "required": [
+                  "channel"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Provider accepted enrollment code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "challenge_token",
+                    "channel",
+                    "expires_at",
+                    "retry_after"
+                  ],
+                  "properties": {
+                    "challenge_token": {
+                      "type": "string",
+                      "description": "Opaque one-use 256-bit challenge token; never the delivered code"
+                    },
+                    "channel": {
+                      "type": "string",
+                      "enum": [
+                        "email",
+                        "sms"
+                      ]
+                    },
+                    "expires_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "retry_after": {
+                      "type": "integer",
+                      "example": 60
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid proof or enrollment authority"
+          },
+          "429": {
+            "description": "Send or request budget exceeded; Retry-After header"
+          },
+          "503": {
+            "description": "Delivery/contact unavailable; provider details omitted"
+          },
+          "403": {
+            "description": "Session CSRF proof missing/invalid"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mfa/factors/contact/finish": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Consume possession proof and enroll contact MFA",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "token": {
+                    "type": "string"
+                  },
+                  "channel": {
+                    "type": "string",
+                    "enum": [
+                      "email",
+                      "sms"
+                    ]
+                  },
+                  "challenge_token": {
+                    "type": "string"
+                  },
+                  "code": {
+                    "type": "string",
+                    "pattern": "^[0-9]{6}$"
+                  }
+                },
+                "required": [
+                  "channel",
+                  "challenge_token",
+                  "code"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Atomic enrollment; ten new recovery codes displayed once",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "properties": {
+                    "mfa_enrolled": {
+                      "type": "boolean"
+                    },
+                    "codes": {
+                      "type": "array",
+                      "items": {
+                        "type": "string"
+                      }
+                    },
+                    "displayed_once": {
+                      "type": "boolean"
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid proof or enrollment authority"
+          },
+          "429": {
+            "description": "Send or request budget exceeded; Retry-After header"
+          },
+          "503": {
+            "description": "Delivery/contact unavailable; provider details omitted"
+          },
+          "403": {
+            "description": "Session CSRF proof missing/invalid"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mfa/contact/login/begin": {
+      "post": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Verify password and send a login OTP",
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "type": "object",
+                "properties": {
+                  "identifier": {
+                    "type": "string"
+                  },
+                  "password": {
+                    "type": "string",
+                    "format": "password"
+                  },
+                  "channel": {
+                    "type": "string",
+                    "enum": [
+                      "email",
+                      "sms"
+                    ]
+                  }
+                },
+                "required": [
+                  "identifier",
+                  "password",
+                  "channel"
+                ]
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Provider accepted code; complete /auth/login with otp_channel, otp_challenge_token and otp_code",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "type": "object",
+                  "required": [
+                    "challenge_token",
+                    "channel",
+                    "expires_at",
+                    "retry_after"
+                  ],
+                  "properties": {
+                    "challenge_token": {
+                      "type": "string",
+                      "description": "Opaque one-use 256-bit challenge token; never the delivered code"
+                    },
+                    "channel": {
+                      "type": "string",
+                      "enum": [
+                        "email",
+                        "sms"
+                      ]
+                    },
+                    "expires_at": {
+                      "type": "string",
+                      "format": "date-time"
+                    },
+                    "retry_after": {
+                      "type": "integer",
+                      "example": 60
+                    }
+                  }
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Invalid proof or enrollment authority"
+          },
+          "429": {
+            "description": "Send or request budget exceeded; Retry-After header"
+          },
+          "503": {
+            "description": "Delivery/contact unavailable; provider details omitted"
+          }
+        }
+      }
+    },
+    "/api/v1/auth/mfa/factors/contact/{channel}": {
+      "delete": {
+        "tags": [
+          "auth"
+        ],
+        "summary": "Remove own enrolled contact factor",
+        "description": "Owner session and CSRF proof required; last-primary guard is atomic.",
+        "parameters": [
+          {
+            "name": "channel",
+            "in": "path",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "enum": [
+                "email",
+                "sms"
+              ]
+            }
+          }
+        ],
+        "responses": {
+          "204": {
+            "description": "Removed; outstanding codes invalidated"
+          },
+          "401": {
+            "description": "Owner session required"
+          },
+          "403": {
+            "description": "CSRF proof missing/invalid"
+          },
+          "409": {
+            "description": "Last primary factor cannot be removed"
+          }
+        }
+      }
+    },
     "/": {
       "get": {
         "tags": ["health"],
