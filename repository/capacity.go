@@ -284,7 +284,7 @@ func (s CapacityStore) Reconcile(ctx context.Context, policy model.Manifest, gen
 		}
 		if proof.MutationAuthorityKind == "core_mutation_grants" {
 			if len(p.MutationBindings) == 0 || proof.ProviderFencingToken != 0 {
-				return model.CapacityIntent{}, "", fmt.Errorf("Core mutation authority requires approved bindings and must not invent a provider fencing token")
+				return model.CapacityIntent{}, "", fmt.Errorf("core mutation authority requires approved bindings and must not invent a provider fencing token")
 			}
 		} else if proof.MutationAuthorityKind != "" || proof.ProviderFencingToken != fence {
 			return model.CapacityIntent{}, "", fmt.Errorf("capacity recovery requires exact mutation authority")

@@ -9,7 +9,6 @@ import (
 	"io"
 	"net/url"
 	"regexp"
-	"strconv"
 	"strings"
 	"time"
 
@@ -99,33 +98,27 @@ func PrepareMutationPlan(p model.CapacityPolicySpec, issue model.CapacityMutatio
 		return plan, fmt.Errorf("capacity mutation requires an approved bounded desired spec")
 	}
 	d := json.NewDecoder(bytes.NewReader(issue.DesiredSpec))
-	d.UseNumber()
-	var spec map[string]any
+	d.DisallowUnknownFields()
+	var spec *model.CapacityMutationSpecV1
 	if err := d.Decode(&spec); err != nil || spec == nil {
 		return plan, fmt.Errorf("capacity mutation desired spec must be an object")
 	}
-	if d.Decode(new(any)) != io.EOF || mutationSecretKey(spec) {
-		return plan, fmt.Errorf("capacity mutation desired spec contains an invalid or sensitive field")
+	if d.Decode(new(any)) != io.EOF || !mutationProjectionSchemaPattern.MatchString(spec.SchemaVersion) || spec.NativeName == "" || len(spec.NativeName) > 256 || !ValidDigest(spec.ProfileChecksum) || !ValidDigest(spec.AdmissionChecksum) || !ValidDigest(spec.BootstrapSHA256) {
+		return plan, fmt.Errorf("capacity mutation desired spec requires a bounded closed non-secret projection")
 	}
-	text := func(key string) string { value, _ := spec[key].(string); return value }
-	if text("integration_instance_id") != b.IntegrationInstanceID || text("scope_checksum") != b.ScopeChecksum || text("profile_name") != b.ProfileName {
+	if spec.IntegrationInstanceID != b.IntegrationInstanceID || spec.ScopeChecksum != b.ScopeChecksum || spec.ProfileName != b.ProfileName {
 		return plan, fmt.Errorf("capacity mutation desired spec identity mismatch")
 	}
-	plan.Capability = text("capability")
+	plan.Capability = spec.Capability
 	if plan.Capability != b.EnsureCapability && plan.Capability != b.DestroyCapability {
 		return plan, fmt.Errorf("capacity mutation capability is not approved")
 	}
-	num, ok := spec["slot"].(json.Number)
-	if !ok {
-		return plan, fmt.Errorf("capacity mutation slot must be an integer")
-	}
-	var err error
-	plan.Slot, err = strconv.Atoi(num.String())
-	if err != nil || plan.Slot < 1 || plan.Slot > b.MaxSlots {
+	plan.Slot = spec.Slot
+	if plan.Slot < 1 || plan.Slot > b.MaxSlots {
 		return plan, fmt.Errorf("capacity mutation slot is outside the approved envelope")
 	}
-	plan.ExpectedResourceID = text("expected_resource_id")
-	plan.ExpectedResourceCreatedAt = text("expected_resource_created_at")
+	plan.ExpectedResourceID = spec.ExpectedResourceID
+	plan.ExpectedResourceCreatedAt = spec.ExpectedResourceCreatedAt
 	if plan.Capability == b.DestroyCapability {
 		if plan.Slot <= b.ProtectedSlots || plan.ExpectedResourceID == "" || len(plan.ExpectedResourceID) > 256 {
 			return plan, fmt.Errorf("capacity destruction requires an unprotected immutable resource")
@@ -134,20 +127,18 @@ func PrepareMutationPlan(p model.CapacityPolicySpec, issue model.CapacityMutatio
 		if err != nil || created.IsZero() {
 			return plan, fmt.Errorf("capacity destruction requires immutable creation time")
 		}
-	} else if _, id := spec["expected_resource_id"]; id {
-		return plan, fmt.Errorf("capacity creation cannot supply a destroy identity")
-	} else if _, created := spec["expected_resource_created_at"]; created {
+	} else if spec.ExpectedResourceID != "" || spec.ExpectedResourceCreatedAt != "" {
 		return plan, fmt.Errorf("capacity creation cannot supply a destroy identity")
 	}
-	plan.CanonicalSpec, err = json.Marshal(spec)
+	var err error
+	plan.CanonicalSpec, err = canonicalMutationProjection(*spec)
 	if err != nil {
 		return plan, err
 	}
 	plan.RequestSHA256 = fmt.Sprintf("%x", sha256.Sum256(plan.CanonicalSpec))
-	delete(spec, "expected_resource_id")
-	delete(spec, "expected_resource_created_at")
-	spec["capability"] = b.EnsureCapability
-	base, err := json.Marshal(spec)
+	spec.ExpectedResourceID, spec.ExpectedResourceCreatedAt = "", ""
+	spec.Capability = b.EnsureCapability
+	base, err := canonicalMutationProjection(*spec)
 	if err != nil {
 		return plan, err
 	}
@@ -160,24 +151,18 @@ func PrepareMutationPlan(p model.CapacityPolicySpec, issue model.CapacityMutatio
 	return plan, fmt.Errorf("capacity mutation desired spec is not the operator-approved slot revision")
 }
 
-func mutationSecretKey(value any) bool {
-	switch v := value.(type) {
-	case map[string]any:
-		for key, child := range v {
-			switch strings.ToLower(key) {
-			case "auth", "credentials", "password", "secret", "token", "api_token", "user_data", "cloud_init", "bootstrap_content":
-				return true
-			}
-			if mutationSecretKey(child) {
-				return true
-			}
-		}
-	case []any:
-		for _, child := range v {
-			if mutationSecretKey(child) {
-				return true
-			}
-		}
+var mutationProjectionSchemaPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+
+func canonicalMutationProjection(spec model.CapacityMutationSpecV1) ([]byte, error) {
+	raw, err := json.Marshal(spec)
+	if err != nil {
+		return nil, err
 	}
-	return false
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var fields map[string]any
+	if err = decoder.Decode(&fields); err != nil {
+		return nil, err
+	}
+	return json.Marshal(fields)
 }

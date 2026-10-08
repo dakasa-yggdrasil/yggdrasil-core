@@ -424,6 +424,8 @@ func (s CapacityStore) MutationReceipt(ctx context.Context, principal, id string
 	if record.Settlement != nil {
 		r := record.Settlement
 		result.Outcome, result.TransportCompleted, result.ResourceID, result.ResourceCreatedAt, result.ActionID, result.NextActionIDs = r.Outcome, r.TransportCompleted, r.ResourceID, r.ResourceCreatedAt, r.ActionID, append([]string(nil), r.NextActionIDs...)
+		result.AuxiliaryResources = append([]model.CapacityMutationAuxiliaryResource(nil), r.AuxiliaryResources...)
+		result.AuxiliaryInventoryComplete = r.AuxiliaryInventoryComplete
 	}
 	return result, nil
 }
@@ -451,17 +453,30 @@ func (s CapacityStore) SettleMutation(ctx context.Context, principal, nonce stri
 		if !validMutationIdentity(r.ResourceID, r.ResourceCreatedAt, r.Outcome == "accepted") || !validMutationActions(r.ActionID, r.NextActionIDs, r.Outcome == "accepted") {
 			return ErrCapacityMutationAuthorization
 		}
+		if !validMutationAuxiliaries(r.AuxiliaryResources) {
+			return ErrCapacityMutationAuthorization
+		}
+		if record.Grant.Capability == record.Binding.DestroyCapability && r.Outcome == "accepted" {
+			if !r.AuxiliaryInventoryComplete {
+				return ErrCapacityMutationAuthorization
+			}
+			for _, resource := range r.AuxiliaryResources {
+				if !resource.RequiresAbsence {
+					return ErrCapacityMutationAuthorization
+				}
+			}
+		}
 		if r.ResourceID != "" && record.Grant.Capability == record.Binding.EnsureCapability {
 			created, _ := time.Parse(time.RFC3339Nano, r.ResourceCreatedAt)
 			if created.Before(record.CreatedAt.Add(-5*time.Second)) || created.After(observed.Add(5*time.Second)) {
 				return ErrCapacityMutationAuthorization
 			}
 		}
-		if r.Outcome == "rejected_before_send" && (r.ResourceID != "" || r.ResourceCreatedAt != "" || r.ActionID != "" || len(r.NextActionIDs) != 0) {
+		if r.Outcome == "rejected_before_send" && (r.ResourceID != "" || r.ResourceCreatedAt != "" || r.ActionID != "" || len(r.NextActionIDs) != 0 || len(r.AuxiliaryResources) != 0 || r.AuxiliaryInventoryComplete) {
 			return ErrCapacityMutationAuthorization
 		}
 		if r.Outcome == "provider_rejected" {
-			if r.ResourceID != "" || r.ResourceCreatedAt != "" || r.ActionID != "" || len(r.NextActionIDs) != 0 {
+			if r.ResourceID != "" || r.ResourceCreatedAt != "" || r.ActionID != "" || len(r.NextActionIDs) != 0 || len(r.AuxiliaryResources) != 0 || r.AuxiliaryInventoryComplete {
 				return ErrCapacityMutationAuthorization
 			}
 			allowed := false
@@ -529,6 +544,23 @@ func validMutationActions(first string, next []string, required bool) bool {
 
 func validMutationProof(p model.CapacityPolicySpec, proof model.CapacityMutationProof, now time.Time) bool {
 	return proof.OwnerVerified && proof.SpecVerified && proof.ReceiptRef != "" && len(proof.ReceiptRef) <= 512 && capacity.Fresh(proof.ObservedAt, now, p.MaxEvidenceAgeSeconds) && validMutationIdentity(proof.ResourceID, proof.ResourceCreatedAt, true)
+}
+
+var mutationAuxiliaryKindPattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+
+func validMutationAuxiliaries(resources []model.CapacityMutationAuxiliaryResource) bool {
+	if len(resources) > 16 {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, resource := range resources {
+		key := resource.Kind + "/" + resource.ID
+		if !mutationAuxiliaryKindPattern.MatchString(resource.Kind) || resource.ID == "" || len(resource.ID) > 256 || seen[key] {
+			return false
+		}
+		seen[key] = true
+	}
+	return true
 }
 
 // RecordMutationSlot registers an exact existing native tuple from a protected
@@ -603,6 +635,9 @@ func (s CapacityStore) ConfirmMutation(ctx context.Context, policy model.Manifes
 			return ErrCapacityConflict
 		}
 		if g.Capability == b.EnsureCapability {
+			if proof.ObservedCreationGrantID != g.GrantID {
+				return ErrCapacityConflict
+			}
 			created, _ := time.Parse(time.RFC3339Nano, proof.ResourceCreatedAt)
 			if created.Before(record.CreatedAt.Add(-5*time.Second)) || created.After(proof.ObservedAt.Add(5*time.Second)) {
 				return ErrCapacityConflict
@@ -618,6 +653,20 @@ func (s CapacityStore) ConfirmMutation(ctx context.Context, policy model.Manifes
 			return err
 		}
 		if g.Capability == b.DestroyCapability {
+			if !settled.AuxiliaryInventoryComplete || !validMutationAuxiliaries(proof.AuxiliaryAbsent) {
+				return ErrCapacityConflict
+			}
+			for _, aux := range settled.AuxiliaryResources {
+				found := false
+				for _, absent := range proof.AuxiliaryAbsent {
+					if aux.Kind == absent.Kind && aux.ID == absent.ID {
+						found = true
+					}
+				}
+				if aux.RequiresAbsence && !found {
+					return ErrCapacityConflict
+				}
+			}
 			if !proof.ResourceAbsent || !exists || slot.ResourceID != g.ExpectedResourceID || slot.ResourceCreatedAt != g.ExpectedResourceCreatedAt || proof.ResourceID != g.ExpectedResourceID || proof.ResourceCreatedAt != g.ExpectedResourceCreatedAt || g.Slot <= b.ProtectedSlots {
 				return ErrCapacityConflict
 			}

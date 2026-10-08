@@ -84,14 +84,14 @@ func TestCapacityMutationCredentialScope(t *testing.T) {
 func TestCapacityMutationInventoryFailsClosed(t *testing.T) {
 	token := "fixture-private-adapter-token"
 	instance := uuid.NewString()
-	p := capacityMutationTestPrincipal(t, token, instance)
+	capacityMutationTestPrincipal(t, token, instance)
 	for _, raw := range []string{"", "null", "[]", "{}", `[{"principal_id":"unknown","unknown":true}]`} {
 		t.Setenv(capacityMutationPrincipalsEnv, raw)
 		if _, err := loadCapacityMutationPrincipals(nil, nil, nil); err == nil {
 			t.Fatalf("invalid inventory accepted: %q", raw)
 		}
 	}
-	p = capacityMutationTestPrincipal(t, token, instance)
+	p := capacityMutationTestPrincipal(t, token, instance)
 	if _, err := loadCapacityMutationPrincipals([]workflowMachinePrincipal{{TokenSHA256: p[0].base.tokenSHA256}}, nil, nil); err == nil {
 		t.Fatal("cross-scope credential collision")
 	}
@@ -157,7 +157,7 @@ func TestCapacityMutationHTTPPostgres(t *testing.T) {
 	b := model.CapacityMutationBinding{Name: "fleet", IntegrationInstanceID: in.ID.String(), IntegrationChecksum: in.Checksum, IntegrationTypeID: ty.ID.String(), IntegrationTypeChecksum: ty.Checksum, AdapterPrincipalID: "fixture-adapter", ScopeChecksum: scope, ProfileName: "base", EnsureCapability: "ensure_server", DestroyCapability: "destroy_server", ProtectedSlots: 2, MaxSlots: 3}
 	plans := map[int]model.CapacityMutationIssue{}
 	for slot := 1; slot <= 3; slot++ {
-		raw, _ := json.Marshal(map[string]any{"capability": "ensure_server", "integration_instance_id": in.ID.String(), "scope_checksum": scope, "profile_name": "base", "slot": slot})
+		raw, _ := json.Marshal(map[string]any{"schema_version": "fixture_slot_v1", "capability": "ensure_server", "integration_instance_id": in.ID.String(), "scope_checksum": scope, "profile_name": "base", "slot": slot, "profile_checksum": strings.Repeat("c", 64), "admission_checksum": strings.Repeat("d", 64), "native_name": fmt.Sprintf("node-%d", slot), "bootstrap_sha256": strings.Repeat("b", 64)})
 		plans[slot] = model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: raw}
 		b.Slots = append(b.Slots, model.CapacityMutationSlotBinding{Slot: slot, DesiredSpecSHA256: fmt.Sprintf("%x", sha256.Sum256(raw))})
 	}

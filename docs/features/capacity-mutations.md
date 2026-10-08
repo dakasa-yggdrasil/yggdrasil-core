@@ -15,8 +15,12 @@ must remain exact and active when issuing or redeeming. Dynamic prices and query
 times must not change logical scope; current physical/admission revisions belong
 in the non-secret desired spec and its digest.
 
-Canonical JSON recursively sorts object keys, preserves integer numbers and
-declared array order. It excludes credentials and raw bootstrap content. For a
+The closed `capacity_vm_slot_v1` projection has only `schema_version`,
+`capability`, `integration_instance_id`, `scope_checksum`, `profile_checksum`,
+`admission_checksum`, `profile_name`, integer `slot`, `native_name`,
+`bootstrap_sha256` and optional expected destroy identity. Unknown fields are
+refused before hashing. Core never hashes arbitrary credential-bearing JSON.
+Canonical JSON sorts object keys and preserves integer numbers. For a
 destroy plan, Core compares the approved ensure base after removing only the
 expected immutable resource tuple and replacing the capability with ensure.
 The actual destroy digest still binds that exact tuple. A dry run cannot approve
@@ -79,12 +83,15 @@ one exact JSON object is bounded to32KiB and unknown fields are rejected.
   private `X-Capacity-Mutation-Settlement` nonce. Request has grant/attempt/digest,
   `outcome`, `transport_completed:true`, immutable resource tuple, primary and
   next action IDs where known, observation time and sanitized provider error.
-  An accepted outcome requires identity and action evidence. Exact settlement
-  retries are idempotent; changed receipts are conflicts. After commit response
+  An accepted outcome requires identity and action evidence.
+  For deletion it also requires `auxiliary_inventory_complete:true` and every
+  identified paid auxiliary in `auxiliary_resources:[{kind,id,requires_absence}]`.
+  Exact settlement retries are idempotent; changed receipts are conflicts. After commit response
   is `{grant_id,attempt_id,request_sha256,status:"settled"}`.
 - `GET /api/v1/capacity/mutations/{grant_id}`: same scoped adapter credential,
   no write permission. Returns `{grant,attempt_id,outcome,transport_completed,
-  resource_id,resource_created_at,action_id,next_action_ids}` where available.
+  resource_id,resource_created_at,action_id,next_action_ids,auxiliary_resources,
+  auxiliary_inventory_complete}` where available.
   This preserves native deletion identity after a server disappears. No lease
   owner/executor, nonce/hash, credential or desired secret content is returned.
 
@@ -105,11 +112,15 @@ An owning adapter can settle after lease expiry, policy replacement or execution
 pause. Accepted transport does not establish native action completion. A fresh
 protected confirmation requires owned/spec-verified exact resource identity,
 all recorded primary/next action IDs present in a complete terminal successful
-action proof, and prior owning transport settlement. Lost create responses may
+action proof, and prior owning transport settlement. Creation confirmation
+requires `observed_creation_grant_id` equal to the exact grant and creation time
+within its bounded chronology. Lost create responses may
 recover only from complete native reads bound to the exact creation grant label;
 empty/partial action lists or a reused name are insufficient. Delete confirmation
-also requires exact native absence, after its recorded delete action completes.
-Paid IP/volume/LB cleanup belongs to a separate owned adapter contract.
+also requires exact native absence, after its recorded delete action completes,
+and fresh `auxiliary_absent:[{kind,id}]` proof for every required auxiliary.
+Provider-specific discovery and cleanup of paid IP/volume/LB resources stays
+with the adapter; a vanished server alone does not prove billing stopped.
 
 Every outstanding `issued`, `redeemed` or `settled` grant blocks intent promotion,
 reconciliation and abort. Only never-redeemed expired grants can retire without

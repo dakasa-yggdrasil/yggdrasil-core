@@ -40,6 +40,24 @@ type CapacityMutationIssue struct {
 	DesiredSpec json.RawMessage `json:"desired_spec"`
 }
 
+// CapacityMutationSpecV1 is the closed non-secret slot projection shared with
+// provider adapters. Physical SDK fields are pinned by profile/admission hashes.
+// Unknown fields never enter an authoritative desired-spec digest.
+type CapacityMutationSpecV1 struct {
+	SchemaVersion             string `json:"schema_version"`
+	Capability                string `json:"capability"`
+	IntegrationInstanceID     string `json:"integration_instance_id"`
+	ScopeChecksum             string `json:"scope_checksum"`
+	ProfileChecksum           string `json:"profile_checksum"`
+	AdmissionChecksum         string `json:"admission_checksum"`
+	ProfileName               string `json:"profile_name"`
+	Slot                      int    `json:"slot"`
+	NativeName                string `json:"native_name"`
+	BootstrapSHA256           string `json:"bootstrap_sha256"`
+	ExpectedResourceID        string `json:"expected_resource_id,omitempty"`
+	ExpectedResourceCreatedAt string `json:"expected_resource_created_at,omitempty"`
+}
+
 // These DTOs agree with the adapter's private callback contract. They contain
 // no settlement bearer. Only a hash enters durable redemption state.
 type CapacityMutationRedeemRequest struct {
@@ -65,18 +83,26 @@ type CapacityMutationRedeemResponse struct {
 }
 
 type CapacityMutationSettleRequest struct {
-	GrantID            string   `json:"grant_id"`
-	AttemptID          string   `json:"attempt_id"`
-	RequestSHA256      string   `json:"request_sha256"`
-	Outcome            string   `json:"outcome"`
-	TransportCompleted bool     `json:"transport_completed"`
-	ResourceID         string   `json:"resource_id,omitempty"`
-	ResourceCreatedAt  string   `json:"resource_created_at,omitempty"`
-	ActionID           string   `json:"action_id,omitempty"`
-	NextActionIDs      []string `json:"next_action_ids,omitempty"`
-	ObservedAt         string   `json:"observed_at"`
-	ProviderErrorCode  string   `json:"provider_error_code,omitempty"`
-	ProviderStatusCode int      `json:"provider_status_code,omitempty"`
+	GrantID                    string                              `json:"grant_id"`
+	AttemptID                  string                              `json:"attempt_id"`
+	RequestSHA256              string                              `json:"request_sha256"`
+	Outcome                    string                              `json:"outcome"`
+	TransportCompleted         bool                                `json:"transport_completed"`
+	ResourceID                 string                              `json:"resource_id,omitempty"`
+	ResourceCreatedAt          string                              `json:"resource_created_at,omitempty"`
+	ActionID                   string                              `json:"action_id,omitempty"`
+	NextActionIDs              []string                            `json:"next_action_ids,omitempty"`
+	ObservedAt                 string                              `json:"observed_at"`
+	ProviderErrorCode          string                              `json:"provider_error_code,omitempty"`
+	ProviderStatusCode         int                                 `json:"provider_status_code,omitempty"`
+	AuxiliaryResources         []CapacityMutationAuxiliaryResource `json:"auxiliary_resources,omitempty"`
+	AuxiliaryInventoryComplete bool                                `json:"auxiliary_inventory_complete,omitempty"`
+}
+
+type CapacityMutationAuxiliaryResource struct {
+	Kind            string `json:"kind"`
+	ID              string `json:"id"`
+	RequiresAbsence bool   `json:"requires_absence,omitempty"`
 }
 
 type CapacityMutationGrant struct {
@@ -95,32 +121,36 @@ type CapacityMutationGrant struct {
 }
 
 type CapacityMutationReceipt struct {
-	Grant              CapacityMutationGrant `json:"grant"`
-	AttemptID          string                `json:"attempt_id,omitempty"`
-	Outcome            string                `json:"outcome,omitempty"`
-	TransportCompleted bool                  `json:"transport_completed"`
-	ResourceID         string                `json:"resource_id,omitempty"`
-	ResourceCreatedAt  string                `json:"resource_created_at,omitempty"`
-	ActionID           string                `json:"action_id,omitempty"`
-	NextActionIDs      []string              `json:"next_action_ids,omitempty"`
+	Grant                      CapacityMutationGrant               `json:"grant"`
+	AttemptID                  string                              `json:"attempt_id,omitempty"`
+	Outcome                    string                              `json:"outcome,omitempty"`
+	TransportCompleted         bool                                `json:"transport_completed"`
+	ResourceID                 string                              `json:"resource_id,omitempty"`
+	ResourceCreatedAt          string                              `json:"resource_created_at,omitempty"`
+	ActionID                   string                              `json:"action_id,omitempty"`
+	NextActionIDs              []string                            `json:"next_action_ids,omitempty"`
+	AuxiliaryResources         []CapacityMutationAuxiliaryResource `json:"auxiliary_resources,omitempty"`
+	AuxiliaryInventoryComplete bool                                `json:"auxiliary_inventory_complete,omitempty"`
 }
 
 // A native action receipt is assembled by the fixed protected workflow using
 // fresh adapter reads. Transport completion, provider action completion, and
 // product readiness are distinct facts; this proof addresses only the first two.
 type CapacityMutationProof struct {
-	GrantID           string    `json:"grant_id"`
-	BindingName       string    `json:"binding_name"`
-	Slot              int       `json:"slot"`
-	ResourceID        string    `json:"resource_id"`
-	ResourceCreatedAt string    `json:"resource_created_at"`
-	RequestSHA256     string    `json:"request_sha256"`
-	ObservedAt        time.Time `json:"observed_at"`
-	ReceiptRef        string    `json:"receipt_ref"`
-	OwnerVerified     bool      `json:"owner_verified"`
-	SpecVerified      bool      `json:"spec_verified"`
-	ResourceAbsent    bool      `json:"resource_absent"`
-	ActionIDs         []string  `json:"action_ids"`
-	ActionsTerminal   bool      `json:"actions_terminal"`
-	ActionsSuccessful bool      `json:"actions_successful"`
+	GrantID                 string                              `json:"grant_id"`
+	BindingName             string                              `json:"binding_name"`
+	Slot                    int                                 `json:"slot"`
+	ResourceID              string                              `json:"resource_id"`
+	ResourceCreatedAt       string                              `json:"resource_created_at"`
+	RequestSHA256           string                              `json:"request_sha256"`
+	ObservedAt              time.Time                           `json:"observed_at"`
+	ReceiptRef              string                              `json:"receipt_ref"`
+	OwnerVerified           bool                                `json:"owner_verified"`
+	SpecVerified            bool                                `json:"spec_verified"`
+	ResourceAbsent          bool                                `json:"resource_absent"`
+	ActionIDs               []string                            `json:"action_ids"`
+	ActionsTerminal         bool                                `json:"actions_terminal"`
+	ActionsSuccessful       bool                                `json:"actions_successful"`
+	ObservedCreationGrantID string                              `json:"observed_creation_grant_id,omitempty"`
+	AuxiliaryAbsent         []CapacityMutationAuxiliaryResource `json:"auxiliary_absent,omitempty"`
 }

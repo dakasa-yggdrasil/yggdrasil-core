@@ -2,6 +2,16 @@
 
 This page explains the cross-cutting concepts that the OpenAPI spec assumes but does not fully spell out. Read it once; refer back when an endpoint behaves unexpectedly.
 
+## Private capacity mutation callbacks
+
+The optional `/api/v1/capacity/mutations` surface accepts only independently
+configured hashed adapter principals. Redeem returns one transport permission;
+every replay is read-only. Settlement requires the private owning nonce and
+does not establish native completion. Scoped receipt reads preserve exact
+resource, action and paid auxiliary identity across recovery. See
+[durable provider mutation authority](../features/capacity-mutations.md) for
+binding, lifecycle, deletion and default-off requirements.
+
 ## Manifest envelope
 
 Every manifest persisted by Yggdrasil shares the same outer shape:

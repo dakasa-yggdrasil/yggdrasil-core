@@ -56,7 +56,7 @@ func mutationPostgresFixture(t *testing.T, register bool) mutationFixture {
 	b := model.CapacityMutationBinding{Name: "burst", IntegrationInstanceID: instance.ID.String(), IntegrationChecksum: instance.Checksum, IntegrationTypeID: ty.ID.String(), IntegrationTypeChecksum: ty.Checksum, AdapterPrincipalID: "fleet-adapter", ScopeChecksum: strings.Repeat("a", 64), ProfileName: "base", EnsureCapability: "ensure_server", DestroyCapability: "destroy_server", ProtectedSlots: 2, MaxSlots: 20}
 	plans := map[int]model.CapacityMutationIssue{}
 	for slot := 1; slot <= b.MaxSlots; slot++ {
-		raw, _ := json.Marshal(map[string]any{"schema_version": "fixture_slot_v1", "capability": b.EnsureCapability, "integration_instance_id": b.IntegrationInstanceID, "scope_checksum": b.ScopeChecksum, "profile_name": b.ProfileName, "slot": slot, "native_name": fmt.Sprintf("node-%d", slot), "bootstrap_sha256": strings.Repeat("b", 64)})
+		raw, _ := json.Marshal(map[string]any{"schema_version": "fixture_slot_v1", "capability": b.EnsureCapability, "integration_instance_id": b.IntegrationInstanceID, "scope_checksum": b.ScopeChecksum, "profile_name": b.ProfileName, "profile_checksum": strings.Repeat("c", 64), "admission_checksum": strings.Repeat("d", 64), "slot": slot, "native_name": fmt.Sprintf("node-%d", slot), "bootstrap_sha256": strings.Repeat("b", 64)})
 		b.Slots = append(b.Slots, model.CapacityMutationSlotBinding{Slot: slot, DesiredSpecSHA256: fmt.Sprintf("%x", sha256.Sum256(raw))})
 		plans[slot] = model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: raw}
 	}
@@ -141,7 +141,12 @@ func mutationSettlement(r model.CapacityMutationRedeemRequest, created string) m
 	if strings.HasPrefix(r.Capability, "ensure_") {
 		created = time.Now().UTC().Format(time.RFC3339Nano)
 	}
-	return model.CapacityMutationSettleRequest{GrantID: r.GrantID, AttemptID: r.AttemptID, RequestSHA256: r.RequestSHA256, Outcome: "accepted", TransportCompleted: true, ResourceID: fmt.Sprintf("resource-%d", r.Slot), ResourceCreatedAt: created, ActionID: "native-action", NextActionIDs: []string{"bootstrap-action"}, ObservedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+	result := model.CapacityMutationSettleRequest{GrantID: r.GrantID, AttemptID: r.AttemptID, RequestSHA256: r.RequestSHA256, Outcome: "accepted", TransportCompleted: true, ResourceID: fmt.Sprintf("resource-%d", r.Slot), ResourceCreatedAt: created, ActionID: "native-action", NextActionIDs: []string{"bootstrap-action"}, ObservedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+	if strings.HasPrefix(r.Capability, "destroy_") {
+		result.AuxiliaryInventoryComplete = true
+		result.AuxiliaryResources = []model.CapacityMutationAuxiliaryResource{{Kind: "primary_ip", ID: "ip-fixture", RequiresAbsence: true}}
+	}
+	return result
 }
 
 func TestCapacityMutationPostgres(t *testing.T) {
@@ -416,6 +421,7 @@ func TestCapacityMutationPostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 		proof.ResourceCreatedAt = settle.ResourceCreatedAt
+		proof.ObservedCreationGrantID = g.GrantID
 		proof.ActionIDs = []string{"native-action"}
 		if _, err := f.store.ConfirmMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, proof); !errors.Is(err, ErrCapacityConflict) {
 			t.Fatal("unobserved next action", err)
@@ -426,6 +432,13 @@ func TestCapacityMutationPostgres(t *testing.T) {
 			t.Fatal("native replacement adopted", err)
 		}
 		proof.ResourceID = settle.ResourceID
+		for _, creationGrantID := range []string{"", uuid.NewString()} {
+			proof.ObservedCreationGrantID = creationGrantID
+			if _, err := f.store.ConfirmMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, proof); !errors.Is(err, ErrCapacityConflict) {
+				t.Fatal("creation identity without its exact native grant label", err)
+			}
+		}
+		proof.ObservedCreationGrantID = g.GrantID
 		result, err := f.store.ConfirmMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, proof)
 		if err != nil || result.State != "confirmed" {
 			t.Fatal(result, err)
@@ -462,6 +475,7 @@ func TestCapacityMutationPostgres(t *testing.T) {
 		proof.ActionsSuccessful = true
 		proof.ActionIDs = []string{"native-action", "bootstrap-action"}
 		proof.ResourceCreatedAt = settle.ResourceCreatedAt
+		proof.ObservedCreationGrantID = g.GrantID
 		result, err := recovery.ConfirmMutation(ctx, f.policy, 1, lease.FencingToken, lease.LeaseOwner, proof)
 		if err != nil || result.State != "confirmed" {
 			t.Fatal(result, err)
@@ -520,6 +534,10 @@ func TestCapacityMutationPostgres(t *testing.T) {
 		deleted.ActionsTerminal = true
 		deleted.ActionsSuccessful = true
 		deleted.ActionIDs = []string{"native-action", "bootstrap-action"}
+		if _, err = f.store.ConfirmMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, deleted); !errors.Is(err, ErrCapacityConflict) {
+			t.Fatal("unobserved paid auxiliary disappearance", err)
+		}
+		deleted.AuxiliaryAbsent = []model.CapacityMutationAuxiliaryResource{{Kind: "primary_ip", ID: "ip-fixture"}}
 		if _, err = f.store.ConfirmMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, deleted); err != nil {
 			t.Fatal(err)
 		}
