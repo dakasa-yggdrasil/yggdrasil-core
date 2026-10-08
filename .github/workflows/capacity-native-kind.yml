@@ -108,11 +108,11 @@ jobs:
           REQUIRE_CAPACITY_NATIVE_KIND: "true"
         run: |
           set -euo pipefail
-          go test -race -count=1 -timeout=8m -json ./controllers/httpapi -run '^TestCapacityMutationNativeKinDHTTPPostgres$' | tee native-core-results.json
+          go test -race -count=1 -timeout=8m -json ./controllers/httpapi -run '^TestCapacityNativeKinDHTTP$' | tee native-core-results.json
           python3 - <<'PY'
           import json
           events=[json.loads(line) for line in open('native-core-results.json') if line.strip()]
-          required='TestCapacityMutationNativeKinDHTTPPostgres'
+          required='TestCapacityNativeKinDHTTP'
           if not any(e.get('Test')==required and e.get('Action')=='pass' for e in events): raise SystemExit('actual protected native Core case missing or failed')
           if any(e.get('Test')==required and e.get('Action') in ['skip','fail'] for e in events): raise SystemExit('actual protected native Core case skipped or failed')
           PY

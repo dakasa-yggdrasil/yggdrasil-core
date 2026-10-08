@@ -29,7 +29,7 @@ import (
 // This CI-only gate uses the actual Kubernetes adapter main, actual Core HTTP
 // actor/RBAC and command APIs, production migrations, PostgreSQL, RabbitMQ and
 // current native KinD Pods carrying the exact independently qualified producer.
-func TestCapacityMutationNativeKinDHTTPPostgres(t *testing.T) {
+func TestCapacityNativeKinDHTTP(t *testing.T) {
 	if os.Getenv("REQUIRE_CAPACITY_NATIVE_KIND") != "true" {
 		t.Skip("remote native Core/Kubernetes/PG qualification")
 	}
@@ -48,7 +48,7 @@ func TestCapacityMutationNativeKinDHTTPPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	defer conn.Close()
-	defer db.Close()
+	t.Cleanup(func() { _ = db.Close() })
 	realm := "native-core-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:12]
 	create := func(kind, name string, value any) model.Manifest {
 		raw, _ := json.Marshal(value)
@@ -124,11 +124,14 @@ func TestCapacityMutationNativeKinDHTTPPostgres(t *testing.T) {
 			return false
 		}
 		defer response.Body.Close()
+		var envelope struct {
+			Body []byte `json:"body"`
+		}
 		var payload struct {
 			OK   bool                          `json:"ok"`
 			Data model.AdapterDescribeResponse `json:"data"`
 		}
-		if json.NewDecoder(response.Body).Decode(&payload) != nil || !payload.OK {
+		if response.StatusCode != http.StatusOK || json.NewDecoder(response.Body).Decode(&envelope) != nil || json.Unmarshal(envelope.Body, &payload) != nil || !payload.OK {
 			return false
 		}
 		describe = payload.Data
