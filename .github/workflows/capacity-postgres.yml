@@ -33,10 +33,38 @@ jobs:
       REQUIRE_CAPACITY_POSTGRES: "true"
     steps:
       - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read-only token for exact private native fixture source
+        id: native-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.YGGDRASIL_APP_ID }}
+          private-key: ${{ secrets.YGGDRASIL_APP_PEM }}
+          owner: dakasa-yggdrasil
+          repositories: integration-hetzner
+          permission-contents: read
+      - name: Checkout reviewed native adapter source
+        uses: actions/checkout@v4
+        with:
+          repository: dakasa-yggdrasil/integration-hetzner
+          ref: cddc784604e7bdb26717c36c2cff242558a781aa
+          path: .ci-native-hetzner
+          token: ${{ steps.native-token.outputs.token }}
+          persist-credentials: false
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
           cache: true
+      - name: Compile actual native read fixture producer in remote CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C .ci-native-hetzner rev-parse HEAD)" = cddc784604e7bdb26717c36c2cff242558a781aa
+          cp scripts/ci/capacity_vm_native_fixture_test.go.tmpl .ci-native-hetzner/internal/adapter/capacity_core_native_fixture_test.go
+          cd .ci-native-hetzner
+          go test -c -o "$RUNNER_TEMP/capacity-native-fixture" ./internal/adapter
+          echo "CAPACITY_NATIVE_FIXTURE_BINARY=$RUNNER_TEMP/capacity-native-fixture" >> "$GITHUB_ENV"
       - name: Apply production migrations
         run: go run ./scripts/goose up
       - name: Exercise durable decisions, concurrency, restart and fencing
@@ -71,6 +99,15 @@ jobs:
               "complete_membership_and_bound_plan_required")}
           expected |= {mutation + "/policy_instance_type_and_executor_fences/" + name for name in ("policy", "instance", "type", "executor")}
           expected |= {"TestCapacityMutationHTTPPostgres", "TestCapacityMutationFailedFloorRecoveryPostgres"}
+          native = "TestCapacityMutationNativeWorkflowPostgres"
+          expected |= {native} | {native + "/" + name for name in (
+              "readonly_real_adapter_inventory_has_no_authority",
+              "caller_scope_proof_and_unprotected_workflow_are_refused",
+              "native_collision_refuses_entire_inventory",
+              "complete_inventory_registers_through_existing_lease",
+              "native_reads_confirm_once_without_readiness_claim",
+              "lost_failed_creation_is_explicit_unresolved_member",
+              "paused_instance_and_old_type_refuse_current_reads")}
           compensation = "TestCapacityMutationCompensationPostgres"
           expected |= {compensation} | {compensation + "/" + name for name in (
               "unprotected_failed_create", "protected_failed_create_without_serving_membership",
