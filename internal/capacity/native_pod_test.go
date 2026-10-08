@@ -73,3 +73,16 @@ func TestBoundNativeWitnessRequiresCurrentFullLifetime(t *testing.T) {
 		})
 	}
 }
+
+func TestBoundNativeTimestampIntervalBoundaries(t *testing.T) {
+	finished := time.Unix(100, 0).UTC()
+	if !nativeJoinTimestamp(finished.Add(time.Second-time.Nanosecond), finished) {
+		t.Fatal("same native second refused")
+	}
+	if nativeJoinTimestamp(finished.Add(time.Second), finished) {
+		t.Fatal("later native second accepted")
+	}
+	if nativeJoinTimestamp(finished.Add(501*time.Millisecond), finished.Add(500*time.Millisecond)) {
+		t.Fatal("precise native timestamp widened")
+	}
+}
