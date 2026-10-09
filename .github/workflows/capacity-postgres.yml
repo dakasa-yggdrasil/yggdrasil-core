@@ -1,0 +1,174 @@
+name: Capacity intent PostgreSQL protocol
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  capacity-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: capacity-ci-only
+          POSTGRES_DB: capacity_integration
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d capacity_integration"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      GOWORK: "off"
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: capacity_integration
+      DB_USER: postgres
+      DB_PASSWORD: capacity-ci-only
+      DB_SSLMODE: disable
+      DB_URL: postgres://postgres:capacity-ci-only@127.0.0.1:5432/capacity_integration?sslmode=disable
+      REQUIRE_CAPACITY_POSTGRES: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read-only token for exact private native fixture source
+        id: native-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.YGGDRASIL_APP_ID }}
+          private-key: ${{ secrets.YGGDRASIL_APP_PEM }}
+          owner: dakasa-yggdrasil
+          repositories: |
+            integration-hetzner
+            integration-prometheus
+            integration-kubernetes
+          permission-contents: read
+      - name: Checkout reviewed native adapter source
+        uses: actions/checkout@v4
+        with:
+          repository: dakasa-yggdrasil/integration-hetzner
+          ref: cddc784604e7bdb26717c36c2cff242558a781aa
+          path: .ci-native-hetzner
+          token: ${{ steps.native-token.outputs.token }}
+          persist-credentials: false
+      - name: Checkout reviewed fixed metric source
+        uses: actions/checkout@v4
+        with:
+          repository: dakasa-yggdrasil/integration-prometheus
+          ref: 50069ab20de576e2818fac0df99050919678f4db
+          path: .ci-bound-prometheus
+          token: ${{ steps.native-token.outputs.token }}
+          persist-credentials: false
+      - name: Checkout reviewed native HPA source
+        uses: actions/checkout@v4
+        with:
+          repository: dakasa-yggdrasil/integration-kubernetes
+          ref: a386344e36383b0a23c3c82c5d05a5a176b0e0af
+          path: .ci-bound-kubernetes
+          token: ${{ steps.native-token.outputs.token }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Compile actual native read fixture producer in remote CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C .ci-native-hetzner rev-parse HEAD)" = cddc784604e7bdb26717c36c2cff242558a781aa
+          cp scripts/ci/capacity_vm_native_fixture_test.go.tmpl .ci-native-hetzner/internal/adapter/capacity_core_native_fixture_test.go
+          cd .ci-native-hetzner
+          go test -c -o "$RUNNER_TEMP/capacity-native-fixture" ./internal/adapter
+          echo "CAPACITY_NATIVE_FIXTURE_BINARY=$RUNNER_TEMP/capacity-native-fixture" >> "$GITHUB_ENV"
+      - name: Compile actual metric and HPA source producers in remote CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C .ci-bound-prometheus rev-parse HEAD)" = 50069ab20de576e2818fac0df99050919678f4db
+          test "$(git -C .ci-bound-kubernetes rev-parse HEAD)" = a386344e36383b0a23c3c82c5d05a5a176b0e0af
+          cp scripts/ci/capacity_metric_source_fixture_test.go.tmpl .ci-bound-prometheus/internal/adapter/capacity_core_metric_source_test.go
+          cp scripts/ci/capacity_hpa_source_fixture_test.go.tmpl .ci-bound-kubernetes/internal/adapter/capacity_core_hpa_source_test.go
+          (cd .ci-bound-prometheus && go test -c -o "$RUNNER_TEMP/capacity-metric-fixture" ./internal/adapter)
+          (cd .ci-bound-kubernetes && go test -c -o "$RUNNER_TEMP/capacity-hpa-fixture" ./internal/adapter)
+          echo "CAPACITY_METRIC_FIXTURE_BINARY=$RUNNER_TEMP/capacity-metric-fixture" >> "$GITHUB_ENV"
+          echo "CAPACITY_HPA_FIXTURE_BINARY=$RUNNER_TEMP/capacity-hpa-fixture" >> "$GITHUB_ENV"
+      - name: Apply production migrations
+        run: go run ./scripts/goose up
+      - name: Exercise durable decisions, concurrency, restart and fencing
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message ./controllers/httpapi -run '^TestCapacity(Intent.*|Workflow|Mutation.*|NativeLifetime)Postgres$' | tee capacity-results.jsonl
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          events = [json.loads(line) for line in Path("capacity-results.jsonl").read_text().splitlines() if line.strip()]
+          root = "TestCapacityIntentPostgres"
+          expected = {root} | {root + "/" + name for name in (
+              "concurrent_assess_and_claim", "phase_receipts_and_promotion",
+              "shadow_and_inactive_policy", "dimension_ownership_and_stale_evidence")}
+          workflow = "TestCapacityWorkflowPostgres"
+          expected |= {workflow} | {workflow + "/" + name for name in (
+              "exact_active_protected_workflow", "shadow_claim_is_blocked",
+              "actorless_dispatch_is_blocked", "invocation_cannot_steal_lease", "unprotected_runtime_is_blocked")}
+          expected |= {"TestCapacityIntentExecutorAndReadbackPrivacyPostgres", "TestCapacityIntentExpiredQuoteAndHistoricalRecoveryPostgres", "TestCapacityIntentAbortRequiresMutationFenceProofPostgres"}
+          expected |= {"TestCapacityIntentDrainRequiresExplicitZeroInflightPostgres", "TestCapacityIntentFloorReadbackWithoutDemandMetricsPostgres"}
+          expected |= {"TestCapacityIntentRetentionPostgres"}
+          mutation = "TestCapacityMutationPostgres"
+          expected |= {mutation} | {mutation + "/" + name for name in (
+              "global_slot_registration_cannot_cross_policy_realms", "native_profiles_have_independent_slot_identities",
+              "paused_unredeemed_expiry_can_reconcile_without_native_fence",
+              "concurrent_issue_and_single_redemption", "lost_reply_same_attempt_is_read_only",
+              "settlement_nonce_scope_pause_and_private_receipt", "unresolved_mutation_blocks_terminal_and_expiry_reissue",
+              "native_action_cannot_replace_transport_settlement", "historical_recovery_confirms_after_pause",
+              "partial_recovery_matches_fresh_membership_and_allows_new_intent",
+              "floor_drain_pending_delete_budget_and_tombstone", "policy_instance_type_and_executor_fences",
+              "complete_membership_and_bound_plan_required")}
+          expected |= {mutation + "/policy_instance_type_and_executor_fences/" + name for name in ("policy", "instance", "type", "executor")}
+          expected |= {"TestCapacityMutationHTTPPostgres", "TestCapacityMutationFailedFloorRecoveryPostgres"}
+          native_http="TestCapacityMutationNativeHTTPPostgres"
+          expected |= {native_http} | {native_http+"/"+name for name in ("default_deny","canonical_members","instance_capability_and_hash_fences","single_use_redemption")}
+          bound_execution="TestCapacityMutationBoundExecutionPostgres"
+          expected |= {bound_execution} | {bound_execution+"/"+name for name in ("finite_unredeemed_permission_budget","redemption_and_revocation_share_one_fence","unredeemed_token_revocation_and_history","single_send_and_canonical_request","principal_scope_and_single_redemption","lost_reply_blocks_new_write_and_terminal","native_readback_and_restart_recovery")}
+          lifetime="TestCapacityNativeLifetimePostgres"
+          expected |= {lifetime} | {lifetime+"/"+name for name in ("jsonb_origin_and_actual_ack","terminal_archive_repeated_rollouts","alive_and_uncertain_never_archived","partial_terminal_never_archived")}
+          native = "TestCapacityMutationNativeWorkflowPostgres"
+          expected |= {native} | {native + "/" + name for name in (
+              "readonly_real_adapter_inventory_has_no_authority",
+              "caller_scope_proof_and_unprotected_workflow_are_refused",
+              "native_collision_refuses_entire_inventory",
+              "complete_inventory_registers_through_existing_lease",
+              "native_reads_confirm_once_without_readiness_claim",
+              "lost_failed_creation_is_explicit_unresolved_member",
+              "paused_instance_and_old_type_refuse_current_reads",
+              "native_catalog_refuses_before_private_hydration")}
+          bound = "TestCapacityMutationBoundAssessmentPostgres"
+          expected |= {bound} | {bound + "/" + name for name in (
+              "actual_metric_and_hpa_producers_measure_only_reserved_minimum",
+              "missing_stale_cardinality_and_nonfinite_sources_hold_without_zero",
+              "caller_assessment_and_old_actuation_paths_are_blocked",
+              "foreign_uid_missing_rv_and_wrong_hash_refuse",
+              "shadow_binding_rejects_vm_units_and_profile_migration",
+              "catalog_refusal_precedes_private_hydration_and_describe",
+              "mutator_category_refusal_precedes_private_hydration",
+              "inactive_instance_and_type_revision_refuse_without_source_calls")}
+          compensation = "TestCapacityMutationCompensationPostgres"
+          expected |= {compensation} | {compensation + "/" + name for name in (
+              "unprotected_failed_create", "protected_failed_create_without_serving_membership",
+              "lost_create_reply_uses_separate_native_readback", "protected_lost_create_reply")}
+          expected |= {compensation + "/unprotected_failed_create/global_slot_precedes_child_row_during_foreign_issue"}
+          passed = {event.get("Test") for event in events if event.get("Action") == "pass"}
+          skipped = {event.get("Test") for event in events if event.get("Action") == "skip"}
+          if expected - passed or skipped:
+              raise SystemExit(f"Capacity gate incomplete: missing={sorted(expected-passed)}, skipped={sorted(skipped)}")
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capacity-protocol-results
+          path: capacity-results.jsonl
+          if-no-files-found: error

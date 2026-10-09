@@ -1,0 +1,174 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_type",
+  "metadata": {
+    "name": "hetzner",
+    "namespace": "global",
+    "description": "Fixed-profile Hetzner Cloud slots; 0.1.0 source candidate, not installed."
+  },
+  "spec": {
+    "provider": "hetzner",
+    "adapter": {
+      "transport": "rabbitmq",
+      "version": "0.1.0",
+      "queues": {
+        "describe": "yggdrasil.adapter.hetzner.describe",
+        "execute": "yggdrasil.adapter.hetzner.execute"
+      },
+      "timeout_seconds": 65
+    },
+    "capabilities": [
+      "describe",
+      "execute"
+    ],
+    "credential_schema": {
+      "mode": "inline",
+      "required": [
+        "api_token"
+      ],
+      "properties": {
+        "api_token": {
+          "type": "string",
+          "secret": true,
+          "description": "Operator secret-resolved project-scoped Hetzner Cloud bearer; no environment/account fallback."
+        },
+        "grant_bearer": {
+          "type": "string",
+          "secret": true,
+          "description": "Separately resolved scoped Core adapter callback bearer; required only for private mutation/recovery receipts."
+        },
+        "bootstrap_templates": {
+          "type": "object",
+          "secret": true,
+          "description": "Fixed secret-resolved cloud-init templates, each matching the approved profile SHA256; never caller input/output."
+        }
+      }
+    },
+    "instance_schema": {
+      "mode": "inline",
+      "required": [
+        "fleet"
+      ],
+      "properties": {
+        "fleet": {
+          "type": "object",
+          "description": "Strict typed operator FleetConfig: project anchor, owner, fixed profiles/slots/floors/ceilings/budgets, default-off mutations and fixed HTTPS grant origin. See docs/FLEET-LIFECYCLE.md."
+        }
+      }
+    },
+    "resource_types": [
+      {
+        "name": "server",
+        "canonical_prefix": "thirdparty.hetzner.cloud.server",
+        "identity_template": "server.{id}",
+        "discoverable": false,
+        "default_actions": [
+          "ensure_server",
+          "observe_servers",
+          "destroy_server",
+          "observe_failed_server_creation"
+        ]
+      },
+      {
+        "name": "server_action",
+        "canonical_prefix": "thirdparty.hetzner.cloud.server_action",
+        "identity_template": "server_action.{id}",
+        "discoverable": false,
+        "default_actions": [
+          "observe_server_action"
+        ]
+      },
+      {
+        "name": "fleet_profile",
+        "canonical_prefix": "thirdparty.hetzner.cloud.fleet_profile",
+        "identity_template": "fleet_profile.{scope_checksum}.{name}",
+        "discoverable": false,
+        "default_actions": [
+          "observe_fleet_profile",
+          "observe_fleet_inventory"
+        ]
+      }
+    ],
+    "action_catalog": [
+      {
+        "name": "ensure_server",
+        "resource_types": [
+          "server"
+        ],
+        "idempotent": true,
+        "description": "Default dry-run fixed-slot server plan; opt-in single-use Core grant sends one native create, uncertainty uses GET-only recovery."
+      },
+      {
+        "name": "observe_servers",
+        "resource_types": [
+          "server"
+        ],
+        "idempotent": true,
+        "description": "Observe one operator-scoped slot with exact immutable identity, owner and physical spec; absence does not prove writer quiescence."
+      },
+      {
+        "name": "destroy_server",
+        "resource_types": [
+          "server"
+        ],
+        "idempotent": true,
+        "description": "Default dry-run immutable-ID delete; durable drain grant and protected-floor refusal, with separately enabled private failed-create compensation child; no retained data/IP/LB destruction."
+      },
+      {
+        "name": "observe_server_action",
+        "resource_types": [
+          "server_action"
+        ],
+        "idempotent": true,
+        "description": "Native action identity/status tied to owned server or private persisted deletion receipt; no business readiness/fencing claim."
+      },
+      {
+        "name": "observe_fleet_profile",
+        "resource_types": [
+          "fleet_profile"
+        ],
+        "idempotent": true,
+        "description": "Read pinned native type/image/location availability and exact gross hourly/monthly price/currency with freshness horizon; no stock reservation or throughput qualification."
+      },
+      {
+        "name": "observe_fleet_inventory",
+        "resource_types": [
+          "fleet_profile"
+        ],
+        "idempotent": true,
+        "description": "Bounded complete profile membership and exact configured-name collision reads; all native states, immutable tuples and canonical ensure projections, never atomic or useful capacity evidence."
+      },
+      {
+        "name": "observe_failed_server_creation",
+        "resource_types": [
+          "server"
+        ],
+        "idempotent": true,
+        "description": "Read an exact settled creation parent, owned partial native lifetime and complete bound failed action history; cleanup identity only, no child authority, writes or healthy physical spec."
+      }
+    ],
+    "discovery": {
+      "mode": "push",
+      "cursor": "none"
+    },
+    "normalization": {
+      "external_id_path": "id",
+      "name_path": "name",
+      "owner_path": "labels.yggdrasil.io/owner",
+      "fallback_resource_prefix": "thirdparty.hetzner.cloud"
+    },
+    "execution": {
+      "supports_dry_run": true,
+      "idempotent_actions": [
+        "ensure_server",
+        "observe_servers",
+        "destroy_server",
+        "observe_server_action",
+        "observe_fleet_profile",
+        "observe_fleet_inventory",
+        "observe_failed_server_creation"
+      ]
+    },
+    "extensions": {}
+  }
+}

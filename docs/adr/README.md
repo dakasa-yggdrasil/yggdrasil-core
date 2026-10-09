@@ -6,8 +6,6 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**27 decisions.**
-
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
 | [0001](0001-foundational-event-stream-transactional-emission-postgresql.md) | Foundational event stream — transactional emission, PostgreSQL-backed cursor pull, JSON Schema contracts | Accepted | 2026-04-10 | yggdrasil-core |
@@ -41,3 +39,11 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0031](0031-export-restricted-consistent-directory-snapshots.md) | Export restricted consistent directory snapshots | Superseded by 0032 | 2026-10-06 | yggdrasil-core / directory machine reads |
 | [0032](0032-materialize-explicit-typed-team-leadership.md) | Materialize explicit typed team leadership | Accepted | 2026-10-07 | yggdrasil-core / team writers and directory leadership |
 | [0033](0033-preserve-current-declarations-during-conditional-contact-writes.md) | Preserve current declarations during conditional contact writes | Accepted | 2026-10-07 | yggdrasil-core / operator contact declaration |
+| [0034](0034-persist-bounded-capacity-intents-under-protected-workflows.md) | Persist bounded capacity intents under protected workflows | Proposed | 2026-10-08 | yggdrasil-core / capacity protocol |
+| [0035](0035-prune-expired-capacity-history-without-changing-intent-authority.md) | Prune expired capacity history without changing intent authority | Proposed | 2026-10-08 | yggdrasil-core / capacity event maintenance |
+| [0036](0036-redeem-provider-mutations-once-under-durable-capacity-authority.md) | Redeem provider mutations once under durable capacity authority | Proposed | 2026-10-08 | yggdrasil-core / provider-neutral capacity mutations |
+| [0037](0037-produce-native-vm-proofs-through-fixed-protected-observers.md) | Produce native VM proofs through fixed protected observers | Proposed | 2026-10-08 | yggdrasil-core / native VM observation and mutation readback |
+| [0038](0038-bind-shadow-pod-assessments-to-fixed-native-and-metric-sources.md) | Bind shadow pod assessments to fixed native and metric sources | Proposed | 2026-10-08 | yggdrasil-core / fixed reserved pod source assessment |
+| [0039](0039-bind-native-hpa-commands-to-retained-local-lifetime-witnesses.md) | Bind native HPA commands to retained local lifetime witnesses | Superseded by 0040 | 2026-10-08 | Fixed native HPA executor and protected current Pod termination receipts |
+| [0040](0040-separate-native-process-lifetimes-from-reservation-decisions.md) | Separate native process lifetimes from reservation decisions | Proposed | 2026-10-08 | Process nonce admission, independent lifetime ledger and authoritative terminal archive |
+| [0041](0041-reobserve-installed-birth-guards-before-native-hpa-authority.md) | Reobserve installed birth guards before native HPA authority | Proposed | 2026-10-09 | yggdrasil-core / native HPA lifetime executor |

@@ -1,0 +1,209 @@
+name: Protected native capacity API qualification
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-core-kind:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: native-ci-only
+          POSTGRES_DB: native_capacity
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d native_capacity"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+      rabbitmq:
+        image: rabbitmq:4-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: native
+          RABBITMQ_DEFAULT_PASS: native-ci-only
+        ports: ["5672:5672"]
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 3s --health-timeout 5s --health-retries 30
+    env:
+      GOWORK: "off"
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: native_capacity
+      DB_USER: postgres
+      DB_PASSWORD: native-ci-only
+      DB_SSLMODE: disable
+      DB_URL: postgres://postgres:native-ci-only@127.0.0.1:5432/native_capacity?sslmode=disable
+      BROKER_URL: amqp://native:native-ci-only@127.0.0.1:5672/
+      REQUIRE_CAPACITY_POSTGRES: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Read exact native adapter candidate source
+        id: native-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.YGGDRASIL_APP_ID }}
+          private-key: ${{ secrets.YGGDRASIL_APP_PEM }}
+          owner: dakasa-yggdrasil
+          repositories: |
+            integration-kubernetes
+            integration-prometheus
+          permission-contents: read
+      - uses: actions/checkout@v4
+        with:
+          repository: dakasa-yggdrasil/integration-kubernetes
+          ref: c8acf75cd936c1c496fc81aa27f963f88881e3f4
+          path: .ci-native-kubernetes
+          token: ${{ steps.native-token.outputs.token }}
+          persist-credentials: false
+      - uses: actions/checkout@v4
+        with:
+          repository: dakasa-yggdrasil/integration-prometheus
+          ref: 50069ab20de576e2818fac0df99050919678f4db
+          path: .ci-native-prometheus
+          token: ${{ steps.native-token.outputs.token }}
+          persist-credentials: false
+      - name: Read exact private native birth guard source
+        id: birth-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.YGGDRASIL_APP_ID }}
+          private-key: ${{ secrets.YGGDRASIL_APP_PEM }}
+          owner: dakasa-co
+          repositories: dakasa-system
+          permission-contents: read
+      - uses: actions/checkout@v4
+        with:
+          repository: dakasa-co/dakasa-system
+          ref: 3fd8f3ff6cb8e35f2386f8d9514e232687542a56
+          path: .ci-native-birth-guard
+          token: ${{ steps.birth-token.outputs.token }}
+          persist-credentials: false
+          submodules: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Compile actual Kubernetes main and fixed metric source
+        run: |
+          set -euo pipefail
+          test "$(git -C .ci-native-kubernetes rev-parse HEAD)" = c8acf75cd936c1c496fc81aa27f963f88881e3f4
+          (cd .ci-native-kubernetes && go build -race -o "$RUNNER_TEMP/native-kubernetes-main" .)
+          cp scripts/ci/capacity_birth_projection_source_test.go.tmpl .ci-native-kubernetes/internal/adapter/capacity_core_birth_projection_test.go
+          (cd .ci-native-kubernetes && go test -c -o "$RUNNER_TEMP/native-birth-projection" ./internal/adapter)
+          echo "CAPACITY_BIRTH_PROJECTION_BINARY=$RUNNER_TEMP/native-birth-projection" >> "$GITHUB_ENV"
+          cp scripts/ci/capacity_metric_source_fixture_test.go.tmpl .ci-native-prometheus/internal/adapter/capacity_core_metric_source_test.go
+          (cd .ci-native-prometheus && go test -c -o "$RUNNER_TEMP/native-metric-source" ./internal/adapter)
+          echo "CAPACITY_KUBERNETES_MAIN_BINARY=$RUNNER_TEMP/native-kubernetes-main" >> "$GITHUB_ENV"
+          echo "CAPACITY_METRIC_FIXTURE_BINARY=$RUNNER_TEMP/native-metric-source" >> "$GITHUB_ENV"
+      - name: Compile the actual pinned private birth guard renderer and image
+        run: |
+          set -euo pipefail
+          guard_commit=$(git -C .ci-native-birth-guard rev-parse HEAD)
+          test "$guard_commit" = "3fd8f3ff6cb8e35f2386f8d9514e232687542a56"
+          mkdir "$RUNNER_TEMP/native-birth-guard"
+          git -C .ci-native-birth-guard archive HEAD tools/protected-platform | tar -x --strip-components=2 -C "$RUNNER_TEMP/native-birth-guard"
+          (cd "$RUNNER_TEMP/native-birth-guard" && go build -ldflags "-X main.platformBuildSourceCommit=$guard_commit" -o "$RUNNER_TEMP/native-birth-guard-plan" .)
+          docker build --build-arg "SOURCE_COMMIT=$guard_commit" -t docker.io/library/native-birth-guard:head "$RUNNER_TEMP/native-birth-guard"
+          echo "CAPACITY_BIRTH_GUARD_BINARY=$RUNNER_TEMP/native-birth-guard-plan" >> "$GITHUB_ENV"
+          echo "CAPACITY_BIRTH_GUARD_ROSTER=$GITHUB_WORKSPACE/.ci-native-birth-guard/deploy/infra/protected-platform/profile.template.json" >> "$GITHUB_ENV"
+      - name: Verify immutable qualified schema two SDK fixture source
+        run: |
+          python3 - <<'PYVERIFY'
+          import hashlib,json,subprocess
+          from pathlib import Path
+          root=Path('.ci-native-kubernetes/.github/fixtures/native-admission')
+          provenance=json.loads((root/'SOURCE.json').read_text())
+          assert provenance['source_commit']=='a26bc0f92a5b1996f7b416f51b753e25428267ca'
+          expected={
+              'lifecycle/group.go': ('c7ef064846963da580d56be16bdd14d4075bc46e','447b82fb82fb5cdce8657cde1a5e49a5db697ee84477f5b8a1c2e961a5ce687c'),
+              'lifecycle/native_termination.go': ('11254b5e449ec8aeb288b04aaec14fc61e773391','e0f72674b30ba9af028924fe24e16292c4a9137ed284eda3542bf59f2a72d519'),
+              'lifecycle/native_admission.go': ('1a21cc11ac082854422c1c2d65308289e3e352b7','3f606c500b3bc4b455fcd2b90df0f59a603c1a3ed079e842b3b861630f43442e'),
+              'README.md': ('d8e6168817b69c72e7d8abdb39292eeb35ab8b2e','6f135b68ac4acffef58ceb77a21413f9e12d52b5eb5cf8f33b37d97382751171')}
+          assert {e['path']:(e['git_blob'],e['sha256']) for e in provenance['files']}==expected
+          for entry in provenance['files']:
+              path=root/'commons'/entry['path']
+              assert hashlib.sha256(path.read_bytes()).hexdigest()==entry['sha256']
+              assert subprocess.check_output(['git','hash-object',str(path)],text=True).strip()==entry['git_blob']
+          PYVERIFY
+      - name: Verify immutable qualified frozen schema one SDK fixture source
+        run: |
+          set -euo pipefail
+          python3 - <<'PYVERIFY'
+          import hashlib,json,subprocess
+          from pathlib import Path
+          root=Path('.ci-native-kubernetes/.github/fixtures/native-receipt')
+          provenance=json.loads((root/'SOURCE.json').read_text())
+          assert provenance['source_commit']=='37be80bb81dd0009cb1265cba6dfbae5203af778'
+          expected={'lifecycle/group.go': ('c7ef064846963da580d56be16bdd14d4075bc46e', '447b82fb82fb5cdce8657cde1a5e49a5db697ee84477f5b8a1c2e961a5ce687c'), 'lifecycle/native_termination.go': ('11254b5e449ec8aeb288b04aaec14fc61e773391', 'e0f72674b30ba9af028924fe24e16292c4a9137ed284eda3542bf59f2a72d519'), 'README.md': ('d8e6168817b69c72e7d8abdb39292eeb35ab8b2e', '6f135b68ac4acffef58ceb77a21413f9e12d52b5eb5cf8f33b37d97382751171')}
+          assert {e['path']:(e['git_blob'],e['sha256']) for e in provenance['files']} == expected
+          for entry in provenance['files']:
+              path=root/'commons'/entry['path']
+              assert hashlib.sha256(path.read_bytes()).hexdigest()==entry['sha256']
+              assert subprocess.check_output(['git','hash-object',str(path)],text=True).strip()==entry['git_blob']
+          PYVERIFY
+      - name: Build exact qualified schema two and frozen schema one fixture sources
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/native-fixture" "$RUNNER_TEMP/old-native-fixture"
+          git -C .ci-native-kubernetes archive HEAD .github/fixtures/native-admission | tar -x --strip-components=3 -C "$RUNNER_TEMP/native-fixture"
+          git -C .ci-native-kubernetes archive HEAD .github/fixtures/native-receipt | tar -x --strip-components=3 -C "$RUNNER_TEMP/old-native-fixture"
+          docker build -t docker.io/library/native-admission-fixture:head "$RUNNER_TEMP/native-fixture"
+          docker build -t docker.io/library/native-receipt-fixture:head "$RUNNER_TEMP/old-native-fixture"
+      - uses: helm/kind-action@v1.12.0
+        with:
+          cluster_name: native-core
+          config: .github/fixtures/native-core-kind.yaml
+          wait: 120s
+      - name: Pin the actual native OCI manifest
+        run: |
+          set -euo pipefail
+          for fixture in native-admission-fixture native-receipt-fixture native-birth-guard; do
+            kind load docker-image "docker.io/library/$fixture:head" --name native-core
+            digest=$(docker exec native-core-control-plane ctr -n k8s.io images ls | awk -v ref="docker.io/library/$fixture:head" '$1 == ref { print $3 }')
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+            for node in $(kind get nodes --name native-core); do
+              docker exec "$node" ctr -n k8s.io images tag "docker.io/library/$fixture:head" "docker.io/library/$fixture@$digest"
+            done
+            if [ "$fixture" = native-admission-fixture ]; then
+              echo "NATIVE_FIXTURE_IMAGE=docker.io/library/$fixture@$digest" >> "$GITHUB_ENV"
+              echo "NATIVE_FIXTURE_DIGEST=$digest" >> "$GITHUB_ENV"
+            elif [ "$fixture" = native-receipt-fixture ]; then
+              echo "NATIVE_OLD_FIXTURE_IMAGE=docker.io/library/$fixture@$digest" >> "$GITHUB_ENV"
+              echo "NATIVE_OLD_FIXTURE_DIGEST=$digest" >> "$GITHUB_ENV"
+            else
+              echo "NATIVE_BIRTH_GUARD_IMAGE=docker.io/library/$fixture@$digest" >> "$GITHUB_ENV"
+            fi
+          done
+          echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
+      - name: Apply production migrations
+        run: go run ./scripts/goose up
+      - name: Qualify real protected HTTP, PostgreSQL, native main and current Pod receipts
+        env:
+          REQUIRE_CAPACITY_NATIVE_KIND: "true"
+        run: |
+          set -euo pipefail
+          go test -race -count=1 -timeout=24m -json ./controllers/httpapi -run '^TestCapacityNativeKinDHTTP$' | tee native-core-results.json
+          python3 - <<'PY'
+          import json
+          events=[json.loads(line) for line in open('native-core-results.json') if line.strip()]
+          required='TestCapacityNativeKinDHTTP'
+          for case in [required,required+'/complete_baseline_controller_retirement',required+'/mixed_schema_one_frozen_bootstrap',required+'/installed_guard_refusal_before_authority',required+'/installed_guard_refusal_during_redemption']:
+              if not any(e.get('Test')==case and e.get('Action')=='pass' for e in events): raise SystemExit('actual protected native Core case missing or failed: '+case)
+          if any(e.get('Test')==required and e.get('Action') in ['skip','fail'] for e in events): raise SystemExit('actual protected native Core case skipped or failed')
+          PY
+      - name: Build the actual production Core Dockerfile from committed HEAD
+        run: |
+          set -euo pipefail
+          mkdir "$RUNNER_TEMP/native-core-production"
+          git archive HEAD | tar -x -C "$RUNNER_TEMP/native-core-production"
+          docker build --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" -t native-core:head "$RUNNER_TEMP/native-core-production"
+          test "$(docker image inspect native-core:head --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$(git rev-parse HEAD)"
+      - name: Native failure evidence
+        if: failure()
+        run: kubectl get pods -A -o wide

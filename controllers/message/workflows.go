@@ -401,6 +401,7 @@ func runWorkflow(
 	spec model.WorkflowManifestSpec,
 	req model.RunWorkflowRequest,
 ) (model.RunWorkflowResponse, error) {
+	ctx = newCapacityInvocationContext(ctx)
 	orderedSteps, err := manifestengine.WorkflowExecutionOrder(spec)
 	if err != nil {
 		return model.RunWorkflowResponse{}, err
@@ -562,6 +563,15 @@ func executeWorkflowStep(
 	// rather than going through an integration adapter. Yggdrasil steps
 	// persist manifests against the core's own store, also in-process.
 	if result.Kind == "yggdrasil" {
+		if strings.HasPrefix(result.Operation, "capacity.") {
+			if capacityBoundOperation(result.Operation) {
+				return executeCapacityBoundWorkflowStep(ctx, conn, db, workflowRef, result, renderedInput)
+			}
+			if capacityNativeOperation(result.Operation) {
+				return executeCapacityNativeWorkflowStep(ctx, conn, db, workflowRef, result, renderedInput)
+			}
+			return executeCapacityWorkflowStep(ctx, db, workflowRef, result, renderedInput)
+		}
 		return executeYggdrasilWorkflowStep(ctx, db, step, result, renderedInput)
 	}
 	if result.Kind == "product" {

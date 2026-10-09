@@ -11,6 +11,7 @@
     {"url": "https://yggdrasil.example.com", "description": "Adopter-hosted instance"}
   ],
   "tags": [
+    {"name":"capacity-mutations","description":"Private one-time provider mutation authority; disabled without operator principal inventory and bindings."},
     {"name": "health", "description": "Liveness / readiness"},
     {"name": "manifests", "description": "Manifest CRUD"},
     {"name": "integrations", "description": "Integration instances and runtime state"},
@@ -21,6 +22,212 @@
     {"name": "products", "description": "Informational product manifests (deploy is via repository_binding in v2.0.0+)"}
   ],
   "paths": {
+    "/api/v1/capacity/mutations/native/redeem": {
+      "post": {
+        "tags": [
+          "capacity-mutations"
+        ],
+        "summary": "Consume exactly one protected native command permission",
+        "description": "Private independent adapter bearer scope plus a one-use native command authority token. Exact five ASCII JSON members, at most 32KiB; duplicate, unknown, aliased members, query parameters and encoded paths refused. The locked current policy, workflow, instance/type checksums, executor lease and command tuple are rechecked before consumption. Success is transport permission, not an atomic Kubernetes snapshot, readiness or a provider fence. Replay is refused; recover through fixed native reads rather than a second mutation.",
+        "security": [
+          {
+            "CapacityMutationAdapter": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapacityNativeAuthorityRedeemRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed one-use permission. No authority secret is returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapacityNativeAuthorityPermit"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Independent adapter credential is absent, expired, revoked or invalid."
+          },
+          "403": {
+            "description": "Exact adapter instance or capability scope denied."
+          },
+          "409": {
+            "description": "Authority or lifecycle conflict; no additional write permission."
+          },
+          "503": {
+            "description": "Authority storage unavailable; refuse provider send."
+          },
+          "400": {
+            "description": "Body is not the exact canonical five-member native authority object."
+          }
+        }
+      }
+    },
+    "/api/v1/capacity/mutations/redeem": {
+      "post": {
+        "tags": [
+          "capacity-mutations"
+        ],
+        "summary": "Redeem exactly one provider transport send; every replay is read-only",
+        "description": "Private operator-configured machine surface. Exact JSON object up to 32KiB; unknown fields, query parameters and encoded paths refused. Human sessions and other machine credential families cannot authorize this route.",
+        "security": [
+          {
+            "CapacityMutationAdapter": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapacityMutationRedeemRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Durable authority readback.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapacityMutationRedeemResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Independent adapter credential is absent, expired, revoked or invalid."
+          },
+          "403": {
+            "description": "Exact adapter instance or capability scope denied."
+          },
+          "409": {
+            "description": "Authority or lifecycle conflict; no additional write permission."
+          },
+          "503": {
+            "description": "Authority storage unavailable; refuse provider send."
+          }
+        }
+      }
+    },
+    "/api/v1/capacity/mutations/settle": {
+      "post": {
+        "tags": [
+          "capacity-mutations"
+        ],
+        "summary": "Settle the owning transport without claiming native readiness",
+        "description": "Private operator-configured machine surface. Exact JSON object up to 32KiB; unknown fields, query parameters and encoded paths refused. Human sessions and other machine credential families cannot authorize this route.",
+        "security": [
+          {
+            "CapacityMutationAdapter": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapacityMutationSettleRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Durable authority readback.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapacityMutationSettleResponse"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Independent adapter credential is absent, expired, revoked or invalid."
+          },
+          "403": {
+            "description": "Exact adapter instance or capability scope denied."
+          },
+          "409": {
+            "description": "Authority or lifecycle conflict; no additional write permission."
+          },
+          "503": {
+            "description": "Authority storage unavailable; refuse provider send."
+          }
+        },
+        "parameters": [
+          {
+            "in": "header",
+            "name": "X-Capacity-Mutation-Settlement",
+            "required": true,
+            "description": "Private nonce created before redemption; its SHA-256 must match the owning attempt. Never returned by Core.",
+            "schema": {
+              "type": "string"
+            }
+          }
+        ]
+      }
+    },
+    "/api/v1/capacity/mutations/{grant_id}": {
+      "get": {
+        "tags": [
+          "capacity-mutations"
+        ],
+        "summary": "Read scoped durable grant and native transport receipt",
+        "security": [
+          {
+            "CapacityMutationAdapter": []
+          }
+        ],
+        "parameters": [
+          {
+            "in": "path",
+            "name": "grant_id",
+            "required": true,
+            "schema": {
+              "type": "string",
+              "format": "uuid"
+            }
+          }
+        ],
+        "responses": {
+          "200": {
+            "description": "Durable authority readback.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapacityMutationReceipt"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Independent adapter credential is absent, expired, revoked or invalid."
+          },
+          "403": {
+            "description": "Exact adapter instance or capability scope denied."
+          },
+          "409": {
+            "description": "Authority or lifecycle conflict; no additional write permission."
+          },
+          "503": {
+            "description": "Authority storage unavailable; refuse provider send."
+          }
+        }
+      }
+    },
     "/": {
       "get": {
         "tags": ["health"],
@@ -585,6 +792,7 @@
   },
   "components": {
     "securitySchemes": {
+      "CapacityMutationAdapter": {"type":"http","scheme":"bearer","description":"Independent hashed adapter principal configured in YGGDRASIL_CAPACITY_MUTATION_PRINCIPALS_JSON; one exact integration instance and capability allowlist."},
       "BearerAuth": {"type": "http", "scheme": "bearer", "description": "Route-appropriate console session or machine bearer in the Authorization header"},
       "EventPublishToken": {"type": "apiKey", "in": "header", "name": "X-Yggdrasil-Event-Token", "description": "Mutation-event publisher bearer whose SHA-256 digest and exact or logical grants are configured in YGGDRASIL_EVENT_PUBLISHER_PRINCIPALS_JSON, or the explicit time-bounded mutation-only plaintext migration bridge"},
       "WorkflowToken": {"type": "apiKey", "in": "header", "name": "X-Yggdrasil-Workflow-Token", "description": "Workflow machine bearer whose SHA-256 digest and exact allowlist are configured in YGGDRASIL_WORKFLOW_MACHINE_PRINCIPALS_JSON, or the explicit time-bounded legacy workflow bridge"},
@@ -602,6 +810,548 @@
       }
     },
     "schemas": {
+      "CapacityNativeAuthorityPermit": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "command_id",
+          "attempt_id",
+          "capability",
+          "request_sha256",
+          "expires_at"
+        ],
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "enum": [
+              1
+            ]
+          },
+          "command_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "capability": {
+            "type": "string",
+            "enum": [
+              "ensure_capacity_envelope_bound",
+              "ensure_capacity_pod_drain",
+              "destroy_capacity_pod_drain_protection"
+            ]
+          },
+          "request_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CapacityNativeAuthorityRedeemRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "authority_token",
+          "integration_instance_id",
+          "integration_type_id",
+          "capability",
+          "request_sha256"
+        ],
+        "properties": {
+          "authority_token": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "writeOnly": true
+          },
+          "integration_instance_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "integration_type_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "capability": {
+            "type": "string",
+            "enum": [
+              "ensure_capacity_envelope_bound",
+              "ensure_capacity_pod_drain",
+              "destroy_capacity_pod_drain_protection"
+            ]
+          },
+          "request_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
+      "CapacityMutationAuxiliaryResource": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "kind",
+          "id"
+        ],
+        "properties": {
+          "kind": {
+            "type": "string",
+            "pattern": "^[a-z][a-z0-9_]{0,63}$"
+          },
+          "id": {
+            "type": "string",
+            "maxLength": 256
+          },
+          "requires_absence": {
+            "type": "boolean"
+          }
+        }
+      },
+      "CapacityMutationGrant": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "grant_id",
+          "binding_name",
+          "integration_instance_id",
+          "scope_checksum",
+          "profile_name",
+          "slot",
+          "capability",
+          "request_sha256",
+          "expires_at",
+          "state"
+        ],
+        "properties": {
+          "grant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "request_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "binding_name": {
+            "type": "string"
+          },
+          "integration_instance_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "scope_checksum": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "profile_name": {
+            "type": "string"
+          },
+          "slot": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "capability": {
+            "type": "string"
+          },
+          "expected_resource_id": {
+            "type": "string"
+          },
+          "expected_resource_created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "state": {
+            "type": "string",
+            "enum": [
+              "issued",
+              "redeemed",
+              "settled",
+              "confirmed",
+              "rejected",
+              "expired",
+              "compensating",
+              "compensated"
+            ]
+          },
+          "compensation_of": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Exact failed parent grant for separately authorized cleanup; omitted for ordinary capacity grants."
+          }
+        }
+      },
+      "CapacityMutationRedeemRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "grant_id",
+          "attempt_id",
+          "request_sha256",
+          "settlement_token_sha256",
+          "integration_instance_id",
+          "scope_checksum",
+          "profile_name",
+          "slot",
+          "capability"
+        ],
+        "properties": {
+          "grant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "request_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "settlement_token_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "integration_instance_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "scope_checksum": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "profile_name": {
+            "type": "string"
+          },
+          "slot": {
+            "type": "integer",
+            "minimum": 1
+          },
+          "capability": {
+            "type": "string"
+          },
+          "expected_resource_id": {
+            "type": "string"
+          },
+          "expected_resource_created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "compensation_of": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Exact failed parent grant for separately authorized cleanup; omitted for ordinary capacity grants."
+          }
+        }
+      },
+      "CapacityMutationRedeemResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "grant_id",
+          "attempt_id",
+          "request_sha256",
+          "mode",
+          "expires_at"
+        ],
+        "properties": {
+          "grant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "request_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "mode": {
+            "type": "string",
+            "enum": [
+              "write_once",
+              "read_only"
+            ]
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "compensation_of": {
+            "type": "string",
+            "format": "uuid",
+            "description": "Exact failed parent grant for separately authorized cleanup; omitted for ordinary capacity grants."
+          }
+        }
+      },
+      "CapacityMutationSettleRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "grant_id",
+          "attempt_id",
+          "request_sha256",
+          "outcome",
+          "transport_completed",
+          "observed_at"
+        ],
+        "properties": {
+          "grant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "request_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "resource_created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "action_id": {
+            "type": "string"
+          },
+          "next_action_ids": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "type": "string"
+            }
+          },
+          "auxiliary_resources": {
+            "type": "array",
+            "maxItems": 16,
+            "items": {
+              "$ref": "#/components/schemas/CapacityMutationAuxiliaryResource"
+            }
+          },
+          "auxiliary_inventory_complete": {
+            "type": "boolean"
+          },
+          "outcome": {
+            "type": "string",
+            "enum": [
+              "accepted",
+              "uncertain",
+              "rejected_before_send",
+              "provider_rejected"
+            ]
+          },
+          "transport_completed": {
+            "type": "boolean",
+            "enum": [
+              true
+            ]
+          },
+          "observed_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "provider_error_code": {
+            "type": "string"
+          },
+          "provider_status_code": {
+            "type": "integer"
+          }
+        }
+      },
+      "CapacityMutationSettleResponse": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "grant_id",
+          "attempt_id",
+          "request_sha256",
+          "status"
+        ],
+        "properties": {
+          "grant_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "request_sha256": {
+            "type": "string",
+            "pattern": "^[a-f0-9]{64}$"
+          },
+          "status": {
+            "type": "string",
+            "enum": [
+              "settled"
+            ]
+          }
+        }
+      },
+        "CapacityMutationNativeReadback": {
+          "type": "object",
+          "additionalProperties": false,
+          "readOnly": true,
+          "description": "Separately admitted failed-create native readback; original owning transport fields remain unchanged, including unknown identifiers.",
+          "required": [
+            "grant_id",
+            "binding_name",
+            "slot",
+            "resource_id",
+            "resource_created_at",
+            "request_sha256",
+            "observed_at",
+            "receipt_ref",
+            "owner_verified",
+            "spec_verified",
+            "resource_absent",
+            "action_ids",
+            "actions_terminal",
+            "actions_successful"
+          ],
+          "properties": {
+            "grant_id": {
+              "type": "string",
+              "format": "uuid"
+            },
+            "binding_name": {
+              "type": "string"
+            },
+            "resource_id": {
+              "type": "string"
+            },
+            "resource_created_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "request_sha256": {
+              "type": "string"
+            },
+            "observed_at": {
+              "type": "string",
+              "format": "date-time"
+            },
+            "receipt_ref": {
+              "type": "string"
+            },
+            "observed_creation_grant_id": {
+              "type": "string"
+            },
+            "slot": {
+              "type": "integer",
+              "minimum": 1
+            },
+            "owner_verified": {
+              "type": "boolean"
+            },
+            "spec_verified": {
+              "type": "boolean"
+            },
+            "resource_absent": {
+              "type": "boolean"
+            },
+            "actions_terminal": {
+              "type": "boolean"
+            },
+            "actions_successful": {
+              "type": "boolean"
+            },
+            "action_history_complete": {
+              "type": "boolean"
+            },
+            "actions_failed": {
+              "type": "boolean"
+            },
+            "compensation_identity_verified": {
+              "type": "boolean"
+            },
+            "action_ids": {
+              "type": "array",
+              "minItems": 1,
+              "maxItems": 64,
+              "uniqueItems": true,
+              "items": {
+                "type": "string",
+                "minLength": 1,
+                "maxLength": 256
+              }
+            },
+            "auxiliary_absent": {
+              "type": "array",
+              "maxItems": 16,
+              "items": {
+                "$ref": "#/components/schemas/CapacityMutationAuxiliaryResource"
+              }
+            }
+          }
+        }
+,
+      "CapacityMutationReceipt": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "grant",
+          "transport_completed"
+        ],
+        "properties": {
+          "native_readback": {
+            "$ref": "#/components/schemas/CapacityMutationNativeReadback"
+          },
+          "resource_id": {
+            "type": "string"
+          },
+          "resource_created_at": {
+            "type": "string",
+            "format": "date-time"
+          },
+          "action_id": {
+            "type": "string"
+          },
+          "next_action_ids": {
+            "type": "array",
+            "maxItems": 64,
+            "items": {
+              "type": "string"
+            }
+          },
+          "auxiliary_resources": {
+            "type": "array",
+            "maxItems": 16,
+            "items": {
+              "$ref": "#/components/schemas/CapacityMutationAuxiliaryResource"
+            }
+          },
+          "auxiliary_inventory_complete": {
+            "type": "boolean"
+          },
+          "grant": {
+            "$ref": "#/components/schemas/CapacityMutationGrant"
+          },
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "outcome": {
+            "type": "string"
+          },
+          "transport_completed": {
+            "type": "boolean"
+          }
+        }
+      },
       "ServiceBanner": {"type": "object", "properties": {"service": {"type": "string"}, "status": {"type": "string"}}},
       "ReadyResponse": {"type": "object", "required": ["status"], "properties": {"status": {"type": "string", "enum": ["ready", "not_ready"]}, "rabbitmq_status": {"type": "string", "enum": ["ok", "degraded"]}, "reason": {"type": "string"}, "error": {"type": "string"}}},
       "ManifestMetadata": {

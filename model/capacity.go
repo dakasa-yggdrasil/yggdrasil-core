@@ -1,0 +1,165 @@
+package model
+
+import (
+	"time"
+
+	"github.com/google/uuid"
+)
+
+// CapacityPolicySpec is an operator-owned, provider-neutral capacity envelope.
+// Price records and validation references are declarations, not live stock receipts.
+type CapacityPolicySpec struct {
+	Environment           string                          `json:"environment"`
+	Domain                string                          `json:"domain"`
+	Dimension             string                          `json:"dimension"`
+	TargetIdentity        string                          `json:"target_identity"`
+	Owner                 string                          `json:"owner"`
+	Workflow              ManifestSelector                `json:"workflow"`
+	Currency              string                          `json:"currency"`
+	Floor                 int                             `json:"floor"`
+	Ceiling               int                             `json:"ceiling"`
+	Step                  int                             `json:"step"`
+	MaxEvidenceAgeSeconds int                             `json:"max_evidence_age_seconds"`
+	MinSamples            int                             `json:"min_samples"`
+	MaxSampleGapSeconds   int                             `json:"max_sample_gap_seconds"`
+	UpHoldSeconds         int                             `json:"up_hold_seconds"`
+	DownHoldSeconds       int                             `json:"down_hold_seconds"`
+	CooldownSeconds       int                             `json:"cooldown_seconds"`
+	LeaseSeconds          int                             `json:"lease_seconds"`
+	ExecutionEnabled      bool                            `json:"execution_enabled"`
+	Signals               []CapacitySignalRule            `json:"signals"`
+	Profiles              []CapacityProfile               `json:"profiles"`
+	MutationBindings      []CapacityMutationBinding       `json:"mutation_bindings,omitempty"`
+	AssessmentBinding     *CapacityBoundAssessmentBinding `json:"assessment_binding,omitempty"`
+	HPAExecutionBinding   *CapacityHPAExecutionBinding    `json:"hpa_execution_binding,omitempty"`
+}
+
+type CapacitySignalRule struct {
+	Name           string  `json:"name"`
+	SourceIdentity string  `json:"source_identity"`
+	Unit           string  `json:"unit"`
+	UpAbove        float64 `json:"up_above"`
+	DownBelow      float64 `json:"down_below"`
+}
+
+type CapacityProfile struct {
+	Name                 string    `json:"name"`
+	Provider             string    `json:"provider"`
+	Region               string    `json:"region"`
+	MinUnits             int       `json:"min_units"`
+	MaxUnits             int       `json:"max_units"`
+	UnitMonthlyCostMinor int64     `json:"unit_monthly_cost_minor"`
+	QuoteValidUntil      time.Time `json:"quote_valid_until"`
+	ValidationValidUntil time.Time `json:"validation_valid_until"`
+	ValidationRef        string    `json:"validation_ref"`
+	ReadinessSeconds     int       `json:"readiness_seconds"`
+}
+
+// CapacityEvidence must carry source sample time independently of adapter/query time.
+// A PromQL instant-vector value-pair timestamp is not a scrape timestamp.
+type CapacityEvidence struct {
+	Name             string    `json:"name"`
+	SourceIdentity   string    `json:"source_identity"`
+	Unit             string    `json:"unit"`
+	RequireData      bool      `json:"require_data"`
+	Matched          bool      `json:"matched"`
+	DataState        string    `json:"data_state"`
+	Value            *float64  `json:"value"`
+	RangeMin         *float64  `json:"range_min"`
+	RangeMax         *float64  `json:"range_max"`
+	SourceSampledAt  time.Time `json:"source_sampled_at"`
+	WindowStart      time.Time `json:"window_start"`
+	WindowEnd        time.Time `json:"window_end"`
+	Samples          int       `json:"samples"`
+	CoverageComplete bool      `json:"coverage_complete"`
+	MaxGapSeconds    int       `json:"max_gap_seconds"`
+}
+
+type CapacitySnapshot struct {
+	TargetIdentity          string    `json:"target_identity"`
+	ResourceUID             string    `json:"resource_uid"`
+	WorkloadUID             string    `json:"workload_uid"`
+	WorkloadResourceVersion string    `json:"workload_resource_version"`
+	ResourceVersion         string    `json:"resource_version"`
+	Owner                   string    `json:"owner"`
+	Profile                 string    `json:"profile"`
+	Units                   int       `json:"units"`
+	ObservedAt              time.Time `json:"observed_at"`
+}
+
+type CapacityAssessment struct {
+	Snapshot CapacitySnapshot   `json:"snapshot"`
+	Evidence []CapacityEvidence `json:"evidence"`
+}
+
+type CapacityClockState struct {
+	PolicyFingerprint       string    `json:"policy_fingerprint"`
+	ResourceUID             string    `json:"resource_uid"`
+	WorkloadUID             string    `json:"workload_uid"`
+	WorkloadResourceVersion string    `json:"workload_resource_version"`
+	Profile                 string    `json:"profile"`
+	LastObservedAt          time.Time `json:"last_observed_at"`
+	LastActionAt            time.Time `json:"last_action_at"`
+	UpSince                 time.Time `json:"up_since"`
+	DownSince               time.Time `json:"down_since"`
+}
+
+type CapacityDecision struct {
+	Action             string             `json:"action"`
+	Reason             string             `json:"reason"`
+	Profile            string             `json:"profile"`
+	Units              int                `json:"units"`
+	Floor              int                `json:"floor"`
+	ExecutionPermitted bool               `json:"execution_permitted"`
+	Clock              CapacityClockState `json:"clock"`
+}
+
+// CapacityIntent is one durable generation per logical domain/dimension.
+type CapacityIntent struct {
+	Namespace           string             `json:"namespace"`
+	PolicyName          string             `json:"policy_name"`
+	PolicyID            uuid.UUID          `json:"policy_id"`
+	PolicyChecksum      string             `json:"policy_checksum"`
+	Environment         string             `json:"environment"`
+	Domain              string             `json:"domain"`
+	Dimension           string             `json:"dimension"`
+	Generation          int64              `json:"generation"`
+	FencingToken        int64              `json:"fencing_token"`
+	Phase               string             `json:"phase"`
+	LeaseOwner          string             `json:"lease_owner,omitempty"`
+	LeaseExecutorID     string             `json:"lease_executor_id,omitempty"`
+	LeaseExpiresAt      *time.Time         `json:"lease_expires_at,omitempty"`
+	RecoveryOnly        bool               `json:"recovery_only"`
+	FloorDegraded       bool               `json:"floor_degraded,omitempty"`
+	NativeHPAGeneration int64              `json:"native_hpa_generation"`
+	NativePodBaseline   []string           `json:"native_pod_baseline"`
+	BaselineSnapshot    CapacitySnapshot   `json:"baseline_snapshot"`
+	Decision            CapacityDecision   `json:"decision"`
+	Assessment          CapacityAssessment `json:"assessment"`
+	UpdatedAt           time.Time          `json:"updated_at"`
+}
+
+// CapacityTransitionProof is a receipt assembled by the policy's protected
+// workflow from provider observations. Core does not generate these receipts
+// or infer readiness, canary health, or a completed drain from replica counts.
+type CapacityTransitionProof struct {
+	Assessment CapacityAssessment `json:"assessment"`
+	ObservedAt time.Time          `json:"observed_at"`
+	ReceiptRef string             `json:"receipt_ref"`
+	Healthy    bool               `json:"healthy"`
+	Inflight   *int               `json:"inflight"`
+	// Recovery proof is distinct from business inflight work. Its assertions
+	// must come from the fixed workflow's provider fencing/quiescence receipt.
+	MutationInflight     *int  `json:"mutation_inflight,omitempty"`
+	ProviderFencingToken int64 `json:"provider_fencing_token,omitempty"`
+	NoMutationVerified   bool  `json:"no_mutation_verified,omitempty"`
+	// core_mutation_grants names Core's durable at-most-one-send ledger;
+	// it must not be represented as a native provider CAS/fencing token.
+	MutationAuthorityKind string `json:"mutation_authority_kind,omitempty"`
+	// Partial recovery also requires a complete native inventory. The store
+	// independently matches its freshly reread immutable membership ledger.
+	MembershipComplete    bool `json:"membership_complete,omitempty"`
+	AdmissionClosed       bool `json:"admission_closed,omitempty"`
+	RoutingWithdrawn      bool `json:"routing_withdrawn,omitempty"`
+	NativeActionsInflight *int `json:"native_actions_inflight,omitempty"`
+}
