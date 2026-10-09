@@ -3,9 +3,11 @@ package repository
 import (
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"os"
 	"sync"
 	"testing"
 	"time"
@@ -214,6 +216,11 @@ func TestCapacityMutationCompensationPostgres(t *testing.T) {
 			if _, err := issuer.SettleMutation(ctx, f.binding.AdapterPrincipalID, childNonce, deleteSettlement); err != nil {
 				t.Fatal(err)
 			}
+			if !protected && !lostReply {
+				t.Run("global_slot_precedes_child_row_during_foreign_issue", func(t *testing.T) {
+					compensationForeignIssueLockOrder(t, f, issuer, current, child, deleted)
+				})
+			}
 			missingIP := deleted
 			missingIP.AuxiliaryAbsent = nil
 			if _, err := issuer.ConfirmCompensation(ctx, current, missingIP); err == nil {
@@ -261,5 +268,122 @@ func TestCapacityMutationCompensationPostgres(t *testing.T) {
 				t.Fatal("completed compensation left original recovery stuck", err)
 			}
 		})
+	}
+}
+
+// Coordinate actual repository calls with native PostgreSQL lock observations.
+// The foreign issuer holds the global slot while waiting on the instance row;
+// confirmation must wait on that slot WITHOUT holding the child grant row.
+func compensationForeignIssueLockOrder(t *testing.T, f mutationFixture, issuer CapacityStore, policy model.Manifest, child model.CapacityMutationGrant, proof model.CapacityMutationProof) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+	ns := "capacity-comp-cross-" + uuid.NewString()
+	otherPolicy, err := CreateManifestVersion(ctx, f.db, model.ManifestDocument{APIVersion: policy.APIVersion, Kind: policy.Kind, Metadata: model.ManifestMetadataInput{Namespace: ns, Name: policy.Metadata.Name}, Spec: policy.Spec}, policy.Checksum)
+	if err != nil {
+		t.Fatal(err)
+	}
+	t.Cleanup(func() {
+		for _, table := range []string{"capacity_mutation_grants", "capacity_resource_slots", "capacity_intent_events", "capacity_intents", "manifests"} {
+			if _, err := f.db.ExecContext(context.Background(), `DELETE FROM public.`+table+` WHERE namespace=$1`, ns); err != nil {
+				t.Error(err)
+			}
+		}
+	})
+	other := issuer
+	other.ExecutorID = uuid.NewString()
+	lease, err := other.Assess(ctx, otherPolicy, freshCapacityTestAssessment(f.a, 4))
+	if err != nil {
+		t.Fatal(err)
+	}
+	lease, err = other.Claim(ctx, otherPolicy, lease.Generation, freshCapacityTestAssessment(f.a, 4))
+	if err != nil {
+		t.Fatal(err)
+	}
+	processDB := func(name string) (*sql.DB, int) {
+		t.Helper()
+		db, err := sql.Open("postgres", os.Getenv("DB_URL"))
+		if err != nil {
+			t.Fatal(err)
+		}
+		db.SetMaxOpenConns(1)
+		t.Cleanup(func() { _ = db.Close() })
+		if _, err := db.ExecContext(ctx, `SELECT set_config('application_name',$1,false)`, name); err != nil {
+			t.Fatal(err)
+		}
+		var pid int
+		if err := db.QueryRowContext(ctx, `SELECT pg_backend_pid()`).Scan(&pid); err != nil {
+			t.Fatal(err)
+		}
+		return db, pid
+	}
+	foreignDB, foreignPID := processDB("capacity-foreign-" + uuid.NewString())
+	confirmDB, confirmPID := processDB("capacity-confirm-" + uuid.NewString())
+	other.DB = foreignDB
+	confirmer := issuer
+	confirmer.DB = confirmDB
+	gate, err := f.db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer gate.Rollback()
+	var instance string
+	if err := gate.QueryRowContext(ctx, `SELECT id::text FROM public.manifests WHERE id=$1 FOR UPDATE`, f.binding.IntegrationInstanceID).Scan(&instance); err != nil {
+		t.Fatal(err)
+	}
+	waitLock := func(pid int, queryPart, event string) {
+		t.Helper()
+		for {
+			var blocked bool
+			if err := f.db.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pg_stat_activity WHERE pid=$1 AND wait_event_type='Lock' AND query LIKE $2 AND ($3='' OR wait_event=$3))`, pid, "%"+queryPart+"%", event).Scan(&blocked); err != nil {
+				t.Fatal(err)
+			}
+			if blocked {
+				return
+			}
+			select {
+			case <-ctx.Done():
+				t.Fatal("actual repository call did not reach its expected native lock", ctx.Err())
+			case <-time.After(10 * time.Millisecond):
+			}
+		}
+	}
+	foreignDone := make(chan error, 1)
+	go func() {
+		_, err := other.IssueMutation(ctx, otherPolicy, lease.Generation, lease.FencingToken, lease.LeaseOwner, f.plans[child.Slot])
+		foreignDone <- err
+	}()
+	waitLock(foreignPID, "integration_instance", "")
+	type confirmation struct {
+		grant model.CapacityMutationGrant
+		err   error
+	}
+	confirmDone := make(chan confirmation, 1)
+	go func() {
+		g, err := confirmer.ConfirmCompensation(ctx, policy, proof)
+		confirmDone <- confirmation{g, err}
+	}()
+	waitLock(confirmPID, "pg_advisory_xact_lock", "advisory")
+	// This deterministic negative fails under the old child-row-first order,
+	// before relying on PostgreSQL's deadlock victim selection or timing.
+	rowProbe, err := f.db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var childID string
+	err = rowProbe.QueryRowContext(ctx, `SELECT id::text FROM public.capacity_mutation_grants WHERE id=$1 FOR UPDATE NOWAIT`, child.GrantID).Scan(&childID)
+	_ = rowProbe.Rollback()
+	if err != nil || childID != child.GrantID {
+		t.Fatal("confirmation held a child row before the global native slot", err)
+	}
+	if err := gate.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	if err := <-foreignDone; !errors.Is(err, ErrCapacityConflict) {
+		t.Fatal("foreign issuance was not refused under ordered locks", err)
+	}
+	result := <-confirmDone
+	if result.err != nil || result.grant.GrantID != child.GrantID || result.grant.State != "confirmed" {
+		t.Fatal("owning compensation did not finish after foreign refusal", result.grant, result.err)
 	}
 }

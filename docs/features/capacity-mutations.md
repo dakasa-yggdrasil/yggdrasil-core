@@ -220,6 +220,9 @@ atomically tombstones the slot, marks parent `compensated` and child `confirmed`
 and emits one canonical destroyed event. It never emits an ensured event or adds
 serving capacity. Compensation cannot support `no_mutation_verified` abort;
 the original read-only epoch closes through its distinct observed outcome.
+Confirmation first locates the exact child without a row lock, takes the global
+native-slot lock, then locks and rechecks the immutable child authority. This
+preserves issuance's lock order across otherwise independent policy realms.
 
 CI exercises real production migrations and PostgreSQL16/race: concurrent
 issuance/redemption, same-attempt lost replies, private nonce/scope, pause and

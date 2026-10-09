@@ -159,6 +159,7 @@ jobs:
           expected |= {compensation} | {compensation + "/" + name for name in (
               "unprotected_failed_create", "protected_failed_create_without_serving_membership",
               "lost_create_reply_uses_separate_native_readback", "protected_lost_create_reply")}
+          expected |= {compensation + "/unprotected_failed_create/global_slot_precedes_child_row_during_foreign_issue"}
           passed = {event.get("Test") for event in events if event.get("Action") == "pass"}
           skipped = {event.get("Test") for event in events if event.get("Action") == "skip"}
           if expected - passed or skipped:

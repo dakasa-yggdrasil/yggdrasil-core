@@ -57,12 +57,20 @@ func (s CapacityStore) compensationTransaction(ctx context.Context, policy model
 }
 
 func loadCompensationRecord(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, id string) (capacityMutationRecord, error) {
+	return readCompensationRecord(ctx, tx, policy, p, id, true)
+}
+
+func readCompensationRecord(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, id string, locked bool) (capacityMutationRecord, error) {
 	var record capacityMutationRecord
 	if !validCapacityExecutor(id) {
 		return record, ErrCapacityConflict
 	}
 	var raw []byte
-	if err := tx.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1 AND namespace=$2 AND environment=$3 AND domain=$4 AND dimension=$5 FOR UPDATE`, id, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&raw); err != nil {
+	query := `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1 AND namespace=$2 AND environment=$3 AND domain=$4 AND dimension=$5`
+	if locked {
+		query += ` FOR UPDATE`
+	}
+	if err := tx.QueryRowContext(ctx, query, id, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&raw); err != nil {
 		return record, err
 	}
 	if err := json.Unmarshal(raw, &record); err != nil {
@@ -273,7 +281,9 @@ func redeemCompensation(ctx context.Context, tx *sql.Tx, record *capacityMutatio
 func (s CapacityStore) ConfirmCompensation(ctx context.Context, policy model.Manifest, proof model.CapacityMutationProof) (model.CapacityMutationGrant, error) {
 	var result model.CapacityMutationGrant
 	err := s.compensationTransaction(ctx, policy, true, func(tx *sql.Tx, p model.CapacityPolicySpec, now time.Time) error {
-		child, err := loadCompensationRecord(ctx, tx, policy, p, proof.GrantID)
+		// Locate only. Issuance takes the shared native slot before grant rows;
+		// taking a child row first would deadlock across independent realms.
+		child, err := readCompensationRecord(ctx, tx, policy, p, proof.GrantID, false)
 		if err != nil {
 			return err
 		}
@@ -283,6 +293,16 @@ func (s CapacityStore) ConfirmCompensation(ctx context.Context, policy model.Man
 		}
 		if err = lockNativeMutationSlot(ctx, tx, b, g.Slot); err != nil {
 			return err
+		}
+		locator := child
+		child, err = loadCompensationRecord(ctx, tx, policy, p, proof.GrantID)
+		if err != nil {
+			return err
+		}
+		locatedBinding, _ := json.Marshal(b)
+		lockedBinding, _ := json.Marshal(child.Binding)
+		if child.Grant != g || string(locatedBinding) != string(lockedBinding) || child.PolicyID != locator.PolicyID || child.PolicyChecksum != locator.PolicyChecksum || child.WorkflowID != locator.WorkflowID || child.Generation != locator.Generation || child.ExecutorID != locator.ExecutorID || child.FencingToken != locator.FencingToken {
+			return ErrCapacityConflict
 		}
 		if g.State == "confirmed" && child.Proof != nil {
 			previous, _ := json.Marshal(child.Proof)
