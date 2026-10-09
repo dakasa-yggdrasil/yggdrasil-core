@@ -477,6 +477,15 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string) {
 	}
 	nativeKindCommand(t, ctx, "-n", realm, "rollout", "status", "deployment/"+workloadName, "--timeout=60s")
 	if drift != "" {
+		// Prime the actual protected planner's sustained-surplus window. A
+		// first HOLD is a successful read, not a reached mutation boundary.
+		run("execute", true)
+		primed, primeErr := store.Observe(ctx, policy)
+		var initialCommands int
+		if primeErr != nil || primed.Decision.Action != "hold" || primed.Decision.Reason != "down_window_pending" || db.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_commands WHERE namespace=$1 AND operation=$2`, realm, capacity.EnsureBoundHPAEnvelope).Scan(&initialCommands) != nil || initialCommands != 0 {
+			t.Fatal("guard adversary did not prime the real read-only hold window", primeErr, initialCommands)
+		}
+		time.Sleep(1200 * time.Millisecond)
 		if drift == "before" {
 			nativeKindCommand(t, ctx, "patch", "validatingwebhookconfiguration", "capacity-native-validate", "--type=json", "-p", `[{"op":"replace","path":"/webhooks/0/failurePolicy","value":"Ignore"}]`)
 		}
@@ -485,15 +494,15 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string) {
 		if current["spec"].(map[string]any)["minReplicas"] != float64(3) {
 			t.Fatal("drifted current birth authority changed reserved HPA minimum")
 		}
-		var commands, redeemed int
-		if db.QueryRowContext(ctx, `SELECT count(*),count(*) FILTER(WHERE state='redeemed') FROM public.capacity_native_commands WHERE namespace=$1 AND operation=$2`, realm, capacity.EnsureBoundHPAEnvelope).Scan(&commands, &redeemed) != nil {
+		var commands, uncertainRedeemed int
+		if db.QueryRowContext(ctx, `SELECT count(*),count(*) FILTER(WHERE state='uncertain' AND command_record->>'redeemed_by'='native-adapter' AND command_record->>'attempt_id' IS NOT NULL AND command_record->>'attempt_id'<>'00000000-0000-0000-0000-000000000000') FROM public.capacity_native_commands WHERE namespace=$1 AND operation=$2`, realm, capacity.EnsureBoundHPAEnvelope).Scan(&commands, &uncertainRedeemed) != nil {
 			t.Fatal("actual native authority ledger read failed")
 		}
 		if drift == "before" && commands != 0 {
 			t.Fatal("invalid current guard reached native command authority")
 		}
-		if drift == "during" && (!redeemedAfterDrift.Load() || commands != 1 || redeemed != 1) {
-			t.Fatal("actual native redemption hook was not exercised", commands, redeemed)
+		if drift == "during" && (!redeemedAfterDrift.Load() || commands != 1 || uncertainRedeemed != 1) {
+			t.Fatal("actual native redemption hook was not exercised", commands, uncertainRedeemed)
 		}
 		t.Log("actual installed guard refused before authority or after consumed redemption; HPA minimum unchanged")
 		return
