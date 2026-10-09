@@ -129,7 +129,15 @@ func nativeInstallBirthGuard(t *testing.T, ctx context.Context, realm, workload,
 	nativeKindCommand(t, ctx, "-n", realm, "rollout", "status", "deployment/capacity-native-admission", "--timeout=120s")
 	nativeKindAwait(t, ctx, func() bool {
 		endpoints := nativeKindGet(t, ctx, "-n", realm, "get", "endpoints", "capacity-native-admission", "-o", "json")
-		var ep corev1.Endpoints
+		// The pinned adapter contract observes the still-served core/v1
+		// Endpoints graph. This readiness wait projects only that native JSON;
+		// it does not replace the adapter's complete endpoint ownership checks.
+		var ep struct {
+			Subsets []struct {
+				Addresses         []json.RawMessage `json:"addresses"`
+				NotReadyAddresses []json.RawMessage `json:"notReadyAddresses"`
+			} `json:"subsets"`
+		}
 		nativeBirthTyped(t, endpoints, &ep)
 		count := 0
 		for _, subset := range ep.Subsets {
