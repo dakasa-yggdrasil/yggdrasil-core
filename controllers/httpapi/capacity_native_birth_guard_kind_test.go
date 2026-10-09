@@ -187,7 +187,10 @@ func nativeBirthAdapterKubeconfig(t *testing.T, ctx context.Context, realm strin
 	if err != nil || len(token) < 32 {
 		t.Fatal("native scoped CI principal credential unavailable")
 	}
-	raw := nativeKindCommand(t, ctx, "config", "view", "--raw", "--flatten", "-o", "json")
+	raw, err := exec.CommandContext(ctx, "kubectl", "config", "view", "--raw", "--flatten", "-o", "json").Output()
+	if err != nil {
+		t.Fatal("native private cluster transport read failed")
+	}
 	original, err := clientcmd.Load(raw)
 	if err != nil || original.Contexts[original.CurrentContext] == nil {
 		t.Fatal("native cluster transport unavailable")
