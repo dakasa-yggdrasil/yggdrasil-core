@@ -4,6 +4,7 @@
 - **Date:** 2026-10-08
 - **Deciders:** Giomaster
 - **Scope:** yggdrasil-core / protected native HPA reservation and process lifetimes
+- **Supersedes:** —
 - **Superseded by:** ADR-0040 (independent lifetime ledger); source qualification remains separate.
 
 ## Context

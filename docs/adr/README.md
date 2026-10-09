@@ -6,8 +6,6 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**34 decisions.**
-
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
 | [0001](0001-foundational-event-stream-transactional-emission-postgresql.md) | Foundational event stream — transactional emission, PostgreSQL-backed cursor pull, JSON Schema contracts | Accepted | 2026-04-10 | yggdrasil-core |

@@ -5,6 +5,7 @@
 - **Deciders:** Giomaster
 - **Scope:** yggdrasil-core / protected native HPA reservation and process lifetimes
 - **Supersedes:** ADR-0039 (selected-subset execution design).
+- **Superseded by:** —
 
 ## Context
 
