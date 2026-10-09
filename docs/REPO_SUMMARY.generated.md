@@ -1,14 +1,14 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-09T01:44:57-03:00_
+_Generated from HEAD at: 2026-10-09T02:39:57-03:00_
 
 ## Languages
 
-- `.go`: 722 files
+- `.go`: 727 files
 - `.json`: 145 files
 - `.py`: 1 files
 - `.sql`: 59 files
-- `.yaml`: 9 files
+- `.yaml`: 10 files
 - `.yml`: 24 files
 
 ## Contracts & Artifacts
@@ -24,18 +24,18 @@ _Generated from HEAD at: 2026-10-09T01:44:57-03:00_
 
 ## Top Directories by File Count
 
-- controllers/httpapi: 167 files (1722.7 KB)
-- repository: 118 files (958.2 KB)
-- model: 64 files (266.4 KB)
-- controllers/message: 60 files (615.5 KB)
+- controllers/httpapi: 169 files (1745.9 KB)
+- repository: 118 files (958.5 KB)
+- model: 65 files (268.5 KB)
+- controllers/message: 60 files (619.0 KB)
 - manifest: 59 files (363.6 KB)
 - db/migrations: 58 files (104.6 KB)
 - addons: 42 files (198.3 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
 - controllers/oidc: 23 files (193.4 KB)
 - docs/bootstrap/seeds/integrations: 20 files (87.4 KB)
+- internal/capacity: 15 files (108.6 KB)
 - internal/externalidentity: 15 files (61.5 KB)
-- internal/capacity: 13 files (99.9 KB)
 
 ## Heaviest Files
 
@@ -47,15 +47,15 @@ _Generated from HEAD at: 2026-10-09T01:44:57-03:00_
 - docs/bootstrap/manifests/products/observability-loki.json: 542.9 KB
 - docs/bootstrap/manifests/products/message-broker-rabbitmq.json: 531.8 KB
 - controllers/httpapi/server.go: 173.9 KB
+- controllers/httpapi/openapi.json: 75.7 KB
+- docs/api-reference/openapi.json: 75.7 KB
 - controllers/message/products.go: 75.4 KB
-- controllers/httpapi/openapi.json: 71.5 KB
-- docs/api-reference/openapi.json: 71.5 KB
 - controllers/httpapi/directory_machine_read_test.go: 65.8 KB
 
 ## Ops & Messaging
 
-- K8s/Config files scanned: **7**
-- Manifests (k8s-ish): **7**
+- K8s/Config files scanned: **8**
+- Manifests (k8s-ish): **8**
 
 ## Dependencies
 

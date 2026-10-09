@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-09T01:44:57-03:00",
+  "generated_at": "2026-10-09T02:39:57-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 722,
+    ".go": 727,
     ".json": 145,
     ".py": 1,
     ".sql": 59,
-    ".yaml": 9,
+    ".yaml": 10,
     ".yml": 24
   },
   "provenance": {
-    "commit": "3009dec3932e10884b0ff69574dee4a3af2e8692",
+    "commit": "3615baa4fd1684bfa684d570f365ae054d1e5502",
     "dirty": true,
     "files": [
       {
@@ -59,8 +59,8 @@
   "top_dirs": [
     {
       "path": "controllers/httpapi",
-      "files": 167,
-      "kb": 1722
+      "files": 169,
+      "kb": 1745
     },
     {
       "path": "repository",
@@ -69,13 +69,13 @@
     },
     {
       "path": "model",
-      "files": 64,
-      "kb": 266
+      "files": 65,
+      "kb": 268
     },
     {
       "path": "controllers/message",
       "files": 60,
-      "kb": 615
+      "kb": 619
     },
     {
       "path": "manifest",
@@ -108,14 +108,14 @@
       "kb": 87
     },
     {
+      "path": "internal/capacity",
+      "files": 15,
+      "kb": 108
+    },
+    {
       "path": "internal/externalidentity",
       "files": 15,
       "kb": 61
-    },
-    {
-      "path": "internal/capacity",
-      "files": 13,
-      "kb": 99
     }
   ],
   "top_files_by_size": [
@@ -152,16 +152,16 @@
       "kb": 173
     },
     {
-      "path": "controllers/message/products.go",
+      "path": "controllers/httpapi/openapi.json",
       "kb": 75
     },
     {
-      "path": "controllers/httpapi/openapi.json",
-      "kb": 71
+      "path": "docs/api-reference/openapi.json",
+      "kb": 75
     },
     {
-      "path": "docs/api-reference/openapi.json",
-      "kb": 71
+      "path": "controllers/message/products.go",
+      "kb": 75
     },
     {
       "path": "controllers/httpapi/directory_machine_read_test.go",
@@ -305,10 +305,10 @@
     ]
   },
   "ops": {
-    "config_files": 7,
-    "k8s_manifests": 7
+    "config_files": 8,
+    "k8s_manifests": 8
   },
-  "verified_at_commit": "3009dec3932e10884b0ff69574dee4a3af2e8692",
-  "verified_diff_sha256": "42ff0b978a98cbdb38626aa9e4f0d7a01235650c0e70bd2c3e472d22ed2ca643",
+  "verified_at_commit": "3615baa4fd1684bfa684d570f365ae054d1e5502",
+  "verified_diff_sha256": "609be121a98961ece188164f384730493eb11b60987e4b63c994575a7aa4d143",
   "reconciler_schema": 1
 }
