@@ -16,11 +16,13 @@ const EnsureBoundHPAEnvelope = "ensure_capacity_envelope_bound"
 const ObserveNativePodInventory = "observe_capacity_pod_inventory"
 const ObserveNativePodAdmission = "observe_capacity_pod_admission"
 const ObserveNativePodAdmissionCandidates = "observe_capacity_pod_admission_candidates"
+const ObserveCurrentBirthGuard = "observe_current_birth_guard"
 const EnsureNativePodDrain = "ensure_capacity_pod_drain"
 const ObserveNativePodTermination = "observe_capacity_pod_termination"
 const DestroyNativePodProtection = "destroy_capacity_pod_drain_protection"
 
 var nativeLanePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
+var lowerSHA = regexp.MustCompile(`^[0-9a-f]{64}$`)
 
 func ValidateHPAExecutionBinding(p model.CapacityPolicySpec) error {
 	binding := p.HPAExecutionBinding
@@ -32,6 +34,9 @@ func ValidateHPAExecutionBinding(p model.CapacityPolicySpec) error {
 	}
 	if binding.Mode == HPALifetimeExecutionMode && (binding.AdmissionMode != "process_v2" || binding.AdmissionPort < 1 || binding.AdmissionPort > 65535) {
 		return fmt.Errorf("native lifetime execution requires current process admission and one fixed Pod proxy port")
+	}
+	if binding.Mode == HPALifetimeExecutionMode && p.ExecutionEnabled && (binding.BirthGuardBinding == "" || len(binding.BirthGuardBinding) > 128 || strings.TrimSpace(binding.BirthGuardBinding) != binding.BirthGuardBinding || strings.ContainsAny(binding.BirthGuardBinding, "/\r\n\t") || !lowerSHA.MatchString(binding.BirthGuardSHA256)) {
+		return fmt.Errorf("native lifetime execution requires a fixed current installed birth guard binding")
 	}
 	if binding.Mode == HPALifetimeExecutionMode && (binding.AdmissionWorkflow.Namespace == "" || binding.AdmissionWorkflow.Name == "" || binding.AdmissionWorkflow.ManifestID != "" || binding.AdmissionWorkflow.Version != nil || (binding.AdmissionWorkflow.Namespace == p.Workflow.Namespace && binding.AdmissionWorkflow.Name == p.Workflow.Name)) {
 		return fmt.Errorf("native admission requires a separate fixed protected logical workflow")

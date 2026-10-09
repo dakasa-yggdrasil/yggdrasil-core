@@ -154,6 +154,7 @@ jobs:
               "foreign_uid_missing_rv_and_wrong_hash_refuse",
               "shadow_binding_rejects_vm_units_and_profile_migration",
               "catalog_refusal_precedes_private_hydration_and_describe",
+              "mutator_category_refusal_precedes_private_hydration",
               "inactive_instance_and_type_revision_refuse_without_source_calls")}
           compensation = "TestCapacityMutationCompensationPostgres"
           expected |= {compensation} | {compensation + "/" + name for name in (

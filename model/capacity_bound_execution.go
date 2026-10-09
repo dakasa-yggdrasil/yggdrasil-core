@@ -20,6 +20,8 @@ type CapacityHPAExecutionBinding struct {
 	AdmissionMode         string           `json:"admission_mode,omitempty"`
 	AdmissionPort         int              `json:"admission_port,omitempty"`
 	AdmissionWorkflow     ManifestSelector `json:"admission_workflow,omitempty"`
+	BirthGuardBinding     string           `json:"birth_guard_binding,omitempty"`
+	BirthGuardSHA256      string           `json:"birth_guard_sha256,omitempty"`
 }
 
 // Native commands are fixed server-authored, one-send envelopes. Their private
@@ -121,4 +123,5 @@ type CapacityNativeHPARequest struct {
 	Adopt                           bool   `json:"adopt,omitempty"`
 	DryRun                          *bool  `json:"dry_run,omitempty"`
 	Mode                            string `json:"mode,omitempty"`
+	BirthGuardBindingName           string `json:"birth_guard_binding_name"`
 }

@@ -1,6 +1,10 @@
 # ADR-0040: Separate native process lifetimes from reservation decisions
 
-**Status:** Proposed
+- **Status:** Proposed
+- **Date:** 2026-10-08
+- **Deciders:** Giomaster
+- **Scope:** yggdrasil-core / protected native HPA reservation and process lifetimes
+- **Supersedes:** ADR-0039 (selected-subset execution design).
 
 ## Context
 
@@ -19,8 +23,8 @@ current baseline before pressure CAS. The fixed executor never deletes a Pod;
 actual controller-selected victims require complete current native termination,
 durable acknowledgement and a separate one-use finalizer release.
 
-Separate protected candidate admission from pressure execution. Current SDK51
-candidates can receive actual projection/startup acknowledgement while old SDK50
+Separate protected candidate admission from pressure execution. Current schema-two
+candidates can receive actual projection/startup acknowledgement while old schema-one
 baseline stays frozen and explicitly unqualified. No admission flag, caller
 receipt, generic process snapshot or predecessor nonce establishes readiness.
 Each consumer must await its actual startup acknowledgements before opening roots.

@@ -319,6 +319,9 @@ func validateNativeCommandRequest(ctx context.Context, tx *sql.Tx, p model.Capac
 			return ErrCapacityMutationAuthorization
 		}
 		if p.HPAExecutionBinding.Mode == capacity.HPALifetimeExecutionMode {
+			if req.BirthGuardBindingName == "" || req.BirthGuardBindingName != p.HPAExecutionBinding.BirthGuardBinding {
+				return ErrCapacityMutationAuthorization
+			}
 			if len(current.NativePodBaseline) < p.Floor {
 				return ErrCapacityConflict
 			}

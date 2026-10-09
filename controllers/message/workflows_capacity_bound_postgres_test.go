@@ -324,6 +324,33 @@ func TestCapacityMutationBoundAssessmentPostgres(t *testing.T) {
 			}
 		}
 	})
+	t.Run("mutator_category_refusal_precedes_private_hydration", func(t *testing.T) {
+		for index, operation := range []string{capacity.EnsureBoundHPAEnvelope, capacity.EnsureNativePodDrain, capacity.DestroyNativePodProtection} {
+			for _, category := range []string{"permission", "unknown"} {
+				raw, _ := json.Marshal(metricType)
+				var bad model.IntegrationTypeManifestSpec
+				decode(json.RawMessage(raw), &bad)
+				if len(bad.ResourceTypes) == 0 {
+					t.Fatal("actual source resource catalog missing")
+				}
+				resource := bad.ResourceTypes[0].Name
+				bad.ResourceTypes[0].DefaultActions = append(bad.ResourceTypes[0].DefaultActions, operation)
+				bad.ActionCatalog = append(bad.ActionCatalog, model.IntegrationActionDefinition{Name: operation, ResourceTypes: []string{resource}, Category: category, Idempotent: false})
+				name := fmt.Sprintf("reject-mutator-%d-%s", index, category)
+				ty := create("integration_type", name, bad)
+				inst := create("integration_instance", name, model.IntegrationInstanceManifestSpec{TypeRef: model.ManifestSelector{ManifestID: ty.ID.String()}, Status: "active", CredentialsRef: "capacity-test://must-not-hydrate", Config: metricConfig})
+				privateCalls := 0
+				private := func(context.Context, *amqp.Connection, *sql.DB, model.ManifestSelector) (model.Manifest, model.IntegrationInstanceManifestSpec, model.Manifest, model.IntegrationTypeManifestSpec, error) {
+					privateCalls++
+					return model.Manifest{}, model.IntegrationInstanceManifestSpec{}, model.Manifest{}, model.IntegrationTypeManifestSpec{}, fmt.Errorf("private hydration sentinel reached")
+				}
+				before, describeBefore := getCalls(), getDescribes()
+				if _, err := resolveCapacityObservationAdapterWithResolver(ctx, nil, db, binding(inst, ty), []string{operation}, private); err == nil || privateCalls != 0 || getCalls() != before || getDescribes() != describeBefore {
+					t.Fatal("non-capability mutator reached private transport", operation, category, err)
+				}
+			}
+		}
+	})
 	t.Run("inactive_instance_and_type_revision_refuse_without_source_calls", func(t *testing.T) {
 		before := getCalls()
 		if _, err = db.ExecContext(ctx, `UPDATE public.manifests SET active=false WHERE id=$1`, mi.ID); err != nil {

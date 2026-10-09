@@ -22,6 +22,57 @@
     {"name": "products", "description": "Informational product manifests (deploy is via repository_binding in v2.0.0+)"}
   ],
   "paths": {
+    "/api/v1/capacity/mutations/native/redeem": {
+      "post": {
+        "tags": [
+          "capacity-mutations"
+        ],
+        "summary": "Consume exactly one protected native command permission",
+        "description": "Private independent adapter bearer scope plus a one-use native command authority token. Exact five ASCII JSON members, at most 32KiB; duplicate, unknown, aliased members, query parameters and encoded paths refused. The locked current policy, workflow, instance/type checksums, executor lease and command tuple are rechecked before consumption. Success is transport permission, not an atomic Kubernetes snapshot, readiness or a provider fence. Replay is refused; recover through fixed native reads rather than a second mutation.",
+        "security": [
+          {
+            "CapacityMutationAdapter": []
+          }
+        ],
+        "requestBody": {
+          "required": true,
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/CapacityNativeAuthorityRedeemRequest"
+              }
+            }
+          }
+        },
+        "responses": {
+          "200": {
+            "description": "Committed one-use permission. No authority secret is returned.",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/CapacityNativeAuthorityPermit"
+                }
+              }
+            }
+          },
+          "401": {
+            "description": "Independent adapter credential is absent, expired, revoked or invalid."
+          },
+          "403": {
+            "description": "Exact adapter instance or capability scope denied."
+          },
+          "409": {
+            "description": "Authority or lifecycle conflict; no additional write permission."
+          },
+          "503": {
+            "description": "Authority storage unavailable; refuse provider send."
+          },
+          "400": {
+            "description": "Body is not the exact canonical five-member native authority object."
+          }
+        }
+      }
+    },
     "/api/v1/capacity/mutations/redeem": {
       "post": {
         "tags": [
@@ -759,6 +810,88 @@
       }
     },
     "schemas": {
+      "CapacityNativeAuthorityPermit": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "schema_version",
+          "command_id",
+          "attempt_id",
+          "capability",
+          "request_sha256",
+          "expires_at"
+        ],
+        "properties": {
+          "schema_version": {
+            "type": "integer",
+            "enum": [
+              1
+            ]
+          },
+          "command_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "attempt_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "capability": {
+            "type": "string",
+            "enum": [
+              "ensure_capacity_envelope_bound",
+              "ensure_capacity_pod_drain",
+              "destroy_capacity_pod_drain_protection"
+            ]
+          },
+          "request_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          },
+          "expires_at": {
+            "type": "string",
+            "format": "date-time"
+          }
+        }
+      },
+      "CapacityNativeAuthorityRedeemRequest": {
+        "type": "object",
+        "additionalProperties": false,
+        "required": [
+          "authority_token",
+          "integration_instance_id",
+          "integration_type_id",
+          "capability",
+          "request_sha256"
+        ],
+        "properties": {
+          "authority_token": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$",
+            "writeOnly": true
+          },
+          "integration_instance_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "integration_type_id": {
+            "type": "string",
+            "format": "uuid"
+          },
+          "capability": {
+            "type": "string",
+            "enum": [
+              "ensure_capacity_envelope_bound",
+              "ensure_capacity_pod_drain",
+              "destroy_capacity_pod_drain_protection"
+            ]
+          },
+          "request_sha256": {
+            "type": "string",
+            "pattern": "^[0-9a-f]{64}$"
+          }
+        }
+      },
       "CapacityMutationAuxiliaryResource": {
         "type": "object",
         "additionalProperties": false,

@@ -106,7 +106,11 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 	read := func(binding model.CapacityObservationAdapterBinding, op string, fixed map[string]any, out any) (string, error) {
 		a, ok := resolved[binding]
 		if !ok {
-			a, err = resolveCapacityObservationAdapter(ctx, conn, db, binding, op)
+			required := []string{op}
+			if p.HPAExecutionBinding != nil && p.ExecutionEnabled && p.HPAExecutionBinding.Mode == capacity.HPALifetimeExecutionMode && binding == p.AssessmentBinding.Snapshot.Adapter && op != capacity.ObserveCurrentBirthGuard {
+				required = append(required, capacity.ObserveCurrentBirthGuard)
+			}
+			a, err = resolveCapacityObservationAdapter(ctx, conn, db, binding, required...)
 			if err != nil {
 				return "", err
 			}
@@ -210,7 +214,7 @@ func capacityBoundCatalogOperation(ts model.IntegrationTypeManifestSpec, operati
 	for _, capability := range ts.Capabilities {
 		if capability == "execute" {
 			for _, action := range ts.ActionCatalog {
-				if action.Name == operation && !action.Idempotent {
+				if action.Name == operation && !action.Idempotent && (action.Category == "" || action.Category == "capability") {
 					for _, resource := range ts.ResourceTypes {
 						for _, kind := range action.ResourceTypes {
 							if kind == resource.Name {

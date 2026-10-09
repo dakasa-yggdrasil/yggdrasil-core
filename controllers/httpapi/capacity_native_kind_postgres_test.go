@@ -15,6 +15,7 @@ import (
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
+	"io"
 	"net"
 	"net/http"
 	"net/http/httptest"
@@ -24,6 +25,7 @@ import (
 	"sort"
 	"strconv"
 	"strings"
+	"sync/atomic"
 	"testing"
 	"time"
 )
@@ -38,12 +40,13 @@ func TestCapacityNativeKinDHTTP(t *testing.T) {
 	for _, scenario := range []struct {
 		name  string
 		mixed bool
-	}{{"complete_baseline_controller_retirement", false}, {"mixed_schema_one_frozen_bootstrap", true}} {
-		t.Run(scenario.name, func(t *testing.T) { qualifyCapacityNativeKinDHTTP(t, scenario.mixed) })
+		drift string
+	}{{"complete_baseline_controller_retirement", false, ""}, {"mixed_schema_one_frozen_bootstrap", true, ""}, {"installed_guard_refusal_before_authority", false, "before"}, {"installed_guard_refusal_during_redemption", false, "during"}} {
+		t.Run(scenario.name, func(t *testing.T) { qualifyCapacityNativeKinDHTTP(t, scenario.mixed, scenario.drift) })
 	}
 }
 
-func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool) {
+func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string) {
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
 	dsn, image, digest, adapterBinary := os.Getenv("DB_URL"), os.Getenv("NATIVE_FIXTURE_IMAGE"), os.Getenv("NATIVE_FIXTURE_DIGEST"), os.Getenv("CAPACITY_KUBERNETES_MAIN_BINARY")
@@ -60,6 +63,7 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool) {
 	}
 	defer conn.Close()
 	t.Cleanup(func() { _ = db.Close() })
+	workloadName := nativeBirthRoster(t)[0]
 	realm := "native-core-" + strings.ReplaceAll(uuid.NewString(), "-", "")[:12]
 	create := func(kind, name string, value any) model.Manifest {
 		raw, _ := json.Marshal(value)
@@ -93,7 +97,7 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool) {
 		}
 		template = map[string]any{"metadata": map[string]any{"labels": map[string]string{"app": "native-core"}, "finalizers": []string{nativeFinalizer}}, "spec": map[string]any{"containers": []map[string]any{{"name": "api", "image": oldImage, "imagePullPolicy": "Never", "env": []map[string]string{{"name": "NATIVE_TERMINATION_PROJECTION_DIR", "value": "/native"}, {"name": "NATIVE_TERMINATION_IMAGE_DIGEST", "value": oldDigest}}, "volumeMounts": []map[string]any{{"name": "native", "mountPath": "/native", "readOnly": true}}}}, "volumes": []map[string]any{{"name": "native", "downwardAPI": map[string]any{"items": projection}}}}}
 	}
-	deployment := map[string]any{"apiVersion": "apps/v1", "kind": "Deployment", "metadata": map[string]any{"namespace": realm, "name": "api"}, "spec": map[string]any{"replicas": 3, "selector": map[string]any{"matchLabels": map[string]string{"app": "native-core"}}, "template": template}}
+	deployment := map[string]any{"apiVersion": "apps/v1", "kind": "Deployment", "metadata": map[string]any{"namespace": realm, "name": workloadName}, "spec": map[string]any{"replicas": 3, "selector": map[string]any{"matchLabels": map[string]string{"app": "native-core"}}, "template": template}}
 	nativeKindApply(t, ctx, deployment)
 	// Custom readiness is not fabricated. Containers must actually enter the
 	// running state while the native admission gate keeps SDK2 Pods unready.
@@ -116,13 +120,23 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool) {
 		}
 		return true
 	})
-	dep := nativeKindGet(t, ctx, "-n", realm, "get", "deployment", "api", "-o", "json")
+	dep := nativeKindGet(t, ctx, "-n", realm, "get", "deployment", workloadName, "-o", "json")
 	workloadUID := dep["metadata"].(map[string]any)["uid"].(string)
+	var originalBaseline map[string]any
+	if mixed {
+		originalBaseline = nativeBirthBaseline(t, ctx, realm, os.Getenv("NATIVE_OLD_FIXTURE_IMAGE"))
+	}
+	birthBinding, adapterKubeconfig := nativeInstallBirthGuard(t, ctx, realm, workloadName, workloadUID, image)
 	if mixed {
 		// Pause the real Deployment then update its existing native ReplicaSet
 		// template. Its actual controller adds one current SDK2 candidate while
 		// all three already booted SDK1 Pods retain their original spec/lifetime.
-		nativeKindCommand(t, ctx, "-n", realm, "rollout", "pause", "deployment/api")
+		nativeKindCommand(t, ctx, "-n", realm, "rollout", "pause", "deployment/"+workloadName)
+		// The paused Deployment and its existing RS both declare the source-two
+		// template before a new Pod is born. Existing schema-one lifetimes remain
+		// unchanged; pausing prevents a rollout from replacing that baseline.
+		deploymentPatch, _ := json.Marshal(map[string]any{"spec": map[string]any{"template": nativeTemplate}})
+		nativeKindCommand(t, ctx, "-n", realm, "patch", "deployment", workloadName, "--type=merge", "-p", string(deploymentPatch))
 		sets := nativeKindGet(t, ctx, "-n", realm, "get", "replicasets", "-l", "app=native-core", "-o", "json")["items"].([]any)
 		if len(sets) != 1 {
 			t.Fatal("exact real baseline ReplicaSet unavailable")
@@ -133,7 +147,7 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool) {
 		labels["candidate"] = "sdk2"
 		patch, _ := json.Marshal(map[string]any{"spec": map[string]any{"template": map[string]any{"metadata": map[string]any{"labels": labels, "finalizers": []string{nativeFinalizer}}, "spec": nativeTemplate["spec"]}}})
 		nativeKindCommand(t, ctx, "-n", realm, "patch", "replicaset", rsName, "--type=merge", "-p", string(patch))
-		nativeKindCommand(t, ctx, "-n", realm, "scale", "deployment/api", "--replicas=4")
+		nativeKindCommand(t, ctx, "-n", realm, "scale", "deployment/"+workloadName, "--replicas=4")
 		nativeKindAwait(t, ctx, func() bool {
 			objects := nativeKindGet(t, ctx, "-n", realm, "get", "pods", "-l", "candidate=sdk2", "-o", "json")["items"].([]any)
 			if len(objects) != 1 {
@@ -150,7 +164,7 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool) {
 	}
 	owner := "native-core-owner"
 	annotations := map[string]string{"yggdrasil.io/capacity-envelope-owner": owner, "yggdrasil.io/capacity-envelope-generation": "1", "yggdrasil.io/capacity-envelope-idempotency": "previous-native", "yggdrasil.io/capacity-envelope-protected-floor": "2", "yggdrasil.io/capacity-envelope-min": "3", "yggdrasil.io/capacity-envelope-max": "4"}
-	nativeKindApply(t, ctx, map[string]any{"apiVersion": "autoscaling/v2", "kind": "HorizontalPodAutoscaler", "metadata": map[string]any{"namespace": realm, "name": "api", "annotations": annotations}, "spec": map[string]any{"scaleTargetRef": map[string]string{"apiVersion": "apps/v1", "kind": "Deployment", "name": "api"}, "minReplicas": 3, "maxReplicas": 4, "metrics": []map[string]any{{"type": "Resource", "resource": map[string]any{"name": "cpu", "target": map[string]any{"type": "Utilization", "averageUtilization": 80}}}}}})
+	nativeKindApply(t, ctx, map[string]any{"apiVersion": "autoscaling/v2", "kind": "HorizontalPodAutoscaler", "metadata": map[string]any{"namespace": realm, "name": "api", "annotations": annotations}, "spec": map[string]any{"scaleTargetRef": map[string]string{"apiVersion": "apps/v1", "kind": "Deployment", "name": workloadName}, "minReplicas": 3, "maxReplicas": 4, "metrics": []map[string]any{{"type": "Resource", "resource": map[string]any{"name": "cpu", "target": map[string]any{"type": "Utilization", "averageUtilization": 80}}}}}})
 	hpaObj := nativeKindGet(t, ctx, "-n", realm, "get", "hpa", "api", "-o", "json")
 	hpaUID := hpaObj["metadata"].(map[string]any)["uid"].(string)
 	nativeInstanceID := uuid.New()
@@ -168,7 +182,32 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool) {
 	if err != nil {
 		t.Fatal(err)
 	}
-	core := httptest.NewServer(coreHandler)
+	var redeemedAfterDrift atomic.Bool
+	core := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if drift == "during" && r.URL.Path == capacityMutationBasePath+"/native/redeem" {
+			raw, err := io.ReadAll(io.LimitReader(r.Body, 8193))
+			if err != nil || len(raw) > 8192 {
+				t.Error("closed native redemption body unavailable")
+				w.WriteHeader(400)
+				return
+			}
+			r.Body = io.NopCloser(bytes.NewReader(raw))
+			var request model.CapacityNativeAuthorityRedeemRequest
+			if json.Unmarshal(raw, &request) != nil {
+				t.Error("closed native redemption decode failed")
+				w.WriteHeader(400)
+				return
+			}
+			if request.Capability == capacity.EnsureBoundHPAEnvelope && redeemedAfterDrift.CompareAndSwap(false, true) {
+				if _, err := exec.CommandContext(ctx, "kubectl", "patch", "validatingwebhookconfiguration", "capacity-native-validate", "--type=json", "-p", `[{"op":"replace","path":"/webhooks/0/failurePolicy","value":"Ignore"}]`).CombinedOutput(); err != nil {
+					t.Error("actual guarded authority corruption hook failed")
+					w.WriteHeader(http.StatusServiceUnavailable)
+					return
+				}
+			}
+		}
+		coreHandler.ServeHTTP(w, r)
+	}))
 	defer core.Close()
 	port, healthPort := nativeKindFreePort(t), nativeKindFreePort(t)
 	adapterLog := filepath.Join(t.TempDir(), "adapter.log")
@@ -221,7 +260,7 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool) {
 		t.Fatal("actual native main describe invalid")
 	}
 	typ := create("integration_type", "native-kubernetes", nativeType)
-	nativeConfig := map[string]any{"base_url": adapterURL, "kubeconfig_path": os.Getenv("KUBECONFIG"), "capacity_authority_url": core.URL, "capacity_envelope_targets": []map[string]any{{"namespace": realm, "hpa_name": "api", "hpa_uid": hpaUID, "workload_name": "api", "workload_uid": workloadUID, "owner": owner, "protected_floor": 2, "maximum_replicas": 4, "adoption_allowed": false, "surplus_max_age_seconds": 180}}, "capacity_pod_targets": []map[string]any{{"binding_name": "api-native", "namespace": realm, "workload_name": "api", "workload_uid": workloadUID, "owner": owner, "container_name": "api", "image_digest": digest, "lanes": []string{"listener", "requests", "signal", "workers"}, "projection_directory": "/native", "admission_mode": "process_v2", "admission_port": 8080}}}
+	nativeConfig := map[string]any{"base_url": adapterURL, "kubeconfig_path": adapterKubeconfig, "current_birth_guard_bindings": []map[string]any{birthBinding}, "capacity_authority_url": core.URL, "capacity_envelope_targets": []map[string]any{{"namespace": realm, "hpa_name": "api", "hpa_uid": hpaUID, "workload_name": workloadName, "workload_uid": workloadUID, "owner": owner, "protected_floor": 2, "maximum_replicas": 4, "adoption_allowed": false, "surplus_max_age_seconds": 180}}, "capacity_pod_targets": []map[string]any{{"binding_name": "api-native", "namespace": realm, "workload_name": workloadName, "workload_uid": workloadUID, "owner": owner, "container_name": "api", "image_digest": digest, "lanes": []string{"listener", "requests", "signal", "workers"}, "projection_directory": "/native", "admission_mode": "process_v2", "admission_port": 8080}}}
 	// The registered instance uses the actual predetermined machine scope UUID.
 	specRaw, _ := json.Marshal(model.IntegrationInstanceManifestSpec{TypeRef: model.ManifestSelector{ManifestID: typ.ID.String()}, Status: "active", Config: nativeConfig, Credentials: map[string]any{"capacity_mutation_token": machineToken, "capacity_admission_key": admissionKey}})
 	instance := create("integration_instance", "native-kubernetes", json.RawMessage(specRaw))
@@ -290,8 +329,13 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool) {
 	}
 	nativeBinding := model.CapacityObservationAdapterBinding{IntegrationInstanceID: instance.ID.String(), InstanceChecksum: instance.Checksum, IntegrationTypeID: typ.ID.String(), TypeChecksum: typ.Checksum}
 	metricBinding := model.CapacityObservationAdapterBinding{IntegrationInstanceID: metricIM.ID.String(), InstanceChecksum: metricIM.Checksum, IntegrationTypeID: metricTM.ID.String(), TypeChecksum: metricTM.Checksum}
+	birthResult, birthErr := message.ExecuteIntegration(ctx, conn, db, model.ExecuteIntegrationRequest{Integration: model.ManifestSelector{ManifestID: instance.ID.String()}, Operation: capacity.ObserveCurrentBirthGuard, Capability: capacity.ObserveCurrentBirthGuard, Input: map[string]any{"binding_name": "api-birth"}})
+	var birth model.CurrentBirthGuardObservation
+	if birthErr != nil || capacity.DecodeNativeCapacity(birthResult.Output, &birth) != nil || birth.BindingSHA256 == "" {
+		t.Fatal("actual installed birth guard readback refused", birthErr)
+	}
 	now := time.Now().UTC()
-	p := model.CapacityPolicySpec{Environment: "production", Domain: "native-core", Dimension: capacity.ReservedPodEnvelopeUnit, TargetIdentity: "fixture/native-core", Owner: owner, Workflow: model.ManifestSelector{Namespace: realm, Name: "execute"}, Currency: "USD", Floor: 2, Ceiling: 4, Step: 1, MaxEvidenceAgeSeconds: 180, MinSamples: 3, MaxSampleGapSeconds: 30, DownHoldSeconds: 1, LeaseSeconds: 120, ExecutionEnabled: true, Profiles: []model.CapacityProfile{{Name: "reserved", Provider: "kubernetes", Region: "fixture-only", MinUnits: 2, MaxUnits: 4, QuoteValidUntil: now.Add(time.Hour), ValidationValidUntil: now.Add(time.Hour), ValidationRef: "fixture:source-qualification-only"}}, Signals: []model.CapacitySignalRule{{Name: "admission_pressure", SourceIdentity: "fixture/prom/native", Unit: "ratio", UpAbove: .8, DownBelow: .3}}, AssessmentBinding: &model.CapacityBoundAssessmentBinding{Snapshot: model.CapacityHPAMinimumBinding{Mode: capacity.HPAMinimumSnapshotMode, Unit: capacity.ReservedPodEnvelopeUnit, Adapter: nativeBinding, Namespace: realm, HPAName: "api", HPAUID: hpaUID, WorkloadName: "api", WorkloadUID: workloadUID, Owner: owner, Profile: "reserved", ProtectedFloor: 2, MaximumReplicas: 4}, Signals: []model.CapacityMetricSignalBinding{{Name: "admission_pressure", Adapter: metricBinding, BindingName: "admission", BindingSHA256: metric.BindingSHA256}}}, HPAExecutionBinding: &model.CapacityHPAExecutionBinding{AdapterPrincipalID: "native-adapter", Mode: capacity.HPALifetimeExecutionMode, PodTerminationBinding: "api-native", ContainerName: "api", ImageDigest: digest, Lanes: []string{"listener", "requests", "signal", "workers"}, ProjectionDirectory: "/native", AdmissionMode: "process_v2", AdmissionPort: 8080, AdmissionWorkflow: model.ManifestSelector{Namespace: realm, Name: "admit"}}}
+	p := model.CapacityPolicySpec{Environment: "production", Domain: "native-core", Dimension: capacity.ReservedPodEnvelopeUnit, TargetIdentity: "fixture/native-core", Owner: owner, Workflow: model.ManifestSelector{Namespace: realm, Name: "execute"}, Currency: "USD", Floor: 2, Ceiling: 4, Step: 1, MaxEvidenceAgeSeconds: 180, MinSamples: 3, MaxSampleGapSeconds: 30, DownHoldSeconds: 1, LeaseSeconds: 120, ExecutionEnabled: true, Profiles: []model.CapacityProfile{{Name: "reserved", Provider: "kubernetes", Region: "fixture-only", MinUnits: 2, MaxUnits: 4, QuoteValidUntil: now.Add(time.Hour), ValidationValidUntil: now.Add(time.Hour), ValidationRef: "fixture:source-qualification-only"}}, Signals: []model.CapacitySignalRule{{Name: "admission_pressure", SourceIdentity: "fixture/prom/native", Unit: "ratio", UpAbove: .8, DownBelow: .3}}, AssessmentBinding: &model.CapacityBoundAssessmentBinding{Snapshot: model.CapacityHPAMinimumBinding{Mode: capacity.HPAMinimumSnapshotMode, Unit: capacity.ReservedPodEnvelopeUnit, Adapter: nativeBinding, Namespace: realm, HPAName: "api", HPAUID: hpaUID, WorkloadName: workloadName, WorkloadUID: workloadUID, Owner: owner, Profile: "reserved", ProtectedFloor: 2, MaximumReplicas: 4}, Signals: []model.CapacityMetricSignalBinding{{Name: "admission_pressure", Adapter: metricBinding, BindingName: "admission", BindingSHA256: metric.BindingSHA256}}}, HPAExecutionBinding: &model.CapacityHPAExecutionBinding{AdapterPrincipalID: "native-adapter", Mode: capacity.HPALifetimeExecutionMode, PodTerminationBinding: "api-native", BirthGuardBinding: "api-birth", BirthGuardSHA256: birth.BindingSHA256, ContainerName: "api", ImageDigest: digest, Lanes: []string{"listener", "requests", "signal", "workers"}, ProjectionDirectory: "/native", AdmissionMode: "process_v2", AdmissionPort: 8080, AdmissionWorkflow: model.ManifestSelector{Namespace: realm, Name: "admit"}}}
 	create("rbac", "native-rbac", map[string]any{"roles": []any{map[string]any{"name": "native", "rules": []any{map[string]any{"effect": "allow", "resources": []string{"workflow:" + realm + ":execute", "workflow:" + realm + ":admit"}, "actions": []string{"run"}}}}}, "bindings": []any{map[string]any{"name": "ci-only", "subjects": []any{map[string]string{"type": "service", "id": "native-ci-runner"}}, "roles": []string{"native"}}}})
 	noNativeInputs := false
 	create("workflow", "execute", model.WorkflowManifestSpec{Trigger: model.WorkflowTriggerSpec{Mode: "manual"}, Authorization: &model.WorkflowAuthorizationSpec{RBAC: model.ManifestSelector{Namespace: realm, Name: "native-rbac"}}, InputSchema: model.WorkflowInputSchemaSpec{Properties: map[string]model.IntegrationSchemaProperty{}, AdditionalProperties: &noNativeInputs}, Steps: []model.WorkflowStepSpec{{ID: "native", TimeoutSeconds: 180, Retry: model.WorkflowRetrySpec{MaxAttempts: 1}, Use: model.WorkflowStepUseSpec{Kind: "yggdrasil", Operation: "capacity.execute_bound"}, With: map[string]any{"policy": map[string]string{"namespace": realm, "name": "native-policy"}}}}})
@@ -418,28 +462,9 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool) {
 		if admitted != 1 {
 			t.Fatalf("mixed bootstrap invented old SDK1 process origins: %d", admitted)
 		}
-		objects := nativeKindGet(t, ctx, "-n", realm, "get", "pods", "-l", "app=native-core", "-o", "json")["items"].([]any)
-		oldUIDs := map[string]string{}
-		for _, item := range objects {
-			pod := item.(map[string]any)
-			meta := pod["metadata"].(map[string]any)
-			cs := pod["spec"].(map[string]any)["containers"].([]any)
-			if cs[0].(map[string]any)["image"] == os.Getenv("NATIVE_OLD_FIXTURE_IMAGE") {
-				oldUIDs[meta["name"].(string)] = meta["uid"].(string)
-			}
-		}
-		if len(oldUIDs) < 1 {
-			t.Fatal("native old SDK1 baseline missing")
-		}
+		nativeBirthCheckBaseline(t, ctx, realm, originalBaseline)
 		run("execute", false)
-		for name, uid := range oldUIDs {
-			pod := nativeKindGet(t, ctx, "-n", realm, "get", "pod", name, "-o", "json")
-			meta := pod["metadata"].(map[string]any)
-			cs := pod["status"].(map[string]any)["containerStatuses"].([]any)
-			if meta["uid"] != uid || meta["deletionTimestamp"] != nil || cs[0].(map[string]any)["state"].(map[string]any)["running"] == nil {
-				t.Fatal("unknown old lifetime retired during candidate admission")
-			}
-		}
+		nativeBirthCheckBaseline(t, ctx, realm, originalBaseline)
 		var writes int
 		if db.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_commands WHERE namespace=$1 AND operation=$2`, realm, capacity.EnsureBoundHPAEnvelope).Scan(&writes) != nil || writes != 0 {
 			t.Fatal("mixed bootstrap gained pressure/HPA permission", writes)
@@ -450,7 +475,29 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool) {
 	if admitted != 3 {
 		t.Fatal("full baseline was not actually admitted", admitted)
 	}
-	nativeKindCommand(t, ctx, "-n", realm, "rollout", "status", "deployment/api", "--timeout=60s")
+	nativeKindCommand(t, ctx, "-n", realm, "rollout", "status", "deployment/"+workloadName, "--timeout=60s")
+	if drift != "" {
+		if drift == "before" {
+			nativeKindCommand(t, ctx, "patch", "validatingwebhookconfiguration", "capacity-native-validate", "--type=json", "-p", `[{"op":"replace","path":"/webhooks/0/failurePolicy","value":"Ignore"}]`)
+		}
+		run("execute", false)
+		current := nativeKindGet(t, ctx, "-n", realm, "get", "hpa", "api", "-o", "json")
+		if current["spec"].(map[string]any)["minReplicas"] != float64(3) {
+			t.Fatal("drifted current birth authority changed reserved HPA minimum")
+		}
+		var commands, redeemed int
+		if db.QueryRowContext(ctx, `SELECT count(*),count(*) FILTER(WHERE state='redeemed') FROM public.capacity_native_commands WHERE namespace=$1 AND operation=$2`, realm, capacity.EnsureBoundHPAEnvelope).Scan(&commands, &redeemed) != nil {
+			t.Fatal("actual native authority ledger read failed")
+		}
+		if drift == "before" && commands != 0 {
+			t.Fatal("invalid current guard reached native command authority")
+		}
+		if drift == "during" && (!redeemedAfterDrift.Load() || commands != 1 || redeemed != 1) {
+			t.Fatal("actual native redemption hook was not exercised", commands, redeemed)
+		}
+		t.Log("actual installed guard refused before authority or after consumed redemption; HPA minimum unchanged")
+		return
+	}
 	run("execute", true)
 	time.Sleep(1200 * time.Millisecond)
 	run("execute", true)
@@ -512,7 +559,7 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool) {
 	// The envelope min is a reservation, not a scale command. This native CI
 	// action asks the real Deployment/ReplicaSet controller to reduce replicas.
 	// The cost is only an adversary input; actual victim UID proves selection.
-	nativeKindCommand(t, ctx, "-n", realm, "scale", "deployment/api", "--replicas=2")
+	nativeKindCommand(t, ctx, "-n", realm, "scale", "deployment/"+workloadName, "--replicas=2")
 	nativeKindAwait(t, ctx, func() bool {
 		pod := nativeKindGet(t, ctx, "-n", realm, "get", "pod", victimName, "-o", "json")
 		meta := pod["metadata"].(map[string]any)

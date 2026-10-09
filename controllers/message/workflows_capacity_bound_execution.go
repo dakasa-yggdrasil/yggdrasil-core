@@ -413,6 +413,10 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 	// Re-read complete membership and every actual SDK admission at the HPA
 	// boundary. Birth protection/readiness gates retain concurrent new Pods.
 	qualifyBaseline := func(hpa model.CapacityHPAEnvelopeResponse) error {
+		var guard model.CurrentBirthGuardObservation
+		if e := read(capacity.ObserveCurrentBirthGuard, map[string]any{"binding_name": p.HPAExecutionBinding.BirthGuardBinding}, &guard); e != nil || capacity.CurrentNativeBirthGuard(p, guard, time.Now().UTC()) != nil {
+			return errCapacityBoundAssessment
+		}
 		baseline, e := inventory()
 		if e != nil {
 			return e
@@ -455,7 +459,7 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 		if intent.Decision.Units < hpa.Observation.MinReplicas {
 			mode = "downshift"
 		}
-		req := model.CapacityNativeHPARequest{Namespace: p.AssessmentBinding.Snapshot.Namespace, HPAName: p.AssessmentBinding.Snapshot.HPAName, ExpectedUID: hpa.Observation.HPAUID, ExpectedResourceVersion: hpa.Observation.ResourceVersion, ExpectedWorkloadUID: hpa.Observation.WorkloadUID, ExpectedWorkloadResourceVersion: hpa.Observation.WorkloadResourceVersion, Owner: p.AssessmentBinding.Snapshot.Owner, Generation: intent.NativeHPAGeneration, IdempotencyKey: fmt.Sprintf("native:%s:%d", policy.ID, intent.Generation), MinReplicas: intent.Decision.Units, MaxReplicas: hpa.Observation.MaxReplicas, Adopt: hpa.Observation.Owner == "", DryRun: &no, Mode: mode}
+		req := model.CapacityNativeHPARequest{Namespace: p.AssessmentBinding.Snapshot.Namespace, HPAName: p.AssessmentBinding.Snapshot.HPAName, ExpectedUID: hpa.Observation.HPAUID, ExpectedResourceVersion: hpa.Observation.ResourceVersion, ExpectedWorkloadUID: hpa.Observation.WorkloadUID, ExpectedWorkloadResourceVersion: hpa.Observation.WorkloadResourceVersion, Owner: p.AssessmentBinding.Snapshot.Owner, Generation: intent.NativeHPAGeneration, IdempotencyKey: fmt.Sprintf("native:%s:%d", policy.ID, intent.Generation), MinReplicas: intent.Decision.Units, MaxReplicas: hpa.Observation.MaxReplicas, Adopt: hpa.Observation.Owner == "", DryRun: &no, Mode: mode, BirthGuardBindingName: p.HPAExecutionBinding.BirthGuardBinding}
 		err = execute(capacity.EnsureBoundHPAEnvelope, req.ExpectedUID, req, func(value any) (any, error) {
 			request := value.(model.CapacityNativeHPARequest)
 			freshHPA, e := observeHPA()

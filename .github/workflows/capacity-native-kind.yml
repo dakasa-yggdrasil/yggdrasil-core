@@ -7,7 +7,7 @@ permissions:
 jobs:
   native-core-kind:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 40
     services:
       postgres:
         image: postgres:16
@@ -58,7 +58,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: dakasa-yggdrasil/integration-kubernetes
-          ref: 77ffa8d828823b40d84eff0bd8b34400b3681a44
+          ref: 4426c5ed8d176fb44ce974f8e23d8ebcc9c0248b
           path: .ci-native-kubernetes
           token: ${{ steps.native-token.outputs.token }}
           persist-credentials: false
@@ -69,18 +69,46 @@ jobs:
           path: .ci-native-prometheus
           token: ${{ steps.native-token.outputs.token }}
           persist-credentials: false
+      - name: Read exact private native birth guard source
+        id: birth-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.YGGDRASIL_APP_ID }}
+          private-key: ${{ secrets.YGGDRASIL_APP_PEM }}
+          owner: dakasa-co
+          repositories: dakasa-system
+          permission-contents: read
+      - uses: actions/checkout@v4
+        with:
+          repository: dakasa-co/dakasa-system
+          ref: 3fd8f3ff6cb8e35f2386f8d9514e232687542a56
+          path: .ci-native-birth-guard
+          token: ${{ steps.birth-token.outputs.token }}
+          persist-credentials: false
+          submodules: false
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
       - name: Compile actual Kubernetes main and fixed metric source
         run: |
           set -euo pipefail
-          test "$(git -C .ci-native-kubernetes rev-parse HEAD)" = 77ffa8d828823b40d84eff0bd8b34400b3681a44
+          test "$(git -C .ci-native-kubernetes rev-parse HEAD)" = 4426c5ed8d176fb44ce974f8e23d8ebcc9c0248b
           (cd .ci-native-kubernetes && go build -race -o "$RUNNER_TEMP/native-kubernetes-main" .)
           cp scripts/ci/capacity_metric_source_fixture_test.go.tmpl .ci-native-prometheus/internal/adapter/capacity_core_metric_source_test.go
           (cd .ci-native-prometheus && go test -c -o "$RUNNER_TEMP/native-metric-source" ./internal/adapter)
           echo "CAPACITY_KUBERNETES_MAIN_BINARY=$RUNNER_TEMP/native-kubernetes-main" >> "$GITHUB_ENV"
           echo "CAPACITY_METRIC_FIXTURE_BINARY=$RUNNER_TEMP/native-metric-source" >> "$GITHUB_ENV"
+      - name: Compile the actual pinned private birth guard renderer and image
+        run: |
+          set -euo pipefail
+          guard_commit=$(git -C .ci-native-birth-guard rev-parse HEAD)
+          test "$guard_commit" = "3fd8f3ff6cb8e35f2386f8d9514e232687542a56"
+          mkdir "$RUNNER_TEMP/native-birth-guard"
+          git -C .ci-native-birth-guard archive HEAD tools/protected-platform | tar -x --strip-components=2 -C "$RUNNER_TEMP/native-birth-guard"
+          (cd "$RUNNER_TEMP/native-birth-guard" && go build -ldflags "-X main.platformBuildSourceCommit=$guard_commit" -o "$RUNNER_TEMP/native-birth-guard-plan" .)
+          docker build --build-arg "SOURCE_COMMIT=$guard_commit" -t docker.io/library/native-birth-guard:head "$RUNNER_TEMP/native-birth-guard"
+          echo "CAPACITY_BIRTH_GUARD_BINARY=$RUNNER_TEMP/native-birth-guard-plan" >> "$GITHUB_ENV"
+          echo "CAPACITY_BIRTH_GUARD_ROSTER=$GITHUB_WORKSPACE/.ci-native-birth-guard/deploy/infra/protected-platform/profile.template.json" >> "$GITHUB_ENV"
       - name: Verify immutable qualified schema two SDK fixture source
         run: |
           python3 - <<'PYVERIFY'
@@ -127,21 +155,26 @@ jobs:
       - uses: helm/kind-action@v1.12.0
         with:
           cluster_name: native-core
+          config: .github/fixtures/native-core-kind.yaml
           wait: 120s
       - name: Pin the actual native OCI manifest
         run: |
           set -euo pipefail
-          for fixture in native-admission-fixture native-receipt-fixture; do
+          for fixture in native-admission-fixture native-receipt-fixture native-birth-guard; do
             kind load docker-image "docker.io/library/$fixture:head" --name native-core
             digest=$(docker exec native-core-control-plane ctr -n k8s.io images ls | awk -v ref="docker.io/library/$fixture:head" '$1 == ref { print $3 }')
             [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
-            docker exec native-core-control-plane ctr -n k8s.io images tag "docker.io/library/$fixture:head" "docker.io/library/$fixture@$digest"
+            for node in $(kind get nodes --name native-core); do
+              docker exec "$node" ctr -n k8s.io images tag "docker.io/library/$fixture:head" "docker.io/library/$fixture@$digest"
+            done
             if [ "$fixture" = native-admission-fixture ]; then
               echo "NATIVE_FIXTURE_IMAGE=docker.io/library/$fixture@$digest" >> "$GITHUB_ENV"
               echo "NATIVE_FIXTURE_DIGEST=$digest" >> "$GITHUB_ENV"
-            else
+            elif [ "$fixture" = native-receipt-fixture ]; then
               echo "NATIVE_OLD_FIXTURE_IMAGE=docker.io/library/$fixture@$digest" >> "$GITHUB_ENV"
               echo "NATIVE_OLD_FIXTURE_DIGEST=$digest" >> "$GITHUB_ENV"
+            else
+              echo "NATIVE_BIRTH_GUARD_IMAGE=docker.io/library/$fixture@$digest" >> "$GITHUB_ENV"
             fi
           done
           echo "KUBECONFIG=$HOME/.kube/config" >> "$GITHUB_ENV"
@@ -152,12 +185,12 @@ jobs:
           REQUIRE_CAPACITY_NATIVE_KIND: "true"
         run: |
           set -euo pipefail
-          go test -race -count=1 -timeout=14m -json ./controllers/httpapi -run '^TestCapacityNativeKinDHTTP$' | tee native-core-results.json
+          go test -race -count=1 -timeout=24m -json ./controllers/httpapi -run '^TestCapacityNativeKinDHTTP$' | tee native-core-results.json
           python3 - <<'PY'
           import json
           events=[json.loads(line) for line in open('native-core-results.json') if line.strip()]
           required='TestCapacityNativeKinDHTTP'
-          for case in [required,required+'/complete_baseline_controller_retirement',required+'/mixed_schema_one_frozen_bootstrap']:
+          for case in [required,required+'/complete_baseline_controller_retirement',required+'/mixed_schema_one_frozen_bootstrap',required+'/installed_guard_refusal_before_authority',required+'/installed_guard_refusal_during_redemption']:
               if not any(e.get('Test')==case and e.get('Action')=='pass' for e in events): raise SystemExit('actual protected native Core case missing or failed: '+case)
           if any(e.get('Test')==required and e.get('Action') in ['skip','fail'] for e in events): raise SystemExit('actual protected native Core case skipped or failed')
           PY

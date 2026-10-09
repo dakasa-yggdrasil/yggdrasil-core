@@ -2,12 +2,24 @@ package message
 
 import (
 	"encoding/json"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"os"
 	"testing"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 )
+
+func TestCapacityBoundMutatorCatalogRefusesPermissionAndUnknownCategory(t *testing.T) {
+	for _, operation := range []string{capacity.EnsureBoundHPAEnvelope, capacity.EnsureNativePodDrain, capacity.DestroyNativePodProtection} {
+		for _, category := range []string{"", "capability", "permission", "unknown"} {
+			typeSpec := model.IntegrationTypeManifestSpec{Capabilities: []string{"describe", "execute"}, ResourceTypes: []model.IntegrationResourceType{{Name: "object", DefaultActions: []string{operation}}}, ActionCatalog: []model.IntegrationActionDefinition{{Name: operation, ResourceTypes: []string{"object"}, Category: category}}}
+			if capacityBoundCatalogOperation(typeSpec, operation) != (category == "" || category == "capability") {
+				t.Fatal("permission/category became dispatched mutation", operation, category)
+			}
+		}
+	}
+}
 
 func TestCapacityNativeCatalogUsesActualRegistrationContract(t *testing.T) {
 	raw, err := os.ReadFile("../../repository/testdata/capacity_hetzner_type_v1.json")

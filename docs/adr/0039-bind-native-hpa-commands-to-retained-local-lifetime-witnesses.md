@@ -1,6 +1,10 @@
 # ADR-0039: Bind native HPA commands to retained local lifetime witnesses
 
-**Status:** Proposed
+- **Status:** Superseded by 0040
+- **Date:** 2026-10-08
+- **Deciders:** Giomaster
+- **Scope:** yggdrasil-core / protected native HPA reservation and process lifetimes
+- **Superseded by:** ADR-0040 (independent lifetime ledger); source qualification remains separate.
 
 ## Context
 

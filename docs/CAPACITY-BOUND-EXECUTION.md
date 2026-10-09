@@ -15,12 +15,12 @@ The pressure gate remains `YGGDRASIL_CAPACITY_EXECUTION_ENABLED`; bootstrap cann
 issue an HPA envelope or Pod DELETE. An enabled policy is still required.
 
 Bootstrap observes the complete bounded native candidate LIST and explicitly
-unqualified old baseline lifetimes. It can acknowledge one actual SDK51 candidate
-while SDK50 baseline remains frozen and unqualified. The producer supplies its
+unqualified old baseline lifetimes. It can acknowledge one actual schema-two candidate
+while schema-one baseline remains frozen and unqualified. The producer supplies its
 own current process nonce, exact dynamic projection acknowledgement and source
 startup acknowledgement. This does not require every old Pod or every function
 to expose schema two before a new candidate can start. It creates no useful or
-warm stock receipt. Never invent a schema two nonce for an existing SDK50 process.
+warm stock receipt. Never invent a schema two nonce for an existing schema-one process.
 
 A controlled rollout must preserve the old protected baseline until its separate
 qualified schema one lifetime evidence or controlled migration resolves it.
@@ -81,3 +81,22 @@ production activation or VM floor mutation.
 A released exact native UID can remain in LIST while an independently owned finalizer retains its already witnessed current termination. The executor re-reads the strict native removal target before excluding that UID from live root admission; Running, restarted or reprotected lifetimes never revive a released origin. While the released UID remains listed, only an unchanged HOLD can complete. New reservation and admission mutations remain refused. The native KinD controller adversary retains a foreign finalizer, requires removal of only the capacity finalizer and replays HOLD before the fixture removes its own finalizer. None of these observations establishes released VM capacity or provider quiescence.
 
 If the terminal origin has already moved to immutable archive, a readonly lookup is limited to UIDs returned by the current native LIST. It validates the full bundle/origin digests, successful native witness and confirmed release against its permanent command identity. It never restores the hot lifetime or grants another command. An archived terminal object still needs the same fresh native removal-target check and HOLD-only restriction.
+
+Enabled `native_hpa_lifetime_v2` policies additionally pin `birth_guard_binding` and `birth_guard_sha256` for the current installed guard in the exact adapter instance. Core reads that graph internally at the native reservation boundary; the adapter independently repeats it before one-use redemption and before HPA CAS. Immutable webhook/config/service/Deployment pins, Fail CREATE/UPDATE/DELETE semantics, the selected namespace label, current source image/container and complete backend routing must all match. A LIST census alone is insufficient. These native reads are not atomic with HPA writes, and they do not self-attest runtime configuration, useful stock or provider continuity. Concurrent operator changes after the final read remain a bounded cross-resource gap.
+
+The private `POST /api/v1/capacity/mutations/native/redeem` route takes exactly
+`authority_token`, `integration_instance_id`, `integration_type_id`, `capability`
+and `request_sha256` under the independent adapter bearer. Its 200 response has
+`schema_version: 1`, `command_id`, `attempt_id`, `capability`, `request_sha256`
+and `expires_at`; it contains no authority token. Invalid closed bodies return
+400, invalid bearer 401, denied exact scope 403, stale/used authority 409 and
+unavailable durable storage 503. Native permission replay is refused. Recovery
+reads do not reissue a command whose send or provider outcome is uncertain.
+
+The remote native Core gate imports the exact private guard source, installs its
+actual admission-plan objects on KinD and reads a binding from current API
+objects through the actual Kubernetes adapter. Its ephemeral ServiceAccount is
+restricted to the isolated namespace and exact read-only cluster resources.
+Guard drift before authority issuance and during native redemption must refuse
+HPA reduction. This fixture qualifies the connected source contract; it does not
+prove provider continuity, all product functions, or atomic webhook/HPA updates.
