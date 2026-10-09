@@ -158,14 +158,15 @@ func nativeInstallBirthGuard(t *testing.T, ctx context.Context, realm, workload,
 	var cm corev1.ConfigMap
 	nativeBirthTyped(t, nativeKindGet(t, ctx, "-n", realm, "get", "configmap", "capacity-native-admission", "-o", "json"), &cm)
 	var deployment appsv1.Deployment
-	nativeBirthTyped(t, nativeKindGet(t, ctx, "-n", realm, "get", "deployment", "capacity-native-admission", "-o", "json"), &deployment)
+	deploymentObject := nativeKindGet(t, ctx, "-n", realm, "get", "deployment", "capacity-native-admission", "-o", "json")
+	nativeBirthTyped(t, deploymentObject, &deployment)
 	var sa corev1.ServiceAccount
 	nativeBirthTyped(t, nativeKindGet(t, ctx, "-n", realm, "get", "serviceaccount", "capacity-native-admission", "-o", "json"), &sa)
 	namespace := nativeKindGet(t, ctx, "get", "namespace", realm, "-o", "json")["metadata"].(map[string]any)
 	pin := func(name, uid string, value any) map[string]any {
 		return map[string]any{"name": name, "uid": uid, "sha256": nativeBirthSHA(value)}
 	}
-	binding := map[string]any{"binding_name": "api-birth", "namespace": realm, "namespace_uid": namespace["uid"], "namespace_label_key": "yggdrasil.io/capacity-native-admission", "namespace_label": "schema2", "workload_name": workload, "workload_uid": workloadUID, "workload_container": "api", "workload_image": image, "adapter_principal": principal, "mutating": pin(mutating.Name, string(mutating.UID), mutating.Webhooks), "validating": pin(validating.Name, string(validating.UID), validating.Webhooks), "service": pin(service.Name, string(service.UID), service.Spec), "configmap": pin(cm.Name, string(cm.UID), map[string]any{"data": cm.Data, "binary_data": cm.BinaryData, "immutable": cm.Immutable}), "deployment": pin(deployment.Name, string(deployment.UID), deployment.Spec), "service_account": sa.Name, "service_account_uid": string(sa.UID), "guard_container": "guard", "guard_image": guardImage, "ca_bundle_sha256": fmt.Sprintf("%x", sha256.Sum256(ca)), "minimum_backends": 2}
+	binding := map[string]any{"binding_name": "api-birth", "namespace": realm, "namespace_uid": namespace["uid"], "namespace_label_key": "yggdrasil.io/capacity-native-admission", "namespace_label": "schema2", "workload_name": workload, "workload_uid": workloadUID, "workload_container": "api", "workload_image": image, "adapter_principal": principal, "mutating": pin(mutating.Name, string(mutating.UID), mutating.Webhooks), "validating": pin(validating.Name, string(validating.UID), validating.Webhooks), "service": pin(service.Name, string(service.UID), service.Spec), "configmap": pin(cm.Name, string(cm.UID), map[string]any{"data": cm.Data, "binary_data": cm.BinaryData, "immutable": cm.Immutable}), "deployment": map[string]any{"name": deployment.Name, "uid": string(deployment.UID), "sha256": nativeBirthDeploymentProjection(t, ctx, deploymentObject)}, "service_account": sa.Name, "service_account_uid": string(sa.UID), "guard_container": "guard", "guard_image": guardImage, "ca_bundle_sha256": fmt.Sprintf("%x", sha256.Sum256(ca)), "minimum_backends": 2}
 	return binding, nativeBirthAdapterKubeconfig(t, ctx, realm)
 }
 
@@ -246,4 +247,35 @@ func nativeBirthCheckBaseline(t *testing.T, ctx context.Context, realm string, b
 			t.Fatal("original native process tuple changed")
 		}
 	}
+}
+
+// Use the production observer's exact typed projection. Core's newer Kubernetes
+// SDK uses omitzero for Template.Metadata.CreationTimestamp; the adapter's pinned
+// SDK retains the explicit null. Dropping the digest guard would hide drift.
+func nativeBirthDeploymentProjection(t *testing.T, ctx context.Context, object map[string]any) string {
+	t.Helper()
+	binary := os.Getenv("CAPACITY_BIRTH_PROJECTION_BINARY")
+	if binary == "" {
+		t.Fatal("exact adapter projection producer required")
+	}
+	dir := t.TempDir()
+	input, output := filepath.Join(dir, "native-deployment.json"), filepath.Join(dir, "projection.json")
+	raw, err := json.Marshal(object)
+	if err != nil || os.WriteFile(input, raw, 0600) != nil {
+		t.Fatal("native Deployment projection input unavailable")
+	}
+	command := exec.CommandContext(ctx, binary, "-test.run=^TestCapacityCoreBirthProjectionProducer$")
+	command.Env = append(os.Environ(), "CAPACITY_NATIVE_INPUT_FILE="+input, "CAPACITY_NATIVE_OUTPUT_FILE="+output)
+	if err = command.Run(); err != nil {
+		t.Fatal("actual adapter projection producer refused")
+	}
+	raw, err = os.ReadFile(output)
+	var result struct {
+		SchemaVersion int    `json:"schema_version"`
+		SHA256        string `json:"deployment_spec_sha256"`
+	}
+	if err != nil || json.Unmarshal(raw, &result) != nil || result.SchemaVersion != 1 || len(result.SHA256) != 64 {
+		t.Fatal("exact native projection result unavailable")
+	}
+	return result.SHA256
 }

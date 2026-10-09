@@ -100,3 +100,11 @@ restricted to the isolated namespace and exact read-only cluster resources.
 Guard drift before authority issuance and during native redemption must refuse
 HPA reduction. This fixture qualifies the connected source contract; it does not
 prove provider continuity, all product functions, or atomic webhook/HPA updates.
+
+Operator object hashes must use the exact adapter revision's typed JSON projection.
+A consumer's newer Kubernetes SDK can change encoding without native resource
+changes (for example zero template `creationTimestamp`: omitted vs explicit null).
+The remote installed-guard fixture compiles a projection producer inside the
+pinned adapter source and hashes the actual native Deployment through that same
+code. It preserves the digest equality check; this projection helper is CI-only
+and grants neither adoption nor write authority.

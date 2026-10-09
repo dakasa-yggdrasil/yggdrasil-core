@@ -58,7 +58,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: dakasa-yggdrasil/integration-kubernetes
-          ref: a9e3403de96f36072de962e9f95e5f43358d1319
+          ref: c8acf75cd936c1c496fc81aa27f963f88881e3f4
           path: .ci-native-kubernetes
           token: ${{ steps.native-token.outputs.token }}
           persist-credentials: false
@@ -92,8 +92,11 @@ jobs:
       - name: Compile actual Kubernetes main and fixed metric source
         run: |
           set -euo pipefail
-          test "$(git -C .ci-native-kubernetes rev-parse HEAD)" = a9e3403de96f36072de962e9f95e5f43358d1319
+          test "$(git -C .ci-native-kubernetes rev-parse HEAD)" = c8acf75cd936c1c496fc81aa27f963f88881e3f4
           (cd .ci-native-kubernetes && go build -race -o "$RUNNER_TEMP/native-kubernetes-main" .)
+          cp scripts/ci/capacity_birth_projection_source_test.go.tmpl .ci-native-kubernetes/internal/adapter/capacity_core_birth_projection_test.go
+          (cd .ci-native-kubernetes && go test -c -o "$RUNNER_TEMP/native-birth-projection" ./internal/adapter)
+          echo "CAPACITY_BIRTH_PROJECTION_BINARY=$RUNNER_TEMP/native-birth-projection" >> "$GITHUB_ENV"
           cp scripts/ci/capacity_metric_source_fixture_test.go.tmpl .ci-native-prometheus/internal/adapter/capacity_core_metric_source_test.go
           (cd .ci-native-prometheus && go test -c -o "$RUNNER_TEMP/native-metric-source" ./internal/adapter)
           echo "CAPACITY_KUBERNETES_MAIN_BINARY=$RUNNER_TEMP/native-kubernetes-main" >> "$GITHUB_ENV"
