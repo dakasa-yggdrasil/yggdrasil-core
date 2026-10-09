@@ -58,7 +58,7 @@ jobs:
       - uses: actions/checkout@v4
         with:
           repository: dakasa-yggdrasil/integration-kubernetes
-          ref: 4426c5ed8d176fb44ce974f8e23d8ebcc9c0248b
+          ref: a9e3403de96f36072de962e9f95e5f43358d1319
           path: .ci-native-kubernetes
           token: ${{ steps.native-token.outputs.token }}
           persist-credentials: false
@@ -92,7 +92,7 @@ jobs:
       - name: Compile actual Kubernetes main and fixed metric source
         run: |
           set -euo pipefail
-          test "$(git -C .ci-native-kubernetes rev-parse HEAD)" = 4426c5ed8d176fb44ce974f8e23d8ebcc9c0248b
+          test "$(git -C .ci-native-kubernetes rev-parse HEAD)" = a9e3403de96f36072de962e9f95e5f43358d1319
           (cd .ci-native-kubernetes && go build -race -o "$RUNNER_TEMP/native-kubernetes-main" .)
           cp scripts/ci/capacity_metric_source_fixture_test.go.tmpl .ci-native-prometheus/internal/adapter/capacity_core_metric_source_test.go
           (cd .ci-native-prometheus && go test -c -o "$RUNNER_TEMP/native-metric-source" ./internal/adapter)
