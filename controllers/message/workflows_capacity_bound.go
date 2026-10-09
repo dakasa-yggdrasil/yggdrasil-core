@@ -110,7 +110,7 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 			if p.HPAExecutionBinding != nil && p.ExecutionEnabled && p.HPAExecutionBinding.Mode == capacity.HPALifetimeExecutionMode && binding == p.AssessmentBinding.Snapshot.Adapter && op != capacity.ObserveCurrentBirthGuard {
 				required = append(required, capacity.ObserveCurrentBirthGuard)
 			}
-			a, err = resolveCapacityObservationAdapter(ctx, conn, db, binding, required...)
+			a, err = resolveCapacityObservationAdapterWithResolver(ctx, conn, db, binding, required, resolveIntegrationInstance)
 			if err != nil {
 				return "", err
 			}
