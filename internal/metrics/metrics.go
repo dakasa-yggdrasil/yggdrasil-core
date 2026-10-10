@@ -58,6 +58,8 @@ const (
 	AuthMFAFactorTOTP         = "totp"
 	AuthMFAFactorRecoveryCode = "recovery_code"
 	AuthMFAFactorWebAuthn     = "webauthn"
+	AuthMFAFactorEmail        = "email"
+	AuthMFAFactorSMS          = "sms"
 )
 
 // Reactor dispatch outcomes. Same closed-set discipline as evaluations.
@@ -153,9 +155,13 @@ var (
 	authMFAVerifySucceededTOTP         atomic.Uint64
 	authMFAVerifySucceededRecoveryCode atomic.Uint64
 	authMFAVerifySucceededWebAuthn     atomic.Uint64
+	authMFAVerifySucceededEmail        atomic.Uint64
+	authMFAVerifySucceededSMS          atomic.Uint64
 	authMFAVerifyFailedTOTP            atomic.Uint64
 	authMFAVerifyFailedRecoveryCode    atomic.Uint64
 	authMFAVerifyFailedWebAuthn        atomic.Uint64
+	authMFAVerifyFailedEmail           atomic.Uint64
+	authMFAVerifyFailedSMS             atomic.Uint64
 
 	// Auth session create / revoke counters. Created counts the moment
 	// `auth_sessions` row is inserted (across login + SSO + admin
@@ -468,12 +474,20 @@ func IncAuthMFAVerify(outcome, factor string) {
 		authMFAVerifySucceededRecoveryCode.Add(1)
 	case outcome == AuthMFAVerifySucceeded && factor == AuthMFAFactorWebAuthn:
 		authMFAVerifySucceededWebAuthn.Add(1)
+	case outcome == AuthMFAVerifySucceeded && factor == AuthMFAFactorEmail:
+		authMFAVerifySucceededEmail.Add(1)
+	case outcome == AuthMFAVerifySucceeded && factor == AuthMFAFactorSMS:
+		authMFAVerifySucceededSMS.Add(1)
 	case outcome == AuthMFAVerifyFailed && factor == AuthMFAFactorTOTP:
 		authMFAVerifyFailedTOTP.Add(1)
 	case outcome == AuthMFAVerifyFailed && factor == AuthMFAFactorRecoveryCode:
 		authMFAVerifyFailedRecoveryCode.Add(1)
 	case outcome == AuthMFAVerifyFailed && factor == AuthMFAFactorWebAuthn:
 		authMFAVerifyFailedWebAuthn.Add(1)
+	case outcome == AuthMFAVerifyFailed && factor == AuthMFAFactorEmail:
+		authMFAVerifyFailedEmail.Add(1)
+	case outcome == AuthMFAVerifyFailed && factor == AuthMFAFactorSMS:
+		authMFAVerifyFailedSMS.Add(1)
 	}
 }
 
@@ -504,9 +518,13 @@ func AuthMFAVerifySnapshot() map[string]uint64 {
 		AuthMFAVerifySucceeded + "|" + AuthMFAFactorTOTP:         authMFAVerifySucceededTOTP.Load(),
 		AuthMFAVerifySucceeded + "|" + AuthMFAFactorRecoveryCode: authMFAVerifySucceededRecoveryCode.Load(),
 		AuthMFAVerifySucceeded + "|" + AuthMFAFactorWebAuthn:     authMFAVerifySucceededWebAuthn.Load(),
+		AuthMFAVerifySucceeded + "|" + AuthMFAFactorEmail:        authMFAVerifySucceededEmail.Load(),
+		AuthMFAVerifySucceeded + "|" + AuthMFAFactorSMS:          authMFAVerifySucceededSMS.Load(),
 		AuthMFAVerifyFailed + "|" + AuthMFAFactorTOTP:            authMFAVerifyFailedTOTP.Load(),
 		AuthMFAVerifyFailed + "|" + AuthMFAFactorRecoveryCode:    authMFAVerifyFailedRecoveryCode.Load(),
 		AuthMFAVerifyFailed + "|" + AuthMFAFactorWebAuthn:        authMFAVerifyFailedWebAuthn.Load(),
+		AuthMFAVerifyFailed + "|" + AuthMFAFactorEmail:           authMFAVerifyFailedEmail.Load(),
+		AuthMFAVerifyFailed + "|" + AuthMFAFactorSMS:             authMFAVerifyFailedSMS.Load(),
 	}
 }
 
@@ -764,9 +782,13 @@ func ResetForTest() {
 	authMFAVerifySucceededTOTP.Store(0)
 	authMFAVerifySucceededRecoveryCode.Store(0)
 	authMFAVerifySucceededWebAuthn.Store(0)
+	authMFAVerifySucceededEmail.Store(0)
+	authMFAVerifySucceededSMS.Store(0)
 	authMFAVerifyFailedTOTP.Store(0)
 	authMFAVerifyFailedRecoveryCode.Store(0)
 	authMFAVerifyFailedWebAuthn.Store(0)
+	authMFAVerifyFailedEmail.Store(0)
+	authMFAVerifyFailedSMS.Store(0)
 	authSessionsCreatedTotal.Store(0)
 	authSessionsRevokedTotal.Store(0)
 	csrfRejectedMu.Lock()

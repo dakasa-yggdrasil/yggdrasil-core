@@ -89,12 +89,15 @@ Supported `kind` values (the authoritative list is the switch in
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/v1/auth/login` | Username/password, then `totp_code` or `recovery_code` when `mfa_required` is returned |
+| POST | `/api/v1/auth/login` | Password then authenticator/recovery code or automatic email/SMS OTP from saved profile contacts; HTTP202 is the MFA stage, HTTP200 completes login |
+| GET | `/api/v1/auth/mfa/contact/options` | Automatic canonical contact availability (read-only owner link/session) |
+| POST | `/api/v1/auth/mfa/contact/login/begin` | Verify password and request a login OTP |
 | POST | `/api/v1/auth/third-party/login` | Third-party identity exchange |
 | GET | `/api/v1/auth/third-party/start/{provider}` | OIDC start |
 | GET | `/api/v1/auth/third-party/callback/{provider}` | OIDC callback |
 
-(See `docs/features/sessions.md` for the auth flow narrative.)
+See [contact OTP MFA](../mfa-contact-otp.md) for exact request/response
+fields, delivery configuration and recovery boundaries.
 
 ## See also
 

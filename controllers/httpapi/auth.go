@@ -109,7 +109,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	}
 
 	req.Metadata = mergeAuthMetadata(req.Metadata, r)
-	collaborator, err := repository.VerifyPasswordCredential(r.Context(), s.db, req)
+	collaborator, passwordBinding, err := repository.VerifyLoginCredentialsWithMFAVersion(r.Context(), s.db, req)
 	if err != nil {
 		// §A5/G1: emit audit on password verification failure. We
 		// stay anonymous for unknown identifiers (no enumeration via
@@ -135,21 +135,34 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := mfa.EnforceMFAEnrolled(r.Context(), s.db, collaborator.ID); err != nil {
-		if errors.Is(err, mfa.ErrMFANotEnrolled) {
-			s.writeMFAEnrollRequired(w, r, collaborator)
-			return
-		}
-		writeMappedError(w, err)
-		return
-	}
-
 	identity, err := repository.GetAuthIdentityByCollaboratorID(r.Context(), s.db, collaborator.ID)
 	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
-	factors := authLoginFactors(identity)
+	contactOptions, err := s.contactMFAOptions(r.Context(), collaborator.ID)
+	if err != nil {
+		writeContactMFAError(w, r, err)
+		return
+	}
+	if !contactOptions["email"].Available && !contactOptions["sms"].Available {
+		if err := mfa.EnforceMFAEnrolled(r.Context(), s.db, collaborator.ID); err != nil {
+			if errors.Is(err, mfa.ErrMFANotEnrolled) {
+				s.writeMFAEnrollRequired(w, r, collaborator)
+				return
+			}
+			writeMappedError(w, err)
+			return
+		}
+	}
+	// An unfinished optional authenticator/passkey setup is not an active
+	// classic factor. Saved contacts remain immediately usable for OTP.
+	if identity.MFAEnrolledAt == nil {
+		identity.HasTOTP = false
+		identity.HasRecoveryCodes = false
+		identity.WebAuthnCredentials = nil
+	}
+	factors := authContactLoginFactors(identity, contactOptions)
 	if len(factors) == 0 {
 		httperr.WriteProblem(w, http.StatusBadRequest,
 			httperr.CodeAuthMFAFactorUnavailable,
@@ -161,7 +174,8 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 	req.TOTPCode = strings.TrimSpace(req.TOTPCode)
 	req.RecoveryCode = strings.TrimSpace(req.RecoveryCode)
-	if req.TOTPCode == "" && req.RecoveryCode == "" {
+	req.OTPCode = strings.TrimSpace(req.OTPCode)
+	if req.TOTPCode == "" && req.RecoveryCode == "" && req.OTPCode == "" {
 		metrics.IncAuthLogin(metrics.AuthLoginMFARequired)
 		// §14 NOTE: this is 202 Accepted (not 4xx), so it uses the
 		// success-path writer. The `code` value uses the canonical
@@ -177,6 +191,9 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	var session model.AuthSession
+	var token string
+	contactVerified := false
 	if req.TOTPCode != "" {
 		if !identity.HasTOTP {
 			httperr.WriteProblem(w, http.StatusBadRequest,
@@ -190,7 +207,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		if !s.requireEnvelope(w) {
 			return
 		}
-		secret, err := repository.GetTOTPSecret(r.Context(), s.db, s.envelope, collaborator.ID)
+		secret, err := repository.GetConfirmedTOTPSecret(r.Context(), s.db, s.envelope, collaborator.ID)
 		if err != nil {
 			writeMappedError(w, err)
 			return
@@ -212,7 +229,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		s.recordAuthAuditCollaborator(r, AuditAuthMFAVerifySucceeded, collaborator.ID, AuditOutcomeSuccess, map[string]any{
 			"factor": "totp",
 		})
-	} else {
+	} else if req.RecoveryCode != "" {
 		if !identity.HasRecoveryCodes {
 			httperr.WriteProblem(w, http.StatusUnauthorized,
 				httperr.CodeAuthMFAInvalid,
@@ -243,12 +260,21 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		s.recordAuthAuditCollaborator(r, AuditAuthMFAVerifySucceeded, collaborator.ID, AuditOutcomeSuccess, map[string]any{
 			"factor": "recovery_code",
 		})
+	} else {
+		session, token, err = s.verifyContactLoginOTP(r, collaborator.ID, passwordBinding, req)
+		if err != nil {
+			writeContactMFAError(w, r, err)
+			return
+		}
+		contactVerified = true
 	}
 
-	session, token, err := repository.CreateAuthSession(r.Context(), s.db, collaborator.ID, req.Metadata, authSessionTTL())
-	if err != nil {
-		writeMappedError(w, err)
-		return
+	if session.ID == uuid.Nil {
+		session, token, err = repository.CreateAuthSession(r.Context(), s.db, collaborator.ID, req.Metadata, authSessionTTL())
+		if err != nil {
+			writeMappedError(w, err)
+			return
+		}
 	}
 
 	// §A5/G1: emit BOTH the session-created event and the login-succeeded
@@ -277,7 +303,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	// password change required. Any other error is non-fatal — we still issue
 	// the session; the flags default to false.
 
-	needsMFA := identity.MFAEnrolledAt == nil
+	needsMFA := identity.MFAEnrolledAt == nil && !contactVerified
 
 	resp := authLoginResponse{
 		Collaborator:           collaborator,
@@ -299,6 +325,22 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	// X-CSRF-Token header on subsequent mutations.
 	writeCSRFCookie(w, computeCSRFToken(session.ID), session.ExpiresAt)
 	writeJSON(w, http.StatusOK, resp)
+}
+
+func authContactLoginFactors(identity model.AuthIdentity, options map[string]contactMFAOption) []string {
+	factors := authLoginFactors(identity)
+	if identity.HasRecoveryCodes {
+		factors = factors[:len(factors)-1]
+	}
+	for _, channel := range []string{"email", "sms"} {
+		if options[channel].Available {
+			factors = append(factors, channel)
+		}
+	}
+	if identity.HasRecoveryCodes {
+		factors = append(factors, "recovery_code")
+	}
+	return factors
 }
 
 func authLoginFactors(identity model.AuthIdentity) []string {
@@ -591,6 +633,12 @@ func (s *Server) handleAuthSession(w http.ResponseWriter, r *http.Request) {
 		mfaEnrolledAt = identity.MFAEnrolledAt
 	}
 
+	recentContactMFA, _ := repository.HasRecentContactSessionProof(r.Context(), s.db, collaborator.ID, session.ID)
+	passwordChangeRequired := false
+	if state, err := repository.GetPasswordCredentialState(r.Context(), s.db, collaborator.ID); err == nil {
+		passwordChangeRequired = state.PasswordMustChange || (state.PasswordExpiresAt != nil && state.PasswordExpiresAt.Before(time.Now()))
+	}
+
 	// Best-effort permission resolution. Errors fail-closed (empty list) so
 	// the FE hides actions instead of silently allowing them.
 	permissions, err := repository.ResolveYggdrasilPermissions(r.Context(), s.db, collaborator.ID, collaborator.Traits)
@@ -613,13 +661,15 @@ func (s *Server) handleAuthSession(w http.ResponseWriter, r *http.Request) {
 	writeCSRFCookie(w, csrfToken, session.ExpiresAt)
 
 	writeJSON(w, http.StatusOK, model.AuthSessionEnvelope{
-		Authenticated:        true,
-		PhoneProfileRequired: collaborator.PhoneProfileRequired,
-		Collaborator:         &collaborator,
-		Session:              &session,
-		MFAEnrolledAt:        mfaEnrolledAt,
-		Permissions:          permissions,
-		CSRFToken:            csrfToken,
+		Authenticated:            true,
+		RecentContactMFAVerified: recentContactMFA,
+		PasswordChangeRequired:   passwordChangeRequired,
+		PhoneProfileRequired:     collaborator.PhoneProfileRequired,
+		Collaborator:             &collaborator,
+		Session:                  &session,
+		MFAEnrolledAt:            mfaEnrolledAt,
+		Permissions:              permissions,
+		CSRFToken:                csrfToken,
 	})
 }
 
@@ -820,6 +870,9 @@ func loginMFAMethod(req model.LoginWithPasswordRequest) string {
 	}
 	if strings.TrimSpace(req.RecoveryCode) != "" {
 		return "recovery_code"
+	}
+	if strings.TrimSpace(req.OTPCode) != "" && (req.OTPChannel == "email" || req.OTPChannel == "sms") {
+		return req.OTPChannel
 	}
 	return "none"
 }

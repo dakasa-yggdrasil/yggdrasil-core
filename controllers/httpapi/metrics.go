@@ -228,7 +228,7 @@ func (s *Server) handleMetrics(w http.ResponseWriter, _ *http.Request) {
 	mfaSnap := metrics.AuthMFAVerifySnapshot()
 	fmt.Fprintf(w, "# HELP yggdrasil_auth_mfa_verify_total Total MFA verify attempts by outcome and factor\n")
 	fmt.Fprintf(w, "# TYPE yggdrasil_auth_mfa_verify_total counter\n")
-	for _, factor := range []string{metrics.AuthMFAFactorTOTP, metrics.AuthMFAFactorRecoveryCode, metrics.AuthMFAFactorWebAuthn} {
+	for _, factor := range []string{metrics.AuthMFAFactorTOTP, metrics.AuthMFAFactorRecoveryCode, metrics.AuthMFAFactorWebAuthn, metrics.AuthMFAFactorEmail, metrics.AuthMFAFactorSMS} {
 		for _, outcome := range []string{metrics.AuthMFAVerifySucceeded, metrics.AuthMFAVerifyFailed} {
 			fmt.Fprintf(w, "yggdrasil_auth_mfa_verify_total{outcome=\"%s\",factor=\"%s\"} %d\n",
 				outcome, factor, mfaSnap[outcome+"|"+factor])

@@ -13,6 +13,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 	"github.com/lib/pq"
+	"github.com/pquerna/otp/totp"
 )
 
 func dbForAuthIdentityTest(t *testing.T) *sql.DB {
@@ -109,13 +110,25 @@ func TestSetAndGetTOTPSecretRoundtrip(t *testing.T) {
 		t.Errorf("totp roundtrip mismatch: %q vs %q", got, seed)
 	}
 
-	// has_totp now reflects the change
+	// A stored setup seed remains pending until a current TOTP proof succeeds.
 	identity, err := GetAuthIdentityByCollaboratorID(context.Background(), db, id)
 	if err != nil {
 		t.Fatalf("get identity: %v", err)
 	}
-	if !identity.HasTOTP {
-		t.Error("expected has_totp=true after SetTOTPSecret")
+	if identity.HasTOTP {
+		t.Error("pending seed was exposed as a confirmed factor")
+	}
+	code, err := totp.GenerateCode(string(seed), time.Now())
+	if err != nil {
+		t.Fatal("TOTP proof fixture generation failed")
+	}
+	_, hashes, err := mfa.GenerateRecoveryCodes()
+	if err != nil || ConfirmTOTPEnrollment(context.Background(), db, env, id, code, hashes, "") != nil {
+		t.Fatal("TOTP proof did not confirm current seed")
+	}
+	identity, err = GetAuthIdentityByCollaboratorID(context.Background(), db, id)
+	if err != nil || !identity.HasTOTP {
+		t.Fatal("confirmed TOTP was not exposed as an enrolled factor")
 	}
 }
 

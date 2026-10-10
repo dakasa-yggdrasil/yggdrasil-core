@@ -32,7 +32,7 @@ func GetCredentialAccountState(ctx context.Context, db DBQuerier, collaboratorID
 		SELECT
 			COALESCE(password_hash, '') <> '',
 			mfa_enrolled_at IS NOT NULL,
-			totp_secret_ciphertext IS NOT NULL,
+			totp_secret_ciphertext IS NOT NULL AND totp_confirmed_at IS NOT NULL,
 			COALESCE(array_length(recovery_codes_hashes, 1), 0) > 0,
 			COALESCE(jsonb_array_length(webauthn_credentials), 0)
 		FROM public.auth_identities
@@ -64,11 +64,15 @@ func GetCredentialAccountState(ctx context.Context, db DBQuerier, collaboratorID
 // Outstanding enroll links are consumed so an old one cannot race the new
 // enrollment. Sessions are revoked by the caller (it owns the §13 fan-out).
 func ResetMFAFactors(ctx context.Context, tx DBExecer, collaboratorID uuid.UUID) error {
+	if _, err := tx.ExecContext(ctx, `SELECT id FROM public.collaborators WHERE id=$1 FOR UPDATE`, collaboratorID); err != nil {
+		return fmt.Errorf("lock collaborator for mfa reset: %w", err)
+	}
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE public.auth_identities
 		SET webauthn_credentials   = '[]'::jsonb,
 		    totp_secret_ciphertext = NULL,
 		    totp_secret_dek        = NULL,
+		    totp_confirmed_at      = NULL,
 		    recovery_codes_hashes  = ARRAY[]::TEXT[],
 		    mfa_enrolled_at        = NULL,
 		    password_hash          = NULL,
@@ -82,6 +86,12 @@ func ResetMFAFactors(ctx context.Context, tx DBExecer, collaboratorID uuid.UUID)
 		WHERE collaborator_id = $1
 	`, collaboratorID); err != nil {
 		return fmt.Errorf("reset mfa factors: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `DELETE FROM public.auth_mfa_contact_factors WHERE collaborator_id=$1`, collaboratorID); err != nil {
+		return fmt.Errorf("reset contact mfa factors: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `UPDATE public.auth_mfa_contact_challenges SET consumed_at=NOW() WHERE collaborator_id=$1 AND consumed_at IS NULL`, collaboratorID); err != nil {
+		return fmt.Errorf("invalidate contact mfa challenges: %w", err)
 	}
 	if _, err := tx.ExecContext(ctx, `
 		UPDATE public.mfa_enroll_tokens

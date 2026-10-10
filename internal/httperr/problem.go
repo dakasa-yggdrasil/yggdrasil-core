@@ -9,17 +9,17 @@
 //
 // Wire shape:
 //
-//   HTTP/1.1 401 Unauthorized
-//   Content-Type: application/problem+json
+//	HTTP/1.1 401 Unauthorized
+//	Content-Type: application/problem+json
 //
-//   {
-//     "type":     "https://yggdrasil.dakasa.me/errors/auth/invalid-credentials",
-//     "title":    "Invalid credentials",
-//     "status":   401,
-//     "detail":   "The provided email or password is incorrect.",
-//     "code":     "auth.invalid_credentials",
-//     "instance": "/api/v1/auth/login"
-//   }
+//	{
+//	  "type":     "https://yggdrasil.dakasa.me/errors/auth/invalid-credentials",
+//	  "title":    "Invalid credentials",
+//	  "status":   401,
+//	  "detail":   "The provided email or password is incorrect.",
+//	  "code":     "auth.invalid_credentials",
+//	  "instance": "/api/v1/auth/login"
+//	}
 //
 // Additional context fields (validation errors with `errors`, rate-limit
 // with `locked_until`, correlation IDs, etc.) flatten into the same JSON
@@ -119,6 +119,8 @@ const (
 	CodeAuthMFANotEnrolled          = "auth.mfa_not_enrolled"
 	CodeAuthMFAInvalid              = "auth.mfa_invalid"
 	CodeAuthMFAFactorUnavailable    = "auth.mfa_factor_unavailable"
+	CodeAuthMFADeliveryUnavailable  = "auth.mfa_delivery_unavailable"
+	CodeAuthMFALastFactor           = "auth.mfa_last_factor"
 	CodeAuthSessionExpired          = "auth.session_expired"
 	CodeAuthSessionNotFound         = "auth.session_not_found"
 	CodeAuthUnauthenticated         = "auth.unauthenticated"
@@ -149,21 +151,21 @@ const (
 	CodeManifestConflict         = "manifest.conflict"
 
 	// integration.*
-	CodeIntegrationNotFound   = "integration.not_found"
+	CodeIntegrationNotFound    = "integration.not_found"
 	CodeIntegrationUnavailable = "integration.unavailable"
 
 	// workflow.*
-	CodeWorkflowNotFound   = "workflow.not_found"
-	CodeWorkflowInvalid    = "workflow.invalid"
+	CodeWorkflowNotFound = "workflow.not_found"
+	CodeWorkflowInvalid  = "workflow.invalid"
 
 	// rate_limit.*
 	CodeRateLimitExceeded = "rate_limit.exceeded"
 
 	// input.*
-	CodeInvalidInput   = "input.invalid"
-	CodeMissingField   = "input.missing_field"
-	CodeMalformedBody  = "input.malformed_body"
-	CodeUnknownFields  = "input.unknown_fields"
+	CodeInvalidInput  = "input.invalid"
+	CodeMissingField  = "input.missing_field"
+	CodeMalformedBody = "input.malformed_body"
+	CodeUnknownFields = "input.unknown_fields"
 
 	// internal.*
 	CodeInternal = "internal.error"

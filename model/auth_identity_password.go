@@ -32,11 +32,12 @@ type PasswordSetupRequest struct {
 }
 
 type PasswordChangeRequest struct {
-	CurrentPassword   string         `json:"current_password"`
-	NewPassword       string         `json:"new_password"`
-	TOTPCode          string         `json:"totp_code,omitempty"`
-	RecoveryCode      string         `json:"recovery_code,omitempty"`
-	WebAuthnAssertion map[string]any `json:"webauthn_assertion,omitempty"`
+	UseRecentContactMFA bool           `json:"use_recent_contact_mfa,omitempty"`
+	CurrentPassword     string         `json:"current_password"`
+	NewPassword         string         `json:"new_password"`
+	TOTPCode            string         `json:"totp_code,omitempty"`
+	RecoveryCode        string         `json:"recovery_code,omitempty"`
+	WebAuthnAssertion   map[string]any `json:"webauthn_assertion,omitempty"`
 }
 
 type PasswordForgotRequest struct {

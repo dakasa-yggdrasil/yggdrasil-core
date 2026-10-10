@@ -144,45 +144,52 @@ func UpsertPasswordCredential(
 //
 // We do NOT increment failed_attempts when the collaborator is missing
 // (would leak which emails are registered).
-func VerifyPasswordCredential(
+func VerifyPasswordCredential(ctx context.Context, db *sql.DB, req model.LoginWithPasswordRequest) (model.Collaborator, error) {
+	collaborator, _, err := VerifyLoginCredentialsWithMFAVersion(ctx, db, req)
+	return collaborator, err
+}
+
+// VerifyLoginCredentialsWithMFAVersion returns a binding to the credential version
+// read alongside the verified hash, so a replaced password cannot reuse proof.
+func VerifyLoginCredentialsWithMFAVersion(
 	ctx context.Context,
 	db *sql.DB,
 	req model.LoginWithPasswordRequest,
-) (model.Collaborator, error) {
+) (model.Collaborator, string, error) {
 	identifier := strings.TrimSpace(req.Identifier)
 	if identifier == "" {
-		return model.Collaborator{}, fmt.Errorf("identifier is required")
+		return model.Collaborator{}, "", fmt.Errorf("identifier is required")
 	}
 	if strings.TrimSpace(req.Password) == "" {
-		return model.Collaborator{}, fmt.Errorf("password is required")
+		return model.Collaborator{}, "", fmt.Errorf("password is required")
 	}
 
 	collaborator, err := resolveCollaboratorForLogin(ctx, db, identifier)
 	if err != nil {
 		if errors.Is(err, ErrCollaboratorNotFound) {
-			return model.Collaborator{}, ErrAuthInvalidCredentials
+			return model.Collaborator{}, "", ErrAuthInvalidCredentials
 		}
-		return model.Collaborator{}, err
+		return model.Collaborator{}, "", err
 	}
 	if strings.ToLower(strings.TrimSpace(collaborator.Status)) != "active" {
-		return model.Collaborator{}, ErrAuthInvalidCredentials
+		return model.Collaborator{}, "", ErrAuthInvalidCredentials
 	}
 
 	// Lockout check BEFORE password verify so we don't leak whether
 	// the locked account's password is right.
 	if locked, err := isAccountLocked(ctx, db, collaborator.ID); err == nil && locked {
-		return model.Collaborator{}, ErrAuthAccountLocked
+		return model.Collaborator{}, "", ErrAuthAccountLocked
 	}
 
 	credential, passwordHash, err := getPasswordCredentialRow(ctx, db, collaborator.ID)
 	if err != nil {
 		if errors.Is(err, ErrPasswordCredentialNotFound) {
-			return model.Collaborator{}, ErrAuthInvalidCredentials
+			return model.Collaborator{}, "", ErrAuthInvalidCredentials
 		}
-		return model.Collaborator{}, err
+		return model.Collaborator{}, "", err
 	}
 	if strings.ToLower(strings.TrimSpace(credential.Status)) != "active" {
-		return model.Collaborator{}, ErrAuthInvalidCredentials
+		return model.Collaborator{}, "", ErrAuthInvalidCredentials
 	}
 
 	// Dispatch pelo scheme armazenado no DB — handleSetupCommit e
@@ -212,15 +219,15 @@ func VerifyPasswordCredential(
 		// locked_until on threshold). Best-effort: a DB hiccup here
 		// must not change the 401 the user sees.
 		if locked, recordErr := recordLoginFailure(ctx, db, collaborator.ID); recordErr == nil && locked {
-			return model.Collaborator{}, ErrAuthAccountLocked
+			return model.Collaborator{}, "", ErrAuthAccountLocked
 		}
-		return model.Collaborator{}, ErrAuthInvalidCredentials
+		return model.Collaborator{}, "", ErrAuthInvalidCredentials
 	}
 
 	// Password matched — reset the failure counter so a streak of
 	// typos doesn't tip a real user into the lockout window.
 	_ = resetLoginFailures(ctx, db, collaborator.ID)
-	return collaborator, nil
+	return collaborator, ContactLoginBindingForVersion(collaborator.ID, credential.MFAPasswordVersion), nil
 }
 
 // isAccountLocked returns true when auth_identities.locked_until is
@@ -580,7 +587,8 @@ func getPasswordCredentialRow(
 				password_scheme,
 				password_hash,
 				password_metadata,
-				password_updated_at,
+				COALESCE(password_updated_at, created_at),
+				mfa_password_version::text,
 				created_at,
 				updated_at
 			FROM public.auth_identities
@@ -594,6 +602,7 @@ func getPasswordCredentialRow(
 		&passwordHash,
 		&metadataRaw,
 		&credential.PasswordUpdatedAt,
+		&credential.MFAPasswordVersion,
 		&credential.CreatedAt,
 		&credential.UpdatedAt,
 	)
@@ -639,7 +648,7 @@ func sessionCapForCollaborator() int {
 
 func createAuthSession(
 	ctx context.Context,
-	db *sql.DB,
+	db dbtx,
 	collaboratorID uuid.UUID,
 	metadata map[string]any,
 	ttl time.Duration,

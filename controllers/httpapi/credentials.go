@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"crypto/hmac"
 	"database/sql"
 	"encoding/json"
 	"errors"
@@ -809,7 +810,8 @@ func (s *Server) handleSetupCommit(w http.ResponseWriter, r *http.Request) {
 	//
 	//   - No second factor yet (first access, or an admin MFA reset): 428 +
 	//     enroll link and NO cookie, mirroring handleAuthLogin. The session
-	//     only exists once MFA is enrolled.
+	//     only exists after a real second-factor proof. Automatic profile
+	//     contacts permit next=login without registering another factor.
 	//   - Second factor enrolled (admin-issued re-access for someone who lost
 	//     the password): 200 with next=login and NO cookie. The person signs
 	//     in with the new password and proves the factor they already have.
@@ -824,8 +826,15 @@ func (s *Server) handleSetupCommit(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	if identity.MFAEnrolledAt == nil {
-		s.writeMFAEnrollRequired(w, r, collab)
-		return
+		options, err := s.contactMFAOptions(r.Context(), collabID)
+		if err != nil {
+			writeContactMFAError(w, r, err)
+			return
+		}
+		if !options["email"].Available && !options["sms"].Available {
+			s.writeMFAEnrollRequired(w, r, collab)
+			return
+		}
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
@@ -959,6 +968,10 @@ func (s *Server) handlePasswordChange(w http.ResponseWriter, r *http.Request) {
 		writeMappedError(w, err)
 		return
 	}
+	if req.UseRecentContactMFA && !hmac.Equal([]byte(strings.TrimSpace(r.Header.Get(csrfHeaderName))), []byte(computeCSRFToken(session.ID))) {
+		writeContactMFAError(w, r, errContactCSRF)
+		return
+	}
 
 	// Step 2: verify current password.
 	if err := repository.VerifyPassword(r.Context(), s.db, collab.ID, req.CurrentPassword); err != nil {
@@ -983,29 +996,31 @@ func (s *Server) handlePasswordChange(w http.ResponseWriter, r *http.Request) {
 		writeMappedError(w, err)
 		return
 	}
-	if err := s.verifyInlineMFAFactor(r, collab.ID, req.TOTPCode, req.RecoveryCode, req.WebAuthnAssertion); err != nil {
-		if errors.Is(err, errMFANotSupplied) {
+	if !req.UseRecentContactMFA {
+		if err := s.verifyInlineMFAFactor(r, collab.ID, req.TOTPCode, req.RecoveryCode, req.WebAuthnAssertion); err != nil {
+			if errors.Is(err, errMFANotSupplied) {
+				httperr.WriteProblem(w, http.StatusUnauthorized,
+					httperr.CodeAuthMFAInvalid,
+					"Invalid MFA",
+					"no MFA factor was supplied",
+					httperr.WithInstance(r.URL.Path))
+				return
+			}
+			if errors.Is(err, errWebAuthnNotImplemented) {
+				httperr.WriteProblem(w, http.StatusNotImplemented,
+					httperr.CodeAuthWebAuthnNotImplemented,
+					"WebAuthn not implemented",
+					"inline WebAuthn assertion verification is not yet implemented (Phase 2)",
+					httperr.WithInstance(r.URL.Path))
+				return
+			}
 			httperr.WriteProblem(w, http.StatusUnauthorized,
 				httperr.CodeAuthMFAInvalid,
 				"Invalid MFA",
-				"no MFA factor was supplied",
+				"the supplied MFA factor could not be verified",
 				httperr.WithInstance(r.URL.Path))
 			return
 		}
-		if errors.Is(err, errWebAuthnNotImplemented) {
-			httperr.WriteProblem(w, http.StatusNotImplemented,
-				httperr.CodeAuthWebAuthnNotImplemented,
-				"WebAuthn not implemented",
-				"inline WebAuthn assertion verification is not yet implemented (Phase 2)",
-				httperr.WithInstance(r.URL.Path))
-			return
-		}
-		httperr.WriteProblem(w, http.StatusUnauthorized,
-			httperr.CodeAuthMFAInvalid,
-			"Invalid MFA",
-			"the supplied MFA factor could not be verified",
-			httperr.WithInstance(r.URL.Path))
-		return
 	}
 
 	// Step 4: validate new password strength.
@@ -1051,6 +1066,12 @@ func (s *Server) handlePasswordChange(w http.ResponseWriter, r *http.Request) {
 			_ = tx.Rollback()
 		}
 	}()
+	if req.UseRecentContactMFA {
+		if err := repository.ConsumeRecentContactSessionProofTx(r.Context(), tx, collab.ID, session.ID, req.CurrentPassword); err != nil {
+			writeContactMFAError(w, r, err)
+			return
+		}
+	}
 
 	if _, err := tx.ExecContext(r.Context(), `
 		UPDATE auth_identities
@@ -1590,7 +1611,7 @@ func (s *Server) verifyInlineMFAFactor(
 		if s.envelope == nil {
 			return fmt.Errorf("TOTP verification unavailable: KEK not configured")
 		}
-		secret, err := repository.GetTOTPSecret(r.Context(), s.db, s.envelope, collabID)
+		secret, err := repository.GetConfirmedTOTPSecret(r.Context(), s.db, s.envelope, collabID)
 		if err != nil {
 			return fmt.Errorf("get totp secret: %w", err)
 		}

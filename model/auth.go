@@ -8,13 +8,14 @@ import (
 
 // PasswordCredential stores one local password auth configuration for a collaborator.
 type PasswordCredential struct {
-	CollaboratorID    uuid.UUID      `json:"collaborator_id"`
-	Status            string         `json:"status"`
-	PasswordScheme    string         `json:"password_scheme"`
-	Metadata          map[string]any `json:"metadata,omitempty"`
-	PasswordUpdatedAt time.Time      `json:"password_updated_at"`
-	CreatedAt         time.Time      `json:"created_at"`
-	UpdatedAt         time.Time      `json:"updated_at"`
+	MFAPasswordVersion string         `json:"-"`
+	CollaboratorID     uuid.UUID      `json:"collaborator_id"`
+	Status             string         `json:"status"`
+	PasswordScheme     string         `json:"password_scheme"`
+	Metadata           map[string]any `json:"metadata,omitempty"`
+	PasswordUpdatedAt  time.Time      `json:"password_updated_at"`
+	CreatedAt          time.Time      `json:"created_at"`
+	UpdatedAt          time.Time      `json:"updated_at"`
 }
 
 // AuthSession is the persisted session state stored by the core.
@@ -60,12 +61,14 @@ type AuthSessionView struct {
 // (grant wildcard OR traits.yggdrasil_admin=true). O FE (PermissionGate,
 // usePermission) usa essas chaves pra esconder rotas e desabilitar ações.
 type AuthSessionEnvelope struct {
-	PhoneProfileRequired bool          `json:"phone_profile_required"`
-	Authenticated        bool          `json:"authenticated"`
-	Collaborator         *Collaborator `json:"collaborator,omitempty"`
-	Session              *AuthSession  `json:"session,omitempty"`
-	MFAEnrolledAt        *time.Time    `json:"mfa_enrolled_at,omitempty"`
-	Permissions          []string      `json:"permissions,omitempty"`
+	RecentContactMFAVerified bool          `json:"recent_contact_mfa_verified"`
+	PasswordChangeRequired   bool          `json:"password_change_required"`
+	PhoneProfileRequired     bool          `json:"phone_profile_required"`
+	Authenticated            bool          `json:"authenticated"`
+	Collaborator             *Collaborator `json:"collaborator,omitempty"`
+	Session                  *AuthSession  `json:"session,omitempty"`
+	MFAEnrolledAt            *time.Time    `json:"mfa_enrolled_at,omitempty"`
+	Permissions              []string      `json:"permissions,omitempty"`
 	// CSRFToken is the per-session CSRF token derived deterministically
 	// from session.id + a server-side HMAC secret (audit 2026-05-27 A7).
 	// Frontend mirrors this value in the X-CSRF-Token request header on
@@ -89,9 +92,12 @@ type UpsertPasswordCredentialRequest struct {
 // receive mfa_required until a supported MFA factor is supplied for enrolled
 // identities.
 type LoginWithPasswordRequest struct {
-	Identifier   string         `json:"identifier"`
-	Password     string         `json:"password"`
-	TOTPCode     string         `json:"totp_code,omitempty"`
-	RecoveryCode string         `json:"recovery_code,omitempty"`
-	Metadata     map[string]any `json:"metadata,omitempty"`
+	Identifier        string         `json:"identifier"`
+	Password          string         `json:"password"`
+	TOTPCode          string         `json:"totp_code,omitempty"`
+	RecoveryCode      string         `json:"recovery_code,omitempty"`
+	OTPChannel        string         `json:"otp_channel,omitempty"`
+	OTPChallengeToken string         `json:"otp_challenge_token,omitempty"`
+	OTPCode           string         `json:"otp_code,omitempty"`
+	Metadata          map[string]any `json:"metadata,omitempty"`
 }

@@ -358,6 +358,7 @@ func TestNoUngatedMutatingRoutes(t *testing.T) {
 		`POST /api/v1/auth/mfa/factors/totp/finish`:     "self MFA enroll",
 		`POST /api/v1/auth/mfa/factors/webauthn/begin`:  "self MFA enroll",
 		`POST /api/v1/auth/mfa/factors/webauthn/finish`: "self MFA enroll",
+		`POST /api/v1/auth/mfa/contact/login/begin`:     "pre-session, password verified before sending to canonical profile contact, no enrollment required",
 		// WebAuthn login flow — pre-session, BLOCKED password re-verify inside
 		// the handler before assertion verification. Same authority shape as
 		// POST /api/v1/auth/login (password+totp); cannot be RBAC-gated
