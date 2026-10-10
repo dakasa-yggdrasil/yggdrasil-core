@@ -72,6 +72,9 @@ func executeCapacityWorkflowStep(ctx context.Context, db *sql.DB, workflowRef mo
 	if p.AssessmentBinding != nil && result.Operation != "capacity.observe" {
 		return fail(fmt.Errorf("bound HPA policies require fixed source assessment and currently support shadow observation only"))
 	}
+	if p.VMNodeMembershipBinding != nil && result.Operation == "capacity.advance" && (parsed.Phase == "prepared" || parsed.Phase == "canary" || parsed.Phase == "drained" || parsed.Phase == "promoted") {
+		return fail(fmt.Errorf("native VM/Node linkage is not readiness, canary, routing, business drain or retirement proof"))
+	}
 	if workflowRef.Kind != "workflow" || workflowRef.Namespace != p.Workflow.Namespace || workflowRef.Name != p.Workflow.Name {
 		return fail(fmt.Errorf("capacity policy does not authorize this workflow"))
 	}

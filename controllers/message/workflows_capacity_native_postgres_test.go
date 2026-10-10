@@ -4,6 +4,8 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/base32"
+	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"net/http"
@@ -12,9 +14,11 @@ import (
 	"os/exec"
 	"path/filepath"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -386,4 +390,357 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 			t.Fatal("native invalid capability reached private transport")
 		}
 	})
+}
+
+// These Node/VM API identities are protocol fixtures. Only PostgreSQL and the
+// Core HTTP dispatcher are actual native components in this source corpus.
+func capacityVMNodeProtocolFixture(t *testing.T) (model.CapacityPolicySpec, model.CapacityMutationBinding, model.CapacityVMFleetInventory, model.CapacityNodeMembershipResponse) {
+	t.Helper()
+	now := time.Now().UTC()
+	owner := "native-owner"
+	b := model.CapacityMutationBinding{Name: "vm-nodes", IntegrationInstanceID: uuid.NewString(), IntegrationChecksum: strings.Repeat("a", 64), IntegrationTypeID: uuid.NewString(), IntegrationTypeChecksum: strings.Repeat("b", 64), AdapterPrincipalID: "fixture-adapter", ScopeChecksum: strings.Repeat("c", 64), ProfileName: "workers", EnsureCapability: "ensure_server", DestroyCapability: "destroy_server", ProtectedSlots: 1, MaxSlots: 4}
+	p := model.CapacityPolicySpec{Environment: "production", Domain: "vm-node-source", Dimension: "nodes", TargetIdentity: "fleet/native", Owner: owner, Workflow: model.ManifestSelector{Namespace: "fixture", Name: "native-node-source"}, Currency: "EUR", Floor: 1, Ceiling: 4, Step: 1, MaxEvidenceAgeSeconds: 60, MinSamples: 3, MaxSampleGapSeconds: 30, DownHoldSeconds: 60, LeaseSeconds: 120, ExecutionEnabled: true, Signals: []model.CapacitySignalRule{{Name: "load", SourceIdentity: "prom/load", Unit: "ratio", UpAbove: .8, DownBelow: .3}}, Profiles: []model.CapacityProfile{{Name: "workers", Provider: "native-provider", Region: "fixed-region", MinUnits: 1, MaxUnits: 4, QuoteValidUntil: now.Add(time.Hour), ValidationValidUntil: now.Add(time.Hour), ValidationRef: "fixture:no-throughput-claim"}}}
+	target := model.CapacityNodeMembershipTarget{BindingName: "workers", RealmUID: uuid.NewString(), Owner: owner, ProfileName: "workers", ProviderIDPrefix: "native://", MaxLeaseAgeSeconds: 60}
+	label := func(s string) string {
+		decoded, _ := hex.DecodeString(s)
+		return strings.ToLower(base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(decoded))
+	}
+	inv := model.CapacityVMFleetInventory{IntegrationInstanceID: b.IntegrationInstanceID, ScopeChecksum: b.ScopeChecksum, ProfileChecksum: strings.Repeat("d", 64), AdmissionChecksum: strings.Repeat("e", 64), ProfileName: b.ProfileName, ProtectedSlots: 1, MaxSlots: 4, Complete: true, ObservationStartedAt: now.Add(-time.Second).Format(time.RFC3339Nano), ObservedAt: now.Format(time.RFC3339Nano), MissingSlots: []int{3, 4}}
+	nodes := model.CapacityNodeMembershipResponse{Operation: capacity.ObserveNodeMembership, Status: "observed", BindingName: target.BindingName, RealmUID: target.RealmUID, Owner: owner, ProfileName: b.ProfileName, Complete: true, NativeNodeCount: 2, FirstListVersion: "11", LastListVersion: "12", FirstListSHA256: strings.Repeat("1", 64), LastListSHA256: strings.Repeat("2", 64), ObservationStartedAt: now.Add(-time.Second), ObservedAt: now, Metadata: map[string]any{"diagnostic_only": true}}
+	for slot := 1; slot <= 4; slot++ {
+		spec := &model.CapacityMutationSpecV1{SchemaVersion: "capacity_vm_slot_v1", Capability: b.EnsureCapability, IntegrationInstanceID: b.IntegrationInstanceID, ScopeChecksum: b.ScopeChecksum, ProfileChecksum: inv.ProfileChecksum, AdmissionChecksum: inv.AdmissionChecksum, ProfileName: b.ProfileName, Slot: slot, NativeName: fmt.Sprintf("workers-%d", slot), BootstrapSHA256: strings.Repeat("f", 64)}
+		raw, _ := json.Marshal(spec)
+		digest := fmt.Sprintf("%x", sha256.Sum256(raw))
+		b.Slots = append(b.Slots, model.CapacityMutationSlotBinding{Slot: slot, DesiredSpecSHA256: digest, DesiredSpec: spec})
+		target.Slots = append(target.Slots, model.CapacityNodeSlotBinding{Slot: slot, NodeName: fmt.Sprintf("node-%d", slot)})
+		if slot > 2 {
+			continue
+		}
+		server := model.CapacityVMServerObservation{CapacityVMNativeTuple: model.CapacityVMNativeTuple{ID: fmt.Sprint(100 + slot), CreatedAt: now.Add(-time.Hour).Format(time.RFC3339Nano)}, Name: spec.NativeName, Status: "running", PhysicalSpecVerified: true, ObservedAt: inv.ObservedAt, Labels: map[string]string{"yggdrasil.io/owner": owner, "yggdrasil.io/scope": label(b.ScopeChecksum), "yggdrasil.io/spec": label(inv.ProfileChecksum), "yggdrasil.io/profile": b.ProfileName, "yggdrasil.io/slot": fmt.Sprint(slot)}}
+		inv.Members = append(inv.Members, model.CapacityVMFleetInventoryMember{Slot: slot, Protected: slot == 1, DesiredSpec: *spec, RequestSHA256: digest, Server: server})
+		nodes.Nodes = append(nodes.Nodes, model.CapacityNodeMembershipTuple{Slot: slot, Name: fmt.Sprintf("node-%d", slot), UID: uuid.NewString(), ResourceVersion: "12", CreatedAt: now.Add(-30 * time.Minute), ProviderID: target.ProviderIDPrefix + server.ID, BootID: uuid.NewString(), Ready: true, ReadyKnown: true, ReadyChangedAt: now.Add(-time.Minute), LeaseUID: uuid.NewString(), LeaseVersion: "13", LeaseHolder: fmt.Sprintf("node-%d", slot), LeaseDurationSeconds: 40, LeaseRenewedAt: now})
+	}
+	p.MutationBindings = []model.CapacityMutationBinding{b}
+	p.VMNodeMembershipBinding = &model.CapacityVMNodeMembershipBinding{MutationBindingName: b.Name, Adapter: model.CapacityObservationAdapterBinding{IntegrationInstanceID: uuid.NewString(), InstanceChecksum: strings.Repeat("3", 64), IntegrationTypeID: uuid.NewString(), TypeChecksum: strings.Repeat("4", 64)}, Target: target}
+	raw, _ := json.Marshal(target)
+	nodes.BindingSHA256 = fmt.Sprintf("%x", sha256.Sum256(raw))
+	return p, b, inv, nodes
+}
+
+func TestCapacityVMNodeJoinRejectsForeignAndReadinessAuthority(t *testing.T) {
+	p, _, inv, nodes := capacityVMNodeProtocolFixture(t)
+	joins, err := capacity.JoinVMNodeMembership(p, inv, nodes, time.Now().UTC())
+	if err != nil || len(joins) != 2 {
+		t.Fatal("fixed primitive did not join", err)
+	}
+	for _, mode := range []string{"partial", "foreign_digest", "wrong_provider", "replacement_created", "missing_boot", "duplicate_uid", "stale_lease", "unknown_ready", "warm", "bootstrap", "atomic", "private_metadata", "unregistered_shape", "vm_off", "foreign_vm_owner", "missing_duration", "expired_duration", "overspan", "future_projection", "unordered_nodes"} {
+		t.Run(mode, func(t *testing.T) {
+			p, _, inv, nodes := capacityVMNodeProtocolFixture(t)
+			switch mode {
+			case "partial":
+				nodes.Complete = false
+			case "foreign_digest":
+				nodes.BindingSHA256 = strings.Repeat("5", 64)
+			case "wrong_provider":
+				nodes.Nodes[0].ProviderID = "native://replacement"
+			case "replacement_created":
+				nodes.Nodes[0].CreatedAt = time.Now().Add(-2 * time.Hour)
+			case "missing_boot":
+				nodes.Nodes[0].BootID = ""
+			case "duplicate_uid":
+				nodes.Nodes[1].UID = nodes.Nodes[0].UID
+			case "stale_lease":
+				nodes.Nodes[0].LeaseRenewedAt = time.Now().Add(-2 * time.Minute)
+			case "unknown_ready":
+				nodes.Nodes[0].ReadyKnown = false
+			case "warm":
+				nodes.WarmResources = true
+			case "bootstrap":
+				nodes.BootstrapCompleted = true
+			case "atomic":
+				nodes.AtomicSnapshot = true
+			case "private_metadata":
+				nodes.Metadata["private-secret"] = "must-not-pass"
+			case "unregistered_shape":
+				nodes.Nodes = nodes.Nodes[:1]
+			case "vm_off":
+				inv.Members[0].Server.Status = "off"
+			case "foreign_vm_owner":
+				inv.Members[0].Server.Labels["yggdrasil.io/owner"] = "foreign"
+			case "missing_duration":
+				nodes.Nodes[0].LeaseDurationSeconds = 0
+			case "expired_duration":
+				nodes.Nodes[0].LeaseDurationSeconds = 1
+				nodes.Nodes[0].LeaseRenewedAt = time.Now().Add(-2 * time.Second)
+			case "overspan":
+				nodes.ObservationStartedAt = time.Now().Add(-61 * time.Second)
+			case "future_projection":
+				nodes.ObservedAt = time.Now().Add(time.Second)
+			case "unordered_nodes":
+				nodes.Nodes[0], nodes.Nodes[1] = nodes.Nodes[1], nodes.Nodes[0]
+			}
+			if _, e := capacity.JoinVMNodeMembership(p, inv, nodes, time.Now().UTC()); e == nil {
+				t.Fatal("unsafe native join admitted", mode)
+			}
+		})
+	}
+	nodes.Nodes[0].Ready = false
+	if _, err = capacity.JoinVMNodeMembership(p, inv, nodes, time.Now().UTC()); err != nil {
+		t.Fatal("known unhealthy point was mistaken for malformed evidence", err)
+	}
+}
+
+func TestCapacityMutationVMNodeProtectedDispatcherPostgres(t *testing.T) {
+	dsn := os.Getenv("DB_URL")
+	if dsn == "" {
+		if os.Getenv("REQUIRE_CAPACITY_POSTGRES") == "true" {
+			t.Fatal("remote PostgreSQL gate required")
+		}
+		t.Skip("remote PostgreSQL protocol gate")
+	}
+	db, e := sql.Open("postgres", dsn)
+	if e != nil {
+		t.Fatal(e)
+	}
+	ctx := newCapacityInvocationContext(context.Background())
+	ns := "node-membership-" + uuid.NewString()
+	t.Cleanup(func() {
+		for _, table := range []string{"capacity_mutation_grants", "capacity_resource_slots", "capacity_intent_events", "capacity_intents", "manifests"} {
+			if _, e := db.ExecContext(context.Background(), `DELETE FROM public.`+table+` WHERE namespace=$1`, ns); e != nil {
+				t.Error(e)
+			}
+		}
+		db.Close()
+	})
+	p, b, inv, nodes := capacityVMNodeProtocolFixture(t)
+	p.Workflow.Namespace = ns
+	typeSpec := func(provider, resource string, ops []string) model.IntegrationTypeManifestSpec {
+		ts := model.IntegrationTypeManifestSpec{Provider: provider, Domain: "infrastructure", Adapter: model.IntegrationAdapterSpec{Transport: "http_json", Version: "1.0.0", Endpoints: model.IntegrationAdapterRoute{Describe: "/describe", Execute: "/execute"}, TimeoutSeconds: 65}, Capabilities: []string{"describe", "execute"}, CredentialSchema: model.IntegrationSchemaSpec{Mode: "inline", Properties: map[string]model.IntegrationSchemaProperty{}}, InstanceSchema: model.IntegrationSchemaSpec{Mode: "inline", Properties: map[string]model.IntegrationSchemaProperty{"base_url": {Type: "string"}}}, ResourceTypes: []model.IntegrationResourceType{{Name: resource, CanonicalPrefix: "thirdparty." + provider + "." + resource, IdentityTemplate: resource + ".{id}", DefaultActions: ops}}}
+		for _, op := range ops {
+			ts.ActionCatalog = append(ts.ActionCatalog, model.IntegrationActionDefinition{Name: op, ResourceTypes: []string{resource}, Idempotent: true})
+		}
+		ts.Discovery = model.IntegrationDiscoverySpec{Mode: "push", Cursor: "none"}
+		ts.Normalization = model.IntegrationNormalizationSpec{ExternalIDPath: "id", FallbackResourcePrefix: "thirdparty." + provider + "." + resource}
+		if e := manifest.ValidateIntegrationTypeSpec(ts); e != nil {
+			t.Fatal("closed fixture catalog invalid", e)
+		}
+		return ts
+	}
+	vmType := typeSpec("native-provider", "server", []string{"ensure_server", "destroy_server", capacity.VMObserveInventory, capacity.VMObserveAction})
+	nodeType := typeSpec("kubernetes", "object", []string{capacity.ObserveNodeMembership})
+	var mu sync.Mutex
+	reads, writes := 0, 0
+	changed := false
+	var lateOwner *capacityVMNodeAbsoluteContext
+	serve := func(ts model.IntegrationTypeManifestSpec, isNode bool) *httptest.Server {
+		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			mu.Lock()
+			defer mu.Unlock()
+			w.Header().Set("Content-Type", "application/json")
+			if r.URL.Path == "/describe" {
+				raw, _ := json.Marshal(ts)
+				var desc model.AdapterDescribeResponse
+				_ = json.Unmarshal(raw, &desc)
+				_ = json.NewEncoder(w).Encode(desc)
+				return
+			}
+			if r.URL.Path != "/execute" {
+				w.WriteHeader(404)
+				return
+			}
+			var req model.AdapterExecuteIntegrationRequest
+			if json.NewDecoder(r.Body).Decode(&req) != nil || !strings.HasPrefix(req.Operation, "observe_") {
+				writes++
+				w.WriteHeader(400)
+				return
+			}
+			reads++
+			now := time.Now().UTC()
+			vmCopy := inv
+			vmCopy.Members = append([]model.CapacityVMFleetInventoryMember(nil), inv.Members...)
+			vmCopy.ObservationStartedAt, vmCopy.ObservedAt = now.Add(-time.Millisecond).Format(time.RFC3339Nano), now.Format(time.RFC3339Nano)
+			for i := range vmCopy.Members {
+				vmCopy.Members[i].Server.ObservedAt = vmCopy.ObservedAt
+			}
+			var value any = vmCopy
+			if isNode {
+				copy := nodes
+				copy.Nodes = append([]model.CapacityNodeMembershipTuple(nil), nodes.Nodes...)
+				copy.ObservationStartedAt, copy.ObservedAt = now.Add(-time.Millisecond), now
+				for i := range copy.Nodes {
+					copy.Nodes[i].LeaseRenewedAt = now
+				}
+				if changed {
+					copy.Nodes[0].BootID = uuid.NewString()
+				}
+				value = copy
+				if lateOwner != nil {
+					lateOwner.expire()
+				}
+			}
+			_ = json.NewEncoder(w).Encode(model.AdapterExecuteIntegrationResponse{Operation: req.Operation, Capability: req.Operation, Status: "observed", Output: value})
+		}))
+	}
+	vmServer, nodeServer := serve(vmType, false), serve(nodeType, true)
+	t.Cleanup(vmServer.Close)
+	t.Cleanup(nodeServer.Close)
+	create := func(id uuid.UUID, kind, name string, spec any) model.Manifest {
+		t.Helper()
+		raw, e := json.Marshal(spec)
+		if e != nil {
+			t.Fatal(e)
+		}
+		sum := fmt.Sprintf("%x", sha256.Sum256(raw))
+		if _, e = db.ExecContext(ctx, `INSERT INTO public.manifests(id,api_version,kind,namespace,name,version,active,spec,checksum) VALUES($1,'yggdrasil.io/v1alpha1',$2,$3,$4,1,true,$5::jsonb,$6)`, id, kind, ns, name, raw, sum); e != nil {
+			t.Fatal(e)
+		}
+		m, e := repository.GetManifestByID(ctx, db, id)
+		if e != nil {
+			t.Fatal(e)
+		}
+		return m
+	}
+	vmTy := create(uuid.MustParse(b.IntegrationTypeID), "integration_type", "vm-type", vmType)
+	vmInstance := create(uuid.MustParse(b.IntegrationInstanceID), "integration_instance", "vm", model.IntegrationInstanceManifestSpec{TypeRef: model.ManifestSelector{ManifestID: b.IntegrationTypeID}, Status: "active", Config: map[string]any{"base_url": vmServer.URL}})
+	nodeTy := create(uuid.MustParse(p.VMNodeMembershipBinding.Adapter.IntegrationTypeID), "integration_type", "node-type", nodeType)
+	nodeInstance := create(uuid.MustParse(p.VMNodeMembershipBinding.Adapter.IntegrationInstanceID), "integration_instance", "nodes", model.IntegrationInstanceManifestSpec{TypeRef: model.ManifestSelector{ManifestID: nodeTy.ID.String()}, Status: "active", Config: map[string]any{"base_url": nodeServer.URL}})
+	b.IntegrationChecksum, b.IntegrationTypeChecksum = vmInstance.Checksum, vmTy.Checksum
+	p.MutationBindings = []model.CapacityMutationBinding{b}
+	p.VMNodeMembershipBinding.Adapter.InstanceChecksum, p.VMNodeMembershipBinding.Adapter.TypeChecksum = nodeInstance.Checksum, nodeTy.Checksum
+	wf := create(uuid.New(), "workflow", p.Workflow.Name, model.WorkflowManifestSpec{Trigger: model.WorkflowTriggerSpec{Mode: "manual"}, Authorization: &model.WorkflowAuthorizationSpec{RBAC: model.ManifestSelector{Namespace: ns, Name: "scope"}}, Steps: []model.WorkflowStepSpec{{ID: "join", Use: model.WorkflowStepUseSpec{Kind: "yggdrasil", Operation: "capacity.observe_vm_node_membership"}}}})
+	policy := create(uuid.New(), "capacity_policy", "workers", p)
+	ref := manifestReferenceFromRecord(wf)
+	store := repository.CapacityStore{DB: db, ExecutionEnabled: true, WorkflowID: wf.ID}
+	store.ExecutorID, _ = ctx.Value(capacityInvocationKey{}).(string)
+	now := time.Now().UTC()
+	load := .9
+	assessment := model.CapacityAssessment{Snapshot: model.CapacitySnapshot{TargetIdentity: p.TargetIdentity, ResourceUID: "fleet", ResourceVersion: "1", WorkloadUID: "workers", WorkloadResourceVersion: "1", Owner: p.Owner, Profile: b.ProfileName, Units: 2, ObservedAt: now}, Evidence: []model.CapacityEvidence{{Name: "load", SourceIdentity: "prom/load", Unit: "ratio", RequireData: true, Matched: true, DataState: "present", Value: &load, RangeMin: &load, RangeMax: &load, SourceSampledAt: now, WindowStart: now.Add(-time.Minute), WindowEnd: now, Samples: 10, CoverageComplete: true, MaxGapSeconds: 15}}}
+	intent, e := store.Assess(ctx, policy, assessment)
+	if e != nil {
+		t.Fatal(e)
+	}
+	intent, e = store.Claim(ctx, policy, intent.Generation, assessment)
+	if e != nil {
+		t.Fatal(e)
+	}
+	proofs, e := capacity.VMInventoryProofs(p, b, inv, "", 0, time.Now().UTC(), "fixture:registered-native-tuples")
+	if e != nil {
+		t.Fatal(e)
+	}
+	for _, proof := range proofs {
+		raw, _ := json.Marshal(b.Slots[proof.Slot-1].DesiredSpec)
+		if e = store.RecordMutationSlot(ctx, policy, intent.Generation, intent.FencingToken, intent.LeaseOwner, model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: raw}, proof); e != nil {
+			t.Fatal(e)
+		}
+	}
+	input := func() map[string]any {
+		return map[string]any{"policy": map[string]any{"namespace": ns, "name": "workers"}, "binding_name": b.Name}
+	}
+	run := func(c context.Context, v map[string]any) model.WorkflowRunStepResult {
+		return executeCapacityNativeWorkflowStep(c, nil, db, ref, model.WorkflowRunStepResult{Operation: "capacity.observe_vm_node_membership"}, v)
+	}
+	got := run(ctx, input())
+	if got.Status != "succeeded" || got.Metadata["native_join_observed"] != true || got.Metadata["warm_resources_known"] != false || got.Metadata["useful_capacity_known"] != false || got.Metadata["provider_mutation_quiescence_known"] != false {
+		t.Fatalf("protected point was not observed or became authority: %+v", got)
+	}
+	count := func() int { mu.Lock(); defer mu.Unlock(); return reads }
+	var grants int
+	if e = db.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1`, ns).Scan(&grants); e != nil || grants != 0 {
+		t.Fatal("observer issued a provider grant", e)
+	}
+	before := count()
+	for _, field := range []string{"healthy", "selector", "url", "proof", "capability", "generation"} {
+		v := input()
+		v[field] = true
+		if run(ctx, v).Status == "succeeded" {
+			t.Fatal("caller authority admitted", field)
+		}
+	}
+	if run(context.Background(), input()).Status == "succeeded" || count() != before {
+		t.Fatal("actorless/refused input performed native reads")
+	}
+	canceled, cancel := context.WithCancel(ctx)
+	cancel()
+	if run(canceled, input()).Status == "succeeded" || count() != before {
+		t.Fatal("expired invocation read or accepted a point")
+	}
+	rawPolicy, _ := json.Marshal(p)
+	p.VMNodeMembershipBinding.Adapter.TypeChecksum = strings.Repeat("6", 64)
+	badRaw, _ := json.Marshal(p)
+	if _, e = db.ExecContext(ctx, `UPDATE public.manifests SET spec=$2::jsonb,checksum=$3 WHERE id=$1`, policy.ID, badRaw, fmt.Sprintf("%x", sha256.Sum256(badRaw))); e != nil {
+		t.Fatal(e)
+	}
+	if run(ctx, input()).Status == "succeeded" || count() != before {
+		t.Fatal("bad native catalog reached a private adapter")
+	}
+	if _, e = db.ExecContext(ctx, `UPDATE public.manifests SET spec=$2::jsonb,checksum=$3 WHERE id=$1`, policy.ID, rawPolicy, policy.Checksum); e != nil {
+		t.Fatal(e)
+	}
+
+	t.Run("registered_tombstone_refuses_before_node_source", func(t *testing.T) {
+		var original []byte
+		if e = db.QueryRowContext(ctx, `SELECT slot_record FROM public.capacity_resource_slots WHERE namespace=$1 AND slot=1`, ns).Scan(&original); e != nil {
+			t.Fatal(e)
+		}
+		t.Cleanup(func() {
+			if _, e := db.ExecContext(ctx, `UPDATE public.capacity_resource_slots SET slot_record=$2::jsonb WHERE namespace=$1 AND slot=1`, ns, original); e != nil {
+				t.Error(e)
+			}
+		})
+		if _, e = db.ExecContext(ctx, `UPDATE public.capacity_resource_slots SET slot_record=jsonb_set(slot_record,'{tombstone}','true'::jsonb) WHERE namespace=$1 AND slot=1`, ns); e != nil {
+			t.Fatal(e)
+		}
+		before := count()
+		if run(ctx, input()).Status == "succeeded" || count() != before+1 {
+			t.Fatal("tombstone revived or reached native Node observer")
+		}
+	})
+	t.Run("original_sdk_return_after_parent_absolute_deadline", func(t *testing.T) {
+		absolute := &capacityVMNodeAbsoluteContext{Context: ctx, deadline: time.Now().Add(time.Minute)}
+		mu.Lock()
+		lateOwner = absolute
+		mu.Unlock()
+		t.Cleanup(func() { mu.Lock(); lateOwner = nil; mu.Unlock() })
+		before := count()
+		got := run(absolute, input())
+		if got.Status == "succeeded" || got.Metadata != nil || absolute.Err() != nil || count() != before+2 {
+			t.Fatal("late original SDK point accepted or issued another read")
+		}
+	})
+	mu.Lock()
+	changed = true
+	mu.Unlock()
+	if run(ctx, input()).Status == "succeeded" {
+		t.Fatal("changed original Node lifetime admitted")
+	}
+	for _, phase := range []string{"prepared", "canary", "drained", "promoted"} {
+		v := map[string]any{"policy": input()["policy"], "generation": intent.Generation, "fencing_token": intent.FencingToken, "lease_owner": intent.LeaseOwner, "phase": phase, "proof": map[string]any{"healthy": true, "inflight": 0}}
+		blocked := executeCapacityWorkflowStep(ctx, db, ref, model.WorkflowRunStepResult{Operation: "capacity.advance"}, v)
+		if blocked.Status == "succeeded" || !strings.Contains(blocked.Error, "native VM/Node linkage is not readiness") {
+			t.Fatal("native linkage refusal did not reach the opt-in phase boundary", phase)
+		}
+	}
+	mu.Lock()
+	defer mu.Unlock()
+	if writes != 0 {
+		t.Fatal("read-only membership performed a provider mutation")
+	}
+}
+
+// Original-context deadline seam only; no fake source identities or SDK calls.
+type capacityVMNodeAbsoluteContext struct {
+	context.Context
+	mu       sync.Mutex
+	deadline time.Time
+}
+
+func (c *capacityVMNodeAbsoluteContext) Deadline() (time.Time, bool) {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	return c.deadline, true
+}
+func (c *capacityVMNodeAbsoluteContext) expire() {
+	c.mu.Lock()
+	defer c.mu.Unlock()
+	c.deadline = time.Now().Add(-time.Second)
 }
