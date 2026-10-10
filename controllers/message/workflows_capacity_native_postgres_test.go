@@ -392,6 +392,29 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 	})
 }
 
+// The fixed typed slot DTO is encoded as a JSON object with sorted keys, as
+// required by the production closed projection. Struct declaration order is
+// not canonical request bytes and cannot authorize RecordMutationSlot.
+func capacityVMNodeProtocolCanonicalSpec(t *testing.T, spec *model.CapacityMutationSpecV1) []byte {
+	t.Helper()
+	if spec == nil {
+		t.Fatal("protocol fixture: typed slot spec absent")
+	}
+	raw, err := json.Marshal(spec)
+	if err != nil {
+		t.Fatalf("protocol fixture: slot DTO encoding refused; cause_type=%T", err)
+	}
+	var fields map[string]json.RawMessage
+	if err = json.Unmarshal(raw, &fields); err != nil {
+		t.Fatalf("protocol fixture: slot object decoding refused; cause_type=%T", err)
+	}
+	canonical, err := json.Marshal(fields)
+	if err != nil {
+		t.Fatalf("protocol fixture: canonical slot encoding refused; cause_type=%T", err)
+	}
+	return canonical
+}
+
 // These Node/VM API identities are protocol fixtures. Only PostgreSQL and the
 // Core HTTP dispatcher are actual native components in this source corpus.
 func capacityVMNodeProtocolFixture(t *testing.T) (model.CapacityPolicySpec, model.CapacityMutationBinding, model.CapacityVMFleetInventory, model.CapacityNodeMembershipResponse) {
@@ -409,7 +432,7 @@ func capacityVMNodeProtocolFixture(t *testing.T) (model.CapacityPolicySpec, mode
 	nodes := model.CapacityNodeMembershipResponse{Operation: capacity.ObserveNodeMembership, Status: "observed", BindingName: target.BindingName, RealmUID: target.RealmUID, Owner: owner, ProfileName: b.ProfileName, Complete: true, NativeNodeCount: 2, FirstListVersion: "11", LastListVersion: "12", FirstListSHA256: strings.Repeat("1", 64), LastListSHA256: strings.Repeat("2", 64), ObservationStartedAt: now.Add(-time.Second), ObservedAt: now, Metadata: map[string]any{"diagnostic_only": true}}
 	for slot := 1; slot <= 4; slot++ {
 		spec := &model.CapacityMutationSpecV1{SchemaVersion: "capacity_vm_slot_v1", Capability: b.EnsureCapability, IntegrationInstanceID: b.IntegrationInstanceID, ScopeChecksum: b.ScopeChecksum, ProfileChecksum: inv.ProfileChecksum, AdmissionChecksum: inv.AdmissionChecksum, ProfileName: b.ProfileName, Slot: slot, NativeName: fmt.Sprintf("workers-%d", slot), BootstrapSHA256: strings.Repeat("f", 64)}
-		raw, _ := json.Marshal(spec)
+		raw := capacityVMNodeProtocolCanonicalSpec(t, spec)
 		digest := fmt.Sprintf("%x", sha256.Sum256(raw))
 		b.Slots = append(b.Slots, model.CapacityMutationSlotBinding{Slot: slot, DesiredSpecSHA256: digest, DesiredSpec: spec})
 		target.Slots = append(target.Slots, model.CapacityNodeSlotBinding{Slot: slot, NodeName: fmt.Sprintf("node-%d", slot)})
@@ -515,7 +538,7 @@ func TestCapacityMutationVMNodeProtectedDispatcherPostgres(t *testing.T) {
 	p, b, inv, nodes := capacityVMNodeProtocolFixture(t)
 	p.Workflow.Namespace = ns
 	typeSpec := func(provider, resource string, ops []string) model.IntegrationTypeManifestSpec {
-		ts := model.IntegrationTypeManifestSpec{Provider: provider, Domain: "infrastructure", Adapter: model.IntegrationAdapterSpec{Transport: "http_json", Version: "1.0.0", Endpoints: model.IntegrationAdapterRoute{Describe: "/describe", Execute: "/execute"}, TimeoutSeconds: 65}, Capabilities: []string{"describe", "execute"}, CredentialSchema: model.IntegrationSchemaSpec{Mode: "inline", Properties: map[string]model.IntegrationSchemaProperty{}}, InstanceSchema: model.IntegrationSchemaSpec{Mode: "inline", Properties: map[string]model.IntegrationSchemaProperty{"base_url": {Type: "string"}}}, ResourceTypes: []model.IntegrationResourceType{{Name: resource, CanonicalPrefix: "thirdparty." + provider + "." + resource, IdentityTemplate: resource + ".{id}", DefaultActions: ops}}}
+		ts := model.IntegrationTypeManifestSpec{Provider: provider, Domain: "infrastructure", Adapter: model.IntegrationAdapterSpec{Transport: "http_json", Version: "1.0.0", Endpoints: model.IntegrationAdapterRoute{Health: "/nativehealth", Describe: "/describe", Execute: "/execute"}, TimeoutSeconds: 65}, Capabilities: []string{"describe", "execute"}, CredentialSchema: model.IntegrationSchemaSpec{Mode: "inline", Properties: map[string]model.IntegrationSchemaProperty{}}, InstanceSchema: model.IntegrationSchemaSpec{Mode: "inline", Properties: map[string]model.IntegrationSchemaProperty{"base_url": {Type: "string"}}}, ResourceTypes: []model.IntegrationResourceType{{Name: resource, CanonicalPrefix: "thirdparty." + provider + "." + resource, IdentityTemplate: resource + ".{id}", DefaultActions: ops}}}
 		for _, op := range ops {
 			ts.ActionCatalog = append(ts.ActionCatalog, model.IntegrationActionDefinition{Name: op, ResourceTypes: []string{resource}, Idempotent: true})
 		}
@@ -529,7 +552,7 @@ func TestCapacityMutationVMNodeProtectedDispatcherPostgres(t *testing.T) {
 	vmType := typeSpec("native-provider", "server", []string{"ensure_server", "destroy_server", capacity.VMObserveInventory, capacity.VMObserveAction})
 	nodeType := typeSpec("kubernetes", "object", []string{capacity.ObserveNodeMembership})
 	var mu sync.Mutex
-	reads, writes := 0, 0
+	healthReads, describeReads, reads, writes := 0, 0, 0, 0
 	changed := false
 	var lateOwner *capacityVMNodeAbsoluteContext
 	serve := func(ts model.IntegrationTypeManifestSpec, isNode bool) *httptest.Server {
@@ -537,7 +560,13 @@ func TestCapacityMutationVMNodeProtectedDispatcherPostgres(t *testing.T) {
 			mu.Lock()
 			defer mu.Unlock()
 			w.Header().Set("Content-Type", "application/json")
-			if r.URL.Path == "/describe" {
+			if r.Method == http.MethodGet && r.URL.Path == "/nativehealth" {
+				healthReads++
+				w.WriteHeader(http.StatusOK)
+				return
+			}
+			if r.Method == http.MethodPost && r.URL.Path == "/describe" {
+				describeReads++
 				raw, _ := json.Marshal(ts)
 				var desc model.AdapterDescribeResponse
 				_ = json.Unmarshal(raw, &desc)
@@ -545,11 +574,12 @@ func TestCapacityMutationVMNodeProtectedDispatcherPostgres(t *testing.T) {
 				return
 			}
 			if r.URL.Path != "/execute" {
+				writes++
 				w.WriteHeader(404)
 				return
 			}
 			var req model.AdapterExecuteIntegrationRequest
-			if json.NewDecoder(r.Body).Decode(&req) != nil || !strings.HasPrefix(req.Operation, "observe_") {
+			if r.Method != http.MethodPost || json.NewDecoder(r.Body).Decode(&req) != nil || !strings.HasPrefix(req.Operation, "observe_") || req.Capability != req.Operation || len(req.Auth) != 0 || len(req.Metadata) != 0 {
 				writes++
 				w.WriteHeader(400)
 				return
@@ -628,7 +658,7 @@ func TestCapacityMutationVMNodeProtectedDispatcherPostgres(t *testing.T) {
 		t.Fatal(e)
 	}
 	for _, proof := range proofs {
-		raw, _ := json.Marshal(b.Slots[proof.Slot-1].DesiredSpec)
+		raw := capacityVMNodeProtocolCanonicalSpec(t, b.Slots[proof.Slot-1].DesiredSpec)
 		if e = store.RecordMutationSlot(ctx, policy, intent.Generation, intent.FencingToken, intent.LeaseOwner, model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: raw}, proof); e != nil {
 			t.Fatal(e)
 		}
@@ -641,14 +671,19 @@ func TestCapacityMutationVMNodeProtectedDispatcherPostgres(t *testing.T) {
 	}
 	got := run(ctx, input())
 	if got.Status != "succeeded" || got.Metadata["native_join_observed"] != true || got.Metadata["warm_resources_known"] != false || got.Metadata["useful_capacity_known"] != false || got.Metadata["provider_mutation_quiescence_known"] != false {
-		t.Fatalf("protected point was not observed or became authority: %+v", got)
+		mu.Lock()
+		h, d, r, w := healthReads, describeReads, reads, writes
+		mu.Unlock()
+		t.Fatalf("protected point was not observed or became authority: status=%s; health=%d describe=%d reads=%d forbidden=%d", got.Status, h, d, r, w)
 	}
 	count := func() int { mu.Lock(); defer mu.Unlock(); return reads }
+	privateCount := func() int { mu.Lock(); defer mu.Unlock(); return healthReads + describeReads + reads }
 	var grants int
 	if e = db.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1`, ns).Scan(&grants); e != nil || grants != 0 {
 		t.Fatal("observer issued a provider grant", e)
 	}
 	before := count()
+	privateBefore := privateCount()
 	for _, field := range []string{"healthy", "selector", "url", "proof", "capability", "generation"} {
 		v := input()
 		v[field] = true
@@ -656,12 +691,12 @@ func TestCapacityMutationVMNodeProtectedDispatcherPostgres(t *testing.T) {
 			t.Fatal("caller authority admitted", field)
 		}
 	}
-	if run(context.Background(), input()).Status == "succeeded" || count() != before {
+	if run(context.Background(), input()).Status == "succeeded" || count() != before || privateCount() != privateBefore {
 		t.Fatal("actorless/refused input performed native reads")
 	}
 	canceled, cancel := context.WithCancel(ctx)
 	cancel()
-	if run(canceled, input()).Status == "succeeded" || count() != before {
+	if run(canceled, input()).Status == "succeeded" || count() != before || privateCount() != privateBefore {
 		t.Fatal("expired invocation read or accepted a point")
 	}
 	rawPolicy, _ := json.Marshal(p)
@@ -670,7 +705,7 @@ func TestCapacityMutationVMNodeProtectedDispatcherPostgres(t *testing.T) {
 	if _, e = db.ExecContext(ctx, `UPDATE public.manifests SET spec=$2::jsonb,checksum=$3 WHERE id=$1`, policy.ID, badRaw, fmt.Sprintf("%x", sha256.Sum256(badRaw))); e != nil {
 		t.Fatal(e)
 	}
-	if run(ctx, input()).Status == "succeeded" || count() != before {
+	if run(ctx, input()).Status == "succeeded" || count() != before || privateCount() != privateBefore {
 		t.Fatal("bad native catalog reached a private adapter")
 	}
 	if _, e = db.ExecContext(ctx, `UPDATE public.manifests SET spec=$2::jsonb,checksum=$3 WHERE id=$1`, policy.ID, rawPolicy, policy.Checksum); e != nil {

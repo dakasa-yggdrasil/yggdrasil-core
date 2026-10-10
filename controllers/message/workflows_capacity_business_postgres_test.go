@@ -116,11 +116,12 @@ func TestCapacityMutationOriginalBusinessCanaryPostgres(t *testing.T) {
 	}
 	start := frame.Challenge.IssuedAt.Add(-time.Second)
 	pod := model.NativeTerminationObservation{BindingName: "notify-original", Namespace: frame.Namespace, PodName: frame.PodName, PodUID: frame.PodUID, PodResourceVersion: "10", PodGeneration: 1, WorkloadUID: frame.Challenge.WorkloadUID, WorkloadResourceVersion: "20", ContainerName: "notify", ContainerID: "containerd://protocol-fixture", ImageID: "fixture@" + frame.ImageDigest, ImageDigest: frame.ImageDigest, RestartCount: 0, ContainerState: "running", StartedAt: &start, Protected: true, AdmissionReady: true, State: "running", Reason: "protocol_fixture_only", ObservedAt: time.Now().UTC()}
-	typeSpec := model.IntegrationTypeManifestSpec{Provider: "kubernetes", Domain: "infrastructure", Adapter: model.IntegrationAdapterSpec{Transport: "http_json", Version: "1.0.0", Endpoints: model.IntegrationAdapterRoute{Describe: "/describe", Execute: "/execute"}, TimeoutSeconds: 65}, Capabilities: []string{"describe", "execute"}, CredentialSchema: model.IntegrationSchemaSpec{Mode: "inline", Properties: map[string]model.IntegrationSchemaProperty{}}, InstanceSchema: model.IntegrationSchemaSpec{Mode: "inline", Properties: map[string]model.IntegrationSchemaProperty{"base_url": {Type: "string"}}}, ResourceTypes: []model.IntegrationResourceType{{Name: "object", CanonicalPrefix: "thirdparty.kubernetes.object", IdentityTemplate: "object.{id}", DefaultActions: []string{capacity.ObserveNativePodAdmission}}}, ActionCatalog: []model.IntegrationActionDefinition{{Name: capacity.ObserveNativePodAdmission, ResourceTypes: []string{"object"}, Idempotent: true}}, Discovery: model.IntegrationDiscoverySpec{Mode: "push", Cursor: "none"}, Normalization: model.IntegrationNormalizationSpec{ExternalIDPath: "id", FallbackResourcePrefix: "thirdparty.kubernetes.object"}}
+	typeSpec := model.IntegrationTypeManifestSpec{Provider: "kubernetes", Domain: "infrastructure", Adapter: model.IntegrationAdapterSpec{Transport: "http_json", Version: "1.0.0", Endpoints: model.IntegrationAdapterRoute{Health: "/nativehealth", Describe: "/describe", Execute: "/execute"}, TimeoutSeconds: 65}, Capabilities: []string{"describe", "execute"}, CredentialSchema: model.IntegrationSchemaSpec{Mode: "inline", Properties: map[string]model.IntegrationSchemaProperty{}}, InstanceSchema: model.IntegrationSchemaSpec{Mode: "inline", Properties: map[string]model.IntegrationSchemaProperty{"base_url": {Type: "string"}}}, ResourceTypes: []model.IntegrationResourceType{{Name: "object", CanonicalPrefix: "thirdparty.kubernetes.object", IdentityTemplate: "object.{id}", DefaultActions: []string{capacity.ObserveNativePodAdmission}}}, ActionCatalog: []model.IntegrationActionDefinition{{Name: capacity.ObserveNativePodAdmission, ResourceTypes: []string{"object"}, Idempotent: true}}, Discovery: model.IntegrationDiscoverySpec{Mode: "push", Cursor: "none"}, Normalization: model.IntegrationNormalizationSpec{ExternalIDPath: "id", FallbackResourcePrefix: "thirdparty.kubernetes.object"}}
 	if manifest.ValidateIntegrationTypeSpec(typeSpec) != nil {
 		t.Fatal("closed protocol fixture catalog invalid")
 	}
-	var reads, canaryReads, writes atomic.Int32
+	var healthReads, describeReads, reads, canaryReads, writes atomic.Int32
+	privateReads := func() int32 { return healthReads.Load() + describeReads.Load() + reads.Load() + canaryReads.Load() }
 	var mode atomic.Value
 	mode.Store("complete")
 	var policy model.Manifest
@@ -145,7 +146,14 @@ func TestCapacityMutationOriginalBusinessCanaryPostgres(t *testing.T) {
 	}))
 	t.Cleanup(canary.Close)
 	adapter := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path == "/describe" {
+		w.Header().Set("Content-Type", "application/json")
+		if r.Method == http.MethodGet && r.URL.Path == "/nativehealth" {
+			healthReads.Add(1)
+			w.WriteHeader(http.StatusOK)
+			return
+		}
+		if r.Method == http.MethodPost && r.URL.Path == "/describe" {
+			describeReads.Add(1)
 			raw, _ := json.Marshal(typeSpec)
 			var describe model.AdapterDescribeResponse
 			_ = json.Unmarshal(raw, &describe)
@@ -233,10 +241,76 @@ func TestCapacityMutationOriginalBusinessCanaryPostgres(t *testing.T) {
 	input := func() map[string]any {
 		return map[string]any{"policy": map[string]any{"namespace": ns, "name": "notify"}, "binding_name": "original"}
 	}
+	prepare := func(t *testing.T) {
+		t.Helper()
+		// Exercise the real setup gates without installing a new executor,
+		// extending the retained lease, or substituting a dispatcher result.
+		if intent.LeaseExpiresAt == nil {
+			t.Fatal("fixture preparation: original lease deadline absent")
+		}
+		setupCtx, setupCancel := context.WithTimeout(ctx, 90*time.Second)
+		defer setupCancel()
+		setupCtx, leaseCancel := context.WithDeadline(setupCtx, *intent.LeaseExpiresAt)
+		defer leaseCancel()
+		setupCtx = withNativeAdapterPolicy(setupCtx, ctx)
+		currentPolicy, e := repository.ResolveManifest(setupCtx, db, "capacity_policy", ns, "notify", nil, true)
+		if e != nil || currentPolicy.ID != policy.ID || currentPolicy.Checksum != policy.Checksum {
+			t.Fatalf("fixture preparation: real policy revision refused; cause_type=%T", e)
+		}
+		parsedPolicy, e := manifest.ParseCapacityPolicySpec(currentPolicy.Spec)
+		if e != nil || manifest.ValidateCapacityPolicySpec(parsedPolicy) != nil || capacity.ValidateBusinessCreationBinding(parsedPolicy) != nil {
+			t.Fatalf("fixture preparation: persisted closed policy refused; cause_type=%T", e)
+		}
+		currentWorkflow, e := repository.ResolveManifest(setupCtx, db, "workflow", p.Workflow.Namespace, p.Workflow.Name, nil, true)
+		if e != nil || ref.Kind != "workflow" || currentWorkflow.ID != ref.ID || currentWorkflow.Version != ref.Version || currentWorkflow.Checksum != wf.Checksum {
+			t.Fatalf("fixture preparation: real workflow revision refused; cause_type=%T", e)
+		}
+		workflowSpec, e := manifest.ParseWorkflowSpec(currentWorkflow.Spec)
+		if e != nil || workflowSpec.Authorization == nil {
+			t.Fatalf("fixture preparation: owning workflow authorization absent; cause_type=%T", e)
+		}
+		checkLease := func() {
+			t.Helper()
+			current, raw, e := readCapacityBusinessIntent(setupCtx, db, policy, p)
+			if e != nil || !bytes.Equal(raw, initialIntent) || current.PolicyID != policy.ID || current.PolicyChecksum != policy.Checksum || current.LeaseExecutorID != executor || executor == "" || current.LeaseOwner != intent.LeaseOwner || current.LeaseOwner == "" || current.Generation != intent.Generation || current.Generation < 1 || current.FencingToken != intent.FencingToken || current.FencingToken < 1 || current.RecoveryOnly || current.LeaseExpiresAt == nil || !current.LeaseExpiresAt.Equal(*intent.LeaseExpiresAt) || !current.LeaseExpiresAt.After(time.Now()) {
+				t.Fatalf("fixture preparation: original lease identity unavailable; cause_type=%T", e)
+			}
+			if e = store.ValidateNativeObservationLease(setupCtx, policy, intent.Generation, intent.FencingToken, intent.LeaseOwner); e != nil {
+				t.Fatalf("fixture preparation: real lease validation refused; cause_type=%T", e)
+			}
+		}
+		checkLease()
+		if e := preflightVMNodeCatalog(setupCtx, db, binding, []string{capacity.ObserveNativePodAdmission}); e != nil {
+			t.Fatalf("fixture preparation: immutable catalog refused; cause_type=%T", e)
+		}
+		healthBefore, describeBefore, readsBefore, canaryBefore := healthReads.Load(), describeReads.Load(), reads.Load(), canaryReads.Load()
+		resolved, e := resolveCapacityObservationAdapterWithResolver(setupCtx, nil, db, binding, []string{capacity.ObserveNativePodAdmission}, resolveIntegrationInstance)
+		if e != nil || resolved.instance.ID != instance.ID || resolved.instance.Checksum != instance.Checksum || resolved.typ.ID != typ.ID || resolved.typ.Checksum != typ.Checksum || healthReads.Load() != healthBefore+1 || describeReads.Load() != describeBefore+1 || reads.Load() != readsBefore || canaryReads.Load() != canaryBefore || writes.Load() != 0 {
+			t.Fatalf("fixture preparation: real resolver/health/Describe refused; cause_type=%T health=%d describe=%d pod=%d canary=%d forbidden=%d", e, healthReads.Load()-healthBefore, describeReads.Load()-describeBefore, reads.Load()-readsBefore, canaryReads.Load()-canaryBefore, writes.Load())
+		}
+		credential, e := repository.ResolveSecretRef(setupCtx, db, p.BusinessCreationBinding.ReadTokenRef)
+		token, ok := credential.(string)
+		if e != nil || !ok || token != strings.Repeat("r", 32) {
+			t.Fatalf("fixture preparation: real bound secret refused; cause_type=%T", e)
+		}
+		response := model.AdapterCapacityPodAdmissionResponse{Operation: capacity.ObserveNativePodAdmission, Status: "observed", Observation: pod, Admission: frame, Metadata: map[string]any{}}
+		at := time.Now().UTC()
+		if e := capacity.NativePodIdentity(p, pod, at); e != nil {
+			t.Fatalf("fixture preparation: original Pod protocol identity refused; cause_type=%T", e)
+		}
+		if e := capacity.NativeProcessAdmission(p, response, at); e != nil {
+			t.Fatalf("fixture preparation: original SDK admission refused; cause_type=%T roots_open=%t roster_matches=%t frame_fresh=%t generation_matches=%t", e, frame.State == "roots_open", frame.LaneRosterSHA256 == capacity.NativeRosterDigest(p.HPAExecutionBinding.Lanes), capacity.Fresh(frame.ObservedAt, at, p.MaxEvidenceAgeSeconds), frame.Challenge != nil && frame.Challenge.IntentGeneration == intent.Generation)
+		}
+		if _, e := capacity.JoinBusinessCreation(p, source.Reply, response, response, at); e != nil {
+			t.Fatalf("fixture preparation: actual original native SQL/SDK join refused; cause_type=%T", e)
+		}
+		checkLease()
+	}
 	t.Run("original_creation_join_is_scoped_without_authority", func(t *testing.T) {
+		prepare(t)
 		result := run(ctx, input())
 		if result.Status != "succeeded" || result.Metadata["native_creation_canary_observed"] != true || result.Metadata["original_caller_return_known"] != false || result.Metadata["useful_capacity_known"] != false {
-			t.Fatalf("actual original creation join refused: %s", result.Error)
+			t.Fatalf("actual original creation join refused: %s; health=%d describe=%d pod=%d canary=%d forbidden=%d", result.Error, healthReads.Load(), describeReads.Load(), reads.Load(), canaryReads.Load(), writes.Load())
 		}
 		for _, table := range []string{"capacity_mutation_grants", "capacity_resource_slots"} {
 			var n int
@@ -246,7 +320,7 @@ func TestCapacityMutationOriginalBusinessCanaryPostgres(t *testing.T) {
 		}
 	})
 	t.Run("actorless_caller_expectations_and_old_workflow_refuse", func(t *testing.T) {
-		before := reads.Load() + canaryReads.Load()
+		before := privateReads()
 		if run(context.Background(), input()).Status == "succeeded" {
 			t.Fatal("actorless observer accepted")
 		}
@@ -259,7 +333,7 @@ func TestCapacityMutationOriginalBusinessCanaryPostgres(t *testing.T) {
 		}
 		wrong := ref
 		wrong.ID = uuid.New()
-		if executeCapacityBusinessWorkflowStepWithClient(ctx, nil, db, wrong, model.WorkflowRunStepResult{Operation: "capacity.observe_original_creation_canary"}, input(), canary.Client()).Status == "succeeded" || reads.Load()+canaryReads.Load() != before {
+		if executeCapacityBusinessWorkflowStepWithClient(ctx, nil, db, wrong, model.WorkflowRunStepResult{Operation: "capacity.observe_original_creation_canary"}, input(), canary.Client()).Status == "succeeded" || privateReads() != before {
 			t.Fatal("refused scope reached private sources")
 		}
 		legacy := executeCapacityWorkflowStep(ctx, db, ref, model.WorkflowRunStepResult{Operation: "capacity.advance"}, map[string]any{"policy": input()["policy"], "generation": intent.Generation, "fencing_token": intent.FencingToken, "lease_owner": intent.LeaseOwner, "phase": "prepared", "proof": model.CapacityTransitionProof{}})
@@ -277,8 +351,8 @@ func TestCapacityMutationOriginalBusinessCanaryPostgres(t *testing.T) {
 				t.Error(err)
 			}
 		}()
-		before := reads.Load() + canaryReads.Load()
-		if run(ctx, input()).Status == "succeeded" || reads.Load()+canaryReads.Load() != before {
+		before := privateReads()
+		if run(ctx, input()).Status == "succeeded" || privateReads() != before {
 			t.Fatal("paused catalog read private source")
 		}
 	})
@@ -300,8 +374,8 @@ func TestCapacityMutationOriginalBusinessCanaryPostgres(t *testing.T) {
 	t.Run("expired_final_native_context_cannot_accept", func(t *testing.T) {
 		expired, done := context.WithDeadline(ctx, time.Now().Add(-time.Second))
 		defer done()
-		before := reads.Load() + canaryReads.Load()
-		if run(expired, input()).Status == "succeeded" || reads.Load()+canaryReads.Load() != before {
+		before := privateReads()
+		if run(expired, input()).Status == "succeeded" || privateReads() != before {
 			t.Fatal("expired source owner reached private sources")
 		}
 	})
