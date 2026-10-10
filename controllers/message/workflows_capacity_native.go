@@ -23,7 +23,7 @@ var errCapacityNativeObservation = fmt.Errorf("protected native VM observation r
 
 func capacityNativeOperation(operation string) bool {
 	switch operation {
-	case "capacity.observe_vm_inventory", "capacity.observe_failed_vm_creation", "capacity.record_vm_inventory", "capacity.confirm_native_mutation", "capacity.observe_vm_node_membership":
+	case "capacity.observe_vm_inventory", "capacity.observe_failed_vm_creation", "capacity.record_vm_inventory", "capacity.confirm_native_mutation", "capacity.observe_vm_node_membership", "capacity.observe_original_creation_canary":
 		return true
 	}
 	return false
@@ -32,6 +32,9 @@ func capacityNativeOperation(operation string) bool {
 // The fixed operation chooses every capability, scope and proof-producing
 // read. Workflow input supplies no provider URL, selector, assessment or bool.
 func executeCapacityNativeWorkflowStep(ctx context.Context, conn *amqp.Connection, db *sql.DB, workflowRef model.ManifestReference, result model.WorkflowRunStepResult, input map[string]any) model.WorkflowRunStepResult {
+	if result.Operation == "capacity.observe_original_creation_canary" {
+		return executeCapacityBusinessWorkflowStep(ctx, conn, db, workflowRef, result, input)
+	}
 	if result.Operation == "capacity.observe_vm_node_membership" {
 		return executeCapacityVMNodeWorkflowStep(ctx, conn, db, workflowRef, result, input)
 	}
@@ -41,8 +44,10 @@ func executeCapacityNativeWorkflowStep(ctx context.Context, conn *amqp.Connectio
 		result.FinishedAt = time.Now().UTC()
 		return result
 	}
+	parent := ctx
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
+	ctx = withNativeAdapterPolicy(ctx, parent)
 	var parsed model.CapacityVMObservationInput
 	if !capacityNativeOperation(result.Operation) || capacity.DecodeVMObservation(input, &parsed) != nil || db == nil || parsed.Policy.ManifestID != "" || strings.TrimSpace(parsed.Policy.Namespace) == "" || strings.TrimSpace(parsed.Policy.Name) == "" || parsed.BindingName == "" {
 		return fail()
@@ -106,7 +111,7 @@ func executeCapacityNativeWorkflowStep(ctx context.Context, conn *amqp.Connectio
 		if !capacityNativeCatalogOperation(ts, operation) {
 			return "", errCapacityNativeObservation
 		}
-		r, err := executeIntegrationThroughResolvedWithPolicy(ctx, conn, model.ExecuteIntegrationRequest{Operation: operation, Capability: operation, Input: fixed}, im, is, tm, ts, 65*time.Second, integrationExecutionPolicy{detailFreeErrors: true, safeError: errCapacityNativeObservation, requireExplicitResponse: true})
+		r, err := executeIntegrationThroughResolvedWithPolicy(ctx, conn, model.ExecuteIntegrationRequest{Operation: operation, Capability: operation, Input: fixed}, im, is, tm, ts, 65*time.Second, integrationExecutionPolicy{detailFreeErrors: true, safeError: errCapacityNativeObservation, requireExplicitResponse: true, nativeHTTP: &nativeAdapterHTTPPolicy{limit: 2 << 20, parent: parent}})
 		if err != nil || (r.Status != "observed" && r.Status != "absent") || capacity.DecodeVMObservation(r.Output, out) != nil {
 			return "", errCapacityNativeObservation
 		}
@@ -248,7 +253,7 @@ func capacityVMNodeContextFailure(ctx context.Context) error {
 	if ctx == nil {
 		return errors.New("original membership context missing")
 	}
-	err := errors.Join(ctx.Err(), context.Cause(ctx))
+	err := errors.Join(ctx.Err(), context.Cause(ctx), nativeAdapterContext(ctx))
 	if d, ok := ctx.Deadline(); ok && !time.Now().Before(d) {
 		err = errors.Join(err, context.DeadlineExceeded)
 	}
@@ -291,6 +296,7 @@ func executeCapacityVMNodeWorkflowStep(parent context.Context, conn *amqp.Connec
 	}
 	ctx, cancel := context.WithTimeout(parent, 90*time.Second)
 	defer cancel()
+	ctx = withNativeAdapterPolicy(ctx, parent)
 	defer func() {
 		out.FinishedAt = time.Now().UTC()
 		if errors.Join(capacityVMNodeContextFailure(ctx), capacityVMNodeContextFailure(parent)) != nil {
@@ -342,7 +348,7 @@ func executeCapacityVMNodeWorkflowStep(parent context.Context, conn *amqp.Connec
 		if errors.Join(capacityVMNodeContextFailure(ctx), capacityVMNodeContextFailure(parent)) != nil {
 			return errCapacityNativeObservation
 		}
-		r, e := executeIntegrationThroughResolvedWithPolicy(ctx, conn, model.ExecuteIntegrationRequest{Operation: op, Capability: op, Input: fixed}, a.instance, a.instanceSpec, a.typ, a.typeSpec, 65*time.Second, integrationExecutionPolicy{detailFreeErrors: true, safeError: errCapacityNativeObservation, requireExplicitResponse: true})
+		r, e := executeIntegrationThroughResolvedWithPolicy(ctx, conn, model.ExecuteIntegrationRequest{Operation: op, Capability: op, Input: fixed}, a.instance, a.instanceSpec, a.typ, a.typeSpec, 65*time.Second, integrationExecutionPolicy{detailFreeErrors: true, safeError: errCapacityNativeObservation, requireExplicitResponse: true, nativeHTTP: &nativeAdapterHTTPPolicy{limit: 2 << 20, parent: parent}})
 		if e != nil || errors.Join(capacityVMNodeContextFailure(ctx), capacityVMNodeContextFailure(parent)) != nil || r.Status != "observed" || capacity.DecodeVMObservation(r.Output, reply) != nil {
 			return errCapacityNativeObservation
 		}

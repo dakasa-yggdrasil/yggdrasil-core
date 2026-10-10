@@ -33,6 +33,52 @@ type CapacityPolicySpec struct {
 	AssessmentBinding       *CapacityBoundAssessmentBinding  `json:"assessment_binding,omitempty"`
 	HPAExecutionBinding     *CapacityHPAExecutionBinding     `json:"hpa_execution_binding,omitempty"`
 	VMNodeMembershipBinding *CapacityVMNodeMembershipBinding `json:"vm_node_membership_binding,omitempty"`
+	BusinessCreationBinding *CapacityBusinessCreationBinding `json:"business_creation_binding,omitempty"`
+}
+
+// Optional original business reader. Only the operator policy selects its
+// origin, secret reference, native identities and expected original input.
+// This is a diagnostic read binding, never a mutation/transition permission.
+type CapacityBusinessCreationBinding struct {
+	Name            string                                    `json:"name"`
+	Adapter         CapacityObservationAdapterBinding         `json:"adapter"`
+	ReaderURL       string                                    `json:"reader_url"`
+	ReadTokenRef    string                                    `json:"read_token_ref"`
+	SourceCommit    string                                    `json:"source_commit"`
+	QuerySHA256     string                                    `json:"query_sha256"`
+	RecordSHA256    string                                    `json:"record_sha256"`
+	BodySHA256      string                                    `json:"body_sha256"`
+	RecipientSHA256 string                                    `json:"recipient_sha256"`
+	RecipientCount  int                                       `json:"recipient_count"`
+	Database        string                                    `json:"database"`
+	DatabaseOID     string                                    `json:"database_oid"`
+	SystemID        string                                    `json:"system_identifier"`
+	TableOIDs       []string                                  `json:"table_oids"`
+	Pod             AdapterObserveCapacityPodAdmissionRequest `json:"pod"`
+}
+
+type CapacityBusinessCreationReply struct {
+	Schema            string                            `json:"schema_version"`
+	Source            string                            `json:"source_commit"`
+	Query             string                            `json:"query_sha256"`
+	PreparationBefore NativeProcessAdmissionObservation `json:"preparation_before"`
+	NativeRaw         []byte                            `json:"native_snapshot_base64"`
+	PreparationAfter  NativeProcessAdmissionObservation `json:"preparation_after"`
+}
+
+// Hashes and native identities only; it carries no payload/token/lease owner.
+type CapacityBusinessCreationObservation struct {
+	RecordSHA256         string    `json:"record_sha256"`
+	BodySHA256           string    `json:"body_sha256"`
+	NativeSnapshotSHA256 string    `json:"native_snapshot_sha256"`
+	NotificationSHA256   string    `json:"notification_sha256"`
+	OriginalXID          string    `json:"original_xid"`
+	OriginalCommit       time.Time `json:"original_commit"`
+	NativeObserved       time.Time `json:"native_observed"`
+	ConsumerPodUID       string    `json:"consumer_pod_uid"`
+	ConsumerProcessNonce string    `json:"consumer_process_nonce"`
+	RecipientSHA256      string    `json:"recipient_sha256"`
+	RecipientCount       int       `json:"recipient_count"`
 }
 
 // Optional fixed read binding. It grants no provider mutation or phase proof.

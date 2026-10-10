@@ -31,6 +31,10 @@ jobs:
       DB_SSLMODE: disable
       DB_URL: postgres://postgres:capacity-ci-only@127.0.0.1:5432/capacity_integration?sslmode=disable
       REQUIRE_CAPACITY_POSTGRES: "true"
+      # Root replaces this explicit source HOLD only after the owning Notify
+      # source is independently reviewed and normally committed. No branch/main
+      # or guessed source may compile or execute this native business fixture.
+      CAPACITY_NOTIFY_SOURCE_COMMIT: ce79e4c838970e3b2345f1b3cada07203b103d0f
     steps:
       - uses: actions/checkout@v4
         with:
@@ -75,6 +79,50 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Require the exact reviewed original business source before effects
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CAPACITY_NOTIFY_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'Reviewed Notify source is still on HOLD'; exit 1; }
+      - name: Read-only token for exact original Notify fixture source
+        id: notify-source-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.YGGDRASIL_APP_ID }}
+          private-key: ${{ secrets.YGGDRASIL_APP_PEM }}
+          owner: dakasa-co
+          repositories: dakasa-app-notify-api
+          permission-contents: read
+      - name: Checkout the original owning business source
+        uses: actions/checkout@v4
+        with:
+          repository: dakasa-co/dakasa-app-notify-api
+          ref: ${{ env.CAPACITY_NOTIFY_SOURCE_COMMIT }}
+          path: .ci-original-notify
+          token: ${{ steps.notify-source-token.outputs.token }}
+          persist-credentials: false
+      - name: Compile the original creation witness and qualify its real HTTP owner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C .ci-original-notify rev-parse HEAD)" = "$CAPACITY_NOTIFY_SOURCE_COMMIT"
+          notify_source_dir="$GITHUB_WORKSPACE/.ci-original-notify"
+          cd "$notify_source_dir"
+          GOWORK=off GOFLAGS=-mod=vendor GOPROXY=off GOSUMDB=off go test -c -tags nativequalification -ldflags "-X github.com/dakasa-co/dakasa-app-notify-api/internal/capacitycanary.SourceCommit=$CAPACITY_NOTIFY_SOURCE_COMMIT" -o "$RUNNER_TEMP/capacity-notify-fixture" ./controllers/message
+          GOWORK=off GOFLAGS=-mod=vendor GOPROXY=off GOSUMDB=off DAKASA_NATIVE_REMOTE_QUALIFICATION=true go test -json -tags nativequalification -p 1 -count=1 -timeout=30s . -run '^TestNativeAppNotifyCapacityCanary(RuntimeOriginalJoin|DefaultOffAndSealedAdmission)$' | tee "$RUNNER_TEMP/capacity-notify-runtime.jsonl"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          events=[json.loads(line) for line in (Path(os.environ['RUNNER_TEMP'])/'capacity-notify-runtime.jsonl').read_text().splitlines() if line.strip()]
+          required={'TestNativeAppNotifyCapacityCanaryRuntimeOriginalJoin','TestNativeAppNotifyCapacityCanaryDefaultOffAndSealedAdmission'}
+          passed={e.get('Test') for e in events if e.get('Action')=='pass'}
+          if required-passed or any(e.get('Action') in ('fail','skip') for e in events):
+              raise SystemExit('Original Notify runtime canary owner gate incomplete')
+          if not any(e.get('Action')=='pass' and not e.get('Test') for e in events):
+              raise SystemExit('Original Notify runtime package did not complete')
+          PY
+          echo "CAPACITY_NOTIFY_FIXTURE_BINARY=$RUNNER_TEMP/capacity-notify-fixture" >> "$GITHUB_ENV"
+          echo "CAPACITY_NOTIFY_FIXTURE_SOURCE_DIR=$notify_source_dir" >> "$GITHUB_ENV"
       - name: Qualify the exact collector request return and deadline ownership
         shell: bash
         run: |
@@ -115,7 +163,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message ./controllers/httpapi -run '^TestCapacity(Intent.*|Workflow|Mutation.*|NativeLifetime)Postgres$' | tee capacity-results.jsonl
+          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message ./controllers/httpapi -run '^(TestCapacity(Intent.*|Workflow|Mutation.*|NativeLifetime)Postgres|TestCapacityNativeAdapter(OriginalHTTP|LegacyHTTPPreserved))$' | tee capacity-results.jsonl
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -159,6 +207,24 @@ jobs:
               "lost_failed_creation_is_explicit_unresolved_member",
               "paused_instance_and_old_type_refuse_current_reads",
               "native_catalog_refuses_before_private_hydration")}
+          expected |= {'TestCapacityMutationVMNodeProtectedDispatcherPostgres',
+              'TestCapacityMutationVMNodeProtectedDispatcherPostgres/registered_tombstone_refuses_before_node_source',
+              'TestCapacityMutationVMNodeProtectedDispatcherPostgres/original_sdk_return_after_parent_absolute_deadline'}
+          business='TestCapacityMutationOriginalBusinessCanaryPostgres'
+          expected |= {business} | {business+'/'+name for name in (
+              'original_creation_join_is_scoped_without_authority',
+              'actorless_caller_expectations_and_old_workflow_refuse',
+              'paused_catalog_precedes_private_hydration',
+              'competing_consumer_and_changed_epoch_hold_without_replay',
+              'expired_final_native_context_cannot_accept',
+              'held_original_close_after_original_lease_expiry_refuses',
+              'closed_native_raw_duplicates_and_private_projection_refuse')}
+          transport='TestCapacityNativeAdapterOriginalHTTP'
+          expected |= {transport,'TestCapacityNativeAdapterLegacyHTTPPreserved'} | {transport+'/'+name for name in (
+              'verified_tls_fixed_original_origin', 'closed_duplicate_casefold_and_byte_cap',
+              'unauthorized_does_not_read_body', 'held_original_read_retains_cause',
+              'held_original_close_retains_cause', 'foreign_response_origin_refused_before_read',
+              'expired_entry_has_zero_original_calls', 'original_parent_deadline_without_err_is_retained')}
           bound = "TestCapacityMutationBoundAssessmentPostgres"
           expected |= {bound} | {bound + "/" + name for name in (
               "actual_metric_and_hpa_producers_measure_only_reserved_minimum",
@@ -184,4 +250,10 @@ jobs:
         with:
           name: capacity-protocol-results
           path: capacity-results.jsonl
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: original-notify-canary-runtime-source
+          path: ${{ runner.temp }}/capacity-notify-runtime.jsonl
           if-no-files-found: error
