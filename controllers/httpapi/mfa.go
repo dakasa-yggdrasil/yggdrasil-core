@@ -252,38 +252,27 @@ func (s *Server) handleMFATOTPFinish(w http.ResponseWriter, r *http.Request) {
 		writeMappedError(w, err)
 		return
 	}
-	secret, err := repository.GetTOTPSecret(r.Context(), s.db, s.envelope, collab.ID)
-	if err != nil {
-		writeMappedError(w, err)
-		return
-	}
-	if err := mfa.ValidateTOTP(string(secret), req.Code); err != nil {
-		httperr.WriteProblem(w, http.StatusUnauthorized,
-			httperr.CodeAuthMFAInvalid,
-			"Invalid MFA",
-			"invalid TOTP code",
-			httperr.WithInstance(r.URL.Path),
-			httperr.WithExtra("factor", "totp"))
-		return
-	}
 	codes, hashes, err := mfa.GenerateRecoveryCodes()
 	if err != nil {
 		writeMappedError(w, err)
 		return
 	}
-	if err := repository.SetRecoveryCodesHashes(r.Context(), s.db, collab.ID, hashes); err != nil {
-		writeMappedError(w, err)
-		return
-	}
-	// Session-mode enrollment (no magic-link token) has nothing to consume;
-	// only the token flow burns the single-use enroll token.
+	enrollTokenHash := ""
 	if strings.TrimSpace(req.Token) != "" {
-		if err := repository.ConsumeMFAEnrollToken(r.Context(), s.db, hashEnrollToken(req.Token)); err != nil {
-			writeMappedError(w, err)
+		enrollTokenHash = hashEnrollToken(req.Token)
+	}
+	// Verify the current seed and publish the factor, recovery codes and token
+	// consumption together. Contact MFA posture never confirms a pending seed.
+	if err := repository.ConfirmTOTPEnrollment(r.Context(), s.db, s.envelope, collab.ID, req.Code, hashes, enrollTokenHash); err != nil {
+		if errors.Is(err, mfa.ErrInvalidTOTP) {
+			httperr.WriteProblem(w, http.StatusUnauthorized,
+				httperr.CodeAuthMFAInvalid,
+				"Invalid MFA",
+				"invalid TOTP code",
+				httperr.WithInstance(r.URL.Path),
+				httperr.WithExtra("factor", "totp"))
 			return
 		}
-	}
-	if err := repository.MarkMFAEnrolled(r.Context(), s.db, collab.ID, time.Now()); err != nil {
 		writeMappedError(w, err)
 		return
 	}

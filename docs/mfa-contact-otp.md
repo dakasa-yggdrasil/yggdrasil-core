@@ -34,6 +34,10 @@ or failed sends issue no usable challenge.
    recent-session proof and session creation together. Response HTTP200 has
    `mfa_enrollment_required:false`. No contact-factor record is inserted.
 
+TOTP has its own confirmation timestamp. A contact proof never confirms an
+unfinished authenticator setup; TOTP remains unavailable until its code is
+confirmed. Previously confirmed MFA factors are preserved.
+
 The profile's current email/phone is authoritative on each new send. Changing
 it does not require registration again: new codes use the new destination
 immediately, while old pending codes and recent session proofs cannot transfer.

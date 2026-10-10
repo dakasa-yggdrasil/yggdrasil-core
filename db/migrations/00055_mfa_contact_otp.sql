@@ -1,5 +1,17 @@
 -- +goose Up
 -- +goose StatementBegin
+-- Backfill only when introducing this marker. Replaying the migration must
+-- never promote a subsequently started, still-unconfirmed TOTP replacement.
+DO $$
+BEGIN
+    IF NOT EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='auth_identities' AND column_name='totp_confirmed_at') THEN
+        ALTER TABLE public.auth_identities ADD COLUMN totp_confirmed_at TIMESTAMPTZ NULL;
+        UPDATE public.auth_identities SET totp_confirmed_at=mfa_enrolled_at
+        WHERE totp_secret_ciphertext IS NOT NULL AND mfa_enrolled_at IS NOT NULL;
+    END IF;
+END;
+$$;
+
 -- Authentication challenges bind to a random credential epoch, never to a
 -- derivative of password material. Legacy nullable password timestamps do not
 -- affect this epoch, and restoring an older hash cannot restore old proofs.
@@ -89,6 +101,7 @@ CREATE TRIGGER collaborators_changed_email_mfa
 DROP TRIGGER IF EXISTS auth_identities_mfa_password_version ON public.auth_identities;
 DROP FUNCTION IF EXISTS public.rotate_mfa_password_version();
 ALTER TABLE public.auth_identities DROP COLUMN IF EXISTS mfa_password_version;
+ALTER TABLE public.auth_identities DROP COLUMN IF EXISTS totp_confirmed_at;
 DROP TRIGGER IF EXISTS collaborators_changed_email_mfa ON public.collaborators;
 DROP FUNCTION IF EXISTS public.invalidate_changed_email_mfa();
 DROP TABLE IF EXISTS public.auth_contact_session_proofs;

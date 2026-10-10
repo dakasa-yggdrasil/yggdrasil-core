@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -19,6 +20,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
+	"github.com/pquerna/otp/totp"
 	"github.com/rabbitmq/amqp091-go"
 )
 
@@ -326,6 +328,110 @@ func TestMFAContactOTPHTTPPostgres(t *testing.T) {
 			contactOTPHTTPPosture(t, db, person.ID, true, 2)
 		})
 	}
+
+	t.Run("contact_login_preserves_classic_factor_confirmation", func(t *testing.T) {
+		for _, scenario := range []struct {
+			name          string
+			confirmed     bool
+			beginAfterOTP bool
+		}{
+			{name: "pending_begin_only"},
+			{name: "confirmed_totp", confirmed: true},
+			{name: "pending_after_contact", beginAfterOTP: true},
+		} {
+			t.Run(scenario.name, func(t *testing.T) {
+				handler := directoryHTTPHandler(t, db)
+				person := directoryHTTPPerson(t, db, false)
+				plain := contactOTPHTTPPassword(t, db, person)
+				rawAuthority := contactOTPHTTPEnrollLink(t, db, person)
+				var w *httptest.ResponseRecorder
+				var begun totpBeginResponse
+				if !scenario.beginAfterOTP {
+					w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/factors/totp/begin", map[string]any{"token": rawAuthority}, "", "", 1)
+					if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &begun) != nil || begun.Secret == "" {
+						t.Fatal("classic TOTP begin fixture did not generate an unconfirmed secret")
+					}
+				}
+				if scenario.confirmed {
+					code, err := totp.GenerateCode(begun.Secret, time.Now())
+					if err != nil {
+						t.Fatal("classic TOTP confirmation fixture failed")
+					}
+					w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/factors/totp/finish", map[string]any{"token": rawAuthority, "code": code}, "", "", 2)
+					if w.Code != http.StatusOK {
+						t.Fatal("classic TOTP finish fixture did not confirm the factor")
+					}
+				}
+				var beforeCiphertext, beforeDEK []byte
+				var wasConfirmed bool
+				if db.QueryRow(`SELECT totp_secret_ciphertext,totp_secret_dek,mfa_enrolled_at IS NOT NULL FROM public.auth_identities WHERE collaborator_id=$1`, person.ID).Scan(&beforeCiphertext, &beforeDEK, &wasConfirmed) != nil || wasConfirmed != scenario.confirmed || !scenario.beginAfterOTP && (len(beforeCiphertext) == 0 || len(beforeDEK) == 0) {
+					t.Fatal("classic factor fixture has the wrong confirmation posture")
+				}
+				previousExecute := executeAuthEmailIntegration
+				t.Cleanup(func() { executeAuthEmailIntegration = previousExecute })
+				var contactCode string
+				executeAuthEmailIntegration = func(_ context.Context, _ *amqp091.Connection, _ *sql.DB, req model.ExecuteIntegrationRequest) (model.ExecuteIntegrationResponse, error) {
+					contactCode = contactOTPHTTPCode(t, req)
+					return model.ExecuteIntegrationResponse{Status: "sent"}, nil
+				}
+				w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/contact/login/begin", map[string]any{"identifier": person.PrimaryEmail, "password": plain, "channel": "email"}, "", "", 3)
+				challenge := contactOTPHTTPChallenge(t, w)
+				w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/login", map[string]any{"identifier": person.PrimaryEmail, "password": plain, "otp_channel": "email", "otp_challenge_token": challenge.ChallengeToken, "otp_code": contactCode}, "", "", 4)
+				login := contactOTPHTTPLogin(t, w)
+				if scenario.beginAfterOTP {
+					w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/factors/totp/begin", map[string]any{}, login.Token, computeCSRFToken(login.Session.ID), 5)
+					if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &begun) != nil || begun.Secret == "" {
+						t.Fatal("classic TOTP begin after contact authentication failed")
+					}
+				}
+				var afterCiphertext, afterDEK []byte
+				if db.QueryRow(`SELECT totp_secret_ciphertext,totp_secret_dek FROM public.auth_identities WHERE collaborator_id=$1`, person.ID).Scan(&afterCiphertext, &afterDEK) != nil {
+					t.Fatal("post-contact classic factor observation failed")
+				}
+				if scenario.beginAfterOTP {
+					if len(afterCiphertext) == 0 || len(afterDEK) == 0 {
+						t.Fatal("post-contact TOTP begin did not persist an encrypted pending seed")
+					}
+				} else if !bytes.Equal(beforeCiphertext, afterCiphertext) || !bytes.Equal(beforeDEK, afterDEK) {
+					t.Fatal("automatic contact login changed the separate classic enrollment state")
+				}
+				w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/login", map[string]any{"identifier": person.PrimaryEmail, "password": plain}, "", "", 5)
+				var required authMFARequiredResponse
+				if w.Code != http.StatusAccepted || json.Unmarshal(w.Body.Bytes(), &required) != nil || len(w.Result().Cookies()) != 0 {
+					t.Fatal("post-contact password login did not require another second-factor proof")
+				}
+				offersTOTP := false
+				for _, factor := range required.Factors {
+					offersTOTP = offersTOTP || factor == "totp"
+				}
+				if offersTOTP != scenario.confirmed {
+					t.Fatal("automatic contact login lost the distinction between pending and confirmed TOTP")
+				}
+				if !scenario.confirmed {
+					code, err := totp.GenerateCode(begun.Secret, time.Now())
+					if err != nil {
+						t.Fatal("pending classic confirmation code fixture failed")
+					}
+					w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/factors/totp/finish", map[string]any{"code": code}, login.Token, computeCSRFToken(login.Session.ID), 6)
+					if w.Code != http.StatusOK {
+						t.Fatal("pending TOTP could not be confirmed independently after contact authentication")
+					}
+					w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/login", map[string]any{"identifier": person.PrimaryEmail, "password": plain}, "", "", 7)
+					if w.Code != http.StatusAccepted || json.Unmarshal(w.Body.Bytes(), &required) != nil {
+						t.Fatal("confirmed classic factor login inventory unavailable")
+					}
+					offersTOTP = false
+					for _, factor := range required.Factors {
+						offersTOTP = offersTOTP || factor == "totp"
+					}
+					if !offersTOTP {
+						t.Fatal("independent confirmation did not make the pending classic factor available")
+					}
+				}
+				contactOTPHTTPPosture(t, db, person.ID, true, 1)
+			})
+		}
+	})
 
 	t.Run("sso_only_options_never_offer_password_login", func(t *testing.T) {
 		handler := directoryHTTPHandler(t, db)

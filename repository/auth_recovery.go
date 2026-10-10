@@ -32,7 +32,7 @@ func GetCredentialAccountState(ctx context.Context, db DBQuerier, collaboratorID
 		SELECT
 			COALESCE(password_hash, '') <> '',
 			mfa_enrolled_at IS NOT NULL,
-			totp_secret_ciphertext IS NOT NULL,
+			totp_secret_ciphertext IS NOT NULL AND totp_confirmed_at IS NOT NULL,
 			COALESCE(array_length(recovery_codes_hashes, 1), 0) > 0,
 			COALESCE(jsonb_array_length(webauthn_credentials), 0)
 		FROM public.auth_identities
@@ -72,6 +72,7 @@ func ResetMFAFactors(ctx context.Context, tx DBExecer, collaboratorID uuid.UUID)
 		SET webauthn_credentials   = '[]'::jsonb,
 		    totp_secret_ciphertext = NULL,
 		    totp_secret_dek        = NULL,
+		    totp_confirmed_at      = NULL,
 		    recovery_codes_hashes  = ARRAY[]::TEXT[],
 		    mfa_enrolled_at        = NULL,
 		    password_hash          = NULL,

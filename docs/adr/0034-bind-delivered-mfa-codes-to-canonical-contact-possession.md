@@ -19,6 +19,8 @@ and provider delivery are usable. Never require a per-user contact factor row.
 Verify the password before sending; bind every code to owner, channel, current
 contact, exact credential epoch and login purpose. Consume the valid OTP and
 create its session atomically. Only that real proof updates internal MFA posture.
+Track TOTP confirmation independently of this shared posture. An unfinished
+authenticator setup cannot become confirmed through a contact proof.
 
 Keep delivery provider-neutral and preserve challenge, resend and attempt budgets.
 Bind recent contact-authenticated session proof to owner, current contact and

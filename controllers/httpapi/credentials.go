@@ -1611,7 +1611,7 @@ func (s *Server) verifyInlineMFAFactor(
 		if s.envelope == nil {
 			return fmt.Errorf("TOTP verification unavailable: KEK not configured")
 		}
-		secret, err := repository.GetTOTPSecret(r.Context(), s.db, s.envelope, collabID)
+		secret, err := repository.GetConfirmedTOTPSecret(r.Context(), s.db, s.envelope, collabID)
 		if err != nil {
 			return fmt.Errorf("get totp secret: %w", err)
 		}

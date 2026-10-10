@@ -152,7 +152,7 @@ func RemoveWebAuthnCredential(ctx context.Context, db *sql.DB, collaboratorID uu
 	var blob []byte
 	var hasTOTP bool
 	err = tx.QueryRowContext(ctx, `
-		SELECT webauthn_credentials, totp_secret_ciphertext IS NOT NULL
+		SELECT webauthn_credentials, totp_secret_ciphertext IS NOT NULL AND totp_confirmed_at IS NOT NULL
 		FROM public.auth_identities
 		WHERE collaborator_id = $1
 		FOR UPDATE

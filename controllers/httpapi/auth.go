@@ -207,7 +207,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		if !s.requireEnvelope(w) {
 			return
 		}
-		secret, err := repository.GetTOTPSecret(r.Context(), s.db, s.envelope, collaborator.ID)
+		secret, err := repository.GetConfirmedTOTPSecret(r.Context(), s.db, s.envelope, collaborator.ID)
 		if err != nil {
 			writeMappedError(w, err)
 			return
