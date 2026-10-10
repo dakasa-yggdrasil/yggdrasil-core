@@ -21,7 +21,17 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres -d capacity_integration"
           --health-interval 5s --health-timeout 5s --health-retries 12
+      rabbitmq:
+        image: rabbitmq:4-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: dispatch
+          RABBITMQ_DEFAULT_PASS: dispatch-ci-only
+        ports: ["5672:5672"]
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 3s --health-timeout 5s --health-retries 30
     env:
+      CAPACITY_DISPATCH_BROKER_URL: amqp://dispatch:dispatch-ci-only@127.0.0.1:5672/
       GOWORK: "off"
       DB_HOST: 127.0.0.1
       DB_PORT: "5432"
@@ -34,7 +44,7 @@ jobs:
       # Root replaces this explicit source HOLD only after the owning Notify
       # source is independently reviewed and normally committed. No branch/main
       # or guessed source may compile or execute this native business fixture.
-      CAPACITY_NOTIFY_SOURCE_COMMIT: ce79e4c838970e3b2345f1b3cada07203b103d0f
+      CAPACITY_NOTIFY_SOURCE_COMMIT: 7e64f55b088a6f06b05072412deb1a9395430800
     steps:
       - uses: actions/checkout@v4
         with:
@@ -163,7 +173,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message ./controllers/httpapi -run '^(TestCapacity(Intent.*|Workflow|Mutation.*|NativeLifetime)Postgres|TestCapacityNativeAdapter(OriginalHTTP|LegacyHTTPPreserved))$' | tee capacity-results.jsonl
+          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message ./controllers/httpapi ./addons -run '^(TestCapacity(Intent.*|Workflow|Mutation.*|NativeLifetime)Postgres|TestCapacityNativeAdapter(OriginalHTTP|LegacyHTTPPreserved)|TestCapacityDispatch(Postgres|AuthorizationPostgres|OriginalTransportPostgres|SchedulerPostgres))$' | tee capacity-results.jsonl
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -240,6 +250,53 @@ jobs:
               "unprotected_failed_create", "protected_failed_create_without_serving_membership",
               "lost_create_reply_uses_separate_native_readback", "protected_lost_create_reply")}
           expected |= {compensation + "/unprotected_failed_create/global_slot_precedes_child_row_during_foreign_issue"}
+          dispatch = 'TestCapacityDispatchPostgres'
+          expected |= {dispatch} | {dispatch+'/'+name for name in (
+              'same_transaction_rollback_and_commit', 'exact_tick_dedup_and_bounded_wakes',
+              'two_owners_and_original_realm', 'prestart_expiry_and_fence',
+              'started_expiry_never_replays_or_releases', 'legacy_ambiguous_rows_excluded',
+              'actual_return_context_failure_and_typed_status',
+              'unacknowledged_return_holds_concurrent_tick_and_claim',
+              'release_authorization_revoked_after_actual_first_ack_holds',
+              'late_commit_acknowledgment_retains_actual_return',
+              'new_binding_wake_preserves_original_pins', 'exact_original_pins_and_no_native_grants')}
+          expected |= {dispatch+'/actual_return_context_failure_and_typed_status/'+name for name in (
+              'succeeded', 'failed', 'unknown', 'cancelled-context',
+              'absolute-deadline-without-err', 'opaque-original-error', 'independent-go-return-clock')}
+          auth = 'TestCapacityDispatchAuthorizationPostgres'
+          expected |= {auth} | {auth+'/'+name for name in (
+              'actual_operator_binding_same_http_kernel', 'caller_metadata_cannot_choose_principal',
+              'current_rbac_revocation_before_start', 'revoked_expired_and_rotated_current_principal',
+              'changed_original_binding_and_workflow_refuse', 'fixed_graph_refuses_retries_and_foreach',
+              'paused_catalog_and_disabled_binding_hold', 'original_cause_and_private_error_format')}
+          expected |= {auth+'/revoked_expired_and_rotated_current_principal/'+name for name in ('absent','revoked','expired','rotated')}
+          expected |= {auth+'/changed_original_binding_and_workflow_refuse/'+name for name in ('binding','workflow')}
+          expected |= {auth+'/fixed_graph_refuses_retries_and_foreach/'+name for name in ('retry','foreach')}
+          original_dispatch = 'TestCapacityDispatchOriginalTransportPostgres'
+          expected |= {original_dispatch} | {original_dispatch+'/'+name for name in (
+              'redirect_307','redirect_308','byte_cap','read_cause','close_cause','child_deadline')}
+          scheduler = 'TestCapacityDispatchSchedulerPostgres'
+          expected |= {scheduler} | {scheduler+'/'+name for name in (
+              'original_cron_tick_queued_without_broker', 'default_off_binding_never_legacy_fallback',
+              'private_owner_absent_binding_never_legacy_fallback',
+              'paused_policy_never_legacy_fallback',
+              'generic_cleaner_cannot_release_started_dispatch',
+              'owned_service_prestart_resume_actual_failed_return',
+              'started_expiry_new_tick_hold', 'actual_child_failstop',
+              'removed_binding_never_legacy_fallback', 'initially_absent_binding_never_legacy_fallback',
+              'unbound_normalized_capacity_graph_never_legacy_fallback',
+              'tombstoned_or_purged_binding_never_legacy_fallback',
+              'private_owner_absent_removed_binding_never_legacy_fallback',
+              'unrelated_legacy_cron_retains_original_dispatch')}
+          expected |= {scheduler+'/removed_binding_never_legacy_fallback/'+name for name in ('process_off','absent_inventory','denied_rbac')}
+          expected |= {scheduler+'/unbound_normalized_capacity_graph_never_legacy_fallback/'+name for name in ('operation_normalized','capability_fallback')}
+          expected |= {scheduler+'/tombstoned_or_purged_binding_never_legacy_fallback/'+name for name in ('tombstoned_without_binding','purged_policy')}
+          expected |= {scheduler+'/actual_child_failstop/'+name for name in ('before_started','after_started_before_invoke')}
+          packages = {'github.com/dakasa-yggdrasil/yggdrasil-core/'+name for name in (
+              'repository','controllers/message','controllers/httpapi','addons')}
+          completed = {event.get('Package') for event in events if event.get('Action')=='pass' and not event.get('Test')}
+          if packages-completed:
+              raise SystemExit('Capacity packages did not complete: '+str(sorted(packages-completed)))
           passed = {event.get("Test") for event in events if event.get("Action") == "pass"}
           skipped = {event.get("Test") for event in events if event.get("Action") == "skip"}
           if expected - passed or skipped:

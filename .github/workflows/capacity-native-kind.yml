@@ -207,7 +207,7 @@ jobs:
           import json
           events=[json.loads(line) for line in open('native-core-results.json') if line.strip()]
           required='TestCapacityNativeKinDHTTP'
-          for case in [required,required+'/complete_baseline_controller_retirement',required+'/mixed_schema_one_frozen_bootstrap',required+'/installed_guard_refusal_before_authority',required+'/installed_guard_refusal_during_redemption']:
+          for case in [required,required+'/complete_baseline_controller_retirement',required+'/mixed_schema_one_frozen_bootstrap',required+'/installed_guard_refusal_before_authority',required+'/installed_guard_refusal_during_redemption',required+'/durable_scheduled_dispatch_original_native_executor']:
               if not any(e.get('Test')==case and e.get('Action')=='pass' for e in events): raise SystemExit('actual protected native Core case missing or failed: '+case)
           if any(e.get('Test')==required and e.get('Action') in ['skip','fail'] for e in events): raise SystemExit('actual protected native Core case skipped or failed')
           PY

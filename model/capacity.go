@@ -34,6 +34,15 @@ type CapacityPolicySpec struct {
 	HPAExecutionBinding     *CapacityHPAExecutionBinding     `json:"hpa_execution_binding,omitempty"`
 	VMNodeMembershipBinding *CapacityVMNodeMembershipBinding `json:"vm_node_membership_binding,omitempty"`
 	BusinessCreationBinding *CapacityBusinessCreationBinding `json:"business_creation_binding,omitempty"`
+	ControllerBinding       *CapacityControllerBinding       `json:"controller_binding,omitempty"`
+}
+
+// Optional operator delegation to the existing protected pressure workflow.
+// A schedule/alert carries demand only; it cannot select an actor or proof.
+type CapacityControllerBinding struct {
+	Mode                 string `json:"mode"`
+	MachinePrincipalID   string `json:"machine_principal_id"`
+	DispatchLeaseSeconds int    `json:"dispatch_lease_seconds"`
 }
 
 // Optional original business reader. Only the operator policy selects its

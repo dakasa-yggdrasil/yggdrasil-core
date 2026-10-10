@@ -49,3 +49,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0041](0041-reobserve-installed-birth-guards-before-native-hpa-authority.md) | Reobserve installed birth guards before native HPA authority | Proposed | 2026-10-09 | yggdrasil-core / native HPA lifetime executor |
 | [0042](0042-join-native-vm-lifetimes-to-fixed-kubernetes-membership.md) | Join native VM lifetimes to fixed Kubernetes membership | Proposed | 2026-10-10 | yggdrasil-core / protected native VM-to-Node observation |
 | [0043](0043-observe-original-business-creation-canaries.md) | Observe original business creation canaries through fixed readers | Proposed | 2026-10-10 | yggdrasil-core / original business canary observations |
+| [0044](0044-durable-pre-start-capacity-dispatch.md) | Admit capacity schedules through durable pre-start ownership | Proposed | 2026-10-10 | yggdrasil-core / protected reserved Pod capacity dispatch |

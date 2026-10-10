@@ -41,12 +41,14 @@ func TestCapacityNativeKinDHTTP(t *testing.T) {
 		name  string
 		mixed bool
 		drift string
-	}{{"complete_baseline_controller_retirement", false, ""}, {"mixed_schema_one_frozen_bootstrap", true, ""}, {"installed_guard_refusal_before_authority", false, "before"}, {"installed_guard_refusal_during_redemption", false, "during"}} {
-		t.Run(scenario.name, func(t *testing.T) { qualifyCapacityNativeKinDHTTP(t, scenario.mixed, scenario.drift) })
+	}{{"complete_baseline_controller_retirement", false, ""}, {"mixed_schema_one_frozen_bootstrap", true, ""}, {"installed_guard_refusal_before_authority", false, "before"}, {"installed_guard_refusal_during_redemption", false, "during"}, {"durable_scheduled_dispatch_original_native_executor", false, ""}} {
+		t.Run(scenario.name, func(t *testing.T) {
+			qualifyCapacityNativeKinDHTTP(t, scenario.mixed, scenario.drift, scenario.name == "durable_scheduled_dispatch_original_native_executor")
+		})
 	}
 }
 
-func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string) {
+func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, scheduled bool) {
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
 	dsn, image, digest, adapterBinary := os.Getenv("DB_URL"), os.Getenv("NATIVE_FIXTURE_IMAGE"), os.Getenv("NATIVE_FIXTURE_DIGEST"), os.Getenv("CAPACITY_KUBERNETES_MAIN_BINARY")
@@ -178,7 +180,8 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string) {
 	t.Setenv(capacityMutationPrincipalsEnv, string(principal))
 	eventPrincipal, _ := json.Marshal([]eventPublisherPrincipalConfig{{PrincipalID: "native-events", Status: "active", ExpiresAt: time.Now().Add(time.Hour), RotationID: "ci-only", TokenSHA256: fmt.Sprintf("%x", sha256.Sum256([]byte(eventToken))), AllowedEvents: []eventPublisherEventRef{{Provider: "kubernetes", InstanceID: nativeInstanceID.String(), EventType: "kubernetes.object.ensured"}, {Provider: "kubernetes", InstanceID: nativeInstanceID.String(), EventType: "kubernetes.object.destroyed"}}}})
 	t.Setenv(eventPublisherPrincipalsEnv, string(eventPrincipal))
-	coreHandler, err := New("native-source-ci", db, conn, zap.NewNop())
+	var dispatchService *CapacityDispatchService
+	coreHandler, err := New("native-source-ci", db, conn, zap.NewNop(), WithCapacityDispatchServiceReceiver(func(service *CapacityDispatchService) { dispatchService = service }))
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -338,7 +341,15 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string) {
 	p := model.CapacityPolicySpec{Environment: "production", Domain: "native-core", Dimension: capacity.ReservedPodEnvelopeUnit, TargetIdentity: "fixture/native-core", Owner: owner, Workflow: model.ManifestSelector{Namespace: realm, Name: "execute"}, Currency: "USD", Floor: 2, Ceiling: 4, Step: 1, MaxEvidenceAgeSeconds: 180, MinSamples: 3, MaxSampleGapSeconds: 30, DownHoldSeconds: 1, LeaseSeconds: 120, ExecutionEnabled: true, Profiles: []model.CapacityProfile{{Name: "reserved", Provider: "kubernetes", Region: "fixture-only", MinUnits: 2, MaxUnits: 4, QuoteValidUntil: now.Add(time.Hour), ValidationValidUntil: now.Add(time.Hour), ValidationRef: "fixture:source-qualification-only"}}, Signals: []model.CapacitySignalRule{{Name: "admission_pressure", SourceIdentity: "fixture/prom/native", Unit: "ratio", UpAbove: .8, DownBelow: .3}}, AssessmentBinding: &model.CapacityBoundAssessmentBinding{Snapshot: model.CapacityHPAMinimumBinding{Mode: capacity.HPAMinimumSnapshotMode, Unit: capacity.ReservedPodEnvelopeUnit, Adapter: nativeBinding, Namespace: realm, HPAName: "api", HPAUID: hpaUID, WorkloadName: workloadName, WorkloadUID: workloadUID, Owner: owner, Profile: "reserved", ProtectedFloor: 2, MaximumReplicas: 4}, Signals: []model.CapacityMetricSignalBinding{{Name: "admission_pressure", Adapter: metricBinding, BindingName: "admission", BindingSHA256: metric.BindingSHA256}}}, HPAExecutionBinding: &model.CapacityHPAExecutionBinding{AdapterPrincipalID: "native-adapter", Mode: capacity.HPALifetimeExecutionMode, PodTerminationBinding: "api-native", BirthGuardBinding: "api-birth", BirthGuardSHA256: birth.BindingSHA256, ContainerName: "api", ImageDigest: digest, Lanes: []string{"listener", "requests", "signal", "workers"}, ProjectionDirectory: "/native", AdmissionMode: "process_v2", AdmissionPort: 8080, AdmissionWorkflow: model.ManifestSelector{Namespace: realm, Name: "admit"}}}
 	create("rbac", "native-rbac", map[string]any{"roles": []any{map[string]any{"name": "native", "rules": []any{map[string]any{"effect": "allow", "resources": []string{"workflow:" + realm + ":execute", "workflow:" + realm + ":admit"}, "actions": []string{"run"}}}}}, "bindings": []any{map[string]any{"name": "ci-only", "subjects": []any{map[string]string{"type": "service", "id": "native-ci-runner"}}, "roles": []string{"native"}}}})
 	noNativeInputs := false
-	create("workflow", "execute", model.WorkflowManifestSpec{Trigger: model.WorkflowTriggerSpec{Mode: "manual"}, Authorization: &model.WorkflowAuthorizationSpec{RBAC: model.ManifestSelector{Namespace: realm, Name: "native-rbac"}}, InputSchema: model.WorkflowInputSchemaSpec{Properties: map[string]model.IntegrationSchemaProperty{}, AdditionalProperties: &noNativeInputs}, Steps: []model.WorkflowStepSpec{{ID: "native", TimeoutSeconds: 180, Retry: model.WorkflowRetrySpec{MaxAttempts: 1}, Use: model.WorkflowStepUseSpec{Kind: "yggdrasil", Operation: "capacity.execute_bound"}, With: map[string]any{"policy": map[string]string{"namespace": realm, "name": "native-policy"}}}}})
+	pressureSpec := model.WorkflowManifestSpec{Trigger: model.WorkflowTriggerSpec{Mode: "manual"}, Authorization: &model.WorkflowAuthorizationSpec{RBAC: model.ManifestSelector{Namespace: realm, Name: "native-rbac"}}, InputSchema: model.WorkflowInputSchemaSpec{Properties: map[string]model.IntegrationSchemaProperty{}, AdditionalProperties: &noNativeInputs}, Steps: []model.WorkflowStepSpec{{ID: "native", TimeoutSeconds: 180, Retry: model.WorkflowRetrySpec{MaxAttempts: 1}, Use: model.WorkflowStepUseSpec{Kind: "yggdrasil", Operation: "capacity.execute_bound"}, With: map[string]any{"policy": map[string]string{"namespace": realm, "name": "native-policy"}}}}}
+	if scheduled {
+		t.Setenv(CapacityDispatchEnabledEnv, "true")
+		p.ControllerBinding = &model.CapacityControllerBinding{Mode: repository.CapacityDispatchProtocol, MachinePrincipalID: "native-ci-runner", DispatchLeaseSeconds: 90}
+		enabled := true
+		pressureSpec.Trigger = model.WorkflowTriggerSpec{Mode: "schedule", Enabled: &enabled, Schedule: &model.WorkflowScheduleTriggerSpec{CronExpression: "* * * * *", Timezone: "UTC"}}
+		pressureSpec.InputSchema.Properties = map[string]model.IntegrationSchemaProperty{"policy": {Type: "object"}}
+	}
+	pressureWorkflow := create("workflow", "execute", pressureSpec)
 	create("workflow", "admit", model.WorkflowManifestSpec{Trigger: model.WorkflowTriggerSpec{Mode: "manual"}, Authorization: &model.WorkflowAuthorizationSpec{RBAC: model.ManifestSelector{Namespace: realm, Name: "native-rbac"}}, InputSchema: model.WorkflowInputSchemaSpec{Properties: map[string]model.IntegrationSchemaProperty{}, AdditionalProperties: &noNativeInputs}, Steps: []model.WorkflowStepSpec{{ID: "admission", TimeoutSeconds: 180, Retry: model.WorkflowRetrySpec{MaxAttempts: 1}, Use: model.WorkflowStepUseSpec{Kind: "yggdrasil", Operation: "capacity.admit_bound"}, With: map[string]any{"policy": map[string]string{"namespace": realm, "name": "native-policy"}}}}})
 	policy := create("capacity_policy", "native-policy", p)
 	if err := manifest.ValidateCapacityPolicySpec(p); err != nil {
@@ -409,7 +420,46 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string) {
 	if code, _ := post("", request); code != 401 {
 		t.Fatal("native executor bypassed actor")
 	}
+	var scheduledTick int
 	run := func(workflow string, succeed bool) {
+		if scheduled && workflow == "execute" {
+			if dispatchService == nil {
+				t.Fatal("same owning dispatch service absent")
+			}
+			scheduledTick++
+			tick := now.Truncate(time.Minute).Add(time.Duration(scheduledTick-20) * time.Minute)
+			prepared, err := dispatchService.PrepareScheduledTick(ctx, pressureWorkflow.ID, tick)
+			if err != nil || prepared == nil {
+				t.Fatal("current principal/native scheduled preparation refused", err)
+			}
+			tx, err := db.BeginTx(ctx, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer tx.Rollback()
+			won, err := repository.UpsertWorkflowScheduleState(ctx, tx, pressureWorkflow.ID.String(), tick, tick.Add(time.Minute))
+			if err != nil || !won {
+				t.Fatal("original scheduled tick not admitted", err)
+			}
+			job, _, err := prepared.Enqueue(ctx, tx)
+			if err != nil || tx.Commit() != nil {
+				t.Fatal("same native tick/run/job transaction failed", err)
+			}
+			ran, err := dispatchService.RunOne(ctx, realm, p.Environment)
+			if err != nil || !ran {
+				t.Fatal("actual original scheduled native invocation unresolved", err)
+			}
+			record, err := repository.GetWorkflowRun(ctx, db, job.RunID)
+			var acknowledged bool
+			if err != nil || db.QueryRowContext(ctx, `SELECT state='returned' AND finalization_ack_at IS NOT NULL FROM public.capacity_dispatch_jobs WHERE id=$1`, job.JobID).Scan(&acknowledged) != nil || !acknowledged || (record.Status == "succeeded") != succeed {
+				t.Fatal("actual source return/ack/native workflow outcome missing", err)
+			}
+			if record.Result == nil || record.Result.Workflow.ID != pressureWorkflow.ID || record.Metadata[repository.WorkflowRunCreatorMachinePrincipalMetadataKey] != "native-ci-runner" {
+				t.Fatal("scheduled native result lost original authorization/source")
+			}
+			t.Log("same private admission/worker reached original native HPA/SDK executor; scheduler cron covered separately in native PG, not whole Core main startup")
+			return
+		}
 		request["workflow"] = map[string]string{"namespace": realm, "name": workflow}
 		code, out := post(workflowToken, request)
 		if code != 202 {

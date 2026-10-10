@@ -60,7 +60,10 @@ func resolveCapacityObservationAdapterWithResolver(ctx context.Context, conn *am
 		}
 	}
 	im, is, tm, ts, err := resolvePrivate(ctx, conn, db, model.ManifestSelector{ManifestID: b.IntegrationInstanceID})
-	if err != nil || im.Kind != "integration_instance" || im.ID.String() != b.IntegrationInstanceID || !im.Metadata.Active || im.Checksum != b.InstanceChecksum || tm.Kind != "integration_type" || tm.ID.String() != b.IntegrationTypeID || !tm.Metadata.Active || tm.Checksum != b.TypeChecksum || manifest.ValidateIntegrationTypeSpec(ts) != nil {
+	if err != nil {
+		return out, capacityDispatchCause(ctx, err)
+	}
+	if im.Kind != "integration_instance" || im.ID.String() != b.IntegrationInstanceID || !im.Metadata.Active || im.Checksum != b.InstanceChecksum || tm.Kind != "integration_type" || tm.ID.String() != b.IntegrationTypeID || !tm.Metadata.Active || tm.Checksum != b.TypeChecksum || manifest.ValidateIntegrationTypeSpec(ts) != nil {
 		return out, errCapacityBoundAssessment
 	}
 	return capacityResolvedObservationAdapter{im, is, tm, ts}, nil
@@ -68,13 +71,19 @@ func resolveCapacityObservationAdapterWithResolver(ctx context.Context, conn *am
 
 func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection, db *sql.DB, workflowRef model.ManifestReference, result model.WorkflowRunStepResult, input map[string]any) model.WorkflowRunStepResult {
 	result.Attempts = 1
-	fail := func() model.WorkflowRunStepResult {
+	fail := func(causes ...error) model.WorkflowRunStepResult {
+		for _, cause := range causes {
+			capacityDispatchCause(ctx, cause)
+		}
 		result.Error = errCapacityBoundAssessment.Error()
 		result.FinishedAt = time.Now().UTC()
 		return result
 	}
 	ctx, cancel := context.WithTimeout(ctx, 90*time.Second)
 	defer cancel()
+	if capacityDispatchFence(ctx) != nil {
+		return fail()
+	}
 	var parsed struct {
 		Policy model.ManifestSelector `json:"policy"`
 	}
@@ -83,7 +92,7 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 	}
 	policy, err := repository.ResolveManifest(ctx, db, "capacity_policy", parsed.Policy.Namespace, parsed.Policy.Name, nil, true)
 	if err != nil {
-		return fail()
+		return fail(err)
 	}
 	p, err := manifest.ParseCapacityPolicySpec(policy.Spec)
 	admissionOnly := result.Operation == "capacity.admit_bound"
@@ -104,6 +113,9 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 	}
 	resolved := map[model.CapacityObservationAdapterBinding]capacityResolvedObservationAdapter{}
 	read := func(binding model.CapacityObservationAdapterBinding, op string, fixed map[string]any, out any) (string, error) {
+		if err := capacityDispatchFence(ctx); err != nil {
+			return "", err
+		}
 		a, ok := resolved[binding]
 		if !ok {
 			required := []string{op}
@@ -116,12 +128,29 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 			}
 			resolved[binding] = a
 		}
+		if err := capacityDispatchFence(ctx); err != nil {
+			return "", err
+		}
 		if !capacityBoundCatalogOperation(a.typeSpec, op) {
 			return "", errCapacityBoundAssessment
 		}
-		r, e := executeIntegrationThroughResolvedWithPolicy(ctx, conn, model.ExecuteIntegrationRequest{Operation: op, Capability: op, Input: fixed}, a.instance, a.instanceSpec, a.typ, a.typeSpec, 35*time.Second, integrationExecutionPolicy{detailFreeErrors: true, safeError: errCapacityBoundAssessment, requireExplicitResponse: true})
-		if e != nil || capacity.DecodeNativeCapacity(r.Output, out) != nil {
-			return "", errCapacityBoundAssessment
+		native, e := capacityDispatchNativePolicy(ctx)
+		if e != nil {
+			return "", e
+		}
+		// The resolved execute entry point bypasses AdapterTransportClient.Call.
+		// Carry the original private native policy explicitly for every read and
+		// mutation on this callback; absent private dispatch keeps legacy behavior.
+		r, e := executeIntegrationThroughResolvedWithPolicy(ctx, conn, model.ExecuteIntegrationRequest{Operation: op, Capability: op, Input: fixed}, a.instance, a.instanceSpec, a.typ, a.typeSpec, 35*time.Second, integrationExecutionPolicy{detailFreeErrors: true, safeError: errCapacityBoundAssessment, requireExplicitResponse: true, nativeHTTP: native})
+		e = capacityDispatchCause(ctx, e)
+		if err := capacityDispatchFence(ctx); err != nil {
+			return "", err
+		}
+		if e != nil {
+			return "", e
+		}
+		if e = capacity.DecodeNativeCapacity(r.Output, out); e != nil {
+			return "", capacityDispatchCause(ctx, e)
 		}
 		return r.Status, nil
 	}
@@ -133,19 +162,19 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 		var hpa model.CapacityHPAEnvelopeResponse
 		status, err := read(b.Snapshot.Adapter, capacity.ObserveHPAEnvelope, map[string]any{"namespace": b.Snapshot.Namespace, "hpa_name": b.Snapshot.HPAName}, &hpa)
 		if err != nil || status != "observed" {
-			return fail()
+			return fail(err)
 		}
 		executor, _ := ctx.Value(capacityInvocationKey{}).(string)
 		store := repository.CapacityStore{DB: db, ExecutionEnabled: true, AdmissionOnly: true, WorkflowID: wf.ID, ExecutorID: executor}
 		intent, err := runCapacityBoundExecution(ctx, store, policy, p, model.CapacityIntent{}, model.CapacityAssessment{}, hpa, read)
 		if err != nil {
-			return fail()
+			return fail(err)
 		}
 		intent.LeaseOwner, intent.LeaseExecutorID = "", ""
 		var membership model.AdapterCapacityPodAdmissionCandidatesResponse
 		status, err = read(b.Snapshot.Adapter, capacity.ObserveNativePodAdmissionCandidates, map[string]any{"binding_name": p.HPAExecutionBinding.PodTerminationBinding}, &membership)
 		if err != nil || status != "observed" || capacity.NativeAdmissionCandidates(p, membership, time.Now().UTC()) != nil {
-			return fail()
+			return fail(err)
 		}
 		result.Metadata = map[string]any{"mode": "native_candidate_admission_v2", "intent": intent, "unqualified_baseline_lifetimes": membership.Unqualified, "pressure_execution_enabled": false, "useful_capacity_known": false, "warm_resources_known": false}
 		result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
@@ -156,32 +185,35 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 		var metric model.CapacityMetricRangeObservation
 		status, e := read(binding.Adapter, capacity.ObserveMetricRange, map[string]any{"binding": binding.BindingName}, &metric)
 		if e != nil || status != "succeeded" {
-			return fail()
+			return fail(e)
 		}
 		evidence, e := capacity.BoundMetricEvidence(p, binding, metric, time.Now().UTC())
 		if e != nil {
-			return fail()
+			return fail(e)
 		}
 		assessment.Evidence = append(assessment.Evidence, evidence)
 	}
 	var hpa model.CapacityHPAEnvelopeResponse
 	status, err := read(b.Snapshot.Adapter, capacity.ObserveHPAEnvelope, map[string]any{"namespace": b.Snapshot.Namespace, "hpa_name": b.Snapshot.HPAName}, &hpa)
 	if err != nil || status != "observed" {
-		return fail()
+		return fail(err)
 	}
 	assessment.Snapshot, err = capacity.BoundHPASnapshot(p, hpa, time.Now().UTC())
 	if err != nil {
-		return fail()
+		return fail(err)
 	}
 	// A source may become stale while later reads run. The policy's planner
 	// checks the complete assembled window at the moment of assessment.
 	receipt := model.CapacityBoundAssessmentReceipt{Mode: b.Snapshot.Mode, Unit: b.Snapshot.Unit, Assessment: assessment}
 	if result.Operation == "capacity.assess_bound" || result.Operation == "capacity.execute_bound" {
+		if capacityDispatchFence(ctx) != nil {
+			return fail()
+		}
 		executor, _ := ctx.Value(capacityInvocationKey{}).(string)
 		store := repository.CapacityStore{DB: db, ExecutionEnabled: result.Operation == "capacity.execute_bound" && os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true", WorkflowID: wf.ID, ExecutorID: executor}
 		intent, e := store.Assess(ctx, policy, assessment)
-		if e != nil {
-			return fail()
+		if e != nil || capacityDispatchFence(ctx) != nil {
+			return fail(e)
 		}
 		if result.Operation == "capacity.execute_bound" {
 			if p.HPAExecutionBinding == nil || !p.ExecutionEnabled || !store.ExecutionEnabled {
@@ -189,7 +221,7 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 			}
 			intent, e = runCapacityBoundExecution(ctx, store, policy, p, intent, assessment, hpa, read)
 			if e != nil {
-				return fail()
+				return fail(e)
 			}
 			receipt.ExecutionEnabled = true
 		}
@@ -198,6 +230,9 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 	}
 	raw, err := json.Marshal(receipt)
 	if err != nil || json.Unmarshal(raw, &result.Metadata) != nil {
+		return fail()
+	}
+	if capacityDispatchFence(ctx) != nil {
 		return fail()
 	}
 	result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
