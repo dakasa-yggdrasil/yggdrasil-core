@@ -81,6 +81,28 @@ adversary; an HPA minimum change alone does not assert a replica decrement. Birt
 protection is fixture source configuration here; the separately qualified
 platform admission webhook and useful all-function N-1 proofs remain distinct.
 
+The selected collector source must separately qualify its actual request return,
+body Close and original context/absolute deadline before the existing integration
+fixtures are compiled. Both capacity workflows run one source-fixed Go lifecycle
+gate: its actual process Start/PID, Wait and stdout/stderr drain, strict root and
+ten-case GoJSON roster, and one package PASS are all required. A nominal PASS
+transcript cannot replace the original zero exit and live deadline. The helper
+owns only a fresh Linux process group and retains at most 4 MiB combined raw
+output on every outcome; overflow is retained as incomplete and refused.
+
+Raw files and the observation report are never sufficient on their own. Actual
+write/Close returns and the final original context/absolute deadline are checked
+before the public gate exit. A late final report stays pre-publication observation
+data, with a nonzero exit and a fixed failure category; it is not rewritten into
+success. The two existing jobs keep their original 15/40-minute bounds, PG's
+5-minute command and Kind's 24-minute command and four scenarios.
+
+This is collector lifecycle qualification plus the existing successful-source
+integration. The exported metric fixture still fails its child test on source
+error; this increment adds no end-to-end Core late-Close error corpus and does
+not persist a successful HOLD from a failed observation. Transport failure is
+neither missing quality data nor zero nor provider/capacity authority.
+
 The strict PostgreSQL CI gate compiles reviewed metric/HPA source checkouts and
 executes actual native source functions and decoders through protected Core
 transport. It checks reserved-minimum semantics, diagnostic holds, caller-path
