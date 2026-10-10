@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-10T10:05:24-03:00",
+  "generated_at": "2026-10-10T17:51:19-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 729,
+    ".go": 733,
     ".json": 145,
     ".py": 1,
     ".sql": 59,
@@ -11,7 +11,7 @@
     ".yml": 24
   },
   "provenance": {
-    "commit": "94e816a7a5361baf6dfca03aac6565b1f9db7e50",
+    "commit": "9d91c80de3a77349f90013e250b4c1829af64065",
     "dirty": true,
     "files": [
       {
@@ -70,12 +70,12 @@
     {
       "path": "model",
       "files": 65,
-      "kb": 268
+      "kb": 275
     },
     {
       "path": "controllers/message",
-      "files": 60,
-      "kb": 619
+      "files": 63,
+      "kb": 701
     },
     {
       "path": "manifest",
@@ -109,8 +109,8 @@
     },
     {
       "path": "internal/capacity",
-      "files": 15,
-      "kb": 108
+      "files": 16,
+      "kb": 127
     },
     {
       "path": "internal/externalidentity",
@@ -308,7 +308,7 @@
     "config_files": 8,
     "k8s_manifests": 8
   },
-  "verified_at_commit": "94e816a7a5361baf6dfca03aac6565b1f9db7e50",
-  "verified_diff_sha256": "b787cae443dfd1b1be589a1e63a702acd826d9f1370653bdd30d3cfc95efd530",
+  "verified_at_commit": "9d91c80de3a77349f90013e250b4c1829af64065",
+  "verified_diff_sha256": "dfd3a5d198a7a9d19fb79c65fd8c47c50e86bb658b51dd9d6056701ce7e16956",
   "reconciler_schema": 1
 }
