@@ -2,9 +2,9 @@
 
 Records the source commit reconciled with the changed runtime contracts.
 
-verified_at_commit: d6d1803e2bf41941b5cfa569ff370539519b2978
-verified_diff_sha256: 6cc8764d79de3ffa4ea61d5651be970326a5bc23041194aac14336d412b8045f
+verified_at_commit: cd7f62d15fb10516b10cb44346350dd495834bd4
+verified_diff_sha256: db433ec3d6676a4e10f8e605eefed49e413baefd6f77188d181be2d663a4cd5d
 reconciler_schema: 1
-verified_at: 2026-10-08
+verified_at: 2026-10-10
 by: Codex
-note: Reviewed fixed exact-revision Prometheus and native HPA source bindings, all mandatory closed evidence mappings, shadow-only reserved pod minimum semantics, VM unit separation and catalog validation before private hydration. Proposed ADR0038 and feature docs describe blocked caller paths and remaining useful-capacity/executor/platform qualifications. Actual reviewed native source fixtures and PostgreSQL16/race execute only in CI; no provider or production activation occurred.
+note: Whole successor22 distinct review closes real native transport propagation, missing-delegation cron fallback and original private source-cause loss. Final sector composes prior reviewed lint3, canonical/health/native preparation fixture2, current original NotifySource7e64 and durable prestart22 into Sourcecd7. Tick/run/job commit together; possible-start precedes invocation, returned/AckNULL retains the dimension, unknown outcomes do not replay. All168 PGexpected PASS results/4packages and5Kind scenes/budgets retained. One final source plan/generated metadata pair follows the complete sector. Owning remote CI remains required; earlier positive business refusal exact cause is not declared fixed. Source diagnostics do not establish guest/warm/useful-capacity/route/full-drain/quiescence, Heimdall wiring or all22 production readiness. No localtest/build/vet/nativeSQL/helper run or deployment.

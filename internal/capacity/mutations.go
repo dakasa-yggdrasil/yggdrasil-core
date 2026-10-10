@@ -77,7 +77,89 @@ func ValidateMutationBindings(p model.CapacityPolicySpec) error {
 		}
 		names[b.Name], targets[key] = true, true
 	}
+	return ValidateVMNodeMembershipBinding(p)
+}
+
+const ObserveNodeMembership = "observe_capacity_node_membership"
+
+func ValidateVMNodeMembershipBinding(p model.CapacityPolicySpec) error {
+	n := p.VMNodeMembershipBinding
+	if n == nil {
+		return nil
+	}
+	if p.AssessmentBinding != nil || p.HPAExecutionBinding != nil || !validObservationAdapter(n.Adapter) {
+		return fmt.Errorf("VM node source requires a separate exact native VM binding")
+	}
+	var b *model.CapacityMutationBinding
+	for i := range p.MutationBindings {
+		if p.MutationBindings[i].Name == n.MutationBindingName {
+			b = &p.MutationBindings[i]
+		}
+	}
+	t := n.Target
+	realm, err := uuid.Parse(t.RealmUID)
+	if b == nil || b.EnsureCapability != "ensure_server" || b.MaxSlots < 1 || b.MaxSlots > 64 || !regexp.MustCompile(`^[a-zA-Z0-9][a-zA-Z0-9_.:-]{0,127}$`).MatchString(t.BindingName) || err != nil || realm == uuid.Nil || realm.String() != t.RealmUID || t.Owner != p.Owner || !regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,61}[A-Za-z0-9])?$`).MatchString(t.Owner) || t.ProfileName != b.ProfileName || !regexp.MustCompile(`^[A-Za-z0-9](?:[A-Za-z0-9_.-]{0,61}[A-Za-z0-9])?$`).MatchString(t.ProfileName) || len(t.Slots) != b.MaxSlots || t.MaxLeaseAgeSeconds < 1 || t.MaxLeaseAgeSeconds > 60 || t.ProviderIDPrefix == "" || len(t.ProviderIDPrefix) > 128 || strings.TrimSpace(t.ProviderIDPrefix) != t.ProviderIDPrefix || strings.ContainsAny(t.ProviderIDPrefix, "\r\n\t ?#") {
+		return fmt.Errorf("fixed VM and node realms or slots differ")
+	}
+	seen := map[string]bool{}
+	for i, s := range t.Slots {
+		if s.Slot != i+1 || !regexp.MustCompile(`^[a-z0-9](?:[a-z0-9.-]{0,251}[a-z0-9])?$`).MatchString(s.NodeName) || seen[s.NodeName] {
+			return fmt.Errorf("bounded approved native node names required")
+		}
+		for _, label := range strings.Split(s.NodeName, ".") {
+			if !regexp.MustCompile(`^[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?$`).MatchString(label) {
+				return fmt.Errorf("canonical native Node DNS labels required")
+			}
+		}
+		seen[s.NodeName] = true
+	}
 	return nil
+}
+
+// Join only independently observed native tuples. No healthy transition proof
+// or useful count is constructed from Node Ready or the lease heartbeat.
+func JoinVMNodeMembership(p model.CapacityPolicySpec, inv model.CapacityVMFleetInventory, nodes model.CapacityNodeMembershipResponse, now time.Time) ([]model.CapacityVMNodeJoin, error) {
+	if ValidateVMNodeMembershipBinding(p) != nil || p.VMNodeMembershipBinding == nil {
+		return nil, fmt.Errorf("fixed native node binding unavailable")
+	}
+	n := p.VMNodeMembershipBinding
+	b, err := VMObservationBinding(p, n.MutationBindingName)
+	if err != nil {
+		return nil, err
+	}
+	proofs, err := VMInventoryProofs(p, b, inv, "", 0, now, "core-native-node-membership")
+	if err != nil || len(proofs) != len(inv.Members) || inv.FailedCreation != nil {
+		return nil, fmt.Errorf("ordinary complete VM membership required")
+	}
+	rawTarget, _ := json.Marshal(n.Target)
+	d := sha256.Sum256(rawTarget)
+	if nodes.Operation != ObserveNodeMembership || nodes.Status != "observed" || !nodes.Complete || nodes.BindingName != n.Target.BindingName || nodes.BindingSHA256 != hex.EncodeToString(d[:]) || nodes.RealmUID != n.Target.RealmUID || nodes.Owner != p.Owner || nodes.ProfileName != b.ProfileName || nodes.NativeNodeCount < len(nodes.Nodes) || nodes.NativeNodeCount > 64 || nodes.FirstListVersion == "" || nodes.LastListVersion == "" || !ValidDigest(nodes.FirstListSHA256) || !ValidDigest(nodes.LastListSHA256) || nodes.ObservationStartedAt.IsZero() || nodes.ObservationStartedAt.After(nodes.ObservedAt) || nodes.ObservedAt.After(now) || nodes.ObservedAt.Sub(nodes.ObservationStartedAt) > 60*time.Second || !Fresh(nodes.ObservationStartedAt, now, min(60, p.MaxEvidenceAgeSeconds)) || !Fresh(nodes.ObservedAt, now, min(60, p.MaxEvidenceAgeSeconds)) || nodes.AtomicSnapshot || nodes.BootstrapCompleted || nodes.WarmResources || nodes.UsefulCapacity || nodes.RoutingWithdrawn || nodes.BusinessDrain || nodes.PhysicalReleased || len(nodes.Nodes) != len(inv.Members) || len(nodes.Metadata) != 1 || nodes.Metadata["diagnostic_only"] != true {
+		return nil, fmt.Errorf("closed fresh native membership diagnostic required")
+	}
+	bySlot := map[int]model.CapacityVMFleetInventoryMember{}
+	for _, member := range inv.Members {
+		if member.Unresolved || member.Server.Status != "running" || member.Server.Labels["yggdrasil.io/owner"] != n.Target.Owner {
+			return nil, fmt.Errorf("original VM is not a known running lifetime")
+		}
+		bySlot[member.Slot] = member
+	}
+	seenUID, seenSlot, seenProvider := map[string]bool{}, map[int]bool{}, map[string]bool{}
+	joins := make([]model.CapacityVMNodeJoin, 0, len(nodes.Nodes))
+	lastSlot := 0
+	for _, node := range nodes.Nodes {
+		member, found := bySlot[node.Slot]
+		created, createdErr := time.Parse(time.RFC3339Nano, member.Server.CreatedAt)
+		id, uidErr := uuid.Parse(node.UID)
+		boot, bootErr := uuid.Parse(node.BootID)
+		lease, leaseErr := uuid.Parse(node.LeaseUID)
+		if !found || node.Slot <= lastSlot || createdErr != nil || node.Slot < 1 || node.Slot > len(n.Target.Slots) || node.Name != n.Target.Slots[node.Slot-1].NodeName || node.ProviderID != n.Target.ProviderIDPrefix+member.Server.ID || uidErr != nil || id == uuid.Nil || id.String() != node.UID || bootErr != nil || boot == uuid.Nil || boot.String() != node.BootID || leaseErr != nil || lease == uuid.Nil || lease.String() != node.LeaseUID || node.ResourceVersion == "" || node.CreatedAt.IsZero() || node.CreatedAt.Before(created) || node.CreatedAt.After(now) || !node.ReadyKnown || node.ReadyChangedAt.IsZero() || node.ReadyChangedAt.Before(node.CreatedAt) || node.ReadyChangedAt.After(now) || node.LeaseDurationSeconds < 1 || node.LeaseDurationSeconds > 300 || !now.Before(node.LeaseRenewedAt.Add(time.Duration(node.LeaseDurationSeconds)*time.Second)) || node.LeaseVersion == "" || node.LeaseHolder != node.Name || node.LeaseRenewedAt.IsZero() || node.LeaseRenewedAt.Before(node.CreatedAt) || node.LeaseRenewedAt.After(now) || node.LeaseRenewedAt.After(nodes.ObservedAt) || node.ReadyChangedAt.After(nodes.ObservedAt) || node.CreatedAt.After(nodes.ObservedAt) || now.Sub(node.LeaseRenewedAt) > time.Duration(n.Target.MaxLeaseAgeSeconds)*time.Second || seenUID[node.UID] || seenSlot[node.Slot] || seenProvider[node.ProviderID] {
+			return nil, fmt.Errorf("original VM and immutable native Node or Lease do not join")
+		}
+		lastSlot = node.Slot
+		seenUID[node.UID], seenSlot[node.Slot], seenProvider[node.ProviderID] = true, true, true
+		joins = append(joins, model.CapacityVMNodeJoin{Slot: member.Slot, ResourceID: member.Server.ID, ResourceCreatedAt: member.Server.CreatedAt, DesiredSpecSHA256: member.RequestSHA256, Node: node})
+	}
+	return joins, nil
 }
 
 type MutationPlan struct {

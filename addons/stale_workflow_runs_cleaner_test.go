@@ -32,6 +32,7 @@ func TestCleanupStaleWorkflowRuns_CancelsRowsBeyondTimeout(t *testing.T) {
 		    error = $2,
 		    updated_at = NOW()
 		WHERE status IN ('pending', 'running')
+		  AND NOT EXISTS (SELECT 1 FROM public.capacity_dispatch_jobs d WHERE d.run_id=workflow_runs.id)
 		  AND COALESCE(started_at, created_at) < NOW() - ($1::text || ' seconds')::interval
 	`)).
 		WithArgs("3600", "stale: addon stale_workflow_runs_cleaner (no heartbeat after 3600s)").

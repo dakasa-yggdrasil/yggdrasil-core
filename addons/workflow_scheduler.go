@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/httpapi"
 	messagecontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
@@ -34,6 +35,11 @@ func init() {
 // the workflow run pipeline can subscribe to. This keeps the scheduler
 // decoupled from the dispatch mechanics.
 func bootstrapWorkflowScheduler(ctx context.Context, app *runtime.ServiceApp) error {
+	if raw, ok := app.Resource(capacityDispatchServiceResource); ok {
+		if service, valid := raw.(*httpapi.CapacityDispatchService); valid {
+			ctx = withCapacitySchedulerService(ctx, service)
+		}
+	}
 	db, ok := Postgres(app)
 	if !ok {
 		return nil
@@ -264,7 +270,29 @@ func processScheduledWorkflow(
 	// pass observes a later nextFire). By skipping here — leaving lastFired
 	// untouched — the SAME tick re-fires on the next pass once the broker is
 	// back. nil conn = boot-degraded; closed conn = runtime drop; both skip.
-	if !brokerLive(conn) {
+	var prepared *httpapi.CapacityDispatchPrepared
+	if service := capacitySchedulerService(ctx); service != nil {
+		id, parseErr := uuid.Parse(manifestID)
+		if parseErr != nil {
+			return parseErr
+		}
+		prepared, err = service.PrepareScheduledTick(ctx, id, nextFire)
+		if err != nil {
+			// An opted-in but disabled/refused binding NEVER falls back to
+			// the legacy goroutine or consumes its original due tick.
+			return err
+		}
+
+	} else {
+		requiresOwner, ownerErr := capacityScheduleRequiresOwner(ctx, db, manifestID)
+		if ownerErr != nil {
+			return ownerErr
+		}
+		if requiresOwner {
+			return errors.New("protected capacity schedule owner unavailable")
+		}
+	}
+	if prepared == nil && !brokerLive(conn) {
 		if logger != nil {
 			logger.Warn("workflow_scheduler: broker unavailable — skipping tick, schedule_state left for replay",
 				zap.String("manifest_id", manifestID),
@@ -289,6 +317,11 @@ func processScheduledWorkflow(
 	if !won {
 		// Another worker already fired this tick
 		return nil
+	}
+	if prepared != nil {
+		if _, _, err := prepared.Enqueue(ctx, tx); err != nil {
+			return err
+		}
 	}
 
 	// Emit event that the workflow run machinery can subscribe to.
@@ -332,6 +365,11 @@ func processScheduledWorkflow(
 
 	if err := tx.Commit(); err != nil {
 		return err
+	}
+	if prepared != nil {
+		// Original tick, pending workflow run and new protocol job committed
+		// together. Only the owned pre-start worker may invoke this run.
+		return nil
 	}
 
 	// Dispatch the workflow run asynchronously after the schedule_state

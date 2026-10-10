@@ -17,6 +17,9 @@ type capacityBoundPrivateCall func(model.CapacityObservationAdapterBinding, stri
 // process lifetimes are separate: controllers select victims; Core never issues
 // Pod DELETE. Hold invocations still reconcile every immutable lifetime origin.
 func runCapacityBoundExecution(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, intent model.CapacityIntent, assessment model.CapacityAssessment, hpa model.CapacityHPAEnvelopeResponse, call capacityBoundPrivateCall) (model.CapacityIntent, error) {
+	if err := capacityDispatchFence(ctx); err != nil {
+		return intent, err
+	}
 	if p.HPAExecutionBinding == nil || p.HPAExecutionBinding.Mode != capacity.HPALifetimeExecutionMode {
 		return intent, errCapacityBoundAssessment
 	}
@@ -34,11 +37,17 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 	}
 	binding := p.AssessmentBinding.Snapshot.Adapter
 	read := func(operation string, request any, out any) error {
+		if err := capacityDispatchFence(ctx); err != nil {
+			return err
+		}
 		input, e := boundPrivateMap(request)
 		if e != nil {
 			return e
 		}
 		status, e := call(binding, operation, input, out)
+		if err := capacityDispatchFence(ctx); err != nil {
+			return err
+		}
 		if e != nil || status != "observed" {
 			return errCapacityBoundAssessment
 		}
@@ -170,6 +179,9 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 	// unredeemed. Each subsequent request uses new actual native reads.
 	execute := func(operation, subject string, request any, refresh func(any) (any, error), after func() (any, error)) error {
 		for sequence := 0; sequence < 4; sequence++ {
+			if err := capacityDispatchFence(ctx); err != nil {
+				return err
+			}
 			fresh, e := refresh(request)
 			if e != nil {
 				return e
@@ -187,9 +199,15 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 			if e != nil {
 				return e
 			}
+			if err := capacityDispatchFence(ctx); err != nil {
+				return err
+			}
 			input["authority_token"] = token
 			var discarded map[string]any
 			_, _ = call(binding, operation, input, &discarded)
+			if err := capacityDispatchFence(ctx); err != nil {
+				return err
+			}
 			refused, e := store.RevokeUnredeemedNativeCommand(ctx, policy, intent, command.CommandID)
 			if e != nil {
 				return e
@@ -497,10 +515,20 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 			return intent, err
 		}
 	}
+	if err = capacityDispatchFence(ctx); err != nil {
+		return intent, err
+	}
 	if err = store.CompleteNativeReservationDecision(ctx, policy, intent); err != nil {
 		return intent, err
 	}
-	return store.Observe(ctx, policy)
+	if err = capacityDispatchFence(ctx); err != nil {
+		return intent, err
+	}
+	observed, err := store.Observe(ctx, policy)
+	if fenceErr := capacityDispatchFence(ctx); fenceErr != nil {
+		return intent, fenceErr
+	}
+	return observed, err
 }
 
 func boundPrivateMap(value any) (map[string]any, error) {

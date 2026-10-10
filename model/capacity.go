@@ -9,29 +9,157 @@ import (
 // CapacityPolicySpec is an operator-owned, provider-neutral capacity envelope.
 // Price records and validation references are declarations, not live stock receipts.
 type CapacityPolicySpec struct {
-	Environment           string                          `json:"environment"`
-	Domain                string                          `json:"domain"`
-	Dimension             string                          `json:"dimension"`
-	TargetIdentity        string                          `json:"target_identity"`
-	Owner                 string                          `json:"owner"`
-	Workflow              ManifestSelector                `json:"workflow"`
-	Currency              string                          `json:"currency"`
-	Floor                 int                             `json:"floor"`
-	Ceiling               int                             `json:"ceiling"`
-	Step                  int                             `json:"step"`
-	MaxEvidenceAgeSeconds int                             `json:"max_evidence_age_seconds"`
-	MinSamples            int                             `json:"min_samples"`
-	MaxSampleGapSeconds   int                             `json:"max_sample_gap_seconds"`
-	UpHoldSeconds         int                             `json:"up_hold_seconds"`
-	DownHoldSeconds       int                             `json:"down_hold_seconds"`
-	CooldownSeconds       int                             `json:"cooldown_seconds"`
-	LeaseSeconds          int                             `json:"lease_seconds"`
-	ExecutionEnabled      bool                            `json:"execution_enabled"`
-	Signals               []CapacitySignalRule            `json:"signals"`
-	Profiles              []CapacityProfile               `json:"profiles"`
-	MutationBindings      []CapacityMutationBinding       `json:"mutation_bindings,omitempty"`
-	AssessmentBinding     *CapacityBoundAssessmentBinding `json:"assessment_binding,omitempty"`
-	HPAExecutionBinding   *CapacityHPAExecutionBinding    `json:"hpa_execution_binding,omitempty"`
+	Environment             string                           `json:"environment"`
+	Domain                  string                           `json:"domain"`
+	Dimension               string                           `json:"dimension"`
+	TargetIdentity          string                           `json:"target_identity"`
+	Owner                   string                           `json:"owner"`
+	Workflow                ManifestSelector                 `json:"workflow"`
+	Currency                string                           `json:"currency"`
+	Floor                   int                              `json:"floor"`
+	Ceiling                 int                              `json:"ceiling"`
+	Step                    int                              `json:"step"`
+	MaxEvidenceAgeSeconds   int                              `json:"max_evidence_age_seconds"`
+	MinSamples              int                              `json:"min_samples"`
+	MaxSampleGapSeconds     int                              `json:"max_sample_gap_seconds"`
+	UpHoldSeconds           int                              `json:"up_hold_seconds"`
+	DownHoldSeconds         int                              `json:"down_hold_seconds"`
+	CooldownSeconds         int                              `json:"cooldown_seconds"`
+	LeaseSeconds            int                              `json:"lease_seconds"`
+	ExecutionEnabled        bool                             `json:"execution_enabled"`
+	Signals                 []CapacitySignalRule             `json:"signals"`
+	Profiles                []CapacityProfile                `json:"profiles"`
+	MutationBindings        []CapacityMutationBinding        `json:"mutation_bindings,omitempty"`
+	AssessmentBinding       *CapacityBoundAssessmentBinding  `json:"assessment_binding,omitempty"`
+	HPAExecutionBinding     *CapacityHPAExecutionBinding     `json:"hpa_execution_binding,omitempty"`
+	VMNodeMembershipBinding *CapacityVMNodeMembershipBinding `json:"vm_node_membership_binding,omitempty"`
+	BusinessCreationBinding *CapacityBusinessCreationBinding `json:"business_creation_binding,omitempty"`
+	ControllerBinding       *CapacityControllerBinding       `json:"controller_binding,omitempty"`
+}
+
+// Optional operator delegation to the existing protected pressure workflow.
+// A schedule/alert carries demand only; it cannot select an actor or proof.
+type CapacityControllerBinding struct {
+	Mode                 string `json:"mode"`
+	MachinePrincipalID   string `json:"machine_principal_id"`
+	DispatchLeaseSeconds int    `json:"dispatch_lease_seconds"`
+}
+
+// Optional original business reader. Only the operator policy selects its
+// origin, secret reference, native identities and expected original input.
+// This is a diagnostic read binding, never a mutation/transition permission.
+type CapacityBusinessCreationBinding struct {
+	Name            string                                    `json:"name"`
+	Adapter         CapacityObservationAdapterBinding         `json:"adapter"`
+	ReaderURL       string                                    `json:"reader_url"`
+	ReadTokenRef    string                                    `json:"read_token_ref"`
+	SourceCommit    string                                    `json:"source_commit"`
+	QuerySHA256     string                                    `json:"query_sha256"`
+	RecordSHA256    string                                    `json:"record_sha256"`
+	BodySHA256      string                                    `json:"body_sha256"`
+	RecipientSHA256 string                                    `json:"recipient_sha256"`
+	RecipientCount  int                                       `json:"recipient_count"`
+	Database        string                                    `json:"database"`
+	DatabaseOID     string                                    `json:"database_oid"`
+	SystemID        string                                    `json:"system_identifier"`
+	TableOIDs       []string                                  `json:"table_oids"`
+	Pod             AdapterObserveCapacityPodAdmissionRequest `json:"pod"`
+}
+
+type CapacityBusinessCreationReply struct {
+	Schema            string                            `json:"schema_version"`
+	Source            string                            `json:"source_commit"`
+	Query             string                            `json:"query_sha256"`
+	PreparationBefore NativeProcessAdmissionObservation `json:"preparation_before"`
+	NativeRaw         []byte                            `json:"native_snapshot_base64"`
+	PreparationAfter  NativeProcessAdmissionObservation `json:"preparation_after"`
+}
+
+// Hashes and native identities only; it carries no payload/token/lease owner.
+type CapacityBusinessCreationObservation struct {
+	RecordSHA256         string    `json:"record_sha256"`
+	BodySHA256           string    `json:"body_sha256"`
+	NativeSnapshotSHA256 string    `json:"native_snapshot_sha256"`
+	NotificationSHA256   string    `json:"notification_sha256"`
+	OriginalXID          string    `json:"original_xid"`
+	OriginalCommit       time.Time `json:"original_commit"`
+	NativeObserved       time.Time `json:"native_observed"`
+	ConsumerPodUID       string    `json:"consumer_pod_uid"`
+	ConsumerProcessNonce string    `json:"consumer_process_nonce"`
+	RecipientSHA256      string    `json:"recipient_sha256"`
+	RecipientCount       int       `json:"recipient_count"`
+}
+
+// Optional fixed read binding. It grants no provider mutation or phase proof.
+type CapacityVMNodeMembershipBinding struct {
+	MutationBindingName string                            `json:"mutation_binding_name"`
+	Adapter             CapacityObservationAdapterBinding `json:"adapter"`
+	Target              CapacityNodeMembershipTarget      `json:"target"`
+}
+
+type CapacityNodeMembershipTarget struct {
+	BindingName        string                    `json:"binding_name"`
+	RealmUID           string                    `json:"realm_uid"`
+	Owner              string                    `json:"owner"`
+	ProfileName        string                    `json:"profile_name"`
+	ProviderIDPrefix   string                    `json:"provider_id_prefix"`
+	MaxLeaseAgeSeconds int                       `json:"max_lease_age_seconds"`
+	Slots              []CapacityNodeSlotBinding `json:"slots"`
+}
+type CapacityNodeSlotBinding struct {
+	Slot     int    `json:"slot"`
+	NodeName string `json:"node_name"`
+}
+type CapacityNodeMembershipTuple struct {
+	Slot                 int       `json:"slot"`
+	Name                 string    `json:"name"`
+	UID                  string    `json:"uid"`
+	ResourceVersion      string    `json:"resource_version"`
+	CreatedAt            time.Time `json:"created_at"`
+	ProviderID           string    `json:"provider_id"`
+	BootID               string    `json:"boot_id"`
+	Ready                bool      `json:"ready"`
+	ReadyKnown           bool      `json:"ready_known"`
+	ReadyChangedAt       time.Time `json:"ready_changed_at"`
+	Unschedulable        bool      `json:"unschedulable"`
+	LeaseUID             string    `json:"lease_uid"`
+	LeaseVersion         string    `json:"lease_version"`
+	LeaseHolder          string    `json:"lease_holder"`
+	LeaseDurationSeconds int       `json:"lease_duration_seconds"`
+	LeaseRenewedAt       time.Time `json:"lease_renewed_at"`
+}
+type CapacityNodeMembershipResponse struct {
+	Operation            string                        `json:"operation"`
+	Status               string                        `json:"status"`
+	BindingName          string                        `json:"binding_name"`
+	BindingSHA256        string                        `json:"binding_sha256"`
+	RealmUID             string                        `json:"realm_uid"`
+	Owner                string                        `json:"owner"`
+	ProfileName          string                        `json:"profile_name"`
+	Complete             bool                          `json:"complete"`
+	NativeNodeCount      int                           `json:"native_node_count"`
+	FirstListVersion     string                        `json:"first_list_version"`
+	LastListVersion      string                        `json:"last_list_version"`
+	FirstListSHA256      string                        `json:"first_list_sha256"`
+	LastListSHA256       string                        `json:"last_list_sha256"`
+	ObservationStartedAt time.Time                     `json:"observation_started_at"`
+	ObservedAt           time.Time                     `json:"observed_at"`
+	Nodes                []CapacityNodeMembershipTuple `json:"nodes"`
+	AtomicSnapshot       bool                          `json:"atomic_snapshot"`
+	BootstrapCompleted   bool                          `json:"bootstrap_completed_known"`
+	WarmResources        bool                          `json:"warm_resources_known"`
+	UsefulCapacity       bool                          `json:"useful_capacity_known"`
+	RoutingWithdrawn     bool                          `json:"routing_withdrawn_known"`
+	BusinessDrain        bool                          `json:"business_drain_known"`
+	PhysicalReleased     bool                          `json:"physical_capacity_released"`
+	Metadata             map[string]any                `json:"metadata"`
+}
+type CapacityVMNodeJoin struct {
+	Slot              int                         `json:"slot"`
+	ResourceID        string                      `json:"resource_id"`
+	ResourceCreatedAt string                      `json:"resource_created_at"`
+	DesiredSpecSHA256 string                      `json:"desired_spec_sha256"`
+	Node              CapacityNodeMembershipTuple `json:"node"`
 }
 
 type CapacitySignalRule struct {

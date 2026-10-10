@@ -43,6 +43,11 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 	}
 
 	var opts []httpapi.ServerOption
+	// This is an in-process service of the SAME HTTP authorization owner,
+	// never a new caller-controlled route or anonymous dispatch wrapper.
+	opts = append(opts, httpapi.WithCapacityDispatchServiceReceiver(func(service *httpapi.CapacityDispatchService) {
+		app.SetResource(capacityDispatchServiceResource, service)
+	}))
 	if engine, ok := Reconciler(app); ok {
 		opts = append(opts, httpapi.WithReconciler(engine))
 	}

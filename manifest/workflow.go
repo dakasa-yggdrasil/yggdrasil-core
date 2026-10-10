@@ -51,6 +51,8 @@ var (
 		"capacity.grant_compensation",
 		"capacity.confirm_compensation",
 		"capacity.observe_vm_inventory",
+		"capacity.observe_vm_node_membership",
+		"capacity.observe_original_creation_canary",
 		"capacity.observe_failed_vm_creation",
 		"capacity.record_vm_inventory",
 		"capacity.confirm_native_mutation",

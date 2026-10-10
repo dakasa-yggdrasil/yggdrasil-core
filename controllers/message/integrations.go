@@ -284,12 +284,19 @@ type integrationExecutionPolicy struct {
 	safeError               error
 	allowSensitiveOutput    bool
 	requireExplicitResponse bool
+	nativeHTTP              *nativeAdapterHTTPPolicy
 }
 
 func (policy integrationExecutionPolicy) sanitizeError(err error) error {
 	if err != nil && policy.detailFreeErrors {
 		if policy.safeError != nil {
+			if policy.nativeHTTP != nil {
+				return &opaqueAdapterError{public: policy.safeError, cause: err}
+			}
 			return policy.safeError
+		}
+		if policy.nativeHTTP != nil {
+			return &opaqueAdapterError{public: errSensitiveOutputSink, cause: err}
 		}
 		return errSensitiveOutputSink
 	}
@@ -342,7 +349,7 @@ func executeIntegrationThroughResolvedWithPolicy(
 		"execute",
 		request,
 		&response,
-		adapterCallPolicy{detailFreeErrors: policy.detailFreeErrors},
+		adapterCallPolicy{detailFreeErrors: policy.detailFreeErrors, native: policy.nativeHTTP},
 	); err != nil {
 		if policy.detailFreeErrors {
 			return model.ExecuteIntegrationResponse{}, policy.sanitizeError(err)
@@ -378,6 +385,15 @@ func executeIntegrationThroughResolvedWithPolicy(
 			return model.ExecuteIntegrationResponse{}, policy.sanitizeError(errors.New("adapter response status is required"))
 		}
 		status = "succeeded"
+	}
+	if policy.nativeHTTP != nil {
+		joined := errors.Join(nativeAdapterContext(rpcCtx), nativeAdapterContext(ctx))
+		if policy.nativeHTTP.parent != nil {
+			joined = errors.Join(joined, nativeAdapterContext(policy.nativeHTTP.parent))
+		}
+		if joined != nil {
+			return model.ExecuteIntegrationResponse{}, policy.sanitizeError(joined)
+		}
 	}
 
 	return model.ExecuteIntegrationResponse{
