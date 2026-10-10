@@ -87,8 +87,12 @@ fixtures are compiled. Both capacity workflows run one source-fixed Go lifecycle
 gate: its actual process Start/PID, Wait and stdout/stderr drain, strict root and
 ten-case GoJSON roster, and one package PASS are all required. A nominal PASS
 transcript cannot replace the original zero exit and live deadline. The helper
-owns only a fresh Linux process group and retains at most 4 MiB combined raw
-output on every outcome; overflow is retained as incomplete and refused.
+owns only a fresh Linux process group, with an independent context owner armed
+until the single actual Wait and every pipe copy return, even after its leader
+exits while a descendant holds the pipes. Cancellation still requires the actual
+owner and Wait joins; no forced pipe close or signal can publish success. It
+retains at most 4 MiB combined raw output on every outcome; overflow is retained
+as incomplete and refused.
 
 Raw files and the observation report are never sufficient on their own. Actual
 write/Close returns and the final original context/absolute deadline are checked

@@ -96,6 +96,7 @@ type processObservation struct {
 	PID                  int    `json:"pid"`
 	ArgvSHA256           string `json:"argv_sha256"`
 	WaitReturned         bool   `json:"wait_returned"`
+	ContextOwnerJoined   bool   `json:"context_owner_joined"`
 	Exited               bool   `json:"exited"`
 	ExitCode             int    `json:"exit_code"`
 	GroupCancelAttempted bool   `json:"group_cancel_attempted"`
@@ -113,42 +114,49 @@ func observeCommand(ctx context.Context, dir string, argv, env []string, stdout,
 	if contextFailure(ctx) != nil || len(argv) == 0 || stdout == nil || stderr == nil {
 		return record, errors.Join(errors.New("command refused before start"), contextFailure(ctx))
 	}
-	command := exec.CommandContext(ctx, argv[0], argv[1:]...)
+	command := exec.Command(argv[0], argv[1:]...)
 	command.Dir, command.Env = dir, env
 	command.Stdout, command.Stderr = stdout, stderr
 	command.SysProcAttr = &syscall.SysProcAttr{Setpgid: true}
-	var mu sync.Mutex
-	var cancelErr error
-	command.Cancel = func() error {
-		mu.Lock()
-		defer mu.Unlock()
-		if command.Process == nil || command.Process.Pid <= 0 {
-			cancelErr = errors.New("owned process identity missing")
-			return cancelErr
-		}
-		record.GroupCancelAttempted = true
-		cancelErr = syscall.Kill(-command.Process.Pid, syscall.SIGKILL)
-		record.GroupCancelSucceeded = cancelErr == nil
-		if errors.Is(cancelErr, syscall.ESRCH) {
-			// A racing original exit still needs actual Wait and the deadline fence.
-			cancelErr = nil
-			return os.ErrProcessDone
-		}
-		return cancelErr
-	}
 	if err := command.Start(); err != nil {
 		return record, errors.Join(err, contextFailure(ctx))
 	}
 	record.Started, record.PID = true, command.Process.Pid
+	type cancellation struct {
+		attempted, succeeded bool
+		err                  error
+	}
+	waitReturned := make(chan struct{})
+	ownerReturned := make(chan cancellation, 1)
+	ownerJoined := make(chan struct{})
+	// CommandContext stops watching once its leader's Process.Wait returns.
+	// This owner stays armed through the single complete Cmd.Wait, including
+	// descendant-held pipe EOF and all original stdout/stderr copy returns.
+	go func(pid int) {
+		defer close(ownerJoined)
+		select {
+		case <-waitReturned:
+			ownerReturned <- cancellation{err: contextFailure(ctx)}
+		case <-ctx.Done():
+			if pid <= 0 {
+				ownerReturned <- cancellation{err: errors.Join(errors.New("owned process identity missing"), contextFailure(ctx))}
+				return
+			}
+			killErr := syscall.Kill(-pid, syscall.SIGKILL)
+			ownerReturned <- cancellation{true, killErr == nil, errors.Join(killErr, contextFailure(ctx))}
+		}
+	}(record.PID)
 	// Wait also joins os/exec's stdout/stderr copying, including failed outcomes.
 	waitErr := command.Wait()
-	mu.Lock()
-	record.WaitReturned = true
+	close(waitReturned)
+	owned := <-ownerReturned
+	<-ownerJoined
+	record.WaitReturned, record.ContextOwnerJoined = true, true
+	record.GroupCancelAttempted, record.GroupCancelSucceeded = owned.attempted, owned.succeeded
 	if command.ProcessState != nil {
 		record.Exited, record.ExitCode = command.ProcessState.Exited(), command.ProcessState.ExitCode()
 	}
-	resultErr = errors.Join(waitErr, cancelErr, contextFailure(ctx))
-	mu.Unlock()
+	resultErr = errors.Join(waitErr, owned.err, contextFailure(ctx))
 	if !record.Exited || record.ExitCode != 0 {
 		resultErr = errors.Join(resultErr, errors.New("original command did not exit successfully"))
 	}
@@ -156,7 +164,7 @@ func observeCommand(ctx context.Context, dir string, argv, env []string, stdout,
 }
 
 func processFailure(record processObservation, originalErr error, overflow bool) error {
-	if !record.Started || record.PID <= 0 || !record.WaitReturned || !record.Exited || record.ExitCode != 0 || overflow {
+	if !record.Started || record.PID <= 0 || !record.WaitReturned || !record.ContextOwnerJoined || !record.Exited || record.ExitCode != 0 || overflow {
 		return errors.Join(originalErr, errors.New("original process or bounded capture unresolved"))
 	}
 	return originalErr

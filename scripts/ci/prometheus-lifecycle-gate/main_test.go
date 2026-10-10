@@ -9,9 +9,12 @@ import (
 	"errors"
 	"io"
 	"os"
+	"os/exec"
 	"path/filepath"
+	"strconv"
 	"strings"
 	"sync"
+	"syscall"
 	"testing"
 	"time"
 )
@@ -161,8 +164,16 @@ func TestGateCompleteJSONCannotReplaceOverflowRefusal(t *testing.T) {
 	if _, err := inspectEvents(stdout); err != nil {
 		t.Fatal("original complete stdout was not preserved", err)
 	}
-	if !overflow || processFailure(processObservation{Started: true, PID: 1, WaitReturned: true, Exited: true, ExitCode: 0}, nil, overflow) == nil {
+	nominal := processObservation{Started: true, PID: 1, WaitReturned: true, ContextOwnerJoined: true, Exited: true, ExitCode: 0}
+	if processFailure(nominal, nil, false) != nil {
+		t.Fatal("complete process observation refused before overflow")
+	}
+	if !overflow || processFailure(nominal, nil, overflow) == nil {
 		t.Fatal("complete original JSON hid overflow on the original stderr channel")
+	}
+	nominal.ContextOwnerJoined = false
+	if processFailure(nominal, nil, false) == nil {
+		t.Fatal("unjoined deadline owner qualified")
 	}
 }
 
@@ -184,6 +195,44 @@ func TestGateFixtureProcess(t *testing.T) {
 		os.Exit(0)
 	case "complete":
 		_, _ = os.Stdout.Write(eventBytes(t, validEvents(t)))
+		os.Exit(0)
+	case "leader-with-held-descendant":
+		executable, err := os.Executable()
+		if err != nil {
+			t.Fatal(err)
+		}
+		child := exec.Command(executable, "-test.run=^TestGateFixtureProcess$")
+		child.Env = append(os.Environ(), "CORE_GATE_CHILD_FIXTURE=held-descendant")
+		child.Stdout, child.Stderr = os.Stdout, os.Stderr
+		// Fixture-only: the test owner becomes the kernel parent so that it can
+		// observe the original descendant's actual Wait, not PID disappearance.
+		child.SysProcAttr = &syscall.SysProcAttr{Cloneflags: syscall.CLONE_PARENT}
+		if err := child.Start(); err != nil {
+			t.Fatal(err)
+		}
+		birth := descendantBirth{Leader: os.Getpid(), Child: child.Process.Pid}
+		raw, err := json.Marshal(birth)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := writeOwned(t.Context(), os.Getenv("CORE_GATE_DESCENDANT_BIRTH"), raw, exclusiveFile); err != nil {
+			t.Fatal(err)
+		}
+		_, _ = os.Stdout.Write(eventBytes(t, validEvents(t)))
+		os.Exit(0)
+	case "held-descendant":
+		identity, err := readProcessIdentity(os.Getpid())
+		if err != nil {
+			t.Fatal(err)
+		}
+		raw, err := json.Marshal(identity)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err := writeOwned(t.Context(), os.Getenv("CORE_GATE_DESCENDANT_READY"), raw, exclusiveFile); err != nil {
+			t.Fatal(err)
+		}
+		time.Sleep(time.Minute)
 		os.Exit(0)
 	}
 }
@@ -256,8 +305,234 @@ func TestGateCancelledOriginalGroupStillWaitsAndRefuses(t *testing.T) {
 	final := <-done
 	<-joined
 	record, err := final.record, final.err
-	if !errors.Is(err, context.DeadlineExceeded) || !record.Started || record.PID <= 0 || !record.GroupCancelAttempted || !record.GroupCancelSucceeded || !record.WaitReturned || record.ExitCode == 0 {
+	if !errors.Is(err, context.DeadlineExceeded) || !record.Started || record.PID <= 0 || !record.GroupCancelAttempted || !record.GroupCancelSucceeded || !record.WaitReturned || !record.ContextOwnerJoined || record.ExitCode == 0 {
 		t.Fatal("timeout notification replaced actual owned process Wait")
+	}
+}
+
+type descendantBirth struct {
+	Leader, Child int
+}
+
+type processIdentity struct {
+	PID, Parent, Group int
+	StartTicks         uint64
+	State              string
+}
+
+// These GET-only kernel identities are fixture witnesses. No disappearance is
+// substituted for the original descendant's native Process.Wait below.
+func readProcessIdentity(pid int) (processIdentity, error) {
+	var out processIdentity
+	if pid <= 0 {
+		return out, errors.New("native fixture PID missing")
+	}
+	raw, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(pid), "stat"))
+	if err != nil {
+		return out, err
+	}
+	open, close := bytes.IndexByte(raw, '('), bytes.LastIndexByte(raw, ')')
+	if open <= 0 || close <= open {
+		return out, errors.New("native fixture stat incomplete")
+	}
+	fields := strings.Fields(string(raw[close+1:]))
+	if len(fields) < 20 {
+		return out, errors.New("native fixture stat fields incomplete")
+	}
+	out.PID, err = strconv.Atoi(strings.TrimSpace(string(raw[:open])))
+	if err != nil || out.PID != pid {
+		return out, errors.Join(errors.New("native fixture stat PID changed"), err)
+	}
+	out.State = fields[0]
+	out.Parent, err = strconv.Atoi(fields[1])
+	if err != nil {
+		return out, err
+	}
+	out.Group, err = strconv.Atoi(fields[2])
+	if err != nil {
+		return out, err
+	}
+	out.StartTicks, err = strconv.ParseUint(fields[19], 10, 64)
+	if err != nil || out.StartTicks == 0 {
+		return out, errors.Join(errors.New("native fixture birth identity missing"), err)
+	}
+	return out, nil
+}
+
+func readFixtureJSON(path string, target any) error {
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		return err
+	}
+	if len(raw) == 0 || len(raw) > 4096 {
+		return errors.New("native fixture identity size refused")
+	}
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.DisallowUnknownFields()
+	if err := decoder.Decode(target); err != nil {
+		return err
+	}
+	if err := decoder.Decode(new(any)); err != io.EOF {
+		return errors.New("native fixture identity has trailing data")
+	}
+	return nil
+}
+
+// Failed assertions can precede the birth-file observation. Find only children
+// actually parented to this test and still bound to the original fresh group,
+// then perform their real Wait after the group's owned cancellation/leader join.
+func waitRemainingFixtureChildren(group int) error {
+	if group <= 0 {
+		return nil
+	}
+	tasks, err := os.ReadDir(filepath.Join("/proc", strconv.Itoa(os.Getpid()), "task"))
+	if err != nil {
+		return err
+	}
+	seen := map[int]bool{}
+	var resultErr error
+	for _, task := range tasks {
+		raw, err := os.ReadFile(filepath.Join("/proc", strconv.Itoa(os.Getpid()), "task", task.Name(), "children"))
+		if errors.Is(err, os.ErrNotExist) {
+			continue // A retired owning thread has no remaining child census.
+		}
+		if err != nil {
+			resultErr = errors.Join(resultErr, err)
+			continue
+		}
+		for _, value := range strings.Fields(string(raw)) {
+			pid, err := strconv.Atoi(value)
+			if err != nil || seen[pid] {
+				resultErr = errors.Join(resultErr, err)
+				continue
+			}
+			seen[pid] = true
+			identity, err := readProcessIdentity(pid)
+			if err != nil {
+				resultErr = errors.Join(resultErr, err)
+				continue
+			}
+			if identity.Parent != os.Getpid() || identity.Group != group {
+				continue
+			}
+			child, err := os.FindProcess(pid)
+			if err != nil {
+				resultErr = errors.Join(resultErr, err)
+				continue
+			}
+			_, err = child.Wait()
+			resultErr = errors.Join(resultErr, err)
+		}
+	}
+	return resultErr
+}
+
+func TestGateLeaderExitDoesNotEndOwnershipBeforeDescendantPipeEOF(t *testing.T) {
+	ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+	defer cancel()
+	args, env := childArgs(t, "leader-with-held-descendant")
+	retention := t.TempDir()
+	birthPath, readyPath := filepath.Join(retention, "original-birth.json"), filepath.Join(retention, "original-ready.json")
+	env = append(env, "CORE_GATE_DESCENDANT_BIRTH="+birthPath, "CORE_GATE_DESCENDANT_READY="+readyPath)
+	capture := new(rawCapture)
+	type outcome struct {
+		record processObservation
+		err    error
+	}
+	var final outcome
+	joined := make(chan struct{})
+	go func() {
+		defer close(joined)
+		final.record, final.err = observeCommand(ctx, "", args, env, captureWriter{capture, false}, captureWriter{capture, true})
+	}()
+	var childJoined <-chan struct{}
+	t.Cleanup(func() {
+		cancel()
+		<-joined
+		if childJoined != nil {
+			<-childJoined
+		}
+		if err := waitRemainingFixtureChildren(final.record.PID); err != nil {
+			t.Error("original fixture children were not actually joined", err)
+		}
+	})
+	var birth descendantBirth
+	var ready, identity processIdentity
+	ticker := time.NewTicker(time.Millisecond)
+	defer ticker.Stop()
+	for {
+		birthErr := readFixtureJSON(birthPath, &birth)
+		readyErr := readFixtureJSON(readyPath, &ready)
+		if birthErr == nil && readyErr == nil {
+			if birth.Leader <= 0 || birth.Child <= 0 || birth.Leader == birth.Child || ready.PID != birth.Child || ready.Parent != os.Getpid() || ready.Group != birth.Leader {
+				t.Fatal("original Start identity/parent/group refused")
+			}
+			var err error
+			identity, err = readProcessIdentity(birth.Child)
+			if err != nil || identity.PID != ready.PID || identity.Parent != ready.Parent || identity.Group != ready.Group || identity.StartTicks != ready.StartTicks || (identity.State != "R" && identity.State != "S") {
+				t.Fatal("original inherited-pipe child is not independently alive", err)
+			}
+			_, leaderErr := readProcessIdentity(birth.Leader)
+			if errors.Is(leaderErr, os.ErrNotExist) {
+				if err := contextFailure(ctx); err != nil {
+					t.Fatal("original leader was not reaped before its deadline", err)
+				}
+				break
+			}
+			if leaderErr != nil {
+				t.Fatal("native leader identity unreadable", leaderErr)
+			}
+		}
+		select {
+		case <-ctx.Done():
+			t.Fatal("native leader/descendant causal phase not reached before original deadline")
+		case <-joined:
+			t.Fatal("original Wait returned while its child still owns pipe EOF")
+		case <-ticker.C:
+		}
+	}
+	executable, err := os.Executable()
+	if err != nil {
+		t.Fatal(err)
+	}
+	actualExecutable, err := os.Readlink(filepath.Join("/proc", strconv.Itoa(identity.PID), "exe"))
+	if err != nil || actualExecutable != executable {
+		t.Fatal("original child executable identity changed", err)
+	}
+	if err := contextFailure(ctx); err != nil {
+		t.Fatal("original inherited-pipe witness crossed its absolute deadline", err)
+	}
+	child, err := os.FindProcess(identity.PID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var childState *os.ProcessState
+	var childErr error
+	childDone := make(chan struct{})
+	childJoined = childDone
+	go func() { defer close(childDone); childState, childErr = child.Wait() }()
+	select {
+	case <-joined:
+		t.Fatal("leader exit0 replaced actual descendant pipe EOF")
+	default:
+	}
+	<-ctx.Done()
+	<-joined
+	<-childDone
+	status, known := syscall.WaitStatus(0), false
+	if childState != nil {
+		status, known = childState.Sys().(syscall.WaitStatus)
+	}
+	if childErr != nil || childState == nil || !known || !status.Signaled() || status.Signal() != syscall.SIGKILL {
+		t.Fatal("signal/PID disappearance replaced original child Wait", childErr)
+	}
+	record, originalErr := final.record, final.err
+	stdout, _, _, overflow := capture.snapshot()
+	if _, err := inspectEvents(stdout); err != nil {
+		t.Fatal("leader's original complete GoJSON missing", err)
+	}
+	if record.PID != birth.Leader || !record.WaitReturned || !record.ContextOwnerJoined || !record.Exited || record.ExitCode != 0 || !record.GroupCancelAttempted || !record.GroupCancelSucceeded || !errors.Is(originalErr, context.DeadlineExceeded) || processFailure(record, originalErr, overflow) == nil {
+		t.Fatal("complete leader0 evidence hid descendant-held EOF or expired ownership")
 	}
 }
 
