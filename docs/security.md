@@ -10,7 +10,7 @@ Two paths, both converging on a session row + bearer token after MFA:
 1. **Password** — `/api/v1/auth/login`. Credentials checked against
    `auth_identities` table. A valid password returns
    `mfa_required` until the caller supplies a valid `totp_code` or
-   single-use `recovery_code`, passkey proof or enrolled email/SMS OTP; a session is not issued from password
+   single-use `recovery_code`, passkey proof or automatic email/SMS OTP from saved contacts; a session is not issued from password
    alone.
 2. **OAuth/OIDC** — `/api/v1/auth/third-party/start/<provider>` →
    redirect to the provider → `/api/v1/auth/third-party/callback/
@@ -21,7 +21,8 @@ Two paths, both converging on a session row + bearer token after MFA:
 MFA enrollment is mandatory. If a collaborator has no MFA enrollment,
 auth paths return `mfa_not_enrolled` and the console guides the user
 through factor enrollment before any session can be created. Email/SMS
-require possession proof bound to the current canonical contact. See
+use saved canonical profile contacts without factor enrollment. A session
+requires the actual OTP proof; contact presence alone never grants access. See
 [contact OTP MFA](./mfa-contact-otp.md) for configuration, API and limits.
 
 Sessions carry a server-side expiry (`AUTH_SESSION_TTL_HOURS`, 720

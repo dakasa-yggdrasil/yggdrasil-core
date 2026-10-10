@@ -197,4 +197,4 @@ disruption; communicate it.
   a callback URL. Don't. URLs leak via referrer headers and proxy
   logs. Use POST + Authorization header.
 
-Email/SMS OTP MFA uses configured integrations, verified canonical contacts and an atomic OTP/session transaction. See [contact OTP MFA](../mfa-contact-otp.md) for enrollment, login and recovery contracts.
+Email/SMS OTP MFA uses configured integrations, saved canonical contacts without registration and an atomic OTP/session transaction. See [contact OTP MFA](../mfa-contact-otp.md) for automatic login and recovery contracts.

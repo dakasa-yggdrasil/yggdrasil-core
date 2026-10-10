@@ -48,6 +48,11 @@ func contactOTPHTTPPassword(t *testing.T, db *sql.DB, person model.Collaborator)
 
 func contactOTPHTTPPhone(t *testing.T, db *sql.DB, person model.Collaborator) string {
 	t.Helper()
+	return contactOTPHTTPDeclarePhone(t, db, person, "+12025550108")
+}
+
+func contactOTPHTTPDeclarePhone(t *testing.T, db *sql.DB, person model.Collaborator, phone string) string {
+	t.Helper()
 	envelope, err := contactphone.EnvelopeFromEnv()
 	if err != nil {
 		t.Fatal("MFA HTTP contact encryption fixture failed")
@@ -57,7 +62,6 @@ func contactOTPHTTPPhone(t *testing.T, db *sql.DB, person model.Collaborator) st
 		t.Fatal("MFA HTTP contact transaction failed")
 	}
 	defer func() { _ = tx.Rollback() }()
-	phone := "+12025550108"
 	if _, err := repository.SetPhoneContactTx(context.Background(), tx, envelope, person.ID, phone, "collaborator:"+person.ID.String(), "self_profile"); err != nil {
 		t.Fatal("MFA HTTP contact fixture failed")
 	}
@@ -123,6 +127,38 @@ func contactOTPHTTPCode(t *testing.T, req model.ExecuteIntegrationRequest) strin
 	return code
 }
 
+func contactOTPHTTPPosture(t *testing.T, db *sql.DB, id uuid.UUID, proved bool, sessions int) {
+	t.Helper()
+	var hasProof bool
+	var storedFactors, storedSessions int
+	if db.QueryRow(`SELECT mfa_enrolled_at IS NOT NULL FROM public.auth_identities WHERE collaborator_id=$1`, id).Scan(&hasProof) != nil || hasProof != proved {
+		t.Fatal("automatic contact availability changed proof posture without successful authentication")
+	}
+	if db.QueryRow(`SELECT COUNT(*) FROM public.auth_mfa_contact_factors WHERE collaborator_id=$1`, id).Scan(&storedFactors) != nil || storedFactors != 0 {
+		t.Fatal("automatic contact login created or required contact enrollment rows")
+	}
+	if db.QueryRow(`SELECT COUNT(*) FROM public.auth_sessions WHERE collaborator_id=$1`, id).Scan(&storedSessions) != nil || storedSessions != sessions {
+		t.Fatal("automatic contact login created a session before valid OTP proof")
+	}
+}
+
+func contactOTPHTTPLogin(t *testing.T, w *httptest.ResponseRecorder) authLoginResponse {
+	t.Helper()
+	var login authLoginResponse
+	if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &login) != nil || login.Session.ID == uuid.Nil || login.Token == "" || login.MFAEnrollmentRequired || login.MFAEnrollURL != "" {
+		t.Fatalf("automatic contact OTP did not create a proved session: status=%d", w.Code)
+	}
+	sessionCookie, csrfCookie := false, false
+	for _, cookie := range w.Result().Cookies() {
+		sessionCookie = sessionCookie || cookie.Name == authSessionCookieName() && cookie.HttpOnly && cookie.Value == login.Token
+		csrfCookie = csrfCookie || cookie.Name == csrfTokenCookieName && cookie.Value == computeCSRFToken(login.Session.ID)
+	}
+	if !sessionCookie || !csrfCookie {
+		t.Fatal("automatic contact login omitted its authenticated or CSRF cookie")
+	}
+	return login
+}
+
 func TestMFAContactOTPHTTPPostgres(t *testing.T) {
 	db := contactOTPHTTPPostgres(t)
 	t.Setenv(contactphone.EnrollmentPolicyEnv, "false")
@@ -131,7 +167,7 @@ func TestMFAContactOTPHTTPPostgres(t *testing.T) {
 	t.Setenv("AUTH_EMAIL_FROM", "security@example.test")
 
 	for _, channel := range []string{"email", "sms"} {
-		t.Run(channel+"_enrollment_and_password_login", func(t *testing.T) {
+		t.Run(channel+"_automatic_password_login", func(t *testing.T) {
 			handler := directoryHTTPHandler(t, db)
 			person := directoryHTTPPerson(t, db, false)
 			plain := contactOTPHTTPPassword(t, db, person)
@@ -140,7 +176,6 @@ func TestMFAContactOTPHTTPPostgres(t *testing.T) {
 				recipient = contactOTPHTTPPhone(t, db, person)
 				operation, instance = "send_sms", "text"
 			}
-			rawEnroll := contactOTPHTTPEnrollLink(t, db, person)
 			previousExecute := executeAuthEmailIntegration
 			t.Cleanup(func() { executeAuthEmailIntegration = previousExecute })
 			var deliveredCode string
@@ -148,138 +183,173 @@ func TestMFAContactOTPHTTPPostgres(t *testing.T) {
 			executeAuthEmailIntegration = func(_ context.Context, _ *amqp091.Connection, _ *sql.DB, req model.ExecuteIntegrationRequest) (model.ExecuteIntegrationResponse, error) {
 				sends++
 				if req.Operation != operation || req.Capability != operation || req.Integration.Namespace != "mfa-tests" || req.Integration.Name != instance {
-					t.Fatal("MFA HTTP request changed the configured delivery selector")
+					t.Fatal("automatic OTP changed the configured delivery selector")
 				}
 				key := "recipient"
 				if channel == "sms" {
 					key = "phone_number"
 					if req.Input["sms_type"] != "Transactional" {
-						t.Fatal("MFA SMS omitted transactional delivery purpose")
+						t.Fatal("automatic SMS omitted transactional delivery purpose")
 					}
 				}
 				if req.Input[key] != recipient {
-					t.Fatal("MFA HTTP delivery escaped the canonical recipient")
+					t.Fatal("automatic OTP escaped its current canonical recipient")
 				}
 				deliveredCode = contactOTPHTTPCode(t, req)
 				return model.ExecuteIntegrationResponse{Status: "sent", Output: map[string]any{"provider_private": "adapter-output-must-stay-private"}}, nil
 			}
-			w := contactOTPHTTPRequest(t, handler, http.MethodGet, "/api/v1/auth/mfa/contact/options?token="+rawEnroll, nil, "", "", 1)
-			var options map[string]contactMFAOption
-			if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &options) != nil || !options[channel].Available || options[channel].Enrolled {
-				t.Fatal("MFA enrollment options did not expose the available canonical contact")
+			contactOTPHTTPPosture(t, db, person.ID, false, 0)
+			rawAuthority := contactOTPHTTPEnrollLink(t, db, person)
+			w := contactOTPHTTPRequest(t, handler, http.MethodGet, "/api/v1/auth/mfa/contact/options?token="+rawAuthority, nil, "", "", 1)
+			var options map[string]json.RawMessage
+			var selectedOption struct {
+				Available bool `json:"available"`
+				Automatic bool `json:"automatic"`
 			}
-			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/factors/contact/begin", map[string]any{"token": rawEnroll, "channel": channel, "recipient": "attacker@example.test"}, "", "", 2)
-			if w.Code < http.StatusBadRequest || sends != 0 {
-				t.Fatal("MFA request accepted a caller-controlled recipient")
+			if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &options) != nil || json.Unmarshal(options[channel], &selectedOption) != nil || !selectedOption.Available || !selectedOption.Automatic || strings.Contains(w.Body.String(), `"enrolled"`) {
+				t.Fatal("saved contact required opt-in instead of being automatically available")
 			}
-			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/factors/contact/begin", map[string]any{"token": rawEnroll, "channel": channel}, "", "", 2)
-			challenge := contactOTPHTTPChallenge(t, w)
-			if sends != 1 || strings.Contains(w.Body.String(), deliveredCode) || strings.Contains(w.Body.String(), recipient) || strings.Contains(w.Body.String(), "adapter-output-must-stay-private") {
-				t.Fatal("MFA challenge disclosed the code, recipient or adapter output")
-			}
-			wrongCode := "000000"
-			if wrongCode == deliveredCode {
-				wrongCode = "000001"
-			}
-			finish := map[string]any{"token": rawEnroll, "channel": channel, "challenge_token": challenge.ChallengeToken, "code": wrongCode}
-			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/factors/contact/finish", finish, "", "", 3)
-			if w.Code != http.StatusUnauthorized {
-				t.Fatal("wrong OTP enrolled a contact factor")
-			}
-			finish["code"] = deliveredCode
-			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/factors/contact/finish", finish, "", "", 4)
-			var enrollment struct {
-				Enrolled bool     `json:"mfa_enrolled"`
-				Codes    []string `json:"codes"`
-			}
-			if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &enrollment) != nil || !enrollment.Enrolled || len(enrollment.Codes) != mfa.RecoveryCodeCount || len(w.Result().Cookies()) != 0 {
-				t.Fatal("contact enrollment did not persist MFA and one-time recovery codes without a session")
-			}
-			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/factors/contact/finish", finish, "", "", 5)
-			if w.Code != http.StatusUnauthorized {
-				t.Fatal("enrollment authority or OTP could be replayed")
+			var passwordLoginAvailable bool
+			if json.Unmarshal(options["password_login_available"], &passwordLoginAvailable) != nil || !passwordLoginAvailable {
+				t.Fatal("password-bearing account cannot reach automatic contact login")
 			}
 			credentials := map[string]any{"identifier": person.PrimaryEmail, "password": plain}
-			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/login", credentials, "", "", 6)
+			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/login", credentials, "", "", 2)
 			var required authMFARequiredResponse
 			if w.Code != http.StatusAccepted || json.Unmarshal(w.Body.Bytes(), &required) != nil || len(w.Result().Cookies()) != 0 {
-				t.Fatal("password-only login bypassed the contact MFA gate")
+				t.Fatal("first password login requested contact enrollment or skipped OTP proof")
 			}
 			found := false
 			for _, factor := range required.Factors {
 				found = found || factor == channel
 			}
 			if !found {
-				t.Fatal("password login omitted the enrolled contact factor")
-			}
-			if _, err := db.Exec(`UPDATE public.auth_mfa_contact_challenges SET created_at=NOW()-INTERVAL '61 seconds' WHERE collaborator_id=$1`, person.ID); err != nil {
-				t.Fatal("MFA resend timing fixture failed")
+				t.Fatal("first password login omitted its automatic saved contact")
 			}
 			loginBegin := map[string]any{"identifier": person.PrimaryEmail, "password": "incorrect-password", "channel": channel}
-			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/contact/login/begin", loginBegin, "", "", 7)
-			if w.Code != http.StatusUnauthorized || sends != 1 {
-				t.Fatal("contact OTP delivery did not require a server-verified password")
-			}
-			if _, err := db.Exec(`UPDATE public.auth_identities SET password_must_change=TRUE WHERE collaborator_id=$1`, person.ID); err != nil {
-				t.Fatal("MFA forced-password-change fixture failed")
+			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/contact/login/begin", loginBegin, "", "", 3)
+			if w.Code != http.StatusUnauthorized || sends != 0 {
+				t.Fatal("automatic OTP delivery did not require a server-verified password")
 			}
 			loginBegin["password"] = plain
-			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/contact/login/begin", loginBegin, "", "", 8)
-			loginChallenge := contactOTPHTTPChallenge(t, w)
-			credentials["otp_channel"], credentials["otp_challenge_token"], credentials["otp_code"] = channel, loginChallenge.ChallengeToken, deliveredCode
-			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/login", credentials, "", "", 9)
-			var login authLoginResponse
-			if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &login) != nil || login.Session.ID == uuid.Nil || login.Token == "" || !login.PasswordChangeRequired {
-				t.Fatalf("contact OTP login did not create a session: status=%d", w.Code)
+			loginBegin["recipient"] = "attacker@example.test"
+			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/contact/login/begin", loginBegin, "", "", 4)
+			if w.Code < http.StatusBadRequest || sends != 0 {
+				t.Fatal("automatic OTP accepted a caller-controlled recipient")
 			}
-			sessionCookie, csrfCookie := false, false
-			for _, cookie := range w.Result().Cookies() {
-				sessionCookie = sessionCookie || cookie.Name == authSessionCookieName() && cookie.HttpOnly && cookie.Value == login.Token
-				csrfCookie = csrfCookie || cookie.Name == csrfTokenCookieName && cookie.Value == computeCSRFToken(login.Session.ID)
+			delete(loginBegin, "recipient")
+			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/contact/login/begin", loginBegin, "", "", 5)
+			challenge := contactOTPHTTPChallenge(t, w)
+			if sends != 1 || strings.Contains(w.Body.String(), deliveredCode) || strings.Contains(w.Body.String(), recipient) || strings.Contains(w.Body.String(), "adapter-output-must-stay-private") {
+				t.Fatal("automatic OTP challenge disclosed its code, recipient or adapter output")
 			}
-			if !sessionCookie || !csrfCookie {
-				t.Fatal("contact OTP login omitted its authenticated or CSRF cookie")
+			contactOTPHTTPPosture(t, db, person.ID, false, 0)
+			wrongCode := "000000"
+			if wrongCode == deliveredCode {
+				wrongCode = "000001"
 			}
-			w = contactOTPHTTPRequest(t, handler, http.MethodGet, "/api/v1/auth/session", nil, login.Token, "", 10)
-			var session model.AuthSessionEnvelope
-			if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &session) != nil || !session.Authenticated || session.MFAEnrolledAt == nil {
-				t.Fatal("contact OTP login did not create a usable authenticated session")
-			}
-			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/login", credentials, "", "", 11)
+			credentials["otp_channel"], credentials["otp_challenge_token"], credentials["otp_code"] = channel, challenge.ChallengeToken, wrongCode
+			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/login", credentials, "", "", 6)
 			if w.Code != http.StatusUnauthorized || len(w.Result().Cookies()) != 0 {
-				t.Fatal("consumed login OTP created another session")
+				t.Fatal("wrong automatic OTP established an authenticated session")
 			}
+			contactOTPHTTPPosture(t, db, person.ID, false, 0)
+			if _, err := db.Exec(`UPDATE public.auth_identities SET password_must_change=TRUE WHERE collaborator_id=$1`, person.ID); err != nil {
+				t.Fatal("automatic OTP forced-password-change fixture failed")
+			}
+			credentials["otp_code"] = deliveredCode
+			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/login", credentials, "", "", 7)
+			login := contactOTPHTTPLogin(t, w)
+			if !login.PasswordChangeRequired {
+				t.Fatal("automatic OTP lost the forced-password-change posture")
+			}
+			contactOTPHTTPPosture(t, db, person.ID, true, 1)
+			w = contactOTPHTTPRequest(t, handler, http.MethodGet, "/api/v1/auth/session", nil, login.Token, "", 8)
+			var session struct {
+				Authenticated      bool       `json:"authenticated"`
+				MFAEnrolledAt      *time.Time `json:"mfa_enrolled_at"`
+				RecentContactProof bool       `json:"recent_contact_mfa_verified"`
+			}
+			if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &session) != nil || !session.Authenticated || session.MFAEnrolledAt == nil || !session.RecentContactProof {
+				t.Fatal("automatic contact proof did not cross the existing session guards")
+			}
+			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/login", credentials, "", "", 9)
+			if w.Code != http.StatusUnauthorized || len(w.Result().Cookies()) != 0 {
+				t.Fatal("consumed automatic OTP created another session")
+			}
+			newPassword := "estante-laranja-com-cadernos-94"
+			change := map[string]any{"current_password": plain, "new_password": newPassword, "use_recent_contact_mfa": true}
+			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/passwords/change", change, login.Token, "", 10)
+			if w.Code != http.StatusForbidden {
+				t.Fatal("recent contact proof changed a password without matching CSRF")
+			}
+			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/passwords/change", change, login.Token, computeCSRFToken(login.Session.ID), 11)
+			if w.Code != http.StatusOK {
+				t.Fatalf("automatic contact-only account was stranded during forced password change: status=%d", w.Code)
+			}
+			change["current_password"], change["new_password"] = newPassword, "cadernos-roxos-perto-da-janela-81"
+			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/passwords/change", change, login.Token, computeCSRFToken(login.Session.ID), 12)
+			if w.Code != http.StatusUnauthorized {
+				t.Fatal("recent contact proof authorized another password change after being consumed")
+			}
+			// An updated profile contact is immediately available; pending proof
+			// from the previous declaration cannot transfer to the new contact.
+			if _, err := db.Exec(`UPDATE public.auth_mfa_contact_challenges SET created_at=clock_timestamp()-INTERVAL '61 seconds' WHERE collaborator_id=$1`, person.ID); err != nil {
+				t.Fatal("automatic OTP contact-change timing fixture failed")
+			}
+			loginBegin["password"] = newPassword
+			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/contact/login/begin", loginBegin, "", "", 13)
+			oldContact := contactOTPHTTPChallenge(t, w)
+			oldCode := deliveredCode
 			if channel == "email" {
-				if _, err := db.Exec(`UPDATE public.auth_mfa_contact_challenges SET created_at=NOW()-INTERVAL '61 seconds' WHERE collaborator_id=$1`, person.ID); err != nil {
-					t.Fatal("MFA email-change timing fixture failed")
+				recipient = person.ID.String() + "-changed@example.test"
+				if _, err := db.Exec(`UPDATE public.collaborators SET primary_email=$2 WHERE id=$1`, person.ID, recipient); err != nil {
+					t.Fatal("automatic OTP email-change fixture failed")
 				}
-				w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/contact/login/begin", loginBegin, "", "", 12)
-				beforeEmailChange := contactOTPHTTPChallenge(t, w)
-				credentials["otp_challenge_token"], credentials["otp_code"] = beforeEmailChange.ChallengeToken, deliveredCode
-				if _, err := db.Exec(`UPDATE public.collaborators SET primary_email=$2 WHERE id=$1`, person.ID, person.ID.String()+"-changed@example.test"); err != nil {
-					t.Fatal("MFA email-change fixture failed")
-				}
-				if _, err := db.Exec(`UPDATE public.collaborators SET primary_email=$2 WHERE id=$1`, person.ID, person.PrimaryEmail); err != nil {
-					t.Fatal("MFA email-revert fixture failed")
-				}
-				w = contactOTPHTTPRequest(t, handler, http.MethodGet, "/api/v1/auth/mfa/contact/options", nil, login.Token, "", 13)
-				if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &options) != nil || options["email"].Enrolled {
-					t.Fatal("changing and reverting an email revived its old MFA factor")
-				}
-				w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/login", credentials, "", "", 14)
-				if w.Code != http.StatusUnauthorized || len(w.Result().Cookies()) != 0 {
-					t.Fatal("changing and reverting an email revived its old OTP challenge")
-				}
+				loginBegin["identifier"], credentials["identifier"] = recipient, recipient
+			} else {
+				recipient = contactOTPHTTPDeclarePhone(t, db, person, "+12025550109")
 			}
+			credentials["password"], credentials["otp_challenge_token"], credentials["otp_code"] = newPassword, oldContact.ChallengeToken, oldCode
+			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/login", credentials, "", "", 14)
+			if w.Code != http.StatusUnauthorized || len(w.Result().Cookies()) != 0 {
+				t.Fatal("old contact proof survived a profile recipient change")
+			}
+			if _, err := db.Exec(`UPDATE public.auth_mfa_contact_challenges SET created_at=clock_timestamp()-INTERVAL '61 seconds' WHERE collaborator_id=$1`, person.ID); err != nil {
+				t.Fatal("automatic OTP new-contact timing fixture failed")
+			}
+			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/contact/login/begin", loginBegin, "", "", 15)
+			newContact := contactOTPHTTPChallenge(t, w)
+			credentials["otp_challenge_token"], credentials["otp_code"] = newContact.ChallengeToken, deliveredCode
+			w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/login", credentials, "", "", 16)
+			_ = contactOTPHTTPLogin(t, w)
+			contactOTPHTTPPosture(t, db, person.ID, true, 2)
 		})
 	}
+
+	t.Run("sso_only_options_never_offer_password_login", func(t *testing.T) {
+		handler := directoryHTTPHandler(t, db)
+		person := directoryHTTPPerson(t, db, false)
+		if err := repository.UpsertAuthIdentity(context.Background(), db, person.ID, person.PrimaryEmail); err != nil {
+			t.Fatal("SSO-only option fixture failed")
+		}
+		authority := contactOTPHTTPEnrollLink(t, db, person)
+		w := contactOTPHTTPRequest(t, handler, http.MethodGet, "/api/v1/auth/mfa/contact/options?token="+authority, nil, "", "", 1)
+		var options struct {
+			Email                  contactMFAOption `json:"email"`
+			PasswordLoginAvailable bool             `json:"password_login_available"`
+		}
+		if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &options) != nil || !options.Email.Available || !options.Email.Automatic || options.PasswordLoginAvailable {
+			t.Fatal("SSO-only profile metadata promised a local password login")
+		}
+	})
 
 	t.Run("failed_delivery_never_activates_or_discloses_a_challenge", func(t *testing.T) {
 		for _, outcome := range []string{"failed", "pending", "provider_error"} {
 			t.Run(outcome, func(t *testing.T) {
 				handler := directoryHTTPHandler(t, db)
 				person := directoryHTTPPerson(t, db, false)
-				rawEnroll := contactOTPHTTPEnrollLink(t, db, person)
+				plain := contactOTPHTTPPassword(t, db, person)
 				previousExecute := executeAuthEmailIntegration
 				t.Cleanup(func() { executeAuthEmailIntegration = previousExecute })
 				var code string
@@ -290,59 +360,84 @@ func TestMFAContactOTPHTTPPostgres(t *testing.T) {
 					}
 					return model.ExecuteIntegrationResponse{Status: outcome, Output: map[string]any{"code": code}}, nil
 				}
-				w := contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/factors/contact/begin", map[string]any{"token": rawEnroll, "channel": "email"}, "", "", 1)
+				w := contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/contact/login/begin", map[string]any{"identifier": person.PrimaryEmail, "password": plain, "channel": "email"}, "", "", 1)
 				if w.Code != http.StatusServiceUnavailable || code == "" || strings.Contains(w.Body.String(), code) || strings.Contains(w.Body.String(), person.PrimaryEmail) || strings.Contains(w.Body.String(), "provider-detail") || strings.Contains(w.Body.String(), "challenge_token") {
-					t.Fatal("failed or uncertain OTP delivery disclosed provider material or a usable challenge")
+					t.Fatal("uncertain automatic delivery disclosed provider material or a usable challenge")
 				}
 				var reserved, active int
 				if err := db.QueryRow(`SELECT COUNT(*),COUNT(delivered_at) FROM public.auth_mfa_contact_challenges WHERE collaborator_id=$1`, person.ID).Scan(&reserved, &active); err != nil || reserved != 1 || active != 0 {
-					t.Fatal("failed delivery escaped its sending budget or activated a challenge")
+					t.Fatal("failed automatic delivery escaped its sending budget or activated a challenge")
 				}
+				contactOTPHTTPPosture(t, db, person.ID, false, 0)
 			})
 		}
 	})
 
-	t.Run("session_enrollment_requires_live_csrf_even_in_warn_mode", func(t *testing.T) {
-		t.Setenv("YGGDRASIL_CSRF_ENFORCE", "warn")
+	t.Run("no_contact_activation_or_disable_routes", func(t *testing.T) {
 		handler := directoryHTTPHandler(t, db)
 		person := directoryHTTPPerson(t, db, false)
 		_ = contactOTPHTTPPassword(t, db, person)
 		session, rawSession, err := repository.CreateAuthSession(context.Background(), db, person.ID, nil, time.Hour)
 		if err != nil {
-			t.Fatal("MFA HTTP session fixture failed")
+			t.Fatal("removed-contact-route session fixture failed")
 		}
+		for _, route := range []struct{ method, path string }{
+			{http.MethodPost, "/api/v1/auth/mfa/factors/contact/begin"},
+			{http.MethodPost, "/api/v1/auth/mfa/factors/contact/finish"},
+			{http.MethodDelete, "/api/v1/auth/mfa/factors/contact/email"},
+			{http.MethodDelete, "/api/v1/auth/mfa/factors/contact/sms"},
+		} {
+			w := contactOTPHTTPRequest(t, handler, route.method, route.path, map[string]any{"channel": "email"}, rawSession, computeCSRFToken(session.ID), 1)
+			if w.Code != http.StatusNotFound {
+				t.Fatal("contact channel retained an enrollment, activation or disable route")
+			}
+		}
+		contactOTPHTTPPosture(t, db, person.ID, false, 1)
+	})
+
+	t.Run("setup_uses_automatic_contact_without_creating_session", func(t *testing.T) {
+		handler := directoryHTTPHandler(t, db)
+		person := directoryHTTPPerson(t, db, false)
+		raw := uuid.NewString()
+		if _, err := repository.IssueCredentialToken(context.Background(), db, repository.IssueCredentialTokenInput{CollaboratorID: person.ID, Purpose: model.CredentialTokenPurposeSetup, TokenHash: password.HashToken(raw), ExpiresAt: time.Now().Add(time.Hour)}); err != nil {
+			t.Fatal("automatic-contact setup fixture failed")
+		}
+		w := contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/passwords/setup", map[string]any{"token": raw, "new_password": "livros-amarelos-em-cima-da-mesa-76"}, "", "", 1)
+		var setup struct {
+			Status             string `json:"status"`
+			Next               string `json:"next"`
+			EnrollmentRequired bool   `json:"mfa_enrollment_required"`
+		}
+		if w.Code != http.StatusOK || json.Unmarshal(w.Body.Bytes(), &setup) != nil || setup.Status != "password_set" || setup.Next != "login" || setup.EnrollmentRequired || len(w.Result().Cookies()) != 0 {
+			t.Fatal("password setup required contact activation or created a session without OTP")
+		}
+		contactOTPHTTPPosture(t, db, person.ID, false, 0)
+	})
+
+	t.Run("expired_recent_contact_proof_cannot_change_password", func(t *testing.T) {
+		handler := directoryHTTPHandler(t, db)
+		person := directoryHTTPPerson(t, db, false)
+		plain := contactOTPHTTPPassword(t, db, person)
 		previousExecute := executeAuthEmailIntegration
 		t.Cleanup(func() { executeAuthEmailIntegration = previousExecute })
-		sends := 0
 		var code string
 		executeAuthEmailIntegration = func(_ context.Context, _ *amqp091.Connection, _ *sql.DB, req model.ExecuteIntegrationRequest) (model.ExecuteIntegrationResponse, error) {
-			sends++
 			code = contactOTPHTTPCode(t, req)
 			return model.ExecuteIntegrationResponse{Status: "sent"}, nil
 		}
-		for index, csrf := range []string{"", computeCSRFToken(uuid.New())} {
-			w := contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/factors/contact/begin", map[string]any{"channel": "email"}, rawSession, csrf, index+1)
-			if w.Code != http.StatusForbidden || sends != 0 {
-				t.Fatal("session enrollment delivered OTP without matching CSRF proof")
-			}
-		}
-		w := contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/factors/contact/begin", map[string]any{"channel": "email"}, rawSession, computeCSRFToken(session.ID), 3)
+		w := contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/contact/login/begin", map[string]any{"identifier": person.PrimaryEmail, "password": plain, "channel": "email"}, "", "", 1)
 		challenge := contactOTPHTTPChallenge(t, w)
-		finish := map[string]any{"channel": "email", "challenge_token": challenge.ChallengeToken, "code": code}
-		w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/factors/contact/finish", finish, rawSession, "", 4)
-		if w.Code != http.StatusForbidden {
-			t.Fatal("session enrollment finish skipped CSRF proof")
+		w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/login", map[string]any{"identifier": person.PrimaryEmail, "password": plain, "otp_channel": "email", "otp_challenge_token": challenge.ChallengeToken, "otp_code": code}, "", "", 2)
+		login := contactOTPHTTPLogin(t, w)
+		if _, err := db.Exec(`UPDATE public.auth_contact_session_proofs SET verified_at=clock_timestamp()-INTERVAL '6 minutes' WHERE session_id=$1`, login.Session.ID); err != nil {
+			t.Fatal("expired recent-contact proof fixture failed")
 		}
-		if _, err := db.Exec(`UPDATE public.auth_sessions SET status='revoked',revoked_at=NOW() WHERE id=$1`, session.ID); err != nil {
-			t.Fatal("MFA HTTP session revocation fixture failed")
-		}
-		w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/mfa/factors/contact/finish", finish, rawSession, computeCSRFToken(session.ID), 5)
+		w = contactOTPHTTPRequest(t, handler, http.MethodPost, "/api/v1/auth/passwords/change", map[string]any{"current_password": plain, "new_password": "arvore-laranja-perto-do-portao-39", "use_recent_contact_mfa": true}, login.Token, computeCSRFToken(login.Session.ID), 3)
 		if w.Code != http.StatusUnauthorized {
-			t.Fatal("revoked enrollment session enabled a contact factor")
+			t.Fatal("stale contact proof authorized a password change")
 		}
-		var factors int
-		if db.QueryRow(`SELECT COUNT(*) FROM public.auth_mfa_contact_factors WHERE collaborator_id=$1`, person.ID).Scan(&factors) != nil || factors != 0 {
-			t.Fatal("revoked session persisted a contact MFA factor")
+		if repository.VerifyPassword(context.Background(), db, person.ID, plain) != nil {
+			t.Fatal("rejected stale proof changed the password")
 		}
 	})
 }

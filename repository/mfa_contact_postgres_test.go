@@ -477,13 +477,13 @@ func TestMFAContactOTPPostgres(t *testing.T) {
 		if _, err := db.Exec(`UPDATE public.auth_identities SET recovery_codes_hashes=$2 WHERE collaborator_id=$1`, c.ID, pgTextArray(contactOTPRecoveryHashes(t))); err != nil {
 			t.Fatal("recovery-only guard fixture failed")
 		}
-		if !errors.Is(DisableContactMFAFactor(ctx, db, c.ID, "email"), ErrLastMFAFactor) {
-			t.Fatal("recovery codes were counted as a primary factor")
+		if !errors.Is(DisableContactMFAFactor(ctx, db, c.ID, "email"), ErrAutomaticMFAFactor) {
+			t.Fatal("automatic email MFA was allowed to be disabled")
 		}
 		contactOTPSetPhone(t, db, c.ID, "+12025550126")
 		contactOTPSeedFactor(t, db, c.ID, "sms")
-		if DisableContactMFAFactor(ctx, db, c.ID, "sms") != nil {
-			t.Fatal("second primary contact factor could not be removed")
+		if !errors.Is(DisableContactMFAFactor(ctx, db, c.ID, "sms"), ErrAutomaticMFAFactor) {
+			t.Fatal("automatic SMS MFA was allowed to be disabled")
 		}
 		authority := contactOTPLoginBinding(t, db, c.ID)
 		token, code := contactOTPIssue(t, db, c.ID, "email", "login", authority, binding, true)
@@ -503,6 +503,24 @@ func TestMFAContactOTPPostgres(t *testing.T) {
 			t.Fatal("full reset retained an outstanding contact challenge")
 		}
 		contactOTPRequireInvalid(t, VerifyContactOTP(ctx, db, c.ID, "email", "login", authority, binding, token, code))
+		available, err := ConfiguredContactMFAFactors(ctx, db, c.ID)
+		if err != nil || len(available) != 2 {
+			t.Fatal("full MFA reset removed the automatic saved profile contacts")
+		}
+		plain := "automatic-after-reset-fixture-password"
+		hash, err := coreauth.HashPassword(plain)
+		if err != nil || SetPasswordHash(ctx, db, c.ID, hash, "pbkdf2_sha256", time.Now().Add(24*time.Hour)) != nil {
+			t.Fatal("legitimate fresh password setup after full reset failed")
+		}
+		if _, err := db.Exec(`UPDATE public.auth_mfa_contact_challenges SET created_at=NOW()-INTERVAL '61 seconds' WHERE collaborator_id=$1`, c.ID); err != nil {
+			t.Fatal("post-reset sending-clock fixture failed")
+		}
+		authority = contactOTPLoginBinding(t, db, c.ID)
+		token, code = contactOTPIssue(t, db, c.ID, "email", "login", authority, binding, true)
+		req := model.LoginWithPasswordRequest{Identifier: c.PrimaryEmail, Password: plain}
+		if _, _, err := VerifyContactOTPAndCreateSession(ctx, db, c.ID, "email", authority, binding, token, code, req, time.Hour); err != nil {
+			t.Fatal("saved contact required MFA re-enrollment after legitimate fresh setup")
+		}
 	})
 
 	t.Run("atomic_session_and_replay", func(t *testing.T) {
@@ -596,18 +614,15 @@ func TestMFAContactOTPPostgres(t *testing.T) {
 		for _, channel := range []string{"email", "sms"} {
 			go func() { results <- DisableContactMFAFactor(ctx, db, c.ID, channel) }()
 		}
-		successes := 0
 		for range 2 {
 			err := <-results
-			if err == nil {
-				successes++
-			} else if !errors.Is(err, ErrLastMFAFactor) {
-				t.Fatal("concurrent primary-factor removal failed unexpectedly")
+			if !errors.Is(err, ErrAutomaticMFAFactor) {
+				t.Fatal("concurrent requests disabled an automatic contact MFA channel")
 			}
 		}
-		factors, err := ListContactMFAFactors(ctx, db, c.ID)
-		if successes != 1 || err != nil || len(factors) != 1 {
-			t.Fatal("concurrent removals stranded the identity without a primary factor")
+		factors, err := ConfiguredContactMFAFactors(ctx, db, c.ID)
+		if err != nil || len(factors) != 2 {
+			t.Fatal("concurrent requests changed automatic profile MFA availability")
 		}
 	})
 
@@ -625,8 +640,8 @@ func TestMFAContactOTPPostgres(t *testing.T) {
 		if err != nil || len(configured) != 1 || configured[0].Channel != "email" {
 			t.Fatal("unconfigured SMS factor counted as a usable primary factor")
 		}
-		if !errors.Is(DisableContactMFAFactor(ctx, db, c.ID, "email"), ErrLastMFAFactor) {
-			t.Fatal("unconfigured SMS permitted removal of the last usable contact factor")
+		if !errors.Is(DisableContactMFAFactor(ctx, db, c.ID, "email"), ErrAutomaticMFAFactor) {
+			t.Fatal("configuration state permitted disabling automatic profile email MFA")
 		}
 		if _, err := db.Exec(`UPDATE public.auth_identities SET webauthn_credentials='[{"id":"fixture-last-passkey"}]'::jsonb WHERE collaborator_id=$1`, c.ID); err != nil {
 			t.Fatal("passkey guard fixture failed")
@@ -638,23 +653,143 @@ func TestMFAContactOTPPostgres(t *testing.T) {
 	})
 	t.Run("undecryptable_sms_does_not_count_as_alternate", func(t *testing.T) {
 		c, _ := contactOTPFixture(t, db)
-		contactOTPSeedFactor(t, db, c.ID, "email")
 		contactOTPSetPhone(t, db, c.ID, "+12025550129")
-		contactOTPSeedFactor(t, db, c.ID, "sms")
+		t.Setenv("AUTH_EMAIL_INTEGRATION", "")
 		for _, key := range []string{"", base64.StdEncoding.EncodeToString([]byte(strings.Repeat("x", 32)))} {
 			t.Setenv("YGGDRASIL_AUTH_KEK_BASE64", key)
-			if !errors.Is(DisableContactMFAFactor(ctx, db, c.ID, "email"), ErrLastMFAFactor) {
-				t.Fatal("unreadable SMS permitted removal of the last usable contact factor")
+			configured, err := ConfiguredContactMFAFactors(ctx, db, c.ID)
+			if err != nil || len(configured) != 0 {
+				t.Fatal("unreadable SMS counted as an automatic available channel")
 			}
-		}
-		if _, err := db.Exec(`DELETE FROM public.auth_mfa_contact_factors WHERE collaborator_id=$1 AND channel='email'`, c.ID); err != nil {
-			t.Fatal("SMS-only guard fixture failed")
 		}
 		if _, err := db.Exec(`UPDATE public.auth_identities SET webauthn_credentials='[{"id":"fixture-last-passkey"}]'::jsonb WHERE collaborator_id=$1`, c.ID); err != nil {
 			t.Fatal("passkey guard fixture failed")
 		}
 		if !errors.Is(RemoveWebAuthnCredential(ctx, db, c.ID, "fixture-last-passkey"), ErrLastMFAFactor) {
 			t.Fatal("unreadable SMS permitted removal of the last usable passkey")
+		}
+	})
+
+	t.Run("automatic_contact_login_without_enrollment", func(t *testing.T) {
+		for _, channel := range []string{"email", "sms"} {
+			t.Run(channel, func(t *testing.T) {
+				c, _ := contactOTPFixture(t, db)
+				plain := "automatic-contact-fixture-password"
+				hash, err := coreauth.HashPassword(plain)
+				if err != nil {
+					t.Fatal("automatic profile password fixture generation failed")
+				}
+				if _, err := db.Exec(`UPDATE public.auth_identities SET password_hash=$2,password_scheme='pbkdf2_sha256',mfa_enrolled_at=NULL WHERE collaborator_id=$1`, c.ID, hash); err != nil {
+					t.Fatal("automatic profile password fixture failed")
+				}
+				if channel == "sms" {
+					contactOTPSetPhone(t, db, c.ID, "+12025550130")
+				}
+				binding := contactOTPBinding(t, db, c.ID, channel)
+				authority := contactOTPLoginBinding(t, db, c.ID)
+				token, code := contactOTPIssue(t, db, c.ID, channel, "login", authority, binding, true)
+				req := model.LoginWithPasswordRequest{Identifier: c.PrimaryEmail, Password: plain}
+				_, _, err = VerifyContactOTPAndCreateSession(ctx, db, c.ID, channel, authority, binding, token, "invalid-code", req, time.Hour)
+				contactOTPRequireInvalid(t, err)
+				var proven bool
+				if db.QueryRow(`SELECT mfa_enrolled_at IS NOT NULL FROM public.auth_identities WHERE collaborator_id=$1`, c.ID).Scan(&proven) != nil || proven {
+					t.Fatal("failed automatic OTP proof marked the identity as MFA authenticated")
+				}
+				session, rawSession, err := VerifyContactOTPAndCreateSession(ctx, db, c.ID, channel, authority, binding, token, code, req, time.Hour)
+				if err != nil || session.ID == uuid.Nil || rawSession == "" {
+					t.Fatal("saved profile OTP could not authenticate without enrollment")
+				}
+				if db.QueryRow(`SELECT mfa_enrolled_at IS NOT NULL FROM public.auth_identities WHERE collaborator_id=$1`, c.ID).Scan(&proven) != nil || !proven {
+					t.Fatal("successful automatic OTP proof did not satisfy the existing session MFA posture")
+				}
+				var factorRows int
+				if db.QueryRow(`SELECT count(*) FROM public.auth_mfa_contact_factors WHERE collaborator_id=$1`, c.ID).Scan(&factorRows) != nil || factorRows != 0 {
+					t.Fatal("automatic OTP login required or created a manual enrollment factor")
+				}
+				_, _, err = VerifyContactOTPAndCreateSession(ctx, db, c.ID, channel, authority, binding, token, code, req, time.Hour)
+				contactOTPRequireInvalid(t, err)
+			})
+		}
+	})
+
+	t.Run("automatic_contact_change_permits_new_otp", func(t *testing.T) {
+		for _, channel := range []string{"email", "sms"} {
+			t.Run(channel, func(t *testing.T) {
+				c, _ := contactOTPFixture(t, db)
+				plain := "automatic-contact-change-fixture-password"
+				hash, err := coreauth.HashPassword(plain)
+				if err != nil {
+					t.Fatal("changed profile password fixture generation failed")
+				}
+				if _, err := db.Exec(`UPDATE public.auth_identities SET password_hash=$2,password_scheme='pbkdf2_sha256',mfa_enrolled_at=NULL WHERE collaborator_id=$1`, c.ID, hash); err != nil {
+					t.Fatal("changed profile password fixture failed")
+				}
+				if channel == "sms" {
+					contactOTPSetPhone(t, db, c.ID, "+12025550131")
+				}
+				oldBinding := contactOTPBinding(t, db, c.ID, channel)
+				authority := contactOTPLoginBinding(t, db, c.ID)
+				oldToken, oldCode := contactOTPIssue(t, db, c.ID, channel, "login", authority, oldBinding, true)
+				if channel == "sms" {
+					contactOTPSetPhone(t, db, c.ID, "+12025550132")
+				} else if _, err := db.Exec(`UPDATE public.collaborators SET primary_email=$2 WHERE id=$1`, c.ID, uuid.NewString()+"@example.test"); err != nil {
+					t.Fatal("automatic email profile update failed")
+				}
+				req := model.LoginWithPasswordRequest{Identifier: c.PrimaryEmail, Password: plain}
+				_, _, err = VerifyContactOTPAndCreateSession(ctx, db, c.ID, channel, authority, oldBinding, oldToken, oldCode, req, time.Hour)
+				contactOTPRequireInvalid(t, err)
+				newBinding := contactOTPBinding(t, db, c.ID, channel)
+				if newBinding == oldBinding {
+					t.Fatal("profile contact replacement retained old challenge authority")
+				}
+				if _, err := db.Exec(`UPDATE public.auth_mfa_contact_challenges SET created_at=NOW()-INTERVAL '61 seconds' WHERE collaborator_id=$1`, c.ID); err != nil {
+					t.Fatal("automatic updated contact sending-clock fixture failed")
+				}
+				newToken, newCode := contactOTPIssue(t, db, c.ID, channel, "login", authority, newBinding, true)
+				session, _, err := VerifyContactOTPAndCreateSession(ctx, db, c.ID, channel, authority, newBinding, newToken, newCode, req, time.Hour)
+				if err != nil || session.ID == uuid.Nil {
+					t.Fatal("new saved profile contact required manual enrollment before OTP login")
+				}
+				var factorRows int
+				if db.QueryRow(`SELECT count(*) FROM public.auth_mfa_contact_factors WHERE collaborator_id=$1`, c.ID).Scan(&factorRows) != nil || factorRows != 0 {
+					t.Fatal("updated profile contact created manual factor state")
+				}
+			})
+		}
+	})
+
+	t.Run("automatic_profile_contact_allows_last_passkey_removal", func(t *testing.T) {
+		for _, channel := range []string{"email", "sms"} {
+			t.Run(channel, func(t *testing.T) {
+				c, _ := contactOTPFixture(t, db)
+				if channel == "sms" {
+					t.Setenv("AUTH_EMAIL_INTEGRATION", "")
+					contactOTPSetPhone(t, db, c.ID, "+12025550133")
+				} else {
+					t.Setenv("AUTH_SMS_INTEGRATION", "")
+				}
+				if _, err := db.Exec(`UPDATE public.auth_identities SET webauthn_credentials='[{"id":"fixture-last-passkey"}]'::jsonb WHERE collaborator_id=$1`, c.ID); err != nil {
+					t.Fatal("automatic profile passkey fixture failed")
+				}
+				key, configured := "AUTH_EMAIL_INTEGRATION", "mfa-tests/mail"
+				if channel == "sms" {
+					key, configured = "AUTH_SMS_INTEGRATION", "mfa-tests/text"
+				}
+				for _, unavailable := range []string{"", "missing-selector-slash"} {
+					t.Setenv(key, unavailable)
+					if !errors.Is(RemoveWebAuthnCredential(ctx, db, c.ID, "fixture-last-passkey"), ErrLastMFAFactor) {
+						t.Fatal("missing or invalid configuration permitted removal of the last usable passkey")
+					}
+				}
+				t.Setenv(key, configured)
+				if RemoveWebAuthnCredential(ctx, db, c.ID, "fixture-last-passkey") != nil {
+					t.Fatal("usable automatic profile contact did not permit last passkey removal")
+				}
+				var count int
+				if db.QueryRow(`SELECT count(*) FROM public.auth_mfa_contact_factors WHERE collaborator_id=$1`, c.ID).Scan(&count) != nil || count != 0 {
+					t.Fatal("last-passkey guard required a manually enrolled profile contact")
+				}
+			})
 		}
 	})
 }

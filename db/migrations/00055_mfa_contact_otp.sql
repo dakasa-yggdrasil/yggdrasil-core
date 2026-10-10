@@ -43,6 +43,18 @@ CREATE TABLE IF NOT EXISTS public.auth_mfa_contact_challenges (
     created_at TIMESTAMPTZ NOT NULL DEFAULT NOW()
 );
 
+-- Only the successful contact-OTP/session transaction creates this proof.
+-- Session metadata is never authentication authority for password changes.
+CREATE TABLE IF NOT EXISTS public.auth_contact_session_proofs (
+    session_id UUID PRIMARY KEY REFERENCES public.auth_sessions(id) ON DELETE CASCADE,
+    collaborator_id UUID NOT NULL REFERENCES public.collaborators(id) ON DELETE CASCADE,
+    channel TEXT NOT NULL CHECK (channel IN ('email', 'sms')),
+    contact_binding TEXT NOT NULL CHECK (contact_binding <> ''),
+    credential_version UUID NOT NULL,
+    verified_at TIMESTAMPTZ NOT NULL DEFAULT clock_timestamp(),
+    consumed_at TIMESTAMPTZ NULL
+);
+
 -- Failed sends remain in this table and consume the same sending budget.
 CREATE INDEX IF NOT EXISTS auth_mfa_contact_challenges_quota_idx
     ON public.auth_mfa_contact_challenges (collaborator_id, channel, created_at DESC);
@@ -59,6 +71,8 @@ BEGIN
         DELETE FROM public.auth_mfa_contact_factors
         WHERE collaborator_id=NEW.id AND channel='email';
         UPDATE public.auth_mfa_contact_challenges SET consumed_at=NOW()
+        WHERE collaborator_id=NEW.id AND channel='email' AND consumed_at IS NULL;
+        UPDATE public.auth_contact_session_proofs SET consumed_at=clock_timestamp()
         WHERE collaborator_id=NEW.id AND channel='email' AND consumed_at IS NULL;
     END IF;
     RETURN NEW;
@@ -77,6 +91,7 @@ DROP FUNCTION IF EXISTS public.rotate_mfa_password_version();
 ALTER TABLE public.auth_identities DROP COLUMN IF EXISTS mfa_password_version;
 DROP TRIGGER IF EXISTS collaborators_changed_email_mfa ON public.collaborators;
 DROP FUNCTION IF EXISTS public.invalidate_changed_email_mfa();
+DROP TABLE IF EXISTS public.auth_contact_session_proofs;
 DROP TABLE IF EXISTS public.auth_mfa_contact_challenges;
 DROP TABLE IF EXISTS public.auth_mfa_contact_factors;
 -- +goose StatementEnd

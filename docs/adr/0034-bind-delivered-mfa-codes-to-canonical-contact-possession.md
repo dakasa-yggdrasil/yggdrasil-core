@@ -7,33 +7,36 @@
 
 ## Context
 
-Collaborators need email and SMS OTPs alongside passkeys and authenticators.
-Directory contacts are declarations, which prove neither possession nor
-authentication authority. Providers must stay outside Core; password reset
-already sends an email link.
+Collaborators already have email and phone in their profile. These contacts
+must be available for OTP MFA at password login without another registration,
+activation or optional factor record. Contact declaration remains distinct from
+an actual authentication proof.
 
 ## Decision
 
-Keep contact MFA possession in separate state and bind every proof to the
-canonical collaborator, current contact, purpose and enrollment authority
-or exact random credential version. Activate only after atomic consumption of a delivered
-OTP. Bind email to the normalized primary email and SMS to its typed contact
-declaration version/time. Use configured `send_email`/`send_sms` integrations.
+Offer email/SMS automatically from the canonical profile whenever that contact
+and provider delivery are usable. Never require a per-user contact factor row.
+Verify the password before sending; bind every code to owner, channel, current
+contact, exact credential epoch and login purpose. Consume the valid OTP and
+create its session atomically. Only that real proof updates internal MFA posture.
 
-Persist hashed random challenge tokens and HMAC code digests, serialize
-attempt/send budgets in PostgreSQL, and commit login proof with its session.
-Administrative recovery invalidates factors/challenges with old credentials.
-Email-link password reset keeps requiring an independent authenticator or
-recovery code instead of another proof of the same mailbox.
+Keep delivery provider-neutral and preserve challenge, resend and attempt budgets.
+Bind recent contact-authenticated session proof to owner, current contact and
+credential epoch for one password change within five minutes; the proof is
+server-issued, never caller metadata, and consumed in the password-update transaction.
+
+Keep email-link password reset dependent on an independent authenticator/recovery
+code. Existing federated provider authentication remains a separate contract.
 
 ## Consequences
 
-Contact changes require new possession proof. Directory assurance remains
-declared. Provider acceptance and human receipt remain separate. Missing
-delivery configuration prevents offering a channel for login. Contact-only
-accounts need saved recovery codes or admin recovery after password loss.
+A changed profile contact is usable for new codes immediately; old pending codes
+and recent session proofs become invalid. Directory assurance remains declared.
+There is no user-controlled registration, enable/disable or deletion for contact
+methods. Provider acceptance is separate from code receipt. Setup routes to password
+login when automatic contacts are usable and still never creates a session alone.
 
 ## Related
 
 - ADR-0030: canonical declared contacts and profile completion.
-- [Contact OTP API and operation](../mfa-contact-otp.md).
+- [Automatic contact OTP API and operation](../mfa-contact-otp.md).

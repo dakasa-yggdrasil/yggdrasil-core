@@ -89,12 +89,9 @@ Supported `kind` values (the authoritative list is the switch in
 
 | Method | Path | Purpose |
 |---|---|---|
-| POST | `/api/v1/auth/login` | Password then authenticator/recovery code or enrolled email/SMS OTP; HTTP202 is the MFA stage, HTTP200 completes login |
-| GET | `/api/v1/auth/mfa/contact/options` | Contact-channel availability for enrollment link/session |
-| POST | `/api/v1/auth/mfa/factors/contact/begin` | Send enrollment OTP to the canonical contact |
-| POST | `/api/v1/auth/mfa/factors/contact/finish` | Verify and enroll the contact factor atomically |
+| POST | `/api/v1/auth/login` | Password then authenticator/recovery code or automatic email/SMS OTP from saved profile contacts; HTTP202 is the MFA stage, HTTP200 completes login |
+| GET | `/api/v1/auth/mfa/contact/options` | Automatic canonical contact availability (read-only owner link/session) |
 | POST | `/api/v1/auth/mfa/contact/login/begin` | Verify password and request a login OTP |
-| DELETE | `/api/v1/auth/mfa/factors/contact/{channel}` | Remove own contact factor with last-factor protection |
 | POST | `/api/v1/auth/third-party/login` | Third-party identity exchange |
 | GET | `/api/v1/auth/third-party/start/{provider}` | OIDC start |
 | GET | `/api/v1/auth/third-party/callback/{provider}` | OIDC callback |

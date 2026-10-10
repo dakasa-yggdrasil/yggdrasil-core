@@ -177,6 +177,8 @@ func RemoveWebAuthnCredential(ctx context.Context, db *sql.DB, collaboratorID uu
 	if !found {
 		return ErrWebAuthnCredentialNotFound
 	}
+	// Saved profile contacts supply automatic OTP alternatives independently
+	// of any historical contact-factor enrollment rows.
 	contacts, err := ConfiguredContactMFAFactors(ctx, tx, collaboratorID)
 	if err != nil {
 		return err

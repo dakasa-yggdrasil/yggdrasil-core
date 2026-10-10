@@ -61,12 +61,14 @@ type AuthSessionView struct {
 // (grant wildcard OR traits.yggdrasil_admin=true). O FE (PermissionGate,
 // usePermission) usa essas chaves pra esconder rotas e desabilitar ações.
 type AuthSessionEnvelope struct {
-	PhoneProfileRequired bool          `json:"phone_profile_required"`
-	Authenticated        bool          `json:"authenticated"`
-	Collaborator         *Collaborator `json:"collaborator,omitempty"`
-	Session              *AuthSession  `json:"session,omitempty"`
-	MFAEnrolledAt        *time.Time    `json:"mfa_enrolled_at,omitempty"`
-	Permissions          []string      `json:"permissions,omitempty"`
+	RecentContactMFAVerified bool          `json:"recent_contact_mfa_verified"`
+	PasswordChangeRequired   bool          `json:"password_change_required"`
+	PhoneProfileRequired     bool          `json:"phone_profile_required"`
+	Authenticated            bool          `json:"authenticated"`
+	Collaborator             *Collaborator `json:"collaborator,omitempty"`
+	Session                  *AuthSession  `json:"session,omitempty"`
+	MFAEnrolledAt            *time.Time    `json:"mfa_enrolled_at,omitempty"`
+	Permissions              []string      `json:"permissions,omitempty"`
 	// CSRFToken is the per-session CSRF token derived deterministically
 	// from session.id + a server-side HMAC secret (audit 2026-05-27 A7).
 	// Frontend mirrors this value in the X-CSRF-Token request header on

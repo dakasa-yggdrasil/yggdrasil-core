@@ -453,19 +453,19 @@ func TestAuthLoginFactorsExposeOnlyImplementedLoginFactors(t *testing.T) {
 	}
 }
 
-func TestContactLoginFactorsKeepRecoveryLastAndRequireUsableEnrollment(t *testing.T) {
+func TestContactLoginFactorsKeepRecoveryLastAndUseProfileContacts(t *testing.T) {
 	identity := model.AuthIdentity{HasRecoveryCodes: true}
 	options := map[string]contactMFAOption{
-		"email": {Available: true, Enrolled: true},
-		"sms":   {Available: false, Enrolled: true},
+		"email": {Available: true, Automatic: true},
+		"sms":   {Available: false, Automatic: true},
 	}
 	factors := authContactLoginFactors(identity, options)
 	if len(factors) != 2 || factors[0] != "email" || factors[1] != "recovery_code" {
 		t.Fatalf("contact-only factors = %v; want usable email before recovery", factors)
 	}
-	options["email"] = contactMFAOption{Available: true, Enrolled: false}
+	options["email"] = contactMFAOption{Available: false, Automatic: true}
 	factors = authContactLoginFactors(identity, options)
 	if len(factors) != 1 || factors[0] != "recovery_code" {
-		t.Fatalf("unproved contact became a login factor: %v", factors)
+		t.Fatalf("unavailable contact became a login factor: %v", factors)
 	}
 }

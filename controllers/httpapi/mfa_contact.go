@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"crypto/hmac"
 	"database/sql"
 	"errors"
 	"fmt"
@@ -21,14 +20,7 @@ import (
 
 type contactMFAOption struct {
 	Available bool `json:"available"`
-	Enrolled  bool `json:"enrolled"`
-}
-
-type contactOTPRequest struct {
-	Token          string `json:"token,omitempty"`
-	Channel        string `json:"channel"`
-	ChallengeToken string `json:"challenge_token,omitempty"`
-	Code           string `json:"code,omitempty"`
+	Automatic bool `json:"automatic"`
 }
 
 type contactOTPResponse struct {
@@ -56,35 +48,23 @@ func loadContactDeliveryConfig(channel string) (contactDeliveryConfig, bool) {
 	}, true
 }
 
-// Public auth routes do not carry session claims through the global CSRF
-// middleware. Resolve and bind the live session here, enforcing CSRF on every
-// session-mode mutation, including when the global middleware is in warn mode.
-func (s *Server) resolveContactEnrollment(r *http.Request, token string, mutation bool) (model.Collaborator, string, error) {
+// Availability uses the canonical profile, without registering a contact
+// factor. A live session or existing first-access link authorizes this read.
+func (s *Server) resolveContactOptionsCollaborator(r *http.Request, token string) (model.Collaborator, error) {
 	if token != "" {
-		collab, err := s.resolveCollaboratorFromEnrollToken(r.Context(), token)
-		return collab, "enroll-token:" + hashEnrollToken(token), err
+		return s.resolveCollaboratorFromEnrollToken(r.Context(), token)
 	}
 	raw, ok := extractAuthToken(r)
 	if !ok {
-		return model.Collaborator{}, "", repository.ErrAuthSessionNotFound
+		return model.Collaborator{}, repository.ErrAuthSessionNotFound
 	}
-	session, collab, err := repository.ResolveAuthSession(r.Context(), s.db, raw)
-	if err != nil {
-		return model.Collaborator{}, "", err
-	}
-	if mutation && !hmac.Equal([]byte(strings.TrimSpace(r.Header.Get(csrfHeaderName))), []byte(computeCSRFToken(session.ID))) {
-		return model.Collaborator{}, "", errContactCSRF
-	}
-	return collab, "session:" + session.ID.String(), nil
+	_, collab, err := repository.ResolveAuthSession(r.Context(), s.db, raw)
+	return collab, err
 }
 
 var errContactCSRF = errors.New("contact MFA requires session CSRF proof")
 
 func (s *Server) contactMFAOptions(ctx context.Context, id uuid.UUID) (map[string]contactMFAOption, error) {
-	factors, err := repository.ListContactMFAFactors(ctx, s.db, id)
-	if err != nil {
-		return nil, err
-	}
 	out := map[string]contactMFAOption{}
 	for _, channel := range []string{"email", "sms"} {
 		_, configured := loadContactDeliveryConfig(channel)
@@ -97,12 +77,7 @@ func (s *Server) contactMFAOptions(ctx context.Context, id uuid.UUID) (map[strin
 			phone, phoneErr := repository.GetPhoneContact(ctx, s.db, s.envelope, id)
 			configured = phoneErr == nil && phone != nil
 		}
-		option := contactMFAOption{Available: configured && bindingErr == nil && binding != ""}
-		for _, factor := range factors {
-			if factor.Channel == channel && factor.ContactBinding == binding {
-				option.Enrolled = true
-			}
-		}
+		option := contactMFAOption{Available: configured && bindingErr == nil && binding != "", Automatic: true}
 		out[channel] = option
 	}
 	return out, nil
@@ -110,7 +85,7 @@ func (s *Server) contactMFAOptions(ctx context.Context, id uuid.UUID) (map[strin
 
 func (s *Server) handleMFAContactOptions(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Cache-Control", "no-store")
-	collab, _, err := s.resolveContactEnrollment(r, strings.TrimSpace(r.URL.Query().Get("token")), false)
+	collab, err := s.resolveContactOptionsCollaborator(r, strings.TrimSpace(r.URL.Query().Get("token")))
 	if err != nil {
 		writeContactMFAError(w, r, err)
 		return
@@ -120,26 +95,15 @@ func (s *Server) handleMFAContactOptions(w http.ResponseWriter, r *http.Request)
 		writeContactMFAError(w, r, err)
 		return
 	}
-	writeJSON(w, http.StatusOK, options)
-}
-
-func (s *Server) handleMFAContactBegin(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "no-store")
-	var req contactOTPRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeMappedError(w, err)
+	_, credentialErr := repository.ReadContactLoginBinding(r.Context(), s.db, collab.ID)
+	if credentialErr != nil && !errors.Is(credentialErr, repository.ErrContactOTPInvalid) {
+		writeContactMFAError(w, r, credentialErr)
 		return
 	}
-	collab, binding, err := s.resolveContactEnrollment(r, strings.TrimSpace(req.Token), true)
-	if err != nil {
-		writeContactMFAError(w, r, err)
-		return
-	}
-	if err := repository.UpsertAuthIdentity(r.Context(), s.db, collab.ID, collab.PrimaryEmail); err != nil {
-		writeMappedError(w, err)
-		return
-	}
-	s.beginContactOTP(w, r, collab, req.Channel, "enroll", binding)
+	writeJSON(w, http.StatusOK, map[string]any{
+		"email": options["email"], "sms": options["sms"],
+		"password_login_available": credentialErr == nil,
+	})
 }
 
 func (s *Server) handleMFAContactLoginBegin(w http.ResponseWriter, r *http.Request) {
@@ -158,12 +122,8 @@ func (s *Server) handleMFAContactLoginBegin(w http.ResponseWriter, r *http.Reque
 		writeMappedError(w, err)
 		return
 	}
-	if err := mfa.EnforceMFAEnrolled(r.Context(), s.db, collab.ID); err != nil {
-		writeMappedError(w, err)
-		return
-	}
 	options, err := s.contactMFAOptions(r.Context(), collab.ID)
-	if err != nil || !options[req.Channel].Available || !options[req.Channel].Enrolled {
+	if err != nil || !options[req.Channel].Available {
 		if err == nil {
 			err = repository.ErrContactUnavailable
 		}
@@ -276,52 +236,6 @@ func contactOTPCopy(brand model.TenantBrand, code string) (string, string) {
 		return fmt.Sprintf("Código de verificação do %s", label), fmt.Sprintf("%s: seu código de verificação é %s. Válido por 5 minutos, para uso único. Não compartilhe este código. Se não foi você, ignore esta mensagem.", label, code)
 	}
 	return fmt.Sprintf("%s verification code", label), fmt.Sprintf("%s: your verification code is %s. Valid for 5 minutes, for one use. Do not share this code. If you did not request it, ignore this message.", label, code)
-}
-
-func (s *Server) handleMFAContactFinish(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "no-store")
-	var req contactOTPRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeMappedError(w, err)
-		return
-	}
-	collab, contextBinding, err := s.resolveContactEnrollment(r, strings.TrimSpace(req.Token), true)
-	if err != nil {
-		writeContactMFAError(w, r, err)
-		return
-	}
-	contactBinding, err := repository.ReadContactBinding(r.Context(), s.db, collab.ID, req.Channel)
-	if err != nil {
-		writeContactMFAError(w, r, err)
-		return
-	}
-	codes, hashes, err := mfa.GenerateRecoveryCodes()
-	if err != nil {
-		writeContactMFAError(w, r, err)
-		return
-	}
-	if err := repository.VerifyAndEnrollContactOTP(r.Context(), s.db, collab.ID, req.Channel, "enroll", contextBinding, contactBinding, req.ChallengeToken, req.Code, hashes); err != nil {
-		writeContactMFAError(w, r, err)
-		return
-	}
-	s.recordAuthAuditCollaborator(r, AuditAuthMFAEnrolled, collab.ID, AuditOutcomeSuccess, map[string]any{"factor": req.Channel})
-	writeJSON(w, http.StatusOK, map[string]any{"mfa_enrolled": true, "codes": codes, "displayed_once": true})
-}
-
-func (s *Server) handleMFAContactDelete(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Cache-Control", "no-store")
-	collab, _, err := s.resolveContactEnrollment(r, "", true)
-	if err != nil {
-		writeContactMFAError(w, r, err)
-		return
-	}
-	channel := r.PathValue("channel")
-	if err := repository.DisableContactMFAFactor(r.Context(), s.db, collab.ID, channel); err != nil {
-		writeContactMFAError(w, r, err)
-		return
-	}
-	s.recordAuthAuditCollaborator(r, AuditAuthMFAUnenrolled, collab.ID, AuditOutcomeSuccess, map[string]any{"factor": channel})
-	w.WriteHeader(http.StatusNoContent)
 }
 
 func writeContactMFAError(w http.ResponseWriter, r *http.Request, err error) {

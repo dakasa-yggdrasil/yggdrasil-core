@@ -363,8 +363,6 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		"/api/v1/auth/mfa/enroll/request",
 		"/api/v1/auth/mfa/enroll/validate",
 		"/api/v1/auth/mfa/contact/options",
-		"/api/v1/auth/mfa/factors/contact/begin",
-		"/api/v1/auth/mfa/factors/contact/finish",
 		"/api/v1/auth/mfa/contact/login/begin",
 		"/api/v1/auth/mfa/factors/totp/begin",
 		"/api/v1/auth/mfa/factors/totp/finish",
@@ -471,8 +469,6 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/auth/mfa/factors/totp/begin", server.handleMFATOTPBegin)
 	mux.HandleFunc("POST /api/v1/auth/mfa/factors/totp/finish", server.handleMFATOTPFinish)
 	mux.HandleFunc("GET /api/v1/auth/mfa/contact/options", server.handleMFAContactOptions)
-	mux.Handle("POST /api/v1/auth/mfa/factors/contact/begin", loginRateLimit(server.loginLimiter, http.HandlerFunc(server.handleMFAContactBegin)))
-	mux.Handle("POST /api/v1/auth/mfa/factors/contact/finish", loginRateLimit(server.loginLimiter, http.HandlerFunc(server.handleMFAContactFinish)))
 	mux.Handle("POST /api/v1/auth/mfa/contact/login/begin", loginRateLimit(server.loginLimiter, http.HandlerFunc(server.handleMFAContactLoginBegin)))
 	mux.HandleFunc("POST /api/v1/auth/mfa/factors/webauthn/begin", server.handleMFAWebAuthnBegin)
 	mux.HandleFunc("POST /api/v1/auth/mfa/factors/webauthn/finish", server.handleMFAWebAuthnFinish)
@@ -489,8 +485,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		loginRateLimit(server.loginLimiter, http.HandlerFunc(server.handleMFAWebAuthnLoginFinish)))
 	// Authenticated factor management (rename, remove). List is also
 	// available via GET /api/v1/auth/mfa/factors.
-	mux.HandleFunc("GET /api/v1/auth/mfa/factors", guard(server.handleMFAFactorsList))
-	mux.HandleFunc("DELETE /api/v1/auth/mfa/factors/contact/{channel}", guard(server.handleMFAContactDelete))
+	mux.HandleFunc("GET /api/v1/auth/mfa/factors", server.handleMFAFactorsList)
 	mux.HandleFunc("PATCH /api/v1/auth/mfa/factors/webauthn/{credential_id}", guard(server.handleMFAWebAuthnRename))
 	mux.HandleFunc("DELETE /api/v1/auth/mfa/factors/webauthn/{credential_id}", guard(server.handleMFAWebAuthnDelete))
 	mux.HandleFunc("POST /api/v1/auth/mfa/recovery-codes", guard(server.handleMFAGenerateRecoveryCodes))

@@ -135,15 +135,6 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if err := mfa.EnforceMFAEnrolled(r.Context(), s.db, collaborator.ID); err != nil {
-		if errors.Is(err, mfa.ErrMFANotEnrolled) {
-			s.writeMFAEnrollRequired(w, r, collaborator)
-			return
-		}
-		writeMappedError(w, err)
-		return
-	}
-
 	identity, err := repository.GetAuthIdentityByCollaboratorID(r.Context(), s.db, collaborator.ID)
 	if err != nil {
 		writeMappedError(w, err)
@@ -153,6 +144,23 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	if err != nil {
 		writeContactMFAError(w, r, err)
 		return
+	}
+	if !contactOptions["email"].Available && !contactOptions["sms"].Available {
+		if err := mfa.EnforceMFAEnrolled(r.Context(), s.db, collaborator.ID); err != nil {
+			if errors.Is(err, mfa.ErrMFANotEnrolled) {
+				s.writeMFAEnrollRequired(w, r, collaborator)
+				return
+			}
+			writeMappedError(w, err)
+			return
+		}
+	}
+	// An unfinished optional authenticator/passkey setup is not an active
+	// classic factor. Saved contacts remain immediately usable for OTP.
+	if identity.MFAEnrolledAt == nil {
+		identity.HasTOTP = false
+		identity.HasRecoveryCodes = false
+		identity.WebAuthnCredentials = nil
 	}
 	factors := authContactLoginFactors(identity, contactOptions)
 	if len(factors) == 0 {
@@ -185,6 +193,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 
 	var session model.AuthSession
 	var token string
+	contactVerified := false
 	if req.TOTPCode != "" {
 		if !identity.HasTOTP {
 			httperr.WriteProblem(w, http.StatusBadRequest,
@@ -257,6 +266,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 			writeContactMFAError(w, r, err)
 			return
 		}
+		contactVerified = true
 	}
 
 	if session.ID == uuid.Nil {
@@ -293,7 +303,7 @@ func (s *Server) handleAuthLogin(w http.ResponseWriter, r *http.Request) {
 	// password change required. Any other error is non-fatal — we still issue
 	// the session; the flags default to false.
 
-	needsMFA := identity.MFAEnrolledAt == nil
+	needsMFA := identity.MFAEnrolledAt == nil && !contactVerified
 
 	resp := authLoginResponse{
 		Collaborator:           collaborator,
@@ -323,7 +333,7 @@ func authContactLoginFactors(identity model.AuthIdentity, options map[string]con
 		factors = factors[:len(factors)-1]
 	}
 	for _, channel := range []string{"email", "sms"} {
-		if options[channel].Available && options[channel].Enrolled {
+		if options[channel].Available {
 			factors = append(factors, channel)
 		}
 	}
@@ -623,6 +633,12 @@ func (s *Server) handleAuthSession(w http.ResponseWriter, r *http.Request) {
 		mfaEnrolledAt = identity.MFAEnrolledAt
 	}
 
+	recentContactMFA, _ := repository.HasRecentContactSessionProof(r.Context(), s.db, collaborator.ID, session.ID)
+	passwordChangeRequired := false
+	if state, err := repository.GetPasswordCredentialState(r.Context(), s.db, collaborator.ID); err == nil {
+		passwordChangeRequired = state.PasswordMustChange || (state.PasswordExpiresAt != nil && state.PasswordExpiresAt.Before(time.Now()))
+	}
+
 	// Best-effort permission resolution. Errors fail-closed (empty list) so
 	// the FE hides actions instead of silently allowing them.
 	permissions, err := repository.ResolveYggdrasilPermissions(r.Context(), s.db, collaborator.ID, collaborator.Traits)
@@ -645,13 +661,15 @@ func (s *Server) handleAuthSession(w http.ResponseWriter, r *http.Request) {
 	writeCSRFCookie(w, csrfToken, session.ExpiresAt)
 
 	writeJSON(w, http.StatusOK, model.AuthSessionEnvelope{
-		Authenticated:        true,
-		PhoneProfileRequired: collaborator.PhoneProfileRequired,
-		Collaborator:         &collaborator,
-		Session:              &session,
-		MFAEnrolledAt:        mfaEnrolledAt,
-		Permissions:          permissions,
-		CSRFToken:            csrfToken,
+		Authenticated:            true,
+		RecentContactMFAVerified: recentContactMFA,
+		PasswordChangeRequired:   passwordChangeRequired,
+		PhoneProfileRequired:     collaborator.PhoneProfileRequired,
+		Collaborator:             &collaborator,
+		Session:                  &session,
+		MFAEnrolledAt:            mfaEnrolledAt,
+		Permissions:              permissions,
+		CSRFToken:                csrfToken,
 	})
 }
 

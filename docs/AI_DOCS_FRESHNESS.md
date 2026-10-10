@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 8b92e677deb3fc3d7752a2c319b7eb0d4ca602c6
-verified_diff_sha256: 0903f49dbb729eb9905037ef32403cf4ee612982684fcee1ece21412cd0a6505
+verified_at_commit: 6295de17e49f5ab53bafe88c3e680fc3a247f082
+verified_diff_sha256: e8e2a4c3353af4e18a741d1aea5ff3c6c4da1fa4907cc7180d3a5d4f9601302b
 reconciler_schema: 1
-verified_at: 2026-10-08
+verified_at: 2026-10-10
 by: Codex
-note: Contact OTP uses random credential epochs and current-time expiration. The verifier API is named for its returned identity and version; SARIF traced a false password classification from its previous name into public collaborator UUID fingerprints. Real passwords remain Argon2/legacy-verified, CodeQL stays enabled, and final CI gates must pass.
+note: Reconciled automatic contact OTP with the explicit owner requirement: saved email/phone require no registration, opt-in or contact factor row. Actual password+OTP proof still precedes sessions. Setup and forced password changes support contact-only accounts; recent session proof is server-issued, short-lived and consumed with the password update. Federated provider auth remains separate. CI only; no production activation.

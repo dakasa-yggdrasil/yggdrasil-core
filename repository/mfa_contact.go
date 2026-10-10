@@ -21,6 +21,7 @@ var (
 	ErrContactOTPRateLimited = errors.New("contact OTP sending limit reached")
 	ErrContactUnavailable    = errors.New("MFA contact is unavailable")
 	ErrLastMFAFactor         = errors.New("cannot remove the last primary MFA factor")
+	ErrAutomaticMFAFactor    = errors.New("profile contact MFA is automatic and cannot be disabled")
 )
 
 const (
@@ -179,17 +180,6 @@ func validateContactContextTx(ctx context.Context, tx *sql.Tx, id uuid.UUID, pur
 	return nil
 }
 
-func enabledContactFactorTx(ctx context.Context, tx *sql.Tx, id uuid.UUID, channel, binding string) error {
-	var exists bool
-	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.auth_mfa_contact_factors WHERE collaborator_id=$1 AND channel=$2 AND contact_binding=$3)`, id, channel, binding).Scan(&exists); err != nil {
-		return fmt.Errorf("read enabled MFA contact factor: %w", err)
-	}
-	if !exists {
-		return ErrContactOTPInvalid
-	}
-	return nil
-}
-
 // IssueContactOTP reserves a send before invoking a provider. All purposes
 // share the same owner/channel quota; unsuccessful sends still count. A new
 // challenge supersedes older challenges for that purpose and channel.
@@ -215,10 +205,8 @@ func IssueContactOTP(ctx context.Context, db *sql.DB, id uuid.UUID, channel, pur
 	if err := validateContactContextTx(ctx, tx, id, purpose, contextBinding); err != nil {
 		return model.MFAContactChallenge{}, err
 	}
-	if purpose == "login" {
-		if err := enabledContactFactorTx(ctx, tx, id, channel, current); err != nil {
-			return model.MFAContactChallenge{}, err
-		}
+	if purpose == "login" && !contactMFADeliveryReady(ctx, tx, id, channel) {
+		return model.MFAContactChallenge{}, ErrContactUnavailable
 	}
 	if _, err := tx.ExecContext(ctx, `DELETE FROM public.auth_mfa_contact_challenges WHERE collaborator_id=$1 AND created_at<NOW()-INTERVAL '24 hours'`, id); err != nil {
 		return model.MFAContactChallenge{}, fmt.Errorf("prune contact OTP challenges: %w", err)
@@ -303,10 +291,8 @@ func reserveAndVerifyContactOTPTx(ctx context.Context, tx *sql.Tx, id uuid.UUID,
 	if err := validateContactContextTx(ctx, tx, id, purpose, contextBinding); err != nil {
 		return false, err
 	}
-	if purpose == "login" {
-		if err := enabledContactFactorTx(ctx, tx, id, channel, current); err != nil {
-			return false, err
-		}
+	if purpose == "login" && !contactMFADeliveryReady(ctx, tx, id, channel) {
+		return false, ErrContactOTPInvalid
 	}
 	var codeHash string
 	err = tx.QueryRowContext(ctx, `UPDATE public.auth_mfa_contact_challenges SET attempts=attempts+1 WHERE token_hash=$1 AND collaborator_id=$2 AND channel=$3 AND purpose=$4 AND context_binding=$5 AND contact_binding=$6 AND delivered_at IS NOT NULL AND consumed_at IS NULL AND expires_at>clock_timestamp() AND attempts<5 RETURNING code_hash`, mfa.HashContactOTPToken(rawToken), id, channel, purpose, contextBinding, current).Scan(&codeHash)
@@ -375,14 +361,96 @@ func VerifyContactOTPAndCreateSession(ctx context.Context, db *sql.DB, id uuid.U
 	if err != nil {
 		return model.AuthSession{}, "", finishContactOTPAttempt(tx, spent, err)
 	}
+	// Contact channels are always available from the saved profile. Completing
+	// their first valid OTP proof establishes the existing session MFA posture
+	// without creating or requiring a separately enrolled contact factor.
+	if _, err := tx.ExecContext(ctx, `UPDATE public.auth_identities SET mfa_enrolled_at=COALESCE(mfa_enrolled_at,NOW()) WHERE collaborator_id=$1`, id); err != nil {
+		return model.AuthSession{}, "", fmt.Errorf("record automatic contact MFA proof: %w", err)
+	}
 	session, token, err := createAuthSession(ctx, tx, id, req.Metadata, ttl)
 	if err != nil {
 		return model.AuthSession{}, "", fmt.Errorf("issue proved contact OTP session: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `INSERT INTO public.auth_contact_session_proofs (session_id,collaborator_id,channel,contact_binding,credential_version) VALUES ($1,$2,$3,$4,$5)`, session.ID, id, channel, contactBinding, version); err != nil {
+		return model.AuthSession{}, "", fmt.Errorf("record recent contact MFA session proof: %w", err)
 	}
 	if err := finishContactOTPAttempt(tx, true, nil); err != nil {
 		return model.AuthSession{}, "", err
 	}
 	return session, token, nil
+}
+
+// HasRecentContactSessionProof reports an advisory password-change option.
+// The mutation path independently validates and consumes the proof under locks.
+// No user-controlled session metadata is trusted as authentication evidence.
+func HasRecentContactSessionProof(ctx context.Context, db DBQuerier, id, sessionID uuid.UUID) (bool, error) {
+	var channel, binding string
+	err := db.QueryRowContext(ctx, `SELECT p.channel,p.contact_binding FROM public.auth_contact_session_proofs p JOIN public.auth_sessions s ON s.id=p.session_id AND s.collaborator_id=p.collaborator_id JOIN public.auth_identities a ON a.collaborator_id=p.collaborator_id JOIN public.collaborators c ON c.id=p.collaborator_id WHERE p.session_id=$1 AND p.collaborator_id=$2 AND c.status='active' AND s.status='active' AND s.revoked_at IS NULL AND s.expires_at>clock_timestamp() AND p.credential_version=a.mfa_password_version AND p.verified_at>clock_timestamp()-INTERVAL '5 minutes' AND p.verified_at<=clock_timestamp() AND p.consumed_at IS NULL`, sessionID, id).Scan(&channel, &binding)
+	if errors.Is(err, sql.ErrNoRows) {
+		return false, nil
+	}
+	if err != nil {
+		return false, fmt.Errorf("read recent contact MFA session proof: %w", err)
+	}
+	current, err := ReadContactBinding(ctx, db, id, channel)
+	if errors.Is(err, ErrContactUnavailable) {
+		return false, nil
+	}
+	if err != nil {
+		return false, err
+	}
+	return current == binding, nil
+}
+
+// ConsumeRecentContactSessionProofTx authorizes one password change with a
+// contact-authenticated session. Its caller changes the password and revokes
+// old sessions in this same transaction; rollback preserves an unused proof.
+func ConsumeRecentContactSessionProofTx(ctx context.Context, tx *sql.Tx, id, sessionID uuid.UUID, currentPassword string) error {
+	if err := lockContactOwnerTx(ctx, tx, id); err != nil {
+		return err
+	}
+	var live uuid.UUID
+	err := tx.QueryRowContext(ctx, `SELECT id FROM public.auth_sessions WHERE id=$1 AND collaborator_id=$2 AND status='active' AND revoked_at IS NULL AND expires_at>clock_timestamp() FOR UPDATE`, sessionID, id).Scan(&live)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrContactOTPInvalid
+	}
+	if err != nil {
+		return fmt.Errorf("lock recent contact MFA session: %w", err)
+	}
+	var hash, scheme, version string
+	if err := tx.QueryRowContext(ctx, `SELECT COALESCE(password_hash,''),COALESCE(NULLIF(password_scheme,''),'pbkdf2_sha256'),mfa_password_version::text FROM public.auth_identities WHERE collaborator_id=$1`, id).Scan(&hash, &scheme, &version); err != nil {
+		return fmt.Errorf("read recent contact MFA password: %w", err)
+	}
+	var channel, binding string
+	err = tx.QueryRowContext(ctx, `SELECT channel,contact_binding FROM public.auth_contact_session_proofs WHERE session_id=$1 AND collaborator_id=$2 AND credential_version=$3 AND verified_at>clock_timestamp()-INTERVAL '5 minutes' AND verified_at<=clock_timestamp() AND consumed_at IS NULL FOR UPDATE`, sessionID, id, version).Scan(&channel, &binding)
+	if errors.Is(err, sql.ErrNoRows) {
+		return ErrContactOTPInvalid
+	}
+	if err != nil {
+		return fmt.Errorf("lock recent contact MFA proof: %w", err)
+	}
+	current, err := ReadContactBinding(ctx, tx, id, channel)
+	if err != nil {
+		if errors.Is(err, ErrContactUnavailable) {
+			return ErrContactOTPInvalid
+		}
+		return err
+	}
+	if current != binding {
+		return ErrContactOTPInvalid
+	}
+	if hash == "" || strings.TrimSpace(currentPassword) == "" || verifyPasswordBridge(scheme, hash, currentPassword) != nil {
+		return ErrAuthInvalidCredentials
+	}
+	res, err := tx.ExecContext(ctx, `UPDATE public.auth_contact_session_proofs SET consumed_at=clock_timestamp() WHERE session_id=$1 AND collaborator_id=$2 AND consumed_at IS NULL AND verified_at>clock_timestamp()-INTERVAL '5 minutes' AND EXISTS(SELECT 1 FROM public.auth_sessions WHERE id=$1 AND collaborator_id=$2 AND status='active' AND revoked_at IS NULL AND expires_at>clock_timestamp())`, sessionID, id)
+	if err != nil {
+		return fmt.Errorf("consume recent contact MFA proof: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil || n != 1 {
+		return ErrContactOTPInvalid
+	}
+	return nil
 }
 
 // VerifyAndEnrollContactOTP commits proof, one-use enrollment authority,
@@ -428,8 +496,9 @@ func VerifyAndEnrollContactOTP(ctx context.Context, db *sql.DB, id uuid.UUID, ch
 	return finishContactOTPAttempt(tx, true, nil)
 }
 
-// ListContactMFAFactors silently excludes stale recipient bindings. Declaring
-// a new email/phone never transfers a verified factor to the new recipient.
+// ListContactMFAFactors lists only legacy manual-enrollment records, excluding
+// stale recipient bindings. Automatic email/SMS availability and login proof
+// use canonical profile contacts independently of this compatibility table.
 func ListContactMFAFactors(ctx context.Context, db dbtx, id uuid.UUID) ([]model.MFAContactFactor, error) {
 	rows, err := db.QueryContext(ctx, `SELECT channel,contact_binding,enrolled_at FROM public.auth_mfa_contact_factors WHERE collaborator_id=$1 ORDER BY channel`, id)
 	if err != nil {
@@ -470,18 +539,21 @@ func CountContactMFAFactorsTx(ctx context.Context, tx *sql.Tx, id uuid.UUID) (in
 	return len(factors), err
 }
 
-// ConfiguredContactMFAFactors counts only current contact proofs that the
-// operator has configured to deliver OTPs. Listing all enrolled factors stays
-// separate so surfaces can show an enrolled but unavailable method.
+// ConfiguredContactMFAFactors lists automatic MFA channels using only saved
+// profile contacts and usable delivery configuration. The legacy enrollment
+// table is not authority for email/SMS availability or last-factor guards.
 func ConfiguredContactMFAFactors(ctx context.Context, db dbtx, id uuid.UUID) ([]model.MFAContactFactor, error) {
-	factors, err := ListContactMFAFactors(ctx, db, id)
-	if err != nil {
-		return nil, err
-	}
-	out := make([]model.MFAContactFactor, 0, len(factors))
-	for _, factor := range factors {
-		if contactMFADeliveryReady(ctx, db, id, factor.Channel) {
-			out = append(out, factor)
+	out := make([]model.MFAContactFactor, 0, 2)
+	for _, channel := range []string{"email", "sms"} {
+		binding, err := ReadContactBinding(ctx, db, id, channel)
+		if errors.Is(err, ErrContactUnavailable) {
+			continue
+		}
+		if err != nil {
+			return nil, err
+		}
+		if contactMFADeliveryReady(ctx, db, id, channel) {
+			out = append(out, model.MFAContactFactor{CollaboratorID: id, Channel: channel, ContactBinding: binding})
 		}
 	}
 	return out, nil
@@ -513,41 +585,5 @@ func DisableContactMFAFactor(ctx context.Context, db *sql.DB, id uuid.UUID, chan
 	if !validContactChannel(channel) {
 		return ErrContactOTPInvalid
 	}
-	tx, err := db.BeginTx(ctx, nil)
-	if err != nil {
-		return fmt.Errorf("begin contact MFA removal: %w", err)
-	}
-	defer func() { _ = tx.Rollback() }()
-	if err := lockContactOwnerTx(ctx, tx, id); err != nil {
-		return err
-	}
-	var traditional int
-	if err := tx.QueryRowContext(ctx, `SELECT (CASE WHEN totp_secret_ciphertext IS NOT NULL THEN 1 ELSE 0 END)+jsonb_array_length(webauthn_credentials) FROM public.auth_identities WHERE collaborator_id=$1`, id).Scan(&traditional); err != nil {
-		return fmt.Errorf("count primary MFA factors: %w", err)
-	}
-	factors, err := ListContactMFAFactors(ctx, tx, id)
-	if err != nil {
-		return err
-	}
-	removesEnrolled := false
-	remainingConfigured := 0
-	for _, factor := range factors {
-		if factor.Channel == channel {
-			removesEnrolled = true
-			continue
-		}
-		if contactMFADeliveryReady(ctx, tx, id, factor.Channel) {
-			remainingConfigured++
-		}
-	}
-	if removesEnrolled && traditional+remainingConfigured == 0 {
-		return ErrLastMFAFactor
-	}
-	if _, err := tx.ExecContext(ctx, `DELETE FROM public.auth_mfa_contact_factors WHERE collaborator_id=$1 AND channel=$2`, id, channel); err != nil {
-		return fmt.Errorf("remove contact MFA factor: %w", err)
-	}
-	if _, err := tx.ExecContext(ctx, `UPDATE public.auth_mfa_contact_challenges SET consumed_at=NOW() WHERE collaborator_id=$1 AND channel=$2 AND consumed_at IS NULL`, id, channel); err != nil {
-		return fmt.Errorf("invalidate removed MFA contact challenges: %w", err)
-	}
-	return tx.Commit()
+	return ErrAutomaticMFAFactor
 }
