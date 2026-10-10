@@ -6,7 +6,6 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
-	"fmt"
 	"net/http"
 	"net/http/httptest"
 	"os"
@@ -379,5 +378,5 @@ func TestCapacityMutationOriginalBusinessCanaryPostgres(t *testing.T) {
 	if writes.Load() != 0 || intent.Generation < 1 || errors.Join(nativeAdapterContext(ctx)) != nil {
 		t.Fatal("source observer mutated or lost original owner")
 	}
-	t.Log(fmt.Sprintf("actual Core PostgreSQL original epoch guarded; actual Notify source %s joined; native Kubernetes/main/original caller return still require integrated remote receipts", source.Source))
+	t.Logf("actual Core PostgreSQL original epoch guarded; actual Notify source %s joined; native Kubernetes/main/original caller return still require integrated remote receipts", source.Source)
 }

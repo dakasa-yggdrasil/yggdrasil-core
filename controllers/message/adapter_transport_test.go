@@ -56,19 +56,19 @@ func TestCapacityNativeAdapterOriginalHTTP(t *testing.T) {
 		_, _ = io.WriteString(w, wire.Load().(string))
 	}))
 	t.Cleanup(server.Close)
-	run := func(ctx context.Context, client *http.Client, limit int64) (error, string) {
+	run := func(ctx context.Context, client *http.Client, limit int64) (string, error) {
 		var out struct {
 			Value string `json:"value"`
 		}
 		c := &adapterTransportClient{httpClient: client}
 		err := c.callNativeHTTPJSON(ctx, server.URL, nil, &out, adapterCallPolicy{detailFreeErrors: true, native: &nativeAdapterHTTPPolicy{limit: limit, get: true, requireTLS: true, exactURL: server.URL, readToken: token, parent: ctx}})
-		return err, out.Value
+		return out.Value, err
 	}
 	owner := func() (context.Context, context.CancelFunc) { return context.WithTimeout(t.Context(), 5*time.Second) }
 	t.Run("verified_tls_fixed_original_origin", func(t *testing.T) {
 		ctx, done := owner()
 		defer done()
-		err, v := run(ctx, server.Client(), 1024)
+		v, err := run(ctx, server.Client(), 1024)
 		if err != nil || v != "original" {
 			t.Fatal("actual verified TLS source unavailable", err)
 		}
@@ -78,7 +78,7 @@ func TestCapacityNativeAdapterOriginalHTTP(t *testing.T) {
 		for _, body := range []string{`{"value":"a","value":"b"}`, `{"Value":"a"}`, `{"value":null}`, `{"value":"a","unknown":true}`, `{"value":"a"} {"value":"b"}`, `{"value":"` + strings.Repeat("a", 1024) + `"}`} {
 			wire.Store(body)
 			ctx, done := owner()
-			err, _ := run(ctx, server.Client(), 1024)
+			_, err := run(ctx, server.Client(), 1024)
 			done()
 			if err == nil {
 				t.Fatal("closed/capped source accepted")
@@ -101,7 +101,7 @@ func TestCapacityNativeAdapterOriginalHTTP(t *testing.T) {
 		})
 		ctx, done := owner()
 		defer done()
-		err, _ := run(ctx, &client, 1024)
+		_, err := run(ctx, &client, 1024)
 		if err == nil || reads.Load() != 0 || closes.Load() != 1 {
 			t.Fatal("private unauthorized body read or original Close lost")
 		}
@@ -140,7 +140,7 @@ func TestCapacityNativeAdapterOriginalHTTP(t *testing.T) {
 				return reply, err
 			})
 			returned := make(chan error, 1)
-			go func() { err, _ := run(bounded, &client, 1024); returned <- err }()
+			go func() { _, err := run(bounded, &client, 1024); returned <- err }()
 			select {
 			case <-entered:
 			case <-time.After(3 * time.Second):
@@ -183,7 +183,7 @@ func TestCapacityNativeAdapterOriginalHTTP(t *testing.T) {
 		})
 		ctx, done := owner()
 		defer done()
-		err, _ := run(ctx, &client, 1024)
+		_, err := run(ctx, &client, 1024)
 		if err == nil || reads.Load() != 0 || closes.Load() != 1 {
 			t.Fatal("foreign original response accepted/read")
 		}
@@ -192,7 +192,7 @@ func TestCapacityNativeAdapterOriginalHTTP(t *testing.T) {
 		ctx, done := context.WithDeadline(t.Context(), time.Now().Add(-time.Second))
 		defer done()
 		before := requests.Load()
-		err, _ := run(ctx, server.Client(), 1024)
+		_, err := run(ctx, server.Client(), 1024)
 		if !errors.Is(err, context.DeadlineExceeded) || requests.Load() != before {
 			t.Fatal("expired owner reached source")
 		}

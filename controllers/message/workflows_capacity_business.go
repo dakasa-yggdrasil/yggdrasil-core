@@ -63,14 +63,19 @@ func executeCapacityBusinessWorkflowStepWithClient(parent context.Context, conn 
 		return out
 	}
 	ctx, cancel := context.WithTimeout(parent, 90*time.Second)
-	leaseCancel := func() {}
-	defer func() { leaseCancel(); cancel() }()
+	defer cancel()
 	ctx = withNativeAdapterPolicy(ctx, parent)
 	var originalLeaseDeadline time.Time
-	defer func() {
+	finalized := false
+	finalize := func() {
 		out.FinishedAt = time.Now().UTC()
 		if errors.Join(nativeAdapterContext(ctx), nativeAdapterContext(parent)) != nil || !originalLeaseDeadline.IsZero() && !time.Now().Before(originalLeaseDeadline) {
 			out.Status, out.Error, out.Metadata = "failed", errCapacityBusinessObservation.Error(), nil
+		}
+	}
+	defer func() {
+		if !finalized {
+			finalize()
 		}
 	}()
 	var parsed struct {
@@ -116,7 +121,16 @@ func executeCapacityBusinessWorkflowStepWithClient(parent context.Context, conn 
 	// Copy the ORIGINAL lease deadline once. Native calls and their real
 	// Read/Close/Commit returns cannot acquire a fresh90s budget after expiry.
 	originalLeaseDeadline = *intent.LeaseExpiresAt
-	ctx, leaseCancel = context.WithDeadline(ctx, originalLeaseDeadline)
+	leaseCtx, leaseCancel := context.WithDeadline(ctx, originalLeaseDeadline)
+	ctx = leaseCtx
+	defer leaseCancel()
+	// The original completion fence runs before our own lease cancellation.
+	// Early pre-lease returns retain the outer fence; every owned lease has
+	// its cleanup registered immediately and completion is checked once.
+	defer func() {
+		finalize()
+		finalized = true
+	}()
 	var boundToken string
 	guard := func() error {
 		if joined := errors.Join(nativeAdapterContext(ctx), nativeAdapterContext(parent)); joined != nil {
