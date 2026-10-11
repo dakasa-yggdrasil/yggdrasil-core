@@ -1,10 +1,10 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-10T22:53:39-03:00_
+_Generated from HEAD at: 2026-10-10T23:55:13-03:00_
 
 ## Languages
 
-- `.go`: 753 files
+- `.go`: 754 files
 - `.json`: 145 files
 - `.py`: 1 files
 - `.sql`: 61 files
@@ -24,17 +24,17 @@ _Generated from HEAD at: 2026-10-10T22:53:39-03:00_
 
 ## Top Directories by File Count
 
-- controllers/httpapi: 175 files (1911.2 KB)
+- controllers/httpapi: 175 files (1913.6 KB)
 - repository: 125 files (1112.9 KB)
 - model: 66 files (286.4 KB)
-- controllers/message: 63 files (777.4 KB)
+- controllers/message: 63 files (780.0 KB)
 - db/migrations: 60 files (117.2 KB)
 - manifest: 59 files (366.0 KB)
 - addons: 44 files (254.3 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
 - controllers/oidc: 23 files (193.4 KB)
 - docs/bootstrap/seeds/integrations: 20 files (87.4 KB)
-- internal/capacity: 18 files (152.6 KB)
+- internal/capacity: 19 files (161.2 KB)
 - internal/externalidentity: 15 files (61.5 KB)
 
 ## Heaviest Files
@@ -47,7 +47,7 @@ _Generated from HEAD at: 2026-10-10T22:53:39-03:00_
 - docs/bootstrap/manifests/products/observability-loki.json: 542.9 KB
 - docs/bootstrap/manifests/products/message-broker-rabbitmq.json: 531.8 KB
 - controllers/httpapi/server.go: 174.3 KB
-- controllers/message/workflows_capacity_native_postgres_test.go: 83.3 KB
+- controllers/message/workflows_capacity_native_postgres_test.go: 85.3 KB
 - controllers/httpapi/openapi.json: 80.4 KB
 - docs/api-reference/openapi.json: 80.4 KB
 - controllers/message/products.go: 75.4 KB

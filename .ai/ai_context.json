@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-10T22:53:39-03:00",
+  "generated_at": "2026-10-10T23:55:13-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 753,
+    ".go": 754,
     ".json": 145,
     ".py": 1,
     ".sql": 61,
@@ -11,7 +11,7 @@
     ".yml": 24
   },
   "provenance": {
-    "commit": "0c9fd8a6b8465906f6908c12115918fb5a7f6a32",
+    "commit": "36e2727a1136a37de9459fc72bb2582c74741530",
     "dirty": true,
     "files": [
       {
@@ -60,7 +60,7 @@
     {
       "path": "controllers/httpapi",
       "files": 175,
-      "kb": 1911
+      "kb": 1913
     },
     {
       "path": "repository",
@@ -75,7 +75,7 @@
     {
       "path": "controllers/message",
       "files": 63,
-      "kb": 777
+      "kb": 780
     },
     {
       "path": "db/migrations",
@@ -109,8 +109,8 @@
     },
     {
       "path": "internal/capacity",
-      "files": 18,
-      "kb": 152
+      "files": 19,
+      "kb": 161
     },
     {
       "path": "internal/externalidentity",
@@ -153,7 +153,7 @@
     },
     {
       "path": "controllers/message/workflows_capacity_native_postgres_test.go",
-      "kb": 83
+      "kb": 85
     },
     {
       "path": "controllers/httpapi/openapi.json",
@@ -308,7 +308,7 @@
     "config_files": 8,
     "k8s_manifests": 8
   },
-  "verified_at_commit": "0c9fd8a6b8465906f6908c12115918fb5a7f6a32",
-  "verified_diff_sha256": "c3448b98179f35eaf04a309d32593b75b6ac2928e35e22954d13be2adac01aaa",
+  "verified_at_commit": "36e2727a1136a37de9459fc72bb2582c74741530",
+  "verified_diff_sha256": "089e3d6daff5c8c6ec66c6ac03ce443a446a84033f7b7e30a39f573f82dadb92",
   "reconciler_schema": 1
 }
