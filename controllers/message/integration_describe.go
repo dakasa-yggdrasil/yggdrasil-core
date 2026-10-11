@@ -63,7 +63,7 @@ func verifyResolvedIntegrationType(
 	}
 
 	cacheKey := integrationDescribeCacheKey(instanceManifest, typeManifest, typeSpec, instanceSpec)
-	if integrationDescribeRecentlyVerified(cacheKey) {
+	if capacityGuestPolicy(ctx) == nil && integrationDescribeRecentlyVerified(cacheKey) {
 		return nil
 	}
 
@@ -245,6 +245,21 @@ func checkHTTPJSONTransportConnectivity(
 	instanceSpec model.IntegrationInstanceManifestSpec,
 	typeSpec model.IntegrationTypeManifestSpec,
 ) (string, map[string]any, error) {
+	if guest := capacityGuestPolicy(ctx); guest != nil {
+		baseURL, err := adapterBaseURL(instanceSpec)
+		if err != nil || baseURL != guest.baseURL || typeSpec.Adapter.Endpoints.Describe != "/rpc/describe" || typeSpec.Adapter.Endpoints.Execute != "/rpc/execute" {
+			return "", nil, (&adapterCallPolicy{detailFreeErrors: true, native: &nativeAdapterHTTPPolicy{guest: guest}}).sanitizeError(fmt.Errorf("fixed Guest catalog routes refused"))
+		}
+		policy, _ := ctx.Value(nativeAdapterPolicyKey{}).(adapterCallPolicy)
+		native := *policy.native
+		native.get = true
+		policy.native = &native
+		transport := newAdapterTransportClient(nil)
+		if err := transport.callNativeHTTPJSON(ctx, guest.baseURL+"/healthz", nil, nil, policy); err != nil {
+			return "", nil, err
+		}
+		return "fixed Guest connectivity observed", map[string]any{"diagnostic_only": true}, nil
+	}
 	baseURL, err := adapterBaseURL(instanceSpec)
 	if err != nil {
 		return "", nil, err

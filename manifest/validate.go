@@ -60,6 +60,12 @@ func ValidateDocument(doc model.ManifestDocument) error {
 	}
 
 	switch doc.Kind {
+	case "capacity_policy":
+		spec, err := ParseCapacityPolicySpec(doc.Spec)
+		if err != nil {
+			return err
+		}
+		return ValidateCapacityPolicySpec(spec)
 	case "rbac":
 		spec, err := ParseRBACSpec(doc.Spec)
 		if err != nil {

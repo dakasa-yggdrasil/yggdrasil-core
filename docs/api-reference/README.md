@@ -57,6 +57,16 @@ Supported `kind` values (the authoritative list is the switch in
 |---|---|---|
 | POST | `/api/v1/workflow-runs` | Run a workflow; hashed machine callers are always asynchronous |
 
+### Protected native capacity callbacks
+
+| Method | Path | Purpose |
+|---|---|---|
+| POST | `/api/v1/capacity/mutations/native/redeem` | Independent adapter bearer plus exact one-use command token; locked native authority consumption |
+
+The [bound execution contract](../CAPACITY-BOUND-EXECUTION.md) distinguishes
+transport permission from installed birth authority, runtime joins and native
+readback. A successful redemption does not attest useful capacity.
+
 ### Webhooks
 
 | Method | Path | Purpose |
