@@ -340,6 +340,7 @@ type originalNotifyRosterRead struct {
 }
 
 type originalNotifyWindowReply struct {
+	PoolPrerequisites   []originalNotifyPoolPrerequisite        `json:"native_pool_prerequisites,omitempty"`
 	ParticipantReads    []json.RawMessage                       `json:"native_participant_reads,omitempty"`
 	NativeRosterRead    *originalNotifyRosterRead               `json:"native_roster_read,omitempty"`
 	Query               string                                  `json:"query_sha256"`
@@ -376,6 +377,7 @@ type originalNotifyParticipantCall struct {
 }
 
 type originalNotifyParticipantReply struct {
+	PoolPrerequisites   []originalNotifyPoolPrerequisite        `json:"native_pool_prerequisites,omitempty"`
 	Schema              string                                  `json:"schema_version"`
 	Source              string                                  `json:"source_commit"`
 	Query               string                                  `json:"query_sha256"`
@@ -760,6 +762,9 @@ func originalNotifyParticipant(p model.CapacityPolicySpec, scope OriginalNotifyW
 	if len(other.Probes) != len(census.Probes) || other.Probes[0] != census.Probes[0] {
 		return errCapacityBoundAssessment
 	}
+	if err = originalNotifyPoolRoster(p, scope, scopeSHA, census.Probes[0].Message, identity, status.PoolPrerequisites); err != nil {
+		return err
+	}
 	if identity.PodUID != calls["handler_call_received"].PodUID {
 		if len(status.Calls) != 0 {
 			return errCapacityBoundAssessment
@@ -803,6 +808,9 @@ func originalNotifyReadComplete(ctx context.Context, p model.CapacityPolicySpec,
 		return false, errors.Join(errCapacityBoundAssessment, err)
 	}
 	if err = originalNotifyCreation(p, scope, b.SourceCommit, census, calls, reply.OriginalCreations[0], admissions); err != nil {
+		return false, err
+	}
+	if err = originalNotifyPoolRoster(p, scope, scopeSHA, census.Probes[0].Message, identity, reply.PoolPrerequisites); err != nil {
 		return false, err
 	}
 	seen := map[string]bool{}
@@ -872,6 +880,9 @@ func runOriginalNotifyWindow(parent context.Context, store repository.CapacitySt
 	}
 	if p.NativeNotifyWindowBinding == nil {
 		return capacityDispatchFence(parent)
+	}
+	if !originalNotifyResourcesSupported(p) {
+		return refuse()
 	}
 	b := p.NativeNotifyWindowBinding
 	invocation := capacityDispatchInvocationFrom(parent)

@@ -56,6 +56,21 @@ type CapacityNativeNotifyWindowBinding struct {
 	ReadKeyRef         string                            `json:"read_key_ref"`
 	ProbeCount         int                               `json:"probe_count"`
 	Participants       []CapacityNativeNotifyParticipant `json:"participants"`
+	RequiredResources  []CapacityNativeNotifyResource    `json:"required_resources,omitempty"`
+}
+
+// These sealed operator expectations never supply a native resource receipt.
+// Every selected actor is covered when this optional prerequisite is enabled.
+// Unsupported resource producers keep execution on HOLD, before an arm attempt.
+type CapacityNativeNotifyResource struct {
+	PodName          string `json:"pod_name"`
+	Kind             string `json:"kind"`
+	ResourceName     string `json:"resource_name"`
+	BindingSHA256    string `json:"binding_sha256"`
+	Database         string `json:"database"`
+	DatabaseOID      string `json:"database_oid"`
+	SystemIdentifier string `json:"system_identifier"`
+	Role             string `json:"role"`
 }
 
 // Name/URI/role are operator declarations only. Pod UID, container and process

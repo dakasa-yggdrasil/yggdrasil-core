@@ -63,6 +63,13 @@ func validateNativeNotifyWindowJSON(raw []byte) error {
 		if capacity.DecodeNativeCapacity(value, &binding) != nil {
 			return fmt.Errorf("closed original Notify window binding required")
 		}
+		var members map[string]json.RawMessage
+		if json.Unmarshal(value, &members) != nil {
+			return fmt.Errorf("original Notify window binding object required")
+		}
+		if _, present := members["required_resources"]; present && len(binding.RequiredResources) == 0 {
+			return fmt.Errorf("present original Notify resource roster must be nonempty")
+		}
 	}
 	closing, err := d.Token()
 	if err != nil || closing != json.Delim('}') || d.Decode(new(any)) != io.EOF {
@@ -140,5 +147,5 @@ func validateNativeNotifyWindowBinding(p model.CapacityPolicySpec) error {
 	if publishers != 1 || consumers != len(b.Participants)-1 {
 		return refuse()
 	}
-	return nil
+	return validateNativeNotifyResourceRoster(b)
 }
