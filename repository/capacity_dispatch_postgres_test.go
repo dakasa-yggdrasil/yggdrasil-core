@@ -479,7 +479,10 @@ func TestCapacityDispatchPostgres(t *testing.T) {
 		})
 		ctx, cancel := context.WithTimeout(context.Background(), 3*time.Second)
 		defer cancel()
-		actualReturn := time.Now().UTC()
+		// Capture the original return once at the native storage precision. lib/pq
+		// sends nanoseconds, but PostgreSQL rounds text timestamps to microseconds;
+		// truncating only after readback can otherwise compare different instants.
+		actualReturn := time.Now().UTC().Truncate(time.Microsecond)
 		finished := make(chan error, 1)
 		go func() {
 			finished <- FinishCapacityDispatch(ctx, db, started, capacityDispatchResponse(e, "succeeded"), actualReturn, nil)
@@ -510,7 +513,7 @@ func TestCapacityDispatchPostgres(t *testing.T) {
 		job, err := readCapacityDispatchJob(context.Background(), db, e.JobID, false)
 		run, runErr := GetWorkflowRun(context.Background(), db, e.RunID)
 		if err != nil || runErr != nil || job.State != "unknown" || job.ReturnedAt == nil || !job.ReturnedAt.Truncate(time.Microsecond).Equal(actualReturn.Truncate(time.Microsecond)) || run.Status != "failed" || run.Result == nil || run.Result.Status != "succeeded" {
-			t.Fatalf("late acknowledgment invented a missing original return: state=%s run=%s err=%v %v", job.State, run.Status, err, runErr)
+			t.Fatalf("late acknowledgment invented a missing original return: state=%s run=%s err=%v %v native_return_present=%t native_return_matches_original=%t result_present=%t result_succeeded=%t", job.State, run.Status, err, runErr, job.ReturnedAt != nil, job.ReturnedAt != nil && job.ReturnedAt.Truncate(time.Microsecond).Equal(actualReturn.Truncate(time.Microsecond)), run.Result != nil, run.Result != nil && run.Result.Status == "succeeded")
 		}
 		wake, dedup := capacityDispatchEnqueueFixture(t, db, capacityDispatchNextWake(t, e, 1))
 		if !dedup || wake.JobID != e.JobID || wake.State != "unknown" {
