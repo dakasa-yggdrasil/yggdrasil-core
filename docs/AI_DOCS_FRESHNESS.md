@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 273f9c7df6354ac817dbfc2be28b917fc791b51f
-verified_diff_sha256: 2b6948817cebab8e4e89f9cb1a2574fc6d56ef04ff4250eb44584238598915c4
+verified_at_commit: d5382d6b9c94896b557050cf498dc75415c9d398
+verified_diff_sha256: ce060c1a9407ac5d57c2ed21b59eb03b0639a97210500389b9dd3ffe9d81de84
 reconciler_schema: 1
 verified_at: 2026-10-10
 by: Codex
@@ -45,3 +45,7 @@ native_guest_original_failure_source_review: The complete three-path sector pass
 ## Canonical original native Describe catalog correction
 
 Source `273f9c7df6354ac817dbfc2be28b917fc791b51f` carries adapter-declared canonical catalog metadata and action input schema through strict native Describe, typed conversion and live comparison. The original raw reply is validated before remarshal; explicit empty Phase A domains remain allowed. The PostgreSQL positive fixture now returns its complete catalog, and eleven mandatory TLS source cases cover canonical fields, legacy absence and malformed refusals. Existing leases, authorization, original HTTP ownership and all result guards are preserved. Current Core owning CI and the subsequent real private Guest collector remain required; no production, useful capacity or physical release is qualified by this source change.
+
+## Original release recovery after both returns
+
+Source `d5382d6b9c94896b557050cf498dc75415c9d398` adds the opt-in `native_release_result_v1` release recovery of ADR-0049, migration 00062 and the authenticated native result route. Only a retained adapter result plus the joined original Core Do/Read/Close returns give a 409 new meaning; the parent stays `rejected_no_effect` and each Pod and phase keeps a four-command release history that counts the original and every fenced release-only recovery command. Historical replies stay uncertain and an absent binding keeps the original behavior. The Kind qualification pins the separately qualified Kube source `3fd6f9bedeceefa846058642b485a89542111c6d` in checkout, compiled `NativeSourceCommit` and binding. Current own Core CI is pending; no local tests, build, vet or production activation ran.

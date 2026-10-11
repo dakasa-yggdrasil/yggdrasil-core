@@ -1,13 +1,13 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-11T13:11:51-03:00_
+_Generated from HEAD at: 2026-10-11T17:56:34-03:00_
 
 ## Languages
 
-- `.go`: 767 files
+- `.go`: 773 files
 - `.json`: 145 files
 - `.py`: 1 files
-- `.sql`: 61 files
+- `.sql`: 62 files
 - `.yaml`: 10 files
 - `.yml`: 24 files
 
@@ -15,7 +15,7 @@ _Generated from HEAD at: 2026-10-11T13:11:51-03:00_
 
 - API Spec: **false**  ((not configured))
 - Event Schemas: **0**  (events/contracts,docs/events/contracts)
-- DB Migrations: **60**  (db/migrations)
+- DB Migrations: **61**  (db/migrations)
 
 ## Docs
 
@@ -24,16 +24,16 @@ _Generated from HEAD at: 2026-10-11T13:11:51-03:00_
 
 ## Top Directories by File Count
 
-- controllers/httpapi: 178 files (1957.4 KB)
-- repository: 126 files (1123.6 KB)
-- controllers/message: 67 files (899.5 KB)
-- model: 66 files (291.4 KB)
-- manifest: 61 files (375.8 KB)
-- db/migrations: 60 files (117.2 KB)
+- controllers/httpapi: 180 files (1979.8 KB)
+- repository: 128 files (1154.1 KB)
+- controllers/message: 69 files (910.5 KB)
+- model: 66 files (294.5 KB)
+- db/migrations: 61 files (120.3 KB)
+- manifest: 61 files (377.3 KB)
 - addons: 45 files (263.1 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
 - controllers/oidc: 23 files (193.4 KB)
-- internal/capacity: 21 files (178.1 KB)
+- internal/capacity: 21 files (178.5 KB)
 - docs/bootstrap/seeds/integrations: 20 files (87.4 KB)
 - internal/externalidentity: 15 files (61.5 KB)
 
