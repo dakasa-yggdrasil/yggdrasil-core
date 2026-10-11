@@ -17,7 +17,7 @@ import (
 
 // These PostgreSQL cases qualify the durable ledger and permissions only.
 // Actual SDK/native controller execution is a separate mandatory KinD gate.
-func nativeLifetimePostgresFixture(t *testing.T) (*sql.DB, CapacityStore, model.Manifest, model.CapacityPolicySpec, model.CapacityIntent) {
+func nativeLifetimePostgresFixture(t *testing.T, recovery ...*model.CapacityNativeReleaseRecoveryBinding) (*sql.DB, CapacityStore, model.Manifest, model.CapacityPolicySpec, model.CapacityIntent) {
 	t.Helper()
 	db, base, _ := capacityPostgresFixture(t)
 	ctx := context.Background()
@@ -44,6 +44,9 @@ func nativeLifetimePostgresFixture(t *testing.T) (*sql.DB, CapacityStore, model.
 	binding := model.CapacityObservationAdapterBinding{IntegrationInstanceID: instance.ID.String(), InstanceChecksum: instance.Checksum, IntegrationTypeID: typ.ID.String(), TypeChecksum: typ.Checksum}
 	p.AssessmentBinding = &model.CapacityBoundAssessmentBinding{Snapshot: model.CapacityHPAMinimumBinding{Mode: capacity.HPAMinimumSnapshotMode, Unit: capacity.ReservedPodEnvelopeUnit, Adapter: binding, Namespace: "platform", HPAName: "api-hpa", HPAUID: uuid.NewString(), WorkloadName: "api", WorkloadUID: uuid.NewString(), Owner: p.Owner, Profile: "base", ProtectedFloor: p.Floor, MaximumReplicas: p.Ceiling}, Signals: []model.CapacityMetricSignalBinding{{Name: "pressure", Adapter: binding, BindingName: "pressure", BindingSHA256: strings.Repeat("a", 64)}}}
 	p.HPAExecutionBinding = &model.CapacityHPAExecutionBinding{AdapterPrincipalID: "native-adapter", Mode: capacity.HPALifetimeExecutionMode, PodTerminationBinding: "api-native", ContainerName: "api", ImageDigest: "sha256:" + strings.Repeat("a", 64), Lanes: []string{"listener", "workers"}, ProjectionDirectory: "/native", AdmissionMode: "process_v2", AdmissionPort: 8080, BirthGuardBinding: "api-birth", BirthGuardSHA256: strings.Repeat("d", 64), AdmissionWorkflow: model.ManifestSelector{Namespace: base.Metadata.Namespace, Name: "admit-api"}}
+	if len(recovery) == 1 {
+		p.HPAExecutionBinding.ReleaseRecovery = recovery[0]
+	}
 	policy := create("capacity_policy", "api", p)
 	store := CapacityStore{DB: db, ExecutionEnabled: true, AdmissionOnly: true, WorkflowID: wf.ID, ExecutorID: uuid.NewString()}
 	hpa := model.CapacityHPAEnvelopeResponse{Operation: capacity.ObserveHPAEnvelope, Status: "observed", Observation: model.CapacityHPAEnvelopeObservation{Namespace: "platform", HPAName: "api-hpa", HPAUID: p.AssessmentBinding.Snapshot.HPAUID, ResourceVersion: "1", APIGeneration: 0, WorkloadName: "api", WorkloadUID: p.AssessmentBinding.Snapshot.WorkloadUID, WorkloadResourceVersion: "10", Owner: p.Owner, EnvelopeGeneration: 7, IdempotencyKey: "previous", MinReplicas: 4, MaxReplicas: p.Ceiling, ProtectedFloor: p.Floor, TrackedProtectedFloor: p.Floor, MaximumReplicas: p.Ceiling, MatchedOwner: true, BoundsWithinScope: true, TrackingMatchesScope: true, BoundsMatchTracking: true, DiagnosticOnly: true, ObservedAt: time.Now().UTC().Format(time.RFC3339Nano)}}

@@ -103,6 +103,12 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 	if err != nil || manifest.ValidateCapacityPolicySpec(p) != nil || p.AssessmentBinding == nil || workflowRef.Kind != "workflow" || workflowRef.Namespace != expectedWorkflow.Namespace || workflowRef.Name != expectedWorkflow.Name {
 		return fail()
 	}
+	if p.HPAExecutionBinding != nil && p.HPAExecutionBinding.ReleaseRecovery != nil {
+		ctx, err = activateCapacityReleaseRecovery(ctx)
+		if err != nil {
+			return fail(err)
+		}
+	}
 	wf, err := repository.ResolveManifest(ctx, db, "workflow", expectedWorkflow.Namespace, expectedWorkflow.Name, nil, true)
 	if err != nil || wf.ID != workflowRef.ID || wf.Version != workflowRef.Version {
 		return fail()
@@ -141,6 +147,16 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 		// The resolved execute entry point bypasses AdapterTransportClient.Call.
 		// Carry the original private native policy explicitly for every read and
 		// mutation on this callback; absent private dispatch keeps legacy behavior.
+		var original *capacityReleaseOriginalReply
+		if value, ok := out.(*capacityReleaseOriginalReply); ok {
+			original = value
+			if native == nil || a.typeSpec.Adapter.Transport != "http_json" || op != capacity.DestroyNativePodProtection || p.HPAExecutionBinding == nil || p.HPAExecutionBinding.ReleaseRecovery == nil {
+				return "", errCapacityBoundAssessment
+			}
+			owned := *native
+			owned.originalReturn = func(joined bool) { original.CallerJoined = joined }
+			native = &owned
+		}
 		r, e := executeIntegrationThroughResolvedWithPolicy(ctx, conn, model.ExecuteIntegrationRequest{Operation: op, Capability: op, Input: fixed}, a.instance, a.instanceSpec, a.typ, a.typeSpec, 35*time.Second, integrationExecutionPolicy{detailFreeErrors: true, safeError: errCapacityBoundAssessment, requireExplicitResponse: true, nativeHTTP: native})
 		e = capacityDispatchCause(ctx, e)
 		if err := capacityDispatchFence(ctx); err != nil {
@@ -148,6 +164,9 @@ func executeCapacityBoundWorkflowStep(ctx context.Context, conn *amqp.Connection
 		}
 		if e != nil {
 			return "", e
+		}
+		if original != nil {
+			out = &original.Output
 		}
 		if e = capacity.DecodeNativeCapacity(r.Output, out); e != nil {
 			return "", capacityDispatchCause(ctx, e)

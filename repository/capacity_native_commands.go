@@ -32,6 +32,10 @@ const maxNativeCommandSequences = 4
 // No network call occurs while the transaction holds dimension and row locks.
 // The plaintext command token is returned only to the fixed private invocation.
 func (s CapacityStore) IssueNativeCommand(ctx context.Context, policy model.Manifest, intent model.CapacityIntent, operation, subject string, request json.RawMessage) (model.CapacityNativeCommand, string, error) {
+	return s.issueNativeCommand(ctx, policy, intent, operation, subject, request, nil)
+}
+
+func (s CapacityStore) issueNativeCommand(ctx context.Context, policy model.Manifest, intent model.CapacityIntent, operation, subject string, request json.RawMessage, recovery *nativeReleaseRecoveryAdmission) (model.CapacityNativeCommand, string, error) {
 	var command model.CapacityNativeCommand
 	if !nativeCapacityOperation(operation) || len(request) == 0 || len(request) > 32768 || !json.Valid(request) || len(subject) > 128 {
 		return command, "", ErrCapacityMutationAuthorization
@@ -86,6 +90,17 @@ func (s CapacityStore) IssueNativeCommand(ctx context.Context, policy model.Mani
 		if sequenceErr != nil {
 			return sequenceErr
 		}
+		if p.HPAExecutionBinding.ReleaseRecovery != nil && operation == capacity.DestroyNativePodProtection && recovery == nil {
+			if err := tx.QueryRowContext(ctx, `SELECT count(*),count(*) FILTER(WHERE COALESCE(c.state,a.command_record->>'state')='refused_no_redemption') FROM public.capacity_native_command_identities i LEFT JOIN public.capacity_native_commands c ON c.id=i.id LEFT JOIN public.capacity_native_command_archive a ON a.id=i.id WHERE i.namespace=$1 AND i.environment=$2 AND i.domain=$3 AND i.dimension=$4 AND i.operation=$5 AND i.subject_uid=$6 AND i.phase='release'`, current.Namespace, p.Environment, p.Domain, p.Dimension, operation, subject).Scan(&previous, &refused); err != nil {
+				return err
+			}
+		}
+		if recovery != nil {
+			previous, refused, err = s.validateNativeReleaseRecoveryAdmission(ctx, tx, policy, p, current, subject, request, recovery, now)
+			if err != nil {
+				return err
+			}
+		}
 		if previous != refused || previous >= maxNativeCommandSequences {
 			return ErrCapacityConflict
 		}
@@ -111,6 +126,20 @@ func (s CapacityStore) IssueNativeCommand(ctx context.Context, policy model.Mani
 			Request:  request, RequestSHA256: hex.EncodeToString(requestDigest[:]), State: "issued", AuthorityTokenSHA256: hex.EncodeToString(tokenDigest[:]),
 			CreatedAt: now, ExpiresAt: *current.LeaseExpiresAt, UpdatedAt: now,
 		}
+		if operation == capacity.DestroyNativePodProtection && p.HPAExecutionBinding.ReleaseRecovery != nil {
+			if deadline, ok := ctx.Deadline(); !ok || !deadline.After(now) {
+				return ErrCapacityLease
+			} else if deadline.Before(command.ExpiresAt) {
+				command.ExpiresAt = deadline
+			}
+			command.ReleaseProtocol = p.HPAExecutionBinding.ReleaseRecovery.Protocol
+			command.AdapterSourceCommit = p.HPAExecutionBinding.ReleaseRecovery.AdapterSourceCommit
+		}
+		if recovery != nil {
+			command.RecoveryDecisionID, command.RecoveryFence = uuid.NewString(), uuid.NewString()
+			command.ParentCommandID, command.ParentAttemptID = recovery.Parent.CommandID.String(), recovery.Parent.AttemptID.String()
+			command.ExpiresAt = recovery.Parent.ExpiresAt
+		}
 		if p.HPAExecutionBinding.Mode == capacity.HPALifetimeExecutionMode {
 			command.OriginPolicy = append(json.RawMessage(nil), policy.Spec...)
 			command.OriginPolicySHA256 = nativeCanonicalArchiveSHA(command.OriginPolicy)
@@ -122,6 +151,11 @@ func (s CapacityStore) IssueNativeCommand(ctx context.Context, policy model.Mani
 		}
 		if p.HPAExecutionBinding.Mode == capacity.HPALifetimeExecutionMode {
 			if _, err := tx.ExecContext(ctx, `INSERT INTO public.capacity_native_command_identities(id,namespace,environment,domain,dimension,generation,operation,subject_uid,phase,sequence,authority_token_sha256,request_sha256)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, command.CommandID, command.Namespace, command.Environment, command.Domain, command.Dimension, command.IntentGeneration, command.Operation, subject, command.Phase, command.Sequence, command.AuthorityTokenSHA256, command.RequestSHA256); err != nil {
+				return err
+			}
+		}
+		if recovery != nil {
+			if err := retainNativeReleaseRecoveryDecision(ctx, tx, command, recovery, now); err != nil {
 				return err
 			}
 		}
@@ -241,7 +275,14 @@ func (s CapacityStore) RedeemNativeCommand(ctx context.Context, principal string
 	if err != nil || intent.PolicyID != command.PolicyID || intent.PolicyChecksum != command.PolicyChecksum || intent.Generation != command.IntentGeneration || intent.FencingToken != command.FencingToken || intent.LeaseOwner != command.LeaseOwner || intent.LeaseExecutorID != command.ExecutorID || intent.RecoveryOnly || intent.LeaseExpiresAt == nil || !intent.LeaseExpiresAt.After(now) || !command.ExpiresAt.After(now) {
 		return permit, ErrCapacityLease
 	}
+	if err := validateNativeReleaseRedemption(command, p, request); err != nil {
+		return permit, err
+	}
 	command.State, command.RedeemedBy, command.AttemptID, command.UpdatedAt = "redeemed", principal, uuid.New(), now.UTC()
+	returnNonce, err := retainNativeReleaseRedemption(ctx, tx, command)
+	if err != nil {
+		return permit, err
+	}
 	raw, err = json.Marshal(command)
 	if err != nil {
 		return permit, err
@@ -252,7 +293,7 @@ func (s CapacityStore) RedeemNativeCommand(ctx context.Context, principal string
 	if err := tx.Commit(); err != nil {
 		return permit, err
 	}
-	return model.CapacityNativeAuthorityPermit{SchemaVersion: 1, CommandID: command.CommandID, AttemptID: command.AttemptID, Capability: command.Operation, RequestSHA256: command.RequestSHA256, ExpiresAt: command.ExpiresAt}, nil
+	return model.CapacityNativeAuthorityPermit{SchemaVersion: 1, CommandID: command.CommandID, AttemptID: command.AttemptID, Capability: command.Operation, RequestSHA256: command.RequestSHA256, ExpiresAt: command.ExpiresAt, ReleaseProtocol: command.ReleaseProtocol, AdapterSourceCommit: command.AdapterSourceCommit, ReturnNonce: returnNonce}, nil
 }
 
 func (s CapacityStore) MarkNativeCommandUncertain(ctx context.Context, commandID uuid.UUID) error {

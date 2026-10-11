@@ -63,12 +63,23 @@ func TestCapacityNativeKinDHTTP(t *testing.T) {
 		drift string
 	}{{"complete_baseline_controller_retirement", false, ""}, {"mixed_schema_one_frozen_bootstrap", true, ""}, {"installed_guard_refusal_before_authority", false, "before"}, {"installed_guard_refusal_during_redemption", false, "during"}, {"durable_scheduled_dispatch_original_native_executor", false, ""}} {
 		t.Run(scenario.name, func(t *testing.T) {
-			qualifyCapacityNativeKinDHTTP(t, scenario.mixed, scenario.drift, scenario.name == "durable_scheduled_dispatch_original_native_executor")
+			qualifyCapacityNativeKinDHTTP(t, scenario.mixed, scenario.drift, scenario.name == "durable_scheduled_dispatch_original_native_executor", scenario.name)
 		})
 	}
 }
 
-func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, scheduled bool) {
+func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, scheduled bool, recoveryMode ...string) {
+	protocolEnabled := len(recoveryMode) == 1
+	mode := ""
+	if protocolEnabled {
+		mode = recoveryMode[0]
+	}
+	forceConflict := strings.HasPrefix(mode, "forced_conflict")
+	compiledSource := os.Getenv("CAPACITY_KUBERNETES_SOURCE_COMMIT")
+	if protocolEnabled && (len(compiledSource) != 40 || strings.ContainsAny(compiledSource, "ABCDEFGHIJKLMNOPQRSTUVWXYZ")) {
+		t.Fatal("exact compiled native release source required before effects")
+	}
+
 	ctx, cancel := context.WithTimeout(context.Background(), 6*time.Minute)
 	defer cancel()
 	dsn, image, digest, adapterBinary := os.Getenv("DB_URL"), os.Getenv("NATIVE_FIXTURE_IMAGE"), os.Getenv("NATIVE_FIXTURE_DIGEST"), os.Getenv("CAPACITY_KUBERNETES_MAIN_BINARY")
@@ -149,6 +160,7 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 		originalBaseline = nativeBirthBaseline(t, ctx, realm, os.Getenv("NATIVE_OLD_FIXTURE_IMAGE"))
 	}
 	birthBinding, adapterKubeconfig := nativeInstallBirthGuard(t, ctx, realm, workloadName, workloadUID, image)
+	adapterKubeconfig, conflictCount := nativeReleaseConflictProxy(t, ctx, adapterKubeconfig, realm, forceConflict)
 	if mixed {
 		// Pause the real Deployment then update its existing native ReplicaSet
 		// template. Its actual controller adds one current SDK2 candidate while
@@ -206,7 +218,8 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 		t.Fatal(err)
 	}
 	var redeemedAfterDrift atomic.Bool
-	core := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+	var heldAdapterAck, heldCallerAck atomic.Bool
+	coreServe := func(w http.ResponseWriter, r *http.Request) {
 		if drift == "during" && r.URL.Path == capacityMutationBasePath+"/native/redeem" {
 			raw, err := io.ReadAll(io.LimitReader(r.Body, 8193))
 			if err != nil || len(raw) > 8192 {
@@ -229,9 +242,40 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 				}
 			}
 		}
+		if r.URL.Path == capacityMutationBasePath+"/native/result" && (mode == "forced_conflict_adapter_ack_held" || mode == "forced_conflict_source_changed_hold" || mode == "forced_conflict_rbac_revoked_hold") && heldAdapterAck.CompareAndSwap(false, true) {
+			recorder := httptest.NewRecorder()
+			coreHandler.ServeHTTP(recorder, r)
+			assertNativeReleaseNoRecoveryBeforeCaller(t, r.Context(), db, realm)
+			if mode == "forced_conflict_source_changed_hold" {
+				if _, e := db.ExecContext(r.Context(), `UPDATE public.manifests SET checksum=$2 WHERE namespace=$1 AND kind='integration_instance' AND name='native-kubernetes'`, realm, strings.Repeat("f", 64)); e != nil {
+					t.Error("native source drift fixture failed")
+				}
+			}
+			if mode == "forced_conflict_rbac_revoked_hold" {
+				if _, e := db.ExecContext(r.Context(), `UPDATE public.manifests SET active=false WHERE namespace=$1 AND kind='rbac'`, realm); e != nil {
+					t.Error("current native RBAC refusal fixture failed")
+				}
+			}
+			for key, values := range recorder.Header() {
+				w.Header()[key] = values
+			}
+			w.WriteHeader(recorder.Code)
+			_, _ = w.Write(recorder.Body.Bytes())
+			return
+		}
 		coreHandler.ServeHTTP(w, r)
-	}))
+	}
+	var core *httptest.Server
+	if protocolEnabled {
+		core = httptest.NewTLSServer(http.HandlerFunc(coreServe))
+	} else {
+		core = httptest.NewServer(http.HandlerFunc(coreServe))
+	}
 	defer core.Close()
+	trustPath := ""
+	if protocolEnabled {
+		trustPath = nativeCoreResultTrust(t, core)
+	}
 	port, healthPort := nativeKindFreePort(t), nativeKindFreePort(t)
 	adapterLog := filepath.Join(t.TempDir(), "adapter.log")
 	logFile, err := os.Create(adapterLog)
@@ -250,12 +294,64 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 	})
 	adapterCmd := exec.CommandContext(ctx, adapterBinary)
 	adapterCmd.Env = append(os.Environ(), "YGGDRASIL_TRANSPORT=http", "ADAPTER_PORT="+strconv.Itoa(port), "HEALTHCHECK_PORT="+strconv.Itoa(healthPort), "YGGDRASIL_CORE_URL="+core.URL, "YGGDRASIL_RUN_TOKEN="+eventToken)
+	if trustPath != "" {
+		adapterCmd.Env = append(adapterCmd.Env, "SSL_CERT_FILE="+trustPath)
+	}
 	adapterCmd.Stdout, adapterCmd.Stderr = logFile, logFile
 	if err := adapterCmd.Start(); err != nil {
 		t.Fatal(err)
 	}
 	defer func() { _ = adapterCmd.Process.Kill(); _ = adapterCmd.Wait() }()
 	adapterURL := fmt.Sprintf("http://127.0.0.1:%d", port)
+	if mode == "forced_conflict_caller_ack_held" || mode == "forced_conflict_late_owner_hold" {
+		upstream := adapterURL
+		caller := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+			raw, e := io.ReadAll(io.LimitReader(r.Body, 2<<20+1))
+			closeErr := r.Body.Close()
+			if e != nil || closeErr != nil || len(raw) > 2<<20 {
+				w.WriteHeader(503)
+				return
+			}
+			request, e := http.NewRequestWithContext(r.Context(), r.Method, upstream+r.URL.Path, bytes.NewReader(raw))
+			if e != nil {
+				w.WriteHeader(503)
+				return
+			}
+			request.GetBody = nil
+			request.Header = r.Header.Clone()
+			reply, e := http.DefaultClient.Do(request)
+			if e != nil || reply == nil || reply.Body == nil {
+				if reply != nil && reply.Body != nil {
+					_ = reply.Body.Close()
+				}
+				w.WriteHeader(503)
+				return
+			}
+			body, readErr := io.ReadAll(io.LimitReader(reply.Body, 2<<20+1))
+			closeErr = reply.Body.Close()
+			if readErr != nil || closeErr != nil || len(body) > 2<<20 {
+				w.WriteHeader(503)
+				return
+			}
+			var operation struct {
+				Operation string `json:"operation"`
+			}
+			if json.Unmarshal(raw, &operation) == nil && operation.Operation == capacity.DestroyNativePodProtection && conflictCount.Load() == 1 && heldCallerAck.CompareAndSwap(false, true) {
+				assertNativeReleaseNoRecoveryBeforeCaller(t, r.Context(), db, realm)
+				if mode == "forced_conflict_late_owner_hold" {
+					<-r.Context().Done()
+					return
+				}
+			}
+			for key, values := range reply.Header {
+				w.Header()[key] = values
+			}
+			w.WriteHeader(reply.StatusCode)
+			_, _ = w.Write(body)
+		}))
+		defer caller.Close()
+		adapterURL = caller.URL
+	}
 	var describe model.AdapterDescribeResponse
 	nativeKindAwait(t, ctx, func() bool {
 		req, _ := http.NewRequestWithContext(ctx, http.MethodPost, adapterURL+"/rpc/describe", strings.NewReader("{}"))
@@ -284,6 +380,10 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 	}
 	typ := create("integration_type", "native-kubernetes", nativeType)
 	nativeConfig := map[string]any{"base_url": adapterURL, "kubeconfig_path": adapterKubeconfig, "current_birth_guard_bindings": []map[string]any{birthBinding}, "capacity_authority_url": core.URL, "capacity_envelope_targets": []map[string]any{{"namespace": realm, "hpa_name": "api", "hpa_uid": hpaUID, "workload_name": workloadName, "workload_uid": workloadUID, "owner": owner, "protected_floor": 2, "maximum_replicas": 4, "adoption_allowed": false, "surplus_max_age_seconds": 180}}, "capacity_pod_targets": []map[string]any{{"binding_name": "api-native", "namespace": realm, "workload_name": workloadName, "workload_uid": workloadUID, "owner": owner, "container_name": "api", "image_digest": digest, "lanes": []string{"listener", "requests", "signal", "workers"}, "projection_directory": "/native", "admission_mode": "process_v2", "admission_port": 8080}}}
+	if protocolEnabled {
+		nativeConfig["native_release_result_protocol"] = capacity.NativeReleaseResultProtocol
+		nativeConfig["native_release_source_commit"] = compiledSource
+	}
 	// The registered instance uses the actual predetermined machine scope UUID.
 	specRaw, _ := json.Marshal(model.IntegrationInstanceManifestSpec{TypeRef: model.ManifestSelector{ManifestID: typ.ID.String()}, Status: "active", Config: nativeConfig, Credentials: map[string]any{"capacity_mutation_token": machineToken, "capacity_admission_key": admissionKey}})
 	instance := create("integration_instance", "native-kubernetes", json.RawMessage(specRaw))
@@ -371,6 +471,9 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 	}
 	pressureWorkflow := create("workflow", "execute", pressureSpec)
 	create("workflow", "admit", model.WorkflowManifestSpec{Trigger: model.WorkflowTriggerSpec{Mode: "manual"}, Authorization: &model.WorkflowAuthorizationSpec{RBAC: model.ManifestSelector{Namespace: realm, Name: "native-rbac"}}, InputSchema: model.WorkflowInputSchemaSpec{Properties: map[string]model.IntegrationSchemaProperty{}, AdditionalProperties: &noNativeInputs}, Steps: []model.WorkflowStepSpec{{ID: "admission", TimeoutSeconds: 180, Retry: model.WorkflowRetrySpec{MaxAttempts: 1}, Use: model.WorkflowStepUseSpec{Kind: "yggdrasil", Operation: "capacity.admit_bound"}, With: map[string]any{"policy": map[string]string{"namespace": realm, "name": "native-policy"}}}}})
+	if protocolEnabled {
+		p.HPAExecutionBinding.ReleaseRecovery = &model.CapacityNativeReleaseRecoveryBinding{Protocol: capacity.NativeReleaseResultProtocol, AdapterSourceCommit: compiledSource}
+	}
 	policy := create("capacity_policy", "native-policy", p)
 	if err := manifest.ValidateCapacityPolicySpec(p); err != nil {
 		t.Fatalf("actual native operator binding: %v", err)
@@ -425,7 +528,7 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 		if token != "" {
 			req.Header.Set("Authorization", "Bearer "+token)
 		}
-		res, err := http.DefaultClient.Do(req)
+		res, err := core.Client().Do(req)
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -672,7 +775,22 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 	if status["exitCode"] != float64(0) || json.Unmarshal([]byte(status["message"].(string)), &receipt) != nil || receipt.SchemaVersion != 2 || receipt.ProcessNonce != checkpoint.ProcessNonce || receipt.RootAdmission != "previously_opened" || len(receipt.Lanes) != 4 {
 		t.Fatal("actual current SDK2 termination receipt unavailable", status)
 	}
+	if mode == "forced_conflict_source_changed_hold" || mode == "forced_conflict_rbac_revoked_hold" || mode == "forced_conflict_late_owner_hold" {
+		beforeIDs := nativeReleaseIdentityCount(t, ctx, db, realm)
+		run("execute", false)
+		if conflictCount.Load() != 1 || nativeReleaseIdentityCount(t, ctx, db, realm) != beforeIDs+1 {
+			t.Fatal("failed current source/RBAC/owner created replacement authority")
+		}
+		var decisions int
+		if db.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_release_recovery_decisions d JOIN public.capacity_native_command_identities i ON i.id=d.command_id WHERE i.namespace=$1`, realm).Scan(&decisions) != nil || decisions != 0 {
+			t.Fatal("HOLD condition admitted a recovery subdecision")
+		}
+		return
+	}
 	run("execute", true)
+	if forceConflict {
+		assertNativeReleaseRecoveryIdentities(t, ctx, db, realm, compiledSource, conflictCount.Load())
+	}
 	retained := nativeKindGet(t, ctx, "-n", realm, "get", "pod", victimName, "-o", "json")
 	retainedMeta := retained["metadata"].(map[string]any)
 	remainingFinalizers := retainedMeta["finalizers"].([]any)
@@ -798,7 +916,7 @@ func nativeKindReleaseSnapshot(t *testing.T, ctx context.Context, db *sql.DB, re
 		t.Fatal("complete original native identity query unavailable", err)
 	}
 	identities, commands := []json.RawMessage{}, []json.RawMessage{}
-	confirmed, refused := 0, 0
+	confirmed, refused, rejected := 0, 0, 0
 	for rows.Next() {
 		var identityRaw, hotRaw, coldRaw []byte
 		var archiveSHA sql.NullString
@@ -838,6 +956,12 @@ func nativeKindReleaseSnapshot(t *testing.T, ctx context.Context, db *sql.DB, re
 				rows.Close()
 				t.Fatal("confirmed original command lacks its actual redemption/readback")
 			}
+		case "rejected_no_effect":
+			var original model.CapacityNativeReleaseResult
+			if p.HPAExecutionBinding.ReleaseRecovery == nil || command.ReleaseProtocol != capacity.NativeReleaseResultProtocol || command.AdapterSourceCommit != p.HPAExecutionBinding.ReleaseRecovery.AdapterSourceCommit || command.CallerReturnObservedAt == nil || !command.CallerReturnObservedAt.Before(command.ExpiresAt) || capacity.DecodeNativeCapacity(command.OriginalResult, &original) != nil || command.OriginalResultSHA256 != fmt.Sprintf("%x", sha256.Sum256(nativeKindCanonicalJSON(t, command.OriginalResult))) || original.CommandID != command.CommandID || original.AttemptID != command.AttemptID || original.RequestSHA256 != command.RequestSHA256 || original.ReturnNonce != "" || original.OriginalStatus != 409 || original.Outcome != "rejected_no_effect" || !original.OneSend || !original.DoReturned || !original.ReadReturned || !original.CloseReturned {
+				rows.Close()
+				t.Fatal("rejected original lost dual ACKs or native result identity")
+			}
 		case "refused_no_redemption":
 			if command.AttemptID != uuid.Nil || command.RedeemedBy != "" || (len(command.NativeReadback) != 0 && !bytes.Equal(bytes.TrimSpace(command.NativeReadback), []byte("null"))) {
 				rows.Close()
@@ -860,8 +984,10 @@ func nativeKindReleaseSnapshot(t *testing.T, ctx context.Context, db *sql.DB, re
 					t.Fatal("original confirmed release lacks the exact completed native removal readback")
 				}
 				confirmed++
-			} else {
+			} else if command.State == "refused_no_redemption" {
 				refused++
+			} else if command.State == "rejected_no_effect" {
+				rejected++
 			}
 		}
 		identities = append(identities, nativeKindCanonicalJSON(t, identityRaw))
@@ -869,6 +995,10 @@ func nativeKindReleaseSnapshot(t *testing.T, ctx context.Context, db *sql.DB, re
 	}
 	err = rows.Err()
 	rows.Close()
+	var durableRejected int
+	if db.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_release_results r JOIN public.capacity_native_command_identities i ON i.id=r.command_id WHERE i.namespace=$1 AND i.subject_uid=$2 AND r.adapter_ack_at IS NOT NULL AND r.caller_ack_at IS NOT NULL AND r.adapter_result->>'outcome'='rejected_no_effect'`, realm, subject).Scan(&durableRejected) != nil || durableRejected != rejected {
+		t.Fatal("original rejected result lost durable dual acknowledgements")
+	}
 	if err != nil || confirmed != 1 || len(commands) != len(identities) {
 		t.Fatal("original native release lacks exactly one confirmed attempt", confirmed, refused, err)
 	}
@@ -885,7 +1015,7 @@ func nativeKindReleaseSnapshot(t *testing.T, ctx context.Context, db *sql.DB, re
 		t.Fatal("original native snapshot did not complete", err)
 	}
 	snapshot = nativeKindCanonicalJSON(t, snapshot)
-	t.Logf("actual native SQL release confirmed=%d refused_no_redemption=%d archived=%t snapshot_sha256=%x snapshot=%s", confirmed, refused, archived, sha256.Sum256(snapshot), snapshot)
+	t.Logf("actual native SQL release confirmed=%d refused_no_redemption=%d rejected_no_effect=%d archived=%t snapshot_sha256=%x snapshot=%s", confirmed, refused, rejected, archived, sha256.Sum256(snapshot), snapshot)
 	return snapshot, archived
 }
 

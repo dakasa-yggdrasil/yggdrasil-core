@@ -54,6 +54,19 @@ type nativeAdapterHTTPPolicy struct {
 	ownerDeadline  time.Time
 	parentDeadline time.Time
 	guest          *capacityGuestHTTPPolicy
+	originalReturn func(bool)
+}
+
+// Only the original private release caller owns this wrapper. http.Client
+// otherwise discards a response returned alongside a RoundTrip error.
+type capacityReleaseCallerTransport struct{ base http.RoundTripper }
+
+func (t capacityReleaseCallerTransport) RoundTrip(r *http.Request) (*http.Response, error) {
+	resp, err := t.base.RoundTrip(r)
+	if err != nil && resp != nil && resp.Body != nil {
+		return nil, errors.Join(err, resp.Body.Close())
+	}
+	return resp, err
 }
 
 // Installed only by the protected original Guest consumer after operator
@@ -420,6 +433,9 @@ func (c *adapterTransportClient) callNativeHTTPJSON(ctx context.Context, target 
 		return fail(err)
 	}
 	req.Header.Set("Content-Type", "application/json")
+	if n.originalReturn != nil {
+		req.GetBody = nil
+	}
 	if n.requireTLS {
 		if guest != nil {
 			req.GetBody = nil
@@ -429,6 +445,13 @@ func (c *adapterTransportClient) callNativeHTTPJSON(ctx context.Context, target 
 		}
 	}
 	client := *c.httpClient
+	if n.originalReturn != nil {
+		base := client.Transport
+		if base == nil {
+			base = http.DefaultTransport
+		}
+		client.Transport = capacityReleaseCallerTransport{base: base}
+	}
 	client.CheckRedirect = func(*http.Request, []*http.Request) error { return errors.New("native redirect refused") }
 	reply, callErr := client.Do(req)
 	var raw []byte
@@ -448,6 +471,9 @@ func (c *adapterTransportClient) callNativeHTTPJSON(ctx context.Context, target 
 		closeErr = reply.Body.Close()
 	}
 	joined := errors.Join(callErr, shapeErr, readErr, closeErr, fence())
+	if n.originalReturn != nil {
+		n.originalReturn(joined == nil && reply != nil && reply.Body != nil && int64(len(raw)) <= n.limit)
+	}
 	if joined != nil || int64(len(raw)) > n.limit {
 		return fail(errors.Join(errors.New("bounded complete native response required"), joined))
 	}

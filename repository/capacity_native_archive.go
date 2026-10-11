@@ -33,7 +33,7 @@ func nativeCanonicalArchiveSHA(raw []byte) string {
 }
 
 func archiveNativeCommand(ctx context.Context, tx *sql.Tx, command model.CapacityNativeCommand) error {
-	if command.State != "confirmed" && command.State != "refused_no_redemption" {
+	if command.State != "confirmed" && command.State != "refused_no_redemption" && !nativeRejectedReleaseRetained(command) {
 		return ErrCapacityConflict
 	}
 	raw, err := json.Marshal(command)
@@ -57,7 +57,7 @@ func archiveNativeCommand(ctx context.Context, tx *sql.Tx, command model.Capacit
 	if _, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_native_command_archive(id,record_sha256,command_record)VALUES($1,$2,$3)`, command.CommandID, nativeCanonicalArchiveSHA(raw), raw); err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `DELETE FROM public.capacity_native_commands WHERE id=$1 AND state IN ('confirmed','refused_no_redemption')`, command.CommandID)
+	_, err = tx.ExecContext(ctx, `DELETE FROM public.capacity_native_commands WHERE id=$1 AND state IN ('confirmed','refused_no_redemption','rejected_no_effect')`, command.CommandID)
 	return err
 }
 
@@ -116,7 +116,7 @@ func (s CapacityStore) ArchiveNativeTerminalHistory(ctx context.Context, policy 
 			}
 			releases := 0
 			for _, command := range commands {
-				if command.PolicyID != cp.PolicyID || command.PolicyChecksum != cp.PolicyChecksum || (command.State != "confirmed" && command.State != "refused_no_redemption") {
+				if command.PolicyID != cp.PolicyID || command.PolicyChecksum != cp.PolicyChecksum || (command.State != "confirmed" && command.State != "refused_no_redemption" && !nativeRejectedReleaseRetained(command)) {
 					return ErrCapacityConflict
 				}
 				if command.Phase == "release" && command.State == "confirmed" {
@@ -232,7 +232,7 @@ func (s CapacityStore) ArchivedNativeLifetime(ctx context.Context, policy model.
 	seen := map[string]bool{}
 	for _, command := range bundle.Commands {
 		commandID := command.CommandID.String()
-		if !capacity.NativeProcessNonce(commandID) || seen[commandID] || command.Namespace != policy.Metadata.Namespace || command.PolicyID != cp.PolicyID || command.PolicyChecksum != cp.PolicyChecksum || command.Environment != p.Environment || command.Domain != p.Domain || command.Dimension != p.Dimension || (command.State != "confirmed" && command.State != "refused_no_redemption") {
+		if !capacity.NativeProcessNonce(commandID) || seen[commandID] || command.Namespace != policy.Metadata.Namespace || command.PolicyID != cp.PolicyID || command.PolicyChecksum != cp.PolicyChecksum || command.Environment != p.Environment || command.Domain != p.Domain || command.Dimension != p.Dimension || (command.State != "confirmed" && command.State != "refused_no_redemption" && !nativeRejectedReleaseRetained(command)) {
 			return zero, false, ErrCapacityConflict
 		}
 		seen[commandID] = true

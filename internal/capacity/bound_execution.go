@@ -20,6 +20,7 @@ const ObserveCurrentBirthGuard = "observe_current_birth_guard"
 const EnsureNativePodDrain = "ensure_capacity_pod_drain"
 const ObserveNativePodTermination = "observe_capacity_pod_termination"
 const DestroyNativePodProtection = "destroy_capacity_pod_drain_protection"
+const NativeReleaseResultProtocol = "native_release_result_v1"
 
 var nativeLanePattern = regexp.MustCompile(`^[a-z][a-z0-9_]{0,63}$`)
 var lowerSHA = regexp.MustCompile(`^[0-9a-f]{64}$`)
@@ -28,6 +29,11 @@ func ValidateHPAExecutionBinding(p model.CapacityPolicySpec) error {
 	binding := p.HPAExecutionBinding
 	if binding == nil {
 		return nil
+	}
+	if r := binding.ReleaseRecovery; r != nil {
+		if binding.Mode != HPALifetimeExecutionMode || r.Protocol != NativeReleaseResultProtocol || !regexp.MustCompile(`^[0-9a-f]{40}$`).MatchString(r.AdapterSourceCommit) {
+			return fmt.Errorf("release recovery requires exact approved original-return protocol and producer source")
+		}
 	}
 	if p.AssessmentBinding == nil || (binding.Mode != HPAExecutionMode && binding.Mode != HPALifetimeExecutionMode) || len(p.MutationBindings) != 0 || p.Dimension != ReservedPodEnvelopeUnit || !filepath.IsAbs(binding.ProjectionDirectory) || filepath.Clean(binding.ProjectionDirectory) != binding.ProjectionDirectory || strings.Contains(binding.ProjectionDirectory, "..") {
 		return fmt.Errorf("native HPA executor requires exact reserved envelope and native projection binding")

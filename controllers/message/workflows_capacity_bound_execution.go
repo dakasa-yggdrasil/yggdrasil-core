@@ -122,7 +122,7 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 	// Old redeemed outcomes permit native GET and durable readback only. They
 	// never acquire new send permission merely because a lease/generation moved.
 	for _, command := range commands {
-		if command.State == "confirmed" || command.State == "refused_no_redemption" {
+		if command.State == "confirmed" || command.State == "refused_no_redemption" || command.State == "rejected_no_effect" {
 			continue
 		}
 		if command.State == "issued" {
@@ -237,6 +237,18 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 		return fmt.Errorf("native phase exhausted four unredeemed permissions")
 	}
 	release := func(cp model.CapacityNativePodCheckpoint) error {
+		if p.HPAExecutionBinding.ReleaseRecovery != nil {
+			return runCapacityReleaseRecovery(ctx, store, policy, p, intent, cp, call, observePod, observeHPA, func() (model.AdapterCapacityPodInventoryResponse, error) {
+				view, e := inventory()
+				if e != nil {
+					return model.AdapterCapacityPodInventoryResponse{}, e
+				}
+				if view.Native == nil {
+					return model.AdapterCapacityPodInventoryResponse{}, errCapacityBoundAssessment
+				}
+				return *view.Native, nil
+			})
+		}
 		observed, e := observePod(cp)
 		if e != nil {
 			return e

@@ -7,6 +7,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"io"
 	"net/http"
 	"os"
@@ -140,6 +141,23 @@ func (s *Server) serveCapacityMutationRequest(w http.ResponseWriter, r *http.Req
 	}
 	route := r.URL.Path
 	switch {
+	case r.Method == http.MethodPost && route == capacityMutationBasePath+"/native/result":
+		var payload model.CapacityNativeReleaseResult
+		r.Body = http.MaxBytesReader(w, r.Body, 32768)
+		raw, err := io.ReadAll(r.Body)
+		if err != nil || r.TLS == nil || capacity.DecodeNativeCapacity(json.RawMessage(raw), &payload) != nil {
+			writeProblemJSON(w, 400, "capacity.mutation_invalid", "a closed original native result over TLS is required")
+			return
+		}
+		if payload.IntegrationInstanceID != p.instanceID || !p.capabilities[payload.Capability] {
+			mutationHTTPError(w, repository.ErrCapacityMutationAuthorization)
+			return
+		}
+		if err = store.RecordNativeReleaseResult(ctx, p.base.principalID, payload); err != nil {
+			mutationHTTPError(w, err)
+			return
+		}
+		writeJSON(w, 200, map[string]bool{"recorded": true})
 	case r.Method == http.MethodPost && route == capacityMutationBasePath+"/native/redeem":
 		var payload model.CapacityNativeAuthorityRedeemRequest
 		if err := decodeCapacityNativeAuthorityJSON(w, r, &payload); err != nil {
@@ -249,6 +267,7 @@ func mutationHTTPError(w http.ResponseWriter, err error) {
 func decodeCapacityNativeAuthorityJSON(w http.ResponseWriter, r *http.Request, out *model.CapacityNativeAuthorityRedeemRequest) error {
 	r.Body = http.MaxBytesReader(w, r.Body, 32768)
 	allowed := map[string]bool{"authority_token": true, "integration_instance_id": true, "integration_type_id": true, "capability": true, "request_sha256": true}
+	allowed["release_protocol"], allowed["adapter_source_commit"] = true, true
 	decoder := json.NewDecoder(r.Body)
 	opening, err := decoder.Token()
 	if err != nil || opening != json.Delim('{') {
@@ -268,8 +287,16 @@ func decodeCapacityNativeAuthorityJSON(w http.ResponseWriter, r *http.Request, o
 		fields[name] = value
 	}
 	closing, err := decoder.Token()
-	if err != nil || closing != json.Delim('}') || len(fields) != len(allowed) || decoder.Decode(new(any)) != io.EOF {
+	if err != nil || closing != json.Delim('}') || (len(fields) != 5 && len(fields) != 7) || decoder.Decode(new(any)) != io.EOF {
 		return fmt.Errorf("incomplete native authority object")
+	}
+	for _, name := range []string{"authority_token", "integration_instance_id", "integration_type_id", "capability", "request_sha256"} {
+		if fields[name] == nil || string(fields[name]) == "null" {
+			return fmt.Errorf("incomplete native authority object")
+		}
+	}
+	if len(fields) == 7 && (fields["release_protocol"] == nil || fields["adapter_source_commit"] == nil || string(fields["release_protocol"]) == "null" || string(fields["adapter_source_commit"]) == "null") {
+		return fmt.Errorf("closed native release binding required")
 	}
 	raw, err := json.Marshal(fields)
 	if err != nil {

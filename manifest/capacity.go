@@ -24,6 +24,9 @@ func ParseCapacityPolicySpec(raw json.RawMessage) (model.CapacityPolicySpec, err
 	if err := validateNativeNotifyWindowJSON(raw); err != nil {
 		return spec, err
 	}
+	if err := validateNativeReleaseRecoveryJSON(raw); err != nil {
+		return spec, err
+	}
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err := decoder.Decode(&spec); err != nil {
@@ -148,4 +151,50 @@ func validateNativeNotifyWindowBinding(p model.CapacityPolicySpec) error {
 		return refuse()
 	}
 	return validateNativeNotifyResourceRoster(b)
+}
+
+func validateNativeReleaseRecoveryJSON(raw []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	token, err := decoder.Token()
+	if err != nil || token != json.Delim('{') {
+		return fmt.Errorf("capacity policy object required")
+	}
+	type member struct {
+		name string
+		raw  json.RawMessage
+	}
+	var hpas []member
+	for decoder.More() {
+		key, err := decoder.Token()
+		name, ok := key.(string)
+		if err != nil || !ok {
+			return fmt.Errorf("capacity policy member required")
+		}
+		var value json.RawMessage
+		if decoder.Decode(&value) != nil {
+			return fmt.Errorf("capacity policy value required")
+		}
+		if strings.EqualFold(name, "hpa_execution_binding") {
+			hpas = append(hpas, member{name, value})
+		}
+	}
+	for _, hpa := range hpas {
+		var fields map[string]json.RawMessage
+		if json.Unmarshal(hpa.raw, &fields) != nil {
+			continue
+		}
+		for name, value := range fields {
+			if !strings.EqualFold(name, "release_recovery") {
+				continue
+			}
+			if len(hpas) != 1 || hpa.name != "hpa_execution_binding" || name != "release_recovery" || bytes.Equal(bytes.TrimSpace(value), []byte("null")) {
+				return fmt.Errorf("canonical nonnull release recovery binding required")
+			}
+			var binding model.CapacityHPAExecutionBinding
+			if capacity.DecodeNativeCapacity(hpa.raw, &binding) != nil || binding.ReleaseRecovery == nil {
+				return fmt.Errorf("closed release recovery binding required")
+			}
+		}
+	}
+	return nil
 }
