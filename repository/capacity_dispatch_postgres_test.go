@@ -328,7 +328,10 @@ func TestCapacityDispatchPostgres(t *testing.T) {
 					response.Status = "failed"
 					runErr = errors.New("private provider bearer must not be persisted")
 				}
-				observedReturn := time.Now().UTC()
+				// Capture this original fixture return once at PostgreSQL storage precision.
+				// lib/pq sends nanoseconds; rounding during storage must not change the
+				// instant compared by the independent Go return-clock assertion.
+				observedReturn := time.Now().UTC().Truncate(time.Microsecond)
 				if status == "independent-go-return-clock" {
 					response.Status = "succeeded"
 					observedReturn = observedReturn.Add(-time.Hour)
@@ -349,7 +352,7 @@ func TestCapacityDispatchPostgres(t *testing.T) {
 					}
 				} else if status == "independent-go-return-clock" {
 					if err != nil || job.State != "returned" || run.Status != "succeeded" || !job.ReturnedAt.Truncate(time.Microsecond).Equal(observedReturn.Truncate(time.Microsecond)) {
-						t.Fatal("independent Go return clock was treated as PostgreSQL clock", err)
+						t.Fatalf("independent Go return clock was treated as PostgreSQL clock: original_error_nil=%t state_returned=%t run_succeeded=%t native_return_matches_original=%t", err == nil, job.State == "returned", run.Status == "succeeded", job.ReturnedAt.Truncate(time.Microsecond).Equal(observedReturn.Truncate(time.Microsecond)))
 					}
 				} else if err != nil || job.State != "returned" || run.Status != status {
 					t.Fatalf("typed return changed: state=%s run=%s err=%v", job.State, run.Status, err)
