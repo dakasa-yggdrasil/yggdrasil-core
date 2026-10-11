@@ -289,10 +289,34 @@ func preflightVMNodeCatalog(ctx context.Context, db *sql.DB, b model.CapacityObs
 	return capacityVMNodeContextFailure(ctx)
 }
 
+// Only existing in-process fixture owners can select this unexported key.
+// Production leaves it absent; it conveys no authority or wire metadata.
+type capacityVMNodeSourceFailureKey struct{}
+
+type capacityVMNodeSourceFailure struct {
+	Phase     string
+	Cause     error
+	Authority bool
+}
+
 func executeCapacityVMNodeWorkflowStep(parent context.Context, conn *amqp.Connection, db *sql.DB, workflowRef model.ManifestReference, result model.WorkflowRunStepResult, input map[string]any) (out model.WorkflowRunStepResult) {
 	out = result
 	out.Attempts, out.Status, out.Error = 1, "failed", errCapacityNativeObservation.Error()
-	if capacityVMNodeContextFailure(parent) != nil {
+	phase := "entry_context"
+	var originalFailure error
+	var observe func(capacityVMNodeSourceFailure)
+	if parent != nil {
+		observe, _ = parent.Value(capacityVMNodeSourceFailureKey{}).(func(capacityVMNodeSourceFailure))
+	}
+	// This private in-process callback cannot install a fence or alter a DTO.
+	// Capture causes at original returns; cleanup cancellation is not evidence.
+	defer func() {
+		if observe != nil && out.Status == "failed" {
+			observe(capacityVMNodeSourceFailure{Phase: phase, Cause: originalFailure, Authority: false})
+		}
+	}()
+	if failure := capacityVMNodeContextFailure(parent); failure != nil {
+		originalFailure = failure
 		out.FinishedAt = time.Now().UTC()
 		return out
 	}
@@ -305,6 +329,8 @@ func executeCapacityVMNodeWorkflowStep(parent context.Context, conn *amqp.Connec
 	finalize := func() {
 		out.FinishedAt = time.Now().UTC()
 		if failure := errors.Join(guard(), capacityVMNodeContextFailure(ctx), capacityVMNodeContextFailure(parent)); failure != nil || !originalGuestLease.IsZero() && !time.Now().Before(originalGuestLease) {
+			phase = "final_fence"
+			originalFailure = errors.Join(originalFailure, failure)
 			capacityDispatchCause(ctx, failure)
 			out.Status, out.Error, out.Metadata = "failed", errCapacityNativeObservation.Error(), nil
 		}
@@ -314,32 +340,41 @@ func executeCapacityVMNodeWorkflowStep(parent context.Context, conn *amqp.Connec
 			finalize()
 		}
 	}()
+	phase = "input"
 	var parsed model.CapacityVMObservationInput
 	if db == nil || result.Operation != "capacity.observe_vm_node_membership" || capacity.DecodeVMObservation(input, &parsed) != nil || parsed.Policy.ManifestID != "" || parsed.Policy.Version != nil || parsed.Policy.Namespace == "" || parsed.Policy.Name == "" || parsed.BindingName == "" || parsed.Generation != 0 || parsed.FencingToken != 0 || parsed.LeaseOwner != "" || parsed.GrantID != "" || parsed.ParentGrantID != "" || parsed.Slot != 0 {
 		return out
 	}
+	phase = "invocation"
 	executor, _ := ctx.Value(capacityInvocationKey{}).(string)
 	if id, e := uuid.Parse(executor); e != nil || id == uuid.Nil || id.String() != executor {
 		return out
 	}
+	phase = "policy_catalog"
 	policy, err := repository.ResolveManifest(ctx, db, "capacity_policy", parsed.Policy.Namespace, parsed.Policy.Name, nil, true)
 	if err != nil {
+		originalFailure = err
 		return out
 	}
+	phase = "policy_schema"
 	p, err := manifest.ParseCapacityPolicySpec(policy.Spec)
 	if err != nil || manifest.ValidateCapacityPolicySpec(p) != nil || p.VMNodeMembershipBinding == nil || p.VMNodeMembershipBinding.MutationBindingName != parsed.BindingName || workflowRef.Kind != "workflow" || workflowRef.Namespace != p.Workflow.Namespace || workflowRef.Name != p.Workflow.Name {
 		return out
 	}
+	phase = "workflow_catalog"
 	wf, err := repository.ResolveManifest(ctx, db, "workflow", p.Workflow.Namespace, p.Workflow.Name, nil, true)
 	if err != nil || wf.ID != workflowRef.ID || wf.Version != workflowRef.Version {
 		return out
 	}
+	phase = "workflow_schema"
 	ws, err := manifest.ParseWorkflowSpec(wf.Spec)
 	if err != nil || ws.Authorization == nil {
 		return out
 	}
+	phase = "vm_binding"
 	b, err := capacity.VMObservationBinding(p, parsed.BindingName)
 	if err != nil {
+		originalFailure = err
 		return out
 	}
 	vmRevision := model.CapacityObservationAdapterBinding{IntegrationInstanceID: b.IntegrationInstanceID, InstanceChecksum: b.IntegrationChecksum, IntegrationTypeID: b.IntegrationTypeID, TypeChecksum: b.IntegrationTypeChecksum}
@@ -347,14 +382,17 @@ func executeCapacityVMNodeWorkflowStep(parent context.Context, conn *amqp.Connec
 	store := repository.CapacityStore{DB: db, WorkflowID: wf.ID, ExecutorID: executor}
 	var guest capacityResolvedObservationAdapter
 	var guestContext context.Context
+	phase = "guest_admission"
 	if gb := p.GuestBootstrapBinding; gb != nil {
 		out.Metadata = nil
 		if os.Getenv("YGGDRASIL_CAPACITY_GUEST_BOOTSTRAP_ENABLED") != "true" {
 			return out
 		}
 		store.ExecutionEnabled = os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true"
+		phase = "guest_lease"
 		intent, original, e := readCapacityBusinessIntent(ctx, db, policy, p)
 		if e != nil || intent.PolicyID != policy.ID || intent.PolicyChecksum != policy.Checksum || intent.LeaseExecutorID != executor || intent.LeaseOwner == "" || intent.Generation < 1 || intent.FencingToken < 1 || intent.RecoveryOnly || intent.LeaseExpiresAt == nil || !intent.LeaseExpiresAt.After(time.Now()) {
+			originalFailure = e
 			capacityDispatchCause(ctx, e)
 			return out
 		}
@@ -417,50 +455,66 @@ func executeCapacityVMNodeWorkflowStep(parent context.Context, conn *amqp.Connec
 		}
 		// ALL immutable catalogs and the original lease precede private secret
 		// hydration, connectivity and Describe. Secret snapshots stay private.
+		phase = "guest_catalog_guard"
 		if e = guard(); e != nil {
+			originalFailure = e
 			capacityDispatchCause(ctx, e)
 			return out
 		}
+		phase = "guest_token_reference"
 		if !strings.HasSuffix(gb.ReadTokenRef, "#value") || strings.Count(gb.ReadTokenRef, "#") != 1 {
 			return out
 		}
+		phase = "guest_token_hydration"
 		tokenSecret, e := readSecret(gb.ReadTokenRef, policy.Metadata.Namespace)
 		token := tokenSecret.Data["value"]
 		if e != nil || len(tokenSecret.Data) != 1 || len(token) < 32 || len(token) > 4096 || strings.ContainsAny(token, "\r\n") {
+			originalFailure = e
 			capacityDispatchCause(ctx, e)
 			return out
 		}
 		privateSecrets[gb.ReadTokenRef] = tokenSecret
+		phase = "guest_instance"
 		im, e := repository.GetManifestByID(ctx, db, uuid.MustParse(gb.Adapter.IntegrationInstanceID))
 		var public model.IntegrationInstanceManifestSpec
 		if e != nil || json.Unmarshal(im.Spec, &public) != nil || len(public.Credentials) != 0 || strings.Contains(public.CredentialsRef, "#") {
+			originalFailure = e
 			capacityDispatchCause(ctx, e)
 			return out
 		}
+		phase = "guest_ssh_hydration"
 		sshSecret, e := readSecret(public.CredentialsRef, im.Metadata.Namespace)
 		if e != nil || len(sshSecret.Data) != 1 || sshSecret.Data["ssh_private_key"] == "" || len(sshSecret.Data["ssh_private_key"]) > 16384 {
+			originalFailure = e
 			capacityDispatchCause(ctx, e)
 			return out
 		}
 		privateSecrets[public.CredentialsRef] = sshSecret
+		phase = "guest_catalog_guard"
 		if e = guard(); e != nil {
+			originalFailure = e
 			capacityDispatchCause(ctx, e)
 			return out
 		}
+		phase = "guest_describe"
 		guestContext = withCapacityGuestHTTPPolicy(ctx, parent, &capacityGuestHTTPPolicy{baseURL: strings.TrimRight(gb.BaseURL, "/"), bearer: token})
 		guest, e = resolveCapacityObservationAdapterWithResolver(guestContext, conn, db, gb.Adapter, []string{capacity.ObserveGuestBootstrap}, resolveIntegrationInstance)
 		if e != nil || guard() != nil {
+			originalFailure = e
 			capacityDispatchCause(ctx, e)
 			return out
 		}
 	}
+	phase = "provider_node_catalog"
 	if preflightVMNodeCatalog(ctx, db, vmRevision, []string{capacity.VMObserveInventory, capacity.VMObserveAction}) != nil || preflightVMNodeCatalog(ctx, db, nb.Adapter, []string{capacity.ObserveNodeMembership}) != nil {
 		return out
 	}
+	phase = "provider_describe"
 	vm, err := resolveCapacityObservationAdapterWithResolver(ctx, conn, db, vmRevision, []string{capacity.VMObserveInventory, capacity.VMObserveAction}, resolveIntegrationInstance)
 	if err != nil || guard() != nil {
 		return out
 	}
+	phase = "node_describe"
 	native, err := resolveCapacityObservationAdapterWithResolver(ctx, conn, db, nb.Adapter, []string{capacity.ObserveNodeMembership}, resolveIntegrationInstance)
 	if err != nil || guard() != nil {
 		return out
@@ -471,6 +525,7 @@ func executeCapacityVMNodeWorkflowStep(parent context.Context, conn *amqp.Connec
 		}
 		r, e := executeIntegrationThroughResolvedWithPolicy(ctx, conn, model.ExecuteIntegrationRequest{Operation: op, Capability: op, Input: fixed}, a.instance, a.instanceSpec, a.typ, a.typeSpec, 65*time.Second, integrationExecutionPolicy{detailFreeErrors: true, safeError: errCapacityNativeObservation, requireExplicitResponse: true, nativeHTTP: &nativeAdapterHTTPPolicy{limit: 2 << 20, parent: parent}})
 		if e != nil || errors.Join(guard(), capacityVMNodeContextFailure(ctx), capacityVMNodeContextFailure(parent)) != nil || r.Status != "observed" || capacity.DecodeVMObservation(r.Output, reply) != nil {
+			originalFailure = e
 			capacityDispatchCause(ctx, e)
 			return errCapacityNativeObservation
 		}
@@ -490,12 +545,15 @@ func executeCapacityVMNodeWorkflowStep(parent context.Context, conn *amqp.Connec
 		}
 		return inv, nil
 	}
+	phase = "provider_before"
 	before, err := readVM()
 	if err != nil {
+		originalFailure = err
 		return out
 	}
 	// A baseline without an owning create grant can be linked physically, but
 	// it never acquires provider-mutation quiescence authority from that link.
+	phase = "provider_actions"
 	creationKnown := true
 	for _, member := range before.Members {
 		id := member.Server.Labels["yggdrasil.io/intent"]
@@ -535,14 +593,18 @@ func executeCapacityVMNodeWorkflowStep(parent context.Context, conn *amqp.Connec
 			return out
 		}
 	}
+	phase = "node_before"
 	var nodes, nodesAfter model.CapacityNodeMembershipResponse
 	if read(native, capacity.ObserveNodeMembership, map[string]any{"binding_name": nb.Target.BindingName}, &nodes) != nil {
 		return out
 	}
+	phase = "node_join_before"
 	joins, err := capacity.JoinVMNodeMembership(p, before, nodes, time.Now().UTC())
 	if err != nil {
+		originalFailure = err
 		return out
 	}
+	phase = "guest_roster"
 	var guestResults []model.CapacityGuestBootstrapResult
 	if p.GuestBootstrapBinding != nil {
 		if len(joins) == 0 || len(joins) != len(p.GuestBootstrapBinding.Members) {
@@ -553,33 +615,44 @@ func executeCapacityVMNodeWorkflowStep(parent context.Context, conn *amqp.Connec
 			if joined.Slot < 1 || guard() != nil {
 				return out
 			}
+			phase = "guest_member"
 			member, e := capacity.GuestBootstrapMember(p, joined.Slot)
 			if e != nil {
+				originalFailure = e
 				return out
 			}
+			phase = "guest_execute"
 			r, e := executeIntegrationThroughResolvedWithPolicy(guestContext, conn, model.ExecuteIntegrationRequest{Operation: capacity.ObserveGuestBootstrap, Capability: capacity.ObserveGuestBootstrap, Input: map[string]any{"binding_name": member.Name}}, guest.instance, guest.instanceSpec, guest.typ, guest.typeSpec, 65*time.Second, integrationExecutionPolicy{detailFreeErrors: true, safeError: errCapacityNativeObservation, requireExplicitResponse: true, nativeHTTP: policy.native})
 			if e != nil || guard() != nil || r.Status != "observed" {
+				originalFailure = e
 				capacityDispatchCause(ctx, e)
 				return out
 			}
+			phase = "guest_result_decode"
 			value, e := capacity.GuestBootstrapResult(r.Output)
 			if e != nil {
+				originalFailure = e
 				return out
 			}
 			guestResults = append(guestResults, value)
 		}
+		phase = "guest_join_before"
 		if _, e := capacity.JoinGuestBootstrapRoster(p, joins, guestResults, time.Now().UTC()); e != nil {
+			originalFailure = e
 			return out
 		}
 	}
+	phase = "provider_node_after"
 	after, err := readVM()
 	if err != nil || read(native, capacity.ObserveNodeMembership, map[string]any{"binding_name": nb.Target.BindingName}, &nodesAfter) != nil {
 		return out
 	}
+	phase = "node_join_after"
 	final, err := capacity.JoinVMNodeMembership(p, after, nodesAfter, time.Now().UTC())
 	if err != nil || len(joins) != len(final) {
 		return out
 	}
+	phase = "node_stability"
 	for i := range joins {
 		a, z := joins[i], final[i]
 		if a.Slot != z.Slot || a.ResourceID != z.ResourceID || a.ResourceCreatedAt != z.ResourceCreatedAt || a.DesiredSpecSHA256 != z.DesiredSpecSHA256 || a.Node.Name != z.Node.Name || a.Node.UID != z.Node.UID || !a.Node.CreatedAt.Equal(z.Node.CreatedAt) || a.Node.ProviderID != z.Node.ProviderID || a.Node.BootID != z.Node.BootID || a.Node.Ready != z.Node.Ready || !a.Node.ReadyChangedAt.Equal(z.Node.ReadyChangedAt) || a.Node.Unschedulable != z.Node.Unschedulable || a.Node.LeaseUID != z.Node.LeaseUID || a.Node.LeaseHolder != z.Node.LeaseHolder {
@@ -588,14 +661,17 @@ func executeCapacityVMNodeWorkflowStep(parent context.Context, conn *amqp.Connec
 	}
 	metadata := map[string]any{"native_join_observed": len(final) > 0, "joins": final, "before_node_read": nodes, "after_node_read": nodesAfter, "creation_action_history_known": creationKnown, "provider_mutation_quiescence_known": false, "atomic_snapshot": false, "bootstrap_completed_known": false, "warm_resources_known": false, "useful_capacity_known": false, "routing_withdrawn_known": false, "business_drain_known": false, "physical_capacity_released": false, "missing": []string{"bootstrap_completion", "warmup", "useful_canary", "route_lifecycle", "business_drain", "writer_retirement", "provider_quiescence"}}
 	if p.GuestBootstrapBinding != nil {
+		phase = "guest_join_after"
 		guestJoins, e := capacity.JoinGuestBootstrapRoster(p, final, guestResults, time.Now().UTC())
 		if e != nil || guard() != nil {
+			originalFailure = e
 			return out
 		}
 		metadata["original_guest_roster_observed"], metadata["guest_joins"] = true, guestJoins
 		metadata["guest_evidence_class"] = p.GuestBootstrapBinding.EvidenceClass
 		metadata["physical_guest_certificate"] = false
 	}
+	phase = "result_projection"
 	raw, err := json.Marshal(metadata)
 	if err != nil || len(raw) > 4<<20 || capacityVMNodeContextFailure(ctx) != nil {
 		return out
@@ -607,7 +683,6 @@ func executeCapacityVMNodeWorkflowStep(parent context.Context, conn *amqp.Connec
 	out.Status, out.Error = "succeeded", ""
 	return out
 }
-
 func capacityNativeCatalogOperation(ts model.IntegrationTypeManifestSpec, operation string) bool {
 	if !strings.HasPrefix(operation, "observe_") || !slices.Contains(ts.Capabilities, "execute") {
 		return false

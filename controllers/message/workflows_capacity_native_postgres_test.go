@@ -14,6 +14,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/http/httptest"
 	"net/url"
@@ -51,6 +52,7 @@ type capacityGuestProtocolPostgres struct {
 	guestType     model.Manifest
 	guestInstance model.Manifest
 	lease         model.CapacityIntent
+	failure       capacityGuestCollectorFailureFacts
 }
 
 // Private CI rendezvous. It is never an API/capability input or production
@@ -111,6 +113,17 @@ type capacityGuestFixtureBinding struct {
 		Signature string                                 `json:"signature"`
 	} `json:"enrollment"`
 }
+
+// Synchronous original collector-return facts, without payload or authority.
+type capacityGuestCollectorFailureFacts struct {
+	Observed      bool
+	Phase         string
+	CauseObserved bool
+	Deadline      bool
+	Canceled      bool
+	Authority     bool
+}
+
 type capacityGuestNativeFixture struct {
 	ctx         context.Context
 	prepareCtx  context.Context
@@ -120,6 +133,73 @@ type capacityGuestNativeFixture struct {
 	catalog     capacityGuestFixtureCatalog
 	runtime     capacityGuestFixtureRuntime
 	binding     capacityGuestFixtureBinding
+	diagnostic  *capacityGuestFixtureDiagnostic
+}
+
+// Only this existing fixture owns these observations. They describe the SAME
+// proxy invocation's original return; neither an error nor missing facts can
+// create caller, bootstrap, membership or physical authority.
+type capacityGuestFixtureHTTPFacts struct {
+	CallObserved     bool   `json:"call_observed"`
+	Phase            string `json:"phase"`
+	Operation        string `json:"operation"`
+	DoReturned       bool   `json:"original_do_returned"`
+	ReadReturned     bool   `json:"original_read_returned"`
+	CloseReturned    bool   `json:"original_close_returned"`
+	UpstreamStatus   int    `json:"original_upstream_status"`
+	ProxyStatus      int    `json:"proxy_status"`
+	Deadline         bool   `json:"deadline"`
+	Canceled         bool   `json:"canceled"`
+	Network          bool   `json:"network_error"`
+	UnexpectedEOF    bool   `json:"unexpected_eof"`
+	CauseObserved    bool   `json:"original_cause_observed"`
+	UpstreamConflict bool   `json:"original_upstream_conflict"`
+}
+
+type capacityGuestFixtureDiagnostic struct {
+	mu    sync.Mutex
+	count int
+	last  capacityGuestFixtureHTTPFacts
+}
+
+func (n *capacityGuestNativeFixture) retainOriginalProxyReturn(facts capacityGuestFixtureHTTPFacts, cause error) {
+	if n.diagnostic == nil {
+		return
+	}
+	var network net.Error
+	facts.CauseObserved = cause != nil
+	facts.Deadline, facts.Canceled = errors.Is(cause, context.DeadlineExceeded), errors.Is(cause, context.Canceled)
+	facts.Network, facts.UnexpectedEOF = errors.As(cause, &network), errors.Is(cause, io.ErrUnexpectedEOF)
+	n.diagnostic.mu.Lock()
+	n.diagnostic.count++
+	n.diagnostic.last = facts
+	n.diagnostic.mu.Unlock()
+}
+
+func (n *capacityGuestNativeFixture) logOriginalCollectorGuard(t *testing.T, f *capacityGuestProtocolPostgres, got model.WorkflowRunStepResult, ledgerKnown, ledgerEqual bool) {
+	t.Helper()
+	status := "unknown"
+	if got.Status == "succeeded" || got.Status == "failed" {
+		status = got.Status
+	}
+	for _, key := range []string{"original_guest_roster_observed", "physical_guest_certificate", "bootstrap_completed_known", "useful_capacity_known"} {
+		value, typed := got.Metadata[key].(bool)
+		_, present := got.Metadata[key]
+		t.Logf("original Core returned flag: field=%s present=%t bool_known=%t value=%t authority=false", key, present, typed, value)
+	}
+	t.Logf("original Core collector guard: status=%s metadata_present=%t guest_reads=%d describe_reads=%d ledger_comparison_observed=%t ledger_equal=%t deadline=%t canceled=%t authority=false", status, got.Metadata != nil, f.guestReads.Load(), f.describeReads.Load(), ledgerKnown, ledgerEqual, errors.Is(nativeAdapterContext(f.ctx), context.DeadlineExceeded), errors.Is(nativeAdapterContext(f.ctx), context.Canceled))
+	t.Logf("original Core collector failure: observed=%t phase=%s original_cause_observed=%t deadline=%t canceled=%t authority=false", f.failure.Observed, f.failure.Phase, f.failure.CauseObserved, f.failure.Deadline, f.failure.Canceled)
+	if n.diagnostic != nil {
+		n.diagnostic.mu.Lock()
+		count, last := n.diagnostic.count, n.diagnostic.last
+		n.diagnostic.mu.Unlock()
+		// last contains only fixture-selected labels, numeric HTTP statuses and
+		// original typed-cause flags. No body, error text, URL or key is copied.
+		raw, err := json.Marshal(last)
+		if err == nil {
+			t.Logf("original Core fixture proxy return: calls=%d facts=%s authority=false", count, raw)
+		}
+	}
 }
 
 func capacityGuestFixtureSHA(raw []byte) string {
@@ -293,21 +373,39 @@ func mustGuestFixtureJSON(t *testing.T, value any) []byte {
 }
 
 func (n *capacityGuestNativeFixture) proxy(w http.ResponseWriter, r *http.Request, f *capacityGuestProtocolPostgres) {
+	facts := capacityGuestFixtureHTTPFacts{CallObserved: true, Phase: "proxy-admission", Operation: "unknown"}
+	switch r.URL.Path {
+	case "/healthz":
+		facts.Operation = "health"
+	case "/rpc/describe":
+		facts.Operation = "describe"
+	case "/rpc/execute":
+		facts.Operation = "execute"
+	}
+	var originalCause error
+	defer func() {
+		n.retainOriginalProxyReturn(facts, errors.Join(originalCause, nativeAdapterContext(r.Context())))
+	}()
 	if n.runtime.UpstreamBaseURL == "" || (r.URL.Path != "/healthz" && r.URL.Path != "/rpc/describe" && r.URL.Path != "/rpc/execute") || r.Header.Get("Authorization") != "Bearer "+n.runtime.RPCBearer {
+		facts.ProxyStatus = 503
 		w.WriteHeader(503)
 		return
 	}
 	ctx, cancel := context.WithTimeout(r.Context(), 65*time.Second)
 	defer cancel()
+	facts.Phase = "request-read-close"
 	body, readErr := io.ReadAll(io.LimitReader(r.Body, capacity.GuestBootstrapLimit+1))
 	closeErr := r.Body.Close()
 	if readErr != nil || closeErr != nil || len(body) > capacity.GuestBootstrapLimit || nativeAdapterContext(ctx) != nil {
+		originalCause = errors.Join(readErr, closeErr, nativeAdapterContext(ctx))
+		facts.ProxyStatus = 502
 		w.WriteHeader(502)
 		return
 	}
 	upstream := strings.TrimRight(n.runtime.UpstreamBaseURL, "/") + r.URL.Path
 	request, err := http.NewRequestWithContext(ctx, r.Method, upstream, bytes.NewReader(body))
 	if err != nil {
+		facts.Phase, facts.ProxyStatus, originalCause = "request-construction", 502, err
 		w.WriteHeader(502)
 		return
 	}
@@ -315,17 +413,27 @@ func (n *capacityGuestNativeFixture) proxy(w http.ResponseWriter, r *http.Reques
 	request.Header.Set("Authorization", "Bearer "+n.runtime.RPCBearer)
 	request.Header.Set("Content-Type", "application/json")
 	client := http.Client{Transport: http.DefaultTransport, CheckRedirect: func(*http.Request, []*http.Request) error { return errCapacityNativeObservation }}
+	facts.Phase = "original-http-do"
 	reply, callErr := client.Do(request)
+	facts.DoReturned = true
+	if reply != nil {
+		facts.UpstreamStatus, facts.UpstreamConflict = reply.StatusCode, reply.StatusCode == http.StatusConflict
+	}
 	var raw []byte
 	var responseRead, responseClose error
 	valid := reply != nil && reply.Body != nil && callErr == nil && reply.Request != nil && reply.Request.URL != nil && reply.Request.URL.String() == upstream && reply.Request.Method == r.Method
 	if reply != nil && reply.Body != nil {
+		facts.Phase = "response-read-close"
 		if valid {
 			raw, responseRead = io.ReadAll(io.LimitReader(reply.Body, capacity.GuestBootstrapLimit+1))
+			facts.ReadReturned = true
 		}
 		responseClose = reply.Body.Close()
+		facts.CloseReturned = true
 	}
+	originalCause = errors.Join(callErr, responseRead, responseClose, nativeAdapterContext(ctx))
 	if !valid || callErr != nil || responseRead != nil || responseClose != nil || len(raw) > capacity.GuestBootstrapLimit || nativeAdapterContext(ctx) != nil {
+		facts.ProxyStatus = 502
 		w.WriteHeader(502)
 		return
 	}
@@ -336,8 +444,10 @@ func (n *capacityGuestNativeFixture) proxy(w http.ResponseWriter, r *http.Reques
 		f.describeReads.Add(1)
 	}
 	w.Header().Set("Content-Type", reply.Header.Get("Content-Type"))
+	facts.Phase, facts.ProxyStatus = "original-proxy-return", reply.StatusCode
 	w.WriteHeader(reply.StatusCode)
-	_, _ = w.Write(raw)
+	_, writeErr := w.Write(raw)
+	originalCause = errors.Join(originalCause, writeErr, nativeAdapterContext(ctx))
 }
 
 func TestCapacityVMGuestExistingCollectorPostgres(t *testing.T) {
@@ -351,7 +461,7 @@ func TestCapacityVMGuestExistingCollectorPostgres(t *testing.T) {
 	defer cancel()
 	prepareCtx, prepareCancel := context.WithTimeout(ctx, 300*time.Second)
 	defer prepareCancel()
-	native := &capacityGuestNativeFixture{ctx: ctx, dir: os.Getenv("CORE_NATIVE_GUEST_RENDEZVOUS_DIR"), coreSource: os.Getenv("CORE_NATIVE_GUEST_CORE_SOURCE_COMMIT"), guestSource: os.Getenv("CORE_NATIVE_GUEST_ADAPTER_SOURCE_COMMIT")}
+	native := &capacityGuestNativeFixture{ctx: ctx, dir: os.Getenv("CORE_NATIVE_GUEST_RENDEZVOUS_DIR"), coreSource: os.Getenv("CORE_NATIVE_GUEST_CORE_SOURCE_COMMIT"), guestSource: os.Getenv("CORE_NATIVE_GUEST_ADAPTER_SOURCE_COMMIT"), diagnostic: &capacityGuestFixtureDiagnostic{last: capacityGuestFixtureHTTPFacts{Phase: "not-observed", Operation: "not-observed"}}}
 	native.prepareCtx = prepareCtx
 	catalogOwner := *native
 	catalogOwner.ctx = prepareCtx
@@ -364,7 +474,13 @@ func TestCapacityVMGuestExistingCollectorPostgres(t *testing.T) {
 	t.Run("complete_selected_roster_and_missing_member_hold", func(t *testing.T) {
 		before := f.ledger(t)
 		got := f.run(f.ctx)
-		if got.Status != "succeeded" || got.Metadata["original_guest_roster_observed"] != true || got.Metadata["physical_guest_certificate"] != false || got.Metadata["bootstrap_completed_known"] != false || got.Metadata["useful_capacity_known"] != false || f.guestReads.Load() != 1 || f.ledger(t) != before {
+		ledgerKnown, ledgerEqual := false, false
+		ledgerUnchanged := func() bool {
+			ledgerKnown, ledgerEqual = true, f.ledger(t) == before
+			return ledgerEqual
+		}
+		if got.Status != "succeeded" || got.Metadata["original_guest_roster_observed"] != true || got.Metadata["physical_guest_certificate"] != false || got.Metadata["bootstrap_completed_known"] != false || got.Metadata["useful_capacity_known"] != false || f.guestReads.Load() != 1 || !ledgerUnchanged() {
+			native.logOriginalCollectorGuard(t, f, got, ledgerKnown, ledgerEqual)
 			t.Fatal("current Core did not join original native Guest scope")
 		}
 		// The protocol provider omits the originally registered member. The
@@ -784,6 +900,10 @@ func newCapacityGuestProtocolPostgres(t *testing.T, initialMode string, native *
 }
 
 func (f *capacityGuestProtocolPostgres) run(ctx context.Context) model.WorkflowRunStepResult {
+	f.failure = capacityGuestCollectorFailureFacts{}
+	ctx = context.WithValue(ctx, capacityVMNodeSourceFailureKey{}, func(failure capacityVMNodeSourceFailure) {
+		f.failure = capacityGuestCollectorFailureFacts{Observed: true, Phase: failure.Phase, CauseObserved: failure.Cause != nil, Deadline: errors.Is(failure.Cause, context.DeadlineExceeded), Canceled: errors.Is(failure.Cause, context.Canceled), Authority: false}
+	})
 	return executeCapacityNativeWorkflowStep(ctx, nil, f.db, manifestReferenceFromRecord(f.wf), model.WorkflowRunStepResult{Operation: "capacity.observe_vm_node_membership"}, f.input)
 }
 
@@ -849,6 +969,9 @@ func TestCapacityGuestCollectorProtocolPostgres(t *testing.T) {
 				}
 			} else if got.Status == "succeeded" || got.Metadata != nil {
 				t.Fatal("unknown/partial/current authority accepted", mode, got.Status)
+			}
+			if f.failure.Observed == positive || f.failure.Authority || (!positive && f.failure.Phase == "") {
+				t.Fatal("original failed-only private stage observation changed")
 			}
 			if before != f.ledger(t) {
 				t.Fatal("original observer changed capacity ledger", mode)
