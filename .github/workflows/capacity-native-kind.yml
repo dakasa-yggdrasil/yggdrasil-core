@@ -4,6 +4,15 @@ on:
   workflow_dispatch:
 permissions:
   contents: read
+# The original machine Notify joint gate is owned by PRIVATE Notify CI. It
+# checks out a reviewed immutable PUBLIC Core source, compiles the actual
+# RunOne/factory, and forwards fixed product TLS to the real original Notify
+# workers with current native before/after identities. Its reviewed Notify
+# source pin and this compiled Core pin must match that original gate; while
+# either pin or its native RunOne/SQL/return census is unavailable, the joint
+# integration remains HOLD. This public job retains EVERY original required
+# native case below; its success does not qualify the private machine joint.
+# No private source archive/checkout, credential grant or synthetic worker.
 jobs:
   native-core-kind:
     runs-on: ubuntu-latest

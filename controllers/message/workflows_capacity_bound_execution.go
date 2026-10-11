@@ -32,6 +32,11 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 	if err != nil {
 		return intent, err
 	}
+	// A possible original useful call survives new generations and opt-in
+	// removal. Unknown old outcomes permit no newly admitted mutation/arm.
+	if marker := intent.OriginalNotifyWindow; marker != nil && (marker.State != "original_returns_observed" || marker.OriginalReturnsObservedAt == nil || !originalNotifySHA(marker.OriginalReturnsSHA256)) {
+		return intent, errCapacityBoundAssessment
+	}
 	if err := store.ArchiveNativeTerminalHistory(ctx, policy, intent); err != nil {
 		return intent, err
 	}
@@ -293,7 +298,15 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 		}
 	}
 	if retirementPending && !store.AdmissionOnly {
+		if p.NativeNotifyWindowBinding != nil {
+			// Unknown retiring participants cannot enter a useful call or clear
+			// the original live lease through the legacy hold-completion branch.
+			return intent, errCapacityBoundAssessment
+		}
 		if intent.Decision.Action == "hold" {
+			if err = runOriginalNotifyWindow(ctx, store, policy, p, intent, call); err != nil {
+				return intent, err
+			}
 			if err = store.CompleteNativeReservationDecision(ctx, policy, intent); err == nil {
 				return store.Observe(ctx, policy)
 			}
@@ -512,6 +525,14 @@ func runCapacityBoundExecution(ctx context.Context, store repository.CapacitySto
 			return request, nil
 		}, func() (any, error) { return observeHPA() })
 		if err != nil {
+			return intent, err
+		}
+	}
+	if err = capacityDispatchFence(ctx); err != nil {
+		return intent, err
+	}
+	if !store.AdmissionOnly {
+		if err = runOriginalNotifyWindow(ctx, store, policy, p, intent, call); err != nil {
 			return intent, err
 		}
 	}

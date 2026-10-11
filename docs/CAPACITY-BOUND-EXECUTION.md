@@ -1,5 +1,67 @@
 # Fixed native HPA reservation and lifetime execution
 
+The optional `native_notify_window_binding` adds one finite original Notify
+business prerequisite before the original reservation decision completes. It
+defaults off when absent. Present configuration is closed and fixes the
+`core_original_bound_machine` mode, reviewed Notify source/query, original
+Core HTTPS origin, complete two-to-eight participant name/role/product HTTPS
+origins, native supplier binding and separate existing ControlKeyRef/ReadKeyRef.
+These operator declarations are not native evidence, credential grants or
+permission to select caller URLs. The first prerequisite has `probe_count=1`
+and at most eight read rounds; Notify's separate limits and the shared
+1024-read original Core registry quota are unchanged.
+
+The actual scheduled dispatcher calls the existing protected `RunOne` kernel.
+Its original Start transaction must acknowledge, current machine principal/RBAC,
+policy/workflow and claim must still match, and the SAME capacity intent lease
+must remain live. A private factory freezes one typed Notify scope in its
+original field order, including the complete actual SDK/native roster. It
+commits a bounded `possible_start` marker in the existing intent JSON before
+Register, any participant installation or the publisher's single arm. The
+token stays in memory/private headers. A missing or unknown acknowledgment
+cannot be replaced by row presence, retry, a new bearer or an expired owner.
+Unknown markers survive next-generation construction and binding removal.
+
+Every original B installation returns before the single A arm. Fixed product
+HTTPS control permits only the existing participant_authority, arm and seal
+operations; Core issues no Kubernetes proxy/control operation. The original
+Do, bounded Read and actual Close return before acceptance, under min(original
+owner, five seconds), with opaque retained causes and absolute deadline checks.
+A different Core/LB registry refuses the bearer; the factory never copies or
+remints it. Actual production needs approved direct TLS certificate mounts and
+the same original Core process origin/affinity. No forwarded-proto claim,
+human session or Directory machine credential supplies that authority.
+
+A's rolling fixed reader retains the original native SQL/probe/call bytes.
+Its reader frames stay A's frames. The useful original business witness is
+joined separately to B's current Pod/container/process origin and SAME original
+business XID across inbox, notification and two recipient state rows. Every
+current participant status is independently reread through the approved GET-only
+supplier around its original body. The marker5 row is insufficient: the
+business, receipt-store, final-marker writer and original owner returns must
+be received and nil in that same source process. Missing/null return fields,
+erasure, replacement, context failure or a late result holds the original lease.
+
+After the single seal returns, the final A/B source/SQL/return and roster join
+finishes while the original Core permission and lease are still live. Only
+hashes of original joined observations enter the durable final marker; its
+actual Commit acknowledgment and current guards precede `Complete`. No native
+raw body, token or product secret enters that marker or public intent readback.
+Configured retiring/unknown lifetimes cannot enter the legacy hold-completion
+branch. An unresolved original is never a new arm opportunity.
+
+The public Core PostgreSQL gate proves source transport, durable markers and
+actual current permission/lease guards; its declared participant fixtures prove
+no Notify capacity. Every original public Core KinD case remains mandatory.
+The additional real machine joint gate is owned by PRIVATE Notify CI using
+reviewed immutable PUBLIC Core source and actual original `RunOne`, live managed
+workers, supplier/native identities and original SQL/caller returns. No private
+source is copied into public Core artifacts. That joint remains HOLD until its
+actual owning zero-skip census passes. CI-only reviewed source pins permit this
+joint build without claiming prior runtime qualification or activating production.
+This finite useful prerequisite certifies no continuous throughput, warm pool,
+all22 usefulness, routing, drain, provider quiescence or physical release.
+
 `capacity.execute_bound` and `capacity.admit_bound` accept only the logical policy
 namespace/name through their distinct exact active protected workflows. Sources,
 adapter revisions, capabilities, requests, current native identities, generations

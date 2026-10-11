@@ -413,6 +413,9 @@ func (s *CapacityDispatchService) RunOne(parent context.Context, realm, environm
 		return false, dispatchOpaque(err)
 	}
 	ctx = messagecontroller.WithCapacityDispatchFence(ctx, func(owner context.Context) error { return guard(owner, true) })
+	if p.NativeNotifyWindowBinding != nil {
+		ctx = messagecontroller.WithOriginalNotifyAuthorityFactory(ctx, s.originalNotifyFactory(job, ctx, func(owner context.Context) error { return guard(owner, true) }))
+	}
 	// A panic is not an observed original return. The started row remains an
 	// explicit HOLD; only this private opaque error reaches the addon logger.
 	defer func() {
@@ -431,6 +434,92 @@ func (s *CapacityDispatchService) RunOne(parent context.Context, realm, environm
 		return errors.Join(err, dispatchContext(owner), dispatchContext(parent))
 	})
 	return ran, dispatchOpaque(errors.Join(joined, finishErr, dispatchContext(ctx), dispatchContext(parent)))
+}
+
+// The factory belongs to this actual original RunOne/SAME Server. Preparing
+// a typed scope has no external effect or registration. The next phase must
+// observe SAMEintent possible-start Commit ACK before minting one bearer.
+func (s *CapacityDispatchService) originalNotifyFactory(job repository.CapacityDispatchJob, original context.Context, dispatchGuard func(context.Context) error) messagecontroller.OriginalNotifyAuthorityFactory {
+	var mu sync.Mutex
+	var prepared *messagecontroller.OriginalNotifyWindowScope
+	var preparedSHA string
+	var registered bool
+	guard := func(owner context.Context, policy model.Manifest, p model.CapacityPolicySpec, intent model.CapacityIntent) error {
+		if s == nil || s.server == nil || s.server.originalCanaryAuthorities == nil || dispatchGuard == nil || policy.ID != job.Policy.ID || policy.Checksum != job.Policy.Checksum || p.NativeNotifyWindowBinding == nil || !p.ExecutionEnabled || os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") != "true" || p.ControllerBinding == nil || p.ControllerBinding.MachinePrincipalID != job.MachinePrincipalID || intent.PolicyID != policy.ID || intent.PolicyChecksum != policy.Checksum || intent.LeaseExpiresAt == nil || !time.Now().Before(*intent.LeaseExpiresAt) {
+			return errCapacityDispatch
+		}
+		store := repository.CapacityStore{DB: s.server.db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true", WorkflowID: job.Workflow.ID, ExecutorID: intent.LeaseExecutorID}
+		return dispatchOpaque(errors.Join(dispatchGuard(owner), store.ValidateNativeObservationLease(owner, policy, intent.Generation, intent.FencingToken, intent.LeaseOwner), dispatchContext(owner), dispatchContext(original)))
+	}
+	return messagecontroller.OriginalNotifyAuthorityFactory{
+		PrepareScope: func(owner context.Context, policy model.Manifest, p model.CapacityPolicySpec, intent model.CapacityIntent, roster messagecontroller.OriginalNotifyNativeRoster) (messagecontroller.OriginalNotifyWindowScope, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			guardErr := guard(owner, policy, p, intent)
+			if prepared != nil || guardErr != nil {
+				return messagecontroller.OriginalNotifyWindowScope{}, dispatchOpaque(errors.Join(errCapacityDispatch, guardErr))
+			}
+			deadline, ok := original.Deadline()
+			if !ok {
+				return messagecontroller.OriginalNotifyWindowScope{}, errCapacityDispatch
+			}
+			if intent.LeaseExpiresAt.Before(deadline) {
+				deadline = *intent.LeaseExpiresAt
+			}
+			if incoming, ok := owner.Deadline(); !ok {
+				return messagecontroller.OriginalNotifyWindowScope{}, errCapacityDispatch
+			} else if incoming.Before(deadline) {
+				deadline = incoming
+			}
+			if maximum := time.Now().Add(90 * time.Second); maximum.Before(deadline) {
+				deadline = maximum
+			}
+			roster.ConsumerUIDs = append([]string(nil), roster.ConsumerUIDs...)
+			roster.ManagedPods = append([]messagecontroller.OriginalNotifyNativeIdentity(nil), roster.ManagedPods...)
+			scope := messagecontroller.OriginalNotifyWindowScope{CoreAuthority: &messagecontroller.OriginalNotifyCoreBinding{WorkflowChecksum: job.Workflow.Checksum, DispatchJobID: job.JobID.String(), DispatchFence: job.FencingToken, MachinePrincipalID: job.MachinePrincipalID}, NativeRoster: &roster, TargetDeployment: "dakasa-notify", WindowID: uuid.NewString(), Namespace: policy.Metadata.Namespace, Environment: p.Environment, Domain: p.Domain, Dimension: p.Dimension, PolicyID: policy.ID.String(), PolicyChecksum: policy.Checksum, WorkflowID: job.Workflow.ID.String(), WorkflowVersion: job.Workflow.Version, Generation: intent.Generation, FencingToken: intent.FencingToken, LeaseOwner: intent.LeaseOwner, LeaseExecutorID: intent.LeaseExecutorID, LeaseExpiresAt: intent.LeaseExpiresAt.UTC(), Deadline: deadline.UTC(), ProbeCount: 1}
+			var err error
+			preparedSHA, err = dispatchSHA(scope)
+			guardErr = guard(owner, policy, p, intent)
+			if err != nil || guardErr != nil {
+				return messagecontroller.OriginalNotifyWindowScope{}, dispatchOpaque(errors.Join(err, guardErr))
+			}
+			prepared = &scope
+			return scope, nil
+		},
+		Register: func(owner context.Context, policy model.Manifest, p model.CapacityPolicySpec, intent model.CapacityIntent, scope messagecontroller.OriginalNotifyWindowScope) (capacity.OriginalCanaryAuthorityToken, func(), func(context.Context) error, error) {
+			mu.Lock()
+			defer mu.Unlock()
+			var token capacity.OriginalCanaryAuthorityToken
+			sha, err := dispatchSHA(scope)
+			guardErr := guard(owner, policy, p, intent)
+			// Only the PRIVATE result of the original Begin Commit ACK carries
+			// this marker into Register. A fresh SQL row cannot replace a lost
+			// original acknowledgment or authorize a caller-built replay.
+			ack := intent.OriginalNotifyWindow
+			if registered || prepared == nil || err != nil || sha != preparedSHA || guardErr != nil || ack == nil || ack.Schema != "core_original_notify_window_marker_v1" || ack.State != "possible_start" || ack.ScopeSHA256 != sha || ack.PossibleStartAt.IsZero() || ack.DispatchJobID != job.JobID.String() || ack.DispatchFence != job.FencingToken {
+				return token, nil, nil, dispatchOpaque(errors.Join(errCapacityDispatch, err, guardErr))
+			}
+			store := repository.CapacityStore{DB: s.server.db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true", WorkflowID: job.Workflow.ID, ExecutorID: intent.LeaseExecutorID}
+			marker, err := store.ObserveOriginalNotifyWindow(owner, policy, intent, sha)
+			if err != nil || marker.State != "possible_start" || marker.DispatchJobID != job.JobID.String() || marker.DispatchFence != job.FencingToken || marker.WindowID != scope.WindowID || !marker.Deadline.Equal(scope.Deadline) {
+				return token, nil, nil, dispatchOpaque(errors.Join(errCapacityDispatch, err))
+			}
+			current := func(request context.Context) error {
+				if err := guard(request, policy, p, intent); err != nil {
+					return err
+				}
+				_, err := store.ObserveOriginalNotifyWindow(request, policy, intent, sha)
+				return dispatchOpaque(errors.Join(err, dispatchContext(request), dispatchContext(original)))
+			}
+			registryScope := capacity.OriginalCanaryAuthorityScope{WindowID: scope.WindowID, ScopeSHA256: sha, PolicyID: policy.ID.String(), PolicyChecksum: policy.Checksum, WorkflowID: job.Workflow.ID.String(), WorkflowChecksum: job.Workflow.Checksum, DispatchJobID: job.JobID.String(), DispatchFence: job.FencingToken, IntentGeneration: intent.Generation, IntentFence: intent.FencingToken, LeaseOwner: intent.LeaseOwner, ExecutorID: intent.LeaseExecutorID, MachinePrincipalID: job.MachinePrincipalID, Deadline: scope.Deadline}
+			token, revoke, err := s.server.originalCanaryAuthorities.Register(original, registryScope, current)
+			if err != nil {
+				return token, nil, nil, dispatchOpaque(err)
+			}
+			registered = true
+			return token, revoke, current, nil
+		},
+	}
 }
 
 // A bounded catalog roster supplies realms, never caller-selected admission.

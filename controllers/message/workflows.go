@@ -35,9 +35,10 @@ var ErrWorkflowAuthenticatedActorRequired = errors.New("workflow spec.authorizat
 type capacityDispatchFenceKey struct{}
 
 type capacityDispatchInvocation struct {
-	fence  func(context.Context) error
-	mu     sync.Mutex
-	causes []error
+	fence         func(context.Context) error
+	notifyFactory OriginalNotifyAuthorityFactory
+	mu            sync.Mutex
+	causes        []error
 }
 
 // WithCapacityDispatchFence is a private in-process delegation from the

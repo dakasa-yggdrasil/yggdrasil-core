@@ -384,6 +384,10 @@ func capacityIntentReduction(intent model.CapacityIntent) bool {
 }
 
 func redactCapacityLease(intent model.CapacityIntent) model.CapacityIntent {
+	// The internal original-window marker captures a private executor/owner.
+	// Public assessment/observation DTOs expose neither those IDs nor its raw
+	// possible-start state; the original private hook reads the native row.
+	intent.OriginalNotifyWindow = nil
 	intent.LeaseOwner, intent.LeaseExecutorID = "", ""
 	return intent
 }
@@ -448,6 +452,18 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	next, receipt, err := mutate(p, previous, now.UTC())
 	if err != nil {
 		return model.CapacityIntent{}, err
+	}
+	// Assess constructs a fresh value for a later generation. Elapsed epochs
+	// or ordinary policy changes cannot discard an unresolved original window.
+	// The private canary methods update this bounded field under the SAME
+	// native intent lock; legacy mutations never rewrite or erase it.
+	if previous != nil && previous.OriginalNotifyWindow != nil {
+		marker := *previous.OriginalNotifyWindow
+		if marker.OriginalReturnsObservedAt != nil {
+			observedAt := *marker.OriginalReturnsObservedAt
+			marker.OriginalReturnsObservedAt = &observedAt
+		}
+		next.OriginalNotifyWindow = &marker
 	}
 	if next.Phase == "promoted" || next.Phase == "reconciled" || next.Phase == "reconciled_partial" || next.Phase == "reconciled_failed_floor" || next.Phase == "aborted" {
 		// Only never-redeemed permissions can expire without remote proof.

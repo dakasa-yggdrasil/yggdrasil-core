@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
@@ -29,6 +30,25 @@ import (
 	"testing"
 	"time"
 )
+
+// Package-owned read seam for the PRIVATE Notify original joint template.
+// Public Core KinD keeps its complete old gate/census. This function neither
+// creates a row nor supplies a success flag: its caller must join the actual
+// original RunOne/HTTP/SQL/SDK and selected native participants independently.
+// Observe intentionally redacts the private marker/owner; this fixed original
+// SQL read is confined to the CI fixture instead of weakening public readback.
+func nativeKindOriginalNotifyIntent(t *testing.T, parent context.Context, db *sql.DB, policy model.Manifest, p model.CapacityPolicySpec) model.CapacityIntent {
+	t.Helper()
+	owner, cancel := context.WithTimeout(parent, 5*time.Second)
+	defer cancel()
+	var raw []byte
+	err := db.QueryRowContext(owner, `SELECT substring(convert_to(intent::text,'UTF8') FROM 1 FOR 2097153) FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&raw)
+	var out model.CapacityIntent
+	if err != nil || len(raw) > 2<<20 || capacity.DecodeNativeCapacity(json.RawMessage(raw), &out) != nil || errors.Join(dispatchContext(owner), dispatchContext(parent)) != nil || out.PolicyID != policy.ID || out.PolicyChecksum != policy.Checksum {
+		t.Fatal("original joint native intent read unavailable")
+	}
+	return out
+}
 
 // This CI-only gate uses the actual Kubernetes adapter main, actual Core HTTP
 // actor/RBAC and command APIs, production migrations, PostgreSQL, RabbitMQ and

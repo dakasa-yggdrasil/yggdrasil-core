@@ -379,6 +379,55 @@ jobs:
           if sum(e.get('Action')=='start' and not e.get('Test') for e in events)!=1 or sum(e.get('Action')=='pass' and not e.get('Test') for e in events)!=1:
               raise SystemExit('Guest protocol owning package did not complete once')
           PY
+      - name: Qualify original Notify window source transport and native PostgreSQL ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -race -json -p 1 -count=1 -timeout=5m ./controllers/message ./controllers/httpapi -run '^TestCapacityOriginalNotifyWindow(Source|Postgres)$' | tee original-notify-window-owner.jsonl
+          python3 - <<'PYWINDOW'
+          import json
+          from collections import Counter
+          from pathlib import Path
+          events=[json.loads(line) for line in Path('original-notify-window-owner.jsonl').read_text().splitlines() if line.strip()]
+          source='TestCapacityOriginalNotifyWindowSource'
+          pg='TestCapacityOriginalNotifyWindowPostgres'
+          expected={source,pg}
+          expected|={source+'/'+name for name in (
+              'private_false_readiness_keeps_whole_ready_roster_guard',
+              'marker5_without_original_owner_return_stays_pending','exact_scope_permission_is_not_business_authority',
+              'legacy_default_off_and_unknown_sticky','concrete_false_control_members',
+              'raw_json_encoding_and_alias_refusal','literal_typed_scope_order_no_map_hash',
+              'optional_binding_null_alias_duplicate_refused','fixed_tls_control_original_return',
+              'read_a_has_no_participant_or_authority_header','non_ok_never_reads_but_actual_close_returns',
+              'original_read_and_close_causes_are_opaque','held_actual_close_cancel','held_actual_close_deadline',
+              'redirect_overflow_and_expired_entry_refused','selector_secret_and_nil_owner_refuse_before_do')}
+          expected|={pg+'/'+name for name in (
+              'same_original_start_and_marker_ack_before_register',
+              'current_dispatch_fence_refuses_registration','current_intent_fence_refuses_registration',
+              'current_intent_owner_refuses_registration','current_intent_executor_refuses_registration',
+              'current_policy_refuses_registration','current_rbac_refuses_registration','current_principal_refuses_registration',
+              'different_original_core_cannot_adopt_bearer',
+              'unknown_marker_survives_generation_and_binding_removal',
+              'final_original_return_commit_precedes_reservation_complete',
+              'lost_ack_original_marker_no_registration','late_actual_ack_original_marker_no_registration')}
+          ran=Counter(e.get('Test') for e in events if e.get('Action')=='run')
+          passed=Counter(e.get('Test') for e in events if e.get('Action')=='pass' and e.get('Test'))
+          packages={'github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message','github.com/dakasa-yggdrasil/yggdrasil-core/controllers/httpapi'}
+          if set(ran)!=expected or set(passed)!=expected or any(ran[n]!=1 or passed[n]!=1 for n in expected):
+              raise SystemExit('Original Notify source/PG owner literal census incomplete')
+          if any(e.get('Package') not in packages or e.get('Action') in ('fail','skip') for e in events):
+              raise SystemExit('Original Notify source/PG owner failed or skipped')
+          for package in packages:
+              if sum(e.get('Package')==package and e.get('Action')=='start' and not e.get('Test') for e in events)!=1 or sum(e.get('Package')==package and e.get('Action')=='pass' and not e.get('Test') for e in events)!=1:
+                  raise SystemExit('Original Notify owning package did not complete once')
+          PYWINDOW
+      - name: Retain original Notify source and PostgreSQL caller evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: original-notify-window-source-postgres
+          path: original-notify-window-owner.jsonl
+          if-no-files-found: error
       # Actual native Guest/Core qualification is owned by the PRIVATE Guest
       # CI. It checks out the exact PUBLIC Core commit and executes the two
       # current Core native collector cases while its original QEMU guest is

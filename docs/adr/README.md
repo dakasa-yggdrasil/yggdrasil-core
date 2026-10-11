@@ -54,3 +54,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0044](0044-durable-pre-start-capacity-dispatch.md) | Admit capacity schedules through durable pre-start ownership | Proposed | 2026-10-10 | yggdrasil-core / protected reserved Pod capacity dispatch |
 | [0045](0045-join-original-guest-bootstrap-under-fixed-vm-membership.md) | Join original Guest bootstrap under fixed VM membership | Proposed | 2026-10-11 | yggdrasil-core / protected original Guest observations |
 | [0046](0046-persist-bounded-capacity-intents-under-protected-workflows.md) | Persist bounded capacity intents under protected workflows | Proposed | 2026-10-08 | yggdrasil-core / capacity protocol |
+| [0047](0047-observe-original-live-lease-before-private-notify-canary.md) | Observe the original live lease before a private Notify canary | Proposed | 2026-10-11 | Original finite private machine useful prerequisite |

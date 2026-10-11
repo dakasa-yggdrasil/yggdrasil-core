@@ -9,33 +9,88 @@ import (
 // CapacityPolicySpec is an operator-owned, provider-neutral capacity envelope.
 // Price records and validation references are declarations, not live stock receipts.
 type CapacityPolicySpec struct {
-	Environment             string                           `json:"environment"`
-	Domain                  string                           `json:"domain"`
-	Dimension               string                           `json:"dimension"`
-	TargetIdentity          string                           `json:"target_identity"`
-	Owner                   string                           `json:"owner"`
-	Workflow                ManifestSelector                 `json:"workflow"`
-	Currency                string                           `json:"currency"`
-	Floor                   int                              `json:"floor"`
-	Ceiling                 int                              `json:"ceiling"`
-	Step                    int                              `json:"step"`
-	MaxEvidenceAgeSeconds   int                              `json:"max_evidence_age_seconds"`
-	MinSamples              int                              `json:"min_samples"`
-	MaxSampleGapSeconds     int                              `json:"max_sample_gap_seconds"`
-	UpHoldSeconds           int                              `json:"up_hold_seconds"`
-	DownHoldSeconds         int                              `json:"down_hold_seconds"`
-	CooldownSeconds         int                              `json:"cooldown_seconds"`
-	LeaseSeconds            int                              `json:"lease_seconds"`
-	ExecutionEnabled        bool                             `json:"execution_enabled"`
-	Signals                 []CapacitySignalRule             `json:"signals"`
-	Profiles                []CapacityProfile                `json:"profiles"`
-	MutationBindings        []CapacityMutationBinding        `json:"mutation_bindings,omitempty"`
-	AssessmentBinding       *CapacityBoundAssessmentBinding  `json:"assessment_binding,omitempty"`
-	HPAExecutionBinding     *CapacityHPAExecutionBinding     `json:"hpa_execution_binding,omitempty"`
-	VMNodeMembershipBinding *CapacityVMNodeMembershipBinding `json:"vm_node_membership_binding,omitempty"`
-	GuestBootstrapBinding   *CapacityGuestBootstrapBinding   `json:"guest_bootstrap_binding,omitempty"`
-	BusinessCreationBinding *CapacityBusinessCreationBinding `json:"business_creation_binding,omitempty"`
-	ControllerBinding       *CapacityControllerBinding       `json:"controller_binding,omitempty"`
+	Environment               string                             `json:"environment"`
+	Domain                    string                             `json:"domain"`
+	Dimension                 string                             `json:"dimension"`
+	TargetIdentity            string                             `json:"target_identity"`
+	Owner                     string                             `json:"owner"`
+	Workflow                  ManifestSelector                   `json:"workflow"`
+	Currency                  string                             `json:"currency"`
+	Floor                     int                                `json:"floor"`
+	Ceiling                   int                                `json:"ceiling"`
+	Step                      int                                `json:"step"`
+	MaxEvidenceAgeSeconds     int                                `json:"max_evidence_age_seconds"`
+	MinSamples                int                                `json:"min_samples"`
+	MaxSampleGapSeconds       int                                `json:"max_sample_gap_seconds"`
+	UpHoldSeconds             int                                `json:"up_hold_seconds"`
+	DownHoldSeconds           int                                `json:"down_hold_seconds"`
+	CooldownSeconds           int                                `json:"cooldown_seconds"`
+	LeaseSeconds              int                                `json:"lease_seconds"`
+	ExecutionEnabled          bool                               `json:"execution_enabled"`
+	Signals                   []CapacitySignalRule               `json:"signals"`
+	Profiles                  []CapacityProfile                  `json:"profiles"`
+	MutationBindings          []CapacityMutationBinding          `json:"mutation_bindings,omitempty"`
+	AssessmentBinding         *CapacityBoundAssessmentBinding    `json:"assessment_binding,omitempty"`
+	HPAExecutionBinding       *CapacityHPAExecutionBinding       `json:"hpa_execution_binding,omitempty"`
+	VMNodeMembershipBinding   *CapacityVMNodeMembershipBinding   `json:"vm_node_membership_binding,omitempty"`
+	GuestBootstrapBinding     *CapacityGuestBootstrapBinding     `json:"guest_bootstrap_binding,omitempty"`
+	BusinessCreationBinding   *CapacityBusinessCreationBinding   `json:"business_creation_binding,omitempty"`
+	ControllerBinding         *CapacityControllerBinding         `json:"controller_binding,omitempty"`
+	NativeNotifyWindowBinding *CapacityNativeNotifyWindowBinding `json:"native_notify_window_binding,omitempty"`
+}
+
+// This optional operator binding selects fixed product HTTPS transports. It
+// neither supplies a caller proof nor permits infrastructure operations. The
+// original dispatcher independently reads every selected native lifetime.
+type CapacityNativeNotifyWindowBinding struct {
+	Mode               string                            `json:"mode"`
+	Name               string                            `json:"name"`
+	SourceCommit       string                            `json:"source_commit"`
+	QuerySHA256        string                            `json:"query_sha256"`
+	CoreAuthorityURL   string                            `json:"core_authority_url"`
+	Adapter            CapacityObservationAdapterBinding `json:"adapter"`
+	NativeNamespace    string                            `json:"native_namespace"`
+	NativeBindingName  string                            `json:"native_binding_name"`
+	PrivateBindingName string                            `json:"private_binding_name"`
+	ControlKeyRef      string                            `json:"control_key_ref"`
+	ReadKeyRef         string                            `json:"read_key_ref"`
+	ProbeCount         int                               `json:"probe_count"`
+	Participants       []CapacityNativeNotifyParticipant `json:"participants"`
+}
+
+// Name/URI/role are operator declarations only. Pod UID, container and process
+// evidence must come from the current original supplier, never this binding.
+type CapacityNativeNotifyParticipant struct {
+	PodName string `json:"pod_name"`
+	Origin  string `json:"origin"`
+	Role    string `json:"role"`
+}
+
+// One bounded, persistent possible-start witness for the original window.
+// Unknown survives generation changes and can never expire into send authority.
+// No bearer, payload, native body or private transport credential is persisted.
+type CapacityOriginalNotifyWindowMarker struct {
+	Schema                    string     `json:"schema"`
+	State                     string     `json:"state"`
+	WindowID                  string     `json:"window_id"`
+	ScopeSHA256               string     `json:"scope_sha256"`
+	SourceCommit              string     `json:"source_commit"`
+	QuerySHA256               string     `json:"query_sha256"`
+	RosterSHA256              string     `json:"roster_sha256"`
+	PolicyID                  string     `json:"policy_id"`
+	PolicyChecksum            string     `json:"policy_checksum"`
+	WorkflowID                string     `json:"workflow_id"`
+	WorkflowChecksum          string     `json:"workflow_checksum"`
+	DispatchJobID             string     `json:"dispatch_job_id"`
+	DispatchFence             int64      `json:"dispatch_fence"`
+	IntentGeneration          int64      `json:"intent_generation"`
+	IntentFence               int64      `json:"intent_fence"`
+	LeaseOwner                string     `json:"lease_owner"`
+	ExecutorID                string     `json:"executor_id"`
+	Deadline                  time.Time  `json:"deadline"`
+	PossibleStartAt           time.Time  `json:"possible_start_at"`
+	OriginalReturnsSHA256     string     `json:"original_returns_sha256,omitempty"`
+	OriginalReturnsObservedAt *time.Time `json:"original_returns_observed_at,omitempty"`
 }
 
 // Optional operator delegation to the existing protected pressure workflow.
@@ -393,27 +448,28 @@ type CapacityDecision struct {
 
 // CapacityIntent is one durable generation per logical domain/dimension.
 type CapacityIntent struct {
-	Namespace           string             `json:"namespace"`
-	PolicyName          string             `json:"policy_name"`
-	PolicyID            uuid.UUID          `json:"policy_id"`
-	PolicyChecksum      string             `json:"policy_checksum"`
-	Environment         string             `json:"environment"`
-	Domain              string             `json:"domain"`
-	Dimension           string             `json:"dimension"`
-	Generation          int64              `json:"generation"`
-	FencingToken        int64              `json:"fencing_token"`
-	Phase               string             `json:"phase"`
-	LeaseOwner          string             `json:"lease_owner,omitempty"`
-	LeaseExecutorID     string             `json:"lease_executor_id,omitempty"`
-	LeaseExpiresAt      *time.Time         `json:"lease_expires_at,omitempty"`
-	RecoveryOnly        bool               `json:"recovery_only"`
-	FloorDegraded       bool               `json:"floor_degraded,omitempty"`
-	NativeHPAGeneration int64              `json:"native_hpa_generation"`
-	NativePodBaseline   []string           `json:"native_pod_baseline"`
-	BaselineSnapshot    CapacitySnapshot   `json:"baseline_snapshot"`
-	Decision            CapacityDecision   `json:"decision"`
-	Assessment          CapacityAssessment `json:"assessment"`
-	UpdatedAt           time.Time          `json:"updated_at"`
+	Namespace            string                              `json:"namespace"`
+	PolicyName           string                              `json:"policy_name"`
+	PolicyID             uuid.UUID                           `json:"policy_id"`
+	PolicyChecksum       string                              `json:"policy_checksum"`
+	Environment          string                              `json:"environment"`
+	Domain               string                              `json:"domain"`
+	Dimension            string                              `json:"dimension"`
+	Generation           int64                               `json:"generation"`
+	FencingToken         int64                               `json:"fencing_token"`
+	Phase                string                              `json:"phase"`
+	LeaseOwner           string                              `json:"lease_owner,omitempty"`
+	LeaseExecutorID      string                              `json:"lease_executor_id,omitempty"`
+	LeaseExpiresAt       *time.Time                          `json:"lease_expires_at,omitempty"`
+	RecoveryOnly         bool                                `json:"recovery_only"`
+	FloorDegraded        bool                                `json:"floor_degraded,omitempty"`
+	NativeHPAGeneration  int64                               `json:"native_hpa_generation"`
+	NativePodBaseline    []string                            `json:"native_pod_baseline"`
+	BaselineSnapshot     CapacitySnapshot                    `json:"baseline_snapshot"`
+	Decision             CapacityDecision                    `json:"decision"`
+	Assessment           CapacityAssessment                  `json:"assessment"`
+	UpdatedAt            time.Time                           `json:"updated_at"`
+	OriginalNotifyWindow *CapacityOriginalNotifyWindowMarker `json:"original_notify_window,omitempty"`
 }
 
 // CapacityTransitionProof is a receipt assembled by the policy's protected

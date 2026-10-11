@@ -19,6 +19,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/oidc"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/scim"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/contactphone"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/cryptoenvelope"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
@@ -212,6 +213,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	}
 
 	server := &Server{
+		originalCanaryAuthorities:  capacity.NewOriginalCanaryAuthorityRegistry(),
 		serviceName:                serviceName,
 		db:                         db,
 		rabbitmq:                   conn,
@@ -948,6 +950,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 
 func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if originalCanaryAuthorityClaim(r) {
+			s.serveOriginalCanaryAuthority(w, r)
+			return
+		}
 		if principal := s.capacityMutationCredential(r); principal != nil || capacityMutationPath(r.URL.Path) {
 			s.serveCapacityMutationRequest(w, r, principal)
 			return
@@ -1345,6 +1351,7 @@ type workflowDispatchFunc func(ctx context.Context, ref model.ManifestSelector, 
 
 // Server exposes the synchronous HTTP surface of yggdrasil-core.
 type Server struct {
+	originalCanaryAuthorities  *capacity.OriginalCanaryAuthorityRegistry
 	capacityMutationPrincipals []capacityMutationPrincipal
 	snapshotHMACSecret         []byte
 
@@ -1499,11 +1506,12 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 		startedAt := time.Now()
 		writer := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(writer, r)
+		method, route := originalCanaryAccessLog(r)
 
 		s.logger.Info("http request served",
 			zap.String("service", s.serviceName),
-			zap.String("method", r.Method),
-			zap.String("path", r.URL.Path),
+			zap.String("method", method),
+			zap.String("path", route),
 			zap.Int("status", writer.status),
 			zap.Duration("duration", time.Since(startedAt)),
 		)
