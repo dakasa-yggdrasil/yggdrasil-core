@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: c2d9b12f8204c184d8fbbbcc72c7d671ca8353ab
-verified_diff_sha256: 8566fb5e7b9a91704e3f3d52da2cf01629b8974206f5260cc1e5ce5302c432c5
+verified_at_commit: 2a91ce7309806716f896edf0b6003ed78d787b8f
+verified_diff_sha256: c59348ec2ed7b69c756054b0ff918ff8594c9690c7e475ebbb485fe03eee237b
 reconciler_schema: 1
 verified_at: 2026-10-10
 by: Codex
@@ -38,3 +38,5 @@ core_independent_native_return_clock_precision_review: The complete current Core
 
 
 current_notify_resource_prerequisite_source_review: Reviewed Sourcec2d adds a sealed optional complete actor/resource roster and joins original A+B retained PostgreSQL-session observations to the same window/message/current native identity and live intent lease before completion. Nullable before/after remains pending/HOLD; only the implemented notify_primary_pg_session producer is supported before possible-start. Unknown cache, AMQP or model producers remain HOLD. Original scope encoding, accepted obligations, MFA55, capacity259 and Kind6 gates remain intact. Static declarations stay declared_unverified; one session does not prove fullWarm, useful all22 or physical retirement. The private Notify producer and joint compiled two-Pod evidence remain required. Current whole owning CI is pending; no local tests/build/vet or production/grant activation occurred.
+
+native_guest_original_failure_source_review: The complete three-path sector passed one independent source review. The original collector now emits private failed-only in-process phase/cause observations with nil default; fixed markers cover its existing catalogs, lease, hydration, transport, joins and final guard without altering wire results, I/O, authorization or deadlines. The original fixture retains same-call transport and positive guard facts and preserves ledger short-circuit. Both Kind source checkout fences adopt the actual supplier36b, whose own three remote workflows qualified143 source and16 Kind requirements; that supplier verdict does not qualify Core. Current own Core CI is pending. The exact Guest workflow/source/build/rendezvous consumer is inventoried for one real SourceCore adoption after owning gates; ordinary Core conditional native-Guest skip cannot certify the live QEMU join, writer/caller return, useful/warm/drain or provider/physical completion. No local tests/build/vet or production adoption ran.
