@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"os"
 	"reflect"
@@ -626,10 +627,14 @@ func DescribeIntegrationType(
 }
 
 func integrationTypeSpecFromDescribeResponse(response model.AdapterDescribeResponse) model.IntegrationTypeManifestSpec {
-	return model.IntegrationTypeManifestSpec{
+	spec := model.IntegrationTypeManifestSpec{
 		Provider:              response.Provider,
 		FamilyRef:             response.FamilyRef,
 		ImplementedOperations: response.ImplementedOperations,
+		Domain:                response.Domain,
+		Dashboard:             response.Dashboard,
+		Display:               response.Display,
+		Icon:                  response.Icon,
 		Adapter:               response.Adapter,
 		Capabilities:          response.Capabilities,
 		CredentialSchema:      response.CredentialSchema,
@@ -646,6 +651,13 @@ func integrationTypeSpecFromDescribeResponse(response model.AdapterDescribeRespo
 		// reactors instead.
 		Reactors: response.Reactors,
 	}
+	if response.CredentialPolicy != nil {
+		spec.CredentialPolicy = *response.CredentialPolicy
+	}
+	if response.GuardianSupport != nil {
+		spec.GuardianSupport = *response.GuardianSupport
+	}
+	return spec
 }
 
 func compareIntegrationTypeSpec(expected model.IntegrationTypeManifestSpec, actual model.IntegrationTypeManifestSpec) error {
@@ -832,6 +844,7 @@ func normalizeIntegrationActionCatalog(actions []model.IntegrationActionDefiniti
 			Description:   strings.TrimSpace(action.Description),
 			ResourceTypes: normalizeIntegrationTokens(action.ResourceTypes),
 			Idempotent:    action.Idempotent,
+			InputSchema:   maps.Clone(action.InputSchema),
 		})
 	}
 

@@ -461,6 +461,17 @@ func (c *adapterTransportClient) callNativeHTTPJSON(ctx context.Context, target 
 			return fail(errors.New("original typed Guest reply required"))
 		}
 		err = capacity.DecodeGuestBootstrapReply(raw, typed)
+	} else if guest != nil && target == guest.baseURL+"/rpc/describe" {
+		// Validate the SAME raw public catalog before optional typed fields can
+		// erase nulls or malformed shapes during remarshal. No projected fixture
+		// or extra request can substitute for the original HTTP Read/Close.
+		if _, ok := response.(*model.AdapterDescribeResponse); !ok {
+			return fail(errors.New("original typed Guest catalog required"))
+		}
+		err = contractdocs.Validate(integrationDescribeContract.Family, integrationDescribeContract.ResponseDef, json.RawMessage(raw))
+		if err == nil {
+			err = decodeRPCBodyWithPolicy(raw, response, policy)
+		}
 	} else if n.get {
 		err = capacity.DecodeBusinessJSON(raw, response)
 	} else {

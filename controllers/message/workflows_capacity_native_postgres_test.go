@@ -609,6 +609,9 @@ func newCapacityGuestProtocolPostgres(t *testing.T, initialMode string, native *
 	guestType.Adapter.Endpoints = model.IntegrationAdapterRoute{Describe: "/rpc/describe", Execute: "/rpc/execute"}
 	guestType.CredentialSchema.Required = []string{"ssh_private_key"}
 	guestType.CredentialSchema.Properties = map[string]model.IntegrationSchemaProperty{"ssh_private_key": {Type: "string", Secret: true, Sensitive: true}}
+	guestType.Display = &model.IntegrationDisplaySpec{Subtitle: "Original protocol guest catalog", SubtitleLocale: map[string]string{"en-US": "Original protocol guest catalog"}}
+	guestType.Icon = &model.IntegrationIconSpec{URL: "/protocol-guest.svg", Accent: "#0F766E", AriaLabel: "Protocol guest"}
+	guestType.ActionCatalog[0].InputSchema = map[string]any{"type": "object", "additionalProperties": false, "required": []string{"binding_name"}, "properties": map[string]any{"binding_name": map[string]any{"type": "string", "maxLength": 64}}}
 	if native != nil {
 		if err = json.Unmarshal(native.catalog.TypeSpec, &guestType); err != nil || manifest.ValidateIntegrationTypeSpec(guestType) != nil {
 			t.Fatal("original private Guest catalog refused")
@@ -676,7 +679,12 @@ func newCapacityGuestProtocolPostgres(t *testing.T, initialMode string, native *
 	t.Cleanup(nodeServer.Close)
 	var results map[string]model.CapacityGuestBootstrapResult
 	token, ssh := strings.Repeat("g", 32), "private-fixture-SSH-key"
-	guestDescribe := capacityProtocolDescribe(t, guestType)
+	// Return the same complete catalog shape as an actual adapter. Projecting
+	// through the consumer DTO hid unknown canonical fields from this gate.
+	guestDescribe, describeErr := json.Marshal(guestType)
+	if describeErr != nil {
+		t.Fatal("complete protocol Guest catalog encode refused")
+	}
 	guestServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if native != nil {
 			native.proxy(w, r, f)
@@ -693,7 +701,7 @@ func newCapacityGuestProtocolPostgres(t *testing.T, initialMode string, native *
 		}
 		if r.Method == http.MethodPost && r.URL.Path == "/rpc/describe" {
 			f.describeReads.Add(1)
-			_ = json.NewEncoder(w).Encode(guestDescribe)
+			_, _ = w.Write(guestDescribe)
 			return
 		}
 		var req struct {

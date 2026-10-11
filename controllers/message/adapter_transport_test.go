@@ -32,6 +32,140 @@ type guestNativePrivateCause string
 
 func (e guestNativePrivateCause) Error() string { return string(e) }
 
+// Source-owned protocol catalog, deliberately encoded as public JSON rather
+// than projected through AdapterDescribeResponse. No Guest source is embedded.
+const canonicalNativeDescribeJSON = `{
+  "provider":"guest-bootstrap","domain":"infrastructure",
+  "dashboard":{"url":"https://example.invalid/operator","label":"Provider"},
+  "display":{"subtitle":"Original native catalog","subtitle_locale":{"en-US":"Original native catalog"}},
+  "icon":{"url":"/native-protocol.svg","accent":"#0F766E","aria_label":"Native protocol"},
+  "adapter":{"transport":"http_json","version":"1.0.0","endpoints":{"describe":"/rpc/describe","execute":"/rpc/execute"},"queues":{"describe":"protocol.describe","execute":"protocol.execute"},"timeout_seconds":65},
+  "capabilities":["describe","execute"],
+  "credential_policy":{"source":"secret_ref","materialize_inline":false},
+  "guardian_support":{"mode":"light","signals":{}},
+  "credential_schema":{"mode":"inline","required":["ssh_private_key"],"properties":{"ssh_private_key":{"type":"string","secret":true,"sensitive":true,"label":"Read-only SSH credential"}}},
+  "instance_schema":{"mode":"inline","properties":{"base_url":{"type":"string","label":"Adapter endpoint"}}},
+  "resource_types":[{"name":"guest_bootstrap","canonical_prefix":"thirdparty.guest-bootstrap.original","identity_template":"original.{id}","discoverable":false,"default_actions":["observe_guest_bootstrap"]}],
+  "action_catalog":[{"name":"observe_guest_bootstrap","resource_types":["guest_bootstrap"],"idempotent":true,"input_schema":{"type":"object","additionalProperties":false,"required":["binding_name"],"properties":{"binding_name":{"type":"string","maxLength":64}}}}],
+  "discovery":{"mode":"push","cursor":"none","supports_webhooks":false},
+  "normalization":{"external_id_path":"id","fallback_resource_prefix":"thirdparty.guest-bootstrap.original"},
+  "execution":{"supports_dry_run":false,"idempotent_actions":["observe_guest_bootstrap"]},
+  "extensions":{"allow_custom_resource_types":false,"allow_custom_actions":false,"preserve_raw_payload":false}
+}`
+
+func TestCapacityGuestNativeDescribeCanonicalCatalog(t *testing.T) {
+	var wire atomic.Value
+	wire.Store(canonicalNativeDescribeJSON)
+	token := strings.Repeat("g", 32)
+	var calls, reads, closes atomic.Int32
+	server := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		calls.Add(1)
+		if r.Method != http.MethodPost || r.URL.Path != "/rpc/describe" || r.Header.Get("Authorization") != "Bearer "+token || r.Header.Get("X-Capacity-Canary-Read-Key") != "" {
+			t.Error("original bound Describe route or header changed")
+			w.WriteHeader(400)
+			return
+		}
+		w.Header().Set("Content-Type", "application/json")
+		_, _ = io.WriteString(w, wire.Load().(string))
+	}))
+	t.Cleanup(server.Close)
+	client := *server.Client()
+	native := client.Transport
+	client.Transport = nativeCanaryRoundTrip(func(r *http.Request) (*http.Response, error) {
+		reply, err := native.RoundTrip(r)
+		if reply != nil && reply.Body != nil {
+			body := reply.Body
+			reply.Body = &nativeCanaryBody{ReadCloser: body, read: func(p []byte) (int, error) { reads.Add(1); return body.Read(p) }, close: func() error { closes.Add(1); return body.Close() }}
+		}
+		return reply, err
+	})
+	run := func(t *testing.T) (model.AdapterDescribeResponse, error) {
+		t.Helper()
+		ctx, cancel := context.WithTimeout(t.Context(), 5*time.Second)
+		defer cancel()
+		ctx = withCapacityGuestHTTPPolicy(ctx, ctx, &capacityGuestHTTPPolicy{baseURL: server.URL, bearer: token})
+		var spec model.IntegrationTypeManifestSpec
+		if json.Unmarshal([]byte(canonicalNativeDescribeJSON), &spec) != nil {
+			t.Fatal("raw source catalog fixture malformed")
+		}
+		var response model.AdapterDescribeResponse
+		err := (&adapterTransportClient{httpClient: &client}).Call(ctx, integrationDescribeContract, spec, model.IntegrationInstanceManifestSpec{Config: map[string]any{"base_url": server.URL}}, "describe", model.AdapterDescribeRequest{Provider: spec.Provider, ExpectedVersion: spec.Adapter.Version}, &response)
+		return response, err
+	}
+	t.Run("full_raw_catalog_original_read_close", func(t *testing.T) {
+		beforeCalls, beforeReads, beforeCloses := calls.Load(), reads.Load(), closes.Load()
+		response, err := run(t)
+		if err != nil || calls.Load() != beforeCalls+1 || reads.Load() <= beforeReads || closes.Load() != beforeCloses+1 || response.Domain != "infrastructure" || response.Display == nil || response.Icon == nil || response.Dashboard == nil || response.CredentialPolicy == nil || response.GuardianSupport == nil || len(response.ActionCatalog) != 1 || response.ActionCatalog[0].InputSchema["type"] != "object" {
+			t.Fatal("original complete canonical Describe contract refused")
+		}
+	})
+	t.Run("domain_empty_phase_a_preserved", func(t *testing.T) {
+		wire.Store(strings.Replace(canonicalNativeDescribeJSON, `"domain":"infrastructure"`, `"domain":""`, 1))
+		defer wire.Store(canonicalNativeDescribeJSON)
+		beforeCalls, beforeReads, beforeCloses := calls.Load(), reads.Load(), closes.Load()
+		response, err := run(t)
+		if err != nil || response.Domain != "" || calls.Load() != beforeCalls+1 || reads.Load() <= beforeReads || closes.Load() != beforeCloses+1 {
+			t.Fatal("explicit empty Phase A domain did not retain original ownership")
+		}
+	})
+	t.Run("ordinary_optional_metadata_absent", func(t *testing.T) {
+		var legacy map[string]any
+		if json.Unmarshal([]byte(canonicalNativeDescribeJSON), &legacy) != nil {
+			t.Fatal("raw legacy fixture malformed")
+		}
+		for _, name := range []string{"domain", "dashboard", "display", "icon", "credential_policy", "guardian_support"} {
+			delete(legacy, name)
+		}
+		delete(legacy["action_catalog"].([]any)[0].(map[string]any), "input_schema")
+		raw, err := json.Marshal(legacy)
+		if err != nil {
+			t.Fatal("raw legacy fixture encode refused")
+		}
+		wire.Store(string(raw))
+		defer wire.Store(canonicalNativeDescribeJSON)
+		response, err := run(t)
+		if err != nil || response.Domain != "" || response.Display != nil || response.Icon != nil || response.Dashboard != nil || response.CredentialPolicy != nil || response.GuardianSupport != nil || len(response.ActionCatalog) != 1 || response.ActionCatalog[0].InputSchema != nil {
+			t.Fatal("ordinary absent optional catalog changed")
+		}
+		raw, err = json.Marshal(response)
+		if err != nil {
+			t.Fatal("legacy DTO encode refused")
+		}
+		var fields map[string]json.RawMessage
+		if json.Unmarshal(raw, &fields) != nil {
+			t.Fatal("legacy DTO malformed")
+		}
+		for _, name := range []string{"domain", "dashboard", "display", "icon", "credential_policy", "guardian_support"} {
+			if _, present := fields[name]; present {
+				t.Fatal("absent optional metadata appeared on the ordinary wire")
+			}
+		}
+	})
+	for _, test := range []struct{ name, from, to string }{
+		{"unknown_catalog_field", `"provider":"guest-bootstrap"`, `"provider":"guest-bootstrap","private_unknown":"strict_original_private"`},
+		{"domain_null", `"domain":"infrastructure"`, `"domain":null`},
+		{"domain_alias", `"domain":"infrastructure"`, `"Domain":"infrastructure"`},
+		{"display_malformed", `"display":{"subtitle":"Original native catalog","subtitle_locale":{"en-US":"Original native catalog"}}`, `"display":false`},
+		{"icon_malformed", `"icon":{"url":"/native-protocol.svg","accent":"#0F766E","aria_label":"Native protocol"}`, `"icon":[]`},
+		{"action_schema_null", `"input_schema":{"type":"object","additionalProperties":false,"required":["binding_name"],"properties":{"binding_name":{"type":"string","maxLength":64}}}`, `"input_schema":null`},
+		{"action_schema_malformed", `"input_schema":{"type":"object","additionalProperties":false,"required":["binding_name"],"properties":{"binding_name":{"type":"string","maxLength":64}}}`, `"input_schema":"strict_original_private"`},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			raw := strings.Replace(canonicalNativeDescribeJSON, test.from, test.to, 1)
+			if raw == canonicalNativeDescribeJSON {
+				t.Fatal("negative raw catalog did not change")
+			}
+			wire.Store(raw)
+			defer wire.Store(canonicalNativeDescribeJSON)
+			beforeCalls, beforeReads, beforeCloses := calls.Load(), reads.Load(), closes.Load()
+			_, err := run(t)
+			if err == nil || !errors.Is(err, errAdapterCallFailed) || calls.Load() != beforeCalls+1 || reads.Load() <= beforeReads || closes.Load() != beforeCloses+1 || strings.Contains(fmt.Sprintf("%s %v %+v %#v", err, err, err, err), "strict_original_private") {
+				t.Fatal("malformed original catalog accepted or private cause/ownership changed")
+			}
+		})
+	}
+}
+
 // TLS and original Do/Read/Close are real; represented Guest records here are
 // protocol fixtures and carry no enrollment or physical-capacity certificate.
 func TestCapacityGuestNativeAdapterOriginalHTTP(t *testing.T) {

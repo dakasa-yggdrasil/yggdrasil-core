@@ -173,7 +173,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message ./controllers/httpapi ./addons -run '^(TestCapacity(Intent.*|Workflow|Mutation.*|NativeLifetime)Postgres|TestCapacityNativeAdapter(OriginalHTTP|LegacyHTTPPreserved)|TestCapacityGuestNativeAdapterOriginalHTTP|TestCapacityGuestCollectorProtocolPostgres|TestCapacityDispatch(Postgres|AuthorizationPostgres|OriginalTransportPostgres|SchedulerPostgres|DemandPostgres)|TestProcessMatchedTrigger_.*)$' | tee capacity-results.jsonl
+          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message ./controllers/httpapi ./addons -run '^(TestCapacity(Intent.*|Workflow|Mutation.*|NativeLifetime)Postgres|TestCapacityNativeAdapter(OriginalHTTP|LegacyHTTPPreserved)|TestCapacityGuestNativeAdapterOriginalHTTP|TestCapacityGuestNativeDescribeCanonicalCatalog|TestCapacityGuestCollectorProtocolPostgres|TestCapacityDispatch(Postgres|AuthorizationPostgres|OriginalTransportPostgres|SchedulerPostgres|DemandPostgres)|TestProcessMatchedTrigger_.*)$' | tee capacity-results.jsonl
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -241,6 +241,11 @@ jobs:
               'raw_alias_null_and_duplicate_refused', 'redirect_no_replay_and_getbody_nil',
               'held_original_do_private_cause', 'held_original_read_private_cause',
               'held_original_close_private_cause', 'owning_deadline_before_live_parent')}
+          guest_describe='TestCapacityGuestNativeDescribeCanonicalCatalog'
+          expected |= {guest_describe} | {guest_describe+'/'+name for name in (
+              'full_raw_catalog_original_read_close','domain_empty_phase_a_preserved','ordinary_optional_metadata_absent',
+              'unknown_catalog_field','domain_null','domain_alias','display_malformed',
+              'icon_malformed','action_schema_null','action_schema_malformed')}
           guest_protocol='TestCapacityGuestCollectorProtocolPostgres'
           expected |= {guest_protocol} | {guest_protocol+'/'+name for name in (
               'full_selected_roster_scoped', 'missing_second', 'alias', 'token_rotation',
