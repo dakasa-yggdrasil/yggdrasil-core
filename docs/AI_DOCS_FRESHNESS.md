@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: f705b424fed3e591e488decdba181d20c07b78f1
-verified_diff_sha256: 0408d5820e4ca73bb74f12f376b63daac0a69bc0382c74be7e8e88e0f942d330
+verified_at_commit: 9b53d52321ca3b889d97d841814a994e7420cc8b
+verified_diff_sha256: cd01942c1d1c140270f166fe17ebd9e05056370795ad774f65c63fcea616e0e1
 reconciler_schema: 1
 verified_at: 2026-10-10
 by: Codex
@@ -29,3 +29,5 @@ current_capacity_complete_failure_batch_review: The complete original first CI f
 core_original_deferred_commit_precision_review: The complete second owning CI preserves259 original PostgreSQL RUN events with257 PASS and a single retained late-Commit leaf failure plus its root. All previous first-run failure leaves now pass; general, Kind and MFA/OIDC gates succeeded. Source captures the original fixture return once at PostgreSQL native microsecond precision before the production call while preserving the exact compound assertion, native deferred Commit, deadlines, unknown state and no-replay requirement. Safe booleans on the same original reads identify any remaining failed conjunct; the previous runtime did not retain which conjunct failed. Production code, SQL/schema and required rosters are unchanged. A fresh complete owning CI remains required. No local tests/build/vet/heavy lint ran.
 
 original_live_lease_notify_canary_source_review: Reviewed original live intent/dispatch/RBAC guard and durable possible-start marker, provider-neutral private HTTPS, bounded selected-consumer installation and final original writer/owner returns before both completion markers. Optional mounted TLS uses the same production serving path. The new machine authority protocol gates do not access the current private machine Notify source; actual paired native RunOne integration is owned by private Notify CI against the immutable public Core source. Source review is not native CI, useful capacity, production affinity or rollout qualification.
+
+current_dispatch_fixture_ci_repair_review: The complete original owning batch failed at one unused shared native helper and a single PostgreSQL stale-fence leaf whose attempted post-start row mutation correctly hit the immutable trigger. The fixture now uses the same capped original SQL helper and changes only the expected private factory claim, while the actual started database row, possible-start marker and original valid claim remain unchanged. Production authority, Notify protocol, migrations, rosters and deadlines are literal. Source review closes this repair; the next complete owning CI and the private Notify joint gate remain required. No local test/build/vet or production change occurred.
