@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 0944e647f7819cfdbec1c44418142ab53613f833
-verified_diff_sha256: c03a74cb4dbd737d0475537ba5abccdbb62f8023f2905f2306ec36b885b4ac47
+verified_at_commit: f705b424fed3e591e488decdba181d20c07b78f1
+verified_diff_sha256: 0408d5820e4ca73bb74f12f376b63daac0a69bc0382c74be7e8e88e0f942d330
 reconciler_schema: 1
 verified_at: 2026-10-10
 by: Codex
@@ -27,3 +27,5 @@ note: Whole successor22 distinct review closes real native transport propagation
 current_capacity_complete_failure_batch_review: The complete original first CI failure inventory was reconciled with immutable logs and native artifacts. This source restores original lock precedence, canonical JSON audit arrays, the public Describe DTO fixtures and strict native Go storage encodings, preserving the complete original ACK, witness, archival, fencing and scoped roster obligations. Twenty-eight added unit obligations exercise real storage roundtrips and malformed-data refusals; the owning PostgreSQL audit reads the real committed row. The original failure remains failed and the complete successor CI is pending. Current Main MFA55 and unapplied capacity56–61, modules, private protocol and all mandatory workflow budgets remain unchanged. The actual released plan, nine genuine context inputs and untouched generated summary bind this source; all earlier human notes are retained. No local tests/build/vet/lint-heavy or production mutation occurred.
 
 core_original_deferred_commit_precision_review: The complete second owning CI preserves259 original PostgreSQL RUN events with257 PASS and a single retained late-Commit leaf failure plus its root. All previous first-run failure leaves now pass; general, Kind and MFA/OIDC gates succeeded. Source captures the original fixture return once at PostgreSQL native microsecond precision before the production call while preserving the exact compound assertion, native deferred Commit, deadlines, unknown state and no-replay requirement. Safe booleans on the same original reads identify any remaining failed conjunct; the previous runtime did not retain which conjunct failed. Production code, SQL/schema and required rosters are unchanged. A fresh complete owning CI remains required. No local tests/build/vet/heavy lint ran.
+
+original_live_lease_notify_canary_source_review: Reviewed original live intent/dispatch/RBAC guard and durable possible-start marker, provider-neutral private HTTPS, bounded selected-consumer installation and final original writer/owner returns before both completion markers. Optional mounted TLS uses the same production serving path. The new machine authority protocol gates do not access the current private machine Notify source; actual paired native RunOne integration is owned by private Notify CI against the immutable public Core source. Source review is not native CI, useful capacity, production affinity or rollout qualification.
