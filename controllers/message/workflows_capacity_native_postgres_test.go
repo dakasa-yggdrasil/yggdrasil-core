@@ -750,9 +750,29 @@ func newCapacityGuestProtocolPostgres(t *testing.T, initialMode string, native *
 	if e != nil {
 		t.Fatal(e)
 	}
-	proofs, e := capacity.VMInventoryProofs(p, b, inv, "", 0, time.Now().UTC(), "fixture:protocol-selected")
-	if e != nil {
-		t.Fatal(e)
+	var proofs []model.CapacityMutationProof
+	if native == nil {
+		proofs, e = capacity.VMInventoryProofs(p, b, inv, "", 0, time.Now().UTC(), "fixture:protocol-selected")
+		if e != nil {
+			t.Fatal(e)
+		}
+	} else {
+		// The pre-admission tuple survives the original Guest boot and owning
+		// tests. Its earlier observation is not fresh membership evidence.
+		// Read the same provider fixture through the original protected SDK
+		// operation; only that returned snapshot supplies the registration proofs.
+		read := executeCapacityNativeWorkflowStep(f.ctx, nil, f.db, manifestReferenceFromRecord(f.wf), model.WorkflowRunStepResult{Operation: "capacity.observe_vm_inventory"}, f.input)
+		var current model.CapacityVMInventoryReceipt
+		if read.Status != "succeeded" || capacity.DecodeVMObservation(read.Metadata, &current) != nil || current.Registered != 0 || current.UsefulCapacityKnown || current.NativeMembers != len(inv.Members) || len(current.MutationProofs) != len(inv.Members) || nativeAdapterContext(f.ctx) != nil {
+			t.Fatal("original current provider fixture read refused")
+		}
+		for i, proof := range current.MutationProofs {
+			member := inv.Members[i]
+			if proof.BindingName != b.Name || proof.Slot != member.Slot || proof.RequestSHA256 != member.RequestSHA256 || proof.ResourceID != member.Server.ID || proof.ResourceCreatedAt != member.Server.CreatedAt {
+				t.Fatal("original provider read replaced the pre-admission tuple")
+			}
+		}
+		proofs = current.MutationProofs
 	}
 	for _, proof := range proofs {
 		raw := capacityVMNodeProtocolCanonicalSpec(t, b.Slots[proof.Slot-1].DesiredSpec)

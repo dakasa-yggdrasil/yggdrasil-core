@@ -240,7 +240,7 @@ func TestCapacityOriginalNotifyWindowPostgres(t *testing.T) {
 		if _, err = f.store.Assess(f.owner, policy, assessment); err != nil {
 			t.Fatal("original next-generation Assess refused", err)
 		}
-		current := f.readIntent(t)
+		current := nativeKindOriginalNotifyIntent(t, f.owner, f.db, policy, p)
 		if current.Generation <= original.Generation || current.OriginalNotifyWindow == nil || current.OriginalNotifyWindow.ScopeSHA256 != f.marker.ScopeSHA256 || current.OriginalNotifyWindow.State != "possible_start" {
 			t.Fatal("original marker erased by new value/binding removal")
 		}
