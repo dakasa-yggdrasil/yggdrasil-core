@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-09-27T02:18:44-03:00",
+  "generated_at": "2026-10-10T22:53:39-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 647,
-    ".json": 144,
+    ".go": 753,
+    ".json": 145,
     ".py": 1,
-    ".sql": 52,
-    ".yaml": 9,
-    ".yml": 22
+    ".sql": 61,
+    ".yaml": 10,
+    ".yml": 24
   },
   "provenance": {
-    "commit": "845701d1b6af4034b08a996831115bba43cdd597",
+    "commit": "0c9fd8a6b8465906f6908c12115918fb5a7f6a32",
     "dirty": true,
     "files": [
       {
@@ -24,7 +24,7 @@
       },
       {
         "path": "CLAUDE.md",
-        "sha256": "201caac94b57c3a18b31dc9e9c0f4751b8a935eefc28926ad1cf9f7f8e7780b5"
+        "sha256": "a49274d3d808cc995f2bdfaf5cd0347b2cde3eaf7dfce3e162593220cae54bab"
       },
       {
         "path": "README.md",
@@ -59,38 +59,38 @@
   "top_dirs": [
     {
       "path": "controllers/httpapi",
-      "files": 157,
-      "kb": 1556
+      "files": 175,
+      "kb": 1911
     },
     {
       "path": "repository",
-      "files": 94,
-      "kb": 610
-    },
-    {
-      "path": "manifest",
-      "files": 57,
-      "kb": 360
+      "files": 125,
+      "kb": 1112
     },
     {
       "path": "model",
-      "files": 55,
-      "kb": 209
+      "files": 66,
+      "kb": 286
     },
     {
       "path": "controllers/message",
-      "files": 51,
-      "kb": 516
+      "files": 63,
+      "kb": 777
     },
     {
       "path": "db/migrations",
-      "files": 51,
-      "kb": 91
+      "files": 60,
+      "kb": 117
+    },
+    {
+      "path": "manifest",
+      "files": 59,
+      "kb": 366
     },
     {
       "path": "addons",
-      "files": 39,
-      "kb": 187
+      "files": 44,
+      "kb": 254
     },
     {
       "path": "docs/bootstrap/manifests/integrations",
@@ -99,8 +99,8 @@
     },
     {
       "path": "controllers/oidc",
-      "files": 22,
-      "kb": 188
+      "files": 23,
+      "kb": 193
     },
     {
       "path": "docs/bootstrap/seeds/integrations",
@@ -108,14 +108,14 @@
       "kb": 87
     },
     {
+      "path": "internal/capacity",
+      "files": 18,
+      "kb": 152
+    },
+    {
       "path": "internal/externalidentity",
       "files": 15,
       "kb": 61
-    },
-    {
-      "path": "docs/contracts/reactors/v1",
-      "files": 11,
-      "kb": 12
     }
   ],
   "top_files_by_size": [
@@ -149,23 +149,23 @@
     },
     {
       "path": "controllers/httpapi/server.go",
-      "kb": 171
+      "kb": 174
+    },
+    {
+      "path": "controllers/message/workflows_capacity_native_postgres_test.go",
+      "kb": 83
+    },
+    {
+      "path": "controllers/httpapi/openapi.json",
+      "kb": 80
+    },
+    {
+      "path": "docs/api-reference/openapi.json",
+      "kb": 80
     },
     {
       "path": "controllers/message/products.go",
       "kb": 75
-    },
-    {
-      "path": "controllers/httpapi/directory_machine_read_test.go",
-      "kb": 65
-    },
-    {
-      "path": "repository/identity.go",
-      "kb": 62
-    },
-    {
-      "path": "controllers/httpapi/credentials.go",
-      "kb": 57
     }
   ],
   "contracts": {
@@ -174,7 +174,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 51,
+    "migrations": 60,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {
@@ -305,7 +305,10 @@
     ]
   },
   "ops": {
-    "config_files": 5,
-    "k8s_manifests": 5
-  }
+    "config_files": 8,
+    "k8s_manifests": 8
+  },
+  "verified_at_commit": "0c9fd8a6b8465906f6908c12115918fb5a7f6a32",
+  "verified_diff_sha256": "c3448b98179f35eaf04a309d32593b75b6ac2928e35e22954d13be2adac01aaa",
+  "reconciler_schema": 1
 }
