@@ -26,14 +26,17 @@ import (
 
 type originalNotifyDispatchFixture struct {
 	dispatchHTTPFixture
-	owner   context.Context
-	job     repository.CapacityDispatchJob
-	store   repository.CapacityStore
-	intent  model.CapacityIntent
-	scope   messagecontroller.OriginalNotifyWindowScope
-	factory messagecontroller.OriginalNotifyAuthorityFactory
-	marker  model.CapacityOriginalNotifyWindowMarker
-	tls     *httptest.Server
+	owner context.Context
+	job   repository.CapacityDispatchJob
+	// Private expected claim copy captured by the actual dispatch guard. The
+	// immutable started database row remains the original independent source.
+	dispatchClaim *repository.CapacityDispatchJob
+	store         repository.CapacityStore
+	intent        model.CapacityIntent
+	scope         messagecontroller.OriginalNotifyWindowScope
+	factory       messagecontroller.OriginalNotifyAuthorityFactory
+	marker        model.CapacityOriginalNotifyWindowMarker
+	tls           *httptest.Server
 }
 
 // The PG records/real Core guards are native; the unexecuted participant roster
@@ -99,7 +102,7 @@ func originalNotifyDispatchPostgresFixture(t *testing.T) *originalNotifyDispatch
 			}
 		}
 	})
-	return &originalNotifyDispatchFixture{dispatchHTTPFixture: base, owner: owner, job: job, store: store, intent: intent, scope: scope, factory: factory, marker: marker, tls: server}
+	return &originalNotifyDispatchFixture{dispatchHTTPFixture: base, owner: owner, job: job, dispatchClaim: &job, store: store, intent: intent, scope: scope, factory: factory, marker: marker, tls: server}
 }
 
 func (f *originalNotifyDispatchFixture) begin(t *testing.T) {
@@ -113,13 +116,7 @@ func (f *originalNotifyDispatchFixture) begin(t *testing.T) {
 
 func (f *originalNotifyDispatchFixture) readIntent(t *testing.T) model.CapacityIntent {
 	t.Helper()
-	var raw []byte
-	err := f.db.QueryRowContext(f.owner, `SELECT intent FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, f.policy.Metadata.Namespace, f.spec.Environment, f.spec.Domain, f.spec.Dimension).Scan(&raw)
-	var result model.CapacityIntent
-	if err != nil || capacity.DecodeNativeCapacity(json.RawMessage(raw), &result) != nil {
-		t.Fatal("original PG intent readback unavailable", err)
-	}
-	return result
+	return nativeKindOriginalNotifyIntent(t, f.owner, f.db, f.policy, f.spec)
 }
 
 func TestCapacityOriginalNotifyWindowPostgres(t *testing.T) {
@@ -167,9 +164,11 @@ func TestCapacityOriginalNotifyWindowPostgres(t *testing.T) {
 			intent := f.intent
 			switch mode {
 			case "dispatch_fence":
-				if _, err := f.db.ExecContext(f.owner, `UPDATE public.capacity_dispatch_jobs SET fencing_token=fencing_token+1 WHERE id=$1`, f.job.JobID); err != nil {
-					t.Fatal(err)
-				}
+				// A started claim is durably immutable. Present a mismatched
+				// expected copy to the SAME actual SQL guard, never rewrite it.
+				wrong := *f.dispatchClaim
+				wrong.FencingToken++
+				*f.dispatchClaim = wrong
 			case "intent_fence":
 				intent.FencingToken++
 			case "intent_owner":
@@ -187,8 +186,12 @@ func TestCapacityOriginalNotifyWindowPostgres(t *testing.T) {
 			case "principal":
 				f.server.workflowRunAuthConfig().principals[0].Status = "revoked"
 			}
-			if token, revoke, _, err := f.factory.Register(f.owner, f.policy, f.spec, intent, f.scope); err == nil || token.HeaderValue() != "" || revoke != nil {
+			token, revoke, _, err := f.factory.Register(f.owner, f.policy, f.spec, intent, f.scope)
+			if err == nil || token.HeaderValue() != "" || revoke != nil {
 				t.Fatal("stale current owner/source/authority admitted")
+			}
+			if mode == "dispatch_fence" && (!errors.Is(err, repository.ErrCapacityDispatchClaim) || repository.ValidateCapacityDispatchClaim(f.owner, f.db, f.job, true) != nil) {
+				t.Fatal("actual mismatched dispatch guard did not refuse or original row changed")
 			}
 			if current := f.readIntent(t); current.OriginalNotifyWindow == nil || current.OriginalNotifyWindow.State != "possible_start" || current.LeaseExpiresAt == nil {
 				t.Fatal("refusal released pending original")
