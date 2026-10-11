@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 9b53d52321ca3b889d97d841814a994e7420cc8b
-verified_diff_sha256: cd01942c1d1c140270f166fe17ebd9e05056370795ad774f65c63fcea616e0e1
+verified_at_commit: 5127f12b22489112dbfc48961292c954e68ef410
+verified_diff_sha256: 0ba6077f5c65bee9f1de2d3a6db98974edec10bcd9583c6231039edb99e3aa96
 reconciler_schema: 1
 verified_at: 2026-10-10
 by: Codex
@@ -31,3 +31,5 @@ core_original_deferred_commit_precision_review: The complete second owning CI pr
 original_live_lease_notify_canary_source_review: Reviewed original live intent/dispatch/RBAC guard and durable possible-start marker, provider-neutral private HTTPS, bounded selected-consumer installation and final original writer/owner returns before both completion markers. Optional mounted TLS uses the same production serving path. The new machine authority protocol gates do not access the current private machine Notify source; actual paired native RunOne integration is owned by private Notify CI against the immutable public Core source. Source review is not native CI, useful capacity, production affinity or rollout qualification.
 
 current_dispatch_fixture_ci_repair_review: The complete original owning batch failed at one unused shared native helper and a single PostgreSQL stale-fence leaf whose attempted post-start row mutation correctly hit the immutable trigger. The fixture now uses the same capped original SQL helper and changes only the expected private factory claim, while the actual started database row, possible-start marker and original valid claim remain unchanged. Production authority, Notify protocol, migrations, rosters and deadlines are literal. Source review closes this repair; the next complete owning CI and the private Notify joint gate remain required. No local test/build/vet or production change occurred.
+
+core_guest_complete_fixture_reads_review: The complete current Core CI retained one original unknown-marker leaf failure caused by reading the newly assessed intent against the earlier policy identity. The fixture now reads the same native row with the actual current policy and preserves the strict identity guard and immutable marker assertions. In the private Guest owning CI, all45 owner/reader and22 adapter cases passed, while the original Core consumer stopped before its two leaves because the pre-boot protocol membership snapshot had expired. The native fixture now acquires the current snapshot through the original protected provider operation after the actual rendezvous and checks its exact pre-admission tuple before registration; freshness limits and production logic remain unchanged. These are source-reviewed fixture repairs, not a new native pass. Complete successor Core and Guest owning CI, including both external native leaves and downstream retirement, remain required. No local tests/build/vet or production action occurred.

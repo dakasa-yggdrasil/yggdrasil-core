@@ -1,6 +1,6 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-11T06:36:01-03:00_
+_Generated from HEAD at: 2026-10-11T06:59:42-03:00_
 
 ## Languages
 
@@ -24,10 +24,10 @@ _Generated from HEAD at: 2026-10-11T06:36:01-03:00_
 
 ## Top Directories by File Count
 
-- controllers/httpapi: 178 files (1957.3 KB)
+- controllers/httpapi: 178 files (1957.4 KB)
 - repository: 126 files (1123.1 KB)
 - model: 66 files (290.2 KB)
-- controllers/message: 65 files (860.9 KB)
+- controllers/message: 65 files (862.3 KB)
 - db/migrations: 60 files (117.2 KB)
 - manifest: 59 files (370.3 KB)
 - addons: 45 files (263.1 KB)
@@ -47,7 +47,7 @@ _Generated from HEAD at: 2026-10-11T06:36:01-03:00_
 - docs/bootstrap/manifests/products/observability-loki.json: 542.9 KB
 - docs/bootstrap/manifests/products/message-broker-rabbitmq.json: 531.8 KB
 - controllers/httpapi/server.go: 174.6 KB
-- controllers/message/workflows_capacity_native_postgres_test.go: 85.3 KB
+- controllers/message/workflows_capacity_native_postgres_test.go: 86.7 KB
 - controllers/httpapi/openapi.json: 80.4 KB
 - docs/api-reference/openapi.json: 80.4 KB
 - controllers/message/products.go: 75.4 KB
