@@ -696,11 +696,12 @@ func TestCapacityDispatchSchedulerPostgres(t *testing.T) {
 				p := f.policy
 				p.ControllerBinding = nil
 				current := f.create("capacity_policy", "pods", p)
-				if state == "tombstoned_without_binding" {
+				switch state {
+				case "tombstoned_without_binding":
 					if count, err := repository.MarkManifestInactiveByID(t.Context(), f.db, current.ID); err != nil || count != 1 {
 						t.Fatal("original event policy tombstone not recorded", err)
 					}
-				} else if state == "purged_policy" {
+				case "purged_policy":
 					if count, err := repository.HardDeleteManifestByID(t.Context(), f.db, current.ID); err != nil || count != 2 {
 						t.Fatal("original event logical policy not purged", err)
 					}

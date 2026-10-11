@@ -385,6 +385,10 @@ func processMatchedTrigger(
 	trigger eventTriggerWorkflow,
 	event model.Event,
 ) error {
+	// The original lock is checked before any database read or dedup marker.
+	if err := workflowdispatchlock.CheckEnvironment(trigger.namespace, trigger.name); err != nil {
+		return err
+	}
 	// Protected capacity graphs never enter the legacy async owner. Demand is
 	// consumed independently by the SAME private service and original job queue.
 	// This refusal precedes the legacy dedup marker even with no current binding.
@@ -392,12 +396,6 @@ func processMatchedTrigger(
 	if ownerErr != nil || protected {
 		return fmt.Errorf("protected capacity event requires private demand admission")
 	}
-	// Check before workflow.event.matched is committed. That event is the
-	// dedup marker, so writing it while locked would discard the trigger.
-	if err := workflowdispatchlock.CheckEnvironment(trigger.namespace, trigger.name); err != nil {
-		return err
-	}
-
 	already, err := repository.HasWorkflowEventMatched(ctx, db, trigger.manifestID, event.EventID.String())
 	if err != nil {
 		return fmt.Errorf("dedup check: %w", err)

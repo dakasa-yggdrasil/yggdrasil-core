@@ -20,6 +20,7 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"reflect"
 	"strings"
 	"sync"
 	"sync/atomic"
@@ -27,6 +28,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/docs/contracts"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -393,6 +395,46 @@ func TestCapacityVMGuestExistingCollectorPostgres(t *testing.T) {
 	})
 }
 
+func capacityProtocolDescribe(t *testing.T, spec model.IntegrationTypeManifestSpec) model.AdapterDescribeResponse {
+	t.Helper()
+	raw, err := json.Marshal(spec)
+	var describe model.AdapterDescribeResponse
+	if err != nil || json.Unmarshal(raw, &describe) != nil {
+		t.Fatal("protocol public Describe projection unavailable")
+	}
+	return describe
+}
+
+func TestAuthorizationEvaluatedOriginalPayloadJSON(t *testing.T) {
+	rbac := model.Manifest{ID: uuid.MustParse("00000000-0000-4000-8000-000000000001"), Metadata: model.ManifestMetadata{Namespace: "fixture", Name: "roles"}}
+	for _, test := range []struct {
+		name  string
+		roles []string
+		rules []model.RBACRuleMatch
+	}{
+		{name: "nil"},
+		{name: "empty", roles: []string{}, rules: []model.RBACRuleMatch{}},
+		{name: "ordered", roles: []string{"second", "first"}, rules: []model.RBACRuleMatch{{Role: "second", Effect: "allow"}, {Role: "first"}}},
+	} {
+		t.Run(test.name, func(t *testing.T) {
+			req := model.EvaluateAuthorizationRequest{Resource: "workflow:fixture:original", Action: "run"}
+			response := model.EvaluateAuthorizationResponse{Decision: "allow", RBAC: model.EvaluateRBACResponse{MatchedRoles: test.roles, MatchedRules: test.rules}}
+			payload := authorizationEvaluatedPayload(req, response, rbac, model.Manifest{})
+			if err := contracts.ValidateEventPayload("authorization.evaluated", "v1", payload); err != nil {
+				t.Fatal("original direct Go payload is not schema JSON", err)
+			}
+			expected := map[string]any{"resource": req.Resource, "action": req.Action, "decision": "allow", "rbac_manifest_ref": map[string]any{"id": rbac.ID.String(), "name": "roles", "namespace": "fixture"}}
+			if test.name == "ordered" {
+				expected["matched_roles"] = []any{"second", "first"}
+				expected["matched_rules"] = []any{"second/allow", "first"}
+			}
+			if !reflect.DeepEqual(payload, expected) {
+				t.Fatal("original payload values/order or omitted empty members changed")
+			}
+		})
+	}
+}
+
 // Actual PostgreSQL, resolver and protected collector; all represented VM,
 // Node and Guest records in this corpus are expressly protocol fixtures.
 func newCapacityGuestProtocolPostgres(t *testing.T, initialMode string, native *capacityGuestNativeFixture) *capacityGuestProtocolPostgres {
@@ -457,13 +499,14 @@ func newCapacityGuestProtocolPostgres(t *testing.T, initialMode string, native *
 		}
 	}
 	serve := func(ts model.IntegrationTypeManifestSpec, isNode bool) *httptest.Server {
+		describe := capacityProtocolDescribe(t, ts)
 		return httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			if r.Method == http.MethodGet && r.URL.Path == "/nativehealth" {
 				w.WriteHeader(200)
 				return
 			}
 			if r.Method == http.MethodPost && r.URL.Path == "/describe" {
-				_ = json.NewEncoder(w).Encode(ts)
+				_ = json.NewEncoder(w).Encode(describe)
 				return
 			}
 			var req model.AdapterExecuteIntegrationRequest
@@ -517,6 +560,7 @@ func newCapacityGuestProtocolPostgres(t *testing.T, initialMode string, native *
 	t.Cleanup(nodeServer.Close)
 	var results map[string]model.CapacityGuestBootstrapResult
 	token, ssh := strings.Repeat("g", 32), "private-fixture-SSH-key"
+	guestDescribe := capacityProtocolDescribe(t, guestType)
 	guestServer := httptest.NewTLSServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if native != nil {
 			native.proxy(w, r, f)
@@ -533,7 +577,7 @@ func newCapacityGuestProtocolPostgres(t *testing.T, initialMode string, native *
 		}
 		if r.Method == http.MethodPost && r.URL.Path == "/rpc/describe" {
 			f.describeReads.Add(1)
-			_ = json.NewEncoder(w).Encode(guestType)
+			_ = json.NewEncoder(w).Encode(guestDescribe)
 			return
 		}
 		var req struct {

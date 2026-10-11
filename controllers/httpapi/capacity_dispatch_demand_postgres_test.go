@@ -522,11 +522,21 @@ func TestCapacityDispatchDemandPostgres(t *testing.T) {
 		}()
 		f.server.db = owned
 		if err := f.service.runDemandPass(t.Context()); !errors.Is(err, cause) || connector.admissionCommits.Load() != 1 || connector.auditCommits.Load() < 1 || connector.otherCommits.Load() != 0 || connector.commits.Load() != connector.auditCommits.Load()+1 || connector.wakeStatements.Load() != 1 || connector.cursorStatements.Load() != 1 || connector.lost.Load() {
+			t.Logf("original ACK observations cause_is=%t admissions=%d audits=%d other=%d commits=%d wakes=%d cursors=%d quota_retained=%t", errors.Is(err, cause), connector.admissionCommits.Load(), connector.auditCommits.Load(), connector.otherCommits.Load(), connector.commits.Load(), connector.wakeStatements.Load(), connector.cursorStatements.Load(), connector.lost.Load())
 			t.Fatal("lost acknowledgement did not follow actual original Commit")
 		}
 		// Independent native reads recover the original durable IDs; no second
 		// admission transaction or action occurs when the permanent wake already exists.
 		f.server.db = f.db
+		var auditRows int64
+		resource := "workflow:" + f.workflow.Metadata.Namespace + ":" + f.workflow.Metadata.Name
+		if err := f.db.QueryRowContext(t.Context(), `SELECT count(*) FROM public.event_log
+			WHERE type='authorization.evaluated' AND schema_version='v1' AND aggregate_type='authorization' AND aggregate_id=$1
+			AND payload->>'resource'=$1 AND payload->>'action'='run' AND payload->>'decision'='allow'
+			AND payload->'matched_roles'='["controller"]'::jsonb AND payload->'matched_rules'='["controller/allow"]'::jsonb
+			AND payload->'rbac_manifest_ref'->>'id'=$2`, resource, f.rbac.ID.String()).Scan(&auditRows); err != nil || auditRows < 1 || auditRows != connector.auditCommits.Load() {
+			t.Fatal("original committed audit rows/ordered role-rule payload differ", auditRows, connector.auditCommits.Load(), err != nil)
+		}
 		var id uuid.UUID
 		if f.db.QueryRow(`SELECT id FROM public.capacity_dispatch_jobs WHERE realm=$1`, f.policy.Metadata.Namespace).Scan(&id) != nil {
 			t.Fatal("committed original missing")
@@ -955,8 +965,10 @@ func TestCapacityDispatchDemandPostgres(t *testing.T) {
 				t.Fatal("invalid native lineage accepted or restoration unresolved")
 			}
 		}
-		if _, err := repository.ReadCapacityDemandEvent(nil, f.db, f.event.EventID); err == nil {
-			t.Fatal("missing original context accepted")
+		for _, missing := range []struct{ ctx context.Context }{{ctx: nil}} {
+			if _, err := repository.ReadCapacityDemandEvent(missing.ctx, f.db, f.event.EventID); err == nil {
+				t.Fatal("missing original context accepted")
+			}
 		}
 		p := f.spec
 		b := *p.ControllerBinding

@@ -12,11 +12,21 @@ import (
 // All new native inputs use literal canonical JSON member names. Go's
 // case-insensitive tagged-field matching is not authority normalization.
 func DecodeNativeCapacity(value any, out any) error {
+	typ := reflect.TypeOf(out)
+	if typ == nil || typ.Kind() != reflect.Pointer || reflect.ValueOf(out).IsNil() {
+		return fmt.Errorf("native capacity output requires nonnil pointer")
+	}
 	raw, err := json.Marshal(value)
 	if err != nil || len(raw) > 2<<20 {
 		return fmt.Errorf("native capacity input exceeds bound")
 	}
-	if err := nativeCapacityClosedJSON(raw, reflect.TypeOf(out).Elem()); err != nil {
+	// RawMessage and byte slices have their original Go JSON encodings, not
+	// the array encoding of ordinary slices. Check duplicate members even in
+	// raw subtrees before typed fields and their owning validators are decoded.
+	if err := nativeCapacityUniqueJSON(raw); err != nil {
+		return err
+	}
+	if err := nativeCapacityClosedJSON(raw, typ.Elem()); err != nil {
 		return err
 	}
 	return json.Unmarshal(raw, out)
@@ -30,7 +40,23 @@ func nativeCapacityClosedJSON(raw []byte, typ reflect.Type) error {
 		}
 		typ = typ.Elem()
 	}
+	if typ == reflect.TypeOf(json.RawMessage{}) {
+		// The original JSON value remains raw. Its owning typed decoder still
+		// checks its schema; this is not an object/permission certificate.
+		return nil
+	}
 	if typ.Kind() == reflect.Slice {
+		if typ.Elem().Kind() == reflect.Uint8 {
+			var value []byte
+			if json.Unmarshal(raw, &value) != nil {
+				return fmt.Errorf("native byte input requires original base64 encoding")
+			}
+			canonical, err := json.Marshal(value)
+			if err != nil || !bytes.Equal(bytes.TrimSpace(raw), canonical) {
+				return fmt.Errorf("native byte input requires original base64 encoding")
+			}
+			return nil
+		}
 		var values []json.RawMessage
 		if json.Unmarshal(raw, &values) != nil {
 			return fmt.Errorf("native input requires array")
@@ -76,6 +102,62 @@ func nativeCapacityClosedJSON(raw []byte, typ reflect.Type) error {
 		if err := nativeCapacityClosedJSON(value, fields[name]); err != nil {
 			return err
 		}
+	}
+	return nil
+}
+
+// UseNumber preserves original numeric values without float conversion. Raw
+// keys may be application data; only exact duplicates are rejected here.
+// Literal typed field names are checked separately by NativeCanonicalObject.
+func nativeCapacityUniqueJSON(raw []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	decoder.UseNumber()
+	var walk func() error
+	walk = func() error {
+		token, err := decoder.Token()
+		if err != nil {
+			return fmt.Errorf("incomplete native JSON value")
+		}
+		if delimiter, ok := token.(json.Delim); ok {
+			switch delimiter {
+			case '{':
+				seen := map[string]bool{}
+				for decoder.More() {
+					key, err := decoder.Token()
+					name, ok := key.(string)
+					if err != nil || !ok || seen[name] {
+						return fmt.Errorf("duplicate or incomplete native JSON member")
+					}
+					seen[name] = true
+					if err := walk(); err != nil {
+						return err
+					}
+				}
+				end, err := decoder.Token()
+				if err != nil || end != json.Delim('}') {
+					return fmt.Errorf("incomplete native JSON object")
+				}
+			case '[':
+				for decoder.More() {
+					if err := walk(); err != nil {
+						return err
+					}
+				}
+				end, err := decoder.Token()
+				if err != nil || end != json.Delim(']') {
+					return fmt.Errorf("incomplete native JSON array")
+				}
+			default:
+				return fmt.Errorf("unexpected native JSON delimiter")
+			}
+		}
+		return nil
+	}
+	if err := walk(); err != nil {
+		return err
+	}
+	if _, err := decoder.Token(); err != io.EOF {
+		return fmt.Errorf("trailing native JSON value")
 	}
 	return nil
 }

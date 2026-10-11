@@ -736,7 +736,28 @@ func nativeKindReleaseSnapshot(t *testing.T, ctx context.Context, db *sql.DB, re
 	err = rows.Err()
 	rows.Close()
 	var checkpoint model.CapacityNativePodCheckpoint
-	if err != nil || checkpoints != 1 || capacity.DecodeNativeCapacity(json.RawMessage(checkpointRaw), &checkpoint) != nil || checkpoint.PodUID != subject || checkpoint.Namespace != realm || checkpoint.PolicyID != policy.ID || checkpoint.PolicyChecksum != policy.Checksum || checkpoint.IntentGeneration != generation || checkpoint.State != "released" || checkpoint.ConfirmedAt == nil || len(checkpoint.NativeTerminationReceipt) == 0 {
+	decodeRan := err == nil && checkpoints == 1
+	var decodeErr error
+	if decodeRan {
+		decodeErr = capacity.DecodeNativeCapacity(json.RawMessage(checkpointRaw), &checkpoint)
+	}
+	if err != nil || checkpoints != 1 || decodeErr != nil || checkpoint.PodUID != subject || checkpoint.Namespace != realm || checkpoint.PolicyID != policy.ID || checkpoint.PolicyChecksum != policy.Checksum || checkpoint.IntentGeneration != generation || checkpoint.State != "released" || checkpoint.ConfirmedAt == nil || len(checkpoint.NativeTerminationReceipt) == 0 {
+		// Only facts from the SAME original SQL reply and the ORIGINAL decode.
+		// No opaque cause/body/identity is reflected; unknown decoded fields
+		// remain omitted instead of becoming successful zero-value predicates.
+		facts := map[string]any{"rows_ok": err == nil, "row_count": checkpoints, "decode_ran": decodeRan, "decode_ok": decodeRan && decodeErr == nil, "bytes": len(checkpointRaw), "sha256": fmt.Sprintf("%x", sha256.Sum256(checkpointRaw))}
+		if decodeRan && decodeErr == nil {
+			facts["uid_equal"] = checkpoint.PodUID == subject
+			facts["namespace_equal"] = checkpoint.Namespace == realm
+			facts["policy_equal"] = checkpoint.PolicyID == policy.ID
+			facts["checksum_equal"] = checkpoint.PolicyChecksum == policy.Checksum
+			facts["origin_generation_equal"] = checkpoint.IntentGeneration == generation
+			facts["released"] = checkpoint.State == "released"
+			facts["confirmed_at_present"] = checkpoint.ConfirmedAt != nil
+			facts["termination_bytes_present"] = len(checkpoint.NativeTerminationReceipt) != 0
+		}
+		diagnostic, _ := json.Marshal(facts)
+		t.Logf("original release checkpoint safe predicates: %s", diagnostic)
 		t.Fatal("exact original released checkpoint missing, duplicated or changed", checkpoints, err)
 	}
 	var originalWitness model.AdapterCapacityPodTerminationResponse

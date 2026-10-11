@@ -210,7 +210,7 @@ func JoinGuestBootstrap(p model.CapacityPolicySpec, member model.CapacityGuestMe
 	}
 	complete := o.Unit.MainPID == 0 && o.Unit.ExecMainCode == 1 && o.Unit.ExecMainStatus == 0 && o.Unit.ExitMonotonic > o.Unit.StartMonotonic && o.Unit.Result == "success" && (o.Unit.ActiveState == "inactive" || o.Unit.ActiveState == "active") && (o.Unit.SubState == "dead" || o.Unit.SubState == "exited") && o.CloudInitStatus == "done" && o.CloudInitFinalFinished > 0 && !o.CloudInitHasErrors
 	if r.BootstrapCompletedKnown != complete {
-		return zero, fmt.Errorf("Guest completion projection differs from original source")
+		return zero, fmt.Errorf("guest completion projection differs from original source")
 	}
 	return model.CapacityGuestBootstrapJoin{Slot: node.Slot, ResourceID: node.ResourceID, ResourceCreatedAt: node.ResourceCreatedAt, BootID: e.BootID, InvocationNonce: j.InvocationNonce, JournalSHA256: o.JournalSHA256, ObservedAt: o.ObservedAt, EnclosingBootstrapRead: complete, OriginalCallerReturnKnown: false, PhysicalCertificate: false, EvidenceClass: e.SourceClass}, nil
 }
