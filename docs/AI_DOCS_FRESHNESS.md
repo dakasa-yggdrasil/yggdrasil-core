@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 906bef8ec4ff1a1d31a10962512ad42d5a61c54c
-verified_diff_sha256: e3432f44be6a9e604f7ea9321dfd963bb7459582d0a95cbe9e4eeb9cd2d11856
+verified_at_commit: 363b1c1b74f82cffd5c8dd69b7335dcf263b08e0
+verified_diff_sha256: 2fea9cd90fde5bd8f82bc5e14920ff71a3ca6ece1b324c4cfdc860fa058ff89e
 reconciler_schema: 1
 verified_at: 2026-10-10
 by: Codex
@@ -61,3 +61,7 @@ Source `226a3e31c1c164d70d3e56df587000c3f3afa725` applies two behaviour-preservi
 ## Original Notify roster LIST candidates without readiness
 
 Source `906bef8ec4ff1a1d31a10962512ad42d5a61c54c` lets the original Notify roster accept the membership LIST candidates the Kubernetes adapter actually returns. Those candidates never carry admission readiness; only the single-Pod admission read does. The after LIST loop now compares each candidate by identity and liveness only (name, UID, namespace, generation, container, start, restarts, image, workload UID and resourceVersion, running, no deletion request, protected), while the admission frame comparison and the later witness reads still require readiness. A protocol fixture drives the roster through the production closed decoder with Kubernetes-shaped replies and refuses every identity drift. No adapter pin changed. Current own Core CI is pending; no local tests, build, vet or production activation ran.
+
+## Kind qualification pinned to the witnessed-version Kube release
+
+Source `363b1c1b74f82cffd5c8dd69b7335dcf263b08e0` repins the integration-kubernetes source of the protected native Kind qualification from `3fd6f9bedeceefa846058642b485a89542111c6d` to `f14310e53e4a12731a4310da5dc636b9dc1d2c1c` in the job SOURCE_COMMIT, the adapter checkout ref and the checked-out HEAD assertion; the compiled `NativeSourceCommit`, the instance `native_release_source_commit` and the policy release recovery binding follow that one value. The new Kube source keeps the local name, namespace, UID, generation and permit checks after redemption but sends the release PUT with the witnessed resourceVersion, so a later write such as the kubelet's final graceful delete returns the genuine native Conflict409 that `native_release_result_v1` already recovers. Its fixture trees are unchanged. No Core source, oracle or recovery semantics changed. Current own Core CI is pending; no local tests, build, vet or production activation ran.
