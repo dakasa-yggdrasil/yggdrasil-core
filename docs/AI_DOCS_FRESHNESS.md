@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: d5382d6b9c94896b557050cf498dc75415c9d398
-verified_diff_sha256: ce060c1a9407ac5d57c2ed21b59eb03b0639a97210500389b9dd3ffe9d81de84
+verified_at_commit: b368971b080d340e2e8a2b7b295a25133c0dc139
+verified_diff_sha256: 0451a4bf5dd5aca91937e81ae271907c90f4274836339b988289f33c7f4f0054
 reconciler_schema: 1
 verified_at: 2026-10-10
 by: Codex
@@ -49,3 +49,7 @@ Source `273f9c7df6354ac817dbfc2be28b917fc791b51f` carries adapter-declared canon
 ## Original release recovery after both returns
 
 Source `d5382d6b9c94896b557050cf498dc75415c9d398` adds the opt-in `native_release_result_v1` release recovery of ADR-0049, migration 00062 and the authenticated native result route. Only a retained adapter result plus the joined original Core Do/Read/Close returns give a 409 new meaning; the parent stays `rejected_no_effect` and each Pod and phase keeps a four-command release history that counts the original and every fenced release-only recovery command. Historical replies stay uncertain and an absent binding keeps the original behavior. The Kind qualification pins the separately qualified Kube source `3fd6f9bedeceefa846058642b485a89542111c6d` in checkout, compiled `NativeSourceCommit` and binding. Current own Core CI is pending; no local tests, build, vet or production activation ran.
+
+## Unredeemed original release retry and native wire mirror
+
+Source `b368971b080d340e2e8a2b7b295a25133c0dc139` fixes the original caller test that assigned a value body where Read and Close have pointer receivers, and documents the optional all-or-none release binding, the native result route and its closed schema in both byte-equal OpenAPI copies under an exact mirror test. An ORIGINAL release refused before redemption is revoked under the shared redemption lock; only a proven `refused_no_redemption` lets a fresh witness mint the next original within the same four permanent identities, while a redeemed original, a failed revoke and every recovery command keep HOLD. ADR-0049 (Proposed) now scopes the no-retry rule to recovery subdecisions. The actor that advanced the Pod resource version in the failing Kind runs is unknown. Current own Core CI is pending; no local tests, build, vet or production activation ran.

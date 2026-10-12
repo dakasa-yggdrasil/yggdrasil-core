@@ -1,6 +1,6 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-11T17:56:34-03:00_
+_Generated from HEAD at: 2026-10-11T23:00:28-03:00_
 
 ## Languages
 
@@ -24,9 +24,9 @@ _Generated from HEAD at: 2026-10-11T17:56:34-03:00_
 
 ## Top Directories by File Count
 
-- controllers/httpapi: 180 files (1979.8 KB)
-- repository: 128 files (1154.1 KB)
-- controllers/message: 69 files (910.5 KB)
+- controllers/httpapi: 180 files (1997.1 KB)
+- repository: 128 files (1160.4 KB)
+- controllers/message: 69 files (911.3 KB)
 - model: 66 files (294.5 KB)
 - db/migrations: 61 files (120.3 KB)
 - manifest: 61 files (377.3 KB)
@@ -48,8 +48,8 @@ _Generated from HEAD at: 2026-10-11T17:56:34-03:00_
 - docs/bootstrap/manifests/products/message-broker-rabbitmq.json: 531.8 KB
 - controllers/httpapi/server.go: 174.6 KB
 - controllers/message/workflows_capacity_native_postgres_test.go: 93.2 KB
-- controllers/httpapi/openapi.json: 80.4 KB
-- docs/api-reference/openapi.json: 80.4 KB
+- controllers/httpapi/openapi.json: 88.3 KB
+- docs/api-reference/openapi.json: 88.3 KB
 - controllers/message/products.go: 75.4 KB
 
 ## Ops & Messaging

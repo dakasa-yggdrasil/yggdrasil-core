@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-11T17:56:34-03:00",
+  "generated_at": "2026-10-11T23:00:28-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 773,
@@ -11,7 +11,7 @@
     ".yml": 24
   },
   "provenance": {
-    "commit": "d5382d6b9c94896b557050cf498dc75415c9d398",
+    "commit": "b368971b080d340e2e8a2b7b295a25133c0dc139",
     "dirty": true,
     "files": [
       {
@@ -60,17 +60,17 @@
     {
       "path": "controllers/httpapi",
       "files": 180,
-      "kb": 1979
+      "kb": 1997
     },
     {
       "path": "repository",
       "files": 128,
-      "kb": 1154
+      "kb": 1160
     },
     {
       "path": "controllers/message",
       "files": 69,
-      "kb": 910
+      "kb": 911
     },
     {
       "path": "model",
@@ -157,11 +157,11 @@
     },
     {
       "path": "controllers/httpapi/openapi.json",
-      "kb": 80
+      "kb": 88
     },
     {
       "path": "docs/api-reference/openapi.json",
-      "kb": 80
+      "kb": 88
     },
     {
       "path": "controllers/message/products.go",
@@ -308,7 +308,7 @@
     "config_files": 8,
     "k8s_manifests": 8
   },
-  "verified_at_commit": "d5382d6b9c94896b557050cf498dc75415c9d398",
-  "verified_diff_sha256": "ce060c1a9407ac5d57c2ed21b59eb03b0639a97210500389b9dd3ffe9d81de84",
+  "verified_at_commit": "b368971b080d340e2e8a2b7b295a25133c0dc139",
+  "verified_diff_sha256": "0451a4bf5dd5aca91937e81ae271907c90f4274836339b988289f33c7f4f0054",
   "reconciler_schema": 1
 }
