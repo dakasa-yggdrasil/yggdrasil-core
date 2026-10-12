@@ -214,7 +214,7 @@ jobs:
           REQUIRE_CAPACITY_NATIVE_KIND: "true"
         run: |
           set -euo pipefail
-          go test -race -count=1 -timeout=24m -json ./controllers/httpapi -run '^(TestCapacityNativeKinDHTTP|TestCapacityNativeReleaseRecoveryKinDHTTP|TestCapacityNativeRecoveryFrameProxyRoutes)$' | tee native-core-results.json
+          go test -race -count=1 -timeout=24m -json ./controllers/httpapi -run '^(TestCapacityNativeKinDHTTP|TestCapacityNativeReleaseRecoveryKinDHTTP|TestCapacityNativeRecoveryFrameProxyRoutes|TestCapacityNativeReleaseRecoveryCompleteChainOracle|TestCapacityNativeReleaseRecoveryIncidentDecisionSQLPostgres)$' | tee native-core-results.json
           python3 - <<'PY'
           import json
           events=[json.loads(line) for line in open('native-core-results.json') if line.strip()]
@@ -232,7 +232,24 @@ jobs:
           for case in proxy_required:
               if sum(e.get('Test')==case and e.get('Action')=='run' for e in events)!=1 or sum(e.get('Test')==case and e.get('Action')=='pass' for e in events)!=1: raise SystemExit('original recovery proxy route census incomplete: '+case)
           if any(e.get('Test') in proxy_required and e.get('Action') in ('skip','fail') for e in events): raise SystemExit('original recovery proxy route failed or skipped')
+          chain='TestCapacityNativeReleaseRecoveryCompleteChainOracle'
+          chain_required={chain}|{chain+'/'+name for name in ('two-identities','three-identities','four-identities','archived-four-identities','fifth-identity-budget','duplicate-token','duplicate-attempt','duplicate-identity','sequence-gap','missing-parent-caller-ack','missing-adapter-ack','missing-result','duplicate-result','extra-result','missing-decision','extra-decision','shared-fence','wrong-parent-attempt','wrong-parent-result','renewed-deadline','late-caller-return','changed-owner','changed-source','changed-policy','witness-inventory-race','foreign-witness-lifetime','foreign-inventory-lifetime','stale-frame','uncertain-parent','relabelled-original409','unjoined-original-close','changed-permanent-identity','changed-archive-hash')}
+          for case in chain_required:
+              if sum(e.get('Test')==case and e.get('Action')=='run' for e in events)!=1 or sum(e.get('Test')==case and e.get('Action')=='pass' for e in events)!=1: raise SystemExit('complete original chain oracle census incomplete: '+case)
+          if any(e.get('Test') in chain_required and e.get('Action') in ('skip','fail') for e in events): raise SystemExit('complete original chain oracle failed or skipped')
+          incident='TestCapacityNativeReleaseRecoveryIncidentDecisionSQLPostgres'
+          incident_required={incident,incident+'/only-owned-relations-before-foreign-edges',incident+'/both-directed-incident-decisions-retained'}
+          for case in incident_required:
+              if sum(e.get('Test')==case and e.get('Action')=='run' for e in events)!=1 or sum(e.get('Test')==case and e.get('Action')=='pass' for e in events)!=1: raise SystemExit('original PostgreSQL incident census incomplete: '+case)
+          if any(e.get('Test') in incident_required and e.get('Action') in ('skip','fail') for e in events): raise SystemExit('original PostgreSQL incident census failed or skipped')
           PY
+      - name: Retain original native GoJSON and complete SQL chain receipts
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capacity-native-core-original-census
+          path: native-core-results.json
+          if-no-files-found: error
       - name: Build the actual production Core Dockerfile from committed HEAD
         run: |
           set -euo pipefail

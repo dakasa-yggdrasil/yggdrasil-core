@@ -275,16 +275,23 @@ func assertNativeReleaseNoRecoveryBeforeCaller(t *testing.T, parent context.Cont
 	}
 }
 
-func assertNativeReleaseRecoveryIdentities(t *testing.T, ctx context.Context, db *sql.DB, realm, source string, conflicts int32) {
+func assertNativeReleaseRecoveryIdentities(t *testing.T, ctx context.Context, db *sql.DB, realm, subject, source string, conflicts int32, policy model.Manifest, p model.CapacityPolicySpec, snapshot []byte, census nativeReleaseChainCensus) {
 	t.Helper()
 	var count int
 	err := db.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_release_recovery_decisions d JOIN public.capacity_native_commands child ON child.id=d.command_id JOIN public.capacity_native_commands parent ON parent.id=d.parent_command_id JOIN public.capacity_native_release_results r ON r.command_id=parent.id WHERE child.namespace=$1 AND parent.state='rejected_no_effect' AND child.state='confirmed' AND parent.command_record->>'adapter_source_commit'=$2 AND child.id<>parent.id AND child.authority_token_sha256<>parent.authority_token_sha256 AND child.command_record->>'attempt_id'<>parent.command_record->>'attempt_id' AND child.command_record->>'parent_attempt_id'=parent.command_record->>'attempt_id' AND d.fence::text=child.command_record->>'recovery_fence' AND child.command_record->>'expires_at'=parent.command_record->>'expires_at' AND r.adapter_ack_at IS NOT NULL AND r.caller_ack_at IS NOT NULL`, realm, source).Scan(&count)
 	if err != nil || conflicts != 1 || count != 1 {
 		t.Fatal("genuine native409 did not reach new durable fenced release", err)
 	}
-	var rejected int
-	if db.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_commands WHERE namespace=$1 AND state='rejected_no_effect' AND operation=$2`, realm, capacity.DestroyNativePodProtection).Scan(&rejected) != nil || rejected != 1 {
-		t.Fatal("original native409 was relabelled or replayed")
+	var original struct {
+		Bundle struct {
+			Checkpoint model.CapacityNativePodCheckpoint `json:"checkpoint"`
+		} `json:"bundle"`
+	}
+	if json.Unmarshal(snapshot, &original) != nil {
+		t.Fatal("original released checkpoint census unavailable")
+	}
+	if err := validateNativeReleaseChain(census, realm, subject, source, policy, p, original.Bundle.Checkpoint); err != nil {
+		t.Fatal("original native409 chain was relabelled, replayed or admitted without exact authority", err)
 	}
 }
 

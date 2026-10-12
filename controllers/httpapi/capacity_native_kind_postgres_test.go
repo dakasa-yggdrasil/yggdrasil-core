@@ -852,8 +852,17 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 		return
 	}
 	run("execute", true)
+	// Retain and validate the original full native checkpoint/identity snapshot
+	// before the chain oracle. A later refusal must not erase the original rows.
+	var originalChain nativeReleaseChainCensus
 	if forceConflict {
-		assertNativeReleaseRecoveryIdentities(t, ctx, db, realm, compiledSource, conflictCount.Load())
+		// Capture first: neither the native snapshot nor an aggregate assertion
+		// may discard the original per-identity/result/decision causal records.
+		originalChain = nativeReleaseReadChainCensus(t, ctx, db, realm, victimUID)
+	}
+	beforeHold, archived := nativeKindReleaseSnapshot(t, ctx, db, realm, victimUID, policy, p)
+	if forceConflict {
+		assertNativeReleaseRecoveryIdentities(t, ctx, db, realm, victimUID, compiledSource, conflictCount.Load(), policy, p, beforeHold, originalChain)
 	}
 	if mode == "forced_conflict_recovery_inventory_race" && recoveryInventoryRace.Load() != 1 {
 		t.Fatal("native witness/inventory race was not injected exactly once")
@@ -867,7 +876,6 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 	if retainedMeta["uid"] != victimUID || len(remainingFinalizers) != 1 || remainingFinalizers[0] != fixtureFinalizer {
 		t.Fatal("Core removed foreign protection or retained its own finalizer")
 	}
-	beforeHold, archived := nativeKindReleaseSnapshot(t, ctx, db, realm, victimUID, policy, p)
 	if archived {
 		t.Fatal("first original release was not retained before terminal compaction")
 	}
