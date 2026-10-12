@@ -33,6 +33,56 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 )
 
+type nativeRecoveryFrameRequest struct {
+	Operation string `json:"operation"`
+	Input     struct {
+		PodName string `json:"pod_name"`
+	} `json:"input"`
+}
+
+// The one real RV-race injection belongs only to an original execute request.
+// Core also performs empty-body connectivity GETs through this same proxy;
+// describe and connectivity requests must reach the original adapter unchanged.
+func nativeRecoveryFrameExecuteRequest(r *http.Request, raw []byte) (nativeRecoveryFrameRequest, error) {
+	var out nativeRecoveryFrameRequest
+	if r.Method != http.MethodPost || r.URL.Path != "/rpc/execute" {
+		return out, nil
+	}
+	if err := json.Unmarshal(raw, &out); err != nil {
+		return out, errors.New("original recovery execute request unavailable")
+	}
+	return out, nil
+}
+
+func TestCapacityNativeRecoveryFrameProxyRoutes(t *testing.T) {
+	for _, scenario := range []struct {
+		name, method, path, body, operation, pod string
+		refused                                  bool
+	}{
+		{"original_empty_connectivity_get", http.MethodGet, "/", "", "", "", false},
+		{"original_empty_health_get", http.MethodGet, "/healthz", "", "", "", false},
+		{"original_describe_post", http.MethodPost, "/rpc/describe", "{}", "", "", false},
+		{"other_route_is_not_execute", http.MethodPost, "/other", "", "", "", false},
+		{"get_execute_cannot_inject", http.MethodGet, "/rpc/execute", `{"operation":"observe_capacity_pod_inventory","input":{"pod_name":"original"}}`, "", "", false},
+		{"original_inventory_execute", http.MethodPost, "/rpc/execute", `{"operation":"observe_capacity_pod_inventory","input":{"pod_name":"original"}}`, capacity.ObserveNativePodInventory, "original", false},
+		{"original_release_execute", http.MethodPost, "/rpc/execute", `{"operation":"destroy_capacity_pod_drain_protection","input":{"pod_name":"original"}}`, capacity.DestroyNativePodProtection, "original", false},
+		{"malformed_execute_refused", http.MethodPost, "/rpc/execute", "{", "", "", true},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			r := httptest.NewRequest(scenario.method, "http://original"+scenario.path, strings.NewReader(scenario.body))
+			raw, readErr := io.ReadAll(r.Body)
+			closeErr := r.Body.Close()
+			if readErr != nil || closeErr != nil {
+				t.Fatal("original proxy request read/close unavailable")
+			}
+			operation, err := nativeRecoveryFrameExecuteRequest(r, raw)
+			if (err != nil) != scenario.refused || operation.Operation != scenario.operation || operation.Input.PodName != scenario.pod || string(raw) != scenario.body {
+				t.Fatal("non-execute request gained an injection or original execute request was changed")
+			}
+		})
+	}
+}
+
 // These negative requests use the actual default-deny middleware and verified
 // TLS route. Their protocol-shaped body is not a native return certificate.
 func TestCapacityMutationNativeResultAuthorizationPostgres(t *testing.T) {

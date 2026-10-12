@@ -214,7 +214,7 @@ jobs:
           REQUIRE_CAPACITY_NATIVE_KIND: "true"
         run: |
           set -euo pipefail
-          go test -race -count=1 -timeout=24m -json ./controllers/httpapi -run '^(TestCapacityNativeKinDHTTP|TestCapacityNativeReleaseRecoveryKinDHTTP)$' | tee native-core-results.json
+          go test -race -count=1 -timeout=24m -json ./controllers/httpapi -run '^(TestCapacityNativeKinDHTTP|TestCapacityNativeReleaseRecoveryKinDHTTP|TestCapacityNativeRecoveryFrameProxyRoutes)$' | tee native-core-results.json
           python3 - <<'PY'
           import json
           events=[json.loads(line) for line in open('native-core-results.json') if line.strip()]
@@ -227,6 +227,11 @@ jobs:
           for case in recovery_required:
               if sum(e.get('Test')==case and e.get('Action')=='run' for e in events)!=1 or sum(e.get('Test')==case and e.get('Action')=='pass' for e in events)!=1: raise SystemExit('real original release recovery census incomplete: '+case)
           if any(e.get('Test') in recovery_required and e.get('Action') in ('skip','fail') for e in events): raise SystemExit('real original release recovery census failed or skipped')
+          proxy='TestCapacityNativeRecoveryFrameProxyRoutes'
+          proxy_required={proxy}|{proxy+'/'+name for name in ('original_empty_connectivity_get','original_empty_health_get','original_describe_post','other_route_is_not_execute','get_execute_cannot_inject','original_inventory_execute','original_release_execute','malformed_execute_refused')}
+          for case in proxy_required:
+              if sum(e.get('Test')==case and e.get('Action')=='run' for e in events)!=1 or sum(e.get('Test')==case and e.get('Action')=='pass' for e in events)!=1: raise SystemExit('original recovery proxy route census incomplete: '+case)
+          if any(e.get('Test') in proxy_required and e.get('Action') in ('skip','fail') for e in events): raise SystemExit('original recovery proxy route failed or skipped')
           PY
       - name: Build the actual production Core Dockerfile from committed HEAD
         run: |

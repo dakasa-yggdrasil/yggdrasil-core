@@ -316,13 +316,8 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 				return
 			}
 			if mode == "forced_conflict_recovery_inventory_race" {
-				var operation struct {
-					Operation string `json:"operation"`
-					Input     struct {
-						PodName string `json:"pod_name"`
-					} `json:"input"`
-				}
-				if json.Unmarshal(raw, &operation) != nil {
+				operation, e := nativeRecoveryFrameExecuteRequest(r, raw)
+				if e != nil {
 					w.WriteHeader(503)
 					return
 				}
