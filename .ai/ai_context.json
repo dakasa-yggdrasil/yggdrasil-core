@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-12T19:00:41-03:00",
+  "generated_at": "2026-10-12T19:39:24-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 774,
@@ -11,7 +11,7 @@
     ".yml": 24
   },
   "provenance": {
-    "commit": "f0500f3ac077847e65baa8307cbaf2493003ed8d",
+    "commit": "b42845cf93070d3b2a4e38b3bf29aa506041ef50",
     "dirty": true,
     "files": [
       {
@@ -60,7 +60,7 @@
     {
       "path": "controllers/httpapi",
       "files": 180,
-      "kb": 2017
+      "kb": 2020
     },
     {
       "path": "repository",
@@ -308,7 +308,7 @@
     "config_files": 8,
     "k8s_manifests": 8
   },
-  "verified_at_commit": "f0500f3ac077847e65baa8307cbaf2493003ed8d",
-  "verified_diff_sha256": "3267b08f92cd17f0c5b6d3b72ae988fbb8f2ac344de96205845f4485ead3b98a",
+  "verified_at_commit": "b42845cf93070d3b2a4e38b3bf29aa506041ef50",
+  "verified_diff_sha256": "f8479a3c4390db7e44d09c294417a1bf1b9f34e9f972f1693b5b9adc024bd266",
   "reconciler_schema": 1
 }
