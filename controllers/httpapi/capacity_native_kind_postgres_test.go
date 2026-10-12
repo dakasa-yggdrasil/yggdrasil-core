@@ -220,6 +220,8 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 	var redeemedAfterDrift atomic.Bool
 	var heldAdapterAck, heldCallerAck atomic.Bool
 	var staleWitness atomic.Int32
+	var recoveryInventoryRace atomic.Int32
+	var recoveryVictim atomic.Value
 	coreServe := func(w http.ResponseWriter, r *http.Request) {
 		if drift == "during" && r.URL.Path == capacityMutationBasePath+"/native/redeem" {
 			raw, err := io.ReadAll(io.LimitReader(r.Body, 8193))
@@ -304,7 +306,7 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 	}
 	defer func() { _ = adapterCmd.Process.Kill(); _ = adapterCmd.Wait() }()
 	adapterURL := fmt.Sprintf("http://127.0.0.1:%d", port)
-	if mode == "forced_conflict_caller_ack_held" || mode == "forced_conflict_late_owner_hold" || mode == "stale_witness_unredeemed_original_retry" {
+	if mode == "forced_conflict_caller_ack_held" || mode == "forced_conflict_late_owner_hold" || mode == "stale_witness_unredeemed_original_retry" || mode == "forced_conflict_recovery_inventory_race" {
 		upstream := adapterURL
 		caller := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			raw, e := io.ReadAll(io.LimitReader(r.Body, 2<<20+1))
@@ -312,6 +314,38 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 			if e != nil || closeErr != nil || len(raw) > 2<<20 {
 				w.WriteHeader(503)
 				return
+			}
+			if mode == "forced_conflict_recovery_inventory_race" {
+				var operation struct {
+					Operation string `json:"operation"`
+					Input     struct {
+						PodName string `json:"pod_name"`
+					} `json:"input"`
+				}
+				if json.Unmarshal(raw, &operation) != nil {
+					w.WriteHeader(503)
+					return
+				}
+				if operation.Operation == capacity.DestroyNativePodProtection && operation.Input.PodName != "" {
+					recoveryVictim.Store(operation.Input.PodName)
+				}
+				if operation.Operation == capacity.ObserveNativePodInventory && recoveryInventoryRace.Load() == 0 {
+					var parents int
+					if db.QueryRowContext(r.Context(), `SELECT count(*) FROM public.capacity_native_commands WHERE namespace=$1 AND state='rejected_no_effect' AND operation=$2`, realm, capacity.DestroyNativePodProtection).Scan(&parents) != nil {
+						w.WriteHeader(503)
+						return
+					}
+					if parents == 1 && recoveryInventoryRace.CompareAndSwap(0, 1) {
+						name, known := recoveryVictim.Load().(string)
+						// The original recovery witness has returned. Advance the REAL
+						// same Pod RV before the original inventory read, once only.
+						if !known || name == "" || exec.CommandContext(r.Context(), "kubectl", "-n", realm, "annotate", "pod", name, "fixture.yggdrasil.io/native-recovery-frame=original", "--overwrite").Run() != nil {
+							t.Error("actual recovery witness/inventory race fixture failed")
+							w.WriteHeader(503)
+							return
+						}
+					}
+				}
 			}
 			if mode == "stale_witness_unredeemed_original_retry" && staleWitness.Load() == 0 {
 				var stale struct {
@@ -825,6 +859,9 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 	run("execute", true)
 	if forceConflict {
 		assertNativeReleaseRecoveryIdentities(t, ctx, db, realm, compiledSource, conflictCount.Load())
+	}
+	if mode == "forced_conflict_recovery_inventory_race" && recoveryInventoryRace.Load() != 1 {
+		t.Fatal("native witness/inventory race was not injected exactly once")
 	}
 	if mode == "stale_witness_unredeemed_original_retry" {
 		assertNativeReleaseStaleWitnessRetry(t, ctx, db, realm, victimUID, staleWitness.Load(), adapterLog)

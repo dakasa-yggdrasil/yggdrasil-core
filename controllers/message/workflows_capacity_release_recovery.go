@@ -36,6 +36,66 @@ type capacityReleaseOriginalReply struct {
 	CallerJoined bool
 }
 
+// Recollect only an RV race of the same native lifetime, before minting any
+// authority. Every frame has fresh full reads under the original owner fence;
+// incomplete membership, identity drift and failed reads remain HOLD. This
+// read-only budget cannot reset the separate four-command permanent history.
+func capacityReleaseRecoveryFrame(p model.CapacityPolicySpec, cp model.CapacityNativePodCheckpoint, fence func() error, observe func(model.CapacityNativePodCheckpoint) (model.AdapterCapacityPodTerminationResponse, error), hpa func() (model.CapacityHPAEnvelopeResponse, error), inventory func() (model.AdapterCapacityPodInventoryResponse, error)) (model.AdapterCapacityPodTerminationResponse, model.CapacityHPAEnvelopeResponse, model.AdapterCapacityPodInventoryResponse, error) {
+	refuse := func(err error) (model.AdapterCapacityPodTerminationResponse, model.CapacityHPAEnvelopeResponse, model.AdapterCapacityPodInventoryResponse, error) {
+		return model.AdapterCapacityPodTerminationResponse{}, model.CapacityHPAEnvelopeResponse{}, model.AdapterCapacityPodInventoryResponse{}, err
+	}
+	for frame := 0; frame < 4; frame++ {
+		if err := fence(); err != nil {
+			return refuse(err)
+		}
+		witness, err := observe(cp)
+		if err != nil {
+			return refuse(err)
+		}
+		if capacity.NativePodWitness(p, cp, witness.Observation, time.Now().UTC()) != nil {
+			return refuse(errCapacityBoundAssessment)
+		}
+		if err = fence(); err != nil {
+			return refuse(err)
+		}
+		currentHPA, err := hpa()
+		if err != nil {
+			return refuse(err)
+		}
+		if err = fence(); err != nil {
+			return refuse(err)
+		}
+		currentInventory, err := inventory()
+		if err != nil {
+			return refuse(err)
+		}
+		if err = fence(); err != nil {
+			return refuse(err)
+		}
+		now := time.Now().UTC()
+		if capacity.NativePodInventory(p, currentInventory, now) != nil {
+			return refuse(errCapacityBoundAssessment)
+		}
+		found, sameVersion := false, false
+		for _, pod := range currentInventory.Pods {
+			if pod.PodUID != cp.PodUID {
+				continue
+			}
+			if capacity.NativePodMatchesCheckpoint(p, cp, pod, now) != nil {
+				return refuse(errCapacityBoundAssessment)
+			}
+			found, sameVersion = true, pod.PodResourceVersion == witness.Observation.PodResourceVersion
+		}
+		if !found {
+			return refuse(errCapacityBoundAssessment)
+		}
+		if sameVersion {
+			return witness, currentHPA, currentInventory, nil
+		}
+	}
+	return refuse(errCapacityBoundAssessment)
+}
+
 // This is an explicit controller branch, not the original unredeemed-token
 // retry loop. Every recovery admission has a new durable parent/fence/command.
 // Only an original release proven unredeemed may be followed by a new original.
@@ -60,7 +120,15 @@ func runCapacityReleaseRecovery(ctx context.Context, store repository.CapacitySt
 		if err := fence(); err != nil {
 			return err
 		}
-		witness, err := observe(cp)
+		var witness model.AdapterCapacityPodTerminationResponse
+		var currentHPA model.CapacityHPAEnvelopeResponse
+		var currentInventory model.AdapterCapacityPodInventoryResponse
+		var err error
+		if parent == nil {
+			witness, err = observe(cp)
+		} else {
+			witness, currentHPA, currentInventory, err = capacityReleaseRecoveryFrame(p, cp, fence, observe, hpa, inventory)
+		}
 		if err != nil || capacity.NativePodWitness(p, cp, witness.Observation, time.Now().UTC()) != nil {
 			return errCapacityBoundAssessment
 		}
@@ -89,14 +157,6 @@ func runCapacityReleaseRecovery(ctx context.Context, store repository.CapacitySt
 		} else {
 			// Current full native census and HPA are independent of the failed
 			// CAS. No scalar caller proof or old resource version is reused.
-			currentHPA, e := hpa()
-			if e != nil {
-				return e
-			}
-			currentInventory, e := inventory()
-			if e != nil {
-				return e
-			}
 			if err = fence(); err != nil {
 				return err
 			}

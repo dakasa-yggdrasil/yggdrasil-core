@@ -173,7 +173,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message ./controllers/httpapi ./addons -run '^(TestCapacity(Intent.*|Workflow|Mutation.*|NativeLifetime)Postgres|TestCapacityNativeAdapter(OriginalHTTP|LegacyHTTPPreserved)|TestCapacityGuestNativeAdapterOriginalHTTP|TestCapacityGuestNativeDescribeCanonicalCatalog|TestCapacityGuestCollectorProtocolPostgres|TestCapacityDispatch(Postgres|AuthorizationPostgres|OriginalTransportPostgres|SchedulerPostgres|DemandPostgres)|TestCapacityNativeReleaseRecoveryPostgres|TestCapacityNativeReleaseOriginalUnredeemedPostgres|TestCapacityReleaseOriginalCaller|TestProcessMatchedTrigger_.*)$' | tee capacity-results.jsonl
+          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message ./controllers/httpapi ./addons -run '^(TestCapacity(Intent.*|Workflow|Mutation.*|NativeLifetime)Postgres|TestCapacityNativeAdapter(OriginalHTTP|LegacyHTTPPreserved)|TestCapacityGuestNativeAdapterOriginalHTTP|TestCapacityGuestNativeDescribeCanonicalCatalog|TestCapacityGuestCollectorProtocolPostgres|TestCapacityDispatch(Postgres|AuthorizationPostgres|OriginalTransportPostgres|SchedulerPostgres|DemandPostgres)|TestCapacityNativeReleaseRecoveryPostgres|TestCapacityNativeReleaseOriginalUnredeemedPostgres|TestCapacityReleaseOriginalCaller|TestCapacityReleaseRecoveryFrame|TestProcessMatchedTrigger_.*)$' | tee capacity-results.jsonl
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -213,6 +213,8 @@ jobs:
           expected|={original_unredeemed}|{original_unredeemed+'/'+name for name in ('unredeemed_revoked_fresh_original_identity','redeemed_original_not_revoked_hold')}
           caller='TestCapacityReleaseOriginalCaller'
           expected|={caller}|{caller+'/'+name for name in ('original_complete_return','held_original_close','original_close_failure','response_and_error_original_close','non200_no_ack')}
+          frame='TestCapacityReleaseRecoveryFrame'
+          expected|={frame}|{frame+'/'+name for name in ('matched_frame','version_race_fresh_frame','repeated_version_race_bounded_hold','incomplete_inventory_hold','identity_drift_hold','missing_target_hold','read_failure_hold','fence_revoked_hold','expired_owner_zero_reads')}
           lifetime="TestCapacityNativeLifetimePostgres"
           expected |= {lifetime} | {lifetime+"/"+name for name in ("jsonb_origin_and_actual_ack","terminal_archive_repeated_rollouts","alive_and_uncertain_never_archived","partial_terminal_never_archived")}
           native = "TestCapacityMutationNativeWorkflowPostgres"
