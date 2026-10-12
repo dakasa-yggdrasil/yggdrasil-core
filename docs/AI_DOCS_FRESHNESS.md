@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 363b1c1b74f82cffd5c8dd69b7335dcf263b08e0
-verified_diff_sha256: 2fea9cd90fde5bd8f82bc5e14920ff71a3ca6ece1b324c4cfdc860fa058ff89e
+verified_at_commit: f0500f3ac077847e65baa8307cbaf2493003ed8d
+verified_diff_sha256: 3267b08f92cd17f0c5b6d3b72ae988fbb8f2ac344de96205845f4485ead3b98a
 reconciler_schema: 1
 verified_at: 2026-10-10
 by: Codex
@@ -65,3 +65,5 @@ Source `906bef8ec4ff1a1d31a10962512ad42d5a61c54c` lets the original Notify roste
 ## Kind qualification pinned to the witnessed-version Kube release
 
 Source `363b1c1b74f82cffd5c8dd69b7335dcf263b08e0` repins the integration-kubernetes source of the protected native Kind qualification from `3fd6f9bedeceefa846058642b485a89542111c6d` to `f14310e53e4a12731a4310da5dc636b9dc1d2c1c` in the job SOURCE_COMMIT, the adapter checkout ref and the checked-out HEAD assertion; the compiled `NativeSourceCommit`, the instance `native_release_source_commit` and the policy release recovery binding follow that one value. The new Kube source keeps the local name, namespace, UID, generation and permit checks after redemption but sends the release PUT with the witnessed resourceVersion, so a later write such as the kubelet's final graceful delete returns the genuine native Conflict409 that `native_release_result_v1` already recovers. Its fixture trees are unchanged. No Core source, oracle or recovery semantics changed. Current own Core CI is pending; no local tests, build, vet or production activation ran.
+
+core_recovery_frame_source_review: Independently reviewed the complete six-source CORE-OBS-R1 batch. Recovery recollects at most four fresh complete same-lifetime native frames before authority when resource versions diverge, under the original fence and deadline. Incomplete membership, identity drift and failed reads remain HOLD. Permanent four-command identities, dual original ACKs, current HPA/catalog/RBAC checks and immutable rejected parents remain unchanged. Nine mandatory source cases and a genuine KinD witness-to-inventory race extend the existing census. The mechanically adopted Prometheus CODE b14ffab preserves the unguarded closed response ABI and original lifecycle cases; no contributor query or policy flag is activated. Genuine generated metadata binds final CODE f0500f3ac077847e65baa8307cbaf2493003ed8d. Owning Core CI and the later Notify repin remain pending; source review is not operational elasticity. No local functional execution, merge, image publication or production mutation occurred.
