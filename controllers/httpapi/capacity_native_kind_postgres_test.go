@@ -766,6 +766,19 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 		meta := pod["metadata"].(map[string]any)
 		return meta["uid"] == victimUID && meta["deletionTimestamp"] != nil
 	})
+	// Read-only diagnostics, never an oracle: every later version of the victim
+	// Pod with its arrival time and the managedFields entry it adds, and on
+	// failure the durable release ledger of that Pod. They name the window and
+	// the writer of an advanced resourceVersion; they decide nothing.
+	victimVersions := nativeKindWatchPod(t, ctx, realm, victimName)
+	defer func() {
+		for _, line := range nativeKindPodTimelineLines(victimVersions()) {
+			t.Logf("native victim pod version %s", line)
+		}
+		if t.Failed() {
+			nativeKindLogReleaseLedger(t, db, realm, victimUID)
+		}
+	}()
 	var cpRaw []byte
 	if db.QueryRowContext(ctx, `SELECT checkpoint_record FROM public.capacity_native_lifetimes WHERE namespace=$1 AND pod_uid=$2`, realm, victimUID).Scan(&cpRaw) != nil {
 		t.Fatal("controller selected an unretained baseline")
@@ -1002,16 +1015,17 @@ func nativeKindReleaseSnapshot(t *testing.T, ctx context.Context, db *sql.DB, re
 				rows.Close()
 				t.Fatal("original release operation or current process identity changed")
 			}
-			if command.State == "confirmed" {
+			switch command.State {
+			case "confirmed":
 				var readback model.AdapterCapacityPodTerminationResponse
 				if capacity.DecodeNativeCapacity(command.NativeReadback, &readback) != nil || readback.Operation != capacity.ObserveNativePodTermination || readback.Status != "observed" || readback.Observation.State != "unprotected" || readback.Observation.PodUID != subject || capacity.NativePodReleaseTarget(p, checkpoint, readback.Observation, command.UpdatedAt) != nil {
 					rows.Close()
 					t.Fatal("original confirmed release lacks the exact completed native removal readback")
 				}
 				confirmed++
-			} else if command.State == "refused_no_redemption" {
+			case "refused_no_redemption":
 				refused++
-			} else if command.State == "rejected_no_effect" {
+			case "rejected_no_effect":
 				rejected++
 			}
 		}

@@ -8,6 +8,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"encoding/pem"
+	"errors"
 	"fmt"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -20,7 +21,10 @@ import (
 	"os"
 	"os/exec"
 	"path/filepath"
+	"sort"
+	"strconv"
 	"strings"
+	"sync"
 	"sync/atomic"
 	"testing"
 	"time"
@@ -133,7 +137,7 @@ func nativeReleaseConflictProxy(t *testing.T, ctx context.Context, path, realm s
 		t.Fatal("original operator transport unavailable")
 	}
 	rc = rest.CopyConfig(rc)
-	rc.TLSClientConfig.NextProtos = []string{"http/1.1"}
+	rc.NextProtos = []string{"http/1.1"}
 	transport, err := rest.TransportFor(rc)
 	if err != nil {
 		t.Fatal("original operator auth unavailable")
@@ -351,4 +355,354 @@ func nativeReleaseIdentityCount(t *testing.T, ctx context.Context, db *sql.DB, r
 		t.Fatal("complete original native identity census unavailable")
 	}
 	return n
+}
+
+// One event of `kubectl get pod --watch --output-watch-events
+// --show-managed-fields -o json` for the victim Pod.
+type nativeKindPodWatchEvent struct {
+	Type   string `json:"type"`
+	Object struct {
+		Metadata struct {
+			ResourceVersion            string            `json:"resourceVersion"`
+			DeletionGracePeriodSeconds *int64            `json:"deletionGracePeriodSeconds"`
+			Finalizers                 []string          `json:"finalizers"`
+			Annotations                map[string]string `json:"annotations"`
+			ManagedFields              []struct {
+				Manager     string `json:"manager"`
+				Operation   string `json:"operation"`
+				Subresource string `json:"subresource"`
+				Time        string `json:"time"`
+			} `json:"managedFields"`
+		} `json:"metadata"`
+		Status json.RawMessage `json:"status"`
+	} `json:"object"`
+}
+
+type nativeKindPodWatchStatus struct {
+	Phase      string `json:"phase"`
+	Conditions []struct {
+		Type   string `json:"type"`
+		Status string `json:"status"`
+	} `json:"conditions"`
+	ContainerStatuses []struct {
+		Ready bool                       `json:"ready"`
+		State map[string]json.RawMessage `json:"state"`
+	} `json:"containerStatuses"`
+}
+
+// One version of the victim Pod, as diagnostics only and never an oracle.
+// Annotation values (the drain challenge among them) and the complete status
+// appear only as a short digest, so a rewrite under an unchanged key or field
+// list is still visible without printing the value.
+type nativeKindPodVersion struct {
+	at      time.Time
+	event   string
+	facts   map[string]string
+	writers []string
+}
+
+var nativeKindPodFactKeys = []string{"grace", "phase", "containers", "conditions", "status", "finalizers", "annotations"}
+
+func nativeKindPodVersionOf(at time.Time, e nativeKindPodWatchEvent) nativeKindPodVersion {
+	m := e.Object.Metadata
+	grace := "unset"
+	if m.DeletionGracePeriodSeconds != nil {
+		grace = strconv.FormatInt(*m.DeletionGracePeriodSeconds, 10)
+	}
+	annotations := []string{}
+	for key, value := range m.Annotations {
+		digest := sha256.Sum256([]byte(value))
+		annotations = append(annotations, fmt.Sprintf("%s#%.4x", key, digest[:]))
+	}
+	sort.Strings(annotations)
+	var status nativeKindPodWatchStatus
+	var compact bytes.Buffer
+	statusDigest := "undecoded"
+	if json.Compact(&compact, e.Object.Status) == nil && json.Unmarshal(e.Object.Status, &status) == nil {
+		digest := sha256.Sum256(compact.Bytes())
+		statusDigest = fmt.Sprintf("%.4x", digest[:])
+	}
+	conditions := []string{}
+	for _, c := range status.Conditions {
+		conditions = append(conditions, c.Type+"="+c.Status)
+	}
+	sort.Strings(conditions)
+	containers := []string{}
+	for _, c := range status.ContainerStatuses {
+		states := []string{}
+		for state := range c.State {
+			states = append(states, state)
+		}
+		sort.Strings(states)
+		containers = append(containers, strings.Join(states, "+")+"/ready="+strconv.FormatBool(c.Ready))
+	}
+	writers := []string{}
+	for _, f := range m.ManagedFields {
+		writers = append(writers, f.Manager+"/"+f.Operation+"/"+f.Subresource+"@"+f.Time)
+	}
+	sort.Strings(writers)
+	return nativeKindPodVersion{at: at, event: e.Type, writers: writers, facts: map[string]string{"rv": m.ResourceVersion, "grace": grace, "phase": status.Phase, "containers": strings.Join(containers, ","), "conditions": strings.Join(conditions, ","), "status": statusDigest, "finalizers": strings.Join(m.Finalizers, ","), "annotations": strings.Join(annotations, ",")}}
+}
+
+// The facts that differ between two versions and every managedFields entry
+// (manager/operation/subresource@time) the later version adds. A version that
+// changes grace and adds no entry is only reported, not attributed here.
+func nativeKindPodVersionChanges(previous, current nativeKindPodVersion) []string {
+	changed := []string{}
+	for _, key := range nativeKindPodFactKeys {
+		if previous.facts[key] != current.facts[key] {
+			changed = append(changed, key)
+		}
+	}
+	seen := map[string]bool{}
+	for _, writer := range previous.writers {
+		seen[writer] = true
+	}
+	for _, writer := range current.writers {
+		if !seen[writer] {
+			changed = append(changed, "writer="+writer)
+		}
+	}
+	return changed
+}
+
+// Successive watch events in arrival order. A stream cut by the watch stop
+// keeps every complete event before the cut and returns its decode error.
+func nativeKindDecodePodWatch(r io.Reader, now func() time.Time, record func(nativeKindPodVersion)) error {
+	decoder := json.NewDecoder(r)
+	for {
+		var event nativeKindPodWatchEvent
+		if err := decoder.Decode(&event); err != nil {
+			if errors.Is(err, io.EOF) {
+				return nil
+			}
+			return err
+		}
+		record(nativeKindPodVersionOf(now(), event))
+	}
+}
+
+func nativeKindPodTimelineLines(versions []nativeKindPodVersion) []string {
+	lines := make([]string, 0, len(versions))
+	for i, v := range versions {
+		changed := "first"
+		if i > 0 {
+			changed = strings.Join(nativeKindPodVersionChanges(versions[i-1], v), ";")
+		}
+		lines = append(lines, fmt.Sprintf("#%d at=%s event=%s rv=%s grace=%s phase=%s containers=%s conditions=%s status=%s finalizers=%s annotations=%s changed=%s writers=%s", i, v.at.Format(time.RFC3339Nano), v.event, v.facts["rv"], v.facts["grace"], v.facts["phase"], v.facts["containers"], v.facts["conditions"], v.facts["status"], v.facts["finalizers"], v.facts["annotations"], changed, strings.Join(v.writers, ",")))
+	}
+	return lines
+}
+
+// Read-only watch of one Pod from now on, with the local arrival time of each
+// version. It never writes. A watch that cannot start is logged, never failed:
+// it is diagnostics for the unknown resourceVersion writer, not an oracle. The
+// stop line carries the last 2 KiB of kubectl stderr, so a watch that exits
+// after Start still names its reason; WaitDelay bounds Wait on that copy.
+func nativeKindWatchPod(t *testing.T, parent context.Context, realm, name string) func() []nativeKindPodVersion {
+	t.Helper()
+	ctx, cancel := context.WithCancel(parent)
+	cmd := exec.CommandContext(ctx, "kubectl", "-n", realm, "get", "pod", name, "--watch", "--output-watch-events", "--show-managed-fields", "-o", "json")
+	var stderr bytes.Buffer
+	cmd.Stderr = &stderr
+	cmd.WaitDelay = 5 * time.Second
+	stdout, err := cmd.StdoutPipe()
+	if err == nil {
+		err = cmd.Start()
+	}
+	if err != nil {
+		cancel()
+		t.Logf("native victim pod watch unavailable: %v", err)
+		return func() []nativeKindPodVersion { return nil }
+	}
+	var mu sync.Mutex
+	versions := []nativeKindPodVersion{}
+	var decodeErr error
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		err := nativeKindDecodePodWatch(stdout, func() time.Time { return time.Now().UTC() }, func(v nativeKindPodVersion) {
+			mu.Lock()
+			versions = append(versions, v)
+			mu.Unlock()
+		})
+		mu.Lock()
+		decodeErr = err
+		mu.Unlock()
+	}()
+	var once sync.Once
+	var out []nativeKindPodVersion
+	return func() []nativeKindPodVersion {
+		once.Do(func() {
+			cancel()
+			select {
+			case <-done:
+			case <-time.After(5 * time.Second):
+			}
+			waitErr := cmd.Wait()
+			<-done
+			reason := stderr.Bytes()
+			if len(reason) > 2048 {
+				reason = reason[len(reason)-2048:]
+			}
+			mu.Lock()
+			out = append([]nativeKindPodVersion(nil), versions...)
+			stopErr := decodeErr
+			mu.Unlock()
+			t.Logf("native victim pod watch stopped versions=%d decode=%v wait=%v stderr=%q", len(out), stopErr, waitErr, reason)
+		})
+		return out
+	}
+}
+
+// Durable facts of every release identity of one Pod (hot or archived), its
+// original result and decisions, the durable inputs of the recovery admission
+// predicate (parent state, protocol, caller return, expiry, result digest and
+// deadline equality, intent generation, fence and lease), the intent and its
+// recent phase events, and the latest durable witness. States, resource
+// versions, times and equality booleans only: no token, nonce, digest value,
+// request or result body.
+func nativeKindLogReleaseLedger(t *testing.T, db *sql.DB, realm, subject string) {
+	t.Helper()
+	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+	rows, err := db.QueryContext(ctx, `SELECT i.sequence,COALESCE(c.command_record,a.command_record),c.id IS NOT NULL,r.command_id IS NOT NULL,COALESCE(r.adapter_result->>'outcome',''),COALESCE(r.adapter_result->>'original_status',''),r.adapter_ack_at IS NOT NULL,r.caller_ack_at IS NOT NULL,(SELECT count(*) FROM public.capacity_native_release_recovery_decisions d WHERE d.parent_command_id=i.id),(SELECT count(*) FROM public.capacity_native_release_recovery_decisions d WHERE d.command_id=i.id),i.generation,COALESCE(c.state,''),c.updated_at,COALESCE(r.adapter_result_sha256=(COALESCE(c.command_record,a.command_record)->>'original_result_sha256'),false),COALESCE(r.original_deadline=(COALESCE(c.command_record,a.command_record)->>'expires_at')::timestamptz,false) FROM public.capacity_native_command_identities i LEFT JOIN public.capacity_native_commands c ON c.id=i.id LEFT JOIN public.capacity_native_command_archive a ON a.id=i.id LEFT JOIN public.capacity_native_release_results r ON r.command_id=i.id WHERE i.namespace=$1 AND i.subject_uid=$2 AND i.operation=$3 AND i.phase='release' ORDER BY i.sequence`, realm, subject, capacity.DestroyNativePodProtection)
+	if err != nil {
+		t.Logf("native release ledger unavailable: %v", err)
+		return
+	}
+	identities := 0
+	for rows.Next() {
+		var sequence, parentOf, childOf int
+		var generation int64
+		var record []byte
+		var hot, result, adapterACK, callerACK, resultDigestMatches, deadlineMatches bool
+		var outcome, status, hotState string
+		var hotUpdatedAt sql.NullTime
+		if err := rows.Scan(&sequence, &record, &hot, &result, &outcome, &status, &adapterACK, &callerACK, &parentOf, &childOf, &generation, &hotState, &hotUpdatedAt, &resultDigestMatches, &deadlineMatches); err != nil {
+			rows.Close()
+			t.Logf("native release ledger row unavailable: %v", err)
+			return
+		}
+		identities++
+		var command model.CapacityNativeCommand
+		var request model.AdapterDestroyCapacityPodDrainProtectionRequest
+		decodeErr := json.Unmarshal(record, &command)
+		if decodeErr == nil {
+			decodeErr = json.Unmarshal(command.Request, &request)
+		}
+		hotUpdated, callerReturn := "archived", "unset"
+		if hotUpdatedAt.Valid {
+			hotUpdated = hotUpdatedAt.Time.UTC().Format(time.RFC3339Nano)
+		}
+		if command.CallerReturnObservedAt != nil {
+			callerReturn = command.CallerReturnObservedAt.UTC().Format(time.RFC3339Nano)
+		}
+		t.Logf("native release ledger seq=%d hot=%t decode=%v state=%s redeemed=%t attempt=%t parent=%t created=%s updated=%s expected_rv=%s result=%t outcome=%s original_status=%s adapter_ack=%t caller_ack=%t decisions_as_parent=%d decisions_as_child=%d", sequence, hot, decodeErr, command.State, command.RedeemedBy != "", command.AttemptID != uuid.Nil, command.ParentCommandID != "", command.CreatedAt.Format(time.RFC3339Nano), command.UpdatedAt.Format(time.RFC3339Nano), request.ExpectedPodResourceVersion, result, outcome, status, adapterACK, callerACK, parentOf, childOf)
+		t.Logf("native release ledger admission seq=%d generation=%d hot_state=%s hot_updated_at=%s intent_generation=%d fencing=%d protocol=%t caller_return_observed_at=%s expires_at=%s result_digest_matches=%t deadline_matches=%t", sequence, generation, hotState, hotUpdated, command.IntentGeneration, command.FencingToken, command.ReleaseProtocol == capacity.NativeReleaseResultProtocol, callerReturn, command.ExpiresAt.UTC().Format(time.RFC3339Nano), resultDigestMatches, deadlineMatches)
+	}
+	err = rows.Err()
+	rows.Close()
+	t.Logf("native release ledger identities=%d rows=%v", identities, err)
+	var intentPhase, intentGeneration, intentFencing, leaseExpiresAt, recoveryOnly string
+	var intentUpdatedAt time.Time
+	if err := db.QueryRowContext(ctx, `SELECT COALESCE(intent->>'phase',''),COALESCE(intent->>'generation',''),COALESCE(intent->>'fencing_token',''),COALESCE(intent->>'lease_expires_at',''),COALESCE(intent->>'recovery_only',''),updated_at FROM public.capacity_intents WHERE namespace=$1 ORDER BY updated_at DESC LIMIT 1`, realm).Scan(&intentPhase, &intentGeneration, &intentFencing, &leaseExpiresAt, &recoveryOnly, &intentUpdatedAt); err != nil {
+		t.Logf("native release ledger intent unavailable: %v", err)
+	} else {
+		t.Logf("native release ledger intent phase=%s generation=%s fencing=%s lease_expires_at=%s recovery_only=%s updated_at=%s", intentPhase, intentGeneration, intentFencing, leaseExpiresAt, recoveryOnly, intentUpdatedAt.UTC().Format(time.RFC3339Nano))
+	}
+	events, err := db.QueryContext(ctx, `SELECT e.generation,e.fencing_token,e.phase,e.recorded_at FROM (SELECT id,generation,fencing_token,phase,recorded_at FROM public.capacity_intent_events WHERE namespace=$1 ORDER BY id DESC LIMIT 16) e ORDER BY e.id`, realm)
+	if err != nil {
+		t.Logf("native release ledger intent events unavailable: %v", err)
+	} else {
+		for events.Next() {
+			var eventGeneration, eventFencing int64
+			var eventPhase string
+			var recordedAt time.Time
+			if err := events.Scan(&eventGeneration, &eventFencing, &eventPhase, &recordedAt); err != nil {
+				t.Logf("native release ledger intent event unavailable: %v", err)
+				break
+			}
+			t.Logf("native release ledger intent event generation=%d fencing=%d phase=%s recorded_at=%s", eventGeneration, eventFencing, eventPhase, recordedAt.UTC().Format(time.RFC3339Nano))
+		}
+		t.Logf("native release ledger intent events rows=%v", events.Err())
+		events.Close()
+	}
+	checkpoints, err := db.QueryContext(ctx, `SELECT checkpoint_record FROM public.capacity_native_lifetimes WHERE namespace=$1 AND pod_uid=$2 UNION ALL SELECT bundle_record->'checkpoint' FROM public.capacity_native_lifetime_archive WHERE namespace=$1 AND pod_uid=$2`, realm, subject)
+	if err != nil {
+		t.Logf("native release ledger checkpoint unavailable: %v", err)
+		return
+	}
+	defer checkpoints.Close()
+	for checkpoints.Next() {
+		var raw []byte
+		if err := checkpoints.Scan(&raw); err != nil {
+			t.Logf("native release ledger checkpoint row unavailable: %v", err)
+			return
+		}
+		var cp model.CapacityNativePodCheckpoint
+		var witness model.AdapterCapacityPodTerminationResponse
+		decodeErr := json.Unmarshal(raw, &cp)
+		if decodeErr == nil {
+			decodeErr = json.Unmarshal(cp.NativeTerminationReceipt, &witness)
+		}
+		confirmed := "unset"
+		if cp.ConfirmedAt != nil {
+			confirmed = cp.ConfirmedAt.Format(time.RFC3339Nano)
+		}
+		t.Logf("native release ledger checkpoint decode=%v state=%s rv=%s confirmed_at=%s witness_rv=%s witness_observed_at=%s", decodeErr, cp.State, cp.PodResourceVersion, confirmed, witness.Observation.PodResourceVersion, witness.Observation.ObservedAt.Format(time.RFC3339Nano))
+	}
+	if err := checkpoints.Err(); err != nil {
+		t.Logf("native release ledger checkpoint rows: %v", err)
+	}
+}
+
+// The victim Pod timeline is diagnostics only. It must keep arrival order,
+// name the managedFields entry each Update adds, show a grace-only version
+// that adds no entry, reduce annotation values to a digest, and keep every
+// complete version before a cut stream while returning the cut.
+func TestNativeKindPodTimelineNamesEachWriter(t *testing.T) {
+	const base = `"finalizers":["yggdrasil.io/capacity-native-termination","qualification.dakasa.io/held-native-deletion"],"annotations":{"fixture.yggdrasil.io/challenge":"private-challenge-value"}`
+	const controller = `{"manager":"kube-controller-manager","operation":"Update","time":"2026-10-12T02:12:30Z"}`
+	const kubelet = `{"manager":"kubelet","operation":"Update","subresource":"status","time":"2026-10-12T02:12:38Z"}`
+	const running = `"status":{"phase":"Running","conditions":[{"type":"Ready","status":"False"}],"containerStatuses":[{"ready":false,"state":{"terminated":{"exitCode":0}}}]}`
+	const succeeded = `"status":{"phase":"Succeeded","conditions":[{"type":"Ready","status":"False"}],"containerStatuses":[{"ready":false,"state":{"terminated":{"exitCode":0}}}]}`
+	stream := `{"type":"ADDED","object":{"metadata":{"resourceVersion":"10","deletionGracePeriodSeconds":30,` + base + `,"managedFields":[` + controller + `]},` + running + `}}
+{"type":"MODIFIED","object":{"metadata":{"resourceVersion":"11","deletionGracePeriodSeconds":30,` + base + `,"managedFields":[` + controller + `,` + kubelet + `]},` + succeeded + `}}
+{"type":"MODIFIED","object":{"metadata":{"resourceVersion":"12","deletionGracePeriodSeconds":0,` + base + `,"managedFields":[` + controller + `,` + kubelet + `]},` + succeeded + `}}
+{"type":"MODIFIED","object":{"metadata":{"resourceVersion":"13"`
+	tick := time.Date(2026, 10, 12, 2, 12, 39, 0, time.UTC)
+	versions := []nativeKindPodVersion{}
+	err := nativeKindDecodePodWatch(strings.NewReader(stream), func() time.Time { tick = tick.Add(time.Millisecond); return tick }, func(v nativeKindPodVersion) { versions = append(versions, v) })
+	if err == nil || len(versions) != 3 {
+		t.Fatal("cut watch stream lost a complete version or hid the cut", err, len(versions))
+	}
+	for i, rv := range []string{"10", "11", "12"} {
+		if versions[i].facts["rv"] != rv || (i > 0 && !versions[i].at.After(versions[i-1].at)) {
+			t.Fatal("victim versions lost their resourceVersion or arrival order", i)
+		}
+	}
+	if got := strings.Join(nativeKindPodVersionChanges(versions[0], versions[1]), ";"); got != "phase;status;writer=kubelet/Update/status@2026-10-12T02:12:38Z" {
+		t.Fatal("status version did not name its writer", got)
+	}
+	if got := strings.Join(nativeKindPodVersionChanges(versions[1], versions[2]), ";"); got != "grace" {
+		t.Fatal("grace-only version was attributed or widened", got)
+	}
+	digest := sha256.Sum256([]byte("private-challenge-value"))
+	lines := nativeKindPodTimelineLines(versions)
+	if len(lines) != 3 || !strings.Contains(lines[0], "changed=first") || !strings.Contains(lines[0], "containers=terminated/ready=false") || !strings.Contains(lines[0], "conditions=Ready=False") || !strings.Contains(lines[0], fmt.Sprintf("annotations=fixture.yggdrasil.io/challenge#%.4x", digest[:])) || !strings.Contains(lines[2], "rv=12 grace=0 phase=Succeeded") || !strings.Contains(lines[2], "changed=grace writers=") {
+		t.Fatal("victim timeline lines lost a fact", lines)
+	}
+	for _, line := range lines {
+		if strings.Contains(line, "private-challenge-value") {
+			t.Fatal("victim timeline printed an annotation value")
+		}
+	}
+	empty := []nativeKindPodVersion{}
+	if err := nativeKindDecodePodWatch(strings.NewReader(""), time.Now, func(v nativeKindPodVersion) { empty = append(empty, v) }); err != nil || len(empty) != 0 {
+		t.Fatal("empty watch stream invented a version", err, len(empty))
+	}
+	if err := nativeKindDecodePodWatch(strings.NewReader("not-json"), time.Now, func(v nativeKindPodVersion) { empty = append(empty, v) }); err == nil || len(empty) != 0 {
+		t.Fatal("malformed watch stream was accepted", len(empty))
+	}
 }
