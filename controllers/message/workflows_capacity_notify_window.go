@@ -309,9 +309,12 @@ func originalNotifyRoster(ctx context.Context, p model.CapacityPolicySpec, call 
 	if err != nil || after.WorkloadUID != before.WorkloadUID || after.WorkloadResourceVersion != before.WorkloadResourceVersion {
 		return result, errors.Join(errCapacityBoundAssessment, err)
 	}
+	// The after LIST proves membership and identity only. Its candidates never
+	// carry the admission readiness bit; each participant's readiness was
+	// already required against its own admission frame above.
 	for _, pod := range after.Candidates {
 		original, exists := byName[pod.PodName]
-		if !exists || !originalNotifyPodSame(original, pod) {
+		if !exists || !originalNotifyCandidateSame(original, pod) {
 			return result, errCapacityBoundAssessment
 		}
 	}
@@ -323,8 +326,16 @@ func originalNotifyRoster(ctx context.Context, p model.CapacityPolicySpec, call 
 	return result, capacityDispatchFence(ctx)
 }
 
+// A membership LIST candidate (observe_capacity_pod_admission_candidates)
+// never carries admission readiness; only a single-Pod admission read does.
+// Identity and liveness stay exact here, without the readiness bit.
+func originalNotifyCandidateSame(a, b model.NativeTerminationObservation) bool {
+	return a.PodName == b.PodName && a.PodUID == b.PodUID && a.Namespace == b.Namespace && a.PodGeneration == b.PodGeneration && a.ContainerID == b.ContainerID && a.StartedAt != nil && b.StartedAt != nil && a.StartedAt.Equal(*b.StartedAt) && a.RestartCount == b.RestartCount && a.ImageDigest == b.ImageDigest && a.WorkloadUID == b.WorkloadUID && a.WorkloadResourceVersion == b.WorkloadResourceVersion && b.ContainerState == "running" && b.DeletionRequestedAt == nil && b.Protected
+}
+
+// The comparison against an admission frame keeps requiring its readiness.
 func originalNotifyPodSame(a, b model.NativeTerminationObservation) bool {
-	return a.PodName == b.PodName && a.PodUID == b.PodUID && a.Namespace == b.Namespace && a.PodGeneration == b.PodGeneration && a.ContainerID == b.ContainerID && a.StartedAt != nil && b.StartedAt != nil && a.StartedAt.Equal(*b.StartedAt) && a.RestartCount == b.RestartCount && a.ImageDigest == b.ImageDigest && a.WorkloadUID == b.WorkloadUID && a.WorkloadResourceVersion == b.WorkloadResourceVersion && b.ContainerState == "running" && b.DeletionRequestedAt == nil && b.Protected && b.AdmissionReady
+	return originalNotifyCandidateSame(a, b) && b.AdmissionReady
 }
 
 func originalNotifySameRoster(a, b OriginalNotifyNativeRoster) bool {

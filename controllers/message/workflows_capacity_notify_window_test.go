@@ -388,3 +388,217 @@ func TestCapacityOriginalNotifyWindowSource(t *testing.T) {
 		}
 	})
 }
+
+// The approved integration-kubernetes supplier (3fd6f9be) answers the
+// membership LIST with qualified candidates whose admission_ready stays
+// false; only the single-Pod admission read carries readiness. These cases
+// drive the original roster through exactly those reply shapes and the
+// production closed decoder. DECLARED protocol fixture: no Pod, SDK or native
+// capacity is created and nothing here is capacity proof.
+type originalNotifyRosterFixture struct {
+	now       time.Time
+	workload  string
+	image     string
+	adapter   model.CapacityObservationAdapterBinding
+	policy    model.CapacityPolicySpec
+	publisher model.NativeTerminationObservation
+	consumer  model.NativeTerminationObservation
+}
+
+func newOriginalNotifyRosterFixture() originalNotifyRosterFixture {
+	f := originalNotifyRosterFixture{now: time.Now().UTC(), workload: uuid.NewString(), image: "sha256:" + strings.Repeat("a", 64)}
+	f.adapter = model.CapacityObservationAdapterBinding{IntegrationInstanceID: "kubernetes-native", InstanceChecksum: strings.Repeat("1", 64), IntegrationTypeID: "integration-kubernetes", TypeChecksum: strings.Repeat("2", 64)}
+	f.policy = model.CapacityPolicySpec{
+		MaxEvidenceAgeSeconds:     60,
+		AssessmentBinding:         &model.CapacityBoundAssessmentBinding{Snapshot: model.CapacityHPAMinimumBinding{Namespace: "native", WorkloadUID: f.workload}},
+		HPAExecutionBinding:       &model.CapacityHPAExecutionBinding{Mode: capacity.HPALifetimeExecutionMode, PodTerminationBinding: "notify-native", AdmissionMode: "process_v2", ContainerName: "api", ImageDigest: f.image, Lanes: []string{"listener"}},
+		NativeNotifyWindowBinding: &model.CapacityNativeNotifyWindowBinding{Mode: originalNotifyWindowMode, Adapter: f.adapter, NativeNamespace: "native", NativeBindingName: "notify-native", Participants: []model.CapacityNativeNotifyParticipant{{PodName: "notify-a", Origin: "a", Role: "publisher_reader"}, {PodName: "notify-b", Origin: "b", Role: "consumer"}}},
+	}
+	f.publisher, f.consumer = f.candidate("notify-a"), f.candidate("notify-b")
+	return f
+}
+
+// candidate mirrors the qualified value integration-kubernetes appends to a
+// membership LIST (capacity_pod_candidates.go:66-70 through
+// capacityAdmissionNativePod, capacity_pod_admission.go:128): protected,
+// running, and admission_ready left false.
+func (f originalNotifyRosterFixture) candidate(name string) model.NativeTerminationObservation {
+	start := f.now.Add(-time.Minute)
+	return model.NativeTerminationObservation{BindingName: "notify-native", Namespace: "native", PodName: name, PodUID: uuid.NewString(), PodResourceVersion: "7", PodGeneration: 0, WorkloadUID: f.workload, WorkloadResourceVersion: "11", ContainerName: "api", ContainerID: "containerd://" + name, ImageID: "registry.fixture/notify@" + f.image, ImageDigest: f.image, RestartCount: 0, StartedAt: &start, Protected: true, ContainerState: "running", State: "running", Reason: "exact_native_admission_lifetime", ObservedAt: f.now}
+}
+
+func (f originalNotifyRosterFixture) list(pods ...model.NativeTerminationObservation) model.AdapterCapacityPodAdmissionCandidatesResponse {
+	return model.AdapterCapacityPodAdmissionCandidatesResponse{Operation: capacity.ObserveNativePodAdmissionCandidates, Status: "observed", BindingName: "notify-native", Namespace: "native", WorkloadUID: f.workload, WorkloadResourceVersion: "11", ListResourceVersion: "21", Complete: true, Candidates: append([]model.NativeTerminationObservation{}, pods...), Unqualified: []model.NativeTerminationObservation{}, ObservedAt: f.now, Metadata: map[string]any{"whole_baseline_qualified": false, "useful_capacity_known": false, "pressure_permission": false}}
+}
+
+// admission mirrors observeCapacityPodAdmissionWithClient: the same lifetime,
+// ready only when the roots_open frame and the readiness condition agree
+// (capacity_pod_admission.go:186-193).
+func (f originalNotifyRosterFixture) admission(pod model.NativeTerminationObservation, ready bool) model.AdapterCapacityPodAdmissionResponse {
+	process, lanes := uuid.NewString(), capacity.NativeRosterDigest(f.policy.HPAExecutionBinding.Lanes)
+	challenge := model.NativePodTerminationChallenge{SchemaVersion: 2, Namespace: pod.Namespace, PodName: pod.PodName, PodUID: pod.PodUID, WorkloadUID: pod.WorkloadUID, ContainerName: pod.ContainerName, ImageDigest: pod.ImageDigest, IntentGeneration: 1, DrainNonce: uuid.NewString(), IssuedAt: f.now.Add(-time.Second), LaneRosterSHA256: lanes, ProcessNonce: process}
+	observation := pod
+	observation.AdmissionReady = ready
+	frame := model.NativeProcessAdmissionObservation{SchemaVersion: 2, Namespace: pod.Namespace, PodName: pod.PodName, PodUID: pod.PodUID, ImageDigest: pod.ImageDigest, LaneRosterSHA256: lanes, ProcessNonce: process, ObservedAt: f.now, State: "roots_open", Challenge: &challenge, ChallengeSHA256: strings.Repeat("b", 64)}
+	return model.AdapterCapacityPodAdmissionResponse{Operation: capacity.ObserveNativePodAdmission, Status: "observed", Observation: observation, Admission: frame, Metadata: map[string]any{"useful_capacity_known": false, "warm_resources_known": false, "physical_capacity_released": false}}
+}
+
+// call answers through the production closed decoder, as the bound read
+// closure does with the adapter output (capacity.DecodeNativeCapacity).
+func (f originalNotifyRosterFixture) call(lists []model.AdapterCapacityPodAdmissionCandidatesResponse, admissions map[string]model.AdapterCapacityPodAdmissionResponse, operations *[]string) capacityBoundPrivateCall {
+	return func(binding model.CapacityObservationAdapterBinding, operation string, input map[string]any, out any) (string, error) {
+		*operations = append(*operations, operation)
+		if binding != f.adapter {
+			return "", errors.New("fixture foreign adapter")
+		}
+		var reply any
+		switch operation {
+		case capacity.ObserveNativePodAdmissionCandidates:
+			if len(lists) == 0 || input["binding_name"] != "notify-native" {
+				return "", errors.New("fixture unexpected candidate LIST")
+			}
+			reply, lists = lists[0], lists[1:]
+		case capacity.ObserveNativePodAdmission:
+			name, _ := input["pod_name"].(string)
+			value, exists := admissions[name]
+			if !exists || input["binding_name"] != "notify-native" || input["expected_pod_uid"] != value.Observation.PodUID {
+				return "", errors.New("fixture unexpected admission read")
+			}
+			reply = value
+		default:
+			return "", errors.New("fixture unexpected operation")
+		}
+		return "observed", capacity.DecodeNativeCapacity(reply, out)
+	}
+}
+
+func TestCapacityOriginalNotifyRosterKubernetesCandidates(t *testing.T) {
+	t.Run("readiness_required_only_against_admission_frame", func(t *testing.T) {
+		f := newOriginalNotifyRosterFixture()
+		ready := f.publisher
+		ready.AdmissionReady = true
+		if !originalNotifyCandidateSame(f.publisher, f.publisher) || !originalNotifyCandidateSame(f.publisher, ready) || originalNotifyPodSame(f.publisher, f.publisher) || !originalNotifyPodSame(f.publisher, ready) {
+			t.Fatal("membership identity and admission readiness predicates drifted")
+		}
+	})
+	// Upstream LIST validation refuses some drifts before the after loop runs,
+	// so each identity and liveness term is also refused on its own here.
+	t.Run("candidate_identity_terms_refuse_in_isolation", func(t *testing.T) {
+		f := newOriginalNotifyRosterFixture()
+		stamp, moved := f.now, f.now.Add(-30*time.Second)
+		for name, drift := range map[string]func(*model.NativeTerminationObservation){
+			"pod_name":                  func(pod *model.NativeTerminationObservation) { pod.PodName = "notify-c" },
+			"pod_uid":                   func(pod *model.NativeTerminationObservation) { pod.PodUID = uuid.NewString() },
+			"namespace":                 func(pod *model.NativeTerminationObservation) { pod.Namespace = "other" },
+			"pod_generation":            func(pod *model.NativeTerminationObservation) { pod.PodGeneration++ },
+			"container_id":              func(pod *model.NativeTerminationObservation) { pod.ContainerID = "containerd://replacement" },
+			"started_at_moved":          func(pod *model.NativeTerminationObservation) { pod.StartedAt = &moved },
+			"started_at_missing":        func(pod *model.NativeTerminationObservation) { pod.StartedAt = nil },
+			"restart_count":             func(pod *model.NativeTerminationObservation) { pod.RestartCount++ },
+			"image_digest":              func(pod *model.NativeTerminationObservation) { pod.ImageDigest = "sha256:" + strings.Repeat("c", 64) },
+			"workload_uid":              func(pod *model.NativeTerminationObservation) { pod.WorkloadUID = uuid.NewString() },
+			"workload_resource_version": func(pod *model.NativeTerminationObservation) { pod.WorkloadResourceVersion = "12" },
+			"not_running":               func(pod *model.NativeTerminationObservation) { pod.ContainerState = "waiting" },
+			"deletion_requested":        func(pod *model.NativeTerminationObservation) { pod.DeletionRequestedAt = &stamp },
+			"unprotected":               func(pod *model.NativeTerminationObservation) { pod.Protected = false },
+		} {
+			drifted := f.publisher
+			drift(&drifted)
+			if originalNotifyCandidateSame(f.publisher, drifted) {
+				t.Fatalf("membership identity admitted %s drift", name)
+			}
+		}
+	})
+	t.Run("candidates_without_readiness_form_ready_roster", func(t *testing.T) {
+		f := newOriginalNotifyRosterFixture()
+		before, after := f.list(f.publisher, f.consumer), f.list(f.publisher, f.consumer)
+		for _, value := range []model.AdapterCapacityPodAdmissionCandidatesResponse{before, after} {
+			raw, err := json.Marshal(value)
+			if err != nil || strings.Count(string(raw), `"admission_ready":false`) != 2 || strings.Contains(string(raw), `"admission_ready":true`) {
+				t.Fatal("fixture no longer mirrors the Kubernetes candidate LIST wire")
+			}
+		}
+		admissions := map[string]model.AdapterCapacityPodAdmissionResponse{f.publisher.PodName: f.admission(f.publisher, true), f.consumer.PodName: f.admission(f.consumer, true)}
+		var operations []string
+		roster, err := originalNotifyRoster(t.Context(), f.policy, f.call([]model.AdapterCapacityPodAdmissionCandidatesResponse{before, after}, admissions, &operations))
+		if err != nil {
+			t.Fatalf("Kubernetes-shaped candidate LIST refused: %v", err)
+		}
+		expected := []string{capacity.ObserveNativePodAdmissionCandidates, capacity.ObserveNativePodAdmission, capacity.ObserveNativePodAdmission, capacity.ObserveNativePodAdmissionCandidates}
+		if strings.Join(operations, ",") != strings.Join(expected, ",") {
+			t.Fatalf("roster read order drifted: %v", operations)
+		}
+		if roster.BindingName != "notify-native" || roster.PublisherUID != f.publisher.PodUID || roster.ReaderUID != f.publisher.PodUID || len(roster.ConsumerUIDs) != 1 || roster.ConsumerUIDs[0] != f.consumer.PodUID || len(roster.ManagedPods) != 2 {
+			t.Fatal("ready roster roles drifted")
+		}
+		for _, identity := range roster.ManagedPods {
+			pod := f.publisher
+			if identity.PodUID == f.consumer.PodUID {
+				pod = f.consumer
+			}
+			frame := admissions[pod.PodName].Admission
+			if identity.PodUID != pod.PodUID || identity.PodName != pod.PodName || identity.ContainerID != pod.ContainerID || !identity.ContainerStart.Equal(*pod.StartedAt) || identity.ProcessNonce != frame.ProcessNonce || identity.ChallengeSHA256 != frame.ChallengeSHA256 || identity.OriginGeneration != frame.Challenge.IntentGeneration {
+				t.Fatal("ready roster identity drifted from its admission frame")
+			}
+		}
+	})
+	type rosterDrift func(f originalNotifyRosterFixture, after *model.AdapterCapacityPodAdmissionCandidatesResponse, admissions map[string]model.AdapterCapacityPodAdmissionResponse)
+	for _, tc := range []struct {
+		name   string
+		reads  int
+		mutate rosterDrift
+	}{
+		{"after_candidate_uid_replaced", 4, func(_ originalNotifyRosterFixture, after *model.AdapterCapacityPodAdmissionCandidatesResponse, _ map[string]model.AdapterCapacityPodAdmissionResponse) {
+			after.Candidates[1].PodUID = uuid.NewString()
+		}},
+		{"after_candidate_container_restarted", 4, func(_ originalNotifyRosterFixture, after *model.AdapterCapacityPodAdmissionCandidatesResponse, _ map[string]model.AdapterCapacityPodAdmissionResponse) {
+			after.Candidates[1].ContainerID, after.Candidates[1].RestartCount = "containerd://replacement", 1
+		}},
+		{"after_candidate_start_moved", 4, func(f originalNotifyRosterFixture, after *model.AdapterCapacityPodAdmissionCandidatesResponse, _ map[string]model.AdapterCapacityPodAdmissionResponse) {
+			moved := f.now.Add(-30 * time.Second)
+			after.Candidates[1].StartedAt = &moved
+		}},
+		{"after_candidate_not_running", 4, func(_ originalNotifyRosterFixture, after *model.AdapterCapacityPodAdmissionCandidatesResponse, _ map[string]model.AdapterCapacityPodAdmissionResponse) {
+			after.Candidates[0].ContainerState = "waiting"
+		}},
+		{"after_candidate_deletion_requested", 4, func(f originalNotifyRosterFixture, after *model.AdapterCapacityPodAdmissionCandidatesResponse, _ map[string]model.AdapterCapacityPodAdmissionResponse) {
+			stamp := f.now
+			after.Candidates[0].DeletionRequestedAt = &stamp
+		}},
+		{"after_candidate_unprotected", 4, func(_ originalNotifyRosterFixture, after *model.AdapterCapacityPodAdmissionCandidatesResponse, _ map[string]model.AdapterCapacityPodAdmissionResponse) {
+			after.Candidates[0].Protected = false
+		}},
+		{"after_pod_disappeared", 4, func(_ originalNotifyRosterFixture, after *model.AdapterCapacityPodAdmissionCandidatesResponse, _ map[string]model.AdapterCapacityPodAdmissionResponse) {
+			after.Candidates = after.Candidates[:1]
+		}},
+		{"after_pod_appeared", 4, func(f originalNotifyRosterFixture, after *model.AdapterCapacityPodAdmissionCandidatesResponse, _ map[string]model.AdapterCapacityPodAdmissionResponse) {
+			after.Candidates = append(after.Candidates, f.candidate("notify-c"))
+		}},
+		{"after_pod_replaced_under_new_name", 4, func(_ originalNotifyRosterFixture, after *model.AdapterCapacityPodAdmissionCandidatesResponse, _ map[string]model.AdapterCapacityPodAdmissionResponse) {
+			after.Candidates[1].PodName = "notify-c"
+		}},
+		{"after_workload_resource_version_moved", 4, func(_ originalNotifyRosterFixture, after *model.AdapterCapacityPodAdmissionCandidatesResponse, _ map[string]model.AdapterCapacityPodAdmissionResponse) {
+			after.WorkloadResourceVersion = "12"
+		}},
+		{"admission_read_not_ready", 3, func(f originalNotifyRosterFixture, _ *model.AdapterCapacityPodAdmissionCandidatesResponse, admissions map[string]model.AdapterCapacityPodAdmissionResponse) {
+			admissions[f.consumer.PodName] = f.admission(f.consumer, false)
+		}},
+		{"admission_read_identity_drift", 3, func(f originalNotifyRosterFixture, _ *model.AdapterCapacityPodAdmissionCandidatesResponse, admissions map[string]model.AdapterCapacityPodAdmissionResponse) {
+			value := admissions[f.consumer.PodName]
+			value.Observation.ContainerID = "containerd://other"
+			admissions[f.consumer.PodName] = value
+		}},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			f := newOriginalNotifyRosterFixture()
+			after := f.list(f.publisher, f.consumer)
+			admissions := map[string]model.AdapterCapacityPodAdmissionResponse{f.publisher.PodName: f.admission(f.publisher, true), f.consumer.PodName: f.admission(f.consumer, true)}
+			tc.mutate(f, &after, admissions)
+			var operations []string
+			_, err := originalNotifyRoster(t.Context(), f.policy, f.call([]model.AdapterCapacityPodAdmissionCandidatesResponse{f.list(f.publisher, f.consumer), after}, admissions, &operations))
+			if !errors.Is(err, errCapacityBoundAssessment) || len(operations) != tc.reads {
+				t.Fatalf("material roster drift admitted or refused at the wrong read (%d reads)", len(operations))
+			}
+		})
+	}
+}
