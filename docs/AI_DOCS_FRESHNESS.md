@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: b368971b080d340e2e8a2b7b295a25133c0dc139
-verified_diff_sha256: 0451a4bf5dd5aca91937e81ae271907c90f4274836339b988289f33c7f4f0054
+verified_at_commit: 226a3e31c1c164d70d3e56df587000c3f3afa725
+verified_diff_sha256: 35783109c934949fe046a96093a80083ce78ae396e5383d9ad223a242cfe853f
 reconciler_schema: 1
 verified_at: 2026-10-10
 by: Codex
@@ -53,3 +53,7 @@ Source `d5382d6b9c94896b557050cf498dc75415c9d398` adds the opt-in `native_releas
 ## Unredeemed original release retry and native wire mirror
 
 Source `b368971b080d340e2e8a2b7b295a25133c0dc139` fixes the original caller test that assigned a value body where Read and Close have pointer receivers, and documents the optional all-or-none release binding, the native result route and its closed schema in both byte-equal OpenAPI copies under an exact mirror test. An ORIGINAL release refused before redemption is revoked under the shared redemption lock; only a proven `refused_no_redemption` lets a fresh witness mint the next original within the same four permanent identities, while a redeemed original, a failed revoke and every recovery command keep HOLD. ADR-0049 (Proposed) now scopes the no-retry rule to recovery subdecisions. The actor that advanced the Pod resource version in the failing Kind runs is unknown. Current own Core CI is pending; no local tests, build, vet or production activation ran.
+
+## Native victim Pod timeline and release ledger diagnostics
+
+Source `226a3e31c1c164d70d3e56df587000c3f3afa725` applies two behaviour-preserving staticcheck quick fixes in the native Kind fixtures (a tagged switch on the release command state, and NextProtos promoted from the embedded TLS client config). It adds read-only diagnostics for two recovery leaves whose cause is unknown: a kubectl watch of the victim Pod after its deletion request that names each later version, the facts it changed and the managedFields writer it added, and a failure-only release ledger with the durable recovery admission inputs, the intent, its last phase events and the stored witness. No oracle, timeout, window, adapter pin or Core semantics changed, and neither leaf is claimed fixed. Current own Core CI is pending; no local tests, build, vet or production activation ran.
