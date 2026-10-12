@@ -173,7 +173,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message ./controllers/httpapi ./addons -run '^(TestCapacity(Intent.*|Workflow|Mutation.*|NativeLifetime)Postgres|TestCapacityNativeAdapter(OriginalHTTP|LegacyHTTPPreserved)|TestCapacityGuestNativeAdapterOriginalHTTP|TestCapacityGuestNativeDescribeCanonicalCatalog|TestCapacityGuestCollectorProtocolPostgres|TestCapacityDispatch(Postgres|AuthorizationPostgres|OriginalTransportPostgres|SchedulerPostgres|DemandPostgres)|TestCapacityNativeReleaseRecoveryPostgres|TestCapacityReleaseOriginalCaller|TestProcessMatchedTrigger_.*)$' | tee capacity-results.jsonl
+          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message ./controllers/httpapi ./addons -run '^(TestCapacity(Intent.*|Workflow|Mutation.*|NativeLifetime)Postgres|TestCapacityNativeAdapter(OriginalHTTP|LegacyHTTPPreserved)|TestCapacityGuestNativeAdapterOriginalHTTP|TestCapacityGuestNativeDescribeCanonicalCatalog|TestCapacityGuestCollectorProtocolPostgres|TestCapacityDispatch(Postgres|AuthorizationPostgres|OriginalTransportPostgres|SchedulerPostgres|DemandPostgres)|TestCapacityNativeReleaseRecoveryPostgres|TestCapacityNativeReleaseOriginalUnredeemedPostgres|TestCapacityReleaseOriginalCaller|TestProcessMatchedTrigger_.*)$' | tee capacity-results.jsonl
           python3 - <<'PY'
           import json
           from pathlib import Path
@@ -209,6 +209,8 @@ jobs:
           expected |= {bound_execution} | {bound_execution+"/"+name for name in ("finite_unredeemed_permission_budget","redemption_and_revocation_share_one_fence","unredeemed_token_revocation_and_history","single_send_and_canonical_request","principal_scope_and_single_redemption","lost_reply_blocks_new_write_and_terminal","native_readback_and_restart_recovery")}
           recovery='TestCapacityNativeReleaseRecoveryPostgres'
           expected|={recovery}|{recovery+'/'+name for name in ('both_original_acks_new_identity_and_archive','no_adapter_ack_hold','no_caller_ack_hold','wrong_nonce_hold','source_mismatch_hold','catalog_changed_hold','late_owner_hold','expired_owner_hold','duplicate_result_exact_only','four_history_no_reset','old_protocol_hold')}
+          original_unredeemed='TestCapacityNativeReleaseOriginalUnredeemedPostgres'
+          expected|={original_unredeemed}|{original_unredeemed+'/'+name for name in ('unredeemed_revoked_fresh_original_identity','redeemed_original_not_revoked_hold')}
           caller='TestCapacityReleaseOriginalCaller'
           expected|={caller}|{caller+'/'+name for name in ('original_complete_return','held_original_close','original_close_failure','response_and_error_original_close','non200_no_ack')}
           lifetime="TestCapacityNativeLifetimePostgres"

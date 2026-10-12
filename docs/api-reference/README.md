@@ -62,6 +62,7 @@ Supported `kind` values (the authoritative list is the switch in
 | Method | Path | Purpose |
 |---|---|---|
 | POST | `/api/v1/capacity/mutations/native/redeem` | Independent adapter bearer plus exact one-use command token; locked native authority consumption |
+| POST | `/api/v1/capacity/mutations/native/result` | Independent adapter bearer over verified TLS; retains one original release-bound finalizer result, never the Core caller return or retry authority |
 
 The [bound execution contract](../CAPACITY-BOUND-EXECUTION.md) distinguishes
 transport permission from installed birth authority, runtime joins and native

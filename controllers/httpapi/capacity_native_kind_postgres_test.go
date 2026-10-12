@@ -219,6 +219,7 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 	}
 	var redeemedAfterDrift atomic.Bool
 	var heldAdapterAck, heldCallerAck atomic.Bool
+	var staleWitness atomic.Int32
 	coreServe := func(w http.ResponseWriter, r *http.Request) {
 		if drift == "during" && r.URL.Path == capacityMutationBasePath+"/native/redeem" {
 			raw, err := io.ReadAll(io.LimitReader(r.Body, 8193))
@@ -303,7 +304,7 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 	}
 	defer func() { _ = adapterCmd.Process.Kill(); _ = adapterCmd.Wait() }()
 	adapterURL := fmt.Sprintf("http://127.0.0.1:%d", port)
-	if mode == "forced_conflict_caller_ack_held" || mode == "forced_conflict_late_owner_hold" {
+	if mode == "forced_conflict_caller_ack_held" || mode == "forced_conflict_late_owner_hold" || mode == "stale_witness_unredeemed_original_retry" {
 		upstream := adapterURL
 		caller := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			raw, e := io.ReadAll(io.LimitReader(r.Body, 2<<20+1))
@@ -311,6 +312,24 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 			if e != nil || closeErr != nil || len(raw) > 2<<20 {
 				w.WriteHeader(503)
 				return
+			}
+			if mode == "stale_witness_unredeemed_original_retry" && staleWitness.Load() == 0 {
+				var stale struct {
+					Operation string `json:"operation"`
+					Input     struct {
+						PodName string `json:"pod_name"`
+					} `json:"input"`
+				}
+				// Advance the REAL Pod RV after Core's current witness and before
+				// the original adapter read, exactly once. Nothing is fabricated:
+				// the adapter itself must refuse before any redemption.
+				if json.Unmarshal(raw, &stale) == nil && stale.Operation == capacity.DestroyNativePodProtection && stale.Input.PodName != "" && staleWitness.CompareAndSwap(0, 1) {
+					if exec.CommandContext(ctx, "kubectl", "-n", realm, "annotate", "pod", stale.Input.PodName, "fixture.yggdrasil.io/native-stale-witness=original", "--overwrite").Run() != nil {
+						t.Error("actual stale native witness fixture failed")
+						w.WriteHeader(503)
+						return
+					}
+				}
 			}
 			request, e := http.NewRequestWithContext(r.Context(), r.Method, upstream+r.URL.Path, bytes.NewReader(raw))
 			if e != nil {
@@ -778,8 +797,11 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 	if mode == "forced_conflict_source_changed_hold" || mode == "forced_conflict_rbac_revoked_hold" || mode == "forced_conflict_late_owner_hold" {
 		beforeIDs := nativeReleaseIdentityCount(t, ctx, db, realm)
 		run("execute", false)
-		if conflictCount.Load() != 1 || nativeReleaseIdentityCount(t, ctx, db, realm) != beforeIDs+1 {
-			t.Fatal("failed current source/RBAC/owner created replacement authority")
+		// Only original refusals proven unredeemed before the single redeemed
+		// parent may precede it; any further identity is replacement authority.
+		predecessors := nativeReleaseUnredeemedPredecessors(t, ctx, db, realm, victimUID)
+		if conflictCount.Load() != 1 || nativeReleaseIdentityCount(t, ctx, db, realm) != beforeIDs+1+predecessors {
+			t.Fatal("failed current source/RBAC/owner created replacement authority", predecessors)
 		}
 		var decisions int
 		if db.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_native_release_recovery_decisions d JOIN public.capacity_native_command_identities i ON i.id=d.command_id WHERE i.namespace=$1`, realm).Scan(&decisions) != nil || decisions != 0 {
@@ -790,6 +812,9 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 	run("execute", true)
 	if forceConflict {
 		assertNativeReleaseRecoveryIdentities(t, ctx, db, realm, compiledSource, conflictCount.Load())
+	}
+	if mode == "stale_witness_unredeemed_original_retry" {
+		assertNativeReleaseStaleWitnessRetry(t, ctx, db, realm, victimUID, staleWitness.Load(), adapterLog)
 	}
 	retained := nativeKindGet(t, ctx, "-n", realm, "get", "pod", victimName, "-o", "json")
 	retainedMeta := retained["metadata"].(map[string]any)

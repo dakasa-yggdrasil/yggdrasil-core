@@ -44,7 +44,7 @@ func TestCapacityReleaseOriginalCaller(t *testing.T) {
 				resp, err := base.RoundTrip(r)
 				if resp != nil && resp.Body != nil {
 					body := resp.Body
-					resp.Body = nativeCanaryBody{ReadCloser: body, close: func() error {
+					resp.Body = &nativeCanaryBody{ReadCloser: body, close: func() error {
 						if name == "held_original_close" {
 							close(entered)
 							<-release

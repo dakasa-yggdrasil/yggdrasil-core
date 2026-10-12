@@ -150,7 +150,14 @@ The private `POST /api/v1/capacity/mutations/native/redeem` route takes exactly
 `authority_token`, `integration_instance_id`, `integration_type_id`, `capability`
 and `request_sha256` under the independent adapter bearer. Its 200 response has
 `schema_version: 1`, `command_id`, `attempt_id`, `capability`, `request_sha256`
-and `expires_at`; it contains no authority token. Invalid closed bodies return
+and `expires_at`; it contains no authority token. Only a command issued under
+the operator-approved `release_recovery` binding (ADR-0049) adds both
+`release_protocol` and `adapter_source_commit` to the request (never one alone),
+and its permit then also returns both plus a one-use `return_nonce`; the default
+wire stays the five-member request and six-member permit. The installed adapter
+reports its original finalizer PUT result once through the private
+`POST /api/v1/capacity/mutations/native/result` route over verified TLS; that
+callback is never the Core caller return. Invalid closed bodies return
 400, invalid bearer 401, denied exact scope 403, stale/used authority 409 and
 unavailable durable storage 503. Native permission replay is refused. Recovery
 reads do not reissue a command whose send or provider outcome is uncertain.

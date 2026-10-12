@@ -38,6 +38,7 @@ type capacityReleaseOriginalReply struct {
 
 // This is an explicit controller branch, not the original unredeemed-token
 // retry loop. Every recovery admission has a new durable parent/fence/command.
+// Only an original release proven unredeemed may be followed by a new original.
 func runCapacityReleaseRecovery(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, intent model.CapacityIntent, cp model.CapacityNativePodCheckpoint, call capacityBoundPrivateCall, observe func(model.CapacityNativePodCheckpoint) (model.AdapterCapacityPodTerminationResponse, error), hpa func() (model.CapacityHPAEnvelopeResponse, error), inventory func() (model.AdapterCapacityPodInventoryResponse, error)) error {
 	deadline, ok := ctx.Deadline()
 	if !ok || intent.LeaseExpiresAt == nil || capacityDispatchInvocationFrom(ctx) == nil {
@@ -114,8 +115,24 @@ func runCapacityReleaseRecovery(ctx context.Context, store repository.CapacitySt
 			return err
 		}
 		if callErr != nil || !original.CallerJoined {
+			// An ORIGINAL release refused before redemption (for example a Pod RV
+			// that advanced after this witness) is not an uncertain write. The
+			// shared redemption lock proves its token unspent and unredeemable,
+			// so only a fresh witness may mint the next original permission
+			// within the same four permanent identities. A redeemed original
+			// and every recovery command keep HOLD.
+			// A failed revoke stays in the private cause so it is never mistaken
+			// for a proven redemption; both still end in HOLD.
+			var revokeErr error
+			if parent == nil {
+				var refused bool
+				refused, revokeErr = store.RevokeUnredeemedNativeCommand(ctx, policy, intent, command.CommandID)
+				if revokeErr == nil && refused {
+					continue
+				}
+			}
 			_ = store.MarkNativeCommandUncertain(ctx, command.CommandID)
-			return capacityDispatchCause(ctx, errors.Join(errCapacityBoundAssessment, callErr))
+			return capacityDispatchCause(ctx, errors.Join(errCapacityBoundAssessment, callErr, revokeErr))
 		}
 		if status == "blocked" {
 			retained, err := store.AcknowledgeNativeReleaseCaller(ctx, policy, intent, command.CommandID)

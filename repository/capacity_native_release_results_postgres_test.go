@@ -174,3 +174,77 @@ func TestCapacityNativeReleaseRecoveryPostgres(t *testing.T) {
 		})
 	}
 }
+
+// An ORIGINAL release-bound permission refused before redemption (for example
+// a Pod RV advanced after Core's witness) is proven unspent under the shared
+// redemption lock. Only then may a fresh witness mint the next original, within
+// the same permanent four-identity history. A redeemed original never may.
+func TestCapacityNativeReleaseOriginalUnredeemedPostgres(t *testing.T) {
+	for _, name := range []string{"unredeemed_revoked_fresh_original_identity", "redeemed_original_not_revoked_hold"} {
+		t.Run(name, func(t *testing.T) {
+			binding := &model.CapacityNativeReleaseRecoveryBinding{Protocol: capacity.NativeReleaseResultProtocol, AdapterSourceCommit: strings.Repeat("a", 40)}
+			db, store, policy, p, intent := nativeLifetimePostgresFixture(t, binding)
+			ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+			defer cancel()
+			boot := nativeLifetimeBoot(p)
+			cp, challenge := nativeLifetimeProtect(t, store, policy, p, intent, boot)
+			zero := int32(0)
+			start := cp.ContainerStartedAt
+			joined := time.Now().UTC()
+			finished := joined.Add(time.Millisecond)
+			deleted := joined.Add(-time.Millisecond)
+			pod := model.NativeTerminationObservation{BindingName: p.HPAExecutionBinding.PodTerminationBinding, Namespace: cp.Namespace, PodName: cp.PodName, PodUID: cp.PodUID, PodResourceVersion: "13", PodGeneration: cp.PodGeneration, WorkloadUID: cp.WorkloadUID, WorkloadResourceVersion: "10", ContainerName: cp.ContainerName, ContainerID: cp.ContainerID, ImageID: "fixture@" + cp.ImageDigest, ImageDigest: cp.ImageDigest, RestartCount: cp.RestartCount, ContainerState: "terminated", ExitCode: &zero, Signal: &zero, StartedAt: &start, FinishedAt: &finished, DeletionRequestedAt: &deleted, Protected: true, State: "terminated", Receipt: &model.NativePodTerminationReceipt{NativePodTerminationChallenge: challenge, JoinedAt: joined, Lanes: map[string]string{"listener": "done", "workers": "inactive"}, RootAdmission: "never_opened"}, ReceiptSHA256: strings.Repeat("b", 64), ObservedAt: time.Now().UTC()}
+			if err := store.ConfirmNativePodWitness(ctx, policy, intent, cp.PodUID, model.AdapterCapacityPodTerminationResponse{Operation: capacity.ObserveNativePodTermination, Status: "observed", Observation: pod}); err != nil {
+				t.Fatal("original PG witness", err)
+			}
+			no := false
+			req := model.AdapterDestroyCapacityPodDrainProtectionRequest{AdapterObserveCapacityPodTerminationRequest: model.AdapterObserveCapacityPodTerminationRequest{BindingName: p.HPAExecutionBinding.PodTerminationBinding, PodName: cp.PodName, ExpectedPodUID: cp.PodUID, ExpectedPodGeneration: cp.PodGeneration, ExpectedContainerID: cp.ContainerID, ExpectedContainerStartedAt: cp.ContainerStartedAt, ExpectedRestartCount: cp.RestartCount, Challenge: challenge}, ExpectedPodResourceVersion: "13", DryRun: &no}
+			raw, _ := json.Marshal(req)
+			command, token, err := store.IssueNativeCommand(ctx, policy, intent, capacity.DestroyNativePodProtection, cp.PodUID, raw)
+			if err != nil || command.Sequence != 1 || command.ReleaseProtocol != capacity.NativeReleaseResultProtocol {
+				t.Fatal("original release-bound permission", err)
+			}
+			redemption := func(c model.CapacityNativeCommand, token string) model.CapacityNativeAuthorityRedeemRequest {
+				return model.CapacityNativeAuthorityRedeemRequest{AuthorityToken: token, IntegrationInstanceID: c.Adapter.IntegrationInstanceID, IntegrationTypeID: c.Adapter.IntegrationTypeID, Capability: c.Operation, RequestSHA256: c.RequestSHA256, ReleaseProtocol: c.ReleaseProtocol, AdapterSourceCommit: c.AdapterSourceCommit}
+			}
+			if name == "redeemed_original_not_revoked_hold" {
+				if _, err := store.RedeemNativeCommand(ctx, p.HPAExecutionBinding.AdapterPrincipalID, redemption(command, token)); err != nil {
+					t.Fatal("original redemption", err)
+				}
+			}
+			refused, err := store.RevokeUnredeemedNativeCommand(ctx, policy, intent, command.CommandID)
+			if err != nil || refused != (name == "unredeemed_revoked_fresh_original_identity") {
+				t.Fatal("original release redemption state was not proven by the shared lock", refused, err)
+			}
+			// The fresh witness is the only new input; the same request shape must
+			// mint a new original only after the first permission was proven unspent.
+			pod.PodResourceVersion, pod.ObservedAt = "14", time.Now().UTC()
+			if err := store.ConfirmNativePodWitness(ctx, policy, intent, cp.PodUID, model.AdapterCapacityPodTerminationResponse{Operation: capacity.ObserveNativePodTermination, Status: "observed", Observation: pod}); err != nil {
+				t.Fatal("fresh original PG witness", err)
+			}
+			req.ExpectedPodResourceVersion = "14"
+			fresh, _ := json.Marshal(req)
+			next, nextToken, err := store.IssueNativeCommand(ctx, policy, intent, capacity.DestroyNativePodProtection, cp.PodUID, fresh)
+			if name == "redeemed_original_not_revoked_hold" {
+				if err == nil {
+					t.Fatal("redeemed original release admitted a second original permission")
+				}
+				return
+			}
+			if err != nil || next.CommandID == command.CommandID || next.Sequence != 2 || next.AuthorityTokenSHA256 == command.AuthorityTokenSHA256 || nextToken == token || next.ReleaseProtocol != capacity.NativeReleaseResultProtocol || next.ParentCommandID != "" || next.RecoveryDecisionID != "" {
+				t.Fatal("fresh original permission/identity missing after unredeemed refusal", err)
+			}
+			if _, err := store.RedeemNativeCommand(ctx, p.HPAExecutionBinding.AdapterPrincipalID, redemption(command, token)); err == nil {
+				t.Fatal("revoked original release token was redeemed late")
+			}
+			var results, decisions int
+			if err := db.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM public.capacity_native_release_results WHERE command_id=$1),(SELECT count(*) FROM public.capacity_native_release_recovery_decisions WHERE parent_command_id=$1 OR command_id=$1)`, command.CommandID).Scan(&results, &decisions); err != nil || results != 0 || decisions != 0 {
+				t.Fatal("unredeemed original refusal retained a result or recovery authority", results, decisions, err)
+			}
+			permit, err := store.RedeemNativeCommand(ctx, p.HPAExecutionBinding.AdapterPrincipalID, redemption(next, nextToken))
+			if err != nil || permit.CommandID != next.CommandID || permit.AttemptID == uuid.Nil || len(permit.ReturnNonce) != 64 || permit.ReleaseProtocol != capacity.NativeReleaseResultProtocol {
+				t.Fatal("fresh original release-bound permission refused", err)
+			}
+		})
+	}
+}
