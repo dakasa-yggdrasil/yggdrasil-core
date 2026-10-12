@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 226a3e31c1c164d70d3e56df587000c3f3afa725
-verified_diff_sha256: 35783109c934949fe046a96093a80083ce78ae396e5383d9ad223a242cfe853f
+verified_at_commit: 906bef8ec4ff1a1d31a10962512ad42d5a61c54c
+verified_diff_sha256: e3432f44be6a9e604f7ea9321dfd963bb7459582d0a95cbe9e4eeb9cd2d11856
 reconciler_schema: 1
 verified_at: 2026-10-10
 by: Codex
@@ -57,3 +57,7 @@ Source `b368971b080d340e2e8a2b7b295a25133c0dc139` fixes the original caller test
 ## Native victim Pod timeline and release ledger diagnostics
 
 Source `226a3e31c1c164d70d3e56df587000c3f3afa725` applies two behaviour-preserving staticcheck quick fixes in the native Kind fixtures (a tagged switch on the release command state, and NextProtos promoted from the embedded TLS client config). It adds read-only diagnostics for two recovery leaves whose cause is unknown: a kubectl watch of the victim Pod after its deletion request that names each later version, the facts it changed and the managedFields writer it added, and a failure-only release ledger with the durable recovery admission inputs, the intent, its last phase events and the stored witness. No oracle, timeout, window, adapter pin or Core semantics changed, and neither leaf is claimed fixed. Current own Core CI is pending; no local tests, build, vet or production activation ran.
+
+## Original Notify roster LIST candidates without readiness
+
+Source `906bef8ec4ff1a1d31a10962512ad42d5a61c54c` lets the original Notify roster accept the membership LIST candidates the Kubernetes adapter actually returns. Those candidates never carry admission readiness; only the single-Pod admission read does. The after LIST loop now compares each candidate by identity and liveness only (name, UID, namespace, generation, container, start, restarts, image, workload UID and resourceVersion, running, no deletion request, protected), while the admission frame comparison and the later witness reads still require readiness. A protocol fixture drives the roster through the production closed decoder with Kubernetes-shaped replies and refuses every identity drift. No adapter pin changed. Current own Core CI is pending; no local tests, build, vet or production activation ran.
