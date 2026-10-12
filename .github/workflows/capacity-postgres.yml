@@ -73,7 +73,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: dakasa-yggdrasil/integration-prometheus
-          ref: f8f7da808af78e252c0c389cb48ce73a973b49e1
+          ref: b14ffabcea2daf0d575168abd2ec8d3e1c10520c
           path: .ci-bound-prometheus
           token: ${{ steps.native-token.outputs.token }}
           persist-credentials: false
@@ -137,7 +137,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git -C .ci-bound-prometheus rev-parse HEAD)" = f8f7da808af78e252c0c389cb48ce73a973b49e1
+          test "$(git -C .ci-bound-prometheus rev-parse HEAD)" = b14ffabcea2daf0d575168abd2ec8d3e1c10520c
           GO111MODULE=off GOWORK=off GOFLAGS='' go run ./scripts/ci/prometheus-lifecycle-gate --mode=postgres
       - name: Retain original collector lifecycle command and GoJSON
         if: always()
@@ -159,7 +159,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git -C .ci-bound-prometheus rev-parse HEAD)" = f8f7da808af78e252c0c389cb48ce73a973b49e1
+          test "$(git -C .ci-bound-prometheus rev-parse HEAD)" = b14ffabcea2daf0d575168abd2ec8d3e1c10520c
           test "$(git -C .ci-bound-kubernetes rev-parse HEAD)" = a386344e36383b0a23c3c82c5d05a5a176b0e0af
           cp scripts/ci/capacity_metric_source_fixture_test.go.tmpl .ci-bound-prometheus/internal/adapter/capacity_core_metric_source_test.go
           cp scripts/ci/capacity_hpa_source_fixture_test.go.tmpl .ci-bound-kubernetes/internal/adapter/capacity_core_hpa_source_test.go

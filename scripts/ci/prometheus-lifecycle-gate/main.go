@@ -24,7 +24,7 @@ import (
 )
 
 const (
-	collectorCommit  = "f8f7da808af78e252c0c389cb48ce73a973b49e1"
+	collectorCommit  = "b14ffabcea2daf0d575168abd2ec8d3e1c10520c"
 	collectorModule  = "github.com/dakasa-yggdrasil/integration-prometheus"
 	collectorPackage = collectorModule + "/internal/adapter"
 	collectorRoot    = "TestRangeEvidenceActualTLSReadCloseAndPostReturnFence"
