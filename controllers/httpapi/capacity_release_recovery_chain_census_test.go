@@ -38,16 +38,20 @@ type nativeReleaseChainCommand struct {
 }
 
 type nativeReleaseChainResult struct {
-	CommandID      uuid.UUID       `json:"command_id"`
-	AttemptID      uuid.UUID       `json:"attempt_id"`
-	Protocol       string          `json:"protocol"`
-	Source         string          `json:"adapter_source_commit"`
-	ReturnNonceSHA string          `json:"return_nonce_sha256"`
-	Deadline       time.Time       `json:"original_deadline"`
-	Result         json.RawMessage `json:"adapter_result"`
-	ResultSHA      string          `json:"adapter_result_sha256"`
-	AdapterACK     *time.Time      `json:"adapter_ack_at"`
-	CallerACK      *time.Time      `json:"caller_ack_at"`
+	CommandID             uuid.UUID       `json:"command_id"`
+	CommandSequence       int             `json:"command_sequence"`
+	AttemptID             uuid.UUID       `json:"attempt_id"`
+	Protocol              string          `json:"protocol"`
+	Source                string          `json:"adapter_source_commit"`
+	ReturnNonceSHA        string          `json:"return_nonce_sha256"`
+	Deadline              time.Time       `json:"original_deadline"`
+	CommandExpiryJSON     string          `json:"command_expires_at_json"`
+	CommandExpirySQL      *time.Time      `json:"command_expires_at_sql"`
+	NativeDeadlineMatches *bool           `json:"native_deadline_matches_command"`
+	Result                json.RawMessage `json:"adapter_result"`
+	ResultSHA             string          `json:"adapter_result_sha256"`
+	AdapterACK            *time.Time      `json:"adapter_ack_at"`
+	CallerACK             *time.Time      `json:"caller_ack_at"`
 }
 
 type nativeReleaseChainDecision struct {
@@ -93,6 +97,15 @@ func nativeReleaseChainSameJSON(a, b any) bool {
 	return e1 == nil && e2 == nil && e3 == nil && e4 == nil && bytes.Equal(x, y)
 }
 
+// JSON retains the original nanosecond context expiry. PostgreSQL's native
+// timestamptz column has its own microsecond representation; the exact typed
+// equality is collected by PostgreSQL in the SAME original readonly snapshot.
+// No tolerance, expiry renewal or guessed client-side rounding is authority.
+func nativeReleaseDeadlineExact(r nativeReleaseChainResult, c *model.CapacityNativeCommand) bool {
+	original, err := time.Parse(time.RFC3339Nano, r.CommandExpiryJSON)
+	return err == nil && original.Equal(c.ExpiresAt) && r.CommandExpirySQL != nil && !r.CommandExpirySQL.IsZero() && r.NativeDeadlineMatches != nil && *r.NativeDeadlineMatches && r.Deadline.Equal(*r.CommandExpirySQL) && r.CommandSequence == c.Sequence
+}
+
 func nativeReleaseChainDigest(s string) bool {
 	b, err := hex.DecodeString(s)
 	return err == nil && len(b) == 32 && hex.EncodeToString(b) == s
@@ -134,7 +147,15 @@ func nativeReleaseReadChainCensus(t *testing.T, ctx context.Context, db *sql.DB,
 	)
 	SELECT json_build_object(
 	 'commands',COALESCE((SELECT json_agg(json_build_object('identity',row_to_json(i),'hot',c.command_record,'archive',a.command_record,'archive_sha256',a.record_sha256) ORDER BY i.sequence) FROM owned i LEFT JOIN public.capacity_native_commands c ON c.id=i.id LEFT JOIN public.capacity_native_command_archive a ON a.id=i.id),'[]'::json),
-	 'results',COALESCE((SELECT json_agg(row_to_json(r) ORDER BY i.sequence) FROM owned i JOIN public.capacity_native_release_results r ON r.command_id=i.id),'[]'::json),
+	 'results',COALESCE((SELECT json_agg(row_to_json(projected) ORDER BY projected.command_sequence) FROM (
+	  SELECT r.*,i.sequence AS command_sequence,
+	   COALESCE(c.command_record,a.command_record)->>'expires_at' AS command_expires_at_json,
+	   (COALESCE(c.command_record,a.command_record)->>'expires_at')::timestamptz AS command_expires_at_sql,
+	   r.original_deadline=(COALESCE(c.command_record,a.command_record)->>'expires_at')::timestamptz AS native_deadline_matches_command
+	  FROM owned i JOIN public.capacity_native_release_results r ON r.command_id=i.id
+	  LEFT JOIN public.capacity_native_commands c ON c.id=i.id
+	  LEFT JOIN public.capacity_native_command_archive a ON a.id=i.id
+	 ) projected),'[]'::json),
 	 'decisions',COALESCE((SELECT json_agg(row_to_json(d) ORDER BY d.created_at,d.id) FROM public.capacity_native_release_recovery_decisions d WHERE EXISTS(SELECT 1 FROM owned i WHERE i.id=d.command_id OR i.id=d.parent_command_id)),'[]'::json)
 	)`, realm, subject, capacity.DestroyNativePodProtection).Scan(&raw)
 	var census nativeReleaseChainCensus
@@ -212,7 +233,7 @@ func validateNativeReleaseChain(census nativeReleaseChainCensus, realm, subject,
 			}
 			continue
 		}
-		if c.AttemptID == uuid.Nil || attempts[c.AttemptID] || c.RedeemedBy != p.HPAExecutionBinding.AdapterPrincipalID || !hasResult || r.AttemptID != c.AttemptID || r.Protocol != c.ReleaseProtocol || r.Source != source || !r.Deadline.Equal(c.ExpiresAt) || r.AdapterACK == nil || r.AdapterACK.Before(c.CreatedAt) || !r.AdapterACK.Before(c.ExpiresAt) || r.ResultSHA != nativeReleaseChainSHA(r.Result) {
+		if c.AttemptID == uuid.Nil || attempts[c.AttemptID] || c.RedeemedBy != p.HPAExecutionBinding.AdapterPrincipalID || !hasResult || r.AttemptID != c.AttemptID || r.Protocol != c.ReleaseProtocol || r.Source != source || !nativeReleaseDeadlineExact(r, c) || r.AdapterACK == nil || r.AdapterACK.Before(c.CreatedAt) || !r.AdapterACK.Before(c.ExpiresAt) || r.ResultSHA != nativeReleaseChainSHA(r.Result) {
 			return refuse
 		}
 		attempts[c.AttemptID] = true
@@ -315,7 +336,9 @@ func nativeReleaseChainProtocolFixture(t *testing.T, count int) (nativeReleaseCh
 		if c.State == "rejected_no_effect" {
 			c.OriginalResult, c.OriginalResultSHA256 = resultRaw, nativeReleaseChainSHA(resultRaw)
 		}
-		r := nativeReleaseChainResult{CommandID: c.CommandID, AttemptID: c.AttemptID, Protocol: c.ReleaseProtocol, Source: source, ReturnNonceSHA: fmt.Sprintf("%064x", i+20), Deadline: c.ExpiresAt, Result: resultRaw, ResultSHA: nativeReleaseChainSHA(resultRaw), AdapterACK: &ack, CallerACK: c.CallerReturnObservedAt}
+		typedExpiry := c.ExpiresAt
+		nativeMatch := true
+		r := nativeReleaseChainResult{CommandExpiryJSON: c.ExpiresAt.Format(time.RFC3339Nano), CommandExpirySQL: &typedExpiry, NativeDeadlineMatches: &nativeMatch, CommandSequence: c.Sequence, CommandID: c.CommandID, AttemptID: c.AttemptID, Protocol: c.ReleaseProtocol, Source: source, ReturnNonceSHA: fmt.Sprintf("%064x", i+20), Deadline: c.ExpiresAt, Result: resultRaw, ResultSHA: nativeReleaseChainSHA(resultRaw), AdapterACK: &ack, CallerACK: c.CallerReturnObservedAt}
 		identity, _ := json.Marshal(map[string]any{"id": c.CommandID, "namespace": realm, "environment": c.Environment, "domain": c.Domain, "dimension": c.Dimension, "generation": c.IntentGeneration, "operation": c.Operation, "subject_uid": subject, "phase": c.Phase, "sequence": c.Sequence, "authority_token_sha256": c.AuthorityTokenSHA256, "request_sha256": c.RequestSHA256})
 		census.Commands = append(census.Commands, nativeReleaseChainCommand{Identity: identity, Hot: c})
 		census.Results = append(census.Results, r)
@@ -339,7 +362,7 @@ func nativeReleaseChainProtocolFixture(t *testing.T, count int) (nativeReleaseCh
 }
 
 func TestCapacityNativeReleaseRecoveryCompleteChainOracle(t *testing.T) {
-	for _, mode := range []string{"two-identities", "three-identities", "four-identities", "archived-four-identities", "fifth-identity-budget", "duplicate-token", "duplicate-attempt", "duplicate-identity", "sequence-gap", "missing-parent-caller-ack", "missing-adapter-ack", "missing-result", "duplicate-result", "extra-result", "missing-decision", "extra-decision", "shared-fence", "wrong-parent-attempt", "wrong-parent-result", "renewed-deadline", "late-caller-return", "changed-owner", "changed-source", "changed-policy", "witness-inventory-race", "foreign-witness-lifetime", "foreign-inventory-lifetime", "stale-frame", "uncertain-parent", "relabelled-original409", "unjoined-original-close", "changed-permanent-identity", "changed-archive-hash"} {
+	for _, mode := range []string{"two-identities", "three-identities", "four-identities", "archived-four-identities", "fifth-identity-budget", "duplicate-token", "duplicate-attempt", "duplicate-identity", "sequence-gap", "missing-parent-caller-ack", "missing-adapter-ack", "missing-result", "duplicate-result", "extra-result", "missing-decision", "extra-decision", "shared-fence", "wrong-parent-attempt", "wrong-parent-result", "renewed-deadline", "late-caller-return", "changed-owner", "changed-source", "changed-policy", "witness-inventory-race", "foreign-witness-lifetime", "foreign-inventory-lifetime", "stale-frame", "uncertain-parent", "relabelled-original409", "unjoined-original-close", "changed-permanent-identity", "changed-archive-hash", "missing-native-deadline", "false-native-deadline", "foreign-deadline-column", "foreign-json-deadline", "foreign-native-command-sequence", "missing-native-sql-deadline", "foreign-sql-expiry-projection"} {
 		t.Run(mode, func(t *testing.T) {
 			count := 3
 			switch mode {
@@ -354,6 +377,22 @@ func TestCapacityNativeReleaseRecoveryCompleteChainOracle(t *testing.T) {
 			valid := mode == "two-identities" || mode == "three-identities" || mode == "four-identities" || mode == "archived-four-identities"
 			last := c.Commands[len(c.Commands)-1].Hot
 			switch mode {
+			case "missing-native-sql-deadline":
+				c.Results[0].CommandExpirySQL = nil
+			case "foreign-sql-expiry-projection":
+				changed := c.Results[0].CommandExpirySQL.Add(time.Microsecond)
+				c.Results[0].CommandExpirySQL = &changed
+			case "missing-native-deadline":
+				c.Results[0].NativeDeadlineMatches = nil
+			case "false-native-deadline":
+				no := false
+				c.Results[0].NativeDeadlineMatches = &no
+			case "foreign-deadline-column":
+				c.Results[0].Deadline = c.Results[0].Deadline.Add(time.Microsecond)
+			case "foreign-json-deadline":
+				c.Results[0].CommandExpiryJSON = c.Commands[0].Hot.ExpiresAt.Add(time.Nanosecond).Format(time.RFC3339Nano)
+			case "foreign-native-command-sequence":
+				c.Results[0].CommandSequence++
 			case "duplicate-token":
 				last.AuthorityTokenSHA256 = c.Commands[0].Hot.AuthorityTokenSHA256
 			case "duplicate-attempt":
@@ -389,8 +428,16 @@ func TestCapacityNativeReleaseRecoveryCompleteChainOracle(t *testing.T) {
 				c.Decisions[0].Record.ParentResultSHA = strings.Repeat("6", 64)
 			case "renewed-deadline":
 				last.ExpiresAt = last.ExpiresAt.Add(time.Minute)
-				c.Results[len(c.Results)-1].Deadline = last.ExpiresAt
+				r := &c.Results[len(c.Results)-1]
+				r.Deadline = last.ExpiresAt
+				r.CommandExpiryJSON = last.ExpiresAt.Format(time.RFC3339Nano)
+				r.CommandExpirySQL = &r.Deadline
+				matches := true
+				r.NativeDeadlineMatches = &matches
 				c.Decisions[len(c.Decisions)-1].Record.Command.ExpiresAt = last.ExpiresAt
+				if !nativeReleaseDeadlineExact(*r, last) {
+					t.Fatal("renewal fixture must preserve exact native representation before the permanent parent deadline guard")
+				}
 			case "late-caller-return":
 				at := c.Commands[0].Hot.ExpiresAt
 				c.Commands[0].Hot.CallerReturnObservedAt = &at
@@ -514,4 +561,125 @@ func TestCapacityNativeReleaseRecoveryIncidentDecisionSQLPostgres(t *testing.T) 
 			t.Fatal("either original incident direction disappeared")
 		}
 	})
+}
+
+// These complete declared protocol chains are stored in the actual migrated
+// remote PostgreSQL relations. They qualify only the native timestamp/type and
+// collector/oracle boundary; they redeem no token and send no native request.
+// The original KinD cases remain the authority for actual release effects.
+func TestCapacityNativeReleaseRecoveryDeadlineSQLPostgres(t *testing.T) {
+	dsn := os.Getenv("DB_URL")
+	if dsn == "" {
+		if os.Getenv("REQUIRE_CAPACITY_NATIVE_KIND") == "true" {
+			t.Fatal("actual PostgreSQL deadline corpus required")
+		}
+		t.Skip("remote PostgreSQL original typed deadline census")
+	}
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		t.Fatal("original PostgreSQL unavailable", err)
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(t.Context(), 30*time.Second)
+	defer cancel()
+	for _, tc := range []struct {
+		name, expiry    string
+		archived, valid bool
+	}{
+		{"exact-microseconds", "2026-10-12T20:01:30.123456Z", false, true},
+		{"rounded-down-original-nanoseconds", "2026-10-12T20:01:30.123456099Z", false, true},
+		{"rounded-up-original-nanoseconds", "2026-10-12T20:01:30.123456958Z", false, true},
+		{"rounded-carry-to-next-second", "2026-10-12T20:01:30.999999958Z", false, true},
+		{"archived-rounded-original-nanoseconds", "2026-10-12T20:01:30.123456958Z", true, true},
+		{"mismatched-native-column", "2026-10-12T20:01:30.123456099Z", false, false},
+		{"mismatched-original-json-deadline", "2026-10-12T20:01:30.123456099Z", false, false},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			census, policy, p, checkpoint, source := nativeReleaseChainProtocolFixture(t, 2)
+			original, err := time.Parse(time.RFC3339Nano, tc.expiry)
+			if err != nil {
+				t.Fatal(err)
+			}
+			tx, err := db.BeginTx(ctx, nil)
+			if err != nil {
+				t.Fatal("isolated deadline transaction unavailable", err)
+			}
+			defer tx.Rollback()
+			for i, row := range census.Commands {
+				c := row.Hot
+				c.ExpiresAt = original
+				if tc.name == "mismatched-original-json-deadline" {
+					c.ExpiresAt = c.ExpiresAt.Add(time.Microsecond)
+				}
+				// Distinct inert fixture hashes preserve global identity uniqueness.
+				c.AuthorityTokenSHA256 = fmt.Sprintf("%x", sha256.Sum256([]byte(c.CommandID.String())))
+				commandRaw, marshalErr := json.Marshal(c)
+				if marshalErr != nil {
+					t.Fatal(marshalErr)
+				}
+				if _, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_native_command_identities(id,namespace,environment,domain,dimension,generation,operation,subject_uid,phase,sequence,authority_token_sha256,request_sha256) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)`, c.CommandID, c.Namespace, c.Environment, c.Domain, c.Dimension, c.IntentGeneration, c.Operation, checkpoint.PodUID, c.Phase, c.Sequence, c.AuthorityTokenSHA256, c.RequestSHA256); err != nil {
+					t.Fatal("original inert deadline identity unavailable", err)
+				}
+				if tc.archived {
+					_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_native_command_archive(id,record_sha256,command_record) VALUES($1,$2,$3)`, c.CommandID, nativeReleaseChainSHA(commandRaw), commandRaw)
+				} else {
+					_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_native_commands(id,namespace,environment,domain,dimension,generation,operation,subject_uid,phase,sequence,state,authority_token_sha256,command_record) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)`, c.CommandID, c.Namespace, c.Environment, c.Domain, c.Dimension, c.IntentGeneration, c.Operation, checkpoint.PodUID, c.Phase, c.Sequence, c.State, c.AuthorityTokenSHA256, commandRaw)
+				}
+				if err != nil {
+					t.Fatal("original inert deadline command unavailable", err)
+				}
+				r := census.Results[i]
+				column := original
+				if tc.name == "mismatched-native-column" {
+					column = column.Add(time.Microsecond)
+				}
+				if _, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_native_release_results(command_id,attempt_id,protocol,adapter_source_commit,return_nonce_sha256,original_deadline,adapter_result,adapter_result_sha256,adapter_ack_at,caller_ack_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, r.CommandID, r.AttemptID, r.Protocol, r.Source, r.ReturnNonceSHA, column, r.Result, r.ResultSHA, r.AdapterACK, r.CallerACK); err != nil {
+					t.Fatal("original native typed deadline result unavailable", err)
+				}
+				if i > 0 {
+					d := census.Decisions[i-1]
+					d.Record.Command.ExpiresAt = c.ExpiresAt
+					d.Record.Command.AuthorityTokenSHA256 = c.AuthorityTokenSHA256
+					recordRaw, marshalErr := json.Marshal(d.Record)
+					if marshalErr != nil {
+						t.Fatal(marshalErr)
+					}
+					if _, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_native_release_recovery_decisions(id,parent_command_id,parent_attempt_id,command_id,fence,decision_record,created_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, d.ID, d.ParentID, d.ParentAttempt, d.CommandID, d.Fence, recordRaw, d.CreatedAt); err != nil {
+						t.Fatal("original immutable deadline decision unavailable", err)
+					}
+				}
+			}
+			if tx.Commit() != nil {
+				t.Fatal("original deadline fixture COMMIT unresolved")
+			}
+			actual := nativeReleaseReadChainCensus(t, ctx, db, checkpoint.Namespace, checkpoint.PodUID)
+			if len(actual.Commands) != 2 || len(actual.Results) != 2 || len(actual.Decisions) != 1 {
+				t.Fatal("native deadline collector dropped original rows")
+			}
+			for _, r := range actual.Results {
+				if r.NativeDeadlineMatches == nil || *r.NativeDeadlineMatches != tc.valid || r.CommandExpirySQL == nil || !r.Deadline.Equal(*r.CommandExpirySQL) && tc.valid {
+					t.Fatal("native typed deadline equality differs")
+				}
+				var c *model.CapacityNativeCommand
+				for _, row := range actual.Commands {
+					candidate := row.Hot
+					if candidate == nil {
+						candidate = row.Archive
+					}
+					if candidate.CommandID == r.CommandID {
+						c = candidate
+					}
+				}
+				if c == nil || r.CommandExpiryJSON != c.ExpiresAt.Format(time.RFC3339Nano) || !c.ExpiresAt.Equal(original) && tc.valid {
+					t.Fatal("original exact JSON nanoseconds were replaced")
+				}
+				if tc.valid && tc.name != "exact-microseconds" && r.Deadline.Equal(c.ExpiresAt) {
+					t.Fatal("native rounding boundary was not reached")
+				}
+			}
+			if err := validateNativeReleaseChain(actual, checkpoint.Namespace, checkpoint.PodUID, source, policy, p, checkpoint); (err == nil) != tc.valid {
+				t.Fatal("whole native chain accepted a mismatched deadline or refused native typed equality", err)
+			}
+		})
+	}
 }
