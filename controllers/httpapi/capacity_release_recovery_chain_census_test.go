@@ -135,9 +135,23 @@ func nativeReleaseIncidentEdgesClosed(census nativeReleaseChainCensus) bool {
 // validating the chain, including archived commands and every original ACK.
 func nativeReleaseReadChainCensus(t *testing.T, ctx context.Context, db *sql.DB, realm, subject string) nativeReleaseChainCensus {
 	t.Helper()
+	census, err := nativeReleaseCollectChainCensus(t, ctx, db, realm, subject)
+	if err != nil {
+		t.Fatal("complete original release chain snapshot did not return", err)
+	}
+	return census
+}
+
+// Failure diagnostics use this same original readonly collector before the
+// enclosing workflow Fatal. They retain the raw bytes even for an uncertain
+// child, without treating an incomplete/refused chain as qualified or changing
+// the original failure. The owner's context/deadline is never renewed.
+func nativeReleaseCollectChainCensus(t *testing.T, ctx context.Context, db *sql.DB, realm, subject string) (nativeReleaseChainCensus, error) {
+	t.Helper()
+	var census nativeReleaseChainCensus
 	tx, err := db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelRepeatableRead, ReadOnly: true})
 	if err != nil {
-		t.Fatal("original release chain snapshot unavailable", err)
+		return census, fmt.Errorf("original release chain snapshot unavailable: %w", err)
 	}
 	defer tx.Rollback()
 	var raw []byte
@@ -158,9 +172,8 @@ func nativeReleaseReadChainCensus(t *testing.T, ctx context.Context, db *sql.DB,
 	 ) projected),'[]'::json),
 	 'decisions',COALESCE((SELECT json_agg(row_to_json(d) ORDER BY d.created_at,d.id) FROM public.capacity_native_release_recovery_decisions d WHERE EXISTS(SELECT 1 FROM owned i WHERE i.id=d.command_id OR i.id=d.parent_command_id)),'[]'::json)
 	)`, realm, subject, capacity.DestroyNativePodProtection).Scan(&raw)
-	var census nativeReleaseChainCensus
 	if err != nil || len(raw) > 8<<20 {
-		t.Fatal("bounded original release chain query unavailable", err)
+		return census, fmt.Errorf("bounded original release chain query unavailable: %v", err)
 	}
 	// Retain the ORIGINAL returned bytes before every decode, transaction and
 	// qualification guard, so a later fatal cannot discard this causal census.
@@ -168,11 +181,11 @@ func nativeReleaseReadChainCensus(t *testing.T, ctx context.Context, db *sql.DB,
 	decoder := json.NewDecoder(bytes.NewReader(raw))
 	decoder.DisallowUnknownFields()
 	if err != nil || len(raw) > 8<<20 || decoder.Decode(&census) != nil || decoder.Decode(new(any)) != io.EOF || tx.Commit() != nil {
-		t.Fatal("complete original release chain snapshot did not return", err)
+		return census, errors.New("complete original release chain snapshot did not return")
 	}
 	// Hashes, private-return nonce hashes and source records only. No plaintext
 	// command permission or callback nonce enters durable rows or this artifact.
-	return census
+	return census, nil
 }
 
 func validateNativeReleaseChain(census nativeReleaseChainCensus, realm, subject, source string, policy model.Manifest, p model.CapacityPolicySpec, checkpoint model.CapacityNativePodCheckpoint) error {

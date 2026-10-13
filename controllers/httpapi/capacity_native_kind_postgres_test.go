@@ -221,6 +221,8 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 	var heldAdapterAck, heldCallerAck atomic.Bool
 	var staleWitness atomic.Int32
 	var recoveryInventoryRace atomic.Int32
+	var recoveryVersionRace atomic.Int32
+	var recoveryVersionChange atomic.Value
 	var recoveryVictim atomic.Value
 	coreServe := func(w http.ResponseWriter, r *http.Request) {
 		if drift == "during" && r.URL.Path == capacityMutationBasePath+"/native/redeem" {
@@ -306,7 +308,7 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 	}
 	defer func() { _ = adapterCmd.Process.Kill(); _ = adapterCmd.Wait() }()
 	adapterURL := fmt.Sprintf("http://127.0.0.1:%d", port)
-	if mode == "forced_conflict_caller_ack_held" || mode == "forced_conflict_late_owner_hold" || mode == "stale_witness_unredeemed_original_retry" || mode == "forced_conflict_recovery_inventory_race" {
+	if mode == "forced_conflict_caller_ack_held" || mode == "forced_conflict_late_owner_hold" || mode == "stale_witness_unredeemed_original_retry" || mode == "forced_conflict_recovery_inventory_race" || mode == "forced_conflict_recovery_version_changed_hold" {
 		upstream := adapterURL
 		caller := httptest.NewServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 			raw, e := io.ReadAll(io.LimitReader(r.Body, 2<<20+1))
@@ -314,6 +316,48 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 			if e != nil || closeErr != nil || len(raw) > 2<<20 {
 				w.WriteHeader(503)
 				return
+			}
+			if mode == "forced_conflict_recovery_version_changed_hold" {
+				var original struct {
+					Operation string                                                `json:"operation"`
+					Input     model.AdapterDestroyCapacityPodDrainProtectionRequest `json:"input"`
+				}
+				operation, parseErr := nativeRecoveryFrameExecuteRequest(r, raw)
+				if parseErr != nil {
+					t.Error("original child execute request unavailable")
+					w.WriteHeader(503)
+					return
+				}
+				if operation.Operation == capacity.DestroyNativePodProtection {
+					if json.Unmarshal(raw, &original) != nil || original.Input.AuthorityToken == "" {
+						t.Error("original child request/permission unavailable")
+						w.WriteHeader(503)
+						return
+					}
+					var commandRaw []byte
+					tokenSHA := fmt.Sprintf("%x", sha256.Sum256([]byte(original.Input.AuthorityToken)))
+					if db.QueryRowContext(r.Context(), `SELECT command_record FROM public.capacity_native_commands WHERE namespace=$1 AND authority_token_sha256=$2 AND operation=$3`, realm, tokenSHA, capacity.DestroyNativePodProtection).Scan(&commandRaw) != nil {
+						t.Error("original child identity unavailable")
+						w.WriteHeader(503)
+						return
+					}
+					var command model.CapacityNativeCommand
+					if json.Unmarshal(commandRaw, &command) != nil {
+						t.Error("original child identity malformed")
+						w.WriteHeader(503)
+						return
+					}
+					if command.ParentCommandID != "" && recoveryVersionRace.CompareAndSwap(0, 1) {
+						change, injectErr := nativeReleaseInjectOriginalChildVersion(r.Context(), realm, command, original.Input)
+						if injectErr != nil {
+							t.Error("actual child pre-redemption version adversary unavailable", injectErr)
+							w.WriteHeader(503)
+							return
+						}
+						recoveryVersionChange.Store(change)
+						t.Logf("original child pre-redemption native version adversary command=%s parent=%s uid=%s expected=%s before=%s after=%s at=%s", change.CommandID, change.ParentID, change.PodUID, change.ExpectedRV, change.BeforeRV, change.AfterRV, change.At.Format(time.RFC3339Nano))
+					}
+				}
 			}
 			if mode == "forced_conflict_recovery_inventory_race" {
 				operation, e := nativeRecoveryFrameExecuteRequest(r, raw)
@@ -592,6 +636,7 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 		t.Fatal("native executor bypassed actor")
 	}
 	var scheduledTick int
+	var recoverySubject string
 	run := func(workflow string, succeed bool) {
 		if scheduled && workflow == "execute" {
 			if dispatchService == nil {
@@ -647,6 +692,13 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 				return false
 			}
 			if (status == "succeeded") != succeed {
+				// Capture the ORIGINAL complete incident rows before any other
+				// diagnostic or Fatal. No child, decision, refusal or absent result
+				// is replaced by a successful protocol-shaped reconstruction.
+				if protocolEnabled && recoverySubject != "" {
+					_, censusErr := nativeReleaseCollectChainCensus(t, ctx, db, realm, recoverySubject)
+					t.Logf("original failed workflow release census returned=%t error=%v", censusErr == nil, censusErr)
+				}
 				// Keep exact native diagnostics in this isolated CI fixture. The
 				// production protected endpoint retains its detail-free refusal.
 				store := repository.CapacityStore{DB: db}
@@ -771,6 +823,7 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 	if victimUID == oldSelectedUID {
 		t.Fatal("controller adversary did not differ from old selected subset")
 	}
+	recoverySubject = victimUID
 	for _, name := range names {
 		cost := "10000"
 		if name == victimName {
@@ -805,6 +858,10 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 			t.Logf("native victim pod version %s", line)
 		}
 		if t.Failed() {
+			if protocolEnabled {
+				_, censusErr := nativeReleaseCollectChainCensus(t, ctx, db, realm, victimUID)
+				t.Logf("original failed fixture release census returned=%t error=%v", censusErr == nil, censusErr)
+			}
 			nativeKindLogReleaseLedger(t, db, realm, victimUID)
 		}
 	}()
@@ -827,14 +884,34 @@ func qualifyCapacityNativeKinDHTTP(t *testing.T, mixed bool, drift string, sched
 	}
 	nativeKindAwait(t, ctx, func() bool {
 		pod := nativeKindGet(t, ctx, "-n", realm, "get", "pod", victimName, "-o", "json")
-		statuses := pod["status"].(map[string]any)["containerStatuses"].([]any)
-		return statuses[0].(map[string]any)["state"].(map[string]any)["terminated"] != nil
+		// Container termination alone precedes the API's server-owned deletion
+		// grace30->0 transition. Wait for the ORIGINAL retained terminal object,
+		// under this same context, before freezing any recovery witness. This
+		// is a fixture prerequisite, never a promise of future RV quiescence.
+		return nativeReleaseFixtureTerminalReady(pod, checkpoint, p.HPAExecutionBinding.Lanes, nativeFinalizer, fixtureFinalizer)
 	})
 	terminated := nativeKindGet(t, ctx, "-n", realm, "get", "pod", victimName, "-o", "json")
 	status := terminated["status"].(map[string]any)["containerStatuses"].([]any)[0].(map[string]any)["state"].(map[string]any)["terminated"].(map[string]any)
 	var receipt model.NativePodTerminationReceipt
 	if status["exitCode"] != float64(0) || json.Unmarshal([]byte(status["message"].(string)), &receipt) != nil || receipt.SchemaVersion != 2 || receipt.ProcessNonce != checkpoint.ProcessNonce || receipt.RootAdmission != "previously_opened" || len(receipt.Lanes) != 4 {
 		t.Fatal("actual current SDK2 termination receipt unavailable", status)
+	}
+	if !nativeReleaseFixtureTerminalReady(terminated, checkpoint, p.HPAExecutionBinding.Lanes, nativeFinalizer, fixtureFinalizer) {
+		t.Fatal("original retained terminal native prerequisite changed before dispatch")
+	}
+	t.Logf("original terminal native prerequisite uid=%s rv=%s metadata_deletion_grace=0 spec_termination_grace=30 original_receipt_sha256=%x", victimUID, terminated["metadata"].(map[string]any)["resourceVersion"], sha256.Sum256([]byte(status["message"].(string))))
+	if mode == "forced_conflict_recovery_version_changed_hold" {
+		run("execute", false)
+		change, known := recoveryVersionChange.Load().(nativeReleaseOriginalVersionChange)
+		if !known || conflictCount.Load() != 1 || recoveryVersionRace.Load() != 1 {
+			t.Fatal("original child version refusal adversary was not reached once")
+		}
+		assertNativeReleaseChildVersionHold(t, ctx, db, realm, victimUID, compiledSource, policy, p, checkpoint, change, adapterLog)
+		retained := nativeKindGet(t, ctx, "-n", realm, "get", "pod", victimName, "-o", "json")
+		if !nativeReleaseFixtureTerminalReady(retained, checkpoint, p.HPAExecutionBinding.Lanes, nativeFinalizer, fixtureFinalizer) {
+			t.Fatal("refused child removed original or foreign native protection")
+		}
+		return
 	}
 	if mode == "forced_conflict_source_changed_hold" || mode == "forced_conflict_rbac_revoked_hold" || mode == "forced_conflict_late_owner_hold" {
 		beforeIDs := nativeReleaseIdentityCount(t, ctx, db, realm)

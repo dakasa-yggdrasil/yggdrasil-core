@@ -259,7 +259,7 @@ func TestCapacityNativeReleaseRecoveryKinDHTTP(t *testing.T) {
 	if os.Getenv("REQUIRE_CAPACITY_NATIVE_KIND") != "true" {
 		t.Skip("remote original native release recovery")
 	}
-	for _, name := range []string{"forced_conflict_new_authority_confirmed", "forced_conflict_adapter_ack_held", "forced_conflict_caller_ack_held", "forced_conflict_source_changed_hold", "forced_conflict_rbac_revoked_hold", "forced_conflict_late_owner_hold", "stale_witness_unredeemed_original_retry", "forced_conflict_recovery_inventory_race"} {
+	for _, name := range []string{"forced_conflict_new_authority_confirmed", "forced_conflict_adapter_ack_held", "forced_conflict_caller_ack_held", "forced_conflict_source_changed_hold", "forced_conflict_rbac_revoked_hold", "forced_conflict_late_owner_hold", "stale_witness_unredeemed_original_retry", "forced_conflict_recovery_inventory_race", "forced_conflict_recovery_version_changed_hold"} {
 		t.Run(name, func(t *testing.T) { qualifyCapacityNativeKinDHTTP(t, false, "", false, name) })
 	}
 }
