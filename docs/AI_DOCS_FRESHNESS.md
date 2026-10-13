@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: efaed5ce8cee4c5f868d67a3b6b590be8e388aef
-verified_diff_sha256: aa406a0fedf173a3e5a2c37b266e6f11613395d8774d0b29610f412d33493968
+verified_at_commit: 38f3f5a26f11f66c6bc4e8eb04494288bb6053db
+verified_diff_sha256: 11888f15dff4d6a1e8856802674e50266aa3c891d9a89d4f1ea41bcccd642e69
 reconciler_schema: 1
 verified_at: 2026-10-12
 by: Codex
@@ -74,3 +74,7 @@ core_complete_recovery_chain_oracle_review: One independent whole-source review 
 ## Exact native deadline datatype qualification source
 
 Source efaed5ce8cee4c5f868d67a3b6b590be8e388aef preserves the original JSON expiry with its exact nanoseconds and reads PostgreSQL deadline equality through the authoritative typed SQL projection in the same original read-only census. Native PostgreSQL boundary cases retain rounded-up, rounded-down, carry, archive and mismatched-column/JSON negatives without changing runtime clocks, expiry, recovery authority or the four-command ceiling. The renewed-deadline fixture reaches the permanent original expiry guard after proving the representations agree. Independent source review and its focused closure are complete. The original prior head 6403180e307f20bb6d52e2ac1359c68f0bd57bf2 remains red; current owning CI is required before qualification or downstream pins. No local tests, build, vet, SQL, native helper or production activation ran.
+
+## Globally unique inert native SQL fixture returns
+
+Source 38f3f5a26f11f66c6bc4e8eb04494288bb6053db changes only the declared PostgreSQL deadline fixture return-nonce hashes to a domain-separated permanent-command SHA256, preserving the original global UNIQUE key across all seven mandatory cases. No bearer, redemption, native request, clock, deadline, original result, recovery oracle, schema or runtime authority changes. Independent one-path source review is complete. The prior94b original corpus retains69testPASS events and only the six later SQL fixture insertion collisions; the whole prior head remains red. This successor requires its original full owning remote CI before downstream qualification or pins. Genuine released generation preserves all9actual input hashes. No local functional execution or production activation occurred.
