@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 38f3f5a26f11f66c6bc4e8eb04494288bb6053db
-verified_diff_sha256: 11888f15dff4d6a1e8856802674e50266aa3c891d9a89d4f1ea41bcccd642e69
+verified_at_commit: cdb222d45f213b8a56b11e78c91bd86de0371b99
+verified_diff_sha256: 0039b6d0ae3e0c27fb8bc84e965fb7bc03ccbff489a525b19f7aa1b5c4174dae
 reconciler_schema: 1
 verified_at: 2026-10-12
 by: Codex
@@ -78,3 +78,7 @@ Source efaed5ce8cee4c5f868d67a3b6b590be8e388aef preserves the original JSON expi
 ## Globally unique inert native SQL fixture returns
 
 Source 38f3f5a26f11f66c6bc4e8eb04494288bb6053db changes only the declared PostgreSQL deadline fixture return-nonce hashes to a domain-separated permanent-command SHA256, preserving the original global UNIQUE key across all seven mandatory cases. No bearer, redemption, native request, clock, deadline, original result, recovery oracle, schema or runtime authority changes. Independent one-path source review is complete. The prior94b original corpus retains69testPASS events and only the six later SQL fixture insertion collisions; the whole prior head remains red. This successor requires its original full owning remote CI before downstream qualification or pins. Genuine released generation preserves all9actual input hashes. No local functional execution or production activation occurred.
+
+## Original native terminal prerequisite and late-version refusal
+
+Source cdb222d45f213b8a56b11e78c91bd86de0371b99 observes the server-owned metadata deletion grace reaching explicit zero on the exact retained terminal Pod before dispatch, while preserving its configured thirty-second graceful termination and original SDK receipt. This fixture prerequisite does not promise future resource-version stability. One original fenced UID/RV JSON patch advances only a fixture annotation on a newly issued recovery child; the actual adapter must refuse before redemption and Core must retain the uncertain child without a result or replacement. Complete original incident rows are collected before enclosing fatal diagnostics under the same context. Independent whole-source review and both source findings are closed; all old native obligations plus sixteen prerequisite cases and the ninth physical recovery case remain mandatory. Runtime RV/CAS, clocks, expiry, four-identity budget and constraints are unchanged. Prior965 remains failed and retained. Current owning remote CI is required before qualification or downstream pins. Genuine released metadata retains all nine actual provenance inputs. No local functional execution or production activation occurred.
