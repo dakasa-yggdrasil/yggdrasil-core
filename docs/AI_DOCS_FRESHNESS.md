@@ -7,10 +7,10 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: cdb222d45f213b8a56b11e78c91bd86de0371b99
-verified_diff_sha256: 0039b6d0ae3e0c27fb8bc84e965fb7bc03ccbff489a525b19f7aa1b5c4174dae
+verified_at_commit: 36ddb021def008cb4f44d7a62a26670deb0c2213
+verified_diff_sha256: f48c65931339908a7ad80fe5d58167e2f72068549a856e06ce85334cf19758f1
 reconciler_schema: 1
-verified_at: 2026-10-12
+verified_at: 2026-10-13
 by: Codex
 note: Reconciled automatic contact OTP with the explicit owner requirement: saved email/phone require no registration, opt-in or contact factor row. Actual password+OTP proof still precedes sessions. Setup and forced password changes support contact-only accounts; recent session proof is server-issued, short-lived and consumed with the password update. Federated provider auth remains separate. CI only; no production activation. TOTP confirmation is independent of shared MFA posture and commits current-seed proof, recovery codes and enrollment-link consumption atomically.
 
@@ -82,3 +82,8 @@ Source 38f3f5a26f11f66c6bc4e8eb04494288bb6053db changes only the declared Postgr
 ## Original native terminal prerequisite and late-version refusal
 
 Source cdb222d45f213b8a56b11e78c91bd86de0371b99 observes the server-owned metadata deletion grace reaching explicit zero on the exact retained terminal Pod before dispatch, while preserving its configured thirty-second graceful termination and original SDK receipt. This fixture prerequisite does not promise future resource-version stability. One original fenced UID/RV JSON patch advances only a fixture annotation on a newly issued recovery child; the actual adapter must refuse before redemption and Core must retain the uncertain child without a result or replacement. Complete original incident rows are collected before enclosing fatal diagnostics under the same context. Independent whole-source review and both source findings are closed; all old native obligations plus sixteen prerequisite cases and the ninth physical recovery case remain mandatory. Runtime RV/CAS, clocks, expiry, four-identity budget and constraints are unchanged. Prior965 remains failed and retained. Current owning remote CI is required before qualification or downstream pins. Genuine released metadata retains all nine actual provenance inputs. No local functional execution or production activation occurred.
+
+
+## Original SQLnull and unredeemed child readback distinction
+
+Source 36ddb021def008cb4f44d7a62a26670deb0c2213 closes the source-owned negative oracle and its equivalent two-finalizer lint expression after complete original83b qualification. The actual uncertain child had no redemption, attempt, original result or caller ACK; its absent native readback persisted as JSONnull through the real non-omitempty DTO and PostgreSQL JSONB. Only nil or valid JSONnull with JSON whitespace denotes no retained original result/readback; invalid raw bytes, object, array, quoted null, boolean, number and trailing input remain refused. Nineteen mandatory actual PostgreSQL/DTO source cases use the same strict child guard and distinguish SQLNULL/missing rows from JSONnull, including native22P02 refusal in both raw fields. Absence establishes neither no native effect nor new authority; the original uncertain child stays HOLD. Whole source review and focused closure are complete. All existing native rosters, graceful shutdown, RV/CAS, clocks, exact expiry, constraints and budgets remain unchanged. Prior83b failed originals/full artifacts are retained; this current whole owning remote CI and downstream pins remain pending. Genuine generation preserves all nine actual provenance inputs. No local tests/build/vet/lint-heavy/SQL/native helper, merge, deployment or production activation occurred.
