@@ -214,7 +214,7 @@ jobs:
           REQUIRE_CAPACITY_NATIVE_KIND: "true"
         run: |
           set -euo pipefail
-          go test -race -count=1 -timeout=24m -json ./controllers/httpapi -run '^(TestCapacityNativeKinDHTTP|TestCapacityNativeReleaseRecoveryKinDHTTP|TestCapacityNativeRecoveryFrameProxyRoutes|TestCapacityNativeReleaseRecoveryCompleteChainOracle|TestCapacityNativeReleaseRecoveryIncidentDecisionSQLPostgres|TestCapacityNativeReleaseRecoveryDeadlineSQLPostgres|TestCapacityNativeReleaseTerminalPrerequisite)$' | tee native-core-results.json
+          go test -race -count=1 -timeout=24m -json ./controllers/httpapi -run '^(TestCapacityNativeKinDHTTP|TestCapacityNativeReleaseRecoveryKinDHTTP|TestCapacityNativeRecoveryFrameProxyRoutes|TestCapacityNativeReleaseRecoveryCompleteChainOracle|TestCapacityNativeReleaseRecoveryIncidentDecisionSQLPostgres|TestCapacityNativeReleaseRecoveryDeadlineSQLPostgres|TestCapacityNativeReleaseTerminalPrerequisite|TestCapacityNativeReleaseUnredeemedStorageAbsence)$' | tee native-core-results.json
           python3 - <<'PY'
           import json
           events=[json.loads(line) for line in open('native-core-results.json') if line.strip()]
@@ -232,6 +232,11 @@ jobs:
           for case in terminal_required:
               if sum(e.get('Test')==case and e.get('Action')=='run' for e in events)!=1 or sum(e.get('Test')==case and e.get('Action')=='pass' for e in events)!=1: raise SystemExit('original terminal Pod prerequisite census incomplete: '+case)
           if any(e.get('Test') in terminal_required and e.get('Action') in ('skip','fail') for e in events): raise SystemExit('original terminal Pod prerequisite failed or skipped')
+          storage='TestCapacityNativeReleaseUnredeemedStorageAbsence'
+          storage_required={storage}|{storage+'/'+name for name in ('dto-null-readback-roundtrip','missing-field-is-sql-null','whole-sql-null-is-missing-row','whole-json-null-is-missing-row','explicit-null-original-result','retained-empty-object','retained-array','retained-string-null','retained-boolean','retained-number','retained-result-object','retained-result-hash','retained-redemption','retained-attempt','retained-caller-return','trailing-json-refused-by-native-sql','json-whitespace-null-roundtrip','invalid-json-whitespace-native-readback','invalid-json-whitespace-original-result')}
+          for case in storage_required:
+              if sum(e.get('Test')==case and e.get('Action')=='run' for e in events)!=1 or sum(e.get('Test')==case and e.get('Action')=='pass' for e in events)!=1: raise SystemExit('original native SQL/DTO absence census incomplete: '+case)
+          if any(e.get('Test') in storage_required and e.get('Action') in ('skip','fail') for e in events): raise SystemExit('original native SQL/DTO absence census failed or skipped')
           proxy='TestCapacityNativeRecoveryFrameProxyRoutes'
           proxy_required={proxy}|{proxy+'/'+name for name in ('original_empty_connectivity_get','original_empty_health_get','original_describe_post','other_route_is_not_execute','get_execute_cannot_inject','original_inventory_execute','original_release_execute','malformed_execute_refused')}
           for case in proxy_required:

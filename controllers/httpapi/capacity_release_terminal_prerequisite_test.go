@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"crypto/sha256"
 	"database/sql"
@@ -16,6 +17,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
+	"github.com/lib/pq"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
@@ -32,7 +34,7 @@ func nativeReleaseFixtureTerminalReady(object map[string]any, checkpoint model.C
 	if err != nil || len(raw) > 1<<20 || json.Unmarshal(raw, &pod) != nil || string(pod.UID) != checkpoint.PodUID || pod.Name != checkpoint.PodName || pod.Namespace != checkpoint.Namespace || pod.Generation != checkpoint.PodGeneration || pod.ResourceVersion == "" || pod.DeletionTimestamp == nil || pod.DeletionTimestamp.IsZero() || pod.DeletionGracePeriodSeconds == nil || *pod.DeletionGracePeriodSeconds != 0 || pod.Spec.TerminationGracePeriodSeconds == nil || *pod.Spec.TerminationGracePeriodSeconds != 30 || len(pod.Finalizers) != 2 || nativeFinalizer == "" || foreignFinalizer == "" || nativeFinalizer == foreignFinalizer {
 		return false
 	}
-	if !((pod.Finalizers[0] == nativeFinalizer && pod.Finalizers[1] == foreignFinalizer) || (pod.Finalizers[1] == nativeFinalizer && pod.Finalizers[0] == foreignFinalizer)) || len(pod.Status.ContainerStatuses) != 1 {
+	if (pod.Finalizers[0] != nativeFinalizer || pod.Finalizers[1] != foreignFinalizer) && (pod.Finalizers[1] != nativeFinalizer || pod.Finalizers[0] != foreignFinalizer) || len(pod.Status.ContainerStatuses) != 1 {
 		return false
 	}
 	c := pod.Status.ContainerStatuses[0]
@@ -175,7 +177,7 @@ func assertNativeReleaseChildVersionHold(t *testing.T, ctx context.Context, db *
 	result, decision := census.Results[0], census.Decisions[0]
 	var request model.AdapterDestroyCapacityPodDrainProtectionRequest
 	var original model.CapacityNativeReleaseResult
-	if parent.Sequence != 1 || parent.State != "rejected_no_effect" || parent.AttemptID == uuid.Nil || parent.RedeemedBy != p.HPAExecutionBinding.AdapterPrincipalID || parent.CallerReturnObservedAt == nil || parent.AdapterSourceCommit != source || child.Sequence != 2 || child.State != "uncertain" || child.CommandID.String() != change.CommandID || child.ParentCommandID != parent.CommandID.String() || change.ParentID != parent.CommandID.String() || child.ParentAttemptID != parent.AttemptID.String() || child.AttemptID != uuid.Nil || child.RedeemedBy != "" || child.CallerReturnObservedAt != nil || len(child.OriginalResult) != 0 || len(child.NativeReadback) != 0 || child.AdapterSourceCommit != source || child.AuthorityTokenSHA256 == parent.AuthorityTokenSHA256 || child.CreatedAt.Before(*parent.CallerReturnObservedAt) || !child.ExpiresAt.Equal(parent.ExpiresAt) || child.IntentGeneration != parent.IntentGeneration || child.FencingToken != parent.FencingToken || child.PolicyID != policy.ID || child.PolicyChecksum != policy.Checksum || child.OriginPolicySHA256 != parent.OriginPolicySHA256 || child.LeaseOwner != parent.LeaseOwner || child.ExecutorID != parent.ExecutorID || child.WorkflowID != parent.WorkflowID || !nativeReleaseDeadlineExact(result, parent) || result.AdapterACK == nil || result.CallerACK == nil || result.CommandID != parent.CommandID || !result.CallerACK.Equal(*parent.CallerReturnObservedAt) || result.CallerACK.Before(*result.AdapterACK) || !result.CallerACK.Before(parent.ExpiresAt) || result.ResultSHA != parent.OriginalResultSHA256 || result.ResultSHA != nativeReleaseChainSHA(result.Result) || capacity.DecodeNativeCapacity(result.Result, &original) != nil || original.CommandID != parent.CommandID || original.AttemptID != parent.AttemptID || original.AdapterSourceCommit != source || original.OriginalStatus != 409 || original.Outcome != "rejected_no_effect" || !original.OneSend || !original.DoReturned || !original.ReadReturned || !original.CloseReturned || decision.CommandID != child.CommandID || decision.ParentID != parent.CommandID || decision.ParentAttempt != parent.AttemptID || decision.ID.String() != child.RecoveryDecisionID || decision.Fence.String() != child.RecoveryFence || decision.Record.ParentResultSHA != parent.OriginalResultSHA256 || !decision.CreatedAt.Equal(child.CreatedAt) || capacity.DecodeNativeCapacity(child.Request, &request) != nil || request.ExpectedPodUID != subject || request.ExpectedPodResourceVersion != change.BeforeRV || decision.Record.Witness.Observation.PodResourceVersion != change.BeforeRV || capacity.NativePodWitness(p, checkpoint, decision.Record.Witness.Observation, child.CreatedAt) != nil || capacity.NativePodInventory(p, decision.Record.Inventory, child.CreatedAt) != nil {
+	if parent.Sequence != 1 || parent.State != "rejected_no_effect" || parent.AttemptID == uuid.Nil || parent.RedeemedBy != p.HPAExecutionBinding.AdapterPrincipalID || parent.CallerReturnObservedAt == nil || parent.AdapterSourceCommit != source || child.Sequence != 2 || child.State != "uncertain" || child.CommandID.String() != change.CommandID || child.ParentCommandID != parent.CommandID.String() || change.ParentID != parent.CommandID.String() || child.ParentAttemptID != parent.AttemptID.String() || !nativeReleaseChildOriginalEffectsAbsent(child) || child.AdapterSourceCommit != source || child.AuthorityTokenSHA256 == parent.AuthorityTokenSHA256 || child.CreatedAt.Before(*parent.CallerReturnObservedAt) || !child.ExpiresAt.Equal(parent.ExpiresAt) || child.IntentGeneration != parent.IntentGeneration || child.FencingToken != parent.FencingToken || child.PolicyID != policy.ID || child.PolicyChecksum != policy.Checksum || child.OriginPolicySHA256 != parent.OriginPolicySHA256 || child.LeaseOwner != parent.LeaseOwner || child.ExecutorID != parent.ExecutorID || child.WorkflowID != parent.WorkflowID || !nativeReleaseDeadlineExact(result, parent) || result.AdapterACK == nil || result.CallerACK == nil || result.CommandID != parent.CommandID || !result.CallerACK.Equal(*parent.CallerReturnObservedAt) || result.CallerACK.Before(*result.AdapterACK) || !result.CallerACK.Before(parent.ExpiresAt) || result.ResultSHA != parent.OriginalResultSHA256 || result.ResultSHA != nativeReleaseChainSHA(result.Result) || capacity.DecodeNativeCapacity(result.Result, &original) != nil || original.CommandID != parent.CommandID || original.AttemptID != parent.AttemptID || original.AdapterSourceCommit != source || original.OriginalStatus != 409 || original.Outcome != "rejected_no_effect" || !original.OneSend || !original.DoReturned || !original.ReadReturned || !original.CloseReturned || decision.CommandID != child.CommandID || decision.ParentID != parent.CommandID || decision.ParentAttempt != parent.AttemptID || decision.ID.String() != child.RecoveryDecisionID || decision.Fence.String() != child.RecoveryFence || decision.Record.ParentResultSHA != parent.OriginalResultSHA256 || !decision.CreatedAt.Equal(child.CreatedAt) || capacity.DecodeNativeCapacity(child.Request, &request) != nil || request.ExpectedPodUID != subject || request.ExpectedPodResourceVersion != change.BeforeRV || decision.Record.Witness.Observation.PodResourceVersion != change.BeforeRV || capacity.NativePodWitness(p, checkpoint, decision.Record.Witness.Observation, child.CreatedAt) != nil || capacity.NativePodInventory(p, decision.Record.Inventory, child.CreatedAt) != nil {
 		t.Fatal("late child RV acquired a redemption/result, replay or replacement authority")
 	}
 	matchedInventory := false
@@ -212,4 +214,147 @@ func assertNativeReleaseChildVersionHold(t *testing.T, ctx context.Context, db *
 		t.Fatal("original adapter did not prove the child RV refusal before redemption")
 	}
 	t.Logf("original late child native RV retained HOLD, no redemption/result/replacement; adapter_log_sha256=%x", sha256.Sum256(raw))
+}
+
+// NativeReadback has no omitempty: an absent original read is serialized by
+// the real DTO as JSONnull and survives PostgreSQL JSONB as literal `null`.
+// This means no retained readback, not proof of no native effect. The original
+// pending child still needs no redemption/attempt/result/ACK and stays HOLD.
+func nativeReleaseChildOriginalEffectsAbsent(child *model.CapacityNativeCommand) bool {
+	absent := func(raw json.RawMessage) bool {
+		return raw == nil || json.Valid(raw) && bytes.Equal(bytes.Trim(raw, " \t\r\n"), []byte("null"))
+	}
+	return child != nil && child.AttemptID == uuid.Nil && child.RedeemedBy == "" && child.CallerReturnObservedAt == nil && child.OriginalResultSHA256 == "" && absent(child.OriginalResult) && absent(child.NativeReadback)
+}
+
+func TestCapacityNativeReleaseUnredeemedStorageAbsence(t *testing.T) {
+	dsn := os.Getenv("DB_URL")
+	if dsn == "" {
+		if os.Getenv("REQUIRE_CAPACITY_POSTGRES") == "true" {
+			t.Fatal("original SQL/DTO absence roundtrip requires PostgreSQL")
+		}
+		t.Skip("remote original SQL/DTO absence roundtrip")
+	}
+	db, err := sql.Open("postgres", dsn)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	ctx, cancel := context.WithTimeout(t.Context(), 20*time.Second)
+	defer cancel()
+	for _, name := range []string{"dto-null-readback-roundtrip", "missing-field-is-sql-null", "whole-sql-null-is-missing-row", "whole-json-null-is-missing-row", "explicit-null-original-result", "retained-empty-object", "retained-array", "retained-string-null", "retained-boolean", "retained-number", "retained-result-object", "retained-result-hash", "retained-redemption", "retained-attempt", "retained-caller-return", "trailing-json-refused-by-native-sql", "json-whitespace-null-roundtrip", "invalid-json-whitespace-native-readback", "invalid-json-whitespace-original-result"} {
+		t.Run(name, func(t *testing.T) {
+			child := model.CapacityNativeCommand{State: "uncertain"}
+			var value any
+			valid := name == "dto-null-readback-roundtrip" || name == "missing-field-is-sql-null" || name == "explicit-null-original-result" || name == "json-whitespace-null-roundtrip"
+			switch name {
+			case "explicit-null-original-result":
+				child.OriginalResult = json.RawMessage("null")
+			case "json-whitespace-null-roundtrip":
+				child.NativeReadback = json.RawMessage(" \tnull\r\n")
+				child.OriginalResult = json.RawMessage("\nnull\t")
+			case "retained-empty-object":
+				child.NativeReadback = json.RawMessage("{}")
+			case "retained-array":
+				child.NativeReadback = json.RawMessage("[]")
+			case "retained-string-null":
+				child.NativeReadback = json.RawMessage(`"null"`)
+			case "retained-boolean":
+				child.NativeReadback = json.RawMessage("false")
+			case "retained-number":
+				child.NativeReadback = json.RawMessage("0")
+			case "retained-result-object":
+				child.OriginalResult = json.RawMessage("{}")
+			case "retained-result-hash":
+				child.OriginalResultSHA256 = strings.Repeat("a", 64)
+			case "retained-redemption":
+				child.RedeemedBy = "original-adapter"
+			case "retained-attempt":
+				child.AttemptID = uuid.New()
+			case "retained-caller-return":
+				at := time.Now().UTC()
+				child.CallerReturnObservedAt = &at
+			}
+			raw, marshalErr := json.Marshal(child)
+			if marshalErr != nil {
+				t.Fatal(marshalErr)
+			}
+			value = string(raw)
+			if name == "missing-field-is-sql-null" {
+				var object map[string]json.RawMessage
+				if json.Unmarshal(raw, &object) != nil {
+					t.Fatal("original command object unavailable")
+				}
+				delete(object, "native_readback")
+				raw, marshalErr = json.Marshal(object)
+				if marshalErr != nil {
+					t.Fatal(marshalErr)
+				}
+				value = string(raw)
+			} else if name == "whole-sql-null-is-missing-row" {
+				value = nil
+			} else if name == "whole-json-null-is-missing-row" {
+				value = "null"
+			} else if name == "trailing-json-refused-by-native-sql" {
+				value = string(raw) + " false"
+			}
+			var returned []byte
+			var wholeSQLNull, fieldSQLNull bool
+			var fieldType sql.NullString
+			err := db.QueryRowContext(ctx, `SELECT $1::jsonb,$1::jsonb IS NULL,($1::jsonb->'native_readback') IS NULL,jsonb_typeof($1::jsonb->'native_readback')`, value).Scan(&returned, &wholeSQLNull, &fieldSQLNull, &fieldType)
+			if name == "trailing-json-refused-by-native-sql" {
+				var syntaxErr *pq.Error
+				if !errors.As(err, &syntaxErr) || syntaxErr.Code != "22P02" {
+					t.Fatal("native JSONB did not independently refuse trailing input with invalid_text_representation", err)
+				}
+				return
+			}
+			if err != nil {
+				t.Fatal("actual original SQL/DTO roundtrip unavailable", err)
+			}
+			var decoded *model.CapacityNativeCommand
+			if !wholeSQLNull && json.Unmarshal(returned, &decoded) != nil {
+				t.Fatal("actual native command DTO did not decode")
+			}
+			if name == "invalid-json-whitespace-native-readback" || name == "invalid-json-whitespace-original-result" {
+				for _, invalidRaw := range []json.RawMessage{[]byte("\u00a0null\u00a0"), []byte("\vnull"), []byte("null false"), []byte("null //comment"), {}} {
+					invalid := *decoded
+					if name == "invalid-json-whitespace-native-readback" {
+						invalid.NativeReadback = invalidRaw
+					} else {
+						invalid.OriginalResult = invalidRaw
+					}
+					if nativeReleaseChildOriginalEffectsAbsent(&invalid) {
+						t.Fatal("invalid raw JSON acquired original result/readback absence")
+					}
+					var nativeJSON []byte
+					var syntaxErr *pq.Error
+					err = db.QueryRowContext(ctx, `SELECT $1::jsonb`, string(invalidRaw)).Scan(&nativeJSON)
+					if !errors.As(err, &syntaxErr) || syntaxErr.Code != "22P02" {
+						t.Fatal("native JSONB did not refuse the same invalid original raw bytes", err)
+					}
+				}
+				return
+			}
+			if nativeReleaseChildOriginalEffectsAbsent(decoded) != valid {
+				t.Fatal("SQL/JSONnull, missing original row or retained effect changed the native child guard")
+			}
+			if name == "dto-null-readback-roundtrip" {
+				invalid := *decoded
+				invalid.NativeReadback = json.RawMessage{}
+				if nativeReleaseChildOriginalEffectsAbsent(&invalid) {
+					t.Fatal("non-nil empty invalid DTO bytes acquired null absence")
+				}
+			}
+			if name == "dto-null-readback-roundtrip" && (wholeSQLNull || fieldSQLNull || !fieldType.Valid || fieldType.String != "null" || len(decoded.NativeReadback) != 4) {
+				t.Fatal("original JSONnull was relabelled SQLNULL or empty bytes")
+			}
+			if name == "missing-field-is-sql-null" && (wholeSQLNull || !fieldSQLNull || fieldType.Valid || len(decoded.NativeReadback) != 0) {
+				t.Fatal("missing field SQLNULL was relabelled native readback")
+			}
+			if name == "whole-sql-null-is-missing-row" && (!wholeSQLNull || decoded != nil) || name == "whole-json-null-is-missing-row" && (wholeSQLNull || decoded != nil) {
+				t.Fatal("missing original command acquired a retained child")
+			}
+		})
+	}
 }
