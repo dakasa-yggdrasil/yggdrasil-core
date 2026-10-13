@@ -60,6 +60,10 @@ var (
 		"capacity.assess_bound",
 		"capacity.execute_bound",
 		"capacity.admit_bound",
+		"capacity.provision_original_guest",
+		"capacity.qualify_original_guest_echo",
+		"capacity.retire_original_guest",
+		"capacity.finish_original_guest_retirement",
 	}
 	workflowTemplatePattern = regexp.MustCompile(`{{\s*([^{}]+?)\s*}}`)
 )

@@ -16,6 +16,9 @@ import (
 
 func ParseCapacityPolicySpec(raw json.RawMessage) (model.CapacityPolicySpec, error) {
 	var spec model.CapacityPolicySpec
+	if err := validateGuestRetirementPolicyJSON(raw); err != nil {
+		return spec, err
+	}
 	if err := capacity.ValidateGuestBootstrapPolicyJSON(raw); err != nil {
 		return spec, err
 	}
@@ -36,6 +39,36 @@ func ParseCapacityPolicySpec(raw json.RawMessage) (model.CapacityPolicySpec, err
 		return spec, fmt.Errorf("capacity policy must contain one JSON object")
 	}
 	return spec, nil
+}
+
+func validateGuestRetirementPolicyJSON(raw []byte) error {
+	decoder := json.NewDecoder(bytes.NewReader(raw))
+	opening, err := decoder.Token()
+	if err != nil || opening != json.Delim('{') {
+		return fmt.Errorf("canonical capacity policy object required")
+	}
+	seen := false
+	for decoder.More() {
+		token, err := decoder.Token()
+		name, ok := token.(string)
+		var value json.RawMessage
+		if err != nil || !ok || decoder.Decode(&value) != nil {
+			return fmt.Errorf("capacity policy member unavailable")
+		}
+		if !strings.EqualFold(name, "guest_retirement_binding") {
+			continue
+		}
+		var binding model.CapacityGuestRetirementBinding
+		if name != "guest_retirement_binding" || seen || capacity.DecodeGuestLifecycle(value, &binding) != nil {
+			return fmt.Errorf("closed nonnull original Guest retirement binding required")
+		}
+		seen = true
+	}
+	closing, err := decoder.Token()
+	if err != nil || closing != json.Delim('}') || decoder.Decode(new(any)) != io.EOF {
+		return fmt.Errorf("one capacity policy object required")
+	}
+	return nil
 }
 
 func validateNativeNotifyWindowJSON(raw []byte) error {

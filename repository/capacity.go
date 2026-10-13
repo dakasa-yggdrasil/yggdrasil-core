@@ -22,11 +22,13 @@ const maxCapacityGeneration int64 = 9007199254740991
 // CapacityStore serializes each logical dimension in PostgreSQL. The process
 // gate is explicit and defaults to false in the workflow handler.
 type CapacityStore struct {
-	DB               *sql.DB
-	ExecutionEnabled bool
-	AdmissionOnly    bool
-	WorkflowID       uuid.UUID
-	ExecutorID       string
+	DB                    *sql.DB
+	ExecutionEnabled      bool
+	AdmissionOnly         bool
+	WorkflowID            uuid.UUID
+	ExecutorID            string
+	guestOriginal         *guestOriginalProvisioningContext
+	guestRetirementOrigin *guestOriginalProvisioningContext
 }
 
 // Assess persists a proposal, even in shadow mode. An outstanding generation

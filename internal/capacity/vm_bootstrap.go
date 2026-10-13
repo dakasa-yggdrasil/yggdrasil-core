@@ -116,6 +116,17 @@ func guestClosedJSON(raw []byte, typ reflect.Type, depth int) error {
 	for typ.Kind() == reflect.Pointer {
 		typ = typ.Elem()
 	}
+	if typ == reflect.TypeOf([]byte{}) {
+		var text string
+		if json.Unmarshal(raw, &text) != nil {
+			return fmt.Errorf("canonical bounded Guest byte string required")
+		}
+		value, err := base64.StdEncoding.DecodeString(text)
+		if err != nil || len(value) > GuestBootstrapLimit || base64.StdEncoding.EncodeToString(value) != text {
+			return fmt.Errorf("canonical bounded Guest byte string required")
+		}
+		return nil
+	}
 	if typ.Kind() == reflect.Slice {
 		var values []json.RawMessage
 		if json.Unmarshal(raw, &values) != nil || values == nil || len(values) > 64 {

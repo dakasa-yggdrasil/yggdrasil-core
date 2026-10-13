@@ -173,6 +173,9 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 			return err
 		}
 		b := plan.Binding
+		if plan.Capability == b.EnsureCapability && (p.GuestRetirementBinding == nil || s.guestOriginal == nil) {
+			return fmt.Errorf("%w: original Guest provisioning step and profile required before create", ErrCapacityConflict)
+		}
 		if err = lockNativeMutationSlot(ctx, tx, b, plan.Slot); err != nil {
 			return err
 		}
@@ -203,6 +206,9 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 			plan, err = capacity.BindMutationDestroyPlan(plan, slot.ResourceID, slot.ResourceCreatedAt)
 			if err != nil {
 				return ErrCapacityConflict
+			}
+			if err = s.guestDestroyEligibilityTx(ctx, tx, policy, p, intent, b, plan.Slot, slot.ResourceID, slot.ResourceCreatedAt, now, ""); err != nil {
+				return err
 			}
 		}
 		// Never-redeemed permissions have never authorized an SDK send. Only
@@ -270,6 +276,12 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 			return err
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_mutation_grants(id,namespace,environment,domain,dimension,generation,integration_instance_id,scope_checksum,profile_name,slot,state,grant_record,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'issued',$11::jsonb,$12)`, result.GrantID, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, generation, b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName, plan.Slot, data, expires)
+		if err == nil && plan.Capability == b.EnsureCapability {
+			err = s.reserveGuestOriginalTx(ctx, tx, policy, p, intent, record, now)
+		}
+		if err == nil && plan.Capability == b.DestroyCapability {
+			err = s.bindGuestDestroyTx(ctx, tx, record, now)
+		}
 		return err
 	})
 	return result, err
@@ -423,6 +435,17 @@ func (s CapacityStore) RedeemMutation(ctx context.Context, principal string, r m
 		}
 		if !capacityProfileCurrent(p, intent.Decision, now) {
 			return ErrCapacityConflict
+		}
+		guestStore := s
+		guestStore.WorkflowID, guestStore.ExecutorID = record.WorkflowID, record.ExecutorID
+		if g.Capability == b.EnsureCapability {
+			if err = guestStore.guestCreateRedemptionTx(ctx, tx, *record, now); err != nil {
+				return err
+			}
+		} else {
+			if err = guestStore.guestDestroyEligibilityTx(ctx, tx, policy, p, intent, b, g.Slot, g.ExpectedResourceID, g.ExpectedResourceCreatedAt, now, g.GrantID); err != nil {
+				return err
+			}
 		}
 		record.AttemptID, record.SettlementTokenSHA256, record.Grant.State = r.AttemptID, r.SettlementTokenSHA256, "redeemed"
 		response.Mode = "write_once"
@@ -698,6 +721,12 @@ func (s CapacityStore) ConfirmMutation(ctx context.Context, policy model.Manifes
 			return err
 		}
 		if g.Capability == b.DestroyCapability {
+			// Historical accepted/uncertain originals without the new complete
+			// enrollment/retirement binding remain readback-only. They cannot
+			// tombstone or free a capacity slot from provider absence alone.
+			if err := s.guestConfirmedDestroyTx(ctx, tx, p, record, proof, now); err != nil {
+				return err
+			}
 			if !settled.AuxiliaryInventoryComplete || !validMutationAuxiliaries(proof.AuxiliaryAbsent) {
 				return ErrCapacityConflict
 			}
@@ -754,7 +783,7 @@ func capacityMutationTypeIdentity(raw []byte, b model.CapacityMutationBinding) (
 		return "", "", ErrCapacityConflict
 	}
 	resource := strings.TrimPrefix(b.EnsureCapability, "ensure_")
-	if !mutationAuxiliaryKindPattern.MatchString(spec.Provider) || !mutationAuxiliaryKindPattern.MatchString(resource) || len(spec.Provider)+len(resource)+1 > 64 || b.EnsureCapability != "ensure_"+resource || b.DestroyCapability != "destroy_"+resource || !slices.Contains(spec.Capabilities, "execute") {
+	if (!mutationAuxiliaryKindPattern.MatchString(spec.Provider) && !capacity.GuestOriginalNativeQEMUProviderEnabled(spec.Provider)) || !mutationAuxiliaryKindPattern.MatchString(resource) || len(spec.Provider)+len(resource)+1 > 64 || b.EnsureCapability != "ensure_"+resource || b.DestroyCapability != "destroy_"+resource || !slices.Contains(spec.Capabilities, "execute") {
 		return "", "", ErrCapacityConflict
 	}
 	// Transport capabilities are describe/read/execute, not resource actions.
@@ -788,7 +817,7 @@ func emitCapacityMutationEvent(ctx context.Context, tx *sql.Tx, namespace string
 	if record.Grant.Capability == record.Binding.DestroyCapability {
 		verb = "destroyed"
 	}
-	if !mutationAuxiliaryKindPattern.MatchString(record.EventProvider) || !mutationAuxiliaryKindPattern.MatchString(record.EventResource) {
+	if (!mutationAuxiliaryKindPattern.MatchString(record.EventProvider) && !capacity.GuestOriginalNativeQEMUProviderEnabled(record.EventProvider)) || !mutationAuxiliaryKindPattern.MatchString(record.EventResource) {
 		return ErrCapacityConflict
 	}
 	observed := map[string]any{"grant_id": record.Grant.GrantID, "scope_checksum": record.Grant.ScopeChecksum, "profile_name": record.Grant.ProfileName, "slot": record.Grant.Slot, "resource_created_at": proof.ResourceCreatedAt, "action_ids": proof.ActionIDs, "receipt_ref": proof.ReceiptRef}

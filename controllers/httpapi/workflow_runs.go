@@ -163,8 +163,14 @@ func (s *Server) dispatchAsyncWorkflowRun(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	originalParent, finishOriginal, ownerErr := s.beginOriginalGuestAsyncWorkflow()
+	if ownerErr != nil {
+		writeProblemJSON(w, http.StatusConflict, "workflow.original_owner_closed", "original workflow owner unavailable")
+		return
+	}
 	launchAsyncWorkflowRun("workflow_run_async", func() {
-		bg, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer finishOriginal()
+		bg, cancel := context.WithTimeout(originalParent, 30*time.Minute)
 		defer cancel()
 		defer markAsyncWorkflowRunFailedOnPanic(s.db, runID)
 

@@ -1,0 +1,122 @@
+name: Original Guest Core source and PostgreSQL gates
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+
+# SOURCE gates precede the separately published Guest joint native matrix.
+# This workflow supplies no QEMU, provider effect, native-positive ledger or
+# production capacity. Guest owns each genuine same-original two-slot realm;
+# its readonly Core verifier consumes that SAME database after the real caller.
+jobs:
+  source-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GOWORK: "off"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Literal transferred deadlines and first retirement thirty-second bound
+        run: bash scripts/ci/capacity_guest_original_corpus.sh transferred
+      - name: Exact canonical original reply bytes and bounded original Read/Close facts
+        if: ${{ !cancelled() }}
+        run: bash scripts/ci/capacity_guest_original_corpus.sh bytes
+      - name: Required native DTO fields without native execution
+        if: ${{ !cancelled() }}
+        run: bash scripts/ci/capacity_guest_original_corpus.sh native-decode
+      - name: Original async and real HTTP handler returns and default invariance
+        if: ${{ !cancelled() }}
+        run: bash scripts/ci/capacity_guest_original_corpus.sh native-owners
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-original-guest-source-censuses
+          path: ${{ runner.temp }}/capacity-guest-original-*/
+          if-no-files-found: error
+
+  guest-pg-public-auth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: native-ci-only
+          POSTGRES_DB: yggdrasil_native_guest
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d yggdrasil_native_guest"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      GOWORK: "off"
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: yggdrasil_native_guest
+      DB_USER: postgres
+      DB_PASSWORD: native-ci-only
+      DB_SSLMODE: disable
+      DB_URL: postgres://postgres:native-ci-only@127.0.0.1:5432/yggdrasil_native_guest?sslmode=disable
+      REQUIRE_CAPACITY_GUEST_ORIGINAL_POSTGRES: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Apply original owning migration source to ephemeral PG
+        run: go run ./scripts/goose up
+      - name: Real PG source refusals and closed public workflow/manifest admission corpus
+        run: bash scripts/ci/capacity_guest_original_corpus.sh source
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-original-guest-pg-auth-census
+          path: ${{ runner.temp }}/capacity-guest-original-*/
+          if-no-files-found: error
+
+  native-cli-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GOWORK: "off"
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build actual clean native Core command outside source checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain --untracked-files=normal)"
+          git rev-parse HEAD > "$RUNNER_TEMP/core-original-guest-source-code.txt"
+          go build -mod=readonly -buildvcs=true -tags nativequalification -o "$RUNNER_TEMP/core-original-guest-native-cli" ./cmd/native-guest-lifecycle-fixture
+          go version -m "$RUNNER_TEMP/core-original-guest-native-cli" > "$RUNNER_TEMP/core-original-guest-native-build-metadata.txt"
+          sha256sum "$RUNNER_TEMP/core-original-guest-native-cli" > "$RUNNER_TEMP/core-original-guest-native-cli.sha256"
+          test -z "$(git status --porcelain --untracked-files=normal)"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-original-guest-native-source-build
+          path: |
+            ${{ runner.temp }}/core-original-guest-source-code.txt
+            ${{ runner.temp }}/core-original-guest-native-build-metadata.txt
+            ${{ runner.temp }}/core-original-guest-native-cli.sha256
+          if-no-files-found: error

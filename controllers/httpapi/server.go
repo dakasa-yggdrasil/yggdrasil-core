@@ -237,6 +237,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	if err != nil {
 		return nil, err
 	}
+	server.capacityGuestPrincipals, err = loadCapacityGuestPrincipals(server.workflowRunAuth.principals, eventPrincipals, directoryPrincipals, server.capacityMutationPrincipals)
+	if err != nil {
+		return nil, err
+	}
 	server.snapshotHMACSecret, err = directorySnapshotSecret(directoryPrincipals)
 	if err != nil {
 		return nil, err
@@ -950,6 +954,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 
 func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if principal := s.capacityGuestCredential(r); principal != nil || capacityGuestPath(r.URL.Path) {
+			s.serveCapacityGuestRequest(w, r, principal)
+			return
+		}
 		if originalCanaryAuthorityClaim(r) {
 			s.serveOriginalCanaryAuthority(w, r)
 			return
@@ -1351,9 +1359,11 @@ type workflowDispatchFunc func(ctx context.Context, ref model.ManifestSelector, 
 
 // Server exposes the synchronous HTTP surface of yggdrasil-core.
 type Server struct {
-	originalCanaryAuthorities  *capacity.OriginalCanaryAuthorityRegistry
-	capacityMutationPrincipals []capacityMutationPrincipal
-	snapshotHMACSecret         []byte
+	originalGuestAsyncWorkflowOwner guestOriginalAsyncWorkflowOwner
+	originalCanaryAuthorities       *capacity.OriginalCanaryAuthorityRegistry
+	capacityMutationPrincipals      []capacityMutationPrincipal
+	capacityGuestPrincipals         []capacityGuestPrincipal
+	snapshotHMACSecret              []byte
 
 	serviceName      string
 	db               *sql.DB
@@ -3477,6 +3487,13 @@ func integrationInstanceDocumentFromPayload(payload consoleCreateIntegrationInst
 func manifestDocumentFromPayload(kind string, payload consoleCreateManifestRequest) (model.ManifestDocument, error) {
 	if len(bytesTrimSpace(payload.Spec)) == 0 || string(bytesTrimSpace(payload.Spec)) == "null" {
 		return model.ManifestDocument{}, fmt.Errorf("spec is required")
+	}
+	// Validate the original operator bytes before generic normalization can
+	// collapse duplicate or case-aliased Guest binding members.
+	if strings.EqualFold(strings.TrimSpace(kind), "capacity_policy") {
+		if _, err := manifestengine.ParseCapacityPolicySpec(payload.Spec); err != nil {
+			return model.ManifestDocument{}, err
+		}
 	}
 
 	var specValue any

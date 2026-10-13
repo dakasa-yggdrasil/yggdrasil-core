@@ -34,6 +34,7 @@ type CapacityPolicySpec struct {
 	HPAExecutionBinding       *CapacityHPAExecutionBinding       `json:"hpa_execution_binding,omitempty"`
 	VMNodeMembershipBinding   *CapacityVMNodeMembershipBinding   `json:"vm_node_membership_binding,omitempty"`
 	GuestBootstrapBinding     *CapacityGuestBootstrapBinding     `json:"guest_bootstrap_binding,omitempty"`
+	GuestRetirementBinding    *CapacityGuestRetirementBinding    `json:"guest_retirement_binding,omitempty"`
 	BusinessCreationBinding   *CapacityBusinessCreationBinding   `json:"business_creation_binding,omitempty"`
 	ControllerBinding         *CapacityControllerBinding         `json:"controller_binding,omitempty"`
 	NativeNotifyWindowBinding *CapacityNativeNotifyWindowBinding `json:"native_notify_window_binding,omitempty"`

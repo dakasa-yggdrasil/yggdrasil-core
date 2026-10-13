@@ -182,6 +182,9 @@ func (s CapacityStore) IssueCompensation(ctx context.Context, policy model.Manif
 		if (parent.Grant.State != "settled" && parent.Grant.State != "compensating") || !sameCompensationBinding(b, parent.Binding) || parent.Grant.Slot != plan.Slot || !validFailedCreationProof(p, parent, issue.FailedProof, now) {
 			return ErrCapacityConflict
 		}
+		if err = s.guestFailedCreateCleanupTx(ctx, tx, p, parent, issue.FailedProof, now, ""); err != nil {
+			return err
+		}
 		plan, err = capacity.BindMutationDestroyPlan(plan, issue.FailedProof.ResourceID, issue.FailedProof.ResourceCreatedAt)
 		if err != nil {
 			return ErrCapacityConflict
@@ -214,6 +217,9 @@ func (s CapacityStore) IssueCompensation(ctx context.Context, policy model.Manif
 				return ErrCapacityConflict
 			}
 			if existing.Grant.State == "issued" {
+				if err = s.guestFailedCreateCleanupTx(ctx, tx, p, parent, issue.FailedProof, now, existing.Grant.GrantID); err != nil {
+					return err
+				}
 				parent.Proof, existing.CompensationDrainProof = &issue.FailedProof, &issue.DrainProof
 				if err = saveMutationGrant(ctx, tx, parent); err != nil {
 					return err
@@ -243,6 +249,9 @@ func (s CapacityStore) IssueCompensation(ctx context.Context, policy model.Manif
 			return err
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_mutation_grants(id,namespace,environment,domain,dimension,generation,integration_instance_id,scope_checksum,profile_name,slot,state,grant_record,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'issued',$11::jsonb,$12)`, result.GrantID, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, parent.Generation, b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName, plan.Slot, raw, result.ExpiresAt)
+		if err == nil {
+			err = s.bindGuestCompensationTx(ctx, tx, record, parent, now)
+		}
 		return err
 	})
 	return result, err
@@ -263,6 +272,9 @@ func redeemCompensation(ctx context.Context, tx *sql.Tx, record *capacityMutatio
 	}
 	if parent.Grant.State != "compensating" || parent.Proof == nil || !validFailedCreationProof(p, parent, *parent.Proof, now) || parent.Proof.ResourceID != g.ExpectedResourceID || parent.Proof.ResourceCreatedAt != g.ExpectedResourceCreatedAt || !sameCompensationBinding(record.Binding, parent.Binding) {
 		return ErrCapacityConflict
+	}
+	if err := (CapacityStore{}).guestFailedCreateCleanupTx(ctx, tx, p, parent, *parent.Proof, now, g.GrantID); err != nil {
+		return err
 	}
 	var ns string
 	if err := tx.QueryRowContext(ctx, `SELECT namespace FROM public.capacity_mutation_grants WHERE id=$1`, g.GrantID).Scan(&ns); err != nil {
@@ -328,6 +340,11 @@ func (s CapacityStore) ConfirmCompensation(ctx context.Context, policy model.Man
 		}
 		if parent.Grant.State != "compensating" || parent.Proof == nil || parent.Proof.ResourceID != g.ExpectedResourceID || parent.Proof.ResourceCreatedAt != g.ExpectedResourceCreatedAt || !sameCompensationBinding(b, parent.Binding) {
 			return ErrCapacityConflict
+		}
+		// Historical readback may be retained without adopting a missing
+		// original writer proof. No new tombstone/reclaim follows absence alone.
+		if err = s.guestConfirmedDestroyTx(ctx, tx, p, child, proof, now); err != nil {
+			return err
 		}
 		var registered int
 		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE integration_instance_id=$1 AND resource_id=$2`, b.IntegrationInstanceID, g.ExpectedResourceID).Scan(&registered); err != nil {

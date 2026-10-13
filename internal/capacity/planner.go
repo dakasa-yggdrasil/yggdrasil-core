@@ -61,6 +61,11 @@ func ValidatePolicy(p model.CapacityPolicySpec) error {
 	if err := ValidateMutationBindings(p); err != nil {
 		return err
 	}
+	if p.GuestRetirementBinding != nil {
+		if err := ValidateGuestRetirementBinding(p, p.GuestRetirementBinding); err != nil {
+			return err
+		}
+	}
 	return ValidateBoundAssessmentBinding(p)
 }
 
