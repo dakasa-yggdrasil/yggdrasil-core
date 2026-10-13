@@ -629,6 +629,9 @@ func TestCapacityNativeReleaseRecoveryDeadlineSQLPostgres(t *testing.T) {
 					t.Fatal("original inert deadline command unavailable", err)
 				}
 				r := census.Results[i]
+				// This inert SQL fixture also preserves the global return-nonce
+				// UNIQUE key across every case; no bearer is created or redeemed.
+				r.ReturnNonceSHA = fmt.Sprintf("%x", sha256.Sum256([]byte("native-deadline-fixture-return:"+c.CommandID.String())))
 				column := original
 				if tc.name == "mismatched-native-column" {
 					column = column.Add(time.Microsecond)
