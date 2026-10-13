@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 87d23aad1e512dff2c9149d03f7335014ab33e47
-verified_diff_sha256: a1babe05e878fdd4a30058b2a61deaed67d3900c94f2dde5fe79cf61fc6cbf00
+verified_at_commit: efaed5ce8cee4c5f868d67a3b6b590be8e388aef
+verified_diff_sha256: aa406a0fedf173a3e5a2c37b266e6f11613395d8774d0b29610f412d33493968
 reconciler_schema: 1
 verified_at: 2026-10-12
 by: Codex
@@ -70,3 +70,7 @@ core_recovery_frame_source_review: Independently reviewed the complete six-sourc
 
 
 core_complete_recovery_chain_oracle_review: One independent whole-source review and cohesive closure preserve production source and clocks. The native oracle retains complete bounded permanent identity, original result/dual ACK and incident decision rows before fatal guards. Every rejected409 remains immutable; each new child has distinct token/attempt/fence, the same original deadline and policy/source/owner, and a complete current HPA/witness/inventory frame with exact process identity. The permanent four-identity limit remains intact.33 protocol cases and the actual PostgreSQL incoming/outgoing/unrelated edge corpus are mandatory in owning CI. Genuine generated context/summary provenance binds CODE 87d23aad1e512dff2c9149d03f7335014ab33e47. Historical4ed intermediate CAS causality remains UNKNOWN; whole current-head CI, Notify adoption and public producer/native load proofs remain pending. No local tests, builds, vet, SQL, native helper, merge, image publication or production activation ran.
+
+## Exact native deadline datatype qualification source
+
+Source efaed5ce8cee4c5f868d67a3b6b590be8e388aef preserves the original JSON expiry with its exact nanoseconds and reads PostgreSQL deadline equality through the authoritative typed SQL projection in the same original read-only census. Native PostgreSQL boundary cases retain rounded-up, rounded-down, carry, archive and mismatched-column/JSON negatives without changing runtime clocks, expiry, recovery authority or the four-command ceiling. The renewed-deadline fixture reaches the permanent original expiry guard after proving the representations agree. Independent source review and its focused closure are complete. The original prior head 6403180e307f20bb6d52e2ac1359c68f0bd57bf2 remains red; current owning CI is required before qualification or downstream pins. No local tests, build, vet, SQL, native helper or production activation ran.
