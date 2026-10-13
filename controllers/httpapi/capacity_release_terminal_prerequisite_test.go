@@ -280,7 +280,8 @@ func TestCapacityNativeReleaseUnredeemedStorageAbsence(t *testing.T) {
 				t.Fatal(marshalErr)
 			}
 			value = string(raw)
-			if name == "missing-field-is-sql-null" {
+			switch name {
+			case "missing-field-is-sql-null":
 				var object map[string]json.RawMessage
 				if json.Unmarshal(raw, &object) != nil {
 					t.Fatal("original command object unavailable")
@@ -291,11 +292,11 @@ func TestCapacityNativeReleaseUnredeemedStorageAbsence(t *testing.T) {
 					t.Fatal(marshalErr)
 				}
 				value = string(raw)
-			} else if name == "whole-sql-null-is-missing-row" {
+			case "whole-sql-null-is-missing-row":
 				value = nil
-			} else if name == "whole-json-null-is-missing-row" {
+			case "whole-json-null-is-missing-row":
 				value = "null"
-			} else if name == "trailing-json-refused-by-native-sql" {
+			case "trailing-json-refused-by-native-sql":
 				value = string(raw) + " false"
 			}
 			var returned []byte
