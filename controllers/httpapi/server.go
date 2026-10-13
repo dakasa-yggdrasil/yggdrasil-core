@@ -19,6 +19,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/oidc"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/scim"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/contactphone"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/cryptoenvelope"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
@@ -212,6 +213,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	}
 
 	server := &Server{
+		originalCanaryAuthorities:  capacity.NewOriginalCanaryAuthorityRegistry(),
 		serviceName:                serviceName,
 		db:                         db,
 		rabbitmq:                   conn,
@@ -231,6 +233,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		server.workflowRunAuth = loadWorkflowRunAuthConfig(eventPrincipals, directoryPrincipals)
 	})
 	logWorkflowRunCredentialSurface(logger, server.workflowRunAuth, directoryErr, time.Now().UTC())
+	server.capacityMutationPrincipals, err = loadCapacityMutationPrincipals(server.workflowRunAuth.principals, eventPrincipals, directoryPrincipals)
+	if err != nil {
+		return nil, err
+	}
 	server.snapshotHMACSecret, err = directorySnapshotSecret(directoryPrincipals)
 	if err != nil {
 		return nil, err
@@ -944,6 +950,14 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 
 func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if originalCanaryAuthorityClaim(r) {
+			s.serveOriginalCanaryAuthority(w, r)
+			return
+		}
+		if principal := s.capacityMutationCredential(r); principal != nil || capacityMutationPath(r.URL.Path) {
+			s.serveCapacityMutationRequest(w, r, principal)
+			return
+		}
 		// Directory machine-read path (ADR-0019) is decided first, on every
 		// request, before the public pass-through and before any other
 		// credential family. A request that names itself as a directory
@@ -1337,7 +1351,9 @@ type workflowDispatchFunc func(ctx context.Context, ref model.ManifestSelector, 
 
 // Server exposes the synchronous HTTP surface of yggdrasil-core.
 type Server struct {
-	snapshotHMACSecret []byte
+	originalCanaryAuthorities  *capacity.OriginalCanaryAuthorityRegistry
+	capacityMutationPrincipals []capacityMutationPrincipal
+	snapshotHMACSecret         []byte
 
 	serviceName      string
 	db               *sql.DB
@@ -1490,11 +1506,12 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 		startedAt := time.Now()
 		writer := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(writer, r)
+		method, route := originalCanaryAccessLog(r)
 
 		s.logger.Info("http request served",
 			zap.String("service", s.serviceName),
-			zap.String("method", r.Method),
-			zap.String("path", r.URL.Path),
+			zap.String("method", method),
+			zap.String("path", route),
 			zap.Int("status", writer.status),
 			zap.Duration("duration", time.Since(startedAt)),
 		)

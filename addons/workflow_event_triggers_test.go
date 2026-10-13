@@ -4,11 +4,16 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
+	"fmt"
 	"os"
 	"testing"
+	"time"
 
 	_ "github.com/lib/pq"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/httpapi"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -34,18 +39,53 @@ func dbForTriggerTest(t *testing.T) *sql.DB {
 	return db
 }
 
-// resetTriggerTestState makes each test deterministic: empty event_log,
-// empty workflow_runs, no scheduled trigger workflows lingering, and the
-// cursor row reset to "" so the loop pulls from sequence 0. The state
-// table seeds the singleton row up front so SaveWorkflowEventTriggerCursor
-// (which UPDATEs) always finds a row to update.
+// Use the real CI broker so brokerLive exercises its healthy connection branch.
+// The dial deadline includes the AMQP handshake and every case owns its close.
+func brokerForTriggerTest(t *testing.T) *amqp.Connection {
+	t.Helper()
+	url := os.Getenv("CAPACITY_DISPATCH_BROKER_URL")
+	if url == "" {
+		t.Fatal("actual CI RabbitMQ required by CAPACITY_DISPATCH_BROKER_URL")
+	}
+	conn, err := amqp.DialConfig(url, amqp.Config{Dial: amqp.DefaultDial(5 * time.Second)})
+	if err != nil {
+		t.Fatal("open actual workflow trigger broker", err)
+	}
+	t.Cleanup(func() {
+		if err := conn.Close(); err != nil && !errors.Is(err, amqp.ErrClosed) {
+			t.Error("close actual workflow trigger broker", err)
+		}
+	})
+	return conn
+}
+
+// resetTriggerTestState removes only this fixture's original events, matched
+// markers, runs and manifests. Foreign events and capacity-owned runs remain.
+// Its singleton cursor row still seeds "" before the fixture positions its
+// native baseline, so SaveWorkflowEventTriggerCursor finds a row to update.
 func resetTriggerTestState(t *testing.T, db *sql.DB) {
 	t.Helper()
-	if _, err := db.Exec(`TRUNCATE TABLE public.event_log RESTART IDENTITY`); err != nil {
-		t.Fatalf("truncate event_log: %v", err)
+	if _, err := db.Exec(`
+		DELETE FROM public.event_log
+		WHERE (
+			type = 'manifest.created'
+			AND aggregate_type = 'manifest'
+			AND aggregate_id = '018f2b4a-1234-7abc-def0-eeeeeeeeeeee'
+			AND payload->>'namespace' = 'test-event-trigger'
+		) OR (
+			type = 'workflow.event.matched'
+			AND aggregate_type = 'workflow'
+			AND payload->>'workflow_manifest_id' = aggregate_id
+			AND aggregate_id IN (
+				SELECT id::text FROM public.manifests
+				WHERE kind = 'workflow' AND namespace = 'test-event-trigger'
+			)
+		)
+	`); err != nil {
+		t.Fatalf("delete fixture event_log: %v", err)
 	}
-	if _, err := db.Exec(`DELETE FROM public.workflow_runs`); err != nil {
-		t.Fatalf("delete workflow_runs: %v", err)
+	if _, err := db.Exec(`DELETE FROM public.workflow_runs WHERE workflow_namespace = 'test-event-trigger'`); err != nil {
+		t.Fatalf("delete fixture workflow_runs: %v", err)
 	}
 	if _, err := db.Exec(
 		`DELETE FROM public.manifests WHERE kind = 'workflow' AND namespace = 'test-event-trigger'`,
@@ -79,10 +119,24 @@ func insertEventTriggerWorkflow(
 			Mode:    "event",
 			Enabled: enabled,
 			Event: &model.WorkflowEventTriggerSpec{
-				Types:         []string{"manifest.created"},
-				DefaultInputs: defaultInputs,
+				Types:          []string{"manifest.created"},
+				PayloadFilters: []model.WorkflowEventPayloadFilter{{Path: "namespace", Operator: "eq", Value: "test-event-trigger"}},
+				DefaultInputs:  defaultInputs,
 			},
 		},
+		Steps: []model.WorkflowStepSpec{{
+			ID:  "ordinary",
+			Use: model.WorkflowStepUseSpec{Kind: "yggdrasil", Operation: "assert"},
+			With: map[string]any{
+				"equal": []any{map[string]any{"name": "same", "actual": 1, "expected": 1}},
+			},
+		}},
+	}
+	if err := manifest.ValidateWorkflowSpec(spec); err != nil {
+		t.Fatalf("validate ordinary reactive fixture: %v", err)
+	}
+	if httpapi.CapacityScheduleGraphRequiresOwner(spec) || len(spec.Steps) != 1 || manifest.NormalizeWorkflowStepOperation(spec.Steps[0]) != "assert" {
+		t.Fatal("ordinary reactive fixture requires a single non-capacity assert step")
 	}
 	specJSON, err := json.Marshal(spec)
 	if err != nil {
@@ -101,11 +155,24 @@ func insertEventTriggerWorkflow(
 	return id
 }
 
-// emitMatchingEvent inserts one manifest.created event into event_log,
-// returning the EventID. The payload is whatever the test wants to expose
-// to the workflow under inputs.event.
-func emitMatchingEvent(t *testing.T, db *sql.DB, payload map[string]any) uuid.UUID {
+// emitMatchingEvent records the current native sequence before inserting this
+// fixture's event and positions the original generic cursor at that baseline.
+// It returns the EventID and baseline cursor so replay reads the same window.
+// The payload remains whatever the test exposes under inputs.event.
+func emitMatchingEvent(t *testing.T, db *sql.DB, payload map[string]any) (uuid.UUID, string) {
 	t.Helper()
+	var baselineSequence int64
+	if err := db.QueryRow(`SELECT COALESCE(MAX(sequence), 0) FROM public.event_log`).Scan(&baselineSequence); err != nil {
+		t.Fatalf("read native event sequence baseline: %v", err)
+	}
+	// This is the native cursor format used by repository.encodePullCursor.
+	baselineCursor := fmt.Sprintf("seq:%d", baselineSequence)
+	if err := repository.SaveWorkflowEventTriggerCursor(context.Background(), db, baselineCursor); err != nil {
+		t.Fatalf("position original cursor at native sequence baseline: %v", err)
+	}
+	if cursor, err := repository.GetWorkflowEventTriggerCursor(context.Background(), db); err != nil || cursor != baselineCursor {
+		t.Fatalf("original cursor did not retain native sequence baseline: cursor=%q err=%v", cursor, err)
+	}
 	tx, err := db.BeginTx(context.Background(), nil)
 	if err != nil {
 		t.Fatalf("begin tx: %v", err)
@@ -123,16 +190,20 @@ func emitMatchingEvent(t *testing.T, db *sql.DB, payload map[string]any) uuid.UU
 	if err != nil {
 		t.Fatalf("emit event: %v", err)
 	}
+	var emittedSequence int64
+	if err := tx.QueryRow(`SELECT sequence FROM public.event_log WHERE event_id = $1`, id).Scan(&emittedSequence); err != nil || emittedSequence <= baselineSequence {
+		t.Fatalf("original fixture event did not follow native sequence baseline: sequence=%d baseline=%d err=%v", emittedSequence, baselineSequence, err)
+	}
 	if err := tx.Commit(); err != nil {
 		t.Fatalf("commit: %v", err)
 	}
-	return id
+	return id, baselineCursor
 }
 
 // recordingDispatcher is the workflowDispatcher fake the trigger-loop tests
 // pass into runWorkflowEventTriggersPass. It captures the (runID, req) tuple
-// instead of actually starting a goroutine, so the test asserts deterministically
-// on what would have been dispatched without any RabbitMQ involvement.
+// instead of starting an execution goroutine. The original trigger still uses
+// the live CI broker gate before calling this recorder.
 type recordingDispatcher struct {
 	calls []recordedDispatch
 }
@@ -161,13 +232,14 @@ func TestProcessMatchedTrigger_DispatchesWorkflowRun(t *testing.T) {
 	db := dbForTriggerTest(t)
 	defer db.Close()
 	resetTriggerTestState(t, db)
+	conn := brokerForTriggerTest(t)
 
 	manifestID := insertEventTriggerWorkflow(t, db, "wf-dispatch", nil, nil)
-	eventID := emitMatchingEvent(t, db, validManifestCreatedPayloadForTrigger("wf-dispatch"))
+	eventID, _ := emitMatchingEvent(t, db, validManifestCreatedPayloadForTrigger("wf-dispatch"))
 
 	rec := &recordingDispatcher{}
 	logger := zap.NewNop()
-	runWorkflowEventTriggersPass(context.Background(), db, nil, logger, rec.dispatch)
+	runWorkflowEventTriggersPass(context.Background(), db, conn, logger, rec.dispatch)
 
 	if len(rec.calls) != 1 {
 		t.Fatalf("expected 1 dispatch, got %d", len(rec.calls))
@@ -207,15 +279,16 @@ func TestProcessMatchedTrigger_IsIdempotent(t *testing.T) {
 	db := dbForTriggerTest(t)
 	defer db.Close()
 	resetTriggerTestState(t, db)
+	conn := brokerForTriggerTest(t)
 
 	insertEventTriggerWorkflow(t, db, "wf-idempotent", nil, nil)
-	emitMatchingEvent(t, db, validManifestCreatedPayloadForTrigger("wf-idempotent"))
+	_, baselineCursor := emitMatchingEvent(t, db, validManifestCreatedPayloadForTrigger("wf-idempotent"))
 
 	rec := &recordingDispatcher{}
 	logger := zap.NewNop()
 
 	// First pass: matches, dispatches, advances cursor.
-	runWorkflowEventTriggersPass(context.Background(), db, nil, logger, rec.dispatch)
+	runWorkflowEventTriggersPass(context.Background(), db, conn, logger, rec.dispatch)
 	if len(rec.calls) != 1 {
 		t.Fatalf("first pass: expected 1 dispatch, got %d", len(rec.calls))
 	}
@@ -223,17 +296,17 @@ func TestProcessMatchedTrigger_IsIdempotent(t *testing.T) {
 	// Reset the cursor so a second pass replays the same window. The
 	// dedup check (HasWorkflowEventMatched) is what must keep us from
 	// dispatching again.
-	if _, err := db.Exec(`UPDATE public.workflow_event_trigger_state SET last_cursor = '' WHERE id = 'workflow_event_trigger_loop'`); err != nil {
+	if _, err := db.Exec(`UPDATE public.workflow_event_trigger_state SET last_cursor = $1 WHERE id = 'workflow_event_trigger_loop'`, baselineCursor); err != nil {
 		t.Fatalf("reset cursor: %v", err)
 	}
 
-	runWorkflowEventTriggersPass(context.Background(), db, nil, logger, rec.dispatch)
+	runWorkflowEventTriggersPass(context.Background(), db, conn, logger, rec.dispatch)
 	if len(rec.calls) != 1 {
 		t.Fatalf("second pass: expected dispatch count to stay at 1 (dedup), got %d", len(rec.calls))
 	}
 
 	var runCount int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM public.workflow_runs`).Scan(&runCount); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM public.workflow_runs WHERE workflow_namespace = 'test-event-trigger'`).Scan(&runCount); err != nil {
 		t.Fatalf("count workflow_runs: %v", err)
 	}
 	if runCount != 1 {
@@ -245,6 +318,7 @@ func TestProcessMatchedTrigger_ExposesPayloadAsInputsEvent(t *testing.T) {
 	db := dbForTriggerTest(t)
 	defer db.Close()
 	resetTriggerTestState(t, db)
+	conn := brokerForTriggerTest(t)
 
 	insertEventTriggerWorkflow(t, db, "wf-payload", nil, nil)
 	payload := validManifestCreatedPayloadForTrigger("wf-payload")
@@ -252,7 +326,7 @@ func TestProcessMatchedTrigger_ExposesPayloadAsInputsEvent(t *testing.T) {
 
 	rec := &recordingDispatcher{}
 	logger := zap.NewNop()
-	runWorkflowEventTriggersPass(context.Background(), db, nil, logger, rec.dispatch)
+	runWorkflowEventTriggersPass(context.Background(), db, conn, logger, rec.dispatch)
 
 	if len(rec.calls) != 1 {
 		t.Fatalf("expected 1 dispatch, got %d", len(rec.calls))
@@ -273,20 +347,21 @@ func TestProcessMatchedTrigger_DefaultInputsOverridePayload(t *testing.T) {
 	db := dbForTriggerTest(t)
 	defer db.Close()
 	resetTriggerTestState(t, db)
+	conn := brokerForTriggerTest(t)
 
 	// DefaultInputs.event is intentionally a plain string; it should
 	// override the payload-derived `event` map per spec ("DefaultInputs
 	// wins on key conflicts").
 	defaults := map[string]any{
-		"event":          "pinned-by-operator",
-		"extra_default":  "always-here",
+		"event":         "pinned-by-operator",
+		"extra_default": "always-here",
 	}
 	insertEventTriggerWorkflow(t, db, "wf-defaults", nil, defaults)
 	emitMatchingEvent(t, db, validManifestCreatedPayloadForTrigger("wf-defaults"))
 
 	rec := &recordingDispatcher{}
 	logger := zap.NewNop()
-	runWorkflowEventTriggersPass(context.Background(), db, nil, logger, rec.dispatch)
+	runWorkflowEventTriggersPass(context.Background(), db, conn, logger, rec.dispatch)
 
 	if len(rec.calls) != 1 {
 		t.Fatalf("expected 1 dispatch, got %d", len(rec.calls))
@@ -318,7 +393,7 @@ func TestProcessMatchedTrigger_DisabledTriggerSkipsDispatch(t *testing.T) {
 	}
 
 	var runCount int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM public.workflow_runs`).Scan(&runCount); err != nil {
+	if err := db.QueryRow(`SELECT COUNT(*) FROM public.workflow_runs WHERE workflow_namespace = 'test-event-trigger'`).Scan(&runCount); err != nil {
 		t.Fatalf("count workflow_runs: %v", err)
 	}
 	if runCount != 0 {

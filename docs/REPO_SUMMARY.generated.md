@@ -1,21 +1,21 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-09-27T02:18:44-03:00_
+_Generated from HEAD at: 2026-10-12T23:48:27-03:00_
 
 ## Languages
 
-- `.go`: 647 files
-- `.json`: 144 files
+- `.go`: 776 files
+- `.json`: 145 files
 - `.py`: 1 files
-- `.sql`: 52 files
-- `.yaml`: 9 files
-- `.yml`: 22 files
+- `.sql`: 62 files
+- `.yaml`: 10 files
+- `.yml`: 24 files
 
 ## Contracts & Artifacts
 
 - API Spec: **false**  ((not configured))
 - Event Schemas: **0**  (events/contracts,docs/events/contracts)
-- DB Migrations: **51**  (db/migrations)
+- DB Migrations: **61**  (db/migrations)
 
 ## Docs
 
@@ -24,18 +24,18 @@ _Generated from HEAD at: 2026-09-27T02:18:44-03:00_
 
 ## Top Directories by File Count
 
-- controllers/httpapi: 157 files (1556.6 KB)
-- repository: 94 files (610.9 KB)
-- manifest: 57 files (360.5 KB)
-- model: 55 files (209.9 KB)
-- controllers/message: 51 files (516.0 KB)
-- db/migrations: 51 files (91.1 KB)
-- addons: 39 files (187.6 KB)
+- controllers/httpapi: 182 files (2090.7 KB)
+- repository: 128 files (1160.4 KB)
+- controllers/message: 70 files (935.7 KB)
+- model: 66 files (294.5 KB)
+- db/migrations: 61 files (120.3 KB)
+- manifest: 61 files (377.3 KB)
+- addons: 45 files (263.1 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
-- controllers/oidc: 22 files (188.9 KB)
+- controllers/oidc: 23 files (193.4 KB)
+- internal/capacity: 21 files (178.5 KB)
 - docs/bootstrap/seeds/integrations: 20 files (87.4 KB)
 - internal/externalidentity: 15 files (61.5 KB)
-- docs/contracts/reactors/v1: 11 files (12.7 KB)
 
 ## Heaviest Files
 
@@ -46,16 +46,16 @@ _Generated from HEAD at: 2026-09-27T02:18:44-03:00_
 - docs/bootstrap/manifests/products/certificate-cert-manager.json: 696.5 KB
 - docs/bootstrap/manifests/products/observability-loki.json: 542.9 KB
 - docs/bootstrap/manifests/products/message-broker-rabbitmq.json: 531.8 KB
-- controllers/httpapi/server.go: 171.7 KB
+- controllers/httpapi/server.go: 174.6 KB
+- controllers/message/workflows_capacity_native_postgres_test.go: 93.2 KB
+- controllers/httpapi/openapi.json: 88.3 KB
+- docs/api-reference/openapi.json: 88.3 KB
 - controllers/message/products.go: 75.4 KB
-- controllers/httpapi/directory_machine_read_test.go: 65.8 KB
-- repository/identity.go: 62.9 KB
-- controllers/httpapi/credentials.go: 57.3 KB
 
 ## Ops & Messaging
 
-- K8s/Config files scanned: **5**
-- Manifests (k8s-ish): **5**
+- K8s/Config files scanned: **8**
+- Manifests (k8s-ish): **8**
 
 ## Dependencies
 

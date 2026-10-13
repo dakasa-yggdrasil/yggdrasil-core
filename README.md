@@ -135,6 +135,38 @@ Install an integration with `yggdrasil install <repo>` and it appears
 in your catalog as a usable operation set inside workflows, regardless
 of which transport it chose.
 
+### Direct TLS for the original Core process
+
+The HTTP addon preserves its existing plaintext transport when both identity
+variables are absent. An explicit pair of mounted identity files enables TLS
+on the same listening address, API handler and process-local authority registry.
+Partial, blank, noncanonical or unreadable identities refuse the HTTP addon
+before it accesses its database resource or performs OIDC/API bootstrap effects.
+Earlier addons may already have initialized their resources. There is no
+plaintext or forwarding-header fallback.
+
+| Variable | Explicit opt-in |
+| --- | --- |
+| `HTTP_TLS_CERT_FILE` | Absolute canonical path to the approved mounted certificate chain. |
+| `HTTP_TLS_KEY_FILE` | Absolute canonical path to its approved mounted private key. |
+
+```mermaid
+flowchart LR
+    Caller[Verified HTTPS caller] --> Listener[Original Core TLS listener]
+    Listener --> Handler[Same API handler and private authority registry]
+    Handler --> Guard[Current original dispatch and intent guards]
+```
+
+The identity is loaded once at boot and TLS requires version 1.2 or later.
+The private canary-authority endpoint requires an actual TLS connection; a TLS
+terminating proxy followed by plaintext does not meet that requirement. Its
+approved origin must reach the same original Core process that registered the
+ephemeral permission. A different process refuses the token and cannot adopt it.
+Before activating this opt-in, the operator must coordinate the certificate,
+approved origins, callers and HTTPS health probes. Listener code and CI evidence
+do not establish a production certificate, routing affinity, useful capacity,
+warm stock or deployment; those remain separate release prerequisites.
+
 ## Feature deep-dives
 
 Every feature below has a dedicated guide in [docs/features/](docs/features/)

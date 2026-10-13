@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/metrics"
@@ -30,6 +31,98 @@ const (
 // dispatch channels that cannot establish a Core actor and evaluate the
 // workflow's RBAC and policy authorization.
 var ErrWorkflowAuthenticatedActorRequired = errors.New("workflow spec.authorization requires an authenticated actor")
+
+type capacityDispatchFenceKey struct{}
+
+type capacityDispatchInvocation struct {
+	fence         func(context.Context) error
+	notifyFactory OriginalNotifyAuthorityFactory
+	mu            sync.Mutex
+	causes        []error
+}
+
+// WithCapacityDispatchFence is a private in-process delegation from the
+// server's persisted operator binding. No wire metadata installs this key.
+// Original source errors remain in this invocation; DTOs retain generic errors.
+func WithCapacityDispatchFence(ctx context.Context, fence func(context.Context) error) context.Context {
+	ctx = withNativeAdapterPolicy(ctx, ctx)
+	return context.WithValue(ctx, capacityDispatchFenceKey{}, &capacityDispatchInvocation{fence: fence})
+}
+
+func capacityDispatchInvocationFrom(ctx context.Context) *capacityDispatchInvocation {
+	if ctx == nil {
+		return nil
+	}
+	owner, _ := ctx.Value(capacityDispatchFenceKey{}).(*capacityDispatchInvocation)
+	return owner
+}
+
+func capacityDispatchCause(ctx context.Context, err error) error {
+	if owner := capacityDispatchInvocationFrom(ctx); owner != nil && err != nil {
+		owner.mu.Lock()
+		owner.causes = append(owner.causes, err)
+		owner.mu.Unlock()
+		return &opaqueAdapterError{public: errCapacityBoundAssessment, cause: err}
+	}
+	return err
+}
+
+func capacityDispatchResultError(ctx context.Context, response model.RunWorkflowResponse, err error) error {
+	owner := capacityDispatchInvocationFrom(ctx)
+	if owner == nil {
+		return err
+	}
+	owner.mu.Lock()
+	causes := append([]error(nil), owner.causes...)
+	owner.mu.Unlock()
+	joined := errors.Join(append(causes, err)...)
+	if joined == nil && response.Status == "failed" {
+		joined = errCapacityBoundAssessment
+	}
+	if joined != nil {
+		return &opaqueAdapterError{public: errCapacityBoundAssessment, cause: joined}
+	}
+	return nil
+}
+
+func capacityDispatchNativePolicy(ctx context.Context) (*nativeAdapterHTTPPolicy, error) {
+	if capacityDispatchInvocationFrom(ctx) == nil {
+		return nil, nil
+	}
+	policy, _ := ctx.Value(nativeAdapterPolicyKey{}).(adapterCallPolicy)
+	if policy.native == nil {
+		return nil, capacityDispatchCause(ctx, errCapacityBoundAssessment)
+	}
+	return policy.native, nil
+}
+
+func capacityDispatchFence(ctx context.Context) error {
+	if owner := capacityDispatchInvocationFrom(ctx); owner != nil {
+		if err := nativeAdapterContext(ctx); err != nil {
+			return capacityDispatchCause(ctx, err)
+		}
+		if owner.fence == nil {
+			return capacityDispatchCause(ctx, errCapacityBoundAssessment)
+		}
+		return capacityDispatchCause(ctx, owner.fence(ctx))
+	}
+	return nil
+}
+
+// PrepareCapacityDispatchWorkflow uses the ORIGINAL preparation/redaction
+// path without inserting a run on an outer database connection. The owner
+// inserts this prepared run with its schedule tick and dispatch in one tx.
+func PrepareCapacityDispatchWorkflow(ctx context.Context, db *sql.DB, req model.RunWorkflowRequest) (model.Manifest, model.WorkflowManifestSpec, model.RunWorkflowRequest, map[string]any, error) {
+	if req.Auth.Token != "" {
+		return model.Manifest{}, model.WorkflowManifestSpec{}, model.RunWorkflowRequest{}, nil, ErrWorkflowAuthenticatedActorRequired
+	}
+	requested := req.Inputs
+	wf, spec, prepared, err := prepareWorkflowRun(ctx, db, req)
+	if err != nil {
+		return wf, spec, prepared, nil, err
+	}
+	return wf, spec, prepared, redactSensitiveWorkflowInputs(spec, requested), nil
+}
 
 func workflowConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) []ConsumerConfig {
 	policy, err := workflowdispatchlock.LoadFromEnvironment()
@@ -224,10 +317,11 @@ func RunWorkflow(
 ) (model.RunWorkflowResponse, error) {
 	workflowManifest, spec, preparedReq, err := prepareWorkflowRun(ctx, db, req)
 	if err != nil {
-		return model.RunWorkflowResponse{}, err
+		return model.RunWorkflowResponse{}, capacityDispatchResultError(ctx, model.RunWorkflowResponse{}, err)
 	}
 
-	return runWorkflow(ctx, conn, db, workflowManifest, spec, preparedReq)
+	response, err := runWorkflow(ctx, conn, db, workflowManifest, spec, preparedReq)
+	return response, capacityDispatchResultError(ctx, response, err)
 }
 
 // RunWorkflowFromUnauthenticatedChannel executes a workflow only when its
@@ -401,6 +495,7 @@ func runWorkflow(
 	spec model.WorkflowManifestSpec,
 	req model.RunWorkflowRequest,
 ) (model.RunWorkflowResponse, error) {
+	ctx = newCapacityInvocationContext(ctx)
 	orderedSteps, err := manifestengine.WorkflowExecutionOrder(spec)
 	if err != nil {
 		return model.RunWorkflowResponse{}, err
@@ -562,6 +657,15 @@ func executeWorkflowStep(
 	// rather than going through an integration adapter. Yggdrasil steps
 	// persist manifests against the core's own store, also in-process.
 	if result.Kind == "yggdrasil" {
+		if strings.HasPrefix(result.Operation, "capacity.") {
+			if capacityBoundOperation(result.Operation) {
+				return executeCapacityBoundWorkflowStep(ctx, conn, db, workflowRef, result, renderedInput)
+			}
+			if capacityNativeOperation(result.Operation) {
+				return executeCapacityNativeWorkflowStep(ctx, conn, db, workflowRef, result, renderedInput)
+			}
+			return executeCapacityWorkflowStep(ctx, db, workflowRef, result, renderedInput)
+		}
 		return executeYggdrasilWorkflowStep(ctx, db, step, result, renderedInput)
 	}
 	if result.Kind == "product" {

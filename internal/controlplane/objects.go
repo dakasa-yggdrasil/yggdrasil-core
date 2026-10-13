@@ -56,12 +56,12 @@ func renderBundledPostgres(namespace string, spec *model.ControlPlanePostgresBun
 		"stringData": map[string]any{
 			"POSTGRES_USER":     postgresUserDefault,
 			"POSTGRES_DB":       postgresDBDefault,
-			"POSTGRES_PASSWORD": generatedPlaceholderPassword("postgres"),
+			"POSTGRES_PASSWORD": secretGenerationInstruction("postgres"),
 			"DB_HOST":           postgresServiceName,
 			"DB_PORT":           fmt.Sprintf("%d", postgresPort),
 			"DB_NAME":           postgresDBDefault,
 			"DB_USER":           postgresUserDefault,
-			"DB_PASSWORD":       generatedPlaceholderPassword("postgres"),
+			"DB_PASSWORD":       secretGenerationInstruction("postgres"),
 		},
 	}
 
@@ -151,8 +151,8 @@ func renderBundledRabbitMQ(namespace string, spec *model.ControlPlaneTransportBu
 		"type": "Opaque",
 		"stringData": map[string]any{
 			"RABBITMQ_DEFAULT_USER": amqpUserDefault,
-			"RABBITMQ_DEFAULT_PASS": generatedPlaceholderPassword("amqp"),
-			"BROKER_URL":            fmt.Sprintf("amqp://%s:%s@%s:%d/", amqpUserDefault, generatedPlaceholderPassword("amqp"), amqpServiceName, amqpAMQPPort),
+			"RABBITMQ_DEFAULT_PASS": secretGenerationInstruction("amqp"),
+			"BROKER_URL":            fmt.Sprintf("amqp://%s:%s@%s:%d/", amqpUserDefault, secretGenerationInstruction("amqp"), amqpServiceName, amqpAMQPPort),
 		},
 	}
 
@@ -495,11 +495,10 @@ func anySlice(in []map[string]any) []any {
 	return out
 }
 
-// generatedPlaceholderPassword returns a deterministic placeholder that
-// the deploy workflow replaces with a real random value before the
-// Secret is applied. Keeping the renderer pure (no randomness) is what
-// makes the output diffable and testable; random generation is the
-// workflow engine's job, not the renderer's.
-func generatedPlaceholderPassword(label string) string {
+// secretGenerationInstruction returns a deterministic rendering instruction,
+// never a generated credential. The deployment path must materialize a real
+// random secret before applying this object. Rendering remains pure and does
+// not establish that materialization or deployment occurred.
+func secretGenerationInstruction(label string) string {
 	return fmt.Sprintf("__GENERATE__:%s", label)
 }
