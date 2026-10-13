@@ -1,21 +1,21 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-12T23:09:02-03:00_
+_Generated from HEAD at: 2026-10-13T05:13:57-03:00_
 
 ## Languages
 
-- `.go`: 776 files
+- `.go`: 840 files
 - `.json`: 145 files
 - `.py`: 1 files
-- `.sql`: 62 files
+- `.sql`: 64 files
 - `.yaml`: 10 files
-- `.yml`: 24 files
+- `.yml`: 25 files
 
 ## Contracts & Artifacts
 
 - API Spec: **false**  ((not configured))
 - Event Schemas: **0**  (events/contracts,docs/events/contracts)
-- DB Migrations: **61**  (db/migrations)
+- DB Migrations: **63**  (db/migrations)
 
 ## Docs
 
@@ -24,16 +24,16 @@ _Generated from HEAD at: 2026-10-12T23:09:02-03:00_
 
 ## Top Directories by File Count
 
-- controllers/httpapi: 182 files (2090.7 KB)
-- repository: 128 files (1160.4 KB)
-- controllers/message: 70 files (935.7 KB)
-- model: 66 files (294.5 KB)
-- db/migrations: 61 files (120.3 KB)
-- manifest: 61 files (377.3 KB)
+- controllers/httpapi: 188 files (2143.8 KB)
+- repository: 141 files (1377.2 KB)
+- controllers/message: 74 files (964.7 KB)
+- model: 70 files (327.7 KB)
+- db/migrations: 63 files (134.1 KB)
+- manifest: 62 files (386.2 KB)
 - addons: 45 files (263.1 KB)
+- internal/capacity: 35 files (277.3 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
 - controllers/oidc: 23 files (193.4 KB)
-- internal/capacity: 21 files (178.5 KB)
 - docs/bootstrap/seeds/integrations: 20 files (87.4 KB)
 - internal/externalidentity: 15 files (61.5 KB)
 
@@ -46,7 +46,7 @@ _Generated from HEAD at: 2026-10-12T23:09:02-03:00_
 - docs/bootstrap/manifests/products/certificate-cert-manager.json: 696.5 KB
 - docs/bootstrap/manifests/products/observability-loki.json: 542.9 KB
 - docs/bootstrap/manifests/products/message-broker-rabbitmq.json: 531.8 KB
-- controllers/httpapi/server.go: 174.6 KB
+- controllers/httpapi/server.go: 175.4 KB
 - controllers/message/workflows_capacity_native_postgres_test.go: 93.2 KB
 - controllers/httpapi/openapi.json: 88.3 KB
 - docs/api-reference/openapi.json: 88.3 KB
@@ -54,8 +54,8 @@ _Generated from HEAD at: 2026-10-12T23:09:02-03:00_
 
 ## Ops & Messaging
 
-- K8s/Config files scanned: **8**
-- Manifests (k8s-ish): **8**
+- K8s/Config files scanned: **9**
+- Manifests (k8s-ish): **9**
 
 ## Dependencies
 

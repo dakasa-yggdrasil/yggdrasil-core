@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-12T23:09:02-03:00",
+  "generated_at": "2026-10-13T05:13:57-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 776,
+    ".go": 840,
     ".json": 145,
     ".py": 1,
-    ".sql": 62,
+    ".sql": 64,
     ".yaml": 10,
-    ".yml": 24
+    ".yml": 25
   },
   "provenance": {
-    "commit": "36ddb021def008cb4f44d7a62a26670deb0c2213",
+    "commit": "e605b9174357caf070d4b640c0863e1cdd7157a5",
     "dirty": true,
     "files": [
       {
@@ -59,38 +59,43 @@
   "top_dirs": [
     {
       "path": "controllers/httpapi",
-      "files": 182,
-      "kb": 2090
+      "files": 188,
+      "kb": 2143
     },
     {
       "path": "repository",
-      "files": 128,
-      "kb": 1160
+      "files": 141,
+      "kb": 1377
     },
     {
       "path": "controllers/message",
-      "files": 70,
-      "kb": 935
+      "files": 74,
+      "kb": 964
     },
     {
       "path": "model",
-      "files": 66,
-      "kb": 294
+      "files": 70,
+      "kb": 327
     },
     {
       "path": "db/migrations",
-      "files": 61,
-      "kb": 120
+      "files": 63,
+      "kb": 134
     },
     {
       "path": "manifest",
-      "files": 61,
-      "kb": 377
+      "files": 62,
+      "kb": 386
     },
     {
       "path": "addons",
       "files": 45,
       "kb": 263
+    },
+    {
+      "path": "internal/capacity",
+      "files": 35,
+      "kb": 277
     },
     {
       "path": "docs/bootstrap/manifests/integrations",
@@ -101,11 +106,6 @@
       "path": "controllers/oidc",
       "files": 23,
       "kb": 193
-    },
-    {
-      "path": "internal/capacity",
-      "files": 21,
-      "kb": 178
     },
     {
       "path": "docs/bootstrap/seeds/integrations",
@@ -149,7 +149,7 @@
     },
     {
       "path": "controllers/httpapi/server.go",
-      "kb": 174
+      "kb": 175
     },
     {
       "path": "controllers/message/workflows_capacity_native_postgres_test.go",
@@ -174,7 +174,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 61,
+    "migrations": 63,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {
@@ -305,10 +305,7 @@
     ]
   },
   "ops": {
-    "config_files": 8,
-    "k8s_manifests": 8
-  },
-  "verified_at_commit": "36ddb021def008cb4f44d7a62a26670deb0c2213",
-  "verified_diff_sha256": "f48c65931339908a7ad80fe5d58167e2f72068549a856e06ce85334cf19758f1",
-  "reconciler_schema": 1
+    "config_files": 9,
+    "k8s_manifests": 9
+  }
 }

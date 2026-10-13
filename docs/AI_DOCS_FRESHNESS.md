@@ -7,12 +7,12 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 36ddb021def008cb4f44d7a62a26670deb0c2213
-verified_diff_sha256: f48c65931339908a7ad80fe5d58167e2f72068549a856e06ce85334cf19758f1
+verified_at_commit: e605b9174357caf070d4b640c0863e1cdd7157a5
+verified_diff_sha256: c133a883ab19e318531c9d41ab3cc4431e49affda521716aea38494a468fc548
 reconciler_schema: 1
 verified_at: 2026-10-13
 by: Codex
-note: Reconciled automatic contact OTP with the explicit owner requirement: saved email/phone require no registration, opt-in or contact factor row. Actual password+OTP proof still precedes sessions. Setup and forced password changes support contact-only accounts; recent session proof is server-issued, short-lived and consumed with the password update. Federated provider auth remains separate. CI only; no production activation. TOTP confirmation is independent of shared MFA posture and commits current-seed proof, recovery codes and enrollment-link consumption atomically.
+note: Reconciled the 82-file original Guest lifecycle source lot on qualified Core73 CODE62105. Distinct whole R3 review closes CWH1-9 statically: public workflow/policy ingestion, private lease authority, exact original retirement deadline, actual owner joins, original Popen chronology and bounded HTTP read/prefix facts. Production profiles remain EMPTY/HOLD. Source118/10roots and all original case names remain mandatory. Current owning source/auth/PG/build CI is pending; FULL_CORE_NATIVE_PENDING includes all inherited gates, old45 authority migration, genuine joint seven-case native evidence, noStart, larger geometries and production20. No local functional execution, merge, deployment or provider activation occurred.
 
 
 Records the source commit reconciled with the changed runtime contracts.
@@ -87,3 +87,7 @@ Source cdb222d45f213b8a56b11e78c91bd86de0371b99 observes the server-owned metada
 ## Original SQLnull and unredeemed child readback distinction
 
 Source 36ddb021def008cb4f44d7a62a26670deb0c2213 closes the source-owned negative oracle and its equivalent two-finalizer lint expression after complete original83b qualification. The actual uncertain child had no redemption, attempt, original result or caller ACK; its absent native readback persisted as JSONnull through the real non-omitempty DTO and PostgreSQL JSONB. Only nil or valid JSONnull with JSON whitespace denotes no retained original result/readback; invalid raw bytes, object, array, quoted null, boolean, number and trailing input remain refused. Nineteen mandatory actual PostgreSQL/DTO source cases use the same strict child guard and distinguish SQLNULL/missing rows from JSONnull, including native22P02 refusal in both raw fields. Absence establishes neither no native effect nor new authority; the original uncertain child stays HOLD. Whole source review and focused closure are complete. All existing native rosters, graceful shutdown, RV/CAS, clocks, exact expiry, constraints and budgets remain unchanged. Prior83b failed originals/full artifacts are retained; this current whole owning remote CI and downstream pins remain pending. Genuine generation preserves all nine actual provenance inputs. No local tests/build/vet/lint-heavy/SQL/native helper, merge, deployment or production activation occurred.
+
+core_original_guest_source_peer_sha256: 54c53483e1b979685174e291bbe74e94621a84686dd7c188adaebc423da46949
+core_original_guest_source_scope: FULL_CORE_NATIVE_PENDING
+previous_contact_mfa_source_review: Reconciled automatic contact OTP with the explicit owner requirement: saved email/phone require no registration, opt-in or contact factor row. Actual password+OTP proof still precedes sessions. Setup and forced password changes support contact-only accounts; recent session proof is server-issued, short-lived and consumed with the password update. Federated provider auth remains separate. CI only; no production activation. TOTP confirmation is independent of shared MFA posture and commits current-seed proof, recovery codes and enrollment-link consumption atomically.
