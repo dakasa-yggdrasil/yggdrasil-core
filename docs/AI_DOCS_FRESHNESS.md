@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 36ddb021def008cb4f44d7a62a26670deb0c2213
-verified_diff_sha256: f48c65931339908a7ad80fe5d58167e2f72068549a856e06ce85334cf19758f1
+verified_at_commit: 62105fad80423beef1cf32f7330668f3b0a787cd
+verified_diff_sha256: 55c23d6de13762e74f7a733080379d20f91fe03131b65d33842cc41ce0ebe9ba
 reconciler_schema: 1
 verified_at: 2026-10-13
 by: Codex
@@ -87,3 +87,8 @@ Source cdb222d45f213b8a56b11e78c91bd86de0371b99 observes the server-owned metada
 ## Original SQLnull and unredeemed child readback distinction
 
 Source 36ddb021def008cb4f44d7a62a26670deb0c2213 closes the source-owned negative oracle and its equivalent two-finalizer lint expression after complete original83b qualification. The actual uncertain child had no redemption, attempt, original result or caller ACK; its absent native readback persisted as JSONnull through the real non-omitempty DTO and PostgreSQL JSONB. Only nil or valid JSONnull with JSON whitespace denotes no retained original result/readback; invalid raw bytes, object, array, quoted null, boolean, number and trailing input remain refused. Nineteen mandatory actual PostgreSQL/DTO source cases use the same strict child guard and distinguish SQLNULL/missing rows from JSONnull, including native22P02 refusal in both raw fields. Absence establishes neither no native effect nor new authority; the original uncertain child stays HOLD. Whole source review and focused closure are complete. All existing native rosters, graceful shutdown, RV/CAS, clocks, exact expiry, constraints and budgets remain unchanged. Prior83b failed originals/full artifacts are retained; this current whole owning remote CI and downstream pins remain pending. Genuine generation preserves all nine actual provenance inputs. No local tests/build/vet/lint-heavy/SQL/native helper, merge, deployment or production activation occurred.
+
+
+## Equivalent native absence fixture selector
+
+Source 62105fad80423beef1cf32f7330668f3b0a787cd preserves the all-terminal prior58cc native qualification and repairs only its required QF1003 tagged selector style. The same four mutually exclusive literal cases retain their exact assignment bodies and default value; all nineteen native PostgreSQL/DTO absence leaves, the ninth physical recovery, every old oracle/RV/CAS/deadline guard and native workflow remain literal. Independent whole-source review is closed. Prior58cc original native and production Docker build passed; its template lint remains failed and retained. This final composed source still requires all original owning gates at its own head before Root/Notify pins; no rerun of unchanged history or gate bypass qualifies it. Genuine released generation preserves all nine input digests and measured provenance. No local functional execution, merge, deploy or production/provider action occurred.
