@@ -7,12 +7,12 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: e605b9174357caf070d4b640c0863e1cdd7157a5
-verified_diff_sha256: c133a883ab19e318531c9d41ab3cc4431e49affda521716aea38494a468fc548
+verified_at_commit: ce95d419a797c42c3e49b8244bf02aab4e33b7d2
+verified_diff_sha256: 53b9d62cfdfdc225ecd95af8fd02c8fa278cb57ec5fd9f74e36684dd50c5a4ec
 reconciler_schema: 1
-verified_at: 2026-10-13
+verified_at: 2026-10-15
 by: Codex
-note: Reconciled the 82-file original Guest lifecycle source lot on qualified Core73 CODE62105. Distinct whole R3 review closes CWH1-9 statically: public workflow/policy ingestion, private lease authority, exact original retirement deadline, actual owner joins, original Popen chronology and bounded HTTP read/prefix facts. Production profiles remain EMPTY/HOLD. Source118/10roots and all original case names remain mandatory. Current owning source/auth/PG/build CI is pending; FULL_CORE_NATIVE_PENDING includes all inherited gates, old45 authority migration, genuine joint seven-case native evidence, noStart, larger geometries and production20. No local functional execution, merge, deployment or provider activation occurred.
+note: Reconciled the complete original Host factory Source5/9/13 composition and actual callers. Distinct nonauthor whole review has no remaining confirmed functional findings, using fresh integration reads and explicitly bounded exact-byte component review reuse. Original command, file, actor, deadline, FIRST, Commit and actual outer GoReturn ownership remain separate. Main private-read census is disjoint from authenticated complete Realm custody; uncertain outcomes retain the same identity and HOLD. The four additive CI phases require 216 exact roots and 2055 descendants alongside all inherited gates. Production and qualification registries remain EMPTY; ordinary final SourceSAFE is unavailable. FULL_CORE_NATIVE_PENDING includes all actual native/provider/resource evidence, old45 obligations and later source approval. Genuine released generation retains all nine actual input digests. Owning remote CI is pending; no local functional execution, merge, deployment or provider activation occurred.
 
 
 Records the source commit reconciled with the changed runtime contracts.
@@ -91,3 +91,7 @@ Source 36ddb021def008cb4f44d7a62a26670deb0c2213 closes the source-owned negative
 core_original_guest_source_peer_sha256: 54c53483e1b979685174e291bbe74e94621a84686dd7c188adaebc423da46949
 core_original_guest_source_scope: FULL_CORE_NATIVE_PENDING
 previous_contact_mfa_source_review: Reconciled automatic contact OTP with the explicit owner requirement: saved email/phone require no registration, opt-in or contact factor row. Actual password+OTP proof still precedes sessions. Setup and forced password changes support contact-only accounts; recent session proof is server-issued, short-lived and consumed with the password update. Federated provider auth remains separate. CI only; no production activation. TOTP confirmation is independent of shared MFA posture and commits current-seed proof, recovery codes and enrollment-link consumption atomically.
+
+core_original_host_source_peer_sha256: 18cf472833f61f34b9f958f82df315083171de1c0099c89649c3c8df98e87ac8
+core_original_host_source_input_sha256: 8a3711941ca71f748122256122ee658050b5ae8e194228a1d2e10855b058a394
+core_original_host_source_scope: FULL_CORE_NATIVE_PENDING

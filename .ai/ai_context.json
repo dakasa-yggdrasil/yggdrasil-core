@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-13T05:13:57-03:00",
+  "generated_at": "2026-10-15T18:47:46-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 840,
-    ".json": 145,
-    ".py": 1,
-    ".sql": 64,
+    ".go": 863,
+    ".json": 146,
+    ".py": 2,
+    ".sql": 65,
     ".yaml": 10,
     ".yml": 25
   },
   "provenance": {
-    "commit": "e605b9174357caf070d4b640c0863e1cdd7157a5",
+    "commit": "ce95d419a797c42c3e49b8244bf02aab4e33b7d2",
     "dirty": true,
     "files": [
       {
@@ -59,28 +59,28 @@
   "top_dirs": [
     {
       "path": "controllers/httpapi",
-      "files": 188,
-      "kb": 2143
+      "files": 189,
+      "kb": 2158
     },
     {
       "path": "repository",
-      "files": 141,
-      "kb": 1377
+      "files": 144,
+      "kb": 2246
     },
     {
       "path": "controllers/message",
-      "files": 74,
-      "kb": 964
+      "files": 75,
+      "kb": 982
     },
     {
       "path": "model",
-      "files": 70,
-      "kb": 327
+      "files": 71,
+      "kb": 412
     },
     {
       "path": "db/migrations",
-      "files": 63,
-      "kb": 134
+      "files": 64,
+      "kb": 170
     },
     {
       "path": "manifest",
@@ -94,8 +94,8 @@
     },
     {
       "path": "internal/capacity",
-      "files": 35,
-      "kb": 277
+      "files": 39,
+      "kb": 901
     },
     {
       "path": "docs/bootstrap/manifests/integrations",
@@ -132,12 +132,20 @@
       "kb": 1634
     },
     {
+      "path": "internal/capacityhostfactory/owner_linux.go",
+      "kb": 1507
+    },
+    {
       "path": "docs/bootstrap/manifests/products/observability-grafana.json",
       "kb": 1008
     },
     {
       "path": "docs/bootstrap/manifests/products/certificate-cert-manager.json",
       "kb": 696
+    },
+    {
+      "path": "repository/capacity_host_original_factory.go",
+      "kb": 576
     },
     {
       "path": "docs/bootstrap/manifests/products/observability-loki.json",
@@ -148,24 +156,16 @@
       "kb": 531
     },
     {
-      "path": "controllers/httpapi/server.go",
-      "kb": 175
+      "path": "scripts/ci/host_factory_source_package_expected.json",
+      "kb": 512
     },
     {
-      "path": "controllers/message/workflows_capacity_native_postgres_test.go",
-      "kb": 93
+      "path": "internal/capacityhostfactory/owner_nativequalification_test.go",
+      "kb": 509
     },
     {
-      "path": "controllers/httpapi/openapi.json",
-      "kb": 88
-    },
-    {
-      "path": "docs/api-reference/openapi.json",
-      "kb": 88
-    },
-    {
-      "path": "controllers/message/products.go",
-      "kb": 75
+      "path": "internal/capacity/host_original_factory.go",
+      "kb": 322
     }
   ],
   "contracts": {
@@ -174,7 +174,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 63,
+    "migrations": 64,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {
