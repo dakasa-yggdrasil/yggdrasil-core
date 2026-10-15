@@ -7,12 +7,12 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 58096e14f017b1bc28bca04f12924d333848971e
-verified_diff_sha256: c17dd227226ed9a5779597ef5eff8fd979664d234a9bcd4c15252b89ee599d6e
+verified_at_commit: f4b18a4741d0b688b47edb5a4339077947242854
+verified_diff_sha256: 1587fcd3fcafbaa48b44bbd1f2dce3746f38787d8f65aa64a756773f34bca5e2
 reconciler_schema: 1
 verified_at: 2026-10-15
 by: Codex
-note: Reconciled the complete second CI failure inventory in one independently reviewed fifteen-path group: actual exclusive acquisition chronology, canonical byte transport, original SQL and awaiting fixtures, compile alias and scoped lint repairs. SAME independent review found zero remaining confirmed defects in the exact group. All four named CI rosters retain 216 roots, 2055 descendants and 2271 nodes; exact source and six changed Test pins are refreshed without gate or budget changes. Genuine context and summary preserve all nine actual input digests. Eight historical CI runs and all fourteen original archives remain retained; the successor owning CI is pending. Inherited old45 remains HOLD with edit_lease false, production registry EMPTY, Native approval NULL, C6 HOLD, ordinary SourceSAFE unsupported and FULL_CORE_NATIVE_PENDING. No local functional execution, merge, deployment or activation occurred.
+note: Reconciled the independently reviewed three-line Boolean normalization after the complete third owning CI cohort. Nil guards, original short-circuit order and exact identity sets remain unchanged. All five pinned test sources, the expected manifest, four named rosters, collector, workflows and budgets stay literal. The previous source workflow passed all 216 roots and 2055 descendants, with each of 2271 nodes passing once; protected Native and other successful gates retain their original scope. Eight terminal runs, fourteen original ZIPs, 373 members and 23 GoJSON collections are retained. Genuine generation preserves all nine actual input digests. Successor owning CI remains required; inherited old45 stays HOLD/edit_lease false, Registry EMPTY, Native NULL, C6 HOLD and FULL_CORE_NATIVE_PENDING. No local functional execution, merge, deployment or activation occurred.
 
 
 Records the source commit reconciled with the changed runtime contracts.
@@ -103,3 +103,8 @@ core_original_host_ci1_repair_input_sha256: 5b8f5f3c34e4925a855be15efa188eeef8a9
 ## Historical first grouped CI repair metadata
 
 note: Reconciled the grouped correction after the complete first CI cohort: actual original process-reference and pipe-byte custody compile repairs, native-provider-aware SQL join, external native ABI test and unchanged closed full decoder. ChoiceReturn uses its existing signed Scope domain; exact reservation, original choice bytes and ancestor Scope joins remain mandatory. Distinct SAME whole review found no remaining confirmed defects in the exact repair. The same four CI rosters retain 216 roots and 2055 descendants with exact refreshed source and Test pins; all inherited gates and budgets remain. First CI failures and all fourteen original artifacts are retained. Genuine generation preserves all nine input digests. Successor owning remote CI is required; production registries remain EMPTY, Native approval NULL, C6 HOLD, ordinary final SourceSAFE unsupported and FULL_CORE_NATIVE_PENDING. No local functional execution, merge, deployment or activation occurred.
+
+
+## Historical second grouped CI repair metadata
+
+note: Reconciled the complete second CI failure inventory in one independently reviewed fifteen-path group: actual exclusive acquisition chronology, canonical byte transport, original SQL and awaiting fixtures, compile alias and scoped lint repairs. SAME independent review found zero remaining confirmed defects in the exact group. All four named CI rosters retain 216 roots, 2055 descendants and 2271 nodes; exact source and six changed Test pins are refreshed without gate or budget changes. Genuine context and summary preserve all nine actual input digests. Eight historical CI runs and all fourteen original archives remain retained; the successor owning CI is pending. Inherited old45 remains HOLD with edit_lease false, production registry EMPTY, Native approval NULL, C6 HOLD, ordinary SourceSAFE unsupported and FULL_CORE_NATIVE_PENDING. No local functional execution, merge, deployment or activation occurred.
