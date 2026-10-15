@@ -1,10 +1,10 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-15T19:17:10-03:00_
+_Generated from HEAD at: 2026-10-15T20:03:59-03:00_
 
 ## Languages
 
-- `.go`: 864 files
+- `.go`: 865 files
 - `.json`: 146 files
 - `.py`: 2 files
 - `.sql`: 65 files
@@ -25,13 +25,13 @@ _Generated from HEAD at: 2026-10-15T19:17:10-03:00_
 ## Top Directories by File Count
 
 - controllers/httpapi: 189 files (2158.3 KB)
-- repository: 145 files (2246.6 KB)
+- repository: 145 files (2246.4 KB)
 - controllers/message: 75 files (982.2 KB)
 - model: 71 files (412.5 KB)
 - db/migrations: 64 files (171.0 KB)
 - manifest: 62 files (386.2 KB)
 - addons: 45 files (263.1 KB)
-- internal/capacity: 39 files (905.8 KB)
+- internal/capacity: 39 files (907.7 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
 - controllers/oidc: 23 files (193.4 KB)
 - docs/bootstrap/seeds/integrations: 20 files (87.4 KB)
@@ -42,15 +42,15 @@ _Generated from HEAD at: 2026-10-15T19:17:10-03:00_
 - docs/bootstrap/manifests/products/observability-prometheus.json: 5020.2 KB
 - docs/bootstrap/manifests/products/strategy-deployment-argo-rollouts.json: 1778.3 KB
 - docs/bootstrap/manifests/products/mesh-istio-continuous-deployment-argo-cd.json: 1634.5 KB
-- internal/capacityhostfactory/owner_linux.go: 1507.4 KB
+- internal/capacityhostfactory/owner_linux.go: 1502.8 KB
 - docs/bootstrap/manifests/products/observability-grafana.json: 1008.9 KB
 - docs/bootstrap/manifests/products/certificate-cert-manager.json: 696.5 KB
-- repository/capacity_host_original_factory.go: 576.2 KB
+- repository/capacity_host_original_factory.go: 575.6 KB
 - docs/bootstrap/manifests/products/observability-loki.json: 542.9 KB
 - docs/bootstrap/manifests/products/message-broker-rabbitmq.json: 531.8 KB
-- scripts/ci/host_factory_source_package_expected.json: 516.3 KB
-- internal/capacityhostfactory/owner_nativequalification_test.go: 509.4 KB
-- internal/capacity/host_original_factory.go: 323.2 KB
+- scripts/ci/host_factory_source_package_expected.json: 524.7 KB
+- internal/capacityhostfactory/owner_nativequalification_test.go: 510.0 KB
+- internal/capacity/host_original_factory.go: 323.5 KB
 
 ## Ops & Messaging
 
