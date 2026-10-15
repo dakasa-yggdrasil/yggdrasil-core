@@ -8017,7 +8017,7 @@ func exteriorOriginalCallRows(l *originalLedger, h *callHandle, operation string
 	var previous time.Time
 	var ordinal uint64
 	for _, row := range rows {
-		if row == nil || row.subjectRole != "host_worker" || row.stage != "worker_exterior_join" && !(operation == "worker_start" && row.stage == "worker_start") || row.cause != nil && !(operation == "stdout_read" || operation == "stderr_read") {
+		if row == nil || row.subjectRole != "host_worker" || row.stage != "worker_exterior_join" && (operation != "worker_start" || row.stage != "worker_start") || row.cause != nil && (operation != "stdout_read" && operation != "stderr_read") {
 			return nil, refused("storage_unknown", nil)
 		}
 		f := row.fact
@@ -19468,7 +19468,7 @@ func originalParentWorkerSourceAuditHex64(s string) bool {
 		return false
 	}
 	for _, b := range []byte(s) {
-		if !(b >= '0' && b <= '9' || b >= 'a' && b <= 'f') {
+		if (b < '0' || b > '9') && (b < 'a' || b > 'f') {
 			return false
 		}
 	}
@@ -26264,7 +26264,7 @@ func originalWorkerIOUUIDValid(s string) bool {
 			if c != '-' {
 				return false
 			}
-		} else if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+		} else if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			return false
 		}
 	}
