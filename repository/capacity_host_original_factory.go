@@ -1139,10 +1139,6 @@ func validateOriginalHostManifestTx(ctx context.Context, tx *sql.Tx, x hostFacto
 	return err
 }
 
-func validateOriginalHostHistoricalManifestTx(ctx context.Context, tx *sql.Tx, x hostFactoryIOIdentity, m model.HostFactoryCallVectorManifest) error {
-	return validateOriginalHostManifestTx(ctx, tx, x, m)
-}
-
 func originalHostManifestFactsTx(ctx context.Context, tx *sql.Tx, x hostFactoryIOIdentity, root model.HostFactoryCallVectorManifest) ([]model.HostFactoryPrimitiveIOReturn, error) {
 	codec := x.codec
 
@@ -1620,12 +1616,13 @@ func decodeOriginalHostEnvelope(codec hostOriginalSourceCodec, selector HostFact
 		return nil, nil, "", ErrHostFactoryHold
 	}
 	if selector.Stage == "" {
-		if selector.Kind == "native-record" || selector.Kind == "native-manifest" {
+		switch selector.Kind {
+		case "native-record", "native-manifest":
 			kind := strings.TrimPrefix(selector.Kind, "native-")
 			stage = "native-observations/" + kind + "/" + capacity.HostFactoryRawSHA256(body) + "/" + capacity.HostFactoryRawSHA256(raw)
-		} else if selector.Kind == "failure-part" {
+		case "failure-part":
 			stage = "failure-collections/" + selector.CollectionID + "/parts/" + strconv.FormatUint(uint64(selector.PartOrdinal), 10) + "?sha256=" + capacity.HostFactoryRawSHA256(body)
-		} else {
+		default:
 			stage = "io-calls/" + selector.HandleID + "/" + selector.Kind + "/" + capacity.HostFactoryRawSHA256(body)
 		}
 	}
@@ -1649,19 +1646,20 @@ func prepareOriginalHostRecords(ctx context.Context, root, scope string, records
 			return nil, ErrHostFactoryHold
 		}
 		sel := HostFactoryRecordSelector{RootID: root}
-		if header.Schema == "original_host_factory_root_signed_envelope_v4" {
+		switch header.Schema {
+		case "original_host_factory_root_signed_envelope_v4":
 			var e model.HostFactoryRootSignedEnvelope
 			if codec.Decode(raw, &e) != nil {
 				return nil, ErrHostFactoryHold
 			}
 			sel.Family, sel.Role, sel.BindingSchema, sel.BindingSHA256 = "root", e.Role, e.BindingSchema, e.BindingSHA256
-		} else if header.Schema == "source_host_factory_signed_envelope_v1" {
+		case "source_host_factory_signed_envelope_v1":
 			var e capacity.HostFactorySourceSignedEnvelope
 			if codec.Decode(raw, &e) != nil || scope == "" || e.PreAuthorityScopeSHA256 != scope {
 				return nil, ErrHostFactoryHold
 			}
 			sel.Family, sel.Role, sel.BindingSchema, sel.BindingSHA256, sel.ScopeSHA256 = "scope", e.Role, "original_host_factory_pre_authority_scope_v4", e.PreAuthorityScopeSHA256, scope
-		} else {
+		default:
 			return nil, ErrHostFactoryHold
 		}
 		if strings.HasPrefix(name, "native-observations/") {
@@ -1918,16 +1916,17 @@ func (s CapacityStore) GetOriginalHostRecord(ctx context.Context, selector HostF
 			kind = "handle-inventory"
 		}
 		args := []any{selector.RootID, selector.BindingSchema, selector.BindingSHA256, selector.OwnerID, kind, selector.RawBodySHA256}
-		if selector.Kind == "native-record" || selector.Kind == "native-manifest" {
+		switch selector.Kind {
+		case "native-record", "native-manifest":
 			if !capacity.ValidDigest(selector.RawEnvelopeSHA256) {
 				return nil, ErrHostFactoryHold
 			}
 			query += ` AND raw_envelope_sha256=$7`
 			args = append(args, selector.RawEnvelopeSHA256)
-		} else if selector.Kind == "failure-part" {
+		case "failure-part":
 			query += ` AND failure_collection_id=$7 AND part_ordinal=$8`
 			args = append(args, selector.CollectionID, selector.PartOrdinal)
-		} else {
+		default:
 			query += ` AND original_handle_id=$7`
 			args = append(args, selector.HandleID)
 		}
@@ -4346,6 +4345,9 @@ func hostOriginalJSONShape(raw []byte, t reflect.Type, depth int) error {
 	if t == reflect.TypeOf(json.RawMessage{}) {
 		return nil
 	}
+	if t == reflect.TypeOf([]byte(nil)) {
+		return originalHostSourceCustodyRequiredFields(raw, t, depth)
+	}
 	if t.Kind() == reflect.Pointer {
 		if bytes.Equal(bytes.TrimSpace(raw), []byte("null")) {
 			return nil
@@ -5089,9 +5091,6 @@ func originalHostSourceDirectoryOperation(operation string) bool {
 	return operation == "source_directory_open" || operation == "source_directory_fstat" || operation == "source_directory_close"
 }
 
-func verifyOriginalHostSourcePublicationWrite(rows []hostOriginalSourceAuditProjection, handle string) error {
-	return verifyOriginalHostSourcePublicationWriteSelected(rows, handle, false)
-}
 func verifyOriginalHostSourcePublicationWriteSelected(rows []hostOriginalSourceAuditProjection, handle string, knownOriginalEmpty bool) error {
 	if len(rows) < 4 || len(rows) == 4 && !knownOriginalEmpty || knownOriginalEmpty && len(rows) != 4 {
 		return ErrHostFactoryHold
@@ -5150,9 +5149,6 @@ func verifyOriginalHostSourcePublicationWriteSelected(rows []hostOriginalSourceA
 	return nil
 }
 
-func verifyOriginalHostHistoricalMainReturns(wrapper hostOriginalFinalCorpus, snapshot hostOriginalSQLSnapshot, owners map[string]string) (time.Time, error) {
-	return verifyOriginalHostHistoricalMainReturnsOriginal(nil, nil, wrapper, snapshot, owners, nil)
-}
 func verifyOriginalHostHistoricalMainReturnsWithCustody(ctx context.Context, tx *sql.Tx, wrapper hostOriginalFinalCorpus, snapshot hostOriginalSQLSnapshot, owners map[string]string, bundle hostOriginalRealmCorpus) (time.Time, error) {
 	return verifyOriginalHostHistoricalMainReturnsOriginal(ctx, tx, wrapper, snapshot, owners, &bundle)
 }
@@ -5196,18 +5192,19 @@ func verifyOriginalHostHistoricalMainReturnsOriginal(ctx context.Context, tx *sq
 				if subject.RequestIdentity == nil || !validCapacityExecutor(*subject.RequestIdentity) || subject.Method == nil || subject.PathFamily == nil {
 					return time.Time{}, ErrHostFactoryHold
 				}
-				if *subject.Method == "GET" {
+				switch *subject.Method {
+				case "GET":
 					if subject.PublicRunID == nil || *subject.PublicRunID != snapshot.PublicRunID || *subject.PathFamily != "same_original_workflow_run" || fact.OriginalSHA256 != nil || fact.RetainedPrefixSHA256 != nil || fact.Operation == "public_workflow_body_read" && fact.OriginalHashState != "private_withheld" {
 						return time.Time{}, ErrHostFactoryHold
 					}
-				} else if *subject.Method == "POST" {
+				case "POST":
 					if *subject.PathFamily != "workflow_run_collection" || wrapper.PublicCallerIdentity.RequestID != nil && *subject.RequestIdentity != *wrapper.PublicCallerIdentity.RequestID {
 						return time.Time{}, ErrHostFactoryHold
 					}
 					if fact.Operation == "public_workflow_body_read" && fact.OriginalHashState == "actual_public_bytes" && fact.OriginalReadScope != nil && (*fact.OriginalReadScope != "complete_original_body_read" || fact.OriginalEOF == nil || !*fact.OriginalEOF || fact.OriginalStatusCode == nil || *fact.OriginalStatusCode != 202 || *fact.OriginalErrorPresent) {
 						return time.Time{}, ErrHostFactoryHold
 					}
-				} else {
+				default:
 					return time.Time{}, ErrHostFactoryHold
 				}
 			} else {
@@ -9506,9 +9503,10 @@ func compareOriginalHostFinalSourceAuditPartition(expected, actual map[string]ho
 			switch {
 			case n == 0, n == 1, n == len(ordered)-1:
 				operation := "source_file_close"
-				if n == 0 {
+				switch n {
+				case 0:
 					operation = "source_file_open"
-				} else if n == 1 {
+				case 1:
 					operation = "source_file_fstat"
 				}
 				if fact.Operation != operation || *fact.OriginalErrorPresent || fact.OriginalHashState != "not_byte_operation" || n == len(ordered)-1 && (!eof || total == 0 || total > 65536) {

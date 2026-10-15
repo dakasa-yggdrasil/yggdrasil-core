@@ -13,7 +13,6 @@ import (
 	"io"
 	"net"
 	"os"
-	"sort"
 	"strconv"
 	"strings"
 	"sync"
@@ -328,7 +327,7 @@ func captureBasalOriginalOwner(h launchHints) (*basalOwner, error) {
 		return nil, err
 	}
 	b := model.HostFactoryBasalOwnerObservation{Schema: "original_host_factory_basal_owner_observation_v3", Purpose: "original_host_factory_basal_owner_observation_v3", FactoryRootID: h.rootID, OriginalOwnerID: h.ownerID, Role: h.role, SourceApprovalSHA256: h.approvalSHA, ActualBinarySourceCommit: capacity.CurrentGuestCoreSource(), BuildReceiptSHA256: h.buildSHA, OriginalContextStartedAt: h.started.UTC(), OriginalContextDeadline: h.deadline.UTC(), OriginalSelfPIDFDHandleID: selfID}
-	var fd int = -1
+	fd := -1
 	var stat unix.Stat_t
 	call := func(index int, op string, fn func() (int64, error)) error {
 		at := time.Now().UTC()
@@ -464,20 +463,6 @@ func pinOriginalSubject(l *originalLedger, pid int, role, stage, operation strin
 	return pin, nil
 }
 
-func (p *originalPin) alive() error {
-	if p == nil || p.handle == nil || p.handle.closed {
-		return refused("alive_owner_refused", nil)
-	}
-	// Requested POLLIN is not the returned mask. Readiness here is refusal:
-	// the expected original subject must still be alive.
-	fds := []unix.PollFd{{Fd: int32(p.handle.fd), Events: unix.POLLIN}}
-	n, err := unix.Poll(fds, 0)
-	if err != nil || n != 0 || fds[0].Revents != 0 {
-		return refused("alive_owner_refused", err)
-	}
-	return nil
-}
-
 func (p *originalPin) pollAndClose(operation, closeOperation, subject, stage string) (int, time.Time, time.Time, error) {
 	if p == nil || p.handle == nil {
 		return 0, time.Time{}, time.Time{}, refused("original_pin_refused", nil)
@@ -498,43 +483,6 @@ func (p *originalPin) pollAndClose(operation, closeOperation, subject, stage str
 	}
 	closed, closeErr := closeOwned(p.handle, closeOperation, subject, stage)
 	return revents, value.returnedAt, closed, errors.Join(err, policyErr, closeErr)
-}
-
-func readNativeFile(l *originalLedger, path, operation, subject, stage string, limit int64, magic bool) ([]byte, model.HostFactoryOriginalIOFact, error) {
-	data, fact, _, err := readNativeFileWithSource(l, path, operation, subject, stage, limit, magic)
-	return data, fact, err
-}
-
-func readNativeFileWithSource(l *originalLedger, path, operation, subject, stage string, limit int64, magic bool) ([]byte, model.HostFactoryOriginalIOFact, unix.Stat_t, error) {
-	flags := unix.O_RDONLY
-	if !magic {
-		flags |= unix.O_NOFOLLOW
-	}
-	h, stat, err := acquireFile(l, path, subject, stage, "native_reader_open", "native_reader_fstat", flags)
-	if err != nil {
-		var closed error
-		if h != nil && h.file != nil {
-			_, closed = closeOwned(h, "native_reader_close", subject, "cleanup")
-		}
-		return nil, model.HostFactoryOriginalIOFact{}, unix.Stat_t{}, errors.Join(err, closed)
-	}
-	if stat.Mode&unix.S_IFMT != unix.S_IFREG {
-		_, closed := closeOwned(h, "native_reader_close", subject, "cleanup")
-		return nil, model.HostFactoryOriginalIOFact{}, *stat, refused("native_join_refused", closed)
-	}
-	data, r := readOwned(h, operation, subject, stage, limit, false, -1)
-	// The executable/source identity belongs to this acquired original FD.
-	// No fresh pathname Stat after Close substitutes a different file's facts.
-	after, statErr := fstatNative(h, "native_reader_fstat", subject, stage)
-	unchanged := sameOriginalFileStat(*stat, after)
-	closeAt, closeErr := closeOwned(h, "native_reader_close", subject, stage)
-	reads, e := l.vector(h, operation, subject)
-	closes, e2 := l.vector(h, "native_reader_close", subject)
-	fact := model.HostFactoryOriginalIOFact{Operation: operation, OriginalHandleID: h.id, OwnerPrimitiveRawSHA256: l.primitiveSHA, OriginalCalledAt: r.started, OriginalReturnedAt: r.returned, OriginalCount: r.count, OriginalSHA256: r.sha, OriginalReturnClass: "eof", OriginalCloseReturnedAt: closeAt, SubjectOwnerID: l.subjects[subject], OriginalOperationDeadline: l.deadline, OriginalEOF: r.eof, OriginalCallVector: reads, OriginalCloseCallVector: closes}
-	if r.err != nil || !r.eof || r.count > limit || statErr != nil || !unchanged || closeErr != nil || e != nil || e2 != nil {
-		return data, fact, *stat, refused("native_join_refused", errors.Join(r.err, statErr, closeErr, e, e2))
-	}
-	return data, fact, *stat, nil
 }
 
 func sameOriginalFileStat(before, after unix.Stat_t) bool {
@@ -829,15 +777,6 @@ func nativeProcessPinPoll(ctx context.Context, l *originalLedger, pin *originalP
 	return value, nil
 }
 
-// Kept as a lexical legacy entry point. Native phase producers must call the
-// Context variant with their actual captured phase context, never a date label.
-func readOriginalNativeSubject(l *originalLedger, pin *originalPin, subject string, subjectBasal model.HostFactoryBasalOwnerObservation, bootstrapSHA, processNonceSHA string, expected executableApproval, stage string) (model.HostFactoryNativeProcess, error) {
-	if l == nil {
-		return model.HostFactoryNativeProcess{}, refused("native_join_refused", nil)
-	}
-	return readOriginalNativeSubjectContext(l.ctx, l, pin, subject, subjectBasal, bootstrapSHA, processNonceSHA, expected, stage)
-}
-
 func readOriginalNativeSubjectContext(ctx context.Context, l *originalLedger, pin *originalPin, subject string, subjectBasal model.HostFactoryBasalOwnerObservation, bootstrapSHA, processNonceSHA string, expected executableApproval, stage string) (out model.HostFactoryNativeProcess, runErr error) {
 	if l == nil || pin == nil || pin.handle == nil || pin.handle.ledger != l || subjectBasal.OriginalOwnerID != l.subjects[subject] || subjectBasal.Calls[0].OriginalScalar != int64(pin.pid) || !capacity.ValidDigest(bootstrapSHA) || !capacity.ValidDigest(processNonceSHA) || nativeProcessPhase(ctx, l) != nil {
 		return out, refused("native_join_refused", nil)
@@ -944,7 +883,7 @@ func uuidParseExact(s string) (string, error) {
 			if c != '-' {
 				return "", refused("native_join_refused", nil)
 			}
-		} else if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f')) {
+		} else if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			return "", refused("native_join_refused", nil)
 		}
 	}
@@ -954,98 +893,4 @@ func uuidParseExact(s string) (string, error) {
 func exactIntent(raw []byte, next model.CapacityIntent) bool {
 	encoded, err := json.Marshal(next)
 	return err == nil && bytes.Equal(raw, encoded)
-}
-
-type threadDirectoryReturn struct {
-	handle       *callHandle
-	tids         []int
-	terminalZero bool
-	closeAt      time.Time
-	err          error
-}
-
-// Native getdents returns raw kernel bytes. Its actual terminal is 0,nil,
-// distinct from File.Read/io.EOF. The frozen wire grammar cannot admit this
-// as an EOF-based task_inventory_read proof, so it remains private/HOLD.
-func readOriginalTaskDirectory(l *originalLedger, pid int, subject, stage string) threadDirectoryReturn {
-	result := threadDirectoryReturn{}
-	if pid < 1 {
-		result.err = refused("native_join_refused", nil)
-		return result
-	}
-	h, err := l.handle()
-	if err != nil {
-		result.err = err
-		return result
-	}
-	result.handle = h
-	fdRaw, _, err := h.unclassifiedCall("open_task_directory", subject, stage, false, func() (int64, []byte, error) {
-		fd, e := unix.Open("/proc/"+strconv.Itoa(pid)+"/task", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_NONBLOCK|unix.O_CLOEXEC, 0)
-		return int64(fd), nil, e
-	})
-	if err != nil {
-		result.err = refused("native_join_refused", err)
-		return result
-	}
-	fd := int(fdRaw)
-	h.fd = fd
-	h.file = os.NewFile(uintptr(fd), "original-native-task-directory")
-	var names []string
-	total := 0
-	for {
-		if l.ctx.Err() != nil || total > bodyLimit {
-			result.err = refused("original_context_refused", l.ctx.Err())
-			break
-		}
-		buf := make([]byte, bodyLimit+1-total)
-		nRaw, raw, e := h.unclassifiedCall("task_inventory_getdents", subject, stage, false, func() (int64, []byte, error) {
-			n, e := unix.ReadDirent(fd, buf)
-			if n < 0 {
-				return int64(n), nil, e
-			}
-			return int64(n), bytes.Clone(buf[:n]), e
-		})
-		if e != nil || nRaw < 0 {
-			result.err = refused("native_join_refused", e)
-			break
-		}
-		if nRaw == 0 {
-			result.terminalZero = true
-			break
-		}
-		total += int(nRaw)
-		_, _, batch := unix.ParseDirent(raw, -1, nil)
-		names = append(names, batch...)
-		if len(names) > 4096 {
-			result.err = refused("native_join_refused", nil)
-			break
-		}
-	}
-	_, _, closeErr := h.unclassifiedCall("close_task_directory", subject, stage, false, func() (int64, []byte, error) {
-		e := h.file.Close()
-		if e != nil {
-			return -1, nil, e
-		}
-		return 0, nil, nil
-	})
-	result.closeAt = time.Now().UTC()
-	seen := map[int]bool{}
-	for _, name := range names {
-		tid, e := strconv.Atoi(name)
-		if e != nil || tid < 1 || strconv.Itoa(tid) != name || seen[tid] {
-			result.err = refused("native_join_refused", e)
-			continue
-		}
-		seen[tid] = true
-		result.tids = append(result.tids, tid)
-	}
-	sort.Ints(result.tids)
-	if result.err == nil && closeErr == nil && result.terminalZero && len(result.tids) > 0 {
-		// The actual returns are retained, but an unsupported wire/terminal
-		// convention cannot be upgraded into a complete native EMPTY.
-		result.err = capacity.ErrHostFactorySourceUnavailable
-	} else {
-		result.err = refused("native_join_refused", errors.Join(result.err, closeErr))
-	}
-	return result
 }

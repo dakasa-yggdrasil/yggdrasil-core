@@ -2465,7 +2465,13 @@ type hostVectorNativeGraph struct {
 
 func hostVectorSyntheticNativeGraph(t *testing.T) hostVectorNativeGraph {
 	t.Helper()
-	g := hostVectorNativeGraph{bodies: map[string][]byte{}, envelopes: map[string][]byte{}, io: map[string][]byte{}, relations: map[string]map[string]string{}, record: hostVectorNativeRecord(), key: ed25519.NewKeyFromSeed(bytes.Repeat([]byte{23}, 32))}
+	return hostVectorSyntheticNativeGraphFromRecord(t, hostVectorNativeRecord())
+}
+
+// Explicit synthetic input only; the legacy wrapper passes its unchanged record.
+func hostVectorSyntheticNativeGraphFromRecord(t *testing.T, record model.HostFactoryNativeObservationRecord) hostVectorNativeGraph {
+	t.Helper()
+	g := hostVectorNativeGraph{bodies: map[string][]byte{}, envelopes: map[string][]byte{}, io: map[string][]byte{}, relations: map[string]map[string]string{}, record: record, key: ed25519.NewKeyFromSeed(bytes.Repeat([]byte{23}, 32))}
 	n := g.record.Process
 	refs := map[string]model.HostFactoryCallVectorReference{}
 	var gather func(reflect.Value)
@@ -2500,7 +2506,7 @@ func hostVectorSyntheticNativeGraph(t *testing.T) hostVectorNativeGraph {
 	}
 	byHandle := map[string][]model.HostFactoryCallVectorReference{}
 	for key, r := range refs {
-		ords := []uint64{}
+		var ords []uint64
 		if r.OriginalCallCount == 1 {
 			ords = []uint64{r.FirstOrdinal}
 		} else {
@@ -2576,7 +2582,7 @@ func hostVectorSyntheticNativeGraph(t *testing.T) hostVectorNativeGraph {
 				}
 				if r.OriginalHandleID == n.OriginalSubjectNativePin.OriginalHandleID {
 					called = tm.Add((time.Duration(ord) - 5) * time.Nanosecond)
-					if ord == 4 {
+					if r.Operation == "native_subject_alive_poll" && *primitive.OriginalCallID == n.OriginalSubjectNativePin.OriginalAfterPollCallID {
 						called = n.OriginalNativeCloseReturnedAt
 					}
 					returned = called
@@ -3867,6 +3873,18 @@ func TestHostFactorySourceProfileScopedDomains(t *testing.T) {
 		if err != nil || purposes == nil || len(purposes) != 0 || !reflect.DeepEqual(decoded, body) {
 			t.Fatal("profile domain changed exact body")
 		}
+		for _, foreign := range []bool{false, true} {
+			changed := body
+			acquired := *body.OriginalGateSource.OriginalAcquisitionCallVector
+			if foreign {
+				acquired.OriginalHandleID = hostVectorSubject
+			} else {
+				acquired.LastOrdinal, acquired.OriginalCallCount = 2, 2
+			}
+			changed.OriginalGateSource.OriginalAcquisitionCallVector = &acquired
+			_, err = p.SignEnvelope(changed, []HostFactorySourceCallPurpose{}, "host_worker", hostVectorOwner, hostVectorScopeSchema, hostVectorSHA(), key)
+			hostVectorRefused(t, err) // The existing gate operation admits only one same-handle acquisition.
+		}
 		_, err = p.VerifyEnvelope(envelope, &decoded, "host_worker", hostVectorOwner, hostVectorScopeSchema, strings.Repeat("d", 64), public)
 		hostVectorRefused(t, err) // Exact Scope is in the signed domain, not the closed return BODY.
 		for _, binding := range []string{hostVectorRootSchema, hostVectorOrdinarySchema} {
@@ -4135,7 +4153,15 @@ func TestHostFactorySourceProfileOriginalPairs(t *testing.T) {
 func hostProfileSyntheticNativePairs(t *testing.T) (hostVectorNativeGraph, model.HostFactoryNativeObservationReference, HostFactorySourceResolvers) {
 	t.Helper()
 	p := ProposedHostFactorySourceProfileV1()
-	g := hostVectorSyntheticNativeGraph(t)
+	// Five declared pin facts retain acquisition :1 and prior Fstat :2;
+	// the current Source observation is beforePoll :3, Fstat :4, afterPoll :5.
+	// These synthetic CI facts provide no native or immutable FIRST proof.
+	record := hostVectorNativeRecord()
+	pin := &record.Process.OriginalSubjectNativePin
+	pin.OriginalFstatCallVector = hostVectorDeclaredRef("native_subject_pidfd_fstat", pin.OriginalHandleID, 2, 4, 2)
+	pin.OriginalAlivePollCallVector = hostVectorDeclaredRef("native_subject_alive_poll", pin.OriginalHandleID, 3, 5, 2)
+	pin.OriginalBeforePollCallID, pin.OriginalAfterPollCallID = pin.OriginalHandleID+":3", pin.OriginalHandleID+":5"
+	g := hostVectorSyntheticNativeGraphFromRecord(t, record)
 	task, rawBuffers := hostVectorSyntheticNativeTask(t, &g)
 	ioEnvelopes := map[string][]byte{}
 	for sha, raw := range g.io {

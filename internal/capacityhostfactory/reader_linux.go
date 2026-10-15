@@ -396,31 +396,6 @@ func (h *callHandle) unclassifiedErrorReturn(operation, subject, stage string, p
 	return value, err
 }
 
-func (h *callHandle) lastOriginalNativeReturn(operation string) (unclassifiedNativeReturn, bool) {
-	h.mu.Lock()
-	defer h.mu.Unlock()
-	for index := len(h.unclassified) - 1; index >= 0; index-- {
-		value := h.unclassified[index]
-		if value.operation == operation {
-			value.raw = bytes.Clone(value.raw)
-			if value.statfs != nil {
-				c := *value.statfs
-				value.statfs = &c
-			}
-			if value.ucred != nil {
-				c := *value.ucred
-				value.ucred = &c
-			}
-			if value.stat != nil {
-				copy := *value.stat
-				value.stat = &copy
-			}
-			return value, true
-		}
-	}
-	return unclassifiedNativeReturn{}, false
-}
-
 // OriginalIOCollection exposes copies of immutable original BODYs. SQL13 and
 // signature/native authentication belong to the separately scoped receiver.
 type OriginalIOCollection struct {

@@ -117,9 +117,7 @@ type OriginalFactoryRealm struct {
 	rootID                                                 string
 	rootPreparation                                        model.HostFactoryRootPreparation
 	rootPreparationRaw                                     []byte
-	initial                                                model.HostFactoryInitialEmptyRealmRead
 	initialRaw                                             []byte
-	assessment                                             model.CapacityAssessment
 	assessmentRaw                                          []byte
 	registrar, worker                                      *originalChild
 	ready, closing                                         bool
@@ -148,7 +146,6 @@ type OriginalFactoryRealm struct {
 	pre                                                    model.CapacityGuestOriginalProvisioningPreregistration
 	grantRaw, preRaw                                       []byte
 	ordinaryBindingRaw                                     []byte
-	ordinaryGuardRaw                                       []byte
 	guardReads                                             map[string]*ordinaryGuardRead
 	rootIOCollection                                       *OriginalIOCollection
 	ordinary                                               *ordinaryOriginalState
@@ -456,7 +453,7 @@ func (r *OriginalFactoryRealm) cacheOriginalSourceAudits() {
 				// A separately retained failed Open never acquired a file and
 				// does not fabricate an EOF/Close/native absence. Its later
 				// successful RPC poll uses another original acquisition handle.
-				if *fact.OriginalErrorPresent && !actualEOF && !((fact.Operation == "source_file_open" || fact.Operation == "source_directory_open") && !selected[handle.id]) {
+				if *fact.OriginalErrorPresent && !actualEOF && ((fact.Operation != "source_file_open" && fact.Operation != "source_directory_open") || selected[handle.id]) {
 					cause = errors.Join(cause, refused("original_pipe_refused", nil))
 				}
 				eof = eof || actualEOF
@@ -582,7 +579,7 @@ func (r *OriginalFactoryRealm) OriginalClosingIO(ctx context.Context) (map[strin
 	for selector, raw := range c.closingIO {
 		// This is bounded grammar/authentication of retained bytes, not a
 		// rebuilt BODY, another signature or a live factory effect guard.
-		if !(strings.HasPrefix(selector, "io-calls/") || strings.HasPrefix(selector, "failure-collections/")) || len(raw) == 0 || len(raw) > bodyLimit || VerifyOriginalHistoricalStage(ctx, selector, raw) != nil {
+		if (!strings.HasPrefix(selector, "io-calls/") && !strings.HasPrefix(selector, "failure-collections/")) || len(raw) == 0 || len(raw) > bodyLimit || VerifyOriginalHistoricalStage(ctx, selector, raw) != nil {
 			return nil, refused("storage_unknown", nil)
 		}
 		out[selector] = bytes.Clone(raw)
@@ -1208,13 +1205,14 @@ func decodeOriginalStage(stage string, raw []byte) (any, error) {
 		if len(parts) != 4 || parts[0] != "io-calls" || uuidMust(parts[1]) == "" || !capacity.ValidDigest(parts[3]) || digest(raw) != parts[3] {
 			return decodeAuthorityStage(stage, raw)
 		}
-		if parts[2] == "chunk" {
+		switch parts[2] {
+		case "chunk":
 			value = &model.HostFactoryCallVectorChunk{}
-		} else if parts[2] == "manifest" {
+		case "manifest":
 			value = &model.HostFactoryCallVectorManifest{}
-		} else if parts[2] == "inventory" {
+		case "inventory":
 			value = &model.HostFactoryHandleCallInventory{}
-		} else {
+		default:
 			return nil, refused("storage_unknown", nil)
 		}
 		if e := capacity.DecodeHostFactory(raw, value); e != nil {
@@ -2442,10 +2440,6 @@ func originalCleanupContext(ctx context.Context) (context.Context, context.Cance
 	return context.WithDeadline(context.WithoutCancel(ctx), deadline.Add(150*time.Second))
 }
 
-func startOriginalChild(ctx context.Context, cmd *exec.Cmd, l *originalLedger, subject, startStage, startOperation, waitOperation string, inputs []originalChildInput) (_ *originalChild, runErr error) {
-	return startOriginalChildRegistered(ctx, cmd, l, subject, startStage, startOperation, waitOperation, inputs, nil)
-}
-
 // Source-owned registration holds its publication gate across preparation and
 // actual Start/sole-Wait registration. The release precedes ALL failure joins
 // and the independent pin. Registering then unlocking before Start is unsafe:
@@ -2667,9 +2661,7 @@ func startOriginalChildRegistered(ctx context.Context, cmd *exec.Cmd, l *origina
 		releaseGate()
 		// Reader owners existed before Start and still have real returns.
 		_, closeOutErr := closeOwned(outWriter, "redundant_stdout_writer_close", subject, "cleanup")
-		outW = nil
 		_, closeErrErr := closeOwned(errWriter, "redundant_stderr_writer_close", subject, "cleanup")
-		errW = nil
 		return nil, errors.Join(err, closeOutErr, closeErrErr)
 	}
 	// Register the sole Wait owner immediately, before a pin/Close can fail.
@@ -2678,12 +2670,10 @@ func startOriginalChildRegistered(ctx context.Context, cmd *exec.Cmd, l *origina
 	if c.startSources != nil {
 		c.startSources.redundantStdout = outWriter.closeCall
 	}
-	outW = nil
 	_, e2 := closeOwned(errWriter, "redundant_stderr_writer_close", subject, startStage)
 	if c.startSources != nil {
 		c.startSources.redundantStderr = errWriter.closeCall
 	}
-	errW = nil
 	if e1 != nil || e2 != nil {
 		return nil, errors.Join(e1, e2)
 	}
@@ -3107,8 +3097,6 @@ func ParseChildDeadline(value string) (time.Time, error) {
 func fixedChildEnvironment(h launchHints, directory, bindingSHA, preparationSHA, targetSHA string) []string {
 	return []string{"PATH=/usr/bin:/bin", "LANG=C", "HOST_ORIGINAL_SOURCE_DIRECTORY=" + directory, "HOST_ORIGINAL_ROOT_ID=" + h.rootID, "HOST_ORIGINAL_OWNER_ID=" + h.ownerID, "HOST_ORIGINAL_ROLE=" + h.role, "HOST_ORIGINAL_APPROVAL_SHA256=" + h.approvalSHA, "HOST_ORIGINAL_BUILD_SHA256=" + h.buildSHA, "HOST_ORIGINAL_CONTEXT_STARTED_AT=" + h.started.UTC().Format(time.RFC3339Nano), "HOST_ORIGINAL_CONTEXT_DEADLINE=" + h.deadline.UTC().Format(time.RFC3339Nano), "HOST_ORIGINAL_BINDING_SHA256=" + bindingSHA, "HOST_ORIGINAL_PREPARATION_SHA256=" + preparationSHA, "HOST_ORIGINAL_TARGET_SHA256=" + targetSHA}
 }
-
-func controlName(slot int) string { return "slot-" + strconv.Itoa(slot) }
 
 // Registrar is independently owned by Core and can only observe the original
 // source domain. It has no mutation bearer or ordinary-create capability.
@@ -3958,11 +3946,6 @@ func (a *originalRegistrarActor) openOriginalNativeDirectory(ctx context.Context
 	return a.captureOriginalNativeDirectoryInventory(ctx)
 }
 
-func controlRegistrarImportParentOriginals(ctx context.Context, p *originalNativePublisher, request controlRegistrarRequest, manifestRaw []byte, audit *originalLedger, anchor *callHandle, uid, gid uint32) error {
-	_, err := controlRegistrarImportParentOriginalsCaptured(ctx, p, request, manifestRaw, audit, anchor, uid, gid)
-	return err
-}
-
 func controlRegistrarImportParentOriginalsCaptured(ctx context.Context, p *originalNativePublisher, request controlRegistrarRequest, manifestRaw []byte, audit *originalLedger, anchor *callHandle, uid, gid uint32) (*originalNativeTransferReturn, error) {
 	if p == nil || request.Phase == "closing" || p.ledger.ownerRole != "host_registrar" || request.RegistrarOwnerID != p.ledger.ownerID || len(manifestRaw) == 0 {
 		return nil, refused("source_registry_refused", nil)
@@ -4310,18 +4293,6 @@ func (a *originalRegistrarActor) initializeOriginalOrdinaryPublisher(x *original
 	}
 	a.currentWorkerPin, a.currentCorePin, a.currentRegistrarPin = pin, nil, nil
 	return e
-}
-
-// Phase context is the actual Source request-owned context, never a deadline
-// reconstructed from an observed record or an untrusted caller timestamp.
-func originalRegistrarPhaseDeadline(ctx context.Context) error {
-	if ctx == nil || ctx.Err() != nil {
-		return refused("original_context_refused", nil)
-	}
-	if _, bounded := ctx.Deadline(); !bounded {
-		return refused("original_context_refused", nil)
-	}
-	return nil
 }
 
 // Source assembly input: native_authority_builder_linux_fragment.go
@@ -4880,18 +4851,8 @@ func controlRegistrarPublishFileCaptured(ctx context.Context, audit *originalLed
 	return controlRegistrarPublishCustodyFileCaptured(ctx, audit, anchor, temporary, final, raw, uid, gid, false)
 }
 
-func controlRegistrarPublishGetdentsFile(ctx context.Context, audit *originalLedger, anchor *callHandle, temporary, final string, raw []byte, uid, gid uint32) error {
-	_, _, err := controlRegistrarPublishGetdentsFileCaptured(ctx, audit, anchor, temporary, final, raw, uid, gid)
-	return err
-}
-
 func controlRegistrarPublishGetdentsFileCaptured(ctx context.Context, audit *originalLedger, anchor *callHandle, temporary, final string, raw []byte, uid, gid uint32) (*callHandle, *callHandle, error) {
 	return controlRegistrarPublishCustodyFileCaptured(ctx, audit, anchor, temporary, final, raw, uid, gid, true)
-}
-
-func controlRegistrarPublishCustodyFile(ctx context.Context, audit *originalLedger, anchor *callHandle, temporary, final string, raw []byte, expectedUID, expectedGID uint32, allowEmpty bool) error {
-	_, _, err := controlRegistrarPublishCustodyFileCaptured(ctx, audit, anchor, temporary, final, raw, expectedUID, expectedGID, allowEmpty)
-	return err
 }
 
 func controlRegistrarPublishCustodyFileCaptured(ctx context.Context, audit *originalLedger, anchor *callHandle, temporary, final string, raw []byte, expectedUID, expectedGID uint32, allowEmpty bool) (writer, method *callHandle, runErr error) {
@@ -5043,21 +5004,12 @@ func controlRegistrarPublicationBound(ctx context.Context, captured time.Time) e
 
 // Source assembly input: native_control_reader_captured_linux_fragment.go
 // Lexical Source file reader; private originals remain exact on late/refused paths.
-func controlRegistrarReadFile(ctx context.Context, audit *originalLedger, anchor *callHandle, name string, uid, gid uint32) ([]byte, error) {
-	raw, _, err := controlRegistrarReadCustodyFile(ctx, audit, anchor, name, uid, gid, false)
-	return raw, err
-}
 
 // originalOpenMissing is retained only from the literal failed Openat branch.
 // It permits bounded polling of the SAME request reply, not effect retry,
 // fabricated FD/Close, absence, or a new original attempt/identity.
 func controlRegistrarReadFileAttempt(ctx context.Context, audit *originalLedger, anchor *callHandle, name string, uid, gid uint32) ([]byte, bool, error) {
 	return controlRegistrarReadCustodyFile(ctx, audit, anchor, name, uid, gid, false)
-}
-
-func controlRegistrarReadGetdentsFile(ctx context.Context, audit *originalLedger, anchor *callHandle, name string, uid, gid uint32) ([]byte, error) {
-	raw, _, err := controlRegistrarReadCustodyFile(ctx, audit, anchor, name, uid, gid, true)
-	return raw, err
 }
 
 func controlRegistrarReadCustodyFile(ctx context.Context, audit *originalLedger, anchor *callHandle, name string, expectedUID, expectedGID uint32, allowEmpty bool) (raw []byte, originalOpenMissing bool, runErr error) {
@@ -5396,11 +5348,6 @@ func controlRegistrarBeginOriginalPhase(ctx context.Context, r *OriginalFactoryR
 	}
 	c.publicationMu.Unlock()
 	return token, err
-}
-
-func controlRegistrarRequireOriginalPhase(p *originalNativePublisher, ctx context.Context, requestID string, basal *basalOwner) error {
-	_, err := controlRegistrarOriginalPhaseCalledAt(p, ctx, requestID, basal)
-	return err
 }
 
 func controlRegistrarOriginalPhaseCalledAt(p *originalNativePublisher, ctx context.Context, requestID string, basal *basalOwner) (time.Time, error) {
@@ -6055,35 +6002,6 @@ func controlRegistrarEncodeRequest(request controlRegistrarRequest, originalInpu
 		return nil, refused("source_registry_refused", err)
 	}
 	return raw, nil
-}
-
-// This derives from the actual original actor context BEFORE new ObservationID
-// reservation/nativeIO. The Source wrapper must also compare its genuine phase
-// cache and exact signed anchor. A request supplies no source or lease authority.
-func controlRegistrarOriginalPhaseContext(original context.Context, request controlRegistrarRequest) (context.Context, context.CancelFunc, error) {
-	if request.Phase == "closing" {
-		return nil, nil, refused("original_context_refused", nil) // cleanup has its own Source-owned diagnostic context, never a native phase
-	}
-	if original == nil || original.Err() != nil {
-		return nil, nil, refused("original_context_refused", nil)
-	}
-	if err := controlRegistrarValidateRequest(request); err != nil {
-		return nil, nil, err
-	}
-	bound, err := controlRegistrarCanonicalTime(request.OriginalEffectivePhaseDeadline)
-	if err != nil {
-		return nil, nil, err
-	}
-	if _, ok := original.Deadline(); !ok {
-		return nil, nil, refused("original_context_refused", nil)
-	}
-	phase, cancel := context.WithDeadline(original, bound)
-	actual, ok := phase.Deadline()
-	if !ok || !actual.Equal(bound) || phase.Err() != nil {
-		cancel()
-		return nil, nil, refused("original_context_refused", nil)
-	}
-	return phase, cancel, nil
 }
 
 // Source assembly input: native_current_custody_types_linux_fragment.go
@@ -7035,14 +6953,6 @@ func controlPublishOriginalCurrentLedgersOwned(ctx context.Context, r *OriginalF
 	err := controlPublishOriginalCurrentLedgers(ctx, r)
 	returned := time.Now().UTC() // real helper GoReturn, not internal publication marker
 	return errors.Join(err, controlCaptureOriginalCurrentPublicationReturn(r, called, returned, err))
-}
-
-// These names and ranges are Source-private, not accepted Host operations.
-func originalCurrentLedgerCustodyBasename(requestID string) string {
-	if uuidMust(requestID) != requestID || requestID == "" {
-		return ""
-	}
-	return requestID + "-poststart-ledger-custody.json"
 }
 
 // Captured by the actual Prepare caller immediately AFTER original Exchange
@@ -9452,19 +9362,20 @@ func collectOriginalFinalSourceAuditActor(r *OriginalFactoryRealm, child *origin
 	var final *originalFinalSourceAuditActorRead
 	var rows []*retainedCall
 	var frameOffset, frameBytes uint32
-	if child.subjectRole == "host_worker" {
+	switch child.subjectRole {
+	case "host_worker":
 		var cause error
 		final, rows, frameOffset, frameBytes, cause = originalFinalWorkerFrameSelection(child)
 		if cause != nil {
 			return out, cause
 		}
-	} else if child.subjectRole == "host_registrar" {
+	case "host_registrar":
 		collected := child.registrarOutput
 		if collected == nil || collected.child != child || collected.cause != nil || collected.classifiedRows != len(collected.rows) || collected.classifiedBytes != len(collected.raw) || collected.eof == nil || collected.finalAudit == nil || !bytes.Equal(collected.raw, child.output.bytes) {
 			return out, refused("storage_unknown", nil)
 		}
 		final, rows, frameOffset, frameBytes = collected.finalAudit, collected.rows, collected.finalOffset, collected.finalBytes
-	} else {
+	default:
 		return out, capacity.ErrHostFactorySourceUnavailable
 	} // no ordinary relabel
 	if final.cause != nil || final.body == nil || final.envelope == nil || final.artifacts == nil {
@@ -10180,44 +10091,6 @@ func originalTransferredGetdentsSourceCustody(request controlRegistrarRequest, i
 		return nil, refused("storage_unknown", e)
 	}
 	return encoded, nil
-}
-
-// Source owner finalization, before any immutable SQL insertion. This is
-// limited to genuinely local kernel buffers with NO transfer reservation.
-// It cannot excuse a pending/failed file publication or select a file0 chain.
-func (p *originalNativePublisher) finalizeOriginalLocalGetdentsSourceCustody() error {
-	if p == nil || p.custody == nil {
-		return refused("storage_unknown", nil)
-	}
-	p.mu.Lock()
-	defer p.mu.Unlock()
-	if p.importFailure != nil {
-		return refused("storage_unknown", p.importFailure)
-	}
-	p.custody.mu.Lock()
-	defer p.custody.mu.Unlock()
-	for id, x := range p.custody.getdents {
-		if len(x.sourceAuditRaw) != 0 {
-			continue
-		}
-		phase := x.originalPhase
-		var chunk model.HostFactoryCallVectorChunk
-		if x.sourceFileAttempt || x.call == nil || !x.known || x.raw == nil || phase == nil || phase.name != "initial" && phase.name != "worker" && phase.name != "terminal" || p.phaseReservations[phase.requestID] != phase || capacity.DecodeHostFactory(x.chunkBody, &chunk) != nil || x.factIndex >= uint32(len(chunk.OriginalCalls)) {
-			return refused("storage_unknown", nil)
-		}
-		fact := chunk.OriginalCalls[x.factIndex]
-		if fact.OriginalState != "returned" || fact.OriginalCallID == nil || *fact.OriginalCallID != id || fact.OriginalReturnedAt == nil || fact.OriginalNativeReturn == nil || fact.OriginalNativeReturn.Kind != "unix_getdents64" || x.call.cause != nil || !x.call.originalRawKnown || !bytes.Equal(x.call.originalRaw, x.raw) {
-			return refused("storage_unknown", nil)
-		}
-		wire := originalNativeGetdentsSourceAuditCustody{Schema: "source_private_original_getdents_source_audit_custody_v1", CustodyClass: "local_kernel", FactoryRootID: p.root, RequestID: phase.requestID, Phase: phase.name, OriginalCallID: id, OriginalChunkBodySHA256: digest(x.chunkBody), OriginalChunkEnvelopeSHA256: digest(x.chunkEnvelope), OriginalFactIndex: x.factIndex, OriginalOwnerID: chunk.OriginalOwnerID, BindingSchema: chunk.BindingSchema, BindingSHA256: chunk.BindingSHA256, OriginalRawBytes: len(x.raw), OriginalRawSHA256: digest(x.raw)}
-		raw, e := json.Marshal(wire)
-		if e != nil || len(raw) == 0 || len(raw) > bodyLimit {
-			return refused("storage_unknown", e)
-		}
-		x.sourceAuditRaw = bytes.Clone(raw)
-		p.custody.getdents[id] = x
-	}
-	return nil
 }
 
 func (r *OriginalFactoryRealm) OriginalGetdentsSourceAuditCustody(ctx context.Context, originalCallID string) ([]byte, error) {
@@ -11330,7 +11203,7 @@ func originalNativeAggregateStage(value any) (string, error) {
 	if err != nil {
 		return "", err
 	}
-	switch value.(type) {
+	switch x := value.(type) {
 	case model.HostFactoryOriginalStartReturn:
 		return "original-start-return", nil
 	case model.HostFactoryAliveNativeRead:
@@ -11340,7 +11213,6 @@ func originalNativeAggregateStage(value any) (string, error) {
 	case model.HostFactoryTerminalRead:
 		return "terminal-read", nil
 	case model.HostFactoryNativeLeaf:
-		x := value.(model.HostFactoryNativeLeaf)
 		switch x.Role {
 		case "host_exterior":
 			return "native-leaf-core-by-registrar", nil
@@ -11906,7 +11778,7 @@ func originalNativeMetadataNodeValid(x originalNativeExportMetadataNode, request
 		}
 		return nil
 	}
-	if x.Children == nil || len(x.Children) < 1 || len(x.Children) > 16 {
+	if len(x.Children) < 1 || len(x.Children) > 16 {
 		return refused("storage_unknown", nil)
 	}
 	next, total := x.FirstOrdinal, uint32(0)
@@ -19274,9 +19146,10 @@ func controlReadOriginalWorkerIO(ctx context.Context, r *OriginalFactoryRealm, c
 	}
 	c := r.control
 	selector := "prepared-create-plan"
-	if phase == "choice" {
+	switch phase {
+	case "choice":
 		selector = "choice-return"
-	} else if phase == "closing" {
+	case "closing":
 		selector = "final-source-audit-worker"
 		for _, done := range []<-chan struct{}{child.launchEffectsDone, child.resultDone, child.waitFinished, child.finalJoinDone} {
 			select {
@@ -20109,55 +19982,55 @@ func postStartOriginalPurpose(l *originalLedger) error {
 }
 func postStartOriginalTuples() []capacity.HostFactorySourceOperationTuple {
 	return []capacity.HostFactorySourceOperationTuple{
-		{"native_subject_alive_poll", "host_registrar", "host_exterior", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("unix_poll")},
-		{"native_subject_pidfd_fstat", "host_registrar", "host_exterior", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("unix_fstat")},
-		{"native_reader_open", "host_registrar", "host_exterior", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("unix_open")},
-		{"native_reader_fstat", "host_registrar", "host_exterior", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("unix_fstat")},
-		{"native_reader_close", "host_registrar", "host_exterior", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("original_file_close")},
-		{"boot_id_read", "host_registrar", "host_exterior", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"stat_before_read", "host_registrar", "host_exterior", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"executable_read", "host_registrar", "host_exterior", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"cmdline_read", "host_registrar", "host_exterior", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"proc_owner_directory_open", "host_registrar", "host_exterior", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("unix_open")},
-		{"proc_owner_directory_fstat", "host_registrar", "host_exterior", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("unix_fstat")},
-		{"proc_owner_directory_close", "host_registrar", "host_exterior", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("original_file_close")},
-		{"stat_after_read", "host_registrar", "host_exterior", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"native_subject_alive_poll", "host_registrar", "host_worker", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("unix_poll")},
-		{"native_subject_pidfd_fstat", "host_registrar", "host_worker", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("unix_fstat")},
-		{"native_reader_open", "host_registrar", "host_worker", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("unix_open")},
-		{"native_reader_fstat", "host_registrar", "host_worker", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("unix_fstat")},
-		{"native_reader_close", "host_registrar", "host_worker", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("original_file_close")},
-		{"boot_id_read", "host_registrar", "host_worker", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"stat_before_read", "host_registrar", "host_worker", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"executable_read", "host_registrar", "host_worker", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"cmdline_read", "host_registrar", "host_worker", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"proc_owner_directory_open", "host_registrar", "host_worker", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("unix_open")},
-		{"proc_owner_directory_fstat", "host_registrar", "host_worker", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("unix_fstat")},
-		{"proc_owner_directory_close", "host_registrar", "host_worker", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("original_file_close")},
-		{"stat_after_read", "host_registrar", "host_worker", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"task_inventory_getdents", "host_registrar", "host_exterior", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("unix_getdents64")},
-		{"thread_stat_before_read", "host_registrar", "host_exterior", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"thread_children_read", "host_registrar", "host_exterior", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"thread_stat_after_read", "host_registrar", "host_exterior", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"boot_id_read", "host_registrar", "host_registrar", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"stat_before_read", "host_registrar", "host_registrar", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"native_reader_open", "host_registrar", "host_registrar", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("unix_open")},
-		{"native_reader_fstat", "host_registrar", "host_registrar", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("unix_fstat")},
-		{"task_inventory_getdents", "host_registrar", "host_registrar", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("unix_getdents64")},
-		{"native_reader_close", "host_registrar", "host_registrar", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("original_file_close")},
-		{"stat_after_read", "host_registrar", "host_registrar", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"thread_stat_before_read", "host_registrar", "host_registrar", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"thread_children_read", "host_registrar", "host_registrar", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"thread_stat_after_read", "host_registrar", "host_registrar", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"task_inventory_getdents", "host_registrar", "host_worker", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("unix_getdents64")},
-		{"thread_stat_before_read", "host_registrar", "host_worker", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"thread_children_read", "host_registrar", "host_worker", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"thread_stat_after_read", "host_registrar", "host_worker", "poststart_empty", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", nil},
-		{"native_reader_close", "host_registrar", "host_exterior", "cleanup", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("original_file_close")},
-		{"native_reader_close", "host_registrar", "host_registrar", "cleanup", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("original_file_close")},
-		{"native_reader_close", "host_registrar", "host_worker", "cleanup", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("original_file_close")},
-		{"proc_owner_directory_close", "host_registrar", "host_exterior", "cleanup", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("original_file_close")},
-		{"proc_owner_directory_close", "host_registrar", "host_worker", "cleanup", "original_host_factory_pre_authority_scope_v4", "HostFactorySignedEnvelope", ptr("original_file_close")},
+		{Operation: "native_subject_alive_poll", OwnerRole: "host_registrar", SubjectRole: "host_exterior", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("unix_poll")},
+		{Operation: "native_subject_pidfd_fstat", OwnerRole: "host_registrar", SubjectRole: "host_exterior", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("unix_fstat")},
+		{Operation: "native_reader_open", OwnerRole: "host_registrar", SubjectRole: "host_exterior", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("unix_open")},
+		{Operation: "native_reader_fstat", OwnerRole: "host_registrar", SubjectRole: "host_exterior", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("unix_fstat")},
+		{Operation: "native_reader_close", OwnerRole: "host_registrar", SubjectRole: "host_exterior", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("original_file_close")},
+		{Operation: "boot_id_read", OwnerRole: "host_registrar", SubjectRole: "host_exterior", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "stat_before_read", OwnerRole: "host_registrar", SubjectRole: "host_exterior", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "executable_read", OwnerRole: "host_registrar", SubjectRole: "host_exterior", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "cmdline_read", OwnerRole: "host_registrar", SubjectRole: "host_exterior", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "proc_owner_directory_open", OwnerRole: "host_registrar", SubjectRole: "host_exterior", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("unix_open")},
+		{Operation: "proc_owner_directory_fstat", OwnerRole: "host_registrar", SubjectRole: "host_exterior", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("unix_fstat")},
+		{Operation: "proc_owner_directory_close", OwnerRole: "host_registrar", SubjectRole: "host_exterior", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("original_file_close")},
+		{Operation: "stat_after_read", OwnerRole: "host_registrar", SubjectRole: "host_exterior", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "native_subject_alive_poll", OwnerRole: "host_registrar", SubjectRole: "host_worker", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("unix_poll")},
+		{Operation: "native_subject_pidfd_fstat", OwnerRole: "host_registrar", SubjectRole: "host_worker", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("unix_fstat")},
+		{Operation: "native_reader_open", OwnerRole: "host_registrar", SubjectRole: "host_worker", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("unix_open")},
+		{Operation: "native_reader_fstat", OwnerRole: "host_registrar", SubjectRole: "host_worker", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("unix_fstat")},
+		{Operation: "native_reader_close", OwnerRole: "host_registrar", SubjectRole: "host_worker", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("original_file_close")},
+		{Operation: "boot_id_read", OwnerRole: "host_registrar", SubjectRole: "host_worker", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "stat_before_read", OwnerRole: "host_registrar", SubjectRole: "host_worker", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "executable_read", OwnerRole: "host_registrar", SubjectRole: "host_worker", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "cmdline_read", OwnerRole: "host_registrar", SubjectRole: "host_worker", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "proc_owner_directory_open", OwnerRole: "host_registrar", SubjectRole: "host_worker", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("unix_open")},
+		{Operation: "proc_owner_directory_fstat", OwnerRole: "host_registrar", SubjectRole: "host_worker", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("unix_fstat")},
+		{Operation: "proc_owner_directory_close", OwnerRole: "host_registrar", SubjectRole: "host_worker", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("original_file_close")},
+		{Operation: "stat_after_read", OwnerRole: "host_registrar", SubjectRole: "host_worker", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "task_inventory_getdents", OwnerRole: "host_registrar", SubjectRole: "host_exterior", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("unix_getdents64")},
+		{Operation: "thread_stat_before_read", OwnerRole: "host_registrar", SubjectRole: "host_exterior", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "thread_children_read", OwnerRole: "host_registrar", SubjectRole: "host_exterior", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "thread_stat_after_read", OwnerRole: "host_registrar", SubjectRole: "host_exterior", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "boot_id_read", OwnerRole: "host_registrar", SubjectRole: "host_registrar", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "stat_before_read", OwnerRole: "host_registrar", SubjectRole: "host_registrar", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "native_reader_open", OwnerRole: "host_registrar", SubjectRole: "host_registrar", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("unix_open")},
+		{Operation: "native_reader_fstat", OwnerRole: "host_registrar", SubjectRole: "host_registrar", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("unix_fstat")},
+		{Operation: "task_inventory_getdents", OwnerRole: "host_registrar", SubjectRole: "host_registrar", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("unix_getdents64")},
+		{Operation: "native_reader_close", OwnerRole: "host_registrar", SubjectRole: "host_registrar", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("original_file_close")},
+		{Operation: "stat_after_read", OwnerRole: "host_registrar", SubjectRole: "host_registrar", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "thread_stat_before_read", OwnerRole: "host_registrar", SubjectRole: "host_registrar", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "thread_children_read", OwnerRole: "host_registrar", SubjectRole: "host_registrar", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "thread_stat_after_read", OwnerRole: "host_registrar", SubjectRole: "host_registrar", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "task_inventory_getdents", OwnerRole: "host_registrar", SubjectRole: "host_worker", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("unix_getdents64")},
+		{Operation: "thread_stat_before_read", OwnerRole: "host_registrar", SubjectRole: "host_worker", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "thread_children_read", OwnerRole: "host_registrar", SubjectRole: "host_worker", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "thread_stat_after_read", OwnerRole: "host_registrar", SubjectRole: "host_worker", Stage: "poststart_empty", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: nil},
+		{Operation: "native_reader_close", OwnerRole: "host_registrar", SubjectRole: "host_exterior", Stage: "cleanup", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("original_file_close")},
+		{Operation: "native_reader_close", OwnerRole: "host_registrar", SubjectRole: "host_registrar", Stage: "cleanup", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("original_file_close")},
+		{Operation: "native_reader_close", OwnerRole: "host_registrar", SubjectRole: "host_worker", Stage: "cleanup", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("original_file_close")},
+		{Operation: "proc_owner_directory_close", OwnerRole: "host_registrar", SubjectRole: "host_exterior", Stage: "cleanup", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("original_file_close")},
+		{Operation: "proc_owner_directory_close", OwnerRole: "host_registrar", SubjectRole: "host_worker", Stage: "cleanup", BindingSchema: "original_host_factory_pre_authority_scope_v4", EnvelopeType: "HostFactorySignedEnvelope", NativeKind: ptr("original_file_close")},
 	}
 }
 
@@ -20434,7 +20307,7 @@ func originalNativeOwnerResolver(ctx context.Context, installation fixedInstalla
 		if err != nil || len(basalEnvelope) == 0 || len(basalEnvelope) > bodyLimit || len(bootstrapEnvelope) == 0 || len(bootstrapEnvelope) > bodyLimit || len(bindingRaw) == 0 || len(bindingRaw) > bodyLimit || digest(bindingRaw) != bindingSHA {
 			return nil, refused("storage_unknown", err)
 		}
-		deadline := time.Time{}
+		var deadline time.Time
 		if originalPhaseDeadline != nil {
 			deadline = *originalPhaseDeadline
 		} else {
@@ -23326,53 +23199,6 @@ func controlCreateOriginalTerminalPublisher(ctx context.Context, r *OriginalFact
 	return p, errors.Join(err, nativeProcessPhase(ctx, l))
 }
 
-// Source assembly input: native_source_audit_closure_linux_fragment.go
-// The lexical closing owner calls this only after sealing publication and
-// joining all original imported readers. The merger handles consistency;
-// genuine Source custody/owner/binding comes from each same verified transfer.
-// It creates no Source audit fact, time, hash, CallID or native completion.
-func (p *originalNativePublisher) originalTransferredSourceAuditProjections() ([]originalSourceAuditProjection, error) {
-	if p == nil {
-		return nil, refused("storage_unknown", nil)
-	}
-	p.mu.Lock()
-	if !p.sealed || p.importFailure != nil || p.custody == nil {
-		cause := p.importFailure
-		p.mu.Unlock()
-		return nil, refused("storage_unknown", cause)
-	}
-	c := p.custody
-	root := p.root
-	p.mu.Unlock()
-	c.mu.Lock()
-	if c.sourceAudits == nil || len(c.sourceAuditOrder) != len(c.sourceAudits) || len(c.sourceAuditOrder) > 4096 {
-		c.mu.Unlock()
-		return nil, refused("storage_unknown", nil)
-	}
-	rows := make([]originalSourceAuditProjection, 0, len(c.sourceAuditOrder))
-	transfers := make([]*originalNativeTransferReturn, 0, len(c.sourceAuditOrder))
-	seen := make(map[string]bool, len(c.sourceAuditOrder))
-	for _, id := range c.sourceAuditOrder {
-		x, found := c.sourceAudits[id]
-		if !found || seen[id] || x.transfer == nil || x.projection.Fact.OriginalCallID == nil || *x.projection.Fact.OriginalCallID != id || x.projection.Fact.FactoryRootID != root {
-			c.mu.Unlock()
-			return nil, refused("storage_unknown", nil)
-		}
-		seen[id] = true
-		rows = append(rows, mergeOriginalSourceAuditCopy(x.projection))
-		transfers = append(transfers, x.transfer)
-	}
-	c.mu.Unlock()
-	// Transfer validation has its own once lock. No publisher/custody mutex
-	// spans it, and there is no IO or reconstruction at this closing read.
-	for _, x := range transfers {
-		if !originalNativeTransferVerified(x) || x.request.FactoryRootID != root {
-			return nil, refused("storage_unknown", nil)
-		}
-	}
-	return mergeOriginalSourceAuditProjections([]originalSourceAuditProjection{}, rows)
-}
-
 // Source assembly input: native_source_audit_owner_linux_fragment.go
 // New Source IO owners retain the actual lexical IO context and immutable
 // namespace. No previous ledger/context/handle/counter is rebound. Registration
@@ -25026,7 +24852,7 @@ func readOriginalNativeTaskPayload(ctx context.Context, l *originalLedger, pid i
 	var buffers [][]byte
 	raw := []byte{}
 	terminal := ""
-	returnedAt := time.Time{}
+	var returnedAt time.Time
 	for {
 		if e := nativeProcessPhase(ctx, l); e != nil {
 			return out, e
@@ -27721,7 +27547,8 @@ func originalWorkerAuthenticateLateFrame(i fixedInstallation, profile *capacity.
 		return nil, "", deadline, refused("native_join_refused", err)
 	}
 	registrationSHA := digest(registrationRaw)
-	if i.entry == "sealed_a0" {
+	switch i.entry {
+	case "sealed_a0":
 		var x model.HostFactoryUnissuedChoiceReservation
 		body, err := readStage("unissued-choice-reservation", frame.ChoiceReservationEnvelopeRaw, &x)
 		if err != nil || x.PreAuthorityScopeSHA256 != scopeSHA || x.AliveRegistrationSHA256 != registrationSHA || x.ReservedAt.Before(registration.CoreRegisteredAt) {
@@ -27729,7 +27556,7 @@ func originalWorkerAuthenticateLateFrame(i fixedInstallation, profile *capacity.
 		}
 		deadline = x.OriginalChoiceDeadline
 		choice = model.HostFactoryUnissuedChoiceBody{Schema: "original_host_factory_unissued_choice_body_v4", Purpose: "original_host_factory_unissued_choice_body_v4", PreAuthorityScopeSHA256: scopeSHA, AliveRegistrationSHA256: registrationSHA, ChoiceReservationSHA256: digest(body), Choice: x.Choice}
-	} else if i.entry == "sealed_a1" {
+	case "sealed_a1":
 		var x model.HostFactoryIssuedChoiceReservation
 		body, err := readStage("issued-choice-reservation", frame.ChoiceReservationEnvelopeRaw, &x)
 		if err != nil || x.PreAuthorityScopeSHA256 != scopeSHA || x.AliveRegistrationSHA256 != registrationSHA || x.ReservedAt.Before(registration.CoreRegisteredAt) {
@@ -27737,7 +27564,7 @@ func originalWorkerAuthenticateLateFrame(i fixedInstallation, profile *capacity.
 		}
 		deadline = x.OriginalChoiceDeadline
 		choice = model.HostFactoryIssuedChoiceBody{Schema: "original_host_factory_issued_choice_body_v4", Purpose: "original_host_factory_issued_choice_body_v4", PreAuthorityScopeSHA256: scopeSHA, AliveRegistrationSHA256: registrationSHA, IssuedAttachmentSHA256: x.IssuedAttachmentSHA256, ChoiceReservationSHA256: digest(body), Choice: x.Choice}
-	} else {
+	default:
 		return nil, "", deadline, refused("source_registry_refused", nil)
 	}
 	d, bounded := early.ctx.Deadline()

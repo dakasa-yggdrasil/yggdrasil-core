@@ -1484,21 +1484,22 @@ func controlDecodeApprovedManifest(i fixedInstallation, raw []byte, kind string,
 	if object["kind"] != kind {
 		return refused("source_registry_refused", nil)
 	}
-	if kind == "capacity_policy" {
+	switch kind {
+	case "capacity_policy":
 		if _, err = controlObject(object["spec"], "environment", "domain", "dimension", "target_identity", "owner", "workflow", "currency", "floor", "ceiling", "step", "max_evidence_age_seconds", "min_samples", "max_sample_gap_seconds", "up_hold_seconds", "down_hold_seconds", "cooldown_seconds", "lease_seconds", "execution_enabled", "signals", "profiles", "mutation_bindings", "guest_bootstrap_binding", "guest_retirement_binding"); err != nil {
 			return err
 		}
 		if err = controlDeclaredShape(object["spec"], reflect.TypeOf(model.CapacityPolicySpec{}), 0); err != nil {
 			return err
 		}
-	} else if kind == "workflow" {
+	case "workflow":
 		if _, err = controlObject(object["spec"], "trigger", "dispatch_mode", "authorization", "steps"); err != nil {
 			return err
 		}
 		if err = controlDeclaredShape(object["spec"], reflect.TypeOf(model.WorkflowManifestSpec{}), 0); err != nil {
 			return err
 		}
-	} else {
+	default:
 		return refused("source_registry_refused", nil)
 	}
 	// Unknown/case/duplicate/null shape is refused BEFORE decoding. Decode into
@@ -1535,7 +1536,7 @@ func controlNonsecretReference(value string) bool {
 		return !strings.ContainsAny(value, "?&#@")
 	}
 	u, err := url.Parse(value)
-	return err == nil && u.Scheme == "https" && u.Hostname() != "" && u.User == nil && u.RawQuery == "" && u.ForceQuery == false && u.Fragment == "" && u.RawFragment == "" && u.RawPath == ""
+	return err == nil && u.Scheme == "https" && u.Hostname() != "" && u.User == nil && u.RawQuery == "" && !u.ForceQuery && u.Fragment == "" && u.RawFragment == "" && u.RawPath == ""
 }
 func controlApprovedThreeSteps(i fixedInstallation, in *controlPolicyInputs) error {
 	if in == nil {

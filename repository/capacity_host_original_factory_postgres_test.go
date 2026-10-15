@@ -373,7 +373,7 @@ func TestHostOriginalFactoryPostgresAwaitingOwnerOnceFill(t *testing.T) {
 	targetSHA := capacity.HostFactoryRawSHA256(targetRaw)
 	awaitingRaw := []byte(`{"storage_awaiting_only":"` + f.root + `"}`)
 	// Storage vectors deliberately carry no native supplier facts or authority.
-	_, err := tx.Exec(`INSERT INTO public.capacity_host_factory_stable_targets(stable_target_sha256,target_wire,root_id,namespace,environment,domain,dimension,target_identity,mutation_binding_name,slot,factory_class,integration_instance_id,integration_type_id,integration_checksum,integration_type_checksum,scope_checksum,profile_name,factory_attempt_id,original_owner_id,entry_class) VALUES($1,$2,$3,$3::text,'storage','storage','storage',$3::text,'storage',1,'original_source_owned_factory',$4,$5,$6,$6,$6,'storage',$7,$8,'sealed_a0')`, targetSHA, targetRaw, f.root, uuid.NewString(), uuid.NewString(), f.binding, attempt, f.owner)
+	_, err := tx.Exec(`INSERT INTO public.capacity_host_factory_stable_targets(stable_target_sha256,target_wire,root_id,namespace,environment,domain,dimension,target_identity,mutation_binding_name,slot,factory_class,integration_instance_id,integration_type_id,integration_checksum,integration_type_checksum,scope_checksum,profile_name,factory_attempt_id,original_owner_id,entry_class) VALUES($1,$2,$3::uuid,($3::uuid)::text,'storage','storage','storage',($3::uuid)::text,'storage',1,'original_source_owned_factory',$4,$5,$6,$6,$6,'storage',$7,$8,'sealed_a0')`, targetSHA, targetRaw, f.root, uuid.NewString(), uuid.NewString(), f.binding, attempt, f.owner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -433,7 +433,7 @@ func TestHostOriginalFactoryPostgresOrdinaryCallbackOmittedRealmHolds(t *testing
 	if err != nil {
 		t.Fatal(err)
 	}
-	_, err = tx.Exec(`INSERT INTO public.capacity_host_factory_stable_targets(stable_target_sha256,target_wire,root_id,namespace,environment,domain,dimension,target_identity,mutation_binding_name,slot,factory_class,integration_instance_id,integration_type_id,integration_checksum,integration_type_checksum,scope_checksum,profile_name,factory_attempt_id,original_owner_id,entry_class) VALUES($1,$2,$3,$3::text,'storage','storage','storage',$3::text,'storage',1,'original_source_owned_factory',$4,$5,$6,$6,$6,'storage',$7,$8,'ordinary_original_create')`, target, targetRaw, f.root, b.IntegrationInstanceID, b.IntegrationTypeID, f.binding, attempt, f.owner)
+	_, err = tx.Exec(`INSERT INTO public.capacity_host_factory_stable_targets(stable_target_sha256,target_wire,root_id,namespace,environment,domain,dimension,target_identity,mutation_binding_name,slot,factory_class,integration_instance_id,integration_type_id,integration_checksum,integration_type_checksum,scope_checksum,profile_name,factory_attempt_id,original_owner_id,entry_class) VALUES($1,$2,$3::uuid,($3::uuid)::text,'storage','storage','storage',($3::uuid)::text,'storage',1,'original_source_owned_factory',$4,$5,$6,$6,$6,'storage',$7,$8,'ordinary_original_create')`, target, targetRaw, f.root, b.IntegrationInstanceID, b.IntegrationTypeID, f.binding, attempt, f.owner)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -684,7 +684,7 @@ func TestHostOriginalFactorySourcePreparationAttemptOnce(t *testing.T) {
 			defer cancel()
 			deadline, _ := ctx.Deadline()
 			h := &hostOriginalClaim{realm: realm, invocation: uuid.NewString(), rootID: uuid.NewString(), attemptID: uuid.NewString(), creatorOwnerID: uuid.NewString(), committed: true, claimReturnedAt: time.Now().UTC()}
-			awaiting := hostOriginalAwaitingRecord{RootID: h.rootID, FactoryAttemptID: h.attemptID, CreatorOwnerID: h.creatorOwnerID, OriginalInvocationID: h.invocation, EntryClass: entry, OriginalContextDeadline: deadline.UTC()}
+			awaiting := hostOriginalAwaitingRecord{RootID: h.rootID, FactoryAttemptID: h.attemptID, CreatorOwnerID: h.creatorOwnerID, OriginalInvocationID: h.invocation, EntryClass: entry, OriginalLeaseExpiresAt: deadline.UTC(), OriginalContextDeadline: deadline.UTC(), Binding: model.CapacityMutationBinding{Slots: []model.CapacityMutationSlotBinding{}}}
 			raw, err := json.Marshal(awaiting)
 			if err != nil {
 				t.Fatal(err)
@@ -1094,7 +1094,7 @@ func TestHostOriginalFactoryPostgresHandleInventoryInterleaving(t *testing.T) {
 		t.Fatal("standalone sparse operation became whole no-gap inventory")
 	}
 	t.Run("sparse_diagnostic_reader_requires_actual_basal", func(t *testing.T) {
-		failure := model.HostFactoryFailureDiagnostic{Schema: "original_host_factory_failure_diagnostic_v4", Purpose: "original_host_factory_failure_diagnostic_v4", BindingSchema: "original_host_factory_source_approval_v4", BindingSHA256: f.binding, OriginalStage: "stdout_read", OriginalContextStartedAt: f.start, OriginalContextDeadline: f.start.Add(600 * time.Second), OriginalOperationDeadline: f.start.Add(60 * time.Second), FailureCode: "storage_unknown", OriginalRecordState: "not_acquired", Operations: []model.HostFactoryCallVectorReference{stdout}, OriginalVectorReferenceCount: 1, RecordedAt: f.start.Add(time.Second), FailureCollectionID: uuid.NewString(), PartOrdinal: 1, FinalPart: false, RetentionState: "incomplete_retention"}
+		failure := model.HostFactoryFailureDiagnostic{Schema: "original_host_factory_failure_diagnostic_v4", Purpose: "original_host_factory_failure_diagnostic_v4", BindingSchema: "original_host_factory_source_approval_v4", BindingSHA256: f.binding, OriginalStage: "cleanup", OriginalContextStartedAt: f.start, OriginalContextDeadline: f.start.Add(600 * time.Second), OriginalOperationDeadline: f.start.Add(60 * time.Second), FailureCode: "storage_unknown", OriginalRecordState: "not_acquired", Operations: []model.HostFactoryCallVectorReference{stdout}, OriginalVectorReferenceCount: 1, RecordedAt: f.start.Add(time.Second), FailureCollectionID: uuid.NewString(), PartOrdinal: 1, FinalPart: false, RetentionState: "incomplete_retention"}
 		raw, err := capacity.CanonicalHostFactory(failure)
 		if err != nil {
 			t.Fatal(err)
@@ -1233,9 +1233,10 @@ func TestHostOriginalFactorySourceHTTPReadAllCausality(t *testing.T) {
 					row := hostOriginalSourceAuditProjection{Family: "source_audit", SubjectIdentity: subject, Fact: fact}
 					if n >= 1 && n <= 3 {
 						count, eof := int64(17), n == 1 || n == 3
-						if n == 2 {
+						switch n {
+						case 2:
 							count = 10
-						} else if n == 3 {
+						case 3:
 							count = 7
 						}
 						row.Fact.OriginalCount, row.Fact.OriginalEOF = &count, &eof
@@ -1481,7 +1482,7 @@ func TestHostOriginalFactorySourceIssueOriginalContextFence(t *testing.T) {
 		})
 	}
 	// The existing default mutation path gains no Source context requirement.
-	if err := (CapacityStore{}).reserveOriginalFactoryIssue(nil); err != nil {
+	if err := (CapacityStore{}).reserveOriginalFactoryIssue(nil); err != nil { //nolint:staticcheck // SA1012: intentional literal nil verifies unchanged default admission without Source context.
 		t.Fatal("nil Source frame changed default mutation reservation", err)
 	}
 }
@@ -1550,9 +1551,10 @@ func hostOriginalSourceGetdentsFileVector(root string, writer bool, count int) h
 		id, called := handle+":"+strconv.Itoa(n+1), start.Add(time.Duration(n*2)*time.Second)
 		returned, failed := called.Add(time.Second), false
 		fact := model.HostFactorySourceAuditReturn{Schema: "original_host_factory_source_audit_return_v1", Purpose: "source_audit_only_no_host_native_authority", FactoryRootID: root, OriginalAuditHandleID: handle, OriginalCallID: &id, Operation: op, OriginalState: "returned", OriginalCalledAt: &called, OriginalReturnedAt: &returned, OriginalOperationDeadline: start.Add(time.Minute), OriginalErrorPresent: &failed, OriginalHashState: "not_byte_operation"}
-		if op == "source_file_write" {
+		switch op {
+		case "source_file_write":
 			fact.OriginalCount, fact.OriginalHashState = hostFactoryStoragePtr(int64(count)), "private_withheld"
-		} else if op == "source_file_read" {
+		case "source_file_read":
 			fact.OriginalHashState = "private_withheld"
 			if count > 0 && !readBytesReturned {
 				fact.OriginalCount, fact.OriginalEOF = hostFactoryStoragePtr(int64(count)), hostFactoryStoragePtr(false)
@@ -1928,7 +1930,7 @@ func TestHostOriginalFactorySourceNativeSevenFixedPhaseAnchors(t *testing.T) {
 			if _, err = originalHostNativePhaseDeadlineTx(context.Background(), nil, uuid.NewString(), test.body); err == nil {
 				t.Fatal("missing original phase/source/SQL custody accepted")
 			}
-			if _, err = resolveOriginalHostHistoricalNativeAggregateTx(nil, nil, uuid.NewString(), "original_host_factory_root_preparation_v4", strings.Repeat("a", 64), time.Now().UTC(), test.body, ""); err == nil {
+			if _, err = resolveOriginalHostHistoricalNativeAggregateTx(nil, nil, uuid.NewString(), "original_host_factory_root_preparation_v4", strings.Repeat("a", 64), time.Now().UTC(), test.body, ""); err == nil { //nolint:staticcheck // SA1012: intentional literal nil is the missing-original-context refusal input.
 				t.Fatal("missing original source/context/native graph accepted")
 			}
 		})
@@ -2380,8 +2382,8 @@ func TestHostOriginalFactoryPostgresGetdentsSourceAuditBytea(t *testing.T) {
 		t.Run(name, func(t *testing.T) {
 			tx, f := hostFactoryStorageTx(t)
 			state, kind, raw, custody := "returned", "unix_getdents64", make([]byte, 0), []byte(`{"storage_audit_only":true}`)
-			var count, scalar *int64 = hostFactoryStoragePtr(int64(0)), hostFactoryStoragePtr(int64(0))
-			var eof, failed *bool = hostFactoryStoragePtr(false), hostFactoryStoragePtr(false)
+			var count, scalar = hostFactoryStoragePtr(int64(0)), hostFactoryStoragePtr(int64(0))
+			var eof, failed = hostFactoryStoragePtr(false), hostFactoryStoragePtr(false)
 			want := name == "known_empty_storage_only" || name == "pending_NULL_diagnostic" || name == "immutable_custody"
 			switch name {
 			case "pending_NULL_diagnostic":
@@ -3070,9 +3072,9 @@ func TestHostFactoryPostStartCustodyCanonicalBytes(t *testing.T) {
 		name string
 		raw  []byte
 	}{
-		{"missing_required_key", bytes.Replace(canonical, []byte(`"schema":"source_private_original_poststart_ledger_custody_v2",`), nil, 1)},
+		{"missing_required_key", bytes.Replace(canonical, []byte(`"schema":"source_private_original_poststart_ledger_custody_v3",`), nil, 1)},
 		{"unknown_key", append(append([]byte(`{"unknown":null,`), canonical[1:]...), []byte{}...)},
-		{"duplicate_key", append([]byte(`{"schema":"source_private_original_poststart_ledger_custody_v2",`), canonical[1:]...)},
+		{"duplicate_key", append([]byte(`{"schema":"source_private_original_poststart_ledger_custody_v3",`), canonical[1:]...)},
 		{"trailing_value", append(bytes.Clone(canonical), []byte(`{}`)...)},
 		{"whitespace_alias", append([]byte(" "), canonical...)},
 		{"scope_byte_array_alias", bytes.Replace(canonical, []byte(`"scope_wire":"e30="`), []byte(`"scope_wire":[123,125]`), 1)},
@@ -3428,7 +3430,8 @@ func TestHostOriginalFactoryRegistrationExternalGoReturn(t *testing.T) {
 			case "late_external_return":
 				returned = deadline
 			case "foreign_context":
-				captureCtx = context.WithValue(ctx, struct{}{}, "foreign")
+				type originalForeignCaptureContextKey struct{}
+				captureCtx = context.WithValue(ctx, originalForeignCaptureContextKey{}, "foreign")
 			case "foreign_database":
 				store.DB = &sql.DB{}
 			case "foreign_executor":
@@ -4562,7 +4565,7 @@ func TestHostOriginalFinalSourceAuditDiagnosticReadCount(t *testing.T) {
 // A Source-only transaction-entry sentinel, not a successful SQL/Native supplier.
 // Begin always fails before a transaction/query/write can exist. These tests
 // run only in remoteCI; they never install an approved Source or mock Wait.
-var originalSettleWaitSourceBeginRefused = errors.New("source-only transaction entry sentinel; no SQL transaction")
+var errOriginalSettleWaitSourceBeginRefused = errors.New("source-only transaction entry sentinel; no SQL transaction")
 var originalSettleWaitSourceDriverNames struct {
 	sync.Mutex
 	n uint64
@@ -4584,7 +4587,7 @@ func (d originalSettleWaitSourceDriver) Open(string) (driver.Conn, error) {
 	return &originalSettleWaitSourceConn{d.boundary}, nil
 }
 func (*originalSettleWaitSourceConn) Prepare(string) (driver.Stmt, error) {
-	return nil, originalSettleWaitSourceBeginRefused
+	return nil, errOriginalSettleWaitSourceBeginRefused
 }
 func (*originalSettleWaitSourceConn) Close() error { return nil }
 func (c *originalSettleWaitSourceConn) Begin() (driver.Tx, error) {
@@ -4595,7 +4598,7 @@ func (c *originalSettleWaitSourceConn) BeginTx(ctx context.Context, _ driver.TxO
 	c.boundary.begins++
 	c.boundary.ctx = ctx
 	c.boundary.mu.Unlock()
-	return nil, originalSettleWaitSourceBeginRefused
+	return nil, errOriginalSettleWaitSourceBeginRefused
 }
 func originalSettleWaitSourceDB(t *testing.T) (*sql.DB, *originalSettleWaitSourceBoundary) {
 	t.Helper()
@@ -4693,7 +4696,7 @@ func TestHostOriginalFactoryOrdinarySettleWaitBeforeTransactionSource(t *testing
 				t.Fatal("sentinel fixture returned settlement permission")
 			}
 			if wantBegin {
-				if !errors.Is(err, originalSettleWaitSourceBeginRefused) || begins != 1 || actualCtx != ctx {
+				if !errors.Is(err, errOriginalSettleWaitSourceBeginRefused) || begins != 1 || actualCtx != ctx {
 					t.Fatal("normal settlement entry/context changed", err, begins)
 				}
 			} else if wantAuthorization {

@@ -36,8 +36,8 @@
       "source_files": [
         {
           "path": "internal/capacity/host_original_factory_test.go",
-          "sha256": "a5fd2c9bcf701f2e7625de278d679aa8f945645a15dcda36cd413b045eb57db6",
-          "bytes": 311720
+          "sha256": "34ec2e238ea1d4fdbcf1a278d50ca23db7c38d46016f09c1b47bed93cffcde42",
+          "bytes": 313398
         }
       ],
       "go_timeout": "90s",
@@ -1137,7 +1137,7 @@
         },
         {
           "name": "TestHostFactorySourceProfileScopedDomains",
-          "function_sha256": "d72a637c882402dbf593bb5d8972189e165d3d6b554fd1a905820aaa61f1d823",
+          "function_sha256": "ea32b5ff6eeb6e7290ad95fd70b45f07b6ed687e48370915c15dbf1a8a44f8dc",
           "children": [
             "default_rejects_profile_domain",
             "existing_Core_issuer_Scope_roundtrip",
@@ -1153,110 +1153,123 @@
           "child_count": 10,
           "children_complete": true,
           "proof": {
-            "method": "CI1 exact isolated fixture repair; all existing descendant names unchanged; new complete Test function hash pinned",
-            "input_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/core/ci-attempt1-source5-profile-fix-r1/packet.json",
-            "input_sha256": "091456830483b3bf2846d43f5812028d436ce53f30ae75b1354b542fd41136ad",
+            "method": "CI2 full retained failure grouping; exact complete Test function hash changed with identical named root/child roster",
             "prior_roster_proof": {
-              "method": "pinned static naming review, exact function SHA",
-              "input_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/review/source5-profile-child-census-root-static-r1/rootsets.json",
-              "input_sha256": "2ae6c7f00d3e6bdcb85d60791c8cc40e7eb480def3fca10fbd61199f4a9f722a",
-              "details": {
-                "method": "Static reviewed ALL t.Run naming/dispatch locations; fixed literal tables, ordered Source51 manifest or whole tuple recipe row list. Flat dispatch; nested loops contain assertions but no t.Run. No Go/helper/tests executed.",
-                "source_path": "_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/whole/provider-union-review-input-r1/candidate/internal/capacity/host_original_factory_test.go",
-                "source_lines": [
-                  3827,
-                  3909
-                ],
-                "source_file_sha256": "f8d93e869975cb94378bdaba858051c68d359541775648392a4ab38b10e8df81",
-                "dispatches": [
-                  {
-                    "line": 3837,
-                    "expression": "t.Run(\"profile_roundtrip\", func(t *testing.T) {"
-                  },
-                  {
-                    "line": 3843,
-                    "expression": "t.Run(\"default_rejects_profile_domain\", func(t *testing.T) {"
-                  },
-                  {
-                    "line": 3848,
-                    "expression": "t.Run(\"profile_rejects_old_scope_domain\", func(t *testing.T) {"
-                  },
-                  {
-                    "line": 3856,
-                    "expression": "t.Run(\"profile_hash_tamper\", func(t *testing.T) {"
-                  },
-                  {
-                    "line": 3861,
-                    "expression": "t.Run(\"wrong_key\", func(t *testing.T) {"
-                  },
-                  {
-                    "line": 3866,
-                    "expression": "t.Run(\"purpose_metadata_tamper\", func(t *testing.T) {"
-                  },
-                  {
-                    "line": 3876,
-                    "expression": "t.Run(\"legacy_Root_exact_bytes_and_no_metadata\", func(t *testing.T) {"
-                  },
-                  {
-                    "line": 3890,
-                    "expression": "t.Run(\"existing_Core_issuer_Scope_roundtrip\", func(t *testing.T) {"
-                  },
-                  {
-                    "line": 3900,
-                    "expression": "t.Run(\"issuer_role_cannot_sign_worker_BODY\", func(t *testing.T) {"
-                  },
-                  {
-                    "line": 3904,
-                    "expression": "t.Run(\"issuer_role_cannot_sign_IO_chunk\", func(t *testing.T) {"
-                  }
-                ],
-                "literal_range_expansions": [
-                  {
-                    "line": 3837,
-                    "literal": "profile_roundtrip"
-                  },
-                  {
-                    "line": 3843,
-                    "literal": "default_rejects_profile_domain"
-                  },
-                  {
-                    "line": 3848,
-                    "literal": "profile_rejects_old_scope_domain"
-                  },
-                  {
-                    "line": 3856,
-                    "literal": "profile_hash_tamper"
-                  },
-                  {
-                    "line": 3861,
-                    "literal": "wrong_key"
-                  },
-                  {
-                    "line": 3866,
-                    "literal": "purpose_metadata_tamper"
-                  },
-                  {
-                    "line": 3876,
-                    "literal": "legacy_Root_exact_bytes_and_no_metadata"
-                  },
-                  {
-                    "line": 3890,
-                    "literal": "existing_Core_issuer_Scope_roundtrip"
-                  },
-                  {
-                    "line": 3900,
-                    "literal": "issuer_role_cannot_sign_worker_BODY"
-                  },
-                  {
-                    "line": 3904,
-                    "literal": "issuer_role_cannot_sign_IO_chunk"
-                  }
-                ]
-              }
+              "method": "CI1 exact isolated fixture repair; all existing descendant names unchanged; new complete Test function hash pinned",
+              "input_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/core/ci-attempt1-source5-profile-fix-r1/packet.json",
+              "input_sha256": "091456830483b3bf2846d43f5812028d436ce53f30ae75b1354b542fd41136ad",
+              "prior_roster_proof": {
+                "method": "pinned static naming review, exact function SHA",
+                "input_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/review/source5-profile-child-census-root-static-r1/rootsets.json",
+                "input_sha256": "2ae6c7f00d3e6bdcb85d60791c8cc40e7eb480def3fca10fbd61199f4a9f722a",
+                "details": {
+                  "method": "Static reviewed ALL t.Run naming/dispatch locations; fixed literal tables, ordered Source51 manifest or whole tuple recipe row list. Flat dispatch; nested loops contain assertions but no t.Run. No Go/helper/tests executed.",
+                  "source_path": "_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/whole/provider-union-review-input-r1/candidate/internal/capacity/host_original_factory_test.go",
+                  "source_lines": [
+                    3827,
+                    3909
+                  ],
+                  "source_file_sha256": "f8d93e869975cb94378bdaba858051c68d359541775648392a4ab38b10e8df81",
+                  "dispatches": [
+                    {
+                      "line": 3837,
+                      "expression": "t.Run(\"profile_roundtrip\", func(t *testing.T) {"
+                    },
+                    {
+                      "line": 3843,
+                      "expression": "t.Run(\"default_rejects_profile_domain\", func(t *testing.T) {"
+                    },
+                    {
+                      "line": 3848,
+                      "expression": "t.Run(\"profile_rejects_old_scope_domain\", func(t *testing.T) {"
+                    },
+                    {
+                      "line": 3856,
+                      "expression": "t.Run(\"profile_hash_tamper\", func(t *testing.T) {"
+                    },
+                    {
+                      "line": 3861,
+                      "expression": "t.Run(\"wrong_key\", func(t *testing.T) {"
+                    },
+                    {
+                      "line": 3866,
+                      "expression": "t.Run(\"purpose_metadata_tamper\", func(t *testing.T) {"
+                    },
+                    {
+                      "line": 3876,
+                      "expression": "t.Run(\"legacy_Root_exact_bytes_and_no_metadata\", func(t *testing.T) {"
+                    },
+                    {
+                      "line": 3890,
+                      "expression": "t.Run(\"existing_Core_issuer_Scope_roundtrip\", func(t *testing.T) {"
+                    },
+                    {
+                      "line": 3900,
+                      "expression": "t.Run(\"issuer_role_cannot_sign_worker_BODY\", func(t *testing.T) {"
+                    },
+                    {
+                      "line": 3904,
+                      "expression": "t.Run(\"issuer_role_cannot_sign_IO_chunk\", func(t *testing.T) {"
+                    }
+                  ],
+                  "literal_range_expansions": [
+                    {
+                      "line": 3837,
+                      "literal": "profile_roundtrip"
+                    },
+                    {
+                      "line": 3843,
+                      "literal": "default_rejects_profile_domain"
+                    },
+                    {
+                      "line": 3848,
+                      "literal": "profile_rejects_old_scope_domain"
+                    },
+                    {
+                      "line": 3856,
+                      "literal": "profile_hash_tamper"
+                    },
+                    {
+                      "line": 3861,
+                      "literal": "wrong_key"
+                    },
+                    {
+                      "line": 3866,
+                      "literal": "purpose_metadata_tamper"
+                    },
+                    {
+                      "line": 3876,
+                      "literal": "legacy_Root_exact_bytes_and_no_metadata"
+                    },
+                    {
+                      "line": 3890,
+                      "literal": "existing_Core_issuer_Scope_roundtrip"
+                    },
+                    {
+                      "line": 3900,
+                      "literal": "issuer_role_cannot_sign_worker_BODY"
+                    },
+                    {
+                      "line": 3904,
+                      "literal": "issuer_role_cannot_sign_IO_chunk"
+                    }
+                  ]
+                }
+              },
+              "current_source_file_sha256": "a5fd2c9bcf701f2e7625de278d679aa8f945645a15dcda36cd413b045eb57db6",
+              "current_function_sha256": "d72a637c882402dbf593bb5d8972189e165d3d6b554fd1a905820aaa61f1d823",
+              "body_changed_without_child_name_changes": true
             },
-            "current_source_file_sha256": "a5fd2c9bcf701f2e7625de278d679aa8f945645a15dcda36cd413b045eb57db6",
-            "current_function_sha256": "d72a637c882402dbf593bb5d8972189e165d3d6b554fd1a905820aaa61f1d823",
-            "body_changed_without_child_name_changes": true
+            "prior_function_sha256": "d72a637c882402dbf593bb5d8972189e165d3d6b554fd1a905820aaa61f1d823",
+            "current_function_sha256": "ea32b5ff6eeb6e7290ad95fd70b45f07b6ed687e48370915c15dbf1a8a44f8dc",
+            "current_source_path": "internal/capacity/host_original_factory_test.go",
+            "current_source_sha256": "34ec2e238ea1d4fdbcf1a278d50ca23db7c38d46016f09c1b47bed93cffcde42",
+            "effective_sector_packets": [
+              "10e57df1a8658ae4a5ee42f7eb2c167c59285afe21f0034cc3c4bd727663058f",
+              "576e99cbe4605f37d8857bc8b885b9397e77a1b8b56955f6da58fab6ffdd7b8f",
+              "8d94ba5f1a8785ee63fc6bcd8f7143341478866ef970e2c8d9dafeb0d8953881"
+            ],
+            "no_execution_claim": true
           }
         },
         {
@@ -2201,6 +2214,16 @@
         "same_roots": 11,
         "same_children": 246,
         "scope": "Source5 fixture/runtime repair; all original names/old jobs/selectors/budgets preserved; no execution claim"
+      },
+      "ci2_repair_overlay": {
+        "inputs": [
+          "10e57df1a8658ae4a5ee42f7eb2c167c59285afe21f0034cc3c4bd727663058f",
+          "576e99cbe4605f37d8857bc8b885b9397e77a1b8b56955f6da58fab6ffdd7b8f",
+          "8d94ba5f1a8785ee63fc6bcd8f7143341478866ef970e2c8d9dafeb0d8953881"
+        ],
+        "source_file_pins_are_current": true,
+        "exact_prior_named_roster_unchanged": true,
+        "source_only_native_pending": true
       }
     },
     "persistence": {
@@ -2215,15 +2238,15 @@
       "source_files": [
         {
           "path": "repository/capacity_host_original_factory_postgres_test.go",
-          "sha256": "e7f6ff63bf9a2c685e2eaa8be84b5764bf943b31cbd09e17ed64a1db042804cb",
-          "bytes": 288421
+          "sha256": "e308ce8ed35cbbaf31debdaf87feafc026f68d62bb7a6150d63fe45b631a68a5",
+          "bytes": 288880
         }
       ],
       "go_timeout": "90s",
       "roots": [
         {
           "name": "TestHostFactoryPostStartCustodyCanonicalBytes",
-          "function_sha256": "80e66812854164eecbc44c722b4a07efe8b3065b1029d771c7cf7add2dfb9020",
+          "function_sha256": "2568ebf10dccc674d807dafa9824b734908476da9fc381408a6f5ccedd647757",
           "children": [
             "duplicate_key",
             "missing_required_key",
@@ -2238,18 +2261,31 @@
           "child_count": 9,
           "children_complete": true,
           "proof": {
-            "method": "pinned static naming review, exact function SHA",
-            "input_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/core/host-factory-source-package-ci-prep-r2/source13-remaining18-rootsets.json",
-            "input_sha256": "8c1b6d90643c351af5baaac69e9c7bcf45c8ab8a5d79a9e6bd2466e3b85aed95",
-            "details": {
-              "method": "selected full naming/control dispatch contexts; literal first-field struct keys, direct t.Run names, exact literal name ranges; no functional semantic re-review",
-              "source_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/core/provider-source5-source13-composition-r1/candidate/repository/capacity_host_original_factory_postgres_test.go",
-              "source_file_sha256": "76d21cffff12040393f6ae9ab97d5cb8dd7aaeee3a29b81544893322eb486693",
-              "source_start_line": 3067,
-              "literal_ranges": [],
-              "zero_descendants_proof": null,
-              "special": null
-            }
+            "method": "CI2 full retained failure grouping; exact complete Test function hash changed with identical named root/child roster",
+            "prior_roster_proof": {
+              "method": "pinned static naming review, exact function SHA",
+              "input_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/core/host-factory-source-package-ci-prep-r2/source13-remaining18-rootsets.json",
+              "input_sha256": "8c1b6d90643c351af5baaac69e9c7bcf45c8ab8a5d79a9e6bd2466e3b85aed95",
+              "details": {
+                "method": "selected full naming/control dispatch contexts; literal first-field struct keys, direct t.Run names, exact literal name ranges; no functional semantic re-review",
+                "source_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/core/provider-source5-source13-composition-r1/candidate/repository/capacity_host_original_factory_postgres_test.go",
+                "source_file_sha256": "76d21cffff12040393f6ae9ab97d5cb8dd7aaeee3a29b81544893322eb486693",
+                "source_start_line": 3067,
+                "literal_ranges": [],
+                "zero_descendants_proof": null,
+                "special": null
+              }
+            },
+            "prior_function_sha256": "80e66812854164eecbc44c722b4a07efe8b3065b1029d771c7cf7add2dfb9020",
+            "current_function_sha256": "2568ebf10dccc674d807dafa9824b734908476da9fc381408a6f5ccedd647757",
+            "current_source_path": "repository/capacity_host_original_factory_postgres_test.go",
+            "current_source_sha256": "e308ce8ed35cbbaf31debdaf87feafc026f68d62bb7a6150d63fe45b631a68a5",
+            "effective_sector_packets": [
+              "10e57df1a8658ae4a5ee42f7eb2c167c59285afe21f0034cc3c4bd727663058f",
+              "576e99cbe4605f37d8857bc8b885b9397e77a1b8b56955f6da58fab6ffdd7b8f",
+              "8d94ba5f1a8785ee63fc6bcd8f7143341478866ef970e2c8d9dafeb0d8953881"
+            ],
+            "no_execution_claim": true
           }
         },
         {
@@ -2578,7 +2614,7 @@
         },
         {
           "name": "TestHostOriginalFactoryOrdinarySettleWaitBeforeTransactionSource",
-          "function_sha256": "f705ab98a60125d9e4e6b8256e18ca575c96d676ffe8a8e28982739115d9ba29",
+          "function_sha256": "8ef927a966883263c8704032b65e6faeb8d244ed908f266610d1fb4f85bb9ca4",
           "children": [
             "cache_flags_cannot_bypass_actual_EMPTY_Source_method",
             "different_grant_keeps_normal_Begin",
@@ -2598,43 +2634,56 @@
           "child_count": 14,
           "children_complete": true,
           "proof": {
-            "method": "pinned static naming review, exact function SHA",
-            "input_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/core/host-factory-source-package-ci-prep-r2/source13-remaining18-rootsets.json",
-            "input_sha256": "8c1b6d90643c351af5baaac69e9c7bcf45c8ab8a5d79a9e6bd2466e3b85aed95",
-            "details": {
-              "method": "selected full naming/control dispatch contexts; literal first-field struct keys, direct t.Run names, exact literal name ranges; no functional semantic re-review",
-              "source_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/core/provider-source5-source13-composition-r1/candidate/repository/capacity_host_original_factory_postgres_test.go",
-              "source_file_sha256": "76d21cffff12040393f6ae9ab97d5cb8dd7aaeee3a29b81544893322eb486693",
-              "source_start_line": 4632,
-              "literal_ranges": [
-                {
-                  "variable": "name",
-                  "values": [
-                    "nonoriginal_no_cache_keeps_normal_Begin",
-                    "different_grant_keeps_normal_Begin",
-                    "matching_grant_no_installed_realm_HOLD",
-                    "matching_foreign_realm_HOLD",
-                    "matching_missing_claim_HOLD",
-                    "matching_foreign_original_root_HOLD",
-                    "matching_issue_uncommitted_HOLD",
-                    "matching_issue_uncaptured_HOLD",
-                    "matching_issue_return_unknown_HOLD",
-                    "matching_issue_return_error_HOLD",
-                    "duplicate_original_grant_HOLD",
-                    "cache_flags_cannot_bypass_actual_EMPTY_Source_method",
-                    "nil_cache_entry_keeps_normal_Begin",
-                    "unissued_empty_grant_is_not_match"
-                  ]
-                }
-              ],
-              "zero_descendants_proof": null,
-              "special": null
-            }
+            "method": "CI2 full retained failure grouping; exact complete Test function hash changed with identical named root/child roster",
+            "prior_roster_proof": {
+              "method": "pinned static naming review, exact function SHA",
+              "input_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/core/host-factory-source-package-ci-prep-r2/source13-remaining18-rootsets.json",
+              "input_sha256": "8c1b6d90643c351af5baaac69e9c7bcf45c8ab8a5d79a9e6bd2466e3b85aed95",
+              "details": {
+                "method": "selected full naming/control dispatch contexts; literal first-field struct keys, direct t.Run names, exact literal name ranges; no functional semantic re-review",
+                "source_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/core/provider-source5-source13-composition-r1/candidate/repository/capacity_host_original_factory_postgres_test.go",
+                "source_file_sha256": "76d21cffff12040393f6ae9ab97d5cb8dd7aaeee3a29b81544893322eb486693",
+                "source_start_line": 4632,
+                "literal_ranges": [
+                  {
+                    "variable": "name",
+                    "values": [
+                      "nonoriginal_no_cache_keeps_normal_Begin",
+                      "different_grant_keeps_normal_Begin",
+                      "matching_grant_no_installed_realm_HOLD",
+                      "matching_foreign_realm_HOLD",
+                      "matching_missing_claim_HOLD",
+                      "matching_foreign_original_root_HOLD",
+                      "matching_issue_uncommitted_HOLD",
+                      "matching_issue_uncaptured_HOLD",
+                      "matching_issue_return_unknown_HOLD",
+                      "matching_issue_return_error_HOLD",
+                      "duplicate_original_grant_HOLD",
+                      "cache_flags_cannot_bypass_actual_EMPTY_Source_method",
+                      "nil_cache_entry_keeps_normal_Begin",
+                      "unissued_empty_grant_is_not_match"
+                    ]
+                  }
+                ],
+                "zero_descendants_proof": null,
+                "special": null
+              }
+            },
+            "prior_function_sha256": "f705ab98a60125d9e4e6b8256e18ca575c96d676ffe8a8e28982739115d9ba29",
+            "current_function_sha256": "8ef927a966883263c8704032b65e6faeb8d244ed908f266610d1fb4f85bb9ca4",
+            "current_source_path": "repository/capacity_host_original_factory_postgres_test.go",
+            "current_source_sha256": "e308ce8ed35cbbaf31debdaf87feafc026f68d62bb7a6150d63fe45b631a68a5",
+            "effective_sector_packets": [
+              "10e57df1a8658ae4a5ee42f7eb2c167c59285afe21f0034cc3c4bd727663058f",
+              "576e99cbe4605f37d8857bc8b885b9397e77a1b8b56955f6da58fab6ffdd7b8f",
+              "8d94ba5f1a8785ee63fc6bcd8f7143341478866ef970e2c8d9dafeb0d8953881"
+            ],
+            "no_execution_claim": true
           }
         },
         {
           "name": "TestHostOriginalFactoryRegistrationExternalGoReturn",
-          "function_sha256": "d2fbadac984f8c991298b492f157f5a771b4a1b2a3d0997729b531e16262d1e2",
+          "function_sha256": "94d32ddb68ebffa66fe7d4e107f475ebce6127bcc2aaf9f1dda69645019f68f3",
           "children": [
             "duplicate_capture_is_not_replay",
             "external_called_after_method_began",
@@ -2654,38 +2703,51 @@
           "child_count": 14,
           "children_complete": true,
           "proof": {
-            "method": "pinned static naming review, exact function SHA",
-            "input_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/core/host-factory-source-package-ci-prep-r2/source13-remaining18-rootsets.json",
-            "input_sha256": "8c1b6d90643c351af5baaac69e9c7bcf45c8ab8a5d79a9e6bd2466e3b85aed95",
-            "details": {
-              "method": "selected full naming/control dispatch contexts; literal first-field struct keys, direct t.Run names, exact literal name ranges; no functional semantic re-review",
-              "source_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/core/provider-source5-source13-composition-r1/candidate/repository/capacity_host_original_factory_postgres_test.go",
-              "source_file_sha256": "76d21cffff12040393f6ae9ab97d5cb8dd7aaeee3a29b81544893322eb486693",
-              "source_start_line": 3401,
-              "literal_ranges": [
-                {
-                  "variable": "name from cases",
-                  "values": [
-                    "internal_marker_is_not_external_return",
-                    "external_called_after_method_began",
-                    "external_return_before_internal_marker",
-                    "late_external_return",
-                    "foreign_context",
-                    "foreign_database",
-                    "foreign_executor",
-                    "unknown_commit",
-                    "panic_without_method_return",
-                    "duplicate_capture_is_not_replay",
-                    "helper_before_commit",
-                    "sealed_missing_original_getter",
-                    "sealed_getter_late",
-                    "sealed_commit_before_getter_return"
-                  ]
-                }
-              ],
-              "zero_descendants_proof": null,
-              "special": null
-            }
+            "method": "CI2 full retained failure grouping; exact complete Test function hash changed with identical named root/child roster",
+            "prior_roster_proof": {
+              "method": "pinned static naming review, exact function SHA",
+              "input_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/core/host-factory-source-package-ci-prep-r2/source13-remaining18-rootsets.json",
+              "input_sha256": "8c1b6d90643c351af5baaac69e9c7bcf45c8ab8a5d79a9e6bd2466e3b85aed95",
+              "details": {
+                "method": "selected full naming/control dispatch contexts; literal first-field struct keys, direct t.Run names, exact literal name ranges; no functional semantic re-review",
+                "source_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/core/provider-source5-source13-composition-r1/candidate/repository/capacity_host_original_factory_postgres_test.go",
+                "source_file_sha256": "76d21cffff12040393f6ae9ab97d5cb8dd7aaeee3a29b81544893322eb486693",
+                "source_start_line": 3401,
+                "literal_ranges": [
+                  {
+                    "variable": "name from cases",
+                    "values": [
+                      "internal_marker_is_not_external_return",
+                      "external_called_after_method_began",
+                      "external_return_before_internal_marker",
+                      "late_external_return",
+                      "foreign_context",
+                      "foreign_database",
+                      "foreign_executor",
+                      "unknown_commit",
+                      "panic_without_method_return",
+                      "duplicate_capture_is_not_replay",
+                      "helper_before_commit",
+                      "sealed_missing_original_getter",
+                      "sealed_getter_late",
+                      "sealed_commit_before_getter_return"
+                    ]
+                  }
+                ],
+                "zero_descendants_proof": null,
+                "special": null
+              }
+            },
+            "prior_function_sha256": "d2fbadac984f8c991298b492f157f5a771b4a1b2a3d0997729b531e16262d1e2",
+            "current_function_sha256": "94d32ddb68ebffa66fe7d4e107f475ebce6127bcc2aaf9f1dda69645019f68f3",
+            "current_source_path": "repository/capacity_host_original_factory_postgres_test.go",
+            "current_source_sha256": "e308ce8ed35cbbaf31debdaf87feafc026f68d62bb7a6150d63fe45b631a68a5",
+            "effective_sector_packets": [
+              "10e57df1a8658ae4a5ee42f7eb2c167c59285afe21f0034cc3c4bd727663058f",
+              "576e99cbe4605f37d8857bc8b885b9397e77a1b8b56955f6da58fab6ffdd7b8f",
+              "8d94ba5f1a8785ee63fc6bcd8f7143341478866ef970e2c8d9dafeb0d8953881"
+            ],
+            "no_execution_claim": true
           }
         },
         {
@@ -2984,7 +3046,17 @@
           }
         }
       ],
-      "effective_overlay_packet_sha256": "3b5c76ce1518768b03fd1c86815a177c56daa1a025952569db02bac7e9a9f524"
+      "effective_overlay_packet_sha256": "3b5c76ce1518768b03fd1c86815a177c56daa1a025952569db02bac7e9a9f524",
+      "ci2_repair_overlay": {
+        "inputs": [
+          "10e57df1a8658ae4a5ee42f7eb2c167c59285afe21f0034cc3c4bd727663058f",
+          "576e99cbe4605f37d8857bc8b885b9397e77a1b8b56955f6da58fab6ffdd7b8f",
+          "8d94ba5f1a8785ee63fc6bcd8f7143341478866ef970e2c8d9dafeb0d8953881"
+        ],
+        "source_file_pins_are_current": true,
+        "exact_prior_named_roster_unchanged": true,
+        "source_only_native_pending": true
+      }
     },
     "package": {
       "package_path": "./internal/capacityhostfactory",
@@ -2997,8 +3069,13 @@
       "source_files": [
         {
           "path": "internal/capacityhostfactory/owner_nativequalification_test.go",
-          "sha256": "10be5181daf03155086be5cf2a37236b5fa1f35447a4dd8e5ffb4590c9c479c8",
-          "bytes": 521645
+          "sha256": "e4dbdd0772d71c2a2e2a9de062ec80e79c7eb50d68cb5437f3b6cda08f7e21d8",
+          "bytes": 522218
+        },
+        {
+          "path": "internal/capacityhostfactory/owner_nativequalification_support_test.go",
+          "sha256": "5ff97ca4f571f90e4d35ef3baf82d17d75abcfd5abf700b1264d13db6281cd76",
+          "bytes": 2288
         }
       ],
       "go_timeout": "3m",
@@ -4033,16 +4110,29 @@
         },
         {
           "name": "TestHostOriginalFactorySourceAuditMergeCopies",
-          "function_sha256": "9a63e32835055d28f65f0318c78eca41a4db7e16ae982f67f39bed04ba271888",
+          "function_sha256": "4730a8aebdc54f21f43749e0bbfeefbdad16a9ec271d51698d5fb60a1564aec5",
           "children": [
             "original_input_and_return_do_not_share_pointers"
           ],
           "children_complete": true,
           "child_count": 1,
           "proof": {
-            "method": "all_lexical_t_Run_arguments_are_unique_literal_strings_in_exact_root_function",
-            "function_sha256": "9a63e32835055d28f65f0318c78eca41a4db7e16ae982f67f39bed04ba271888",
-            "note": "No assertion of runtime execution or helper coverage"
+            "method": "CI2 full retained failure grouping; exact complete Test function hash changed with identical named root/child roster",
+            "prior_roster_proof": {
+              "method": "all_lexical_t_Run_arguments_are_unique_literal_strings_in_exact_root_function",
+              "function_sha256": "9a63e32835055d28f65f0318c78eca41a4db7e16ae982f67f39bed04ba271888",
+              "note": "No assertion of runtime execution or helper coverage"
+            },
+            "prior_function_sha256": "9a63e32835055d28f65f0318c78eca41a4db7e16ae982f67f39bed04ba271888",
+            "current_function_sha256": "4730a8aebdc54f21f43749e0bbfeefbdad16a9ec271d51698d5fb60a1564aec5",
+            "current_source_path": "internal/capacityhostfactory/owner_nativequalification_test.go",
+            "current_source_sha256": "e4dbdd0772d71c2a2e2a9de062ec80e79c7eb50d68cb5437f3b6cda08f7e21d8",
+            "effective_sector_packets": [
+              "10e57df1a8658ae4a5ee42f7eb2c167c59285afe21f0034cc3c4bd727663058f",
+              "576e99cbe4605f37d8857bc8b885b9397e77a1b8b56955f6da58fab6ffdd7b8f",
+              "8d94ba5f1a8785ee63fc6bcd8f7143341478866ef970e2c8d9dafeb0d8953881"
+            ],
+            "no_execution_claim": true
           }
         },
         {
@@ -8242,7 +8332,7 @@
         },
         {
           "name": "TestOriginalOrdinaryIndependentReceiptPrivateSignature",
-          "function_sha256": "247d2cbdfaff99e363b8510ada4d54b0718713977cd475bf5060383464526f15",
+          "function_sha256": "f1c46740390f5e15e172a7a746b56f7c5ae3ca65ed288493423cdb97592a3e24",
           "children": [
             "Host_envelope_schema",
             "byte_array_alias_signed",
@@ -8264,45 +8354,58 @@
           "children_complete": true,
           "child_count": 16,
           "proof": {
-            "method": "full_static_naming_expansion_reconciliation_with_exact_function_SHA",
-            "owner": "Root selected29",
-            "input_sha256": "542078933640e86992cd9117ecdc4585fe3e3293cd1c9abec0770f635d082f45",
-            "source_proof": {
-              "method": "Root reviewed current dispatch tables/range literal names and EVERY t.Run expression for this root. Each dispatch is flat; no nested/dynamic format names. Text extraction only, not executing Go, helper or cases.",
-              "source_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/guest/host-a-source-implementation/native-representation-proposal-r1/source9-full-target-assembly-offer-r2/candidate/internal/capacityhostfactory/owner_nativequalification_test.go",
-              "source_lines": [
-                3480,
-                3548
-              ],
-              "literal_range_expansions": [
-                {
-                  "line": 3483,
-                  "names": [
-                    "exact_private_wire_only",
-                    "wrong_expected_root",
-                    "wrong_expected_root_body",
-                    "wrong_expected_binding",
-                    "wrong_fixed_key",
-                    "wrong_key_id",
-                    "wrong_role",
-                    "wrong_domain",
-                    "Host_envelope_schema",
-                    "foreign_request_after_signature",
-                    "foreign_owner_after_signature",
-                    "foreign_basal_after_signature",
-                    "noncanonical_signed_body",
-                    "noncanonical_envelope",
-                    "byte_array_alias_signed",
-                    "wire_overhead_over_cap"
-                  ],
-                  "kind": "entire_inline_literal_string_range"
-                }
-              ],
-              "dispatch_expressions": [
-                "name"
-              ],
-              "source_fragment": "native_ordinary_independent_receipt_source_test_fragment.go"
-            }
+            "method": "CI2 full retained failure grouping; exact complete Test function hash changed with identical named root/child roster",
+            "prior_roster_proof": {
+              "method": "full_static_naming_expansion_reconciliation_with_exact_function_SHA",
+              "owner": "Root selected29",
+              "input_sha256": "542078933640e86992cd9117ecdc4585fe3e3293cd1c9abec0770f635d082f45",
+              "source_proof": {
+                "method": "Root reviewed current dispatch tables/range literal names and EVERY t.Run expression for this root. Each dispatch is flat; no nested/dynamic format names. Text extraction only, not executing Go, helper or cases.",
+                "source_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/guest/host-a-source-implementation/native-representation-proposal-r1/source9-full-target-assembly-offer-r2/candidate/internal/capacityhostfactory/owner_nativequalification_test.go",
+                "source_lines": [
+                  3480,
+                  3548
+                ],
+                "literal_range_expansions": [
+                  {
+                    "line": 3483,
+                    "names": [
+                      "exact_private_wire_only",
+                      "wrong_expected_root",
+                      "wrong_expected_root_body",
+                      "wrong_expected_binding",
+                      "wrong_fixed_key",
+                      "wrong_key_id",
+                      "wrong_role",
+                      "wrong_domain",
+                      "Host_envelope_schema",
+                      "foreign_request_after_signature",
+                      "foreign_owner_after_signature",
+                      "foreign_basal_after_signature",
+                      "noncanonical_signed_body",
+                      "noncanonical_envelope",
+                      "byte_array_alias_signed",
+                      "wire_overhead_over_cap"
+                    ],
+                    "kind": "entire_inline_literal_string_range"
+                  }
+                ],
+                "dispatch_expressions": [
+                  "name"
+                ],
+                "source_fragment": "native_ordinary_independent_receipt_source_test_fragment.go"
+              }
+            },
+            "prior_function_sha256": "247d2cbdfaff99e363b8510ada4d54b0718713977cd475bf5060383464526f15",
+            "current_function_sha256": "f1c46740390f5e15e172a7a746b56f7c5ae3ca65ed288493423cdb97592a3e24",
+            "current_source_path": "internal/capacityhostfactory/owner_nativequalification_test.go",
+            "current_source_sha256": "e4dbdd0772d71c2a2e2a9de062ec80e79c7eb50d68cb5437f3b6cda08f7e21d8",
+            "effective_sector_packets": [
+              "10e57df1a8658ae4a5ee42f7eb2c167c59285afe21f0034cc3c4bd727663058f",
+              "576e99cbe4605f37d8857bc8b885b9397e77a1b8b56955f6da58fab6ffdd7b8f",
+              "8d94ba5f1a8785ee63fc6bcd8f7143341478866ef970e2c8d9dafeb0d8953881"
+            ],
+            "no_execution_claim": true
           }
         },
         {
@@ -10567,7 +10670,17 @@
           }
         }
       ],
-      "child_count": 1521
+      "child_count": 1521,
+      "ci2_repair_overlay": {
+        "inputs": [
+          "10e57df1a8658ae4a5ee42f7eb2c167c59285afe21f0034cc3c4bd727663058f",
+          "576e99cbe4605f37d8857bc8b885b9397e77a1b8b56955f6da58fab6ffdd7b8f",
+          "8d94ba5f1a8785ee63fc6bcd8f7143341478866ef970e2c8d9dafeb0d8953881"
+        ],
+        "source_file_pins_are_current": true,
+        "exact_prior_named_roster_unchanged": true,
+        "source_only_native_pending": true
+      }
     },
     "main": {
       "package_path": "./cmd/native-host-factory-fixture",
@@ -10623,7 +10736,17 @@
         }
       ],
       "child_count": 10,
-      "effective_overlay_packet_sha256": "3b5c76ce1518768b03fd1c86815a177c56daa1a025952569db02bac7e9a9f524"
+      "effective_overlay_packet_sha256": "3b5c76ce1518768b03fd1c86815a177c56daa1a025952569db02bac7e9a9f524",
+      "ci2_repair_overlay": {
+        "inputs": [
+          "10e57df1a8658ae4a5ee42f7eb2c167c59285afe21f0034cc3c4bd727663058f",
+          "576e99cbe4605f37d8857bc8b885b9397e77a1b8b56955f6da58fab6ffdd7b8f",
+          "8d94ba5f1a8785ee63fc6bcd8f7143341478866ef970e2c8d9dafeb0d8953881"
+        ],
+        "source_file_pins_are_current": true,
+        "exact_prior_named_roster_unchanged": true,
+        "source_only_native_pending": true
+      }
     }
   },
   "root_count": 216,
@@ -10664,7 +10787,11 @@
     "main_partition": "3b5c76ce1518768b03fd1c86815a177c56daa1a025952569db02bac7e9a9f524",
     "ci1_source5_repair": "091456830483b3bf2846d43f5812028d436ce53f30ae75b1354b542fd41136ad",
     "ci1_source13_repair": "2b28141f436ef3db8f6f60fe6e92626c0a04c8cb1222ce4b4b9c209ee9540d39",
-    "ci1_source9_repair_checksums": "5400710b240c612ac6ccec2542d14f66ab45863f5a666f8fc6ddfda4521e8db0"
+    "ci1_source9_repair_checksums": "5400710b240c612ac6ccec2542d14f66ab45863f5a666f8fc6ddfda4521e8db0",
+    "ci2_source5": "10e57df1a8658ae4a5ee42f7eb2c167c59285afe21f0034cc3c4bd727663058f",
+    "ci2_source9": "576e99cbe4605f37d8857bc8b885b9397e77a1b8b56955f6da58fab6ffdd7b8f",
+    "ci2_source13": "8d94ba5f1a8785ee63fc6bcd8f7143341478866ef970e2c8d9dafeb0d8953881"
   },
-  "ci1_pin_refresh": "Exact Source5 source-file and three Test function pins refreshed; prior proofs retained as historical name-roster evidence."
+  "ci1_pin_refresh": "Exact Source5 source-file and three Test function pins refreshed; prior proofs retained as historical name-roster evidence.",
+  "ci2_pin_refresh": "All216 complete function hashes verified against actual690d baseline and final overlay; exact named rosters preserved. Three changed test file pins refreshed; new tagged test-support source pinned. No old gate, selector, timeout or collector changed."
 }

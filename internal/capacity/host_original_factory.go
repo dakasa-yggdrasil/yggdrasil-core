@@ -2219,7 +2219,10 @@ func hostFactoryAcquisitionDeclared(handle string, acquired *model.HostFactoryCa
 	// os.Pipe owns one acquisition call for two actual returned handles.
 	// Its distinct writer is joined to ReturnedDescriptors by the consumer;
 	// duplicating the acquisition call into the writer counter is forbidden.
-	return ok && (rule.kind == "native_descriptor" || strings.Contains(acquired.Operation, "pipe_create") || acquired.Operation == "gate_directory_duplicate" || acquired.Operation == "executable_anchor_duplicate")
+	// The sealed gate's existing nonbyte operation owns one same-handle open.
+	// Admitting its declared acquisition does not establish a native return.
+	gateOpen := acquired.Operation == "gate_open_exclusive" && acquired.OriginalHandleID == handle && acquired.OriginalCallCount == 1
+	return ok && (rule.kind == "native_descriptor" || strings.Contains(acquired.Operation, "pipe_create") || acquired.Operation == "gate_directory_duplicate" || acquired.Operation == "executable_anchor_duplicate" || gateOpen)
 }
 
 // ValidateHostFactoryHandleInventory checks the complete original handle union.

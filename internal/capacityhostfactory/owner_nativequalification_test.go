@@ -1053,7 +1053,10 @@ func TestHostOriginalFactorySourceAuditMergeRefusals(t *testing.T) {
 func TestHostOriginalFactorySourceAuditMergeCopies(t *testing.T) {
 	t.Run("original_input_and_return_do_not_share_pointers", func(t *testing.T) {
 		own := mergeSourceAuditFixture("00000000-0000-4000-8000-000000000002", mergeSourceAuditOrigin())
-		own[2].Fact.FailureCode = ptr("synthetic_source_diagnostic")
+		own[2].Fact.FailureCode = ptr("original_pipe_refused")
+		if own[2].Fact.FailureCode == nil || capacity.ValidateHostFactory(own[2].Fact) != nil {
+			t.Fatal("copy fixture must contain a valid nonnil diagnostic code")
+		}
 		original, _ := json.Marshal(own)
 		got, err := mergeOriginalSourceAuditProjections(own, []originalSourceAuditProjection{})
 		if err != nil {
@@ -3486,7 +3489,7 @@ func TestOriginalOrdinaryIndependentReceiptPrivateSignature(t *testing.T) {
 			rootID, rootSHA, binding := v.FactoryRootID, digest([]byte("synthetic original RootPreparation")), v.OrdinarySourceBindingSHA256
 			i := fixedInstallation{keys: []approvedKey{{id: "00000000-0000-4000-8000-000000000009", role: "host_registrar", public: bytes.Clone(key.Public().(ed25519.PublicKey))}}}
 			if name == "wire_overhead_over_cap" {
-				v.OriginalIndependentRaw = bytes.Repeat([]byte{0xff}, bodyLimit/2)
+				v.OriginalIndependentRaw = bytes.Repeat([]byte{0xff}, bodyLimit*5/8)
 			}
 			body, _ := json.Marshal(v)
 			if name == "noncanonical_signed_body" {
@@ -3529,6 +3532,12 @@ func TestOriginalOrdinaryIndependentReceiptPrivateSignature(t *testing.T) {
 				env.BodyBase64 = base64.StdEncoding.EncodeToString(body)
 			}
 			wire, _ := json.Marshal(env)
+			if name == "wire_overhead_over_cap" {
+				var control originalOrdinaryIndependentReceipt
+				if len(body) == 0 || len(body) > bodyLimit || originalOrdinaryIndependentBody(body, &control) != nil || !bytes.Equal(control.OriginalIndependentRaw, v.OriginalIndependentRaw) || len(wire) <= bodyLimit {
+					t.Fatal("wire cap fixture must retain a valid bounded signed BODY inside an oversized envelope")
+				}
+			}
 			if name == "noncanonical_envelope" {
 				wire = append(wire, ' ')
 			}

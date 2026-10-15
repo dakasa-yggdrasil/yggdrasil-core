@@ -50,7 +50,6 @@ type fixedInstallation struct {
 	ordinaryMutationPrincipal             string
 	slot                                  int
 	entry                                 string
-	initialAssessment                     model.CapacityAssessment
 	controlPolicyArtifacts                [3]approvedArtifact
 	controlPolicyRaw                      [3][]byte
 	controlPolicyPublic                   controlPolicyPublicInventory
@@ -111,40 +110,6 @@ func (i fixedInstallation) approvedPublic(role string, public ed25519.PublicKey)
 		}
 	}
 	return false
-}
-
-// Exact source paths are pinned component by component before use. The final
-// FD is retained; /proc/self/fd numbers are never re-opened after that owner
-// closed or reused the original descriptor.
-func openPrivateDirectory(path string) (*os.File, unix.Stat_t, error) {
-	if !filepath.IsAbs(path) || filepath.Clean(path) != path || path == "/" {
-		return nil, unix.Stat_t{}, refused("source_registry_refused", nil)
-	}
-	fd, err := unix.Open("/", unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NONBLOCK|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-	if err != nil {
-		return nil, unix.Stat_t{}, refused("source_registry_refused", err)
-	}
-	for _, name := range strings.Split(strings.TrimPrefix(path, "/"), "/") {
-		if name == "" || name == "." || name == ".." {
-			_ = unix.Close(fd)
-			return nil, unix.Stat_t{}, refused("source_registry_refused", nil)
-		}
-		next, e := unix.Openat(fd, name, unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NONBLOCK|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-		closeErr := unix.Close(fd)
-		if e != nil || closeErr != nil {
-			if next >= 0 {
-				_ = unix.Close(next)
-			}
-			return nil, unix.Stat_t{}, refused("source_registry_refused", errors.Join(e, closeErr))
-		}
-		fd = next
-	}
-	var st unix.Stat_t
-	if err = unix.Fstat(fd, &st); err != nil || st.Mode&unix.S_IFMT != unix.S_IFDIR || st.Mode&0777 != 0700 || st.Uid != uint32(unix.Getuid()) {
-		_ = unix.Close(fd)
-		return nil, st, refused("source_registry_refused", err)
-	}
-	return os.NewFile(uintptr(fd), "original-private-source-directory"), st, nil
 }
 
 // The prepared directory is acquired by the original basal owner, not supplied
@@ -252,67 +217,11 @@ type preparedOriginal struct {
 	anchorHandle   *callHandle
 	choice         *originalChoice
 	started        bool
-	owner          *originalChild
 	stdio          *privatePreparedIO
 }
 
 type privatePreparedIO struct {
 	stdoutR, stdoutW, stderrR, stderrW, stdin *os.File
-	stdout, stderr                            chan privateStreamReturn
-	closed                                    bool
-}
-type privateStreamReturn struct {
-	readStartedAt, readReturnedAt, closeReturnedAt time.Time
-	count                                          int64
-	sha                                            string
-	eof                                            bool
-	err                                            error
-}
-
-func preparePrivateStdio(ctx context.Context) (_ *privatePreparedIO, runErr error) {
-	p := &privatePreparedIO{stdout: make(chan privateStreamReturn, 1), stderr: make(chan privateStreamReturn, 1)}
-	defer func() {
-		if runErr != nil {
-			runErr = errors.Join(runErr, p.closeUnstarted())
-		}
-	}()
-	var err error
-	p.stdoutR, p.stdoutW, err = os.Pipe()
-	if err != nil {
-		return nil, err
-	}
-	p.stderrR, p.stderrW, err = os.Pipe()
-	if err != nil {
-		return nil, err
-	}
-	p.stdin, err = os.OpenFile("/dev/null", os.O_RDONLY, 0)
-	if err != nil {
-		return nil, err
-	}
-	d, ok := ctx.Deadline()
-	if !ok {
-		return nil, refused("original_context_refused", nil)
-	}
-	if err = p.stdoutR.SetReadDeadline(d); err != nil {
-		return nil, err
-	}
-	if err = p.stderrR.SetReadDeadline(d); err != nil {
-		return nil, err
-	}
-	return p, nil
-}
-func (p *privatePreparedIO) closeUnstarted() error {
-	if p == nil || p.closed {
-		return nil
-	}
-	p.closed = true
-	var joined error
-	for _, f := range []*os.File{p.stdoutR, p.stdoutW, p.stderrR, p.stderrW, p.stdin} {
-		if f != nil {
-			joined = errors.Join(joined, f.Close())
-		}
-	}
-	return joined
 }
 
 // The real compiled create body is prepared in the worker process. The same

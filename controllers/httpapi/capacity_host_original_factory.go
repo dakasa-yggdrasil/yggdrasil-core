@@ -149,7 +149,7 @@ func (s *Server) loadOriginalHostPrincipals(events []eventPublisherPrincipal, di
 				return fmt.Errorf("exact Host scope principal required")
 			}
 		} else if c.ScopeSHA256 != "" || c.Role == "host_worker" || ((c.Role == "factory_ordinary_worker" || c.Role == "factory_ordinary_guard_reader") && c.BindingSchema != "factory_ordinary_source_binding_v4") {
-			return fmt.Errorf("Root principal cannot use Scope binding")
+			return fmt.Errorf("root principal cannot use Scope binding")
 		}
 		collision := false
 		for _, other := range s.workflowRunAuth.principals {

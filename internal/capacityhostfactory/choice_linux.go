@@ -3,7 +3,6 @@
 package capacityhostfactory
 
 import (
-	"bytes"
 	"errors"
 	"os"
 	"sync"
@@ -238,42 +237,4 @@ func finalDescriptor(s model.HostFactoryBootstrapDescriptorSource, nativeSHA str
 		inherited = &copy
 	}
 	return model.HostFactoryDescriptorSource{Role: s.Role, OwnerNativeReceiptSHA256: nativeSHA, Device: s.Device, Inode: s.Inode, Type: s.Type, Mode: s.Mode, LinkCount: s.LinkCount, UID: s.UID, GID: s.GID, Flags: s.Flags, OriginalDescriptorNumber: s.OriginalDescriptorNumber, DescriptorFlags: s.DescriptorFlags, OriginalFstatReturnedAt: s.OriginalFstatReturnedAt, OriginalHandleID: s.OriginalHandleID, OriginalAcquisitionCallVector: acquisition, OriginalInheritedFromHandleID: inherited, OriginalFstatCallVector: workerOriginalCloneVector(s.OriginalFstatCallVector), OriginalFstatCallID: s.OriginalFstatCallID, OriginalGetflCallVector: workerOriginalCloneVector(s.OriginalGetflCallVector), OriginalGetflCallID: s.OriginalGetflCallID, OriginalGetfdCallVector: workerOriginalCloneVector(s.OriginalGetfdCallVector), OriginalGetfdCallID: s.OriginalGetfdCallID}
-}
-
-// readOriginalChoice retains the exact original bounded bytes, including a
-// partial invalid body. It never replaces raw bytes with re-marshaled JSON.
-func (c *originalChoice) readOriginalChoice(expected []byte, subject, stage string) ([]byte, model.HostFactoryOriginalIOFact, error) {
-	if c.validateRoot() != nil {
-		return nil, model.HostFactoryOriginalIOFact{}, refused("terminal_read_refused", nil)
-	}
-	h, err := c.ledger.handle()
-	if err != nil {
-		return nil, model.HostFactoryOriginalIOFact{}, err
-	}
-	var fd int
-	_, err = nonbyte(h, "native_reader_open", subject, stage, false, func() error {
-		var e error
-		fd, e = unix.Openat(c.rootFD, "creator.choice", unix.O_RDONLY|unix.O_NONBLOCK|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
-		return e
-	})
-	if err != nil {
-		return nil, model.HostFactoryOriginalIOFact{}, err
-	}
-	h.fd = fd
-	h.file = os.NewFile(uintptr(fd), "original-terminal-choice")
-	var st unix.Stat_t
-	_, err = nonbyte(h, "gate_fstat", subject, stage, false, func() error { return unix.Fstat(fd, &st) })
-	if err != nil || st.Mode&unix.S_IFMT != unix.S_IFREG || st.Mode&0777 != 0600 || st.Nlink != 1 {
-		_, _ = closeOwned(h, "terminal_gate_close", subject, stage)
-		return nil, model.HostFactoryOriginalIOFact{}, refused("terminal_read_refused", err)
-	}
-	raw, r := readOwned(h, "gate_read", subject, stage, bodyLimit, false, -1)
-	closeAt, closeErr := closeOwned(h, "terminal_gate_close", subject, stage)
-	readRef, e := c.ledger.vector(h, "gate_read", subject)
-	closeRef, e2 := c.ledger.vector(h, "terminal_gate_close", subject)
-	f := model.HostFactoryOriginalIOFact{Operation: "gate_read", OriginalHandleID: h.id, OwnerPrimitiveRawSHA256: c.ledger.primitiveSHA, OriginalCalledAt: r.started, OriginalReturnedAt: r.returned, OriginalCount: r.count, OriginalSHA256: r.sha, OriginalReturnClass: "eof", OriginalCloseReturnedAt: closeAt, SubjectOwnerID: c.ledger.subjects[subject], OriginalOperationDeadline: c.ledger.deadline, OriginalEOF: r.eof, OriginalCallVector: readRef, OriginalCloseCallVector: closeRef}
-	if r.err != nil || !r.eof || closeErr != nil || e != nil || e2 != nil || !bytes.Equal(raw, expected) {
-		return raw, f, refused("terminal_read_refused", errors.Join(r.err, closeErr, e, e2))
-	}
-	return raw, f, nil
 }
