@@ -29,6 +29,9 @@ type CapacityStore struct {
 	ExecutorID            string
 	guestOriginal         *guestOriginalProvisioningContext
 	guestRetirementOrigin *guestOriginalProvisioningContext
+	hostOriginalClaim     *hostOriginalClaim
+	hostOriginalFactory   *hostOriginalFactoryScope
+	hostOriginalOrdinary  *hostOriginalOrdinaryFactory
 }
 
 // Assess persists a proposal, even in shadow mode. An outstanding generation
@@ -451,6 +454,12 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	} else if !errors.Is(err, sql.ErrNoRows) {
 		return model.CapacityIntent{}, err
 	}
+	// The original Host claim is single-use. A durable association blocks
+	// re-Claim, renewal, recovery and phase replacement even without its
+	// private context, before an expired lease or a replay can be considered.
+	if err = guardOriginalHostCapacityTx(ctx, tx, policy.Metadata.Namespace, p); err != nil {
+		return model.CapacityIntent{}, err
+	}
 	next, receipt, err := mutate(p, previous, now.UTC())
 	if err != nil {
 		return model.CapacityIntent{}, err
@@ -469,7 +478,7 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	}
 	if next.Phase == "promoted" || next.Phase == "reconciled" || next.Phase == "reconciled_partial" || next.Phase == "reconciled_failed_floor" || next.Phase == "aborted" {
 		// Only never-redeemed permissions can expire without remote proof.
-		if _, err = tx.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET state='expired',grant_record=jsonb_set(grant_record,'{grant,state}','"expired"'),updated_at=$5 WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state='issued' AND expires_at<=$5`, next.Namespace, p.Environment, p.Domain, p.Dimension, now); err != nil {
+		if _, err = tx.ExecContext(ctx, `UPDATE public.capacity_mutation_grants g SET state='expired',grant_record=jsonb_set(grant_record,'{grant,state}','"expired"'),updated_at=$5 WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state='issued' AND expires_at<=$5 AND NOT EXISTS (SELECT 1 FROM public.capacity_factory_original_grant_bindings h WHERE h.grant_id=g.id)`, next.Namespace, p.Environment, p.Domain, p.Dimension, now); err != nil {
 			return model.CapacityIntent{}, err
 		}
 		var unresolved int
@@ -521,8 +530,14 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 			return model.CapacityIntent{}, err
 		}
 	}
+	if err = s.attachOriginalHostClaimTx(ctx, tx, next, data); err != nil {
+		return model.CapacityIntent{}, err
+	}
 	if err = tx.Commit(); err != nil {
 		return model.CapacityIntent{}, err
+	}
+	if s.hostOriginalClaim != nil {
+		s.hostOriginalClaim.committed = true
 	}
 	return next, nil
 }

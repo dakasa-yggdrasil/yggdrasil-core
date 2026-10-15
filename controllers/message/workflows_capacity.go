@@ -47,6 +47,11 @@ func executeCapacityWorkflowStep(ctx context.Context, db *sql.DB, workflowRef mo
 		result.FinishedAt = time.Now().UTC()
 		return result
 	}
+	ctx, cancelHost, hostErr := originalHostCapacityContext(ctx, workflowRef)
+	if hostErr != nil {
+		return fail(hostErr)
+	}
+	defer cancelHost()
 	data, err := json.Marshal(input)
 	if err != nil {
 		return fail(err)
@@ -94,6 +99,10 @@ func executeCapacityWorkflowStep(ctx context.Context, db *sql.DB, workflowRef mo
 	}
 	executorID, _ := ctx.Value(capacityInvocationKey{}).(string)
 	store := repository.CapacityStore{DB: db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true", WorkflowID: wf.ID, ExecutorID: executorID}
+	store, err = originalHostCapacityCarrier(ctx, store, policy, wf, spec, result, parsed.Assessment)
+	if err != nil {
+		return fail(err)
+	}
 	var intent model.CapacityIntent
 	var output any
 	switch result.Operation {
@@ -113,7 +122,10 @@ func executeCapacityWorkflowStep(ctx context.Context, db *sql.DB, workflowRef mo
 	case "capacity.observe":
 		intent, err = store.Observe(ctx, policy)
 	case "capacity.claim":
+		calledAt := time.Now().UTC()
 		intent, err = store.Claim(ctx, policy, parsed.Generation, parsed.Assessment)
+		returnedAt := time.Now().UTC()
+		err = originalHostClaimReturned(ctx, store, intent, calledAt, returnedAt, err)
 	case "capacity.renew":
 		intent, err = store.Renew(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner)
 	case "capacity.advance":

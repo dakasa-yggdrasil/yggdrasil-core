@@ -86,9 +86,58 @@ jobs:
           token: ${{ steps.native-token.outputs.token }}
           persist-credentials: false
       - uses: actions/setup-go@v5
+        id: retention_go_setup
         with:
           go-version-file: go.mod
           cache: true
+      # Linux owner pins actual directory FDs for fixed native openat reads.
+      # The Source corpus requires exact10 roots+78 children once run/pass.
+      # CLI cases build the current package in their own private test directory;
+      # they do not borrow this workflow binary or claim native qualification.
+      - name: Build the bounded original Source retention Go owner
+        id: retention_go_build
+        if: ${{ !cancelled() && steps.retention_go_setup.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          core_pg_owner_dir="$RUNNER_TEMP/capacity-source-corpus-go-owner"
+          mkdir -m 700 "$core_pg_owner_dir"
+          go build -mod=readonly -o "$core_pg_owner_dir/status-owner" ./scripts/ci/capacity-source-corpus-status >"$core_pg_owner_dir/build.stdout" 2>"$core_pg_owner_dir/build.stderr"
+      - name: Qualify the original Source retention Go owner corpus
+        id: retention_go_tests
+        if: ${{ !cancelled() && steps.retention_go_build.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          core_pg_owner_dir="$RUNNER_TEMP/capacity-source-corpus-go-owner"
+          set +e
+          go test -race -json -p 1 -count=1 -timeout=90s ./scripts/ci/capacity-source-corpus-status 2>"$core_pg_owner_dir/owner-tests.stderr" | tee "$core_pg_owner_dir/owner-tests.jsonl" 2>"$core_pg_owner_dir/owner-tests-tee.stderr"
+          core_pg_owner_pipeline_status=("${PIPESTATUS[@]}")
+          core_pg_owner_go_exit="${core_pg_owner_pipeline_status[0]}"
+          core_pg_owner_tee_exit="${core_pg_owner_pipeline_status[1]}"
+          "$core_pg_owner_dir/status-owner" verify-owner-tests >"$core_pg_owner_dir/owner-census.stdout" 2>"$core_pg_owner_dir/owner-census.stderr"
+          core_pg_owner_census_exit=$?
+          printf '%s\n' "$core_pg_owner_go_exit" "$core_pg_owner_tee_exit" "$core_pg_owner_census_exit" >"$core_pg_owner_dir/owner-test-returns.txt"
+          core_pg_owner_returns_exit=$?
+          if [[ "$core_pg_owner_go_exit" != 0 || "$core_pg_owner_tee_exit" != 0 || "$core_pg_owner_census_exit" != 0 || "$core_pg_owner_returns_exit" != 0 ]]; then
+            exit 1
+          fi
+      - name: Prepare original mandatory corpus retention outside source checkout
+        id: prepare_original_corpora
+        if: ${{ !cancelled() && steps.retention_go_tests.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/capacity-source-corpus-go-owner/status-owner" prepare
+      - name: Retain original Source retention Go owner build and unit returns
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capacity-source-retention-go-owner
+          path: ${{ runner.temp }}/capacity-source-corpus-go-owner/
+          if-no-files-found: error
       - name: Require the exact reviewed original business source before effects
         shell: bash
         run: |
@@ -170,14 +219,22 @@ jobs:
       - name: Apply production migrations
         run: go run ./scripts/goose up
       - name: Exercise durable decisions, concurrency, restart and fencing
+        if: ${{ !cancelled() && steps.prepare_original_corpora.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
-          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message ./controllers/httpapi ./addons -run '^(TestCapacity(Intent.*|Workflow|Mutation.*|NativeLifetime)Postgres|TestCapacityNativeAdapter(OriginalHTTP|LegacyHTTPPreserved)|TestCapacityGuestNativeAdapterOriginalHTTP|TestCapacityGuestNativeDescribeCanonicalCatalog|TestCapacityGuestCollectorProtocolPostgres|TestCapacityDispatch(Postgres|AuthorizationPostgres|OriginalTransportPostgres|SchedulerPostgres|DemandPostgres)|TestCapacityNativeReleaseRecoveryPostgres|TestCapacityNativeReleaseOriginalUnredeemedPostgres|TestCapacityReleaseOriginalCaller|TestCapacityReleaseRecoveryFrame|TestProcessMatchedTrigger_.*)$' | tee capacity-results.jsonl
-          python3 - <<'PY'
+          core_pg_case_dir="$RUNNER_TEMP/capacity-postgres-original/capacity"
+          "$RUNNER_TEMP/capacity-source-corpus-go-owner/status-owner" start "capacity"
+          set +e
+          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message ./controllers/httpapi ./addons -run '^(TestCapacity(Intent.*|Workflow|Mutation.*|NativeLifetime)Postgres|TestCapacityNativeAdapter(OriginalHTTP|LegacyHTTPPreserved)|TestCapacityGuestNativeAdapterOriginalHTTP|TestCapacityGuestNativeDescribeCanonicalCatalog|TestCapacityGuestCollectorProtocolPostgres|TestCapacityDispatch(Postgres|AuthorizationPostgres|OriginalTransportPostgres|SchedulerPostgres|DemandPostgres)|TestCapacityNativeReleaseRecoveryPostgres|TestCapacityNativeReleaseOriginalUnredeemedPostgres|TestCapacityReleaseOriginalCaller|TestCapacityReleaseRecoveryFrame|TestProcessMatchedTrigger_.*)$' 2>"$core_pg_case_dir/go-test.stderr" | tee "$core_pg_case_dir/original.jsonl" 2>"$core_pg_case_dir/tee.stderr"
+          core_pg_pipeline_status=("${PIPESTATUS[@]}")
+          core_pg_go_exit="${core_pg_pipeline_status[0]}"
+          core_pg_tee_exit="${core_pg_pipeline_status[1]}"
+          python3 - <<'PY' >"$core_pg_case_dir/census.stdout" 2>"$core_pg_case_dir/census.stderr"
           import json
           from pathlib import Path
-          events = [json.loads(line) for line in Path("capacity-results.jsonl").read_text().splitlines() if line.strip()]
+          import os
+          events = [json.loads(line) for line in (Path(os.environ['RUNNER_TEMP'])/'capacity-postgres-original/capacity/original.jsonl').read_text().splitlines() if line.strip()]
           root = "TestCapacityIntentPostgres"
           expected = {root} | {root + "/" + name for name in (
               "concurrent_assess_and_claim", "phase_receipts_and_promotion",
@@ -369,16 +426,30 @@ jobs:
           if expected - passed or skipped:
               raise SystemExit(f"Capacity gate incomplete: missing={sorted(expected-passed)}, skipped={sorted(skipped)}")
           PY
+          core_pg_census_exit=$?
+          "$RUNNER_TEMP/capacity-source-corpus-go-owner/status-owner" finish "capacity" "$core_pg_go_exit" "$core_pg_tee_exit" "$core_pg_census_exit"
+          core_pg_state_exit=$?
+          if [[ "$core_pg_go_exit" != 0 || "$core_pg_tee_exit" != 0 || "$core_pg_census_exit" != 0 || "$core_pg_state_exit" != 0 ]]; then
+            exit 1
+          fi
       - name: Qualify closed original Guest wire and scoped roster protocol
+        if: ${{ !cancelled() && steps.prepare_original_corpora.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
-          go test -race -json -p 1 -count=1 -timeout=90s ./internal/capacity -run '^TestCapacityGuest(OriginalClosedWire|OriginalRosterJoinsWithoutAuthority|OptionalBindingPreserved)$' | tee capacity-guest-wire-protocol.jsonl
-          python3 - <<'PY'
+          core_pg_case_dir="$RUNNER_TEMP/capacity-postgres-original/guest-wire"
+          "$RUNNER_TEMP/capacity-source-corpus-go-owner/status-owner" start "guest-wire"
+          set +e
+          go test -race -json -p 1 -count=1 -timeout=90s ./internal/capacity -run '^TestCapacityGuest(OriginalClosedWire|OriginalRosterJoinsWithoutAuthority|OptionalBindingPreserved)$' 2>"$core_pg_case_dir/go-test.stderr" | tee "$core_pg_case_dir/original.jsonl" 2>"$core_pg_case_dir/tee.stderr"
+          core_pg_pipeline_status=("${PIPESTATUS[@]}")
+          core_pg_go_exit="${core_pg_pipeline_status[0]}"
+          core_pg_tee_exit="${core_pg_pipeline_status[1]}"
+          python3 - <<'PY' >"$core_pg_case_dir/census.stdout" 2>"$core_pg_case_dir/census.stderr"
           import json
           from collections import Counter
           from pathlib import Path
-          events=[json.loads(line) for line in Path('capacity-guest-wire-protocol.jsonl').read_text().splitlines() if line.strip()]
+          import os
+          events=[json.loads(line) for line in (Path(os.environ['RUNNER_TEMP'])/'capacity-postgres-original/guest-wire/original.jsonl').read_text().splitlines() if line.strip()]
           package='github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity'
           wire='TestCapacityGuestOriginalClosedWire'
           roster='TestCapacityGuestOriginalRosterJoinsWithoutAuthority'
@@ -394,16 +465,30 @@ jobs:
           if sum(e.get('Action')=='start' and not e.get('Test') for e in events)!=1 or sum(e.get('Action')=='pass' and not e.get('Test') for e in events)!=1:
               raise SystemExit('Guest protocol owning package did not complete once')
           PY
+          core_pg_census_exit=$?
+          "$RUNNER_TEMP/capacity-source-corpus-go-owner/status-owner" finish "guest-wire" "$core_pg_go_exit" "$core_pg_tee_exit" "$core_pg_census_exit"
+          core_pg_state_exit=$?
+          if [[ "$core_pg_go_exit" != 0 || "$core_pg_tee_exit" != 0 || "$core_pg_census_exit" != 0 || "$core_pg_state_exit" != 0 ]]; then
+            exit 1
+          fi
       - name: Qualify original Notify window source transport and native PostgreSQL ownership
+        if: ${{ !cancelled() && steps.prepare_original_corpora.outcome == 'success' }}
         shell: bash
         run: |
           set -euo pipefail
-          go test -race -json -p 1 -count=1 -timeout=5m ./controllers/message ./controllers/httpapi -run '^TestCapacityOriginalNotifyWindow(Source|Postgres)$' | tee original-notify-window-owner.jsonl
-          python3 - <<'PYWINDOW'
+          core_pg_case_dir="$RUNNER_TEMP/capacity-postgres-original/notify-owner"
+          "$RUNNER_TEMP/capacity-source-corpus-go-owner/status-owner" start "notify-owner"
+          set +e
+          go test -race -json -p 1 -count=1 -timeout=5m ./controllers/message ./controllers/httpapi -run '^TestCapacityOriginalNotifyWindow(Source|Postgres)$' 2>"$core_pg_case_dir/go-test.stderr" | tee "$core_pg_case_dir/original.jsonl" 2>"$core_pg_case_dir/tee.stderr"
+          core_pg_pipeline_status=("${PIPESTATUS[@]}")
+          core_pg_go_exit="${core_pg_pipeline_status[0]}"
+          core_pg_tee_exit="${core_pg_pipeline_status[1]}"
+          python3 - <<'PYWINDOW' >"$core_pg_case_dir/census.stdout" 2>"$core_pg_case_dir/census.stderr"
           import json
           from collections import Counter
           from pathlib import Path
-          events=[json.loads(line) for line in Path('original-notify-window-owner.jsonl').read_text().splitlines() if line.strip()]
+          import os
+          events=[json.loads(line) for line in (Path(os.environ['RUNNER_TEMP'])/'capacity-postgres-original/notify-owner/original.jsonl').read_text().splitlines() if line.strip()]
           source='TestCapacityOriginalNotifyWindowSource'
           pg='TestCapacityOriginalNotifyWindowPostgres'
           expected={source,pg}
@@ -436,12 +521,18 @@ jobs:
               if sum(e.get('Package')==package and e.get('Action')=='start' and not e.get('Test') for e in events)!=1 or sum(e.get('Package')==package and e.get('Action')=='pass' and not e.get('Test') for e in events)!=1:
                   raise SystemExit('Original Notify owning package did not complete once')
           PYWINDOW
+          core_pg_census_exit=$?
+          "$RUNNER_TEMP/capacity-source-corpus-go-owner/status-owner" finish "notify-owner" "$core_pg_go_exit" "$core_pg_tee_exit" "$core_pg_census_exit"
+          core_pg_state_exit=$?
+          if [[ "$core_pg_go_exit" != 0 || "$core_pg_tee_exit" != 0 || "$core_pg_census_exit" != 0 || "$core_pg_state_exit" != 0 ]]; then
+            exit 1
+          fi
       - name: Retain original Notify source and PostgreSQL caller evidence
         if: always()
         uses: actions/upload-artifact@v4
         with:
           name: original-notify-window-source-postgres
-          path: original-notify-window-owner.jsonl
+          path: ${{ runner.temp }}/capacity-postgres-original/notify-owner/
           if-no-files-found: error
       # Actual native Guest/Core qualification is owned by the PRIVATE Guest
       # CI. It checks out the exact PUBLIC Core commit and executes the two
@@ -452,13 +543,13 @@ jobs:
         if: always()
         with:
           name: capacity-guest-closed-wire-protocol
-          path: capacity-guest-wire-protocol.jsonl
+          path: ${{ runner.temp }}/capacity-postgres-original/guest-wire/
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: capacity-protocol-results
-          path: capacity-results.jsonl
+          path: ${{ runner.temp }}/capacity-postgres-original/capacity/
           if-no-files-found: error
       - uses: actions/upload-artifact@v4
         if: always()

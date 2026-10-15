@@ -89,11 +89,6 @@ func guestNativeQEMUIdentityTx(ctx context.Context, tx *sql.Tx, preID string) (g
 	return original, nil
 }
 
-func guestNativeQEMUCreatorSHA(ctx context.Context, tx *sql.Tx, preID string) (string, error) {
-	original, err := guestNativeQEMUIdentityTx(ctx, tx, preID)
-	return original.OriginalCreatorSHA256, err
-}
-
 func guestNativeQEMUSameCreator(off GuestNativeQEMUOffReturn, original guestNativeQEMUOriginalIdentity) bool {
 	return off.CreatorOriginalSHA256 == original.OriginalCreatorSHA256 && off.QEMU == original.Original.QEMU
 }

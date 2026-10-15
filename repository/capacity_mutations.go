@@ -70,6 +70,12 @@ func lockNativeMutationSlot(ctx context.Context, tx *sql.Tx, b model.CapacityMut
 }
 
 func (s CapacityStore) mutationTransaction(ctx context.Context, policy model.Manifest, historical bool, generation, fence int64, owner string, fn func(*sql.Tx, model.CapacityPolicySpec, model.CapacityIntent, time.Time) error) error {
+	return s.mutationTransactionWithCommitReturn(ctx, policy, historical, generation, fence, owner, fn, nil)
+}
+
+// Only the original Source registration owner supplies this private capture.
+// The existing default path retains its single direct Commit unchanged.
+func (s CapacityStore) mutationTransactionWithCommitReturn(ctx context.Context, policy model.Manifest, historical bool, generation, fence int64, owner string, fn func(*sql.Tx, model.CapacityPolicySpec, model.CapacityIntent, time.Time) error, capture func(time.Time, time.Time, error)) error {
 	p, err := parseCapacityPolicy(policy)
 	if err != nil {
 		return err
@@ -123,7 +129,14 @@ func (s CapacityStore) mutationTransaction(ctx context.Context, policy model.Man
 	if err = fn(tx, p, intent, now.UTC()); err != nil {
 		return err
 	}
-	return tx.Commit()
+	if capture == nil {
+		return tx.Commit()
+	}
+	calledAt := time.Now().UTC()
+	err = tx.Commit()
+	returnedAt := time.Now().UTC()
+	capture(calledAt, returnedAt, err)
+	return err
 }
 
 func checkMutationIntegration(ctx context.Context, tx *sql.Tx, b model.CapacityMutationBinding) error {
@@ -167,6 +180,9 @@ func checkMutationIntegration(ctx context.Context, tx *sql.Tx, b model.CapacityM
 // redeemed or unresolved slot never becomes free merely because time elapsed.
 func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest, generation, fence int64, owner string, issue model.CapacityMutationIssue) (model.CapacityMutationGrant, error) {
 	var result model.CapacityMutationGrant
+	if err := s.reserveOriginalFactoryIssue(ctx); err != nil {
+		return result, err
+	}
 	err := s.mutationTransaction(ctx, policy, false, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, intent model.CapacityIntent, now time.Time) error {
 		plan, err := capacity.PrepareMutationPlan(p, issue)
 		if err != nil {
@@ -177,6 +193,9 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 			return fmt.Errorf("%w: original Guest provisioning step and profile required before create", ErrCapacityConflict)
 		}
 		if err = lockNativeMutationSlot(ctx, tx, b, plan.Slot); err != nil {
+			return err
+		}
+		if err = s.guardOriginalHostIssueTx(ctx, tx, policy.Metadata.Namespace, p, b, plan.Slot); err != nil {
 			return err
 		}
 		if err = checkMutationIntegration(ctx, tx, b); err != nil {
@@ -213,7 +232,7 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 		}
 		// Never-redeemed permissions have never authorized an SDK send. Only
 		// those may expire without a remote mutation receipt.
-		if _, err = tx.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET state='expired',grant_record=jsonb_set(grant_record,'{grant,state}','"expired"'),updated_at=$5 WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state='issued' AND expires_at<=$5`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, now); err != nil {
+		if _, err = tx.ExecContext(ctx, `UPDATE public.capacity_mutation_grants g SET state='expired',grant_record=jsonb_set(grant_record,'{grant,state}','"expired"'),updated_at=$5 WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state='issued' AND expires_at<=$5 AND NOT EXISTS (SELECT 1 FROM public.capacity_factory_original_grant_bindings h WHERE h.grant_id=g.id)`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, now); err != nil {
 			return err
 		}
 		var data []byte
@@ -277,13 +296,23 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_mutation_grants(id,namespace,environment,domain,dimension,generation,integration_instance_id,scope_checksum,profile_name,slot,state,grant_record,expires_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,'issued',$11::jsonb,$12)`, result.GrantID, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, generation, b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName, plan.Slot, data, expires)
 		if err == nil && plan.Capability == b.EnsureCapability {
-			err = s.reserveGuestOriginalTx(ctx, tx, policy, p, intent, record, now)
+			err = s.reserveGuestOriginalTx(ctx, tx, policy, p, intent, record, now, data)
 		}
 		if err == nil && plan.Capability == b.DestroyCapability {
 			err = s.bindGuestDestroyTx(ctx, tx, record, now)
 		}
 		return err
 	})
+	if err == nil && s.hostOriginalFactory != nil {
+		s.hostOriginalFactory.mu.Lock()
+		s.hostOriginalFactory.issueCommitted = true
+		s.hostOriginalFactory.mu.Unlock()
+	}
+	if err == nil && s.hostOriginalOrdinary != nil {
+		s.hostOriginalOrdinary.mu.Lock()
+		s.hostOriginalOrdinary.issueCommitted = true
+		s.hostOriginalOrdinary.mu.Unlock()
+	}
 	return result, err
 }
 
@@ -336,7 +365,7 @@ func saveMutationGrant(ctx context.Context, tx *sql.Tx, record capacityMutationR
 // callbackTransaction first finds the durable scope, then takes the shared
 // scope lock. Settlement deliberately does not require an active lease/policy:
 // revocation must not erase a late owning adapter's transport facts.
-func (s CapacityStore) callbackTransaction(ctx context.Context, id string, fn func(*sql.Tx, *capacityMutationRecord, string, model.CapacityPolicySpec, time.Time) error) error {
+func (s CapacityStore) callbackTransaction(ctx context.Context, id string, fn func(*sql.Tx, *capacityMutationRecord, string, model.CapacityPolicySpec, time.Time) error, originalRequest ...hostOriginalCallbackRequest) error {
 	if parsed, err := uuid.Parse(id); err != nil || parsed == uuid.Nil {
 		return ErrCapacityMutationAuthorization
 	}
@@ -354,10 +383,19 @@ func (s CapacityStore) callbackTransaction(ctx context.Context, id string, fn fu
 		return err
 	}
 	var raw []byte
-	if err = tx.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1 FOR UPDATE`, id).Scan(&raw); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1`, id).Scan(&raw); err != nil {
 		return err
 	}
 	var record capacityMutationRecord
+	if err = json.Unmarshal(raw, &record); err != nil {
+		return err
+	}
+	if err = s.guardOriginalHostCallbackTx(ctx, tx, record, ns, p, originalRequest...); err != nil {
+		return err
+	}
+	if err = tx.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1 FOR UPDATE`, id).Scan(&raw); err != nil {
+		return err
+	}
 	if err = json.Unmarshal(raw, &record); err != nil {
 		return err
 	}
@@ -450,7 +488,7 @@ func (s CapacityStore) RedeemMutation(ctx context.Context, principal string, r m
 		record.AttemptID, record.SettlementTokenSHA256, record.Grant.State = r.AttemptID, r.SettlementTokenSHA256, "redeemed"
 		response.Mode = "write_once"
 		return nil
-	})
+	}, hostOriginalCallbackRequest{principal: principal, redeem: &r})
 	return response, err
 }
 
@@ -496,6 +534,9 @@ func (s CapacityStore) SettleMutation(ctx context.Context, principal, nonce stri
 	}
 	if r.Outcome != "accepted" && r.Outcome != "uncertain" && r.Outcome != "rejected_before_send" && r.Outcome != "provider_rejected" {
 		return result, ErrCapacityMutationAuthorization
+	}
+	if err := s.waitOriginalOrdinarySettleBeforeTx(ctx, principal, r); err != nil {
+		return result, err
 	}
 	err := s.callbackTransaction(ctx, r.GrantID, func(_ *sql.Tx, record *capacityMutationRecord, _ string, _ model.CapacityPolicySpec, now time.Time) error {
 		digest := sha256.Sum256([]byte(nonce))
@@ -570,7 +611,7 @@ func (s CapacityStore) SettleMutation(ctx context.Context, principal, nonce stri
 		}
 		result = record.Grant
 		return nil
-	})
+	}, hostOriginalCallbackRequest{principal: principal, settle: &r, nonce: nonce})
 	return result, err
 }
 
@@ -633,6 +674,9 @@ func (s CapacityStore) RecordMutationSlot(ctx context.Context, policy model.Mani
 		if err = lockNativeMutationSlot(ctx, tx, b, plan.Slot); err != nil {
 			return err
 		}
+		if err = s.guardOriginalHostMutationTx(ctx, tx, policy.Metadata.Namespace, p, b, plan.Slot); err != nil {
+			return err
+		}
 		if plan.Capability != b.EnsureCapability || proof.ResourceAbsent || proof.BindingName != b.Name || proof.Slot != plan.Slot || proof.RequestSHA256 != plan.RequestSHA256 || !validMutationProof(p, proof, now) {
 			return ErrCapacityConflict
 		}
@@ -678,6 +722,9 @@ func (s CapacityStore) ConfirmMutation(ctx context.Context, policy model.Manifes
 		}
 		g, b := record.Grant, record.Binding
 		if err := lockNativeMutationSlot(ctx, tx, b, g.Slot); err != nil {
+			return err
+		}
+		if err := s.guardOriginalHostConfirmTx(ctx, tx, policy.Metadata.Namespace, p, b, g.Slot, proof); err != nil {
 			return err
 		}
 		if record.PolicyID == policy.ID && record.PolicyChecksum == policy.Checksum && record.WorkflowID == s.WorkflowID && g.State == "confirmed" && record.Proof != nil {

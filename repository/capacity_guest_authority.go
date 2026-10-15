@@ -132,6 +132,9 @@ func (s CapacityStore) ReserveGuestAuthorityRead(ctx context.Context, principal,
 				return err
 			}
 			_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_guest_runtime_snapshot_challenges(id,intent_id,phase,ordinal,challenge_sha256,original_wire,original_record,original_deadline,recorded_at) VALUES($1,$2,$3,$4,$5,$6,$7::jsonb,$8,$9)`, challenge.ChallengeID, id, phase, ordinal, capacity.GuestRetirementSHA(challenge), wire, string(wire), deadline, now)
+			if err != nil {
+				return err
+			}
 			result.Challenge = &challenge
 		}
 		return err

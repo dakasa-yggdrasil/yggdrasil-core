@@ -99,16 +99,27 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		result.FinishedAt = time.Now().UTC()
 		return result
 	}
-	if db == nil || !guestOriginalOperation(result.Operation) || step.Use.Kind != "yggdrasil" || step.Use.Operation != result.Operation || step.TimeoutSeconds < 1 || step.TimeoutSeconds > 86400 || step.Retry.MaxAttempts > 1 || step.ForEach != nil || originalGuestSourceProvider == nil {
+	if db == nil || !guestOriginalOperation(result.Operation) || step.Use.Kind != "yggdrasil" || step.Use.Operation != result.Operation || step.TimeoutSeconds < 1 || step.TimeoutSeconds > 86400 || step.Retry.MaxAttempts > 1 || step.ForEach != nil {
 		return fail()
+	}
+	hostContext, cancelHost, hostRealm, err := originalHostStepContext(parent, workflowRef, step, result.Operation)
+	if err != nil || (hostRealm == nil && originalGuestSourceProvider == nil) {
+		return fail()
+	}
+	defer cancelHost()
+	if hostRealm != nil {
+		parent = hostContext
 	}
 	ctx, cancel := context.WithTimeout(parent, time.Duration(step.TimeoutSeconds)*time.Second)
 	defer cancel()
-	ctx, cancelSource, err := guestOriginalSourceLimit(ctx)
-	if err != nil {
-		return fail()
+	if hostRealm == nil {
+		limited, cancelSource, sourceErr := guestOriginalSourceLimit(ctx)
+		if sourceErr != nil {
+			return fail()
+		}
+		ctx = limited
+		defer cancelSource()
 	}
-	defer cancelSource()
 	var parsed guestOriginalStepInput
 	if capacity.DecodeVMObservation(input, &parsed) != nil || parsed.Policy.ManifestID != "" || parsed.Policy.Version != nil || parsed.Policy.Namespace == "" || parsed.Policy.Name == "" || parsed.BindingName == "" || parsed.Slot < 1 || parsed.Slot > 64 || parsed.Generation < 1 || parsed.FencingToken < 1 || parsed.LeaseOwner == "" {
 		return fail()
@@ -162,6 +173,20 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 	store := repository.CapacityStore{DB: db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true", WorkflowID: wf.ID, ExecutorID: executor}
 	if store.ValidateNativeObservationLease(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner) != nil {
 		return fail()
+	}
+	if hostRealm != nil {
+		output, hostErr := executeOriginalHostFactoryStep(ctx, hostRealm, store, policy, wf, step, p, b, parsed)
+		if hostErr != nil {
+			return fail()
+		}
+		raw, hostErr := json.Marshal(output)
+		if hostErr != nil || json.Unmarshal(raw, &result.Metadata) != nil {
+			return fail()
+		}
+		result.Status = "succeeded"
+		result.Error = ""
+		result.FinishedAt = time.Now().UTC()
+		return result
 	}
 	key, err := sourceGuestSigningKey(ctx, db, p.GuestRetirementBinding.IntentSigningKeyRef)
 	if err != nil {

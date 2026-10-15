@@ -17,7 +17,7 @@ func GuestRetirementObservedReturnAuthentic(o model.CapacityGuestRetirementObser
 		return false
 	}
 	states := []string{"possible_start", "quiescent", "poweroff_possible_start", "poweroff_command_returned"}
-	if r.State != states[r.Sequence-1] && !(r.State == "uncertain" && (r.Sequence == 2 || r.Sequence == 4)) {
+	if r.State != states[r.Sequence-1] && (r.State != "uncertain" || (r.Sequence != 2 && r.Sequence != 4)) {
 		return false
 	}
 	if (o.ActiveAttemptID != "" || o.ActiveIntentSHA256 != "") && (o.ActiveAttemptID != i.AttemptID || o.ActiveIntentSHA256 != GuestRetirementSHA(i)) {
@@ -33,7 +33,7 @@ func GuestRetirementObservedReturnAuthentic(o model.CapacityGuestRetirementObser
 func GuestRetirementObservation(o model.CapacityGuestRetirementObservation, e model.CapacityGuestRetirementEnrollment, i model.CapacityGuestRetirementIntent, now time.Time, active bool) error {
 	r := o.Record
 	states := []string{"possible_start", "quiescent", "poweroff_possible_start", "poweroff_command_returned"}
-	if o.Schema != GuestRetirementSchema || r.Schema != GuestRetirementSchema || r.Sequence < 1 || r.Sequence > len(states) || (r.State != states[r.Sequence-1] && !(r.State == "uncertain" && (r.Sequence == 2 || r.Sequence == 4))) || r.Intent != i || r.IntentSHA256 != GuestRetirementSHA(i) || r.EnrollmentSHA256 != GuestRetirementSHA(e) || o.RecordSHA256 != GuestRetirementSHA(r) || !o.JournalComplete || o.HoldReasons == nil || len(o.HoldReasons) != 0 || o.Reader != e.Statement.Actor || !GuestRetirementLifetime(o.Reader) || o.ObservedAt.IsZero() || o.ObservedAt.After(now) || now.Sub(o.ObservedAt) > 30*time.Second || r.RecordedAt.IsZero() || r.RecordedAt.After(o.ObservedAt) || r.PossibleStartAt.Before(i.IssuedAt) || r.RecordedAt.Before(r.PossibleStartAt) || !r.RecordedAt.Before(i.OriginalDeadline) || r.WriterQuiescenceScope != "enrolled_roster_only" || r.PoweredOffObserved || (r.Sequence == 1 && r.PreviousSHA256 != "") || (r.Sequence > 1 && !ValidDigest(r.PreviousSHA256)) {
+	if o.Schema != GuestRetirementSchema || r.Schema != GuestRetirementSchema || r.Sequence < 1 || r.Sequence > len(states) || (r.State != states[r.Sequence-1] && (r.State != "uncertain" || (r.Sequence != 2 && r.Sequence != 4))) || r.Intent != i || r.IntentSHA256 != GuestRetirementSHA(i) || r.EnrollmentSHA256 != GuestRetirementSHA(e) || o.RecordSHA256 != GuestRetirementSHA(r) || !o.JournalComplete || o.HoldReasons == nil || len(o.HoldReasons) != 0 || o.Reader != e.Statement.Actor || !GuestRetirementLifetime(o.Reader) || o.ObservedAt.IsZero() || o.ObservedAt.After(now) || now.Sub(o.ObservedAt) > 30*time.Second || r.RecordedAt.IsZero() || r.RecordedAt.After(o.ObservedAt) || r.PossibleStartAt.Before(i.IssuedAt) || r.RecordedAt.Before(r.PossibleStartAt) || !r.RecordedAt.Before(i.OriginalDeadline) || r.WriterQuiescenceScope != "enrolled_roster_only" || r.PoweredOffObserved || (r.Sequence == 1 && r.PreviousSHA256 != "") || (r.Sequence > 1 && !ValidDigest(r.PreviousSHA256)) {
 		return fmt.Errorf("complete original Guest journal return required")
 	}
 	if active && (o.ActiveAttemptID != i.AttemptID || o.ActiveIntentSHA256 != GuestRetirementSHA(i) || !now.Before(i.OriginalDeadline)) {

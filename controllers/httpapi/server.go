@@ -241,6 +241,9 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	if err != nil {
 		return nil, err
 	}
+	if err = server.loadOriginalHostPrincipals(eventPrincipals, directoryPrincipals); err != nil {
+		return nil, err
+	}
 	server.snapshotHMACSecret, err = directorySnapshotSecret(directoryPrincipals)
 	if err != nil {
 		return nil, err
@@ -954,6 +957,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 
 func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if principal := s.originalHostCredential(r); principal != nil || hostFactoryPath(r.URL.Path) {
+			s.serveOriginalHostRequest(w, r, principal)
+			return
+		}
 		if principal := s.capacityGuestCredential(r); principal != nil || capacityGuestPath(r.URL.Path) {
 			s.serveCapacityGuestRequest(w, r, principal)
 			return
@@ -1363,6 +1370,7 @@ type Server struct {
 	originalCanaryAuthorities       *capacity.OriginalCanaryAuthorityRegistry
 	capacityMutationPrincipals      []capacityMutationPrincipal
 	capacityGuestPrincipals         []capacityGuestPrincipal
+	capacityHostFactoryPrincipals   []hostFactoryPrincipal
 	snapshotHMACSecret              []byte
 
 	serviceName      string

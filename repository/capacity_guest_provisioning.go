@@ -48,7 +48,7 @@ func guestMember(binding model.CapacityGuestRetirementBinding, slot int) (model.
 
 // This runs inside the ORIGINAL provider grant transaction, before COMMIT.
 // No provider send or WAN read is performed while holding the scope lock.
-func (s CapacityStore) reserveGuestOriginalTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, intent model.CapacityIntent, record capacityMutationRecord, now time.Time) error {
+func (s CapacityStore) reserveGuestOriginalTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, intent model.CapacityIntent, record capacityMutationRecord, now time.Time, originalGrantRaw ...[]byte) error {
 	b := p.GuestRetirementBinding
 	if b == nil || capacity.ValidateGuestRetirementBinding(p, b) != nil || b.MutationBindingName != record.Binding.Name || !capacity.GuestOriginalProfileEnabled(p, *b, record.EventProvider) || s.guestOriginal == nil || s.guestOriginal.source != b.CoreAuthoritySourceCommit || s.guestOriginal.source != capacity.CurrentGuestCoreSource() || !capacity.ValidDigest(s.guestOriginal.nonceSHA) {
 		return fmt.Errorf("%w: complete original protected Guest preregistration required", ErrCapacityConflict)
@@ -91,6 +91,18 @@ func (s CapacityStore) reserveGuestOriginalTx(ctx context.Context, tx *sql.Tx, p
 		return err
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_vm_provisioning_preregistrations(id,create_grant_id,nonce_sha256,profile_manifest_sha256,preregistration_record,original_deadline,created_at,original_wire,binding_wire) VALUES($1,$2,$3,$4,$5::jsonb,$6,$7,$8,$9)`, pre.PreregistrationID, pre.OriginalCreateGrantID, pre.NonceSHA256, pre.ProfileManifestSHA256, wire, pre.OriginalDeadline, now, wire, bindingWire)
+	if err == nil {
+		if s.hostOriginalFactory != nil || s.hostOriginalOrdinary != nil {
+			if len(originalGrantRaw) != 1 {
+				return ErrHostFactoryHold
+			}
+			if s.hostOriginalOrdinary != nil {
+				err = s.attachOriginalOrdinaryGrantTx(ctx, tx, record, originalGrantRaw[0], pre, wire)
+			} else {
+				err = s.attachOriginalHostGrantTx(ctx, tx, record, originalGrantRaw[0], pre, wire)
+			}
+		}
+	}
 	return err
 }
 
@@ -203,11 +215,39 @@ func (s CapacityStore) RecordGuestCreateWitness(ctx context.Context, preregistra
 			return err
 		}
 		var raw []byte
-		if err = tx.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1 FOR SHARE`, stored.pre.OriginalCreateGrantID).Scan(&raw); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1`, stored.pre.OriginalCreateGrantID).Scan(&raw); err != nil {
 			return err
+		}
+		var factoryBindings int
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_factory_original_grant_bindings WHERE grant_id=$1`, stored.pre.OriginalCreateGrantID).Scan(&factoryBindings); err != nil {
+			return err
+		}
+		if factoryBindings != 0 && s.hostOriginalOrdinary == nil {
+			return ErrHostFactoryHold
 		}
 		var original capacityMutationRecord
 		if json.Unmarshal(raw, &original) != nil || original.Settlement == nil || original.Grant.State != "settled" || original.Settlement.Outcome != "accepted" || !original.Settlement.TransportCompleted || original.Grant.Capability != original.Binding.EnsureCapability || original.Grant.CompensationOf != "" || original.AttemptID == "" || original.PolicyChecksum != stored.pre.PolicyChecksum || original.Generation != stored.pre.Generation || original.FencingToken != stored.pre.Fence || original.ExecutorID != stored.pre.ExecutorID || proof.GrantID != original.Grant.GrantID || proof.RequestSHA256 != original.Grant.RequestSHA256 || proof.ObservedCreationGrantID != original.Grant.GrantID || proof.ResourceAbsent || !validMutationProof(p, proof, now) || !completeMutationActionProof(original, proof) || !proof.ActionsSuccessful || proof.ActionsFailed || proof.ResourceID != original.Settlement.ResourceID || proof.ResourceCreatedAt != original.Settlement.ResourceCreatedAt {
+			return ErrCapacityConflict
+		}
+		if h := s.hostOriginalOrdinary; h != nil {
+			if factoryBindings != 1 || !reflect.DeepEqual(p, h.policySpec) || !reflect.DeepEqual(original.Binding, h.mutationBinding) {
+				return ErrHostFactoryHold
+			}
+			if err = lockNativeMutationSlot(ctx, tx, original.Binding, original.Grant.Slot); err != nil {
+				return err
+			}
+			if err = lockOriginalHostTarget(ctx, tx, h.binding.StableOriginalTargetSHA256); err != nil {
+				return err
+			}
+			if err = s.checkOriginalOrdinaryRegisteredTx(ctx, tx, h); err != nil {
+				return err
+			}
+		}
+		var lockedRaw []byte
+		if err = tx.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1 FOR SHARE`, stored.pre.OriginalCreateGrantID).Scan(&lockedRaw); err != nil {
+			return err
+		}
+		if !bytes.Equal(lockedRaw, raw) {
 			return ErrCapacityConflict
 		}
 		var slot model.CapacityMutationSlotBinding
@@ -237,7 +277,18 @@ func (s CapacityStore) RecordGuestCreateWitness(ctx context.Context, preregistra
 		}
 		returned := native.Original.OriginalCreateReturnedAt
 		observed, err := time.Parse(time.RFC3339Nano, original.Settlement.ObservedAt)
-		if err != nil || native.Original.ResourceID != proof.ResourceID || native.Original.Slot != stored.pre.Slot || native.Original.OriginalSourceCommit != stored.binding.GuestSourceCommit || native.Original.OriginalCreateStartedAt.Before(stored.pre.ReservedAt) || returned.Before(native.Original.OriginalCreateStartedAt) || returned.After(proof.ObservedAt) || returned.UTC().Format(time.RFC3339Nano) != proof.ResourceCreatedAt || !observed.Equal(native.CloseReturnedAt) || !proof.ObservedAt.Equal(native.CloseReturnedAt) {
+		creatorSourceMatches := native.Original.OriginalSourceCommit == stored.binding.GuestSourceCommit
+		if s.hostOriginalOrdinary != nil {
+			// The new compiled creator has the actual Core PUB epoch. Guest
+			// image/bootstrap/Actor epoch remains the separate original binding.
+			// Only this private actual Realm and exact original Continue/SQL raw
+			// join admits that branch; caller labels/flags/keys do not select it.
+			if native.Original.OriginalSourceCommit != capacity.CurrentGuestCoreSource() || s.verifyOriginalOrdinaryCreateTx(ctx, tx, stored.pre, proof) != nil {
+				return ErrHostFactoryHold
+			}
+			creatorSourceMatches = true
+		}
+		if err != nil || native.Original.ResourceID != proof.ResourceID || native.Original.Slot != stored.pre.Slot || !creatorSourceMatches || native.Original.OriginalCreateStartedAt.Before(stored.pre.ReservedAt) || returned.Before(native.Original.OriginalCreateStartedAt) || returned.After(proof.ObservedAt) || returned.UTC().Format(time.RFC3339Nano) != proof.ResourceCreatedAt || !observed.Equal(native.CloseReturnedAt) || !proof.ObservedAt.Equal(native.CloseReturnedAt) {
 			return ErrCapacityConflict
 		}
 		result = model.CapacityGuestOriginalCreateWitness{Schema: capacity.GuestCreateWitnessSchema, BindingName: stored.pre.BindingName, PreregistrationID: stored.pre.PreregistrationID, PreregistrationNonceSHA256: stored.pre.NonceSHA256, Tuple: model.CapacityGuestNativeTuple{Provider: provider, InstanceID: original.Binding.IntegrationInstanceID, InstanceChecksum: original.Binding.IntegrationChecksum, TypeID: original.Binding.IntegrationTypeID, TypeChecksum: original.Binding.IntegrationTypeChecksum, ScopeChecksum: original.Binding.ScopeChecksum, ProfileChecksum: slot.DesiredSpec.ProfileChecksum, Profile: original.Binding.ProfileName, Slot: original.Grant.Slot, ResourceID: proof.ResourceID, CreatedAt: proof.ResourceCreatedAt}, OriginalCreateGrantID: original.Grant.GrantID, OriginalCreateAttemptID: original.AttemptID, OriginalCreateRequestSHA256: original.Grant.RequestSHA256, OriginalCreateSettlementSHA256: capacity.GuestRetirementSHA(*original.Settlement), ProfileManifestSHA256: stored.pre.ProfileManifestSHA256, BootstrapSHA256: stored.binding.ProfileManifest.BootstrapSHA256, CoreSourceCommit: stored.pre.CoreSourceCommit, OriginalDeadline: stored.pre.OriginalDeadline, OriginalCreateReturnedAt: returned, ObservedAt: now}

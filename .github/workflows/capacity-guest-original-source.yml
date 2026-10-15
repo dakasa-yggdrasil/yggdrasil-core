@@ -42,6 +42,185 @@ jobs:
           path: ${{ runner.temp }}/capacity-guest-original-*/
           if-no-files-found: error
 
+  host-factory-source-pg:
+    # Proposed additive SOURCE/PG gate. Dispatch awaits whole Source peer;
+    # native tags compile Source only; no worker/QEMU execution, approval or resources.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: source-ci-only
+          POSTGRES_DB: yggdrasil_host_source
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d yggdrasil_host_source"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      GOWORK: "off"
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: yggdrasil_host_source
+      DB_USER: postgres
+      DB_PASSWORD: source-ci-only
+      DB_SSLMODE: disable
+      DB_URL: postgres://postgres:source-ci-only@127.0.0.1:5432/yggdrasil_host_source?sslmode=disable
+      REQUIRE_CAPACITY_HOST_ORIGINAL_POSTGRES: "true"
+      REQUIRE_CAPACITY_HOST_ORIGINAL_SOURCE_BUILDS: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Apply original migration source to CI-only ephemeral PG
+        run: go run ./scripts/goose up > "$RUNNER_TEMP/host-factory-migration.raw.log" 2>&1
+      - name: Actual pure byte graph SOURCE cases
+        if: ${{ !cancelled() }}
+        run: go test -json -count=1 ./internal/capacity -run '^TestHostOriginalFactory' > "$RUNNER_TEMP/host-factory-pure.jsonl" 2> "$RUNNER_TEMP/host-factory-pure.stderr.log"
+      - name: Actual clean tagged Source command and native reader builds without execution
+        if: ${{ !cancelled() }}
+        run: go test -json -count=1 ./repository -run '^TestHostOriginalFactoryRemoteSourceBuildOwner$' > "$RUNNER_TEMP/host-factory-build-owner.jsonl" 2> "$RUNNER_TEMP/host-factory-build-owner.stderr.log"
+      - name: Actual PostgreSQL immutable relation SOURCE cases
+        if: ${{ !cancelled() }}
+        run: go test -json -count=1 ./repository -run '^TestHostOriginalFactory(Postgres|ActualRegistry|Source)' > "$RUNNER_TEMP/host-factory-pg.jsonl" 2> "$RUNNER_TEMP/host-factory-pg.stderr.log"
+      # Isolated Source-only proposal; adopt only after the ONE whole-source review.
+      # Expected names pin Source case coverage and grant no native qualification.
+      - name: Exact additive Source profile pure roots and descendant census
+        if: ${{ !cancelled() }}
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          audit_dir="$RUNNER_TEMP/host-factory-source-package-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-profile"
+          mkdir "$audit_dir"
+          set +e
+          python3 scripts/ci/host_factory_source_package_census.py preflight --expected scripts/ci/host_factory_source_package_expected.json --phase profile --audit "$audit_dir"
+          preflight_exit=$?
+          if (( preflight_exit != 0 )); then exit "$preflight_exit"; fi
+          root_regex="$(cat "$audit_dir/root-regex.txt")"
+          selector_exit=$?
+          if (( selector_exit != 0 )) || [[ -z "$root_regex" ]]; then exit 1; fi
+          go test -json -mod=readonly -tags nativequalification -p 1 -count=1 -timeout=90s ./internal/capacity -run "$root_regex" 2> "$audit_dir/stderr.log" | tee "$audit_dir/raw.jsonl" 2> "$audit_dir/tee.stderr.log"
+          original_status=( "${PIPESTATUS[@]}" )
+          if (( ${#original_status[@]} != 2 )); then exit 1; fi
+          printf '%s\n' "${original_status[0]}" > "$audit_dir/go.exit" || exit 1
+          printf '%s\n' "${original_status[1]}" > "$audit_dir/tee.exit" || exit 1
+          python3 scripts/ci/host_factory_source_package_census.py census --phase profile --audit "$audit_dir" --go-exit "${original_status[0]}" --tee-exit "${original_status[1]}" > "$audit_dir/collector.stdout.log" 2> "$audit_dir/collector.stderr.log"
+          census_exit=$?
+          printf '%s\n' "$census_exit" > "$audit_dir/collector.exit" || exit 1
+          if (( original_status[0] != 0 )); then exit "${original_status[0]}"; fi
+          if (( original_status[1] != 0 )); then exit "${original_status[1]}"; fi
+          exit "$census_exit"
+      - name: Exact additive persistence Source roots and descendant census
+        if: ${{ !cancelled() }}
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          audit_dir="$RUNNER_TEMP/host-factory-source-package-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-persistence"
+          mkdir "$audit_dir"
+          set +e
+          python3 scripts/ci/host_factory_source_package_census.py preflight --expected scripts/ci/host_factory_source_package_expected.json --phase persistence --audit "$audit_dir"
+          preflight_exit=$?
+          if (( preflight_exit != 0 )); then exit "$preflight_exit"; fi
+          root_regex="$(cat "$audit_dir/root-regex.txt")"
+          selector_exit=$?
+          if (( selector_exit != 0 )) || [[ -z "$root_regex" ]]; then exit 1; fi
+          go test -json -mod=readonly -tags nativequalification -p 1 -count=1 -timeout=90s ./repository -run "$root_regex" 2> "$audit_dir/stderr.log" | tee "$audit_dir/raw.jsonl" 2> "$audit_dir/tee.stderr.log"
+          original_status=( "${PIPESTATUS[@]}" )
+          if (( ${#original_status[@]} != 2 )); then exit 1; fi
+          printf '%s\n' "${original_status[0]}" > "$audit_dir/go.exit" || exit 1
+          printf '%s\n' "${original_status[1]}" > "$audit_dir/tee.exit" || exit 1
+          python3 scripts/ci/host_factory_source_package_census.py census --phase persistence --audit "$audit_dir" --go-exit "${original_status[0]}" --tee-exit "${original_status[1]}" > "$audit_dir/collector.stdout.log" 2> "$audit_dir/collector.stderr.log"
+          census_exit=$?
+          printf '%s\n' "$census_exit" > "$audit_dir/collector.exit" || exit 1
+          if (( original_status[0] != 0 )); then exit "${original_status[0]}"; fi
+          if (( original_status[1] != 0 )); then exit "${original_status[1]}"; fi
+          exit "$census_exit"
+      - name: Exact tagged host factory Source package roots and descendant census
+        if: ${{ !cancelled() }}
+        timeout-minutes: 4
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          audit_dir="$RUNNER_TEMP/host-factory-source-package-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-package"
+          mkdir "$audit_dir"
+          set +e
+          python3 scripts/ci/host_factory_source_package_census.py preflight --expected scripts/ci/host_factory_source_package_expected.json --phase package --audit "$audit_dir"
+          preflight_exit=$?
+          if (( preflight_exit != 0 )); then exit "$preflight_exit"; fi
+          root_regex="$(cat "$audit_dir/root-regex.txt")"
+          selector_exit=$?
+          if (( selector_exit != 0 )) || [[ -z "$root_regex" ]]; then exit 1; fi
+          go test -json -mod=readonly -tags nativequalification -p 1 -count=1 -timeout=3m ./internal/capacityhostfactory -run "$root_regex" 2> "$audit_dir/stderr.log" | tee "$audit_dir/raw.jsonl" 2> "$audit_dir/tee.stderr.log"
+          original_status=( "${PIPESTATUS[@]}" )
+          if (( ${#original_status[@]} != 2 )); then exit 1; fi
+          printf '%s\n' "${original_status[0]}" > "$audit_dir/go.exit" || exit 1
+          printf '%s\n' "${original_status[1]}" > "$audit_dir/tee.exit" || exit 1
+          python3 scripts/ci/host_factory_source_package_census.py census --phase package --audit "$audit_dir" --go-exit "${original_status[0]}" --tee-exit "${original_status[1]}" > "$audit_dir/collector.stdout.log" 2> "$audit_dir/collector.stderr.log"
+          census_exit=$?
+          printf '%s\n' "$census_exit" > "$audit_dir/collector.exit" || exit 1
+          if (( original_status[0] != 0 )); then exit "${original_status[0]}"; fi
+          if (( original_status[1] != 0 )); then exit "${original_status[1]}"; fi
+          exit "$census_exit"
+      - name: Exact tagged Main Capture refusal Source caller census
+        if: ${{ !cancelled() }}
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          audit_dir="$RUNNER_TEMP/host-factory-source-package-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-main"
+          mkdir "$audit_dir"
+          set +e
+          python3 scripts/ci/host_factory_source_package_census.py preflight --expected scripts/ci/host_factory_source_package_expected.json --phase main --audit "$audit_dir"
+          preflight_exit=$?
+          if (( preflight_exit != 0 )); then exit "$preflight_exit"; fi
+          root_regex="$(cat "$audit_dir/root-regex.txt")"
+          selector_exit=$?
+          if (( selector_exit != 0 )) || [[ -z "$root_regex" ]]; then exit 1; fi
+          go test -json -mod=readonly -tags nativequalification -p 1 -count=1 -timeout=90s ./cmd/native-host-factory-fixture -run "$root_regex" 2> "$audit_dir/stderr.log" | tee "$audit_dir/raw.jsonl" 2> "$audit_dir/tee.stderr.log"
+          original_status=( "${PIPESTATUS[@]}" )
+          if (( ${#original_status[@]} != 2 )); then exit 1; fi
+          printf '%s\n' "${original_status[0]}" > "$audit_dir/go.exit" || exit 1
+          printf '%s\n' "${original_status[1]}" > "$audit_dir/tee.exit" || exit 1
+          python3 scripts/ci/host_factory_source_package_census.py census --phase main --audit "$audit_dir" --go-exit "${original_status[0]}" --tee-exit "${original_status[1]}" > "$audit_dir/collector.stdout.log" 2> "$audit_dir/collector.stderr.log"
+          census_exit=$?
+          printf '%s\n' "$census_exit" > "$audit_dir/collector.exit" || exit 1
+          if (( original_status[0] != 0 )); then exit "${original_status[0]}"; fi
+          if (( original_status[1] != 0 )); then exit "${original_status[1]}"; fi
+          exit "$census_exit"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-host-factory-source-package-original-census
+          path: ${{ runner.temp }}/host-factory-source-package-*/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-host-factory-source-pg-original-census
+          path: |
+            ${{ runner.temp }}/host-factory-migration.raw.log
+            ${{ runner.temp }}/host-factory-pure.jsonl
+            ${{ runner.temp }}/host-factory-pure.stderr.log
+            ${{ runner.temp }}/host-factory-build-owner.jsonl
+            ${{ runner.temp }}/host-factory-build-owner.stderr.log
+            ${{ runner.temp }}/host-factory-source-build-*/
+            ${{ runner.temp }}/host-factory-pg.jsonl
+            ${{ runner.temp }}/host-factory-pg.stderr.log
+            ${{ runner.temp }}/host-factory-source-case-*.json
+          if-no-files-found: error
+
   guest-pg-public-auth:
     runs-on: ubuntu-latest
     timeout-minutes: 15

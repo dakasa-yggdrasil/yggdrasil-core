@@ -60,7 +60,7 @@ func loadCapacityGuestPrincipals(workflows []workflowMachinePrincipal, events []
 		return nil, nil
 	}
 	if len(config) == 0 || len(config) > 128 {
-		return nil, fmt.Errorf("Guest inventory requires exact independent scoped principals")
+		return nil, fmt.Errorf("guest inventory requires exact independent scoped principals")
 	}
 	ids, digests := map[string]bool{}, map[[sha256.Size]byte]bool{}
 	var result []capacityGuestPrincipal
@@ -70,7 +70,7 @@ func loadCapacityGuestPrincipals(workflows []workflowMachinePrincipal, events []
 			return nil, err
 		}
 		if ids[base.principalID] || digests[base.tokenSHA256] || (c.Role != "provisioner" && c.Role != "actor") || c.BindingName == "" || len(c.BindingName) > 64 || containsWildcard(c.BindingName) || strings.TrimSpace(c.BindingName) != c.BindingName || strings.ContainsAny(c.BindingName, "/\x00\r\n") || c.Slot < 1 || c.Slot > 64 || !capacity.ValidDigest(c.ProfileManifestSHA256) {
-			return nil, fmt.Errorf("Guest principal requires exact role/member/slot/profile")
+			return nil, fmt.Errorf("guest principal requires exact role/member/slot/profile")
 		}
 		collision := false
 		for _, other := range workflows {
@@ -89,7 +89,7 @@ func loadCapacityGuestPrincipals(workflows []workflowMachinePrincipal, events []
 			collision = collision || digestMatchesPlaintext(base.tokenSHA256, other.value)
 		}
 		if collision {
-			return nil, fmt.Errorf("Guest principal collides with another credential surface")
+			return nil, fmt.Errorf("guest principal collides with another credential surface")
 		}
 		ids[base.principalID], digests[base.tokenSHA256] = true, true
 		result = append(result, capacityGuestPrincipal{base: base, role: c.Role, binding: c.BindingName, slot: c.Slot, profileSHA: c.ProfileManifestSHA256})
