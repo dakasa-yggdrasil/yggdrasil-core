@@ -7,12 +7,12 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: ce95d419a797c42c3e49b8244bf02aab4e33b7d2
-verified_diff_sha256: 53b9d62cfdfdc225ecd95af8fd02c8fa278cb57ec5fd9f74e36684dd50c5a4ec
+verified_at_commit: 3308218aa42dc5c0a1e3e0649ea2e25d71481dd9
+verified_diff_sha256: e41b56843db10ae6734fc54d95dbc59f1eefe5db6cb689773a535a6be926383f
 reconciler_schema: 1
 verified_at: 2026-10-15
 by: Codex
-note: Reconciled the complete original Host factory Source5/9/13 composition and actual callers. Distinct nonauthor whole review has no remaining confirmed functional findings, using fresh integration reads and explicitly bounded exact-byte component review reuse. Original command, file, actor, deadline, FIRST, Commit and actual outer GoReturn ownership remain separate. Main private-read census is disjoint from authenticated complete Realm custody; uncertain outcomes retain the same identity and HOLD. The four additive CI phases require 216 exact roots and 2055 descendants alongside all inherited gates. Production and qualification registries remain EMPTY; ordinary final SourceSAFE is unavailable. FULL_CORE_NATIVE_PENDING includes all actual native/provider/resource evidence, old45 obligations and later source approval. Genuine released generation retains all nine actual input digests. Owning remote CI is pending; no local functional execution, merge, deployment or provider activation occurred.
+note: Reconciled the grouped correction after the complete first CI cohort: actual original process-reference and pipe-byte custody compile repairs, native-provider-aware SQL join, external native ABI test and unchanged closed full decoder. ChoiceReturn uses its existing signed Scope domain; exact reservation, original choice bytes and ancestor Scope joins remain mandatory. Distinct SAME whole review found no remaining confirmed defects in the exact repair. The same four CI rosters retain 216 roots and 2055 descendants with exact refreshed source and Test pins; all inherited gates and budgets remain. First CI failures and all fourteen original artifacts are retained. Genuine generation preserves all nine input digests. Successor owning remote CI is required; production registries remain EMPTY, Native approval NULL, C6 HOLD, ordinary final SourceSAFE unsupported and FULL_CORE_NATIVE_PENDING. No local functional execution, merge, deployment or activation occurred.
 
 
 Records the source commit reconciled with the changed runtime contracts.
@@ -95,3 +95,6 @@ previous_contact_mfa_source_review: Reconciled automatic contact OTP with the ex
 core_original_host_source_peer_sha256: 18cf472833f61f34b9f958f82df315083171de1c0099c89649c3c8df98e87ac8
 core_original_host_source_input_sha256: 8a3711941ca71f748122256122ee658050b5ae8e194228a1d2e10855b058a394
 core_original_host_source_scope: FULL_CORE_NATIVE_PENDING
+
+core_original_host_ci1_repair_peer_sha256: 22ccfe52d204f57371093949bdb02cbf20f4dae1cadea9bae08a131c6cf39c61
+core_original_host_ci1_repair_input_sha256: 5b8f5f3c34e4925a855be15efa188eeef8a923cfe2a94a5f66a002fe608489ac
