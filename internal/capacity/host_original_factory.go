@@ -1603,6 +1603,11 @@ func hostFactoryEnvelopeBinding(body any, bindingSchema, bindingSHA string) bool
 		return bindingSchema == "original_host_factory_root_preparation_v4" // prior Root raw relation is checked by the immutable SQL consumer; body has no RootPreparationSHA field
 	case model.HostFactoryRootCompletion:
 		return bindingSchema == "original_host_factory_root_preparation_v4" && x.RootPreparationSHA256 == bindingSHA
+	case model.HostFactoryChoiceReturn:
+		// This existing closed return has no direct Scope field. The signature
+		// domain binds the exact Scope digest; consumers independently join its
+		// signed reservation and original choice bytes to that same Scope.
+		return bindingSchema == "original_host_factory_pre_authority_scope_v4"
 	case model.HostFactoryBasalOwnerObservation:
 		return hostFactoryHas(hostFactoryEnums["BindingSchema"], bindingSchema) // approved private bootstrap joins the untrusted basal launch hints separately
 	case model.FactoryOrdinaryGuardRead:

@@ -1642,6 +1642,15 @@ type privateCurrentGrantRecord struct {
 
 var ordinaryGuardPhases = [...]string{"before_redeem", "after_redeem", "before_start"}
 
+func guardPhase(phase string) int {
+	for i, candidate := range ordinaryGuardPhases {
+		if phase == candidate {
+			return i
+		}
+	}
+	return -1
+}
+
 // None of this local carrier is wire authority. Each buffer enters it only
 // from the source-owned original reader/transaction/return at the named stage.
 // In particular, a route attempt UUID cannot install the worker's request.
@@ -1681,7 +1690,7 @@ type ordinaryOriginalState struct {
 }
 
 func (r *OriginalFactoryRealm) originalOrdinaryCacheLocked(ctx context.Context) error {
-	if ctx == nil || ctx.Err() != nil || !r.ready || r.basal == nil || r.trustedInstallationLocked() != nil || r.installation.entry != "ordinary_original_create" || r.worker == nil || r.worker.cmd == nil || r.worker.cmd.Process == nil || len(r.claimRaw) == 0 || len(r.leaseRaw) == 0 || len(r.grantRaw) == 0 || len(r.preRaw) == 0 || len(r.preparedBindingRaw) == 0 || len(r.ordinaryBindingRaw) == 0 {
+	if ctx == nil || ctx.Err() != nil || !r.ready || r.basal == nil || r.control == nil || r.control.phasePublishers["worker"] == nil || r.trustedInstallationLocked() != nil || r.installation.entry != "ordinary_original_create" || r.worker == nil || r.worker.cmd == nil || r.worker.cmd.Process == nil || len(r.claimRaw) == 0 || len(r.leaseRaw) == 0 || len(r.grantRaw) == 0 || len(r.preRaw) == 0 || len(r.preparedBindingRaw) == 0 || len(r.ordinaryBindingRaw) == 0 {
 		return capacity.ErrHostFactorySourceUnavailable
 	}
 	var binding model.FactoryOrdinarySourceBinding
@@ -1689,7 +1698,11 @@ func (r *OriginalFactoryRealm) originalOrdinaryCacheLocked(ctx context.Context) 
 		return refused("native_join_refused", nil)
 	}
 	var leaf model.HostFactoryNativeLeaf
-	if r.verifyOriginalStageLocked("ordinary-native-leaf-worker", r.records["ordinary-native-leaf-worker"]) != nil || capacity.DecodeHostFactory(r.originalBodies["ordinary-native-leaf-worker"], &leaf) != nil || leaf.BindingSHA256 != digest(r.ordinaryBindingRaw) || leaf.Process.PID != r.worker.cmd.Process.Pid {
+	if r.verifyOriginalStageLocked("ordinary-native-leaf-worker", r.records["ordinary-native-leaf-worker"]) != nil || capacity.DecodeHostFactory(r.originalBodies["ordinary-native-leaf-worker"], &leaf) != nil || leaf.BindingSHA256 != digest(r.ordinaryBindingRaw) {
+		return capacity.ErrHostFactorySourceUnavailable
+	}
+	process, err := initialOriginalProcess(r.control.phasePublishers["worker"], leaf.Process)
+	if err != nil || process.PID != r.worker.cmd.Process.Pid {
 		return capacity.ErrHostFactorySourceUnavailable
 	}
 	return nil
@@ -9433,7 +9446,7 @@ func collectOriginalFinalSourceAuditActor(r *OriginalFactoryRealm, child *origin
 		}
 	}
 	h := child.stdout
-	if h == nil || h.ledger == nil || h.closeCall == nil || !child.output.read.eof || child.output.err != nil || len(child.output.data) == 0 || len(child.output.data) > bodyLimit {
+	if h == nil || h.ledger == nil || h.closeCall == nil || !child.output.read.eof || child.output.err != nil || len(child.output.bytes) == 0 || len(child.output.bytes) > bodyLimit {
 		return out, refused("storage_unknown", child.output.err)
 	}
 	var final *originalFinalSourceAuditActorRead
@@ -9447,7 +9460,7 @@ func collectOriginalFinalSourceAuditActor(r *OriginalFactoryRealm, child *origin
 		}
 	} else if child.subjectRole == "host_registrar" {
 		collected := child.registrarOutput
-		if collected == nil || collected.child != child || collected.cause != nil || collected.classifiedRows != len(collected.rows) || collected.classifiedBytes != len(collected.raw) || collected.eof == nil || collected.finalAudit == nil || !bytes.Equal(collected.raw, child.output.data) {
+		if collected == nil || collected.child != child || collected.cause != nil || collected.classifiedRows != len(collected.rows) || collected.classifiedBytes != len(collected.raw) || collected.eof == nil || collected.finalAudit == nil || !bytes.Equal(collected.raw, child.output.bytes) {
 			return out, refused("storage_unknown", nil)
 		}
 		final, rows, frameOffset, frameBytes = collected.finalAudit, collected.rows, collected.finalOffset, collected.finalBytes
@@ -9461,7 +9474,7 @@ func collectOriginalFinalSourceAuditActor(r *OriginalFactoryRealm, child *origin
 	if carrier.OriginalHelperReturn.OriginalReturnedAt.After(child.joined.at) {
 		return out, refused("native_join_refused", nil)
 	}
-	transport := originalFinalSourceAuditTransportCustody{Schema: "source_private_original_final_source_audit_transport_custody_v1", OriginalStreamHandleID: h.id, OriginalStdoutWire: bytes.Clone(child.output.data), OriginalFrameOffset: frameOffset, OriginalFrameBytes: frameBytes, OriginalReadSegments: []originalPostStartReadSegment{}}
+	transport := originalFinalSourceAuditTransportCustody{Schema: "source_private_original_final_source_audit_transport_custody_v1", OriginalStreamHandleID: h.id, OriginalStdoutWire: bytes.Clone(child.output.bytes), OriginalFrameOffset: frameOffset, OriginalFrameBytes: frameBytes, OriginalReadSegments: []originalPostStartReadSegment{}}
 	offset := uint32(0)
 	for _, row := range rows {
 		if row == nil || !row.originalRawKnown || row.fact.OriginalCount == nil || row.fact.OriginalEOF == nil || *row.fact.OriginalCount != int64(len(row.originalRaw)) {
@@ -9478,7 +9491,7 @@ func collectOriginalFinalSourceAuditActor(r *OriginalFactoryRealm, child *origin
 			transport.OriginalEOFReference = ref
 			continue
 		}
-		if row.cause != nil || len(row.originalRaw) == 0 || int(offset)+len(row.originalRaw) > len(child.output.data) || !bytes.Equal(row.originalRaw, child.output.data[int(offset):int(offset)+len(row.originalRaw)]) {
+		if row.cause != nil || len(row.originalRaw) == 0 || int(offset)+len(row.originalRaw) > len(child.output.bytes) || !bytes.Equal(row.originalRaw, child.output.bytes[int(offset):int(offset)+len(row.originalRaw)]) {
 			return out, refused("storage_unknown", row.cause)
 		}
 		transport.OriginalReadSegments = append(transport.OriginalReadSegments, originalPostStartReadSegment{ref.OriginalCallID, ref.OriginalChunkBodySHA256, ref.OriginalChunkEnvelopeSHA256, ref.OriginalFactIndex, offset, uint32(len(row.originalRaw))})

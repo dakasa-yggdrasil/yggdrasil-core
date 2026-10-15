@@ -3824,20 +3824,54 @@ func TestHostFactorySourceProfileClosedPurposeBytes(t *testing.T) {
 	})
 }
 
+// Synthetic shape of writeOnce's closed return, authored for CI only. These
+// descriptor/vector facts provide no original native or immutable SQL proof.
+func hostProfileTestChoiceReturn(t *testing.T) model.HostFactoryChoiceReturn {
+	t.Helper()
+	makeSource := func(role, handle, acquisition string, inode uint64, descriptor int) model.HostFactoryDescriptorSource {
+		source := model.HostFactoryDescriptorSource{Role: role, OwnerNativeReceiptSHA256: strings.Repeat("b", 64), Device: 1, Inode: inode, Type: "regular", Mode: 0100600, LinkCount: 1, Flags: 0x20801, OriginalDescriptorNumber: descriptor, DescriptorFlags: 1, OriginalFstatReturnedAt: hostVectorTime(), OriginalHandleID: handle}
+		if role == "gate_directory" {
+			source.Type, source.Mode, source.Flags = "directory", 0040700, 0x30800
+		}
+		acquired := hostVectorDeclaredRef(acquisition, handle, 1, 1, 1)
+		acquired.SubjectOwnerID = hostVectorOwner
+		source.OriginalAcquisitionCallVector = &acquired
+		for index, ref := range []*model.HostFactoryCallVectorReference{&source.OriginalFstatCallVector, &source.OriginalGetflCallVector, &source.OriginalGetfdCallVector} {
+			ordinal := uint64(index + 2)
+			*ref = hostVectorDeclaredRef([]string{"descriptor_fstat", "fcntl_getfl", "fcntl_getfd"}[index], handle, ordinal, ordinal, 1)
+			ref.SubjectOwnerID = hostVectorOwner
+		}
+		source.OriginalFstatCallID, source.OriginalGetflCallID, source.OriginalGetfdCallID = handle+":2", handle+":3", handle+":4"
+		return source
+	}
+	choice := hostVectorChoice()
+	raw := hostVectorJSON(t, choice)
+	sha, at := HostFactoryRawSHA256(raw), hostVectorTime()
+	return model.HostFactoryChoiceReturn{Schema: "original_host_factory_choice_return_v4", Purpose: "original_host_factory_choice_return_v4", ChoiceBodySchema: choice.Schema, ChoiceBodySHA256: sha, ChoiceReservationSHA256: choice.ChoiceReservationSHA256, ReturnSignerNativeReceiptSHA256: strings.Repeat("b", 64), OriginalGateSource: makeSource("gate_file", hostVectorHandle, "gate_open_exclusive", 1, 11), OriginalDirectorySource: makeSource("gate_directory", hostVectorSubject, "gate_directory_duplicate", 2, 12), OriginalWriteStartedAt: at, OriginalWriteReturnedAt: at.Add(time.Nanosecond), OriginalWrittenBytes: len(raw), OriginalWrittenSHA256: sha, OriginalFileSyncReturnedAt: at.Add(2 * time.Nanosecond), OriginalFileCloseReturnedAt: at.Add(3 * time.Nanosecond), OriginalDirectorySyncReturnedAt: at.Add(4 * time.Nanosecond), OriginalDirectoryCloseReturnedAt: at.Add(5 * time.Nanosecond)}
+}
+
 func TestHostFactorySourceProfileScopedDomains(t *testing.T) {
 	p := ProposedHostFactorySourceProfileV1()
 	key := hostProfileTestKey()
 	public := key.Public().(ed25519.PublicKey)
-	body := hostVectorChoice()
+	// Raw choice bytes belong to the gate file, not to a signature family.
+	// Use the producer-shaped worker return to exercise its Scope domain.
+	body := hostProfileTestChoiceReturn(t)
 	envelope, err := p.SignEnvelope(body, []HostFactorySourceCallPurpose{}, "host_worker", hostVectorOwner, hostVectorScopeSchema, hostVectorSHA(), key)
 	if err != nil {
 		t.Fatal(err)
 	}
-	var decoded model.HostFactoryUnissuedChoiceBody
+	var decoded model.HostFactoryChoiceReturn
 	t.Run("profile_roundtrip", func(t *testing.T) {
 		purposes, err := p.VerifyEnvelope(envelope, &decoded, "host_worker", hostVectorOwner, hostVectorScopeSchema, hostVectorSHA(), public)
 		if err != nil || purposes == nil || len(purposes) != 0 || !reflect.DeepEqual(decoded, body) {
 			t.Fatal("profile domain changed exact body")
+		}
+		_, err = p.VerifyEnvelope(envelope, &decoded, "host_worker", hostVectorOwner, hostVectorScopeSchema, strings.Repeat("d", 64), public)
+		hostVectorRefused(t, err) // Exact Scope is in the signed domain, not the closed return BODY.
+		for _, binding := range []string{hostVectorRootSchema, hostVectorOrdinarySchema} {
+			_, err = p.SignEnvelope(body, []HostFactorySourceCallPurpose{}, "host_worker", hostVectorOwner, binding, hostVectorSHA(), key)
+			hostVectorRefused(t, err)
 		}
 	})
 	t.Run("default_rejects_profile_domain", func(t *testing.T) {
@@ -3898,7 +3932,9 @@ func TestHostFactorySourceProfileScopedDomains(t *testing.T) {
 		hostVectorRefused(t, VerifyHostFactoryEnvelope(env, &out, "host_core_issuer", hostVectorOwner, hostVectorScopeSchema, hostVectorSHA(), public))
 	})
 	t.Run("issuer_role_cannot_sign_worker_BODY", func(t *testing.T) {
-		_, err := p.SignEnvelope(body, []HostFactorySourceCallPurpose{}, "host_core_issuer", hostVectorOwner, hostVectorScopeSchema, hostVectorSHA(), key)
+		_, err := p.SignEnvelope(hostVectorChoice(), []HostFactorySourceCallPurpose{}, "host_worker", hostVectorOwner, hostVectorScopeSchema, hostVectorSHA(), key)
+		hostVectorRefused(t, err) // A raw gate choice never acquires a signature family.
+		_, err = p.SignEnvelope(body, []HostFactorySourceCallPurpose{}, "host_core_issuer", hostVectorOwner, hostVectorScopeSchema, hostVectorSHA(), key)
 		hostVectorRefused(t, err)
 	})
 	t.Run("issuer_role_cannot_sign_IO_chunk", func(t *testing.T) {
@@ -3939,6 +3975,7 @@ func TestHostFactorySourceProfilePerCallPurpose(t *testing.T) {
 		hostVectorRefused(t, p.ValidatePendingSuccessor(pending, chunk, prior, mutated))
 	})
 	t.Run("same_handle_distinct_original_stages", func(t *testing.T) {
+		chunk, entries := hostProfileTestChunk("returned")
 		second := hostVectorPrimitive("boot_id_read", 2, "returned")
 		second.SubjectOwnerID = hostVectorOwner
 		chunk.OriginalCalls = append(chunk.OriginalCalls, second)
@@ -4117,11 +4154,9 @@ func hostProfileSyntheticNativePairs(t *testing.T) (hostVectorNativeGraph, model
 				t.Fatal("synthetic chunk")
 			}
 			for _, fact := range chunk.OriginalCalls {
-				stage := "native_alive"
-				if fact.Operation == "native_subject_pidfd_open" {
-					stage = "worker_start" // Declared synthetic acquisition phase.
-				}
-				purposes = append(purposes, HostFactorySourceCallPurpose{*fact.OriginalCallID, "host_worker", stage})
+				// This synthetic graph declares registrar-owned observation calls,
+				// including the subject pin acquisition, at native_alive.
+				purposes = append(purposes, HostFactorySourceCallPurpose{*fact.OriginalCallID, "host_worker", "native_alive"})
 			}
 			body = chunk
 		case "original_host_factory_call_vector_manifest_v2":
@@ -4509,16 +4544,20 @@ func TestHostFactorySourceProfileLauncherWholeRecipe(t *testing.T) {
 		}
 	})
 	t.Run("prior107d_profile_not_relabelled", func(t *testing.T) {
-		body := hostVectorChoice()
+		body := hostProfileTestChoiceReturn(t)
 		key := hostProfileTestKey()
 		env, err := p.SignEnvelope(body, []HostFactorySourceCallPurpose{}, "host_worker", hostVectorOwner, hostVectorScopeSchema, hostVectorSHA(), key)
 		if err != nil {
 			t.Fatal(err)
 		}
+		var out model.HostFactoryChoiceReturn
+		purposes, verifyErr := p.VerifyEnvelope(env, &out, "host_worker", hostVectorOwner, hostVectorScopeSchema, hostVectorSHA(), key.Public().(ed25519.PublicKey))
+		if verifyErr != nil || purposes == nil || len(purposes) != 0 || !reflect.DeepEqual(out, body) {
+			t.Fatal("current profile must verify before testing the prior identity")
+		}
 		prior := bytes.Replace(env, []byte(hostFactorySourceProfileSHA), []byte("107d1a2cf25fee4d966fa1886dbf5f94c19c866c2eb4cda28405d27c70923ebd"), 1)
 		var decoded HostFactorySourceSignedEnvelope
 		hostVectorRefused(t, p.Decode(prior, &decoded))
-		var out model.HostFactoryChoiceReturn
 		_, err = p.VerifyEnvelope(prior, &out, "host_worker", hostVectorOwner, hostVectorScopeSchema, hostVectorSHA(), key.Public().(ed25519.PublicKey))
 		hostVectorRefused(t, err)
 	})

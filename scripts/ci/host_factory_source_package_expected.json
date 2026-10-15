@@ -36,8 +36,8 @@
       "source_files": [
         {
           "path": "internal/capacity/host_original_factory_test.go",
-          "sha256": "f8d93e869975cb94378bdaba858051c68d359541775648392a4ab38b10e8df81",
-          "bytes": 307972
+          "sha256": "a5fd2c9bcf701f2e7625de278d679aa8f945645a15dcda36cd413b045eb57db6",
+          "bytes": 311720
         }
       ],
       "go_timeout": "90s",
@@ -147,7 +147,7 @@
         },
         {
           "name": "TestHostFactorySourceProfileLauncherWholeRecipe",
-          "function_sha256": "095736737f164b1b87172da8d2f10f0597edf07d259a2ec552b583e7866146f2",
+          "function_sha256": "506ac9378d3347c7d3846ccba47c8c70c30868a1e9d1c2543756491d6082afb6",
           "children": [
             "bootstrap_parent_redundant_close",
             "control_parent_redundant_close",
@@ -195,368 +195,376 @@
           "child_count": 42,
           "children_complete": true,
           "proof": {
-            "method": "pinned static naming review, exact function SHA",
-            "input_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/review/source5-profile-child-census-root-static-r1/rootsets.json",
-            "input_sha256": "2ae6c7f00d3e6bdcb85d60791c8cc40e7eb480def3fca10fbd61199f4a9f722a",
-            "details": {
-              "method": "Static reviewed ALL t.Run naming/dispatch locations; fixed literal tables, ordered Source51 manifest or whole tuple recipe row list. Flat dispatch; nested loops contain assertions but no t.Run. No Go/helper/tests executed.",
-              "source_path": "_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/whole/provider-union-review-input-r1/candidate/internal/capacity/host_original_factory_test.go",
-              "source_lines": [
-                4389,
-                4525
-              ],
-              "source_file_sha256": "f8d93e869975cb94378bdaba858051c68d359541775648392a4ab38b10e8df81",
-              "dispatches": [
-                {
-                  "line": 4433,
-                  "expression": "t.Run(fmt.Sprintf(\"launcher_%02d_%s_%s\", index, row.Operation, row.Stage), func(t *testing.T) {"
-                },
-                {
-                  "line": 4439,
-                  "expression": "t.Run(\"control_parent_redundant_close\", func(t *testing.T) {"
-                },
-                {
-                  "line": 4461,
-                  "expression": "t.Run(\"bootstrap_parent_redundant_close\", func(t *testing.T) {"
-                },
-                {
-                  "line": 4483,
-                  "expression": "t.Run(\"partial_control_parent_cleanup\", func(t *testing.T) {"
-                },
-                {
-                  "line": 4505,
-                  "expression": "t.Run(\"existing_worker_owned_cleanup_base_preserved\", func(t *testing.T) {"
-                },
-                {
-                  "line": 4511,
-                  "expression": "t.Run(\"prior107d_profile_not_relabelled\", func(t *testing.T) {"
-                }
-              ],
-              "literal_range_expansions": [
-                {
-                  "line": 4439,
-                  "literal": "control_parent_redundant_close"
-                },
-                {
-                  "line": 4461,
-                  "literal": "bootstrap_parent_redundant_close"
-                },
-                {
-                  "line": 4483,
-                  "literal": "partial_control_parent_cleanup"
-                },
-                {
-                  "line": 4505,
-                  "literal": "existing_worker_owned_cleanup_base_preserved"
-                },
-                {
-                  "line": 4511,
-                  "literal": "prior107d_profile_not_relabelled"
-                },
-                {
-                  "ordered_static_rows": [
-                    {
-                      "line": 4394,
-                      "operation": "control_pipe_create",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_start"
-                    },
-                    {
-                      "line": 4395,
-                      "operation": "bootstrap_pipe_create",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_start"
-                    },
-                    {
-                      "line": 4396,
-                      "operation": "stdout_pipe_create",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_start"
-                    },
-                    {
-                      "line": 4397,
-                      "operation": "stderr_pipe_create",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_start"
-                    },
-                    {
-                      "line": 4398,
-                      "operation": "descriptor_fstat",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_start"
-                    },
-                    {
-                      "line": 4399,
-                      "operation": "fcntl_getfl",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_start"
-                    },
-                    {
-                      "line": 4400,
-                      "operation": "fcntl_getfd",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_start"
-                    },
-                    {
-                      "line": 4401,
-                      "operation": "worker_start",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_start"
-                    },
-                    {
-                      "line": 4402,
-                      "operation": "worker_pidfd_pin",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_start"
-                    },
-                    {
-                      "line": 4403,
-                      "operation": "control_reader_close",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_start"
-                    },
-                    {
-                      "line": 4404,
-                      "operation": "bootstrap_reader_close",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_start"
-                    },
-                    {
-                      "line": 4405,
-                      "operation": "redundant_stdout_writer_close",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_start"
-                    },
-                    {
-                      "line": 4406,
-                      "operation": "redundant_stderr_writer_close",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_start"
-                    },
-                    {
-                      "line": 4407,
-                      "operation": "bootstrap_challenge32_write",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_bootstrap"
-                    },
-                    {
-                      "line": 4408,
-                      "operation": "bootstrap_key64_write",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_bootstrap"
-                    },
-                    {
-                      "line": 4409,
-                      "operation": "bootstrap_binding_digest32_write",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_bootstrap"
-                    },
-                    {
-                      "line": 4410,
-                      "operation": "bootstrap_writer_close",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_bootstrap"
-                    },
-                    {
-                      "line": 4411,
-                      "operation": "control_frame_write",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "prepared_create"
-                    },
-                    {
-                      "line": 4412,
-                      "operation": "control_frame_write",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "choice_control"
-                    },
-                    {
-                      "line": 4413,
-                      "operation": "control_writer_close",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "choice_write"
-                    },
-                    {
-                      "line": 4414,
-                      "operation": "stdout_read",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_exterior_join"
-                    },
-                    {
-                      "line": 4415,
-                      "operation": "stderr_read",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_exterior_join"
-                    },
-                    {
-                      "line": 4416,
-                      "operation": "stdout_close",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_exterior_join"
-                    },
-                    {
-                      "line": 4417,
-                      "operation": "stderr_close",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_exterior_join"
-                    },
-                    {
-                      "line": 4418,
-                      "operation": "worker_wait",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_exterior_join"
-                    },
-                    {
-                      "line": 4419,
-                      "operation": "worker_pidfd_poll",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_exterior_join"
-                    },
-                    {
-                      "line": 4420,
-                      "operation": "worker_pidfd_close",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "worker_exterior_join"
-                    },
-                    {
-                      "line": 4421,
-                      "operation": "control_reader_close",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "cleanup"
-                    },
-                    {
-                      "line": 4422,
-                      "operation": "bootstrap_reader_close",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "cleanup"
-                    },
-                    {
-                      "line": 4423,
-                      "operation": "bootstrap_writer_close",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "cleanup"
-                    },
-                    {
-                      "line": 4424,
-                      "operation": "control_writer_close",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "cleanup"
-                    },
-                    {
-                      "line": 4425,
-                      "operation": "redundant_stdout_writer_close",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "cleanup"
-                    },
-                    {
-                      "line": 4426,
-                      "operation": "redundant_stderr_writer_close",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "cleanup"
-                    },
-                    {
-                      "line": 4427,
-                      "operation": "stdout_close",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "cleanup"
-                    },
-                    {
-                      "line": 4428,
-                      "operation": "stderr_close",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "cleanup"
-                    },
-                    {
-                      "line": 4429,
-                      "operation": "worker_pidfd_signal",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "cleanup"
-                    },
-                    {
-                      "line": 4430,
-                      "operation": "worker_pidfd_close",
-                      "owner_role": "host_exterior",
-                      "subject_role": "host_worker",
-                      "stage": "cleanup"
-                    }
-                  ],
-                  "expanded_names": [
-                    "launcher_00_control_pipe_create_worker_start",
-                    "launcher_01_bootstrap_pipe_create_worker_start",
-                    "launcher_02_stdout_pipe_create_worker_start",
-                    "launcher_03_stderr_pipe_create_worker_start",
-                    "launcher_04_descriptor_fstat_worker_start",
-                    "launcher_05_fcntl_getfl_worker_start",
-                    "launcher_06_fcntl_getfd_worker_start",
-                    "launcher_07_worker_start_worker_start",
-                    "launcher_08_worker_pidfd_pin_worker_start",
-                    "launcher_09_control_reader_close_worker_start",
-                    "launcher_10_bootstrap_reader_close_worker_start",
-                    "launcher_11_redundant_stdout_writer_close_worker_start",
-                    "launcher_12_redundant_stderr_writer_close_worker_start",
-                    "launcher_13_bootstrap_challenge32_write_worker_bootstrap",
-                    "launcher_14_bootstrap_key64_write_worker_bootstrap",
-                    "launcher_15_bootstrap_binding_digest32_write_worker_bootstrap",
-                    "launcher_16_bootstrap_writer_close_worker_bootstrap",
-                    "launcher_17_control_frame_write_prepared_create",
-                    "launcher_18_control_frame_write_choice_control",
-                    "launcher_19_control_writer_close_choice_write",
-                    "launcher_20_stdout_read_worker_exterior_join",
-                    "launcher_21_stderr_read_worker_exterior_join",
-                    "launcher_22_stdout_close_worker_exterior_join",
-                    "launcher_23_stderr_close_worker_exterior_join",
-                    "launcher_24_worker_wait_worker_exterior_join",
-                    "launcher_25_worker_pidfd_poll_worker_exterior_join",
-                    "launcher_26_worker_pidfd_close_worker_exterior_join",
-                    "launcher_27_control_reader_close_cleanup",
-                    "launcher_28_bootstrap_reader_close_cleanup",
-                    "launcher_29_bootstrap_writer_close_cleanup",
-                    "launcher_30_control_writer_close_cleanup",
-                    "launcher_31_redundant_stdout_writer_close_cleanup",
-                    "launcher_32_redundant_stderr_writer_close_cleanup",
-                    "launcher_33_stdout_close_cleanup",
-                    "launcher_34_stderr_close_cleanup",
-                    "launcher_35_worker_pidfd_signal_cleanup",
-                    "launcher_36_worker_pidfd_close_cleanup"
-                  ]
-                }
-              ]
-            }
+            "method": "CI1 exact isolated fixture repair; all existing descendant names unchanged; new complete Test function hash pinned",
+            "input_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/core/ci-attempt1-source5-profile-fix-r1/packet.json",
+            "input_sha256": "091456830483b3bf2846d43f5812028d436ce53f30ae75b1354b542fd41136ad",
+            "prior_roster_proof": {
+              "method": "pinned static naming review, exact function SHA",
+              "input_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/review/source5-profile-child-census-root-static-r1/rootsets.json",
+              "input_sha256": "2ae6c7f00d3e6bdcb85d60791c8cc40e7eb480def3fca10fbd61199f4a9f722a",
+              "details": {
+                "method": "Static reviewed ALL t.Run naming/dispatch locations; fixed literal tables, ordered Source51 manifest or whole tuple recipe row list. Flat dispatch; nested loops contain assertions but no t.Run. No Go/helper/tests executed.",
+                "source_path": "_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/whole/provider-union-review-input-r1/candidate/internal/capacity/host_original_factory_test.go",
+                "source_lines": [
+                  4389,
+                  4525
+                ],
+                "source_file_sha256": "f8d93e869975cb94378bdaba858051c68d359541775648392a4ab38b10e8df81",
+                "dispatches": [
+                  {
+                    "line": 4433,
+                    "expression": "t.Run(fmt.Sprintf(\"launcher_%02d_%s_%s\", index, row.Operation, row.Stage), func(t *testing.T) {"
+                  },
+                  {
+                    "line": 4439,
+                    "expression": "t.Run(\"control_parent_redundant_close\", func(t *testing.T) {"
+                  },
+                  {
+                    "line": 4461,
+                    "expression": "t.Run(\"bootstrap_parent_redundant_close\", func(t *testing.T) {"
+                  },
+                  {
+                    "line": 4483,
+                    "expression": "t.Run(\"partial_control_parent_cleanup\", func(t *testing.T) {"
+                  },
+                  {
+                    "line": 4505,
+                    "expression": "t.Run(\"existing_worker_owned_cleanup_base_preserved\", func(t *testing.T) {"
+                  },
+                  {
+                    "line": 4511,
+                    "expression": "t.Run(\"prior107d_profile_not_relabelled\", func(t *testing.T) {"
+                  }
+                ],
+                "literal_range_expansions": [
+                  {
+                    "line": 4439,
+                    "literal": "control_parent_redundant_close"
+                  },
+                  {
+                    "line": 4461,
+                    "literal": "bootstrap_parent_redundant_close"
+                  },
+                  {
+                    "line": 4483,
+                    "literal": "partial_control_parent_cleanup"
+                  },
+                  {
+                    "line": 4505,
+                    "literal": "existing_worker_owned_cleanup_base_preserved"
+                  },
+                  {
+                    "line": 4511,
+                    "literal": "prior107d_profile_not_relabelled"
+                  },
+                  {
+                    "ordered_static_rows": [
+                      {
+                        "line": 4394,
+                        "operation": "control_pipe_create",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_start"
+                      },
+                      {
+                        "line": 4395,
+                        "operation": "bootstrap_pipe_create",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_start"
+                      },
+                      {
+                        "line": 4396,
+                        "operation": "stdout_pipe_create",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_start"
+                      },
+                      {
+                        "line": 4397,
+                        "operation": "stderr_pipe_create",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_start"
+                      },
+                      {
+                        "line": 4398,
+                        "operation": "descriptor_fstat",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_start"
+                      },
+                      {
+                        "line": 4399,
+                        "operation": "fcntl_getfl",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_start"
+                      },
+                      {
+                        "line": 4400,
+                        "operation": "fcntl_getfd",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_start"
+                      },
+                      {
+                        "line": 4401,
+                        "operation": "worker_start",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_start"
+                      },
+                      {
+                        "line": 4402,
+                        "operation": "worker_pidfd_pin",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_start"
+                      },
+                      {
+                        "line": 4403,
+                        "operation": "control_reader_close",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_start"
+                      },
+                      {
+                        "line": 4404,
+                        "operation": "bootstrap_reader_close",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_start"
+                      },
+                      {
+                        "line": 4405,
+                        "operation": "redundant_stdout_writer_close",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_start"
+                      },
+                      {
+                        "line": 4406,
+                        "operation": "redundant_stderr_writer_close",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_start"
+                      },
+                      {
+                        "line": 4407,
+                        "operation": "bootstrap_challenge32_write",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_bootstrap"
+                      },
+                      {
+                        "line": 4408,
+                        "operation": "bootstrap_key64_write",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_bootstrap"
+                      },
+                      {
+                        "line": 4409,
+                        "operation": "bootstrap_binding_digest32_write",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_bootstrap"
+                      },
+                      {
+                        "line": 4410,
+                        "operation": "bootstrap_writer_close",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_bootstrap"
+                      },
+                      {
+                        "line": 4411,
+                        "operation": "control_frame_write",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "prepared_create"
+                      },
+                      {
+                        "line": 4412,
+                        "operation": "control_frame_write",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "choice_control"
+                      },
+                      {
+                        "line": 4413,
+                        "operation": "control_writer_close",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "choice_write"
+                      },
+                      {
+                        "line": 4414,
+                        "operation": "stdout_read",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_exterior_join"
+                      },
+                      {
+                        "line": 4415,
+                        "operation": "stderr_read",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_exterior_join"
+                      },
+                      {
+                        "line": 4416,
+                        "operation": "stdout_close",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_exterior_join"
+                      },
+                      {
+                        "line": 4417,
+                        "operation": "stderr_close",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_exterior_join"
+                      },
+                      {
+                        "line": 4418,
+                        "operation": "worker_wait",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_exterior_join"
+                      },
+                      {
+                        "line": 4419,
+                        "operation": "worker_pidfd_poll",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_exterior_join"
+                      },
+                      {
+                        "line": 4420,
+                        "operation": "worker_pidfd_close",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "worker_exterior_join"
+                      },
+                      {
+                        "line": 4421,
+                        "operation": "control_reader_close",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "cleanup"
+                      },
+                      {
+                        "line": 4422,
+                        "operation": "bootstrap_reader_close",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "cleanup"
+                      },
+                      {
+                        "line": 4423,
+                        "operation": "bootstrap_writer_close",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "cleanup"
+                      },
+                      {
+                        "line": 4424,
+                        "operation": "control_writer_close",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "cleanup"
+                      },
+                      {
+                        "line": 4425,
+                        "operation": "redundant_stdout_writer_close",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "cleanup"
+                      },
+                      {
+                        "line": 4426,
+                        "operation": "redundant_stderr_writer_close",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "cleanup"
+                      },
+                      {
+                        "line": 4427,
+                        "operation": "stdout_close",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "cleanup"
+                      },
+                      {
+                        "line": 4428,
+                        "operation": "stderr_close",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "cleanup"
+                      },
+                      {
+                        "line": 4429,
+                        "operation": "worker_pidfd_signal",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "cleanup"
+                      },
+                      {
+                        "line": 4430,
+                        "operation": "worker_pidfd_close",
+                        "owner_role": "host_exterior",
+                        "subject_role": "host_worker",
+                        "stage": "cleanup"
+                      }
+                    ],
+                    "expanded_names": [
+                      "launcher_00_control_pipe_create_worker_start",
+                      "launcher_01_bootstrap_pipe_create_worker_start",
+                      "launcher_02_stdout_pipe_create_worker_start",
+                      "launcher_03_stderr_pipe_create_worker_start",
+                      "launcher_04_descriptor_fstat_worker_start",
+                      "launcher_05_fcntl_getfl_worker_start",
+                      "launcher_06_fcntl_getfd_worker_start",
+                      "launcher_07_worker_start_worker_start",
+                      "launcher_08_worker_pidfd_pin_worker_start",
+                      "launcher_09_control_reader_close_worker_start",
+                      "launcher_10_bootstrap_reader_close_worker_start",
+                      "launcher_11_redundant_stdout_writer_close_worker_start",
+                      "launcher_12_redundant_stderr_writer_close_worker_start",
+                      "launcher_13_bootstrap_challenge32_write_worker_bootstrap",
+                      "launcher_14_bootstrap_key64_write_worker_bootstrap",
+                      "launcher_15_bootstrap_binding_digest32_write_worker_bootstrap",
+                      "launcher_16_bootstrap_writer_close_worker_bootstrap",
+                      "launcher_17_control_frame_write_prepared_create",
+                      "launcher_18_control_frame_write_choice_control",
+                      "launcher_19_control_writer_close_choice_write",
+                      "launcher_20_stdout_read_worker_exterior_join",
+                      "launcher_21_stderr_read_worker_exterior_join",
+                      "launcher_22_stdout_close_worker_exterior_join",
+                      "launcher_23_stderr_close_worker_exterior_join",
+                      "launcher_24_worker_wait_worker_exterior_join",
+                      "launcher_25_worker_pidfd_poll_worker_exterior_join",
+                      "launcher_26_worker_pidfd_close_worker_exterior_join",
+                      "launcher_27_control_reader_close_cleanup",
+                      "launcher_28_bootstrap_reader_close_cleanup",
+                      "launcher_29_bootstrap_writer_close_cleanup",
+                      "launcher_30_control_writer_close_cleanup",
+                      "launcher_31_redundant_stdout_writer_close_cleanup",
+                      "launcher_32_redundant_stderr_writer_close_cleanup",
+                      "launcher_33_stdout_close_cleanup",
+                      "launcher_34_stderr_close_cleanup",
+                      "launcher_35_worker_pidfd_signal_cleanup",
+                      "launcher_36_worker_pidfd_close_cleanup"
+                    ]
+                  }
+                ]
+              }
+            },
+            "current_source_file_sha256": "a5fd2c9bcf701f2e7625de278d679aa8f945645a15dcda36cd413b045eb57db6",
+            "current_function_sha256": "506ac9378d3347c7d3846ccba47c8c70c30868a1e9d1c2543756491d6082afb6",
+            "body_changed_without_child_name_changes": true
           }
         },
         {
@@ -932,7 +940,7 @@
         },
         {
           "name": "TestHostFactorySourceProfilePerCallPurpose",
-          "function_sha256": "999641cb38774663b356137f6d92d9b3c2bbad5656e59074a32897a3df2e2f90",
+          "function_sha256": "d82f178a68fb4cfc68edeb04b7720f5b588b5efbe21e94274edb055dd749532e",
           "children": [
             "duplicate_orphan",
             "empty_missing_call",
@@ -948,86 +956,94 @@
           "child_count": 10,
           "children_complete": true,
           "proof": {
-            "method": "pinned static naming review, exact function SHA",
-            "input_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/review/source5-profile-child-census-root-static-r1/rootsets.json",
-            "input_sha256": "2ae6c7f00d3e6bdcb85d60791c8cc40e7eb480def3fca10fbd61199f4a9f722a",
-            "details": {
-              "method": "Static reviewed ALL t.Run naming/dispatch locations; fixed literal tables, ordered Source51 manifest or whole tuple recipe row list. Flat dispatch; nested loops contain assertions but no t.Run. No Go/helper/tests executed.",
-              "source_path": "_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/whole/provider-union-review-input-r1/candidate/internal/capacity/host_original_factory_test.go",
-              "source_lines": [
-                3911,
-                3996
-              ],
-              "source_file_sha256": "f8d93e869975cb94378bdaba858051c68d359541775648392a4ab38b10e8df81",
-              "dispatches": [
-                {
-                  "line": 3927,
-                  "expression": "t.Run(tc.name, func(t *testing.T) {"
-                },
-                {
-                  "line": 3932,
-                  "expression": "t.Run(\"pending_returned_purpose_immutable\", func(t *testing.T) {"
-                },
-                {
-                  "line": 3941,
-                  "expression": "t.Run(\"same_handle_distinct_original_stages\", func(t *testing.T) {"
-                },
-                {
-                  "line": 3954,
-                  "expression": "t.Run(\"same_CallID_pending_returned_metadata_conflict\", func(t *testing.T) {"
-                },
-                {
-                  "line": 3977,
-                  "expression": "t.Run(\"same_CallID_same_pending_returned_purpose\", func(t *testing.T) {"
-                }
-              ],
-              "literal_range_expansions": [
-                {
-                  "line": 3932,
-                  "literal": "pending_returned_purpose_immutable"
-                },
-                {
-                  "line": 3941,
-                  "literal": "same_handle_distinct_original_stages"
-                },
-                {
-                  "line": 3954,
-                  "literal": "same_CallID_pending_returned_metadata_conflict"
-                },
-                {
-                  "line": 3977,
-                  "literal": "same_CallID_same_pending_returned_purpose"
-                },
-                {
-                  "static_table_names": [
-                    {
-                      "line": 3919,
-                      "name": "nil_unknown"
-                    },
-                    {
-                      "line": 3920,
-                      "name": "empty_missing_call"
-                    },
-                    {
-                      "line": 3921,
-                      "name": "duplicate_orphan"
-                    },
-                    {
-                      "line": 3922,
-                      "name": "foreign_call_id"
-                    },
-                    {
-                      "line": 3923,
-                      "name": "wrong_stage"
-                    },
-                    {
-                      "line": 3924,
-                      "name": "wrong_subject_role"
-                    }
-                  ]
-                }
-              ]
-            }
+            "method": "CI1 exact isolated fixture repair; all existing descendant names unchanged; new complete Test function hash pinned",
+            "input_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/core/ci-attempt1-source5-profile-fix-r1/packet.json",
+            "input_sha256": "091456830483b3bf2846d43f5812028d436ce53f30ae75b1354b542fd41136ad",
+            "prior_roster_proof": {
+              "method": "pinned static naming review, exact function SHA",
+              "input_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/review/source5-profile-child-census-root-static-r1/rootsets.json",
+              "input_sha256": "2ae6c7f00d3e6bdcb85d60791c8cc40e7eb480def3fca10fbd61199f4a9f722a",
+              "details": {
+                "method": "Static reviewed ALL t.Run naming/dispatch locations; fixed literal tables, ordered Source51 manifest or whole tuple recipe row list. Flat dispatch; nested loops contain assertions but no t.Run. No Go/helper/tests executed.",
+                "source_path": "_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/whole/provider-union-review-input-r1/candidate/internal/capacity/host_original_factory_test.go",
+                "source_lines": [
+                  3911,
+                  3996
+                ],
+                "source_file_sha256": "f8d93e869975cb94378bdaba858051c68d359541775648392a4ab38b10e8df81",
+                "dispatches": [
+                  {
+                    "line": 3927,
+                    "expression": "t.Run(tc.name, func(t *testing.T) {"
+                  },
+                  {
+                    "line": 3932,
+                    "expression": "t.Run(\"pending_returned_purpose_immutable\", func(t *testing.T) {"
+                  },
+                  {
+                    "line": 3941,
+                    "expression": "t.Run(\"same_handle_distinct_original_stages\", func(t *testing.T) {"
+                  },
+                  {
+                    "line": 3954,
+                    "expression": "t.Run(\"same_CallID_pending_returned_metadata_conflict\", func(t *testing.T) {"
+                  },
+                  {
+                    "line": 3977,
+                    "expression": "t.Run(\"same_CallID_same_pending_returned_purpose\", func(t *testing.T) {"
+                  }
+                ],
+                "literal_range_expansions": [
+                  {
+                    "line": 3932,
+                    "literal": "pending_returned_purpose_immutable"
+                  },
+                  {
+                    "line": 3941,
+                    "literal": "same_handle_distinct_original_stages"
+                  },
+                  {
+                    "line": 3954,
+                    "literal": "same_CallID_pending_returned_metadata_conflict"
+                  },
+                  {
+                    "line": 3977,
+                    "literal": "same_CallID_same_pending_returned_purpose"
+                  },
+                  {
+                    "static_table_names": [
+                      {
+                        "line": 3919,
+                        "name": "nil_unknown"
+                      },
+                      {
+                        "line": 3920,
+                        "name": "empty_missing_call"
+                      },
+                      {
+                        "line": 3921,
+                        "name": "duplicate_orphan"
+                      },
+                      {
+                        "line": 3922,
+                        "name": "foreign_call_id"
+                      },
+                      {
+                        "line": 3923,
+                        "name": "wrong_stage"
+                      },
+                      {
+                        "line": 3924,
+                        "name": "wrong_subject_role"
+                      }
+                    ]
+                  }
+                ]
+              }
+            },
+            "current_source_file_sha256": "a5fd2c9bcf701f2e7625de278d679aa8f945645a15dcda36cd413b045eb57db6",
+            "current_function_sha256": "d82f178a68fb4cfc68edeb04b7720f5b588b5efbe21e94274edb055dd749532e",
+            "body_changed_without_child_name_changes": true
           }
         },
         {
@@ -1121,7 +1137,7 @@
         },
         {
           "name": "TestHostFactorySourceProfileScopedDomains",
-          "function_sha256": "99ecb6ab025dc196217d16a926912aecb32ac6a898e01adc242247e24cc44eb8",
+          "function_sha256": "d72a637c882402dbf593bb5d8972189e165d3d6b554fd1a905820aaa61f1d823",
           "children": [
             "default_rejects_profile_domain",
             "existing_Core_issuer_Scope_roundtrip",
@@ -1137,102 +1153,110 @@
           "child_count": 10,
           "children_complete": true,
           "proof": {
-            "method": "pinned static naming review, exact function SHA",
-            "input_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/review/source5-profile-child-census-root-static-r1/rootsets.json",
-            "input_sha256": "2ae6c7f00d3e6bdcb85d60791c8cc40e7eb480def3fca10fbd61199f4a9f722a",
-            "details": {
-              "method": "Static reviewed ALL t.Run naming/dispatch locations; fixed literal tables, ordered Source51 manifest or whole tuple recipe row list. Flat dispatch; nested loops contain assertions but no t.Run. No Go/helper/tests executed.",
-              "source_path": "_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/whole/provider-union-review-input-r1/candidate/internal/capacity/host_original_factory_test.go",
-              "source_lines": [
-                3827,
-                3909
-              ],
-              "source_file_sha256": "f8d93e869975cb94378bdaba858051c68d359541775648392a4ab38b10e8df81",
-              "dispatches": [
-                {
-                  "line": 3837,
-                  "expression": "t.Run(\"profile_roundtrip\", func(t *testing.T) {"
-                },
-                {
-                  "line": 3843,
-                  "expression": "t.Run(\"default_rejects_profile_domain\", func(t *testing.T) {"
-                },
-                {
-                  "line": 3848,
-                  "expression": "t.Run(\"profile_rejects_old_scope_domain\", func(t *testing.T) {"
-                },
-                {
-                  "line": 3856,
-                  "expression": "t.Run(\"profile_hash_tamper\", func(t *testing.T) {"
-                },
-                {
-                  "line": 3861,
-                  "expression": "t.Run(\"wrong_key\", func(t *testing.T) {"
-                },
-                {
-                  "line": 3866,
-                  "expression": "t.Run(\"purpose_metadata_tamper\", func(t *testing.T) {"
-                },
-                {
-                  "line": 3876,
-                  "expression": "t.Run(\"legacy_Root_exact_bytes_and_no_metadata\", func(t *testing.T) {"
-                },
-                {
-                  "line": 3890,
-                  "expression": "t.Run(\"existing_Core_issuer_Scope_roundtrip\", func(t *testing.T) {"
-                },
-                {
-                  "line": 3900,
-                  "expression": "t.Run(\"issuer_role_cannot_sign_worker_BODY\", func(t *testing.T) {"
-                },
-                {
-                  "line": 3904,
-                  "expression": "t.Run(\"issuer_role_cannot_sign_IO_chunk\", func(t *testing.T) {"
-                }
-              ],
-              "literal_range_expansions": [
-                {
-                  "line": 3837,
-                  "literal": "profile_roundtrip"
-                },
-                {
-                  "line": 3843,
-                  "literal": "default_rejects_profile_domain"
-                },
-                {
-                  "line": 3848,
-                  "literal": "profile_rejects_old_scope_domain"
-                },
-                {
-                  "line": 3856,
-                  "literal": "profile_hash_tamper"
-                },
-                {
-                  "line": 3861,
-                  "literal": "wrong_key"
-                },
-                {
-                  "line": 3866,
-                  "literal": "purpose_metadata_tamper"
-                },
-                {
-                  "line": 3876,
-                  "literal": "legacy_Root_exact_bytes_and_no_metadata"
-                },
-                {
-                  "line": 3890,
-                  "literal": "existing_Core_issuer_Scope_roundtrip"
-                },
-                {
-                  "line": 3900,
-                  "literal": "issuer_role_cannot_sign_worker_BODY"
-                },
-                {
-                  "line": 3904,
-                  "literal": "issuer_role_cannot_sign_IO_chunk"
-                }
-              ]
-            }
+            "method": "CI1 exact isolated fixture repair; all existing descendant names unchanged; new complete Test function hash pinned",
+            "input_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/core/ci-attempt1-source5-profile-fix-r1/packet.json",
+            "input_sha256": "091456830483b3bf2846d43f5812028d436ce53f30ae75b1354b542fd41136ad",
+            "prior_roster_proof": {
+              "method": "pinned static naming review, exact function SHA",
+              "input_path": "/Users/dakasa/projects/dakasa/_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/review/source5-profile-child-census-root-static-r1/rootsets.json",
+              "input_sha256": "2ae6c7f00d3e6bdcb85d60791c8cc40e7eb480def3fca10fbd61199f4a9f722a",
+              "details": {
+                "method": "Static reviewed ALL t.Run naming/dispatch locations; fixed literal tables, ordered Source51 manifest or whole tuple recipe row list. Flat dispatch; nested loops contain assertions but no t.Run. No Go/helper/tests executed.",
+                "source_path": "_audit/elastic-implementation-20261011/codex-continuation/parallel-sessions/provider/whole/provider-union-review-input-r1/candidate/internal/capacity/host_original_factory_test.go",
+                "source_lines": [
+                  3827,
+                  3909
+                ],
+                "source_file_sha256": "f8d93e869975cb94378bdaba858051c68d359541775648392a4ab38b10e8df81",
+                "dispatches": [
+                  {
+                    "line": 3837,
+                    "expression": "t.Run(\"profile_roundtrip\", func(t *testing.T) {"
+                  },
+                  {
+                    "line": 3843,
+                    "expression": "t.Run(\"default_rejects_profile_domain\", func(t *testing.T) {"
+                  },
+                  {
+                    "line": 3848,
+                    "expression": "t.Run(\"profile_rejects_old_scope_domain\", func(t *testing.T) {"
+                  },
+                  {
+                    "line": 3856,
+                    "expression": "t.Run(\"profile_hash_tamper\", func(t *testing.T) {"
+                  },
+                  {
+                    "line": 3861,
+                    "expression": "t.Run(\"wrong_key\", func(t *testing.T) {"
+                  },
+                  {
+                    "line": 3866,
+                    "expression": "t.Run(\"purpose_metadata_tamper\", func(t *testing.T) {"
+                  },
+                  {
+                    "line": 3876,
+                    "expression": "t.Run(\"legacy_Root_exact_bytes_and_no_metadata\", func(t *testing.T) {"
+                  },
+                  {
+                    "line": 3890,
+                    "expression": "t.Run(\"existing_Core_issuer_Scope_roundtrip\", func(t *testing.T) {"
+                  },
+                  {
+                    "line": 3900,
+                    "expression": "t.Run(\"issuer_role_cannot_sign_worker_BODY\", func(t *testing.T) {"
+                  },
+                  {
+                    "line": 3904,
+                    "expression": "t.Run(\"issuer_role_cannot_sign_IO_chunk\", func(t *testing.T) {"
+                  }
+                ],
+                "literal_range_expansions": [
+                  {
+                    "line": 3837,
+                    "literal": "profile_roundtrip"
+                  },
+                  {
+                    "line": 3843,
+                    "literal": "default_rejects_profile_domain"
+                  },
+                  {
+                    "line": 3848,
+                    "literal": "profile_rejects_old_scope_domain"
+                  },
+                  {
+                    "line": 3856,
+                    "literal": "profile_hash_tamper"
+                  },
+                  {
+                    "line": 3861,
+                    "literal": "wrong_key"
+                  },
+                  {
+                    "line": 3866,
+                    "literal": "purpose_metadata_tamper"
+                  },
+                  {
+                    "line": 3876,
+                    "literal": "legacy_Root_exact_bytes_and_no_metadata"
+                  },
+                  {
+                    "line": 3890,
+                    "literal": "existing_Core_issuer_Scope_roundtrip"
+                  },
+                  {
+                    "line": 3900,
+                    "literal": "issuer_role_cannot_sign_worker_BODY"
+                  },
+                  {
+                    "line": 3904,
+                    "literal": "issuer_role_cannot_sign_IO_chunk"
+                  }
+                ]
+              }
+            },
+            "current_source_file_sha256": "a5fd2c9bcf701f2e7625de278d679aa8f945645a15dcda36cd413b045eb57db6",
+            "current_function_sha256": "d72a637c882402dbf593bb5d8972189e165d3d6b554fd1a905820aaa61f1d823",
+            "body_changed_without_child_name_changes": true
           }
         },
         {
@@ -2170,7 +2194,14 @@
             }
           }
         }
-      ]
+      ],
+      "repair_pin_overlay": {
+        "source5_packet_sha256": "091456830483b3bf2846d43f5812028d436ce53f30ae75b1354b542fd41136ad",
+        "source5_case_census_sha256": "00a3fcb978a6c020d92f9faaea459cea13972dec778231950526762471d4bd42",
+        "same_roots": 11,
+        "same_children": 246,
+        "scope": "Source5 fixture/runtime repair; all original names/old jobs/selectors/budgets preserved; no execution claim"
+      }
     },
     "persistence": {
       "package_path": "./repository",
@@ -10630,6 +10661,10 @@
   "effective_input_packets": {
     "source9": "854bc2d5ccbad44b8e5a5c89d8f06676c07eefb7c9f2417cadc768e362638f55",
     "source5_source13": "962afaf967351b244b53affe9ce4fbb0d5b49a17ddaca728ba3b1e4e629fadf1",
-    "main_partition": "3b5c76ce1518768b03fd1c86815a177c56daa1a025952569db02bac7e9a9f524"
-  }
+    "main_partition": "3b5c76ce1518768b03fd1c86815a177c56daa1a025952569db02bac7e9a9f524",
+    "ci1_source5_repair": "091456830483b3bf2846d43f5812028d436ce53f30ae75b1354b542fd41136ad",
+    "ci1_source13_repair": "2b28141f436ef3db8f6f60fe6e92626c0a04c8cb1222ce4b4b9c209ee9540d39",
+    "ci1_source9_repair_checksums": "5400710b240c612ac6ccec2542d14f66ab45863f5a666f8fc6ddfda4521e8db0"
+  },
+  "ci1_pin_refresh": "Exact Source5 source-file and three Test function pins refreshed; prior proofs retained as historical name-roster evidence."
 }

@@ -5422,7 +5422,7 @@ func verifyOriginalHostHistoricalOrdinaryTx(ctx context.Context, tx *sql.Tx, sna
 	}
 	var policy model.CapacityPolicySpec
 	var policyRaw []byte
-	if err = tx.QueryRowContext(ctx, `SELECT spec FROM public.manifests WHERE id=$1 AND kind='capacity_policy'`, pre.PolicyID).Scan(&policyRaw); err != nil || json.Unmarshal(policyRaw, &policy) != nil || !capacity.GuestOriginalProfileEnabled(policy, stored.binding) {
+	if err = tx.QueryRowContext(ctx, `SELECT spec FROM public.manifests WHERE id=$1 AND kind='capacity_policy'`, pre.PolicyID).Scan(&policyRaw); err != nil || json.Unmarshal(policyRaw, &policy) != nil || !capacity.GuestOriginalProfileEnabled(policy, stored.binding, native.Original.Provider) {
 		return ErrHostFactoryHold
 	}
 	witnessRecord, err := originalHostSnapshotSingleton(snapshot, "public.capacity_guest_original_create_witnesses")

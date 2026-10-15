@@ -1,6 +1,6 @@
 //go:build linux && nativequalification
 
-package repository
+package repository_test
 
 import (
 	"context"
@@ -14,6 +14,7 @@ import (
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	q "github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacitynativeqemu"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 )
 
 // This is a readonly admission boundary, not an original native producer.
@@ -61,11 +62,11 @@ func TestHostOriginalFactoryNativeCorpusReadonlyAdmission(t *testing.T) {
 	defer db.Close()
 	// This process NEVER constructs or installs a Realm. Authenticator is
 	// compiled Source/key inventory only, followed by full SQL/graph/owner joins.
-	if err = (CapacityStore{DB: db}).VerifyOriginalHostHistoricalCorpus(ctx, raw); err != nil {
+	if err = (repository.CapacityStore{DB: db}).VerifyOriginalHostHistoricalCorpus(ctx, raw); err != nil {
 		t.Fatal("historical original corpus refused", err)
 	}
-	var wrapper hostOriginalFinalCorpus
-	if hostOriginalStrictJSON(raw, &wrapper, 64*1024*1024) != nil {
+	wrapper, err := repository.DecodeOriginalHostFinalCorpusForNativeTest(raw)
+	if err != nil {
 		t.Fatal("closed original wrapper required")
 	}
 	if wrapper.SourceIdentity.EntryClass != "ordinary_original_create" {
