@@ -7,12 +7,12 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: f4b18a4741d0b688b47edb5a4339077947242854
-verified_diff_sha256: 1587fcd3fcafbaa48b44bbd1f2dce3746f38787d8f65aa64a756773f34bca5e2
+verified_at_commit: c3ca4185af4b8a28c5ce8010a19dd9f6970d5e2d
+verified_diff_sha256: e59a55b2f1fb3239da0e3be65f2afc061997d60839ea8d308b137997990b82c4
 reconciler_schema: 1
-verified_at: 2026-10-15
+verified_at: 2026-10-16
 by: Codex
-note: Reconciled the independently reviewed three-line Boolean normalization after the complete third owning CI cohort. Nil guards, original short-circuit order and exact identity sets remain unchanged. All five pinned test sources, the expected manifest, four named rosters, collector, workflows and budgets stay literal. The previous source workflow passed all 216 roots and 2055 descendants, with each of 2271 nodes passing once; protected Native and other successful gates retain their original scope. Eight terminal runs, fourteen original ZIPs, 373 members and 23 GoJSON collections are retained. Genuine generation preserves all nine actual input digests. Successor owning CI remains required; inherited old45 stays HOLD/edit_lease false, Registry EMPTY, Native NULL, C6 HOLD and FULL_CORE_NATIVE_PENDING. No local functional execution, merge, deployment or activation occurred.
+note: Reconciled the final one-line lowercase hexadecimal interval complement after the complete fourth owning CI inventory. Independent SAME review found zero confirmed findings; exact byte acceptance, length and empty behavior and short-circuit order remain unchanged. Bounded textual recurrence review covers all 209 changed Go paths across tags and finds only this occurrence; it is not a linter or global semantic pass. Five test sources, expected manifest, four named rosters, collector, owning workflow and budgets stay literal. Prior source CI passed all 216 roots and 2055 descendants, each of 2271 nodes once with exact names and no FAIL/SKIP. Fourteen original ZIPs, 373 members and 23 GoJSON collections for all eight prior terminal runs remain retained. Genuine context and summary preserve all nine actual input digests. Successor owning CI is required; old45 stays HOLD/edit_lease false, Registry EMPTY, Native NULL, C6 HOLD and FULL_CORE_NATIVE_PENDING. No local functional execution or production change occurred.
 
 
 Records the source commit reconciled with the changed runtime contracts.
@@ -108,3 +108,8 @@ note: Reconciled the grouped correction after the complete first CI cohort: actu
 ## Historical second grouped CI repair metadata
 
 note: Reconciled the complete second CI failure inventory in one independently reviewed fifteen-path group: actual exclusive acquisition chronology, canonical byte transport, original SQL and awaiting fixtures, compile alias and scoped lint repairs. SAME independent review found zero remaining confirmed defects in the exact group. All four named CI rosters retain 216 roots, 2055 descendants and 2271 nodes; exact source and six changed Test pins are refreshed without gate or budget changes. Genuine context and summary preserve all nine actual input digests. Eight historical CI runs and all fourteen original archives remain retained; the successor owning CI is pending. Inherited old45 remains HOLD with edit_lease false, production registry EMPTY, Native approval NULL, C6 HOLD, ordinary SourceSAFE unsupported and FULL_CORE_NATIVE_PENDING. No local functional execution, merge, deployment or activation occurred.
+
+
+## Historical third grouped CI repair metadata
+
+note: Reconciled the independently reviewed three-line Boolean normalization after the complete third owning CI cohort. Nil guards, original short-circuit order and exact identity sets remain unchanged. All five pinned test sources, the expected manifest, four named rosters, collector, workflows and budgets stay literal. The previous source workflow passed all 216 roots and 2055 descendants, with each of 2271 nodes passing once; protected Native and other successful gates retain their original scope. Eight terminal runs, fourteen original ZIPs, 373 members and 23 GoJSON collections are retained. Genuine generation preserves all nine actual input digests. Successor owning CI remains required; inherited old45 stays HOLD/edit_lease false, Registry EMPTY, Native NULL, C6 HOLD and FULL_CORE_NATIVE_PENDING. No local functional execution, merge, deployment or activation occurred.
