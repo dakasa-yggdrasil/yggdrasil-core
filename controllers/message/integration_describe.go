@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"net/http"
 	"os"
 	"reflect"
@@ -63,7 +64,7 @@ func verifyResolvedIntegrationType(
 	}
 
 	cacheKey := integrationDescribeCacheKey(instanceManifest, typeManifest, typeSpec, instanceSpec)
-	if integrationDescribeRecentlyVerified(cacheKey) {
+	if capacityGuestPolicy(ctx) == nil && integrationDescribeRecentlyVerified(cacheKey) {
 		return nil
 	}
 
@@ -245,6 +246,21 @@ func checkHTTPJSONTransportConnectivity(
 	instanceSpec model.IntegrationInstanceManifestSpec,
 	typeSpec model.IntegrationTypeManifestSpec,
 ) (string, map[string]any, error) {
+	if guest := capacityGuestPolicy(ctx); guest != nil {
+		baseURL, err := adapterBaseURL(instanceSpec)
+		if err != nil || baseURL != guest.baseURL || typeSpec.Adapter.Endpoints.Describe != "/rpc/describe" || typeSpec.Adapter.Endpoints.Execute != "/rpc/execute" {
+			return "", nil, (&adapterCallPolicy{detailFreeErrors: true, native: &nativeAdapterHTTPPolicy{guest: guest}}).sanitizeError(fmt.Errorf("fixed Guest catalog routes refused"))
+		}
+		policy, _ := ctx.Value(nativeAdapterPolicyKey{}).(adapterCallPolicy)
+		native := *policy.native
+		native.get = true
+		policy.native = &native
+		transport := newAdapterTransportClient(nil)
+		if err := transport.callNativeHTTPJSON(ctx, guest.baseURL+"/healthz", nil, nil, policy); err != nil {
+			return "", nil, err
+		}
+		return "fixed Guest connectivity observed", map[string]any{"diagnostic_only": true}, nil
+	}
 	baseURL, err := adapterBaseURL(instanceSpec)
 	if err != nil {
 		return "", nil, err
@@ -611,10 +627,14 @@ func DescribeIntegrationType(
 }
 
 func integrationTypeSpecFromDescribeResponse(response model.AdapterDescribeResponse) model.IntegrationTypeManifestSpec {
-	return model.IntegrationTypeManifestSpec{
+	spec := model.IntegrationTypeManifestSpec{
 		Provider:              response.Provider,
 		FamilyRef:             response.FamilyRef,
 		ImplementedOperations: response.ImplementedOperations,
+		Domain:                response.Domain,
+		Dashboard:             response.Dashboard,
+		Display:               response.Display,
+		Icon:                  response.Icon,
 		Adapter:               response.Adapter,
 		Capabilities:          response.Capabilities,
 		CredentialSchema:      response.CredentialSchema,
@@ -631,6 +651,13 @@ func integrationTypeSpecFromDescribeResponse(response model.AdapterDescribeRespo
 		// reactors instead.
 		Reactors: response.Reactors,
 	}
+	if response.CredentialPolicy != nil {
+		spec.CredentialPolicy = *response.CredentialPolicy
+	}
+	if response.GuardianSupport != nil {
+		spec.GuardianSupport = *response.GuardianSupport
+	}
+	return spec
 }
 
 func compareIntegrationTypeSpec(expected model.IntegrationTypeManifestSpec, actual model.IntegrationTypeManifestSpec) error {
@@ -817,6 +844,7 @@ func normalizeIntegrationActionCatalog(actions []model.IntegrationActionDefiniti
 			Description:   strings.TrimSpace(action.Description),
 			ResourceTypes: normalizeIntegrationTokens(action.ResourceTypes),
 			Idempotent:    action.Idempotent,
+			InputSchema:   maps.Clone(action.InputSchema),
 		})
 	}
 

@@ -1,21 +1,21 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-09-27T02:18:44-03:00_
+_Generated from HEAD at: 2026-10-15T21:01:44-03:00_
 
 ## Languages
 
-- `.go`: 647 files
-- `.json`: 144 files
-- `.py`: 1 files
-- `.sql`: 52 files
-- `.yaml`: 9 files
-- `.yml`: 22 files
+- `.go`: 865 files
+- `.json`: 146 files
+- `.py`: 2 files
+- `.sql`: 65 files
+- `.yaml`: 10 files
+- `.yml`: 25 files
 
 ## Contracts & Artifacts
 
 - API Spec: **false**  ((not configured))
 - Event Schemas: **0**  (events/contracts,docs/events/contracts)
-- DB Migrations: **51**  (db/migrations)
+- DB Migrations: **64**  (db/migrations)
 
 ## Docs
 
@@ -24,38 +24,38 @@ _Generated from HEAD at: 2026-09-27T02:18:44-03:00_
 
 ## Top Directories by File Count
 
-- controllers/httpapi: 157 files (1556.6 KB)
-- repository: 94 files (610.9 KB)
-- manifest: 57 files (360.5 KB)
-- model: 55 files (209.9 KB)
-- controllers/message: 51 files (516.0 KB)
-- db/migrations: 51 files (91.1 KB)
-- addons: 39 files (187.6 KB)
+- controllers/httpapi: 189 files (2158.3 KB)
+- repository: 145 files (2246.4 KB)
+- controllers/message: 75 files (982.2 KB)
+- model: 71 files (412.5 KB)
+- db/migrations: 64 files (171.0 KB)
+- manifest: 62 files (386.2 KB)
+- addons: 45 files (263.1 KB)
+- internal/capacity: 39 files (907.7 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
-- controllers/oidc: 22 files (188.9 KB)
+- controllers/oidc: 23 files (193.4 KB)
 - docs/bootstrap/seeds/integrations: 20 files (87.4 KB)
 - internal/externalidentity: 15 files (61.5 KB)
-- docs/contracts/reactors/v1: 11 files (12.7 KB)
 
 ## Heaviest Files
 
 - docs/bootstrap/manifests/products/observability-prometheus.json: 5020.2 KB
 - docs/bootstrap/manifests/products/strategy-deployment-argo-rollouts.json: 1778.3 KB
 - docs/bootstrap/manifests/products/mesh-istio-continuous-deployment-argo-cd.json: 1634.5 KB
+- internal/capacityhostfactory/owner_linux.go: 1502.8 KB
 - docs/bootstrap/manifests/products/observability-grafana.json: 1008.9 KB
 - docs/bootstrap/manifests/products/certificate-cert-manager.json: 696.5 KB
+- repository/capacity_host_original_factory.go: 575.6 KB
 - docs/bootstrap/manifests/products/observability-loki.json: 542.9 KB
 - docs/bootstrap/manifests/products/message-broker-rabbitmq.json: 531.8 KB
-- controllers/httpapi/server.go: 171.7 KB
-- controllers/message/products.go: 75.4 KB
-- controllers/httpapi/directory_machine_read_test.go: 65.8 KB
-- repository/identity.go: 62.9 KB
-- controllers/httpapi/credentials.go: 57.3 KB
+- scripts/ci/host_factory_source_package_expected.json: 524.7 KB
+- internal/capacityhostfactory/owner_nativequalification_test.go: 510.0 KB
+- internal/capacity/host_original_factory.go: 323.5 KB
 
 ## Ops & Messaging
 
-- K8s/Config files scanned: **5**
-- Manifests (k8s-ish): **5**
+- K8s/Config files scanned: **9**
+- Manifests (k8s-ish): **9**
 
 ## Dependencies
 

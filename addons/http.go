@@ -2,12 +2,15 @@ package addons
 
 import (
 	"context"
+	"crypto/tls"
 	"database/sql"
 	"errors"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"os"
+	"path/filepath"
 	"sort"
 	"strconv"
 	"strings"
@@ -31,6 +34,10 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 	if strings.TrimSpace(os.Getenv("YGGDRASIL_OIDC_CLIENTS_FILE")) != "" && issuer == "" {
 		return fmt.Errorf("oidc confidential client bootstrap requires YGGDRASIL_OIDC_ISSUER")
 	}
+	tlsConfig, err := httpTLSConfigFromEnv()
+	if err != nil {
+		return err
+	}
 	db, ok := Postgres(app)
 	if !ok {
 		return fmt.Errorf("postgres addon is not available")
@@ -43,6 +50,11 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 	}
 
 	var opts []httpapi.ServerOption
+	// This is an in-process service of the SAME HTTP authorization owner,
+	// never a new caller-controlled route or anonymous dispatch wrapper.
+	opts = append(opts, httpapi.WithCapacityDispatchServiceReceiver(func(service *httpapi.CapacityDispatchService) {
+		app.SetResource(capacityDispatchServiceResource, service)
+	}))
 	if engine, ok := Reconciler(app); ok {
 		opts = append(opts, httpapi.WithReconciler(engine))
 	}
@@ -131,10 +143,15 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 		ReadTimeout:       httpDurationFromEnv("HTTP_READ_TIMEOUT_SECONDS", 30*time.Second),
 		WriteTimeout:      httpDurationFromEnv("HTTP_WRITE_TIMEOUT_SECONDS", 30*time.Second),
 		IdleTimeout:       httpDurationFromEnv("HTTP_IDLE_TIMEOUT_SECONDS", 120*time.Second),
+		TLSConfig:         tlsConfig,
 	}
 
+	listener, err := net.Listen("tcp", addr)
+	if err != nil {
+		return fmt.Errorf("bind http listener: %w", err)
+	}
 	go func() {
-		if serveErr := server.ListenAndServe(); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
+		if serveErr := serveConfiguredHTTP(server, listener); serveErr != nil && !errors.Is(serveErr, http.ErrServerClosed) {
 			logger.Fatal("http server stopped unexpectedly", zap.String("addr", addr), zap.Error(serveErr))
 		}
 	}()
@@ -147,6 +164,42 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 		return server.Shutdown(ctx)
 	})
 	return nil
+}
+
+type httpTLSConfigurationError struct{ cause error }
+
+func (httpTLSConfigurationError) Error() string                { return "configured HTTP TLS identity unavailable" }
+func (e httpTLSConfigurationError) Unwrap() error              { return e.cause }
+func (e httpTLSConfigurationError) Format(s fmt.State, _ rune) { _, _ = fmt.Fprint(s, e.Error()) }
+
+// Explicit mounted identities are loaded once before the HTTP addon accesses
+// its database resource or performs OIDC/API bootstrap effects. Earlier addons
+// may already have initialized their own resources. Absence preserves the
+// original HTTP transport. A partial, blank or
+// malformed opt-in never silently falls back to plaintext or a proxy header.
+func httpTLSConfigFromEnv() (*tls.Config, error) {
+	certFile, hasCert := os.LookupEnv("HTTP_TLS_CERT_FILE")
+	keyFile, hasKey := os.LookupEnv("HTTP_TLS_KEY_FILE")
+	if !hasCert && !hasKey {
+		return nil, nil
+	}
+	if !hasCert || !hasKey || certFile == "" || keyFile == "" || strings.TrimSpace(certFile) != certFile || strings.TrimSpace(keyFile) != keyFile || !filepath.IsAbs(certFile) || !filepath.IsAbs(keyFile) || filepath.Clean(certFile) != certFile || filepath.Clean(keyFile) != keyFile || strings.ContainsAny(certFile+keyFile, "\r\n\x00") {
+		return nil, httpTLSConfigurationError{}
+	}
+	identity, err := tls.LoadX509KeyPair(certFile, keyFile)
+	if err != nil {
+		return nil, httpTLSConfigurationError{cause: err}
+	}
+	return &tls.Config{MinVersion: tls.VersionTLS12, Certificates: []tls.Certificate{identity}}, nil
+}
+
+func serveConfiguredHTTP(server *http.Server, listener net.Listener) error {
+	if server.TLSConfig == nil {
+		return server.Serve(listener)
+	}
+	// The already loaded identity and SAME original API handler/registry are
+	// used. No certificate path/key is retained in server logs or request data.
+	return server.ServeTLS(listener, "", "")
 }
 
 func ensureConfiguredOIDCClients(ctx context.Context, db *sql.DB, logger *zap.Logger) error {

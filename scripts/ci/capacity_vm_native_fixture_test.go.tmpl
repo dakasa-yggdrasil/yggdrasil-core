@@ -1,0 +1,161 @@
+package adapter
+
+// Compiled only by remote Core CI inside the exact reviewed adapter checkout.
+// The actual public Execute, scope decoder, provider reads and private receipt
+// validation run unchanged. No real provider or Core endpoint is contacted.
+import (
+	"encoding/json"
+	"net/http"
+	"os"
+	"strings"
+	"testing"
+	"time"
+
+	"github.com/dakasa-yggdrasil/integration-hetzner/internal/protocol"
+	"github.com/google/uuid"
+)
+
+type coreNativeFixtureInput struct {
+	Mode            string                                    `json:"mode"`
+	InstanceID      string                                    `json:"instance_id"`
+	TypeID          string                                    `json:"type_id"`
+	Request         protocol.AdapterExecuteIntegrationRequest `json:"request"`
+	Receipt         protocol.MutationReceipt                  `json:"receipt"`
+	NativeCreatedAt string                                    `json:"native_created_at"`
+	Members         []struct {
+		Slot      int    `json:"slot"`
+		ID        int64  `json:"id"`
+		CreatedAt string `json:"created_at"`
+		GrantID   string `json:"grant_id"`
+	} `json:"members"`
+}
+
+type coreNativeFixtureHTTP struct {
+	fake    *fleetFake
+	in      coreNativeFixtureInput
+	created time.Time
+}
+
+func (h coreNativeFixtureHTTP) Do(r *http.Request) (*http.Response, error) {
+	if r.URL.Host == "api.hetzner.cloud" && (strings.HasPrefix(r.URL.Path, "/v1/actions/") || strings.HasSuffix(r.URL.Path, "/actions")) {
+		if strings.HasPrefix(r.URL.Path, "/v1/actions/") || r.URL.Query().Get("status") != "running" {
+			id := int64(100)
+			if h.fake.server != nil {
+				id = h.fake.server.ID
+			}
+			a := map[string]any{"id": 500, "status": "success", "command": "create_server", "started": h.created.UTC().Format(time.RFC3339Nano), "finished": h.created.Add(time.Millisecond).UTC().Format(time.RFC3339Nano), "resources": []any{map[string]any{"id": id, "type": "server"}}}
+			if h.in.Mode == "failed" || h.in.Mode == "failed_inventory" {
+				a["status"] = "error"
+				a["error"] = map[string]any{"code": "resource_unavailable", "message": "fixture"}
+			}
+			if strings.HasPrefix(r.URL.Path, "/v1/actions/") {
+				return fixtureResponse(200, map[string]any{"action": a}), nil
+			}
+			return fixtureResponse(200, map[string]any{"actions": []any{a}, "meta": fixtureMeta()}), nil
+		}
+	}
+	if r.URL.Host == "api.hetzner.cloud" && r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, "/v1/servers/") && !strings.HasSuffix(r.URL.Path, "/actions") && h.fake.server != nil {
+		return fixtureResponse(200, map[string]any{"server": h.fake.server}), nil
+	}
+	return h.fake.Do(r)
+}
+
+func TestCapacityCoreNativeFixtureProducer(t *testing.T) {
+	inFile, outFile := os.Getenv("CAPACITY_NATIVE_INPUT_FILE"), os.Getenv("CAPACITY_NATIVE_OUTPUT_FILE")
+	if inFile == "" || outFile == "" {
+		t.Fatal("remote fixture files required")
+	}
+	raw, err := os.ReadFile(inFile)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var in coreNativeFixtureInput
+	if err = json.Unmarshal(raw, &in); err != nil {
+		t.Fatal(err)
+	}
+	write := func(value any) {
+		raw, err := json.Marshal(value)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if err = os.WriteFile(outFile, raw, 0600); err != nil {
+			t.Fatal(err)
+		}
+	}
+	if in.Mode == "seed" {
+		req := fixtureRequest(t, OperationEnsureServer)
+		req.Integration.Instance.ID = uuid.MustParse(in.InstanceID)
+		req.Integration.Type.ID = uuid.MustParse(in.TypeID)
+		slots := []map[string]any{}
+		for slot := 1; slot <= 4; slot++ {
+			req.Input["slot"] = slot
+			s, err := resolveScope(req)
+			if err != nil {
+				t.Fatal(err)
+			}
+			slots = append(slots, map[string]any{"slot": slot, "desired_spec": s.spec, "desired_spec_sha256": s.digest})
+		}
+		write(map[string]any{"describe": Describe(), "config": req.Integration.InstanceSpec.Config, "credentials": req.Integration.InstanceSpec.Credentials, "slots": slots})
+		return
+	}
+	req := in.Request
+	f := installFake(t, req)
+	created := time.Now().UTC().Add(-time.Second)
+	if in.Receipt.ResourceCreatedAt != "" {
+		created, err = time.Parse(time.RFC3339Nano, in.Receipt.ResourceCreatedAt)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if in.NativeCreatedAt != "" {
+		created, err = time.Parse(time.RFC3339Nano, in.NativeCreatedAt)
+		if err != nil {
+			t.Fatal(err)
+		}
+	}
+	if in.Mode == "inventory" || in.Mode == "failed_inventory" || in.Mode == "collision" {
+		for _, member := range in.Members {
+			s := inventoryFixtureMember(t, f.s, member.Slot, member.ID, "running")
+			s.Created, err = time.Parse(time.RFC3339Nano, member.CreatedAt)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s.Labels["yggdrasil.io/intent"] = member.GrantID
+			f.inventory = append(f.inventory, s)
+		}
+		if in.Mode == "collision" {
+			f.inventory[0].Labels = nil
+		}
+	}
+	if in.Mode == "confirm" || in.Mode == "failed" || in.Mode == "failed_inventory" {
+		s := f.s
+		if in.Mode == "failed_inventory" {
+			s, err = slotScope(s, in.Receipt.Grant.Slot)
+			if err != nil {
+				t.Fatal(err)
+			}
+			s.input.GrantID = in.Receipt.Grant.GrantID
+		}
+		f.server = fixtureServer(t, s)
+		f.server.Created = created
+		f.server.Labels["yggdrasil.io/intent"] = in.Receipt.Grant.GrantID
+		if in.Mode == "failed" || in.Mode == "failed_inventory" {
+			f.server.Image = nil
+			f.server.ID = 104
+		}
+		if in.Mode == "failed_inventory" {
+			f.inventory = append(f.inventory, f.server)
+		}
+	}
+	f.privateReceipts = map[string]protocol.MutationReceipt{in.Receipt.Grant.GrantID: in.Receipt}
+	newHTTPClient = func() httpDoer { return coreNativeFixtureHTTP{f, in, created} }
+	response, err := Execute(req)
+	if f.nativeWrites != 0 || f.redeems != 0 || f.settles != 0 {
+		t.Fatal("read bridge acquired native mutation authority")
+	}
+	if err != nil {
+		write(map[string]any{"error": "native_fixture_refused"})
+		return
+	}
+	write(response)
+}

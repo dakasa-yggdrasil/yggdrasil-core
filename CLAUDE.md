@@ -87,7 +87,8 @@ cmd/                         # auxiliary CLIs (operator, validate-manifests, …
   `workflow_event_triggers`, `team-reconcile`, `team_provisioning`,
   `heimdall_inbox_writer`, `heimdall_inbox_dispatcher`, `buildproject_lifecycle`,
   `expired_sessions_cleaner`, `audit_events_retention`,
-  `stale_workflow_runs_cleaner`.
+  `stale_workflow_runs_cleaner`. The registered `capacity_events_retention` addon
+  requires explicit process opt-in and defaults to disabled.
 
 ## HTTP API (most relevant routes)
 

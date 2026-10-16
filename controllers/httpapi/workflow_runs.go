@@ -94,7 +94,7 @@ func (s *Server) handleWorkflowRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := messagecontroller.RunWorkflow(r.Context(), s.rabbitmq, s.db, req)
+	response, err := messagecontroller.RunWorkflow(s.withCapacityReleaseAuthorization(r.Context(), req, actor, r), s.rabbitmq, s.db, req)
 	if err != nil {
 		writeMappedError(w, err)
 		return
@@ -163,15 +163,21 @@ func (s *Server) dispatchAsyncWorkflowRun(w http.ResponseWriter, r *http.Request
 		return
 	}
 
+	originalParent, finishOriginal, ownerErr := s.beginOriginalGuestAsyncWorkflow()
+	if ownerErr != nil {
+		writeProblemJSON(w, http.StatusConflict, "workflow.original_owner_closed", "original workflow owner unavailable")
+		return
+	}
 	launchAsyncWorkflowRun("workflow_run_async", func() {
-		bg, cancel := context.WithTimeout(context.Background(), 30*time.Minute)
+		defer finishOriginal()
+		bg, cancel := context.WithTimeout(originalParent, 30*time.Minute)
 		defer cancel()
 		defer markAsyncWorkflowRunFailedOnPanic(s.db, runID)
 
 		startedAt := time.Now().UTC()
 		_ = repository.MarkWorkflowRunRunning(bg, s.db, runID, startedAt)
 
-		response, runErr := messagecontroller.RunWorkflow(bg, s.rabbitmq, s.db, req)
+		response, runErr := messagecontroller.RunWorkflow(s.withCapacityReleaseAuthorization(bg, req, actor, r), s.rabbitmq, s.db, req)
 
 		status := "succeeded"
 		errMsg := ""
