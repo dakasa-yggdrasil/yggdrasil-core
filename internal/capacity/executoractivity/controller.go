@@ -256,11 +256,12 @@ func (c Controller) Reconcile(ctx context.Context) (string, error) {
 			if !ok || job.BootID != w.BootID {
 				return fmt.Errorf("owned job lifetime missing")
 			}
-			if state == "finished" {
+			switch state {
+			case "finished":
 				job.State = "finished"
-			} else if state == "running" {
+			case "running":
 				job.State = "running"
-			} else {
+			default:
 				return fmt.Errorf("unknown worker job state")
 			}
 			current.Jobs[id] = job
