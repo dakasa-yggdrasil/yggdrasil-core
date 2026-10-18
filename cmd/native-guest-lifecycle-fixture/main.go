@@ -71,7 +71,12 @@ type fixture struct {
 	mutationToken     string
 	guestPrincipals   []map[string]any
 	namespace         string
+	completedSourceFloor map[string]any
+	completedHistoricalConfirm map[string]any
+	completedTerminal map[string]any
+	completedLivePartial map[string]any
 	completed         q.SourceCaseStage
+	completedSourceContract q.SourceFenceCompletion
 }
 
 func main() {
@@ -103,6 +108,17 @@ func run() (runErr error) {
 	// This defer is registered BEFORE DB/broker/API owners. It runs after their
 	// actual Close/Serve returns and never emits completion when any join fails.
 	defer func() {
+		if runErr==nil && f!=nil && f.completedSourceFloor!=nil { _,runErr=q.Publish(ctx,filepath.Join(f.private,"original-failed-floor-completed.json"),f.completedSourceFloor) }
+		if runErr == nil && f != nil && f.completedHistoricalConfirm != nil {
+			_, runErr = q.Publish(ctx,filepath.Join(f.private,"original-historical-confirm-completed.json"),f.completedHistoricalConfirm)
+		}
+		if runErr==nil && f!=nil && f.completedTerminal!=nil{_,runErr=q.Publish(ctx,filepath.Join(f.private,"original-terminal-contract-completed.json"),f.completedTerminal)}
+		if runErr == nil && f != nil && f.completedLivePartial != nil {
+			_, runErr = q.Publish(ctx, filepath.Join(f.private, "original-live-partial-completed.json"), f.completedLivePartial)
+		}
+		if runErr == nil && f != nil && f.completedSourceContract.ContractSHA256 != "" {
+			_, runErr = q.Publish(ctx, filepath.Join(f.private, "original-source-contract-completed.json"), f.completedSourceContract)
+		}
 		if runErr == nil && f != nil && f.completed.NativeCorpusReceiptSHA256 != "" {
 			_, runErr = q.Publish(ctx, filepath.Join(f.private, f.completed.Stage), f.completed)
 		}
@@ -215,6 +231,16 @@ func run() (runErr error) {
 			return err
 		}
 	}
+	if q.SourceRecoveryCase(request.NativeCase) {
+		return f.runOriginalRecoveryContractCaller(ctx)
+	}
+	if q.SourceContractCase(request.NativeCase) {
+		return f.runOriginalSourceFenceCaller(ctx)
+	}
+	if q.SourceFailedFloorCase(f.request.NativeCase) { return f.runOriginalFailedFloorCaller(ctx) }
+	if q.SourceHistoricalConfirmCase(f.request.NativeCase) { return f.runOriginalHistoricalConfirmCaller(ctx) }
+	if q.SourceTerminalCase(f.request.NativeCase){return f.runOriginalTerminalCaller(ctx)}
+	if q.SourceLivePartialCase(f.request.NativeCase) { return f.runOriginalLivePartialCaller(ctx) }
 	return f.runOriginalPublicCaller(ctx)
 }
 
@@ -384,6 +410,8 @@ func (f *fixture) prepareSource(ctx context.Context) error {
 		return err
 	}
 	b := model.CapacityMutationBinding{Name: "native-qemu", IntegrationInstanceID: instance.ID.String(), IntegrationChecksum: instance.Checksum, IntegrationTypeID: typ.ID.String(), IntegrationTypeChecksum: typ.Checksum, AdapterPrincipalID: "original-native-qemu-adapter", ScopeChecksum: capacity.GuestRetirementSHA([]string{f.namespace, f.request.SourceCommit, capacity.CurrentGuestCoreSource()}), ProfileName: f.profile.Profile, EnsureCapability: "ensure_server", DestroyCapability: "destroy_server", ProtectedSlots: 1, MaxSlots: 2}
+	if q.SourceProtectedCompensationCase(f.request.NativeCase) { b.ProtectedSlots=2 }
+	if q.SourceFailedFloorCase(f.request.NativeCase) { b.CompensationEnabled=true }
 	for slot := 1; slot <= 2; slot++ {
 		projection := model.CapacityMutationSpecV1{SchemaVersion: "capacity_vm_slot_v1", Capability: b.EnsureCapability, IntegrationInstanceID: b.IntegrationInstanceID, ScopeChecksum: b.ScopeChecksum, ProfileChecksum: capacity.GuestRetirementSHA([]string{"native-original-qemu-fixed-1536-2-kvm", f.profile.OwnerSourceCommit}), AdmissionChecksum: capacity.GuestRetirementSHA(f.profile), ProfileName: b.ProfileName, Slot: slot, NativeName: "original-native-qemu-slot-" + fmt.Sprint(slot), BootstrapSHA256: f.profile.BootstrapSHA256}
 		b.Slots = append(b.Slots, model.CapacityMutationSlotBinding{Slot: slot, DesiredSpecSHA256: capacity.GuestRetirementSHA(projection), DesiredSpec: &projection})
@@ -433,4 +461,193 @@ func (f *fixture) prepareSource(ctx context.Context) error {
 	}
 	_, err = q.Publish(ctx, filepath.Join(f.private, "binding.json"), f.binding)
 	return err
+}
+
+// This separate closed caller never enters the native original corpus reader.
+// It executes the actual authenticated workflow and rereads the same durable
+// grant/administrative result; its result has Source authority only.
+func (f *fixture) runOriginalSourceFenceCaller(ctx context.Context) error {
+	if !q.SourceContractCase(f.request.NativeCase) || len(f.realm.OwnedSlots()) != 0 { return q.ErrOriginalUnknown }
+	var p model.CapacityPolicySpec
+	if json.Unmarshal(f.policy.Spec, &p) != nil { return q.ErrOriginalUnknown }
+	run, returns, err := f.originalWorkflow(ctx, "source_contract", 1, q.QualificationAssessment(p, 0, 0.9, time.Now().UTC()), "")
+	if err != nil || run.Status != "succeeded" || run.Result == nil || len(run.Result.Steps) != 3 { return q.ErrOriginalUnknown }
+	var contract q.SourceFenceContract
+	contractWire, err := q.ReadPrivate(ctx, filepath.Join(f.private, "source-fence-contract.json"), &contract)
+	if err != nil || contract.Schema != "core_original_source_fence_contract_v1" || contract.Scope != "SOURCE_CONTRACT_ONLY_NO_NATIVE_AUTHORITY" || contract.Case != f.request.NativeCase || contract.CoreSource != capacity.CurrentGuestCoreSource() || contract.GuestSource != f.request.SourceCommit || contract.PolicyID != f.policy.ID.String() || contract.WorkflowID != f.workflow.ID.String() || contract.Namespace != f.namespace || contract.Slot != 1 || contract.NativeQualified || !contract.CheckedAt.Before(contract.OriginalDeadline) { return q.ErrOriginalUnknown }
+	if _, err = uuid.Parse(contract.GrantID); err != nil { return q.ErrOriginalUnknown }
+	matched := 0
+	for _, step := range run.Result.Steps {
+		if step.Status != "succeeded" || step.Error != "" { return q.ErrOriginalUnknown }
+		if step.Operation == capacity.ProvisionOriginalGuestOperation {
+			wire, err := json.Marshal(step.Metadata)
+			var actual q.SourceFenceContract
+			if err != nil || json.Unmarshal(wire, &actual) != nil || capacity.GuestRetirementSHA(actual) != capacity.GuestRetirementSHA(contract) { return q.ErrOriginalUnknown }
+			matched++
+		}
+	}
+	if matched != 1 { return q.ErrOriginalUnknown }
+	var grantWire []byte
+	if err = f.db.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1 AND namespace=$2`, contract.GrantID, f.namespace).Scan(&grantWire); err != nil || capacity.BusinessCreationSHA256(grantWire) != contract.GrantAfterSHA256 { return q.ErrOriginalUnknown }
+	if contract.Case == "source_contract_executor_fence" {
+		store := repository.CapacityStore{DB: f.db}
+		current, err := store.Observe(ctx, f.policy)
+		if err != nil || current.FencingToken != contract.FenceBefore+1 || current.FencingToken != contract.FenceAfter || !current.RecoveryOnly || current.Decision.ExecutionPermitted || !contract.ExecutorChanged || !contract.LeaseOwnerChanged || !contract.OldIssueRefused || !contract.OriginalGrantExpired || contract.HTTP.Status != 200 || contract.HTTP.Mode != "read_only" || contract.RepositoryRedeemResult != "read_only_after_real_expiry" || contract.GrantTransition != "issued_to_expired_only" { return q.ErrOriginalUnknown }
+	} else {
+		id, err := uuid.Parse(contract.RevokedID)
+		if err != nil { return q.ErrOriginalUnknown }
+		revoked, err := repository.GetManifestByID(ctx, f.db, id)
+		if err != nil || revoked.Metadata.Active || revoked.Kind != contract.RevokedKind || revoked.Metadata.Namespace != f.namespace || contract.RevocationRows != 1 || contract.RevokedActiveAfter || contract.GrantBeforeSHA256 != contract.GrantAfterSHA256 || contract.RepositoryRedeemResult != "revoked_scope_refused" || contract.GrantTransition != "byte_exact_unchanged" { return q.ErrOriginalUnknown }
+	}
+	returnsWire, err := q.Publish(ctx, filepath.Join(f.private, "source-contract-public-returns.json"), returns)
+	if err != nil { return err }
+	completion := q.SourceFenceCompletion{Schema: q.FixtureSchema, Stage: "original-source-contract-completed.json", Scope: "SOURCE_CONTRACT_ONLY_NO_NATIVE_AUTHORITY", Case: contract.Case, CoreSource: contract.CoreSource, GuestSource: contract.GuestSource, WorkflowRunID: run.ID.String(), ContractSHA256: capacity.BusinessCreationSHA256(contractWire), PublicReturnsSHA256: capacity.BusinessCreationSHA256(returnsWire), NativeQualified: false}
+	if _, err = q.Publish(ctx, filepath.Join(f.private, "source-contract-caller-readback.json"), completion); err != nil { return err }
+	// The existing run() completion defer publishes this same DTO only AFTER
+	// the original handlers/workflows/server/broker/DB owners have returned.
+	f.completedSourceContract = completion
+	return nil
+}
+
+func (f *fixture) runOriginalRecoveryContractCaller(ctx context.Context) error {
+	if !q.SourceRecoveryCase(f.request.NativeCase) || len(f.realm.OwnedSlots()) != 0 { return q.ErrOriginalUnknown }
+	var p model.CapacityPolicySpec
+	if json.Unmarshal(f.policy.Spec, &p) != nil { return q.ErrOriginalUnknown }
+	run, returns, err := f.originalWorkflow(ctx, "source_contract", 1, q.QualificationAssessment(p, 0, 0.9, time.Now().UTC()), "")
+	if err != nil || run.Status != "succeeded" || run.Result == nil || len(run.Result.Steps) != 3 { return q.ErrOriginalUnknown }
+	var contract q.SourceRecoveryContract
+	wire, err := q.ReadPrivate(ctx, filepath.Join(f.private, "source-recovery-contract.json"), &contract)
+	if err != nil || contract.Schema != "core_original_source_recovery_contract_v1" || contract.Scope != "SOURCE_CONTRACT_ONLY_NO_NATIVE_AUTHORITY" || contract.Case != f.request.NativeCase || contract.CoreSource != capacity.CurrentGuestCoreSource() || contract.GuestSource != f.request.SourceCommit || contract.Namespace != f.namespace || contract.PolicyID != f.policy.ID.String() || contract.WorkflowID != f.workflow.ID.String() || contract.Slot != 1 || contract.NativeQualified || !contract.CheckedAt.Before(contract.OriginalDeadline) || contract.OriginalDeadline.After(f.request.OriginalContextDeadline) || contract.DBExpiryObservedAt.Before(contract.GrantExpiresAt) { return q.ErrOriginalUnknown }
+	matched := 0
+	for _, step := range run.Result.Steps {
+		if step.Status != "succeeded" || step.Error != "" { return q.ErrOriginalUnknown }
+		if step.Operation == capacity.ProvisionOriginalGuestOperation {
+			raw, err := json.Marshal(step.Metadata)
+			var typed q.SourceRecoveryContract
+			if err != nil || json.Unmarshal(raw, &typed) != nil || capacity.GuestRetirementSHA(typed) != capacity.GuestRetirementSHA(contract) { return q.ErrOriginalUnknown }
+			matched++
+		}
+	}
+	if matched != 1 || contract.PhaseAfter != contract.PhaseBefore || contract.PhaseAfter != "preparing" || contract.ReconcileAccepted { return q.ErrOriginalUnknown }
+	store := repository.CapacityStore{DB: f.db}
+	pre, err := store.OriginalGuestProvisioning(ctx, contract.GrantID)
+	if err != nil || pre.PreregistrationID != contract.PreregistrationID || pre.Generation != contract.Generation || pre.Fence != contract.FenceBefore { return q.ErrOriginalUnknown }
+	var rawIntent, rawGrant []byte
+	if err = f.db.QueryRowContext(ctx, `SELECT intent FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, f.namespace, p.Environment, p.Domain, p.Dimension).Scan(&rawIntent); err != nil { return err }
+	var intent model.CapacityIntent
+	if json.Unmarshal(rawIntent, &intent) != nil || intent.PolicyID != f.policy.ID || intent.PolicyChecksum != f.policy.Checksum || intent.FencingToken != contract.FenceAfter || intent.Phase != contract.PhaseAfter { return q.ErrOriginalUnknown }
+	if err = f.db.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1 AND namespace=$2`, contract.GrantID, f.namespace).Scan(&rawGrant); err != nil || capacity.BusinessCreationSHA256(rawGrant) != contract.GrantAfterSHA256 { return q.ErrOriginalUnknown }
+	var state string
+	if err = f.db.QueryRowContext(ctx, `SELECT state FROM public.capacity_mutation_grants WHERE id=$1 AND namespace=$2`, contract.GrantID, f.namespace).Scan(&state); err != nil || state != contract.StateAfter { return q.ErrOriginalUnknown }
+	actualPolicy, err := repository.GetManifestByID(ctx, f.db, f.policy.ID)
+	if err != nil || actualPolicy.ID != f.policy.ID || actualPolicy.Kind != "capacity_policy" || actualPolicy.Checksum != f.policy.Checksum || actualPolicy.Metadata.Namespace != f.namespace || actualPolicy.Metadata.Active != contract.PolicyActiveAfter { return q.ErrOriginalUnknown }
+	if contract.Case == "source_contract_unredeemed_expiry_recovery" {
+		if !contract.PolicyPauseApplied || contract.PolicyPauseRows != 1 || contract.PolicyActiveAfter || contract.PauseMode != "persisted_policy_manifest_inactive_and_recovery_store_execution_disabled" { return q.ErrOriginalUnknown }
+		if !contract.RecoveryAttempted || !contract.RecoveryOnly || !contract.ExecutorChanged || !contract.LeaseOwnerChanged || contract.FenceAfter != contract.FenceBefore+1 || !intent.RecoveryOnly || intent.Decision.ExecutionPermitted || intent.LeaseOwner == pre.LeaseOwner || intent.LeaseExecutorID == pre.ExecutorID || contract.DBExpiryObservedAt.Before(contract.LeaseExpiresAt) || contract.StateAfter != "expired" || contract.ReplayMode != "read_only" || !contract.ReconcileAttempted || contract.ReconcileErrorClass != "missing_genuine_recovery_proof" || contract.ProofBoundary != "ABORT_NOT_ADMITTED_MISSING_GENUINE_HEALTH_AND_NO_MUTATION_PROOF" { return q.ErrOriginalUnknown }
+	} else {
+		if contract.PolicyPauseApplied || contract.PolicyPauseRows != 0 || !contract.PolicyActiveAfter || contract.PauseMode != "none" { return q.ErrOriginalUnknown }
+		if contract.RecoveryAttempted || contract.RecoveryOnly || contract.ExecutorChanged || contract.LeaseOwnerChanged || contract.ReconcileAttempted || contract.FenceAfter != contract.FenceBefore || intent.RecoveryOnly || intent.LeaseOwner != pre.LeaseOwner || intent.LeaseExecutorID != pre.ExecutorID || contract.StateAfter != "redeemed" || contract.FirstMode != "write_once" || contract.ReplayMode != "read_only" || !contract.IssueReturnedOriginal || contract.GrantBeforeSHA256 != contract.GrantAfterSHA256 || contract.ProofBoundary != "TERMINAL_UNRESOLVED_GUARD_NOT_EXERCISED_MISSING_GENUINE_PROTECTED_TRANSITION_PROOF" { return q.ErrOriginalUnknown }
+	}
+	returnsWire, err := q.Publish(ctx, filepath.Join(f.private, "source-recovery-public-returns.json"), returns)
+	if err != nil { return err }
+	completion := q.SourceFenceCompletion{Schema: q.FixtureSchema, Stage: "original-source-contract-completed.json", Scope: "SOURCE_CONTRACT_ONLY_NO_NATIVE_AUTHORITY", Case: contract.Case, CoreSource: contract.CoreSource, GuestSource: contract.GuestSource, WorkflowRunID: run.ID.String(), ContractSHA256: capacity.BusinessCreationSHA256(wire), PublicReturnsSHA256: capacity.BusinessCreationSHA256(returnsWire), NativeQualified: false}
+	if _, err = q.Publish(ctx, filepath.Join(f.private, "source-recovery-caller-readback.json"), completion); err != nil { return err }
+	f.completedSourceContract = completion
+	return nil
+}
+
+func(f *fixture) runOriginalLivePartialCaller(ctx context.Context) error {
+	var p model.CapacityPolicySpec
+	if json.Unmarshal(f.policy.Spec,&p)!=nil || len(f.realm.OwnedSlots())!=0{return q.ErrOriginalUnknown}
+	if err:=f.initializeOriginalRecoverySourceTables(ctx);err!=nil{return err}
+	baseline,_,err:=f.originalWorkflow(ctx,"baseline",1,q.QualificationAssessment(p,0,0.9,time.Now().UTC()),"")
+	if err!=nil || baseline.Status!="succeeded"{return q.ErrOriginalUnknown}
+	at,err:=f.actualLastUsefulProbeTime(ctx,1);if err!=nil{return err}
+	run,_,err:=f.originalWorkflow(ctx,"live_partial",2,q.QualificationAssessment(p,1,0.9,at),"")
+	if err!=nil || run.Status!="succeeded" || run.Result==nil{return q.ErrOriginalUnknown}
+	var retained q.SourceLivePartialContract
+	wire,err:=q.ReadPrivate(ctx,filepath.Join(f.private,"source-live-partial-contract.json"),&retained)
+	if err!=nil || retained.Schema!="core_original_live_partial_recovery_v1" || retained.Case!=f.request.NativeCase || retained.NativeQualified || retained.PolicyID!=f.policy.ID.String() || retained.WorkflowID!=f.workflow.ID.String() || retained.CoreSource!=capacity.CurrentGuestCoreSource() || retained.GuestSource!=f.request.SourceCommit || retained.BaselineUnits!=1 || retained.TargetUnits!=2 || retained.PartialUnits!=1 || retained.OutstandingMutations!=0 || retained.Slot2Grants!=0 || retained.MemberRows!=1 || retained.NextGeneration<=retained.PriorGeneration || !retained.CheckedAt.Before(retained.OriginalDeadline){return q.ErrOriginalUnknown}
+	matched:=0
+	for _,step:=range run.Result.Steps {
+		if step.Operation==capacity.ProvisionOriginalGuestOperation && step.Status=="succeeded" {
+			encoded,err:=json.Marshal(step.Metadata);var actual q.SourceLivePartialContract
+			if err!=nil || json.Unmarshal(encoded,&actual)!=nil || capacity.GuestRetirementSHA(actual)!=capacity.GuestRetirementSHA(retained){return q.ErrOriginalUnknown};matched++
+		}
+	}
+	if matched!=1{return q.ErrOriginalUnknown}
+	var intentRaw []byte;var actualIntent model.CapacityIntent
+	if err=f.db.QueryRowContext(ctx,`SELECT intent FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`,f.namespace,p.Environment,p.Domain,p.Dimension).Scan(&intentRaw);err!=nil{return err}
+	if json.Unmarshal(intentRaw,&actualIntent)!=nil || capacity.GuestRetirementSHA(actualIntent)!=retained.NextIntentSHA256 || actualIntent.Generation!=retained.NextGeneration || actualIntent.RecoveryOnly{return q.ErrOriginalUnknown}
+	f.completedLivePartial=map[string]any{"schema":q.FixtureSchema,"stage":"original-live-partial-completed.json","case":f.request.NativeCase,"contract_sha256":capacity.BusinessCreationSHA256(wire),"scope":"SOURCE_NATIVE_BASELINE_PARTIAL_ONLY","native_qualified":false,"core_source":capacity.CurrentGuestCoreSource(),"guest_source":f.request.SourceCommit}
+	return nil
+}
+
+func(f *fixture) runOriginalHistoricalConfirmCaller(ctx context.Context)error{
+	var p model.CapacityPolicySpec
+	if json.Unmarshal(f.policy.Spec,&p)!=nil || len(f.realm.OwnedSlots())!=0{return q.ErrOriginalUnknown}
+	run,_,err:=f.originalWorkflow(ctx,"historical_confirm",1,q.QualificationAssessment(p,0,0.9,time.Now().UTC()),"")
+	if err!=nil || run.Status!="succeeded" || run.Result==nil{return q.ErrOriginalUnknown}
+	var retained q.SourceHistoricalConfirmContract
+	wire,err:=q.ReadPrivate(ctx,filepath.Join(f.private,"source-historical-confirm-contract.json"),&retained)
+	if err!=nil || retained.Schema!="core_original_source_historical_confirm_v1" || retained.Scope!="SOURCE_HISTORICAL_CONFIRMED_AFTER_REAL_PAUSE_ONLY" || retained.Case!=f.request.NativeCase || retained.CoreSource!=capacity.CurrentGuestCoreSource() || retained.GuestSource!=f.request.SourceCommit || retained.PolicyID!=f.policy.ID.String() || retained.NativeQualified || retained.PauseRows!=1 || retained.PolicyActiveAfter || retained.RecoveryExecutionEnabled || retained.CanonicalEvents!=1 || !retained.OldObservationRefused || retained.StateAfter!="confirmed" || !retained.CheckedAt.Before(retained.OriginalDeadline){return q.ErrOriginalUnknown}
+	matched:=0;for _,step:=range run.Result.Steps{if step.Operation==capacity.ProvisionOriginalGuestOperation && step.Status=="succeeded"{encoded,err:=json.Marshal(step.Metadata);var result q.SourceHistoricalConfirmContract;if err!=nil || json.Unmarshal(encoded,&result)!=nil || capacity.GuestRetirementSHA(result)!=capacity.GuestRetirementSHA(retained){return q.ErrOriginalUnknown};matched++}}
+	if matched!=1{return q.ErrOriginalUnknown}
+	actual,err:=repository.GetManifestByID(ctx,f.db,f.policy.ID);if err!=nil || actual.ID!=f.policy.ID || actual.Checksum!=f.policy.Checksum || actual.Metadata.Active{return q.ErrOriginalUnknown}
+	var events int;if err=f.db.QueryRowContext(ctx,`SELECT count(*) FROM public.event_log WHERE idempotency_key=$1`,"capacity-mutation/"+retained.GrantID).Scan(&events);err!=nil || events!=1{return q.ErrOriginalUnknown}
+	f.completedHistoricalConfirm=map[string]any{"schema":q.FixtureSchema,"stage":"original-historical-confirm-completed.json","case":f.request.NativeCase,"contract_sha256":capacity.BusinessCreationSHA256(wire),"scope":retained.Scope,"native_qualified":false,"core_source":retained.CoreSource,"guest_source":retained.GuestSource}
+	return nil
+}
+
+func(f *fixture) initializeOriginalRecoverySourceTables(ctx context.Context)error{
+	// Fixture-owned Source-only schema; production migration00064 and its
+	// closed usage/stage enums remain unchanged.
+	if _,err:=f.db.ExecContext(ctx,`CREATE TABLE public.capacity_guest_qualification_recovery_source_challenges (
+ challenge_id UUID PRIMARY KEY, preregistration_id UUID NOT NULL REFERENCES public.capacity_vm_provisioning_preregistrations(id), challenge_sha256 TEXT NOT NULL UNIQUE CHECK(challenge_sha256 ~ '^[0-9a-f]{64}$'),
+ original_wire BYTEA NOT NULL CHECK(octet_length(original_wire) BETWEEN 1 AND 16384), original_record JSONB NOT NULL CHECK(jsonb_typeof(original_record)='object'), original_deadline TIMESTAMPTZ NOT NULL, recorded_at TIMESTAMPTZ NOT NULL,
+ usage_class TEXT NOT NULL CHECK(usage_class='capacity_recovery'))`);err!=nil{return err}
+	if _,err:=f.db.ExecContext(ctx,`CREATE TABLE public.capacity_guest_qualification_recovery_source_returns (
+ id UUID PRIMARY KEY, preregistration_id UUID NOT NULL REFERENCES public.capacity_vm_provisioning_preregistrations(id), native_stage TEXT NOT NULL CHECK(native_stage='recovery_serving_probe'),
+ return_sha256 TEXT NOT NULL CHECK(return_sha256 ~ '^[0-9a-f]{64}$'), original_wire BYTEA NOT NULL CHECK(octet_length(original_wire) BETWEEN 1 AND 1048576), original_record JSONB NOT NULL CHECK(jsonb_typeof(original_record)='object'), recorded_at TIMESTAMPTZ NOT NULL, UNIQUE(preregistration_id,native_stage,return_sha256))`);err!=nil{return err}
+	if _,err:=f.db.ExecContext(ctx,`CREATE TRIGGER capacity_recovery_source_challenges_immutable BEFORE UPDATE OR DELETE ON public.capacity_guest_qualification_recovery_source_challenges FOR EACH ROW EXECUTE FUNCTION public.capacity_vm_original_retirement_immutable()`);err!=nil{return err}
+	if _,err:=f.db.ExecContext(ctx,`CREATE TRIGGER capacity_recovery_source_returns_immutable BEFORE UPDATE OR DELETE ON public.capacity_guest_qualification_recovery_source_returns FOR EACH ROW EXECUTE FUNCTION public.capacity_vm_original_retirement_immutable()`);err!=nil{return err}
+	return nil
+}
+
+func(f *fixture) runOriginalTerminalCaller(ctx context.Context)error{
+ var p model.CapacityPolicySpec
+ if json.Unmarshal(f.policy.Spec,&p)!=nil || len(f.realm.OwnedSlots())!=0{return q.ErrOriginalUnknown}
+ if err:=f.initializeOriginalRecoverySourceTables(ctx);err!=nil{return err}
+ baseline,_,err:=f.originalWorkflow(ctx,"baseline",1,q.QualificationAssessment(p,0,0.9,time.Now().UTC()),"")
+ if err!=nil || baseline.Status!="succeeded"{return q.ErrOriginalUnknown}
+ at,err:=f.actualLastUsefulProbeTime(ctx,1);if err!=nil{return err}
+ run,_,err:=f.originalWorkflow(ctx,"terminal_contract",2,q.QualificationAssessment(p,1,0.9,at),"")
+ if err!=nil || run.Status!="succeeded" || run.Result==nil{return q.ErrOriginalUnknown}
+ var c q.SourceTerminalContract
+ wire,err:=q.ReadPrivate(ctx,filepath.Join(f.private,"source-terminal-contract.json"),&c)
+ if err!=nil || c.Schema!="core_original_source_terminal_contract_v1" || c.Scope!="SOURCE_TERMINAL_CONTRACT_ONLY_NO_NATIVE_CREDIT" || c.Case!=f.request.NativeCase || c.CoreSource!=capacity.CurrentGuestCoreSource() || c.GuestSource!=f.request.SourceCommit || c.PolicyID!=f.policy.ID.String() || c.NativeQualified || !c.CheckedAt.Before(c.OriginalDeadline){return q.ErrOriginalUnknown}
+ matched:=0;for _,step:=range run.Result.Steps{if step.Operation==capacity.ProvisionOriginalGuestOperation && step.Status=="succeeded"{encoded,err:=json.Marshal(step.Metadata);var actual q.SourceTerminalContract;if err!=nil || capacity.DecodeGuestLifecycle(encoded,&actual)!=nil || capacity.GuestRetirementSHA(actual)!=capacity.GuestRetirementSHA(c){return q.ErrOriginalUnknown};matched++}}
+ if matched!=1{return q.ErrOriginalUnknown}
+ var state string;var members int
+ if err=f.db.QueryRowContext(ctx,`SELECT state FROM public.capacity_mutation_grants WHERE id=$1 AND namespace=$2`,c.GrantID,f.namespace).Scan(&state);err!=nil || state!=c.GrantState{return q.ErrOriginalUnknown}
+ if err=f.db.QueryRowContext(ctx,`SELECT count(*) FROM public.capacity_resource_slots WHERE namespace=$1 AND resource_id<>''`,f.namespace).Scan(&members);err!=nil || members!=1 || len(f.realm.OwnedSlots())!=1{return q.ErrOriginalUnknown}
+ if c.Case=="source_live_unredeemed_abort"{if state!="expired" || c.Terminal!="aborted" || c.TerminalRefused{return q.ErrOriginalUnknown}}else{if state!="redeemed" || c.Terminal!="reconciled_partial" || !c.TerminalRefused || !capacity.ValidDigest(c.ReplaySHA256){return q.ErrOriginalUnknown}}
+ if c.CallbackRepresentation!="TYPED_RESERIALIZATION_NOT_RAW_HTTP"{return q.ErrOriginalUnknown}
+ if c.Case=="source_live_unresolved_terminal"{
+  var first,replay model.CapacityMutationRedeemResponse
+  firstWire,err:=q.ReadPrivate(ctx,filepath.Join(f.private,"source-terminal-first-typed-return.json"),&first);if err!=nil || capacity.BusinessCreationSHA256(firstWire)!=c.FirstSHA256{return q.ErrOriginalUnknown}
+  replayWire,err:=q.ReadPrivate(ctx,filepath.Join(f.private,"source-terminal-replay-typed-return.json"),&replay);if err!=nil || capacity.BusinessCreationSHA256(replayWire)!=c.ReplaySHA256{return q.ErrOriginalUnknown}
+  if first.Mode!="write_once" || replay.Mode!="read_only" || first.GrantID!=c.GrantID || replay.GrantID!=c.GrantID || first.AttemptID!=c.CallbackAttemptID || replay.AttemptID!=c.CallbackAttemptID || first.RequestSHA256!=c.CallbackRequestSHA256 || replay.RequestSHA256!=c.CallbackRequestSHA256 || first.ExpiresAt=="" || first.ExpiresAt!=replay.ExpiresAt || first.CompensationOf!="" || replay.CompensationOf!=""{return q.ErrOriginalUnknown}
+  if _,err=uuid.Parse(c.CallbackAttemptID);err!=nil || !capacity.ValidDigest(c.CallbackRequestSHA256){return q.ErrOriginalUnknown}
+  var attempt,requestSHA string
+  if err=f.db.QueryRowContext(ctx,`SELECT grant_record->>'attempt_id',grant_record->'grant'->>'request_sha256' FROM public.capacity_mutation_grants WHERE id=$1 AND namespace=$2`,c.GrantID,f.namespace).Scan(&attempt,&requestSHA);err!=nil || attempt!=c.CallbackAttemptID || requestSHA!=c.CallbackRequestSHA256{return q.ErrOriginalUnknown}
+  var refusal q.SourceTerminalRefusal
+  refusalWire,err:=q.ReadPrivate(ctx,filepath.Join(f.private,"source-terminal-refusal-return.json"),&refusal);if err!=nil || capacity.BusinessCreationSHA256(refusalWire)!=c.RefusalSHA256{return q.ErrOriginalUnknown}
+  expected:=repository.ErrCapacityConflict.Error()+": unresolved provider mutation authority"
+  if refusal.Schema!="core_original_terminal_refusal_return_v1" || refusal.Representation!="ACTUAL_ERROR_CLASS_COUNT_HASH_NO_RAW_MESSAGE" || refusal.ErrorClass!="repository.ErrCapacityConflict" || refusal.Predicate!="unresolved_provider_mutation_authority" || refusal.ReturnCount!=1 || refusal.ErrorBytes!=len(expected) || refusal.ErrorSHA256!=capacity.BusinessCreationSHA256([]byte(expected)){return q.ErrOriginalUnknown}
+ }else if c.FirstSHA256!="" || c.RefusalSHA256!="" || c.CallbackAttemptID!="" || c.CallbackRequestSHA256!=""{return q.ErrOriginalUnknown}
+ if _,err=q.Publish(ctx,filepath.Join(f.private,"source-terminal-public-returns.json"),f.publicReturns);err!=nil{return err}
+ if c.Case=="source_live_unredeemed_abort"{paused,err:=repository.GetManifestByID(ctx,f.db,f.policy.ID);if err!=nil || paused.Metadata.Active || paused.Checksum!=f.policy.Checksum{return q.ErrOriginalUnknown}}
+ f.completedTerminal=map[string]any{"schema":q.FixtureSchema,"stage":"original-terminal-contract-completed.json","case":c.Case,"scope":c.Scope,"native_qualified":false,"core_source":c.CoreSource,"guest_source":c.GuestSource,"contract_sha256":capacity.BusinessCreationSHA256(wire)}
+ return nil
 }

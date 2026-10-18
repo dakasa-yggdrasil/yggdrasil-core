@@ -334,7 +334,7 @@ func guestOriginalSourceAssertNativeRefusals(ctx context.Context, store reposito
 	if err := canonicalEmpty(); err != nil {
 		return err
 	}
-	names := []string{"creation_grant_missing", "creation_grant_foreign", "resource_foreign", "creation_epoch_foreign", "actions_empty", "actions_nonterminal", "actions_unsuccessful", "owner_unverified", "spec_unverified", "request_foreign"}
+	names := []string{"creation_grant_missing", "creation_grant_foreign", "resource_foreign", "creation_epoch_foreign", "actions_empty", "required_action_missing", "actions_nonterminal", "actions_unsuccessful", "owner_unverified", "spec_unverified", "request_foreign"}
 	refused := make([]string, 0, len(names))
 	for _, name := range names {
 		bad := proof
@@ -359,6 +359,8 @@ func guestOriginalSourceAssertNativeRefusals(ctx context.Context, store reposito
 			bad.ResourceCreatedAt = created.Add(-time.Nanosecond).UTC().Format(time.RFC3339Nano)
 		case "actions_empty":
 			bad.ActionIDs = nil
+		case "required_action_missing":
+			bad.ActionIDs = []string{"different-action:" + capacity.GuestRetirementSHA(proof)}
 		case "actions_nonterminal":
 			bad.ActionsTerminal = false
 		case "actions_unsuccessful":
@@ -394,4 +396,20 @@ func guestOriginalSourceAssertNativeRefusals(ctx context.Context, store reposito
 	}{"original_guest_native_refusal_contract_v1", capacity.CurrentGuestCoreSource(), input.Slot, grant.GrantID, proof.ResourceID, capacity.GuestRetirementSHA(proof), refused, 0, 0}
 	_, err := capacitynativeqemu.Publish(ctx, filepath.Join(capacitynativeqemu.SlotDirectory(originalGuestNativeRealm.PrivateDirectory, input.Slot), "native-refusal-contract.json"), contract)
 	return err
+}
+
+// Selector is the immutable owning source request, never a workflow input.
+func guestOriginalSourceContractFence(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, binding model.CapacityMutationBinding, input guestOriginalStepInput, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration) (any, bool, error) {
+	if originalGuestNativeRealm == nil || !capacitynativeqemu.SourceContractCase(originalGuestNativeRealm.Request.NativeCase) {
+		return nil, false, nil
+	}
+	if input.Slot != 1 || grant.Slot != 1 || input.Generation != pre.Generation || input.FencingToken != pre.Fence || input.LeaseOwner != pre.LeaseOwner || store.ExecutorID != pre.ExecutorID {
+		return nil, true, errOriginalGuestStep
+	}
+	if capacitynativeqemu.SourceRecoveryCase(originalGuestNativeRealm.Request.NativeCase) {
+		contract, err := originalGuestNativeRealm.OriginalRecoveryContract(ctx, store, policy, p, binding, grant, pre)
+		return contract, true, err
+	}
+	contract, err := originalGuestNativeRealm.OriginalSourceFence(ctx, store, policy, p, binding, grant, pre)
+	return contract, true, err
 }

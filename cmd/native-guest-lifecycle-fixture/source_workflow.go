@@ -4,6 +4,7 @@ package main
 
 import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
+	q "github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacitynativeqemu"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 )
 
@@ -23,8 +24,12 @@ func (f *fixture) workflowSpec(rbac model.Manifest) model.WorkflowManifestSpec {
 	create := step(f.profile.OriginalProvisioningStepID, capacity.ProvisionOriginalGuestOperation, owned())
 	create.Condition = "{{ inputs.mode }} == baseline || {{ inputs.mode }} == burst"
 	create.DependsOn = []string{claim.ID}
+	if q.SourceLivePartialCase(f.request.NativeCase) { create.Condition += " || {{ inputs.mode }} == live_partial" }
+	if q.SourceHistoricalConfirmCase(f.request.NativeCase) { create.Condition += " || {{ inputs.mode }} == historical_confirm" }
+	if q.SourceTerminalCase(f.request.NativeCase) { create.Condition += " || {{ inputs.mode }} == terminal_contract" }
+	if q.SourceFailedFloorCase(f.request.NativeCase) { create.Condition += " || {{ inputs.mode }} == floor_repair" }
 	qualify := step("original_echo_qualified", "capacity.qualify_original_guest_echo", owned())
-	qualify.Condition = create.Condition
+	qualify.Condition = "{{ inputs.mode }} == baseline || {{ inputs.mode }} == burst"
 	qualify.DependsOn = []string{create.ID}
 	retireInput := owned()
 	retireInput["preregistration_id"] = "{{ inputs.preregistration_id }}"
@@ -36,5 +41,14 @@ func (f *fixture) workflowSpec(rbac model.Manifest) model.WorkflowManifestSpec {
 	finish.DependsOn = []string{retire.ID}
 	finish.With["preregistration_id"] = "{{ inputs.preregistration_id }}"
 	finish.With["request_id"] = "{{ steps.original_burst_retire.metadata.request_id }}"
-	return model.WorkflowManifestSpec{DispatchMode: "async", Authorization: &model.WorkflowAuthorizationSpec{RBAC: model.ManifestSelector{ManifestID: rbac.ID.String()}}, InputSchema: model.WorkflowInputSchemaSpec{Required: []string{"mode", "slot", "assessment"}, AdditionalProperties: &closed, Properties: map[string]model.IntegrationSchemaProperty{"mode": {Type: "string", Enum: []any{"baseline", "burst", "observe_reduction_demand", "retire"}}, "slot": {Type: "integer"}, "assessment": {Type: "object"}, "preregistration_id": {Type: "string"}}}, Steps: []model.WorkflowStepSpec{assess, claim, create, qualify, retire, finish}}
+	if q.SourceContractCase(f.request.NativeCase) {
+		create.Condition = "{{ inputs.mode }} == source_contract"
+		return model.WorkflowManifestSpec{DispatchMode: "async", Authorization: &model.WorkflowAuthorizationSpec{RBAC: model.ManifestSelector{ManifestID: rbac.ID.String()}}, InputSchema: model.WorkflowInputSchemaSpec{Required: []string{"mode", "slot", "assessment"}, AdditionalProperties: &closed, Properties: map[string]model.IntegrationSchemaProperty{"mode": {Type: "string", Enum: []any{"source_contract"}}, "slot": {Type: "integer"}, "assessment": {Type: "object"}, "preregistration_id": {Type: "string"}}}, Steps: []model.WorkflowStepSpec{assess, claim, create}}
+	}
+	spec := model.WorkflowManifestSpec{DispatchMode: "async", Authorization: &model.WorkflowAuthorizationSpec{RBAC: model.ManifestSelector{ManifestID: rbac.ID.String()}}, InputSchema: model.WorkflowInputSchemaSpec{Required: []string{"mode", "slot", "assessment"}, AdditionalProperties: &closed, Properties: map[string]model.IntegrationSchemaProperty{"mode": {Type: "string", Enum: []any{"baseline", "burst", "observe_reduction_demand", "retire"}}, "slot": {Type: "integer"}, "assessment": {Type: "object"}, "preregistration_id": {Type: "string"}}}, Steps: []model.WorkflowStepSpec{assess, claim, create, qualify, retire, finish}}
+	if q.SourceLivePartialCase(f.request.NativeCase) { mode := spec.InputSchema.Properties["mode"]; mode.Enum = append(mode.Enum, "live_partial"); spec.InputSchema.Properties["mode"] = mode }
+	if q.SourceHistoricalConfirmCase(f.request.NativeCase) { mode := spec.InputSchema.Properties["mode"]; mode.Enum = append(mode.Enum, "historical_confirm"); spec.InputSchema.Properties["mode"] = mode }
+	if q.SourceTerminalCase(f.request.NativeCase){mode:=spec.InputSchema.Properties["mode"];mode.Enum=append(mode.Enum,"terminal_contract");spec.InputSchema.Properties["mode"]=mode}
+	if q.SourceFailedFloorCase(f.request.NativeCase) { mode:=spec.InputSchema.Properties["mode"];mode.Enum=append(mode.Enum,"floor_repair");spec.InputSchema.Properties["mode"]=mode }
+	return spec
 }

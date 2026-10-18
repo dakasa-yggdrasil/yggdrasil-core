@@ -50,6 +50,10 @@ type QualificationFailureRecord struct {
 	OriginalStartReturnedAt       time.Time                                     `json:"original_start_returned_at"`
 	OriginalWait                  QualificationFailedOwnerReturn                `json:"original_wait"`
 	OriginalExitCode              *int                                          `json:"original_exit_code"`
+	OriginalOutputEOF *bool `json:"original_output_eof,omitempty"`
+	OriginalOutputCloseSucceeded *bool `json:"original_output_close_succeeded,omitempty"`
+	OriginalDiagnosticEOF *bool `json:"original_diagnostic_eof,omitempty"`
+	OriginalDiagnosticCloseSucceeded *bool `json:"original_diagnostic_close_succeeded,omitempty"`
 	OriginalOutputEOFAndClose     QualificationFailedOwnerReturn                `json:"original_output_eof_and_close"`
 	OriginalDiagnosticEOFAndClose QualificationFailedOwnerReturn                `json:"original_diagnostic_eof_and_close"`
 	OriginalProbeRead             *QualificationFailedOwnerReturn               `json:"original_probe_read,omitempty"`
