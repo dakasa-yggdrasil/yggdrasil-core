@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-18T13:22:28-03:00",
+  "generated_at": "2026-10-18T16:30:58-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 900,
@@ -11,7 +11,7 @@
     ".yml": 25
   },
   "provenance": {
-    "commit": "3cff99d6857f9bc749368b29451f98d8c7617fbd",
+    "commit": "ce7cc5a79d7f972580665fe5e0cedb99bde85cf3",
     "dirty": true,
     "files": [
       {
@@ -70,7 +70,7 @@
     {
       "path": "controllers/message",
       "files": 80,
-      "kb": 1010
+      "kb": 1011
     },
     {
       "path": "model",
