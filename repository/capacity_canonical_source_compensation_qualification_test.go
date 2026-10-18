@@ -46,3 +46,15 @@ func TestCanonicalChildProvisioningDeadlineIsOriginalAbsolute(t *testing.T){
  end,ok=canonicalChildDeadline(now,grant,cleanup,lease,now.Add(420*time.Second))
  if !ok || !end.Equal(grant){t.Fatal("provisioning cap extended an earlier actual child expiry")}
 }
+
+func TestCanonicalSignedChildBindsActualPolicySuccessor(t *testing.T){
+ original:="aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa";current:="bbbbbbbb-bbbb-4bbb-8bbb-bbbbbbbbbbbb";foreign:="cccccccc-cccc-4ccc-8ccc-cccccccccccc"
+ oldChecksum:=strings.Repeat("a",64);newChecksum:=strings.Repeat("b",64)
+ a:=CanonicalSourceChildAuthority{Case:"canonical_compensation_unprotected_failed_create",OriginalPolicyID:original,CurrentPolicyID:current,CurrentPolicyChecksum:newChecksum}
+ if !canonicalChildPolicyJoin(a,current,newChecksum,original,oldChecksum){t.Fatal("actual explicit compensation opt-in successor refused")}
+ for _,name:=range []string{"missing_original","foreign_original","foreign_current","wrong_checksum","aliased_original_policy","aliased_original_checksum"}{bad:=a;switch name{case "missing_original":bad.OriginalPolicyID="";case "foreign_original":bad.OriginalPolicyID=foreign;case "foreign_current":bad.CurrentPolicyID=foreign;case "wrong_checksum":bad.CurrentPolicyChecksum=strings.Repeat("c",64);case "aliased_original_policy":bad.CurrentPolicyID=original;case "aliased_original_checksum":bad.CurrentPolicyChecksum=oldChecksum};if canonicalChildPolicyJoin(bad,current,newChecksum,original,oldChecksum){t.Fatal("signed child hid or relabelled actual successor identity",name)}}
+ floor:=CanonicalSourceChildAuthority{Case:"canonical_failed_floor_recovery",OriginalPolicyID:original,CurrentPolicyID:original,CurrentPolicyChecksum:oldChecksum}
+ if !canonicalChildPolicyJoin(floor,original,oldChecksum,original,oldChecksum){t.Fatal("already-enabled exact Floor2 policy refused")}
+ floor.CurrentPolicyID=current;floor.CurrentPolicyChecksum=newChecksum
+ if canonicalChildPolicyJoin(floor,current,newChecksum,original,oldChecksum){t.Fatal("floor case invented an unrelated policy successor")}
+}
