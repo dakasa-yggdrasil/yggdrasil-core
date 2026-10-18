@@ -3,9 +3,12 @@
 package message
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"encoding/json"
+	"errors"
+	"path/filepath"
 	"sync"
 	"time"
 
@@ -142,4 +145,253 @@ func sourceGuestQualificationStep(ctx context.Context, store repository.Capacity
 		UsefulEchoProbes                  []capacitynativeqemu.QualificationProbeReceipt `json:"useful_echo_probes"`
 		ProductionUsefulCapacityQualified bool                                           `json:"production_useful_capacity_qualified"`
 	}{"same_original_qualification_echo_profile_only", probes, false}, nil
+}
+
+// Twenty logical contenders use the SAME original source-owned store, step,
+// nonce, slot and parent context. Only the one returned durable grant proceeds
+// to the unchanged single Create call; this never requests twenty native VMs.
+func guestOriginalSourceIssueContenders(ctx context.Context, store repository.CapacityStore, policy model.Manifest, input guestOriginalStepInput, issue model.CapacityMutationIssue, expectedHistory int, contractName string) (model.CapacityMutationGrant, error) {
+	var zero model.CapacityMutationGrant
+	if originalGuestNativeRealm == nil || ctx.Err() != nil || input.Slot < 1 || input.Slot > 2 || (expectedHistory != 1 && expectedHistory != 2) {
+		return zero, errOriginalGuestStep
+	}
+	type returned struct {
+		grant model.CapacityMutationGrant
+		err   error
+	}
+	const contenders = 20
+	results := make(chan returned, contenders)
+	start := make(chan struct{})
+	var joined sync.WaitGroup
+	for n := 0; n < contenders; n++ {
+		joined.Add(1)
+		go func() {
+			defer joined.Done()
+			<-start
+			grant, err := store.IssueMutation(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, issue)
+			results <- returned{grant: grant, err: err}
+		}()
+	}
+	close(start)
+	// Context cancellation never substitutes for return of a SQL owner.
+	joined.Wait()
+	close(results)
+	var grant model.CapacityMutationGrant
+	var first []byte
+	var failures error
+	returnedCount := 0
+	for result := range results {
+		returnedCount++
+		failures = errors.Join(failures, result.err)
+		wire, err := json.Marshal(result.grant)
+		failures = errors.Join(failures, err)
+		if first == nil {
+			first, grant = wire, result.grant
+		} else if !bytes.Equal(first, wire) {
+			failures = errors.Join(failures, errOriginalGuestStep)
+		}
+	}
+	if failures != nil || returnedCount != contenders || ctx.Err() != nil || grant.GrantID == "" || grant.Slot != input.Slot {
+		return zero, errors.Join(errOriginalGuestStep, failures)
+	}
+	var grants, history, preregistrations int
+	if err := store.DB.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE state IN ('issued','redeemed','settled','compensating')),count(*) FROM public.capacity_mutation_grants WHERE namespace=$1 AND integration_instance_id=$2 AND scope_checksum=$3 AND profile_name=$4 AND slot=$5`, policy.Metadata.Namespace, grant.IntegrationInstanceID, grant.ScopeChecksum, grant.ProfileName, grant.Slot).Scan(&grants, &history); err != nil {
+		return zero, err
+	}
+	if err := store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_vm_provisioning_preregistrations WHERE create_grant_id=$1`, grant.GrantID).Scan(&preregistrations); err != nil {
+		return zero, err
+	}
+	if grants != 1 || history != expectedHistory || preregistrations != 1 {
+		return zero, errOriginalGuestStep
+	}
+	proof := struct {
+		Schema           string `json:"schema"`
+		CoreSource       string `json:"core_source"`
+		Slot             int    `json:"slot"`
+		Contenders       int    `json:"contenders"`
+		Returned         int    `json:"returned"`
+		GrantID          string `json:"grant_id"`
+		GrantSHA256      string `json:"grant_sha256"`
+		GrantRows        int    `json:"active_grant_rows"`
+		HistoryRows      int    `json:"historical_grant_rows"`
+		Preregistrations int    `json:"preregistrations"`
+	}{"original_guest_logical_reservation_concurrency_v1", capacity.CurrentGuestCoreSource(), input.Slot, contenders, returnedCount, grant.GrantID, capacity.BusinessCreationSHA256(first), grants, history, preregistrations}
+	_, err := capacitynativeqemu.Publish(ctx, filepath.Join(capacitynativeqemu.SlotDirectory(originalGuestNativeRealm.PrivateDirectory, input.Slot), contractName), proof)
+	if err != nil {
+		return zero, err
+	}
+	return grant, nil
+}
+
+func guestOriginalSourceIssue(ctx context.Context, store repository.CapacityStore, policy model.Manifest, step model.WorkflowStepSpec, input guestOriginalStepInput, issue model.CapacityMutationIssue) (model.CapacityMutationGrant, error) {
+	var zero model.CapacityMutationGrant
+	if originalGuestNativeRealm == nil {
+		return zero, errOriginalGuestStep
+	}
+	// Negative cases retain exactly one original preregistration per slot.
+	// Only the closed source-owned positive selector exercises unsent reissue.
+	if !capacitynativeqemu.PositiveCase(originalGuestNativeRealm.Request.NativeCase) {
+		return guestOriginalSourceIssueContenders(ctx, store, policy, input, issue, 1, "logical-reservation-contract.json")
+	}
+	grant, err := guestOriginalSourceIssueContenders(ctx, store, policy, input, issue, 1, "unsent-logical-reservation-contract.json")
+	if err != nil {
+		return zero, err
+	}
+	firstPre, err := store.OriginalGuestProvisioning(ctx, grant.GrantID)
+	if err != nil {
+		return zero, err
+	}
+	// The unsent contract does not renew the first original420s budget.
+	original, cancel := context.WithDeadline(ctx, firstPre.OriginalDeadline)
+	defer cancel()
+	if err = originalGuestNativeRealm.RejectOriginalUnsent(original, grant); err != nil {
+		return zero, err
+	}
+	nonce, err := sourceGuestNonce()
+	if err != nil {
+		return zero, err
+	}
+	// Only this actual resolved source-owned step mints the replacement nonce.
+	// No test request supplies a private original context or an admission field.
+	freshStore := store.WithOriginalGuestProvisioning(step, capacity.CurrentGuestCoreSource(), capacity.BusinessCreationSHA256([]byte(nonce)))
+	reissued, err := guestOriginalSourceIssueContenders(original, freshStore, policy, input, issue, 2, "logical-reservation-contract.json")
+	if err != nil || reissued.GrantID == grant.GrantID || reissued.GrantID == "" || reissued.Slot != grant.Slot {
+		return zero, errors.Join(errOriginalGuestStep, err)
+	}
+	nextPre, err := freshStore.OriginalGuestProvisioning(original, reissued.GrantID)
+	if err != nil || nextPre.OriginalDeadline.After(firstPre.OriginalDeadline) || nextPre.OriginalCreateGrantID != reissued.GrantID {
+		return zero, errors.Join(errOriginalGuestStep, err)
+	}
+	contract := struct {
+		Schema           string    `json:"schema"`
+		CoreSource       string    `json:"core_source"`
+		Slot             int       `json:"slot"`
+		FirstGrantID     string    `json:"first_grant_id"`
+		ReissuedGrantID  string    `json:"reissued_grant_id"`
+		OriginalDeadline time.Time `json:"original_deadline"`
+		ReissuedDeadline time.Time `json:"reissued_deadline"`
+	}{"original_guest_unsent_reissue_contract_v1", capacity.CurrentGuestCoreSource(), input.Slot, grant.GrantID, reissued.GrantID, firstPre.OriginalDeadline, nextPre.OriginalDeadline}
+	_, err = capacitynativeqemu.Publish(original, filepath.Join(capacitynativeqemu.SlotDirectory(originalGuestNativeRealm.PrivateDirectory, input.Slot), "unsent-reissue-contract.json"), contract)
+	if err != nil {
+		return zero, err
+	}
+	return reissued, nil
+}
+
+// Repeating confirmation of the SAME actual independent native proof must not
+// apply a second canonical event or manufacture another registered member.
+func guestOriginalSourceAssertApply(ctx context.Context, store repository.CapacityStore, policy model.Manifest, input guestOriginalStepInput, proof model.CapacityMutationProof, grant model.CapacityMutationGrant) error {
+	if originalGuestNativeRealm == nil || input.Slot < 1 || input.Slot > 2 {
+		return errOriginalGuestStep
+	}
+	if _, err := store.ConfirmMutation(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, proof); err != nil {
+		return err
+	}
+	var events, members int
+	if err := store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.event_log WHERE idempotency_key=$1 AND metadata->>'namespace'=$2`, "capacity-mutation/"+grant.GrantID, policy.Metadata.Namespace).Scan(&events); err != nil {
+		return err
+	}
+	if err := store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE namespace=$1 AND integration_instance_id=$2 AND scope_checksum=$3 AND profile_name=$4 AND slot=$5 AND resource_id=$6`, policy.Metadata.Namespace, grant.IntegrationInstanceID, grant.ScopeChecksum, grant.ProfileName, grant.Slot, proof.ResourceID).Scan(&members); err != nil {
+		return err
+	}
+	if events != 1 || members != 1 || ctx.Err() != nil {
+		return errOriginalGuestStep
+	}
+	contract := struct {
+		Schema      string `json:"schema"`
+		CoreSource  string `json:"core_source"`
+		Slot        int    `json:"slot"`
+		GrantID     string `json:"grant_id"`
+		ResourceID  string `json:"resource_id"`
+		ProofSHA256 string `json:"proof_sha256"`
+		Events      int    `json:"canonical_events"`
+		Members     int    `json:"registered_members"`
+	}{"original_guest_canonical_apply_once_v1", capacity.CurrentGuestCoreSource(), input.Slot, grant.GrantID, proof.ResourceID, capacity.GuestRetirementSHA(proof), events, members}
+	_, err := capacitynativeqemu.Publish(ctx, filepath.Join(capacitynativeqemu.SlotDirectory(originalGuestNativeRealm.PrivateDirectory, input.Slot), "canonical-apply-contract.json"), contract)
+	return err
+}
+
+// Refusal inputs derive from the SAME actual native read, settled grant and
+// enrollment. No fabricated successful proof or private source context enters
+// the repository. Every rejected transaction must leave canonical state empty.
+func guestOriginalSourceAssertNativeRefusals(ctx context.Context, store repository.CapacityStore, policy model.Manifest, input guestOriginalStepInput, proof model.CapacityMutationProof, grant model.CapacityMutationGrant) error {
+	if originalGuestNativeRealm == nil || ctx.Err() != nil {
+		return errOriginalGuestStep
+	}
+	canonicalEmpty := func() error {
+		var events, members int
+		if err := store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.event_log WHERE idempotency_key=$1 AND metadata->>'namespace'=$2`, "capacity-mutation/"+grant.GrantID, policy.Metadata.Namespace).Scan(&events); err != nil {
+			return err
+		}
+		if err := store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE namespace=$1 AND integration_instance_id=$2 AND scope_checksum=$3 AND profile_name=$4 AND slot=$5 AND resource_id=$6`, policy.Metadata.Namespace, grant.IntegrationInstanceID, grant.ScopeChecksum, grant.ProfileName, grant.Slot, proof.ResourceID).Scan(&members); err != nil {
+			return err
+		}
+		if events != 0 || members != 0 || ctx.Err() != nil {
+			return errOriginalGuestStep
+		}
+		return nil
+	}
+	if err := canonicalEmpty(); err != nil {
+		return err
+	}
+	names := []string{"creation_grant_missing", "creation_grant_foreign", "resource_foreign", "creation_epoch_foreign", "actions_empty", "actions_nonterminal", "actions_unsuccessful", "owner_unverified", "spec_unverified", "request_foreign"}
+	refused := make([]string, 0, len(names))
+	for _, name := range names {
+		bad := proof
+		switch name {
+		case "creation_grant_missing":
+			bad.ObservedCreationGrantID = ""
+		case "creation_grant_foreign":
+			bad.ObservedCreationGrantID = "00000000-0000-4000-8000-000000000001"
+			if bad.ObservedCreationGrantID == grant.GrantID {
+				return errOriginalGuestStep
+			}
+		case "resource_foreign":
+			bad.ResourceID = "00000000-0000-4000-8000-000000000001"
+			if bad.ResourceID == proof.ResourceID {
+				return errOriginalGuestStep
+			}
+		case "creation_epoch_foreign":
+			created, err := time.Parse(time.RFC3339Nano, proof.ResourceCreatedAt)
+			if err != nil {
+				return err
+			}
+			bad.ResourceCreatedAt = created.Add(-time.Nanosecond).UTC().Format(time.RFC3339Nano)
+		case "actions_empty":
+			bad.ActionIDs = nil
+		case "actions_nonterminal":
+			bad.ActionsTerminal = false
+		case "actions_unsuccessful":
+			bad.ActionsSuccessful = false
+		case "owner_unverified":
+			bad.OwnerVerified = false
+		case "spec_unverified":
+			bad.SpecVerified = false
+		case "request_foreign":
+			bad.RequestSHA256 = "0000000000000000000000000000000000000000000000000000000000000000"
+			if bad.RequestSHA256 == proof.RequestSHA256 {
+				return errOriginalGuestStep
+			}
+		}
+		if _, err := store.ConfirmMutation(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, bad); !errors.Is(err, repository.ErrCapacityConflict) {
+			return errors.Join(errOriginalGuestStep, err)
+		}
+		if err := canonicalEmpty(); err != nil {
+			return err
+		}
+		refused = append(refused, name)
+	}
+	contract := struct {
+		Schema string `json:"schema"`
+		CoreSource string `json:"core_source"`
+		Slot int `json:"slot"`
+		GrantID string `json:"grant_id"`
+		ResourceID string `json:"resource_id"`
+		OriginalProofSHA256 string `json:"original_proof_sha256"`
+		Refused []string `json:"refused"`
+		CanonicalEvents int `json:"canonical_events"`
+		CanonicalMembers int `json:"canonical_members"`
+	}{"original_guest_native_refusal_contract_v1", capacity.CurrentGuestCoreSource(), input.Slot, grant.GrantID, proof.ResourceID, capacity.GuestRetirementSHA(proof), refused, 0, 0}
+	_, err := capacitynativeqemu.Publish(ctx, filepath.Join(capacitynativeqemu.SlotDirectory(originalGuestNativeRealm.PrivateDirectory, input.Slot), "native-refusal-contract.json"), contract)
+	return err
 }

@@ -194,6 +194,12 @@ func (r *Realm) api(ctx context.Context, path, nonce string, input, out any) err
 	}
 	response, err := r.Client.Do(req)
 	if err != nil {
+		if response != nil && response.Body != nil {
+			_ = response.Body.Close()
+		}
+		return ErrOriginalUnknown
+	}
+	if response == nil || response.Body == nil {
 		return ErrOriginalUnknown
 	}
 	raw, re := io.ReadAll(io.LimitReader(response.Body, 2<<20))
@@ -202,6 +208,65 @@ func (r *Realm) api(ctx context.Context, path, nonce string, input, out any) err
 		return ErrOriginalUnknown
 	}
 	return nil
+}
+
+// RejectOriginalUnsent exercises real callbacks before this realm has called
+// Create for the slot. It never invents a failed native attempt or a resource.
+func (r *Realm) RejectOriginalUnsent(ctx context.Context, grant model.CapacityMutationGrant) error {
+	r.mu.Lock()
+	started := r.started[grant.Slot]
+	r.mu.Unlock()
+	if started || grant.Slot < 1 || grant.Slot > 2 {
+		return ErrOriginalUnknown
+	}
+	var nonceRaw [32]byte
+	if _, err := rand.Read(nonceRaw[:]); err != nil {
+		return err
+	}
+	nonce, attempt := hex.EncodeToString(nonceRaw[:]), uuid.NewString()
+	request := model.CapacityMutationRedeemRequest{GrantID: grant.GrantID, AttemptID: attempt, SettlementTokenSHA256: capacity.BusinessCreationSHA256([]byte(nonce)), Capability: grant.Capability, IntegrationInstanceID: grant.IntegrationInstanceID, ScopeChecksum: grant.ScopeChecksum, ProfileName: grant.ProfileName, Slot: grant.Slot, RequestSHA256: grant.RequestSHA256}
+	var first, replay model.CapacityMutationRedeemResponse
+	if r.api(ctx, "/api/v1/capacity/mutations/redeem", "", request, &first) != nil || first.Mode != "write_once" || first.GrantID != grant.GrantID || first.AttemptID != attempt || first.RequestSHA256 != grant.RequestSHA256 {
+		return ErrOriginalUnknown
+	}
+	if r.api(ctx, "/api/v1/capacity/mutations/redeem", "", request, &replay) != nil || replay.Mode != "read_only" || replay.GrantID != grant.GrantID || replay.AttemptID != attempt || replay.RequestSHA256 != grant.RequestSHA256 {
+		return ErrOriginalUnknown
+	}
+	settlement := model.CapacityMutationSettleRequest{GrantID: grant.GrantID, AttemptID: attempt, RequestSHA256: grant.RequestSHA256, Outcome: "rejected_before_send", TransportCompleted: true, ObservedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+	type settledReturn struct {
+		GrantID       string `json:"grant_id"`
+		AttemptID     string `json:"attempt_id"`
+		RequestSHA256 string `json:"request_sha256"`
+		Status        string `json:"status"`
+	}
+	var settled, repeated settledReturn
+	if r.api(ctx, "/api/v1/capacity/mutations/settle", nonce, settlement, &settled) != nil || settled.GrantID != grant.GrantID || settled.AttemptID != attempt || settled.RequestSHA256 != grant.RequestSHA256 || settled.Status != "settled" {
+		return ErrOriginalUnknown
+	}
+	if r.api(ctx, "/api/v1/capacity/mutations/settle", nonce, settlement, &repeated) != nil || repeated != settled {
+		return ErrOriginalUnknown
+	}
+	r.mu.Lock()
+	started = r.started[grant.Slot]
+	r.mu.Unlock()
+	if started || ctx.Err() != nil {
+		return ErrOriginalUnknown
+	}
+	contract := struct {
+		Schema               string `json:"schema"`
+		CoreSource           string `json:"core_source"`
+		Slot                 int    `json:"slot"`
+		GrantID              string `json:"grant_id"`
+		FirstMode            string `json:"first_mode"`
+		ReplayMode           string `json:"replay_mode"`
+		Outcome              string `json:"outcome"`
+		SettlementSHA256     string `json:"settlement_sha256"`
+		FirstReturnSHA256    string `json:"first_return_sha256"`
+		RepeatedSHA256       string `json:"repeated_return_sha256"`
+		ProviderCreateCalled bool   `json:"provider_create_called"`
+	}{"original_guest_unsent_terminal_contract_v1", capacity.CurrentGuestCoreSource(), grant.Slot, grant.GrantID, first.Mode, replay.Mode, settlement.Outcome, capacity.GuestRetirementSHA(settlement), capacity.GuestRetirementSHA(settled), capacity.GuestRetirementSHA(repeated), started}
+	_, err := Publish(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, grant.Slot), "unsent-terminal-contract.json"), contract)
+	return err
 }
 
 func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, _ model.Manifest, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration) (model.CapacityMutationProof, error) {
@@ -223,16 +288,93 @@ func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, _ mo
 	if prepared.ResourceID != r.Request.Slots[slot-1].ResourceID || grant.Capability != "ensure_server" || pre.OriginalCreateGrantID != grant.GrantID || pre.Slot != slot {
 		return proof, ErrOriginalUnknown
 	}
-	var nonceRaw [32]byte
-	if _, err := rand.Read(nonceRaw[:]); err != nil {
-		return proof, err
+	// All contenders are genuine authenticated callbacks for this SAME original
+	// grant. A logical race cannot authorize additional native creates.
+	type redemption struct {
+		attempt  string
+		nonce    string
+		response model.CapacityMutationRedeemResponse
+		started  time.Time
+		returned time.Time
+		err      error
 	}
-	nonce := hex.EncodeToString(nonceRaw[:])
-	attempt := uuid.NewString()
-	redeem := model.CapacityMutationRedeemRequest{GrantID: grant.GrantID, AttemptID: attempt, SettlementTokenSHA256: capacity.BusinessCreationSHA256([]byte(nonce)), Capability: grant.Capability, IntegrationInstanceID: grant.IntegrationInstanceID, ScopeChecksum: grant.ScopeChecksum, ProfileName: grant.ProfileName, Slot: slot, RequestSHA256: grant.RequestSHA256}
+	const contenders = 20
+	results := make(chan redemption, contenders)
+	start := make(chan struct{})
+	var owners sync.WaitGroup
+	for n := 0; n < contenders; n++ {
+		owners.Add(1)
+		go func() {
+			defer owners.Done()
+			<-start
+			var original redemption
+			original.started = time.Now().UTC()
+			var nonceRaw [32]byte
+			if _, original.err = rand.Read(nonceRaw[:]); original.err == nil {
+				original.nonce = hex.EncodeToString(nonceRaw[:])
+				original.attempt = uuid.NewString()
+				request := model.CapacityMutationRedeemRequest{GrantID: grant.GrantID, AttemptID: original.attempt, SettlementTokenSHA256: capacity.BusinessCreationSHA256([]byte(original.nonce)), Capability: grant.Capability, IntegrationInstanceID: grant.IntegrationInstanceID, ScopeChecksum: grant.ScopeChecksum, ProfileName: grant.ProfileName, Slot: slot, RequestSHA256: grant.RequestSHA256}
+				original.err = r.api(ctx, "/api/v1/capacity/mutations/redeem", "", request, &original.response)
+			}
+			original.returned = time.Now().UTC()
+			results <- original
+		}()
+	}
+	close(start)
+	owners.Wait()
+	close(results)
+	type returnedFact struct {
+		AttemptID           string    `json:"attempt_id"`
+		Mode                string    `json:"mode"`
+		StartedAt           time.Time `json:"started_at"`
+		ReturnedAt          time.Time `json:"returned_at"`
+		TypedResponseSHA256 string    `json:"typed_response_sha256"`
+	}
+	facts := make([]returnedFact, 0, contenders)
+	attempt, nonce := "", ""
 	var redeemed model.CapacityMutationRedeemResponse
-	if r.api(ctx, "/api/v1/capacity/mutations/redeem", "", redeem, &redeemed) != nil || redeemed.Mode != "write_once" || redeemed.GrantID != grant.GrantID || redeemed.AttemptID != attempt || redeemed.RequestSHA256 != grant.RequestSHA256 {
+	writes, reads := 0, 0
+	var invalid bool
+	for original := range results {
+		response := original.response
+		if original.err != nil || response.GrantID != grant.GrantID || response.AttemptID != original.attempt || response.RequestSHA256 != grant.RequestSHA256 {
+			invalid = true
+			continue
+		}
+		switch response.Mode {
+		case "write_once":
+			writes++
+			attempt, nonce, redeemed = original.attempt, original.nonce, response
+		case "read_only":
+			reads++
+		default:
+			invalid = true
+		}
+		facts = append(facts, returnedFact{original.attempt, response.Mode, original.started, original.returned, capacity.GuestRetirementSHA(response)})
+	}
+	if invalid || writes != 1 || reads != contenders-1 || len(facts) != contenders || ctx.Err() != nil {
 		return proof, ErrOriginalUnknown
+	}
+	// Losing the first reply never grants a second send, even to its exact
+	// winning attempt. The original repository callback must return read_only.
+	replayRequest := model.CapacityMutationRedeemRequest{GrantID: grant.GrantID, AttemptID: attempt, SettlementTokenSHA256: capacity.BusinessCreationSHA256([]byte(nonce)), Capability: grant.Capability, IntegrationInstanceID: grant.IntegrationInstanceID, ScopeChecksum: grant.ScopeChecksum, ProfileName: grant.ProfileName, Slot: slot, RequestSHA256: grant.RequestSHA256}
+	var replay model.CapacityMutationRedeemResponse
+	if r.api(ctx, "/api/v1/capacity/mutations/redeem", "", replayRequest, &replay) != nil || replay.Mode != "read_only" || replay.GrantID != grant.GrantID || replay.AttemptID != attempt || replay.RequestSHA256 != grant.RequestSHA256 {
+		return proof, ErrOriginalUnknown
+	}
+	contract := struct {
+		Schema     string         `json:"schema"`
+		CoreSource string         `json:"core_source"`
+		Slot       int            `json:"slot"`
+		GrantID    string         `json:"grant_id"`
+		WriteOnce  int            `json:"write_once"`
+		ReadOnly   int            `json:"read_only"`
+		Facts      []returnedFact `json:"facts"`
+		ReplayMode string         `json:"same_attempt_replay_mode"`
+		ReplaySHA  string         `json:"same_attempt_typed_response_sha256"`
+	}{"original_guest_redemption_concurrency_v1", capacity.CurrentGuestCoreSource(), slot, grant.GrantID, writes, reads, facts, replay.Mode, capacity.GuestRetirementSHA(replay)}
+	if _, err := Publish(ctx, filepath.Join(dir, "redemption-concurrency-contract.json"), contract); err != nil {
+		return proof, err
 	}
 	redeemedAt := time.Now().UTC()
 	ready := Stage{FixtureSchema, "ready.json", slot, capacity.CurrentGuestCoreSource(), r.Request.SourceCommit, pre.OriginalDeadline, redeemedAt, capacity.GuestRetirementSHA(redeemed)}

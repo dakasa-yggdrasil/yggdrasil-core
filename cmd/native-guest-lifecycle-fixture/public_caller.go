@@ -10,6 +10,8 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
@@ -35,6 +37,12 @@ type originalPublicReturn struct {
 	BodySHA256            string    `json:"body_sha256"`
 	BodyBytes             int       `json:"body_bytes"`
 	OriginalContextFailed bool      `json:"original_context_failed"`
+	WorkflowStatus        string    `json:"workflow_status"`
+	WorkflowFailedStep    string    `json:"workflow_failed_step"`
+	WorkflowPredicate     string    `json:"workflow_predicate"`
+	WorkflowErrorClass    string    `json:"workflow_error_class"`
+	WorkflowErrorBytes    int       `json:"workflow_error_bytes"`
+	WorkflowErrorSHA256   string    `json:"workflow_error_sha256"`
 }
 
 func (f *fixture) originalPublic(ctx context.Context, method, path string, input, out any) (record originalPublicReturn, returnedErr error) {
@@ -42,6 +50,37 @@ func (f *fixture) originalPublic(ctx context.Context, method, path string, input
 	defer func() {
 		record.DriverReturnedAt = time.Now().UTC()
 		record.OriginalContextFailed = ctx.Err() != nil
+		if run, ok := out.(*model.WorkflowRunRecord); ok && returnedErr == nil {
+			switch run.Status {
+			case "pending", "running", "succeeded", "failed":
+				record.WorkflowStatus = run.Status
+			}
+			if run.Result != nil {
+				for _, step := range run.Result.Steps {
+					if step.Status != "failed" || !regexp.MustCompile(`^[a-z0-9_]{1,96}$`).MatchString(step.ID) {
+						continue
+					}
+					record.WorkflowFailedStep = step.ID
+					if predicate, ok := step.Metadata["original_guest_refusal_predicate"].(string); ok && regexp.MustCompile(`^original-guest-step-[0-9]{2}$`).MatchString(predicate) {
+						record.WorkflowPredicate = predicate
+					}
+					record.WorkflowErrorBytes = len(step.Error)
+					record.WorkflowErrorSHA256 = capacity.BusinessCreationSHA256([]byte(step.Error))
+					record.WorkflowErrorClass = "other"
+					switch {
+					case strings.Contains(step.Error, "protected original Guest source step unavailable"):
+						record.WorkflowErrorClass = "original_guest_source_hold"
+					case strings.Contains(step.Error, "capacity intent conflict"):
+						record.WorkflowErrorClass = "capacity_conflict"
+					case strings.Contains(strings.ToLower(step.Error), "condition"):
+						record.WorkflowErrorClass = "condition"
+					case strings.Contains(strings.ToLower(step.Error), "authorization") || strings.Contains(strings.ToLower(step.Error), "forbidden"):
+						record.WorkflowErrorClass = "authorization"
+					}
+					break
+				}
+			}
+		}
 		f.publicReturns = append(f.publicReturns, record)
 	}()
 	var body []byte

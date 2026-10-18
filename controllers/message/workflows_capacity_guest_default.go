@@ -24,3 +24,16 @@ func sourceGuestQualificationStep(context.Context, repository.CapacityStore, mod
 func guestOriginalSourceBeforeRetirement(context.Context, repository.CapacityStore, model.Manifest, model.CapacityPolicySpec, guestOriginalStepInput, ed25519.PrivateKey) (func() error, error) {
 	return nil, errOriginalGuestStep
 }
+
+// Production retains the original single issue and all repository admission gates.
+func guestOriginalSourceIssue(ctx context.Context, store repository.CapacityStore, policy model.Manifest, step model.WorkflowStepSpec, input guestOriginalStepInput, issue model.CapacityMutationIssue) (model.CapacityMutationGrant, error) {
+	return store.IssueMutation(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, issue)
+}
+
+func guestOriginalSourceAssertApply(context.Context, repository.CapacityStore, model.Manifest, guestOriginalStepInput, model.CapacityMutationProof, model.CapacityMutationGrant) error {
+	return nil
+}
+
+func guestOriginalSourceAssertNativeRefusals(context.Context, repository.CapacityStore, model.Manifest, guestOriginalStepInput, model.CapacityMutationProof, model.CapacityMutationGrant) error {
+	return nil
+}
