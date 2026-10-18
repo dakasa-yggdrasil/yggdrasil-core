@@ -203,7 +203,13 @@ func prepareMutationPlan(p model.CapacityPolicySpec, issue model.CapacityMutatio
 	if err := d.Decode(&spec); err != nil || spec == nil {
 		return plan, fmt.Errorf("capacity mutation desired spec must be an object")
 	}
-	if d.Decode(new(any)) != io.EOF || !validMutationProjection(*spec) {
+	if d.Decode(new(any)) != io.EOF {
+		return plan, fmt.Errorf("capacity mutation desired spec requires one closed object")
+	}
+	if spec.Capability == "start_ec2_instance" || spec.Capability == "stop_ec2_instance" {
+		return plan, ErrPowerLifecycleUnqualified
+	}
+	if !validMutationProjection(*spec) {
 		return plan, fmt.Errorf("capacity mutation desired spec requires a bounded closed non-secret projection")
 	}
 	if spec.IntegrationInstanceID != b.IntegrationInstanceID || spec.ScopeChecksum != b.ScopeChecksum || spec.ProfileName != b.ProfileName {

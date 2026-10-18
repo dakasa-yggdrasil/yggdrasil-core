@@ -1,6 +1,7 @@
 package model
 
 import (
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity/executorpower"
 	"time"
 
 	"github.com/google/uuid"
@@ -9,6 +10,7 @@ import (
 // CapacityPolicySpec is an operator-owned, provider-neutral capacity envelope.
 // Price records and validation references are declarations, not live stock receipts.
 type CapacityPolicySpec struct {
+	ExecutorPowerBinding      *executorpower.Binding             `json:"executor_power_binding,omitempty"`
 	Environment               string                             `json:"environment"`
 	Domain                    string                             `json:"domain"`
 	Dimension                 string                             `json:"dimension"`
@@ -37,7 +39,18 @@ type CapacityPolicySpec struct {
 	GuestRetirementBinding    *CapacityGuestRetirementBinding    `json:"guest_retirement_binding,omitempty"`
 	BusinessCreationBinding   *CapacityBusinessCreationBinding   `json:"business_creation_binding,omitempty"`
 	ControllerBinding         *CapacityControllerBinding         `json:"controller_binding,omitempty"`
+	ExecutorActivityBinding   *CapacityExecutorActivityBinding   `json:"executor_activity_binding,omitempty"`
 	NativeNotifyWindowBinding *CapacityNativeNotifyWindowBinding `json:"native_notify_window_binding,omitempty"`
+}
+
+// Optional lab demand/shutdown prerequisite. It does not lower the capacity floor
+// or authorize any provider action. Configuration belongs to the pinned operator policy.
+type CapacityExecutorActivityBinding struct {
+	Mode                     string `json:"mode"`
+	LeaseTTLSeconds          int    `json:"lease_ttl_seconds"`
+	IdleAfterSeconds         int    `json:"idle_after_seconds"`
+	MaxObservationAgeSeconds int    `json:"max_observation_age_seconds"`
+	MaxTasks                 int    `json:"max_tasks"`
 }
 
 // This optional operator binding selects fixed product HTTPS transports. It

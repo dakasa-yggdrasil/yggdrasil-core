@@ -232,7 +232,7 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 		}
 		// Never-redeemed permissions have never authorized an SDK send. Only
 		// those may expire without a remote mutation receipt.
-		if _, err = tx.ExecContext(ctx, `UPDATE public.capacity_mutation_grants g SET state='expired',grant_record=jsonb_set(grant_record,'{grant,state}','"expired"'),updated_at=$5 WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state='issued' AND expires_at<=$5 AND NOT EXISTS (SELECT 1 FROM public.capacity_factory_original_grant_bindings h WHERE h.grant_id=g.id)`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, now); err != nil {
+		if _, err = tx.ExecContext(ctx, `UPDATE public.capacity_mutation_grants g SET state='expired',grant_record=jsonb_set(grant_record,'{grant,state}','"expired"'),updated_at=$5 WHERE NOT (grant_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state='issued' AND expires_at<=$5 AND NOT EXISTS (SELECT 1 FROM public.capacity_factory_original_grant_bindings h WHERE h.grant_id=g.id)`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, now); err != nil {
 			return err
 		}
 		var data []byte
@@ -259,17 +259,17 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 			return ErrCapacityConflict
 		}
 		var live, pending, pendingDestroy, started int
-		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND resource_id<>''`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&live); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE NOT (slot_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND resource_id<>''`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&live); err != nil {
 			return err
 		}
-		if err = tx.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE state IN ('issued','redeemed','settled','compensating') AND grant_record->'grant'->>'capability' ~ '^ensure_'),count(*) FILTER(WHERE state IN ('issued','redeemed','settled') AND grant_record->'grant'->>'capability' ~ '^destroy_' AND COALESCE(grant_record->'grant'->>'compensation_of','')=''),count(*) FILTER(WHERE generation=$5 AND state<>'expired' AND state<>'rejected') FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, generation).Scan(&pending, &pendingDestroy, &started); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE state IN ('issued','redeemed','settled','compensating') AND grant_record->'grant'->>'capability' ~ '^ensure_'),count(*) FILTER(WHERE state IN ('issued','redeemed','settled') AND grant_record->'grant'->>'capability' ~ '^destroy_' AND COALESCE(grant_record->'grant'->>'compensation_of','')=''),count(*) FILTER(WHERE generation=$5 AND state<>'expired' AND state<>'rejected') FROM public.capacity_mutation_grants WHERE NOT (grant_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, generation).Scan(&pending, &pendingDestroy, &started); err != nil {
 			return err
 		}
 		if started == 0 && live != intent.BaselineSnapshot.Units {
 			return fmt.Errorf("%w: native membership has not been completely registered", ErrCapacityConflict)
 		}
 		var fresh int
-		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND resource_id<>'' AND (slot_record->>'observed_at')::timestamptz BETWEEN $5 AND $6`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, now.Add(-time.Duration(p.MaxEvidenceAgeSeconds)*time.Second), now.Add(5*time.Second)).Scan(&fresh); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE NOT (slot_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND resource_id<>'' AND (slot_record->>'observed_at')::timestamptz BETWEEN $5 AND $6`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, now.Add(-time.Duration(p.MaxEvidenceAgeSeconds)*time.Second), now.Add(5*time.Second)).Scan(&fresh); err != nil {
 			return err
 		}
 		if fresh != live {
@@ -339,7 +339,7 @@ func saveMutationSlot(ctx context.Context, tx *sql.Tx, namespace string, p model
 	if err != nil {
 		return err
 	}
-	result, err := tx.ExecContext(ctx, `INSERT INTO public.capacity_resource_slots(integration_instance_id,scope_checksum,profile_name,slot,namespace,environment,domain,dimension,resource_id,slot_record) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb) ON CONFLICT(integration_instance_id,scope_checksum,profile_name,slot) DO UPDATE SET resource_id=EXCLUDED.resource_id,slot_record=EXCLUDED.slot_record,revision=capacity_resource_slots.revision+1,updated_at=clock_timestamp() WHERE capacity_resource_slots.namespace=EXCLUDED.namespace AND capacity_resource_slots.environment=EXCLUDED.environment AND capacity_resource_slots.domain=EXCLUDED.domain AND capacity_resource_slots.dimension=EXCLUDED.dimension`, b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName, slot, namespace, p.Environment, p.Domain, p.Dimension, record.ResourceID, raw)
+	result, err := tx.ExecContext(ctx, `INSERT INTO public.capacity_resource_slots(integration_instance_id,scope_checksum,profile_name,slot,namespace,environment,domain,dimension,resource_id,slot_record) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10::jsonb) ON CONFLICT(integration_instance_id,scope_checksum,profile_name,slot) DO UPDATE SET resource_id=EXCLUDED.resource_id,slot_record=EXCLUDED.slot_record,revision=capacity_resource_slots.revision+1,updated_at=clock_timestamp() WHERE NOT (capacity_resource_slots.slot_record ? 'authority_kind') AND capacity_resource_slots.namespace=EXCLUDED.namespace AND capacity_resource_slots.environment=EXCLUDED.environment AND capacity_resource_slots.domain=EXCLUDED.domain AND capacity_resource_slots.dimension=EXCLUDED.dimension`, b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName, slot, namespace, p.Environment, p.Domain, p.Dimension, record.ResourceID, raw)
 	if err != nil {
 		return err
 	}
@@ -358,7 +358,7 @@ func saveMutationGrant(ctx context.Context, tx *sql.Tx, record capacityMutationR
 	if err != nil {
 		return err
 	}
-	_, err = tx.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET state=$2,grant_record=$3::jsonb,updated_at=clock_timestamp() WHERE id=$1`, record.Grant.GrantID, record.Grant.State, raw)
+	_, err = tx.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET state=$2,grant_record=$3::jsonb,updated_at=clock_timestamp() WHERE id=$1 AND NOT (grant_record ? 'authority_kind')`, record.Grant.GrantID, record.Grant.State, raw)
 	return err
 }
 
@@ -457,6 +457,9 @@ func (s CapacityStore) RedeemMutation(ctx context.Context, principal string, r m
 		}
 		if !active {
 			return ErrCapacityConflict
+		}
+		if err := guardExecutorPowerAdoption(ctx, tx, g.ExpectedResourceID); err != nil {
+			return err
 		}
 		if g.CompensationOf != "" {
 			return redeemCompensation(ctx, tx, record, p, now, r, &response)

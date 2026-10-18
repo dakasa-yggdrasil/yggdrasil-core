@@ -8,6 +8,7 @@ import (
 	"errors"
 	"fmt"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity/executorpower"
 	"io"
 	"net/http"
 	"os"
@@ -139,8 +140,46 @@ func (s *Server) serveCapacityMutationRequest(w http.ResponseWriter, r *http.Req
 		mutationHTTPError(w, fmt.Errorf("database unavailable"))
 		return
 	}
+	store.ExecutorPowerEnabled = os.Getenv("YGGDRASIL_EXECUTOR_POWER_ENABLED") == "true"
 	route := r.URL.Path
 	switch {
+	case r.Method == http.MethodPost && (route == capacityMutationBasePath+"/power/redeem" || route == capacityMutationBasePath+"/power/settle"):
+		var payload struct {
+			IntegrationID string                `json:"integration_instance_id"`
+			Action        string                `json:"action"`
+			Claim         *executorpower.Claim  `json:"claim,omitempty"`
+			Result        *executorpower.Result `json:"result,omitempty"`
+		}
+		r.Body = http.MaxBytesReader(w, r.Body, 32768)
+		raw, err := io.ReadAll(r.Body)
+		if err != nil || r.TLS == nil || capacity.DecodeNativeCapacity(json.RawMessage(raw), &payload) != nil || payload.IntegrationID != p.instanceID || executorpower.Capability(payload.Action) == "" || !p.capabilities[executorpower.Capability(payload.Action)] {
+			mutationHTTPError(w, repository.ErrCapacityMutationAuthorization)
+			return
+		}
+		if route == capacityMutationBasePath+"/power/redeem" {
+			if payload.Claim == nil || payload.Result != nil || payload.Claim.Action != payload.Action {
+				mutationHTTPError(w, repository.ErrCapacityMutationAuthorization)
+				return
+			}
+			reply, e := store.RedeemExecutorPower(ctx, p.base.principalID, p.instanceID, *payload.Claim)
+			if e != nil {
+				mutationHTTPError(w, e)
+				return
+			}
+			writeJSON(w, 200, reply)
+			return
+		}
+		tokens := r.Header.Values("X-Capacity-Mutation-Settlement")
+		if payload.Result == nil || payload.Claim != nil || len(tokens) != 1 || len(tokens[0]) < 32 || len(tokens[0]) > 256 {
+			mutationHTTPError(w, repository.ErrCapacityMutationAuthorization)
+			return
+		}
+		if e := store.SettleExecutorPower(ctx, p.base.principalID, p.instanceID, payload.Action, tokens[0], *payload.Result); e != nil {
+			mutationHTTPError(w, e)
+			return
+		}
+		writeJSON(w, 200, map[string]bool{"recorded": true})
+		return
 	case r.Method == http.MethodPost && route == capacityMutationBasePath+"/native/result":
 		var payload model.CapacityNativeReleaseResult
 		r.Body = http.MaxBytesReader(w, r.Body, 32768)

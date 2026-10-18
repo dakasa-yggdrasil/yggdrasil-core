@@ -6,6 +6,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity/executorpower"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
@@ -22,16 +23,20 @@ const maxCapacityGeneration int64 = 9007199254740991
 // CapacityStore serializes each logical dimension in PostgreSQL. The process
 // gate is explicit and defaults to false in the workflow handler.
 type CapacityStore struct {
-	DB                    *sql.DB
-	ExecutionEnabled      bool
-	AdmissionOnly         bool
-	WorkflowID            uuid.UUID
-	ExecutorID            string
-	guestOriginal         *guestOriginalProvisioningContext
-	guestRetirementOrigin *guestOriginalProvisioningContext
-	hostOriginalClaim     *hostOriginalClaim
-	hostOriginalFactory   *hostOriginalFactoryScope
-	hostOriginalOrdinary  *hostOriginalOrdinaryFactory
+	ExecutorPowerEnabled      bool
+	ExecutorPowerOperator     string
+	ExecutorPowerObserver     executorpower.Observer
+	DB                        *sql.DB
+	ExecutionEnabled          bool
+	AdmissionOnly             bool
+	WorkflowID                uuid.UUID
+	ExecutorID                string
+	ExecutorActivityPrincipal string
+	guestOriginal             *guestOriginalProvisioningContext
+	guestRetirementOrigin     *guestOriginalProvisioningContext
+	hostOriginalClaim         *hostOriginalClaim
+	hostOriginalFactory       *hostOriginalFactoryScope
+	hostOriginalOrdinary      *hostOriginalOrdinaryFactory
 }
 
 // Assess persists a proposal, even in shadow mode. An outstanding generation
@@ -478,11 +483,11 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	}
 	if next.Phase == "promoted" || next.Phase == "reconciled" || next.Phase == "reconciled_partial" || next.Phase == "reconciled_failed_floor" || next.Phase == "aborted" {
 		// Only never-redeemed permissions can expire without remote proof.
-		if _, err = tx.ExecContext(ctx, `UPDATE public.capacity_mutation_grants g SET state='expired',grant_record=jsonb_set(grant_record,'{grant,state}','"expired"'),updated_at=$5 WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state='issued' AND expires_at<=$5 AND NOT EXISTS (SELECT 1 FROM public.capacity_factory_original_grant_bindings h WHERE h.grant_id=g.id)`, next.Namespace, p.Environment, p.Domain, p.Dimension, now); err != nil {
+		if _, err = tx.ExecContext(ctx, `UPDATE public.capacity_mutation_grants g SET state='expired',grant_record=jsonb_set(grant_record,'{grant,state}','"expired"'),updated_at=$5 WHERE NOT (grant_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state='issued' AND expires_at<=$5 AND NOT EXISTS (SELECT 1 FROM public.capacity_factory_original_grant_bindings h WHERE h.grant_id=g.id)`, next.Namespace, p.Environment, p.Domain, p.Dimension, now); err != nil {
 			return model.CapacityIntent{}, err
 		}
 		var unresolved int
-		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN ('issued','redeemed','settled','compensating')`, next.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&unresolved); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE NOT (grant_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN ('issued','redeemed','settled','compensating')`, next.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&unresolved); err != nil {
 			return model.CapacityIntent{}, err
 		}
 		if unresolved != 0 {
@@ -490,7 +495,7 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 		}
 		if next.Phase == "reconciled_partial" || next.Phase == "reconciled_failed_floor" {
 			var live, fresh, matchingProfile int
-			if err = tx.QueryRowContext(ctx, `SELECT count(*),count(*) FILTER(WHERE (slot_record->>'observed_at')::timestamptz BETWEEN $5 AND $6),count(*) FILTER(WHERE profile_name=$7) FROM public.capacity_resource_slots WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND resource_id<>''`, next.Namespace, p.Environment, p.Domain, p.Dimension, now.Add(-time.Duration(p.MaxEvidenceAgeSeconds)*time.Second), now.Add(5*time.Second), next.Assessment.Snapshot.Profile).Scan(&live, &fresh, &matchingProfile); err != nil {
+			if err = tx.QueryRowContext(ctx, `SELECT count(*),count(*) FILTER(WHERE (slot_record->>'observed_at')::timestamptz BETWEEN $5 AND $6),count(*) FILTER(WHERE profile_name=$7) FROM public.capacity_resource_slots WHERE NOT (slot_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND resource_id<>''`, next.Namespace, p.Environment, p.Domain, p.Dimension, now.Add(-time.Duration(p.MaxEvidenceAgeSeconds)*time.Second), now.Add(5*time.Second), next.Assessment.Snapshot.Profile).Scan(&live, &fresh, &matchingProfile); err != nil {
 				return model.CapacityIntent{}, err
 			}
 			if live != next.Assessment.Snapshot.Units || fresh != live || matchingProfile != live {
@@ -499,7 +504,7 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 		}
 		if next.Phase == "reconciled_failed_floor" {
 			var ensured int
-			if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5 AND state='confirmed' AND grant_record->'grant'->>'capability'=grant_record->'binding'->>'ensure_capability'`, next.Namespace, p.Environment, p.Domain, p.Dimension, next.Generation).Scan(&ensured); err != nil {
+			if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE NOT (grant_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5 AND state='confirmed' AND grant_record->'grant'->>'capability'=grant_record->'binding'->>'ensure_capability'`, next.Namespace, p.Environment, p.Domain, p.Dimension, next.Generation).Scan(&ensured); err != nil {
 				return model.CapacityIntent{}, err
 			}
 			if ensured != 0 {
@@ -508,7 +513,7 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 		}
 		if next.Phase == "aborted" {
 			var mutations int
-			if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5 AND state IN ('confirmed','compensated')`, next.Namespace, p.Environment, p.Domain, p.Dimension, next.Generation).Scan(&mutations); err != nil {
+			if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE NOT (grant_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND generation=$5 AND state IN ('confirmed','compensated')`, next.Namespace, p.Environment, p.Domain, p.Dimension, next.Generation).Scan(&mutations); err != nil {
 				return model.CapacityIntent{}, err
 			}
 			if mutations != 0 {
