@@ -428,7 +428,7 @@ func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, poli
 		Status        string `json:"status"`
 	}
 	if PositiveCase(r.Request.NativeCase) {
-		if err := r.originalSettlementScopeContract(ctx, store, policy, grant, nonce, settlement); err != nil {
+		if err := r.originalSettlementScopeContract(ctx, store, policy, grant, pre, nonce, settlement); err != nil {
 			return proof, err
 		}
 	}
@@ -509,7 +509,7 @@ func (r *Realm) Close() {
 // tuple. The first accepted settlement uses the SAME real store with execution
 // paused, then Create retains its unchanged authenticated HTTP settlement call.
 // No native mutation, nonce, lease, timestamp or proof is synthesized here.
-func (r *Realm) originalSettlementScopeContract(ctx context.Context, store repository.CapacityStore, policy model.Manifest, grant model.CapacityMutationGrant, nonce string, settlement model.CapacityMutationSettleRequest) error {
+func (r *Realm) originalSettlementScopeContract(ctx context.Context, store repository.CapacityStore, policy model.Manifest, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, nonce string, settlement model.CapacityMutationSettleRequest) error {
 	var p model.CapacityPolicySpec
 	if json.Unmarshal(policy.Spec, &p) != nil || ctx.Err() != nil || settlement.Outcome != "accepted" || settlement.GrantID != grant.GrantID || len(nonce) < 32 || grant.Slot < 1 || grant.Slot > 2 {
 		return ErrOriginalUnknown
@@ -518,8 +518,9 @@ func (r *Realm) originalSettlementScopeContract(ctx context.Context, store repos
 	if err != nil || binding.AdapterPrincipalID == "" || binding.IntegrationInstanceID != grant.IntegrationInstanceID || binding.ScopeChecksum != grant.ScopeChecksum || binding.ProfileName != grant.ProfileName {
 		return ErrOriginalUnknown
 	}
-	current, err := store.Observe(ctx, policy)
-	if err != nil || current.LeaseOwner == "" || store.ExecutorID == "" {
+	// Observe intentionally redacts private lease fields. Use only the same
+	// durable preregistration already loaded by the original source Create.
+	if pre.OriginalCreateGrantID != grant.GrantID || pre.PolicyID != policy.ID.String() || pre.ExecutorID != store.ExecutorID || pre.LeaseOwner == "" || store.ExecutorID == "" {
 		return ErrOriginalUnknown
 	}
 	foreignPrincipal := uuid.NewString()
@@ -550,7 +551,7 @@ func (r *Realm) originalSettlementScopeContract(ctx context.Context, store repos
 	if err != nil {
 		return err
 	}
-	for _, private := range []string{nonce, capacity.BusinessCreationSHA256([]byte(nonce)), current.LeaseOwner, store.ExecutorID} {
+	for _, private := range []string{nonce, capacity.BusinessCreationSHA256([]byte(nonce)), pre.LeaseOwner, pre.ExecutorID} {
 		if private == "" || strings.Contains(string(wire), private) {
 			return ErrOriginalUnknown
 		}
