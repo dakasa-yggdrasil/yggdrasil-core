@@ -236,6 +236,7 @@ func (f *fixture) runOriginalPublicCaller(ctx context.Context) (runErr error) {
 		return err
 	}
 	runIDs = append(runIDs, burst.ID.String())
+	if q.CanonicalSourceCompensationCase(f.request.NativeCase) {return f.finishOriginalCanonicalSourceCompensation(ctx,p,baseline,burst,runIDs,returns)}
 	if q.SourceCompensationCase(f.request.NativeCase) {
 		return f.finishOriginalSourceCompensation(ctx,p,baseline,burst,runIDs,returns)
 	}

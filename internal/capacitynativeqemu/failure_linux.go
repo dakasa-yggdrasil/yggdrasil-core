@@ -33,7 +33,23 @@ type QualificationProvisioningJournalRead struct {
 	OriginalCloseReturnedAt time.Time                             `json:"original_close_returned_at"`
 	Records                 []QualificationProvisioningRecordRead `json:"records"`
 }
+type CanonicalPayloadPreparation struct {
+ Schema string `json:"schema"`
+ ActionID string `json:"action_id"`
+ SessionNonceSHA256 string `json:"session_nonce_sha256"`
+ PreregistrationID string `json:"preregistration_id"`
+ ParentGrantID string `json:"parent_grant_id"`
+ CreateWitnessSHA256 string `json:"create_witness_sha256"`
+ GuestSource string `json:"guest_source"`
+ PreparedAt time.Time `json:"prepared_at"`
+ OriginalWriteReturnedAt time.Time `json:"original_write_returned_at"`
+ OriginalReadReturnedAt time.Time `json:"original_read_returned_at"`
+ OriginalBodySHA256 string `json:"original_body_sha256"`
+}
 type QualificationFailureRecord struct {
+ OriginalPayloadPreparation *CanonicalPayloadPreparation `json:"original_payload_preparation,omitempty"`
+ OriginalPayloadActionID string `json:"original_payload_action_id,omitempty"`
+ OriginalPayloadSessionNonceSHA256 string `json:"original_payload_session_nonce_sha256,omitempty"`
 	Schema                        string                                        `json:"schema"`
 	NativeCase                    string                                        `json:"native_case"`
 	SourceCommit                  string                                        `json:"source_commit"`

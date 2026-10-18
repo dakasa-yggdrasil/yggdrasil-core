@@ -203,9 +203,10 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		if parsed.PreregistrationID != "" {
 			return fail("original-guest-step-18")
 		}
-		if originalGuestSourceProvider.Prepare(ctx, parsed.Slot) != nil {
-			return fail("original-guest-step-19")
-		}
+        permissionOnly,permissionErr:=guestOriginalCanonicalFloorPreparing(ctx,store,policy,parsed)
+        if permissionErr!=nil{return fail("original-canonical-floor-permission-gate")}
+        if !permissionOnly && originalGuestSourceProvider.Prepare(ctx,parsed.Slot)!=nil{return fail("original-guest-step-19")}
+
 		if recoveredOutput, handled, recoveryErr := guestOriginalSourceLivePartial(ctx, store, policy, p, b, parsed, key); handled {
 			if recoveryErr != nil { return fail("original-source-live-partial") }
 			wire, encodeErr := json.Marshal(recoveredOutput)
@@ -231,6 +232,11 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 			return fail("original-guest-step-22")
 		}
 		store = store.WithOriginalGuestProvisioning(step, capacity.CurrentGuestCoreSource(), capacity.BusinessCreationSHA256([]byte(nonce)))
+        if output,handled,permissionErr:=guestOriginalCanonicalFloorPermission(ctx,store,policy,parsed,model.CapacityMutationIssue{BindingName:b.Name,DesiredSpec:body});handled{
+            if permissionErr!=nil{return fail("original-canonical-floor-next-permission")}
+            encoded,encodeErr:=json.Marshal(output);if encodeErr!=nil || json.Unmarshal(encoded,&result.Metadata)!=nil{return fail("original-canonical-floor-next-output")}
+            result.Status,result.Error,result.FinishedAt="succeeded","",time.Now().UTC();return result
+        }
 		grant, err := guestOriginalSourceIssue(ctx, store, policy, step, parsed, model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: body})
 		if err != nil {
 			return fail("original-guest-step-23")

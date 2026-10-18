@@ -20,10 +20,10 @@ import (
 )
 
 func SourceCompensationCase(s string) bool {
- switch s { case "compensation_unprotected_failed_create","compensation_protected_failed_create","compensation_unprotected_lost_create_reply","compensation_protected_lost_create_reply","source_live_failed_floor_recovery":return true };return false
+ switch s { case "canonical_compensation_unprotected_failed_create", "canonical_compensation_protected_failed_create", "canonical_failed_floor_recovery", "compensation_unprotected_failed_create","compensation_protected_failed_create","compensation_unprotected_lost_create_reply","compensation_protected_lost_create_reply","source_live_failed_floor_recovery":return true };return false
 }
 func SourceLostCreateCase(s string) bool { return s=="compensation_unprotected_lost_create_reply" || s=="compensation_protected_lost_create_reply" }
-func SourceProtectedCompensationCase(s string) bool { return s=="compensation_protected_failed_create" || s=="compensation_protected_lost_create_reply" }
+func SourceProtectedCompensationCase(s string) bool { return s=="canonical_compensation_protected_failed_create" || s=="compensation_protected_failed_create" || s=="compensation_protected_lost_create_reply" }
 
 // Host-original source authority, never an enrollment or successful Guest
 // retirement. Unenrolled uncertain creations are explicitly cleanup-only.
@@ -138,3 +138,5 @@ func (r *Realm) ReadSourceFailureCleanup(ctx context.Context,a SourceFailureClea
  if f.OriginalPinReturnedAt.Before(f.OriginalPinStartedAt) || f.OriginalSignalCalledAt.Before(f.OriginalPinReturnedAt) || f.OriginalSignalReturnedAt.Before(f.OriginalSignalCalledAt) || f.OriginalWaitReturnedAt.Before(f.OriginalSignalCalledAt) || f.OriginalStderrCloseReturnedAt.Before(f.OriginalWaitReturnedAt) || f.OriginalPIDFDOffReturnedAt.Before(f.OriginalStderrCloseReturnedAt) || f.OriginalPIDFDCloseReturnedAt.Before(f.OriginalPIDFDOffReturnedAt) || f.OriginalUnlinkCalledAt.Before(f.OriginalPIDFDCloseReturnedAt) || f.OriginalUnlinkReturnedAt.Before(f.OriginalUnlinkCalledAt) || f.OriginalDirectorySyncReturnedAt.Before(f.OriginalUnlinkReturnedAt) || f.OriginalAbsenceReturnedAt.Before(f.OriginalDirectorySyncReturnedAt) || f.OriginalDirectoryCloseReturnedAt.Before(f.OriginalAbsenceReturnedAt){return f,ErrOriginalUnknown}
  return f,nil
 }
+
+func CanonicalSourceCompensationCase(s string) bool {return s=="canonical_compensation_unprotected_failed_create" || s=="canonical_compensation_protected_failed_create" || s=="canonical_failed_floor_recovery"}

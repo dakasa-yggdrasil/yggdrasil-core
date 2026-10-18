@@ -31,7 +31,7 @@ type SourceFloorPolicyBridge struct {
  NativeQualified bool `json:"native_qualified"`
 }
 
-func SourceFailedFloorCase(value string) bool { return value == "source_live_failed_floor_recovery" }
+func SourceFailedFloorCase(value string) bool { return value == "source_live_failed_floor_recovery" || value == "canonical_failed_floor_recovery" }
 
 type SourceFailedFloorContract struct {
  Schema string `json:"schema"`

@@ -77,6 +77,15 @@ func guestOriginalSourceBeforeRetirement(ctx context.Context, store repository.C
 	if err := originalGuestNativeRealm.PinOriginalRetirement(ctx, 2); err != nil {
 		return nil, err
 	}
+	if q.PositiveCase(originalGuestNativeRealm.Request.NativeCase) {
+	// Retain the genuine live physical tuple BEFORE quiescence. This record
+	// is never refreshed or rewritten after deletion to manufacture presence.
+	readoptionBinding,err:=capacity.VMObservationBinding(p,input.BindingName)
+	if err!=nil{return nil,err}
+	presence,err:=originalGuestNativeRealm.OriginalReadoptionPresence(ctx,2,readoptionBinding)
+	if err!=nil{return nil,err}
+	if _,err=q.Publish(ctx,filepath.Join(q.SlotDirectory(originalGuestNativeRealm.PrivateDirectory,2),"delete-readoption-original-presence.json"),presence);err!=nil{return nil,err}
+	}
 	original, cancel := context.WithCancel(ctx)
 	returned := make(chan error, 1)
 	go func() {
@@ -322,6 +331,7 @@ func sourceNativeConfirmedDeleteContract(ctx context.Context, store repository.C
 	if !tombstone || resource != "" || created != proof.ResourceCreatedAt || events != 1 || ctx.Err() != nil {
 		return errOriginalGuestStep
 	}
+	if err=sourceNativePostDeleteReadoptionContract(ctx,store,policy,p,b,input,proof,confirmed);err!=nil{return err}
 	contract := struct {
 		Schema string `json:"schema"`
 		CoreSource string `json:"core_source"`

@@ -88,6 +88,7 @@ type Realm struct {
 	enrollments      map[int]model.CapacityGuestOriginalProvisioningReceipt
 	retirementPins   map[int]*OriginalPIDFD
 	disks            map[int]OriginalDisk
+	deleteDirectory OriginalDisk
 	deleted          bool
 }
 

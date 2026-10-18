@@ -257,7 +257,7 @@ func (s CapacityStore) IssueCompensation(ctx context.Context, policy model.Manif
 	return result, err
 }
 
-func redeemCompensation(ctx context.Context, tx *sql.Tx, record *capacityMutationRecord, p model.CapacityPolicySpec, now time.Time, request model.CapacityMutationRedeemRequest, response *model.CapacityMutationRedeemResponse) error {
+func redeemCompensation(s CapacityStore, ctx context.Context, tx *sql.Tx, record *capacityMutationRecord, p model.CapacityPolicySpec, now time.Time, request model.CapacityMutationRedeemRequest, response *model.CapacityMutationRedeemResponse) error {
 	g := record.Grant
 	if !record.Binding.CompensationEnabled || g.Capability != record.Binding.DestroyCapability || record.CompensationDrainProof == nil || !validCapacityExecutor(record.ExecutorID) {
 		return ErrCapacityConflict
@@ -273,7 +273,7 @@ func redeemCompensation(ctx context.Context, tx *sql.Tx, record *capacityMutatio
 	if parent.Grant.State != "compensating" || parent.Proof == nil || !validFailedCreationProof(p, parent, *parent.Proof, now) || parent.Proof.ResourceID != g.ExpectedResourceID || parent.Proof.ResourceCreatedAt != g.ExpectedResourceCreatedAt || !sameCompensationBinding(record.Binding, parent.Binding) {
 		return ErrCapacityConflict
 	}
-	if err := (CapacityStore{}).guestFailedCreateCleanupTx(ctx, tx, p, parent, *parent.Proof, now, g.GrantID); err != nil {
+	if err := s.guestFailedCreateCleanupTx(ctx, tx, p, parent, *parent.Proof, now, g.GrantID); err != nil {
 		return err
 	}
 	var ns string

@@ -68,6 +68,11 @@ func(f *fixture) runOriginalFailedFloorCaller(ctx context.Context)error{
  burst,burstReturns,err:=f.originalWorkflow(ctx,"floor_repair",2,q.QualificationAssessment(p,1,0.9,at),"")
  returns=append(returns,burstReturns...)
  if err!=nil || burst.Status!="failed"{return q.ErrOriginalUnknown}
+ if q.CanonicalSourceCompensationCase(f.request.NativeCase){
+  if err=f.finishOriginalCanonicalSourceCompensation(ctx,p,baseline,burst,[]string{baseline.ID.String(),burst.ID.String()},returns);err!=nil{return err}
+  pre,err:=f.realm.OriginalPreregistration(2);if err!=nil{return err}
+  return f.finishOriginalCanonicalFloorRecovery(ctx,p,store,bridge,pre)
+ }
  if err=f.finishOriginalSourceCompensation(ctx,p,baseline,burst,[]string{baseline.ID.String(),burst.ID.String()},returns);err!=nil{return err}
  // The compensation dependency may publish Source cleanup completion, but
  // this case must never publish its ordinary/native completion as floor PASS.
