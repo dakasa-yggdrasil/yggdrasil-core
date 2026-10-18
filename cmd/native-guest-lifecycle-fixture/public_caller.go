@@ -55,6 +55,23 @@ func (f *fixture) originalPublic(ctx context.Context, method, path string, input
 			case "pending", "running", "succeeded", "failed":
 				record.WorkflowStatus = run.Status
 			}
+			// Async dispatch can fail before any step result exists. Retain only
+			// closed class, byte count and hash of that actual top-level error.
+			if run.Error != "" {
+				record.WorkflowErrorBytes = len(run.Error)
+				record.WorkflowErrorSHA256 = capacity.BusinessCreationSHA256([]byte(run.Error))
+				record.WorkflowErrorClass = "other"
+				switch run.Error {
+				case "sql: no rows in result set":
+					record.WorkflowErrorClass = "sql_no_rows"
+				case "capacity execution is disabled":
+					record.WorkflowErrorClass = "capacity_disabled"
+				case "capacity intent conflict":
+					record.WorkflowErrorClass = "capacity_conflict"
+				case "capacity mutation authorization denied":
+					record.WorkflowErrorClass = "authorization"
+				}
+			}
 			if run.Result != nil {
 				for _, step := range run.Result.Steps {
 					if step.Status != "failed" || !regexp.MustCompile(`^[a-z0-9_]{1,96}$`).MatchString(step.ID) {
@@ -63,6 +80,9 @@ func (f *fixture) originalPublic(ctx context.Context, method, path string, input
 					record.WorkflowFailedStep = step.ID
 					if predicate, ok := step.Metadata["original_guest_refusal_predicate"].(string); ok && regexp.MustCompile(`^original-guest-step-[0-9]{2}$`).MatchString(predicate) {
 						record.WorkflowPredicate = predicate
+					}
+					if step.Error == "" {
+						break
 					}
 					record.WorkflowErrorBytes = len(step.Error)
 					record.WorkflowErrorSHA256 = capacity.BusinessCreationSHA256([]byte(step.Error))

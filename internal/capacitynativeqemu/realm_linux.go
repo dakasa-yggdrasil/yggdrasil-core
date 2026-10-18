@@ -10,6 +10,8 @@ import (
 	"crypto/x509"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
+	"strings"
 	"io"
 	"net/http"
 	"os"
@@ -269,7 +271,7 @@ func (r *Realm) RejectOriginalUnsent(ctx context.Context, grant model.CapacityMu
 	return err
 }
 
-func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, _ model.Manifest, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration) (model.CapacityMutationProof, error) {
+func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, policy model.Manifest, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration) (model.CapacityMutationProof, error) {
 	var proof model.CapacityMutationProof
 	slot := grant.Slot
 	if slot < 1 || slot > 2 {
@@ -425,6 +427,11 @@ func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, _ mo
 		RequestSHA256 string `json:"request_sha256"`
 		Status        string `json:"status"`
 	}
+	if PositiveCase(r.Request.NativeCase) {
+		if err := r.originalSettlementScopeContract(ctx, store, policy, grant, nonce, settlement); err != nil {
+			return proof, err
+		}
+	}
 	if r.api(ctx, "/api/v1/capacity/mutations/settle", nonce, settlement, &settled) != nil || settled.GrantID != grant.GrantID || settled.AttemptID != attempt || settled.RequestSHA256 != grant.RequestSHA256 || settled.Status != "settled" {
 		return proof, ErrOriginalUnknown
 	}
@@ -496,4 +503,89 @@ func (r *Realm) Close() {
 	if transport, ok := r.Client.Transport.(*http.Transport); ok {
 		transport.CloseIdleConnections()
 	}
+}
+
+// originalSettlementScopeContract runs only on the already-created original
+// tuple. The first accepted settlement uses the SAME real store with execution
+// paused, then Create retains its unchanged authenticated HTTP settlement call.
+// No native mutation, nonce, lease, timestamp or proof is synthesized here.
+func (r *Realm) originalSettlementScopeContract(ctx context.Context, store repository.CapacityStore, policy model.Manifest, grant model.CapacityMutationGrant, nonce string, settlement model.CapacityMutationSettleRequest) error {
+	var p model.CapacityPolicySpec
+	if json.Unmarshal(policy.Spec, &p) != nil || ctx.Err() != nil || settlement.Outcome != "accepted" || settlement.GrantID != grant.GrantID || len(nonce) < 32 || grant.Slot < 1 || grant.Slot > 2 {
+		return ErrOriginalUnknown
+	}
+	binding, err := capacity.VMObservationBinding(p, grant.BindingName)
+	if err != nil || binding.AdapterPrincipalID == "" || binding.IntegrationInstanceID != grant.IntegrationInstanceID || binding.ScopeChecksum != grant.ScopeChecksum || binding.ProfileName != grant.ProfileName {
+		return ErrOriginalUnknown
+	}
+	current, err := store.Observe(ctx, policy)
+	if err != nil || current.LeaseOwner == "" || store.ExecutorID == "" {
+		return ErrOriginalUnknown
+	}
+	foreignPrincipal := uuid.NewString()
+	if foreignPrincipal == binding.AdapterPrincipalID {
+		return ErrOriginalUnknown
+	}
+	if _, err = store.SettleMutation(ctx, foreignPrincipal, nonce, settlement); !errors.Is(err, repository.ErrCapacityMutationAuthorization) {
+		return ErrOriginalUnknown
+	}
+	wrongNonce := "0" + nonce[1:]
+	if wrongNonce == nonce {
+		wrongNonce = "1" + nonce[1:]
+	}
+	if _, err = store.SettleMutation(ctx, binding.AdapterPrincipalID, wrongNonce, settlement); !errors.Is(err, repository.ErrCapacityMutationAuthorization) {
+		return ErrOriginalUnknown
+	}
+	paused := store
+	paused.ExecutionEnabled = false
+	settled, err := paused.SettleMutation(ctx, binding.AdapterPrincipalID, nonce, settlement)
+	if err != nil || settled.GrantID != grant.GrantID || settled.State != "settled" {
+		return ErrOriginalUnknown
+	}
+	receipt, err := paused.MutationReceipt(ctx, binding.AdapterPrincipalID, grant.GrantID)
+	if err != nil || receipt.Grant.GrantID != grant.GrantID || receipt.Outcome != settlement.Outcome || receipt.ResourceID != settlement.ResourceID || receipt.ResourceCreatedAt != settlement.ResourceCreatedAt || receipt.ActionID != settlement.ActionID || !receipt.TransportCompleted {
+		return ErrOriginalUnknown
+	}
+	wire, err := json.Marshal(receipt)
+	if err != nil {
+		return err
+	}
+	for _, private := range []string{nonce, capacity.BusinessCreationSHA256([]byte(nonce)), current.LeaseOwner, store.ExecutorID} {
+		if private == "" || strings.Contains(string(wire), private) {
+			return ErrOriginalUnknown
+		}
+	}
+	if _, err = paused.MutationReceipt(ctx, foreignPrincipal, grant.GrantID); !errors.Is(err, repository.ErrCapacityMutationAuthorization) {
+		return ErrOriginalUnknown
+	}
+	conflicting := settlement
+	conflicting.ActionID += "-conflicting-replay"
+	if _, err = paused.SettleMutation(ctx, binding.AdapterPrincipalID, nonce, conflicting); !errors.Is(err, repository.ErrCapacityConflict) {
+		return ErrOriginalUnknown
+	}
+	after, err := paused.MutationReceipt(ctx, binding.AdapterPrincipalID, grant.GrantID)
+	if err != nil {
+		return err
+	}
+	afterWire, err := json.Marshal(after)
+	if err != nil || !bytes.Equal(wire, afterWire) || ctx.Err() != nil {
+		return ErrOriginalUnknown
+	}
+	contract := struct {
+		Schema string `json:"schema"`
+		CoreSource string `json:"core_source"`
+		Slot int `json:"slot"`
+		GrantID string `json:"grant_id"`
+		SettlementSHA256 string `json:"settlement_sha256"`
+		ReceiptSHA256 string `json:"receipt_sha256"`
+		WrongPrincipalRefused bool `json:"wrong_principal_refused"`
+		WrongNonceRefused bool `json:"wrong_nonce_refused"`
+		PausedOriginalSettlementAccepted bool `json:"paused_original_settlement_accepted"`
+		PrivateFieldsAbsent bool `json:"private_fields_absent"`
+		ForeignReceiptRefused bool `json:"foreign_receipt_refused"`
+		ConflictRefused bool `json:"conflict_refused"`
+		ReceiptUnchanged bool `json:"receipt_unchanged"`
+	}{"original_guest_settlement_scope_contract_v1", capacity.CurrentGuestCoreSource(), grant.Slot, grant.GrantID, capacity.GuestRetirementSHA(settlement), capacity.BusinessCreationSHA256(wire), true, true, true, true, true, true, true}
+	_, err = Publish(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, grant.Slot), "settlement-scope-contract.json"), contract)
+	return err
 }
