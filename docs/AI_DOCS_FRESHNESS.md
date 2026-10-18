@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: d38bd51d372fcd98b81fc5edd7aa2aeaa299be37
-verified_diff_sha256: 69f69191aedde4213bed068d4ed0a078230170ca178eade8f8de1e04a7acec13
+verified_at_commit: 3cff99d6857f9bc749368b29451f98d8c7617fbd
+verified_diff_sha256: e0ca954ec1045b64604f62c7bebec75483132b6ab4cc8950d07b16232f0d81d7
 reconciler_schema: 1
 verified_at: 2026-10-16
 by: Codex
@@ -117,3 +117,9 @@ note: Reconciled the independently reviewed three-line Boolean normalization aft
 ## Canonical executor activity and SDK distribution integration
 
 The approved52 source files are unchanged. Genuine Linux generation binds the published canonical executor SDK module v0.9.1-0.20261018141245-05f42ab80ed0 with normal Go/SumDB verification; only go.mod/go.sum changed, including the genuine direct x/sys classification. The full build passed. Original whole-unit results remain5069 PASS,501 SKIP and1 FAIL: TestRetentionOwnerClosedCLI requires genuine GitHub Actions. No hosted identity was fabricated; mandatory vet was not reached in that sequence. Complete original custody and retirement were verified and acknowledged without qualification. Genuine current-head owning CI, vet, PostgreSQL/Native gates and downstream integration remain required; no production activation, policy enablement or deployment is asserted.
+
+## Exact executor state switch lint repair
+
+The complete original b2f300eb owning unit job and addons smoke passed in genuine GitHub Actions. One QF1003 finding is corrected by the equivalent tagged switch on the same local immutable state string, preserving both assignments and the unknown-state error. This is the only Source change after the published52-file candidate and canonical module adoption;51other approved source bodies and both genuine dependency files remain exact. The previous PostgreSQL failures and missing original Guest profile/step remain retained; no production registry, guard, fixtures or test oracle is relaxed. Current-head owning CI and explicit vet are separately pending, and the ongoing original Native Kind run is not prequalified. No Native, HA, production activation or cleanup claim is added.
+
+explicit_current_CODE_vet: Original Go1.25.0 go vet -mod=readonly ./... completed rc0 on clean CODE3cff99d6857f9bc749368b29451f98d8c7617fbd, with full original Wait/EOF/custody and all1372Source bodies preserved before/after. The successful transient unit was unloaded before late systemd readback; retained inservice cgroup checks establish CPU2/6GiB/pids512, while late default properties are not claimed as running caps. Original b2f NativeKind completed114PASS/eightroots and TLSfixture11PASS with genuine productionDocker build; those remain prior-head results. Original PostgreSQL failures remain unqualified.
