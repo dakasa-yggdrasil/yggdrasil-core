@@ -63,3 +63,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0053](0053-isolate-original-source-recovery-probes-from-production-phase-authority.md) | Isolate original Source recovery probes from production phase authority | Proposed | 2026-10-18 | Original Guest native qualification recovery |
 
 | [0054](0054-bind-failed-owner-compensation-to-redeemed-child.md) | Bind failed-owner compensation to its original redeemed cleanup child | Proposed | 2026-10-18 | nativequalification Source fixture |
+
+| [0055](0055-observe-uncertain-original-create-and-reissue-unused-cleanup-child.md) | Observe uncertain original create and reissue unused cleanup child | Proposed | 2026-10-18 | Qualification-only actual lost reply and fresh reissue |

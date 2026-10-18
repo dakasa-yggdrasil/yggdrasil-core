@@ -20,10 +20,10 @@ import (
 )
 
 func SourceCompensationCase(s string) bool {
- switch s { case "canonical_compensation_unprotected_failed_create", "canonical_compensation_protected_failed_create", "canonical_failed_floor_recovery", "compensation_unprotected_failed_create","compensation_protected_failed_create","compensation_unprotected_lost_create_reply","compensation_protected_lost_create_reply","source_live_failed_floor_recovery":return true };return false
+ switch s { case "canonical_postloss_unprotected_failed_create_reissue", "canonical_postloss_protected_failed_create_reissue", "canonical_compensation_unprotected_failed_create", "canonical_compensation_protected_failed_create", "canonical_failed_floor_recovery", "compensation_unprotected_failed_create","compensation_protected_failed_create","compensation_unprotected_lost_create_reply","compensation_protected_lost_create_reply","source_live_failed_floor_recovery":return true };return false
 }
 func SourceLostCreateCase(s string) bool { return s=="compensation_unprotected_lost_create_reply" || s=="compensation_protected_lost_create_reply" }
-func SourceProtectedCompensationCase(s string) bool { return s=="canonical_compensation_protected_failed_create" || s=="compensation_protected_failed_create" || s=="compensation_protected_lost_create_reply" }
+func SourceProtectedCompensationCase(s string) bool { return s=="canonical_postloss_protected_failed_create_reissue" || s=="canonical_compensation_protected_failed_create" || s=="compensation_protected_failed_create" || s=="compensation_protected_lost_create_reply" }
 
 // Host-original source authority, never an enrollment or successful Guest
 // retirement. Unenrolled uncertain creations are explicitly cleanup-only.
@@ -107,7 +107,7 @@ func (r *Realm) PrepareSourceFailureCleanup(ctx context.Context,store repository
  if !ok || !known || native.OriginalDisk!=disk { return authority,body,ErrOriginalUnknown }
  receipt,err:=r.OriginalMutationReceipt(ctx,pre.OriginalCreateGrantID);if err!=nil || receipt.Grant.State!="settled" || !receipt.TransportCompleted { return authority,body,ErrOriginalUnknown }
  lost:=SourceLostCreateCase(r.Request.NativeCase)
- if lost { if receipt.Outcome!="uncertain" || receipt.ResourceID!="" || receipt.ResourceCreatedAt!="" || failureSHA!="" || enrollmentSHA!="" { return authority,body,ErrOriginalUnknown } } else if receipt.Outcome!="accepted" || !validSHA(failureSHA) || !validSHA(enrollmentSHA) { return authority,body,ErrOriginalUnknown }
+ if lost { if receipt.Outcome!="uncertain" || receipt.ResourceID!="" || receipt.ResourceCreatedAt!="" || failureSHA!="" || enrollmentSHA!="" { return authority,body,ErrOriginalUnknown } } else if PostlossSourceCase(r.Request.NativeCase) {if receipt.Outcome!="uncertain" || receipt.ResourceID!="" || receipt.ResourceCreatedAt!="" || !validSHA(failureSHA) || !validSHA(enrollmentSHA){return authority,body,ErrOriginalUnknown}} else if receipt.Outcome!="accepted" || !validSHA(failureSHA) || !validSHA(enrollmentSHA) { return authority,body,ErrOriginalUnknown }
  var members,failed,events int
  if err=store.DB.QueryRowContext(ctx,`SELECT count(*) FILTER (WHERE resource_id<>''),count(*) FILTER (WHERE slot=2 AND resource_id<>'') FROM public.capacity_resource_slots WHERE namespace=$1`,policy.Metadata.Namespace).Scan(&members,&failed);err!=nil || members!=1 || failed!=0 { return authority,body,ErrOriginalUnknown }
  if err=store.DB.QueryRowContext(ctx,`SELECT count(*) FROM public.event_log WHERE idempotency_key=$1`,"capacity-mutation/"+pre.OriginalCreateGrantID).Scan(&events);err!=nil || events!=0 { return authority,body,ErrOriginalUnknown }
@@ -139,4 +139,4 @@ func (r *Realm) ReadSourceFailureCleanup(ctx context.Context,a SourceFailureClea
  return f,nil
 }
 
-func CanonicalSourceCompensationCase(s string) bool {return s=="canonical_compensation_unprotected_failed_create" || s=="canonical_compensation_protected_failed_create" || s=="canonical_failed_floor_recovery"}
+func CanonicalSourceCompensationCase(s string) bool {return PostlossSourceCase(s) || s=="canonical_compensation_unprotected_failed_create" || s=="canonical_compensation_protected_failed_create" || s=="canonical_failed_floor_recovery"}

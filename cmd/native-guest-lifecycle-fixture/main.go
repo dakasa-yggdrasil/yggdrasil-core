@@ -411,7 +411,7 @@ func (f *fixture) prepareSource(ctx context.Context) error {
 	}
 	b := model.CapacityMutationBinding{Name: "native-qemu", IntegrationInstanceID: instance.ID.String(), IntegrationChecksum: instance.Checksum, IntegrationTypeID: typ.ID.String(), IntegrationTypeChecksum: typ.Checksum, AdapterPrincipalID: "original-native-qemu-adapter", ScopeChecksum: capacity.GuestRetirementSHA([]string{f.namespace, f.request.SourceCommit, capacity.CurrentGuestCoreSource()}), ProfileName: f.profile.Profile, EnsureCapability: "ensure_server", DestroyCapability: "destroy_server", ProtectedSlots: 1, MaxSlots: 2}
 	if q.SourceProtectedCompensationCase(f.request.NativeCase) { b.ProtectedSlots=2 }
-	if q.SourceFailedFloorCase(f.request.NativeCase) { b.CompensationEnabled=true }
+	if q.SourceFailedFloorCase(f.request.NativeCase) || q.PostlossSourceCase(f.request.NativeCase) { b.CompensationEnabled=true }
 	for slot := 1; slot <= 2; slot++ {
 		projection := model.CapacityMutationSpecV1{SchemaVersion: "capacity_vm_slot_v1", Capability: b.EnsureCapability, IntegrationInstanceID: b.IntegrationInstanceID, ScopeChecksum: b.ScopeChecksum, ProfileChecksum: capacity.GuestRetirementSHA([]string{"native-original-qemu-fixed-1536-2-kvm", f.profile.OwnerSourceCommit}), AdmissionChecksum: capacity.GuestRetirementSHA(f.profile), ProfileName: b.ProfileName, Slot: slot, NativeName: "original-native-qemu-slot-" + fmt.Sprint(slot), BootstrapSHA256: f.profile.BootstrapSHA256}
 		b.Slots = append(b.Slots, model.CapacityMutationSlotBinding{Slot: slot, DesiredSpecSHA256: capacity.GuestRetirementSHA(projection), DesiredSpec: &projection})

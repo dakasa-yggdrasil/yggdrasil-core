@@ -16,7 +16,7 @@ func(f *fixture) prepareCanonicalSourceChild(ctx context.Context,p model.Capacit
  if err=parentStore.RecordMutationSlot(ctx,f.policy,intent.Generation,intent.FencingToken,intent.LeaseOwner,model.CapacityMutationIssue{BindingName:binding.Name,DesiredSpec:baselineDesired},native);err!=nil{return none,noPolicy,noChild,noSession,err}
  if err=parentStore.CheckNativeMembershipCoverage(ctx,f.policy,binding,[]model.CapacityMutationProof{native});err!=nil{return none,noPolicy,noChild,noSession,err}
  var live,failed int;if err=f.db.QueryRowContext(ctx,`SELECT count(*) FILTER(WHERE resource_id<>''),count(*) FILTER(WHERE slot=2 AND resource_id<>'') FROM public.capacity_resource_slots WHERE namespace=$1`,f.namespace).Scan(&live,&failed);err!=nil || live!=1 || failed!=0{return none,noPolicy,noChild,noSession,q.ErrOriginalUnknown}
- var destroy model.CapacityMutationSpecV1;for _,slot:=range binding.Slots{if slot.Slot==2{if json.Unmarshal(slot.DesiredSpec,&destroy)!=nil{return none,noPolicy,noChild,noSession,q.ErrOriginalUnknown}}};destroy.Capability=binding.DestroyCapability;destroy.ExpectedResourceID=eligible.Aggregate.ResourceID;destroy.ExpectedResourceCreatedAt=eligible.Aggregate.ResourceCreatedAt;desired,err:=json.Marshal(destroy);if err!=nil{return none,noPolicy,noChild,noSession,err}
+ var destroy model.CapacityMutationSpecV1;for _,slot:=range binding.Slots{if slot.Slot==2{if slot.DesiredSpec==nil{return none,noPolicy,noChild,noSession,q.ErrOriginalUnknown};destroy=*slot.DesiredSpec}};destroy.Capability=binding.DestroyCapability;destroy.ExpectedResourceID=eligible.Aggregate.ResourceID;destroy.ExpectedResourceCreatedAt=eligible.Aggregate.ResourceCreatedAt;desired,err:=json.Marshal(destroy);if err!=nil{return none,noPolicy,noChild,noSession,err}
  zero:=0
  // Healthy/member completeness derives from SAME signed useful probe plus
  // fresh original native/member coverage above. Failed payload is reaped; its QEMU is still owned and running until
@@ -40,6 +40,7 @@ func(f *fixture) prepareCanonicalSourceChild(ctx context.Context,p model.Capacit
  // Actual negative calls cannot mint effects before the original API
  // redemption, and no physical absence exists before the frontend action.
  if _,err=issuer.AuthorizeCanonicalSourceChild(ctx,current,child.GrantID,uuid.NewString(),capacity.BusinessCreationSHA256([]byte("unredeemed-probe")));err==nil{return none,noPolicy,noChild,noSession,q.ErrOriginalUnknown}
+ if q.PostlossSourceCase(f.request.NativeCase){child,err=f.reissueCanonicalPostlossChild(ctx,issuer,current,p,pre,child,issue);if err!=nil{return none,noPolicy,noChild,noSession,err}}
  session,err:=f.realm.RedeemCanonicalSourceChild(ctx,issuer,current,child);if err!=nil{return none,noPolicy,noChild,noSession,err}
  if _,err=issuer.ObserveCanonicalSourceCompensation(ctx,current,child.GrantID);err==nil{return none,noPolicy,noChild,noSession,q.ErrOriginalUnknown}
  foreign:=issuer;foreign.ExecutorID=uuid.NewString()

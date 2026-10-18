@@ -100,7 +100,7 @@ type CanonicalSourceEligibility struct {
 type CanonicalSourceAbsenceRead struct {
  Schema string `json:"schema"`;Scope string `json:"scope"`;ChildGrantID string `json:"child_grant_id"`;ParentGrantID string `json:"parent_grant_id"`;RequestSHA256 string `json:"request_sha256"`;EligibilitySHA256 string `json:"eligibility_sha256"`;ActionID string `json:"action_id"`;Read SourceFailureCleanupCurrentRead `json:"read"`;Proof model.CapacityMutationProof `json:"proof"`;ProductionQualified bool `json:"production_qualified"`
 }
-func canonicalKnownFailedCase(c string) bool {return c=="canonical_compensation_unprotected_failed_create" || c=="canonical_compensation_protected_failed_create" || c=="canonical_failed_floor_recovery"}
+func canonicalKnownFailedCase(c string) bool {return canonicalPostlossCase(c) || c=="canonical_compensation_unprotected_failed_create" || c=="canonical_compensation_protected_failed_create" || c=="canonical_failed_floor_recovery"}
 func canonicalSignedBody(ctx context.Context,s CapacityStore,stored guestOriginalStored,wire []byte)([]byte,error){
  var signed SourceFailureCleanupAuthority
  if capacity.DecodeGuestLifecycle(wire,&signed)!=nil{return nil,ErrCapacityConflict}
@@ -128,9 +128,10 @@ func(s CapacityStore) PrepareCanonicalSourceCompensation(ctx context.Context,pol
  p,err:=parseCapacityPolicy(policy);if err!=nil{return e,err};if !s.ExecutionEnabled || !p.ExecutionEnabled || s.WorkflowID.String()=="00000000-0000-0000-0000-000000000000"{return e,ErrCapacityDisabled}
  if err=lockMutationScope(ctx,tx,policy.Metadata.Namespace,p);err!=nil{return e,err}
  parent,err:=loadCompensationRecord(ctx,tx,policy,p,parentID);if err!=nil{return e,err}
- if parent.Grant.State!="settled" || parent.Settlement==nil || parent.Settlement.Outcome!="accepted" || !parent.Settlement.TransportCompleted || parent.Grant.CompensationOf!=""{return e,ErrCapacityConflict}
+ if parent.Grant.State!="settled" || parent.Settlement==nil || !parent.Settlement.TransportCompleted || parent.Grant.CompensationOf!=""{return e,ErrCapacityConflict}
  var preID string;if err=tx.QueryRowContext(ctx,`SELECT id::text FROM public.capacity_vm_provisioning_preregistrations WHERE create_grant_id=$1`,parentID).Scan(&preID);err!=nil{return e,err}
  stored,b,t,err:=canonicalCleanupHistory(ctx,s,tx,preID);if err!=nil{return e,err};if t.TerminalSHA256!=""{return e,ErrCapacityConflict}
+ if parent.Settlement.Outcome!="accepted" && !s.canonicalPostlossParentTx(ctx,tx,stored,parent,b.NativeCase){return e,ErrCapacityConflict}
  if stored.pre.WorkflowID!=s.WorkflowID.String() || stored.pre.PolicyID!=parent.PolicyID.String() || stored.pre.PolicyChecksum!=parent.PolicyChecksum{return e,ErrCapacityDisabled}
  var now time.Time;if err=tx.QueryRowContext(ctx,`SELECT clock_timestamp()`).Scan(&now);err!=nil{return e,err}
  current,err:=loadCapacityIntent(ctx,tx,policy.Metadata.Namespace,p,true);if err!=nil{return e,err};owner:=s;owner.ExecutorID=parent.ExecutorID;if err=owner.checkLease(p,policy,&current,parent.Generation,parent.FencingToken,parent.LeaseOwner,now);err!=nil{return e,err}
@@ -158,7 +159,7 @@ func(s CapacityStore) PrepareCanonicalSourceCompensation(ctx context.Context,pol
  // The original native action names Go's exact typed Creator serialization,
  // not the independently retained Python creator-file raw serialization.
  nativeID:="qemu-original-create:"+capacity.BusinessCreationSHA256(originalNativeFields["original"])
- if parent.Settlement.ActionID!=nativeID || parent.Settlement.ResourceID!=b.ResourceID || parent.Settlement.ResourceCreatedAt!=b.ResourceCreatedAt{return e,ErrCapacityConflict}
+ if canonicalPostlossCase(b.NativeCase) {if !s.canonicalPostlossParentTx(ctx,tx,stored,parent,b.NativeCase){return e,ErrCapacityConflict}} else if parent.Settlement.ActionID!=nativeID || parent.Settlement.ResourceID!=b.ResourceID || parent.Settlement.ResourceCreatedAt!=b.ResourceCreatedAt{return e,ErrCapacityConflict}
  if !now.Before(b.CleanupDeadline) || !capacity.Fresh(failed.RecordedAt,now,p.MaxEvidenceAgeSeconds){return e,ErrCapacityConflict}
  proof:=model.CapacityMutationProof{GrantID:parentID,BindingName:parent.Binding.Name,Slot:parent.Grant.Slot,ResourceID:b.ResourceID,ResourceCreatedAt:b.ResourceCreatedAt,RequestSHA256:parent.Grant.RequestSHA256,ObservedAt:failed.RecordedAt,ReceiptRef:"canonical-source-failed-owner:"+b.FailureSHA256,OwnerVerified:true,SpecVerified:true,CompensationIdentityVerified:true,ObservedCreationGrantID:parentID,ActionIDs:[]string{nativeID,failed.OriginalPayloadActionID},ActionsTerminal:true,ActionsSuccessful:false,ActionsFailed:true,ActionHistoryComplete:true}
  if !validFailedCreationProof(p,parent,proof,now){return e,ErrCapacityConflict}
@@ -173,7 +174,9 @@ func(s CapacityStore) canonicalEligibilityTx(ctx context.Context,tx *sql.Tx,pare
  if err:=tx.QueryRowContext(ctx,`SELECT to_regclass('public.capacity_canonical_source_cleanup_eligibility')::text`).Scan(&relation);err!=nil{return e,true,err};if !relation.Valid{return e,false,nil}
  var wire []byte;var preID,sha string
  err:=tx.QueryRowContext(ctx,`SELECT preregistration_id::text,eligibility_wire,eligibility_sha256 FROM public.capacity_canonical_source_cleanup_eligibility WHERE parent_grant_id=$1`,parentID).Scan(&preID,&wire,&sha);if errors.Is(err,sql.ErrNoRows){return e,false,nil};if err!=nil{return e,true,err};if s.DB==nil{return e,true,ErrCapacityConflict}
- stored,b,_,err:=canonicalCleanupHistory(ctx,s,tx,preID);if err!=nil{return e,true,err};body,err:=canonicalSignedBody(ctx,s,stored,wire);if err!=nil || capacity.DecodeGuestLifecycle(body,&e)!=nil || capacity.BusinessCreationSHA256(wire)!=sha{return e,true,ErrCapacityConflict}
+ stored,b,_,err:=canonicalCleanupHistory(ctx,s,tx,preID);if err!=nil{return e,true,err}
+ if canonicalPostlossCase(b.NativeCase) {var revisions sql.NullString;if err=tx.QueryRowContext(ctx,`SELECT to_regclass('public.capacity_canonical_postloss_fresh_reads')::text`).Scan(&revisions);err!=nil{return e,true,err};if revisions.Valid {var newer,prior string;var revised []byte;err=tx.QueryRowContext(ctx,`SELECT eligibility_wire,eligibility_sha256,prior_eligibility_sha256 FROM public.capacity_canonical_postloss_fresh_reads WHERE parent_grant_id=$1 ORDER BY observed_at DESC,read_id DESC LIMIT 1`,parentID).Scan(&revised,&newer,&prior);if err==nil{if prior!=sha{return e,true,ErrCapacityConflict};wire,sha=revised,newer}else if !errors.Is(err,sql.ErrNoRows){return e,true,err}}}
+ body,err:=canonicalSignedBody(ctx,s,stored,wire);if err!=nil || capacity.DecodeGuestLifecycle(body,&e)!=nil || capacity.BusinessCreationSHA256(wire)!=sha{return e,true,ErrCapacityConflict}
  if e.Schema!="canonical_source_failed_owner_eligibility_v1" || e.Scope!="NATIVEQUALIFICATION_FAILED_OWNER_CHILD_OWNS_PHYSICAL_EFFECTS_NOT_POSITIVE_QUIESCENCE" || !canonicalKnownFailedCase(e.NativeCase) || e.ParentGrantID!=parentID || e.PreregistrationID!=preID || e.CoreSource!=capacity.CurrentGuestCoreSource() || e.GuestSource!=stored.binding.GuestSourceCommit || e.Namespace=="" || !e.ChildOwnsPhysicalEffects || e.PositiveQuiescence || e.ProductionQualified || e.CleanupAuthoritySHA256!=capacity.BusinessCreationSHA256(mustCanonicalAuthorityWire(ctx,tx,parentID)) || e.CleanupTerminalSHA256!="" || e.FailureSHA256!=b.FailureSHA256 || e.OriginalReceiptSHA256!=b.OriginalReceiptSHA256 || !now.Before(e.OriginalDeadline) || len(e.Actions)!=2 || e.Actions[0].Outcome!="success" || e.Actions[1].Outcome!="failed_exit_1" || len(e.Aggregate.ActionIDs)!=2 || e.Actions[0].ID!=e.Aggregate.ActionIDs[0] || e.Actions[1].ID!=e.Aggregate.ActionIDs[1]{return e,true,ErrCapacityConflict}
  e.EligibilityWireSHA256=sha
  return e,true,nil
@@ -185,9 +188,9 @@ func(s CapacityStore) canonicalSourceFailedCleanupTx(ctx context.Context,tx *sql
  return true,nil
 }
 func(s CapacityStore) canonicalSourceBindCompensationTx(ctx context.Context,tx *sql.Tx,child,parent capacityMutationRecord,now time.Time)(bool,error){
- _,handled,err:=s.canonicalEligibilityTx(ctx,tx,parent.Grant.GrantID,now);if !handled || err!=nil{return handled,err}
+ e,handled,err:=s.canonicalEligibilityTx(ctx,tx,parent.Grant.GrantID,now);if !handled || err!=nil{return handled,err}
  if parent.Proof==nil || child.Grant.CompensationOf!=parent.Grant.GrantID || child.Grant.ExpectedResourceID!=parent.Proof.ResourceID || child.Grant.ExpectedResourceCreatedAt!=parent.Proof.ResourceCreatedAt{return true,ErrCapacityConflict}
- _,err=tx.ExecContext(ctx,`INSERT INTO public.capacity_canonical_source_cleanup_children(child_grant_id,parent_grant_id,eligibility_sha256) SELECT $1,parent_grant_id,eligibility_sha256 FROM public.capacity_canonical_source_cleanup_eligibility WHERE parent_grant_id=$2`,child.Grant.GrantID,parent.Grant.GrantID);return true,err
+ _,err=tx.ExecContext(ctx,`INSERT INTO public.capacity_canonical_source_cleanup_children(child_grant_id,parent_grant_id,eligibility_sha256) VALUES($1,$2,$3)`,child.Grant.GrantID,parent.Grant.GrantID,e.EligibilityWireSHA256);return true,err
 }
 
 func mustCanonicalAuthorityWire(ctx context.Context,tx *sql.Tx,parent string)[]byte{var raw []byte;if tx.QueryRowContext(ctx,`SELECT authority_wire FROM public.capacity_source_failure_cleanup_originals WHERE parent_grant_id=$1`,parent).Scan(&raw)!=nil{return nil};return raw}
@@ -254,7 +257,7 @@ func(s CapacityStore) canonicalSourceConfirmedCleanupTx(ctx context.Context,tx *
  return true,nil
 }
 
-func(s CapacityStore) CanonicalSourceEligibilityWire(ctx context.Context,parentID string)([]byte,error){var wire []byte;var sha string;err:=s.DB.QueryRowContext(ctx,`SELECT eligibility_wire,eligibility_sha256 FROM public.capacity_canonical_source_cleanup_eligibility WHERE parent_grant_id=$1`,parentID).Scan(&wire,&sha);if err!=nil || capacity.BusinessCreationSHA256(wire)!=sha{return nil,ErrCapacityConflict};return wire,nil}
+func(s CapacityStore) CanonicalSourceEligibilityWire(ctx context.Context,parentID string)([]byte,error){var wire []byte;var sha string;err:=s.DB.QueryRowContext(ctx,`SELECT eligibility_wire,eligibility_sha256 FROM public.capacity_canonical_source_cleanup_eligibility WHERE parent_grant_id=$1`,parentID).Scan(&wire,&sha);if err!=nil || capacity.BusinessCreationSHA256(wire)!=sha{return nil,ErrCapacityConflict};var revisions sql.NullString;if err=s.DB.QueryRowContext(ctx,`SELECT to_regclass('public.capacity_canonical_postloss_fresh_reads')::text`).Scan(&revisions);err!=nil{return nil,err};if revisions.Valid{var next []byte;var nextSHA,prior string;err=s.DB.QueryRowContext(ctx,`SELECT eligibility_wire,eligibility_sha256,prior_eligibility_sha256 FROM public.capacity_canonical_postloss_fresh_reads WHERE parent_grant_id=$1`,parentID).Scan(&next,&nextSHA,&prior);if err==nil{if prior!=sha || capacity.BusinessCreationSHA256(next)!=nextSHA{return nil,ErrCapacityConflict};wire=next}else if !errors.Is(err,sql.ErrNoRows){return nil,err}};return wire,nil}
 
 func(s CapacityStore) CanonicalSourceFloorCurrentAbsence(ctx context.Context,policy model.Manifest,parentID string,generation,fence int64,owner string)([]byte,error){
  var result []byte;tx,err:=s.DB.BeginTx(ctx,nil);if err!=nil{return nil,err};defer tx.Rollback();p,err:=parseCapacityPolicy(policy);if err!=nil{return nil,err};if err=lockMutationScope(ctx,tx,policy.Metadata.Namespace,p);err!=nil{return nil,err}
@@ -314,7 +317,7 @@ func canonicalChildPolicyJoin(a CanonicalSourceChildAuthority,childPolicy,childC
  if !validCapacityExecutor(a.OriginalPolicyID) || !validCapacityExecutor(a.CurrentPolicyID) || !capacity.ValidDigest(a.CurrentPolicyChecksum) || a.OriginalPolicyID!=originalPolicy || a.CurrentPolicyID!=childPolicy || a.CurrentPolicyChecksum!=childChecksum || !capacity.ValidDigest(originalChecksum){return false}
  switch a.Case{
  case "canonical_compensation_unprotected_failed_create","canonical_compensation_protected_failed_create":return a.CurrentPolicyID!=a.OriginalPolicyID && a.CurrentPolicyChecksum!=originalChecksum
- case "canonical_failed_floor_recovery":return a.CurrentPolicyID==a.OriginalPolicyID && a.CurrentPolicyChecksum==originalChecksum
+ case "canonical_postloss_unprotected_failed_create_reissue","canonical_postloss_protected_failed_create_reissue","canonical_failed_floor_recovery":return a.CurrentPolicyID==a.OriginalPolicyID && a.CurrentPolicyChecksum==originalChecksum
  }
  return false
 }

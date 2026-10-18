@@ -270,7 +270,7 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		if err != nil {
 			return fail("original-guest-step-25")
 		}
-		witness, err := store.RecordGuestCreateWitness(original, pre.PreregistrationID, proof, key)
+		witness, err := guestOriginalSourceCreateWitness(original,store,pre.PreregistrationID,proof,key)
 		if err != nil {
 			return fail("original-guest-step-26")
 		}
