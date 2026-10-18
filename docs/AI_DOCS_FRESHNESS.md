@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: c3ca4185af4b8a28c5ce8010a19dd9f6970d5e2d
-verified_diff_sha256: e59a55b2f1fb3239da0e3be65f2afc061997d60839ea8d308b137997990b82c4
+verified_at_commit: d38bd51d372fcd98b81fc5edd7aa2aeaa299be37
+verified_diff_sha256: 69f69191aedde4213bed068d4ed0a078230170ca178eade8f8de1e04a7acec13
 reconciler_schema: 1
 verified_at: 2026-10-16
 by: Codex
@@ -113,3 +113,7 @@ note: Reconciled the complete second CI failure inventory in one independently r
 ## Historical third grouped CI repair metadata
 
 note: Reconciled the independently reviewed three-line Boolean normalization after the complete third owning CI cohort. Nil guards, original short-circuit order and exact identity sets remain unchanged. All five pinned test sources, the expected manifest, four named rosters, collector, workflows and budgets stay literal. The previous source workflow passed all 216 roots and 2055 descendants, with each of 2271 nodes passing once; protected Native and other successful gates retain their original scope. Eight terminal runs, fourteen original ZIPs, 373 members and 23 GoJSON collections are retained. Genuine generation preserves all nine actual input digests. Successor owning CI remains required; inherited old45 stays HOLD/edit_lease false, Registry EMPTY, Native NULL, C6 HOLD and FULL_CORE_NATIVE_PENDING. No local functional execution, merge, deployment or activation occurred.
+
+## Canonical executor activity and SDK distribution integration
+
+The approved52 source files are unchanged. Genuine Linux generation binds the published canonical executor SDK module v0.9.1-0.20261018141245-05f42ab80ed0 with normal Go/SumDB verification; only go.mod/go.sum changed, including the genuine direct x/sys classification. The full build passed. Original whole-unit results remain5069 PASS,501 SKIP and1 FAIL: TestRetentionOwnerClosedCLI requires genuine GitHub Actions. No hosted identity was fabricated; mandatory vet was not reached in that sequence. Complete original custody and retirement were verified and acknowledged without qualification. Genuine current-head owning CI, vet, PostgreSQL/Native gates and downstream integration remain required; no production activation, policy enablement or deployment is asserted.
