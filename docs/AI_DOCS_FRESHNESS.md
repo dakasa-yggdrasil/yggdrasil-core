@@ -150,8 +150,8 @@ Separate custody ACK 53aeb169-ebed-4107-b047-a33aee9db8a3 completed with origina
 ## Current native slot projection producer Source reconciliation
 
 core_original_source_code: f60c753f03603b10b58e8049ed62bc25e0696251
-core_original_guest_source_code: ad653e49a1236610a31742084f1db0a7aea1a96c
-core_original_source_peer_manifest_sha256: 6402afcde5a4e3e7e5377c4340eca36eb63765d84040116c9e0375d55d502325
+core_original_guest_source_code: 174f6bd3d981b90b2e48f8a831aef5e9da122ca9
+core_original_source_peer_manifest_sha256: 663a4a2eda40f9606569b5e348af4a1f2b81051885a8ccd997ccd74d5bd542cb
 
 Root accepted this exact whole Source successor for local markers and metadata, with independently reviewed Core producer delta and the coordinated Guest selector. The Core change is restricted to cmd/native-guest-lifecycle-fixture/main.go: its digest input now uses the explicit closed ten-field map that the unchanged slot guard already canonicalizes. The typed DesiredSpec/address, guard, authorization, API and all other producer bytes remain unchanged. Independent narrow peer d88e2a3d accepted the exact postimage49632/29e1c7c1; full CODE census1412 preserves all1411 other Git bodies/modes from actual published89f9. Accepted earlier whole-manifest scopes and all failed predecessor originals remain historical evidence, not current runtime approval. The paired Guest CODE f91cbec6709e35170173ddd7a233b2d0abd02981 is a Source binding in the Root-accepted manifest, not a claim of Guest or Native execution by this metadata step.
 
