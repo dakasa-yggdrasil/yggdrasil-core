@@ -11,12 +11,12 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"errors"
-	"strings"
 	"io"
 	"net/http"
 	"os"
 	"path/filepath"
 	"strconv"
+	"strings"
 	"sync"
 	"time"
 
@@ -88,7 +88,7 @@ type Realm struct {
 	enrollments      map[int]model.CapacityGuestOriginalProvisioningReceipt
 	retirementPins   map[int]*OriginalPIDFD
 	disks            map[int]OriginalDisk
-	deleteDirectory OriginalDisk
+	deleteDirectory  OriginalDisk
 	deleted          bool
 }
 
@@ -391,8 +391,10 @@ func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, poli
 	var creator CreatorReturn
 	creatorPath := filepath.Join(dir, "creator-original.json")
 	if slot == 2 && (SourceLostCreateCase(r.Request.NativeCase) || PostlossSourceCase(r.Request.NativeCase)) {
-		if err := readSourceLostCreateReply(ctx,dir); err != nil { return proof,err }
-		creatorPath = filepath.Join(dir,"creator-original-independent-read.json")
+		if err := readSourceLostCreateReply(ctx, dir); err != nil {
+			return proof, err
+		}
+		creatorPath = filepath.Join(dir, "creator-original-independent-read.json")
 	}
 	creatorWire, err := Await(ctx, creatorPath, &creator)
 	if err != nil {
@@ -430,7 +432,7 @@ func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, poli
 	if slot == 2 && (SourceLostCreateCase(r.Request.NativeCase) || PostlossSourceCase(r.Request.NativeCase)) {
 		// Actual original owning reply was empty EOF. Independent native
 		// identity is retained separately; no accepted identity is invented.
-		settlement.Outcome,settlement.ResourceID,settlement.ResourceCreatedAt,settlement.ActionID = "uncertain","","",""
+		settlement.Outcome, settlement.ResourceID, settlement.ResourceCreatedAt, settlement.ActionID = "uncertain", "", "", ""
 	}
 	proof = model.CapacityMutationProof{GrantID: grant.GrantID, BindingName: grant.BindingName, Slot: slot, ResourceID: creator.ResourceID, ResourceCreatedAt: created, RequestSHA256: grant.RequestSHA256, ObservedAt: native.CloseReturnedAt, ReceiptRef: "original-native-qemu:" + capacity.GuestRetirementSHA(native), OwnerVerified: true, SpecVerified: true, ActionIDs: []string{actionID}, ActionsTerminal: true, ActionsSuccessful: true, ObservedCreationGrantID: grant.GrantID}
 	if PositiveCase(r.Request.NativeCase) {
@@ -456,8 +458,10 @@ func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, poli
 	r.originals[slot] = native
 	r.mu.Unlock()
 	if slot == 2 && SourceLostCreateCase(r.Request.NativeCase) {
-		stage := Stage{FixtureSchema,"original-create-settled.json",slot,capacity.CurrentGuestCoreSource(),r.Request.SourceCommit,pre.OriginalDeadline,time.Now().UTC(),capacity.GuestRetirementSHA(settlement)}
-		if _,err:=Publish(ctx,filepath.Join(dir,stage.Stage),stage);err!=nil{return proof,err}
+		stage := Stage{FixtureSchema, "original-create-settled.json", slot, capacity.CurrentGuestCoreSource(), r.Request.SourceCommit, pre.OriginalDeadline, time.Now().UTC(), capacity.GuestRetirementSHA(settlement)}
+		if _, err := Publish(ctx, filepath.Join(dir, stage.Stage), stage); err != nil {
+			return proof, err
+		}
 	}
 	// These assertions are derived only after the actual independent native
 	// returns above. They refer to the qualification's fixed QEMU projection,
@@ -514,7 +518,14 @@ func (r *Realm) Witnessed(ctx context.Context, grant model.CapacityMutationGrant
 	if witness.PreregistrationID != pre.PreregistrationID || witness.OriginalCreateGrantID != grant.GrantID || witness.Tuple.Slot != grant.Slot || witness.Tuple.ResourceID != r.Request.Slots[grant.Slot-1].ResourceID {
 		return ErrOriginalUnknown
 	}
- if PostlossSourceCase(r.Request.NativeCase) && pre.Slot==2 {if witness.SourceObservation==nil{return ErrOriginalUnknown};if _,err:=Publish(ctx,filepath.Join(SlotDirectory(r.PrivateDirectory,2),"core-postloss-observed-create-witness.json"),witness);err!=nil{return err}}
+	if PostlossSourceCase(r.Request.NativeCase) && pre.Slot == 2 {
+		if witness.SourceObservation == nil {
+			return ErrOriginalUnknown
+		}
+		if _, err := Publish(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, 2), "core-postloss-observed-create-witness.json"), witness); err != nil {
+			return err
+		}
+	}
 	stage := Stage{FixtureSchema, "original-create-settled.json", grant.Slot, capacity.CurrentGuestCoreSource(), r.Request.SourceCommit, pre.OriginalDeadline, time.Now().UTC(), capacity.GuestRetirementSHA(witness)}
 	_, err := Publish(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, grant.Slot), stage.Stage), stage)
 	return err
@@ -594,19 +605,19 @@ func (r *Realm) originalSettlementScopeContract(ctx context.Context, store repos
 		return ErrOriginalUnknown
 	}
 	contract := struct {
-		Schema string `json:"schema"`
-		CoreSource string `json:"core_source"`
-		Slot int `json:"slot"`
-		GrantID string `json:"grant_id"`
-		SettlementSHA256 string `json:"settlement_sha256"`
-		ReceiptSHA256 string `json:"receipt_sha256"`
-		WrongPrincipalRefused bool `json:"wrong_principal_refused"`
-		WrongNonceRefused bool `json:"wrong_nonce_refused"`
-		PausedOriginalSettlementAccepted bool `json:"paused_original_settlement_accepted"`
-		PrivateFieldsAbsent bool `json:"private_fields_absent"`
-		ForeignReceiptRefused bool `json:"foreign_receipt_refused"`
-		ConflictRefused bool `json:"conflict_refused"`
-		ReceiptUnchanged bool `json:"receipt_unchanged"`
+		Schema                           string `json:"schema"`
+		CoreSource                       string `json:"core_source"`
+		Slot                             int    `json:"slot"`
+		GrantID                          string `json:"grant_id"`
+		SettlementSHA256                 string `json:"settlement_sha256"`
+		ReceiptSHA256                    string `json:"receipt_sha256"`
+		WrongPrincipalRefused            bool   `json:"wrong_principal_refused"`
+		WrongNonceRefused                bool   `json:"wrong_nonce_refused"`
+		PausedOriginalSettlementAccepted bool   `json:"paused_original_settlement_accepted"`
+		PrivateFieldsAbsent              bool   `json:"private_fields_absent"`
+		ForeignReceiptRefused            bool   `json:"foreign_receipt_refused"`
+		ConflictRefused                  bool   `json:"conflict_refused"`
+		ReceiptUnchanged                 bool   `json:"receipt_unchanged"`
 	}{"original_guest_settlement_scope_contract_v1", capacity.CurrentGuestCoreSource(), grant.Slot, grant.GrantID, capacity.GuestRetirementSHA(settlement), capacity.BusinessCreationSHA256(wire), true, true, true, true, true, true, true}
 	_, err = Publish(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, grant.Slot), "settlement-scope-contract.json"), contract)
 	return err
@@ -615,76 +626,82 @@ func (r *Realm) originalSettlementScopeContract(ctx context.Context, store repos
 // SourceFenceHTTPReturn contains only closed response metadata, never an error
 // body, bearer, settlement nonce or a fabricated native observation.
 type SourceFenceHTTPReturn struct {
-	Status int `json:"status"`
-	BodyBytes int `json:"body_bytes"`
-	BodySHA256 string `json:"body_sha256"`
-	StartedAt time.Time `json:"started_at"`
-	DoReturnedAt time.Time `json:"do_returned_at"`
-	ReadReturnedAt time.Time `json:"read_returned_at"`
+	Status          int       `json:"status"`
+	BodyBytes       int       `json:"body_bytes"`
+	BodySHA256      string    `json:"body_sha256"`
+	StartedAt       time.Time `json:"started_at"`
+	DoReturnedAt    time.Time `json:"do_returned_at"`
+	ReadReturnedAt  time.Time `json:"read_returned_at"`
 	CloseReturnedAt time.Time `json:"close_returned_at"`
-	Mode string `json:"mode"`
-	ProblemCode string `json:"problem_code"`
+	Mode            string    `json:"mode"`
+	ProblemCode     string    `json:"problem_code"`
 }
 
 type SourceFenceContract struct {
-	Schema string `json:"schema"`
-	Scope string `json:"scope"`
-	Case string `json:"case"`
-	CoreSource string `json:"core_source"`
-	GuestSource string `json:"guest_source"`
-	Namespace string `json:"namespace"`
-	PolicyID string `json:"policy_id"`
-	WorkflowID string `json:"workflow_id"`
-	GrantID string `json:"grant_id"`
-	PreregistrationID string `json:"preregistration_id"`
-	Slot int `json:"slot"`
-	Generation int64 `json:"generation"`
-	FenceBefore int64 `json:"fence_before"`
-	FenceAfter int64 `json:"fence_after"`
-	RevokedID string `json:"revoked_id"`
-	RevokedKind string `json:"revoked_kind"`
-	RevocationRows int64 `json:"revocation_rows"`
-	RevokedActiveAfter bool `json:"revoked_active_after"`
-	RecoveryOnly bool `json:"recovery_only"`
-	ExecutorChanged bool `json:"executor_changed"`
-	LeaseOwnerChanged bool `json:"lease_owner_changed"`
-	OriginalGrantExpired bool `json:"original_grant_expired"`
-	OldIssueRefused bool `json:"old_issue_refused"`
-	RepositoryRedeemResult string `json:"repository_redeem_result"`
-	GrantBeforeSHA256 string `json:"grant_before_sha256"`
-	GrantAfterSHA256 string `json:"grant_after_sha256"`
-	GrantTransition string `json:"grant_transition"`
-	HTTP SourceFenceHTTPReturn `json:"http"`
-	OriginalDeadline time.Time `json:"original_deadline"`
-	CheckedAt time.Time `json:"checked_at"`
-	NativeQualified bool `json:"native_qualified"`
+	Schema                 string                `json:"schema"`
+	Scope                  string                `json:"scope"`
+	Case                   string                `json:"case"`
+	CoreSource             string                `json:"core_source"`
+	GuestSource            string                `json:"guest_source"`
+	Namespace              string                `json:"namespace"`
+	PolicyID               string                `json:"policy_id"`
+	WorkflowID             string                `json:"workflow_id"`
+	GrantID                string                `json:"grant_id"`
+	PreregistrationID      string                `json:"preregistration_id"`
+	Slot                   int                   `json:"slot"`
+	Generation             int64                 `json:"generation"`
+	FenceBefore            int64                 `json:"fence_before"`
+	FenceAfter             int64                 `json:"fence_after"`
+	RevokedID              string                `json:"revoked_id"`
+	RevokedKind            string                `json:"revoked_kind"`
+	RevocationRows         int64                 `json:"revocation_rows"`
+	RevokedActiveAfter     bool                  `json:"revoked_active_after"`
+	RecoveryOnly           bool                  `json:"recovery_only"`
+	ExecutorChanged        bool                  `json:"executor_changed"`
+	LeaseOwnerChanged      bool                  `json:"lease_owner_changed"`
+	OriginalGrantExpired   bool                  `json:"original_grant_expired"`
+	OldIssueRefused        bool                  `json:"old_issue_refused"`
+	RepositoryRedeemResult string                `json:"repository_redeem_result"`
+	GrantBeforeSHA256      string                `json:"grant_before_sha256"`
+	GrantAfterSHA256       string                `json:"grant_after_sha256"`
+	GrantTransition        string                `json:"grant_transition"`
+	HTTP                   SourceFenceHTTPReturn `json:"http"`
+	OriginalDeadline       time.Time             `json:"original_deadline"`
+	CheckedAt              time.Time             `json:"checked_at"`
+	NativeQualified        bool                  `json:"native_qualified"`
 }
 
 type SourceFenceCompletion struct {
-	Schema string `json:"schema"`
-	Stage string `json:"stage"`
-	Scope string `json:"scope"`
-	Case string `json:"case"`
-	CoreSource string `json:"core_source"`
-	GuestSource string `json:"guest_source"`
-	WorkflowRunID string `json:"workflow_run_id"`
-	ContractSHA256 string `json:"contract_sha256"`
+	Schema              string `json:"schema"`
+	Stage               string `json:"stage"`
+	Scope               string `json:"scope"`
+	Case                string `json:"case"`
+	CoreSource          string `json:"core_source"`
+	GuestSource         string `json:"guest_source"`
+	WorkflowRunID       string `json:"workflow_run_id"`
+	ContractSHA256      string `json:"contract_sha256"`
 	PublicReturnsSHA256 string `json:"public_returns_sha256"`
-	NativeQualified bool `json:"native_qualified"`
+	NativeQualified     bool   `json:"native_qualified"`
 }
 
 func (r *Realm) sourceFenceRedeem(ctx context.Context, request model.CapacityMutationRedeemRequest, executorCase bool) (SourceFenceHTTPReturn, error) {
 	fact := SourceFenceHTTPReturn{StartedAt: time.Now().UTC()}
 	body, err := json.Marshal(request)
-	if err != nil { return fact, err }
+	if err != nil {
+		return fact, err
+	}
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, r.CoreOrigin+"/api/v1/capacity/mutations/redeem", bytes.NewReader(body))
-	if err != nil { return fact, err }
+	if err != nil {
+		return fact, err
+	}
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Authorization", "Bearer "+r.MutationToken)
 	response, doErr := r.Client.Do(req)
 	fact.DoReturnedAt = time.Now().UTC()
 	if doErr != nil || response == nil || response.Body == nil {
-		if response != nil && response.Body != nil { _ = response.Body.Close() }
+		if response != nil && response.Body != nil {
+			_ = response.Body.Close()
+		}
 		return fact, ErrOriginalUnknown
 	}
 	raw, readErr := io.ReadAll(io.LimitReader(response.Body, 2<<20))
@@ -692,15 +709,29 @@ func (r *Realm) sourceFenceRedeem(ctx context.Context, request model.CapacityMut
 	closeErr := response.Body.Close()
 	fact.CloseReturnedAt = time.Now().UTC()
 	fact.Status, fact.BodyBytes, fact.BodySHA256 = response.StatusCode, len(raw), digest(raw)
-	if readErr != nil || closeErr != nil || len(raw) == 0 || len(raw) == 2<<20 || fact.DoReturnedAt.Before(fact.StartedAt) || fact.ReadReturnedAt.Before(fact.DoReturnedAt) || fact.CloseReturnedAt.Before(fact.ReadReturnedAt) || ctx.Err() != nil { return fact, ErrOriginalUnknown }
+	if readErr != nil || closeErr != nil || len(raw) == 0 || len(raw) == 2<<20 || fact.DoReturnedAt.Before(fact.StartedAt) || fact.ReadReturnedAt.Before(fact.DoReturnedAt) || fact.CloseReturnedAt.Before(fact.ReadReturnedAt) || ctx.Err() != nil {
+		return fact, ErrOriginalUnknown
+	}
 	if executorCase {
 		var returned model.CapacityMutationRedeemResponse
-		if response.StatusCode != 200 || closedJSON(raw, &returned) != nil || returned.Mode != "read_only" || returned.GrantID != request.GrantID || returned.AttemptID != request.AttemptID || returned.RequestSHA256 != request.RequestSHA256 { return fact, ErrOriginalUnknown }
+		if response.StatusCode != 200 || closedJSON(raw, &returned) != nil || returned.Mode != "read_only" || returned.GrantID != request.GrantID || returned.AttemptID != request.AttemptID || returned.RequestSHA256 != request.RequestSHA256 {
+			return fact, ErrOriginalUnknown
+		}
 		fact.Mode = returned.Mode
 	} else {
-		var problem struct { Type string `json:"type"`; Title string `json:"title"`; Status int `json:"status"`; Detail string `json:"detail"`; Code string `json:"code"` }
-		if closedJSON(raw, &problem) != nil || problem.Status != response.StatusCode || problem.Type != "https://yggdrasil.dakasa.me/problems/"+problem.Code || problem.Title != problem.Code { return fact, ErrOriginalUnknown }
-		if (response.StatusCode != 403 || problem.Code != "capacity.mutation_scope_denied") && (response.StatusCode != 409 || problem.Code != "capacity.mutation_conflict") { return fact, ErrOriginalUnknown }
+		var problem struct {
+			Type   string `json:"type"`
+			Title  string `json:"title"`
+			Status int    `json:"status"`
+			Detail string `json:"detail"`
+			Code   string `json:"code"`
+		}
+		if closedJSON(raw, &problem) != nil || problem.Status != response.StatusCode || problem.Type != "https://yggdrasil.dakasa.me/problems/"+problem.Code || problem.Title != problem.Code {
+			return fact, ErrOriginalUnknown
+		}
+		if (response.StatusCode != 403 || problem.Code != "capacity.mutation_scope_denied") && (response.StatusCode != 409 || problem.Code != "capacity.mutation_conflict") {
+			return fact, ErrOriginalUnknown
+		}
 		fact.ProblemCode = problem.Code
 	}
 	return fact, nil
@@ -712,102 +743,195 @@ func (r *Realm) sourceFenceRedeem(ctx context.Context, request model.CapacityMut
 // No private authority is supplied by the workflow input and no Create follows.
 func (r *Realm) OriginalSourceFence(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, binding model.CapacityMutationBinding, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration) (SourceFenceContract, error) {
 	contract := SourceFenceContract{}
-	if !SourceContractCase(r.Request.NativeCase) || grant.Slot != 1 || grant.State != "issued" || pre.OriginalCreateGrantID != grant.GrantID || pre.CoreSourceCommit != capacity.CurrentGuestCoreSource() || pre.PolicyID != policy.ID.String() || pre.ExecutorID != store.ExecutorID || pre.OriginalWorkflowStepTimeoutSeconds != 600 || !grant.ExpiresAt.After(time.Now().UTC()) || ctx.Err() != nil { return contract, ErrOriginalUnknown }
+	if !SourceContractCase(r.Request.NativeCase) || grant.Slot != 1 || grant.State != "issued" || pre.OriginalCreateGrantID != grant.GrantID || pre.CoreSourceCommit != capacity.CurrentGuestCoreSource() || pre.PolicyID != policy.ID.String() || pre.ExecutorID != store.ExecutorID || pre.OriginalWorkflowStepTimeoutSeconds != 600 || !grant.ExpiresAt.After(time.Now().UTC()) || ctx.Err() != nil {
+		return contract, ErrOriginalUnknown
+	}
 	deadline, ok := ctx.Deadline()
-	if !ok || deadline.After(pre.OriginalDeadline) || deadline.After(r.Request.OriginalContextDeadline) { return contract, ErrOriginalUnknown }
+	if !ok || deadline.After(pre.OriginalDeadline) || deadline.After(r.Request.OriginalContextDeadline) {
+		return contract, ErrOriginalUnknown
+	}
 	persistedPre, err := store.OriginalGuestProvisioning(ctx, grant.GrantID)
-	if err != nil || capacity.GuestRetirementSHA(persistedPre) != capacity.GuestRetirementSHA(pre) { return contract, ErrOriginalUnknown }
+	if err != nil || capacity.GuestRetirementSHA(persistedPre) != capacity.GuestRetirementSHA(pre) {
+		return contract, ErrOriginalUnknown
+	}
 	current, err := sourceFencePrivateIntent(ctx, store, policy, p)
-	if err != nil || current.Generation != pre.Generation || current.FencingToken != pre.Fence || current.LeaseOwner != pre.LeaseOwner || current.LeaseExecutorID != pre.ExecutorID || current.LeaseExpiresAt == nil || current.Phase != "preparing" { return contract, ErrOriginalUnknown }
+	if err != nil || current.Generation != pre.Generation || current.FencingToken != pre.Fence || current.LeaseOwner != pre.LeaseOwner || current.LeaseExecutorID != pre.ExecutorID || current.LeaseExpiresAt == nil || current.Phase != "preparing" {
+		return contract, ErrOriginalUnknown
+	}
 	var before []byte
-	if err = store.DB.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1 AND namespace=$2`, grant.GrantID, policy.Metadata.Namespace).Scan(&before); err != nil { return contract, err }
+	if err = store.DB.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1 AND namespace=$2`, grant.GrantID, policy.Metadata.Namespace).Scan(&before); err != nil {
+		return contract, err
+	}
 	contract = SourceFenceContract{Schema: "core_original_source_fence_contract_v1", Scope: "SOURCE_CONTRACT_ONLY_NO_NATIVE_AUTHORITY", Case: r.Request.NativeCase, CoreSource: capacity.CurrentGuestCoreSource(), GuestSource: r.Request.SourceCommit, Namespace: policy.Metadata.Namespace, PolicyID: policy.ID.String(), WorkflowID: store.WorkflowID.String(), GrantID: grant.GrantID, PreregistrationID: pre.PreregistrationID, Slot: 1, Generation: pre.Generation, FenceBefore: pre.Fence, FenceAfter: pre.Fence, GrantBeforeSHA256: digest(before), OriginalDeadline: deadline, NativeQualified: false}
 	executorCase := r.Request.NativeCase == "source_contract_executor_fence"
 	if executorCase {
 		// Real DB lease expiry, no SQL timestamp edit and no renewal. The original
 		// provisioning context (<=420s) still bounds the wait and all later I/O.
 		wait := time.Until(*current.LeaseExpiresAt)
-		if wait < 0 { wait = 0 }
-		if !current.LeaseExpiresAt.Before(deadline) { return contract, ErrOriginalUnknown }
+		if wait < 0 {
+			wait = 0
+		}
+		if !current.LeaseExpiresAt.Before(deadline) {
+			return contract, ErrOriginalUnknown
+		}
 		timer := time.NewTimer(wait)
 		defer timer.Stop()
-		select { case <-ctx.Done(): return contract, ctx.Err(); case <-timer.C: }
+		select {
+		case <-ctx.Done():
+			return contract, ctx.Err()
+		case <-timer.C:
+		}
 		// Poll only the real PostgreSQL clock; wall-clock disagreement never
 		// manufactures expiry or mutates authority to make recovery succeed.
 		for {
 			var now time.Time
-			if err = store.DB.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil { return contract, err }
-			if !now.Before(*current.LeaseExpiresAt) { break }
-			select { case <-ctx.Done(): return contract, ctx.Err(); case <-time.After(20*time.Millisecond): }
+			if err = store.DB.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil {
+				return contract, err
+			}
+			if !now.Before(*current.LeaseExpiresAt) {
+				break
+			}
+			select {
+			case <-ctx.Done():
+				return contract, ctx.Err()
+			case <-time.After(20 * time.Millisecond):
+			}
 		}
 		recovery := store
 		recovery.ExecutionEnabled, recovery.ExecutorID = false, uuid.NewString()
 		assessment := QualificationAssessment(p, 0, 0.9, time.Now().UTC())
 		lease, err := recovery.Recover(ctx, policy, pre.Generation, assessment)
-		if err != nil || !lease.RecoveryOnly || lease.FencingToken != pre.Fence+1 || lease.LeaseOwner == pre.LeaseOwner || lease.LeaseExecutorID == pre.ExecutorID || lease.LeaseExecutorID != recovery.ExecutorID || lease.Decision.ExecutionPermitted { return contract, ErrOriginalUnknown }
+		if err != nil || !lease.RecoveryOnly || lease.FencingToken != pre.Fence+1 || lease.LeaseOwner == pre.LeaseOwner || lease.LeaseExecutorID == pre.ExecutorID || lease.LeaseExecutorID != recovery.ExecutorID || lease.Decision.ExecutionPermitted {
+			return contract, ErrOriginalUnknown
+		}
 		persisted, err := sourceFencePrivateIntent(ctx, recovery, policy, p)
-		if err != nil || persisted.FencingToken != lease.FencingToken || persisted.LeaseExecutorID != lease.LeaseExecutorID || persisted.LeaseOwner != lease.LeaseOwner || !persisted.RecoveryOnly { return contract, ErrOriginalUnknown }
+		if err != nil || persisted.FencingToken != lease.FencingToken || persisted.LeaseExecutorID != lease.LeaseExecutorID || persisted.LeaseOwner != lease.LeaseOwner || !persisted.RecoveryOnly {
+			return contract, ErrOriginalUnknown
+		}
 		var issue model.CapacityMutationIssue
-		for _, slot := range binding.Slots { if slot.Slot == 1 && slot.DesiredSpec != nil { issue = model.CapacityMutationIssue{BindingName: binding.Name, DesiredSpec: jsonBytesSourceFence(slot.DesiredSpec)} } }
-		if len(issue.DesiredSpec) == 0 { return contract, ErrOriginalUnknown }
-		if _, err = store.IssueMutation(ctx, policy, pre.Generation, pre.Fence, pre.LeaseOwner, issue); !errors.Is(err, repository.ErrCapacityConflict) { return contract, ErrOriginalUnknown }
+		for _, slot := range binding.Slots {
+			if slot.Slot == 1 && slot.DesiredSpec != nil {
+				issue = model.CapacityMutationIssue{BindingName: binding.Name, DesiredSpec: jsonBytesSourceFence(slot.DesiredSpec)}
+			}
+		}
+		if len(issue.DesiredSpec) == 0 {
+			return contract, ErrOriginalUnknown
+		}
+		if _, err = store.IssueMutation(ctx, policy, pre.Generation, pre.Fence, pre.LeaseOwner, issue); !errors.Is(err, repository.ErrCapacityConflict) {
+			return contract, ErrOriginalUnknown
+		}
 		contract.FenceAfter, contract.RecoveryOnly, contract.ExecutorChanged, contract.LeaseOwnerChanged, contract.OldIssueRefused = lease.FencingToken, true, true, true, true
 		contract.OriginalGrantExpired = !grant.ExpiresAt.After(time.Now().UTC())
-		if !contract.OriginalGrantExpired { return contract, ErrOriginalUnknown }
+		if !contract.OriginalGrantExpired {
+			return contract, ErrOriginalUnknown
+		}
 	} else {
 		id, kind := policy.ID, "capacity_policy"
-		if r.Request.NativeCase == "source_contract_instance_fence" { id, err = uuid.Parse(binding.IntegrationInstanceID); kind = "integration_instance" }
-		if r.Request.NativeCase == "source_contract_type_fence" { id, err = uuid.Parse(binding.IntegrationTypeID); kind = "integration_type" }
-		if err != nil || id == uuid.Nil { return contract, ErrOriginalUnknown }
+		if r.Request.NativeCase == "source_contract_instance_fence" {
+			id, err = uuid.Parse(binding.IntegrationInstanceID)
+			kind = "integration_instance"
+		}
+		if r.Request.NativeCase == "source_contract_type_fence" {
+			id, err = uuid.Parse(binding.IntegrationTypeID)
+			kind = "integration_type"
+		}
+		if err != nil || id == uuid.Nil {
+			return contract, ErrOriginalUnknown
+		}
 		original, err := repository.GetManifestByID(ctx, store.DB, id)
-		if err != nil || original.Kind != kind || original.Metadata.Namespace != policy.Metadata.Namespace || !original.Metadata.Active { return contract, ErrOriginalUnknown }
+		if err != nil || original.Kind != kind || original.Metadata.Namespace != policy.Metadata.Namespace || !original.Metadata.Active {
+			return contract, ErrOriginalUnknown
+		}
 		changed, err := repository.MarkManifestInactiveByID(ctx, store.DB, id)
-		if err != nil || changed != 1 { return contract, ErrOriginalUnknown }
+		if err != nil || changed != 1 {
+			return contract, ErrOriginalUnknown
+		}
 		revoked, err := repository.GetManifestByID(ctx, store.DB, id)
-		if err != nil || revoked.ID != original.ID || revoked.Kind != original.Kind || revoked.Metadata.Namespace != original.Metadata.Namespace || revoked.Checksum != original.Checksum || revoked.Metadata.Active { return contract, ErrOriginalUnknown }
+		if err != nil || revoked.ID != original.ID || revoked.Kind != original.Kind || revoked.Metadata.Namespace != original.Metadata.Namespace || revoked.Checksum != original.Checksum || revoked.Metadata.Active {
+			return contract, ErrOriginalUnknown
+		}
 		contract.RevokedID, contract.RevokedKind, contract.RevocationRows, contract.RevokedActiveAfter = id.String(), kind, changed, revoked.Metadata.Active
-		if !grant.ExpiresAt.After(time.Now().UTC()) { return contract, ErrOriginalUnknown }
+		if !grant.ExpiresAt.After(time.Now().UTC()) {
+			return contract, ErrOriginalUnknown
+		}
 	}
 	var nonceRaw [32]byte
-	if _, err = rand.Read(nonceRaw[:]); err != nil { return contract, err }
+	if _, err = rand.Read(nonceRaw[:]); err != nil {
+		return contract, err
+	}
 	nonce, attempt := hex.EncodeToString(nonceRaw[:]), uuid.NewString()
 	request := model.CapacityMutationRedeemRequest{GrantID: grant.GrantID, AttemptID: attempt, SettlementTokenSHA256: capacity.BusinessCreationSHA256([]byte(nonce)), Capability: grant.Capability, IntegrationInstanceID: grant.IntegrationInstanceID, ScopeChecksum: grant.ScopeChecksum, ProfileName: grant.ProfileName, Slot: 1, RequestSHA256: grant.RequestSHA256}
 	redeemed, redeemErr := store.RedeemMutation(ctx, binding.AdapterPrincipalID, request)
 	if executorCase {
-		if redeemErr != nil || redeemed.Mode != "read_only" { return contract, ErrOriginalUnknown }
+		if redeemErr != nil || redeemed.Mode != "read_only" {
+			return contract, ErrOriginalUnknown
+		}
 		contract.RepositoryRedeemResult, contract.GrantTransition = "read_only_after_real_expiry", "issued_to_expired_only"
 	} else {
-		if !errors.Is(redeemErr, repository.ErrCapacityConflict) && !errors.Is(redeemErr, repository.ErrCapacityDisabled) { return contract, ErrOriginalUnknown }
+		if !errors.Is(redeemErr, repository.ErrCapacityConflict) && !errors.Is(redeemErr, repository.ErrCapacityDisabled) {
+			return contract, ErrOriginalUnknown
+		}
 		contract.RepositoryRedeemResult, contract.GrantTransition = "revoked_scope_refused", "byte_exact_unchanged"
 	}
 	contract.HTTP, err = r.sourceFenceRedeem(ctx, request, executorCase)
-	if err != nil { return contract, err }
+	if err != nil {
+		return contract, err
+	}
 	var after []byte
-	if err = store.DB.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1 AND namespace=$2`, grant.GrantID, policy.Metadata.Namespace).Scan(&after); err != nil { return contract, err }
+	if err = store.DB.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1 AND namespace=$2`, grant.GrantID, policy.Metadata.Namespace).Scan(&after); err != nil {
+		return contract, err
+	}
 	if executorCase {
 		var original, retained map[string]json.RawMessage
-		if json.Unmarshal(before, &original) != nil || json.Unmarshal(after, &retained) != nil { return contract, ErrOriginalUnknown }
-		expected := grant; expected.State = "expired"
+		if json.Unmarshal(before, &original) != nil || json.Unmarshal(after, &retained) != nil {
+			return contract, ErrOriginalUnknown
+		}
+		expected := grant
+		expected.State = "expired"
 		original["grant"] = jsonBytesSourceFence(expected)
 		expectedCanonical, err := canonicalSourceFenceJSON(jsonBytesSourceFence(original))
-		if err != nil { return contract, err }
+		if err != nil {
+			return contract, err
+		}
 		actual, err := canonicalSourceFenceJSON(jsonBytesSourceFence(retained))
-		if err != nil || !bytes.Equal(expectedCanonical, actual) { return contract, ErrOriginalUnknown }
-	} else if !bytes.Equal(before, after) || !grant.ExpiresAt.After(time.Now().UTC()) { return contract, ErrOriginalUnknown }
+		if err != nil || !bytes.Equal(expectedCanonical, actual) {
+			return contract, ErrOriginalUnknown
+		}
+	} else if !bytes.Equal(before, after) || !grant.ExpiresAt.After(time.Now().UTC()) {
+		return contract, ErrOriginalUnknown
+	}
 	contract.GrantAfterSHA256 = digest(after)
 	// The ledger census is only a Source contract check. It is explicitly NOT
 	// a no-start/off/native-provider observation or native-capacity authority.
 	var grants, preregistrations, witnesses, nativeReturns, members int
-	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1`, policy.Metadata.Namespace).Scan(&grants); err != nil { return contract, err }
-	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_vm_provisioning_preregistrations p JOIN public.capacity_mutation_grants g ON p.create_grant_id=g.id WHERE g.namespace=$1`, policy.Metadata.Namespace).Scan(&preregistrations); err != nil { return contract, err }
-	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_guest_original_create_witnesses WHERE preregistration_id=$1`, pre.PreregistrationID).Scan(&witnesses); err != nil { return contract, err }
-	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_guest_qualification_native_source_returns WHERE preregistration_id=$1`, pre.PreregistrationID).Scan(&nativeReturns); err != nil { return contract, err }
-	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE namespace=$1`, policy.Metadata.Namespace).Scan(&members); err != nil { return contract, err }
-	if grants != 1 || preregistrations != 1 || witnesses != 0 || nativeReturns != 0 || members != 0 { return contract, ErrOriginalUnknown }
+	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1`, policy.Metadata.Namespace).Scan(&grants); err != nil {
+		return contract, err
+	}
+	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_vm_provisioning_preregistrations p JOIN public.capacity_mutation_grants g ON p.create_grant_id=g.id WHERE g.namespace=$1`, policy.Metadata.Namespace).Scan(&preregistrations); err != nil {
+		return contract, err
+	}
+	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_guest_original_create_witnesses WHERE preregistration_id=$1`, pre.PreregistrationID).Scan(&witnesses); err != nil {
+		return contract, err
+	}
+	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_guest_qualification_native_source_returns WHERE preregistration_id=$1`, pre.PreregistrationID).Scan(&nativeReturns); err != nil {
+		return contract, err
+	}
+	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE namespace=$1`, policy.Metadata.Namespace).Scan(&members); err != nil {
+		return contract, err
+	}
+	if grants != 1 || preregistrations != 1 || witnesses != 0 || nativeReturns != 0 || members != 0 {
+		return contract, ErrOriginalUnknown
+	}
 	contract.CheckedAt = time.Now().UTC()
-	if !contract.CheckedAt.Before(deadline) || ctx.Err() != nil { return contract, ErrOriginalUnknown }
-	if _, err = Publish(ctx, filepath.Join(r.PrivateDirectory, "source-fence-contract.json"), contract); err != nil { return contract, err }
-	if ctx.Err() != nil || !time.Now().UTC().Before(deadline) { return contract, ErrOriginalUnknown }
+	if !contract.CheckedAt.Before(deadline) || ctx.Err() != nil {
+		return contract, ErrOriginalUnknown
+	}
+	if _, err = Publish(ctx, filepath.Join(r.PrivateDirectory, "source-fence-contract.json"), contract); err != nil {
+		return contract, err
+	}
+	if ctx.Err() != nil || !time.Now().UTC().Before(deadline) {
+		return contract, ErrOriginalUnknown
+	}
 	return contract, nil
 }
 
@@ -818,8 +942,12 @@ func jsonBytesSourceFence(value any) []byte { wire, _ := json.Marshal(value); re
 func sourceFencePrivateIntent(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec) (model.CapacityIntent, error) {
 	var intent model.CapacityIntent
 	var wire []byte
-	if err := store.DB.QueryRowContext(ctx, `SELECT intent FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&wire); err != nil { return intent, err }
-	if closedJSON(wire, &intent) != nil || intent.Namespace != policy.Metadata.Namespace || intent.PolicyID != policy.ID || intent.PolicyChecksum != policy.Checksum || intent.Environment != p.Environment || intent.Domain != p.Domain || intent.Dimension != p.Dimension || intent.Generation < 1 || intent.FencingToken < 1 || ctx.Err() != nil { return intent, ErrOriginalUnknown }
+	if err := store.DB.QueryRowContext(ctx, `SELECT intent FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&wire); err != nil {
+		return intent, err
+	}
+	if closedJSON(wire, &intent) != nil || intent.Namespace != policy.Metadata.Namespace || intent.PolicyID != policy.ID || intent.PolicyChecksum != policy.Checksum || intent.Environment != p.Environment || intent.Domain != p.Domain || intent.Dimension != p.Dimension || intent.Generation < 1 || intent.FencingToken < 1 || ctx.Err() != nil {
+		return intent, ErrOriginalUnknown
+	}
 	return intent, nil
 }
 
@@ -830,8 +958,12 @@ func canonicalSourceFenceJSON(wire []byte) ([]byte, error) {
 	decoder := json.NewDecoder(bytes.NewReader(wire))
 	decoder.UseNumber()
 	var value any
-	if err := decoder.Decode(&value); err != nil { return nil, err }
-	if decoder.Decode(new(any)) != io.EOF { return nil, ErrOriginalUnknown }
+	if err := decoder.Decode(&value); err != nil {
+		return nil, err
+	}
+	if decoder.Decode(new(any)) != io.EOF {
+		return nil, ErrOriginalUnknown
+	}
 	return json.Marshal(value)
 }
 
@@ -839,68 +971,85 @@ func canonicalSourceFenceJSON(wire []byte) ([]byte, error) {
 // facts from a protected provider-health/quiescence proof, which these cases
 // do not possess. It cannot be consumed as a Native or no-start receipt.
 type SourceRecoveryContract struct {
-	Schema string `json:"schema"`
-	Scope string `json:"scope"`
-	Case string `json:"case"`
-	CoreSource string `json:"core_source"`
-	GuestSource string `json:"guest_source"`
-	Namespace string `json:"namespace"`
-	PolicyID string `json:"policy_id"`
-	WorkflowID string `json:"workflow_id"`
-	GrantID string `json:"grant_id"`
-	PreregistrationID string `json:"preregistration_id"`
-	Slot int `json:"slot"`
-	Generation int64 `json:"generation"`
-	FenceBefore int64 `json:"fence_before"`
-	FenceAfter int64 `json:"fence_after"`
-	GrantExpiresAt time.Time `json:"grant_expires_at"`
-	LeaseExpiresAt time.Time `json:"lease_expires_at"`
-	OriginalDeadline time.Time `json:"original_deadline"`
-	DBExpiryObservedAt time.Time `json:"db_expiry_observed_at"`
-	CheckedAt time.Time `json:"checked_at"`
-	GrantBeforeSHA256 string `json:"grant_before_sha256"`
-	GrantAfterSHA256 string `json:"grant_after_sha256"`
-	StateAfter string `json:"state_after"`
-	FirstMode string `json:"first_mode"`
-	ReplayMode string `json:"replay_mode"`
-	FirstTypedReturnSHA256 string `json:"first_typed_return_sha256"`
-	ReplayTypedReturnSHA256 string `json:"replay_typed_return_sha256"`
-	IssueReturnedOriginal bool `json:"issue_returned_original"`
-	RecoveryAttempted bool `json:"recovery_attempted"`
-	RecoveryOnly bool `json:"recovery_only"`
-	ExecutorChanged bool `json:"executor_changed"`
-	LeaseOwnerChanged bool `json:"lease_owner_changed"`
-	ReconcileAttempted bool `json:"reconcile_attempted"`
-	ReconcileAccepted bool `json:"reconcile_accepted"`
-	ReconcileErrorClass string `json:"reconcile_error_class"`
-	ReconcileErrorBytes int `json:"reconcile_error_bytes"`
-	ReconcileErrorSHA256 string `json:"reconcile_error_sha256"`
-	PhaseBefore string `json:"phase_before"`
-	PhaseAfter string `json:"phase_after"`
-	ProofBoundary string `json:"proof_boundary"`
-	PolicyPauseApplied bool `json:"policy_pause_applied"`
-	PolicyPauseRows int64 `json:"policy_pause_rows"`
-	PolicyActiveAfter bool `json:"policy_active_after"`
-	PauseMode string `json:"pause_mode"`
-	CallbackFactScope string `json:"callback_fact_scope"`
-	NativeQualified bool `json:"native_qualified"`
+	Schema                  string    `json:"schema"`
+	Scope                   string    `json:"scope"`
+	Case                    string    `json:"case"`
+	CoreSource              string    `json:"core_source"`
+	GuestSource             string    `json:"guest_source"`
+	Namespace               string    `json:"namespace"`
+	PolicyID                string    `json:"policy_id"`
+	WorkflowID              string    `json:"workflow_id"`
+	GrantID                 string    `json:"grant_id"`
+	PreregistrationID       string    `json:"preregistration_id"`
+	Slot                    int       `json:"slot"`
+	Generation              int64     `json:"generation"`
+	FenceBefore             int64     `json:"fence_before"`
+	FenceAfter              int64     `json:"fence_after"`
+	GrantExpiresAt          time.Time `json:"grant_expires_at"`
+	LeaseExpiresAt          time.Time `json:"lease_expires_at"`
+	OriginalDeadline        time.Time `json:"original_deadline"`
+	DBExpiryObservedAt      time.Time `json:"db_expiry_observed_at"`
+	CheckedAt               time.Time `json:"checked_at"`
+	GrantBeforeSHA256       string    `json:"grant_before_sha256"`
+	GrantAfterSHA256        string    `json:"grant_after_sha256"`
+	StateAfter              string    `json:"state_after"`
+	FirstMode               string    `json:"first_mode"`
+	ReplayMode              string    `json:"replay_mode"`
+	FirstTypedReturnSHA256  string    `json:"first_typed_return_sha256"`
+	ReplayTypedReturnSHA256 string    `json:"replay_typed_return_sha256"`
+	IssueReturnedOriginal   bool      `json:"issue_returned_original"`
+	RecoveryAttempted       bool      `json:"recovery_attempted"`
+	RecoveryOnly            bool      `json:"recovery_only"`
+	ExecutorChanged         bool      `json:"executor_changed"`
+	LeaseOwnerChanged       bool      `json:"lease_owner_changed"`
+	ReconcileAttempted      bool      `json:"reconcile_attempted"`
+	ReconcileAccepted       bool      `json:"reconcile_accepted"`
+	ReconcileErrorClass     string    `json:"reconcile_error_class"`
+	ReconcileErrorBytes     int       `json:"reconcile_error_bytes"`
+	ReconcileErrorSHA256    string    `json:"reconcile_error_sha256"`
+	PhaseBefore             string    `json:"phase_before"`
+	PhaseAfter              string    `json:"phase_after"`
+	ProofBoundary           string    `json:"proof_boundary"`
+	PolicyPauseApplied      bool      `json:"policy_pause_applied"`
+	PolicyPauseRows         int64     `json:"policy_pause_rows"`
+	PolicyActiveAfter       bool      `json:"policy_active_after"`
+	PauseMode               string    `json:"pause_mode"`
+	CallbackFactScope       string    `json:"callback_fact_scope"`
+	NativeQualified         bool      `json:"native_qualified"`
 }
 
 // waitSourceDBExpiry never advances a clock or edits a row. Context bounds
 // both host scheduling and repeated reads of the actual PostgreSQL clock.
 func waitSourceDBExpiry(ctx context.Context, store repository.CapacityStore, target, originalDeadline time.Time) (time.Time, error) {
 	var now time.Time
-	if !target.Before(originalDeadline) { return now, ErrOriginalUnknown }
+	if !target.Before(originalDeadline) {
+		return now, ErrOriginalUnknown
+	}
 	wait := time.Until(target)
-	if wait < 0 { wait = 0 }
+	if wait < 0 {
+		wait = 0
+	}
 	timer := time.NewTimer(wait)
 	defer timer.Stop()
-	select { case <-ctx.Done(): return now, ctx.Err(); case <-timer.C: }
+	select {
+	case <-ctx.Done():
+		return now, ctx.Err()
+	case <-timer.C:
+	}
 	for {
-		if err := store.DB.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil { return now, err }
-		if !now.Before(target) { return now.UTC(), nil }
-		tick := time.NewTimer(20*time.Millisecond)
-		select { case <-ctx.Done(): tick.Stop(); return now, ctx.Err(); case <-tick.C: }
+		if err := store.DB.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil {
+			return now, err
+		}
+		if !now.Before(target) {
+			return now.UTC(), nil
+		}
+		tick := time.NewTimer(20 * time.Millisecond)
+		select {
+		case <-ctx.Done():
+			tick.Stop()
+			return now, ctx.Err()
+		case <-tick.C:
+		}
 	}
 }
 
@@ -912,51 +1061,85 @@ func sourceRecoveryGrantWire(ctx context.Context, store repository.CapacityStore
 
 func (r *Realm) OriginalRecoveryContract(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, binding model.CapacityMutationBinding, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration) (SourceRecoveryContract, error) {
 	contract := SourceRecoveryContract{}
-	if !SourceRecoveryCase(r.Request.NativeCase) || grant.Slot != 1 || grant.State != "issued" || pre.OriginalCreateGrantID != grant.GrantID || pre.PolicyID != policy.ID.String() || pre.CoreSourceCommit != capacity.CurrentGuestCoreSource() || pre.ExecutorID != store.ExecutorID || ctx.Err() != nil { return contract, ErrOriginalUnknown }
+	if !SourceRecoveryCase(r.Request.NativeCase) || grant.Slot != 1 || grant.State != "issued" || pre.OriginalCreateGrantID != grant.GrantID || pre.PolicyID != policy.ID.String() || pre.CoreSourceCommit != capacity.CurrentGuestCoreSource() || pre.ExecutorID != store.ExecutorID || ctx.Err() != nil {
+		return contract, ErrOriginalUnknown
+	}
 	deadline, ok := ctx.Deadline()
-	if !ok || deadline.After(pre.OriginalDeadline) || deadline.After(r.Request.OriginalContextDeadline) || !time.Now().UTC().Before(grant.ExpiresAt) { return contract, ErrOriginalUnknown }
+	if !ok || deadline.After(pre.OriginalDeadline) || deadline.After(r.Request.OriginalContextDeadline) || !time.Now().UTC().Before(grant.ExpiresAt) {
+		return contract, ErrOriginalUnknown
+	}
 	persistedPre, err := store.OriginalGuestProvisioning(ctx, grant.GrantID)
-	if err != nil || capacity.GuestRetirementSHA(persistedPre) != capacity.GuestRetirementSHA(pre) { return contract, ErrOriginalUnknown }
+	if err != nil || capacity.GuestRetirementSHA(persistedPre) != capacity.GuestRetirementSHA(pre) {
+		return contract, ErrOriginalUnknown
+	}
 	current, err := sourceFencePrivateIntent(ctx, store, policy, p)
-	if err != nil || current.Phase != "preparing" || current.Generation != pre.Generation || current.FencingToken != pre.Fence || current.LeaseOwner != pre.LeaseOwner || current.LeaseExecutorID != pre.ExecutorID || current.LeaseExpiresAt == nil || current.RecoveryOnly { return contract, ErrOriginalUnknown }
+	if err != nil || current.Phase != "preparing" || current.Generation != pre.Generation || current.FencingToken != pre.Fence || current.LeaseOwner != pre.LeaseOwner || current.LeaseExecutorID != pre.ExecutorID || current.LeaseExpiresAt == nil || current.RecoveryOnly {
+		return contract, ErrOriginalUnknown
+	}
 	contract = SourceRecoveryContract{Schema: "core_original_source_recovery_contract_v1", Scope: "SOURCE_CONTRACT_ONLY_NO_NATIVE_AUTHORITY", Case: r.Request.NativeCase, CoreSource: capacity.CurrentGuestCoreSource(), GuestSource: r.Request.SourceCommit, Namespace: policy.Metadata.Namespace, PolicyID: policy.ID.String(), WorkflowID: store.WorkflowID.String(), GrantID: grant.GrantID, PreregistrationID: pre.PreregistrationID, Slot: 1, Generation: pre.Generation, FenceBefore: pre.Fence, FenceAfter: pre.Fence, GrantExpiresAt: grant.ExpiresAt, LeaseExpiresAt: *current.LeaseExpiresAt, OriginalDeadline: deadline, PhaseBefore: current.Phase, CallbackFactScope: "typed_original_api_returns_200_bounded_full_read_and_close_not_raw_body", NativeQualified: false}
 	actualPolicy, err := repository.GetManifestByID(ctx, store.DB, policy.ID)
-	if err != nil || actualPolicy.ID != policy.ID || actualPolicy.Kind != "capacity_policy" || actualPolicy.Checksum != policy.Checksum || actualPolicy.Metadata.Namespace != policy.Metadata.Namespace || !actualPolicy.Metadata.Active { return contract, ErrOriginalUnknown }
+	if err != nil || actualPolicy.ID != policy.ID || actualPolicy.Kind != "capacity_policy" || actualPolicy.Checksum != policy.Checksum || actualPolicy.Metadata.Namespace != policy.Metadata.Namespace || !actualPolicy.Metadata.Active {
+		return contract, ErrOriginalUnknown
+	}
 	contract.PolicyActiveAfter, contract.PauseMode = true, "none"
 	if r.Request.NativeCase == "source_contract_unredeemed_expiry_recovery" {
 		// Real administrative revocation of this disposable version. This is
 		// not a write to spec.executionEnabled and is never restored by SQL.
 		rows, err := repository.MarkManifestInactiveByID(ctx, store.DB, policy.ID)
-		if err != nil || rows != 1 { return contract, ErrOriginalUnknown }
+		if err != nil || rows != 1 {
+			return contract, ErrOriginalUnknown
+		}
 		paused, err := repository.GetManifestByID(ctx, store.DB, policy.ID)
-		if err != nil || paused.ID != actualPolicy.ID || paused.Kind != actualPolicy.Kind || paused.Checksum != actualPolicy.Checksum || paused.Metadata.Namespace != actualPolicy.Metadata.Namespace || paused.Metadata.Active { return contract, ErrOriginalUnknown }
+		if err != nil || paused.ID != actualPolicy.ID || paused.Kind != actualPolicy.Kind || paused.Checksum != actualPolicy.Checksum || paused.Metadata.Namespace != actualPolicy.Metadata.Namespace || paused.Metadata.Active {
+			return contract, ErrOriginalUnknown
+		}
 		contract.PolicyPauseApplied, contract.PolicyPauseRows, contract.PolicyActiveAfter = true, rows, false
 		contract.PauseMode = "persisted_policy_manifest_inactive_and_recovery_store_execution_disabled"
 	}
 	var nonceRaw [32]byte
-	if _, err = rand.Read(nonceRaw[:]); err != nil { return contract, err }
+	if _, err = rand.Read(nonceRaw[:]); err != nil {
+		return contract, err
+	}
 	nonce, attempt := hex.EncodeToString(nonceRaw[:]), uuid.NewString()
 	request := model.CapacityMutationRedeemRequest{GrantID: grant.GrantID, AttemptID: attempt, SettlementTokenSHA256: capacity.BusinessCreationSHA256([]byte(nonce)), Capability: grant.Capability, IntegrationInstanceID: grant.IntegrationInstanceID, ScopeChecksum: grant.ScopeChecksum, ProfileName: grant.ProfileName, Slot: grant.Slot, RequestSHA256: grant.RequestSHA256}
 	if r.Request.NativeCase == "source_contract_unresolved_expiry" {
 		var first model.CapacityMutationRedeemResponse
-		if r.api(ctx, "/api/v1/capacity/mutations/redeem", "", request, &first) != nil || first.Mode != "write_once" || first.GrantID != grant.GrantID || first.AttemptID != attempt || first.RequestSHA256 != grant.RequestSHA256 { return contract, ErrOriginalUnknown }
+		if r.api(ctx, "/api/v1/capacity/mutations/redeem", "", request, &first) != nil || first.Mode != "write_once" || first.GrantID != grant.GrantID || first.AttemptID != attempt || first.RequestSHA256 != grant.RequestSHA256 {
+			return contract, ErrOriginalUnknown
+		}
 		contract.FirstMode, contract.FirstTypedReturnSHA256 = first.Mode, capacity.GuestRetirementSHA(first)
 		before, err := sourceRecoveryGrantWire(ctx, store, policy, grant.GrantID)
-		if err != nil { return contract, err }
+		if err != nil {
+			return contract, err
+		}
 		contract.GrantBeforeSHA256 = digest(before)
 		contract.DBExpiryObservedAt, err = waitSourceDBExpiry(ctx, store, grant.ExpiresAt, deadline)
-		if err != nil || !contract.DBExpiryObservedAt.Before(*current.LeaseExpiresAt) { return contract, ErrOriginalUnknown }
+		if err != nil || !contract.DBExpiryObservedAt.Before(*current.LeaseExpiresAt) {
+			return contract, ErrOriginalUnknown
+		}
 		var replay model.CapacityMutationRedeemResponse
-		if r.api(ctx, "/api/v1/capacity/mutations/redeem", "", request, &replay) != nil || replay.Mode != "read_only" || replay.GrantID != grant.GrantID || replay.AttemptID != attempt || replay.RequestSHA256 != grant.RequestSHA256 { return contract, ErrOriginalUnknown }
+		if r.api(ctx, "/api/v1/capacity/mutations/redeem", "", request, &replay) != nil || replay.Mode != "read_only" || replay.GrantID != grant.GrantID || replay.AttemptID != attempt || replay.RequestSHA256 != grant.RequestSHA256 {
+			return contract, ErrOriginalUnknown
+		}
 		contract.ReplayMode, contract.ReplayTypedReturnSHA256 = replay.Mode, capacity.GuestRetirementSHA(replay)
 		var issue model.CapacityMutationIssue
-		for _, slot := range binding.Slots { if slot.Slot == grant.Slot && slot.DesiredSpec != nil { issue = model.CapacityMutationIssue{BindingName: binding.Name, DesiredSpec: jsonBytesSourceFence(slot.DesiredSpec)} } }
-		if len(issue.DesiredSpec) == 0 { return contract, ErrOriginalUnknown }
+		for _, slot := range binding.Slots {
+			if slot.Slot == grant.Slot && slot.DesiredSpec != nil {
+				issue = model.CapacityMutationIssue{BindingName: binding.Name, DesiredSpec: jsonBytesSourceFence(slot.DesiredSpec)}
+			}
+		}
+		if len(issue.DesiredSpec) == 0 {
+			return contract, ErrOriginalUnknown
+		}
 		repeated, err := store.IssueMutation(ctx, policy, pre.Generation, pre.Fence, pre.LeaseOwner, issue)
-		if err != nil || repeated.GrantID != grant.GrantID || repeated.State != "redeemed" || !repeated.ExpiresAt.Equal(grant.ExpiresAt) || repeated.RequestSHA256 != grant.RequestSHA256 { return contract, ErrOriginalUnknown }
+		if err != nil || repeated.GrantID != grant.GrantID || repeated.State != "redeemed" || !repeated.ExpiresAt.Equal(grant.ExpiresAt) || repeated.RequestSHA256 != grant.RequestSHA256 {
+			return contract, ErrOriginalUnknown
+		}
 		contract.IssueReturnedOriginal = true
 		after, err := sourceRecoveryGrantWire(ctx, store, policy, grant.GrantID)
-		if err != nil || !bytes.Equal(before, after) { return contract, ErrOriginalUnknown }
+		if err != nil || !bytes.Equal(before, after) {
+			return contract, ErrOriginalUnknown
+		}
 		contract.GrantAfterSHA256, contract.StateAfter = digest(after), repeated.State
 		// Source-only preparation has no genuine healthy canary/protected
 		// transition proof. Do not set Healthy/ReceiptRef or skip to promoted
@@ -964,59 +1147,106 @@ func (r *Realm) OriginalRecoveryContract(ctx context.Context, store repository.C
 		contract.ProofBoundary = "TERMINAL_UNRESOLVED_GUARD_NOT_EXERCISED_MISSING_GENUINE_PROTECTED_TRANSITION_PROOF"
 	} else {
 		before, err := sourceRecoveryGrantWire(ctx, store, policy, grant.GrantID)
-		if err != nil { return contract, err }
+		if err != nil {
+			return contract, err
+		}
 		contract.GrantBeforeSHA256 = digest(before)
 		target := *current.LeaseExpiresAt
-		if grant.ExpiresAt.After(target) { target = grant.ExpiresAt }
+		if grant.ExpiresAt.After(target) {
+			target = grant.ExpiresAt
+		}
 		contract.DBExpiryObservedAt, err = waitSourceDBExpiry(ctx, store, target, deadline)
-		if err != nil { return contract, err }
+		if err != nil {
+			return contract, err
+		}
 		recovery := store
 		recovery.ExecutionEnabled, recovery.ExecutorID = false, uuid.NewString()
 		contract.RecoveryAttempted = true
 		lease, err := recovery.Recover(ctx, policy, pre.Generation, QualificationAssessment(p, 0, 0.9, time.Now().UTC()))
-		if err != nil || !lease.RecoveryOnly || lease.Decision.ExecutionPermitted || lease.FencingToken != pre.Fence+1 || lease.LeaseOwner == pre.LeaseOwner || lease.LeaseExecutorID == pre.ExecutorID || lease.LeaseExecutorID != recovery.ExecutorID { return contract, ErrOriginalUnknown }
+		if err != nil || !lease.RecoveryOnly || lease.Decision.ExecutionPermitted || lease.FencingToken != pre.Fence+1 || lease.LeaseOwner == pre.LeaseOwner || lease.LeaseExecutorID == pre.ExecutorID || lease.LeaseExecutorID != recovery.ExecutorID {
+			return contract, ErrOriginalUnknown
+		}
 		contract.FenceAfter, contract.RecoveryOnly, contract.ExecutorChanged, contract.LeaseOwnerChanged = lease.FencingToken, true, true, true
 		// The original never-redeemed grant expires through its real callback;
 		// no new grant, provider send or permission is obtained by this read.
 		var expired model.CapacityMutationRedeemResponse
-		if r.api(ctx, "/api/v1/capacity/mutations/redeem", "", request, &expired) != nil || expired.Mode != "read_only" || expired.GrantID != grant.GrantID || expired.AttemptID != attempt || expired.RequestSHA256 != grant.RequestSHA256 { return contract, ErrOriginalUnknown }
+		if r.api(ctx, "/api/v1/capacity/mutations/redeem", "", request, &expired) != nil || expired.Mode != "read_only" || expired.GrantID != grant.GrantID || expired.AttemptID != attempt || expired.RequestSHA256 != grant.RequestSHA256 {
+			return contract, ErrOriginalUnknown
+		}
 		contract.ReplayMode, contract.ReplayTypedReturnSHA256 = expired.Mode, capacity.GuestRetirementSHA(expired)
 		receipt, err := store.MutationReceipt(ctx, binding.AdapterPrincipalID, grant.GrantID)
-		if err != nil || receipt.Grant.State != "expired" || receipt.AttemptID != "" || receipt.Outcome != "" || receipt.TransportCompleted { return contract, ErrOriginalUnknown }
+		if err != nil || receipt.Grant.State != "expired" || receipt.AttemptID != "" || receipt.Outcome != "" || receipt.TransportCompleted {
+			return contract, ErrOriginalUnknown
+		}
 		after, err := sourceRecoveryGrantWire(ctx, store, policy, grant.GrantID)
-		if err != nil { return contract, err }
+		if err != nil {
+			return contract, err
+		}
 		var expected, retained map[string]json.RawMessage
-		if json.Unmarshal(before, &expected) != nil || json.Unmarshal(after, &retained) != nil { return contract, ErrOriginalUnknown }
-		expiredGrant := grant; expiredGrant.State = "expired"
+		if json.Unmarshal(before, &expected) != nil || json.Unmarshal(after, &retained) != nil {
+			return contract, ErrOriginalUnknown
+		}
+		expiredGrant := grant
+		expiredGrant.State = "expired"
 		expected["grant"] = jsonBytesSourceFence(expiredGrant)
-		expectedCanonical, err := canonicalSourceFenceJSON(jsonBytesSourceFence(expected)); if err != nil { return contract, err }
-		actualCanonical, err := canonicalSourceFenceJSON(jsonBytesSourceFence(retained)); if err != nil || !bytes.Equal(expectedCanonical, actualCanonical) { return contract, ErrOriginalUnknown }
+		expectedCanonical, err := canonicalSourceFenceJSON(jsonBytesSourceFence(expected))
+		if err != nil {
+			return contract, err
+		}
+		actualCanonical, err := canonicalSourceFenceJSON(jsonBytesSourceFence(retained))
+		if err != nil || !bytes.Equal(expectedCanonical, actualCanonical) {
+			return contract, ErrOriginalUnknown
+		}
 		contract.GrantAfterSHA256, contract.StateAfter = digest(after), "expired"
 		// No invented receipt, healthy assertion, provider fence or noMutation
 		// flag is passed. The real method must retain its proof requirement.
 		contract.ReconcileAttempted = true
 		_, refusal := recovery.Reconcile(ctx, policy, pre.Generation, lease.FencingToken, lease.LeaseOwner, "aborted", model.CapacityTransitionProof{})
 		const missing = "capacity recovery requires fresh healthy proof, current provider fencing and explicitly zero outstanding mutations"
-		if refusal == nil || refusal.Error() != missing { return contract, ErrOriginalUnknown }
+		if refusal == nil || refusal.Error() != missing {
+			return contract, ErrOriginalUnknown
+		}
 		contract.ReconcileErrorClass, contract.ReconcileErrorBytes, contract.ReconcileErrorSHA256 = "missing_genuine_recovery_proof", len(refusal.Error()), capacity.BusinessCreationSHA256([]byte(refusal.Error()))
 		persisted, err := sourceFencePrivateIntent(ctx, recovery, policy, p)
-		if err != nil || capacity.GuestRetirementSHA(persisted) != capacity.GuestRetirementSHA(lease) { return contract, ErrOriginalUnknown }
+		if err != nil || capacity.GuestRetirementSHA(persisted) != capacity.GuestRetirementSHA(lease) {
+			return contract, ErrOriginalUnknown
+		}
 		contract.ProofBoundary = "ABORT_NOT_ADMITTED_MISSING_GENUINE_HEALTH_AND_NO_MUTATION_PROOF"
 	}
 	post, err := sourceFencePrivateIntent(ctx, store, policy, p)
-	if err != nil || post.Phase != current.Phase { return contract, ErrOriginalUnknown }
+	if err != nil || post.Phase != current.Phase {
+		return contract, ErrOriginalUnknown
+	}
 	contract.PhaseAfter = post.Phase
 	var grants, preregistrations, witnesses, nativeReturns, members int
-	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1`, policy.Metadata.Namespace).Scan(&grants); err != nil { return contract, err }
-	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_vm_provisioning_preregistrations p JOIN public.capacity_mutation_grants g ON p.create_grant_id=g.id WHERE g.namespace=$1`, policy.Metadata.Namespace).Scan(&preregistrations); err != nil { return contract, err }
-	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_guest_original_create_witnesses WHERE preregistration_id=$1`, pre.PreregistrationID).Scan(&witnesses); err != nil { return contract, err }
-	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_guest_qualification_native_source_returns WHERE preregistration_id=$1`, pre.PreregistrationID).Scan(&nativeReturns); err != nil { return contract, err }
-	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE namespace=$1`, policy.Metadata.Namespace).Scan(&members); err != nil { return contract, err }
-	if grants != 1 || preregistrations != 1 || witnesses != 0 || nativeReturns != 0 || members != 0 { return contract, ErrOriginalUnknown }
+	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1`, policy.Metadata.Namespace).Scan(&grants); err != nil {
+		return contract, err
+	}
+	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_vm_provisioning_preregistrations p JOIN public.capacity_mutation_grants g ON p.create_grant_id=g.id WHERE g.namespace=$1`, policy.Metadata.Namespace).Scan(&preregistrations); err != nil {
+		return contract, err
+	}
+	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_guest_original_create_witnesses WHERE preregistration_id=$1`, pre.PreregistrationID).Scan(&witnesses); err != nil {
+		return contract, err
+	}
+	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_guest_qualification_native_source_returns WHERE preregistration_id=$1`, pre.PreregistrationID).Scan(&nativeReturns); err != nil {
+		return contract, err
+	}
+	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE namespace=$1`, policy.Metadata.Namespace).Scan(&members); err != nil {
+		return contract, err
+	}
+	if grants != 1 || preregistrations != 1 || witnesses != 0 || nativeReturns != 0 || members != 0 {
+		return contract, ErrOriginalUnknown
+	}
 	contract.CheckedAt = time.Now().UTC()
-	if !contract.CheckedAt.Before(deadline) || ctx.Err() != nil { return contract, ErrOriginalUnknown }
-	if _, err = Publish(ctx, filepath.Join(r.PrivateDirectory, "source-recovery-contract.json"), contract); err != nil { return contract, err }
-	if ctx.Err() != nil || !time.Now().UTC().Before(deadline) { return contract, ErrOriginalUnknown }
+	if !contract.CheckedAt.Before(deadline) || ctx.Err() != nil {
+		return contract, ErrOriginalUnknown
+	}
+	if _, err = Publish(ctx, filepath.Join(r.PrivateDirectory, "source-recovery-contract.json"), contract); err != nil {
+		return contract, err
+	}
+	if ctx.Err() != nil || !time.Now().UTC().Before(deadline) {
+		return contract, ErrOriginalUnknown
+	}
 	return contract, nil
 }
 
@@ -1033,7 +1263,7 @@ func (r *Realm) originalNativeBeforeSettlementContract(ctx context.Context, stor
 			return nil, err
 		}
 		var record struct {
-			Grant model.CapacityMutationGrant `json:"grant"`
+			Grant      model.CapacityMutationGrant          `json:"grant"`
 			Settlement *model.CapacityMutationSettleRequest `json:"settlement"`
 		}
 		if json.Unmarshal(raw, &record) != nil || record.Grant.GrantID != grant.GrantID || record.Grant.State != "redeemed" || record.Settlement != nil {
@@ -1063,75 +1293,75 @@ func (r *Realm) originalNativeBeforeSettlementContract(ctx context.Context, stor
 		return errors.Join(ErrOriginalUnknown, err)
 	}
 	contract := struct {
-		Schema string `json:"schema"`
-		CoreSource string `json:"core_source"`
-		GrantID string `json:"grant_id"`
-		Slot int `json:"slot"`
+		Schema                    string `json:"schema"`
+		CoreSource                string `json:"core_source"`
+		GrantID                   string `json:"grant_id"`
+		Slot                      int    `json:"slot"`
 		OriginalNativeProofSHA256 string `json:"original_native_proof_sha256"`
-		GrantRecordSHA256 string `json:"grant_record_sha256"`
-		State string `json:"state"`
-		CanonicalEvents int `json:"canonical_events"`
-		CanonicalMembers int `json:"canonical_members"`
-		RecordUnchanged bool `json:"record_unchanged"`
+		GrantRecordSHA256         string `json:"grant_record_sha256"`
+		State                     string `json:"state"`
+		CanonicalEvents           int    `json:"canonical_events"`
+		CanonicalMembers          int    `json:"canonical_members"`
+		RecordUnchanged           bool   `json:"record_unchanged"`
 	}{"original_guest_native_before_settlement_contract_v1", capacity.CurrentGuestCoreSource(), grant.GrantID, grant.Slot, capacity.GuestRetirementSHA(proof), capacity.BusinessCreationSHA256(before), "redeemed", 0, 0, true}
 	_, err = Publish(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, grant.Slot), "native-before-settlement-contract.json"), contract)
 	return err
 }
 
 type SourceLivePartialContract struct {
-	Schema string `json:"schema"`
-	Scope string `json:"scope"`
-	Case string `json:"case"`
-	PolicyID string `json:"policy_id"`
-	WorkflowID string `json:"workflow_id"`
-	CoreSource string `json:"core_source"`
-	GuestSource string `json:"guest_source"`
-	NativeQualified bool `json:"native_qualified"`
-	BaselineUnits int `json:"baseline_units"`
-	TargetUnits int `json:"target_units"`
-	PartialUnits int `json:"partial_units"`
-	OutstandingMutations int `json:"outstanding_mutations"`
-	Slot2Grants int `json:"slot2_grants"`
-	MemberRows int `json:"member_rows"`
-	ProbeSHA256 string `json:"probe_sha256"`
-	PhysicalSHA256 string `json:"physical_sha256"`
-	PartialSHA256 string `json:"partial_sha256"`
-	NextGeneration int64 `json:"next_generation"`
-	NextIntentSHA256 string `json:"next_intent_sha256"`
-	PriorGeneration int64 `json:"prior_generation"`
-	RecoveryFence int64 `json:"recovery_fence"`
-	Refused []string `json:"refused"`
-	StaleMemberDeadline time.Time `json:"stale_member_deadline"`
+	Schema                 string    `json:"schema"`
+	Scope                  string    `json:"scope"`
+	Case                   string    `json:"case"`
+	PolicyID               string    `json:"policy_id"`
+	WorkflowID             string    `json:"workflow_id"`
+	CoreSource             string    `json:"core_source"`
+	GuestSource            string    `json:"guest_source"`
+	NativeQualified        bool      `json:"native_qualified"`
+	BaselineUnits          int       `json:"baseline_units"`
+	TargetUnits            int       `json:"target_units"`
+	PartialUnits           int       `json:"partial_units"`
+	OutstandingMutations   int       `json:"outstanding_mutations"`
+	Slot2Grants            int       `json:"slot2_grants"`
+	MemberRows             int       `json:"member_rows"`
+	ProbeSHA256            string    `json:"probe_sha256"`
+	PhysicalSHA256         string    `json:"physical_sha256"`
+	PartialSHA256          string    `json:"partial_sha256"`
+	NextGeneration         int64     `json:"next_generation"`
+	NextIntentSHA256       string    `json:"next_intent_sha256"`
+	PriorGeneration        int64     `json:"prior_generation"`
+	RecoveryFence          int64     `json:"recovery_fence"`
+	Refused                []string  `json:"refused"`
+	StaleMemberDeadline    time.Time `json:"stale_member_deadline"`
 	LeaseExpiredObservedAt time.Time `json:"lease_expired_observed_at"`
-	CheckedAt time.Time `json:"checked_at"`
-	OriginalDeadline time.Time `json:"original_deadline"`
+	CheckedAt              time.Time `json:"checked_at"`
+	OriginalDeadline       time.Time `json:"original_deadline"`
 }
 
 type SourceHistoricalConfirmContract struct {
-	Schema string `json:"schema"`
-	Scope string `json:"scope"`
-	Case string `json:"case"`
-	CoreSource string `json:"core_source"`
-	GuestSource string `json:"guest_source"`
-	PolicyID string `json:"policy_id"`
-	GrantID string `json:"grant_id"`
-	PreregistrationID string `json:"preregistration_id"`
-	Generation int64 `json:"generation"`
-	RecoveryFence int64 `json:"recovery_fence"`
-	PauseRows int64 `json:"pause_rows"`
-	PolicyActiveAfter bool `json:"policy_active_after"`
-	RecoveryExecutionEnabled bool `json:"recovery_execution_enabled"`
-	OriginalProofSHA256 string `json:"original_proof_sha256"`
-	FreshPhysicalSHA256 string `json:"fresh_physical_sha256"`
-	FreshConfirmSHA256 string `json:"fresh_confirm_sha256"`
-	OriginalReceiptSHA256 string `json:"original_receipt_sha256"`
-	ConfirmedReceiptSHA256 string `json:"confirmed_receipt_sha256"`
-	DiagnosticSHA256 string `json:"diagnostic_sha256"`
-	StateAfter string `json:"state_after"`
-	CanonicalEvents int `json:"canonical_events"`
-	OldObservationRefused bool `json:"old_observation_refused"`
-	LeaseExpiredObservedAt time.Time `json:"lease_expired_observed_at"`
-	CheckedAt time.Time `json:"checked_at"`
-	OriginalDeadline time.Time `json:"original_deadline"`
-	NativeQualified bool `json:"native_qualified"`
+	Schema                   string    `json:"schema"`
+	Scope                    string    `json:"scope"`
+	Case                     string    `json:"case"`
+	CoreSource               string    `json:"core_source"`
+	GuestSource              string    `json:"guest_source"`
+	PolicyID                 string    `json:"policy_id"`
+	GrantID                  string    `json:"grant_id"`
+	PreregistrationID        string    `json:"preregistration_id"`
+	Generation               int64     `json:"generation"`
+	RecoveryFence            int64     `json:"recovery_fence"`
+	PauseRows                int64     `json:"pause_rows"`
+	PolicyActiveAfter        bool      `json:"policy_active_after"`
+	RecoveryExecutionEnabled bool      `json:"recovery_execution_enabled"`
+	OriginalProofSHA256      string    `json:"original_proof_sha256"`
+	FreshPhysicalSHA256      string    `json:"fresh_physical_sha256"`
+	FreshConfirmSHA256       string    `json:"fresh_confirm_sha256"`
+	OriginalReceiptSHA256    string    `json:"original_receipt_sha256"`
+	ConfirmedReceiptSHA256   string    `json:"confirmed_receipt_sha256"`
+	DiagnosticSHA256         string    `json:"diagnostic_sha256"`
+	StateAfter               string    `json:"state_after"`
+	CanonicalEvents          int       `json:"canonical_events"`
+	OldObservationRefused    bool      `json:"old_observation_refused"`
+	LeaseExpiredObservedAt   time.Time `json:"lease_expired_observed_at"`
+	CheckedAt                time.Time `json:"checked_at"`
+	OriginalDeadline         time.Time `json:"original_deadline"`
+	NativeQualified          bool      `json:"native_qualified"`
 }

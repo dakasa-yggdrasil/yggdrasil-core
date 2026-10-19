@@ -384,15 +384,15 @@ func guestOriginalSourceAssertNativeRefusals(ctx context.Context, store reposito
 		refused = append(refused, name)
 	}
 	contract := struct {
-		Schema string `json:"schema"`
-		CoreSource string `json:"core_source"`
-		Slot int `json:"slot"`
-		GrantID string `json:"grant_id"`
-		ResourceID string `json:"resource_id"`
-		OriginalProofSHA256 string `json:"original_proof_sha256"`
-		Refused []string `json:"refused"`
-		CanonicalEvents int `json:"canonical_events"`
-		CanonicalMembers int `json:"canonical_members"`
+		Schema              string   `json:"schema"`
+		CoreSource          string   `json:"core_source"`
+		Slot                int      `json:"slot"`
+		GrantID             string   `json:"grant_id"`
+		ResourceID          string   `json:"resource_id"`
+		OriginalProofSHA256 string   `json:"original_proof_sha256"`
+		Refused             []string `json:"refused"`
+		CanonicalEvents     int      `json:"canonical_events"`
+		CanonicalMembers    int      `json:"canonical_members"`
 	}{"original_guest_native_refusal_contract_v1", capacity.CurrentGuestCoreSource(), input.Slot, grant.GrantID, proof.ResourceID, capacity.GuestRetirementSHA(proof), refused, 0, 0}
 	_, err := capacitynativeqemu.Publish(ctx, filepath.Join(capacitynativeqemu.SlotDirectory(originalGuestNativeRealm.PrivateDirectory, input.Slot), "native-refusal-contract.json"), contract)
 	return err
@@ -414,9 +414,9 @@ func guestOriginalSourceContractFence(ctx context.Context, store repository.Capa
 	return contract, true, err
 }
 
-func guestOriginalSourceCreateWitness(ctx context.Context,store repository.CapacityStore,id string,proof model.CapacityMutationProof,key ed25519.PrivateKey)(model.CapacityGuestOriginalCreateWitness,error){
- if originalGuestNativeRealm!=nil && capacitynativeqemu.PostlossSourceCase(originalGuestNativeRealm.Request.NativeCase) && proof.Slot==2 {
- return store.RecordGuestPostlossObservedWitness(ctx,id,proof,key,originalGuestNativeRealm.Request.NativeCase,filepath.Join(capacitynativeqemu.SlotDirectory(originalGuestNativeRealm.PrivateDirectory,2),"core-original-create-transport-uncertain.json"))
- }
- return store.RecordGuestCreateWitness(ctx,id,proof,key)
+func guestOriginalSourceCreateWitness(ctx context.Context, store repository.CapacityStore, id string, proof model.CapacityMutationProof, key ed25519.PrivateKey) (model.CapacityGuestOriginalCreateWitness, error) {
+	if originalGuestNativeRealm != nil && capacitynativeqemu.PostlossSourceCase(originalGuestNativeRealm.Request.NativeCase) && proof.Slot == 2 {
+		return store.RecordGuestPostlossObservedWitness(ctx, id, proof, key, originalGuestNativeRealm.Request.NativeCase, filepath.Join(capacitynativeqemu.SlotDirectory(originalGuestNativeRealm.PrivateDirectory, 2), "core-original-create-transport-uncertain.json"))
+	}
+	return store.RecordGuestCreateWitness(ctx, id, proof, key)
 }

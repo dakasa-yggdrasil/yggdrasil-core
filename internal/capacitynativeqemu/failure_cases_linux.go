@@ -42,7 +42,9 @@ func validateOriginalFailureCase(record QualificationFailureRecord) error {
 			return ErrOriginalUnknown
 		}
 		for _, process := range record.CensusAfter.Processes {
-			if process.PID == record.OriginalChild.PID && process.StartTicks == record.OriginalChild.StartTicks { return ErrOriginalUnknown }
+			if process.PID == record.OriginalChild.PID && process.StartTicks == record.OriginalChild.StartTicks {
+				return ErrOriginalUnknown
+			}
 		}
 	case "admission_bind_cancelled_original":
 		if (record.Phase != "original_preownership_failure" && record.Phase != "original_provisioning_held") || !record.OriginalWait.OriginalReturnedAt.Before(record.OriginalProvisioningDeadline) || j.LastSequence != 5 || j.LastState != "admission_possible" || !validSHA(j.EnrollmentSHA256) || !j.AdmissionPossible || j.AdmissionWriteReturned {

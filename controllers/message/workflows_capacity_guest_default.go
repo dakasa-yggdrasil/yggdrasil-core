@@ -43,12 +43,18 @@ func guestOriginalSourceContractFence(context.Context, repository.CapacityStore,
 	return nil, false, nil
 }
 
-func guestOriginalSourceLivePartial(context.Context, repository.CapacityStore, model.Manifest, model.CapacityPolicySpec, model.CapacityMutationBinding, guestOriginalStepInput, ed25519.PrivateKey) (any, bool, error) { return nil, false, nil }
+func guestOriginalSourceLivePartial(context.Context, repository.CapacityStore, model.Manifest, model.CapacityPolicySpec, model.CapacityMutationBinding, guestOriginalStepInput, ed25519.PrivateKey) (any, bool, error) {
+	return nil, false, nil
+}
 
-func guestOriginalSourceHistoricalConfirm(context.Context,repository.CapacityStore,model.Manifest,model.CapacityPolicySpec,model.CapacityMutationBinding,guestOriginalStepInput,ed25519.PrivateKey,model.CapacityMutationGrant,model.CapacityGuestOriginalProvisioningPreregistration,model.CapacityGuestOriginalProvisioningReceipt,model.CapacityMutationProof)(any,bool,error){return nil,false,nil}
+func guestOriginalSourceHistoricalConfirm(context.Context, repository.CapacityStore, model.Manifest, model.CapacityPolicySpec, model.CapacityMutationBinding, guestOriginalStepInput, ed25519.PrivateKey, model.CapacityMutationGrant, model.CapacityGuestOriginalProvisioningPreregistration, model.CapacityGuestOriginalProvisioningReceipt, model.CapacityMutationProof) (any, bool, error) {
+	return nil, false, nil
+}
 
-func guestOriginalSourceTerminal(context.Context,repository.CapacityStore,model.Manifest,model.CapacityPolicySpec,model.CapacityMutationBinding,guestOriginalStepInput,model.CapacityMutationGrant,model.CapacityGuestOriginalProvisioningPreregistration,ed25519.PrivateKey)(any,bool,error){return nil,false,nil}
+func guestOriginalSourceTerminal(context.Context, repository.CapacityStore, model.Manifest, model.CapacityPolicySpec, model.CapacityMutationBinding, guestOriginalStepInput, model.CapacityMutationGrant, model.CapacityGuestOriginalProvisioningPreregistration, ed25519.PrivateKey) (any, bool, error) {
+	return nil, false, nil
+}
 
-func guestOriginalSourceCreateWitness(ctx context.Context,store repository.CapacityStore,id string,proof model.CapacityMutationProof,key ed25519.PrivateKey)(model.CapacityGuestOriginalCreateWitness,error){
- return store.RecordGuestCreateWitness(ctx,id,proof,key)
+func guestOriginalSourceCreateWitness(ctx context.Context, store repository.CapacityStore, id string, proof model.CapacityMutationProof, key ed25519.PrivateKey) (model.CapacityGuestOriginalCreateWitness, error) {
+	return store.RecordGuestCreateWitness(ctx, id, proof, key)
 }
