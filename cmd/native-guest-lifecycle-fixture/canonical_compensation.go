@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	message "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	q "github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacitynativeqemu"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -118,6 +119,13 @@ func (f *fixture) prepareCanonicalSourceChild(ctx context.Context, p model.Capac
 	paused.ExecutionEnabled = false
 	if _, err = paused.IssueCompensation(ctx, current, issue); !errors.Is(err, repository.ErrCapacityDisabled) {
 		return none, noPolicy, noChild, noSession, q.ErrOriginalUnknown
+	}
+	pg17Eligibility, pg17Err := message.PG17AssertCompensationEligibility(ctx, f.realm, issuer, current, issue)
+	if pg17Err != nil {
+		return none, noPolicy, noChild, noSession, pg17Err
+	}
+	if pg17Err = message.PG17RetainAssertions(ctx, f.realm, current, f.workflow.ID.String(), 0, "compensation-eligibility", pg17Eligibility); pg17Err != nil {
+		return none, noPolicy, noChild, noSession, pg17Err
 	}
 	var group sync.WaitGroup
 	children := make(chan model.CapacityMutationGrant, 2)

@@ -294,12 +294,13 @@ func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, poli
 	// All contenders are genuine authenticated callbacks for this SAME original
 	// grant. A logical race cannot authorize additional native creates.
 	type redemption struct {
-		attempt  string
-		nonce    string
-		response model.CapacityMutationRedeemResponse
-		started  time.Time
-		returned time.Time
-		err      error
+		attempt      string
+		nonce        string
+		response     model.CapacityMutationRedeemResponse
+		httpOriginal PG17HTTPRedeemReturn
+		started      time.Time
+		returned     time.Time
+		err          error
 	}
 	const contenders = 20
 	results := make(chan redemption, contenders)
@@ -317,7 +318,12 @@ func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, poli
 				original.nonce = hex.EncodeToString(nonceRaw[:])
 				original.attempt = uuid.NewString()
 				request := model.CapacityMutationRedeemRequest{GrantID: grant.GrantID, AttemptID: original.attempt, SettlementTokenSHA256: capacity.BusinessCreationSHA256([]byte(original.nonce)), Capability: grant.Capability, IntegrationInstanceID: grant.IntegrationInstanceID, ScopeChecksum: grant.ScopeChecksum, ProfileName: grant.ProfileName, Slot: slot, RequestSHA256: grant.RequestSHA256}
-				original.err = r.api(ctx, "/api/v1/capacity/mutations/redeem", "", request, &original.response)
+				if r.Request.NativeCase == "positive_original_lifecycle" && slot == 2 {
+					original.httpOriginal, original.err = r.PG17RedeemHTTP(ctx, request)
+					original.response = original.httpOriginal.Returned
+				} else {
+					original.err = r.api(ctx, "/api/v1/capacity/mutations/redeem", "", request, &original.response)
+				}
 			}
 			original.returned = time.Now().UTC()
 			results <- original
@@ -336,6 +342,8 @@ func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, poli
 	facts := make([]returnedFact, 0, contenders)
 	attempt, nonce := "", ""
 	var redeemed model.CapacityMutationRedeemResponse
+	var pg17First, pg17Replay PG17HTTPRedeemReturn
+	pg17HTTPFacts := []PG17HTTPReturn{}
 	writes, reads := 0, 0
 	var invalid bool
 	for original := range results {
@@ -348,12 +356,16 @@ func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, poli
 		case "write_once":
 			writes++
 			attempt, nonce, redeemed = original.attempt, original.nonce, response
+			pg17First = original.httpOriginal
 		case "read_only":
 			reads++
 		default:
 			invalid = true
 		}
 		facts = append(facts, returnedFact{original.attempt, response.Mode, original.started, original.returned, capacity.GuestRetirementSHA(response)})
+		if r.Request.NativeCase == "positive_original_lifecycle" && slot == 2 {
+			pg17HTTPFacts = append(pg17HTTPFacts, original.httpOriginal.HTTP)
+		}
 	}
 	if invalid || writes != 1 || reads != contenders-1 || len(facts) != contenders || ctx.Err() != nil {
 		return proof, ErrOriginalUnknown
@@ -362,7 +374,14 @@ func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, poli
 	// winning attempt. The original repository callback must return read_only.
 	replayRequest := model.CapacityMutationRedeemRequest{GrantID: grant.GrantID, AttemptID: attempt, SettlementTokenSHA256: capacity.BusinessCreationSHA256([]byte(nonce)), Capability: grant.Capability, IntegrationInstanceID: grant.IntegrationInstanceID, ScopeChecksum: grant.ScopeChecksum, ProfileName: grant.ProfileName, Slot: slot, RequestSHA256: grant.RequestSHA256}
 	var replay model.CapacityMutationRedeemResponse
-	if r.api(ctx, "/api/v1/capacity/mutations/redeem", "", replayRequest, &replay) != nil || replay.Mode != "read_only" || replay.GrantID != grant.GrantID || replay.AttemptID != attempt || replay.RequestSHA256 != grant.RequestSHA256 {
+	var replayErr error
+	if r.Request.NativeCase == "positive_original_lifecycle" && slot == 2 {
+		pg17Replay, replayErr = r.PG17RedeemHTTP(ctx, replayRequest)
+		replay = pg17Replay.Returned
+	} else {
+		replayErr = r.api(ctx, "/api/v1/capacity/mutations/redeem", "", replayRequest, &replay)
+	}
+	if replayErr != nil || replay.Mode != "read_only" || replay.GrantID != grant.GrantID || replay.AttemptID != attempt || replay.RequestSHA256 != grant.RequestSHA256 {
 		return proof, ErrOriginalUnknown
 	}
 	contract := struct {
@@ -378,6 +397,21 @@ func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, poli
 	}{"original_guest_redemption_concurrency_v1", capacity.CurrentGuestCoreSource(), slot, grant.GrantID, writes, reads, facts, replay.Mode, capacity.GuestRetirementSHA(replay)}
 	if _, err := Publish(ctx, filepath.Join(dir, "redemption-concurrency-contract.json"), contract); err != nil {
 		return proof, err
+	}
+	if r.Request.NativeCase == "positive_original_lifecycle" && slot == 2 {
+		if len(pg17HTTPFacts) != 20 {
+			return proof, ErrOriginalUnknown
+		}
+		httpCustody := struct {
+			Schema     string           `json:"schema"`
+			CoreSource string           `json:"core_source"`
+			GrantID    string           `json:"grant_id"`
+			Slot       int              `json:"slot"`
+			Returns    []PG17HTTPReturn `json:"returns"`
+		}{"pg17_original_redemption_http_custody_v1", capacity.CurrentGuestCoreSource(), grant.GrantID, slot, pg17HTTPFacts}
+		if _, err := Publish(ctx, filepath.Join(dir, "pg17-redemption-http-custody.json"), httpCustody); err != nil {
+			return proof, err
+		}
 	}
 	redeemedAt := time.Now().UTC()
 	ready := Stage{FixtureSchema, "ready.json", slot, capacity.CurrentGuestCoreSource(), r.Request.SourceCommit, pre.OriginalDeadline, redeemedAt, capacity.GuestRetirementSHA(redeemed)}
@@ -445,6 +479,11 @@ func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, poli
 		AttemptID     string `json:"attempt_id"`
 		RequestSHA256 string `json:"request_sha256"`
 		Status        string `json:"status"`
+	}
+	if r.Request.NativeCase == "positive_original_lifecycle" && slot == 2 {
+		if err := r.AssertPG17HTTPCallbacks(ctx, store, policy, grant, pre, nonce, settlement, pg17First, pg17Replay); err != nil {
+			return proof, err
+		}
 	}
 	if PositiveCase(r.Request.NativeCase) {
 		if err := r.originalSettlementScopeContract(ctx, store, policy, grant, pre, nonce, settlement); err != nil {

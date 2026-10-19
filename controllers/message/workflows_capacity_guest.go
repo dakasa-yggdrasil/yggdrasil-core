@@ -277,6 +277,11 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 			if terminalErr != nil {
 				return fail("original-source-terminal")
 			}
+			if hostRealm == nil {
+				if err = guestPG17AfterTerminal(original, store, policy, p, b, parsed, grant, pre, terminalOutput); err != nil {
+					return fail("pg17-original-terminal-assertions")
+				}
+			}
 			encoded, encodeErr := json.Marshal(terminalOutput)
 			if encodeErr != nil || json.Unmarshal(encoded, &result.Metadata) != nil {
 				return fail("original-source-terminal-output")
@@ -287,6 +292,11 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		proof, err := originalGuestSourceProvider.Create(original, store, policy, grant, pre)
 		if err != nil {
 			return fail("original-guest-step-25")
+		}
+		if hostRealm == nil {
+			if err = guestPG17AfterCreate(original, store, policy, p, b, parsed, grant, pre, proof); err != nil {
+				return fail("pg17-original-create-assertions")
+			}
 		}
 		witness, err := guestOriginalSourceCreateWitness(original, store, pre.PreregistrationID, proof, key)
 		if err != nil {
@@ -321,6 +331,11 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 			if historicalErr != nil {
 				return fail("original-source-historical-confirm")
 			}
+			if hostRealm == nil {
+				if err = guestPG17AfterHistorical(original, store, policy, p, b, parsed, grant, pre, historicalOutput); err != nil {
+					return fail("pg17-original-historical-assertions")
+				}
+			}
 			encoded, encodeErr := json.Marshal(historicalOutput)
 			if encodeErr != nil || json.Unmarshal(encoded, &result.Metadata) != nil {
 				return fail("original-source-historical-output")
@@ -328,11 +343,21 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 			result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
 			return result
 		}
+		if hostRealm == nil {
+			if err = guestPG17BeforeConfirm(original, store, policy, workflowRef, parsed, grant); err != nil {
+				return fail("pg17-original-workflow-confirm")
+			}
+		}
 		if _, err = store.ConfirmMutation(original, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, proof); err != nil {
 			return fail("original-guest-step-30")
 		}
 		if err = guestOriginalSourceAssertApply(original, store, policy, parsed, proof, grant); err != nil {
 			return fail("original-guest-step-42")
+		}
+		if hostRealm == nil {
+			if err = guestPG17AfterConfirm(original, store, policy, p, b, parsed, grant, proof); err != nil {
+				return fail("pg17-original-confirm-assertions")
+			}
 		}
 		if err = guestOriginalSourceEnrolled(original, grant, pre, receipt); err != nil {
 			return fail("original-guest-step-31")

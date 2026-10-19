@@ -7,6 +7,7 @@ import (
 	"crypto/rand"
 	"encoding/hex"
 	"encoding/json"
+	message "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	q "github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacitynativeqemu"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -206,6 +207,13 @@ func (f *fixture) reissueCanonicalPostlossChild(ctx context.Context, issuer repo
 	zero := 0
 	issue.FailedProof = fresh.Aggregate
 	issue.DrainProof = model.CapacityTransitionProof{Assessment: q.QualificationAssessment(p, 1, 0.9, probe.OriginalNativeAfterReturnedAt), ObservedAt: probe.OriginalNativeAfterReturnedAt, ReceiptRef: "canonical-postloss-current-baseline:" + capacity.GuestRetirementSHA(probe), Healthy: true, MembershipComplete: true, AdmissionClosed: true, RoutingWithdrawn: true, Inflight: &zero, NativeActionsInflight: &zero}
+	pg17Reissue, pg17ReissueErr := message.PG17AssertPostlossReissueIdentity(ctx, f.realm, issuer, policy, issue, first)
+	if pg17ReissueErr != nil {
+		return none, pg17ReissueErr
+	}
+	if pg17ReissueErr = message.PG17RetainAssertions(ctx, f.realm, policy, f.workflow.ID.String(), 0, "compensation-postloss-reissue", pg17Reissue); pg17ReissueErr != nil {
+		return none, pg17ReissueErr
+	}
 	second, err := issuer.IssueCompensation(ctx, policy, issue)
 	if err != nil || second.GrantID == first.GrantID || second.CompensationOf != pre.OriginalCreateGrantID || second.State != "issued" {
 		return none, q.ErrOriginalUnknown

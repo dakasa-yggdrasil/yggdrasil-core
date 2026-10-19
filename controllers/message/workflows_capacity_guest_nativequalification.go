@@ -284,6 +284,9 @@ func guestOriginalSourceAssertApply(ctx context.Context, store repository.Capaci
 	if originalGuestNativeRealm == nil || input.Slot < 1 || input.Slot > 2 {
 		return errOriginalGuestStep
 	}
+	if err := guestOriginalConsumeRedemption(ctx, store, policy, input, grant); err != nil {
+		return err
+	}
 	if _, err := store.ConfirmMutation(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, proof); err != nil {
 		return err
 	}

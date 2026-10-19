@@ -175,6 +175,13 @@ func run() (runErr error) {
 	}
 	defer f.realm.Close()
 	defer func() { runErr = errors.Join(runErr, f.realm.CloseOriginalPins()) }()
+	if request.NativeCase == "positive_original_lifecycle" {
+		closePG17Read, pg17Err := message.StartPG17OriginalReadConsumer(ctx, broker, repository.CapacityStore{DB: db, WorkflowID: f.workflow.ID}, f.policy, f.realm)
+		if pg17Err != nil {
+			return pg17Err
+		}
+		defer func() { runErr = errors.Join(runErr, closePG17Read()) }()
+	}
 	workflowOwners, err := httpapi.NewNativeOriginalWorkflowOwners(ctx)
 	if err != nil {
 		return err
@@ -207,7 +214,19 @@ func run() (runErr error) {
 	if err != nil {
 		return errors.Join(err, listener.Close())
 	}
-	server := &http.Server{Handler: originalNativeHTTPHandler(handler, handlerOwners), BaseContext: func(net.Listener) context.Context { return ctx }, ReadHeaderTimeout: 5 * time.Second, TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{pair}, ClientCAs: pool, ClientAuth: tls.RequireAndVerifyClientCert}}
+	pg17Handler := http.Handler(handler)
+	if request.NativeCase == "positive_original_lifecycle" {
+		pg17Callbacks, pg17Err := httpapi.NewNativeOriginalWorkflowOwners(ctx)
+		if pg17Err != nil {
+			return pg17Err
+		}
+		if pg17Err = f.realm.InstallPG17CallbackOwner(pg17Callbacks); pg17Err != nil {
+			return pg17Err
+		}
+		defer func() { runErr = errors.Join(runErr, pg17Callbacks.Join(context.WithoutCancel(ctx))) }()
+		pg17Handler = pg17PausedCallbackHTTPHandler(pg17Handler, pg17Callbacks, f.realm, f.policy)
+	}
+	server := &http.Server{Handler: originalNativeHTTPHandler(pg17Handler, handlerOwners), BaseContext: func(net.Listener) context.Context { return ctx }, ReadHeaderTimeout: 5 * time.Second, TLSConfig: &tls.Config{MinVersion: tls.VersionTLS13, Certificates: []tls.Certificate{pair}, ClientCAs: pool, ClientAuth: tls.RequireAndVerifyClientCert}}
 	returned := make(chan error, 1)
 	go func() { returned <- server.Serve(tls.NewListener(listener, server.TLSConfig)) }()
 	defer func() {
@@ -413,6 +432,12 @@ func (f *fixture) prepareSource(ctx context.Context) error {
 		return err
 	}
 	provider := model.IntegrationTypeManifestSpec{Provider: "native-qemu", Domain: "infrastructure", Adapter: model.IntegrationAdapterSpec{Transport: "rabbitmq", Version: "1.0.0", TimeoutSeconds: 65, Queues: model.IntegrationAdapterQueue{Describe: "qualification.original.describe", Execute: "qualification.original.execute"}}, Capabilities: []string{"describe", "execute"}, CredentialSchema: model.IntegrationSchemaSpec{Mode: "none"}, InstanceSchema: model.IntegrationSchemaSpec{Mode: "none"}, ResourceTypes: []model.IntegrationResourceType{{Name: "server", CanonicalPrefix: "thirdparty.native-qemu.server", IdentityTemplate: "server.{id}", DefaultActions: []string{"ensure_server", "destroy_server"}}}, ActionCatalog: []model.IntegrationActionDefinition{{Name: "ensure_server", ResourceTypes: []string{"server"}, Idempotent: true}, {Name: "destroy_server", ResourceTypes: []string{"server"}, Idempotent: true}}, Discovery: model.IntegrationDiscoverySpec{Mode: "push", Cursor: "none"}, Normalization: model.IntegrationNormalizationSpec{ExternalIDPath: "id", FallbackResourcePrefix: "thirdparty.native-qemu.server"}, Execution: model.IntegrationExecutionSpec{SupportsDryRun: true, IdempotentActions: []string{"ensure_server", "destroy_server"}}}
+	if f.request.NativeCase == "positive_original_lifecycle" {
+		for _, operation := range []string{capacity.VMObserveServer, capacity.VMObserveAction} {
+			provider.ActionCatalog = append(provider.ActionCatalog, model.IntegrationActionDefinition{Name: operation, Category: "capability", ResourceTypes: []string{"server"}, Idempotent: true})
+			provider.ResourceTypes[0].DefaultActions = append(provider.ResourceTypes[0].DefaultActions, operation)
+		}
+	}
 	typ, err := f.createManifest(ctx, "integration_type", "original-native-qemu", provider)
 	if err != nil {
 		return err
@@ -549,6 +574,17 @@ func (f *fixture) runOriginalSourceFenceCaller(ctx context.Context) error {
 		revoked, err := repository.GetManifestByID(ctx, f.db, id)
 		if err != nil || revoked.Metadata.Active || revoked.Kind != contract.RevokedKind || revoked.Metadata.Namespace != f.namespace || contract.RevocationRows != 1 || contract.RevokedActiveAfter || contract.GrantBeforeSHA256 != contract.GrantAfterSHA256 || contract.RepositoryRedeemResult != "revoked_scope_refused" || contract.GrantTransition != "byte_exact_unchanged" {
 			return q.ErrOriginalUnknown
+		}
+	}
+	if contract.Case != "source_contract_executor_fence" {
+		pg17FenceRead, cancelPG17FenceRead := context.WithDeadline(ctx, contract.OriginalDeadline)
+		defer cancelPG17FenceRead()
+		pg17Fence, pg17FenceErr := message.AssertPG17SourceFence(pg17FenceRead, repository.CapacityStore{DB: f.db, WorkflowID: f.workflow.ID}, f.policy, contract)
+		if pg17FenceErr != nil {
+			return pg17FenceErr
+		}
+		if pg17FenceErr = message.PG17RetainAssertions(pg17FenceRead, f.realm, f.policy, f.workflow.ID.String(), 0, "source-fence", []message.PG17AssertionResult{pg17Fence}); pg17FenceErr != nil {
+			return pg17FenceErr
 		}
 	}
 	returnsWire, err := q.Publish(ctx, filepath.Join(f.private, "source-contract-public-returns.json"), returns)
