@@ -50,5 +50,17 @@ func (f *fixture) workflowSpec(rbac model.Manifest) model.WorkflowManifestSpec {
 	if q.SourceHistoricalConfirmCase(f.request.NativeCase) { mode := spec.InputSchema.Properties["mode"]; mode.Enum = append(mode.Enum, "historical_confirm"); spec.InputSchema.Properties["mode"] = mode }
 	if q.SourceTerminalCase(f.request.NativeCase){mode:=spec.InputSchema.Properties["mode"];mode.Enum=append(mode.Enum,"terminal_contract");spec.InputSchema.Properties["mode"]=mode}
 	if q.SourceFailedFloorCase(f.request.NativeCase) { mode:=spec.InputSchema.Properties["mode"];mode.Enum=append(mode.Enum,"floor_repair");spec.InputSchema.Properties["mode"]=mode }
+
+ if q.CanonicalSourceCompensationCase(f.request.NativeCase) {
+  mode:=spec.InputSchema.Properties["mode"];mode.Enum=append(mode.Enum,"recovery_cleanup");spec.InputSchema.Properties["mode"]=mode
+  spec.InputSchema.Properties["generation"]=model.IntegrationSchemaProperty{Type:"integer"}
+  spec.Steps[0].Condition="{{ inputs.mode }} != recovery_cleanup"
+  spec.Steps[1].Condition+=" && {{ inputs.mode }} != recovery_cleanup"
+  recover:=step("original_recovery_cleanup_recover","capacity.recover",map[string]any{"policy":policy,"generation":"{{ inputs.generation }}","assessment":"{{ inputs.assessment }}"})
+  recover.Condition="{{ inputs.mode }} == recovery_cleanup"
+  fresh:=step("original_recovery_cleanup_read","capacity.qualify_original_guest_echo",map[string]any{"policy":policy,"binding_name":"native-qemu","slot":2,"generation":"{{ steps.original_recovery_cleanup_recover.metadata.generation }}","fencing_token":"{{ steps.original_recovery_cleanup_recover.metadata.fencing_token }}","lease_owner":"{{ steps.original_recovery_cleanup_recover.metadata.lease_owner }}","preregistration_id":"{{ inputs.preregistration_id }}","request_id":"source_recovery_cleanup_v1"})
+  fresh.Condition="{{ inputs.mode }} == recovery_cleanup";fresh.DependsOn=[]string{recover.ID}
+  spec.Steps=append(spec.Steps,recover,fresh)
+ }
 	return spec
 }

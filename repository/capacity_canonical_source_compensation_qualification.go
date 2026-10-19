@@ -202,7 +202,7 @@ func canonicalCleanupHistory(ctx context.Context, s CapacityStore, tx *sql.Tx, p
 			return stored, b, t, ErrCapacityConflict
 		}
 	}
-	if !canonicalKnownFailedCase(b.NativeCase) || b.PreregistrationID != preID || b.ParentGrantID != stored.pre.OriginalCreateGrantID || b.CoreSource != capacity.CurrentGuestCoreSource() || b.GuestSource != stored.binding.GuestSourceCommit || b.Mode != "failure_cleanup_only" || b.PositiveQuiescence || b.ProductionQualified {
+	if !canonicalKnownFailedCase(b.NativeCase) || b.PreregistrationID != preID || b.ParentGrantID != stored.pre.OriginalCreateGrantID || b.CoreSource != capacity.CurrentGuestCoreSource() || b.GuestSource != stored.binding.GuestSourceCommit || !canonicalCleanupMode(b) || b.PositiveQuiescence || b.ProductionQualified {
 		return stored, b, t, ErrCapacityConflict
 	}
 	if len(tw) > 0 {
@@ -268,9 +268,14 @@ func (s CapacityStore) PrepareCanonicalSourceCompensation(ctx context.Context, p
 	}
 	owner := s
 	owner.ExecutorID = parent.ExecutorID
+	if b.Recovery!=nil {
+  if s.ExecutorID!=current.LeaseExecutorID{return e,ErrCapacityLease}
+  if _,err=s.sourceRecoveryCleanupLeaseTx(ctx,tx,b,parent,now);err!=nil{return e,err}
+ } else {
 	if err = owner.checkLease(p, policy, &current, parent.Generation, parent.FencingToken, parent.LeaseOwner, now); err != nil {
 		return e, err
 	}
+ }
 	var failureWire, enrollmentWire []byte
 	if err = tx.QueryRowContext(ctx, `SELECT original_wire FROM public.capacity_guest_qualification_native_source_returns WHERE preregistration_id=$1 AND native_stage='source_refusal' AND return_sha256=$2 AND original_record=convert_from(original_wire,'UTF8')::jsonb`, preID, b.FailureSHA256).Scan(&failureWire); err != nil {
 		return e, err
@@ -346,10 +351,10 @@ func (s CapacityStore) PrepareCanonicalSourceCompensation(ctx context.Context, p
 	} else if parent.Settlement.ActionID != nativeID || parent.Settlement.ResourceID != b.ResourceID || parent.Settlement.ResourceCreatedAt != b.ResourceCreatedAt {
 		return e, ErrCapacityConflict
 	}
-	if !now.Before(b.CleanupDeadline) || !capacity.Fresh(failed.RecordedAt, now, p.MaxEvidenceAgeSeconds) {
+	if !now.Before(b.CleanupDeadline) || !capacity.Fresh(canonicalRecoveryObservedAt(b,failed.RecordedAt), now, p.MaxEvidenceAgeSeconds) {
 		return e, ErrCapacityConflict
 	}
-	proof := model.CapacityMutationProof{GrantID: parentID, BindingName: parent.Binding.Name, Slot: parent.Grant.Slot, ResourceID: b.ResourceID, ResourceCreatedAt: b.ResourceCreatedAt, RequestSHA256: parent.Grant.RequestSHA256, ObservedAt: failed.RecordedAt, ReceiptRef: "canonical-source-failed-owner:" + b.FailureSHA256, OwnerVerified: true, SpecVerified: true, CompensationIdentityVerified: true, ObservedCreationGrantID: parentID, ActionIDs: []string{nativeID, failed.OriginalPayloadActionID}, ActionsTerminal: true, ActionsSuccessful: false, ActionsFailed: true, ActionHistoryComplete: true}
+	proof := model.CapacityMutationProof{GrantID: parentID, BindingName: parent.Binding.Name, Slot: parent.Grant.Slot, ResourceID: b.ResourceID, ResourceCreatedAt: b.ResourceCreatedAt, RequestSHA256: parent.Grant.RequestSHA256, ObservedAt: canonicalRecoveryObservedAt(b,failed.RecordedAt), ReceiptRef: "canonical-source-failed-owner:" + b.FailureSHA256, OwnerVerified: true, SpecVerified: true, CompensationIdentityVerified: true, ObservedCreationGrantID: parentID, ActionIDs: []string{nativeID, failed.OriginalPayloadActionID}, ActionsTerminal: true, ActionsSuccessful: false, ActionsFailed: true, ActionHistoryComplete: true}
 	if !validFailedCreationProof(p, parent, proof, now) {
 		return e, ErrCapacityConflict
 	}
@@ -430,6 +435,8 @@ func (s CapacityStore) canonicalSourceFailedCleanupTx(ctx context.Context, tx *s
 	if !reflect.DeepEqual(e.Aggregate, proof) || !validFailedCreationProof(p, parent, proof, now) || parent.Binding.ProfileName != "qualification-original-echo-writer-v1" {
 		return true, ErrCapacityConflict
 	}
+	_,body,_,readErr:=canonicalCleanupHistory(ctx,s,tx,e.PreregistrationID);if readErr!=nil{return true,readErr}
+ if body.Recovery!=nil{if _,readErr=s.sourceRecoveryCleanupLeaseTx(ctx,tx,body,parent,now);readErr!=nil{return true,readErr}}
 	if childID != "" {
 		var linked, sha string
 		if err = tx.QueryRowContext(ctx, `SELECT parent_grant_id::text,eligibility_sha256 FROM public.capacity_canonical_source_cleanup_children WHERE child_grant_id=$1`, childID).Scan(&linked, &sha); err != nil || linked != parent.Grant.GrantID || sha != e.EligibilityWireSHA256 {
@@ -523,9 +530,14 @@ func (s CapacityStore) AuthorizeCanonicalSourceChild(ctx context.Context, policy
 		if err != nil {
 			return err
 		}
+		if b.Recovery!=nil {
+   if s.ExecutorID!=current.LeaseExecutorID{return ErrCapacityLease}
+   if _,err=s.sourceRecoveryCleanupLeaseTx(ctx,tx,b,parent,now);err!=nil{return err}
+  }else{
 		if err = owner.checkLease(originalSpec, originalPolicy, &current, parent.Generation, parent.FencingToken, parent.LeaseOwner, now); err != nil {
 			return err
 		}
+  }
 		if current.LeaseExpiresAt == nil {
 			return ErrCapacityConflict
 		}
@@ -571,6 +583,12 @@ func (s CapacityStore) canonicalOwnedPhysicalTx(ctx context.Context, tx *sql.Tx,
 	if capacity.DecodeGuestLifecycle(physicalWire, &f) != nil || capacity.BusinessCreationSHA256(physicalWire) != t.PhysicalSHA256 || f.AuthoritySHA256 != a.SourceAuthoritySHA256 || f.CoreSource != e.CoreSource || f.GuestSource != e.GuestSource || f.ResourceID != b.ResourceID || !reflect.DeepEqual(f.QEMU, b.QEMU) || !reflect.DeepEqual(f.OriginalDisk, b.OriginalDisk) || f.OriginalSignal != 9 || f.OriginalWaitCode != -9 || !f.OriginalStderrEOF || f.AbsenceClass != "ENOENT" || f.PositiveQuiescence || f.ProductionQualified {
 		return a, b, t, ErrCapacityConflict
 	}
+	if b.Recovery!=nil {
+  if f.Schema!="original_source_recovery_failure_cleanup_physical_v1" || f.Scope!="host_owned_recovery_failure_cleanup_only_not_positive_retirement"{return a,b,t,ErrCapacityConflict}
+  // Record loader requires the actual policy scope; validate the current lease
+  // and two immutable per-effect permits through the dedicated validator.
+  if err=s.validateRecoveryPhysicalPermitsTx(ctx,tx,stored,b,child,a,f,now);err!=nil{return a,b,t,err}
+ }else if f.Schema!="original_source_failure_cleanup_physical_v1" || f.Scope!="host_owned_failure_cleanup_only_not_positive_retirement"{return a,b,t,ErrCapacityConflict}
 	for _, at := range []time.Time{f.OriginalPinStartedAt, f.OriginalPinReturnedAt, f.OriginalSignalCalledAt, f.OriginalSignalReturnedAt, f.OriginalWaitReturnedAt, f.OriginalStderrCloseReturnedAt, f.OriginalPIDFDOffReturnedAt, f.OriginalPIDFDCloseReturnedAt, f.OriginalUnlinkCalledAt, f.OriginalUnlinkReturnedAt, f.OriginalDirectorySyncReturnedAt, f.OriginalAbsenceReturnedAt, f.OriginalDirectoryCloseReturnedAt} {
 		if at.Before(a.RedeemedAt) || !at.Before(a.OriginalDeadline) || at.After(now) {
 			return a, b, t, ErrCapacityConflict

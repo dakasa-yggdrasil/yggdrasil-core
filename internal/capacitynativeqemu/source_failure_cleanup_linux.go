@@ -36,6 +36,7 @@ func SourceProtectedCompensationCase(s string) bool {
 // Host-original source authority, never an enrollment or successful Guest
 // retirement. Unenrolled uncertain creations are explicitly cleanup-only.
 type SourceFailureCleanupBody struct {
+ Recovery *model.CapacitySourceRecoveryCleanupEpoch `json:"recovery,omitempty"`
 	Schema                       string       `json:"schema"`
 	SourceSlotDirectory          string       `json:"source_slot_directory"`
 	SourceDirectoryDevice        uint64       `json:"source_directory_device"`

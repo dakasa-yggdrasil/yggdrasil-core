@@ -19,6 +19,7 @@ import (
  "github.com/dakasa-yggdrasil/yggdrasil-core/model"
 )
 type SourceFailureCleanupBody struct {
+ Recovery *model.CapacitySourceRecoveryCleanupEpoch `json:"recovery,omitempty"`
  Schema string `json:"schema"`
  SourceSlotDirectory string `json:"source_slot_directory"`
  SourceDirectoryDevice uint64 `json:"source_directory_device"`

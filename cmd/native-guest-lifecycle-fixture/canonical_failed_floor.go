@@ -28,6 +28,13 @@ func (f *fixture) finishOriginalCanonicalFloorRecovery(ctx context.Context, p mo
 	if err := f.db.QueryRowContext(ctx, `SELECT intent FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, f.namespace, p.Environment, p.Domain, p.Dimension).Scan(&raw); err != nil {
 		return err
 	}
+	var err error
+	var recovered model.CapacityIntent
+ var recoveredStore repository.CapacityStore
+ if active,recoveryErr:=f.realm.OriginalRecoveryCleanupSession(ctx);recoveryErr==nil{
+  if json.Unmarshal(raw,&before)!=nil || !before.RecoveryOnly || before.PolicyID!=f.policy.ID || before.PolicyChecksum!=f.policy.Checksum || before.LeaseExecutorID!=active.Store.ExecutorID || before.Generation!=active.Epoch.Generation || before.FencingToken!=active.Epoch.FencingToken{return q.ErrOriginalUnknown}
+  recovered=before;recoveredStore=active.Store
+ }else{
 	if json.Unmarshal(raw, &before) != nil || before.PolicyID != f.policy.ID || before.PolicyChecksum != f.policy.Checksum || before.RecoveryOnly || before.Decision.Reason != "protected_floor_recovery" || before.BaselineSnapshot.Units != 1 || before.Decision.Units != 2 || before.LeaseExpiresAt == nil || !before.LeaseExpiresAt.Before(limit) {
 		return q.ErrOriginalUnknown
 	}
@@ -56,12 +63,15 @@ func (f *fixture) finishOriginalCanonicalFloorRecovery(ctx context.Context, p mo
 	if err != nil {
 		return err
 	}
-	recoveredStore := store
+	recoveredStore = store
 	recoveredStore.ExecutorID = uuid.NewString()
-	recovered, err := recoveredStore.Recover(ctx, f.policy, before.Generation, q.QualificationAssessment(p, 1, 0.9, observed.OriginalNativeAfterReturnedAt))
+	recovered, err = recoveredStore.Recover(ctx, f.policy, before.Generation, q.QualificationAssessment(p, 1, 0.9, observed.OriginalNativeAfterReturnedAt))
 	if err != nil || !recovered.RecoveryOnly || recovered.FencingToken != before.FencingToken+1 || recovered.LeaseOwner == before.LeaseOwner || recovered.LeaseExecutorID != recoveredStore.ExecutorID || recovered.LeaseExpiresAt == nil {
 		return q.ErrOriginalUnknown
 	}
+
+ }
+ client,err:=f.sourceClient(1);if err!=nil{return err};defer client.Close()
 	probe, err := f.realm.FloorSourceProbe(ctx, recoveredStore, f.policy, recovered.Generation, recovered.FencingToken, recovered.LeaseOwner, 1, f.corePrivate, client, *recovered.LeaseExpiresAt)
 	if err != nil {
 		return err

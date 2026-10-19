@@ -65,3 +65,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0054](0054-bind-failed-owner-compensation-to-redeemed-child.md) | Bind failed-owner compensation to its original redeemed cleanup child | Proposed | 2026-10-18 | nativequalification Source fixture |
 
 | [0055](0055-observe-uncertain-original-create-and-reissue-unused-cleanup-child.md) | Observe uncertain original create and reissue unused cleanup child | Proposed | 2026-10-18 | Qualification-only actual lost reply and fresh reissue |
+
+| [0056](0056-bind-recovery-owned-cleanup-to-current-lease-and-one-use-effects.md) | Bind recovery-owned cleanup to current lease and one-use effects | Proposed | 2026-10-19 | Qualification-only original failed-owner cleanup |
