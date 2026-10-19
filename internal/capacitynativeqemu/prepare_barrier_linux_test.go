@@ -17,7 +17,7 @@ import (
 // not change cancellation, deadlines or Err; no timing sleep orders publication.
 type prepareBarrierContext struct {
 	context.Context
-	once sync.Once
+	once    sync.Once
 	waiting chan struct{}
 }
 
@@ -33,17 +33,21 @@ func prepareBarrierFixture(t *testing.T) (*Realm, string, func()) {
 	t.Setenv("GUEST_NATIVE_SOURCE_ROOT", guest)
 	dir := SlotDirectory(private, 1)
 	for _, path := range []string{dir, filepath.Join(dir, "source-bundle"), filepath.Join(guest, "docs", "systemd")} {
-		if err := os.MkdirAll(path, 0700); err != nil { t.Fatal(err) }
+		if err := os.MkdirAll(path, 0700); err != nil {
+			t.Fatal(err)
+		}
 	}
 	r := &Realm{PrivateDirectory: private, Request: SourceRequest{
 		NativeCase: "positive_original_lifecycle", CreatorSourceSHA256: digest([]byte("creator")),
 		OriginalContextDeadline: time.Now().UTC().Add(time.Minute),
-		Slots: []SlotRequest{{Slot: 1, ResourceID: "original-resource"}},
+		Slots:                   []SlotRequest{{Slot: 1, ResourceID: "original-resource"}},
 	}, started: map[int]bool{}, prepared: map[int]PreCreateRequest{}}
 	r.Profile.BootstrapSHA256 = digest([]byte("bootstrap"))
 	write := func(path string, raw []byte) {
 		t.Helper()
-		if err := os.WriteFile(path, raw, 0600); err != nil { t.Fatal(err) }
+		if err := os.WriteFile(path, raw, 0600); err != nil {
+			t.Fatal(err)
+		}
 	}
 	publish := func() {
 		for _, unit := range []string{"yggdrasil-guest-retirement.service", "yggdrasil-guest-protected-runtime-owner.service"} {
@@ -62,9 +66,13 @@ func prepareBarrierFixture(t *testing.T) (*Realm, string, func()) {
 			OriginalContextDeadline: r.Request.OriginalContextDeadline, OriginalProvisioningBudgetSeconds: 420,
 			SourceConfigStageSHA256: digest(stage), SourceISOSHA256: digest(iso), BootstrapSHA256: digest(bootstrap)}
 		raw, err := json.Marshal(pre)
-		if err != nil { t.Fatal(err) }
+		if err != nil {
+			t.Fatal(err)
+		}
 		// The final barrier is published only after all body writes are closed.
-		if _, err := PublishBytes(context.Background(), filepath.Join(dir, "pre-create-request.json"), raw); err != nil { t.Fatal(err) }
+		if _, err := PublishBytes(context.Background(), filepath.Join(dir, "pre-create-request.json"), raw); err != nil {
+			t.Fatal(err)
+		}
 	}
 	return r, dir, publish
 }
@@ -86,12 +94,18 @@ func TestOriginalPrepareWaitsForPreCreateBeforeSourceReads(t *testing.T) {
 	publish()
 	select {
 	case err := <-result:
-		if err != nil { t.Fatal(err) }
+		if err != nil {
+			t.Fatal(err)
+		}
 	case <-base.Done():
 		t.Fatal("Prepare did not finish after publication")
 	}
-	if _, ok := r.prepared[1]; !ok { t.Fatal("preparation not retained") }
-	if _, ok := r.disks[1]; !ok { t.Fatal("owned disk identity not retained") }
+	if _, ok := r.prepared[1]; !ok {
+		t.Fatal("preparation not retained")
+	}
+	if _, ok := r.disks[1]; !ok {
+		t.Fatal("owned disk identity not retained")
+	}
 }
 
 func TestOriginalPrepareBarrierPreservesNegativeChecks(t *testing.T) {
@@ -102,26 +116,42 @@ func TestOriginalPrepareBarrierPreservesNegativeChecks(t *testing.T) {
 			ctx := context.Background()
 			switch name {
 			case "unit":
-				if err := os.WriteFile(filepath.Join(dir, "source-bundle", "yggdrasil-guest-retirement.service"), []byte("tampered"), 0600); err != nil { t.Fatal(err) }
+				if err := os.WriteFile(filepath.Join(dir, "source-bundle", "yggdrasil-guest-retirement.service"), []byte("tampered"), 0600); err != nil {
+					t.Fatal(err)
+				}
 			case "iso":
-				if err := os.WriteFile(filepath.Join(dir, "source.iso"), []byte("tampered"), 0600); err != nil { t.Fatal(err) }
+				if err := os.WriteFile(filepath.Join(dir, "source.iso"), []byte("tampered"), 0600); err != nil {
+					t.Fatal(err)
+				}
 			case "prehash":
 				path := filepath.Join(dir, "pre-create-request.json")
 				raw, err := os.ReadFile(path)
-				if err != nil { t.Fatal(err) }
+				if err != nil {
+					t.Fatal(err)
+				}
 				var pre PreCreateRequest
-				if err = json.Unmarshal(raw, &pre); err != nil { t.Fatal(err) }
+				if err = json.Unmarshal(raw, &pre); err != nil {
+					t.Fatal(err)
+				}
 				pre.BootstrapSHA256 = digest([]byte("foreign"))
 				raw, err = json.Marshal(pre)
-				if err != nil { t.Fatal(err) }
-				if err = os.WriteFile(path, raw, 0600); err != nil { t.Fatal(err) }
+				if err != nil {
+					t.Fatal(err)
+				}
+				if err = os.WriteFile(path, raw, 0600); err != nil {
+					t.Fatal(err)
+				}
 			case "expired-context":
 				var cancel context.CancelFunc
 				ctx, cancel = context.WithDeadline(ctx, time.Now().Add(-time.Second))
 				defer cancel()
 			}
-			if err := r.Prepare(ctx, 1); err == nil { t.Fatal("invalid preparation accepted") }
-			if len(r.prepared) != 0 || len(r.disks) != 0 { t.Fatal("invalid preparation retained") }
+			if err := r.Prepare(ctx, 1); err == nil {
+				t.Fatal("invalid preparation accepted")
+			}
+			if len(r.prepared) != 0 || len(r.disks) != 0 {
+				t.Fatal("invalid preparation retained")
+			}
 		})
 	}
 }
