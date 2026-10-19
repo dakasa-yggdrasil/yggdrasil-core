@@ -3,55 +3,93 @@
 package capacitynativeqemu
 
 import (
- "context"
- "crypto/ed25519"
- "crypto/rand"
- "encoding/base64"
- "encoding/json"
- "net/http"
- "os"
- "path/filepath"
- "strings"
- "time"
- "golang.org/x/sys/unix"
- "github.com/google/uuid"
- "github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
- "github.com/dakasa-yggdrasil/yggdrasil-core/model"
- "github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/base64"
+	"encoding/json"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	"github.com/google/uuid"
+	"golang.org/x/sys/unix"
+	"net/http"
+	"os"
+	"path/filepath"
+	"strings"
+	"time"
 )
 
 type SourceRecoveryCleanupSession struct {
- Store repository.CapacityStore
- Policy model.Manifest
- PreregistrationID string
- Epoch model.CapacitySourceRecoveryCleanupEpoch
+	Store             repository.CapacityStore
+	Policy            model.Manifest
+	PreregistrationID string
+	Epoch             model.CapacitySourceRecoveryCleanupEpoch
 }
 
 // Session provenance is the actual resolved Source invocation's store, retained
 // in the original Realm. No executor is reconstructed from a JSON statement.
-func(r *Realm) OriginalRecoveryCleanupSession(ctx context.Context)(SourceRecoveryCleanupSession,error){
- r.mu.Lock();s:=r.recoveryCleanup;r.mu.Unlock()
- if s==nil || ctx.Err()!=nil || !CanonicalSourceCompensationCase(r.Request.NativeCase){return SourceRecoveryCleanupSession{},ErrOriginalUnknown}
- return *s,nil
+func (r *Realm) OriginalRecoveryCleanupSession(ctx context.Context) (SourceRecoveryCleanupSession, error) {
+	r.mu.Lock()
+	s := r.recoveryCleanup
+	r.mu.Unlock()
+	if s == nil || ctx.Err() != nil || !CanonicalSourceCompensationCase(r.Request.NativeCase) {
+		return SourceRecoveryCleanupSession{}, ErrOriginalUnknown
+	}
+	return *s, nil
 }
 
-func(r *Realm) PrepareOriginalRecoveryCleanupRead(ctx context.Context,store repository.CapacityStore,policy model.Manifest,pre model.CapacityGuestOriginalProvisioningPreregistration,client *capacity.GuestOriginalHTTPClient)error{
- if !CanonicalSourceCompensationCase(r.Request.NativeCase) || pre.Slot!=2 || pre.WorkflowID!=store.WorkflowID.String() || client==nil{return ErrOriginalUnknown}
- var random [32]byte;if _,err:=rand.Read(random[:]);err!=nil{return err};nonce:=capacity.BusinessCreationSHA256(random[:])
- epoch,err:=store.PrepareSourceRecoveryCleanupChallenge(ctx,policy,pre.OriginalCreateGrantID,nonce);if err!=nil{return err}
- request:=struct{Schema string `json:"schema"`;NonceSHA256 string `json:"nonce_sha256"`}{"canonical_recovery_fresh_failure_request_v1",nonce}
- raw,err:=Publish(ctx,filepath.Join(r.PrivateDirectory,"canonical-recovery-fresh-read-request.json"),request);if err!=nil{return err}
- // Both operations are reads of the SAME already-started original, never retry,
- // Prepare, adoption, create, withdraw or positive-quiescence permission.
- _,nativeWire,err:=r.freshCanonicalRecoveryNative(ctx);if err!=nil{return err}
- read,cancel:=context.WithTimeout(ctx,5*time.Second);returned,err:=client.Original(read,http.MethodGet,"/v1/qualification-source-refusal",raw);cancel()
- if err!=nil || returned.Status!=200 || !returned.DriverReturnedAt.Before(pre.OriginalDeadline){return ErrOriginalUnknown}
- if _,err=Publish(ctx,filepath.Join(r.PrivateDirectory,"canonical-recovery-fresh-read-host-return.json"),returned);err!=nil{return err}
- if _,err=PublishBytes(ctx,filepath.Join(SlotDirectory(r.PrivateDirectory,2),"core-recovery-fresh-failure-read.json"),returned.Body);err!=nil{return err}
- epoch,err=store.CompleteSourceRecoveryCleanupRead(ctx,policy,pre.OriginalCreateGrantID,epoch,nativeWire,returned.Body);if err!=nil{return err}
- session:=SourceRecoveryCleanupSession{Store:store,Policy:policy,PreregistrationID:pre.PreregistrationID,Epoch:epoch}
- r.mu.Lock();defer r.mu.Unlock();if r.recoveryCleanup!=nil{return ErrOriginalUnknown};r.recoveryCleanup=&session
- return nil
+func (r *Realm) PrepareOriginalRecoveryCleanupRead(ctx context.Context, store repository.CapacityStore, policy model.Manifest, pre model.CapacityGuestOriginalProvisioningPreregistration, client *capacity.GuestOriginalHTTPClient) error {
+	if !CanonicalSourceCompensationCase(r.Request.NativeCase) || pre.Slot != 2 || pre.WorkflowID != store.WorkflowID.String() || client == nil {
+		return ErrOriginalUnknown
+	}
+	var random [32]byte
+	if _, err := rand.Read(random[:]); err != nil {
+		return err
+	}
+	nonce := capacity.BusinessCreationSHA256(random[:])
+	epoch, err := store.PrepareSourceRecoveryCleanupChallenge(ctx, policy, pre.OriginalCreateGrantID, nonce)
+	if err != nil {
+		return err
+	}
+	request := struct {
+		Schema      string `json:"schema"`
+		NonceSHA256 string `json:"nonce_sha256"`
+	}{"canonical_recovery_fresh_failure_request_v1", nonce}
+	raw, err := Publish(ctx, filepath.Join(r.PrivateDirectory, "canonical-recovery-fresh-read-request.json"), request)
+	if err != nil {
+		return err
+	}
+	// Both operations are reads of the SAME already-started original, never retry,
+	// Prepare, adoption, create, withdraw or positive-quiescence permission.
+	_, nativeWire, err := r.freshCanonicalRecoveryNative(ctx)
+	if err != nil {
+		return err
+	}
+	read, cancel := context.WithTimeout(ctx, 5*time.Second)
+	returned, err := client.Original(read, http.MethodGet, "/v1/qualification-source-refusal", raw)
+	cancel()
+	if err != nil || returned.Status != 200 || !returned.DriverReturnedAt.Before(pre.OriginalDeadline) {
+		return ErrOriginalUnknown
+	}
+	if _, err = Publish(ctx, filepath.Join(r.PrivateDirectory, "canonical-recovery-fresh-read-host-return.json"), returned); err != nil {
+		return err
+	}
+	if _, err = PublishBytes(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, 2), "core-recovery-fresh-failure-read.json"), returned.Body); err != nil {
+		return err
+	}
+	epoch, err = store.CompleteSourceRecoveryCleanupRead(ctx, policy, pre.OriginalCreateGrantID, epoch, nativeWire, returned.Body)
+	if err != nil {
+		return err
+	}
+	session := SourceRecoveryCleanupSession{Store: store, Policy: policy, PreregistrationID: pre.PreregistrationID, Epoch: epoch}
+	r.mu.Lock()
+	defer r.mu.Unlock()
+	if r.recoveryCleanup != nil {
+		return ErrOriginalUnknown
+	}
+	r.recoveryCleanup = &session
+	return nil
 }
 func (r *Realm) freshCanonicalRecoveryNative(ctx context.Context) (IndependentReturn, []byte, error) {
 	var fresh IndependentReturn
@@ -117,10 +155,14 @@ func (r *Realm) PrepareSourceRecoveryFailureCleanup(ctx context.Context, store r
 	if json.Unmarshal(policy.Spec, &policySpec) != nil {
 		return authority, body, ErrOriginalUnknown
 	}
-	actual,err:=r.OriginalRecoveryCleanupSession(ctx)
-	if err!=nil || actual.Store.ExecutorID!=store.ExecutorID || actual.Store.WorkflowID!=store.WorkflowID || actual.Store.DB!=store.DB || actual.PreregistrationID!=pre.PreregistrationID{return authority,body,ErrOriginalUnknown}
-	currentLease,err:=store.ValidateSourceRecoveryPreparation(ctx,policy,pre.OriginalCreateGrantID,actual.Epoch)
-	if err!=nil{return authority,body,err}
+	actual, err := r.OriginalRecoveryCleanupSession(ctx)
+	if err != nil || actual.Store.ExecutorID != store.ExecutorID || actual.Store.WorkflowID != store.WorkflowID || actual.Store.DB != store.DB || actual.PreregistrationID != pre.PreregistrationID {
+		return authority, body, ErrOriginalUnknown
+	}
+	currentLease, err := store.ValidateSourceRecoveryPreparation(ctx, policy, pre.OriginalCreateGrantID, actual.Epoch)
+	if err != nil {
+		return authority, body, err
+	}
 	now := time.Now().UTC()
 	deadline := now.Add(150 * time.Second)
 	parent, ok := ctx.Deadline()
@@ -136,7 +178,9 @@ func (r *Realm) PrepareSourceRecoveryFailureCleanup(ctx context.Context, store r
 	if currentLease.LeaseExpiresAt.Before(deadline) {
 		deadline = *currentLease.LeaseExpiresAt
 	}
-	if pre.OriginalDeadline.Before(deadline){deadline=pre.OriginalDeadline}
+	if pre.OriginalDeadline.Before(deadline) {
+		deadline = pre.OriginalDeadline
+	}
 	if !now.Before(deadline) {
 		return authority, body, ErrOriginalUnknown
 	}
@@ -167,16 +211,25 @@ func (r *Realm) ReadSourceRecoveryFailureCleanup(ctx context.Context, a SourceFa
 	var f SourceFailureCleanupPhysical
 	original, cancel := context.WithDeadline(ctx, b.CleanupDeadline)
 	defer cancel()
-	if b.Recovery==nil || b.Schema!="original_source_recovery_failure_cleanup_authority_v1" || session.Child.CompensationOf!=b.ParentGrantID{return f,ErrOriginalUnknown}
- for _,phase:=range []string{"signal","unlink"}{
-  var request model.CapacitySourceRecoveryEffectRequest
-  requestWire,err:=Await(original,filepath.Join(SlotDirectory(r.PrivateDirectory,2),"source-recovery-"+phase+"-request.json"),&request)
-  if err!=nil || request.Phase!=phase{return f,ErrOriginalUnknown}
-  // The helper commits and releases all database locks before this publish;
-  // neither original owner waits for a stage while holding a SQL transaction.
-  permit,err:=store.AuthorizeSourceRecoveryEffect(original,policy,session.Child.GrantID,requestWire);if err!=nil{return f,err}
-  if _,err=Publish(original,filepath.Join(SlotDirectory(r.PrivateDirectory,2),"source-recovery-"+phase+"-permit.json"),permit);err!=nil{return f,err}
- }
+	if b.Recovery == nil || b.Schema != "original_source_recovery_failure_cleanup_authority_v1" || session.Child.CompensationOf != b.ParentGrantID {
+		return f, ErrOriginalUnknown
+	}
+	for _, phase := range []string{"signal", "unlink"} {
+		var request model.CapacitySourceRecoveryEffectRequest
+		requestWire, err := Await(original, filepath.Join(SlotDirectory(r.PrivateDirectory, 2), "source-recovery-"+phase+"-request.json"), &request)
+		if err != nil || request.Phase != phase {
+			return f, ErrOriginalUnknown
+		}
+		// The helper commits and releases all database locks before this publish;
+		// neither original owner waits for a stage while holding a SQL transaction.
+		permit, err := store.AuthorizeSourceRecoveryEffect(original, policy, session.Child.GrantID, requestWire)
+		if err != nil {
+			return f, err
+		}
+		if _, err = Publish(original, filepath.Join(SlotDirectory(r.PrivateDirectory, 2), "source-recovery-"+phase+"-permit.json"), permit); err != nil {
+			return f, err
+		}
+	}
 	if _, err := Await(original, filepath.Join(SlotDirectory(r.PrivateDirectory, 2), "source-failure-cleanup-physical.json"), &f); err != nil {
 		return f, err
 	}

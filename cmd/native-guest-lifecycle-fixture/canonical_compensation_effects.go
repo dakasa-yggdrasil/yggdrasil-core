@@ -90,9 +90,15 @@ func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	if err=f.prepareOriginalRecoveryCleanupChronology(ctx,p,pre);err!=nil{return err}
- recoverySession,err:=f.realm.OriginalRecoveryCleanupSession(ctx);if err!=nil{return err};store=recoverySession.Store
- authority, body, err := f.realm.PrepareSourceRecoveryFailureCleanup(ctx, store, f.policy, pre, failureSHA, enrollmentSHA, f.corePrivate)
+	if err = f.prepareOriginalRecoveryCleanupChronology(ctx, p, pre); err != nil {
+		return err
+	}
+	recoverySession, err := f.realm.OriginalRecoveryCleanupSession(ctx)
+	if err != nil {
+		return err
+	}
+	store = recoverySession.Store
+	authority, body, err := f.realm.PrepareSourceRecoveryFailureCleanup(ctx, store, f.policy, pre, failureSHA, enrollmentSHA, f.corePrivate)
 	if err != nil {
 		return err
 	}
@@ -278,7 +284,11 @@ func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	if f.request.NativeCase!="canonical_failed_floor_recovery"{if err=f.finishOriginalKnownRecoveryTerminal(ctx,p,pre);err!=nil{return err}}
+	if f.request.NativeCase != "canonical_failed_floor_recovery" {
+		if err = f.finishOriginalKnownRecoveryTerminal(ctx, p, pre); err != nil {
+			return err
+		}
+	}
 	f.completed = q.SourceCaseStage{Schema: q.FixtureSchema, Stage: "original-native-caller-completed.json", NativeCase: f.request.NativeCase, CaseOutcome: "CANONICAL_RECOVERY_FAILED_OWNER_CHILD_CLEANUP_AND_CONFIRM_COMPLETE", NativeCorpusReceiptSHA256: capacity.BusinessCreationSHA256(contractWire)}
 	_ = wire
 	return nil

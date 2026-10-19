@@ -90,7 +90,7 @@ type Realm struct {
 	disks            map[int]OriginalDisk
 	deleteDirectory  OriginalDisk
 	deleted          bool
-	recoveryCleanup *SourceRecoveryCleanupSession
+	recoveryCleanup  *SourceRecoveryCleanupSession
 }
 
 func FileSHA(ctx context.Context, path string, limit int64) (string, error) {

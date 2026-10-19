@@ -102,11 +102,18 @@ func (s CapacityStore) AppendCanonicalPostlossFreshRead(ctx context.Context, pol
 	}
 	owner := s
 	owner.ExecutorID = parent.ExecutorID
-	if b.Recovery!=nil {if s.ExecutorID!=current.LeaseExecutorID{return e,ErrCapacityLease};if _,err=s.sourceRecoveryCleanupLeaseTx(ctx,tx,b,parent,now);err!=nil{return e,err}}else{
-	if err = owner.checkLease(p, policy, &current, parent.Generation, parent.FencingToken, parent.LeaseOwner, now); err != nil {
-		return e, err
+	if b.Recovery != nil {
+		if s.ExecutorID != current.LeaseExecutorID {
+			return e, ErrCapacityLease
+		}
+		if _, err = s.sourceRecoveryCleanupLeaseTx(ctx, tx, b, parent, now); err != nil {
+			return e, err
+		}
+	} else {
+		if err = owner.checkLease(p, policy, &current, parent.Generation, parent.FencingToken, parent.LeaseOwner, now); err != nil {
+			return e, err
+		}
 	}
- }
 	var native struct {
 		Schema                               string          `json:"schema"`
 		OriginalCreatorSHA256                string          `json:"original_creator_sha256"`

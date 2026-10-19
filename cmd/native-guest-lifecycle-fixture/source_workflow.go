@@ -24,10 +24,18 @@ func (f *fixture) workflowSpec(rbac model.Manifest) model.WorkflowManifestSpec {
 	create := step(f.profile.OriginalProvisioningStepID, capacity.ProvisionOriginalGuestOperation, owned())
 	create.Condition = "{{ inputs.mode }} == baseline || {{ inputs.mode }} == burst"
 	create.DependsOn = []string{claim.ID}
-	if q.SourceLivePartialCase(f.request.NativeCase) { create.Condition += " || {{ inputs.mode }} == live_partial" }
-	if q.SourceHistoricalConfirmCase(f.request.NativeCase) { create.Condition += " || {{ inputs.mode }} == historical_confirm" }
-	if q.SourceTerminalCase(f.request.NativeCase) { create.Condition += " || {{ inputs.mode }} == terminal_contract" }
-	if q.SourceFailedFloorCase(f.request.NativeCase) { create.Condition += " || {{ inputs.mode }} == floor_repair" }
+	if q.SourceLivePartialCase(f.request.NativeCase) {
+		create.Condition += " || {{ inputs.mode }} == live_partial"
+	}
+	if q.SourceHistoricalConfirmCase(f.request.NativeCase) {
+		create.Condition += " || {{ inputs.mode }} == historical_confirm"
+	}
+	if q.SourceTerminalCase(f.request.NativeCase) {
+		create.Condition += " || {{ inputs.mode }} == terminal_contract"
+	}
+	if q.SourceFailedFloorCase(f.request.NativeCase) {
+		create.Condition += " || {{ inputs.mode }} == floor_repair"
+	}
 	qualify := step("original_echo_qualified", "capacity.qualify_original_guest_echo", owned())
 	qualify.Condition = "{{ inputs.mode }} == baseline || {{ inputs.mode }} == burst"
 	qualify.DependsOn = []string{create.ID}
@@ -46,21 +54,40 @@ func (f *fixture) workflowSpec(rbac model.Manifest) model.WorkflowManifestSpec {
 		return model.WorkflowManifestSpec{DispatchMode: "async", Authorization: &model.WorkflowAuthorizationSpec{RBAC: model.ManifestSelector{ManifestID: rbac.ID.String()}}, InputSchema: model.WorkflowInputSchemaSpec{Required: []string{"mode", "slot", "assessment"}, AdditionalProperties: &closed, Properties: map[string]model.IntegrationSchemaProperty{"mode": {Type: "string", Enum: []any{"source_contract"}}, "slot": {Type: "integer"}, "assessment": {Type: "object"}, "preregistration_id": {Type: "string"}}}, Steps: []model.WorkflowStepSpec{assess, claim, create}}
 	}
 	spec := model.WorkflowManifestSpec{DispatchMode: "async", Authorization: &model.WorkflowAuthorizationSpec{RBAC: model.ManifestSelector{ManifestID: rbac.ID.String()}}, InputSchema: model.WorkflowInputSchemaSpec{Required: []string{"mode", "slot", "assessment"}, AdditionalProperties: &closed, Properties: map[string]model.IntegrationSchemaProperty{"mode": {Type: "string", Enum: []any{"baseline", "burst", "observe_reduction_demand", "retire"}}, "slot": {Type: "integer"}, "assessment": {Type: "object"}, "preregistration_id": {Type: "string"}}}, Steps: []model.WorkflowStepSpec{assess, claim, create, qualify, retire, finish}}
-	if q.SourceLivePartialCase(f.request.NativeCase) { mode := spec.InputSchema.Properties["mode"]; mode.Enum = append(mode.Enum, "live_partial"); spec.InputSchema.Properties["mode"] = mode }
-	if q.SourceHistoricalConfirmCase(f.request.NativeCase) { mode := spec.InputSchema.Properties["mode"]; mode.Enum = append(mode.Enum, "historical_confirm"); spec.InputSchema.Properties["mode"] = mode }
-	if q.SourceTerminalCase(f.request.NativeCase){mode:=spec.InputSchema.Properties["mode"];mode.Enum=append(mode.Enum,"terminal_contract");spec.InputSchema.Properties["mode"]=mode}
-	if q.SourceFailedFloorCase(f.request.NativeCase) { mode:=spec.InputSchema.Properties["mode"];mode.Enum=append(mode.Enum,"floor_repair");spec.InputSchema.Properties["mode"]=mode }
+	if q.SourceLivePartialCase(f.request.NativeCase) {
+		mode := spec.InputSchema.Properties["mode"]
+		mode.Enum = append(mode.Enum, "live_partial")
+		spec.InputSchema.Properties["mode"] = mode
+	}
+	if q.SourceHistoricalConfirmCase(f.request.NativeCase) {
+		mode := spec.InputSchema.Properties["mode"]
+		mode.Enum = append(mode.Enum, "historical_confirm")
+		spec.InputSchema.Properties["mode"] = mode
+	}
+	if q.SourceTerminalCase(f.request.NativeCase) {
+		mode := spec.InputSchema.Properties["mode"]
+		mode.Enum = append(mode.Enum, "terminal_contract")
+		spec.InputSchema.Properties["mode"] = mode
+	}
+	if q.SourceFailedFloorCase(f.request.NativeCase) {
+		mode := spec.InputSchema.Properties["mode"]
+		mode.Enum = append(mode.Enum, "floor_repair")
+		spec.InputSchema.Properties["mode"] = mode
+	}
 
- if q.CanonicalSourceCompensationCase(f.request.NativeCase) {
-  mode:=spec.InputSchema.Properties["mode"];mode.Enum=append(mode.Enum,"recovery_cleanup");spec.InputSchema.Properties["mode"]=mode
-  spec.InputSchema.Properties["generation"]=model.IntegrationSchemaProperty{Type:"integer"}
-  spec.Steps[0].Condition="{{ inputs.mode }} != recovery_cleanup"
-  spec.Steps[1].Condition+=" && {{ inputs.mode }} != recovery_cleanup"
-  recover:=step("original_recovery_cleanup_recover","capacity.recover",map[string]any{"policy":policy,"generation":"{{ inputs.generation }}","assessment":"{{ inputs.assessment }}"})
-  recover.Condition="{{ inputs.mode }} == recovery_cleanup"
-  fresh:=step("original_recovery_cleanup_read","capacity.qualify_original_guest_echo",map[string]any{"policy":policy,"binding_name":"native-qemu","slot":2,"generation":"{{ steps.original_recovery_cleanup_recover.metadata.generation }}","fencing_token":"{{ steps.original_recovery_cleanup_recover.metadata.fencing_token }}","lease_owner":"{{ steps.original_recovery_cleanup_recover.metadata.lease_owner }}","preregistration_id":"{{ inputs.preregistration_id }}","request_id":"source_recovery_cleanup_v1"})
-  fresh.Condition="{{ inputs.mode }} == recovery_cleanup";fresh.DependsOn=[]string{recover.ID}
-  spec.Steps=append(spec.Steps,recover,fresh)
- }
+	if q.CanonicalSourceCompensationCase(f.request.NativeCase) {
+		mode := spec.InputSchema.Properties["mode"]
+		mode.Enum = append(mode.Enum, "recovery_cleanup")
+		spec.InputSchema.Properties["mode"] = mode
+		spec.InputSchema.Properties["generation"] = model.IntegrationSchemaProperty{Type: "integer"}
+		spec.Steps[0].Condition = "{{ inputs.mode }} != recovery_cleanup"
+		spec.Steps[1].Condition += " && {{ inputs.mode }} != recovery_cleanup"
+		recover := step("original_recovery_cleanup_recover", "capacity.recover", map[string]any{"policy": policy, "generation": "{{ inputs.generation }}", "assessment": "{{ inputs.assessment }}"})
+		recover.Condition = "{{ inputs.mode }} == recovery_cleanup"
+		fresh := step("original_recovery_cleanup_read", "capacity.qualify_original_guest_echo", map[string]any{"policy": policy, "binding_name": "native-qemu", "slot": 2, "generation": "{{ steps.original_recovery_cleanup_recover.metadata.generation }}", "fencing_token": "{{ steps.original_recovery_cleanup_recover.metadata.fencing_token }}", "lease_owner": "{{ steps.original_recovery_cleanup_recover.metadata.lease_owner }}", "preregistration_id": "{{ inputs.preregistration_id }}", "request_id": "source_recovery_cleanup_v1"})
+		fresh.Condition = "{{ inputs.mode }} == recovery_cleanup"
+		fresh.DependsOn = []string{recover.ID}
+		spec.Steps = append(spec.Steps, recover, fresh)
+	}
 	return spec
 }

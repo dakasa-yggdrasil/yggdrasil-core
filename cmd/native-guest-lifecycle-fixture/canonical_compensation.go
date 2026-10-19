@@ -23,7 +23,11 @@ func (f *fixture) prepareCanonicalSourceChild(ctx context.Context, p model.Capac
 	var noChild model.CapacityMutationGrant
 	var noSession q.CanonicalCleanupSession
 	issuer := repository.CapacityStore{DB: f.db, WorkflowID: f.workflow.ID, ExecutionEnabled: true, ExecutorID: uuid.NewString()}
- recoverySession,recoveryErr:=f.realm.OriginalRecoveryCleanupSession(ctx);if recoveryErr!=nil{return none,noPolicy,noChild,noSession,recoveryErr};issuer=recoverySession.Store
+	recoverySession, recoveryErr := f.realm.OriginalRecoveryCleanupSession(ctx)
+	if recoveryErr != nil {
+		return none, noPolicy, noChild, noSession, recoveryErr
+	}
+	issuer = recoverySession.Store
 	eligible, err := issuer.PrepareCanonicalSourceCompensation(ctx, f.policy, pre.OriginalCreateGrantID)
 	if err != nil {
 		return none, noPolicy, noChild, noSession, err
@@ -39,7 +43,9 @@ func (f *fixture) prepareCanonicalSourceChild(ctx context.Context, p model.Capac
 	}
 	defer client.Close()
 	parentStore := issuer
-	if issuer.ExecutorID!=intent.LeaseExecutorID || !intent.RecoveryOnly{return none,noPolicy,noChild,noSession,q.ErrOriginalUnknown}
+	if issuer.ExecutorID != intent.LeaseExecutorID || !intent.RecoveryOnly {
+		return none, noPolicy, noChild, noSession, q.ErrOriginalUnknown
+	}
 	useful, err := f.realm.DiagnosticProbe(ctx, parentStore, 1, f.corePrivate, client)
 	if err != nil {
 		return none, noPolicy, noChild, noSession, err
@@ -128,7 +134,9 @@ func (f *fixture) prepareCanonicalSourceChild(ctx context.Context, p model.Capac
 	if pg17Err = message.PG17RetainAssertions(ctx, f.realm, current, f.workflow.ID.String(), 0, "compensation-eligibility", pg17Eligibility); pg17Err != nil {
 		return none, noPolicy, noChild, noSession, pg17Err
 	}
-	if err=f.assertOriginalRecoveryUnresolved(ctx,p,pre,"parent");err!=nil{return none,noPolicy,noChild,noSession,err}
+	if err = f.assertOriginalRecoveryUnresolved(ctx, p, pre, "parent"); err != nil {
+		return none, noPolicy, noChild, noSession, err
+	}
 	var group sync.WaitGroup
 	children := make(chan model.CapacityMutationGrant, 2)
 	failures := make(chan error, 2)
@@ -163,7 +171,9 @@ func (f *fixture) prepareCanonicalSourceChild(ctx context.Context, p model.Capac
 			return none, noPolicy, noChild, noSession, err
 		}
 	}
-	if err=f.assertOriginalRecoveryUnresolved(ctx,p,pre,"child");err!=nil{return none,noPolicy,noChild,noSession,err}
+	if err = f.assertOriginalRecoveryUnresolved(ctx, p, pre, "child"); err != nil {
+		return none, noPolicy, noChild, noSession, err
+	}
 	session, err := f.realm.RedeemCanonicalSourceChild(ctx, issuer, current, child)
 	if err != nil {
 		return none, noPolicy, noChild, noSession, err
