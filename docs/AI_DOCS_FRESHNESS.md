@@ -7,7 +7,7 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: afaa84a050ca9e2a946a085e7221c88baf009706
+verified_at_commit: 4b6eba233de834a5cdf582cc3796ce58049a7997
 verified_diff_sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
 reconciler_schema: 1
 verified_at: 2026-10-19
@@ -150,8 +150,8 @@ Separate custody ACK 53aeb169-ebed-4107-b047-a33aee9db8a3 completed with origina
 ## Current native slot projection producer Source reconciliation
 
 core_original_source_code: ff4443e487ecbc98f25a499e88f57135aa0bfdcb
-core_original_guest_source_code: 64bced128c78e8af65c03fe5dfabce2ec8441e41
-core_original_source_peer_manifest_sha256: ec13e43c8f28180cacc0351be46dd09b6cc8b785fd307714ef51b709d49a0acd
+core_original_guest_source_code: a15a8672d85965eb23eb287ef31e5d029c836385
+core_original_source_peer_manifest_sha256: 9f8a771536d8580021bce5d2ae2a63cd27a2beb77b94d93fc8a62e298d1167ff
 
 Root accepted this exact whole Source successor for local markers and metadata, with independently reviewed Core producer delta and the coordinated Guest selector. The Core change is restricted to cmd/native-guest-lifecycle-fixture/main.go: its digest input now uses the explicit closed ten-field map that the unchanged slot guard already canonicalizes. The typed DesiredSpec/address, guard, authorization, API and all other producer bytes remain unchanged. Independent narrow peer d88e2a3d accepted the exact postimage49632/29e1c7c1; full CODE census1412 preserves all1411 other Git bodies/modes from actual published89f9. Accepted earlier whole-manifest scopes and all failed predecessor originals remain historical evidence, not current runtime approval. The paired Guest CODE f91cbec6709e35170173ddd7a233b2d0abd02981 is a Source binding in the Root-accepted manifest, not a claim of Guest or Native execution by this metadata step.
 
@@ -191,3 +191,5 @@ Original hosted positive run39309524112/job118258399591 remains failed at origin
 The released d8ed CLI generated current context and summary at this actual CODE, with its authentic provenance, plan and streams. Metadata verification at CODE before META checks six reconciliation predicates only; it does not execute mandatory go-test or svc-doctor. The actual missing-service-contract warning remains unresolved. New public writes and any cancellation of the current hosted run require their own explicit authorization; none occurred in this local metadata preparation. All earlier notes and failed originals remain historical and unchanged.
 
 current_guest_payload_source_pair_review: This metadata-only successor binds the reviewed Guest source pair while preserving the public Core functional source byte-for-byte. Focused private source regression evidence is retained separately and does not qualify the whole native lifecycle. No private source, test bodies, raw logs or audit artifacts are included in this public successor. Complete owning native qualification remains pending.
+
+current_payload_failure_diagnostic_review: The exact source pair binds the reviewed Guest diagnostic successor while this repository retains its unchanged functional source. Existing independent protocol qualification failures remain unresolved; this metadata update does not repair fixtures or grant new runtime, native or production qualification. No private source, log or artifact is published here.
