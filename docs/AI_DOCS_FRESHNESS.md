@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 38bd38312987a22a478b48bf8ffdfa07f9bbcb33
-verified_diff_sha256: 5d48543e31d9840342046993a0b750948815670f4aec3903401f8b976e4fa965
+verified_at_commit: c5845106481f6571def62279e3b03d1334bdd81a
+verified_diff_sha256: 984eeb1b2dfa6caa37c3d0135cb851d90f7b215e4b8e34331d9901c1f9457457
 reconciler_schema: 1
 verified_at: 2026-10-19
 by: Codex
@@ -136,3 +136,12 @@ This local merge retains both the public PR75 diagnostic ancestry and the comple
 The retained R12 Source-only originals contain 47 successful complete commands, 13 exact Source test roots and 44 RUN/PASS nodes. That historical run stayed HOLD because 30 readonly gofmt postimages differed; R13 adopted exactly those official remote stdout bodies and a single Guest workflow Core pin. This merge is not a new execution or owning-CI result. Local work used normal Git and the pinned released CLI for plan/context/summary/reconciliation only, without Go, tests, formatting, parser, network or publication. Current owning CI, remaining native/production obligations and deployment/rollback authority are separate.
 
 The accepted reconciliation plan uses the actual retained public PR75 head as base. The first plan using a historical prior-publication base is preserved but superseded. The CLI reports a real missing-service-contract warning: authoritative docs/SERVICE_CONTRACT.yaml is absent and the generated context is intentionally incomplete. No substitute contract or standalone-context waiver was invented; metadata verification does not qualify required go-test, svc-doctor or contract-connectivity checks.
+
+
+## Two known ContextFreshness and lint repairs
+
+This successor changes exactly two Source paths from the published metadata parent: ADR-0055 title/status syntax now matches the existing ContextFreshness rules, and one error string begins with lowercase. Its Decision, predicates, tests, dependencies, workflow gates and the rest of the cohort remain unchanged. Independent static review 53d297f0f4287d577df5a0d9e05917bdae2342a5451f7b22d358c56d3ea268f6 accepted the exact two-path delta. No new complete-cohort or Guest source approval is asserted by this peripheral update.
+
+Actual LAB job core-ci-lint-repair-r2 used clean CODE c5845106481f6571def62279e3b03d1334bdd81a. The original ContextFreshness Python guard and official golangci-lint v2.1.0 completed successfully; all eleven original commands returned zero with complete custody and all1412 Source bodies/modes unchanged. The actual Go client authenticated both official module checksums and origin cab8d9b5c146a3f797b0511928c849d5fbd38824 before the source installation. Independent actual receipt 4147743baa5a49824ae02a0f11ad29cea4d416212d8c4a3397afe18598baa3d9 accepts only that context/lint/custody scope. The first LAB attempt remains a failed original: its config-path output was on stderr; the later carrier handled exactly one output stream without weakening the exact Source-config check.
+
+Separate custody ACK 53aeb169-ebed-4107-b047-a33aee9db8a3 completed with original_rc0, exports_pendingfalse and qualification_completefalse. It closes transport debt only. No Go tests, explicit vet, doctor, contract-connectivity, Native, complete Guest qualification, production deployment or rollback were run or qualified by this LAB profile. Prior cohort results retain their original Source identities and limits; genuine current owning CI and all remaining platform gates stay pending. The actual missing-service-contract warning remains unresolved; generated context is intentionally incomplete. Local work here uses the original released CLI only for plan/context/metadata verification, without Go, formatter, tests, network or publication.
