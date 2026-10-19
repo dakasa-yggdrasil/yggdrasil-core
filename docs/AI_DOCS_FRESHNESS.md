@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 539e97701fb9bc0ab9f98e9b7dae1d17927977ba
-verified_diff_sha256: b1192ad50334edb3ba67611807c83c7aeb385bf0f27d5180f4b8c716041462cf
+verified_at_commit: bbfafb59fd370f8ceaa2988431ebc9c0bd2e5f77
+verified_diff_sha256: 493faf4a2201e84a5a080b228ae21395f6ed79f872fe2ed6756541f7bb522a8a
 reconciler_schema: 1
 verified_at: 2026-10-19
 by: Codex
@@ -149,9 +149,9 @@ Separate custody ACK 53aeb169-ebed-4107-b047-a33aee9db8a3 completed with origina
 
 ## Current native slot projection producer Source reconciliation
 
-core_original_source_code: 539e97701fb9bc0ab9f98e9b7dae1d17927977ba
-core_original_guest_source_code: 61be57c73a49f2a669cbe5e4435bbb69232bbe4a
-core_original_source_peer_manifest_sha256: 206cca09e442461cb8f3e8c3111b3e3c16f7424f84548122375acf624f309137
+core_original_source_code: bbfafb59fd370f8ceaa2988431ebc9c0bd2e5f77
+core_original_guest_source_code: e21984c7ef9acf067b024e9798cedb235b212dd6
+core_original_source_peer_manifest_sha256: 6bf6a1209e164505389b5b2edfaae0b8ed50f8765bb02b5bf0a1545155cdb218
 
 Root accepted this exact whole Source successor for local markers and metadata, with independently reviewed Core producer delta and the coordinated Guest selector. The Core change is restricted to cmd/native-guest-lifecycle-fixture/main.go: its digest input now uses the explicit closed ten-field map that the unchanged slot guard already canonicalizes. The typed DesiredSpec/address, guard, authorization, API and all other producer bytes remain unchanged. Independent narrow peer d88e2a3d accepted the exact postimage49632/29e1c7c1; full CODE census1412 preserves all1411 other Git bodies/modes from actual published89f9. Accepted earlier whole-manifest scopes and all failed predecessor originals remain historical evidence, not current runtime approval. The paired Guest CODE f91cbec6709e35170173ddd7a233b2d0abd02981 is a Source binding in the Root-accepted manifest, not a claim of Guest or Native execution by this metadata step.
 
@@ -173,3 +173,10 @@ formatted_current_public_integration_review: The exact whole manifest above also
 current_r8_failure_evidence_source_review: Root accepted whole Source manifest 206cca09e442461cb8f3e8c3111b3e3c16f7424f84548122375acf624f309137 for Core CODE 539e97701fb9bc0ab9f98e9b7dae1d17927977ba and Guest CODE 61be57c73a49f2a669cbe5e4435bbb69232bbe4a. Current primary fields select that exact cohort. Genuine Source126 actual peer f838ba70 retains 126 original operations rc0, 110 format comparisons equal and 70 Source cases across 21 roots. Adapter race binary was compiled only and never executed; Native, production, full old20 PostgreSQL and physical capacity qualification are not granted. Root retained custody ACK and stopped state separately. These original Source-only results do not replace mandatory genuine owning CI, functional provider, production or rollback gates. Earlier source epochs and notes remain historical.
 
 The released d8ed CLI generated actual current context/summary and reconciliation provenance at CODE before META, preserving its actual warning and dirty provenance. This local metadata operation performs no Go, formatter, tests, runtime, network or publication.
+
+
+## Current focused unsent assertion and closed refusal visibility
+
+Root accepted exact whole Source manifest 6bf6a1209e164505389b5b2edfaae0b8ed50f8765bb02b5bf0a1545155cdb218 for Core CODE bbfafb59fd370f8ceaa2988431ebc9c0bd2e5f77 and Guest CODE e21984c7ef9acf067b024e9798cedb235b212dd6. Independent current Source delta peer d8990aa52263196fd831c5e2d49f925363fbdd7c350f8339d27a5eae44ae5cd6 covers the exact pair. This Core successor changes four paths from published b77: the called stored-unsent assertion now requires the canonical rejected state for rejected_before_send, while preserving the policy, workflow, settlement, empty-resource and hash joins; the existing public caller retains only fourteen additional closed Source-owned refusal names. Two focused test roots exercise the actual pure stored-record predicate and actual public projection. No production callback, authority, native action, clock, deadline, budget or remaining assertion is relaxed. The public predecessor failure projection hid the named predicate, so the deterministic assertion incompatibility is corrected without claiming it was the first or exclusive runtime cause.
+
+The released d8ed CLI PLAN uses the actual published b77 base and this CODE; genuine AI generation and content-addressed metadata verification occur at CODE before META. The actual missing-service-contract warning and mandatory go-test, repo-reconcile-verify and svc-doctor requirements remain. Earlier Source and LAB results retain their original Source identities and scope; no current LAB outcome, new test PASS, formatting PASS, full PostgreSQL or Guest qualification, Native, production, migration or rollback approval is inferred here. This local metadata step performs no Go, formatter, tests, runtime, network, publication or hook/signing bypass.
