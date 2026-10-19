@@ -292,7 +292,7 @@ func (record *originalPublicReturn) projectOriginalWorkflowReturn(run model.Work
 				continue
 			}
 			record.WorkflowFailedStep = step.ID
-			if predicate, ok := step.Metadata["original_guest_refusal_predicate"].(string); ok && regexp.MustCompile(`^original-guest-step-[0-9]{2}$`).MatchString(predicate) {
+			if predicate, ok := step.Metadata["original_guest_refusal_predicate"].(string); ok && regexp.MustCompile(`^(?:original-guest-step-[0-9]{2}|original-canonical-floor-next-output|original-canonical-floor-next-permission|original-canonical-floor-permission-gate|original-source-historical-confirm|original-source-historical-output|original-source-live-partial|original-source-live-partial-output|original-source-terminal|original-source-terminal-output|pg17-original-confirm-assertions|pg17-original-create-assertions|pg17-original-historical-assertions|pg17-original-terminal-assertions|pg17-original-workflow-confirm)$`).MatchString(predicate) {
 				record.WorkflowPredicate = predicate
 			}
 			if step.Error == "" {

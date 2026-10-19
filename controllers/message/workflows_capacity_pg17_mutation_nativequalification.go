@@ -99,6 +99,13 @@ func pg17MutationCommon(m map[string]json.RawMessage, schema string, slot int, g
 	return pg17MutationEqual(m, "schema", schema) && pg17MutationEqual(m, "core_source", capacity.CurrentGuestCoreSource()) && pg17MutationEqual(m, "slot", slot) && pg17MutationEqual(m, "grant_id", grant)
 }
 
+// pg17OriginalUnsentRecordValid consumes the already stored first grant. The
+// canonical callback ledger records rejected_before_send as rejected, not settled.
+// This assertion grants no authority and preserves the original record/hash joins.
+func pg17OriginalUnsentRecordValid(old pg17MutationRecord, policyID, workflowID, settlementSHA string) bool {
+	return old.PolicyID == policyID && old.WorkflowID == workflowID && old.Grant.State == "rejected" && old.Settlement != nil && old.Settlement.Outcome == "rejected_before_send" && old.Settlement.ResourceID == "" && settlementSHA == capacity.GuestRetirementSHA(*old.Settlement)
+}
+
 func guestPG17MutationAfterCreate(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, binding model.CapacityMutationBinding, input guestOriginalStepInput, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, proof model.CapacityMutationProof) ([]PG17AssertionResult, error) {
 	r, raw, err := pg17MutationGrant(ctx, store, policy, input, grant)
 	if err != nil {
@@ -212,7 +219,7 @@ func guestPG17MutationAfterCreate(ctx context.Context, store repository.Capacity
 		if err = store.DB.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1 AND namespace=$2 AND generation=$3`, first, policy.Metadata.Namespace, input.Generation).Scan(&oldRaw); err != nil {
 			return nil, err
 		}
-		if json.Unmarshal(oldRaw, &old) != nil || old.PolicyID != policy.ID.String() || old.WorkflowID != r.WorkflowID || old.Grant.State != "settled" || old.Settlement == nil || old.Settlement.Outcome != "rejected_before_send" || old.Settlement.ResourceID != "" || pg17MutationDigest(unsent, "settlement_sha256") != capacity.GuestRetirementSHA(*old.Settlement) {
+		if json.Unmarshal(oldRaw, &old) != nil || !pg17OriginalUnsentRecordValid(old, policy.ID.String(), r.WorkflowID, pg17MutationDigest(unsent, "settlement_sha256")) {
 			return nil, errOriginalGuestStep
 		}
 		rows = append(rows, pg17MutationResult(8, policy, r.WorkflowID, []string{"actual_unsent_first_write_once_same_attempt_read_only", "same_rejected_before_send_settlement_without_provider_create", "distinct_replacement_grant_nonextended_deadline_same_workflow"}, capacity.BusinessCreationSHA256(uw), capacity.BusinessCreationSHA256(iw), capacity.BusinessCreationSHA256(oldRaw)))
