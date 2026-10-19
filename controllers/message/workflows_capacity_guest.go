@@ -203,8 +203,24 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		if parsed.PreregistrationID != "" {
 			return fail("original-guest-step-18")
 		}
-		if originalGuestSourceProvider.Prepare(ctx, parsed.Slot) != nil {
+		permissionOnly, permissionErr := guestOriginalCanonicalFloorPreparing(ctx, store, policy, parsed)
+		if permissionErr != nil {
+			return fail("original-canonical-floor-permission-gate")
+		}
+		if !permissionOnly && originalGuestSourceProvider.Prepare(ctx, parsed.Slot) != nil {
 			return fail("original-guest-step-19")
+		}
+
+		if recoveredOutput, handled, recoveryErr := guestOriginalSourceLivePartial(ctx, store, policy, p, b, parsed, key); handled {
+			if recoveryErr != nil {
+				return fail("original-source-live-partial")
+			}
+			wire, encodeErr := json.Marshal(recoveredOutput)
+			if encodeErr != nil || json.Unmarshal(wire, &result.Metadata) != nil {
+				return fail("original-source-live-partial-output")
+			}
+			result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
+			return result
 		}
 		var projection *model.CapacityMutationSpecV1
 		for _, slot := range b.Slots {
@@ -224,7 +240,18 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 			return fail("original-guest-step-22")
 		}
 		store = store.WithOriginalGuestProvisioning(step, capacity.CurrentGuestCoreSource(), capacity.BusinessCreationSHA256([]byte(nonce)))
-		grant, err := store.IssueMutation(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: body})
+		if output, handled, permissionErr := guestOriginalCanonicalFloorPermission(ctx, store, policy, parsed, model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: body}); handled {
+			if permissionErr != nil {
+				return fail("original-canonical-floor-next-permission")
+			}
+			encoded, encodeErr := json.Marshal(output)
+			if encodeErr != nil || json.Unmarshal(encoded, &result.Metadata) != nil {
+				return fail("original-canonical-floor-next-output")
+			}
+			result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
+			return result
+		}
+		grant, err := guestOriginalSourceIssue(ctx, store, policy, step, parsed, model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: body})
 		if err != nil {
 			return fail("original-guest-step-23")
 		}
@@ -234,11 +261,34 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		}
 		original, cancelOriginal := context.WithDeadline(ctx, pre.OriginalDeadline)
 		defer cancelOriginal()
+		contract, handled, contractErr := guestOriginalSourceContractFence(original, store, policy, p, b, parsed, grant, pre)
+		if contractErr != nil {
+			return fail("original-guest-step-44")
+		}
+		if handled {
+			raw, encodeErr := json.Marshal(contract)
+			if encodeErr != nil || json.Unmarshal(raw, &result.Metadata) != nil {
+				return fail("original-guest-step-45")
+			}
+			result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
+			return result
+		}
+		if terminalOutput, handled, terminalErr := guestOriginalSourceTerminal(original, store, policy, p, b, parsed, grant, pre, key); handled {
+			if terminalErr != nil {
+				return fail("original-source-terminal")
+			}
+			encoded, encodeErr := json.Marshal(terminalOutput)
+			if encodeErr != nil || json.Unmarshal(encoded, &result.Metadata) != nil {
+				return fail("original-source-terminal-output")
+			}
+			result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
+			return result
+		}
 		proof, err := originalGuestSourceProvider.Create(original, store, policy, grant, pre)
 		if err != nil {
 			return fail("original-guest-step-25")
 		}
-		witness, err := store.RecordGuestCreateWitness(original, pre.PreregistrationID, proof, key)
+		witness, err := guestOriginalSourceCreateWitness(original, store, pre.PreregistrationID, proof, key)
 		if err != nil {
 			return fail("original-guest-step-26")
 		}
@@ -264,8 +314,25 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		}
 		// Confirm physical source membership only after the complete original
 		// enrollment callback. This still grants no business readiness/canary.
+		if err = guestOriginalSourceAssertNativeRefusals(original, store, policy, parsed, proof, grant); err != nil {
+			return fail("original-guest-step-43")
+		}
+		if historicalOutput, handled, historicalErr := guestOriginalSourceHistoricalConfirm(original, store, policy, p, b, parsed, key, grant, pre, receipt, proof); handled {
+			if historicalErr != nil {
+				return fail("original-source-historical-confirm")
+			}
+			encoded, encodeErr := json.Marshal(historicalOutput)
+			if encodeErr != nil || json.Unmarshal(encoded, &result.Metadata) != nil {
+				return fail("original-source-historical-output")
+			}
+			result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
+			return result
+		}
 		if _, err = store.ConfirmMutation(original, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, proof); err != nil {
 			return fail("original-guest-step-30")
+		}
+		if err = guestOriginalSourceAssertApply(original, store, policy, parsed, proof, grant); err != nil {
+			return fail("original-guest-step-42")
 		}
 		if err = guestOriginalSourceEnrolled(original, grant, pre, receipt); err != nil {
 			return fail("original-guest-step-31")

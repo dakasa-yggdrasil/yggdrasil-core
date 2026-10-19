@@ -112,7 +112,10 @@ func (r *Realm) DestroyOriginal(ctx context.Context, grant model.CapacityMutatio
 		return observed, ErrOriginalUnknown
 	}
 	fact := OriginalDeleteReturn{Schema: "core_original_native_qemu_disk_delete_v1", Scope: "original_source_owned_native_qemu_disk_only_not_physical_provider_or_billing", GrantID: grant.GrantID, AttemptID: attempt, ResourceID: grant.ExpectedResourceID, CreatorOriginalSHA256: native.OriginalCreatorSHA256, OriginalDisk: disk, OriginalUnlinkCalledAt: time.Now().UTC()}
+	var sourceDirectory unix.Stat_t
+	if unix.Fstat(fd,&sourceDirectory)!=nil || sourceDirectory.Mode&unix.S_IFMT!=unix.S_IFDIR || sourceDirectory.Uid!=uint32(os.Getuid()) || sourceDirectory.Mode&0022!=0 {return observed,ErrOriginalUnknown}
 	r.mu.Lock()
+	r.deleteDirectory=OriginalDisk{Device:uint64(sourceDirectory.Dev),Inode:sourceDirectory.Ino}
 	r.deleted = true
 	r.mu.Unlock() // possible unlink is never retried
 	err = unix.Unlinkat(fd, "original.qcow2", 0)

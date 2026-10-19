@@ -41,7 +41,7 @@ if [[ -z "$guest_preflight_error" ]]; then
       guest_pipeline_status=("${PIPESTATUS[@]}")
       ;;
     native)
-      go test -json -tags nativequalification -p 1 -count=1 -timeout=3m ./repository -run '^TestCapacityGuestOriginalNativeCorpusPostgres$' 2>"$guest_go_stderr" | tee "$guest_corpus_path" 2>"$guest_tee_stderr"
+      go test -json -tags nativequalification -p 1 -count=1 -timeout=3m ./repository ./controllers/httpapi ./controllers/message -run '^TestCapacityGuestOriginal(NativeCorpusPostgres|HTTPCallbacksPostgres|WorkflowNativeReadsPostgres)$' 2>"$guest_go_stderr" | tee "$guest_corpus_path" 2>"$guest_tee_stderr"
       guest_pipeline_status=("${PIPESTATUS[@]}")
       ;;
     native-hold)
@@ -95,8 +95,8 @@ for number, line in enumerate(lines, 1):
     except (ValueError, TypeError) as exc:
         malformed.append({'line': number, 'error': type(exc).__name__})
 if mode == 'native':
-    groups = {'TestCapacityGuestOriginalNativeCorpusPostgres': ()}
-    packages = {'github.com/dakasa-yggdrasil/yggdrasil-core/repository'}
+    groups = {'TestCapacityGuestOriginalNativeCorpusPostgres': (), 'TestCapacityGuestOriginalHTTPCallbacksPostgres': (), 'TestCapacityGuestOriginalWorkflowNativeReadsPostgres': ()}
+    packages = {'github.com/dakasa-yggdrasil/yggdrasil-core/repository', 'github.com/dakasa-yggdrasil/yggdrasil-core/controllers/httpapi', 'github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message'}
 elif mode == 'native-hold':
     groups = {'TestCapacityGuestOriginalNativeHoldCorpusPostgres': ()}
     packages = {'github.com/dakasa-yggdrasil/yggdrasil-core/repository'}

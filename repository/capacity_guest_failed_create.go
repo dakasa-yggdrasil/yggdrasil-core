@@ -18,6 +18,7 @@ import (
 // every missing/legacy enrollment stays HOLD. A known enrolled original must
 // instead carry the SAME complete original Guest joins and native-off proof.
 func (s CapacityStore) guestFailedCreateCleanupTx(ctx context.Context, tx *sql.Tx, p model.CapacityPolicySpec, parent capacityMutationRecord, proof model.CapacityMutationProof, now time.Time, childID string) error {
+	if handled,err:=s.canonicalSourceFailedCleanupTx(ctx,tx,p,parent,proof,now,childID);handled{return err}
 	if p.GuestRetirementBinding == nil || capacity.ValidateGuestRetirementBinding(p, p.GuestRetirementBinding) != nil {
 		return fmt.Errorf("%w: failed create has unknown original writer enrollment; HOLD", ErrCapacityConflict)
 	}
@@ -58,6 +59,7 @@ func (s CapacityStore) guestFailedCreateCleanupTx(ctx context.Context, tx *sql.T
 // A compensation has an independent current workflow authority but binds to
 // the SAME original failed-create retirement, not a fabricated child fence.
 func (s CapacityStore) bindGuestCompensationTx(ctx context.Context, tx *sql.Tx, child, parent capacityMutationRecord, now time.Time) error {
+ if handled,err:=s.canonicalSourceBindCompensationTx(ctx,tx,child,parent,now);handled{return err}
 	var id string
 	if err := tx.QueryRowContext(ctx, `SELECT r.id::text FROM public.capacity_vm_retirement_intents r JOIN public.capacity_vm_provisioning_preregistrations pre ON pre.id=r.preregistration_id WHERE pre.create_grant_id=$1`, parent.Grant.GrantID).Scan(&id); err != nil {
 		return ErrCapacityConflict

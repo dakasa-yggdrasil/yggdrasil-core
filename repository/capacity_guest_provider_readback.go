@@ -34,6 +34,7 @@ func (s CapacityStore) RecordVMRetirementReadback(ctx context.Context, policy mo
 }
 
 func (s CapacityStore) guestConfirmedDestroyTx(ctx context.Context, tx *sql.Tx, p model.CapacityPolicySpec, original capacityMutationRecord, proof model.CapacityMutationProof, now time.Time) error {
+ if handled,err:=s.canonicalSourceConfirmedCleanupTx(ctx,tx,p,original,proof,now);handled{return err}
 	var id string
 	var bindingWire []byte
 	var digest string

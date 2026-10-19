@@ -462,7 +462,7 @@ func (s CapacityStore) RedeemMutation(ctx context.Context, principal string, r m
 			return err
 		}
 		if g.CompensationOf != "" {
-			return redeemCompensation(ctx, tx, record, p, now, r, &response)
+			return redeemCompensation(s, ctx, tx, record, p, now, r, &response)
 		}
 		intent, err := loadCapacityIntent(ctx, tx, ns, scope, true)
 		if err != nil {
