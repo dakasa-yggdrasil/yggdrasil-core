@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-19T03:23:31-03:00",
+  "generated_at": "2026-10-19T04:26:05-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 937,
+    ".go": 953,
     ".json": 146,
     ".py": 2,
-    ".sql": 67,
+    ".sql": 68,
     ".yaml": 10,
     ".yml": 25
   },
   "provenance": {
-    "commit": "93af446c68ce720500bce7709c14b5a3d23b8909",
+    "commit": "19fa0a95b2dc66e84ef13b15d23b0b3012891475",
     "dirty": true,
     "files": [
       {
@@ -64,23 +64,23 @@
     },
     {
       "path": "repository",
-      "files": 165,
-      "kb": 2473
+      "files": 167,
+      "kb": 2506
     },
     {
       "path": "controllers/message",
-      "files": 85,
-      "kb": 1094
+      "files": 93,
+      "kb": 1219
     },
     {
       "path": "model",
-      "files": 72,
-      "kb": 413
+      "files": 73,
+      "kb": 416
     },
     {
       "path": "db/migrations",
-      "files": 66,
-      "kb": 173
+      "files": 67,
+      "kb": 176
     },
     {
       "path": "manifest",
@@ -103,14 +103,14 @@
       "kb": 98
     },
     {
+      "path": "internal/capacitynativeqemu",
+      "files": 26,
+      "kb": 220
+    },
+    {
       "path": "controllers/oidc",
       "files": 23,
       "kb": 193
-    },
-    {
-      "path": "internal/capacitynativeqemu",
-      "files": 23,
-      "kb": 180
     },
     {
       "path": "docs/bootstrap/seeds/integrations",
@@ -174,7 +174,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 66,
+    "migrations": 67,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {
