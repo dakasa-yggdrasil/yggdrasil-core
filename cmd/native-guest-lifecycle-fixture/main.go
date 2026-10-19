@@ -430,7 +430,19 @@ func (f *fixture) prepareSource(ctx context.Context) error {
 	}
 	for slot := 1; slot <= 2; slot++ {
 		projection := model.CapacityMutationSpecV1{SchemaVersion: "capacity_vm_slot_v1", Capability: b.EnsureCapability, IntegrationInstanceID: b.IntegrationInstanceID, ScopeChecksum: b.ScopeChecksum, ProfileChecksum: capacity.GuestRetirementSHA([]string{"native-original-qemu-fixed-1536-2-kvm", f.profile.OwnerSourceCommit}), AdmissionChecksum: capacity.GuestRetirementSHA(f.profile), ProfileName: b.ProfileName, Slot: slot, NativeName: "original-native-qemu-slot-" + fmt.Sprint(slot), BootstrapSHA256: f.profile.BootstrapSHA256}
-		b.Slots = append(b.Slots, model.CapacityMutationSlotBinding{Slot: slot, DesiredSpecSHA256: capacity.GuestRetirementSHA(projection), DesiredSpec: &projection})
+		projectionSHA := capacity.GuestRetirementSHA(map[string]any{
+			"schema_version":          projection.SchemaVersion,
+			"capability":              projection.Capability,
+			"integration_instance_id": projection.IntegrationInstanceID,
+			"scope_checksum":          projection.ScopeChecksum,
+			"profile_checksum":        projection.ProfileChecksum,
+			"admission_checksum":      projection.AdmissionChecksum,
+			"profile_name":            projection.ProfileName,
+			"slot":                    projection.Slot,
+			"native_name":             projection.NativeName,
+			"bootstrap_sha256":        projection.BootstrapSHA256,
+		})
+		b.Slots = append(b.Slots, model.CapacityMutationSlotBinding{Slot: slot, DesiredSpecSHA256: projectionSHA, DesiredSpec: &projection})
 	}
 	f.binding = model.CapacityGuestRetirementBinding{Mode: capacity.GuestRetirementSchema, MutationBindingName: b.Name, EvidenceClass: "native_qemu_qualification", ProvisionerSourceCommit: f.request.SourceCommit, GuestSourceCommit: f.request.SourceCommit, CoreAuthoritySourceCommit: capacity.CurrentGuestCoreSource(), ProvisionerPublicKey: base64.StdEncoding.EncodeToString(f.producerPublic), EnrollmentIssuerPublicKey: base64.StdEncoding.EncodeToString(f.issuerPublic), EnrollmentSigningKeyRef: issuerRef, IntentSigningKeyRef: intentRef, ProfileManifest: f.profile, ProfileManifestSHA256: capacity.GuestRetirementSHA(f.profile), MaxEvidenceAgeSeconds: 30}
 	for _, slot := range f.request.Slots {
