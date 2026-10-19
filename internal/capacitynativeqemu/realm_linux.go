@@ -141,11 +141,11 @@ func (r *Realm) Prepare(ctx context.Context, slot int) error {
 		return ErrOriginalUnknown
 	}
 	dir := SlotDirectory(r.PrivateDirectory, slot)
-	if err := r.verifySourceUnits(ctx, slot); err != nil {
-		return err
-	}
 	var pre PreCreateRequest
 	if _, err := Await(ctx, filepath.Join(dir, "pre-create-request.json"), &pre); err != nil {
+		return err
+	}
+	if err := r.verifySourceUnits(ctx, slot); err != nil {
 		return err
 	}
 	stageSHA, err := FileSHA(ctx, filepath.Join(dir, "source-config-ready.json"), 65536)
