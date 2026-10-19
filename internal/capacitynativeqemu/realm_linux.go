@@ -378,7 +378,9 @@ func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, poli
 	if r.Request.NativeCase == "positive_original_lifecycle" && slot == 2 {
 		var snapshotErr error
 		replayBefore, snapshotErr = readOriginalReplaySQLSnapshot(ctx, store, policy, grant, attempt, nonce)
-		if snapshotErr != nil { return proof, snapshotErr }
+		if snapshotErr != nil {
+			return proof, snapshotErr
+		}
 	}
 	var replay model.CapacityMutationRedeemResponse
 	var replayErr error
@@ -393,7 +395,9 @@ func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, poli
 	}
 	if r.Request.NativeCase == "positive_original_lifecycle" && slot == 2 {
 		replayAfter, snapshotErr := readOriginalReplaySQLSnapshot(ctx, store, policy, grant, attempt, nonce)
-		if snapshotErr != nil || !originalReplaySQLUnchanged(replayBefore, replayAfter) { return proof, ErrOriginalUnknown }
+		if snapshotErr != nil || !originalReplaySQLUnchanged(replayBefore, replayAfter) {
+			return proof, ErrOriginalUnknown
+		}
 	}
 	contract := struct {
 		Schema     string         `json:"schema"`

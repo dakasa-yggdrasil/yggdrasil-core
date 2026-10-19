@@ -188,9 +188,11 @@ func (f *fixture) runOriginalPublicCaller(ctx context.Context) (runErr error) {
 		return err
 	}
 	runIDs = append(runIDs, burst.ID.String())
-	if q.CanonicalSourceCompensationCase(f.request.NativeCase) {return f.finishOriginalCanonicalSourceCompensation(ctx,p,baseline,burst,runIDs,returns)}
+	if q.CanonicalSourceCompensationCase(f.request.NativeCase) {
+		return f.finishOriginalCanonicalSourceCompensation(ctx, p, baseline, burst, runIDs, returns)
+	}
 	if q.SourceCompensationCase(f.request.NativeCase) {
-		return f.finishOriginalSourceCompensation(ctx,p,baseline,burst,runIDs,returns)
+		return f.finishOriginalSourceCompensation(ctx, p, baseline, burst, runIDs, returns)
 	}
 	if !q.PositiveCase(f.request.NativeCase) && f.request.NativeCase != "held_ack_after_owned_original_deadline" {
 		return f.finishExpectedOriginalHold(ctx, p, baseline, burst, runIDs, returns)
