@@ -1,6 +1,6 @@
-# 0055 — Observe an uncertain original create and reissue its unused cleanup child
+# ADR-0055: Observe an uncertain original create and reissue its unused cleanup child
 
-- Status: Proposed
+**Status:** Proposed
 - Date: 2026-10-18
 - Scope: compiled `nativequalification` / `guestretirementqualification` Source fixture only
 

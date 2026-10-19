@@ -70,7 +70,7 @@ func GuestOriginalCreateWitness(p model.CapacityPolicySpec, binding model.Capaci
 		return fmt.Errorf("authentic original create witness required")
 	}
 	if w.SourceObservation != nil && !guestPostlossObservationAllowed(binding, w) {
-		return fmt.Errorf("Source-only postloss witness refused")
+		return fmt.Errorf("source-only postloss witness refused")
 	}
 	signature := w.Signature
 	w.Signature = ""
