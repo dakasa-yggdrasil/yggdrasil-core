@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-18T16:30:58-03:00",
+  "generated_at": "2026-10-18T21:52:32-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 900,
+    ".go": 937,
     ".json": 146,
     ".py": 2,
     ".sql": 67,
@@ -11,7 +11,7 @@
     ".yml": 25
   },
   "provenance": {
-    "commit": "ce7cc5a79d7f972580665fe5e0cedb99bde85cf3",
+    "commit": "38bd38312987a22a478b48bf8ffdfa07f9bbcb33",
     "dirty": true,
     "files": [
       {
@@ -59,22 +59,22 @@
   "top_dirs": [
     {
       "path": "controllers/httpapi",
-      "files": 194,
-      "kb": 2163
+      "files": 195,
+      "kb": 2172
     },
     {
       "path": "repository",
-      "files": 153,
-      "kb": 2315
+      "files": 165,
+      "kb": 2473
     },
     {
       "path": "controllers/message",
-      "files": 80,
-      "kb": 1011
+      "files": 85,
+      "kb": 1094
     },
     {
       "path": "model",
-      "files": 71,
+      "files": 72,
       "kb": 413
     },
     {
@@ -94,8 +94,8 @@
     },
     {
       "path": "internal/capacity",
-      "files": 42,
-      "kb": 910
+      "files": 44,
+      "kb": 912
     },
     {
       "path": "docs/bootstrap/manifests/integrations",
@@ -108,14 +108,14 @@
       "kb": 193
     },
     {
+      "path": "internal/capacitynativeqemu",
+      "files": 23,
+      "kb": 180
+    },
+    {
       "path": "docs/bootstrap/seeds/integrations",
       "files": 20,
       "kb": 87
-    },
-    {
-      "path": "internal/externalidentity",
-      "files": 15,
-      "kb": 61
     }
   ],
   "top_files_by_size": [
