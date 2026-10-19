@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-19T04:26:05-03:00",
+  "generated_at": "2026-10-19T04:51:12-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 953,
@@ -11,7 +11,7 @@
     ".yml": 25
   },
   "provenance": {
-    "commit": "19fa0a95b2dc66e84ef13b15d23b0b3012891475",
+    "commit": "f60c753f03603b10b58e8049ed62bc25e0696251",
     "dirty": true,
     "files": [
       {
@@ -65,7 +65,7 @@
     {
       "path": "repository",
       "files": 167,
-      "kb": 2506
+      "kb": 2512
     },
     {
       "path": "controllers/message",
@@ -105,7 +105,7 @@
     {
       "path": "internal/capacitynativeqemu",
       "files": 26,
-      "kb": 220
+      "kb": 222
     },
     {
       "path": "controllers/oidc",

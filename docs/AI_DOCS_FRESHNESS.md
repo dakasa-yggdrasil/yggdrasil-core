@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 19fa0a95b2dc66e84ef13b15d23b0b3012891475
-verified_diff_sha256: 9e48e8bde239fcf54b8a0cb2c21706009fc7b779d8cff18104623b71c8338d8c
+verified_at_commit: f60c753f03603b10b58e8049ed62bc25e0696251
+verified_diff_sha256: ea995c6193bc3e19572e7e4a9a2671a503c211512638b8c267335d1ee1a87728
 reconciler_schema: 1
 verified_at: 2026-10-19
 by: Codex
@@ -149,9 +149,9 @@ Separate custody ACK 53aeb169-ebed-4107-b047-a33aee9db8a3 completed with origina
 
 ## Current native slot projection producer Source reconciliation
 
-core_original_source_code: 19fa0a95b2dc66e84ef13b15d23b0b3012891475
-core_original_guest_source_code: 9343ff9a66be1c44093bd7642b023f5abad5ee18
-core_original_source_peer_manifest_sha256: 14c7d1f93528122fc107d1c7296a481db56b99683623bfb5280054f2f18903f7
+core_original_source_code: f60c753f03603b10b58e8049ed62bc25e0696251
+core_original_guest_source_code: a1c4fef0eee718743e847daf20c7ac5dfa914bfa
+core_original_source_peer_manifest_sha256: 8b5de1f0855aad25c2a5651a41d64c921fcd01ece5504ad68bf0f271eed763ad
 
 Root accepted this exact whole Source successor for local markers and metadata, with independently reviewed Core producer delta and the coordinated Guest selector. The Core change is restricted to cmd/native-guest-lifecycle-fixture/main.go: its digest input now uses the explicit closed ten-field map that the unchanged slot guard already canonicalizes. The typed DesiredSpec/address, guard, authorization, API and all other producer bytes remain unchanged. Independent narrow peer d88e2a3d accepted the exact postimage49632/29e1c7c1; full CODE census1412 preserves all1411 other Git bodies/modes from actual published89f9. Accepted earlier whole-manifest scopes and all failed predecessor originals remain historical evidence, not current runtime approval. The paired Guest CODE f91cbec6709e35170173ddd7a233b2d0abd02981 is a Source binding in the Root-accepted manifest, not a claim of Guest or Native execution by this metadata step.
 
@@ -161,3 +161,10 @@ The genuine released CLI PLAN addresses actual published89f9-to-CODE93af and ret
 current_recovery_owned_cleanup_source_review: Root accepted exact whole Source manifest 14c7d1f93528122fc107d1c7296a481db56b99683623bfb5280054f2f18903f7 for Core CODE 19fa0a95b2dc66e84ef13b15d23b0b3012891475 and Guest CODE 9343ff9a66be1c44093bd7642b023f5abad5ee18. The private Source cohort preserves the original failed payload and original provisioning tuple while using the genuine current Recover owner, independent fresh signed census and native reads, and separately signed one-use pre-effect permits. The existing stage-file protocol is explicitly extended; no historical lease, grant, failure timestamp or deadline is renewed. Original v1 gates, default production-disabled registry, original cases and budgets remain required. Proposed ADR0056 and the new empty append-only migration remain Source-reviewed proposals, not production admission. Existing PG17 properties retain their per-assertion limits; paid auxiliary inventory, independent lock-order and distinct three-member floor obligations are not granted by this metadata.
 
 Actual released CLI generation below binds this current CODE and exact plan. All inherited notes and old runtime evidence retain their historical Source scopes. No current compilation, formatting, tests, Native, useful warm capacity, provider action, deployment or rollback qualification is granted. Genuine current owning CI remains pending. No local Go, formatter, tests, AST/import, network, push or runtime is executed in this metadata preparation.
+
+
+current_recovery_owned_cleanup_source_review: Root accepted exact whole Source manifest 8b5de1f0855aad25c2a5651a41d64c921fcd01ece5504ad68bf0f271eed763ad for Core CODE f60c753f03603b10b58e8049ed62bc25e0696251 and Guest CODE a1c4fef0eee718743e847daf20c7ac5dfa914bfa. The private Source cohort preserves the original failed payload and original provisioning tuple while using the genuine current Recover owner, independent fresh signed census and native reads, and separately signed one-use pre-effect permits. The existing stage-file protocol is explicitly extended; no historical lease, grant, failure timestamp or deadline is renewed. Original v1 gates, default production-disabled registry, original cases and budgets remain required. Proposed ADR0056 and the new empty append-only migration remain Source-reviewed proposals, not production admission. Existing PG17 properties retain their per-assertion limits; paid auxiliary inventory, independent lock-order and distinct three-member floor obligations are not granted by this metadata.
+
+Actual released CLI generation below binds this current CODE and exact plan. All inherited notes and old runtime evidence retain their historical Source scopes. No current compilation, formatting, tests, Native, useful warm capacity, provider action, deployment or rollback qualification is granted. Genuine current owning CI remains pending. No local Go, formatter, tests, AST/import, network, push or runtime is executed in this metadata preparation.
+
+formatted_current_public_integration_review: The exact whole manifest above also includes fifteen authentic remote Core formatter postimages and one authentic Guest Go formatter postimage from Source121 originals. All121 original operations returned zero on the earlier19fa/9343 Source; the original overall formatting HOLD remains preserved and is not relabeled as a new formatted-source test PASS. Independent formatting DATA review and the layered current-public Guest integration preserve its two published diagnostic Go files. Guest run/exporter are the exact reviewed recovery successor bodies; the one workflow Core literal binds this actual Core CODE. New current functional CI is pending.
