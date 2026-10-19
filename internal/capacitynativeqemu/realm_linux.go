@@ -374,6 +374,12 @@ func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, poli
 	// Losing the first reply never grants a second send, even to its exact
 	// winning attempt. The original repository callback must return read_only.
 	replayRequest := model.CapacityMutationRedeemRequest{GrantID: grant.GrantID, AttemptID: attempt, SettlementTokenSHA256: capacity.BusinessCreationSHA256([]byte(nonce)), Capability: grant.Capability, IntegrationInstanceID: grant.IntegrationInstanceID, ScopeChecksum: grant.ScopeChecksum, ProfileName: grant.ProfileName, Slot: slot, RequestSHA256: grant.RequestSHA256}
+	var replayBefore originalReplaySQLSnapshot
+	if r.Request.NativeCase == "positive_original_lifecycle" && slot == 2 {
+		var snapshotErr error
+		replayBefore, snapshotErr = readOriginalReplaySQLSnapshot(ctx, store, policy, grant, attempt, nonce)
+		if snapshotErr != nil { return proof, snapshotErr }
+	}
 	var replay model.CapacityMutationRedeemResponse
 	var replayErr error
 	if r.Request.NativeCase == "positive_original_lifecycle" && slot == 2 {
@@ -384,6 +390,10 @@ func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, poli
 	}
 	if replayErr != nil || replay.Mode != "read_only" || replay.GrantID != grant.GrantID || replay.AttemptID != attempt || replay.RequestSHA256 != grant.RequestSHA256 {
 		return proof, ErrOriginalUnknown
+	}
+	if r.Request.NativeCase == "positive_original_lifecycle" && slot == 2 {
+		replayAfter, snapshotErr := readOriginalReplaySQLSnapshot(ctx, store, policy, grant, attempt, nonce)
+		if snapshotErr != nil || !originalReplaySQLUnchanged(replayBefore, replayAfter) { return proof, ErrOriginalUnknown }
 	}
 	contract := struct {
 		Schema     string         `json:"schema"`

@@ -51,55 +51,7 @@ func (f *fixture) originalPublic(ctx context.Context, method, path string, input
 		record.DriverReturnedAt = time.Now().UTC()
 		record.OriginalContextFailed = ctx.Err() != nil
 		if run, ok := out.(*model.WorkflowRunRecord); ok && returnedErr == nil {
-			switch run.Status {
-			case "pending", "running", "succeeded", "failed":
-				record.WorkflowStatus = run.Status
-			}
-			// Async dispatch can fail before any step result exists. Retain only
-			// closed class, byte count and hash of that actual top-level error.
-			if run.Error != "" {
-				record.WorkflowErrorBytes = len(run.Error)
-				record.WorkflowErrorSHA256 = capacity.BusinessCreationSHA256([]byte(run.Error))
-				record.WorkflowErrorClass = "other"
-				switch run.Error {
-				case "sql: no rows in result set":
-					record.WorkflowErrorClass = "sql_no_rows"
-				case "capacity execution is disabled":
-					record.WorkflowErrorClass = "capacity_disabled"
-				case "capacity intent conflict":
-					record.WorkflowErrorClass = "capacity_conflict"
-				case "capacity mutation authorization denied":
-					record.WorkflowErrorClass = "authorization"
-				}
-			}
-			if run.Result != nil {
-				for _, step := range run.Result.Steps {
-					if step.Status != "failed" || !regexp.MustCompile(`^[a-z0-9_]{1,96}$`).MatchString(step.ID) {
-						continue
-					}
-					record.WorkflowFailedStep = step.ID
-					if predicate, ok := step.Metadata["original_guest_refusal_predicate"].(string); ok && regexp.MustCompile(`^original-guest-step-[0-9]{2}$`).MatchString(predicate) {
-						record.WorkflowPredicate = predicate
-					}
-					if step.Error == "" {
-						break
-					}
-					record.WorkflowErrorBytes = len(step.Error)
-					record.WorkflowErrorSHA256 = capacity.BusinessCreationSHA256([]byte(step.Error))
-					record.WorkflowErrorClass = "other"
-					switch {
-					case strings.Contains(step.Error, "protected original Guest source step unavailable"):
-						record.WorkflowErrorClass = "original_guest_source_hold"
-					case strings.Contains(step.Error, "capacity intent conflict"):
-						record.WorkflowErrorClass = "capacity_conflict"
-					case strings.Contains(strings.ToLower(step.Error), "condition"):
-						record.WorkflowErrorClass = "condition"
-					case strings.Contains(strings.ToLower(step.Error), "authorization") || strings.Contains(strings.ToLower(step.Error), "forbidden"):
-						record.WorkflowErrorClass = "authorization"
-					}
-					break
-				}
-			}
+			record.projectOriginalWorkflowReturn(*run)
 		}
 		f.publicReturns = append(f.publicReturns, record)
 	}()
@@ -306,4 +258,58 @@ func (f *fixture) actualLastUsefulProbeTime(ctx context.Context, slot int) (time
 		return at, q.ErrOriginalUnknown
 	}
 	return probe.OriginalNativeAfterReturnedAt, nil
+}
+
+// projectOriginalWorkflowReturn retains only the existing closed diagnostic fields.
+// One exact Source-owned hyphenated ID is accepted; arbitrary hyphenated IDs remain refused.
+func (record *originalPublicReturn) projectOriginalWorkflowReturn(run model.WorkflowRunRecord) {
+	switch run.Status {
+	case "pending", "running", "succeeded", "failed":
+		record.WorkflowStatus = run.Status
+	}
+	// Async dispatch can fail before any step result exists. Retain only
+	// closed class, byte count and hash of that actual top-level error.
+	if run.Error != "" {
+		record.WorkflowErrorBytes = len(run.Error)
+		record.WorkflowErrorSHA256 = capacity.BusinessCreationSHA256([]byte(run.Error))
+		record.WorkflowErrorClass = "other"
+		switch run.Error {
+		case "sql: no rows in result set":
+			record.WorkflowErrorClass = "sql_no_rows"
+		case "capacity execution is disabled":
+			record.WorkflowErrorClass = "capacity_disabled"
+		case "capacity intent conflict":
+			record.WorkflowErrorClass = "capacity_conflict"
+		case "capacity mutation authorization denied":
+			record.WorkflowErrorClass = "authorization"
+		}
+	}
+	if run.Result != nil {
+		for _, step := range run.Result.Steps {
+			if step.Status != "failed" || (step.ID != "original-native-qemu-create" && !regexp.MustCompile(`^[a-z0-9_]{1,96}$`).MatchString(step.ID)) {
+				continue
+			}
+			record.WorkflowFailedStep = step.ID
+			if predicate, ok := step.Metadata["original_guest_refusal_predicate"].(string); ok && regexp.MustCompile(`^original-guest-step-[0-9]{2}$`).MatchString(predicate) {
+				record.WorkflowPredicate = predicate
+			}
+			if step.Error == "" {
+				break
+			}
+			record.WorkflowErrorBytes = len(step.Error)
+			record.WorkflowErrorSHA256 = capacity.BusinessCreationSHA256([]byte(step.Error))
+			record.WorkflowErrorClass = "other"
+			switch {
+			case strings.Contains(step.Error, "protected original Guest source step unavailable"):
+				record.WorkflowErrorClass = "original_guest_source_hold"
+			case strings.Contains(step.Error, "capacity intent conflict"):
+				record.WorkflowErrorClass = "capacity_conflict"
+			case strings.Contains(strings.ToLower(step.Error), "condition"):
+				record.WorkflowErrorClass = "condition"
+			case strings.Contains(strings.ToLower(step.Error), "authorization") || strings.Contains(strings.ToLower(step.Error), "forbidden"):
+				record.WorkflowErrorClass = "authorization"
+			}
+			break
+		}
+	}
 }
