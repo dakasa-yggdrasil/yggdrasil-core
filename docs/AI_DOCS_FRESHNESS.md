@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: bbfafb59fd370f8ceaa2988431ebc9c0bd2e5f77
-verified_diff_sha256: 493faf4a2201e84a5a080b228ae21395f6ed79f872fe2ed6756541f7bb522a8a
+verified_at_commit: ff4443e487ecbc98f25a499e88f57135aa0bfdcb
+verified_diff_sha256: 2dcbec937d12b95205d66ffad75f2698b2e77a9d42806a8225bcf009ced9fe70
 reconciler_schema: 1
 verified_at: 2026-10-19
 by: Codex
@@ -149,9 +149,9 @@ Separate custody ACK 53aeb169-ebed-4107-b047-a33aee9db8a3 completed with origina
 
 ## Current native slot projection producer Source reconciliation
 
-core_original_source_code: bbfafb59fd370f8ceaa2988431ebc9c0bd2e5f77
-core_original_guest_source_code: e21984c7ef9acf067b024e9798cedb235b212dd6
-core_original_source_peer_manifest_sha256: 6bf6a1209e164505389b5b2edfaae0b8ed50f8765bb02b5bf0a1545155cdb218
+core_original_source_code: ff4443e487ecbc98f25a499e88f57135aa0bfdcb
+core_original_guest_source_code: b00e4d135dc7d8b99748e94e23a23a8d2162dfc2
+core_original_source_peer_manifest_sha256: 8c40f851d4655cafe99fe925a38c5c6b04da974c25babd70fd79d42bb96af195
 
 Root accepted this exact whole Source successor for local markers and metadata, with independently reviewed Core producer delta and the coordinated Guest selector. The Core change is restricted to cmd/native-guest-lifecycle-fixture/main.go: its digest input now uses the explicit closed ten-field map that the unchanged slot guard already canonicalizes. The typed DesiredSpec/address, guard, authorization, API and all other producer bytes remain unchanged. Independent narrow peer d88e2a3d accepted the exact postimage49632/29e1c7c1; full CODE census1412 preserves all1411 other Git bodies/modes from actual published89f9. Accepted earlier whole-manifest scopes and all failed predecessor originals remain historical evidence, not current runtime approval. The paired Guest CODE f91cbec6709e35170173ddd7a233b2d0abd02981 is a Source binding in the Root-accepted manifest, not a claim of Guest or Native execution by this metadata step.
 
@@ -180,3 +180,12 @@ The released d8ed CLI generated actual current context/summary and reconciliatio
 Root accepted exact whole Source manifest 6bf6a1209e164505389b5b2edfaae0b8ed50f8765bb02b5bf0a1545155cdb218 for Core CODE bbfafb59fd370f8ceaa2988431ebc9c0bd2e5f77 and Guest CODE e21984c7ef9acf067b024e9798cedb235b212dd6. Independent current Source delta peer d8990aa52263196fd831c5e2d49f925363fbdd7c350f8339d27a5eae44ae5cd6 covers the exact pair. This Core successor changes four paths from published b77: the called stored-unsent assertion now requires the canonical rejected state for rejected_before_send, while preserving the policy, workflow, settlement, empty-resource and hash joins; the existing public caller retains only fourteen additional closed Source-owned refusal names. Two focused test roots exercise the actual pure stored-record predicate and actual public projection. No production callback, authority, native action, clock, deadline, budget or remaining assertion is relaxed. The public predecessor failure projection hid the named predicate, so the deterministic assertion incompatibility is corrected without claiming it was the first or exclusive runtime cause.
 
 The released d8ed CLI PLAN uses the actual published b77 base and this CODE; genuine AI generation and content-addressed metadata verification occur at CODE before META. The actual missing-service-contract warning and mandatory go-test, repo-reconcile-verify and svc-doctor requirements remain. Earlier Source and LAB results retain their original Source identities and scope; no current LAB outcome, new test PASS, formatting PASS, full PostgreSQL or Guest qualification, Native, production, migration or rollback approval is inferred here. This local metadata step performs no Go, formatter, tests, runtime, network, publication or hook/signing bypass.
+
+
+## Current original pre-create barrier ordering
+
+Root accepted exact whole Source manifest 8c40f851d4655cafe99fe925a38c5c6b04da974c25babd70fd79d42bb96af195 for Core CODE ff4443e487ecbc98f25a499e88f57135aa0bfdcb and unchanged functional Guest Source epoch b00e4d135dc7d8b99748e94e23a23a8d2162dfc2. The two-path Core successor moves the identical verifySourceUnits validation after the identical Await(pre-create-request) using the same context. Guest publishes that final receipt only after writing its approved source bundle, ISO, user-data and disk. All validation predicates, identity, hashes, authenticity, original deadlines and failure handling remain intact. The deterministic regression observes the actual Await missing-file wait before publishing its fixture; separate unit, ISO, prehash and expired-context negatives continue refusing. Independent Source and formatting reviews preserve every other Source path.
+
+Original hosted positive run39309524112/job118258399591 remains failed at original-guest-step-19 (Prepare), before PG17 assertions. The precise inner failed Prepare check was not retained; the proven Source ordering defect is not declared its exclusive observed cause. The original rejected-before-send PG17 correction therefore remains unobserved by this new hosted positive. On the existing LAB, exact predecessor CODE0a9c136cdcfe7e3a7903acdf7c199aaea57752ea passed two focused roots plus four negative subtests with race, zero FAIL/SKIP, full Wait/EOF/retirement and unchanged1436 Source bodies. The final CODE differs only by the genuine LAB formatter postimage for the new test, with exact inverse and non-whitespace preservation. Original custody ACK is complete for that focused scope only; Native, live PG17, whole Guest CI, recovery, elasticity, production and deployment qualification remain pending. No previous green was rerun or relabeled.
+
+The released d8ed CLI generated current context and summary at this actual CODE, with its authentic provenance, plan and streams. Metadata verification at CODE before META checks six reconciliation predicates only; it does not execute mandatory go-test or svc-doctor. The actual missing-service-contract warning remains unresolved. New public writes and any cancellation of the current hosted run require their own explicit authorization; none occurred in this local metadata preparation. All earlier notes and failed originals remain historical and unchanged.
