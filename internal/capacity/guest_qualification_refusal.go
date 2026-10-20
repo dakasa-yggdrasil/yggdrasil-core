@@ -87,8 +87,62 @@ func GuestQualificationPredicate(err error) string {
 		return "original-guest-step-87"
 	case "finish_probe":
 		return "original-guest-step-88"
+	case "probe_http_preflight":
+		return "original-guest-step-90"
+	case "probe_http_context":
+		return "original-guest-step-91"
+	case "probe_http_transport":
+		return "original-guest-step-92"
+	case "probe_http_read":
+		return "original-guest-step-93"
+	case "probe_http_close":
+		return "original-guest-step-94"
+	case "probe_http_auth_status":
+		return "original-guest-step-95"
+	case "probe_http_not_found":
+		return "original-guest-step-96"
+	case "probe_http_client_status":
+		return "original-guest-step-97"
+	case "probe_http_server_status":
+		return "original-guest-step-98"
+	case "probe_http_other_status":
+		return "original-guest-step-99"
 	case "publish_probe":
 		return "original-guest-step-89"
 	}
 	return "original-guest-step-17"
+}
+
+// GuestQualificationHTTPRefusal classifies only a failed original call. Context
+// takes precedence over I/O symptoms; remaining precedence follows the original
+// client guards. Categories do not assert a unique cause when facts overlap.
+// No body, header, URL, error text, or hash is retained by this projection.
+func GuestQualificationHTTPRefusal(r GuestOriginalHTTPReturn, cause error) error {
+	if cause == nil {
+		return nil
+	}
+	stage := "probe_http"
+	switch {
+	case r.OriginalContextFailed:
+		stage = "probe_http_context"
+	case r.PreflightFailed:
+		stage = "probe_http_preflight"
+	case r.DoFailed:
+		stage = "probe_http_transport"
+	case r.ReadFailed:
+		stage = "probe_http_read"
+	case r.CloseFailed:
+		stage = "probe_http_close"
+	case r.Status == 401 || r.Status == 403:
+		stage = "probe_http_auth_status"
+	case r.Status == 404:
+		stage = "probe_http_not_found"
+	case r.Status >= 400 && r.Status <= 499:
+		stage = "probe_http_client_status"
+	case r.Status >= 500 && r.Status <= 599:
+		stage = "probe_http_server_status"
+	case r.Status != 200:
+		stage = "probe_http_other_status"
+	}
+	return GuestQualificationRefusal(stage, cause)
 }

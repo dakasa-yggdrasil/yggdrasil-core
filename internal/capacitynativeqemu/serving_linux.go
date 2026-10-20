@@ -81,7 +81,7 @@ func (r *Realm) probe(ctx context.Context, store repository.CapacityStore, polic
 	}
 	returned, err := client.Original(original, http.MethodGet, "/v1/qualification-serving-probe", requestWire)
 	if err != nil {
-		return result, capacity.GuestQualificationRefusal("probe_http", ErrOriginalUnknown)
+		return result, capacity.GuestQualificationHTTPRefusal(returned, ErrOriginalUnknown)
 	}
 	if capacity.GuestOriginalHTTPDecode(returned, &result) != nil {
 		return result, capacity.GuestQualificationRefusal("probe_decode", ErrOriginalUnknown)
