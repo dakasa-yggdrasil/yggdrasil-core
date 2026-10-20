@@ -14,6 +14,8 @@ import (
 func TestGuestQualificationRefusalClosedProjection(t *testing.T) {
 	cause := errors.New("SECRET SQL HTTP credential body")
 	cases := []struct{ stage, predicate string }{
+		{"probe_http_config_held", "original-guest-step-50"},
+		{"probe_http_enrollment_held", "original-guest-step-51"},
 		{"observe", "original-guest-step-60"},
 		{"lease_missing", "original-guest-step-61"},
 		{"generation", "original-guest-step-62"},
@@ -169,6 +171,72 @@ func TestGuestQualificationHTTPOriginalFailureFacts(t *testing.T) {
 		want := map[string]string{"transport": "92", "read": "93", "close": "94", "status": "97", "context": "91"}[mode]
 		if err == nil || calls != 1 || GuestQualificationPredicate(GuestQualificationHTTPRefusal(returned, err)) != "original-guest-step-"+want {
 			t.Fatalf("original %s return lost or retried", mode)
+		}
+	}
+}
+
+func TestGuestQualificationFixedServerProblems(t *testing.T) {
+	for _, code := range []string{"config_held", "enrollment_held"} {
+		body := []byte("{\"code\":\"guest_retirement." + code + "\",\"status\":503,\"title\":\"Guest retirement held\",\"detail\":\"The original Guest retirement requires its enrolled authority and complete original results.\"}\n")
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		calls := 0
+		client := &GuestOriginalHTTPClient{origin: "https://example.invalid", client: &http.Client{Transport: qualificationHTTPRoundTrip(func(r *http.Request) (*http.Response, error) {
+			calls++
+			return &http.Response{StatusCode: 503, Body: io.NopCloser(strings.NewReader(string(body))), Header: make(http.Header)}, nil
+		})}}
+		returned, err := client.Original(ctx, http.MethodGet, "/v1/runtime-snapshot", []byte("{}"))
+		cancel()
+		want := "original-guest-step-50"
+		if code == "enrollment_held" {
+			want = "original-guest-step-51"
+		}
+		if err == nil || calls != 1 || GuestQualificationPredicate(GuestQualificationHTTPRefusal(returned, err)) != want {
+			t.Fatal("exact fixed native problem not classified")
+		}
+		mutations := []func(*GuestOriginalHTTPReturn){
+			func(r *GuestOriginalHTTPReturn) { r.Status = 500 },
+			func(r *GuestOriginalHTTPReturn) { r.Body = append([]byte("SECRET"), r.Body...) },
+			func(r *GuestOriginalHTTPReturn) { r.ResponseBodyScope = GuestOriginalBodyIncompleteRead },
+			func(r *GuestOriginalHTTPReturn) { r.RetainedPrefixSHA256 = strings.Repeat("0", 64) },
+		}
+		for _, mutate := range mutations {
+			changed := returned
+			mutate(&changed)
+			if GuestQualificationPredicate(GuestQualificationHTTPRefusal(changed, err)) != "original-guest-step-98" {
+				t.Fatal("nonexact or incomplete problem acquired a specific code")
+			}
+		}
+		returned.OriginalContextFailed = true
+		if GuestQualificationPredicate(GuestQualificationHTTPRefusal(returned, err)) != "original-guest-step-91" {
+			t.Fatal("body classification overrode original context failure")
+		}
+	}
+}
+
+func TestGuestQualificationUnrecognizedServerProblem(t *testing.T) {
+	valid := "{\"code\":\"guest_retirement.enrollment_held\",\"status\":503,\"title\":\"Guest retirement held\",\"detail\":\"The original Guest retirement requires its enrolled authority and complete original results.\"}\n"
+	bodies := []string{
+		strings.Replace(valid, "enrollment_held", "unknown_held", 1),
+		strings.Replace(valid, "Guest retirement held", "SECRET", 1),
+		strings.Replace(valid, "503", "500", 1),
+		strings.TrimSuffix(valid, "\n"),
+		" " + valid,
+		valid + valid,
+		strings.Replace(valid, "{", "{\"secret\":\"SECRET\",", 1),
+		strings.Replace(valid, "{", "{\"code\":\"guest_retirement.config_held\",", 1),
+	}
+	for _, body := range bodies {
+		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+		calls := 0
+		client := &GuestOriginalHTTPClient{origin: "https://example.invalid", client: &http.Client{Transport: qualificationHTTPRoundTrip(func(r *http.Request) (*http.Response, error) {
+			calls++
+			return &http.Response{StatusCode: 503, Body: io.NopCloser(strings.NewReader(body)), Header: make(http.Header)}, nil
+		})}}
+		returned, err := client.Original(ctx, http.MethodGet, "/v1/runtime-snapshot", []byte("{}"))
+		cancel()
+		projected := GuestQualificationHTTPRefusal(returned, err)
+		if err == nil || calls != 1 || GuestQualificationPredicate(projected) != "original-guest-step-98" || strings.Contains(projected.Error(), "SECRET") {
+			t.Fatal("unrecognized complete server problem was disclosed or promoted")
 		}
 	}
 }

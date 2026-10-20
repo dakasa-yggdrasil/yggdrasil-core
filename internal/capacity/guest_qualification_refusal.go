@@ -1,6 +1,9 @@
 package capacity
 
-import "errors"
+import (
+	"bytes"
+	"errors"
+)
 
 // A closed source-stage diagnostic. It carries no permission and never exposes
 // the underlying error text, request, response, credential, or SQL value.
@@ -29,6 +32,10 @@ func GuestQualificationPredicate(err error) string {
 		return "original-guest-step-17"
 	}
 	switch refusal.stage {
+	case "probe_http_config_held":
+		return "original-guest-step-50"
+	case "probe_http_enrollment_held":
+		return "original-guest-step-51"
 	case "observe":
 		return "original-guest-step-60"
 	case "lease_missing":
@@ -140,9 +147,25 @@ func GuestQualificationHTTPRefusal(r GuestOriginalHTTPReturn, cause error) error
 	case r.Status >= 400 && r.Status <= 499:
 		stage = "probe_http_client_status"
 	case r.Status >= 500 && r.Status <= 599:
-		stage = "probe_http_server_status"
+		stage = guestQualificationServerStage(r)
 	case r.Status != 200:
 		stage = "probe_http_other_status"
 	}
 	return GuestQualificationRefusal(stage, cause)
+}
+
+// Only the two exact fixed native-handler problems are distinguished. Unknown,
+// altered or incomplete bodies retain the server-status class. No response data
+// enters the public predicate, and this classification never grants permission.
+func guestQualificationServerStage(r GuestOriginalHTTPReturn) string {
+	if r.Status != 503 || r.ResponseBodyScope != GuestOriginalBodyCompleteRead || !GuestOriginalHTTPBodyFactsValid(r.ResponseBodyScope, r.ReadReturnedAt, r.ReceivedBodyBytes, r.ResponseSHA256, r.RetainedPrefixBytes, r.RetainedPrefixSHA256, r.ReadFailed) || r.RetainedPrefixBytes != len(r.Body) || r.RetainedPrefixSHA256 != BusinessCreationSHA256(r.Body) {
+		return "probe_http_server_status"
+	}
+	for _, code := range []string{"config_held", "enrollment_held"} {
+		body := "{\"code\":\"guest_retirement." + code + "\",\"status\":503,\"title\":\"Guest retirement held\",\"detail\":\"The original Guest retirement requires its enrolled authority and complete original results.\"}\n"
+		if bytes.Equal(r.Body, []byte(body)) {
+			return "probe_http_" + code
+		}
+	}
+	return "probe_http_server_status"
 }
