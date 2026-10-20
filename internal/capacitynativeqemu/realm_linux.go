@@ -529,18 +529,9 @@ func (r *Realm) verifyFixedCommand(ctx context.Context, slot int, native Indepen
 		return err
 	}
 	dir := SlotDirectory(r.PrivateDirectory, slot)
-	arguments := bytes.Split(bytes.TrimSuffix(raw, []byte{0}), []byte{0})
-	if len(arguments) < 2 {
+	expected := []string{"-machine", "accel=kvm", "-cpu", "max", "-m", "1536", "-smp", "2", "-display", "none", "-no-reboot", "-uuid", r.Request.Slots[slot-1].ResourceID, "-qmp", "unix:" + filepath.Join(dir, "original-qmp.sock") + ",server=on,wait=off", "-serial", "file:" + r.publicSerial(slot), "-drive", "file=" + filepath.Join(dir, "original.qcow2") + ",format=qcow2,if=virtio", "-drive", "file=" + filepath.Join(dir, "seed.img") + ",format=raw,media=cdrom,readonly=on", "-drive", "file=" + filepath.Join(dir, "source.iso") + ",format=raw,media=cdrom,readonly=on", "-netdev", "user,id=net0,hostfwd=tcp:127.0.0.1:" + actorPort(slot) + "-:9447", "-device", "virtio-net-pci,netdev=net0"}
+	if !exactOriginalCommand(raw, expected, native.CommandLineSHA256) {
 		return ErrOriginalUnknown
-	}
-	expected := []string{"-machine", "accel=kvm", "-cpu", "max", "-m", "1536", "-smp", "2", "-display", "none", "-no-reboot", "-uuid", r.Request.Slots[slot-1].ResourceID, "-qmp", "unix:" + filepath.Join(dir, "original-qmp.sock") + ",server=on,wait=off", "-serial", "file:" + r.publicSerial(slot), "-drive", "file=" + filepath.Join(dir, "original.qcow2") + ",format=qcow2", "-drive", "file=" + filepath.Join(dir, "seed.img") + ",format=raw,media=cdrom,readonly=on", "-drive", "file=" + filepath.Join(dir, "source.iso") + ",format=raw,media=cdrom,readonly=on", "-netdev", "user,id=net0,hostfwd=tcp:127.0.0.1:" + actorPort(slot) + "-:9447", "-device", "virtio-net-pci,netdev=net0"}
-	if len(arguments) != len(expected)+1 || digest(raw) != native.CommandLineSHA256 {
-		return ErrOriginalUnknown
-	}
-	for n, value := range expected {
-		if string(arguments[n+1]) != value {
-			return ErrOriginalUnknown
-		}
 	}
 	return nil
 }
