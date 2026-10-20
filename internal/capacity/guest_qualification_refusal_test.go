@@ -16,6 +16,10 @@ func TestGuestQualificationRefusalClosedProjection(t *testing.T) {
 	cases := []struct{ stage, predicate string }{
 		{"probe_http_config_held", "original-guest-step-50"},
 		{"probe_http_enrollment_held", "original-guest-step-51"},
+		{"probe_http_enrollment_read_held", "original-guest-step-52"},
+		{"probe_http_enrollment_decode_held", "original-guest-step-53"},
+		{"probe_http_enrollment_validate_held", "original-guest-step-54"},
+		{"probe_http_enrollment_command_held", "original-guest-step-55"},
 		{"observe", "original-guest-step-60"},
 		{"lease_missing", "original-guest-step-61"},
 		{"generation", "original-guest-step-62"},
@@ -176,7 +180,7 @@ func TestGuestQualificationHTTPOriginalFailureFacts(t *testing.T) {
 }
 
 func TestGuestQualificationFixedServerProblems(t *testing.T) {
-	for _, code := range []string{"config_held", "enrollment_held"} {
+	for _, code := range []string{"config_held", "enrollment_held", "enrollment_read_held", "enrollment_decode_held", "enrollment_validate_held", "enrollment_command_held"} {
 		body := []byte("{\"code\":\"guest_retirement." + code + "\",\"status\":503,\"title\":\"Guest retirement held\",\"detail\":\"The original Guest retirement requires its enrolled authority and complete original results.\"}\n")
 		ctx, cancel := context.WithTimeout(context.Background(), time.Second)
 		calls := 0
@@ -186,10 +190,7 @@ func TestGuestQualificationFixedServerProblems(t *testing.T) {
 		})}}
 		returned, err := client.Original(ctx, http.MethodGet, "/v1/runtime-snapshot", []byte("{}"))
 		cancel()
-		want := "original-guest-step-50"
-		if code == "enrollment_held" {
-			want = "original-guest-step-51"
-		}
+		want := map[string]string{"config_held": "original-guest-step-50", "enrollment_held": "original-guest-step-51", "enrollment_read_held": "original-guest-step-52", "enrollment_decode_held": "original-guest-step-53", "enrollment_validate_held": "original-guest-step-54", "enrollment_command_held": "original-guest-step-55"}[code]
 		if err == nil || calls != 1 || GuestQualificationPredicate(GuestQualificationHTTPRefusal(returned, err)) != want {
 			t.Fatal("exact fixed native problem not classified")
 		}
