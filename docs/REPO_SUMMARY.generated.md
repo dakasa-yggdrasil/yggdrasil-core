@@ -1,6 +1,6 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-19T23:37:13-03:00_
+_Generated from HEAD at: 2026-10-20T00:04:38-03:00_
 
 ## Languages
 
@@ -30,7 +30,7 @@ _Generated from HEAD at: 2026-10-19T23:37:13-03:00_
 - model: 73 files (416.7 KB)
 - db/migrations: 67 files (176.1 KB)
 - manifest: 64 files (392.2 KB)
-- internal/capacity: 46 files (917.3 KB)
+- internal/capacity: 46 files (923.1 KB)
 - addons: 45 files (263.1 KB)
 - internal/capacitynativeqemu: 32 files (259.0 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
