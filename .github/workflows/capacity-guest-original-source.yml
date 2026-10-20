@@ -24,6 +24,8 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Closed original enrollment refusal diagnostics
+        run: go test -count=1 -timeout=60s ./internal/capacity -run '^TestGuestQualification'
       - name: Exact original QEMU command bytes and virtio-only root
         run: go test -count=1 -v internal/capacitynativeqemu/original_command.go internal/capacitynativeqemu/original_command_test.go
       - name: Literal transferred deadlines and first retirement thirty-second bound
