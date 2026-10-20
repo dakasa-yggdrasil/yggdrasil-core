@@ -72,22 +72,34 @@ func sourceGuestQualificationStep(ctx context.Context, store repository.Capacity
 		return sourceGuestRecoveryCleanupStep(ctx, store, policy, p, input, operation)
 	}
 	if originalGuestNativeRealm == nil || p.GuestRetirementBinding == nil || !capacity.GuestOriginalProfileEnabled(p, *p.GuestRetirementBinding, "native-qemu") {
-		return nil, errOriginalGuestStep
+		return nil, capacity.GuestQualificationRefusal("realm_profile", errOriginalGuestStep)
 	}
 	if operation == "capacity.finish_original_guest_retirement" {
 		return sourceGuestNativeRetirementFinished(ctx, store, policy, p, input, key)
 	}
 	current, err := store.Observe(ctx, policy)
-	if err != nil || current.LeaseExpiresAt == nil || current.Generation != input.Generation || current.FencingToken != input.FencingToken || current.Phase != "preparing" {
-		return nil, errOriginalGuestStep
+	if err != nil {
+		return nil, capacity.GuestQualificationRefusal("observe", errOriginalGuestStep)
+	}
+	if current.LeaseExpiresAt == nil {
+		return nil, capacity.GuestQualificationRefusal("lease_missing", errOriginalGuestStep)
+	}
+	if current.Generation != input.Generation {
+		return nil, capacity.GuestQualificationRefusal("generation", errOriginalGuestStep)
+	}
+	if current.FencingToken != input.FencingToken {
+		return nil, capacity.GuestQualificationRefusal("fence", errOriginalGuestStep)
+	}
+	if current.Phase != "preparing" {
+		return nil, capacity.GuestQualificationRefusal("phase", errOriginalGuestStep)
 	}
 	b, err := capacity.VMObservationBinding(p, input.BindingName)
 	if err != nil {
-		return nil, errOriginalGuestStep
+		return nil, capacity.GuestQualificationRefusal("binding", errOriginalGuestStep)
 	}
 	slots := originalGuestNativeRealm.OwnedSlots()
 	if len(slots) != current.Decision.Units {
-		return nil, errOriginalGuestStep
+		return nil, capacity.GuestQualificationRefusal("owned_slots", errOriginalGuestStep)
 	}
 	var probes []capacitynativeqemu.QualificationProbeReceipt
 	for _, slot := range slots {
@@ -98,11 +110,11 @@ func sourceGuestQualificationStep(ctx context.Context, store repository.Capacity
 			}
 		}
 		if member.Name == "" {
-			return nil, errOriginalGuestStep
+			return nil, capacity.GuestQualificationRefusal("member", errOriginalGuestStep)
 		}
 		client, err := sourceGuestClient(ctx, store.DB, member)
 		if err != nil {
-			return nil, err
+			return nil, capacity.GuestQualificationRefusal("client", err)
 		}
 		probe, err := originalGuestNativeRealm.Probe(ctx, store, policy, input.Generation, input.FencingToken, input.LeaseOwner, slot, key, client, *current.LeaseExpiresAt)
 		client.Close()
@@ -112,7 +124,7 @@ func sourceGuestQualificationStep(ctx context.Context, store repository.Capacity
 		probes = append(probes, probe)
 		physical, err := originalGuestNativeRealm.FreshNativeMember(ctx, slot, b)
 		if err != nil {
-			return nil, err
+			return nil, capacity.GuestQualificationRefusal("fresh_native", err)
 		}
 		var projection *model.CapacityMutationSpecV1
 		for _, approved := range b.Slots {
@@ -121,14 +133,14 @@ func sourceGuestQualificationStep(ctx context.Context, store repository.Capacity
 			}
 		}
 		if projection == nil {
-			return nil, errOriginalGuestStep
+			return nil, capacity.GuestQualificationRefusal("projection", errOriginalGuestStep)
 		}
 		wire, err := json.Marshal(projection)
 		if err != nil {
-			return nil, err
+			return nil, capacity.GuestQualificationRefusal("projection_encode", err)
 		}
 		if err = store.RecordMutationSlot(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: wire}, physical); err != nil {
-			return nil, err
+			return nil, capacity.GuestQualificationRefusal("record_slot", err)
 		}
 	}
 	// Healthy is restricted to the ACTUAL admitted source echo profile. Each
@@ -140,7 +152,7 @@ func sourceGuestQualificationStep(ctx context.Context, store repository.Capacity
 	proof := model.CapacityTransitionProof{Assessment: assessment, ObservedAt: at, ReceiptRef: "original-native-useful-echo:" + capacity.GuestRetirementSHA(probes), Healthy: len(probes) == len(slots) && len(probes) > 0, Inflight: &zero}
 	for _, phase := range []string{"prepared", "canary", "promoted"} {
 		if _, err = store.Advance(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, phase, proof); err != nil {
-			return nil, err
+			return nil, capacity.GuestQualificationRefusal("advance_"+phase, err)
 		}
 	}
 	return struct {

@@ -197,7 +197,7 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 	if result.Operation == "capacity.qualify_original_guest_echo" || result.Operation == "capacity.finish_original_guest_retirement" {
 		output, err = sourceGuestQualificationStep(ctx, store, policy, p, parsed, key, result.Operation)
 		if err != nil {
-			return fail("original-guest-step-17")
+			return fail(capacity.GuestQualificationPredicate(err))
 		}
 	} else if result.Operation == capacity.ProvisionOriginalGuestOperation {
 		if parsed.PreregistrationID != "" {

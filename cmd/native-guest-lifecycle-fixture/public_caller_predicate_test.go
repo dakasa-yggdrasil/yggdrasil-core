@@ -3,6 +3,7 @@
 package main
 
 import (
+	"fmt"
 	"testing"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -42,5 +43,16 @@ func TestOriginalPublicClosedRefusalPredicates(t *testing.T) {
 				t.Fatal("unclosed predicate disclosed")
 			}
 		})
+	}
+}
+
+func TestOriginalWorkflowQualificationPredicatesRemainClosed(t *testing.T) {
+	for code := 60; code <= 89; code++ {
+		predicate := fmt.Sprintf("original-guest-step-%02d", code)
+		var got originalPublicReturn
+		got.projectOriginalWorkflowReturn(model.WorkflowRunRecord{Status: "failed", Result: &model.RunWorkflowResponse{Steps: []model.WorkflowRunStepResult{{ID: "original_echo_qualified", Status: "failed", Error: "SECRET", Metadata: map[string]any{"original_guest_refusal_predicate": predicate}}}}})
+		if got.WorkflowPredicate != predicate || got.WorkflowFailedStep != "original_echo_qualified" {
+			t.Fatalf("closed qualification predicate lost: %s", predicate)
+		}
 	}
 }
