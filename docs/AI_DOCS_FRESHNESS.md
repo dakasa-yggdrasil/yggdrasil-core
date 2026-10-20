@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: b0a1e4a1af02367f3ce348afe12b414d9fbdb658
-verified_diff_sha256: e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855
+verified_at_commit: 5f4fd175a7ad36bc3dc4a3f1c56f274dfe3a2080
+verified_diff_sha256: b69cbbf660403550d92b5e2f7a8abefda08382734fe8126005d7c52b235d66b9
 reconciler_schema: 1
 verified_at: 2026-10-19
 by: Codex
@@ -149,9 +149,9 @@ Separate custody ACK 53aeb169-ebed-4107-b047-a33aee9db8a3 completed with origina
 
 ## Current native slot projection producer Source reconciliation
 
-core_original_source_code: ff4443e487ecbc98f25a499e88f57135aa0bfdcb
-core_original_guest_source_code: 00f85a94b5009b64943465b57c20f2bdeff63d27
-core_original_source_peer_manifest_sha256: 8a7d5074779712b06386512c1447267ed708ef8eb93a5c50650e820d5339b7aa
+core_original_source_code: 5f4fd175a7ad36bc3dc4a3f1c56f274dfe3a2080
+core_original_guest_source_code: 920b39ffe45b9a25118621693b78f72999981072
+core_original_source_peer_manifest_sha256: 3dbb30ba503bf21297973422c472eecc2e3df8c244f45ca5dc533463f07717fd
 
 Root accepted this exact whole Source successor for local markers and metadata, with independently reviewed Core producer delta and the coordinated Guest selector. The Core change is restricted to cmd/native-guest-lifecycle-fixture/main.go: its digest input now uses the explicit closed ten-field map that the unchanged slot guard already canonicalizes. The typed DesiredSpec/address, guard, authorization, API and all other producer bytes remain unchanged. Independent narrow peer d88e2a3d accepted the exact postimage49632/29e1c7c1; full CODE census1412 preserves all1411 other Git bodies/modes from actual published89f9. Accepted earlier whole-manifest scopes and all failed predecessor originals remain historical evidence, not current runtime approval. The paired Guest CODE f91cbec6709e35170173ddd7a233b2d0abd02981 is a Source binding in the Root-accepted manifest, not a claim of Guest or Native execution by this metadata step.
 
@@ -195,3 +195,5 @@ current_guest_payload_source_pair_review: This metadata-only successor binds the
 current_payload_failure_diagnostic_review: The exact source pair binds the reviewed Guest diagnostic successor while this repository retains its unchanged functional source. Existing independent protocol qualification failures remain unresolved; this metadata update does not repair fixtures or grant new runtime, native or production qualification. No private source, log or artifact is published here.
 
 current_systemctl_source_digest_review: The exact source pair binds a reviewed Guest source-preparation successor while this repository retains unchanged functional source. Existing independent protocol qualification failures remain unresolved; this metadata update does not repair fixtures or grant runtime, native or production qualification. No private source, log or artifact is published here.
+
+current_enrollment_confirmation_fresh_read_review: The original enrollment wait can outlive the native observation freshness window. The reviewed source now obtains another authentic observation within the same original context and a five-second bound, verifies the same process, executable, command, disk and immutable creation lineage, and retains both proofs. Freshness, grants, leases and original deadlines are unchanged. Focused bounded LAB race tests passed4 roots and50 subcases; default and nativequalification controller variants compiled. These results do not qualify PostgreSQL, the complete native workflow or production; existing broader fixture failures remain unresolved. No private source, log or artifact is published here.
