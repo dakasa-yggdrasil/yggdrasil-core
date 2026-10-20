@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 06c765023bb5f3809416c4d7c997409b98745815
-verified_diff_sha256: 0636e01d253c309b48ab974eb2ae59da161bdcb4d2238b27e1259f1d652678be
+verified_at_commit: a635a4a8ab30b7fad6b586b387dc4bcabd58dc7e
+verified_diff_sha256: f0653932503832d94f60daa6a237438e5b8b1e03195aaba6be687f7fe8e1927c
 reconciler_schema: 1
 verified_at: 2026-10-19
 by: Codex
@@ -149,9 +149,9 @@ Separate custody ACK 53aeb169-ebed-4107-b047-a33aee9db8a3 completed with origina
 
 ## Current native slot projection producer Source reconciliation
 
-core_original_source_code: 06c765023bb5f3809416c4d7c997409b98745815
-core_original_guest_source_code: 258d655740b0b1149021eaebce21b9d839082105
-core_original_source_peer_manifest_sha256: a9a9110409561f6fed50ffba1dadb29e7008f5cbc8f5c465e9fc9fa5440bdc63
+core_original_source_code: a635a4a8ab30b7fad6b586b387dc4bcabd58dc7e
+core_original_guest_source_code: 2e0f49e7682549b6dcb945ac6a1470c631ac653e
+core_original_source_peer_manifest_sha256: d8816cc19270057edb2422d71a6565431ec098afc178d6161d83d6cf5776b766
 
 Root accepted this exact whole Source successor for local markers and metadata, with independently reviewed Core producer delta and the coordinated Guest selector. The Core change is restricted to cmd/native-guest-lifecycle-fixture/main.go: its digest input now uses the explicit closed ten-field map that the unchanged slot guard already canonicalizes. The typed DesiredSpec/address, guard, authorization, API and all other producer bytes remain unchanged. Independent narrow peer d88e2a3d accepted the exact postimage49632/29e1c7c1; full CODE census1412 preserves all1411 other Git bodies/modes from actual published89f9. Accepted earlier whole-manifest scopes and all failed predecessor originals remain historical evidence, not current runtime approval. The paired Guest CODE f91cbec6709e35170173ddd7a233b2d0abd02981 is a Source binding in the Root-accepted manifest, not a claim of Guest or Native execution by this metadata step.
 
@@ -199,3 +199,5 @@ current_systemctl_source_digest_review: The exact source pair binds a reviewed G
 current_enrollment_confirmation_fresh_read_review: The original enrollment wait can outlive the native observation freshness window. The reviewed source now obtains another authentic observation within the same original context and a five-second bound, verifies the same process, executable, command, disk and immutable creation lineage, and retains both proofs. Freshness, grants, leases and original deadlines are unchanged. Focused bounded LAB race tests passed4 roots and50 subcases; default and nativequalification controller variants compiled. These results do not qualify PostgreSQL, the complete native workflow or production; existing broader fixture failures remain unresolved. No private source, log or artifact is published here.
 
 current_native_qualification_event_contract_review: The reviewed Core source admits exactly native-qemu.server.ensured and native-qemu.server.destroyed at v1 only in nativequalification builds. Dedicated schemas bind provider, resource and verb, and the repository classifier and parser use the same fixed vocabulary for reaction dispatch. Default builds continue rejecting these events; generic schemas and grammar remain unchanged. The exact 1,451-file candidate passed four bounded LAB race commands with 217 Test records, four package passes, zero failures and zero skips; the designated ten-file readonly formatting check also passed. These focused contracts, parser and mocked SQL results do not qualify PostgreSQL, the complete native workflow or production, and do not establish the first or exclusive cause of the earlier Guest failure. The paired Guest source changes only its runtime Core pin. Existing broader failures and owning qualification remain unresolved. The six metadata reconciliation predicates do not execute or satisfy the required contract-connectivity, full go-test or svc-doctor gates. The existing capacity PostgreSQL failures, protected native failure and PG17 end-to-end obligations remain open. No private source, log or artifact is included in this metadata successor.
+
+current_original_echo_refusal_diagnostic_review: The reviewed source classifies original echo qualification refusals using closed predicates60 through89 while preserving the original guards, short-circuit order, context, five-second probe bound, lease cap, source authentication and generic public error. Unknown and untyped errors retain predicate17. The exact1,455-file candidate passed37 test records in four bounded LAB race commands with zero failures or skips and a readonly formatting pass. These are focused diagnostic, privacy, original missing-enrollment and missing-realm refusal checks; they neither identify the earlier original runtime cause nor qualify PostgreSQL, native lifecycle or production. A prior formatting-only failed attempt was retained as failure before correction. The complete owning CI remains necessary. The six metadata reconciliation checks do not execute or replace full tests, contract-connectivity or svc-doctor gates. Existing broader failures and full native/PG17 qualification remain open.

@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-19T22:22:13-03:00",
+  "generated_at": "2026-10-19T23:37:13-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 972,
+    ".go": 976,
     ".json": 148,
     ".py": 2,
     ".sql": 68,
@@ -11,7 +11,7 @@
     ".yml": 25
   },
   "provenance": {
-    "commit": "06c765023bb5f3809416c4d7c997409b98745815",
+    "commit": "a635a4a8ab30b7fad6b586b387dc4bcabd58dc7e",
     "dirty": true,
     "files": [
       {
@@ -69,8 +69,8 @@
     },
     {
       "path": "controllers/message",
-      "files": 96,
-      "kb": 1224
+      "files": 97,
+      "kb": 1226
     },
     {
       "path": "model",
@@ -88,19 +88,19 @@
       "kb": 392
     },
     {
+      "path": "internal/capacity",
+      "files": 46,
+      "kb": 917
+    },
+    {
       "path": "addons",
       "files": 45,
       "kb": 263
     },
     {
-      "path": "internal/capacity",
-      "files": 44,
-      "kb": 912
-    },
-    {
       "path": "internal/capacitynativeqemu",
-      "files": 31,
-      "kb": 257
+      "files": 32,
+      "kb": 259
     },
     {
       "path": "docs/bootstrap/manifests/integrations",
