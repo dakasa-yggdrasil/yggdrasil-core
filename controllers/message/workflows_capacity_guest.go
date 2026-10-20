@@ -324,7 +324,13 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		}
 		// Confirm physical source membership only after the complete original
 		// enrollment callback. This still grants no business readiness/canary.
-		if err = guestOriginalSourceAssertNativeRefusals(original, store, policy, parsed, proof, grant); err != nil {
+		// The creation witness remains immutable. Enrollment can outlive its
+		// freshness window, so confirmation needs another actual native read.
+		confirmProof, err := guestOriginalSourceConfirmationProof(original, grant, pre, receipt, proof)
+		if err != nil {
+			return fail("original-guest-step-46")
+		}
+		if err = guestOriginalSourceAssertNativeRefusals(original, store, policy, parsed, confirmProof, grant); err != nil {
 			return fail("original-guest-step-43")
 		}
 		if historicalOutput, handled, historicalErr := guestOriginalSourceHistoricalConfirm(original, store, policy, p, b, parsed, key, grant, pre, receipt, proof); handled {
@@ -348,14 +354,14 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 				return fail("pg17-original-workflow-confirm")
 			}
 		}
-		if _, err = store.ConfirmMutation(original, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, proof); err != nil {
+		if _, err = store.ConfirmMutation(original, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, confirmProof); err != nil {
 			return fail("original-guest-step-30")
 		}
-		if err = guestOriginalSourceAssertApply(original, store, policy, parsed, proof, grant); err != nil {
+		if err = guestOriginalSourceAssertApply(original, store, policy, parsed, confirmProof, grant); err != nil {
 			return fail("original-guest-step-42")
 		}
 		if hostRealm == nil {
-			if err = guestPG17AfterConfirm(original, store, policy, p, b, parsed, grant, proof); err != nil {
+			if err = guestPG17AfterConfirm(original, store, policy, p, b, parsed, grant, confirmProof); err != nil {
 				return fail("pg17-original-confirm-assertions")
 			}
 		}
