@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 7da9a39132ef47bafeb08f966fa6ef110f27ad66
-verified_diff_sha256: c085d37d66ff62b3ccf4dcd7a5c7d69f883b211b3dee02aff0e222809759ea14
+verified_at_commit: b6e577760ce849d36e3929e61ba9b538c8b29379
+verified_diff_sha256: cf61108d11c887e35c5fea3befa945c1afffce5a76d5f7a7f183d43bf99133c6
 reconciler_schema: 1
 verified_at: 2026-10-19
 by: Codex
@@ -149,9 +149,9 @@ Separate custody ACK 53aeb169-ebed-4107-b047-a33aee9db8a3 completed with origina
 
 ## Current native slot projection producer Source reconciliation
 
-core_original_source_code: 7da9a39132ef47bafeb08f966fa6ef110f27ad66
-core_original_guest_source_code: 98e68138915dff08a3ab6ef8c3045944c5e7ec73
-core_original_source_peer_manifest_sha256: f8cf904da0d9cd4ddbe84ae0bed991d63e5d4ec13e2e26c4dbaff62977feb00d
+core_original_source_code: b6e577760ce849d36e3929e61ba9b538c8b29379
+core_original_guest_source_code: b5a04eac0aca6d89ce5533fa3962bb2e6410f97c
+core_original_source_peer_manifest_sha256: ec171078d0bf2c8b44404ba54f60fb5dda98bfaf7e5907df62a5eef56c1bb166
 
 Root accepted this exact whole Source successor for local markers and metadata, with independently reviewed Core producer delta and the coordinated Guest selector. The Core change is restricted to cmd/native-guest-lifecycle-fixture/main.go: its digest input now uses the explicit closed ten-field map that the unchanged slot guard already canonicalizes. The typed DesiredSpec/address, guard, authorization, API and all other producer bytes remain unchanged. Independent narrow peer d88e2a3d accepted the exact postimage49632/29e1c7c1; full CODE census1412 preserves all1411 other Git bodies/modes from actual published89f9. Accepted earlier whole-manifest scopes and all failed predecessor originals remain historical evidence, not current runtime approval. The paired Guest CODE f91cbec6709e35170173ddd7a233b2d0abd02981 is a Source binding in the Root-accepted manifest, not a claim of Guest or Native execution by this metadata step.
 
@@ -213,3 +213,5 @@ current_original_installation_barrier_review: CI follow-up adds exactly two pass
 
 
 current_original_step97_diagnostic_review: Closed diagnostic stages and bounded installation projections; no historical cause, functional fix or native qualification claimed. Focused Linux retention checks passed; grouped predicate granularity is explicit.
+
+current_original_probe_temporal_diagnostic_review: Closed five-predicate unverified request-time diagnostics, nanosecond precision and explicit bounded deltas; authority and validity unchanged. Focused portable handler/Core/export checks passed; updated Linux retention test is authored but not executed in this revision. No historical drift or functional correction claimed.
