@@ -1,0 +1,757 @@
+{
+  "records": [
+    {
+      "argument_expression_sha256": "713b0e19b306dc29799cd35a32014be2dd427450fe0a3b59b923924c2d4d76d6",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "addons/buildproject_lifecycle.go",
+      "function": "transitionBuildProjectToExpiringWithEvent",
+      "line": 161,
+      "type_expressions": [
+        "\"buildproject.expired\"",
+        "\"system\""
+      ]
+    },
+    {
+      "argument_expression_sha256": "ed5763b98f6e48e5023dd43ca6aa0651df98b37cb22ecb15c28c227a383ac4d7",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "addons/integration_surface_sync.go",
+      "function": "Emit",
+      "line": 44,
+      "type_expressions": [
+        "eventType"
+      ]
+    },
+    {
+      "argument_expression_sha256": "703f2b4c66833bb86fe0e7e8a762d13dd31ac8d9c873a944d1eb40b66d70ae39",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "addons/manifest_sync.go",
+      "function": "EmitEvent",
+      "line": 177,
+      "type_expressions": [
+        "eventType"
+      ]
+    },
+    {
+      "argument_expression_sha256": "13d7e519f8add5426cb815d405c2bbd29928b73823a9d4fa01e3e2a2c6b11c47",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "addons/password_rotation.go",
+      "function": "emitPasswordRotationEvent",
+      "line": 105,
+      "type_expressions": [
+        "repository.EventTypeCredentialPasswordRotationRequired",
+        "\"system\""
+      ]
+    },
+    {
+      "argument_expression_sha256": "e83f0e76cc68da74643834b26da277c548d3b563b655e8f2e8c8eea13c74099d",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "addons/reactor_dispatcher.go",
+      "function": "persistExternalIdentity",
+      "line": 255,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "9aa73d9fd0089fa25eb175615f4c9c5773cfcee091188c3a56baf98bebb79c6d",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "addons/workflow_event_triggers.go",
+      "function": "emitWorkflowEventMatched",
+      "line": 515,
+      "type_expressions": [
+        "\"workflow.event.matched\"",
+        "\"system\""
+      ]
+    },
+    {
+      "argument_expression_sha256": "acc631c8645d95e77fca8165d465ed8bd247c85d13731bcbde9791ecf8e95a48",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "addons/workflow_scheduler.go",
+      "function": "processScheduledWorkflow",
+      "line": 340,
+      "type_expressions": [
+        "\"workflow.schedule.fired\"",
+        "\"system\""
+      ]
+    },
+    {
+      "argument_expression_sha256": "fd766c8cafece953f71aee99f5a2b8e3c23b6895e8f7c397755d062623e9c756",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/admin_session_revoke.go",
+      "function": "handleAdminCollaboratorRevokeSessions",
+      "line": 126,
+      "type_expressions": [
+        "repository.EventTypeCollaboratorSessionTerminated"
+      ]
+    },
+    {
+      "argument_expression_sha256": "5f11a6faefa8c9d5ea38ce528e8d0244629b6c80c6abe1ff9322f5eae6e27548",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/auth.go",
+      "function": "recordSessionRevocation",
+      "line": 790,
+      "type_expressions": [
+        "repository.EventTypeCollaboratorSessionTerminated"
+      ]
+    },
+    {
+      "argument_expression_sha256": "1a9ece07a3b300695989ca16cd74bf92bbd2cce9c53e43470e38d54aa7ef8321",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/collaborator_lifecycle.go",
+      "function": "handleCollaboratorOffboard",
+      "line": 95,
+      "type_expressions": [
+        "repository.EventTypeCollaboratorOffboarded"
+      ]
+    },
+    {
+      "argument_expression_sha256": "7df4bc1564a684a76c479fd9364eece8a52e4990a0fd2556167c24c0d398ceaf",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/collaborator_lifecycle.go",
+      "function": "handleCollaboratorOffboard",
+      "line": 141,
+      "type_expressions": [
+        "repository.EventTypeCollaboratorSessionTerminated"
+      ]
+    },
+    {
+      "argument_expression_sha256": "f25c9e60ddb13ecaadad5cbcb8e37bcd8784f425a60d320a94c6e3840bd11640",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/collaborator_lifecycle.go",
+      "function": "handleCollaboratorReOnboard",
+      "line": 255,
+      "type_expressions": [
+        "repository.EventTypeCollaboratorReOnboarded"
+      ]
+    },
+    {
+      "argument_expression_sha256": "19c17daf4f956d01868ee73988e25d96ebbe97c5e44dcf3d15fc5d86c692a351",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/collaborator_lifecycle.go",
+      "function": "handleCollaboratorRoleChange",
+      "line": 344,
+      "type_expressions": [
+        "repository.EventTypeCollaboratorRoleChanged"
+      ]
+    },
+    {
+      "argument_expression_sha256": "18c869957bec69da2233713975a393eddedb75e0f1fd09d2508d2c7ea2a00988",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/collaborator_lifecycle.go",
+      "function": "handleCollaboratorTeamAdd",
+      "line": 432,
+      "type_expressions": [
+        "repository.EventTypeTeamMembershipAdded",
+        "model.ActorTypeAPI"
+      ]
+    },
+    {
+      "argument_expression_sha256": "b2e2e96d37b2a53b54789b0ca67ed452e7a34d4f90027c2ae63673e774b01c9f",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/collaborator_lifecycle.go",
+      "function": "handleCollaboratorTeamRemove",
+      "line": 511,
+      "type_expressions": [
+        "repository.EventTypeTeamMembershipRemoved",
+        "model.ActorTypeAPI"
+      ]
+    },
+    {
+      "argument_expression_sha256": "55527bb5a9be53560ecf6cbe3cd657353cf49544a166044b71ff19d52de4884c",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/collaborator_lifecycle.go",
+      "function": "handleCollaboratorAbsenceStart",
+      "line": 713,
+      "type_expressions": [
+        "repository.EventTypeCollaboratorAbsenceStarted"
+      ]
+    },
+    {
+      "argument_expression_sha256": "762f663de6cc4f56916b0175a030379d5baf990fe3e770360900d4c1a0613215",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/collaborator_lifecycle.go",
+      "function": "handleCollaboratorAbsenceEnd",
+      "line": 790,
+      "type_expressions": [
+        "repository.EventTypeCollaboratorAbsenceEnded"
+      ]
+    },
+    {
+      "argument_expression_sha256": "686e00afc3204ae71ca4b5159ae9c1b8e4e8fe924b018a4badc265b14de1da56",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/credentials.go",
+      "function": "resetMFAAndIssueSetupLink",
+      "line": 202,
+      "type_expressions": [
+        "repository.EventTypeCredentialMFAReset"
+      ]
+    },
+    {
+      "argument_expression_sha256": "06ee5d6c74dbcdc12c461e301e425005499dcb2ac2b7e2ed09ab81c8ef54dea0",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/credentials.go",
+      "function": "revokeForCredentialReplacement",
+      "line": 246,
+      "type_expressions": [
+        "repository.EventTypeCollaboratorSessionTerminated"
+      ]
+    },
+    {
+      "argument_expression_sha256": "822829bd4a324ae884873ad52af59d2134698ca1840d1b740fd8189c4ccd9ae1",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/credentials.go",
+      "function": "emitCredentialEvent",
+      "line": 535,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "aa97b1c5f7430e0b0d23165ba06bff4052e09d05b390654bb92ed1391155d7db",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/credentials.go",
+      "function": "handleSetupCommit",
+      "line": 779,
+      "type_expressions": [
+        "repository.EventTypeCredentialPasswordSetupCompleted",
+        "\"collaborator\""
+      ]
+    },
+    {
+      "argument_expression_sha256": "53ad7dc7fc72d7ba72a8d2a6d3c05507d1588d86dd28eae458a06532d430b151",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/credentials.go",
+      "function": "handlePasswordChange",
+      "line": 1106,
+      "type_expressions": [
+        "repository.EventTypeCredentialPasswordChanged",
+        "\"collaborator\""
+      ]
+    },
+    {
+      "argument_expression_sha256": "8540262193a2dc082cf3799f2e33e0a76e1ac703fef8a4e6c89601a6c1792f8e",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/credentials.go",
+      "function": "handlePasswordChange",
+      "line": 1143,
+      "type_expressions": [
+        "repository.EventTypeCollaboratorSessionTerminated"
+      ]
+    },
+    {
+      "argument_expression_sha256": "47ba1276f930bec137745fd641456e4c6f0c7dee2a0a3d7a41e3671ce0ee0f2b",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/credentials.go",
+      "function": "handlePasswordReset",
+      "line": 1544,
+      "type_expressions": [
+        "repository.EventTypeCredentialPasswordChanged",
+        "\"collaborator\""
+      ]
+    },
+    {
+      "argument_expression_sha256": "0f1a5948681e133f7d5904e70beff37b58394975fc6e106d804a45de3ebcd0f2",
+      "build_constraint": "default",
+      "callee": "EmitEventWithOutcome",
+      "file": "controllers/httpapi/events_publish.go",
+      "function": "handleEventPublish",
+      "line": 148,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "8ea6f6ddee0d0eb925ead5fafe9f6522578911d02775be06b206c1c32fad4b17",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/external_identities.go",
+      "function": "emitLinkedEvent",
+      "line": 154,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "9b6a2c44dd47b610ca4beb93b2c38487ab5e3f70d67d51f896dacb81d191538b",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/external_identities.go",
+      "function": "emitConflictEvent",
+      "line": 164,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "75ba9790387517177b1862b23d8d53522d7cf1f10a74cce6778979cfad273699",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/external_identities.go",
+      "function": "handleExternalIdentityDelete",
+      "line": 205,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "d160039a9974f61ec6ca5b21db68515c5d205ee86964bf49e6466a64e3b0272e",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/integration_type_sync.go",
+      "function": "EmitEvent",
+      "line": 99,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "703f2b4c66833bb86fe0e7e8a762d13dd31ac8d9c873a944d1eb40b66d70ae39",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/integration_type_sync.go",
+      "function": "EmitEvent",
+      "line": 203,
+      "type_expressions": [
+        "eventType"
+      ]
+    },
+    {
+      "argument_expression_sha256": "3842f1d31bebbe0bbc99d30614487e39e18b166a4cd7fed9134dc361f5280998",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/integration_webhook.go",
+      "function": "applyLinkAction",
+      "line": 148,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "7cb9b7c71c4f3a87692507996b72054c2233d64b03282498859d161231351dfc",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/integration_webhook.go",
+      "function": "applyLinkAction",
+      "line": 165,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "5b5835473899efb0ec1918a5f023ce8c6f001b641b3115ff30ce3be56e4a1ff3",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/integration_webhook.go",
+      "function": "applyLinkAction",
+      "line": 178,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "a0b136678fd134bcbdcf5fa760cc7c88fc904fa9736a8201ba4aca07488ce826",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/integration_webhook.go",
+      "function": "applyUnlinkAction",
+      "line": 208,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "3ded13dfa1e7a58b7bc6b5fb611248a0f40864a8fb5d58ac7aac96b86a755dfc",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/integration_webhook.go",
+      "function": "applyEmitAction",
+      "line": 229,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "1106fce501fbbdb898b021c9d27a5539cf220c194e6a3b28253db28adec24107",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/server.go",
+      "function": "handleCollaboratorCreate",
+      "line": 2059,
+      "type_expressions": [
+        "repository.EventTypeCollaboratorCreated"
+      ]
+    },
+    {
+      "argument_expression_sha256": "f5d642389b0294712e59be0a58a989ec0c60e18066bdd01a172587a272672097",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/server.go",
+      "function": "handleTeamCreate",
+      "line": 2296,
+      "type_expressions": [
+        "repository.EventTypeTeamCreated"
+      ]
+    },
+    {
+      "argument_expression_sha256": "6f59a9d87fb8c537985ed9ccfe2d6f97690638967f05fe52d0bd514aefb9b49c",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/server.go",
+      "function": "handleTeamUpdate",
+      "line": 2391,
+      "type_expressions": [
+        "repository.EventTypeTeamUpdated"
+      ]
+    },
+    {
+      "argument_expression_sha256": "fe337481c855d45fcb8a857b545c45dd99c7b249328306d93b72a38a22c2e468",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/server.go",
+      "function": "handleTeamDelete",
+      "line": 2480,
+      "type_expressions": [
+        "repository.EventTypeTeamDeleted"
+      ]
+    },
+    {
+      "argument_expression_sha256": "ecfc0a0c7d5a444cf6610ee93135f22228bc691626b3956457d6180b8bf78c9c",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/server.go",
+      "function": "handleTeamGrantCreate",
+      "line": 2544,
+      "type_expressions": [
+        "repository.EventTypeTeamGrantAdded",
+        "model.ActorTypeAPI"
+      ]
+    },
+    {
+      "argument_expression_sha256": "c8943f2b3f151abd3d36e59e11404edbb38b07d8a5156c5204c80fe6ddf5ea4b",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/server.go",
+      "function": "handleTeamGrantDelete",
+      "line": 2581,
+      "type_expressions": [
+        "repository.EventTypeTeamGrantRevoked",
+        "model.ActorTypeAPI"
+      ]
+    },
+    {
+      "argument_expression_sha256": "63cceac66601912c635a6e14748652f971fd567a732e3b19a50cb67555846938",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/server.go",
+      "function": "handleTeamMembershipUpsert",
+      "line": 2688,
+      "type_expressions": [
+        "repository.EventTypeTeamMembershipAdded"
+      ]
+    },
+    {
+      "argument_expression_sha256": "7ca612d1a73e6a06bc14c040927c15c6297b6285e1e33a3810c8900634f32dbf",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/server.go",
+      "function": "handleTeamMembershipUpsert",
+      "line": 2713,
+      "type_expressions": [
+        "repository.EventTypeTeamMembershipRemoved"
+      ]
+    },
+    {
+      "argument_expression_sha256": "e1a4a201e576e287b2f50317015ea329f37c709ff00ab8307e50fdc7f0a43149",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/tartaro_actions.go",
+      "function": "handleSyncTartaroActions",
+      "line": 185,
+      "type_expressions": [
+        "repository.EventTypeTeamMembershipAdded",
+        "model.ActorTypeAPI"
+      ]
+    },
+    {
+      "argument_expression_sha256": "aba3872495db635ed0967413b9ae41b22cf10f5ff0a40fb32db7333ca9612ab4",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/httpapi/team_sync.go",
+      "function": "handleTeamSync",
+      "line": 51,
+      "type_expressions": [
+        "repository.EventTypeTeamCreated",
+        "model.ActorTypeAPI"
+      ]
+    },
+    {
+      "argument_expression_sha256": "45672d34b3f4efa0fb49da96ad746b3667a9445ddc89b874c5be79be2781a92c",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/message/integration_describe.go",
+      "function": "emitContractMismatchDetectedIfNew",
+      "line": 969,
+      "type_expressions": [
+        "repository.EventTypeRuntimeStateContractMismatchDetected"
+      ]
+    },
+    {
+      "argument_expression_sha256": "c18ff006301c568f793309ad00bf01159da3894c93b0ad735e1b1e53f872dc43",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/message/manifest_persist.go",
+      "function": "persistManifestVersion",
+      "line": 77,
+      "type_expressions": [
+        "\"manifest.created\""
+      ]
+    },
+    {
+      "argument_expression_sha256": "0305eb256231360fd4ff2001ad61fb8bdc41a16873d7132742c4270ec64ae0d0",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/message/manifests.go",
+      "function": "EmitAuthorizationEvaluatedEvent",
+      "line": 474,
+      "type_expressions": [
+        "\"authorization.evaluated\""
+      ]
+    },
+    {
+      "argument_expression_sha256": "5d017defa36aeae7aca97c7b513904d524b3eec6d21b45be1d25bdb31c1a102d",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/message/products.go",
+      "function": "emitProductInstallationAppliedEvent",
+      "line": 338,
+      "type_expressions": [
+        "\"product.installation.applied\""
+      ]
+    },
+    {
+      "argument_expression_sha256": "b8d5c38ebfe8d50f77a4e27632cb89b179dafda4d13055c0d88154c14eb990c5",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/message/products.go",
+      "function": "emitProductInstallationUninstalledEvent",
+      "line": 501,
+      "type_expressions": [
+        "\"product.installation.uninstalled\""
+      ]
+    },
+    {
+      "argument_expression_sha256": "7046c82554ab5adf8e8b6690ec58d6f2a6eff32e6951326b918be2e149b58f24",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/message/workflows.go",
+      "function": "emitWorkflowRunCompletedEvent",
+      "line": 290,
+      "type_expressions": [
+        "\"workflow.run.completed\""
+      ]
+    },
+    {
+      "argument_expression_sha256": "9a86c7e2d38bfc357235626f12677c92bb607dee8effeba08aac6339dc1e8a45",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "controllers/message/workflows_yggdrasil.go",
+      "function": "emitStatusDriftEvent",
+      "line": 621,
+      "type_expressions": [
+        "\"collaborator.status.drift_detected\""
+      ]
+    },
+    {
+      "argument_expression_sha256": "3694632792b20a9dbc0b17a03723f92469159a966004fe4412e3fd7ea86dd80c",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "internal/externalidentity/cleanup_runner.go",
+      "function": "CleanupTick",
+      "line": 26,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "703f2b4c66833bb86fe0e7e8a762d13dd31ac8d9c873a944d1eb40b66d70ae39",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "internal/externalidentity/events.go",
+      "function": "EmitEvent",
+      "line": 145,
+      "type_expressions": [
+        "eventType"
+      ]
+    },
+    {
+      "argument_expression_sha256": "9f2003a7bc8e18d140f638573c2477f53e74a622b8324029f3af4285b1c4fd39",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "internal/externalidentity/resync_runner.go",
+      "function": "resyncInstance",
+      "line": 172,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "96ce0955cc70f66e7719f6ba293f32fdc406d70eca09ea7db2ae71e10c4b23c6",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "internal/externalidentity/resync_runner.go",
+      "function": "resyncInstance",
+      "line": 190,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "c68c7b8cfbaa29b8e7152c5ce451249e086d0976a397bc64dac1ebc72b6ff958",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "internal/externalidentity/resync_runner.go",
+      "function": "autoLinkExternal",
+      "line": 320,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "7c67c9e16ee2a1acccd0964461c96b2161a022befd1e51e6f7232f18b13a202a",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "internal/externalidentity/resync_runner.go",
+      "function": "autoLinkExternal",
+      "line": 337,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "bcd1384a2df4ea188bf8b8cc1cb463ce7c41a19ca86500e8653844ff19267554",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "internal/manifestsync/syncer.go",
+      "function": "package",
+      "line": 24,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "66fcedf39e45a247264ed77c312c547ad841ac7ea7fda7f05dfbd098ded95934",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "internal/manifestsync/syncer.go",
+      "function": "SyncIntegrationType",
+      "line": 37,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "5c2d496f910cc34bb010fb4a37a8c766e281a9724359bdc0dc8723a38c40e7be",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "internal/manifestsync/syncer.go",
+      "function": "SyncIntegrationType",
+      "line": 48,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "b97ffd28b688353984252a282a3971cdea1dffdbe6d64fefd44626269d649f28",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "internal/manifestsync/syncer.go",
+      "function": "SyncIntegrationType",
+      "line": 58,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "2c9a91adce26528af5ac4dfd2a3307042ad1cb0cd252212422b564627ff7f85a",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "internal/manifestsync/syncer.go",
+      "function": "SyncIntegrationType",
+      "line": 75,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "070bf8b49f993a7d4638d1aeea696e15a3db72f88695295ed4e6419b6ffe1412",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "internal/manifestsync/syncer.go",
+      "function": "SyncIntegrationType",
+      "line": 88,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "d036b612600287ac65c85bc1f0887c1fee23ae62fe58d918c6db4ff66f102e1b",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "internal/manifestsync/syncer.go",
+      "function": "SyncIntegrationType",
+      "line": 105,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "c2e7217afa35f05d5b6d8a9334cf8ad5eb3c504bee6c609102c1715e6b41db25",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "internal/manifestsync/syncer.go",
+      "function": "SyncIntegrationType",
+      "line": 119,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "064086cde9fb8a1684df4fb1ceeab8bb47ce13b5f232ed353900a0f863d8019c",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "internal/manifestsync/syncer.go",
+      "function": "SyncIntegrationType",
+      "line": 145,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "bec71e24a4795bac7a2955f1f7ea8bee0eb374be63b7fb0247f48b12cf113666",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "internal/manifestsync/syncer.go",
+      "function": "SyncIntegrationType",
+      "line": 157,
+      "type_expressions": []
+    },
+    {
+      "argument_expression_sha256": "85b0c1da9d6a5b4ec037004c039a3da3415799802da68320185844eda630c407",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "internal/reactors/dispatcher.go",
+      "function": "emitDeadLetterEvent",
+      "line": 219,
+      "type_expressions": [
+        "repository.EventTypeReactorDeadLettered"
+      ]
+    },
+    {
+      "argument_expression_sha256": "0172bc3aa5a460920c862907afdaf25c427fc54a7892971a48979eed9805346a",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "internal/teamreconcile/runner.go",
+      "function": "reEmit",
+      "line": 107,
+      "type_expressions": [
+        "repository.EventTypeTeamCreated",
+        "model.ActorTypeSystem"
+      ]
+    },
+    {
+      "argument_expression_sha256": "e458272444f335121bac421692acc17a1ef69ed7b4044b5660daba90eee28e21",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "repository/capacity_mutations.go",
+      "function": "emitCapacityMutationEvent",
+      "line": 896,
+      "type_expressions": [
+        "record.EventProvider + \".\" + record.EventResource + \".\" + verb",
+        "\"workflow\""
+      ]
+    },
+    {
+      "argument_expression_sha256": "822829bd4a324ae884873ad52af59d2134698ca1840d1b740fd8189c4ccd9ae1",
+      "build_constraint": "default",
+      "callee": "EmitEventWithOutcome",
+      "file": "repository/event.go",
+      "function": "EmitEvent",
+      "line": 34,
+      "type_expressions": []
+    }
+  ],
+  "schema": "core_source_interface_census_v1",
+  "scope": "source facts; no deployed endpoint or runtime authority claimed"
+}

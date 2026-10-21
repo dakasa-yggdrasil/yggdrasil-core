@@ -48,6 +48,18 @@ exact:
   - upsert_secrets_manager_secret
   - restore_secret
 
+  # EC2 transitions act on one existing instance ID; they do not reconcile
+  # a declarative resource specification or create an interchangeable VM.
+  - start_ec2_instance
+  - stop_ec2_instance
+  - terminate_ec2_instance
+  # Remove one policy membership from an existing IAM identity.
+  - detach_iam_policy
+  # Associate encryption configuration with an existing EKS cluster.
+  - associate_eks_secrets_encryption
+  # Set the desired-capacity value of an existing Auto Scaling group.
+  - set_asg_desired_capacity
+
   # Reactors not using on_* prefix (historical, category=reactor exempts at code path)
   - on_surface_query
   - efi_webhook_received

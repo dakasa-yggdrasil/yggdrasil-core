@@ -1,11 +1,56 @@
 package message
 
 import (
+	"encoding/json"
 	"fmt"
+	"reflect"
 	"testing"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 )
+
+func TestIntegrationTypeSpecFromDescribeResponseCarriesCanonicalCatalog(t *testing.T) {
+	var response model.AdapterDescribeResponse
+	var expected model.IntegrationTypeManifestSpec
+	raw := []byte(canonicalNativeDescribeJSON)
+	if strictJSONUnmarshal(raw, &response) != nil || json.Unmarshal(raw, &expected) != nil {
+		t.Fatal("full public canonical catalog refused")
+	}
+	got := integrationTypeSpecFromDescribeResponse(response)
+	if manifest.ValidateIntegrationTypeSpec(got) != nil {
+		t.Fatal("full converted catalog is not registration-valid")
+	}
+	if got.Domain != expected.Domain || !reflect.DeepEqual(got.Dashboard, expected.Dashboard) || !reflect.DeepEqual(got.Display, expected.Display) || !reflect.DeepEqual(got.Icon, expected.Icon) || !reflect.DeepEqual(got.CredentialPolicy, expected.CredentialPolicy) || !reflect.DeepEqual(got.GuardianSupport, expected.GuardianSupport) || !reflect.DeepEqual(got.ActionCatalog, expected.ActionCatalog) {
+		t.Fatal("canonical catalog fields disappeared before the live spec")
+	}
+	if err := compareIntegrationTypeSpec(expected, got); err != nil {
+		t.Fatal("same complete canonical catalog did not compare")
+	}
+}
+
+func TestCompareIntegrationTypeSpecActionInputSchema(t *testing.T) {
+	var expected model.IntegrationTypeManifestSpec
+	if json.Unmarshal([]byte(canonicalNativeDescribeJSON), &expected) != nil {
+		t.Fatal("raw catalog fixture malformed")
+	}
+	var actual model.IntegrationTypeManifestSpec
+	if json.Unmarshal([]byte(canonicalNativeDescribeJSON), &actual) != nil {
+		t.Fatal("independent live catalog fixture malformed")
+	}
+	actual.ActionCatalog[0].InputSchema["additionalProperties"] = true
+	if compareIntegrationTypeSpec(expected, actual) == nil {
+		t.Fatal("changed action input contract was erased before comparison")
+	}
+	actual.ActionCatalog[0].InputSchema = nil
+	if compareIntegrationTypeSpec(expected, actual) == nil {
+		t.Fatal("missing originally declared action input contract was accepted")
+	}
+	expected.ActionCatalog[0].InputSchema = nil
+	if compareIntegrationTypeSpec(expected, actual) != nil {
+		t.Fatal("legacy absent input contract changed")
+	}
+}
 
 func TestCompareIntegrationTypeSpecIgnoresOrderingNoise(t *testing.T) {
 	expected := model.IntegrationTypeManifestSpec{

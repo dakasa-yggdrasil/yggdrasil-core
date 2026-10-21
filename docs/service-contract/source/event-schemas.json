@@ -1,0 +1,306 @@
+{
+  "records": [
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/authorization/evaluated.json",
+      "schema_key": "authorization.evaluated",
+      "sha256": "c99fa1b424299a43720da7f052c8e73d45de4ff3efc3c2acb2d250e46e0c10ad"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/buildproject/expired.json",
+      "schema_key": "buildproject.expired",
+      "sha256": "1e40caaf4785452fbb1ef8626877a2ce89d54a87b6a387daad539287e713f6ab"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/collaborator/absence_ended.json",
+      "schema_key": "collaborator.absence_ended",
+      "sha256": "02ead0a08713809bf3c9687b767a2b484b6ec32cb91a8f20b213080e1b832b7b"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/collaborator/absence_started.json",
+      "schema_key": "collaborator.absence_started",
+      "sha256": "d8d6e66bc88b10499b554cbd94f203309bc83829bd8e15fd2e00f3ef778f4277"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/collaborator/created.json",
+      "schema_key": "collaborator.created",
+      "sha256": "f473514161e28085f74f983a8eb77840f911f8805b5cc2e1f7680af030eb3b63"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/collaborator/offboarded.json",
+      "schema_key": "collaborator.offboarded",
+      "sha256": "111c32b879aff403fa140c8eb89b6504426633b62d8f3f09cdad56e9add6513a"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/collaborator/re_onboarded.json",
+      "schema_key": "collaborator.re_onboarded",
+      "sha256": "f1a69e554dbc9cb7f9e52ddef7ac470961a3c743b9bd897ef39dc500cfe05285"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/collaborator/role_changed.json",
+      "schema_key": "collaborator.role_changed",
+      "sha256": "90ab981256a6aaeac56b3425ee214e7dc0f8227ba70eeb6399f47640aa837ffd"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/collaborator/session_terminated.json",
+      "schema_key": "collaborator.session_terminated",
+      "sha256": "6fb2125bc9e07ce14fe934d484994279dc4b2a24025e5b53760abc0cf747bf7f"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/collaborator/status_drift_detected.json",
+      "schema_key": "collaborator.status_drift_detected",
+      "sha256": "4277803fa9b194371da688f1817c088861cf00ab166d362cbb0b1d5b7793385d"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/collaborator_external_identity/conflict_detected.json",
+      "schema_key": "collaborator_external_identity.conflict_detected",
+      "sha256": "f7f2f4c9d98e54bec635470fd08c2dfd4b485200c7820917ed8753caf5cf64a5"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/collaborator_external_identity/drift_detected.json",
+      "schema_key": "collaborator_external_identity.drift_detected",
+      "sha256": "9dbe8cb847b1cc37f0ee94093c5d4eb42c6548457ad1815bd16eb6251d5ca1a8"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/collaborator_external_identity/linked.json",
+      "schema_key": "collaborator_external_identity.linked",
+      "sha256": "e9e0cd7cf2aab42e780fd02db94a81863514e4ea57492be4df12155516038d32"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/collaborator_external_identity/purged.json",
+      "schema_key": "collaborator_external_identity.purged",
+      "sha256": "23c32898ee7191395856cef6e3a6a5d0bf436842d6ccf45c40460058b9719e1a"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/collaborator_external_identity/unknown_external.json",
+      "schema_key": "collaborator_external_identity.unknown_external",
+      "sha256": "09825911845aed3db99d89c715fbf02392a6ea8943d0c56e9faac7d92dbd28e7"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/collaborator_external_identity/unlinked.json",
+      "schema_key": "collaborator_external_identity.unlinked",
+      "sha256": "663505c88862c8f791c03248ebaa2960e8d4251bbb5da9b56f459f29b444d740"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/credential/mfa_reset.json",
+      "schema_key": "credential.mfa_reset",
+      "sha256": "57683b44a4ca91c574109fffb42674f19f62018fbc55e65c71eb89551997f971"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/credential/password_changed.json",
+      "schema_key": "credential.password_changed",
+      "sha256": "24dae7bd267c7c83d45e5f0a0d73ee061ed273001e9d2914104270f3aa593fd7"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/credential/password_rotation_required.json",
+      "schema_key": "credential.password_rotation_required",
+      "sha256": "9e8cf080139c9756796cdb9dec02f4e2f3068358c255321cf1324bd7cd862c80"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/credential/password_setup_completed.json",
+      "schema_key": "credential.password_setup_completed",
+      "sha256": "c41be2a0e6d76774a0acaa0063050deb585efebb7d5a3b4f29eb529041ba272c"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/credential/reset_token_issued.json",
+      "schema_key": "credential.reset_token_issued",
+      "sha256": "d5058e1cb7a758fc97a12d0acc70858409a06e900c064f7a8fc8107f0fdde8ba"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/credential/setup_token_issued.json",
+      "schema_key": "credential.setup_token_issued",
+      "sha256": "10695b8bcb0e8f7368c8c42f56ed027f26f66cf7c68c7387b4c1cd4668e3483c"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/infra/alert_firing.json",
+      "schema_key": "infra.alert_firing",
+      "sha256": "b259e64ead71eaf46601e73fb21ef7e9f800c06148ea70bf07491c0ab2c792ef"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/integration_mutation/created.json",
+      "schema_key": "integration_mutation.created",
+      "sha256": "56ee28b49824aab08e4f7ac3e602d3d71894166fd8b2d7b5fbf4cfb1834a024e"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/integration_mutation/destroyed.json",
+      "schema_key": "integration_mutation.destroyed",
+      "sha256": "84c9f10c630bfae6d6adeedc5e3643163e73d0a7c069fce5b82d0eb53990ba0e"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/integration_mutation/ensured.json",
+      "schema_key": "integration_mutation.ensured",
+      "sha256": "a23002d2bda1fafc28a79e4a899b3004a8b86de9a2dca4fce2ec6fab0b192b29"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/integration_surface/deactivated.json",
+      "schema_key": "integration_surface.deactivated",
+      "sha256": "82361dde82628d347c8f35fbb312ddb4f2103d0a48f677cc07ac90ee06c67fb1"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/integration_surface/drift_detected.json",
+      "schema_key": "integration_surface.drift_detected",
+      "sha256": "5ac3875ea9ee86cd8ce0b70cb5940e88a41c319947a8ed9202a0d102bf83d3d3"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/integration_surface/registered.json",
+      "schema_key": "integration_surface.registered",
+      "sha256": "746bdba61a4d3171206e8e921023e1e9dedddda80596f505258be724e3051025"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/integration_surface/updated.json",
+      "schema_key": "integration_surface.updated",
+      "sha256": "fef243920ab41efff70ec2dd50c300a1dbffa5e29d4769f8672e6bf8d35690a7"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/integration_type/sync_no_op.json",
+      "schema_key": "integration_type.sync_no_op",
+      "sha256": "dfae883d22c2f389ff425e847818649262730acca515d86d4ed003578817a41b"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/integration_type/sync_skipped.json",
+      "schema_key": "integration_type.sync_skipped",
+      "sha256": "ebe5c50ee8e0b82a4657f3e190e78d7c59caa7cccaeaef3263a9a360f54b7584"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/integration_type/synced.json",
+      "schema_key": "integration_type.synced",
+      "sha256": "8692c22ddd5004032e496347e7aa91c26097e905c287242c1e1e7a038ec02688"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/manifest/created.json",
+      "schema_key": "manifest.created",
+      "sha256": "f7de6b86416804df2462d8a1e53fc70d9114f817003064738391546628063752"
+    },
+    {
+      "classification": "nativequalification-only",
+      "file": "docs/contracts/events/v1/native_qualification/server_destroyed.json",
+      "schema_key": "native_qualification.server_destroyed",
+      "sha256": "a35e54b607c67d669b3b388f4d41a7c553a71083bcd6d314530af586ab0bd1dc"
+    },
+    {
+      "classification": "nativequalification-only",
+      "file": "docs/contracts/events/v1/native_qualification/server_ensured.json",
+      "schema_key": "native_qualification.server_ensured",
+      "sha256": "d2fbeff0eb26c7dfb8137a6d85cf18bc4ad1280547538ecf04b7430a6a6a4ad1"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/product/installation_applied.json",
+      "schema_key": "product.installation_applied",
+      "sha256": "6d7227f18e7cdc3fe5478accb3806a3e1b073c076cf04d68578c5196dd0c315a"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/reactor/dead_lettered.json",
+      "schema_key": "reactor.dead_lettered",
+      "sha256": "b6a5659b3b08c00575d640268924d2a4d1d284994b31d1e8060f7a9a22461648"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/runtime_state/contract_mismatch_detected.json",
+      "schema_key": "runtime_state.contract_mismatch_detected",
+      "sha256": "6e8b2104226215b869a4df0414f342219e10efce40d434602db58e0f96365ae9"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/schema.json",
+      "schema_key": "schema",
+      "sha256": "a79db93b919ca3b56a248f399f83f5f401a37588257a27568ba2a2bbaca38353"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/team/created.json",
+      "schema_key": "team.created",
+      "sha256": "35976d46c954e4c5434d612b56a51294bf826e821edbcff3706193adaeb8b691"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/team/deleted.json",
+      "schema_key": "team.deleted",
+      "sha256": "6727870bbc7f5845379569911f6bfbc09389a00ec0134a43b354e6f258cfdab2"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/team/updated.json",
+      "schema_key": "team.updated",
+      "sha256": "db7963b76ff4605b973cb9080e4f7dc77e19eca8e934149615165f52d223080f"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/team_grant/added.json",
+      "schema_key": "team_grant.added",
+      "sha256": "b6fb34db204c67f9b271bd777f157968623383a9bdd28dbc55b69a23d2500cd1"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/team_grant/revoked.json",
+      "schema_key": "team_grant.revoked",
+      "sha256": "7834cc0907277c7c0df60406765f0aa91ff21fee083da8058e3de4acaae19335"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/team_membership/added.json",
+      "schema_key": "team_membership.added",
+      "sha256": "4bd3a2683e000f3c426fa8e02e20887cdad29437047eec66794398d58b488ba8"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/team_membership/removed.json",
+      "schema_key": "team_membership.removed",
+      "sha256": "f9f36afdfccc22961243853f623feeaaccf36b0bdcee02bafbaf29b22ca8e3be"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/workflow/event_matched.json",
+      "schema_key": "workflow.event_matched",
+      "sha256": "575c0830b4206a9863643b8ac1131304e98080fa5d47e58a2d8b1180d2cc7872"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/workflow/run_completed.json",
+      "schema_key": "workflow.run_completed",
+      "sha256": "10b9aad0a7004628bacbcde4daf6cd9ffba3414d328d666758282d3c4ca1998b"
+    },
+    {
+      "classification": "event-schema",
+      "file": "docs/contracts/events/v1/workflow/schedule_fired.json",
+      "schema_key": "workflow.schedule_fired",
+      "sha256": "5c311af2fdea6debaf7787a8ea9140ae04fc56baa135b6e3bc4ac8fbde431959"
+    }
+  ],
+  "schema": "core_source_interface_census_v1",
+  "scope": "source facts; no deployed endpoint or runtime authority claimed"
+}

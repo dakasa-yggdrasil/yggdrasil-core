@@ -1,0 +1,618 @@
+name: Capacity intent PostgreSQL protocol
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  capacity-postgres:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: capacity-ci-only
+          POSTGRES_DB: capacity_integration
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d capacity_integration"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      rabbitmq:
+        image: rabbitmq:4-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: dispatch
+          RABBITMQ_DEFAULT_PASS: dispatch-ci-only
+        ports: ["5672:5672"]
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 3s --health-timeout 5s --health-retries 30
+    env:
+      CAPACITY_DISPATCH_BROKER_URL: amqp://dispatch:dispatch-ci-only@127.0.0.1:5672/
+      GOWORK: "off"
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: capacity_integration
+      DB_USER: postgres
+      DB_PASSWORD: capacity-ci-only
+      DB_SSLMODE: disable
+      DB_URL: postgres://postgres:capacity-ci-only@127.0.0.1:5432/capacity_integration?sslmode=disable
+      REQUIRE_CAPACITY_POSTGRES: "true"
+      # Root replaces this explicit source HOLD only after the owning Notify
+      # source is independently reviewed and normally committed. No branch/main
+      # or guessed source may compile or execute this native business fixture.
+      CAPACITY_NOTIFY_SOURCE_COMMIT: 80952ba4b173113c1e645aa7c7dd5347dc421a7d
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - name: Read-only token for exact private native fixture source
+        id: native-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.YGGDRASIL_APP_ID }}
+          private-key: ${{ secrets.YGGDRASIL_APP_PEM }}
+          owner: dakasa-yggdrasil
+          repositories: |
+            integration-hetzner
+            integration-prometheus
+            integration-kubernetes
+          permission-contents: read
+      - name: Checkout reviewed native adapter source
+        uses: actions/checkout@v4
+        with:
+          repository: dakasa-yggdrasil/integration-hetzner
+          ref: cddc784604e7bdb26717c36c2cff242558a781aa
+          path: .ci-native-hetzner
+          token: ${{ steps.native-token.outputs.token }}
+          persist-credentials: false
+      - name: Checkout reviewed fixed metric source
+        uses: actions/checkout@v4
+        with:
+          repository: dakasa-yggdrasil/integration-prometheus
+          ref: b14ffabcea2daf0d575168abd2ec8d3e1c10520c
+          path: .ci-bound-prometheus
+          token: ${{ steps.native-token.outputs.token }}
+          persist-credentials: false
+      - name: Checkout reviewed native HPA source
+        uses: actions/checkout@v4
+        with:
+          repository: dakasa-yggdrasil/integration-kubernetes
+          ref: a386344e36383b0a23c3c82c5d05a5a176b0e0af
+          path: .ci-bound-kubernetes
+          token: ${{ steps.native-token.outputs.token }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        id: retention_go_setup
+        with:
+          go-version-file: go.mod
+          cache: true
+      # Linux owner pins actual directory FDs for fixed native openat reads.
+      # The Source corpus requires exact10 roots+78 children once run/pass.
+      # CLI cases build the current package in their own private test directory;
+      # they do not borrow this workflow binary or claim native qualification.
+      - name: Build the bounded original Source retention Go owner
+        id: retention_go_build
+        if: ${{ !cancelled() && steps.retention_go_setup.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          core_pg_owner_dir="$RUNNER_TEMP/capacity-source-corpus-go-owner"
+          mkdir -m 700 "$core_pg_owner_dir"
+          go build -mod=readonly -o "$core_pg_owner_dir/status-owner" ./scripts/ci/capacity-source-corpus-status >"$core_pg_owner_dir/build.stdout" 2>"$core_pg_owner_dir/build.stderr"
+      - name: Qualify the original Source retention Go owner corpus
+        id: retention_go_tests
+        if: ${{ !cancelled() && steps.retention_go_build.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          core_pg_owner_dir="$RUNNER_TEMP/capacity-source-corpus-go-owner"
+          set +e
+          go test -race -json -p 1 -count=1 -timeout=90s ./scripts/ci/capacity-source-corpus-status 2>"$core_pg_owner_dir/owner-tests.stderr" | tee "$core_pg_owner_dir/owner-tests.jsonl" 2>"$core_pg_owner_dir/owner-tests-tee.stderr"
+          core_pg_owner_pipeline_status=("${PIPESTATUS[@]}")
+          core_pg_owner_go_exit="${core_pg_owner_pipeline_status[0]}"
+          core_pg_owner_tee_exit="${core_pg_owner_pipeline_status[1]}"
+          "$core_pg_owner_dir/status-owner" verify-owner-tests >"$core_pg_owner_dir/owner-census.stdout" 2>"$core_pg_owner_dir/owner-census.stderr"
+          core_pg_owner_census_exit=$?
+          printf '%s\n' "$core_pg_owner_go_exit" "$core_pg_owner_tee_exit" "$core_pg_owner_census_exit" >"$core_pg_owner_dir/owner-test-returns.txt"
+          core_pg_owner_returns_exit=$?
+          if [[ "$core_pg_owner_go_exit" != 0 || "$core_pg_owner_tee_exit" != 0 || "$core_pg_owner_census_exit" != 0 || "$core_pg_owner_returns_exit" != 0 ]]; then
+            exit 1
+          fi
+      - name: Prepare original mandatory corpus retention outside source checkout
+        id: prepare_original_corpora
+        if: ${{ !cancelled() && steps.retention_go_tests.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          "$RUNNER_TEMP/capacity-source-corpus-go-owner/status-owner" prepare
+      - name: Retain original Source retention Go owner build and unit returns
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capacity-source-retention-go-owner
+          path: ${{ runner.temp }}/capacity-source-corpus-go-owner/
+          if-no-files-found: error
+      - name: Require the exact reviewed original business source before effects
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$CAPACITY_NOTIFY_SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]] || { echo 'Reviewed Notify source is still on HOLD'; exit 1; }
+      - name: Read-only token for exact original Notify fixture source
+        id: notify-source-token
+        uses: actions/create-github-app-token@v2
+        with:
+          app-id: ${{ vars.YGGDRASIL_APP_ID }}
+          private-key: ${{ secrets.YGGDRASIL_APP_PEM }}
+          owner: dakasa-co
+          repositories: dakasa-app-notify-api
+          permission-contents: read
+      - name: Checkout the original owning business source
+        uses: actions/checkout@v4
+        with:
+          repository: dakasa-co/dakasa-app-notify-api
+          ref: ${{ env.CAPACITY_NOTIFY_SOURCE_COMMIT }}
+          path: .ci-original-notify
+          token: ${{ steps.notify-source-token.outputs.token }}
+          persist-credentials: false
+      - name: Compile the original creation witness and qualify its real HTTP owner
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C .ci-original-notify rev-parse HEAD)" = "$CAPACITY_NOTIFY_SOURCE_COMMIT"
+          notify_source_dir="$GITHUB_WORKSPACE/.ci-original-notify"
+          cd "$notify_source_dir"
+          GOWORK=off GOFLAGS=-mod=vendor GOPROXY=off GOSUMDB=off go test -c -tags nativequalification -ldflags "-X github.com/dakasa-co/dakasa-app-notify-api/internal/capacitycanary.SourceCommit=$CAPACITY_NOTIFY_SOURCE_COMMIT" -o "$RUNNER_TEMP/capacity-notify-fixture" ./controllers/message
+          GOWORK=off GOFLAGS=-mod=vendor GOPROXY=off GOSUMDB=off DAKASA_NATIVE_REMOTE_QUALIFICATION=true go test -json -tags nativequalification -p 1 -count=1 -timeout=30s . -run '^TestNativeAppNotifyCapacityCanary(RuntimeOriginalJoin|DefaultOffAndSealedAdmission)$' | tee "$RUNNER_TEMP/capacity-notify-runtime.jsonl"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          events=[json.loads(line) for line in (Path(os.environ['RUNNER_TEMP'])/'capacity-notify-runtime.jsonl').read_text().splitlines() if line.strip()]
+          required={'TestNativeAppNotifyCapacityCanaryRuntimeOriginalJoin','TestNativeAppNotifyCapacityCanaryDefaultOffAndSealedAdmission'}
+          passed={e.get('Test') for e in events if e.get('Action')=='pass'}
+          if required-passed or any(e.get('Action') in ('fail','skip') for e in events):
+              raise SystemExit('Original Notify runtime canary owner gate incomplete')
+          if not any(e.get('Action')=='pass' and not e.get('Test') for e in events):
+              raise SystemExit('Original Notify runtime package did not complete')
+          PY
+          echo "CAPACITY_NOTIFY_FIXTURE_BINARY=$RUNNER_TEMP/capacity-notify-fixture" >> "$GITHUB_ENV"
+          echo "CAPACITY_NOTIFY_FIXTURE_SOURCE_DIR=$notify_source_dir" >> "$GITHUB_ENV"
+      - name: Qualify the exact collector request return and deadline ownership
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C .ci-bound-prometheus rev-parse HEAD)" = b14ffabcea2daf0d575168abd2ec8d3e1c10520c
+          GO111MODULE=off GOWORK=off GOFLAGS='' go run ./scripts/ci/prometheus-lifecycle-gate --mode=postgres
+      - name: Retain original collector lifecycle command and GoJSON
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capacity-prometheus-lifecycle-postgres
+          path: ${{ runner.temp }}/prometheus-lifecycle-postgres
+          if-no-files-found: error
+      - name: Compile actual native read fixture producer in remote CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C .ci-native-hetzner rev-parse HEAD)" = cddc784604e7bdb26717c36c2cff242558a781aa
+          cp scripts/ci/capacity_vm_native_fixture_test.go.tmpl .ci-native-hetzner/internal/adapter/capacity_core_native_fixture_test.go
+          cd .ci-native-hetzner
+          go test -c -o "$RUNNER_TEMP/capacity-native-fixture" ./internal/adapter
+          echo "CAPACITY_NATIVE_FIXTURE_BINARY=$RUNNER_TEMP/capacity-native-fixture" >> "$GITHUB_ENV"
+      - name: Compile actual metric and HPA source producers in remote CI
+        shell: bash
+        run: |
+          set -euo pipefail
+          test "$(git -C .ci-bound-prometheus rev-parse HEAD)" = b14ffabcea2daf0d575168abd2ec8d3e1c10520c
+          test "$(git -C .ci-bound-kubernetes rev-parse HEAD)" = a386344e36383b0a23c3c82c5d05a5a176b0e0af
+          cp scripts/ci/capacity_metric_source_fixture_test.go.tmpl .ci-bound-prometheus/internal/adapter/capacity_core_metric_source_test.go
+          cp scripts/ci/capacity_hpa_source_fixture_test.go.tmpl .ci-bound-kubernetes/internal/adapter/capacity_core_hpa_source_test.go
+          (cd .ci-bound-prometheus && go test -c -o "$RUNNER_TEMP/capacity-metric-fixture" ./internal/adapter)
+          (cd .ci-bound-kubernetes && go test -c -o "$RUNNER_TEMP/capacity-hpa-fixture" ./internal/adapter)
+          echo "CAPACITY_METRIC_FIXTURE_BINARY=$RUNNER_TEMP/capacity-metric-fixture" >> "$GITHUB_ENV"
+          echo "CAPACITY_HPA_FIXTURE_BINARY=$RUNNER_TEMP/capacity-hpa-fixture" >> "$GITHUB_ENV"
+      - name: Apply production migrations
+        run: go run ./scripts/goose up
+      - name: Require the closed original Guest reconcile Source protocol
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          guest_reconcile_dir="$RUNNER_TEMP/original-guest-reconcile-source"
+          mkdir -m 700 "$guest_reconcile_dir"
+          go test -race -json -p 1 -count=1 -timeout=120s ./internal/capacity ./repository ./manifest ./controllers/message ./controllers/httpapi -run '^TestOriginalGuest(Reconcile|Dispatch|Administrative|Production)' 2>"$guest_reconcile_dir/stderr.log" | tee "$guest_reconcile_dir/original.jsonl"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])/'original-guest-reconcile-source'
+          events = [json.loads(line) for line in (root/'original.jsonl').read_text().splitlines()]
+          expected = {
+              'TestOriginalGuestProductionApprovalsBindActualContracts',
+              'TestOriginalGuestAdministrativeCostAssumptionClosed',
+              'TestOriginalGuestAdministrativeExpiryIsNotNativeQuote',
+              'TestOriginalGuestAdministrativeCostDoesNotChangeApproval',
+              'TestOriginalGuestReconcileStrictThresholdBoundaries',
+              'TestOriginalGuestReconcileCadenceAndRangeClocksSeparate',
+              'TestOriginalGuestReconcileCoverageWindowOwnsSampleMinimum',
+              'TestOriginalGuestReconcileBindingClosedScope',
+              'TestOriginalGuestReconcileFloorCreationDoesNotInventReadiness',
+              'TestOriginalGuestReconcileFloorBootstrapKeepsDemandMissing',
+              'TestOriginalGuestReconcileFloorBootstrapRefusesOtherAuthority',
+              'TestOriginalGuestReconcileCoverageRejectsPartialAggregates',
+              'TestOriginalGuestReconcileObservationWaitKeepsOriginalBudget',
+              'TestOriginalGuestReconcileGraphRejectsCallerAuthority',
+              'TestOriginalGuestReconcileSnapshotUsesCompleteNativePartition',
+              'TestOriginalGuestReconcileDoesNotChangeProfileApprovalProjection',
+              'TestOriginalGuestReconcileOwnerNeverRenewsLease',
+              'TestOriginalGuestReconcileOwnerFencesInsideMutex',
+              'TestOriginalGuestReconcileOwnerRequiresBoundedLiveCreator',
+              'TestOriginalGuestReconcileRequiresLiveOriginalOwner',
+              'TestOriginalGuestReconcileCannotSupplyAbsentSQLAuthority',
+              'TestOriginalGuestReconcileMaintenanceIsSourceClassified',
+              'TestOriginalGuestReconcilePostgresCannotInventAuthority',
+              'TestOriginalGuestReconcilePostgresFloorBootstrapCannotInventAuthority',
+              'TestOriginalGuestReconcileJSONPresenceIsExplicit',
+              'TestOriginalGuestReconcileWorkflowOperationsAreClosed',
+              'TestOriginalGuestReconcileSelectsOneOwnedSlot',
+              'TestOriginalGuestReconcileStepFailsBeforeAnyTransportWithoutOwner',
+              'TestOriginalGuestDispatchDoesNotTranslateHPAIntoVMAuthority',
+          }
+          runs = [e['Test'] for e in events if e.get('Action') == 'run' and e.get('Test')]
+          passes = [e['Test'] for e in events if e.get('Action') == 'pass' and e.get('Test')]
+          assert not any(e.get('Action') in ('skip', 'fail') for e in events)
+          assert set(runs) == set(passes) and len(runs) == len(set(runs)) == len(passes)
+          assert {n for n in runs if '/' not in n} == expected
+          assert len({e['Package'] for e in events if e.get('Action') == 'pass' and not e.get('Test')}) == 5
+          (root/'census.json').write_text(json.dumps({'roots':len(expected),'nodes':len(runs),'skips':0,'postgres_refusal_only':True,'production_qualification':False},sort_keys=True)+'\n')
+          PY
+      - name: Retain original Guest reconcile Source returns
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: original-guest-reconcile-source
+          path: ${{ runner.temp }}/original-guest-reconcile-source/
+          if-no-files-found: error
+      - name: Exercise durable decisions, concurrency, restart and fencing
+        if: ${{ !cancelled() && steps.prepare_original_corpora.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          core_pg_case_dir="$RUNNER_TEMP/capacity-postgres-original/capacity"
+          "$RUNNER_TEMP/capacity-source-corpus-go-owner/status-owner" start "capacity"
+          set +e
+          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message ./controllers/httpapi ./addons -run '^(TestCapacity(Intent.*|Workflow|Mutation.*|NativeLifetime)Postgres|TestCapacityNativeAdapter(OriginalHTTP|LegacyHTTPPreserved)|TestCapacityGuestNativeAdapterOriginalHTTP|TestCapacityGuestNativeDescribeCanonicalCatalog|TestCapacityGuestCollectorProtocolPostgres|TestCapacityDispatch(Postgres|AuthorizationPostgres|OriginalTransportPostgres|SchedulerPostgres|DemandPostgres)|TestCapacityNativeReleaseRecoveryPostgres|TestCapacityNativeReleaseOriginalUnredeemedPostgres|TestCapacityReleaseOriginalCaller|TestCapacityReleaseRecoveryFrame|TestProcessMatchedTrigger_.*)$' 2>"$core_pg_case_dir/go-test.stderr" | tee "$core_pg_case_dir/original.jsonl" 2>"$core_pg_case_dir/tee.stderr"
+          core_pg_pipeline_status=("${PIPESTATUS[@]}")
+          core_pg_go_exit="${core_pg_pipeline_status[0]}"
+          core_pg_tee_exit="${core_pg_pipeline_status[1]}"
+          python3 - <<'PY' >"$core_pg_case_dir/census.stdout" 2>"$core_pg_case_dir/census.stderr"
+          import json
+          from pathlib import Path
+          import os
+          events = [json.loads(line) for line in (Path(os.environ['RUNNER_TEMP'])/'capacity-postgres-original/capacity/original.jsonl').read_text().splitlines() if line.strip()]
+          root = "TestCapacityIntentPostgres"
+          expected = {root} | {root + "/" + name for name in (
+              "concurrent_assess_and_claim", "phase_receipts_and_promotion",
+              "shadow_and_inactive_policy", "dimension_ownership_and_stale_evidence")}
+          workflow = "TestCapacityWorkflowPostgres"
+          expected |= {workflow} | {workflow + "/" + name for name in (
+              "exact_active_protected_workflow", "shadow_claim_is_blocked",
+              "actorless_dispatch_is_blocked", "invocation_cannot_steal_lease", "unprotected_runtime_is_blocked")}
+          expected |= {"TestCapacityIntentExecutorAndReadbackPrivacyPostgres", "TestCapacityIntentExpiredQuoteAndHistoricalRecoveryPostgres", "TestCapacityIntentAbortRequiresMutationFenceProofPostgres"}
+          expected |= {"TestCapacityIntentDrainRequiresExplicitZeroInflightPostgres", "TestCapacityIntentFloorReadbackWithoutDemandMetricsPostgres"}
+          expected |= {"TestCapacityIntentRetentionPostgres"}
+          mutation = "TestCapacityMutationPostgres"
+          expected |= {mutation} | {mutation + "/" + name for name in (
+              "global_slot_registration_cannot_cross_policy_realms", "native_profiles_have_independent_slot_identities",
+              "paused_unredeemed_expiry_can_reconcile_without_native_fence",
+              "concurrent_issue_and_single_redemption", "lost_reply_same_attempt_is_read_only",
+              "settlement_nonce_scope_pause_and_private_receipt", "unresolved_mutation_blocks_terminal_and_expiry_reissue",
+              "native_action_cannot_replace_transport_settlement", "historical_recovery_confirms_after_pause",
+              "partial_recovery_matches_fresh_membership_and_allows_new_intent",
+              "floor_drain_pending_delete_budget_and_tombstone", "policy_instance_type_and_executor_fences",
+              "complete_membership_and_bound_plan_required")}
+          expected |= {mutation + "/policy_instance_type_and_executor_fences/" + name for name in ("policy", "instance", "type", "executor")}
+          expected |= {"TestCapacityMutationHTTPPostgres", "TestCapacityMutationFailedFloorRecoveryPostgres"}
+          native_http="TestCapacityMutationNativeHTTPPostgres"
+          expected |= {native_http} | {native_http+"/"+name for name in ("default_deny","canonical_members","instance_capability_and_hash_fences","single_use_redemption")}
+          result_http="TestCapacityMutationNativeResultAuthorizationPostgres"
+          expected |= {result_http} | {result_http+"/"+name for name in ("anonymous_result_default_deny","authenticated_result_wrong_capability")}
+          bound_execution="TestCapacityMutationBoundExecutionPostgres"
+          expected |= {bound_execution} | {bound_execution+"/"+name for name in ("finite_unredeemed_permission_budget","redemption_and_revocation_share_one_fence","unredeemed_token_revocation_and_history","single_send_and_canonical_request","principal_scope_and_single_redemption","lost_reply_blocks_new_write_and_terminal","native_readback_and_restart_recovery")}
+          recovery='TestCapacityNativeReleaseRecoveryPostgres'
+          expected|={recovery}|{recovery+'/'+name for name in ('both_original_acks_new_identity_and_archive','no_adapter_ack_hold','no_caller_ack_hold','wrong_nonce_hold','source_mismatch_hold','catalog_changed_hold','late_owner_hold','expired_owner_hold','duplicate_result_exact_only','four_history_no_reset','old_protocol_hold')}
+          original_unredeemed='TestCapacityNativeReleaseOriginalUnredeemedPostgres'
+          expected|={original_unredeemed}|{original_unredeemed+'/'+name for name in ('unredeemed_revoked_fresh_original_identity','redeemed_original_not_revoked_hold')}
+          caller='TestCapacityReleaseOriginalCaller'
+          expected|={caller}|{caller+'/'+name for name in ('original_complete_return','held_original_close','original_close_failure','response_and_error_original_close','non200_no_ack')}
+          frame='TestCapacityReleaseRecoveryFrame'
+          expected|={frame}|{frame+'/'+name for name in ('matched_frame','version_race_fresh_frame','repeated_version_race_bounded_hold','incomplete_inventory_hold','identity_drift_hold','missing_target_hold','read_failure_hold','fence_revoked_hold','expired_owner_zero_reads')}
+          lifetime="TestCapacityNativeLifetimePostgres"
+          expected |= {lifetime} | {lifetime+"/"+name for name in ("jsonb_origin_and_actual_ack","terminal_archive_repeated_rollouts","alive_and_uncertain_never_archived","partial_terminal_never_archived")}
+          native = "TestCapacityMutationNativeWorkflowPostgres"
+          expected |= {native} | {native + "/" + name for name in (
+              "readonly_real_adapter_inventory_has_no_authority",
+              "caller_scope_proof_and_unprotected_workflow_are_refused",
+              "native_collision_refuses_entire_inventory",
+              "complete_inventory_registers_through_existing_lease",
+              "native_reads_confirm_once_without_readiness_claim",
+              "lost_failed_creation_is_explicit_unresolved_member",
+              "paused_instance_and_old_type_refuse_current_reads",
+              "native_catalog_refuses_before_private_hydration")}
+          expected |= {'TestCapacityMutationVMNodeProtectedDispatcherPostgres',
+              'TestCapacityMutationVMNodeProtectedDispatcherPostgres/registered_tombstone_refuses_before_node_source',
+              'TestCapacityMutationVMNodeProtectedDispatcherPostgres/original_sdk_return_after_parent_absolute_deadline'}
+          business='TestCapacityMutationOriginalBusinessCanaryPostgres'
+          expected |= {business} | {business+'/'+name for name in (
+              'original_creation_join_is_scoped_without_authority',
+              'actorless_caller_expectations_and_old_workflow_refuse',
+              'paused_catalog_precedes_private_hydration',
+              'competing_consumer_and_changed_epoch_hold_without_replay',
+              'expired_final_native_context_cannot_accept',
+              'held_original_close_after_original_lease_expiry_refuses',
+              'closed_native_raw_duplicates_and_private_projection_refuse')}
+          transport='TestCapacityNativeAdapterOriginalHTTP'
+          expected |= {transport,'TestCapacityNativeAdapterLegacyHTTPPreserved'} | {transport+'/'+name for name in (
+              'verified_tls_fixed_original_origin', 'closed_duplicate_casefold_and_byte_cap',
+              'unauthorized_does_not_read_body', 'held_original_read_retains_cause',
+              'held_original_close_retains_cause', 'foreign_response_origin_refused_before_read',
+              'expired_entry_has_zero_original_calls', 'original_parent_deadline_without_err_is_retained')}
+          guest_transport='TestCapacityGuestNativeAdapterOriginalHTTP'
+          expected |= {guest_transport} | {guest_transport+'/'+name for name in (
+              'fixed_bearer_original_typed_reply', 'connectivity_owns_read_and_close',
+              'raw_alias_null_and_duplicate_refused', 'redirect_no_replay_and_getbody_nil',
+              'held_original_do_private_cause', 'held_original_read_private_cause',
+              'held_original_close_private_cause', 'owning_deadline_before_live_parent')}
+          guest_describe='TestCapacityGuestNativeDescribeCanonicalCatalog'
+          expected |= {guest_describe} | {guest_describe+'/'+name for name in (
+              'full_raw_catalog_original_read_close','domain_empty_phase_a_preserved','ordinary_optional_metadata_absent',
+              'unknown_catalog_field','domain_null','domain_alias','display_malformed',
+              'icon_malformed','action_schema_null','action_schema_malformed')}
+          guest_protocol='TestCapacityGuestCollectorProtocolPostgres'
+          expected |= {guest_protocol} | {guest_protocol+'/'+name for name in (
+              'full_selected_roster_scoped', 'missing_second', 'alias', 'token_rotation',
+              'catalog_pause', 'process_off', 'expired_lease', 'foreign_executor',
+              'preflight_catalog_before_secret', 'denied_dispatch_fence',
+              'fresh_describe_even_cached', 'missing_enrollment', 'enrolled_extra', 'empty_source')}
+          bound = "TestCapacityMutationBoundAssessmentPostgres"
+          expected |= {bound} | {bound + "/" + name for name in (
+              "actual_metric_and_hpa_producers_measure_only_reserved_minimum",
+              "missing_stale_cardinality_and_nonfinite_sources_hold_without_zero",
+              "caller_assessment_and_old_actuation_paths_are_blocked",
+              "foreign_uid_missing_rv_and_wrong_hash_refuse",
+              "shadow_binding_rejects_vm_units_and_profile_migration",
+              "catalog_refusal_precedes_private_hydration_and_describe",
+              "mutator_category_refusal_precedes_private_hydration",
+              "inactive_instance_and_type_revision_refuse_without_source_calls")}
+          compensation = "TestCapacityMutationCompensationPostgres"
+          expected |= {compensation} | {compensation + "/" + name for name in (
+              "unprotected_failed_create", "protected_failed_create_without_serving_membership",
+              "lost_create_reply_uses_separate_native_readback", "protected_lost_create_reply")}
+          expected |= {compensation + "/unprotected_failed_create/global_slot_precedes_child_row_during_foreign_issue"}
+          dispatch = 'TestCapacityDispatchPostgres'
+          expected |= {dispatch} | {dispatch+'/'+name for name in (
+              'same_transaction_rollback_and_commit', 'exact_tick_dedup_and_bounded_wakes',
+              'two_owners_and_original_realm', 'prestart_expiry_and_fence',
+              'started_expiry_never_replays_or_releases', 'legacy_ambiguous_rows_excluded',
+              'actual_return_context_failure_and_typed_status',
+              'unacknowledged_return_holds_concurrent_tick_and_claim',
+              'release_authorization_revoked_after_actual_first_ack_holds',
+              'late_commit_acknowledgment_retains_actual_return',
+              'new_binding_wake_preserves_original_pins', 'exact_original_pins_and_no_native_grants')}
+          expected |= {dispatch+'/actual_return_context_failure_and_typed_status/'+name for name in (
+              'succeeded', 'failed', 'unknown', 'cancelled-context',
+              'absolute-deadline-without-err', 'opaque-original-error', 'independent-go-return-clock')}
+          auth = 'TestCapacityDispatchAuthorizationPostgres'
+          expected |= {auth} | {auth+'/'+name for name in (
+              'actual_operator_binding_same_http_kernel', 'caller_metadata_cannot_choose_principal',
+              'current_rbac_revocation_before_start', 'revoked_expired_and_rotated_current_principal',
+              'changed_original_binding_and_workflow_refuse', 'fixed_graph_refuses_retries_and_foreach',
+              'paused_catalog_and_disabled_binding_hold', 'original_cause_and_private_error_format')}
+          expected |= {auth+'/revoked_expired_and_rotated_current_principal/'+name for name in ('absent','revoked','expired','rotated')}
+          expected |= {auth+'/changed_original_binding_and_workflow_refuse/'+name for name in ('binding','workflow')}
+          expected |= {auth+'/fixed_graph_refuses_retries_and_foreach/'+name for name in ('retry','foreach')}
+          original_dispatch = 'TestCapacityDispatchOriginalTransportPostgres'
+          expected |= {original_dispatch} | {original_dispatch+'/'+name for name in (
+              'redirect_307','redirect_308','byte_cap','read_cause','close_cause','child_deadline')}
+          scheduler = 'TestCapacityDispatchSchedulerPostgres'
+          expected |= {scheduler} | {scheduler+'/'+name for name in (
+              'original_cron_tick_queued_without_broker', 'default_off_binding_never_legacy_fallback',
+              'private_owner_absent_binding_never_legacy_fallback',
+              'paused_policy_never_legacy_fallback',
+              'generic_cleaner_cannot_release_started_dispatch',
+              'owned_service_prestart_resume_actual_failed_return',
+              'started_expiry_new_tick_hold', 'actual_child_failstop',
+              'removed_binding_never_legacy_fallback', 'initially_absent_binding_never_legacy_fallback',
+              'unbound_normalized_capacity_graph_never_legacy_fallback',
+              'tombstoned_or_purged_binding_never_legacy_fallback',
+              'private_owner_absent_removed_binding_never_legacy_fallback',
+              'unrelated_legacy_cron_retains_original_dispatch')}
+          expected |= {scheduler+'/removed_binding_never_legacy_fallback/'+name for name in ('process_off','absent_inventory','denied_rbac')}
+          expected |= {scheduler+'/unbound_normalized_capacity_graph_never_legacy_fallback/'+name for name in ('operation_normalized','capability_fallback')}
+          expected |= {scheduler+'/tombstoned_or_purged_binding_never_legacy_fallback/'+name for name in ('tombstoned_without_binding','purged_policy')}
+          expected |= {scheduler+'/actual_child_failstop/'+name for name in ('before_started','after_started_before_invoke')}
+          demand = 'TestCapacityDispatchDemandPostgres'
+          expected |= {demand} | {demand+'/'+name for name in (
+              'original_source_return_and_private_job', 'duplicate_and_uncertain_ack_same_ids',
+              'atomic_rollback_and_cursor', 'broker_outage_retains_original',
+              'coalesce_saturation_retains_event', 'started_unknown_never_replay',
+              'binding_principal_and_rbac_refusals', 'caller_payload_cannot_supply_authority',
+              'wrong_lineage_and_source_pins_refuse', 'stale_or_unknown_demand_is_hold',
+              'native_bound_refusal_is_not_capacity', 'cron_wire_and_private_cursor_independent')}
+          expected |= {demand+'/'+name for name in (
+              'fresh_dimension_survives_other_dimension_hold',
+              'lower_sequence_late_original_commit_remains_eligible')}
+          expected |= {demand+'/fresh_dimension_survives_other_dimension_hold/'+name for name in (
+              'expired','revoked','saturated','inactive')}
+          expected |= {scheduler+'/original_scheduler_null_version_completion_wakes_fixed_demand'}
+          expected |= {demand+'/'+name for name in (
+              'versioned_cursor_fits_original_sql_column',
+              'stored_version_response_and_manifest_identity_refuse_drift')}
+          expected |= {demand+'/stored_version_response_and_manifest_identity_refuse_drift/'+name for name in (
+              'sql_version_mismatch','sql_version_zero','sql_version_negative',
+              'response_version_zero','response_version_foreign',
+              'metadata_manifest_foreign','payload_version_foreign')}
+          expected |= {'TestProcessMatchedTrigger_'+name for name in (
+              'DispatchesWorkflowRun','IsIdempotent','ExposesPayloadAsInputsEvent',
+              'DefaultInputsOverridePayload','DisabledTriggerSkipsDispatch')}
+          expected |= {scheduler+'/'+name for name in (
+              'unrelated_legacy_event_retains_original_dispatch',
+              'unrelated_legacy_event_degraded_broker_retains_original_match',
+              'configured_capacity_event_binding_refused_before_legacy_dedup',
+              'unbound_capacity_event_graph_refused_before_legacy_dedup',
+              'removed_tombstoned_or_purged_capacity_event_binding_refused_before_legacy_dedup')}
+          expected |= {scheduler+'/unrelated_legacy_event_degraded_broker_retains_original_match/'+name for name in ('nil_broker','closed_broker')}
+          expected |= {scheduler+'/configured_capacity_event_binding_refused_before_legacy_dedup/'+name for name in ('private_owner_present','private_owner_absent')}
+          for name in ('operation_canonical','operation_normalized','capability_fallback'):
+              parent = scheduler+'/unbound_capacity_event_graph_refused_before_legacy_dedup/'+name
+              expected.add(parent)
+              expected |= {parent+'/'+owner for owner in ('private_owner_present','private_owner_absent')}
+          for name in ('removed_binding','tombstoned_without_binding','purged_policy'):
+              parent = scheduler+'/removed_tombstoned_or_purged_capacity_event_binding_refused_before_legacy_dedup/'+name
+              expected.add(parent)
+              expected |= {parent+'/'+owner for owner in ('private_owner_present','private_owner_absent')}
+          packages = {'github.com/dakasa-yggdrasil/yggdrasil-core/'+name for name in (
+              'repository','controllers/message','controllers/httpapi','addons')}
+          completed = {event.get('Package') for event in events if event.get('Action')=='pass' and not event.get('Test')}
+          if packages-completed:
+              raise SystemExit('Capacity packages did not complete: '+str(sorted(packages-completed)))
+          passed = {event.get("Test") for event in events if event.get("Action") == "pass"}
+          skipped = {event.get("Test") for event in events if event.get("Action") == "skip"}
+          if expected - passed or skipped:
+              raise SystemExit(f"Capacity gate incomplete: missing={sorted(expected-passed)}, skipped={sorted(skipped)}")
+          PY
+          core_pg_census_exit=$?
+          "$RUNNER_TEMP/capacity-source-corpus-go-owner/status-owner" finish "capacity" "$core_pg_go_exit" "$core_pg_tee_exit" "$core_pg_census_exit"
+          core_pg_state_exit=$?
+          if [[ "$core_pg_go_exit" != 0 || "$core_pg_tee_exit" != 0 || "$core_pg_census_exit" != 0 || "$core_pg_state_exit" != 0 ]]; then
+            exit 1
+          fi
+      - name: Qualify closed original Guest wire and scoped roster protocol
+        if: ${{ !cancelled() && steps.prepare_original_corpora.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          core_pg_case_dir="$RUNNER_TEMP/capacity-postgres-original/guest-wire"
+          "$RUNNER_TEMP/capacity-source-corpus-go-owner/status-owner" start "guest-wire"
+          set +e
+          go test -race -json -p 1 -count=1 -timeout=90s ./internal/capacity -run '^TestCapacityGuest(OriginalClosedWire|OriginalRosterJoinsWithoutAuthority|OptionalBindingPreserved)$' 2>"$core_pg_case_dir/go-test.stderr" | tee "$core_pg_case_dir/original.jsonl" 2>"$core_pg_case_dir/tee.stderr"
+          core_pg_pipeline_status=("${PIPESTATUS[@]}")
+          core_pg_go_exit="${core_pg_pipeline_status[0]}"
+          core_pg_tee_exit="${core_pg_pipeline_status[1]}"
+          python3 - <<'PY' >"$core_pg_case_dir/census.stdout" 2>"$core_pg_case_dir/census.stderr"
+          import json
+          from collections import Counter
+          from pathlib import Path
+          import os
+          events=[json.loads(line) for line in (Path(os.environ['RUNNER_TEMP'])/'capacity-postgres-original/guest-wire/original.jsonl').read_text().splitlines() if line.strip()]
+          package='github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity'
+          wire='TestCapacityGuestOriginalClosedWire'
+          roster='TestCapacityGuestOriginalRosterJoinsWithoutAuthority'
+          expected={wire,roster,'TestCapacityGuestOptionalBindingPreserved'}
+          expected|={wire+'/'+name for name in ('alias','duplicate','alias_overwrite','missing_false','null_false','missing_wait','null_wait','trailing','extra','metadata_null','metadata_authority','cap')}
+          expected|={roster+'/'+name for name in ('missing','extra','duplicate','empty','boot','tuple','context','source','stale','journal_hash','unfinished','enclosing_projection','warm','useful','route','drain','quiescence','release','pending_enclosing_unit_is_scoped_only')}
+          ran=Counter(e.get('Test') for e in events if e.get('Action')=='run')
+          passed=Counter(e.get('Test') for e in events if e.get('Action')=='pass' and e.get('Test'))
+          if set(ran)!=expected or set(passed)!=expected or any(ran[n]!=1 or passed[n]!=1 for n in expected):
+              raise SystemExit('Guest closed wire/roster literal census incomplete')
+          if any(e.get('Package')!=package or e.get('Action') in ('fail','skip') for e in events):
+              raise SystemExit('Guest protocol package/refusal failed')
+          if sum(e.get('Action')=='start' and not e.get('Test') for e in events)!=1 or sum(e.get('Action')=='pass' and not e.get('Test') for e in events)!=1:
+              raise SystemExit('Guest protocol owning package did not complete once')
+          PY
+          core_pg_census_exit=$?
+          "$RUNNER_TEMP/capacity-source-corpus-go-owner/status-owner" finish "guest-wire" "$core_pg_go_exit" "$core_pg_tee_exit" "$core_pg_census_exit"
+          core_pg_state_exit=$?
+          if [[ "$core_pg_go_exit" != 0 || "$core_pg_tee_exit" != 0 || "$core_pg_census_exit" != 0 || "$core_pg_state_exit" != 0 ]]; then
+            exit 1
+          fi
+      - name: Qualify original Notify window source transport and native PostgreSQL ownership
+        if: ${{ !cancelled() && steps.prepare_original_corpora.outcome == 'success' }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          core_pg_case_dir="$RUNNER_TEMP/capacity-postgres-original/notify-owner"
+          "$RUNNER_TEMP/capacity-source-corpus-go-owner/status-owner" start "notify-owner"
+          set +e
+          go test -race -json -p 1 -count=1 -timeout=5m ./controllers/message ./controllers/httpapi -run '^TestCapacityOriginalNotifyWindow(Source|Postgres)$' 2>"$core_pg_case_dir/go-test.stderr" | tee "$core_pg_case_dir/original.jsonl" 2>"$core_pg_case_dir/tee.stderr"
+          core_pg_pipeline_status=("${PIPESTATUS[@]}")
+          core_pg_go_exit="${core_pg_pipeline_status[0]}"
+          core_pg_tee_exit="${core_pg_pipeline_status[1]}"
+          python3 - <<'PYWINDOW' >"$core_pg_case_dir/census.stdout" 2>"$core_pg_case_dir/census.stderr"
+          import json
+          from collections import Counter
+          from pathlib import Path
+          import os
+          events=[json.loads(line) for line in (Path(os.environ['RUNNER_TEMP'])/'capacity-postgres-original/notify-owner/original.jsonl').read_text().splitlines() if line.strip()]
+          source='TestCapacityOriginalNotifyWindowSource'
+          pg='TestCapacityOriginalNotifyWindowPostgres'
+          expected={source,pg}
+          expected|={source+'/'+name for name in (
+              'private_false_readiness_keeps_whole_ready_roster_guard',
+              'marker5_without_original_owner_return_stays_pending','exact_scope_permission_is_not_business_authority',
+              'legacy_default_off_and_unknown_sticky','concrete_false_control_members',
+              'raw_json_encoding_and_alias_refusal','literal_typed_scope_order_no_map_hash',
+              'optional_binding_null_alias_duplicate_refused','fixed_tls_control_original_return',
+              'read_a_has_no_participant_or_authority_header','non_ok_never_reads_but_actual_close_returns',
+              'original_read_and_close_causes_are_opaque','held_actual_close_cancel','held_actual_close_deadline',
+              'redirect_overflow_and_expired_entry_refused','selector_secret_and_nil_owner_refuse_before_do')}
+          expected|={pg+'/'+name for name in (
+              'same_original_start_and_marker_ack_before_register',
+              'current_dispatch_fence_refuses_registration','current_intent_fence_refuses_registration',
+              'current_intent_owner_refuses_registration','current_intent_executor_refuses_registration',
+              'current_policy_refuses_registration','current_rbac_refuses_registration','current_principal_refuses_registration',
+              'different_original_core_cannot_adopt_bearer',
+              'unknown_marker_survives_generation_and_binding_removal',
+              'final_original_return_commit_precedes_reservation_complete',
+              'lost_ack_original_marker_no_registration','late_actual_ack_original_marker_no_registration')}
+          ran=Counter(e.get('Test') for e in events if e.get('Action')=='run')
+          passed=Counter(e.get('Test') for e in events if e.get('Action')=='pass' and e.get('Test'))
+          packages={'github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message','github.com/dakasa-yggdrasil/yggdrasil-core/controllers/httpapi'}
+          if set(ran)!=expected or set(passed)!=expected or any(ran[n]!=1 or passed[n]!=1 for n in expected):
+              raise SystemExit('Original Notify source/PG owner literal census incomplete')
+          if any(e.get('Package') not in packages or e.get('Action') in ('fail','skip') for e in events):
+              raise SystemExit('Original Notify source/PG owner failed or skipped')
+          for package in packages:
+              if sum(e.get('Package')==package and e.get('Action')=='start' and not e.get('Test') for e in events)!=1 or sum(e.get('Package')==package and e.get('Action')=='pass' and not e.get('Test') for e in events)!=1:
+                  raise SystemExit('Original Notify owning package did not complete once')
+          PYWINDOW
+          core_pg_census_exit=$?
+          "$RUNNER_TEMP/capacity-source-corpus-go-owner/status-owner" finish "notify-owner" "$core_pg_go_exit" "$core_pg_tee_exit" "$core_pg_census_exit"
+          core_pg_state_exit=$?
+          if [[ "$core_pg_go_exit" != 0 || "$core_pg_tee_exit" != 0 || "$core_pg_census_exit" != 0 || "$core_pg_state_exit" != 0 ]]; then
+            exit 1
+          fi
+      - name: Retain original Notify source and PostgreSQL caller evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: original-notify-window-source-postgres
+          path: ${{ runner.temp }}/capacity-postgres-original/notify-owner/
+          if-no-files-found: error
+      # Actual native Guest/Core qualification is owned by the PRIVATE Guest
+      # CI. It checks out the exact PUBLIC Core commit and executes the two
+      # current Core native collector cases while its original QEMU guest is
+      # alive. This public repository never copies/checks out private Guest
+      # source and never fabricates those external results from protocol cases.
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capacity-guest-closed-wire-protocol
+          path: ${{ runner.temp }}/capacity-postgres-original/guest-wire/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: capacity-protocol-results
+          path: ${{ runner.temp }}/capacity-postgres-original/capacity/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: original-notify-canary-runtime-source
+          path: ${{ runner.temp }}/capacity-notify-runtime.jsonl
+          if-no-files-found: error

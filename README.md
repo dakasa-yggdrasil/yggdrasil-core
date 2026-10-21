@@ -135,6 +135,61 @@ Install an integration with `yggdrasil install <repo>` and it appears
 in your catalog as a usable operation set inside workflows, regardless
 of which transport it chose.
 
+### Direct TLS for the original Core process
+
+The HTTP addon preserves its existing plaintext transport when both identity
+variables are absent. An explicit pair of mounted identity files enables TLS
+on the same listening address, API handler and process-local authority registry.
+Partial, blank, noncanonical or unreadable identities refuse the HTTP addon
+before it accesses its database resource or performs OIDC/API bootstrap effects.
+Earlier addons may already have initialized their resources. There is no
+plaintext or forwarding-header fallback.
+
+| Variable | Explicit opt-in |
+| --- | --- |
+| `HTTP_TLS_CERT_FILE` | Absolute canonical path to the approved mounted certificate chain. |
+| `HTTP_TLS_KEY_FILE` | Absolute canonical path to its approved mounted private key. |
+| `HTTP_TLS_SECONDARY_ADDR` | Optional canonical literal IP or wildcard address and distinct port, such as `:9443`. Requires the mounted identity pair. |
+
+```mermaid
+flowchart LR
+    Caller[Verified HTTPS caller] --> Listener[Original Core TLS listener]
+    Listener --> Handler[Same API handler and private authority registry]
+    Handler --> Guard[Current original dispatch and intent guards]
+```
+
+When `HTTP_TLS_SECONDARY_ADDR` is present, the primary listener retains HTTP and
+the additional listener serves TLS through the same handler and process-local
+authority registry. This supports mixed old/new processes during a rollout.
+All sockets must bind before any server starts; a failed secondary bind closes
+the primary socket. Shutdown shares the caller's existing context across both
+servers. Blank, noncanonical, hostname-based, zoned, zero-port or same-port
+secondary addresses are refused before HTTP database/OIDC bootstrap.
+
+The identity is loaded once at boot and TLS requires version 1.2 or later.
+The private canary-authority endpoint requires an actual TLS connection; a TLS
+terminating proxy followed by plaintext does not meet that requirement. Its
+approved origin must reach the same original Core process that registered the
+ephemeral permission. A different process refuses the token and cannot adopt it.
+Before activating this opt-in, the operator must coordinate the certificate,
+approved origins, callers and HTTPS health probes. Listener code and CI evidence
+do not establish a production certificate, routing affinity, useful capacity,
+warm stock or deployment; those remain separate release prerequisites.
+
+### Original Guest capacity contracts
+
+The source-owned [provider contract](docs/adr/0060-own-original-guest-provider-per-workflow-invocation.md)
+binds one workflow invocation to an exact AWS or Hetzner adapter source and its
+original create return. Independently read native identity is included in the
+signed Guest witness; kernel boot and application process lifetimes remain
+separate. Production profile approvals default to an empty registry. Source CI
+does not establish private network reachability, useful capacity or retirement.
+
+The explicit public service profile verifies the complete source census and
+[service contract](docs/SERVICE_CONTRACT.yaml). Its independent source review is
+recorded in [REVIEW.json](docs/service-contract/REVIEW.json); operational rollout
+and native qualification require their own evidence.
+
 ## Feature deep-dives
 
 Every feature below has a dedicated guide in [docs/features/](docs/features/)
