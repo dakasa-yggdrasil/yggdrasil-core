@@ -14,7 +14,7 @@ import (
 )
 
 func originalAWSGuestSupplierCatalog(ts model.IntegrationTypeManifestSpec) bool {
-	if ts.Provider != "aws" || ts.Adapter.Version != "1.61.0" || ts.Adapter.Transport != "http_json" || ts.Adapter.Endpoints.Execute != "/rpc/execute" || ts.Adapter.Endpoints.Describe != "/rpc/describe" || manifest.ValidateIntegrationTypeSpec(ts) != nil {
+	if ts.Provider != "aws" || (ts.Adapter.Version != "1.61.0" && ts.Adapter.Version != "1.62.0") || ts.Adapter.Transport != "http_json" || ts.Adapter.Endpoints.Execute != "/rpc/execute" || ts.Adapter.Endpoints.Describe != "/rpc/describe" || manifest.ValidateIntegrationTypeSpec(ts) != nil {
 		return false
 	}
 	for _, required := range []string{"ensure_ec2_instance", "observe_ec2_instance", "terminate_ec2_instance"} {

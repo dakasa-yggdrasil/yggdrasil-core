@@ -559,6 +559,14 @@ func (s CapacityStore) SettleMutation(ctx context.Context, principal, nonce stri
 				return ErrCapacityMutationAuthorization
 			}
 		}
+		if r.OriginalProviderDestroyReturn != nil || record.EventProvider == "aws" && capacity.AWSOriginalMutationPair(record.Binding) && record.Grant.Capability == record.Binding.DestroyCapability && r.Outcome == "accepted" {
+			if record.EventProvider != "aws" {
+				return ErrCapacityMutationAuthorization
+			}
+			if _, err := capacity.ValidateOriginalAWSDestroyReturn(record.Binding, record.Grant, record.AttemptID, r, record.CreatedAt, now); err != nil {
+				return ErrCapacityMutationAuthorization
+			}
+		}
 		observed, err := time.Parse(time.RFC3339Nano, r.ObservedAt)
 		if err != nil || observed.Before(record.CreatedAt.Add(-5*time.Second)) || observed.After(now.Add(5*time.Second)) {
 			return ErrCapacityMutationAuthorization

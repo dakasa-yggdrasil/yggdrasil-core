@@ -23,6 +23,9 @@ func TestOriginalMutationCompletionPreservesLegacyAWS(t *testing.T) {
 		{"legacy_aws_rejects_new_lifecycle", func(_ *capacityMutationRecord, p *model.CapacityMutationProof) {
 			p.AWSInstanceLifecycle = &model.CapacityAWSInstanceLifecycle{}
 		}, false},
+		{"legacy_aws_rejects_retirement_lifecycle", func(_ *capacityMutationRecord, p *model.CapacityMutationProof) {
+			p.AWSRetirementLifecycle = &model.CapacityAWSRetirementLifecycle{}
+		}, false},
 		{"legacy_aws_still_requires_complete_actions", func(_ *capacityMutationRecord, p *model.CapacityMutationProof) { p.ActionIDs = nil }, false},
 		{"legacy_aws_still_rejects_failed_actions", func(_ *capacityMutationRecord, p *model.CapacityMutationProof) { p.ActionsFailed = true }, false},
 		{"legacy_aws_still_requires_success", func(_ *capacityMutationRecord, p *model.CapacityMutationProof) { p.ActionsSuccessful = false }, false},
@@ -35,10 +38,10 @@ func TestOriginalMutationCompletionPreservesLegacyAWS(t *testing.T) {
 		{"source_pinned_ec2_cannot_use_generic_actions", func(r *capacityMutationRecord, _ *model.CapacityMutationProof) {
 			r.Binding.OriginalProviderSourceCommit = strings.Repeat("a", 40)
 		}, false},
-		{"source_pinned_ec2_retirement_does_not_use_create_lifecycle", func(r *capacityMutationRecord, _ *model.CapacityMutationProof) {
+		{"source_pinned_ec2_retirement_requires_own_original_receipt", func(r *capacityMutationRecord, _ *model.CapacityMutationProof) {
 			r.Binding.OriginalProviderSourceCommit = strings.Repeat("a", 40)
 			r.Grant.Capability = r.Binding.DestroyCapability
-		}, true},
+		}, false},
 		{"source_pinned_ec2_compensation_does_not_use_create_lifecycle", func(r *capacityMutationRecord, _ *model.CapacityMutationProof) {
 			r.Binding.OriginalProviderSourceCommit = strings.Repeat("a", 40)
 			r.Grant.CompensationOf = "parent"

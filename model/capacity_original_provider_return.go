@@ -73,3 +73,7 @@ func (r *CapacityOriginalProviderCreateReturn) UnmarshalJSON(raw []byte) error {
 	*r = CapacityOriginalProviderCreateReturn(parsed)
 	return nil
 }
+
+// The wire is equally closed, while its distinct settlement field/schema
+// prevent any create reply from being repurposed as TerminateInstances truth.
+type CapacityOriginalProviderDestroyReturn = CapacityOriginalProviderCreateReturn

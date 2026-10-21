@@ -6,6 +6,7 @@ package model
 // The owning protected consumer rechecks every field against the immutable
 // original receipt; RetirementComplete alone never frees a reserved slot.
 type CapacityVMRetirementObservation struct {
+	AWSRetirementLifecycle *CapacityAWSRetirementLifecycle `json:"aws_retirement_lifecycle,omitempty"`
 	CapacityVMNativeTuple
 	DestroyGrantID             string                           `json:"destroy_grant_id"`
 	DestroyGrantState          string                           `json:"destroy_grant_state"`

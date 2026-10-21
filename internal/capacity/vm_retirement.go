@@ -16,6 +16,12 @@ const VMObserveRetirement = "observe_server_retirement"
 // independently join the original Guest evidence before freeing a slot.
 func VMRetirementProof(p model.CapacityPolicySpec, b model.CapacityMutationBinding, original model.CapacityMutationReceipt, observed model.CapacityVMRetirementObservation, now time.Time, receiptRef string) (model.CapacityMutationProof, error) {
 	var out model.CapacityMutationProof
+	if AWSOriginalMutationPair(b) {
+		return awsVMRetirementProof(p, b, original, observed, now, receiptRef)
+	}
+	if observed.AWSRetirementLifecycle != nil {
+		return out, fmt.Errorf("AWS retirement lifecycle requires its exact source-pinned AWS binding")
+	}
 	g := original.Grant
 	refuse := fmt.Errorf("exact original native retirement readback required")
 	if (g.State != "settled" && g.State != "confirmed") || g.Capability != b.DestroyCapability || g.BindingName != b.Name || g.IntegrationInstanceID != b.IntegrationInstanceID || g.ScopeChecksum != b.ScopeChecksum || g.ProfileName != b.ProfileName || g.GrantID == "" || g.RequestSHA256 == "" || g.ExpectedResourceID == "" || g.ExpectedResourceCreatedAt == "" || original.Outcome != "accepted" || !original.TransportCompleted || observed.DestroyGrantID != g.GrantID || observed.DestroyGrantState != g.State || observed.CompensationOf != g.CompensationOf || observed.ID != g.ExpectedResourceID || observed.CreatedAt != g.ExpectedResourceCreatedAt || observed.OriginalOutcome != original.Outcome || observed.OriginalTransportCompleted != original.TransportCompleted || !observed.ServerAbsent || !observed.ServerAbsenceComplete || observed.ServerStatus != "" || !observed.AuxiliaryInventoryComplete || !original.AuxiliaryInventoryComplete || !observed.BillableResourcesAbsent || !observed.RetirementComplete || observed.HoldReasons == nil || len(observed.HoldReasons) != 0 || observed.InvoiceReconciled || observed.WriterQuiescenceEvidence || observed.ProviderFencingEvidence || receiptRef == "" || len(receiptRef) > 2048 {

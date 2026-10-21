@@ -15,5 +15,12 @@ func successfulOriginalMutationProof(record capacityMutationRecord, proof model.
 		_, err := capacity.ValidateOriginalAWSCreateReturn(record.Binding, record.Grant, record.AttemptID, *record.Settlement, record.CreatedAt, now)
 		return err == nil
 	}
-	return proof.AWSInstanceLifecycle == nil && completeMutationActionProof(record, proof) && proof.ActionsSuccessful && !proof.ActionsFailed
+	if record.EventProvider == "aws" && capacity.AWSOriginalMutationPair(record.Binding) && record.Grant.Capability == record.Binding.DestroyCapability && record.Grant.CompensationOf == "" {
+		if !capacity.AWSOriginalDestroyLifecycleComplete(record.Binding, record.Grant, record.Settlement, proof, now) {
+			return false
+		}
+		_, err := capacity.ValidateOriginalAWSDestroyReturn(record.Binding, record.Grant, record.AttemptID, *record.Settlement, record.CreatedAt, now)
+		return err == nil
+	}
+	return proof.AWSRetirementLifecycle == nil && proof.AWSInstanceLifecycle == nil && completeMutationActionProof(record, proof) && proof.ActionsSuccessful && !proof.ActionsFailed
 }

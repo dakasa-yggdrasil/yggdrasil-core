@@ -74,8 +74,11 @@ original DTO, scope and native tuple. It cannot confer application readiness,
 cancel a late writer, certify retirement or populate the production registry.
 
 Use the existing AWS pair `ensure_ec2_instance`/`terminate_ec2_instance`; do not
-invent a destroy alias. Original capacity start/stop/terminate stay refused in
-the adapter until their own source-owned retirement contract exists.
+invent a destroy alias. Original capacity start/stop remain refused. Adapter 1.62.0 supplies a distinct
+source-owned original terminate receipt and independently complete native
+instance/root-EBS/primary-ENI absence. Core production retirement orchestration
+must still join original Guest drain and protected useful-floor evidence before
+permitting the write; provider absence cannot stand in for either.
 
 ## Consequences
 
@@ -120,3 +123,24 @@ and metadata availability-zone is diagnostic only. No obsolete API field or
 inferred location-to-datacenter mapping becomes authority.
 Sources: [Hetzner metadata/reference](https://docs.hetzner.cloud/reference/cloud),
 [Hetzner API changelog](https://docs.hetzner.cloud/changelog).
+
+
+### AWS original retirement lifecycle
+
+The existing AWS destroy capability requires a distinct
+`original_provider_destroy_return`, closed schema
+`aws_original_terminate_instances_return_v1`, inside the existing authenticated
+principal/attempt/nonce settlement transaction. Its old creation timestamp is
+not restamped to the destroy call. Its actual request ID does not describe an
+EC2 job. The original pre-write root EBS volume and primary ENI IDs, each marked
+requires_absence, are retained immutably with that settlement.
+
+A source-pinned AWS binding consumes the separate
+`aws_original_terminate_and_native_absence_v1` lifecycle. Exact native instance
+terminated/NotFound and separately complete volume/ENI NotFound must all be
+freshly observed; generic action flags remain false and action IDs empty.
+Unknown receipts, retained auxiliaries, incomplete Close/error bodies, reuse of
+a creation receipt, generic delete_server actions, invoice/quiescence claims
+or compensation without a separate owned contract refuse completion. Legacy
+bindings without the optional source pin preserve their prior generic behavior.
+No schema migration or source test fabricates durable provider authority.

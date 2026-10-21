@@ -97,21 +97,22 @@ type CapacityMutationRedeemResponse struct {
 }
 
 type CapacityMutationSettleRequest struct {
-	OriginalProviderCreateReturn *CapacityOriginalProviderCreateReturn `json:"original_provider_create_return,omitempty"`
-	GrantID                      string                                `json:"grant_id"`
-	AttemptID                    string                                `json:"attempt_id"`
-	RequestSHA256                string                                `json:"request_sha256"`
-	Outcome                      string                                `json:"outcome"`
-	TransportCompleted           bool                                  `json:"transport_completed"`
-	ResourceID                   string                                `json:"resource_id,omitempty"`
-	ResourceCreatedAt            string                                `json:"resource_created_at,omitempty"`
-	ActionID                     string                                `json:"action_id,omitempty"`
-	NextActionIDs                []string                              `json:"next_action_ids,omitempty"`
-	ObservedAt                   string                                `json:"observed_at"`
-	ProviderErrorCode            string                                `json:"provider_error_code,omitempty"`
-	ProviderStatusCode           int                                   `json:"provider_status_code,omitempty"`
-	AuxiliaryResources           []CapacityMutationAuxiliaryResource   `json:"auxiliary_resources,omitempty"`
-	AuxiliaryInventoryComplete   bool                                  `json:"auxiliary_inventory_complete,omitempty"`
+	OriginalProviderDestroyReturn *CapacityOriginalProviderDestroyReturn `json:"original_provider_destroy_return,omitempty"`
+	OriginalProviderCreateReturn  *CapacityOriginalProviderCreateReturn  `json:"original_provider_create_return,omitempty"`
+	GrantID                       string                                 `json:"grant_id"`
+	AttemptID                     string                                 `json:"attempt_id"`
+	RequestSHA256                 string                                 `json:"request_sha256"`
+	Outcome                       string                                 `json:"outcome"`
+	TransportCompleted            bool                                   `json:"transport_completed"`
+	ResourceID                    string                                 `json:"resource_id,omitempty"`
+	ResourceCreatedAt             string                                 `json:"resource_created_at,omitempty"`
+	ActionID                      string                                 `json:"action_id,omitempty"`
+	NextActionIDs                 []string                               `json:"next_action_ids,omitempty"`
+	ObservedAt                    string                                 `json:"observed_at"`
+	ProviderErrorCode             string                                 `json:"provider_error_code,omitempty"`
+	ProviderStatusCode            int                                    `json:"provider_status_code,omitempty"`
+	AuxiliaryResources            []CapacityMutationAuxiliaryResource    `json:"auxiliary_resources,omitempty"`
+	AuxiliaryInventoryComplete    bool                                   `json:"auxiliary_inventory_complete,omitempty"`
 }
 
 type CapacityMutationAuxiliaryResource struct {
@@ -156,6 +157,7 @@ type CapacityMutationReceipt struct {
 // fresh adapter reads. Transport completion, provider action completion, and
 // product readiness are distinct facts; this proof addresses only the first two.
 type CapacityMutationProof struct {
+	AWSRetirementLifecycle       *CapacityAWSRetirementLifecycle      `json:"aws_retirement_lifecycle,omitempty"`
 	ProviderNativeIdentity       *CapacityGuestProviderNativeIdentity `json:"provider_native_identity,omitempty"`
 	AWSInstanceLifecycle         *CapacityAWSInstanceLifecycle        `json:"aws_instance_lifecycle,omitempty"`
 	GrantID                      string                               `json:"grant_id"`
@@ -189,4 +191,14 @@ type CapacityAWSInstanceLifecycle struct {
 	SystemStatus   string    `json:"system_status"`
 	InstanceStatus string    `json:"instance_status"`
 	ObservedAt     time.Time `json:"observed_at"`
+}
+
+// EC2 TerminateInstances returns a request identity, not an asynchronous job.
+// Complete independently authenticated native absence must cover the retained
+// instance, root EBS volume and primary ENI before this can release membership.
+type CapacityAWSRetirementLifecycle struct {
+	Schema     string    `json:"schema"`
+	RequestID  string    `json:"request_id"`
+	EC2State   string    `json:"ec2_state"`
+	ObservedAt time.Time `json:"observed_at"`
 }
