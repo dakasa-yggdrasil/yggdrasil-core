@@ -34,8 +34,18 @@ external delivery. The publisher receipt preserves PostgreSQL JSONB wire bytes;
 Core independently checks the template and joins that actual wire hash to the
 consumer witness. Source marshal bytes cannot substitute for the actual relay
 wire. The native SQL reader closes its rows and reports physical database,
-table, transaction and commit identities. Freshness uses commit and observation
-from that same PostgreSQL clock.
+table and transaction identities. Guest read V2 accepts the physical server's
+actual `track_commit_timestamp` on/off setting. Each of the five original rows
+returns the real commit timestamp when enabled and explicit NULL when disabled;
+no reboot or fabricated commit timestamp is needed. Legacy EKS reads keep their
+existing contract. Freshness follows the actual newly signed publication,
+original critical publish/commit, reliable consumption, same-transaction witness
+visibility and completed original read inside the SAME original Core five-second
+window. The read must use the same immutable executor and deadline bounded by
+the parent publication; it cannot grant an old publication another window.
+Subsequent age is conservatively the whole five-second creation upper bound
+plus actual elapsed time on the Core PostgreSQL ledger clock. Native commit
+and observed wall timestamps remain diagnostics, not cross-clock authority.
 
 Carry exact bounded original process-control frames over the persistent private
 Notify pipe. Do not invent an EOF or Close for that persistent pipe. Core retains
@@ -71,8 +81,14 @@ Duplicate or uncertain calls do not receive another publication permission.
 Accepted canonical bodies are retained separately from diagnostic transport
 metadata; unknown response bodies do not become evidence. Rollback keeps these
 identities permanent. Publication rate and useful evidence age are bounded by
-the fixed source binding. This operation does not itself open useful membership,
-retirement or a compiled production registry entry.
+the fixed source binding. Phase changes and retirement with this explicit binding independently require
+fresh original useful creations from surviving physical members, their original
+installed enrollment and source profile. The target and pending destroys never
+count toward the useful floor. Delete additionally requires a new after-retirement
+creation issued on Core PG after the original caller acknowledgement was durably
+retained. The independent native slot floor remains mandatory. These source
+checks do not add a compiled production registry entry. Production retirement
+still needs its separate monotonic original owner contract.
 
 ## Consequences
 

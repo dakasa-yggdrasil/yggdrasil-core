@@ -112,6 +112,7 @@ func (s CapacityStore) issueGuestNotifyCanary(ctx context.Context, policy model.
 			return ErrCapacityConflict
 		}
 		id := uuid.NewString()
+		var parent model.CapacityGuestNotifyCanaryChallenge
 		phase, schema, purpose := "read", capacity.GuestNotifyCanaryChallengeSchema, capacity.GuestNotifyCanaryReadPurpose
 		if recordID == "" {
 			phase, schema, purpose = "publish", capacity.GuestNotifyCanaryPublicationChallengeSchema, capacity.GuestNotifyCanaryPublicationPurpose
@@ -126,11 +127,11 @@ func (s CapacityStore) issueGuestNotifyCanary(ctx context.Context, policy model.
 			}
 		} else {
 			var parentWire []byte
-			if err = tx.QueryRowContext(ctx, `SELECT c.original_wire FROM public.capacity_guest_notify_canary_challenges c JOIN public.capacity_guest_notify_canary_returns r ON r.challenge_id=c.id WHERE c.id=$1 AND c.preregistration_id=$2 AND c.phase='publish' AND r.outcome='accepted'`, recordID, preID).Scan(&parentWire); err != nil {
+			var parentExecutor string
+			if err = tx.QueryRowContext(ctx, `SELECT c.original_wire,c.executor_id FROM public.capacity_guest_notify_canary_challenges c JOIN public.capacity_guest_notify_canary_returns r ON r.challenge_id=c.id WHERE c.id=$1 AND c.preregistration_id=$2 AND c.phase='publish' AND r.outcome='accepted'`, recordID, preID).Scan(&parentWire, &parentExecutor); err != nil {
 				return err
 			}
-			var parent model.CapacityGuestNotifyCanaryChallenge
-			if capacity.DecodeGuestLifecycle(parentWire, &parent) != nil || !capacity.GuestNotifyCanaryPublication(parent) || parent.PolicyID != policy.ID.String() || parent.PolicyChecksum != policy.Checksum || parent.EnrollmentSHA256 != capacity.GuestRetirementSHA(receipt.Enrollment) || parent.Tuple != receipt.Enrollment.Statement.Tuple {
+			if parentExecutor != s.ExecutorID || capacity.DecodeGuestLifecycle(parentWire, &parent) != nil || !capacity.GuestNotifyCanaryPublication(parent) || parent.PolicyID != policy.ID.String() || parent.PolicyChecksum != policy.Checksum || parent.EnrollmentSHA256 != capacity.GuestRetirementSHA(receipt.Enrollment) || parent.Tuple != receipt.Enrollment.Statement.Tuple {
 				return ErrCapacityConflict
 			}
 		}
@@ -148,6 +149,9 @@ func (s CapacityStore) issueGuestNotifyCanary(ctx context.Context, policy model.
 		}
 		issued := time.Now()
 		budget := min(5*time.Second, limit.Sub(issued))
+		if parent.ChallengeID != "" {
+			budget = min(budget, parent.OriginalDeadline.Sub(issued))
+		}
 		if current.LeaseExpiresAt != nil {
 			budget = min(budget, current.LeaseExpiresAt.Sub(leaseNow)-issued.Sub(sampleStarted))
 		}
@@ -158,7 +162,7 @@ func (s CapacityStore) issueGuestNotifyCanary(ctx context.Context, policy model.
 		}
 		result = model.CapacityGuestNotifyCanaryChallenge{Schema: schema, Purpose: purpose, ChallengeID: id, NonceSHA256: hex.EncodeToString(nonce[:]), UsageClass: usage, RecordChallengeID: recordID, BindingName: stored.member.Name, Slot: stored.member.Slot, PreregistrationID: preID, PreregistrationNonceSHA256: stored.pre.NonceSHA256, OriginalRegistrationSHA256: receipt.OriginalProvisioningSHA256, OriginalCreateWitnessSHA256: capacity.GuestRetirementSHA(stored.witness), EnrollmentSHA256: capacity.GuestRetirementSHA(receipt.Enrollment), ProfileManifestSHA256: stored.binding.ProfileManifestSHA256, Tuple: receipt.Enrollment.Statement.Tuple, PolicyID: policy.ID.String(), PolicyChecksum: policy.Checksum, WorkflowID: s.WorkflowID.String(), WorkflowChecksum: stored.pre.WorkflowChecksum, Generation: uint64(generation), Fence: uint64(fence), LeaseOwner: owner, CoreSourceCommit: capacity.CurrentGuestCoreSource(), IssuedAt: issued, OriginalDeadline: deadline}
 		result.Signature, err = capacity.GuestLifecycleSignature(key, result)
-		if err != nil || capacity.ValidateGuestNotifyCanaryPreflight(result, receipt.Enrollment, time.Now().UTC()) != nil {
+		if err != nil || (parent.ChallengeID != "" && !capacity.GuestNotifyCausalPair(parent, result)) || capacity.ValidateGuestNotifyCanaryPreflight(result, receipt.Enrollment, time.Now().UTC()) != nil {
 			return ErrCapacityConflict
 		}
 		wire, err := json.Marshal(result)

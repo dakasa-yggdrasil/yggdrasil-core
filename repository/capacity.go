@@ -470,6 +470,9 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	if err != nil {
 		return model.CapacityIntent{}, err
 	}
+	if err = s.guardGuestNotifyPhaseTx(ctx, tx, policy, p, previous, next, now.UTC()); err != nil {
+		return model.CapacityIntent{}, err
+	}
 	// Assess constructs a fresh value for a later generation. Elapsed epochs
 	// or ordinary policy changes cannot discard an unresolved original window.
 	// The private canary methods update this bounded field under the SAME

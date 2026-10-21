@@ -9,7 +9,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 )
 
-const GuestNotifyBusinessQuerySHA256 = "9a4b0834f5a89e01adf0a6784570373bf28fcb8ff0a87d76179ca97b2656ae4e"
+const GuestNotifyBusinessQuerySHA256 = "621b160fc16e8f8e270a4a981ca407a48509c08836e48f82f02f2f0f667629a2"
 
 const GuestNotifyCanaryChallengeSchema = "guest_notify_business_canary_challenge_v1"
 const GuestNotifyCanaryReadSchema = "guest_notify_business_canary_read_v1"

@@ -4,6 +4,7 @@ import (
 	"bytes"
 	"encoding/json"
 	"fmt"
+	"reflect"
 	"sort"
 	"time"
 
@@ -75,6 +76,33 @@ type guestNotifySnapshot struct {
 	Notifications   []businessNotification `json:"notifications"`
 }
 
+// SQL emits commit_at explicitly for all five same-transaction rows. Missing
+// fields cannot masquerade as the explicit NULL of a tracking-disabled server.
+func guestNotifyCommitFieldsPresent(raw []byte) bool {
+	var snapshot struct {
+		Witness       map[string]json.RawMessage `json:"witness"`
+		Inbox         map[string]json.RawMessage `json:"inbox"`
+		Notifications []struct {
+			Commit json.RawMessage `json:"commit_at"`
+			States []struct {
+				Commit json.RawMessage `json:"commit_at"`
+			} `json:"states"`
+		} `json:"notifications"`
+	}
+	if json.Unmarshal(raw, &snapshot) != nil || len(snapshot.Notifications) != 1 || len(snapshot.Notifications[0].States) != 2 {
+		return false
+	}
+	if len(snapshot.Witness["commit_at"]) == 0 || len(snapshot.Inbox["commit_at"]) == 0 || len(snapshot.Notifications[0].Commit) == 0 {
+		return false
+	}
+	for _, state := range snapshot.Notifications[0].States {
+		if len(state.Commit) == 0 {
+			return false
+		}
+	}
+	return true
+}
+
 // Exact public Notify input projection. Defaults are intentional and all
 // nonoptional false/zero/empty fields participate in template comparison.
 type guestNotifyPayload struct {
@@ -142,13 +170,37 @@ func GuestNotifyPublicationFacts(p model.CapacityPolicySpec, c model.CapacityGue
 	return out, nil
 }
 
-// Native PostgreSQL commit freshness is measured only against the native
-// observation of THIS database. No inferred Go/PG clock offset is manufactured.
-func JoinGuestNotifyBusiness(p model.CapacityPolicySpec, c model.CapacityGuestNotifyCanaryChallenge, e model.CapacityGuestRetirementEnrollment, r model.CapacityGuestNotifyCanaryRead, publication GuestNotifyPublicationReply, now time.Time) (model.CapacityGuestNotifyBusinessObservation, error) {
+const GuestNotifyCreationFreshnessClass = "original_challenge_publish_consume_read_v2"
+
+// The publication and read share one original Core budget and execution. A
+// later standalone read cannot refresh an old creation. This validates content;
+// the repository independently joins the actual immutable executor rows.
+func GuestNotifyCausalPair(publication, read model.CapacityGuestNotifyCanaryChallenge) bool {
+	if !GuestNotifyCanaryPublication(publication) || GuestNotifyCanaryPublication(read) || publication.ChallengeID != read.RecordChallengeID || publication.RecordChallengeID != publication.ChallengeID || publication.IssuedAt.IsZero() || publication.OriginalDeadline.Sub(publication.IssuedAt) <= 0 || publication.OriginalDeadline.Sub(publication.IssuedAt) > 5*time.Second || read.IssuedAt.Before(publication.IssuedAt) || !read.IssuedAt.Before(publication.OriginalDeadline) || read.OriginalDeadline.After(publication.OriginalDeadline) || !read.OriginalDeadline.After(read.IssuedAt) {
+		return false
+	}
+	normalize := func(c model.CapacityGuestNotifyCanaryChallenge) model.CapacityGuestNotifyCanaryChallenge {
+		c.Schema = ""
+		c.Purpose = ""
+		c.ChallengeID = ""
+		c.NonceSHA256 = ""
+		c.IssuedAt = time.Time{}
+		c.OriginalDeadline = time.Time{}
+		c.GuestNonce = model.CapacityGuestNotifyCanaryNonce{}
+		c.Signature = ""
+		return c
+	}
+	return reflect.DeepEqual(normalize(publication), normalize(read))
+}
+
+// Actual publication, critical outbox consumption and same-transaction witness
+// visibility occur within the SAME original five-second Core window. Native PG
+// commit timestamps are optional diagnostics, never manufactured freshness.
+func JoinGuestNotifyBusiness(p model.CapacityPolicySpec, c model.CapacityGuestNotifyCanaryChallenge, e model.CapacityGuestRetirementEnrollment, r model.CapacityGuestNotifyCanaryRead, publication GuestNotifyPublicationReply, publicationChallenge model.CapacityGuestNotifyCanaryChallenge, now time.Time) (model.CapacityGuestNotifyBusinessObservation, error) {
 	var out model.CapacityGuestNotifyBusinessObservation
 	fail := fmt.Errorf("fresh original same-transaction Notify business creation required")
 	b := p.GuestNotifyCanaryBinding
-	if b == nil || ValidateGuestNotifyCanaryBinding(p) != nil || GuestNotifyCanaryPublication(c) || ValidateGuestNotifyCanaryEnvelope(c, e, r, now) != nil {
+	if b == nil || ValidateGuestNotifyCanaryBinding(p) != nil || !GuestNotifyCausalPair(publicationChallenge, c) || ValidateGuestNotifyCanaryChallenge(publicationChallenge, e, publicationChallenge.IssuedAt) != nil || GuestNotifyCanaryPublication(c) || ValidateGuestNotifyCanaryEnvelope(c, e, r, now) != nil {
 		return out, fail
 	}
 	f, err := GuestNotifyCanaryOriginalFrame(c, e, r)
@@ -156,22 +208,28 @@ func JoinGuestNotifyBusiness(p model.CapacityPolicySpec, c model.CapacityGuestNo
 		return out, fail
 	}
 	var reply GuestNotifyBusinessReply
-	if DecodeBusinessJSON(f.CanaryBody, &reply) != nil || reply.Schema != "notify_guest_capacity_creation_canary_response_v1" || reply.Source != b.NotifySourceCommit || reply.Query != b.QuerySHA256 || !guestNotifyAdmissionMatches(reply.PreparationBefore, e, *f.CanaryReadStartedAt, *f.CanaryReadReturnedAt) || !guestNotifyAdmissionMatches(reply.PreparationAfter, e, reply.PreparationBefore.ObservedAt, *f.CanaryReadReturnedAt) {
+	if DecodeBusinessJSON(f.CanaryBody, &reply) != nil || reply.Schema != "notify_guest_capacity_creation_canary_response_v2" || reply.Source != b.NotifySourceCommit || reply.Query != b.QuerySHA256 || !guestNotifyAdmissionMatches(reply.PreparationBefore, e, *f.CanaryReadStartedAt, *f.CanaryReadReturnedAt) || !guestNotifyAdmissionMatches(reply.PreparationAfter, e, reply.PreparationBefore.ObservedAt, *f.CanaryReadReturnedAt) {
 		return out, fail
 	}
 	var s guestNotifySnapshot
-	if len(reply.NativeRaw) > 4096 || DecodeBusinessJSON(reply.NativeRaw, &s) != nil || s.Schema != "notify_guest_capacity_creation_canary_read_v1" || s.Database != b.Database || s.DatabaseOID != b.DatabaseOID || s.SystemID != b.SystemID || s.Recovery || s.Track != "on" || s.WitnessOID != b.TableOIDs[0] || s.InboxOID != b.TableOIDs[1] || s.NotificationOID != b.TableOIDs[2] || s.StateOID != b.TableOIDs[3] || s.Observed.IsZero() || s.Witness == nil || s.Inbox == nil || len(s.Notifications) != 1 {
+	if len(reply.NativeRaw) > 4096 || !guestNotifyCommitFieldsPresent(reply.NativeRaw) || DecodeBusinessJSON(reply.NativeRaw, &s) != nil || s.Schema != "notify_guest_capacity_creation_canary_read_v2" || s.Database != b.Database || s.DatabaseOID != b.DatabaseOID || s.SystemID != b.SystemID || s.Recovery || (s.Track != "on" && s.Track != "off") || s.WitnessOID != b.TableOIDs[0] || s.InboxOID != b.TableOIDs[1] || s.NotificationOID != b.TableOIDs[2] || s.StateOID != b.TableOIDs[3] || s.Observed.IsZero() || s.Witness == nil || s.Inbox == nil || len(s.Notifications) != 1 {
 		return out, fail
 	}
 	w, inbox, n := s.Witness, s.Inbox, s.Notifications[0]
 	record := GuestNotifyRecord(c.RecordChallengeID)
 	queue := GuestNotifyQueue(p.GuestRetirementBinding.ProfileManifest.NotifyCanaryTopology, c.Tuple.Provider, c.Slot)
 	writer := e.Statement.Writers[0].Lifetime
-	if queue == "" || publication.QueueSHA256 != BusinessCreationSHA256([]byte(queue)) || publication.ChallengeID != c.RecordChallengeID || publication.Source != b.NotifySourceCommit || publication.EnrollmentSHA256 != c.EnrollmentSHA256 || publication.RecordSHA256 != BusinessCreationSHA256([]byte(record)) || publication.BodySHA256 != BusinessCreationSHA256(publication.NativeBody) || !guestNotifyTemplate(publication.NativeBody, record, b.RecipientSHA256) || w.Commit == nil || w.Commit.IsZero() || w.Commit.After(s.Observed) || s.Observed.Sub(*w.Commit) > time.Duration(p.MaxEvidenceAgeSeconds)*time.Second || w.BackendStart.IsZero() || w.BackendStart.After(*w.Commit) || !businessDecimal(w.OriginalXID, 32) || w.OriginalXID == publication.OutboxXID || !businessDecimal(publication.OutboxXID, 32) {
+	if queue == "" || publication.QueueSHA256 != BusinessCreationSHA256([]byte(queue)) || publication.ChallengeID != c.RecordChallengeID || publication.Source != b.NotifySourceCommit || publication.EnrollmentSHA256 != c.EnrollmentSHA256 || publication.RecordSHA256 != BusinessCreationSHA256([]byte(record)) || publication.BodySHA256 != BusinessCreationSHA256(publication.NativeBody) || !guestNotifyTemplate(publication.NativeBody, record, b.RecipientSHA256) || w.BackendStart.IsZero() || !businessDecimal(w.OriginalXID, 32) || w.OriginalXID == publication.OutboxXID || !businessDecimal(publication.OutboxXID, 32) {
 		return out, fail
 	}
 	commit := func(xid string, at *time.Time) bool {
-		return businessDecimal(xid, 32) && xid == w.OriginalXID && at != nil && !at.IsZero() && at.Equal(*w.Commit)
+		if !businessDecimal(xid, 32) || xid != w.OriginalXID {
+			return false
+		}
+		if s.Track == "off" {
+			return at == nil
+		}
+		return w.Commit != nil && !w.Commit.IsZero() && !w.Commit.After(s.Observed) && !w.BackendStart.After(*w.Commit) && at != nil && !at.IsZero() && at.Equal(*w.Commit)
 	}
 	if w.MessageSHA != publication.RecordSHA256 || inbox.ID != record || n.Dedupe != record || w.BodySHA != publication.BodySHA256 || w.Source != b.NotifySourceCommit || w.EnrollmentSHA256 != c.EnrollmentSHA256 || w.BinarySHA256 != writer.BinarySHA256 || w.PID != writer.PID || w.StartTicks != fmt.Sprint(writer.StartTicks) || w.BootID != writer.BootID || w.Invocation != writer.ServiceInvocationID || w.NativeFrameSHA256 != BusinessCreationSHA256(w.NativeFrame) || w.BackendPID < 1 || !commit(w.XID, w.Commit) || !commit(inbox.XID, inbox.Commit) || !commit(n.XID, n.Commit) || !guestUUID(n.ID) || w.RecipientCount != 2 || w.RecipientSHA != b.RecipientSHA256 || len(n.UserIDs) != 2 || len(n.States) != 2 {
 		return out, fail
@@ -196,6 +254,6 @@ func JoinGuestNotifyBusiness(p model.CapacityPolicySpec, c model.CapacityGuestNo
 		}
 		seen[state.UserID] = true
 	}
-	out = model.CapacityGuestNotifyBusinessObservation{RecordChallengeID: c.RecordChallengeID, RecordSHA256: w.MessageSHA, BodySHA256: w.BodySHA, NativeSnapshotSHA256: BusinessCreationSHA256(reply.NativeRaw), NotificationSHA256: BusinessCreationSHA256([]byte(n.ID)), OriginalXID: w.OriginalXID, OriginalCommit: *w.Commit, NativeObserved: s.Observed, EnrollmentSHA256: c.EnrollmentSHA256, Writer: e.Statement.Writers[0], RecipientSHA256: b.RecipientSHA256, RecipientCount: 2, OriginalReadReturnedAt: r.OriginalFrameReadReturnedAt}
+	out = model.CapacityGuestNotifyBusinessObservation{RecordChallengeID: c.RecordChallengeID, RecordSHA256: w.MessageSHA, BodySHA256: w.BodySHA, NativeSnapshotSHA256: BusinessCreationSHA256(reply.NativeRaw), NotificationSHA256: BusinessCreationSHA256([]byte(n.ID)), OriginalXID: w.OriginalXID, CreationFreshnessClass: GuestNotifyCreationFreshnessClass, CreationUpperBoundSeconds: 5, NativeCommitTimestampKnown: s.Track == "on", OriginalCommit: w.Commit, NativeObserved: s.Observed, EnrollmentSHA256: c.EnrollmentSHA256, Writer: e.Statement.Writers[0], RecipientSHA256: b.RecipientSHA256, RecipientCount: 2, OriginalReadReturnedAt: r.OriginalFrameReadReturnedAt}
 	return out, nil
 }

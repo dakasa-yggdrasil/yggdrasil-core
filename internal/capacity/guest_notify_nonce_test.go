@@ -1,7 +1,10 @@
 package capacity
 
 import (
+	"context"
 	"encoding/json"
+	"io"
+	"net/http"
 	"strings"
 	"testing"
 	"time"
@@ -73,5 +76,25 @@ func TestGuestNotifyOriginalNonceScopeAndClockDomains(t *testing.T) {
 				t.Fatalf("original local budget %s: %v", kind, err)
 			}
 		})
+	}
+}
+
+func TestGuestNotifyExpiredPreflightCannotMintOrSign(t *testing.T) {
+	c, e, _, core, _, _ := guestNotifyUnit(t)
+	c.GuestNonce = model.CapacityGuestNotifyCanaryNonce{}
+	c.IssuedAt = time.Now().Add(-2 * time.Second)
+	c.OriginalDeadline = c.IssuedAt.Add(time.Second)
+	c.Signature = ""
+	c.Signature, _ = GuestLifecycleSignature(core, c)
+	calls := 0
+	client := &GuestOriginalHTTPClient{origin: "https://unit.invalid", client: &http.Client{Transport: guestOriginalTestTransport(func(*http.Request) (*http.Response, error) {
+		calls++
+		return &http.Response{StatusCode: 200, Body: io.NopCloser(strings.NewReader(`{}`))}, nil
+	})}}
+	ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+	defer cancel()
+	final, _, err := AcquireGuestNotifyCanaryNonce(ctx, client, core, c, e)
+	if err == nil || calls != 0 || final.GuestNonce != (model.CapacityGuestNotifyCanaryNonce{}) || final.Signature != c.Signature {
+		t.Fatal("expired preflight minted or gained a final signature")
 	}
 }

@@ -15,28 +15,33 @@ func guestNotifyHTTPWithin(c model.CapacityGuestNotifyCanaryChallenge, r capacit
 	return !r.StartedAt.IsZero() && !r.StartedAt.Before(c.IssuedAt) && !r.DriverReturnedAt.IsZero() && r.DriverReturnedAt.Before(c.OriginalDeadline) && r.CloseReturnedAt.Before(c.OriginalDeadline) && r.ReadReturnedAt.Before(c.OriginalDeadline) && !r.OriginalContextFailed
 }
 
-func loadGuestNotifyPublicationTx(ctx context.Context, tx *sql.Tx, id string, e model.CapacityGuestRetirementEnrollment, p model.CapacityPolicySpec) (capacity.GuestNotifyPublicationReply, error) {
+func loadGuestNotifyPublicationTx(ctx context.Context, tx *sql.Tx, read model.CapacityGuestNotifyCanaryChallenge, e model.CapacityGuestRetirementEnrollment, p model.CapacityPolicySpec) (capacity.GuestNotifyPublicationReply, model.CapacityGuestNotifyCanaryChallenge, error) {
 	var out capacity.GuestNotifyPublicationReply
-	c, err := loadGuestNotifyChallengeTx(ctx, tx, id)
-	if err != nil || !capacity.GuestNotifyCanaryPublication(c) || c.EnrollmentSHA256 != capacity.GuestRetirementSHA(e) {
-		return out, ErrCapacityConflict
+	c, err := loadGuestNotifyChallengeTx(ctx, tx, read.RecordChallengeID)
+	if err != nil || !capacity.GuestNotifyCausalPair(c, read) || c.EnrollmentSHA256 != capacity.GuestRetirementSHA(e) {
+		return out, c, ErrCapacityConflict
+	}
+	var sameExecutor bool
+	if err = tx.QueryRowContext(ctx, `SELECT p.executor_id=r.executor_id FROM public.capacity_guest_notify_canary_challenges p JOIN public.capacity_guest_notify_canary_challenges r ON r.id=$2 WHERE p.id=$1`, c.ChallengeID, read.ChallengeID).Scan(&sameExecutor); err != nil || !sameExecutor {
+		return out, c, ErrCapacityConflict
 	}
 	var wire, transport []byte
 	var digest string
-	err = tx.QueryRowContext(ctx, `SELECT original_wire,original_transport,return_sha256 FROM public.capacity_guest_notify_canary_returns WHERE challenge_id=$1 AND outcome='accepted'`, id).Scan(&wire, &transport, &digest)
+	err = tx.QueryRowContext(ctx, `SELECT original_wire,original_transport,return_sha256 FROM public.capacity_guest_notify_canary_returns WHERE challenge_id=$1 AND outcome='accepted'`, c.ChallengeID).Scan(&wire, &transport, &digest)
 	if err != nil {
-		return out, err
+		return out, c, err
 	}
 	var original capacity.GuestOriginalHTTPReturn
 	var r model.CapacityGuestNotifyCanaryRead
-	if json.Unmarshal(transport, &original) != nil || capacity.BusinessCreationSHA256(wire) != digest || capacity.DecodeGuestLifecycle(wire, &r) != nil || !guestNotifyHTTPWithin(c, original) {
-		return out, ErrCapacityConflict
+	if json.Unmarshal(transport, &original) != nil || capacity.BusinessCreationSHA256(wire) != digest || capacity.DecodeGuestLifecycle(wire, &r) != nil || !guestNotifyHTTPWithin(c, original) || original.DriverReturnedAt.After(read.IssuedAt) {
+		return out, c, ErrCapacityConflict
 	}
 	original.Body = wire
 	if capacity.GuestOriginalHTTPDecode(original, &r) != nil || capacity.ValidateGuestNotifyCanaryEnvelope(c, e, r, original.DriverReturnedAt) != nil {
-		return out, ErrCapacityConflict
+		return out, c, ErrCapacityConflict
 	}
-	return capacity.GuestNotifyPublicationFacts(p, c, e, r)
+	out, err = capacity.GuestNotifyPublicationFacts(p, c, e, r)
+	return out, c, err
 }
 
 // Retain one exact completed original transport. Unknown/error body bytes are
@@ -75,9 +80,9 @@ func (s CapacityStore) RecordGuestNotifyCanaryReturn(ctx context.Context, policy
 					observation = fact
 				}
 			} else {
-				publication, e := loadGuestNotifyPublicationTx(ctx, tx, c.RecordChallengeID, receipt.Enrollment, p)
+				publication, pubChallenge, e := loadGuestNotifyPublicationTx(ctx, tx, c, receipt.Enrollment, p)
 				if e == nil {
-					business, e = capacity.JoinGuestNotifyBusiness(p, c, receipt.Enrollment, r, publication, time.Now().UTC())
+					business, e = capacity.JoinGuestNotifyBusiness(p, c, receipt.Enrollment, r, publication, pubChallenge, returned.DriverReturnedAt)
 					if e == nil {
 						accepted = true
 						observation = business

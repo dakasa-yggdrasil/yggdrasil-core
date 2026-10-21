@@ -105,19 +105,22 @@ type CapacityGuestNotifyCanaryQueue struct {
 }
 
 type CapacityGuestNotifyBusinessObservation struct {
-	RecordChallengeID      string                        `json:"record_challenge_id"`
-	RecordSHA256           string                        `json:"record_sha256"`
-	BodySHA256             string                        `json:"body_sha256"`
-	NativeSnapshotSHA256   string                        `json:"native_snapshot_sha256"`
-	NotificationSHA256     string                        `json:"notification_sha256"`
-	OriginalXID            string                        `json:"original_xid"`
-	OriginalCommit         time.Time                     `json:"original_commit"`
-	NativeObserved         time.Time                     `json:"native_observed"`
-	EnrollmentSHA256       string                        `json:"enrollment_sha256"`
-	Writer                 CapacityGuestRetirementWriter `json:"writer"`
-	RecipientSHA256        string                        `json:"recipient_sha256"`
-	RecipientCount         int                           `json:"recipient_count"`
-	OriginalReadReturnedAt time.Time                     `json:"original_read_returned_at"`
+	RecordChallengeID          string                        `json:"record_challenge_id"`
+	RecordSHA256               string                        `json:"record_sha256"`
+	BodySHA256                 string                        `json:"body_sha256"`
+	NativeSnapshotSHA256       string                        `json:"native_snapshot_sha256"`
+	NotificationSHA256         string                        `json:"notification_sha256"`
+	CreationFreshnessClass     string                        `json:"creation_freshness_class"`
+	CreationUpperBoundSeconds  int                           `json:"creation_upper_bound_seconds"`
+	NativeCommitTimestampKnown bool                          `json:"native_commit_timestamp_known"`
+	OriginalXID                string                        `json:"original_xid"`
+	OriginalCommit             *time.Time                    `json:"original_commit"`
+	NativeObserved             time.Time                     `json:"native_observed"`
+	EnrollmentSHA256           string                        `json:"enrollment_sha256"`
+	Writer                     CapacityGuestRetirementWriter `json:"writer"`
+	RecipientSHA256            string                        `json:"recipient_sha256"`
+	RecipientCount             int                           `json:"recipient_count"`
+	OriginalReadReturnedAt     time.Time                     `json:"original_read_returned_at"`
 }
 
 // Opaque local Guest CLOCK_MONOTONIC custody. Core authenticates this signed

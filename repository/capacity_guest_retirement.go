@@ -71,6 +71,9 @@ func (s CapacityStore) IssueGuestRetirement(ctx context.Context, policy model.Ma
 		if err != nil || checkMutationIntegration(ctx, tx, b) != nil || s.guestRetirementFloorTx(ctx, tx, policy.Metadata.Namespace, p, current, b, stored.pre.Slot, now) != nil {
 			return ErrCapacityConflict
 		}
+		if s.guestNotifyRetirementFloorTx(ctx, tx, policy, p, current, stored.pre.Slot, now, "before_retirement_floor", "") != nil {
+			return ErrCapacityConflict
+		}
 		var workflowChecksum string
 		var workflowRaw []byte
 		if err = tx.QueryRowContext(ctx, `SELECT checksum,spec FROM public.manifests WHERE id=$1 AND active FOR SHARE`, s.WorkflowID).Scan(&workflowChecksum, &workflowRaw); err != nil {
@@ -213,6 +216,9 @@ func (s CapacityStore) guestRetirementCurrentTx(ctx context.Context, tx *sql.Tx,
 		return policy, p, current, ErrCapacityConflict
 	}
 	if guestNativeUsefulFloorTx(ctx, tx, stored, now) != nil {
+		return policy, p, current, ErrCapacityConflict
+	}
+	if s.guestNotifyRetirementFloorTx(ctx, tx, policy, p, current, i.Slot, now, "", "") != nil {
 		return policy, p, current, ErrCapacityConflict
 	}
 	return policy, p, current, nil
@@ -397,6 +403,9 @@ func (s CapacityStore) guestDestroyEligibilityTx(ctx context.Context, tx *sql.Tx
 	}
 	if _, err = guestQuiescentProofTx(ctx, tx, stored); err != nil {
 		return err
+	}
+	if s.guestNotifyRetirementFloorTx(ctx, tx, policy, p, current, slot, now, "after_retirement_floor", id) != nil {
+		return ErrCapacityConflict
 	}
 	var wire []byte
 	if err = tx.QueryRowContext(ctx, `SELECT original_wire FROM public.capacity_guest_original_native_poweroff_reads WHERE intent_id=$1 ORDER BY recorded_at DESC LIMIT 1`, id).Scan(&wire); err != nil {

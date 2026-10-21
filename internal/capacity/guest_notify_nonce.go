@@ -50,7 +50,7 @@ func ValidateGuestNotifyCanaryChallenge(c model.CapacityGuestNotifyCanaryChallen
 // exact scope plus opaque local Guest nonce without renewing either owner.
 func AcquireGuestNotifyCanaryNonce(original context.Context, client *GuestOriginalHTTPClient, key ed25519.PrivateKey, c model.CapacityGuestNotifyCanaryChallenge, e model.CapacityGuestRetirementEnrollment) (model.CapacityGuestNotifyCanaryChallenge, GuestOriginalHTTPReturn, error) {
 	var returned GuestOriginalHTTPReturn
-	if original == nil || original.Err() != nil || c.GuestNonce != (model.CapacityGuestNotifyCanaryNonce{}) || !GuestLifecycleKeyMatches(key, e.Statement.CoreIntentPublicKey) {
+	if original == nil || original.Err() != nil || ValidateGuestNotifyCanaryPreflight(c, e, time.Now().UTC()) != nil || !GuestLifecycleKeyMatches(key, e.Statement.CoreIntentPublicKey) {
 		return c, returned, ErrGuestOriginalTransport
 	}
 	deadline, ok := original.Deadline()
@@ -66,7 +66,7 @@ func AcquireGuestNotifyCanaryNonce(original context.Context, client *GuestOrigin
 		return c, returned, err
 	}
 	var nonce model.CapacityGuestNotifyCanaryNonce
-	if GuestOriginalHTTPDecode(returned, &nonce) != nil || original.Err() != nil {
+	if GuestOriginalHTTPDecode(returned, &nonce) != nil || original.Err() != nil || !time.Now().Before(c.OriginalDeadline) {
 		return c, returned, ErrGuestOriginalTransport
 	}
 	c.GuestNonce = nonce

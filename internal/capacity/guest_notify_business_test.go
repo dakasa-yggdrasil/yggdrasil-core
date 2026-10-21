@@ -11,7 +11,7 @@ import (
 
 // Pure semantic operands, not native SQL/provider evidence or admission.
 // A real owning PostgreSQL producer must separately supply physical coverage.
-func guestNotifyBusinessUnit(t *testing.T) (model.CapacityPolicySpec, model.CapacityGuestNotifyCanaryChallenge, model.CapacityGuestRetirementEnrollment, model.CapacityGuestNotifyCanaryRead, GuestNotifyPublicationReply, time.Time) {
+func guestNotifyBusinessUnit(t *testing.T) (model.CapacityPolicySpec, model.CapacityGuestNotifyCanaryChallenge, model.CapacityGuestRetirementEnrollment, model.CapacityGuestNotifyCanaryRead, GuestNotifyPublicationReply, model.CapacityGuestNotifyCanaryChallenge, time.Time) {
 	t.Helper()
 	c, e, r, core, observer, now := guestNotifyUnit(t)
 	users := []string{"77777777-7777-4777-8777-777777777777", "88888888-8888-4888-8888-888888888888"}
@@ -81,9 +81,9 @@ func guestNotifyBusinessUnit(t *testing.T) (model.CapacityPolicySpec, model.Capa
 	nativeFrame, _ := json.Marshal(admit(now.Add(-time.Second)))
 	w := &guestNotifyWitness{MessageSHA: pub.RecordSHA256, BodySHA: pub.BodySHA256, Source: b.NotifySourceCommit, EnrollmentSHA256: c.EnrollmentSHA256, BinarySHA256: id.Binary, PID: id.PID, StartTicks: "1030", BootID: id.BootID, Invocation: id.Invocation, NativeFrame: nativeFrame, NativeFrameSHA256: BusinessCreationSHA256(nativeFrame), BackendPID: 1002, BackendStart: now.Add(-time.Hour), OriginalXID: "102", RecipientSHA: b.RecipientSHA256, RecipientCount: 2, XID: "102", Commit: &commit}
 	notificationID := "99999999-9999-4999-8999-999999999999"
-	snapshot := guestNotifySnapshot{Schema: "notify_guest_capacity_creation_canary_read_v1", Database: b.Database, DatabaseOID: b.DatabaseOID, SystemID: b.SystemID, Track: "on", WitnessOID: b.TableOIDs[0], InboxOID: b.TableOIDs[1], NotificationOID: b.TableOIDs[2], StateOID: b.TableOIDs[3], Observed: observed, Witness: w, Inbox: &businessInbox{ID: GuestNotifyRecord(c.RecordChallengeID), XID: "102", Commit: &commit}, Notifications: []businessNotification{{ID: notificationID, UserIDs: users, Dedupe: GuestNotifyRecord(c.RecordChallengeID), XID: "102", Commit: &commit, States: []businessState{{NotificationID: notificationID, UserID: users[0], XID: "102", Commit: &commit}, {NotificationID: notificationID, UserID: users[1], XID: "102", Commit: &commit}}}}}
+	snapshot := guestNotifySnapshot{Schema: "notify_guest_capacity_creation_canary_read_v2", Database: b.Database, DatabaseOID: b.DatabaseOID, SystemID: b.SystemID, Track: "on", WitnessOID: b.TableOIDs[0], InboxOID: b.TableOIDs[1], NotificationOID: b.TableOIDs[2], StateOID: b.TableOIDs[3], Observed: observed, Witness: w, Inbox: &businessInbox{ID: GuestNotifyRecord(c.RecordChallengeID), XID: "102", Commit: &commit}, Notifications: []businessNotification{{ID: notificationID, UserIDs: users, Dedupe: GuestNotifyRecord(c.RecordChallengeID), XID: "102", Commit: &commit, States: []businessState{{NotificationID: notificationID, UserID: users[0], XID: "102", Commit: &commit}, {NotificationID: notificationID, UserID: users[1], XID: "102", Commit: &commit}}}}}
 	raw, _ := json.Marshal(snapshot)
-	reply := GuestNotifyBusinessReply{Schema: "notify_guest_capacity_creation_canary_response_v1", Source: b.NotifySourceCommit, Query: b.QuerySHA256, PreparationBefore: admit(now.Add(-4500 * time.Microsecond)), NativeRaw: raw, PreparationAfter: admit(now.Add(-3500 * time.Microsecond))}
+	reply := GuestNotifyBusinessReply{Schema: "notify_guest_capacity_creation_canary_response_v2", Source: b.NotifySourceCommit, Query: b.QuerySHA256, PreparationBefore: admit(now.Add(-4500 * time.Microsecond)), NativeRaw: raw, PreparationAfter: admit(now.Add(-3500 * time.Microsecond))}
 	var f GuestNotifyOriginalFrame
 	_ = json.Unmarshal(r.NotifyOriginalReturn, &f)
 	f.CanaryBody, _ = json.Marshal(reply)
@@ -93,12 +93,12 @@ func guestNotifyBusinessUnit(t *testing.T) (model.CapacityPolicySpec, model.Capa
 	r.NotifyOriginalReturnSHA256 = BusinessCreationSHA256(r.NotifyOriginalReturn)
 	r.Signature = ""
 	r.Signature, _ = GuestLifecycleSignature(observer, r)
-	return p, c, e, r, pub, now
+	return p, c, e, r, pub, pubC, now
 }
 func TestGuestNotifyNativeBusinessJoinSeparatesSQLAndWire(t *testing.T) {
-	for _, kind := range []string{"original_noncanonical_wire", "changed_body_wire", "wrong_outbox_xid", "publication_wrong_enrollment", "publication_wrong_record", "publication_wrong_template", "publication_wrong_queue", "missing_publication", "stale_pg_commit", "different_state_xid", "missing_state", "wrong_native_writer", "wrong_native_enrollment", "wrong_native_frame_hash", "wrong_source", "wrong_database", "in_recovery", "untracked_commit", "wrong_query", "wrong_recipient_set"} {
+	for _, kind := range []string{"original_noncanonical_wire", "changed_body_wire", "wrong_outbox_xid", "publication_wrong_enrollment", "publication_wrong_record", "publication_wrong_template", "publication_wrong_queue", "missing_publication", "reversed_pg_commit", "off_explicit_null", "off_omitted_commit", "on_missing_commit", "wrong_track_mode", "different_state_xid", "missing_state", "wrong_native_writer", "wrong_native_enrollment", "wrong_native_frame_hash", "wrong_source", "wrong_database", "in_recovery", "untracked_commit", "wrong_query", "wrong_recipient_set"} {
 		t.Run(kind, func(t *testing.T) {
-			p, c, e, r, pub, now := guestNotifyBusinessUnit(t)
+			p, c, e, r, pub, pubC, now := guestNotifyBusinessUnit(t)
 			_, _, _, _, observer, _ := guestNotifyUnit(t)
 			if strings.HasPrefix(kind, "publication_") || kind == "missing_publication" || kind == "changed_body_wire" || kind == "wrong_outbox_xid" {
 				switch kind {
@@ -126,8 +126,20 @@ func TestGuestNotifyNativeBusinessJoinSeparatesSQLAndWire(t *testing.T) {
 				var s guestNotifySnapshot
 				_ = json.Unmarshal(reply.NativeRaw, &s)
 				switch kind {
-				case "stale_pg_commit":
-					s.Observed = s.Witness.Commit.Add(time.Minute)
+				case "reversed_pg_commit":
+					s.Observed = s.Witness.Commit.Add(-time.Second)
+				case "off_explicit_null", "off_omitted_commit":
+					s.Track = "off"
+					s.Witness.Commit = nil
+					s.Inbox.Commit = nil
+					s.Notifications[0].Commit = nil
+					for i := range s.Notifications[0].States {
+						s.Notifications[0].States[i].Commit = nil
+					}
+				case "on_missing_commit":
+					s.Notifications[0].States[0].Commit = nil
+				case "wrong_track_mode":
+					s.Track = "disabled"
 				case "different_state_xid":
 					s.Notifications[0].States[0].XID = "103"
 				case "missing_state":
@@ -152,6 +164,12 @@ func TestGuestNotifyNativeBusinessJoinSeparatesSQLAndWire(t *testing.T) {
 					s.Notifications[0].UserIDs[0] = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
 				}
 				reply.NativeRaw, _ = json.Marshal(s)
+				if kind == "off_omitted_commit" {
+					var raw map[string]any
+					_ = json.Unmarshal(reply.NativeRaw, &raw)
+					delete(raw["inbox"].(map[string]any), "commit_at")
+					reply.NativeRaw, _ = json.Marshal(raw)
+				}
 				f.CanaryBody, _ = json.Marshal(reply)
 				f.CanaryBodySHA256 = BusinessCreationSHA256(f.CanaryBody)
 				raw, _ := json.Marshal(f)
@@ -160,12 +178,38 @@ func TestGuestNotifyNativeBusinessJoinSeparatesSQLAndWire(t *testing.T) {
 				r.Signature = ""
 				r.Signature, _ = GuestLifecycleSignature(observer, r)
 			}
-			observed, err := JoinGuestNotifyBusiness(p, c, e, r, pub, now)
-			if (err == nil) != (kind == "original_noncanonical_wire") {
+			observed, err := JoinGuestNotifyBusiness(p, c, e, r, pub, pubC, now)
+			if (err == nil) != (kind == "original_noncanonical_wire" || kind == "off_explicit_null") {
 				t.Fatalf("native creation admission %s: %v", kind, err)
 			}
-			if err == nil && (observed.RecipientCount != 2 || observed.Writer != e.Statement.Writers[0] || observed.BodySHA256 != pub.BodySHA256) {
+			if err == nil && (observed.CreationFreshnessClass != GuestNotifyCreationFreshnessClass || observed.CreationUpperBoundSeconds != 5 || observed.NativeCommitTimestampKnown != (kind != "off_explicit_null") || (observed.OriginalCommit == nil) != (kind == "off_explicit_null") || observed.RecipientCount != 2 || observed.Writer != e.Statement.Writers[0] || observed.BodySHA256 != pub.BodySHA256) {
 				t.Fatal("original business/source identity lost")
+			}
+		})
+	}
+}
+
+func TestGuestNotifyCausalPairCannotRenewPublication(t *testing.T) {
+	for _, kind := range []string{"original", "renewed_deadline", "old_publication", "different_executor_scope", "read_before_publish", "wrong_record", "wrong_usage"} {
+		t.Run(kind, func(t *testing.T) {
+			_, read, _, _, _, pub, _ := guestNotifyBusinessUnit(t)
+			switch kind {
+			case "renewed_deadline":
+				read.OriginalDeadline = pub.OriginalDeadline.Add(time.Nanosecond)
+			case "old_publication":
+				pub.IssuedAt = pub.IssuedAt.Add(-time.Minute)
+				pub.OriginalDeadline = pub.OriginalDeadline.Add(-time.Minute)
+			case "different_executor_scope":
+				read.WorkflowID = "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa"
+			case "read_before_publish":
+				read.IssuedAt = pub.IssuedAt.Add(-time.Nanosecond)
+			case "wrong_record":
+				read.RecordChallengeID = read.ChallengeID
+			case "wrong_usage":
+				read.UsageClass = "after_retirement_floor"
+			}
+			if GuestNotifyCausalPair(pub, read) != (kind == "original") {
+				t.Fatal("old or foreign original publication acquired a new read window")
 			}
 		})
 	}
