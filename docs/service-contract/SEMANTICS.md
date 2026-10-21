@@ -78,6 +78,26 @@ The HTTP addon optionally binds a secondary TLS socket through the same original
 
 An optional closed `slot_bootstraps` profile list binds each member to its own user-data hash. Its mode excludes the legacy shared hash, and the policy slot, original create witness and bootstrap journal must agree on the selected native slot. The common setup executable keeps its independent payload hash. Provider adapters select only that slot's protected template before grant/send; another slot's private keys or configuration are never a fallback. An omitted list preserves the legacy signed wire.
 
+Production retirement V2 uses the same exact actor credential family at fixed
+`GET /internal/capacity/guest-retirement/v2/authority`. Its closed request pins the
+full final intent hash, phase and canonical request UUID before a durable read
+ordinal is consumed. Core connects only to the enrolled fixed Guest mTLS origin
+and V2 nonce/retire/observation paths. The monotonic Guest nonce and actual Core
+caller deadline have separate owners. No later native GET replaces missing
+original writer joins or a complete original caller acknowledgement.
+
+V2 native off and original destroy readbacks use exact source-pinned adapter
+catalogs: EC2 instance/lifecycle and retained EBS/ENI, or Hetzner server/action and
+retained Primary IPs. The dedicated Hetzner 0.3 GET-only retirement reader has a
+reviewed literal publication gate; the compiled profile contract remains an
+independent default-closed approval. One source finish invocation may poll only
+known pending GETs within its sixty-second owner, with each complete read bounded
+by five seconds. Only its actual Core PG custody age contributes to freshness;
+provider timestamps stay inside original native content. Confirming release also
+rechecks the complete original Guest chain, durable original destroy receipt and
+fresh useful floor after caller acknowledgement. No source fabricates a drained
+metric assessment or self-advances a workflow phase to obtain destroy authority.
+
 ## Review and updates
 
 The service descriptor selects `public-go-module-v1` explicitly. An unknown profile fails; descriptors without a selector keep the legacy DaKasa scaffold checks. The public profile verifies the exact module/repository identity, real layout, closed bounded contract, hash-bound graph evidence and full source-file census. It does not require the unrelated private namespace, vendoring or Air scaffold. It must continue to reject a candidate/incomplete review, altered evidence, extra/missing/changed source, indirect evidence and empty graph sections.

@@ -30,11 +30,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test -p 1 -race -count=1 -timeout=120s -json ./internal/capacity ./controllers/message ./repository -run '^(TestOriginalProviderReturnClosedJSON|TestOriginalAWSDestroyReceiptAndNativeAbsence|TestOriginalMutationCompletionPreservesLegacyAWS|TestOriginalAWSCreateReturnAndNativeLifecycle|TestOriginalGuestProviderNativeIdentity|TestProviderNativeIdentitySignedClosedWitness|TestVMAWSReadUsesExactExistingCapability|TestOriginalAWSGuestSupplierUsesActualClosedCatalog|TestOriginalAWSGuestSupplierRequiresIndependentSourcePin|TestOriginalGuestSupplierPinsPublicAdapterSource|TestProductionOriginalGuestWitnessRefusesUnsupportedSources|TestOriginalGuestSupplierRequiresActualClosedCatalog)$' | tee original-provider-source.jsonl
+          go test -p 1 -race -count=1 -timeout=120s -json ./internal/capacity ./controllers/message ./repository -run '^(TestOriginalProviderReturnClosedJSON|TestOriginalAWSDestroyReceiptAndNativeAbsence|TestOriginalMutationCompletionPreservesLegacyAWS|TestOriginalAWSCreateReturnAndNativeLifecycle|TestOriginalGuestProviderNativeIdentity|TestProviderNativeIdentitySignedClosedWitness|TestVMAWSReadUsesExactExistingCapability|TestOriginalAWSGuestSupplierUsesActualClosedCatalog|TestOriginalAWSGuestSupplierRequiresIndependentSourcePin|TestOriginalGuestSupplierPinsPublicAdapterSource|TestProductionOriginalGuestWitnessRefusesUnsupportedSources|TestOriginalGuestSupplierRequiresActualClosedCatalog|TestOriginalGuestReceiptJoinsOmittedEmptyActionLists)$' | tee original-provider-source.jsonl
           python3 - <<'PY'
           import json
           rows=[json.loads(line) for line in open('original-provider-source.jsonl') if line.strip()]
-          roots={'TestOriginalAWSDestroyReceiptAndNativeAbsence','TestOriginalMutationCompletionPreservesLegacyAWS','TestOriginalProviderReturnClosedJSON','TestOriginalAWSCreateReturnAndNativeLifecycle','TestOriginalGuestProviderNativeIdentity','TestProviderNativeIdentitySignedClosedWitness','TestVMAWSReadUsesExactExistingCapability','TestOriginalAWSGuestSupplierUsesActualClosedCatalog','TestOriginalAWSGuestSupplierRequiresIndependentSourcePin','TestOriginalGuestSupplierPinsPublicAdapterSource','TestProductionOriginalGuestWitnessRefusesUnsupportedSources','TestOriginalGuestSupplierRequiresActualClosedCatalog'}
+          roots={'TestOriginalAWSDestroyReceiptAndNativeAbsence','TestOriginalMutationCompletionPreservesLegacyAWS','TestOriginalProviderReturnClosedJSON','TestOriginalAWSCreateReturnAndNativeLifecycle','TestOriginalGuestProviderNativeIdentity','TestProviderNativeIdentitySignedClosedWitness','TestVMAWSReadUsesExactExistingCapability','TestOriginalAWSGuestSupplierUsesActualClosedCatalog','TestOriginalAWSGuestSupplierRequiresIndependentSourcePin','TestOriginalGuestSupplierPinsPublicAdapterSource','TestProductionOriginalGuestWitnessRefusesUnsupportedSources','TestOriginalGuestSupplierRequiresActualClosedCatalog','TestOriginalGuestReceiptJoinsOmittedEmptyActionLists'}
           passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
           skipped=[r.get('Test',r.get('Package')) for r in rows if r.get('Action')=='skip']
           if roots-passed or skipped:raise SystemExit(f'Original provider source incomplete: missing={sorted(roots-passed)}, skips={skipped}')
@@ -52,6 +52,21 @@ jobs:
           passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
           if roots-passed or any(r.get('Action')=='skip' for r in rows):raise SystemExit('Original Notify canary source roots missing or skipped')
           print(f'All {len(roots)} original Notify canary source roots passed; no PostgreSQL/broker/native pass claimed')
+          PY
+      - name: Production retirement V2 original clocks and closed native callers
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./internal/capacity ./repository ./controllers/message ./controllers/httpapi -run '^(TestGuestRetirementV2OriginalOwnerConsumesWholeBudgetOnce|TestGuestRetirementV2SeparatesKernelClockFromCoreWall|TestGuestRetirementV2NativeOffContentUsesActualProviderWireWithoutClockAuthority|TestGuestRetirementV2NativeOffContentRefusesChangedOriginalOrProjection|TestGuestRetirementV2NativeAbsenceContentPreservesOriginalReceipt|TestGuestRetirementV2NativeAbsenceDoesNotUseCoreWallClock|TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn|TestOriginalRetirementV2PollsOnlyKnownAcceptedAWSAbsence|TestOriginalRetirementV2RequiresExactProviderOwnedCatalog|TestOriginalRetirementV2PollsOnlyKnownAcceptedHetznerAbsence|TestCapacityGuestRetirementV2ClosedAuthorityBeforeReservation)$' | tee original-retirement-v2-source.jsonl
+          python3 - <<'PY'
+          import json
+          rows=[json.loads(line) for line in open('original-retirement-v2-source.jsonl') if line.strip()]
+          roots={'TestCapacityGuestRetirementV2ClosedAuthorityBeforeReservation', 'TestGuestRetirementV2NativeOffContentRefusesChangedOriginalOrProjection', 'TestGuestRetirementV2NativeAbsenceContentPreservesOriginalReceipt', 'TestOriginalRetirementV2PollsOnlyKnownAcceptedAWSAbsence', 'TestOriginalRetirementV2RequiresExactProviderOwnedCatalog', 'TestGuestRetirementV2OriginalOwnerConsumesWholeBudgetOnce', 'TestGuestRetirementV2SeparatesKernelClockFromCoreWall', 'TestGuestRetirementV2NativeOffContentUsesActualProviderWireWithoutClockAuthority', 'TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn', 'TestGuestRetirementV2NativeAbsenceDoesNotUseCoreWallClock', 'TestOriginalRetirementV2PollsOnlyKnownAcceptedHetznerAbsence'}
+          passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
+          assert not any(r.get('Action') in ('fail','skip','build-fail') for r in rows)
+          assert not roots-passed, f'missing V2 source roots: {sorted(roots-passed)}'
+          assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==4
+          print(f'All {len(roots)} production V2 source roots passed; no native-positive chain claimed')
           PY
       - name: Stable canary maintenance cannot adopt a provider mutation lease
         shell: bash
@@ -74,6 +89,7 @@ jobs:
             original-provider-source.jsonl
             original-notify-canary-source.jsonl
             original-notify-maintenance-source.jsonl
+            original-retirement-v2-source.jsonl
   original-http-transport:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -195,6 +211,22 @@ jobs:
           assert [r['Action'] for r in rows if r.get('Test')==case and r.get('Action') in ('run','pass')]==['run','pass']
           assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==1
           print('Actual migrated PostgreSQL FK/immutable schema negatives; no positive enrollment or capacity qualification')
+          PY
+      - name: Actual production V2 absent-original PostgreSQL authority refusals
+        env:
+          REQUIRE_GUEST_RETIREMENT_V2_DB_TEST: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./repository -run '^TestGuestRetirementV2PostgresAbsentOriginalAuthority$' | tee "$RUNNER_TEMP/original-retirement-v2-pg.jsonl"
+          python3 - <<'PY'
+          import json,os,pathlib
+          rows=[json.loads(line) for line in (pathlib.Path(os.environ['RUNNER_TEMP'])/'original-retirement-v2-pg.jsonl').read_text().splitlines() if line.strip()]
+          case='TestGuestRetirementV2PostgresAbsentOriginalAuthority'
+          assert not any(r.get('Action') in ('skip','fail','build-fail') for r in rows)
+          assert [r['Action'] for r in rows if r.get('Test')==case and r.get('Action') in ('run','pass')]==['run','pass']
+          assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==1
+          print('Actual PostgreSQL absent-original FK refusals only; no manufactured enrollment or positive authority')
           PY
       - name: Actual pure byte graph SOURCE cases
         if: ${{ !cancelled() }}
@@ -328,6 +360,7 @@ jobs:
           path: |
             ${{ runner.temp }}/host-factory-migration.raw.log
             ${{ runner.temp }}/original-notify-canary-pg.jsonl
+            ${{ runner.temp }}/original-retirement-v2-pg.jsonl
             ${{ runner.temp }}/host-factory-pure.jsonl
             ${{ runner.temp }}/host-factory-pure.stderr.log
             ${{ runner.temp }}/host-factory-build-owner.jsonl

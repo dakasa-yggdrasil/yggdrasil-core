@@ -4,14 +4,14 @@
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_guest.go",
       "function": "guestHTTPError",
-      "line": 395,
+      "line": 399,
       "predicate": "errors.Is(err, repository.ErrCapacityMutationAuthorization), errors.Is(err, sql.ErrNoRows)"
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_guest.go",
       "function": "guestHTTPError",
-      "line": 397,
+      "line": 401,
       "predicate": "errors.Is(err, repository.ErrCapacityConflict), errors.Is(err, repository.ErrCapacityLease), errors.Is(err, repository.ErrCapacityDisabled)"
     },
     {
