@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 90c09d27f1743de36a450297c9b1f5a634c9d8c6
-verified_diff_sha256: 8c743f5f27c04c23cac2c7a8d2ef8af892de128bbd45dcce0925edbe9a54903a
+verified_at_commit: 1b698ae0668614382676d28264be0857aac5f092
+verified_diff_sha256: 3a4a7abb9c7cb871343aab4e698b3639213b69502e09514e447dfbd7c1b8efab
 reconciler_schema: 1
 verified_at: 2026-10-21
 by: Codex
@@ -257,3 +257,6 @@ core_original_general_lint_six_equivalences_review: Reviewed all six original li
 
 
 core_final_nested_mutation_pair_demorgan_review: The complete successor general CI532 passed unit and addon checks and retained two nested QF1001 findings. Both complete remaining conjunction complements are now normalized without changing evaluation order, provider guards or callback count; both owning files contain no remaining negated compound parentheses. Four actual bounded portable source roots/34nodes passed, while Linux lint/PostgreSQL/runtime qualification remain separate. All630 production sources and eleven inventory artifacts were verified; the guarded review and its own contract evidence hash were committed in CODE90c09 before this genuine plan. Earlier failed CI and source publications remain immutable. Full successor Linux CI is required; this source does not activate a registry, new production image, migration or capacity policy.
+
+
+core_original_notify_guest_scheduler_source_review: The explicit original Guest binding now schedules the canonical protected source graph through the existing durable machine-principal/RBAC/dispatch owner, with fixed native inventory, source-pinned demand/member quality, original no-replay provisioning/useful/retirement ledgers and captured lease clipping. New Guest strict boundaries, finite reviewed administrative USD assumptions and separate controller/range clocks preserve legacy HPA/dated-policy behavior. The cumulative source and additive H034 supplier are bound by the635-source census; A3 full bridge/final static peers and Root integrated29-root/205-node/no-skip portable exit0 are retained separately. Author Core builds and Linux test crosscompiles are not Linux execution. Registry stays empty and process flags unchanged for early owning Linux/PG CI. Full production approvals/metadata/telemetry/native lifecycle remain pending; first-floor telemetry maturation needs its scoped source follow-up before activation. No migration, credential, provider call, VM, image rollout, native useful result or economic saving is claimed. The genuine released CLI plan and actual generated context/summary preserve their source provenance; reconciliation verification checks peripheral write scope, not full tests or physical readiness.
