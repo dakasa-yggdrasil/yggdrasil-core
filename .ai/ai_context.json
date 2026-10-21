@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-20T00:31:36-03:00",
+  "generated_at": "2026-10-20T21:58:00-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 976,
+    ".go": 986,
     ".json": 148,
-    ".py": 2,
-    ".sql": 68,
+    ".py": 3,
+    ".sql": 69,
     ".yaml": 10,
     ".yml": 25
   },
   "provenance": {
-    "commit": "4de6ee43bba0fc58cc69b60cdfbaf20af560a3f7",
+    "commit": "3c9fb82b3370b093b31945b5dc24d16d8351b0d0",
     "dirty": true,
     "files": [
       {
@@ -60,12 +60,12 @@
     {
       "path": "controllers/httpapi",
       "files": 195,
-      "kb": 2172
+      "kb": 2174
     },
     {
       "path": "repository",
-      "files": 170,
-      "kb": 2521
+      "files": 173,
+      "kb": 2540
     },
     {
       "path": "controllers/message",
@@ -74,13 +74,13 @@
     },
     {
       "path": "model",
-      "files": 73,
-      "kb": 416
+      "files": 74,
+      "kb": 417
     },
     {
       "path": "db/migrations",
-      "files": 67,
-      "kb": 176
+      "files": 68,
+      "kb": 177
     },
     {
       "path": "manifest",
@@ -89,8 +89,8 @@
     },
     {
       "path": "internal/capacity",
-      "files": 46,
-      "kb": 927
+      "files": 50,
+      "kb": 937
     },
     {
       "path": "addons",
@@ -99,8 +99,8 @@
     },
     {
       "path": "internal/capacitynativeqemu",
-      "files": 32,
-      "kb": 259
+      "files": 34,
+      "kb": 261
     },
     {
       "path": "docs/bootstrap/manifests/integrations",
@@ -174,7 +174,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 67,
+    "migrations": 68,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {

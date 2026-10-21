@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 4de6ee43bba0fc58cc69b60cdfbaf20af560a3f7
-verified_diff_sha256: d2ec9e555a0eb9010da3b11ba5e4b67d41a674b78636062740b01f069d25e027
+verified_at_commit: 3c9fb82b3370b093b31945b5dc24d16d8351b0d0
+verified_diff_sha256: 3349feae2964f25a5f1c876f69c757afdc0a58c77ef4342f4e83f006d18b00ad
 reconciler_schema: 1
 verified_at: 2026-10-19
 by: Codex
@@ -149,9 +149,9 @@ Separate custody ACK 53aeb169-ebed-4107-b047-a33aee9db8a3 completed with origina
 
 ## Current native slot projection producer Source reconciliation
 
-core_original_source_code: 4de6ee43bba0fc58cc69b60cdfbaf20af560a3f7
-core_original_guest_source_code: 33335acd277787388d50901f2d9152ecec8654d3
-core_original_source_peer_manifest_sha256: c41806c4bc6220dc728f78a71f496d63ab54ad4d862f235056dc533a4e5a5034
+core_original_source_code: 3c9fb82b3370b093b31945b5dc24d16d8351b0d0
+core_original_guest_source_code: 15c50c8491024ba7764249c8150405dfcc9436d7
+core_original_source_peer_manifest_sha256: 4c3b25ef120418db8d044bcaa247575799caed4af957ab13199780a80bd1469c
 
 Root accepted this exact whole Source successor for local markers and metadata, with independently reviewed Core producer delta and the coordinated Guest selector. The Core change is restricted to cmd/native-guest-lifecycle-fixture/main.go: its digest input now uses the explicit closed ten-field map that the unchanged slot guard already canonicalizes. The typed DesiredSpec/address, guard, authorization, API and all other producer bytes remain unchanged. Independent narrow peer d88e2a3d accepted the exact postimage49632/29e1c7c1; full CODE census1412 preserves all1411 other Git bodies/modes from actual published89f9. Accepted earlier whole-manifest scopes and all failed predecessor originals remain historical evidence, not current runtime approval. The paired Guest CODE f91cbec6709e35170173ddd7a233b2d0abd02981 is a Source binding in the Root-accepted manifest, not a claim of Guest or Native execution by this metadata step.
 
@@ -205,3 +205,6 @@ current_original_echo_refusal_diagnostic_review: The reviewed source classifies 
 current_original_echo_http_diagnostic_review: The source classifies the already-failed qualification HTTP return into fixed predicates90 through99: preflight, context, transport, read, close, authentication status, missing endpoint, other client status, server status and other status. Context takes precedence over overlapping I/O facts; categories do not claim a unique cause. An unclassified failure retains85. The original single call, authentication, request/response limits, five-second bound and lease cap are unchanged. The exact functional source passed64 records in four bounded LAB race commands with zero failures or skips and readonly formatting. Tests include actual original-client transport/read/close/status/context failure paths with one call and no retries. These tests do not prove the original step85 root cause or full native/PG17 qualification. The six metadata reconciliation checks do not execute or replace full tests, contract-connectivity or svc-doctor gates. Existing broader failures and full native/PG17 qualification remain open.
 
 current_original_fixed_guest_problem_review: The candidate maps only exact complete hash-consistent native HTTP503 problem bodies config_held and enrollment_held to closed predicates50 and51. All unknown, altered, incomplete or inconsistent bodies retain98; original context and I/O failures retain precedence. No response text, new authority, retry, changed authentication, deadline, limit or runtime ordering is introduced. The source passed68 records across four bounded LAB race commands with zero failures or skips and readonly formatting. Tests cover original client returns, altered status/content, missing newline, extra or duplicate fields, multiple bodies and incomplete facts. A registration/installation race remains only a source-supported hypothesis; this change does not claim to fix or qualify the native lifecycle. The six metadata reconciliation checks do not execute or replace full tests, contract-connectivity or svc-doctor gates. Existing broader failures and full native/PG17 qualification remain open.
+
+
+current_original_installation_barrier_review: Authenticated post-installation confirmation precedes unique probe reservation. Functional delta independently reviewed; exact source inventory bound. Focused local and isolated real PostgreSQL16 tests passed, including immutable storage and observed scope locking. Full native authority and all four reservation positives remain integrated validation obligations. No production qualification or deployment is claimed.
