@@ -77,3 +77,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0060](0060-own-original-guest-provider-per-workflow-invocation.md) | Own the original Guest provider per workflow invocation | Proposed | 2026-10-21 | Original source provider lifetime and single-call ownership |
 
 | [0061](0061-verify-public-core-service-contract-explicitly.md) | Verify public Core service contract explicitly | Accepted | 2026-10-21 | Exact source-owned public Core doctor profile |
+
+| [0062](0062-preserve-primary-http-with-same-owner-secondary-tls.md) | Preserve primary HTTP with same-owner secondary TLS | Accepted | 2026-10-21 | Core transport and mixed-process rollout |

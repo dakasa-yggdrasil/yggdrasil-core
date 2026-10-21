@@ -24,7 +24,7 @@ import (
 
 func unsetHTTPIdentity(t *testing.T) {
 	t.Helper()
-	for _, key := range []string{"HTTP_TLS_CERT_FILE", "HTTP_TLS_KEY_FILE"} {
+	for _, key := range []string{"HTTP_TLS_CERT_FILE", "HTTP_TLS_KEY_FILE", "HTTP_TLS_SECONDARY_ADDR"} {
 		t.Setenv(key, "")
 		if err := os.Unsetenv(key); err != nil {
 			t.Fatal(err)
@@ -192,4 +192,130 @@ func TestHTTPTLSOriginalListenerReadCloseShutdown(t *testing.T) {
 			joined = true
 		})
 	}
+}
+
+func TestHTTPSecondaryTLSAdmissionBeforeDatabase(t *testing.T) {
+	for _, address := range []string{"", " :9443", ":09443", ":0", ":65536", "localhost:9443", "[fe80::1%lo0]:9443", ":9080", "127.0.0.1:9080", "127.000.0.1:9443", "[0:0:0:0:0:0:0:1]:9443"} {
+		t.Run(address, func(t *testing.T) {
+			cfg, _ := httpTLSNativeIdentity(t)
+			t.Setenv("HTTP_TLS_SECONDARY_ADDR", address)
+			if _, err := httpTLSSecondaryAddrFromEnv(cfg, ":9080"); err == nil {
+				t.Fatal("invalid or conflicting secondary accepted")
+			}
+			t.Setenv("YGGDRASIL_OIDC_CLIENTS_FILE", "")
+			t.Setenv("YGGDRASIL_OIDC_ISSUER", "")
+			t.Setenv("HTTP_ADDR", ":9080")
+			if _, ok := bootstrapHTTP(t.Context(), nil).(httpTLSConfigurationError); !ok {
+				t.Fatal("secondary validation did not precede database access")
+			}
+		})
+	}
+	for _, address := range []string{":9443", "127.0.0.1:9443", "[::1]:9443"} {
+		t.Run(address, func(t *testing.T) {
+			cfg, _ := httpTLSNativeIdentity(t)
+			t.Setenv("HTTP_TLS_SECONDARY_ADDR", address)
+			got, err := httpTLSSecondaryAddrFromEnv(cfg, ":9080")
+			if err != nil || got != address {
+				t.Fatal("canonical secondary refused")
+			}
+			if _, err := httpTLSSecondaryAddrFromEnv(nil, ":9080"); err == nil {
+				t.Fatal("secondary accepted without mounted identity")
+			}
+		})
+	}
+}
+
+func TestHTTPSecondaryTLSOriginalSharedHandler(t *testing.T) {
+	cfg, roots := httpTLSNativeIdentity(t)
+	var calls atomic.Int64
+	handler := http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		n := calls.Add(1)
+		_, _ = fmt.Fprintf(w, "same owner %d", n)
+	})
+	servers := configuredHTTPServers("127.0.0.1:0", "127.0.0.1:0", handler, cfg)
+	if len(servers) != 2 || servers[0].TLSConfig != nil || servers[1].TLSConfig != cfg {
+		t.Fatal("primary HTTP and secondary TLS configuration differs")
+	}
+	listeners, err := listenHTTPServers(servers)
+	if err != nil {
+		t.Fatal(err)
+	}
+	returns := make([]chan error, 2)
+	for i, server := range servers {
+		returns[i] = make(chan error, 1)
+		go func() { returns[i] <- serveConfiguredHTTP(server, listeners[i]) }()
+	}
+	joined := false
+	t.Cleanup(func() {
+		for i, server := range servers {
+			_ = server.Close()
+			_ = listeners[i].Close()
+		}
+		if !joined {
+			for _, returned := range returns {
+				<-returned
+			}
+		}
+	})
+	ctx, cancel := context.WithTimeout(t.Context(), 10*time.Second)
+	defer cancel()
+	transport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: roots, MinVersion: tls.VersionTLS12}}
+	defer transport.CloseIdleConnections()
+	client := &http.Client{Transport: transport}
+	for i, scheme := range []string{"http", "https"} {
+		request, err := http.NewRequestWithContext(ctx, http.MethodGet, scheme+"://"+listeners[i].Addr().String()+"/healthz", nil)
+		if err != nil {
+			t.Fatal(err)
+		}
+		response, err := client.Do(request)
+		if err != nil {
+			t.Fatal(err)
+		}
+		body, readErr := io.ReadAll(io.LimitReader(response.Body, 1025))
+		closeErr := response.Body.Close()
+		if readErr != nil || closeErr != nil || response.StatusCode != 200 || string(body) != fmt.Sprintf("same owner %d", i+1) {
+			t.Fatal("same handler original response unavailable")
+		}
+		if i == 0 && response.TLS != nil {
+			t.Fatal("primary HTTP changed")
+		}
+		if i == 1 && (response.TLS == nil || len(response.TLS.VerifiedChains) == 0) {
+			t.Fatal("secondary TLS identity unverified")
+		}
+	}
+	if calls.Load() != 2 {
+		t.Fatal("handler owner state was duplicated")
+	}
+	if err := shutdownHTTPServers(ctx, servers); err != nil {
+		t.Fatal(err)
+	}
+	for _, returned := range returns {
+		if err := <-returned; !errors.Is(err, http.ErrServerClosed) {
+			t.Fatal("original server did not return")
+		}
+	}
+	joined = true
+}
+
+func TestHTTPSecondaryBindFailureClosesPrimary(t *testing.T) {
+	occupied, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer occupied.Close()
+	primary, err := net.Listen("tcp", "127.0.0.1:0")
+	if err != nil {
+		t.Fatal(err)
+	}
+	primaryAddr := primary.Addr().String()
+	_ = primary.Close()
+	servers := configuredHTTPServers(primaryAddr, occupied.Addr().String(), http.NotFoundHandler(), &tls.Config{MinVersion: tls.VersionTLS12})
+	if listeners, err := listenHTTPServers(servers); err == nil || listeners != nil {
+		t.Fatal("partial bind accepted")
+	}
+	rebound, err := net.Listen("tcp", primaryAddr)
+	if err != nil {
+		t.Fatal("failed secondary left primary socket bound")
+	}
+	_ = rebound.Close()
 }

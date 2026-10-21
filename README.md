@@ -149,6 +149,7 @@ plaintext or forwarding-header fallback.
 | --- | --- |
 | `HTTP_TLS_CERT_FILE` | Absolute canonical path to the approved mounted certificate chain. |
 | `HTTP_TLS_KEY_FILE` | Absolute canonical path to its approved mounted private key. |
+| `HTTP_TLS_SECONDARY_ADDR` | Optional canonical literal IP or wildcard address and distinct port, such as `:9443`. Requires the mounted identity pair. |
 
 ```mermaid
 flowchart LR
@@ -156,6 +157,14 @@ flowchart LR
     Listener --> Handler[Same API handler and private authority registry]
     Handler --> Guard[Current original dispatch and intent guards]
 ```
+
+When `HTTP_TLS_SECONDARY_ADDR` is present, the primary listener retains HTTP and
+the additional listener serves TLS through the same handler and process-local
+authority registry. This supports mixed old/new processes during a rollout.
+All sockets must bind before any server starts; a failed secondary bind closes
+the primary socket. Shutdown shares the caller's existing context across both
+servers. Blank, noncanonical, hostname-based, zoned, zero-port or same-port
+secondary addresses are refused before HTTP database/OIDC bootstrap.
 
 The identity is loaded once at boot and TLS requires version 1.2 or later.
 The private canary-authority endpoint requires an actual TLS connection; a TLS

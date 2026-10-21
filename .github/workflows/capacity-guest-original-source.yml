@@ -30,11 +30,11 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test -p 1 -race -count=1 -timeout=120s -json ./internal/capacity ./controllers/message -run '^(TestOriginalProviderReturnClosedJSON|TestOriginalAWSCreateReturnAndNativeLifecycle|TestOriginalGuestProviderNativeIdentity|TestProviderNativeIdentitySignedClosedWitness|TestVMAWSReadUsesExactExistingCapability|TestOriginalAWSGuestSupplierUsesActualClosedCatalog|TestOriginalAWSGuestSupplierRequiresIndependentSourcePin|TestOriginalGuestSupplierPinsPublicAdapterSource|TestProductionOriginalGuestWitnessRefusesUnsupportedSources|TestOriginalGuestSupplierRequiresActualClosedCatalog)$' | tee original-provider-source.jsonl
+          go test -p 1 -race -count=1 -timeout=120s -json ./internal/capacity ./controllers/message ./repository -run '^(TestOriginalProviderReturnClosedJSON|TestOriginalAWSDestroyReceiptAndNativeAbsence|TestOriginalMutationCompletionPreservesLegacyAWS|TestOriginalAWSCreateReturnAndNativeLifecycle|TestOriginalGuestProviderNativeIdentity|TestProviderNativeIdentitySignedClosedWitness|TestVMAWSReadUsesExactExistingCapability|TestOriginalAWSGuestSupplierUsesActualClosedCatalog|TestOriginalAWSGuestSupplierRequiresIndependentSourcePin|TestOriginalGuestSupplierPinsPublicAdapterSource|TestProductionOriginalGuestWitnessRefusesUnsupportedSources|TestOriginalGuestSupplierRequiresActualClosedCatalog)$' | tee original-provider-source.jsonl
           python3 - <<'PY'
           import json
           rows=[json.loads(line) for line in open('original-provider-source.jsonl') if line.strip()]
-          roots={'TestOriginalProviderReturnClosedJSON','TestOriginalAWSCreateReturnAndNativeLifecycle','TestOriginalGuestProviderNativeIdentity','TestProviderNativeIdentitySignedClosedWitness','TestVMAWSReadUsesExactExistingCapability','TestOriginalAWSGuestSupplierUsesActualClosedCatalog','TestOriginalAWSGuestSupplierRequiresIndependentSourcePin','TestOriginalGuestSupplierPinsPublicAdapterSource','TestProductionOriginalGuestWitnessRefusesUnsupportedSources','TestOriginalGuestSupplierRequiresActualClosedCatalog'}
+          roots={'TestOriginalAWSDestroyReceiptAndNativeAbsence','TestOriginalMutationCompletionPreservesLegacyAWS','TestOriginalProviderReturnClosedJSON','TestOriginalAWSCreateReturnAndNativeLifecycle','TestOriginalGuestProviderNativeIdentity','TestProviderNativeIdentitySignedClosedWitness','TestVMAWSReadUsesExactExistingCapability','TestOriginalAWSGuestSupplierUsesActualClosedCatalog','TestOriginalAWSGuestSupplierRequiresIndependentSourcePin','TestOriginalGuestSupplierPinsPublicAdapterSource','TestProductionOriginalGuestWitnessRefusesUnsupportedSources','TestOriginalGuestSupplierRequiresActualClosedCatalog'}
           passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
           skipped=[r.get('Test',r.get('Package')) for r in rows if r.get('Action')=='skip']
           if roots-passed or skipped:raise SystemExit(f'Original provider source incomplete: missing={sorted(roots-passed)}, skips={skipped}')
@@ -45,6 +45,38 @@ jobs:
         with:
           name: core-original-provider-source
           path: original-provider-source.jsonl
+  original-http-transport:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GOMAXPROCS: '2'
+      GOMEMLIMIT: 2GiB
+      GOWORK: 'off'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Original HTTP and verified same-owner secondary TLS
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./addons -run '^TestHTTP(TLS|Secondary)' | tee original-http-transport.jsonl
+          python3 - <<'PY'
+          import json
+          rows=[json.loads(line) for line in open('original-http-transport.jsonl') if line.strip()]
+          roots={'TestHTTPTLSExplicitIdentityAdmission','TestHTTPTLSOriginalListenerReadCloseShutdown','TestHTTPSecondaryTLSAdmissionBeforeDatabase','TestHTTPSecondaryTLSOriginalSharedHandler','TestHTTPSecondaryBindFailureClosesPrimary'}
+          passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
+          if roots-passed or any(r.get('Action')=='skip' for r in rows):raise SystemExit('Original HTTP transport roots missing or skipped')
+          print(f'All {len(roots)} original HTTP transport roots passed')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-original-http-transport
+          path: original-http-transport.jsonl
   source-contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 15
