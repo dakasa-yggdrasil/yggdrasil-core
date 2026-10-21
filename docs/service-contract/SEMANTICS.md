@@ -159,6 +159,15 @@ writer catalog. Runtime current Core source is checked separately to avoid a
 self-referential commit hash. Qualification and other profiles remain excluded.
 An exact source approval supplies no current policy, lease, useful member,
 provider grant, credential, deployment or VM.
+The AWS1.64 supplier requires its complete closed catalog, including
+`observe_fleet_inventory` in the instance resource's default actions. The
+source-pinned inventory reports physical profile membership; Core still joins
+the original grant, enrollment and useful-canary ledgers separately. A new
+adapter instance changes the complete mutation contract, scope and admission
+checksums even when its eight bootstrap bodies stay identical. The corresponding
+managed policy must authorize that actual new scope before any mutation.
+Other AWS versions retain their explicit catalog gates; an unknown future
+version cannot inherit this supplier approval.
 Source review, portable tests and a required no-skip owning PostgreSQL refusal
 gate do not substitute for genuine positive native authority or production
 usefulness.

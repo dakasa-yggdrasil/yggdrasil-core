@@ -917,8 +917,8 @@
     },
     "controllers/message/workflows_capacity_guest_production_aws.go": {
       "build_constraint": "!nativequalification",
-      "bytes": 4942,
-      "sha256": "cdc34eb1a1e78d37db08d5c1da6ecf5e5444b133a0963acfb4818f2612323526"
+      "bytes": 5105,
+      "sha256": "cd8fec56a34886b9f5d2d394e64080d01729e449adef653ce00a72fa46155ab1"
     },
     "controllers/message/workflows_capacity_guest_production_provider.go": {
       "build_constraint": "!nativequalification",
@@ -937,8 +937,8 @@
     },
     "controllers/message/workflows_capacity_guest_retirement_v2_source.go": {
       "build_constraint": "!nativequalification",
-      "bytes": 18194,
-      "sha256": "fe295c0faf3aa2f4faeb10657afbc8f20fc7dcccae63c29a6e4385dd469c324c"
+      "bytes": 18228,
+      "sha256": "10a5bd13a88779bd3571cbe158370a64b8a17f6e2248ea508d499f782df91c23"
     },
     "controllers/message/workflows_capacity_guest_retirement_v2_source_nativequalification.go": {
       "build_constraint": "nativequalification",
@@ -1393,7 +1393,7 @@
     "internal/capacity/guest_production_registry_default.go": {
       "build_constraint": "!nativequalification",
       "bytes": 1206,
-      "sha256": "c598645cae52335790de56953fb2b92306c8a5858e13f482e70aa11e7e28c196"
+      "sha256": "9378adae8df67886b218e121e2ff99a9cfc7060bef1520506e0a2b3b5bb9b5c3"
     },
     "internal/capacity/guest_production_registry_nativequalification.go": {
       "build_constraint": "nativequalification",
