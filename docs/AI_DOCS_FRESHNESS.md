@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 9e5f0b598e249da251372ac9afb61874ab75f7e7
-verified_diff_sha256: a34810fb373ab2cc100eab6822dcf7b00786c8987b3ef68c0c7671469da42e16
+verified_at_commit: c5b4365b39547769eae7e0446257fbd3a0bf51fb
+verified_diff_sha256: 2ec82fabc8b508a5f918261a605e3dc77b1663d515f8a13b43813b994c13029d
 reconciler_schema: 1
 verified_at: 2026-10-21
 by: Codex
@@ -263,3 +263,6 @@ core_original_notify_guest_scheduler_source_review: The explicit original Guest 
 
 
 core_original_protected_floor_bootstrap_source_review: Only the original protected zero-to-one floor generation may complete on its actual pinned Coverage30 while Demand300 is still missing. The immutable empty baseline, current lease/source/compiled graph, native member ledger and raw useful-canary guards remain mandatory in the same transaction; transaction-time source age15 rejects stale reporting after SQL contention. Actual demand is retained unchanged and ordinary expansion/retirement still require complete demand. Independent A3 full static peer721565 and Root exact15-postimage review/application are scoped source evidence. Author Darwin11roots/78nodes and final2roots/29nodes passed without skips; source inventory636 and five static-tool tests passed. Core build/Linux test crosscompile do not claim native execution. Three CI-reported test lint equivalences preserve behavior, with only an ADR Related label corrected after the reviewed patch. Registry remains empty, process flags unchanged, and current-source owning Linux/PG plus protected native-positive qualification remain required before activation. Genuine CLI plan/context/summary preserve source provenance without supplying production authority.
+
+
+core_two_actual_original_notify_approvals_source_review: Exactly two literal AWS/H034 protected contracts bind the unchanged3fd/be3 profile hashes to actual public original dry-run, installer and outer-caller joins. Root completed final source review and verified the nine applied postimages; independent A3 full static peer45f4 and the complete636-source inventory are retained separately. Author current-Core contract matching passed1root/23nodes/no skips. The descriptor accepts this source contract, with historical registry-empty/pending entries retained for their predecessor snapshots. Runtime current-source rebinding and existing policy, principal, process-flag, lease, useful-canary and native gates remain separately mandatory; this source publication supplies no deployment or physical lifecycle qualification. Actual genuine CLI plan, context/summary generation and peripheral verification preserve source provenance.
