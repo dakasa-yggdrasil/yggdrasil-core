@@ -40,6 +40,38 @@ jobs:
           if roots-passed or skipped:raise SystemExit(f'Original provider source incomplete: missing={sorted(roots-passed)}, skips={skipped}')
           print(f'All {len(roots)} original provider source roots passed; no native qualification claimed')
           PY
+      - name: Exact original AWS mutation callback principal operation
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./controllers/httpapi -run '^TestCapacityMutation(OriginalAWSOperationIsExact|CredentialScope|InventoryFailsClosed)$' | tee original-provider-principal-source.jsonl
+          python3 - <<'PYCODE'
+          import json
+          rows=[json.loads(line) for line in open('original-provider-principal-source.jsonl') if line.strip()]
+          roots={'TestCapacityMutationOriginalAWSOperationIsExact','TestCapacityMutationCredentialScope','TestCapacityMutationInventoryFailsClosed'}
+          passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
+          assert not any(r.get('Action') in ('fail','skip','build-fail') for r in rows)
+          assert not roots-passed, f'missing exact provider principal roots: {sorted(roots-passed)}'
+          assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==1
+          print('Exact provider callback scope source contracts passed; no native or SQL authority granted')
+          PYCODE
+      - name: Exact native AWS catalog naming compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./manifest -run '^TestLoadCapabilityNamingAllowlist_AWS173CatalogExactTransitions$' | tee original-provider-naming-source.jsonl
+          python3 - <<'PYCODE'
+          import json
+          rows=[json.loads(line) for line in open('original-provider-naming-source.jsonl') if line.strip()]
+          root='TestLoadCapabilityNamingAllowlist_AWS173CatalogExactTransitions'
+          names={'start_ec2_instance','stop_ec2_instance','terminate_ec2_instance','detach_iam_policy','associate_eks_secrets_encryption','set_asg_desired_capacity'}
+          expected={root}|{root+'/'+name for name in names}
+          passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
+          assert passed==expected
+          assert not any(r.get('Action') in ('fail','skip','build-fail') for r in rows)
+          assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==1
+          print('Native catalog and six exact naming exceptions passed; hard-fail remains enabled')
+          PYCODE
       - name: Original Notify canary source, clock domains and closed routes
         shell: bash
         run: |
@@ -102,6 +134,8 @@ jobs:
           name: core-original-provider-source
           path: |
             original-provider-source.jsonl
+            original-provider-principal-source.jsonl
+            original-provider-naming-source.jsonl
             original-notify-canary-source.jsonl
             original-notify-maintenance-source.jsonl
             original-retirement-v2-source.jsonl

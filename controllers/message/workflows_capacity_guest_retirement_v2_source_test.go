@@ -60,52 +60,71 @@ func TestOriginalRetirementV2RequiresExactProviderOwnedCatalog(t *testing.T) {
 	if json.Unmarshal(raw, &original) != nil {
 		t.Fatal("owning source catalog malformed")
 	}
-	for _, kind := range []string{"exact", "old_create_only", "future_version", "missing_retirement", "not_idempotent", "missing_native_default", "foreign_source", "duplicate_retirement"} {
-		t.Run(kind, func(t *testing.T) {
-			ts, err := manifest.ParseIntegrationTypeSpec(original.Spec)
-			if err != nil {
-				t.Fatal(err)
-			}
-			source := originalHetznerRetirementV3Source
-			switch kind {
-			case "old_create_only":
-				ts.Adapter.Version = "0.2.0"
-			case "future_version":
-				ts.Adapter.Version = "0.3.1"
-			case "foreign_source":
-				source = strings.Repeat("a", 40)
-			case "missing_retirement":
-				for n, a := range ts.ActionCatalog {
-					if a.Name == capacity.VMObserveRetirement {
-						ts.ActionCatalog = append(ts.ActionCatalog[:n], ts.ActionCatalog[n+1:]...)
-						break
+	for _, version := range []string{"0.3.0", "0.3.2"} {
+		for _, kind := range []string{"exact", "old_create_only", "future_version", "missing_destroy", "missing_retirement", "not_idempotent", "missing_native_default", "foreign_source", "wrong_version_source", "duplicate_retirement"} {
+			t.Run(version+"/"+kind, func(t *testing.T) {
+				ts, err := manifest.ParseIntegrationTypeSpec(original.Spec)
+				if err != nil {
+					t.Fatal(err)
+				}
+				ts.Adapter.Version = version
+				source := originalHetznerRetirementV3Source
+				if version == "0.3.2" {
+					source = originalHetznerRetirementV032Source
+				}
+				switch kind {
+				case "old_create_only":
+					ts.Adapter.Version = "0.2.0"
+				case "future_version":
+					ts.Adapter.Version = "0.3.1"
+				case "foreign_source":
+					source = strings.Repeat("a", 40)
+				case "wrong_version_source":
+					if version == "0.3.2" {
+						source = originalHetznerRetirementV3Source
+					} else {
+						source = originalHetznerRetirementV032Source
+					}
+				case "missing_destroy":
+					for n, a := range ts.ActionCatalog {
+						if a.Name == "destroy_server" {
+							ts.ActionCatalog = append(ts.ActionCatalog[:n], ts.ActionCatalog[n+1:]...)
+							break
+						}
+					}
+				case "missing_retirement":
+					for n, a := range ts.ActionCatalog {
+						if a.Name == capacity.VMObserveRetirement {
+							ts.ActionCatalog = append(ts.ActionCatalog[:n], ts.ActionCatalog[n+1:]...)
+							break
+						}
+					}
+				case "not_idempotent":
+					for n := range ts.ActionCatalog {
+						if ts.ActionCatalog[n].Name == capacity.VMObserveRetirement {
+							ts.ActionCatalog[n].Idempotent = false
+						}
+					}
+				case "missing_native_default":
+					for n := range ts.ResourceTypes {
+						if ts.ResourceTypes[n].Name == "server" {
+							ts.ResourceTypes[n].DefaultActions = []string{"ensure_server", "destroy_server", capacity.VMObserveServer}
+						}
+					}
+				case "duplicate_retirement":
+					for _, a := range ts.ActionCatalog {
+						if a.Name == capacity.VMObserveRetirement {
+							ts.ActionCatalog = append(ts.ActionCatalog, a)
+							break
+						}
 					}
 				}
-			case "not_idempotent":
-				for n := range ts.ActionCatalog {
-					if ts.ActionCatalog[n].Name == capacity.VMObserveRetirement {
-						ts.ActionCatalog[n].Idempotent = false
-					}
+				allowed := productionRetirementCatalogV2("hetzner", ts) && originalGuestSupplierCatalogSourceFor("hetzner", ts, source)
+				if allowed != (kind == "exact") {
+					t.Fatal("unowned retirement capability/source admitted", kind)
 				}
-			case "missing_native_default":
-				for n := range ts.ResourceTypes {
-					if ts.ResourceTypes[n].Name == "server" {
-						ts.ResourceTypes[n].DefaultActions = []string{"ensure_server", "destroy_server", capacity.VMObserveServer}
-					}
-				}
-			case "duplicate_retirement":
-				for _, a := range ts.ActionCatalog {
-					if a.Name == capacity.VMObserveRetirement {
-						ts.ActionCatalog = append(ts.ActionCatalog, a)
-						break
-					}
-				}
-			}
-			allowed := productionRetirementCatalogV2("hetzner", ts) && originalGuestSupplierCatalogSourceFor("hetzner", ts, source)
-			if allowed != (kind == "exact") {
-				t.Fatal("unowned retirement capability/source admitted", kind)
-			}
-		})
+			})
+		}
 	}
 }
 

@@ -20,6 +20,7 @@ import (
 // Exact owning publication reviewed for the additive Hetzner 0.3 retirement
 // reader. This is not an environment/manifest-selected source approval.
 const originalHetznerRetirementV3Source = "b375d438983b89601c0896fd77d73cde667bedaf"
+const originalHetznerRetirementV032Source = "b672bde630e1faa7947f811c2e10732319403781"
 
 type originalGuestTransportKey struct{}
 type productionGuestInvocationKey struct{}
@@ -120,11 +121,11 @@ func originalGuestSupplierCatalogFor(provider string, ts model.IntegrationTypeMa
 	}
 	// The reviewed supplier uses the original broker request protocol. HTTP
 	// adapters need their own reviewed no-replay transport contract.
-	if ts.Provider != "hetzner" || (ts.Adapter.Version != "0.1.0" && ts.Adapter.Version != "0.2.0" && ts.Adapter.Version != "0.3.0") || ts.Adapter.Transport != "rabbitmq" || manifest.ValidateIntegrationTypeSpec(ts) != nil {
+	if ts.Provider != "hetzner" || (ts.Adapter.Version != "0.1.0" && ts.Adapter.Version != "0.2.0" && ts.Adapter.Version != "0.3.0" && ts.Adapter.Version != "0.3.2") || ts.Adapter.Transport != "rabbitmq" || manifest.ValidateIntegrationTypeSpec(ts) != nil {
 		return false
 	}
 	operations := []string{"ensure_server", capacity.VMObserveServer, capacity.VMObserveAction}
-	if ts.Adapter.Version == "0.3.0" {
+	if ts.Adapter.Version == "0.3.0" || ts.Adapter.Version == "0.3.2" {
 		operations = append(operations, "destroy_server", capacity.VMObserveRetirement)
 	}
 	for _, required := range operations {
@@ -156,7 +157,18 @@ func originalGuestSupplierCatalogFor(provider string, ts model.IntegrationTypeMa
 }
 
 func originalGuestSupplierCatalogSourceFor(provider string, ts model.IntegrationTypeManifestSpec, source string) bool {
-	return originalGuestSupplierCatalogFor(provider, ts) && !(provider == "hetzner" && ts.Adapter.Version == "0.3.0" && source != originalHetznerRetirementV3Source)
+	if !originalGuestSupplierCatalogFor(provider, ts) {
+		return false
+	}
+	if provider == "hetzner" {
+		switch ts.Adapter.Version {
+		case "0.3.0":
+			return source == originalHetznerRetirementV3Source
+		case "0.3.2":
+			return source == originalHetznerRetirementV032Source
+		}
+	}
+	return true
 }
 
 func originalGuestSupplierSourceConfig(spec model.IntegrationInstanceManifestSpec, source string) bool {

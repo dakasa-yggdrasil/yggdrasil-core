@@ -39,56 +39,56 @@
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_mutations.go",
       "function": "serveCapacityMutationRequest",
-      "line": 146,
+      "line": 148,
       "predicate": "r.Method == http.MethodPost && (route == capacityMutationBasePath+\"/power/redeem\" || route == capacityMutationBasePath+\"/power/settle\")"
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_mutations.go",
       "function": "serveCapacityMutationRequest",
-      "line": 183,
+      "line": 185,
       "predicate": "r.Method == http.MethodPost && route == capacityMutationBasePath+\"/native/result\""
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_mutations.go",
       "function": "serveCapacityMutationRequest",
-      "line": 200,
+      "line": 202,
       "predicate": "r.Method == http.MethodPost && route == capacityMutationBasePath+\"/native/redeem\""
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_mutations.go",
       "function": "serveCapacityMutationRequest",
-      "line": 216,
+      "line": 218,
       "predicate": "r.Method == http.MethodPost && route == capacityMutationBasePath+\"/redeem\""
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_mutations.go",
       "function": "serveCapacityMutationRequest",
-      "line": 232,
+      "line": 234,
       "predicate": "r.Method == http.MethodPost && route == capacityMutationBasePath+\"/settle\""
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_mutations.go",
       "function": "serveCapacityMutationRequest",
-      "line": 258,
+      "line": 260,
       "predicate": "r.Method == http.MethodGet && strings.HasPrefix(route, capacityMutationBasePath+\"/\")"
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_mutations.go",
       "function": "mutationHTTPError",
-      "line": 295,
+      "line": 297,
       "predicate": "errors.Is(err, repository.ErrCapacityMutationAuthorization), errors.Is(err, sql.ErrNoRows)"
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_mutations.go",
       "function": "mutationHTTPError",
-      "line": 297,
+      "line": 299,
       "predicate": "errors.Is(err, repository.ErrCapacityConflict), errors.Is(err, repository.ErrCapacityLease), errors.Is(err, repository.ErrCapacityDisabled)"
     }
   ],

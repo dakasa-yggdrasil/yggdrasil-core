@@ -28,13 +28,13 @@
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_mutations.go",
       "function": "capacityMutationPath",
-      "line": 118
+      "line": 120
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_mutations.go",
       "function": "serveCapacityMutationRequest",
-      "line": 125
+      "line": 127
     },
     {
       "build_constraint": "default",

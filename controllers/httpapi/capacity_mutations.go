@@ -71,7 +71,9 @@ func loadCapacityMutationPrincipals(workflows []workflowMachinePrincipal, events
 		}
 		p := capacityMutationPrincipal{base: base, instanceID: c.IntegrationInstanceID, capabilities: map[string]bool{}}
 		for _, capability := range c.Capabilities {
-			if (!strings.HasPrefix(capability, "ensure_") && !strings.HasPrefix(capability, "destroy_")) || len(capability) > 128 || containsWildcard(capability) || strings.IndexFunc(capability, func(r rune) bool { return r != '_' && (r < 'a' || r > 'z') && (r < '0' || r > '9') }) >= 0 || p.capabilities[capability] {
+			// The original AWS adapter retains this one exact public operation;
+			// it does not grant a terminate_* family or any other AWS operation.
+			if (!strings.HasPrefix(capability, "ensure_") && !strings.HasPrefix(capability, "destroy_") && capability != "terminate_ec2_instance") || len(capability) > 128 || containsWildcard(capability) || strings.IndexFunc(capability, func(r rune) bool { return r != '_' && (r < 'a' || r > 'z') && (r < '0' || r > '9') }) >= 0 || p.capabilities[capability] {
 				return nil, fmt.Errorf("capacity mutation principal capability must be exact")
 			}
 			p.capabilities[capability] = true

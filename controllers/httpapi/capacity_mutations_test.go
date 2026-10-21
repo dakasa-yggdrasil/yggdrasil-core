@@ -110,6 +110,41 @@ func TestCapacityMutationInventoryFailsClosed(t *testing.T) {
 	}
 }
 
+func TestCapacityMutationOriginalAWSOperationIsExact(t *testing.T) {
+	token, instance := "fixture-private-adapter-token", uuid.NewString()
+	load := func(capabilities []string) ([]capacityMutationPrincipal, error) {
+		config := []capacityMutationPrincipalConfig{{PrincipalID: "fixture-adapter", Status: "active", ExpiresAt: time.Now().Add(time.Hour), RotationID: "fixture-rotation", TokenSHA256: fmt.Sprintf("%x", sha256.Sum256([]byte(token))), IntegrationInstanceID: instance, Capabilities: capabilities}}
+		raw, err := json.Marshal(config)
+		if err != nil {
+			t.Fatal(err)
+		}
+		t.Setenv(capacityMutationPrincipalsEnv, string(raw))
+		return loadCapacityMutationPrincipals(nil, nil, nil)
+	}
+	for _, capabilities := range [][]string{{"ensure_ec2_instance", "terminate_ec2_instance"}, {"ensure_server", "destroy_server"}} {
+		principals, err := load(capabilities)
+		if err != nil || len(principals) != 1 || principals[0].instanceID != instance || len(principals[0].capabilities) != 2 {
+			t.Fatal("exact original provider pair refused or instance scope changed", err)
+		}
+		for _, name := range capabilities {
+			if !principals[0].capabilities[name] {
+				t.Fatal("exact original capability missing", name)
+			}
+		}
+		if len(capabilities) == 2 && capabilities[1] == "terminate_ec2_instance" && (principals[0].capabilities["destroy_server"] || principals[0].capabilities["terminate_rds_instance"]) {
+			t.Fatal("AWS operation widened provider capability scope")
+		}
+	}
+	for _, capability := range []string{"terminate_*", "terminate_ec2_instances", "terminate_ec2_instance_extra", "terminate_rds_instance", "Terminate_ec2_instance", " terminate_ec2_instance", "terminate_ec2_instance ", "terminate_ec2_instance/", ""} {
+		if _, err := load([]string{"ensure_ec2_instance", capability}); err == nil {
+			t.Fatal("non-exact original AWS operation accepted", capability)
+		}
+	}
+	if _, err := load([]string{"terminate_ec2_instance", "terminate_ec2_instance"}); err == nil {
+		t.Fatal("duplicate exact original operation accepted")
+	}
+}
+
 func TestCapacityMutationExactJSON(t *testing.T) {
 	for _, body := range []string{`{"grant_id":"x","unexpected":true}`, `{} {}`, strings.Repeat(" ", 32769) + `{}`} {
 		r := httptest.NewRequest("POST", capacityMutationBasePath+"/redeem", strings.NewReader(body))

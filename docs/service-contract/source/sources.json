@@ -382,8 +382,8 @@
     },
     "controllers/httpapi/capacity_mutations.go": {
       "build_constraint": "default",
-      "bytes": 15442,
-      "sha256": "e3e32f25a88991299c13810679ffd127612517b6def49ed00fcb7b58ef23998c"
+      "bytes": 15629,
+      "sha256": "fa524ad5341d91cfafd021be29ea5fe222be9a799009f2e08d1f9e362a61402f"
     },
     "controllers/httpapi/capacity_release_authorization.go": {
       "build_constraint": "default",
@@ -922,8 +922,8 @@
     },
     "controllers/message/workflows_capacity_guest_production_provider.go": {
       "build_constraint": "!nativequalification",
-      "bytes": 18829,
-      "sha256": "9493e4aa73025b83b568d8321388326e637ad56d6dbffcf3ecbf20bf2fb4564c"
+      "bytes": 19111,
+      "sha256": "452988ead99ca0f9939333154a6efbb0fce0080d01b69ee91cf18242a743e980"
     },
     "controllers/message/workflows_capacity_guest_retirement_v2.go": {
       "build_constraint": "default",
@@ -932,8 +932,8 @@
     },
     "controllers/message/workflows_capacity_guest_retirement_v2_source.go": {
       "build_constraint": "!nativequalification",
-      "bytes": 18094,
-      "sha256": "c1a036728a0826377b27575d22833f91f5df64c92dc1e00affd3c2cbf85a8dc9"
+      "bytes": 18129,
+      "sha256": "72acb5985095d63038ec09c2c533b41a60e21acf6a7310e71b03a089730437b6"
     },
     "controllers/message/workflows_capacity_guest_retirement_v2_source_nativequalification.go": {
       "build_constraint": "nativequalification",

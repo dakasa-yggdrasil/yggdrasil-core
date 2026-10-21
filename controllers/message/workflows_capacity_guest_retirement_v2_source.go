@@ -301,7 +301,7 @@ func productionRetirementCatalogV2(provider string, ts model.IntegrationTypeMani
 	if provider == "aws" {
 		return (ts.Adapter.Version == "1.62.0" || ts.Adapter.Version == "1.63.0") && originalGuestSupplierCatalogFor(provider, ts)
 	}
-	return provider == "hetzner" && ts.Adapter.Version == "0.3.0" && originalGuestSupplierCatalogFor(provider, ts)
+	return provider == "hetzner" && (ts.Adapter.Version == "0.3.0" || ts.Adapter.Version == "0.3.2") && originalGuestSupplierCatalogFor(provider, ts)
 }
 
 func originalHetznerRetirementPendingV2(o model.CapacityVMRetirementObservation, r model.CapacityMutationReceipt) bool {
