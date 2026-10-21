@@ -44,14 +44,27 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test -p 1 -race -count=1 -timeout=60s -json ./internal/capacity -run '^TestGuest(Notify|OriginalHTTP(LateClose|OnlyClosed)|ProductionRegistry)' | tee original-notify-canary-source.jsonl
+          go test -p 1 -race -count=1 -timeout=60s -json ./internal/capacity -run '^TestGuest(Notify|SlotBootstrap|OriginalHTTP(LateClose|OnlyClosed)|ProductionRegistry)' | tee original-notify-canary-source.jsonl
           python3 - <<'PY'
           import json
           rows=[json.loads(line) for line in open('original-notify-canary-source.jsonl') if line.strip()]
-          roots={'TestGuestProductionRegistryExactContract','TestGuestProductionRegistryPinsIndependentHetznerSource','TestGuestProductionRegistryDigestDoesNotMutateOrApprove','TestGuestProductionRegistryPinsCanaryAndDeclarativeTopology','TestGuestNotifyOriginalNonceScopeAndClockDomains','TestGuestNotifyDeclarativeQueueIdentity','TestGuestOriginalHTTPLateCloseCannotRenewBudget','TestGuestOriginalHTTPOnlyClosedCanaryRoutes','TestGuestNotifyCanaryChallengeAndOriginalProcessEnvelope','TestGuestNotifyNativeBusinessJoinSeparatesSQLAndWire'}
+          roots={'TestGuestProductionRegistryExactContract','TestGuestProductionRegistryPinsIndependentHetznerSource','TestGuestProductionRegistryDigestDoesNotMutateOrApprove','TestGuestProductionRegistryPinsCanaryAndDeclarativeTopology','TestGuestNotifyOriginalNonceScopeAndClockDomains','TestGuestNotifyDeclarativeQueueIdentity','TestGuestOriginalHTTPLateCloseCannotRenewBudget','TestGuestOriginalHTTPOnlyClosedCanaryRoutes','TestGuestNotifyCanaryChallengeAndOriginalProcessEnvelope','TestGuestNotifyNativeBusinessJoinSeparatesSQLAndWire','TestGuestNotifyCausalPairCannotRenewPublication','TestGuestNotifyFreshnessKeepsClockDomainsAndOriginalBudget','TestGuestNotifyExpiredPreflightCannotMintOrSign','TestGuestSlotBootstrapSelectsOnlyExactPrivateTemplate','TestGuestSlotBootstrapPinsFullMemberAndSourceContract','TestGuestSlotBootstrapKeepsLegacyWireAndPayload'}
           passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
           if roots-passed or any(r.get('Action')=='skip' for r in rows):raise SystemExit('Original Notify canary source roots missing or skipped')
           print(f'All {len(roots)} original Notify canary source roots passed; no PostgreSQL/broker/native pass claimed')
+          PY
+      - name: Stable canary maintenance cannot adopt a provider mutation lease
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./repository -run '^TestGuestNotifyMaintenanceCannotAdoptMutationLease$' | tee original-notify-maintenance-source.jsonl
+          python3 - <<'PY'
+          import json
+          rows=[json.loads(line) for line in open('original-notify-maintenance-source.jsonl') if line.strip()]
+          case='TestGuestNotifyMaintenanceCannotAdoptMutationLease'
+          assert not any(r.get('Action') in ('fail','skip','build-fail') for r in rows)
+          assert [r['Action'] for r in rows if r.get('Test')==case and r.get('Action') in ('run','pass')]==['run','pass']
+          assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==1
           PY
       - uses: actions/upload-artifact@v4
         if: always()
@@ -60,6 +73,7 @@ jobs:
           path: |
             original-provider-source.jsonl
             original-notify-canary-source.jsonl
+            original-notify-maintenance-source.jsonl
   original-http-transport:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -166,6 +180,22 @@ jobs:
           cache: true
       - name: Apply original migration source to CI-only ephemeral PG
         run: go run ./scripts/goose up > "$RUNNER_TEMP/host-factory-migration.raw.log" 2>&1
+      - name: Actual Guest canary immutable schema and absent-authority PostgreSQL negatives
+        env:
+          REQUIRE_GUEST_NOTIFY_CANARY_DB_TEST: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./repository -run '^TestGuestNotifyCanaryPostgresSchemaAndAbsentAuthority$' | tee "$RUNNER_TEMP/original-notify-canary-pg.jsonl"
+          python3 - <<'PY'
+          import json,os,pathlib
+          rows=[json.loads(line) for line in (pathlib.Path(os.environ['RUNNER_TEMP'])/'original-notify-canary-pg.jsonl').read_text().splitlines() if line.strip()]
+          case='TestGuestNotifyCanaryPostgresSchemaAndAbsentAuthority'
+          assert not any(r.get('Action') in ('skip','fail','build-fail') for r in rows)
+          assert [r['Action'] for r in rows if r.get('Test')==case and r.get('Action') in ('run','pass')]==['run','pass']
+          assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==1
+          print('Actual migrated PostgreSQL FK/immutable schema negatives; no positive enrollment or capacity qualification')
+          PY
       - name: Actual pure byte graph SOURCE cases
         if: ${{ !cancelled() }}
         run: go test -json -count=1 ./internal/capacity -run '^TestHostOriginalFactory' > "$RUNNER_TEMP/host-factory-pure.jsonl" 2> "$RUNNER_TEMP/host-factory-pure.stderr.log"
@@ -297,6 +327,7 @@ jobs:
           name: core-host-factory-source-pg-original-census
           path: |
             ${{ runner.temp }}/host-factory-migration.raw.log
+            ${{ runner.temp }}/original-notify-canary-pg.jsonl
             ${{ runner.temp }}/host-factory-pure.jsonl
             ${{ runner.temp }}/host-factory-pure.stderr.log
             ${{ runner.temp }}/host-factory-build-owner.jsonl

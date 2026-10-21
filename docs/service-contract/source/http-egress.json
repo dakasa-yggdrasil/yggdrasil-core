@@ -218,7 +218,7 @@
       "expression_complete": true,
       "file": "internal/capacity/guest_original_http.go",
       "function": "Original",
-      "line": 91
+      "line": 104
     },
     {
       "argument_expression": "request",
@@ -228,7 +228,7 @@
       "expression_complete": true,
       "file": "internal/capacity/guest_original_http.go",
       "function": "Original",
-      "line": 98
+      "line": 111
     },
     {
       "argument_expression": "ctx, method, origin+path, bytes.NewReader(body)",
