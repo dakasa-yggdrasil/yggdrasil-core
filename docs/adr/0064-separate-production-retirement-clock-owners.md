@@ -1,4 +1,4 @@
-# 0064 — Separate production retirement clock owners
+# ADR-0064: Separate production retirement clock owners
 
 - **Status:** Proposed
 - **Date:** 2026-10-21

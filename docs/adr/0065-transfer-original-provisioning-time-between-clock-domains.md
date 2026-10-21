@@ -1,4 +1,4 @@
-# 0065 — Transfer original provisioning time between clock domains
+# ADR-0065: Transfer original provisioning time between clock domains
 
 - **Status:** Proposed
 - **Date:** 2026-10-21
