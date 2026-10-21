@@ -213,17 +213,6 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 			return fail("original-guest-step-19")
 		}
 
-		if recoveredOutput, handled, recoveryErr := guestOriginalSourceLivePartial(ctx, store, policy, p, b, parsed, key); handled {
-			if recoveryErr != nil {
-				return fail("original-source-live-partial")
-			}
-			wire, encodeErr := json.Marshal(recoveredOutput)
-			if encodeErr != nil || json.Unmarshal(wire, &result.Metadata) != nil {
-				return fail("original-source-live-partial-output")
-			}
-			result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
-			return result
-		}
 		var projection *model.CapacityMutationSpecV1
 		for _, slot := range b.Slots {
 			if slot.Slot == parsed.Slot {
@@ -397,6 +386,17 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		}
 		if err = guestOriginalSourceEnrolled(original, grant, pre, receipt); err != nil {
 			return fail("original-guest-step-31")
+		}
+		if recoveredOutput, handled, recoveryErr := guestOriginalSourceLivePartial(original, store, policy, p, b, parsed, key, step, grant, pre); handled {
+			if recoveryErr != nil {
+				return fail("original-source-live-partial")
+			}
+			wire, encodeErr := json.Marshal(recoveredOutput)
+			if encodeErr != nil || json.Unmarshal(wire, &result.Metadata) != nil {
+				return fail("original-source-live-partial-output")
+			}
+			result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
+			return result
 		}
 		output = struct {
 			Preregistration     model.CapacityGuestOriginalProvisioningPreregistration `json:"preregistration"`

@@ -25,6 +25,9 @@ func AssertPG17SourceFence(ctx context.Context, store repository.CapacityStore, 
 	if originalGuestNativeRealm == nil || store.DB == nil || ctx.Err() != nil {
 		return out, errOriginalGuestStep
 	}
+	if fact.Case == "source_contract_executor_fence" {
+		return assertPG17OriginalExecutorFence(ctx, store, policy, fact)
+	}
 	id, kind := policy.ID.String(), "capacity_policy"
 	row := 15
 	switch fact.Case {
@@ -34,7 +37,7 @@ func AssertPG17SourceFence(ctx context.Context, store repository.CapacityStore, 
 	case "source_contract_type_fence":
 		row, kind = 17, "integration_type"
 	default:
-		return out, errOriginalGuestStep // executor18 is deliberately not expiry-aliasable.
+		return out, errOriginalGuestStep
 	}
 	deadline, ok := ctx.Deadline()
 	if !ok || deadline.After(fact.OriginalDeadline) || fact.CheckedAt.IsZero() || !fact.CheckedAt.Before(fact.OriginalDeadline) || !time.Now().Before(fact.OriginalDeadline) || fact.Schema != "core_original_source_fence_contract_v1" || fact.Scope != "SOURCE_CONTRACT_ONLY_NO_NATIVE_AUTHORITY" || fact.CoreSource != capacity.CurrentGuestCoreSource() || fact.GuestSource != originalGuestNativeRealm.Request.SourceCommit || fact.Namespace != policy.Metadata.Namespace || fact.PolicyID != policy.ID.String() || fact.WorkflowID != store.WorkflowID.String() || fact.Slot != 1 || fact.Generation < 1 || fact.FenceBefore < 1 || fact.FenceBefore != fact.FenceAfter || fact.NativeQualified || fact.RecoveryOnly || fact.ExecutorChanged || fact.LeaseOwnerChanged || fact.OriginalGrantExpired || fact.OldIssueRefused || fact.RevokedKind != kind || fact.RevocationRows != 1 || fact.RevokedActiveAfter || fact.RepositoryRedeemResult != "revoked_scope_refused" || fact.GrantTransition != "byte_exact_unchanged" || fact.GrantBeforeSHA256 == "" || fact.GrantBeforeSHA256 != fact.GrantAfterSHA256 {

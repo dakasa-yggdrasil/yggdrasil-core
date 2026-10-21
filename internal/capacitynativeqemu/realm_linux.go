@@ -107,6 +107,10 @@ func SlotDirectory(private string, slot int) string {
 	if slot == 2 {
 		return filepath.Join(private, "slot-2")
 	}
+	// Prospective source-owned config only. Prepare/Create still accept 1..2.
+	if slot == 3 {
+		return filepath.Join(private, "slot-3")
+	}
 	return ""
 }
 
@@ -810,6 +814,32 @@ func (r *Realm) OriginalSourceFence(ctx context.Context, store repository.Capaci
 	contract = SourceFenceContract{Schema: "core_original_source_fence_contract_v1", Scope: "SOURCE_CONTRACT_ONLY_NO_NATIVE_AUTHORITY", Case: r.Request.NativeCase, CoreSource: capacity.CurrentGuestCoreSource(), GuestSource: r.Request.SourceCommit, Namespace: policy.Metadata.Namespace, PolicyID: policy.ID.String(), WorkflowID: store.WorkflowID.String(), GrantID: grant.GrantID, PreregistrationID: pre.PreregistrationID, Slot: 1, Generation: pre.Generation, FenceBefore: pre.Fence, FenceAfter: pre.Fence, GrantBeforeSHA256: digest(before), OriginalDeadline: deadline, NativeQualified: false}
 	executorCase := r.Request.NativeCase == "source_contract_executor_fence"
 	if executorCase {
+		// Calibrate the executor predicate while BOTH original lease and grant
+		// are still valid. The only modified intent is a negative read-only
+		// clone inside the repository; it never becomes SQL authority. A real
+		// foreign invocation also reaches and fails the ordinary Issue guard.
+		guard, guardErr := store.QualifyOriginalGuestExecutorGuard(ctx, policy, grant.GrantID)
+		if guardErr != nil || !guard.OriginalGuardAccepted || !guard.ExecutorOnlyCloneRefused {
+			return contract, ErrOriginalUnknown
+		}
+		var foreignIssue model.CapacityMutationIssue
+		for _, slot := range binding.Slots {
+			if slot.Slot == grant.Slot && slot.DesiredSpec != nil {
+				foreignIssue = model.CapacityMutationIssue{BindingName: binding.Name, DesiredSpec: jsonBytesSourceFence(slot.DesiredSpec)}
+			}
+		}
+		foreign := store
+		foreign.ExecutorID = uuid.NewString()
+		if len(foreignIssue.DesiredSpec) == 0 || foreign.ExecutorID == store.ExecutorID {
+			return contract, ErrOriginalUnknown
+		}
+		if _, issueErr := foreign.IssueMutation(ctx, policy, pre.Generation, pre.Fence, pre.LeaseOwner, foreignIssue); issueErr != repository.ErrCapacityLease {
+			return contract, ErrOriginalUnknown
+		}
+		guard.ForeignIssueRefused = true
+		if _, err = Publish(ctx, filepath.Join(r.PrivateDirectory, "source-executor-guard-readonly.json"), guard); err != nil {
+			return contract, err
+		}
 		// Real DB lease expiry, no SQL timestamp edit and no renewal. The original
 		// provisioning context (<=420s) still bounds the wait and all later I/O.
 		wait := time.Until(*current.LeaseExpiresAt)
@@ -1354,32 +1384,41 @@ func (r *Realm) originalNativeBeforeSettlementContract(ctx context.Context, stor
 }
 
 type SourceLivePartialContract struct {
-	Schema                 string    `json:"schema"`
-	Scope                  string    `json:"scope"`
-	Case                   string    `json:"case"`
-	PolicyID               string    `json:"policy_id"`
-	WorkflowID             string    `json:"workflow_id"`
-	CoreSource             string    `json:"core_source"`
-	GuestSource            string    `json:"guest_source"`
-	NativeQualified        bool      `json:"native_qualified"`
-	BaselineUnits          int       `json:"baseline_units"`
-	TargetUnits            int       `json:"target_units"`
-	PartialUnits           int       `json:"partial_units"`
-	OutstandingMutations   int       `json:"outstanding_mutations"`
-	Slot2Grants            int       `json:"slot2_grants"`
-	MemberRows             int       `json:"member_rows"`
-	ProbeSHA256            string    `json:"probe_sha256"`
-	PhysicalSHA256         string    `json:"physical_sha256"`
-	PartialSHA256          string    `json:"partial_sha256"`
-	NextGeneration         int64     `json:"next_generation"`
-	NextIntentSHA256       string    `json:"next_intent_sha256"`
-	PriorGeneration        int64     `json:"prior_generation"`
-	RecoveryFence          int64     `json:"recovery_fence"`
-	Refused                []string  `json:"refused"`
-	StaleMemberDeadline    time.Time `json:"stale_member_deadline"`
-	LeaseExpiredObservedAt time.Time `json:"lease_expired_observed_at"`
-	CheckedAt              time.Time `json:"checked_at"`
-	OriginalDeadline       time.Time `json:"original_deadline"`
+	Schema                  string    `json:"schema"`
+	Scope                   string    `json:"scope"`
+	Case                    string    `json:"case"`
+	PolicyID                string    `json:"policy_id"`
+	WorkflowID              string    `json:"workflow_id"`
+	CoreSource              string    `json:"core_source"`
+	GuestSource             string    `json:"guest_source"`
+	NativeQualified         bool      `json:"native_qualified"`
+	BaselineUnits           int       `json:"baseline_units"`
+	TargetUnits             int       `json:"target_units"`
+	PartialUnits            int       `json:"partial_units"`
+	OutstandingMutations    int       `json:"outstanding_mutations"`
+	Slot2Grants             int       `json:"slot2_grants"`
+	CreatedGrantID          string    `json:"created_grant_id"`
+	PendingGrantID          string    `json:"pending_grant_id"`
+	PendingBeforeSHA256     string    `json:"pending_before_sha256"`
+	PendingAfterSHA256      string    `json:"pending_after_sha256"`
+	PendingPreSHA256        string    `json:"pending_preregistration_sha256"`
+	PendingPromotionRefused bool      `json:"pending_promotion_refused"`
+	PendingCreateCalled     bool      `json:"pending_create_called"`
+	ProbeSetSHA256          string    `json:"probe_set_sha256"`
+	PhysicalSetSHA256       string    `json:"physical_set_sha256"`
+	MemberRows              int       `json:"member_rows"`
+	ProbeSHA256             string    `json:"probe_sha256"`
+	PhysicalSHA256          string    `json:"physical_sha256"`
+	PartialSHA256           string    `json:"partial_sha256"`
+	NextGeneration          int64     `json:"next_generation"`
+	NextIntentSHA256        string    `json:"next_intent_sha256"`
+	PriorGeneration         int64     `json:"prior_generation"`
+	RecoveryFence           int64     `json:"recovery_fence"`
+	Refused                 []string  `json:"refused"`
+	StaleMemberDeadline     time.Time `json:"stale_member_deadline"`
+	LeaseExpiredObservedAt  time.Time `json:"lease_expired_observed_at"`
+	CheckedAt               time.Time `json:"checked_at"`
+	OriginalDeadline        time.Time `json:"original_deadline"`
 }
 
 type SourceHistoricalConfirmContract struct {

@@ -453,7 +453,11 @@ func (f *fixture) prepareSource(ctx context.Context) error {
 	if q.SourceFailedFloorCase(f.request.NativeCase) || q.PostlossSourceCase(f.request.NativeCase) {
 		b.CompensationEnabled = true
 	}
-	for slot := 1; slot <= 2; slot++ {
+	approvedSlots := 2
+	if q.SourceLivePartialCase(f.request.NativeCase) {
+		approvedSlots, b.MaxSlots = 3, 3
+	}
+	for slot := 1; slot <= approvedSlots; slot++ {
 		projection := model.CapacityMutationSpecV1{SchemaVersion: "capacity_vm_slot_v1", Capability: b.EnsureCapability, IntegrationInstanceID: b.IntegrationInstanceID, ScopeChecksum: b.ScopeChecksum, ProfileChecksum: capacity.GuestRetirementSHA([]string{"native-original-qemu-fixed-1536-2-kvm", f.profile.OwnerSourceCommit}), AdmissionChecksum: capacity.GuestRetirementSHA(f.profile), ProfileName: b.ProfileName, Slot: slot, NativeName: "original-native-qemu-slot-" + fmt.Sprint(slot), BootstrapSHA256: f.profile.BootstrapSHA256}
 		projectionSHA := capacity.GuestRetirementSHA(map[string]any{
 			"schema_version":          projection.SchemaVersion,
@@ -477,6 +481,16 @@ func (f *fixture) prepareSource(ctx context.Context) error {
 		}
 		f.binding.Members = append(f.binding.Members, member)
 	}
+	// Slot3 is an approved prospective permission only. It has independent
+	// source config and credentials, but is absent from the physical request;
+	// the fixed native realm still refuses every Prepare/Create above slot2.
+	if q.SourceLivePartialCase(f.request.NativeCase) {
+		prospective, prepareErr := f.prepareMember(ctx, q.SlotRequest{Slot: 3, ActorOrigin: "https://127.0.0.1:21447"})
+		if prepareErr != nil {
+			return prepareErr
+		}
+		f.binding.Members = append(f.binding.Members, prospective)
+	}
 	rbac, err := f.createManifest(ctx, "rbac", "original-native-qemu", map[string]any{"roles": []any{map[string]any{"name": "original-qemu-caller", "rules": []any{map[string]any{"effect": "allow", "resources": []string{"workflow:" + f.namespace + ":original-native-qemu"}, "actions": []string{"run"}}}}}, "bindings": []any{map[string]any{"name": "original-caller", "subjects": []any{map[string]string{"type": "service", "id": "original-native-qemu-workflow-caller"}}, "roles": []string{"original-qemu-caller"}}}})
 	if err != nil {
 		return err
@@ -488,6 +502,9 @@ func (f *fixture) prepareSource(ctx context.Context) error {
 	}
 	now := time.Now().UTC()
 	policy := model.CapacityPolicySpec{Environment: "qualification", Domain: "infrastructure", Dimension: "native_echo", TargetIdentity: "original-native-qemu:" + f.namespace, Owner: "original-native-qemu", Workflow: model.ManifestSelector{Namespace: f.namespace, Name: f.workflow.Metadata.Name}, Currency: "USD", Floor: 1, Ceiling: 2, Step: 1, MaxEvidenceAgeSeconds: 30, MaxSampleGapSeconds: 5, MinSamples: 1, UpHoldSeconds: 0, DownHoldSeconds: 1, CooldownSeconds: 0, LeaseSeconds: 300, ExecutionEnabled: true, Signals: []model.CapacitySignalRule{{Name: "qualification-demand", SourceIdentity: "source-controlled-native-fixture-demand", Unit: "ratio", UpAbove: 0.8, DownBelow: 0.3}}, Profiles: []model.CapacityProfile{{Name: f.profile.Profile, Provider: "native-qemu", Region: "owning-ci-qemu", MinUnits: 1, MaxUnits: 2, UnitMonthlyCostMinor: 0, QuoteValidUntil: f.request.OriginalContextDeadline, ValidationValidUntil: f.request.OriginalContextDeadline, ValidationRef: "native-qualification-source-only:" + f.request.SourceCommit, ReadinessSeconds: 0}}, MutationBindings: []model.CapacityMutationBinding{b}, GuestRetirementBinding: &f.binding}
+	if q.SourceLivePartialCase(f.request.NativeCase) {
+		policy.Ceiling, policy.Step, policy.Profiles[0].MaxUnits = 3, 2, 3
+	}
 	if !capacity.GuestOriginalProfileEnabled(policy, f.binding, "native-qemu") {
 		return q.ErrOriginalUnknown
 	}
@@ -576,7 +593,7 @@ func (f *fixture) runOriginalSourceFenceCaller(ctx context.Context) error {
 			return q.ErrOriginalUnknown
 		}
 	}
-	if contract.Case != "source_contract_executor_fence" {
+	{
 		pg17FenceRead, cancelPG17FenceRead := context.WithDeadline(ctx, contract.OriginalDeadline)
 		defer cancelPG17FenceRead()
 		pg17Fence, pg17FenceErr := message.AssertPG17SourceFence(pg17FenceRead, repository.CapacityStore{DB: f.db, WorkflowID: f.workflow.ID}, f.policy, contract)
@@ -708,7 +725,7 @@ func (f *fixture) runOriginalLivePartialCaller(ctx context.Context) error {
 	}
 	var retained q.SourceLivePartialContract
 	wire, err := q.ReadPrivate(ctx, filepath.Join(f.private, "source-live-partial-contract.json"), &retained)
-	if err != nil || retained.Schema != "core_original_live_partial_recovery_v1" || retained.Case != f.request.NativeCase || retained.NativeQualified || retained.PolicyID != f.policy.ID.String() || retained.WorkflowID != f.workflow.ID.String() || retained.CoreSource != capacity.CurrentGuestCoreSource() || retained.GuestSource != f.request.SourceCommit || retained.BaselineUnits != 1 || retained.TargetUnits != 2 || retained.PartialUnits != 1 || retained.OutstandingMutations != 0 || retained.Slot2Grants != 0 || retained.MemberRows != 1 || retained.NextGeneration <= retained.PriorGeneration || !retained.CheckedAt.Before(retained.OriginalDeadline) {
+	if err != nil || retained.Schema != "core_original_live_partial_recovery_v1" || retained.Case != f.request.NativeCase || retained.NativeQualified || retained.PolicyID != f.policy.ID.String() || retained.WorkflowID != f.workflow.ID.String() || retained.CoreSource != capacity.CurrentGuestCoreSource() || retained.GuestSource != f.request.SourceCommit || retained.Scope != "SOURCE_NATIVE_NEW_MEMBER_PARTIAL_ONLY" || retained.BaselineUnits != 1 || retained.TargetUnits != 3 || retained.PartialUnits != 2 || retained.OutstandingMutations != 0 || retained.Slot2Grants != 1 || retained.MemberRows != 2 || !retained.PendingPromotionRefused || retained.PendingCreateCalled || retained.NextGeneration <= retained.PriorGeneration || !retained.CheckedAt.Before(retained.OriginalDeadline) {
 		return q.ErrOriginalUnknown
 	}
 	matched := 0
@@ -733,7 +750,7 @@ func (f *fixture) runOriginalLivePartialCaller(ctx context.Context) error {
 	if json.Unmarshal(intentRaw, &actualIntent) != nil || capacity.GuestRetirementSHA(actualIntent) != retained.NextIntentSHA256 || actualIntent.Generation != retained.NextGeneration || actualIntent.RecoveryOnly {
 		return q.ErrOriginalUnknown
 	}
-	f.completedLivePartial = map[string]any{"schema": q.FixtureSchema, "stage": "original-live-partial-completed.json", "case": f.request.NativeCase, "contract_sha256": capacity.BusinessCreationSHA256(wire), "scope": "SOURCE_NATIVE_BASELINE_PARTIAL_ONLY", "native_qualified": false, "core_source": capacity.CurrentGuestCoreSource(), "guest_source": f.request.SourceCommit}
+	f.completedLivePartial = map[string]any{"schema": q.FixtureSchema, "stage": "original-live-partial-completed.json", "case": f.request.NativeCase, "contract_sha256": capacity.BusinessCreationSHA256(wire), "scope": "SOURCE_NATIVE_NEW_MEMBER_PARTIAL_ONLY", "native_qualified": false, "core_source": capacity.CurrentGuestCoreSource(), "guest_source": f.request.SourceCommit}
 	return nil
 }
 

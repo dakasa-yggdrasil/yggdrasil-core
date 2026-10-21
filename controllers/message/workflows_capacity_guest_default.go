@@ -60,7 +60,7 @@ func guestOriginalSourceContractFence(context.Context, repository.CapacityStore,
 	return nil, false, nil
 }
 
-func guestOriginalSourceLivePartial(context.Context, repository.CapacityStore, model.Manifest, model.CapacityPolicySpec, model.CapacityMutationBinding, guestOriginalStepInput, ed25519.PrivateKey) (any, bool, error) {
+func guestOriginalSourceLivePartial(context.Context, repository.CapacityStore, model.Manifest, model.CapacityPolicySpec, model.CapacityMutationBinding, guestOriginalStepInput, ed25519.PrivateKey, model.WorkflowStepSpec, model.CapacityMutationGrant, model.CapacityGuestOriginalProvisioningPreregistration) (any, bool, error) {
 	return nil, false, nil
 }
 

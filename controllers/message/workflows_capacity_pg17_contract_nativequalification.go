@@ -39,9 +39,11 @@ var pg17OriginalNames = map[int]string{
 	10: "TestCapacityMutationPostgres/unresolved_mutation_blocks_terminal_and_expiry_reissue",
 	11: "TestCapacityMutationPostgres/native_action_cannot_replace_transport_settlement",
 	12: "TestCapacityMutationPostgres/historical_recovery_confirms_after_pause",
+	13: "TestCapacityMutationPostgres/partial_recovery_matches_fresh_membership_and_allows_new_intent",
 	15: "TestCapacityMutationPostgres/policy_instance_type_and_executor_fences/policy",
 	16: "TestCapacityMutationPostgres/policy_instance_type_and_executor_fences/instance",
 	17: "TestCapacityMutationPostgres/policy_instance_type_and_executor_fences/type",
+	18: "TestCapacityMutationPostgres/policy_instance_type_and_executor_fences/executor",
 	19: "TestCapacityMutationNativeWorkflowPostgres/native_reads_confirm_once_without_readiness_claim",
 	20: "TestCapacityMutationHTTPPostgres",
 }
@@ -53,7 +55,7 @@ func PG17RetainAssertions(ctx context.Context, realm *q.Realm, policy model.Mani
 		return errOriginalGuestStep
 	}
 	switch family {
-	case "compensation-eligibility", "compensation-pre-settlement", "compensation-confirm", "compensation-postloss-reissue", "failed-floor", "failed-floor-completed", "mutation-create", "mutation-confirm", "mutation-terminal", "mutation-historical", "source-fence", "native-workflow", "http-callback":
+	case "compensation-eligibility", "compensation-pre-settlement", "compensation-confirm", "compensation-postloss-reissue", "failed-floor", "failed-floor-completed", "mutation-create", "mutation-confirm", "mutation-terminal", "mutation-historical", "mutation-partial", "source-fence", "native-workflow", "http-callback":
 	default:
 		return errOriginalGuestStep
 	}
