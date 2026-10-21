@@ -12,7 +12,7 @@
   "source_inventory": {
     "id": "complete_runtime_source_census",
     "evidence": "docs/service-contract/source/sources.json",
-    "sha256": "350731d0ab3d5918fc7e74b187757fa355d842dbd4ba5e17c81f89b87e987a9b"
+    "sha256": "70f5f8d7d313d33f5a5104c78c4f3359e5017b5ed7b2cece2a6a145612a3e058"
   },
   "produces": [
     {
@@ -55,7 +55,7 @@
     {
       "id": "independent_source_review",
       "evidence": "docs/service-contract/REVIEW.json",
-      "sha256": "e3b8f525dd2d57191a3507334d859d3466ed5171e92e4310d4f6dcdb2aab78fc"
+      "sha256": "6204e07c03be166d9f4d62161d0306536dafb370b55059e031839d565f43c32e"
     }
   ],
   "callsREST": [
@@ -84,12 +84,12 @@
     {
       "id": "pre_mux_capacity_dispatch",
       "evidence": "docs/service-contract/source/http-intercept-dispatch.json",
-      "sha256": "79de4aa297eb0b920ea69c407a65ec80886a94557809c432e87f0f83f19bb4f9"
+      "sha256": "4b571703c09487afe728cc9c9a27b3a0f6577bc9ec60f1127ceb9ea043fef9f7"
     },
     {
       "id": "auth_dispatch_source_functions",
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
-      "sha256": "689700ced779d29401aaba3fa1283059ca582aa9590c5a6b09dddaac6bcae925"
+      "sha256": "e104a032442137829fd988b68edf7be185b1fa84e41b0f2b4a923c5864c06d14"
     }
   ]
 }
