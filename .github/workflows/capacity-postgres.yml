@@ -225,13 +225,14 @@ jobs:
           umask 077
           guest_reconcile_dir="$RUNNER_TEMP/original-guest-reconcile-source"
           mkdir -m 700 "$guest_reconcile_dir"
-          go test -race -json -p 1 -count=1 -timeout=120s ./internal/capacity ./repository ./manifest ./controllers/message ./controllers/httpapi -run '^TestOriginalGuest(Reconcile|Dispatch|Administrative)' 2>"$guest_reconcile_dir/stderr.log" | tee "$guest_reconcile_dir/original.jsonl"
+          go test -race -json -p 1 -count=1 -timeout=120s ./internal/capacity ./repository ./manifest ./controllers/message ./controllers/httpapi -run '^TestOriginalGuest(Reconcile|Dispatch|Administrative|Production)' 2>"$guest_reconcile_dir/stderr.log" | tee "$guest_reconcile_dir/original.jsonl"
           python3 - <<'PY'
           import json, os
           from pathlib import Path
           root = Path(os.environ['RUNNER_TEMP'])/'original-guest-reconcile-source'
           events = [json.loads(line) for line in (root/'original.jsonl').read_text().splitlines()]
           expected = {
+              'TestOriginalGuestProductionApprovalsBindActualContracts',
               'TestOriginalGuestAdministrativeCostAssumptionClosed',
               'TestOriginalGuestAdministrativeExpiryIsNotNativeQuote',
               'TestOriginalGuestAdministrativeCostDoesNotChangeApproval',

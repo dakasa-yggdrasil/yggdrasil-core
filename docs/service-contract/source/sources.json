@@ -1392,8 +1392,8 @@
     },
     "internal/capacity/guest_production_registry_default.go": {
       "build_constraint": "!nativequalification",
-      "bytes": 685,
-      "sha256": "57eaa134f29c63973ad4f210635be5e6df4a095b1c5735198009c4ebe074cc2f"
+      "bytes": 1206,
+      "sha256": "c598645cae52335790de56953fb2b92306c8a5858e13f482e70aa11e7e28c196"
     },
     "internal/capacity/guest_production_registry_nativequalification.go": {
       "build_constraint": "nativequalification",

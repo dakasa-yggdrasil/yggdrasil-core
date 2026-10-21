@@ -1,10 +1,10 @@
 {
   "schema": "core_service_source_review_v1",
-  "accepted_at": "2026-10-21T19:41:22.206677+00:00",
-  "reviewer": "Codex A4 source census owner preserving prior Root and independent reviews, binding independent A3 full static floor-bootstrap review to the exact successor source; no human, native or deployment approval claimed",
+  "accepted_at": "2026-10-21T20:04:43.710044+00:00",
+  "reviewer": "Root completed final full source review and exact nine-postimage integration; Codex A4 records that acceptance and independent A3 full static peer45f4 against the current636-source census; no human, native or deployment approval claimed",
   "human_architecture_signoff_claimed": false,
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "c4fa9b7bb85e10e5332c5b350a390246f68f0780c22c5a4887ec51faba0438ce",
+  "source_inventory_sha256": "f2060483555e0028216f30749895be8c848b7904d251096b4d26fabdbdea860f",
   "non_test_Go_sources": 636,
   "checker": {
     "private_repository": "dakasa-co/dakasa-commons",
@@ -45,7 +45,9 @@
     "Independent A3 full27-file bridge and12-file cumulative financial/cadence source reviews found no concrete P1/P2 at their frozen exact snapshots; Root authorized integrating these source patches with the additive H034 supplier source into the existing branch. The complete current635-source census binds every integrated production postimage.",
     "The canonical Guest graph uses explicit plan/complete opcodes, durable scheduled machine-principal/RBAC/dispatch ownership, source-only observations and original no-replay provision/useful/retirement ledgers. Default production approval registry remains empty; HPA/qualification contracts are separate.",
     "New Guest-only strict thresholds, finite explicit administrative USD assumptions and exact selected native currency preserve legacy dated behavior and original fresh quote checks. Source controller cadence and actual range sample gaps are separate; Coverage30/min5 is independent of Demand300/min61. Neither missing data nor a schedule wake supplies native readiness or drain authority.",
-    "Independent A3 full static floor-bootstrap review721565 binds the exact three production and two new test postimages. Only the immutable original native-zero protected floor generation may complete using bound Coverage30/current15s source time while keeping actual missing Demand300 unchanged. Current original lease/source/compiled graph/native ledger and raw useful-canary phase guards remain in the same transaction; generic, recovery, nonzero-baseline, reduction and above-floor authority remain refused."
+    "Independent A3 full static floor-bootstrap review721565 binds the exact three production and two new test postimages. Only the immutable original native-zero protected floor generation may complete using bound Coverage30/current15s source time while keeping actual missing Demand300 unchanged. Current original lease/source/compiled graph/native ledger and raw useful-canary phase guards remain in the same transaction; generic, recovery, nonzero-baseline, reduction and above-floor authority remain refused.",
+    "Author prepared exactly two complete actual public Notify protected contracts through the frozen owning Core typed helper and original native/caller joins. AWS external-IAM-v2 and H034 own dry-run public records remain unchanged; the lean AWS type is joined to original Core RPC and installer/type metadata. This literal two-row approval is a source candidate pending Root final integration review, not a deployment or useful-member observation.",
+    "Root completed the final full source review of exactly two original Notify protected contracts and verified all nine integrated postimages against the frozen candidate. Independent A3 full actual-ABI and two-approval static peer45f4 is bound separately. The current636-source inventory matches every production source byte; the literal two-row registry is accepted for source publication, while runtime current-source rebinding, operational policy, process flags, grants and native qualification remain separate gates. Earlier pending and registry-empty statements describe their historical predecessor snapshots."
   ],
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
@@ -72,7 +74,9 @@
     "Independent A3 full bridge peer a1c40 and cumulative final peer c9f4 are static source reviews, not native execution. Source capacity-postgres CI newly requires25 roots/noSkip including an actual PG refusal that preserves existing intent/lease/event/grant authority. Its execution remains owning CI work.",
     "This registry-empty source publication is for early owning Linux/PG CI. No compiled two-profile approval, new H034 metadata UUID, operational metrics, process flag, credential, database migration or production activation is supplied by this review. Initial-floor telemetry maturation remains a source-supported functional follow-up before activation; no native positive is claimed.",
     "Floor successor author Darwin eleven roots/seventy-eight nodes passed before the added15s transaction-age guard; final two floor roots/twenty-nine nodes/no skips passed with the exact current helper. Core message+HTTP build and Linuxamd64 message test crosscompile passed before only those additional pure Fresh checks/test case. No Linux or PostgreSQL execution is attributed. The current owning CI requires28 no-skip roots including a new actual generic floor-claim PostgreSQL authority refusal; complete protected production-positive execution remains separately required.",
-    "The earlier registry-empty validation requiring a floor-maturation follow-up describes predecessor178c only. This source successor implements that narrow path and still does not supply production profile approvals, process flags, deployment, credentials, metrics, VM authority or native success. Three test-only lint equivalences preserve exact behavior; owning lint rerun remains required."
+    "The earlier registry-empty validation requiring a floor-maturation follow-up describes predecessor178c only. This source successor implements that narrow path and still does not supply production profile approvals, process flags, deployment, credentials, metrics, VM authority or native success. Three test-only lint equivalences preserve exact behavior; owning lint rerun remains required.",
+    "Author actual public ABI five roots passed without any API/private/native call. Core typed contract-only execution completed0 for two providers and16slots with unchanged3fd/be3 ProfileManifest hashes; full operational policy validation remains false. Candidate source approval matching with the two actual public datasets passed1root/23nodes/noSkip on Darwin, including foreign-source/runtime/member/recipient/adapter/admission/age/cross-provider/duplicate refusals. Linux/PG/current-source positive physical lifecycle remains owning qualification work.",
+    "Root final source acceptance and exact application receipt a982d43d bind candidate377126 and independent A3 peer45f4. Existing author current-Core contract test1root/23nodes/noSkip passed; no redundant tests were rerun for this documentation-only acceptance update. Current owning Linux/PG execution remains required and no production lifecycle success is supplied by this acceptance."
   ],
   "production_deployment_or_native_pass_claimed": false,
   "reviewed_source_head": "462f2298321af68edff83f789e256f6b9f2eeb0d",
@@ -87,7 +91,7 @@
     "independent_A3_bridge_peer_sha256": "a1c40a1cbb8c1e93f2891c2873bb063116ed30034b5fa8f79a11cff21cd79822",
     "independent_A3_final_delta_peer_sha256": "c9f4a27aafd220b2e686938ffe3472eecd27ab3f697eb3bd492c66378be80b51",
     "source_only": true,
-    "compiled_registry_empty": true,
+    "compiled_registry_empty": false,
     "Root_current_combined_portable_roots": 29,
     "Root_current_combined_portable_nodes": 205,
     "Root_current_combined_portable_skips": 0,
@@ -99,8 +103,31 @@
       "author_final_portable_skips": 0,
       "source_only": true,
       "native_execution_claimed": false
+    },
+    "two_actual_approval_candidate": {
+      "base": "532ddfe05a1e9d74340021b49b6513193d5775f5",
+      "Root_final_integration_review_pending": false,
+      "source_review_only": true,
+      "typed_contract_source_review_sha256": "29ae1f3575e7a172b8d8dc27ee31eb076c36e5183560d9cd10aea50abb935971",
+      "profiles": {
+        "aws": "ddd39fc8ee9d4b23e39b5af99dc13eb43168ebf92291507000f83ada8f5880b4",
+        "hetzner": "6c7b5b4eef25545dd3b46908527e3f738585b0c524a04af2ca49b5bdec24d5b1"
+      },
+      "full_operational_policy_validated": false,
+      "process_flags_changed": false,
+      "native_lifecycle_qualification_claimed": false,
+      "Root_final_source_review_complete": true,
+      "Root_exact_source_application_receipt_sha256": "a982d43d24f27ace74a2ff12de752df04d7226f6d081a2ce83d6705d0a031e81",
+      "independent_A3_full_static_peer_sha256": "45f4cd806c01d62c1680914869f1a98044ff7cbaecbd989a20e25e52002288bb",
+      "compiled_approval_rows": 2,
+      "accepted_source_inventory_sha256": "f2060483555e0028216f30749895be8c848b7904d251096b4d26fabdbdea860f"
     }
   },
   "previous_review_before_floor_bootstrap_sha256": "a38b423729b60de88fecf379d7f4d68fd423ad97a2914091d95478ae114cfa2e",
-  "previous_review_accepted_at": "2026-10-21T19:28:31.389131+00:00"
+  "previous_review_accepted_at": "2026-10-21T19:28:31.389131+00:00",
+  "previous_review_before_two_actual_approval_candidate_sha256": "2fa1a8302d35d015d3e0e72913693646dec46a488664fcf5b2d84adcc78eb695",
+  "accepted_at_is_historical_for_two_profile_candidate": false,
+  "previous_review_before_final_two_approval_acceptance_sha256": "8743d3f7a2c0983472ac6e6ba39915a7607fe29c3700e5acf6df775bbccdebd9",
+  "previous_two_approval_candidate_accepted_at": "2026-10-21T19:41:22.206677+00:00",
+  "previous_two_approval_candidate_reviewer": "Codex A4 source census owner preserving prior Root and independent reviews, binding independent A3 full static floor-bootstrap review to the exact successor source; no human, native or deployment approval claimed"
 }

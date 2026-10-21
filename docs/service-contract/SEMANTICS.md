@@ -152,8 +152,13 @@ legacy policy contract. The additive Hetzner0.3.3/0.3.4 supplier gates retain th
 exact original source/catalog joins and earlier selected versions, without
 adopting a prior instance as a new provider version.
 
-This source revision keeps the compiled production profile registry empty and
-introduces no runtime policy, credential, provider grant, deployment or VM.
+This source revision compiles exactly the two reviewed original Notify profile
+contracts for AWS and Hetzner. Each complete contract binds its actual native
+adapter instance/type, eight slots, public identities, canary and protected
+writer catalog. Runtime current Core source is checked separately to avoid a
+self-referential commit hash. Qualification and other profiles remain excluded.
+An exact source approval supplies no current policy, lease, useful member,
+provider grant, credential, deployment or VM.
 Source review, portable tests and a required no-skip owning PostgreSQL refusal
 gate do not substitute for genuine positive native authority or production
 usefulness.
