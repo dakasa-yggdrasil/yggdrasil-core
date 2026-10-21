@@ -33,7 +33,7 @@ func (s CapacityStore) guestNotifyStoredTx(ctx context.Context, tx *sql.Tx, poli
 		return stored, empty, err
 	}
 	origin := s.guestNotifyOrigin
-	if origin == nil || origin.source != capacity.CurrentGuestCoreSource() || origin.source != stored.binding.CoreAuthoritySourceCommit || origin.step.Use.Kind != "yggdrasil" || (origin.step.Use.Operation != GuestNotifyCanaryOperation && origin.step.Use.Operation != capacity.RetireOriginalGuestOperation && origin.step.Use.Operation != "capacity.finish_original_guest_retirement") || origin.step.TimeoutSeconds < 1 || origin.step.TimeoutSeconds > 86400 || origin.step.Retry.MaxAttempts > 1 || origin.step.ForEach != nil || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.WorkflowID != s.WorkflowID.String() || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.binding) || p.GuestNotifyCanaryBinding == nil || capacity.ValidateGuestNotifyCanaryBinding(p) != nil {
+	if origin == nil || origin.source != capacity.CurrentGuestCoreSource() || origin.source != stored.binding.CoreAuthoritySourceCommit || origin.step.Use.Kind != "yggdrasil" || (origin.step.Use.Operation != GuestNotifyCanaryOperation && origin.step.Use.Operation != GuestNotifyMaintenanceOperation && origin.step.Use.Operation != capacity.RetireOriginalGuestOperation && origin.step.Use.Operation != "capacity.finish_original_guest_retirement") || origin.step.TimeoutSeconds < 1 || origin.step.TimeoutSeconds > 86400 || origin.step.Retry.MaxAttempts > 1 || origin.step.ForEach != nil || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.WorkflowID != s.WorkflowID.String() || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.binding) || p.GuestNotifyCanaryBinding == nil || capacity.ValidateGuestNotifyCanaryBinding(p) != nil {
 		return stored, empty, ErrCapacityConflict
 	}
 	if err = loadGuestWitnessTx(ctx, tx, &stored); err != nil {
@@ -65,7 +65,10 @@ func (s CapacityStore) guestNotifyStoredTx(ctx context.Context, tx *sql.Tx, poli
 	if _, err = loadGuestInstallationTx(ctx, tx, stored, receipt); err != nil {
 		return stored, empty, err
 	}
-	if receipt.Enrollment.Statement.Tuple != stored.witness.Tuple || receipt.Enrollment.Statement.CoreAuthoritySourceCommit != origin.source || capacity.GuestRetirementEnrollment(p, stored.binding, stored.member, receipt.Enrollment, receipt.RecordedAt) != nil {
+	// The installed immutable enrollment is historical signed content. Its
+	// original admission was checked independently; today's nonce and original
+	// transport, rather than an inter-machine timestamp, own this read's age.
+	if receipt.Enrollment.Statement.Tuple != stored.witness.Tuple || receipt.Enrollment.Statement.CoreAuthoritySourceCommit != origin.source || capacity.GuestRetirementEnrollment(p, stored.binding, stored.member, receipt.Enrollment, receipt.Enrollment.Statement.IssuedAt) != nil {
 		return stored, empty, ErrCapacityConflict
 	}
 	b, err := capacity.VMObservationBinding(p, stored.binding.MutationBindingName)
@@ -93,8 +96,8 @@ func (s CapacityStore) IssueGuestNotifyCanaryRead(ctx context.Context, policy mo
 }
 func (s CapacityStore) issueGuestNotifyCanary(ctx context.Context, policy model.Manifest, generation, fence int64, owner, preID, usage, recordID string, key ed25519.PrivateKey) (model.CapacityGuestNotifyCanaryChallenge, error) {
 	var result model.CapacityGuestNotifyCanaryChallenge
-	err := s.mutationTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
-		if current.RecoveryOnly || !capacity.GuestNotifyCanaryUsage(usage) || !capacityProfileCurrent(p, current.Decision, now) {
+	err := s.guestNotifyTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
+		if s.guestNotifyOrigin == nil || current.RecoveryOnly || !capacity.GuestNotifyCanaryUsage(usage) || (usage == "steady_useful_membership") != (s.guestNotifyOrigin.step.Use.Operation == GuestNotifyMaintenanceOperation) || s.guestNotifyOrigin.step.Use.Operation != GuestNotifyMaintenanceOperation && !capacityProfileCurrent(p, current.Decision, now) {
 			return ErrCapacityConflict
 		}
 		stored, receipt, err := s.guestNotifyStoredTx(ctx, tx, policy, p, preID)
@@ -105,7 +108,7 @@ func (s CapacityStore) issueGuestNotifyCanary(ctx context.Context, policy model.
 			return ErrCapacityConflict
 		}
 		limit, ok := ctx.Deadline()
-		if !ok || ctx.Err() != nil || current.LeaseExpiresAt == nil {
+		if !ok || ctx.Err() != nil || current.LeaseExpiresAt == nil && s.guestNotifyOrigin.step.Use.Operation != GuestNotifyMaintenanceOperation {
 			return ErrCapacityConflict
 		}
 		id := uuid.NewString()
@@ -144,7 +147,10 @@ func (s CapacityStore) issueGuestNotifyCanary(ctx context.Context, policy model.
 			return err
 		}
 		issued := time.Now()
-		budget := min(5*time.Second, limit.Sub(issued), current.LeaseExpiresAt.Sub(leaseNow)-issued.Sub(sampleStarted))
+		budget := min(5*time.Second, limit.Sub(issued))
+		if current.LeaseExpiresAt != nil {
+			budget = min(budget, current.LeaseExpiresAt.Sub(leaseNow)-issued.Sub(sampleStarted))
+		}
 		deadline := issued.Add(budget).UTC()
 		issued = issued.UTC()
 		if budget <= 0 {
@@ -183,7 +189,7 @@ func loadGuestNotifyPreflightTx(ctx context.Context, tx *sql.Tx, id string) (mod
 // The immutable possible-send record is committed before the one actual HTTP
 // call. A duplicate request refuses; it never returns another permission.
 func (s CapacityStore) ReserveGuestNotifyCanarySend(ctx context.Context, policy model.Manifest, generation, fence int64, owner string, c model.CapacityGuestNotifyCanaryChallenge) error {
-	return s.mutationTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
+	return s.guestNotifyTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
 		stored, receipt, err := s.guestNotifyStoredTx(ctx, tx, policy, p, c.PreregistrationID)
 		if err != nil {
 			return err

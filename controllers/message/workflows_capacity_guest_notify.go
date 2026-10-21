@@ -27,14 +27,18 @@ func executeOriginalGuestNotifyProbe(ctx context.Context, db *sql.DB, store repo
 	if _, err := uuid.Parse(input.PreregistrationID); err != nil {
 		return nil, errOriginalGuestStep
 	}
-	publication, err := store.IssueGuestNotifyCanaryPublication(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, input.PreregistrationID, "initial_useful_membership", key)
+	usage := "initial_useful_membership"
+	if input.LeaseOwner == repository.GuestNotifyMaintenanceOwner(store.ExecutorID) {
+		usage = "steady_useful_membership"
+	}
+	publication, err := store.IssueGuestNotifyCanaryPublication(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, input.PreregistrationID, usage, key)
 	if err != nil || publication.Slot != input.Slot {
 		return nil, errOriginalGuestStep
 	}
 	if _, err = originalGuestNotifyCall(ctx, db, store, policy, p, input, publication, key); err != nil {
 		return nil, err
 	}
-	read, err := store.IssueGuestNotifyCanaryRead(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, input.PreregistrationID, "initial_useful_membership", publication.ChallengeID, key)
+	read, err := store.IssueGuestNotifyCanaryRead(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, input.PreregistrationID, usage, publication.ChallengeID, key)
 	if err != nil || read.Slot != input.Slot {
 		return nil, errOriginalGuestStep
 	}

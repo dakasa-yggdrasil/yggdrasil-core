@@ -21,7 +21,7 @@ const GuestNotifyCanaryPath = "/v1/guest/provisioning/notify-creation-canary"
 const GuestNotifyCanaryPublicationPath = "/v1/guest/provisioning/notify-creation-canary-publication"
 
 func GuestNotifyCanaryUsage(s string) bool {
-	return s == "initial_useful_membership" || s == "before_retirement_floor" || s == "after_retirement_floor"
+	return s == "initial_useful_membership" || s == "steady_useful_membership" || s == "before_retirement_floor" || s == "after_retirement_floor"
 }
 func ValidateGuestNotifyCanaryBinding(p model.CapacityPolicySpec) error {
 	b := p.GuestNotifyCanaryBinding

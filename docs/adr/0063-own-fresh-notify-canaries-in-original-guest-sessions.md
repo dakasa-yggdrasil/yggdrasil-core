@@ -54,6 +54,17 @@ configuration privileges to Notify. An authentic enrollment in the fixed
 template and the same original process remain mandatory. A declared topology
 hash alone does not assert that the broker applied it.
 
+Refresh after promotion through a separate protected workflow operation. It
+derives its owner from the actual workflow invocation and rereads a stable
+capacity epoch under the dimension lock for every ledger mutation. The epoch
+must have no VM lease, recovery authority or unresolved provider grant. It
+cannot accept a caller-selected generation, fence or owner, and cannot publish
+after a concurrent epoch change. This authority only refreshes the fixed
+synthetic business canary; it never renews a VM lease or provider quote, advances
+a phase, authorizes retirement or reserves a provider mutation. Retain the same
+one-use nonce, original five-second context, immutable ledgers and source rate
+limits. A periodic owning workflow may invoke it for continued fresh evidence.
+
 Migration 70 creates empty immutable challenge, Guest nonce, possible-send and
 original-return ledgers. Commit possible-send before the sole original call.
 Duplicate or uncertain calls do not receive another publication permission.

@@ -40,7 +40,7 @@ type guestOriginalStepInput struct {
 }
 
 func guestOriginalOperation(operation string) bool {
-	return operation == repository.GuestNotifyCanaryOperation || operation == capacity.ProvisionOriginalGuestOperation || operation == capacity.RetireOriginalGuestOperation || operation == "capacity.qualify_original_guest_echo" || operation == "capacity.finish_original_guest_retirement"
+	return operation == repository.GuestNotifyCanaryOperation || operation == repository.GuestNotifyMaintenanceOperation || operation == capacity.ProvisionOriginalGuestOperation || operation == capacity.RetireOriginalGuestOperation || operation == "capacity.qualify_original_guest_echo" || operation == "capacity.finish_original_guest_retirement"
 }
 
 func sourceGuestSecret(ctx context.Context, db *sql.DB, ref string) ([]byte, error) {
@@ -118,7 +118,8 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		defer cancelSource()
 	}
 	var parsed guestOriginalStepInput
-	if capacity.DecodeVMObservation(input, &parsed) != nil || parsed.Policy.ManifestID != "" || parsed.Policy.Version != nil || parsed.Policy.Namespace == "" || parsed.Policy.Name == "" || parsed.BindingName == "" || parsed.Slot < 1 || parsed.Slot > 64 || parsed.Generation < 1 || parsed.FencingToken < 1 || parsed.LeaseOwner == "" {
+	maintenance := result.Operation == repository.GuestNotifyMaintenanceOperation
+	if capacity.DecodeVMObservation(input, &parsed) != nil || parsed.Policy.ManifestID != "" || parsed.Policy.Version != nil || parsed.Policy.Namespace == "" || parsed.Policy.Name == "" || parsed.BindingName == "" || parsed.Slot < 1 || parsed.Slot > 64 || !maintenance && (parsed.Generation < 1 || parsed.FencingToken < 1 || parsed.LeaseOwner == "") || maintenance && (parsed.Generation != 0 || parsed.FencingToken != 0 || parsed.LeaseOwner != "") {
 		return fail("original-guest-step-04")
 	}
 	policy, err := repository.ResolveManifest(ctx, db, "capacity_policy", parsed.Policy.Namespace, parsed.Policy.Name, nil, true)
@@ -168,7 +169,13 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 	}
 	executor, _ := ctx.Value(capacityInvocationKey{}).(string)
 	store := repository.CapacityStore{DB: db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true", WorkflowID: wf.ID, ExecutorID: executor}
-	if store.ValidateNativeObservationLease(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner) != nil {
+	if maintenance {
+		store = store.WithOriginalGuestNotifyCanary(step, capacity.CurrentGuestCoreSource())
+		parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, err = store.GuestNotifyMaintenanceEpoch(ctx, policy, parsed.PreregistrationID)
+		if err != nil {
+			return fail("original-guest-notify-maintenance-epoch")
+		}
+	} else if store.ValidateNativeObservationLease(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner) != nil {
 		return fail("original-guest-step-13")
 	}
 	if hostRealm != nil {
@@ -198,7 +205,7 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 	}
 	var output any
 	switch result.Operation {
-	case repository.GuestNotifyCanaryOperation:
+	case repository.GuestNotifyCanaryOperation, repository.GuestNotifyMaintenanceOperation:
 		store = store.WithOriginalGuestNotifyCanary(step, capacity.CurrentGuestCoreSource())
 		output, err = executeOriginalGuestNotifyProbe(ctx, db, store, policy, p, parsed, key)
 		if err != nil {

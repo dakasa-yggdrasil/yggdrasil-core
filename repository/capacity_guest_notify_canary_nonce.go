@@ -30,7 +30,7 @@ func loadGuestNotifyChallengeTx(ctx context.Context, tx *sql.Tx, id string) (mod
 	return final, nil
 }
 func (s CapacityStore) FinalizeGuestNotifyCanaryNonce(ctx context.Context, policy model.Manifest, generation, fence int64, owner string, c model.CapacityGuestNotifyCanaryChallenge, returned capacity.GuestOriginalHTTPReturn) error {
-	return s.mutationTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
+	return s.guestNotifyTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
 		_, receipt, err := s.guestNotifyStoredTx(ctx, tx, policy, p, c.PreregistrationID)
 		if err != nil {
 			return err
@@ -60,7 +60,7 @@ func (s CapacityStore) FinalizeGuestNotifyCanaryNonce(ctx context.Context, polic
 
 func (s CapacityStore) GuestNotifyCanaryEnrollment(ctx context.Context, policy model.Manifest, generation, fence int64, owner, preID string) (model.CapacityGuestRetirementEnrollment, error) {
 	var e model.CapacityGuestRetirementEnrollment
-	err := s.mutationTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, _ model.CapacityIntent, _ time.Time) error {
+	err := s.guestNotifyTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, _ model.CapacityIntent, _ time.Time) error {
 		_, receipt, err := s.guestNotifyStoredTx(ctx, tx, policy, p, preID)
 		if err != nil {
 			return err
