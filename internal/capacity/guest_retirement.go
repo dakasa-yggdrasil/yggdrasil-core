@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/url"
+	"reflect"
 	"strings"
 	"time"
 
@@ -70,7 +71,7 @@ func ValidateGuestRetirementBinding(p model.CapacityPolicySpec, r *model.Capacit
 	}
 	seen := map[string]bool{}
 	for _, w := range profile.Writers {
-		if !guestText(w.ID, 64) || seen[w.ID] || !businessSource.MatchString(w.SourceCommit) || !ValidDigest(w.BinarySHA256) || !ValidDigest(w.CommandSHA256) || !ValidDigest(w.HandleContractSHA256) || (profile.CoverageClass == "native_qualification_subset" && w.CgroupRelativePath != ".") || (profile.CoverageClass != "native_qualification_subset" && w.CgroupRelativePath != w.ID) || !guestWriterImageProvenance(profile, w) {
+		if !guestText(w.ID, 64) || seen[w.ID] || !businessSource.MatchString(w.SourceCommit) || !ValidDigest(w.BinarySHA256) || !ValidDigest(w.CommandSHA256) || !ValidDigest(w.HandleContractSHA256) || !guestProtectedWriterCgroup(p, r, w) || !guestWriterImageProvenance(profile, w) {
 			return refuse
 		}
 		seen[w.ID] = true
@@ -90,6 +91,21 @@ func ValidateGuestRetirementBinding(p model.CapacityPolicySpec, r *model.Capacit
 		lastSlot = m.Slot
 	}
 	return nil
+}
+
+// The owning Notify launcher places its sole original child directly in the
+// fixed protected root and reads the ENTIRE subtree, requiring exactly that
+// PID/start-ticks pair. Its compiled Guest contract therefore pins ".". This
+// exact canary-bound singleton is distinct from generic per-writer children;
+// accepting its path does not install a production registry approval.
+func guestProtectedWriterCgroup(p model.CapacityPolicySpec, r *model.CapacityGuestRetirementBinding, w model.CapacityGuestProtectedWriterDefinition) bool {
+	if r.ProfileManifest.CoverageClass == "native_qualification_subset" {
+		return w.CgroupRelativePath == "."
+	}
+	if w.CgroupRelativePath == w.ID {
+		return true
+	}
+	return r.EvidenceClass == "owned_provisioner_original" && r.ProfileManifest.CoverageClass == "complete_production_roster" && len(r.ProfileManifest.Writers) == 1 && w.ID == "notify-original-writer" && w.CgroupRelativePath == "." && p.GuestRetirementBinding != nil && reflect.DeepEqual(*p.GuestRetirementBinding, *r) && p.GuestNotifyCanaryBinding != nil && ValidateGuestNotifyCanaryBinding(p) == nil
 }
 
 // Census is joined to the ORIGINAL enrolled full source roster. An empty or

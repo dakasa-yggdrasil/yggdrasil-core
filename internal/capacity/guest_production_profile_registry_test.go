@@ -165,3 +165,79 @@ func TestGuestProductionRegistryPinsCanaryAndDeclarativeTopology(t *testing.T) {
 		t.Fatal("different profile/config topology received a source contract")
 	}
 }
+
+// The production Guest's actual Notify placement writes the original child
+// into the fixed protected root, then reads the whole subtree. These shape-only
+// fixtures grant no source approval, native placement or SQL authority.
+func TestGuestProductionRegistryNotifyRootCgroupIsExact(t *testing.T) {
+	for _, kind := range []string{"aws_exact", "hetzner_exact", "generic_named_child", "missing_canary", "foreign_writer", "multiple_writers", "foreign_path", "escaped_path", "missing_topology", "foreign_queue", "foreign_canary_writer", "foreign_canary_source", "foreign_query", "different_policy_binding", "qualification_root", "qualification_named_child"} {
+		t.Run(kind, func(t *testing.T) {
+			p, b, _, source := guestProductionRegistryFixture(t)
+			provider := "aws"
+			if kind == "hetzner_exact" {
+				provider = "hetzner"
+			}
+			p.Profiles[0].Provider = provider
+			p.MutationBindings[0].OriginalProviderSourceCommit = source
+			w := &b.ProfileManifest.Writers[0]
+			w.ID, w.CgroupRelativePath = "notify-original-writer", "."
+			topology := &model.CapacityGuestNotifyCanaryTopology{Schema: "notify_guest_canary_topology_v1", Namespace: "dakasa-production", Binding: b.MutationBindingName, DefinitionsSHA256: strings.Repeat("a", 64), Queues: []model.CapacityGuestNotifyCanaryQueue{{Provider: provider, Slot: 1, Name: guestNotifyQueueName(b.MutationBindingName, provider, 1)}}}
+			b.ProfileManifest.NotifyCanaryTopology = topology
+			p.GuestNotifyCanaryBinding = &model.CapacityGuestNotifyCanaryBinding{Mode: "original_guest_notify_canary_v1", Name: "shape-only-notify", WriterID: w.ID, NotifySourceCommit: source, QuerySHA256: GuestNotifyBusinessQuerySHA256, RecipientSHA256: strings.Repeat("b", 64), RecipientCount: 2, Database: "shape-only", DatabaseOID: "1", SystemID: "2", TableOIDs: []string{"3", "4", "5", "6"}, MinimumPublicationIntervalSeconds: 10, MaximumPublicationsPerHour: 120, TopologySHA256: GuestRetirementSHA(topology)}
+			switch kind {
+			case "generic_named_child":
+				w.CgroupRelativePath = w.ID
+				p.GuestNotifyCanaryBinding = nil
+			case "missing_canary":
+				p.GuestNotifyCanaryBinding = nil
+			case "foreign_writer":
+				w.ID = "other-original-writer"
+				p.GuestNotifyCanaryBinding.WriterID = w.ID
+			case "multiple_writers":
+				other := *w
+				other.ID, other.CgroupRelativePath = "other-original-writer", "other-original-writer"
+				b.ProfileManifest.Writers = append(b.ProfileManifest.Writers, other)
+			case "foreign_path":
+				w.CgroupRelativePath = "other-path"
+			case "escaped_path":
+				w.CgroupRelativePath = "../other-path"
+			case "missing_topology":
+				b.ProfileManifest.NotifyCanaryTopology = nil
+			case "foreign_queue":
+				topology.Queues[0].Name = "foreign-queue"
+				p.GuestNotifyCanaryBinding.TopologySHA256 = GuestRetirementSHA(topology)
+			case "foreign_canary_writer":
+				p.GuestNotifyCanaryBinding.WriterID = "other-original-writer"
+			case "foreign_canary_source":
+				p.GuestNotifyCanaryBinding.NotifySourceCommit = strings.Repeat("c", 40)
+			case "foreign_query":
+				p.GuestNotifyCanaryBinding.QuerySHA256 = strings.Repeat("c", 64)
+			case "qualification_root", "qualification_named_child":
+				p.GuestNotifyCanaryBinding = nil
+				b.EvidenceClass = "native_qemu_qualification"
+				b.ProfileManifest.CoverageClass = "native_qualification_subset"
+				b.ProfileManifest.ProductionCatalogSHA256, b.ProfileManifest.OwnerImageDigest = "", ""
+				b.ProfileManifest.NotifyCanaryTopology = nil
+				w.ImageDigest, w.SourceImageReceiptSHA256 = "", ""
+				if kind == "qualification_named_child" {
+					w.CgroupRelativePath = w.ID
+				}
+			}
+			b.ProfileManifestSHA256 = GuestRetirementSHA(b.ProfileManifest)
+			p.GuestRetirementBinding = &b
+			if kind == "different_policy_binding" {
+				other := b
+				other.Members = append([]model.CapacityGuestRetirementMemberBinding{}, b.Members...)
+				other.Members[0].Origin = "https://other.invalid"
+				p.GuestRetirementBinding = &other
+			}
+			valid := kind == "aws_exact" || kind == "hetzner_exact" || kind == "generic_named_child" || kind == "qualification_root"
+			if (ValidateGuestRetirementBinding(p, &b) == nil) != valid {
+				t.Fatal("root or generic/qualification placement shape changed", kind)
+			}
+			if GuestOriginalProfileEnabled(p, b, provider) {
+				t.Fatal("placement shape populated an empty production registry")
+			}
+		})
+	}
+}
