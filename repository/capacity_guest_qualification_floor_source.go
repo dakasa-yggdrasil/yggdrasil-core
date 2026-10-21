@@ -24,12 +24,21 @@ func (s CapacityStore) ReserveGuestQualificationFloorProbe(ctx context.Context, 
 		return ErrCapacityConflict
 	}
 	return s.mutationTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
-		if !current.RecoveryOnly { return ErrCapacityConflict }
+		if !current.RecoveryOnly {
+			return ErrCapacityConflict
+		}
 		stored, err := loadGuestOriginalTx(ctx, tx, preID)
-		if err != nil { return err }
-		if err=sourceFloorBridgeTx(ctx,tx,policy,p,stored);err!=nil{return err}
+		if err != nil {
+			return err
+		}
+		if err = sourceFloorBridgeTx(ctx, tx, policy, p, stored); err != nil {
+			return err
+		}
 		receipt, _, err := loadGuestReceiptTx(ctx, tx, preID)
 		if err != nil {
+			return err
+		}
+		if _, err = loadGuestInstallationTx(ctx, tx, stored, receipt); err != nil {
 			return err
 		}
 		c := request.Challenge
@@ -71,10 +80,16 @@ func (s CapacityStore) FinishGuestQualificationFloorProbe(ctx context.Context, p
 		return ErrCapacityConflict
 	}
 	return s.mutationTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
-		if !current.RecoveryOnly { return ErrCapacityConflict }
+		if !current.RecoveryOnly {
+			return ErrCapacityConflict
+		}
 		stored, err := loadGuestOriginalTx(ctx, tx, preID)
-		if err != nil { return err }
-		if err=sourceFloorBridgeTx(ctx,tx,policy,p,stored);err!=nil{return err}
+		if err != nil {
+			return err
+		}
+		if err = sourceFloorBridgeTx(ctx, tx, policy, p, stored); err != nil {
+			return err
+		}
 		receipt, _, err := loadGuestReceiptTx(ctx, tx, preID)
 		if err != nil {
 			return err

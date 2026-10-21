@@ -1,6 +1,7 @@
 package httpapi
 
 import (
+	"bytes"
 	"context"
 	"crypto/ed25519"
 	"crypto/sha256"
@@ -216,6 +217,32 @@ func (s *Server) serveCapacityGuestRequest(w http.ResponseWriter, r *http.Reques
 			return
 		}
 		guestCanonicalReply(w, receipt)
+		return
+	}
+	if r.Method == http.MethodPost && r.URL.Path == guestProvisioningBase+"/installations" {
+		r.Body = http.MaxBytesReader(w, r.Body, capacity.GuestBootstrapLimit)
+		raw, err := io.ReadAll(r.Body)
+		var confirmation model.CapacityGuestOriginalInstallationConfirmation
+		if err != nil || capacity.DecodeGuestLifecycle(raw, &confirmation) != nil {
+			writeProblemJSON(w, 400, "capacity.guest_invalid", "closed original installation confirmation required")
+			return
+		}
+		canonical, encodeErr := json.Marshal(confirmation)
+		if encodeErr != nil || !bytes.Equal(raw, canonical) {
+			writeProblemJSON(w, 400, "capacity.guest_invalid", "canonical original installation confirmation required")
+			return
+		}
+		binding, member, err := store.GuestProvisioningCallbackScope(ctx, p.base.principalID, confirmation.PreregistrationID)
+		if err != nil || !guestScopeMatches(p, binding, member) {
+			guestHTTPError(w, repository.ErrCapacityMutationAuthorization)
+			return
+		}
+		accepted, err := store.RegisterOriginalGuestInstallation(ctx, p.base.principalID, confirmation)
+		if err != nil {
+			guestHTTPError(w, err)
+			return
+		}
+		guestCanonicalReply(w, accepted)
 		return
 	}
 	if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, guestProvisioningBase+"/bindings/") {

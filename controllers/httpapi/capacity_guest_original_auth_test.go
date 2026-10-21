@@ -54,6 +54,8 @@ func TestCapacityGuestOriginalAuth(t *testing.T) {
 		{name: "actor_cannot_dispatch_workflow", role: "actor", method: "POST", target: "https://core.invalid/api/v1/workflow-runs", credential: token, status: 403},
 		{name: "actor_cannot_publish_events", role: "actor", method: "POST", target: "https://core.invalid/api/v1/events", credential: token, status: 403},
 		{name: "actor_cannot_write_manifest", role: "actor", method: "POST", target: "https://core.invalid/api/v1/manifests", credential: token, status: 403},
+		{name: "actor_cannot_confirm_installation", role: "actor", method: "POST", target: "https://core.invalid" + guestProvisioningBase + "/installations", credential: token, status: 403},
+		{name: "human_cannot_confirm_installation", role: "actor", method: "POST", target: "https://core.invalid" + guestProvisioningBase + "/installations", credential: "human-session", status: 401},
 		{name: "actor_cannot_use_provisioner_path", role: "actor", method: "POST", target: "https://core.invalid" + guestProvisioningBase + "/registrations", credential: token, status: 403},
 		{name: "provisioner_cannot_use_actor_path", role: "provisioner", method: "GET", target: "https://core.invalid" + guestRetirementBase + "/intents/original?phase=before_start", credential: token, status: 403},
 		{name: "dot_segment_refused_before_mux_redirect", role: "actor", method: "GET", target: "https://core.invalid" + guestRetirementBase + "/intents/../original", credential: token, status: 403},

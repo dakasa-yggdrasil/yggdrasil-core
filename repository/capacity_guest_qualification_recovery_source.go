@@ -24,13 +24,18 @@ func (s CapacityStore) ReserveGuestQualificationRecoveryProbe(ctx context.Contex
 		return ErrCapacityConflict
 	}
 	return s.mutationTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
-		if !current.RecoveryOnly { return ErrCapacityConflict }
+		if !current.RecoveryOnly {
+			return ErrCapacityConflict
+		}
 		stored, err := loadGuestOriginalTx(ctx, tx, preID)
 		if err != nil {
 			return err
 		}
 		receipt, _, err := loadGuestReceiptTx(ctx, tx, preID)
 		if err != nil {
+			return err
+		}
+		if _, err = loadGuestInstallationTx(ctx, tx, stored, receipt); err != nil {
 			return err
 		}
 		c := request.Challenge
@@ -72,7 +77,9 @@ func (s CapacityStore) FinishGuestQualificationRecoveryProbe(ctx context.Context
 		return ErrCapacityConflict
 	}
 	return s.mutationTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
-		if !current.RecoveryOnly { return ErrCapacityConflict }
+		if !current.RecoveryOnly {
+			return ErrCapacityConflict
+		}
 		stored, err := loadGuestOriginalTx(ctx, tx, preID)
 		if err != nil {
 			return err

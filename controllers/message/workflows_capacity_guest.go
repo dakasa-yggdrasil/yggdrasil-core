@@ -307,20 +307,25 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		}
 		ticker := time.NewTicker(50 * time.Millisecond)
 		defer ticker.Stop()
-		var receipt model.CapacityGuestOriginalProvisioningReceipt
-		for {
-			receipt, err = store.GuestProvisioningReceipt(original, member.ProvisionerClientPrincipal, pre.PreregistrationID, pre.NonceSHA256)
-			if err == nil {
-				break
+		receipt, err := capacity.AwaitGuestOriginalInstallation(original, ticker.C, func(readCtx context.Context) (model.CapacityGuestOriginalProvisioningReceipt, bool, error) {
+			receipt, readErr := store.GuestProvisioningReceipt(readCtx, member.ProvisionerClientPrincipal, pre.PreregistrationID, pre.NonceSHA256)
+			if errors.Is(readErr, sql.ErrNoRows) {
+				return receipt, false, nil
 			}
-			if !errors.Is(err, sql.ErrNoRows) {
-				return fail("original-guest-step-28")
+			if readErr != nil {
+				return receipt, false, readErr
 			}
-			select {
-			case <-original.Done():
+			_, readErr = store.GuestInstallationConfirmation(readCtx, member.ProvisionerClientPrincipal, pre.PreregistrationID, pre.NonceSHA256)
+			if errors.Is(readErr, sql.ErrNoRows) {
+				return receipt, false, nil
+			}
+			return receipt, readErr == nil, readErr
+		})
+		if err != nil {
+			if original.Err() != nil {
 				return fail("original-guest-step-29")
-			case <-ticker.C:
 			}
+			return fail("original-guest-step-28")
 		}
 		// Confirm physical source membership only after the complete original
 		// enrollment callback. This still grants no business readiness/canary.

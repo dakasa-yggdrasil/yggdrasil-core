@@ -48,6 +48,9 @@ func (s CapacityStore) ReserveGuestQualificationProbe(ctx context.Context, polic
 		if err != nil {
 			return err
 		}
+		if _, err = loadGuestInstallationTx(ctx, tx, stored, receipt); err != nil {
+			return err
+		}
 		c := request.Challenge
 		e := receipt.Enrollment.Statement
 		if p.GuestRetirementBinding == nil || !reflect.DeepEqual(stored.binding, *p.GuestRetirementBinding) || !capacity.GuestOriginalProfileEnabled(p, stored.binding, "native-qemu") || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.WorkflowID != s.WorkflowID.String() || stored.binding.CoreAuthoritySourceCommit != capacity.CurrentGuestCoreSource() || c.Schema != "original_qualification_serving_probe_v1" || c.Purpose != "same_original_admitted_writer_useful_echo" || !validCapacityExecutor(c.ChallengeID) || c.EnrollmentSHA256 != capacity.GuestRetirementSHA(receipt.Enrollment) || c.Tuple != e.Tuple || c.Actor != e.Actor || c.Runtime != e.Runtime || len(e.Writers) != 1 || c.Writer != e.Writers[0] || !capacity.ValidDigest(c.NonceSHA256) || c.IssuedAt.IsZero() || c.IssuedAt.After(now) || !now.Before(c.OriginalDeadline) || c.OriginalDeadline.Sub(c.IssuedAt) > 5*time.Second || !c.OriginalDeadline.After(c.IssuedAt) || current.LeaseExpiresAt == nil || c.OriginalDeadline.After(*current.LeaseExpiresAt) || capacity.GuestRetirementEnrollment(p, stored.binding, stored.member, receipt.Enrollment, now) != nil {
@@ -131,6 +134,9 @@ func (s CapacityStore) ReserveGuestQualificationDiagnosticProbe(ctx context.Cont
 	return s.guestStoredTransaction(ctx, preID, func(tx *sql.Tx, stored guestOriginalStored, now time.Time) error {
 		receipt, _, err := loadGuestReceiptTx(ctx, tx, preID)
 		if err != nil {
+			return err
+		}
+		if _, err = loadGuestInstallationTx(ctx, tx, stored, receipt); err != nil {
 			return err
 		}
 		c := request.Challenge
