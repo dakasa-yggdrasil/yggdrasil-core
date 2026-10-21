@@ -185,7 +185,11 @@ func VMServerPlanProof(p model.CapacityPolicySpec, b model.CapacityMutationBindi
 		return proof, fmt.Errorf("native readback has no exact settled owning transport")
 	}
 	slot, err := vmProjection(b, g.Slot, plan.DesiredSpec)
-	if err != nil || plan.DesiredSpec.Capability != VMObserveServer || vmNoAuthority(plan) != nil || plan.CompensationOf != "" || plan.CompensationIdentityVerified || plan.Protected != (g.Slot <= b.ProtectedSlots) {
+	observeCapability := VMObserveServer
+	if AWSOriginalMutationPair(b) && g.Capability == b.EnsureCapability {
+		observeCapability = "observe_ec2_instance"
+	}
+	if err != nil || plan.DesiredSpec.Capability != observeCapability || vmNoAuthority(plan) != nil || plan.CompensationOf != "" || plan.CompensationIdentityVerified || plan.Protected != (g.Slot <= b.ProtectedSlots) {
 		return proof, fmt.Errorf("native server plan differs from approved ordinary slot")
 	}
 	at, err := vmTime(plan.ObservedAt, p, now)

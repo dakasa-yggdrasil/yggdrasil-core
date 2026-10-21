@@ -115,3 +115,48 @@ func TestVMClosedDecodeAndAbsentDestroyProof(t *testing.T) {
 		t.Fatal("missing independently billable resource absence accepted")
 	}
 }
+
+// The source-pinned existing AWS capability is literal; no generic observe
+// alias is fabricated, and a create projection cannot count as a native read.
+func TestVMAWSReadUsesExactExistingCapability(t *testing.T) {
+	for _, kind := range []string{"original", "create_projection", "generic_alias", "missing_source", "foreign_tuple", "unverified_spec"} {
+		t.Run(kind, func(t *testing.T) {
+			p, b, inv, now := vmObservationFixture()
+			b.EnsureCapability = "ensure_ec2_instance"
+			b.DestroyCapability = "terminate_ec2_instance"
+			b.OriginalProviderSourceCommit = strings.Repeat("a", 40)
+			for n := range b.Slots {
+				b.Slots[n].DesiredSpec.Capability = b.EnsureCapability
+			}
+			slot := b.Slots[0]
+			server := inv.Members[0].Server
+			server.ID = "i-1234567890abcdef0"
+			server.Labels["yggdrasil.io/intent"] = "owning-grant"
+			spec := *slot.DesiredSpec
+			spec.Capability = "observe_ec2_instance"
+			spec.ExpectedResourceID = server.ID
+			spec.ExpectedResourceCreatedAt = server.CreatedAt
+			plan := model.CapacityVMFleetPlan{DesiredSpec: spec, RequestSHA256: slot.DesiredSpecSHA256, Protected: true, Server: &server, ObservedAt: now.Format(time.RFC3339Nano)}
+			receipt := model.CapacityMutationReceipt{Grant: model.CapacityMutationGrant{GrantID: "owning-grant", BindingName: b.Name, IntegrationInstanceID: b.IntegrationInstanceID, ScopeChecksum: b.ScopeChecksum, ProfileName: b.ProfileName, Slot: 1, Capability: b.EnsureCapability, RequestSHA256: slot.DesiredSpecSHA256}, Outcome: "accepted", TransportCompleted: true, ResourceID: server.ID, ResourceCreatedAt: server.CreatedAt}
+			switch kind {
+			case "create_projection":
+				plan.DesiredSpec.Capability = b.EnsureCapability
+			case "generic_alias":
+				plan.DesiredSpec.Capability = VMObserveServer
+			case "missing_source":
+				b.OriginalProviderSourceCommit = ""
+			case "foreign_tuple":
+				plan.Server.ID = "i-00000000000000000"
+			case "unverified_spec":
+				plan.Server.PhysicalSpecVerified = false
+			}
+			proof, err := VMServerPlanProof(p, b, plan, receipt, "observed", now, "actual-native-read-unit")
+			if (err == nil) != (kind == "original") {
+				t.Fatalf("%s accepted=%v err=%v", kind, err == nil, err)
+			}
+			if err == nil && (len(proof.ActionIDs) != 0 || proof.ActionsTerminal || proof.ActionsSuccessful || !proof.SpecVerified) {
+				t.Fatal("native read invented action/readiness")
+			}
+		})
+	}
+}

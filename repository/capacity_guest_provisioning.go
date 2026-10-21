@@ -285,10 +285,13 @@ func (s CapacityStore) RecordGuestCreateWitness(ctx context.Context, preregistra
 				validateReturn = capacity.ValidateOriginalAWSCreateReturn
 			}
 			returned, err = validateReturn(original.Binding, original.Grant, original.AttemptID, *original.Settlement, stored.pre.ReservedAt, now)
-			if err != nil || returned.After(proof.ObservedAt) || !returned.Before(stored.pre.OriginalDeadline) {
+			if err != nil || returned.After(proof.ObservedAt) || !returned.Before(stored.pre.OriginalDeadline) || proof.ProviderNativeIdentity == nil || !proof.ProviderNativeIdentity.ObservedAt.Equal(proof.ObservedAt) || capacity.ValidateGuestProviderNativeIdentity(proof.ProviderNativeIdentity, model.CapacityGuestNativeTuple{Provider: provider, ResourceID: proof.ResourceID, CreatedAt: proof.ResourceCreatedAt}, original.Binding.OriginalProviderSourceCommit, now) != nil {
 				return ErrCapacityConflict
 			}
 		} else {
+			if proof.ProviderNativeIdentity != nil {
+				return ErrCapacityConflict
+			}
 			// A later QMP read is not Popen's original return. Qualification
 			// continues to use its original separately owned source identity.
 			if stored.binding.EvidenceClass != "native_qemu_qualification" {
@@ -316,6 +319,10 @@ func (s CapacityStore) RecordGuestCreateWitness(ctx context.Context, preregistra
 			}
 		}
 		result = model.CapacityGuestOriginalCreateWitness{Schema: capacity.GuestCreateWitnessSchema, BindingName: stored.pre.BindingName, PreregistrationID: stored.pre.PreregistrationID, PreregistrationNonceSHA256: stored.pre.NonceSHA256, Tuple: model.CapacityGuestNativeTuple{Provider: provider, InstanceID: original.Binding.IntegrationInstanceID, InstanceChecksum: original.Binding.IntegrationChecksum, TypeID: original.Binding.IntegrationTypeID, TypeChecksum: original.Binding.IntegrationTypeChecksum, ScopeChecksum: original.Binding.ScopeChecksum, ProfileChecksum: slot.DesiredSpec.ProfileChecksum, Profile: original.Binding.ProfileName, Slot: original.Grant.Slot, ResourceID: proof.ResourceID, CreatedAt: proof.ResourceCreatedAt}, OriginalCreateGrantID: original.Grant.GrantID, OriginalCreateAttemptID: original.AttemptID, OriginalCreateRequestSHA256: original.Grant.RequestSHA256, OriginalCreateSettlementSHA256: capacity.GuestRetirementSHA(*original.Settlement), ProfileManifestSHA256: stored.pre.ProfileManifestSHA256, BootstrapSHA256: stored.binding.ProfileManifest.BootstrapSHA256, CoreSourceCommit: stored.pre.CoreSourceCommit, OriginalDeadline: stored.pre.OriginalDeadline, OriginalCreateReturnedAt: returned, ObservedAt: now}
+		if proof.ProviderNativeIdentity != nil {
+			identity := *proof.ProviderNativeIdentity
+			result.ProviderNativeIdentity = &identity
+		}
 		result.Signature, err = capacity.GuestLifecycleSignature(intentKey, result)
 		if err != nil {
 			return err

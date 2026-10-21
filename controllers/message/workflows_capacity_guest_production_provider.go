@@ -286,6 +286,10 @@ func (s *originalProductionGuestSupplier) Create(ctx context.Context, g model.Ca
 				s.createdGrant = g
 				s.createdPre = pre
 				frozen := proof
+				if proof.ProviderNativeIdentity != nil {
+					identity := *proof.ProviderNativeIdentity
+					frozen.ProviderNativeIdentity = &identity
+				}
 				frozen.ActionIDs = append([]string(nil), proof.ActionIDs...)
 				frozen.AuxiliaryAbsent = append([]model.CapacityMutationAuxiliaryResource(nil), proof.AuxiliaryAbsent...)
 				if proof.AWSInstanceLifecycle != nil {
@@ -353,5 +357,9 @@ func (s *originalProductionGuestSupplier) Read(ctx context.Context, g model.Capa
 		return empty, errOriginalGuestStep
 	}
 	proof.ActionsTerminal, proof.ActionsSuccessful = true, true
+	proof.ProviderNativeIdentity, err = capacity.OriginalGuestProviderIdentity(s.p, s.binding, plan, proof, time.Now().UTC())
+	if err != nil {
+		return empty, errOriginalGuestStep
+	}
 	return proof, nil
 }

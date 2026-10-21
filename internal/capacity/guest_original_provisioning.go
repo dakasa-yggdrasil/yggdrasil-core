@@ -72,6 +72,19 @@ func GuestOriginalCreateWitness(p model.CapacityPolicySpec, binding model.Capaci
 	if w.SourceObservation != nil && !guestPostlossObservationAllowed(binding, w) {
 		return fmt.Errorf("source-only postloss witness refused")
 	}
+	if w.Tuple.Provider == "aws" || w.Tuple.Provider == "hetzner" {
+		source := ""
+		for _, mutation := range p.MutationBindings {
+			if mutation.Name == binding.MutationBindingName {
+				source = mutation.OriginalProviderSourceCommit
+			}
+		}
+		if ValidateGuestProviderNativeIdentity(w.ProviderNativeIdentity, w.Tuple, source, w.ObservedAt) != nil || w.ProviderNativeIdentity.ObservedAt.Before(w.OriginalCreateReturnedAt) {
+			return fmt.Errorf("signed original provider native identity required")
+		}
+	} else if w.ProviderNativeIdentity != nil {
+		return fmt.Errorf("provider identity outside original production source")
+	}
 	signature := w.Signature
 	w.Signature = ""
 	if !guestRetirementVerify(corePublic, signature, w) {

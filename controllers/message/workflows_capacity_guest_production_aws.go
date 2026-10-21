@@ -89,6 +89,10 @@ func (s *originalProductionGuestSupplier) readAWS(ctx context.Context, g model.C
 		return empty, errOriginalGuestStep
 	}
 	proof.AWSInstanceLifecycle = &observed.Lifecycle
+	proof.ProviderNativeIdentity, err = capacity.OriginalGuestProviderIdentity(s.p, s.binding, observed.Plan, proof, time.Now().UTC())
+	if err != nil {
+		return empty, errOriginalGuestStep
+	}
 	// ActionIDs and every generic Actions* flag deliberately stay empty/false.
 	// EC2's native health checks establish only this creation lifecycle.
 	return proof, nil

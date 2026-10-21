@@ -97,3 +97,26 @@ CI, real provider execution and product qualification remain separate work.
 - ADR-0050 (original provisioning, admission and native retirement)
 - ADR-0053 (separate Source recovery authority)
 - ADR-0059 (compiled production profile approvals)
+
+
+### Signed provider identity for Guest startup
+
+AWS and Hetzner production witnesses require the optional closed
+`provider_native_identity` extension, schema `guest_provider_native_identity_v1`.
+It is populated only by the source-owned independent native read after the
+original accepted settlement. Core joins the exact tuple, binding source pin,
+fresh observation and original creation return before including it in the
+existing signature. The field stays absent for native QEMU qualification.
+No migration, seeded grant, caller environment or unsigned manifest supplies
+this evidence. Guest separately reads native metadata and kernel boot/process
+lifetimes; EC2 LaunchTime/pendingTime identifies creation rather than a new boot.
+
+The fields distinguish provider region, location and availability zone. AWS
+uses actual regional account/instance/AZ/image/type/private-hostname data.
+Hetzner uses native server location and `location.network_zone`; metadata region
+is the latter. The current Hetzner API removed server `datacenter` on 1 July
+2026 and removed datacenter endpoints on 1 October 2026, so signed zone is empty
+and metadata availability-zone is diagnostic only. No obsolete API field or
+inferred location-to-datacenter mapping becomes authority.
+Sources: [Hetzner metadata/reference](https://docs.hetzner.cloud/reference/cloud),
+[Hetzner API changelog](https://docs.hetzner.cloud/changelog).

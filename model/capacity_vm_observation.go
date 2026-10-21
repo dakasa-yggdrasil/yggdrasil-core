@@ -96,6 +96,8 @@ type CapacityVMFleetQuote struct {
 }
 
 type CapacityVMServerObservation struct {
+	ProviderAccountID string `json:"provider_account_id,omitempty"`
+	ProviderHostname  string `json:"provider_hostname,omitempty"`
 	CapacityVMNativeTuple
 	Name                         string            `json:"name"`
 	Status                       string            `json:"status"`

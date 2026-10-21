@@ -156,26 +156,27 @@ type CapacityMutationReceipt struct {
 // fresh adapter reads. Transport completion, provider action completion, and
 // product readiness are distinct facts; this proof addresses only the first two.
 type CapacityMutationProof struct {
-	AWSInstanceLifecycle         *CapacityAWSInstanceLifecycle       `json:"aws_instance_lifecycle,omitempty"`
-	GrantID                      string                              `json:"grant_id"`
-	BindingName                  string                              `json:"binding_name"`
-	Slot                         int                                 `json:"slot"`
-	ResourceID                   string                              `json:"resource_id"`
-	ResourceCreatedAt            string                              `json:"resource_created_at"`
-	RequestSHA256                string                              `json:"request_sha256"`
-	ObservedAt                   time.Time                           `json:"observed_at"`
-	ReceiptRef                   string                              `json:"receipt_ref"`
-	OwnerVerified                bool                                `json:"owner_verified"`
-	SpecVerified                 bool                                `json:"spec_verified"`
-	ResourceAbsent               bool                                `json:"resource_absent"`
-	ActionIDs                    []string                            `json:"action_ids"`
-	ActionsTerminal              bool                                `json:"actions_terminal"`
-	ActionsSuccessful            bool                                `json:"actions_successful"`
-	ActionHistoryComplete        bool                                `json:"action_history_complete,omitempty"`
-	ActionsFailed                bool                                `json:"actions_failed,omitempty"`
-	CompensationIdentityVerified bool                                `json:"compensation_identity_verified,omitempty"`
-	ObservedCreationGrantID      string                              `json:"observed_creation_grant_id,omitempty"`
-	AuxiliaryAbsent              []CapacityMutationAuxiliaryResource `json:"auxiliary_absent,omitempty"`
+	ProviderNativeIdentity       *CapacityGuestProviderNativeIdentity `json:"provider_native_identity,omitempty"`
+	AWSInstanceLifecycle         *CapacityAWSInstanceLifecycle        `json:"aws_instance_lifecycle,omitempty"`
+	GrantID                      string                               `json:"grant_id"`
+	BindingName                  string                               `json:"binding_name"`
+	Slot                         int                                  `json:"slot"`
+	ResourceID                   string                               `json:"resource_id"`
+	ResourceCreatedAt            string                               `json:"resource_created_at"`
+	RequestSHA256                string                               `json:"request_sha256"`
+	ObservedAt                   time.Time                            `json:"observed_at"`
+	ReceiptRef                   string                               `json:"receipt_ref"`
+	OwnerVerified                bool                                 `json:"owner_verified"`
+	SpecVerified                 bool                                 `json:"spec_verified"`
+	ResourceAbsent               bool                                 `json:"resource_absent"`
+	ActionIDs                    []string                             `json:"action_ids"`
+	ActionsTerminal              bool                                 `json:"actions_terminal"`
+	ActionsSuccessful            bool                                 `json:"actions_successful"`
+	ActionHistoryComplete        bool                                 `json:"action_history_complete,omitempty"`
+	ActionsFailed                bool                                 `json:"actions_failed,omitempty"`
+	CompensationIdentityVerified bool                                 `json:"compensation_identity_verified,omitempty"`
+	ObservedCreationGrantID      string                               `json:"observed_creation_grant_id,omitempty"`
+	AuxiliaryAbsent              []CapacityMutationAuxiliaryResource  `json:"auxiliary_absent,omitempty"`
 }
 
 // EC2 has no job/action observation API for RunInstances. Its original SDK
