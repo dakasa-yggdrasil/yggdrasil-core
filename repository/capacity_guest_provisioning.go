@@ -37,6 +37,13 @@ type guestOriginalStored struct {
 	member  model.CapacityGuestRetirementMemberBinding
 }
 
+// OriginalGuestCreateWitnessProviderEnabled describes implemented original
+// return sources, independently of profile approval. A registry entry cannot
+// turn a provider settlement/readback into a missing owning create return.
+func OriginalGuestCreateWitnessProviderEnabled(provider string) bool {
+	return provider == "hetzner" || provider == "native-qemu" && capacity.GuestOriginalNativeQEMUProviderEnabled(provider)
+}
+
 func guestMember(binding model.CapacityGuestRetirementBinding, slot int) (model.CapacityGuestRetirementMemberBinding, error) {
 	for _, member := range binding.Members {
 		if member.Slot == slot {
@@ -265,31 +272,44 @@ func (s CapacityStore) RecordGuestCreateWitness(ctx context.Context, preregistra
 				provider = profile.Provider
 			}
 		}
-		// The later QMP Read/Close observation is not Popen's return. Only
-		// this compiled qualification producer supplies an owning native
-		// create return; unsupported production producers remain HOLD.
-		if provider != "native-qemu" || stored.binding.EvidenceClass != "native_qemu_qualification" || !capacity.GuestOriginalNativeQEMUProviderEnabled(provider) {
+		if !OriginalGuestCreateWitnessProviderEnabled(provider) {
 			return ErrCapacityConflict
 		}
-		native, err := guestNativeQEMUIdentityTx(ctx, tx, stored.pre.PreregistrationID)
-		if err != nil {
-			return err
-		}
-		returned := native.Original.OriginalCreateReturnedAt
-		observed, err := time.Parse(time.RFC3339Nano, original.Settlement.ObservedAt)
-		creatorSourceMatches := native.Original.OriginalSourceCommit == stored.binding.GuestSourceCommit
-		if s.hostOriginalOrdinary != nil {
-			// The new compiled creator has the actual Core PUB epoch. Guest
-			// image/bootstrap/Actor epoch remains the separate original binding.
-			// Only this private actual Realm and exact original Continue/SQL raw
-			// join admits that branch; caller labels/flags/keys do not select it.
-			if native.Original.OriginalSourceCommit != capacity.CurrentGuestCoreSource() || s.verifyOriginalOrdinaryCreateTx(ctx, tx, stored.pre, proof) != nil {
-				return ErrHostFactoryHold
+		var returned time.Time
+		if provider == "hetzner" {
+			if stored.binding.EvidenceClass != "owned_provisioner_original" || s.hostOriginalOrdinary != nil || s.hostOriginalFactory != nil {
+				return ErrCapacityConflict
 			}
-			creatorSourceMatches = true
-		}
-		if err != nil || native.Original.ResourceID != proof.ResourceID || native.Original.Slot != stored.pre.Slot || !creatorSourceMatches || native.Original.OriginalCreateStartedAt.Before(stored.pre.ReservedAt) || returned.Before(native.Original.OriginalCreateStartedAt) || returned.After(proof.ObservedAt) || returned.UTC().Format(time.RFC3339Nano) != proof.ResourceCreatedAt || !observed.Equal(native.CloseReturnedAt) || !proof.ObservedAt.Equal(native.CloseReturnedAt) {
-			return ErrCapacityConflict
+			returned, err = capacity.ValidateOriginalHetznerCreateReturn(original.Binding, original.Grant, original.AttemptID, *original.Settlement, stored.pre.ReservedAt, now)
+			if err != nil || returned.After(proof.ObservedAt) || !returned.Before(stored.pre.OriginalDeadline) {
+				return ErrCapacityConflict
+			}
+		} else {
+			// A later QMP read is not Popen's original return. Qualification
+			// continues to use its original separately owned source identity.
+			if stored.binding.EvidenceClass != "native_qemu_qualification" {
+				return ErrCapacityConflict
+			}
+			native, err := guestNativeQEMUIdentityTx(ctx, tx, stored.pre.PreregistrationID)
+			if err != nil {
+				return err
+			}
+			returned = native.Original.OriginalCreateReturnedAt
+			observed, err := time.Parse(time.RFC3339Nano, original.Settlement.ObservedAt)
+			creatorSourceMatches := native.Original.OriginalSourceCommit == stored.binding.GuestSourceCommit
+			if s.hostOriginalOrdinary != nil {
+				// The new compiled creator has the actual Core PUB epoch. Guest
+				// image/bootstrap/Actor epoch remains the separate original binding.
+				// Only this private actual Realm and exact original Continue/SQL raw
+				// join admits that branch; caller labels/flags/keys do not select it.
+				if native.Original.OriginalSourceCommit != capacity.CurrentGuestCoreSource() || s.verifyOriginalOrdinaryCreateTx(ctx, tx, stored.pre, proof) != nil {
+					return ErrHostFactoryHold
+				}
+				creatorSourceMatches = true
+			}
+			if err != nil || native.Original.ResourceID != proof.ResourceID || native.Original.Slot != stored.pre.Slot || !creatorSourceMatches || native.Original.OriginalCreateStartedAt.Before(stored.pre.ReservedAt) || returned.Before(native.Original.OriginalCreateStartedAt) || returned.After(proof.ObservedAt) || returned.UTC().Format(time.RFC3339Nano) != proof.ResourceCreatedAt || !observed.Equal(native.CloseReturnedAt) || !proof.ObservedAt.Equal(native.CloseReturnedAt) {
+				return ErrCapacityConflict
+			}
 		}
 		result = model.CapacityGuestOriginalCreateWitness{Schema: capacity.GuestCreateWitnessSchema, BindingName: stored.pre.BindingName, PreregistrationID: stored.pre.PreregistrationID, PreregistrationNonceSHA256: stored.pre.NonceSHA256, Tuple: model.CapacityGuestNativeTuple{Provider: provider, InstanceID: original.Binding.IntegrationInstanceID, InstanceChecksum: original.Binding.IntegrationChecksum, TypeID: original.Binding.IntegrationTypeID, TypeChecksum: original.Binding.IntegrationTypeChecksum, ScopeChecksum: original.Binding.ScopeChecksum, ProfileChecksum: slot.DesiredSpec.ProfileChecksum, Profile: original.Binding.ProfileName, Slot: original.Grant.Slot, ResourceID: proof.ResourceID, CreatedAt: proof.ResourceCreatedAt}, OriginalCreateGrantID: original.Grant.GrantID, OriginalCreateAttemptID: original.AttemptID, OriginalCreateRequestSHA256: original.Grant.RequestSHA256, OriginalCreateSettlementSHA256: capacity.GuestRetirementSHA(*original.Settlement), ProfileManifestSHA256: stored.pre.ProfileManifestSHA256, BootstrapSHA256: stored.binding.ProfileManifest.BootstrapSHA256, CoreSourceCommit: stored.pre.CoreSourceCommit, OriginalDeadline: stored.pre.OriginalDeadline, OriginalCreateReturnedAt: returned, ObservedAt: now}
 		result.Signature, err = capacity.GuestLifecycleSignature(intentKey, result)

@@ -659,7 +659,7 @@ func executeWorkflowStep(
 	if result.Kind == "yggdrasil" {
 		if strings.HasPrefix(result.Operation, "capacity.") {
 			if guestOriginalOperation(result.Operation) {
-				return executeCapacityGuestWorkflowStep(ctx, db, workflowRef, step, result, renderedInput)
+				return executeCapacityGuestWorkflowStep(withOriginalGuestWorkflowTransport(ctx, conn), db, workflowRef, step, result, renderedInput)
 			}
 			if capacityBoundOperation(result.Operation) {
 				return executeCapacityBoundWorkflowStep(ctx, conn, db, workflowRef, result, renderedInput)

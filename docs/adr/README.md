@@ -71,3 +71,7 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0057](0057-require-original-local-installation-before-qualification.md) | Require original local installation before qualification | Proposed | 2026-10-21 | Core/Guest original provisioning |
 
 | [0058](0058-anchor-qualification-freshness-in-original-monotonic-owners.md) | Anchor qualification freshness in original monotonic owners | Proposed | 2026-10-21 | Original qualification nonce protocol |
+
+| [0059](0059-pin-production-guest-admission-to-compiled-contracts.md) | Pin production Guest admission to compiled contracts | Proposed | 2026-10-21 | Core original Guest production profile admission |
+
+| [0060](0060-own-original-guest-provider-per-workflow-invocation.md) | Own the original Guest provider per workflow invocation | Proposed | 2026-10-21 | Original source provider lifetime and single-call ownership |

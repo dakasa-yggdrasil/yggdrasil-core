@@ -11,11 +11,12 @@ func GuestOriginalNativeQEMUProviderEnabled(provider string) bool {
 	return guestOriginalExecutionClass == "native_qemu_qualification" && provider == "native-qemu"
 }
 
-// This source registry is EMPTY for production. Hash syntax, an operator's
-// claimed completeness, a candidate Root catalog or a producer signature do
-// not approve a complete production workload. No new provider send precedes
-// this check. Adding production coverage is a separately reviewed source act.
+// Production admission is an exact compiled source approval. Qualification
+// keeps its separate fixed subset and cannot populate production approvals.
 func GuestOriginalProfileEnabled(p model.CapacityPolicySpec, binding model.CapacityGuestRetirementBinding, actualProvider string) bool {
+	if guestOriginalExecutionClass != "native_qemu_qualification" {
+		return guestOriginalProductionProfileEnabled(p, binding, actualProvider)
+	}
 	profile := binding.ProfileManifest
 	if guestOriginalExecutionClass != "native_qemu_qualification" || actualProvider != "native-qemu" || binding.EvidenceClass != "native_qemu_qualification" || profile.CoverageClass != "native_qualification_subset" || profile.Profile != GuestQualificationProfile || profile.ProductionCatalogSHA256 != "" || profile.OwnerImageDigest != "" || len(profile.Writers) != 1 {
 		return false

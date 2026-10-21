@@ -5,19 +5,35 @@ package message
 import (
 	"context"
 	"crypto/ed25519"
+	"reflect"
+	"time"
+
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
-	"time"
 )
 
 func guestOriginalSourceLimit(ctx context.Context) (context.Context, context.CancelFunc, error) {
-	return ctx, func() {}, errOriginalGuestStep
+	deadline, ok := ctx.Deadline()
+	if !ok || !guestOriginalProviderAvailable(ctx) || ctx.Err() != nil || !time.Now().Before(deadline) {
+		return ctx, func() {}, errOriginalGuestStep
+	}
+	return ctx, func() {}, nil
 }
-func guestOriginalSourceEnrolled(context.Context, model.CapacityMutationGrant, model.CapacityGuestOriginalProvisioningPreregistration, model.CapacityGuestOriginalProvisioningReceipt) error {
-	return errOriginalGuestStep
+func guestOriginalSourceEnrolled(ctx context.Context, g model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, r model.CapacityGuestOriginalProvisioningReceipt) error {
+	source, err := productionGuestSource(ctx)
+	if err != nil || !source.installed || !reflect.DeepEqual(source.grant, g) || !reflect.DeepEqual(source.pre, pre) || !reflect.DeepEqual(source.receipt, r) {
+		return errOriginalGuestStep
+	}
+	return nil
 }
-func guestOriginalSourceWitnessed(context.Context, model.CapacityMutationGrant, model.CapacityGuestOriginalProvisioningPreregistration, model.CapacityGuestOriginalCreateWitness) error {
-	return errOriginalGuestStep
+func guestOriginalSourceWitnessed(ctx context.Context, g model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, w model.CapacityGuestOriginalCreateWitness) error {
+	source, err := productionGuestSource(ctx)
+	if err != nil || !reflect.DeepEqual(source.supplier.createdGrant, g) || !reflect.DeepEqual(source.supplier.createdPre, pre) || w.OriginalCreateGrantID != g.GrantID || w.PreregistrationID != pre.PreregistrationID || w.OriginalCreateRequestSHA256 != g.RequestSHA256 || w.Tuple.ResourceID != source.supplier.createdProof.ResourceID || w.Tuple.CreatedAt != source.supplier.createdProof.ResourceCreatedAt {
+		return errOriginalGuestStep
+	}
+	source.grant, source.pre, source.witness = g, pre, w
+	return nil
 }
 func sourceGuestQualificationStep(context.Context, repository.CapacityStore, model.Manifest, model.CapacityPolicySpec, guestOriginalStepInput, ed25519.PrivateKey, string) (any, error) {
 	return nil, errOriginalGuestStep
@@ -57,13 +73,25 @@ func guestOriginalSourceTerminal(context.Context, repository.CapacityStore, mode
 }
 
 func guestOriginalSourceCreateWitness(ctx context.Context, store repository.CapacityStore, id string, proof model.CapacityMutationProof, key ed25519.PrivateKey) (model.CapacityGuestOriginalCreateWitness, error) {
+	source, err := productionGuestSource(ctx)
+	if err != nil || source.supplier.createdPre.PreregistrationID != id || !reflect.DeepEqual(source.supplier.createdProof, proof) || source.supplier.createdGrant.GrantID != proof.GrantID || !source.owner.OriginalReturned(ctx, source.supplier.createdGrant, source.supplier.createdPre) {
+		return model.CapacityGuestOriginalCreateWitness{}, errOriginalGuestStep
+	}
+	// The private source state exists only after this invocation's actual
+	// original accepted adapter return and native read. A settled row or GET
+	// cannot create it after an uncertain original RPC caller return.
 	return store.RecordGuestCreateWitness(ctx, id, proof, key)
 }
 
-func guestOriginalSourceInstallation(ctx context.Context, g model.CapacityMutationGrant, p model.CapacityGuestOriginalProvisioningPreregistration, r model.CapacityGuestOriginalProvisioningReceipt, confirmation model.CapacityGuestOriginalInstallationConfirmation, readReturnedAt time.Time) error {
-	return errOriginalGuestStep
+func guestOriginalSourceInstallation(ctx context.Context, g model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, r model.CapacityGuestOriginalProvisioningReceipt, confirmation model.CapacityGuestOriginalInstallationConfirmation, readReturnedAt time.Time) error {
+	source, err := productionGuestSource(ctx)
+	if err != nil || !reflect.DeepEqual(source.grant, g) || !reflect.DeepEqual(source.pre, pre) || r.PreregistrationID != pre.PreregistrationID || r.OriginalProvisioningSHA256 != r.Enrollment.Statement.OriginalNativeResultSHA256 || capacity.GuestOriginalInstallation(pre, r, confirmation, source.supplier.p.GuestRetirementBinding.ProvisionerPublicKey, readReturnedAt) != nil {
+		return errOriginalGuestStep
+	}
+	source.receipt, source.installed = r, true
+	return nil
 }
-
 func guestOriginalSourceInstallationState(ctx context.Context, slot int, state string) error {
-	return errOriginalGuestStep
+	_, err := productionGuestSource(ctx)
+	return err
 }

@@ -547,6 +547,14 @@ func (s CapacityStore) SettleMutation(ctx context.Context, principal, nonce stri
 		if err != nil || subtle.ConstantTimeCompare(digest[:], expected) != 1 || principal != record.Binding.AdapterPrincipalID || record.AttemptID != r.AttemptID || record.Grant.RequestSHA256 != r.RequestSHA256 {
 			return ErrCapacityMutationAuthorization
 		}
+		if r.OriginalProviderCreateReturn != nil || record.Binding.OriginalProviderSourceCommit != "" && record.Grant.Capability == record.Binding.EnsureCapability && r.Outcome == "accepted" {
+			if record.EventProvider != "hetzner" {
+				return ErrCapacityMutationAuthorization
+			}
+			if _, err := capacity.ValidateOriginalHetznerCreateReturn(record.Binding, record.Grant, record.AttemptID, r, record.CreatedAt, now); err != nil {
+				return ErrCapacityMutationAuthorization
+			}
+		}
 		observed, err := time.Parse(time.RFC3339Nano, r.ObservedAt)
 		if err != nil || observed.Before(record.CreatedAt.Add(-5*time.Second)) || observed.After(now.Add(5*time.Second)) {
 			return ErrCapacityMutationAuthorization

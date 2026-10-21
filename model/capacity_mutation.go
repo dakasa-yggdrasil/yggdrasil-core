@@ -8,21 +8,22 @@ import (
 // CapacityMutationBinding is operator-owned. A dry-run plan never authorizes
 // itself: its normalized non-secret spec must match a preapproved slot digest.
 type CapacityMutationBinding struct {
-	Name                    string                        `json:"name"`
-	IntegrationInstanceID   string                        `json:"integration_instance_id"`
-	IntegrationChecksum     string                        `json:"integration_checksum"`
-	IntegrationTypeID       string                        `json:"integration_type_id"`
-	IntegrationTypeChecksum string                        `json:"integration_type_checksum"`
-	AdapterPrincipalID      string                        `json:"adapter_principal_id"`
-	ScopeChecksum           string                        `json:"scope_checksum"`
-	ProfileName             string                        `json:"profile_name"`
-	EnsureCapability        string                        `json:"ensure_capability"`
-	DestroyCapability       string                        `json:"destroy_capability"`
-	ProtectedSlots          int                           `json:"protected_slots"`
-	MaxSlots                int                           `json:"max_slots"`
-	Slots                   []CapacityMutationSlotBinding `json:"slots"`
-	DefinitiveRejections    []CapacityMutationRejection   `json:"definitive_rejections,omitempty"`
-	CompensationEnabled     bool                          `json:"compensation_enabled,omitempty"`
+	OriginalProviderSourceCommit string                        `json:"original_provider_source_commit,omitempty"`
+	Name                         string                        `json:"name"`
+	IntegrationInstanceID        string                        `json:"integration_instance_id"`
+	IntegrationChecksum          string                        `json:"integration_checksum"`
+	IntegrationTypeID            string                        `json:"integration_type_id"`
+	IntegrationTypeChecksum      string                        `json:"integration_type_checksum"`
+	AdapterPrincipalID           string                        `json:"adapter_principal_id"`
+	ScopeChecksum                string                        `json:"scope_checksum"`
+	ProfileName                  string                        `json:"profile_name"`
+	EnsureCapability             string                        `json:"ensure_capability"`
+	DestroyCapability            string                        `json:"destroy_capability"`
+	ProtectedSlots               int                           `json:"protected_slots"`
+	MaxSlots                     int                           `json:"max_slots"`
+	Slots                        []CapacityMutationSlotBinding `json:"slots"`
+	DefinitiveRejections         []CapacityMutationRejection   `json:"definitive_rejections,omitempty"`
+	CompensationEnabled          bool                          `json:"compensation_enabled,omitempty"`
 }
 
 type CapacityMutationRejection struct {
@@ -96,20 +97,21 @@ type CapacityMutationRedeemResponse struct {
 }
 
 type CapacityMutationSettleRequest struct {
-	GrantID                    string                              `json:"grant_id"`
-	AttemptID                  string                              `json:"attempt_id"`
-	RequestSHA256              string                              `json:"request_sha256"`
-	Outcome                    string                              `json:"outcome"`
-	TransportCompleted         bool                                `json:"transport_completed"`
-	ResourceID                 string                              `json:"resource_id,omitempty"`
-	ResourceCreatedAt          string                              `json:"resource_created_at,omitempty"`
-	ActionID                   string                              `json:"action_id,omitempty"`
-	NextActionIDs              []string                            `json:"next_action_ids,omitempty"`
-	ObservedAt                 string                              `json:"observed_at"`
-	ProviderErrorCode          string                              `json:"provider_error_code,omitempty"`
-	ProviderStatusCode         int                                 `json:"provider_status_code,omitempty"`
-	AuxiliaryResources         []CapacityMutationAuxiliaryResource `json:"auxiliary_resources,omitempty"`
-	AuxiliaryInventoryComplete bool                                `json:"auxiliary_inventory_complete,omitempty"`
+	OriginalProviderCreateReturn *CapacityOriginalProviderCreateReturn `json:"original_provider_create_return,omitempty"`
+	GrantID                      string                                `json:"grant_id"`
+	AttemptID                    string                                `json:"attempt_id"`
+	RequestSHA256                string                                `json:"request_sha256"`
+	Outcome                      string                                `json:"outcome"`
+	TransportCompleted           bool                                  `json:"transport_completed"`
+	ResourceID                   string                                `json:"resource_id,omitempty"`
+	ResourceCreatedAt            string                                `json:"resource_created_at,omitempty"`
+	ActionID                     string                                `json:"action_id,omitempty"`
+	NextActionIDs                []string                              `json:"next_action_ids,omitempty"`
+	ObservedAt                   string                                `json:"observed_at"`
+	ProviderErrorCode            string                                `json:"provider_error_code,omitempty"`
+	ProviderStatusCode           int                                   `json:"provider_status_code,omitempty"`
+	AuxiliaryResources           []CapacityMutationAuxiliaryResource   `json:"auxiliary_resources,omitempty"`
+	AuxiliaryInventoryComplete   bool                                  `json:"auxiliary_inventory_complete,omitempty"`
 }
 
 type CapacityMutationAuxiliaryResource struct {

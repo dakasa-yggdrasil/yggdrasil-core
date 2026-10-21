@@ -16,6 +16,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacitynativeqemu"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	amqp "github.com/rabbitmq/amqp091-go"
 )
 
 var originalGuestNativeRealm *capacitynativeqemu.Realm
@@ -28,7 +29,6 @@ func InstallOriginalGuestNativeFixture(realm *capacitynativeqemu.Realm) error {
 	originalGuestNativeInstall.Do(func() {
 		if realm != nil {
 			originalGuestNativeRealm = realm
-			originalGuestSourceProvider = realm
 			installed = true
 		}
 	})
@@ -483,4 +483,17 @@ func guestOriginalSourceInstallationState(ctx context.Context, slot int, state s
 		return errOriginalGuestStep
 	}
 	return originalGuestNativeRealm.InstallationReadState(ctx, slot, state)
+}
+
+// The qualification constructor remains separate from production invocation
+// factories; its installed realm never enters a production binary.
+func withOriginalGuestWorkflowTransport(ctx context.Context, _ *amqp.Connection) context.Context {
+	return ctx
+}
+func guestOriginalProviderAvailable(context.Context) bool { return originalGuestNativeRealm != nil }
+func guestOriginalProviderInvocation(ctx context.Context, _ repository.CapacityStore, _, _ model.Manifest, _ model.WorkflowStepSpec, _ model.CapacityPolicySpec, _ model.CapacityMutationBinding, _ guestOriginalStepInput) (context.Context, guestOriginalProvider, error) {
+	if originalGuestNativeRealm == nil {
+		return ctx, nil, errOriginalGuestStep
+	}
+	return ctx, originalGuestNativeRealm, nil
 }

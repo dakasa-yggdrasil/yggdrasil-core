@@ -28,10 +28,6 @@ type guestOriginalProvider interface {
 	Create(context.Context, repository.CapacityStore, model.Manifest, model.CapacityMutationGrant, model.CapacityGuestOriginalProvisioningPreregistration) (model.CapacityMutationProof, error)
 }
 
-// The production source provider/registry is EMPTY. Only the separately
-// compiled native qualification constructor may install its exact own realm.
-var originalGuestSourceProvider guestOriginalProvider
-
 type guestOriginalStepInput struct {
 	Policy            model.ManifestSelector `json:"policy"`
 	BindingName       string                 `json:"binding_name"`
@@ -104,7 +100,7 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		return fail("original-guest-step-01")
 	}
 	hostContext, cancelHost, hostRealm, err := originalHostStepContext(parent, workflowRef, step, result.Operation)
-	if err != nil || (hostRealm == nil && originalGuestSourceProvider == nil) {
+	if err != nil || (hostRealm == nil && !guestOriginalProviderAvailable(parent)) {
 		return fail("original-guest-step-02")
 	}
 	defer cancelHost()
@@ -189,6 +185,11 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		result.FinishedAt = time.Now().UTC()
 		return result
 	}
+	var sourceProvider guestOriginalProvider
+	ctx, sourceProvider, err = guestOriginalProviderInvocation(ctx, store, policy, wf, step, p, b, parsed)
+	if err != nil {
+		return fail("original-guest-step-02")
+	}
 	key, err := sourceGuestSigningKey(ctx, db, p.GuestRetirementBinding.IntentSigningKeyRef)
 	if err != nil {
 		return fail("original-guest-step-16")
@@ -208,7 +209,7 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		if permissionErr != nil {
 			return fail("original-canonical-floor-permission-gate")
 		}
-		if !permissionOnly && originalGuestSourceProvider.Prepare(ctx, parsed.Slot) != nil {
+		if !permissionOnly && sourceProvider.Prepare(ctx, parsed.Slot) != nil {
 			return fail("original-guest-step-19")
 		}
 
@@ -290,7 +291,7 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 			result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
 			return result
 		}
-		proof, err := originalGuestSourceProvider.Create(original, store, policy, grant, pre)
+		proof, err := sourceProvider.Create(original, store, policy, grant, pre)
 		if err != nil {
 			return fail("original-guest-step-25")
 		}
