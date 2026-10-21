@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 86c78734919914a23f588bb6a4c23d1bb9677a4a
-verified_diff_sha256: 4e79dd894124e081ff9dc1a06361668b3c3d6a2c011c0df02e0a9da406c97d42
+verified_at_commit: c06897924054f5c63e5f108a77d0d16a773c021c
+verified_diff_sha256: 298a0e182a8a21c5afbfc7388f2bcea0ba812e92b4cae788888cdbdb97db4349
 reconciler_schema: 1
 verified_at: 2026-10-21
 by: Codex
@@ -229,3 +229,8 @@ The integrated source preserves generic legacy AWS confirmation, binds the origi
 ## Original Notify and private per-slot bootstrap source reconciliation
 
 Reviewed the complete integrated original provider retirement, same-process secondary TLS, immutable canary schema70, causal v2 SQL envelope, fresh useful-floor reconstruction, lease-separated maintenance and strict per-slot user-data map. The fixed setup executable hash stays common; individual slot credentials belong only to their own user-data. Native SQL commit timestamps are explicit NULL when disabled and actual equal values when enabled; freshness uses the original five-second causal bound and Core PostgreSQL ledger age. The exact full source census and real published service checker passed. Owning Linux source, PostgreSQL and later actual restore/native/production gates retain their independent scope. This stamp and genuine generated context establish source reconciliation only. The production registry is empty, flags remain disabled and no useful elasticity or rollout is claimed. Historical failed runs and evidence remain retained.
+
+
+## Original retirement V2 and independent profile reconciliation
+
+Reviewed the complete original Core/Guest clock and caller chain, immutable nonce plus four raw signed journal records, exact provider catalog/native return and auxiliary absence joins, and original no-resend destroy settlement. The Notify singleton cgroup root is restricted to its same fully validated canary binding; generic and qualification paths retain their contracts. The fixed authenticated original-profile GET breaks the userdata/profile hash cycle using the existing principal-pinned digest and immutable create witness, with current policy, lease, workflow, source and compiled approval rechecked. The exact625-file census and clean published service checker passed. Genuine released context and summary were regenerated from this source. Author portable source tests and Hetzner owning CI remain distinct from new Core owning Linux/PG gates and later real native lifecycle/production activation. Registry entries remain empty. No migration, useful capacity, retirement, economic result or production rollout is claimed by source reconciliation. Historical failure evidence stays retained.
