@@ -80,6 +80,18 @@ instance/root-EBS/primary-ENI absence. Core production retirement orchestration
 must still join original Guest drain and protected useful-floor evidence before
 permitting the write; provider absence cannot stand in for either.
 
+Production profiles may use an exact sorted per-member `slot_bootstraps` list
+instead of one shared user-data hash. The legacy hash must be empty in that mode;
+legacy profiles omit the optional list and keep their byte-exact contract. Every
+member and provider mutation slot must pin its own actual user-data hash. Original
+create witness and bootstrap journal joins select the actual native slot's hash,
+never another slot or a fallback. The source profile digest covers the whole list.
+The original setup executable is shared and retains its real common payload hash;
+per-slot certificates and WireGuard keys are materialized only in that slot's
+private user-data before setup starts. Provider selection independently checks its
+source-owned per-slot secret template and hash before the original grant/send.
+No VM receives another slot's private template.
+
 ## Consequences
 
 Invocation ownership is testable without giving unit doubles native or SQL

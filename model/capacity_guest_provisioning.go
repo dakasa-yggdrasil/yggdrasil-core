@@ -28,6 +28,14 @@ type CapacityGuestProtectedProfileManifest struct {
 	PoweroffCommandSHA256             string                                   `json:"poweroff_command_sha256"`
 	Writers                           []CapacityGuestProtectedWriterDefinition `json:"writers"`
 	NotifyCanaryTopology              *CapacityGuestNotifyCanaryTopology       `json:"notify_canary_topology,omitempty"`
+	SlotBootstraps                    []CapacityGuestSlotBootstrap             `json:"slot_bootstraps,omitempty"`
+}
+
+// Per-slot user-data bytes may contain only that slot's private material.
+// The common setup executable remains pinned by BootstrapPayloadSHA256.
+type CapacityGuestSlotBootstrap struct {
+	Slot            int    `json:"slot"`
+	BootstrapSHA256 string `json:"bootstrap_sha256"`
 }
 
 // Reserved by the protected owning workflow BEFORE the original provider
