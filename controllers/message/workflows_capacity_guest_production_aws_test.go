@@ -76,6 +76,10 @@ func TestOriginalAWSGuestSupplierUsesActualClosedCatalog(t *testing.T) {
 			if originalAWSGuestSupplierCatalog(ts) != (kind == "candidate" || kind == "retirement_candidate" || kind == "slot_candidate") {
 				t.Fatal("AWS closed catalog admission mismatch", kind)
 			}
+			if productionRetirementCatalogV2("aws", ts) != (kind == "retirement_candidate" || kind == "slot_candidate") {
+				t.Fatal("creation-only AWS catalog acquired retirement", kind)
+			}
+
 		})
 	}
 }

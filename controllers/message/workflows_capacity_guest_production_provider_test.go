@@ -94,3 +94,55 @@ func TestOriginalGuestSupplierRequiresActualClosedCatalog(t *testing.T) {
 		})
 	}
 }
+
+func TestOriginalGuestReceiptJoinsOmittedEmptyActionLists(t *testing.T) {
+	for _, kind := range []string{"omitted_receipt_empty_return", "empty_receipt_omitted_return", "exact_ordered", "foreign_action", "foreign_next", "reversed_order", "duplicate_next", "duplicate_main", "empty_next", "uncertain", "incomplete"} {
+		t.Run(kind, func(t *testing.T) {
+			r := model.CapacityMutationReceipt{Outcome: "accepted", TransportCompleted: true, ActionID: "original-action"}
+			next := []string{}
+			switch kind {
+			case "empty_receipt_omitted_return":
+				r.NextActionIDs = []string{}
+				next = nil
+			case "exact_ordered":
+				r.NextActionIDs = []string{"original-next", "original-last"}
+				next = []string{"original-next", "original-last"}
+			case "foreign_action":
+				r.ActionID = "foreign"
+			case "foreign_next":
+				next = []string{"foreign"}
+			case "reversed_order":
+				r.NextActionIDs = []string{"one", "two"}
+				next = []string{"two", "one"}
+			case "duplicate_next":
+				r.NextActionIDs = []string{"one", "one"}
+				next = []string{"one", "one"}
+			case "duplicate_main":
+				r.NextActionIDs = []string{r.ActionID}
+				next = []string{r.ActionID}
+			case "empty_next":
+				r.NextActionIDs = []string{""}
+				next = []string{""}
+			case "uncertain":
+				r.Outcome = "uncertain"
+			case "incomplete":
+				r.TransportCompleted = false
+			}
+			// Actual receipt JSON omitempty drops empty arrays. The owning query's
+			// append(nil,list...) projection likewise produces nil when empty.
+			raw, err := json.Marshal(r)
+			if err != nil {
+				t.Fatal(err)
+			}
+			var projected model.CapacityMutationReceipt
+			if json.Unmarshal(raw, &projected) != nil {
+				t.Fatal("receipt codec")
+			}
+			projected.NextActionIDs = append([]string(nil), projected.NextActionIDs...)
+			want := kind == "omitted_receipt_empty_return" || kind == "empty_receipt_omitted_return" || kind == "exact_ordered"
+			if originalGuestReceiptActionJoin(projected, "original-action", next) != want {
+				t.Fatal("original action identity join mismatch", kind)
+			}
+		})
+	}
+}

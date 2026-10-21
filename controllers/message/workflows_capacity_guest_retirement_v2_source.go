@@ -7,7 +7,6 @@ import (
 	"crypto/ed25519"
 	"database/sql"
 	"encoding/json"
-	"reflect"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
@@ -127,9 +126,9 @@ func finishProductionGuestNativeDestroyV2(ctx context.Context, store repository.
 	if err != nil {
 		return nil, err
 	}
-	// The current owning Hetzner source has no complete retirement read producer.
-	// It stays closed before DELETE until that source contract is implemented.
-	if !capacity.AWSOriginalMutationPair(b) {
+	// Each provider must have its own exact ordinary destroy/read contract.
+	// Version checks below happen before issuance or the actual adapter send.
+	if !capacity.AWSOriginalMutationPair(b) && !(b.EnsureCapability == "ensure_server" && b.DestroyCapability == "destroy_server") {
 		return nil, errOriginalGuestStep
 	}
 	if found && existing.Grant.State == "confirmed" {
@@ -142,8 +141,8 @@ func finishProductionGuestNativeDestroyV2(ctx context.Context, store repository.
 	original, cancel := context.WithTimeout(ctx, 60*time.Second)
 	defer cancel()
 	supplier, err := productionRetirementSupplierV2(original, store, policy, p, b, input)
-	if err != nil {
-		return nil, err
+	if err != nil || !productionRetirementCatalogV2(supplier.provider, supplier.resolved.typeSpec) {
+		return nil, errOriginalGuestStep
 	}
 	receipt := existing
 	if !found {
@@ -180,7 +179,7 @@ func finishProductionGuestNativeDestroyV2(ctx context.Context, store repository.
 			return nil, errOriginalGuestStep
 		}
 		receipt, err = store.NativeMutationReceipt(original, policy, b, grant.GrantID)
-		if err != nil || receipt.Grant.State != "settled" || receipt.Outcome != "accepted" || !receipt.TransportCompleted || returned.ActionID != receipt.ActionID || !reflect.DeepEqual(returned.NextActionIDs, receipt.NextActionIDs) || receipt.ResourceID != grant.ExpectedResourceID || receipt.ResourceCreatedAt != grant.ExpectedResourceCreatedAt {
+		if err != nil || receipt.Grant.State != "settled" || !originalGuestReceiptActionJoin(receipt, returned.ActionID, returned.NextActionIDs) || receipt.ResourceID != grant.ExpectedResourceID || receipt.ResourceCreatedAt != grant.ExpectedResourceCreatedAt {
 			return nil, errOriginalGuestStep
 		}
 	}
@@ -192,7 +191,7 @@ func finishProductionGuestNativeDestroyV2(ctx context.Context, store repository.
 	// second read challenge. Neither budget can substitute for the original
 	// thirty-second Guest caller success or authorize another DELETE.
 	for {
-		returned, proof, pending, readErr := sourceAWSNativeAbsenceV2(original, store, policy, p, b, input, receipt)
+		returned, proof, pending, readErr := sourceProductionNativeAbsenceV2(original, store, policy, p, b, input, receipt)
 		if readErr == nil {
 			confirmed, err := store.ConfirmMutation(original, policy, input.Generation, input.FencingToken, input.LeaseOwner, proof)
 			if err != nil {
@@ -219,7 +218,7 @@ func finishProductionGuestNativeDestroyV2(ctx context.Context, store repository.
 	}
 }
 
-func sourceAWSNativeAbsenceV2(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, b model.CapacityMutationBinding, input guestOriginalStepInput, receipt model.CapacityMutationReceipt) (repository.GuestNativeAbsenceReturnV2, model.CapacityMutationProof, bool, error) {
+func sourceProductionNativeAbsenceV2(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, b model.CapacityMutationBinding, input guestOriginalStepInput, receipt model.CapacityMutationReceipt) (repository.GuestNativeAbsenceReturnV2, model.CapacityMutationProof, bool, error) {
 	var returned repository.GuestNativeAbsenceReturnV2
 	var proof model.CapacityMutationProof
 	read, stop := context.WithTimeout(ctx, 5*time.Second)
@@ -234,7 +233,16 @@ func sourceAWSNativeAbsenceV2(ctx context.Context, store repository.CapacityStor
 	}
 	returned = repository.GuestNativeAbsenceReturnV2{Schema: "original_core_guest_native_absence_return_v2", Challenge: challenge, DestroyGrantID: receipt.Grant.GrantID, OriginalDestroyReceiptSHA256: capacity.GuestRetirementSHA(receipt), StartedAtCore: time.Now().UTC()}
 	var observed model.CapacityVMRetirementObservation
-	returned.Status, err = reader.call(read, "observe_ec2_instance", map[string]any{"profile": b.ProfileName, "slot": input.Slot, "grant_id": receipt.Grant.GrantID, "retirement": true, "expected_resource_id": receipt.ResourceID, "expected_resource_created_at": receipt.ResourceCreatedAt}, &observed)
+	if !productionRetirementCatalogV2(reader.provider, reader.resolved.typeSpec) {
+		return returned, proof, false, errOriginalGuestStep
+	}
+	operation := capacity.VMObserveRetirement
+	fixed := map[string]any{"profile": b.ProfileName, "slot": input.Slot, "grant_id": receipt.Grant.GrantID, "expected_resource_id": receipt.ResourceID, "expected_resource_created_at": receipt.ResourceCreatedAt}
+	if reader.provider == "aws" {
+		operation = "observe_ec2_instance"
+		fixed["retirement"] = true
+	}
+	returned.Status, err = reader.call(read, operation, fixed, &observed)
 	returned.OriginalReturnedAtCore = time.Now().UTC()
 	returned.CallFailed = err != nil
 	returned.OriginalContextFailed = read.Err() != nil || !returned.OriginalReturnedAtCore.Before(challenge.OriginalDeadlineCore)
@@ -248,7 +256,11 @@ func sourceAWSNativeAbsenceV2(ctx context.Context, store repository.CapacityStor
 		return returned, proof, false, errOriginalGuestStep
 	}
 	if recordErr != nil {
-		return returned, proof, returned.Status == "observed" && originalAWSRetirementPendingV2(observed, receipt), errOriginalGuestStep
+		pending := originalAWSRetirementPendingV2(observed, receipt)
+		if reader.provider == "hetzner" {
+			pending = originalHetznerRetirementPendingV2(observed, receipt)
+		}
+		return returned, proof, returned.Status == "observed" && pending, errOriginalGuestStep
 	}
 	return returned, proof, false, nil
 }
@@ -283,4 +295,42 @@ func originalAWSRetirementPendingV2(o model.CapacityVMRetirementObservation, r m
 		}
 	}
 	return true
+}
+
+func productionRetirementCatalogV2(provider string, ts model.IntegrationTypeManifestSpec) bool {
+	if provider == "aws" {
+		return (ts.Adapter.Version == "1.62.0" || ts.Adapter.Version == "1.63.0") && originalGuestSupplierCatalogFor(provider, ts)
+	}
+	return provider == "hetzner" && ts.Adapter.Version == "0.3.0" && originalGuestSupplierCatalogFor(provider, ts)
+}
+
+func originalHetznerRetirementPendingV2(o model.CapacityVMRetirementObservation, r model.CapacityMutationReceipt) bool {
+	if r.Grant.State != "settled" || r.Grant.CompensationOf != "" || r.Outcome != "accepted" || !r.TransportCompleted || !r.AuxiliaryInventoryComplete || len(r.AuxiliaryResources) < 1 || len(r.AuxiliaryResources) > 2 || o.AWSRetirementLifecycle != nil || o.DestroyGrantID != r.Grant.GrantID || o.DestroyGrantState != r.Grant.State || o.CompensationOf != "" || o.ID != r.ResourceID || o.CreatedAt != r.ResourceCreatedAt || o.OriginalOutcome != "accepted" || !o.OriginalTransportCompleted || !o.ServerAbsenceComplete || !o.AuxiliaryInventoryComplete || len(o.AuxiliaryResources) != len(r.AuxiliaryResources) || o.RetirementComplete || len(o.HoldReasons) < 1 || len(o.HoldReasons) > 3 || o.WriterQuiescenceEvidence || o.ProviderFencingEvidence || o.InvoiceReconciled || o.BillingExposure != nil || o.DeleteAction.ID != r.ActionID || !o.DeleteAction.Known || !o.DeleteAction.Observed || o.DeleteAction.Command != "delete_server" || o.DeleteAction.ErrorCode != "" || (o.DeleteAction.Status != "running" && o.DeleteAction.Status != "success") || o.NextActions == nil || len(o.NextActions) != len(r.NextActionIDs) {
+		return false
+	}
+	seen := map[string]bool{}
+	for _, hold := range o.HoldReasons {
+		if seen[hold] || (hold != "native_server_present" && hold != "original_delete_actions_not_successful" && hold != "native_billable_resources_present") {
+			return false
+		}
+		seen[hold] = true
+	}
+	allAbsent := o.ServerAbsent
+	if o.ServerAbsent && o.ServerStatus != "" || !o.ServerAbsent && o.ServerStatus == "" {
+		return false
+	}
+	for n, a := range o.AuxiliaryResources {
+		if a.Kind != r.AuxiliaryResources[n].Kind || a.ID != r.AuxiliaryResources[n].ID {
+			return false
+		}
+		allAbsent = allAbsent && a.Absent
+	}
+	allActions := o.DeleteAction.Status == "success"
+	for n, a := range o.NextActions {
+		if a.ID != r.NextActionIDs[n] || a.ResourceID != r.ResourceID || a.ErrorCode != "" || (a.Status != "running" && a.Status != "success") {
+			return false
+		}
+		allActions = allActions && a.Status == "success"
+	}
+	return seen["native_server_present"] != o.ServerAbsent && seen["original_delete_actions_not_successful"] != allActions && seen["native_billable_resources_present"] != allAbsent && o.BillableResourcesAbsent == allAbsent
 }

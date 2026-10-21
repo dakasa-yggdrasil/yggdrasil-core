@@ -6,6 +6,7 @@ import (
 	"context"
 	"errors"
 	"reflect"
+	"slices"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
@@ -15,6 +16,10 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
+
+// Exact owning publication reviewed for the additive Hetzner 0.3 retirement
+// reader. This is not an environment/manifest-selected source approval.
+const originalHetznerRetirementV3Source = "b375d438983b89601c0896fd77d73cde667bedaf"
 
 type originalGuestTransportKey struct{}
 type productionGuestInvocationKey struct{}
@@ -115,10 +120,14 @@ func originalGuestSupplierCatalogFor(provider string, ts model.IntegrationTypeMa
 	}
 	// The reviewed supplier uses the original broker request protocol. HTTP
 	// adapters need their own reviewed no-replay transport contract.
-	if ts.Provider != "hetzner" || (ts.Adapter.Version != "0.1.0" && ts.Adapter.Version != "0.2.0") || ts.Adapter.Transport != "rabbitmq" || manifest.ValidateIntegrationTypeSpec(ts) != nil {
+	if ts.Provider != "hetzner" || (ts.Adapter.Version != "0.1.0" && ts.Adapter.Version != "0.2.0" && ts.Adapter.Version != "0.3.0") || ts.Adapter.Transport != "rabbitmq" || manifest.ValidateIntegrationTypeSpec(ts) != nil {
 		return false
 	}
-	for _, required := range []string{"ensure_server", capacity.VMObserveServer, capacity.VMObserveAction} {
+	operations := []string{"ensure_server", capacity.VMObserveServer, capacity.VMObserveAction}
+	if ts.Adapter.Version == "0.3.0" {
+		operations = append(operations, "destroy_server", capacity.VMObserveRetirement)
+	}
+	for _, required := range operations {
 		found := 0
 		for _, action := range ts.ActionCatalog {
 			if action.Name != required {
@@ -144,6 +153,10 @@ func originalGuestSupplierCatalogFor(provider string, ts model.IntegrationTypeMa
 		}
 	}
 	return true
+}
+
+func originalGuestSupplierCatalogSourceFor(provider string, ts model.IntegrationTypeManifestSpec, source string) bool {
+	return originalGuestSupplierCatalogFor(provider, ts) && !(provider == "hetzner" && ts.Adapter.Version == "0.3.0" && source != originalHetznerRetirementV3Source)
 }
 
 func originalGuestSupplierSourceConfig(spec model.IntegrationInstanceManifestSpec, source string) bool {
@@ -186,13 +199,13 @@ func resolveOriginalGuestSupplier(ctx context.Context, conn *amqp.Connection, st
 		return empty, errOriginalGuestStep
 	}
 	ts, err := manifest.ParseIntegrationTypeSpec(tm.Spec)
-	if err != nil || !originalGuestSupplierCatalogFor(provider, ts) || !originalGuestSupplierSourceConfigFor(provider, is, source) {
+	if err != nil || !originalGuestSupplierCatalogSourceFor(provider, ts, source) || !originalGuestSupplierSourceConfigFor(provider, is, source) {
 		return empty, errOriginalGuestStep
 	}
 	// Secret hydration and live Describe occur only after public registry and
 	// exact raw catalog checks. Recheck the same immutable revisions afterward.
 	im, is, tm, ts, err = resolveIntegrationInstance(ctx, conn, store.DB, model.ManifestSelector{ManifestID: b.IntegrationInstanceID})
-	if err != nil || !im.Metadata.Active || im.ID.String() != b.IntegrationInstanceID || im.Checksum != b.InstanceChecksum || !tm.Metadata.Active || tm.ID.String() != b.IntegrationTypeID || tm.Checksum != b.TypeChecksum || !originalGuestSupplierCatalogFor(provider, ts) || !originalGuestSupplierSourceConfigFor(provider, is, source) {
+	if err != nil || !im.Metadata.Active || im.ID.String() != b.IntegrationInstanceID || im.Checksum != b.InstanceChecksum || !tm.Metadata.Active || tm.ID.String() != b.IntegrationTypeID || tm.Checksum != b.TypeChecksum || !originalGuestSupplierCatalogSourceFor(provider, ts, source) || !originalGuestSupplierSourceConfigFor(provider, is, source) {
 		return empty, errOriginalGuestStep
 	}
 	return capacityResolvedObservationAdapter{im, is, tm, ts}, nil
@@ -239,6 +252,24 @@ func (s *originalProductionGuestSupplier) call(ctx context.Context, op string, f
 	}
 	return r.Status, nil
 }
+
+// Both immutable receipt DTOs omit empty successor lists. Compare their
+// semantic ordered identities, not nil-vs-empty allocation after JSON decode.
+// Canonical signed envelopes and their raw bytes are never normalized here.
+func originalGuestReceiptActionJoin(r model.CapacityMutationReceipt, action string, next []string) bool {
+	if !r.TransportCompleted || r.Outcome != "accepted" || action == "" || len(action) > 256 || action != r.ActionID || len(next) > 32 || !slices.Equal(next, r.NextActionIDs) {
+		return false
+	}
+	seen := map[string]bool{action: true}
+	for _, id := range next {
+		if id == "" || len(id) > 256 || seen[id] {
+			return false
+		}
+		seen[id] = true
+	}
+	return true
+}
+
 func (s *originalProductionGuestSupplier) Prepare(ctx context.Context, slot int) error {
 	if s.provider == "aws" {
 		return s.prepareAWS(ctx, slot)
@@ -274,7 +305,7 @@ func (s *originalProductionGuestSupplier) Create(ctx context.Context, g model.Ca
 		return model.CapacityMutationProof{}, errOriginalGuestStep
 	}
 	receipt, err := s.store.NativeMutationReceipt(ctx, s.policy, s.binding, g.GrantID)
-	if err != nil || !receipt.TransportCompleted || receipt.Outcome != "accepted" || receipt.ActionID != returned.ActionID || !reflect.DeepEqual(receipt.NextActionIDs, returned.NextActionIDs) || receipt.ResourceID != returned.Plan.Server.ID || receipt.ResourceCreatedAt != returned.Plan.Server.CreatedAt {
+	if err != nil || !originalGuestReceiptActionJoin(receipt, returned.ActionID, returned.NextActionIDs) || receipt.ResourceID != returned.Plan.Server.ID || receipt.ResourceCreatedAt != returned.Plan.Server.CreatedAt {
 		return model.CapacityMutationProof{}, errOriginalGuestStep
 	}
 	ticker := time.NewTicker(time.Second)

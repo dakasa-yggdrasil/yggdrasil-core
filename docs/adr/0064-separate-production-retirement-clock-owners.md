@@ -71,3 +71,24 @@ PostgreSQL negatives do not manufacture accepted authority. Positive native
 runtime/provider evidence is separate and mandatory. A provider lacking its own
 complete original retirement reader is refused before destroy until its owning
 source is implemented, published and pinned.
+
+## Owning provider retirement readers
+
+The additive Hetzner 0.3 catalog must include ordinary destroy and
+`observe_server_retirement` as idempotent, server-bound capabilities. Its exact
+reviewed publication is `b375d438983b89601c0896fd77d73cde667bedaf`; check that
+source before private hydration and recheck the live Describe. AWS retirement
+requires 1.62 or 1.63; the reviewed creation-only 1.61 cannot acquire this effect.
+Neither gate supplies a profile registry approval or changes an active pin.
+
+Each original accepted destroy may be observed repeatedly under one finish
+invocation of at most sixty seconds, each GET inside its own complete five-second
+read budget and durable challenge. Only closed known pending native states may
+poll. Uncertain originals never resend. The original Guest caller success stays
+inside its original thirty-second owner and is never renewed by these GETs.
+
+The current [official Hetzner SDK server schema](https://raw.githubusercontent.com/hetznercloud/hcloud-go/main/hcloud/schema/server.go)
+exposes only `Action` on `ServerDeleteResponse`; `NextActions` belongs to create.
+Do not invent a Primary IP deletion successor or mislabel its native target as a
+server. Any retained successor still requires its actual original identity and
+closed native target join. An unsupported provider shape remains held.
