@@ -190,6 +190,7 @@ else:
             'unconfigured_private_route', 'human_session_cannot_enter_guest',
             'actor_cannot_read_public_health', 'actor_cannot_dispatch_workflow',
             'actor_cannot_publish_events', 'actor_cannot_write_manifest',
+            'actor_cannot_confirm_installation', 'human_cannot_confirm_installation',
             'actor_cannot_use_provisioner_path', 'provisioner_cannot_use_actor_path',
             'dot_segment_refused_before_mux_redirect', 'escaped_path_refused',
             'expired_credential_still_claims_public_route',

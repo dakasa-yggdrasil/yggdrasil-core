@@ -194,12 +194,13 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		return fail("original-guest-step-16")
 	}
 	var output any
-	if result.Operation == "capacity.qualify_original_guest_echo" || result.Operation == "capacity.finish_original_guest_retirement" {
+	switch result.Operation {
+	case "capacity.qualify_original_guest_echo", "capacity.finish_original_guest_retirement":
 		output, err = sourceGuestQualificationStep(ctx, store, policy, p, parsed, key, result.Operation)
 		if err != nil {
 			return fail(capacity.GuestQualificationPredicate(err))
 		}
-	} else if result.Operation == capacity.ProvisionOriginalGuestOperation {
+	case capacity.ProvisionOriginalGuestOperation:
 		if parsed.PreregistrationID != "" {
 			return fail("original-guest-step-18")
 		}
@@ -379,7 +380,7 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 			Receipt             model.CapacityGuestOriginalProvisioningReceipt         `json:"receipt"`
 			UsefulCapacityKnown bool                                                   `json:"useful_capacity_known"`
 		}{pre, capacity.GuestRetirementSHA(witness), receipt, false}
-	} else {
+	default:
 		if _, err = uuid.Parse(parsed.PreregistrationID); err != nil {
 			return fail("original-guest-step-32")
 		}

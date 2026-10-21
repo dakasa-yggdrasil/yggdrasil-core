@@ -30,7 +30,7 @@ type installationConnector struct{ s *installationDB }
 func (c installationConnector) Connect(context.Context) (driver.Conn, error) {
 	return &installationConn{c.s}, nil
 }
-func (c installationConnector) Driver() driver.Driver { return installationDriver{c.s} }
+func (c installationConnector) Driver() driver.Driver { return installationDriver(c) }
 
 type installationDriver struct{ s *installationDB }
 
