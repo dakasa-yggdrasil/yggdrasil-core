@@ -80,6 +80,9 @@ func (r *Realm) probe(ctx context.Context, store repository.CapacityStore, polic
 		return result, capacity.GuestQualificationRefusal("reserve_probe", err)
 	}
 	returned, err := client.Original(original, http.MethodGet, "/v1/qualification-serving-probe", requestWire)
+	if diagnosticErr := r.publishProbeDiagnostic(ctx, slot, "normal", returned); diagnosticErr != nil && err == nil {
+		return result, diagnosticErr
+	}
 	if err != nil {
 		return result, capacity.GuestQualificationHTTPRefusal(returned, ErrOriginalUnknown)
 	}
@@ -186,6 +189,9 @@ func (r *Realm) RecoveryProbe(ctx context.Context, store repository.CapacityStor
 		return result, err
 	}
 	returned, err := client.Original(original, http.MethodGet, "/v1/qualification-serving-probe", requestWire)
+	if diagnosticErr := r.publishProbeDiagnostic(ctx, slot, "recovery", returned); diagnosticErr != nil && err == nil {
+		return result, diagnosticErr
+	}
 	if err != nil || capacity.GuestOriginalHTTPDecode(returned, &result) != nil || ValidateProbeReturn(request, result, receipt.Enrollment, receipt.OriginalProvisioningSHA256, returned.DriverReturnedAt) != nil {
 		return result, ErrOriginalUnknown
 	}

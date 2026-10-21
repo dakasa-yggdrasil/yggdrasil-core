@@ -3,23 +3,26 @@
 package capacitynativeqemu
 
 import (
- "context"
- "crypto/ed25519"
- "crypto/rand"
- "encoding/hex"
- "encoding/json"
- "net/http"
- "path/filepath"
- "time"
- "github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
- "github.com/dakasa-yggdrasil/yggdrasil-core/model"
- "github.com/dakasa-yggdrasil/yggdrasil-core/repository"
- "github.com/google/uuid"
+	"context"
+	"crypto/ed25519"
+	"crypto/rand"
+	"encoding/hex"
+	"encoding/json"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	"github.com/google/uuid"
+	"net/http"
+	"path/filepath"
+	"time"
 )
+
 func (r *Realm) FloorSourceProbe(ctx context.Context, store repository.CapacityStore, policy model.Manifest, generation, fence int64, owner string, slot int, key ed25519.PrivateKey, client *capacity.GuestOriginalHTTPClient, leaseUntil time.Time) (QualificationProbeReceipt, error) {
 	diagnostic := false
 	var result QualificationProbeReceipt
-	if !SourceFailedFloorCase(r.Request.NativeCase) { return result, ErrOriginalUnknown }
+	if !SourceFailedFloorCase(r.Request.NativeCase) {
+		return result, ErrOriginalUnknown
+	}
 	pre, receipt, err := r.OriginalEnrollment(slot)
 	if err != nil {
 		return result, err
@@ -63,6 +66,9 @@ func (r *Realm) FloorSourceProbe(ctx context.Context, store repository.CapacityS
 		return result, err
 	}
 	returned, err := client.Original(original, http.MethodGet, "/v1/qualification-serving-probe", requestWire)
+	if diagnosticErr := r.publishProbeDiagnostic(ctx, slot, "floor", returned); diagnosticErr != nil && err == nil {
+		return result, diagnosticErr
+	}
 	if err != nil || capacity.GuestOriginalHTTPDecode(returned, &result) != nil || ValidateProbeReturn(request, result, receipt.Enrollment, receipt.OriginalProvisioningSHA256, returned.DriverReturnedAt) != nil {
 		return result, ErrOriginalUnknown
 	}
@@ -79,4 +85,3 @@ func (r *Realm) FloorSourceProbe(ctx context.Context, store repository.CapacityS
 	}
 	return result, nil
 }
-

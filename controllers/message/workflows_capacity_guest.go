@@ -308,24 +308,47 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		}
 		ticker := time.NewTicker(50 * time.Millisecond)
 		defer ticker.Stop()
+		var installation model.CapacityGuestOriginalInstallationConfirmation
+		var installationReadReturnedAt time.Time
+		installationReadState := "receipt_pending"
 		receipt, err := capacity.AwaitGuestOriginalInstallation(original, ticker.C, func(readCtx context.Context) (model.CapacityGuestOriginalProvisioningReceipt, bool, error) {
 			receipt, readErr := store.GuestProvisioningReceipt(readCtx, member.ProvisionerClientPrincipal, pre.PreregistrationID, pre.NonceSHA256)
+			installationReadState = "receipt_pending"
+			if readErr != nil && !errors.Is(readErr, sql.ErrNoRows) {
+				installationReadState = "receipt_read_error"
+				if errors.Is(readErr, repository.ErrCapacityConflict) || errors.Is(readErr, repository.ErrCapacityMutationAuthorization) {
+					installationReadState = "receipt_refused"
+				}
+			}
 			if errors.Is(readErr, sql.ErrNoRows) {
 				return receipt, false, nil
 			}
 			if readErr != nil {
 				return receipt, false, readErr
 			}
-			_, readErr = store.GuestInstallationConfirmation(readCtx, member.ProvisionerClientPrincipal, pre.PreregistrationID, pre.NonceSHA256)
+			installation, readErr = store.GuestInstallationConfirmation(readCtx, member.ProvisionerClientPrincipal, pre.PreregistrationID, pre.NonceSHA256)
+			installationReadReturnedAt = time.Now().UTC()
+			installationReadState = "read_ok"
+			if errors.Is(readErr, sql.ErrNoRows) {
+				installationReadState = "confirmation_pending"
+			} else if errors.Is(readErr, repository.ErrCapacityConflict) || errors.Is(readErr, repository.ErrCapacityMutationAuthorization) {
+				installationReadState = "confirmation_refused"
+			} else if readErr != nil {
+				installationReadState = "confirmation_read_error"
+			}
 			if errors.Is(readErr, sql.ErrNoRows) {
 				return receipt, false, nil
 			}
 			return receipt, readErr == nil, readErr
 		})
 		if err != nil {
+			_ = guestOriginalSourceInstallationState(original, grant.Slot, installationReadState)
 			if original.Err() != nil {
 				return fail("original-guest-step-29")
 			}
+			return fail("original-guest-step-28")
+		}
+		if err = guestOriginalSourceInstallation(original, grant, pre, receipt, installation, installationReadReturnedAt); err != nil {
 			return fail("original-guest-step-28")
 		}
 		// Confirm physical source membership only after the complete original

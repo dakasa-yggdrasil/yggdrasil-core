@@ -470,3 +470,17 @@ func sourceGuestRecoveryCleanupStep(ctx context.Context, store repository.Capaci
 	// No executor/lease/token escapes through the public workflow result.
 	return map[string]any{"schema": "original_source_recovery_cleanup_admitted_v1", "scope": "CURRENT_READ_ONLY_ADMISSION_NOT_PHYSICAL_EFFECT", "native_qualified": false}, nil
 }
+
+func guestOriginalSourceInstallation(ctx context.Context, g model.CapacityMutationGrant, p model.CapacityGuestOriginalProvisioningPreregistration, r model.CapacityGuestOriginalProvisioningReceipt, confirmation model.CapacityGuestOriginalInstallationConfirmation, readReturnedAt time.Time) error {
+	if originalGuestNativeRealm == nil {
+		return errOriginalGuestStep
+	}
+	return originalGuestNativeRealm.InstallationRecorded(ctx, g, p, r, confirmation, readReturnedAt)
+}
+
+func guestOriginalSourceInstallationState(ctx context.Context, slot int, state string) error {
+	if originalGuestNativeRealm == nil {
+		return errOriginalGuestStep
+	}
+	return originalGuestNativeRealm.InstallationReadState(ctx, slot, state)
+}

@@ -7,6 +7,7 @@ import (
 	"crypto/ed25519"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	"time"
 )
 
 func guestOriginalSourceLimit(ctx context.Context) (context.Context, context.CancelFunc, error) {
@@ -57,4 +58,12 @@ func guestOriginalSourceTerminal(context.Context, repository.CapacityStore, mode
 
 func guestOriginalSourceCreateWitness(ctx context.Context, store repository.CapacityStore, id string, proof model.CapacityMutationProof, key ed25519.PrivateKey) (model.CapacityGuestOriginalCreateWitness, error) {
 	return store.RecordGuestCreateWitness(ctx, id, proof, key)
+}
+
+func guestOriginalSourceInstallation(ctx context.Context, g model.CapacityMutationGrant, p model.CapacityGuestOriginalProvisioningPreregistration, r model.CapacityGuestOriginalProvisioningReceipt, confirmation model.CapacityGuestOriginalInstallationConfirmation, readReturnedAt time.Time) error {
+	return errOriginalGuestStep
+}
+
+func guestOriginalSourceInstallationState(ctx context.Context, slot int, state string) error {
+	return errOriginalGuestStep
 }
