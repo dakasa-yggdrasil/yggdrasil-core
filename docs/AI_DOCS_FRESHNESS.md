@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 8485ecc806b8a7ab8bd528687925bdcbd1aead7e
-verified_diff_sha256: 8dd0fbcdbe5dd9ee1ab8509f9f16957f8fea4a0b37fc472783ffc8315229acf5
+verified_at_commit: 86c78734919914a23f588bb6a4c23d1bb9677a4a
+verified_diff_sha256: 4e79dd894124e081ff9dc1a06361668b3c3d6a2c011c0df02e0a9da406c97d42
 reconciler_schema: 1
 verified_at: 2026-10-21
 by: Codex
@@ -224,3 +224,8 @@ current_native_container_build_source_review: The default image preserves commit
 ## Integrated original provider and source contract review
 
 The integrated source preserves generic legacy AWS confirmation, binds the original AWS observation to its literal capability pair and signs the independently read AWS or Hetzner identity with the original Guest witness. The complete 591-file runtime census and its hash-bound independent source review were updated, and the actual clean owning service-doctor publication validated this exact integrated source. New Linux owning provider, source and PostgreSQL gates remain required. Default production profile approvals stay empty; no live capacity, private networking, restoration or retirement success is asserted by this metadata reconciliation.
+
+
+## Original Notify and private per-slot bootstrap source reconciliation
+
+Reviewed the complete integrated original provider retirement, same-process secondary TLS, immutable canary schema70, causal v2 SQL envelope, fresh useful-floor reconstruction, lease-separated maintenance and strict per-slot user-data map. The fixed setup executable hash stays common; individual slot credentials belong only to their own user-data. Native SQL commit timestamps are explicit NULL when disabled and actual equal values when enabled; freshness uses the original five-second causal bound and Core PostgreSQL ledger age. The exact full source census and real published service checker passed. Owning Linux source, PostgreSQL and later actual restore/native/production gates retain their independent scope. This stamp and genuine generated context establish source reconciliation only. The production registry is empty, flags remain disabled and no useful elasticity or rollout is claimed. Historical failed runs and evidence remain retained.

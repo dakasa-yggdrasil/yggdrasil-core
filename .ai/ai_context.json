@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-21T05:26:30-03:00",
+  "generated_at": "2026-10-21T06:54:39-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1020,
+    ".go": 1047,
     ".json": 161,
     ".py": 6,
-    ".sql": 69,
+    ".sql": 70,
     ".yaml": 11,
     ".yml": 26
   },
   "provenance": {
-    "commit": "8485ecc806b8a7ab8bd528687925bdcbd1aead7e",
+    "commit": "86c78734919914a23f588bb6a4c23d1bb9677a4a",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "8233d1def9ecf1bcd90f5459d8ee93e2c24b334317588f027161f4670c0b9169"
+        "sha256": "ceab4eed72eb73cfc1670f09391af2faf4361118a4e1d0e313b89bf29b6b6a83"
       },
       {
         "path": "AGENTS.md",
@@ -32,7 +32,7 @@
       },
       {
         "path": "README.md",
-        "sha256": "76d905292e3a9313db441410f222d3576da1eed9fa017a6f0c028e4db6d67802"
+        "sha256": "4a0b58a01e62680f7de64b516415772e078bb366271532f432d3bcdbfc7d388e"
       },
       {
         "path": "Taskfile.yml",
@@ -70,28 +70,28 @@
     },
     {
       "path": "repository",
-      "files": 177,
-      "kb": 2556
+      "files": 185,
+      "kb": 2603
     },
     {
       "path": "controllers/message",
-      "files": 104,
-      "kb": 1280
-    },
-    {
-      "path": "model",
-      "files": 76,
-      "kb": 422
-    },
-    {
-      "path": "db/migrations",
-      "files": 68,
-      "kb": 177
+      "files": 105,
+      "kb": 1287
     },
     {
       "path": "internal/capacity",
-      "files": 66,
-      "kb": 998
+      "files": 83,
+      "kb": 1094
+    },
+    {
+      "path": "model",
+      "files": 77,
+      "kb": 433
+    },
+    {
+      "path": "db/migrations",
+      "files": 69,
+      "kb": 181
     },
     {
       "path": "manifest",
@@ -101,7 +101,7 @@
     {
       "path": "addons",
       "files": 45,
-      "kb": 263
+      "kb": 270
     },
     {
       "path": "internal/capacitynativeqemu",
@@ -180,7 +180,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 68,
+    "migrations": 69,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {
