@@ -225,10 +225,10 @@ func (s CapacityStore) guestRetirementFloorTx(ctx context.Context, tx *sql.Tx, n
 		return ErrCapacityConflict
 	}
 	var live, fresh, pending int
-	if err := tx.QueryRowContext(ctx, `SELECT count(*),count(*) FILTER(WHERE (slot_record->>'observed_at')::timestamptz BETWEEN $5 AND $6) FROM public.capacity_resource_slots WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND resource_id<>''`, namespace, p.Environment, p.Domain, p.Dimension, now.Add(-time.Duration(p.MaxEvidenceAgeSeconds)*time.Second), now.Add(5*time.Second)).Scan(&live, &fresh); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT count(*),count(*) FILTER(WHERE (slot_record->>'observed_at')::timestamptz BETWEEN $5 AND $6) FROM public.capacity_resource_slots WHERE NOT (slot_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND resource_id<>''`, namespace, p.Environment, p.Domain, p.Dimension, now.Add(-time.Duration(p.MaxEvidenceAgeSeconds)*time.Second), now.Add(5*time.Second)).Scan(&live, &fresh); err != nil {
 		return err
 	}
-	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN ('issued','redeemed','settled') AND grant_record->'grant'->>'capability'=$5 AND COALESCE(grant_record->'grant'->>'compensation_of','')='' AND slot<>$6`, namespace, p.Environment, p.Domain, p.Dimension, b.DestroyCapability, slot).Scan(&pending); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE NOT (grant_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN ('issued','redeemed','settled') AND grant_record->'grant'->>'capability'=$5 AND COALESCE(grant_record->'grant'->>'compensation_of','')='' AND slot<>$6`, namespace, p.Environment, p.Domain, p.Dimension, b.DestroyCapability, slot).Scan(&pending); err != nil {
 		return err
 	}
 	if live != fresh || live-pending-1 < p.Floor || live-pending-1 < current.Decision.Units {

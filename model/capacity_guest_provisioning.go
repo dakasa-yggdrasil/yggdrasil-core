@@ -155,6 +155,8 @@ type CapacityGuestRetirementMemberBinding struct {
 // new Guest writer is admitted. Resource-created identity is never configured
 // before the original ensure call or inferred from the Guest's own claim.
 type CapacityGuestOriginalCreateWitness struct {
+	SourceObservation *CapacityGuestPostlossObservation `json:"source_observation,omitempty"`
+
 	Schema                         string                   `json:"schema"`
 	BindingName                    string                   `json:"binding_name"`
 	PreregistrationID              string                   `json:"preregistration_id"`

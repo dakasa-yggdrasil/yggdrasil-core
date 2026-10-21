@@ -41,7 +41,7 @@ if [[ -z "$guest_preflight_error" ]]; then
       guest_pipeline_status=("${PIPESTATUS[@]}")
       ;;
     native)
-      go test -json -tags nativequalification -p 1 -count=1 -timeout=3m ./repository -run '^TestCapacityGuestOriginalNativeCorpusPostgres$' 2>"$guest_go_stderr" | tee "$guest_corpus_path" 2>"$guest_tee_stderr"
+      go test -json -tags nativequalification -p 1 -count=1 -timeout=3m ./repository ./controllers/httpapi ./controllers/message -run '^TestCapacityGuestOriginal(NativeCorpusPostgres|HTTPCallbacksPostgres|WorkflowNativeReadsPostgres)$' 2>"$guest_go_stderr" | tee "$guest_corpus_path" 2>"$guest_tee_stderr"
       guest_pipeline_status=("${PIPESTATUS[@]}")
       ;;
     native-hold)
@@ -95,8 +95,8 @@ for number, line in enumerate(lines, 1):
     except (ValueError, TypeError) as exc:
         malformed.append({'line': number, 'error': type(exc).__name__})
 if mode == 'native':
-    groups = {'TestCapacityGuestOriginalNativeCorpusPostgres': ()}
-    packages = {'github.com/dakasa-yggdrasil/yggdrasil-core/repository'}
+    groups = {'TestCapacityGuestOriginalNativeCorpusPostgres': (), 'TestCapacityGuestOriginalHTTPCallbacksPostgres': (), 'TestCapacityGuestOriginalWorkflowNativeReadsPostgres': ()}
+    packages = {'github.com/dakasa-yggdrasil/yggdrasil-core/repository', 'github.com/dakasa-yggdrasil/yggdrasil-core/controllers/httpapi', 'github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message'}
 elif mode == 'native-hold':
     groups = {'TestCapacityGuestOriginalNativeHoldCorpusPostgres': ()}
     packages = {'github.com/dakasa-yggdrasil/yggdrasil-core/repository'}
@@ -190,6 +190,7 @@ else:
             'unconfigured_private_route', 'human_session_cannot_enter_guest',
             'actor_cannot_read_public_health', 'actor_cannot_dispatch_workflow',
             'actor_cannot_publish_events', 'actor_cannot_write_manifest',
+            'actor_cannot_confirm_installation', 'human_cannot_confirm_installation',
             'actor_cannot_use_provisioner_path', 'provisioner_cannot_use_actor_path',
             'dot_segment_refused_before_mux_redirect', 'escaped_path_refused',
             'expired_credential_still_claims_public_route',

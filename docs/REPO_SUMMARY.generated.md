@@ -1,13 +1,13 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-15T21:01:44-03:00_
+_Generated from HEAD at: 2026-10-21T02:42:14-03:00_
 
 ## Languages
 
-- `.go`: 865 files
-- `.json`: 146 files
-- `.py`: 2 files
-- `.sql`: 65 files
+- `.go`: 995 files
+- `.json`: 148 files
+- `.py`: 3 files
+- `.sql`: 69 files
 - `.yaml`: 10 files
 - `.yml`: 25 files
 
@@ -15,7 +15,7 @@ _Generated from HEAD at: 2026-10-15T21:01:44-03:00_
 
 - API Spec: **false**  ((not configured))
 - Event Schemas: **0**  (events/contracts,docs/events/contracts)
-- DB Migrations: **64**  (db/migrations)
+- DB Migrations: **68**  (db/migrations)
 
 ## Docs
 
@@ -24,18 +24,18 @@ _Generated from HEAD at: 2026-10-15T21:01:44-03:00_
 
 ## Top Directories by File Count
 
-- controllers/httpapi: 189 files (2158.3 KB)
-- repository: 145 files (2246.4 KB)
-- controllers/message: 75 files (982.2 KB)
-- model: 71 files (412.5 KB)
-- db/migrations: 64 files (171.0 KB)
-- manifest: 62 files (386.2 KB)
+- controllers/httpapi: 195 files (2174.5 KB)
+- repository: 174 files (2546.0 KB)
+- controllers/message: 97 files (1229.0 KB)
+- model: 74 files (417.3 KB)
+- db/migrations: 68 files (177.2 KB)
+- manifest: 64 files (392.2 KB)
+- internal/capacity: 56 files (955.6 KB)
 - addons: 45 files (263.1 KB)
-- internal/capacity: 39 files (907.7 KB)
+- internal/capacitynativeqemu: 36 files (268.6 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
 - controllers/oidc: 23 files (193.4 KB)
 - docs/bootstrap/seeds/integrations: 20 files (87.4 KB)
-- internal/externalidentity: 15 files (61.5 KB)
 
 ## Heaviest Files
 
@@ -87,7 +87,7 @@ _Generated from HEAD at: 2026-10-15T21:01:44-03:00_
 - github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 - github.com/cespare/xxhash/v2 v2.3.0 // indirect
 - github.com/crewjam/saml v0.5.1
-- github.com/dakasa-yggdrasil/yggdrasil-sdk-go v0.9.0
+- github.com/dakasa-yggdrasil/yggdrasil-sdk-go v0.9.1-0.20261018141245-05f42ab80ed0
 - github.com/davecgh/go-spew v1.1.1 // indirect
 - github.com/emicklei/go-restful/v3 v3.12.2 // indirect
 - github.com/fatih/color v1.13.0 // indirect
@@ -158,7 +158,7 @@ _Generated from HEAD at: 2026-10-15T21:01:44-03:00_
 - golang.org/x/net v0.58.0 // indirect
 - golang.org/x/oauth2 v0.36.0 // indirect
 - golang.org/x/sync v0.22.0 // indirect
-- golang.org/x/sys v0.47.0 // indirect
+- golang.org/x/sys v0.47.0
 - golang.org/x/term v0.45.0 // indirect
 - golang.org/x/text v0.41.0 // indirect
 - golang.org/x/time v0.9.0

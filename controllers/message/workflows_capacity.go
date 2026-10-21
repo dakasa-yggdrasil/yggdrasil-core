@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity/executoractivity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -25,16 +26,21 @@ func newCapacityInvocationContext(ctx context.Context) context.Context {
 }
 
 type capacityWorkflowInput struct {
-	Policy        model.ManifestSelector          `json:"policy"`
-	Assessment    model.CapacityAssessment        `json:"assessment"`
-	Generation    int64                           `json:"generation"`
-	FencingToken  int64                           `json:"fencing_token"`
-	LeaseOwner    string                          `json:"lease_owner"`
-	Phase         string                          `json:"phase"`
-	Proof         model.CapacityTransitionProof   `json:"proof"`
-	Mutation      model.CapacityMutationIssue     `json:"mutation"`
-	MutationProof model.CapacityMutationProof     `json:"mutation_proof"`
-	Compensation  model.CapacityCompensationIssue `json:"compensation"`
+	ExecutorPower *struct {
+		CommandID string `json:"command_id"`
+		GrantID   string `json:"grant_id"`
+	} `json:"executor_power,omitempty"`
+	ExecutorActivity *executoractivity.WorkflowRequest `json:"executor_activity,omitempty"`
+	Policy           model.ManifestSelector            `json:"policy"`
+	Assessment       model.CapacityAssessment          `json:"assessment"`
+	Generation       int64                             `json:"generation"`
+	FencingToken     int64                             `json:"fencing_token"`
+	LeaseOwner       string                            `json:"lease_owner"`
+	Phase            string                            `json:"phase"`
+	Proof            model.CapacityTransitionProof     `json:"proof"`
+	Mutation         model.CapacityMutationIssue       `json:"mutation"`
+	MutationProof    model.CapacityMutationProof       `json:"mutation_proof"`
+	Compensation     model.CapacityCompensationIssue   `json:"compensation"`
 }
 
 // Capacity operations are available only inside the exact protected workflow
@@ -80,10 +86,17 @@ func executeCapacityWorkflowStep(ctx context.Context, db *sql.DB, workflowRef mo
 	if p.VMNodeMembershipBinding != nil && result.Operation == "capacity.advance" && (parsed.Phase == "prepared" || parsed.Phase == "canary" || parsed.Phase == "drained" || parsed.Phase == "promoted") {
 		return fail(fmt.Errorf("native VM/Node linkage is not readiness, canary, routing, business drain or retirement proof"))
 	}
-	if workflowRef.Kind != "workflow" || workflowRef.Namespace != p.Workflow.Namespace || workflowRef.Name != p.Workflow.Name {
+	authorizedWorkflow := p.Workflow
+	if result.Operation == "capacity.adopt_executor_power" {
+		if p.ExecutorPowerBinding == nil {
+			return fail(fmt.Errorf("executor power binding required"))
+		}
+		authorizedWorkflow = model.ManifestSelector{Namespace: p.ExecutorPowerBinding.AdoptionWorkflow.Namespace, Name: p.ExecutorPowerBinding.AdoptionWorkflow.Name}
+	}
+	if workflowRef.Kind != "workflow" || workflowRef.Namespace != authorizedWorkflow.Namespace || workflowRef.Name != authorizedWorkflow.Name {
 		return fail(fmt.Errorf("capacity policy does not authorize this workflow"))
 	}
-	wf, err := repository.ResolveManifest(ctx, db, "workflow", p.Workflow.Namespace, p.Workflow.Name, nil, true)
+	wf, err := repository.ResolveManifest(ctx, db, "workflow", authorizedWorkflow.Namespace, authorizedWorkflow.Name, nil, true)
 	if err != nil {
 		return fail(err)
 	}
@@ -99,6 +112,11 @@ func executeCapacityWorkflowStep(ctx context.Context, db *sql.DB, workflowRef mo
 	}
 	executorID, _ := ctx.Value(capacityInvocationKey{}).(string)
 	store := repository.CapacityStore{DB: db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true", WorkflowID: wf.ID, ExecutorID: executorID}
+	store.ExecutorActivityPrincipal, _ = ctx.Value(executorActivityActorKey{}).(string)
+	store.ExecutorPowerEnabled = os.Getenv("YGGDRASIL_EXECUTOR_POWER_ENABLED") == "true"
+	store.ExecutorPowerOperator, _ = ctx.Value(executorPowerOperatorKey{}).(string)
+	// No trusted provider observer is installed here. Adoption and confirmation
+	// remain unavailable until a source-owned, qualified factory is reviewed.
 	store, err = originalHostCapacityCarrier(ctx, store, policy, wf, spec, result, parsed.Assessment)
 	if err != nil {
 		return fail(err)
@@ -106,6 +124,23 @@ func executeCapacityWorkflowStep(ctx context.Context, db *sql.DB, workflowRef mo
 	var intent model.CapacityIntent
 	var output any
 	switch result.Operation {
+	case "capacity.adopt_executor_power":
+		output, err = store.AdoptExecutorPower(ctx, policy)
+	case "capacity.grant_executor_power":
+		if parsed.ExecutorPower == nil || parsed.ExecutorPower.CommandID == "" || parsed.ExecutorPower.GrantID != "" {
+			return fail(fmt.Errorf("exact power command required"))
+		}
+		output, err = store.IssueExecutorPower(ctx, policy, parsed.ExecutorPower.CommandID)
+	case "capacity.confirm_executor_power":
+		if parsed.ExecutorPower == nil || parsed.ExecutorPower.GrantID == "" || parsed.ExecutorPower.CommandID != "" {
+			return fail(fmt.Errorf("exact power grant required"))
+		}
+		output, err = store.ConfirmExecutorPower(ctx, policy, parsed.ExecutorPower.GrantID)
+	case "capacity.initialize_executor_activity", "capacity.record_executor_activity", "capacity.observe_executor_activity", "capacity.reserve_executor_stop", "capacity.prepare_executor_stop":
+		if parsed.ExecutorActivity == nil {
+			return fail(fmt.Errorf("executor activity input required"))
+		}
+		output, err = store.ExecutorActivity(ctx, policy, result.Operation, *parsed.ExecutorActivity)
 	case "capacity.grant_compensation":
 		output, err = store.IssueCompensation(ctx, policy, parsed.Compensation)
 	case "capacity.confirm_compensation":

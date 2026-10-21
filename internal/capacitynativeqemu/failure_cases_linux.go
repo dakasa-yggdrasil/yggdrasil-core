@@ -35,6 +35,17 @@ func validateOriginalFailureCase(record QualificationFailureRecord) error {
 		if record.Phase != "original_probe_held" || record.OriginalProbeRead == nil || record.OriginalProbeRead.ErrorClass != "none" || record.OriginalProbeRead.OriginalBodyBytes == 0 || !record.OriginalProbeRead.OriginalReturnedAt.Before(record.OriginalOperationDeadline) || record.OriginalWait.OriginalReturnedAt.Before(record.OriginalProbeRead.OriginalReturnedAt) || !record.OriginalWait.OriginalReturnedAt.Before(record.OriginalOperationDeadline) || j.LastSequence != 6 || j.LastState != "admitted" || !validSHA(j.EnrollmentSHA256) || !j.AdmissionPossible || !j.AdmissionWriteReturned {
 			return ErrOriginalUnknown
 		}
+	case "canonical_postloss_unprotected_failed_create_reissue", "canonical_postloss_protected_failed_create_reissue", "canonical_compensation_unprotected_failed_create", "canonical_compensation_protected_failed_create", "canonical_failed_floor_recovery", "failed_owner_after_enrollment", "compensation_unprotected_failed_create", "compensation_protected_failed_create", "source_live_failed_floor_recovery":
+		// A known source child exit is diagnostic-only. The original positive
+		// retirement still requires successful Withdraw/Wait and is unchanged.
+		if record.Phase != "original_probe_failed_owner_exit" || record.OriginalExitCode == nil || *record.OriginalExitCode != 1 || record.OriginalWait.ErrorClass != "original_owner_error" || !record.OriginalWait.OriginalReturnedAt.Before(record.OriginalOperationDeadline) || !record.OriginalOutputEOFAndClose.OriginalReturnedAt.Before(record.OriginalOperationDeadline) || !record.OriginalDiagnosticEOFAndClose.OriginalReturnedAt.Before(record.OriginalOperationDeadline) || record.OriginalOutputEOF == nil || !*record.OriginalOutputEOF || record.OriginalOutputCloseSucceeded == nil || !*record.OriginalOutputCloseSucceeded || record.OriginalDiagnosticEOF == nil || !*record.OriginalDiagnosticEOF || record.OriginalDiagnosticCloseSucceeded == nil || !*record.OriginalDiagnosticCloseSucceeded || j.LastSequence != 6 || j.LastState != "admitted" || !validSHA(j.EnrollmentSHA256) || !j.AdmissionPossible || !j.AdmissionWriteReturned || record.CensusAfter == nil || record.CensusAfter.SourceCommit != record.SourceCommit || !validSHA(record.CensusAfter.RawCensusSHA256) || record.CensusAfter.ObservedAt.Before(record.OriginalWait.OriginalReturnedAt) || record.CensusAfter.ObservedAt.Before(record.OriginalOutputEOFAndClose.OriginalReturnedAt) || record.CensusAfter.ObservedAt.Before(record.OriginalDiagnosticEOFAndClose.OriginalReturnedAt) || record.CensusAfter.ObservedAt.After(record.RecordedAt) {
+			return ErrOriginalUnknown
+		}
+		for _, process := range record.CensusAfter.Processes {
+			if process.PID == record.OriginalChild.PID && process.StartTicks == record.OriginalChild.StartTicks {
+				return ErrOriginalUnknown
+			}
+		}
 	case "admission_bind_cancelled_original":
 		if (record.Phase != "original_preownership_failure" && record.Phase != "original_provisioning_held") || !record.OriginalWait.OriginalReturnedAt.Before(record.OriginalProvisioningDeadline) || j.LastSequence != 5 || j.LastState != "admission_possible" || !validSHA(j.EnrollmentSHA256) || !j.AdmissionPossible || j.AdmissionWriteReturned {
 			return ErrOriginalUnknown

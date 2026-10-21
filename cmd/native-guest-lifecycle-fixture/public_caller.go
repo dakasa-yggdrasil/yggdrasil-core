@@ -10,6 +10,8 @@ import (
 	"io"
 	"net/http"
 	"path/filepath"
+	"regexp"
+	"strings"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
@@ -35,6 +37,12 @@ type originalPublicReturn struct {
 	BodySHA256            string    `json:"body_sha256"`
 	BodyBytes             int       `json:"body_bytes"`
 	OriginalContextFailed bool      `json:"original_context_failed"`
+	WorkflowStatus        string    `json:"workflow_status"`
+	WorkflowFailedStep    string    `json:"workflow_failed_step"`
+	WorkflowPredicate     string    `json:"workflow_predicate"`
+	WorkflowErrorClass    string    `json:"workflow_error_class"`
+	WorkflowErrorBytes    int       `json:"workflow_error_bytes"`
+	WorkflowErrorSHA256   string    `json:"workflow_error_sha256"`
 }
 
 func (f *fixture) originalPublic(ctx context.Context, method, path string, input, out any) (record originalPublicReturn, returnedErr error) {
@@ -42,6 +50,9 @@ func (f *fixture) originalPublic(ctx context.Context, method, path string, input
 	defer func() {
 		record.DriverReturnedAt = time.Now().UTC()
 		record.OriginalContextFailed = ctx.Err() != nil
+		if run, ok := out.(*model.WorkflowRunRecord); ok && returnedErr == nil {
+			record.projectOriginalWorkflowReturn(*run)
+		}
 		f.publicReturns = append(f.publicReturns, record)
 	}()
 	var body []byte
@@ -177,6 +188,12 @@ func (f *fixture) runOriginalPublicCaller(ctx context.Context) (runErr error) {
 		return err
 	}
 	runIDs = append(runIDs, burst.ID.String())
+	if q.CanonicalSourceCompensationCase(f.request.NativeCase) {
+		return f.finishOriginalCanonicalSourceCompensation(ctx, p, baseline, burst, runIDs, returns)
+	}
+	if q.SourceCompensationCase(f.request.NativeCase) {
+		return f.finishOriginalSourceCompensation(ctx, p, baseline, burst, runIDs, returns)
+	}
 	if !q.PositiveCase(f.request.NativeCase) && f.request.NativeCase != "held_ack_after_owned_original_deadline" {
 		return f.finishExpectedOriginalHold(ctx, p, baseline, burst, runIDs, returns)
 	}
@@ -243,4 +260,58 @@ func (f *fixture) actualLastUsefulProbeTime(ctx context.Context, slot int) (time
 		return at, q.ErrOriginalUnknown
 	}
 	return probe.OriginalNativeAfterReturnedAt, nil
+}
+
+// projectOriginalWorkflowReturn retains only the existing closed diagnostic fields.
+// One exact Source-owned hyphenated ID is accepted; arbitrary hyphenated IDs remain refused.
+func (record *originalPublicReturn) projectOriginalWorkflowReturn(run model.WorkflowRunRecord) {
+	switch run.Status {
+	case "pending", "running", "succeeded", "failed":
+		record.WorkflowStatus = run.Status
+	}
+	// Async dispatch can fail before any step result exists. Retain only
+	// closed class, byte count and hash of that actual top-level error.
+	if run.Error != "" {
+		record.WorkflowErrorBytes = len(run.Error)
+		record.WorkflowErrorSHA256 = capacity.BusinessCreationSHA256([]byte(run.Error))
+		record.WorkflowErrorClass = "other"
+		switch run.Error {
+		case "sql: no rows in result set":
+			record.WorkflowErrorClass = "sql_no_rows"
+		case "capacity execution is disabled":
+			record.WorkflowErrorClass = "capacity_disabled"
+		case "capacity intent conflict":
+			record.WorkflowErrorClass = "capacity_conflict"
+		case "capacity mutation authorization denied":
+			record.WorkflowErrorClass = "authorization"
+		}
+	}
+	if run.Result != nil {
+		for _, step := range run.Result.Steps {
+			if step.Status != "failed" || (step.ID != "original-native-qemu-create" && !regexp.MustCompile(`^[a-z0-9_]{1,96}$`).MatchString(step.ID)) {
+				continue
+			}
+			record.WorkflowFailedStep = step.ID
+			if predicate, ok := step.Metadata["original_guest_refusal_predicate"].(string); ok && regexp.MustCompile(`^(?:original-guest-step-[0-9]{2}|original-canonical-floor-next-output|original-canonical-floor-next-permission|original-canonical-floor-permission-gate|original-source-historical-confirm|original-source-historical-output|original-source-live-partial|original-source-live-partial-output|original-source-terminal|original-source-terminal-output|pg17-original-confirm-assertions|pg17-original-create-assertions|pg17-original-historical-assertions|pg17-original-terminal-assertions|pg17-original-workflow-confirm)$`).MatchString(predicate) {
+				record.WorkflowPredicate = predicate
+			}
+			if step.Error == "" {
+				break
+			}
+			record.WorkflowErrorBytes = len(step.Error)
+			record.WorkflowErrorSHA256 = capacity.BusinessCreationSHA256([]byte(step.Error))
+			record.WorkflowErrorClass = "other"
+			switch {
+			case strings.Contains(step.Error, "protected original Guest source step unavailable"):
+				record.WorkflowErrorClass = "original_guest_source_hold"
+			case strings.Contains(step.Error, "capacity intent conflict"):
+				record.WorkflowErrorClass = "capacity_conflict"
+			case strings.Contains(strings.ToLower(step.Error), "condition"):
+				record.WorkflowErrorClass = "condition"
+			case strings.Contains(strings.ToLower(step.Error), "authorization") || strings.Contains(strings.ToLower(step.Error), "forbidden"):
+				record.WorkflowErrorClass = "authorization"
+			}
+			break
+		}
+	}
 }

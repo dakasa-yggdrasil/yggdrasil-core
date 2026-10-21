@@ -94,7 +94,7 @@ func (s *Server) handleWorkflowRun(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	response, err := messagecontroller.RunWorkflow(s.withCapacityReleaseAuthorization(r.Context(), req, actor, r), s.rabbitmq, s.db, req)
+	response, err := messagecontroller.RunWorkflow(s.withExecutorActivityActor(s.withCapacityReleaseAuthorization(r.Context(), req, actor, r), actor), s.rabbitmq, s.db, req)
 	if err != nil {
 		writeMappedError(w, err)
 		return
@@ -177,7 +177,7 @@ func (s *Server) dispatchAsyncWorkflowRun(w http.ResponseWriter, r *http.Request
 		startedAt := time.Now().UTC()
 		_ = repository.MarkWorkflowRunRunning(bg, s.db, runID, startedAt)
 
-		response, runErr := messagecontroller.RunWorkflow(s.withCapacityReleaseAuthorization(bg, req, actor, r), s.rabbitmq, s.db, req)
+		response, runErr := messagecontroller.RunWorkflow(s.withExecutorActivityActor(s.withCapacityReleaseAuthorization(bg, req, actor, r), actor), s.rabbitmq, s.db, req)
 
 		status := "succeeded"
 		errMsg := ""

@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-15T21:01:44-03:00",
+  "generated_at": "2026-10-21T02:42:14-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 865,
-    ".json": 146,
-    ".py": 2,
-    ".sql": 65,
+    ".go": 995,
+    ".json": 148,
+    ".py": 3,
+    ".sql": 69,
     ".yaml": 10,
     ".yml": 25
   },
   "provenance": {
-    "commit": "c3ca4185af4b8a28c5ce8010a19dd9f6970d5e2d",
+    "commit": "cf2e1bbcf3b9be837bc8917dcc29410981cf1ca4",
     "dirty": true,
     "files": [
       {
@@ -48,7 +48,7 @@
       },
       {
         "path": "go.mod",
-        "sha256": "361a07f565cda4307e50288bc74f7683aaa5cf709c8e1785db9c5eaace179ac1"
+        "sha256": "54fd842f05970b55a8b07605246a3f70e4dfe27676a135233c8adcbbcfdb4f32"
       }
     ]
   },
@@ -59,33 +59,38 @@
   "top_dirs": [
     {
       "path": "controllers/httpapi",
-      "files": 189,
-      "kb": 2158
+      "files": 195,
+      "kb": 2174
     },
     {
       "path": "repository",
-      "files": 145,
-      "kb": 2246
+      "files": 174,
+      "kb": 2545
     },
     {
       "path": "controllers/message",
-      "files": 75,
-      "kb": 982
+      "files": 97,
+      "kb": 1228
     },
     {
       "path": "model",
-      "files": 71,
-      "kb": 412
+      "files": 74,
+      "kb": 417
     },
     {
       "path": "db/migrations",
-      "files": 64,
-      "kb": 170
+      "files": 68,
+      "kb": 177
     },
     {
       "path": "manifest",
-      "files": 62,
-      "kb": 386
+      "files": 64,
+      "kb": 392
+    },
+    {
+      "path": "internal/capacity",
+      "files": 56,
+      "kb": 955
     },
     {
       "path": "addons",
@@ -93,9 +98,9 @@
       "kb": 263
     },
     {
-      "path": "internal/capacity",
-      "files": 39,
-      "kb": 907
+      "path": "internal/capacitynativeqemu",
+      "files": 36,
+      "kb": 268
     },
     {
       "path": "docs/bootstrap/manifests/integrations",
@@ -111,11 +116,6 @@
       "path": "docs/bootstrap/seeds/integrations",
       "files": 20,
       "kb": 87
-    },
-    {
-      "path": "internal/externalidentity",
-      "files": 15,
-      "kb": 61
     }
   ],
   "top_files_by_size": [
@@ -174,7 +174,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 64,
+    "migrations": 68,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {
@@ -210,7 +210,7 @@
       "github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect",
       "github.com/cespare/xxhash/v2 v2.3.0 // indirect",
       "github.com/crewjam/saml v0.5.1",
-      "github.com/dakasa-yggdrasil/yggdrasil-sdk-go v0.9.0",
+      "github.com/dakasa-yggdrasil/yggdrasil-sdk-go v0.9.1-0.20261018141245-05f42ab80ed0",
       "github.com/davecgh/go-spew v1.1.1 // indirect",
       "github.com/emicklei/go-restful/v3 v3.12.2 // indirect",
       "github.com/fatih/color v1.13.0 // indirect",
@@ -281,7 +281,7 @@
       "golang.org/x/net v0.58.0 // indirect",
       "golang.org/x/oauth2 v0.36.0 // indirect",
       "golang.org/x/sync v0.22.0 // indirect",
-      "golang.org/x/sys v0.47.0 // indirect",
+      "golang.org/x/sys v0.47.0",
       "golang.org/x/term v0.45.0 // indirect",
       "golang.org/x/text v0.41.0 // indirect",
       "golang.org/x/time v0.9.0",

@@ -149,7 +149,7 @@ func validateCompensationDrain(ctx context.Context, tx *sql.Tx, namespace string
 		return fmt.Errorf("%w: failed floor cleanup cannot lose healthy baseline membership", ErrCapacityConflict)
 	}
 	var live, fresh, sameProfile int
-	if err := tx.QueryRowContext(ctx, `SELECT count(*),count(*) FILTER(WHERE (slot_record->>'observed_at')::timestamptz BETWEEN $5 AND $6),count(*) FILTER(WHERE profile_name=$7) FROM public.capacity_resource_slots WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND resource_id<>''`, namespace, p.Environment, p.Domain, p.Dimension, now.Add(-time.Duration(p.MaxEvidenceAgeSeconds)*time.Second), now.Add(5*time.Second), proof.Assessment.Snapshot.Profile).Scan(&live, &fresh, &sameProfile); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT count(*),count(*) FILTER(WHERE (slot_record->>'observed_at')::timestamptz BETWEEN $5 AND $6),count(*) FILTER(WHERE profile_name=$7) FROM public.capacity_resource_slots WHERE NOT (slot_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND resource_id<>''`, namespace, p.Environment, p.Domain, p.Dimension, now.Add(-time.Duration(p.MaxEvidenceAgeSeconds)*time.Second), now.Add(5*time.Second), proof.Assessment.Snapshot.Profile).Scan(&live, &fresh, &sameProfile); err != nil {
 		return err
 	}
 	if live != proof.Assessment.Snapshot.Units || fresh != live || sameProfile != live {
@@ -190,7 +190,7 @@ func (s CapacityStore) IssueCompensation(ctx context.Context, policy model.Manif
 			return ErrCapacityConflict
 		}
 		var registered int
-		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE integration_instance_id=$1 AND resource_id=$2`, b.IntegrationInstanceID, issue.FailedProof.ResourceID).Scan(&registered); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE (integration_instance_id=$1 AND resource_id=$2) OR (slot_record->>'authority_kind'='ec2_operator_adoption_v1' AND slot_record->'resource'->>'instance_id'=$2)`, b.IntegrationInstanceID, issue.FailedProof.ResourceID).Scan(&registered); err != nil {
 			return err
 		}
 		if registered != 0 {
@@ -257,7 +257,7 @@ func (s CapacityStore) IssueCompensation(ctx context.Context, policy model.Manif
 	return result, err
 }
 
-func redeemCompensation(ctx context.Context, tx *sql.Tx, record *capacityMutationRecord, p model.CapacityPolicySpec, now time.Time, request model.CapacityMutationRedeemRequest, response *model.CapacityMutationRedeemResponse) error {
+func redeemCompensation(s CapacityStore, ctx context.Context, tx *sql.Tx, record *capacityMutationRecord, p model.CapacityPolicySpec, now time.Time, request model.CapacityMutationRedeemRequest, response *model.CapacityMutationRedeemResponse) error {
 	g := record.Grant
 	if !record.Binding.CompensationEnabled || g.Capability != record.Binding.DestroyCapability || record.CompensationDrainProof == nil || !validCapacityExecutor(record.ExecutorID) {
 		return ErrCapacityConflict
@@ -273,7 +273,7 @@ func redeemCompensation(ctx context.Context, tx *sql.Tx, record *capacityMutatio
 	if parent.Grant.State != "compensating" || parent.Proof == nil || !validFailedCreationProof(p, parent, *parent.Proof, now) || parent.Proof.ResourceID != g.ExpectedResourceID || parent.Proof.ResourceCreatedAt != g.ExpectedResourceCreatedAt || !sameCompensationBinding(record.Binding, parent.Binding) {
 		return ErrCapacityConflict
 	}
-	if err := (CapacityStore{}).guestFailedCreateCleanupTx(ctx, tx, p, parent, *parent.Proof, now, g.GrantID); err != nil {
+	if err := s.guestFailedCreateCleanupTx(ctx, tx, p, parent, *parent.Proof, now, g.GrantID); err != nil {
 		return err
 	}
 	var ns string
@@ -347,7 +347,7 @@ func (s CapacityStore) ConfirmCompensation(ctx context.Context, policy model.Man
 			return err
 		}
 		var registered int
-		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE integration_instance_id=$1 AND resource_id=$2`, b.IntegrationInstanceID, g.ExpectedResourceID).Scan(&registered); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE (integration_instance_id=$1 AND resource_id=$2) OR (slot_record->>'authority_kind'='ec2_operator_adoption_v1' AND slot_record->'resource'->>'instance_id'=$2)`, b.IntegrationInstanceID, g.ExpectedResourceID).Scan(&registered); err != nil {
 			return err
 		}
 		if registered != 0 {

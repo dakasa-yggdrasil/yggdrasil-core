@@ -6,6 +6,7 @@ import (
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity/executorpower"
 	"math"
 	"strings"
 	"time"
@@ -15,6 +16,16 @@ import (
 
 // ValidatePolicy rejects ambiguous scope, invalid budgets and unsafe numeric inputs.
 func ValidatePolicy(p model.CapacityPolicySpec) error {
+	if b := p.ExecutorPowerBinding; b != nil {
+		if executorpower.ValidateBinding(*b) != nil || len(p.MutationBindings) > 0 || p.ExecutorActivityBinding == nil || (b.AdoptionWorkflow.Namespace == p.Workflow.Namespace && b.AdoptionWorkflow.Name == p.Workflow.Name) {
+			return fmt.Errorf("invalid executor power binding or adoption workflow")
+		}
+	}
+	if b := p.ExecutorActivityBinding; b != nil {
+		if b.Mode != "executor_activity_v1" || b.LeaseTTLSeconds < 5 || b.LeaseTTLSeconds > 300 || b.IdleAfterSeconds < 1 || b.IdleAfterSeconds > 86400 || b.MaxObservationAgeSeconds < 1 || b.MaxObservationAgeSeconds > b.LeaseTTLSeconds || b.MaxTasks < 1 || b.MaxTasks > 100000 {
+			return fmt.Errorf("invalid executor activity binding")
+		}
+	}
 	for label, value := range map[string]string{"environment": p.Environment, "domain": p.Domain, "dimension": p.Dimension, "target_identity": p.TargetIdentity, "owner": p.Owner} {
 		if strings.TrimSpace(value) == "" || len(value) > 256 {
 			return fmt.Errorf("capacity %s is required and bounded", label)

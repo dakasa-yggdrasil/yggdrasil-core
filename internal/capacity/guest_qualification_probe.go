@@ -11,10 +11,24 @@ import (
 	"time"
 )
 
-const qualificationProbeSchema = "original_qualification_serving_probe_v1"
+const qualificationProbeSchema = "original_qualification_serving_probe_v2"
 const qualificationProbePurpose = "same_original_admitted_writer_useful_echo"
 const qualificationEchoSchema = "original_qualification_writer_echo_v1"
 const qualificationEchoPrefix = "original-admitted-useful-echo:"
+
+type QualificationProbeNonce struct {
+	Schema             string                                `json:"schema"`
+	ChallengeID        string                                `json:"challenge_id"`
+	EnrollmentSHA256   string                                `json:"enrollment_sha256"`
+	Actor              model.CapacityGuestRetirementLifetime `json:"actor"`
+	Runtime            model.CapacityGuestRetirementLifetime `json:"runtime"`
+	Writer             model.CapacityGuestRetirementWriter   `json:"writer"`
+	NonceSHA256        string                                `json:"nonce_sha256"`
+	PreflightSHA256    string                                `json:"preflight_sha256"`
+	IssuedMonotonicNS  int64                                 `json:"issued_monotonic_ns"`
+	ExpiresMonotonicNS int64                                 `json:"expires_monotonic_ns"`
+	Signature          string                                `json:"signature"`
+}
 
 type QualificationProbeChallenge struct {
 	Schema           string                                `json:"schema"`
@@ -26,6 +40,7 @@ type QualificationProbeChallenge struct {
 	Runtime          model.CapacityGuestRetirementLifetime `json:"runtime"`
 	Writer           model.CapacityGuestRetirementWriter   `json:"writer"`
 	NonceSHA256      string                                `json:"nonce_sha256"`
+	GuestNonce       QualificationProbeNonce               `json:"guest_nonce"`
 	IssuedAt         time.Time                             `json:"issued_at"`
 	OriginalDeadline time.Time                             `json:"original_deadline"`
 }
@@ -87,10 +102,13 @@ func ValidateProbeReturn(request QualificationProbeRequest, receipt Qualificatio
 	if c.Schema != qualificationProbeSchema || c.Purpose != qualificationProbePurpose || !guestUUID(c.ChallengeID) || c.EnrollmentSHA256 != GuestRetirementSHA(enrollment) || c.Tuple != s.Tuple || c.Actor != s.Actor || c.Runtime != s.Runtime || len(s.Writers) != 1 || c.Writer != s.Writers[0] || c.Writer.ID != GuestQualificationWriter || !ValidDigest(c.NonceSHA256) || c.IssuedAt.IsZero() || c.IssuedAt.After(now) || c.OriginalDeadline.Sub(c.IssuedAt) > 5*time.Second || !c.OriginalDeadline.After(c.IssuedAt) || !now.Before(c.OriginalDeadline) || !guestQualificationSignature(s.CoreIntentPublicKey, request.Signature, c) {
 		return fmt.Errorf("authentic original qualification probe required")
 	}
-	if receipt.Schema != qualificationProbeSchema || receipt.ChallengeSHA256 != GuestRetirementSHA(c) || receipt.EnrollmentSHA256 != c.EnrollmentSHA256 || receipt.OriginalRegistrationSHA256 != registrationSHA || receipt.Actor != c.Actor || receipt.Runtime != c.Runtime || receipt.OriginalReadStartedAt.Before(c.IssuedAt) || receipt.OriginalRuntimeSocketCloseReturnedAt.Before(p.OriginalNativeAfterReturnedAt) || receipt.OriginalNativeAfterReturnedAt.Before(receipt.OriginalRuntimeSocketCloseReturnedAt) || receipt.OriginalNativeAfterReturnedAt.After(now) || !receipt.OriginalNativeAfterReturnedAt.Before(c.OriginalDeadline) || !GuestRetirementProtectedCensus(receipt.CensusBefore, enrollment, p.OriginalProbeStartedAt, true) || !GuestRetirementProtectedCensus(receipt.CensusAfter, enrollment, receipt.OriginalNativeAfterReturnedAt, true) || !reflect.DeepEqual(receipt.CensusBefore.Processes, receipt.CensusAfter.Processes) || receipt.CensusBefore.RawCensusSHA256 != receipt.CensusAfter.RawCensusSHA256 {
+	if ValidateQualificationProbeNonce(c, enrollment) != nil {
+		return fmt.Errorf("authentic guest nonce required")
+	}
+	if receipt.Schema != qualificationProbeSchema || receipt.ChallengeSHA256 != GuestRetirementSHA(c) || receipt.EnrollmentSHA256 != c.EnrollmentSHA256 || receipt.OriginalRegistrationSHA256 != registrationSHA || receipt.Actor != c.Actor || receipt.Runtime != c.Runtime || receipt.OriginalReadStartedAt.IsZero() || receipt.OriginalRuntimeSocketCloseReturnedAt.Before(p.OriginalNativeAfterReturnedAt) || receipt.OriginalNativeAfterReturnedAt.Before(receipt.OriginalRuntimeSocketCloseReturnedAt) || !GuestRetirementProtectedCensus(receipt.CensusBefore, enrollment, p.OriginalProbeStartedAt, true) || !GuestRetirementProtectedCensus(receipt.CensusAfter, enrollment, receipt.OriginalNativeAfterReturnedAt, true) || !reflect.DeepEqual(receipt.CensusBefore.Processes, receipt.CensusAfter.Processes) || receipt.CensusBefore.RawCensusSHA256 != receipt.CensusAfter.RawCensusSHA256 {
 		return fmt.Errorf("authentic original qualification probe required")
 	}
-	if p.Schema != qualificationProbeSchema || p.ChallengeSHA256 != GuestRetirementSHA(c) || p.Writer != c.Writer || p.InputPipe.Device == 0 || p.InputPipe.Inode == 0 || p.InputPipe.Mode&unix.S_IFMT != unix.S_IFIFO || p.OutputPipe.Device == 0 || p.OutputPipe.Inode == 0 || p.OutputPipe.Mode&unix.S_IFMT != unix.S_IFIFO || p.InputPipe == p.OutputPipe || !ValidDigest(p.OriginalWriteSHA256) || p.OriginalWriteBytes < 1 || p.OriginalWriteBytes > 65536 || p.OriginalProbeStartedAt.Before(receipt.CensusBefore.ObservedAt) || p.OriginalWriteReturnedAt.Before(p.OriginalProbeStartedAt) || p.OriginalDuplicateInputCloseReturnedAt.Before(p.OriginalWriteReturnedAt) || p.OriginalReadReturnedAt.Before(p.OriginalDuplicateInputCloseReturnedAt) || p.OriginalNativeAfterReturnedAt.Before(p.OriginalReadReturnedAt) || !p.OriginalNativeAfterReturnedAt.Before(c.OriginalDeadline) || e.Schema != qualificationEchoSchema || e.ChallengeSHA256 != GuestRetirementSHA(c) || e.Writer != c.Writer.Lifetime || e.Echo != qualificationEchoPrefix+c.NonceSHA256 || e.OriginalReadReturnedAt.Before(p.OriginalProbeStartedAt) || e.OriginalReadReturnedAt.After(p.OriginalReadReturnedAt) || p.OriginalReadSHA256 != GuestRetirementSHA(e) {
+	if p.Schema != qualificationProbeSchema || p.ChallengeSHA256 != GuestRetirementSHA(c) || p.Writer != c.Writer || p.InputPipe.Device == 0 || p.InputPipe.Inode == 0 || p.InputPipe.Mode&unix.S_IFMT != unix.S_IFIFO || p.OutputPipe.Device == 0 || p.OutputPipe.Inode == 0 || p.OutputPipe.Mode&unix.S_IFMT != unix.S_IFIFO || p.InputPipe == p.OutputPipe || !ValidDigest(p.OriginalWriteSHA256) || p.OriginalWriteBytes < 1 || p.OriginalWriteBytes > 65536 || p.OriginalProbeStartedAt.Before(receipt.CensusBefore.ObservedAt) || p.OriginalWriteReturnedAt.Before(p.OriginalProbeStartedAt) || p.OriginalDuplicateInputCloseReturnedAt.Before(p.OriginalWriteReturnedAt) || p.OriginalReadReturnedAt.Before(p.OriginalDuplicateInputCloseReturnedAt) || p.OriginalNativeAfterReturnedAt.Before(p.OriginalReadReturnedAt) || e.Schema != qualificationEchoSchema || e.ChallengeSHA256 != GuestRetirementSHA(c) || e.Writer != c.Writer.Lifetime || e.Echo != qualificationEchoPrefix+c.NonceSHA256 || e.OriginalReadReturnedAt.Before(p.OriginalProbeStartedAt) || e.OriginalReadReturnedAt.After(p.OriginalReadReturnedAt) || p.OriginalReadSHA256 != GuestRetirementSHA(e) {
 		return fmt.Errorf("authentic original qualification probe required")
 	}
 	signature := receipt.Signature

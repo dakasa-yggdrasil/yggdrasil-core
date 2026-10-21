@@ -8,7 +8,7 @@ import (
 	"time"
 )
 
-const qualificationProbeSchema = "original_qualification_serving_probe_v1"
+const qualificationProbeSchema = "original_qualification_serving_probe_v2"
 const qualificationProbePurpose = "same_original_admitted_writer_useful_echo"
 
 type QualificationProbeChallenge = capacity.QualificationProbeChallenge

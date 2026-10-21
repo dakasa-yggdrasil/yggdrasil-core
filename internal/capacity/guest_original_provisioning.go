@@ -69,6 +69,9 @@ func GuestOriginalCreateWitness(p model.CapacityPolicySpec, binding model.Capaci
 	if ValidateGuestRetirementBinding(p, &binding) != nil || !GuestOriginalProvisioningDeadlineMatches(pre, binding.ProfileManifest) || w.Schema != GuestCreateWitnessSchema || w.BindingName != member.Name || pre.BindingName != member.Name || w.PreregistrationID != pre.PreregistrationID || w.PreregistrationNonceSHA256 != pre.NonceSHA256 || !guestRetirementNativeTuple(p, binding, member, w.Tuple) || w.Tuple.Slot != pre.Slot || w.OriginalCreateGrantID != pre.OriginalCreateGrantID || !guestUUID(w.OriginalCreateAttemptID) || w.OriginalCreateRequestSHA256 != pre.OriginalCreateRequestSHA256 || !ValidDigest(w.OriginalCreateSettlementSHA256) || w.ProfileManifestSHA256 != pre.ProfileManifestSHA256 || w.BootstrapSHA256 != binding.ProfileManifest.BootstrapSHA256 || w.CoreSourceCommit != pre.CoreSourceCommit || w.CoreSourceCommit != binding.CoreAuthoritySourceCommit || !w.OriginalDeadline.Equal(pre.OriginalDeadline) || w.OriginalCreateReturnedAt.IsZero() || w.OriginalCreateReturnedAt.Before(pre.ReservedAt) || w.OriginalCreateReturnedAt.After(w.ObservedAt) || w.ObservedAt.After(now) || !w.ObservedAt.Before(w.OriginalDeadline) {
 		return fmt.Errorf("authentic original create witness required")
 	}
+	if w.SourceObservation != nil && !guestPostlossObservationAllowed(binding, w) {
+		return fmt.Errorf("source-only postloss witness refused")
+	}
 	signature := w.Signature
 	w.Signature = ""
 	if !guestRetirementVerify(corePublic, signature, w) {

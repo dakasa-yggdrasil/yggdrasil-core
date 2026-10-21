@@ -16,19 +16,7 @@ import (
 
 // This internal qualification protocol is deliberately outside shared9/3/16.
 // Production has no compiled native-QEMU source registry and cannot reserve it.
-type guestQualificationChallenge struct {
-	Schema           string                                `json:"schema"`
-	Purpose          string                                `json:"purpose"`
-	ChallengeID      string                                `json:"challenge_id"`
-	EnrollmentSHA256 string                                `json:"enrollment_sha256"`
-	Tuple            model.CapacityGuestNativeTuple        `json:"tuple"`
-	Actor            model.CapacityGuestRetirementLifetime `json:"actor"`
-	Runtime          model.CapacityGuestRetirementLifetime `json:"runtime"`
-	Writer           model.CapacityGuestRetirementWriter   `json:"writer"`
-	NonceSHA256      string                                `json:"nonce_sha256"`
-	IssuedAt         time.Time                             `json:"issued_at"`
-	OriginalDeadline time.Time                             `json:"original_deadline"`
-}
+type guestQualificationChallenge = capacity.QualificationProbeChallenge
 type guestQualificationRequest struct {
 	Challenge guestQualificationChallenge `json:"challenge"`
 	Signature string                      `json:"signature"`
@@ -48,9 +36,12 @@ func (s CapacityStore) ReserveGuestQualificationProbe(ctx context.Context, polic
 		if err != nil {
 			return err
 		}
+		if _, err = loadGuestInstallationTx(ctx, tx, stored, receipt); err != nil {
+			return err
+		}
 		c := request.Challenge
 		e := receipt.Enrollment.Statement
-		if p.GuestRetirementBinding == nil || !reflect.DeepEqual(stored.binding, *p.GuestRetirementBinding) || !capacity.GuestOriginalProfileEnabled(p, stored.binding, "native-qemu") || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.WorkflowID != s.WorkflowID.String() || stored.binding.CoreAuthoritySourceCommit != capacity.CurrentGuestCoreSource() || c.Schema != "original_qualification_serving_probe_v1" || c.Purpose != "same_original_admitted_writer_useful_echo" || !validCapacityExecutor(c.ChallengeID) || c.EnrollmentSHA256 != capacity.GuestRetirementSHA(receipt.Enrollment) || c.Tuple != e.Tuple || c.Actor != e.Actor || c.Runtime != e.Runtime || len(e.Writers) != 1 || c.Writer != e.Writers[0] || !capacity.ValidDigest(c.NonceSHA256) || c.IssuedAt.IsZero() || c.IssuedAt.After(now) || !now.Before(c.OriginalDeadline) || c.OriginalDeadline.Sub(c.IssuedAt) > 5*time.Second || !c.OriginalDeadline.After(c.IssuedAt) || current.LeaseExpiresAt == nil || c.OriginalDeadline.After(*current.LeaseExpiresAt) || capacity.GuestRetirementEnrollment(p, stored.binding, stored.member, receipt.Enrollment, now) != nil {
+		if p.GuestRetirementBinding == nil || !reflect.DeepEqual(stored.binding, *p.GuestRetirementBinding) || !capacity.GuestOriginalProfileEnabled(p, stored.binding, "native-qemu") || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.WorkflowID != s.WorkflowID.String() || stored.binding.CoreAuthoritySourceCommit != capacity.CurrentGuestCoreSource() || capacity.ValidateQualificationProbeNonce(c, receipt.Enrollment) != nil || c.Schema != "original_qualification_serving_probe_v2" || c.Purpose != "same_original_admitted_writer_useful_echo" || !validCapacityExecutor(c.ChallengeID) || c.EnrollmentSHA256 != capacity.GuestRetirementSHA(receipt.Enrollment) || c.Tuple != e.Tuple || c.Actor != e.Actor || c.Runtime != e.Runtime || len(e.Writers) != 1 || c.Writer != e.Writers[0] || !capacity.ValidDigest(c.NonceSHA256) || c.IssuedAt.IsZero() || c.IssuedAt.After(now) || !now.Before(c.OriginalDeadline) || c.OriginalDeadline.Sub(c.IssuedAt) > 5*time.Second || !c.OriginalDeadline.After(c.IssuedAt) || current.LeaseExpiresAt == nil || c.OriginalDeadline.After(*current.LeaseExpiresAt) || validateStoredQualificationEnrollment(p, stored, receipt.Enrollment) != nil {
 			return ErrCapacityConflict
 		}
 		deadline, exists := ctx.Deadline()
@@ -88,7 +79,7 @@ func (s CapacityStore) RecordGuestQualificationSourceReturn(ctx context.Context,
 	if json.Unmarshal(wire, &typed) != nil {
 		return ErrCapacityConflict
 	}
-	if ((stage == "native_read" || stage == "diagnostic_native_read") && typed.Schema != "core_independent_original_qemu_read_v1") || ((stage == "serving_probe" || stage == "diagnostic_serving_probe") && (typed.Schema != "original_qualification_serving_probe_v1" || !capacity.ValidDigest(typed.ChallengeSHA256))) || (stage == "source_refusal" && typed.Schema != "original_qualification_failed_owner_returns_v1") {
+	if ((stage == "native_read" || stage == "diagnostic_native_read") && typed.Schema != "core_independent_original_qemu_read_v1") || ((stage == "serving_probe" || stage == "diagnostic_serving_probe") && (typed.Schema != "original_qualification_serving_probe_v2" || !capacity.ValidDigest(typed.ChallengeSHA256))) || (stage == "source_refusal" && typed.Schema != "original_qualification_failed_owner_returns_v1") {
 		return ErrCapacityConflict
 	}
 	return s.guestStoredTransaction(ctx, preID, func(tx *sql.Tx, stored guestOriginalStored, now time.Time) error {
@@ -133,10 +124,13 @@ func (s CapacityStore) ReserveGuestQualificationDiagnosticProbe(ctx context.Cont
 		if err != nil {
 			return err
 		}
+		if _, err = loadGuestInstallationTx(ctx, tx, stored, receipt); err != nil {
+			return err
+		}
 		c := request.Challenge
 		e := receipt.Enrollment.Statement
 		deadline, ok := ctx.Deadline()
-		if !ok || c.OriginalDeadline.After(deadline) || ctx.Err() != nil || stored.binding.CoreAuthoritySourceCommit != capacity.CurrentGuestCoreSource() || stored.pre.WorkflowID != s.WorkflowID.String() || stored.binding.EvidenceClass != "native_qemu_qualification" || c.Schema != "original_qualification_serving_probe_v1" || c.Purpose != "same_original_admitted_writer_useful_echo" || !validCapacityExecutor(c.ChallengeID) || c.EnrollmentSHA256 != capacity.GuestRetirementSHA(receipt.Enrollment) || c.Tuple != e.Tuple || c.Actor != e.Actor || c.Runtime != e.Runtime || len(e.Writers) != 1 || c.Writer != e.Writers[0] || !capacity.ValidDigest(c.NonceSHA256) || c.IssuedAt.IsZero() || c.IssuedAt.After(now) || !now.Before(c.OriginalDeadline) || c.OriginalDeadline.Sub(c.IssuedAt) > 5*time.Second {
+		if !ok || c.OriginalDeadline.After(deadline) || ctx.Err() != nil || stored.binding.CoreAuthoritySourceCommit != capacity.CurrentGuestCoreSource() || stored.pre.WorkflowID != s.WorkflowID.String() || stored.binding.EvidenceClass != "native_qemu_qualification" || capacity.ValidateQualificationProbeNonce(c, receipt.Enrollment) != nil || c.Schema != "original_qualification_serving_probe_v2" || c.Purpose != "same_original_admitted_writer_useful_echo" || !validCapacityExecutor(c.ChallengeID) || c.EnrollmentSHA256 != capacity.GuestRetirementSHA(receipt.Enrollment) || c.Tuple != e.Tuple || c.Actor != e.Actor || c.Runtime != e.Runtime || len(e.Writers) != 1 || c.Writer != e.Writers[0] || !capacity.ValidDigest(c.NonceSHA256) || c.IssuedAt.IsZero() || c.IssuedAt.After(now) || !now.Before(c.OriginalDeadline) || c.OriginalDeadline.Sub(c.IssuedAt) > 5*time.Second {
 			return ErrCapacityConflict
 		}
 		public, e1 := base64.StdEncoding.DecodeString(e.CoreIntentPublicKey)
@@ -160,7 +154,7 @@ func (s CapacityStore) FinishGuestQualificationProbe(ctx context.Context, policy
 		OriginalRegistrationSHA256    string    `json:"original_registration_sha256"`
 		OriginalNativeAfterReturnedAt time.Time `json:"original_native_after_returned_at"`
 	}
-	if json.Unmarshal(wire, &header) != nil || header.Schema != "original_qualification_serving_probe_v1" || !capacity.ValidDigest(header.ChallengeSHA256) {
+	if json.Unmarshal(wire, &header) != nil || header.Schema != "original_qualification_serving_probe_v2" || !capacity.ValidDigest(header.ChallengeSHA256) {
 		return ErrCapacityConflict
 	}
 	return s.mutationTransaction(ctx, policy, false, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, _ model.CapacityIntent, now time.Time) error {
@@ -180,7 +174,7 @@ func (s CapacityStore) FinishGuestQualificationProbe(ctx context.Context, policy
 			return err
 		}
 		var request guestQualificationRequest
-		if capacity.DecodeGuestLifecycle(challengeWire, &request) != nil || header.OriginalNativeAfterReturnedAt.Before(request.Challenge.IssuedAt) || header.OriginalNativeAfterReturnedAt.After(now) || !now.Before(request.Challenge.OriginalDeadline) || ctx.Err() != nil {
+		if capacity.DecodeGuestLifecycle(challengeWire, &request) != nil || !now.Before(request.Challenge.OriginalDeadline) || ctx.Err() != nil {
 			return ErrCapacityConflict
 		}
 		var originalRequest capacity.QualificationProbeRequest
@@ -191,4 +185,12 @@ func (s CapacityStore) FinishGuestQualificationProbe(ctx context.Context, policy
 		_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_guest_qualification_native_source_returns(id,preregistration_id,native_stage,return_sha256,original_wire,original_record,recorded_at) VALUES($1,$2,'serving_probe',$3,$4,$5::jsonb,$6)`, uuid.New(), preID, capacity.BusinessCreationSHA256(wire), wire, string(wire), now)
 		return err
 	})
+}
+
+// validateStoredQualificationEnrollment checks immutable signed content only.
+// Callers MUST first load the admitted enrollment and its matching post-install
+// record, and independently enforce current policy, authority and lease. The
+// signed Guest timestamp is not evidence of freshness in the Core clock domain.
+func validateStoredQualificationEnrollment(p model.CapacityPolicySpec, stored guestOriginalStored, enrollment model.CapacityGuestRetirementEnrollment) error {
+	return capacity.GuestRetirementEnrollment(p, stored.binding, stored.member, enrollment, enrollment.Statement.IssuedAt)
 }

@@ -10,12 +10,19 @@ import (
 	"strings"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity/executorpower"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 )
 
 func ParseCapacityPolicySpec(raw json.RawMessage) (model.CapacityPolicySpec, error) {
 	var spec model.CapacityPolicySpec
+	if err := validateExecutorPowerBindingJSON(raw); err != nil {
+		return spec, err
+	}
+	if err := validateExecutorActivityBindingJSON(raw); err != nil {
+		return spec, err
+	}
 	if err := validateGuestRetirementPolicyJSON(raw); err != nil {
 		return spec, err
 	}
@@ -39,6 +46,64 @@ func ParseCapacityPolicySpec(raw json.RawMessage) (model.CapacityPolicySpec, err
 		return spec, fmt.Errorf("capacity policy must contain one JSON object")
 	}
 	return spec, nil
+}
+
+func validateExecutorActivityBindingJSON(raw []byte) error {
+	d := json.NewDecoder(bytes.NewReader(raw))
+	opening, err := d.Token()
+	if err != nil || opening != json.Delim('{') {
+		return fmt.Errorf("capacity policy object required")
+	}
+	seen := false
+	for d.More() {
+		token, err := d.Token()
+		name, ok := token.(string)
+		var value json.RawMessage
+		if err != nil || !ok || d.Decode(&value) != nil {
+			return fmt.Errorf("capacity policy member required")
+		}
+		if !strings.EqualFold(name, "executor_activity_binding") {
+			continue
+		}
+		var binding model.CapacityExecutorActivityBinding
+		if name != "executor_activity_binding" || seen || bytes.Equal(bytes.TrimSpace(value), []byte("null")) || capacity.DecodeNativeCapacity(value, &binding) != nil {
+			return fmt.Errorf("canonical nonnull executor activity binding required")
+		}
+		seen = true
+	}
+	if closing, err := d.Token(); err != nil || closing != json.Delim('}') || d.Decode(new(any)) != io.EOF {
+		return fmt.Errorf("one capacity policy object required")
+	}
+	return nil
+}
+
+func validateExecutorPowerBindingJSON(raw []byte) error {
+	d := json.NewDecoder(bytes.NewReader(raw))
+	opening, err := d.Token()
+	if err != nil || opening != json.Delim('{') {
+		return fmt.Errorf("capacity policy object required")
+	}
+	seen := false
+	for d.More() {
+		token, err := d.Token()
+		name, ok := token.(string)
+		var value json.RawMessage
+		if err != nil || !ok || d.Decode(&value) != nil {
+			return fmt.Errorf("capacity policy member required")
+		}
+		if !strings.EqualFold(name, "executor_power_binding") {
+			continue
+		}
+		var binding executorpower.Binding
+		if name != "executor_power_binding" || seen || bytes.Equal(bytes.TrimSpace(value), []byte("null")) || capacity.DecodeNativeCapacity(value, &binding) != nil {
+			return fmt.Errorf("canonical nonnull executor power binding required")
+		}
+		seen = true
+	}
+	if closing, err := d.Token(); err != nil || closing != json.Delim('}') || d.Decode(new(any)) != io.EOF {
+		return fmt.Errorf("one capacity policy object required")
+	}
+	return nil
 }
 
 func validateGuestRetirementPolicyJSON(raw []byte) error {

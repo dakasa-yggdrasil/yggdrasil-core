@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**49 decisions.**
+**50 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -59,3 +59,15 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0049](0049-create-release-recovery-authority-after-original-dual-returns.md) | Create release recovery authority after both original returns | Proposed | 2026-10-11 | Fixed native finalizer result and release-only subdecision |
 | [0050](0050-bind-guest-admission-and-retirement-to-original-native-returns.md) | Bind Guest admission and retirement to original native returns | Proposed | 2026-10-13 | Core original provisioning, Guest admission and protected retirement |
 | [0051](0051-keep-original-creator-admission-source-owned-and-durably-sealed.md) | Keep original creator admission source-owned and durably sealed | Proposed | 2026-10-13 | Core original creator lifecycle and persistent exclusions |
+| [0052](0052-gate-executor-stop-on-task-leases-and-closed-admission.md) | Gate executor stop on task leases and closed admission | Proposed | 2026-10-16 | Opt-in laboratory activity and power lifecycle |
+| [0053](0053-isolate-original-source-recovery-probes-from-production-phase-authority.md) | Isolate original Source recovery probes from production phase authority | Proposed | 2026-10-18 | Original Guest native qualification recovery |
+
+| [0054](0054-bind-failed-owner-compensation-to-redeemed-child.md) | Bind failed-owner compensation to its original redeemed cleanup child | Proposed | 2026-10-18 | nativequalification Source fixture |
+
+| [0055](0055-observe-uncertain-original-create-and-reissue-unused-cleanup-child.md) | Observe uncertain original create and reissue unused cleanup child | Proposed | 2026-10-18 | Qualification-only actual lost reply and fresh reissue |
+
+| [0056](0056-bind-recovery-owned-cleanup-to-current-lease-and-one-use-effects.md) | Bind recovery-owned cleanup to current lease and one-use effects | Proposed | 2026-10-19 | Qualification-only original failed-owner cleanup |
+
+| [0057](0057-require-original-local-installation-before-qualification.md) | Require original local installation before qualification | Proposed | 2026-10-21 | Core/Guest original provisioning |
+
+| [0058](0058-anchor-qualification-freshness-in-original-monotonic-owners.md) | Anchor qualification freshness in original monotonic owners | Proposed | 2026-10-21 | Original qualification nonce protocol |
