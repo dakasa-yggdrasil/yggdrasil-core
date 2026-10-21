@@ -1497,8 +1497,8 @@
     },
     "internal/capacity/mutations.go": {
       "build_constraint": "default",
-      "bytes": 18828,
-      "sha256": "05cc794577bb4130274e561e250e9647e8476d1f883094379ab7a3d96f338193"
+      "bytes": 18829,
+      "sha256": "35fa315d9ca01470a4735fd7c7b16a7490eefd445a70c6ec3894c9a34f697ebd"
     },
     "internal/capacity/native_admission.go": {
       "build_constraint": "default",
@@ -2843,7 +2843,7 @@
     "repository/capacity_mutations.go": {
       "build_constraint": "default",
       "bytes": 45117,
-      "sha256": "5bbe80ffa9959a4ea8dc6142939fafb3d5976aa44fde03ee3eafafa8eab3404b"
+      "sha256": "bbaf2794cdb72981bfafedb7b737b75d1613a945eb5fbe1787ac4fec0ccb2c79"
     },
     "repository/capacity_native_archive.go": {
       "build_constraint": "default",

@@ -53,7 +53,7 @@ func ValidateMutationBindings(p model.CapacityPolicySpec) error {
 		}
 		key := b.IntegrationInstanceID + "/" + b.ScopeChecksum + "/" + b.ProfileName
 		resource := strings.TrimPrefix(b.EnsureCapability, "ensure_")
-		if !mutationProjectionSchemaPattern.MatchString(resource) || (b.DestroyCapability != "destroy_"+resource && !(awsPair && awsProfile)) {
+		if !mutationProjectionSchemaPattern.MatchString(resource) || (b.DestroyCapability != "destroy_"+resource && (!awsPair || !awsProfile)) {
 			return fmt.Errorf("capacity mutation capabilities require one canonical resource pair")
 		}
 		if targets[key] || b.ProtectedSlots < 0 || b.MaxSlots < b.ProtectedSlots || b.MaxSlots > p.Ceiling || len(b.Slots) != b.MaxSlots {

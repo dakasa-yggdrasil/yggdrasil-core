@@ -852,7 +852,7 @@ func capacityMutationTypeIdentity(raw []byte, b model.CapacityMutationBinding) (
 		return "", "", ErrCapacityConflict
 	}
 	resource := strings.TrimPrefix(b.EnsureCapability, "ensure_")
-	if (!mutationAuxiliaryKindPattern.MatchString(spec.Provider) && !capacity.GuestOriginalNativeQEMUProviderEnabled(spec.Provider)) || !mutationAuxiliaryKindPattern.MatchString(resource) || len(spec.Provider)+len(resource)+1 > 64 || b.EnsureCapability != "ensure_"+resource || (b.DestroyCapability != "destroy_"+resource && !(spec.Provider == "aws" && capacity.AWSOriginalMutationPair(b))) || !slices.Contains(spec.Capabilities, "execute") {
+	if (!mutationAuxiliaryKindPattern.MatchString(spec.Provider) && !capacity.GuestOriginalNativeQEMUProviderEnabled(spec.Provider)) || !mutationAuxiliaryKindPattern.MatchString(resource) || len(spec.Provider)+len(resource)+1 > 64 || b.EnsureCapability != "ensure_"+resource || (b.DestroyCapability != "destroy_"+resource && (spec.Provider != "aws" || !capacity.AWSOriginalMutationPair(b))) || !slices.Contains(spec.Capabilities, "execute") {
 		return "", "", ErrCapacityConflict
 	}
 	// Transport capabilities are describe/read/execute, not resource actions.
