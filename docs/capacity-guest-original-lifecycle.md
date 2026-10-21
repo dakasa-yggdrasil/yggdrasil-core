@@ -24,6 +24,19 @@ receipt. A response lost after commitment permits the scoped receipt GET, never
 a second provisioning attempt. Provisioner and actor principals are separate;
 enrollment, intent, provisioning and observation signing purposes remain distinct.
 
+Production AWS/Hetzner provisioning uses the explicit profile authority V2 and
+result/installation V2 contract in [ADR-0065](adr/0065-transfer-original-provisioning-time-between-clock-domains.md).
+The fixed `original-profile-authority-v2` member/slot GET signs the exact original
+profile, preregistration and witness with its remaining PG deadline, requested
+boot ID and random request nonce digest. It accepts no caller duration or query.
+The Guest measures the entire exchange, including EOF/Close and verification,
+within five seconds on CLOCK_BOOTTIME and clips it to its original acquisition
+expiration. Bootstrap, placement, enrollment and installation wall chronology
+stay Guest-local; Core checks its current authority and original deadline in PG.
+The exact signed result clock is rejoined through immutable registration bytes,
+the separately hashed result, enrollment and receipt. Qualification V1 retains
+its original wire and checks; production does not fall back to V1.
+
 Retirement preserves the shared sixteen DTOs. The transport uses the literal
 `/v1/retirement` route for its sole signed POST and same-original GET. Two
 independent `before_start` challenges and fresh native snapshots precede start.

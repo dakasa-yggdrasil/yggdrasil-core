@@ -380,6 +380,9 @@ func (s CapacityStore) RegisterOriginalGuest(ctx context.Context, principal stri
 			return err
 		}
 		corePublic := registration.EnrollmentStatement.CoreIntentPublicKey
+		if registration.Result.ProductionClock != nil && !capacity.GuestProductionClockStoredMatches(registration.Result.ProductionClock, stored.pre, stored.witness, stored.binding.ProfileManifest) {
+			return ErrCapacityConflict
+		}
 		if !capacity.GuestLifecycleKeyMatches(intentKey, corePublic) || !capacity.GuestLifecycleKeyMatches(enrollmentKey, stored.binding.EnrollmentIssuerPublicKey) || bytes.Equal(intentKey, enrollmentKey) || capacity.GuestOriginalCreateWitness(p, stored.binding, stored.member, stored.pre, stored.witness, corePublic, now) != nil || capacity.GuestOriginalRegistration(p, stored.binding, stored.member, stored.witness, registration, now) != nil {
 			return ErrCapacityConflict
 		}
@@ -417,7 +420,7 @@ func loadGuestReceiptTx(ctx context.Context, tx *sql.Tx, id string) (model.Capac
 		return result, "", err
 	}
 	var original model.CapacityGuestOriginalProvisioningRegistration
-	if !consistent || capacity.DecodeGuestLifecycle(wire, &result) != nil || capacity.DecodeGuestLifecycle(registration, &original) != nil || result.PreregistrationID != id || capacity.GuestRetirementSHA(result.Enrollment) != digest || result.OriginalProvisioningSHA256 != capacity.GuestRetirementSHA(original) || result.Enrollment.Statement.OriginalNativeResultSHA256 != capacity.GuestRetirementSHA(original.Result) {
+	if !consistent || capacity.DecodeGuestLifecycle(wire, &result) != nil || capacity.DecodeGuestLifecycle(registration, &original) != nil || result.PreregistrationID != id || capacity.GuestRetirementSHA(result.Enrollment) != digest || result.OriginalProvisioningSHA256 != capacity.GuestRetirementSHA(original) || result.Enrollment.Statement.OriginalNativeResultSHA256 != capacity.GuestRetirementSHA(original.Result) || capacity.GuestRetirementSHA(result.Enrollment.Statement) != capacity.GuestRetirementSHA(original.EnrollmentStatement) {
 		return result, "", ErrCapacityConflict
 	}
 	return result, capacity.GuestRetirementSHA(original), nil

@@ -251,17 +251,58 @@ func (s *Server) serveCapacityGuestRequest(w http.ResponseWriter, r *http.Reques
 	}
 	if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, guestProvisioningBase+"/bindings/") {
 		parts := strings.Split(strings.TrimPrefix(r.URL.Path, guestProvisioningBase+"/bindings/"), "/")
-		if len(parts) != 4 || parts[1] != "slots" || (parts[3] != "original" && parts[3] != "original-profile") || parts[0] != p.binding {
+		if len(parts) != 4 || parts[1] != "slots" || (parts[3] != "original" && parts[3] != "original-profile" && parts[3] != "original-profile-authority-v2") || parts[0] != p.binding {
 			guestHTTPError(w, repository.ErrCapacityMutationAuthorization)
 			return
 		}
 		slot, err := strconv.Atoi(parts[2])
 		profile := r.Header.Values("X-Guest-Profile-Manifest-SHA256")
 		native := r.Header.Values("X-Guest-Native-Resource-ID")
-		profileRead := parts[3] == "original-profile"
+		profileRead := parts[3] == "original-profile" || parts[3] == "original-profile-authority-v2"
+		authorityRead := parts[3] == "original-profile-authority-v2"
 		profileHeaderValid := (!profileRead && len(profile) == 1 && profile[0] == p.profileSHA) || (profileRead && len(profile) == 0)
 		if err != nil || strconv.Itoa(slot) != parts[2] || slot != p.slot || !profileHeaderValid || len(native) != 1 || native[0] == "" || len(native[0]) > 128 || strings.ContainsAny(native[0], "/ \t\x00\r\n") {
 			guestHTTPError(w, repository.ErrCapacityMutationAuthorization)
+			return
+		}
+		if authorityRead {
+			boot, nonce := r.Header.Values("X-Guest-Boot-ID"), r.Header.Values("X-Guest-Profile-Request-Nonce-SHA256")
+			if len(boot) != 1 || len(nonce) != 1 || !guestProfileAuthorityV2Headers(boot[0], nonce[0]) || r.URL.ForceQuery || r.ContentLength != 0 || len(r.TransferEncoding) != 0 {
+				guestHTTPError(w, repository.ErrCapacityMutationAuthorization)
+				return
+			}
+			// Preserve the exact original ready/pending classification. This read
+			// does not grant authority; the signed result is built under fresh locks.
+			_, err := store.GuestOriginalProfile(ctx, p.base.principalID, p.binding, slot, p.profileSHA, native[0])
+			if errors.Is(err, repository.ErrGuestOriginalCreatePending) {
+				guestOriginalProfilePendingReply(w)
+				return
+			}
+			if err != nil {
+				guestHTTPError(w, err)
+				return
+			}
+			pre, err := store.GuestExactOriginalLookup(ctx, p.base.principalID, p.binding, slot, p.profileSHA, native[0])
+			if err != nil {
+				guestHTTPError(w, err)
+				return
+			}
+			binding, member, err := store.GuestProvisioningCallbackScope(ctx, p.base.principalID, pre.PreregistrationID)
+			if err != nil || !guestScopeMatches(p, binding, member) {
+				guestHTTPError(w, repository.ErrCapacityMutationAuthorization)
+				return
+			}
+			key, _, err := guestSigningKeys(ctx, s.db, binding)
+			if err != nil {
+				guestHTTPError(w, err)
+				return
+			}
+			authority, err := store.GuestOriginalProfileAuthorityV2(ctx, p.base.principalID, pre.PreregistrationID, p.binding, slot, p.profileSHA, native[0], boot[0], nonce[0], key)
+			if err != nil {
+				guestHTTPError(w, err)
+				return
+			}
+			guestCanonicalReply(w, authority)
 			return
 		}
 		if profileRead {
@@ -426,4 +467,9 @@ func guestOriginalProfilePendingReply(w http.ResponseWriter) {
 	w.Header().Set("Cache-Control", "no-store")
 	w.WriteHeader(http.StatusTooEarly)
 	_, _ = w.Write([]byte(`{"schema":"original_guest_profile_pending_v1","code":"original_create_pending"}`))
+}
+
+func guestProfileAuthorityV2Headers(boot, nonce string) bool {
+	id, err := uuid.Parse(boot)
+	return err == nil && id != uuid.Nil && id.String() == boot && capacity.ValidDigest(nonce)
 }

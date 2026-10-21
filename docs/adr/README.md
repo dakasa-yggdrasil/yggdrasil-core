@@ -83,3 +83,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0063](0063-own-fresh-notify-canaries-in-original-guest-sessions.md) | Own fresh Notify canaries in original Guest sessions | Proposed | 2026-10-21 | One-use original publication, native transaction read and separate clock owners |
 
 | [0064](0064-separate-production-retirement-clock-owners.md) | Separate production retirement clock owners | Proposed | 2026-10-21 | Original production retirement and causal native destroy readback |
+
+| [0065](0065-transfer-original-provisioning-time-between-clock-domains.md) | Transfer original provisioning time between clock domains | Proposed | 2026-10-21 | Signed current PG authority and original Guest boot-clock provisioning/installation |

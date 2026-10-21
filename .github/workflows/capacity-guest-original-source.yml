@@ -68,6 +68,21 @@ jobs:
           assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==4
           print(f'All {len(roots)} production V2 source roots passed; no native-positive chain claimed')
           PY
+      - name: Production provisioning V2 original clock and immutable wire contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./internal/capacity ./repository ./controllers/httpapi -run '^(TestGuestProductionClockV2(SameDomainAndSignature|ConservativeWholeExchange|InstallationOriginalReceipt|CrossImportAndExport|InstallationCrossImport|RegistrationKeepsOriginalProofs|EnrollmentMarkerIsIssuerSigned|RepositoryRefusesMissingAuthority)|TestCapacityGuestProfileAuthorityV2ClosedScope|TestGuestOriginalInstallationAuthentication)$' | tee original-provisioning-v2-source.jsonl
+          python3 - <<'PYCODE'
+          import json
+          rows=[json.loads(line) for line in open('original-provisioning-v2-source.jsonl') if line.strip()]
+          roots={'TestGuestProductionClockV2SameDomainAndSignature','TestGuestProductionClockV2ConservativeWholeExchange','TestGuestProductionClockV2InstallationOriginalReceipt','TestGuestProductionClockV2CrossImportAndExport','TestGuestProductionClockV2InstallationCrossImport','TestGuestProductionClockV2RegistrationKeepsOriginalProofs','TestGuestProductionClockV2EnrollmentMarkerIsIssuerSigned','TestGuestProductionClockV2RepositoryRefusesMissingAuthority','TestCapacityGuestProfileAuthorityV2ClosedScope','TestGuestOriginalInstallationAuthentication'}
+          passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
+          assert not any(r.get('Action') in ('fail','skip','build-fail') for r in rows)
+          assert not roots-passed, f'missing provisioning V2 roots: {sorted(roots-passed)}'
+          assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==3
+          print('Production provisioning clock source contracts only; no native/provider/SQL authority granted')
+          PYCODE
       - name: Stable canary maintenance cannot adopt a provider mutation lease
         shell: bash
         run: |
@@ -90,6 +105,7 @@ jobs:
             original-notify-canary-source.jsonl
             original-notify-maintenance-source.jsonl
             original-retirement-v2-source.jsonl
+            original-provisioning-v2-source.jsonl
   original-http-transport:
     runs-on: ubuntu-latest
     timeout-minutes: 10
@@ -228,6 +244,22 @@ jobs:
           assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==1
           print('Actual PostgreSQL absent-original FK refusals only; no manufactured enrollment or positive authority')
           PY
+      - name: Actual immutable registration and result hash domains in PostgreSQL
+        env:
+          REQUIRE_CAPACITY_GUEST_ORIGINAL_POSTGRES: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./repository -run '^TestGuestProductionClockV2PostgresImmutableReceiptHashDomains$' | tee "$RUNNER_TEMP/original-provisioning-v2-pg.jsonl"
+          python3 - <<'PYCODE'
+          import json,os,pathlib
+          rows=[json.loads(line) for line in (pathlib.Path(os.environ['RUNNER_TEMP'])/'original-provisioning-v2-pg.jsonl').read_text().splitlines() if line.strip()]
+          root='TestGuestProductionClockV2PostgresImmutableReceiptHashDomains'
+          assert not any(r.get('Action') in ('fail','skip','build-fail') for r in rows)
+          assert [r['Action'] for r in rows if r.get('Test')==root and r.get('Action') in ('run','pass')]==['run','pass']
+          assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==1
+          print('Expired rollback-only PostgreSQL storage/wire evidence; no signed enrollment or native authority')
+          PYCODE
       - name: Actual pure byte graph SOURCE cases
         if: ${{ !cancelled() }}
         run: go test -json -count=1 ./internal/capacity -run '^TestHostOriginalFactory' > "$RUNNER_TEMP/host-factory-pure.jsonl" 2> "$RUNNER_TEMP/host-factory-pure.stderr.log"
@@ -361,6 +393,7 @@ jobs:
             ${{ runner.temp }}/host-factory-migration.raw.log
             ${{ runner.temp }}/original-notify-canary-pg.jsonl
             ${{ runner.temp }}/original-retirement-v2-pg.jsonl
+            ${{ runner.temp }}/original-provisioning-v2-pg.jsonl
             ${{ runner.temp }}/host-factory-pure.jsonl
             ${{ runner.temp }}/host-factory-pure.stderr.log
             ${{ runner.temp }}/host-factory-build-owner.jsonl

@@ -105,13 +105,14 @@ type CapacityGuestOriginalProvisioningResult struct {
 		Census             CapacityGuestRetirementProtectedCensus `json:"census"`
 		OriginalReturnedAt time.Time                              `json:"original_returned_at"`
 	} `json:"writer_placements"`
-	WriterRosterSHA256           string                                 `json:"writer_roster_sha256"`
-	ProtectedCensus              CapacityGuestRetirementProtectedCensus `json:"protected_census"`
-	PlacementOperation           CapacityGuestRetirementOperationReturn `json:"placement_operation"`
-	BootstrapOriginalJournal     CapacityGuestJournal                   `json:"bootstrap_original_journal"`
-	BootstrapOriginalObservation CapacityGuestObservation               `json:"bootstrap_original_observation"`
-	AdmissionOpened              bool                                   `json:"admission_opened"`
-	OriginalReturnedAt           time.Time                              `json:"original_returned_at"`
+	WriterRosterSHA256           string                                      `json:"writer_roster_sha256"`
+	ProtectedCensus              CapacityGuestRetirementProtectedCensus      `json:"protected_census"`
+	PlacementOperation           CapacityGuestRetirementOperationReturn      `json:"placement_operation"`
+	BootstrapOriginalJournal     CapacityGuestJournal                        `json:"bootstrap_original_journal"`
+	BootstrapOriginalObservation CapacityGuestObservation                    `json:"bootstrap_original_observation"`
+	AdmissionOpened              bool                                        `json:"admission_opened"`
+	OriginalReturnedAt           time.Time                                   `json:"original_returned_at"`
+	ProductionClock              *CapacityGuestProductionProvisioningClockV2 `json:"production_clock,omitempty"`
 }
 
 // A producer callback is signed separately from the Guest observation and

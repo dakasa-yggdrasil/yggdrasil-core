@@ -16,6 +16,18 @@ Public health/root/metadata and login/recovery/setup surfaces retain their own d
 
 Guest principals bind role, member/binding name, slot and profile digest. Their provisioning/retirement handlers validate the current source-owned lifecycle, installation/probe authority and TLS requirements of each phase. Mutation callbacks bind adapter principal, integration, capability and original grant/settlement. Original host requests bind the exact root/owner/scope/stage/roles and dedicated headers, with TLS and canonical paths. The detailed method/path predicates, strict DTO decoders and current repositories remain authoritative; this document cannot mint any authority those owners refuse.
 
+The production `original-profile-authority-v2` member/slot GET adds canonical
+boot ID and request nonce digest headers to that existing private provisioning
+scope, with no profile selector, query, body or caller duration. The same current
+PG transaction signs the immutable preregistration, witness, profile and remaining
+original interval. The Guest conservatively transfers it to its original
+CLOCK_BOOTTIME acquisition and complete five-second exchange. Explicit result,
+enrollment-clock digest and installation V2 preserve separate Core PG and Guest
+chronology. Installation revalidates immutable registration bytes, the distinct
+nested result digest and the exact receipt/enrollment; this route introduces no
+new endpoint destination, credential grant, database schema or production
+registry approval. Qualification V1 retains its own unchanged contract.
+
 The production Guest Notify canary uses distinct signed nonce, publication and read routes over the same enrolled actor/runtime/application. One original Core five-second context covers publication and read. The read must share the publication's immutable executor, policy, epoch, enrollment and resource tuple, and cannot outlive its original deadline. Core persists nonce finalization and possible-send custody before the sole publication POST. A closed HTTP return and native SQL Rows.Close remain separate from the persistent application pipe's final retirement EOF/Close.
 
 ```mermaid

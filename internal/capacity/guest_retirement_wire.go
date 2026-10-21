@@ -19,11 +19,16 @@ func GuestRetirementEnrollment(p model.CapacityPolicySpec, binding model.Capacit
 		return refuse
 	}
 	s := e.Statement
+	markedClock := guestProductionEnrollmentClockMarked(binding, s)
+	production := binding.EvidenceClass == "owned_provisioner_original" && (s.Tuple.Provider == "aws" || s.Tuple.Provider == "hetzner")
+	if (s.OriginalProvisioningClockSHA256 != "" || production) && !markedClock {
+		return refuse
+	}
 	known := false
 	for _, approved := range binding.Members {
 		known = known || approved == member
 	}
-	if !known || s.Schema != GuestRetirementSchema || s.Purpose != GuestRetirementPurpose || s.BindingName != member.Name || s.SourceClass != binding.EvidenceClass || s.ProvisionerSourceCommit != binding.ProvisionerSourceCommit || !ValidDigest(s.OriginalNativeResultSHA256) || !guestRetirementNativeTuple(p, binding, member, s.Tuple) || !GuestRetirementLifetime(s.Actor) || !GuestRetirementLifetime(s.Runtime) || s.Actor.BootID != s.Runtime.BootID || s.Actor.SourceCommit != binding.GuestSourceCommit || s.Actor.BinarySHA256 != binding.ProfileManifest.ActorBinarySHA256 || s.Runtime.SourceCommit != binding.ProfileManifest.OwnerSourceCommit || s.Runtime.BinarySHA256 != binding.ProfileManifest.OwnerBinarySHA256 || s.CoreAuthoritySourceCommit != binding.CoreAuthoritySourceCommit || s.RuntimeCommandSHA256 != binding.ProfileManifest.RuntimeClientCommandSHA256 || s.PoweroffCommandSHA256 != binding.ProfileManifest.PoweroffCommandSHA256 || len(s.Writers) != len(binding.ProfileManifest.Writers) || GuestRetirementSHA(s.Writers) != s.WriterRosterSHA256 || s.IssuedAt.IsZero() || s.IssuedAt.After(now) || !guestRetirementPublicKey(s.ObservationPublicKey) || !guestRetirementPublicKey(s.CoreIntentPublicKey) || s.ObservationPublicKey == s.CoreIntentPublicKey {
+	if !known || s.Schema != GuestRetirementSchema || s.Purpose != GuestRetirementPurpose || s.BindingName != member.Name || s.SourceClass != binding.EvidenceClass || s.ProvisionerSourceCommit != binding.ProvisionerSourceCommit || !ValidDigest(s.OriginalNativeResultSHA256) || !guestRetirementNativeTuple(p, binding, member, s.Tuple) || !GuestRetirementLifetime(s.Actor) || !GuestRetirementLifetime(s.Runtime) || s.Actor.BootID != s.Runtime.BootID || s.Actor.SourceCommit != binding.GuestSourceCommit || s.Actor.BinarySHA256 != binding.ProfileManifest.ActorBinarySHA256 || s.Runtime.SourceCommit != binding.ProfileManifest.OwnerSourceCommit || s.Runtime.BinarySHA256 != binding.ProfileManifest.OwnerBinarySHA256 || s.CoreAuthoritySourceCommit != binding.CoreAuthoritySourceCommit || s.RuntimeCommandSHA256 != binding.ProfileManifest.RuntimeClientCommandSHA256 || s.PoweroffCommandSHA256 != binding.ProfileManifest.PoweroffCommandSHA256 || len(s.Writers) != len(binding.ProfileManifest.Writers) || GuestRetirementSHA(s.Writers) != s.WriterRosterSHA256 || s.IssuedAt.IsZero() || (!markedClock && s.IssuedAt.After(now)) || !guestRetirementPublicKey(s.ObservationPublicKey) || !guestRetirementPublicKey(s.CoreIntentPublicKey) || s.ObservationPublicKey == s.CoreIntentPublicKey {
 		return refuse
 	}
 	seenPID := map[int]bool{}

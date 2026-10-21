@@ -23,23 +23,24 @@ type CapacityGuestRetirementWriter struct {
 }
 
 type CapacityGuestRetirementEnrollmentStatement struct {
-	Schema                     string                          `json:"schema"`
-	Purpose                    string                          `json:"purpose"`
-	BindingName                string                          `json:"binding_name"`
-	SourceClass                string                          `json:"source_class"`
-	ProvisionerSourceCommit    string                          `json:"provisioner_source_commit"`
-	OriginalNativeResultSHA256 string                          `json:"original_native_result_sha256"`
-	Tuple                      CapacityGuestNativeTuple        `json:"tuple"`
-	Actor                      CapacityGuestRetirementLifetime `json:"actor"`
-	Runtime                    CapacityGuestRetirementLifetime `json:"runtime"`
-	Writers                    []CapacityGuestRetirementWriter `json:"writers"`
-	WriterRosterSHA256         string                          `json:"writer_roster_sha256"`
-	RuntimeCommandSHA256       string                          `json:"runtime_command_sha256"`
-	PoweroffCommandSHA256      string                          `json:"poweroff_command_sha256"`
-	ObservationPublicKey       string                          `json:"observation_public_key"`
-	CoreIntentPublicKey        string                          `json:"core_intent_public_key"`
-	CoreAuthoritySourceCommit  string                          `json:"core_authority_source_commit"`
-	IssuedAt                   time.Time                       `json:"issued_at"`
+	Schema                          string                          `json:"schema"`
+	Purpose                         string                          `json:"purpose"`
+	BindingName                     string                          `json:"binding_name"`
+	SourceClass                     string                          `json:"source_class"`
+	ProvisionerSourceCommit         string                          `json:"provisioner_source_commit"`
+	OriginalNativeResultSHA256      string                          `json:"original_native_result_sha256"`
+	Tuple                           CapacityGuestNativeTuple        `json:"tuple"`
+	Actor                           CapacityGuestRetirementLifetime `json:"actor"`
+	Runtime                         CapacityGuestRetirementLifetime `json:"runtime"`
+	Writers                         []CapacityGuestRetirementWriter `json:"writers"`
+	WriterRosterSHA256              string                          `json:"writer_roster_sha256"`
+	RuntimeCommandSHA256            string                          `json:"runtime_command_sha256"`
+	PoweroffCommandSHA256           string                          `json:"poweroff_command_sha256"`
+	ObservationPublicKey            string                          `json:"observation_public_key"`
+	CoreIntentPublicKey             string                          `json:"core_intent_public_key"`
+	CoreAuthoritySourceCommit       string                          `json:"core_authority_source_commit"`
+	IssuedAt                        time.Time                       `json:"issued_at"`
+	OriginalProvisioningClockSHA256 string                          `json:"original_provisioning_clock_sha256,omitempty"`
 }
 
 type CapacityGuestRetirementEnrollment struct {

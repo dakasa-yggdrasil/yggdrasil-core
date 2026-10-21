@@ -8,7 +8,6 @@ import (
 	"reflect"
 	"time"
 
-	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 )
@@ -85,7 +84,16 @@ func guestOriginalSourceCreateWitness(ctx context.Context, store repository.Capa
 
 func guestOriginalSourceInstallation(ctx context.Context, g model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, r model.CapacityGuestOriginalProvisioningReceipt, confirmation model.CapacityGuestOriginalInstallationConfirmation, readReturnedAt time.Time) error {
 	source, err := productionGuestSource(ctx)
-	if err != nil || !reflect.DeepEqual(source.grant, g) || !reflect.DeepEqual(source.pre, pre) || r.PreregistrationID != pre.PreregistrationID || r.OriginalProvisioningSHA256 != r.Enrollment.Statement.OriginalNativeResultSHA256 || capacity.GuestOriginalInstallation(pre, r, confirmation, source.supplier.p.GuestRetirementBinding.ProvisionerPublicKey, readReturnedAt) != nil {
+	if err != nil || source.supplier.p.GuestRetirementBinding == nil || source.supplier.guard(ctx) != nil {
+		return errOriginalGuestStep
+	}
+	principal := ""
+	for _, member := range source.supplier.p.GuestRetirementBinding.Members {
+		if member.Name == pre.BindingName && member.Slot == pre.Slot {
+			principal = member.ProvisionerClientPrincipal
+		}
+	}
+	if principal == "" || !reflect.DeepEqual(source.grant, g) || !reflect.DeepEqual(source.pre, pre) || r.PreregistrationID != pre.PreregistrationID || readReturnedAt.IsZero() || readReturnedAt.After(time.Now()) || source.supplier.store.ValidateGuestOriginalInstallationReceipt(ctx, principal, pre, r, confirmation) != nil {
 		return errOriginalGuestStep
 	}
 	source.receipt, source.installed = r, true
