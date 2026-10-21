@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 3c390ec97b8bf75680f680e7d7359d607b6f8a80
-verified_diff_sha256: 9806a68fab1743ca6a309cbef2678c62cd82e6245b97e182c3f8170148866db1
+verified_at_commit: 3a268e9e6caa11d059339402bda3f5edaefa139b
+verified_diff_sha256: cb41ed0c4ec07876b3b6886cc56dddf7cda1fb5550db9b92ada4312914fb1e4a
 reconciler_schema: 1
 verified_at: 2026-10-21
 by: Codex
@@ -239,3 +239,10 @@ Reviewed the complete original Core/Guest clock and caller chain, immutable nonc
 ## Scoped original-profile pending read
 
 Root independently reviewed the full original ready/pending read, locked policy/workflow/lease/source/member/grant joins, unique unresolved preregistration selection excluding old witnesses, exact canonical non-authoritative425 response and one bounded ready recheck. SQL failures, failed or foreign creates and expired authority do not become pending. The updated625-file census and exact published service checker passed. Previous owning Core Linux4144nodes passed atd2aa; author Darwin153nodes are content/source evidence. Current owning Linux and a genuine native PostgreSQL pending-to-witness authority roundtrip remain separately required. No native create, useful capacity, production approval or rollout is claimed by this source reconciliation.
+
+
+## Exact original provider compatibility
+
+Reviewed the original AWS callback principal exact operation, Hetzner0.3.2 supplier and V2 retirement catalog with its literal published source pin, and six exact native AWS action naming exceptions. Existing provider versions, current hard-fail validation, immutable caller budgets and default empty production registry remain enforced. Independent source peer covered the complete compatibility and owning workflow delta. The complete630-file source census and guarded service contract were reconciled and the exact clean published service checker passed. Author Darwin focused owning naming tests and a byte-exact portable gate harness passed; package build and Linux crosscompile do not claim Linux execution. New owning Linux source, PostgreSQL and native operational gates remain required. No actual elasticity, useful Guest, retirement or production rollout is claimed by this source publication.
+
+The released d8ed CLI generated this plan and both derived artifacts at the actual reviewed source head. All ten authentic context-input digests and original dirty provenance are retained. Reconciliation verification checks source provenance and peripheral write scope; it does not execute the required full tests or connectivity checks. The separate repository-hygiene command retains five pre-existing wrapper/workflow convention findings; the exact published service checker is a distinct successful check. Historical failed owners and evidence remain unchanged.

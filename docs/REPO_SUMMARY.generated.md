@@ -1,6 +1,6 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-21T09:28:03-03:00_
+_Generated from HEAD at: 2026-10-21T13:26:01-03:00_
 
 ## Languages
 
@@ -24,13 +24,13 @@ _Generated from HEAD at: 2026-10-21T09:28:03-03:00_
 
 ## Top Directories by File Count
 
-- controllers/httpapi: 198 files (2190.0 KB)
+- controllers/httpapi: 198 files (2192.1 KB)
 - repository: 197 files (2707.5 KB)
-- controllers/message: 109 files (1323.4 KB)
+- controllers/message: 109 files (1324.4 KB)
 - internal/capacity: 96 files (1195.7 KB)
 - model: 79 files (446.4 KB)
 - db/migrations: 69 files (181.8 KB)
-- manifest: 64 files (392.3 KB)
+- manifest: 64 files (394.2 KB)
 - addons: 45 files (270.1 KB)
 - internal/capacitynativeqemu: 37 files (272.0 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
