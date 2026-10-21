@@ -40,11 +40,26 @@ jobs:
           if roots-passed or skipped:raise SystemExit(f'Original provider source incomplete: missing={sorted(roots-passed)}, skips={skipped}')
           print(f'All {len(roots)} original provider source roots passed; no native qualification claimed')
           PY
+      - name: Original Notify canary source, clock domains and closed routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./internal/capacity -run '^TestGuest(Notify|OriginalHTTP(LateClose|OnlyClosed)|ProductionRegistry)' | tee original-notify-canary-source.jsonl
+          python3 - <<'PY'
+          import json
+          rows=[json.loads(line) for line in open('original-notify-canary-source.jsonl') if line.strip()]
+          roots={'TestGuestProductionRegistryExactContract','TestGuestProductionRegistryPinsIndependentHetznerSource','TestGuestProductionRegistryDigestDoesNotMutateOrApprove','TestGuestProductionRegistryPinsCanaryAndDeclarativeTopology','TestGuestNotifyOriginalNonceScopeAndClockDomains','TestGuestNotifyDeclarativeQueueIdentity','TestGuestOriginalHTTPLateCloseCannotRenewBudget','TestGuestOriginalHTTPOnlyClosedCanaryRoutes','TestGuestNotifyCanaryChallengeAndOriginalProcessEnvelope','TestGuestNotifyNativeBusinessJoinSeparatesSQLAndWire'}
+          passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
+          if roots-passed or any(r.get('Action')=='skip' for r in rows):raise SystemExit('Original Notify canary source roots missing or skipped')
+          print(f'All {len(roots)} original Notify canary source roots passed; no PostgreSQL/broker/native pass claimed')
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
           name: core-original-provider-source
-          path: original-provider-source.jsonl
+          path: |
+            original-provider-source.jsonl
+            original-notify-canary-source.jsonl
   original-http-transport:
     runs-on: ubuntu-latest
     timeout-minutes: 10
