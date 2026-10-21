@@ -134,3 +134,34 @@ func TestGuestProductionRegistryDigestDoesNotMutateOrApprove(t *testing.T) {
 		t.Fatal("computing digest or synthetic test contract granted compiled approval")
 	}
 }
+
+func TestGuestProductionRegistryPinsCanaryAndDeclarativeTopology(t *testing.T) {
+	p, b, _, source := guestProductionRegistryFixture(t)
+	p.Profiles[0].Provider = "aws"
+	p.MutationBindings[0].OriginalProviderSourceCommit = source
+	topology := &model.CapacityGuestNotifyCanaryTopology{Schema: "notify_guest_canary_topology_v1", Namespace: "dakasa-production", Binding: b.MutationBindingName, DefinitionsSHA256: strings.Repeat("a", 64), Queues: []model.CapacityGuestNotifyCanaryQueue{{Provider: "aws", Slot: 1, Name: guestNotifyQueueName(b.MutationBindingName, "aws", 1)}}}
+	b.ProfileManifest.NotifyCanaryTopology = topology
+	b.ProfileManifestSHA256 = GuestRetirementSHA(b.ProfileManifest)
+	p.GuestRetirementBinding = &b
+	p.GuestNotifyCanaryBinding = &model.CapacityGuestNotifyCanaryBinding{Mode: "original_guest_notify_canary_v1", Name: "unit-only", WriterID: b.ProfileManifest.Writers[0].ID, NotifySourceCommit: source, QuerySHA256: GuestNotifyBusinessQuerySHA256, RecipientSHA256: strings.Repeat("b", 64), RecipientCount: 2, Database: "unit-not-native", DatabaseOID: "1", SystemID: "2", TableOIDs: []string{"3", "4", "5", "6"}, MinimumPublicationIntervalSeconds: 10, MaximumPublicationsPerHour: 120, TopologySHA256: GuestRetirementSHA(topology)}
+	one := GuestProductionProfileContractSHA256(p, b, "aws")
+	if !ValidDigest(one) {
+		t.Fatal("source canary contract refused")
+	}
+	p.GuestNotifyCanaryBinding.RecipientSHA256 = strings.Repeat("c", 64)
+	two := GuestProductionProfileContractSHA256(p, b, "aws")
+	if !ValidDigest(two) || two == one {
+		t.Fatal("canary recipient authority escaped source profile digest")
+	}
+	topology.DefinitionsSHA256 = strings.Repeat("d", 64)
+	b.ProfileManifestSHA256 = GuestRetirementSHA(b.ProfileManifest)
+	p.GuestNotifyCanaryBinding.TopologySHA256 = GuestRetirementSHA(topology)
+	three := GuestProductionProfileContractSHA256(p, b, "aws")
+	if !ValidDigest(three) || three == two {
+		t.Fatal("declarative topology escaped source profile digest")
+	}
+	p.GuestNotifyCanaryBinding.TopologySHA256 = strings.Repeat("e", 64)
+	if GuestProductionProfileContractSHA256(p, b, "aws") != "" {
+		t.Fatal("different profile/config topology received a source contract")
+	}
+}

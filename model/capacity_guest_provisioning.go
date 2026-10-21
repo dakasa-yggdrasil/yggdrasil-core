@@ -27,6 +27,7 @@ type CapacityGuestProtectedProfileManifest struct {
 	RuntimeClientCommandSHA256        string                                   `json:"runtime_client_command_sha256"`
 	PoweroffCommandSHA256             string                                   `json:"poweroff_command_sha256"`
 	Writers                           []CapacityGuestProtectedWriterDefinition `json:"writers"`
+	NotifyCanaryTopology              *CapacityGuestNotifyCanaryTopology       `json:"notify_canary_topology,omitempty"`
 }
 
 // Reserved by the protected owning workflow BEFORE the original provider

@@ -77,6 +77,9 @@ func ValidatePolicy(p model.CapacityPolicySpec) error {
 			return err
 		}
 	}
+	if err := ValidateGuestNotifyCanaryBinding(p); err != nil {
+		return err
+	}
 	return ValidateBoundAssessmentBinding(p)
 }
 

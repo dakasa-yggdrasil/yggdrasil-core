@@ -34,6 +34,7 @@ type CapacityStore struct {
 	ExecutorActivityPrincipal string
 	guestOriginal             *guestOriginalProvisioningContext
 	guestRetirementOrigin     *guestOriginalProvisioningContext
+	guestNotifyOrigin         *guestOriginalProvisioningContext
 	hostOriginalClaim         *hostOriginalClaim
 	hostOriginalFactory       *hostOriginalFactoryScope
 	hostOriginalOrdinary      *hostOriginalOrdinaryFactory

@@ -70,6 +70,7 @@ var (
 		"capacity.admit_bound",
 		"capacity.provision_original_guest",
 		"capacity.qualify_original_guest_echo",
+		"capacity.qualify_original_guest_notify",
 		"capacity.retire_original_guest",
 		"capacity.finish_original_guest_retirement",
 	}

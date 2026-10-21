@@ -10,6 +10,7 @@ import (
 // CapacityPolicySpec is an operator-owned, provider-neutral capacity envelope.
 // Price records and validation references are declarations, not live stock receipts.
 type CapacityPolicySpec struct {
+	GuestNotifyCanaryBinding  *CapacityGuestNotifyCanaryBinding  `json:"guest_notify_canary_binding,omitempty"`
 	ExecutorPowerBinding      *executorpower.Binding             `json:"executor_power_binding,omitempty"`
 	Environment               string                             `json:"environment"`
 	Domain                    string                             `json:"domain"`

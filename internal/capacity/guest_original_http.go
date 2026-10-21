@@ -78,8 +78,21 @@ func (c *GuestOriginalHTTPClient) Original(ctx context.Context, method, path str
 	result.StartedAt = time.Now().UTC()
 	result.ResponseBodyScope = GuestOriginalBodyNoRead
 	result.RetainedPrefixSHA256 = BusinessCreationSHA256([]byte{})
-	defer func() { result.DriverReturnedAt = time.Now().UTC(); result.OriginalContextFailed = ctx.Err() != nil }()
-	allowed := method == http.MethodGet && path == "/v1/runtime-snapshot" || (method == http.MethodPost || method == http.MethodGet) && path == "/v1/retirement" || method == http.MethodGet && GuestOriginalNativeQEMUProviderEnabled("native-qemu") && ((path == "/v1/qualification-serving-probe" || path == "/v1/qualification-serving-probe-nonce") || path == "/v1/qualification-source-refusal")
+	if ctx == nil {
+		result.PreflightFailed = true
+		result.OriginalContextFailed = true
+		result.DriverReturnedAt = time.Now().UTC()
+		return result, ErrGuestOriginalTransport
+	}
+	originalDeadline, deadlinePresent := ctx.Deadline()
+	defer func() {
+		result.DriverReturnedAt = time.Now().UTC()
+		result.OriginalContextFailed = ctx.Err() != nil || !deadlinePresent || !result.DriverReturnedAt.Before(originalDeadline)
+		if result.OriginalContextFailed {
+			returnedError = errors.Join(returnedError, ErrGuestOriginalTransport, ctx.Err())
+		}
+	}()
+	allowed := method == http.MethodGet && path == GuestNotifyCanaryNoncePath || method == http.MethodPost && path == GuestNotifyCanaryPublicationPath || method == http.MethodGet && path == GuestNotifyCanaryPath || method == http.MethodGet && path == "/v1/runtime-snapshot" || (method == http.MethodPost || method == http.MethodGet) && path == "/v1/retirement" || method == http.MethodGet && GuestOriginalNativeQEMUProviderEnabled("native-qemu") && ((path == "/v1/qualification-serving-probe" || path == "/v1/qualification-serving-probe-nonce") || path == "/v1/qualification-source-refusal")
 	if c == nil || c.client == nil || !allowed || len(body) < 1 || len(body) > GuestBootstrapLimit || ctx.Err() != nil {
 		result.PreflightFailed = true
 		return result, ErrGuestOriginalTransport
@@ -125,7 +138,7 @@ func (c *GuestOriginalHTTPClient) Original(ctx context.Context, method, path str
 	} else if doErr == nil {
 		result.DoFailed = true
 	}
-	result.OriginalContextFailed = ctx.Err() != nil
+	result.OriginalContextFailed = ctx.Err() != nil || !deadlinePresent || !time.Now().Before(originalDeadline)
 	if result.DoFailed || result.ReadFailed || result.CloseFailed || result.OriginalContextFailed || result.Status != http.StatusOK {
 		return result, errors.Join(ErrGuestOriginalTransport, ctx.Err())
 	}

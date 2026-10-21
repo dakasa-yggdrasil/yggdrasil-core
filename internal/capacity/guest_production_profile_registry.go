@@ -21,7 +21,7 @@ type guestProductionProfileApproval struct {
 // a source commit cannot contain its own future Git SHA. Every other binding
 // field, including keys, transport references and member principals, is pinned.
 func GuestProductionProfileContractSHA256(p model.CapacityPolicySpec, binding model.CapacityGuestRetirementBinding, provider string) string {
-	if provider == "" || provider == "native-qemu" || binding.EvidenceClass != "owned_provisioner_original" || binding.ProfileManifest.CoverageClass != "complete_production_roster" || ValidateGuestRetirementBinding(p, &binding) != nil || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, binding) {
+	if provider == "" || provider == "native-qemu" || binding.EvidenceClass != "owned_provisioner_original" || binding.ProfileManifest.CoverageClass != "complete_production_roster" || ValidateGuestRetirementBinding(p, &binding) != nil || ValidateGuestNotifyCanaryBinding(p) != nil || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, binding) {
 		return ""
 	}
 	bindingMatches := 0
@@ -54,10 +54,11 @@ func GuestProductionProfileContractSHA256(p model.CapacityPolicySpec, binding mo
 	}
 	binding.CoreAuthoritySourceCommit = ""
 	return GuestRetirementSHA(struct {
-		Provider        string                               `json:"provider"`
-		GuestBinding    model.CapacityGuestRetirementBinding `json:"guest_binding"`
-		MutationBinding model.CapacityMutationBinding        `json:"mutation_binding"`
-	}{provider, binding, mutation})
+		Provider            string                                  `json:"provider"`
+		GuestBinding        model.CapacityGuestRetirementBinding    `json:"guest_binding"`
+		MutationBinding     model.CapacityMutationBinding           `json:"mutation_binding"`
+		NotifyCanaryBinding *model.CapacityGuestNotifyCanaryBinding `json:"notify_canary_binding,omitempty"`
+	}{provider, binding, mutation, p.GuestNotifyCanaryBinding})
 }
 
 func guestProductionProfileMatches(p model.CapacityPolicySpec, binding model.CapacityGuestRetirementBinding, provider, currentCoreSource string, approvals []guestProductionProfileApproval) bool {

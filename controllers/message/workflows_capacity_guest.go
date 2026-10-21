@@ -40,7 +40,7 @@ type guestOriginalStepInput struct {
 }
 
 func guestOriginalOperation(operation string) bool {
-	return operation == capacity.ProvisionOriginalGuestOperation || operation == capacity.RetireOriginalGuestOperation || operation == "capacity.qualify_original_guest_echo" || operation == "capacity.finish_original_guest_retirement"
+	return operation == repository.GuestNotifyCanaryOperation || operation == capacity.ProvisionOriginalGuestOperation || operation == capacity.RetireOriginalGuestOperation || operation == "capacity.qualify_original_guest_echo" || operation == "capacity.finish_original_guest_retirement"
 }
 
 func sourceGuestSecret(ctx context.Context, db *sql.DB, ref string) ([]byte, error) {
@@ -186,9 +186,11 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		return result
 	}
 	var sourceProvider guestOriginalProvider
-	ctx, sourceProvider, err = guestOriginalProviderInvocation(ctx, store, policy, wf, step, p, b, parsed)
-	if err != nil {
-		return fail("original-guest-step-02")
+	if result.Operation == capacity.ProvisionOriginalGuestOperation || capacity.GuestOriginalNativeQEMUProviderEnabled(provider) {
+		ctx, sourceProvider, err = guestOriginalProviderInvocation(ctx, store, policy, wf, step, p, b, parsed)
+		if err != nil {
+			return fail("original-guest-step-02")
+		}
 	}
 	key, err := sourceGuestSigningKey(ctx, db, p.GuestRetirementBinding.IntentSigningKeyRef)
 	if err != nil {
@@ -196,6 +198,12 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 	}
 	var output any
 	switch result.Operation {
+	case repository.GuestNotifyCanaryOperation:
+		store = store.WithOriginalGuestNotifyCanary(step, capacity.CurrentGuestCoreSource())
+		output, err = executeOriginalGuestNotifyProbe(ctx, db, store, policy, p, parsed, key)
+		if err != nil {
+			return fail("original-guest-notify-canary-held")
+		}
 	case "capacity.qualify_original_guest_echo", "capacity.finish_original_guest_retirement":
 		output, err = sourceGuestQualificationStep(ctx, store, policy, p, parsed, key, result.Operation)
 		if err != nil {
