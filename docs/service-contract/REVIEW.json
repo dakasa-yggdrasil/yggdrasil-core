@@ -1,11 +1,11 @@
 {
   "schema": "core_service_source_review_v1",
-  "accepted_at": "2026-10-21T11:26:13.783319+00:00",
-  "reviewer": "Codex root integration owner; independent of authoring subagent",
+  "accepted_at": "2026-10-21T12:28:03.429121+00:00",
+  "reviewer": "Codex root integration owner with independent A2 whole-delta source peer",
   "human_architecture_signoff_claimed": false,
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "2d2c2663e78d35fa58c95803f7674947ff25634c33a305eccc9b619f80560dc4",
-  "non_test_Go_sources": 625,
+  "source_inventory_sha256": "350731d0ab3d5918fc7e74b187757fa355d842dbd4ba5e17c81f89b87e987a9b",
+  "non_test_Go_sources": 630,
   "checker": {
     "private_repository": "dakasa-co/dakasa-commons",
     "publication_commit": "3ad45d29acd7fd730618959a43e31fd1eea24ddd",
@@ -37,7 +37,8 @@
     "Ordered action identity joins treat omitted empty receipt lists semantically while preserving signed raw payloads, exact nonempty IDs/order and duplicate refusal; legacy AWS/create/qualification validation remains separate",
     "Exact original Notify singleton root cgroup path is admitted only under the same complete production binding and validated Notify canary/topology; generic writer paths and qualification remain separate",
     "Independent original-profile GET uses the fixed authenticated Core route and principal-pinned digest, exactly one immutable original native witness, and rechecks current policy/workflow/lease/compiled approval in the original bounded transaction; caller profile selectors are refused",
-    "Root independently read the complete six-file original pending profile change, existing ready lookup/current transaction owners and exact sentinel discriminator: one current unresolved preregistration and original create grant, locked source/policy/workflow/lease/member joins, no witness/native authority in425, exact canonical non-cacheable response and one ready recheck without deadline renewal"
+    "Root independently read the complete six-file original pending profile change, existing ready lookup/current transaction owners and exact sentinel discriminator: one current unresolved preregistration and original create grant, locked source/policy/workflow/lease/member joins, no witness/native authority in425, exact canonical non-cacheable response and one ready recheck without deadline renewal",
+    "Root reviewed the complete production clock/registration/installation, HTTP and repository/factory delta; independent A2 reviewed all29 CODE and3 META postimages and actual callers. Original signed read carries current locked PG remaining interval into one Guest CLOCK_BOOTTIME owner, preserving5s whole exchange and420s original acquisition; V1 remains closed. Immutable registration, result, receipt and issuer statement retain separate authenticated hash domains; default registry stays empty and no DDL is added."
   ],
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
@@ -56,9 +57,10 @@
     "Actual production VM create/useful/drain/delete, native positive PostgreSQL authority chain and operational elasticity remain unqualified by this source acceptance",
     "Root fully read the exact cgroup and original-profile source/test/workflow/Proposed ADR diffs and current transaction/lookup/witness owners; source census regenerated at625",
     "Author focused Darwin cgroup five roots47 nodes and authenticated profile source three roots61 nodes passed; these do not supply native PostgreSQL or production qualification",
-    "Author focused Darwin153nodes passed; Root reviewed literal source and unchanged625production census. Owning native positive PostgreSQL pending-to-witness/old-settled scope remains separate and is not claimed by content tests or source review. Actual previous Core owning Linux4144nodes passed atd2aa, not attributed to this new source."
+    "Author focused Darwin153nodes passed; Root reviewed literal source and unchanged625production census. Owning native positive PostgreSQL pending-to-witness/old-settled scope remains separate and is not claimed by content tests or source review. Actual previous Core owning Linux4144nodes passed atd2aa, not attributed to this new source.",
+    "Whole-delta independent A2 source review receipt SHA256225f82040af06bfde2b281ddf58abad3fd84aa13435e8ad0779ccadad7d0a851 and independent A4 Guest37-file peer SHA2562ce4f8f9a0d6c89667ced994cd66f9070a9b0dc8f0c5e53a3622716ad122f914 report no concrete P1/P2. Author actual Darwin12roots166nodes and Guest20roots169nodes/crosscompiles are portable source evidence. Current owning Linux/race/PG execution and physical provisioning remain separately required."
   ],
   "production_deployment_or_native_pass_claimed": false,
-  "reviewed_source_head": "f117e4d63bbdf336ee67338edf58d38a359b3467",
-  "previous_accepted_inventory_sha256": "28a33bcefce3ad73070d04d5dcc82b0d2569ff1a080bf9ac06cec906f791f04f"
+  "reviewed_source_head": "4054404c9073aa98593de113c271c375484556bf",
+  "previous_accepted_inventory_sha256": "2d2c2663e78d35fa58c95803f7674947ff25634c33a305eccc9b619f80560dc4"
 }
