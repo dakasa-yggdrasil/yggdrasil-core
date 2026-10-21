@@ -38,6 +38,7 @@ type CapacityStore struct {
 	hostOriginalClaim         *hostOriginalClaim
 	hostOriginalFactory       *hostOriginalFactoryScope
 	hostOriginalOrdinary      *hostOriginalOrdinaryFactory
+	guestReconcile            *guestReconcileSource
 }
 
 // Assess persists a proposal, even in shadow mode. An outstanding generation
@@ -370,7 +371,7 @@ func validCapacityExecutor(id string) bool {
 
 func capacityProfileCurrent(p model.CapacityPolicySpec, decision model.CapacityDecision, now time.Time) bool {
 	for _, profile := range p.Profiles {
-		if profile.Name == decision.Profile && profile.MinUnits <= decision.Units && profile.MaxUnits >= decision.Units && profile.QuoteValidUntil.After(now) && profile.ValidationValidUntil.After(now) {
+		if profile.Name == decision.Profile && profile.MinUnits <= decision.Units && profile.MaxUnits >= decision.Units && capacity.ProfilePlanningCurrent(p, profile, now) {
 			return true
 		}
 	}
@@ -466,9 +467,19 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	if err = guardOriginalHostCapacityTx(ctx, tx, policy.Metadata.Namespace, p); err != nil {
 		return model.CapacityIntent{}, err
 	}
+	if s.guestReconcile != nil {
+		if err = s.guestReconcileSourceTx(ctx, tx, policy, p); err != nil {
+			return model.CapacityIntent{}, err
+		}
+	}
 	next, receipt, err := mutate(p, previous, now.UTC())
 	if err != nil {
 		return model.CapacityIntent{}, err
+	}
+	if s.guestReconcile != nil && previous != nil && next.Phase != previous.Phase && (next.Phase == "prepared" || next.Phase == "canary" || next.Phase == "drained" || next.Phase == "promoted") {
+		if err = s.guestReconcilePhaseTx(ctx, tx, policy, p, *previous, next, now.UTC()); err != nil {
+			return model.CapacityIntent{}, err
+		}
 	}
 	if err = s.guardGuestNotifyPhaseTx(ctx, tx, policy, p, previous, next, now.UTC()); err != nil {
 		return model.CapacityIntent{}, err
@@ -529,6 +540,9 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	if err != nil {
 		return model.CapacityIntent{}, err
 	}
+	if s.guestReconcile != nil && !guestReconcileLive(ctx) {
+		return model.CapacityIntent{}, ErrCapacityLease
+	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_intents (namespace, environment, domain, dimension, intent, updated_at)
 		VALUES ($1,$2,$3,$4,$5::jsonb,$6) ON CONFLICT (namespace,environment,domain,dimension)
 		DO UPDATE SET intent=EXCLUDED.intent, updated_at=EXCLUDED.updated_at`, next.Namespace, next.Environment, next.Domain, next.Dimension, data, next.UpdatedAt); err != nil {
@@ -544,6 +558,9 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 	}
 	if err = tx.Commit(); err != nil {
 		return model.CapacityIntent{}, err
+	}
+	if s.guestReconcile != nil && !guestReconcileLive(ctx) {
+		return model.CapacityIntent{}, ErrCapacityLease
 	}
 	if s.hostOriginalClaim != nil {
 		s.hostOriginalClaim.committed = true

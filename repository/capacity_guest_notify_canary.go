@@ -33,7 +33,8 @@ func (s CapacityStore) guestNotifyStoredTx(ctx context.Context, tx *sql.Tx, poli
 		return stored, empty, err
 	}
 	origin := s.guestNotifyOrigin
-	if origin == nil || origin.source != capacity.CurrentGuestCoreSource() || origin.source != stored.binding.CoreAuthoritySourceCommit || origin.step.Use.Kind != "yggdrasil" || (origin.step.Use.Operation != GuestNotifyCanaryOperation && origin.step.Use.Operation != GuestNotifyMaintenanceOperation && origin.step.Use.Operation != capacity.RetireOriginalGuestOperation && origin.step.Use.Operation != "capacity.finish_original_guest_retirement") || origin.step.TimeoutSeconds < 1 || origin.step.TimeoutSeconds > 86400 || origin.step.Retry.MaxAttempts > 1 || origin.step.ForEach != nil || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.WorkflowID != s.WorkflowID.String() || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.binding) || p.GuestNotifyCanaryBinding == nil || capacity.ValidateGuestNotifyCanaryBinding(p) != nil {
+	reconcile := origin != nil && origin.step.Use.Operation == capacity.CompleteOriginalGuestOperation && s.guestReconcile != nil && reflect.DeepEqual(origin.step, s.guestReconcile.step) && s.guestReconcileSourceTx(ctx, tx, policy, p) == nil
+	if origin == nil || origin.source != capacity.CurrentGuestCoreSource() || origin.source != stored.binding.CoreAuthoritySourceCommit || origin.step.Use.Kind != "yggdrasil" || (!reconcile && origin.step.Use.Operation != GuestNotifyCanaryOperation && origin.step.Use.Operation != GuestNotifyMaintenanceOperation && origin.step.Use.Operation != capacity.RetireOriginalGuestOperation && origin.step.Use.Operation != "capacity.finish_original_guest_retirement") || origin.step.TimeoutSeconds < 1 || origin.step.TimeoutSeconds > 86400 || origin.step.Retry.MaxAttempts > 1 || origin.step.ForEach != nil || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.WorkflowID != s.WorkflowID.String() || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.binding) || p.GuestNotifyCanaryBinding == nil || capacity.ValidateGuestNotifyCanaryBinding(p) != nil {
 		return stored, empty, ErrCapacityConflict
 	}
 	if err = loadGuestWitnessTx(ctx, tx, &stored); err != nil {
@@ -97,7 +98,8 @@ func (s CapacityStore) IssueGuestNotifyCanaryRead(ctx context.Context, policy mo
 func (s CapacityStore) issueGuestNotifyCanary(ctx context.Context, policy model.Manifest, generation, fence int64, owner, preID, usage, recordID string, key ed25519.PrivateKey) (model.CapacityGuestNotifyCanaryChallenge, error) {
 	var result model.CapacityGuestNotifyCanaryChallenge
 	err := s.guestNotifyTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
-		if s.guestNotifyOrigin == nil || current.RecoveryOnly || !capacity.GuestNotifyCanaryUsage(usage) || (usage == "steady_useful_membership") != (s.guestNotifyOrigin.step.Use.Operation == GuestNotifyMaintenanceOperation) || s.guestNotifyOrigin.step.Use.Operation != GuestNotifyMaintenanceOperation && !capacityProfileCurrent(p, current.Decision, now) {
+		maintenance := s.guestNotifyMaintenanceOrigin()
+		if s.guestNotifyOrigin == nil || current.RecoveryOnly || !capacity.GuestNotifyCanaryUsage(usage) || (usage == "steady_useful_membership") != maintenance || !maintenance && !capacityProfileCurrent(p, current.Decision, now) {
 			return ErrCapacityConflict
 		}
 		stored, receipt, err := s.guestNotifyStoredTx(ctx, tx, policy, p, preID)
@@ -108,7 +110,7 @@ func (s CapacityStore) issueGuestNotifyCanary(ctx context.Context, policy model.
 			return ErrCapacityConflict
 		}
 		limit, ok := ctx.Deadline()
-		if !ok || ctx.Err() != nil || current.LeaseExpiresAt == nil && s.guestNotifyOrigin.step.Use.Operation != GuestNotifyMaintenanceOperation {
+		if !ok || ctx.Err() != nil || current.LeaseExpiresAt == nil && !maintenance {
 			return ErrCapacityConflict
 		}
 		id := uuid.NewString()

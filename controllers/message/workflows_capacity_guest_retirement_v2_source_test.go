@@ -60,8 +60,8 @@ func TestOriginalRetirementV2RequiresExactProviderOwnedCatalog(t *testing.T) {
 	if json.Unmarshal(raw, &original) != nil {
 		t.Fatal("owning source catalog malformed")
 	}
-	for _, version := range []string{"0.3.0", "0.3.2"} {
-		for _, kind := range []string{"exact", "old_create_only", "future_version", "missing_destroy", "missing_retirement", "not_idempotent", "missing_native_default", "foreign_source", "wrong_version_source", "duplicate_retirement"} {
+	for _, version := range []string{"0.3.0", "0.3.2", "0.3.3", "0.3.4"} {
+		for _, kind := range []string{"exact", "old_create_only", "future_version", "missing_destroy", "missing_retirement", "not_idempotent", "missing_native_default", "foreign_source", "wrong_version_source", "h033_source_for_legacy", "legacy_source_for_h033", "h034_source_for_h033", "h033_source_for_h034", "h034_source_for_legacy", "legacy_source_for_h034", "unknown_next_version", "duplicate_retirement"} {
 			t.Run(version+"/"+kind, func(t *testing.T) {
 				ts, err := manifest.ParseIntegrationTypeSpec(original.Spec)
 				if err != nil {
@@ -71,6 +71,10 @@ func TestOriginalRetirementV2RequiresExactProviderOwnedCatalog(t *testing.T) {
 				source := originalHetznerRetirementV3Source
 				if version == "0.3.2" {
 					source = originalHetznerRetirementV032Source
+				} else if version == "0.3.3" {
+					source = originalHetznerRetirementV033Source
+				} else if version == "0.3.4" {
+					source = originalHetznerRetirementV034Source
 				}
 				switch kind {
 				case "old_create_only":
@@ -85,6 +89,26 @@ func TestOriginalRetirementV2RequiresExactProviderOwnedCatalog(t *testing.T) {
 					} else {
 						source = originalHetznerRetirementV032Source
 					}
+				case "h033_source_for_legacy":
+					ts.Adapter.Version = "0.3.2"
+					source = originalHetznerRetirementV033Source
+				case "legacy_source_for_h033":
+					ts.Adapter.Version = "0.3.3"
+					source = originalHetznerRetirementV032Source
+				case "h034_source_for_h033":
+					ts.Adapter.Version = "0.3.3"
+					source = originalHetznerRetirementV034Source
+				case "h033_source_for_h034":
+					ts.Adapter.Version = "0.3.4"
+					source = originalHetznerRetirementV033Source
+				case "h034_source_for_legacy":
+					ts.Adapter.Version = "0.3.2"
+					source = originalHetznerRetirementV034Source
+				case "legacy_source_for_h034":
+					ts.Adapter.Version = "0.3.4"
+					source = originalHetznerRetirementV032Source
+				case "unknown_next_version":
+					ts.Adapter.Version = "0.3.5"
 				case "missing_destroy":
 					for n, a := range ts.ActionCatalog {
 						if a.Name == "destroy_server" {

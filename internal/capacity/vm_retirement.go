@@ -92,7 +92,7 @@ func VMRetirementProof(p model.CapacityPolicySpec, b model.CapacityMutationBindi
 
 func vmRetirementExposureBound(p model.CapacityPolicySpec, original model.CapacityMutationReceipt, observed model.CapacityVMRetirementObservation, created, start, end time.Time) bool {
 	x := observed.BillingExposure
-	if x == nil || x.Basis != "profile_admission_ceiling_not_invoice" || x.Currency != p.Currency || x.WindowStart != observed.CreatedAt || len(x.Resources) != len(observed.AuxiliaryResources)+1 || len(x.Resources) > 17 || x.ExcludedCosts == nil || len(x.ExcludedCosts) == 0 || len(x.ExcludedCosts) > 32 || x.StartedHoursUpperBound < 1 || x.CalendarMonthsUpperBound < 1 || x.GrossHourlyCeilingMicros < 0 || x.GrossMonthlyCeilingMicros < 0 || x.HourlyCeilingTotalMicros < 0 || x.MonthlyCapCeilingTotalMicros < 0 || x.GrossCeilingMicrosUpperBound < 0 {
+	if x == nil || x.Basis != "profile_admission_ceiling_not_invoice" || x.Currency != NativeBillingCurrency(p) || x.WindowStart != observed.CreatedAt || len(x.Resources) != len(observed.AuxiliaryResources)+1 || len(x.Resources) > 17 || x.ExcludedCosts == nil || len(x.ExcludedCosts) == 0 || len(x.ExcludedCosts) > 32 || x.StartedHoursUpperBound < 1 || x.CalendarMonthsUpperBound < 1 || x.GrossHourlyCeilingMicros < 0 || x.GrossMonthlyCeilingMicros < 0 || x.HourlyCeilingTotalMicros < 0 || x.MonthlyCapCeilingTotalMicros < 0 || x.GrossCeilingMicrosUpperBound < 0 {
 		return false
 	}
 	windowEnd, err := time.Parse(time.RFC3339Nano, x.WindowEndUpperBound)

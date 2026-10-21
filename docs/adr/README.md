@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**63 decisions.**
+**65 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -85,3 +85,7 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0064](0064-separate-production-retirement-clock-owners.md) | Separate production retirement clock owners | Proposed | 2026-10-21 | Original production retirement and causal native destroy readback |
 
 | [0065](0065-transfer-original-provisioning-time-between-clock-domains.md) | Transfer original provisioning time between clock domains | Proposed | 2026-10-21 | Signed current PG authority and original Guest boot-clock provisioning/installation |
+
+| [0066](0066-reconcile-original-notify-guests-through-the-protected-workflow.md) | Reconcile original Notify Guests through the protected workflow | Proposed | 2026-10-21 | Exact scheduled original Guest graph, useful membership and unchanged original deadlines |
+
+| [0067](0067-separate-administrative-capacity-costs-from-native-quotes.md) | Separate administrative capacity costs from native quotes | Proposed | 2026-10-21 | Finite reviewed planning assumptions, unchanged native quote/billing currency and legacy dates |

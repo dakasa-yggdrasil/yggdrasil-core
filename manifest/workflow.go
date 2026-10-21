@@ -69,6 +69,8 @@ var (
 		"capacity.execute_bound",
 		"capacity.admit_bound",
 		"capacity.provision_original_guest",
+		"capacity.plan_original_guest",
+		"capacity.complete_original_guest",
 		"capacity.qualify_original_guest_echo",
 		"capacity.qualify_original_guest_notify",
 		"capacity.refresh_original_guest_notify",

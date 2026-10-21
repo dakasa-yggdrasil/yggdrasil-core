@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 )
@@ -189,6 +190,23 @@ func ClaimCapacityDispatch(ctx context.Context, db *sql.DB, realm, environment s
 	job, err := readCapacityDispatchJob(ctx, tx, id, false)
 	if err != nil || checkCapacityDispatchOriginal(ctx, tx, job) != nil {
 		return CapacityDispatchJob{}, ErrCapacityDispatchClaim
+	}
+	// Only the distinct, valid Guest source protocol receives the existing
+	// repository's maximum five-minute original claim. HPA claims stay90s.
+	// Authorization and compiled-profile admission still precede StartPossible.
+	var policyRaw []byte
+	if err = tx.QueryRowContext(ctx, `SELECT spec FROM public.manifests WHERE id=$1 AND checksum=$2 AND active FOR SHARE`, job.Policy.ID, job.Policy.Checksum).Scan(&policyRaw); err != nil {
+		return CapacityDispatchJob{}, ErrCapacityDispatchClaim
+	}
+	var policy model.CapacityPolicySpec
+	if json.Unmarshal(policyRaw, &policy) != nil {
+		return CapacityDispatchJob{}, ErrCapacityDispatchClaim
+	}
+	if policy.GuestNotifyReconcileBinding != nil {
+		if capacity.ValidateGuestNotifyReconcileBinding(policy) != nil {
+			return CapacityDispatchJob{}, ErrCapacityDispatchClaim
+		}
+		lease = 300 * time.Second
 	}
 	if _, err = tx.ExecContext(ctx, `UPDATE public.capacity_dispatch_jobs SET lease_owner=$2,fencing_token=fencing_token+1,lease_expires_at=clock_timestamp()+($3 * interval '1 microsecond'),updated_at=clock_timestamp() WHERE id=$1 AND fencing_token < 9007199254740991`, id, owner, lease.Microseconds()); err != nil {
 		return CapacityDispatchJob{}, ErrCapacityDispatchClaim

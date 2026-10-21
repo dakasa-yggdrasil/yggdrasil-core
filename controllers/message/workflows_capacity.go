@@ -10,6 +10,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity/executoractivity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -22,7 +23,8 @@ type capacityInvocationKey struct{}
 // The invocation identity is process-generated and lives in an unexported
 // context key. Caller inputs and metadata cannot supply or restore it.
 func newCapacityInvocationContext(ctx context.Context) context.Context {
-	return context.WithValue(ctx, capacityInvocationKey{}, uuid.NewString())
+	ctx = context.WithValue(ctx, capacityInvocationKey{}, uuid.NewString())
+	return context.WithValue(ctx, originalGuestReconcileOwnerKey{}, &capacity.OriginalGuestReconcileOwner{})
 }
 
 type capacityWorkflowInput struct {

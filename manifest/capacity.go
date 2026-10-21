@@ -17,6 +17,9 @@ import (
 
 func ParseCapacityPolicySpec(raw json.RawMessage) (model.CapacityPolicySpec, error) {
 	var spec model.CapacityPolicySpec
+	if err := validateGuestReconcileJSON(raw); err != nil {
+		return spec, err
+	}
 	if err := validateExecutorPowerBindingJSON(raw); err != nil {
 		return spec, err
 	}
@@ -46,6 +49,31 @@ func ParseCapacityPolicySpec(raw json.RawMessage) (model.CapacityPolicySpec, err
 		return spec, fmt.Errorf("capacity policy must contain one JSON object")
 	}
 	return spec, nil
+}
+
+func validateGuestReconcileJSON(raw []byte) error {
+	d := json.NewDecoder(bytes.NewReader(raw))
+	token, err := d.Token()
+	if err != nil || token != json.Delim('{') {
+		return fmt.Errorf("capacity policy object required")
+	}
+	seen := false
+	for d.More() {
+		key, err := d.Token()
+		name, ok := key.(string)
+		var value json.RawMessage
+		if err != nil || !ok || d.Decode(&value) != nil {
+			return fmt.Errorf("capacity policy member required")
+		}
+		if strings.EqualFold(name, "guest_notify_reconcile_binding") {
+			trim := bytes.TrimSpace(value)
+			if name != "guest_notify_reconcile_binding" || seen || len(trim) == 0 || trim[0] != '{' {
+				return fmt.Errorf("one non-null original Guest reconciliation object required")
+			}
+			seen = true
+		}
+	}
+	return nil
 }
 
 func validateExecutorActivityBindingJSON(raw []byte) error {
@@ -190,7 +218,12 @@ func ValidateCapacityPolicySpec(spec model.CapacityPolicySpec) error {
 		return err
 	}
 	if b := spec.ControllerBinding; b != nil {
-		if b.Mode != "capacity_dispatch_prestart_v1" || b.MachinePrincipalID == "" || len(b.MachinePrincipalID) > 128 || strings.TrimSpace(b.MachinePrincipalID) != b.MachinePrincipalID || strings.ContainsAny(b.MachinePrincipalID, "*?\x00\r\n") || b.DispatchLeaseSeconds < 5 || b.DispatchLeaseSeconds > 90 || spec.AssessmentBinding == nil || spec.HPAExecutionBinding == nil || spec.HPAExecutionBinding.Mode != capacity.HPALifetimeExecutionMode || spec.Dimension != "reserved_pod_envelope" || len(spec.Profiles) != 1 || len(spec.MutationBindings) != 0 {
+		guest := spec.GuestNotifyReconcileBinding != nil && capacity.ValidateGuestNotifyReconcileBinding(spec) == nil
+		limit := 90
+		if guest {
+			limit = 300
+		}
+		if b.Mode != "capacity_dispatch_prestart_v1" || b.MachinePrincipalID == "" || len(b.MachinePrincipalID) > 128 || strings.TrimSpace(b.MachinePrincipalID) != b.MachinePrincipalID || strings.ContainsAny(b.MachinePrincipalID, "*?\x00\r\n") || b.DispatchLeaseSeconds < 5 || b.DispatchLeaseSeconds > limit || !guest && (spec.AssessmentBinding == nil || spec.HPAExecutionBinding == nil || spec.HPAExecutionBinding.Mode != capacity.HPALifetimeExecutionMode || spec.Dimension != "reserved_pod_envelope" || len(spec.Profiles) != 1 || len(spec.MutationBindings) != 0) {
 			return fmt.Errorf("capacity controller requires fixed pre-start HPA delegation")
 		}
 		if d := b.DemandSource; d != nil {

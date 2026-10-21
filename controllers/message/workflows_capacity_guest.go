@@ -88,6 +88,8 @@ func sourceGuestNonce() (string, error) {
 // ACTUAL resolved step and its timeout precede reservation. Inputs supply no
 // profile, native tuple, source identity, provider proof or context/deadline.
 func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workflowRef model.ManifestReference, step model.WorkflowStepSpec, result model.WorkflowRunStepResult, input map[string]any) model.WorkflowRunStepResult {
+	parent, stopReconcile := withOriginalGuestReconcileDeadline(parent)
+	defer stopReconcile()
 	result.Attempts = 1
 	fail := func(predicate string) model.WorkflowRunStepResult {
 		result.Status = "failed"

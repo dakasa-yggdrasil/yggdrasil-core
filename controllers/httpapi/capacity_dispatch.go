@@ -193,6 +193,16 @@ func CapacityScheduleGraphRequiresOwner(spec model.WorkflowManifestSpec) bool {
 }
 
 func dispatchWorkflowGraph(spec model.WorkflowManifestSpec, policy model.Manifest) error {
+	var p model.CapacityPolicySpec
+	if json.Unmarshal(policy.Spec, &p) == nil && p.GuestNotifyReconcileBinding != nil {
+		if p.ControllerBinding == nil || p.GuestRetirementBinding == nil || len(p.Profiles) != 1 || !capacity.GuestOriginalProfileEnabled(p, *p.GuestRetirementBinding, p.Profiles[0].Provider) {
+			return errCapacityDispatch
+		}
+		if capacity.ValidateOriginalGuestReconcileGraph(spec, policy, p) != nil {
+			return errCapacityDispatch
+		}
+		return nil
+	}
 	if spec.Authorization == nil || spec.Trigger.Mode != "schedule" || spec.Trigger.Enabled == nil || !*spec.Trigger.Enabled || spec.Trigger.Schedule == nil || len(spec.Steps) != 1 {
 		return errCapacityDispatch
 	}
@@ -383,9 +393,14 @@ func (s *CapacityDispatchService) RunOne(parent context.Context, realm, environm
 	if principal.ExpiresAt.Before(deadline) {
 		deadline = principal.ExpiresAt
 	}
-	// Shorter binding budgets are measured from the ORIGINAL 90s claim,
+	// Shorter binding budgets are measured from the ORIGINAL claim (90s HPA,
+	// 300s only for the distinct Guest source protocol),
 	// never from the time authorization or any native read finally returns.
-	bound := job.LeaseExpiresAt.Add(-90*time.Second + time.Duration(p.ControllerBinding.DispatchLeaseSeconds)*time.Second)
+	claimBudget := 90 * time.Second
+	if p.GuestNotifyReconcileBinding != nil {
+		claimBudget = 300 * time.Second
+	}
+	bound := job.LeaseExpiresAt.Add(-claimBudget + time.Duration(p.ControllerBinding.DispatchLeaseSeconds)*time.Second)
 	if bound.Before(deadline) {
 		deadline = bound
 	}

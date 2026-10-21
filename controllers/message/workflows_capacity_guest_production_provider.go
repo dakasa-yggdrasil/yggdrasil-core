@@ -21,6 +21,8 @@ import (
 // reader. This is not an environment/manifest-selected source approval.
 const originalHetznerRetirementV3Source = "b375d438983b89601c0896fd77d73cde667bedaf"
 const originalHetznerRetirementV032Source = "b672bde630e1faa7947f811c2e10732319403781"
+const originalHetznerRetirementV033Source = "9dad0c7b4e94514772900292e22f568f9b15bd22"
+const originalHetznerRetirementV034Source = "a435b9670a6127c904e8362dc6e45e5fa0952d15"
 
 type originalGuestTransportKey struct{}
 type productionGuestInvocationKey struct{}
@@ -121,11 +123,11 @@ func originalGuestSupplierCatalogFor(provider string, ts model.IntegrationTypeMa
 	}
 	// The reviewed supplier uses the original broker request protocol. HTTP
 	// adapters need their own reviewed no-replay transport contract.
-	if ts.Provider != "hetzner" || (ts.Adapter.Version != "0.1.0" && ts.Adapter.Version != "0.2.0" && ts.Adapter.Version != "0.3.0" && ts.Adapter.Version != "0.3.2") || ts.Adapter.Transport != "rabbitmq" || manifest.ValidateIntegrationTypeSpec(ts) != nil {
+	if ts.Provider != "hetzner" || (ts.Adapter.Version != "0.1.0" && ts.Adapter.Version != "0.2.0" && ts.Adapter.Version != "0.3.0" && ts.Adapter.Version != "0.3.2" && ts.Adapter.Version != "0.3.3" && ts.Adapter.Version != "0.3.4") || ts.Adapter.Transport != "rabbitmq" || manifest.ValidateIntegrationTypeSpec(ts) != nil {
 		return false
 	}
 	operations := []string{"ensure_server", capacity.VMObserveServer, capacity.VMObserveAction}
-	if ts.Adapter.Version == "0.3.0" || ts.Adapter.Version == "0.3.2" {
+	if ts.Adapter.Version == "0.3.0" || ts.Adapter.Version == "0.3.2" || ts.Adapter.Version == "0.3.3" || ts.Adapter.Version == "0.3.4" {
 		operations = append(operations, "destroy_server", capacity.VMObserveRetirement)
 	}
 	for _, required := range operations {
@@ -166,6 +168,10 @@ func originalGuestSupplierCatalogSourceFor(provider string, ts model.Integration
 			return source == originalHetznerRetirementV3Source
 		case "0.3.2":
 			return source == originalHetznerRetirementV032Source
+		case "0.3.3":
+			return source == originalHetznerRetirementV033Source
+		case "0.3.4":
+			return source == originalHetznerRetirementV034Source
 		}
 	}
 	return true
@@ -297,7 +303,7 @@ func (s *originalProductionGuestSupplier) Prepare(ctx context.Context, slot int)
 	}
 	var plan model.CapacityVMFleetPlan
 	status, err := s.call(ctx, s.binding.EnsureCapability, map[string]any{"profile": s.binding.ProfileName, "slot": slot}, &plan)
-	if err != nil || status != "dry_run" || plan.Server != nil || plan.RequestSHA256 != expected.DesiredSpecSHA256 || !reflect.DeepEqual(plan.DesiredSpec, *expected.DesiredSpec) || plan.Protected != (slot <= s.binding.ProtectedSlots) || plan.ProviderFencingEvidence || plan.WarmReadinessEvidence || plan.BusinessReadyEvidence || plan.Quote == nil || !plan.Quote.Available || plan.Quote.StockReserved || plan.Quote.Currency != s.p.Currency {
+	if err != nil || status != "dry_run" || plan.Server != nil || plan.RequestSHA256 != expected.DesiredSpecSHA256 || !reflect.DeepEqual(plan.DesiredSpec, *expected.DesiredSpec) || plan.Protected != (slot <= s.binding.ProtectedSlots) || plan.ProviderFencingEvidence || plan.WarmReadinessEvidence || plan.BusinessReadyEvidence || plan.Quote == nil || !plan.Quote.Available || plan.Quote.StockReserved || plan.Quote.Currency != capacity.NativeBillingCurrency(s.p) {
 		return errOriginalGuestStep
 	}
 	until, err := time.Parse(time.RFC3339Nano, plan.Quote.ValidUntil)

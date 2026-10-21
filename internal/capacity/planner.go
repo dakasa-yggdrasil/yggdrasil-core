@@ -61,7 +61,7 @@ func ValidatePolicy(p model.CapacityPolicySpec) error {
 	}
 	names = map[string]bool{}
 	for _, profile := range p.Profiles {
-		if profile.Name == "" || names[profile.Name] || profile.Provider == "" || profile.Region == "" || profile.ValidationRef == "" || profile.QuoteValidUntil.IsZero() || profile.ValidationValidUntil.IsZero() {
+		if profile.Name == "" || names[profile.Name] || profile.Provider == "" || profile.Region == "" || profile.ValidationRef == "" || !profilePlanningDeclarations(p, profile) {
 			return fmt.Errorf("capacity profile requires unique name, provider, region and dated validation/quote")
 		}
 		if profile.MinUnits < p.Floor || profile.MaxUnits < profile.MinUnits || profile.MaxUnits > p.Ceiling || profile.UnitMonthlyCostMinor < 0 || profile.UnitMonthlyCostMinor > 1000000000000 || profile.ReadinessSeconds < 0 || profile.ReadinessSeconds > 86400 {
@@ -78,6 +78,9 @@ func ValidatePolicy(p model.CapacityPolicySpec) error {
 		}
 	}
 	if err := ValidateGuestNotifyCanaryBinding(p); err != nil {
+		return err
+	}
+	if err := ValidateGuestNotifyReconcileBinding(p); err != nil {
 		return err
 	}
 	return ValidateBoundAssessmentBinding(p)
@@ -135,12 +138,25 @@ func Assess(p model.CapacityPolicySpec, a model.CapacityAssessment, previous mod
 		if windowStart.IsZero() || e.WindowStart.After(windowStart) {
 			windowStart = e.WindowStart
 		}
-		up = up || (*e.Value >= rule.UpAbove && (p.UpHoldSeconds == 0 || *e.RangeMin >= rule.UpAbove))
-		down = down && *e.RangeMax <= rule.DownBelow
+		above, below := *e.Value >= rule.UpAbove && (p.UpHoldSeconds == 0 || *e.RangeMin >= rule.UpAbove), *e.RangeMax <= rule.DownBelow
+		if p.GuestNotifyReconcileBinding != nil {
+			above = *e.Value > rule.UpAbove && (p.UpHoldSeconds == 0 || *e.RangeMin > rule.UpAbove)
+			below = *e.RangeMax < rule.DownBelow
+		}
+		up, down = up || above, down && below
 	}
 	policyJSON, _ := json.Marshal(p) // ValidatePolicy already excludes non-finite numbers.
 	fingerprint := fmt.Sprintf("%x", sha256.Sum256(policyJSON))
-	if previous.PolicyFingerprint != fingerprint || previous.ResourceUID != s.ResourceUID || previous.WorkloadUID != s.WorkloadUID || previous.WorkloadResourceVersion != s.WorkloadResourceVersion || previous.Profile != s.Profile || previous.LastObservedAt.IsZero() || !fresh(previous.LastObservedAt, now, p.MaxSampleGapSeconds) {
+	// Metric range sample gaps and scheduled controller observation gaps are
+	// different clocks. The explicit Guest collector still requires the entire
+	// fresh range above; its source cadence is bounded by evidence age. Legacy
+	// HPA keeps its original inter-observation gap. Neither branch invents
+	// samples or advances hysteresis on missing/partial observations.
+	controllerGapSeconds := p.MaxSampleGapSeconds
+	if p.GuestNotifyReconcileBinding != nil {
+		controllerGapSeconds = p.MaxEvidenceAgeSeconds
+	}
+	if previous.PolicyFingerprint != fingerprint || previous.ResourceUID != s.ResourceUID || previous.WorkloadUID != s.WorkloadUID || previous.WorkloadResourceVersion != s.WorkloadResourceVersion || previous.Profile != s.Profile || previous.LastObservedAt.IsZero() || !fresh(previous.LastObservedAt, now, controllerGapSeconds) {
 		d.Clock.UpSince, d.Clock.DownSince = time.Time{}, time.Time{}
 	}
 	d.Clock.PolicyFingerprint, d.Clock.ResourceUID, d.Clock.WorkloadUID, d.Clock.Profile = fingerprint, s.ResourceUID, s.WorkloadUID, s.Profile
@@ -226,7 +242,7 @@ func selectEligibleProfile(p model.CapacityPolicySpec, units int, now time.Time,
 	found := false
 	for _, candidate := range p.Profiles {
 		horizon := now.Add(time.Duration(candidate.ReadinessSeconds) * time.Second)
-		if (!floorRepair && candidate.MinUnits > units) || candidate.MaxUnits < units || !candidate.QuoteValidUntil.After(horizon) || !candidate.ValidationValidUntil.After(horizon) {
+		if (!floorRepair && candidate.MinUnits > units) || candidate.MaxUnits < units || !ProfilePlanningCurrent(p, candidate, horizon) {
 			continue
 		}
 		cost := candidate.UnitMonthlyCostMinor * int64(max(units, candidate.MinUnits))

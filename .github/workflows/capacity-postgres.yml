@@ -218,6 +218,61 @@ jobs:
           echo "CAPACITY_HPA_FIXTURE_BINARY=$RUNNER_TEMP/capacity-hpa-fixture" >> "$GITHUB_ENV"
       - name: Apply production migrations
         run: go run ./scripts/goose up
+      - name: Require the closed original Guest reconcile Source protocol
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          guest_reconcile_dir="$RUNNER_TEMP/original-guest-reconcile-source"
+          mkdir -m 700 "$guest_reconcile_dir"
+          go test -race -json -p 1 -count=1 -timeout=120s ./internal/capacity ./repository ./manifest ./controllers/message ./controllers/httpapi -run '^TestOriginalGuest(Reconcile|Dispatch|Administrative)' 2>"$guest_reconcile_dir/stderr.log" | tee "$guest_reconcile_dir/original.jsonl"
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          root = Path(os.environ['RUNNER_TEMP'])/'original-guest-reconcile-source'
+          events = [json.loads(line) for line in (root/'original.jsonl').read_text().splitlines()]
+          expected = {
+              'TestOriginalGuestAdministrativeCostAssumptionClosed',
+              'TestOriginalGuestAdministrativeExpiryIsNotNativeQuote',
+              'TestOriginalGuestAdministrativeCostDoesNotChangeApproval',
+              'TestOriginalGuestReconcileStrictThresholdBoundaries',
+              'TestOriginalGuestReconcileCadenceAndRangeClocksSeparate',
+              'TestOriginalGuestReconcileCoverageWindowOwnsSampleMinimum',
+              'TestOriginalGuestReconcileBindingClosedScope',
+              'TestOriginalGuestReconcileFloorCreationDoesNotInventReadiness',
+              'TestOriginalGuestReconcileCoverageRejectsPartialAggregates',
+              'TestOriginalGuestReconcileObservationWaitKeepsOriginalBudget',
+              'TestOriginalGuestReconcileGraphRejectsCallerAuthority',
+              'TestOriginalGuestReconcileSnapshotUsesCompleteNativePartition',
+              'TestOriginalGuestReconcileDoesNotChangeProfileApprovalProjection',
+              'TestOriginalGuestReconcileOwnerNeverRenewsLease',
+              'TestOriginalGuestReconcileOwnerFencesInsideMutex',
+              'TestOriginalGuestReconcileOwnerRequiresBoundedLiveCreator',
+              'TestOriginalGuestReconcileRequiresLiveOriginalOwner',
+              'TestOriginalGuestReconcileCannotSupplyAbsentSQLAuthority',
+              'TestOriginalGuestReconcileMaintenanceIsSourceClassified',
+              'TestOriginalGuestReconcilePostgresCannotInventAuthority',
+              'TestOriginalGuestReconcileJSONPresenceIsExplicit',
+              'TestOriginalGuestReconcileWorkflowOperationsAreClosed',
+              'TestOriginalGuestReconcileSelectsOneOwnedSlot',
+              'TestOriginalGuestReconcileStepFailsBeforeAnyTransportWithoutOwner',
+              'TestOriginalGuestDispatchDoesNotTranslateHPAIntoVMAuthority',
+          }
+          runs = [e['Test'] for e in events if e.get('Action') == 'run' and e.get('Test')]
+          passes = [e['Test'] for e in events if e.get('Action') == 'pass' and e.get('Test')]
+          assert not any(e.get('Action') in ('skip', 'fail') for e in events)
+          assert set(runs) == set(passes) and len(runs) == len(set(runs)) == len(passes)
+          assert {n for n in runs if '/' not in n} == expected
+          assert len({e['Package'] for e in events if e.get('Action') == 'pass' and not e.get('Test')}) == 5
+          (root/'census.json').write_text(json.dumps({'roots':len(expected),'nodes':len(runs),'skips':0,'postgres_refusal_only':True,'production_qualification':False},sort_keys=True)+'\n')
+          PY
+      - name: Retain original Guest reconcile Source returns
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: original-guest-reconcile-source
+          path: ${{ runner.temp }}/original-guest-reconcile-source/
+          if-no-files-found: error
       - name: Exercise durable decisions, concurrency, restart and fencing
         if: ${{ !cancelled() && steps.prepare_original_corpora.outcome == 'success' }}
         shell: bash

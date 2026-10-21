@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"reflect"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
@@ -14,6 +15,13 @@ const GuestNotifyMaintenanceOperation = "capacity.refresh_original_guest_notify"
 
 func (s CapacityStore) guestNotifyMaintenanceOwner() string {
 	return GuestNotifyMaintenanceOwner(s.ExecutorID)
+}
+
+// Classify only the actual source-installed operation. The shared transaction
+// still validates the exact current graph, compiled profile and stable epoch.
+func (s CapacityStore) guestNotifyMaintenanceOrigin() bool {
+	o := s.guestNotifyOrigin
+	return o != nil && (o.step.Use.Operation == GuestNotifyMaintenanceOperation || s.guestReconcile != nil && s.guestReconcile.mode == "refresh" && o.step.Use.Operation == capacity.CompleteOriginalGuestOperation && reflect.DeepEqual(o.step, s.guestReconcile.step))
 }
 
 // A domain-separated invocation identifier, not a VM lease or provider grant.
@@ -34,7 +42,8 @@ func guestNotifyStableEpoch(current model.CapacityIntent) bool {
 // reread under the same physical dimension lock on EVERY ledger mutation.
 func (s CapacityStore) guestNotifyMaintenanceTransaction(ctx context.Context, policy model.Manifest, generation, fence int64, owner string, discover bool, fn func(*sql.Tx, model.CapacityPolicySpec, model.CapacityIntent, time.Time) error) error {
 	origin := s.guestNotifyOrigin
-	if s.DB == nil || s.WorkflowID == uuid.Nil || origin == nil || origin.source != capacity.CurrentGuestCoreSource() || origin.step.Use.Kind != "yggdrasil" || origin.step.Use.Operation != GuestNotifyMaintenanceOperation || origin.step.Retry.MaxAttempts > 1 || origin.step.ForEach != nil || origin.step.TimeoutSeconds < 1 || origin.step.TimeoutSeconds > 86400 || s.guestNotifyMaintenanceOwner() == "" || ctx.Err() != nil {
+	reconcile := origin != nil && origin.step.Use.Operation == capacity.CompleteOriginalGuestOperation && s.guestReconcile != nil && s.guestReconcile.mode == "refresh" && reflect.DeepEqual(origin.step, s.guestReconcile.step)
+	if s.DB == nil || s.WorkflowID == uuid.Nil || origin == nil || origin.source != capacity.CurrentGuestCoreSource() || origin.step.Use.Kind != "yggdrasil" || !reconcile && origin.step.Use.Operation != GuestNotifyMaintenanceOperation || origin.step.Retry.MaxAttempts > 1 || origin.step.ForEach != nil || origin.step.TimeoutSeconds < 1 || origin.step.TimeoutSeconds > 86400 || s.guestNotifyMaintenanceOwner() == "" || ctx.Err() != nil {
 		return ErrCapacityMutationAuthorization
 	}
 	p, err := parseCapacityPolicy(policy)
@@ -48,6 +57,11 @@ func (s CapacityStore) guestNotifyMaintenanceTransaction(ctx context.Context, po
 	defer tx.Rollback()
 	if err = lockMutationScope(ctx, tx, policy.Metadata.Namespace, p); err != nil {
 		return err
+	}
+	if reconcile {
+		if err = s.guestReconcileSourceTx(ctx, tx, policy, p); err != nil {
+			return err
+		}
 	}
 	var checksum string
 	var active bool
@@ -88,7 +102,7 @@ func (s CapacityStore) guestNotifyMaintenanceTransaction(ctx context.Context, po
 }
 
 func (s CapacityStore) guestNotifyTransaction(ctx context.Context, policy model.Manifest, historical bool, generation, fence int64, owner string, fn func(*sql.Tx, model.CapacityPolicySpec, model.CapacityIntent, time.Time) error) error {
-	if s.guestNotifyOrigin != nil && s.guestNotifyOrigin.step.Use.Operation == GuestNotifyMaintenanceOperation {
+	if s.guestNotifyMaintenanceOrigin() {
 		return s.guestNotifyMaintenanceTransaction(ctx, policy, generation, fence, owner, false, fn)
 	}
 	return s.mutationTransaction(ctx, policy, historical, generation, fence, owner, fn)

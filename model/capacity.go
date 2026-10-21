@@ -10,38 +10,59 @@ import (
 // CapacityPolicySpec is an operator-owned, provider-neutral capacity envelope.
 // Price records and validation references are declarations, not live stock receipts.
 type CapacityPolicySpec struct {
-	GuestNotifyCanaryBinding  *CapacityGuestNotifyCanaryBinding  `json:"guest_notify_canary_binding,omitempty"`
-	ExecutorPowerBinding      *executorpower.Binding             `json:"executor_power_binding,omitempty"`
-	Environment               string                             `json:"environment"`
-	Domain                    string                             `json:"domain"`
-	Dimension                 string                             `json:"dimension"`
-	TargetIdentity            string                             `json:"target_identity"`
-	Owner                     string                             `json:"owner"`
-	Workflow                  ManifestSelector                   `json:"workflow"`
-	Currency                  string                             `json:"currency"`
-	Floor                     int                                `json:"floor"`
-	Ceiling                   int                                `json:"ceiling"`
-	Step                      int                                `json:"step"`
-	MaxEvidenceAgeSeconds     int                                `json:"max_evidence_age_seconds"`
-	MinSamples                int                                `json:"min_samples"`
-	MaxSampleGapSeconds       int                                `json:"max_sample_gap_seconds"`
-	UpHoldSeconds             int                                `json:"up_hold_seconds"`
-	DownHoldSeconds           int                                `json:"down_hold_seconds"`
-	CooldownSeconds           int                                `json:"cooldown_seconds"`
-	LeaseSeconds              int                                `json:"lease_seconds"`
-	ExecutionEnabled          bool                               `json:"execution_enabled"`
-	Signals                   []CapacitySignalRule               `json:"signals"`
-	Profiles                  []CapacityProfile                  `json:"profiles"`
-	MutationBindings          []CapacityMutationBinding          `json:"mutation_bindings,omitempty"`
-	AssessmentBinding         *CapacityBoundAssessmentBinding    `json:"assessment_binding,omitempty"`
-	HPAExecutionBinding       *CapacityHPAExecutionBinding       `json:"hpa_execution_binding,omitempty"`
-	VMNodeMembershipBinding   *CapacityVMNodeMembershipBinding   `json:"vm_node_membership_binding,omitempty"`
-	GuestBootstrapBinding     *CapacityGuestBootstrapBinding     `json:"guest_bootstrap_binding,omitempty"`
-	GuestRetirementBinding    *CapacityGuestRetirementBinding    `json:"guest_retirement_binding,omitempty"`
-	BusinessCreationBinding   *CapacityBusinessCreationBinding   `json:"business_creation_binding,omitempty"`
-	ControllerBinding         *CapacityControllerBinding         `json:"controller_binding,omitempty"`
-	ExecutorActivityBinding   *CapacityExecutorActivityBinding   `json:"executor_activity_binding,omitempty"`
-	NativeNotifyWindowBinding *CapacityNativeNotifyWindowBinding `json:"native_notify_window_binding,omitempty"`
+	GuestNotifyCanaryBinding    *CapacityGuestNotifyCanaryBinding    `json:"guest_notify_canary_binding,omitempty"`
+	ExecutorPowerBinding        *executorpower.Binding               `json:"executor_power_binding,omitempty"`
+	Environment                 string                               `json:"environment"`
+	Domain                      string                               `json:"domain"`
+	Dimension                   string                               `json:"dimension"`
+	TargetIdentity              string                               `json:"target_identity"`
+	Owner                       string                               `json:"owner"`
+	Workflow                    ManifestSelector                     `json:"workflow"`
+	Currency                    string                               `json:"currency"`
+	Floor                       int                                  `json:"floor"`
+	Ceiling                     int                                  `json:"ceiling"`
+	Step                        int                                  `json:"step"`
+	MaxEvidenceAgeSeconds       int                                  `json:"max_evidence_age_seconds"`
+	MinSamples                  int                                  `json:"min_samples"`
+	MaxSampleGapSeconds         int                                  `json:"max_sample_gap_seconds"`
+	UpHoldSeconds               int                                  `json:"up_hold_seconds"`
+	DownHoldSeconds             int                                  `json:"down_hold_seconds"`
+	CooldownSeconds             int                                  `json:"cooldown_seconds"`
+	LeaseSeconds                int                                  `json:"lease_seconds"`
+	ExecutionEnabled            bool                                 `json:"execution_enabled"`
+	Signals                     []CapacitySignalRule                 `json:"signals"`
+	Profiles                    []CapacityProfile                    `json:"profiles"`
+	MutationBindings            []CapacityMutationBinding            `json:"mutation_bindings,omitempty"`
+	AssessmentBinding           *CapacityBoundAssessmentBinding      `json:"assessment_binding,omitempty"`
+	HPAExecutionBinding         *CapacityHPAExecutionBinding         `json:"hpa_execution_binding,omitempty"`
+	VMNodeMembershipBinding     *CapacityVMNodeMembershipBinding     `json:"vm_node_membership_binding,omitempty"`
+	GuestBootstrapBinding       *CapacityGuestBootstrapBinding       `json:"guest_bootstrap_binding,omitempty"`
+	GuestRetirementBinding      *CapacityGuestRetirementBinding      `json:"guest_retirement_binding,omitempty"`
+	BusinessCreationBinding     *CapacityBusinessCreationBinding     `json:"business_creation_binding,omitempty"`
+	ControllerBinding           *CapacityControllerBinding           `json:"controller_binding,omitempty"`
+	ExecutorActivityBinding     *CapacityExecutorActivityBinding     `json:"executor_activity_binding,omitempty"`
+	NativeNotifyWindowBinding   *CapacityNativeNotifyWindowBinding   `json:"native_notify_window_binding,omitempty"`
+	GuestNotifyReconcileBinding *CapacityGuestNotifyReconcileBinding `json:"guest_notify_reconcile_binding,omitempty"`
+}
+
+// This optional source-owned VM collector is separate from the HPA snapshot
+// protocol. Adapter identities and range bindings are immutable policy inputs;
+// neither a scheduled wake nor a caller supplies a query, sample or proof.
+type CapacityGuestNotifyReconcileBinding struct {
+	Mode                         string                                `json:"mode"`
+	Signals                      []CapacityMetricSignalBinding         `json:"signals"`
+	MemberCoverage               *CapacityMetricSignalBinding          `json:"member_coverage,omitempty"`
+	AdministrativeCostAssumption *CapacityAdministrativeCostAssumption `json:"administrative_cost_assumption,omitempty"`
+}
+
+// Explicit operator planning assumptions, never native price/stock, an invoice
+// or a currency conversion. The fixed provider still checks its own originals.
+type CapacityAdministrativeCostAssumption struct {
+	Mode                  string    `json:"mode"`
+	ReviewReference       string    `json:"review_reference"`
+	ReviewSHA256          string    `json:"review_sha256"`
+	ExpiresAt             time.Time `json:"expires_at"`
+	NativeBillingCurrency string    `json:"native_billing_currency"`
 }
 
 // Optional lab demand/shutdown prerequisite. It does not lower the capacity floor

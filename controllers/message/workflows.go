@@ -658,6 +658,9 @@ func executeWorkflowStep(
 	// persist manifests against the core's own store, also in-process.
 	if result.Kind == "yggdrasil" {
 		if strings.HasPrefix(result.Operation, "capacity.") {
+			if guestReconcileOperation(result.Operation) {
+				return executeOriginalGuestReconcileStep(withOriginalGuestWorkflowTransport(ctx, conn), conn, db, workflowRef, step, result, renderedInput)
+			}
 			if guestOriginalOperation(result.Operation) {
 				return executeCapacityGuestWorkflowStep(withOriginalGuestWorkflowTransport(ctx, conn), db, workflowRef, step, result, renderedInput)
 			}

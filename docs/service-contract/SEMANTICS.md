@@ -110,6 +110,50 @@ rechecks the complete original Guest chain, durable original destroy receipt and
 fresh useful floor after caller acknowledgement. No source fabricates a drained
 metric assessment or self-advances a workflow phase to obtain destroy authority.
 
+## Original Notify Guest scheduler source
+
+An explicit original_guest_notify_reconcile_v1 binding selects the existing
+durable scheduler/dispatch owner and a canonical seven-step Guest graph. The
+new capacity.plan_original_guest and capacity.complete_original_guest operations
+collect fixed native inventory and pinned metric bindings, select one actual
+approved slot, and join the existing original provisioning, canary, retirement
+and finish operations. No HPA step is translated into VM authority. Current
+policy/workflow/principal/RBAC, compiled source approval, epoch, original lease,
+full enrollment/witness/installation and raw useful-membership returns remain
+independent mandatory checks. Unknown grants or native tuples stay HOLD without
+replay/adoption. A source-captured remaining lease clips every later step; the
+600-second workflow step does not renew the original provider budget or lease.
+
+Demand is actual handler inflight per complete reporting member. A separate
+MemberCoverage range must match the complete current native membership for the
+whole quality window; a partial low aggregate cannot authorize retirement. The
+source choices use a real complete 300-second Demand range with at least61
+samples and a separate complete30-second Coverage range with at least5samples.
+Range gaps and scheduled controller intervals have separate bounds. New Guest
+thresholds are strictly above/below; historical HPA equality and observation
+clocks retain their prior behavior. Missing metrics never become zero. Native
+empty inventory can plan protected-floor recovery, but full promotion and all
+subsequent demand/retirement checks retain their source gates. Native initial
+telemetry maturation and complete lifecycle execution still require owning
+qualification; this source contract does not certify those transitions.
+
+An optional reviewed_administrative_cost_assumption is an explicit finite
+planning declaration outside the protected ProfileManifest/approval hash. It
+requires the legacy quote/validation dates to be zero, its own reviewed expiry
+and exact selected native currency. The selected AWS and Hetzner profiles are
+USD; no native price is relabeled or converted. An administrative assumption is
+not future price, stock, invoice evidence or an actual charge cap. Hetzner still
+requires its original fresh quote before creation. Omission preserves the dated
+legacy policy contract. The additive Hetzner0.3.3/0.3.4 supplier gates retain the
+exact original source/catalog joins and earlier selected versions, without
+adopting a prior instance as a new provider version.
+
+This source revision keeps the compiled production profile registry empty and
+introduces no runtime policy, credential, provider grant, deployment or VM.
+Source review, portable tests and a required no-skip owning PostgreSQL refusal
+gate do not substitute for genuine positive native authority or production
+usefulness.
+
 ## Review and updates
 
 The service descriptor selects `public-go-module-v1` explicitly. An unknown profile fails; descriptors without a selector keep the legacy DaKasa scaffold checks. The public profile verifies the exact module/repository identity, real layout, closed bounded contract, hash-bound graph evidence and full source-file census. It does not require the unrelated private namespace, vendoring or Air scaffold. It must continue to reject a candidate/incomplete review, altered evidence, extra/missing/changed source, indirect evidence and empty graph sections.
