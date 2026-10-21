@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 9bba0b7b1fbc77bbe7074d8c5fcac811be12d3b0
-verified_diff_sha256: e9165802f468a73eae688fc4d112d54b10021d41f2f4513a148dd674288a5b31
+verified_at_commit: 90c09d27f1743de36a450297c9b1f5a634c9d8c6
+verified_diff_sha256: 8c743f5f27c04c23cac2c7a8d2ef8af892de128bbd45dcce0925edbe9a54903a
 reconciler_schema: 1
 verified_at: 2026-10-21
 by: Codex
@@ -254,3 +254,6 @@ The exact first title lines of Proposed ADR0064 and ADR0065 now use the required
 
 
 core_original_general_lint_six_equivalences_review: Reviewed all six original lint findings from the completed original general CI at0eda. Five production expressions preserve exact values, short-circuit order and both original transactional reads/errors; the test removes only a redundant io.ReadCloser annotation. The post-clock policy remains the consumed authority. The unchanged 630-file source census now binds all five production source hashes; guarded service contract evidence was updated in CODE9bba before this genuine plan. Original failed lint and Darwin whole-package syscall incompatibility remain retained. Bounded Darwin internal/repository roots passed and the controller package cross-compiled for Linux without execution; complete successor Linux CI remains required. No migrations, registry, production image, Guest or policy was activated by this source publication.
+
+
+core_final_nested_mutation_pair_demorgan_review: The complete successor general CI532 passed unit and addon checks and retained two nested QF1001 findings. Both complete remaining conjunction complements are now normalized without changing evaluation order, provider guards or callback count; both owning files contain no remaining negated compound parentheses. Four actual bounded portable source roots/34nodes passed, while Linux lint/PostgreSQL/runtime qualification remain separate. All630 production sources and eleven inventory artifacts were verified; the guarded review and its own contract evidence hash were committed in CODE90c09 before this genuine plan. Earlier failed CI and source publications remain immutable. Full successor Linux CI is required; this source does not activate a registry, new production image, migration or capacity policy.
