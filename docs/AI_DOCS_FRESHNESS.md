@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 1b698ae0668614382676d28264be0857aac5f092
-verified_diff_sha256: 3a4a7abb9c7cb871343aab4e698b3639213b69502e09514e447dfbd7c1b8efab
+verified_at_commit: 9e5f0b598e249da251372ac9afb61874ab75f7e7
+verified_diff_sha256: a34810fb373ab2cc100eab6822dcf7b00786c8987b3ef68c0c7671469da42e16
 reconciler_schema: 1
 verified_at: 2026-10-21
 by: Codex
@@ -260,3 +260,6 @@ core_final_nested_mutation_pair_demorgan_review: The complete successor general 
 
 
 core_original_notify_guest_scheduler_source_review: The explicit original Guest binding now schedules the canonical protected source graph through the existing durable machine-principal/RBAC/dispatch owner, with fixed native inventory, source-pinned demand/member quality, original no-replay provisioning/useful/retirement ledgers and captured lease clipping. New Guest strict boundaries, finite reviewed administrative USD assumptions and separate controller/range clocks preserve legacy HPA/dated-policy behavior. The cumulative source and additive H034 supplier are bound by the635-source census; A3 full bridge/final static peers and Root integrated29-root/205-node/no-skip portable exit0 are retained separately. Author Core builds and Linux test crosscompiles are not Linux execution. Registry stays empty and process flags unchanged for early owning Linux/PG CI. Full production approvals/metadata/telemetry/native lifecycle remain pending; first-floor telemetry maturation needs its scoped source follow-up before activation. No migration, credential, provider call, VM, image rollout, native useful result or economic saving is claimed. The genuine released CLI plan and actual generated context/summary preserve their source provenance; reconciliation verification checks peripheral write scope, not full tests or physical readiness.
+
+
+core_original_protected_floor_bootstrap_source_review: Only the original protected zero-to-one floor generation may complete on its actual pinned Coverage30 while Demand300 is still missing. The immutable empty baseline, current lease/source/compiled graph, native member ledger and raw useful-canary guards remain mandatory in the same transaction; transaction-time source age15 rejects stale reporting after SQL contention. Actual demand is retained unchanged and ordinary expansion/retirement still require complete demand. Independent A3 full static peer721565 and Root exact15-postimage review/application are scoped source evidence. Author Darwin11roots/78nodes and final2roots/29nodes passed without skips; source inventory636 and five static-tool tests passed. Core build/Linux test crosscompile do not claim native execution. Three CI-reported test lint equivalences preserve behavior, with only an ADR Related label corrected after the reviewed patch. Registry remains empty, process flags unchanged, and current-source owning Linux/PG plus protected native-positive qualification remain required before activation. Genuine CLI plan/context/summary preserve source provenance without supplying production authority.
