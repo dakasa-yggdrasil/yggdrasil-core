@@ -41,6 +41,7 @@ func TestGuestQualificationRefusalClosedProjection(t *testing.T) {
 		{"enrollment", "original-guest-step-78"},
 		{"key_writers", "original-guest-step-79"},
 		{"deadline", "original-guest-step-80"},
+		{"nonce_preflight", "original-guest-step-59"},
 		{"nonce", "original-guest-step-81"},
 		{"signature", "original-guest-step-82"},
 		{"request_encode", "original-guest-step-83"},

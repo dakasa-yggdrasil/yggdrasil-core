@@ -44,7 +44,7 @@ func (r *Realm) probe(ctx context.Context, store repository.CapacityStore, polic
 	if !capacity.GuestLifecycleKeyMatches(key, receipt.Enrollment.Statement.CoreIntentPublicKey) || len(receipt.Enrollment.Statement.Writers) != 1 {
 		return result, capacity.GuestQualificationRefusal("key_writers", ErrOriginalUnknown)
 	}
-	now := time.Now().UTC()
+	now := time.Now()
 	deadline := now.Add(5 * time.Second)
 	contextDeadline, exists := ctx.Deadline()
 	if !exists {
@@ -52,7 +52,7 @@ func (r *Realm) probe(ctx context.Context, store repository.CapacityStore, polic
 	}
 	for _, limit := range []time.Time{contextDeadline, leaseUntil} {
 		if limit.Before(deadline) {
-			deadline = limit
+			deadline = now.Add(limit.Sub(now))
 		}
 	}
 	original, cancel := context.WithDeadline(ctx, deadline)
@@ -61,7 +61,14 @@ func (r *Realm) probe(ctx context.Context, store repository.CapacityStore, polic
 	if _, err = rand.Read(nonce[:]); err != nil {
 		return result, capacity.GuestQualificationRefusal("nonce", err)
 	}
-	c := QualificationProbeChallenge{qualificationProbeSchema, qualificationProbePurpose, uuid.NewString(), capacity.GuestRetirementSHA(receipt.Enrollment), receipt.Enrollment.Statement.Tuple, receipt.Enrollment.Statement.Actor, receipt.Enrollment.Statement.Runtime, receipt.Enrollment.Statement.Writers[0], capacity.BusinessCreationSHA256([]byte(hex.EncodeToString(nonce[:]))), now, deadline}
+	c := QualificationProbeChallenge{qualificationProbeSchema, qualificationProbePurpose, uuid.NewString(), capacity.GuestRetirementSHA(receipt.Enrollment), receipt.Enrollment.Statement.Tuple, receipt.Enrollment.Statement.Actor, receipt.Enrollment.Statement.Runtime, receipt.Enrollment.Statement.Writers[0], capacity.BusinessCreationSHA256([]byte(hex.EncodeToString(nonce[:]))), capacity.QualificationProbeNonce{}, now.UTC(), deadline.UTC()}
+	c, err = capacity.AcquireQualificationProbeNonce(original, client, key, c, receipt.Enrollment)
+	if err == nil {
+		err = original.Err()
+	}
+	if err != nil {
+		return result, capacity.GuestQualificationRefusal("nonce_preflight", err)
+	}
 	request := QualificationProbeRequest{Challenge: c}
 	request.Signature, err = capacity.GuestLifecycleSignature(key, c)
 	if err != nil {
@@ -89,7 +96,7 @@ func (r *Realm) probe(ctx context.Context, store repository.CapacityStore, polic
 	if capacity.GuestOriginalHTTPDecode(returned, &result) != nil {
 		return result, capacity.GuestQualificationRefusal("probe_decode", ErrOriginalUnknown)
 	}
-	if ValidateProbeReturn(request, result, receipt.Enrollment, receipt.OriginalProvisioningSHA256, returned.DriverReturnedAt) != nil {
+	if original.Err() != nil || ValidateProbeReturn(request, result, receipt.Enrollment, receipt.OriginalProvisioningSHA256, returned.DriverReturnedAt) != nil {
 		return result, capacity.GuestQualificationRefusal("probe_validate", ErrOriginalUnknown)
 	}
 	if diagnostic {
@@ -153,7 +160,7 @@ func (r *Realm) RecoveryProbe(ctx context.Context, store repository.CapacityStor
 	if !capacity.GuestLifecycleKeyMatches(key, receipt.Enrollment.Statement.CoreIntentPublicKey) || len(receipt.Enrollment.Statement.Writers) != 1 {
 		return result, ErrOriginalUnknown
 	}
-	now := time.Now().UTC()
+	now := time.Now()
 	deadline := now.Add(5 * time.Second)
 	contextDeadline, exists := ctx.Deadline()
 	if !exists {
@@ -161,7 +168,7 @@ func (r *Realm) RecoveryProbe(ctx context.Context, store repository.CapacityStor
 	}
 	for _, limit := range []time.Time{contextDeadline, leaseUntil} {
 		if limit.Before(deadline) {
-			deadline = limit
+			deadline = now.Add(limit.Sub(now))
 		}
 	}
 	original, cancel := context.WithDeadline(ctx, deadline)
@@ -170,7 +177,14 @@ func (r *Realm) RecoveryProbe(ctx context.Context, store repository.CapacityStor
 	if _, err = rand.Read(nonce[:]); err != nil {
 		return result, err
 	}
-	c := QualificationProbeChallenge{qualificationProbeSchema, qualificationProbePurpose, uuid.NewString(), capacity.GuestRetirementSHA(receipt.Enrollment), receipt.Enrollment.Statement.Tuple, receipt.Enrollment.Statement.Actor, receipt.Enrollment.Statement.Runtime, receipt.Enrollment.Statement.Writers[0], capacity.BusinessCreationSHA256([]byte(hex.EncodeToString(nonce[:]))), now, deadline}
+	c := QualificationProbeChallenge{qualificationProbeSchema, qualificationProbePurpose, uuid.NewString(), capacity.GuestRetirementSHA(receipt.Enrollment), receipt.Enrollment.Statement.Tuple, receipt.Enrollment.Statement.Actor, receipt.Enrollment.Statement.Runtime, receipt.Enrollment.Statement.Writers[0], capacity.BusinessCreationSHA256([]byte(hex.EncodeToString(nonce[:]))), capacity.QualificationProbeNonce{}, now.UTC(), deadline.UTC()}
+	c, err = capacity.AcquireQualificationProbeNonce(original, client, key, c, receipt.Enrollment)
+	if err == nil {
+		err = original.Err()
+	}
+	if err != nil {
+		return result, capacity.GuestQualificationRefusal("nonce_preflight", err)
+	}
 	request := QualificationProbeRequest{Challenge: c}
 	request.Signature, err = capacity.GuestLifecycleSignature(key, c)
 	if err != nil {
@@ -192,7 +206,7 @@ func (r *Realm) RecoveryProbe(ctx context.Context, store repository.CapacityStor
 	if diagnosticErr := r.publishProbeDiagnostic(ctx, slot, "recovery", returned); diagnosticErr != nil && err == nil {
 		return result, diagnosticErr
 	}
-	if err != nil || capacity.GuestOriginalHTTPDecode(returned, &result) != nil || ValidateProbeReturn(request, result, receipt.Enrollment, receipt.OriginalProvisioningSHA256, returned.DriverReturnedAt) != nil {
+	if original.Err() != nil || err != nil || capacity.GuestOriginalHTTPDecode(returned, &result) != nil || ValidateProbeReturn(request, result, receipt.Enrollment, receipt.OriginalProvisioningSHA256, returned.DriverReturnedAt) != nil {
 		return result, ErrOriginalUnknown
 	}
 	if diagnostic {

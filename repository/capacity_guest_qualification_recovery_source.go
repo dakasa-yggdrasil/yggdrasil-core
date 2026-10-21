@@ -40,7 +40,7 @@ func (s CapacityStore) ReserveGuestQualificationRecoveryProbe(ctx context.Contex
 		}
 		c := request.Challenge
 		e := receipt.Enrollment.Statement
-		if p.GuestRetirementBinding == nil || !reflect.DeepEqual(stored.binding, *p.GuestRetirementBinding) || !capacity.GuestOriginalProfileEnabled(p, stored.binding, "native-qemu") || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.WorkflowID != s.WorkflowID.String() || stored.binding.CoreAuthoritySourceCommit != capacity.CurrentGuestCoreSource() || c.Schema != "original_qualification_serving_probe_v1" || c.Purpose != "same_original_admitted_writer_useful_echo" || !validCapacityExecutor(c.ChallengeID) || c.EnrollmentSHA256 != capacity.GuestRetirementSHA(receipt.Enrollment) || c.Tuple != e.Tuple || c.Actor != e.Actor || c.Runtime != e.Runtime || len(e.Writers) != 1 || c.Writer != e.Writers[0] || !capacity.ValidDigest(c.NonceSHA256) || c.IssuedAt.IsZero() || c.IssuedAt.After(now) || !now.Before(c.OriginalDeadline) || c.OriginalDeadline.Sub(c.IssuedAt) > 5*time.Second || !c.OriginalDeadline.After(c.IssuedAt) || current.LeaseExpiresAt == nil || c.OriginalDeadline.After(*current.LeaseExpiresAt) || capacity.GuestRetirementEnrollment(p, stored.binding, stored.member, receipt.Enrollment, now) != nil {
+		if p.GuestRetirementBinding == nil || !reflect.DeepEqual(stored.binding, *p.GuestRetirementBinding) || !capacity.GuestOriginalProfileEnabled(p, stored.binding, "native-qemu") || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.WorkflowID != s.WorkflowID.String() || stored.binding.CoreAuthoritySourceCommit != capacity.CurrentGuestCoreSource() || capacity.ValidateQualificationProbeNonce(c, receipt.Enrollment) != nil || c.Schema != "original_qualification_serving_probe_v2" || c.Purpose != "same_original_admitted_writer_useful_echo" || !validCapacityExecutor(c.ChallengeID) || c.EnrollmentSHA256 != capacity.GuestRetirementSHA(receipt.Enrollment) || c.Tuple != e.Tuple || c.Actor != e.Actor || c.Runtime != e.Runtime || len(e.Writers) != 1 || c.Writer != e.Writers[0] || !capacity.ValidDigest(c.NonceSHA256) || c.IssuedAt.IsZero() || c.IssuedAt.After(now) || !now.Before(c.OriginalDeadline) || c.OriginalDeadline.Sub(c.IssuedAt) > 5*time.Second || !c.OriginalDeadline.After(c.IssuedAt) || current.LeaseExpiresAt == nil || c.OriginalDeadline.After(*current.LeaseExpiresAt) || validateStoredQualificationEnrollment(p, stored, receipt.Enrollment) != nil {
 			return ErrCapacityConflict
 		}
 		deadline, exists := ctx.Deadline()
@@ -73,7 +73,7 @@ func (s CapacityStore) FinishGuestQualificationRecoveryProbe(ctx context.Context
 		OriginalRegistrationSHA256    string    `json:"original_registration_sha256"`
 		OriginalNativeAfterReturnedAt time.Time `json:"original_native_after_returned_at"`
 	}
-	if !capacity.GuestOriginalNativeQEMUProviderEnabled("native-qemu") || json.Unmarshal(wire, &header) != nil || header.Schema != "original_qualification_serving_probe_v1" || !capacity.ValidDigest(header.ChallengeSHA256) {
+	if !capacity.GuestOriginalNativeQEMUProviderEnabled("native-qemu") || json.Unmarshal(wire, &header) != nil || header.Schema != "original_qualification_serving_probe_v2" || !capacity.ValidDigest(header.ChallengeSHA256) {
 		return ErrCapacityConflict
 	}
 	return s.mutationTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
@@ -96,7 +96,7 @@ func (s CapacityStore) FinishGuestQualificationRecoveryProbe(ctx context.Context
 			return err
 		}
 		var request guestQualificationRequest
-		if capacity.DecodeGuestLifecycle(challengeWire, &request) != nil || header.OriginalNativeAfterReturnedAt.Before(request.Challenge.IssuedAt) || header.OriginalNativeAfterReturnedAt.After(now) || !now.Before(request.Challenge.OriginalDeadline) || ctx.Err() != nil {
+		if capacity.DecodeGuestLifecycle(challengeWire, &request) != nil || !now.Before(request.Challenge.OriginalDeadline) || ctx.Err() != nil {
 			return ErrCapacityConflict
 		}
 		var originalRequest capacity.QualificationProbeRequest

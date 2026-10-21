@@ -86,6 +86,8 @@ func GuestQualificationPredicate(err error) string {
 		return "original-guest-step-79"
 	case "deadline":
 		return "original-guest-step-80"
+	case "nonce_preflight":
+		return "original-guest-step-59"
 	case "nonce":
 		return "original-guest-step-81"
 	case "signature":

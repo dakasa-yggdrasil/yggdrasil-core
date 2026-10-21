@@ -79,7 +79,7 @@ func (c *GuestOriginalHTTPClient) Original(ctx context.Context, method, path str
 	result.ResponseBodyScope = GuestOriginalBodyNoRead
 	result.RetainedPrefixSHA256 = BusinessCreationSHA256([]byte{})
 	defer func() { result.DriverReturnedAt = time.Now().UTC(); result.OriginalContextFailed = ctx.Err() != nil }()
-	allowed := method == http.MethodGet && path == "/v1/runtime-snapshot" || (method == http.MethodPost || method == http.MethodGet) && path == "/v1/retirement" || method == http.MethodGet && GuestOriginalNativeQEMUProviderEnabled("native-qemu") && (path == "/v1/qualification-serving-probe" || path == "/v1/qualification-source-refusal")
+	allowed := method == http.MethodGet && path == "/v1/runtime-snapshot" || (method == http.MethodPost || method == http.MethodGet) && path == "/v1/retirement" || method == http.MethodGet && GuestOriginalNativeQEMUProviderEnabled("native-qemu") && ((path == "/v1/qualification-serving-probe" || path == "/v1/qualification-serving-probe-nonce") || path == "/v1/qualification-source-refusal")
 	if c == nil || c.client == nil || !allowed || len(body) < 1 || len(body) > GuestBootstrapLimit || ctx.Err() != nil {
 		result.PreflightFailed = true
 		return result, ErrGuestOriginalTransport

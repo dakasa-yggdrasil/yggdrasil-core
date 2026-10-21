@@ -30,7 +30,7 @@ func (r *Realm) FloorSourceProbe(ctx context.Context, store repository.CapacityS
 	if !capacity.GuestLifecycleKeyMatches(key, receipt.Enrollment.Statement.CoreIntentPublicKey) || len(receipt.Enrollment.Statement.Writers) != 1 {
 		return result, ErrOriginalUnknown
 	}
-	now := time.Now().UTC()
+	now := time.Now()
 	deadline := now.Add(5 * time.Second)
 	contextDeadline, exists := ctx.Deadline()
 	if !exists {
@@ -38,7 +38,7 @@ func (r *Realm) FloorSourceProbe(ctx context.Context, store repository.CapacityS
 	}
 	for _, limit := range []time.Time{contextDeadline, leaseUntil} {
 		if limit.Before(deadline) {
-			deadline = limit
+			deadline = now.Add(limit.Sub(now))
 		}
 	}
 	original, cancel := context.WithDeadline(ctx, deadline)
@@ -47,7 +47,14 @@ func (r *Realm) FloorSourceProbe(ctx context.Context, store repository.CapacityS
 	if _, err = rand.Read(nonce[:]); err != nil {
 		return result, err
 	}
-	c := QualificationProbeChallenge{qualificationProbeSchema, qualificationProbePurpose, uuid.NewString(), capacity.GuestRetirementSHA(receipt.Enrollment), receipt.Enrollment.Statement.Tuple, receipt.Enrollment.Statement.Actor, receipt.Enrollment.Statement.Runtime, receipt.Enrollment.Statement.Writers[0], capacity.BusinessCreationSHA256([]byte(hex.EncodeToString(nonce[:]))), now, deadline}
+	c := QualificationProbeChallenge{qualificationProbeSchema, qualificationProbePurpose, uuid.NewString(), capacity.GuestRetirementSHA(receipt.Enrollment), receipt.Enrollment.Statement.Tuple, receipt.Enrollment.Statement.Actor, receipt.Enrollment.Statement.Runtime, receipt.Enrollment.Statement.Writers[0], capacity.BusinessCreationSHA256([]byte(hex.EncodeToString(nonce[:]))), capacity.QualificationProbeNonce{}, now.UTC(), deadline.UTC()}
+	c, err = capacity.AcquireQualificationProbeNonce(original, client, key, c, receipt.Enrollment)
+	if err == nil {
+		err = original.Err()
+	}
+	if err != nil {
+		return result, capacity.GuestQualificationRefusal("nonce_preflight", err)
+	}
 	request := QualificationProbeRequest{Challenge: c}
 	request.Signature, err = capacity.GuestLifecycleSignature(key, c)
 	if err != nil {
@@ -69,7 +76,7 @@ func (r *Realm) FloorSourceProbe(ctx context.Context, store repository.CapacityS
 	if diagnosticErr := r.publishProbeDiagnostic(ctx, slot, "floor", returned); diagnosticErr != nil && err == nil {
 		return result, diagnosticErr
 	}
-	if err != nil || capacity.GuestOriginalHTTPDecode(returned, &result) != nil || ValidateProbeReturn(request, result, receipt.Enrollment, receipt.OriginalProvisioningSHA256, returned.DriverReturnedAt) != nil {
+	if original.Err() != nil || err != nil || capacity.GuestOriginalHTTPDecode(returned, &result) != nil || ValidateProbeReturn(request, result, receipt.Enrollment, receipt.OriginalProvisioningSHA256, returned.DriverReturnedAt) != nil {
 		return result, ErrOriginalUnknown
 	}
 	if diagnostic {

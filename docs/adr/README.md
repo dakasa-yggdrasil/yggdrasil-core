@@ -69,3 +69,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0056](0056-bind-recovery-owned-cleanup-to-current-lease-and-one-use-effects.md) | Bind recovery-owned cleanup to current lease and one-use effects | Proposed | 2026-10-19 | Qualification-only original failed-owner cleanup |
 
 | [0057](0057-require-original-local-installation-before-qualification.md) | Require original local installation before qualification | Proposed | 2026-10-21 | Core/Guest original provisioning |
+
+| [0058](0058-anchor-qualification-freshness-in-original-monotonic-owners.md) | Anchor qualification freshness in original monotonic owners | Proposed | 2026-10-21 | Original qualification nonce protocol |
