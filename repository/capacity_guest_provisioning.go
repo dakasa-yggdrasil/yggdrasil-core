@@ -481,3 +481,38 @@ func (s CapacityStore) GuestExactOriginalLookup(ctx context.Context, principal, 
 	}
 	return s.GuestPreregistration(ctx, principal, id, nonceSHA)
 }
+
+// GuestOriginalProfile is an independent authenticated read, not user-data.
+// The principal already pins the full profile digest. The native ID is only a
+// selector for exactly one original create witness, never a proof or adoption.
+// Recheck current authority under the existing original transaction and budget.
+func (s CapacityStore) GuestOriginalProfile(ctx context.Context, principal, memberName string, slot int, profileSHA, nativeResourceID string) (model.CapacityGuestProtectedProfileManifest, error) {
+	var result model.CapacityGuestProtectedProfileManifest
+	if s.DB == nil {
+		return result, ErrCapacityMutationAuthorization
+	}
+	pre, err := s.GuestExactOriginalLookup(ctx, principal, memberName, slot, profileSHA, nativeResourceID)
+	if err != nil {
+		return result, err
+	}
+	err = s.guestStoredTransaction(ctx, pre.PreregistrationID, func(tx *sql.Tx, stored guestOriginalStored, now time.Time) error {
+		if principal != stored.member.ProvisionerClientPrincipal || memberName != stored.member.Name || slot != stored.member.Slot || profileSHA != stored.binding.ProfileManifestSHA256 || profileSHA != stored.pre.ProfileManifestSHA256 || capacity.GuestRetirementSHA(stored.binding.ProfileManifest) != profileSHA {
+			return ErrCapacityMutationAuthorization
+		}
+		if _, _, err := s.guestCurrentTx(ctx, tx, stored, now, true); err != nil {
+			return err
+		}
+		if err := loadGuestWitnessTx(ctx, tx, &stored); err != nil {
+			return err
+		}
+		if stored.binding.EvidenceClass != "owned_provisioner_original" || (stored.witness.Tuple.Provider != "aws" && stored.witness.Tuple.Provider != "hetzner") || stored.witness.Tuple.ResourceID != nativeResourceID || stored.witness.Tuple.Slot != slot || stored.witness.BindingName != memberName || stored.witness.ProfileManifestSHA256 != profileSHA || stored.witness.CoreSourceCommit != stored.pre.CoreSourceCommit || !stored.witness.OriginalDeadline.Equal(stored.pre.OriginalDeadline) {
+			return ErrCapacityMutationAuthorization
+		}
+		result = stored.binding.ProfileManifest
+		return nil
+	})
+	if err != nil {
+		return model.CapacityGuestProtectedProfileManifest{}, err
+	}
+	return result, nil
+}

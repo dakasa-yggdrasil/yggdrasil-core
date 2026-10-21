@@ -156,3 +156,19 @@ a creation receipt, generic delete_server actions, invoice/quiescence claims
 or compensation without a separate owned contract refuse completion. Legacy
 bindings without the optional source pin preserve their prior generic behavior.
 No schema migration or source test fabricates durable provider authority.
+
+### Independent original profile read
+
+Per-slot user-data cannot contain a profile that itself hashes those user-data
+bytes. The opt-in Guest configuration therefore carries fixed Core origin,
+member/slot/provider and independent public/transport identities, with an empty
+local profile. It reads the complete public profile over the same fixed Core
+mTLS/bearer channel at `bindings/<member>/slots/<slot>/original-profile`.
+The principal already pins its exact profile digest; no caller URL or new hash
+selects a profile. Exactly one accepted original create witness must already
+exist for the native metadata ID. Core rechecks current policy, workflow, lease,
+clean source and compiled approval before returning the canonical typed profile.
+The read neither creates nor renews preregistration. Guest still verifies the
+original signed witness's profile hash and independently verifies the actual
+provider-native identity before bootstrap payload or writer admission. Legacy
+local profiles and the separate native qualification realm remain unchanged.

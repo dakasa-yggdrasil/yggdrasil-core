@@ -240,3 +240,62 @@ func TestCapacityGuestOriginalCanonicalResponse(t *testing.T) {
 		}
 	}
 }
+
+// Query failures below supply no policy, lease, create witness or SQL authority.
+// They exercise the public scoped route and prove it cannot read a generic
+// profile or bypass the exact original native-witness selector.
+func TestCapacityGuestOriginalProfileClosedScope(t *testing.T) {
+	for _, kind := range []string{"requires_original_witness", "missing_native", "duplicate_native", "foreign_profile_header", "wrong_slot", "noncanonical_slot", "foreign_member", "unknown_tail", "query", "actor", "plaintext"} {
+		t.Run(kind, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			const token = "ci-only-distinct-profile-channel-token"
+			role, scheme, member, slot, tail := "provisioner", "https", "original-member", "2", "original-profile"
+			suffix := ""
+			switch kind {
+			case "wrong_slot":
+				slot = "3"
+			case "noncanonical_slot":
+				slot = "02"
+			case "foreign_member":
+				member = "other-member"
+			case "unknown_tail":
+				tail = "profile"
+			case "query":
+				suffix = "?url=https://caller.invalid"
+			case "actor":
+				role = "actor"
+			case "plaintext":
+				scheme = "http"
+			}
+			s := &Server{db: db, capacityGuestPrincipals: guestOriginalAuthInventory(t, guestOriginalAuthConfig(token, role))}
+			calls := 0
+			h := s.requireAuthenticatedConsoleAPIs(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { calls++ }))
+			r := httptest.NewRequest(http.MethodGet, scheme+"://core.invalid"+guestProvisioningBase+"/bindings/"+member+"/slots/"+slot+"/"+tail+suffix, nil)
+			r.Header.Set("Authorization", "Bearer "+token)
+			if kind != "missing_native" {
+				r.Header.Set("X-Guest-Native-Resource-ID", "i-1234567890abcdef0")
+			}
+			if kind == "duplicate_native" {
+				r.Header.Add("X-Guest-Native-Resource-ID", "i-00000000000000000")
+			}
+			if kind == "foreign_profile_header" {
+				r.Header.Set("X-Guest-Profile-Manifest-SHA256", strings.Repeat("a", 64))
+			}
+			if kind == "requires_original_witness" {
+				mock.ExpectQuery("SELECT p.id::text,p.nonce_sha256").WithArgs("original-member", "2", strings.Repeat("a", 64), "i-1234567890abcdef0").WillReturnError(errors.New("original native witness unavailable"))
+			}
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, r)
+			if w.Code < 400 || calls != 0 || strings.Contains(w.Body.String(), token) {
+				t.Fatal("profile read escaped original scope", w.Code, calls)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

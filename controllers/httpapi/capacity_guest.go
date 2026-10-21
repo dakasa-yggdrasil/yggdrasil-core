@@ -251,15 +251,26 @@ func (s *Server) serveCapacityGuestRequest(w http.ResponseWriter, r *http.Reques
 	}
 	if r.Method == http.MethodGet && strings.HasPrefix(r.URL.Path, guestProvisioningBase+"/bindings/") {
 		parts := strings.Split(strings.TrimPrefix(r.URL.Path, guestProvisioningBase+"/bindings/"), "/")
-		if len(parts) != 4 || parts[1] != "slots" || parts[3] != "original" || parts[0] != p.binding {
+		if len(parts) != 4 || parts[1] != "slots" || (parts[3] != "original" && parts[3] != "original-profile") || parts[0] != p.binding {
 			guestHTTPError(w, repository.ErrCapacityMutationAuthorization)
 			return
 		}
 		slot, err := strconv.Atoi(parts[2])
 		profile := r.Header.Values("X-Guest-Profile-Manifest-SHA256")
 		native := r.Header.Values("X-Guest-Native-Resource-ID")
-		if err != nil || strconv.Itoa(slot) != parts[2] || slot != p.slot || len(profile) != 1 || profile[0] != p.profileSHA || len(native) != 1 || native[0] == "" || strings.ContainsAny(native[0], "/ \t\x00\r\n") {
+		profileRead := parts[3] == "original-profile"
+		profileHeaderValid := (!profileRead && len(profile) == 1 && profile[0] == p.profileSHA) || (profileRead && len(profile) == 0)
+		if err != nil || strconv.Itoa(slot) != parts[2] || slot != p.slot || !profileHeaderValid || len(native) != 1 || native[0] == "" || len(native[0]) > 128 || strings.ContainsAny(native[0], "/ \t\x00\r\n") {
 			guestHTTPError(w, repository.ErrCapacityMutationAuthorization)
+			return
+		}
+		if profileRead {
+			manifest, err := store.GuestOriginalProfile(ctx, p.base.principalID, p.binding, slot, p.profileSHA, native[0])
+			if err != nil {
+				guestHTTPError(w, err)
+				return
+			}
+			guestCanonicalReply(w, manifest)
 			return
 		}
 		pre, err := store.GuestExactOriginalLookup(ctx, p.base.principalID, p.binding, slot, profile[0], native[0])
