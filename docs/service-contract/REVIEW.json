@@ -1,10 +1,10 @@
 {
   "schema": "core_service_source_review_v1",
-  "accepted_at": "2026-10-21T10:42:38.495679+00:00",
+  "accepted_at": "2026-10-21T10:54:05.832290+00:00",
   "reviewer": "Codex root integration owner; independent of authoring subagent",
   "human_architecture_signoff_claimed": false,
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "bc1c32fd5f9845ee7706df6e4035d181808f14534c4bcf91c755e86cba04fa72",
+  "source_inventory_sha256": "28a33bcefce3ad73070d04d5dcc82b0d2569ff1a080bf9ac06cec906f791f04f",
   "non_test_Go_sources": 625,
   "checker": {
     "private_repository": "dakasa-co/dakasa-commons",
@@ -34,7 +34,9 @@
     "Original caller possible-send commits before the one POST; four authority reads join the same original enrollment/workflow epoch and never renew its deadline",
     "Native off and original destroy require complete original caller ACK before durable read challenge, actual Core5s RPC return and separate PG ledger age; provider timestamps remain inside native source content",
     "Real AWS termination and exact Hetzner0.3 b375 source/catalog capability gate before send; original destroy settlement and retained resource/action/auxiliary absence, same60s GET-only pending polling and fresh afterACK floor at confirmation",
-    "Ordered action identity joins treat omitted empty receipt lists semantically while preserving signed raw payloads, exact nonempty IDs/order and duplicate refusal; legacy AWS/create/qualification validation remains separate"
+    "Ordered action identity joins treat omitted empty receipt lists semantically while preserving signed raw payloads, exact nonempty IDs/order and duplicate refusal; legacy AWS/create/qualification validation remains separate",
+    "Exact original Notify singleton root cgroup path is admitted only under the same complete production binding and validated Notify canary/topology; generic writer paths and qualification remain separate",
+    "Independent original-profile GET uses the fixed authenticated Core route and principal-pinned digest, exactly one immutable original native witness, and rechecks current policy/workflow/lease/compiled approval in the original bounded transaction; caller profile selectors are refused"
   ],
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
@@ -50,9 +52,11 @@
     "Root independently read complete added production V2 source and integration diffs, and then reviewed Hetzner0.3 successor source/capability/CI deltas",
     "Root verified both frozen author manifests against exact Git source objects and the complete625-file census; author portable tests and crosscompile are scoped source evidence",
     "Hetzner owning Linux CI39585655677 passed actual race/census/image build for literalb375 source; Core current V2 owning Linux/Goose70 native-negative CI is still required",
-    "Actual production VM create/useful/drain/delete, native positive PostgreSQL authority chain and operational elasticity remain unqualified by this source acceptance"
+    "Actual production VM create/useful/drain/delete, native positive PostgreSQL authority chain and operational elasticity remain unqualified by this source acceptance",
+    "Root fully read the exact cgroup and original-profile source/test/workflow/Proposed ADR diffs and current transaction/lookup/witness owners; source census regenerated at625",
+    "Author focused Darwin cgroup five roots47 nodes and authenticated profile source three roots61 nodes passed; these do not supply native PostgreSQL or production qualification"
   ],
   "production_deployment_or_native_pass_claimed": false,
-  "reviewed_source_head": "0ae64760c5418f14d4de7b3376053f691083d9bd",
-  "previous_accepted_inventory_sha256": "528871e5299fc0f319cc1e6b86a83cf11250ff16bae84bafa3b1085ac6bef3a9"
+  "reviewed_source_head": "7f61d941a6c815643e4e7e2cee466102ad2a234d",
+  "previous_accepted_inventory_sha256": "bc1c32fd5f9845ee7706df6e4035d181808f14534c4bcf91c755e86cba04fa72"
 }
