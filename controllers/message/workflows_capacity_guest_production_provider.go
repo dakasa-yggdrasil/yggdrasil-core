@@ -32,7 +32,7 @@ func guestOriginalProviderAvailable(ctx context.Context) bool {
 
 type productionGuestInvocation struct {
 	owner     *capacityguestprovider.Invocation
-	supplier  *originalHetznerGuestSupplier
+	supplier  *originalProductionGuestSupplier
 	grant     model.CapacityMutationGrant
 	pre       model.CapacityGuestOriginalProvisioningPreregistration
 	witness   model.CapacityGuestOriginalCreateWitness
@@ -48,21 +48,27 @@ func productionGuestSource(ctx context.Context) (*productionGuestInvocation, err
 	return source, nil
 }
 
-// This constructor selects the existing reviewed Hetzner durable grant
-// protocol. AWS's legacy name-adopting EC2 ensure is deliberately unsupported:
-// it has no compatible original redemption/settlement supplier.
+// Each supported provider supplies its own original create and independent
+// native lifecycle contract. Compiled profile approval remains a separate gate.
 func guestOriginalProviderInvocation(ctx context.Context, store repository.CapacityStore, policy, workflow model.Manifest, step model.WorkflowStepSpec, p model.CapacityPolicySpec, b model.CapacityMutationBinding, input guestOriginalStepInput) (context.Context, guestOriginalProvider, error) {
 	transport, ok := ctx.Value(originalGuestTransportKey{}).(originalGuestTransport)
-	if !ok || step.Use.Operation != capacity.ProvisionOriginalGuestOperation || p.GuestRetirementBinding == nil || !capacity.GuestOriginalProfileEnabled(p, *p.GuestRetirementBinding, "hetzner") || b.EnsureCapability != "ensure_server" || b.DestroyCapability != "destroy_server" {
+	provider := ""
+	for _, profile := range p.Profiles {
+		if profile.Name == b.ProfileName {
+			provider = profile.Provider
+		}
+	}
+	pair := provider == "hetzner" && b.EnsureCapability == "ensure_server" && b.DestroyCapability == "destroy_server" || provider == "aws" && capacity.AWSOriginalMutationPair(b)
+	if !ok || !pair || step.Use.Operation != capacity.ProvisionOriginalGuestOperation || p.GuestRetirementBinding == nil || !capacity.GuestOriginalProfileEnabled(p, *p.GuestRetirementBinding, provider) {
 		return ctx, nil, errOriginalGuestStep
 	}
 	// Fail before catalog hydration, reservation or native send until the
 	// repository implements this actual provider's original-return source.
-	if !repository.OriginalGuestCreateWitnessProviderEnabled("hetzner") {
+	if !repository.OriginalGuestCreateWitnessProviderEnabled(provider) {
 		return ctx, nil, errOriginalGuestStep
 	}
 	scope := model.CapacityObservationAdapterBinding{IntegrationInstanceID: b.IntegrationInstanceID, InstanceChecksum: b.IntegrationChecksum, IntegrationTypeID: b.IntegrationTypeID, TypeChecksum: b.IntegrationTypeChecksum}
-	resolved, err := resolveOriginalGuestSupplier(ctx, transport.conn, store, scope, b.OriginalProviderSourceCommit)
+	resolved, err := resolveOriginalGuestSupplier(ctx, transport.conn, store, scope, b.OriginalProviderSourceCommit, provider)
 	if err != nil {
 		return ctx, nil, err
 	}
@@ -76,7 +82,7 @@ func guestOriginalProviderInvocation(ctx context.Context, store repository.Capac
 			memberName = member.Name
 		}
 	}
-	supplier := &originalHetznerGuestSupplier{store: store, policy: policy, p: p, binding: b, resolved: resolved, conn: transport.conn, parent: ctx, input: input}
+	supplier := &originalProductionGuestSupplier{provider: provider, store: store, policy: policy, p: p, binding: b, resolved: resolved, conn: transport.conn, parent: ctx, input: input}
 	owner, err := capacityguestprovider.New(ctx, capacityguestprovider.Scope{InvocationID: invocation, PolicyID: policy.ID.String(), PolicyChecksum: policy.Checksum, WorkflowID: workflow.ID.String(), WorkflowChecksum: workflow.Checksum, StepID: step.ID, StepTimeoutSeconds: step.TimeoutSeconds, ProvisioningBudgetSeconds: p.GuestRetirementBinding.ProfileManifest.OriginalProvisioningBudgetSeconds, MemberBindingName: memberName, Slot: input.Slot, Generation: input.Generation, Fence: input.FencingToken, LeaseOwner: input.LeaseOwner, ExecutorID: store.ExecutorID, CoreSourceCommit: capacity.CurrentGuestCoreSource(), ProfileSHA256: p.GuestRetirementBinding.ProfileManifestSHA256, Binding: b}, supplier)
 	if err != nil {
 		return ctx, nil, errOriginalGuestStep
@@ -100,6 +106,13 @@ func (s *productionGuestInvocation) Create(ctx context.Context, store repository
 }
 
 func originalGuestSupplierCatalog(ts model.IntegrationTypeManifestSpec) bool {
+	return originalGuestSupplierCatalogFor("hetzner", ts)
+}
+
+func originalGuestSupplierCatalogFor(provider string, ts model.IntegrationTypeManifestSpec) bool {
+	if provider == "aws" {
+		return originalAWSGuestSupplierCatalog(ts)
+	}
 	// The reviewed supplier uses the original broker request protocol. HTTP
 	// adapters need their own reviewed no-replay transport contract.
 	if ts.Provider != "hetzner" || ts.Adapter.Version != "0.1.0" || ts.Adapter.Transport != "rabbitmq" || manifest.ValidateIntegrationTypeSpec(ts) != nil {
@@ -134,6 +147,10 @@ func originalGuestSupplierCatalog(ts model.IntegrationTypeManifestSpec) bool {
 }
 
 func originalGuestSupplierSourceConfig(spec model.IntegrationInstanceManifestSpec, source string) bool {
+	return originalGuestSupplierSourceConfigFor("hetzner", spec, source)
+}
+
+func originalGuestSupplierSourceConfigFor(provider string, spec model.IntegrationInstanceManifestSpec, source string) bool {
 	if len(source) != 40 {
 		return false
 	}
@@ -141,6 +158,10 @@ func originalGuestSupplierSourceConfig(spec model.IntegrationInstanceManifestSpe
 		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
 			return false
 		}
+	}
+	if provider == "aws" {
+		config, ok := spec.Config["original_capacity"].(map[string]any)
+		return ok && config["mode"] == "original_aws_ec2_capacity_v1" && config["adapter_source_commit"] == source
 	}
 	config, ok := spec.Config["fleet"].(map[string]any)
 	if !ok {
@@ -150,14 +171,14 @@ func originalGuestSupplierSourceConfig(spec model.IntegrationInstanceManifestSpe
 	return ok && pinned == source
 }
 
-func resolveOriginalGuestSupplier(ctx context.Context, conn *amqp.Connection, store repository.CapacityStore, b model.CapacityObservationAdapterBinding, source string) (capacityResolvedObservationAdapter, error) {
+func resolveOriginalGuestSupplier(ctx context.Context, conn *amqp.Connection, store repository.CapacityStore, b model.CapacityObservationAdapterBinding, source, provider string) (capacityResolvedObservationAdapter, error) {
 	var empty capacityResolvedObservationAdapter
 	im, err := resolveManifestForKind(ctx, store.DB, "integration_instance", b.IntegrationInstanceID, "", "", nil)
 	if err != nil || !im.Metadata.Active || im.Checksum != b.InstanceChecksum {
 		return empty, errOriginalGuestStep
 	}
 	is, err := manifest.ParseIntegrationInstanceSpec(im.Spec)
-	if err != nil || !originalGuestSupplierSourceConfig(is, source) {
+	if err != nil || !originalGuestSupplierSourceConfigFor(provider, is, source) {
 		return empty, errOriginalGuestStep
 	}
 	tm, err := resolveManifestForKind(ctx, store.DB, "integration_type", is.TypeRef.ManifestID, is.TypeRef.Namespace, is.TypeRef.Name, is.TypeRef.Version)
@@ -165,19 +186,20 @@ func resolveOriginalGuestSupplier(ctx context.Context, conn *amqp.Connection, st
 		return empty, errOriginalGuestStep
 	}
 	ts, err := manifest.ParseIntegrationTypeSpec(tm.Spec)
-	if err != nil || !originalGuestSupplierCatalog(ts) || !originalGuestSupplierSourceConfig(is, source) {
+	if err != nil || !originalGuestSupplierCatalogFor(provider, ts) || !originalGuestSupplierSourceConfigFor(provider, is, source) {
 		return empty, errOriginalGuestStep
 	}
 	// Secret hydration and live Describe occur only after public registry and
 	// exact raw catalog checks. Recheck the same immutable revisions afterward.
 	im, is, tm, ts, err = resolveIntegrationInstance(ctx, conn, store.DB, model.ManifestSelector{ManifestID: b.IntegrationInstanceID})
-	if err != nil || !im.Metadata.Active || im.ID.String() != b.IntegrationInstanceID || im.Checksum != b.InstanceChecksum || !tm.Metadata.Active || tm.ID.String() != b.IntegrationTypeID || tm.Checksum != b.TypeChecksum || !originalGuestSupplierCatalog(ts) || !originalGuestSupplierSourceConfig(is, source) {
+	if err != nil || !im.Metadata.Active || im.ID.String() != b.IntegrationInstanceID || im.Checksum != b.InstanceChecksum || !tm.Metadata.Active || tm.ID.String() != b.IntegrationTypeID || tm.Checksum != b.TypeChecksum || !originalGuestSupplierCatalogFor(provider, ts) || !originalGuestSupplierSourceConfigFor(provider, is, source) {
 		return empty, errOriginalGuestStep
 	}
 	return capacityResolvedObservationAdapter{im, is, tm, ts}, nil
 }
 
-type originalHetznerGuestSupplier struct {
+type originalProductionGuestSupplier struct {
+	provider     string
 	store        repository.CapacityStore
 	policy       model.Manifest
 	p            model.CapacityPolicySpec
@@ -191,7 +213,7 @@ type originalHetznerGuestSupplier struct {
 	createdProof model.CapacityMutationProof
 }
 
-func (s *originalHetznerGuestSupplier) guard(ctx context.Context) error {
+func (s *originalProductionGuestSupplier) guard(ctx context.Context) error {
 	if ctx == nil || ctx.Err() != nil || s.parent.Err() != nil {
 		return errOriginalGuestStep
 	}
@@ -206,7 +228,7 @@ func (s *originalHetznerGuestSupplier) guard(ctx context.Context) error {
 	}
 	return nil
 }
-func (s *originalHetznerGuestSupplier) call(ctx context.Context, op string, fixed map[string]any, out any) (string, error) {
+func (s *originalProductionGuestSupplier) call(ctx context.Context, op string, fixed map[string]any, out any) (string, error) {
 	if s.guard(ctx) != nil {
 		return "", errOriginalGuestStep
 	}
@@ -217,7 +239,10 @@ func (s *originalHetznerGuestSupplier) call(ctx context.Context, op string, fixe
 	}
 	return r.Status, nil
 }
-func (s *originalHetznerGuestSupplier) Prepare(ctx context.Context, slot int) error {
+func (s *originalProductionGuestSupplier) Prepare(ctx context.Context, slot int) error {
+	if s.provider == "aws" {
+		return s.prepareAWS(ctx, slot)
+	}
 	var expected *model.CapacityMutationSlotBinding
 	for n := range s.binding.Slots {
 		if s.binding.Slots[n].Slot == slot {
@@ -238,7 +263,7 @@ func (s *originalHetznerGuestSupplier) Prepare(ctx context.Context, slot int) er
 	}
 	return nil
 }
-func (s *originalHetznerGuestSupplier) Create(ctx context.Context, g model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration) (model.CapacityMutationProof, error) {
+func (s *originalProductionGuestSupplier) Create(ctx context.Context, g model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration) (model.CapacityMutationProof, error) {
 	var returned struct {
 		Plan          model.CapacityVMFleetPlan `json:"plan"`
 		ActionID      string                    `json:"action_id"`
@@ -260,7 +285,14 @@ func (s *originalHetznerGuestSupplier) Create(ctx context.Context, g model.Capac
 			if err == nil {
 				s.createdGrant = g
 				s.createdPre = pre
-				s.createdProof = proof
+				frozen := proof
+				frozen.ActionIDs = append([]string(nil), proof.ActionIDs...)
+				frozen.AuxiliaryAbsent = append([]model.CapacityMutationAuxiliaryResource(nil), proof.AuxiliaryAbsent...)
+				if proof.AWSInstanceLifecycle != nil {
+					lifecycle := *proof.AWSInstanceLifecycle
+					frozen.AWSInstanceLifecycle = &lifecycle
+				}
+				s.createdProof = frozen
 			}
 			return proof, err
 		}
@@ -274,7 +306,10 @@ func (s *originalHetznerGuestSupplier) Create(ctx context.Context, g model.Capac
 
 var errOriginalGuestProviderPending = errors.New("original native provider action pending")
 
-func (s *originalHetznerGuestSupplier) Read(ctx context.Context, g model.CapacityMutationGrant) (model.CapacityMutationProof, error) {
+func (s *originalProductionGuestSupplier) Read(ctx context.Context, g model.CapacityMutationGrant) (model.CapacityMutationProof, error) {
+	if s.provider == "aws" {
+		return s.readAWS(ctx, g)
+	}
 	var empty model.CapacityMutationProof
 	receipt, err := s.store.NativeMutationReceipt(ctx, s.policy, s.binding, g.GrantID)
 	if err != nil || !receipt.TransportCompleted || receipt.Outcome != "accepted" || (receipt.Grant.State != "settled" && receipt.Grant.State != "confirmed") {

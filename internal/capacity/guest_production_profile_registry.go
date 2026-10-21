@@ -37,7 +37,7 @@ func GuestProductionProfileContractSHA256(p model.CapacityPolicySpec, binding mo
 	if err != nil {
 		return ""
 	}
-	if provider == "hetzner" && !businessSource.MatchString(mutation.OriginalProviderSourceCommit) {
+	if (provider == "hetzner" || provider == "aws") && !businessSource.MatchString(mutation.OriginalProviderSourceCommit) {
 		return ""
 	}
 	matches := 0

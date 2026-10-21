@@ -41,7 +41,7 @@ type guestOriginalStored struct {
 // return sources, independently of profile approval. A registry entry cannot
 // turn a provider settlement/readback into a missing owning create return.
 func OriginalGuestCreateWitnessProviderEnabled(provider string) bool {
-	return provider == "hetzner" || provider == "native-qemu" && capacity.GuestOriginalNativeQEMUProviderEnabled(provider)
+	return provider == "hetzner" || provider == "aws" || provider == "native-qemu" && capacity.GuestOriginalNativeQEMUProviderEnabled(provider)
 }
 
 func guestMember(binding model.CapacityGuestRetirementBinding, slot int) (model.CapacityGuestRetirementMemberBinding, error) {
@@ -233,7 +233,7 @@ func (s CapacityStore) RecordGuestCreateWitness(ctx context.Context, preregistra
 			return ErrHostFactoryHold
 		}
 		var original capacityMutationRecord
-		if json.Unmarshal(raw, &original) != nil || original.Settlement == nil || original.Grant.State != "settled" || original.Settlement.Outcome != "accepted" || !original.Settlement.TransportCompleted || original.Grant.Capability != original.Binding.EnsureCapability || original.Grant.CompensationOf != "" || original.AttemptID == "" || original.PolicyChecksum != stored.pre.PolicyChecksum || original.Generation != stored.pre.Generation || original.FencingToken != stored.pre.Fence || original.ExecutorID != stored.pre.ExecutorID || proof.GrantID != original.Grant.GrantID || proof.RequestSHA256 != original.Grant.RequestSHA256 || proof.ObservedCreationGrantID != original.Grant.GrantID || proof.ResourceAbsent || !validMutationProof(p, proof, now) || !completeMutationActionProof(original, proof) || !proof.ActionsSuccessful || proof.ActionsFailed || proof.ResourceID != original.Settlement.ResourceID || proof.ResourceCreatedAt != original.Settlement.ResourceCreatedAt {
+		if json.Unmarshal(raw, &original) != nil || original.Settlement == nil || original.Grant.State != "settled" || original.Settlement.Outcome != "accepted" || !original.Settlement.TransportCompleted || original.Grant.Capability != original.Binding.EnsureCapability || original.Grant.CompensationOf != "" || original.AttemptID == "" || original.PolicyChecksum != stored.pre.PolicyChecksum || original.Generation != stored.pre.Generation || original.FencingToken != stored.pre.Fence || original.ExecutorID != stored.pre.ExecutorID || proof.GrantID != original.Grant.GrantID || proof.RequestSHA256 != original.Grant.RequestSHA256 || proof.ObservedCreationGrantID != original.Grant.GrantID || proof.ResourceAbsent || !validMutationProof(p, proof, now) || !successfulOriginalMutationProof(original, proof, now) || proof.ResourceID != original.Settlement.ResourceID || proof.ResourceCreatedAt != original.Settlement.ResourceCreatedAt {
 			return ErrCapacityConflict
 		}
 		if h := s.hostOriginalOrdinary; h != nil {
@@ -276,11 +276,15 @@ func (s CapacityStore) RecordGuestCreateWitness(ctx context.Context, preregistra
 			return ErrCapacityConflict
 		}
 		var returned time.Time
-		if provider == "hetzner" {
+		if provider == "hetzner" || provider == "aws" {
 			if stored.binding.EvidenceClass != "owned_provisioner_original" || s.hostOriginalOrdinary != nil || s.hostOriginalFactory != nil {
 				return ErrCapacityConflict
 			}
-			returned, err = capacity.ValidateOriginalHetznerCreateReturn(original.Binding, original.Grant, original.AttemptID, *original.Settlement, stored.pre.ReservedAt, now)
+			validateReturn := capacity.ValidateOriginalHetznerCreateReturn
+			if provider == "aws" {
+				validateReturn = capacity.ValidateOriginalAWSCreateReturn
+			}
+			returned, err = validateReturn(original.Binding, original.Grant, original.AttemptID, *original.Settlement, stored.pre.ReservedAt, now)
 			if err != nil || returned.After(proof.ObservedAt) || !returned.Before(stored.pre.OriginalDeadline) {
 				return ErrCapacityConflict
 			}

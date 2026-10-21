@@ -37,7 +37,7 @@ func TestOriginalGuestSupplierPinsPublicAdapterSource(t *testing.T) {
 }
 
 func TestProductionOriginalGuestWitnessRefusesUnsupportedSources(t *testing.T) {
-	for _, provider := range []string{"aws", "native-qemu", ""} {
+	for _, provider := range []string{"unsupported-provider", "native-qemu", ""} {
 		if repository.OriginalGuestCreateWitnessProviderEnabled(provider) {
 			t.Fatalf("production gained an unimplemented original create witness: %q", provider)
 		}

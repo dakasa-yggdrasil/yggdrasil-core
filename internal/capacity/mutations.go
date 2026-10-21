@@ -24,6 +24,13 @@ func ValidDigest(v string) bool {
 	return err == nil
 }
 
+// Preserve the existing AWS capability spelling. This explicit provider pair
+// is admitted only with a source-pinned AWS profile/type; no destroy alias is
+// invented for the running adapter.
+func AWSOriginalMutationPair(b model.CapacityMutationBinding) bool {
+	return b.EnsureCapability == "ensure_ec2_instance" && b.DestroyCapability == "terminate_ec2_instance" && businessSource.MatchString(b.OriginalProviderSourceCommit)
+}
+
 func ValidateMutationBindings(p model.CapacityPolicySpec) error {
 	if len(p.MutationBindings) > 64 {
 		return fmt.Errorf("capacity mutation bindings exceed limit")
@@ -31,17 +38,22 @@ func ValidateMutationBindings(p model.CapacityPolicySpec) error {
 	names := map[string]bool{}
 	targets := map[string]bool{}
 	for _, b := range p.MutationBindings {
+		awsPair := AWSOriginalMutationPair(b)
+		awsProfile := false
+		for _, profile := range p.Profiles {
+			awsProfile = awsProfile || profile.Name == b.ProfileName && profile.Provider == "aws"
+		}
 		if b.OriginalProviderSourceCommit != "" && !businessSource.MatchString(b.OriginalProviderSourceCommit) {
 			return fmt.Errorf("original provider source must be an exact source commit")
 		}
 		id, err := uuid.Parse(b.IntegrationInstanceID)
 		typeID, typeErr := uuid.Parse(b.IntegrationTypeID)
-		if err != nil || id == uuid.Nil || id.String() != b.IntegrationInstanceID || typeErr != nil || typeID == uuid.Nil || typeID.String() != b.IntegrationTypeID || !ValidDigest(b.IntegrationTypeChecksum) || b.Name == "" || len(b.Name) > 128 || names[b.Name] || b.AdapterPrincipalID == "" || len(b.AdapterPrincipalID) > 128 || !ValidDigest(b.IntegrationChecksum) || !ValidDigest(b.ScopeChecksum) || !strings.HasPrefix(b.EnsureCapability, "ensure_") || !strings.HasPrefix(b.DestroyCapability, "destroy_") || len(b.EnsureCapability) > 128 || len(b.DestroyCapability) > 128 {
+		if err != nil || id == uuid.Nil || id.String() != b.IntegrationInstanceID || typeErr != nil || typeID == uuid.Nil || typeID.String() != b.IntegrationTypeID || !ValidDigest(b.IntegrationTypeChecksum) || b.Name == "" || len(b.Name) > 128 || names[b.Name] || b.AdapterPrincipalID == "" || len(b.AdapterPrincipalID) > 128 || !ValidDigest(b.IntegrationChecksum) || !ValidDigest(b.ScopeChecksum) || !strings.HasPrefix(b.EnsureCapability, "ensure_") || (!strings.HasPrefix(b.DestroyCapability, "destroy_") && !(awsPair && awsProfile)) || len(b.EnsureCapability) > 128 || len(b.DestroyCapability) > 128 {
 			return fmt.Errorf("capacity mutation binding requires exact identity, digests, principal and capability pair")
 		}
 		key := b.IntegrationInstanceID + "/" + b.ScopeChecksum + "/" + b.ProfileName
 		resource := strings.TrimPrefix(b.EnsureCapability, "ensure_")
-		if !mutationProjectionSchemaPattern.MatchString(resource) || b.DestroyCapability != "destroy_"+resource {
+		if !mutationProjectionSchemaPattern.MatchString(resource) || (b.DestroyCapability != "destroy_"+resource && !(awsPair && awsProfile)) {
 			return fmt.Errorf("capacity mutation capabilities require one canonical resource pair")
 		}
 		if targets[key] || b.ProtectedSlots < 0 || b.MaxSlots < b.ProtectedSlots || b.MaxSlots > p.Ceiling || len(b.Slots) != b.MaxSlots {

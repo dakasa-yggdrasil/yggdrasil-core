@@ -156,6 +156,7 @@ type CapacityMutationReceipt struct {
 // fresh adapter reads. Transport completion, provider action completion, and
 // product readiness are distinct facts; this proof addresses only the first two.
 type CapacityMutationProof struct {
+	AWSInstanceLifecycle         *CapacityAWSInstanceLifecycle       `json:"aws_instance_lifecycle,omitempty"`
 	GrantID                      string                              `json:"grant_id"`
 	BindingName                  string                              `json:"binding_name"`
 	Slot                         int                                 `json:"slot"`
@@ -175,4 +176,16 @@ type CapacityMutationProof struct {
 	CompensationIdentityVerified bool                                `json:"compensation_identity_verified,omitempty"`
 	ObservedCreationGrantID      string                              `json:"observed_creation_grant_id,omitempty"`
 	AuxiliaryAbsent              []CapacityMutationAuxiliaryResource `json:"auxiliary_absent,omitempty"`
+}
+
+// EC2 has no job/action observation API for RunInstances. Its original SDK
+// requestId plus independently read instance/system checks are explicit native
+// lifecycle evidence; none of the generic Actions* fields describe AWS jobs.
+type CapacityAWSInstanceLifecycle struct {
+	Schema         string    `json:"schema"`
+	RequestID      string    `json:"request_id"`
+	EC2State       string    `json:"ec2_state"`
+	SystemStatus   string    `json:"system_status"`
+	InstanceStatus string    `json:"instance_status"`
+	ObservedAt     time.Time `json:"observed_at"`
 }

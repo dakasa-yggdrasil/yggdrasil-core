@@ -262,7 +262,7 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE NOT (slot_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND resource_id<>''`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&live); err != nil {
 			return err
 		}
-		if err = tx.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE state IN ('issued','redeemed','settled','compensating') AND grant_record->'grant'->>'capability' ~ '^ensure_'),count(*) FILTER(WHERE state IN ('issued','redeemed','settled') AND grant_record->'grant'->>'capability' ~ '^destroy_' AND COALESCE(grant_record->'grant'->>'compensation_of','')=''),count(*) FILTER(WHERE generation=$5 AND state<>'expired' AND state<>'rejected') FROM public.capacity_mutation_grants WHERE NOT (grant_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, generation).Scan(&pending, &pendingDestroy, &started); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE state IN ('issued','redeemed','settled','compensating') AND grant_record->'grant'->>'capability'=grant_record->'binding'->>'ensure_capability'),count(*) FILTER(WHERE state IN ('issued','redeemed','settled') AND grant_record->'grant'->>'capability'=grant_record->'binding'->>'destroy_capability' AND COALESCE(grant_record->'grant'->>'compensation_of','')=''),count(*) FILTER(WHERE generation=$5 AND state<>'expired' AND state<>'rejected') FROM public.capacity_mutation_grants WHERE NOT (grant_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, generation).Scan(&pending, &pendingDestroy, &started); err != nil {
 			return err
 		}
 		if started == 0 && live != intent.BaselineSnapshot.Units {
@@ -548,10 +548,14 @@ func (s CapacityStore) SettleMutation(ctx context.Context, principal, nonce stri
 			return ErrCapacityMutationAuthorization
 		}
 		if r.OriginalProviderCreateReturn != nil || record.Binding.OriginalProviderSourceCommit != "" && record.Grant.Capability == record.Binding.EnsureCapability && r.Outcome == "accepted" {
-			if record.EventProvider != "hetzner" {
+			if record.EventProvider != "hetzner" && record.EventProvider != "aws" {
 				return ErrCapacityMutationAuthorization
 			}
-			if _, err := capacity.ValidateOriginalHetznerCreateReturn(record.Binding, record.Grant, record.AttemptID, r, record.CreatedAt, now); err != nil {
+			validateReturn := capacity.ValidateOriginalHetznerCreateReturn
+			if record.EventProvider == "aws" {
+				validateReturn = capacity.ValidateOriginalAWSCreateReturn
+			}
+			if _, err := validateReturn(record.Binding, record.Grant, record.AttemptID, r, record.CreatedAt, now); err != nil {
 				return ErrCapacityMutationAuthorization
 			}
 		}
@@ -746,15 +750,8 @@ func (s CapacityStore) ConfirmMutation(ctx context.Context, policy model.Manifes
 				return nil
 			}
 		}
-		if record.PolicyID != policy.ID || record.PolicyChecksum != policy.Checksum || record.WorkflowID != s.WorkflowID || g.CompensationOf != "" || g.State != "settled" || record.Settlement == nil || !record.Settlement.TransportCompleted || proof.BindingName != b.Name || proof.Slot != g.Slot || proof.RequestSHA256 != g.RequestSHA256 || !validMutationProof(p, proof, now) || !proof.ActionsTerminal || !proof.ActionsSuccessful || proof.ActionsFailed || len(proof.ActionIDs) == 0 || len(proof.ActionIDs) > 64 {
+		if record.PolicyID != policy.ID || record.PolicyChecksum != policy.Checksum || record.WorkflowID != s.WorkflowID || g.CompensationOf != "" || g.State != "settled" || record.Settlement == nil || !record.Settlement.TransportCompleted || proof.BindingName != b.Name || proof.Slot != g.Slot || proof.RequestSHA256 != g.RequestSHA256 || !validMutationProof(p, proof, now) || !successfulOriginalMutationProof(record, proof, now) {
 			return ErrCapacityConflict
-		}
-		seen := map[string]bool{}
-		for _, id := range proof.ActionIDs {
-			if id == "" || len(id) > 256 || seen[id] {
-				return ErrCapacityConflict
-			}
-			seen[id] = true
 		}
 		settled := record.Settlement
 		if settled.ResourceID != "" && (settled.ResourceID != proof.ResourceID || settled.ResourceCreatedAt != proof.ResourceCreatedAt) {
@@ -766,11 +763,6 @@ func (s CapacityStore) ConfirmMutation(ctx context.Context, policy model.Manifes
 			}
 			created, _ := time.Parse(time.RFC3339Nano, proof.ResourceCreatedAt)
 			if created.Before(record.CreatedAt.Add(-5*time.Second)) || created.After(proof.ObservedAt.Add(5*time.Second)) {
-				return ErrCapacityConflict
-			}
-		}
-		for _, id := range append([]string{settled.ActionID}, settled.NextActionIDs...) {
-			if id != "" && !slices.Contains(proof.ActionIDs, id) {
 				return ErrCapacityConflict
 			}
 		}
@@ -841,7 +833,7 @@ func capacityMutationTypeIdentity(raw []byte, b model.CapacityMutationBinding) (
 		return "", "", ErrCapacityConflict
 	}
 	resource := strings.TrimPrefix(b.EnsureCapability, "ensure_")
-	if (!mutationAuxiliaryKindPattern.MatchString(spec.Provider) && !capacity.GuestOriginalNativeQEMUProviderEnabled(spec.Provider)) || !mutationAuxiliaryKindPattern.MatchString(resource) || len(spec.Provider)+len(resource)+1 > 64 || b.EnsureCapability != "ensure_"+resource || b.DestroyCapability != "destroy_"+resource || !slices.Contains(spec.Capabilities, "execute") {
+	if (!mutationAuxiliaryKindPattern.MatchString(spec.Provider) && !capacity.GuestOriginalNativeQEMUProviderEnabled(spec.Provider)) || !mutationAuxiliaryKindPattern.MatchString(resource) || len(spec.Provider)+len(resource)+1 > 64 || b.EnsureCapability != "ensure_"+resource || (b.DestroyCapability != "destroy_"+resource && !(spec.Provider == "aws" && capacity.AWSOriginalMutationPair(b))) || !slices.Contains(spec.Capabilities, "execute") {
 		return "", "", ErrCapacityConflict
 	}
 	// Transport capabilities are describe/read/execute, not resource actions.

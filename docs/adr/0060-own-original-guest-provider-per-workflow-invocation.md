@@ -31,16 +31,17 @@ successfully. Do not create a background retry or detached lifetime.
 Keep the production approval registry empty until the complete real production
 catalog, application handle ownership and original provider witness protocol
 are implemented and independently verified. The production constructor selects
-only the existing fixed Hetzner broker catalog; AWS's legacy name-adopting ensure
-and unreviewed HTTP transports do not satisfy this contract.
+the fixed Hetzner broker catalog or the explicit source-pinned AWS HTTP original
+capacity contract. AWS's existing generic name-adopting ensure remains separate;
+its legacy catalog cannot activate original provisioning.
 
 Check the repository's separately compiled original-witness provider support
 before catalog hydration, reservation or native send. Profile approval cannot
 activate a provider whose authentic original return source is still absent.
 
-Pin the Hetzner adapter's own clean build source in the mutation binding and
-the checksummed FleetConfig admission contract, independently of Guest and Core
-sources. The worker checks its actual build identity before network operations.
+Pin each adapter's own clean build source in the mutation binding and its
+checksummed operator configuration, independently of Guest and Core sources.
+The worker checks its actual build identity before network operations.
 Only its actual successful native POST/Read/Close produces the closed original
 return DTO. Include that DTO in the existing authenticated one-use settlement;
 bind its grant, attempt, request, native tuple, actions, body hash and original
@@ -51,6 +52,30 @@ retain it immutably in the existing settlement JSON. The repository's Hetzner
 witness joins that original with the same preregistration, current authority and
 independent native proof. A GET or uncertain create cannot supply a missing
 original. Keep native QEMU's existing separate original source path intact.
+
+AWS preserves the deployed adapter's capability names and existing credentials.
+Its opt-in configuration freezes account, region, image and image owner, subnet,
+security groups, instance profile, bootstrap hash and slot. Actual STS and EC2
+reads validate the native realm before grant redemption. The original single
+`RunInstances` uses a grant-bound client token, `aws.NopRetryer` and the configured
+HTTP transport with all redirects refused. Original HTTP Do, complete Read/EOF,
+Close and the actual SDK decoder/metadata return must agree before settlement.
+Missing source stamping, name adoption, transport uncertainty or a replay cannot
+produce the AWS original DTO.
+
+EC2 exposes an original requestId, instance ID and LaunchTime; it does not expose
+a RunInstances job/action observation API. The wire's historical `action_id`
+field carries that actual requestId only as original request lineage. The native
+proof uses the explicit `AWSInstanceLifecycle` schema and independently fresh
+`DescribeInstances` plus `DescribeInstanceStatus` instance/system checks. Its
+generic ActionIDs and Actions flags remain empty/false. The repository accepts
+this provider-specific creation evidence only with the same authenticated
+original DTO, scope and native tuple. It cannot confer application readiness,
+cancel a late writer, certify retirement or populate the production registry.
+
+Use the existing AWS pair `ensure_ec2_instance`/`terminate_ec2_instance`; do not
+invent a destroy alias. Original capacity start/stop/terminate stay refused in
+the adapter until their own source-owned retirement contract exists.
 
 ## Consequences
 
