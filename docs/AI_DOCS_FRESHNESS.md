@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: c5b4365b39547769eae7e0446257fbd3a0bf51fb
-verified_diff_sha256: 2ec82fabc8b508a5f918261a605e3dc77b1663d515f8a13b43813b994c13029d
+verified_at_commit: 900e234c9c965f5994c0172cb2e5c21527b6d8cc
+verified_diff_sha256: 94959881ffd687120ca5b5f9e844dd78424d2416f9d071b553e2ffc436960202
 reconciler_schema: 1
 verified_at: 2026-10-21
 by: Codex
@@ -266,3 +266,8 @@ core_original_protected_floor_bootstrap_source_review: Only the original protect
 
 
 core_two_actual_original_notify_approvals_source_review: Exactly two literal AWS/H034 protected contracts bind the unchanged3fd/be3 profile hashes to actual public original dry-run, installer and outer-caller joins. Root completed final source review and verified the nine applied postimages; independent A3 full static peer45f4 and the complete636-source inventory are retained separately. Author current-Core contract matching passed1root/23nodes/no skips. The descriptor accepts this source contract, with historical registry-empty/pending entries retained for their predecessor snapshots. Runtime current-source rebinding and existing policy, principal, process-flag, lease, useful-canary and native gates remain separately mandatory; this source publication supplies no deployment or physical lifecycle qualification. Actual genuine CLI plan, context/summary generation and peripheral verification preserve source provenance.
+
+
+Current AWS1.64 original instance contract source review
+
+The explicit AWS1.64 supplier and retirement catalog require the owning profile inventory capability; unknown future versions retain closed refusal. The owning Core typed helper, rebuilt against the actual compatibility source, derived the new complete AWS contract from original instance V2 metadata and one actual slot1 dry-run. Eight create specs are source-derived, not eight native observations. The same dedicated IAM policy received one new default version with only three exact scope leaves changed; original custom and principal simulations and full readbacks retain the previous version and key. The Hetzner complete typed contract remains identical. Only the AWS literal approval and its complete public fixture changed. Independent full source, input and literal-delta reviews and the complete636-source census are bound in the service review. The actual Darwin contract matcher passed1root/23nodes without skips. These records grant no VM, useful member, native lifecycle or deployment authority; current owning Linux/PG, genuine image and operational rollout remain separate. The released CLI generated context and summary at this exact CODE and verified the metadata content addresses.
