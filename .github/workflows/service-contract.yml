@@ -3,7 +3,7 @@ name: Service contract
 on:
   pull_request:
   push:
-    branches: [main]
+    branches: [main, 'codex/**']
   workflow_dispatch:
 
 permissions:

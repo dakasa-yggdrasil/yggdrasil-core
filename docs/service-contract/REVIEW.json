@@ -1,11 +1,11 @@
 {
   "schema": "core_service_source_review_v1",
-  "accepted_at": "2026-10-21T07:53:17.984622+00:00",
+  "accepted_at": "2026-10-21T08:23:10.342931+00:00",
   "reviewer": "Codex root integration owner; independent of authoring subagent",
   "human_architecture_signoff_claimed": false,
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "7448fb79d9934855bf43c7999e3b805efa7741f5dcabea5ace8aa0fa4aacc6e8",
-  "non_test_Go_sources": 586,
+  "source_inventory_sha256": "835a1f3857e08646d9e5d3db792d11256e9e2608b27f21f8be8b5716b62911b8",
+  "non_test_Go_sources": 591,
   "checker": {
     "private_repository": "dakasa-co/dakasa-commons",
     "publication_commit": "3ad45d29acd7fd730618959a43e31fd1eea24ddd",
@@ -19,14 +19,22 @@
     "Actual HTTP/pre-mux credential ownership, event emission/validation, RPC, HTTP/SDK and shipped-command edges",
     "All three production shipped commands included; no blanket scripts exclusion",
     "Dynamic endpoints describe actual configuration/trust owners, without fabricated fixed production endpoints",
-    "Native qualification build constraints remain separate from production resources and permissions"
+    "Native qualification build constraints remain separate from production resources and permissions",
+    "Original AWS provider branches remain scoped to the exact provider/source/ensure pair; generic legacy AWS and compensation proofs retain the existing contract",
+    "AWS observe_ec2_instance is accepted only for its source-pinned original capability pair",
+    "Signed provider native identity joins the independently read immutable provider tuple, current source/settlement and fresh observation; kernel boot/process lifetimes remain distinct",
+    "Hetzner location/network_zone is kept separate from the removed Cloud API datacenter and unknown availability-zone; AWS account/private hostname come from the actual native reservation"
   ],
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
     "Root compiled clean exact publication with buildvcs=true and verified revision/modified=false",
     "Root integrated census and five static-tool tests passed",
-    "Root actual candidate CLI refused only architecture review incomplete before acceptance"
+    "Root actual candidate CLI refused only architecture review incomplete before acceptance",
+    "Author focused actual provider identity, AWS observation, default registry and workflow source tests passed on Darwin; Linux owning CI remains required",
+    "Root independently reviewed the integration deltas and regenerated the complete source census"
   ],
-  "production_deployment_or_native_pass_claimed": false
+  "production_deployment_or_native_pass_claimed": false,
+  "reviewed_source_head": "49acbf4ab9bc00ec053cae63e0f32e18d281bbec",
+  "previous_accepted_inventory_sha256": "7448fb79d9934855bf43c7999e3b805efa7741f5dcabea5ace8aa0fa4aacc6e8"
 }

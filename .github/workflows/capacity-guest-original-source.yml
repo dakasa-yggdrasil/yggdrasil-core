@@ -1,6 +1,8 @@
 name: Original Guest Core source and PostgreSQL gates
 on:
   pull_request:
+  push:
+    branches: ['codex/**']
   workflow_dispatch:
 permissions:
   contents: read
@@ -10,6 +12,39 @@ permissions:
 # production capacity. Guest owns each genuine same-original two-slot realm;
 # its readonly Core verifier consumes that SAME database after the real caller.
 jobs:
+  original-provider-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GOMAXPROCS: '2'
+      GOMEMLIMIT: 2GiB
+      GOWORK: 'off'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Actual original provider source contracts and default refusal
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=120s -json ./internal/capacity ./controllers/message -run '^(TestOriginalProviderReturnClosedJSON|TestOriginalAWSCreateReturnAndNativeLifecycle|TestOriginalGuestProviderNativeIdentity|TestProviderNativeIdentitySignedClosedWitness|TestVMAWSReadUsesExactExistingCapability|TestOriginalAWSGuestSupplierUsesActualClosedCatalog|TestOriginalAWSGuestSupplierRequiresIndependentSourcePin|TestOriginalGuestSupplierPinsPublicAdapterSource|TestProductionOriginalGuestWitnessRefusesUnsupportedSources|TestOriginalGuestSupplierRequiresActualClosedCatalog)$' | tee original-provider-source.jsonl
+          python3 - <<'PY'
+          import json
+          rows=[json.loads(line) for line in open('original-provider-source.jsonl') if line.strip()]
+          roots={'TestOriginalProviderReturnClosedJSON','TestOriginalAWSCreateReturnAndNativeLifecycle','TestOriginalGuestProviderNativeIdentity','TestProviderNativeIdentitySignedClosedWitness','TestVMAWSReadUsesExactExistingCapability','TestOriginalAWSGuestSupplierUsesActualClosedCatalog','TestOriginalAWSGuestSupplierRequiresIndependentSourcePin','TestOriginalGuestSupplierPinsPublicAdapterSource','TestProductionOriginalGuestWitnessRefusesUnsupportedSources','TestOriginalGuestSupplierRequiresActualClosedCatalog'}
+          passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
+          skipped=[r.get('Test',r.get('Package')) for r in rows if r.get('Action')=='skip']
+          if roots-passed or skipped:raise SystemExit(f'Original provider source incomplete: missing={sorted(roots-passed)}, skips={skipped}')
+          print(f'All {len(roots)} original provider source roots passed; no native qualification claimed')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-original-provider-source
+          path: original-provider-source.jsonl
   source-contracts:
     runs-on: ubuntu-latest
     timeout-minutes: 15

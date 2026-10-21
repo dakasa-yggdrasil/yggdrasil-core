@@ -905,10 +905,15 @@
       "bytes": 17834,
       "sha256": "5e7927dfff875eaff44d51aec536685ca8b24e00495fde952558b668e0ee573e"
     },
+    "controllers/message/workflows_capacity_guest_production_aws.go": {
+      "build_constraint": "!nativequalification",
+      "bytes": 4872,
+      "sha256": "5aff13327719501df1d268572f1742285de2aa9085cd5ebb3aa5953bd8ada9cb"
+    },
     "controllers/message/workflows_capacity_guest_production_provider.go": {
       "build_constraint": "!nativequalification",
-      "bytes": 15720,
-      "sha256": "6938a83b829c220fe73549d28786a3d6592dd421a20e2a1646abf077a870039b"
+      "bytes": 17446,
+      "sha256": "de4dde5a705cf31897e427e3ac32ad068e5413f19f3bde978eb3e13118520394"
     },
     "controllers/message/workflows_capacity_host_original_factory.go": {
       "build_constraint": "default",
@@ -1282,8 +1287,8 @@
     },
     "internal/capacity/guest_original_provisioning.go": {
       "build_constraint": "default",
-      "bytes": 15603,
-      "sha256": "09317d941d306572a5428801f18be9993941f2017316f8711a46ab36b6472367"
+      "bytes": 16227,
+      "sha256": "599492cf474fb1c8d33ca8e66f6c4d03f58c84c4c9301ee12ef67628563ee31e"
     },
     "internal/capacity/guest_postloss_default.go": {
       "build_constraint": "!linux || !nativequalification",
@@ -1307,8 +1312,8 @@
     },
     "internal/capacity/guest_production_profile_registry.go": {
       "build_constraint": "default",
-      "bytes": 3207,
-      "sha256": "114453ac452b8ea3b71b7460dbdb6357c26736ca8b910f8f021af4bd1ffa9caa"
+      "bytes": 3230,
+      "sha256": "9ba4a8d69ff159136004e3b85226a7b3904a7977d59ae0c77be77819b109377a"
     },
     "internal/capacity/guest_production_registry_default.go": {
       "build_constraint": "!nativequalification",
@@ -1334,6 +1339,11 @@
       "build_constraint": "nativequalification",
       "bytes": 114,
       "sha256": "600ed47584a8d2a57b2ae126a29b372592e71b6b6c2125c9939ff8031dd00ebe"
+    },
+    "internal/capacity/guest_provider_identity.go": {
+      "build_constraint": "default",
+      "bytes": 4368,
+      "sha256": "8cd43453c9ce6217ea5a6b61b2ee11c2d25cbe6b1324a435b451655784144919"
     },
     "internal/capacity/guest_provisioning_deadline.go": {
       "build_constraint": "default",
@@ -1387,8 +1397,8 @@
     },
     "internal/capacity/mutations.go": {
       "build_constraint": "default",
-      "bytes": 18142,
-      "sha256": "311c6b2079d9d07c20b881c401576a0a33ae471d55d38b6b078c4ce20d1d97d1"
+      "bytes": 18827,
+      "sha256": "5f5c4d76fb1976b8ad66af61be7c5e37ffa10e71b7f29559fa3255b022ddd727"
     },
     "internal/capacity/native_admission.go": {
       "build_constraint": "default",
@@ -1405,6 +1415,11 @@
       "bytes": 7763,
       "sha256": "6de35e30afb64953e1d9e32bfd1ecb1ecbb468356a59551a5c7858657e27bf9b"
     },
+    "internal/capacity/original_aws_lifecycle.go": {
+      "build_constraint": "default",
+      "bytes": 1999,
+      "sha256": "8c3ca1351d780ec67692ea5f590beca33ed59a920453934be487a1bc5b1ef9c5"
+    },
     "internal/capacity/original_canary_authority.go": {
       "build_constraint": "default",
       "bytes": 10297,
@@ -1412,8 +1427,8 @@
     },
     "internal/capacity/original_provider_return.go": {
       "build_constraint": "default",
-      "bytes": 2896,
-      "sha256": "547c5addef1e5bf1eefa8c1dff829debceaad57223643d5e1e03e64c9f18ca8b"
+      "bytes": 3964,
+      "sha256": "7672bde6f84d7a1732763af45bf7eafe575531d6e513e43cfabddce5ff977389"
     },
     "internal/capacity/planner.go": {
       "build_constraint": "default",
@@ -1432,8 +1447,8 @@
     },
     "internal/capacity/vm_observation.go": {
       "build_constraint": "default",
-      "bytes": 16290,
-      "sha256": "a5ad3274dc8180e6659030f72a062301d2aea21ea277b1ef77b059f35c83e95e"
+      "bytes": 16449,
+      "sha256": "ebce541122f1e3c92dcce869e9ac605705a19c9299bf327754d7c93b8bf44fde"
     },
     "internal/capacity/vm_retirement.go": {
       "build_constraint": "default",
@@ -2085,10 +2100,15 @@
       "bytes": 625,
       "sha256": "e07edb2722c013339369b689acc38cb78c3b5d71f17e78a95c90fbbc991262ea"
     },
+    "model/capacity_guest_provider_identity.go": {
+      "build_constraint": "default",
+      "bytes": 979,
+      "sha256": "704528311aeb92eb6a5e6b9ef267017df7d889a3b112325b2f2ea403f8bcaa92"
+    },
     "model/capacity_guest_provisioning.go": {
       "build_constraint": "default",
-      "bytes": 12692,
-      "sha256": "2807c54a0f17a2ac6f889f2461f8ce865da2493f00f15879c96ddf611c17c347"
+      "bytes": 12805,
+      "sha256": "89a627bfe0631b09f6a421b6b9e3ef0fad052cad184589b3c8a9f076397f7c71"
     },
     "model/capacity_guest_retirement.go": {
       "build_constraint": "default",
@@ -2107,8 +2127,8 @@
     },
     "model/capacity_mutation.go": {
       "build_constraint": "default",
-      "bytes": 10799,
-      "sha256": "b2ce2c6fe0dd6504dca164cb378c4ac25e474cf90f0ab60259e7e2e19eb01b58"
+      "bytes": 11598,
+      "sha256": "14d37739ada658c078ea081c0d2c77899b05e45f3049d425fa9ab02be890c359"
     },
     "model/capacity_native_pod.go": {
       "build_constraint": "default",
@@ -2127,8 +2147,8 @@
     },
     "model/capacity_vm_observation.go": {
       "build_constraint": "default",
-      "bytes": 8680,
-      "sha256": "37a37c1c6ac99043b3308cbf481541ae290e649e584fd6d491c500cfc573ee59"
+      "bytes": 8808,
+      "sha256": "5a93acf732379b1f9f961f900787113ac8cea7f706cf3f96bc4e17e7d16a5d74"
     },
     "model/capacity_vm_retirement.go": {
       "build_constraint": "default",
@@ -2587,8 +2607,8 @@
     },
     "repository/capacity_guest_provisioning.go": {
       "build_constraint": "default",
-      "bytes": 27120,
-      "sha256": "cc1b1c623ab1aa7442707dd52a2170fb386ee1f713eb45c18870cc78644bb476"
+      "bytes": 27828,
+      "sha256": "1bf9b4f317dab017c92653e87d69c3c7161452bb5d417b7fc30c5357b7c8ed26"
     },
     "repository/capacity_guest_qualification.go": {
       "build_constraint": "default",
@@ -2627,8 +2647,8 @@
     },
     "repository/capacity_mutations.go": {
       "build_constraint": "default",
-      "bytes": 44208,
-      "sha256": "cf89a3b2debddbaddc955e77a7527b0437ca38608f34a28188185f5d5bd64ab8"
+      "bytes": 44085,
+      "sha256": "916286a47a30d43f0be7f958a6c03881086a3ba82428507c6267eb1a0f87dbda"
     },
     "repository/capacity_native_archive.go": {
       "build_constraint": "default",
@@ -2664,6 +2684,11 @@
       "build_constraint": "default",
       "bytes": 16566,
       "sha256": "b8650f7f7efdc05ec4980bb1bc5a6326a4f0319e8fc90b4f2e9a145621327a65"
+    },
+    "repository/capacity_original_native_completion.go": {
+      "build_constraint": "default",
+      "bytes": 938,
+      "sha256": "f954c38c3d7cb84e482cbc4d4856e82c6cd362efcf38828a128de523b0dc2ea3"
     },
     "repository/capacity_power_discriminator.go": {
       "build_constraint": "default",
