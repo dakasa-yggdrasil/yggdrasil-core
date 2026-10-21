@@ -42,7 +42,7 @@ func ValidateGuestProviderNativeIdentity(i *model.CapacityGuestProviderNativeIde
 		// The current Cloud API exposes location/network_zone but removed its
 		// datacenter property. It cannot attest metadata's availability-zone.
 		if !guestNativeNumeric(i.ResourceID) || !guestNativeNumeric(i.TypeID) || !guestNativeNumeric(i.ImageID) || i.AccountID != "" || i.Zone != "" {
-			return fmt.Errorf("Hetzner native realm mismatch")
+			return fmt.Errorf("hetzner native realm mismatch")
 		}
 	default:
 		return fmt.Errorf("unsupported native provider identity")

@@ -71,7 +71,7 @@ func TestGuestRetirementV2OriginalOwnerConsumesWholeBudgetOnce(t *testing.T) {
 					n.Signature, _ = GuestLifecycleSignature(observer, n)
 				}
 				raw, _ := json.Marshal(n)
-				var body io.ReadCloser = io.NopCloser(strings.NewReader(string(raw)))
+				body := io.NopCloser(strings.NewReader(string(raw)))
 				if kind == "late_close" {
 					body = guestOriginalDeadlineBody{Reader: strings.NewReader(string(raw)), deadline: r.Intent.OriginalDeadline}
 				}

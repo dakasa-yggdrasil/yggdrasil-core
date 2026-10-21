@@ -128,7 +128,7 @@ func finishProductionGuestNativeDestroyV2(ctx context.Context, store repository.
 	}
 	// Each provider must have its own exact ordinary destroy/read contract.
 	// Version checks below happen before issuance or the actual adapter send.
-	if !capacity.AWSOriginalMutationPair(b) && !(b.EnsureCapability == "ensure_server" && b.DestroyCapability == "destroy_server") {
+	if !capacity.AWSOriginalMutationPair(b) && (b.EnsureCapability != "ensure_server" || b.DestroyCapability != "destroy_server") {
 		return nil, errOriginalGuestStep
 	}
 	if found && existing.Grant.State == "confirmed" {

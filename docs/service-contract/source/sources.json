@@ -922,8 +922,8 @@
     },
     "controllers/message/workflows_capacity_guest_production_provider.go": {
       "build_constraint": "!nativequalification",
-      "bytes": 19111,
-      "sha256": "452988ead99ca0f9939333154a6efbb0fce0080d01b69ee91cf18242a743e980"
+      "bytes": 19108,
+      "sha256": "9e9e964a07ccdb1d07a7e74d10509c90f1f5a4e3fba9be486ab09dde0925353c"
     },
     "controllers/message/workflows_capacity_guest_retirement_v2.go": {
       "build_constraint": "default",
@@ -932,8 +932,8 @@
     },
     "controllers/message/workflows_capacity_guest_retirement_v2_source.go": {
       "build_constraint": "!nativequalification",
-      "bytes": 18129,
-      "sha256": "72acb5985095d63038ec09c2c533b41a60e21acf6a7310e71b03a089730437b6"
+      "bytes": 18128,
+      "sha256": "fd40a0f91ec4120922df6bef5c8412b5ed79e7b7d3e962bdc09c665cf57e2199"
     },
     "controllers/message/workflows_capacity_guest_retirement_v2_source_nativequalification.go": {
       "build_constraint": "nativequalification",
@@ -1413,7 +1413,7 @@
     "internal/capacity/guest_provider_identity.go": {
       "build_constraint": "default",
       "bytes": 4368,
-      "sha256": "8cd43453c9ce6217ea5a6b61b2ee11c2d25cbe6b1324a435b451655784144919"
+      "sha256": "79de8fb84c78cce29131dccac9f6e475751d0fc1e83c5299eed0929d7b2f622b"
     },
     "internal/capacity/guest_provisioning_deadline.go": {
       "build_constraint": "default",
@@ -1497,8 +1497,8 @@
     },
     "internal/capacity/mutations.go": {
       "build_constraint": "default",
-      "bytes": 18827,
-      "sha256": "5f5c4d76fb1976b8ad66af61be7c5e37ffa10e71b7f29559fa3255b022ddd727"
+      "bytes": 18828,
+      "sha256": "05cc794577bb4130274e561e250e9647e8476d1f883094379ab7a3d96f338193"
     },
     "internal/capacity/native_admission.go": {
       "build_constraint": "default",
@@ -2762,8 +2762,8 @@
     },
     "repository/capacity_guest_profile_authority_v2.go": {
       "build_constraint": "default",
-      "bytes": 3669,
-      "sha256": "83506b69f1a128f18b37ebad941b8ff0731904a8ed4fba4d594d445c5047a4b6"
+      "bytes": 3665,
+      "sha256": "4b934de723dcde681e32044ba2953d0c42d0e5cd0d4ed7a2abe114be5fa4fc70"
     },
     "repository/capacity_guest_provider_readback.go": {
       "build_constraint": "default",

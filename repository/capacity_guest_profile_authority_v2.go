@@ -29,7 +29,7 @@ func (s CapacityStore) GuestOriginalProfileAuthorityV2(ctx context.Context, prin
 		if principal != stored.member.ProvisionerClientPrincipal || memberName != stored.member.Name || slot != stored.member.Slot || profileSHA != stored.pre.ProfileManifestSHA256 || profileSHA != stored.binding.ProfileManifestSHA256 || stored.binding.EvidenceClass != "owned_provisioner_original" {
 			return ErrCapacityMutationAuthorization
 		}
-		policy, _, err := s.guestCurrentTx(ctx, tx, stored, now, true)
+		_, _, err := s.guestCurrentTx(ctx, tx, stored, now, true)
 		if err != nil {
 			return err
 		}
@@ -45,7 +45,7 @@ func (s CapacityStore) GuestOriginalProfileAuthorityV2(ctx context.Context, prin
 		if err = tx.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil {
 			return err
 		}
-		policy, _, err = s.guestCurrentTx(ctx, tx, stored, now, true)
+		policy, _, err := s.guestCurrentTx(ctx, tx, stored, now, true)
 		if err != nil {
 			return err
 		}

@@ -48,7 +48,7 @@ func ValidateMutationBindings(p model.CapacityPolicySpec) error {
 		}
 		id, err := uuid.Parse(b.IntegrationInstanceID)
 		typeID, typeErr := uuid.Parse(b.IntegrationTypeID)
-		if err != nil || id == uuid.Nil || id.String() != b.IntegrationInstanceID || typeErr != nil || typeID == uuid.Nil || typeID.String() != b.IntegrationTypeID || !ValidDigest(b.IntegrationTypeChecksum) || b.Name == "" || len(b.Name) > 128 || names[b.Name] || b.AdapterPrincipalID == "" || len(b.AdapterPrincipalID) > 128 || !ValidDigest(b.IntegrationChecksum) || !ValidDigest(b.ScopeChecksum) || !strings.HasPrefix(b.EnsureCapability, "ensure_") || (!strings.HasPrefix(b.DestroyCapability, "destroy_") && !(awsPair && awsProfile)) || len(b.EnsureCapability) > 128 || len(b.DestroyCapability) > 128 {
+		if err != nil || id == uuid.Nil || id.String() != b.IntegrationInstanceID || typeErr != nil || typeID == uuid.Nil || typeID.String() != b.IntegrationTypeID || !ValidDigest(b.IntegrationTypeChecksum) || b.Name == "" || len(b.Name) > 128 || names[b.Name] || b.AdapterPrincipalID == "" || len(b.AdapterPrincipalID) > 128 || !ValidDigest(b.IntegrationChecksum) || !ValidDigest(b.ScopeChecksum) || !strings.HasPrefix(b.EnsureCapability, "ensure_") || (!strings.HasPrefix(b.DestroyCapability, "destroy_") && (!awsPair || !awsProfile)) || len(b.EnsureCapability) > 128 || len(b.DestroyCapability) > 128 {
 			return fmt.Errorf("capacity mutation binding requires exact identity, digests, principal and capability pair")
 		}
 		key := b.IntegrationInstanceID + "/" + b.ScopeChecksum + "/" + b.ProfileName
