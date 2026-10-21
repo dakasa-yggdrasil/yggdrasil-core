@@ -43,6 +43,7 @@ FROM --platform=$BUILDPLATFORM golang:1.25-bookworm AS build
 
 ARG TARGETOS=linux
 ARG TARGETARCH=amd64
+ARG WITH_CONSOLE=false
 
 WORKDIR /build
 
@@ -56,15 +57,25 @@ RUN go mod download
 
 COPY . .
 
-# Replace the committed placeholder bundle with the freshly-built one
-# from stage console-build. The destination dir already exists with a
-# placeholder index.html so go:embed compiles in dev/local builds.
-COPY --from=console-build /console/dist ./controllers/console/yggdrasil-console-dist
+# The default release compiles the exact committed bundle. Replacing even its
+# placeholder would mark the native Core checkout modified and erase its source
+# authority. An explicitly requested external console build keeps its existing
+# behavior; it does not claim an unmodified native Core source stamp.
+COPY --from=console-build /console/dist /tmp/console-dist
+RUN if [ "${WITH_CONSOLE}" = "true" ]; then \
+        cp -a /tmp/console-dist/. ./controllers/console/yggdrasil-console-dist/; \
+    fi
 
-RUN go build -o /bin/yggdrasil-core . \
+RUN go build -buildvcs=true -o /bin/yggdrasil-core . \
  && go build -o /bin/goose ./scripts/goose \
  && go build -o /bin/yggdrasil-bootstrap ./scripts/bootstrap \
- && go build -o /bin/yggdrasil-bootstrap-admin ./scripts/bootstrap-admin
+ && go build -o /bin/yggdrasil-bootstrap-admin ./scripts/bootstrap-admin \
+ && if [ "${WITH_CONSOLE}" != "true" ]; then \
+        go version -m /bin/yggdrasil-core > /tmp/core-build-info \
+     && awk -v expected="vcs.revision=$(git rev-parse HEAD)" \
+            '$1 == "build" && $2 == expected { found = 1 } END { exit !found }' /tmp/core-build-info \
+     && awk '$1 == "build" && $2 == "vcs.modified=false" { found = 1 } END { exit !found }' /tmp/core-build-info; \
+    fi
 
 FROM alpine:3.21
 

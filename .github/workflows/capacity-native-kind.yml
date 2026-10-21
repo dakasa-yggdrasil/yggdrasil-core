@@ -268,8 +268,13 @@ jobs:
       - name: Build the actual production Core Dockerfile from committed HEAD
         run: |
           set -euo pipefail
-          mkdir "$RUNNER_TEMP/native-core-production"
-          git archive HEAD | tar -x -C "$RUNNER_TEMP/native-core-production"
+          # An independent checkout retains the actual VCS object and index
+          # needed by native source authority. Never copy a worktree .git
+          # pointer or use a shared object database outside the build context.
+          source_commit=$(git rev-parse HEAD)
+          git clone --no-hardlinks --no-checkout "$GITHUB_WORKSPACE" "$RUNNER_TEMP/native-core-production"
+          git -C "$RUNNER_TEMP/native-core-production" checkout --detach "$source_commit"
+          test -z "$(git -C "$RUNNER_TEMP/native-core-production" status --porcelain)"
           docker build --label "org.opencontainers.image.revision=$(git rev-parse HEAD)" -t native-core:head "$RUNNER_TEMP/native-core-production"
           test "$(docker image inspect native-core:head --format '{{ index .Config.Labels "org.opencontainers.image.revision" }}')" = "$(git rev-parse HEAD)"
       - name: Native failure evidence

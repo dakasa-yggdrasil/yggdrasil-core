@@ -1,4 +1,15 @@
-.git
+# Native Core authority reads the compiler's VCS stamp. Keep only the Git
+# object database and worktree index needed to derive that stamp; local Git
+# configuration, hooks, credentials and reflogs never enter the build context.
+.git/**
+!.git/HEAD
+!.git/index
+!.git/packed-refs
+!.git/shallow
+!.git/refs/
+!.git/refs/**
+!.git/objects/
+!.git/objects/**
 .DS_Store
 bin
 dist
