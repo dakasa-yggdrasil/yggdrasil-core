@@ -357,8 +357,8 @@
     },
     "controllers/httpapi/capacity_guest.go": {
       "build_constraint": "default",
-      "bytes": 17926,
-      "sha256": "d951262937e330c81294e42b6428a6e3a5211fb737b5c3694f2932eb8ccab834"
+      "bytes": 18433,
+      "sha256": "929cd76d7e5373610f3ee6c8afb8c5ac4b997332bcf75720b3b05bed66bc788b"
     },
     "controllers/httpapi/capacity_guest_retirement_v2.go": {
       "build_constraint": "default",
@@ -2747,8 +2747,8 @@
     },
     "repository/capacity_guest_provisioning.go": {
       "build_constraint": "default",
-      "bytes": 30003,
-      "sha256": "74c1933fbd21993c7f5c292ba353a082596d6e7c842712678fa0fb1ff723a97d"
+      "bytes": 36006,
+      "sha256": "ff93d2c47b9e974ffb431b82d935aeac0b3c7a626057b5e3a02a407519231c09"
     },
     "repository/capacity_guest_qualification.go": {
       "build_constraint": "default",

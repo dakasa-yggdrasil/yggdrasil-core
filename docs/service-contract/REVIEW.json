@@ -1,10 +1,10 @@
 {
   "schema": "core_service_source_review_v1",
-  "accepted_at": "2026-10-21T10:54:05.832290+00:00",
+  "accepted_at": "2026-10-21T11:26:13.783319+00:00",
   "reviewer": "Codex root integration owner; independent of authoring subagent",
   "human_architecture_signoff_claimed": false,
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "28a33bcefce3ad73070d04d5dcc82b0d2569ff1a080bf9ac06cec906f791f04f",
+  "source_inventory_sha256": "2d2c2663e78d35fa58c95803f7674947ff25634c33a305eccc9b619f80560dc4",
   "non_test_Go_sources": 625,
   "checker": {
     "private_repository": "dakasa-co/dakasa-commons",
@@ -36,7 +36,8 @@
     "Real AWS termination and exact Hetzner0.3 b375 source/catalog capability gate before send; original destroy settlement and retained resource/action/auxiliary absence, same60s GET-only pending polling and fresh afterACK floor at confirmation",
     "Ordered action identity joins treat omitted empty receipt lists semantically while preserving signed raw payloads, exact nonempty IDs/order and duplicate refusal; legacy AWS/create/qualification validation remains separate",
     "Exact original Notify singleton root cgroup path is admitted only under the same complete production binding and validated Notify canary/topology; generic writer paths and qualification remain separate",
-    "Independent original-profile GET uses the fixed authenticated Core route and principal-pinned digest, exactly one immutable original native witness, and rechecks current policy/workflow/lease/compiled approval in the original bounded transaction; caller profile selectors are refused"
+    "Independent original-profile GET uses the fixed authenticated Core route and principal-pinned digest, exactly one immutable original native witness, and rechecks current policy/workflow/lease/compiled approval in the original bounded transaction; caller profile selectors are refused",
+    "Root independently read the complete six-file original pending profile change, existing ready lookup/current transaction owners and exact sentinel discriminator: one current unresolved preregistration and original create grant, locked source/policy/workflow/lease/member joins, no witness/native authority in425, exact canonical non-cacheable response and one ready recheck without deadline renewal"
   ],
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
@@ -54,9 +55,10 @@
     "Hetzner owning Linux CI39585655677 passed actual race/census/image build for literalb375 source; Core current V2 owning Linux/Goose70 native-negative CI is still required",
     "Actual production VM create/useful/drain/delete, native positive PostgreSQL authority chain and operational elasticity remain unqualified by this source acceptance",
     "Root fully read the exact cgroup and original-profile source/test/workflow/Proposed ADR diffs and current transaction/lookup/witness owners; source census regenerated at625",
-    "Author focused Darwin cgroup five roots47 nodes and authenticated profile source three roots61 nodes passed; these do not supply native PostgreSQL or production qualification"
+    "Author focused Darwin cgroup five roots47 nodes and authenticated profile source three roots61 nodes passed; these do not supply native PostgreSQL or production qualification",
+    "Author focused Darwin153nodes passed; Root reviewed literal source and unchanged625production census. Owning native positive PostgreSQL pending-to-witness/old-settled scope remains separate and is not claimed by content tests or source review. Actual previous Core owning Linux4144nodes passed atd2aa, not attributed to this new source."
   ],
   "production_deployment_or_native_pass_claimed": false,
-  "reviewed_source_head": "7f61d941a6c815643e4e7e2cee466102ad2a234d",
-  "previous_accepted_inventory_sha256": "bc1c32fd5f9845ee7706df6e4035d181808f14534c4bcf91c755e86cba04fa72"
+  "reviewed_source_head": "f117e4d63bbdf336ee67338edf58d38a359b3467",
+  "previous_accepted_inventory_sha256": "28a33bcefce3ad73070d04d5dcc82b0d2569ff1a080bf9ac06cec906f791f04f"
 }
