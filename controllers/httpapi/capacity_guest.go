@@ -266,6 +266,10 @@ func (s *Server) serveCapacityGuestRequest(w http.ResponseWriter, r *http.Reques
 		}
 		if profileRead {
 			manifest, err := store.GuestOriginalProfile(ctx, p.base.principalID, p.binding, slot, p.profileSHA, native[0])
+			if errors.Is(err, repository.ErrGuestOriginalCreatePending) {
+				guestOriginalProfilePendingReply(w)
+				return
+			}
 			if err != nil {
 				guestHTTPError(w, err)
 				return
@@ -414,4 +418,12 @@ func guestHTTPError(w http.ResponseWriter, err error) {
 	default:
 		writeProblemJSON(w, 503, "capacity.guest_unavailable", "original durable Guest state unavailable; recover by exact GET")
 	}
+}
+
+// A fixed non-authoritative signal; no tuple, profile or native ID is exposed.
+func guestOriginalProfilePendingReply(w http.ResponseWriter) {
+	w.Header().Set("Content-Type", "application/json")
+	w.Header().Set("Cache-Control", "no-store")
+	w.WriteHeader(http.StatusTooEarly)
+	_, _ = w.Write([]byte(`{"schema":"original_guest_profile_pending_v1","code":"original_create_pending"}`))
 }

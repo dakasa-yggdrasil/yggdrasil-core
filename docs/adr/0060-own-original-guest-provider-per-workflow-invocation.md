@@ -172,3 +172,27 @@ The read neither creates nor renews preregistration. Guest still verifies the
 original signed witness's profile hash and independently verifies the actual
 provider-native identity before bootstrap payload or writer admission. Legacy
 local profiles and the separate native qualification realm remain unchanged.
+
+
+### Read-only wait for the owning create
+
+Native boot can reach ConfigV2 before the original provider operation finishes
+its independent health observations and records the immutable create witness.
+The fixed profile endpoint may return only the canonical non-authoritative 425
+`{"schema":"original_guest_profile_pending_v1","code":"original_create_pending"}`
+after finding exactly one scoped, unexpired original preregistration and open
+create grant. Under the existing scope lock it rechecks current policy,
+workflow, lease, source, compiled approval and exact original grant content;
+failed/foreign/expired state and SQL errors never become pending. No native ID
+proves authority in this branch. A witness that commits concurrently is read
+again once within the same HTTP budget, preserving the exact immutable selector.
+
+Guest owns one parent-clipped monotonic wait of at most 420 seconds, beginning
+before one native selector read. It repeats only the fixed profile GET on that
+exact 425 body. Every Do/read/EOF/Close exchange has a child budget of at most
+five seconds; unknown bodies, authentication errors, late returns and Close
+failures hold. The wait neither renews the original create/lease nor retries a
+mutation. Ready responses still require the full accepted create witness and
+independent native health, and bootstrap still verifies the signed witness.
+The original five-second canary, thirty-second retirement and HTTP timeouts
+remain separate. Source tests do not claim a positive native PostgreSQL witness.

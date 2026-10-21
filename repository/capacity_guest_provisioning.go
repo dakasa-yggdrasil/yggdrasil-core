@@ -486,7 +486,7 @@ func (s CapacityStore) GuestExactOriginalLookup(ctx context.Context, principal, 
 // The principal already pins the full profile digest. The native ID is only a
 // selector for exactly one original create witness, never a proof or adoption.
 // Recheck current authority under the existing original transaction and budget.
-func (s CapacityStore) GuestOriginalProfile(ctx context.Context, principal, memberName string, slot int, profileSHA, nativeResourceID string) (model.CapacityGuestProtectedProfileManifest, error) {
+func (s CapacityStore) guestOriginalReadyProfile(ctx context.Context, principal, memberName string, slot int, profileSHA, nativeResourceID string) (model.CapacityGuestProtectedProfileManifest, error) {
 	var result model.CapacityGuestProtectedProfileManifest
 	if s.DB == nil {
 		return result, ErrCapacityMutationAuthorization
@@ -515,4 +515,106 @@ func (s CapacityStore) GuestOriginalProfile(ctx context.Context, principal, memb
 		return model.CapacityGuestProtectedProfileManifest{}, err
 	}
 	return result, nil
+}
+
+// ErrGuestOriginalCreatePending is a read-only observation, never a witness or
+// an admission. Only a uniquely scoped, current original create may produce it.
+var ErrGuestOriginalCreatePending = errors.New("original Guest create pending")
+
+func (s CapacityStore) GuestOriginalProfile(ctx context.Context, principal, memberName string, slot int, profileSHA, nativeResourceID string) (model.CapacityGuestProtectedProfileManifest, error) {
+	result, err := s.guestOriginalReadyProfile(ctx, principal, memberName, slot, profileSHA, nativeResourceID)
+	if !errors.Is(err, ErrCapacityMutationAuthorization) || s.DB == nil {
+		return result, err
+	}
+	pending, pendingErr := s.guestOriginalProfilePending(ctx, principal, memberName, slot, profileSHA)
+	if pendingErr != nil && !errors.Is(pendingErr, ErrCapacityMutationAuthorization) {
+		return model.CapacityGuestProtectedProfileManifest{}, pendingErr
+	}
+	if pending {
+		return model.CapacityGuestProtectedProfileManifest{}, ErrGuestOriginalCreatePending
+	}
+	// A witness can commit between the first lookup and the locked pending read.
+	// Recheck it once in the SAME request context; never recurse or renew a lease.
+	return s.guestOriginalReadyProfile(ctx, principal, memberName, slot, profileSHA, nativeResourceID)
+}
+
+func (s CapacityStore) guestOriginalProfilePending(ctx context.Context, principal, memberName string, slot int, profileSHA string) (bool, error) {
+	if principal == "" || memberName == "" || slot < 1 || slot > 64 || !capacity.ValidDigest(profileSHA) {
+		return false, ErrCapacityMutationAuthorization
+	}
+	rows, err := s.DB.QueryContext(ctx, `SELECT p.id::text FROM public.capacity_vm_provisioning_preregistrations p JOIN public.capacity_mutation_grants m ON m.id=p.create_grant_id WHERE p.preregistration_record->>'binding_name'=$1 AND p.preregistration_record->>'slot'=$2 AND p.profile_manifest_sha256=$3 AND p.original_deadline>clock_timestamp() AND m.state IN ('issued','redeemed','settled') AND NOT EXISTS (SELECT 1 FROM public.capacity_guest_original_create_witnesses w WHERE w.preregistration_id=p.id) LIMIT 2`, memberName, fmt.Sprint(slot), profileSHA)
+	if err != nil {
+		return false, err
+	}
+	count, id := 0, ""
+	for rows.Next() {
+		if err = rows.Scan(&id); err != nil {
+			rows.Close()
+			return false, err
+		}
+		count++
+	}
+	if err = errors.Join(rows.Err(), rows.Close()); err != nil {
+		return false, err
+	}
+	if count != 1 {
+		return false, ErrCapacityMutationAuthorization
+	}
+	pending := false
+	err = s.guestStoredTransaction(ctx, id, func(tx *sql.Tx, stored guestOriginalStored, now time.Time) error {
+		if principal != stored.member.ProvisionerClientPrincipal || memberName != stored.member.Name || slot != stored.member.Slot || profileSHA != stored.binding.ProfileManifestSHA256 || profileSHA != stored.pre.ProfileManifestSHA256 || capacity.GuestRetirementSHA(stored.binding.ProfileManifest) != profileSHA || stored.binding.EvidenceClass != "owned_provisioner_original" {
+			return ErrCapacityMutationAuthorization
+		}
+		p, _, err := s.guestCurrentTx(ctx, tx, stored, now, true)
+		if err != nil {
+			return err
+		}
+		var raw []byte
+		var state string
+		if err = tx.QueryRowContext(ctx, `SELECT state,grant_record FROM public.capacity_mutation_grants WHERE id=$1 FOR SHARE`, stored.pre.OriginalCreateGrantID).Scan(&state, &raw); err != nil {
+			return err
+		}
+		var record capacityMutationRecord
+		if json.Unmarshal(raw, &record) != nil || !guestOriginalCreateStillPending(p, stored, record, state, now) {
+			return ErrCapacityConflict
+		}
+		var witnessed bool
+		if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.capacity_guest_original_create_witnesses WHERE preregistration_id=$1)`, id).Scan(&witnessed); err != nil {
+			return err
+		}
+		pending = !witnessed
+		return nil
+	})
+	if err == nil && pending {
+		deadline, bounded := ctx.Deadline()
+		if !bounded || ctx.Err() != nil || !time.Now().Before(deadline) {
+			return false, ErrCapacityConflict
+		}
+	}
+	return pending, err
+}
+
+// Content joins only. Current policy, source, lease and original deadline are
+// checked by guestCurrentTx under the same scope lock before this helper.
+func guestOriginalCreateStillPending(p model.CapacityPolicySpec, stored guestOriginalStored, r capacityMutationRecord, state string, now time.Time) bool {
+	b, err := capacity.VMObservationBinding(p, stored.binding.MutationBindingName)
+	providerMatches := false
+	for _, profile := range p.Profiles {
+		if profile.Name == b.ProfileName && profile.Provider == r.EventProvider {
+			providerMatches = true
+		}
+	}
+	if err != nil || !providerMatches || !reflect.DeepEqual(b, r.Binding) || r.Grant.State != state || r.Grant.GrantID != stored.pre.OriginalCreateGrantID || r.Grant.BindingName != b.Name || r.Grant.IntegrationInstanceID != b.IntegrationInstanceID || r.Grant.ScopeChecksum != b.ScopeChecksum || r.Grant.ProfileName != b.ProfileName || r.Grant.Slot != stored.pre.Slot || r.Grant.Capability != b.EnsureCapability || r.Grant.RequestSHA256 != stored.pre.OriginalCreateRequestSHA256 || r.Grant.CompensationOf != "" || r.PolicyID.String() != stored.pre.PolicyID || r.PolicyChecksum != stored.pre.PolicyChecksum || r.WorkflowID.String() != stored.pre.WorkflowID || r.Generation != stored.pre.Generation || r.FencingToken != stored.pre.Fence || r.LeaseOwner != stored.pre.LeaseOwner || r.ExecutorID != stored.pre.ExecutorID || stored.pre.CoreSourceCommit != stored.binding.CoreAuthoritySourceCommit || (r.EventProvider != "aws" && r.EventProvider != "hetzner") {
+		return false
+	}
+	switch state {
+	case "issued":
+		return r.Settlement == nil && r.AttemptID == "" && now.Before(r.Grant.ExpiresAt)
+	case "redeemed":
+		return r.Settlement == nil && r.AttemptID != ""
+	case "settled":
+		return r.Settlement != nil && r.AttemptID != "" && r.Settlement.GrantID == r.Grant.GrantID && r.Settlement.AttemptID == r.AttemptID && r.Settlement.RequestSHA256 == r.Grant.RequestSHA256 && r.Settlement.Outcome == "accepted" && r.Settlement.TransportCompleted
+	default:
+		return false
+	}
 }

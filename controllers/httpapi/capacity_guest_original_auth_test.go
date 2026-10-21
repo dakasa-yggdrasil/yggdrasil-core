@@ -245,7 +245,7 @@ func TestCapacityGuestOriginalCanonicalResponse(t *testing.T) {
 // They exercise the public scoped route and prove it cannot read a generic
 // profile or bypass the exact original native-witness selector.
 func TestCapacityGuestOriginalProfileClosedScope(t *testing.T) {
-	for _, kind := range []string{"requires_original_witness", "missing_native", "duplicate_native", "foreign_profile_header", "wrong_slot", "noncanonical_slot", "foreign_member", "unknown_tail", "query", "actor", "plaintext"} {
+	for _, kind := range []string{"requires_original_witness", "pending_sql_error", "missing_native", "duplicate_native", "foreign_profile_header", "wrong_slot", "noncanonical_slot", "foreign_member", "unknown_tail", "query", "actor", "plaintext"} {
 		t.Run(kind, func(t *testing.T) {
 			db, mock, err := sqlmock.New()
 			if err != nil {
@@ -288,14 +288,35 @@ func TestCapacityGuestOriginalProfileClosedScope(t *testing.T) {
 			if kind == "requires_original_witness" {
 				mock.ExpectQuery("SELECT p.id::text,p.nonce_sha256").WithArgs("original-member", "2", strings.Repeat("a", 64), "i-1234567890abcdef0").WillReturnError(errors.New("original native witness unavailable"))
 			}
+			if kind == "pending_sql_error" {
+				mock.ExpectQuery("SELECT p.id::text,p.nonce_sha256").WithArgs("original-member", "2", strings.Repeat("a", 64), "i-1234567890abcdef0").WillReturnRows(sqlmock.NewRows([]string{"id", "nonce_sha256"}))
+				mock.ExpectQuery("SELECT p.id::text FROM public.capacity_vm_provisioning_preregistrations").WithArgs("original-member", "2", strings.Repeat("a", 64)).WillReturnError(errors.New("pending storage unavailable"))
+			}
 			w := httptest.NewRecorder()
 			h.ServeHTTP(w, r)
 			if w.Code < 400 || calls != 0 || strings.Contains(w.Body.String(), token) {
 				t.Fatal("profile read escaped original scope", w.Code, calls)
 			}
+			if kind == "pending_sql_error" && w.Code != 503 {
+				t.Fatal("SQL failure was classified as pending", w.Code)
+			}
 			if err := mock.ExpectationsWereMet(); err != nil {
 				t.Fatal(err)
 			}
 		})
+	}
+}
+
+func TestCapacityGuestOriginalProfilePendingCanonicalNonAuthority(t *testing.T) {
+	w := httptest.NewRecorder()
+	guestOriginalProfilePendingReply(w)
+	if w.Code != 425 || w.Header().Get("Cache-Control") != "no-store" || w.Header().Get("Content-Type") != "application/json" || w.Body.String() != `{"schema":"original_guest_profile_pending_v1","code":"original_create_pending"}` {
+		t.Fatal("pending body became authority or a generic retry response")
+	}
+	// The sentinel is only emitted by the scoped original-profile branch.
+	w = httptest.NewRecorder()
+	guestHTTPError(w, repository.ErrGuestOriginalCreatePending)
+	if w.Code == 425 {
+		t.Fatal("generic errors acquired pending authority")
 	}
 }
