@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 3a268e9e6caa11d059339402bda3f5edaefa139b
-verified_diff_sha256: cb41ed0c4ec07876b3b6886cc56dddf7cda1fb5550db9b92ada4312914fb1e4a
+verified_at_commit: ffcc32d9f510d5d68539b73014c0ca6c02ce7a90
+verified_diff_sha256: 6bcda3e442e60769ff9d1860c75dfff586dacb5ad171e92997d353ff531f2c3b
 reconciler_schema: 1
 verified_at: 2026-10-21
 by: Codex
@@ -246,3 +246,8 @@ Root independently reviewed the full original ready/pending read, locked policy/
 Reviewed the original AWS callback principal exact operation, Hetzner0.3.2 supplier and V2 retirement catalog with its literal published source pin, and six exact native AWS action naming exceptions. Existing provider versions, current hard-fail validation, immutable caller budgets and default empty production registry remain enforced. Independent source peer covered the complete compatibility and owning workflow delta. The complete630-file source census and guarded service contract were reconciled and the exact clean published service checker passed. Author Darwin focused owning naming tests and a byte-exact portable gate harness passed; package build and Linux crosscompile do not claim Linux execution. New owning Linux source, PostgreSQL and native operational gates remain required. No actual elasticity, useful Guest, retirement or production rollout is claimed by this source publication.
 
 The released d8ed CLI generated this plan and both derived artifacts at the actual reviewed source head. All ten authentic context-input digests and original dirty provenance are retained. Reconciliation verification checks source provenance and peripheral write scope; it does not execute the required full tests or connectivity checks. The separate repository-hygiene command retains five pre-existing wrapper/workflow convention findings; the exact published service checker is a distinct successful check. Historical failed owners and evidence remain unchanged.
+
+
+## Original clock ADR title integrity
+
+The exact first title lines of Proposed ADR0064 and ADR0065 now use the required ADR-NNNN header. Every remaining byte, including both decisions, statuses and consequences, is preserved. The original PR context lint failure is retained; executing the literal current checker now validates both durable context files and all63 ADRs. Runtime source, source census, supported provider catalog, allowlist and production registry bytes are unchanged from the compatibility publication. Genuine released CLI plan/context/summary and content-addressed verification bind this documentation-only source successor; no Linux/native/production pass is inferred from it.
