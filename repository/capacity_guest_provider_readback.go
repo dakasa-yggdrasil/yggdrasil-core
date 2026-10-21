@@ -34,12 +34,21 @@ func (s CapacityStore) RecordVMRetirementReadback(ctx context.Context, policy mo
 }
 
 func (s CapacityStore) guestConfirmedDestroyTx(ctx context.Context, tx *sql.Tx, p model.CapacityPolicySpec, original capacityMutationRecord, proof model.CapacityMutationProof, now time.Time) error {
- if handled,err:=s.canonicalSourceConfirmedCleanupTx(ctx,tx,p,original,proof,now);handled{return err}
+	if handled, err := s.canonicalSourceConfirmedCleanupTx(ctx, tx, p, original, proof, now); handled {
+		return err
+	}
 	var id string
 	var bindingWire []byte
 	var digest string
 	if err := tx.QueryRowContext(ctx, `SELECT intent_id::text,original_wire,eligibility_sha256 FROM public.capacity_vm_retirement_delete_bindings WHERE destroy_grant_id=$1`, original.Grant.GrantID).Scan(&id, &bindingWire, &digest); err != nil {
 		return ErrCapacityConflict
+	}
+	v2, kindErr := guestRetirementV2KindTx(ctx, tx, id)
+	if kindErr != nil {
+		return kindErr
+	}
+	if v2 {
+		return guestConfirmedDestroyV2Tx(ctx, tx, p, original, proof, now)
 	}
 	var eligibility model.CapacityGuestRetirementObservation
 	if capacity.DecodeGuestLifecycle(bindingWire, &eligibility) != nil || capacity.GuestRetirementSHA(eligibility) != digest {

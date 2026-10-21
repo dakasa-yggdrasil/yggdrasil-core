@@ -81,3 +81,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0062](0062-preserve-primary-http-with-same-owner-secondary-tls.md) | Preserve primary HTTP with same-owner secondary TLS | Accepted | 2026-10-21 | Core transport and mixed-process rollout |
 
 | [0063](0063-own-fresh-notify-canaries-in-original-guest-sessions.md) | Own fresh Notify canaries in original Guest sessions | Proposed | 2026-10-21 | One-use original publication, native transaction read and separate clock owners |
+
+| [0064](0064-separate-production-retirement-clock-owners.md) | Separate production retirement clock owners | Proposed | 2026-10-21 | Original production retirement and causal native destroy readback |

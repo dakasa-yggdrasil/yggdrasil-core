@@ -734,7 +734,7 @@ func (s CapacityStore) RecordMutationSlot(ctx context.Context, policy model.Mani
 // owning-transport settlement. No current GET proves a lost POST never arrived.
 func (s CapacityStore) ConfirmMutation(ctx context.Context, policy model.Manifest, generation, fence int64, owner string, proof model.CapacityMutationProof) (model.CapacityMutationGrant, error) {
 	var result model.CapacityMutationGrant
-	err := s.mutationTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, _ model.CapacityIntent, now time.Time) error {
+	err := s.mutationTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
 		var raw []byte
 		if err := tx.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1 AND namespace=$2 AND environment=$3 AND domain=$4 AND dimension=$5 AND generation=$6`, proof.GrantID, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, generation).Scan(&raw); err != nil {
 			return err
@@ -758,7 +758,18 @@ func (s CapacityStore) ConfirmMutation(ctx context.Context, policy model.Manifes
 				return nil
 			}
 		}
-		if record.PolicyID != policy.ID || record.PolicyChecksum != policy.Checksum || record.WorkflowID != s.WorkflowID || g.CompensationOf != "" || g.State != "settled" || record.Settlement == nil || !record.Settlement.TransportCompleted || proof.BindingName != b.Name || proof.Slot != g.Slot || proof.RequestSHA256 != g.RequestSHA256 || !validMutationProof(p, proof, now) || !successfulOriginalMutationProof(record, proof, now) {
+		v2Original, v2Err := guestV2RetirementProofTx(ctx, tx, p, record, proof, now)
+		if v2Err != nil {
+			return v2Err
+		}
+		if v2Original {
+			var retirementID string
+			if tx.QueryRowContext(ctx, `SELECT intent_id::text FROM public.capacity_vm_retirement_delete_bindings WHERE destroy_grant_id=$1`, g.GrantID).Scan(&retirementID) != nil || s.guestNotifyRetirementFloorTx(ctx, tx, policy, p, current, g.Slot, now, "after_retirement_floor", retirementID) != nil {
+				return ErrCapacityConflict
+			}
+		}
+
+		if record.PolicyID != policy.ID || record.PolicyChecksum != policy.Checksum || record.WorkflowID != s.WorkflowID || g.CompensationOf != "" || g.State != "settled" || record.Settlement == nil || !record.Settlement.TransportCompleted || proof.BindingName != b.Name || proof.Slot != g.Slot || proof.RequestSHA256 != g.RequestSHA256 || !validMutationProof(p, proof, now) || (!v2Original && !successfulOriginalMutationProof(record, proof, now)) {
 			return ErrCapacityConflict
 		}
 		settled := record.Settlement

@@ -18,6 +18,14 @@ import (
 // echo. Only the current compiled production profile can enter its repository
 // issuer. Neither input nor a package-global hook supplies transport or proof.
 func executeOriginalGuestNotifyProbe(ctx context.Context, db *sql.DB, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, input guestOriginalStepInput, key ed25519.PrivateKey) (any, error) {
+	usage := "initial_useful_membership"
+	if input.LeaseOwner == repository.GuestNotifyMaintenanceOwner(store.ExecutorID) {
+		usage = "steady_useful_membership"
+	}
+	return executeOriginalGuestNotifyProbeForUsage(ctx, db, store, policy, p, input, key, usage)
+}
+
+func executeOriginalGuestNotifyProbeForUsage(ctx context.Context, db *sql.DB, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, input guestOriginalStepInput, key ed25519.PrivateKey, usage string) (any, error) {
 	originalProbe, cancelProbe := context.WithTimeout(ctx, 5*time.Second)
 	defer cancelProbe()
 	ctx = originalProbe
@@ -26,10 +34,6 @@ func executeOriginalGuestNotifyProbe(ctx context.Context, db *sql.DB, store repo
 	}
 	if _, err := uuid.Parse(input.PreregistrationID); err != nil {
 		return nil, errOriginalGuestStep
-	}
-	usage := "initial_useful_membership"
-	if input.LeaseOwner == repository.GuestNotifyMaintenanceOwner(store.ExecutorID) {
-		usage = "steady_useful_membership"
 	}
 	publication, err := store.IssueGuestNotifyCanaryPublication(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, input.PreregistrationID, usage, key)
 	if err != nil || publication.Slot != input.Slot {

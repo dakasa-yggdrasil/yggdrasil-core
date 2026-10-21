@@ -394,6 +394,13 @@ func (s CapacityStore) guestDestroyEligibilityTx(ctx context.Context, tx *sql.Tx
 	if err := tx.QueryRowContext(ctx, `SELECT r.id::text FROM public.capacity_vm_retirement_intents r JOIN public.capacity_vm_original_enrollments e ON e.preregistration_id=r.preregistration_id WHERE e.enrollment_record->'statement'->'tuple'->>'resource_id'=$1 AND e.enrollment_record->'statement'->'tuple'->>'resource_created_at'=$2 AND r.intent_record->>'policy_id'=$3 AND r.intent_record->>'policy_checksum'=$4 AND r.intent_record->>'generation'=$5 AND r.intent_record->>'fence'=$6 AND r.intent_record->>'lease_owner'=$7`, resourceID, created, policy.ID.String(), policy.Checksum, fmt.Sprint(current.Generation), fmt.Sprint(current.FencingToken), current.LeaseOwner).Scan(&id); err != nil {
 		return ErrCapacityConflict
 	}
+	v2, kindErr := guestRetirementV2KindTx(ctx, tx, id)
+	if kindErr != nil {
+		return kindErr
+	}
+	if v2 {
+		return s.guestDestroyEligibilityV2Tx(ctx, tx, policy, p, current, b, slot, resourceID, created, now, destroyGrantID, id)
+	}
 	stored, err := loadGuestRetirementTx(ctx, tx, id)
 	if err != nil || stored.Request.Intent.Slot != slot || stored.Request.Intent.Tuple.InstanceID != b.IntegrationInstanceID || stored.Request.Intent.Tuple.ScopeChecksum != b.ScopeChecksum || stored.Request.Intent.WorkflowID != s.WorkflowID.String() {
 		return ErrCapacityConflict
@@ -438,6 +445,13 @@ func (s CapacityStore) bindGuestDestroyTx(ctx context.Context, tx *sql.Tx, origi
 	var id string
 	if err := tx.QueryRowContext(ctx, `SELECT id::text FROM public.capacity_vm_retirement_intents WHERE intent_record->'tuple'->>'resource_id'=$1 AND intent_record->'tuple'->>'resource_created_at'=$2 AND intent_record->>'policy_id'=$3 AND intent_record->>'generation'=$4 AND intent_record->>'fence'=$5`, original.Grant.ExpectedResourceID, original.Grant.ExpectedResourceCreatedAt, original.PolicyID.String(), fmt.Sprint(original.Generation), fmt.Sprint(original.FencingToken)).Scan(&id); err != nil {
 		return ErrCapacityConflict
+	}
+	v2, kindErr := guestRetirementV2KindTx(ctx, tx, id)
+	if kindErr != nil {
+		return kindErr
+	}
+	if v2 {
+		return bindGuestDestroyV2Tx(ctx, tx, original, now, id)
 	}
 	stored, err := loadGuestRetirementTx(ctx, tx, id)
 	if err != nil {

@@ -186,7 +186,11 @@ func (s *Server) serveCapacityGuestRequest(w http.ResponseWriter, r *http.Reques
 		return
 	}
 	if r.Method == http.MethodGet && p.role == "actor" {
-		s.serveGuestOriginalAuthority(w, r.WithContext(ctx), p, store)
+		if r.URL.Path == model.GuestRetirementV2AuthorityPath {
+			s.serveGuestOriginalAuthorityV2(w, r.WithContext(ctx), p, store)
+		} else {
+			s.serveGuestOriginalAuthority(w, r.WithContext(ctx), p, store)
+		}
 		return
 	}
 	if r.URL.RawQuery != "" {

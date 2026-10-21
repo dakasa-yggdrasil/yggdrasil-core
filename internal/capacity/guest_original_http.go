@@ -92,7 +92,7 @@ func (c *GuestOriginalHTTPClient) Original(ctx context.Context, method, path str
 			returnedError = errors.Join(returnedError, ErrGuestOriginalTransport, ctx.Err())
 		}
 	}()
-	allowed := method == http.MethodGet && path == GuestNotifyCanaryNoncePath || method == http.MethodPost && path == GuestNotifyCanaryPublicationPath || method == http.MethodGet && path == GuestNotifyCanaryPath || method == http.MethodGet && path == "/v1/runtime-snapshot" || (method == http.MethodPost || method == http.MethodGet) && path == "/v1/retirement" || method == http.MethodGet && GuestOriginalNativeQEMUProviderEnabled("native-qemu") && ((path == "/v1/qualification-serving-probe" || path == "/v1/qualification-serving-probe-nonce") || path == "/v1/qualification-source-refusal")
+	allowed := method == http.MethodGet && (path == model.GuestRetirementV2NoncePath || path == model.GuestRetirementV2ObservationPath) || method == http.MethodPost && path == model.GuestRetirementV2WritePath || method == http.MethodGet && path == GuestNotifyCanaryNoncePath || method == http.MethodPost && path == GuestNotifyCanaryPublicationPath || method == http.MethodGet && path == GuestNotifyCanaryPath || method == http.MethodGet && path == "/v1/runtime-snapshot" || (method == http.MethodPost || method == http.MethodGet) && path == "/v1/retirement" || method == http.MethodGet && GuestOriginalNativeQEMUProviderEnabled("native-qemu") && ((path == "/v1/qualification-serving-probe" || path == "/v1/qualification-serving-probe-nonce") || path == "/v1/qualification-source-refusal")
 	if c == nil || c.client == nil || !allowed || len(body) < 1 || len(body) > GuestBootstrapLimit || ctx.Err() != nil {
 		result.PreflightFailed = true
 		return result, ErrGuestOriginalTransport

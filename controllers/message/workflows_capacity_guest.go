@@ -212,7 +212,11 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 			return fail("original-guest-notify-canary-held")
 		}
 	case "capacity.qualify_original_guest_echo", "capacity.finish_original_guest_retirement":
-		output, err = sourceGuestQualificationStep(ctx, store, policy, p, parsed, key, result.Operation)
+		if result.Operation == "capacity.finish_original_guest_retirement" && p.GuestRetirementBinding.EvidenceClass == "owned_provisioner_original" {
+			output, err = executeProductionGuestRetirementFinishedV2(ctx, db, store, policy, p, step, parsed, key)
+		} else {
+			output, err = sourceGuestQualificationStep(ctx, store, policy, p, parsed, key, result.Operation)
+		}
 		if err != nil {
 			return fail(capacity.GuestQualificationPredicate(err))
 		}
@@ -420,6 +424,13 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 			UsefulCapacityKnown bool                                                   `json:"useful_capacity_known"`
 		}{pre, capacity.GuestRetirementSHA(witness), receipt, false}
 	default:
+		if p.GuestRetirementBinding.EvidenceClass == "owned_provisioner_original" {
+			output, err = executeProductionGuestRetirementV2(ctx, db, store, policy, p, step, parsed, member, key)
+			if err != nil {
+				return fail("original-production-retirement-v2-held")
+			}
+			break
+		}
 		if _, err = uuid.Parse(parsed.PreregistrationID); err != nil {
 			return fail("original-guest-step-32")
 		}
