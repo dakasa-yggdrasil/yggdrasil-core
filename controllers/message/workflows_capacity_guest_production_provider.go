@@ -115,7 +115,7 @@ func originalGuestSupplierCatalogFor(provider string, ts model.IntegrationTypeMa
 	}
 	// The reviewed supplier uses the original broker request protocol. HTTP
 	// adapters need their own reviewed no-replay transport contract.
-	if ts.Provider != "hetzner" || ts.Adapter.Version != "0.1.0" || ts.Adapter.Transport != "rabbitmq" || manifest.ValidateIntegrationTypeSpec(ts) != nil {
+	if ts.Provider != "hetzner" || (ts.Adapter.Version != "0.1.0" && ts.Adapter.Version != "0.2.0") || ts.Adapter.Transport != "rabbitmq" || manifest.ValidateIntegrationTypeSpec(ts) != nil {
 		return false
 	}
 	for _, required := range []string{"ensure_server", capacity.VMObserveServer, capacity.VMObserveAction} {

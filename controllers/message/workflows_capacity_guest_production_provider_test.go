@@ -53,13 +53,15 @@ func TestOriginalGuestSupplierRequiresActualClosedCatalog(t *testing.T) {
 	if err = json.Unmarshal(raw, &original); err != nil {
 		t.Fatal(err)
 	}
-	for _, name := range []string{"original", "provider", "transport", "version", "ensure_not_idempotent", "missing_observation", "duplicate_action"} {
+	for _, name := range []string{"original", "slot_candidate", "provider", "transport", "version", "ensure_not_idempotent", "missing_observation", "duplicate_action"} {
 		t.Run(name, func(t *testing.T) {
 			ts, err := manifest.ParseIntegrationTypeSpec(original.Spec)
 			if err != nil {
 				t.Fatal(err)
 			}
 			switch name {
+			case "slot_candidate":
+				ts.Adapter.Version = "0.2.0"
 			case "provider":
 				ts.Provider = "aws"
 			case "transport":
@@ -86,7 +88,7 @@ func TestOriginalGuestSupplierRequiresActualClosedCatalog(t *testing.T) {
 					}
 				}
 			}
-			if originalGuestSupplierCatalog(ts) != (name == "original") {
+			if originalGuestSupplierCatalog(ts) != (name == "original" || name == "slot_candidate") {
 				t.Fatalf("unexpected catalog admission for %s", name)
 			}
 		})

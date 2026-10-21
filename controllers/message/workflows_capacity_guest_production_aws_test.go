@@ -28,7 +28,7 @@ func TestOriginalAWSGuestSupplierUsesActualClosedCatalog(t *testing.T) {
 	if originalAWSGuestSupplierCatalog(legacy) {
 		t.Fatal("legacy name-adopting AWS supplier became original capacity")
 	}
-	for _, kind := range []string{"candidate", "retirement_candidate", "wrong_provider", "old_version", "wrong_transport", "foreign_endpoint", "missing_observe", "missing_native_resource", "duplicate_ensure"} {
+	for _, kind := range []string{"candidate", "retirement_candidate", "slot_candidate", "future_version", "wrong_provider", "old_version", "wrong_transport", "foreign_endpoint", "missing_observe", "missing_native_resource", "duplicate_ensure"} {
 		t.Run(kind, func(t *testing.T) {
 			ts, err := manifest.ParseIntegrationTypeSpec(original.Spec)
 			if err != nil {
@@ -40,6 +40,10 @@ func TestOriginalAWSGuestSupplierUsesActualClosedCatalog(t *testing.T) {
 			switch kind {
 			case "retirement_candidate":
 				ts.Adapter.Version = "1.62.0"
+			case "slot_candidate":
+				ts.Adapter.Version = "1.63.0"
+			case "future_version":
+				ts.Adapter.Version = "1.64.0"
 			case "wrong_provider":
 				ts.Provider = "hetzner"
 			case "old_version":
@@ -69,7 +73,7 @@ func TestOriginalAWSGuestSupplierUsesActualClosedCatalog(t *testing.T) {
 					}
 				}
 			}
-			if originalAWSGuestSupplierCatalog(ts) != (kind == "candidate" || kind == "retirement_candidate") {
+			if originalAWSGuestSupplierCatalog(ts) != (kind == "candidate" || kind == "retirement_candidate" || kind == "slot_candidate") {
 				t.Fatal("AWS closed catalog admission mismatch", kind)
 			}
 		})
