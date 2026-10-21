@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: c06897924054f5c63e5f108a77d0d16a773c021c
-verified_diff_sha256: 298a0e182a8a21c5afbfc7388f2bcea0ba812e92b4cae788888cdbdb97db4349
+verified_at_commit: d0d75a9a6b5e4c4be1ffe8fce56109739c8b0960
+verified_diff_sha256: b82a9c71511cb51ae350486254dc45307f4decda46057912640be80d3df336db
 reconciler_schema: 1
 verified_at: 2026-10-21
 by: Codex
@@ -234,3 +234,8 @@ Reviewed the complete integrated original provider retirement, same-process seco
 ## Original retirement V2 and independent profile reconciliation
 
 Reviewed the complete original Core/Guest clock and caller chain, immutable nonce plus four raw signed journal records, exact provider catalog/native return and auxiliary absence joins, and original no-resend destroy settlement. The Notify singleton cgroup root is restricted to its same fully validated canary binding; generic and qualification paths retain their contracts. The fixed authenticated original-profile GET breaks the userdata/profile hash cycle using the existing principal-pinned digest and immutable create witness, with current policy, lease, workflow, source and compiled approval rechecked. The exact625-file census and clean published service checker passed. Genuine released context and summary were regenerated from this source. Author portable source tests and Hetzner owning CI remain distinct from new Core owning Linux/PG gates and later real native lifecycle/production activation. Registry entries remain empty. No migration, useful capacity, retirement, economic result or production rollout is claimed by source reconciliation. Historical failure evidence stays retained.
+
+
+## Scoped original-profile pending read
+
+Root independently reviewed the full original ready/pending read, locked policy/workflow/lease/source/member/grant joins, unique unresolved preregistration selection excluding old witnesses, exact canonical non-authoritative425 response and one bounded ready recheck. SQL failures, failed or foreign creates and expired authority do not become pending. The updated625-file census and exact published service checker passed. Previous owning Core Linux4144nodes passed atd2aa; author Darwin153nodes are content/source evidence. Current owning Linux and a genuine native PostgreSQL pending-to-witness authority roundtrip remain separately required. No native create, useful capacity, production approval or rollout is claimed by this source reconciliation.
