@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-21T02:42:14-03:00",
+  "generated_at": "2026-10-21T04:00:48-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 995,
@@ -11,7 +11,7 @@
     ".yml": 25
   },
   "provenance": {
-    "commit": "cf2e1bbcf3b9be837bc8917dcc29410981cf1ca4",
+    "commit": "3f1e4ac7532d9720104a156ec02e6c808a4844a5",
     "dirty": true,
     "files": [
       {
@@ -36,7 +36,7 @@
       },
       {
         "path": "Dockerfile",
-        "sha256": "666526124670fef2c76c350befa0e314cc1cd78cfb24fa0fff39a91a728f2ef1"
+        "sha256": "d60e795d4fc4f351c9e91963f0a2538a60b8f7e75ef25872c691021155aecf14"
       },
       {
         "path": "Dockerfile.dev",

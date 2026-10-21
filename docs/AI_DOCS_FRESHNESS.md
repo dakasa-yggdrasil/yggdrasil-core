@@ -7,10 +7,10 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: cf2e1bbcf3b9be837bc8917dcc29410981cf1ca4
-verified_diff_sha256: 5662d7d5855393a366163abb5cabbf431395a3599c16a1e059986fc69fcd9b40
+verified_at_commit: 3f1e4ac7532d9720104a156ec02e6c808a4844a5
+verified_diff_sha256: 14dcb9d9865fa98a4470716014fa9ed46cae2260c4ec9c95256b1ddac1ca3b30
 reconciler_schema: 1
-verified_at: 2026-10-19
+verified_at: 2026-10-21
 by: Codex
 historical_fourth_owning_ci_note: Reconciled the final one-line lowercase hexadecimal interval complement after the complete fourth owning CI inventory. Independent SAME review found zero confirmed findings; exact byte acceptance, length and empty behavior and short-circuit order remain unchanged. Bounded textual recurrence review covers all 209 changed Go paths across tags and finds only this occurrence; it is not a linter or global semantic pass. Five test sources, expected manifest, four named rosters, collector, owning workflow and budgets stay literal. Prior source CI passed all 216 roots and 2055 descendants, each of 2271 nodes once with exact names and no FAIL/SKIP. Fourteen original ZIPs, 373 members and 23 GoJSON collections for all eight prior terminal runs remain retained. Genuine context and summary preserve all nine actual input digests. Successor owning CI is required; old45 stays HOLD/edit_lease false, Registry EMPTY, Native NULL, C6 HOLD and FULL_CORE_NATIVE_PENDING. No local functional execution or production change occurred.
 
@@ -218,3 +218,5 @@ current_original_probe_temporal_diagnostic_review: Closed five-predicate unverif
 
 guest_original_qualification_probe_protocol: original_qualification_serving_probe_v2
 current_original_nonce_v2_review: Authenticated preflight binds an immutable Guest monotonic nonce; Core retains its original five-second acceptance context. These are separate bounded owners, not a simultaneous distributed deadline. Mixed versions refuse. Focused tests and isolated PostgreSQL storage checks do not prove complete native lifecycle or four positive reservation transactions.
+
+current_native_container_build_source_review: The default image preserves committed console bytes and compiler VCS metadata from its actual clean build commit. Only native Git objects and index enter the Docker context; local config, hooks, credentials and reflogs are excluded. Native KinD stages an independent exact checkout instead of a Git archive. Runtime source identity must match the actual artifact build commit, not an older protocol CODE or an injected expected value. External console builds retain their prior behavior and do not claim a clean native source stamp. Remote image build verification remains required; runtime authority, registry entries and production activation are unchanged.
