@@ -14,10 +14,14 @@ import (
 )
 
 func originalAWSGuestSupplierCatalog(ts model.IntegrationTypeManifestSpec) bool {
-	if ts.Provider != "aws" || (ts.Adapter.Version != "1.61.0" && ts.Adapter.Version != "1.62.0" && ts.Adapter.Version != "1.63.0") || ts.Adapter.Transport != "http_json" || ts.Adapter.Endpoints.Execute != "/rpc/execute" || ts.Adapter.Endpoints.Describe != "/rpc/describe" || manifest.ValidateIntegrationTypeSpec(ts) != nil {
+	if ts.Provider != "aws" || (ts.Adapter.Version != "1.61.0" && ts.Adapter.Version != "1.62.0" && ts.Adapter.Version != "1.63.0" && ts.Adapter.Version != "1.64.0") || ts.Adapter.Transport != "http_json" || ts.Adapter.Endpoints.Execute != "/rpc/execute" || ts.Adapter.Endpoints.Describe != "/rpc/describe" || manifest.ValidateIntegrationTypeSpec(ts) != nil {
 		return false
 	}
-	for _, required := range []string{"ensure_ec2_instance", "observe_ec2_instance", "terminate_ec2_instance"} {
+	operations := []string{"ensure_ec2_instance", "observe_ec2_instance", "terminate_ec2_instance"}
+	if ts.Adapter.Version == "1.64.0" {
+		operations = append(operations, capacity.VMObserveInventory)
+	}
+	for _, required := range operations {
 		count := 0
 		for _, action := range ts.ActionCatalog {
 			if action.Name != required {
