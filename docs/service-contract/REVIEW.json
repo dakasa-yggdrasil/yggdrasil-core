@@ -1,0 +1,32 @@
+{
+  "schema": "core_service_source_review_v1",
+  "accepted_at": "2026-10-21T07:53:17.984622+00:00",
+  "reviewer": "Codex root integration owner; independent of authoring subagent",
+  "human_architecture_signoff_claimed": false,
+  "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
+  "source_inventory_sha256": "7448fb79d9934855bf43c7999e3b805efa7741f5dcabea5ace8aa0fa4aacc6e8",
+  "non_test_Go_sources": 586,
+  "checker": {
+    "private_repository": "dakasa-co/dakasa-commons",
+    "publication_commit": "3ad45d29acd7fd730618959a43e31fd1eea24ddd",
+    "tracked_tree_sha256": "f4d5b55f01d765954d8aee968dd366b519ee6ce141b0fd80df66099e998c3a3b",
+    "actual_binary_sha256": "ac6a58a0a98e2bcfbdd3f0571d55b495e4f48ccb7fee4b66295c273f4f211f2f",
+    "actual_binary_clean_VCS": true
+  },
+  "reviewed": [
+    "Exact explicit service profile; legacy defaults and duplicate checks preserved",
+    "Closed bounded checker, no unknown profile fallback; evidence and full non-test source bytes verified",
+    "Actual HTTP/pre-mux credential ownership, event emission/validation, RPC, HTTP/SDK and shipped-command edges",
+    "All three production shipped commands included; no blanket scripts exclusion",
+    "Dynamic endpoints describe actual configuration/trust owners, without fabricated fixed production endpoints",
+    "Native qualification build constraints remain separate from production resources and permissions"
+  ],
+  "validation": [
+    "Author focused owning command/catalog/package tests passed on Darwin",
+    "Author full compiled CLI integration and negative cases passed",
+    "Root compiled clean exact publication with buildvcs=true and verified revision/modified=false",
+    "Root integrated census and five static-tool tests passed",
+    "Root actual candidate CLI refused only architecture review incomplete before acceptance"
+  ],
+  "production_deployment_or_native_pass_claimed": false
+}

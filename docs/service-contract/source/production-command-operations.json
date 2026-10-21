@@ -1,0 +1,186 @@
+{
+  "records": [
+    {
+      "argument_expression": "document",
+      "argument_expression_sha256": "43cc23fa52b87b4cc1d02b5b114154151d6adddb17c9fddc06b027fa99e24008",
+      "build_constraint": "default",
+      "callee": "manifestpkg.NormalizeDocument",
+      "command": "bootstrap",
+      "file": "scripts/bootstrap/main.go",
+      "function": "main",
+      "line": 49
+    },
+    {
+      "argument_expression": "document",
+      "argument_expression_sha256": "43cc23fa52b87b4cc1d02b5b114154151d6adddb17c9fddc06b027fa99e24008",
+      "build_constraint": "default",
+      "callee": "manifestpkg.ValidateDocument",
+      "command": "bootstrap",
+      "file": "scripts/bootstrap/main.go",
+      "function": "main",
+      "line": 50
+    },
+    {
+      "argument_expression": "",
+      "argument_expression_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "build_constraint": "default",
+      "callee": "psql.Open",
+      "command": "bootstrap",
+      "file": "scripts/bootstrap/main.go",
+      "function": "main",
+      "line": 69
+    },
+    {
+      "argument_expression": "ctx, db, document.Kind, document.Metadata.Namespace, document.Metadata.Name, nil, true",
+      "argument_expression_sha256": "e178d9f4976760fdd4041e0208eb4982abf3cf0f270e76f6c6b2bd0c22d1e625",
+      "build_constraint": "default",
+      "callee": "repository.ResolveManifest",
+      "command": "bootstrap",
+      "file": "scripts/bootstrap/main.go",
+      "function": "importManifest",
+      "line": 144
+    },
+    {
+      "argument_expression": "ctx, db, document, checksum",
+      "argument_expression_sha256": "6813307336c6476963ec92876605c66d0ea053a57356a4264bb27c59f8ea066c",
+      "build_constraint": "default",
+      "callee": "repository.CreateManifestVersion",
+      "command": "bootstrap",
+      "file": "scripts/bootstrap/main.go",
+      "function": "importManifest",
+      "line": 155
+    },
+    {
+      "argument_expression": "",
+      "argument_expression_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "build_constraint": "default",
+      "callee": "psql.Open",
+      "command": "bootstrap-admin",
+      "file": "scripts/bootstrap-admin/main.go",
+      "function": "main",
+      "line": 50
+    },
+    {
+      "argument_expression": "ctx, db, email",
+      "argument_expression_sha256": "66dc386f5aab4b3aa9377055fdcf56f6279a65a58589657a51fe4e82b32559ed",
+      "build_constraint": "default",
+      "callee": "repository.GetCollaboratorByPrimaryEmail",
+      "command": "bootstrap-admin",
+      "file": "scripts/bootstrap-admin/main.go",
+      "function": "promoteAdmin",
+      "line": 79
+    },
+    {
+      "argument_expression": "ctx, nil",
+      "argument_expression_sha256": "6fc29c0d3931060e66d798df8745796051a76c2cf7df118e740e7ad5fbbfb668",
+      "build_constraint": "default",
+      "callee": "db.BeginTx",
+      "command": "bootstrap-admin",
+      "file": "scripts/bootstrap-admin/main.go",
+      "function": "promoteAdmin",
+      "line": 89
+    },
+    {
+      "argument_expression": "",
+      "argument_expression_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "build_constraint": "default",
+      "callee": "tx.Rollback",
+      "command": "bootstrap-admin",
+      "file": "scripts/bootstrap-admin/main.go",
+      "function": "promoteAdmin",
+      "line": 93
+    },
+    {
+      "argument_expression": "ctx, tx, collab.ID, teamSlug, \"bootstrap-cli\"",
+      "argument_expression_sha256": "945245aec90ec0b7cd23a8a917b1029b6575b3348d2b2317fbecefed999e7a97",
+      "build_constraint": "default",
+      "callee": "repository.AddCollaboratorToTeamBySlugTx",
+      "command": "bootstrap-admin",
+      "file": "scripts/bootstrap-admin/main.go",
+      "function": "promoteAdmin",
+      "line": 95
+    },
+    {
+      "argument_expression": "",
+      "argument_expression_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "build_constraint": "default",
+      "callee": "tx.Commit",
+      "command": "bootstrap-admin",
+      "file": "scripts/bootstrap-admin/main.go",
+      "function": "promoteAdmin",
+      "line": 98
+    },
+    {
+      "argument_expression": "\"postgres\"",
+      "argument_expression_sha256": "264c0424e4bd463a7d02b9db6896143e1a96cd1c52511119f839d2bc9c934241",
+      "build_constraint": "default",
+      "callee": "goose.SetDialect",
+      "command": "goose",
+      "file": "scripts/goose/main.go",
+      "function": "main",
+      "line": 57
+    },
+    {
+      "argument_expression": "db, dir",
+      "argument_expression_sha256": "620eb1a6d79e747bc0a33b7c33885c59f52715de96b55cdf3d496373b440a07a",
+      "build_constraint": "default",
+      "callee": "goose.Up",
+      "command": "goose",
+      "file": "scripts/goose/main.go",
+      "function": "main",
+      "line": 64
+    },
+    {
+      "argument_expression": "db, dir",
+      "argument_expression_sha256": "620eb1a6d79e747bc0a33b7c33885c59f52715de96b55cdf3d496373b440a07a",
+      "build_constraint": "default",
+      "callee": "goose.Down",
+      "command": "goose",
+      "file": "scripts/goose/main.go",
+      "function": "main",
+      "line": 68
+    },
+    {
+      "argument_expression": "db, dir",
+      "argument_expression_sha256": "620eb1a6d79e747bc0a33b7c33885c59f52715de96b55cdf3d496373b440a07a",
+      "build_constraint": "default",
+      "callee": "goose.Status",
+      "command": "goose",
+      "file": "scripts/goose/main.go",
+      "function": "main",
+      "line": 72
+    },
+    {
+      "argument_expression": "\"postgres\", psql.LoadConfig().DSN()",
+      "argument_expression_sha256": "6514eabb10644ff23af45ee4dd91dc2511393cb1d93dda7621f5d0dcd9f19682",
+      "build_constraint": "default",
+      "callee": "sql.Open",
+      "command": "goose",
+      "file": "scripts/goose/main.go",
+      "function": "openDB",
+      "line": 83
+    },
+    {
+      "argument_expression": "",
+      "argument_expression_sha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "build_constraint": "default",
+      "callee": "psql.LoadConfig",
+      "command": "goose",
+      "file": "scripts/goose/main.go",
+      "function": "openDB",
+      "line": 83
+    },
+    {
+      "argument_expression": "path, []byte(content), 0o644",
+      "argument_expression_sha256": "f620e0f7f11c4847c0ba95deb6011930d91fd6dc1f501bc1dc7f3bba032929b0",
+      "build_constraint": "default",
+      "callee": "os.WriteFile",
+      "command": "goose",
+      "file": "scripts/goose/main.go",
+      "function": "createMigrationFile",
+      "line": 143
+    }
+  ],
+  "schema": "core_source_interface_census_v1",
+  "scope": "source facts; no deployed endpoint or runtime authority claimed"
+}

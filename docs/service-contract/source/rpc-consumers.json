@@ -1,0 +1,370 @@
+{
+  "records": [
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueEventStreamPull",
+      "file": "controllers/message/event_stream.go",
+      "function": "eventStreamConsumers",
+      "line": 21
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueCollaboratorCreate",
+      "file": "controllers/message/identities.go",
+      "function": "identityConsumers",
+      "line": 36
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueCollaboratorUpdate",
+      "file": "controllers/message/identities.go",
+      "function": "identityConsumers",
+      "line": 42
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueCollaboratorDelete",
+      "file": "controllers/message/identities.go",
+      "function": "identityConsumers",
+      "line": 48
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueCollaboratorGet",
+      "file": "controllers/message/identities.go",
+      "function": "identityConsumers",
+      "line": 54
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueCollaboratorList",
+      "file": "controllers/message/identities.go",
+      "function": "identityConsumers",
+      "line": 60
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueTeamCreate",
+      "file": "controllers/message/identities.go",
+      "function": "identityConsumers",
+      "line": 66
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueTeamUpdate",
+      "file": "controllers/message/identities.go",
+      "function": "identityConsumers",
+      "line": 72
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueTeamDelete",
+      "file": "controllers/message/identities.go",
+      "function": "identityConsumers",
+      "line": 78
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueTeamGet",
+      "file": "controllers/message/identities.go",
+      "function": "identityConsumers",
+      "line": 84
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueTeamList",
+      "file": "controllers/message/identities.go",
+      "function": "identityConsumers",
+      "line": 90
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueTeamMembershipUpsert",
+      "file": "controllers/message/identities.go",
+      "function": "identityConsumers",
+      "line": 96
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueTeamMembershipList",
+      "file": "controllers/message/identities.go",
+      "function": "identityConsumers",
+      "line": 102
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueIntegrationExecute",
+      "file": "controllers/message/integrations.go",
+      "function": "integrationConsumers",
+      "line": 39
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueCatalogDiscover",
+      "file": "controllers/message/integrations.go",
+      "function": "integrationConsumers",
+      "line": 45
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueIntegrationStatusGet",
+      "file": "controllers/message/integrations.go",
+      "function": "integrationConsumers",
+      "line": 55
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueIntegrationStatusList",
+      "file": "controllers/message/integrations.go",
+      "function": "integrationConsumers",
+      "line": 61
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueIntegrationInstanceHealthGet",
+      "file": "controllers/message/integrations.go",
+      "function": "integrationConsumers",
+      "line": 67
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueIntegrationInstanceHealthList",
+      "file": "controllers/message/integrations.go",
+      "function": "integrationConsumers",
+      "line": 73
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueIntegrationCatalogGet",
+      "file": "controllers/message/integrations.go",
+      "function": "integrationConsumers",
+      "line": 79
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueIntegrationCatalogList",
+      "file": "controllers/message/integrations.go",
+      "function": "integrationConsumers",
+      "line": 85
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueManifestValidate",
+      "file": "controllers/message/manifests.go",
+      "function": "manifestConsumers",
+      "line": 47
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueManifestCreate",
+      "file": "controllers/message/manifests.go",
+      "function": "manifestConsumers",
+      "line": 57
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueManifestList",
+      "file": "controllers/message/manifests.go",
+      "function": "manifestConsumers",
+      "line": 66
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueManifestGet",
+      "file": "controllers/message/manifests.go",
+      "function": "manifestConsumers",
+      "line": 72
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueManifestRBACEvaluate",
+      "file": "controllers/message/manifests.go",
+      "function": "manifestConsumers",
+      "line": 78
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueManifestPolicyEval",
+      "file": "controllers/message/manifests.go",
+      "function": "manifestConsumers",
+      "line": 84
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueAuthorizationEval",
+      "file": "controllers/message/manifests.go",
+      "function": "manifestConsumers",
+      "line": 90
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueCollaboratorReconcileState",
+      "file": "controllers/message/manifests.go",
+      "function": "manifestConsumers",
+      "line": 96
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueProductInstallationStateDiscover",
+      "file": "controllers/message/products.go",
+      "function": "productConsumers",
+      "line": 36
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueProductMaterialize",
+      "file": "controllers/message/products.go",
+      "function": "productConsumers",
+      "line": 45
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueProductInstallationReconcile",
+      "file": "controllers/message/products.go",
+      "function": "productConsumers",
+      "line": 51
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueProductInstallationApply",
+      "file": "controllers/message/products.go",
+      "function": "productConsumers",
+      "line": 57
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueProductInstallationObserve",
+      "file": "controllers/message/products.go",
+      "function": "productConsumers",
+      "line": 63
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueProductInstallationUninstall",
+      "file": "controllers/message/products.go",
+      "function": "productConsumers",
+      "line": 69
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueProductInstallationStateDiscover",
+      "file": "controllers/message/products.go",
+      "function": "productConsumers",
+      "line": 75
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueTopologyNodeUpsert",
+      "file": "controllers/message/topology.go",
+      "function": "topologyConsumers",
+      "line": 37
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueTopologyNodeGet",
+      "file": "controllers/message/topology.go",
+      "function": "topologyConsumers",
+      "line": 43
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueTopologyNodeChildren",
+      "file": "controllers/message/topology.go",
+      "function": "topologyConsumers",
+      "line": 49
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueTopologyEdgeUpsert",
+      "file": "controllers/message/topology.go",
+      "function": "topologyConsumers",
+      "line": 55
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueTopologyEdgeList",
+      "file": "controllers/message/topology.go",
+      "function": "topologyConsumers",
+      "line": 61
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueTopologyDocumentUpsert",
+      "file": "controllers/message/topology.go",
+      "function": "topologyConsumers",
+      "line": 67
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueTopologyDocumentGet",
+      "file": "controllers/message/topology.go",
+      "function": "topologyConsumers",
+      "line": 73
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueTopologyDocumentList",
+      "file": "controllers/message/topology.go",
+      "function": "topologyConsumers",
+      "line": 79
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueTopologyDocumentValue",
+      "file": "controllers/message/topology.go",
+      "function": "topologyConsumers",
+      "line": 85
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueTopologyAccessEvaluate",
+      "file": "controllers/message/topology.go",
+      "function": "topologyConsumers",
+      "line": 91
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueBuildProjectCreate",
+      "file": "controllers/message/topology.go",
+      "function": "topologyConsumers",
+      "line": 97
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueBuildProjectGet",
+      "file": "controllers/message/topology.go",
+      "function": "topologyConsumers",
+      "line": 103
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueBuildProjectList",
+      "file": "controllers/message/topology.go",
+      "function": "topologyConsumers",
+      "line": 109
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueBuildProjectDelete",
+      "file": "controllers/message/topology.go",
+      "function": "topologyConsumers",
+      "line": 115
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueWorkflowDispatch",
+      "file": "controllers/message/workflows.go",
+      "function": "workflowConsumers",
+      "line": 137
+    },
+    {
+      "build_constraint": "default",
+      "endpoint_expression": "queueWorkflowRun",
+      "file": "controllers/message/workflows.go",
+      "function": "workflowConsumers",
+      "line": 143
+    }
+  ],
+  "schema": "core_source_interface_census_v1",
+  "scope": "source facts; no deployed endpoint or runtime authority claimed"
+}

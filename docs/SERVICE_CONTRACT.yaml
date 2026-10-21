@@ -1,0 +1,95 @@
+{
+  "schema_version": 2,
+  "service": {
+    "name": "yggdrasil-core",
+    "repo": "dakasa-yggdrasil/yggdrasil-core"
+  },
+  "profile": "public-go-module-v1",
+  "scope": "source-contract-with-parameterized-deployment",
+  "review_status": "accepted",
+  "coverage": "complete",
+  "unresolved": [],
+  "source_inventory": {
+    "id": "complete_runtime_source_census",
+    "evidence": "docs/service-contract/source/sources.json",
+    "sha256": "7448fb79d9934855bf43c7999e3b805efa7741f5dcabea5ace8aa0fa4aacc6e8"
+  },
+  "produces": [
+    {
+      "id": "transactional_event_emission_sites",
+      "evidence": "docs/service-contract/source/event-emissions.json",
+      "sha256": "ad4fe4b5cca60497636443228202a2825371cbe800895f13f8962ad32e48667c"
+    },
+    {
+      "id": "embedded_event_schema_keys",
+      "evidence": "docs/service-contract/source/event-schemas.json",
+      "sha256": "eb0551010a623e9c7b6bbfa42711c63be4e7751f8f07bef89d80a3bef4d25f00"
+    },
+    {
+      "id": "event_and_queue_constants",
+      "evidence": "docs/service-contract/source/event-and-queue-constants.json",
+      "sha256": "28ac6b0e4a17ad5a4f85f73c3c56220648cf874c925523fb63d42b8270811927"
+    }
+  ],
+  "consumes": [
+    {
+      "id": "logical_rpc_consumers",
+      "evidence": "docs/service-contract/source/rpc-consumers.json",
+      "sha256": "c579bbf4cc5c7f584f22ce2d6a2e86d7a5edbd9a59ce305db0a756c990e47ca1"
+    },
+    {
+      "id": "http_inbound_protocols_and_auth",
+      "evidence": "docs/service-contract/SEMANTICS.md",
+      "sha256": "22ab301fd08c4c476e7b3ac0964e36ccbc7c2e49680a3754040cfc35c3a74634"
+    },
+    {
+      "id": "dependency_versions",
+      "evidence": "go.mod",
+      "sha256": "54fd842f05970b55a8b07605246a3f70e4dfe27676a135233c8adcbbcfdb4f32"
+    },
+    {
+      "id": "shipped_command_ingress_and_database_operations",
+      "evidence": "docs/service-contract/source/production-command-operations.json",
+      "sha256": "ecff88688b91f7195eb033ffbd27b3d7d856af75bbbc9a0ae534ce8d3b217ccd"
+    },
+    {
+      "id": "independent_source_review",
+      "evidence": "docs/service-contract/REVIEW.json",
+      "sha256": "e7de9c19dde9d356ca6a06cd502e3e19da8d6b46b0cb3eafe87a58410ae97e65"
+    }
+  ],
+  "callsREST": [
+    {
+      "id": "http_and_rpc_egress_callsites",
+      "evidence": "docs/service-contract/source/http-egress.json",
+      "sha256": "3633f980c750d9f485dc0f532467c241ddc9eddca4f50ebb8a83236e55515824"
+    },
+    {
+      "id": "optional_provider_sdk_callsites",
+      "evidence": "docs/service-contract/source/provider-sdk-operations.json",
+      "sha256": "2a6ec1c414e5e32535ee05c60c07ba915974aaff9e88475c0cddab90cee8fba8"
+    },
+    {
+      "id": "parameterized_destination_families",
+      "evidence": "docs/service-contract/SEMANTICS.md",
+      "sha256": "22ab301fd08c4c476e7b3ac0964e36ccbc7c2e49680a3754040cfc35c3a74634"
+    }
+  ],
+  "exposesREST": [
+    {
+      "id": "http_mux_registrations",
+      "evidence": "docs/service-contract/source/http-routes.json",
+      "sha256": "003e61d1733a4e1d530efc4e39a4caf848462b2b0d7189fac29a67dc28e3bffa"
+    },
+    {
+      "id": "pre_mux_capacity_dispatch",
+      "evidence": "docs/service-contract/source/http-intercept-dispatch.json",
+      "sha256": "b5c8e23b64d10154274db9e280ebefc796ca0b73f823098e50b467c8f844d930"
+    },
+    {
+      "id": "auth_dispatch_source_functions",
+      "evidence": "docs/service-contract/source/authentication-dispatch.json",
+      "sha256": "689700ced779d29401aaba3fa1283059ca582aa9590c5a6b09dddaac6bcae925"
+    }
+  ]
+}

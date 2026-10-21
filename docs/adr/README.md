@@ -75,3 +75,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0059](0059-pin-production-guest-admission-to-compiled-contracts.md) | Pin production Guest admission to compiled contracts | Proposed | 2026-10-21 | Core original Guest production profile admission |
 
 | [0060](0060-own-original-guest-provider-per-workflow-invocation.md) | Own the original Guest provider per workflow invocation | Proposed | 2026-10-21 | Original source provider lifetime and single-call ownership |
+
+| [0061](0061-verify-public-core-service-contract-explicitly.md) | Verify public Core service contract explicitly | Accepted | 2026-10-21 | Exact source-owned public Core doctor profile |
