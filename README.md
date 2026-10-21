@@ -167,6 +167,20 @@ approved origins, callers and HTTPS health probes. Listener code and CI evidence
 do not establish a production certificate, routing affinity, useful capacity,
 warm stock or deployment; those remain separate release prerequisites.
 
+### Original Guest capacity contracts
+
+The source-owned [provider contract](docs/adr/0060-own-original-guest-provider-per-workflow-invocation.md)
+binds one workflow invocation to an exact AWS or Hetzner adapter source and its
+original create return. Independently read native identity is included in the
+signed Guest witness; kernel boot and application process lifetimes remain
+separate. Production profile approvals default to an empty registry. Source CI
+does not establish private network reachability, useful capacity or retirement.
+
+The explicit public service profile verifies the complete source census and
+[service contract](docs/SERVICE_CONTRACT.yaml). Its independent source review is
+recorded in [REVIEW.json](docs/service-contract/REVIEW.json); operational rollout
+and native qualification require their own evidence.
+
 ## Feature deep-dives
 
 Every feature below has a dedicated guide in [docs/features/](docs/features/)

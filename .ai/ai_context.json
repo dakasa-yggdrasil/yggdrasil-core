@@ -1,22 +1,26 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-21T04:00:48-03:00",
+  "generated_at": "2026-10-21T05:26:30-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 995,
-    ".json": 148,
-    ".py": 3,
+    ".go": 1020,
+    ".json": 161,
+    ".py": 6,
     ".sql": 69,
-    ".yaml": 10,
-    ".yml": 25
+    ".yaml": 11,
+    ".yml": 26
   },
   "provenance": {
-    "commit": "3f1e4ac7532d9720104a156ec02e6c808a4844a5",
+    "commit": "8485ecc806b8a7ab8bd528687925bdcbd1aead7e",
     "dirty": true,
     "files": [
       {
         "path": ".dakasa/service-config.json",
-        "sha256": "1d1046a59a93c778082863b4f51abe44b5e779fe55bd35d0e2d7cee365b822a0"
+        "sha256": "27f4b7dd6619c91fb1f3775b3eb63727c28bfd190c0be4bae34b8781855170d6"
+      },
+      {
+        "path": "docs/SERVICE_CONTRACT.yaml",
+        "sha256": "8233d1def9ecf1bcd90f5459d8ee93e2c24b334317588f027161f4670c0b9169"
       },
       {
         "path": "AGENTS.md",
@@ -28,7 +32,7 @@
       },
       {
         "path": "README.md",
-        "sha256": "e7cad4a276a917ea16203606b6f76001edfc56358ac01fbdee55a5788ba8a1e0"
+        "sha256": "76d905292e3a9313db441410f222d3576da1eed9fa017a6f0c028e4db6d67802"
       },
       {
         "path": "Taskfile.yml",
@@ -54,7 +58,9 @@
   },
   "service": {
     "name": "yggdrasil-core",
-    "scope": "be"
+    "repository": "dakasa-yggdrasil/yggdrasil-core",
+    "scope": "be",
+    "contract_path": "docs/SERVICE_CONTRACT.yaml"
   },
   "top_dirs": [
     {
@@ -64,18 +70,18 @@
     },
     {
       "path": "repository",
-      "files": 174,
-      "kb": 2545
+      "files": 177,
+      "kb": 2556
     },
     {
       "path": "controllers/message",
-      "files": 97,
-      "kb": 1228
+      "files": 104,
+      "kb": 1280
     },
     {
       "path": "model",
-      "files": 74,
-      "kb": 417
+      "files": 76,
+      "kb": 422
     },
     {
       "path": "db/migrations",
@@ -83,14 +89,14 @@
       "kb": 177
     },
     {
+      "path": "internal/capacity",
+      "files": 66,
+      "kb": 998
+    },
+    {
       "path": "manifest",
       "files": 64,
       "kb": 392
-    },
-    {
-      "path": "internal/capacity",
-      "files": 56,
-      "kb": 955
     },
     {
       "path": "addons",
@@ -99,8 +105,8 @@
     },
     {
       "path": "internal/capacitynativeqemu",
-      "files": 36,
-      "kb": 268
+      "files": 37,
+      "kb": 272
     },
     {
       "path": "docs/bootstrap/manifests/integrations",
@@ -305,7 +311,7 @@
     ]
   },
   "ops": {
-    "config_files": 9,
-    "k8s_manifests": 9
+    "config_files": 10,
+    "k8s_manifests": 10
   }
 }

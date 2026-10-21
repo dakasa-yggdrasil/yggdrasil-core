@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 3f1e4ac7532d9720104a156ec02e6c808a4844a5
-verified_diff_sha256: 14dcb9d9865fa98a4470716014fa9ed46cae2260c4ec9c95256b1ddac1ca3b30
+verified_at_commit: 8485ecc806b8a7ab8bd528687925bdcbd1aead7e
+verified_diff_sha256: 8dd0fbcdbe5dd9ee1ab8509f9f16957f8fea4a0b37fc472783ffc8315229acf5
 reconciler_schema: 1
 verified_at: 2026-10-21
 by: Codex
@@ -220,3 +220,7 @@ guest_original_qualification_probe_protocol: original_qualification_serving_prob
 current_original_nonce_v2_review: Authenticated preflight binds an immutable Guest monotonic nonce; Core retains its original five-second acceptance context. These are separate bounded owners, not a simultaneous distributed deadline. Mixed versions refuse. Focused tests and isolated PostgreSQL storage checks do not prove complete native lifecycle or four positive reservation transactions.
 
 current_native_container_build_source_review: The default image preserves committed console bytes and compiler VCS metadata from its actual clean build commit. Only native Git objects and index enter the Docker context; local config, hooks, credentials and reflogs are excluded. Native KinD stages an independent exact checkout instead of a Git archive. Runtime source identity must match the actual artifact build commit, not an older protocol CODE or an injected expected value. External console builds retain their prior behavior and do not claim a clean native source stamp. Remote image build verification remains required; runtime authority, registry entries and production activation are unchanged.
+
+## Integrated original provider and source contract review
+
+The integrated source preserves generic legacy AWS confirmation, binds the original AWS observation to its literal capability pair and signs the independently read AWS or Hetzner identity with the original Guest witness. The complete 591-file runtime census and its hash-bound independent source review were updated, and the actual clean owning service-doctor publication validated this exact integrated source. New Linux owning provider, source and PostgreSQL gates remain required. Default production profile approvals stay empty; no live capacity, private networking, restoration or retirement success is asserted by this metadata reconciliation.
