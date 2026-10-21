@@ -6,11 +6,9 @@
   },
   "profile": "public-go-module-v1",
   "scope": "source-contract-with-parameterized-deployment",
-  "review_status": "candidate",
+  "review_status": "accepted",
   "coverage": "complete",
-  "unresolved": [
-    "Independent integrated V2/provider-retirement source review and current owning CLI acceptance remain to be recorded by integration owner."
-  ],
+  "unresolved": [],
   "source_inventory": {
     "id": "complete_runtime_source_census",
     "evidence": "docs/service-contract/source/sources.json",
@@ -57,7 +55,7 @@
     {
       "id": "independent_source_review",
       "evidence": "docs/service-contract/REVIEW.json",
-      "sha256": "c7ab740ca4a76ee58f1000a2bbeff5ff3e253112c86261468677680453608eb6"
+      "sha256": "fd1e83d48e24d2dcdebb96cbe3d7d834eb7468451d94b2e78a45f887ba63a01d"
     }
   ],
   "callsREST": [
