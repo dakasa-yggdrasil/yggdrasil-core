@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: ffcc32d9f510d5d68539b73014c0ca6c02ce7a90
-verified_diff_sha256: 6bcda3e442e60769ff9d1860c75dfff586dacb5ad171e92997d353ff531f2c3b
+verified_at_commit: 9bba0b7b1fbc77bbe7074d8c5fcac811be12d3b0
+verified_diff_sha256: e9165802f468a73eae688fc4d112d54b10021d41f2f4513a148dd674288a5b31
 reconciler_schema: 1
 verified_at: 2026-10-21
 by: Codex
@@ -251,3 +251,6 @@ The released d8ed CLI generated this plan and both derived artifacts at the actu
 ## Original clock ADR title integrity
 
 The exact first title lines of Proposed ADR0064 and ADR0065 now use the required ADR-NNNN header. Every remaining byte, including both decisions, statuses and consequences, is preserved. The original PR context lint failure is retained; executing the literal current checker now validates both durable context files and all63 ADRs. Runtime source, source census, supported provider catalog, allowlist and production registry bytes are unchanged from the compatibility publication. Genuine released CLI plan/context/summary and content-addressed verification bind this documentation-only source successor; no Linux/native/production pass is inferred from it.
+
+
+core_original_general_lint_six_equivalences_review: Reviewed all six original lint findings from the completed original general CI at0eda. Five production expressions preserve exact values, short-circuit order and both original transactional reads/errors; the test removes only a redundant io.ReadCloser annotation. The post-clock policy remains the consumed authority. The unchanged 630-file source census now binds all five production source hashes; guarded service contract evidence was updated in CODE9bba before this genuine plan. Original failed lint and Darwin whole-package syscall incompatibility remain retained. Bounded Darwin internal/repository roots passed and the controller package cross-compiled for Linux without execution; complete successor Linux CI remains required. No migrations, registry, production image, Guest or policy was activated by this source publication.
