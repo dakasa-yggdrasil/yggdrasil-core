@@ -67,7 +67,7 @@ func TestOriginalGuestAdministrativeExpiryIsNotNativeQuote(t *testing.T) {
 	if ProfilePlanningCurrent(p, p.Profiles[0], now.Add(61*time.Second)) {
 		t.Fatal("legacy expired quote weakened")
 	}
-	p, now = guestAdministrativeUnit(t)
+	p, _ = guestAdministrativeUnit(t)
 	p.Profiles[0].Provider, p.Profiles[0].Name, p.MutationBindings[0].ProfileName = "hetzner", "notify-hetzner-elastic", "notify-hetzner-elastic"
 	p.Profiles[0].UnitMonthlyCostMinor = 6000
 	p.GuestNotifyReconcileBinding.AdministrativeCostAssumption.NativeBillingCurrency = "USD"

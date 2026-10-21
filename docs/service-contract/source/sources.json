@@ -927,8 +927,8 @@
     },
     "controllers/message/workflows_capacity_guest_reconcile.go": {
       "build_constraint": "default",
-      "bytes": 15671,
-      "sha256": "58832c5a41eba190ab5c60eb7c9bab2e5fa5688c48c9e2fd789e889e4e8c4358"
+      "bytes": 15915,
+      "sha256": "cf4aada5878229bf559730a68d9695109827187a0381ef5781c2d2d13e8081dc"
     },
     "controllers/message/workflows_capacity_guest_retirement_v2.go": {
       "build_constraint": "default",
@@ -1449,6 +1449,11 @@
       "build_constraint": "default",
       "bytes": 2894,
       "sha256": "3d6a4b8ed7754419c837c0c2b1763d06c37193abbfeba0e59d28cb1a48b2ce00"
+    },
+    "internal/capacity/guest_reconcile_floor.go": {
+      "build_constraint": "default",
+      "bytes": 2509,
+      "sha256": "f6d364b682d0273f097cc758a57278ed03d3b8fd83db28f89c9df473dcc252ba"
     },
     "internal/capacity/guest_reconcile_owner.go": {
       "build_constraint": "default",
@@ -2812,8 +2817,8 @@
     },
     "repository/capacity_guest_reconcile.go": {
       "build_constraint": "default",
-      "bytes": 16452,
-      "sha256": "40a2ec7112bbabd29e3a01d8ba40bc637b2135a22cc787638635f5aa53f8ffe4"
+      "bytes": 16990,
+      "sha256": "ee5163eac3973152f77bf5a2a1ce07546832ad6cdacfc603ecccd49e71eb8694"
     },
     "repository/capacity_guest_retirement.go": {
       "build_constraint": "default",

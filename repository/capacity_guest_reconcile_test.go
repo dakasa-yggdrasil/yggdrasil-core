@@ -39,7 +39,7 @@ func TestOriginalGuestReconcileMaintenanceIsSourceClassified(t *testing.T) {
 				if name == "foreign_operation" {
 					step.Use.Operation = capacity.PlanOriginalGuestOperation
 				}
-				s = s.WithOriginalGuestReconcile(model.Manifest{}, step, capacity.CurrentGuestCoreSource(), mode, "", model.CapacityVMFleetInventory{})
+				s = s.WithOriginalGuestReconcile(model.Manifest{}, step, capacity.CurrentGuestCoreSource(), mode, "", model.CapacityVMFleetInventory{}, model.CapacityMetricRangeObservation{})
 			}
 			if s.guestNotifyMaintenanceOrigin() != (name == "legacy" || name == "source_refresh") {
 				t.Fatal("caller/mode/foreign step reclassified as maintenance")
@@ -54,7 +54,7 @@ func (c guestReconcileDelayedCancellation) Err() error                  { return
 func TestOriginalGuestReconcileRequiresLiveOriginalOwner(t *testing.T) {
 	for _, mode := range []string{"no_deadline", "expired_without_notification", "canceled", "live"} {
 		t.Run(mode, func(t *testing.T) {
-			var ctx context.Context = context.Background()
+			ctx := context.Background()
 			cancel := func() {}
 			switch mode {
 			case "expired_without_notification":

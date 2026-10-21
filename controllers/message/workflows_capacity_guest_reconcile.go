@@ -69,11 +69,12 @@ func originalGuestReconcileLive(ctx context.Context) error {
 // Sources are exact active operator bindings and real adapter responses.
 // Neither scheduled inputs nor this collector can set source timestamps,
 // values, range coverage, a URL, a profile, native tuple or healthy flag.
-func collectOriginalGuestAssessment(ctx context.Context, conn *amqp.Connection, db *sql.DB, policy model.Manifest, p model.CapacityPolicySpec) (model.CapacityVMFleetInventory, model.CapacityAssessment, error) {
+func collectOriginalGuestAssessment(ctx context.Context, conn *amqp.Connection, db *sql.DB, policy model.Manifest, p model.CapacityPolicySpec) (model.CapacityVMFleetInventory, model.CapacityAssessment, model.CapacityMetricRangeObservation, error) {
 	var inv model.CapacityVMFleetInventory
 	var assessment model.CapacityAssessment
+	var reporting model.CapacityMetricRangeObservation
 	if p.GuestNotifyReconcileBinding == nil || capacity.ValidateGuestNotifyReconcileBinding(p) != nil {
-		return inv, assessment, errOriginalGuestStep
+		return inv, assessment, reporting, errOriginalGuestStep
 	}
 	b := p.MutationBindings[0]
 	read := func(binding model.CapacityObservationAdapterBinding, operation string, input map[string]any, out any) error {
@@ -100,32 +101,31 @@ func collectOriginalGuestAssessment(ctx context.Context, conn *amqp.Connection, 
 	for _, binding := range p.GuestNotifyReconcileBinding.Signals {
 		var raw model.CapacityMetricRangeObservation
 		if err := read(binding.Adapter, capacity.ObserveMetricRange, map[string]any{"binding": binding.BindingName}, &raw); err != nil {
-			return inv, assessment, err
+			return inv, assessment, reporting, err
 		}
 		evidence, err := capacity.BoundMetricEvidence(p, binding, raw, time.Now().UTC())
 		if err != nil {
-			return inv, assessment, err
+			return inv, assessment, reporting, err
 		}
 		assessment.Evidence = append(assessment.Evidence, evidence)
 	}
 	revision := model.CapacityObservationAdapterBinding{IntegrationInstanceID: b.IntegrationInstanceID, InstanceChecksum: b.IntegrationChecksum, IntegrationTypeID: b.IntegrationTypeID, TypeChecksum: b.IntegrationTypeChecksum}
 	if err := read(revision, capacity.VMObserveInventory, map[string]any{"profile": b.ProfileName}, &inv); err != nil {
-		return inv, assessment, err
+		return inv, assessment, reporting, err
 	}
 	var err error
 	assessment.Snapshot, err = capacity.GuestReconcileSnapshot(policy, p, inv, time.Now().UTC())
 	if err != nil || originalGuestReconcileLive(ctx) != nil {
-		return inv, assessment, errOriginalGuestStep
+		return inv, assessment, reporting, errOriginalGuestStep
 	}
 	coverage := *p.GuestNotifyReconcileBinding.MemberCoverage
-	var reporting model.CapacityMetricRangeObservation
 	if err = read(coverage.Adapter, capacity.ObserveMetricRange, map[string]any{"binding": coverage.BindingName}, &reporting); err != nil {
-		return inv, assessment, err
+		return inv, assessment, reporting, err
 	}
 	if err = capacity.GuestReconcileMemberCoverage(p, reporting, assessment.Snapshot.Units, time.Now().UTC()); err != nil {
-		return inv, assessment, err
+		return inv, assessment, reporting, err
 	}
-	return inv, assessment, nil
+	return inv, assessment, reporting, nil
 }
 
 func originalGuestNextSlot(p model.CapacityPolicySpec, inv model.CapacityVMFleetInventory, members []repository.GuestNotifyFloorMember, decision model.CapacityDecision) (string, int, string, error) {
@@ -223,9 +223,10 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 	}
 	var inv model.CapacityVMFleetInventory
 	var assessment model.CapacityAssessment
+	var reporting model.CapacityMetricRangeObservation
 	collect := func(readCtx context.Context) error {
 		var e error
-		inv, assessment, e = collectOriginalGuestAssessment(readCtx, conn, db, policy, p)
+		inv, assessment, reporting, e = collectOriginalGuestAssessment(readCtx, conn, db, policy, p)
 		return e
 	}
 	if step.Use.Operation == capacity.CompleteOriginalGuestOperation && parsed.Mode != "refresh" {
@@ -236,7 +237,7 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 	if err != nil {
 		return fail(err)
 	}
-	store = store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), parsed.Mode, parsed.RequestID, inv)
+	store = store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), parsed.Mode, parsed.RequestID, inv, reporting)
 	members, pending, err := store.OriginalGuestReconcileMembers(ctx, policy)
 	if err != nil {
 		return fail(err)
@@ -257,11 +258,11 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 					return fail(e)
 				}
 				// Actual source reread immediately before the existing Claim.
-				inv, assessment, e = collectOriginalGuestAssessment(ctx, conn, db, policy, p)
+				inv, assessment, reporting, e = collectOriginalGuestAssessment(ctx, conn, db, policy, p)
 				if e != nil {
 					return fail(e)
 				}
-				store = store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), "", "", inv)
+				store = store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), "", "", inv, reporting)
 				fresh, unresolved, e := store.OriginalGuestReconcileMembers(ctx, policy)
 				if e != nil || unresolved || !reflect.DeepEqual(fresh, members) {
 					return fail(errOriginalGuestStep)
@@ -314,11 +315,11 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 			output = map[string]any{"mode": "refresh", "members": len(members), "provider_mutations": false}
 		} else {
 			// Refresh source observations after all actual original canaries.
-			inv, assessment, e = collectOriginalGuestAssessment(ctx, conn, db, policy, p)
+			inv, assessment, reporting, e = collectOriginalGuestAssessment(ctx, conn, db, policy, p)
 			if e != nil {
 				return fail(e)
 			}
-			store = store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), parsed.Mode, parsed.RequestID, inv)
+			store = store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), parsed.Mode, parsed.RequestID, inv, reporting)
 			phases := []string{"prepared", "canary", "promoted"}
 			if parsed.Mode == "retire" {
 				phases = []string{"drained", "promoted"}

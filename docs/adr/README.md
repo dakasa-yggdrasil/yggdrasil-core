@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**65 decisions.**
+**68 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -89,3 +89,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0066](0066-reconcile-original-notify-guests-through-the-protected-workflow.md) | Reconcile original Notify Guests through the protected workflow | Proposed | 2026-10-21 | Exact scheduled original Guest graph, useful membership and unchanged original deadlines |
 
 | [0067](0067-separate-administrative-capacity-costs-from-native-quotes.md) | Separate administrative capacity costs from native quotes | Proposed | 2026-10-21 | Finite reviewed planning assumptions, unchanged native quote/billing currency and legacy dates |
+
+| [0068](0068-promote-the-original-protected-floor-with-complete-membership.md) | Promote the original protected floor with complete membership | Proposed | 2026-10-21 | Original zero-to-one floor, complete Coverage30 and unchanged raw useful-member gates |

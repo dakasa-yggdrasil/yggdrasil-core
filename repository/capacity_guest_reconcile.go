@@ -16,12 +16,13 @@ type guestReconcileSource struct {
 	workflow                model.Manifest
 	source, mode, requestID string
 	inventory               model.CapacityVMFleetInventory
+	reporting               model.CapacityMetricRangeObservation
 }
 
 // Source installation is inside the actual generic workflow executor. This is
 // not a callback registration, API input, configurable URL or proof factory.
-func (s CapacityStore) WithOriginalGuestReconcile(workflow model.Manifest, step model.WorkflowStepSpec, actualSource, mode, requestID string, inventory model.CapacityVMFleetInventory) CapacityStore {
-	s.guestReconcile = &guestReconcileSource{step: step, workflow: workflow, source: actualSource, mode: mode, requestID: requestID, inventory: inventory}
+func (s CapacityStore) WithOriginalGuestReconcile(workflow model.Manifest, step model.WorkflowStepSpec, actualSource, mode, requestID string, inventory model.CapacityVMFleetInventory, reporting model.CapacityMetricRangeObservation) CapacityStore {
+	s.guestReconcile = &guestReconcileSource{step: step, workflow: workflow, source: actualSource, mode: mode, requestID: requestID, inventory: inventory, reporting: reporting}
 	return s
 }
 
@@ -253,7 +254,12 @@ func (s CapacityStore) AdvanceOriginalGuest(ctx context.Context, policy model.Ma
 			return model.CapacityIntent{}, "", ErrCapacityConflict
 		}
 		if err := capacity.ValidateAssessment(p, assessment, now); err != nil {
-			return model.CapacityIntent{}, "", err
+			// Only this source-owned first-floor transition may finish before
+			// Demand300 exists. The original native/member/canary transaction
+			// guards below still run; no demand value or evidence is invented.
+			if s.guestReconcile.mode != "provision" || !validCapacityBaseline(p, *old) || capacity.ValidateOriginalGuestFloorBootstrap(p, *old, assessment, s.guestReconcile.reporting, now) != nil {
+				return model.CapacityIntent{}, "", err
+			}
 		}
 		next := *old
 		next.Phase, next.Assessment, next.UpdatedAt = phase, assessment, now

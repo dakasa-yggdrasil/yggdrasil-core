@@ -132,9 +132,13 @@ samples and a separate complete30-second Coverage range with at least5samples.
 Range gaps and scheduled controller intervals have separate bounds. New Guest
 thresholds are strictly above/below; historical HPA equality and observation
 clocks retain their prior behavior. Missing metrics never become zero. Native
-empty inventory can plan protected-floor recovery, but full promotion and all
-subsequent demand/retirement checks retain their source gates. Native initial
-telemetry maturation and complete lifecycle execution still require owning
+empty inventory can plan protected-floor recovery. Only its original zero-to-one
+claim may complete before Demand300 matures, using the exact complete raw
+Coverage30 response revalidated at transaction time. Its captured empty baseline,
+live original lease, current native/member ledger and raw useful-canary joins
+remain mandatory. The assessment retains missing demand unchanged; subsequent
+expansion and retirement still require the full demand contract. Native initial
+telemetry maturation and complete lifecycle execution require owning
 qualification; this source contract does not certify those transitions.
 
 An optional reviewed_administrative_cost_assumption is an explicit finite

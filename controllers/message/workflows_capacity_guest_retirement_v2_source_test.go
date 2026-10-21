@@ -69,11 +69,12 @@ func TestOriginalRetirementV2RequiresExactProviderOwnedCatalog(t *testing.T) {
 				}
 				ts.Adapter.Version = version
 				source := originalHetznerRetirementV3Source
-				if version == "0.3.2" {
+				switch version {
+				case "0.3.2":
 					source = originalHetznerRetirementV032Source
-				} else if version == "0.3.3" {
+				case "0.3.3":
 					source = originalHetznerRetirementV033Source
-				} else if version == "0.3.4" {
+				case "0.3.4":
 					source = originalHetznerRetirementV034Source
 				}
 				switch kind {
