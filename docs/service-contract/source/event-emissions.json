@@ -376,7 +376,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleCollaboratorCreate",
-      "line": 2059,
+      "line": 2061,
       "type_expressions": [
         "repository.EventTypeCollaboratorCreated"
       ]
@@ -387,7 +387,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamCreate",
-      "line": 2296,
+      "line": 2298,
       "type_expressions": [
         "repository.EventTypeTeamCreated"
       ]
@@ -398,7 +398,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamUpdate",
-      "line": 2391,
+      "line": 2393,
       "type_expressions": [
         "repository.EventTypeTeamUpdated"
       ]
@@ -409,7 +409,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamDelete",
-      "line": 2480,
+      "line": 2482,
       "type_expressions": [
         "repository.EventTypeTeamDeleted"
       ]
@@ -420,7 +420,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamGrantCreate",
-      "line": 2544,
+      "line": 2546,
       "type_expressions": [
         "repository.EventTypeTeamGrantAdded",
         "model.ActorTypeAPI"
@@ -432,7 +432,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamGrantDelete",
-      "line": 2581,
+      "line": 2583,
       "type_expressions": [
         "repository.EventTypeTeamGrantRevoked",
         "model.ActorTypeAPI"
@@ -444,7 +444,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamMembershipUpsert",
-      "line": 2688,
+      "line": 2690,
       "type_expressions": [
         "repository.EventTypeTeamMembershipAdded"
       ]
@@ -455,7 +455,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamMembershipUpsert",
-      "line": 2713,
+      "line": 2715,
       "type_expressions": [
         "repository.EventTypeTeamMembershipRemoved"
       ]
@@ -623,7 +623,7 @@
       "callee": "EmitEvent",
       "file": "internal/manifestsync/syncer.go",
       "function": "package",
-      "line": 24,
+      "line": 25,
       "type_expressions": []
     },
     {
@@ -632,7 +632,7 @@
       "callee": "EmitEvent",
       "file": "internal/manifestsync/syncer.go",
       "function": "SyncIntegrationType",
-      "line": 37,
+      "line": 38,
       "type_expressions": []
     },
     {
@@ -641,7 +641,7 @@
       "callee": "EmitEvent",
       "file": "internal/manifestsync/syncer.go",
       "function": "SyncIntegrationType",
-      "line": 48,
+      "line": 49,
       "type_expressions": []
     },
     {
@@ -650,7 +650,7 @@
       "callee": "EmitEvent",
       "file": "internal/manifestsync/syncer.go",
       "function": "SyncIntegrationType",
-      "line": 58,
+      "line": 59,
       "type_expressions": []
     },
     {
@@ -659,7 +659,7 @@
       "callee": "EmitEvent",
       "file": "internal/manifestsync/syncer.go",
       "function": "SyncIntegrationType",
-      "line": 75,
+      "line": 76,
       "type_expressions": []
     },
     {
@@ -668,7 +668,7 @@
       "callee": "EmitEvent",
       "file": "internal/manifestsync/syncer.go",
       "function": "SyncIntegrationType",
-      "line": 88,
+      "line": 89,
       "type_expressions": []
     },
     {
@@ -677,7 +677,7 @@
       "callee": "EmitEvent",
       "file": "internal/manifestsync/syncer.go",
       "function": "SyncIntegrationType",
-      "line": 105,
+      "line": 106,
       "type_expressions": []
     },
     {
@@ -686,7 +686,7 @@
       "callee": "EmitEvent",
       "file": "internal/manifestsync/syncer.go",
       "function": "SyncIntegrationType",
-      "line": 119,
+      "line": 120,
       "type_expressions": []
     },
     {
@@ -695,7 +695,7 @@
       "callee": "EmitEvent",
       "file": "internal/manifestsync/syncer.go",
       "function": "SyncIntegrationType",
-      "line": 145,
+      "line": 147,
       "type_expressions": []
     },
     {
@@ -704,7 +704,7 @@
       "callee": "EmitEvent",
       "file": "internal/manifestsync/syncer.go",
       "function": "SyncIntegrationType",
-      "line": 157,
+      "line": 159,
       "type_expressions": []
     },
     {
@@ -736,7 +736,7 @@
       "callee": "EmitEvent",
       "file": "repository/capacity_mutations.go",
       "function": "emitCapacityMutationEvent",
-      "line": 896,
+      "line": 901,
       "type_expressions": [
         "record.EventProvider + \".\" + record.EventResource + \".\" + verb",
         "\"workflow\""

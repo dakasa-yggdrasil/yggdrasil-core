@@ -177,3 +177,46 @@ usefulness.
 The service descriptor selects `public-go-module-v1` explicitly. An unknown profile fails; descriptors without a selector keep the legacy DaKasa scaffold checks. The public profile verifies the exact module/repository identity, real layout, closed bounded contract, hash-bound graph evidence and full source-file census. It does not require the unrelated private namespace, vendoring or Air scaffold. It must continue to reject a candidate/incomplete review, altered evidence, extra/missing/changed source, indirect evidence and empty graph sections.
 
 The independently reviewed source graph is accepted under the evidence in `REVIEW.json`, including the owning compiled CLI and full integrated census. Setting a status string alone is not an approval mechanism. Any subsequent source change requires an updated census and an independent review of that change. The source-review checklist covers census completeness (including shipped commands), credential dispatch, actual logical edges, bounded closed checker behavior and the compiled owning CLI against these exact files. Instantiated production topology and actual provider/catalog/source qualification are independent deployment obligations; they do not keep a completed source review circularly unresolved, and remain required after source acceptance.
+
+
+## Expired original accepted creation dispositions
+
+The administrative original-create-dispositions POST accepts only a canonical
+original grant UUID. Both POST and exact-grant GET require an authenticated human
+collaborator with actual `yggdrasil:*` permission, independently of machine and
+warn-mode shortcuts. Core obtains the native observation through the active
+version of the historical creator's logical integration identity. Its current
+observer UUID, checksum and source are validated independently; the old grant,
+policy, preregistration, accepted settlement and source are never relabelled.
+
+The read-only adapter capability authenticates exact native terminal absence and
+complete required auxiliary absence. The separate AWS CloudTrail/root-snapshot
+basis preserves the original unknown inventory and proves only complete absence
+of snapshot descendants and the exact original interface. Full native bodies
+remain in bounded immutable database evidence, outside the ordinary HTTP
+summary. Neither basis supplies a signed Guest witness, business readiness,
+writer quiescence, deletion permission or savings authority.
+
+Migration 71 adds an append-only disposition and a one-way, matching-grant
+foreign-key pointer. Completion rechecks unchanged originals, PostgreSQL expiry,
+zero witness/enrollment/installation, protected zero-member recovery, no active
+owning invocation and no serving slots under the same scope and slot locks.
+Only that validated pointer removes the original from open-slot reservations;
+its accepted state and JSON stay unchanged. A later creation requires a new
+assessment, generation, higher fence and separate single-use grant. An uncertain
+administrative acknowledgment is reconciled through the exact-grant GET rather
+than repeating the original provider effect.
+
+
+Automatic integration-type synchronization resolves a historical notification to
+its active logical type before merging the live adapter contract. A dedicated
+conditional repository write serializes that logical type, reuses an identical
+active catalog, and refuses a stale describe result after another catalog or
+operator declaration changed. Explicit manifest creation still creates an
+explicit version; synchronization does not rewrite an inactive historical row.
+
+The disposition reader's native output is private to the administrative bridge.
+The central integration execution policy refuses that operation and capability
+for generic workflows, RPC and sensitive-output callers. Only an unexported
+bridge policy bit, with both names exactly equal to the fixed read operation,
+can obtain its native bodies; request metadata cannot set that bit.

@@ -299,9 +299,9 @@ func originalAWSRetirementPendingV2(o model.CapacityVMRetirementObservation, r m
 
 func productionRetirementCatalogV2(provider string, ts model.IntegrationTypeManifestSpec) bool {
 	if provider == "aws" {
-		return (ts.Adapter.Version == "1.62.0" || ts.Adapter.Version == "1.63.0" || ts.Adapter.Version == "1.64.0") && originalGuestSupplierCatalogFor(provider, ts)
+		return (ts.Adapter.Version == "1.62.0" || ts.Adapter.Version == "1.63.0" || ts.Adapter.Version == "1.64.0" || ts.Adapter.Version == "1.65.1") && originalGuestSupplierCatalogFor(provider, ts)
 	}
-	return provider == "hetzner" && (ts.Adapter.Version == "0.3.0" || ts.Adapter.Version == "0.3.2" || ts.Adapter.Version == "0.3.3" || ts.Adapter.Version == "0.3.4") && originalGuestSupplierCatalogFor(provider, ts)
+	return provider == "hetzner" && (ts.Adapter.Version == "0.3.0" || ts.Adapter.Version == "0.3.2" || ts.Adapter.Version == "0.3.3" || ts.Adapter.Version == "0.3.4" || ts.Adapter.Version == "0.3.5") && originalGuestSupplierCatalogFor(provider, ts)
 }
 
 func originalHetznerRetirementPendingV2(o model.CapacityVMRetirementObservation, r model.CapacityMutationReceipt) bool {

@@ -172,7 +172,7 @@ func (s CapacityStore) OriginalGuestReconcileMembers(ctx context.Context, policy
 		return nil, false, err
 	}
 	var pending int
-	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE NOT(grant_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN ('issued','redeemed','settled','compensating')`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&pending); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE original_disposition_id IS NULL AND NOT(grant_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN ('issued','redeemed','settled','compensating')`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&pending); err != nil {
 		return nil, false, err
 	}
 	// Unknown/redeemed originals retain authority. No inventory adoption,
@@ -288,7 +288,7 @@ func (s CapacityStore) guestReconcilePhaseTx(ctx context.Context, tx *sql.Tx, po
 		return ErrCapacityConflict
 	}
 	var pending int
-	if tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE NOT(grant_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN ('issued','redeemed','settled','compensating')`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&pending) != nil || pending != 0 {
+	if tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE original_disposition_id IS NULL AND NOT(grant_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN ('issued','redeemed','settled','compensating')`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&pending) != nil || pending != 0 {
 		return ErrCapacityConflict
 	}
 	if s.guestReconcile.mode == "retire" {

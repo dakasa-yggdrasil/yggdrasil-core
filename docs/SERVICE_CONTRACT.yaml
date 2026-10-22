@@ -12,13 +12,13 @@
   "source_inventory": {
     "id": "complete_runtime_source_census",
     "evidence": "docs/service-contract/source/sources.json",
-    "sha256": "e50205786355bd8229db8093dd6134d2de0cb3dedc93e071a325581804c1c6a6"
+    "sha256": "3248d5eb46fdfcb9cc9ad30419b9754b4fa62daa8a8f21393dd1447a7449a286"
   },
   "produces": [
     {
       "id": "transactional_event_emission_sites",
       "evidence": "docs/service-contract/source/event-emissions.json",
-      "sha256": "6e6eb0d8b0b99f177564098c73a1afe2155056feff9cc4921d6e279b5d9c4f06"
+      "sha256": "f2d3c3052dd9318e11c416c96a11980a0866370c3e379a062f5d1f898e8b4e16"
     },
     {
       "id": "embedded_event_schema_keys",
@@ -40,7 +40,7 @@
     {
       "id": "http_inbound_protocols_and_auth",
       "evidence": "docs/service-contract/SEMANTICS.md",
-      "sha256": "9b3e29bd5c496c207294bafef55a5ea7f503869a68def3fd9ea6aa4d3048ad00"
+      "sha256": "866ab28d1a7f4ae50bcefef774bc5bc379b1f271a0067461e148ff02b519ad7a"
     },
     {
       "id": "dependency_versions",
@@ -55,7 +55,7 @@
     {
       "id": "independent_source_review",
       "evidence": "docs/service-contract/REVIEW.json",
-      "sha256": "3f2e427ae005de56544a60346b723d33a63fc253586a0625f11abd13299ca34e"
+      "sha256": "467c71460da8f277880a5594f388fd83a56898b795325ba5396dd7fa76a936c6"
     }
   ],
   "callsREST": [
@@ -72,14 +72,14 @@
     {
       "id": "parameterized_destination_families",
       "evidence": "docs/service-contract/SEMANTICS.md",
-      "sha256": "9b3e29bd5c496c207294bafef55a5ea7f503869a68def3fd9ea6aa4d3048ad00"
+      "sha256": "866ab28d1a7f4ae50bcefef774bc5bc379b1f271a0067461e148ff02b519ad7a"
     }
   ],
   "exposesREST": [
     {
       "id": "http_mux_registrations",
       "evidence": "docs/service-contract/source/http-routes.json",
-      "sha256": "003e61d1733a4e1d530efc4e39a4caf848462b2b0d7189fac29a67dc28e3bffa"
+      "sha256": "9f25a034556251c2f7aaf747f78f2301701bc5df794a21e0499aa6a94ae6b522"
     },
     {
       "id": "pre_mux_capacity_dispatch",
@@ -89,7 +89,7 @@
     {
       "id": "auth_dispatch_source_functions",
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
-      "sha256": "e104a032442137829fd988b68edf7be185b1fa84e41b0f2b4a923c5864c06d14"
+      "sha256": "cc57d473ef2faddfe8cd96bbd27579b79549f21e0e931a917c767243c77314b8"
     }
   ]
 }

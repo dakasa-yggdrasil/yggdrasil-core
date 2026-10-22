@@ -91,3 +91,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0067](0067-separate-administrative-capacity-costs-from-native-quotes.md) | Separate administrative capacity costs from native quotes | Proposed | 2026-10-21 | Finite reviewed planning assumptions, unchanged native quote/billing currency and legacy dates |
 
 | [0068](0068-promote-the-original-protected-floor-with-complete-membership.md) | Promote the original protected floor with complete membership | Proposed | 2026-10-21 | Original zero-to-one floor, complete Coverage30 and unchanged raw useful-member gates |
+
+| [0069](0069-record-expired-unadmitted-create-dispositions-separately.md) | Record expired unadmitted create dispositions separately | Proposed | 2026-10-22 | Immutable accepted creates, authenticated terminal absence and fenced floor recovery |

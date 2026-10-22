@@ -123,11 +123,11 @@ func originalGuestSupplierCatalogFor(provider string, ts model.IntegrationTypeMa
 	}
 	// The reviewed supplier uses the original broker request protocol. HTTP
 	// adapters need their own reviewed no-replay transport contract.
-	if ts.Provider != "hetzner" || (ts.Adapter.Version != "0.1.0" && ts.Adapter.Version != "0.2.0" && ts.Adapter.Version != "0.3.0" && ts.Adapter.Version != "0.3.2" && ts.Adapter.Version != "0.3.3" && ts.Adapter.Version != "0.3.4") || ts.Adapter.Transport != "rabbitmq" || manifest.ValidateIntegrationTypeSpec(ts) != nil {
+	if ts.Provider != "hetzner" || (ts.Adapter.Version != "0.1.0" && ts.Adapter.Version != "0.2.0" && ts.Adapter.Version != "0.3.0" && ts.Adapter.Version != "0.3.2" && ts.Adapter.Version != "0.3.3" && ts.Adapter.Version != "0.3.4" && ts.Adapter.Version != "0.3.5") || ts.Adapter.Transport != "rabbitmq" || manifest.ValidateIntegrationTypeSpec(ts) != nil {
 		return false
 	}
 	operations := []string{"ensure_server", capacity.VMObserveServer, capacity.VMObserveAction}
-	if ts.Adapter.Version == "0.3.0" || ts.Adapter.Version == "0.3.2" || ts.Adapter.Version == "0.3.3" || ts.Adapter.Version == "0.3.4" {
+	if ts.Adapter.Version == "0.3.0" || ts.Adapter.Version == "0.3.2" || ts.Adapter.Version == "0.3.3" || ts.Adapter.Version == "0.3.4" || ts.Adapter.Version == "0.3.5" {
 		operations = append(operations, "destroy_server", capacity.VMObserveRetirement)
 	}
 	for _, required := range operations {
@@ -162,6 +162,9 @@ func originalGuestSupplierCatalogSourceFor(provider string, ts model.Integration
 	if !originalGuestSupplierCatalogFor(provider, ts) {
 		return false
 	}
+	if provider == "aws" && ts.Adapter.Version == "1.65.1" {
+		return len(originalCreateDispositionAWSObserverSource) == 40 && source == originalCreateDispositionAWSObserverSource
+	}
 	if provider == "hetzner" {
 		switch ts.Adapter.Version {
 		case "0.3.0":
@@ -172,6 +175,8 @@ func originalGuestSupplierCatalogSourceFor(provider string, ts model.Integration
 			return source == originalHetznerRetirementV033Source
 		case "0.3.4":
 			return source == originalHetznerRetirementV034Source
+		case "0.3.5":
+			return source == originalCreateDispositionHetznerObserverSource
 		}
 	}
 	return true

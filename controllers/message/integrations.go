@@ -281,11 +281,12 @@ func executeIntegrationThroughResolved(
 }
 
 type integrationExecutionPolicy struct {
-	detailFreeErrors        bool
-	safeError               error
-	allowSensitiveOutput    bool
-	requireExplicitResponse bool
-	nativeHTTP              *nativeAdapterHTTPPolicy
+	originalCreateDisposition bool
+	detailFreeErrors          bool
+	safeError                 error
+	allowSensitiveOutput      bool
+	requireExplicitResponse   bool
+	nativeHTTP                *nativeAdapterHTTPPolicy
 }
 
 func (policy integrationExecutionPolicy) sanitizeError(err error) error {
@@ -315,6 +316,9 @@ func executeIntegrationThroughResolvedWithPolicy(
 	timeoutOverride time.Duration,
 	policy integrationExecutionPolicy,
 ) (model.ExecuteIntegrationResponse, error) {
+	if !originalDispositionExecutionAllowed(req, policy) {
+		return model.ExecuteIntegrationResponse{}, policy.sanitizeError(errSensitiveOutputSink)
+	}
 	timeout := defaultWorkflowStepTimeout
 	if typeSpec.Adapter.TimeoutSeconds > 0 {
 		timeout = time.Duration(typeSpec.Adapter.TimeoutSeconds) * time.Second
