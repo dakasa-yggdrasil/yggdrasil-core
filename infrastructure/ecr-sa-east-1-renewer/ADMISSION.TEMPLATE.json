@@ -1,0 +1,21 @@
+{
+  "approved_by_principal": null,
+  "existing_host_role_multiservice_use_accepted": true,
+  "existing_ecr_read_only_scope_observed": true,
+  "host_imds_v2_available_confirmed": true,
+  "kube_single_secret_scope_confirmed": null,
+  "projected_serviceaccount_rotation_selected": true,
+  "public_identity_evidence_ref": null,
+  "public_kube_evidence_ref": null,
+  "existing_principal_arn": "arn:aws:iam::153828470928:role/dakasa-validation-ec2",
+  "existing_instance_profile_arn": "arn:aws:iam::153828470928:instance-profile/dakasa-validation-ec2",
+  "existing_role_name": "dakasa-validation-ec2",
+  "expected_instance_id": "i-0eb40396f80878812",
+  "expected_secret_uid": null,
+  "execution_target": "existing_brain_host_network_pod",
+  "scheduler": "kubernetes_cronjob",
+  "kube_identity": "system:serviceaccount:dakasa:ecr-pull-sa-east-1-renewer",
+  "kube_server": "https://kubernetes.default.svc",
+  "kube_ca_file": "/var/run/secrets/dakasa-ecr/ca.crt",
+  "kube_token_file": "/var/run/secrets/dakasa-ecr/token"
+}
