@@ -149,6 +149,10 @@ func loadGuestWitnessTx(ctx context.Context, tx *sql.Tx, stored *guestOriginalSt
 func (s CapacityStore) guestCurrentTx(ctx context.Context, tx *sql.Tx, stored guestOriginalStored, now time.Time, originalDeadline bool) (model.CapacityPolicySpec, model.CapacityIntent, error) {
 	var p model.CapacityPolicySpec
 	var intent model.CapacityIntent
+	var terminal bool
+	if err := tx.QueryRowContext(ctx, `SELECT failed_original_disposition_id IS NOT NULL FROM public.capacity_mutation_grants WHERE id=$1`, stored.pre.OriginalCreateGrantID).Scan(&terminal); err != nil || terminal {
+		return p, intent, ErrCapacityConflict
+	}
 	var namespace, name, checksum string
 	var raw []byte
 	var active bool

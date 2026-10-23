@@ -19,7 +19,7 @@ func dispositionCatalogFixture(t *testing.T, provider string) model.IntegrationT
 	version, kind, transport := "0.3.5", "server", "rabbitmq"
 	if provider == "aws" {
 		file = "capacity_aws_type_v130.json"
-		version, kind, transport = "1.65.3", "ec2_instance", "http_json"
+		version, kind, transport = "1.65.4", "ec2_instance", "http_json"
 	}
 	raw, err := os.ReadFile("../../repository/testdata/" + file)
 	if err != nil {
@@ -142,6 +142,7 @@ func TestOriginalDispositionAWSObserverVersionSourcePairs(t *testing.T) {
 	historical := []struct{ version, source string }{
 		{"1.65.1", originalCreateDispositionAWS1651Source},
 		{"1.65.2", originalCreateDispositionAWS1652Source},
+		{"1.65.3", originalCreateDispositionAWS1653Source},
 	}
 	for _, pair := range historical {
 		legacy := current
@@ -175,8 +176,8 @@ func TestOriginalDispositionAWSObserverVersionSourcePairs(t *testing.T) {
 	}
 }
 
-func TestOriginalDispositionAWS1653RequiresWholeLifecycleCatalog(t *testing.T) {
-	for _, version := range []string{"1.65.2", "1.65.3"} {
+func TestOriginalDispositionAWS1654RequiresWholeLifecycleCatalog(t *testing.T) {
+	for _, version := range []string{"1.65.2", "1.65.3", "1.65.4"} {
 		for _, operation := range []string{"ensure_ec2_instance", "observe_ec2_instance", "terminate_ec2_instance", "observe_fleet_inventory"} {
 			t.Run(version+"/missing_"+operation, func(t *testing.T) {
 				spec := dispositionCatalogFixture(t, "aws")

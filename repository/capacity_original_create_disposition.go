@@ -114,7 +114,7 @@ func loadOriginalCreateDispositionSnapshot(ctx context.Context, tx *sql.Tx, id s
 	if settlement.Outcome != "accepted" || !settlement.TransportCompleted || len(settlement.AuxiliaryResources) > 16 || settlement.GrantID != id || settlement.AttemptID != r.AttemptID || settlement.RequestSHA256 != g.RequestSHA256 || settlement.ResourceID == "" || settlement.ResourceCreatedAt == "" || settlement.ActionID == "" || original.GrantID != id || original.AttemptID != r.AttemptID || original.RequestSHA256 != g.RequestSHA256 || original.ResourceID != settlement.ResourceID || original.ResourceCreatedAt != settlement.ResourceCreatedAt || original.ActionID != settlement.ActionID || !slices.Equal(original.NextActionIDs, settlement.NextActionIDs) || original.AdapterSourceCommit != b.OriginalProviderSourceCommit || !originalDispositionHex(original.AdapterSourceCommit, 40) || original.Provider != r.EventProvider || (original.Provider != "aws" && original.Provider != "hetzner") {
 		return out, ErrOriginalCreateDisposition
 	}
-	unknownAWS := !settlement.AuxiliaryInventoryComplete && len(settlement.AuxiliaryResources) == 0 && original.Provider == "aws" && original.AdapterSourceCommit == originalDispositionAWSOriginalSource && original.Schema == "aws_original_run_instances_return_v1" && original.ResponseStatus == 200 && validCapacityExecutor(settlement.ActionID)
+	unknownAWS := !settlement.AuxiliaryInventoryComplete && len(settlement.AuxiliaryResources) == 0 && original.Provider == "aws" && (original.AdapterSourceCommit == originalDispositionAWSOriginalSource || original.AdapterSourceCommit == originalDispositionAWS1653OriginalSource) && original.Schema == "aws_original_run_instances_return_v1" && original.ResponseStatus == 200 && validCapacityExecutor(settlement.ActionID)
 	if !settlement.AuxiliaryInventoryComplete && !unknownAWS || settlement.AuxiliaryInventoryComplete && len(settlement.AuxiliaryResources) == 0 {
 		return out, ErrOriginalCreateDisposition
 	}
@@ -236,7 +236,7 @@ func (s CapacityStore) CompleteOriginalCreateDisposition(ctx context.Context, o 
 	if err != nil {
 		return result, err
 	}
-	affected, err := tx.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET original_disposition_id=$2 WHERE id=$1 AND original_disposition_id IS NULL`, result.GrantID, result.ID)
+	affected, err := tx.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET original_disposition_id=$2 WHERE id=$1 AND original_disposition_id IS NULL AND failed_original_disposition_id IS NULL`, result.GrantID, result.ID)
 	if err != nil {
 		return result, err
 	}
@@ -247,7 +247,7 @@ func (s CapacityStore) CompleteOriginalCreateDisposition(ctx context.Context, o 
 	// Every other unresolved original still blocks closure. Only a validated
 	// one-way FK pointer removes this exact grant from current authority counts.
 	var pending int
-	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN('issued','redeemed','settled','compensating') AND original_disposition_id IS NULL`, snap.intent.Namespace, snap.spec.Environment, snap.spec.Domain, snap.spec.Dimension).Scan(&pending); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN('issued','redeemed','settled','compensating') AND original_disposition_id IS NULL AND failed_original_disposition_id IS NULL`, snap.intent.Namespace, snap.spec.Environment, snap.spec.Domain, snap.spec.Dimension).Scan(&pending); err != nil {
 		return result, err
 	}
 	if pending != 0 {

@@ -260,7 +260,7 @@ current policy/credential/native lifecycle gates remain independently required.
 
 ## Actual AWS1.65.3 root-EBS approval successor
 
-The current AWS observer is bound to published source
+The AWS1.65.3 observer is bound to published source
 39bdd1da87adba6ac03432e1602ec62dc63baaad. The catalog still requires all four
 ensure, observe, terminate and fleet-inventory lifecycle operations. The
 read-only disposition path retains its six complete authenticated native reads.
@@ -296,3 +296,37 @@ API authorization, protected provider contracts and schema72 SQL are unchanged.
 
 Source acceptance and the isolated local RabbitMQ recovery test provide no
 production600, policy, Guest lifecycle or business qualification.
+
+
+## Terminal accounting for a failed witnessed original lifetime
+
+An authenticated operator may POST only grant_id and job_id to
+/api/v1/ops/capacity/failed-original-dispositions. The Core obtains its own
+current native absence observation. The original accepted grant, provisioning
+preregistration, create witness, failed run and missing finalization ACK remain
+historical. A separate schema73 ledger links the exact expired original tuple
+and closes its dispatch as failed_disposed while retaining a NULL ACK. This
+administrative terminal state does not turn the original invocation into a
+successful or acknowledged return.
+
+Begin and Complete recheck the same owning scope, slot, dispatch and intent
+locks. The original deadline and leases must have elapsed. Enrollment,
+installation, registered resources, retirement, factory bindings, compensation,
+other active work and incomplete native absence refuse closure. A nullable
+workflow_runs.workflow_id is preserved; the exact row selector, original result
+workflow identity and dispatch envelope must still agree. Foreign non-null IDs
+and missing or conflicting result identities refuse. Successor creation requires
+a new generation and fencing token. Late original callbacks remain refused.
+
+The read-only AWS disposition observer binds the published 1.65.4 source
+d6af60729dee334c2be9bee45a0ba2dd02b7ec51, independently of the exact historical
+f816 or 39bdd creator in its accepted grant. The 1.65.3 supplier retains its own
+39bdd source pair. Full lifecycle catalog and native evidence checks remain
+mandatory. Existing complete protected profile fixtures and registry approvals
+stay byte-identical in this administrative phase; the corrected R3 user-data,
+new production instances, dry-runs and typed approvals belong to a later source.
+
+The migration and closed API have real isolated PostgreSQL and HTTP source
+validation plus an independent final review. Linux source CI, the immutable
+Core/Goose image, production migration, rollout and runtime observation remain
+separate requirements. No native useful capacity or economic result is implied.

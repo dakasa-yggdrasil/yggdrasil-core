@@ -7,11 +7,11 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 77debbbd18dcf60aaae4c960c6fa752da89ecbc7
-verified_diff_sha256: d8df397401075e81d96de3753986dc231cbd76aaee99082aad47f45cc15f7d9e
+verified_at_commit: fab98420d75a5ee10581f3a2593e4ba5097626ec
+verified_diff_sha256: af7de49d7a28e68d5af132b4ae38a1aa159496c7a564c26065ba76120815d5eb
 reconciler_schema: 1
 verified_at: 2026-10-23
-by: Codex
+by: Giomaster
 historical_fourth_owning_ci_note: Reconciled the final one-line lowercase hexadecimal interval complement after the complete fourth owning CI inventory. Independent SAME review found zero confirmed findings; exact byte acceptance, length and empty behavior and short-circuit order remain unchanged. Bounded textual recurrence review covers all 209 changed Go paths across tags and finds only this occurrence; it is not a linter or global semantic pass. Five test sources, expected manifest, four named rosters, collector, owning workflow and budgets stay literal. Prior source CI passed all 216 roots and 2055 descendants, each of 2271 nodes once with exact names and no FAIL/SKIP. Fourteen original ZIPs, 373 members and 23 GoJSON collections for all eight prior terminal runs remain retained. Genuine context and summary preserve all nine actual input digests. Successor owning CI is required; old45 stays HOLD/edit_lease false, Registry EMPTY, Native NULL, C6 HOLD and FULL_CORE_NATIVE_PENDING. No local functional execution or production change occurred.
 
 
@@ -327,3 +327,5 @@ recovery test passed on the frozen source. Dependencies, schema72 SQL and
 protected provider contracts remain unchanged. The owning Linux CI, immutable
 image and production600 qualification remain separate. Genuine CLI generation
 and reconciliation retain this guarded source and dirty provenance.
+
+core_D6_failed_witnessed_original_phase1_review: Reviewed the exact twenty-six-file D6 phase-one Source: immutable failed-witnessed-original native-absence ledger and explicit failed_disposed state, preserved accepted grant/witness/run failure and unknown ACK, nullable historical workflow identity with exact envelope and active-work fences, finite AWS creator/source/version pairs and the complete 1.65.4 observer catalog. Existing full production typed fixtures and registry and migrations61/71/72 remain unchanged; new sixteen-profile credentials and later approval activation are excluded. Eight contract/census/generator files preserve the complete 658-record Source map within the published bound. The exact-Source Linux workflow requires nine repository, five message and three HTTP roots with no skip and owned PostgreSQL shutdown. Local PostgreSQL and HTTP results are separate retained evidence; the five new message roots still require owning Linux CI. Independent Source peers cover this reviewed packet. Actual CI, image, schema adoption, rollout, disposition and new Guest capacity remain separate. The genuine released CLI generated context/summary at this actual CODE and verified its canonical plan.
