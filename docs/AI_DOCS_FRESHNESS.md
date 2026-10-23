@@ -7,10 +7,10 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 900e234c9c965f5994c0172cb2e5c21527b6d8cc
-verified_diff_sha256: 94959881ffd687120ca5b5f9e844dd78424d2416f9d071b553e2ffc436960202
+verified_at_commit: 571c6ed4d3d796a23695bfced7cf0c19e63d16ac
+verified_diff_sha256: 2facefc07a2e1ac881c3cea1210f4580e95b3a88b8e5e3ba7c7f294430f0a816
 reconciler_schema: 1
-verified_at: 2026-10-21
+verified_at: 2026-10-23
 by: Codex
 historical_fourth_owning_ci_note: Reconciled the final one-line lowercase hexadecimal interval complement after the complete fourth owning CI inventory. Independent SAME review found zero confirmed findings; exact byte acceptance, length and empty behavior and short-circuit order remain unchanged. Bounded textual recurrence review covers all 209 changed Go paths across tags and finds only this occurrence; it is not a linter or global semantic pass. Five test sources, expected manifest, four named rosters, collector, owning workflow and budgets stay literal. Prior source CI passed all 216 roots and 2055 descendants, each of 2271 nodes once with exact names and no FAIL/SKIP. Fourteen original ZIPs, 373 members and 23 GoJSON collections for all eight prior terminal runs remain retained. Genuine context and summary preserve all nine actual input digests. Successor owning CI is required; old45 stays HOLD/edit_lease false, Registry EMPTY, Native NULL, C6 HOLD and FULL_CORE_NATIVE_PENDING. No local functional execution or production change occurred.
 
@@ -271,3 +271,27 @@ core_two_actual_original_notify_approvals_source_review: Exactly two literal AWS
 Current AWS1.64 original instance contract source review
 
 The explicit AWS1.64 supplier and retirement catalog require the owning profile inventory capability; unknown future versions retain closed refusal. The owning Core typed helper, rebuilt against the actual compatibility source, derived the new complete AWS contract from original instance V2 metadata and one actual slot1 dry-run. Eight create specs are source-derived, not eight native observations. The same dedicated IAM policy received one new default version with only three exact scope leaves changed; original custom and principal simulations and full readbacks retain the previous version and key. The Hetzner complete typed contract remains identical. Only the AWS literal approval and its complete public fixture changed. Independent full source, input and literal-delta reviews and the complete636-source census are bound in the service review. The actual Darwin contract matcher passed1root/23nodes without skips. These records grant no VM, useful member, native lifecycle or deployment authority; current owning Linux/PG, genuine image and operational rollout remain separate. The released CLI generated context and summary at this exact CODE and verified the metadata content addresses.
+
+
+## Explicit empty EC2 and administrative prestart rejection
+
+Reconciled the integrated schema72 source and its649-file runtime census. Raw
+EC2 HTTP200 absence requires the complete explicitly empty XML and all six
+authenticated inventory reads; original accepted creates and unknown owning
+inventory remain unchanged. AWS1.65.2 binds its exact genuine publication while
+1.65.1 and the historical creator keep their separate sources. The human-only
+prestart rejection records a superseded queued v1 job under current database
+authorization, expiry and compare-and-swap locks. Started or unknown jobs cannot
+be reclassified; ordinary Enqueue, Claim and Start stay byte-identical.
+
+Independent XML, version/source and complete schema72 integration reviews bind
+the exact source. Scoped local XML/controller tests and external isolated
+PostgreSQL17 with pgcrypto passed; Linux test compilation is not Linux execution.
+The official census verifier and exact clean published service-doctor binary
+validated the guarded contract. Genuine released CLI plan/context/summary and
+content-addressed reconciliation preserve actual source and dirty provenance.
+They do not execute the required owning CI, production migration or new-source
+rollout/600 qualification. New AWS metadata, owning dry-run, complete typed
+approvals, current policy/credential bindings and native useful lifecycle remain
+separately required. Historical failures, policies, grants and evidence remain
+retained; no new production or business success is inferred from this stamp.
