@@ -747,8 +747,8 @@
     },
     "controllers/message/capacity_original_create_disposition.go": {
       "build_constraint": "!nativequalification",
-      "bytes": 7710,
-      "sha256": "7fb0c5eeab35dcb1644b99812eb230da4444619387ad26228526ae70ec1e29f4"
+      "bytes": 7800,
+      "sha256": "5267356157c8c9b74ca7916d0375e87a0344a3b1479f4c28d5a41baf83dbb132"
     },
     "controllers/message/capacity_original_create_disposition_contract.go": {
       "build_constraint": "default",
@@ -942,13 +942,13 @@
     },
     "controllers/message/workflows_capacity_guest_production_aws.go": {
       "build_constraint": "!nativequalification",
-      "bytes": 5241,
-      "sha256": "43615be99967f29779cea2ad5b2520160963a11a12d815ba9c30995d8fb4cc9f"
+      "bytes": 5309,
+      "sha256": "48dc997e30af2fe86e2db68b8be51ad1abb061d7a84c87a88a9b598f63c07c6b"
     },
     "controllers/message/workflows_capacity_guest_production_provider.go": {
       "build_constraint": "!nativequalification",
-      "bytes": 20029,
-      "sha256": "7323155f8ee7faf183fc8c54c7278ced3e16f5972c0d7261615f9fcdb1f08624"
+      "bytes": 20148,
+      "sha256": "1f7f260240b550df9b3153d561c45c36654cd77bc4b94683b560017e6a4a9fb7"
     },
     "controllers/message/workflows_capacity_guest_reconcile.go": {
       "build_constraint": "default",
@@ -962,8 +962,8 @@
     },
     "controllers/message/workflows_capacity_guest_retirement_v2_source.go": {
       "build_constraint": "!nativequalification",
-      "bytes": 18329,
-      "sha256": "aa64468572d32be1de3a1d236a1da42546341bfa5c64dbbdc05b00b7cf3d3d3e"
+      "bytes": 18363,
+      "sha256": "b82b5e04113bb81439f66588364cf4808fc4edf2dbc9edc9350834908fb2c74a"
     },
     "controllers/message/workflows_capacity_guest_retirement_v2_source_nativequalification.go": {
       "build_constraint": "nativequalification",
@@ -1423,7 +1423,7 @@
     "internal/capacity/guest_production_registry_default.go": {
       "build_constraint": "!nativequalification",
       "bytes": 1206,
-      "sha256": "5c4b4ded6f58836ef927c39309851177241c50b0b44b75d993bff7b4d7e56700"
+      "sha256": "4653ff081a873ef1b5bdb5743b25084a766a70acd03d8f2dbacfd8bcb7975613"
     },
     "internal/capacity/guest_production_registry_nativequalification.go": {
       "build_constraint": "nativequalification",

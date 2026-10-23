@@ -228,8 +228,8 @@ The complementary AWS disposition basis accepts HTTP 200 absence only from the
 complete retained EC2 XML: one exact namespace/root, a request ID, an explicitly
 empty reservation set and no remaining pagination. HTTP 200 terminated and
 HTTP 400 absence remain distinct native responses. The current observer is
-AWS1.65.2 at its exact published source; historical1.65.1 retains its own source
-pair. All six authenticated native reads and complete auxiliary absence remain
+AWS1.65.3 at its exact published source; historical1.65.1 and1.65.2 retain their
+own distinct source pairs. All six authenticated native reads and complete auxiliary absence remain
 required. Neither an SDK zero value nor an operator boolean supplies absence.
 
 The administrative prestart-rejection POST and exact-job GET require a current
@@ -256,3 +256,26 @@ fixture and approval remain unchanged. The actual adapter source is 56bbed398dfd
 This source acceptance supplies no policy, grant, provider effect, native useful
 member or deployment authority. The new runtime Core source, original600 and
 current policy/credential/native lifecycle gates remain independently required.
+
+
+## Actual AWS1.65.3 root-EBS approval successor
+
+The current AWS observer is bound to published source
+39bdd1da87adba6ac03432e1602ec62dc63baaad. The catalog still requires all four
+ensure, observe, terminate and fleet-inventory lifecycle operations. The
+read-only disposition path retains its six complete authenticated native reads.
+The adapter accepts one exact root EBS mapping with additional explicitly
+virtual ephemeral mappings; another EBS mapping remains refused. These
+compatible virtual mappings do not provide native absence or disposition
+authority by themselves. The complete original EC2 response, exact original
+interface absence and root-snapshot descendant absence remain mandatory.
+
+The AWS literal protected-contract approval and complete fixture bind the
+actual V5 integration and V9 logical type, original owning dry-run and owning
+Core typed projection. Only mutation binding identity, source, type, scope and
+eight derived specs change. Replacing that mutation binding with its historical
+value recovers the complete previous fixture. The whole protected profile,
+canary, catalog, Hetzner fixture and Hetzner approval remain unchanged. The
+already applied schema72 migration is not replayed or relabelled for this
+adapter successor. Source acceptance supplies no new policy, grant, native
+useful membership, business result or deployment qualification.
