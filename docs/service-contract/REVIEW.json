@@ -1,5 +1,5 @@
 {
-  "accepted_at": "2026-10-23T22:18:34.114911+00:00",
+  "accepted_at": "2026-10-23T23:27:32.138722+00:00",
   "accepted_at_is_historical_for_two_profile_candidate": false,
   "checker": {
     "actual_binary_clean_VCS": true,
@@ -66,6 +66,26 @@
       "owning_full_policy_typed_return_sha256": "9ab95989a006e72322635ee77d3143624aebd558322320e9bbee866db9e7dc71",
       "slots_per_profile": 8,
       "typed_compiler_source_sha256": "f76e43c4389565862fc61d1117b3027225db50b5727b5b03c30a40325b58dc5c"
+    },
+    "D8_native_authorization_denied_original_accounting": {
+      "Core_CI_image_schema74_rollout_and_useful_capacity_qualification": null,
+      "MAC_message_tests_not_executed_due_inherited_Linux_only_fixture": true,
+      "Root_MAC_HTTP_roots_passed": 3,
+      "Root_MAC_XML_PG_repository_roots_passed": 8,
+      "Root_XML_PG_followup_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-D8-XML-PG17-THREE-PEER-FIXES-R3-20261023/RETURN.PUBLIC.json",
+        "sha256": "8dcec2e9e6a8b5c58bf7048460d8074a8af8d0bd1c01bf3d89a2bf7528a7c5e7"
+      },
+      "Root_source_review_complete": true,
+      "Root_three_peer_fixes_targeted_PG_roots_passed": 2,
+      "Source_record_count": 665,
+      "accepted_source_inventory_sha256": "aa7294c0ca0e741319adb392b9fd42749772e1359a84c281adb5bf3169dacddb",
+      "independent_final_source_peer_sha256": "7ad5c2820d5dea8b81da64af49db5dbd112a6a730b3ea18ce017e7d097d06fdf",
+      "original_uncertainty_NULL_identities_failed_run_and_NULL_ACK_preserved": true,
+      "owning_Linux_focused_roots_required": 30,
+      "reviewed_observer_publication": "c34e330d8b266bb88e29ae7cf7b01df6f9fd96ce",
+      "separate_schema": 74,
+      "source_roster_sha256": "c5aa076fc54a6ca9477c7e6201382eb9a1c9de03b00f0c2521d9364087de5dc7"
     },
     "H034_supplier_patch_sha256": "b9dc27414035fd518efbc63eb2bfad48e0b8d5609f59c76d1900c1bb0ced1699",
     "Root_current_combined_portable_nodes": 205,
@@ -260,7 +280,7 @@
   "reviewer": "Root full production-source delta review; separate independent manager/dial/monitor peer; source acceptance only",
   "schema": "core_service_source_review_v1",
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "1e075f71b7f5631784e610cec68907bc13ca5399f90a5314d7522aad79f28012",
+  "source_inventory_sha256": "aa7294c0ca0e741319adb392b9fd42749772e1359a84c281adb5bf3169dacddb",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",

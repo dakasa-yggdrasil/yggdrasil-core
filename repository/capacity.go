@@ -502,7 +502,7 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 			return model.CapacityIntent{}, err
 		}
 		var unresolved int
-		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE original_disposition_id IS NULL AND failed_original_disposition_id IS NULL AND NOT (grant_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN ('issued','redeemed','settled','compensating')`, next.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&unresolved); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE original_disposition_id IS NULL AND failed_original_disposition_id IS NULL AND native_denied_disposition_id IS NULL AND NOT (grant_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN ('issued','redeemed','settled','compensating')`, next.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&unresolved); err != nil {
 			return model.CapacityIntent{}, err
 		}
 		if unresolved != 0 {

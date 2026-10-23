@@ -75,7 +75,7 @@ func originalDispositionPG(t *testing.T) *sql.DB {
 		if _, err = db.Exec(up); err != nil {
 			t.Fatal("migration71", err)
 		}
-		for _, name := range []string{"00061_capacity_dispatch_jobs.sql", "00072_capacity_dispatch_prestart_rejection.sql", "00073_failed_original_guest_dispositions.sql"} {
+		for _, name := range []string{"00061_capacity_dispatch_jobs.sql", "00072_capacity_dispatch_prestart_rejection.sql", "00073_failed_original_guest_dispositions.sql", "00074_native_authorization_denied_dispositions.sql"} {
 			wire, readErr := os.ReadFile(filepath.Join("..", "db", "migrations", name))
 			if readErr != nil {
 				t.Fatal(readErr)
@@ -83,6 +83,19 @@ func originalDispositionPG(t *testing.T) *sql.DB {
 			if _, execErr := db.Exec(strings.Split(string(wire), "-- +goose Down")[0]); execErr != nil {
 				t.Fatal(name, execErr)
 			}
+		}
+	}
+	var deniedExists bool
+	if err = db.QueryRow(`SELECT to_regclass('public.capacity_native_denied_dispositions') IS NOT NULL`).Scan(&deniedExists); err != nil {
+		t.Fatal(err)
+	}
+	if !deniedExists {
+		wire, e := os.ReadFile(filepath.Join("..", "db", "migrations", "00074_native_authorization_denied_dispositions.sql"))
+		if e != nil {
+			t.Fatal(e)
+		}
+		if _, e = db.Exec(strings.Split(string(wire), "-- +goose Down")[0]); e != nil {
+			t.Fatal("migration74", e)
 		}
 	}
 	return db

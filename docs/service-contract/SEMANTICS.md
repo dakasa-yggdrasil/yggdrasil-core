@@ -349,3 +349,26 @@ The first managed-reference partial failure and the pre-effect Hetzner refusal
 remain failures. Source approval is separate from the final Core authority,
 immutable image, rollout, network qualification, policy activation and useful
 capacity, pressure, retirement and economic observations.
+
+
+## Native authorization-denied original accounting
+
+Authenticated capacity operators may submit only the original grant and dispatch
+job UUIDs to `/api/v1/ops/capacity/native-denied-dispositions`. Core loads their
+immutable uncertain settlement, preregistration, failed Create run and unknown
+original acknowledgment, then obtains its own source-pinned read-only observation.
+The distinct observer authenticates the historical creator profile and joins an
+exact CloudTrail authorization denial with complete client-token instance pages.
+CloudTrail evidence explicitly omits UserData in RAM and retains only the declared
+projection; STS and EC2 retain bounded original response bodies. No original HTTP
+error response or auxiliary-resource absence is manufactured.
+
+A separate schema74 ledger atomically links the grant, dispatch and failed-floor
+intent, advances one fence and records `native_denied_disposed`. Original uncertain
+settlement, missing identities, failed run and NULL acknowledgment stay immutable.
+The authenticated GET by grant UUID returns a summary without native evidence
+bodies. No witness, enrollment, installation or useful-capacity authority follows.
+Future creation requires a new assessment, generation, fencing token and grant;
+the successor barrier covers all three administrative terminal ledgers across
+integration-instance revisions. Existing accepted-create and witnessed-failure
+contracts and protected production profiles retain their separate authority.

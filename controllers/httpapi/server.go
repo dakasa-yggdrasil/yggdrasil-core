@@ -570,6 +570,8 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/ops/surfaces/{id}/data/{viewId}", server.requireOpsPermissionFunc(permViewIntegrations, server.handleOpsSurfaceData))
 	mux.HandleFunc("POST /api/v1/ops/surfaces/{id}/action/{actionId}", server.requireOpsPermissionFunc(permManageIntegrations, server.handleOpsSurfaceAction))
 	mux.HandleFunc("POST /api/v1/ops/capacity/original-create-dispositions", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsOriginalCreateDisposition))
+	mux.HandleFunc("POST /api/v1/ops/capacity/native-denied-dispositions", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsNativeDeniedDisposition))
+	mux.HandleFunc("GET /api/v1/ops/capacity/native-denied-dispositions/{grantId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsNativeDeniedDispositionRead))
 	mux.HandleFunc("POST /api/v1/ops/capacity/failed-original-dispositions", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedOriginalDisposition))
 	mux.HandleFunc("GET /api/v1/ops/capacity/failed-original-dispositions/{grantId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedOriginalDispositionRead))
 	mux.HandleFunc("GET /api/v1/ops/capacity/original-create-dispositions/{grantId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsOriginalCreateDispositionRead))
