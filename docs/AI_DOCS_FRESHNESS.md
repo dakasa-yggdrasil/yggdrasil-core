@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 1abe41b9c3db761a4684c9e41e349b7fe5ef491e
-verified_diff_sha256: 23c5e9227b987b67e6f6f10e700c806114708482c3800c850ba817850c96b337
+verified_at_commit: e84d5a74e732ec66ff287b23dce2cd6cdbb327e5
+verified_diff_sha256: 6b89b21d786afd40becd4cd7b8feb3f8b589430ef91b69fbe57cc4048bdee2e6
 reconciler_schema: 1
 verified_at: 2026-10-23
 by: Codex
@@ -309,3 +309,10 @@ census verifier and published service doctor passed. Genuine CLI generation
 preserves its actual provenance; these source checks supply no operational
 policy, Guest grant, migration, rollout600 or native business qualification.
 The old2b93 publication and its separately qualified history remain immutable.
+
+
+Current AWS1.65.3 actual-instance contract source review
+
+The five compatibility guards bind published AWS1.65.3 source39bdd1da87adba6ac03432e1602ec62dc63baaad while retaining the exact historical1.65.1 and1.65.2 pairs. All four lifecycle operations and the private administrative bridge remain mandatory. The observer permits explicitly virtual ephemeral mappings beside the one exact root EBS mapping; all six original native reads and complete native absence predicates remain required. Actual V5 instance/V9 type metadata and one original owning dry-run produced the complete owning-Core typed contract1c87694e9b8d48675ed63d85af038b245bc8eac3ff0a12abf1dd1a8039df97d0. Only the AWS fixture mutation binding and one registry digest changed; reversing that binding recovers the whole predecessor fixture, with Hetzner byteexact.
+
+Independent five-guard peerfd511282 and complete typed/postimage peer2a02d8b1 found no concrete P1/P2. Five guard roots/thirty-four subcases passed using only the inherited Linux-specific fixture portability overlay on Darwin; full Linux controller test compilation passed without that overlay and its binary was not executed. Six actual approval/registry roots/seventy nodes passed without failures or skips. The official649-source census and the published service doctor passed. The genuine released CLI generated the repository context and summary at this guarded CODE. Schema72 remains the prior migration; this source review supplies no new rollout, original600, disposition ACK, policy, Guest lifecycle or business qualification.
