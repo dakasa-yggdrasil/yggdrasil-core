@@ -250,143 +250,143 @@
       "adapter_principal_id": "notify-aws-elastic-adapter-grant",
       "destroy_capability": "terminate_ec2_instance",
       "ensure_capability": "ensure_ec2_instance",
-      "integration_checksum": "fa341a4b3eaa882c9dd90032b7a1e93c818d9a044e666ca2f6401e80606f6b6e",
-      "integration_instance_id": "c7118fc4-02e0-4fe8-a767-867db8f470a8",
-      "integration_type_checksum": "e74746e245bea965fa87df785d104d71cb674a61b768c6baa6f088ff18d0668c",
-      "integration_type_id": "723c707d-e1de-4922-a0f2-b2548b87020e",
+      "integration_checksum": "0fd029d4ae5b867667177ef45ceaba36304d140ea922b2484c64d4cfe0b88d9e",
+      "integration_instance_id": "8338cca7-cdba-46b5-888d-b12cc64ea596",
+      "integration_type_checksum": "08286169c7deb8d78af23b56778bfafdd762817427e7b0cd90a0bcd336bf1f93",
+      "integration_type_id": "698e1c62-4886-4be7-af5f-dee152ae53a0",
       "max_slots": 8,
       "name": "notify-aws-elastic",
-      "original_provider_source_commit": "56bbed398dfdb4f53a68f8ed8ff6b7fb6ef0f5f9",
+      "original_provider_source_commit": "39bdd1da87adba6ac03432e1602ec62dc63baaad",
       "profile_name": "notify-aws-elastic",
       "protected_slots": 0,
-      "scope_checksum": "b463f58cc20614d6ff077500159eda52e63ee216b6176b7a0c0b4f2e007df953",
+      "scope_checksum": "26e7d2500aa130588ebca5396e1d34deb0fb4764170f05bb44185edc78e5eecc",
       "slots": [
         {
           "desired_spec": {
-            "admission_checksum": "a06db753ecb84903c0ba6ada2e95eeb35fbe6c94dee8d53381a4c3eca328479c",
+            "admission_checksum": "7d92d1974133882bba68744960943286d05812841dbf9a03e4fe20b5843bd4b9",
             "bootstrap_sha256": "b82a58a97719772f94ef37d7e7304fb386a0d63f81f4c3471c26666455996d10",
             "capability": "ensure_ec2_instance",
-            "integration_instance_id": "c7118fc4-02e0-4fe8-a767-867db8f470a8",
+            "integration_instance_id": "8338cca7-cdba-46b5-888d-b12cc64ea596",
             "native_name": "dakasa-notify-notify-aws-elastic-1",
             "profile_checksum": "404b7671adbbe87d00f87d90499608ea43abe4a341bf6b5f6f714c6bcd35c7e7",
             "profile_name": "notify-aws-elastic",
             "schema_version": "capacity_vm_slot_v1",
-            "scope_checksum": "b463f58cc20614d6ff077500159eda52e63ee216b6176b7a0c0b4f2e007df953",
+            "scope_checksum": "26e7d2500aa130588ebca5396e1d34deb0fb4764170f05bb44185edc78e5eecc",
             "slot": 1
           },
-          "desired_spec_sha256": "60b0c48e2a901ae53122978e80a574e1f9fadc323619ce9dbe646e49582c8aa5",
+          "desired_spec_sha256": "bf76a0ed7363ea8546f89b072dbe8b2b21264e61d312762eed790eb2f9167b53",
           "slot": 1
         },
         {
           "desired_spec": {
-            "admission_checksum": "a06db753ecb84903c0ba6ada2e95eeb35fbe6c94dee8d53381a4c3eca328479c",
+            "admission_checksum": "7d92d1974133882bba68744960943286d05812841dbf9a03e4fe20b5843bd4b9",
             "bootstrap_sha256": "47d11e8c9d73f65a2f3325aaca8cbec61d5cd5e3a73958b058b2a14d8659541e",
             "capability": "ensure_ec2_instance",
-            "integration_instance_id": "c7118fc4-02e0-4fe8-a767-867db8f470a8",
+            "integration_instance_id": "8338cca7-cdba-46b5-888d-b12cc64ea596",
             "native_name": "dakasa-notify-notify-aws-elastic-2",
             "profile_checksum": "404b7671adbbe87d00f87d90499608ea43abe4a341bf6b5f6f714c6bcd35c7e7",
             "profile_name": "notify-aws-elastic",
             "schema_version": "capacity_vm_slot_v1",
-            "scope_checksum": "b463f58cc20614d6ff077500159eda52e63ee216b6176b7a0c0b4f2e007df953",
+            "scope_checksum": "26e7d2500aa130588ebca5396e1d34deb0fb4764170f05bb44185edc78e5eecc",
             "slot": 2
           },
-          "desired_spec_sha256": "f76c3e6741dd42cb941640c8ca51e3d742871f7efb1c8a9ea24deeebadae6ea1",
+          "desired_spec_sha256": "21c8b0401430ec0078c1cda8d03c36de567f5cf5d3c24091d65a8e4c6857ddf6",
           "slot": 2
         },
         {
           "desired_spec": {
-            "admission_checksum": "a06db753ecb84903c0ba6ada2e95eeb35fbe6c94dee8d53381a4c3eca328479c",
+            "admission_checksum": "7d92d1974133882bba68744960943286d05812841dbf9a03e4fe20b5843bd4b9",
             "bootstrap_sha256": "c19ac152261af9408d9f69e3f66465e8e724a6fc97d045d9f94ad33e0effa9bf",
             "capability": "ensure_ec2_instance",
-            "integration_instance_id": "c7118fc4-02e0-4fe8-a767-867db8f470a8",
+            "integration_instance_id": "8338cca7-cdba-46b5-888d-b12cc64ea596",
             "native_name": "dakasa-notify-notify-aws-elastic-3",
             "profile_checksum": "404b7671adbbe87d00f87d90499608ea43abe4a341bf6b5f6f714c6bcd35c7e7",
             "profile_name": "notify-aws-elastic",
             "schema_version": "capacity_vm_slot_v1",
-            "scope_checksum": "b463f58cc20614d6ff077500159eda52e63ee216b6176b7a0c0b4f2e007df953",
+            "scope_checksum": "26e7d2500aa130588ebca5396e1d34deb0fb4764170f05bb44185edc78e5eecc",
             "slot": 3
           },
-          "desired_spec_sha256": "6482b72a93fbd55c846513b04437cbec387f0e9edd10d04b2737c553af415346",
+          "desired_spec_sha256": "2187675376b0381b567d8f4581d150fc9b739525a60af0913e86542b83cb2b13",
           "slot": 3
         },
         {
           "desired_spec": {
-            "admission_checksum": "a06db753ecb84903c0ba6ada2e95eeb35fbe6c94dee8d53381a4c3eca328479c",
+            "admission_checksum": "7d92d1974133882bba68744960943286d05812841dbf9a03e4fe20b5843bd4b9",
             "bootstrap_sha256": "d41119482ad50565ae95b0b69f7d20c90c07a4641877af9d2bf32d024bada195",
             "capability": "ensure_ec2_instance",
-            "integration_instance_id": "c7118fc4-02e0-4fe8-a767-867db8f470a8",
+            "integration_instance_id": "8338cca7-cdba-46b5-888d-b12cc64ea596",
             "native_name": "dakasa-notify-notify-aws-elastic-4",
             "profile_checksum": "404b7671adbbe87d00f87d90499608ea43abe4a341bf6b5f6f714c6bcd35c7e7",
             "profile_name": "notify-aws-elastic",
             "schema_version": "capacity_vm_slot_v1",
-            "scope_checksum": "b463f58cc20614d6ff077500159eda52e63ee216b6176b7a0c0b4f2e007df953",
+            "scope_checksum": "26e7d2500aa130588ebca5396e1d34deb0fb4764170f05bb44185edc78e5eecc",
             "slot": 4
           },
-          "desired_spec_sha256": "84e0d6ea954445e40338854f784da359e0d0d0031e6da333410a0eeb8e812fea",
+          "desired_spec_sha256": "aae7118bf20714ea4578fef96cec36bc195e218ec45121e1c37e21f69b18f667",
           "slot": 4
         },
         {
           "desired_spec": {
-            "admission_checksum": "a06db753ecb84903c0ba6ada2e95eeb35fbe6c94dee8d53381a4c3eca328479c",
+            "admission_checksum": "7d92d1974133882bba68744960943286d05812841dbf9a03e4fe20b5843bd4b9",
             "bootstrap_sha256": "e4c3e54bd463657bf06855b070b2a061730a024819edccad09363774d0e5bd3b",
             "capability": "ensure_ec2_instance",
-            "integration_instance_id": "c7118fc4-02e0-4fe8-a767-867db8f470a8",
+            "integration_instance_id": "8338cca7-cdba-46b5-888d-b12cc64ea596",
             "native_name": "dakasa-notify-notify-aws-elastic-5",
             "profile_checksum": "404b7671adbbe87d00f87d90499608ea43abe4a341bf6b5f6f714c6bcd35c7e7",
             "profile_name": "notify-aws-elastic",
             "schema_version": "capacity_vm_slot_v1",
-            "scope_checksum": "b463f58cc20614d6ff077500159eda52e63ee216b6176b7a0c0b4f2e007df953",
+            "scope_checksum": "26e7d2500aa130588ebca5396e1d34deb0fb4764170f05bb44185edc78e5eecc",
             "slot": 5
           },
-          "desired_spec_sha256": "1c583b1d60c6d287a8e53820d67b999ffdc2f1e35f3719accb7d4adcfeba5ef6",
+          "desired_spec_sha256": "1c582a212fce8e35ea6318c9898b5232111fe102dc9de2ab857fa24078324685",
           "slot": 5
         },
         {
           "desired_spec": {
-            "admission_checksum": "a06db753ecb84903c0ba6ada2e95eeb35fbe6c94dee8d53381a4c3eca328479c",
+            "admission_checksum": "7d92d1974133882bba68744960943286d05812841dbf9a03e4fe20b5843bd4b9",
             "bootstrap_sha256": "e89d07c1767664ede992e31f6550af37344c2683ef252c221058805816a9e5ce",
             "capability": "ensure_ec2_instance",
-            "integration_instance_id": "c7118fc4-02e0-4fe8-a767-867db8f470a8",
+            "integration_instance_id": "8338cca7-cdba-46b5-888d-b12cc64ea596",
             "native_name": "dakasa-notify-notify-aws-elastic-6",
             "profile_checksum": "404b7671adbbe87d00f87d90499608ea43abe4a341bf6b5f6f714c6bcd35c7e7",
             "profile_name": "notify-aws-elastic",
             "schema_version": "capacity_vm_slot_v1",
-            "scope_checksum": "b463f58cc20614d6ff077500159eda52e63ee216b6176b7a0c0b4f2e007df953",
+            "scope_checksum": "26e7d2500aa130588ebca5396e1d34deb0fb4764170f05bb44185edc78e5eecc",
             "slot": 6
           },
-          "desired_spec_sha256": "fed9dfe027a28993c6d19e024164f19209eed4b9d9163c4827f30b4689b97cc0",
+          "desired_spec_sha256": "8f09975cb0bcdbb08c74a014d34751458b02bf4f9aec5b2e52800e4b9712a6dc",
           "slot": 6
         },
         {
           "desired_spec": {
-            "admission_checksum": "a06db753ecb84903c0ba6ada2e95eeb35fbe6c94dee8d53381a4c3eca328479c",
+            "admission_checksum": "7d92d1974133882bba68744960943286d05812841dbf9a03e4fe20b5843bd4b9",
             "bootstrap_sha256": "2b6354889f4b17facde2b5dfe5d5bdfd69fa4ed77880f00b887b87a17a3efd13",
             "capability": "ensure_ec2_instance",
-            "integration_instance_id": "c7118fc4-02e0-4fe8-a767-867db8f470a8",
+            "integration_instance_id": "8338cca7-cdba-46b5-888d-b12cc64ea596",
             "native_name": "dakasa-notify-notify-aws-elastic-7",
             "profile_checksum": "404b7671adbbe87d00f87d90499608ea43abe4a341bf6b5f6f714c6bcd35c7e7",
             "profile_name": "notify-aws-elastic",
             "schema_version": "capacity_vm_slot_v1",
-            "scope_checksum": "b463f58cc20614d6ff077500159eda52e63ee216b6176b7a0c0b4f2e007df953",
+            "scope_checksum": "26e7d2500aa130588ebca5396e1d34deb0fb4764170f05bb44185edc78e5eecc",
             "slot": 7
           },
-          "desired_spec_sha256": "570a349ca906ed9b5ba3ff33c69c64786f83068acfec5ae8f03ead9399d37406",
+          "desired_spec_sha256": "b4afc360f2b6dc520dbb8fc244e9f9e7e366c5093b415b71ef8306540722515c",
           "slot": 7
         },
         {
           "desired_spec": {
-            "admission_checksum": "a06db753ecb84903c0ba6ada2e95eeb35fbe6c94dee8d53381a4c3eca328479c",
+            "admission_checksum": "7d92d1974133882bba68744960943286d05812841dbf9a03e4fe20b5843bd4b9",
             "bootstrap_sha256": "48c4d4b38dc85779fb2bcad36aa4defc2ca27482514108061b9704cf33488d90",
             "capability": "ensure_ec2_instance",
-            "integration_instance_id": "c7118fc4-02e0-4fe8-a767-867db8f470a8",
+            "integration_instance_id": "8338cca7-cdba-46b5-888d-b12cc64ea596",
             "native_name": "dakasa-notify-notify-aws-elastic-8",
             "profile_checksum": "404b7671adbbe87d00f87d90499608ea43abe4a341bf6b5f6f714c6bcd35c7e7",
             "profile_name": "notify-aws-elastic",
             "schema_version": "capacity_vm_slot_v1",
-            "scope_checksum": "b463f58cc20614d6ff077500159eda52e63ee216b6176b7a0c0b4f2e007df953",
+            "scope_checksum": "26e7d2500aa130588ebca5396e1d34deb0fb4764170f05bb44185edc78e5eecc",
             "slot": 8
           },
-          "desired_spec_sha256": "3a754099def9f3dc0fbbe2a811872d6c6ab6e6ac5c33c5a6c9a86f9749090812",
+          "desired_spec_sha256": "274a5a26cc335f92743d0771db91d8695e8cb40e54d2007e2c9300611c7fb42d",
           "slot": 8
         }
       ]
