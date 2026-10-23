@@ -1,76 +1,262 @@
-name: release
-
-# Publishes the yggdrasil-core container image to
-# ghcr.io/dakasa-yggdrasil/yggdrasil-core.
-#
-# Triggers:
-#   - `vX.Y.Z` tags: tagged release (multi-arch, tagged + "latest").
-#   - push to main: rolling "edge" tag + sha-based immutable tag.
-#   - manual dispatch: re-run against current main for repairs.
+name: Export ECR pull renewer OCI
 
 on:
-  push:
-    branches:
-      - main
-    tags:
-      - 'v*'
   workflow_dispatch:
+    inputs:
+      source_ref:
+        description: Reviewed Source S3 commit (40 lowercase hexadecimal characters)
+        required: true
+        type: string
 
 permissions:
   contents: read
-  packages: write
-  id-token: write
 
 jobs:
-  docker:
+  export-oci:
     runs-on: ubuntu-latest
+    timeout-minutes: 20
+    env:
+      SOURCE_REF: ${{ inputs.source_ref }}
+      CONTROL_COMMIT: ${{ github.sha }}
+      SOURCE_CATALOG_SHA256: 84ed12450a5e6d8e6563f7645e27be942bfdb71e2951fead84793790a3f0bcda
+      FIXED_BASE_IMAGE: docker.io/library/python@sha256:1aaa65a85fda306ffb8b910824d4e93bdce61e212c7e87168123ea3073b41a1a
+      FIXED_PLATFORM: linux/amd64
+      RUNTIME_CONTEXT: infrastructure/ecr-pull-renewer
+      PYTHONDONTWRITEBYTECODE: '1'
+      DOCKER_BUILD_RECORD_UPLOAD: 'false'
     steps:
-      - name: Checkout
-        uses: actions/checkout@v4
+      - name: Validate dispatch identities before checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ "$SOURCE_REF" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$CONTROL_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$SOURCE_REF" != "$CONTROL_COMMIT" ]]
+
+      # Immutable official action commit refs reviewed before Control publication.
+      - name: Checkout Source S3
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4 official ref reviewed
         with:
+          ref: ${{ inputs.source_ref }}
           persist-credentials: false
+          fetch-depth: 1
 
-      - name: Set up QEMU (for arm64 cross-builds)
-        uses: docker/setup-qemu-action@v3
+      - name: Verify exact clean Source S3 before any generated writes
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I -B - <<'PY'
+          import hashlib, json, os, re, subprocess
+          from pathlib import Path
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          if head != os.environ['SOURCE_REF'] or not re.fullmatch('[0-9a-f]{40}', head):
+              raise SystemExit('Source S3 checkout mismatch')
+          if not re.fullmatch('[0-9a-f]{40}', os.environ['CONTROL_COMMIT']):
+              raise SystemExit('Control S4 identity invalid')
+          if head == os.environ['CONTROL_COMMIT']:
+              raise SystemExit('Source S3 and Control S4 must be distinct')
+          status = subprocess.check_output(['git', 'status', '--porcelain=v1', '--untracked-files=all', '--ignored'], text=True)
+          if status:
+              raise SystemExit('Source S3 must be clean before generated writes')
+          pins = {
+              'Dockerfile': {'bytes': 509, 'sha256': '73642d1ce12aaa565accdbcdb64c4f0af75a908fa0b2e82023f1db43114859a4'},
+              'pure_refresh.py': {'bytes': 7486, 'sha256': '407ebbbb7bf3b418095f39eb29efcbea19ca8b996be298e79efc005118819334'},
+              'refresh_once.py': {'bytes': 16042, 'sha256': 'b54606e4b51acd28de86cf114ffaa385be5d74dc29fa8364df612b6ea8e2b733'},
+              'requirements.lock': {'bytes': 764, 'sha256': 'ab81ac4e45f887b20d8d0692fdcd13ee40a7dccb1b6127e9e6d78ae643eb14d3'},
+          }
+          context = Path(os.environ['RUNTIME_CONTEXT'])
+          frozen_inputs = {
+              '.dockerignore': {'bytes': 67, 'sha256': '49c361317711bf7973cdb1b1aeae093b3d3d073e50268a0a2fd7a3fdd600352f'},
+              'ADMISSION.TEMPLATE.json': {'bytes': 1004, 'sha256': '0744c33d9fd253a7c3f282890feccb2099da02220578d3933d6f032ec6332e6b'},
+              'Dockerfile': {'bytes': 509, 'sha256': '73642d1ce12aaa565accdbcdb64c4f0af75a908fa0b2e82023f1db43114859a4'},
+              'KUBERNETES.TEMPLATE.json': {'bytes': 6787, 'sha256': 'a06892068dbed5d30d07206906ce00ce964498e6e99f51934800ae53fc29e122'},
+              'pure_refresh.py': {'bytes': 7486, 'sha256': '407ebbbb7bf3b418095f39eb29efcbea19ca8b996be298e79efc005118819334'},
+              'refresh_once.py': {'bytes': 16042, 'sha256': 'b54606e4b51acd28de86cf114ffaa385be5d74dc29fa8364df612b6ea8e2b733'},
+              'render_manifest.py': {'bytes': 2186, 'sha256': '07e0c2392e41bfff244c3c7d6b869f2fa6ad5f8addedae301d51c07beee0a619'},
+              'requirements.lock': {'bytes': 764, 'sha256': 'ab81ac4e45f887b20d8d0692fdcd13ee40a7dccb1b6127e9e6d78ae643eb14d3'},
+              'test_admission_and_sdk.py': {'bytes': 9996, 'sha256': 'a743c0c8b9b3c6950fd9888634cb629b602c741b7db726aed7ef5071b1018a99'},
+              'test_projection_readonly_root.py': {'bytes': 9769, 'sha256': '35cdf03533f8e6062ec0ee12bd37e384acf58853762f7ff45ee523873b492e3b'},
+              'test_pure_refresh.py': {'bytes': 11221, 'sha256': '00f9bba7040439c24478a2787594369da7639f08c61beff167690160e8eb8323'},
+              'test_refresh_once.py': {'bytes': 12978, 'sha256': 'd878e68d096ede7240462d9d56d6728423c862e382a2a4e832f09e0c5978f25a'},
+              'test_ttl_boundary.py': {'bytes': 2087, 'sha256': '6fa19ba4f9990e1a28d740cdc6f4ad9382718d64111228f12471b83f8e276a34'},
+          }
+          if {p.name for p in context.iterdir()} != set(frozen_inputs) | {'README.md'}:
+              raise SystemExit('Thirteen frozen inputs plus operator README roster mismatch')
+          if {name: frozen_inputs[name] for name in pins} != pins:
+              raise SystemExit('Image pins must match frozen input pins')
+          for name, expected in frozen_inputs.items():
+              path = context / name
+              if path.is_symlink() or not path.is_file():
+                  raise SystemExit('Frozen input must identify a regular file')
+              raw = path.read_bytes()
+              if {'sha256': hashlib.sha256(raw).hexdigest(), 'bytes': len(raw)} != expected:
+                  raise SystemExit('Frozen input descriptor mismatch')
+          print(json.dumps({'source_commit': head, 'control_commit': os.environ['CONTROL_COMMIT'],
+                            'source_catalog_sha256': os.environ['SOURCE_CATALOG_SHA256'],
+                            'source_clean_before_generated_writes': True}, sort_keys=True))
+          PY
 
-      - name: Set up Docker Buildx
-        uses: docker/setup-buildx-action@v3
+      - name: Prepare isolated generated output directories
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 -I -B - <<'PY'
+          import os
+          from pathlib import Path
+          (Path(os.environ['RUNNER_TEMP']) / 'export').mkdir(mode=0o700)
+          (Path(os.environ['GITHUB_WORKSPACE']) / 'work').mkdir(mode=0o700, exist_ok=True)
+          PY
 
-      - name: Log in to ghcr.io
-        uses: docker/login-action@v3
+      - name: Set up Python 3.12
+        uses: actions/setup-python@a26af69be951a213d495a4c3e4e4022e16d87065 # v5 official ref reviewed
         with:
-          registry: ghcr.io
-          username: ${{ github.actor }}
-          password: ${{ secrets.GITHUB_TOKEN }}
+          python-version: '3.12'
 
-      - name: Compute image tags
-        id: meta
-        uses: docker/metadata-action@v5
-        with:
-          images: ghcr.io/dakasa-yggdrasil/yggdrasil-core
-          tags: |
-            type=ref,event=tag
-            type=sha,prefix=sha-,format=short
-            type=raw,value=edge,enable={{is_default_branch}}
-            type=raw,value=latest,enable=${{ startsWith(github.ref, 'refs/tags/v') }}
-          labels: |
-            org.opencontainers.image.title=yggdrasil-core
-            org.opencontainers.image.licenses=Apache-2.0
+      - name: Install only hash-locked binary SDK dependencies
+        shell: bash
+        run: |
+          set -euo pipefail
+          if python -I -B -m pip install --require-hashes --only-binary=:all: -r "$RUNTIME_CONTEXT/requirements.lock" > "$RUNNER_TEMP/export/SDK-INSTALL.stdout.txt" 2>&1; then
+            cat "$RUNNER_TEMP/export/SDK-INSTALL.stdout.txt"
+          else
+            task_install_exit=$?
+            cat "$RUNNER_TEMP/export/SDK-INSTALL.stdout.txt"
+            exit "$task_install_exit"
+          fi
 
-      - name: Build & push multi-arch image
-        uses: docker/build-push-action@v6
+      - name: Run all forty-six offline tests with no skips
+        shell: bash
+        run: |
+          set -euo pipefail
+          export ECR_TEST_SDK_DIR="$(python -I -B -c 'import sysconfig; print(sysconfig.get_paths()["purelib"])')"
+          if python -I -B - > "$RUNNER_TEMP/export/TESTS.stdout.txt" 2>&1 <<'PY'
+          import json, os, sys, unittest
+          from pathlib import Path
+          context = Path(os.environ['RUNTIME_CONTEXT']).resolve()
+          sys.path.insert(0, str(context))
+          if not os.environ.get('ECR_TEST_SDK_DIR'):
+              raise SystemExit('Locked SDK path is required; no skip normalization')
+          suite = unittest.TestLoader().discover(str(context), pattern='test_*.py', top_level_dir=str(context))
+          result = unittest.TextTestRunner(verbosity=2).run(suite)
+          summary = {'tests_run': result.testsRun, 'failures': len(result.failures),
+                     'errors': len(result.errors), 'skipped': len(result.skipped),
+                     'successful': result.wasSuccessful()}
+          export = Path(os.environ['RUNNER_TEMP']) / 'export'
+          (export / 'TEST-RETURN.PUBLIC.json').write_text(json.dumps(summary, sort_keys=True) + '\n')
+          print(json.dumps(summary, sort_keys=True))
+          if result.testsRun != 46 or not result.wasSuccessful() or result.skipped:
+              raise SystemExit(1)
+          PY
+          then
+            cat "$RUNNER_TEMP/export/TESTS.stdout.txt"
+          else
+            task_test_exit=$?
+            cat "$RUNNER_TEMP/export/TESTS.stdout.txt"
+            exit "$task_test_exit"
+          fi
+
+      - name: Set up existing Buildx toolchain
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3 official ref reviewed
+
+      - name: Build one OCI archive without registry authentication or publication
+        shell: bash
+        run: |
+          set -euo pipefail
+          if docker buildx build \
+              --platform "$FIXED_PLATFORM" \
+              --provenance=false \
+              --sbom=false \
+              --progress=plain \
+              --label "org.opencontainers.image.revision=$SOURCE_REF" \
+              --label "io.dakasa.source.catalog.sha256=$SOURCE_CATALOG_SHA256" \
+              --metadata-file "$RUNNER_TEMP/export/BUILDKIT-METADATA.PUBLIC.json" \
+              --output "type=oci,dest=$RUNNER_TEMP/export/ecr-pull-renewer.oci.tar,oci-mediatypes=true,compression=gzip,force-compression=true" \
+              --build-arg "PYTHON_BASE_IMAGE=$FIXED_BASE_IMAGE" \
+              --file "$RUNTIME_CONTEXT/Dockerfile" \
+              "$RUNTIME_CONTEXT" > "$RUNNER_TEMP/export/BUILD.stdout.txt" 2>&1; then
+            cat "$RUNNER_TEMP/export/BUILD.stdout.txt"
+          else
+            task_build_exit=$?
+            cat "$RUNNER_TEMP/export/BUILD.stdout.txt"
+            exit "$task_build_exit"
+          fi
+
+      - name: Export original Source S3 and Control S4 provenance and archive descriptor
+        shell: bash
+        run: |
+          set -euo pipefail
+          python -I -B - <<'PY'
+          import hashlib, json, os, re, subprocess
+          from pathlib import Path
+          head = subprocess.check_output(['git', 'rev-parse', 'HEAD'], text=True).strip()
+          control = os.environ['CONTROL_COMMIT']
+          if head != os.environ['SOURCE_REF'] or not re.fullmatch('[0-9a-f]{40}', control):
+              raise SystemExit('Source or control identity changed')
+          if head == control:
+              raise SystemExit('Source S3 and Control S4 must be distinct')
+          for key in ('GITHUB_RUN_ID', 'GITHUB_RUN_ATTEMPT'):
+              if not re.fullmatch('[0-9]+', os.environ[key]) or int(os.environ[key]) <= 0:
+                  raise SystemExit('Original run identity invalid')
+          pins = {
+              'Dockerfile': {'bytes': 509, 'sha256': '73642d1ce12aaa565accdbcdb64c4f0af75a908fa0b2e82023f1db43114859a4'},
+              'pure_refresh.py': {'bytes': 7486, 'sha256': '407ebbbb7bf3b418095f39eb29efcbea19ca8b996be298e79efc005118819334'},
+              'refresh_once.py': {'bytes': 16042, 'sha256': 'b54606e4b51acd28de86cf114ffaa385be5d74dc29fa8364df612b6ea8e2b733'},
+              'requirements.lock': {'bytes': 764, 'sha256': 'ab81ac4e45f887b20d8d0692fdcd13ee40a7dccb1b6127e9e6d78ae643eb14d3'},
+          }
+          context = Path(os.environ['RUNTIME_CONTEXT'])
+          frozen_inputs = {
+              '.dockerignore': {'bytes': 67, 'sha256': '49c361317711bf7973cdb1b1aeae093b3d3d073e50268a0a2fd7a3fdd600352f'},
+              'ADMISSION.TEMPLATE.json': {'bytes': 1004, 'sha256': '0744c33d9fd253a7c3f282890feccb2099da02220578d3933d6f032ec6332e6b'},
+              'Dockerfile': {'bytes': 509, 'sha256': '73642d1ce12aaa565accdbcdb64c4f0af75a908fa0b2e82023f1db43114859a4'},
+              'KUBERNETES.TEMPLATE.json': {'bytes': 6787, 'sha256': 'a06892068dbed5d30d07206906ce00ce964498e6e99f51934800ae53fc29e122'},
+              'pure_refresh.py': {'bytes': 7486, 'sha256': '407ebbbb7bf3b418095f39eb29efcbea19ca8b996be298e79efc005118819334'},
+              'refresh_once.py': {'bytes': 16042, 'sha256': 'b54606e4b51acd28de86cf114ffaa385be5d74dc29fa8364df612b6ea8e2b733'},
+              'render_manifest.py': {'bytes': 2186, 'sha256': '07e0c2392e41bfff244c3c7d6b869f2fa6ad5f8addedae301d51c07beee0a619'},
+              'requirements.lock': {'bytes': 764, 'sha256': 'ab81ac4e45f887b20d8d0692fdcd13ee40a7dccb1b6127e9e6d78ae643eb14d3'},
+              'test_admission_and_sdk.py': {'bytes': 9996, 'sha256': 'a743c0c8b9b3c6950fd9888634cb629b602c741b7db726aed7ef5071b1018a99'},
+              'test_projection_readonly_root.py': {'bytes': 9769, 'sha256': '35cdf03533f8e6062ec0ee12bd37e384acf58853762f7ff45ee523873b492e3b'},
+              'test_pure_refresh.py': {'bytes': 11221, 'sha256': '00f9bba7040439c24478a2787594369da7639f08c61beff167690160e8eb8323'},
+              'test_refresh_once.py': {'bytes': 12978, 'sha256': 'd878e68d096ede7240462d9d56d6728423c862e382a2a4e832f09e0c5978f25a'},
+              'test_ttl_boundary.py': {'bytes': 2087, 'sha256': '6fa19ba4f9990e1a28d740cdc6f4ad9382718d64111228f12471b83f8e276a34'},
+          }
+          if {p.name for p in context.iterdir()} != set(frozen_inputs) | {'README.md'}:
+              raise SystemExit('Thirteen frozen inputs plus operator README roster mismatch')
+          if {name: frozen_inputs[name] for name in pins} != pins:
+              raise SystemExit('Image pins must match frozen input pins')
+          for name, expected in frozen_inputs.items():
+              path = context / name
+              if path.is_symlink() or not path.is_file():
+                  raise SystemExit('Frozen input must identify a regular file')
+              raw = path.read_bytes()
+              if {'sha256': hashlib.sha256(raw).hexdigest(), 'bytes': len(raw)} != expected:
+                  raise SystemExit('Frozen input descriptor mismatch')
+          export = Path(os.environ['RUNNER_TEMP']) / 'export'
+          raw = (export / 'ecr-pull-renewer.oci.tar').read_bytes()
+          archive = {'sha256': hashlib.sha256(raw).hexdigest(), 'bytes': len(raw)}
+          provenance = {
+              'source_catalog_sha256': os.environ['SOURCE_CATALOG_SHA256'],
+              'control_commit': control,
+              'source_commit': head,
+              'run_id': int(os.environ['GITHUB_RUN_ID']),
+              'run_attempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
+              'base_image': os.environ['FIXED_BASE_IMAGE'],
+              'platform': os.environ['FIXED_PLATFORM'],
+              'source_files': pins,
+          }
+          for name, value in (('ARCHIVE.PUBLIC.json', archive), ('PROVENANCE.PUBLIC.json', provenance)):
+              with (export / name).open('x', encoding='utf-8') as stream:
+                  stream.write(json.dumps(value, sort_keys=True, separators=(',', ':')) + '\n')
+          print(json.dumps({'source_commit': head, 'control_commit': control,
+                            'run_id': provenance['run_id'], 'run_attempt': provenance['run_attempt'],
+                            'archive': archive}, sort_keys=True))
+          PY
+
+      - name: Preserve exact archive, provenance, metadata and failure outputs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4 official ref reviewed
         with:
-          context: .
-          file: Dockerfile
-          platforms: linux/amd64,linux/arm64
-          push: true
-          tags: ${{ steps.meta.outputs.tags }}
-          labels: ${{ steps.meta.outputs.labels }}
-          cache-from: type=gha
-          cache-to: type=gha,mode=max
-          # Token used by the console-build stage to clone the private
-          # dakasa-yggdrasil/yggdrasil-console repo. BuildKit mounts it
-          # at /run/secrets/github_token only during the RUN that needs
-          # it; never lands in an image layer.
-          secrets: |
-            github_token=${{ secrets.GITHUB_TOKEN }}
+          name: ecr-pull-renewer-oci-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/export/
+          if-no-files-found: error
+          compression-level: 0
+          retention-days: 3
