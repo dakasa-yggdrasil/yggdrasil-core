@@ -166,6 +166,9 @@ func originalGuestSupplierCatalogSourceFor(provider string, ts model.Integration
 		return source == originalCreateDispositionAWS1651Source
 	}
 	if provider == "aws" && ts.Adapter.Version == "1.65.2" {
+		return source == originalCreateDispositionAWS1652Source
+	}
+	if provider == "aws" && ts.Adapter.Version == "1.65.3" {
 		return len(originalCreateDispositionAWSObserverSource) == 40 && source == originalCreateDispositionAWSObserverSource
 	}
 	if provider == "hetzner" {
