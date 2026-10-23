@@ -243,3 +243,16 @@ cannot use this boundary. Ordinary Enqueue, Claim and Start remain unchanged; a
 new dispatch still needs a new current admission. No provider effect, successful
 workflow, Guest readiness or business result follows from this administrative
 terminal state. Migration72 adds its immutable storage and terminal constraints.
+
+
+## Actual AWS1.65.2 integration approval successor
+
+The literal AWS protected-contract approval and complete fixture bind the actual
+V4 integration metadata, owning original dry-run and owning-Core typed projection.
+Only the mutation binding identity, adapter publication, type, scope and eight
+derived specs change. Reversing those mutation fields recovers the historical
+complete fixture; the protected profile, canary, catalog and whole Hetzner
+fixture and approval remain unchanged. The actual adapter source is 56bbed398dfdb4f53a68f8ed8ff6b7fb6ef0f5f9.
+This source acceptance supplies no policy, grant, provider effect, native useful
+member or deployment authority. The new runtime Core source, original600 and
+current policy/credential/native lifecycle gates remain independently required.

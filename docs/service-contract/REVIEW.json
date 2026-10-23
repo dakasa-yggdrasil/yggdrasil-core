@@ -1,5 +1,5 @@
 {
-  "accepted_at": "2026-10-23T02:28:27.146717+00:00",
+  "accepted_at": "2026-10-23T02:46:08.896936+00:00",
   "accepted_at_is_historical_for_two_profile_candidate": false,
   "checker": {
     "actual_binary_clean_VCS": true,
@@ -32,6 +32,20 @@
     "Root_current_combined_portable_nodes": 205,
     "Root_current_combined_portable_roots": 29,
     "Root_current_combined_portable_skips": 0,
+    "actual_AWS1652_contract_successor": {
+      "H_fixture_and_approval_byteexact": true,
+      "actual_adapter_source": "56bbed398dfdb4f53a68f8ed8ff6b7fb6ef0f5f9",
+      "all_non_mutation_profile_fields_byteexact": true,
+      "base_publication": "2b93a7298bc1432e17df885d30e2b59036a3e97c",
+      "contract_sha256": "d7edd5c50df10c21f93c3024d0d95a5e6c5b24d5a3ae339d7a833f3c0f47eacb",
+      "full_operational_policy_validated": false,
+      "independent_full_source_typed_integration_peer_sha256": "e81c9c04f5347445bc99ceb55f3855e6263316c0d2655026dc98770ae60cefc2",
+      "metadata_return_sha256": "7f1bda8f2fa5e5fb6909bd7d13946332ad34868812a852502507569d9372b111",
+      "owning_typed_result_sha256": "a5ed77f46087f1f5afee4de0f2186e3e22ea4a3f4f562c4cceb64c4fce96b545",
+      "production_or_native_business_qualification": false,
+      "source_head": "5cc5cda37038a41f6a533f3e2f41ad5d27bf679b",
+      "source_inventory_sha256": "38a3bda5ecfd7aaf2b466b8c0b858ff0307fa6225419057d88d12bb62467d6e1"
+    },
     "base": "9670704587cf054a0df0969a2a89f6b58a7193e8",
     "bridge_patch_sha256": "0a2667607a1c69a8a4f284caa0e8a83b155e895852784454441884efcdb0d523",
     "compiled_registry_empty": false,
@@ -107,12 +121,13 @@
   },
   "human_architecture_signoff_claimed": false,
   "non_test_Go_sources": 649,
-  "previous_accepted_inventory_sha256": "fb1e48fe52f2ba0c2cfc46581b4c827eaf91c7e774b5ef2aeba5ac3fe1bb92e6",
+  "previous_accepted_inventory_sha256": "9e84d02942ec5c2178962b84ce64baa859ff43472e0916d2d5df4d304dae9de8",
   "previous_accepted_review_sha256": "6d6bb4351292d4e7f4274aaa7470c6553f60541799d58170fce4e7cf30250e05",
   "previous_original_create_disposition_accepted_at": "2026-10-21T23:08:55.177061+00:00",
   "previous_original_create_disposition_reviewer": "Root full-reviewed the explicit AWS1.64 closed supplier/retirement catalog, original new-instance metadata/dry-run/IAM scope qualification and actual rebuilt owning typed contracts; independent A3 complete input and literal-registry/fixture/semantics peers preserve the exact two-row boundary. Source acceptance only; no native useful member, runtime or human approval is claimed.",
   "previous_review_accepted_at": "2026-10-21T19:28:31.389131+00:00",
   "previous_review_before_AWS164_actual_instance_contract_successor_sha256": "a3c6edf138584b0fb0da606336deb7a463fadfa4a9cc5869edb72acf1dc3c421",
+  "previous_review_before_actual_AWS1652_contract_successor_sha256": "fb87e8b18a2e5847d83e6abdb57ccd23ed0759eb0abcc33f214966dcd5d5fc6f",
   "previous_review_before_final_two_approval_acceptance_sha256": "8743d3f7a2c0983472ac6e6ba39915a7607fe29c3700e5acf6df775bbccdebd9",
   "previous_review_before_floor_bootstrap_sha256": "a38b423729b60de88fecf379d7f4d68fd423ad97a2914091d95478ae114cfa2e",
   "previous_review_before_original_create_disposition_recovery_sha256": "3f2e427ae005de56544a60346b723d33a63fc253586a0625f11abd13299ca34e",
@@ -160,14 +175,15 @@
     "Root completed the final full source review of exactly two original Notify protected contracts and verified all nine integrated postimages against the frozen candidate. Independent A3 full actual-ABI and two-approval static peer45f4 is bound separately. The current636-source inventory matches every production source byte; the literal two-row registry is accepted for source publication, while runtime current-source rebinding, operational policy, process flags, grants and native qualification remain separate gates. Earlier pending and registry-empty statements describe their historical predecessor snapshots.",
     "AWS1.64 is admitted only through the explicit complete supplier and retirement catalog with observe_fleet_inventory; an unknown future version stays refused. The complete actual AWS V2 mutation binding, all eight source-derived specs and literal contract approval come from rebuilt owning Core typed output after the original metadata/dry-run/new-scope IAM qualification. Exact profiles, bootstraps and the whole Hetzner contract remain unchanged. Independent A3 full input-transformer and literal3-postimage peers bind this delta and the complete636-source census; historical approvals and failures remain identified separately.",
     "Production default PG17 assertions are passive harness hooks while the complete real signed witness, current provider/native return, fencing and installation chain remain mandatory. A separate human GodMode administrative disposition records authenticated terminal absence for an accepted expired never-witnessed create without rewriting its grant, preregistration, settlement or failed workflow. Goose71 provides append-only records and a matching one-way grant pointer. Original source/current observer source remain separate, raw provider transport remains private to the dedicated bridge, and every generic execution path refuses this operation/capability. Logical scope/profile/slot successors require a fresh strictly greater generation and fence. Historical catalog IDs resolve the current active logical type, retain operator labels/description, and the serialized compare-and-write refuses stale overwrite, duplicate versions and resurrection.",
-    "Exactly two production approval rows now bind genuine AWS1.65.1/V3 and Hetzner0.3.5/V4 integration metadata and the corresponding complete owning-Core typed contract projections. All eight specs are source-derived with only slot1 individually observed. The complete protected profiles, writer catalogs, canary and physical settings remain unchanged; CoreAuthoritySourceCommit remains a separately required final runtime binding. Old enabled V3 policies and accepted failed creations are not relabeled or replayed."
+    "Exactly two production approval rows now bind genuine AWS1.65.1/V3 and Hetzner0.3.5/V4 integration metadata and the corresponding complete owning-Core typed contract projections. All eight specs are source-derived with only slot1 individually observed. The complete protected profiles, writer catalogs, canary and physical settings remain unchanged; CoreAuthoritySourceCommit remains a separately required final runtime binding. Old enabled V3 policies and accepted failed creations are not relabeled or replayed.",
+    "The AWS approval now binds actual AWS1.65.2/V4 metadata, its owning original dry-run and the complete owning-Core typed policy projection. Exactly the mutation binding identity/source/type/scope and eight derived specs change; reversing those bindings recovers the previous complete fixture. The protected profile, canary and production catalog and complete Hetzner fixture/approval remain byte-exact. Independent full typed/source integration peer e81c9c04 binds all postimages. Runtime CoreAuthoritySourceCommit, genuine image/600, policy and native lifecycle remain separate mandatory gates."
   ],
-  "reviewed_source_head": "0183fe48a8b635c53d55c7c0cae832a20f75c51e",
+  "reviewed_source_head": "5cc5cda37038a41f6a533f3e2f41ad5d27bf679b",
   "reviewed_source_head_is_historical": false,
-  "reviewer": "Root authorized source integration with independent full schema72/API/concurrency and XML/native-source-pair peers; source-only acceptance, no human architecture signoff or production qualification.",
+  "reviewer": "Root authorized exact actual AWS1.65.2/V4 typed approval integration; independent full typed/source/postimage review e81c9c04, source-only acceptance with H unchanged and no runtime or native business qualification.",
   "schema": "core_service_source_review_v1",
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "9e84d02942ec5c2178962b84ce64baa859ff43472e0916d2d5df4d304dae9de8",
+  "source_inventory_sha256": "38a3bda5ecfd7aaf2b466b8c0b858ff0307fa6225419057d88d12bb62467d6e1",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -199,6 +215,7 @@
     "Author isolated Unix-socket PostgreSQL17 validation exercised append-only/FK/index/concurrency, same-source snapshot/races, authentic auxiliary kinds, AWS original-UNKNOWN six-read adjunct while preserving false completeness, and fresh successor generation/fence. Actual migration sequence was also applied to the pre71 Core schema locally; only initial pgcrypto extension creation was omitted because the task-local PG was compiled without OpenSSL, and this limitation remains explicit. This is not production migration proof.",
     "Focused author API/bridge/catalog/private-output/sync and real local PostgreSQL historical-ID/CAS tests passed. The new labels preservation/independence root passed0.491s; final two actual complete contract plus registry suite passed0.562s. Addons test compilation and complete Linuxamd64 Core compile-only build passed; buildvcs=false helper/binary artifacts are not release artifacts. Current owning CI/release, production Goose71 and original bounded network/Core/provider/Guest qualification remain separately required.",
     "The exact reviewed published service-doctor binary ac6a58a0a98e2bcfbdd3f0571d55b495e4f48ccb7fee4b66295c273f4f211f2f validated this complete service scaffold locally; deterministic646-source census verification and git diff whitespace checks passed. Independent actual two-fixture/literal review14eb44e0799cbcac441447c8c8abbd783934530157e556ac89024620a6460fc2 confirms only the two contract digest literals change in the closed registry and both fixture projections equal their owning typed outputs.",
-    "Local source-only validation: XML9 roots92subcases and controller4roots26subcases passed; Darwin Linux-fixture-only overlay is explicit, complete Linux controller compile used no overlay and was not executed. External isolated PostgreSQL17 with pgcrypto exercised41 new schema72/API/concurrency leaves without skips; integration peer binds the exact source. These are not production migration or native business proof."
+    "Local source-only validation: XML9 roots92subcases and controller4roots26subcases passed; Darwin Linux-fixture-only overlay is explicit, complete Linux controller compile used no overlay and was not executed. External isolated PostgreSQL17 with pgcrypto exercised41 new schema72/API/concurrency leaves without skips; integration peer binds the exact source. These are not production migration or native business proof.",
+    "Six targeted owning capacity roots/seventy PASS nodes and zero FAIL/SKIP completed locally on Darwin for actual two-provider approval fixtures and registry negatives. Official649-source census regenerated; current owning Linux/CI, schema72 migration and production firstReady600 remain separately required, not supplied by local source acceptance."
   ]
 }

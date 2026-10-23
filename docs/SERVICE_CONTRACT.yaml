@@ -12,7 +12,7 @@
   "source_inventory": {
     "id": "complete_runtime_source_census",
     "evidence": "docs/service-contract/source/sources.json",
-    "sha256": "9e84d02942ec5c2178962b84ce64baa859ff43472e0916d2d5df4d304dae9de8"
+    "sha256": "38a3bda5ecfd7aaf2b466b8c0b858ff0307fa6225419057d88d12bb62467d6e1"
   },
   "produces": [
     {
@@ -40,7 +40,7 @@
     {
       "id": "http_inbound_protocols_and_auth",
       "evidence": "docs/service-contract/SEMANTICS.md",
-      "sha256": "aae0494cfadebf98e7fbbd49705e766f16bbbfc125f8e7e5c7a47eb86aa1ba93"
+      "sha256": "30b8b7d95f099b3341828d633c6330ced80ead9a3548d39621f326c4c0d0acc5"
     },
     {
       "id": "dependency_versions",
@@ -55,7 +55,7 @@
     {
       "id": "independent_source_review",
       "evidence": "docs/service-contract/REVIEW.json",
-      "sha256": "fb87e8b18a2e5847d83e6abdb57ccd23ed0759eb0abcc33f214966dcd5d5fc6f"
+      "sha256": "e4820e92a3ab43b3ba63ff229977eeae82835c8b7f60c7e596d245d0dcd949da"
     }
   ],
   "callsREST": [
@@ -72,7 +72,7 @@
     {
       "id": "parameterized_destination_families",
       "evidence": "docs/service-contract/SEMANTICS.md",
-      "sha256": "aae0494cfadebf98e7fbbd49705e766f16bbbfc125f8e7e5c7a47eb86aa1ba93"
+      "sha256": "30b8b7d95f099b3341828d633c6330ced80ead9a3548d39621f326c4c0d0acc5"
     }
   ],
   "exposesREST": [
