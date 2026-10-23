@@ -100,7 +100,7 @@
       "build_constraint": "default",
       "file": "controllers/message/integrations.go",
       "function": "package",
-      "line": 23,
+      "line": 22,
       "name": "queueIntegrationExecute",
       "value": "yggdrasil-core.integration.execute"
     },
@@ -108,7 +108,7 @@
       "build_constraint": "default",
       "file": "controllers/message/integrations.go",
       "function": "package",
-      "line": 24,
+      "line": 23,
       "name": "queueIntegrationStatusGet",
       "value": "yggdrasil-core.integration.status.get"
     },
@@ -116,7 +116,7 @@
       "build_constraint": "default",
       "file": "controllers/message/integrations.go",
       "function": "package",
-      "line": 25,
+      "line": 24,
       "name": "queueIntegrationStatusList",
       "value": "yggdrasil-core.integration.status.list"
     },
@@ -124,7 +124,7 @@
       "build_constraint": "default",
       "file": "controllers/message/integrations.go",
       "function": "package",
-      "line": 26,
+      "line": 25,
       "name": "queueIntegrationInstanceHealthGet",
       "value": "yggdrasil-core.integration.instance_health.get"
     },
@@ -132,7 +132,7 @@
       "build_constraint": "default",
       "file": "controllers/message/integrations.go",
       "function": "package",
-      "line": 27,
+      "line": 26,
       "name": "queueIntegrationInstanceHealthList",
       "value": "yggdrasil-core.integration.instance_health.list"
     },
@@ -140,7 +140,7 @@
       "build_constraint": "default",
       "file": "controllers/message/integrations.go",
       "function": "package",
-      "line": 28,
+      "line": 27,
       "name": "queueIntegrationCatalogGet",
       "value": "yggdrasil-core.integration.catalog.get"
     },
@@ -148,7 +148,7 @@
       "build_constraint": "default",
       "file": "controllers/message/integrations.go",
       "function": "package",
-      "line": 29,
+      "line": 28,
       "name": "queueIntegrationCatalogList",
       "value": "yggdrasil-core.integration.catalog.list"
     },
@@ -156,7 +156,7 @@
       "build_constraint": "default",
       "file": "controllers/message/integrations.go",
       "function": "package",
-      "line": 30,
+      "line": 29,
       "name": "queueCatalogDiscover",
       "value": "yggdrasil-core.catalog.discover"
     },
@@ -228,7 +228,7 @@
       "build_constraint": "default",
       "file": "controllers/message/products.go",
       "function": "package",
-      "line": 23,
+      "line": 22,
       "name": "queueProductMaterialize",
       "value": "yggdrasil-core.product.materialize"
     },
@@ -236,7 +236,7 @@
       "build_constraint": "default",
       "file": "controllers/message/products.go",
       "function": "package",
-      "line": 24,
+      "line": 23,
       "name": "queueProductInstallationReconcile",
       "value": "yggdrasil-core.product.installation.reconcile"
     },
@@ -244,7 +244,7 @@
       "build_constraint": "default",
       "file": "controllers/message/products.go",
       "function": "package",
-      "line": 25,
+      "line": 24,
       "name": "queueProductInstallationApply",
       "value": "yggdrasil-core.product.installation.apply"
     },
@@ -252,7 +252,7 @@
       "build_constraint": "default",
       "file": "controllers/message/products.go",
       "function": "package",
-      "line": 26,
+      "line": 25,
       "name": "queueProductInstallationObserve",
       "value": "yggdrasil-core.product.installation.observe"
     },
@@ -260,7 +260,7 @@
       "build_constraint": "default",
       "file": "controllers/message/products.go",
       "function": "package",
-      "line": 27,
+      "line": 26,
       "name": "queueProductInstallationUninstall",
       "value": "yggdrasil-core.product.installation.uninstall"
     },
@@ -268,7 +268,7 @@
       "build_constraint": "default",
       "file": "controllers/message/products.go",
       "function": "package",
-      "line": 28,
+      "line": 27,
       "name": "queueProductInstallationStateDiscover",
       "value": "yggdrasil-core.product.installation_state.discover"
     },

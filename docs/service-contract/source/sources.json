@@ -10,6 +10,11 @@
       "bytes": 468,
       "sha256": "ffa15f5843e6cb5748cb1044918369eeab2918b4055f89577a907530d257e57e"
     },
+    "addons/broker_connection.go": {
+      "build_constraint": "default",
+      "bytes": 790,
+      "sha256": "00a6a9e21e762beb7077f9a01ea82c5f061bca008ab6f0d3f03057c374bac37c"
+    },
     "addons/buildproject_lifecycle.go": {
       "build_constraint": "default",
       "bytes": 6126,
@@ -47,8 +52,8 @@
     },
     "addons/external_identity_resync.go": {
       "build_constraint": "default",
-      "bytes": 3390,
-      "sha256": "65fa49ec0745e68dc394ecad7e0b8cade5592696105a30224970df0fd51d19ea"
+      "bytes": 3323,
+      "sha256": "547e3e478b6e8b27aecb10beabe8c175e9098cb096bcdd1bfff62fcc8323f2ea"
     },
     "addons/first_run.go": {
       "build_constraint": "default",
@@ -57,8 +62,8 @@
     },
     "addons/heimdall_inbox_dispatcher.go": {
       "build_constraint": "default",
-      "bytes": 9397,
-      "sha256": "d90ec03191c41341d35c3429aafd60ec521db7d470c1126c590ebfcf8323ad6b"
+      "bytes": 9474,
+      "sha256": "aac4222c39103584bbb23c8045c6c933dcb16d20545c2f0c69d5bb1f40dd70e0"
     },
     "addons/heimdall_inbox_writer.go": {
       "build_constraint": "default",
@@ -67,13 +72,13 @@
     },
     "addons/http.go": {
       "build_constraint": "default",
-      "bytes": 14505,
-      "sha256": "eb5831e8c29b7ca83867e7196ea83b3a5815b3115b862625945c47a4e301fde4"
+      "bytes": 14682,
+      "sha256": "2f45f7ba2e44e846d7c604c4d610a71a737666fe12cfd4211214bf3bae58d7fd"
     },
     "addons/integration_surface_sync.go": {
       "build_constraint": "default",
-      "bytes": 3640,
-      "sha256": "8723fdecf5e111282c5536702b3091d02e3f2352efe5e14fc1e42573a7565ddd"
+      "bytes": 3878,
+      "sha256": "d72314f982b7cfb769ff5ffca1fed275d69f50ea44fb475fc84f2dcefef32ee8"
     },
     "addons/manifest_purge.go": {
       "build_constraint": "default",
@@ -82,8 +87,8 @@
     },
     "addons/manifest_sync.go": {
       "build_constraint": "default",
-      "bytes": 6796,
-      "sha256": "63495e76b05b87e9434c05425435acff788963306a241dcf399d0782179e389e"
+      "bytes": 6983,
+      "sha256": "9fe2f0e94e0ad804de2ee7d4d98a22a4640ce77bc4be49b39f0456fe4df6c72c"
     },
     "addons/observability.go": {
       "build_constraint": "default",
@@ -107,13 +112,13 @@
     },
     "addons/rabbitmq.go": {
       "build_constraint": "default",
-      "bytes": 7176,
-      "sha256": "849badc09f5b0ffc3bddaa02de1d0f57a37b349d0eb7c2d0c9afa7d1959d1c38"
+      "bytes": 10109,
+      "sha256": "71eebfabc9143327352ef4b6605379c148405afd238ce2b37a883a2600b40ce4"
     },
     "addons/reactor_dispatcher.go": {
       "build_constraint": "default",
-      "bytes": 16558,
-      "sha256": "51697ce034c9607b6c8930fbc9815dacf63637f1e39f61fa5a192dcd2c3c763d"
+      "bytes": 16963,
+      "sha256": "8b2df6c167ad9558b7a730e4b79273b933632ab68154f2835aec762ec9a53743"
     },
     "addons/reconciler.go": {
       "build_constraint": "default",
@@ -142,13 +147,13 @@
     },
     "addons/workflow_event_triggers.go": {
       "build_constraint": "default",
-      "bytes": 17998,
-      "sha256": "2eb9019f4e745f2798c92822fe298c63537c108f1bba6c9fc26558e38cb0a1f1"
+      "bytes": 18075,
+      "sha256": "7f4cc9cb5c363694b7ed40b79ac68ac6ecf19fce32e6355d5360d36d728bc1f9"
     },
     "addons/workflow_scheduler.go": {
       "build_constraint": "default",
-      "bytes": 17225,
-      "sha256": "ca0c27987fafc1cc70ff69c4b6984d1bdaf5660eb802c38952c58e5e5f6ed3fc"
+      "bytes": 17302,
+      "sha256": "b5778f60d04d31062553e7041eff9ef4b74d6057b63a3487ef8bb252ec35f94c"
     },
     "cmd/native-guest-lifecycle-fixture/canonical_compensation.go": {
       "build_constraint": "linux && nativequalification",
@@ -312,8 +317,8 @@
     },
     "controllers/httpapi/auth_recovery_email.go": {
       "build_constraint": "default",
-      "bytes": 8180,
-      "sha256": "737dd7f597ff5a0d8f837735620e5a77303cf21cc30d90a6be20797dba0bd988"
+      "bytes": 8190,
+      "sha256": "6bd682b002d84ab41e0de5df01169460daee1e0d91051ca62607861192c7336e"
     },
     "controllers/httpapi/auth_third_party_provision.go": {
       "build_constraint": "default",
@@ -347,8 +352,8 @@
     },
     "controllers/httpapi/capacity_dispatch.go": {
       "build_constraint": "default",
-      "bytes": 29629,
-      "sha256": "52c0ad074870f8ec5ff527982e6c1895c3b00e3abbefd5f11e9eaeba89d55092"
+      "bytes": 29639,
+      "sha256": "15588f3b0ef85e3ba67c1ba6832ecbf785c2f5fa6bb46042d51e365ba731b63b"
     },
     "controllers/httpapi/capacity_dispatch_demand.go": {
       "build_constraint": "default",
@@ -507,18 +512,18 @@
     },
     "controllers/httpapi/integration_type_sync.go": {
       "build_constraint": "default",
-      "bytes": 7893,
-      "sha256": "d081971e2a12e43376729fea011b16a05dbf834f2136f89e0fc7025ced6c0cc6"
+      "bytes": 8096,
+      "sha256": "83812dacfc284fd9c4642794bd2d21d2c4f06c11f7a03fb9faabaf9ce45eba6e"
     },
     "controllers/httpapi/integration_webhook.go": {
       "build_constraint": "default",
-      "bytes": 10355,
-      "sha256": "8c05b246ef0bfc6011fdb0b33cd765ea91adb08e20a158c9596f986bb2389fef"
+      "bytes": 10365,
+      "sha256": "a3580c0cb5064f6a2142578659308b44f348b1b5565c28aaf4c7d7d319ab2381"
     },
     "controllers/httpapi/integrations_install.go": {
       "build_constraint": "default",
-      "bytes": 8121,
-      "sha256": "fe4dec1c252c45821c3eb58dba55841f47afbec1a834fd8c9c66039d84a8a3a9"
+      "bytes": 8131,
+      "sha256": "8e5a3f284bfa23432a54b71e01c70590b4b47b09d96d29becdc922efbd6d628b"
     },
     "controllers/httpapi/invites.go": {
       "build_constraint": "default",
@@ -572,8 +577,8 @@
     },
     "controllers/httpapi/mfa_contact.go": {
       "build_constraint": "default",
-      "bytes": 11720,
-      "sha256": "b3df27034fb41a8b26e57264a49a68e6a7e6e943c0b78d6d86991ca1b324bae0"
+      "bytes": 11730,
+      "sha256": "254dffe9dbf544fbbc6c2188bfcb7cc440775793fd5309dbf571146c67856ab8"
     },
     "controllers/httpapi/middleware_auth.go": {
       "build_constraint": "default",
@@ -617,8 +622,8 @@
     },
     "controllers/httpapi/ops_original_create_disposition.go": {
       "build_constraint": "default",
-      "bytes": 5129,
-      "sha256": "6ac03d3dabd0f1f68b3de2b63573f3ca005700f88085c07e9713dea304211d3a"
+      "bytes": 5139,
+      "sha256": "f0cef1ea675bc83ff8cb50077d1e09909330e7ea29ebbf78e0e82074c3aec91d"
     },
     "controllers/httpapi/ops_rbac_catalog.go": {
       "build_constraint": "default",
@@ -687,8 +692,8 @@
     },
     "controllers/httpapi/server.go": {
       "build_constraint": "default",
-      "bytes": 180688,
-      "sha256": "6f604e08c6fd0b85a5543b0eb30ffd43dc007a9e458706ee7f54735f98d1e59d"
+      "bytes": 181353,
+      "sha256": "4f609138c2ade7bc39aa913dff6bd1cfb602aefaaaf421544057a69b384081f7"
     },
     "controllers/httpapi/tartaro_actions.go": {
       "build_constraint": "default",
@@ -732,8 +737,8 @@
     },
     "controllers/httpapi/workflow_runs.go": {
       "build_constraint": "default",
-      "bytes": 28810,
-      "sha256": "963d9e59a79aede772009b628eaa5a23d24df75ebfae83693072409eb64d08b9"
+      "bytes": 28830,
+      "sha256": "df1e869b1675db98855c334f02410958dedf7b3a050d4da4bf2155552d7dd8ce"
     },
     "controllers/httpapi/workflow_template_instantiate.go": {
       "build_constraint": "default",
@@ -744,6 +749,11 @@
       "build_constraint": "default",
       "bytes": 21591,
       "sha256": "5658425148ade507ea2493a301ba3117922c0b77910400736a69631fe7497e5e"
+    },
+    "controllers/message/amqp_transport.go": {
+      "build_constraint": "default",
+      "bytes": 1178,
+      "sha256": "32c5f8d5f985cd2a32c24ece437bb9adb41b58fb1ef01be4405413b7d9088f80"
     },
     "controllers/message/capacity_original_create_disposition.go": {
       "build_constraint": "!nativequalification",
@@ -802,8 +812,8 @@
     },
     "controllers/message/integration_describe.go": {
       "build_constraint": "default",
-      "bytes": 36597,
-      "sha256": "e8c491defc6061ec865fb4e2fd61b802848970c4e3e7a47df4e53be4e6b3ff82"
+      "bytes": 35013,
+      "sha256": "178a64e86a5f521a57b195675b39eea03751325325ea002a05be026821a69eba"
     },
     "controllers/message/integration_family_resolver.go": {
       "build_constraint": "default",
@@ -817,13 +827,13 @@
     },
     "controllers/message/integration_monitor.go": {
       "build_constraint": "default",
-      "bytes": 4211,
-      "sha256": "3ce8ae135d6aabb4b6284ef60d93f72828eb7ca82988ee0fa83caa9f4992a611"
+      "bytes": 4793,
+      "sha256": "36bcd589c2d184fe352f5c3e977a5dab51817296f67a493087805c84a02279eb"
     },
     "controllers/message/integrations.go": {
       "build_constraint": "default",
-      "bytes": 19863,
-      "sha256": "82077a5c4d32040ff11d623398d57418c3499384d617a75e9fb103c02d90cf2c"
+      "bytes": 19807,
+      "sha256": "a2f20d9afba667f9e65434486b49e4f6d9781fc9fad007153f988ee9226a3ebf"
     },
     "controllers/message/manifest_persist.go": {
       "build_constraint": "default",
@@ -837,13 +847,13 @@
     },
     "controllers/message/products.go": {
       "build_constraint": "default",
-      "bytes": 77246,
-      "sha256": "79e2bc1760fff798b6d46d7512a6006d821f5fec0dc4ad81e2b413007f326d9e"
+      "bytes": 77244,
+      "sha256": "f564169145d116acdb690c3540e53b90804e12ee73c8a6d6bbbd11e989885d3a"
     },
     "controllers/message/register.go": {
       "build_constraint": "default",
-      "bytes": 1285,
-      "sha256": "1a36dd3cb0b22e5b5c437260e754367b5da4c71448fe000125484c147ca07578"
+      "bytes": 2345,
+      "sha256": "b0b457f3bbe755be3900adca61087a1629dbed2e35486dfcb95ae1d98546bc3f"
     },
     "controllers/message/rpc_client.go": {
       "build_constraint": "default",
@@ -1269,6 +1279,16 @@
       "build_constraint": "default",
       "bytes": 2421,
       "sha256": "1d7a0c6c1307145009be73999b8bde3146f9f7c3dfd9ee34191d5c7d0ffa7060"
+    },
+    "internal/brokersession/consumers.go": {
+      "build_constraint": "default",
+      "bytes": 2779,
+      "sha256": "6ce34706a525683df94d74b36ac79db15b9569bd7c321c8c94de87ebff7a78ad"
+    },
+    "internal/brokersession/session.go": {
+      "build_constraint": "default",
+      "bytes": 5242,
+      "sha256": "d1893a14d4073f80f1edb201619a2a9edbd952d0ae11e46278c5833c80129132"
     },
     "internal/cache/ttl.go": {
       "build_constraint": "default",

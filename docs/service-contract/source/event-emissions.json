@@ -29,7 +29,7 @@
       "callee": "EmitEvent",
       "file": "addons/manifest_sync.go",
       "function": "EmitEvent",
-      "line": 177,
+      "line": 184,
       "type_expressions": [
         "eventType"
       ]
@@ -52,7 +52,7 @@
       "callee": "EmitEvent",
       "file": "addons/reactor_dispatcher.go",
       "function": "persistExternalIdentity",
-      "line": 255,
+      "line": 268,
       "type_expressions": []
     },
     {
@@ -61,7 +61,7 @@
       "callee": "EmitEvent",
       "file": "addons/workflow_event_triggers.go",
       "function": "emitWorkflowEventMatched",
-      "line": 515,
+      "line": 517,
       "type_expressions": [
         "\"workflow.event.matched\"",
         "\"system\""
@@ -73,7 +73,7 @@
       "callee": "EmitEvent",
       "file": "addons/workflow_scheduler.go",
       "function": "processScheduledWorkflow",
-      "line": 340,
+      "line": 342,
       "type_expressions": [
         "\"workflow.schedule.fired\"",
         "\"system\""
@@ -320,7 +320,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/integration_type_sync.go",
       "function": "EmitEvent",
-      "line": 203,
+      "line": 211,
       "type_expressions": [
         "eventType"
       ]
@@ -376,7 +376,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleCollaboratorCreate",
-      "line": 2063,
+      "line": 2082,
       "type_expressions": [
         "repository.EventTypeCollaboratorCreated"
       ]
@@ -387,7 +387,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamCreate",
-      "line": 2300,
+      "line": 2319,
       "type_expressions": [
         "repository.EventTypeTeamCreated"
       ]
@@ -398,7 +398,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamUpdate",
-      "line": 2395,
+      "line": 2414,
       "type_expressions": [
         "repository.EventTypeTeamUpdated"
       ]
@@ -409,7 +409,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamDelete",
-      "line": 2484,
+      "line": 2503,
       "type_expressions": [
         "repository.EventTypeTeamDeleted"
       ]
@@ -420,7 +420,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamGrantCreate",
-      "line": 2548,
+      "line": 2567,
       "type_expressions": [
         "repository.EventTypeTeamGrantAdded",
         "model.ActorTypeAPI"
@@ -432,7 +432,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamGrantDelete",
-      "line": 2585,
+      "line": 2604,
       "type_expressions": [
         "repository.EventTypeTeamGrantRevoked",
         "model.ActorTypeAPI"
@@ -444,7 +444,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamMembershipUpsert",
-      "line": 2692,
+      "line": 2711,
       "type_expressions": [
         "repository.EventTypeTeamMembershipAdded"
       ]
@@ -455,7 +455,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamMembershipUpsert",
-      "line": 2717,
+      "line": 2736,
       "type_expressions": [
         "repository.EventTypeTeamMembershipRemoved"
       ]
@@ -490,7 +490,7 @@
       "callee": "EmitEvent",
       "file": "controllers/message/integration_describe.go",
       "function": "emitContractMismatchDetectedIfNew",
-      "line": 969,
+      "line": 929,
       "type_expressions": [
         "repository.EventTypeRuntimeStateContractMismatchDetected"
       ]
@@ -523,7 +523,7 @@
       "callee": "EmitEvent",
       "file": "controllers/message/products.go",
       "function": "emitProductInstallationAppliedEvent",
-      "line": 338,
+      "line": 337,
       "type_expressions": [
         "\"product.installation.applied\""
       ]
@@ -534,7 +534,7 @@
       "callee": "EmitEvent",
       "file": "controllers/message/products.go",
       "function": "emitProductInstallationUninstalledEvent",
-      "line": 501,
+      "line": 500,
       "type_expressions": [
         "\"product.installation.uninstalled\""
       ]

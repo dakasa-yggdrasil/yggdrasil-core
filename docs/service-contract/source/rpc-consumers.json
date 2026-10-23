@@ -96,56 +96,56 @@
       "endpoint_expression": "queueIntegrationExecute",
       "file": "controllers/message/integrations.go",
       "function": "integrationConsumers",
-      "line": 39
+      "line": 38
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueCatalogDiscover",
       "file": "controllers/message/integrations.go",
       "function": "integrationConsumers",
-      "line": 45
+      "line": 44
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueIntegrationStatusGet",
       "file": "controllers/message/integrations.go",
       "function": "integrationConsumers",
-      "line": 55
+      "line": 54
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueIntegrationStatusList",
       "file": "controllers/message/integrations.go",
       "function": "integrationConsumers",
-      "line": 61
+      "line": 60
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueIntegrationInstanceHealthGet",
       "file": "controllers/message/integrations.go",
       "function": "integrationConsumers",
-      "line": 67
+      "line": 66
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueIntegrationInstanceHealthList",
       "file": "controllers/message/integrations.go",
       "function": "integrationConsumers",
-      "line": 73
+      "line": 72
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueIntegrationCatalogGet",
       "file": "controllers/message/integrations.go",
       "function": "integrationConsumers",
-      "line": 79
+      "line": 78
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueIntegrationCatalogList",
       "file": "controllers/message/integrations.go",
       "function": "integrationConsumers",
-      "line": 85
+      "line": 84
     },
     {
       "build_constraint": "default",
@@ -208,49 +208,49 @@
       "endpoint_expression": "queueProductInstallationStateDiscover",
       "file": "controllers/message/products.go",
       "function": "productConsumers",
-      "line": 36
+      "line": 35
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueProductMaterialize",
       "file": "controllers/message/products.go",
       "function": "productConsumers",
-      "line": 45
+      "line": 44
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueProductInstallationReconcile",
       "file": "controllers/message/products.go",
       "function": "productConsumers",
-      "line": 51
+      "line": 50
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueProductInstallationApply",
       "file": "controllers/message/products.go",
       "function": "productConsumers",
-      "line": 57
+      "line": 56
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueProductInstallationObserve",
       "file": "controllers/message/products.go",
       "function": "productConsumers",
-      "line": 63
+      "line": 62
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueProductInstallationUninstall",
       "file": "controllers/message/products.go",
       "function": "productConsumers",
-      "line": 69
+      "line": 68
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueProductInstallationStateDiscover",
       "file": "controllers/message/products.go",
       "function": "productConsumers",
-      "line": 75
+      "line": 74
     },
     {
       "build_constraint": "default",

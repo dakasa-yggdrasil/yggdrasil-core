@@ -158,7 +158,7 @@
       "expression_complete": true,
       "file": "controllers/message/integration_describe.go",
       "function": "checkHTTPJSONTransportConnectivity",
-      "line": 278
+      "line": 276
     },
     {
       "argument_expression": "req",
@@ -168,7 +168,7 @@
       "expression_complete": true,
       "file": "controllers/message/integration_describe.go",
       "function": "checkHTTPJSONTransportConnectivity",
-      "line": 283
+      "line": 281
     },
     {
       "argument_expression": "ctx, rpc.Request{\n\t\tEndpoint:    endpoint,\n\t\tBody:        body,\n\t\tContentType: \"application/json\",\n\t}",

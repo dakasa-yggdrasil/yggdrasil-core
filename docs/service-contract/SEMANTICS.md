@@ -279,3 +279,20 @@ canary, catalog, Hetzner fixture and Hetzner approval remain unchanged. The
 already applied schema72 migration is not replayed or relabelled for this
 adapter successor. Source acceptance supplies no new policy, grant, native
 useful membership, business result or deployment qualification.
+
+
+## Serialized AMQP session recovery
+
+One addon owner replaces a disconnected broker session with bounded connection
+setup and backoff. A session becomes available after consumers are registered.
+HTTP dispatch and background passes resolve the current session for each new
+operation. On retirement, the owner closes the delivery gate and socket before
+cancelling handlers, then joins consumers and the integration monitor before
+starting another generation. A drain deadline is reported without overlapping
+generations. Recovery does not retry Request or Publish payloads and preserves
+an ambiguous operation result. Nil AMQP handles return an unavailable result;
+HTTP JSON adapters retain their independent transport. Dependency versions,
+API authorization, protected provider contracts and schema72 SQL are unchanged.
+
+Source acceptance and the isolated local RabbitMQ recovery test provide no
+production600, policy, Guest lifecycle or business qualification.
