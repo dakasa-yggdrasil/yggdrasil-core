@@ -1,0 +1,200 @@
+{
+  "apiVersion": "v1",
+  "kind": "List",
+  "items": [
+    {
+      "apiVersion": "v1",
+      "kind": "ServiceAccount",
+      "metadata": {
+        "name": "ecr-pull-renewer",
+        "namespace": "dakasa"
+      },
+      "automountServiceAccountToken": false
+    },
+    {
+      "apiVersion": "rbac.authorization.k8s.io/v1",
+      "kind": "Role",
+      "metadata": {
+        "name": "ecr-pull-renewer",
+        "namespace": "dakasa"
+      },
+      "rules": [
+        {
+          "apiGroups": [
+            ""
+          ],
+          "resources": [
+            "secrets"
+          ],
+          "resourceNames": [
+            "ecr-pull-fresh"
+          ],
+          "verbs": [
+            "get",
+            "patch"
+          ]
+        }
+      ]
+    },
+    {
+      "apiVersion": "rbac.authorization.k8s.io/v1",
+      "kind": "RoleBinding",
+      "metadata": {
+        "name": "ecr-pull-renewer",
+        "namespace": "dakasa"
+      },
+      "subjects": [
+        {
+          "kind": "ServiceAccount",
+          "name": "ecr-pull-renewer",
+          "namespace": "dakasa"
+        }
+      ],
+      "roleRef": {
+        "apiGroup": "rbac.authorization.k8s.io",
+        "kind": "Role",
+        "name": "ecr-pull-renewer"
+      }
+    },
+    {
+      "apiVersion": "v1",
+      "kind": "ConfigMap",
+      "metadata": {
+        "name": "ecr-pull-renewer-admission",
+        "namespace": "dakasa"
+      },
+      "data": {
+        "admission.json": "{\"approved_by_principal\": null, \"execution_target\": \"existing_brain_host_network_pod\", \"existing_ecr_read_only_scope_observed\": true, \"existing_host_role_multiservice_use_accepted\": true, \"existing_instance_profile_arn\": \"arn:aws:iam::153828470928:instance-profile/dakasa-validation-ec2\", \"existing_principal_arn\": \"arn:aws:iam::153828470928:role/dakasa-validation-ec2\", \"existing_role_name\": \"dakasa-validation-ec2\", \"expected_instance_id\": \"i-0eb40396f80878812\", \"expected_secret_uid\": null, \"host_imds_v2_available_confirmed\": true, \"kube_ca_file\": \"/var/run/secrets/dakasa-ecr/ca.crt\", \"kube_identity\": \"system:serviceaccount:dakasa:ecr-pull-renewer\", \"kube_server\": \"https://kubernetes.default.svc\", \"kube_single_secret_scope_confirmed\": null, \"kube_token_file\": \"/var/run/secrets/dakasa-ecr/token\", \"projected_serviceaccount_rotation_selected\": true, \"public_identity_evidence_ref\": null, \"public_kube_evidence_ref\": null, \"scheduler\": \"kubernetes_cronjob\"}"
+      }
+    },
+    {
+      "apiVersion": "batch/v1",
+      "kind": "CronJob",
+      "metadata": {
+        "name": "ecr-pull-renewer",
+        "namespace": "dakasa"
+      },
+      "spec": {
+        "suspend": true,
+        "schedule": "*/30 * * * *",
+        "concurrencyPolicy": "Forbid",
+        "startingDeadlineSeconds": 120,
+        "successfulJobsHistoryLimit": 1,
+        "failedJobsHistoryLimit": 3,
+        "jobTemplate": {
+          "spec": {
+            "backoffLimit": 0,
+            "activeDeadlineSeconds": 120,
+            "ttlSecondsAfterFinished": 86400,
+            "template": {
+              "metadata": {
+                "labels": {
+                  "app.kubernetes.io/name": "ecr-pull-renewer"
+                }
+              },
+              "spec": {
+                "serviceAccountName": "ecr-pull-renewer",
+                "automountServiceAccountToken": false,
+                "restartPolicy": "Never",
+                "nodeSelector": {
+                  "kubernetes.io/hostname": "ip-172-31-9-242"
+                },
+                "hostNetwork": true,
+                "hostPID": false,
+                "hostIPC": false,
+                "dnsPolicy": "ClusterFirstWithHostNet",
+                "securityContext": {
+                  "runAsUser": 0,
+                  "runAsGroup": 0,
+                  "seccompProfile": {
+                    "type": "RuntimeDefault"
+                  }
+                },
+                "containers": [
+                  {
+                    "name": "renew",
+                    "image": null,
+                    "imagePullPolicy": "Always",
+                    "command": [
+                      "python3",
+                      "-I",
+                      "-B",
+                      "/app/refresh_once.py",
+                      "--admission",
+                      "/etc/dakasa-ecr/admission.json"
+                    ],
+                    "securityContext": {
+                      "allowPrivilegeEscalation": false,
+                      "readOnlyRootFilesystem": true,
+                      "capabilities": {
+                        "drop": [
+                          "ALL"
+                        ]
+                      }
+                    },
+                    "resources": {
+                      "requests": {
+                        "cpu": "25m",
+                        "memory": "64Mi"
+                      },
+                      "limits": {
+                        "cpu": "200m",
+                        "memory": "192Mi"
+                      }
+                    },
+                    "volumeMounts": [
+                      {
+                        "name": "admission",
+                        "mountPath": "/etc/dakasa-ecr",
+                        "readOnly": true
+                      },
+                      {
+                        "name": "identity",
+                        "mountPath": "/var/run/secrets/dakasa-ecr",
+                        "readOnly": true
+                      }
+                    ]
+                  }
+                ],
+                "volumes": [
+                  {
+                    "name": "admission",
+                    "configMap": {
+                      "name": "ecr-pull-renewer-admission",
+                      "defaultMode": 256
+                    }
+                  },
+                  {
+                    "name": "identity",
+                    "projected": {
+                      "defaultMode": 256,
+                      "sources": [
+                        {
+                          "serviceAccountToken": {
+                            "path": "token",
+                            "expirationSeconds": 3600
+                          }
+                        },
+                        {
+                          "configMap": {
+                            "name": "kube-root-ca.crt",
+                            "items": [
+                              {
+                                "key": "ca.crt",
+                                "path": "ca.crt"
+                              }
+                            ]
+                          }
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            }
+          }
+        }
+      }
+    }
+  ]
+}
