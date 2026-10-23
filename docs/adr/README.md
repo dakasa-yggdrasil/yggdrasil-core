@@ -99,3 +99,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0072](0072-recover-amqp-through-serialized-consumer-sessions.md) | Recover AMQP through serialized consumer sessions | Proposed | 2026-10-23 | AMQP session readiness, consumer drain and recovery without ambiguous-operation replay |
 
 | [0073](0073-record-terminal-failed-witnessed-original-lifetimes.md) | Record terminal failed witnessed original lifetimes | Proposed | 2026-10-23 | Preserved accepted create/witness and unknown ACK with separate native-absence terminal ledger |
+
+| [0074](0074-record-native-authorization-denied-originals-separately.md) | Record native authorization-denied originals separately | Proposed | 2026-10-23 | Preserved uncertain originals and unknown ACK with authenticated denial decision and separate fenced terminal ledger |
