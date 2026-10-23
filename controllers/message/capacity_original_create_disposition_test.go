@@ -19,7 +19,7 @@ func dispositionCatalogFixture(t *testing.T, provider string) model.IntegrationT
 	version, kind, transport := "0.3.5", "server", "rabbitmq"
 	if provider == "aws" {
 		file = "capacity_aws_type_v130.json"
-		version, kind, transport = "1.65.1", "ec2_instance", "http_json"
+		version, kind, transport = "1.65.2", "ec2_instance", "http_json"
 	}
 	raw, err := os.ReadFile("../../repository/testdata/" + file)
 	if err != nil {
@@ -133,6 +133,30 @@ func TestOriginalDispositionObserverCatalogAndSupplierRemainClosed(t *testing.T)
 		}
 		if len(source) == 40 && !originalGuestSupplierCatalogSourceFor(provider, spec, source) {
 			t.Fatal("reviewed new supplier source refused", provider)
+		}
+	}
+}
+
+func TestOriginalDispositionAWSObserverVersionSourcePairs(t *testing.T) {
+	current := dispositionCatalogFixture(t, "aws")
+	legacy := current
+	legacy.Adapter.Version = "1.65.1"
+	if dispositionObserverCatalog("aws", legacy) {
+		t.Fatal("historical observer became the current disposition observer")
+	}
+	if !originalGuestSupplierCatalogFor("aws", legacy) || !productionRetirementCatalogV2("aws", legacy) || !originalGuestSupplierCatalogSourceFor("aws", legacy, originalCreateDispositionAWS1651Source) {
+		t.Fatal("historical supplier/retirement source pair changed")
+	}
+	for _, pair := range []struct {
+		catalog model.IntegrationTypeManifestSpec
+		source  string
+	}{
+		{legacy, originalCreateDispositionAWSObserverSource},
+		{current, originalCreateDispositionAWS1651Source},
+		{current, strings.Repeat("f", 40)},
+	} {
+		if originalGuestSupplierCatalogSourceFor("aws", pair.catalog, pair.source) {
+			t.Fatal("crossed or unreviewed version/source pair accepted")
 		}
 	}
 }
