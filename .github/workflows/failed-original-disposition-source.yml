@@ -1,7 +1,8 @@
-name: Failed original disposition Source
+name: Failed original disposition exact Source CONTROL
 
 on:
-  pull_request:
+  push:
+    branches: [control/core-d6-focused-source-9ecff39e007c-20261023]
   workflow_dispatch:
 
 permissions:
@@ -20,18 +21,22 @@ jobs:
       GOMEMLIMIT: 2GiB
       CGO_ENABLED: '1'
       GOFLAGS: -mod=readonly
-      SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+      SOURCE_COMMIT: 9ecff39e007c939de3618387fa7229de44915fdd
+      WORKFLOW_CONTROL_COMMIT: ${{ github.sha }}
       PG_IMAGE: postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
         with:
-          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          ref: 9ecff39e007c939de3618387fa7229de44915fdd
           persist-credentials: false
       - name: Verify exact Source checkout
         shell: bash
         run: |
           set -Eeuo pipefail
           [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$WORKFLOW_CONTROL_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$WORKFLOW_CONTROL_COMMIT" != "$SOURCE_COMMIT" ]]
+          [[ "$GITHUB_REF" == "refs/heads/control/core-d6-focused-source-9ecff39e007c-20261023" ]]
           [[ "$(git rev-parse HEAD)" == "$SOURCE_COMMIT" ]]
           [[ -z "$(git status --porcelain --untracked-files=all)" ]]
       - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
@@ -97,6 +102,7 @@ jobs:
           record pg-create docker create --network none --user "$(id -u):$(id -g)" \
             --cap-drop ALL --security-opt no-new-privileges --memory 512m --cpus 2 \
             --pids-limit 128 --mount "type=bind,src=$pg_root,dst=$pg_root" \
+            --mount "type=bind,src=$PGHOST,dst=/var/run/postgresql" \
             -e PGDATA -e PGHOST -e PGUSER -e PGDATABASE \
             -e POSTGRES_USER=postgres -e "POSTGRES_DB=$PGDATABASE" -e POSTGRES_HOST_AUTH_METHOD=trust \
             "$PG_IMAGE" postgres -k "$PGHOST" -c listen_addresses= \
@@ -111,6 +117,10 @@ jobs:
             sleep 1
           done
           [[ "$ready" == 1 ]]
+          # The official initializer clears PGHOST for its own psql calls. The
+          # second bind aliases that default socket path to this same owned inode.
+          # It chmods that directory 03775; restore 0700 before any source test.
+          record pg-socket-mode chmod 0700 "$PGHOST"
           record pg-version docker exec "$cid" postgres --version
           record pg-identity docker exec "$cid" psql -XAt -v ON_ERROR_STOP=1 -h "$PGHOST" -U "$PGUSER" -d "$PGDATABASE" \
             -c "SELECT json_build_object('database',current_database(),'unix_socket',inet_server_addr() IS NULL,'version',current_setting('server_version_num')::int,'listen_addresses',current_setting('listen_addresses'));"
@@ -119,6 +129,8 @@ jobs:
           v=json.loads((pathlib.Path(os.environ['LOGS'])/'pg-identity.stdout').read_text())
           assert v['database']==os.environ['PGDATABASE'] and v['unix_socket'] is True
           assert 170000<=v['version']<180000 and v['listen_addresses']==''
+          for key in ('PGDATA','PGHOST'):
+              st=os.stat(os.environ[key]); assert st.st_uid==os.getuid() and (st.st_mode&0o7777)==0o700, key+' ownership/mode'
           print(json.dumps(v,sort_keys=True))
           PY_ID
           # The fixture initializes only this empty dedicated database with its required
@@ -168,7 +180,7 @@ jobs:
           actual_head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
           assert actual_head==os.environ['SOURCE_COMMIT'], 'Source checkout identity changed'
           assert not subprocess.check_output(['git','status','--porcelain','--untracked-files=all']), 'Source worktree became dirty'
-          value={'schema':'failed_original_source_CI_exact_root_census_v1','source_commit':actual_head,'race':True,'count':1,'package_parallelism':1,'summary':summary,'total_roots':17,'production_authority':False}
+          value={'schema':'failed_original_source_CI_exact_root_census_v1','source_commit':actual_head,'workflow_control_commit':os.environ['WORKFLOW_CONTROL_COMMIT'],'race':True,'count':1,'package_parallelism':1,'summary':summary,'total_roots':17,'production_authority':False}
           (p/'CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
           print(json.dumps(value,sort_keys=True))
           PY_CENSUS
