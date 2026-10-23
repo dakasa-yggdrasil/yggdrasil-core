@@ -241,7 +241,7 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 			return err
 		}
 		var data []byte
-		err = tx.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE original_disposition_id IS NULL AND integration_instance_id=$1 AND scope_checksum=$2 AND profile_name=$3 AND slot=$4 AND state IN ('issued','redeemed','settled','compensating') FOR UPDATE`, b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName, plan.Slot).Scan(&data)
+		err = tx.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE original_disposition_id IS NULL AND failed_original_disposition_id IS NULL AND integration_instance_id=$1 AND scope_checksum=$2 AND profile_name=$3 AND slot=$4 AND state IN ('issued','redeemed','settled','compensating') FOR UPDATE`, b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName, plan.Slot).Scan(&data)
 		if err == nil {
 			var old capacityMutationRecord
 			if err = json.Unmarshal(data, &old); err != nil {
@@ -267,7 +267,7 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 		if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE NOT (slot_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND resource_id<>''`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&live); err != nil {
 			return err
 		}
-		if err = tx.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE state IN ('issued','redeemed','settled','compensating') AND grant_record->'grant'->>'capability'=grant_record->'binding'->>'ensure_capability'),count(*) FILTER(WHERE state IN ('issued','redeemed','settled') AND grant_record->'grant'->>'capability'=grant_record->'binding'->>'destroy_capability' AND COALESCE(grant_record->'grant'->>'compensation_of','')=''),count(*) FILTER(WHERE generation=$5 AND state<>'expired' AND state<>'rejected') FROM public.capacity_mutation_grants WHERE original_disposition_id IS NULL AND NOT (grant_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, generation).Scan(&pending, &pendingDestroy, &started); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE state IN ('issued','redeemed','settled','compensating') AND grant_record->'grant'->>'capability'=grant_record->'binding'->>'ensure_capability'),count(*) FILTER(WHERE state IN ('issued','redeemed','settled') AND grant_record->'grant'->>'capability'=grant_record->'binding'->>'destroy_capability' AND COALESCE(grant_record->'grant'->>'compensation_of','')=''),count(*) FILTER(WHERE generation=$5 AND state<>'expired' AND state<>'rejected') FROM public.capacity_mutation_grants WHERE original_disposition_id IS NULL AND failed_original_disposition_id IS NULL AND NOT (grant_record ? 'authority_kind') AND namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, generation).Scan(&pending, &pendingDestroy, &started); err != nil {
 			return err
 		}
 		if started == 0 && live != intent.BaselineSnapshot.Units {
@@ -714,7 +714,7 @@ func (s CapacityStore) RecordMutationSlot(ctx context.Context, policy model.Mani
 			}
 		}
 		var count, history int
-		if err = tx.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE original_disposition_id IS NULL AND state IN ('issued','redeemed','settled','compensating')),count(*) FROM public.capacity_mutation_grants WHERE integration_instance_id=$1 AND scope_checksum=$2 AND profile_name=$3 AND slot=$4`, b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName, plan.Slot).Scan(&count, &history); err != nil {
+		if err = tx.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE original_disposition_id IS NULL AND failed_original_disposition_id IS NULL AND state IN ('issued','redeemed','settled','compensating')),count(*) FROM public.capacity_mutation_grants WHERE integration_instance_id=$1 AND scope_checksum=$2 AND profile_name=$3 AND slot=$4`, b.IntegrationInstanceID, b.ScopeChecksum, b.ProfileName, plan.Slot).Scan(&count, &history); err != nil {
 			return err
 		}
 		if count != 0 {

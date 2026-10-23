@@ -28,6 +28,22 @@
       },
       "source_approval_rows": 2
     },
+    "D6_failed_witnessed_terminal_and_AWS1654_observer": {
+      "HTTP_package_source_pass": true,
+      "Linux_CI_and_image_and_production_qualification": null,
+      "Mac_message_execution": null,
+      "complete_source_map_compact_representation_with_same_658_records": true,
+      "historical_NULL_workflow_id_and_finalization_ACK_preserved": true,
+      "independent_final_peer_sha256": "8e74f5cca4c61b40ce3c1b576a3c9dc51daef384cbccb43e0dbee55e62a30fde",
+      "local_nullable_PG_return_sha256": "2aed5e38f9ccb47a407602d65f4ebe1a7ba128db96bb7811087dad0405046382",
+      "old_protected_profiles_and_registry_byteexact": true,
+      "phase2_R3_profiles_excluded": true,
+      "reviewed_at": "2026-10-23T20:51:48.329356+00:00",
+      "reviewed_source_closure_sha256": "a1cc4dfe34bac13267b878da0f9b6d155154b2b708292830f7b473154f587978",
+      "schema": 73,
+      "source_inventory_sha256": "a477069c886ff9d7da76a8b0b2acbd69f1c18bbe13c2e46389e2ad0a73661748",
+      "source_roster_sha256": "8dde1288c5e3cbb287142ef3b8d40e371f7540dc54b2376bc7a45277da44e3f2"
+    },
     "H034_supplier_patch_sha256": "b9dc27414035fd518efbc63eb2bfad48e0b8d5609f59c76d1900c1bb0ced1699",
     "Root_current_combined_portable_nodes": 205,
     "Root_current_combined_portable_roots": 29,

@@ -16,6 +16,7 @@ import (
 var ErrOriginalCreateDisposition = errors.New("original accepted create disposition held")
 
 const originalDispositionAWSOriginalSource = "f81697fe298a1df63956af6ac65dd5b7ca937a3d"
+const originalDispositionAWS1653OriginalSource = "39bdd1da87adba6ac03432e1602ec62dc63baaad"
 
 func originalDispositionDigest(raw []byte) string {
 	s := sha256.Sum256(raw)
@@ -57,7 +58,7 @@ func validateOriginalDispositionObservation(c model.CapacityOriginalCreateDispos
 		}
 	} else {
 		action, err := uuid.Parse(r.OriginalCreateActionID)
-		if r.OriginalAdapterSourceCommit != originalDispositionAWSOriginalSource || err != nil || action == uuid.Nil || action.String() != r.OriginalCreateActionID || c.Receipt.ActionID != r.OriginalCreateActionID || len(r.AuxiliaryResources) != 0 || o.Provider != "aws" || o.InventoryBasis != "aws_original_run_instances_cloudtrail_root_snapshot_absence_v1" || len(o.AuxiliaryResources) != 2 || len(o.NativeReads) != 6 {
+		if (r.OriginalAdapterSourceCommit != originalDispositionAWSOriginalSource && r.OriginalAdapterSourceCommit != originalDispositionAWS1653OriginalSource) || err != nil || action == uuid.Nil || action.String() != r.OriginalCreateActionID || c.Receipt.ActionID != r.OriginalCreateActionID || len(r.AuxiliaryResources) != 0 || o.Provider != "aws" || o.InventoryBasis != "aws_original_run_instances_cloudtrail_root_snapshot_absence_v1" || len(o.AuxiliaryResources) != 2 || len(o.NativeReads) != 6 {
 			return ErrOriginalCreateDisposition
 		}
 		if o.AuxiliaryResources[0].Kind != "aws_ebs_snapshot_descendants" || !regexp.MustCompile(`^snap-[0-9a-f]{8,17}$`).MatchString(o.AuxiliaryResources[0].ID) || o.AuxiliaryResources[1].Kind != "aws_network_interface" || !regexp.MustCompile(`^eni-[0-9a-f]{8,17}$`).MatchString(o.AuxiliaryResources[1].ID) {

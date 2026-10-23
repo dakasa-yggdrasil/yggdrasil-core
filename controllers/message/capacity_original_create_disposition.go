@@ -20,7 +20,8 @@ import (
 // A new observer source never rewrites the historical creator in an old grant.
 const originalCreateDispositionAWS1651Source = "5745ceb06e3221c756a3b6a26da1df248b8b4417"
 const originalCreateDispositionAWS1652Source = "56bbed398dfdb4f53a68f8ed8ff6b7fb6ef0f5f9"
-const originalCreateDispositionAWSObserverSource = "39bdd1da87adba6ac03432e1602ec62dc63baaad"
+const originalCreateDispositionAWS1653Source = "39bdd1da87adba6ac03432e1602ec62dc63baaad"
+const originalCreateDispositionAWSObserverSource = "d6af60729dee334c2be9bee45a0ba2dd02b7ec51"
 const originalCreateDispositionHetznerObserverSource = "6026f78572a0ebfbf1b50984c2d47ff28bdc714d"
 
 var errOriginalCreateDisposition = errors.New("original create disposition unresolved")
@@ -39,7 +40,7 @@ func dispositionObserverCatalog(provider string, spec model.IntegrationTypeManif
 	if spec.Provider != provider || manifest.ValidateIntegrationTypeSpec(spec) != nil {
 		return false
 	}
-	if provider == "aws" && (spec.Adapter.Version != "1.65.3" || spec.Adapter.Transport != "http_json" || spec.Adapter.Endpoints.Execute != "/rpc/execute" || spec.Adapter.Endpoints.Describe != "/rpc/describe") {
+	if provider == "aws" && (spec.Adapter.Version != "1.65.4" || spec.Adapter.Transport != "http_json" || spec.Adapter.Endpoints.Execute != "/rpc/execute" || spec.Adapter.Endpoints.Describe != "/rpc/describe") {
 		return false
 	}
 	if provider == "hetzner" && (spec.Adapter.Version != "0.3.5" || spec.Adapter.Transport != "rabbitmq") {

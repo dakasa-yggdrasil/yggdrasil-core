@@ -50,16 +50,17 @@ func originalDispositionPG(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	if !exists {
-		ddl := `CREATE TABLE public.manifests(id uuid PRIMARY KEY,kind text,namespace text,name text,checksum text,spec jsonb,active boolean);
+		ddl := `CREATE TABLE public.manifests(id uuid PRIMARY KEY,kind text,namespace text,name text,version int NOT NULL DEFAULT 1,checksum text,spec jsonb,active boolean);
  CREATE TABLE public.capacity_mutation_grants(id uuid PRIMARY KEY,namespace text,environment text,domain text,dimension text,generation bigint,integration_instance_id uuid,scope_checksum text,profile_name text,slot int,state text,grant_record jsonb,expires_at timestamptz,updated_at timestamptz DEFAULT clock_timestamp());
  CREATE UNIQUE INDEX capacity_mutation_grants_open_slot_idx ON public.capacity_mutation_grants(integration_instance_id,scope_checksum,profile_name,slot) WHERE state IN('issued','redeemed','settled');
  CREATE TABLE public.capacity_vm_provisioning_preregistrations(id uuid PRIMARY KEY,create_grant_id uuid UNIQUE REFERENCES public.capacity_mutation_grants(id),nonce_sha256 text,profile_manifest_sha256 text,preregistration_record jsonb,original_deadline timestamptz,created_at timestamptz,original_wire bytea,binding_wire bytea);
- CREATE TABLE public.capacity_guest_original_create_witnesses(preregistration_id uuid PRIMARY KEY REFERENCES public.capacity_vm_provisioning_preregistrations(id));
+ CREATE TABLE public.capacity_guest_original_create_witnesses(preregistration_id uuid PRIMARY KEY REFERENCES public.capacity_vm_provisioning_preregistrations(id), original_wire bytea,witness_sha256 text,original_record jsonb,original_create_attempt_id uuid,recorded_at timestamptz);
  CREATE TABLE public.capacity_vm_original_enrollments(preregistration_id uuid PRIMARY KEY REFERENCES public.capacity_vm_provisioning_preregistrations(id));
  CREATE TABLE public.capacity_guest_original_installations(preregistration_id uuid PRIMARY KEY REFERENCES public.capacity_vm_provisioning_preregistrations(id));
  CREATE TABLE public.capacity_factory_original_grant_bindings(grant_id uuid PRIMARY KEY);
- CREATE TABLE public.workflow_runs(id uuid PRIMARY KEY,workflow_id uuid,status text);
- CREATE TABLE public.capacity_dispatch_jobs(run_id uuid PRIMARY KEY,state text,finalization_ack_at timestamptz);
+ CREATE TABLE public.workflow_runs(id uuid PRIMARY KEY,workflow_id uuid,status text,workflow_namespace text,workflow_name text,workflow_version int,started_at timestamptz,finished_at timestamptz,result jsonb,error text,inputs jsonb,metadata jsonb,created_at timestamptz DEFAULT clock_timestamp(),updated_at timestamptz DEFAULT clock_timestamp());
+
+ CREATE TABLE public.capacity_vm_retirement_intents(id uuid PRIMARY KEY,preregistration_id uuid);
  CREATE TABLE public.capacity_resource_slots(integration_instance_id uuid,scope_checksum text,profile_name text,slot int,namespace text,environment text,domain text,dimension text,resource_id text,slot_record jsonb,revision bigint DEFAULT 1,updated_at timestamptz DEFAULT clock_timestamp(),PRIMARY KEY(integration_instance_id,scope_checksum,profile_name,slot));
  CREATE TABLE public.capacity_intents(namespace text,environment text,domain text,dimension text,intent jsonb,updated_at timestamptz,PRIMARY KEY(namespace,environment,domain,dimension));
  CREATE TABLE public.capacity_intent_events(id bigserial PRIMARY KEY,namespace text,environment text,domain text,dimension text,generation bigint,fencing_token bigint,phase text,receipt_ref text,recorded_at timestamptz);`
@@ -73,6 +74,15 @@ func originalDispositionPG(t *testing.T) *sql.DB {
 		up := strings.Split(string(raw), "-- +goose Down")[0]
 		if _, err = db.Exec(up); err != nil {
 			t.Fatal("migration71", err)
+		}
+		for _, name := range []string{"00061_capacity_dispatch_jobs.sql", "00072_capacity_dispatch_prestart_rejection.sql", "00073_failed_original_guest_dispositions.sql"} {
+			wire, readErr := os.ReadFile(filepath.Join("..", "db", "migrations", name))
+			if readErr != nil {
+				t.Fatal(readErr)
+			}
+			if _, execErr := db.Exec(strings.Split(string(wire), "-- +goose Down")[0]); execErr != nil {
+				t.Fatal(name, execErr)
+			}
 		}
 	}
 	return db
