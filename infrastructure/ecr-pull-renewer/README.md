@@ -18,3 +18,5 @@ python3 -m unittest discover -s . -p 'test_*.py'
 ```
 
 The tests use synthetic credentials, fake transports and SDK stubs. They do not renew a production token or establish a successful live Job.
+
+Disable Kubernetes service links so Service environment variables cannot become ambient AWS configuration. The runtime accepts writable permission bits only on the two fixed read-only projected volume roots. Outside ancestors and all internal components retain strict ownership, type and permission checks. The deployment template contains no nested mounts; host and kubelet remain trusted. Projection rotation races fail the Job without retry.

@@ -95,6 +95,7 @@
               "spec": {
                 "serviceAccountName": "ecr-pull-renewer",
                 "automountServiceAccountToken": false,
+                "enableServiceLinks": false,
                 "restartPolicy": "Never",
                 "nodeSelector": {
                   "kubernetes.io/hostname": "ip-172-31-9-242"

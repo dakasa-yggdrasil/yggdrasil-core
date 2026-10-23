@@ -72,17 +72,50 @@ PROJECTED_FILES = {
     "/var/run/secrets/dakasa-ecr/ca.crt": "/var/run/secrets/dakasa-ecr",
 }
 
+PROJECTED_CANONICAL_ROOTS = {
+    "/etc/dakasa-ecr": "/etc/dakasa-ecr",
+    "/var/run/secrets/dakasa-ecr": "/run/secrets/dakasa-ecr",
+}
+
+
+def _projected_path(root, actual):
+    # Only the fixed projection root may have writable mode bits. A read-only
+    # mount makes those bits ineffective; all other path checks stay strict.
+    if (root not in {Path(value) for value in PROJECTED_CANONICAL_ROOTS.values()}
+            or root not in actual.parents):
+        raise Hold("projection_escaped_mount")
+    trusted_path(root.parent)
+    info = root.lstat()
+    if (not stat.S_ISDIR(info.st_mode) or info.st_uid not in (0, os.geteuid())):
+        raise Hold("untrusted_projection_root")
+    if not os.statvfs(root).f_flag & os.ST_RDONLY:
+        raise Hold("projection_mount_not_readonly")
+    device = info.st_dev
+    for part in [actual] + list(actual.parents):
+        if part == root:
+            break
+        info = part.lstat()
+        if (stat.S_ISLNK(info.st_mode) or info.st_uid not in (0, os.geteuid())
+                or stat.S_IMODE(info.st_mode) & 0o022):
+            raise Hold("untrusted_path")
+        if (info.st_dev != device or not os.statvfs(part).f_flag & os.ST_RDONLY):
+            raise Hold("projection_mount_mismatch")
+        if not (stat.S_ISREG(info.st_mode) if part == actual else stat.S_ISDIR(info.st_mode)):
+            raise Hold("projection_path_type")
+    return actual
+
 
 def input_path(path):
     # Kubelet projections use symlinks for atomic rotation. Only these fixed
     # mounts may resolve symlinks, and their targets must stay inside the mount.
     if path in PROJECTED_FILES:
         root = Path(PROJECTED_FILES[path]).resolve(strict=True)
+        if root != Path(PROJECTED_CANONICAL_ROOTS[PROJECTED_FILES[path]]):
+            raise Hold("projection_mount_root_mismatch")
         actual = Path(path).resolve(strict=True)
         if root not in actual.parents:
             raise Hold("projection_escaped_mount")
-        trusted_path(root)
-        return trusted_path(actual)
+        return _projected_path(root, actual)
     return trusted_path(path)
 
 

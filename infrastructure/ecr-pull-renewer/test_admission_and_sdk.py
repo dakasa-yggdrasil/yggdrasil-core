@@ -65,7 +65,9 @@ class AdmissionTests(unittest.TestCase):
                 token = directory / "token"; token.write_text(name); token.chmod(0o400)
             visible = root / "token"; visible.symlink_to("v1/token")
             mapping = {str(visible): str(root)}
-            with mock.patch.object(runtime, "PROJECTED_FILES", mapping):
+            with mock.patch.object(runtime, "PROJECTED_FILES", mapping), \
+                    mock.patch.object(runtime, "PROJECTED_CANONICAL_ROOTS", {str(root): str(root)}), \
+                    mock.patch.object(runtime.os, "statvfs", return_value=type("ReadOnlyMount", (), {"f_flag": os.ST_RDONLY})()):
                 self.assertEqual(runtime.private_read(runtime.input_path(str(visible))), b"v1")
                 visible.unlink(); visible.symlink_to("v2/token")
                 self.assertEqual(runtime.private_read(runtime.input_path(str(visible))), b"v2")
