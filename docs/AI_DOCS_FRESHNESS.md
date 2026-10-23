@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 571c6ed4d3d796a23695bfced7cf0c19e63d16ac
-verified_diff_sha256: 2facefc07a2e1ac881c3cea1210f4580e95b3a88b8e5e3ba7c7f294430f0a816
+verified_at_commit: 1abe41b9c3db761a4684c9e41e349b7fe5ef491e
+verified_diff_sha256: 23c5e9227b987b67e6f6f10e700c806114708482c3800c850ba817850c96b337
 reconciler_schema: 1
 verified_at: 2026-10-23
 by: Codex
@@ -295,3 +295,17 @@ rollout/600 qualification. New AWS metadata, owning dry-run, complete typed
 approvals, current policy/credential bindings and native useful lifecycle remain
 separately required. Historical failures, policies, grants and evidence remain
 retained; no new production or business success is inferred from this stamp.
+
+
+## Actual AWS1.65.2 complete typed approval
+
+The exact AWS V4 integration metadata and owning dry-run produced the new complete
+contract through the owning Core typed compiler. The fixture and one registry
+literal now bind that actual source, identity, type and scope; the full Hetzner
+contract and every protected profile/canary/catalog field remain unchanged.
+Independent full typed and exact integration review e81c9c04 is retained. Six
+local targeted roots/seventy PASS nodes and no FAIL/SKIP, the official649-source
+census verifier and published service doctor passed. Genuine CLI generation
+preserves its actual provenance; these source checks supply no operational
+policy, Guest grant, migration, rollout600 or native business qualification.
+The old2b93 publication and its separately qualified history remain immutable.
