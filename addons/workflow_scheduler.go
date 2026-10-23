@@ -35,6 +35,7 @@ func init() {
 // the workflow run pipeline can subscribe to. This keeps the scheduler
 // decoupled from the dispatch mechanics.
 func bootstrapWorkflowScheduler(ctx context.Context, app *runtime.ServiceApp) error {
+	ctx = withBrokerConnection(ctx, app)
 	if raw, ok := app.Resource(capacityDispatchServiceResource); ok {
 		if service, valid := raw.(*httpapi.CapacityDispatchService); valid {
 			ctx = withCapacitySchedulerService(ctx, service)
@@ -90,6 +91,7 @@ func runWorkflowSchedulerLoop(
 // runWorkflowSchedulerPass executes one pass of the scheduler. Exposed for
 // deterministic testing.
 func runWorkflowSchedulerPass(ctx context.Context, db *sql.DB, conn *amqp.Connection, logger *zap.Logger) {
+	conn = brokerConnectionFor(ctx, conn)
 	rows, err := db.QueryContext(ctx, `
 		SELECT id, namespace, name, spec
 		FROM public.manifests

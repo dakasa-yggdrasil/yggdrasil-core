@@ -23,6 +23,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 	surfacesvc "github.com/dakasa-yggdrasil/yggdrasil-core/internal/surface"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
 )
 
@@ -56,6 +57,10 @@ func bootstrapHTTP(ctx context.Context, app *runtime.ServiceApp) error {
 	}
 
 	var opts []httpapi.ServerOption
+	opts = append(opts, httpapi.WithRabbitMQConnectionProvider(func() *amqp.Connection {
+		current, _ := RabbitMQ(app)
+		return current
+	}))
 	// This is an in-process service of the SAME HTTP authorization owner,
 	// never a new caller-controlled route or anonymous dispatch wrapper.
 	opts = append(opts, httpapi.WithCapacityDispatchServiceReceiver(func(service *httpapi.CapacityDispatchService) {

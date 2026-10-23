@@ -41,12 +41,10 @@ func bootstrapManifestSync(ctx context.Context, app *runtime.ServiceApp) error {
 	if !ok {
 		return nil
 	}
-	// RabbitMQ(app) returns (nil, true) when the broker was unreachable at
-	// boot, so `ok` alone does not mean we have a usable connection. Without
-	// this nil guard the cron/event goroutines would call InvokeDescribe →
-	// conn.Channel() on a nil *amqp.Connection → panic, crashing the process.
+	// Keep the runner installed during temporary session unavailability. Its
+	// gate and each describe operation resolve the current session separately.
 	conn, ok := RabbitMQ(app)
-	if !ok || conn == nil {
+	if !ok {
 		return nil
 	}
 	logger, _ := Logger(app)
@@ -54,6 +52,7 @@ func bootstrapManifestSync(ctx context.Context, app *runtime.ServiceApp) error {
 	deps := &productionDeps{
 		db:              db,
 		conn:            conn,
+		connection:      func() *amqp.Connection { current, _ := RabbitMQ(app); return current },
 		describeTimeout: envDurOrDefault("MANIFEST_SYNC_DESCRIBE_TIMEOUT", 10*time.Second),
 	}
 
@@ -64,7 +63,7 @@ func bootstrapManifestSync(ctx context.Context, app *runtime.ServiceApp) error {
 		// Gate every sync on broker liveness — re-evaluated per tick so a
 		// runtime drop (conn closes after a healthy boot) skips the sync
 		// instead of dispatching a describe RPC through a dead connection.
-		BrokerLive: func() bool { return brokerLive(conn) },
+		BrokerLive: func() bool { current, _ := RabbitMQ(app); return brokerLive(current) },
 	}
 
 	go func() {
@@ -89,6 +88,7 @@ func bootstrapManifestSync(ctx context.Context, app *runtime.ServiceApp) error {
 type productionDeps struct {
 	db              *sql.DB
 	conn            *amqp.Connection
+	connection      func() *amqp.Connection
 	describeTimeout time.Duration
 }
 
@@ -150,7 +150,14 @@ func (p *productionDeps) InvokeDescribe(
 ) (model.IntegrationTypeManifestSpec, error) {
 	rpcCtx, cancel := context.WithTimeout(ctx, p.describeTimeout)
 	defer cancel()
-	return messagecontroller.DescribeIntegrationType(rpcCtx, p.conn, instanceManifest, typeManifest, instanceSpec, typeSpec)
+	conn := p.conn
+	if p.connection != nil {
+		conn = p.connection()
+	}
+	if !brokerLive(conn) {
+		return model.IntegrationTypeManifestSpec{}, fmt.Errorf("rabbitmq connection unavailable")
+	}
+	return messagecontroller.DescribeIntegrationType(rpcCtx, conn, instanceManifest, typeManifest, instanceSpec, typeSpec)
 }
 
 func (p *productionDeps) ApplyManifestVersion(ctx context.Context, expected model.Manifest, doc model.ManifestDocument) (model.Manifest, error) {

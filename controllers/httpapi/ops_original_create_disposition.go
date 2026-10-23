@@ -95,7 +95,7 @@ func (s *Server) handleOpsOriginalCreateDisposition(w http.ResponseWriter, r *ht
 		writeJSONError(w, http.StatusBadRequest, "only_original_grant_uuid_required")
 		return
 	}
-	result, err := messagecontroller.RecordOriginalCreateDisposition(r.Context(), s.db, s.rabbitmq, grantID, issuer)
+	result, err := messagecontroller.RecordOriginalCreateDisposition(r.Context(), s.db, s.brokerConnection(), grantID, issuer)
 	if err != nil {
 		writeJSONError(w, http.StatusConflict, "original_create_disposition_unresolved")
 		return

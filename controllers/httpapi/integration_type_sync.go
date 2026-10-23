@@ -106,7 +106,7 @@ func (c *captureEmitter) EmitEvent(ctx context.Context, eventType string, aggreg
 func (s *Server) buildManifestSyncDeps() manifestsync.Deps {
 	return &httpManifestSyncDeps{
 		db:              s.db,
-		conn:            s.rabbitmq,
+		connection:      s.brokerConnection,
 		describeTimeout: 10 * time.Second,
 	}
 }
@@ -117,7 +117,15 @@ func (s *Server) buildManifestSyncDeps() manifestsync.Deps {
 type httpManifestSyncDeps struct {
 	db              *sql.DB
 	conn            *amqp.Connection
+	connection      func() *amqp.Connection
 	describeTimeout time.Duration
+}
+
+func (p *httpManifestSyncDeps) brokerConnection() *amqp.Connection {
+	if p.connection != nil {
+		return p.connection()
+	}
+	return p.conn
 }
 
 func (p *httpManifestSyncDeps) Now() time.Time { return time.Now().UTC() }
@@ -177,7 +185,7 @@ func (p *httpManifestSyncDeps) InvokeDescribe(
 ) (model.IntegrationTypeManifestSpec, error) {
 	rpcCtx, cancel := context.WithTimeout(ctx, p.describeTimeout)
 	defer cancel()
-	return messagecontroller.DescribeIntegrationType(rpcCtx, p.conn, instanceManifest, typeManifest, instanceSpec, typeSpec)
+	return messagecontroller.DescribeIntegrationType(rpcCtx, p.brokerConnection(), instanceManifest, typeManifest, instanceSpec, typeSpec)
 }
 
 func (p *httpManifestSyncDeps) ApplyManifestVersion(ctx context.Context, expected model.Manifest, doc model.ManifestDocument) (model.Manifest, error) {

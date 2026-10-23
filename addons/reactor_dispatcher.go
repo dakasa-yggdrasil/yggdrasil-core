@@ -61,7 +61,7 @@ func bootstrapReactorDispatcher(ctx context.Context, app *runtime.ServiceApp) er
 	runner := &reactors.Runner{
 		DB:             db,
 		Logger:         logger,
-		Caller:         &rabbitmqReactorCaller{conn: conn, db: db, logger: logger},
+		Caller:         &rabbitmqReactorCaller{conn: conn, connection: func() *amqp.Connection { current, _ := RabbitMQ(app); return current }, db: db, logger: logger},
 		Interval:       envDurOrDefault("REACTOR_RUNNER_INTERVAL", 5*time.Second),
 		BatchSize:      envIntOrDefault("REACTOR_RUNNER_BATCH_SIZE", 50),
 		Parallelism:    envIntOrDefault("REACTOR_RUNNER_PARALLELISM", 10),
@@ -71,7 +71,8 @@ func bootstrapReactorDispatcher(ctx context.Context, app *runtime.ServiceApp) er
 		// claiming reactions. Rows stay pending and are replayed as soon
 		// as the broker reconnects and a fresh connection is provided.
 		BrokerAvailable: func() bool {
-			return conn != nil && !conn.IsClosed()
+			current, _ := RabbitMQ(app)
+			return brokerLive(current)
 		},
 	}
 
@@ -98,9 +99,17 @@ func bootstrapReactorDispatcher(ctx context.Context, app *runtime.ServiceApp) er
 // integration_instance manifest from DB and dispatching via the canonical
 // message.ExecuteIntegration path (resolve → hydrate secrets → adapter RPC).
 type rabbitmqReactorCaller struct {
-	conn   *amqp.Connection
-	db     *sql.DB
-	logger *zap.Logger
+	conn       *amqp.Connection
+	connection func() *amqp.Connection
+	db         *sql.DB
+	logger     *zap.Logger
+}
+
+func (c *rabbitmqReactorCaller) currentConnection() *amqp.Connection {
+	if c.connection != nil {
+		return c.connection()
+	}
+	return c.conn
 }
 
 // Call implements reactors.Caller.
@@ -125,6 +134,10 @@ func (c *rabbitmqReactorCaller) Call(
 	capability string,
 	payload []byte,
 ) error {
+	conn := c.currentConnection()
+	if !brokerLive(conn) {
+		return fmt.Errorf("rabbitmq connection unavailable")
+	}
 	var input map[string]any
 	if err := json.Unmarshal(payload, &input); err != nil {
 		return fmt.Errorf("decode reactor payload: %w", err)
@@ -165,7 +178,7 @@ func (c *rabbitmqReactorCaller) Call(
 		Input:      input,
 	}
 
-	resp, err := message.ExecuteIntegration(ctx, c.conn, c.db, req)
+	resp, err := message.ExecuteIntegration(ctx, conn, c.db, req)
 	if err != nil {
 		return err
 	}

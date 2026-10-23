@@ -114,7 +114,7 @@ func (s *Server) handleInstallIntegration(w http.ResponseWriter, r *http.Request
 		return
 	}
 
-	runResp, err := messagecontroller.RunWorkflow(r.Context(), s.rabbitmq, s.db, model.RunWorkflowRequest{
+	runResp, err := messagecontroller.RunWorkflow(r.Context(), s.brokerConnection(), s.db, model.RunWorkflowRequest{
 		Workflow: model.ManifestSelector{
 			Namespace: wfManifest.Metadata.Namespace,
 			Name:      wfManifest.Metadata.Name,

@@ -96,3 +96,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
 | [0070](0070-validate-explicit-empty-ec2-instance-responses.md) | Validate explicit empty EC2 instance responses | Proposed | 2026-10-23 | Retained native HTTP 200, complete empty XML and unchanged six-read inventory basis |
 | [0071](0071-reject-superseded-dispatch-before-start.md) | Reject superseded dispatch before start | Proposed | 2026-10-23 | Explicit administrative capacity dispatch rejection with retained original ownership |
+| [0072](0072-recover-amqp-through-serialized-consumer-sessions.md) | Recover AMQP through serialized consumer sessions | Proposed | 2026-10-23 | AMQP session readiness, consumer drain and recovery without ambiguous-operation replay |

@@ -14,7 +14,6 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
-	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc/amqp"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
 )
@@ -376,7 +375,7 @@ func executeIntegrationThroughResolvedWithPolicy(
 	}
 
 	var response model.AdapterExecuteIntegrationResponse
-	transport := newAdapterTransportClient(rpcamqp.New(conn))
+	transport := newAdapterTransportClient(sessionAMQPTransport(conn))
 	if err := transport.callWithPolicy(
 		rpcCtx,
 		integrationExecuteContract,

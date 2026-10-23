@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"maps"
 	"net/http"
-	"os"
 	"reflect"
 	"slices"
 	"strings"
@@ -18,7 +17,6 @@ import (
 	manifestengine "github.com/dakasa-yggdrasil/yggdrasil-core/manifest"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
-	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc/amqp"
 	"github.com/google/uuid"
 	amqp "github.com/rabbitmq/amqp091-go"
 )
@@ -86,7 +84,7 @@ func verifyResolvedIntegrationType(
 	}
 
 	var response model.AdapterDescribeResponse
-	transport := NewAdapterTransportClient(rpcamqp.New(conn))
+	transport := NewAdapterTransportClient(sessionAMQPTransport(conn))
 	if err := transport.Call(rpcCtx, integrationDescribeContract, typeSpec, instanceSpec, "describe", request, &response); err != nil {
 		wrappedErr := fmt.Errorf(
 			"describe integration type %s/%s through transport %q: %w",
@@ -298,56 +296,18 @@ func checkHTTPJSONTransportConnectivity(
 	return fmt.Sprintf("transport connectivity healthy via %s", targetURL), details, nil
 }
 
-// acquireConnectivityChannel returns a usable AMQP channel for the integration
-// runtime monitor's transport-connectivity probe. If the stored connection
-// has been forcibly closed (e.g. RabbitMQ broker restart), the conn pointer
-// passed in from the addon is stale and `conn.Channel()` returns 504
-// "channel/connection is not open" forever — silently marking every
-// integration as unhealthy. As a defensive fallback, dial a fresh
-// short-lived connection from BROKER_URL just for this probe.
-//
-// This is NOT a proper reconnection strategy (the cached conn stays stale
-// for future calls), but it stops the cascade where one rabbit restart
-// permanently breaks the health monitor + all workflows that depend on
-// integration capabilities. A higher-level fix would replace the cached
-// conn with a ReliableConnection that auto-redials on close.
-//
-// Returns the channel and a closer that handles both the channel and any
-// dialed fallback connection.
+// acquireConnectivityChannel uses only the caller's session. Reconnection is
+// owned by the addon supervisor; an old probe must not open an independent
+// connection while its session is being retired.
 func acquireConnectivityChannel(conn *amqp.Connection) (*amqp.Channel, func(), error) {
-	if conn != nil && !conn.IsClosed() {
-		ch, err := conn.Channel()
-		if err == nil {
-			return ch, func() { _ = ch.Close() }, nil
-		}
-		// Fall through to redial attempt below if the cached conn rejected
-		// the channel-open. The connection may be in a half-closed state
-		// not yet reflected by IsClosed().
+	if conn == nil || conn.IsClosed() {
+		return nil, func() {}, fmt.Errorf("rabbitmq session is unavailable")
 	}
-
-	brokerURL := strings.TrimSpace(os.Getenv("BROKER_URL"))
-	if brokerURL == "" {
-		if conn == nil {
-			return nil, func() {}, fmt.Errorf("rabbitmq connection is not configured")
-		}
-		// Fall back to the original error path — caller will report it.
-		_, originalErr := conn.Channel()
-		return nil, func() {}, originalErr
-	}
-
-	fresh, err := amqp.Dial(brokerURL)
+	ch, err := conn.Channel()
 	if err != nil {
-		return nil, func() {}, fmt.Errorf("redial rabbitmq for connectivity probe: %w", err)
+		return nil, func() {}, err
 	}
-	ch, err := fresh.Channel()
-	if err != nil {
-		_ = fresh.Close()
-		return nil, func() {}, fmt.Errorf("open channel on fresh connection: %w", err)
-	}
-	return ch, func() {
-		_ = ch.Close()
-		_ = fresh.Close()
-	}, nil
+	return ch, func() { _ = ch.Close() }, nil
 }
 
 func checkRabbitMQTransportConnectivity(
@@ -612,7 +572,7 @@ func DescribeIntegrationType(
 	}
 
 	var response model.AdapterDescribeResponse
-	transport := NewAdapterTransportClient(rpcamqp.New(conn))
+	transport := NewAdapterTransportClient(sessionAMQPTransport(conn))
 	if err := transport.Call(rpcCtx, integrationDescribeContract, typeSpec, instanceSpec, "describe", request, &response); err != nil {
 		return model.IntegrationTypeManifestSpec{}, fmt.Errorf(
 			"describe integration type %s/%s through transport %q: %w",

@@ -22,13 +22,30 @@ func StartIntegrationRuntimeMonitor(
 	logger *zap.Logger,
 	interval time.Duration,
 ) context.CancelFunc {
+	return StartIntegrationRuntimeMonitorWithContext(context.Background(), conn, db, logger, interval)
+}
+
+// StartIntegrationRuntimeMonitorWithContext binds the probe loop to one broker
+// session. The returned function cancels and joins the loop, including a probe
+// already in progress, before a replacement session can start another monitor.
+func StartIntegrationRuntimeMonitorWithContext(
+	parent context.Context,
+	conn *amqp.Connection,
+	db *sql.DB,
+	logger *zap.Logger,
+	interval time.Duration,
+) func() {
 	if interval <= 0 {
 		interval = defaultIntegrationRuntimeMonitorInterval
 	}
 
-	ctx, cancel := context.WithCancel(context.Background())
-	go runIntegrationRuntimeMonitor(ctx, conn, db, logger, interval)
-	return cancel
+	ctx, cancel := context.WithCancel(parent)
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		runIntegrationRuntimeMonitor(ctx, conn, db, logger, interval)
+	}()
+	return func() { cancel(); <-done }
 }
 
 func runIntegrationRuntimeMonitor(

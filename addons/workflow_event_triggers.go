@@ -42,6 +42,7 @@ type workflowDispatcher func(ctx context.Context, db *sql.DB, conn *amqp.Connect
 // On a leader drop (connection lost, process dies), Postgres releases the
 // lock automatically and another worker takes over.
 func bootstrapWorkflowEventTriggers(ctx context.Context, app *runtime.ServiceApp) error {
+	ctx = withBrokerConnection(ctx, app)
 	db, ok := Postgres(app)
 	if !ok {
 		return nil
@@ -104,6 +105,7 @@ func runWorkflowEventTriggersPass(
 	logger *zap.Logger,
 	dispatch workflowDispatcher,
 ) {
+	conn = brokerConnectionFor(ctx, conn)
 	leader, err := repository.TryAcquireWorkflowEventTriggerLeadership(ctx, db)
 	if err != nil {
 		if logger != nil {

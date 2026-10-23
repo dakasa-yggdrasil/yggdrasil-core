@@ -276,7 +276,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		runID := uuid.New()
 		response, runErr := messagecontroller.PrepareInsertAndRunWorkflowFromUnauthenticatedChannel(
 			ctx,
-			server.rabbitmq,
+			server.brokerConnection(),
 			server.db,
 			runID,
 			model.RunWorkflowRequest{Workflow: ref, Inputs: inputs},
@@ -1292,6 +1292,13 @@ func requiresAuthenticatedConsoleAPI(path string) bool {
 // ServerOption configures optional Server dependencies.
 type ServerOption func(*Server)
 
+// WithRabbitMQConnectionProvider resolves the current connection for each dispatch.
+// The provider must support concurrent requests. A configured provider returning
+// nil means unavailable; it never falls back to an earlier connection.
+func WithRabbitMQConnectionProvider(provider func() *amqp.Connection) ServerOption {
+	return func(s *Server) { s.rabbitmqConnectionProvider = provider }
+}
+
 // WithReconciler injects the reconciler engine into the HTTP server.
 func WithReconciler(engine *reconciler.Engine) ServerOption {
 	return func(s *Server) { s.reconciler = engine }
@@ -1377,13 +1384,14 @@ type Server struct {
 	capacityHostFactoryPrincipals   []hostFactoryPrincipal
 	snapshotHMACSecret              []byte
 
-	serviceName      string
-	db               *sql.DB
-	rabbitmq         *amqp.Connection
-	logger           *zap.Logger
-	reconciler       *reconciler.Engine
-	provisioner      *provisioner.AWSProvisioner
-	dispatchWorkflow workflowDispatchFunc
+	serviceName                string
+	db                         *sql.DB
+	rabbitmq                   *amqp.Connection
+	rabbitmqConnectionProvider func() *amqp.Connection
+	logger                     *zap.Logger
+	reconciler                 *reconciler.Engine
+	provisioner                *provisioner.AWSProvisioner
+	dispatchWorkflow           workflowDispatchFunc
 	// oidcIssuerURL, when non-empty, opts the server into mounting the
 	// OIDC OP routes (.well-known/openid-configuration + /oidc/*). Set via
 	// WithOIDCIssuer. Empty (default) keeps OIDC dormant for tests/dev.
@@ -1568,10 +1576,8 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 
 	// RabbitMQ is a soft dependency — a closed connection degrades workflow
 	// dispatch throughput but does not make the HTTP API unavailable.
-	// Without a ReliableConnection the single *amqp.Connection closes after
-	// transient broker blips and never recovers until pod restart, which
-	// cascaded into /readyz → 503 → Traefik 404 for every external caller.
-	// Surface the state via `rabbitmq_status` but stay ready.
+	// The connection provider tracks broker generations independently of the HTTP
+	// server. Surface the current state via `rabbitmq_status` but stay ready.
 	rabbitmqStatus := "ok"
 	if strings.TrimSpace(os.Getenv("BROKER_URL")) != "" && !s.isBrokerAvailable() {
 		rabbitmqStatus = "degraded"
@@ -1583,13 +1589,26 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// brokerConnection takes one snapshot of the current broker generation. Direct
+// Server users retain the constructor connection when no provider is configured.
+func (s *Server) brokerConnection() *amqp.Connection {
+	if s == nil {
+		return nil
+	}
+	if s.rabbitmqConnectionProvider != nil {
+		return s.rabbitmqConnectionProvider()
+	}
+	return s.rabbitmq
+}
+
 // isBrokerAvailable reports whether the workflow/event path can dispatch.
-// It is the single source of truth for broker liveness: BROKER_URL must be
-// configured AND the cached connection must be open. With BROKER_URL unset
-// the floor runs IdP-only and this is intentionally false.
+// BROKER_URL must be configured and the current connection must be open.
 func (s *Server) isBrokerAvailable() bool {
-	return strings.TrimSpace(os.Getenv("BROKER_URL")) != "" &&
-		s.rabbitmq != nil && !s.rabbitmq.IsClosed()
+	if strings.TrimSpace(os.Getenv("BROKER_URL")) == "" {
+		return false
+	}
+	conn := s.brokerConnection()
+	return conn != nil && !conn.IsClosed()
 }
 
 func (s *Server) handleIntegrationCatalogList(w http.ResponseWriter, r *http.Request) {
@@ -1634,7 +1653,7 @@ func (s *Server) handleIntegrationCatalogEntry(w http.ResponseWriter, r *http.Re
 }
 
 func (s *Server) handleCatalogDiscovery(w http.ResponseWriter, r *http.Request) {
-	response, err := messagecontroller.DiscoverCatalog(r.Context(), s.rabbitmq, s.db, model.DiscoverCatalogRequest{
+	response, err := messagecontroller.DiscoverCatalog(r.Context(), s.brokerConnection(), s.db, model.DiscoverCatalogRequest{
 		Source: model.ManifestSelector{
 			ManifestID: queryString(r, "source_manifest_id"),
 			Namespace:  queryString(r, "source_namespace"),

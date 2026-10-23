@@ -440,7 +440,7 @@ func (s *CapacityDispatchService) RunOne(parent context.Context, realm, environm
 	}()
 	req := model.RunWorkflowRequest{Workflow: model.ManifestSelector{ManifestID: job.Workflow.ID.String()}, Inputs: job.Inputs, Metadata: job.Metadata}
 	ran = true
-	response, runErr := messagecontroller.RunWorkflow(ctx, s.server.rabbitmq, s.server.db, req)
+	response, runErr := messagecontroller.RunWorkflow(ctx, s.server.brokerConnection(), s.server.db, req)
 	actualReturnedAt := time.Now().UTC()
 	ownerErr := guard(ctx, true)
 	joined := errors.Join(runErr, ownerErr, dispatchContext(ctx), dispatchContext(parent))
