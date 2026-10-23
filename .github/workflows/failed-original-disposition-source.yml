@@ -97,6 +97,7 @@ jobs:
           record pg-create docker create --network none --user "$(id -u):$(id -g)" \
             --cap-drop ALL --security-opt no-new-privileges --memory 512m --cpus 2 \
             --pids-limit 128 --mount "type=bind,src=$pg_root,dst=$pg_root" \
+            --mount "type=bind,src=$PGHOST,dst=/var/run/postgresql" \
             -e PGDATA -e PGHOST -e PGUSER -e PGDATABASE \
             -e POSTGRES_USER=postgres -e "POSTGRES_DB=$PGDATABASE" -e POSTGRES_HOST_AUTH_METHOD=trust \
             "$PG_IMAGE" postgres -k "$PGHOST" -c listen_addresses= \
@@ -111,6 +112,11 @@ jobs:
             sleep 1
           done
           [[ "$ready" == 1 ]]
+          # The official initializer clears PGHOST for its own psql calls. The
+          # second bind aliases that default socket path to this same owned inode.
+          # It chmods that directory 03775; restore 0700 before any source test.
+          record pg-socket-mode chmod 00700 "$PGHOST"
+          record pg-directory-modes stat -c '%u %a' "$PGDATA" "$PGHOST"
           record pg-version docker exec "$cid" postgres --version
           record pg-identity docker exec "$cid" psql -XAt -v ON_ERROR_STOP=1 -h "$PGHOST" -U "$PGUSER" -d "$PGDATABASE" \
             -c "SELECT json_build_object('database',current_database(),'unix_socket',inet_server_addr() IS NULL,'version',current_setting('server_version_num')::int,'listen_addresses',current_setting('listen_addresses'));"
@@ -119,6 +125,8 @@ jobs:
           v=json.loads((pathlib.Path(os.environ['LOGS'])/'pg-identity.stdout').read_text())
           assert v['database']==os.environ['PGDATABASE'] and v['unix_socket'] is True
           assert 170000<=v['version']<180000 and v['listen_addresses']==''
+          for key in ('PGDATA','PGHOST'):
+              st=os.stat(os.environ[key]); assert st.st_uid==os.getuid() and (st.st_mode&0o7777)==0o700, key+' ownership/mode'
           print(json.dumps(v,sort_keys=True))
           PY_ID
           # The fixture initializes only this empty dedicated database with its required

@@ -330,3 +330,22 @@ The migration and closed API have real isolated PostgreSQL and HTTP source
 validation plus an independent final review. Linux source CI, the immutable
 Core/Goose image, production migration, rollout and runtime observation remain
 separate requirements. No native useful capacity or economic result is implied.
+
+## D7 R3 complete profile rebind
+
+The two complete production fixtures now bind the actual new R3 AWS and Hetzner
+integration instances and all sixteen corrected bootstrap hashes. The canonical
+owning Core compiler validates each complete policy, its eight mutation slots
+and protected profile before deriving the two registry contract digests. The
+existing operational profiles, controller bindings and reviewed administrative
+cost assumptions come from the authenticated active policy histories; native
+quote and validation dates are not manufactured. Native credentials, grant
+bearers, physical slot names and complete writer catalogs remain unchanged.
+
+Each provider has a genuine owning slot-one dry-run. The AWS adapter retains its
+original R0 lifetime; the existing Hetzner process retains its authenticated R4
+lifetime, without resetting its counter or replacing the historical R0 rollout.
+The first managed-reference partial failure and the pre-effect Hetzner refusal
+remain failures. Source approval is separate from the final Core authority,
+immutable image, rollout, network qualification, policy activation and useful
+capacity, pressure, retirement and economic observations.

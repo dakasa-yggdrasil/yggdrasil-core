@@ -1,5 +1,5 @@
 {
-  "accepted_at": "2026-10-23T18:19:03.895496+00:00",
+  "accepted_at": "2026-10-23T22:18:34.114911+00:00",
   "accepted_at_is_historical_for_two_profile_candidate": false,
   "checker": {
     "actual_binary_clean_VCS": true,
@@ -43,6 +43,29 @@
       "schema": 73,
       "source_inventory_sha256": "a477069c886ff9d7da76a8b0b2acbd69f1c18bbe13c2e46389e2ad0a73661748",
       "source_roster_sha256": "8dde1288c5e3cbb287142ef3b8d40e371f7540dc54b2376bc7a45277da44e3f2"
+    },
+    "D7_R3_complete_profiles": {
+      "Linux_CI_image_rollout_and_useful_capacity_qualification": null,
+      "Root_final_source_review_complete": true,
+      "accepted_source_inventory_sha256": "1e075f71b7f5631784e610cec68907bc13ca5399f90a5314d7522aad79f28012",
+      "actual_Darwin_registry_pass_nodes": 50,
+      "actual_Darwin_registry_roots": 2,
+      "actual_Darwin_registry_skips": 0,
+      "authenticated_operational_fields": [
+        "profiles",
+        "controller_binding",
+        "guest_notify_reconcile_binding"
+      ],
+      "base": "9ecff39e007c939de3618387fa7229de44915fdd",
+      "complete_profiles": 2,
+      "full_operational_policy_validated": true,
+      "independent_typed_source_peer_sha256": "f8d0b9e74ea49670945f7ea5f81fe1260fa8d84305ba079d390531215a70ab75",
+      "native_credentials_and_grant_bearers_unchanged": true,
+      "native_quote_dates_manufactured": false,
+      "only_slot1_individually_native_observed": true,
+      "owning_full_policy_typed_return_sha256": "9ab95989a006e72322635ee77d3143624aebd558322320e9bbee866db9e7dc71",
+      "slots_per_profile": 8,
+      "typed_compiler_source_sha256": "f76e43c4389565862fc61d1117b3027225db50b5727b5b03c30a40325b58dc5c"
     },
     "H034_supplier_patch_sha256": "b9dc27414035fd518efbc63eb2bfad48e0b8d5609f59c76d1900c1bb0ced1699",
     "Root_current_combined_portable_nodes": 205,
@@ -178,6 +201,7 @@
   "previous_review_accepted_at": "2026-10-21T19:28:31.389131+00:00",
   "previous_review_before_AMQP_session_recovery_sha256": "75350fe06eae3bc91d89ef3dfa904029fef1ba4718024aa8ba31063238ec5059",
   "previous_review_before_AWS164_actual_instance_contract_successor_sha256": "a3c6edf138584b0fb0da606336deb7a463fadfa4a9cc5869edb72acf1dc3c421",
+  "previous_review_before_D7_R3_complete_profiles_sha256": "a866516ae2e96c6bec1b03d10d66fc5da57bfb258c702c6be19b3dd833bbd452",
   "previous_review_before_actual_AWS1652_contract_successor_sha256": "fb87e8b18a2e5847d83e6abdb57ccd23ed0759eb0abcc33f214966dcd5d5fc6f",
   "previous_review_before_actual_AWS1653_contract_successor_sha256": "e4820e92a3ab43b3ba63ff229977eeae82835c8b7f60c7e596d245d0dcd949da",
   "previous_review_before_final_two_approval_acceptance_sha256": "8743d3f7a2c0983472ac6e6ba39915a7607fe29c3700e5acf6df775bbccdebd9",
@@ -231,12 +255,12 @@
     "The AWS approval now binds actual AWS1.65.2/V4 metadata, its owning original dry-run and the complete owning-Core typed policy projection. Exactly the mutation binding identity/source/type/scope and eight derived specs change; reversing those bindings recovers the previous complete fixture. The protected profile, canary and production catalog and complete Hetzner fixture/approval remain byte-exact. Independent full typed/source integration peer e81c9c04 binds all postimages. Runtime CoreAuthoritySourceCommit, genuine image/600, policy and native lifecycle remain separate mandatory gates.",
     "AWS1.65.3 source39bdd is the sole current observer; the supplier and retirement catalogs retain exact historical1.65.1/1.65.2 source pairs and require the complete four-operation lifecycle catalog for1.65.2/1.65.3. Its root-EBS predicate allows only explicitly virtual ephemeral extras while six native reads and original absence gates remain mandatory. Actual V5 metadata and the original owning dry-run derive the complete new contract1c876; reverse mutation-binding replacement recovers the old fixture and Hetzner remains byteexact. Schema72 is unchanged; deployment, original600, disposition, policy and business authority remain separate."
   ],
-  "reviewed_source_head": "c3863e9c984a9a814b243e5d8a2f9a0e736f9a6e",
-  "reviewed_source_head_is_historical": false,
+  "reviewed_source_head": "9ecff39e007c939de3618387fa7229de44915fdd",
+  "reviewed_source_head_is_historical": true,
   "reviewer": "Root full production-source delta review; separate independent manager/dial/monitor peer; source acceptance only",
   "schema": "core_service_source_review_v1",
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "b1893307d635b70417460185e97b2e55d38edd7962ba55032b98d590a803bbc5",
+  "source_inventory_sha256": "1e075f71b7f5631784e610cec68907bc13ca5399f90a5314d7522aad79f28012",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
