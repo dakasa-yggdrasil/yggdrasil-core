@@ -1,0 +1,107 @@
+name: Verify and export exact final Core image
+
+on:
+  push:
+    branches: ['codex/core-d8-exact-image-export-20261023']
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  immutable-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      IMAGE: ghcr.io/dakasa-yggdrasil/yggdrasil-core@sha256:44b9795cbea21c896c3c0596ebdcad00d12e4e9fbf55cc5a71d2746d90e62f21
+      EXPECTED_SOURCE: 91fe965fd319853902d595c98599f07817a0a61d
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 91fe965fd319853902d595c98599f07817a0a61d
+          path: source
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: source/go.mod
+          cache: false
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify actual published Core and Goose without executing the image
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$(git -C source rev-parse HEAD)" = "$EXPECTED_SOURCE"
+          test -z "$(git -C source status --porcelain)"
+          [[ "$GITHUB_RUN_ID" =~ ^[0-9]+$ ]]
+          mkdir image-export-artifacts
+          mkdir "$RUNNER_TEMP/core-source-image-exports"
+          docker pull --platform=linux/amd64 "$IMAGE"
+          container=$(docker create --platform=linux/amd64 --network=none "$IMAGE")
+          trap 'docker rm "$container" >/dev/null' EXIT
+          docker cp "$container:/app/yggdrasil-core" "$RUNNER_TEMP/core-source-image-exports/yggdrasil-core"
+          docker cp "$container:/app/goose" "$RUNNER_TEMP/core-source-image-exports/goose"
+          docker cp "$container:/app/entrypoint.sh" "$RUNNER_TEMP/core-source-image-exports/entrypoint.sh"
+          docker cp "$container:/app/db/migrations" "$RUNNER_TEMP/core-source-image-exports/migrations"
+          go version -m "$RUNNER_TEMP/core-source-image-exports/yggdrasil-core" > image-export-artifacts/binary-build.txt
+          go version -m "$RUNNER_TEMP/core-source-image-exports/goose" > "$RUNNER_TEMP/core-source-image-exports/goose-build.txt"
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,re,stat
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'core-source-image-exports'
+          def digest(path):
+              raw=path.read_bytes();assert 0<len(raw)<=128*1024**2
+              return hashlib.sha256(raw).hexdigest()
+          for name,module in [('yggdrasil-core','github.com/dakasa-yggdrasil/yggdrasil-core'),('goose','github.com/dakasa-yggdrasil/yggdrasil-core/scripts/goose')]:
+              text=(pathlib.Path('image-export-artifacts/binary-build.txt') if name=='yggdrasil-core' else root/'goose-build.txt').read_text()
+              rows=[line.lstrip('\t') for line in text.splitlines()[1:]]
+              assert rows.count('path\t'+module)==1
+              settings={}
+              for line in rows:
+                  if line.startswith('build\t'):
+                      key,value=line[6:].split('=',1);assert key not in settings;settings[key]=value
+              assert settings['vcs.revision']==os.environ['EXPECTED_SOURCE'] and settings['vcs.modified']=='false'
+              assert settings['GOOS']=='linux' and settings['GOARCH']=='amd64' and settings['CGO_ENABLED']=='0'
+              assert settings.get('-tags','')==''
+          expected=sorted(pathlib.Path('source/db/migrations').iterdir())
+          observed=sorted((root/'migrations').iterdir())
+          assert len(expected)==len(observed)==73 and [p.name for p in expected]==[p.name for p in observed]
+          frozen_sql_pins = {'00001_initial.sql': 'ad62a91552c7ae4820340da3ee7c496eefe4261cc8eea2b0fd663163e5062b36', '00002_core_identities.sql': 'd6f050b65d9d4c88c41efeef96bd57c06e97743954f677a70b05a8a983c00d44', '00003_product_materializations.sql': 'da22332d9cac514c4b0b3aa1e8969dc682fb19920c94e8f732020e1695fbc938', '00004_topology.sql': '295105e76ca7871f3ccd4921d6d8e3eb8afdf70f711c349d7617c394cdbcf906', '00005_integration_runtime_states.sql': 'f1cd37f55e1bf26c4279c9b2e7fa7280ecdfff5b579c5fd1feda1deeb7869c27', '00006_core_auth.sql': '8f843ad2a19c00dc510fc49eff5fb819cd401495c400ec3255e162b03f9f6399', '00007_managed_secrets.sql': '949b997615c0cd859c359eca595f57382c5f50b8773aa85989b09ef6264979cc', '00008_integration_instance_runtime_states.sql': 'd20cc1ebb0477c85cc401aec6f55d8ff70936c247751ce66b0f171a02b1147c6', '00009_managed_secret_rotation.sql': '44ec25147803e65b1dd723f180b8b90dfa1d9d62cc47456e94892f26b5290ff3', '00010_third_party_auth.sql': '210c4190044e654572735583e6219d2d94f1b14cd4c1333c96d7ac5d142b1078', '00011_auth_providers.sql': '442982895039a536ded7ecbe2f4ca792e4c5acd4208216bfef7280c48c879404', '00012_event_log.sql': 'a7c3a140d9c4d5c47ed268ca78caa56258876b952657081af21345ba87d910b7', '00013_event_retention_policy.sql': '48e517eb2d43d2b913cf7a382c81c6c81dae9515c3307170f4fd636779bf1f43', '00014_buildproject_lifecycle.sql': '5c7ed8e32d93626bc8a769debe282774b59bcdcc6313d32c9c602bfbab7f7e10', '00015_workflow_trigger_state.sql': 'e571aff00c6a572d70907af9596c617126e7aad051d11acbe28405ce85799030', '00016_repository_binding_lookup.sql': '7abfffffcaa9d134f64d88146d421f7c2071e4cc901fd233266a52068dde4dd0', '00017_audit_events.sql': 'e16ade1db8f3e802ff449541325d28662da9ce7dfbe35d8e22a8873fdabca8c5', '00018_workflow_runs.sql': 'bf76af7f11777f76faafb242b79e063a005aa45562b35bcc670feea6b7ab2679', '00019_oidc.sql': '466ac6a5fb4e2f90da0afe6f062ebea3d4276e513827a145eebc72da847c24e7', '00020_repository_binding_active_unique.sql': '118c2466cdaa9c990773f6e8a1a062776cc95c568b886a0edb43c43a6dc59738', '00021_heimdall_inbox.sql': 'ba4263d9bd23fbf5ff3f7fce6f66cf1b2ee0468d8d50c48e6df02b8bf2a304da', '00022_collaborators_lifecycle.sql': '77c1f372845a82ab5c97ac5839cb19d87a8aeb60a7d4123a10a9e7c3f532a86a', '00023_lifecycle_events.sql': '6e18a098f5f4613be8a8c880e26777c280fc0ca4ba321726bf3ccd8b789a4b7b', '00024_collaborator_provider_state.sql': 'd4c65394fc1f18f0643750a2307ac229acf8962e8982ea2eaa3e6c68244182dc', '00025_permissions_catalog.sql': '2c0e67954138958c04a062987b55992349880346ce3bc597c848c01ae357f2c7', '00026_auth_identities.sql': '5530c255611936ccad2166c6c0586f98048797467237abb418bbee089c6e539e', '00027_auth_sessions_extend.sql': 'f7a213e2548df7f2bc9ed81464752133aca4c8339a999181434d1d23b138985e', '00028_saml_service_providers.sql': '3c7fa9e9fce3a9e670e5e5f39b30beb7935972ae165cbd064ce2ef083c292dbd', '00029_scim_clients.sql': 'fb454f787ee5f18121030293a0cfa517128b2007047931ca0a47d80e40ee0882', '00030_mfa_enroll_tokens.sql': '6040edac25abf78f7815d17f94c5606f256672a6047a8da6c0646508cee7d34f', '00031_audit_events_ops_extension.sql': 'a9944b22ecde633ac02053d287160acee8f33fb8ec29d1c1e46add4cb0766927', '00032_ops_roles_seed.sql': '30dc2119fd73695e636d68741bffda66a8be1cfc6718642767047fbed2600f7c', '00033_surface_manifests.sql': '383e76a2ff8d1ce02e6c0d8c0eee73518cd3ae03cd3538d3bc0b3f60eadecd64', '00034_tenant_brand_settings.sql': '867653a068909f604f250d2c2dd2e3eb38004f077d908a60643b70173d12d26f', '00035_surface_runtime_targets.sql': 'c4c1f3f03c0285ea9e5e58bddc191fe32efca0c0ac66a1c7553be5fa50c6cb20', '00036_team_grants.sql': '9a4c8df62751a9ac805505b71cbdb14a54ea0308f767fb2947a05e1b24986f62', '00037_unify_credentials.sql': 'd845e98b761a80233a22c2edd6f0049b9b27e4df63a878852fcb060d79f6088c', '00038_auth_credential_tokens.sql': '867dd3e8e1c734aa04d4e6fc0f7faf9d1af01dd132b466b0df39169cff908826', '00039_integration_event_reactions.sql': 'a147fa389946dd4fd1bfa105b5d0b9fb130a152d81a8a9b4e7c6898d770d5d91', '00041_collaborator_external_identities.sql': 'e958347bfdb4124333a6ecab070cf89d41ad03481ba36e39e04d3ecad6e53d9b', '00042_integration_surfaces.sql': '1e87f835dbaa668b8f2439fe0d477c1580a98119d26ca91b2f08113b7718d32c', '00043_team_provisioning_log.sql': '1dcba44cc142c02c66b3889ebcaf2d26e216e4e37d4f0067e25b4760de44d20d', '00044_team_email.sql': '4fda9ed92fbe648c28354e7c4d4e00865f84c3076242e1c232920dd8088ffcaf', '00045_manifests_metadata.sql': '37eef9e9dbdc79ff2910fadedd556172894617f080321b907dc9cb7098793872', '00046_event_log_idempotency.sql': '4803f93d127b525cfa5ebcf524572ebb2f28d6eab53cf206bb59c37f73e18ddc', '00047_session_revocation.sql': '7f82cf0f04b2a8cc92137bed2390e438fd9be2fd3473d0208cb222eaa4058202', '00048_oidc_client_access_token_lifetime.sql': '8be4b092da308c6717ddb93752701aa2fe931f030707e90caeba518098f14663', '00049_audit_events_retention.sql': 'be2343720ed544cca16aff8aefe7330fbcc873334041b21bd2441764f0ba5f89', '00050_tenant_brand_integration_domain_catalog.sql': 'e3b494e1a2b958c73b9120fc4aac0706f6fe2a3be8f85f1cc836183cb48e70eb', '00051_workflow_run_idempotency.sql': '8cda6ae680a66d723590dfba861b28310c04208f8256ef71693d278c6882a65c', '00052_credential_token_created_by_set_null.sql': '84be211abb4ea5ce2ba8e6349184fdd3c2290b02cd062fcae03c43208b80e5ec', '00053_declared_phone_contacts.sql': 'd28b9923d9654dbc3b5302b8e5b9eadabb638f11dfff2834ffdbb8e53465f981', '00054_typed_team_membership_leadership.sql': '393aa0bbadc2a4853129a70fdc34e33d11b6e42682da773fe6e3f0724196d92c', '00055_mfa_contact_otp.sql': '558304ba71f0f9380a90a6e13a361263e275a301adf9c39eaf96435a8b4a818d', '00056_capacity_intents.sql': '74a61706fbd6a79613482fa0c6bbbccde7cda956fb8946946849d659b6f7eb91', '00057_capacity_mutation_grants.sql': 'de6f855c21db1052caa476aa95161b381009f99747abd0ba8b413bafa854767d', '00058_capacity_compensation_grants.sql': '5156d56526bcc2380b6c7614884727f2ed1b89bdf6848099625eec0631f85ec9', '00059_capacity_native_commands.sql': '0ea5e5294ddb41536e78323a088e9c5c7e63dd162f226c222550aceb59401207', '00060_capacity_native_lifetime_ledger.sql': '361ef20b8058797075a3e224d0c91598a5d0455103a12d71e3789e254cb389a2', '00061_capacity_dispatch_jobs.sql': '36cecdd914acc4a49edc4d488036c744b97e711d189b359341eb87733be4c33b', '00062_capacity_native_release_results.sql': '3a1797d2a40fac3e11fa00d55cc34e66bd5c953000e42d7126619fa313992f57', '00063_capacity_vm_original_retirement.sql': 'ba8f54770a56a5cdaf7e112008257813c20120d0f1ff27598f5d4c86cb2dfcd8', '00064_capacity_guest_original_scoped_records.sql': '01622e8c3d87e33b0c139b3c79c179901935cc8d3a69a5f28b363bc3310163ec', '00065_capacity_host_original_factory.sql': '809282e22b64096da570c552bee8dcd5f308675cd697234040270c2638da0294', '00066_capacity_executor_activity.sql': '93b6b012b0f7ebbdb3151c7e434b3baa82691cdcb84f5ec3f3966a9d83e4db21', '00067_capacity_executor_power.sql': 'd77cb2b96984fd22f1750a2718363d787a2868448eda49817e442f713939752a', '00068_source_recovery_failure_cleanup.sql': '2817e56b23f3c930d724499b82f847d20e6cda20b86f80da1417ab1d02a7c91f', '00069_guest_original_installation.sql': 'e0c787d92ced9d40a37b2f6ca30ed861ff83ab3a7849a412f97979e48aadb03a', '00070_guest_notify_canary_reads.sql': '5319ccdf351e4e2e3c50f7a05cd5f902757d605ee2f3ec8b4b6bde380d39d830', '00071_original_create_dispositions.sql': '17aaf1b2a6090c36ed39bc40e5f9e62ad861a6cd71a7061676fee33abc3d197d', '00072_capacity_dispatch_prestart_rejection.sql': '189e2889b32e03d3ac1d947c3d8595c6ca48e8fa897d03dceed48d66766b27fe', '00073_failed_original_guest_dispositions.sql': '8ff1d3d580c15bfc27d0cd7a137868df38e9c36f8010cd342399358d9717ad17', '00074_native_authorization_denied_dispositions.sql': '5019fce6e7545fb6b665f79322657ab6661acc638fbf22fe3e884f32a5abba92'}
+          assert {p.name:digest(p) for p in expected} == frozen_sql_pins
+          assert [int(p.name[:5]) for p in expected] == [v for v in range(1,75) if v!=40]
+          pins=[]
+          for a,b in zip(expected,observed):
+              assert stat.S_ISREG(a.lstat().st_mode) and stat.S_ISREG(b.lstat().st_mode)
+              assert re.fullmatch('[0-9]{5}_[a-z0-9_]+\\.sql',a.name) and a.read_bytes()==b.read_bytes()
+              pins.append({'path':'app/db/migrations/'+a.name,'bytes':a.stat().st_size,'sha256':digest(a)})
+          assert stat.S_ISREG((root/'entrypoint.sh').lstat().st_mode)
+          assert (root/'entrypoint.sh').read_bytes()==pathlib.Path('source/scripts/entrypoint.sh').read_bytes()
+          receipt={'goose_sha256':digest(root/'goose'),'goose_module_path':'github.com/dakasa-yggdrasil/yggdrasil-core/scripts/goose','migration_files':pins}
+          (root/'CORE-ASSETS.json').write_text(json.dumps(receipt,sort_keys=True))
+          PY
+          docker image inspect --format '{{json .RootFS.Layers}}' "$IMAGE" > image-export-artifacts/rootfs-diffids.json
+          docker tag "$IMAGE" "yggdrasil-core:verified-source-export-$GITHUB_RUN_ID"
+          docker image save --platform=linux/amd64 --output image-export-artifacts/image.tar "yggdrasil-core:verified-source-export-$GITHUB_RUN_ID"
+          python3 - <<'PY'
+          import datetime,hashlib,json,os,pathlib
+          root=pathlib.Path('image-export-artifacts');native=pathlib.Path(os.environ['RUNNER_TEMP'])/'core-source-image-exports';archive=root/'image.tar'
+          assert 0<archive.stat().st_size<=512*1024**2
+          def digest(path):
+              h=hashlib.sha256()
+              with path.open('rb') as stream:
+                  for part in iter(lambda:stream.read(1024**2),b''):h.update(part)
+              return h.hexdigest()
+          receipt={'schema':'exact_published_Core_and_Goose_SQL_archive_v1','at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'image':os.environ['IMAGE'],'expected_compiler_source':os.environ['EXPECTED_SOURCE'],'verification_workflow_source':os.environ['GITHUB_SHA'],'verification_run':os.environ['GITHUB_RUN_ID'],'platform':'linux/amd64','image_executed':False,'production_activation':False,'archive_sha256':digest(archive),'archive_bytes':archive.stat().st_size,'binary_sha256':digest(native/'yggdrasil-core'),'rootfs_diffids':json.loads((root/'rootfs-diffids.json').read_text()),'core_assets':json.loads((native/'CORE-ASSETS.json').read_text()),'goose_native_build_info':(native/'goose-build.txt').read_text(),'entrypoint_file_sha256':digest(native/'entrypoint.sh'),'all_image_migrations_match_exact_clean_source':True}
+          (root/'PROVENANCE.json').write_text(json.dumps(receipt,indent=2)+'\n')
+          print(json.dumps(receipt))
+          PY
+          test -z "$(git -C source status --porcelain)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exact-published-core-D8-image
+          path: image-export-artifacts/
+          retention-days: 3
+          if-no-files-found: error
