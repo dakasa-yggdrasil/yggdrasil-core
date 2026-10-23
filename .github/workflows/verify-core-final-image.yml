@@ -1,0 +1,104 @@
+name: Verify and export exact final Core image
+
+on:
+  push:
+    branches: ['codex/core-d4-exact-image-export-20261023']
+
+permissions:
+  contents: read
+  packages: read
+
+jobs:
+  immutable-image:
+    runs-on: ubuntu-latest
+    timeout-minutes: 12
+    env:
+      IMAGE: ghcr.io/dakasa-yggdrasil/yggdrasil-core@sha256:ef2a61335459f9f5ad9c35506174fb87f565937e8c00bcb1944f9a06f42ebb0b
+      EXPECTED_SOURCE: 5201d21f721c6ff109e91204de5c172f29fc5b25
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 5201d21f721c6ff109e91204de5c172f29fc5b25
+          path: source
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: source/go.mod
+          cache: false
+      - uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Verify actual published Core and Goose without executing the image
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          test "$(git -C source rev-parse HEAD)" = "$EXPECTED_SOURCE"
+          test -z "$(git -C source status --porcelain)"
+          [[ "$GITHUB_RUN_ID" =~ ^[0-9]+$ ]]
+          mkdir image-export-artifacts
+          mkdir "$RUNNER_TEMP/core-source-image-exports"
+          docker pull --platform=linux/amd64 "$IMAGE"
+          container=$(docker create --platform=linux/amd64 --network=none "$IMAGE")
+          trap 'docker rm "$container" >/dev/null' EXIT
+          docker cp "$container:/app/yggdrasil-core" "$RUNNER_TEMP/core-source-image-exports/yggdrasil-core"
+          docker cp "$container:/app/goose" "$RUNNER_TEMP/core-source-image-exports/goose"
+          docker cp "$container:/app/entrypoint.sh" "$RUNNER_TEMP/core-source-image-exports/entrypoint.sh"
+          docker cp "$container:/app/db/migrations" "$RUNNER_TEMP/core-source-image-exports/migrations"
+          go version -m "$RUNNER_TEMP/core-source-image-exports/yggdrasil-core" > image-export-artifacts/binary-build.txt
+          go version -m "$RUNNER_TEMP/core-source-image-exports/goose" > "$RUNNER_TEMP/core-source-image-exports/goose-build.txt"
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib,re,stat
+          root=pathlib.Path(os.environ['RUNNER_TEMP'])/'core-source-image-exports'
+          def digest(path):
+              raw=path.read_bytes();assert 0<len(raw)<=128*1024**2
+              return hashlib.sha256(raw).hexdigest()
+          for name,module in [('yggdrasil-core','github.com/dakasa-yggdrasil/yggdrasil-core'),('goose','github.com/dakasa-yggdrasil/yggdrasil-core/scripts/goose')]:
+              text=(pathlib.Path('image-export-artifacts/binary-build.txt') if name=='yggdrasil-core' else root/'goose-build.txt').read_text()
+              rows=[line.lstrip('\t') for line in text.splitlines()[1:]]
+              assert rows.count('path\t'+module)==1
+              settings={}
+              for line in rows:
+                  if line.startswith('build\t'):
+                      key,value=line[6:].split('=',1);assert key not in settings;settings[key]=value
+              assert settings['vcs.revision']==os.environ['EXPECTED_SOURCE'] and settings['vcs.modified']=='false'
+              assert settings['GOOS']=='linux' and settings['GOARCH']=='amd64' and settings['CGO_ENABLED']=='0'
+              assert settings.get('-tags','')==''
+          expected=sorted(pathlib.Path('source/db/migrations').iterdir())
+          observed=sorted((root/'migrations').iterdir())
+          assert len(expected)==len(observed)==71 and [p.name for p in expected]==[p.name for p in observed]
+          pins=[]
+          for a,b in zip(expected,observed):
+              assert stat.S_ISREG(a.lstat().st_mode) and stat.S_ISREG(b.lstat().st_mode)
+              assert re.fullmatch('[0-9]{5}_[a-z0-9_]+\\.sql',a.name) and a.read_bytes()==b.read_bytes()
+              pins.append({'path':'app/db/migrations/'+a.name,'bytes':a.stat().st_size,'sha256':digest(a)})
+          assert stat.S_ISREG((root/'entrypoint.sh').lstat().st_mode)
+          assert (root/'entrypoint.sh').read_bytes()==pathlib.Path('source/scripts/entrypoint.sh').read_bytes()
+          receipt={'goose_sha256':digest(root/'goose'),'goose_module_path':'github.com/dakasa-yggdrasil/yggdrasil-core/scripts/goose','migration_files':pins}
+          (root/'CORE-ASSETS.json').write_text(json.dumps(receipt,sort_keys=True))
+          PY
+          docker image inspect --format '{{json .RootFS.Layers}}' "$IMAGE" > image-export-artifacts/rootfs-diffids.json
+          docker tag "$IMAGE" "yggdrasil-core:verified-source-export-$GITHUB_RUN_ID"
+          docker image save --platform=linux/amd64 --output image-export-artifacts/image.tar "yggdrasil-core:verified-source-export-$GITHUB_RUN_ID"
+          python3 - <<'PY'
+          import datetime,hashlib,json,os,pathlib
+          root=pathlib.Path('image-export-artifacts');native=pathlib.Path(os.environ['RUNNER_TEMP'])/'core-source-image-exports';archive=root/'image.tar'
+          assert 0<archive.stat().st_size<=512*1024**2
+          def digest(path):
+              h=hashlib.sha256()
+              with path.open('rb') as stream:
+                  for part in iter(lambda:stream.read(1024**2),b''):h.update(part)
+              return h.hexdigest()
+          receipt={'schema':'exact_published_Core_and_Goose_SQL_archive_v1','at':datetime.datetime.now(datetime.timezone.utc).isoformat(),'image':os.environ['IMAGE'],'expected_compiler_source':os.environ['EXPECTED_SOURCE'],'verification_workflow_source':os.environ['GITHUB_SHA'],'verification_run':os.environ['GITHUB_RUN_ID'],'platform':'linux/amd64','image_executed':False,'production_activation':False,'archive_sha256':digest(archive),'archive_bytes':archive.stat().st_size,'binary_sha256':digest(native/'yggdrasil-core'),'rootfs_diffids':json.loads((root/'rootfs-diffids.json').read_text()),'core_assets':json.loads((native/'CORE-ASSETS.json').read_text()),'goose_native_build_info':(native/'goose-build.txt').read_text(),'entrypoint_file_sha256':digest(native/'entrypoint.sh'),'all_image_migrations_match_exact_clean_source':True}
+          (root/'PROVENANCE.json').write_text(json.dumps(receipt,indent=2)+'\n')
+          print(json.dumps(receipt))
+          PY
+          test -z "$(git -C source status --porcelain)"
+      - uses: actions/upload-artifact@v4
+        with:
+          name: exact-published-core-D4-image
+          path: image-export-artifacts/
+          retention-days: 3
+          if-no-files-found: error
