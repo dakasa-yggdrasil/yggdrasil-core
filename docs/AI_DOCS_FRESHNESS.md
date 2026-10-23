@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: fab98420d75a5ee10581f3a2593e4ba5097626ec
-verified_diff_sha256: af7de49d7a28e68d5af132b4ae38a1aa159496c7a564c26065ba76120815d5eb
+verified_at_commit: 458efdbddab5a667b940914887c6a86d605254eb
+verified_diff_sha256: f01efb031e2ab19548d6e44f99eab4bbfe7cfcc86d8eb28ccbc506618f697481
 reconciler_schema: 1
 verified_at: 2026-10-23
 by: Giomaster
@@ -329,3 +329,5 @@ image and production600 qualification remain separate. Genuine CLI generation
 and reconciliation retain this guarded source and dirty provenance.
 
 core_D6_failed_witnessed_original_phase1_review: Reviewed the exact twenty-six-file D6 phase-one Source: immutable failed-witnessed-original native-absence ledger and explicit failed_disposed state, preserved accepted grant/witness/run failure and unknown ACK, nullable historical workflow identity with exact envelope and active-work fences, finite AWS creator/source/version pairs and the complete 1.65.4 observer catalog. Existing full production typed fixtures and registry and migrations61/71/72 remain unchanged; new sixteen-profile credentials and later approval activation are excluded. Eight contract/census/generator files preserve the complete 658-record Source map within the published bound. The exact-Source Linux workflow requires nine repository, five message and three HTTP roots with no skip and owned PostgreSQL shutdown. Local PostgreSQL and HTTP results are separate retained evidence; the five new message roots still require owning Linux CI. Independent Source peers cover this reviewed packet. Actual CI, image, schema adoption, rollout, disposition and new Guest capacity remain separate. The genuine released CLI generated context/summary at this actual CODE and verified its canonical plan.
+
+core_D7_R3_profile_rebind_review: Reviewed the exact D7 production rebind: two complete production Guest profile fixtures and two registry approval literals derive from the genuine owning Go compiler at preserved D6 Source, two actual new R3 integration instances and two actual owning dryruns. Native credentials and grant bearers remain unchanged; sixteen public bootstrap bodies each remove exactly one nineteen-byte flag. The exact-Source seventeen-root Linux workflow carries the default PostgreSQL socket binding and precise directory mode proof while retaining dynamic Source checkout. Reviewed generated census files track this minimal Source delta; no new architecture ADR or migration is introduced. Genuine typed returns, Source references and independent peers are pinned in the reviewed CODE manifest. Original managed-ref partial failures remain failures; the accepted-first plus three-current continuation is separately verified in the actual owning database. The genuine released CLI generated context and summary at this actual CODE and verified its canonical plan. Actual Source CI, image publication, Core rollout, policy activation and new Guest capacity remain separate required evidence.
