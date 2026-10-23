@@ -164,7 +164,7 @@ func validateOriginalDispositionAWSAdjunctCoverage(o model.CapacityOriginalCreat
 				return ErrOriginalCreateDisposition
 			}
 		case "DescribeInstances":
-			if r.ResourceID != o.ResourceID || (r.Status != 200 && r.Status != 400) || r.Status == 200 && o.ResourceState != "terminated" || r.Status == 400 && o.ResourceState != "absent" {
+			if r.ResourceID != o.ResourceID || (r.Status != 200 && r.Status != 400) || r.Status == 200 && o.ResourceState != "terminated" && !(o.ResourceState == "absent" && originalDispositionAWSExplicitEmptyInstances(r)) || r.Status == 400 && o.ResourceState != "absent" {
 				return ErrOriginalCreateDisposition
 			}
 		case "LookupEvents":

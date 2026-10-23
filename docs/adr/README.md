@@ -93,3 +93,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0068](0068-promote-the-original-protected-floor-with-complete-membership.md) | Promote the original protected floor with complete membership | Proposed | 2026-10-21 | Original zero-to-one floor, complete Coverage30 and unchanged raw useful-member gates |
 
 | [0069](0069-record-expired-unadmitted-create-dispositions-separately.md) | Record expired unadmitted create dispositions separately | Proposed | 2026-10-22 | Immutable accepted creates, authenticated terminal absence and fenced floor recovery |
+
+| [0070](0070-validate-explicit-empty-ec2-instance-responses.md) | Validate explicit empty EC2 instance responses | Proposed | 2026-10-23 | Retained native HTTP 200, complete empty XML and unchanged six-read inventory basis |
