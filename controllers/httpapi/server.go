@@ -571,6 +571,8 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("POST /api/v1/ops/surfaces/{id}/action/{actionId}", server.requireOpsPermissionFunc(permManageIntegrations, server.handleOpsSurfaceAction))
 	mux.HandleFunc("POST /api/v1/ops/capacity/original-create-dispositions", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsOriginalCreateDisposition))
 	mux.HandleFunc("GET /api/v1/ops/capacity/original-create-dispositions/{grantId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsOriginalCreateDispositionRead))
+	mux.HandleFunc("POST /api/v1/ops/capacity/dispatch-prestart-rejections", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsCapacityDispatchPrestartRejection))
+	mux.HandleFunc("GET /api/v1/ops/capacity/dispatch-prestart-rejections/{jobId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsCapacityDispatchPrestartRejectionRead))
 	mux.HandleFunc("GET /api/v1/ops/workflows", server.requireOpsPermissionFunc(permViewOps, server.handleOpsWorkflowsList))
 	mux.HandleFunc("GET /api/v1/ops/workflows/{runId}", server.requireOpsPermissionFunc(permViewOps, server.handleOpsWorkflowDetail))
 	mux.HandleFunc("POST /api/v1/ops/workflows/{runId}/retry", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsWorkflowRetry))

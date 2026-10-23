@@ -95,3 +95,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0069](0069-record-expired-unadmitted-create-dispositions-separately.md) | Record expired unadmitted create dispositions separately | Proposed | 2026-10-22 | Immutable accepted creates, authenticated terminal absence and fenced floor recovery |
 
 | [0070](0070-validate-explicit-empty-ec2-instance-responses.md) | Validate explicit empty EC2 instance responses | Proposed | 2026-10-23 | Retained native HTTP 200, complete empty XML and unchanged six-read inventory basis |
+| [0071](0071-reject-superseded-dispatch-before-start.md) | Reject superseded dispatch before start | Proposed | 2026-10-23 | Explicit administrative capacity dispatch rejection with retained original ownership |
