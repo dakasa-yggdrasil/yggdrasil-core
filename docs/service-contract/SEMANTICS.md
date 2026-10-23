@@ -220,3 +220,26 @@ The central integration execution policy refuses that operation and capability
 for generic workflows, RPC and sensitive-output callers. Only an unexported
 bridge policy bit, with both names exactly equal to the fixed read operation,
 can obtain its native bodies; request metadata cannot set that bit.
+
+
+## Explicit empty EC2 reads and superseded dispatch before start
+
+The complementary AWS disposition basis accepts HTTP 200 absence only from the
+complete retained EC2 XML: one exact namespace/root, a request ID, an explicitly
+empty reservation set and no remaining pagination. HTTP 200 terminated and
+HTTP 400 absence remain distinct native responses. The current observer is
+AWS1.65.2 at its exact published source; historical1.65.1 retains its own source
+pair. All six authenticated native reads and complete auxiliary absence remain
+required. Neither an SDK zero value nor an operator boolean supplies absence.
+
+The administrative prestart-rejection POST and exact-job GET require a current
+authenticated human with actual GodMode permission. The closed POST supplies
+only compare-and-swap expectations. Under the owning locks, Core obtains the
+current superseding policy and authorization from the database, rechecks the
+expired queued v1 job and pending unstarted workflow, and appends the separate
+prestart-rejected record. The original envelope, fencing token, wakes, lease and
+absent started/returned/final-ACK fields remain truthful. Started or unknown jobs
+cannot use this boundary. Ordinary Enqueue, Claim and Start remain unchanged; a
+new dispatch still needs a new current admission. No provider effect, successful
+workflow, Guest readiness or business result follows from this administrative
+terminal state. Migration72 adds its immutable storage and terminal constraints.
