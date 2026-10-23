@@ -120,7 +120,8 @@ jobs:
           # The official initializer clears PGHOST for its own psql calls. The
           # second bind aliases that default socket path to this same owned inode.
           # It chmods that directory 03775; restore 0700 before any source test.
-          record pg-socket-mode chmod 0700 "$PGHOST"
+          record pg-socket-mode chmod 00700 "$PGHOST"
+          record pg-directory-modes stat -c '%u %a' "$PGDATA" "$PGHOST"
           record pg-version docker exec "$cid" postgres --version
           record pg-identity docker exec "$cid" psql -XAt -v ON_ERROR_STOP=1 -h "$PGHOST" -U "$PGUSER" -d "$PGDATABASE" \
             -c "SELECT json_build_object('database',current_database(),'unix_socket',inet_server_addr() IS NULL,'version',current_setting('server_version_num')::int,'listen_addresses',current_setting('listen_addresses'));"
