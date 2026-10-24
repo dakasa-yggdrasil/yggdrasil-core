@@ -209,12 +209,14 @@ func loadNativeDeniedDispatch(ctx context.Context, tx *sql.Tx, jobID, namespace 
 		return err
 	}
 	job, err := readCapacityDispatchJob(ctx, tx, uuid.MustParse(jobID), true)
-	if err != nil || job.State != "unknown" || job.Protocol != CapacityDispatchProtocol || job.Realm != namespace || job.Environment != p.Environment || job.Domain != p.Domain || job.Dimension != p.Dimension || job.Policy.ID != original.PolicyID || job.Policy.Checksum != original.PolicyChecksum || job.Workflow.ID != original.WorkflowID || job.Workflow.Checksum != pre.WorkflowChecksum || job.LeaseOwner == uuid.Nil || job.FencingToken < 1 || job.StartedAt == nil || job.ReturnedAt == nil || job.FinalizationAckAt != nil || job.LeaseExpiresAt == nil || now.Before(*job.LeaseExpiresAt) || job.ReturnedAt.Before(*job.StartedAt) || pre.ReservedAt.Before(*job.StartedAt) || pre.ReservedAt.After(*job.ReturnedAt) {
+	_, ackLaneOK := nativeDeniedDispatchSchema(job)
+	if err != nil || !ackLaneOK || job.Protocol != CapacityDispatchProtocol || job.Realm != namespace || job.Environment != p.Environment || job.Domain != p.Domain || job.Dimension != p.Dimension || job.Policy.ID != original.PolicyID || job.Policy.Checksum != original.PolicyChecksum || job.Workflow.ID != original.WorkflowID || job.Workflow.Checksum != pre.WorkflowChecksum || job.LeaseOwner == uuid.Nil || job.FencingToken < 1 || job.StartedAt == nil || job.ReturnedAt == nil || job.LeaseExpiresAt == nil || now.Before(*job.LeaseExpiresAt) || job.ReturnedAt.Before(*job.StartedAt) || pre.ReservedAt.Before(*job.StartedAt) || pre.ReservedAt.After(*job.ReturnedAt) {
 		return ErrOriginalCreateDisposition
 	}
 	var dispatchRaw, runRaw []byte
 	var pointer sql.NullString
-	if err = tx.QueryRowContext(ctx, `SELECT to_jsonb(j)::text,native_denied_disposition_id::text FROM public.capacity_dispatch_jobs j WHERE id=$1`, jobID).Scan(&dispatchRaw, &pointer); err != nil || pointer.Valid {
+	var returnStatus sql.NullString
+	if err = tx.QueryRowContext(ctx, `SELECT to_jsonb(j)::text,native_denied_disposition_id::text,return_status FROM public.capacity_dispatch_jobs j WHERE id=$1`, jobID).Scan(&dispatchRaw, &pointer, &returnStatus); err != nil || pointer.Valid || job.State == "returned" && (!returnStatus.Valid || returnStatus.String != "failed") {
 		return ErrOriginalCreateDisposition
 	}
 	// The owning InsertWorkflowRunTx stores the immutable selector but omits
@@ -292,6 +294,14 @@ func (s CapacityStore) CompleteNativeDeniedDisposition(ctx context.Context, o *N
 		OriginalGrantSHA256: c.OriginalGrantSHA256, OriginalPreregistrationSHA256: c.OriginalPreregistrationSHA256, OriginalSettlementSHA256: c.OriginalSettlementSHA256, OriginalBindingSHA256: c.OriginalBindingSHA256, OriginalPolicySHA256: c.OriginalPolicySHA256, OriginalWorkflowSHA256: c.OriginalWorkflowSHA256, OriginalDispatchSHA256: snap.dispatchSHA, OriginalRunSHA256: snap.runSHA,
 		OriginalGeneration: snap.record.Generation, OriginalFencingToken: snap.record.FencingToken, ClosedGeneration: snap.intent.Generation, ClosedFencingToken: snap.intent.FencingToken + 1, OriginalDeadline: c.Preregistration.OriginalDeadline, HistoricalCoreSourceCommit: c.Preregistration.CoreSourceCommit,
 		Observation: observation, ObservationSHA256: originalDispositionJSONSHA(observation), RecordedAt: snap.now, OriginalUncertainAndNullIdentitiesUnchanged: true, OriginalUnknownACKPreserved: true, WitnessEnrollmentInstallationAbsent: true}
+	if snap.job.State == "returned" {
+		ack := snap.job.FinalizationAckAt.UTC()
+		result.Schema = model.NativeDeniedReturnedACKDispositionSchema
+		result.OriginalUnknownACKPreserved = false
+		result.OriginalDispatchState = "returned"
+		result.OriginalFinalizationACKAt = &ack
+		result.OriginalFailedWorkflowACKPreserved = true
+	}
 	raw, err := json.Marshal(result)
 	if err != nil || len(raw) > 2<<20 {
 		return result, ErrOriginalCreateDisposition
@@ -308,7 +318,7 @@ func (s CapacityStore) CompleteNativeDeniedDisposition(ctx context.Context, o *N
 	if err != nil || count != 1 {
 		return result, ErrOriginalCreateDisposition
 	}
-	n, err = tx.ExecContext(ctx, `UPDATE public.capacity_dispatch_jobs SET state='native_denied_disposed',native_denied_disposition_id=$2,updated_at=$3 WHERE id=$1 AND state='unknown' AND native_denied_disposition_id IS NULL AND failed_original_disposition_id IS NULL AND finalization_ack_at IS NULL`, result.JobID, result.ID, result.RecordedAt)
+	n, err = tx.ExecContext(ctx, `UPDATE public.capacity_dispatch_jobs SET state='native_denied_disposed',native_denied_disposition_id=$2,updated_at=$3 WHERE id=$1 AND state=$4 AND native_denied_disposition_id IS NULL AND failed_original_disposition_id IS NULL AND finalization_ack_at IS NOT DISTINCT FROM $5::timestamptz`, result.JobID, result.ID, result.RecordedAt, snap.job.State, snap.job.FinalizationAckAt)
 	if err != nil {
 		return result, err
 	}
@@ -361,8 +371,13 @@ func (s CapacityStore) ReadNativeDeniedDisposition(ctx context.Context, grantID 
 	}
 	var raw []byte
 	var digest string
-	err := s.DB.QueryRowContext(ctx, `SELECT d.original_wire,d.disposition_sha256 FROM public.capacity_native_denied_dispositions d JOIN public.capacity_mutation_grants g ON(g.native_denied_disposition_id,g.id)=(d.id,d.grant_id) JOIN public.capacity_dispatch_jobs j ON(j.native_denied_disposition_id,j.id)=(d.id,d.job_id) WHERE g.id=$1 AND j.state='native_denied_disposed' AND j.finalization_ack_at IS NULL`, grantID).Scan(&raw, &digest)
-	if err != nil || originalDispositionDigest(raw) != digest || capacity.DecodeGuestLifecycle(raw, &v) != nil || v.Schema != model.NativeDeniedDispositionSchema || v.GrantID != grantID || !v.OriginalUncertainAndNullIdentitiesUnchanged || !v.OriginalUnknownACKPreserved || !v.WitnessEnrollmentInstallationAbsent || v.ServingOrBusinessOrSavingsAuthority {
+	var acknowledged sql.NullTime
+	err := s.DB.QueryRowContext(ctx, `SELECT d.original_wire,d.disposition_sha256,j.finalization_ack_at FROM public.capacity_native_denied_dispositions d JOIN public.capacity_mutation_grants g ON(g.native_denied_disposition_id,g.id)=(d.id,d.grant_id) JOIN public.capacity_dispatch_jobs j ON(j.native_denied_disposition_id,j.id)=(d.id,d.job_id) WHERE g.id=$1 AND j.state='native_denied_disposed'`, grantID).Scan(&raw, &digest, &acknowledged)
+	var ack *time.Time
+	if acknowledged.Valid {
+		ack = &acknowledged.Time
+	}
+	if err != nil || originalDispositionDigest(raw) != digest || capacity.DecodeGuestLifecycle(raw, &v) != nil || !nativeDeniedDispositionACKMatches(v, ack) || v.GrantID != grantID || !v.OriginalUncertainAndNullIdentitiesUnchanged || !v.WitnessEnrollmentInstallationAbsent || v.ServingOrBusinessOrSavingsAuthority {
 		return model.CapacityNativeDeniedDisposition{}, ErrOriginalCreateDisposition
 	}
 	return v, nil

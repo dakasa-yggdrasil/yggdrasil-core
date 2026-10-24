@@ -1,5 +1,5 @@
 {
-  "accepted_at": "2026-10-23T23:27:32.138722+00:00",
+  "accepted_at": "2026-10-24T00:30:01.344615+00:00",
   "accepted_at_is_historical_for_two_profile_candidate": false,
   "checker": {
     "actual_binary_clean_VCS": true,
@@ -86,6 +86,36 @@
       "reviewed_observer_publication": "c34e330d8b266bb88e29ae7cf7b01df6f9fd96ce",
       "separate_schema": 74,
       "source_roster_sha256": "c5aa076fc54a6ca9477c7e6201382eb9a1c9de03b00f0c2521d9364087de5dc7"
+    },
+    "D9_returned_failed_ACK_and_AWS1655_actual_contract": {
+      "AWS_actual_provider_source": "c34e330d8b266bb88e29ae7cf7b01df6f9fd96ce",
+      "AWS_contract_sha256": "76c468b890f07284b1205b87bf97833764d7de2a4fe7a62bf03e26cb49c9e281",
+      "AWS_new_instance_id": "5e5096f7-2577-48d6-bee9-5991b33831dc",
+      "Hetzner_contract_fixture_and_registry_approval_byteexact": true,
+      "Root_actual_registry_fail_or_skip": 0,
+      "Root_actual_registry_pass_nodes": 47,
+      "Root_actual_registry_roots": 5,
+      "Root_local_new_HTTP_roots_passed": 1,
+      "Root_local_new_repository_PG_roots_passed": 4,
+      "Root_source_review_complete": true,
+      "Source_CI_image_schema75_rollout_and_new_useful_capacity_qualification": null,
+      "accepted_source_inventory_sha256": "e39f4614184ecd918fd38152d877c3f3e1d296f24e3092d61c8b462f651427ec",
+      "actual_full_policies_validated_by_owning_Go": true,
+      "actual_two_full_profiles_typed_return_sha256": "63350a13e99d25a8329a9f7fd70d059d2c433194f4981f4fb9e8a2f50ab3b644",
+      "base": "91fe965fd319853902d595c98599f07817a0a61d",
+      "business_BASE_catalog_sha256": "8db09ec3eb1ffc7365eb471d7de46c9da4dd3670b9147a6c08af147acc4a9508",
+      "full_profile_compilation_independent_peer_sha256": "543ac1e2827b76b132786d6f9e074dd22030f1f504c83aa241379a0f0899a14c",
+      "independent_business_BASE_peer_sha256": "73a02f7e1104eb2ceb6cc979823bd948e97f29d86a53b28a0ba2fe994ea55f83",
+      "local_PG17_XML_Unix_shutdown_original_zero": true,
+      "local_new_tests_return_sha256": "abd7c8a3609b87cc7e42c3ff9b74f9e2f35dc50642fa1ef8ca0a28650e52b06a",
+      "message_Linux_compile_only_no_execution": true,
+      "original_failed_workflow_and_returned_ACK_preserved": true,
+      "owning_Linux_focused_roots_required": 36,
+      "policies_execution_enabled": false,
+      "registry_tests_return_sha256": "eaea861cc8ff863f45bc88563a09bc017e7f5456effc2c5a92550766d9c0253e",
+      "separate_schema": 75,
+      "slots_per_profile": 8,
+      "source_record_count": 666
     },
     "H034_supplier_patch_sha256": "b9dc27414035fd518efbc63eb2bfad48e0b8d5609f59c76d1900c1bb0ced1699",
     "Root_current_combined_portable_nodes": 205,
@@ -280,7 +310,7 @@
   "reviewer": "Root full production-source delta review; separate independent manager/dial/monitor peer; source acceptance only",
   "schema": "core_service_source_review_v1",
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "aa7294c0ca0e741319adb392b9fd42749772e1359a84c281adb5bf3169dacddb",
+  "source_inventory_sha256": "e39f4614184ecd918fd38152d877c3f3e1d296f24e3092d61c8b462f651427ec",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -315,6 +345,7 @@
     "Local source-only validation: XML9 roots92subcases and controller4roots26subcases passed; Darwin Linux-fixture-only overlay is explicit, complete Linux controller compile used no overlay and was not executed. External isolated PostgreSQL17 with pgcrypto exercised41 new schema72/API/concurrency leaves without skips; integration peer binds the exact source. These are not production migration or native business proof.",
     "Six targeted owning capacity roots/seventy PASS nodes and zero FAIL/SKIP completed locally on Darwin for actual two-provider approval fixtures and registry negatives. Official649-source census regenerated; current owning Linux/CI, schema72 migration and production firstReady600 remain separately required, not supplied by local source acceptance.",
     "Current AWS1653 five-guard tests passed five roots/thirty-four subcases using only the inherited Linux-only PostgreSQL fixture Darwin portability overlay; full Linux controller test compilation passed without overlay and no Linux execution is claimed. Actual approval fixture and registry tests passed six roots/seventy nodes without fail or skip on Darwin. Official649-source census and published service doctor remain the final guarded validation.",
-    "Final frozen Darwin source passed33 roots/37 nodes with no FAIL/SKIP: manager/consumer race, focused addon/message/HTTP race and loopback guard. HTTP/message focused-file scopes remain explicit in the author validation; this is not whole Linux execution. Root final real isolated loopback RabbitMQ320 test passed with all Go sources pinned before and unchanged after, proving request/consumption recovery, unavailable drain, one generation and no ambiguous replay. Current owning Linux/CI and production rollout600 remain separately required."
+    "Final frozen Darwin source passed33 roots/37 nodes with no FAIL/SKIP: manager/consumer race, focused addon/message/HTTP race and loopback guard. HTTP/message focused-file scopes remain explicit in the author validation; this is not whole Linux execution. Root final real isolated loopback RabbitMQ320 test passed with all Go sources pinned before and unchanged after, proving request/consumption recovery, unavailable drain, one generation and no ambiguous replay. Current owning Linux/CI and production rollout600 remain separately required.",
+    "D9 source acceptance: four new isolated PostgreSQL17 XML repository roots and one new HTTP race root completed without skips; Linux message compilation completed without execution. The actual owning Go compiler validated both full disabled operational policies and all sixteen slot plans; its six original native children and original containing process completed zero. Exact generated AWS mutation bindings and one default registry digest changed; the complete Hetzner fixture and approval are byteexact. Five owning registry race roots passed forty-seven nodes without failures or skips. Current owning Linux focused thirty-six roots, Source CI, release image, production Goose75 and rollout remain separate required evidence."
   ]
 }

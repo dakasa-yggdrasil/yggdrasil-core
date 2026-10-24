@@ -158,6 +158,10 @@ func originalGuestSupplierCatalogFor(provider string, ts model.IntegrationTypeMa
 	return true
 }
 
+// Independently published normal-creation supplier; historical denied reads keep
+// their original 1.65.4 envelope/config and separate live observer handshake.
+const originalAWS1655SupplierSource = "c34e330d8b266bb88e29ae7cf7b01df6f9fd96ce"
+
 func originalGuestSupplierCatalogSourceFor(provider string, ts model.IntegrationTypeManifestSpec, source string) bool {
 	if !originalGuestSupplierCatalogFor(provider, ts) {
 		return false
@@ -173,6 +177,9 @@ func originalGuestSupplierCatalogSourceFor(provider string, ts model.Integration
 	}
 	if provider == "aws" && ts.Adapter.Version == "1.65.4" {
 		return len(originalCreateDispositionAWSObserverSource) == 40 && source == originalCreateDispositionAWSObserverSource
+	}
+	if provider == "aws" && ts.Adapter.Version == "1.65.5" {
+		return len(originalAWS1655SupplierSource) == 40 && source == originalAWS1655SupplierSource
 	}
 	if provider == "hetzner" {
 		switch ts.Adapter.Version {

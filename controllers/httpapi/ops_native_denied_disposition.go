@@ -8,7 +8,14 @@ import (
 )
 
 func nativeDeniedDispositionSummary(v model.CapacityNativeDeniedDisposition) map[string]any {
-	return map[string]any{"schema": v.Schema, "id": v.ID, "grant_id": v.GrantID, "preregistration_id": v.PreregistrationID, "job_id": v.JobID, "run_id": v.RunID, "issuer": v.Issuer, "recorded_at": v.RecordedAt, "observation_sha256": v.ObservationSHA256, "closed_generation": v.ClosedGeneration, "closed_fencing_token": v.ClosedFencingToken, "historical_core_source_commit": v.HistoricalCoreSourceCommit, "historical_create_source_commit": v.Observation.Request.OriginalAdapterSourceCommit, "observer_source_commit": v.Observation.AdapterSourceCommit, "decision": v.Observation.Decision, "event_id": v.Observation.EventID, "request_id": v.Observation.RequestID, "original_uncertain_and_NULL_identities_unchanged": v.OriginalUncertainAndNullIdentitiesUnchanged, "original_unknown_ACK_preserved": v.OriginalUnknownACKPreserved, "witness_enrollment_installation_absent": v.WitnessEnrollmentInstallationAbsent, "original_HTTP_response_available": false, "dispatch_state": "native_denied_disposed", "original_finalization_ack_present": false, "new_assessment_decision_and_single_use_grant_still_required": true, "serving_or_business_or_savings_authority": false, "provider_mutations": 0}
+	summary := map[string]any{"schema": v.Schema, "id": v.ID, "grant_id": v.GrantID, "preregistration_id": v.PreregistrationID, "job_id": v.JobID, "run_id": v.RunID, "issuer": v.Issuer, "recorded_at": v.RecordedAt, "observation_sha256": v.ObservationSHA256, "closed_generation": v.ClosedGeneration, "closed_fencing_token": v.ClosedFencingToken, "historical_core_source_commit": v.HistoricalCoreSourceCommit, "historical_create_source_commit": v.Observation.Request.OriginalAdapterSourceCommit, "observer_source_commit": v.Observation.AdapterSourceCommit, "decision": v.Observation.Decision, "event_id": v.Observation.EventID, "request_id": v.Observation.RequestID, "original_uncertain_and_NULL_identities_unchanged": v.OriginalUncertainAndNullIdentitiesUnchanged, "original_unknown_ACK_preserved": v.OriginalUnknownACKPreserved, "witness_enrollment_installation_absent": v.WitnessEnrollmentInstallationAbsent, "original_HTTP_response_available": false, "dispatch_state": "native_denied_disposed", "original_finalization_ack_present": false, "new_assessment_decision_and_single_use_grant_still_required": true, "serving_or_business_or_savings_authority": false, "provider_mutations": 0}
+	if v.Schema == model.NativeDeniedReturnedACKDispositionSchema {
+		summary["original_finalization_ack_present"] = v.OriginalFinalizationACKAt != nil
+		summary["original_dispatch_state"] = v.OriginalDispatchState
+		summary["original_finalization_ack_at"] = v.OriginalFinalizationACKAt
+		summary["original_failed_workflow_ACK_preserved"] = v.OriginalFailedWorkflowACKPreserved
+	}
+	return summary
 }
 func (s *Server) handleOpsNativeDeniedDisposition(w http.ResponseWriter, r *http.Request) {
 	issuer, ok := s.originalDispositionIssuer(w, r)
