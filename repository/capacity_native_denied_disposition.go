@@ -310,7 +310,7 @@ func (s CapacityStore) CompleteNativeDeniedDisposition(ctx context.Context, o *N
 	if err != nil {
 		return result, err
 	}
-	n, err := tx.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET native_denied_disposition_id=$2 WHERE id=$1 AND original_disposition_id IS NULL AND failed_original_disposition_id IS NULL AND native_denied_disposition_id IS NULL`, result.GrantID, result.ID)
+	n, err := tx.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET native_denied_disposition_id=$2 WHERE id=$1 AND original_disposition_id IS NULL AND failed_original_disposition_id IS NULL AND native_denied_disposition_id IS NULL AND enrolled_failed_disposition_id IS NULL`, result.GrantID, result.ID)
 	if err != nil {
 		return result, err
 	}
@@ -327,7 +327,7 @@ func (s CapacityStore) CompleteNativeDeniedDisposition(ctx context.Context, o *N
 		return result, ErrOriginalCreateDisposition
 	}
 	var pending int
-	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN('issued','redeemed','settled','compensating') AND original_disposition_id IS NULL AND failed_original_disposition_id IS NULL AND native_denied_disposition_id IS NULL`, snap.intent.Namespace, snap.spec.Environment, snap.spec.Domain, snap.spec.Dimension).Scan(&pending); err != nil || pending != 0 {
+	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN('issued','redeemed','settled','compensating') AND original_disposition_id IS NULL AND failed_original_disposition_id IS NULL AND native_denied_disposition_id IS NULL AND enrolled_failed_disposition_id IS NULL`, snap.intent.Namespace, snap.spec.Environment, snap.spec.Domain, snap.spec.Dimension).Scan(&pending); err != nil || pending != 0 {
 		return result, ErrOriginalCreateDisposition
 	}
 	next := snap.intent

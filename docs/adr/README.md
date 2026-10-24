@@ -105,3 +105,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0075](0075-preserve-returned-failed-workflow-acks-in-denied-dispositions.md) | Preserve returned failed-workflow ACKs in denied dispositions | Proposed | 2026-10-23 | Explicit returned/failed/known-ACK lane, immutable original acknowledgment and unchanged native-denial evidence |
 
 | [0076](0076-isolate-native-denial-observation-from-normal-aws-admission.md) | Isolate native-denial observation from normal AWS admission | Proposed | 2026-10-24 | Dedicated HTTP-only observer identity, exact historical protocol projection and unchanged normal supplier admission |
+
+| [0077](0077-close-enrolled-failed-originals-through-native-absence.md) | Close enrolled failed originals through a separate native-absence ledger | Proposed | 2026-10-24 | Preserved accepted enrollment, immutable failed workflow and fenced exact native-absence accounting |

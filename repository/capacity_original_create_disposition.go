@@ -236,7 +236,7 @@ func (s CapacityStore) CompleteOriginalCreateDisposition(ctx context.Context, o 
 	if err != nil {
 		return result, err
 	}
-	affected, err := tx.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET original_disposition_id=$2 WHERE id=$1 AND original_disposition_id IS NULL AND failed_original_disposition_id IS NULL AND native_denied_disposition_id IS NULL`, result.GrantID, result.ID)
+	affected, err := tx.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET original_disposition_id=$2 WHERE id=$1 AND original_disposition_id IS NULL AND failed_original_disposition_id IS NULL AND native_denied_disposition_id IS NULL AND enrolled_failed_disposition_id IS NULL`, result.GrantID, result.ID)
 	if err != nil {
 		return result, err
 	}
@@ -247,7 +247,7 @@ func (s CapacityStore) CompleteOriginalCreateDisposition(ctx context.Context, o 
 	// Every other unresolved original still blocks closure. Only a validated
 	// one-way FK pointer removes this exact grant from current authority counts.
 	var pending int
-	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN('issued','redeemed','settled','compensating') AND original_disposition_id IS NULL AND failed_original_disposition_id IS NULL AND native_denied_disposition_id IS NULL`, snap.intent.Namespace, snap.spec.Environment, snap.spec.Domain, snap.spec.Dimension).Scan(&pending); err != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND state IN('issued','redeemed','settled','compensating') AND original_disposition_id IS NULL AND failed_original_disposition_id IS NULL AND native_denied_disposition_id IS NULL AND enrolled_failed_disposition_id IS NULL`, snap.intent.Namespace, snap.spec.Environment, snap.spec.Domain, snap.spec.Dimension).Scan(&pending); err != nil {
 		return result, err
 	}
 	if pending != 0 {
