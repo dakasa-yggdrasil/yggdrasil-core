@@ -3,6 +3,7 @@ package model
 import "time"
 
 const NativeDeniedDispositionSchema = "original_native_authorization_denied_terminal_disposition_v1"
+const NativeDeniedReturnedACKDispositionSchema = "original_native_authorization_denied_failed_returned_ack_terminal_disposition_v2"
 const NativeDeniedObservationSchema = "aws_original_authorization_denied_observation_v1"
 const NativeDeniedReadRequestSchema = "aws_original_authorization_denied_read_request_v1"
 
@@ -80,6 +81,10 @@ type CapacityNativeDeniedDisposition struct {
 	RecordedAt                                  time.Time                       `json:"recorded_at"`
 	OriginalUncertainAndNullIdentitiesUnchanged bool                            `json:"original_uncertain_and_NULL_identities_unchanged"`
 	OriginalUnknownACKPreserved                 bool                            `json:"original_unknown_ACK_preserved"`
-	WitnessEnrollmentInstallationAbsent         bool                            `json:"witness_enrollment_installation_absent"`
-	ServingOrBusinessOrSavingsAuthority         bool                            `json:"serving_or_business_or_savings_authority"`
+	// Only the returned-failed-workflow lane carries an existing observed ACK.
+	OriginalDispatchState               string     `json:"original_dispatch_state,omitempty"`
+	OriginalFinalizationACKAt           *time.Time `json:"original_finalization_ack_at,omitempty"`
+	OriginalFailedWorkflowACKPreserved  bool       `json:"original_failed_workflow_ACK_preserved,omitempty"`
+	WitnessEnrollmentInstallationAbsent bool       `json:"witness_enrollment_installation_absent"`
+	ServingOrBusinessOrSavingsAuthority bool       `json:"serving_or_business_or_savings_authority"`
 }

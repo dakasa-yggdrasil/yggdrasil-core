@@ -355,20 +355,30 @@ capacity, pressure, retirement and economic observations.
 
 Authenticated capacity operators may submit only the original grant and dispatch
 job UUIDs to `/api/v1/ops/capacity/native-denied-dispositions`. Core loads their
-immutable uncertain settlement, preregistration, failed Create run and unknown
-original acknowledgment, then obtains its own source-pinned read-only observation.
+immutable uncertain settlement, preregistration, failed Create run and original
+dispatch acknowledgment, then obtains its own source-pinned read-only observation.
 The distinct observer authenticates the historical creator profile and joins an
 exact CloudTrail authorization denial with complete client-token instance pages.
 CloudTrail evidence explicitly omits UserData in RAM and retains only the declared
 projection; STS and EC2 retain bounded original response bodies. No original HTTP
 error response or auxiliary-resource absence is manufactured.
 
-A separate schema74 ledger atomically links the grant, dispatch and failed-floor
-intent, advances one fence and records `native_denied_disposed`. Original uncertain
-settlement, missing identities, failed run and NULL acknowledgment stay immutable.
+A separate schema74 ledger, extended by migration75, atomically links the grant,
+dispatch and failed-floor intent, advances one fence and records
+`native_denied_disposed`. V1 retains the unknown dispatch with a NULL ACK. V2
+requires an original returned, failed workflow and preserves its existing ACK,
+observed after return and before the original lease deadline. A workflow ACK
+does not establish provider creation. Original uncertain settlement, missing
+identities, failed run and the exact original acknowledgment stay immutable.
 The authenticated GET by grant UUID returns a summary without native evidence
 bodies. No witness, enrollment, installation or useful-capacity authority follows.
 Future creation requires a new assessment, generation, fencing token and grant;
 the successor barrier covers all three administrative terminal ledgers across
 integration-instance revisions. Existing accepted-create and witnessed-failure
 contracts and protected production profiles retain their separate authority.
+
+The normal AWS supplier and retirement catalogs also admit the independently
+published 1.65.5 source with its complete lifecycle and fleet-inventory catalog.
+Historical native-denial reads retain their separate original 1.65.4 creator
+configuration and current source-pinned observer. A new supplier instance and
+complete compiled production profile require their own registry qualification.

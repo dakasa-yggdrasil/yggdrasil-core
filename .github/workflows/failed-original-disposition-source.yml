@@ -130,13 +130,13 @@ jobs:
           print(json.dumps(v,sort_keys=True))
           PY_ID
           # The fixture initializes only this empty dedicated database with its required
-          # schema and migrations61/71/72/73/74; no global goose/migration command is run.
+          # schema and migrations61/71/72/73/74/75; no global goose/migration command is run.
           record repository go test -p=1 -race -count=1 -timeout=4m -json ./repository \
-            -run '^((TestFailedOriginalDisposition(Migration73(DeferredLinks|DirectInsertGuards|WorkflowIdentityAndActiveWork|ClosedHistoryAndLateOwnership)|Postgres(WholeLifecycle|Rechecks)|NullableWorkflowIdentity)|TestOriginalDispositionAWS1653Adjunct(Observation|Postgres))|TestNativeDeniedDispositionPostgresWholeLifecycle|TestNativeDeniedDispositionPostgresEligibility|TestNativeDeniedDispositionPostgresConcurrentAndStaleCAS|TestNativeDeniedDispositionMigration74DeferredLinks|TestNativeDeniedDispositionMigration74RejectsForgedDecision|TestNativeDeniedDispositionMigration74ClosedHistoryImmutable|TestNativeDeniedDecisionProofRejectsReclosedForeignOrSuccessfulEvents|TestNativeDeniedUniqueOriginalProjection)$'
+            -run '^((TestFailedOriginalDisposition(Migration73(DeferredLinks|DirectInsertGuards|WorkflowIdentityAndActiveWork|ClosedHistoryAndLateOwnership)|Postgres(WholeLifecycle|Rechecks)|NullableWorkflowIdentity)|TestOriginalDispositionAWS1653Adjunct(Observation|Postgres))|TestNativeDeniedDispositionPostgresWholeLifecycle|TestNativeDeniedDispositionPostgresEligibility|TestNativeDeniedDispositionPostgresConcurrentAndStaleCAS|TestNativeDeniedDispositionMigration74DeferredLinks|TestNativeDeniedDispositionMigration74RejectsForgedDecision|TestNativeDeniedDispositionMigration74ClosedHistoryImmutable|TestNativeDeniedDecisionProofRejectsReclosedForeignOrSuccessfulEvents|TestNativeDeniedUniqueOriginalProjection|TestNativeDeniedOriginalACKLanesAndWire|TestNativeDeniedReturnedACKPostgresLanesAndFence|TestNativeDeniedReturnedACKMigration75DeferredAndForged|TestNativeDeniedReturnedACKPostgresImmutableHistory)$'
           record message go test -p=1 -race -count=1 -timeout=4m -json ./controllers/message \
-            -run '^(TestOriginalDisposition(ObserverCatalogAndSupplierRemainClosed|AWSObserverVersionSourcePairs|AWS1654RequiresWholeLifecycleCatalog|BridgeRefusesUnownedCallsAndForeignOutput|PrivateReadCannotEscapeThroughGenericExecute)|TestNativeDeniedObserverFutureSourceRefusesBeforeHydration|TestNativeDeniedHistoricalEnvelopeWithCurrentLiveCatalog)$'
+            -run '^(TestOriginalDisposition(ObserverCatalogAndSupplierRemainClosed|AWSObserverVersionSourcePairs|AWS1654RequiresWholeLifecycleCatalog|BridgeRefusesUnownedCallsAndForeignOutput|PrivateReadCannotEscapeThroughGenericExecute)|TestNativeDeniedObserverFutureSourceRefusesBeforeHydration|TestNativeDeniedHistoricalEnvelopeWithCurrentLiveCatalog|TestOriginalAWS1655NormalSupplierKeepsExactSourceAndLifecycle)$'
           record http go test -p=1 -race -count=1 -timeout=4m -json ./controllers/httpapi \
-            -run '^(TestFailedOriginalDisposition(ClosedIdentityRequest|RequiresAuthenticatedOperator|SummaryKeepsUnknownAndPrivateEvidence)|TestNativeDeniedDispositionClosedOriginalIdentities|TestNativeDeniedDispositionRequiresOperatorBeforeDatabaseOrBroker|TestNativeDeniedSummaryPreservesUncertaintyAndOmitsEvidenceBodies)$'
+            -run '^(TestFailedOriginalDisposition(ClosedIdentityRequest|RequiresAuthenticatedOperator|SummaryKeepsUnknownAndPrivateEvidence)|TestNativeDeniedDispositionClosedOriginalIdentities|TestNativeDeniedDispositionRequiresOperatorBeforeDatabaseOrBroker|TestNativeDeniedSummaryPreservesUncertaintyAndOmitsEvidenceBodies|TestNativeDeniedReturnedACKSummaryPreservesFailedOriginal)$'
           python3 - <<'PY_CENSUS'
           import collections, json, os, pathlib, subprocess
           p=pathlib.Path(os.environ['LOGS']); base='github.com/dakasa-yggdrasil/yggdrasil-core/'
@@ -158,7 +158,12 @@ jobs:
             'TestFailedOriginalDispositionPostgresRechecks',
             'TestFailedOriginalDispositionNullableWorkflowIdentity',
             'TestOriginalDispositionAWS1653AdjunctObservation',
-            'TestOriginalDispositionAWS1653AdjunctPostgres'],
+            'TestOriginalDispositionAWS1653AdjunctPostgres',
+            'TestNativeDeniedOriginalACKLanesAndWire',
+            'TestNativeDeniedReturnedACKPostgresLanesAndFence',
+            'TestNativeDeniedReturnedACKMigration75DeferredAndForged',
+            'TestNativeDeniedReturnedACKPostgresImmutableHistory'
+           ],
            'message':[
             'TestNativeDeniedObserverFutureSourceRefusesBeforeHydration',
             'TestNativeDeniedHistoricalEnvelopeWithCurrentLiveCatalog',
@@ -166,14 +171,18 @@ jobs:
             'TestOriginalDispositionAWSObserverVersionSourcePairs',
             'TestOriginalDispositionAWS1654RequiresWholeLifecycleCatalog',
             'TestOriginalDispositionBridgeRefusesUnownedCallsAndForeignOutput',
-            'TestOriginalDispositionPrivateReadCannotEscapeThroughGenericExecute'],
+            'TestOriginalDispositionPrivateReadCannotEscapeThroughGenericExecute',
+            'TestOriginalAWS1655NormalSupplierKeepsExactSourceAndLifecycle'
+           ],
            'http':[
             'TestNativeDeniedDispositionClosedOriginalIdentities',
             'TestNativeDeniedDispositionRequiresOperatorBeforeDatabaseOrBroker',
             'TestNativeDeniedSummaryPreservesUncertaintyAndOmitsEvidenceBodies',
             'TestFailedOriginalDispositionClosedIdentityRequest',
             'TestFailedOriginalDispositionRequiresAuthenticatedOperator',
-            'TestFailedOriginalDispositionSummaryKeepsUnknownAndPrivateEvidence']}
+            'TestFailedOriginalDispositionSummaryKeepsUnknownAndPrivateEvidence',
+            'TestNativeDeniedReturnedACKSummaryPreservesFailedOriginal'
+           ]}
           packages={'repository':base+'repository','message':base+'controllers/message','http':base+'controllers/httpapi'}
           summary={}
           for name, roots in expected.items():
@@ -189,7 +198,7 @@ jobs:
           actual_head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
           assert actual_head==os.environ['SOURCE_COMMIT'], 'Source checkout identity changed'
           assert not subprocess.check_output(['git','status','--porcelain','--untracked-files=all']), 'Source worktree became dirty'
-          value={'schema':'failed_original_source_CI_exact_root_census_v1','source_commit':actual_head,'race':True,'count':1,'package_parallelism':1,'summary':summary,'total_roots':30,'production_authority':False}
+          value={'schema':'failed_original_source_CI_exact_root_census_v1','source_commit':actual_head,'race':True,'count':1,'package_parallelism':1,'summary':summary,'total_roots':36,'production_authority':False}
           (p/'CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
           print(json.dumps(value,sort_keys=True))
           PY_CENSUS
