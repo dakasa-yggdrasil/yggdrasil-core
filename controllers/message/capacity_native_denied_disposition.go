@@ -149,7 +149,7 @@ func resolveNativeDeniedObserver(ctx context.Context, db *sql.DB, conn *amqp.Con
 }
 func RecordNativeDeniedDisposition(parent context.Context, db *sql.DB, conn *amqp.Connection, grantID, jobID, issuer string) (model.CapacityNativeDeniedDisposition, error) {
 	var empty model.CapacityNativeDeniedDisposition
-	if parent == nil || db == nil || conn == nil || !nativeDeniedObserverSourceReady(nativeDeniedAWSObserverSource) {
+	if parent == nil || db == nil || conn == nil || !nativeDeniedObserverSourceReady(nativeDeniedAWSObserverSource) || !nativeDeniedReadonlySourceReady(nativeDeniedReadonlySource) {
 		return empty, errOriginalCreateDisposition
 	}
 	ctx, cancel := context.WithTimeout(parent, 30*time.Second)
@@ -164,6 +164,9 @@ func RecordNativeDeniedDisposition(parent context.Context, db *sql.DB, conn *amq
 	if err != nil {
 		return empty, err
 	}
+	if describeNativeDeniedReadonly(ctx, nativeDeniedReadonlySource) != nil {
+		return empty, errOriginalCreateDisposition
+	}
 	raw, err := json.Marshal(candidate.Request)
 	if err != nil {
 		return empty, errOriginalCreateDisposition
@@ -172,7 +175,7 @@ func RecordNativeDeniedDisposition(parent context.Context, db *sql.DB, conn *amq
 	if json.Unmarshal(raw, &fixed) != nil {
 		return empty, errOriginalCreateDisposition
 	}
-	reply, err := executeIntegrationThroughResolvedWithPolicy(ctx, conn, model.ExecuteIntegrationRequest{Operation: originalCreateDispositionOperation, Capability: originalCreateDispositionOperation, Input: fixed}, observer.instance, observer.instanceSpec, observer.typ, observer.typeSpec, 25*time.Second, integrationExecutionPolicy{originalCreateDisposition: true, detailFreeErrors: true, safeError: errOriginalCreateDisposition, requireExplicitResponse: true, nativeHTTP: &nativeAdapterHTTPPolicy{limit: 2 << 20, parent: ctx}})
+	reply, err := executeNativeDeniedReadonly(ctx, observer, fixed)
 	if err != nil || ctx.Err() != nil || reply.Status != "observed" {
 		return empty, errOriginalCreateDisposition
 	}
@@ -181,11 +184,14 @@ func RecordNativeDeniedDisposition(parent context.Context, db *sql.DB, conn *amq
 		return empty, errOriginalCreateDisposition
 	}
 	var observation model.CapacityNativeDeniedObservation
-	if capacity.DecodeGuestLifecycle(body, &observation) != nil || observation.AdapterSourceCommit != nativeDeniedAWSObserverSource {
+	if capacity.DecodeGuestLifecycle(body, &observation) != nil || observation.AdapterSourceCommit != nativeDeniedReadonlySource {
 		return empty, errOriginalCreateDisposition
 	}
 	after, err := resolveNativeDeniedObserver(ctx, db, conn, candidate)
 	if err != nil || after.instance.ID != observer.instance.ID || after.instance.Checksum != observer.instance.Checksum || after.typ.ID != observer.typ.ID || after.typ.Checksum != observer.typ.Checksum || after.currentType.ID != observer.currentType.ID || after.currentType.Checksum != observer.currentType.Checksum {
+		return empty, errOriginalCreateDisposition
+	}
+	if describeNativeDeniedReadonly(ctx, nativeDeniedReadonlySource) != nil {
 		return empty, errOriginalCreateDisposition
 	}
 	return store.CompleteNativeDeniedDisposition(ctx, owner, observation)
