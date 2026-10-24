@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-23T22:41:43-03:00",
+  "generated_at": "2026-10-24T00:43:16-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1161,
+    ".go": 1174,
     ".json": 169,
     ".py": 6,
-    ".sql": 75,
+    ".sql": 76,
     ".yaml": 11,
     ".yml": 27
   },
   "provenance": {
-    "commit": "5df64eeeb7572eaccbe373322c4ee92a4003fe75",
+    "commit": "0ea2c47ac968c6108b6e4ca7499175dacdac33f7",
     "dirty": true,
     "files": [
       {
@@ -65,18 +65,18 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 225,
-      "kb": 3030
+      "files": 231,
+      "kb": 3127
     },
     {
       "path": "controllers/httpapi",
-      "files": 210,
-      "kb": 2259
+      "files": 212,
+      "kb": 2265
     },
     {
       "path": "controllers/message",
-      "files": 128,
-      "kb": 1416
+      "files": 132,
+      "kb": 1432
     },
     {
       "path": "internal/capacity",
@@ -85,13 +85,13 @@
     },
     {
       "path": "model",
-      "files": 82,
-      "kb": 467
+      "files": 83,
+      "kb": 471
     },
     {
       "path": "db/migrations",
-      "files": 74,
-      "kb": 328
+      "files": 75,
+      "kb": 376
     },
     {
       "path": "manifest",
@@ -180,7 +180,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 74,
+    "migrations": 75,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {

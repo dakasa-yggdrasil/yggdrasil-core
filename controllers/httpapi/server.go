@@ -574,6 +574,8 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/ops/capacity/native-denied-dispositions/{grantId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsNativeDeniedDispositionRead))
 	mux.HandleFunc("POST /api/v1/ops/capacity/failed-original-dispositions", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedOriginalDisposition))
 	mux.HandleFunc("GET /api/v1/ops/capacity/failed-original-dispositions/{grantId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedOriginalDispositionRead))
+	mux.HandleFunc("POST /api/v1/ops/capacity/enrolled-failed-original-dispositions", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsEnrolledFailedOriginalDisposition))
+	mux.HandleFunc("GET /api/v1/ops/capacity/enrolled-failed-original-dispositions/{grantId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsEnrolledFailedOriginalDispositionRead))
 	mux.HandleFunc("GET /api/v1/ops/capacity/original-create-dispositions/{grantId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsOriginalCreateDispositionRead))
 	mux.HandleFunc("POST /api/v1/ops/capacity/dispatch-prestart-rejections", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsCapacityDispatchPrestartRejection))
 	mux.HandleFunc("GET /api/v1/ops/capacity/dispatch-prestart-rejections/{jobId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsCapacityDispatchPrestartRejectionRead))

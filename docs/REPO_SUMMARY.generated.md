@@ -1,13 +1,13 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-23T22:41:43-03:00_
+_Generated from HEAD at: 2026-10-24T00:43:16-03:00_
 
 ## Languages
 
-- `.go`: 1161 files
+- `.go`: 1174 files
 - `.json`: 169 files
 - `.py`: 6 files
-- `.sql`: 75 files
+- `.sql`: 76 files
 - `.yaml`: 11 files
 - `.yml`: 27 files
 
@@ -15,7 +15,7 @@ _Generated from HEAD at: 2026-10-23T22:41:43-03:00_
 
 - API Spec: **false**  ((not configured))
 - Event Schemas: **0**  (events/contracts,docs/events/contracts)
-- DB Migrations: **74**  (db/migrations)
+- DB Migrations: **75**  (db/migrations)
 
 ## Docs
 
@@ -24,12 +24,12 @@ _Generated from HEAD at: 2026-10-23T22:41:43-03:00_
 
 ## Top Directories by File Count
 
-- repository: 225 files (3030.8 KB)
-- controllers/httpapi: 210 files (2259.6 KB)
-- controllers/message: 128 files (1416.5 KB)
+- repository: 231 files (3127.6 KB)
+- controllers/httpapi: 212 files (2265.1 KB)
+- controllers/message: 132 files (1432.2 KB)
 - internal/capacity: 105 files (1255.3 KB)
-- model: 82 files (467.5 KB)
-- db/migrations: 74 files (328.4 KB)
+- model: 83 files (471.9 KB)
+- db/migrations: 75 files (376.9 KB)
 - manifest: 65 files (397.1 KB)
 - addons: 48 files (280.4 KB)
 - internal/capacitynativeqemu: 37 files (272.0 KB)

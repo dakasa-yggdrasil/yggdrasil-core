@@ -98,6 +98,37 @@ func originalDispositionPG(t *testing.T) *sql.DB {
 			t.Fatal("migration74", e)
 		}
 	}
+	// This explicit isolated fixture follows additive production schema76.
+	// Nullable storage columns preserve all prior representation/refusal tests.
+	if _, err = db.Exec(`ALTER TABLE public.capacity_vm_original_enrollments
+  ADD COLUMN IF NOT EXISTS resource_tuple_sha256 text,
+  ADD COLUMN IF NOT EXISTS enrollment_sha256 text,
+  ADD COLUMN IF NOT EXISTS original_provisioning_sha256 text,
+  ADD COLUMN IF NOT EXISTS enrollment_record jsonb,
+  ADD COLUMN IF NOT EXISTS recorded_at timestamptz,
+  ADD COLUMN IF NOT EXISTS registration_wire bytea,
+  ADD COLUMN IF NOT EXISTS receipt_wire bytea`); err != nil {
+		t.Fatal(err)
+	}
+	for _, item := range []struct{ name, probe string }{
+		{"00075_native_denied_failed_returned_ack_dispositions.sql", `SELECT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='capacity_native_denied_original_ack_v2_check')`},
+		{"00076_enrolled_failed_original_guest_dispositions.sql", `SELECT to_regclass('public.capacity_enrolled_failed_original_dispositions') IS NOT NULL`},
+	} {
+		var applied bool
+		if err = db.QueryRow(item.probe).Scan(&applied); err != nil {
+			t.Fatal(err)
+		}
+		if !applied {
+			raw, e := os.ReadFile(filepath.Join("..", "db", "migrations", item.name))
+			if e != nil {
+				t.Fatal(e)
+			}
+			if _, e = db.Exec(strings.Split(string(raw), "-- +goose Down")[0]); e != nil {
+				t.Fatal(item.name, e)
+			}
+		}
+	}
+
 	return db
 }
 
