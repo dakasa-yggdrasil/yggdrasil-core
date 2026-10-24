@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**68 decisions.**
+**69 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -103,3 +103,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0074](0074-record-native-authorization-denied-originals-separately.md) | Record native authorization-denied originals separately | Proposed | 2026-10-23 | Preserved uncertain originals and unknown ACK with authenticated denial decision and separate fenced terminal ledger |
 
 | [0075](0075-preserve-returned-failed-workflow-acks-in-denied-dispositions.md) | Preserve returned failed-workflow ACKs in denied dispositions | Proposed | 2026-10-23 | Explicit returned/failed/known-ACK lane, immutable original acknowledgment and unchanged native-denial evidence |
+
+| [0076](0076-isolate-native-denial-observation-from-normal-aws-admission.md) | Isolate native-denial observation from normal AWS admission | Proposed | 2026-10-24 | Dedicated HTTP-only observer identity, exact historical protocol projection and unchanged normal supplier admission |
