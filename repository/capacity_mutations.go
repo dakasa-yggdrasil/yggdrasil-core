@@ -196,6 +196,9 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 			return err
 		}
 		if plan.Capability == b.EnsureCapability {
+			if err = requireFailedInstalledReplacementTx(ctx, tx, policy, p); err != nil {
+				return err
+			}
 			if err = requireOriginalDispositionSuccessorTx(ctx, tx, policy.Metadata.Namespace, p, b, plan.Slot, generation, fence); err != nil {
 				return err
 			}

@@ -37,6 +37,13 @@ func (s CapacityStore) guardGuestNotifyPhaseTx(ctx context.Context, tx *sql.Tx, 
 }
 
 func (s CapacityStore) guestNotifyRetirementFloorTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, current model.CapacityIntent, slot int, now time.Time, usage, afterAckID string) error {
+	if current.FailedInstalledDisposal != nil {
+		valid, err := s.failedInstalledDisposalActiveTx(ctx, tx, policy, p, current, slot, now)
+		if err != nil || !valid {
+			return ErrCapacityConflict
+		}
+		return nil
+	}
 	if p.GuestNotifyCanaryBinding == nil {
 		return nil
 	}

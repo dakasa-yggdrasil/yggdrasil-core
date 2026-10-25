@@ -384,3 +384,41 @@ published 1.65.5 source with its complete lifecycle and fleet-inventory catalog.
 Historical native-denial reads retain their separate original 1.65.4 creator
 configuration and current source-pinned observer. A new supplier instance and
 complete compiled production profile require their own registry qualification.
+
+## Failed installed Guest disposal
+
+Authenticated capacity operators may request disposal using only the original
+preregistration and expected failed-run UUIDs. Core derives eligibility from the
+confirmed original creation, installation, immutable failed runs and final
+acknowledgments, absence of an active epoch and absence of accepted useful
+capacity. An installation or acknowledgment does not establish useful capacity
+or erase possible business effects.
+
+The current compiled map retains both historical complete contracts and adds
+the two independently derived Guest a900 contracts. Each mutation principal
+authorizes one exact integration instance. A successor instance uses its own
+scoped principal and grant bearer while historical principals continue to
+authorize their original instances. Callback principals separately bind the
+complete protected profile and stable member; a new profile requires its own
+matching callback identities. Compiled approval supplies no deployment,
+credential installation, provider creation or useful-capacity observation.
+
+Migration78 records an append-only requested, claimed, quiescent and terminal
+chain. The retirement mode is derived by Core. Only Guest548 and the complete
+two historical production contracts may use `legacy_guest548_original_v1`;
+the actor's existing authenticated V1 protocol must return its four original
+signed records through a complete bounded POST. Current ordinary retirement
+continues to require V2. Historical authority verification selects the original
+complete compatibility map while retaining the actual issuing Core build in
+the audit; it does not approve another profile or issue an old build identity.
+
+After genuine Guest retirement, Core performs a separate bounded native
+poweroff read. An operator may then perform the explicit exact-resource native
+cleanup. A later authenticated completion uses Core's own read-only provider
+observer to verify the original machine and complete auxiliary inventory are
+absent. The confirmed-create loader remains distinct from uninstalled or
+uncertain failure accounting. No caller-supplied effect, quiescence or absence
+boolean is accepted. The terminal preserves original creation, installation,
+acknowledgments and business-effect records and supplies zero useful-capacity
+credit. Replacement requires a different Guest source and profile with a
+complete current approval and a fresh original assessment and grant.

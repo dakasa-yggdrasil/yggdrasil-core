@@ -215,7 +215,15 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		}
 	case "capacity.qualify_original_guest_echo", "capacity.finish_original_guest_retirement":
 		if result.Operation == "capacity.finish_original_guest_retirement" && p.GuestRetirementBinding.EvidenceClass == "owned_provisioner_original" {
-			output, err = executeProductionGuestRetirementFinishedV2(ctx, db, store, policy, p, step, parsed, key)
+			legacy, legacyErr := store.FailedInstalledGuestLegacyV1(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, parsed.PreregistrationID)
+			if legacyErr != nil {
+				return fail("original-failed-installed-legacy-mode-held")
+			}
+			if legacy {
+				output, err = executeFailedInstalledGuestRetirementFinishedV1(ctx, db, store, policy, p, step, parsed, key)
+			} else {
+				output, err = executeProductionGuestRetirementFinishedV2(ctx, db, store, policy, p, step, parsed, key)
+			}
 		} else {
 			output, err = sourceGuestQualificationStep(ctx, store, policy, p, parsed, key, result.Operation)
 		}
@@ -427,8 +435,19 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		}{pre, capacity.GuestRetirementSHA(witness), receipt, false}
 	default:
 		if p.GuestRetirementBinding.EvidenceClass == "owned_provisioner_original" {
-			output, err = executeProductionGuestRetirementV2(ctx, db, store, policy, p, step, parsed, member, key)
+			legacy, legacyErr := store.FailedInstalledGuestLegacyV1(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, parsed.PreregistrationID)
+			if legacyErr != nil {
+				return fail("original-failed-installed-legacy-mode-held")
+			}
+			if legacy {
+				output, err = executeFailedInstalledGuestRetirementV1(ctx, db, store, policy, p, step, parsed, member, key)
+			} else {
+				output, err = executeProductionGuestRetirementV2(ctx, db, store, policy, p, step, parsed, member, key)
+			}
 			if err != nil {
+				if legacy {
+					return fail("original-failed-installed-legacy-v1-held")
+				}
 				return fail("original-production-retirement-v2-held")
 			}
 			break

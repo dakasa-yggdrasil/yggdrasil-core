@@ -226,6 +226,22 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 			return fail(errOriginalGuestStep)
 		}
 	}
+	if step.Use.Operation == capacity.PlanOriginalGuestOperation || parsed.Mode == "retire" {
+		early := store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), parsed.Mode, parsed.RequestID, model.CapacityVMFleetInventory{}, model.CapacityMetricRangeObservation{})
+		held, waiting, e := early.FailedInstalledGuestDisposalWaiting(ctx, policy, parsed.RequestID)
+		if e != nil {
+			return fail(e)
+		}
+		if waiting {
+			output := map[string]any{"mode": "hold", "reason": "failed_installed_explicit_native_cleanup_pending", "admission_id": held.ID, "retirement_request_id": held.RetirementRequestID, "useful_capacity_credit": 0, "native_destroy_sent": false, "original_business_effects_preserved": true}
+			raw, e := json.Marshal(output)
+			if e != nil || json.Unmarshal(raw, &result.Metadata) != nil || originalGuestReconcileLive(ctx) != nil {
+				return fail(errOriginalGuestStep)
+			}
+			result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
+			return result
+		}
+	}
 	var inv model.CapacityVMFleetInventory
 	var assessment model.CapacityAssessment
 	var reporting model.CapacityMetricRangeObservation
@@ -254,11 +270,27 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 		plan := originalGuestReconcilePlan{Mode: "hold", Reason: "outstanding_original_authority"}
 		if !pending {
 			stage = "installed_resume_claim"
-			resumed, eligible, resumeErr := store.TryResumeInstalledGuest(ctx, policy, assessment)
+			disposed, preID, disposalEligible, disposalErr := store.TryClaimFailedInstalledGuestDisposal(ctx, policy, assessment)
+			if disposalErr != nil {
+				return fail(disposalErr)
+			}
+			var resumed model.CapacityIntent
+			eligible := false
+			var resumeErr error
+			if !disposalEligible {
+				resumed, eligible, resumeErr = store.TryResumeInstalledGuest(ctx, policy, assessment)
+			}
 			if resumeErr != nil {
 				return fail(resumeErr)
 			}
-			if eligible {
+			if disposalEligible {
+				deadline, e := store.OriginalGuestReconcileLeaseDeadline(ctx, policy, disposed.Generation, disposed.FencingToken, disposed.LeaseOwner)
+				if e != nil || captureOriginalGuestReconcileDeadline(ctx, deadline) != nil {
+					return fail(errOriginalGuestStep)
+				}
+				plan.Mode, plan.Reason, plan.Slot, plan.PreregistrationID = "retire", "failed_installed_disposal", 1, preID
+				plan.Generation, plan.FencingToken, plan.LeaseOwner = disposed.Generation, disposed.FencingToken, disposed.LeaseOwner
+			} else if eligible {
 				deadline, e := store.OriginalGuestReconcileLeaseDeadline(ctx, policy, resumed.Generation, resumed.FencingToken, resumed.LeaseOwner)
 				if e != nil || captureOriginalGuestReconcileDeadline(ctx, deadline) != nil {
 					return fail(errOriginalGuestStep)
@@ -363,7 +395,10 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 			store = store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), effectiveMode, parsed.RequestID, inv, reporting)
 			phases := []string{"prepared", "canary", "promoted"}
 			if parsed.Mode == "retire" {
-				phases = []string{"drained", "promoted"}
+				// Finish already committed drained from the original V2/off
+				// proof before issuing DELETE. Promotion still revalidates the
+				// confirmed grant, absence and fresh surviving membership.
+				phases = []string{"promoted"}
 			}
 			var intent model.CapacityIntent
 			for _, phase := range phases {

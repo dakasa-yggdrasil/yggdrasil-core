@@ -62,11 +62,7 @@ func sourceProductionGuestNativeOffV2(ctx context.Context, store repository.Capa
 			out.Status, err = supplier.call(original, "observe_ec2_instance", fixed, &returned)
 			if err == nil {
 				receipt, receiptErr := store.NativeMutationReceipt(original, policy, b, stored.Preregistration.OriginalCreateGrantID)
-				nativeAt := ""
-				if returned.Plan.Server != nil {
-					nativeAt = returned.Plan.Server.ObservedAt
-				}
-				if receiptErr != nil || receipt.ActionID == "" || returned.Lifecycle.RequestID != receipt.ActionID || returned.Lifecycle.Schema != "aws_original_request_and_instance_status_v1" || returned.Lifecycle.EC2State != "stopped" || returned.Plan.Server == nil || returned.Plan.Server.Status != "stopped" || returned.Lifecycle.ObservedAt.UTC().Format(time.RFC3339Nano) != nativeAt {
+				if receiptErr != nil || !originalAWSNativeOffLifecycleJoin(returned.Plan, returned.Lifecycle, receipt.ActionID) {
 					err = errOriginalGuestStep
 				}
 			}
@@ -112,6 +108,13 @@ func executeProductionGuestRetirementFinishedV2(ctx context.Context, db *sql.DB,
 		if err != nil {
 			return nil, err
 		}
+	}
+	disposal, handled, disposalErr := store.PrepareFailedInstalledGuestNativeCleanup(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, input.RequestID)
+	if disposalErr != nil {
+		return nil, disposalErr
+	}
+	if handled {
+		return map[string]any{"request_id": disposal.RetirementRequestID, "admission_id": disposal.ID, "stage": disposal.Stage, "native_poweroff_sha256": disposal.NativePoweroffSHA256, "explicit_operator_native_cleanup_required": true, "native_destroy_sent": false, "useful_capacity_credit": 0, "original_business_effects_preserved": true}, nil
 	}
 	if err = originalGuestNotifyFloor(ctx, db, store, policy, p, input, key, "after_retirement_floor"); err != nil {
 		return nil, err
@@ -163,8 +166,12 @@ func finishProductionGuestNativeDestroyV2(ctx context.Context, store repository.
 		if err != nil {
 			return nil, err
 		}
-		// Assessment/drain transitions remain owned by their actual source workflow;
-		// this method does not invent metrics or advance a phase to obtain a grant.
+		// The actual V2 chain, closed caller, survivor canary and native off
+		// observation own drained. The later complete step owns the fresh
+		// reduced inventory assessment and final promotion after native absence.
+		if _, err = store.AdvanceGuestRetirementDrainedV2(original, policy, input.Generation, input.FencingToken, input.LeaseOwner, input.RequestID, input.PreregistrationID, input.Slot); err != nil {
+			return nil, err
+		}
 		grant, err := store.IssueMutation(original, policy, input.Generation, input.FencingToken, input.LeaseOwner, model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: raw})
 		if err != nil {
 			return nil, err
@@ -231,7 +238,7 @@ func sourceProductionNativeAbsenceV2(ctx context.Context, store repository.Capac
 	if err != nil {
 		return returned, proof, false, err
 	}
-	returned = repository.GuestNativeAbsenceReturnV2{Schema: "original_core_guest_native_absence_return_v2", Challenge: challenge, DestroyGrantID: receipt.Grant.GrantID, OriginalDestroyReceiptSHA256: capacity.GuestRetirementSHA(receipt), StartedAtCore: time.Now().UTC()}
+	returned = repository.GuestNativeAbsenceReturnV2{Schema: "original_core_guest_native_absence_return_v2", Challenge: challenge, DestroyGrantID: receipt.Grant.GrantID, OriginalDestroyReceiptSHA256: capacity.GuestRetirementSHA(receipt), OriginalDestroyReceipt: &receipt, StartedAtCore: time.Now().UTC()}
 	var observed model.CapacityVMRetirementObservation
 	if !productionRetirementCatalogV2(reader.provider, reader.resolved.typeSpec) {
 		return returned, proof, false, errOriginalGuestStep
@@ -333,4 +340,11 @@ func originalHetznerRetirementPendingV2(o model.CapacityVMRetirementObservation,
 		allActions = allActions && a.Status == "success"
 	}
 	return seen["native_server_present"] != o.ServerAbsent && seen["original_delete_actions_not_successful"] != allActions && seen["native_billable_resources_present"] != allAbsent && o.BillableResourcesAbsent == allAbsent
+}
+
+// AWS publishes Server.ObservedAt at DescribeInstances and the later shared
+// Plan/Lifecycle timestamp after DescribeInstanceStatus. Bind the actual shared
+// producer field; comparing it to the earlier server GET always refuses.
+func originalAWSNativeOffLifecycleJoin(plan model.CapacityVMFleetPlan, lifecycle model.CapacityAWSInstanceLifecycle, actionID string) bool {
+	return actionID != "" && lifecycle.RequestID == actionID && lifecycle.Schema == "aws_original_request_and_instance_status_v1" && lifecycle.EC2State == "stopped" && plan.Server != nil && plan.Server.Status == "stopped" && !lifecycle.ObservedAt.IsZero() && lifecycle.ObservedAt.UTC().Format(time.RFC3339Nano) == plan.ObservedAt
 }

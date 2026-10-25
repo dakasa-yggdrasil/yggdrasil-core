@@ -499,6 +499,7 @@ type CapacityDecision struct {
 
 // CapacityIntent is one durable generation per logical domain/dimension.
 type CapacityIntent struct {
+	FailedInstalledDisposal *CapacityFailedInstalledDisposal    `json:"failed_installed_disposal,omitempty"`
 	InstalledGuestReconcile *CapacityInstalledGuestReconcile    `json:"installed_guest_reconcile,omitempty"`
 	Namespace               string                              `json:"namespace"`
 	PolicyName              string                              `json:"policy_name"`

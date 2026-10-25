@@ -69,6 +69,95 @@
       "schema": 77,
       "source_inventory_sha256": "5bcde85da8edf21cf9db104a6730dbeda23df8623cb5c679d0427a7d9856c30d"
     },
+    "D13_actual_a900_profiles_historical_compatibility_and_failed_installed_disposal": {
+      "Guest_source": "a900f5379db35ee48f74798c4a68cd8091f8c116",
+      "actual_local_evidence": {
+        "complete_Linux_target_static_lint_zero": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-D13-LINUX-TARGET-COMPLETE-STATIC-LINT-R3-20261025/ORIGINAL-CALLER.PUBLIC.json",
+          "sha256": "edc40ba38624d85f4b2d9750feedfa321fc3423ebd57f80bac9f1594608ecdeb"
+        },
+        "distinct_mutation_principal_binding_correction": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-A900-TWO-CORRECTED-MUTATION-FULL-TYPED-PROFILES-20261025/TWO-CORRECTED-COMPILED-PROFILES-RETURN.PUBLIC.json",
+          "sha256": "ea9eb0c8fee6e5d35ddc0e288cd751c87e1a2876ae0daf917e4d9a62bbf03e9d"
+        },
+        "failed_installed_disposal_legacy_V1_and_PG78": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/GUEST-FAILED-INSTALLED-DISPOSAL-LOCAL-VALIDATION/R4-V1/SOURCE-CHECKPOINT.PUBLIC.json",
+          "sha256": "1753cf4b1381144627aa9bdda9af52d96c066cf534fe060f0086f0f3aac250ba"
+        },
+        "final_five_approval_Source_postimages": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/core-D13-a900-production-approval-appender-source-review/ACTUAL-PRINCIPAL-CORRECTION/SOURCE-CHECKPOINT.PUBLIC.json",
+          "sha256": "78d8788683bd209df5345ea3ce33a830456cebb2ea4a19a305564152fd49d5de"
+        },
+        "ordinary_V2_drained_and_original_receipt": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/Core-retirement-V2-drained-local-validation/SOURCE-CHECKPOINT-R3.PUBLIC.json",
+          "sha256": "5858b4d4dd5576fc6d3288fd9c1098eab022bc9fdd666a1e6f634130fd771c40"
+        },
+        "terminal_disposal_scheduler_handoff_PG17_race": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/GUEST-FAILED-INSTALLED-DISPOSAL-LOCAL-VALIDATION/R5-R3-TERMINAL-SCHEDULER-HANDOFF/SOURCE-ADDENDUM.PUBLIC.json",
+          "sha256": "6d805d732bba3190476e93e96a53f0b652cf9876191de2143007f99e48af2a70"
+        },
+        "two_existing_roots_75_race_nodes_no_fail_or_skip": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/core-D13-a900-production-approval-appender-source-review/ACTUAL-PRINCIPAL-CORRECTION/GO-TEST-RETURN.PUBLIC.json",
+          "sha256": "599cfba44e81837ad9474a7030e587e605ab2e79e2d88c308272ea642c836540"
+        },
+        "two_native_readonly_slot2_dryruns_and_full_policies": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-A900-TWO-FULL-TYPED-PROFILES-20261025/TWO-COMPILED-PROFILES-RETURN.PUBLIC.json",
+          "sha256": "42741ff4bd681d913ac6da3313ec3ea566736882ee0d6b272c350e72a1585bad"
+        }
+      },
+      "all_previous_SQL_through77_unchanged": true,
+      "base": "c8d9b7c0d13ae8ef22a8f088ee7a7628f0148a6a",
+      "both_new_full_profiles_DISABLED": true,
+      "complete_production_source_records": 691,
+      "current_Linux_CI_ELF_ECR_SQL78_network_R39_rollout_and_native_lifecycle_required": true,
+      "current_four_contract_map_sha256": "b5a496bb19f332a82387af7af85b75c9c738f17a139d23665de4548b89c199cd",
+      "distinct_scoped_mutation_principals_required_per_new_integration_instance": true,
+      "existing_original_creation_installation_failed_ACKs_and_possible_business_effects_preserved": true,
+      "historical_two_contract_map_sha256": "557b50ee2b03b5d3425ce2ce958538dc602fb4339f853e65139949626058116c",
+      "independent_source_peers": {
+        "actual_native_wire_decoder_and_mapping": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/GUEST-V2-EMBEDDED-INTENT-AND-PRODUCTION-WIRE-INDEPENDENT-SOURCE-PEER.PUBLIC.json",
+          "sha256": "89e5d9757da6929a77c84cfa0df42c744739ade2a882dc042091d4e4fda335fc"
+        },
+        "legacy_V1_disposal": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/CORE-D13-FAILED-INSTALLED-548-V1-NARROW-SOURCE-PEER.PUBLIC.json",
+          "sha256": "12d5ed3521778899790431b8fe89d2ebd97f22bcf5d73f8255eab6381addf4c8"
+        },
+        "terminal_scheduler_handoff": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/CORE-D13-TERMINAL-DISPOSAL-SCHEDULER-HANDOFF-INDEPENDENT-SOURCE-PEER.PUBLIC.json",
+          "sha256": "6032f6beffc952efbf8f9b81679ab92292960f93ea6ddbb74a4e0a0d47842a1a"
+        }
+      },
+      "new_SQL78_sha256": "fdd466f4f655ab577834b5f660fdb31a2b877460224e96b34fc8c08626ea5538",
+      "new_contracts": {
+        "aws": {
+          "actual_owning_full_policy_result_ref": {
+            "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-A900-TWO-CORRECTED-MUTATION-FULL-TYPED-PROFILES-20261025/AWS-TYPED-RESULT.PUBLIC.json",
+            "sha256": "15609822c427061e7288236d1a829091620cb0a01f796fb90b2e078b8cd814fa"
+          },
+          "adapter_principal_id": "notify-aws-elastic-adapter-grant-a900",
+          "contract_sha256": "97beb27b884fcf3928f2da6f14d8840ba0fb6f460012fdb50b8ab02b01334df7",
+          "profile_manifest_sha256": "a77fba7e94f839dbac7500f1eef88e29c309014ebf73bd0da16e59812ef92df9"
+        },
+        "hetzner": {
+          "actual_owning_full_policy_result_ref": {
+            "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-A900-TWO-CORRECTED-MUTATION-FULL-TYPED-PROFILES-20261025/HETZNER-TYPED-RESULT.PUBLIC.json",
+            "sha256": "70c050d719d0a0dd7ee71b1ba693df5391796b8a77571174308a6e957b92ad67"
+          },
+          "adapter_principal_id": "notify-hetzner-elastic-adapter-grant-a900",
+          "contract_sha256": "3fcb7fc4634fc5102d2172cc1d7f66bd92a61b9d544525a3438e8cdf914803f9",
+          "profile_manifest_sha256": "3ec37521106e4f6c4a191bd60fb690cb6e64f0fa5c8715617211daad3ccebf44"
+        }
+      },
+      "old548_disposal_uses_only_actual_signed_legacy_V1_protocol": true,
+      "ordinary_new_Guest_retirement_V2_remains_required": true,
+      "original_two_approval_rows_and_fixtures_preserved": true,
+      "production_qualification_claimed": false,
+      "protocol_authority_revision": "48888f21acdddaf411094ec525004297c229863f",
+      "reviewed_at": "2026-10-25T14:13:32.703374+00:00",
+      "source_inventory_sha256": "65be8c218107efb35f0ec4a5c70427c7ece2de191397720d880941f051913245",
+      "source_only": true
+    },
     "D6_failed_witnessed_terminal_and_AWS1654_observer": {
       "HTTP_package_source_pass": true,
       "Linux_CI_and_image_and_production_qualification": null,
@@ -351,14 +440,15 @@
     "AWS1.65.3 source39bdd is the sole current observer; the supplier and retirement catalogs retain exact historical1.65.1/1.65.2 source pairs and require the complete four-operation lifecycle catalog for1.65.2/1.65.3. Its root-EBS predicate allows only explicitly virtual ephemeral extras while six native reads and original absence gates remain mandatory. Actual V5 metadata and the original owning dry-run derive the complete new contract1c876; reverse mutation-binding replacement recovers the old fixture and Hetzner remains byteexact. Schema72 is unchanged; deployment, original600, disposition, policy and business authority remain separate.",
     "Dedicated native-denial HTTP observer is source-pinned and separate from the normal AWS supplier; complete historical/current catalog authentication precedes explicit historical AWS protocol projection. Original creator/configuration and accounting history remain immutable; SQL75 and normal profiles/inventories are unchanged.",
     "D12 preserves immutable Guest wire authority while recording the real clean issuer in a separate atomic SQL77 ledger. Installed reconciliation keeps the same native resource, enrollment, installation and generation, requires the previous failed run and acknowledged finalization plus a fresh private dispatch run, and admits at most three new fenced readiness attempts. Existing failures and possible business effects remain immutable. The post-CI style correction uses equivalent tagged-switch and De Morgan predicates; intentional nil-owner rejection tests retain nil and narrow documented staticcheck exclusions. The current complete inventory includes all inherited D11 and added D12 production source.",
-    "Three additional original-disposition De Morgan normalizations preserve left-to-right short-circuit and side-effect call order, including the explicit-empty-instances predicate. The owning lint workflow now reports all same-kind and per-linter findings without truncation; no check is disabled. Original failed lint runs remain failures."
+    "Three additional original-disposition De Morgan normalizations preserve left-to-right short-circuit and side-effect call order, including the explicit-empty-instances predicate. The owning lint workflow now reports all same-kind and per-linter findings without truncation; no check is disabled. Original failed lint runs remain failures.",
+    "D13 retains both complete historical contracts and their original compatibility map, then adds the two real a900 contracts derived from original native slot2 dry-runs and the owning C8 full-policy compiler. Each new integration instance has a distinct scoped mutation principal. Historical issuer verification keeps full original bindings and the actual build; SQL78 records failed installed disposal without inventing useful capacity or erasing business effects. Guest548 uses its genuine narrow signed V1 protocol; ordinary V2 gains the required drained transition, original destroy receipt and closed production DTO decoding. Terminal disposal proceeds to ordinary reassessment while source/profile replacement gates remain mandatory."
   ],
   "reviewed_source_head": "9ecff39e007c939de3618387fa7229de44915fdd",
   "reviewed_source_head_is_historical": true,
   "reviewer": "Root full production-source delta review; separate independent manager/dial/monitor peer; source acceptance only",
   "schema": "core_service_source_review_v1",
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "171b75fc1326a872c70cf661c436d2baa84efacd09650f9793ab3a1ac500e7bc",
+  "source_inventory_sha256": "65be8c218107efb35f0ec4a5c70427c7ece2de191397720d880941f051913245",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -396,6 +486,7 @@
     "Final frozen Darwin source passed33 roots/37 nodes with no FAIL/SKIP: manager/consumer race, focused addon/message/HTTP race and loopback guard. HTTP/message focused-file scopes remain explicit in the author validation; this is not whole Linux execution. Root final real isolated loopback RabbitMQ320 test passed with all Go sources pinned before and unchanged after, proving request/consumption recovery, unavailable drain, one generation and no ambiguous replay. Current owning Linux/CI and production rollout600 remain separately required.",
     "D9 source acceptance: four new isolated PostgreSQL17 XML repository roots and one new HTTP race root completed without skips; Linux message compilation completed without execution. The actual owning Go compiler validated both full disabled operational policies and all sixteen slot plans; its six original native children and original containing process completed zero. Exact generated AWS mutation bindings and one default registry digest changed; the complete Hetzner fixture and approval are byteexact. Five owning registry race roots passed forty-seven nodes without failures or skips. Current owning Linux focused thirty-six roots, Source CI, release image, production Goose75 and rollout remain separate required evidence.",
     "Root ran three new pure controller roots under an explicit external Mac-only overlay excluding other existing test files; all three passed without skips. Earlier Mac compile failures from existing Linux syscall fixtures remain separate preserved failures. The required owning Linux39 race/PostgreSQL workflow, actual dedicated image/runtime, new network pair, original Core600 and native accounting remain independent operational qualifications.",
-    "Original D12 Linux49 and Linux16 source workflows passed on the preceding publication; their historical results are not attributed to this correction. Current owning CI must validate the successor publication, generated complete census and contract digests. No deployment, migration or useful-capacity success is supplied by this source review."
+    "Original D12 Linux49 and Linux16 source workflows passed on the preceding publication; their historical results are not attributed to this correction. Current owning CI must validate the successor publication, generated complete census and contract digests. No deployment, migration or useful-capacity success is supplied by this source review.",
+    "D13 source acceptance retains actual local isolated PostgreSQL17/schema78, normal V2, terminal scheduler handoff and exact five-postimage evidence. Both original native slot2 readonly RPCs and the owning Go full-policy compilations returned zero; corrected final policies differ only in their two new adapter principal IDs. Two existing approval roots passed75 race nodes with no fail/skip. Complete Linux-target static lint passed with zero issues before only the final literal principal/contract substitutions; current publication CI remains required. No SQL78 production migration, D13 rollout, new inventory activation or useful native lifecycle is supplied by this source review."
   ]
 }

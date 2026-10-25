@@ -109,3 +109,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0077](0077-close-enrolled-failed-originals-through-native-absence.md) | Close enrolled failed originals through a separate native-absence ledger | Proposed | 2026-10-24 | Preserved accepted enrollment, immutable failed workflow and fenced exact native-absence accounting |
 
 | [0078](0078-version-guest-protocol-authority-and-reconcile-installed-originals.md) | Version Guest protocol authority independently of issuer builds | Accepted | 2026-10-25 | Stable approved Guest-v1 authority, atomic actual-issuer provenance and distinct installed-readiness reconciliation |
+
+| [0079](0079-dispose-failed-installed-guests-without-inventing-capacity.md) | Dispose failed installed Guests through original retirement | Proposed | 2026-10-25 | Explicit administrative admission, zero-useful-capacity floor proof, original V2/native absence and corrected-profile replacement gate |

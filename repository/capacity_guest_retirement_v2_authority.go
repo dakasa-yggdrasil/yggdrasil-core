@@ -69,9 +69,7 @@ func (s CapacityStore) RecordGuestAuthorityTransportV2(ctx context.Context, read
 	if returned.StartedAt.Before(read.StartedAt) || returned.DriverReturnedAt.Before(returned.StartedAt) || !capacity.GuestOriginalHTTPBodyFactsValid(returned.ResponseBodyScope, returned.ReadReturnedAt, returned.ReceivedBodyBytes, returned.ResponseSHA256, returned.RetainedPrefixBytes, returned.RetainedPrefixSHA256, returned.ReadFailed) || returned.RetainedPrefixBytes != len(returned.Body) || returned.RetainedPrefixSHA256 != capacity.BusinessCreationSHA256(returned.Body) {
 		return ErrCapacityConflict
 	}
-	diagnostic := returned
-	diagnostic.Body = nil
-	wire, err := json.Marshal(diagnostic)
+	wire, err := guestAuthorityTransportDiagnosticV2(returned)
 	if err != nil {
 		return err
 	}
@@ -89,6 +87,15 @@ func (s CapacityStore) RecordGuestAuthorityTransportV2(ctx context.Context, read
 		return ErrCapacityConflict
 	}
 	return nil
+}
+
+func guestAuthorityTransportDiagnosticV2(returned capacity.GuestOriginalHTTPReturn) ([]byte, error) {
+	diagnostic := returned
+	// The actual accepted body has separate original_reply_wire custody.
+	// Preserve all original metadata and an explicit empty byte-string marker
+	// so its closed diagnostic can be decoded BEFORE that body is rehydrated.
+	diagnostic.Body = []byte{}
+	return json.Marshal(diagnostic)
 }
 
 func (s CapacityStore) FinishGuestAuthorityReadV2(ctx context.Context, read GuestOriginalAuthorityReadV2, observation *model.CapacityGuestRetirementObservationV2) (model.CapacityGuestRetirementAuthorityV2, error) {

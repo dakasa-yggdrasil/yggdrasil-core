@@ -473,6 +473,14 @@ func (s CapacityStore) capacityTransaction(ctx context.Context, policy model.Man
 			return model.CapacityIntent{}, err
 		}
 	}
+	if previous != nil && previous.FailedInstalledDisposal != nil && previous.FailedInstalledDisposal.Stage != "terminal" {
+		return model.CapacityIntent{}, ErrCapacityConflict
+	}
+	if previous != nil && previous.FailedInstalledDisposal != nil && previous.FailedInstalledDisposal.Stage == "terminal" {
+		if err = requireFailedInstalledReplacementTx(ctx, tx, policy, p); err != nil {
+			return model.CapacityIntent{}, err
+		}
+	}
 	next, receipt, err := mutate(p, previous, now.UTC())
 	if err != nil {
 		return model.CapacityIntent{}, err
@@ -599,7 +607,7 @@ func parseCapacityPolicy(policy model.Manifest) (model.CapacityPolicySpec, error
 }
 
 func pendingCapacityPhase(phase string) bool {
-	return phase != "envelope_applied" && phase != "native_completed" && phase != "hold" && phase != "promoted" && phase != "reconciled" && phase != "reconciled_partial" && phase != "reconciled_failed_floor" && phase != "aborted"
+	return phase != "disposed_failed_installed" && phase != "envelope_applied" && phase != "native_completed" && phase != "hold" && phase != "promoted" && phase != "reconciled" && phase != "reconciled_partial" && phase != "reconciled_failed_floor" && phase != "aborted"
 }
 func sameCapacityResources(a, b model.CapacitySnapshot) bool {
 	return sameCapacityResourceIdentity(a, b) && a.WorkloadResourceVersion == b.WorkloadResourceVersion

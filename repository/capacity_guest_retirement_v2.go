@@ -69,7 +69,7 @@ func (s CapacityStore) IssueGuestRetirementV2(original *capacity.GuestRetirement
 		if budget <= 0 {
 			return ErrCapacityLease
 		}
-		deadline = issued.Add(budget).UTC()
+		deadline = originalGuestCanarySerializedDeadline(issued, budget, contextDeadline)
 		issued = issued.UTC()
 
 		b, err := capacity.VMObservationBinding(p, stored.binding.MutationBindingName)
@@ -163,7 +163,7 @@ func loadGuestRetirementV2Tx(ctx context.Context, tx *sql.Tx, id string, finaliz
 		return out, ErrCapacityConflict
 	}
 	var source string
-	if err = tx.QueryRowContext(ctx, `SELECT executor_id::text,core_actual_source_commit FROM public.capacity_guest_original_retirement_contexts WHERE intent_id=$1`, id).Scan(&out.ExecutorID, &source); err != nil || verifyGuestAuthorityIssuerTx(ctx, tx, "retirement_intent", id, source, out.Binding) != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT executor_id::text,core_actual_source_commit FROM public.capacity_guest_original_retirement_contexts WHERE intent_id=$1`, id).Scan(&out.ExecutorID, &source); err != nil || verifyGuestAuthorityIssuerTx(ctx, tx, "retirement_intent", id, source, out.Binding, out.Preregistration) != nil {
 		return out, ErrCapacityConflict
 	}
 	out.Request = out.Preflight

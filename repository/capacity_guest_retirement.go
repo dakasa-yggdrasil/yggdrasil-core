@@ -54,6 +54,15 @@ func (s CapacityStore) IssueGuestRetirement(ctx context.Context, policy model.Ma
 		if err != nil || origin == nil || origin.source != capacity.CurrentGuestCoreSource() || !capacity.GuestBindingAuthorityCurrent(p, stored.binding) || origin.step.Use.Kind != "yggdrasil" || origin.step.Use.Operation != capacity.RetireOriginalGuestOperation || origin.step.TimeoutSeconds < 1 || origin.step.TimeoutSeconds > 86400 || origin.step.Retry.MaxAttempts > 1 || origin.step.ForEach != nil || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.binding) || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.WorkflowID != s.WorkflowID.String() || !capacityIntentReduction(current) || (current.Phase != "draining" && current.Phase != "drained") {
 			return ErrCapacityConflict
 		}
+		if stored.binding.EvidenceClass == "owned_provisioner_original" {
+			if current.FailedInstalledDisposal == nil || current.FailedInstalledDisposal.PreregistrationID != preregistrationID || failedInstalledRetirementMode(p, stored.binding) != failedInstalledLegacyV1Mode {
+				return ErrCapacityConflict
+			}
+			valid, e := s.failedInstalledDisposalActiveTx(ctx, tx, policy, p, current, stored.pre.Slot, now)
+			if e != nil || !valid {
+				return ErrCapacityConflict
+			}
+		}
 		receipt, _, err := loadGuestReceiptTx(ctx, tx, preregistrationID)
 		if err != nil || capacity.GuestRetirementEnrollment(p, stored.binding, stored.member, receipt.Enrollment, now) != nil || !capacity.GuestLifecycleKeyMatches(key, receipt.Enrollment.Statement.CoreIntentPublicKey) || !capacity.ValidDigest(nonce) {
 			return ErrCapacityConflict
@@ -151,7 +160,7 @@ func loadGuestRetirementTx(ctx context.Context, tx *sql.Tx, id string) (GuestRet
 		return result, ErrCapacityConflict
 	}
 	var actualSource string
-	if err = tx.QueryRowContext(ctx, `SELECT executor_id::text,core_actual_source_commit FROM public.capacity_guest_original_retirement_contexts WHERE intent_id=$1`, id).Scan(&result.ExecutorID, &actualSource); err != nil || verifyGuestAuthorityIssuerTx(ctx, tx, "retirement_intent", id, actualSource, result.Binding) != nil {
+	if err = tx.QueryRowContext(ctx, `SELECT executor_id::text,core_actual_source_commit FROM public.capacity_guest_original_retirement_contexts WHERE intent_id=$1`, id).Scan(&result.ExecutorID, &actualSource); err != nil || verifyGuestAuthorityIssuerTx(ctx, tx, "retirement_intent", id, actualSource, result.Binding, result.Preregistration) != nil {
 		return result, ErrCapacityConflict
 	}
 	return result, nil
@@ -230,6 +239,14 @@ func (s CapacityStore) guestRetirementCurrentTx(ctx context.Context, tx *sql.Tx,
 // This preserves the existing physical floor/lease gates. It never labels a
 // slot count as serving/useful capacity or replaces the original writer drain.
 func (s CapacityStore) guestRetirementFloorTx(ctx context.Context, tx *sql.Tx, namespace string, p model.CapacityPolicySpec, current model.CapacityIntent, b model.CapacityMutationBinding, slot int, now time.Time) error {
+	if current.FailedInstalledDisposal != nil {
+		policy := model.Manifest{ID: current.PolicyID, Checksum: current.PolicyChecksum, Metadata: model.ManifestMetadata{Namespace: namespace}}
+		valid, err := s.failedInstalledDisposalActiveTx(ctx, tx, policy, p, current, slot, now)
+		if err != nil || !valid {
+			return ErrCapacityConflict
+		}
+		return nil
+	}
 	if slot <= b.ProtectedSlots || !capacityIntentReduction(current) || current.Decision.Units < p.Floor {
 		return ErrCapacityConflict
 	}

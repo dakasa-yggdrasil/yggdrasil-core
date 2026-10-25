@@ -43,8 +43,13 @@ func (s CapacityStore) PrepareGuestNativePoweroffReadV2(ctx context.Context, id 
 	var out GuestNativePoweroffReadV2
 	err := s.guestRetirementV2Transaction(ctx, id, true, func(tx *sql.Tx, stored GuestRetirementOriginalV2, nowPG time.Time) error {
 		_, p, current, err := s.guestRetirementV2CurrentTx(ctx, tx, stored, nowPG, false)
+		readonlyAfterFailedFinish := false
 		if err != nil {
-			return err
+			read, readErr := failedInstalledPoweroffReadonlyTx(ctx, tx, stored)
+			if readErr != nil {
+				return err
+			}
+			p, current, readonlyAfterFailedFinish = read.Spec, read.Current, true
 		}
 		if _, err = guestQuiescentProofV2Tx(ctx, tx, stored); err != nil {
 			return err
@@ -64,6 +69,9 @@ func (s CapacityStore) PrepareGuestNativePoweroffReadV2(ctx context.Context, id 
 		}
 		issued := time.Now()
 		budget := min(5*time.Second, deadline.Sub(issued), current.LeaseExpiresAt.Sub(leaseNow)-issued.Sub(sampleStarted))
+		if readonlyAfterFailedFinish {
+			budget = min(5*time.Second, deadline.Sub(issued))
+		}
 		if budget <= 0 {
 			return ErrCapacityLease
 		}
@@ -109,7 +117,11 @@ func (s CapacityStore) RecordGuestNativePoweroffV2(ctx context.Context, returned
 	err := s.guestRetirementV2Transaction(ctx, returned.Challenge.IntentID, true, func(tx *sql.Tx, stored GuestRetirementOriginalV2, nowPG time.Time) error {
 		_, p, _, err := s.guestRetirementV2CurrentTx(ctx, tx, stored, nowPG, false)
 		if err != nil {
-			return err
+			read, readErr := failedInstalledPoweroffReadonlyTx(ctx, tx, stored)
+			if readErr != nil {
+				return err
+			}
+			p = read.Spec
 		}
 		if _, err = guestQuiescentProofV2Tx(ctx, tx, stored); err != nil {
 			return err

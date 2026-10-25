@@ -143,11 +143,15 @@ func guestClosedJSON(raw []byte, typ reflect.Type, depth int) error {
 		return nil
 	}
 	allowed, fields, optional := map[string]bool{}, map[string]reflect.Type{}, map[string]bool{}
-	for i := 0; i < typ.NumField(); i++ {
-		f := typ.Field(i)
+	// encoding/json promotes visible fields of anonymous embedded structs.
+	// Their literal names remain required and closed like direct fields.
+	for _, f := range reflect.VisibleFields(typ) {
 		tag := strings.Split(f.Tag.Get("json"), ",")
 		if tag[0] == "" || tag[0] == "-" {
 			continue
+		}
+		if allowed[tag[0]] {
+			return fmt.Errorf("ambiguous original Guest field")
 		}
 		allowed[tag[0]], fields[tag[0]] = true, f.Type
 		optional[tag[0]] = len(tag) > 1 && tag[1] == "omitempty"

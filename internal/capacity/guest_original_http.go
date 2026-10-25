@@ -23,24 +23,24 @@ const GuestOriginalBodyCompleteRead = "complete_original_body_read"
 const GuestOriginalBodyIncompleteRead = "incomplete_original_body_read"
 
 type GuestOriginalHTTPReturn struct {
-	StartedAt             time.Time
-	DoStartedAt           time.Time
-	DriverReturnedAt      time.Time
-	PreflightFailed       bool
-	DoReturnedAt          time.Time
-	ReadReturnedAt        time.Time
-	CloseReturnedAt       time.Time
-	Status                int
-	Body                  []byte
-	ReceivedBodyBytes     int
-	ResponseSHA256        string
-	ResponseBodyScope     string
-	RetainedPrefixBytes   int
-	RetainedPrefixSHA256  string
-	DoFailed              bool
-	ReadFailed            bool
-	CloseFailed           bool
-	OriginalContextFailed bool
+	StartedAt             time.Time `json:"StartedAt"`
+	DoStartedAt           time.Time `json:"DoStartedAt"`
+	DriverReturnedAt      time.Time `json:"DriverReturnedAt"`
+	PreflightFailed       bool      `json:"PreflightFailed"`
+	DoReturnedAt          time.Time `json:"DoReturnedAt"`
+	ReadReturnedAt        time.Time `json:"ReadReturnedAt"`
+	CloseReturnedAt       time.Time `json:"CloseReturnedAt"`
+	Status                int       `json:"Status"`
+	Body                  []byte    `json:"Body"`
+	ReceivedBodyBytes     int       `json:"ReceivedBodyBytes"`
+	ResponseSHA256        string    `json:"ResponseSHA256"`
+	ResponseBodyScope     string    `json:"ResponseBodyScope"`
+	RetainedPrefixBytes   int       `json:"RetainedPrefixBytes"`
+	RetainedPrefixSHA256  string    `json:"RetainedPrefixSHA256"`
+	DoFailed              bool      `json:"DoFailed"`
+	ReadFailed            bool      `json:"ReadFailed"`
+	CloseFailed           bool      `json:"CloseFailed"`
+	OriginalContextFailed bool      `json:"OriginalContextFailed"`
 }
 
 type GuestOriginalHTTPClient struct {

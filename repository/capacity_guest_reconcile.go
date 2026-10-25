@@ -314,17 +314,13 @@ func (s CapacityStore) guestReconcilePhaseTx(ctx context.Context, tx *sql.Tx, po
 		if _, err = guestDestroyEligibilityRecordV2ForGrantTx(ctx, tx, original); err != nil {
 			return err
 		}
-		var digest string
-		var at time.Time
-		var consistent bool
-		if tx.QueryRowContext(ctx, `SELECT original_wire,observation_sha256,recorded_at,original_observation_record=convert_from(original_wire,'UTF8')::jsonb FROM public.capacity_vm_retirement_native_readbacks WHERE destroy_grant_id=$1 ORDER BY recorded_at DESC,id DESC LIMIT 1`, original.Grant.GrantID).Scan(&raw, &digest, &at, &consistent) != nil || !consistent || !capacity.Fresh(at, now, p.MaxEvidenceAgeSeconds) {
+		if original.Grant.State != "confirmed" || original.Proof == nil {
 			return ErrCapacityConflict
 		}
-		var absence GuestNativeAbsenceReturnV2
-		if capacity.DecodeGuestLifecycle(raw, &absence) != nil || capacity.GuestRetirementSHA(absence) != digest {
-			return ErrCapacityConflict
-		}
-		if _, err = guestNativeAbsenceContentV2(absence, p, original); err != nil {
+		// Re-derive the SAME proof, including its original PG custody stamp,
+		// using the immutable receipt observed before confirmation. The actual
+		// record remains confirmed; this cannot issue or resend DELETE.
+		if err = guestConfirmedDestroyV2Tx(ctx, tx, p, original, *original.Proof, now); err != nil {
 			return err
 		}
 	}

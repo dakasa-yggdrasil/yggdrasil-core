@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"encoding/json"
+	"os"
 	"testing"
 	"time"
 
@@ -13,6 +14,10 @@ import (
 )
 
 func TestInstalledGuestResumeDoesNotAdoptLiveOrAlreadyResumedEpoch(t *testing.T) {
+	t.Run("failed_installed_disposal_boundaries", testFailedInstalledDisposalBoundaries)
+	if os.Getenv("D12_LOCAL_PG17_DSN") != "" || os.Getenv("D12_SOURCE_CI_PG17_DSN") != "" {
+		t.Run("failed_installed_disposal_PG78", testFailedInstalledDisposalPostgres)
+	}
 	now := time.Now().UTC()
 	expired := now.Add(-time.Second)
 	policy := model.Manifest{ID: uuid.New(), Checksum: "old-policy"}

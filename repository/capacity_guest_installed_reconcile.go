@@ -18,7 +18,7 @@ const installedGuestOriginalFailedRunQuery = `SELECT j.id::text,w.id::text,row_t
 const installedGuestPreviousFailedRunQuery = `SELECT row_to_json(w)::text,w.result FROM public.workflow_runs w JOIN public.capacity_dispatch_jobs j ON j.run_id=w.id WHERE w.id=$1 AND (w.workflow_id IS NULL OR w.workflow_id=$2) AND j.envelope::jsonb #>> '{workflow,id}'=$2::text AND w.status='failed' AND j.state='returned' AND j.return_status='failed' AND j.returned_at IS NOT NULL AND j.finalization_ack_at IS NOT NULL AND w.finished_at=j.returned_at AND j.returned_at<=$3`
 
 func installedGuestResumeCandidate(old *model.CapacityIntent, p model.CapacityPolicySpec, policy model.Manifest, now time.Time) bool {
-	if old == nil || old.RecoveryOnly || old.FloorDegraded || (old.Phase != "preparing" && old.Phase != "prepared" && old.Phase != "canary") || old.PolicyID != policy.ID || old.PolicyChecksum != policy.Checksum || old.Generation <= 0 || old.FencingToken <= 0 || old.FencingToken >= maxCapacityGeneration || old.LeaseExpiresAt == nil || old.LeaseExpiresAt.After(now) || old.Decision.Units < p.Floor || old.Decision.Units > p.Ceiling {
+	if old == nil || old.FailedInstalledDisposal != nil || old.RecoveryOnly || old.FloorDegraded || (old.Phase != "preparing" && old.Phase != "prepared" && old.Phase != "canary") || old.PolicyID != policy.ID || old.PolicyChecksum != policy.Checksum || old.Generation <= 0 || old.FencingToken <= 0 || old.FencingToken >= maxCapacityGeneration || old.LeaseExpiresAt == nil || old.LeaseExpiresAt.After(now) || old.Decision.Units < p.Floor || old.Decision.Units > p.Ceiling {
 		return false
 	}
 	m := old.InstalledGuestReconcile

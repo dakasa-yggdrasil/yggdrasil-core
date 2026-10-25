@@ -17,6 +17,7 @@ type GuestNativeAbsenceReturnV2 struct {
 	Challenge                    GuestNativePoweroffReadV2              `json:"challenge"`
 	DestroyGrantID               string                                 `json:"destroy_grant_id"`
 	OriginalDestroyReceiptSHA256 string                                 `json:"original_destroy_receipt_sha256"`
+	OriginalDestroyReceipt       *model.CapacityMutationReceipt         `json:"original_destroy_receipt,omitempty"`
 	Status                       string                                 `json:"status"`
 	Observation                  *model.CapacityVMRetirementObservation `json:"observation,omitempty"`
 	StartedAtCore                time.Time                              `json:"started_at_core"`
@@ -42,10 +43,44 @@ func guestMutationReceiptV2(r capacityMutationRecord) model.CapacityMutationRece
 }
 
 func guestNativeAbsenceContentV2(r GuestNativeAbsenceReturnV2, p model.CapacityPolicySpec, original capacityMutationRecord) (model.CapacityMutationProof, error) {
+	receipt := guestMutationReceiptV2(original)
+	if original.Grant.State != "settled" || r.OriginalDestroyReceipt != nil && !reflect.DeepEqual(*r.OriginalDestroyReceipt, receipt) {
+		return model.CapacityMutationProof{}, ErrCapacityConflict
+	}
+	return guestNativeAbsenceReceiptContentV2(r, p, original, receipt)
+}
+
+// The persisted Core absence return contains the actual receipt read BEFORE
+// confirmation. Its SHA authenticates those original bytes; only the explicit
+// settled->confirmed state transition may differ from the current DB receipt.
+// Neither the current record nor the historical receipt is rewritten.
+func guestConfirmedNativeAbsenceContentV2(r GuestNativeAbsenceReturnV2, p model.CapacityPolicySpec, confirmed capacityMutationRecord) (model.CapacityMutationProof, error) {
+	if confirmed.Grant.State != "confirmed" || confirmed.Proof == nil || confirmed.Grant.Capability != confirmed.Binding.DestroyCapability || confirmed.Grant.CompensationOf != "" || r.OriginalDestroyReceipt == nil || r.OriginalDestroyReceipt.Grant.State != "settled" {
+		return model.CapacityMutationProof{}, ErrCapacityConflict
+	}
+	expectedCurrentReceipt := *r.OriginalDestroyReceipt
+	expectedCurrentReceipt.Grant.State = "confirmed"
+	if !reflect.DeepEqual(expectedCurrentReceipt, guestMutationReceiptV2(confirmed)) {
+		return model.CapacityMutationProof{}, ErrCapacityConflict
+	}
+	proof, err := guestNativeAbsenceReceiptContentV2(r, p, confirmed, *r.OriginalDestroyReceipt)
+	if err != nil {
+		return proof, err
+	}
+	// PG custody is independently joined to recorded_at by the transaction
+	// below. Every other persisted confirmation-proof field must already match.
+	proof.ObservedAt = confirmed.Proof.ObservedAt
+	if !reflect.DeepEqual(proof, *confirmed.Proof) {
+		return model.CapacityMutationProof{}, ErrCapacityConflict
+	}
+	return proof, nil
+}
+
+func guestNativeAbsenceReceiptContentV2(r GuestNativeAbsenceReturnV2, p model.CapacityPolicySpec, original capacityMutationRecord, receipt model.CapacityMutationReceipt) (model.CapacityMutationProof, error) {
 	c := r.Challenge
-	g := original.Grant
+	g := receipt.Grant
 	b := original.Binding
-	if r.Schema != "original_core_guest_native_absence_return_v2" || r.Status != "observed" || r.Observation == nil || r.CallFailed || r.OriginalContextFailed || c.Schema != "original_core_guest_native_poweroff_read_challenge_v2" || !validCapacityExecutor(c.ReadID) || !validCapacityExecutor(c.IntentID) || !capacity.ValidDigest(c.IntentSHA256) || !capacity.ValidDigest(c.OriginalCallerSHA256) || c.MutationBindingSHA256 != capacity.GuestRetirementSHA(b) || c.AdapterSourceCommit != b.OriginalProviderSourceCommit || c.Tuple.ResourceID != g.ExpectedResourceID || c.Tuple.CreatedAt != g.ExpectedResourceCreatedAt || c.IssuedAtCore.IsZero() || !c.OriginalDeadlineCore.After(c.IssuedAtCore) || c.OriginalDeadlineCore.Sub(c.IssuedAtCore) > 5*time.Second || r.StartedAtCore.Before(c.IssuedAtCore) || r.OriginalReturnedAtCore.Before(r.StartedAtCore) || !r.OriginalReturnedAtCore.Before(c.OriginalDeadlineCore) || r.DestroyGrantID != g.GrantID || r.OriginalDestroyReceiptSHA256 != capacity.GuestRetirementSHA(guestMutationReceiptV2(original)) || original.Settlement == nil || g.State != "settled" || !original.Settlement.TransportCompleted || original.Settlement.Outcome != "accepted" {
+	if r.Schema != "original_core_guest_native_absence_return_v2" || r.Status != "observed" || r.Observation == nil || r.CallFailed || r.OriginalContextFailed || c.Schema != "original_core_guest_native_poweroff_read_challenge_v2" || !validCapacityExecutor(c.ReadID) || !validCapacityExecutor(c.IntentID) || !capacity.ValidDigest(c.IntentSHA256) || !capacity.ValidDigest(c.OriginalCallerSHA256) || c.MutationBindingSHA256 != capacity.GuestRetirementSHA(b) || c.AdapterSourceCommit != b.OriginalProviderSourceCommit || c.Tuple.ResourceID != g.ExpectedResourceID || c.Tuple.CreatedAt != g.ExpectedResourceCreatedAt || c.IssuedAtCore.IsZero() || !c.OriginalDeadlineCore.After(c.IssuedAtCore) || c.OriginalDeadlineCore.Sub(c.IssuedAtCore) > 5*time.Second || r.StartedAtCore.Before(c.IssuedAtCore) || r.OriginalReturnedAtCore.Before(r.StartedAtCore) || !r.OriginalReturnedAtCore.Before(c.OriginalDeadlineCore) || r.DestroyGrantID != g.GrantID || r.OriginalDestroyReceiptSHA256 != capacity.GuestRetirementSHA(receipt) || original.Settlement == nil || g.State != "settled" || !original.Settlement.TransportCompleted || original.Settlement.Outcome != "accepted" {
 		return model.CapacityMutationProof{}, ErrCapacityConflict
 	}
 	if capacity.AWSOriginalMutationPair(b) {
@@ -60,7 +95,7 @@ func guestNativeAbsenceContentV2(r GuestNativeAbsenceReturnV2, p model.CapacityP
 			return model.CapacityMutationProof{}, ErrCapacityConflict
 		}
 	}
-	return capacity.GuestRetirementV2NativeAbsenceContent(p, b, guestMutationReceiptV2(original), *r.Observation, "original-core-v2-native-absence:"+c.ReadID)
+	return capacity.GuestRetirementV2NativeAbsenceContent(p, b, receipt, *r.Observation, "original-core-v2-native-absence:"+c.ReadID)
 }
 
 // Original native timestamps stay inside the immutable source return. The
@@ -161,7 +196,12 @@ func guestConfirmedDestroyV2Tx(ctx context.Context, tx *sql.Tx, p model.Capacity
 	if age < 0 || age+5*time.Second > time.Duration(p.MaxEvidenceAgeSeconds)*time.Second {
 		return ErrCapacityConflict
 	}
-	expected, err := guestNativeAbsenceContentV2(returned, p, original)
+	var expected model.CapacityMutationProof
+	if original.Grant.State == "confirmed" {
+		expected, err = guestConfirmedNativeAbsenceContentV2(returned, p, original)
+	} else {
+		expected, err = guestNativeAbsenceContentV2(returned, p, original)
+	}
 	if err != nil {
 		return err
 	}

@@ -98,7 +98,7 @@ func originalDispositionPG(t *testing.T) *sql.DB {
 			t.Fatal("migration74", e)
 		}
 	}
-	// This explicit isolated fixture follows additive production schema76.
+	// This explicit isolated fixture follows additive production schema78.
 	// Nullable storage columns preserve all prior representation/refusal tests.
 	if _, err = db.Exec(`ALTER TABLE public.capacity_vm_original_enrollments
   ADD COLUMN IF NOT EXISTS resource_tuple_sha256 text,
@@ -113,6 +113,7 @@ func originalDispositionPG(t *testing.T) *sql.DB {
 	for _, item := range []struct{ name, probe string }{
 		{"00075_native_denied_failed_returned_ack_dispositions.sql", `SELECT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='capacity_native_denied_original_ack_v2_check')`},
 		{"00076_enrolled_failed_original_guest_dispositions.sql", `SELECT to_regclass('public.capacity_enrolled_failed_original_dispositions') IS NOT NULL`},
+		{"00078_failed_installed_guest_disposals.sql", `SELECT to_regclass('public.capacity_guest_failed_installed_disposals') IS NOT NULL`},
 	} {
 		var applied bool
 		if err = db.QueryRow(item.probe).Scan(&applied); err != nil {

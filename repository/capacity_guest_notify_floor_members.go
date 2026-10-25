@@ -22,6 +22,13 @@ func (s CapacityStore) GuestNotifyFloorMembers(ctx context.Context, policy model
 		if s.guestNotifyOrigin == nil || s.guestNotifyOrigin.source != capacity.CurrentGuestCoreSource() || p.GuestNotifyCanaryBinding == nil || p.GuestRetirementBinding == nil || !capacityIntentReduction(current) || current.RecoveryOnly || current.FloorDegraded || (current.Phase != "draining" && current.Phase != "drained") {
 			return ErrCapacityConflict
 		}
+		if current.FailedInstalledDisposal != nil {
+			valid, err := s.failedInstalledDisposalActiveTx(ctx, tx, policy, p, current, excludedSlot, now)
+			if err != nil || !valid {
+				return ErrCapacityConflict
+			}
+			return nil
+		}
 		r := *p.GuestRetirementBinding
 		b, err := capacity.VMObservationBinding(p, r.MutationBindingName)
 		if err != nil || checkMutationIntegration(ctx, tx, b) != nil {

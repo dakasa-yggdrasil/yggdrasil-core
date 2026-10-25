@@ -62,19 +62,24 @@ func (s CapacityStore) recordGuestAuthorityIssueTx(ctx context.Context, tx *sql.
 // Historical C11 contexts remain their original C11 facts. A successor context
 // must carry the separately atomic actual-issuer record; it never rewrites the
 // legacy signed authority field or treats that field as a new build identity.
-func verifyGuestAuthorityIssuerTx(ctx context.Context, tx *sql.Tx, kind, id, actual string, binding model.CapacityGuestRetirementBinding) error {
+func verifyGuestAuthorityIssuerTx(ctx context.Context, tx *sql.Tx, kind, id, actual string, binding model.CapacityGuestRetirementBinding, pre model.CapacityGuestOriginalProvisioningPreregistration) error {
 	if actual == binding.CoreAuthoritySourceCommit {
 		return nil
 	}
 	if len(actual) != 40 {
 		return ErrCapacityConflict
 	}
-	var valid bool
-	err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.capacity_guest_authority_issues WHERE issue_kind=$1 AND issue_id=$2 AND issuer_actual_source_commit=$3 AND protocol_authority_source_commit=$4 AND compatibility_map_sha256=$5 AND profile=$6)`, kind, id, actual, binding.CoreAuthoritySourceCommit, capacity.GuestProtocolCompatibilityMapSHA256(), binding.ProfileManifest.Profile).Scan(&valid)
+	var compatibility string
+	err := tx.QueryRowContext(ctx, `SELECT compatibility_map_sha256 FROM public.capacity_guest_authority_issues WHERE issue_kind=$1 AND issue_id=$2 AND issuer_actual_source_commit=$3 AND protocol_authority_source_commit=$4 AND profile=$5 AND policy_id=$6 AND workflow_id=$7`, kind, id, actual, binding.CoreAuthoritySourceCommit, binding.ProfileManifest.Profile, pre.PolicyID, pre.WorkflowID).Scan(&compatibility)
 	if err != nil {
 		return err
 	}
-	if !valid {
+	var raw []byte
+	if err = tx.QueryRowContext(ctx, `SELECT spec FROM public.manifests WHERE id=$1 AND kind='capacity_policy' AND checksum=$2 FOR SHARE`, pre.PolicyID, pre.PolicyChecksum).Scan(&raw); err != nil {
+		return err
+	}
+	var p model.CapacityPolicySpec
+	if capacity.DecodeNativeCapacity(json.RawMessage(raw), &p) != nil || !capacity.GuestBindingApprovedByCompatibilityMap(p, binding, actual, compatibility) {
 		return ErrCapacityConflict
 	}
 	return nil
