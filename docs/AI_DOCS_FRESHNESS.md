@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 86667b4198dbee56653b9fcdff50221d5a2c0256
-verified_diff_sha256: 086c10945a2bb5acf4d12fa53de455619f0ba021e801a5e4a99d3bb41b1e7d7e
+verified_at_commit: d02cdc2e0b4d7ff59b4eaf728fa95c8aa5beed54
+verified_diff_sha256: cb97facfc6dc3b0b37ae1ac58ba35467d5d65a2af2b3fa928831c26f2416b9eb
 reconciler_schema: 1
 verified_at: 2026-10-25
 by: Giomaster
@@ -345,3 +345,5 @@ core_D12_protocol_authority_installed_reconcile_review: Reviewed the explicit Gu
 core_D12_CI_census_and_lint_correction_review: Corrected six owning CI lint findings using equivalent production predicates and narrowly documented intentional nil-owner rejection tests. Regenerated all680 production Go source records and the derived interface census, and refreshed every exact service-contract evidence digest. Prior immutable source/SQL77 design and independent reviews remain separately identified. Original Linux49 and Linux16 passes belong to the preceding publication; the corrected publication requires its own current CI. No image, deployment, native capacity or business success is claimed by this metadata.
 
 core_D12_complete_lint_correction_review: Corrected the remaining three original-disposition De Morgan lint findings with equivalent short-circuit predicates and unchanged explicit-empty native call order. Unlimited same-kind and per-linter diagnostics are now required in the owning workflow. Refreshed the complete680 production source census, independent source review record and all exact contract evidence digests. This canonical metadata is generated at the actual correction CODE. Previous canonical publications, failed lint runs and passing source tests retain their own identity; current CI, actual final image and runtime qualifications remain separate.
+
+core_D12_original_NULL_workflow_identity_review: Correct installed Guest resumption for actual scheduler runs whose optional workflow_id remains NULL: authenticate the canonical server-owned dispatch envelope, selector, metadata and complete failed result, preserving ACK, CAS, three-attempt bounds and all original records. Retry only the PostgreSQL startup ping inside its existing five-second context before HTTP starts. All 76 SQL files and dependencies remain byteexact; Source acceptance does not claim native scaling or production qualification.

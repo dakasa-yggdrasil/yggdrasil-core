@@ -109,6 +109,7 @@ func TestD12AuthorityLedgerPostgresRequiresClosedIdentity(t *testing.T) {
 }
 
 func TestD12InstalledResumePostgresCASAndAtomicRollback(t *testing.T) {
+	t.Run("scheduler_original_NULL_workflow_identity", testInstalledGuestDispatchWorkflowIdentityPostgres)
 	db, policy := d12AuthorityLocalFixture(t)
 	ctx := context.Background()
 	p, _ := parseCapacityPolicy(policy)

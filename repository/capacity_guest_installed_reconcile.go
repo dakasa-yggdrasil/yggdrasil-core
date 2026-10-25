@@ -13,12 +13,52 @@ import (
 	"github.com/google/uuid"
 )
 
+const installedGuestOriginalFailedRunQuery = `SELECT j.id::text,w.id::text,row_to_json(w)::text,w.result FROM public.workflow_runs w JOIN public.capacity_dispatch_jobs j ON j.run_id=w.id WHERE (w.workflow_id IS NULL OR w.workflow_id=$1) AND j.envelope::jsonb #>> '{workflow,id}'=$1::text AND w.status='failed' AND j.state='returned' AND j.return_status='failed' AND j.returned_at IS NOT NULL AND j.finalization_ack_at IS NOT NULL AND w.finished_at=j.returned_at AND j.returned_at<=$3 AND w.metadata->>'capacity_dispatch_job_id'=j.id::text AND w.metadata->>'triggered_by'='workflow_scheduler' AND w.result #>>'{steps,1,metadata,preregistration,preregistration_id}'=$2 AND w.id<>$4 LIMIT 2`
+
+const installedGuestPreviousFailedRunQuery = `SELECT row_to_json(w)::text,w.result FROM public.workflow_runs w JOIN public.capacity_dispatch_jobs j ON j.run_id=w.id WHERE w.id=$1 AND (w.workflow_id IS NULL OR w.workflow_id=$2) AND j.envelope::jsonb #>> '{workflow,id}'=$2::text AND w.status='failed' AND j.state='returned' AND j.return_status='failed' AND j.returned_at IS NOT NULL AND j.finalization_ack_at IS NOT NULL AND w.finished_at=j.returned_at AND j.returned_at<=$3`
+
 func installedGuestResumeCandidate(old *model.CapacityIntent, p model.CapacityPolicySpec, policy model.Manifest, now time.Time) bool {
 	if old == nil || old.RecoveryOnly || old.FloorDegraded || (old.Phase != "preparing" && old.Phase != "prepared" && old.Phase != "canary") || old.PolicyID != policy.ID || old.PolicyChecksum != policy.Checksum || old.Generation <= 0 || old.FencingToken <= 0 || old.FencingToken >= maxCapacityGeneration || old.LeaseExpiresAt == nil || old.LeaseExpiresAt.After(now) || old.Decision.Units < p.Floor || old.Decision.Units > p.Ceiling {
 		return false
 	}
 	m := old.InstalledGuestReconcile
 	return m == nil || m.Schema == "installed_original_guest_readiness_reconcile_v1" && m.Attempt >= 1 && m.Attempt < 3 && m.NewFence == old.FencingToken && m.OriginalFence > 0 && m.OriginalGeneration == old.Generation && m.OriginalFailurePreserved && !m.OriginalQuiescenceOrNoEffectClaimed && validCapacityExecutor(m.NewRunID)
+}
+
+// Scheduled runs retain their original namespace/name/version selector; their
+// optional workflow_id column is not populated by InsertWorkflowRunTx. The
+// server-owned, immutable dispatch envelope pins the exact manifest revision.
+func (s CapacityStore) installedGuestDispatchRunTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, runID uuid.UUID, result []byte) error {
+	if tx == nil || s.guestReconcile == nil || runID == uuid.Nil {
+		return ErrCapacityConflict
+	}
+	var jobID uuid.UUID
+	var optionalWorkflowID uuid.NullUUID
+	if err := tx.QueryRowContext(ctx, `SELECT j.id,w.workflow_id FROM public.capacity_dispatch_jobs j JOIN public.workflow_runs w ON w.id=j.run_id WHERE j.run_id=$1`, runID).Scan(&jobID, &optionalWorkflowID); err != nil || optionalWorkflowID.Valid && optionalWorkflowID.UUID != s.WorkflowID {
+		return ErrCapacityConflict
+	}
+	job, err := readCapacityDispatchJob(ctx, tx, jobID, false)
+	wf := s.guestReconcile.workflow
+	workflowPin := CapacityDispatchManifestPin{ID: wf.ID, Namespace: wf.Metadata.Namespace, Name: wf.Metadata.Name, Version: wf.Version, Checksum: wf.Checksum}
+	policyPin := CapacityDispatchManifestPin{ID: policy.ID, Namespace: policy.Metadata.Namespace, Name: policy.Metadata.Name, Version: policy.Version, Checksum: policy.Checksum}
+	if err != nil || job.Protocol != CapacityDispatchProtocol || job.RunID != runID || job.Workflow != workflowPin || job.Workflow.ID != s.WorkflowID || job.Policy != policyPin || job.Realm != policy.Metadata.Namespace || job.Environment != p.Environment || job.Domain != p.Domain || job.Dimension != p.Dimension || job.Metadata["triggered_by"] != "workflow_scheduler" || job.Metadata["capacity_dispatch_job_id"] != jobID.String() || checkCapacityDispatchOriginal(ctx, tx, job) != nil {
+		return ErrCapacityConflict
+	}
+	if result == nil {
+		if job.State != "started" || job.ReturnedAt != nil || job.FinalizationAckAt != nil {
+			return ErrCapacityConflict
+		}
+		return nil
+	}
+	var returned struct {
+		Workflow model.ManifestReference `json:"workflow"`
+		Status   string                  `json:"status"`
+	}
+	expected := model.ManifestReference{ID: job.Workflow.ID, Kind: "workflow", Namespace: job.Workflow.Namespace, Name: job.Workflow.Name, Version: job.Workflow.Version}
+	if job.State != "returned" || job.ReturnedAt == nil || job.FinalizationAckAt == nil || json.Unmarshal(result, &returned) != nil || returned.Status != "failed" || returned.Workflow != expected {
+		return ErrCapacityConflict
+	}
+	return nil
 }
 
 // TryResumeInstalledGuest is called only by the actual scheduler's plan step.
@@ -73,8 +113,7 @@ func (s CapacityStore) TryResumeInstalledGuest(ctx context.Context, policy model
 	if !sameCapacityResourceIdentity(old.Assessment.Snapshot, assessment.Snapshot) || assessment.Snapshot.Profile != old.Decision.Profile || assessment.Snapshot.Units != old.Decision.Units {
 		return old, false, ErrCapacityConflict
 	}
-	var actualRun bool
-	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.capacity_dispatch_jobs j JOIN public.workflow_runs w ON w.id=j.run_id WHERE j.run_id=$1 AND w.workflow_id=$2 AND j.state='started' AND j.returned_at IS NULL AND j.finalization_ack_at IS NULL AND w.status='running')`, s.OriginalRunID, s.WorkflowID).Scan(&actualRun); err != nil || !actualRun {
+	if err = s.installedGuestDispatchRunTx(ctx, tx, policy, p, s.OriginalRunID, nil); err != nil {
 		return old, false, ErrCapacityConflict
 	}
 	var pending int
@@ -126,7 +165,7 @@ func (s CapacityStore) TryResumeInstalledGuest(ctx context.Context, policy model
 	}
 	var jobID, runID string
 	var runWire, result []byte
-	rows, err := tx.QueryContext(ctx, `SELECT j.id::text,w.id::text,row_to_json(w)::text,w.result FROM public.workflow_runs w JOIN public.capacity_dispatch_jobs j ON j.run_id=w.id WHERE w.workflow_id=$1 AND w.status='failed' AND j.state='returned' AND j.return_status='failed' AND j.returned_at IS NOT NULL AND j.finalization_ack_at IS NOT NULL AND w.finished_at=j.returned_at AND j.returned_at<=$3 AND w.metadata->>'capacity_dispatch_job_id'=j.id::text AND w.metadata->>'triggered_by'='workflow_scheduler' AND w.result #>>'{steps,1,metadata,preregistration,preregistration_id}'=$2 AND w.id<>$4 LIMIT 2`, s.WorkflowID, selected.pre.PreregistrationID, now, s.OriginalRunID)
+	rows, err := tx.QueryContext(ctx, installedGuestOriginalFailedRunQuery, s.WorkflowID, selected.pre.PreregistrationID, now, s.OriginalRunID)
 	if err != nil {
 		return old, false, err
 	}
@@ -142,6 +181,9 @@ func (s CapacityStore) TryResumeInstalledGuest(ctx context.Context, policy model
 	if rowErr != nil || closeErr != nil || count != 1 || !originalInstalledFailureResult(result, selected.pre, s.WorkflowID) {
 		return old, false, ErrCapacityConflict
 	}
+	if err = s.installedGuestDispatchRunTx(ctx, tx, policy, p, uuid.MustParse(runID), result); err != nil {
+		return old, false, err
+	}
 	previousResumeRun, previousResumeSHA := "", ""
 	if old.InstalledGuestReconcile != nil {
 		m := old.InstalledGuestReconcile
@@ -149,9 +191,12 @@ func (s CapacityStore) TryResumeInstalledGuest(ctx context.Context, policy model
 			return old, false, ErrCapacityConflict
 		}
 		var lastWire, lastResult []byte
-		err = tx.QueryRowContext(ctx, `SELECT row_to_json(w)::text,w.result FROM public.workflow_runs w JOIN public.capacity_dispatch_jobs j ON j.run_id=w.id WHERE w.id=$1 AND w.workflow_id=$2 AND w.status='failed' AND j.state='returned' AND j.return_status='failed' AND j.returned_at IS NOT NULL AND j.finalization_ack_at IS NOT NULL AND w.finished_at=j.returned_at AND j.returned_at<=$3`, m.NewRunID, s.WorkflowID, now).Scan(&lastWire, &lastResult)
+		err = tx.QueryRowContext(ctx, installedGuestPreviousFailedRunQuery, m.NewRunID, s.WorkflowID, now).Scan(&lastWire, &lastResult)
 		if err != nil || !failedInstalledResumeResult(lastResult, old.Generation, old.FencingToken) {
 			return old, false, ErrCapacityConflict
+		}
+		if err = s.installedGuestDispatchRunTx(ctx, tx, policy, p, uuid.MustParse(m.NewRunID), lastResult); err != nil {
+			return old, false, err
 		}
 		previousResumeRun, previousResumeSHA = m.NewRunID, capacity.BusinessCreationSHA256(lastWire)
 	}

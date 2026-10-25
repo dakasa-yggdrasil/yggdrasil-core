@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-25T06:14:04-03:00",
+  "generated_at": "2026-10-25T07:12:46-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1185,
+    ".go": 1187,
     ".json": 169,
     ".py": 6,
     ".sql": 77,
@@ -11,7 +11,7 @@
     ".yml": 28
   },
   "provenance": {
-    "commit": "86667b4198dbee56653b9fcdff50221d5a2c0256",
+    "commit": "d02cdc2e0b4d7ff59b4eaf728fa95c8aa5beed54",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "14e4164f0622d2cbb0c3bad3f062e9989b55afd87220c9f7533193046181531e"
+        "sha256": "99ec3018b43f52422fd6ea41e9112eb969352ed75117b22b7211f0eb3c85b650"
       },
       {
         "path": "AGENTS.md",
@@ -65,8 +65,8 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 237,
-      "kb": 3177
+      "files": 238,
+      "kb": 3186
     },
     {
       "path": "controllers/httpapi",
@@ -100,8 +100,8 @@
     },
     {
       "path": "addons",
-      "files": 48,
-      "kb": 280
+      "files": 49,
+      "kb": 282
     },
     {
       "path": "internal/capacitynativeqemu",
