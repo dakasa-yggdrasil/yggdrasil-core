@@ -51,7 +51,7 @@
       "local_source_validation_sha256": "db619bdbf46dfff119d07afb0271ae9db0e4bc3e5a963144a77fadcc33aaeb61",
       "production_qualification_claimed": false,
       "schema": 77,
-      "source_inventory_sha256": "bee1310d71f6fae37662170e624b542f3ac179d5bb2df096bd63eddee5afd554"
+      "source_inventory_sha256": "5bcde85da8edf21cf9db104a6730dbeda23df8623cb5c679d0427a7d9856c30d"
     },
     "D6_failed_witnessed_terminal_and_AWS1654_observer": {
       "HTTP_package_source_pass": true,
@@ -278,6 +278,7 @@
   "previous_review_before_AWS164_actual_instance_contract_successor_sha256": "a3c6edf138584b0fb0da606336deb7a463fadfa4a9cc5869edb72acf1dc3c421",
   "previous_review_before_D10_dedicated_readonly_observer_sha256": "3b8d1eab38b41b49b3d85b0a90b35ba9fdba67418896de902d58c7c5d6c61663",
   "previous_review_before_D12_inventory_and_lint_correction_sha256": "2dcd0143eb4c4b6b864f3035c18ab352b69ddb7e10011b883ad8d3571406cf97",
+  "previous_review_before_D12_unbounded_lint_correction_sha256": "eaefd44faca96b8cea72a33a17b2b3c5afd55e460767fbeb21604cb591982f60",
   "previous_review_before_D7_R3_complete_profiles_sha256": "a866516ae2e96c6bec1b03d10d66fc5da57bfb258c702c6be19b3dd833bbd452",
   "previous_review_before_actual_AWS1652_contract_successor_sha256": "fb87e8b18a2e5847d83e6abdb57ccd23ed0759eb0abcc33f214966dcd5d5fc6f",
   "previous_review_before_actual_AWS1653_contract_successor_sha256": "e4820e92a3ab43b3ba63ff229977eeae82835c8b7f60c7e596d245d0dcd949da",
@@ -332,14 +333,15 @@
     "The AWS approval now binds actual AWS1.65.2/V4 metadata, its owning original dry-run and the complete owning-Core typed policy projection. Exactly the mutation binding identity/source/type/scope and eight derived specs change; reversing those bindings recovers the previous complete fixture. The protected profile, canary and production catalog and complete Hetzner fixture/approval remain byte-exact. Independent full typed/source integration peer e81c9c04 binds all postimages. Runtime CoreAuthoritySourceCommit, genuine image/600, policy and native lifecycle remain separate mandatory gates.",
     "AWS1.65.3 source39bdd is the sole current observer; the supplier and retirement catalogs retain exact historical1.65.1/1.65.2 source pairs and require the complete four-operation lifecycle catalog for1.65.2/1.65.3. Its root-EBS predicate allows only explicitly virtual ephemeral extras while six native reads and original absence gates remain mandatory. Actual V5 metadata and the original owning dry-run derive the complete new contract1c876; reverse mutation-binding replacement recovers the old fixture and Hetzner remains byteexact. Schema72 is unchanged; deployment, original600, disposition, policy and business authority remain separate.",
     "Dedicated native-denial HTTP observer is source-pinned and separate from the normal AWS supplier; complete historical/current catalog authentication precedes explicit historical AWS protocol projection. Original creator/configuration and accounting history remain immutable; SQL75 and normal profiles/inventories are unchanged.",
-    "D12 preserves immutable Guest wire authority while recording the real clean issuer in a separate atomic SQL77 ledger. Installed reconciliation keeps the same native resource, enrollment, installation and generation, requires the previous failed run and acknowledged finalization plus a fresh private dispatch run, and admits at most three new fenced readiness attempts. Existing failures and possible business effects remain immutable. The post-CI style correction uses equivalent tagged-switch and De Morgan predicates; intentional nil-owner rejection tests retain nil and narrow documented staticcheck exclusions. The current complete inventory includes all inherited D11 and added D12 production source."
+    "D12 preserves immutable Guest wire authority while recording the real clean issuer in a separate atomic SQL77 ledger. Installed reconciliation keeps the same native resource, enrollment, installation and generation, requires the previous failed run and acknowledged finalization plus a fresh private dispatch run, and admits at most three new fenced readiness attempts. Existing failures and possible business effects remain immutable. The post-CI style correction uses equivalent tagged-switch and De Morgan predicates; intentional nil-owner rejection tests retain nil and narrow documented staticcheck exclusions. The current complete inventory includes all inherited D11 and added D12 production source.",
+    "Three additional original-disposition De Morgan normalizations preserve left-to-right short-circuit and side-effect call order, including the explicit-empty-instances predicate. The owning lint workflow now reports all same-kind and per-linter findings without truncation; no check is disabled. Original failed lint runs remain failures."
   ],
   "reviewed_source_head": "9ecff39e007c939de3618387fa7229de44915fdd",
   "reviewed_source_head_is_historical": true,
   "reviewer": "Root full production-source delta review; separate independent manager/dial/monitor peer; source acceptance only",
   "schema": "core_service_source_review_v1",
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "bee1310d71f6fae37662170e624b542f3ac179d5bb2df096bd63eddee5afd554",
+  "source_inventory_sha256": "5bcde85da8edf21cf9db104a6730dbeda23df8623cb5c679d0427a7d9856c30d",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
