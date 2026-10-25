@@ -1,5 +1,5 @@
 {
-  "accepted_at": "2026-10-25T17:41:14.977262+00:00",
+  "accepted_at": "2026-10-25T17:55:53.066551+00:00",
   "accepted_at_is_historical_for_two_profile_candidate": false,
   "checker": {
     "actual_binary_clean_VCS": true,
@@ -223,6 +223,28 @@
       },
       "schema79_sha256": "90a64acdec8f70bf2a1d97ae01d43e52bc43234b16b8b46987fe447b822dfebb",
       "source_only": true
+    },
+    "D15_R2_current_ops_route_inventory": {
+      "Root_Source_review_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-CORED15-R2-OPS-INVENTORY-SOURCE-REVIEW-20261025.PUBLIC.json",
+        "sha256": "458626a6e6d9f756e46d5d75bcec1f30dc2bca4bc974742117e244bcc2de1f15"
+      },
+      "actual_ops_route_inventory_count": 41,
+      "actual_two_root_race_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-D15-R2-OPS-INVENTORY-REGRESSION-20261025/RETURN.PUBLIC.json",
+        "sha256": "c93aedf595bb8f27563304762cf3e0af89b281a4e1844941bd5d07034f60d4b2"
+      },
+      "bounded_inventory_range": [
+        35,
+        50
+      ],
+      "full_Linux_target_lint_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-D15-R2-LINUX-TARGET-SOURCE-LINT-20261025/RETURN.PUBLIC.json",
+        "sha256": "b2811c2189581a209c0cc7b6693b934754b27b48753696d2fa45aa7eda970486"
+      },
+      "production_qualification_claimed": false,
+      "route_wrapper_and_canonical_permission_assertions_preserved": true,
+      "runtime_and_SQL80_source_unchanged": true
     },
     "D15_scheduler_authority_deadline_and_distinct_prejournal_refusal80": {
       "Root_final_Source_review_ref": {
@@ -500,6 +522,7 @@
   "previous_review_before_D12_inventory_and_lint_correction_sha256": "2dcd0143eb4c4b6b864f3035c18ab352b69ddb7e10011b883ad8d3571406cf97",
   "previous_review_before_D12_unbounded_lint_correction_sha256": "eaefd44faca96b8cea72a33a17b2b3c5afd55e460767fbeb21604cb591982f60",
   "previous_review_before_D14_presend_retirement_recovery_sha256": "34e6bf85f4bc5d6c1f75b78414a40fdee8dd964b78a6ccc2b4a10f83533e548e",
+  "previous_review_before_D15_R2_ops_inventory_sha256": "dbc351b28be5896c80c22828b061c2a5cfc8499fa4c61d37ffa7857e9d1ca4bf",
   "previous_review_before_D15_prejournal_refusal_and_scheduler_sha256": "efa62303bdfddf7b8322b8238c66833bf71377dbe3a414c3911834b625acf91b",
   "previous_review_before_D7_R3_complete_profiles_sha256": "a866516ae2e96c6bec1b03d10d66fc5da57bfb258c702c6be19b3dd833bbd452",
   "previous_review_before_actual_AWS1652_contract_successor_sha256": "fb87e8b18a2e5847d83e6abdb57ccd23ed0759eb0abcc33f214966dcd5d5fc6f",
@@ -612,6 +635,7 @@
     "D14 actual local PostgreSQL17 recovery storage root34nodes, twelve inherited repository roots156nodes, compatibility/UTC56nodes and administrative API8nodes passed with race and no fail/skip; PostgreSQL stopped with original exit0.",
     "D14 Root full Linux-target Core, Goose and nativequalification source builds passed; complete static lint passed after a test-only tagged-switch correction. Fresh two-root UTC regression passed.",
     "D14 CI preserves the exact original sixteen-root artifact and adds five recovery/UTC/API roots in a separate retained artifact; a local Bash output-tree control verified the separation.",
-    "D15 local disposable PostgreSQL17/Goose1..80 passed four race roots/102 nodes with no failures/skips and closed shutdown; new HTTP authorization/closed IDs/privacy passed eleven nodes; real-context authority UTC passed seven nodes. Complete Linux-target Core, Goose, nativequalification source builds and full static lint passed. The exact original sixteen CI roots remain intact; ten additional recovery/UTC/API roots have a separate retained artifact. These Source checks grant no production lifecycle credit."
+    "D15 local disposable PostgreSQL17/Goose1..80 passed four race roots/102 nodes with no failures/skips and closed shutdown; new HTTP authorization/closed IDs/privacy passed eleven nodes; real-context authority UTC passed seven nodes. Complete Linux-target Core, Goose, nativequalification source builds and full static lint passed. The exact original sixteen CI roots remain intact; ten additional recovery/UTC/API roots have a separate retained artifact. These Source checks grant no production lifecycle credit.",
+    "D15 R2 resolves the actual general-CI route-count guard failure introduced by two new explicit administrative routes. Both route wrapper/inventory and canonical permission tests passed under race, with zero failures/skips; complete Linux-target lint passed. Runtime Go sources, SQL80, all previous migrations and recovery-specific tests remain byteexact to the prior genuine publication. The prior failed original CI and publication are preserved."
   ]
 }
