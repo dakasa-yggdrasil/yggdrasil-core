@@ -23,6 +23,7 @@ const maxCapacityGeneration int64 = 9007199254740991
 // CapacityStore serializes each logical dimension in PostgreSQL. The process
 // gate is explicit and defaults to false in the workflow handler.
 type CapacityStore struct {
+	OriginalRunID             uuid.UUID // Private actual dispatch run, never a wire-supplied recovery selector.
 	ExecutorPowerEnabled      bool
 	ExecutorPowerOperator     string
 	ExecutorPowerObserver     executorpower.Observer

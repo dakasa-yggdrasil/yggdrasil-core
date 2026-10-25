@@ -37,14 +37,14 @@ func executeOriginalGuestNotifyProbeForUsage(ctx context.Context, db *sql.DB, st
 	}
 	publication, err := store.IssueGuestNotifyCanaryPublication(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, input.PreregistrationID, usage, key)
 	if err != nil || publication.Slot != input.Slot {
-		return nil, errOriginalGuestStep
+		return nil, guestNotifyProbeHeld("issue_publication", errOriginalGuestStep)
 	}
 	if _, err = originalGuestNotifyCall(ctx, db, store, policy, p, input, publication, key); err != nil {
 		return nil, err
 	}
 	read, err := store.IssueGuestNotifyCanaryRead(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, input.PreregistrationID, usage, publication.ChallengeID, key)
 	if err != nil || read.Slot != input.Slot {
-		return nil, errOriginalGuestStep
+		return nil, guestNotifyProbeHeld("issue_read", errOriginalGuestStep)
 	}
 	business, err := originalGuestNotifyCall(ctx, db, store, policy, p, input, read, key)
 	if err != nil {
@@ -77,23 +77,23 @@ func originalGuestNotifyCall(ctx context.Context, db *sql.DB, store repository.C
 	defer stop()
 	client, err := sourceGuestClient(original, db, member)
 	if err != nil {
-		return empty, err
+		return empty, guestNotifyProbeHeld("source_client", err)
 	}
 	defer client.Close()
 	enrollment, err := store.GuestNotifyCanaryEnrollment(original, policy, input.Generation, input.FencingToken, input.LeaseOwner, c.PreregistrationID)
 	if err != nil {
-		return empty, err
+		return empty, guestNotifyProbeHeld("stored_enrollment", err)
 	}
 	finalized, nonceReturn, err := capacity.AcquireGuestNotifyCanaryNonce(original, client, key, c, enrollment)
 	if err != nil {
-		return empty, err
+		return empty, guestNotifyProbeHeld("nonce_acquire", err)
 	}
 	if err = store.FinalizeGuestNotifyCanaryNonce(original, policy, input.Generation, input.FencingToken, input.LeaseOwner, finalized, nonceReturn); err != nil {
-		return empty, err
+		return empty, guestNotifyProbeHeld("nonce_finalize", err)
 	}
 	c = finalized
 	if err = store.ReserveGuestNotifyCanarySend(original, policy, input.Generation, input.FencingToken, input.LeaseOwner, c); err != nil {
-		return empty, err
+		return empty, guestNotifyProbeHeld("reserve_send", err)
 	}
 	body, err := json.Marshal(model.CapacityGuestNotifyCanaryRequest{Challenge: c})
 	if err != nil {
@@ -110,7 +110,7 @@ func originalGuestNotifyCall(ctx context.Context, db *sql.DB, store repository.C
 	defer cancel()
 	business, recordErr := store.RecordGuestNotifyCanaryReturn(retain, policy, input.Generation, input.FencingToken, input.LeaseOwner, c, returned)
 	if callErr != nil || recordErr != nil {
-		return empty, errOriginalGuestStep
+		return empty, guestNotifyProbeHeld("original_HTTP_or_return", errOriginalGuestStep)
 	}
 	return business, nil
 }

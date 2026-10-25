@@ -63,7 +63,7 @@ func (s CapacityStore) OriginalGuestReconcileLeaseDeadline(ctx context.Context, 
 
 func (s CapacityStore) guestReconcileSourceTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec) error {
 	o := s.guestReconcile
-	if o == nil || !guestReconcileLive(ctx) || s.WorkflowID != o.workflow.ID || o.source != capacity.CurrentGuestCoreSource() || p.GuestNotifyReconcileBinding == nil || capacity.ValidateGuestNotifyReconcileBinding(p) != nil || p.GuestRetirementBinding.CoreAuthoritySourceCommit != o.source || !capacity.GuestOriginalProfileEnabled(p, *p.GuestRetirementBinding, p.Profiles[0].Provider) {
+	if o == nil || !guestReconcileLive(ctx) || s.WorkflowID != o.workflow.ID || o.source != capacity.CurrentGuestCoreSource() || p.GuestNotifyReconcileBinding == nil || capacity.ValidateGuestNotifyReconcileBinding(p) != nil || !capacity.GuestBindingAuthorityCurrent(p, *p.GuestRetirementBinding) || !capacity.GuestOriginalProfileEnabled(p, *p.GuestRetirementBinding, p.Profiles[0].Provider) {
 		return ErrCapacityConflict
 	}
 	var policyID, policySHA string

@@ -51,7 +51,7 @@ func (s CapacityStore) IssueGuestRetirement(ctx context.Context, policy model.Ma
 	err := s.mutationTransaction(ctx, policy, false, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
 		stored, err := loadGuestOriginalTx(ctx, tx, preregistrationID)
 		origin := s.guestRetirementOrigin
-		if err != nil || origin == nil || origin.source != capacity.CurrentGuestCoreSource() || origin.source != stored.binding.CoreAuthoritySourceCommit || origin.step.Use.Kind != "yggdrasil" || origin.step.Use.Operation != capacity.RetireOriginalGuestOperation || origin.step.TimeoutSeconds < 1 || origin.step.TimeoutSeconds > 86400 || origin.step.Retry.MaxAttempts > 1 || origin.step.ForEach != nil || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.binding) || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.WorkflowID != s.WorkflowID.String() || !capacityIntentReduction(current) || (current.Phase != "draining" && current.Phase != "drained") {
+		if err != nil || origin == nil || origin.source != capacity.CurrentGuestCoreSource() || !capacity.GuestBindingAuthorityCurrent(p, stored.binding) || origin.step.Use.Kind != "yggdrasil" || origin.step.Use.Operation != capacity.RetireOriginalGuestOperation || origin.step.TimeoutSeconds < 1 || origin.step.TimeoutSeconds > 86400 || origin.step.Retry.MaxAttempts > 1 || origin.step.ForEach != nil || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.binding) || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.WorkflowID != s.WorkflowID.String() || !capacityIntentReduction(current) || (current.Phase != "draining" && current.Phase != "drained") {
 			return ErrCapacityConflict
 		}
 		receipt, _, err := loadGuestReceiptTx(ctx, tx, preregistrationID)
@@ -114,6 +114,9 @@ func (s CapacityStore) IssueGuestRetirement(ctx context.Context, policy model.Ma
 		if err == nil {
 			_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_guest_original_retirement_contexts(intent_id,executor_id,original_step_id,original_step_timeout_seconds,original_context_deadline,core_actual_source_commit,recorded_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, intent.RequestID, s.ExecutorID, origin.step.ID, origin.step.TimeoutSeconds, contextDeadline, origin.source, now)
 		}
+		if err == nil {
+			err = s.recordGuestAuthorityIssueTx(ctx, tx, policy, p, stored.binding, "retirement_intent", intent.RequestID, capacity.GuestRetirementSHA(intent))
+		}
 		return err
 	})
 	return result, err
@@ -148,7 +151,7 @@ func loadGuestRetirementTx(ctx context.Context, tx *sql.Tx, id string) (GuestRet
 		return result, ErrCapacityConflict
 	}
 	var actualSource string
-	if err = tx.QueryRowContext(ctx, `SELECT executor_id::text,core_actual_source_commit FROM public.capacity_guest_original_retirement_contexts WHERE intent_id=$1`, id).Scan(&result.ExecutorID, &actualSource); err != nil || actualSource != result.Binding.CoreAuthoritySourceCommit {
+	if err = tx.QueryRowContext(ctx, `SELECT executor_id::text,core_actual_source_commit FROM public.capacity_guest_original_retirement_contexts WHERE intent_id=$1`, id).Scan(&result.ExecutorID, &actualSource); err != nil || verifyGuestAuthorityIssuerTx(ctx, tx, "retirement_intent", id, actualSource, result.Binding) != nil {
 		return result, ErrCapacityConflict
 	}
 	return result, nil
@@ -194,7 +197,7 @@ func (s CapacityStore) guestRetirementCurrentTx(ctx context.Context, tx *sql.Tx,
 		return policy, p, current, err
 	}
 	p, err = parseCapacityPolicy(policy)
-	if err != nil || !active || policy.Checksum != i.PolicyChecksum || stored.Binding.CoreAuthoritySourceCommit != capacity.CurrentGuestCoreSource() || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.Binding) || (liveOriginal && !now.Before(i.OriginalDeadline)) {
+	if err != nil || !active || policy.Checksum != i.PolicyChecksum || !capacity.GuestBindingAuthorityCurrent(p, stored.Binding) || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.Binding) || (liveOriginal && !now.Before(i.OriginalDeadline)) {
 		return policy, p, current, ErrCapacityConflict
 	}
 	var checksum string

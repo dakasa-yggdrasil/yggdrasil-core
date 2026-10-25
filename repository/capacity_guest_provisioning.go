@@ -57,7 +57,7 @@ func guestMember(binding model.CapacityGuestRetirementBinding, slot int) (model.
 // No provider send or WAN read is performed while holding the scope lock.
 func (s CapacityStore) reserveGuestOriginalTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, intent model.CapacityIntent, record capacityMutationRecord, now time.Time, originalGrantRaw ...[]byte) error {
 	b := p.GuestRetirementBinding
-	if b == nil || capacity.ValidateGuestRetirementBinding(p, b) != nil || b.MutationBindingName != record.Binding.Name || !capacity.GuestOriginalProfileEnabled(p, *b, record.EventProvider) || s.guestOriginal == nil || s.guestOriginal.source != b.CoreAuthoritySourceCommit || s.guestOriginal.source != capacity.CurrentGuestCoreSource() || !capacity.ValidDigest(s.guestOriginal.nonceSHA) {
+	if b == nil || capacity.ValidateGuestRetirementBinding(p, b) != nil || b.MutationBindingName != record.Binding.Name || !capacity.GuestOriginalProfileEnabled(p, *b, record.EventProvider) || s.guestOriginal == nil || !capacity.GuestBindingAuthorityCurrent(p, *b) || s.guestOriginal.source != capacity.CurrentGuestCoreSource() || !capacity.ValidDigest(s.guestOriginal.nonceSHA) {
 		return fmt.Errorf("%w: complete original protected Guest preregistration required", ErrCapacityConflict)
 	}
 	member, err := guestMember(*b, record.Grant.Slot)
@@ -85,7 +85,7 @@ func (s CapacityStore) reserveGuestOriginalTx(ctx context.Context, tx *sql.Tx, p
 		return err
 	}
 	contextDeadline, _ := ctx.Deadline()
-	pre := model.CapacityGuestOriginalProvisioningPreregistration{Schema: capacity.GuestPreregistrationSchema, PreregistrationID: uuid.NewString(), BindingName: member.Name, OriginalCreateGrantID: record.Grant.GrantID, OriginalCreateRequestSHA256: record.Grant.RequestSHA256, NonceSHA256: s.guestOriginal.nonceSHA, ProfileManifestSHA256: b.ProfileManifestSHA256, PolicyID: policy.ID.String(), PolicyChecksum: policy.Checksum, WorkflowID: s.WorkflowID.String(), WorkflowChecksum: checksum, OriginalWorkflowStepID: s.guestOriginal.step.ID, OriginalWorkflowStepTimeoutSeconds: s.guestOriginal.step.TimeoutSeconds, OriginalWorkflowContextDeadline: contextDeadline, CoreSourceCommit: s.guestOriginal.source, Generation: intent.Generation, Fence: intent.FencingToken, LeaseOwner: intent.LeaseOwner, ExecutorID: s.ExecutorID, Slot: record.Grant.Slot, OriginalDeadline: deadline, ReservedAt: now}
+	pre := model.CapacityGuestOriginalProvisioningPreregistration{Schema: capacity.GuestPreregistrationSchema, PreregistrationID: uuid.NewString(), BindingName: member.Name, OriginalCreateGrantID: record.Grant.GrantID, OriginalCreateRequestSHA256: record.Grant.RequestSHA256, NonceSHA256: s.guestOriginal.nonceSHA, ProfileManifestSHA256: b.ProfileManifestSHA256, PolicyID: policy.ID.String(), PolicyChecksum: policy.Checksum, WorkflowID: s.WorkflowID.String(), WorkflowChecksum: checksum, OriginalWorkflowStepID: s.guestOriginal.step.ID, OriginalWorkflowStepTimeoutSeconds: s.guestOriginal.step.TimeoutSeconds, OriginalWorkflowContextDeadline: contextDeadline, CoreSourceCommit: b.CoreAuthoritySourceCommit, Generation: intent.Generation, Fence: intent.FencingToken, LeaseOwner: intent.LeaseOwner, ExecutorID: s.ExecutorID, Slot: record.Grant.Slot, OriginalDeadline: deadline, ReservedAt: now}
 	if !capacity.GuestOriginalProvisioningDeadlineMatches(pre, b.ProfileManifest) {
 		return ErrCapacityConflict
 	}
@@ -109,6 +109,9 @@ func (s CapacityStore) reserveGuestOriginalTx(ctx context.Context, tx *sql.Tx, p
 				err = s.attachOriginalHostGrantTx(ctx, tx, record, originalGrantRaw[0], pre, wire)
 			}
 		}
+	}
+	if err == nil {
+		err = s.recordGuestAuthorityIssueTx(ctx, tx, policy, p, *b, "preregistration", pre.PreregistrationID, capacity.GuestRetirementSHA(pre))
 	}
 	return err
 }
@@ -162,7 +165,7 @@ func (s CapacityStore) guestCurrentTx(ctx context.Context, tx *sql.Tx, stored gu
 	}
 	policy := model.Manifest{ID: uuid.MustParse(stored.pre.PolicyID), Kind: "capacity_policy", Checksum: checksum, Metadata: model.ManifestMetadata{Namespace: namespace, Name: name}, Spec: raw}
 	p, err = parseCapacityPolicy(policy)
-	if err != nil || !active || checksum != stored.pre.PolicyChecksum || stored.binding.CoreAuthoritySourceCommit != capacity.CurrentGuestCoreSource() || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.binding) || capacity.ValidateGuestRetirementBinding(p, p.GuestRetirementBinding) != nil || (originalDeadline && !now.Before(stored.pre.OriginalDeadline)) {
+	if err != nil || !active || checksum != stored.pre.PolicyChecksum || !capacity.GuestBindingAuthorityCurrent(p, stored.binding) || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.binding) || capacity.ValidateGuestRetirementBinding(p, p.GuestRetirementBinding) != nil || (originalDeadline && !now.Before(stored.pre.OriginalDeadline)) {
 		return p, intent, ErrCapacityConflict
 	}
 	if err = tx.QueryRowContext(ctx, `SELECT checksum,active FROM public.manifests WHERE id=$1 AND kind='workflow' AND namespace=$2 AND name=$3 AND jsonb_typeof(spec->'authorization')='object' FOR SHARE`, stored.pre.WorkflowID, p.Workflow.Namespace, p.Workflow.Name).Scan(&checksum, &active); err != nil {
@@ -336,6 +339,9 @@ func (s CapacityStore) RecordGuestCreateWitness(ctx context.Context, preregistra
 			return err
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_guest_original_create_witnesses(preregistration_id,original_create_attempt_id,resource_tuple_sha256,witness_sha256,original_wire,original_record,recorded_at) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7)`, preregistrationID, original.AttemptID, capacity.GuestRetirementSHA(result.Tuple), capacity.GuestRetirementSHA(result), wire, string(wire), now)
+		if err == nil {
+			err = s.recordGuestAuthorityIssueTx(ctx, tx, model.Manifest{ID: uuid.MustParse(stored.pre.PolicyID)}, p, stored.binding, "create_witness", preregistrationID, capacity.GuestRetirementSHA(result))
+		}
 		return err
 	})
 	return result, err
@@ -409,6 +415,12 @@ func (s CapacityStore) RegisterOriginalGuest(ctx context.Context, principal stri
 			return err
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_vm_original_enrollments(preregistration_id,resource_tuple_sha256,enrollment_sha256,original_provisioning_sha256,enrollment_record,recorded_at,registration_wire,receipt_wire) VALUES($1,$2,$3,$4,$5::jsonb,$6,$7,$8)`, stored.pre.PreregistrationID, capacity.GuestRetirementSHA(e.Statement.Tuple), capacity.GuestRetirementSHA(e), result.OriginalProvisioningSHA256, enrollmentWire, now, registrationWire, receiptWire)
+		if err == nil {
+			issuer := s
+			issuer.WorkflowID = uuid.MustParse(stored.pre.WorkflowID)
+			issuer.ExecutorID = stored.pre.ExecutorID
+			err = issuer.recordGuestAuthorityIssueTx(ctx, tx, model.Manifest{ID: uuid.MustParse(stored.pre.PolicyID)}, p, stored.binding, "enrollment", stored.pre.PreregistrationID, capacity.GuestRetirementSHA(result.Enrollment))
+		}
 		return err
 	})
 	return result, err

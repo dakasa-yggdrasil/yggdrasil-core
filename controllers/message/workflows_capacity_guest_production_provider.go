@@ -91,7 +91,7 @@ func guestOriginalProviderInvocation(ctx context.Context, store repository.Capac
 		}
 	}
 	supplier := &originalProductionGuestSupplier{provider: provider, store: store, policy: policy, p: p, binding: b, resolved: resolved, conn: transport.conn, parent: ctx, input: input}
-	owner, err := capacityguestprovider.New(ctx, capacityguestprovider.Scope{InvocationID: invocation, PolicyID: policy.ID.String(), PolicyChecksum: policy.Checksum, WorkflowID: workflow.ID.String(), WorkflowChecksum: workflow.Checksum, StepID: step.ID, StepTimeoutSeconds: step.TimeoutSeconds, ProvisioningBudgetSeconds: p.GuestRetirementBinding.ProfileManifest.OriginalProvisioningBudgetSeconds, MemberBindingName: memberName, Slot: input.Slot, Generation: input.Generation, Fence: input.FencingToken, LeaseOwner: input.LeaseOwner, ExecutorID: store.ExecutorID, CoreSourceCommit: capacity.CurrentGuestCoreSource(), ProfileSHA256: p.GuestRetirementBinding.ProfileManifestSHA256, Binding: b}, supplier)
+	owner, err := capacityguestprovider.New(ctx, capacityguestprovider.Scope{InvocationID: invocation, PolicyID: policy.ID.String(), PolicyChecksum: policy.Checksum, WorkflowID: workflow.ID.String(), WorkflowChecksum: workflow.Checksum, StepID: step.ID, StepTimeoutSeconds: step.TimeoutSeconds, ProvisioningBudgetSeconds: p.GuestRetirementBinding.ProfileManifest.OriginalProvisioningBudgetSeconds, MemberBindingName: memberName, Slot: input.Slot, Generation: input.Generation, Fence: input.FencingToken, LeaseOwner: input.LeaseOwner, ExecutorID: store.ExecutorID, CoreSourceCommit: p.GuestRetirementBinding.CoreAuthoritySourceCommit, ProfileSHA256: p.GuestRetirementBinding.ProfileManifestSHA256, Binding: b}, supplier)
 	if err != nil {
 		return ctx, nil, errOriginalGuestStep
 	}

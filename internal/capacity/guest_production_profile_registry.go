@@ -62,7 +62,7 @@ func GuestProductionProfileContractSHA256(p model.CapacityPolicySpec, binding mo
 }
 
 func guestProductionProfileMatches(p model.CapacityPolicySpec, binding model.CapacityGuestRetirementBinding, provider, currentCoreSource string, approvals []guestProductionProfileApproval) bool {
-	if !businessSource.MatchString(currentCoreSource) || binding.CoreAuthoritySourceCommit != currentCoreSource {
+	if !guestProtocolAuthoritySupported(binding.CoreAuthoritySourceCommit, currentCoreSource, provider, binding.ProfileManifest.Profile) {
 		return false
 	}
 	contract := GuestProductionProfileContractSHA256(p, binding, provider)

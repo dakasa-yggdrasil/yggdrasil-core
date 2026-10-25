@@ -428,6 +428,7 @@ func (s *CapacityDispatchService) RunOne(parent context.Context, realm, environm
 		return false, dispatchOpaque(err)
 	}
 	ctx = messagecontroller.WithCapacityDispatchFence(ctx, func(owner context.Context) error { return guard(owner, true) })
+	ctx = messagecontroller.WithCapacityDispatchRunIdentity(ctx, job.RunID)
 	if p.NativeNotifyWindowBinding != nil {
 		ctx = messagecontroller.WithOriginalNotifyAuthorityFactory(ctx, s.originalNotifyFactory(job, ctx, func(owner context.Context) error { return guard(owner, true) }))
 	}
