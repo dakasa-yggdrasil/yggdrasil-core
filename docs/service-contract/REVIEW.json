@@ -1,5 +1,5 @@
 {
-  "accepted_at": "2026-10-25T16:28:03.528510+00:00",
+  "accepted_at": "2026-10-25T17:41:14.977262+00:00",
   "accepted_at_is_historical_for_two_profile_candidate": false,
   "checker": {
     "actual_binary_clean_VCS": true,
@@ -224,6 +224,54 @@
       "schema79_sha256": "90a64acdec8f70bf2a1d97ae01d43e52bc43234b16b8b46987fe447b822dfebb",
       "source_only": true
     },
+    "D15_scheduler_authority_deadline_and_distinct_prejournal_refusal80": {
+      "Root_final_Source_review_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-CORED15-SCHEDULER-PREJOURNAL80-SOURCE-REVIEW-20261025.PUBLIC.json",
+        "sha256": "543c558e001092bb583088eb2ca4fd6cafac17da305ab48cadff99581da410da"
+      },
+      "actual_local_validation_refs": {
+        "API80": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/D15-SCHEDULER-REACHABILITY-LOCAL-VALIDATION/R2/HTTP80-AUTH-IDS-PRIVACY.PUBLIC.json",
+          "sha256": "bfb105d5ba6695d23127e3099e210ca20aebde5529988f197ce1f6025aa5da53"
+        },
+        "PG80_R2": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/D15-PREJOURNAL80-LOCAL-VALIDATION/R2/ROOT-CENSUS.PUBLIC.json",
+          "sha256": "cbe185d609f81b38f0034125e1d63cdd6609712bbaee5889f9a8764c1d74cf14"
+        },
+        "authority_UTC": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/D15-SCHEDULER-REACHABILITY-LOCAL-VALIDATION/R2/AUTHORITY-UTC.PUBLIC.json",
+          "sha256": "86d12557917b162a0f2dfbc790c7c713cfd16b64b08676cda02b077be2f94836"
+        },
+        "full_Linux_target_build": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-D15-LINUX-TARGET-SOURCE-BUILD-20261025/RETURN.PUBLIC.json",
+          "sha256": "f9f4bf03fda07ccac37e61b56bdebc9fab1b4040edda400efb91d390991b66f3"
+        },
+        "full_Linux_target_static_lint": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-D15-LINUX-TARGET-SOURCE-LINT-20261025/RETURN.PUBLIC.json",
+          "sha256": "1baf4921127229b9a4e9bd4ab083ee49a028028b8692bb78a3019b536b1abb95"
+        }
+      },
+      "all78_previous_SQL_byteexact": true,
+      "base": "6f9651542a5ad826757ac18224720f50af3adc83",
+      "independent_Source_peer_refs": {
+        "authority_UTC": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/D15-AUTHORITY-SNAPSHOT-DEADLINE-UTC-INDEPENDENT-NARROW-SOURCE-PEER.PUBLIC.json",
+          "sha256": "1da7c4362a10d69f73add170e2b67e1020a08fe8ddbaf23b8a1305385741635b"
+        },
+        "causal80_crossfamily_latecallback": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/D15-PREJOURNAL80-CAUSALITY-CROSSFAMILY-LATECALLBACK-INDEPENDENT-SOURCE-PEER.PUBLIC.json",
+          "sha256": "a9f589bb319bccb883c222479e8b4d314e6fb3ef1f2f0395869c259320038ab0"
+        },
+        "publication_projection": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/D15-GENUINE-PUBLICATION-PROJECTOR-INDEPENDENT-SOURCE-PEER.PUBLIC.json",
+          "sha256": "cb00864b09219fdd6a5bd3c3ad8177cf2ea6678539765fc6b987ab21eb5ecb11"
+        }
+      },
+      "old_possible_send_and_business_effects_preserved": true,
+      "production_qualification_claimed": false,
+      "schema": 80,
+      "source_inventory_sha256": "84dfea477a430dbd4da1daf58f66b5e8a37cb070471a9f88bf648910f3a3d4ed"
+    },
     "D6_failed_witnessed_terminal_and_AWS1654_observer": {
       "HTTP_package_source_pass": true,
       "Linux_CI_and_image_and_production_qualification": null,
@@ -438,7 +486,7 @@
     }
   },
   "human_architecture_signoff_claimed": false,
-  "non_test_Go_sources": 695,
+  "non_test_Go_sources": 698,
   "previous_AWS1652_review_accepted_at": "2026-10-23T02:46:08.896936+00:00",
   "previous_accepted_inventory_sha256": "9e84d02942ec5c2178962b84ce64baa859ff43472e0916d2d5df4d304dae9de8",
   "previous_accepted_review_sha256": "6d6bb4351292d4e7f4274aaa7470c6553f60541799d58170fce4e7cf30250e05",
@@ -452,6 +500,7 @@
   "previous_review_before_D12_inventory_and_lint_correction_sha256": "2dcd0143eb4c4b6b864f3035c18ab352b69ddb7e10011b883ad8d3571406cf97",
   "previous_review_before_D12_unbounded_lint_correction_sha256": "eaefd44faca96b8cea72a33a17b2b3c5afd55e460767fbeb21604cb591982f60",
   "previous_review_before_D14_presend_retirement_recovery_sha256": "34e6bf85f4bc5d6c1f75b78414a40fdee8dd964b78a6ccc2b4a10f83533e548e",
+  "previous_review_before_D15_prejournal_refusal_and_scheduler_sha256": "efa62303bdfddf7b8322b8238c66833bf71377dbe3a414c3911834b625acf91b",
   "previous_review_before_D7_R3_complete_profiles_sha256": "a866516ae2e96c6bec1b03d10d66fc5da57bfb258c702c6be19b3dd833bbd452",
   "previous_review_before_actual_AWS1652_contract_successor_sha256": "fb87e8b18a2e5847d83e6abdb57ccd23ed0759eb0abcc33f214966dcd5d5fc6f",
   "previous_review_before_actual_AWS1653_contract_successor_sha256": "e4820e92a3ab43b3ba63ff229977eeae82835c8b7f60c7e596d245d0dcd949da",
@@ -519,7 +568,7 @@
   "reviewer": "Root full production-source delta review; separate independent manager/dial/monitor peer; source acceptance only",
   "schema": "core_service_source_review_v1",
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "a11707b6f2465c7d2e45a765e3da5ef1ba1393041c33da2b3ef65c70156b56a7",
+  "source_inventory_sha256": "84dfea477a430dbd4da1daf58f66b5e8a37cb070471a9f88bf648910f3a3d4ed",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -562,6 +611,7 @@
     "After the actual ca45 tagged-CI compile failure, Linux nativequalification Core build and complete message test-binary compilation both returned zero. Isolated byte-exact source copies of the pure join and refusal boundaries passed thirteen Mac race nodes with no failure or skip; no whole Darwin message package or Linux runtime execution is claimed. Current exact-publication CI is required. Seven separately reported CodeQL findings remain preserved with a local historical/bounds/semantic triage; no alert was suppressed or dismissed.",
     "D14 actual local PostgreSQL17 recovery storage root34nodes, twelve inherited repository roots156nodes, compatibility/UTC56nodes and administrative API8nodes passed with race and no fail/skip; PostgreSQL stopped with original exit0.",
     "D14 Root full Linux-target Core, Goose and nativequalification source builds passed; complete static lint passed after a test-only tagged-switch correction. Fresh two-root UTC regression passed.",
-    "D14 CI preserves the exact original sixteen-root artifact and adds five recovery/UTC/API roots in a separate retained artifact; a local Bash output-tree control verified the separation."
+    "D14 CI preserves the exact original sixteen-root artifact and adds five recovery/UTC/API roots in a separate retained artifact; a local Bash output-tree control verified the separation.",
+    "D15 local disposable PostgreSQL17/Goose1..80 passed four race roots/102 nodes with no failures/skips and closed shutdown; new HTTP authorization/closed IDs/privacy passed eleven nodes; real-context authority UTC passed seven nodes. Complete Linux-target Core, Goose, nativequalification source builds and full static lint passed. The exact original sixteen CI roots remain intact; ten additional recovery/UTC/API roots have a separate retained artifact. These Source checks grant no production lifecycle credit."
   ]
 }

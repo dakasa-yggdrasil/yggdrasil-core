@@ -453,3 +453,33 @@ new claim and issued successor, then requires the genuine signed Guest return
 and separate native poweroff proof. Cleanup and complete native and auxiliary
 absence remain separate. The corresponding authenticated GET exposes only
 the bounded public recovery summaries and supplies no quiescence credit.
+
+The early disposal scheduler gate lets an exact pending schema79 recovery reach
+the existing locked claim owner. A pending request must match the immutable
+claimed disposal and current intent; an unrelated, already claimed or issued
+request cannot open that gate. The normal claim still revalidates eligibility.
+
+The V1 authority deadline is also converted to UTC before a new snapshot
+challenge is signed and persisted. Its minimum context, intent, lease and
+evidence deadline remains unchanged. Snapshot persistence still requires the
+complete original challenge equality and signature.
+
+`POST /api/v1/ops/capacity/failed-installed-guest-disposals/prejournal-refusal-recoveries`
+accepts only `preregistration_id` and `refused_retirement_request_id`, with the
+same GodMode and workflow management requirements. Schema80 records this
+recovery separately from schema79. Core authenticates the complete original
+legacy Guest first-live refusal: one closed original caller refusal, one
+`before_start` authority read and its complete, timely signed snapshot response,
+with no snapshot or authority return and no retirement or native mutation
+record. The supported actor performs this authority check before journal
+reservation or retirement work. A status code alone cannot prove that boundary;
+unknown, incomplete or later-phase transports are refused.
+
+The original possible-send and all business effects remain recorded. A fresh
+scheduled run, fence, lease and distinct signed retirement may be issued only
+through the explicit schema80 chain, with at most one successor across both
+recovery families. The original request is never replayed, renewed or relabeled
+as never sent. Quiescent continuation authenticates the exact new claim and
+issued request and still requires actual Guest retirement, separate native
+poweroff and subsequent exact cleanup and terminal absence. The corresponding
+GET returns bounded public summaries and gives no quiescence credit.

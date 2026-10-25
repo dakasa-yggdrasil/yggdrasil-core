@@ -85,6 +85,24 @@ type GuestOriginalAuthorityRead struct {
 // The ORIGINAL read identity and challenge are committed BEFORE the GET.
 // The first pre-Reserve read uses the separate snapshot. Every subsequent
 // read must join the actual signed journal and currently active attempt.
+// Preserve the minimum ORIGINAL bound. Canonicalize only the new value before
+// signing and persistence so strict durable challenge equality remains valid.
+func guestAuthorityReadDeadline(ctx context.Context, now, original time.Time, lease *time.Time, maxEvidenceAgeSeconds int) (time.Time, error) {
+	if ctx == nil {
+		return time.Time{}, ErrCapacityConflict
+	}
+	deadline, ok := ctx.Deadline()
+	if !ok || ctx.Err() != nil || !deadline.After(now) || lease == nil {
+		return time.Time{}, ErrCapacityConflict
+	}
+	for _, bound := range []time.Time{original, *lease, now.Add(time.Duration(maxEvidenceAgeSeconds) * time.Second)} {
+		if bound.Before(deadline) {
+			deadline = bound
+		}
+	}
+	return deadline.UTC(), nil
+}
+
 func (s CapacityStore) ReserveGuestAuthorityRead(ctx context.Context, principal, id, intentSHA, phase string, intentKey ed25519.PrivateKey) (GuestOriginalAuthorityRead, error) {
 	var result GuestOriginalAuthorityRead
 	err := s.guestRetirementTransaction(ctx, id, func(tx *sql.Tx, stored GuestRetirementOriginal, now time.Time) error {
@@ -99,14 +117,9 @@ func (s CapacityStore) ReserveGuestAuthorityRead(ctx context.Context, principal,
 		if err = tx.QueryRowContext(ctx, `SELECT attempt_id::text FROM public.capacity_guest_original_caller_attempts WHERE intent_id=$1`, id).Scan(&attempt); err != nil || attempt != stored.Request.Intent.AttemptID {
 			return ErrCapacityConflict
 		}
-		deadline, ok := ctx.Deadline()
-		if !ok || ctx.Err() != nil || !deadline.After(now) || current.LeaseExpiresAt == nil {
-			return ErrCapacityConflict
-		}
-		for _, bound := range []time.Time{stored.Request.Intent.OriginalDeadline, *current.LeaseExpiresAt, now.Add(time.Duration(stored.Binding.MaxEvidenceAgeSeconds) * time.Second)} {
-			if bound.Before(deadline) {
-				deadline = bound
-			}
+		deadline, err := guestAuthorityReadDeadline(ctx, now, stored.Request.Intent.OriginalDeadline, current.LeaseExpiresAt, stored.Binding.MaxEvidenceAgeSeconds)
+		if err != nil {
+			return err
 		}
 		var ordinal int
 		if err = tx.QueryRowContext(ctx, `SELECT COALESCE(max(ordinal),0)+1 FROM public.capacity_guest_original_authority_reads WHERE intent_id=$1 AND phase=$2`, id, phase).Scan(&ordinal); err != nil {

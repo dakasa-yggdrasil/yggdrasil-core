@@ -320,7 +320,10 @@ func (s CapacityStore) TryClaimFailedInstalledGuestDisposal(ctx context.Context,
 		if err = tx.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil {
 			return old, "", false, err
 		}
-		next, preID, eligible, e := s.claimNeverSentRecoveryTx(ctx, tx, policy, p, old, assessment, now.UTC())
+		next, preID, eligible, e := s.claimPrejournalRefusalRecoveryTx(ctx, tx, policy, p, old, assessment, now.UTC())
+		if e == nil && !eligible {
+			next, preID, eligible, e = s.claimNeverSentRecoveryTx(ctx, tx, policy, p, old, assessment, now.UTC())
+		}
 		if e != nil || !eligible {
 			return old, "", false, e
 		}

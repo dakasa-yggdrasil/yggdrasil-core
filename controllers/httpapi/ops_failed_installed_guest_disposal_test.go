@@ -20,6 +20,10 @@ func TestFailedInstalledDisposalRequiresExplicitAdministrativeIdentity(t *testin
 		{http.MethodGet, "/api/v1/ops/capacity/failed-installed-guest-disposals/id", func(s *Server, w http.ResponseWriter, r *http.Request) {
 			s.handleOpsFailedInstalledGuestDisposalRead(w, r)
 		}},
+		{http.MethodPost, "/api/v1/ops/capacity/failed-installed-guest-disposals/prejournal-refusal-recoveries", func(s *Server, w http.ResponseWriter, r *http.Request) { s.handleOpsPrejournalRefusalRecovery(w, r) }},
+		{http.MethodGet, "/api/v1/ops/capacity/failed-installed-guest-disposals/prejournal-refusal-recoveries/id", func(s *Server, w http.ResponseWriter, r *http.Request) {
+			s.handleOpsPrejournalRefusalRecoveryRead(w, r)
+		}},
 		{http.MethodPost, "/api/v1/ops/capacity/failed-installed-guest-disposals/retirement-recoveries", func(s *Server, w http.ResponseWriter, r *http.Request) { s.handleOpsPresendRetirementRecovery(w, r) }},
 		{http.MethodGet, "/api/v1/ops/capacity/failed-installed-guest-disposals/retirement-recoveries/id", func(s *Server, w http.ResponseWriter, r *http.Request) {
 			s.handleOpsPresendRetirementRecoveryRead(w, r)
