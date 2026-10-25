@@ -1,0 +1,742 @@
+{
+  "records": [
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/identities.go",
+      "function": "package",
+      "line": 19,
+      "name": "queueCollaboratorCreate",
+      "value": "yggdrasil-core.collaborator.create"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/identities.go",
+      "function": "package",
+      "line": 20,
+      "name": "queueCollaboratorUpdate",
+      "value": "yggdrasil-core.collaborator.update"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/identities.go",
+      "function": "package",
+      "line": 21,
+      "name": "queueCollaboratorDelete",
+      "value": "yggdrasil-core.collaborator.delete"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/identities.go",
+      "function": "package",
+      "line": 22,
+      "name": "queueCollaboratorGet",
+      "value": "yggdrasil-core.collaborator.get"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/identities.go",
+      "function": "package",
+      "line": 23,
+      "name": "queueCollaboratorList",
+      "value": "yggdrasil-core.collaborator.list"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/identities.go",
+      "function": "package",
+      "line": 24,
+      "name": "queueTeamCreate",
+      "value": "yggdrasil-core.team.create"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/identities.go",
+      "function": "package",
+      "line": 25,
+      "name": "queueTeamUpdate",
+      "value": "yggdrasil-core.team.update"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/identities.go",
+      "function": "package",
+      "line": 26,
+      "name": "queueTeamDelete",
+      "value": "yggdrasil-core.team.delete"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/identities.go",
+      "function": "package",
+      "line": 27,
+      "name": "queueTeamGet",
+      "value": "yggdrasil-core.team.get"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/identities.go",
+      "function": "package",
+      "line": 28,
+      "name": "queueTeamList",
+      "value": "yggdrasil-core.team.list"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/identities.go",
+      "function": "package",
+      "line": 29,
+      "name": "queueTeamMembershipUpsert",
+      "value": "yggdrasil-core.team.membership.upsert"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/identities.go",
+      "function": "package",
+      "line": 30,
+      "name": "queueTeamMembershipList",
+      "value": "yggdrasil-core.team.membership.list"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/integrations.go",
+      "function": "package",
+      "line": 22,
+      "name": "queueIntegrationExecute",
+      "value": "yggdrasil-core.integration.execute"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/integrations.go",
+      "function": "package",
+      "line": 23,
+      "name": "queueIntegrationStatusGet",
+      "value": "yggdrasil-core.integration.status.get"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/integrations.go",
+      "function": "package",
+      "line": 24,
+      "name": "queueIntegrationStatusList",
+      "value": "yggdrasil-core.integration.status.list"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/integrations.go",
+      "function": "package",
+      "line": 25,
+      "name": "queueIntegrationInstanceHealthGet",
+      "value": "yggdrasil-core.integration.instance_health.get"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/integrations.go",
+      "function": "package",
+      "line": 26,
+      "name": "queueIntegrationInstanceHealthList",
+      "value": "yggdrasil-core.integration.instance_health.list"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/integrations.go",
+      "function": "package",
+      "line": 27,
+      "name": "queueIntegrationCatalogGet",
+      "value": "yggdrasil-core.integration.catalog.get"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/integrations.go",
+      "function": "package",
+      "line": 28,
+      "name": "queueIntegrationCatalogList",
+      "value": "yggdrasil-core.integration.catalog.list"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/integrations.go",
+      "function": "package",
+      "line": 29,
+      "name": "queueCatalogDiscover",
+      "value": "yggdrasil-core.catalog.discover"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/manifests.go",
+      "function": "package",
+      "line": 23,
+      "name": "queueManifestValidate",
+      "value": "yggdrasil-core.manifest.validate"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/manifests.go",
+      "function": "package",
+      "line": 24,
+      "name": "queueManifestCreate",
+      "value": "yggdrasil-core.manifest.create"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/manifests.go",
+      "function": "package",
+      "line": 25,
+      "name": "queueManifestList",
+      "value": "yggdrasil-core.manifest.list"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/manifests.go",
+      "function": "package",
+      "line": 26,
+      "name": "queueManifestGet",
+      "value": "yggdrasil-core.manifest.get"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/manifests.go",
+      "function": "package",
+      "line": 27,
+      "name": "queueManifestRBACEvaluate",
+      "value": "yggdrasil-core.manifest.rbac.evaluate"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/manifests.go",
+      "function": "package",
+      "line": 28,
+      "name": "queueManifestPolicyEval",
+      "value": "yggdrasil-core.manifest.policy.evaluate"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/manifests.go",
+      "function": "package",
+      "line": 29,
+      "name": "queueAuthorizationEval",
+      "value": "yggdrasil-core.authorization.evaluate"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/manifests.go",
+      "function": "package",
+      "line": 30,
+      "name": "queueCollaboratorReconcileState",
+      "value": "yggdrasil-core.collaborator.reconcile_provider_state"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/products.go",
+      "function": "package",
+      "line": 22,
+      "name": "queueProductMaterialize",
+      "value": "yggdrasil-core.product.materialize"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/products.go",
+      "function": "package",
+      "line": 23,
+      "name": "queueProductInstallationReconcile",
+      "value": "yggdrasil-core.product.installation.reconcile"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/products.go",
+      "function": "package",
+      "line": 24,
+      "name": "queueProductInstallationApply",
+      "value": "yggdrasil-core.product.installation.apply"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/products.go",
+      "function": "package",
+      "line": 25,
+      "name": "queueProductInstallationObserve",
+      "value": "yggdrasil-core.product.installation.observe"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/products.go",
+      "function": "package",
+      "line": 26,
+      "name": "queueProductInstallationUninstall",
+      "value": "yggdrasil-core.product.installation.uninstall"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/products.go",
+      "function": "package",
+      "line": 27,
+      "name": "queueProductInstallationStateDiscover",
+      "value": "yggdrasil-core.product.installation_state.discover"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/topology.go",
+      "function": "package",
+      "line": 18,
+      "name": "queueTopologyNodeUpsert",
+      "value": "yggdrasil-core.topology.node.upsert"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/topology.go",
+      "function": "package",
+      "line": 19,
+      "name": "queueTopologyNodeGet",
+      "value": "yggdrasil-core.topology.node.get"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/topology.go",
+      "function": "package",
+      "line": 20,
+      "name": "queueTopologyNodeChildren",
+      "value": "yggdrasil-core.topology.node.children"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/topology.go",
+      "function": "package",
+      "line": 21,
+      "name": "queueTopologyEdgeUpsert",
+      "value": "yggdrasil-core.topology.edge.upsert"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/topology.go",
+      "function": "package",
+      "line": 22,
+      "name": "queueTopologyEdgeList",
+      "value": "yggdrasil-core.topology.edge.list"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/topology.go",
+      "function": "package",
+      "line": 23,
+      "name": "queueTopologyDocumentUpsert",
+      "value": "yggdrasil-core.topology.document.upsert"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/topology.go",
+      "function": "package",
+      "line": 24,
+      "name": "queueTopologyDocumentGet",
+      "value": "yggdrasil-core.topology.document.get"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/topology.go",
+      "function": "package",
+      "line": 25,
+      "name": "queueTopologyDocumentList",
+      "value": "yggdrasil-core.topology.document.list"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/topology.go",
+      "function": "package",
+      "line": 26,
+      "name": "queueTopologyDocumentValue",
+      "value": "yggdrasil-core.topology.document.value"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/topology.go",
+      "function": "package",
+      "line": 27,
+      "name": "queueTopologyAccessEvaluate",
+      "value": "yggdrasil-core.topology.access.evaluate"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/topology.go",
+      "function": "package",
+      "line": 28,
+      "name": "queueBuildProjectCreate",
+      "value": "yggdrasil-core.topology.build_project.create"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/topology.go",
+      "function": "package",
+      "line": 29,
+      "name": "queueBuildProjectGet",
+      "value": "yggdrasil-core.topology.build_project.get"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/topology.go",
+      "function": "package",
+      "line": 30,
+      "name": "queueBuildProjectList",
+      "value": "yggdrasil-core.topology.build_project.list"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/topology.go",
+      "function": "package",
+      "line": 31,
+      "name": "queueBuildProjectDelete",
+      "value": "yggdrasil-core.topology.build_project.delete"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/workflows.go",
+      "function": "package",
+      "line": 25,
+      "name": "queueWorkflowDispatch",
+      "value": "yggdrasil-core.workflow.dispatch"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/message/workflows.go",
+      "function": "package",
+      "line": 26,
+      "name": "queueWorkflowRun",
+      "value": "yggdrasil-core.workflow.run"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_credential.go",
+      "function": "package",
+      "line": 7,
+      "name": "EventTypeCredentialSetupTokenIssued",
+      "value": "credential.setup_token_issued"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_credential.go",
+      "function": "package",
+      "line": 8,
+      "name": "EventTypeCredentialPasswordSetupCompleted",
+      "value": "credential.password_setup_completed"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_credential.go",
+      "function": "package",
+      "line": 9,
+      "name": "EventTypeCredentialPasswordChanged",
+      "value": "credential.password_changed"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_credential.go",
+      "function": "package",
+      "line": 10,
+      "name": "EventTypeCredentialResetTokenIssued",
+      "value": "credential.reset_token_issued"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_credential.go",
+      "function": "package",
+      "line": 11,
+      "name": "EventTypeCredentialPasswordRotationRequired",
+      "value": "credential.password_rotation_required"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_credential.go",
+      "function": "package",
+      "line": 12,
+      "name": "EventTypeCredentialMFAReset",
+      "value": "credential.mfa_reset"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_integration_mutation.go",
+      "function": "ParseIntegrationMutationEventType",
+      "line": 86,
+      "name": "EventTypeStripeCustomerEnsured",
+      "value": "stripe.customer.ensured"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_integration_mutation.go",
+      "function": "ParseIntegrationMutationEventType",
+      "line": 87,
+      "name": "EventTypeStripeCustomerDestroyed",
+      "value": "stripe.customer.destroyed"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_integration_mutation.go",
+      "function": "ParseIntegrationMutationEventType",
+      "line": 88,
+      "name": "EventTypeStripeSubscriptionEnsured",
+      "value": "stripe.subscription.ensured"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_integration_mutation.go",
+      "function": "ParseIntegrationMutationEventType",
+      "line": 89,
+      "name": "EventTypeStripeSubscriptionDestroyed",
+      "value": "stripe.subscription.destroyed"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_integration_mutation.go",
+      "function": "ParseIntegrationMutationEventType",
+      "line": 90,
+      "name": "EventTypeStripeRefundCreated",
+      "value": "stripe.refund.created"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_integration_mutation.go",
+      "function": "ParseIntegrationMutationEventType",
+      "line": 93,
+      "name": "EventTypeEFIChargeEnsured",
+      "value": "efi.charge.ensured"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_integration_mutation.go",
+      "function": "ParseIntegrationMutationEventType",
+      "line": 94,
+      "name": "EventTypeEFIChargeDestroyed",
+      "value": "efi.charge.destroyed"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_integration_mutation.go",
+      "function": "ParseIntegrationMutationEventType",
+      "line": 95,
+      "name": "EventTypeEFIPayoutCreated",
+      "value": "efi.payout.created"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_integration_mutation.go",
+      "function": "ParseIntegrationMutationEventType",
+      "line": 98,
+      "name": "EventTypeNFEIOServiceInvoiceEnsured",
+      "value": "nfeio.service_invoice.ensured"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_integration_mutation.go",
+      "function": "ParseIntegrationMutationEventType",
+      "line": 101,
+      "name": "EventTypeGitHubRepositoryEnsured",
+      "value": "github.repository.ensured"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_integration_mutation.go",
+      "function": "ParseIntegrationMutationEventType",
+      "line": 102,
+      "name": "EventTypeGitHubTeamMembershipDestroyed",
+      "value": "github.team_membership.destroyed"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 8,
+      "name": "EventTypeCollaboratorCreated",
+      "value": "collaborator.created"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 9,
+      "name": "EventTypeCollaboratorOffboarded",
+      "value": "collaborator.offboarded"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 15,
+      "name": "EventTypeCollaboratorSessionTerminated",
+      "value": "collaborator.session.terminated"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 16,
+      "name": "EventTypeCollaboratorAbsenceStarted",
+      "value": "collaborator.absence_started"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 17,
+      "name": "EventTypeCollaboratorAbsenceEnded",
+      "value": "collaborator.absence_ended"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 18,
+      "name": "EventTypeCollaboratorRoleChanged",
+      "value": "collaborator.role_changed"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 19,
+      "name": "EventTypeCollaboratorReOnboarded",
+      "value": "collaborator.re_onboarded"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 20,
+      "name": "EventTypeTeamCreated",
+      "value": "team.created"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 21,
+      "name": "EventTypeTeamUpdated",
+      "value": "team.updated"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 22,
+      "name": "EventTypeTeamDeleted",
+      "value": "team.deleted"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 23,
+      "name": "EventTypeTeamMembershipAdded",
+      "value": "team_membership.added"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 24,
+      "name": "EventTypeTeamMembershipRemoved",
+      "value": "team_membership.removed"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 25,
+      "name": "EventTypeTeamGrantAdded",
+      "value": "team_grant.added"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 26,
+      "name": "EventTypeTeamGrantRevoked",
+      "value": "team_grant.revoked"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 31,
+      "name": "EventTypeReactorDeadLettered",
+      "value": "reactor.dead_lettered"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 37,
+      "name": "EventTypeRuntimeStateContractMismatchDetected",
+      "value": "runtime_state.contract_mismatch_detected"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 38,
+      "name": "EventTypeIntegrationTypeSynced",
+      "value": "integration_type.synced"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 39,
+      "name": "EventTypeIntegrationTypeSyncNoOp",
+      "value": "integration_type.sync_no_op"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 40,
+      "name": "EventTypeIntegrationTypeSyncSkipped",
+      "value": "integration_type.sync_skipped"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 43,
+      "name": "EventTypeExternalIdentityLinked",
+      "value": "collaborator_external_identity.linked"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 44,
+      "name": "EventTypeExternalIdentityUnlinked",
+      "value": "collaborator_external_identity.unlinked"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 45,
+      "name": "EventTypeExternalIdentityDriftDetected",
+      "value": "collaborator_external_identity.drift_detected"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 46,
+      "name": "EventTypeExternalIdentityUnknownExternal",
+      "value": "collaborator_external_identity.unknown_external"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 47,
+      "name": "EventTypeExternalIdentityPurged",
+      "value": "collaborator_external_identity.purged"
+    },
+    {
+      "build_constraint": "default",
+      "file": "repository/event_types_lifecycle.go",
+      "function": "package",
+      "line": 48,
+      "name": "EventTypeExternalIdentityConflictDetected",
+      "value": "collaborator_external_identity.conflict_detected"
+    }
+  ],
+  "schema": "core_source_interface_census_v1",
+  "scope": "source facts; no deployed endpoint or runtime authority claimed"
+}

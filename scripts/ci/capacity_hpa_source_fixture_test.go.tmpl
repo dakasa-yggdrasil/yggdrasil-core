@@ -1,0 +1,64 @@
+package adapter
+
+// Remote CI fixture inside exact reviewed integration-kubernetes source.
+import (
+	"context"
+	"encoding/json"
+	"os"
+	"testing"
+
+	model "github.com/dakasa-yggdrasil/integration-kubernetes/internal/protocol"
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
+)
+
+func TestCapacityCoreHPASourceFixtureProducer(t *testing.T) {
+	var in struct {
+		Mode    string                                 `json:"mode"`
+		Request model.AdapterExecuteIntegrationRequest `json:"request"`
+	}
+	raw, err := os.ReadFile(os.Getenv("CAPACITY_NATIVE_INPUT_FILE"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	if json.Unmarshal(raw, &in) != nil {
+		t.Fatal("closed fixture request missing")
+	}
+	client, scope, req, emitter := capacityFixture(t, true)
+	write := func(v any) {
+		raw, err := json.Marshal(v)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if os.WriteFile(os.Getenv("CAPACITY_NATIVE_OUTPUT_FILE"), raw, 0600) != nil {
+			t.Fatal("fixture output missing")
+		}
+	}
+	if in.Mode == "seed" {
+		write(map[string]any{"describe": Describe(), "config": req.Target.InstanceSpec.Config, "scope": scope})
+		return
+	}
+	if in.Mode == "foreign_hpa" || in.Mode == "missing_rv" {
+		obj, err := client.Resource(capacityHPAGVR).Namespace(scope.Namespace).Get(context.Background(), scope.HPAName, metav1.GetOptions{})
+		if err != nil {
+			t.Fatal(err)
+		}
+		if in.Mode == "foreign_hpa" {
+			obj.SetUID(types.UID("foreign"))
+		} else {
+			obj.SetResourceVersion("")
+		}
+		if err = client.Tracker().Update(capacityHPAGVR, obj, scope.Namespace); err != nil {
+			t.Fatal(err)
+		}
+	}
+	response, err := Execute(context.Background(), in.Request)
+	if len(capacityWrites(client)) != 0 || len(emitter.events) != 0 {
+		t.Fatal("source observation mutated HPA or emitted event")
+	}
+	if err != nil {
+		write(map[string]any{"error": "hpa_fixture_refused"})
+		return
+	}
+	write(response)
+}

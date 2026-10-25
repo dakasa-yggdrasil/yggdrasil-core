@@ -1,0 +1,84 @@
+{
+  "records": [
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_guest.go",
+      "function": "capacityGuestPath",
+      "line": 101
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_guest.go",
+      "function": "serveCapacityGuestRequest",
+      "line": 171
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_host_original_factory.go",
+      "function": "hostFactoryPath",
+      "line": 182
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_host_original_factory.go",
+      "function": "serveOriginalHostRequest",
+      "line": 226
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_mutations.go",
+      "function": "capacityMutationPath",
+      "line": 120
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_mutations.go",
+      "function": "serveCapacityMutationRequest",
+      "line": 127
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/contact_phone.go",
+      "function": "phoneProfileExemptPath",
+      "line": 23
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/deploy_auth.go",
+      "function": "deployCredentialPath",
+      "line": 66
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/directory_machine_read.go",
+      "function": "serveDirectoryMachineRequest",
+      "line": 233
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "requiresAuthenticatedConsoleRequest",
+      "line": 1162
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "mfaEnrollmentExemptPath",
+      "line": 1212
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "requiresAuthenticatedConsoleAPI",
+      "line": 1239
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/workflow_runs.go",
+      "function": "workflowRunMachineCredentialPath",
+      "line": 479
+    }
+  ],
+  "schema": "core_source_interface_census_v1",
+  "scope": "source facts; no deployed endpoint or runtime authority claimed"
+}

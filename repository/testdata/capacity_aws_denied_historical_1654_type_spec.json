@@ -1,0 +1,2478 @@
+{
+  "action_catalog": [
+    {
+      "category": "capability",
+      "description": "Ensure one S3 bucket exists and optionally apply tags, versioning, or a PublicAccessBlock. PublicAccessBlock (1.46.0+): block_public_acls / ignore_public_acls / block_public_policy / restrict_public_buckets. Omit all four to leave the bucket's block untouched; name any one and the unnamed ones default to TRUE (the secure value, and CreateBucket's own default). A NEW bucket is created with all four TRUE, which makes PutBucketPolicy REJECT a public policy \u2014 so a public-read media bucket needs block_public_policy=false (to ATTACH the policy) AND restrict_public_buckets=false (for anonymous principals to be SERVED it). Setting only the first yields a bucket that accepts the policy and still 403s the public.",
+      "idempotent": true,
+      "name": "ensure_s3_bucket",
+      "resource_types": [
+        "s3_bucket"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Request (or adopt) an ACM certificate with DNS validation and return the validation CNAME records to publish in Route53. Set for_cloudfront=true to force the cert into us-east-1 (required by CloudFront). Idempotent: an existing cert for the same domain_name is adopted, never re-requested.",
+      "idempotent": true,
+      "name": "ensure_acm_certificate",
+      "resource_types": [
+        "acm_certificate"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure a CloudFront distribution serving an S3 bucket over HTTPS via Origin Access Control (OAC) with optional alias_domain_names and an acm_certificate_arn. When distribution_id + path_pattern are provided, reconcile a path-scoped S3 origin and GET/HEAD CORS response policy on that existing distribution, wait until Deployed, then merge an OAC bucket-policy statement restricted to s3_object_prefix. Idempotent and fail-closed: the default behavior and unrelated bucket-policy statements are preserved; an origin-ID/domain collision, duplicate exact path, or potentially shadowing earlier ordered behavior is rejected before shared CloudFront resources are changed.",
+      "idempotent": true,
+      "name": "ensure_cloudfront_distribution",
+      "resource_types": [
+        "cloudfront_distribution"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one ECR repository exists and optionally apply tags, image tag mutability and scan-on-push. Image tag mutability (1.56.0+): when image_tag_mutability is named (MUTABLE, IMMUTABLE, IMMUTABLE_WITH_EXCLUSION or MUTABLE_WITH_EXCLUSION, the *_WITH_EXCLUSION modes with image_tag_mutability_exclusion_filters as a list of {filter_type: WILDCARD, filter} objects), an existing repository whose setting differs is reconciled through PutImageTagMutability and read back to prove the stored setting; a converged repository is left untouched. A new repository is created with the requested mode and filters. Without the key the setting is observed and reported but never written. Scan-on-push (1.57.0+): the flat boolean key scan_on_push follows the same contract, reconciling an existing repository through PutImageScanningConfiguration plus a read-back, creating a new one with the flag, and only observing when omitted; the nested image_scanning_configuration object is refused. Unknown modes, filter types, malformed filters, a non-boolean scan_on_push or the nested scanning object fail before any AWS call. Output adds image_tag_mutability, image_tag_mutability_exclusion_filters, mutability_changed, previous_image_tag_mutability, scan_on_push, scan_on_push_changed and previous_scan_on_push.",
+      "idempotent": true,
+      "name": "ensure_ecr_repository",
+      "resource_types": [
+        "ecr_repository"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Replace the ECR repository lifecycle policy. Accepts a structured policy or raw rules array (e.g. keep last N tags, expire untagged after N days).",
+      "idempotent": true,
+      "name": "set_ecr_lifecycle_policy",
+      "resource_types": [
+        "ecr_repository"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Read the exact AWS caller identity and model ecr:PutLifecyclePolicy for 1-100 named repositories in one explicit region of the caller's default ECR registry. Rejects registry_id, retrieves each repository policy when IAM supports complete evaluation, preserves explicit deny, missing context, permissions-boundary and Organizations decisions, and fails closed for unsupported principal shapes or any applicable Organizations resource control policy. Returns identity and organization metadata, exact per-repository decisions, aggregate counts and modeled_controls_all_allowed without credential or policy material. VPC endpoint policies and authorization changes after the observation are not modeled, so this is not proof that a later live write will succeed.",
+      "idempotent": true,
+      "name": "observe_ecr_lifecycle_policy_authority",
+      "resource_types": [
+        "ecr_repository"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List images in an ECR repository for audit. Returns image_tag, image_digest, pushed_at, image_size_bytes per image (paginated).",
+      "idempotent": true,
+      "name": "list_ecr_images",
+      "resource_types": [
+        "ecr_repository"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Fetch a fresh ECR authorization token for the caller's account. Returns registry, username, password (decoded) and auth_b64 (raw token) plus expires_at. Used to rotate Kubernetes docker-registry pull secrets so private-ECR pulls keep working past the 12h token TTL.",
+      "idempotent": true,
+      "name": "get_ecr_authorization_token",
+      "resource_types": [
+        "ecr_repository"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one Secrets Manager secret exists and optionally write a new secret value. For regional migration, source_secret_name + source_region copies a SecretString entirely inside the adapter so plaintext does not cross workflow inputs or outputs; json_overrides may replace non-secret regional fields in a JSON object before destination write.",
+      "idempotent": true,
+      "name": "upsert_secrets_manager_secret",
+      "resource_types": [
+        "secret"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Atomically ensure a sensitive partial replacement of an existing JSON SecretString. Reads operation_secret_json and its exact validation contract from the instance credentials_ref, writes a deterministic client_request_token version under a pending stage, and promotes it only while AWSCURRENT equals expected_current_version_id.",
+      "idempotent": true,
+      "name": "ensure_secrets_manager_json_secret_version",
+      "resource_types": [
+        "secret"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Cancel a scheduled deletion of one Secrets Manager secret while it is still inside the 7-30 day recovery window. Idempotent: secrets that are not currently scheduled for deletion still return success.",
+      "idempotent": true,
+      "name": "restore_secret",
+      "resource_types": [
+        "secret"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one Route53 hosted zone exists and optionally apply tags.",
+      "idempotent": true,
+      "name": "ensure_route53_zone",
+      "resource_types": [
+        "route53_zone"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one Route53 record exists in the target hosted zone.",
+      "idempotent": true,
+      "name": "ensure_route53_record",
+      "resource_types": [
+        "route53_record"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one SES email or domain identity exists; when configuration_set_name is supplied, reconcile its default configuration set even on an existing identity.",
+      "idempotent": true,
+      "name": "ensure_ses_identity",
+      "resource_types": [
+        "ses_identity"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one SES configuration set exists in the requested region with an explicit owner_tag. Existing sets without matching ownership are rejected.",
+      "idempotent": true,
+      "name": "ensure_ses_configuration_set",
+      "resource_types": [
+        "ses_configuration_set"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one SES configuration-set EventBridge destination with exact enabled state, default event bus ARN and matching event types. Existing destinations of other types are rejected.",
+      "idempotent": true,
+      "name": "ensure_ses_event_destination",
+      "resource_types": [
+        "ses_event_destination"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Copy missing SES account-level suppressed destinations from source_region to target_region, promoting BOUNCE to COMPLAINT where needed. Never delete or downgrade entries. Output contains counts only, never addresses.",
+      "idempotent": true,
+      "name": "ensure_ses_suppression_sync",
+      "resource_types": [
+        "ses_suppression_list"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Send one email through AWS SES.",
+      "name": "send_email",
+      "resource_types": [
+        "email_message"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Send one SMS message through AWS SNS.",
+      "name": "send_sms",
+      "resource_types": [
+        "sms_message"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one IAM role exists with the desired trust policy and optionally inline policies and attached managed policies (managed_policy_arns \u2014 additive/idempotent, never detached).",
+      "idempotent": true,
+      "name": "ensure_iam_role",
+      "resource_types": [
+        "iam_role"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete one IAM role. Inputs: role_name (required; name is an alias), force_detach (boolean, default false). A missing role is outcome already-absent. The role's attached managed policies, inline policies and instance-profile memberships are listed first; when any exist and force_detach is false the step fails naming them and changes nothing. With force_detach=true it removes the role from each instance profile, detaches each managed policy, deletes each inline policy, then calls DeleteRole. Service-linked roles are refused. NoSuchEntity during teardown counts as done, so a retry converges. Retains aws.iam_role.destroyed. Output: role_name, role_arn, outcome (destroyed|already-absent), removed_from_instance_profiles, detached_managed_policies, deleted_inline_policies.",
+      "idempotent": true,
+      "name": "destroy_iam_role",
+      "resource_types": [
+        "iam_role"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure an IAM managed policy is attached to a role.",
+      "idempotent": true,
+      "name": "ensure_iam_policy_attachment",
+      "resource_types": [
+        "iam_policy_attachment"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure (upsert) ONE named inline policy on an existing IAM role via PutRolePolicy. Surgical and non-destructive: only the named inline policy is created/replaced; the role's other inline policies, managed attachments, and trust policy are untouched. Use to grant a scoped permission to a shared, externally-owned role (e.g. an EC2 node role) without ensure_iam_role taking over the whole role.",
+      "idempotent": true,
+      "name": "ensure_iam_role_policy",
+      "resource_types": [
+        "iam_role_policy"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Destroy one named inline IAM role policy via DeleteRolePolicy. Idempotent: a missing role or policy is an already-absent success; other provider failures are returned.",
+      "idempotent": true,
+      "name": "destroy_iam_role_policy",
+      "resource_types": [
+        "iam_role_policy"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Detach a managed policy from an IAM role via DetachRolePolicy. Idempotent inverse of ensure_iam_policy_attachment: a no-op success when the policy is not currently attached.",
+      "idempotent": true,
+      "name": "detach_iam_policy",
+      "resource_types": [
+        "iam_policy_attachment"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one IAM USER exists with optional inline policies, and optionally create+store an access key in Secrets Manager (access_key_secret_name). Idempotent: reuses a stored key still live on the user; mints one (pruning orphaned keys) only when none valid exists \u2014 AWS caps 2 keys/user and returns the secret only at creation. The response returns access_key_id + the SM secret name, NEVER the secret access key. For substrates where IRSA is impossible (k3s, no IAM OIDC provider): a scoped static credential with a smaller blast radius than the node role.",
+      "idempotent": true,
+      "name": "ensure_iam_user",
+      "resource_types": [
+        "iam_user"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure an IAM instance profile exists and (optionally) bind a role to it (for EC2 to assume). Idempotent: existing profile is adopted; role add is skipped when already attached (an instance profile holds at most one role).",
+      "idempotent": true,
+      "name": "ensure_iam_instance_profile",
+      "resource_types": [
+        "iam_instance_profile"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete one IAM instance profile. Inputs: instance_profile_name (required; name is an alias), remove_roles (boolean, default false). A missing profile is outcome already-absent. When the profile still holds a role and remove_roles is false the step fails naming the roles and changes nothing; with remove_roles=true each role is removed (RemoveRoleFromInstanceProfile) before DeleteInstanceProfile. The roles themselves are never deleted. Retains aws.iam_instance_profile.destroyed. Output: instance_profile_name, instance_profile_arn, outcome (destroyed|already-absent), removed_roles.",
+      "idempotent": true,
+      "name": "destroy_iam_instance_profile",
+      "resource_types": [
+        "iam_instance_profile"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure an IAM OpenID Connect provider exists (used for IRSA and GitHub Actions federation).",
+      "idempotent": true,
+      "name": "ensure_oidc_provider",
+      "resource_types": [
+        "oidc_provider"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one VPC exists with the desired CIDR block, DNS attributes, and tags.",
+      "idempotent": true,
+      "name": "ensure_vpc",
+      "resource_types": [
+        "vpc"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one subnet exists in the target VPC with the desired CIDR, AZ, and tags.",
+      "idempotent": true,
+      "name": "ensure_subnet",
+      "resource_types": [
+        "subnet"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one NAT Gateway exists in the target subnet (allocates an Elastic IP if not provided).",
+      "idempotent": true,
+      "name": "ensure_nat_gateway",
+      "resource_types": [
+        "nat_gateway"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one EKS cluster exists with the desired Kubernetes version, VPC config, and control-plane logging.",
+      "idempotent": true,
+      "name": "ensure_eks_cluster",
+      "resource_types": [
+        "eks_cluster"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one EKS managed node group exists with the desired instance types, disk size, and scaling config.",
+      "idempotent": true,
+      "name": "ensure_eks_nodegroup",
+      "resource_types": [
+        "eks_nodegroup"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure a customer-managed symmetric KMS CMK exists (keyed on alias). Enables annual rotation and applies an optional key policy on create. Idempotent \u2014 an existing alias returns the existing key unchanged.",
+      "idempotent": true,
+      "name": "ensure_kms_key",
+      "resource_types": [
+        "kms_key"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Envelope-encrypt k8s secrets at rest in etcd by associating a customer-managed KMS CMK with a live EKS cluster. IRREVERSIBLE at AWS; guarded by a DescribeCluster no-op when encryption is already present.",
+      "idempotent": true,
+      "name": "associate_eks_secrets_encryption",
+      "resource_types": [
+        "eks_cluster"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Make a CMK-encrypted copy (<source>-enc) of the latest unencrypted presleep snapshot for an RDS family so the wake-time restore comes up encrypted at rest. Reuses the restore-source selector for parity; excludes already-encrypted and own -enc copies. Idempotent \u2014 an existing -enc copy is returned unchanged; no source snapshot returns encrypted_snapshot_id:\"\" for fresh-create.",
+      "idempotent": true,
+      "name": "ensure_rds_snapshot_encrypted_copy",
+      "resource_types": [
+        "rds_snapshot"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Set a bucket's default server-side encryption (PutBucketEncryption) to SSE-KMS (aws:kms + CMK) or SSE-S3 (AES256) with an optional S3 Bucket Key. Idempotent \u2014 a live config that already matches returns a no_op. Honors the input region (KMS is regional).",
+      "idempotent": true,
+      "name": "ensure_s3_bucket_encryption",
+      "resource_types": [
+        "s3_bucket"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure an EKS managed addon (e.g. aws-ebs-csi-driver) is installed/reconciled with an optional IRSA role and version.",
+      "idempotent": true,
+      "name": "ensure_eks_addon",
+      "resource_types": [
+        "eks_addon"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure an EKS access entry exists for an IAM principal (CreateAccessEntry) and optionally associate an access policy at cluster/namespace scope (AssociateAccessPolicy). Replaces aws-auth ConfigMap edits. Idempotent: existing entry/association adopted. Requires cluster authenticationMode API or API_AND_CONFIG_MAP.",
+      "idempotent": true,
+      "name": "ensure_eks_access_entry",
+      "resource_types": [
+        "eks_access_entry"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one RDS database instance exists with the desired engine, instance class, storage, optional max_allocated_storage autoscaling ceiling, and VPC config. A create/restore password can be supplied as legacy plaintext master_password or as a non-secret master_password_ref {secret_id,json_key,region}, resolved from AWS Secrets Manager only inside the adapter. Mutable Multi-AZ and storage-autoscaling drift is reconciled in place.",
+      "idempotent": true,
+      "name": "ensure_rds_instance",
+      "resource_types": [
+        "rds_instance"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure a custom RDS DB parameter group exists, set parameters (e.g. rds.force_ssl), and optionally associate+reboot an instance.",
+      "idempotent": true,
+      "name": "ensure_rds_parameter_group",
+      "resource_types": [
+        "rds_parameter_group"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one ElastiCache cluster exists. Default path is a standalone cache cluster (CreateCacheCluster, identity cache_cluster_id). When input replication_group_id is set, creates an encrypted REPLICATION GROUP instead (CreateReplicationGroup \u2014 the only API accepting transit_encryption_enabled + at_rest_encryption_enabled + auth_token; default 2 nodes / automatic failover / multi-AZ). AUTH can be supplied as legacy plaintext auth_token or as a non-secret auth_token_ref {secret_id,json_key,region}, resolved from AWS Secrets Manager only inside the adapter. Idempotent: an existing RG is adopted and its primary endpoint returned (encryption/auth are immutable at create-time).",
+      "idempotent": true,
+      "name": "ensure_elasticache_cluster",
+      "resource_types": [
+        "elasticache_cluster"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure an Internet Gateway exists and is attached to the target VPC.",
+      "idempotent": true,
+      "name": "ensure_internet_gateway",
+      "resource_types": [
+        "internet_gateway"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure a route table exists with the desired routes and subnet associations.",
+      "idempotent": true,
+      "name": "ensure_route_table",
+      "resource_types": [
+        "route_table"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Upsert a single route in a route table. Tries CreateRoute; on RouteAlreadyExists falls back to ReplaceRoute with the same destination_cidr_block + target (nat_gateway_id | gateway_id | transit_gateway_id | vpc_peering_connection_id). Fixes the blackhole-route bug where a stale 0.0.0.0/0 \u2192 deleted-NAT route can't be overwritten by CreateRoute. Idempotent.",
+      "idempotent": true,
+      "name": "ensure_route",
+      "resource_types": [
+        "route"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure a VPC peering connection between vpc_id (requester) and peer_vpc_id (accepter). Idempotent: reuses any existing non-terminal peering between the two VPCs (either direction). A same-account same-region create lands in pending-acceptance and, with auto_accept (default true), is accepted through to active; the handler waits (bounded) for the connection to settle so a follow-up ensure_route referencing the pcx doesn't race provisioning. Optional peer_region (default same region) and peer_owner_id (cross-account) are supported. Note: peering yields reachability into the peer VPC CIDR only, NOT the EKS service CIDR \u2014 front cross-cluster targets with an internal NLB.",
+      "idempotent": true,
+      "name": "ensure_vpc_peering",
+      "resource_types": [
+        "vpc_peering_connection"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete one EKS managed node group (DeleteNodegroup) and poll DescribeNodegroup until it is gone (bounded ~480s). Idempotent: ResourceNotFound returns existed:false. If still DELETING at the bound, returns status:DELETING so the workflow can re-poll.",
+      "idempotent": true,
+      "name": "destroy_eks_nodegroup",
+      "resource_types": [
+        "eks_nodegroup"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete one EKS cluster (DeleteCluster) and poll DescribeCluster until it is gone (bounded ~720s). Idempotent: ResourceNotFound returns existed:false. If still DELETING at the bound, returns status:DELETING.",
+      "idempotent": true,
+      "name": "destroy_eks_cluster",
+      "resource_types": [
+        "eks_cluster"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete NAT gateway(s) (DeleteNatGateway). Accepts nat_gateway_id, or vpc_id to delete every available NAT gateway in that VPC. Idempotent: NatGatewayNotFound / already-gone is a no-op.",
+      "idempotent": true,
+      "name": "destroy_nat_gateway",
+      "resource_types": [
+        "nat_gateway"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete ELBv2 load balancer(s) (DeleteLoadBalancer). Accepts load_balancer_arn, or vpc_id (+ optional type, default network) to delete every matching LB in that VPC. Idempotent: LoadBalancerNotFound / already-gone is a no-op.",
+      "idempotent": true,
+      "name": "destroy_load_balancer",
+      "resource_types": [
+        "load_balancer"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete one RDS DB instance (DeleteDBInstance) for data-tier deep-sleep. Requires an explicit data decision: pass final_snapshot_id to take a final snapshot before deletion, or skip_final_snapshot=true to delete without one (refuses if neither is given). DeleteAutomatedBackups is left false so the retention window survives. Idempotent: DBInstanceNotFound / already-deleting is a no-op.",
+      "idempotent": true,
+      "name": "destroy_rds_instance",
+      "resource_types": [
+        "rds_instance"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete one ElastiCache cluster for data-tier deep-sleep. Default deletes a standalone cache cluster (DeleteCacheCluster). When input replication_group_id is set, deletes the encrypted replication group instead (DeleteReplicationGroup, RetainPrimaryCluster=false). Cache holds no durable data, so no snapshot is taken. Idempotent: NotFound / already-deleting is a no-op.",
+      "idempotent": true,
+      "name": "destroy_elasticache_cluster",
+      "resource_types": [
+        "elasticache_cluster"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure a security group exists with the desired ingress rules.",
+      "idempotent": true,
+      "name": "ensure_security_group",
+      "resource_types": [
+        "security_group"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete one EC2 security group. Inputs: group_id, or group_name together with vpc_id (one form required), region, revoke_references (boolean, default false). A missing group is outcome already-absent; the VPC default group is refused. A group used by any network interface is always refused (never forced). Rules in other security groups of the same region whose ingress or egress references this group (DescribeSecurityGroups filters ip-permission.group-id and egress.ip-permission.group-id) fail the step with the list unless revoke_references=true, in which case exactly those UserIdGroupPairs entries are revoked (RevokeSecurityGroupIngress/Egress; every other rule and source is kept) before DeleteSecurityGroup. Retains aws.security_group.destroyed. Output: group_id, group_name, vpc_id, region, outcome (destroyed|already-absent), revoked_references (list of {group_id, direction, protocol, from_port, to_port}).",
+      "idempotent": true,
+      "name": "destroy_security_group",
+      "resource_types": [
+        "security_group"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure an RDS DB subnet group exists spanning the given subnets.",
+      "idempotent": true,
+      "name": "ensure_db_subnet_group",
+      "resource_types": [
+        "db_subnet_group"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure an ElastiCache subnet group exists spanning the given subnets.",
+      "idempotent": true,
+      "name": "ensure_cache_subnet_group",
+      "resource_types": [
+        "cache_subnet_group"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure an EC2 launch template exists. Updates default version when called with new data.",
+      "idempotent": true,
+      "name": "ensure_launch_template",
+      "resource_types": [
+        "launch_template"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete one EC2 launch template and all its versions. Inputs: launch_template_name (name is an alias) or launch_template_id (one required; when both are given they must name the same template), region. A missing template is outcome already-absent. The adapter does not check whether an Auto Scaling group still references the template; destroy the group first. Retains aws.launch_template.destroyed. Output: launch_template_id, launch_template_name, region, outcome (destroyed|already-absent).",
+      "idempotent": true,
+      "name": "destroy_launch_template",
+      "resource_types": [
+        "launch_template"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure an EC2 Auto Scaling Group exists with the desired launch template, sizing, and subnets.",
+      "idempotent": true,
+      "name": "ensure_autoscaling_group",
+      "resource_types": [
+        "autoscaling_group"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Trigger an instance refresh on an Auto Scaling Group to roll out a new launch template version.",
+      "name": "start_instance_refresh",
+      "resource_types": [
+        "autoscaling_group"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Set an Auto Scaling Group's DesiredCapacity, clamped to its live [MinSize, MaxSize]. mode=exact is the default; mode=at_least treats desired_capacity as a floor and never scales a busy group down. A missing group is a loud failure; a resulting target equal to the current desired is a no-op that still succeeds (changed:false).",
+      "idempotent": true,
+      "name": "set_asg_desired_capacity",
+      "resource_types": [
+        "autoscaling_group"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete an Auto Scaling Group. The destroy_ side of the ASG lifecycle, used when a whole eco cell is torn down to remove the cell's dedicated worker ASG. force_delete defaults TRUE (delete even with attached instances). A group that is already gone is an idempotent success (deleted:false), not a loud error.",
+      "idempotent": true,
+      "name": "destroy_autoscaling_group",
+      "resource_types": [
+        "autoscaling_group"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure a standalone EC2 instance exists (idempotent RunInstances). Adopts a non-terminated instance already carrying the given Name tag instead of launching a duplicate.",
+      "idempotent": true,
+      "name": "ensure_ec2_instance",
+      "resource_types": [
+        "ec2_instance"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Read-only exact original accepted creation tuple and complete required root EBS/ENI absence. No create, terminate, grant, witness, enrollment, business or savings authority.",
+      "idempotent": true,
+      "name": "observe_original_create_disposition",
+      "resource_types": [
+        "ec2_instance"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Observe a complete non-atomic original-capacity profile census through bounded native pagination and every exact configured slot Name. Revalidates physical membership; reports no enrollment, fencing, readiness or business authority.",
+      "idempotent": true,
+      "name": "observe_fleet_inventory",
+      "resource_types": [
+        "ec2_instance"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Observe a standalone EC2 instance's live state and IP addresses via DescribeInstances. A missing instance is reported as found:false, not an error.",
+      "name": "observe_ec2_instance",
+      "resource_types": [
+        "ec2_instance"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Start a stopped EC2 instance. Idempotent \u2014 starting an already-running instance is a no-op.",
+      "idempotent": true,
+      "name": "start_ec2_instance",
+      "resource_types": [
+        "ec2_instance"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Stop a running EC2 instance. Idempotent \u2014 stopping an already-stopped instance is a no-op.",
+      "idempotent": true,
+      "name": "stop_ec2_instance",
+      "resource_types": [
+        "ec2_instance"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Terminate an EC2 instance (irreversible). Idempotent \u2014 terminating an already-terminated or non-existent instance is treated as success.",
+      "idempotent": true,
+      "name": "terminate_ec2_instance",
+      "resource_types": [
+        "ec2_instance"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Discover EC2 instances by tag. Lists every instance carrying a given tag_key (and optionally tags key=value pairs and a states allow-list), returning id, state, IPs, type and tags for each. Read-only; the source of truth for a cell-pool registry derived from the eco.dakasa.io/cell tag.",
+      "name": "discover_ec2_instances",
+      "resource_types": [
+        "ec2_instance"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Create or adopt an EC2 machine image. Supports a crash-consistent image from a stopped source_instance_id or an encrypted cross-region copy from source_image_id/source_region; waits for available by default.",
+      "idempotent": true,
+      "name": "ensure_machine_image",
+      "resource_types": [
+        "machine_image"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Observe a self-owned EC2 machine image by image_id or name, including state and backing snapshot IDs. A missing image returns found:false.",
+      "idempotent": true,
+      "name": "observe_machine_image",
+      "resource_types": [
+        "machine_image"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Deregister a self-owned EC2 machine image and, by default, delete its backing snapshots. An already-absent image is an idempotent success.",
+      "idempotent": true,
+      "name": "destroy_machine_image",
+      "resource_types": [
+        "machine_image"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Create or adopt an AWS Global Accelerator, then reconcile one listener and one regional endpoint group backed by the supplied NLB endpoint IDs. The adapter uses the required us-west-2 control endpoint while endpoints remain regional.",
+      "idempotent": true,
+      "name": "ensure_global_accelerator",
+      "resource_types": [
+        "global_accelerator"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Observe an AWS Global Accelerator by ARN or name, including static IPs, listeners, endpoint groups, health settings, and endpoint health descriptions.",
+      "idempotent": true,
+      "name": "observe_global_accelerator",
+      "resource_types": [
+        "global_accelerator"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Disable and delete an AWS Global Accelerator after deleting all endpoint groups and listeners. An already-absent accelerator is an idempotent success.",
+      "idempotent": true,
+      "name": "destroy_global_accelerator",
+      "resource_types": [
+        "global_accelerator"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Replace the lifecycle configuration of an S3 bucket (transitions, expiration, abort_incomplete_multipart).",
+      "idempotent": true,
+      "name": "ensure_s3_bucket_lifecycle",
+      "resource_types": [
+        "s3_bucket_lifecycle"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Replace the CORS configuration of an S3 bucket.",
+      "idempotent": true,
+      "name": "ensure_s3_bucket_cors",
+      "resource_types": [
+        "s3_bucket_cors"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Replace the bucket policy of an S3 bucket. Accepts JSON string or decoded object.",
+      "idempotent": true,
+      "name": "ensure_s3_bucket_policy",
+      "resource_types": [
+        "s3_bucket_policy"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Put one object into an S3 bucket \u2014 useful for bootstrap smoke tests.",
+      "idempotent": true,
+      "name": "s3_put_object",
+      "resource_types": [
+        "s3_object"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Query AWS Cost Explorer GetSavingsPlansPurchaseRecommendation for the operator's account. Returns top recommendations with hourly_commitment, upfront_cost, estimated_monthly_savings, estimated_savings_percentage. Decision-only \u2014 used by the recommend-aws-savings-plans monthly workflow to surface dollar value of commit candidates without auto-purchasing (multi-year financial commitment stays manual).",
+      "idempotent": true,
+      "name": "cost_explorer_recommendations",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List EBS snapshots not associated with any active AMI AND whose source volume no longer exists. Decision-only \u2014 surfaces metadata.{orphan_count, total_orphan_gib, estimated_monthly_usd, snapshots:[{snapshot_id, size_gib, start_time, description, volume_id}]} so the operator can review before deleting via aws ec2 delete-snapshot or a Phase 9 apply-storage-cleanup workflow.",
+      "idempotent": true,
+      "name": "list_ebs_snapshots_orphans",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete one EBS snapshot. Hardened with TTL grace guard \u2014 refuses snapshots younger than grace_hours (default 168h = 7 days, hard floor 24h enforced in adapter even if caller passes lower). Status semantics: succeeded (deleted), blocked (TTL grace not satisfied), not_found (snapshot does not exist). Used by apply-storage-cleanup workflow to GC orphans.",
+      "name": "destroy_ebs_snapshot",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List RDS DB snapshots whose source DBInstance no longer exists OR are older than retention_days (default 30). RDS snapshot storage is gp2-priced (~$0.095/GB-month) so orphans accumulate cost steeper than EBS. Decision-only \u2014 surfaces metadata.{orphan_count, total_orphan_gib, estimated_monthly_usd, snapshots:[{snapshot_id, db_instance_id, db_instance_alive, older_than_retention, ...}]}.",
+      "idempotent": true,
+      "name": "list_rds_snapshots_orphans",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete one RDS DB snapshot. Hardened with TTL grace floor (default 168h, hard 24h). Mirrors delete_ebs_snapshot semantics: succeeded / blocked / not_found. Used by apply-rds-cleanup workflow.",
+      "name": "destroy_rds_snapshot",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List KMS customer-managed keys that lack aliases AND have no rotation activity within rotation_grace_days (default 365). Decision-only \u2014 surfaces metadata.{candidate_count, candidates:[{key_id, alias_names, key_state, days_since_rotation, ...}], estimated_monthly_usd}. KMS customer-managed keys are flat ~$1/key-month; old accounts accumulate dozens easily.",
+      "idempotent": true,
+      "name": "audit_kms_keys_unused",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List S3 buckets without lifecycle policy. Decision-only \u2014 surfaces metadata.{candidate_count, candidates:[{bucket_name, region, creation_date}]} so operator configures lifecycle (object versioning, multipart abort, glacier tier). Without lifecycle: old versions accumulate forever, incomplete uploads stay billable, log/temp prefixes never tier.",
+      "idempotent": true,
+      "name": "audit_s3_buckets_no_lifecycle",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List EKS managed node groups whose underlying ASG averages CPUUtilization below cpu_threshold_percent (default 30) over lookback_days (default 7) AND have desired_capacity > 1. Cross-references EKS DescribeNodegroup with CloudWatch GetMetricStatistics on AWS/EC2 namespace, AutoScalingGroupName dimension. Decision-only \u2014 surfaces candidates:[{cluster, nodegroup, instance_types, desired_capacity, min_size, max_size, asg_name, avg_cpu_percent, suggested_desired}]. Suggested desired = current/2 floored to min_size.",
+      "idempotent": true,
+      "name": "audit_eks_node_underutilization",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List ELBv2 target groups with 0 healthy targets OR 0 registered targets. Decision-only \u2014 surfaces candidates:[{tg_arn, tg_name, vpc_id, target_count, healthy_count, attached_lb_count}]. Orphan TGs have no direct cost but keep ALBs alive ($16-22/mo per ALB) that would otherwise be deletable.",
+      "idempotent": true,
+      "name": "audit_alb_target_groups_unused",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List NAT Gateways whose CloudWatch BytesOutToDestination over lookback_days (default 7) is below bytes_threshold_gib (default 1 GiB). NAT Gateway charges $32/mo flat + $0.045/GB processed. Idle NATs are pure waste; substitute with VPC Gateway Endpoint (S3/DynamoDB free) or VPC Interface Endpoint ($7/mo + $0.01/GB). Decision-only.",
+      "idempotent": true,
+      "name": "audit_nat_gateway_idle",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Update one EKS managed node group's scaling_config (desired_capacity + optional min_size + max_size). Captures before_snapshot of current scaling config in output for guardian_memory + revert. EKS UpdateNodegroupConfig is async \u2014 returns Update record with Status=InProgress. Inputs: cluster_name, nodegroup_name, desired_capacity (required); min_size, max_size (optional, default to current). Validates desired is within [min, max]. Pairs with apply-eks-rightsize-scale workflow.",
+      "name": "ensure_eks_nodegroup_config",
+      "resource_types": [
+        "compute_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List Elastic IPs whose AssociationId is nil. Each unattached EIP costs ~$3.65/month \u2014 small per address but easily accumulated from terminated workloads or rotated NAT gateways. Decision-only \u2014 surfaces metadata.{candidate_count, candidates:[{public_ip, allocation_id, domain, network_border_group}], estimated_monthly_usd}.",
+      "idempotent": true,
+      "name": "audit_elastic_ips_unattached",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List EBS volumes in state=available (unattached) older than min_age_days (default 7). Surfaces volume_type-aware estimated_monthly_usd (gp3=$0.08/GiB, gp2=$0.10/GiB, io1/io2=$0.125, st1=$0.045, sc1=$0.015). Decision-only \u2014 pairs with future apply-ebs-volume-cleanup workflow with TTL grace floor.",
+      "idempotent": true,
+      "name": "audit_ebs_volumes_unattached",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Release one Elastic IP by allocation_id. Refuses if AssociationId is non-nil (status=blocked). Returns succeeded/blocked/not_found semantics. Pairs with apply-eip-release workflow. Captures before_snapshot of public_ip+domain+association_id for guardian_memory.",
+      "name": "release_elastic_ip",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete one EBS volume. TTL grace floor (default 168h, hard 24h) + state=available guard + optional pre-delete CreateSnapshot when create_snapshot=true. Once deleted, data is unrecoverable \u2014 pre-snapshot is cheap insurance. Captures before_snapshot of volume_type+size+az+create_time. Pairs with apply-ebs-volume-cleanup workflow.",
+      "name": "destroy_ebs_volume",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List self-owned AMIs older than min_age_days (default 180) AND not used by any running/stopped instance. Cross-references DescribeImages (Owners=self) with DescribeInstances. Surfaces snapshot_ids + total_snapshot_gib for accurate cost (~$0.05/GiB-month for snapshot storage). Big AMIs (CUDA/ML images) easily $20-50/mo each. Decision-only.",
+      "idempotent": true,
+      "name": "audit_old_amis_orphan",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List Route53 hosted zones containing only SOA + NS records (no A/AAAA/CNAME/MX/TXT). Decision-only \u2014 empty zones cost $0.50/mo + $0.40/M queries; common provenance includes upcoming-use planning, abandoned migrations, parked domains. Surfaces zone_id + zone_name + record_count.",
+      "idempotent": true,
+      "name": "audit_route53_zones_no_records",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List Security Groups without ENI attached. Cross-references DescribeSecurityGroups + DescribeNetworkInterfaces.Groups[]. Skips default SGs (group_name=='default'). SGs themselves are free, but cleanup signals abandoned workloads, supports IAM/policy hygiene, and reduces audit reviewer burden. Surfaces candidates:[{group_id, group_name, vpc_id, ingress_rules_count, egress_rules_count}].",
+      "idempotent": true,
+      "name": "audit_security_groups_orphan",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List IAM roles with RoleLastUsed.LastUsedDate older than min_age_days (default 180), OR never-used roles created before cutoff. Skips service-linked roles (path=='/aws-service-role/'). Optional path_prefix input filters by role path. Hygiene-driven (each unused role is attack surface) \u2014 IAM roles have no direct cost. Surfaces candidates:[{role_name, arn, path, create_date, last_used_date, days_since_last_used}].",
+      "idempotent": true,
+      "name": "audit_iam_roles_unused",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List Lambda functions with zero invocations over min_age_days (default 90) via CloudWatch GetMetricStatistics on AWS/Lambda namespace, FunctionName dimension, Invocations metric. Lambda has no idle cost, but cleanup reduces account CodeStorage usage (75 GB account limit) + IAM/security debt. Surfaces candidates:[{function_name, runtime, last_modified, code_size_bytes, invocations_lookback}].",
+      "idempotent": true,
+      "name": "audit_lambda_functions_orphan",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List CloudWatch Log Groups with RetentionInDays==nil (Never expire). Without retention: ingestion at $0.50/GB + storage at $0.03/GB-month accumulates indefinitely. Common in dev/staging where defaults were never set. Surfaces candidates:[{log_group_name, stored_bytes, stored_gib, age_days, estimated_monthly_usd}].",
+      "idempotent": true,
+      "name": "audit_cloudwatch_log_groups_no_retention",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Set RetentionInDays on one CloudWatch log group via PutRetentionPolicy. Captures before_snapshot of previous retention (nil = Never expire). Validates retention_in_days is one of CloudWatch's allowed values (1/3/5/7/14/30/60/90/120/150/180/365/400/545/731/1827/3653). Pairs with apply-cloudwatch-set-retention workflow (for_each over audit candidates).",
+      "idempotent": true,
+      "name": "ensure_log_retention",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List DynamoDB tables with zero ConsumedReadCapacityUnits + ConsumedWriteCapacityUnits sum over min_age_days (default 30). Distinguishes provisioned (PROVISIONED) vs on-demand (PAY_PER_REQUEST) \u2014 provisioned waste capacity even when idle; on-demand waste only storage. Surfaces candidates:[{table_name, status, billing_mode, item_count, table_size_bytes, read_capacity, write_capacity}].",
+      "idempotent": true,
+      "name": "audit_dynamodb_tables_idle",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List EFS filesystems with 0 ClientConnections (CloudWatch max) over min_age_days (default 30) AND size > min_size_gib (default 1 GiB, to skip newly-provisioned). $0.30/GB-month Standard storage; idle filesystems with TBs of dormant data become very expensive. Surfaces candidates:[{file_system_id, name, lifecycle_state, size_gib, performance_mode, throughput_mode, estimated_monthly_usd}].",
+      "idempotent": true,
+      "name": "audit_efs_filesystems_idle",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List Secrets Manager secrets with LastAccessedDate older than min_age_days (default 90) OR never accessed and created before cutoff. $0.40/secret-month + $0.05/10k API calls. Small per-secret but accumulates (200 secrets = $80/year). Surfaces candidates:[{name, arn, created_date, last_accessed_date, days_since_last_access}].",
+      "idempotent": true,
+      "name": "audit_secretsmanager_secrets_unused",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List PROVISIONED DynamoDB tables with utilization rate below threshold_percent (default 30) over min_age_days (default 30). Distinct from audit_dynamodb_tables_idle: targets ACTIVE tables wasting provisioned capacity. Computes per-second consumed capacity vs provisioned, suggests new capacity (peak * 1.3 rounded up to 5). Surfaces candidates with read/write_utilization_pct + suggested_read/write.",
+      "idempotent": true,
+      "name": "audit_dynamodb_provisioned_overprovisioned",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List Aurora clusters (engine starts with 'aurora-') with 0 DatabaseConnections sum over min_age_days (default 30). Aurora Serverless v2 auto-pauses to 0 ACU but storage charges continue ($0.10/GB-month); provisioned Aurora has both compute + storage charges even when idle. Surfaces candidates:[{cluster_id, engine, engine_version, status, allocated_storage_gib, instances_count, estimated_monthly_usd}].",
+      "idempotent": true,
+      "name": "audit_aurora_cluster_idle",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Cost Explorer GetSavingsPlansUtilization over lookback_days (default 30). Flags Savings Plans with utilization_pct below threshold_percent (default 95). Below 95% = money paid but compute not used (pure waste relative to commit). Decision-only \u2014 operator's reaction is to hold off on next SP commit OR adjust workload to consume capacity. Cost Explorer hits us-east-1 endpoint regardless of region.",
+      "idempotent": true,
+      "name": "audit_savings_plans_underutilization",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Cost Explorer GetReservationUtilization over lookback_days (default 30). Flags RIs with utilization_pct below threshold_percent (default 80). Distinct from Savings Plans (RIs are tied to specific instance type/region/AZ; underutilization signals misalignment between reserved type and actual workload). Cost Explorer hits us-east-1 endpoint.",
+      "idempotent": true,
+      "name": "audit_reserved_instances_unused",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Set LifecycleConfiguration on one EFS filesystem to tier files to IA after transition_to_ia_days (valid: 7, 14, 30, 60, 90; default 30). IA storage is ~12x cheaper ($0.025 vs $0.30 per GB-month). Reversible \u2014 re-running with empty policies via subsequent api call OR PutLifecycleConfiguration with TransitionToPrimaryStorageClass tiers data back. Captures before_snapshot of existing lifecycle policies. Pairs with apply-efs-tier-to-ia workflow.",
+      "idempotent": true,
+      "name": "apply_efs_lifecycle",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List IAM users without any MFA device attached. Critical security control \u2014 password-only IAM users vulnerable to credential leaks. Skips users tagged is_service_user=true. Surfaces candidates:[{user_name, arn, create_date, has_console_access, has_access_keys}]. Severity: console_access=true && access_keys=true is highest risk.",
+      "idempotent": true,
+      "name": "audit_iam_users_with_no_mfa",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List KMS customer-managed keys with policy Statements where Principal=='*' or Principal.AWS=='*' (wildcard) AND no constraining Condition. Wildcards without conditions are backdoor risks \u2014 anyone with key ARN can decrypt. Skips AWS-managed keys (operator can't modify). Surfaces wildcard_statements:[{sid, action, effect}] per key.",
+      "idempotent": true,
+      "name": "audit_kms_key_policies_overpermissive",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List S3 buckets exposed publicly via bucket policy (GetBucketPolicyStatus.IsPublic) OR incomplete PublicAccessBlock (any of BlockPublicAcls/BlockPublicPolicy/IgnorePublicAcls/RestrictPublicBuckets is false). Cross-region \u2014 re-loads AWS config per bucket region. Surfaces public_via_policy + public_access_block_complete flags.",
+      "idempotent": true,
+      "name": "audit_s3_buckets_publicly_accessible",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List DynamoDB tables without Point-in-Time Recovery enabled. PITR allows restore to any second within last 35 days \u2014 critical for production data without compliance gaps. Decision-only \u2014 operator enables via `aws dynamodb update-continuous-backups --table-name <n> --point-in-time-recovery-specification PointInTimeRecoveryEnabled=true`.",
+      "idempotent": true,
+      "name": "audit_dynamodb_tables_no_pitr",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List single-instance RDS DB instances (engine != aurora-*; clustered Aurora covered by audit_aurora_cluster_idle) with 0 DatabaseConnections sum over min_age_days (default 30). RDS pricing varies by instance class; idle db.t3.medium = ~$50/month sitting idle. Surfaces candidates with engine + instance_class + storage + multi_az + estimated_monthly_usd.",
+      "idempotent": true,
+      "name": "audit_rds_instances_idle",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Set PublicAccessBlock all-flags-true (BlockPublicAcls + BlockPublicPolicy + IgnorePublicAcls + RestrictPublicBuckets) on one S3 bucket. Captures previous block state as before_snapshot for revert. Cross-region. Idempotent \u2014 safe to re-run. Pairs with apply-s3-block-public-access workflow (for_each over audit candidates).",
+      "idempotent": true,
+      "name": "apply_s3_block_public_access",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Enable Point-in-Time Recovery on one DynamoDB table via UpdateContinuousBackups. Captures previous PITR state. Idempotent \u2014 re-running on already-enabled table returns succeeded with no_op=true. PITR cost ~$0.20/GB-month \u2014 cheap insurance vs data loss. Pairs with apply-dynamodb-enable-pitr workflow.",
+      "idempotent": true,
+      "name": "apply_dynamodb_enable_pitr",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List IAM access keys older than min_age_days (default 90). Long-lived access keys are higher risk (longer attack window, harder to revoke without breaking apps). Surfaces candidates:[{user_name, access_key_id, status, create_date, age_days}]. Severity scales with age and Status==Active.",
+      "idempotent": true,
+      "name": "audit_iam_access_keys_old",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List CloudTrail trails with IsLogging=false OR no trails configured at all. CRITICAL compliance \u2014 CloudTrail records who-did-what-when account-wide; without it, audit is impossible. Distinguishes multi-region trails (cover all regions) vs single-region. Special case noTrailsAtAll=true if zero trails configured.",
+      "idempotent": true,
+      "name": "audit_cloudtrail_disabled",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List GuardDuty detectors with Status != ENABLED OR no detectors configured. AWS native threat detection (CloudTrail + VPC Flow Logs + DNS analysis); disabled = missed detection of cryptomining, exfil, lateral movement, instance compromise. Special case noDetectorsAtAll=true if zero detectors. Per-region \u2014 must run in all regions for full coverage.",
+      "idempotent": true,
+      "name": "audit_guardduty_disabled",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Query Security Hub for findings with SeverityLabel=CRITICAL AND WorkflowStatus=NEW (not yet triaged) AND RecordState=ACTIVE. Security Hub aggregates findings from GuardDuty, Inspector, Macie, IAM Access Analyzer, Trusted Advisor \u2014 single pane of glass for security posture. Returns top max_results (default 50) findings.",
+      "idempotent": true,
+      "name": "audit_security_hub_findings_critical",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List AWS Config recorders with Recording=false OR no recorder configured at all. AWS Config = compliance evaluation engine; records resource state changes. Special case noRecordersAtAll=true. Without Config: no historical resource configuration audit, no automated compliance check (config rules).",
+      "idempotent": true,
+      "name": "audit_config_recorder_disabled",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List IAM Access Analyzer analyzers with Status != ACTIVE OR no analyzer configured. Access Analyzer detects external access (cross-account, public) via formal IAM policy reasoning \u2014 catches mistakes that pass linting (e.g., overly permissive S3 bucket policies, IAM role trust policies allowing wrong external accounts). Special case noAnalyzersAtAll=true.",
+      "idempotent": true,
+      "name": "audit_iam_access_analyzer_disabled",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List ELBv1 (Classic) Load Balancers \u2014 deprecated since 2019. Migration to ALB/NLB unlocks features (HTTP/2, gRPC, WebSocket, IP-based targets) AND lower cost ($0.0225 vs $0.025/hour + LCU pricing typically lower). Surfaces lb_name + listeners_count + instances_count + estimated_monthly_usd ($18/LB).",
+      "idempotent": true,
+      "name": "audit_alb_classic_loadbalancers",
+      "resource_types": [
+        "cost_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Set account-wide IAM password policy via UpdateAccountPasswordPolicy. Defaults align with CIS AWS Foundations Benchmark v1.5: min_length=14, require_symbols/numbers/uppercase/lowercase=true, max_age=90d, reuse_prevention=24, allow_change=true, hard_expiry=false. Captures previous policy as before_snapshot (existed=false if account had no policy). Idempotent \u2014 re-running with same values is no-op.",
+      "idempotent": true,
+      "name": "apply_iam_password_policy",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Create GuardDuty detector with Status=ENABLED in current region. Idempotent \u2014 short-circuits as no_op=true if any detector exists in region. Inputs: finding_publishing_frequency (FIFTEEN_MINUTES default; valid: FIFTEEN_MINUTES/ONE_HOUR/SIX_HOURS). Closes Phase 17.5/18.5 audit\u2192apply loop.",
+      "idempotent": true,
+      "name": "apply_guardduty_create_detector",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Create IAM Access Analyzer in current region. Idempotent \u2014 short-circuits if analyzer with same name exists. Inputs: analyzer_name (default 'dakasa-account-analyzer'), type ACCOUNT or ORGANIZATION (default ACCOUNT). FREE \u2014 Access Analyzer n\u00e3o cobra. Closes Phase 19.3 audit\u2192apply loop.",
+      "idempotent": true,
+      "name": "apply_iam_access_analyzer_create",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Enable Security Hub in current region. Maps ResourceConflictException (already enabled) to no_op=true for idempotency. Inputs: enable_default_standards (default true) \u2014 enables CIS AWS Foundations + AWS Foundational Security Best Practices standards. Closes loop pra Phase 19.1 (Security Hub findings audit).",
+      "idempotent": true,
+      "name": "apply_security_hub_enable",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Query Macie GetMacieSession to verify Status=ENABLED. Two states: AccessDeniedException = never enabled in region; Status != ENABLED = configured but paused. Macie covers data classification (PII, PHI, financial, credentials) in S3 \u2014 single-most-impactful tool to detect accidental sensitive-data exposure.",
+      "idempotent": true,
+      "name": "audit_macie_disabled",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Query Inspector v2 BatchGetAccountStatus checking per-resource-type status (EC2/ECR/Lambda). Inspector pu\u00f2 estar enabled pra EC2 mas disabled pra ECR \u2014 adapter reports per-type so operator v\u00ea granular picture. Vulnerability scanning critical pra container images + EC2 OS patches.",
+      "idempotent": true,
+      "name": "audit_inspector_disabled",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Enable Macie in current region via EnableMacie. Maps ConflictException (already enabled) to no_op=true for idempotency. Inputs: finding_publishing_frequency (default FIFTEEN_MINUTES). Cost: $1/GB scanned (first 50TB), $0.50/GB above. Closes Phase 20.4 audit\u2192apply loop.",
+      "idempotent": true,
+      "name": "apply_macie_enable",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Enable Inspector v2 for one or more resource_types (default ['EC2','ECR','LAMBDA']). Per-resource-type enablement. Returns per-account ResourceStatus + FailedAccounts list. Cost: ~$0.30/EC2 instance-month + $0.09/container image scanned. Closes Phase 20.5 audit\u2192apply loop.",
+      "idempotent": true,
+      "name": "apply_inspector_enable",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List KMS customer-managed symmetric encryption keys with KeyRotationEnabled=false. Distinct from audit_kms_keys_unused (potentially orphan); this flags keys IN USE lacking rotation hygiene. CIS 3.6 baseline: annual rotation limits exposure window. Skips AWS-managed keys, asymmetric keys, HMAC keys, external key material (rotation N/A).",
+      "idempotent": true,
+      "name": "audit_kms_key_rotation_disabled",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List VPCs without Flow Logs configured (DescribeVpcs + DescribeFlowLogs reverse-lookup). VPC Flow Logs essential for forensics + GuardDuty input + DDoS analysis. CIS 3.9 baseline. Surfaces vpc_id + cidr_block + is_default + state + tags.",
+      "idempotent": true,
+      "name": "audit_vpc_flow_logs_disabled",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List single-instance RDS DB instances (engine != aurora-*) with BackupRetentionPeriod < min_days (default 7). Compliance: PCI 1d minimum; HIPAA recommends 30d; SOC 2 typically 7-30d. Skips Aurora cluster members (cluster-level backup managed separately).",
+      "idempotent": true,
+      "name": "audit_rds_backup_retention_short",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Enable annual rotation on one KMS key. Idempotent \u2014 checks GetKeyRotationStatus first; returns no_op=true if already enabled. Closes Phase 21.3 audit\u2192apply loop. Pairs with apply-kms-enable-rotation workflow (for_each over audit candidates).",
+      "idempotent": true,
+      "name": "apply_kms_enable_rotation",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Create VPC Flow Log delivering to CloudWatch Logs. Inputs: vpc_id, log_group_name, deliver_logs_role_arn (operator-supplied IAM role), traffic_type (default ALL). Idempotent \u2014 short-circuits if Flow Log para mesma VPC + log group j\u00e1 existe. Closes Phase 21.4 audit\u2192apply loop.",
+      "idempotent": true,
+      "name": "apply_vpc_create_flow_log",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Modify one RDS DB instance's BackupRetentionPeriod. Inputs: instance_id, retention_days (1-35), apply_immediately (default true). Captures previous retention as before_snapshot. Idempotent \u2014 short-circuits if already at target. Closes Phase 21.5 audit\u2192apply loop.",
+      "idempotent": true,
+      "name": "apply_rds_modify_backup_retention",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List ACM certificates whose NotAfter is within expiry_warning_days (default 30) of now AND status ISSUED/REVOKED (skips PENDING_VALIDATION/FAILED/INACTIVE). Critical pra prevenir TLS outages. Surfaces in_use_by + renewal_eligibility per cert.",
+      "idempotent": true,
+      "name": "audit_acm_certificates_expiring",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List Secrets Manager secrets with RotationEnabled != true. Distinct from audit_secretsmanager_secrets_unused (Phase 15.4 \u2014 flags secrets sem access h\u00e1 > 90d). Aqui flags secrets ATIVOS sem rotation Lambda configurado. Skips secrets tagged intentionally_static=true (e.g., third-party API keys non-rotatable).",
+      "idempotent": true,
+      "name": "audit_secretsmanager_secrets_no_rotation",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List self-owned EBS snapshots with Encrypted=false. CIS 2.2.1 baseline. Encryption-at-rest critical pra compliance (PCI/HIPAA/SOC2) \u2014 unencrypted snapshots leak data se account \u00e9 comprometida. Fix path: copy snapshot encrypted (CopySnapshot Encrypted=true).",
+      "idempotent": true,
+      "name": "audit_ebs_snapshots_no_encryption",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List RDS DB instances + Aurora DB clusters with StorageEncrypted=false. CIS 2.3.1 baseline. Once provisioned unencrypted, only fix path is snapshot+restore-encrypted (downtime). Surfaces resource_type (db_instance / db_cluster) + engine + status.",
+      "idempotent": true,
+      "name": "audit_rds_no_encryption",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List S3 buckets without server-side default encryption (SSE-S3 or SSE-KMS). CIS 2.1.1 baseline. Distinguishes ServerSideEncryptionConfigurationNotFoundError (never set) vs auth/network errors. Cross-region per-bucket.",
+      "idempotent": true,
+      "name": "audit_s3_buckets_no_default_encryption",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List ELBv2 (ALB/NLB) load balancers with access_logs.s3.enabled=false. CIS 3.10 baseline. Without access logs, request-level forensics impossible (which IPs hit which endpoints during incident). Surfaces s3_bucket attribute showing operator's intended bucket (mas disabled).",
+      "idempotent": true,
+      "name": "audit_alb_no_logging",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "List EBS volumes with Encrypted=false. Complementary to audit_ebs_snapshots_no_encryption (Phase 23.1) \u2014 snapshot encryption inherits from source volume; fix existing unencrypted volume requires snapshot+restore-encrypted.",
+      "idempotent": true,
+      "name": "audit_ebs_volumes_no_encryption",
+      "resource_types": [
+        "security_recommendation"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Provision one user in AWS Identity Center via identitystore CreateUser. Idempotent: returns status=exists when ListUsers shows existing UserName.",
+      "idempotent": true,
+      "name": "identity_center_provision_user",
+      "resource_types": [
+        "identity_center_user"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "PATCH user attributes via identitystore UpdateUser. Accepts pre-built operations[] or flat shape (display_name, given_name, family_name, email).",
+      "idempotent": true,
+      "name": "identity_center_update_user",
+      "resource_types": [
+        "identity_center_user"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete user via identitystore DeleteUser (Identity Center has no soft-disable). Idempotent: ResourceNotFound returns status=already_gone.",
+      "idempotent": true,
+      "name": "identity_center_deactivate_user",
+      "resource_types": [
+        "identity_center_user"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "ListUsers with optional UserName filter for reconcile observed-state.",
+      "idempotent": true,
+      "name": "identity_center_list_users",
+      "resource_types": [
+        "identity_center_user"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "CreateGroup. Idempotent: returns status=exists when group with DisplayName exists.",
+      "idempotent": true,
+      "name": "identity_center_create_group",
+      "resource_types": [
+        "identity_center_group"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "CreateGroupMembership. Idempotent: ConflictException returns status=already_member.",
+      "idempotent": true,
+      "name": "identity_center_add_user_to_group",
+      "resource_types": [
+        "identity_center_group_membership"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "DeleteGroupMembership (looks up MembershipId via GetGroupMembershipId). Idempotent: ResourceNotFound returns already_gone.",
+      "idempotent": true,
+      "name": "identity_center_remove_user_from_group",
+      "resource_types": [
+        "identity_center_group_membership"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "ssoadmin CreateAccountAssignment binding a permission set to a principal (USER or GROUP) on a target AWS account. Idempotent via ListAccountAssignments lookup.",
+      "idempotent": true,
+      "name": "identity_center_assign_permission_set",
+      "resource_types": [
+        "permission_set_assignment"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "ssoadmin DeleteAccountAssignment. Idempotent: ResourceNotFound returns already_revoked.",
+      "idempotent": true,
+      "name": "identity_center_revoke_permission_set",
+      "resource_types": [
+        "permission_set_assignment"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Returns the SCIM v2 endpoint URL for the Identity Center instance plus the operator-supplied bearer-token Secrets Manager ARN. AWS does not expose token mint via SDK (2026-05) \u2014 token rotation lives in console + AWS SM.",
+      "idempotent": true,
+      "name": "identity_center_create_scim_endpoint",
+      "resource_types": [
+        "scim_endpoint"
+      ]
+    },
+    {
+      "category": "reactor",
+      "description": "Surface-driven query proxy. Input {query_name, params}: list-ecr-images (wraps list_ecr_images, params.repository_name + optional region/registry_id), list-accounts (paginates Organizations.ListAccounts; requires org-management creds). Returns {items:[...]} envelope consumed by the surface DataTable.",
+      "idempotent": true,
+      "name": "on_surface_query",
+      "resource_types": [
+        "surface_query"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one SNS topic exists (idempotent CreateTopic returns the existing ARN for the same name) and optionally apply tags and subscriptions. Inputs: name (required), tags (optional map), subscriptions (optional array of {protocol, endpoint}, e.g. {protocol:lambda, endpoint:<function-arn>}); each subscription is added only if an identical protocol+endpoint pair is not already subscribed. Output: topic_arn, existed, subscriptions.",
+      "idempotent": true,
+      "name": "ensure_sns_topic",
+      "resource_types": [
+        "sns_topic"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one standard SQS queue by name. Required: name, owner_tag {key,value}, policy (JSON object/string; empty string removes it), message_retention_seconds (60..1209600), sqs_managed_sse_enabled. Optional: region, tags (exact non-AWS set), adopt_existing (false by default; permits adoption only if ownership is unmarked). Conflicting ownership is rejected. Converges policy, retention, SQS encryption (clears KMS key), and tags; reobserves postconditions. Mutation retention is mandatory; ambiguous writes or delayed propagation return errors and may be retried. Output: found, queue_url, queue_arn, attributes, tags, items, existed.",
+      "idempotent": true,
+      "name": "ensure_sqs_queue",
+      "resource_types": [
+        "sqs_queue"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Read one standard SQS queue by required name and optional region. Returns found, items (zero or one), queue_url, queue_arn, attributes and tags. Only authoritative QueueDoesNotExist becomes found:false; permission and transport failures remain errors.",
+      "idempotent": true,
+      "name": "observe_sqs_queue",
+      "resource_types": [
+        "sqs_queue"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete one standard SQS queue by name, requiring matching owner_tag {key,value}; absent is idempotent success. Optional region. Reobserves absence and retains aws.sqs_queue.destroyed before success. No adoption during deletion.",
+      "idempotent": true,
+      "name": "destroy_sqs_queue",
+      "resource_types": [
+        "sqs_queue"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure an exclusively owned event-pattern rule. Required: name, owner_tag {key,value}, event_pattern (JSON object/string), state (ENABLED|DISABLED), targets (explicit array of at most five {id,arn}); a target may add dead_letter_config {arn} for a same-region standard SQS queue. Optional: region, event_bus_name (default), description, tags (exact non-AWS set), adopt_existing (false; unmarked resources only). Converges complete rule configuration and exact targets, removes owned excess/changed targets, checks partial failures, reobserves state, and retains aws.eventbridge_rule.ensured. AWS-managed or conflicting-owner rules are rejected. Ambiguous writes and delayed propagation remain retryable errors.",
+      "idempotent": true,
+      "name": "ensure_eventbridge_rule",
+      "resource_types": [
+        "eventbridge_rule"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Read one event rule by name and optional region/event_bus_name. Returns found, items (zero or one), rule_arn, event_pattern, state, description, all paginated targets and tags. Only authoritative ResourceNotFound becomes found:false; read failures remain errors.",
+      "idempotent": true,
+      "name": "observe_eventbridge_rule",
+      "resource_types": [
+        "eventbridge_rule"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete one exclusively owned EventBridge rule and all its targets by name and owner_tag {key,value}; optional region/event_bus_name. Checks partial target-removal failures before deleting the rule, confirms absence, and retains aws.eventbridge_rule.destroyed. Already absent is idempotent; no adoption or force deletion of managed rules.",
+      "idempotent": true,
+      "name": "destroy_eventbridge_rule",
+      "resource_types": [
+        "eventbridge_rule"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Read one SNS topic's attributes and subscriptions. Inputs: topic_arn (or name, resolved to arn:aws:sns:<region>:<account>:<name>). Output: found, topic_arn, attributes, subscriptions. A missing topic returns found:false, not an error.",
+      "idempotent": true,
+      "name": "observe_sns_topic",
+      "resource_types": [
+        "sns_topic"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete one SNS topic (idempotent: DeleteTopic on a non-existent topic is a success, deleted:false). DeleteTopic also removes the topic's own subscriptions, but the invoke permission the topic held on a subscribed Lambda is NOT removed here (destroy_lambda_function does that, or it is left inert). Teardown order for the full alarm-to-Slack chain: destroy the alarm, then this topic, then the Lambda. Inputs: topic_arn (or name). Output: topic_arn, deleted.",
+      "idempotent": true,
+      "name": "destroy_sns_topic",
+      "resource_types": [
+        "sns_topic"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one Lambda function exists and matches the desired code and configuration (idempotent adopt-then-converge). Code is delivered inline as code_zip_base64 (a base64-encoded zip, mirroring AWS's native ZipFile upload; capped near the 50MB inline limit). Inputs: function_name (required), code_zip_base64 (required), runtime + handler + role_arn (required on create), environment (optional map, non-secret config only), timeout, memory_size, description, architectures, tags, allow_sns_invoke (optional array of SNS topic ARNs granted lambda:InvokeFunction). Adoption: GetFunction, then UpdateFunctionCode only when CodeSha256 differs and UpdateFunctionConfiguration only on config drift, so a re-run with identical inputs is a no-op. Secrets never travel in the code or environment: the function reads them from Secrets Manager at runtime. Output: function_arn, function_name, code_sha256, existed, updated_code, updated_config.",
+      "idempotent": true,
+      "name": "ensure_lambda_function",
+      "resource_types": [
+        "lambda_function"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Read one Lambda function's configuration. Inputs: function_name (required). Output: found, function_arn, runtime, handler, role_arn, code_sha256, timeout, memory_size, last_modified. A missing function returns found:false, not an error.",
+      "idempotent": true,
+      "name": "observe_lambda_function",
+      "resource_types": [
+        "lambda_function"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete one Lambda function (idempotent: DeleteFunction on a non-existent function is a success, deleted:false). Deleting the function drops its resource policy (so any SNS invoke grant goes with it), but does NOT unsubscribe SNS topics still pointing at this function ARN; destroy_sns_topic (or a full teardown) clears those. Inputs: function_name (required). Output: function_name, deleted.",
+      "idempotent": true,
+      "name": "destroy_lambda_function",
+      "resource_types": [
+        "lambda_function"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one CloudWatch metric alarm exists with the given configuration (idempotent PutMetricAlarm upserts by alarm_name). treat_missing_data is a first-class input (missing | notBreaching | breaching | ignore) so a box that dies and stops emitting is not read as healthy. Inputs: alarm_name (required), namespace (required), metric_name (required), statistic OR extended_statistic (required), period (required, seconds), evaluation_periods (required), threshold (required), comparison_operator (required, e.g. GreaterThanOrEqualToThreshold), dimensions (optional array of {name,value} or map), datapoints_to_alarm, treat_missing_data, unit, alarm_description, alarm_actions, ok_actions, insufficient_data_actions (arrays of ARNs), tags. Output: alarm_name, alarm_arn, existed.",
+      "idempotent": true,
+      "name": "ensure_cloudwatch_metric_alarm",
+      "resource_types": [
+        "cloudwatch_metric_alarm"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Read one CloudWatch metric alarm. Inputs: alarm_name (required). Output: found, alarm_name, alarm_arn, state_value, comparison_operator, threshold, treat_missing_data, actions_enabled. A missing alarm returns found:false, not an error.",
+      "idempotent": true,
+      "name": "observe_cloudwatch_metric_alarm",
+      "resource_types": [
+        "cloudwatch_metric_alarm"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete one CloudWatch metric alarm (idempotent: DeleteAlarms on a name that does not exist is a success; deleted reflects whether it was present). Inputs: alarm_name (required). Output: alarm_name, deleted.",
+      "idempotent": true,
+      "name": "destroy_cloudwatch_metric_alarm",
+      "resource_types": [
+        "cloudwatch_metric_alarm"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Ensure one CloudTrail trail homed in the request region (idempotent adopt-then-converge). Inputs: name (required), s3_bucket_name (required), s3_key_prefix, is_multi_region_trail (default true), include_global_service_events (default true), enable_log_file_validation (default true), kms_key_id (key ARN, key id or alias), start_logging (default true), tags (object of strings, merged over the instance default_tags), region. DescribeTrails(includeShadowTrails=false); CreateTrail when absent, otherwise UpdateTrail only when a managed setting differs; s3_key_prefix and kms_key_id are managed only when named (omitted leaves the current value untouched). Missing or different tags are added with AddTags (extra tags are never removed). When start_logging is true and the trail is not logging, StartLogging (start_logging=false never stops logging). Settings are read back before success; a trail homed in another region is an error naming that region. Booleans must be JSON booleans. Retains aws.cloudtrail_trail.ensured. Output: name, trail_arn, home_region, s3_bucket_name, s3_key_prefix, is_multi_region_trail, include_global_service_events, log_file_validation_enabled, kms_key_id, is_logging, outcome (created|updated|unchanged), changed_fields, tags_applied, logging_started, region.",
+      "idempotent": true,
+      "name": "ensure_cloudtrail_trail",
+      "resource_types": [
+        "cloudtrail_trail"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Read one CloudTrail trail homed in the request region. Inputs: name (required), region. Read-only: DescribeTrails(includeShadowTrails=false) plus GetTrailStatus. Output: exists (found is an alias), trail_arn, home_region, s3_bucket_name, s3_key_prefix, is_multi_region_trail, include_global_service_events, log_file_validation_enabled, kms_key_id, is_logging, latest_delivery_time, latest_delivery_error, latest_digest_delivery_time (RFC 3339, empty when never delivered). A missing trail returns exists:false with zero-valued settings, not an error.",
+      "idempotent": true,
+      "name": "observe_cloudtrail_trail",
+      "resource_types": [
+        "cloudtrail_trail"
+      ]
+    },
+    {
+      "category": "capability",
+      "description": "Delete one CloudTrail trail with DeleteTrail. Inputs: name (required), region (the trail's home region). Idempotent: TrailNotFound is outcome already-absent, otherwise destroyed; a trail homed in another region is an error naming that region. Absence is confirmed before success and aws.cloudtrail_trail.destroyed is retained. The S3 bucket and its log files are never touched. Output: name, region, trail_arn, outcome.",
+      "idempotent": true,
+      "name": "destroy_cloudtrail_trail",
+      "resource_types": [
+        "cloudtrail_trail"
+      ]
+    }
+  ],
+  "adapter": {
+    "endpoints": {
+      "describe": "/rpc/describe",
+      "execute": "/rpc/execute"
+    },
+    "queues": {},
+    "timeout_seconds": 120,
+    "transport": "http_json",
+    "version": "1.65.4"
+  },
+  "capabilities": [
+    "describe",
+    "execute"
+  ],
+  "credential_policy": {
+    "source": "secret_ref"
+  },
+  "credential_schema": {
+    "mode": "inline",
+    "properties": {
+      "access_key_id": {
+        "description": "AWS access key id used by governance operations.",
+        "secret": true,
+        "type": "string"
+      },
+      "grant_bearer": {
+        "description": "Private existing Core mutation principal token for opt-in original_capacity only; never a workflow input.",
+        "secret": true,
+        "type": "string"
+      },
+      "operation_secret_json": {
+        "description": "Optional JSON payload used only by the compare-and-swap Secrets Manager patch path. Supply it through credentials_ref together with operation_secret_json_contract so secret values never enter workflow inputs or run records.",
+        "secret": true,
+        "type": "string"
+      },
+      "operation_secret_json_contract": {
+        "description": "Exact field-validation contract for operation_secret_json. It must share the same credentials_ref so public workflow inputs cannot become a secret-value oracle.",
+        "secret": true,
+        "type": "string"
+      },
+      "original_capacity_bootstrap": {
+        "description": "Private approved bootstrap bodies keyed by the legacy profile bootstrap_key or selected slot_bootstraps entry; whole object is sensitive.",
+        "secret": true,
+        "type": "object"
+      },
+      "profile": {
+        "description": "Optional shared config profile name when the worker should use local AWS profiles.",
+        "type": "string"
+      },
+      "secret_access_key": {
+        "description": "AWS secret access key used by governance operations.",
+        "secret": true,
+        "type": "string"
+      },
+      "session_token": {
+        "description": "Optional AWS session token for temporary credentials.",
+        "secret": true,
+        "type": "string"
+      }
+    }
+  },
+  "discovery": {
+    "cursor": "none",
+    "mode": "push"
+  },
+  "execution": {
+    "idempotent_actions": [
+      "ensure_s3_bucket",
+      "ensure_acm_certificate",
+      "ensure_cloudfront_distribution",
+      "ensure_ecr_repository",
+      "set_ecr_lifecycle_policy",
+      "observe_ecr_lifecycle_policy_authority",
+      "list_ecr_images",
+      "get_ecr_authorization_token",
+      "upsert_secrets_manager_secret",
+      "ensure_secrets_manager_json_secret_version",
+      "restore_secret",
+      "ensure_route53_zone",
+      "ensure_route53_record",
+      "ensure_ses_identity",
+      "ensure_ses_configuration_set",
+      "ensure_ses_event_destination",
+      "ensure_ses_suppression_sync",
+      "send_email",
+      "send_sms",
+      "ensure_iam_role",
+      "ensure_iam_policy_attachment",
+      "ensure_iam_role_policy",
+      "destroy_iam_role_policy",
+      "detach_iam_policy",
+      "ensure_iam_user",
+      "ensure_iam_instance_profile",
+      "ensure_oidc_provider",
+      "ensure_vpc",
+      "ensure_subnet",
+      "ensure_nat_gateway",
+      "ensure_eks_cluster",
+      "ensure_eks_nodegroup",
+      "ensure_eks_addon",
+      "ensure_eks_access_entry",
+      "ensure_kms_key",
+      "associate_eks_secrets_encryption",
+      "ensure_rds_snapshot_encrypted_copy",
+      "ensure_s3_bucket_encryption",
+      "ensure_rds_instance",
+      "ensure_rds_parameter_group",
+      "ensure_elasticache_cluster",
+      "ensure_internet_gateway",
+      "ensure_route_table",
+      "ensure_security_group",
+      "ensure_db_subnet_group",
+      "ensure_cache_subnet_group",
+      "ensure_launch_template",
+      "ensure_autoscaling_group",
+      "start_instance_refresh",
+      "ensure_s3_bucket_lifecycle",
+      "ensure_s3_bucket_cors",
+      "ensure_s3_bucket_policy",
+      "s3_put_object",
+      "destroy_eks_nodegroup",
+      "destroy_eks_cluster",
+      "destroy_nat_gateway",
+      "destroy_load_balancer",
+      "destroy_rds_instance",
+      "destroy_elasticache_cluster",
+      "ensure_route",
+      "ensure_vpc_peering",
+      "cost_explorer_recommendations",
+      "list_ebs_snapshots_orphans",
+      "destroy_ebs_snapshot",
+      "list_rds_snapshots_orphans",
+      "destroy_rds_snapshot",
+      "audit_kms_keys_unused",
+      "audit_s3_buckets_no_lifecycle",
+      "audit_eks_node_underutilization",
+      "audit_alb_target_groups_unused",
+      "audit_nat_gateway_idle",
+      "ensure_eks_nodegroup_config",
+      "audit_elastic_ips_unattached",
+      "audit_ebs_volumes_unattached",
+      "release_elastic_ip",
+      "destroy_ebs_volume",
+      "audit_old_amis_orphan",
+      "audit_route53_zones_no_records",
+      "audit_security_groups_orphan",
+      "audit_iam_roles_unused",
+      "audit_lambda_functions_orphan",
+      "audit_cloudwatch_log_groups_no_retention",
+      "ensure_log_retention",
+      "audit_dynamodb_tables_idle",
+      "audit_efs_filesystems_idle",
+      "audit_secretsmanager_secrets_unused",
+      "audit_dynamodb_provisioned_overprovisioned",
+      "audit_aurora_cluster_idle",
+      "audit_savings_plans_underutilization",
+      "audit_reserved_instances_unused",
+      "apply_efs_lifecycle",
+      "audit_iam_users_with_no_mfa",
+      "audit_kms_key_policies_overpermissive",
+      "audit_s3_buckets_publicly_accessible",
+      "audit_dynamodb_tables_no_pitr",
+      "audit_rds_instances_idle",
+      "apply_s3_block_public_access",
+      "apply_dynamodb_enable_pitr",
+      "audit_iam_access_keys_old",
+      "audit_cloudtrail_disabled",
+      "audit_guardduty_disabled",
+      "audit_security_hub_findings_critical",
+      "audit_config_recorder_disabled",
+      "audit_iam_access_analyzer_disabled",
+      "audit_alb_classic_loadbalancers",
+      "apply_iam_password_policy",
+      "apply_guardduty_create_detector",
+      "apply_iam_access_analyzer_create",
+      "apply_security_hub_enable",
+      "audit_macie_disabled",
+      "audit_inspector_disabled",
+      "apply_macie_enable",
+      "apply_inspector_enable",
+      "audit_kms_key_rotation_disabled",
+      "audit_vpc_flow_logs_disabled",
+      "audit_rds_backup_retention_short",
+      "apply_kms_enable_rotation",
+      "apply_vpc_create_flow_log",
+      "apply_rds_modify_backup_retention",
+      "audit_acm_certificates_expiring",
+      "audit_secretsmanager_secrets_no_rotation",
+      "audit_ebs_snapshots_no_encryption",
+      "audit_rds_no_encryption",
+      "audit_s3_buckets_no_default_encryption",
+      "audit_alb_no_logging",
+      "audit_ebs_volumes_no_encryption",
+      "identity_center_provision_user",
+      "identity_center_update_user",
+      "identity_center_deactivate_user",
+      "identity_center_list_users",
+      "identity_center_create_group",
+      "identity_center_add_user_to_group",
+      "identity_center_remove_user_from_group",
+      "identity_center_assign_permission_set",
+      "identity_center_revoke_permission_set",
+      "identity_center_create_scim_endpoint",
+      "on_surface_query",
+      "ensure_ec2_instance",
+      "observe_ec2_instance",
+      "observe_fleet_inventory",
+      "observe_original_create_disposition",
+      "start_ec2_instance",
+      "stop_ec2_instance",
+      "terminate_ec2_instance",
+      "discover_ec2_instances",
+      "ensure_machine_image",
+      "observe_machine_image",
+      "destroy_machine_image",
+      "ensure_global_accelerator",
+      "observe_global_accelerator",
+      "destroy_global_accelerator",
+      "set_asg_desired_capacity",
+      "destroy_autoscaling_group",
+      "ensure_sqs_queue",
+      "observe_sqs_queue",
+      "destroy_sqs_queue",
+      "ensure_eventbridge_rule",
+      "observe_eventbridge_rule",
+      "destroy_eventbridge_rule",
+      "ensure_sns_topic",
+      "observe_sns_topic",
+      "destroy_sns_topic",
+      "ensure_lambda_function",
+      "observe_lambda_function",
+      "destroy_lambda_function",
+      "ensure_cloudwatch_metric_alarm",
+      "observe_cloudwatch_metric_alarm",
+      "destroy_cloudwatch_metric_alarm",
+      "ensure_cloudtrail_trail",
+      "observe_cloudtrail_trail",
+      "destroy_cloudtrail_trail",
+      "destroy_iam_role",
+      "destroy_iam_instance_profile",
+      "destroy_launch_template",
+      "destroy_security_group"
+    ]
+  },
+  "extensions": {
+    "allow_custom_actions": true
+  },
+  "guardian_support": {
+    "signals": {}
+  },
+  "instance_schema": {
+    "mode": "inline",
+    "properties": {
+      "base_url": {
+        "description": "HTTP adapter base URL used when the integration_type declares transport=http_json.",
+        "type": "string"
+      },
+      "default_account_id": {
+        "description": "Optional fallback AWS account identifier used for metadata and normalization.",
+        "type": "string"
+      },
+      "default_email_from": {
+        "description": "Optional default sender address for SES email operations.",
+        "type": "string"
+      },
+      "default_region": {
+        "default": "us-east-1",
+        "description": "Default AWS region for governance operations.",
+        "type": "string"
+      },
+      "default_sms_type": {
+        "default": "Transactional",
+        "description": "Optional default SNS SMS type.",
+        "type": "string"
+      },
+      "default_tags": {
+        "description": "Default tags applied when an operation omits tags.",
+        "type": "object"
+      },
+      "original_capacity": {
+        "description": "Opt-in fixed original EC2 capacity v1 config; closed profiles with exclusive legacy bootstrap or complete sorted per-slot bootstrap keys/SHA256, actual source pin and existing grant service. Generic name-adopting governance is unavailable on a configured instance.",
+        "type": "object"
+      }
+    }
+  },
+  "normalization": {
+    "external_id_path": "arn",
+    "fallback_resource_prefix": "thirdparty.aws.custom",
+    "name_path": "name",
+    "owner_path": "region"
+  },
+  "provider": "aws",
+  "resource_types": [
+    {
+      "canonical_prefix": "thirdparty.aws.s3.bucket",
+      "default_actions": [
+        "ensure_s3_bucket",
+        "ensure_s3_bucket_encryption"
+      ],
+      "discoverable": false,
+      "identity_template": "s3_bucket.{region}.{bucket_name}",
+      "name": "s3_bucket"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.acm.certificate",
+      "default_actions": [
+        "ensure_acm_certificate"
+      ],
+      "discoverable": false,
+      "identity_template": "acm_certificate.{region}.{domain_name}",
+      "name": "acm_certificate"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.cloudfront.distribution",
+      "default_actions": [
+        "ensure_cloudfront_distribution"
+      ],
+      "discoverable": false,
+      "identity_template": "cloudfront_distribution.{distribution_id}",
+      "name": "cloudfront_distribution"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.ecr.repository",
+      "default_actions": [
+        "ensure_ecr_repository",
+        "set_ecr_lifecycle_policy",
+        "observe_ecr_lifecycle_policy_authority",
+        "list_ecr_images",
+        "get_ecr_authorization_token"
+      ],
+      "discoverable": false,
+      "identity_template": "ecr_repository.{region}.{repository_name}",
+      "name": "ecr_repository"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.secrets_manager.secret",
+      "default_actions": [
+        "upsert_secrets_manager_secret",
+        "ensure_secrets_manager_json_secret_version"
+      ],
+      "discoverable": false,
+      "identity_template": "secret.{region}.{secret_name}",
+      "name": "secret"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.route53.hosted_zone",
+      "default_actions": [
+        "ensure_route53_zone"
+      ],
+      "discoverable": false,
+      "identity_template": "route53_zone.{zone_name}",
+      "name": "route53_zone"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.route53.record",
+      "default_actions": [
+        "ensure_route53_record"
+      ],
+      "discoverable": false,
+      "identity_template": "route53_record.{zone_id}.{record_name}.{record_type}",
+      "name": "route53_record"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.ses.identity",
+      "default_actions": [
+        "ensure_ses_identity"
+      ],
+      "discoverable": false,
+      "identity_template": "ses_identity.{identity}",
+      "name": "ses_identity"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.ses.configuration_set",
+      "default_actions": [
+        "ensure_ses_configuration_set"
+      ],
+      "discoverable": false,
+      "identity_template": "ses_configuration_set.{region}.{name}",
+      "name": "ses_configuration_set"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.ses.event_destination",
+      "default_actions": [
+        "ensure_ses_event_destination"
+      ],
+      "discoverable": false,
+      "identity_template": "ses_event_destination.{region}.{configuration_set_name}.{name}",
+      "name": "ses_event_destination"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.ses.suppression_list",
+      "default_actions": [
+        "ensure_ses_suppression_sync"
+      ],
+      "discoverable": false,
+      "identity_template": "ses_suppression_list.{target_region}",
+      "name": "ses_suppression_list"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.ses.email",
+      "default_actions": [
+        "send_email"
+      ],
+      "discoverable": false,
+      "identity_template": "email.{region}.{from_email}.{subject}",
+      "name": "email_message"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.sns.sms",
+      "default_actions": [
+        "send_sms"
+      ],
+      "discoverable": false,
+      "identity_template": "sms.{region}.{phone_number}",
+      "name": "sms_message"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.iam.role",
+      "default_actions": [
+        "ensure_iam_role",
+        "destroy_iam_role"
+      ],
+      "discoverable": false,
+      "identity_template": "iam_role.{role_name}",
+      "name": "iam_role"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.iam.role_policy",
+      "default_actions": [
+        "ensure_iam_role_policy",
+        "destroy_iam_role_policy"
+      ],
+      "discoverable": false,
+      "identity_template": "iam_role_policy.{role_name}.{policy_name}",
+      "name": "iam_role_policy"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.iam.policy_attachment",
+      "default_actions": [
+        "ensure_iam_policy_attachment",
+        "detach_iam_policy"
+      ],
+      "discoverable": false,
+      "identity_template": "iam_policy_attachment.{role_name}.{policy_arn}",
+      "name": "iam_policy_attachment"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.iam.user",
+      "default_actions": [
+        "ensure_iam_user"
+      ],
+      "discoverable": false,
+      "identity_template": "iam_user.{user_name}",
+      "name": "iam_user"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.iam.instance_profile",
+      "default_actions": [
+        "ensure_iam_instance_profile",
+        "destroy_iam_instance_profile"
+      ],
+      "discoverable": false,
+      "identity_template": "iam_instance_profile.{instance_profile_name}",
+      "name": "iam_instance_profile"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.iam.oidc_provider",
+      "default_actions": [
+        "ensure_oidc_provider"
+      ],
+      "discoverable": false,
+      "identity_template": "oidc_provider.{url}",
+      "name": "oidc_provider"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.ec2.vpc",
+      "default_actions": [
+        "ensure_vpc"
+      ],
+      "discoverable": false,
+      "identity_template": "vpc.{region}.{vpc_name}",
+      "name": "vpc"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.ec2.subnet",
+      "default_actions": [
+        "ensure_subnet"
+      ],
+      "discoverable": false,
+      "identity_template": "subnet.{region}.{vpc_id}.{cidr_block}",
+      "name": "subnet"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.ec2.nat_gateway",
+      "default_actions": [
+        "ensure_nat_gateway",
+        "destroy_nat_gateway"
+      ],
+      "discoverable": false,
+      "identity_template": "nat_gateway.{region}.{subnet_id}",
+      "name": "nat_gateway"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.eks.cluster",
+      "default_actions": [
+        "ensure_eks_cluster",
+        "destroy_eks_cluster"
+      ],
+      "discoverable": false,
+      "identity_template": "eks_cluster.{region}.{cluster_name}",
+      "name": "eks_cluster"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.eks.nodegroup",
+      "default_actions": [
+        "ensure_eks_nodegroup",
+        "destroy_eks_nodegroup"
+      ],
+      "discoverable": false,
+      "identity_template": "eks_nodegroup.{region}.{cluster_name}.{nodegroup_name}",
+      "name": "eks_nodegroup"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.eks.addon",
+      "default_actions": [
+        "ensure_eks_addon"
+      ],
+      "discoverable": false,
+      "identity_template": "eks_addon.{region}.{cluster_name}.{addon_name}",
+      "name": "eks_addon"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.eks.access_entry",
+      "default_actions": [
+        "ensure_eks_access_entry"
+      ],
+      "discoverable": false,
+      "identity_template": "eks_access_entry.{region}.{cluster_name}.{principal_arn}",
+      "name": "eks_access_entry"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.kms.key",
+      "default_actions": [
+        "ensure_kms_key"
+      ],
+      "discoverable": false,
+      "identity_template": "kms_key.{region}.{alias}",
+      "name": "kms_key"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.rds.instance",
+      "default_actions": [
+        "ensure_rds_instance",
+        "destroy_rds_instance"
+      ],
+      "discoverable": false,
+      "identity_template": "rds_instance.{region}.{db_instance_identifier}",
+      "name": "rds_instance"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.rds.snapshot",
+      "default_actions": [
+        "ensure_rds_snapshot_encrypted_copy"
+      ],
+      "discoverable": false,
+      "identity_template": "rds_snapshot.{region}.{snapshot_name_prefix}",
+      "name": "rds_snapshot"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.rds.parameter_group",
+      "default_actions": [
+        "ensure_rds_parameter_group"
+      ],
+      "discoverable": false,
+      "identity_template": "rds_parameter_group.{region}.{db_parameter_group_name}",
+      "name": "rds_parameter_group"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.elasticache.cluster",
+      "default_actions": [
+        "ensure_elasticache_cluster",
+        "destroy_elasticache_cluster"
+      ],
+      "discoverable": false,
+      "identity_template": "elasticache_cluster.{region}.{cache_cluster_id}",
+      "name": "elasticache_cluster"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.ec2.internet_gateway",
+      "default_actions": [
+        "ensure_internet_gateway"
+      ],
+      "discoverable": false,
+      "identity_template": "internet_gateway.{region}.{vpc_id}",
+      "name": "internet_gateway"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.ec2.route_table",
+      "default_actions": [
+        "ensure_route_table"
+      ],
+      "discoverable": false,
+      "identity_template": "route_table.{region}.{vpc_id}.{route_table_name}",
+      "name": "route_table"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.ec2.route",
+      "default_actions": [
+        "ensure_route"
+      ],
+      "discoverable": false,
+      "identity_template": "route.{region}.{route_table_id}.{destination_cidr_block}",
+      "name": "route"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.ec2.vpc_peering_connection",
+      "default_actions": [
+        "ensure_vpc_peering"
+      ],
+      "discoverable": false,
+      "identity_template": "vpc_peering_connection.{region}.{requester_vpc_id}.{accepter_vpc_id}",
+      "name": "vpc_peering_connection"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.elbv2.load_balancer",
+      "default_actions": [
+        "destroy_load_balancer"
+      ],
+      "discoverable": false,
+      "identity_template": "load_balancer.{region}.{load_balancer_arn}",
+      "name": "load_balancer"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.ec2.security_group",
+      "default_actions": [
+        "ensure_security_group",
+        "destroy_security_group"
+      ],
+      "discoverable": false,
+      "identity_template": "security_group.{region}.{vpc_id}.{group_name}",
+      "name": "security_group"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.rds.db_subnet_group",
+      "default_actions": [
+        "ensure_db_subnet_group"
+      ],
+      "discoverable": false,
+      "identity_template": "db_subnet_group.{region}.{name}",
+      "name": "db_subnet_group"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.elasticache.subnet_group",
+      "default_actions": [
+        "ensure_cache_subnet_group"
+      ],
+      "discoverable": false,
+      "identity_template": "cache_subnet_group.{region}.{name}",
+      "name": "cache_subnet_group"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.ec2.launch_template",
+      "default_actions": [
+        "ensure_launch_template",
+        "destroy_launch_template"
+      ],
+      "discoverable": false,
+      "identity_template": "launch_template.{region}.{name}",
+      "name": "launch_template"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.autoscaling.group",
+      "default_actions": [
+        "ensure_autoscaling_group",
+        "start_instance_refresh",
+        "set_asg_desired_capacity",
+        "destroy_autoscaling_group"
+      ],
+      "discoverable": false,
+      "identity_template": "autoscaling_group.{region}.{name}",
+      "name": "autoscaling_group"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.ec2.instance",
+      "default_actions": [
+        "ensure_ec2_instance",
+        "observe_ec2_instance",
+        "observe_fleet_inventory",
+        "observe_original_create_disposition",
+        "start_ec2_instance",
+        "stop_ec2_instance",
+        "terminate_ec2_instance",
+        "discover_ec2_instances"
+      ],
+      "discoverable": false,
+      "identity_template": "ec2_instance.{region}.{instance_id}",
+      "name": "ec2_instance"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.ec2.machine_image",
+      "default_actions": [
+        "ensure_machine_image",
+        "observe_machine_image",
+        "destroy_machine_image"
+      ],
+      "discoverable": false,
+      "identity_template": "machine_image.{region}.{image_name}",
+      "name": "machine_image"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.globalaccelerator.accelerator",
+      "default_actions": [
+        "ensure_global_accelerator",
+        "observe_global_accelerator",
+        "destroy_global_accelerator"
+      ],
+      "discoverable": false,
+      "identity_template": "global_accelerator.{name}",
+      "name": "global_accelerator"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.s3.bucket_lifecycle",
+      "default_actions": [
+        "ensure_s3_bucket_lifecycle"
+      ],
+      "discoverable": false,
+      "identity_template": "s3_bucket_lifecycle.{region}.{bucket}",
+      "name": "s3_bucket_lifecycle"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.s3.bucket_cors",
+      "default_actions": [
+        "ensure_s3_bucket_cors"
+      ],
+      "discoverable": false,
+      "identity_template": "s3_bucket_cors.{region}.{bucket}",
+      "name": "s3_bucket_cors"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.s3.bucket_policy",
+      "default_actions": [
+        "ensure_s3_bucket_policy"
+      ],
+      "discoverable": false,
+      "identity_template": "s3_bucket_policy.{region}.{bucket}",
+      "name": "s3_bucket_policy"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.s3.object",
+      "default_actions": [
+        "s3_put_object"
+      ],
+      "discoverable": false,
+      "identity_template": "s3_object.{region}.{bucket}.{key}",
+      "name": "s3_object"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.identity_center.user",
+      "default_actions": [
+        "identity_center_provision_user",
+        "identity_center_update_user",
+        "identity_center_deactivate_user",
+        "identity_center_list_users"
+      ],
+      "discoverable": false,
+      "identity_template": "identity_center_user.{identity_store_id}.{user_name}",
+      "name": "identity_center_user"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.identity_center.group",
+      "default_actions": [
+        "identity_center_create_group"
+      ],
+      "discoverable": false,
+      "identity_template": "identity_center_group.{identity_store_id}.{group_name}",
+      "name": "identity_center_group"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.identity_center.group_membership",
+      "default_actions": [
+        "identity_center_add_user_to_group",
+        "identity_center_remove_user_from_group"
+      ],
+      "discoverable": false,
+      "identity_template": "identity_center_group_membership.{identity_store_id}.{group_id}.{user_id}",
+      "name": "identity_center_group_membership"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.identity_center.permission_set_assignment",
+      "default_actions": [
+        "identity_center_assign_permission_set",
+        "identity_center_revoke_permission_set"
+      ],
+      "discoverable": false,
+      "identity_template": "permission_set_assignment.{instance_arn}.{account_id}.{permission_set_arn}.{principal_id}",
+      "name": "permission_set_assignment"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.identity_center.scim_endpoint",
+      "default_actions": [
+        "identity_center_create_scim_endpoint"
+      ],
+      "discoverable": false,
+      "identity_template": "scim_endpoint.{instance_arn}",
+      "name": "scim_endpoint"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.surface.query",
+      "default_actions": [
+        "on_surface_query"
+      ],
+      "discoverable": false,
+      "identity_template": "surface_query.{query_name}",
+      "name": "surface_query"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.recommendation.cost",
+      "default_actions": [
+        "cost_explorer_recommendations"
+      ],
+      "discoverable": false,
+      "identity_template": "cost_recommendation.{capability}.{candidate_id}",
+      "name": "cost_recommendation"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.recommendation.compute",
+      "default_actions": [
+        "ensure_eks_nodegroup_config"
+      ],
+      "discoverable": false,
+      "identity_template": "compute_recommendation.{capability}.{candidate_id}",
+      "name": "compute_recommendation"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.recommendation.security",
+      "default_actions": [
+        "audit_iam_users_with_no_mfa"
+      ],
+      "discoverable": false,
+      "identity_template": "security_recommendation.{capability}.{candidate_id}",
+      "name": "security_recommendation"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.sns.topic",
+      "default_actions": [
+        "ensure_sns_topic",
+        "observe_sns_topic",
+        "destroy_sns_topic"
+      ],
+      "discoverable": false,
+      "identity_template": "sns_topic.{name}",
+      "name": "sns_topic"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.sqs.queue",
+      "default_actions": [
+        "ensure_sqs_queue",
+        "observe_sqs_queue",
+        "destroy_sqs_queue"
+      ],
+      "discoverable": false,
+      "identity_template": "sqs_queue.{region}.{name}",
+      "name": "sqs_queue"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.eventbridge.rule",
+      "default_actions": [
+        "ensure_eventbridge_rule",
+        "observe_eventbridge_rule",
+        "destroy_eventbridge_rule"
+      ],
+      "discoverable": false,
+      "identity_template": "eventbridge_rule.{region}.{event_bus_name}.{name}",
+      "name": "eventbridge_rule"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.lambda.function",
+      "default_actions": [
+        "ensure_lambda_function",
+        "observe_lambda_function",
+        "destroy_lambda_function"
+      ],
+      "discoverable": false,
+      "identity_template": "lambda_function.{function_name}",
+      "name": "lambda_function"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.cloudwatch.metric_alarm",
+      "default_actions": [
+        "ensure_cloudwatch_metric_alarm",
+        "observe_cloudwatch_metric_alarm",
+        "destroy_cloudwatch_metric_alarm"
+      ],
+      "discoverable": false,
+      "identity_template": "cloudwatch_metric_alarm.{alarm_name}",
+      "name": "cloudwatch_metric_alarm"
+    },
+    {
+      "canonical_prefix": "thirdparty.aws.cloudtrail.trail",
+      "default_actions": [
+        "ensure_cloudtrail_trail",
+        "observe_cloudtrail_trail",
+        "destroy_cloudtrail_trail"
+      ],
+      "discoverable": false,
+      "identity_template": "cloudtrail_trail.{region}.{name}",
+      "name": "cloudtrail_trail"
+    }
+  ]
+}

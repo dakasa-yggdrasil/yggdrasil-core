@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**27 decisions.**
+**69 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -42,3 +42,72 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0032](0032-materialize-explicit-typed-team-leadership.md) | Materialize explicit typed team leadership | Accepted | 2026-10-07 | yggdrasil-core / team writers and directory leadership |
 | [0033](0033-preserve-current-declarations-during-conditional-contact-writes.md) | Preserve current declarations during conditional contact writes | Accepted | 2026-10-07 | yggdrasil-core / operator contact declaration |
 | [0034](0034-bind-delivered-mfa-codes-to-canonical-contact-possession.md) | Use saved profile contacts automatically for OTP MFA | Proposed | 2026-10-08 | yggdrasil-core / collaborator authentication |
+| [0035](0035-prune-expired-capacity-history-without-changing-intent-authority.md) | Prune expired capacity history without changing intent authority | Proposed | 2026-10-08 | yggdrasil-core / capacity event maintenance |
+| [0036](0036-redeem-provider-mutations-once-under-durable-capacity-authority.md) | Redeem provider mutations once under durable capacity authority | Proposed | 2026-10-08 | yggdrasil-core / provider-neutral capacity mutations |
+| [0037](0037-produce-native-vm-proofs-through-fixed-protected-observers.md) | Produce native VM proofs through fixed protected observers | Proposed | 2026-10-08 | yggdrasil-core / native VM observation and mutation readback |
+| [0038](0038-bind-shadow-pod-assessments-to-fixed-native-and-metric-sources.md) | Bind shadow pod assessments to fixed native and metric sources | Proposed | 2026-10-08 | yggdrasil-core / fixed reserved pod source assessment |
+| [0039](0039-bind-native-hpa-commands-to-retained-local-lifetime-witnesses.md) | Bind native HPA commands to retained local lifetime witnesses | Superseded by 0040 | 2026-10-08 | Fixed native HPA executor and protected current Pod termination receipts |
+| [0040](0040-separate-native-process-lifetimes-from-reservation-decisions.md) | Separate native process lifetimes from reservation decisions | Proposed | 2026-10-08 | Process nonce admission, independent lifetime ledger and authoritative terminal archive |
+| [0041](0041-reobserve-installed-birth-guards-before-native-hpa-authority.md) | Reobserve installed birth guards before native HPA authority | Proposed | 2026-10-09 | yggdrasil-core / native HPA lifetime executor |
+| [0042](0042-join-native-vm-lifetimes-to-fixed-kubernetes-membership.md) | Join native VM lifetimes to fixed Kubernetes membership | Proposed | 2026-10-10 | yggdrasil-core / protected native VM-to-Node observation |
+| [0043](0043-observe-original-business-creation-canaries.md) | Observe original business creation canaries through fixed readers | Proposed | 2026-10-10 | yggdrasil-core / original business canary observations |
+| [0044](0044-durable-pre-start-capacity-dispatch.md) | Admit capacity schedules through durable pre-start ownership | Proposed | 2026-10-10 | yggdrasil-core / protected reserved Pod capacity dispatch |
+| [0045](0045-join-original-guest-bootstrap-under-fixed-vm-membership.md) | Join original Guest bootstrap under fixed VM membership | Proposed | 2026-10-11 | yggdrasil-core / protected original Guest observations |
+| [0046](0046-persist-bounded-capacity-intents-under-protected-workflows.md) | Persist bounded capacity intents under protected workflows | Proposed | 2026-10-08 | yggdrasil-core / capacity protocol |
+| [0047](0047-observe-original-live-lease-before-private-notify-canary.md) | Observe the original live lease before a private Notify canary | Proposed | 2026-10-11 | Original finite private machine useful prerequisite |
+| [0048](0048-join-retained-resource-prerequisites-to-original-notify-returns.md) | Join retained resource prerequisites to original Notify returns | Proposed | 2026-10-11 | Sealed private resource prerequisites |
+| [0049](0049-create-release-recovery-authority-after-original-dual-returns.md) | Create release recovery authority after both original returns | Proposed | 2026-10-11 | Fixed native finalizer result and release-only subdecision |
+| [0050](0050-bind-guest-admission-and-retirement-to-original-native-returns.md) | Bind Guest admission and retirement to original native returns | Proposed | 2026-10-13 | Core original provisioning, Guest admission and protected retirement |
+| [0051](0051-keep-original-creator-admission-source-owned-and-durably-sealed.md) | Keep original creator admission source-owned and durably sealed | Proposed | 2026-10-13 | Core original creator lifecycle and persistent exclusions |
+| [0052](0052-gate-executor-stop-on-task-leases-and-closed-admission.md) | Gate executor stop on task leases and closed admission | Proposed | 2026-10-16 | Opt-in laboratory activity and power lifecycle |
+| [0053](0053-isolate-original-source-recovery-probes-from-production-phase-authority.md) | Isolate original Source recovery probes from production phase authority | Proposed | 2026-10-18 | Original Guest native qualification recovery |
+
+| [0054](0054-bind-failed-owner-compensation-to-redeemed-child.md) | Bind failed-owner compensation to its original redeemed cleanup child | Proposed | 2026-10-18 | nativequalification Source fixture |
+
+| [0055](0055-observe-uncertain-original-create-and-reissue-unused-cleanup-child.md) | Observe uncertain original create and reissue unused cleanup child | Proposed | 2026-10-18 | Qualification-only actual lost reply and fresh reissue |
+
+| [0056](0056-bind-recovery-owned-cleanup-to-current-lease-and-one-use-effects.md) | Bind recovery-owned cleanup to current lease and one-use effects | Proposed | 2026-10-19 | Qualification-only original failed-owner cleanup |
+
+| [0057](0057-require-original-local-installation-before-qualification.md) | Require original local installation before qualification | Proposed | 2026-10-21 | Core/Guest original provisioning |
+
+| [0058](0058-anchor-qualification-freshness-in-original-monotonic-owners.md) | Anchor qualification freshness in original monotonic owners | Proposed | 2026-10-21 | Original qualification nonce protocol |
+
+| [0059](0059-pin-production-guest-admission-to-compiled-contracts.md) | Pin production Guest admission to compiled contracts | Proposed | 2026-10-21 | Core original Guest production profile admission |
+
+| [0060](0060-own-original-guest-provider-per-workflow-invocation.md) | Own the original Guest provider per workflow invocation | Proposed | 2026-10-21 | Original source provider lifetime and single-call ownership |
+
+| [0061](0061-verify-public-core-service-contract-explicitly.md) | Verify public Core service contract explicitly | Accepted | 2026-10-21 | Exact source-owned public Core doctor profile |
+
+| [0062](0062-preserve-primary-http-with-same-owner-secondary-tls.md) | Preserve primary HTTP with same-owner secondary TLS | Accepted | 2026-10-21 | Core transport and mixed-process rollout |
+
+| [0063](0063-own-fresh-notify-canaries-in-original-guest-sessions.md) | Own fresh Notify canaries in original Guest sessions | Proposed | 2026-10-21 | One-use original publication, native transaction read and separate clock owners |
+
+| [0064](0064-separate-production-retirement-clock-owners.md) | Separate production retirement clock owners | Proposed | 2026-10-21 | Original production retirement and causal native destroy readback |
+
+| [0065](0065-transfer-original-provisioning-time-between-clock-domains.md) | Transfer original provisioning time between clock domains | Proposed | 2026-10-21 | Signed current PG authority and original Guest boot-clock provisioning/installation |
+
+| [0066](0066-reconcile-original-notify-guests-through-the-protected-workflow.md) | Reconcile original Notify Guests through the protected workflow | Proposed | 2026-10-21 | Exact scheduled original Guest graph, useful membership and unchanged original deadlines |
+
+| [0067](0067-separate-administrative-capacity-costs-from-native-quotes.md) | Separate administrative capacity costs from native quotes | Proposed | 2026-10-21 | Finite reviewed planning assumptions, unchanged native quote/billing currency and legacy dates |
+
+| [0068](0068-promote-the-original-protected-floor-with-complete-membership.md) | Promote the original protected floor with complete membership | Proposed | 2026-10-21 | Original zero-to-one floor, complete Coverage30 and unchanged raw useful-member gates |
+
+| [0069](0069-record-expired-unadmitted-create-dispositions-separately.md) | Record expired unadmitted create dispositions separately | Proposed | 2026-10-22 | Immutable accepted creates, authenticated terminal absence and fenced floor recovery |
+
+| [0070](0070-validate-explicit-empty-ec2-instance-responses.md) | Validate explicit empty EC2 instance responses | Proposed | 2026-10-23 | Retained native HTTP 200, complete empty XML and unchanged six-read inventory basis |
+| [0071](0071-reject-superseded-dispatch-before-start.md) | Reject superseded dispatch before start | Proposed | 2026-10-23 | Explicit administrative capacity dispatch rejection with retained original ownership |
+| [0072](0072-recover-amqp-through-serialized-consumer-sessions.md) | Recover AMQP through serialized consumer sessions | Proposed | 2026-10-23 | AMQP session readiness, consumer drain and recovery without ambiguous-operation replay |
+
+| [0073](0073-record-terminal-failed-witnessed-original-lifetimes.md) | Record terminal failed witnessed original lifetimes | Proposed | 2026-10-23 | Preserved accepted create/witness and unknown ACK with separate native-absence terminal ledger |
+
+| [0074](0074-record-native-authorization-denied-originals-separately.md) | Record native authorization-denied originals separately | Proposed | 2026-10-23 | Preserved uncertain originals and unknown ACK with authenticated denial decision and separate fenced terminal ledger |
+
+| [0075](0075-preserve-returned-failed-workflow-acks-in-denied-dispositions.md) | Preserve returned failed-workflow ACKs in denied dispositions | Proposed | 2026-10-23 | Explicit returned/failed/known-ACK lane, immutable original acknowledgment and unchanged native-denial evidence |
+
+| [0076](0076-isolate-native-denial-observation-from-normal-aws-admission.md) | Isolate native-denial observation from normal AWS admission | Proposed | 2026-10-24 | Dedicated HTTP-only observer identity, exact historical protocol projection and unchanged normal supplier admission |
+
+| [0077](0077-close-enrolled-failed-originals-through-native-absence.md) | Close enrolled failed originals through a separate native-absence ledger | Proposed | 2026-10-24 | Preserved accepted enrollment, immutable failed workflow and fenced exact native-absence accounting |
+
+| [0078](0078-version-guest-protocol-authority-and-reconcile-installed-originals.md) | Version Guest protocol authority independently of issuer builds | Accepted | 2026-10-25 | Stable approved Guest-v1 authority, atomic actual-issuer provenance and distinct installed-readiness reconciliation |
+
+| [0079](0079-dispose-failed-installed-guests-without-inventing-capacity.md) | Dispose failed installed Guests through original retirement | Proposed | 2026-10-25 | Explicit administrative admission, zero-useful-capacity floor proof, original V2/native absence and corrected-profile replacement gate |

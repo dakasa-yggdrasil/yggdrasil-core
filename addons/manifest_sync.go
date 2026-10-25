@@ -41,12 +41,10 @@ func bootstrapManifestSync(ctx context.Context, app *runtime.ServiceApp) error {
 	if !ok {
 		return nil
 	}
-	// RabbitMQ(app) returns (nil, true) when the broker was unreachable at
-	// boot, so `ok` alone does not mean we have a usable connection. Without
-	// this nil guard the cron/event goroutines would call InvokeDescribe →
-	// conn.Channel() on a nil *amqp.Connection → panic, crashing the process.
+	// Keep the runner installed during temporary session unavailability. Its
+	// gate and each describe operation resolve the current session separately.
 	conn, ok := RabbitMQ(app)
-	if !ok || conn == nil {
+	if !ok {
 		return nil
 	}
 	logger, _ := Logger(app)
@@ -54,6 +52,7 @@ func bootstrapManifestSync(ctx context.Context, app *runtime.ServiceApp) error {
 	deps := &productionDeps{
 		db:              db,
 		conn:            conn,
+		connection:      func() *amqp.Connection { current, _ := RabbitMQ(app); return current },
 		describeTimeout: envDurOrDefault("MANIFEST_SYNC_DESCRIBE_TIMEOUT", 10*time.Second),
 	}
 
@@ -64,7 +63,7 @@ func bootstrapManifestSync(ctx context.Context, app *runtime.ServiceApp) error {
 		// Gate every sync on broker liveness — re-evaluated per tick so a
 		// runtime drop (conn closes after a healthy boot) skips the sync
 		// instead of dispatching a describe RPC through a dead connection.
-		BrokerLive: func() bool { return brokerLive(conn) },
+		BrokerLive: func() bool { current, _ := RabbitMQ(app); return brokerLive(current) },
 	}
 
 	go func() {
@@ -89,13 +88,14 @@ func bootstrapManifestSync(ctx context.Context, app *runtime.ServiceApp) error {
 type productionDeps struct {
 	db              *sql.DB
 	conn            *amqp.Connection
+	connection      func() *amqp.Connection
 	describeTimeout time.Duration
 }
 
 func (p *productionDeps) Now() time.Time { return time.Now().UTC() }
 
 func (p *productionDeps) GetIntegrationType(ctx context.Context, typeID uuid.UUID) (model.Manifest, model.IntegrationTypeManifestSpec, error) {
-	m, err := repository.GetManifestByID(ctx, p.db, typeID)
+	m, err := repository.CurrentIntegrationTypeForSync(ctx, p.db, typeID)
 	if err != nil {
 		return model.Manifest{}, model.IntegrationTypeManifestSpec{}, fmt.Errorf("get integration_type %s: %w", typeID, err)
 	}
@@ -150,15 +150,22 @@ func (p *productionDeps) InvokeDescribe(
 ) (model.IntegrationTypeManifestSpec, error) {
 	rpcCtx, cancel := context.WithTimeout(ctx, p.describeTimeout)
 	defer cancel()
-	return messagecontroller.DescribeIntegrationType(rpcCtx, p.conn, instanceManifest, typeManifest, instanceSpec, typeSpec)
+	conn := p.conn
+	if p.connection != nil {
+		conn = p.connection()
+	}
+	if !brokerLive(conn) {
+		return model.IntegrationTypeManifestSpec{}, fmt.Errorf("rabbitmq connection unavailable")
+	}
+	return messagecontroller.DescribeIntegrationType(rpcCtx, conn, instanceManifest, typeManifest, instanceSpec, typeSpec)
 }
 
-func (p *productionDeps) ApplyManifestVersion(ctx context.Context, doc model.ManifestDocument) (model.Manifest, error) {
+func (p *productionDeps) ApplyManifestVersion(ctx context.Context, expected model.Manifest, doc model.ManifestDocument) (model.Manifest, error) {
 	checksum, err := manifestengine.Checksum(doc)
 	if err != nil {
 		return model.Manifest{}, fmt.Errorf("compute manifest checksum: %w", err)
 	}
-	return repository.CreateManifestVersion(ctx, p.db, doc, checksum)
+	return repository.ApplyIntegrationTypeSyncVersion(ctx, p.db, expected, doc, checksum)
 }
 
 func (p *productionDeps) EmitEvent(ctx context.Context, eventType string, aggregateID uuid.UUID, payload map[string]any) error {

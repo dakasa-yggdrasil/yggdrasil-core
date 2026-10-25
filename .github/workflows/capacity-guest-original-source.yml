@@ -1,0 +1,518 @@
+name: Original Guest Core source and PostgreSQL gates
+on:
+  pull_request:
+  push:
+    branches: ['codex/**']
+  workflow_dispatch:
+permissions:
+  contents: read
+
+# SOURCE gates precede the separately published Guest joint native matrix.
+# This workflow supplies no QEMU, provider effect, native-positive ledger or
+# production capacity. Guest owns each genuine same-original two-slot realm;
+# its readonly Core verifier consumes that SAME database after the real caller.
+jobs:
+  original-provider-source:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GOMAXPROCS: '2'
+      GOMEMLIMIT: 2GiB
+      GOWORK: 'off'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Actual original provider source contracts and default refusal
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=120s -json ./internal/capacity ./controllers/message ./repository -run '^(TestOriginalProviderReturnClosedJSON|TestOriginalAWSDestroyReceiptAndNativeAbsence|TestOriginalMutationCompletionPreservesLegacyAWS|TestOriginalAWSCreateReturnAndNativeLifecycle|TestOriginalGuestProviderNativeIdentity|TestProviderNativeIdentitySignedClosedWitness|TestVMAWSReadUsesExactExistingCapability|TestOriginalAWSGuestSupplierUsesActualClosedCatalog|TestOriginalAWSGuestSupplierRequiresIndependentSourcePin|TestOriginalGuestSupplierPinsPublicAdapterSource|TestProductionOriginalGuestWitnessRefusesUnsupportedSources|TestOriginalGuestSupplierRequiresActualClosedCatalog|TestOriginalGuestReceiptJoinsOmittedEmptyActionLists)$' | tee original-provider-source.jsonl
+          python3 - <<'PY'
+          import json
+          rows=[json.loads(line) for line in open('original-provider-source.jsonl') if line.strip()]
+          roots={'TestOriginalAWSDestroyReceiptAndNativeAbsence','TestOriginalMutationCompletionPreservesLegacyAWS','TestOriginalProviderReturnClosedJSON','TestOriginalAWSCreateReturnAndNativeLifecycle','TestOriginalGuestProviderNativeIdentity','TestProviderNativeIdentitySignedClosedWitness','TestVMAWSReadUsesExactExistingCapability','TestOriginalAWSGuestSupplierUsesActualClosedCatalog','TestOriginalAWSGuestSupplierRequiresIndependentSourcePin','TestOriginalGuestSupplierPinsPublicAdapterSource','TestProductionOriginalGuestWitnessRefusesUnsupportedSources','TestOriginalGuestSupplierRequiresActualClosedCatalog','TestOriginalGuestReceiptJoinsOmittedEmptyActionLists'}
+          passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
+          skipped=[r.get('Test',r.get('Package')) for r in rows if r.get('Action')=='skip']
+          if roots-passed or skipped:raise SystemExit(f'Original provider source incomplete: missing={sorted(roots-passed)}, skips={skipped}')
+          print(f'All {len(roots)} original provider source roots passed; no native qualification claimed')
+          PY
+      - name: Exact original AWS mutation callback principal operation
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./controllers/httpapi -run '^TestCapacityMutation(OriginalAWSOperationIsExact|CredentialScope|InventoryFailsClosed)$' | tee original-provider-principal-source.jsonl
+          python3 - <<'PYCODE'
+          import json
+          rows=[json.loads(line) for line in open('original-provider-principal-source.jsonl') if line.strip()]
+          roots={'TestCapacityMutationOriginalAWSOperationIsExact','TestCapacityMutationCredentialScope','TestCapacityMutationInventoryFailsClosed'}
+          passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
+          assert not any(r.get('Action') in ('fail','skip','build-fail') for r in rows)
+          assert not roots-passed, f'missing exact provider principal roots: {sorted(roots-passed)}'
+          assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==1
+          print('Exact provider callback scope source contracts passed; no native or SQL authority granted')
+          PYCODE
+      - name: Exact native AWS catalog naming compatibility
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./manifest -run '^TestLoadCapabilityNamingAllowlist_AWS173CatalogExactTransitions$' | tee original-provider-naming-source.jsonl
+          python3 - <<'PYCODE'
+          import json
+          rows=[json.loads(line) for line in open('original-provider-naming-source.jsonl') if line.strip()]
+          root='TestLoadCapabilityNamingAllowlist_AWS173CatalogExactTransitions'
+          names={'start_ec2_instance','stop_ec2_instance','terminate_ec2_instance','detach_iam_policy','associate_eks_secrets_encryption','set_asg_desired_capacity'}
+          expected={root}|{root+'/'+name for name in names}
+          passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
+          assert passed==expected
+          assert not any(r.get('Action') in ('fail','skip','build-fail') for r in rows)
+          assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==1
+          print('Native catalog and six exact naming exceptions passed; hard-fail remains enabled')
+          PYCODE
+      - name: Original Notify canary source, clock domains and closed routes
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./internal/capacity -run '^TestGuest(Notify|SlotBootstrap|OriginalHTTP(LateClose|OnlyClosed)|ProductionRegistry)' | tee original-notify-canary-source.jsonl
+          python3 - <<'PY'
+          import json
+          rows=[json.loads(line) for line in open('original-notify-canary-source.jsonl') if line.strip()]
+          roots={'TestGuestProductionRegistryExactContract','TestGuestProductionRegistryPinsIndependentHetznerSource','TestGuestProductionRegistryDigestDoesNotMutateOrApprove','TestGuestProductionRegistryPinsCanaryAndDeclarativeTopology','TestGuestProductionRegistryNotifyRootCgroupIsExact','TestGuestNotifyOriginalNonceScopeAndClockDomains','TestGuestNotifyDeclarativeQueueIdentity','TestGuestOriginalHTTPLateCloseCannotRenewBudget','TestGuestOriginalHTTPOnlyClosedCanaryRoutes','TestGuestNotifyCanaryChallengeAndOriginalProcessEnvelope','TestGuestNotifyNativeBusinessJoinSeparatesSQLAndWire','TestGuestNotifyCausalPairCannotRenewPublication','TestGuestNotifyFreshnessKeepsClockDomainsAndOriginalBudget','TestGuestNotifyExpiredPreflightCannotMintOrSign','TestGuestSlotBootstrapSelectsOnlyExactPrivateTemplate','TestGuestSlotBootstrapPinsFullMemberAndSourceContract','TestGuestSlotBootstrapKeepsLegacyWireAndPayload'}
+          passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
+          if roots-passed or any(r.get('Action')=='skip' for r in rows):raise SystemExit('Original Notify canary source roots missing or skipped')
+          print(f'All {len(roots)} original Notify canary source roots passed; no PostgreSQL/broker/native pass claimed')
+          PY
+      - name: Production retirement V2 original clocks and closed native callers
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./internal/capacity ./repository ./controllers/message ./controllers/httpapi -run '^(TestGuestRetirementV2OriginalOwnerConsumesWholeBudgetOnce|TestGuestRetirementV2SeparatesKernelClockFromCoreWall|TestGuestRetirementV2NativeOffContentUsesActualProviderWireWithoutClockAuthority|TestGuestRetirementV2NativeOffContentRefusesChangedOriginalOrProjection|TestGuestRetirementV2NativeAbsenceContentPreservesOriginalReceipt|TestGuestRetirementV2NativeAbsenceDoesNotUseCoreWallClock|TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn|TestOriginalRetirementV2PollsOnlyKnownAcceptedAWSAbsence|TestOriginalRetirementV2RequiresExactProviderOwnedCatalog|TestOriginalRetirementV2PollsOnlyKnownAcceptedHetznerAbsence|TestCapacityGuestRetirementV2ClosedAuthorityBeforeReservation|TestCapacityGuestOriginalProfileClosedScope|TestGuestOriginalProfilePendingContentRequiresOriginalCreate|TestCapacityGuestOriginalProfilePendingCanonicalNonAuthority)$' | tee original-retirement-v2-source.jsonl
+          python3 - <<'PY'
+          import json
+          rows=[json.loads(line) for line in open('original-retirement-v2-source.jsonl') if line.strip()]
+          roots={'TestCapacityGuestRetirementV2ClosedAuthorityBeforeReservation', 'TestCapacityGuestOriginalProfileClosedScope', 'TestGuestOriginalProfilePendingContentRequiresOriginalCreate', 'TestCapacityGuestOriginalProfilePendingCanonicalNonAuthority', 'TestGuestRetirementV2NativeOffContentRefusesChangedOriginalOrProjection', 'TestGuestRetirementV2NativeAbsenceContentPreservesOriginalReceipt', 'TestOriginalRetirementV2PollsOnlyKnownAcceptedAWSAbsence', 'TestOriginalRetirementV2RequiresExactProviderOwnedCatalog', 'TestGuestRetirementV2OriginalOwnerConsumesWholeBudgetOnce', 'TestGuestRetirementV2SeparatesKernelClockFromCoreWall', 'TestGuestRetirementV2NativeOffContentUsesActualProviderWireWithoutClockAuthority', 'TestGuestRetirementV2NativeReadContentRequiresWholeOriginalReturn', 'TestGuestRetirementV2NativeAbsenceDoesNotUseCoreWallClock', 'TestOriginalRetirementV2PollsOnlyKnownAcceptedHetznerAbsence'}
+          passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
+          assert not any(r.get('Action') in ('fail','skip','build-fail') for r in rows)
+          assert not roots-passed, f'missing V2 source roots: {sorted(roots-passed)}'
+          assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==4
+          print(f'All {len(roots)} production V2 source roots passed; no native-positive chain claimed')
+          PY
+      - name: Production provisioning V2 original clock and immutable wire contracts
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./internal/capacity ./repository ./controllers/httpapi -run '^(TestGuestProductionClockV2(SameDomainAndSignature|ConservativeWholeExchange|InstallationOriginalReceipt|CrossImportAndExport|InstallationCrossImport|RegistrationKeepsOriginalProofs|EnrollmentMarkerIsIssuerSigned|RepositoryRefusesMissingAuthority)|TestCapacityGuestProfileAuthorityV2ClosedScope|TestGuestOriginalInstallationAuthentication)$' | tee original-provisioning-v2-source.jsonl
+          python3 - <<'PYCODE'
+          import json
+          rows=[json.loads(line) for line in open('original-provisioning-v2-source.jsonl') if line.strip()]
+          roots={'TestGuestProductionClockV2SameDomainAndSignature','TestGuestProductionClockV2ConservativeWholeExchange','TestGuestProductionClockV2InstallationOriginalReceipt','TestGuestProductionClockV2CrossImportAndExport','TestGuestProductionClockV2InstallationCrossImport','TestGuestProductionClockV2RegistrationKeepsOriginalProofs','TestGuestProductionClockV2EnrollmentMarkerIsIssuerSigned','TestGuestProductionClockV2RepositoryRefusesMissingAuthority','TestCapacityGuestProfileAuthorityV2ClosedScope','TestGuestOriginalInstallationAuthentication'}
+          passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
+          assert not any(r.get('Action') in ('fail','skip','build-fail') for r in rows)
+          assert not roots-passed, f'missing provisioning V2 roots: {sorted(roots-passed)}'
+          assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==3
+          print('Production provisioning clock source contracts only; no native/provider/SQL authority granted')
+          PYCODE
+      - name: Stable canary maintenance cannot adopt a provider mutation lease
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./repository -run '^TestGuestNotifyMaintenanceCannotAdoptMutationLease$' | tee original-notify-maintenance-source.jsonl
+          python3 - <<'PY'
+          import json
+          rows=[json.loads(line) for line in open('original-notify-maintenance-source.jsonl') if line.strip()]
+          case='TestGuestNotifyMaintenanceCannotAdoptMutationLease'
+          assert not any(r.get('Action') in ('fail','skip','build-fail') for r in rows)
+          assert [r['Action'] for r in rows if r.get('Test')==case and r.get('Action') in ('run','pass')]==['run','pass']
+          assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==1
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-original-provider-source
+          path: |
+            original-provider-source.jsonl
+            original-provider-principal-source.jsonl
+            original-provider-naming-source.jsonl
+            original-notify-canary-source.jsonl
+            original-notify-maintenance-source.jsonl
+            original-retirement-v2-source.jsonl
+            original-provisioning-v2-source.jsonl
+  original-http-transport:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    env:
+      GOMAXPROCS: '2'
+      GOMEMLIMIT: 2GiB
+      GOWORK: 'off'
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Original HTTP and verified same-owner secondary TLS
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./addons -run '^TestHTTP(TLS|Secondary)' | tee original-http-transport.jsonl
+          python3 - <<'PY'
+          import json
+          rows=[json.loads(line) for line in open('original-http-transport.jsonl') if line.strip()]
+          roots={'TestHTTPTLSExplicitIdentityAdmission','TestHTTPTLSOriginalListenerReadCloseShutdown','TestHTTPSecondaryTLSAdmissionBeforeDatabase','TestHTTPSecondaryTLSOriginalSharedHandler','TestHTTPSecondaryBindFailureClosesPrimary'}
+          passed={r['Test'] for r in rows if r.get('Action')=='pass' and r.get('Test')}
+          if roots-passed or any(r.get('Action')=='skip' for r in rows):raise SystemExit('Original HTTP transport roots missing or skipped')
+          print(f'All {len(roots)} original HTTP transport roots passed')
+          PY
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-original-http-transport
+          path: original-http-transport.jsonl
+  source-contracts:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GOWORK: "off"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Closed original enrollment refusal diagnostics
+        run: go test -count=1 -timeout=60s ./internal/capacity -run '^TestGuestQualification'
+      - name: Exact original QEMU command bytes and virtio-only root
+        run: go test -count=1 -v internal/capacitynativeqemu/original_command.go internal/capacitynativeqemu/original_command_test.go
+      - name: Literal transferred deadlines and first retirement thirty-second bound
+        run: bash scripts/ci/capacity_guest_original_corpus.sh transferred
+      - name: Exact canonical original reply bytes and bounded original Read/Close facts
+        if: ${{ !cancelled() }}
+        run: bash scripts/ci/capacity_guest_original_corpus.sh bytes
+      - name: Required native DTO fields without native execution
+        if: ${{ !cancelled() }}
+        run: bash scripts/ci/capacity_guest_original_corpus.sh native-decode
+      - name: Original async and real HTTP handler returns and default invariance
+        if: ${{ !cancelled() }}
+        run: bash scripts/ci/capacity_guest_original_corpus.sh native-owners
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-original-guest-source-censuses
+          path: ${{ runner.temp }}/capacity-guest-original-*/
+          if-no-files-found: error
+
+  host-factory-source-pg:
+    # Proposed additive SOURCE/PG gate. Dispatch awaits whole Source peer;
+    # native tags compile Source only; no worker/QEMU execution, approval or resources.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: source-ci-only
+          POSTGRES_DB: yggdrasil_host_source
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d yggdrasil_host_source"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      GOWORK: "off"
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: yggdrasil_host_source
+      DB_USER: postgres
+      DB_PASSWORD: source-ci-only
+      DB_SSLMODE: disable
+      DB_URL: postgres://postgres:source-ci-only@127.0.0.1:5432/yggdrasil_host_source?sslmode=disable
+      REQUIRE_CAPACITY_HOST_ORIGINAL_POSTGRES: "true"
+      REQUIRE_CAPACITY_HOST_ORIGINAL_SOURCE_BUILDS: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Apply original migration source to CI-only ephemeral PG
+        run: go run ./scripts/goose up > "$RUNNER_TEMP/host-factory-migration.raw.log" 2>&1
+      - name: Actual Guest canary immutable schema and absent-authority PostgreSQL negatives
+        env:
+          REQUIRE_GUEST_NOTIFY_CANARY_DB_TEST: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./repository -run '^TestGuestNotifyCanaryPostgresSchemaAndAbsentAuthority$' | tee "$RUNNER_TEMP/original-notify-canary-pg.jsonl"
+          python3 - <<'PY'
+          import json,os,pathlib
+          rows=[json.loads(line) for line in (pathlib.Path(os.environ['RUNNER_TEMP'])/'original-notify-canary-pg.jsonl').read_text().splitlines() if line.strip()]
+          case='TestGuestNotifyCanaryPostgresSchemaAndAbsentAuthority'
+          assert not any(r.get('Action') in ('skip','fail','build-fail') for r in rows)
+          assert [r['Action'] for r in rows if r.get('Test')==case and r.get('Action') in ('run','pass')]==['run','pass']
+          assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==1
+          print('Actual migrated PostgreSQL FK/immutable schema negatives; no positive enrollment or capacity qualification')
+          PY
+      - name: Actual production V2 absent-original PostgreSQL authority refusals
+        env:
+          REQUIRE_GUEST_RETIREMENT_V2_DB_TEST: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./repository -run '^TestGuestRetirementV2PostgresAbsentOriginalAuthority$' | tee "$RUNNER_TEMP/original-retirement-v2-pg.jsonl"
+          python3 - <<'PY'
+          import json,os,pathlib
+          rows=[json.loads(line) for line in (pathlib.Path(os.environ['RUNNER_TEMP'])/'original-retirement-v2-pg.jsonl').read_text().splitlines() if line.strip()]
+          case='TestGuestRetirementV2PostgresAbsentOriginalAuthority'
+          assert not any(r.get('Action') in ('skip','fail','build-fail') for r in rows)
+          assert [r['Action'] for r in rows if r.get('Test')==case and r.get('Action') in ('run','pass')]==['run','pass']
+          assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==1
+          print('Actual PostgreSQL absent-original FK refusals only; no manufactured enrollment or positive authority')
+          PY
+      - name: Actual immutable registration and result hash domains in PostgreSQL
+        env:
+          REQUIRE_CAPACITY_GUEST_ORIGINAL_POSTGRES: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -timeout=60s -json ./repository -run '^TestGuestProductionClockV2PostgresImmutableReceiptHashDomains$' | tee "$RUNNER_TEMP/original-provisioning-v2-pg.jsonl"
+          python3 - <<'PYCODE'
+          import json,os,pathlib
+          rows=[json.loads(line) for line in (pathlib.Path(os.environ['RUNNER_TEMP'])/'original-provisioning-v2-pg.jsonl').read_text().splitlines() if line.strip()]
+          root='TestGuestProductionClockV2PostgresImmutableReceiptHashDomains'
+          assert not any(r.get('Action') in ('fail','skip','build-fail') for r in rows)
+          assert [r['Action'] for r in rows if r.get('Test')==root and r.get('Action') in ('run','pass')]==['run','pass']
+          assert sum(r.get('Test') is None and r.get('Action')=='pass' for r in rows)==1
+          print('Expired rollback-only PostgreSQL storage/wire evidence; no signed enrollment or native authority')
+          PYCODE
+      - name: Actual pure byte graph SOURCE cases
+        if: ${{ !cancelled() }}
+        run: go test -json -count=1 ./internal/capacity -run '^TestHostOriginalFactory' > "$RUNNER_TEMP/host-factory-pure.jsonl" 2> "$RUNNER_TEMP/host-factory-pure.stderr.log"
+      - name: Actual clean tagged Source command and native reader builds without execution
+        if: ${{ !cancelled() }}
+        run: go test -json -count=1 ./repository -run '^TestHostOriginalFactoryRemoteSourceBuildOwner$' > "$RUNNER_TEMP/host-factory-build-owner.jsonl" 2> "$RUNNER_TEMP/host-factory-build-owner.stderr.log"
+      - name: Actual PostgreSQL immutable relation SOURCE cases
+        if: ${{ !cancelled() }}
+        run: go test -json -count=1 ./repository -run '^TestHostOriginalFactory(Postgres|ActualRegistry|Source)' > "$RUNNER_TEMP/host-factory-pg.jsonl" 2> "$RUNNER_TEMP/host-factory-pg.stderr.log"
+      # Isolated Source-only proposal; adopt only after the ONE whole-source review.
+      # Expected names pin Source case coverage and grant no native qualification.
+      - name: Exact additive Source profile pure roots and descendant census
+        if: ${{ !cancelled() }}
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          audit_dir="$RUNNER_TEMP/host-factory-source-package-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-profile"
+          mkdir "$audit_dir"
+          set +e
+          python3 scripts/ci/host_factory_source_package_census.py preflight --expected scripts/ci/host_factory_source_package_expected.json --phase profile --audit "$audit_dir"
+          preflight_exit=$?
+          if (( preflight_exit != 0 )); then exit "$preflight_exit"; fi
+          root_regex="$(cat "$audit_dir/root-regex.txt")"
+          selector_exit=$?
+          if (( selector_exit != 0 )) || [[ -z "$root_regex" ]]; then exit 1; fi
+          go test -json -mod=readonly -tags nativequalification -p 1 -count=1 -timeout=90s ./internal/capacity -run "$root_regex" 2> "$audit_dir/stderr.log" | tee "$audit_dir/raw.jsonl" 2> "$audit_dir/tee.stderr.log"
+          original_status=( "${PIPESTATUS[@]}" )
+          if (( ${#original_status[@]} != 2 )); then exit 1; fi
+          printf '%s\n' "${original_status[0]}" > "$audit_dir/go.exit" || exit 1
+          printf '%s\n' "${original_status[1]}" > "$audit_dir/tee.exit" || exit 1
+          python3 scripts/ci/host_factory_source_package_census.py census --phase profile --audit "$audit_dir" --go-exit "${original_status[0]}" --tee-exit "${original_status[1]}" > "$audit_dir/collector.stdout.log" 2> "$audit_dir/collector.stderr.log"
+          census_exit=$?
+          printf '%s\n' "$census_exit" > "$audit_dir/collector.exit" || exit 1
+          if (( original_status[0] != 0 )); then exit "${original_status[0]}"; fi
+          if (( original_status[1] != 0 )); then exit "${original_status[1]}"; fi
+          exit "$census_exit"
+      - name: Exact additive persistence Source roots and descendant census
+        if: ${{ !cancelled() }}
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          audit_dir="$RUNNER_TEMP/host-factory-source-package-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-persistence"
+          mkdir "$audit_dir"
+          set +e
+          python3 scripts/ci/host_factory_source_package_census.py preflight --expected scripts/ci/host_factory_source_package_expected.json --phase persistence --audit "$audit_dir"
+          preflight_exit=$?
+          if (( preflight_exit != 0 )); then exit "$preflight_exit"; fi
+          root_regex="$(cat "$audit_dir/root-regex.txt")"
+          selector_exit=$?
+          if (( selector_exit != 0 )) || [[ -z "$root_regex" ]]; then exit 1; fi
+          go test -json -mod=readonly -tags nativequalification -p 1 -count=1 -timeout=90s ./repository -run "$root_regex" 2> "$audit_dir/stderr.log" | tee "$audit_dir/raw.jsonl" 2> "$audit_dir/tee.stderr.log"
+          original_status=( "${PIPESTATUS[@]}" )
+          if (( ${#original_status[@]} != 2 )); then exit 1; fi
+          printf '%s\n' "${original_status[0]}" > "$audit_dir/go.exit" || exit 1
+          printf '%s\n' "${original_status[1]}" > "$audit_dir/tee.exit" || exit 1
+          python3 scripts/ci/host_factory_source_package_census.py census --phase persistence --audit "$audit_dir" --go-exit "${original_status[0]}" --tee-exit "${original_status[1]}" > "$audit_dir/collector.stdout.log" 2> "$audit_dir/collector.stderr.log"
+          census_exit=$?
+          printf '%s\n' "$census_exit" > "$audit_dir/collector.exit" || exit 1
+          if (( original_status[0] != 0 )); then exit "${original_status[0]}"; fi
+          if (( original_status[1] != 0 )); then exit "${original_status[1]}"; fi
+          exit "$census_exit"
+      - name: Exact tagged host factory Source package roots and descendant census
+        if: ${{ !cancelled() }}
+        timeout-minutes: 4
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          audit_dir="$RUNNER_TEMP/host-factory-source-package-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-package"
+          mkdir "$audit_dir"
+          set +e
+          python3 scripts/ci/host_factory_source_package_census.py preflight --expected scripts/ci/host_factory_source_package_expected.json --phase package --audit "$audit_dir"
+          preflight_exit=$?
+          if (( preflight_exit != 0 )); then exit "$preflight_exit"; fi
+          root_regex="$(cat "$audit_dir/root-regex.txt")"
+          selector_exit=$?
+          if (( selector_exit != 0 )) || [[ -z "$root_regex" ]]; then exit 1; fi
+          go test -json -mod=readonly -tags nativequalification -p 1 -count=1 -timeout=3m ./internal/capacityhostfactory -run "$root_regex" 2> "$audit_dir/stderr.log" | tee "$audit_dir/raw.jsonl" 2> "$audit_dir/tee.stderr.log"
+          original_status=( "${PIPESTATUS[@]}" )
+          if (( ${#original_status[@]} != 2 )); then exit 1; fi
+          printf '%s\n' "${original_status[0]}" > "$audit_dir/go.exit" || exit 1
+          printf '%s\n' "${original_status[1]}" > "$audit_dir/tee.exit" || exit 1
+          python3 scripts/ci/host_factory_source_package_census.py census --phase package --audit "$audit_dir" --go-exit "${original_status[0]}" --tee-exit "${original_status[1]}" > "$audit_dir/collector.stdout.log" 2> "$audit_dir/collector.stderr.log"
+          census_exit=$?
+          printf '%s\n' "$census_exit" > "$audit_dir/collector.exit" || exit 1
+          if (( original_status[0] != 0 )); then exit "${original_status[0]}"; fi
+          if (( original_status[1] != 0 )); then exit "${original_status[1]}"; fi
+          exit "$census_exit"
+      - name: Exact tagged Main Capture refusal Source caller census
+        if: ${{ !cancelled() }}
+        timeout-minutes: 2
+        shell: bash
+        run: |
+          set -euo pipefail
+          umask 077
+          audit_dir="$RUNNER_TEMP/host-factory-source-package-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-main"
+          mkdir "$audit_dir"
+          set +e
+          python3 scripts/ci/host_factory_source_package_census.py preflight --expected scripts/ci/host_factory_source_package_expected.json --phase main --audit "$audit_dir"
+          preflight_exit=$?
+          if (( preflight_exit != 0 )); then exit "$preflight_exit"; fi
+          root_regex="$(cat "$audit_dir/root-regex.txt")"
+          selector_exit=$?
+          if (( selector_exit != 0 )) || [[ -z "$root_regex" ]]; then exit 1; fi
+          go test -json -mod=readonly -tags nativequalification -p 1 -count=1 -timeout=90s ./cmd/native-host-factory-fixture -run "$root_regex" 2> "$audit_dir/stderr.log" | tee "$audit_dir/raw.jsonl" 2> "$audit_dir/tee.stderr.log"
+          original_status=( "${PIPESTATUS[@]}" )
+          if (( ${#original_status[@]} != 2 )); then exit 1; fi
+          printf '%s\n' "${original_status[0]}" > "$audit_dir/go.exit" || exit 1
+          printf '%s\n' "${original_status[1]}" > "$audit_dir/tee.exit" || exit 1
+          python3 scripts/ci/host_factory_source_package_census.py census --phase main --audit "$audit_dir" --go-exit "${original_status[0]}" --tee-exit "${original_status[1]}" > "$audit_dir/collector.stdout.log" 2> "$audit_dir/collector.stderr.log"
+          census_exit=$?
+          printf '%s\n' "$census_exit" > "$audit_dir/collector.exit" || exit 1
+          if (( original_status[0] != 0 )); then exit "${original_status[0]}"; fi
+          if (( original_status[1] != 0 )); then exit "${original_status[1]}"; fi
+          exit "$census_exit"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-host-factory-source-package-original-census
+          path: ${{ runner.temp }}/host-factory-source-package-*/
+          if-no-files-found: error
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-host-factory-source-pg-original-census
+          path: |
+            ${{ runner.temp }}/host-factory-migration.raw.log
+            ${{ runner.temp }}/original-notify-canary-pg.jsonl
+            ${{ runner.temp }}/original-retirement-v2-pg.jsonl
+            ${{ runner.temp }}/original-provisioning-v2-pg.jsonl
+            ${{ runner.temp }}/host-factory-pure.jsonl
+            ${{ runner.temp }}/host-factory-pure.stderr.log
+            ${{ runner.temp }}/host-factory-build-owner.jsonl
+            ${{ runner.temp }}/host-factory-build-owner.stderr.log
+            ${{ runner.temp }}/host-factory-source-build-*/
+            ${{ runner.temp }}/host-factory-pg.jsonl
+            ${{ runner.temp }}/host-factory-pg.stderr.log
+            ${{ runner.temp }}/host-factory-source-case-*.json
+          if-no-files-found: error
+
+  guest-pg-public-auth:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: native-ci-only
+          POSTGRES_DB: yggdrasil_native_guest
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d yggdrasil_native_guest"
+          --health-interval 3s --health-timeout 3s --health-retries 20
+    env:
+      GOWORK: "off"
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: yggdrasil_native_guest
+      DB_USER: postgres
+      DB_PASSWORD: native-ci-only
+      DB_SSLMODE: disable
+      DB_URL: postgres://postgres:native-ci-only@127.0.0.1:5432/yggdrasil_native_guest?sslmode=disable
+      REQUIRE_CAPACITY_GUEST_ORIGINAL_POSTGRES: "true"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Apply original owning migration source to ephemeral PG
+        run: go run ./scripts/goose up
+      - name: Real PG source refusals and closed public workflow/manifest admission corpus
+        run: bash scripts/ci/capacity_guest_original_corpus.sh source
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-original-guest-pg-auth-census
+          path: ${{ runner.temp }}/capacity-guest-original-*/
+          if-no-files-found: error
+
+  native-cli-build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    env:
+      GOWORK: "off"
+      CGO_ENABLED: "0"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build actual clean native Core command outside source checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain --untracked-files=normal)"
+          git rev-parse HEAD > "$RUNNER_TEMP/core-original-guest-source-code.txt"
+          go build -mod=readonly -buildvcs=true -tags nativequalification -o "$RUNNER_TEMP/core-original-guest-native-cli" ./cmd/native-guest-lifecycle-fixture
+          go version -m "$RUNNER_TEMP/core-original-guest-native-cli" > "$RUNNER_TEMP/core-original-guest-native-build-metadata.txt"
+          sha256sum "$RUNNER_TEMP/core-original-guest-native-cli" > "$RUNNER_TEMP/core-original-guest-native-cli.sha256"
+          test -z "$(git status --porcelain --untracked-files=normal)"
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: core-original-guest-native-source-build
+          path: |
+            ${{ runner.temp }}/core-original-guest-source-code.txt
+            ${{ runner.temp }}/core-original-guest-native-build-metadata.txt
+            ${{ runner.temp }}/core-original-guest-native-cli.sha256
+          if-no-files-found: error

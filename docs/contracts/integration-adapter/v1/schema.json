@@ -317,6 +317,36 @@
         }
       }
     },
+    "integrationDashboardSpec": {
+      "type": "object",
+      "required": ["url"],
+      "properties": {
+        "url": {"type": "string"},
+        "label": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
+    "integrationDisplaySpec": {
+      "type": "object",
+      "properties": {
+        "subtitle": {"type": "string"},
+        "subtitle_locale": {
+          "type": "object",
+          "additionalProperties": {"type": "string"}
+        }
+      },
+      "additionalProperties": false
+    },
+    "integrationIconSpec": {
+      "type": "object",
+      "required": ["url"],
+      "properties": {
+        "url": {"type": "string"},
+        "accent": {"type": "string"},
+        "aria_label": {"type": "string"}
+      },
+      "additionalProperties": false
+    },
     "integrationActionDefinition": {
       "type": "object",
       "required": [
@@ -338,12 +368,17 @@
         "idempotent": {
           "type": "boolean"
         },
+        "input_schema": {
+          "type": "object",
+          "description": "Adapter-declared action input schema; metadata only, never dispatch authority."
+        },
         "category": {
           "type": "string",
           "enum": ["", "reactor", "capability", "permission"],
           "description": "Categoria semântica: reactor (hook interno, oculto em pickers), capability (operação dispatched), permission (granted via team_grant, autorizada downstream). Vazio = capability (back-compat)."
         }
-      }
+      },
+      "additionalProperties": false
     },
     "integrationDiscoverySpec": {
       "type": "object",
@@ -429,6 +464,13 @@
         "provider": {
           "type": "string"
         },
+        "domain": {
+          "type": "string",
+          "pattern": "^$|^[a-z][a-z0-9_-]*$"
+        },
+        "dashboard": {"$ref": "#/$defs/integrationDashboardSpec"},
+        "display": {"$ref": "#/$defs/integrationDisplaySpec"},
+        "icon": {"$ref": "#/$defs/integrationIconSpec"},
         "family_ref": {
           "$ref": "#/$defs/manifestSelector"
         },
@@ -584,6 +626,15 @@
         "provider": {
           "type": "string"
         },
+        "domain": {
+          "type": "string",
+          "pattern": "^$|^[a-z][a-z0-9_-]*$"
+        },
+        "dashboard": {"$ref": "#/$defs/integrationDashboardSpec"},
+        "display": {"$ref": "#/$defs/integrationDisplaySpec"},
+        "icon": {"$ref": "#/$defs/integrationIconSpec"},
+        "credential_policy": {"$ref": "#/$defs/integrationCredentialPolicySpec"},
+        "guardian_support": {"$ref": "#/$defs/integrationGuardianSupportSpec"},
         "family_ref": {
           "$ref": "#/$defs/manifestSelector"
         },

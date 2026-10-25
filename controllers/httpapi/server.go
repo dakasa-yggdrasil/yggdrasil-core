@@ -19,6 +19,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/oidc"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/scim"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/contactphone"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/cryptoenvelope"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
@@ -212,6 +213,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	}
 
 	server := &Server{
+		originalCanaryAuthorities:  capacity.NewOriginalCanaryAuthorityRegistry(),
 		serviceName:                serviceName,
 		db:                         db,
 		rabbitmq:                   conn,
@@ -231,6 +233,17 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		server.workflowRunAuth = loadWorkflowRunAuthConfig(eventPrincipals, directoryPrincipals)
 	})
 	logWorkflowRunCredentialSurface(logger, server.workflowRunAuth, directoryErr, time.Now().UTC())
+	server.capacityMutationPrincipals, err = loadCapacityMutationPrincipals(server.workflowRunAuth.principals, eventPrincipals, directoryPrincipals)
+	if err != nil {
+		return nil, err
+	}
+	server.capacityGuestPrincipals, err = loadCapacityGuestPrincipals(server.workflowRunAuth.principals, eventPrincipals, directoryPrincipals, server.capacityMutationPrincipals)
+	if err != nil {
+		return nil, err
+	}
+	if err = server.loadOriginalHostPrincipals(eventPrincipals, directoryPrincipals); err != nil {
+		return nil, err
+	}
 	server.snapshotHMACSecret, err = directorySnapshotSecret(directoryPrincipals)
 	if err != nil {
 		return nil, err
@@ -263,7 +276,7 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 		runID := uuid.New()
 		response, runErr := messagecontroller.PrepareInsertAndRunWorkflowFromUnauthenticatedChannel(
 			ctx,
-			server.rabbitmq,
+			server.brokerConnection(),
 			server.db,
 			runID,
 			model.RunWorkflowRequest{Workflow: ref, Inputs: inputs},
@@ -556,6 +569,20 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/ops/surfaces/{id}/manifest", server.requireOpsPermissionFunc(permViewIntegrations, server.handleOpsSurfaceManifest))
 	mux.HandleFunc("GET /api/v1/ops/surfaces/{id}/data/{viewId}", server.requireOpsPermissionFunc(permViewIntegrations, server.handleOpsSurfaceData))
 	mux.HandleFunc("POST /api/v1/ops/surfaces/{id}/action/{actionId}", server.requireOpsPermissionFunc(permManageIntegrations, server.handleOpsSurfaceAction))
+	mux.HandleFunc("POST /api/v1/ops/capacity/original-create-dispositions", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsOriginalCreateDisposition))
+	mux.HandleFunc("POST /api/v1/ops/capacity/native-denied-dispositions", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsNativeDeniedDisposition))
+	mux.HandleFunc("GET /api/v1/ops/capacity/native-denied-dispositions/{grantId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsNativeDeniedDispositionRead))
+	mux.HandleFunc("POST /api/v1/ops/capacity/failed-original-dispositions", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedOriginalDisposition))
+	mux.HandleFunc("GET /api/v1/ops/capacity/failed-original-dispositions/{grantId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedOriginalDispositionRead))
+	mux.HandleFunc("POST /api/v1/ops/capacity/failed-installed-guest-disposals/advance", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedInstalledGuestDisposalAdvance))
+	mux.HandleFunc("POST /api/v1/ops/capacity/failed-installed-guest-disposals/complete", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedInstalledGuestDisposalComplete))
+	mux.HandleFunc("POST /api/v1/ops/capacity/failed-installed-guest-disposals", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedInstalledGuestDisposal))
+	mux.HandleFunc("GET /api/v1/ops/capacity/failed-installed-guest-disposals/{preregistrationId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedInstalledGuestDisposalRead))
+	mux.HandleFunc("POST /api/v1/ops/capacity/enrolled-failed-original-dispositions", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsEnrolledFailedOriginalDisposition))
+	mux.HandleFunc("GET /api/v1/ops/capacity/enrolled-failed-original-dispositions/{grantId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsEnrolledFailedOriginalDispositionRead))
+	mux.HandleFunc("GET /api/v1/ops/capacity/original-create-dispositions/{grantId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsOriginalCreateDispositionRead))
+	mux.HandleFunc("POST /api/v1/ops/capacity/dispatch-prestart-rejections", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsCapacityDispatchPrestartRejection))
+	mux.HandleFunc("GET /api/v1/ops/capacity/dispatch-prestart-rejections/{jobId}", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsCapacityDispatchPrestartRejectionRead))
 	mux.HandleFunc("GET /api/v1/ops/workflows", server.requireOpsPermissionFunc(permViewOps, server.handleOpsWorkflowsList))
 	mux.HandleFunc("GET /api/v1/ops/workflows/{runId}", server.requireOpsPermissionFunc(permViewOps, server.handleOpsWorkflowDetail))
 	mux.HandleFunc("POST /api/v1/ops/workflows/{runId}/retry", server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsWorkflowRetry))
@@ -944,6 +971,22 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 
 func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
+		if principal := s.originalHostCredential(r); principal != nil || hostFactoryPath(r.URL.Path) {
+			s.serveOriginalHostRequest(w, r, principal)
+			return
+		}
+		if principal := s.capacityGuestCredential(r); principal != nil || capacityGuestPath(r.URL.Path) {
+			s.serveCapacityGuestRequest(w, r, principal)
+			return
+		}
+		if originalCanaryAuthorityClaim(r) {
+			s.serveOriginalCanaryAuthority(w, r)
+			return
+		}
+		if principal := s.capacityMutationCredential(r); principal != nil || capacityMutationPath(r.URL.Path) {
+			s.serveCapacityMutationRequest(w, r, principal)
+			return
+		}
 		// Directory machine-read path (ADR-0019) is decided first, on every
 		// request, before the public pass-through and before any other
 		// credential family. A request that names itself as a directory
@@ -1259,6 +1302,13 @@ func requiresAuthenticatedConsoleAPI(path string) bool {
 // ServerOption configures optional Server dependencies.
 type ServerOption func(*Server)
 
+// WithRabbitMQConnectionProvider resolves the current connection for each dispatch.
+// The provider must support concurrent requests. A configured provider returning
+// nil means unavailable; it never falls back to an earlier connection.
+func WithRabbitMQConnectionProvider(provider func() *amqp.Connection) ServerOption {
+	return func(s *Server) { s.rabbitmqConnectionProvider = provider }
+}
+
 // WithReconciler injects the reconciler engine into the HTTP server.
 func WithReconciler(engine *reconciler.Engine) ServerOption {
 	return func(s *Server) { s.reconciler = engine }
@@ -1337,15 +1387,21 @@ type workflowDispatchFunc func(ctx context.Context, ref model.ManifestSelector, 
 
 // Server exposes the synchronous HTTP surface of yggdrasil-core.
 type Server struct {
-	snapshotHMACSecret []byte
+	originalGuestAsyncWorkflowOwner guestOriginalAsyncWorkflowOwner
+	originalCanaryAuthorities       *capacity.OriginalCanaryAuthorityRegistry
+	capacityMutationPrincipals      []capacityMutationPrincipal
+	capacityGuestPrincipals         []capacityGuestPrincipal
+	capacityHostFactoryPrincipals   []hostFactoryPrincipal
+	snapshotHMACSecret              []byte
 
-	serviceName      string
-	db               *sql.DB
-	rabbitmq         *amqp.Connection
-	logger           *zap.Logger
-	reconciler       *reconciler.Engine
-	provisioner      *provisioner.AWSProvisioner
-	dispatchWorkflow workflowDispatchFunc
+	serviceName                string
+	db                         *sql.DB
+	rabbitmq                   *amqp.Connection
+	rabbitmqConnectionProvider func() *amqp.Connection
+	logger                     *zap.Logger
+	reconciler                 *reconciler.Engine
+	provisioner                *provisioner.AWSProvisioner
+	dispatchWorkflow           workflowDispatchFunc
 	// oidcIssuerURL, when non-empty, opts the server into mounting the
 	// OIDC OP routes (.well-known/openid-configuration + /oidc/*). Set via
 	// WithOIDCIssuer. Empty (default) keeps OIDC dormant for tests/dev.
@@ -1490,11 +1546,12 @@ func (s *Server) withLogging(next http.Handler) http.Handler {
 		startedAt := time.Now()
 		writer := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(writer, r)
+		method, route := originalCanaryAccessLog(r)
 
 		s.logger.Info("http request served",
 			zap.String("service", s.serviceName),
-			zap.String("method", r.Method),
-			zap.String("path", r.URL.Path),
+			zap.String("method", method),
+			zap.String("path", route),
 			zap.Int("status", writer.status),
 			zap.Duration("duration", time.Since(startedAt)),
 		)
@@ -1529,10 +1586,8 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 
 	// RabbitMQ is a soft dependency — a closed connection degrades workflow
 	// dispatch throughput but does not make the HTTP API unavailable.
-	// Without a ReliableConnection the single *amqp.Connection closes after
-	// transient broker blips and never recovers until pod restart, which
-	// cascaded into /readyz → 503 → Traefik 404 for every external caller.
-	// Surface the state via `rabbitmq_status` but stay ready.
+	// The connection provider tracks broker generations independently of the HTTP
+	// server. Surface the current state via `rabbitmq_status` but stay ready.
 	rabbitmqStatus := "ok"
 	if strings.TrimSpace(os.Getenv("BROKER_URL")) != "" && !s.isBrokerAvailable() {
 		rabbitmqStatus = "degraded"
@@ -1544,13 +1599,26 @@ func (s *Server) handleReadyz(w http.ResponseWriter, r *http.Request) {
 	})
 }
 
+// brokerConnection takes one snapshot of the current broker generation. Direct
+// Server users retain the constructor connection when no provider is configured.
+func (s *Server) brokerConnection() *amqp.Connection {
+	if s == nil {
+		return nil
+	}
+	if s.rabbitmqConnectionProvider != nil {
+		return s.rabbitmqConnectionProvider()
+	}
+	return s.rabbitmq
+}
+
 // isBrokerAvailable reports whether the workflow/event path can dispatch.
-// It is the single source of truth for broker liveness: BROKER_URL must be
-// configured AND the cached connection must be open. With BROKER_URL unset
-// the floor runs IdP-only and this is intentionally false.
+// BROKER_URL must be configured and the current connection must be open.
 func (s *Server) isBrokerAvailable() bool {
-	return strings.TrimSpace(os.Getenv("BROKER_URL")) != "" &&
-		s.rabbitmq != nil && !s.rabbitmq.IsClosed()
+	if strings.TrimSpace(os.Getenv("BROKER_URL")) == "" {
+		return false
+	}
+	conn := s.brokerConnection()
+	return conn != nil && !conn.IsClosed()
 }
 
 func (s *Server) handleIntegrationCatalogList(w http.ResponseWriter, r *http.Request) {
@@ -1595,7 +1663,7 @@ func (s *Server) handleIntegrationCatalogEntry(w http.ResponseWriter, r *http.Re
 }
 
 func (s *Server) handleCatalogDiscovery(w http.ResponseWriter, r *http.Request) {
-	response, err := messagecontroller.DiscoverCatalog(r.Context(), s.rabbitmq, s.db, model.DiscoverCatalogRequest{
+	response, err := messagecontroller.DiscoverCatalog(r.Context(), s.brokerConnection(), s.db, model.DiscoverCatalogRequest{
 		Source: model.ManifestSelector{
 			ManifestID: queryString(r, "source_manifest_id"),
 			Namespace:  queryString(r, "source_namespace"),
@@ -3460,6 +3528,13 @@ func integrationInstanceDocumentFromPayload(payload consoleCreateIntegrationInst
 func manifestDocumentFromPayload(kind string, payload consoleCreateManifestRequest) (model.ManifestDocument, error) {
 	if len(bytesTrimSpace(payload.Spec)) == 0 || string(bytesTrimSpace(payload.Spec)) == "null" {
 		return model.ManifestDocument{}, fmt.Errorf("spec is required")
+	}
+	// Validate the original operator bytes before generic normalization can
+	// collapse duplicate or case-aliased Guest binding members.
+	if strings.EqualFold(strings.TrimSpace(kind), "capacity_policy") {
+		if _, err := manifestengine.ParseCapacityPolicySpec(payload.Spec); err != nil {
+			return model.ManifestDocument{}, err
+		}
 	}
 
 	var specValue any

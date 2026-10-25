@@ -460,51 +460,7 @@ func EmitAuthorizationEvaluatedEvent(
 	rbacManifest model.Manifest,
 	policyManifest model.Manifest,
 ) {
-	decision := string(response.Decision)
-	if decision == "" {
-		decision = "not_applicable"
-	}
-
-	payload := map[string]interface{}{
-		"resource": req.Resource,
-		"action":   req.Action,
-		"decision": decision,
-	}
-	if collabID := strings.TrimSpace(req.CollaboratorID); collabID != "" {
-		payload["collaborator_id"] = collabID
-	}
-
-	// Collect matched roles from RBAC results
-	matchedRoles := append(make([]string, 0, len(response.RBAC.MatchedRoles)), response.RBAC.MatchedRoles...)
-	if len(matchedRoles) > 0 {
-		payload["matched_roles"] = matchedRoles
-	}
-
-	matchedRules := make([]string, 0)
-	for _, rule := range response.RBAC.MatchedRules {
-		label := rule.Role
-		if rule.Effect != "" {
-			label += "/" + rule.Effect
-		}
-		matchedRules = append(matchedRules, label)
-	}
-	if len(matchedRules) > 0 {
-		payload["matched_rules"] = matchedRules
-	}
-
-	payload["rbac_manifest_ref"] = map[string]interface{}{
-		"id":        rbacManifest.ID.String(),
-		"name":      rbacManifest.Metadata.Name,
-		"namespace": rbacManifest.Metadata.Namespace,
-	}
-
-	if policyManifest.ID != (uuid.UUID{}) {
-		payload["policy_manifest_ref"] = map[string]interface{}{
-			"id":        policyManifest.ID.String(),
-			"name":      policyManifest.Metadata.Name,
-			"namespace": policyManifest.Metadata.Namespace,
-		}
-	}
+	payload := authorizationEvaluatedPayload(req, response, rbacManifest, policyManifest)
 
 	tx, err := db.BeginTx(ctx, nil)
 	if err != nil {
@@ -533,6 +489,61 @@ func EmitAuthorizationEvaluatedEvent(
 			logger.Warn("emit authorization.evaluated: commit failed", zap.Error(err))
 		}
 	}
+}
+
+// Keep the original ordered string values in JSON-native arrays accepted by
+// the pinned event schema validator before the original transaction INSERT.
+func authorizationEvaluatedPayload(req model.EvaluateAuthorizationRequest, response model.EvaluateAuthorizationResponse, rbacManifest, policyManifest model.Manifest) map[string]interface{} {
+	decision := string(response.Decision)
+	if decision == "" {
+		decision = "not_applicable"
+	}
+
+	payload := map[string]interface{}{
+		"resource": req.Resource,
+		"action":   req.Action,
+		"decision": decision,
+	}
+	if collabID := strings.TrimSpace(req.CollaboratorID); collabID != "" {
+		payload["collaborator_id"] = collabID
+	}
+
+	// Collect matched roles from RBAC results
+	matchedRoles := make([]any, 0, len(response.RBAC.MatchedRoles))
+	for _, role := range response.RBAC.MatchedRoles {
+		matchedRoles = append(matchedRoles, role)
+	}
+	if len(matchedRoles) > 0 {
+		payload["matched_roles"] = matchedRoles
+	}
+
+	matchedRules := make([]any, 0)
+	for _, rule := range response.RBAC.MatchedRules {
+		label := rule.Role
+		if rule.Effect != "" {
+			label += "/" + rule.Effect
+		}
+		matchedRules = append(matchedRules, label)
+	}
+	if len(matchedRules) > 0 {
+		payload["matched_rules"] = matchedRules
+	}
+
+	payload["rbac_manifest_ref"] = map[string]interface{}{
+		"id":        rbacManifest.ID.String(),
+		"name":      rbacManifest.Metadata.Name,
+		"namespace": rbacManifest.Metadata.Namespace,
+	}
+
+	if policyManifest.ID != (uuid.UUID{}) {
+		payload["policy_manifest_ref"] = map[string]interface{}{
+			"id":        policyManifest.ID.String(),
+			"name":      policyManifest.Metadata.Name,
+			"namespace": policyManifest.Metadata.Namespace,
+		}
+	}
+
+	return payload
 }
 
 func resolveManifestForRBAC(ctx context.Context, db *sql.DB, req model.EvaluateRBACRequest) (model.Manifest, error) {

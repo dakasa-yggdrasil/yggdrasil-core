@@ -27,6 +27,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          persist-credentials: false
 
       - name: Set up QEMU (for arm64 cross-builds)
         uses: docker/setup-qemu-action@v3

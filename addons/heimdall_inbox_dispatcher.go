@@ -46,6 +46,7 @@ func init() {
 }
 
 func bootstrapHeimdallInboxDispatcher(ctx context.Context, app *runtime.ServiceApp) error {
+	ctx = withBrokerConnection(ctx, app)
 	db, ok := Postgres(app)
 	if !ok {
 		return nil
@@ -95,6 +96,7 @@ func runHeimdallInboxDispatcherLoop(
 // the throughput; bursts that exceed it land in the inbox and drain at
 // the dispatcher's pace without overwhelming downstream goroutines.
 func runHeimdallInboxDispatcherPass(ctx context.Context, db *sql.DB, conn *amqp.Connection, logger *zap.Logger) {
+	conn = brokerConnectionFor(ctx, conn)
 	// Refuse before selecting or updating an inbox row. Lock refusals are not
 	// poison messages and must not consume the retry budget.
 	if err := workflowdispatchlock.CheckEnvironment(heimdallInboxReactNamespace, heimdallInboxReactWorkflow); err != nil {

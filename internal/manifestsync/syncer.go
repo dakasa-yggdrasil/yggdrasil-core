@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"maps"
 	"os"
 	"reflect"
 	"strings"
@@ -20,7 +21,7 @@ type Deps interface {
 	GetIntegrationType(ctx context.Context, typeID uuid.UUID) (model.Manifest, model.IntegrationTypeManifestSpec, error)
 	ListInstances(ctx context.Context, typeID uuid.UUID) ([]model.Manifest, []model.IntegrationInstanceManifestSpec, error)
 	InvokeDescribe(ctx context.Context, instanceManifest model.Manifest, typeManifest model.Manifest, instanceSpec model.IntegrationInstanceManifestSpec, typeSpec model.IntegrationTypeManifestSpec) (model.IntegrationTypeManifestSpec, error)
-	ApplyManifestVersion(ctx context.Context, doc model.ManifestDocument) (model.Manifest, error)
+	ApplyManifestVersion(ctx context.Context, expected model.Manifest, doc model.ManifestDocument) (model.Manifest, error)
 	EmitEvent(ctx context.Context, eventType string, aggregateID uuid.UUID, payload map[string]any) error
 	Now() time.Time
 }
@@ -135,12 +136,13 @@ func SyncIntegrationType(ctx context.Context, d Deps, typeID uuid.UUID) error {
 			Namespace:   typeManifest.Metadata.Namespace,
 			Name:        typeManifest.Metadata.Name,
 			Description: typeManifest.Metadata.Description,
+			Labels:      maps.Clone(typeManifest.Metadata.Labels),
 			Active:      &active,
 		},
 		Spec: json.RawMessage(specJSON),
 	}
 
-	applied, err := d.ApplyManifestVersion(ctx, doc)
+	applied, err := d.ApplyManifestVersion(ctx, typeManifest, doc)
 	if err != nil {
 		return d.EmitEvent(ctx, "integration_type.sync_skipped", typeID, buildSkippedPayload(skippedInputs{
 			TypeID:              typeID,

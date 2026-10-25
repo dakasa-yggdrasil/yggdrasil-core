@@ -217,7 +217,7 @@ func (s *Server) deliverContactOTP(ctx context.Context, cfg contactDeliveryConfi
 		operation = "send_sms"
 		input = map[string]any{"phone_number": recipient, "message": body, "sms_type": "Transactional"}
 	}
-	result, err := executeAuthEmailIntegration(ctx, s.rabbitmq, s.db, model.ExecuteIntegrationRequest{Integration: cfg.Integration, Operation: operation, Capability: operation, Input: input})
+	result, err := executeAuthEmailIntegration(ctx, s.brokerConnection(), s.db, model.ExecuteIntegrationRequest{Integration: cfg.Integration, Operation: operation, Capability: operation, Input: input})
 	if err != nil || result.Status != "sent" {
 		return repository.ErrContactUnavailable
 	}
