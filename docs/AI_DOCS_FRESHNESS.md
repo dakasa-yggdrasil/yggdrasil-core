@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 55f14ec7b6ab1ae15ca220cbd316830497b057a5
-verified_diff_sha256: 9bfc517ec159427d5893b51d42acde8daf980bf2831b46b67430d9c986b57972
+verified_at_commit: 3cce07829a93f1981bbca14d8f69f56683d4c729
+verified_diff_sha256: 8330f6316afd70655078092084ffaef6b2d3f5137a60d77ae5d5a5d179552741
 reconciler_schema: 1
 verified_at: 2026-10-25
 by: Giomaster
@@ -353,3 +353,5 @@ core_d13_actual_a900_profiles_and_installed_disposal_review: Reviewed the actual
 core_d13_tagged_disposal_boundary_source_correction_review: Corrected the genuine ca45 nativequalification build failure with two explicit error-only privileged disposal boundaries. The pure AWS native-off timestamp predicate moves byte-for-byte into common source, preserving its original eight test cases and untagged root hook without Skip. Default production disposal, all SQL and all four actual profile approvals remain unchanged. Actual Linux tagged Core build and complete message test-binary compilation passed; exact Source-copy Mac race controls passed thirteen nodes. The published service doctor and complete693-source census passed. Current publication CI, immutable image and production migration/rollout/business lifecycle remain separate required qualifications.
 
 reviewed_d14_presend_retirement_recovery_source: Reviewed all695 runtime Sources and the narrow schema79 recovery delta: canonical UTC signed deadline, explicit never-sent admission, fresh fenced successor and preserved originals. Local PostgreSQL/race/API gates, full Linux-target builds, complete static lint and service doctor passed. CI retains the original16 artifact and separately records five new roots. Guest/native operation and production validation require their own genuine originals.
+
+core_d15_prejournal_refusal_source_review: Reviewed the complete scheduler reachability, canonical authority challenge deadline and separate authenticated prejournal refusal recovery delta. Pending exact schema79/80 requests may reach the unchanged locked claim owner; strict signed challenge equality remains. Schema80 preserves every original possible-send and business effect, requires an independently authenticated first-live closed refusal, and admits at most one fresh fenced successor across both recovery families. Four local PostgreSQL17 race roots passed 102 nodes with zero failures/skips and clean shutdown; HTTP IDs/privacy passed eleven nodes, signed UTC context passed seven, complete Linux-target builds and full lint passed. All 78 previous migrations are byteexact; the 698-source census, service contract, Proposed ADR0081 and independent peers are current. Source acceptance supplies no production retirement, cleanup, capacity or economic qualification.
