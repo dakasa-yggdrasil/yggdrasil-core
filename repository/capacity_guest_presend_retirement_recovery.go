@@ -194,7 +194,7 @@ func (s CapacityStore) RequestFailedInstalledRetirementRecovery(ctx context.Cont
 	}
 	now = now.UTC()
 	m := current.FailedInstalledDisposal
-	if m == nil || m.Stage != "claimed" || m.PreregistrationID != preID || m.RetirementRecoveryID != "" || current.LeaseExpiresAt == nil || current.LeaseExpiresAt.After(now) || current.FencingToken >= maxCapacityGeneration {
+	if m == nil || m.Stage != "claimed" || m.PreregistrationID != preID || m.RetirementRecoveryID != "" || m.RetirementRefusalRecoveryID != "" || current.LeaseExpiresAt == nil || current.LeaseExpiresAt.After(now) || current.FencingToken >= maxCapacityGeneration {
 		return out, ErrCapacityConflict
 	}
 	r, claimSHA, err := loadFailedInstalledDisposalTx(ctx, tx, m.ID, "claimed")
@@ -230,7 +230,7 @@ func (s CapacityStore) RequestFailedInstalledRetirementRecovery(ctx context.Cont
 func (s CapacityStore) claimNeverSentRecoveryTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec, old model.CapacityIntent, assessment model.CapacityAssessment, now time.Time) (model.CapacityIntent, string, bool, error) {
 	var empty model.CapacityIntent
 	m := old.FailedInstalledDisposal
-	if m == nil || m.Stage != "claimed" || m.RetirementRecoveryID != "" {
+	if m == nil || m.Stage != "claimed" || m.RetirementRecoveryID != "" || m.RetirementRefusalRecoveryID != "" {
 		return empty, "", false, ErrCapacityConflict
 	}
 	var id string
@@ -298,6 +298,9 @@ func (s CapacityStore) claimNeverSentRecoveryTx(ctx context.Context, tx *sql.Tx,
 // admission, original claim hash, failed run and expired parent in79.
 func effectiveFailedInstalledClaimTx(ctx context.Context, tx *sql.Tx, r FailedInstalledGuestDisposal, current model.CapacityIntent) (FailedInstalledGuestDisposal, error) {
 	m := current.FailedInstalledDisposal
+	if m != nil && m.RetirementRefusalRecoveryID != "" {
+		return effectivePrejournalRefusalClaimTx(ctx, tx, r, current)
+	}
 	if m == nil || m.RetirementRecoveryID == "" {
 		return r, nil
 	}
@@ -315,6 +318,9 @@ func effectiveFailedInstalledClaimTx(ctx context.Context, tx *sql.Tx, r FailedIn
 
 func issueNeverSentSuccessorTx(ctx context.Context, tx *sql.Tx, current model.CapacityIntent, intent model.CapacityGuestRetirementIntent, now time.Time) error {
 	m := current.FailedInstalledDisposal
+	if m != nil && m.RetirementRefusalRecoveryID != "" {
+		return issuePrejournalRefusalSuccessorTx(ctx, tx, current, intent, now)
+	}
 	if m == nil || m.RetirementRecoveryID == "" {
 		return nil
 	}

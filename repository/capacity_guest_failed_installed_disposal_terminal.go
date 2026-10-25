@@ -110,13 +110,31 @@ func (s CapacityStore) FailedInstalledGuestDisposalWaiting(ctx context.Context, 
 	if err != nil {
 		return out, false, err
 	}
+	return s.failedInstalledGuestDisposalWaitingTx(ctx, tx, current, requestID)
+}
+
+// The public owner has already authenticated the Source and taken the mutation
+// scope/current-intent locks. This same decision is also exercised by PG tests.
+func (s CapacityStore) failedInstalledGuestDisposalWaitingTx(ctx context.Context, tx *sql.Tx, current model.CapacityIntent, requestID string) (FailedInstalledGuestDisposal, bool, error) {
+	var out FailedInstalledGuestDisposal
+	var err error
 	m := current.FailedInstalledDisposal
 	if m == nil || m.Stage == "requested" || m.Stage == "terminal" {
 		return out, false, nil
 	}
 	if m.Stage == "claimed" && s.guestReconcile.step.Use.Operation == capacity.PlanOriginalGuestOperation {
-		out, _, err = loadFailedInstalledDisposalTx(ctx, tx, m.ID, "claimed")
-		return out, true, err
+		var claimSHA string
+		out, claimSHA, err = loadFailedInstalledDisposalTx(ctx, tx, m.ID, "claimed")
+		if err != nil {
+			return out, true, err
+		}
+		ready, err := requestedRetirementRecoveryMayReachClaimTx(ctx, tx, current, out, claimSHA)
+		if err != nil {
+			return out, true, err
+		}
+		// This only reaches collection and the unchanged claim authorization.
+		// It does not acquire a new lease or issue any Guest authority.
+		return out, !ready, nil
 	}
 	if m.Stage != "quiescent" {
 		return out, false, ErrCapacityConflict
@@ -137,6 +155,30 @@ func (s CapacityStore) FailedInstalledGuestDisposalWaiting(ctx context.Context, 
 		return out, false, err
 	}
 	return out, true, nil
+}
+
+// A claimed disposal normally waits for explicit native cleanup. The sole
+// exception is its separately admitted, not-yet-claimed79 recovery. Immutable
+// original/current equality is required here; claimNeverSentRecoveryTx still
+// rechecks every lease, run/ACK, no-send, profile and CAS condition later.
+func requestedRetirementRecoveryMayReachClaimTx(ctx context.Context, tx *sql.Tx, current model.CapacityIntent, original FailedInstalledGuestDisposal, claimSHA string) (bool, error) {
+	m := current.FailedInstalledDisposal
+	if m == nil || m.Stage != "claimed" || m.RetirementRecoveryID != "" || m.RetirementRefusalRecoveryID != "" {
+		return false, nil
+	}
+	var id string
+	err := tx.QueryRowContext(ctx, `SELECT r.id::text FROM public.capacity_guest_presend_retirement_recoveries r WHERE r.disposal_id=$1 AND r.stage='requested' AND NOT EXISTS(SELECT 1 FROM public.capacity_guest_presend_retirement_recoveries x WHERE x.id=r.id AND x.stage IN('claimed','issued'))`, m.ID).Scan(&id)
+	if err == sql.ErrNoRows {
+		return requestedPrejournalRefusalMayReachClaimTx(ctx, tx, current, original, claimSHA)
+	}
+	if err != nil {
+		return false, err
+	}
+	r, _, err := loadRetirementRecoveryTx(ctx, tx, id, "requested")
+	if err != nil || r.DisposalID != m.ID || r.PreregistrationID != m.PreregistrationID || r.OriginalClaimSHA256 != claimSHA || original.ClaimedIntent == nil || !reflect.DeepEqual(*original.ClaimedIntent, current) || !reflect.DeepEqual(r.OriginalClaimedIntent, current) {
+		return false, ErrCapacityConflict
+	}
+	return true, nil
 }
 
 // Independent of any expired Guest/lease deadline: these are historical

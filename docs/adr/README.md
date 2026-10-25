@@ -113,3 +113,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0079](0079-dispose-failed-installed-guests-without-inventing-capacity.md) | Dispose failed installed Guests through original retirement | Proposed | 2026-10-25 | Explicit administrative admission, zero-useful-capacity floor proof, original V2/native absence and corrected-profile replacement gate |
 
 | [0080](0080-recover-expired-never-sent-retirement-through-a-distinct-original.md) | Recover expired never-sent retirement through a distinct original | Proposed | 2026-10-25 | Canonical UTC deadline, immutable expired parent and one explicit zero-send successor with fresh fenced ownership |
+
+| [0081](0081-recover-authenticated-prejournal-retirement-refusals-separately.md) | Recover authenticated prejournal retirement refusals separately | Proposed | 2026-10-25 | Canonical authority challenge deadline and separate, authenticated first-live refusal recovery without quiescence credit |

@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-25T13:30:10-03:00",
+  "generated_at": "2026-10-25T14:57:03-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1211,
+    ".go": 1218,
     ".json": 171,
     ".py": 6,
-    ".sql": 79,
+    ".sql": 80,
     ".yaml": 11,
     ".yml": 29
   },
   "provenance": {
-    "commit": "55f14ec7b6ab1ae15ca220cbd316830497b057a5",
+    "commit": "248a6d9777ac10b08f14489028c3c9be25d9e048",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "2c51e384fddfc51ebeebb9a6b1c2430f651d667e85361a48f0776848e112a358"
+        "sha256": "f33acd6c81a1bb7db69fad9d427180d54f19d6de73faa4d26016dbceb3a05b1a"
       },
       {
         "path": "AGENTS.md",
@@ -65,13 +65,13 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 248,
-      "kb": 3352
+      "files": 253,
+      "kb": 3418
     },
     {
       "path": "controllers/httpapi",
-      "files": 215,
-      "kb": 2278
+      "files": 217,
+      "kb": 2285
     },
     {
       "path": "controllers/message",
@@ -90,8 +90,8 @@
     },
     {
       "path": "db/migrations",
-      "files": 78,
-      "kb": 401
+      "files": 79,
+      "kb": 422
     },
     {
       "path": "manifest",
@@ -180,7 +180,7 @@
     "event_schemas": 0
   },
   "database": {
-    "migrations": 78,
+    "migrations": 79,
     "notes": "Migrations presentes; recomendo 'forward-only' e ADR linkado."
   },
   "docs": {
