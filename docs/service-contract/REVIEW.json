@@ -1,5 +1,5 @@
 {
-  "accepted_at": "2026-10-24T01:36:40.104932+00:00",
+  "accepted_at": "2026-10-25T16:28:03.528510+00:00",
   "accepted_at_is_historical_for_two_profile_candidate": false,
   "checker": {
     "actual_binary_clean_VCS": true,
@@ -195,6 +195,34 @@
       "source_inventory_sha256": "b7eaaa39bce293d82152ad4d28574f2e9103e4b2cf1d109bb20b36c2b274d4d9",
       "source_only": true,
       "whole_Darwin_message_package_execution_claimed": false
+    },
+    "D14_expired_never_sent_retirement_distinct_successor": {
+      "all_seven_possible_send_or_result_classes_refuse_recovery": true,
+      "author_local_validation_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/D14-RECOVERY79-LOCAL-VALIDATION/R3/SOURCE-CHECKPOINT.PUBLIC.json",
+        "sha256": "57e49be6f9725e46dc04ed648a3096d9fddfc533b7050c28f838de103c6897b0"
+      },
+      "base": "3d570162ba51967ee791316c23c5b45419993f1b",
+      "deadline_canonicalized_before_signing_complete_equality_retained": true,
+      "local_positive_scope": "Typed PostgreSQL storage/authentication/CAS and canonical signed DTO; genuine Guest/native production execution remains independently required.",
+      "old63_64_77_78_preserved_append_only79": true,
+      "old_expired_intent_or_signature_or_ACK_changed": false,
+      "one_explicit_never_sent_successor_new_request_attempt_nonce_context_fence_run": true,
+      "production_or_Guest_runtime_qualified": false,
+      "root_Core_Goose_nativequalification_build_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-D14-LINUX-TARGET-SOURCE-BUILD-20261025/RETURN.PUBLIC.json",
+        "sha256": "6d4f4e8e48871bad044181c4881d07b39d5dfe93a7836a5e9a1567343da3c122"
+      },
+      "root_UTC_regression_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-D14-UTC-TAGGED-SWITCH-REGRESSION-20261025/RETURN.PUBLIC.json",
+        "sha256": "b3e98ae2a6da77c1b1df6aea5c33f597ff9322549fcb4338730b81f1bd66d08a"
+      },
+      "root_complete_Linux_target_lint_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-D14-LINUX-TARGET-SOURCE-LINT-R2-20261025/RETURN.PUBLIC.json",
+        "sha256": "d45dd8a4b8d5d1dce8e275edc23722dee45e4153eb23368815aaf77e0d08c849"
+      },
+      "schema79_sha256": "90a64acdec8f70bf2a1d97ae01d43e52bc43234b16b8b46987fe447b822dfebb",
+      "source_only": true
     },
     "D6_failed_witnessed_terminal_and_AWS1654_observer": {
       "HTTP_package_source_pass": true,
@@ -410,7 +438,7 @@
     }
   },
   "human_architecture_signoff_claimed": false,
-  "non_test_Go_sources": 680,
+  "non_test_Go_sources": 695,
   "previous_AWS1652_review_accepted_at": "2026-10-23T02:46:08.896936+00:00",
   "previous_accepted_inventory_sha256": "9e84d02942ec5c2178962b84ce64baa859ff43472e0916d2d5df4d304dae9de8",
   "previous_accepted_review_sha256": "6d6bb4351292d4e7f4274aaa7470c6553f60541799d58170fce4e7cf30250e05",
@@ -423,6 +451,7 @@
   "previous_review_before_D12_NULL_workflow_identity_and_bounded_startup_sha256": "28835da1eb863fcbb352adde587cfa617fe2c624a1c2ba7656ce5873d25c9af9",
   "previous_review_before_D12_inventory_and_lint_correction_sha256": "2dcd0143eb4c4b6b864f3035c18ab352b69ddb7e10011b883ad8d3571406cf97",
   "previous_review_before_D12_unbounded_lint_correction_sha256": "eaefd44faca96b8cea72a33a17b2b3c5afd55e460767fbeb21604cb591982f60",
+  "previous_review_before_D14_presend_retirement_recovery_sha256": "34e6bf85f4bc5d6c1f75b78414a40fdee8dd964b78a6ccc2b4a10f83533e548e",
   "previous_review_before_D7_R3_complete_profiles_sha256": "a866516ae2e96c6bec1b03d10d66fc5da57bfb258c702c6be19b3dd833bbd452",
   "previous_review_before_actual_AWS1652_contract_successor_sha256": "fb87e8b18a2e5847d83e6abdb57ccd23ed0759eb0abcc33f214966dcd5d5fc6f",
   "previous_review_before_actual_AWS1653_contract_successor_sha256": "e4820e92a3ab43b3ba63ff229977eeae82835c8b7f60c7e596d245d0dcd949da",
@@ -480,14 +509,17 @@
     "D12 preserves immutable Guest wire authority while recording the real clean issuer in a separate atomic SQL77 ledger. Installed reconciliation keeps the same native resource, enrollment, installation and generation, requires the previous failed run and acknowledged finalization plus a fresh private dispatch run, and admits at most three new fenced readiness attempts. Existing failures and possible business effects remain immutable. The post-CI style correction uses equivalent tagged-switch and De Morgan predicates; intentional nil-owner rejection tests retain nil and narrow documented staticcheck exclusions. The current complete inventory includes all inherited D11 and added D12 production source.",
     "Three additional original-disposition De Morgan normalizations preserve left-to-right short-circuit and side-effect call order, including the explicit-empty-instances predicate. The owning lint workflow now reports all same-kind and per-linter findings without truncation; no check is disabled. Original failed lint runs remain failures.",
     "D13 retains both complete historical contracts and their original compatibility map, then adds the two real a900 contracts derived from original native slot2 dry-runs and the owning C8 full-policy compiler. Each new integration instance has a distinct scoped mutation principal. Historical issuer verification keeps full original bindings and the actual build; SQL78 records failed installed disposal without inventing useful capacity or erasing business effects. Guest548 uses its genuine narrow signed V1 protocol; ordinary V2 gains the required drained transition, original destroy receipt and closed production DTO decoding. Terminal disposal proceeds to ordinary reassessment while source/profile replacement gates remain mandatory.",
-    "The nativequalification build receives only two explicit error-only privileged disposal boundaries. The pure AWS native-off timestamp join moves byte-for-byte into common source, retaining its eight original cases and root hook without any Skip. Default production disposal behavior, SQL and all four complete approval contracts remain unchanged."
+    "The nativequalification build receives only two explicit error-only privileged disposal boundaries. The pure AWS native-off timestamp join moves byte-for-byte into common source, retaining its eight original cases and root hook without any Skip. Default production disposal behavior, SQL and all four complete approval contracts remain unchanged.",
+    "D14 canonical UTC retirement deadline precedes signing and durable JSON; whole request equality, signatures and original deadline checks remain intact.",
+    "D14 explicit IDs-only GodMode recovery preserves the expired never-sent original and uses one append-only successor with fresh scheduled ownership. Scope/intent locks and seven evidence-class refusals protect uncertain sends; ambiguous legacy compensation selectors refuse both originals.",
+    "D14 schema79 continuation joins the exact recovery claim and issued successor while preserving immutable63/64/77/78 rows. Native Guest quiescence, native poweroff, cleanup and complete absence require their own original evidence."
   ],
   "reviewed_source_head": "9ecff39e007c939de3618387fa7229de44915fdd",
   "reviewed_source_head_is_historical": true,
   "reviewer": "Root full production-source delta review; separate independent manager/dial/monitor peer; source acceptance only",
   "schema": "core_service_source_review_v1",
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "b7eaaa39bce293d82152ad4d28574f2e9103e4b2cf1d109bb20b36c2b274d4d9",
+  "source_inventory_sha256": "a11707b6f2465c7d2e45a765e3da5ef1ba1393041c33da2b3ef65c70156b56a7",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -527,6 +559,9 @@
     "Root ran three new pure controller roots under an explicit external Mac-only overlay excluding other existing test files; all three passed without skips. Earlier Mac compile failures from existing Linux syscall fixtures remain separate preserved failures. The required owning Linux39 race/PostgreSQL workflow, actual dedicated image/runtime, new network pair, original Core600 and native accounting remain independent operational qualifications.",
     "Original D12 Linux49 and Linux16 source workflows passed on the preceding publication; their historical results are not attributed to this correction. Current owning CI must validate the successor publication, generated complete census and contract digests. No deployment, migration or useful-capacity success is supplied by this source review.",
     "D13 source acceptance retains actual local isolated PostgreSQL17/schema78, normal V2, terminal scheduler handoff and exact five-postimage evidence. Both original native slot2 readonly RPCs and the owning Go full-policy compilations returned zero; corrected final policies differ only in their two new adapter principal IDs. Two existing approval roots passed75 race nodes with no fail/skip. Complete Linux-target static lint passed with zero issues before only the final literal principal/contract substitutions; current publication CI remains required. No SQL78 production migration, D13 rollout, new inventory activation or useful native lifecycle is supplied by this source review.",
-    "After the actual ca45 tagged-CI compile failure, Linux nativequalification Core build and complete message test-binary compilation both returned zero. Isolated byte-exact source copies of the pure join and refusal boundaries passed thirteen Mac race nodes with no failure or skip; no whole Darwin message package or Linux runtime execution is claimed. Current exact-publication CI is required. Seven separately reported CodeQL findings remain preserved with a local historical/bounds/semantic triage; no alert was suppressed or dismissed."
+    "After the actual ca45 tagged-CI compile failure, Linux nativequalification Core build and complete message test-binary compilation both returned zero. Isolated byte-exact source copies of the pure join and refusal boundaries passed thirteen Mac race nodes with no failure or skip; no whole Darwin message package or Linux runtime execution is claimed. Current exact-publication CI is required. Seven separately reported CodeQL findings remain preserved with a local historical/bounds/semantic triage; no alert was suppressed or dismissed.",
+    "D14 actual local PostgreSQL17 recovery storage root34nodes, twelve inherited repository roots156nodes, compatibility/UTC56nodes and administrative API8nodes passed with race and no fail/skip; PostgreSQL stopped with original exit0.",
+    "D14 Root full Linux-target Core, Goose and nativequalification source builds passed; complete static lint passed after a test-only tagged-switch correction. Fresh two-root UTC regression passed.",
+    "D14 CI preserves the exact original sixteen-root artifact and adds five recovery/UTC/API roots in a separate retained artifact; a local Bash output-tree control verified the separation."
   ]
 }

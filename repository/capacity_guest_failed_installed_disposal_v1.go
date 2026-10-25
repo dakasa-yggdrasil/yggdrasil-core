@@ -135,6 +135,10 @@ func (s CapacityStore) failedInstalledLegacyCurrentTx(ctx context.Context, tx *s
 		}
 		policy, p, current = read.Policy, read.Spec, read.Current
 	}
+	r, err = effectiveFailedInstalledClaimTx(ctx, tx, r, current)
+	if err != nil {
+		return r, stored, policy, p, current, err
+	}
 	if !failedInstalledLegacyJoin(r, stored, p) {
 		return r, stored, policy, p, current, ErrCapacityConflict
 	}

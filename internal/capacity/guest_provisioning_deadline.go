@@ -24,7 +24,7 @@ func GuestOriginalRetirementDeadline(ctx context.Context, issuedAt, leaseExpires
 			deadline = bound
 		}
 	}
-	return deadline, nil
+	return deadline.UTC(), nil
 }
 
 // The caller supplies the ACTUAL resolved protected workflow step, never a

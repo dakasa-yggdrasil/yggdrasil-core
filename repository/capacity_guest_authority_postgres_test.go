@@ -114,7 +114,7 @@ func testGuestAuthorityHistoricalMapPostgres(t *testing.T, db *sql.DB, fixture m
 	t.Helper()
 	ctx := context.Background()
 	for _, provider := range []string{"aws", "hetzner"} {
-		for _, name := range []string{"exact_historical", "unknown_map", "changed_contract_same_profile_catalog", "wrong_policy", "wrong_workflow", "wrong_policy_checksum", "current_map_transaction_rollback"} {
+		for _, name := range []string{"exact_historical", "unknown_map", "changed_contract_same_profile_catalog", "wrong_policy", "wrong_workflow", "wrong_policy_checksum", "current_map_transaction_rollback", "actual_prior_D13_same_current_map"} {
 			t.Run(provider+"/"+name, func(t *testing.T) {
 				raw, err := os.ReadFile(filepath.Join("..", "internal", "capacity", "testdata", "original-notify-"+provider+"-production-contract.json"))
 				if err != nil {
@@ -147,8 +147,11 @@ func testGuestAuthorityHistoricalMapPostgres(t *testing.T, db *sql.DB, fixture m
 				switch name {
 				case "unknown_map":
 					compatibility = strings.Repeat("f", 64)
-				case "current_map_transaction_rollback":
+				case "current_map_transaction_rollback", "actual_prior_D13_same_current_map":
 					compatibility = capacity.GuestProtocolCompatibilityMapSHA256()
+					if name == "actual_prior_D13_same_current_map" {
+						actual = "3d570162ba51967ee791316c23c5b45419993f1b"
+					}
 				}
 				wireSHA := strings.Repeat("b", 64)
 				record := map[string]any{"schema": "guest_authority_issue_v1", "issue_kind": "retirement_intent", "issue_id": id, "issuer_actual_source_commit": actual, "protocol_authority_source_commit": capacity.GuestD11ProtocolAuthority, "compatibility_map_sha256": compatibility, "profile": p.GuestRetirementBinding.ProfileManifest.Profile, "policy_id": policyID, "workflow_id": fixture.ID.String(), "executor_id": executor, "issued_wire_sha256": wireSHA}
@@ -167,7 +170,7 @@ func testGuestAuthorityHistoricalMapPostgres(t *testing.T, db *sql.DB, fixture m
 					pre.PolicyChecksum = strings.Repeat("c", 64)
 				}
 				err = verifyGuestAuthorityIssuerTx(ctx, tx, "retirement_intent", id, actual, *p.GuestRetirementBinding, pre)
-				accepted := name == "exact_historical" || name == "current_map_transaction_rollback"
+				accepted := name == "exact_historical" || name == "current_map_transaction_rollback" || name == "actual_prior_D13_same_current_map"
 				if (err == nil) != accepted {
 					t.Fatalf("historical issuer/map scope accepted=%v, error=%v", accepted, err)
 				}

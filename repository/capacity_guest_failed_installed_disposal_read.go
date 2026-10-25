@@ -49,6 +49,10 @@ func loadFailedInstalledRetirementReadTx(ctx context.Context, tx *sql.Tx, id, pr
 	if err != nil {
 		return out, err
 	}
+	r, err = effectiveFailedInstalledClaimTx(ctx, tx, r, out.Current)
+	if err != nil {
+		return out, err
+	}
 	m := out.Current.FailedInstalledDisposal
 	if m == nil || m.ID != admissionID || m.Stage != "claimed" || m.PreregistrationID != preID || !reflect.DeepEqual(out.Current, *r.ClaimedIntent) {
 		return out, ErrCapacityConflict
@@ -173,6 +177,10 @@ func (s CapacityStore) AdvanceFailedInstalledGuestCleanup(ctx context.Context, p
 	}
 	if read.LegacyOriginal != nil {
 		r, _, e := loadFailedInstalledDisposalTx(ctx, tx, admissionID, "claimed")
+		if e != nil {
+			return empty, e
+		}
+		r, e = effectiveFailedInstalledClaimTx(ctx, tx, r, read.Current)
 		if e != nil {
 			return empty, e
 		}

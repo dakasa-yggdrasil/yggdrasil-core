@@ -51,11 +51,22 @@ jobs:
           export PGUSER=postgres PGDATABASE=core_d12_test
           export D12_SOURCE_CI_PG17_DSN="host=$PGHOST dbname=$PGDATABASE user=$PGUSER sslmode=disable"
           export REQUIRE_D12_INSTALLED_SOURCE_POSTGRES=true
+          export EXTRALOGS="$pg_root/recovery79-logs"
+          mkdir -m 0700 "$EXTRALOGS"
+          printf 'D14_RECOVERY79_LOGS=%s\n' "$EXTRALOGS" >> "$GITHUB_ENV"
           cid=''
           record() {
             local name="$1" rc; shift
             if "$@" > "$LOGS/$name.stdout" 2> "$LOGS/$name.stderr"; then rc=0; else rc=$?; fi
             printf '%s\n' "$rc" > "$LOGS/$name.exit"
+            return "$rc"
+          }
+          # Additional roots have a distinct artifact; the historical exact
+          # sixteen-root log file roster must remain byte-for-byte compatible.
+          record_recovery79() {
+            local name="$1" rc; shift
+            if "$@" > "$EXTRALOGS/$name.stdout" 2> "$EXTRALOGS/$name.stderr"; then rc=0; else rc=$?; fi
+            printf '%s\n' "$rc" > "$EXTRALOGS/$name.exit"
             return "$rc"
           }
           cleanup() {
@@ -129,12 +140,12 @@ jobs:
               st=os.stat(os.environ[key]); assert st.st_uid==os.getuid() and (st.st_mode&0o7777)==0o700, key+' ownership/mode'
           print(json.dumps(v,sort_keys=True))
           PY_ID
-          # Fresh dedicated DB: Goose applies the published repository schema through78.
+          # Fresh dedicated DB: Goose applies the published repository schema through79.
           # The helper refuses any network listener or foreign database identity.
           cat > "$pg_root/migrate.go" <<'GO_MIGRATE'
           package main
           import("context";"database/sql";"fmt";"os";"time";_ "github.com/lib/pq";"github.com/pressly/goose/v3")
-          func main(){ctx,stop:=context.WithTimeout(context.Background(),90*time.Second);defer stop();db,e:=sql.Open("postgres",os.Getenv("D12_SOURCE_CI_PG17_DSN"));if e!=nil{panic(e)};defer db.Close();var name,listen string;var socket bool;var version int;e=db.QueryRowContext(ctx,`SELECT current_database(),inet_server_addr() IS NULL,current_setting('listen_addresses'),current_setting('server_version_num')::int`).Scan(&name,&socket,&listen,&version);if e!=nil||name!="core_d12_test"||!socket||listen!=""||version/10000!=17{panic("foreign D12 Source fixture")};if e=goose.SetDialect("postgres");e!=nil{panic(e)};if e=goose.UpContext(ctx,db,"db/migrations");e!=nil{panic(e)};v,e:=goose.GetDBVersionContext(ctx,db);if e!=nil||v!=78{panic("schema78 missing")};fmt.Println("D12_SOURCE_DISPOSABLE_SCHEMA78_READY")}
+          func main(){ctx,stop:=context.WithTimeout(context.Background(),90*time.Second);defer stop();db,e:=sql.Open("postgres",os.Getenv("D12_SOURCE_CI_PG17_DSN"));if e!=nil{panic(e)};defer db.Close();var name,listen string;var socket bool;var version int;e=db.QueryRowContext(ctx,`SELECT current_database(),inet_server_addr() IS NULL,current_setting('listen_addresses'),current_setting('server_version_num')::int`).Scan(&name,&socket,&listen,&version);if e!=nil||name!="core_d12_test"||!socket||listen!=""||version/10000!=17{panic("foreign D12 Source fixture")};if e=goose.SetDialect("postgres");e!=nil{panic(e)};if e=goose.UpContext(ctx,db,"db/migrations");e!=nil{panic(e)};v,e:=goose.GetDBVersionContext(ctx,db);if e!=nil||v!=79{panic("schema79 missing")};fmt.Println("D12_SOURCE_DISPOSABLE_SCHEMA79_READY")}
           GO_MIGRATE
           record migrate go run "$pg_root/migrate.go"
           record repository go test -p=1 -race -count=1 -timeout=4m -json ./repository \
@@ -166,11 +177,47 @@ jobs:
           (p/'CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
           print(json.dumps(value,sort_keys=True))
           PY_CENSUS
+          # Separate focused evidence. The original sixteen-root census above
+          # remains unchanged; these recovery/UTC/API roots are additional.
+          record_recovery79 recovery79 go test -p=1 -race -count=1 -timeout=4m -json ./repository \
+            -run '^TestD14PresendRetirementRecoveryPostgres$'
+          record_recovery79 retirement-utc go test -p=1 -race -count=1 -timeout=4m -json ./internal/capacity \
+            -run '^(TestGuestOriginalRetirementDeadlineCanonicalDurableIntent|TestGuestOriginalRetirementFirstDeadline)$'
+          record_recovery79 recovery-api go test -p=1 -race -count=1 -timeout=4m -json ./controllers/httpapi \
+            -run '^(TestFailedInstalledDisposalRequiresExplicitAdministrativeIdentity|TestPresendRetirementRecoveryIDsAndSafeSummary)$'
+          python3 - <<'PY_RECOVERY'
+          import collections, json, os, pathlib
+          p=pathlib.Path(os.environ['EXTRALOGS']); base='github.com/dakasa-yggdrasil/yggdrasil-core/'
+          expected={'recovery79':('repository',['TestD14PresendRetirementRecoveryPostgres']), 'retirement-utc':('internal/capacity',['TestGuestOriginalRetirementDeadlineCanonicalDurableIntent','TestGuestOriginalRetirementFirstDeadline']), 'recovery-api':('controllers/httpapi',['TestFailedInstalledDisposalRequiresExplicitAdministrativeIdentity','TestPresendRetirementRecoveryIDsAndSafeSummary'])}
+          summary={}
+          for name,(package,roots) in expected.items():
+              assert (p/(name+'.exit')).read_text().strip()=='0'
+              rows=[json.loads(line) for line in (p/(name+'.stdout')).read_text().splitlines()]
+              assert rows and all(r.get('Package')==base+package for r in rows)
+              assert not any(r['Action'] in ('fail','skip') for r in rows)
+              runs=collections.Counter(r['Test'] for r in rows if r['Action']=='run' and 'Test' in r and '/' not in r['Test'])
+              passed=collections.Counter(r['Test'] for r in rows if r['Action']=='pass' and 'Test' in r and '/' not in r['Test'])
+              assert runs==passed==collections.Counter(roots)
+              assert sum(r['Action']=='pass' and 'Test' not in r for r in rows)==1
+              summary[name]={'package':base+package,'roots':roots,'passed':len(roots),'skipped':0}
+          value={'schema':'presend_retirement_recovery_source_CI_additional_root_census_v1','source_commit':os.environ['SOURCE_COMMIT'],'race':True,'schema_version':79,'summary':summary,'additional_roots':5,'original_installed_sixteen_root_census_unchanged':True,'positive_original_Guest_runtime_qualified':False,'production_authority':False}
+          (p/'RECOVERY79-CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
+          print(json.dumps(value,sort_keys=True))
+          PY_RECOVERY
       - name: Retain original outputs and shutdown proof
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
           name: installed-reconcile-source-${{ github.run_id }}-${{ github.run_attempt }}
           path: ${{ env.D12_INSTALLED_LOGS }}
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Retain separate recovery79 and UTC original outputs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: presend-retirement-recovery-source-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.D14_RECOVERY79_LOGS }}
           if-no-files-found: error
           retention-days: 14
