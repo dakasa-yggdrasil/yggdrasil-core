@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 9b253fe62393ba5befb64218d75862fe965a6582
-verified_diff_sha256: cd4c0a235f03c28a303dc32037541a71e50168471830c66a07d029db8f5bbb15
+verified_at_commit: 86e6bb7c0220849f1eadb4e6f6395128ae5875e7
+verified_diff_sha256: d5303994a9ea7f8c5b94ba7f784b521b9a6fa49ace1b908b5838c41f02d132e5
 reconciler_schema: 1
 verified_at: 2026-10-25
 by: Giomaster
@@ -349,3 +349,5 @@ core_D12_complete_lint_correction_review: Corrected the remaining three original
 core_D12_original_NULL_workflow_identity_review: Correct installed Guest resumption for actual scheduler runs whose optional workflow_id remains NULL: authenticate the canonical server-owned dispatch envelope, selector, metadata and complete failed result, preserving ACK, CAS, three-attempt bounds and all original records. Retry only the PostgreSQL startup ping inside its existing five-second context before HTTP starts. All 76 SQL files and dependencies remain byteexact; Source acceptance does not claim native scaling or production qualification.
 
 core_d13_actual_a900_profiles_and_installed_disposal_review: Reviewed the actual a900 two-provider full contracts with distinct per-instance adapter principals and preserved historical contracts and original issuer map. Added append-only schema78 failed installed disposal through genuine Guest548 V1 and native absence while retaining creation, installation, failed acknowledgments and possible Notify effects. Ordinary V2 retains its signed lifecycle, drained transition and original destroy receipt. Local isolated PostgreSQL17, approval race roots75 nodes, Linux-target static lint and the complete691-source service contract were checked; publication CI, principal installation, production migration, network, rollout and useful capacity remain separate required gates.
+
+core_d13_tagged_disposal_boundary_source_correction_review: Corrected the genuine ca45 nativequalification build failure with two explicit error-only privileged disposal boundaries. The pure AWS native-off timestamp predicate moves byte-for-byte into common source, preserving its original eight test cases and untagged root hook without Skip. Default production disposal, all SQL and all four actual profile approvals remain unchanged. Actual Linux tagged Core build and complete message test-binary compilation passed; exact Source-copy Mac race controls passed thirteen nodes. The published service doctor and complete693-source census passed. Current publication CI, immutable image and production migration/rollout/business lifecycle remain separate required qualifications.
