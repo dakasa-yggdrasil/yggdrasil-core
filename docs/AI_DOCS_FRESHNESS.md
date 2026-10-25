@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: d02cdc2e0b4d7ff59b4eaf728fa95c8aa5beed54
-verified_diff_sha256: cb97facfc6dc3b0b37ae1ac58ba35467d5d65a2af2b3fa928831c26f2416b9eb
+verified_at_commit: da174e705ad055fce57a9a057228686f977d4884
+verified_diff_sha256: 743a2ea65271e324fa911a56e2a570848d6903a3d8f9687f0d0a39dd37dd3294
 reconciler_schema: 1
 verified_at: 2026-10-25
 by: Giomaster
@@ -347,3 +347,5 @@ core_D12_CI_census_and_lint_correction_review: Corrected six owning CI lint find
 core_D12_complete_lint_correction_review: Corrected the remaining three original-disposition De Morgan lint findings with equivalent short-circuit predicates and unchanged explicit-empty native call order. Unlimited same-kind and per-linter diagnostics are now required in the owning workflow. Refreshed the complete680 production source census, independent source review record and all exact contract evidence digests. This canonical metadata is generated at the actual correction CODE. Previous canonical publications, failed lint runs and passing source tests retain their own identity; current CI, actual final image and runtime qualifications remain separate.
 
 core_D12_original_NULL_workflow_identity_review: Correct installed Guest resumption for actual scheduler runs whose optional workflow_id remains NULL: authenticate the canonical server-owned dispatch envelope, selector, metadata and complete failed result, preserving ACK, CAS, three-attempt bounds and all original records. Retry only the PostgreSQL startup ping inside its existing five-second context before HTTP starts. All 76 SQL files and dependencies remain byteexact; Source acceptance does not claim native scaling or production qualification.
+
+Core_contract_evidence_hash_correction: Correct only the published service-contract evidence hash for the already reviewed source record. Production compiler Source remains the independently built c8 revision; all Go, SQL and dependencies are byteexact and no replacement runtime image is required.
