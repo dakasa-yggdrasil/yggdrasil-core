@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 3cce07829a93f1981bbca14d8f69f56683d4c729
-verified_diff_sha256: 8330f6316afd70655078092084ffaef6b2d3f5137a60d77ae5d5a5d179552741
+verified_at_commit: 248a6d9777ac10b08f14489028c3c9be25d9e048
+verified_diff_sha256: 62dc8c7252c0766e7460cfea2985b03bdded34f6acdcfbabef0bcf150cb8943f
 reconciler_schema: 1
 verified_at: 2026-10-25
 by: Giomaster
@@ -355,3 +355,5 @@ core_d13_tagged_disposal_boundary_source_correction_review: Corrected the genuin
 reviewed_d14_presend_retirement_recovery_source: Reviewed all695 runtime Sources and the narrow schema79 recovery delta: canonical UTC signed deadline, explicit never-sent admission, fresh fenced successor and preserved originals. Local PostgreSQL/race/API gates, full Linux-target builds, complete static lint and service doctor passed. CI retains the original16 artifact and separately records five new roots. Guest/native operation and production validation require their own genuine originals.
 
 core_d15_prejournal_refusal_source_review: Reviewed the complete scheduler reachability, canonical authority challenge deadline and separate authenticated prejournal refusal recovery delta. Pending exact schema79/80 requests may reach the unchanged locked claim owner; strict signed challenge equality remains. Schema80 preserves every original possible-send and business effect, requires an independently authenticated first-live closed refusal, and admits at most one fresh fenced successor across both recovery families. Four local PostgreSQL17 race roots passed 102 nodes with zero failures/skips and clean shutdown; HTTP IDs/privacy passed eleven nodes, signed UTC context passed seven, complete Linux-target builds and full lint passed. All 78 previous migrations are byteexact; the 698-source census, service contract, Proposed ADR0081 and independent peers are current. Source acceptance supplies no production retirement, cleanup, capacity or economic qualification.
+
+core_d15_r2_ops_inventory_source_review: Reviewed the actual route-inventory CI failure: two new explicit recovery routes raised the inventory from thirty-nine to forty-one, crossing the previous forty-route guard. The bounded range is now thirty-five through fifty while every route permission wrapper and canonical permission assertion remains required. Both owning route tests passed under race with no failure or skip; complete Linux-target static lint, unchanged 698-source census, service doctor and whitespace validation passed. Runtime sources, SQL80, all prior migrations and recovery algorithms remain byteexact to the prior genuine publication, whose failed original CI and immutable history are preserved. Append a new CODE and canonical three-file META publication on the existing branch without force or history rewrite. The earlier complete Source review,102-node local PostgreSQL validation and independent recovery peers remain retained; current exact-publication CI and production lifecycle qualifications are still required.
