@@ -12,13 +12,13 @@
   "source_inventory": {
     "id": "complete_runtime_source_census",
     "evidence": "docs/service-contract/source/sources.json",
-    "sha256": "33e3310863e266bd4266d941e605ce0de3b6029e709bd1d3e0ff4db74c136ced"
+    "sha256": "bee1310d71f6fae37662170e624b542f3ac179d5bb2df096bd63eddee5afd554"
   },
   "produces": [
     {
       "id": "transactional_event_emission_sites",
       "evidence": "docs/service-contract/source/event-emissions.json",
-      "sha256": "0a06d36e168c07f2910da9624f94b911e3eaeeb94af2f2b02ef428c6bd51ae84"
+      "sha256": "c3a9a4126d3c2c38405c0f0f5284f859be75bfff8d0d847c1e53de6674b231a8"
     },
     {
       "id": "embedded_event_schema_keys",
@@ -35,7 +35,7 @@
     {
       "id": "logical_rpc_consumers",
       "evidence": "docs/service-contract/source/rpc-consumers.json",
-      "sha256": "4bb201d71910c60d9bc34894be7c9115e342fc4e3674bb1ae66de4e9c1027806"
+      "sha256": "0ead9be8adb390c5cad6436914dc77f4a50871357c51e0369b72f78acf6b885c"
     },
     {
       "id": "http_inbound_protocols_and_auth",
@@ -55,7 +55,7 @@
     {
       "id": "independent_source_review",
       "evidence": "docs/service-contract/REVIEW.json",
-      "sha256": "2dcd0143eb4c4b6b864f3035c18ab352b69ddb7e10011b883ad8d3571406cf97"
+      "sha256": "eaefd44faca96b8cea72a33a17b2b3c5afd55e460767fbeb21604cb591982f60"
     }
   ],
   "callsREST": [
@@ -79,7 +79,7 @@
     {
       "id": "http_mux_registrations",
       "evidence": "docs/service-contract/source/http-routes.json",
-      "sha256": "41d4fb7519726c0a386a5e5a924ed1efc291cde18aeb8ad1e25f9a1bf61de0f9"
+      "sha256": "e976b938d2b6cef0dad6168d63c03cd73158f95d7ae791f5e693631e41665f8f"
     },
     {
       "id": "pre_mux_capacity_dispatch",
@@ -89,7 +89,7 @@
     {
       "id": "auth_dispatch_source_functions",
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
-      "sha256": "4feb18c700bea6be738858f6795ead36551f865fca88f954ae241eb418dfb2a9"
+      "sha256": "133f18d5984ce7cc9d952edf33bfe0c1fe0aef2f520ab3b018df856d85da59ab"
     }
   ]
 }

@@ -50,7 +50,7 @@ func TestNativeDeniedReadonlyExactRoleAndSourceCatalog(t *testing.T) {
 			t.Fatal("historical/unpublished source became dedicated", invalid)
 		}
 	}
-	if describeNativeDeniedReadonly(nil, source) == nil {
+	if describeNativeDeniedReadonly(nil, source) == nil { //nolint:staticcheck // SA1012: deliberately verify rejection of a missing owner.
 		t.Fatal("missing owner admitted")
 	}
 	if _, err := executeNativeDeniedReadonly(context.Background(), nativeDeniedResolvedObserver{}, nil); err == nil {
