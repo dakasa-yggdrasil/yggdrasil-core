@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 86e6bb7c0220849f1eadb4e6f6395128ae5875e7
-verified_diff_sha256: d5303994a9ea7f8c5b94ba7f784b521b9a6fa49ace1b908b5838c41f02d132e5
+verified_at_commit: 55f14ec7b6ab1ae15ca220cbd316830497b057a5
+verified_diff_sha256: 9bfc517ec159427d5893b51d42acde8daf980bf2831b46b67430d9c986b57972
 reconciler_schema: 1
 verified_at: 2026-10-25
 by: Giomaster
@@ -351,3 +351,5 @@ core_D12_original_NULL_workflow_identity_review: Correct installed Guest resumpt
 core_d13_actual_a900_profiles_and_installed_disposal_review: Reviewed the actual a900 two-provider full contracts with distinct per-instance adapter principals and preserved historical contracts and original issuer map. Added append-only schema78 failed installed disposal through genuine Guest548 V1 and native absence while retaining creation, installation, failed acknowledgments and possible Notify effects. Ordinary V2 retains its signed lifecycle, drained transition and original destroy receipt. Local isolated PostgreSQL17, approval race roots75 nodes, Linux-target static lint and the complete691-source service contract were checked; publication CI, principal installation, production migration, network, rollout and useful capacity remain separate required gates.
 
 core_d13_tagged_disposal_boundary_source_correction_review: Corrected the genuine ca45 nativequalification build failure with two explicit error-only privileged disposal boundaries. The pure AWS native-off timestamp predicate moves byte-for-byte into common source, preserving its original eight test cases and untagged root hook without Skip. Default production disposal, all SQL and all four actual profile approvals remain unchanged. Actual Linux tagged Core build and complete message test-binary compilation passed; exact Source-copy Mac race controls passed thirteen nodes. The published service doctor and complete693-source census passed. Current publication CI, immutable image and production migration/rollout/business lifecycle remain separate required qualifications.
+
+reviewed_d14_presend_retirement_recovery_source: Reviewed all695 runtime Sources and the narrow schema79 recovery delta: canonical UTC signed deadline, explicit never-sent admission, fresh fenced successor and preserved originals. Local PostgreSQL/race/API gates, full Linux-target builds, complete static lint and service doctor passed. CI retains the original16 artifact and separately records five new roots. Guest/native operation and production validation require their own genuine originals.

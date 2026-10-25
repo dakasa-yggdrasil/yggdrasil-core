@@ -12,6 +12,15 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 )
 
+// A legacy compensation has no successor epoch operand. After an explicitly
+// admitted retirement successor exists it must HOLD, never choose one of the
+// two real originals by unspecified query order.
+func singleFailedCreateRetirementTx(ctx context.Context, tx *sql.Tx, grantID string) (string, error) {
+	var id string
+	err := tx.QueryRowContext(ctx, `SELECT min(r.id::text) FROM public.capacity_vm_retirement_intents r JOIN public.capacity_vm_provisioning_preregistrations pre ON pre.id=r.preregistration_id JOIN public.capacity_vm_original_enrollments e ON e.preregistration_id=pre.id WHERE pre.create_grant_id=$1 GROUP BY pre.create_grant_id HAVING count(*)=1`, grantID).Scan(&id)
+	return id, err
+}
+
 // Never-started is an ORIGINAL source outcome, not the absence of enrollment,
 // a 404, an empty cgroup, a failed create action or a signed completeness flag.
 // Until its actual prestarter producer and closed return wire are integrated,
@@ -24,8 +33,8 @@ func (s CapacityStore) guestFailedCreateCleanupTx(ctx context.Context, tx *sql.T
 	if p.GuestRetirementBinding == nil || capacity.ValidateGuestRetirementBinding(p, p.GuestRetirementBinding) != nil {
 		return fmt.Errorf("%w: failed create has unknown original writer enrollment; HOLD", ErrCapacityConflict)
 	}
-	var id string
-	if err := tx.QueryRowContext(ctx, `SELECT r.id::text FROM public.capacity_vm_retirement_intents r JOIN public.capacity_vm_provisioning_preregistrations pre ON pre.id=r.preregistration_id JOIN public.capacity_vm_original_enrollments e ON e.preregistration_id=pre.id WHERE pre.create_grant_id=$1`, parent.Grant.GrantID).Scan(&id); err != nil {
+	id, err := singleFailedCreateRetirementTx(ctx, tx, parent.Grant.GrantID)
+	if err != nil {
 		return fmt.Errorf("%w: no original never-started or complete enrolled retirement proof; HOLD", ErrCapacityConflict)
 	}
 	stored, err := loadGuestRetirementTx(ctx, tx, id)
@@ -64,8 +73,8 @@ func (s CapacityStore) bindGuestCompensationTx(ctx context.Context, tx *sql.Tx, 
 	if handled, err := s.canonicalSourceBindCompensationTx(ctx, tx, child, parent, now); handled {
 		return err
 	}
-	var id string
-	if err := tx.QueryRowContext(ctx, `SELECT r.id::text FROM public.capacity_vm_retirement_intents r JOIN public.capacity_vm_provisioning_preregistrations pre ON pre.id=r.preregistration_id WHERE pre.create_grant_id=$1`, parent.Grant.GrantID).Scan(&id); err != nil {
+	id, err := singleFailedCreateRetirementTx(ctx, tx, parent.Grant.GrantID)
+	if err != nil {
 		return ErrCapacityConflict
 	}
 	stored, err := loadGuestRetirementTx(ctx, tx, id)

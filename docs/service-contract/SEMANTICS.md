@@ -425,3 +425,31 @@ boolean is accepted. The terminal preserves original creation, installation,
 acknowledgments and business-effect records and supplies zero useful-capacity
 credit. Replacement requires a different Guest source and profile with a
 complete current approval and a fresh original assessment and grant.
+
+The V1 retirement deadline is converted to UTC before its signed DTO and durable
+JSON are constructed. The original caller still compares the entire request
+and validates its signature and original deadline. Monotonic or location state
+from a Go context cannot create a different in-memory representation of that
+same persisted deadline.
+
+`POST /api/v1/ops/capacity/failed-installed-guest-disposals/retirement-recoveries`
+accepts only `preregistration_id` and `expired_retirement_request_id`. Both
+GodMode and workflow management permission are required. Core derives the
+original failed-installed legacy V1 claim, failed retirement run and final
+acknowledgment, expired lease and original deadline, current complete contract
+and zero-useful-capacity state. The mutation-scope and original-intent locks
+serialize the proof with existing caller and authority writers. Any possible
+caller attempt, return, runtime snapshot, authority read, retirement return,
+delete binding or native poweroff read on the parent refuses recovery.
+
+The append-only schema79 recovery records preserve the original schema63 and
+schema78 records. A scheduled claim uses a new run, lease owner and fence in
+the same generation. At most one explicitly admitted successor receives a
+fresh request, attempt, nonce, original context and bounded signed deadline.
+Every caller and Guest result references that actual new request. The original
+expired request is never renewed or aliased. A second recovery or any unknown
+possible-send remains refused. Quiescent continuation authenticates the exact
+new claim and issued successor, then requires the genuine signed Guest return
+and separate native poweroff proof. Cleanup and complete native and auxiliary
+absence remain separate. The corresponding authenticated GET exposes only
+the bounded public recovery summaries and supplies no quiescence credit.

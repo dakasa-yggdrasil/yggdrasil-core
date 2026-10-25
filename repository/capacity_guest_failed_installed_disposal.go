@@ -312,6 +312,26 @@ func (s CapacityStore) TryClaimFailedInstalledGuestDisposal(ctx context.Context,
 		return old, "", false, err
 	}
 	m := old.FailedInstalledDisposal
+	if m != nil && m.Stage == "claimed" {
+		if _, err = tx.ExecContext(ctx, `SET LOCAL TIME ZONE 'UTC'`); err != nil {
+			return old, "", false, err
+		}
+		var now time.Time
+		if err = tx.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil {
+			return old, "", false, err
+		}
+		next, preID, eligible, e := s.claimNeverSentRecoveryTx(ctx, tx, policy, p, old, assessment, now.UTC())
+		if e != nil || !eligible {
+			return old, "", false, e
+		}
+		if !guestReconcileLive(ctx) {
+			return old, "", false, ErrCapacityLease
+		}
+		if e = tx.Commit(); e != nil {
+			return old, "", false, e
+		}
+		return next, preID, true, nil
+	}
 	requested, stageErr := failedInstalledDisposalClaimRequested(m)
 	if stageErr != nil || !requested {
 		// Terminal accounting no longer owns the scheduler's plan. The next
@@ -399,6 +419,9 @@ func (s CapacityStore) failedInstalledDisposalActiveTx(ctx context.Context, tx *
 	}
 	policy = canonical
 	r, _, err := loadFailedInstalledDisposalTx(ctx, tx, m.ID, "claimed")
+	if err == nil {
+		r, err = effectiveFailedInstalledClaimTx(ctx, tx, r, current)
+	}
 	if err != nil || r.AdmissionSHA256 != m.AdmissionSHA256 || r.PreregistrationID != m.PreregistrationID || r.ClaimedIntent == nil || !reflect.DeepEqual(*r.ClaimedIntent, current) {
 		return false, ErrCapacityConflict
 	}

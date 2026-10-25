@@ -119,6 +119,9 @@ func (s CapacityStore) IssueGuestRetirement(ctx context.Context, policy model.Ma
 		if err != nil {
 			return err
 		}
+		if err = issueNeverSentSuccessorTx(ctx, tx, current, intent, now); err != nil {
+			return err
+		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_vm_retirement_intents(id,preregistration_id,attempt_id,nonce_sha256,intent_sha256,intent_record,original_deadline,created_at,original_wire) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9)`, intent.RequestID, preregistrationID, intent.AttemptID, intent.NonceSHA256, capacity.GuestRetirementSHA(intent), intentWire, deadline, now, wire)
 		if err == nil {
 			_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_guest_original_retirement_contexts(intent_id,executor_id,original_step_id,original_step_timeout_seconds,original_context_deadline,core_actual_source_commit,recorded_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, intent.RequestID, s.ExecutorID, origin.step.ID, origin.step.TimeoutSeconds, contextDeadline, origin.source, now)

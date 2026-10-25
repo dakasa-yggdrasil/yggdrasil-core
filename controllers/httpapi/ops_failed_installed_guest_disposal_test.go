@@ -20,6 +20,10 @@ func TestFailedInstalledDisposalRequiresExplicitAdministrativeIdentity(t *testin
 		{http.MethodGet, "/api/v1/ops/capacity/failed-installed-guest-disposals/id", func(s *Server, w http.ResponseWriter, r *http.Request) {
 			s.handleOpsFailedInstalledGuestDisposalRead(w, r)
 		}},
+		{http.MethodPost, "/api/v1/ops/capacity/failed-installed-guest-disposals/retirement-recoveries", func(s *Server, w http.ResponseWriter, r *http.Request) { s.handleOpsPresendRetirementRecovery(w, r) }},
+		{http.MethodGet, "/api/v1/ops/capacity/failed-installed-guest-disposals/retirement-recoveries/id", func(s *Server, w http.ResponseWriter, r *http.Request) {
+			s.handleOpsPresendRetirementRecoveryRead(w, r)
+		}},
 		{http.MethodPost, "/api/v1/ops/capacity/failed-installed-guest-disposals", func(s *Server, w http.ResponseWriter, r *http.Request) { s.handleOpsFailedInstalledGuestDisposal(w, r) }},
 		{http.MethodPost, "/api/v1/ops/capacity/failed-installed-guest-disposals/advance", func(s *Server, w http.ResponseWriter, r *http.Request) {
 			s.handleOpsFailedInstalledGuestDisposalAdvance(w, r)
@@ -69,5 +73,23 @@ func TestFailedInstalledDisposalAcceptsOnlyTwoOriginalIDsAndSafeSummary(t *testi
 	wire, err := json.Marshal(failedInstalledGuestDisposalSummary(r))
 	if err != nil || strings.Contains(string(wire), "DO_NOT_EXPORT") || !strings.Contains(string(wire), `"business_effects_preserved":true`) || strings.Contains(string(wire), "no_effect") {
 		t.Fatal("summary leaked or erased effects", err)
+	}
+}
+
+func TestPresendRetirementRecoveryIDsAndSafeSummary(t *testing.T) {
+	a, b := uuid.NewString(), uuid.NewString()
+	good := `{"preregistration_id":"` + a + `","expired_retirement_request_id":"` + b + `"}`
+	if x, y, e := decodeFailedInstalledGuestIDs(strings.NewReader(good), "expired_retirement_request_id"); e != nil || x != a || y != b {
+		t.Fatal(e)
+	}
+	for _, raw := range []string{`{}`, `null`, `[]`, good + good, strings.Replace(good, `"expired_retirement_request_id"`, `"expired_retirement_request_id":null,"extra"`, 1), strings.Replace(good, `}`, `,"deadline":"renew"}`, 1), strings.Replace(good, `}`, `,"preregistration_id":"`+a+`"}`, 1)} {
+		if _, _, e := decodeFailedInstalledGuestIDs(strings.NewReader(raw), "expired_retirement_request_id"); e == nil {
+			t.Fatal("caller authority or malformed IDs admitted")
+		}
+	}
+	r := repository.FailedInstalledRetirementRecovery{FailedRun: `{"private":"DO_NOT_EXPORT"}`, ParentIntentSHA256: "DO_NOT_EXPORT", OriginalClaimSHA256: "DO_NOT_EXPORT"}
+	wire, e := json.Marshal(presendRetirementRecoverySummary(r))
+	if e != nil || strings.Contains(string(wire), "DO_NOT_EXPORT") || !strings.Contains(string(wire), `"Guest_quiescence_or_native_cleanup_qualified":false`) {
+		t.Fatal("summary leaked or granted recovery authority", e)
 	}
 }
