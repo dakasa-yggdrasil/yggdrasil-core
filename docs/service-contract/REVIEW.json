@@ -41,6 +41,22 @@
       "source_catalog_sha256": "8168ed6a5b60a4f8a047eeae478ce85949cd1bc5a338f5bfc2ce889087b53171",
       "source_inventory_sha256": "33e3310863e266bd4266d941e605ce0de3b6029e709bd1d3e0ff4db74c136ced"
     },
+    "D12_NULL_workflow_identity_and_bounded_startup": {
+      "Mac_Linux_target_full_static_lint_issues": 0,
+      "Root_final_Source_review_sha256": "d46eee92dfd8d2e2ed1de13b001e8587de86c42245bb841f5101e75a5505d025",
+      "actual_local_PG8_subcases_no_fail_no_skip": true,
+      "actual_local_PG8_subcases_summary_sha256": "628106c92f34f4e496be8ec0fdc3ba053118f078a0b98db7774bd58adbbec304",
+      "actual_local_PG_stopped_after_tests": true,
+      "all76_SQL_and_dependencies_unchanged": true,
+      "base": "d8989492178b641dfac522db2bf075d0f25bee15",
+      "historical_workflow_records_backfilled": false,
+      "independent_final_fixture_peer_sha256": "a5c4f310588be36becf4fe411d872de7c2bf3c8f829377c9494fe4f390c50f29",
+      "independent_product_peer_sha256": "4dae0ce8a5d748ef357b25c2639235760374dbf250e93eb390434ec04ba688ba",
+      "independent_startup_peer_sha256": "d92a92cc68651c1894ea6785b811a60e3182eca428b6b2a8d4a23d72dac6121a",
+      "production_qualification_claimed": false,
+      "reviewed_at": "2026-10-25T10:12:28.790323+00:00",
+      "source_inventory_sha256": "171b75fc1326a872c70cf661c436d2baa84efacd09650f9793ab3a1ac500e7bc"
+    },
     "D12_installed_reconcile_and_explicit_protocol_authority": {
       "Root_frozen_final_source_review_sha256": "77133c5c29a4530b852c4eb11e8239a1bb54ff08eb84da832e8aba22de2f43cd",
       "actual_issuer_build_separate": true,
@@ -277,6 +293,7 @@
   "previous_review_before_AMQP_session_recovery_sha256": "75350fe06eae3bc91d89ef3dfa904029fef1ba4718024aa8ba31063238ec5059",
   "previous_review_before_AWS164_actual_instance_contract_successor_sha256": "a3c6edf138584b0fb0da606336deb7a463fadfa4a9cc5869edb72acf1dc3c421",
   "previous_review_before_D10_dedicated_readonly_observer_sha256": "3b8d1eab38b41b49b3d85b0a90b35ba9fdba67418896de902d58c7c5d6c61663",
+  "previous_review_before_D12_NULL_workflow_identity_and_bounded_startup_sha256": "28835da1eb863fcbb352adde587cfa617fe2c624a1c2ba7656ce5873d25c9af9",
   "previous_review_before_D12_inventory_and_lint_correction_sha256": "2dcd0143eb4c4b6b864f3035c18ab352b69ddb7e10011b883ad8d3571406cf97",
   "previous_review_before_D12_unbounded_lint_correction_sha256": "eaefd44faca96b8cea72a33a17b2b3c5afd55e460767fbeb21604cb591982f60",
   "previous_review_before_D7_R3_complete_profiles_sha256": "a866516ae2e96c6bec1b03d10d66fc5da57bfb258c702c6be19b3dd833bbd452",
@@ -341,7 +358,7 @@
   "reviewer": "Root full production-source delta review; separate independent manager/dial/monitor peer; source acceptance only",
   "schema": "core_service_source_review_v1",
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "5bcde85da8edf21cf9db104a6730dbeda23df8623cb5c679d0427a7d9856c30d",
+  "source_inventory_sha256": "171b75fc1326a872c70cf661c436d2baa84efacd09650f9793ab3a1ac500e7bc",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
