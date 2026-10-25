@@ -345,6 +345,3 @@ func originalHetznerRetirementPendingV2(o model.CapacityVMRetirementObservation,
 // AWS publishes Server.ObservedAt at DescribeInstances and the later shared
 // Plan/Lifecycle timestamp after DescribeInstanceStatus. Bind the actual shared
 // producer field; comparing it to the earlier server GET always refuses.
-func originalAWSNativeOffLifecycleJoin(plan model.CapacityVMFleetPlan, lifecycle model.CapacityAWSInstanceLifecycle, actionID string) bool {
-	return actionID != "" && lifecycle.RequestID == actionID && lifecycle.Schema == "aws_original_request_and_instance_status_v1" && lifecycle.EC2State == "stopped" && plan.Server != nil && plan.Server.Status == "stopped" && !lifecycle.ObservedAt.IsZero() && lifecycle.ObservedAt.UTC().Format(time.RFC3339Nano) == plan.ObservedAt
-}

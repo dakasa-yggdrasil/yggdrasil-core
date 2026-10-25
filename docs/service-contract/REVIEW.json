@@ -158,6 +158,44 @@
       "source_inventory_sha256": "65be8c218107efb35f0ec4a5c70427c7ece2de191397720d880941f051913245",
       "source_only": true
     },
+    "D13_nativequalification_disposal_boundary_and_common_pure_join_correction": {
+      "CodeQL_alert_dismissal_or_suppression_claimed": false,
+      "Linux_execution_claimed": false,
+      "Linux_full_message_tagged_test_binary_compile_zero": true,
+      "Linux_tagged_Core_build_zero": true,
+      "Mac_race_exact_source_copy_join_and_refusal_13_nodes_no_failure_or_skip": true,
+      "actual_validation_checkpoint_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/CORE-D13-NATIVEQUAL-STUB-CORRECTION-VALIDATION-R5-20261025/SOURCE-CHECKPOINT.PUBLIC.json",
+        "sha256": "ae93a36f2150825074cafdbe1446cb24c8eba41a79681866fb7fdbdc3f7b1be2"
+      },
+      "all_SQL_and_four_profile_approvals_unchanged": true,
+      "base": "ca45fb7adc97c8db4f34ee81cb477c7739e5d3ab",
+      "common_native_off_pure_join_body_byteexact": true,
+      "complete_production_source_records": 693,
+      "current_publication_CI_and_production_runtime_required": true,
+      "explicit_nativequalification_privileged_disposal_refusal_stubs": true,
+      "four_contract_map_sha256": "b5a496bb19f332a82387af7af85b75c9c738f17a139d23665de4548b89c199cd",
+      "independent_exact_pure_extraction_peer_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/CORE-D13-PURE-NATIVE-OFF-JOIN-EXTRACTION-INDEPENDENT-SOURCE-PEER.PUBLIC.json",
+        "sha256": "00b0d85c67031d1ead1c46a4f49f63da791744b95b84d309c83af2a19a803aed"
+      },
+      "independent_refusal_stub_peer_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/CORE-D13-NATIVEQUALIFICATION-DISPOSAL-STUBS-INDEPENDENT-SOURCE-PEER.PUBLIC.json",
+        "sha256": "35ff7a0cf51b3cb487aa0c626d2b3091d1f608d33a3b5164b9b2467ee8dabb0e"
+      },
+      "no_test_skip_added": true,
+      "original_timestamp_join_test_and_root_hook_untagged_and_byteexact": true,
+      "prior_original_qualified_build_CI_failures_preserved": true,
+      "production_disposal_implementation_unchanged": true,
+      "reviewed_at": "2026-10-25T14:46:02.488478+00:00",
+      "seven_CodeQL_alerts_preserved_source_triage_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/PR87-SEVEN-CODEQL-ALERTS-LOCAL-SOURCE-SEMANTIC-TRIAGE.PUBLIC.json",
+        "sha256": "f40870a51debbbebc71431581df39194d1d557e836424c08bdf7b54b63f46a4a"
+      },
+      "source_inventory_sha256": "b7eaaa39bce293d82152ad4d28574f2e9103e4b2cf1d109bb20b36c2b274d4d9",
+      "source_only": true,
+      "whole_Darwin_message_package_execution_claimed": false
+    },
     "D6_failed_witnessed_terminal_and_AWS1654_observer": {
       "HTTP_package_source_pass": true,
       "Linux_CI_and_image_and_production_qualification": null,
@@ -441,14 +479,15 @@
     "Dedicated native-denial HTTP observer is source-pinned and separate from the normal AWS supplier; complete historical/current catalog authentication precedes explicit historical AWS protocol projection. Original creator/configuration and accounting history remain immutable; SQL75 and normal profiles/inventories are unchanged.",
     "D12 preserves immutable Guest wire authority while recording the real clean issuer in a separate atomic SQL77 ledger. Installed reconciliation keeps the same native resource, enrollment, installation and generation, requires the previous failed run and acknowledged finalization plus a fresh private dispatch run, and admits at most three new fenced readiness attempts. Existing failures and possible business effects remain immutable. The post-CI style correction uses equivalent tagged-switch and De Morgan predicates; intentional nil-owner rejection tests retain nil and narrow documented staticcheck exclusions. The current complete inventory includes all inherited D11 and added D12 production source.",
     "Three additional original-disposition De Morgan normalizations preserve left-to-right short-circuit and side-effect call order, including the explicit-empty-instances predicate. The owning lint workflow now reports all same-kind and per-linter findings without truncation; no check is disabled. Original failed lint runs remain failures.",
-    "D13 retains both complete historical contracts and their original compatibility map, then adds the two real a900 contracts derived from original native slot2 dry-runs and the owning C8 full-policy compiler. Each new integration instance has a distinct scoped mutation principal. Historical issuer verification keeps full original bindings and the actual build; SQL78 records failed installed disposal without inventing useful capacity or erasing business effects. Guest548 uses its genuine narrow signed V1 protocol; ordinary V2 gains the required drained transition, original destroy receipt and closed production DTO decoding. Terminal disposal proceeds to ordinary reassessment while source/profile replacement gates remain mandatory."
+    "D13 retains both complete historical contracts and their original compatibility map, then adds the two real a900 contracts derived from original native slot2 dry-runs and the owning C8 full-policy compiler. Each new integration instance has a distinct scoped mutation principal. Historical issuer verification keeps full original bindings and the actual build; SQL78 records failed installed disposal without inventing useful capacity or erasing business effects. Guest548 uses its genuine narrow signed V1 protocol; ordinary V2 gains the required drained transition, original destroy receipt and closed production DTO decoding. Terminal disposal proceeds to ordinary reassessment while source/profile replacement gates remain mandatory.",
+    "The nativequalification build receives only two explicit error-only privileged disposal boundaries. The pure AWS native-off timestamp join moves byte-for-byte into common source, retaining its eight original cases and root hook without any Skip. Default production disposal behavior, SQL and all four complete approval contracts remain unchanged."
   ],
   "reviewed_source_head": "9ecff39e007c939de3618387fa7229de44915fdd",
   "reviewed_source_head_is_historical": true,
   "reviewer": "Root full production-source delta review; separate independent manager/dial/monitor peer; source acceptance only",
   "schema": "core_service_source_review_v1",
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "65be8c218107efb35f0ec4a5c70427c7ece2de191397720d880941f051913245",
+  "source_inventory_sha256": "b7eaaa39bce293d82152ad4d28574f2e9103e4b2cf1d109bb20b36c2b274d4d9",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -487,6 +526,7 @@
     "D9 source acceptance: four new isolated PostgreSQL17 XML repository roots and one new HTTP race root completed without skips; Linux message compilation completed without execution. The actual owning Go compiler validated both full disabled operational policies and all sixteen slot plans; its six original native children and original containing process completed zero. Exact generated AWS mutation bindings and one default registry digest changed; the complete Hetzner fixture and approval are byteexact. Five owning registry race roots passed forty-seven nodes without failures or skips. Current owning Linux focused thirty-six roots, Source CI, release image, production Goose75 and rollout remain separate required evidence.",
     "Root ran three new pure controller roots under an explicit external Mac-only overlay excluding other existing test files; all three passed without skips. Earlier Mac compile failures from existing Linux syscall fixtures remain separate preserved failures. The required owning Linux39 race/PostgreSQL workflow, actual dedicated image/runtime, new network pair, original Core600 and native accounting remain independent operational qualifications.",
     "Original D12 Linux49 and Linux16 source workflows passed on the preceding publication; their historical results are not attributed to this correction. Current owning CI must validate the successor publication, generated complete census and contract digests. No deployment, migration or useful-capacity success is supplied by this source review.",
-    "D13 source acceptance retains actual local isolated PostgreSQL17/schema78, normal V2, terminal scheduler handoff and exact five-postimage evidence. Both original native slot2 readonly RPCs and the owning Go full-policy compilations returned zero; corrected final policies differ only in their two new adapter principal IDs. Two existing approval roots passed75 race nodes with no fail/skip. Complete Linux-target static lint passed with zero issues before only the final literal principal/contract substitutions; current publication CI remains required. No SQL78 production migration, D13 rollout, new inventory activation or useful native lifecycle is supplied by this source review."
+    "D13 source acceptance retains actual local isolated PostgreSQL17/schema78, normal V2, terminal scheduler handoff and exact five-postimage evidence. Both original native slot2 readonly RPCs and the owning Go full-policy compilations returned zero; corrected final policies differ only in their two new adapter principal IDs. Two existing approval roots passed75 race nodes with no fail/skip. Complete Linux-target static lint passed with zero issues before only the final literal principal/contract substitutions; current publication CI remains required. No SQL78 production migration, D13 rollout, new inventory activation or useful native lifecycle is supplied by this source review.",
+    "After the actual ca45 tagged-CI compile failure, Linux nativequalification Core build and complete message test-binary compilation both returned zero. Isolated byte-exact source copies of the pure join and refusal boundaries passed thirteen Mac race nodes with no failure or skip; no whole Darwin message package or Linux runtime execution is claimed. Current exact-publication CI is required. Seven separately reported CodeQL findings remain preserved with a local historical/bounds/semantic triage; no alert was suppressed or dismissed."
   ]
 }

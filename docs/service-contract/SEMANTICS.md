@@ -411,6 +411,9 @@ signed records through a complete bounded POST. Current ordinary retirement
 continues to require V2. Historical authority verification selects the original
 complete compatibility map while retaining the actual issuing Core build in
 the audit; it does not approve another profile or issue an old build identity.
+The native-qualification build refuses privileged disposal advancement and
+completion through explicit error-only boundaries. The pure AWS observation
+timestamp join remains common to both builds and retains the same tests.
 
 After genuine Guest retirement, Core performs a separate bounded native
 poweroff read. An operator may then perform the explicit exact-resource native
