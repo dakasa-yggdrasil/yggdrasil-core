@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 3b2393a6760a671259957a8b9665cb4f09a5fb6c
-verified_diff_sha256: e7dfa0e0752b9c0e5987d5a484a658e878cfcb7b728ae2cf76baeb50e6bbdd2d
+verified_at_commit: 86667b4198dbee56653b9fcdff50221d5a2c0256
+verified_diff_sha256: 086c10945a2bb5acf4d12fa53de455619f0ba021e801a5e4a99d3bb41b1e7d7e
 reconciler_schema: 1
 verified_at: 2026-10-25
 by: Giomaster
@@ -343,3 +343,5 @@ core_D11_enrolled_failed_original_review: Reviewed the separate production enrol
 core_D12_protocol_authority_installed_reconcile_review: Reviewed the explicit Guest protocol authority and installed reconciliation code. The immutable canonical Guest authority remains 48888f21acdddaf411094ec525004297c229863f while the actual issuer is the real clean Core build, recorded separately; exact compatibility is restricted to the two reviewed canonical production profiles and preserves original enrollment, native tuple, policy, generation and fence joins. The append-only migration77 audit records the actual issuer atomically with its owning transaction. UTC wire deadlines are clamped to the original parent context deadline after the monotonic budget calculation. Installed reconciliation requires fresh original observations of the existing Guest and never creates another VM, replays an old create/publication, or turns an old failed run into success. All75 prior migration files through76 remain byte exact. Supplied Source peer, local unit and local PostgreSQL17 evidence remains separately pinned original evidence; this publisher does not execute or qualify those tests, and claims no Linux49 result, deployed image, serving state or production admission. The released canonical CLI generated and genuinely verified this metadata at the actual CODE commit.
 
 core_D12_CI_census_and_lint_correction_review: Corrected six owning CI lint findings using equivalent production predicates and narrowly documented intentional nil-owner rejection tests. Regenerated all680 production Go source records and the derived interface census, and refreshed every exact service-contract evidence digest. Prior immutable source/SQL77 design and independent reviews remain separately identified. Original Linux49 and Linux16 passes belong to the preceding publication; the corrected publication requires its own current CI. No image, deployment, native capacity or business success is claimed by this metadata.
+
+core_D12_complete_lint_correction_review: Corrected the remaining three original-disposition De Morgan lint findings with equivalent short-circuit predicates and unchanged explicit-empty native call order. Unlimited same-kind and per-linter diagnostics are now required in the owning workflow. Refreshed the complete680 production source census, independent source review record and all exact contract evidence digests. This canonical metadata is generated at the actual correction CODE. Previous canonical publications, failed lint runs and passing source tests retain their own identity; current CI, actual final image and runtime qualifications remain separate.
