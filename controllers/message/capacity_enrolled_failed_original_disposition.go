@@ -41,16 +41,17 @@ func RecordEnrolledFailedOriginalDisposition(parent context.Context, db *sql.DB,
 	}
 	var returnedStatus string
 	var returnedOutput any
-	if provider == "aws" {
+	switch provider {
+	case "aws":
 		fixed["schema"] = "aws_original_enrolled_failed_create_absence_read_request_v1"
 		returned, callErr := executeEnrolledFailedReadonly(ctx, observer, fixed)
 		err = callErr
 		returnedStatus, returnedOutput = returned.Status, returned.Output
-	} else if provider == "hetzner" {
+	case "hetzner":
 		returned, callErr := executeIntegrationThroughResolvedWithPolicy(ctx, conn, model.ExecuteIntegrationRequest{Operation: originalCreateDispositionOperation, Capability: originalCreateDispositionOperation, Input: fixed}, observer.instance, observer.instanceSpec, observer.typ, observer.typeSpec, 25*time.Second, integrationExecutionPolicy{originalCreateDisposition: true, detailFreeErrors: true, safeError: errOriginalCreateDisposition, requireExplicitResponse: true, nativeHTTP: &nativeAdapterHTTPPolicy{limit: 2 << 20, parent: ctx}})
 		err = callErr
 		returnedStatus, returnedOutput = returned.Status, returned.Output
-	} else {
+	default:
 		return empty, errOriginalCreateDisposition
 	}
 	if err != nil || ctx.Err() != nil || returnedStatus != "observed" {

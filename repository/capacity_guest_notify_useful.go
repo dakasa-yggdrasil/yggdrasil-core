@@ -28,7 +28,7 @@ func loadFreshGuestNotifyBusinessTx(ctx context.Context, tx *sql.Tx, policy mode
 		return empty, err
 	}
 	c, err := loadGuestNotifyChallengeTx(ctx, tx, id)
-	if err != nil || c.PreregistrationID != preID || c.EnrollmentSHA256 != capacity.GuestRetirementSHA(receipt.Enrollment) || c.PolicyID != policy.ID.String() || c.PolicyChecksum != policy.Checksum || c.Tuple != receipt.Enrollment.Statement.Tuple || c.CoreSourceCommit != capacity.CurrentGuestCoreSource() || !afterPG.IsZero() && !issuedPG.After(afterPG) || usage != "" && c.UsageClass != usage || current.LeaseOwner == "" && (!guestNotifyStableEpoch(current) || c.UsageClass != "steady_useful_membership" || c.LeaseOwner != GuestNotifyMaintenanceOwner(executor)) {
+	if err != nil || c.PreregistrationID != preID || c.EnrollmentSHA256 != capacity.GuestRetirementSHA(receipt.Enrollment) || c.PolicyID != policy.ID.String() || c.PolicyChecksum != policy.Checksum || c.Tuple != receipt.Enrollment.Statement.Tuple || c.CoreSourceCommit != receipt.Enrollment.Statement.CoreAuthoritySourceCommit || !afterPG.IsZero() && !issuedPG.After(afterPG) || usage != "" && c.UsageClass != usage || current.LeaseOwner == "" && (!guestNotifyStableEpoch(current) || c.UsageClass != "steady_useful_membership" || c.LeaseOwner != GuestNotifyMaintenanceOwner(executor)) {
 		return empty, ErrCapacityConflict
 	}
 	var wire, transport []byte
@@ -64,7 +64,7 @@ func guestNotifyMemberReceiptTx(ctx context.Context, tx *sql.Tx, policy model.Ma
 		return empty, err
 	}
 	stored, err := loadGuestOriginalTx(ctx, tx, id)
-	if err != nil || p.GuestRetirementBinding == nil || !reflect.DeepEqual(stored.binding, *p.GuestRetirementBinding) || stored.member != member || stored.binding.CoreAuthoritySourceCommit != capacity.CurrentGuestCoreSource() {
+	if err != nil || p.GuestRetirementBinding == nil || !reflect.DeepEqual(stored.binding, *p.GuestRetirementBinding) || stored.member != member || !capacity.GuestBindingAuthorityCurrent(p, stored.binding) {
 		return empty, ErrCapacityConflict
 	}
 	receipt, _, err := loadGuestReceiptTx(ctx, tx, id)

@@ -1,0 +1,176 @@
+name: Installed Guest reconciliation Source
+
+on:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: installed-reconcile-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  focused-linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    env:
+      GOMAXPROCS: '2'
+      GOMEMLIMIT: 2GiB
+      CGO_ENABLED: '1'
+      GOFLAGS: -mod=readonly
+      SOURCE_COMMIT: ${{ github.event.pull_request.head.sha || github.sha }}
+      PG_IMAGE: postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683 # v4.2.2
+        with:
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          persist-credentials: false
+      - name: Verify exact Source checkout
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          [[ "$SOURCE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          [[ "$(git rev-parse HEAD)" == "$SOURCE_COMMIT" ]]
+          [[ -z "$(git status --porcelain --untracked-files=all)" ]]
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5.5.0
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: PostgreSQL17 Unix socket and focused race gates
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          pg_root="$(mktemp -d "$RUNNER_TEMP/d12-installed-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-XXXXXX")"
+          chmod 0700 "$pg_root"
+          export PGDATA="$pg_root/data" PGHOST="$pg_root/socket" LOGS="$pg_root/logs"
+          mkdir -m 0700 "$PGDATA" "$PGHOST" "$LOGS"
+          printf 'D12_INSTALLED_LOGS=%s\n' "$LOGS" >> "$GITHUB_ENV"
+          export PGUSER=postgres PGDATABASE=core_d12_test
+          export D12_SOURCE_CI_PG17_DSN="host=$PGHOST dbname=$PGDATABASE user=$PGUSER sslmode=disable"
+          export REQUIRE_D12_INSTALLED_SOURCE_POSTGRES=true
+          cid=''
+          record() {
+            local name="$1" rc; shift
+            if "$@" > "$LOGS/$name.stdout" 2> "$LOGS/$name.stderr"; then rc=0; else rc=$?; fi
+            printf '%s\n' "$rc" > "$LOGS/$name.exit"
+            return "$rc"
+          }
+          cleanup() {
+            local original=$? shutdown=0 rc
+            trap - EXIT INT TERM
+            if [[ -n "$cid" ]]; then
+              record pg-stop timeout 45s docker stop --time 30 "$cid" || shutdown=1
+              record pg-wait timeout 10s docker wait "$cid" || shutdown=1
+              record pg-state docker inspect --format '{{json .State}}' "$cid" || shutdown=1
+              record pg-log docker logs "$cid" || shutdown=1
+              record pg-remove docker rm --volumes "$cid" || shutdown=1
+              if python3 - "$LOGS" "$original" "$shutdown" <<'PY_STOP'
+          import json, pathlib, sys
+          p=pathlib.Path(sys.argv[1]); original=int(sys.argv[2]); cleanup=int(sys.argv[3])
+          try:
+              state=json.loads((p/'pg-state.stdout').read_text())
+              exits={n:int((p/(n+'.exit')).read_text()) for n in ['pg-stop','pg-wait','pg-state','pg-log','pg-remove']}
+              closed=all(v==0 for v in exits.values()) and (p/'pg-wait.stdout').read_text().strip()=='0' and state['ExitCode']==0 and not state['Running'] and not state['OOMKilled']
+          except Exception as e:
+              closed=False; exits={'proof_exception':type(e).__name__}
+          value={'schema':'installed_reconcile_source_CI_shutdown_v1','original_step_exit':original,'cleanup_command_failure':cleanup,'shutdown_original_exits':exits,'postgres_closed_zero':closed,'production_authority':False}
+          (p/'SHUTDOWN.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
+          print(json.dumps(value,sort_keys=True))
+          sys.exit(0 if closed and cleanup==0 else 1)
+          PY_STOP
+              then :; else shutdown=1; fi
+            else
+              printf '{"postgres_started":false,"original_step_exit":%s}\n' "$original" > "$LOGS/SHUTDOWN.PUBLIC.json"
+            fi
+            if (( original != 0 || shutdown != 0 )); then exit 1; fi
+          }
+          trap cleanup EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          record go-version go version
+          record pg-pull docker pull "$PG_IMAGE"
+          # The official entrypoint supports an arbitrary non-root UID via nss_wrapper.
+          # The only host mounts are this job's owned 0700 data/socket/log directory.
+          record pg-create docker create --network none --user "$(id -u):$(id -g)" \
+            --cap-drop ALL --security-opt no-new-privileges --memory 512m --cpus 2 \
+            --pids-limit 128 --mount "type=bind,src=$pg_root,dst=$pg_root" \
+            --mount "type=bind,src=$PGHOST,dst=/var/run/postgresql" \
+            -e PGDATA -e PGHOST -e PGUSER -e PGDATABASE \
+            -e POSTGRES_USER=postgres -e "POSTGRES_DB=$PGDATABASE" -e POSTGRES_HOST_AUTH_METHOD=trust \
+            "$PG_IMAGE" postgres -k "$PGHOST" -c listen_addresses= \
+            -c unix_socket_permissions=0700 -c max_connections=20 -c shared_buffers=32MB \
+            -c max_worker_processes=0 -c max_parallel_workers=0
+          cid="$(cat "$LOGS/pg-create.stdout")"
+          [[ "$cid" =~ ^[0-9a-f]{64}$ ]]
+          record pg-start docker start "$cid"
+          ready=0
+          for n in $(seq 1 60); do
+            if record "pg-ready-$n" docker exec "$cid" /bin/sh -ec 'test "$(cat /proc/1/comm)" = postgres; exec pg_isready -h "$PGHOST" -U "$PGUSER" -d "$PGDATABASE"'; then ready=1; break; fi
+            sleep 1
+          done
+          [[ "$ready" == 1 ]]
+          # The official initializer clears PGHOST for its own psql calls. The
+          # second bind aliases that default socket path to this same owned inode.
+          # It chmods that directory 03775; restore 0700 before any source test.
+          record pg-socket-mode chmod 00700 "$PGHOST"
+          record pg-directory-modes stat -c '%u %a' "$PGDATA" "$PGHOST"
+          record pg-version docker exec "$cid" postgres --version
+          record pg-identity docker exec "$cid" psql -XAt -v ON_ERROR_STOP=1 -h "$PGHOST" -U "$PGUSER" -d "$PGDATABASE" \
+            -c "SELECT json_build_object('database',current_database(),'unix_socket',inet_server_addr() IS NULL,'version',current_setting('server_version_num')::int,'listen_addresses',current_setting('listen_addresses'),'xml_supported',xpath_exists('/native-denied-xml',xmlparse(document '<native-denied-xml/>')));"
+          python3 - <<'PY_ID'
+          import json, os, pathlib
+          v=json.loads((pathlib.Path(os.environ['LOGS'])/'pg-identity.stdout').read_text())
+          assert v['database']==os.environ['PGDATABASE'] and v['unix_socket'] is True
+          assert 170000<=v['version']<180000 and v['listen_addresses']=='' and v['xml_supported'] is True
+          for key in ('PGDATA','PGHOST'):
+              st=os.stat(os.environ[key]); assert st.st_uid==os.getuid() and (st.st_mode&0o7777)==0o700, key+' ownership/mode'
+          print(json.dumps(v,sort_keys=True))
+          PY_ID
+          # Fresh dedicated DB: Goose applies the published repository schema through77.
+          # The helper refuses any network listener or foreign database identity.
+          cat > "$pg_root/migrate.go" <<'GO_MIGRATE'
+          package main
+          import("context";"database/sql";"fmt";"os";"time";_ "github.com/lib/pq";"github.com/pressly/goose/v3")
+          func main(){ctx,stop:=context.WithTimeout(context.Background(),90*time.Second);defer stop();db,e:=sql.Open("postgres",os.Getenv("D12_SOURCE_CI_PG17_DSN"));if e!=nil{panic(e)};defer db.Close();var name,listen string;var socket bool;var version int;e=db.QueryRowContext(ctx,`SELECT current_database(),inet_server_addr() IS NULL,current_setting('listen_addresses'),current_setting('server_version_num')::int`).Scan(&name,&socket,&listen,&version);if e!=nil||name!="core_d12_test"||!socket||listen!=""||version/10000!=17{panic("foreign D12 Source fixture")};if e=goose.SetDialect("postgres");e!=nil{panic(e)};if e=goose.UpContext(ctx,db,"db/migrations");e!=nil{panic(e)};v,e:=goose.GetDBVersionContext(ctx,db);if e!=nil||v!=77{panic("schema77 missing")};fmt.Println("D12_SOURCE_DISPOSABLE_SCHEMA77_READY")}
+          GO_MIGRATE
+          record migrate go run "$pg_root/migrate.go"
+          record repository go test -p=1 -race -count=1 -timeout=4m -json ./repository \
+            -run '^(TestD12AuthorityLedgerPostgresRequiresClosedIdentity|TestD12InstalledResumePostgresCASAndAtomicRollback|TestD12InstalledResumePostgresThreeFreshEpochsNeverReplaysFourth|TestD12AuthorityLedgerInstalledMarkerSurvivesIntentReplacement|TestD12AuthorityLedgerInstalledMarkerClosedPayload|TestInstalledGuestResumeDoesNotAdoptLiveOrAlreadyResumedEpoch|TestInstalledGuestPreviousHeldPublicationRemainsHeldAndUnknownRemainsUnknown|TestInstalledGuestResumeBoundedFreshAttemptsAndPendingPhase|TestInstalledGuestResumeRequiresDistinctAcknowledgedRefreshShape|TestGuestNotifyCanarySerializedDeadlineNeverExtendsOriginalBudget|TestGuestNotifyCanarySerializedDeadlineRealClockProjection|TestGuestNotifyHistoricalEnrollmentPreservesSignedAuthority)$'
+          record capacity go test -p=1 -race -count=1 -timeout=4m -json ./internal/capacity \
+            -run '^(TestGuestProtocolAuthorityCompatibilityKeepsCompleteCanonicalApproval)$'
+          record message go test -p=1 -race -count=1 -timeout=4m -json ./controllers/message \
+            -run '^(TestGuestNotifyClosedDiagnosticNeverExposesPrivateCause|TestOriginalGuestReconcileSelectsOneOwnedSlot|TestOriginalGuestReconcileStepFailsBeforeAnyTransportWithoutOwner)$'
+          python3 - <<'PY_CENSUS'
+          import collections, json, os, pathlib, subprocess
+          p=pathlib.Path(os.environ['LOGS']); base='github.com/dakasa-yggdrasil/yggdrasil-core/'
+          expected={'repository': ['TestD12AuthorityLedgerPostgresRequiresClosedIdentity', 'TestD12InstalledResumePostgresCASAndAtomicRollback', 'TestD12InstalledResumePostgresThreeFreshEpochsNeverReplaysFourth', 'TestD12AuthorityLedgerInstalledMarkerSurvivesIntentReplacement', 'TestD12AuthorityLedgerInstalledMarkerClosedPayload', 'TestInstalledGuestResumeDoesNotAdoptLiveOrAlreadyResumedEpoch', 'TestInstalledGuestPreviousHeldPublicationRemainsHeldAndUnknownRemainsUnknown', 'TestInstalledGuestResumeBoundedFreshAttemptsAndPendingPhase', 'TestInstalledGuestResumeRequiresDistinctAcknowledgedRefreshShape', 'TestGuestNotifyCanarySerializedDeadlineNeverExtendsOriginalBudget', 'TestGuestNotifyCanarySerializedDeadlineRealClockProjection', 'TestGuestNotifyHistoricalEnrollmentPreservesSignedAuthority'], 'capacity': ['TestGuestProtocolAuthorityCompatibilityKeepsCompleteCanonicalApproval'], 'message': ['TestGuestNotifyClosedDiagnosticNeverExposesPrivateCause', 'TestOriginalGuestReconcileSelectsOneOwnedSlot', 'TestOriginalGuestReconcileStepFailsBeforeAnyTransportWithoutOwner']}
+          packages={'repository':base+'repository','capacity':base+'internal/capacity','message':base+'controllers/message'}
+          summary={}
+          for name, roots in expected.items():
+              assert (p/(name+'.exit')).read_text().strip()=='0', name+' original go exit'
+              rows=[json.loads(line) for line in (p/(name+'.stdout')).read_text().splitlines()]
+              assert rows and all(r.get('Package')==packages[name] for r in rows), name+' package identity'
+              assert not any(r['Action'] in ('fail','skip') for r in rows), name+' failure or skip'
+              runs=collections.Counter(r['Test'] for r in rows if r['Action']=='run' and 'Test' in r and '/' not in r['Test'])
+              passed=collections.Counter(r['Test'] for r in rows if r['Action']=='pass' and 'Test' in r and '/' not in r['Test'])
+              assert runs==passed==collections.Counter(roots), name+' missing, duplicate or unexpected roots'
+              assert sum(r['Action']=='pass' and 'Test' not in r for r in rows)==1, name+' incomplete package'
+              summary[name]={'package':packages[name],'roots':roots,'passed':len(roots),'skipped':0}
+          actual_head=subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()
+          assert actual_head==os.environ['SOURCE_COMMIT'], 'Source checkout identity changed'
+          assert not subprocess.check_output(['git','status','--porcelain','--untracked-files=all']), 'Source worktree became dirty'
+          value={'schema':'installed_reconcile_source_CI_exact_root_census_v1','source_commit':actual_head,'race':True,'count':1,'package_parallelism':1,'summary':summary,'total_roots':16,'production_authority':False}
+          (p/'CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
+          print(json.dumps(value,sort_keys=True))
+          PY_CENSUS
+      - name: Retain original outputs and shutdown proof
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: installed-reconcile-source-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ env.D12_INSTALLED_LOGS }}
+          if-no-files-found: error
+          retention-days: 14

@@ -107,3 +107,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0076](0076-isolate-native-denial-observation-from-normal-aws-admission.md) | Isolate native-denial observation from normal AWS admission | Proposed | 2026-10-24 | Dedicated HTTP-only observer identity, exact historical protocol projection and unchanged normal supplier admission |
 
 | [0077](0077-close-enrolled-failed-originals-through-native-absence.md) | Close enrolled failed originals through a separate native-absence ledger | Proposed | 2026-10-24 | Preserved accepted enrollment, immutable failed workflow and fenced exact native-absence accounting |
+
+| [0078](0078-version-guest-protocol-authority-and-reconcile-installed-originals.md) | Version Guest protocol authority independently of issuer builds | Accepted | 2026-10-25 | Stable approved Guest-v1 authority, atomic actual-issuer provenance and distinct installed-readiness reconciliation |

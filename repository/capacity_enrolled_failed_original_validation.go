@@ -55,7 +55,7 @@ func validateEnrolledFailedOriginalObservationForSource(c model.CapacityOriginal
 		o.ObservationStartedAt.IsZero() || o.ObservedAt.Before(o.ObservationStartedAt) || o.ObservationStartedAt.Before(began.Add(-5*time.Second)) || o.ObservedAt.After(now.Add(5*time.Second)) || now.Sub(o.ObservedAt) > maxAge || o.ObservedAt.Sub(o.ObservationStartedAt) > 60*time.Second {
 		return ErrOriginalCreateDisposition
 	}
-	if o.ResourceState != "absent" && !(o.Provider == "aws" && o.ResourceState == "terminated") {
+	if o.ResourceState != "absent" && (o.Provider != "aws" || o.ResourceState != "terminated") {
 		return ErrOriginalCreateDisposition
 	}
 	var expected []model.CapacityMutationAuxiliaryResource
@@ -88,7 +88,7 @@ func validateEnrolledFailedOriginalObservationForSource(c model.CapacityOriginal
 			return ErrOriginalCreateDisposition
 		}
 		raw, err := base64.StdEncoding.Strict().DecodeString(read.ResponseBodyBase64)
-		if err != nil || base64.StdEncoding.EncodeToString(raw) != read.ResponseBodyBase64 || int64(len(raw)) != read.ResponseBytes || originalDispositionDigest(raw) != read.ResponseSHA256 || (read.ResponseRepresentation != "raw_http_body_v1" && read.ResponseRepresentation != "canonical_provider_SDK_result_v1" && !(adjunct && read.Operation == "LookupEvents" && read.ResponseRepresentation == "cloudtrail_lookup_events_userdata_omitted_projection_v1")) {
+		if err != nil || base64.StdEncoding.EncodeToString(raw) != read.ResponseBodyBase64 || int64(len(raw)) != read.ResponseBytes || originalDispositionDigest(raw) != read.ResponseSHA256 || (read.ResponseRepresentation != "raw_http_body_v1" && read.ResponseRepresentation != "canonical_provider_SDK_result_v1" && (!adjunct || read.Operation != "LookupEvents" || read.ResponseRepresentation != "cloudtrail_lookup_events_userdata_omitted_projection_v1")) {
 			return ErrOriginalCreateDisposition
 		}
 		if o.Provider == "aws" && read.Operation == "LookupEvents" {

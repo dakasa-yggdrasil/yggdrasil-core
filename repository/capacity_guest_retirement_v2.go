@@ -47,7 +47,7 @@ func (s CapacityStore) IssueGuestRetirementV2(original *capacity.GuestRetirement
 	err := s.mutationTransaction(ctx, policy, false, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
 		stored, err := loadGuestOriginalTx(ctx, tx, preregistrationID)
 		origin := s.guestRetirementOrigin
-		if err != nil || origin == nil || origin.source != capacity.CurrentGuestCoreSource() || origin.source != stored.binding.CoreAuthoritySourceCommit || origin.step.Use.Kind != "yggdrasil" || origin.step.Use.Operation != capacity.RetireOriginalGuestOperation || origin.step.TimeoutSeconds < 1 || origin.step.TimeoutSeconds > 86400 || origin.step.Retry.MaxAttempts > 1 || origin.step.ForEach != nil || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.binding) || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.WorkflowID != s.WorkflowID.String() || !capacityIntentReduction(current) || (current.Phase != "draining" && current.Phase != "drained") {
+		if err != nil || origin == nil || origin.source != capacity.CurrentGuestCoreSource() || !capacity.GuestBindingAuthorityCurrent(p, stored.binding) || origin.step.Use.Kind != "yggdrasil" || origin.step.Use.Operation != capacity.RetireOriginalGuestOperation || origin.step.TimeoutSeconds < 1 || origin.step.TimeoutSeconds > 86400 || origin.step.Retry.MaxAttempts > 1 || origin.step.ForEach != nil || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.binding) || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.WorkflowID != s.WorkflowID.String() || !capacityIntentReduction(current) || (current.Phase != "draining" && current.Phase != "drained") {
 			return ErrCapacityConflict
 		}
 		receipt, _, err := loadGuestReceiptTx(ctx, tx, preregistrationID)
@@ -96,7 +96,7 @@ func (s CapacityStore) IssueGuestRetirementV2(original *capacity.GuestRetirement
 			return ErrCapacityMutationAuthorization
 		}
 		base := model.CapacityGuestRetirementIntent{Schema: capacity.GuestRetirementV2IntentSchema, Purpose: capacity.GuestRetirementV2Purpose, BindingName: stored.member.Name, Slot: stored.pre.Slot, RequestID: uuid.NewString(), AttemptID: uuid.NewString(), NonceSHA256: capacity.BusinessCreationSHA256([]byte(nonce)), EnrollmentSHA256: capacity.GuestRetirementSHA(receipt.Enrollment), Tuple: receipt.Enrollment.Statement.Tuple, Actor: receipt.Enrollment.Statement.Actor, PolicyID: policy.ID.String(), PolicyChecksum: policy.Checksum, WorkflowID: s.WorkflowID.String(), WorkflowChecksum: workflowChecksum, Generation: uint64(generation), Fence: uint64(fence), LeaseOwner: owner, WithdrawOperationID: uuid.NewString(), DrainOperationID: uuid.NewString(), OriginalDeadline: deadline, IssuedAt: issued}
-		intent := model.CapacityGuestRetirementIntentV2{CapacityGuestRetirementIntent: base, PreregistrationID: preregistrationID, ProfileManifestSHA256: stored.binding.ProfileManifestSHA256, CoreSourceCommit: origin.source, Runtime: receipt.Enrollment.Statement.Runtime, Writers: append([]model.CapacityGuestRetirementWriter(nil), receipt.Enrollment.Statement.Writers...), WriterRosterSHA256: receipt.Enrollment.Statement.WriterRosterSHA256}
+		intent := model.CapacityGuestRetirementIntentV2{CapacityGuestRetirementIntent: base, PreregistrationID: preregistrationID, ProfileManifestSHA256: stored.binding.ProfileManifestSHA256, CoreSourceCommit: stored.binding.CoreAuthoritySourceCommit, Runtime: receipt.Enrollment.Statement.Runtime, Writers: append([]model.CapacityGuestRetirementWriter(nil), receipt.Enrollment.Statement.Writers...), WriterRosterSHA256: receipt.Enrollment.Statement.WriterRosterSHA256}
 		// These source-generated semantic request identities are carried into
 		// the exact original writer control frames and owning return records.
 		intent.WithdrawRequestSHA256 = capacity.GuestRetirementSHA([]string{"original_guest_withdraw_v1", intent.RequestID, intent.WithdrawOperationID, intent.EnrollmentSHA256, receipt.Enrollment.Statement.WriterRosterSHA256})
@@ -119,6 +119,9 @@ func (s CapacityStore) IssueGuestRetirementV2(original *capacity.GuestRetirement
 		_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_vm_retirement_intents(id,preregistration_id,attempt_id,nonce_sha256,intent_sha256,intent_record,original_deadline,created_at,original_wire) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9)`, intent.RequestID, preregistrationID, intent.AttemptID, intent.NonceSHA256, capacity.GuestRetirementSHA(intent), intentWire, deadline, issued, wire)
 		if err == nil {
 			_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_guest_original_retirement_contexts(intent_id,executor_id,original_step_id,original_step_timeout_seconds,original_context_deadline,core_actual_source_commit,recorded_at) VALUES($1,$2,$3,$4,$5,$6,$7)`, intent.RequestID, s.ExecutorID, origin.step.ID, origin.step.TimeoutSeconds, contextDeadline, origin.source, issued)
+		}
+		if err == nil {
+			err = s.recordGuestAuthorityIssueTx(ctx, tx, policy, p, stored.binding, "retirement_intent", intent.RequestID, capacity.GuestRetirementSHA(intent))
 		}
 		return err
 	})
@@ -160,7 +163,7 @@ func loadGuestRetirementV2Tx(ctx context.Context, tx *sql.Tx, id string, finaliz
 		return out, ErrCapacityConflict
 	}
 	var source string
-	if err = tx.QueryRowContext(ctx, `SELECT executor_id::text,core_actual_source_commit FROM public.capacity_guest_original_retirement_contexts WHERE intent_id=$1`, id).Scan(&out.ExecutorID, &source); err != nil || source != out.Binding.CoreAuthoritySourceCommit {
+	if err = tx.QueryRowContext(ctx, `SELECT executor_id::text,core_actual_source_commit FROM public.capacity_guest_original_retirement_contexts WHERE intent_id=$1`, id).Scan(&out.ExecutorID, &source); err != nil || verifyGuestAuthorityIssuerTx(ctx, tx, "retirement_intent", id, source, out.Binding) != nil {
 		return out, ErrCapacityConflict
 	}
 	out.Request = out.Preflight
@@ -256,7 +259,7 @@ func (s CapacityStore) guestRetirementV2CurrentTx(ctx context.Context, tx *sql.T
 		return policy, p, current, err
 	}
 	p, err = parseCapacityPolicy(policy)
-	if err != nil || !active || policy.Checksum != i.PolicyChecksum || stored.Binding.EvidenceClass != "owned_provisioner_original" || !capacity.GuestOriginalProfileEnabled(p, stored.Binding, i.Tuple.Provider) || p.GuestNotifyCanaryBinding == nil || stored.Binding.CoreAuthoritySourceCommit != capacity.CurrentGuestCoreSource() || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.Binding) || (liveOriginal && !time.Now().Before(i.OriginalDeadline)) {
+	if err != nil || !active || policy.Checksum != i.PolicyChecksum || stored.Binding.EvidenceClass != "owned_provisioner_original" || !capacity.GuestOriginalProfileEnabled(p, stored.Binding, i.Tuple.Provider) || p.GuestNotifyCanaryBinding == nil || !capacity.GuestBindingAuthorityCurrent(p, stored.Binding) || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.Binding) || (liveOriginal && !time.Now().Before(i.OriginalDeadline)) {
 		return policy, p, current, ErrCapacityConflict
 	}
 	var checksum string

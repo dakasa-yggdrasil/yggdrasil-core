@@ -34,7 +34,7 @@ func (s CapacityStore) guestNotifyStoredTx(ctx context.Context, tx *sql.Tx, poli
 	}
 	origin := s.guestNotifyOrigin
 	reconcile := origin != nil && origin.step.Use.Operation == capacity.CompleteOriginalGuestOperation && s.guestReconcile != nil && reflect.DeepEqual(origin.step, s.guestReconcile.step) && s.guestReconcileSourceTx(ctx, tx, policy, p) == nil
-	if origin == nil || origin.source != capacity.CurrentGuestCoreSource() || origin.source != stored.binding.CoreAuthoritySourceCommit || origin.step.Use.Kind != "yggdrasil" || (!reconcile && origin.step.Use.Operation != GuestNotifyCanaryOperation && origin.step.Use.Operation != GuestNotifyMaintenanceOperation && origin.step.Use.Operation != capacity.RetireOriginalGuestOperation && origin.step.Use.Operation != "capacity.finish_original_guest_retirement") || origin.step.TimeoutSeconds < 1 || origin.step.TimeoutSeconds > 86400 || origin.step.Retry.MaxAttempts > 1 || origin.step.ForEach != nil || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.WorkflowID != s.WorkflowID.String() || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.binding) || p.GuestNotifyCanaryBinding == nil || capacity.ValidateGuestNotifyCanaryBinding(p) != nil {
+	if origin == nil || origin.source != capacity.CurrentGuestCoreSource() || !capacity.GuestBindingAuthorityCurrent(p, stored.binding) || origin.step.Use.Kind != "yggdrasil" || (!reconcile && origin.step.Use.Operation != GuestNotifyCanaryOperation && origin.step.Use.Operation != GuestNotifyMaintenanceOperation && origin.step.Use.Operation != capacity.RetireOriginalGuestOperation && origin.step.Use.Operation != "capacity.finish_original_guest_retirement") || origin.step.TimeoutSeconds < 1 || origin.step.TimeoutSeconds > 86400 || origin.step.Retry.MaxAttempts > 1 || origin.step.ForEach != nil || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.WorkflowID != s.WorkflowID.String() || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.binding) || p.GuestNotifyCanaryBinding == nil || capacity.ValidateGuestNotifyCanaryBinding(p) != nil {
 		return stored, empty, ErrCapacityConflict
 	}
 	if err = loadGuestWitnessTx(ctx, tx, &stored); err != nil {
@@ -69,7 +69,7 @@ func (s CapacityStore) guestNotifyStoredTx(ctx context.Context, tx *sql.Tx, poli
 	// The installed immutable enrollment is historical signed content. Its
 	// original admission was checked independently; today's nonce and original
 	// transport, rather than an inter-machine timestamp, own this read's age.
-	if receipt.Enrollment.Statement.Tuple != stored.witness.Tuple || receipt.Enrollment.Statement.CoreAuthoritySourceCommit != origin.source || capacity.GuestRetirementEnrollment(p, stored.binding, stored.member, receipt.Enrollment, receipt.Enrollment.Statement.IssuedAt) != nil {
+	if !guestNotifyHistoricalEnrollmentMatches(p, stored, receipt) {
 		return stored, empty, ErrCapacityConflict
 	}
 	b, err := capacity.VMObservationBinding(p, stored.binding.MutationBindingName)
@@ -84,6 +84,13 @@ func (s CapacityStore) guestNotifyStoredTx(ctx context.Context, tx *sql.Tx, poli
 		return stored, empty, ErrCapacityConflict
 	}
 	return stored, receipt, nil
+}
+
+// Historical signed enrollment is bound to its immutable protocol authority.
+// The private current issuer build is checked independently above; changing
+// that issuer must never require rewriting the installed signed enrollment.
+func guestNotifyHistoricalEnrollmentMatches(p model.CapacityPolicySpec, stored guestOriginalStored, receipt model.CapacityGuestOriginalProvisioningReceipt) bool {
+	return receipt.Enrollment.Statement.Tuple == stored.witness.Tuple && receipt.Enrollment.Statement.CoreAuthoritySourceCommit == stored.binding.CoreAuthoritySourceCommit && capacity.GuestRetirementEnrollment(p, stored.binding, stored.member, receipt.Enrollment, receipt.Enrollment.Statement.IssuedAt) == nil
 }
 
 func (s CapacityStore) IssueGuestNotifyCanaryPublication(ctx context.Context, policy model.Manifest, generation, fence int64, owner, preID, usage string, key ed25519.PrivateKey) (model.CapacityGuestNotifyCanaryChallenge, error) {
@@ -114,6 +121,13 @@ func (s CapacityStore) issueGuestNotifyCanary(ctx context.Context, policy model.
 			return ErrCapacityConflict
 		}
 		id := uuid.NewString()
+		if current.InstalledGuestReconcile != nil {
+			for _, prior := range current.InstalledGuestReconcile.PreviousCanaries {
+				if prior.ChallengeID == id {
+					return ErrCapacityConflict
+				}
+			}
+		}
 		var parent model.CapacityGuestNotifyCanaryChallenge
 		phase, schema, purpose := "read", capacity.GuestNotifyCanaryChallengeSchema, capacity.GuestNotifyCanaryReadPurpose
 		if recordID == "" {
@@ -157,12 +171,12 @@ func (s CapacityStore) issueGuestNotifyCanary(ctx context.Context, policy model.
 		if current.LeaseExpiresAt != nil {
 			budget = min(budget, current.LeaseExpiresAt.Sub(leaseNow)-issued.Sub(sampleStarted))
 		}
-		deadline := issued.Add(budget).UTC()
+		deadline := originalGuestCanarySerializedDeadline(issued, budget, limit)
 		issued = issued.UTC()
 		if budget <= 0 {
 			return ErrCapacityConflict
 		}
-		result = model.CapacityGuestNotifyCanaryChallenge{Schema: schema, Purpose: purpose, ChallengeID: id, NonceSHA256: hex.EncodeToString(nonce[:]), UsageClass: usage, RecordChallengeID: recordID, BindingName: stored.member.Name, Slot: stored.member.Slot, PreregistrationID: preID, PreregistrationNonceSHA256: stored.pre.NonceSHA256, OriginalRegistrationSHA256: receipt.OriginalProvisioningSHA256, OriginalCreateWitnessSHA256: capacity.GuestRetirementSHA(stored.witness), EnrollmentSHA256: capacity.GuestRetirementSHA(receipt.Enrollment), ProfileManifestSHA256: stored.binding.ProfileManifestSHA256, Tuple: receipt.Enrollment.Statement.Tuple, PolicyID: policy.ID.String(), PolicyChecksum: policy.Checksum, WorkflowID: s.WorkflowID.String(), WorkflowChecksum: stored.pre.WorkflowChecksum, Generation: uint64(generation), Fence: uint64(fence), LeaseOwner: owner, CoreSourceCommit: capacity.CurrentGuestCoreSource(), IssuedAt: issued, OriginalDeadline: deadline}
+		result = model.CapacityGuestNotifyCanaryChallenge{Schema: schema, Purpose: purpose, ChallengeID: id, NonceSHA256: hex.EncodeToString(nonce[:]), UsageClass: usage, RecordChallengeID: recordID, BindingName: stored.member.Name, Slot: stored.member.Slot, PreregistrationID: preID, PreregistrationNonceSHA256: stored.pre.NonceSHA256, OriginalRegistrationSHA256: receipt.OriginalProvisioningSHA256, OriginalCreateWitnessSHA256: capacity.GuestRetirementSHA(stored.witness), EnrollmentSHA256: capacity.GuestRetirementSHA(receipt.Enrollment), ProfileManifestSHA256: stored.binding.ProfileManifestSHA256, Tuple: receipt.Enrollment.Statement.Tuple, PolicyID: policy.ID.String(), PolicyChecksum: policy.Checksum, WorkflowID: s.WorkflowID.String(), WorkflowChecksum: stored.pre.WorkflowChecksum, Generation: uint64(generation), Fence: uint64(fence), LeaseOwner: owner, CoreSourceCommit: stored.binding.CoreAuthoritySourceCommit, IssuedAt: issued, OriginalDeadline: deadline}
 		result.Signature, err = capacity.GuestLifecycleSignature(key, result)
 		if err != nil || (parent.ChallengeID != "" && !capacity.GuestNotifyCausalPair(parent, result)) || capacity.ValidateGuestNotifyCanaryPreflight(result, receipt.Enrollment, time.Now().UTC()) != nil {
 			return ErrCapacityConflict
@@ -172,6 +186,9 @@ func (s CapacityStore) issueGuestNotifyCanary(ctx context.Context, policy model.
 			return err
 		}
 		_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_guest_notify_canary_challenges(id,preregistration_id,record_challenge_id,phase,policy_id,workflow_id,generation,fence,executor_id,lease_owner,challenge_sha256,nonce_sha256,original_wire,original_record,original_deadline,recorded_at)VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16)`, id, preID, recordID, phase, policy.ID, s.WorkflowID, generation, fence, s.ExecutorID, owner, capacity.GuestRetirementSHA(result), result.NonceSHA256, wire, string(wire), deadline, now)
+		if err == nil {
+			err = s.recordGuestAuthorityIssueTx(ctx, tx, policy, p, stored.binding, "canary_challenge", id, capacity.GuestRetirementSHA(result))
+		}
 		return err
 	})
 	return result, err
@@ -212,4 +229,17 @@ func (s CapacityStore) ReserveGuestNotifyCanarySend(ctx context.Context, policy 
 		_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_guest_notify_canary_sends(challenge_id,request_sha256,possible_send_at,original_deadline,recorded_at)VALUES($1,$2,$3,$4,$5)`, c.ChallengeID, capacity.BusinessCreationSHA256(body), time.Now().UTC(), c.OriginalDeadline, now)
 		return err
 	})
+}
+
+// Keep the signed deadline inside BOTH conservative duration budgets and the
+// original context wall deadline. time.Now's realtime/monotonic samples may
+// differ by nanoseconds across reads; stripping monotonic state can otherwise
+// put an equal-duration UTC projection after its original parent deadline.
+func originalGuestCanarySerializedDeadline(issued time.Time, budget time.Duration, originalLimit time.Time) time.Time {
+	deadline := issued.Add(budget).UTC()
+	limit := originalLimit.UTC()
+	if deadline.After(limit) {
+		deadline = limit
+	}
+	return deadline
 }

@@ -34,7 +34,7 @@ func originalDispositionHex(s string, n int) bool {
 		return false
 	}
 	for _, c := range s {
-		if !(c >= '0' && c <= '9' || c >= 'a' && c <= 'f') {
+		if (c < '0' || c > '9') && (c < 'a' || c > 'f') {
 			return false
 		}
 	}
@@ -71,7 +71,7 @@ func validateOriginalDispositionObservation(c model.CapacityOriginalCreateDispos
 		o.ObservationStartedAt.IsZero() || o.ObservedAt.Before(o.ObservationStartedAt) || o.ObservationStartedAt.Before(began.Add(-5*time.Second)) || o.ObservedAt.After(now.Add(5*time.Second)) || now.Sub(o.ObservedAt) > maxAge || o.ObservedAt.Sub(o.ObservationStartedAt) > 60*time.Second {
 		return ErrOriginalCreateDisposition
 	}
-	if o.ResourceState != "absent" && !(o.Provider == "aws" && o.ResourceState == "terminated") {
+	if o.ResourceState != "absent" && (o.Provider != "aws" || o.ResourceState != "terminated") {
 		return ErrOriginalCreateDisposition
 	}
 	var expected []model.CapacityMutationAuxiliaryResource
@@ -165,7 +165,7 @@ func validateOriginalDispositionAWSAdjunctCoverage(o model.CapacityOriginalCreat
 				return ErrOriginalCreateDisposition
 			}
 		case "DescribeInstances":
-			if r.ResourceID != o.ResourceID || (r.Status != 200 && r.Status != 400) || r.Status == 200 && o.ResourceState != "terminated" && !(o.ResourceState == "absent" && originalDispositionAWSExplicitEmptyInstances(r)) || r.Status == 400 && o.ResourceState != "absent" {
+			if r.ResourceID != o.ResourceID || (r.Status != 200 && r.Status != 400) || r.Status == 200 && o.ResourceState != "terminated" && (o.ResourceState != "absent" || !originalDispositionAWSExplicitEmptyInstances(r)) || r.Status == 400 && o.ResourceState != "absent" {
 				return ErrOriginalCreateDisposition
 			}
 		case "LookupEvents":

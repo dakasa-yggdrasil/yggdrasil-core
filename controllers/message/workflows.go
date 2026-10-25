@@ -39,6 +39,7 @@ type capacityDispatchInvocation struct {
 	notifyFactory OriginalNotifyAuthorityFactory
 	mu            sync.Mutex
 	causes        []error
+	runID         uuid.UUID
 }
 
 // WithCapacityDispatchFence is a private in-process delegation from the
@@ -47,6 +48,21 @@ type capacityDispatchInvocation struct {
 func WithCapacityDispatchFence(ctx context.Context, fence func(context.Context) error) context.Context {
 	ctx = withNativeAdapterPolicy(ctx, ctx)
 	return context.WithValue(ctx, capacityDispatchFenceKey{}, &capacityDispatchInvocation{fence: fence})
+}
+
+// WithCapacityDispatchRunIdentity binds the private server-owned prepared run.
+// Metadata and workflow inputs cannot install this private invocation identity.
+func WithCapacityDispatchRunIdentity(ctx context.Context, runID uuid.UUID) context.Context {
+	if o := capacityDispatchInvocationFrom(ctx); o != nil && runID != uuid.Nil {
+		o.runID = runID
+	}
+	return ctx
+}
+func capacityDispatchOriginalRun(ctx context.Context) uuid.UUID {
+	if o := capacityDispatchInvocationFrom(ctx); o != nil {
+		return o.runID
+	}
+	return uuid.Nil
 }
 
 func capacityDispatchInvocationFrom(ctx context.Context) *capacityDispatchInvocation {

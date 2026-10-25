@@ -166,10 +166,15 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 	parent, stopOwner := withOriginalGuestReconcileDeadline(parent)
 	defer stopOwner()
 	result.Attempts = 1
+	stage := "input"
 	fail := func(err error) model.WorkflowRunStepResult {
 		capacityDispatchCause(parent, err)
 		result.Status = "failed"
 		result.Error = "original Guest reconciliation held"
+		result.Metadata = map[string]any{"original_guest_reconcile_refusal_stage": stage}
+		if n := originalGuestNotifyProbeStage(err); n != "" {
+			result.Metadata["original_guest_notify_refusal_stage"] = n
+		}
 		result.FinishedAt = time.Now().UTC()
 		return result
 	}
@@ -206,7 +211,7 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 		return fail(errOriginalGuestStep)
 	}
 	executor, _ := ctx.Value(capacityInvocationKey{}).(string)
-	store := repository.CapacityStore{DB: db, ExecutionEnabled: capacityExecutionEnabled(), WorkflowID: wf.ID, ExecutorID: executor}
+	store := repository.CapacityStore{DB: db, ExecutionEnabled: capacityExecutionEnabled(), WorkflowID: wf.ID, ExecutorID: executor, OriginalRunID: capacityDispatchOriginalRun(ctx)}
 	if !store.ExecutionEnabled || !p.ExecutionEnabled {
 		return fail(repository.ErrCapacityDisabled)
 	}
@@ -229,6 +234,7 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 		inv, assessment, reporting, e = collectOriginalGuestAssessment(readCtx, conn, db, policy, p)
 		return e
 	}
+	stage = "source_assessment"
 	if step.Use.Operation == capacity.CompleteOriginalGuestOperation && parsed.Mode != "refresh" {
 		err = capacity.AwaitOriginalGuestReporting(ctx, collect)
 	} else {
@@ -238,6 +244,7 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 		return fail(err)
 	}
 	store = store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), parsed.Mode, parsed.RequestID, inv, reporting)
+	stage = "native_installed_members"
 	members, pending, err := store.OriginalGuestReconcileMembers(ctx, policy)
 	if err != nil {
 		return fail(err)
@@ -246,39 +253,54 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 	if step.Use.Operation == capacity.PlanOriginalGuestOperation {
 		plan := originalGuestReconcilePlan{Mode: "hold", Reason: "outstanding_original_authority"}
 		if !pending {
-			intent, e := store.AssessOriginalGuest(ctx, policy, assessment)
-			if e != nil {
-				return fail(e)
+			stage = "installed_resume_claim"
+			resumed, eligible, resumeErr := store.TryResumeInstalledGuest(ctx, policy, assessment)
+			if resumeErr != nil {
+				return fail(resumeErr)
 			}
-			plan.Generation, plan.FencingToken = intent.Generation, intent.FencingToken
-			plan.Reason = intent.Decision.Reason
-			if intent.Phase == "proposed" && intent.Decision.ExecutionPermitted {
-				mode, slot, preID, e := originalGuestNextSlot(p, inv, members, intent.Decision)
-				if e != nil {
-					return fail(e)
-				}
-				// Actual source reread immediately before the existing Claim.
-				inv, assessment, reporting, e = collectOriginalGuestAssessment(ctx, conn, db, policy, p)
-				if e != nil {
-					return fail(e)
-				}
-				store = store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), "", "", inv, reporting)
-				fresh, unresolved, e := store.OriginalGuestReconcileMembers(ctx, policy)
-				if e != nil || unresolved || !reflect.DeepEqual(fresh, members) {
-					return fail(errOriginalGuestStep)
-				}
-				intent, e = store.Claim(ctx, policy, intent.Generation, assessment)
-				if e != nil {
-					return fail(e)
-				}
-				deadline, e := store.OriginalGuestReconcileLeaseDeadline(ctx, policy, intent.Generation, intent.FencingToken, intent.LeaseOwner)
+			if eligible {
+				deadline, e := store.OriginalGuestReconcileLeaseDeadline(ctx, policy, resumed.Generation, resumed.FencingToken, resumed.LeaseOwner)
 				if e != nil || captureOriginalGuestReconcileDeadline(ctx, deadline) != nil {
 					return fail(errOriginalGuestStep)
 				}
-				plan.Mode, plan.Slot, plan.PreregistrationID = mode, slot, preID
-				plan.Generation, plan.FencingToken, plan.LeaseOwner = intent.Generation, intent.FencingToken, intent.LeaseOwner
-			} else if intent.Phase == "promoted" || intent.Phase == "reconciled" || intent.Phase == "reconciled_partial" {
-				plan.Mode = "refresh"
+				plan.Mode, plan.Reason = "refresh", "installed_original_readiness_reconcile"
+				plan.Generation, plan.FencingToken, plan.LeaseOwner = resumed.Generation, resumed.FencingToken, resumed.LeaseOwner
+			} else {
+				stage = "ordinary_assessment"
+				intent, e := store.AssessOriginalGuest(ctx, policy, assessment)
+				if e != nil {
+					return fail(e)
+				}
+				plan.Generation, plan.FencingToken = intent.Generation, intent.FencingToken
+				plan.Reason = intent.Decision.Reason
+				if intent.Phase == "proposed" && intent.Decision.ExecutionPermitted {
+					mode, slot, preID, e := originalGuestNextSlot(p, inv, members, intent.Decision)
+					if e != nil {
+						return fail(e)
+					}
+					// Actual source reread immediately before the existing Claim.
+					inv, assessment, reporting, e = collectOriginalGuestAssessment(ctx, conn, db, policy, p)
+					if e != nil {
+						return fail(e)
+					}
+					store = store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), "", "", inv, reporting)
+					fresh, unresolved, e := store.OriginalGuestReconcileMembers(ctx, policy)
+					if e != nil || unresolved || !reflect.DeepEqual(fresh, members) {
+						return fail(errOriginalGuestStep)
+					}
+					intent, e = store.Claim(ctx, policy, intent.Generation, assessment)
+					if e != nil {
+						return fail(e)
+					}
+					deadline, e := store.OriginalGuestReconcileLeaseDeadline(ctx, policy, intent.Generation, intent.FencingToken, intent.LeaseOwner)
+					if e != nil || captureOriginalGuestReconcileDeadline(ctx, deadline) != nil {
+						return fail(errOriginalGuestStep)
+					}
+					plan.Mode, plan.Slot, plan.PreregistrationID = mode, slot, preID
+					plan.Generation, plan.FencingToken, plan.LeaseOwner = intent.Generation, intent.FencingToken, intent.LeaseOwner
+				} else if intent.Phase == "promoted" || intent.Phase == "reconciled" || intent.Phase == "reconciled_partial" {
+					plan.Mode = "refresh"
+				}
 			}
 		}
 		output = plan
@@ -286,6 +308,19 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 		if pending {
 			return fail(repository.ErrCapacityConflict)
 		}
+		resuming := false
+		if parsed.Mode == "refresh" {
+			stage = "installed_resume_epoch"
+			var epoch model.CapacityIntent
+			store, epoch, resuming, err = store.OriginalGuestInstalledResumeEpoch(ctx, policy)
+			if err != nil {
+				return fail(err)
+			}
+			if resuming {
+				parsed.Generation, parsed.FencingToken, parsed.LeaseOwner = epoch.Generation, epoch.FencingToken, epoch.LeaseOwner
+			}
+		}
+		stage = "signing_key"
 		store = store.WithOriginalGuestNotifyCanary(step, capacity.CurrentGuestCoreSource())
 		key, e := sourceGuestSigningKey(ctx, db, p.GuestRetirementBinding.IntentSigningKeyRef)
 		if e != nil {
@@ -297,29 +332,35 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 					return fail(errOriginalGuestStep)
 				}
 				probe := guestOriginalStepInput{Policy: parsed.Policy, BindingName: p.MutationBindings[0].Name, Slot: member.Slot, Generation: parsed.Generation, FencingToken: parsed.FencingToken, LeaseOwner: parsed.LeaseOwner, PreregistrationID: member.PreregistrationID}
-				if parsed.Mode == "refresh" {
+				if parsed.Mode == "refresh" && !resuming {
 					probe.Generation, probe.FencingToken, probe.LeaseOwner, e = store.GuestNotifyMaintenanceEpoch(ctx, policy, member.PreregistrationID)
 					if e != nil {
 						return fail(e)
 					}
 				}
+				stage = "fresh_original_canary"
 				if _, e = executeOriginalGuestNotifyProbe(ctx, db, store, policy, p, probe, key); e != nil {
 					return fail(e)
 				}
 			}
 		}
-		if parsed.Mode == "refresh" {
+		if parsed.Mode == "refresh" && !resuming {
 			if len(members) < p.Floor {
 				return fail(errOriginalGuestStep)
 			}
 			output = map[string]any{"mode": "refresh", "members": len(members), "provider_mutations": false}
 		} else {
 			// Refresh source observations after all actual original canaries.
+			stage = "post_canary_source_assessment"
 			inv, assessment, reporting, e = collectOriginalGuestAssessment(ctx, conn, db, policy, p)
 			if e != nil {
 				return fail(e)
 			}
-			store = store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), parsed.Mode, parsed.RequestID, inv, reporting)
+			effectiveMode := parsed.Mode
+			if resuming {
+				effectiveMode = "provision"
+			}
+			store = store.WithOriginalGuestReconcile(wf, step, capacity.CurrentGuestCoreSource(), effectiveMode, parsed.RequestID, inv, reporting)
 			phases := []string{"prepared", "canary", "promoted"}
 			if parsed.Mode == "retire" {
 				phases = []string{"drained", "promoted"}
@@ -329,6 +370,7 @@ func executeOriginalGuestReconcileStep(parent context.Context, conn *amqp.Connec
 				if originalGuestReconcileLive(ctx) != nil {
 					return fail(errOriginalGuestStep)
 				}
+				stage = "advance_" + phase
 				intent, e = store.AdvanceOriginalGuest(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, phase, assessment)
 				if e != nil {
 					return fail(e)

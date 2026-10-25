@@ -243,7 +243,7 @@ func TestOriginalDispositionPrivateReadCannotEscapeThroughGenericExecute(t *test
 			if !v.allowed {
 				// A nil context/transport would panic if the call crossed the
 				// central guard. Rejection must precede any native owner.
-				if _, err := executeIntegrationThroughResolvedWithPolicy(nil, nil, req, model.Manifest{}, model.IntegrationInstanceManifestSpec{}, model.Manifest{}, model.IntegrationTypeManifestSpec{}, 0, v.policy); err == nil {
+				if _, err := executeIntegrationThroughResolvedWithPolicy(nil, nil, req, model.Manifest{}, model.IntegrationInstanceManifestSpec{}, model.Manifest{}, model.IntegrationTypeManifestSpec{}, 0, v.policy); err == nil { //nolint:staticcheck // SA1012: rejection must precede use of the deliberately missing owner.
 					t.Fatal("central private read guard not applied")
 				}
 			}

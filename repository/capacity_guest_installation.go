@@ -8,6 +8,7 @@ import (
 	"errors"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/google/uuid"
 	"time"
 )
 
@@ -19,14 +20,20 @@ func (s CapacityStore) RegisterOriginalGuestInstallation(ctx context.Context, pr
 		if principal != stored.member.ProvisionerClientPrincipal {
 			return ErrCapacityMutationAuthorization
 		}
-		if _, _, err := s.guestCurrentTx(ctx, tx, stored, now, true); err != nil {
+		p, _, err := s.guestCurrentTx(ctx, tx, stored, now, true)
+		if err != nil {
 			return err
 		}
 		receipt, _, err := loadGuestReceiptTx(ctx, tx, stored.pre.PreregistrationID)
 		if err != nil {
 			return err
 		}
-		result, err = storeGuestInstallationTx(ctx, tx, stored, receipt, confirmation, now)
+		result, err = storeGuestInstallationTx(ctx, tx, stored, receipt, confirmation, now, func() error {
+			issuer := s
+			issuer.WorkflowID = uuid.MustParse(stored.pre.WorkflowID)
+			issuer.ExecutorID = stored.pre.ExecutorID
+			return issuer.recordGuestAuthorityIssueTx(ctx, tx, model.Manifest{ID: uuid.MustParse(stored.pre.PolicyID)}, p, stored.binding, "installation", stored.pre.PreregistrationID, capacity.GuestRetirementSHA(confirmation))
+		})
 		return err
 
 	})
@@ -41,8 +48,8 @@ func (s CapacityStore) GuestInstallationConfirmation(ctx context.Context, princi
 		if principal != stored.member.ProvisionerClientPrincipal || nonceSHA != stored.pre.NonceSHA256 {
 			return ErrCapacityMutationAuthorization
 		}
-		if _, _, err := s.guestCurrentTx(ctx, tx, stored, now, true); err != nil {
-			return err
+		if _, _, currentErr := s.guestCurrentTx(ctx, tx, stored, now, true); currentErr != nil {
+			return currentErr
 		}
 		receipt, _, err := loadGuestReceiptTx(ctx, tx, id)
 		if err != nil {
@@ -80,7 +87,7 @@ func loadGuestInstallationTx(ctx context.Context, tx *sql.Tx, stored guestOrigin
 	return result, nil
 }
 
-func storeGuestInstallationTx(ctx context.Context, tx *sql.Tx, stored guestOriginalStored, receipt model.CapacityGuestOriginalProvisioningReceipt, confirmation model.CapacityGuestOriginalInstallationConfirmation, now time.Time) (model.CapacityGuestOriginalInstallationConfirmation, error) {
+func storeGuestInstallationTx(ctx context.Context, tx *sql.Tx, stored guestOriginalStored, receipt model.CapacityGuestOriginalProvisioningReceipt, confirmation model.CapacityGuestOriginalInstallationConfirmation, now time.Time, audit ...func() error) (model.CapacityGuestOriginalInstallationConfirmation, error) {
 	var zero model.CapacityGuestOriginalInstallationConfirmation
 	if validateGuestInstallationTx(ctx, tx, stored, receipt, confirmation, now) != nil {
 		return zero, ErrCapacityConflict
@@ -103,6 +110,14 @@ func storeGuestInstallationTx(ctx context.Context, tx *sql.Tx, stored guestOrigi
 	_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_guest_original_installations(preregistration_id,original_wire,confirmation_sha256,recorded_at) VALUES($1,$2,$3,$4)`, stored.pre.PreregistrationID, wire, capacity.GuestRetirementSHA(confirmation), now)
 	if err != nil {
 		return zero, err
+	}
+	if len(audit) > 1 {
+		return zero, ErrCapacityConflict
+	}
+	if len(audit) == 1 {
+		if err = audit[0](); err != nil {
+			return zero, err
+		}
 	}
 	return confirmation, nil
 }

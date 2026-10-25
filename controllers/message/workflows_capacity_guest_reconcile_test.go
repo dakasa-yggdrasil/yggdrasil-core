@@ -50,7 +50,7 @@ func TestOriginalGuestReconcileStepFailsBeforeAnyTransportWithoutOwner(t *testin
 	result := model.WorkflowRunStepResult{Operation: step.Use.Operation, Status: "failed"}
 	for _, input := range []map[string]any{{"policy": map[string]any{"namespace": "dakasa-production", "name": "notify-aws-elastic"}}, {"assessment": map[string]any{"healthy": true}}, {"lease_owner": "caller", "generation": 1}} {
 		got := executeOriginalGuestReconcileStep(ctx, nil, nil, model.ManifestReference{}, step, result, input)
-		if got.Status != "failed" || got.Metadata != nil {
+		if got.Status != "failed" || len(got.Metadata) != 1 || got.Metadata["original_guest_reconcile_refusal_stage"] != "input" {
 			t.Fatal("missing SQL/transport/executor became positive")
 		}
 	}

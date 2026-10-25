@@ -18,7 +18,9 @@ import (
 // every missing/legacy enrollment stays HOLD. A known enrolled original must
 // instead carry the SAME complete original Guest joins and native-off proof.
 func (s CapacityStore) guestFailedCreateCleanupTx(ctx context.Context, tx *sql.Tx, p model.CapacityPolicySpec, parent capacityMutationRecord, proof model.CapacityMutationProof, now time.Time, childID string) error {
-	if handled,err:=s.canonicalSourceFailedCleanupTx(ctx,tx,p,parent,proof,now,childID);handled{return err}
+	if handled, err := s.canonicalSourceFailedCleanupTx(ctx, tx, p, parent, proof, now, childID); handled {
+		return err
+	}
 	if p.GuestRetirementBinding == nil || capacity.ValidateGuestRetirementBinding(p, p.GuestRetirementBinding) != nil {
 		return fmt.Errorf("%w: failed create has unknown original writer enrollment; HOLD", ErrCapacityConflict)
 	}
@@ -27,7 +29,7 @@ func (s CapacityStore) guestFailedCreateCleanupTx(ctx context.Context, tx *sql.T
 		return fmt.Errorf("%w: no original never-started or complete enrolled retirement proof; HOLD", ErrCapacityConflict)
 	}
 	stored, err := loadGuestRetirementTx(ctx, tx, id)
-	if err != nil || !reflect.DeepEqual(stored.Binding, *p.GuestRetirementBinding) || !capacity.GuestOriginalProfileEnabled(p, stored.Binding, stored.Request.Intent.Tuple.Provider) || stored.Binding.CoreAuthoritySourceCommit != capacity.CurrentGuestCoreSource() || stored.Preregistration.OriginalCreateGrantID != parent.Grant.GrantID || stored.Request.Intent.Tuple.InstanceID != parent.Binding.IntegrationInstanceID || stored.Request.Intent.Tuple.ScopeChecksum != parent.Binding.ScopeChecksum || stored.Request.Intent.Slot != parent.Grant.Slot || proof.GrantID != parent.Grant.GrantID || stored.Request.Intent.Tuple.ResourceID != proof.ResourceID || stored.Request.Intent.Tuple.CreatedAt != proof.ResourceCreatedAt {
+	if err != nil || !reflect.DeepEqual(stored.Binding, *p.GuestRetirementBinding) || !capacity.GuestOriginalProfileEnabled(p, stored.Binding, stored.Request.Intent.Tuple.Provider) || !capacity.GuestBindingAuthorityCurrent(p, stored.Binding) || stored.Preregistration.OriginalCreateGrantID != parent.Grant.GrantID || stored.Request.Intent.Tuple.InstanceID != parent.Binding.IntegrationInstanceID || stored.Request.Intent.Tuple.ScopeChecksum != parent.Binding.ScopeChecksum || stored.Request.Intent.Slot != parent.Grant.Slot || proof.GrantID != parent.Grant.GrantID || stored.Request.Intent.Tuple.ResourceID != proof.ResourceID || stored.Request.Intent.Tuple.CreatedAt != proof.ResourceCreatedAt {
 		return ErrCapacityConflict
 	}
 	if _, err = guestQuiescentProofTx(ctx, tx, stored); err != nil {
@@ -59,7 +61,9 @@ func (s CapacityStore) guestFailedCreateCleanupTx(ctx context.Context, tx *sql.T
 // A compensation has an independent current workflow authority but binds to
 // the SAME original failed-create retirement, not a fabricated child fence.
 func (s CapacityStore) bindGuestCompensationTx(ctx context.Context, tx *sql.Tx, child, parent capacityMutationRecord, now time.Time) error {
- if handled,err:=s.canonicalSourceBindCompensationTx(ctx,tx,child,parent,now);handled{return err}
+	if handled, err := s.canonicalSourceBindCompensationTx(ctx, tx, child, parent, now); handled {
+		return err
+	}
 	var id string
 	if err := tx.QueryRowContext(ctx, `SELECT r.id::text FROM public.capacity_vm_retirement_intents r JOIN public.capacity_vm_provisioning_preregistrations pre ON pre.id=r.preregistration_id WHERE pre.create_grant_id=$1`, parent.Grant.GrantID).Scan(&id); err != nil {
 		return ErrCapacityConflict
