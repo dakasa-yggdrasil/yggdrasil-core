@@ -7,11 +7,12 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 1d6e637981364fe285d375110cb1bbab641d64aa
-verified_diff_sha256: b1a22b0ebcb5edc05c4ce54a247a30a3509a1cd15fb5bc2617a383300bd3a4aa
+verified_at_commit: 17149fb1b0075fbf4b470671602b480b0386e28e
+verified_diff_sha256: f70b37e2b78685a3f25f4d94bebb3ae0cb92f20d29d7a979aa02a46d78f346fe
 reconciler_schema: 1
 verified_at: 2026-10-26
 by: Giomaster
+qemu_broker_source_reconciliation: Reconciled the nativequalification-only broker Describe and read consumers, dedicated socket ownership, startup and cleanup guards with the service interface contract at the source commit above. The digest records git diff --binary HEAD^ HEAD at that commit. Source transport checks do not establish native QEMU, PG17 or production qualification.
 historical_fourth_owning_ci_note: Reconciled the final one-line lowercase hexadecimal interval complement after the complete fourth owning CI inventory. Independent SAME review found zero confirmed findings; exact byte acceptance, length and empty behavior and short-circuit order remain unchanged. Bounded textual recurrence review covers all 209 changed Go paths across tags and finds only this occurrence; it is not a linter or global semantic pass. Five test sources, expected manifest, four named rosters, collector, owning workflow and budgets stay literal. Prior source CI passed all 216 roots and 2055 descendants, each of 2271 nodes once with exact names and no FAIL/SKIP. Fourteen original ZIPs, 373 members and 23 GoJSON collections for all eight prior terminal runs remain retained. Genuine context and summary preserve all nine actual input digests. Successor owning CI is required; old45 stays HOLD/edit_lease false, Registry EMPTY, Native NULL, C6 HOLD and FULL_CORE_NATIVE_PENDING. No local functional execution or production change occurred.
 
 
