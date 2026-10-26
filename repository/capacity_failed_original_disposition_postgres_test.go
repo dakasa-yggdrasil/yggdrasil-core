@@ -26,29 +26,36 @@ type failedOriginalFixture struct {
 // provider, Guest, native runtime or production authority is exercised here.
 func failedOriginalPGFixture(t *testing.T, db *sql.DB) failedOriginalFixture {
 	t.Helper()
-	f := originalDispositionPGFixture(t, db)
-	f.record.EventProvider = "hetzner"
-	f.record.Binding.OriginalProviderSourceCommit = failedOriginalHetznerCreator
-	f.record.Binding.EnsureCapability = "ensure_server"
-	f.record.Binding.DestroyCapability = "delete_server"
-	f.record.Binding.Slots[0].DesiredSpec.Capability = "ensure_server"
-	requestSHA := originalDispositionJSONSHA(f.record.Binding.Slots[0].DesiredSpec)
-	f.record.Binding.Slots[0].DesiredSpecSHA256 = requestSHA
-	f.record.Grant.Capability, f.record.Grant.RequestSHA256 = "ensure_server", requestSHA
-	f.pre.OriginalCreateRequestSHA256 = requestSHA
-	f.record.Settlement.RequestSHA256 = requestSHA
+	f := originalDispositionPGFixturePrepared(t, db, func(f *dispositionPGFixture) {
+		f.record.EventProvider = "hetzner"
+		f.record.Binding.OriginalProviderSourceCommit = failedOriginalHetznerCreator
+		f.record.Binding.EnsureCapability = "ensure_server"
+		f.record.Binding.DestroyCapability = "delete_server"
+		f.record.Binding.Slots[0].DesiredSpec.Capability = "ensure_server"
+		requestSHA := originalDispositionJSONSHA(f.record.Binding.Slots[0].DesiredSpec)
+		f.record.Binding.Slots[0].DesiredSpecSHA256 = requestSHA
+		f.record.Grant.Capability, f.record.Grant.RequestSHA256 = "ensure_server", requestSHA
+		f.pre.OriginalCreateRequestSHA256 = requestSHA
+		f.record.Settlement.RequestSHA256 = requestSHA
+		o := f.record.Settlement.OriginalProviderCreateReturn
+		o.Schema, o.Provider, o.AdapterSourceCommit = "hetzner_original_create_return_v1", "hetzner", failedOriginalHetznerCreator
+		o.RequestSHA256, o.ResourceID, o.ResponseStatus = requestSHA, "172099513", 201
+		f.record.Settlement.ResourceID = o.ResourceID
+		f.record.Settlement.AuxiliaryResources = []model.CapacityMutationAuxiliaryResource{{Kind: "server_disk", ID: o.ResourceID, RequiresAbsence: true}, {Kind: "volume", ID: "2012345", RequiresAbsence: true}, {Kind: "network", ID: "shared-original-network", RequiresAbsence: false}}
+		var p model.CapacityPolicySpec
+		if json.Unmarshal(f.policy.Spec, &p) != nil {
+			t.Fatal("fixture policy")
+		}
+		p.Profiles[0].Provider = "hetzner"
+		policyRaw, _ := json.Marshal(p)
+		f.policy.Spec = policyRaw
+	})
 	o := f.record.Settlement.OriginalProviderCreateReturn
-	o.Schema, o.Provider, o.AdapterSourceCommit = "hetzner_original_create_return_v1", "hetzner", failedOriginalHetznerCreator
-	o.RequestSHA256, o.ResourceID, o.ResponseStatus = requestSHA, "172099513", 201
-	f.record.Settlement.ResourceID = o.ResourceID
-	f.record.Settlement.AuxiliaryResources = []model.CapacityMutationAuxiliaryResource{{Kind: "server_disk", ID: o.ResourceID, RequiresAbsence: true}, {Kind: "volume", ID: "2012345", RequiresAbsence: true}, {Kind: "network", ID: "shared-original-network", RequiresAbsence: false}}
+	requestSHA := f.record.Grant.RequestSHA256
 	var p model.CapacityPolicySpec
 	if json.Unmarshal(f.policy.Spec, &p) != nil {
-		t.Fatal("fixture policy")
+		t.Fatal("prepared H policy")
 	}
-	p.Profiles[0].Provider = "hetzner"
-	policyRaw, _ := json.Marshal(p)
-	f.policy.Spec = policyRaw
 	start := f.pre.ReservedAt.Add(-time.Second)
 	finish := f.pre.OriginalDeadline.Add(time.Second)
 	jobID, runID := uuid.New(), uuid.New()
@@ -70,18 +77,13 @@ func failedOriginalPGFixture(t *testing.T, db *sql.DB) failedOriginalFixture {
 	w := model.CapacityGuestOriginalCreateWitness{Schema: capacity.GuestCreateWitnessSchema, BindingName: f.pre.BindingName, PreregistrationID: f.pre.PreregistrationID, PreregistrationNonceSHA256: f.pre.NonceSHA256, OriginalCreateGrantID: f.pre.OriginalCreateGrantID, OriginalCreateAttemptID: f.record.AttemptID, OriginalCreateRequestSHA256: requestSHA, OriginalCreateSettlementSHA256: capacity.GuestRetirementSHA(*f.record.Settlement), ProfileManifestSHA256: f.pre.ProfileManifestSHA256, BootstrapSHA256: f.binding.ProfileManifest.BootstrapSHA256, CoreSourceCommit: f.pre.CoreSourceCommit, OriginalDeadline: f.pre.OriginalDeadline, OriginalCreateReturnedAt: f.pre.ReservedAt.Add(2 * time.Second), ObservedAt: observed, Tuple: model.CapacityGuestNativeTuple{Provider: "hetzner", InstanceID: f.record.Binding.IntegrationInstanceID, InstanceChecksum: f.record.Binding.IntegrationChecksum, TypeID: f.record.Binding.IntegrationTypeID, TypeChecksum: f.record.Binding.IntegrationTypeChecksum, ScopeChecksum: f.record.Binding.ScopeChecksum, Profile: f.record.Binding.ProfileName, Slot: 1, ResourceID: o.ResourceID, CreatedAt: o.ResourceCreatedAt}}
 	w.ProviderNativeIdentity = &model.CapacityGuestProviderNativeIdentity{Schema: capacity.GuestProviderNativeIdentitySchema, Provider: "hetzner", ResourceID: o.ResourceID, ResourceCreatedAt: o.ResourceCreatedAt, Region: "us-east", Location: "ash", TypeID: "22", ImageID: "12345", Hostname: "isolated-original", ObservedAt: observed, AdapterSourceCommit: failedOriginalHetznerCreator}
 	witnessRaw, _ := json.Marshal(w)
-	grantRaw, _ := json.Marshal(f.record)
-	preRaw, _ := json.Marshal(f.pre)
 	must := func(query string, args ...any) {
 		t.Helper()
 		if _, err := db.Exec(query, args...); err != nil {
 			t.Fatal(err)
 		}
 	}
-	must(`UPDATE public.manifests SET spec=$2::jsonb WHERE id=$1`, f.policy.ID, string(policyRaw))
-	must(`UPDATE public.capacity_mutation_grants SET grant_record=$2::jsonb WHERE id=$1`, f.pre.OriginalCreateGrantID, string(grantRaw))
-	must(`UPDATE public.capacity_vm_provisioning_preregistrations SET preregistration_record=$2::jsonb,original_wire=$3 WHERE id=$1`, f.pre.PreregistrationID, string(preRaw), preRaw)
-	must(`INSERT INTO public.capacity_guest_original_create_witnesses(preregistration_id,original_wire,witness_sha256,original_record,original_create_attempt_id,recorded_at) VALUES($1,$2,$3,$4::jsonb,$5,$6)`, f.pre.PreregistrationID, witnessRaw, capacity.GuestRetirementSHA(w), string(witnessRaw), f.record.AttemptID, observed)
+	must(`INSERT INTO public.capacity_guest_original_create_witnesses(preregistration_id,original_wire,witness_sha256,original_record,original_create_attempt_id,recorded_at,resource_tuple_sha256) VALUES($1,$2,$3,$4::jsonb,$5,$6,$7)`, f.pre.PreregistrationID, witnessRaw, capacity.GuestRetirementSHA(w), string(witnessRaw), f.record.AttemptID, observed, capacity.GuestRetirementSHA(w.Tuple))
 	// The owning insertWorkflowRun stores the selector and omits workflow_id.
 	// Keep the actual historical NULL instead of improving the old row.
 	must(`INSERT INTO public.workflow_runs(id,status,workflow_namespace,workflow_name,workflow_version,started_at,finished_at,result,error,inputs,metadata) VALUES($1,'failed',$2,'original',1,$3,$4,$5::jsonb,'original deadline elapsed',$6::jsonb,$7::jsonb)`, runID, f.policy.Metadata.Namespace, start, finish, string(resultRaw), string(inputsRaw), string(metadataRaw))
@@ -203,17 +205,20 @@ func TestFailedOriginalDispositionPostgresRechecks(t *testing.T) {
 			var query string
 			switch name {
 			case "enrollment":
-				query = `INSERT INTO public.capacity_vm_original_enrollments(preregistration_id) VALUES($1)`
+				enrolledFailedSQLRecordFromFixture(t, db, f)
 			case "installation":
-				query = `INSERT INTO public.capacity_guest_original_installations(preregistration_id) VALUES($1)`
+				witnessedUnenrolledDeclaredInstallation(t, db, f)
 			case "witness_changed":
-				query = `UPDATE public.capacity_guest_original_create_witnesses SET witness_sha256=repeat('f',64) WHERE preregistration_id=$1`
+				if _, changed := db.Exec(`UPDATE public.capacity_guest_original_create_witnesses SET witness_sha256=repeat('f',64) WHERE preregistration_id=$1`, f.pre.PreregistrationID); changed == nil {
+					t.Fatal("immutable witness rewrite succeeded")
+				}
+				return
 			case "running_run":
 				if _, err = db.Exec(`UPDATE public.workflow_runs SET status='running' WHERE id=$1`, f.runID); err != nil {
 					t.Fatal(err)
 				}
 			case "live_lease": // The immutable original lease cannot be renewed; a live conflicting run is held instead.
-				if _, err = db.Exec(`INSERT INTO public.workflow_runs(id,workflow_id,status) VALUES($1,$2,'running')`, uuid.New(), f.record.WorkflowID); err != nil {
+				if _, err = db.Exec(`INSERT INTO public.workflow_runs(id,workflow_id,status,workflow_namespace,workflow_name,workflow_version) SELECT $1,id,'running',namespace,name,version FROM public.manifests WHERE id=$2`, uuid.New(), f.record.WorkflowID); err != nil {
 					t.Fatal(err)
 				}
 			case "native_present":

@@ -129,8 +129,14 @@ jobs:
               st=os.stat(os.environ[key]); assert st.st_uid==os.getuid() and (st.st_mode&0o7777)==0o700, key+' ownership/mode'
           print(json.dumps(v,sort_keys=True))
           PY_ID
-          # The fixture initializes only this empty dedicated database with its required
-          # schema and migrations61/71/72/73/74/75/76/78; no global goose/migration command is run.
+          # Apply the complete published schema to this job's empty owned DB.
+          # The existing component fixture must not hide production constraints.
+          cat > "$pg_root/migrate82.go" <<'GO_MIGRATE82'
+          package main
+          import("context";"database/sql";"fmt";"os";"strings";"time";_ "github.com/lib/pq";"github.com/pressly/goose/v3")
+          func main(){ctx,stop:=context.WithTimeout(context.Background(),90*time.Second);defer stop();db,e:=sql.Open("postgres",os.Getenv("ORIGINAL_CREATE_DISPOSITION_PG_DSN"));if e!=nil{panic(e)};defer db.Close();var name,listen string;var socket bool;var version int;e=db.QueryRowContext(ctx,`SELECT current_database(),inet_server_addr() IS NULL,current_setting('listen_addresses'),current_setting('server_version_num')::int`).Scan(&name,&socket,&listen,&version);if e!=nil||name!=os.Getenv("PGDATABASE")||!strings.HasPrefix(name,"original_disposition_test_")||!socket||listen!=""||version/10000!=17{panic("foreign original-disposition Source fixture")};if e=goose.SetDialect("postgres");e!=nil{panic(e)};if e=goose.UpContext(ctx,db,"db/migrations");e!=nil{panic(e)};v,e:=goose.GetDBVersionContext(ctx,db);if e!=nil||v!=82{panic("schema82 missing")};fmt.Println("FAILED_ORIGINAL_SOURCE_DISPOSABLE_SCHEMA82_READY")}
+          GO_MIGRATE82
+          record schema82-migrate go run "$pg_root/migrate82.go"
           record repository go test -p=1 -race -count=1 -timeout=4m -json ./repository \
             -run '^((TestFailedOriginalDisposition(Migration73(DeferredLinks|DirectInsertGuards|WorkflowIdentityAndActiveWork|ClosedHistoryAndLateOwnership)|Postgres(WholeLifecycle|Rechecks)|NullableWorkflowIdentity)|TestOriginalDispositionAWS1653Adjunct(Observation|Postgres))|TestNativeDeniedDispositionPostgresWholeLifecycle|TestNativeDeniedDispositionPostgresEligibility|TestNativeDeniedDispositionPostgresConcurrentAndStaleCAS|TestNativeDeniedDispositionMigration74DeferredLinks|TestNativeDeniedDispositionMigration74RejectsForgedDecision|TestNativeDeniedDispositionMigration74ClosedHistoryImmutable|TestNativeDeniedDecisionProofRejectsReclosedForeignOrSuccessfulEvents|TestNativeDeniedUniqueOriginalProjection|TestNativeDeniedOriginalACKLanesAndWire|TestNativeDeniedReturnedACKPostgresLanesAndFence|TestNativeDeniedReturnedACKMigration75DeferredAndForged|TestNativeDeniedReturnedACKPostgresImmutableHistory|TestEnrolledFailedReceiptAuthenticatesHistoricalOriginals|TestEnrolledFailedKnownAuxiliaryNeverInventsMissingInventory|TestEnrolledFailedAbsenceRetainsHNativeProofBoundaries|TestEnrolledFailedCloudTrailProjectionNeverRetainsUserData|TestEnrolledFailedDispositionPostgresAtomicLinksAndSuccessorFence|TestEnrolledFailedDispositionPostgresClosedForgeryBoundaries)$'
           record message go test -p=1 -race -count=1 -timeout=4m -json ./controllers/message \
@@ -218,6 +224,30 @@ jobs:
           (p/'CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
           print(json.dumps(value,sort_keys=True))
           PY_CENSUS
+          # Additional82 roots remain separate from the original49-root census.
+          record witnessed-AWS82 go test -p=1 -race -count=1 -timeout=4m -json ./repository \
+            -run '^(TestWitnessedUnenrolledAWSObservationBoundaries|TestWitnessedUnenrolledAWSFailedOriginalPostgresWholeLifecycle|TestWitnessedUnenrolledAWSFailedOriginalPostgresStateGuards|TestWitnessedUnenrolledAWSMigration82NativeGuards)$'
+          python3 - <<'PY_82'
+          import collections, json, os, pathlib, subprocess
+          p=pathlib.Path(os.environ['LOGS']); base='github.com/dakasa-yggdrasil/yggdrasil-core/'
+          expected={'witnessed-AWS82': ('repository', ['TestWitnessedUnenrolledAWSObservationBoundaries', 'TestWitnessedUnenrolledAWSFailedOriginalPostgresWholeLifecycle', 'TestWitnessedUnenrolledAWSFailedOriginalPostgresStateGuards', 'TestWitnessedUnenrolledAWSMigration82NativeGuards'])}
+          summary={}
+          for name,(package,roots) in expected.items():
+              assert (p/(name+'.exit')).read_text().strip()=='0'
+              rows=[json.loads(line) for line in (p/(name+'.stdout')).read_text().splitlines()]
+              assert rows and all(r.get('Package')==base+package for r in rows)
+              assert not any(r['Action'] in ('fail','skip') for r in rows)
+              runs=collections.Counter(r['Test'] for r in rows if r['Action']=='run' and 'Test' in r and '/' not in r['Test'])
+              passed=collections.Counter(r['Test'] for r in rows if r['Action']=='pass' and 'Test' in r and '/' not in r['Test'])
+              assert runs==passed==collections.Counter(roots)
+              assert sum(r['Action']=='pass' and 'Test' not in r for r in rows)==1
+              summary[name]={'package':base+package,'roots':roots,'passed':len(roots),'skipped':0}
+          assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==os.environ['SOURCE_COMMIT']
+          assert not subprocess.check_output(['git','status','--porcelain','--untracked-files=all'])
+          value={'schema':'witnessed_unenrolled_AWS82_source_CI_additional_root_census_v1','source_commit':os.environ['SOURCE_COMMIT'],'schema_version':82,'race':True,'summary':summary,'additional_roots':4,'historical_focused_rosters_unchanged':True,'production_authority':False}
+          (p/'WITNESSED-AWS82-CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
+          print(json.dumps(value,sort_keys=True))
+          PY_82
       - name: Retain original outputs and shutdown proof
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

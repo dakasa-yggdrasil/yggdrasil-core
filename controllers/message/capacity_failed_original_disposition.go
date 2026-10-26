@@ -27,8 +27,8 @@ func RecordFailedOriginalDisposition(parent context.Context, db *sql.DB, conn *a
 		return empty, err
 	}
 	candidate := owner.Candidate()
-	observer, provider, err := resolveDispositionObserver(ctx, db, conn, candidate)
-	if err != nil || provider != "hetzner" {
+	observer, provider, err := resolveEnrolledFailedObserver(ctx, db, conn, candidate)
+	if err != nil || (provider != "hetzner" && provider != "aws") {
 		return empty, errOriginalCreateDisposition
 	}
 	body, err := json.Marshal(candidate.Request)
@@ -39,17 +39,28 @@ func RecordFailedOriginalDisposition(parent context.Context, db *sql.DB, conn *a
 	if json.Unmarshal(body, &fixed) != nil {
 		return empty, errOriginalCreateDisposition
 	}
-	returned, err := executeIntegrationThroughResolvedWithPolicy(ctx, conn, model.ExecuteIntegrationRequest{Operation: originalCreateDispositionOperation, Capability: originalCreateDispositionOperation, Input: fixed}, observer.instance, observer.instanceSpec, observer.typ, observer.typeSpec, 25*time.Second, integrationExecutionPolicy{originalCreateDisposition: true, detailFreeErrors: true, safeError: errOriginalCreateDisposition, requireExplicitResponse: true, nativeHTTP: &nativeAdapterHTTPPolicy{limit: 2 << 20, parent: ctx}})
-	if err != nil || ctx.Err() != nil || returned.Status != "observed" {
+	var returnedStatus string
+	var returnedOutput any
+	if provider == "aws" {
+		// The pinned1657 DTO contains only native identity/action/AUX facts.
+		// Its historical name does not supply or claim a Guest enrollment.
+		fixed["schema"] = "aws_original_enrolled_failed_create_absence_read_request_v1"
+		returned, callErr := executeEnrolledFailedReadonly(ctx, observer, fixed)
+		err, returnedStatus, returnedOutput = callErr, returned.Status, returned.Output
+	} else {
+		returned, callErr := executeIntegrationThroughResolvedWithPolicy(ctx, conn, model.ExecuteIntegrationRequest{Operation: originalCreateDispositionOperation, Capability: originalCreateDispositionOperation, Input: fixed}, observer.instance, observer.instanceSpec, observer.typ, observer.typeSpec, 25*time.Second, integrationExecutionPolicy{originalCreateDisposition: true, detailFreeErrors: true, safeError: errOriginalCreateDisposition, requireExplicitResponse: true, nativeHTTP: &nativeAdapterHTTPPolicy{limit: 2 << 20, parent: ctx}})
+		err, returnedStatus, returnedOutput = callErr, returned.Status, returned.Output
+	}
+	if err != nil || ctx.Err() != nil || returnedStatus != "observed" {
 		return empty, errOriginalCreateDisposition
 	}
 	var observation model.CapacityOriginalCreateDispositionObservation
-	if capacityDecodeDisposition(returned.Output, &observation) != nil || observation.Provider != provider || observation.AdapterSourceCommit != dispositionObserverSource(provider) {
+	if capacityDecodeDisposition(returnedOutput, &observation) != nil || observation.Provider != provider || observation.AdapterSourceCommit != enrolledFailedObserverSource(provider) {
 		return empty, errOriginalCreateDisposition
 	}
 	// Re-resolve immutable observer identities after the actual read. No public
 	// catalog replacement or secret hydration can stand in for this same source.
-	after, _, err := resolveDispositionObserver(ctx, db, conn, candidate)
+	after, _, err := resolveEnrolledFailedObserver(ctx, db, conn, candidate)
 	if err != nil || after.instance.ID != observer.instance.ID || after.instance.Checksum != observer.instance.Checksum || after.typ.ID != observer.typ.ID || after.typ.Checksum != observer.typ.Checksum {
 		return empty, errOriginalCreateDisposition
 	}

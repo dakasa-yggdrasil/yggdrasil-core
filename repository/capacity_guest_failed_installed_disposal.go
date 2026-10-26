@@ -19,33 +19,36 @@ import (
 // that a possible publication had no business effect. Actual withdrawal,
 // original writer drain and native absence are still required by V2.
 type FailedInstalledGuestDisposal struct {
-	RetirementMode           string                                              `json:"retirement_mode"`
-	Schema                   string                                              `json:"schema"`
-	ID                       string                                              `json:"id"`
-	Stage                    string                                              `json:"stage"`
-	Namespace                string                                              `json:"namespace"`
-	Environment              string                                              `json:"environment"`
-	Domain                   string                                              `json:"domain"`
-	Dimension                string                                              `json:"dimension"`
-	PreregistrationID        string                                              `json:"preregistration_id"`
-	Issuer                   string                                              `json:"issuer"`
-	ActualCoreSource         string                                              `json:"actual_core_source"`
-	OriginalIntent           model.CapacityIntent                                `json:"original_intent"`
-	OriginalRun              string                                              `json:"original_run"`
-	LastFailedRun            string                                              `json:"last_failed_run"`
-	InstallationSHA256       string                                              `json:"installation_sha256"`
-	EnrollmentSHA256         string                                              `json:"enrollment_sha256"`
-	BlockedGuestSource       string                                              `json:"blocked_guest_source"`
-	BlockedProfileSHA256     string                                              `json:"blocked_profile_sha256"`
-	UsefulCapacityBefore     int                                                 `json:"useful_capacity_before"`
-	BusinessEffectsPreserved bool                                                `json:"business_effects_preserved"`
-	AdmissionSHA256          string                                              `json:"admission_sha256,omitempty"`
-	ClaimedIntent            *model.CapacityIntent                               `json:"claimed_intent,omitempty"`
-	RetirementRequestID      string                                              `json:"retirement_request_id,omitempty"`
-	TerminalIssuer           string                                              `json:"terminal_issuer,omitempty"`
-	NativePoweroffSHA256     string                                              `json:"native_poweroff_sha256,omitempty"`
-	ObservationSHA256        string                                              `json:"observation_sha256,omitempty"`
-	Observation              *model.CapacityOriginalCreateDispositionObservation `json:"observation,omitempty"`
+	ReplacementMode                string                                              `json:"replacement_mode,omitempty"`
+	OriginalFailedIssuerCoreSource string                                              `json:"original_failed_issuer_core_source,omitempty"`
+	ReplacementCoreSource          string                                              `json:"replacement_core_source,omitempty"`
+	RetirementMode                 string                                              `json:"retirement_mode"`
+	Schema                         string                                              `json:"schema"`
+	ID                             string                                              `json:"id"`
+	Stage                          string                                              `json:"stage"`
+	Namespace                      string                                              `json:"namespace"`
+	Environment                    string                                              `json:"environment"`
+	Domain                         string                                              `json:"domain"`
+	Dimension                      string                                              `json:"dimension"`
+	PreregistrationID              string                                              `json:"preregistration_id"`
+	Issuer                         string                                              `json:"issuer"`
+	ActualCoreSource               string                                              `json:"actual_core_source"`
+	OriginalIntent                 model.CapacityIntent                                `json:"original_intent"`
+	OriginalRun                    string                                              `json:"original_run"`
+	LastFailedRun                  string                                              `json:"last_failed_run"`
+	InstallationSHA256             string                                              `json:"installation_sha256"`
+	EnrollmentSHA256               string                                              `json:"enrollment_sha256"`
+	BlockedGuestSource             string                                              `json:"blocked_guest_source"`
+	BlockedProfileSHA256           string                                              `json:"blocked_profile_sha256"`
+	UsefulCapacityBefore           int                                                 `json:"useful_capacity_before"`
+	BusinessEffectsPreserved       bool                                                `json:"business_effects_preserved"`
+	AdmissionSHA256                string                                              `json:"admission_sha256,omitempty"`
+	ClaimedIntent                  *model.CapacityIntent                               `json:"claimed_intent,omitempty"`
+	RetirementRequestID            string                                              `json:"retirement_request_id,omitempty"`
+	TerminalIssuer                 string                                              `json:"terminal_issuer,omitempty"`
+	NativePoweroffSHA256           string                                              `json:"native_poweroff_sha256,omitempty"`
+	ObservationSHA256              string                                              `json:"observation_sha256,omitempty"`
+	Observation                    *model.CapacityOriginalCreateDispositionObservation `json:"observation,omitempty"`
 }
 
 func failedInstalledDisposalCandidate(old model.CapacityIntent, p model.CapacityPolicySpec, policy model.Manifest, now time.Time) bool {
@@ -74,7 +77,7 @@ func loadFailedInstalledDisposalTx(ctx context.Context, tx *sql.Tx, id, stage st
 	if err != nil {
 		return r, "", err
 	}
-	if !consistent || capacity.BusinessCreationSHA256(raw) != sha || decodeFailedInstalledDisposal(raw, &r) != nil || r.Schema != "failed_installed_guest_disposal_v1" || r.ID != id || r.Stage != stage || r.UsefulCapacityBefore != 0 || !r.BusinessEffectsPreserved || (r.RetirementMode != failedInstalledV2Mode && r.RetirementMode != failedInstalledLegacyV1Mode) {
+	if !consistent || capacity.BusinessCreationSHA256(raw) != sha || decodeFailedInstalledDisposal(raw, &r) != nil || r.Schema != "failed_installed_guest_disposal_v1" || r.ID != id || r.Stage != stage || r.UsefulCapacityBefore != 0 || !r.BusinessEffectsPreserved || (r.RetirementMode != failedInstalledV2Mode && r.RetirementMode != failedInstalledLegacyV1Mode) || !failedInstalledReplacementMarkerValid(r) {
 		return r, "", ErrCapacityConflict
 	}
 	return r, sha, nil
@@ -135,8 +138,18 @@ func (s CapacityStore) failedInstalledRecordedRunsTx(ctx context.Context, tx *sq
 // The request contains IDs only. Original policy, enrollment, lifetime, ACK,
 // profile and the absence of useful-capacity credit are all rederived here.
 func (s CapacityStore) RequestFailedInstalledGuestDisposal(ctx context.Context, preID, lastRunID, issuer string) (FailedInstalledGuestDisposal, error) {
+	return s.requestFailedInstalledGuestDisposal(ctx, preID, lastRunID, issuer, "")
+}
+
+// The administrative caller selects only this closed mode and original IDs.
+// Both Core identities are derived inside the original admission transaction.
+func (s CapacityStore) RequestFailedInstalledGuestCoreReplacement(ctx context.Context, preID, lastRunID, issuer string) (FailedInstalledGuestDisposal, error) {
+	return s.requestFailedInstalledGuestDisposal(ctx, preID, lastRunID, issuer, FailedInstalledCoreReplacementMode)
+}
+
+func (s CapacityStore) requestFailedInstalledGuestDisposal(ctx context.Context, preID, lastRunID, issuer, replacementMode string) (FailedInstalledGuestDisposal, error) {
 	var out FailedInstalledGuestDisposal
-	if s.DB == nil || !validCapacityExecutor(preID) || !validCapacityExecutor(lastRunID) || issuer == "" || len(issuer) > 256 {
+	if (replacementMode != "" && replacementMode != FailedInstalledCoreReplacementMode) || s.DB == nil || !validCapacityExecutor(preID) || !validCapacityExecutor(lastRunID) || issuer == "" || len(issuer) > 256 {
 		return out, ErrCapacityMutationAuthorization
 	}
 	tx, err := s.DB.BeginTx(ctx, nil)
@@ -226,6 +239,17 @@ func (s CapacityStore) RequestFailedInstalledGuestDisposal(ctx context.Context, 
 	if err != nil || rowErr != nil || closeErr != nil || count != 1 || !originalInstalledFailureResult(result, stored.pre, s.WorkflowID) || s.installedGuestDispatchRunTx(ctx, tx, policy, p, uuid.MustParse(run), result) != nil {
 		return out, ErrCapacityConflict
 	}
+	originalFailedCore := ""
+	if replacementMode != "" {
+		// Capture before result is replaced by a later installed-resume result.
+		if stored.witness.Tuple.Provider != "hetzner" || !failedInstalledOriginalCanaryFailure(result) {
+			return out, ErrCapacityConflict
+		}
+		originalFailedCore, err = failedInstalledOriginalCanaryIssuerTx(ctx, tx, p, stored, receipt, run)
+		if err != nil {
+			return out, err
+		}
+	}
 	lastRaw := originalRaw
 	expectedRun := run
 	originalFence := old.FencingToken
@@ -245,6 +269,14 @@ func (s CapacityStore) RequestFailedInstalledGuestDisposal(ctx context.Context, 
 	out = FailedInstalledGuestDisposal{Schema: "failed_installed_guest_disposal_v1", ID: uuid.NewString(), Stage: "requested", Namespace: policy.Metadata.Namespace, Environment: p.Environment, Domain: p.Domain, Dimension: p.Dimension, PreregistrationID: preID, Issuer: issuer, ActualCoreSource: capacity.CurrentGuestCoreSource(), OriginalIntent: old, OriginalRun: string(originalRaw), LastFailedRun: string(lastRaw), InstallationSHA256: capacity.GuestRetirementSHA(installed), EnrollmentSHA256: capacity.GuestRetirementSHA(receipt.Enrollment), BlockedGuestSource: stored.binding.GuestSourceCommit, BlockedProfileSHA256: stored.binding.ProfileManifestSHA256, BusinessEffectsPreserved: true, RetirementMode: failedInstalledRetirementMode(p, stored.binding)}
 	if out.RetirementMode == "" {
 		return FailedInstalledGuestDisposal{}, ErrCapacityConflict
+	}
+	if replacementMode != "" {
+		out.ReplacementMode = replacementMode
+		out.OriginalFailedIssuerCoreSource = originalFailedCore
+		out.ReplacementCoreSource = out.ActualCoreSource
+		if !failedInstalledReplacementMarkerValid(out) {
+			return FailedInstalledGuestDisposal{}, ErrCapacityConflict
+		}
 	}
 	if err = failedInstalledZeroUsefulTx(ctx, tx, out, now, ""); err != nil {
 		return out, err
@@ -465,35 +497,51 @@ func (s CapacityStore) failedInstalledDisposalActiveTx(ctx context.Context, tx *
 	return true, nil
 }
 
-// New Source is required, not a caller's replacement-ready assertion. The
-// current compiled complete contract must approve the different Guest Source
-// and profile before any subsequent native creation in this dimension.
+// Every original requested marker must have its own terminal V2/native-absence
+// chain before a replacement. Historical markers keep the original both-changed
+// barrier. A newly admitted Core-bound marker has an exact replacement build.
 func requireFailedInstalledReplacementTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec) error {
 	if p.GuestNotifyReconcileBinding == nil {
 		return nil
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT original_record->>'blocked_guest_source',original_record->>'blocked_profile_sha256',stage FROM public.capacity_guest_failed_installed_disposals WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND stage IN('requested','terminal') ORDER BY recorded_at,id`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension)
+	rows, err := tx.QueryContext(ctx, `SELECT id::text,stage FROM public.capacity_guest_failed_installed_disposals WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND stage IN('requested','terminal') ORDER BY recorded_at,id`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension)
 	if err != nil {
 		return err
 	}
-	defer rows.Close()
-	requested, terminal := 0, 0
+	type original struct{ id, stage string }
+	var originals []original
 	for rows.Next() {
-		var source, profile, stage string
-		if err = rows.Scan(&source, &profile, &stage); err != nil {
+		var r original
+		if err = rows.Scan(&r.id, &r.stage); err != nil {
+			break
+		}
+		originals = append(originals, r)
+	}
+	rowErr, closeErr := rows.Err(), rows.Close()
+	if err != nil {
+		return err
+	}
+	if rowErr != nil {
+		return rowErr
+	}
+	if closeErr != nil {
+		return closeErr
+	}
+	requested, terminal := 0, 0
+	for _, original := range originals {
+		r, _, err := loadFailedInstalledDisposalTx(ctx, tx, original.id, original.stage)
+		if err != nil {
 			return err
 		}
-		if stage == "requested" {
+		if r.Stage == "requested" {
 			requested++
 		} else {
 			terminal++
 		}
-		if !failedInstalledReplacementChanged(p.GuestRetirementBinding, source, profile) || !capacity.GuestBindingAuthorityCurrent(p, *p.GuestRetirementBinding) {
+		if !failedInstalledReplacementPermitted(p.GuestRetirementBinding, r, capacity.CurrentGuestCoreSource()) ||
+			!capacity.GuestBindingAuthorityCurrent(p, *p.GuestRetirementBinding) {
 			return ErrCapacityConflict
 		}
-	}
-	if err = rows.Err(); err != nil {
-		return err
 	}
 	if requested != terminal {
 		return ErrCapacityConflict

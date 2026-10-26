@@ -522,14 +522,52 @@
       },
       "source_review_only": true,
       "typed_contract_source_review_sha256": "29ae1f3575e7a172b8d8dc27ee31eb076c36e5183560d9cd10aea50abb935971"
+    },
+    "typed82_witnessed_unenrolled_AWS_and_original_Core_bound_replacement": {
+      "AWS_administrative_terminal_not_Guest_quiescence": true,
+      "H_explicit_replacement_preserves_full_V2_terminal_chain": true,
+      "Linux_target_lint_and_Core_cross_compile": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-CORE263-TYPED82-FULL-LINUX-TARGET-R2-f9ad60b2ea2af3bf913b/RETURN.PUBLIC.json",
+        "sha256": "0b1b9d7872ed7624c64ad716823300f8a1033e313fbfc3dad91b4c83eb0fcb34"
+      },
+      "Linux_target_static_scope": "All production and then-current R3 test source; R4 changed fixtures only. No Linux execution or clean image claim.",
+      "Root_final_source_review_complete": true,
+      "actual_PG_test_failures": 0,
+      "actual_PG_test_passes": 497,
+      "actual_PG_test_skips": 0,
+      "actual_local_PG_regression_containing_original": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-WHOLE-CORE263-TYPED82-R4-BROAD-LOCAL-PG17-7184cd6f50c304af7fc9/RETURN.PUBLIC.json",
+        "sha256": "a365a1f0f1b31579f0301c67d9b3dcb6462db45af03433696a2088a9ba523dd0"
+      },
+      "actual_local_full_migrated_PG17_regressions": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-CORE263-TYPED82-R4-BROAD-MIGRATED-OWNED-PG17-92f308eb92c1301c6a8d/RETURN.PUBLIC.json",
+        "sha256": "e6d82223d29156831e2f51f48705fb76bf7189984108b48513550aba70b1aa05"
+      },
+      "all_existing_SQL_through81_byteexact": true,
+      "base": "59f59f531405abcb337ba94343db3513273cdda0",
+      "complete_production_source_records": 706,
+      "historical_focused_CI_rosters_retained_and_new_eight_roots_added": true,
+      "human_architecture_signoff_claimed": false,
+      "independent_combined_production_source_peer": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/Core263-combined82-formatted-source-review/INDEPENDENT-COMBINED-PRODUCTION-SOURCE-PEER.PUBLIC.json",
+        "sha256": "d0ee88788f7ed6485ac1ae2ce3116d958991a3ab0e7959c59676ac4c34420508"
+      },
+      "new_migration82_sha256": "f604cb49a43ce62382ad91be2b4089706568878733bc87f4bb76b5897b2dac76",
+      "old_ACK_deadline_or_attempt_replayed_or_retimed": false,
+      "owned_disposable_PG17_cluster_with_two_databases_stopped": true,
+      "production_qualification_claimed": false,
+      "reviewed_at": "2026-10-26T17:43:37.079058+00:00",
+      "schema82_Linux_CI_image_Goose_runtime_and_useful_capacity_still_required": true,
+      "source_inventory_sha256": "e6e919b15af44e43b6d05c4c969beca37dc2569a0c1ff4633e7ce47f3ab85e2e"
     }
   },
   "human_architecture_signoff_claimed": false,
-  "non_test_Go_sources": 704,
+  "non_test_Go_sources": 706,
   "previous_AWS1652_review_accepted_at": "2026-10-23T02:46:08.896936+00:00",
   "previous_accepted_inventory_sha256": "9e84d02942ec5c2178962b84ce64baa859ff43472e0916d2d5df4d304dae9de8",
   "previous_accepted_review_sha256": "6d6bb4351292d4e7f4274aaa7470c6553f60541799d58170fce4e7cf30250e05",
   "previous_inventory_before_closed_canary_return_clock_sha256": "84dfea477a430dbd4da1daf58f66b5e8a37cb070471a9f88bf648910f3a3d4ed",
+  "previous_inventory_before_typed82_recovery_sha256": "e3b1ff22bf7b590ee9f3111a4c123cc7459d39c60699872f06ab2c617ecc5a75",
   "previous_original_create_disposition_accepted_at": "2026-10-21T23:08:55.177061+00:00",
   "previous_original_create_disposition_reviewer": "Root full-reviewed the explicit AWS1.64 closed supplier/retirement catalog, original new-instance metadata/dry-run/IAM scope qualification and actual rebuilt owning typed contracts; independent A3 complete input and literal-registry/fixture/semantics peers preserve the exact two-row boundary. Source acceptance only; no native useful member, runtime or human approval is claimed.",
   "previous_review_accepted_at": "2026-10-21T19:28:31.389131+00:00",
@@ -551,6 +589,7 @@
   "previous_review_before_original_create_disposition_recovery_sha256": "3f2e427ae005de56544a60346b723d33a63fc253586a0625f11abd13299ca34e",
   "previous_review_before_schema72_explicit_empty_sha256": "467c71460da8f277880a5594f388fd83a56898b795325ba5396dd7fa76a936c6",
   "previous_review_before_two_actual_approval_candidate_sha256": "2fa1a8302d35d015d3e0e72913693646dec46a488664fcf5b2d84adcc78eb695",
+  "previous_review_before_typed82_recovery_sha256": "a391699122b39dea2db145e6950033efe63433e000650e3b8d6919ac4ed44da4",
   "previous_schema72_acceptance_timestamp": "2026-10-22T23:44:58.360035+00:00",
   "previous_schema72_reviewed_head": "7dd060cab5ddceb19fa96c0f06ec6eea4b28660f",
   "previous_two_approval_candidate_accepted_at": "2026-10-21T19:41:22.206677+00:00",
@@ -610,7 +649,7 @@
   "reviewer": "Root full production-source delta review; separate independent manager/dial/monitor peer; source acceptance only",
   "schema": "core_service_source_review_v1",
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "e3b1ff22bf7b590ee9f3111a4c123cc7459d39c60699872f06ab2c617ecc5a75",
+  "source_inventory_sha256": "e6e919b15af44e43b6d05c4c969beca37dc2569a0c1ff4633e7ce47f3ab85e2e",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
