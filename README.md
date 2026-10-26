@@ -508,3 +508,12 @@ Apache 2.0 — see [LICENSE](LICENSE).
 Built with care by [Dakasa](https://dakasa.me) · Star ⭐ to follow releases
 
 </div>
+
+The administrative partial-retirement reconciliation routes are documented in
+[Proposed ADR-0082](docs/adr/0082-reconcile-partial-guest-retirement-with-separate-native-off-proof.md)
+and [service semantics](docs/service-contract/SEMANTICS.md). They preserve a
+legacy Guest's original three-record quiescence/refusal history and permit only
+bounded provider OFF reads before separate cleanup. They do not resend Guest
+retirement or replace the normal four-record success proof. The dedicated
+`partial-nativeoff-reconciliation-source.yml` job retains its six-root race/PG81
+census and physical shutdown separately from the historical Source gates.

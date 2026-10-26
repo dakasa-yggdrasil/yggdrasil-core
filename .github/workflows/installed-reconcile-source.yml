@@ -140,12 +140,12 @@ jobs:
               st=os.stat(os.environ[key]); assert st.st_uid==os.getuid() and (st.st_mode&0o7777)==0o700, key+' ownership/mode'
           print(json.dumps(v,sort_keys=True))
           PY_ID
-          # Fresh dedicated DB: Goose applies the published repository schema through80.
+          # Fresh dedicated DB: Goose applies the published repository schema through81.
           # The helper refuses any network listener or foreign database identity.
           cat > "$pg_root/migrate.go" <<'GO_MIGRATE'
           package main
           import("context";"database/sql";"fmt";"os";"time";_ "github.com/lib/pq";"github.com/pressly/goose/v3")
-          func main(){ctx,stop:=context.WithTimeout(context.Background(),90*time.Second);defer stop();db,e:=sql.Open("postgres",os.Getenv("D12_SOURCE_CI_PG17_DSN"));if e!=nil{panic(e)};defer db.Close();var name,listen string;var socket bool;var version int;e=db.QueryRowContext(ctx,`SELECT current_database(),inet_server_addr() IS NULL,current_setting('listen_addresses'),current_setting('server_version_num')::int`).Scan(&name,&socket,&listen,&version);if e!=nil||name!="core_d12_test"||!socket||listen!=""||version/10000!=17{panic("foreign D12 Source fixture")};if e=goose.SetDialect("postgres");e!=nil{panic(e)};if e=goose.UpContext(ctx,db,"db/migrations");e!=nil{panic(e)};v,e:=goose.GetDBVersionContext(ctx,db);if e!=nil||v!=80{panic("schema80 missing")};fmt.Println("D12_SOURCE_DISPOSABLE_SCHEMA80_READY")}
+          func main(){ctx,stop:=context.WithTimeout(context.Background(),90*time.Second);defer stop();db,e:=sql.Open("postgres",os.Getenv("D12_SOURCE_CI_PG17_DSN"));if e!=nil{panic(e)};defer db.Close();var name,listen string;var socket bool;var version int;e=db.QueryRowContext(ctx,`SELECT current_database(),inet_server_addr() IS NULL,current_setting('listen_addresses'),current_setting('server_version_num')::int`).Scan(&name,&socket,&listen,&version);if e!=nil||name!="core_d12_test"||!socket||listen!=""||version/10000!=17{panic("foreign D12 Source fixture")};if e=goose.SetDialect("postgres");e!=nil{panic(e)};if e=goose.UpContext(ctx,db,"db/migrations");e!=nil{panic(e)};v,e:=goose.GetDBVersionContext(ctx,db);if e!=nil||v!=81{panic("schema81 missing")};fmt.Println("D12_SOURCE_DISPOSABLE_SCHEMA81_READY")}
           GO_MIGRATE
           record migrate go run "$pg_root/migrate.go"
           record repository go test -p=1 -race -count=1 -timeout=4m -json ./repository \
@@ -210,7 +210,7 @@ jobs:
               assert runs==passed==collections.Counter(roots)
               assert sum(r['Action']=='pass' and 'Test' not in r for r in rows)==1
               summary[name]={'package':base+package,'roots':roots,'passed':len(roots),'skipped':0}
-          value={'schema':'presend_retirement_recovery_source_CI_additional_root_census_v1','source_commit':os.environ['SOURCE_COMMIT'],'race':True,'schema_version':80,'summary':summary,'additional_roots':10,'original_installed_sixteen_root_census_unchanged':True,'positive_original_Guest_runtime_qualified':False,'production_authority':False}
+          value={'schema':'presend_retirement_recovery_source_CI_additional_root_census_v1','source_commit':os.environ['SOURCE_COMMIT'],'race':True,'schema_version':81,'summary':summary,'additional_roots':10,'original_installed_sixteen_root_census_unchanged':True,'positive_original_Guest_runtime_qualified':False,'production_authority':False}
           (p/'RECOVERY79-CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
           print(json.dumps(value,sort_keys=True))
           PY_RECOVERY

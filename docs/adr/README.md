@@ -115,3 +115,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0080](0080-recover-expired-never-sent-retirement-through-a-distinct-original.md) | Recover expired never-sent retirement through a distinct original | Proposed | 2026-10-25 | Canonical UTC deadline, immutable expired parent and one explicit zero-send successor with fresh fenced ownership |
 
 | [0081](0081-recover-authenticated-prejournal-retirement-refusals-separately.md) | Recover authenticated prejournal retirement refusals separately | Proposed | 2026-10-25 | Canonical authority challenge deadline and separate, authenticated first-live refusal recovery without quiescence credit |
+
+| [0082](0082-reconcile-partial-guest-retirement-with-separate-native-off-proof.md) | Reconcile partial Guest retirement with a separate native OFF proof | Proposed | 2026-10-25 | Explicit administrative admission, immutable three-record quiescence history and bounded provider-only OFF observations |

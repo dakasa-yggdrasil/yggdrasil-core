@@ -17,15 +17,15 @@ func testGuestActualA900ProfileApprovals(t *testing.T) {
 		"aws":     {"8066c34878d2a476f926207e65c27cf3f5bc87743c8380549e360040b7499b48", "97beb27b884fcf3928f2da6f14d8840ba0fb6f460012fdb50b8ab02b01334df7"},
 		"hetzner": {"6d0a539f4841566c97063158fa3a4e62a465f7eb74d10a6405679681957706ec", "3fcb7fc4634fc5102d2172cc1d7f66bd92a61b9d544525a3438e8cdf914803f9"},
 	}
-	if len(guestProductionProfileApprovals) != 4 || guestProtocolCompatibilityMapSHA256(guestD12ProtocolProfileApprovals) != GuestD12ProtocolCompatibilityMapSHA256 || GuestProtocolCompatibilityMapSHA256() == GuestD12ProtocolCompatibilityMapSHA256 {
-		t.Fatal("old two-map snapshot changed or current four-map absent")
+	if len(guestD15ProtocolProfileApprovals) != 4 || guestProtocolCompatibilityMapSHA256(guestD15ProtocolProfileApprovals) != GuestD15ProtocolCompatibilityMapSHA256 || len(guestProductionProfileApprovals) != 6 || guestProtocolCompatibilityMapSHA256(guestD12ProtocolProfileApprovals) != GuestD12ProtocolCompatibilityMapSHA256 || GuestProtocolCompatibilityMapSHA256() == GuestD12ProtocolCompatibilityMapSHA256 || GuestProtocolCompatibilityMapSHA256() == GuestD15ProtocolCompatibilityMapSHA256 {
+		t.Fatal("historical two/four-map snapshot changed or current six-map absent")
 	}
 	for _, provider := range []string{"aws", "hetzner"} {
 		data, err := os.ReadFile("testdata/a900-notify-" + provider + "-production-contract.json")
 		if err != nil {
 			t.Fatal(err)
 		}
-		for _, kind := range []string{"actual_current_map", "old557_rejects_new", "changed_member", "changed_bootstrap", "changed_Guest_source", "changed_runtime_source", "changed_OCI", "missing_actual_issuer"} {
+		for _, kind := range []string{"actual_current_map", "historical_b5_map", "old557_rejects_new", "changed_member", "changed_bootstrap", "changed_Guest_source", "changed_runtime_source", "changed_OCI", "missing_actual_issuer"} {
 			t.Run(provider+"/"+kind, func(t *testing.T) {
 				var p model.CapacityPolicySpec
 				if DecodeNativeCapacity(json.RawMessage(data), &p) != nil {
@@ -38,6 +38,8 @@ func testGuestActualA900ProfileApprovals(t *testing.T) {
 				fingerprint := GuestProtocolCompatibilityMapSHA256()
 				issuer := strings.Repeat("a", 40) // Declared pure operand, never a future actual Core PUB.
 				switch kind {
+				case "historical_b5_map":
+					fingerprint = GuestD15ProtocolCompatibilityMapSHA256
 				case "old557_rejects_new":
 					fingerprint = GuestD12ProtocolCompatibilityMapSHA256
 				case "changed_member":
@@ -54,7 +56,7 @@ func testGuestActualA900ProfileApprovals(t *testing.T) {
 					issuer = ""
 				}
 				accepted := GuestBindingApprovedByCompatibilityMap(p, *b, issuer, fingerprint)
-				if accepted != (kind == "actual_current_map") {
+				if accepted != (kind == "actual_current_map" || kind == "historical_b5_map") {
 					t.Fatal("wrong complete contract or old map approved a new Guest", kind)
 				}
 			})

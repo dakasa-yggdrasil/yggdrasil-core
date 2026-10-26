@@ -769,8 +769,35 @@
       "build_constraint": "default",
       "file": "controllers/httpapi/server.go",
       "function": "http",
-      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsPrejournalRefusalRecovery)",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsPartialNativeOffReconciliation)",
       "line": 577,
+      "pattern_expression": "\"POST /api/v1/ops/capacity/failed-installed-guest-disposals/partial-native-off-reconciliations\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsPartialNativeOffReconciliationRead)",
+      "line": 578,
+      "pattern_expression": "\"GET /api/v1/ops/capacity/failed-installed-guest-disposals/partial-native-off-reconciliations/{preregistrationId}\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsPartialNativeOffReconciliationObserve)",
+      "line": 579,
+      "pattern_expression": "\"POST /api/v1/ops/capacity/failed-installed-guest-disposals/partial-native-off-reconciliations/observe\"",
+      "registration": "HandleFunc"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/server.go",
+      "function": "http",
+      "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsPrejournalRefusalRecovery)",
+      "line": 580,
       "pattern_expression": "\"POST /api/v1/ops/capacity/failed-installed-guest-disposals/prejournal-refusal-recoveries\"",
       "registration": "HandleFunc"
     },
@@ -779,7 +806,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsPrejournalRefusalRecoveryRead)",
-      "line": 578,
+      "line": 581,
       "pattern_expression": "\"GET /api/v1/ops/capacity/failed-installed-guest-disposals/prejournal-refusal-recoveries/{preregistrationId}\"",
       "registration": "HandleFunc"
     },
@@ -788,7 +815,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsPresendRetirementRecovery)",
-      "line": 579,
+      "line": 582,
       "pattern_expression": "\"POST /api/v1/ops/capacity/failed-installed-guest-disposals/retirement-recoveries\"",
       "registration": "HandleFunc"
     },
@@ -797,7 +824,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsPresendRetirementRecoveryRead)",
-      "line": 580,
+      "line": 583,
       "pattern_expression": "\"GET /api/v1/ops/capacity/failed-installed-guest-disposals/retirement-recoveries/{preregistrationId}\"",
       "registration": "HandleFunc"
     },
@@ -806,7 +833,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedInstalledGuestDisposalAdvance)",
-      "line": 581,
+      "line": 584,
       "pattern_expression": "\"POST /api/v1/ops/capacity/failed-installed-guest-disposals/advance\"",
       "registration": "HandleFunc"
     },
@@ -815,7 +842,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedInstalledGuestDisposalComplete)",
-      "line": 582,
+      "line": 585,
       "pattern_expression": "\"POST /api/v1/ops/capacity/failed-installed-guest-disposals/complete\"",
       "registration": "HandleFunc"
     },
@@ -824,7 +851,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedInstalledGuestDisposal)",
-      "line": 583,
+      "line": 586,
       "pattern_expression": "\"POST /api/v1/ops/capacity/failed-installed-guest-disposals\"",
       "registration": "HandleFunc"
     },
@@ -833,7 +860,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsFailedInstalledGuestDisposalRead)",
-      "line": 584,
+      "line": 587,
       "pattern_expression": "\"GET /api/v1/ops/capacity/failed-installed-guest-disposals/{preregistrationId}\"",
       "registration": "HandleFunc"
     },
@@ -842,7 +869,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsEnrolledFailedOriginalDisposition)",
-      "line": 585,
+      "line": 588,
       "pattern_expression": "\"POST /api/v1/ops/capacity/enrolled-failed-original-dispositions\"",
       "registration": "HandleFunc"
     },
@@ -851,7 +878,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsEnrolledFailedOriginalDispositionRead)",
-      "line": 586,
+      "line": 589,
       "pattern_expression": "\"GET /api/v1/ops/capacity/enrolled-failed-original-dispositions/{grantId}\"",
       "registration": "HandleFunc"
     },
@@ -860,7 +887,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsOriginalCreateDispositionRead)",
-      "line": 587,
+      "line": 590,
       "pattern_expression": "\"GET /api/v1/ops/capacity/original-create-dispositions/{grantId}\"",
       "registration": "HandleFunc"
     },
@@ -869,7 +896,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsCapacityDispatchPrestartRejection)",
-      "line": 588,
+      "line": 591,
       "pattern_expression": "\"POST /api/v1/ops/capacity/dispatch-prestart-rejections\"",
       "registration": "HandleFunc"
     },
@@ -878,7 +905,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsCapacityDispatchPrestartRejectionRead)",
-      "line": 589,
+      "line": 592,
       "pattern_expression": "\"GET /api/v1/ops/capacity/dispatch-prestart-rejections/{jobId}\"",
       "registration": "HandleFunc"
     },
@@ -887,7 +914,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleOpsWorkflowsList)",
-      "line": 590,
+      "line": 593,
       "pattern_expression": "\"GET /api/v1/ops/workflows\"",
       "registration": "HandleFunc"
     },
@@ -896,7 +923,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleOpsWorkflowDetail)",
-      "line": 591,
+      "line": 594,
       "pattern_expression": "\"GET /api/v1/ops/workflows/{runId}\"",
       "registration": "HandleFunc"
     },
@@ -905,7 +932,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsWorkflowRetry)",
-      "line": 592,
+      "line": 595,
       "pattern_expression": "\"POST /api/v1/ops/workflows/{runId}/retry\"",
       "registration": "HandleFunc"
     },
@@ -914,7 +941,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsWorkflowAbort)",
-      "line": 593,
+      "line": 596,
       "pattern_expression": "\"POST /api/v1/ops/workflows/{runId}/abort\"",
       "registration": "HandleFunc"
     },
@@ -923,7 +950,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsWorkflowReplay)",
-      "line": 594,
+      "line": 597,
       "pattern_expression": "\"POST /api/v1/ops/workflows/{runId}/replay\"",
       "registration": "HandleFunc"
     },
@@ -932,7 +959,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleOpsApprovalsList)",
-      "line": 595,
+      "line": 598,
       "pattern_expression": "\"GET /api/v1/ops/approvals\"",
       "registration": "HandleFunc"
     },
@@ -941,7 +968,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsApprovalDecide(\"approved\"))",
-      "line": 596,
+      "line": 599,
       "pattern_expression": "\"POST /api/v1/ops/approvals/{id}/approve\"",
       "registration": "HandleFunc"
     },
@@ -950,7 +977,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsApprovalDecide(\"rejected\"))",
-      "line": 597,
+      "line": 600,
       "pattern_expression": "\"POST /api/v1/ops/approvals/{id}/reject\"",
       "registration": "HandleFunc"
     },
@@ -959,7 +986,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleOpsDriftList)",
-      "line": 598,
+      "line": 601,
       "pattern_expression": "\"GET /api/v1/ops/drift\"",
       "registration": "HandleFunc"
     },
@@ -968,7 +995,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleOpsDriftReconcile)",
-      "line": 599,
+      "line": 602,
       "pattern_expression": "\"POST /api/v1/ops/drift/{id}/reconcile\"",
       "registration": "HandleFunc"
     },
@@ -977,7 +1004,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewIntegrations, server.handleOpsCatalog)",
-      "line": 600,
+      "line": 603,
       "pattern_expression": "\"GET /api/v1/ops/catalog\"",
       "registration": "HandleFunc"
     },
@@ -986,7 +1013,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleOpsSystemHealth)",
-      "line": 601,
+      "line": 604,
       "pattern_expression": "\"GET /api/v1/ops/system/health\"",
       "registration": "HandleFunc"
     },
@@ -995,7 +1022,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewAudit, server.handleOpsAuditList)",
-      "line": 602,
+      "line": 605,
       "pattern_expression": "\"GET /api/v1/ops/audit\"",
       "registration": "HandleFunc"
     },
@@ -1004,7 +1031,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewPeople, server.handleOpsCollaboratorsMissingMFA)",
-      "line": 603,
+      "line": 606,
       "pattern_expression": "\"GET /api/v1/ops/collaborators/missing-mfa\"",
       "registration": "HandleFunc"
     },
@@ -1013,7 +1040,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleCollaboratorList",
-      "line": 610,
+      "line": 613,
       "pattern_expression": "\"GET /api/v1/collaborators\"",
       "registration": "HandleFunc"
     },
@@ -1022,7 +1049,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permCreateCollaborator, server.handleCollaboratorCreate)",
-      "line": 611,
+      "line": 614,
       "pattern_expression": "\"POST /api/v1/collaborators\"",
       "registration": "HandleFunc"
     },
@@ -1031,7 +1058,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleCollaboratorGet",
-      "line": 612,
+      "line": 615,
       "pattern_expression": "\"GET /api/v1/collaborators/{id}\"",
       "registration": "HandleFunc"
     },
@@ -1040,7 +1067,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorUpdate)",
-      "line": 613,
+      "line": 616,
       "pattern_expression": "\"PATCH /api/v1/collaborators/{id}\"",
       "registration": "HandleFunc"
     },
@@ -1049,7 +1076,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permOffboardCollaborator, server.handleCollaboratorDelete)",
-      "line": 614,
+      "line": 617,
       "pattern_expression": "\"DELETE /api/v1/collaborators/{id}\"",
       "registration": "HandleFunc"
     },
@@ -1058,7 +1085,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permOffboardCollaborator, server.handleCollaboratorOffboard)",
-      "line": 615,
+      "line": 618,
       "pattern_expression": "\"POST /api/v1/collaborators/{id}/offboard\"",
       "registration": "HandleFunc"
     },
@@ -1067,7 +1094,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorSuspend)",
-      "line": 616,
+      "line": 619,
       "pattern_expression": "\"POST /api/v1/collaborators/{id}/suspend\"",
       "registration": "HandleFunc"
     },
@@ -1076,7 +1103,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorUnsuspend)",
-      "line": 617,
+      "line": 620,
       "pattern_expression": "\"POST /api/v1/collaborators/{id}/unsuspend\"",
       "registration": "HandleFunc"
     },
@@ -1085,7 +1112,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorReOnboard)",
-      "line": 618,
+      "line": 621,
       "pattern_expression": "\"POST /api/v1/collaborators/{id}/re-onboard\"",
       "registration": "HandleFunc"
     },
@@ -1094,7 +1121,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorRoleChange)",
-      "line": 619,
+      "line": 622,
       "pattern_expression": "\"POST /api/v1/collaborators/{id}/role-change\"",
       "registration": "HandleFunc"
     },
@@ -1103,7 +1130,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorTeamAdd)",
-      "line": 620,
+      "line": 623,
       "pattern_expression": "\"POST /api/v1/collaborators/{id}/team-add\"",
       "registration": "HandleFunc"
     },
@@ -1112,7 +1139,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorTeamRemove)",
-      "line": 621,
+      "line": 624,
       "pattern_expression": "\"POST /api/v1/collaborators/{id}/team-remove\"",
       "registration": "HandleFunc"
     },
@@ -1121,7 +1148,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorAttributeSet)",
-      "line": 622,
+      "line": 625,
       "pattern_expression": "\"POST /api/v1/collaborators/{id}/attribute-set\"",
       "registration": "HandleFunc"
     },
@@ -1130,7 +1157,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorManagerChange)",
-      "line": 623,
+      "line": 626,
       "pattern_expression": "\"POST /api/v1/collaborators/{id}/manager-change\"",
       "registration": "HandleFunc"
     },
@@ -1139,7 +1166,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorAbsenceStart)",
-      "line": 624,
+      "line": 627,
       "pattern_expression": "\"POST /api/v1/collaborators/{id}/absence/start\"",
       "registration": "HandleFunc"
     },
@@ -1148,7 +1175,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorAbsenceEnd)",
-      "line": 625,
+      "line": 628,
       "pattern_expression": "\"POST /api/v1/collaborators/{id}/absence/end\"",
       "registration": "HandleFunc"
     },
@@ -1157,7 +1184,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleCollaboratorLifecycleEvents",
-      "line": 626,
+      "line": 629,
       "pattern_expression": "\"GET /api/v1/collaborators/{id}/lifecycle-events\"",
       "registration": "HandleFunc"
     },
@@ -1166,7 +1193,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleCollaboratorProviderState",
-      "line": 627,
+      "line": 630,
       "pattern_expression": "\"GET /api/v1/collaborators/{id}/provider-state\"",
       "registration": "HandleFunc"
     },
@@ -1175,7 +1202,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleEffectiveTartaroActions",
-      "line": 628,
+      "line": 631,
       "pattern_expression": "\"GET /api/v1/collaborators/{id}/effective-tartaro-actions\"",
       "registration": "HandleFunc"
     },
@@ -1184,7 +1211,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleSyncTartaroActions)",
-      "line": 629,
+      "line": 632,
       "pattern_expression": "\"POST /api/v1/collaborators/{id}/sync-tartaro-actions\"",
       "registration": "HandleFunc"
     },
@@ -1193,7 +1220,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleExternalIdentityPost)",
-      "line": 630,
+      "line": 633,
       "pattern_expression": "\"POST /api/v1/collaborator-external-identities\"",
       "registration": "HandleFunc"
     },
@@ -1202,7 +1229,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleExternalIdentityGet",
-      "line": 631,
+      "line": 634,
       "pattern_expression": "\"GET /api/v1/collaborator-external-identities\"",
       "registration": "HandleFunc"
     },
@@ -1211,7 +1238,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleExternalIdentityDelete)",
-      "line": 632,
+      "line": 635,
       "pattern_expression": "\"DELETE /api/v1/collaborator-external-identities/{id}\"",
       "registration": "HandleFunc"
     },
@@ -1220,7 +1247,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handlePermissionList",
-      "line": 633,
+      "line": 636,
       "pattern_expression": "\"GET /api/v1/permissions/catalog\"",
       "registration": "HandleFunc"
     },
@@ -1229,7 +1256,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionRegister)",
-      "line": 634,
+      "line": 637,
       "pattern_expression": "\"POST /api/v1/permissions/catalog\"",
       "registration": "HandleFunc"
     },
@@ -1238,7 +1265,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handlePermissionBindingList",
-      "line": 635,
+      "line": 638,
       "pattern_expression": "\"GET /api/v1/permissions/bindings\"",
       "registration": "HandleFunc"
     },
@@ -1247,7 +1274,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionBindingCreate)",
-      "line": 636,
+      "line": 639,
       "pattern_expression": "\"POST /api/v1/permissions/bindings\"",
       "registration": "HandleFunc"
     },
@@ -1256,7 +1283,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionEvaluate)",
-      "line": 637,
+      "line": 640,
       "pattern_expression": "\"POST /api/v1/permissions/evaluate\"",
       "registration": "HandleFunc"
     },
@@ -1265,7 +1292,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleTeamList",
-      "line": 638,
+      "line": 641,
       "pattern_expression": "\"GET /api/v1/teams\"",
       "registration": "HandleFunc"
     },
@@ -1274,7 +1301,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permCreateTeam, server.handleTeamCreate)",
-      "line": 639,
+      "line": 642,
       "pattern_expression": "\"POST /api/v1/teams\"",
       "registration": "HandleFunc"
     },
@@ -1283,7 +1310,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleTeamGet",
-      "line": 640,
+      "line": 643,
       "pattern_expression": "\"GET /api/v1/teams/{id}\"",
       "registration": "HandleFunc"
     },
@@ -1292,7 +1319,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditTeam, server.handleTeamUpdate)",
-      "line": 641,
+      "line": 644,
       "pattern_expression": "\"PATCH /api/v1/teams/{id}\"",
       "registration": "HandleFunc"
     },
@@ -1301,7 +1328,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditTeam, server.handleTeamDelete)",
-      "line": 642,
+      "line": 645,
       "pattern_expression": "\"DELETE /api/v1/teams/{id}\"",
       "registration": "HandleFunc"
     },
@@ -1310,7 +1337,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditTeam, server.handleTeamSync)",
-      "line": 643,
+      "line": 646,
       "pattern_expression": "\"POST /api/v1/teams/{id}/sync\"",
       "registration": "HandleFunc"
     },
@@ -1319,7 +1346,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleTeamProvisioningStatus",
-      "line": 644,
+      "line": 647,
       "pattern_expression": "\"GET /api/v1/teams/{id}/provisioning-status\"",
       "registration": "HandleFunc"
     },
@@ -1328,7 +1355,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleTeamGrantList",
-      "line": 645,
+      "line": 648,
       "pattern_expression": "\"GET /api/v1/teams/{id}/grants\"",
       "registration": "HandleFunc"
     },
@@ -1337,7 +1364,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handleTeamGrantCreate)",
-      "line": 646,
+      "line": 649,
       "pattern_expression": "\"POST /api/v1/teams/{id}/grants\"",
       "registration": "HandleFunc"
     },
@@ -1346,7 +1373,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handleTeamGrantDelete)",
-      "line": 647,
+      "line": 650,
       "pattern_expression": "\"DELETE /api/v1/teams/{id}/grants/{grant_id}\"",
       "registration": "HandleFunc"
     },
@@ -1355,7 +1382,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleTeamAvailableSources",
-      "line": 648,
+      "line": 651,
       "pattern_expression": "\"GET /api/v1/teams/{id}/available-sources\"",
       "registration": "HandleFunc"
     },
@@ -1364,7 +1391,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleTeamMembershipList",
-      "line": 649,
+      "line": 652,
       "pattern_expression": "\"GET /api/v1/team-memberships\"",
       "registration": "HandleFunc"
     },
@@ -1373,7 +1400,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditTeam, server.handleTeamMembershipUpsert)",
-      "line": 650,
+      "line": 653,
       "pattern_expression": "\"POST /api/v1/team-memberships\"",
       "registration": "HandleFunc"
     },
@@ -1382,7 +1409,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleProductList",
-      "line": 651,
+      "line": 654,
       "pattern_expression": "\"GET /api/v1/products\"",
       "registration": "HandleFunc"
     },
@@ -1391,7 +1418,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleProductCreate)",
-      "line": 652,
+      "line": 655,
       "pattern_expression": "\"POST /api/v1/products\"",
       "registration": "HandleFunc"
     },
@@ -1400,7 +1427,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleManagedSecretList",
-      "line": 654,
+      "line": 657,
       "pattern_expression": "\"GET /api/v1/secrets\"",
       "registration": "HandleFunc"
     },
@@ -1409,7 +1436,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleManagedSecretGet",
-      "line": 655,
+      "line": 658,
       "pattern_expression": "\"GET /api/v1/secrets/{namespace}/{name}\"",
       "registration": "HandleFunc"
     },
@@ -1418,7 +1445,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretCreate)",
-      "line": 656,
+      "line": 659,
       "pattern_expression": "\"POST /api/v1/secrets\"",
       "registration": "HandleFunc"
     },
@@ -1427,7 +1454,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretRotate)",
-      "line": 657,
+      "line": 660,
       "pattern_expression": "\"POST /api/v1/secrets/{namespace}/{name}/rotate\"",
       "registration": "HandleFunc"
     },
@@ -1436,7 +1463,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretDisable)",
-      "line": 658,
+      "line": 661,
       "pattern_expression": "\"POST /api/v1/secrets/{namespace}/{name}/disable\"",
       "registration": "HandleFunc"
     },
@@ -1445,7 +1472,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretRevoke)",
-      "line": 659,
+      "line": 662,
       "pattern_expression": "\"POST /api/v1/secrets/{namespace}/{name}/revoke\"",
       "registration": "HandleFunc"
     },
@@ -1454,7 +1481,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleMaterializeAll)",
-      "line": 660,
+      "line": 663,
       "pattern_expression": "\"POST /api/v1/secrets/materialize-all\"",
       "registration": "HandleFunc"
     },
@@ -1463,7 +1490,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleMaterializeOne)",
-      "line": 661,
+      "line": 664,
       "pattern_expression": "\"POST /api/v1/secrets/{namespace}/{name}/materialize\"",
       "registration": "HandleFunc"
     },
@@ -1472,7 +1499,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleReconcilerStatus",
-      "line": 662,
+      "line": 665,
       "pattern_expression": "\"GET /api/v1/reconciler/status\"",
       "registration": "HandleFunc"
     },
@@ -1481,7 +1508,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleRepositoryBindingList",
-      "line": 663,
+      "line": 666,
       "pattern_expression": "\"GET /api/v1/repository-bindings\"",
       "registration": "HandleFunc"
     },
@@ -1490,7 +1517,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleRepositoryBindingCreate)",
-      "line": 664,
+      "line": 667,
       "pattern_expression": "\"POST /api/v1/repository-bindings\"",
       "registration": "HandleFunc"
     },
@@ -1499,7 +1526,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleGuardianPolicyList",
-      "line": 665,
+      "line": 668,
       "pattern_expression": "\"GET /api/v1/guardian-policies\"",
       "registration": "HandleFunc"
     },
@@ -1508,7 +1535,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleGuardianPolicyCreate)",
-      "line": 666,
+      "line": 669,
       "pattern_expression": "\"POST /api/v1/guardian-policies\"",
       "registration": "HandleFunc"
     },
@@ -1517,7 +1544,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleGuardianApprovalList",
-      "line": 667,
+      "line": 670,
       "pattern_expression": "\"GET /api/v1/guardian-approvals\"",
       "registration": "HandleFunc"
     },
@@ -1526,7 +1553,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleGuardianApprovalCreate)",
-      "line": 668,
+      "line": 671,
       "pattern_expression": "\"POST /api/v1/guardian-approvals\"",
       "registration": "HandleFunc"
     },
@@ -1535,7 +1562,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleGuardianApprovalDecision)",
-      "line": 669,
+      "line": 672,
       "pattern_expression": "\"POST /api/v1/guardian-approvals/{namespace}/{name}/decision\"",
       "registration": "HandleFunc"
     },
@@ -1544,7 +1571,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleGuardianMemoryList",
-      "line": 670,
+      "line": 673,
       "pattern_expression": "\"GET /api/v1/guardian-memories\"",
       "registration": "HandleFunc"
     },
@@ -1553,7 +1580,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleRemediationBundleList",
-      "line": 671,
+      "line": 674,
       "pattern_expression": "\"GET /api/v1/remediation-bundles\"",
       "registration": "HandleFunc"
     },
@@ -1562,7 +1589,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleRemediationBundleCreate)",
-      "line": 672,
+      "line": 675,
       "pattern_expression": "\"POST /api/v1/remediation-bundles\"",
       "registration": "HandleFunc"
     },
@@ -1571,7 +1598,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleGuardianMemoryReview)",
-      "line": 673,
+      "line": 676,
       "pattern_expression": "\"POST /api/v1/guardian-memories/review\"",
       "registration": "HandleFunc"
     },
@@ -1580,7 +1607,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleRemediationContractList",
-      "line": 674,
+      "line": 677,
       "pattern_expression": "\"GET /api/v1/remediation-contracts\"",
       "registration": "HandleFunc"
     },
@@ -1589,7 +1616,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleRemediationContractCreate)",
-      "line": 675,
+      "line": 678,
       "pattern_expression": "\"POST /api/v1/remediation-contracts\"",
       "registration": "HandleFunc"
     },
@@ -1598,7 +1625,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleSurfaceList",
-      "line": 676,
+      "line": 679,
       "pattern_expression": "\"GET /api/v1/surfaces\"",
       "registration": "HandleFunc"
     },
@@ -1607,7 +1634,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleSurfaceCreate)",
-      "line": 677,
+      "line": 680,
       "pattern_expression": "\"POST /api/v1/surfaces\"",
       "registration": "HandleFunc"
     },
@@ -1616,7 +1643,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleWorkflowList",
-      "line": 678,
+      "line": 681,
       "pattern_expression": "\"GET /api/v1/workflows\"",
       "registration": "HandleFunc"
     },
@@ -1625,7 +1652,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleWorkflowCreate)",
-      "line": 679,
+      "line": 682,
       "pattern_expression": "\"POST /api/v1/workflows\"",
       "registration": "HandleFunc"
     },
@@ -1634,7 +1661,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleWorkflowRun)",
-      "line": 680,
+      "line": 683,
       "pattern_expression": "\"POST /api/v1/workflow-runs\"",
       "registration": "HandleFunc"
     },
@@ -1643,7 +1670,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleWorkflowRunGet",
-      "line": 681,
+      "line": 684,
       "pattern_expression": "\"GET /api/v1/workflow-runs/{run_id}\"",
       "registration": "HandleFunc"
     },
@@ -1652,7 +1679,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleInstallIntegration)",
-      "line": 682,
+      "line": 685,
       "pattern_expression": "\"POST /api/v1/integrations/install\"",
       "registration": "HandleFunc"
     },
@@ -1661,7 +1688,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageOrganization, server.handleProvisionAWS)",
-      "line": 683,
+      "line": 686,
       "pattern_expression": "\"POST /api/v1/provision/aws\"",
       "registration": "HandleFunc"
     },
@@ -1670,7 +1697,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "requireDeployToken(server.handleDeployProduct)",
-      "line": 684,
+      "line": 687,
       "pattern_expression": "\"POST /api/v1/products/{namespace}/{name}/deploy\"",
       "registration": "HandleFunc"
     },
@@ -1679,7 +1706,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "requireDeployToken(server.handleDeployAll)",
-      "line": 685,
+      "line": 688,
       "pattern_expression": "\"POST /api/v1/products/deploy-all\"",
       "registration": "HandleFunc"
     },
@@ -1688,7 +1715,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "requireDeployToken(server.handleBootstrap)",
-      "line": 686,
+      "line": 689,
       "pattern_expression": "\"POST /api/v1/bootstrap\"",
       "registration": "HandleFunc"
     },
@@ -1697,7 +1724,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleTenantBrandGet",
-      "line": 687,
+      "line": 690,
       "pattern_expression": "\"GET /api/v1/tenant/brand\"",
       "registration": "HandleFunc"
     },
@@ -1706,7 +1733,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageOrganization, server.handleTenantBrandPatch)",
-      "line": 688,
+      "line": 691,
       "pattern_expression": "\"PATCH /api/v1/tenant/brand\"",
       "registration": "HandleFunc"
     },
@@ -1715,7 +1742,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "guard(server.handleSelfPhoneGet)",
-      "line": 689,
+      "line": 692,
       "pattern_expression": "\"GET /api/v1/me/contact/phone\"",
       "registration": "HandleFunc"
     },
@@ -1724,7 +1751,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "guard(server.handleSelfPhonePut)",
-      "line": 690,
+      "line": 693,
       "pattern_expression": "\"PUT /api/v1/me/contact/phone\"",
       "registration": "HandleFunc"
     },
@@ -1733,7 +1760,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleOperatorPhoneGet",
-      "line": 691,
+      "line": 694,
       "pattern_expression": "\"GET /api/v1/console/collaborators/{id}/contact/phone\"",
       "registration": "HandleFunc"
     },
@@ -1742,7 +1769,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleOperatorPhonePut)",
-      "line": 692,
+      "line": 695,
       "pattern_expression": "\"PUT /api/v1/console/collaborators/{id}/contact/phone\"",
       "registration": "HandleFunc"
     },
@@ -1751,7 +1778,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "guard(server.handleMe)",
-      "line": 693,
+      "line": 696,
       "pattern_expression": "\"GET /api/v1/me\"",
       "registration": "HandleFunc"
     },
@@ -1760,7 +1787,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "guard(server.handleUserPreferencesGet)",
-      "line": 694,
+      "line": 697,
       "pattern_expression": "\"GET /api/v1/me/preferences\"",
       "registration": "HandleFunc"
     },
@@ -1769,7 +1796,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "guard(server.handleUserPreferencesPatch)",
-      "line": 695,
+      "line": 698,
       "pattern_expression": "\"PATCH /api/v1/me/preferences\"",
       "registration": "HandleFunc"
     },
@@ -1778,7 +1805,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "guard(server.handleMeSessionsList)",
-      "line": 700,
+      "line": 703,
       "pattern_expression": "\"GET /api/v1/me/sessions\"",
       "registration": "HandleFunc"
     },
@@ -1787,7 +1814,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "guard(server.handleMeSessionsRevoke)",
-      "line": 701,
+      "line": 704,
       "pattern_expression": "\"DELETE /api/v1/me/sessions/{id}\"",
       "registration": "HandleFunc"
     },
@@ -1796,7 +1823,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewIntegrations, server.handleIntegrationCatalogList)",
-      "line": 713,
+      "line": 716,
       "pattern_expression": "\"GET /api/v1/console/integration-catalog\"",
       "registration": "HandleFunc"
     },
@@ -1805,7 +1832,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewIntegrations, server.handleIntegrationCatalogEntry)",
-      "line": 714,
+      "line": 717,
       "pattern_expression": "\"GET /api/v1/console/integration-catalog/{domain}/{section}/{entry}\"",
       "registration": "HandleFunc"
     },
@@ -1814,7 +1841,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewIntegrations, server.handleCatalogDiscovery)",
-      "line": 715,
+      "line": 718,
       "pattern_expression": "\"GET /api/v1/console/catalog-discovery\"",
       "registration": "HandleFunc"
     },
@@ -1823,7 +1850,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleCatalogDiscoveryRegister)",
-      "line": 716,
+      "line": 719,
       "pattern_expression": "\"POST /api/v1/console/catalog-discovery/register\"",
       "registration": "HandleFunc"
     },
@@ -1832,7 +1859,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewIntegrations, server.handleIntegrationInstanceList)",
-      "line": 717,
+      "line": 720,
       "pattern_expression": "\"GET /api/v1/console/integration-instances\"",
       "registration": "HandleFunc"
     },
@@ -1841,7 +1868,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleIntegrationInstanceCreate)",
-      "line": 718,
+      "line": 721,
       "pattern_expression": "\"POST /api/v1/console/integration-instances\"",
       "registration": "HandleFunc"
     },
@@ -1850,7 +1877,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewPeople, server.handleCollaboratorList)",
-      "line": 725,
+      "line": 728,
       "pattern_expression": "\"GET /api/v1/console/collaborators\"",
       "registration": "HandleFunc"
     },
@@ -1859,7 +1886,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permCreateCollaborator, server.handleCollaboratorCreate)",
-      "line": 726,
+      "line": 729,
       "pattern_expression": "\"POST /api/v1/console/collaborators\"",
       "registration": "HandleFunc"
     },
@@ -1868,7 +1895,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewPeople, server.handleCollaboratorGet)",
-      "line": 727,
+      "line": 730,
       "pattern_expression": "\"GET /api/v1/console/collaborators/{id}\"",
       "registration": "HandleFunc"
     },
@@ -1877,7 +1904,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorUpdate)",
-      "line": 728,
+      "line": 731,
       "pattern_expression": "\"PATCH /api/v1/console/collaborators/{id}\"",
       "registration": "HandleFunc"
     },
@@ -1886,7 +1913,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permOffboardCollaborator, server.handleCollaboratorDelete)",
-      "line": 729,
+      "line": 732,
       "pattern_expression": "\"DELETE /api/v1/console/collaborators/{id}\"",
       "registration": "HandleFunc"
     },
@@ -1895,7 +1922,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permOffboardCollaborator, server.handleCollaboratorOffboard)",
-      "line": 730,
+      "line": 733,
       "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/offboard\"",
       "registration": "HandleFunc"
     },
@@ -1904,7 +1931,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorSuspend)",
-      "line": 731,
+      "line": 734,
       "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/suspend\"",
       "registration": "HandleFunc"
     },
@@ -1913,7 +1940,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorUnsuspend)",
-      "line": 732,
+      "line": 735,
       "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/unsuspend\"",
       "registration": "HandleFunc"
     },
@@ -1922,7 +1949,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorReOnboard)",
-      "line": 733,
+      "line": 736,
       "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/re-onboard\"",
       "registration": "HandleFunc"
     },
@@ -1931,7 +1958,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorRoleChange)",
-      "line": 734,
+      "line": 737,
       "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/role-change\"",
       "registration": "HandleFunc"
     },
@@ -1940,7 +1967,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorTeamAdd)",
-      "line": 735,
+      "line": 738,
       "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/team-add\"",
       "registration": "HandleFunc"
     },
@@ -1949,7 +1976,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorTeamRemove)",
-      "line": 736,
+      "line": 739,
       "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/team-remove\"",
       "registration": "HandleFunc"
     },
@@ -1958,7 +1985,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorAttributeSet)",
-      "line": 737,
+      "line": 740,
       "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/attribute-set\"",
       "registration": "HandleFunc"
     },
@@ -1967,7 +1994,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorManagerChange)",
-      "line": 738,
+      "line": 741,
       "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/manager-change\"",
       "registration": "HandleFunc"
     },
@@ -1976,7 +2003,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorAbsenceStart)",
-      "line": 739,
+      "line": 742,
       "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/absence/start\"",
       "registration": "HandleFunc"
     },
@@ -1985,7 +2012,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditCollaborator, server.handleCollaboratorAbsenceEnd)",
-      "line": 740,
+      "line": 743,
       "pattern_expression": "\"POST /api/v1/console/collaborators/{id}/absence/end\"",
       "registration": "HandleFunc"
     },
@@ -1994,7 +2021,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewPeople, server.handleCollaboratorLifecycleEvents)",
-      "line": 741,
+      "line": 744,
       "pattern_expression": "\"GET /api/v1/console/collaborators/{id}/lifecycle-events\"",
       "registration": "HandleFunc"
     },
@@ -2003,7 +2030,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewPeople, server.handleCollaboratorProviderState)",
-      "line": 742,
+      "line": 745,
       "pattern_expression": "\"GET /api/v1/console/collaborators/{id}/provider-state\"",
       "registration": "HandleFunc"
     },
@@ -2012,7 +2039,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionList)",
-      "line": 747,
+      "line": 750,
       "pattern_expression": "\"GET /api/v1/console/permissions/catalog\"",
       "registration": "HandleFunc"
     },
@@ -2021,7 +2048,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionRegister)",
-      "line": 748,
+      "line": 751,
       "pattern_expression": "\"POST /api/v1/console/permissions/catalog\"",
       "registration": "HandleFunc"
     },
@@ -2030,7 +2057,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionBindingList)",
-      "line": 749,
+      "line": 752,
       "pattern_expression": "\"GET /api/v1/console/permissions/bindings\"",
       "registration": "HandleFunc"
     },
@@ -2039,7 +2066,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionBindingCreate)",
-      "line": 750,
+      "line": 753,
       "pattern_expression": "\"POST /api/v1/console/permissions/bindings\"",
       "registration": "HandleFunc"
     },
@@ -2048,7 +2075,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handlePermissionEvaluate)",
-      "line": 751,
+      "line": 754,
       "pattern_expression": "\"POST /api/v1/console/permissions/evaluate\"",
       "registration": "HandleFunc"
     },
@@ -2057,7 +2084,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewTeams, server.handleTeamList)",
-      "line": 755,
+      "line": 758,
       "pattern_expression": "\"GET /api/v1/console/teams\"",
       "registration": "HandleFunc"
     },
@@ -2066,7 +2093,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permCreateTeam, server.handleTeamCreate)",
-      "line": 756,
+      "line": 759,
       "pattern_expression": "\"POST /api/v1/console/teams\"",
       "registration": "HandleFunc"
     },
@@ -2075,7 +2102,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewTeams, server.handleTeamGet)",
-      "line": 757,
+      "line": 760,
       "pattern_expression": "\"GET /api/v1/console/teams/{id}\"",
       "registration": "HandleFunc"
     },
@@ -2084,7 +2111,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditTeam, server.handleTeamUpdate)",
-      "line": 758,
+      "line": 761,
       "pattern_expression": "\"PATCH /api/v1/console/teams/{id}\"",
       "registration": "HandleFunc"
     },
@@ -2093,7 +2120,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditTeam, server.handleTeamDelete)",
-      "line": 759,
+      "line": 762,
       "pattern_expression": "\"DELETE /api/v1/console/teams/{id}\"",
       "registration": "HandleFunc"
     },
@@ -2102,7 +2129,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditTeam, server.handleTeamSync)",
-      "line": 760,
+      "line": 763,
       "pattern_expression": "\"POST /api/v1/console/teams/{id}/sync\"",
       "registration": "HandleFunc"
     },
@@ -2111,7 +2138,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewTeams, server.handleTeamProvisioningStatus)",
-      "line": 761,
+      "line": 764,
       "pattern_expression": "\"GET /api/v1/console/teams/{id}/provisioning-status\"",
       "registration": "HandleFunc"
     },
@@ -2120,7 +2147,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handleTeamGrantList)",
-      "line": 762,
+      "line": 765,
       "pattern_expression": "\"GET /api/v1/console/teams/{id}/grants\"",
       "registration": "HandleFunc"
     },
@@ -2129,7 +2156,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handleTeamGrantCreate)",
-      "line": 763,
+      "line": 766,
       "pattern_expression": "\"POST /api/v1/console/teams/{id}/grants\"",
       "registration": "HandleFunc"
     },
@@ -2138,7 +2165,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageTeamPermissions, server.handleTeamGrantDelete)",
-      "line": 764,
+      "line": 767,
       "pattern_expression": "\"DELETE /api/v1/console/teams/{id}/grants/{grant_id}\"",
       "registration": "HandleFunc"
     },
@@ -2147,7 +2174,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewTeams, server.handleTeamAvailableSources)",
-      "line": 765,
+      "line": 768,
       "pattern_expression": "\"GET /api/v1/console/teams/{id}/available-sources\"",
       "registration": "HandleFunc"
     },
@@ -2156,7 +2183,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewTeams, server.handleTeamMembershipList)",
-      "line": 768,
+      "line": 771,
       "pattern_expression": "\"GET /api/v1/console/team-memberships\"",
       "registration": "HandleFunc"
     },
@@ -2165,7 +2192,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permEditTeam, server.handleTeamMembershipUpsert)",
-      "line": 769,
+      "line": 772,
       "pattern_expression": "\"POST /api/v1/console/team-memberships\"",
       "registration": "HandleFunc"
     },
@@ -2174,7 +2201,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyIdentityList)",
-      "line": 774,
+      "line": 777,
       "pattern_expression": "\"GET /api/v1/console/auth/third-party-identities\"",
       "registration": "HandleFunc"
     },
@@ -2183,7 +2210,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyIdentityUpsert)",
-      "line": 775,
+      "line": 778,
       "pattern_expression": "\"POST /api/v1/console/auth/third-party-identities\"",
       "registration": "HandleFunc"
     },
@@ -2192,7 +2219,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyIdentityDelete)",
-      "line": 776,
+      "line": 779,
       "pattern_expression": "\"DELETE /api/v1/console/auth/third-party-identities/{provider}/{subject}\"",
       "registration": "HandleFunc"
     },
@@ -2201,7 +2228,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyAuthProviderList)",
-      "line": 777,
+      "line": 780,
       "pattern_expression": "\"GET /api/v1/console/auth/providers\"",
       "registration": "HandleFunc"
     },
@@ -2210,7 +2237,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyAuthProviderUpsert)",
-      "line": 778,
+      "line": 781,
       "pattern_expression": "\"POST /api/v1/console/auth/providers\"",
       "registration": "HandleFunc"
     },
@@ -2219,7 +2246,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyAuthProviderGet)",
-      "line": 779,
+      "line": 782,
       "pattern_expression": "\"GET /api/v1/console/auth/providers/{provider}\"",
       "registration": "HandleFunc"
     },
@@ -2228,7 +2255,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleThirdPartyAuthProviderDelete)",
-      "line": 780,
+      "line": 783,
       "pattern_expression": "\"DELETE /api/v1/console/auth/providers/{provider}\"",
       "registration": "HandleFunc"
     },
@@ -2237,7 +2264,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleSCIMClientCreate)",
-      "line": 781,
+      "line": 784,
       "pattern_expression": "\"POST /api/v1/console/auth/scim/clients\"",
       "registration": "HandleFunc"
     },
@@ -2246,7 +2273,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleSCIMClientList)",
-      "line": 782,
+      "line": 785,
       "pattern_expression": "\"GET /api/v1/console/auth/scim/clients\"",
       "registration": "HandleFunc"
     },
@@ -2255,7 +2282,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleSAMLSPRegister)",
-      "line": 783,
+      "line": 786,
       "pattern_expression": "\"POST /api/v1/console/auth/saml/service-providers\"",
       "registration": "HandleFunc"
     },
@@ -2264,7 +2291,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleSAMLSPList)",
-      "line": 784,
+      "line": 787,
       "pattern_expression": "\"GET /api/v1/console/auth/saml/service-providers\"",
       "registration": "HandleFunc"
     },
@@ -2273,7 +2300,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageAuthProviders, server.handleSAMLRotateSigningCert)",
-      "line": 785,
+      "line": 788,
       "pattern_expression": "\"POST /api/v1/console/auth/saml/rotate-signing-cert\"",
       "registration": "HandleFunc"
     },
@@ -2282,7 +2309,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleProductList)",
-      "line": 789,
+      "line": 792,
       "pattern_expression": "\"GET /api/v1/console/products\"",
       "registration": "HandleFunc"
     },
@@ -2291,7 +2318,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleProductCreate)",
-      "line": 790,
+      "line": 793,
       "pattern_expression": "\"POST /api/v1/console/products\"",
       "registration": "HandleFunc"
     },
@@ -2300,7 +2327,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretList)",
-      "line": 807,
+      "line": 810,
       "pattern_expression": "\"GET /api/v1/console/secrets\"",
       "registration": "HandleFunc"
     },
@@ -2309,7 +2336,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretGet)",
-      "line": 808,
+      "line": 811,
       "pattern_expression": "\"GET /api/v1/console/secrets/{namespace}/{name}\"",
       "registration": "HandleFunc"
     },
@@ -2318,7 +2345,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretCreate)",
-      "line": 809,
+      "line": 812,
       "pattern_expression": "\"POST /api/v1/console/secrets\"",
       "registration": "HandleFunc"
     },
@@ -2327,7 +2354,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretRotate)",
-      "line": 810,
+      "line": 813,
       "pattern_expression": "\"POST /api/v1/console/secrets/{namespace}/{name}/rotate\"",
       "registration": "HandleFunc"
     },
@@ -2336,7 +2363,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretDisable)",
-      "line": 811,
+      "line": 814,
       "pattern_expression": "\"POST /api/v1/console/secrets/{namespace}/{name}/disable\"",
       "registration": "HandleFunc"
     },
@@ -2345,7 +2372,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleManagedSecretRevoke)",
-      "line": 812,
+      "line": 815,
       "pattern_expression": "\"POST /api/v1/console/secrets/{namespace}/{name}/revoke\"",
       "registration": "HandleFunc"
     },
@@ -2354,7 +2381,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleMaterializeAll)",
-      "line": 813,
+      "line": 816,
       "pattern_expression": "\"POST /api/v1/console/secrets/materialize-all\"",
       "registration": "HandleFunc"
     },
@@ -2363,7 +2390,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageSecrets, server.handleMaterializeOne)",
-      "line": 814,
+      "line": 817,
       "pattern_expression": "\"POST /api/v1/console/secrets/{namespace}/{name}/materialize\"",
       "registration": "HandleFunc"
     },
@@ -2372,7 +2399,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleReconcilerStatus)",
-      "line": 817,
+      "line": 820,
       "pattern_expression": "\"GET /api/v1/console/reconciler/status\"",
       "registration": "HandleFunc"
     },
@@ -2381,7 +2408,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewIntegrations, server.handleRepositoryBindingList)",
-      "line": 820,
+      "line": 823,
       "pattern_expression": "\"GET /api/v1/console/repository-bindings\"",
       "registration": "HandleFunc"
     },
@@ -2390,7 +2417,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleRepositoryBindingCreate)",
-      "line": 821,
+      "line": 824,
       "pattern_expression": "\"POST /api/v1/console/repository-bindings\"",
       "registration": "HandleFunc"
     },
@@ -2399,7 +2426,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleGuardianPolicyList)",
-      "line": 825,
+      "line": 828,
       "pattern_expression": "\"GET /api/v1/console/guardian-policies\"",
       "registration": "HandleFunc"
     },
@@ -2408,7 +2435,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleGuardianPolicyCreate)",
-      "line": 826,
+      "line": 829,
       "pattern_expression": "\"POST /api/v1/console/guardian-policies\"",
       "registration": "HandleFunc"
     },
@@ -2417,7 +2444,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleGuardianApprovalList)",
-      "line": 827,
+      "line": 830,
       "pattern_expression": "\"GET /api/v1/console/guardian-approvals\"",
       "registration": "HandleFunc"
     },
@@ -2426,7 +2453,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleGuardianApprovalCreate)",
-      "line": 828,
+      "line": 831,
       "pattern_expression": "\"POST /api/v1/console/guardian-approvals\"",
       "registration": "HandleFunc"
     },
@@ -2435,7 +2462,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleGuardianApprovalDecision)",
-      "line": 829,
+      "line": 832,
       "pattern_expression": "\"POST /api/v1/console/guardian-approvals/{namespace}/{name}/decision\"",
       "registration": "HandleFunc"
     },
@@ -2444,7 +2471,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleGuardianMemoryList)",
-      "line": 830,
+      "line": 833,
       "pattern_expression": "\"GET /api/v1/console/guardian-memories\"",
       "registration": "HandleFunc"
     },
@@ -2453,7 +2480,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleRemediationBundleList)",
-      "line": 831,
+      "line": 834,
       "pattern_expression": "\"GET /api/v1/console/remediation-bundles\"",
       "registration": "HandleFunc"
     },
@@ -2462,7 +2489,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleRemediationBundleCreate)",
-      "line": 832,
+      "line": 835,
       "pattern_expression": "\"POST /api/v1/console/remediation-bundles\"",
       "registration": "HandleFunc"
     },
@@ -2471,7 +2498,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleGuardianMemoryReview)",
-      "line": 833,
+      "line": 836,
       "pattern_expression": "\"POST /api/v1/console/guardian-memories/review\"",
       "registration": "HandleFunc"
     },
@@ -2480,7 +2507,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleRemediationContractList)",
-      "line": 834,
+      "line": 837,
       "pattern_expression": "\"GET /api/v1/console/remediation-contracts\"",
       "registration": "HandleFunc"
     },
@@ -2489,7 +2516,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleRemediationContractCreate)",
-      "line": 835,
+      "line": 838,
       "pattern_expression": "\"POST /api/v1/console/remediation-contracts\"",
       "registration": "HandleFunc"
     },
@@ -2498,7 +2525,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewIntegrations, server.handleSurfaceList)",
-      "line": 839,
+      "line": 842,
       "pattern_expression": "\"GET /api/v1/console/surfaces\"",
       "registration": "HandleFunc"
     },
@@ -2507,7 +2534,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleSurfaceCreate)",
-      "line": 840,
+      "line": 843,
       "pattern_expression": "\"POST /api/v1/console/surfaces\"",
       "registration": "HandleFunc"
     },
@@ -2516,7 +2543,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleWorkflowList)",
-      "line": 843,
+      "line": 846,
       "pattern_expression": "\"GET /api/v1/console/workflows\"",
       "registration": "HandleFunc"
     },
@@ -2525,7 +2552,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleWorkflowCreate)",
-      "line": 844,
+      "line": 847,
       "pattern_expression": "\"POST /api/v1/console/workflows\"",
       "registration": "HandleFunc"
     },
@@ -2534,7 +2561,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleWorkflowRun)",
-      "line": 845,
+      "line": 848,
       "pattern_expression": "\"POST /api/v1/console/workflow-runs\"",
       "registration": "HandleFunc"
     },
@@ -2543,7 +2570,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewOps, server.handleWorkflowRunGet)",
-      "line": 846,
+      "line": 849,
       "pattern_expression": "\"GET /api/v1/console/workflow-runs/{run_id}\"",
       "registration": "HandleFunc"
     },
@@ -2552,7 +2579,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleInstallIntegration)",
-      "line": 849,
+      "line": 852,
       "pattern_expression": "\"POST /api/v1/console/integrations/install\"",
       "registration": "HandleFunc"
     },
@@ -2561,7 +2588,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageOrganization, server.handleProvisionAWS)",
-      "line": 853,
+      "line": 856,
       "pattern_expression": "\"POST /api/v1/console/provision/aws\"",
       "registration": "HandleFunc"
     },
@@ -2570,7 +2597,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewOverview, server.handleConsoleOverviewSummary)",
-      "line": 870,
+      "line": 873,
       "pattern_expression": "\"GET /api/v1/console/overview-summary\"",
       "registration": "HandleFunc"
     },
@@ -2579,7 +2606,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewTeams, server.handleConsoleTeamEditContext)",
-      "line": 871,
+      "line": 874,
       "pattern_expression": "\"GET /api/v1/console/teams/{id}/edit-context\"",
       "registration": "HandleFunc"
     },
@@ -2588,7 +2615,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permViewIntegrations, server.handleOpsSurfaceConfigureContext)",
-      "line": 872,
+      "line": 875,
       "pattern_expression": "\"GET /api/v1/ops/surfaces/{id}/configure-context\"",
       "registration": "HandleFunc"
     },
@@ -2597,7 +2624,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, requireDeployToken(server.handleDeployProduct))",
-      "line": 879,
+      "line": 882,
       "pattern_expression": "\"POST /api/v1/console/products/{namespace}/{name}/deploy\"",
       "registration": "HandleFunc"
     },
@@ -2606,7 +2633,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, requireDeployToken(server.handleDeployAll))",
-      "line": 880,
+      "line": 883,
       "pattern_expression": "\"POST /api/v1/console/products/deploy-all\"",
       "registration": "HandleFunc"
     },
@@ -2615,7 +2642,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageOrganization, requireDeployToken(server.handleBootstrap))",
-      "line": 881,
+      "line": 884,
       "pattern_expression": "\"POST /api/v1/console/bootstrap\"",
       "registration": "HandleFunc"
     },
@@ -2624,7 +2651,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleAuditList",
-      "line": 882,
+      "line": 885,
       "pattern_expression": "\"GET /api/v1/audit\"",
       "registration": "HandleFunc"
     },
@@ -2633,7 +2660,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageWorkflows, server.handleWorkflowTemplateInstantiate)",
-      "line": 884,
+      "line": 887,
       "pattern_expression": "\"POST /api/v1/workflow-templates/{namespace}/{name}/instantiate\"",
       "registration": "HandleFunc"
     },
@@ -2642,7 +2669,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleIntegrationSurfacesList()",
-      "line": 890,
+      "line": 893,
       "pattern_expression": "\"GET /api/v1/integration-surfaces\"",
       "registration": "HandleFunc"
     },
@@ -2651,7 +2678,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleIntegrationSurfaceGet()",
-      "line": 891,
+      "line": 894,
       "pattern_expression": "\"GET /api/v1/integration-surfaces/{name}\"",
       "registration": "HandleFunc"
     },
@@ -2660,7 +2687,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleIntegrationSurfaceUpdateIcon())",
-      "line": 892,
+      "line": 895,
       "pattern_expression": "\"PATCH /api/v1/integration-surfaces/{name}/icon\"",
       "registration": "HandleFunc"
     },
@@ -2669,7 +2696,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleIntegrationSurfaceSync()",
-      "line": 893,
+      "line": 896,
       "pattern_expression": "\"POST /api/v1/integration-surfaces/{name}/sync\"",
       "registration": "HandleFunc"
     },
@@ -2678,7 +2705,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.requireOpsPermissionFunc(permManageIntegrations, server.handleIntegrationSurfaceDeactivate())",
-      "line": 894,
+      "line": 897,
       "pattern_expression": "\"DELETE /api/v1/integration-surfaces/{name}\"",
       "registration": "HandleFunc"
     },
@@ -2687,7 +2714,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleIntegrationSurfaceQuery()",
-      "line": 895,
+      "line": 898,
       "pattern_expression": "\"POST /api/v1/integrations/{instance_id}/surface-query\"",
       "registration": "HandleFunc"
     },
@@ -2696,7 +2723,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleOIDCIntrospect",
-      "line": 938,
+      "line": 941,
       "pattern_expression": "\"POST /api/v1/oidc/introspect\"",
       "registration": "HandleFunc"
     },
@@ -2705,7 +2732,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleAdminCollaboratorRevokeSessions",
-      "line": 939,
+      "line": 942,
       "pattern_expression": "\"POST /api/v1/admin/collaborators/{id}/revoke-sessions\"",
       "registration": "HandleFunc"
     },
@@ -2714,7 +2741,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.handleAdminOIDCClientPatch",
-      "line": 944,
+      "line": 947,
       "pattern_expression": "\"PATCH /api/v1/admin/oidc-clients/{id}\"",
       "registration": "HandleFunc"
     },
@@ -2723,7 +2750,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.consoleHandler",
-      "line": 954,
+      "line": 957,
       "pattern_expression": "prefix",
       "registration": "Handle"
     },
@@ -2732,7 +2759,7 @@
       "file": "controllers/httpapi/server.go",
       "function": "http",
       "handler_expression": "server.consoleHandler",
-      "line": 955,
+      "line": 958,
       "pattern_expression": "prefix+\"/\"",
       "registration": "Handle"
     },

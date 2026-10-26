@@ -16,10 +16,18 @@ var guestD12ProtocolProfileApprovals = []guestProductionProfileApproval{
 	{Provider: "hetzner", Profile: "notify-hetzner-elastic", ProductionCatalogSHA256: "6d0a539f4841566c97063158fa3a4e62a465f7eb74d10a6405679681957706ec", ContractSHA256: "fd9d4c511230e041955aa4da4a6626d5aee4e236664eabfdcb024660dc095a2e"},
 }
 
-var guestProductionProfileApprovals = append(
+const GuestD15ProtocolCompatibilityMapSHA256 = "b5a496bb19f332a82387af7af85b75c9c738f17a139d23665de4548b89c199cd"
+
+var guestD15ProtocolProfileApprovals = append(
 	append([]guestProductionProfileApproval(nil), guestD12ProtocolProfileApprovals...),
 	guestProductionProfileApproval{Provider: "aws", Profile: "notify-aws-elastic", ProductionCatalogSHA256: "8066c34878d2a476f926207e65c27cf3f5bc87743c8380549e360040b7499b48", ContractSHA256: "97beb27b884fcf3928f2da6f14d8840ba0fb6f460012fdb50b8ab02b01334df7"},
 	guestProductionProfileApproval{Provider: "hetzner", Profile: "notify-hetzner-elastic", ProductionCatalogSHA256: "6d0a539f4841566c97063158fa3a4e62a465f7eb74d10a6405679681957706ec", ContractSHA256: "3fcb7fc4634fc5102d2172cc1d7f66bd92a61b9d544525a3438e8cdf914803f9"},
+)
+
+var guestProductionProfileApprovals = append(
+	append([]guestProductionProfileApproval(nil), guestD15ProtocolProfileApprovals...),
+	guestProductionProfileApproval{Provider: "aws", Profile: "notify-aws-elastic", ProductionCatalogSHA256: "8066c34878d2a476f926207e65c27cf3f5bc87743c8380549e360040b7499b48", ContractSHA256: "d81b2f6bfd4100f8e31a465efc49a1a0698f39a1df1372e2b4af2c12957c1602"},
+	guestProductionProfileApproval{Provider: "hetzner", Profile: "notify-hetzner-elastic", ProductionCatalogSHA256: "6d0a539f4841566c97063158fa3a4e62a465f7eb74d10a6405679681957706ec", ContractSHA256: "e9e6745ef3e0ef627bbe2080f196ed55b6037b42839ddf99bd0fbf353b386c9d"},
 )
 
 func guestProtocolAuthoritySupported(authority, actualBuild, provider, profile string) bool {
@@ -60,6 +68,11 @@ func guestBindingApprovedByCompatibilityMap(p model.CapacityPolicySpec, binding 
 			return false
 		}
 		approvals = guestD12ProtocolProfileApprovals
+	} else if compatibilityMap == GuestD15ProtocolCompatibilityMapSHA256 {
+		if guestProtocolCompatibilityMapSHA256(guestD15ProtocolProfileApprovals) != GuestD15ProtocolCompatibilityMapSHA256 {
+			return false
+		}
+		approvals = guestD15ProtocolProfileApprovals
 	} else if compatibilityMap != guestProtocolCompatibilityMapSHA256(currentApprovals) {
 		return false
 	}
