@@ -35,6 +35,7 @@ type partialFixture struct {
 	observations [3]model.CapacityGuestRetirementObservation
 	reads        [4]partialReadFixture
 	observer     ed25519.PrivateKey
+	core         ed25519.PrivateKey
 	now          time.Time
 }
 
@@ -54,6 +55,7 @@ func partialSignedFixtureWith(t *testing.T, header *model.CapacityGuestRetiremen
 		f.stored.Preregistration.PreregistrationID = pre
 	}
 	_, core, _ := ed25519.GenerateKey(rand.Reader)
+	f.core = core
 	_, f.observer, _ = ed25519.GenerateKey(rand.Reader)
 	e := &f.stored.Receipt.Enrollment
 	e.Statement.ObservationPublicKey = base64.StdEncoding.EncodeToString(f.observer.Public().(ed25519.PublicKey))
@@ -171,7 +173,7 @@ func expectPartialEvidence(t *testing.T, m sqlmock.Sqlmock, f partialFixture) {
 		m.ExpectQuery("SELECT r.id::text,r.possible_read_at").WithArgs(i.RequestID, r.phase, r.ordinal).WillReturnRows(sqlmock.NewRows([]string{"id", "possible", "deadline", "wire", "sha", "recorded", "consistent"}).AddRow(r.id, r.possible, r.deadline, b, capacity.BusinessCreationSHA256(b), r.recorded, true))
 		for _, v := range r.stages {
 			b = mustRecoveryJSON(t, v.t)
-			m.ExpectQuery("SELECT original_wire,return_sha256,original_reply_wire").WithArgs(r.id, v.stage).WillReturnRows(sqlmock.NewRows([]string{"wire", "sha", "reply", "consistent"}).AddRow(b, capacity.BusinessCreationSHA256(b), v.reply, true))
+			m.ExpectQuery("SELECT original_wire,return_sha256,original_reply_wire").WithArgs(r.id, v.stage, r.deadline).WillReturnRows(sqlmock.NewRows([]string{"wire", "sha", "reply", "consistent"}).AddRow(b, capacity.BusinessCreationSHA256(b), v.reply, true))
 			if v.stage == "snapshot" {
 				ch := mustRecoveryJSON(t, v.challenge)
 				m.ExpectQuery("SELECT c.original_wire,c.challenge_sha256").WithArgs(i.RequestID, r.phase, r.ordinal).WillReturnRows(sqlmock.NewRows([]string{"cwire", "csha", "wire", "sha", "consistent"}).AddRow(ch, capacity.BusinessCreationSHA256(ch), v.snapshot, capacity.BusinessCreationSHA256(v.snapshot), true))

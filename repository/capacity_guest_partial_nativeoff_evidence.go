@@ -112,13 +112,23 @@ func partialNativeOffEvidenceTx(ctx context.Context, tx *sql.Tx, stored GuestRet
 				stages = append(stages, "journal")
 			}
 		}
+		var originalReadDeadline time.Time
 		for _, stage := range stages {
 			var transportWire, reply []byte
 			var transport prejournalSnapshotTransport
-			if err = tx.QueryRowContext(ctx, `SELECT original_wire,return_sha256,original_reply_wire,original_record=convert_from(original_wire,'UTF8')::jsonb FROM public.capacity_guest_original_authority_transport_returns WHERE read_id=$1 AND native_stage=$2`, id, stage).Scan(&transportWire, &out.TransportSHA256[transportIndex], &reply, &consistent); err != nil {
+			if err = tx.QueryRowContext(ctx, `SELECT original_wire,return_sha256,original_reply_wire,original_record=convert_from(original_wire,'UTF8')::jsonb AND (original_record->>'original_deadline')::timestamptz=$3::timestamptz FROM public.capacity_guest_original_authority_transport_returns WHERE read_id=$1 AND native_stage=$2`, id, stage, readDeadline).Scan(&transportWire, &out.TransportSHA256[transportIndex], &reply, &consistent); err != nil {
 				return out, err
 			}
-			if !consistent || capacity.BusinessCreationSHA256(transportWire) != out.TransportSHA256[transportIndex] || decodePrejournalOriginal(transportWire, &transport) != nil || !partialNativeTransportClosed(transport, stage, reply, caller, id, possible, readDeadline) || transport.DriverReturnedAt.After(recorded) {
+			if !consistent || capacity.BusinessCreationSHA256(transportWire) != out.TransportSHA256[transportIndex] || decodePrejournalOriginal(transportWire, &transport) != nil {
+				return out, ErrCapacityConflict
+			}
+			// The immutable original wire retains nanoseconds; timestamptz is
+			// only its checked PostgreSQL projection. Keep the original deadline
+			// for exact timing and require sibling stages of this read to match.
+			if originalReadDeadline.IsZero() {
+				originalReadDeadline = transport.OriginalDeadline
+			}
+			if !partialNativeTransportClosed(transport, stage, reply, caller, id, possible, originalReadDeadline) || transport.DriverReturnedAt.After(recorded) {
 				return out, ErrCapacityConflict
 			}
 			transportIndex++
@@ -130,7 +140,7 @@ func partialNativeOffEvidenceTx(ctx context.Context, tx *sql.Tx, stored GuestRet
 				if err = tx.QueryRowContext(ctx, `SELECT c.original_wire,c.challenge_sha256,v.original_wire,v.return_sha256,c.original_record=convert_from(c.original_wire,'UTF8')::jsonb AND v.original_record=convert_from(v.original_wire,'UTF8')::jsonb FROM public.capacity_guest_runtime_snapshot_challenges c JOIN public.capacity_guest_runtime_snapshot_returns v ON v.challenge_id=c.id WHERE c.intent_id=$1 AND c.phase=$2 AND c.ordinal=$3`, i.RequestID, phase, ordinal).Scan(&challengeWire, &out.SnapshotChallengeSHA256[k], &snapshotWire, &out.SnapshotReturnSHA256[k], &consistent); err != nil {
 					return out, err
 				}
-				if !consistent || capacity.DecodeGuestLifecycle(challengeWire, &challenge) != nil || capacity.DecodeGuestLifecycle(snapshotWire, &snapshot) != nil || capacity.BusinessCreationSHA256(challengeWire) != out.SnapshotChallengeSHA256[k] || capacity.BusinessCreationSHA256(snapshotWire) != out.SnapshotReturnSHA256[k] || !bytes.Equal(reply, snapshotWire) || !challenge.OriginalDeadline.Equal(readDeadline) || capacity.GuestRuntimeSnapshot(challenge, stored.Receipt.Enrollment, i, snapshot, transport.DriverReturnedAt) != nil {
+				if !consistent || capacity.DecodeGuestLifecycle(challengeWire, &challenge) != nil || capacity.DecodeGuestLifecycle(snapshotWire, &snapshot) != nil || capacity.BusinessCreationSHA256(challengeWire) != out.SnapshotChallengeSHA256[k] || capacity.BusinessCreationSHA256(snapshotWire) != out.SnapshotReturnSHA256[k] || !bytes.Equal(reply, snapshotWire) || !challenge.OriginalDeadline.Equal(originalReadDeadline) || capacity.GuestRuntimeSnapshot(challenge, stored.Receipt.Enrollment, i, snapshot, transport.DriverReturnedAt) != nil {
 					return out, ErrCapacityConflict
 				}
 			} else {
