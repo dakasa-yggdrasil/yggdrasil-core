@@ -323,32 +323,67 @@ func enrolledFailedAWSContractBoundaries(t *testing.T, db *sql.DB) {
 // As in the H SQL fixture, signature-shaped enrollment is not Go authority.
 func enrolledFailedAWSOriginalPGFixture(t *testing.T, db *sql.DB, auxiliaryFlag, auxiliaryResources string) failedOriginalFixture {
 	t.Helper()
-	f := originalDispositionPGFixture(t, db)
-	f.record.EventProvider = "aws"
-	f.record.Binding.OriginalProviderSourceCommit = enrolledFailedAWSCreator
-	f.record.Binding.EnsureCapability = "ensure_ec2_instance"
-	f.record.Binding.DestroyCapability = "terminate_ec2_instance"
-	f.record.Binding.Slots[0].DesiredSpec.Capability = "ensure_ec2_instance"
-	requestSHA := originalDispositionJSONSHA(f.record.Binding.Slots[0].DesiredSpec)
-	f.record.Binding.Slots[0].DesiredSpecSHA256 = requestSHA
-	f.record.Grant.Capability, f.record.Grant.RequestSHA256 = "ensure_ec2_instance", requestSHA
-	f.pre.OriginalCreateRequestSHA256 = requestSHA
-	f.record.Settlement.RequestSHA256 = requestSHA
+	f := originalDispositionPGFixturePrepared(t, db, func(f *dispositionPGFixture) {
+		f.record.EventProvider = "aws"
+		f.record.Binding.OriginalProviderSourceCommit = enrolledFailedAWSCreator
+		f.record.Binding.EnsureCapability = "ensure_ec2_instance"
+		f.record.Binding.DestroyCapability = "terminate_ec2_instance"
+		f.record.Binding.Slots[0].DesiredSpec.Capability = "ensure_ec2_instance"
+		requestSHA := originalDispositionJSONSHA(f.record.Binding.Slots[0].DesiredSpec)
+		f.record.Binding.Slots[0].DesiredSpecSHA256 = requestSHA
+		f.record.Grant.Capability, f.record.Grant.RequestSHA256 = "ensure_ec2_instance", requestSHA
+		f.pre.OriginalCreateRequestSHA256 = requestSHA
+		f.record.Settlement.RequestSHA256 = requestSHA
+		o := f.record.Settlement.OriginalProviderCreateReturn
+		o.Schema, o.Provider, o.AdapterSourceCommit = "aws_original_run_instances_return_v1", "aws", enrolledFailedAWSCreator
+		o.RequestSHA256, o.ResourceID, o.ResponseStatus = requestSHA, "i-0123456789abcdef0", 200
+		o.ActionID = uuid.NewString()
+		f.record.Settlement.ActionID = o.ActionID
+		f.record.Settlement.ResourceID = o.ResourceID
+		f.record.Settlement.AuxiliaryResources = []model.CapacityMutationAuxiliaryResource{}
+		f.record.Settlement.AuxiliaryInventoryComplete = false
+		var p model.CapacityPolicySpec
+		if json.Unmarshal(f.policy.Spec, &p) != nil {
+			t.Fatal("fixture policy")
+		}
+		p.Profiles[0].Provider = "aws"
+		policyRaw, _ := json.Marshal(p)
+		f.policy.Spec = policyRaw
+		grantRaw, _ := json.Marshal(f.record)
+		// Preserve the real owning c34 omitempty shape in the default positive.
+		// Compatibility/forgery cases change only the DECLARED SQL representation
+		// before witness insertion; no old immutable or production row is rewritten.
+		var grantFields, settlementFields map[string]json.RawMessage
+		if err := json.Unmarshal(grantRaw, &grantFields); err != nil {
+			t.Fatal(err)
+		}
+		if err := json.Unmarshal(grantFields["settlement"], &settlementFields); err != nil {
+			t.Fatal(err)
+		}
+		if _, present := settlementFields["auxiliary_inventory_complete"]; present {
+			t.Fatal("owning false inventory flag must remain omitted")
+		}
+		if _, present := settlementFields["auxiliary_resources"]; present {
+			t.Fatal("owning empty auxiliary slice must remain omitted")
+		}
+		if auxiliaryFlag != "" {
+			settlementFields["auxiliary_inventory_complete"] = json.RawMessage(auxiliaryFlag)
+		}
+		if auxiliaryResources != "" {
+			settlementFields["auxiliary_resources"] = json.RawMessage(auxiliaryResources)
+		}
+		if auxiliaryFlag != "" || auxiliaryResources != "" {
+			grantFields["settlement"], _ = json.Marshal(settlementFields)
+			grantRaw, _ = json.Marshal(grantFields)
+		}
+		f.initialGrantRaw = grantRaw
+	})
 	o := f.record.Settlement.OriginalProviderCreateReturn
-	o.Schema, o.Provider, o.AdapterSourceCommit = "aws_original_run_instances_return_v1", "aws", enrolledFailedAWSCreator
-	o.RequestSHA256, o.ResourceID, o.ResponseStatus = requestSHA, "i-0123456789abcdef0", 200
-	o.ActionID = uuid.NewString()
-	f.record.Settlement.ActionID = o.ActionID
-	f.record.Settlement.ResourceID = o.ResourceID
-	f.record.Settlement.AuxiliaryResources = []model.CapacityMutationAuxiliaryResource{}
-	f.record.Settlement.AuxiliaryInventoryComplete = false
+	requestSHA := f.record.Grant.RequestSHA256
 	var p model.CapacityPolicySpec
 	if json.Unmarshal(f.policy.Spec, &p) != nil {
-		t.Fatal("fixture policy")
+		t.Fatal("prepared AWS policy")
 	}
-	p.Profiles[0].Provider = "aws"
-	policyRaw, _ := json.Marshal(p)
-	f.policy.Spec = policyRaw
 	start := f.pre.ReservedAt.Add(-time.Second)
 	finish := f.pre.OriginalDeadline.Add(time.Second)
 	jobID, runID := uuid.New(), uuid.New()
@@ -369,45 +404,18 @@ func enrolledFailedAWSOriginalPGFixture(t *testing.T, db *sql.DB, auxiliaryFlag,
 	observed := f.pre.ReservedAt.Add(3 * time.Second)
 	w := model.CapacityGuestOriginalCreateWitness{Schema: capacity.GuestCreateWitnessSchema, BindingName: f.pre.BindingName, PreregistrationID: f.pre.PreregistrationID, PreregistrationNonceSHA256: f.pre.NonceSHA256, OriginalCreateGrantID: f.pre.OriginalCreateGrantID, OriginalCreateAttemptID: f.record.AttemptID, OriginalCreateRequestSHA256: requestSHA, OriginalCreateSettlementSHA256: capacity.GuestRetirementSHA(*f.record.Settlement), ProfileManifestSHA256: f.pre.ProfileManifestSHA256, BootstrapSHA256: f.binding.ProfileManifest.BootstrapSHA256, CoreSourceCommit: f.pre.CoreSourceCommit, OriginalDeadline: f.pre.OriginalDeadline, OriginalCreateReturnedAt: f.pre.ReservedAt.Add(2 * time.Second), ObservedAt: observed, Tuple: model.CapacityGuestNativeTuple{Provider: "aws", InstanceID: f.record.Binding.IntegrationInstanceID, InstanceChecksum: f.record.Binding.IntegrationChecksum, TypeID: f.record.Binding.IntegrationTypeID, TypeChecksum: f.record.Binding.IntegrationTypeChecksum, ScopeChecksum: f.record.Binding.ScopeChecksum, Profile: f.record.Binding.ProfileName, Slot: 1, ResourceID: o.ResourceID, CreatedAt: o.ResourceCreatedAt}}
 	w.ProviderNativeIdentity = &model.CapacityGuestProviderNativeIdentity{Schema: capacity.GuestProviderNativeIdentitySchema, Provider: "aws", ResourceID: o.ResourceID, ResourceCreatedAt: o.ResourceCreatedAt, Region: "us-east-1", TypeID: "m6a.large", ImageID: "ami-0123456789abcdef0", Hostname: "isolated-original", ObservedAt: observed, AdapterSourceCommit: enrolledFailedAWSCreator}
+	// Complete the DECLARED AWS native-realm fixture before first insertion.
+	w.ProviderNativeIdentity.Location = "us-east-1"
+	w.ProviderNativeIdentity.Zone = "us-east-1a"
+	w.ProviderNativeIdentity.AccountID = "123456789012"
 	witnessRaw, _ := json.Marshal(w)
-	grantRaw, _ := json.Marshal(f.record)
-	// Preserve the real owning c34 omitempty shape in the default positive.
-	// Compatibility/forgery cases change only the DECLARED SQL representation
-	// before witness insertion; no old immutable or production row is rewritten.
-	var grantFields, settlementFields map[string]json.RawMessage
-	if err := json.Unmarshal(grantRaw, &grantFields); err != nil {
-		t.Fatal(err)
-	}
-	if err := json.Unmarshal(grantFields["settlement"], &settlementFields); err != nil {
-		t.Fatal(err)
-	}
-	if _, present := settlementFields["auxiliary_inventory_complete"]; present {
-		t.Fatal("owning false inventory flag must remain omitted")
-	}
-	if _, present := settlementFields["auxiliary_resources"]; present {
-		t.Fatal("owning empty auxiliary slice must remain omitted")
-	}
-	if auxiliaryFlag != "" {
-		settlementFields["auxiliary_inventory_complete"] = json.RawMessage(auxiliaryFlag)
-	}
-	if auxiliaryResources != "" {
-		settlementFields["auxiliary_resources"] = json.RawMessage(auxiliaryResources)
-	}
-	if auxiliaryFlag != "" || auxiliaryResources != "" {
-		grantFields["settlement"], _ = json.Marshal(settlementFields)
-		grantRaw, _ = json.Marshal(grantFields)
-	}
-	preRaw, _ := json.Marshal(f.pre)
 	must := func(query string, args ...any) {
 		t.Helper()
 		if _, err := db.Exec(query, args...); err != nil {
 			t.Fatal(err)
 		}
 	}
-	must(`UPDATE public.manifests SET spec=$2::jsonb WHERE id=$1`, f.policy.ID, string(policyRaw))
-	must(`UPDATE public.capacity_mutation_grants SET grant_record=$2::jsonb WHERE id=$1`, f.pre.OriginalCreateGrantID, string(grantRaw))
-	must(`UPDATE public.capacity_vm_provisioning_preregistrations SET preregistration_record=$2::jsonb,original_wire=$3 WHERE id=$1`, f.pre.PreregistrationID, string(preRaw), preRaw)
-	must(`INSERT INTO public.capacity_guest_original_create_witnesses(preregistration_id,original_wire,witness_sha256,original_record,original_create_attempt_id,recorded_at) VALUES($1,$2,$3,$4::jsonb,$5,$6)`, f.pre.PreregistrationID, witnessRaw, capacity.GuestRetirementSHA(w), string(witnessRaw), f.record.AttemptID, observed)
+	must(`INSERT INTO public.capacity_guest_original_create_witnesses(preregistration_id,original_wire,witness_sha256,original_record,original_create_attempt_id,recorded_at,resource_tuple_sha256) VALUES($1,$2,$3,$4::jsonb,$5,$6,$7)`, f.pre.PreregistrationID, witnessRaw, capacity.GuestRetirementSHA(w), string(witnessRaw), f.record.AttemptID, observed, capacity.GuestRetirementSHA(w.Tuple))
 	// The owning insertWorkflowRun stores the selector and omits workflow_id.
 	// Keep the actual historical NULL instead of improving the old row.
 	must(`INSERT INTO public.workflow_runs(id,status,workflow_namespace,workflow_name,workflow_version,started_at,finished_at,result,error,inputs,metadata) VALUES($1,'failed',$2,'original',1,$3,$4,$5::jsonb,'original deadline elapsed',$6::jsonb,$7::jsonb)`, runID, f.policy.Metadata.Namespace, start, finish, string(resultRaw), string(inputsRaw), string(metadataRaw))

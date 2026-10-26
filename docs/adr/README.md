@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**69 decisions.**
+**70 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -117,3 +117,7 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0081](0081-recover-authenticated-prejournal-retirement-refusals-separately.md) | Recover authenticated prejournal retirement refusals separately | Proposed | 2026-10-25 | Canonical authority challenge deadline and separate, authenticated first-live refusal recovery without quiescence credit |
 
 | [0082](0082-reconcile-partial-guest-retirement-with-separate-native-off-proof.md) | Reconcile partial Guest retirement with a separate native OFF proof | Proposed | 2026-10-25 | Explicit administrative admission, immutable three-record quiescence history and bounded provider-only OFF observations |
+
+| [0083](0083-close-witnessed-unenrolled-aws-originals-with-native-absence.md) | Close witnessed unenrolled AWS originals with native absence | Proposed | 2026-10-26 | Exact published AWS creator, immutable witness/failed run/unknown ACK, existing read-only observer and independent complete native absence |
+
+- [ADR-0084: Bind an explicit failed-installed replacement to its original Core issuer](0084-bind-failed-installed-replacement-to-original-Core-issuer.md)

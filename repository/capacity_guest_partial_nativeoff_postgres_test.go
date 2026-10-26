@@ -21,8 +21,8 @@ func TestPartialNativeOffReconciliationPostgres(t *testing.T) {
 	db, policy := d12AuthorityLocalFixture(t)
 	tx, ctx := guestOriginalStorageTx(t, db)
 	var schema int
-	if e := tx.QueryRowContext(ctx, `SELECT max(version_id) FROM goose_db_version WHERE is_applied`).Scan(&schema); e != nil || schema != 81 {
-		t.Fatal("owning schema81 required", schema, e)
+	if e := tx.QueryRowContext(ctx, `SELECT max(version_id) FROM goose_db_version WHERE is_applied`).Scan(&schema); e != nil || schema != 82 {
+		t.Fatal("owning schema82 required", schema, e)
 	}
 	f, parent, old, disposal, recovery := recoveryStorageFixture(t, tx, ctx, policy)
 	before := recoveryOriginals(t, tx, ctx, parent.RequestID, disposal.ID)

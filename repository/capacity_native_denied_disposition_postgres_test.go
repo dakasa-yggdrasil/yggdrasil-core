@@ -196,26 +196,27 @@ func TestNativeDeniedDispositionPostgresEligibility(t *testing.T) {
 				q = `UPDATE public.capacity_mutation_grants SET grant_record=jsonb_set(grant_record,'{settlement,action_id}','"foreign-action"') WHERE id=$1`
 				args = []any{f.pre.OriginalCreateGrantID}
 			case "witness":
-				q = `INSERT INTO public.capacity_guest_original_create_witnesses(preregistration_id)VALUES($1)`
-				args = []any{f.pre.PreregistrationID}
+				originalDispositionDeclaredBoundary(t, db, f.dispositionPGFixture, "witness")
 			case "enrollment":
-				q = `INSERT INTO public.capacity_vm_original_enrollments(preregistration_id)VALUES($1)`
-				args = []any{f.pre.PreregistrationID}
+				originalDispositionDeclaredBoundary(t, db, f.dispositionPGFixture, "enrollment")
 			case "installation":
-				q = `INSERT INTO public.capacity_guest_original_installations(preregistration_id)VALUES($1)`
-				args = []any{f.pre.PreregistrationID}
+				originalDispositionDeclaredBoundary(t, db, f.dispositionPGFixture, "installation")
 			case "wrong_step":
 				q = `UPDATE public.workflow_runs SET result=jsonb_set(result,'{steps,1,metadata,original_guest_refusal_predicate}','"original-guest-step-29"') WHERE id=$1`
 				args = []any{f.runID}
 			case "live_deadline":
-				q = `UPDATE public.capacity_vm_provisioning_preregistrations SET original_deadline=clock_timestamp()+interval '1 hour' WHERE id=$1`
-				args = []any{f.pre.PreregistrationID}
+				if _, changed := db.Exec(`UPDATE public.capacity_vm_provisioning_preregistrations SET original_deadline=clock_timestamp()+interval '1 hour' WHERE id=$1`, f.pre.PreregistrationID); changed == nil {
+					t.Fatal("immutable original deadline rewrite succeeded")
+				}
+				return
 			case "foreign_workflow":
 				q = `UPDATE public.workflow_runs SET workflow_id=$2 WHERE id=$1`
 				args = []any{f.runID, uuid.New()}
 			}
-			if _, e := db.Exec(q, args...); e != nil {
-				t.Fatal(e)
+			if q != "" {
+				if _, e := db.Exec(q, args...); e != nil {
+					t.Fatal(e)
+				}
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 			defer cancel()

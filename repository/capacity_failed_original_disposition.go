@@ -20,10 +20,12 @@ const failedOriginalHetznerCreator = "6026f78572a0ebfbf1b50984c2d47ff28bdc714d"
 
 type failedOriginalDispositionSnapshot struct {
 	originalDispositionSnapshot
-	witnessSHA  string
-	dispatchSHA string
-	runSHA      string
-	job         CapacityDispatchJob
+	witnessImageID   string
+	witnessAccountID string
+	witnessSHA       string
+	dispatchSHA      string
+	runSHA           string
+	job              CapacityDispatchJob
 }
 
 // This owner is created only by the private database admission. It never
@@ -126,13 +128,10 @@ func loadFailedOriginalDispositionSnapshot(ctx context.Context, tx *sql.Tx, id, 
 	if settlement.Outcome != "accepted" || !settlement.TransportCompleted || len(settlement.AuxiliaryResources) > 16 || settlement.GrantID != id || settlement.AttemptID != r.AttemptID || settlement.RequestSHA256 != g.RequestSHA256 || settlement.ResourceID == "" || settlement.ResourceCreatedAt == "" || settlement.ActionID == "" || original.GrantID != id || original.AttemptID != r.AttemptID || original.RequestSHA256 != g.RequestSHA256 || original.ResourceID != settlement.ResourceID || original.ResourceCreatedAt != settlement.ResourceCreatedAt || original.ActionID != settlement.ActionID || !slices.Equal(original.NextActionIDs, settlement.NextActionIDs) || original.AdapterSourceCommit != b.OriginalProviderSourceCommit || !originalDispositionHex(original.AdapterSourceCommit, 40) || original.Provider != r.EventProvider || (original.Provider != "aws" && original.Provider != "hetzner") {
 		return out, ErrOriginalCreateDisposition
 	}
-	// Witnessed terminal accounting starts with the exact known H creator and
-	// its complete original auxiliary list. AWS unknown-AUX uses its separate
-	// existing disposition and cannot select this witnessed branch.
-	if original.Provider != "hetzner" || original.AdapterSourceCommit != failedOriginalHetznerCreator || !settlement.AuxiliaryInventoryComplete {
-		return out, ErrOriginalCreateDisposition
-	}
-	if len(settlement.AuxiliaryResources) == 0 {
+	// This second branch is only the existing published c34 AWS creator's
+	// witnessed, unenrolled unknown-AUX outcome. It never means never-started.
+	witnessedAWS := original.Provider == "aws" && original.AdapterSourceCommit == enrolledFailedAWSCreator && !settlement.AuxiliaryInventoryComplete && len(settlement.AuxiliaryResources) == 0
+	if !witnessedAWS && (original.Provider != "hetzner" || original.AdapterSourceCommit != failedOriginalHetznerCreator || !settlement.AuxiliaryInventoryComplete || len(settlement.AuxiliaryResources) == 0) {
 		return out, ErrOriginalCreateDisposition
 	}
 	var preID string
@@ -200,12 +199,22 @@ func loadFailedOriginalDispositionSnapshot(ctx context.Context, tx *sql.Tx, id, 
 		return out, err
 	}
 	w := stored.witness
-	returned, returnErr := capacity.ValidateOriginalHetznerCreateReturn(b, g, r.AttemptID, *settlement, pre.ReservedAt, w.ObservedAt)
+	var returned time.Time
+	var returnErr error
+	if witnessedAWS {
+		returned, returnErr = capacity.ValidateOriginalAWSCreateReturn(b, g, r.AttemptID, *settlement, pre.ReservedAt, w.ObservedAt)
+	} else {
+		returned, returnErr = capacity.ValidateOriginalHetznerCreateReturn(b, g, r.AttemptID, *settlement, pre.ReservedAt, w.ObservedAt)
+	}
 	if returnErr != nil || !returned.Equal(w.OriginalCreateReturnedAt) {
 		return out, ErrOriginalCreateDisposition
 	}
 	if err = tx.QueryRowContext(ctx, `SELECT witness_sha256 FROM public.capacity_guest_original_create_witnesses WHERE preregistration_id=$1 FOR SHARE`, preID).Scan(&out.witnessSHA); err != nil || !originalDispositionHex(out.witnessSHA, 64) || w.Schema != capacity.GuestCreateWitnessSchema || w.PreregistrationID != preID || w.BindingName != pre.BindingName || w.PreregistrationNonceSHA256 != pre.NonceSHA256 || w.OriginalCreateGrantID != id || w.OriginalCreateAttemptID != r.AttemptID || w.OriginalCreateRequestSHA256 != g.RequestSHA256 || w.OriginalCreateSettlementSHA256 != capacity.GuestRetirementSHA(*settlement) || w.ProfileManifestSHA256 != pre.ProfileManifestSHA256 || w.CoreSourceCommit != pre.CoreSourceCommit || !w.OriginalDeadline.Equal(pre.OriginalDeadline) || w.Tuple.Provider != original.Provider || w.Tuple.InstanceID != b.IntegrationInstanceID || w.Tuple.InstanceChecksum != b.IntegrationChecksum || w.Tuple.TypeID != b.IntegrationTypeID || w.Tuple.TypeChecksum != b.IntegrationTypeChecksum || w.Tuple.ScopeChecksum != b.ScopeChecksum || w.Tuple.Profile != b.ProfileName || w.Tuple.Slot != slot || w.Tuple.ResourceID != settlement.ResourceID || w.Tuple.CreatedAt != settlement.ResourceCreatedAt || w.ObservedAt.Before(w.OriginalCreateReturnedAt) || !w.ObservedAt.Before(pre.OriginalDeadline) || capacity.ValidateGuestProviderNativeIdentity(w.ProviderNativeIdentity, w.Tuple, original.AdapterSourceCommit, w.ObservedAt) != nil {
 		return out, ErrOriginalCreateDisposition
+	}
+	if witnessedAWS {
+		out.witnessImageID = w.ProviderNativeIdentity.ImageID
+		out.witnessAccountID = w.ProviderNativeIdentity.AccountID
 	}
 	if err = loadFailedOriginalDispatch(ctx, tx, jobID, ns, out.spec, r, pre, out.now, &out); err != nil {
 		return out, err
@@ -219,6 +228,9 @@ func loadFailedOriginalDispositionSnapshot(ctx context.Context, tx *sql.Tx, id, 
 	}
 	receipt := model.CapacityMutationReceipt{Grant: g, AttemptID: r.AttemptID, Outcome: settlement.Outcome, TransportCompleted: settlement.TransportCompleted, ResourceID: settlement.ResourceID, ResourceCreatedAt: settlement.ResourceCreatedAt, ActionID: settlement.ActionID, NextActionIDs: append([]string{}, settlement.NextActionIDs...), AuxiliaryResources: append([]model.CapacityMutationAuxiliaryResource{}, settlement.AuxiliaryResources...), AuxiliaryInventoryComplete: settlement.AuxiliaryInventoryComplete}
 	out.candidate = model.CapacityOriginalCreateDispositionCandidate{OriginalPolicy: policy, Binding: b, Preregistration: pre, Receipt: receipt, Request: model.CapacityOriginalCreateDispositionReadRequest{OriginalAuxiliaryInventoryComplete: settlement.AuxiliaryInventoryComplete, Profile: b.ProfileName, Slot: g.Slot, GrantID: id, AttemptID: r.AttemptID, RequestSHA256: g.RequestSHA256, ExpectedResourceID: settlement.ResourceID, ExpectedResourceCreatedAt: settlement.ResourceCreatedAt, OriginalAdapterSourceCommit: original.AdapterSourceCommit, AuxiliaryResources: append([]model.CapacityMutationAuxiliaryResource{}, settlement.AuxiliaryResources...)}, OriginalGrantSHA256: originalDispositionDigest(raw), OriginalPreregistrationSHA256: originalDispositionDigest(preWire), OriginalBindingSHA256: originalDispositionDigest(bindingWire), OriginalSettlementSHA256: originalDispositionJSONSHA(settlement), OriginalPolicySHA256: originalDispositionDigest(policySpec), OriginalWorkflowSHA256: originalDispositionDigest(workflowSpec), Generation: intent.Generation, FencingToken: intent.FencingToken, BeganAt: out.now}
+	if witnessedAWS {
+		out.candidate.Request.OriginalCreateActionID = settlement.ActionID
+	}
 	out.intentSHA = originalDispositionJSONSHA(intent)
 	return out, nil
 }
@@ -305,7 +317,12 @@ func (s CapacityStore) CompleteFailedOriginalDisposition(ctx context.Context, ow
 	if err != nil || !bytes.Equal(fresh, owner.snapshot) {
 		return result, ErrOriginalCreateDisposition
 	}
-	if err = validateOriginalDispositionObservation(old, observation, owner.started, snap.now, time.Duration(snap.spec.MaxEvidenceAgeSeconds)*time.Second); err != nil {
+	if originalDispositionProvider(old) == "aws" {
+		err = validateWitnessedUnenrolledAWSObservation(old, observation, snap.witnessImageID, snap.witnessAccountID, owner.started, snap.now, time.Duration(snap.spec.MaxEvidenceAgeSeconds)*time.Second)
+	} else {
+		err = validateOriginalDispositionObservation(old, observation, owner.started, snap.now, time.Duration(snap.spec.MaxEvidenceAgeSeconds)*time.Second)
+	}
+	if err != nil {
 		return result, err
 	}
 	result = model.CapacityFailedOriginalDisposition{
@@ -389,4 +406,21 @@ func (s CapacityStore) ReadFailedOriginalDisposition(ctx context.Context, grantI
 		return model.CapacityFailedOriginalDisposition{}, ErrOriginalCreateDisposition
 	}
 	return result, nil
+}
+
+// The existing1657 request/return describe only native absence, not enrollment.
+// Its immutable create-witness AMI is a further join on this unenrolled lane.
+func validateWitnessedUnenrolledAWSObservation(c model.CapacityOriginalCreateDispositionCandidate, o model.CapacityOriginalCreateDispositionObservation, witnessImageID, witnessAccountID string, began, now time.Time, maxAge time.Duration) error {
+	if originalDispositionProvider(c) != "aws" || c.Request.OriginalAdapterSourceCommit != enrolledFailedAWSCreator || c.Request.OriginalAuxiliaryInventoryComplete || len(c.Request.AuxiliaryResources) != 0 || witnessImageID == "" || len(witnessAccountID) != 12 {
+		return ErrOriginalCreateDisposition
+	}
+	if err := validateEnrolledFailedOriginalObservation(c, o, began, now, maxAge); err != nil {
+		return err
+	}
+	for _, read := range o.NativeReads {
+		if (read.Operation == "DescribeImages" && read.ResourceID != witnessImageID) || (read.Operation == "GetCallerIdentity" && read.ResourceID != witnessAccountID) {
+			return ErrOriginalCreateDisposition
+		}
+	}
+	return nil
 }

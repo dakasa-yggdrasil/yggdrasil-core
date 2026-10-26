@@ -6,7 +6,6 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"os"
-	"path/filepath"
 	"strings"
 	"sync"
 	"testing"
@@ -43,109 +42,37 @@ func originalDispositionPG(t *testing.T) *sql.DB {
 	if err = db.QueryRow(`SELECT current_database(),inet_server_addr() IS NULL`).Scan(&name, &local); err != nil || !local || !strings.HasPrefix(name, "original_disposition_test_") {
 		t.Fatal("isolated DB identity", name, local, err)
 	}
-	// An empty dedicated test DB receives only the schema necessary to exercise
-	// real Begin/Complete and migration71. Ordinary CI DBs are not modified.
-	var exists bool
-	if err = db.QueryRow(`SELECT to_regclass('public.capacity_original_create_dispositions') IS NOT NULL`).Scan(&exists); err != nil {
-		t.Fatal(err)
-	}
-	if !exists {
-		ddl := `CREATE TABLE public.manifests(id uuid PRIMARY KEY,kind text,namespace text,name text,version int NOT NULL DEFAULT 1,checksum text,spec jsonb,active boolean);
- CREATE TABLE public.capacity_mutation_grants(id uuid PRIMARY KEY,namespace text,environment text,domain text,dimension text,generation bigint,integration_instance_id uuid,scope_checksum text,profile_name text,slot int,state text,grant_record jsonb,expires_at timestamptz,updated_at timestamptz DEFAULT clock_timestamp());
- CREATE UNIQUE INDEX capacity_mutation_grants_open_slot_idx ON public.capacity_mutation_grants(integration_instance_id,scope_checksum,profile_name,slot) WHERE state IN('issued','redeemed','settled');
- CREATE TABLE public.capacity_vm_provisioning_preregistrations(id uuid PRIMARY KEY,create_grant_id uuid UNIQUE REFERENCES public.capacity_mutation_grants(id),nonce_sha256 text,profile_manifest_sha256 text,preregistration_record jsonb,original_deadline timestamptz,created_at timestamptz,original_wire bytea,binding_wire bytea);
- CREATE TABLE public.capacity_guest_original_create_witnesses(preregistration_id uuid PRIMARY KEY REFERENCES public.capacity_vm_provisioning_preregistrations(id), original_wire bytea,witness_sha256 text,original_record jsonb,original_create_attempt_id uuid,recorded_at timestamptz);
- CREATE TABLE public.capacity_vm_original_enrollments(preregistration_id uuid PRIMARY KEY REFERENCES public.capacity_vm_provisioning_preregistrations(id));
- CREATE TABLE public.capacity_guest_original_installations(preregistration_id uuid PRIMARY KEY REFERENCES public.capacity_vm_provisioning_preregistrations(id));
- CREATE TABLE public.capacity_factory_original_grant_bindings(grant_id uuid PRIMARY KEY);
- CREATE TABLE public.workflow_runs(id uuid PRIMARY KEY,workflow_id uuid,status text,workflow_namespace text,workflow_name text,workflow_version int,started_at timestamptz,finished_at timestamptz,result jsonb,error text,inputs jsonb,metadata jsonb,created_at timestamptz DEFAULT clock_timestamp(),updated_at timestamptz DEFAULT clock_timestamp());
-
- CREATE TABLE public.capacity_vm_retirement_intents(id uuid PRIMARY KEY,preregistration_id uuid);
- CREATE TABLE public.capacity_resource_slots(integration_instance_id uuid,scope_checksum text,profile_name text,slot int,namespace text,environment text,domain text,dimension text,resource_id text,slot_record jsonb,revision bigint DEFAULT 1,updated_at timestamptz DEFAULT clock_timestamp(),PRIMARY KEY(integration_instance_id,scope_checksum,profile_name,slot));
- CREATE TABLE public.capacity_intents(namespace text,environment text,domain text,dimension text,intent jsonb,updated_at timestamptz,PRIMARY KEY(namespace,environment,domain,dimension));
- CREATE TABLE public.capacity_intent_events(id bigserial PRIMARY KEY,namespace text,environment text,domain text,dimension text,generation bigint,fencing_token bigint,phase text,receipt_ref text,recorded_at timestamptz);`
-		if _, err = db.Exec(ddl); err != nil {
-			t.Fatal(err)
-		}
-		raw, err := os.ReadFile(filepath.Join("..", "db", "migrations", "00071_original_create_dispositions.sql"))
-		if err != nil {
-			t.Fatal(err)
-		}
-		up := strings.Split(string(raw), "-- +goose Down")[0]
-		if _, err = db.Exec(up); err != nil {
-			t.Fatal("migration71", err)
-		}
-		for _, name := range []string{"00061_capacity_dispatch_jobs.sql", "00072_capacity_dispatch_prestart_rejection.sql", "00073_failed_original_guest_dispositions.sql", "00074_native_authorization_denied_dispositions.sql"} {
-			wire, readErr := os.ReadFile(filepath.Join("..", "db", "migrations", name))
-			if readErr != nil {
-				t.Fatal(readErr)
-			}
-			if _, execErr := db.Exec(strings.Split(string(wire), "-- +goose Down")[0]); execErr != nil {
-				t.Fatal(name, execErr)
-			}
-		}
-	}
-	var deniedExists bool
-	if err = db.QueryRow(`SELECT to_regclass('public.capacity_native_denied_dispositions') IS NOT NULL`).Scan(&deniedExists); err != nil {
-		t.Fatal(err)
-	}
-	if !deniedExists {
-		wire, e := os.ReadFile(filepath.Join("..", "db", "migrations", "00074_native_authorization_denied_dispositions.sql"))
-		if e != nil {
-			t.Fatal(e)
-		}
-		if _, e = db.Exec(strings.Split(string(wire), "-- +goose Down")[0]); e != nil {
-			t.Fatal("migration74", e)
-		}
-	}
-	// This explicit isolated fixture follows additive production schema78.
-	// Nullable storage columns preserve all prior representation/refusal tests.
-	if _, err = db.Exec(`ALTER TABLE public.capacity_vm_original_enrollments
-  ADD COLUMN IF NOT EXISTS resource_tuple_sha256 text,
-  ADD COLUMN IF NOT EXISTS enrollment_sha256 text,
-  ADD COLUMN IF NOT EXISTS original_provisioning_sha256 text,
-  ADD COLUMN IF NOT EXISTS enrollment_record jsonb,
-  ADD COLUMN IF NOT EXISTS recorded_at timestamptz,
-  ADD COLUMN IF NOT EXISTS registration_wire bytea,
-  ADD COLUMN IF NOT EXISTS receipt_wire bytea`); err != nil {
-		t.Fatal(err)
-	}
-	for _, item := range []struct{ name, probe string }{
-		{"00075_native_denied_failed_returned_ack_dispositions.sql", `SELECT EXISTS(SELECT 1 FROM pg_constraint WHERE conname='capacity_native_denied_original_ack_v2_check')`},
-		{"00076_enrolled_failed_original_guest_dispositions.sql", `SELECT to_regclass('public.capacity_enrolled_failed_original_dispositions') IS NOT NULL`},
-		{"00078_failed_installed_guest_disposals.sql", `SELECT to_regclass('public.capacity_guest_failed_installed_disposals') IS NOT NULL`},
-	} {
-		var applied bool
-		if err = db.QueryRow(item.probe).Scan(&applied); err != nil {
-			t.Fatal(err)
-		}
-		if !applied {
-			raw, e := os.ReadFile(filepath.Join("..", "db", "migrations", item.name))
-			if e != nil {
-				t.Fatal(e)
-			}
-			if _, e = db.Exec(strings.Split(string(raw), "-- +goose Down")[0]); e != nil {
-				t.Fatal(item.name, e)
-			}
-		}
+	// This fixture now exercises the full production schema, including immutable
+	// originals and schema82. Root/CI must migrate the disposable Unix DB first.
+	// It never creates a reduced schema or relaxes a production constraint.
+	var schema int64
+	if err = db.QueryRow(`SELECT coalesce(max(version_id),0) FROM public.goose_db_version WHERE is_applied`).Scan(&schema); err != nil || schema < 82 {
+		t.Fatal("fully migrated isolated schema82 database required", schema, err)
 	}
 
 	return db
 }
 
 type dispositionPGFixture struct {
-	db       *sql.DB
-	store    CapacityStore
-	record   capacityMutationRecord
-	pre      model.CapacityGuestOriginalProvisioningPreregistration
-	binding  model.CapacityGuestRetirementBinding
-	policy   model.Manifest
-	intent   model.CapacityIntent
-	rawGrant string
-	ctx      context.Context
+	db              *sql.DB
+	store           CapacityStore
+	record          capacityMutationRecord
+	pre             model.CapacityGuestOriginalProvisioningPreregistration
+	binding         model.CapacityGuestRetirementBinding
+	policy          model.Manifest
+	intent          model.CapacityIntent
+	rawGrant        string
+	initialGrantRaw []byte
+	ctx             context.Context
 }
 
 func originalDispositionPGFixture(t *testing.T, db *sql.DB) dispositionPGFixture {
+	return originalDispositionPGFixturePrepared(t, db, nil)
+}
+
+// Prepare only DECLARED in-memory fixture values before their first INSERT.
+// Production immutable originals are never updated to change creator/provider.
+func originalDispositionPGFixturePrepared(t *testing.T, db *sql.DB, prepare func(*dispositionPGFixture)) dispositionPGFixture {
 	t.Helper()
 	ctx := context.Background()
 	at := time.Now().UTC().Truncate(time.Second).Add(-2 * time.Hour)
@@ -168,15 +95,28 @@ func originalDispositionPGFixture(t *testing.T, db *sql.DB) dispositionPGFixture
 	record := capacityMutationRecord{Grant: g, Binding: binding, PolicyID: policyID, PolicyChecksum: policy.Checksum, WorkflowID: wfID, Generation: 1, FencingToken: 1, LeaseOwner: pre.LeaseOwner, ExecutorID: pre.ExecutorID, CreatedAt: at, AttemptID: attempt, Settlement: settlement, EventProvider: "aws"}
 	snapshot := model.CapacitySnapshot{Units: 0, Profile: "original", ObservedAt: at}
 	intent := model.CapacityIntent{Namespace: ns, PolicyName: "original", PolicyID: policyID, PolicyChecksum: policy.Checksum, Environment: p.Environment, Domain: p.Domain, Dimension: p.Dimension, Generation: 1, FencingToken: 1, Phase: "preparing", LeaseOwner: pre.LeaseOwner, LeaseExecutorID: pre.ExecutorID, LeaseExpiresAt: &pre.OriginalDeadline, BaselineSnapshot: snapshot, Assessment: model.CapacityAssessment{Snapshot: snapshot}, Decision: model.CapacityDecision{Reason: "protected_floor_recovery", Profile: "original", Units: 2, Floor: 2, ExecutionPermitted: true}}
+	f := dispositionPGFixture{db: db, store: CapacityStore{DB: db}, record: record, pre: pre, binding: guest, policy: policy, intent: intent, ctx: ctx}
+	if prepare != nil {
+		prepare(&f)
+	}
+	record, pre, guest, policy, intent = f.record, f.pre, f.binding, f.policy, f.intent
+	g, binding = record.Grant, record.Binding
+	policyRaw = policy.Spec
+	if err := json.Unmarshal(policyRaw, &p); err != nil {
+		t.Fatal("declared prepared policy", err)
+	}
 	must := func(q string, a ...any) {
 		t.Helper()
 		if _, err := db.ExecContext(ctx, q, a...); err != nil {
 			t.Fatal(err)
 		}
 	}
-	must(`INSERT INTO public.manifests(id,kind,namespace,name,checksum,spec,active) VALUES($1,'capacity_policy',$2,'original',$3,$4::jsonb,false)`, policyID, ns, policy.Checksum, string(policyRaw))
-	must(`INSERT INTO public.manifests(id,kind,namespace,name,checksum,spec,active) VALUES($1,'workflow',$2,'original',$3,'{}'::jsonb,true)`, wfID, ns, wfSHA)
+	must(`INSERT INTO public.manifests(id,api_version,kind,namespace,name,version,checksum,spec,active) VALUES($1,'v1','capacity_policy',$2,'original',1,$3,$4::jsonb,false)`, policyID, ns, policy.Checksum, string(policyRaw))
+	must(`INSERT INTO public.manifests(id,api_version,kind,namespace,name,version,checksum,spec,active) VALUES($1,'v1','workflow',$2,'original',1,$3,'{}'::jsonb,true)`, wfID, ns, wfSHA)
 	raw, _ := json.Marshal(record)
+	if len(f.initialGrantRaw) != 0 {
+		raw = append([]byte(nil), f.initialGrantRaw...)
+	}
 	must(`INSERT INTO public.capacity_mutation_grants(id,namespace,environment,domain,dimension,generation,integration_instance_id,scope_checksum,profile_name,slot,state,grant_record,expires_at) VALUES($1,$2,$3,$4,$5,1,$6,$7,$8,1,'settled',$9::jsonb,$10)`, grantID, ns, p.Environment, p.Domain, p.Dimension, instance, binding.ScopeChecksum, binding.ProfileName, string(raw), g.ExpiresAt)
 	preRaw, _ := json.Marshal(pre)
 	bindingRaw, _ := json.Marshal(guest)
@@ -187,7 +127,8 @@ func originalDispositionPGFixture(t *testing.T, db *sql.DB) dispositionPGFixture
 	if err := db.QueryRow(`SELECT grant_record::text FROM public.capacity_mutation_grants WHERE id=$1`, grantID).Scan(&rawGrant); err != nil {
 		t.Fatal(err)
 	}
-	return dispositionPGFixture{db: db, store: CapacityStore{DB: db}, record: record, pre: pre, binding: guest, policy: policy, intent: intent, rawGrant: rawGrant, ctx: ctx}
+	f.rawGrant = rawGrant
+	return f
 }
 func (f dispositionPGFixture) native(t *testing.T, c model.CapacityOriginalCreateDispositionCandidate) model.CapacityOriginalCreateDispositionObservation {
 	t.Helper()
@@ -285,22 +226,21 @@ func TestOriginalDispositionPostgresWholeLifecycle(t *testing.T) {
 }
 func TestOriginalDispositionPostgresRejectsOpenBoundaries(t *testing.T) {
 	db := originalDispositionPG(t)
-	for _, test := range []struct{ name, q string }{
-		{"witness", `INSERT INTO public.capacity_guest_original_create_witnesses(preregistration_id) VALUES($1)`},
-		{"enrollment", `INSERT INTO public.capacity_vm_original_enrollments(preregistration_id) VALUES($1)`},
-		{"installation", `INSERT INTO public.capacity_guest_original_installations(preregistration_id) VALUES($1)`},
-		{"running_workflow", `INSERT INTO public.workflow_runs(id,workflow_id,status) SELECT gen_random_uuid(),($2::jsonb->>'workflow_id')::uuid,'running' WHERE $1::uuid IS NOT NULL`},
-		{"live_original_deadline", `UPDATE public.capacity_vm_provisioning_preregistrations SET original_deadline=clock_timestamp()+interval '1 minute' WHERE id=$1`},
-	} {
-		t.Run(test.name, func(t *testing.T) {
+	for _, name := range []string{"witness", "enrollment", "installation", "running_workflow", "live_original_deadline"} {
+		t.Run(name, func(t *testing.T) {
 			f := originalDispositionPGFixture(t, db)
-			raw, _ := json.Marshal(f.record)
-			args := []any{f.pre.PreregistrationID}
-			if strings.Contains(test.q, "$2") {
-				args = append(args, string(raw))
-			}
-			if _, err := db.Exec(test.q, args...); err != nil {
-				t.Fatal(err)
+			switch name {
+			case "witness", "enrollment", "installation":
+				originalDispositionDeclaredBoundary(t, db, f, name)
+			case "running_workflow":
+				if _, err := db.Exec(`INSERT INTO public.workflow_runs(id,workflow_id,status,workflow_namespace,workflow_name,workflow_version) SELECT $1,id,'running',namespace,name,version FROM public.manifests WHERE id=$2`, uuid.New(), f.record.WorkflowID); err != nil {
+					t.Fatal(err)
+				}
+			case "live_original_deadline":
+				if _, err := db.Exec(`UPDATE public.capacity_vm_provisioning_preregistrations SET original_deadline=clock_timestamp()+interval '1 minute' WHERE id=$1`, f.pre.PreregistrationID); err == nil {
+					t.Fatal("immutable original deadline rewrite succeeded")
+				}
+				return
 			}
 			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 			defer cancel()
@@ -320,9 +260,7 @@ func TestOriginalDispositionPostgresRechecksRaceAndSerializes(t *testing.T) {
 		if err != nil {
 			t.Fatal(err)
 		}
-		if _, err = db.Exec(`INSERT INTO public.capacity_guest_original_create_witnesses(preregistration_id) VALUES($1)`, f.pre.PreregistrationID); err != nil {
-			t.Fatal(err)
-		}
+		originalDispositionDeclaredBoundary(t, db, f, "witness")
 		if _, err = f.store.CompleteOriginalCreateDisposition(ctx, owner, f.native(t, owner.Candidate())); err == nil {
 			t.Fatal("late witness race accepted")
 		}
@@ -416,4 +354,33 @@ func TestOriginalDispositionPostgresSuccessorFence(t *testing.T) {
 			}
 		}
 	}
+}
+
+// Complete DECLARED SQL storage for presence/refusal tests. These records do
+// not claim an authenticated provider, signer, Guest or runtime execution.
+func originalDispositionDeclaredBoundary(t *testing.T, db *sql.DB, f dispositionPGFixture, kind string) {
+	t.Helper()
+	at := f.pre.ReservedAt.Add(3 * time.Second)
+	tuple := model.CapacityGuestNativeTuple{Provider: "aws", InstanceID: f.record.Binding.IntegrationInstanceID, InstanceChecksum: f.record.Binding.IntegrationChecksum, TypeID: f.record.Binding.IntegrationTypeID, TypeChecksum: f.record.Binding.IntegrationTypeChecksum, ScopeChecksum: f.record.Binding.ScopeChecksum, Profile: f.record.Binding.ProfileName, Slot: f.pre.Slot, ResourceID: "i-0123456789abcdef0", CreatedAt: f.pre.ReservedAt.Add(time.Second).Format(time.RFC3339Nano)}
+	w := model.CapacityGuestOriginalCreateWitness{Schema: capacity.GuestCreateWitnessSchema, BindingName: f.pre.BindingName, PreregistrationID: f.pre.PreregistrationID, PreregistrationNonceSHA256: f.pre.NonceSHA256, Tuple: tuple, OriginalCreateGrantID: f.pre.OriginalCreateGrantID, OriginalCreateAttemptID: f.record.AttemptID, OriginalCreateRequestSHA256: f.pre.OriginalCreateRequestSHA256, OriginalCreateSettlementSHA256: capacity.GuestRetirementSHA(*f.record.Settlement), ProfileManifestSHA256: f.pre.ProfileManifestSHA256, BootstrapSHA256: f.binding.ProfileManifest.BootstrapSHA256, CoreSourceCommit: f.pre.CoreSourceCommit, OriginalDeadline: f.pre.OriginalDeadline, OriginalCreateReturnedAt: f.pre.ReservedAt.Add(2 * time.Second), ObservedAt: at, Signature: strings.Repeat("A", 88)}
+	if kind == "witness" {
+		wire, err := json.Marshal(w)
+		if err != nil {
+			t.Fatal(err)
+		}
+		if _, err = db.Exec(`INSERT INTO public.capacity_guest_original_create_witnesses(preregistration_id,original_create_attempt_id,resource_tuple_sha256,witness_sha256,original_wire,original_record,recorded_at) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7)`, f.pre.PreregistrationID, f.record.AttemptID, capacity.GuestRetirementSHA(tuple), capacity.GuestRetirementSHA(w), wire, string(wire), at); err != nil {
+			t.Fatal(err)
+		}
+		return
+	}
+	declared := failedOriginalFixture{dispositionPGFixture: f, witness: w}
+	if kind == "enrollment" {
+		enrolledFailedSQLRecordFromFixture(t, db, declared)
+		return
+	}
+	if kind == "installation" {
+		witnessedUnenrolledDeclaredInstallation(t, db, declared)
+		return
+	}
+	t.Fatal("unknown declared boundary", kind)
 }

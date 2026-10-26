@@ -513,3 +513,31 @@ state. The terminal branch revalidates this distinct lineage and then requires
 fresh exact VM/AUX absence. Cleanup is a separate authorized operation. The
 original three records and refusal remain original facts; no fourth record or
 successful caller is synthesized. See Proposed ADR-0082.
+
+### Witnessed unenrolled AWS accounting and Core-bound replacement
+
+Migration 82 extends the existing failed-original disposition insert guard to
+the exact published AWS creator with a settled accepted create, immutable native
+witness, expired failed original run, unknown ACK and no enrollment or
+installation. The administrator still supplies only `grant_id` and `job_id`.
+Core authenticates the existing read-only AWS observer, all six original native
+read results, VM and owned auxiliary absence, and the immutable witness AMI and
+account. Omitted false/empty auxiliary fields in the original settlement remain
+omitted. Native cleanup is separate; the terminal record supplies no Guest
+quiescence, useful capacity or business authority. Historical Hetzner admission
+and all existing records remain unchanged. See Proposed ADR-0083.
+
+The failed-installed disposal admission additionally accepts the optional closed
+`replacement_mode` value `original_canary_core_bound_v1`. For an eligible Hetzner
+original, Core derives the failed original canary issuer from its immutable
+publication, held read, signed challenges and actual-issuer records. It records
+the current replacement Core separately and requires different source builds;
+the caller cannot choose either source. Legacy requests retain their existing
+Guest-and-profile replacement requirements.
+
+The optional mode permits the same approved Guest and complete profile only for
+the exact recorded replacement Core, after the existing V2 drain, quiescence,
+provider VM/AUX absence, zero-use, ACK, lease, fencing and FIFO terminal chain.
+Migration 82 adds three optional all-or-none fields without retrofilling old
+rows. A fresh signed canary remains required, and the old failure's cause is not
+asserted. See Proposed ADR-0084.

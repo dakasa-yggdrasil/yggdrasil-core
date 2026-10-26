@@ -45,7 +45,7 @@ func decodeFailedInstalledGuestIDs(r io.Reader, second string) (string, string, 
 // Public summaries contain no raw workflow result, token, nonce or private
 // lifetime credential. They explicitly preserve possible business effects.
 func failedInstalledGuestDisposalSummary(r repository.FailedInstalledGuestDisposal) map[string]any {
-	return map[string]any{"schema": r.Schema, "retirement_mode": r.RetirementMode, "id": r.ID, "stage": r.Stage, "preregistration_id": r.PreregistrationID, "useful_capacity_before": r.UsefulCapacityBefore, "business_effects_preserved": r.BusinessEffectsPreserved, "retirement_request_id": r.RetirementRequestID, "native_poweroff_sha256": r.NativePoweroffSHA256, "observation_sha256": r.ObservationSHA256, "replacement_requires_different_approved_Guest": true, "original_CREATE_installation_ACK_and_canaries_unchanged": true}
+	return map[string]any{"schema": r.Schema, "retirement_mode": r.RetirementMode, "id": r.ID, "stage": r.Stage, "preregistration_id": r.PreregistrationID, "useful_capacity_before": r.UsefulCapacityBefore, "business_effects_preserved": r.BusinessEffectsPreserved, "retirement_request_id": r.RetirementRequestID, "native_poweroff_sha256": r.NativePoweroffSHA256, "observation_sha256": r.ObservationSHA256, "replacement_requires_different_approved_Guest": r.ReplacementMode == "", "replacement_mode": r.ReplacementMode, "original_failed_issuer_core_source": r.OriginalFailedIssuerCoreSource, "replacement_core_source": r.ReplacementCoreSource, "same_profile_replacement_requires_recorded_Core_and_current_approval": r.ReplacementMode == repository.FailedInstalledCoreReplacementMode, "original_failure_cause_fixed_claimed": false, "original_CREATE_installation_ACK_and_canaries_unchanged": true}
 }
 
 func (s *Server) handleOpsFailedInstalledGuestDisposal(w http.ResponseWriter, r *http.Request) {
@@ -53,14 +53,20 @@ func (s *Server) handleOpsFailedInstalledGuestDisposal(w http.ResponseWriter, r 
 	if !ok {
 		return
 	}
-	preID, lastRunID, err := decodeFailedInstalledGuestDisposal(http.MaxBytesReader(w, r.Body, 4096))
+	preID, lastRunID, mode, err := decodeFailedInstalledGuestDisposalRequest(http.MaxBytesReader(w, r.Body, 4096))
 	if err != nil {
-		writeJSONError(w, http.StatusBadRequest, "only_preregistration_and_expected_failed_run_UUIDs_required")
+		writeJSONError(w, http.StatusBadRequest, "only_original_UUIDs_and_optional_closed_replacement_mode_required")
 		return
 	}
 	ctx, stop := context.WithTimeout(r.Context(), 15*time.Second)
 	defer stop()
-	result, err := (repository.CapacityStore{DB: s.db}).RequestFailedInstalledGuestDisposal(ctx, preID, lastRunID, issuer)
+	store := repository.CapacityStore{DB: s.db}
+	var result repository.FailedInstalledGuestDisposal
+	if mode == repository.FailedInstalledCoreReplacementMode {
+		result, err = store.RequestFailedInstalledGuestCoreReplacement(ctx, preID, lastRunID, issuer)
+	} else {
+		result, err = store.RequestFailedInstalledGuestDisposal(ctx, preID, lastRunID, issuer)
+	}
 	if err != nil {
 		writeJSONError(w, http.StatusConflict, "failed_installed_disposal_not_admitted")
 		return

@@ -304,7 +304,7 @@ func TestFailedOriginalDispositionMigration73ClosedHistoryAndLateOwnership(t *te
 	}
 	// A distinct independently owned next history is not blocked by old pointers.
 	next := failedOriginalPGFixture(t, db)
-	if _, err = db.Exec(`INSERT INTO public.capacity_vm_original_enrollments(preregistration_id) VALUES($1)`, next.pre.PreregistrationID); err != nil {
-		t.Fatal("unrelated next preregistration globally blocked", err)
-	}
+	// A complete declared enrollment in the distinct next history must remain
+	// insertable; sparse rows fail schema63 before testing terminal isolation.
+	enrolledFailedSQLRecordFromFixture(t, db, next)
 }
