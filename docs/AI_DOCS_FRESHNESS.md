@@ -7,8 +7,8 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: eb9a3f813a2e90cc39989c9fd199387b2e49500e
-verified_diff_sha256: 26d3a4e0d6a1940c0e1ed6ce501e2782b7e2622d3f73c51d945837e1282423e2
+verified_at_commit: 1d6e637981364fe285d375110cb1bbab641d64aa
+verified_diff_sha256: b1a22b0ebcb5edc05c4ce54a247a30a3509a1cd15fb5bc2617a383300bd3a4aa
 reconciler_schema: 1
 verified_at: 2026-10-26
 by: Giomaster
@@ -371,3 +371,5 @@ core_d16_owning_precision_regression_roster_review: Reviewed the owning partial-
 core_canary_closed_return_clock_source_review: Completed original canary envelopes are validated at their exact driver return time while every original transport deadline, current authority, causal join and immutable SQL gate remains enforced. Closed diagnostic stages retain body erasure and existing transport fields. Semantic cryptographic tests, actual PostgreSQL retention delay, immutable schema and existing installed-resume regressions passed on an owned migrated PostgreSQL17 fixture. This does not establish a complete accepted Record business-ledger test or fresh provider/Guest functional acceptance. Historical held results remain unchanged.
 
 core_typed82_recovery_source_review: Migration82 extends witnessed unenrolled AWS terminal accounting with the exact original observer and immutable witness identity; the explicit Hetzner replacement mode derives the failed original Core issuer and preserves the complete V2 terminal chain. The complete706-runtime-source census and API semantics are current. Actual owned full-schema PostgreSQL17 regression execution passed497 cases with no skips; Linux target full static analysis and Core cross-compilation passed. Historical originals and all migrations through81 are preserved. Linux CI, an immutable image, production Goose82, rollout and fresh useful capacity remain independently required.
+
+core_typed82_nativeoff_fixture_schema_review: The existing partial native-off PostgreSQL regression now requires its actual full migrated schema82. Only the test version assertion and diagnostic changed. All35 selected partial native-off cases passed without failures/skips on an owned migrated PostgreSQL17 fixture, which was stopped. Production Go, all SQL and the706-runtime-source census remain unchanged. Fresh final-publication CI and image provenance remain required.
