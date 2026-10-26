@@ -8,10 +8,10 @@ import (
 	"errors"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	q "github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacitynativeqemu"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacityqualification"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
-	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc/amqp"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"path/filepath"
 	"strconv"
@@ -22,7 +22,7 @@ import (
 var pg17OriginalReadBrokerMu sync.Mutex
 var pg17OriginalReadBroker *amqp.Connection
 
-// StartPG17OriginalReadConsumer reuses the original broker connection, SDK
+// StartPG17OriginalReadConsumer uses the dedicated original fixture broker connection, SDK
 // RPC codec and advertised endpoint. It cannot declare a differently named
 // queue outside that fixed advertised contract, spawn an executor, send
 // provider mutations or read another Realm.
@@ -30,8 +30,8 @@ var pg17OriginalReadBroker *amqp.Connection
 // Subscription.Close is an unsubscribe request, not an observed SDK driver
 // goroutine Wait. Only the original outer Core process Wait/EOF/retirement
 // can close that process-scoped driver boundary; this helper claims none.
-func StartPG17OriginalReadConsumer(ctx context.Context, broker *amqp.Connection, store repository.CapacityStore, policy model.Manifest, realm *q.Realm) (func() error, error) {
-	if broker == nil || realm == nil || realm != originalGuestNativeRealm || store.DB == nil || realm.Request.NativeCase != "positive_original_lifecycle" || ctx.Err() != nil {
+func StartPG17OriginalReadConsumer(ctx context.Context, clientBroker, broker *amqp.Connection, store repository.CapacityStore, policy model.Manifest, realm *q.Realm) (func() error, error) {
+	if clientBroker == nil || broker == nil || clientBroker == broker || realm == nil || realm != originalGuestNativeRealm || store.DB == nil || realm.Request.NativeCase != "positive_original_lifecycle" || ctx.Err() != nil {
 		return nil, q.ErrOriginalUnknown
 	}
 	if _, ok := ctx.Deadline(); !ok {
@@ -42,7 +42,7 @@ func StartPG17OriginalReadConsumer(ctx context.Context, broker *amqp.Connection,
 		pg17OriginalReadBrokerMu.Unlock()
 		return nil, q.ErrOriginalUnknown
 	}
-	pg17OriginalReadBroker = broker
+	pg17OriginalReadBroker = clientBroker
 	pg17OriginalReadBrokerMu.Unlock()
 	var mu sync.Mutex
 	var owners sync.WaitGroup
@@ -50,8 +50,14 @@ func StartPG17OriginalReadConsumer(ctx context.Context, broker *amqp.Connection,
 	reads := 0
 	var workerErr error
 	failWorker := func(err error) { mu.Lock(); workerErr = errors.Join(workerErr, err); mu.Unlock() }
-	transport := rpcamqp.New(broker)
-	subscription, err := transport.Consume(rpc.ConsumerConfig{Endpoint: "qualification.original.execute", Concurrency: 1, Timeout: 65 * time.Second, Handler: func(deliveryContext context.Context, d rpc.Delivery) (returnErr error) {
+	closeDescribe, err := capacityqualification.StartDescribe(ctx, broker)
+	if err != nil {
+		pg17OriginalReadBrokerMu.Lock()
+		pg17OriginalReadBroker = nil
+		pg17OriginalReadBrokerMu.Unlock()
+		return nil, err
+	}
+	subscription, err := capacityqualification.ConsumePredeclared(ctx, broker, rpc.ConsumerConfig{Endpoint: "qualification.original.execute", Concurrency: 1, Timeout: 65 * time.Second, Handler: func(deliveryContext context.Context, d rpc.Delivery) (returnErr error) {
 		defer func() {
 			if returnErr != nil {
 				failWorker(returnErr)
@@ -180,6 +186,7 @@ func StartPG17OriginalReadConsumer(ctx context.Context, broker *amqp.Connection,
 		return ackErr
 	}})
 	if err != nil {
+		_ = closeDescribe()
 		pg17OriginalReadBrokerMu.Lock()
 		pg17OriginalReadBroker = nil
 		pg17OriginalReadBrokerMu.Unlock()
@@ -192,7 +199,7 @@ func StartPG17OriginalReadConsumer(ctx context.Context, broker *amqp.Connection,
 			mu.Lock()
 			closing = true
 			mu.Unlock()
-			joined = subscription.Close()
+			joined = errors.Join(subscription.Close(), closeDescribe())
 			owners.Wait()
 			mu.Lock()
 			joined = errors.Join(joined, workerErr)
