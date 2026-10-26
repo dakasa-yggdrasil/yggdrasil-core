@@ -15,6 +15,34 @@ func guestNotifyHTTPWithin(c model.CapacityGuestNotifyCanaryChallenge, r capacit
 	return !r.StartedAt.IsZero() && !r.StartedAt.Before(c.IssuedAt) && !r.DriverReturnedAt.IsZero() && r.DriverReturnedAt.Before(c.OriginalDeadline) && r.CloseReturnedAt.Before(c.OriginalDeadline) && r.ReadReturnedAt.Before(c.OriginalDeadline) && !r.OriginalContextFailed
 }
 
+// The transport owns the original challenge clock. Retaining a completed
+// response may outlive that clock; the current scope/lease transaction remains
+// independent. Every original read/close/driver and canonical signed envelope
+// must still pass before the response can reach the business join.
+func guestNotifyClosedOriginalEnvelope(c model.CapacityGuestNotifyCanaryChallenge, e model.CapacityGuestRetirementEnrollment, returned capacity.GuestOriginalHTTPReturn, out *model.CapacityGuestNotifyCanaryRead) string {
+	if !guestNotifyHTTPWithin(c, returned) {
+		return "original_transport"
+	}
+	if capacity.GuestOriginalHTTPDecode(returned, out) != nil {
+		return "original_body_decode"
+	}
+	if capacity.ValidateGuestNotifyCanaryEnvelope(c, e, *out, returned.DriverReturnedAt) != nil {
+		return "original_envelope"
+	}
+	return ""
+}
+
+// The response wire/hash and transport fields remain exact. Only a closed
+// Source stage is added to the diagnostic JSON; arbitrary response bytes stay
+// erased. Existing transport readers use json.Unmarshal and ignore this field.
+func guestNotifyReturnDiagnostic(returned capacity.GuestOriginalHTTPReturn, stage string) ([]byte, error) {
+	returned.Body = nil
+	return json.Marshal(struct {
+		capacity.GuestOriginalHTTPReturn
+		CanaryReturnValidationStage string `json:"CanaryReturnValidationStage"`
+	}{returned, stage})
+}
+
 func loadGuestNotifyPublicationTx(ctx context.Context, tx *sql.Tx, read model.CapacityGuestNotifyCanaryChallenge, e model.CapacityGuestRetirementEnrollment, p model.CapacityPolicySpec) (capacity.GuestNotifyPublicationReply, model.CapacityGuestNotifyCanaryChallenge, error) {
 	var out capacity.GuestNotifyPublicationReply
 	c, err := loadGuestNotifyChallengeTx(ctx, tx, read.RecordChallengeID)
@@ -72,16 +100,20 @@ func (s CapacityStore) RecordGuestNotifyCanaryReturn(ctx context.Context, policy
 		var retained []byte
 		var observation any
 		var r model.CapacityGuestNotifyCanaryRead
-		if guestNotifyHTTPWithin(c, returned) && capacity.GuestOriginalHTTPDecode(returned, &r) == nil && capacity.ValidateGuestNotifyCanaryEnvelope(c, receipt.Enrollment, r, time.Now().UTC()) == nil {
+		validationStage := guestNotifyClosedOriginalEnvelope(c, receipt.Enrollment, returned, &r)
+		if validationStage == "" {
 			if capacity.GuestNotifyCanaryPublication(c) {
+				validationStage = "publication_facts"
 				fact, e := capacity.GuestNotifyPublicationFacts(p, c, receipt.Enrollment, r)
 				if e == nil {
 					accepted = true
 					observation = fact
 				}
 			} else {
+				validationStage = "load_original_publication"
 				publication, pubChallenge, e := loadGuestNotifyPublicationTx(ctx, tx, c, receipt.Enrollment, p)
 				if e == nil {
+					validationStage = "business_join"
 					business, e = capacity.JoinGuestNotifyBusiness(p, c, receipt.Enrollment, r, publication, pubChallenge, returned.DriverReturnedAt)
 					if e == nil {
 						accepted = true
@@ -91,14 +123,13 @@ func (s CapacityStore) RecordGuestNotifyCanaryReturn(ctx context.Context, policy
 			}
 		}
 		if accepted {
+			validationStage = "accepted"
 			outcome = "accepted"
 			retained = append([]byte(nil), returned.Body...)
 		}
 		// Preserve the actual body hash/count/times; erase arbitrary response bytes
 		// from diagnostic metadata. Accepted canonical bytes are stored separately.
-		transport := returned
-		transport.Body = nil
-		diagnostic, err := json.Marshal(transport)
+		diagnostic, err := guestNotifyReturnDiagnostic(returned, validationStage)
 		if err != nil {
 			return err
 		}

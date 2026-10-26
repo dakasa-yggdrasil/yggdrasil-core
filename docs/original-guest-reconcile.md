@@ -61,6 +61,16 @@ surviving useful floor. A stable unchanged epoch refreshes useful membership
 through the existing maintenance challenge/send ledger, with no provider grant.
 Pending originals permit observation/HOLD only, including after lease expiry.
 
+The five-second Notify canary budget covers the original publication/read chain,
+including the complete HTTP body read, close and driver return. Envelope
+validation uses that original driver return time. Recording the completed return
+can consume its separate retention budget while the transaction still checks the
+current policy, workflow, lease, generation, fence, slot and one-use send. A late
+HTTP return, failed original context, incomplete body or invalid signature remains
+held. Diagnostic transport JSON adds the closed `CanaryReturnValidationStage`
+field to distinguish transport, decoding, envelope, publication and business
+join failures. Held response bodies remain erased; historical rows remain intact.
+
 The current compiled production profile registry must independently approve
 the complete exact bindings. This module does not populate it. The new outer
 binding is omitted when absent and is outside ProfileManifest/approval contract
