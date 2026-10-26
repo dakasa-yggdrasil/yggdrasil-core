@@ -138,7 +138,7 @@ jobs:
           GO_MIGRATE
           record migrate go run "$pg_root/migrate.go"
           record repository go test -p=1 -race -count=1 -timeout=4m -json ./repository \
-            -run '^(TestPartialNativeOffReconciliationPostgres|TestPartialNativeOffHistoricalEvidence|TestPartialNativeOffReadKeepsFiveSecondsAndOriginalFailure)$'
+            -run '^(TestPartialNativeOffReconciliationPostgres|TestPartialNativeOffHistoricalEvidence|TestPartialNativeOffReadKeepsFiveSecondsAndOriginalFailure|TestPartialNativeOffHistoricalReadDeadlinePrecisionPostgres|TestPartialNativeOffTransportKeepsExactOriginalNanosecondDeadline)$'
           record httpapi go test -p=1 -race -count=1 -timeout=4m -json ./controllers/httpapi \
             -run '^(TestPartialNativeOffOpsRequiresExplicitAdministrativeIdentity|TestPartialNativeOffOpsClosedIDsAndPublicProjection)$'
           record capacity go test -p=1 -race -count=1 -timeout=4m -json ./internal/capacity \
@@ -146,7 +146,7 @@ jobs:
           python3 - <<'PY_CENSUS'
           import collections, json, os, pathlib, subprocess
           p=pathlib.Path(os.environ['LOGS']); base='github.com/dakasa-yggdrasil/yggdrasil-core/'
-          expected={'repository':('repository',['TestPartialNativeOffReconciliationPostgres','TestPartialNativeOffHistoricalEvidence','TestPartialNativeOffReadKeepsFiveSecondsAndOriginalFailure']), 'httpapi':('controllers/httpapi',['TestPartialNativeOffOpsRequiresExplicitAdministrativeIdentity','TestPartialNativeOffOpsClosedIDsAndPublicProjection']), 'capacity':('internal/capacity',['TestGuestD15CompatibilitySnapshotPreservesOriginalIssues'])}
+          expected={'repository':('repository',['TestPartialNativeOffReconciliationPostgres','TestPartialNativeOffHistoricalEvidence','TestPartialNativeOffReadKeepsFiveSecondsAndOriginalFailure','TestPartialNativeOffHistoricalReadDeadlinePrecisionPostgres','TestPartialNativeOffTransportKeepsExactOriginalNanosecondDeadline']), 'httpapi':('controllers/httpapi',['TestPartialNativeOffOpsRequiresExplicitAdministrativeIdentity','TestPartialNativeOffOpsClosedIDsAndPublicProjection']), 'capacity':('internal/capacity',['TestGuestD15CompatibilitySnapshotPreservesOriginalIssues'])}
           summary={}
           for name,(package,roots) in expected.items():
               assert (p/(name+'.exit')).read_text().strip()=='0'
@@ -160,7 +160,7 @@ jobs:
               summary[name]={'package':base+package,'roots':roots,'passed':len(roots),'skipped':0}
           assert subprocess.check_output(['git','rev-parse','HEAD'],text=True).strip()==os.environ['SOURCE_COMMIT']
           assert not subprocess.check_output(['git','status','--porcelain','--untracked-files=all'])
-          value={'schema':'partial_nativeoff_source_CI_exact_root_census_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'race':True,'schema_version':81,'summary':summary,'total_roots':6,'original_49_16_and_extra10_censuses_separate':True,'positive_original_Guest_runtime_qualified':False,'production_authority':False}
+          value={'schema':'partial_nativeoff_source_CI_exact_root_census_v1','source_commit':os.environ['SOURCE_COMMIT'],'run_id':os.environ['GITHUB_RUN_ID'],'run_attempt':os.environ['GITHUB_RUN_ATTEMPT'],'race':True,'schema_version':81,'summary':summary,'total_roots':8,'original_49_16_and_extra10_censuses_separate':True,'positive_original_Guest_runtime_qualified':False,'production_authority':False}
           (p/'CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
           print(json.dumps(value,sort_keys=True))
           PY_CENSUS
