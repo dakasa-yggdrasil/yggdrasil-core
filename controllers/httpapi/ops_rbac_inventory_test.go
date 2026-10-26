@@ -147,11 +147,11 @@ func TestOpsRoutesAreFullyMapped(t *testing.T) {
 			len(missing), strings.Join(missing, "\n  "))
 	}
 
-	// The reviewed inventory includes 41 ops routes, including both explicit
-	// retirement recovery families. Keep a bounded [35, 50] drift check while
+	// The reviewed inventory includes 44 ops routes, including the explicit
+	// retirement recovery and separate partial-nativeoff reconciliation families. Keep a bounded [35, 50] drift check while
 	// requiring every individual route to retain its permission wrapper above.
 	if routeCount < 35 || routeCount > 50 {
-		t.Errorf("ops route count = %d, expected ~41 — investigate before merging", routeCount)
+		t.Errorf("ops route count = %d, expected ~44 — investigate before merging", routeCount)
 	}
 }
 

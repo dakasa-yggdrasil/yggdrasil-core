@@ -219,12 +219,18 @@ func loadFailedInstalledQuiescentTx(ctx context.Context, tx *sql.Tx, preID, id, 
 		if e != nil || !failedInstalledLegacyJoin(r, stored, p) {
 			return r, policy, p, ErrCapacityConflict
 		}
-		if _, e = guestQuiescentProofTx(ctx, tx, stored); e != nil {
+		partial, e := partialNativeOffQualifiedTx(ctx, tx, r, stored, p)
+		if e != nil {
 			return r, policy, p, e
 		}
-		digest, e := failedInstalledLegacyOffTx(ctx, tx, r, stored, p, false)
-		if e != nil || digest != r.NativePoweroffSHA256 {
-			return r, policy, p, ErrCapacityConflict
+		if !partial {
+			if _, e = guestQuiescentProofTx(ctx, tx, stored); e != nil {
+				return r, policy, p, e
+			}
+			digest, offErr := failedInstalledLegacyOffTx(ctx, tx, r, stored, p, false)
+			if offErr != nil || digest != r.NativePoweroffSHA256 {
+				return r, policy, p, ErrCapacityConflict
+			}
 		}
 	} else {
 		stored, err := loadGuestRetirementV2Tx(ctx, tx, r.RetirementRequestID, true)

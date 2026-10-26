@@ -483,3 +483,33 @@ as never sent. Quiescent continuation authenticates the exact new claim and
 issued request and still requires actual Guest retirement, separate native
 poweroff and subsequent exact cleanup and terminal absence. The corresponding
 GET returns bounded public summaries and gives no quiescence credit.
+
+### Separate partial Guest retirement / native OFF reconciliation
+
+The normal retirement proof remains four authenticated records ending in
+`poweroff_command_returned` plus its original successful closed caller. A legacy
+three-record prefix ending in `poweroff_possible_start` and a closed refusal must
+not be promoted to that proof. Migration 81 records a distinct reconciliation
+admission after backend authentication of the original quiescence, full runtime
+and protected census, four authority results, two snapshots, closed nested
+transports, acknowledged failed workflow, existing issued recovery and zero useful
+capacity. No Guest request, nonce, fence, lease or poweroff is reissued.
+
+The three administrative routes under
+`/api/v1/ops/capacity/failed-installed-guest-disposals/partial-native-off-reconciliations`
+require the canonical workflow-management permission and an authenticated GodMode
+collaborator. The admission POST takes only `preregistration_id` and
+`retirement_request_id`; the GET suffix `/{preregistrationId}` returns public
+stages and read selectors. The `/observe` POST takes `preregistration_id`,
+`reconciliation_id` and `expected_previous_read_id` (empty only for the first
+read). It allows one owning provider GET under a new five-second original read
+budget. Unknown replies require GET reconciliation. At most three linear reads
+are admitted, with no automatic retry or renewed Guest authority.
+
+A read result is retained independently of qualification. Only a complete timely
+observation of the exact native VM physically OFF, joined to the original receipt
+and full native plan, can atomically append the 81 qualification and 78 quiescent
+state. The terminal branch revalidates this distinct lineage and then requires
+fresh exact VM/AUX absence. Cleanup is a separate authorized operation. The
+original three records and refusal remain original facts; no fourth record or
+successful caller is synthesized. See Proposed ADR-0082.
