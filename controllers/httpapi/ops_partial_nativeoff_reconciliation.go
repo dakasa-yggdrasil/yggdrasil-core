@@ -82,7 +82,7 @@ func decodePartialNativeOffRead(r io.Reader) (string, string, string, error) {
 			return "", "", "", repository.ErrCapacityMutationAuthorization
 		}
 		v := *value
-		if !dispositionGrantID(v) && !(key == "expected_previous_read_id" && v == "") {
+		if !dispositionGrantID(v) && (key != "expected_previous_read_id" || v != "") {
 			return "", "", "", repository.ErrCapacityMutationAuthorization
 		}
 		values[key] = v

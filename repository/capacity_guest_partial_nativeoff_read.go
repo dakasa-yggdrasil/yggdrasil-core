@@ -100,16 +100,17 @@ func (s CapacityStore) PrepareFailedInstalledPartialNativeOffRead(ctx context.Co
 	var previousReturned bool
 	ordinal := 1
 	err = tx.QueryRowContext(ctx, `SELECT s.original_wire,EXISTS(SELECT 1 FROM public.capacity_guest_partial_nativeoff_reads r WHERE r.id=s.id AND r.stage='returned') FROM public.capacity_guest_partial_nativeoff_reads s WHERE s.reconciliation_id=$1 AND s.stage='started' ORDER BY s.ordinal DESC LIMIT 1`, id).Scan(&previousWire, &previousReturned)
-	if err == nil {
+	switch err {
+	case nil:
 		if decodePrejournalOriginal(previousWire, &previous) != nil || previous.ReadID != expectedPrevious || (!previousReturned && time.Now().Before(previous.OriginalDeadline)) {
 			return nil, ErrCapacityConflict
 		}
 		ordinal = previous.Ordinal + 1
-	} else if err == sql.ErrNoRows {
+	case sql.ErrNoRows:
 		if expectedPrevious != "" {
 			return nil, ErrCapacityConflict
 		}
-	} else {
+	default:
 		return nil, err
 	}
 	issued := time.Now().UTC()

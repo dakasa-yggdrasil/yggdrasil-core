@@ -31,7 +31,10 @@ func TestPartialNativeOffReconciliationPostgres(t *testing.T) {
 		t.Fatal(e)
 	}
 	next := recoveryNextStorage(old, recovery, admission)
-	expiry := time.Now().Add(4 * time.Second).UTC()
+	// Signed fixture instants must survive PostgreSQL's microsecond columns
+	// exactly. Align them before signing; the real four-second lease still
+	// expires once and no retained deadline is rewritten or extended.
+	expiry := time.Now().Add(4 * time.Second).UTC().Truncate(time.Microsecond)
 	next.LeaseExpiresAt = &expiry
 	recovery.Stage = "claimed"
 	recovery.AdmissionSHA256 = admission
@@ -43,6 +46,7 @@ func TestPartialNativeOffReconciliationPostgres(t *testing.T) {
 		t.Fatal(e)
 	}
 	request, _ := recoveryFreshSignedDTO(t, parent, next)
+	request.Intent.IssuedAt = request.Intent.IssuedAt.Truncate(time.Microsecond)
 	signed := partialSignedFixtureWith(t, &request.Intent, f.pre.PreregistrationID, 10)
 	request.Intent = signed.stored.Request.Intent
 	if e = issueNeverSentSuccessorTx(ctx, tx, next, request.Intent, time.Now().UTC()); e != nil {
