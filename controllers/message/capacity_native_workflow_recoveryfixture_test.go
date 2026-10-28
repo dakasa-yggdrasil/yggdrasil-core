@@ -95,11 +95,14 @@ func nativeWorkflowFixturePolicy(t *testing.T, p model.CapacityPolicySpec, mutat
 	b.ProfileManifest.Profile, b.ProfileManifest.MutationBinding = mutation.ProfileName, mutation.Name
 	b.ProfileManifest.Writers[0].CgroupRelativePath = b.ProfileManifest.Writers[0].ID
 	b.ProfileManifest.SlotBootstraps = nil
+	if len(slots) == 0 || slots[0].DesiredSpec == nil {
+		t.Fatal("approved slot required")
+	}
+	b.ProfileManifest.BootstrapSHA256 = slots[0].DesiredSpec.BootstrapSHA256
 	for _, slot := range slots {
-		if slot.DesiredSpec == nil {
-			t.Fatal("approved slot required")
+		if slot.DesiredSpec == nil || slot.DesiredSpec.BootstrapSHA256 != b.ProfileManifest.BootstrapSHA256 {
+			t.Fatal("shared synthetic bootstrap must match every slot")
 		}
-		b.ProfileManifest.SlotBootstraps = append(b.ProfileManifest.SlotBootstraps, model.CapacityGuestSlotBootstrap{Slot: slot.Slot, BootstrapSHA256: slot.DesiredSpec.BootstrapSHA256})
 	}
 	b.ProfileManifestSHA256 = capacity.GuestRetirementSHA(b.ProfileManifest)
 	p.GuestRetirementBinding = &b
