@@ -888,9 +888,23 @@ func runSyntheticCompensation(t *testing.T, protected, lost bool) {
 		if _, err := issuer.IssueCompensation(ctx, current, replacement); !errors.Is(err, ErrCapacityConflict) {
 			t.Fatal("expired child changed pinned creation time", err)
 		}
-		reissued, err := issuer.IssueCompensation(ctx, current, issue)
-		if err != nil || reissued.GrantID == child.GrantID || reissued.ExpectedResourceID != nativeResourceID || reissued.ExpectedResourceCreatedAt != nativeCreatedAt {
-			t.Fatal("same immutable lifetime could not reissue unused child", reissued, err)
+		reissueGrants := make(chan model.CapacityMutationGrant, 2)
+		reissueErrors := make(chan error, 2)
+		var reissueWG sync.WaitGroup
+		for n := 0; n < 2; n++ {
+			reissueWG.Add(1)
+			go func() {
+				defer reissueWG.Done()
+				g, err := issuer.IssueCompensation(ctx, current, issue)
+				reissueGrants <- g
+				reissueErrors <- err
+			}()
+		}
+		reissueWG.Wait()
+		reissued, repeatedReissue := <-reissueGrants, <-reissueGrants
+		firstErr, secondErr := <-reissueErrors, <-reissueErrors
+		if firstErr != nil || secondErr != nil || reissued.GrantID != repeatedReissue.GrantID || reissued.GrantID == child.GrantID || reissued.ExpectedResourceID != nativeResourceID || reissued.ExpectedResourceCreatedAt != nativeCreatedAt {
+			t.Fatal("same immutable lifetime could not reissue one unused child", reissued, repeatedReissue, firstErr, secondErr)
 		}
 		child = reissued
 		// The expired grant never gains write authority on replay.
