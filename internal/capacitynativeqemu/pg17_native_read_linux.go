@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacityqualification"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -93,7 +94,7 @@ func (r *Realm) PG17NativeRead(ctx context.Context, store repository.CapacitySto
 	if err != nil || capacity.GuestRetirementSHA(persisted) != capacity.GuestRetirementSHA(pre) {
 		return refuse("original", ErrOriginalUnknown)
 	}
-	binding, err := capacity.VMObservationBinding(spec, pre.BindingName)
+	binding, err := capacityqualification.OriginalReadMutationBinding(spec, pre)
 	if err != nil || profile != binding.ProfileName || request.Integration.Instance.ID.String() != binding.IntegrationInstanceID || request.Integration.Type.ID.String() != binding.IntegrationTypeID {
 		return refuse("binding", ErrOriginalUnknown)
 	}
