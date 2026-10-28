@@ -84,7 +84,7 @@ func (f *fixture) workflowSpec(rbac model.Manifest) model.WorkflowManifestSpec {
 		spec.Steps[1].Condition += " && {{ inputs.mode }} != recovery_cleanup"
 		recover := step("original_recovery_cleanup_recover", "capacity.recover", map[string]any{"policy": policy, "generation": "{{ inputs.generation }}", "assessment": "{{ inputs.assessment }}"})
 		recover.Condition = "{{ inputs.mode }} == recovery_cleanup"
-		fresh := step("original_recovery_cleanup_read", "capacity.qualify_original_guest_echo", map[string]any{"policy": policy, "binding_name": "native-qemu", "slot": 2, "generation": "{{ steps.original_recovery_cleanup_recover.metadata.generation }}", "fencing_token": "{{ steps.original_recovery_cleanup_recover.metadata.fencing_token }}", "lease_owner": "{{ steps.original_recovery_cleanup_recover.metadata.lease_owner }}", "preregistration_id": "{{ inputs.preregistration_id }}", "request_id": "source_recovery_cleanup_v1"})
+		fresh := step("original_recovery_cleanup_read", "capacity.qualify_original_guest_echo", map[string]any{"policy": policy, "binding_name": "native-qemu", "slot": q.SourceFailureSlot(f.request.NativeCase), "generation": "{{ steps.original_recovery_cleanup_recover.metadata.generation }}", "fencing_token": "{{ steps.original_recovery_cleanup_recover.metadata.fencing_token }}", "lease_owner": "{{ steps.original_recovery_cleanup_recover.metadata.lease_owner }}", "preregistration_id": "{{ inputs.preregistration_id }}", "request_id": "source_recovery_cleanup_v1"})
 		fresh.Condition = "{{ inputs.mode }} == recovery_cleanup"
 		fresh.DependsOn = []string{recover.ID}
 		spec.Steps = append(spec.Steps, recover, fresh)

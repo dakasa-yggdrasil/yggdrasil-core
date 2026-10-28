@@ -202,7 +202,7 @@ func canonicalCleanupHistory(ctx context.Context, s CapacityStore, tx *sql.Tx, p
 			return stored, b, t, ErrCapacityConflict
 		}
 	}
-	if !canonicalKnownFailedCase(b.NativeCase) || b.PreregistrationID != preID || b.ParentGrantID != stored.pre.OriginalCreateGrantID || b.CoreSource != capacity.CurrentGuestCoreSource() || b.GuestSource != stored.binding.GuestSourceCommit || !canonicalCleanupMode(b) || b.PositiveQuiescence || b.ProductionQualified {
+	if !canonicalKnownFailedCase(b.NativeCase) || b.Slot != canonicalSourceExpectedSlot(b.NativeCase) || b.Slot != stored.pre.Slot || b.PreregistrationID != preID || b.ParentGrantID != stored.pre.OriginalCreateGrantID || b.CoreSource != capacity.CurrentGuestCoreSource() || b.GuestSource != stored.binding.GuestSourceCommit || !canonicalCleanupMode(b) || b.PositiveQuiescence || b.ProductionQualified {
 		return stored, b, t, ErrCapacityConflict
 	}
 	if len(tw) > 0 {
@@ -510,11 +510,11 @@ func (s CapacityStore) AuthorizeCanonicalSourceChild(ctx context.Context, policy
 		if err != nil {
 			return err
 		}
-		if !canonicalRedeemedChild(child, childID, attempt, s.ExecutorID, now) || child.WorkflowID != s.WorkflowID || child.PolicyID != policy.ID || child.PolicyChecksum != policy.Checksum || !capacity.ValidDigest(redeemSHA) {
-			return ErrCapacityConflict
-		}
 		e, handled, err := s.canonicalEligibilityTx(ctx, tx, child.Grant.CompensationOf, now)
 		if !handled || err != nil {
+			return ErrCapacityConflict
+		}
+		if !canonicalRedeemedChild(child, childID, attempt, s.ExecutorID, e.NativeCase, now) || child.WorkflowID != s.WorkflowID || child.PolicyID != policy.ID || child.PolicyChecksum != policy.Checksum || !capacity.ValidDigest(redeemSHA) {
 			return ErrCapacityConflict
 		}
 		stored, b, t, err := canonicalCleanupHistory(ctx, s, tx, e.PreregistrationID)
@@ -812,8 +812,23 @@ func canonicalPayloadLinked(f QualificationFailureRecord, w model.CapacityGuestR
 	return f.OriginalChild.PID == w.PID && f.OriginalChild.StartTicks == w.StartTicks && capacity.ValidDigest(w.ProcessNonceSHA256) && f.OriginalPayloadSessionNonceSHA256 == w.ProcessNonceSHA256 && f.OriginalPayloadActionID == "guest-protected-payload:"+w.ProcessNonceSHA256
 }
 
-func canonicalRedeemedChild(child capacityMutationRecord, id, attempt, executor string, now time.Time) bool {
-	return child.Grant.GrantID == id && validCapacityExecutor(id) && child.Grant.State == "redeemed" && validCapacityExecutor(child.Grant.CompensationOf) && child.Grant.Slot == 2 && child.Grant.RequestSHA256 != "" && child.Grant.ExpectedResourceID != "" && child.Grant.ExpectedResourceCreatedAt != "" && child.AttemptID == attempt && validCapacityExecutor(attempt) && child.ExecutorID == executor && validCapacityExecutor(executor) && now.Before(child.Grant.ExpiresAt)
+func canonicalSourceExpectedSlot(nativeCase string) int {
+	if !canonicalKnownFailedCase(nativeCase) {
+		return 0
+	}
+	slot := capacity.GuestPostlossQualificationSlot(nativeCase)
+	if slot == 0 {
+		slot = 2
+	}
+	return slot
+}
+
+func canonicalRedeemedChild(child capacityMutationRecord, id, attempt, executor, nativeCase string, now time.Time) bool {
+	slot := canonicalSourceExpectedSlot(nativeCase)
+	if slot == 0 {
+		return false
+	}
+	return child.Grant.GrantID == id && validCapacityExecutor(id) && child.Grant.State == "redeemed" && validCapacityExecutor(child.Grant.CompensationOf) && child.Grant.Slot == slot && child.Grant.RequestSHA256 != "" && child.Grant.ExpectedResourceID != "" && child.Grant.ExpectedResourceCreatedAt != "" && child.AttemptID == attempt && validCapacityExecutor(attempt) && child.ExecutorID == executor && validCapacityExecutor(executor) && now.Before(child.Grant.ExpiresAt)
 }
 
 // Store ONLY the actual ordinary Reconcile return already committed in SQL.

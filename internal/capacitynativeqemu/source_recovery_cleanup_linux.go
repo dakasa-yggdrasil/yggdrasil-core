@@ -40,7 +40,7 @@ func (r *Realm) OriginalRecoveryCleanupSession(ctx context.Context) (SourceRecov
 }
 
 func (r *Realm) PrepareOriginalRecoveryCleanupRead(ctx context.Context, store repository.CapacityStore, policy model.Manifest, pre model.CapacityGuestOriginalProvisioningPreregistration, client *capacity.GuestOriginalHTTPClient) error {
-	if !CanonicalSourceCompensationCase(r.Request.NativeCase) || pre.Slot != 2 || pre.WorkflowID != store.WorkflowID.String() || client == nil {
+	if !CanonicalSourceCompensationCase(r.Request.NativeCase) || pre.Slot != SourceFailureSlot(r.Request.NativeCase) || pre.WorkflowID != store.WorkflowID.String() || client == nil {
 		return ErrOriginalUnknown
 	}
 	var random [32]byte
@@ -75,7 +75,7 @@ func (r *Realm) PrepareOriginalRecoveryCleanupRead(ctx context.Context, store re
 	if _, err = Publish(ctx, filepath.Join(r.PrivateDirectory, "canonical-recovery-fresh-read-host-return.json"), returned); err != nil {
 		return err
 	}
-	if _, err = PublishBytes(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, 2), "core-recovery-fresh-failure-read.json"), returned.Body); err != nil {
+	if _, err = PublishBytes(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, SourceFailureSlot(r.Request.NativeCase)), "core-recovery-fresh-failure-read.json"), returned.Body); err != nil {
 		return err
 	}
 	epoch, err = store.CompleteSourceRecoveryCleanupRead(ctx, policy, pre.OriginalCreateGrantID, epoch, nativeWire, returned.Body)
@@ -97,31 +97,31 @@ func (r *Realm) freshCanonicalRecoveryNative(ctx context.Context) (IndependentRe
 		return fresh, nil, ErrOriginalUnknown
 	}
 	r.mu.Lock()
-	original, ok := r.originals[2]
+	original, ok := r.originals[SourceFailureSlot(r.Request.NativeCase)]
 	r.mu.Unlock()
 	if !ok {
 		return fresh, nil, ErrOriginalUnknown
 	}
 	read, cancel := context.WithTimeout(ctx, 5*time.Second)
-	fresh, err := Observe(read, SlotDirectory(r.PrivateDirectory, 2), original.Original, r.QEMUBinarySHA256)
+	fresh, err := Observe(read, SlotDirectory(r.PrivateDirectory, SourceFailureSlot(r.Request.NativeCase)), original.Original, r.QEMUBinarySHA256)
 	cancel()
-	if err != nil || r.verifyFixedCommand(ctx, 2, fresh) != nil || !sameProcess(fresh.Before, original.After) || !sameProcess(fresh.After, original.After) || fresh.OriginalDisk != original.OriginalDisk {
+	if err != nil || r.verifyFixedCommand(ctx, SourceFailureSlot(r.Request.NativeCase), fresh) != nil || !sameProcess(fresh.Before, original.After) || !sameProcess(fresh.After, original.After) || fresh.OriginalDisk != original.OriginalDisk {
 		return fresh, nil, ErrOriginalUnknown
 	}
 	fresh.OriginalCreatorSHA256 = original.OriginalCreatorSHA256
-	wire, err := Publish(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, 2), "core-recovery-fresh-native-read.json"), fresh)
+	wire, err := Publish(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, SourceFailureSlot(r.Request.NativeCase)), "core-recovery-fresh-native-read.json"), fresh)
 	return fresh, wire, err
 }
 
 func (r *Realm) PrepareSourceRecoveryFailureCleanup(ctx context.Context, store repository.CapacityStore, policy model.Manifest, pre model.CapacityGuestOriginalProvisioningPreregistration, failureSHA, enrollmentSHA string, key ed25519.PrivateKey) (SourceFailureCleanupAuthority, SourceFailureCleanupBody, error) {
 	var authority SourceFailureCleanupAuthority
 	var body SourceFailureCleanupBody
-	if !SourceCompensationCase(r.Request.NativeCase) || pre.Slot != 2 || len(key) != ed25519.PrivateKeySize || ctx.Err() != nil || pre.CoreSourceCommit != capacity.CurrentGuestCoreSource() || policy.Metadata.Namespace == "" || pre.WorkflowID != store.WorkflowID.String() {
+	if !SourceCompensationCase(r.Request.NativeCase) || pre.Slot != SourceFailureSlot(r.Request.NativeCase) || len(key) != ed25519.PrivateKeySize || ctx.Err() != nil || pre.CoreSourceCommit != capacity.CurrentGuestCoreSource() || policy.Metadata.Namespace == "" || pre.WorkflowID != store.WorkflowID.String() {
 		return authority, body, ErrOriginalUnknown
 	}
 	r.mu.Lock()
-	native, ok := r.originals[2]
-	disk, known := r.disks[2]
+	native, ok := r.originals[SourceFailureSlot(r.Request.NativeCase)]
+	disk, known := r.disks[SourceFailureSlot(r.Request.NativeCase)]
 	r.mu.Unlock()
 	if !ok || !known || native.OriginalDisk != disk {
 		return authority, body, ErrOriginalUnknown
@@ -143,7 +143,7 @@ func (r *Realm) PrepareSourceRecoveryFailureCleanup(ctx context.Context, store r
 		return authority, body, ErrOriginalUnknown
 	}
 	var members, failed, events int
-	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FILTER (WHERE resource_id<>''),count(*) FILTER (WHERE slot=2 AND resource_id<>'') FROM public.capacity_resource_slots WHERE namespace=$1`, policy.Metadata.Namespace).Scan(&members, &failed); err != nil || members != 1 || failed != 0 {
+	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FILTER (WHERE resource_id<>''),count(*) FILTER (WHERE slot=$2 AND resource_id<>'') FROM public.capacity_resource_slots WHERE namespace=$1`, policy.Metadata.Namespace, pre.Slot).Scan(&members, &failed); err != nil || members != 1 || failed != 0 {
 		return authority, body, ErrOriginalUnknown
 	}
 	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.event_log WHERE idempotency_key=$1`, "capacity-mutation/"+pre.OriginalCreateGrantID).Scan(&events); err != nil || events != 0 {
@@ -184,7 +184,7 @@ func (r *Realm) PrepareSourceRecoveryFailureCleanup(ctx context.Context, store r
 	if !now.Before(deadline) {
 		return authority, body, ErrOriginalUnknown
 	}
-	directory, err := unix.Open(SlotDirectory(r.PrivateDirectory, 2), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
+	directory, err := unix.Open(SlotDirectory(r.PrivateDirectory, SourceFailureSlot(r.Request.NativeCase)), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return authority, body, err
 	}
@@ -198,7 +198,7 @@ func (r *Realm) PrepareSourceRecoveryFailureCleanup(ctx context.Context, store r
 	if err != nil || !validUUID(strings.TrimSpace(string(hostBoot))) {
 		return authority, body, ErrOriginalUnknown
 	}
-	body = SourceFailureCleanupBody{Recovery: &actual.Epoch, Schema: "original_source_recovery_failure_cleanup_authority_v1", SourceSlotDirectory: SlotDirectory(r.PrivateDirectory, 2), SourceDirectoryDevice: uint64(directoryStat.Dev), SourceDirectoryInode: directoryStat.Ino, OriginalHostBootID: strings.TrimSpace(string(hostBoot)), Mode: "recovery_failure_cleanup_only", Scope: "same_original_host_qemu_recovery_owned_cleanup_not_guest_positive_retirement", AuthorityID: uuid.NewString(), NativeCase: r.Request.NativeCase, CoreSource: capacity.CurrentGuestCoreSource(), GuestSource: r.Request.SourceCommit, CreatorSourceSHA256: r.Request.CreatorSourceSHA256, PreregistrationID: pre.PreregistrationID, ParentGrantID: pre.OriginalCreateGrantID, PolicyID: policy.ID.String(), PolicyChecksum: policy.Checksum, OriginalReceiptSHA256: capacity.GuestRetirementSHA(receipt), OriginalOutcome: receipt.Outcome, FailureSHA256: failureSHA, EnrollmentSHA256: enrollmentSHA, CreatorSHA256: native.OriginalCreatorSHA256, NativeReadSHA256: capacity.GuestRetirementSHA(native), Slot: 2, ResourceID: native.Original.ResourceID, ResourceCreatedAt: native.Original.OriginalCreateReturnedAt.UTC().Format(time.RFC3339Nano), QEMU: native.Original.QEMU, OriginalDisk: disk, IssuedAt: now, OriginalProvisioningDeadline: pre.OriginalDeadline, OriginalContextDeadline: r.Request.OriginalContextDeadline, CleanupDeadline: deadline, BaselineMembers: members, FailedSlotMembers: failed, FailedSlotEnsuredEvents: events, ProductionQualified: false, PositiveQuiescence: false}
+	body = SourceFailureCleanupBody{Recovery: &actual.Epoch, Schema: "original_source_recovery_failure_cleanup_authority_v1", SourceSlotDirectory: SlotDirectory(r.PrivateDirectory, SourceFailureSlot(r.Request.NativeCase)), SourceDirectoryDevice: uint64(directoryStat.Dev), SourceDirectoryInode: directoryStat.Ino, OriginalHostBootID: strings.TrimSpace(string(hostBoot)), Mode: "recovery_failure_cleanup_only", Scope: "same_original_host_qemu_recovery_owned_cleanup_not_guest_positive_retirement", AuthorityID: uuid.NewString(), NativeCase: r.Request.NativeCase, CoreSource: capacity.CurrentGuestCoreSource(), GuestSource: r.Request.SourceCommit, CreatorSourceSHA256: r.Request.CreatorSourceSHA256, PreregistrationID: pre.PreregistrationID, ParentGrantID: pre.OriginalCreateGrantID, PolicyID: policy.ID.String(), PolicyChecksum: policy.Checksum, OriginalReceiptSHA256: capacity.GuestRetirementSHA(receipt), OriginalOutcome: receipt.Outcome, FailureSHA256: failureSHA, EnrollmentSHA256: enrollmentSHA, CreatorSHA256: native.OriginalCreatorSHA256, NativeReadSHA256: capacity.GuestRetirementSHA(native), Slot: pre.Slot, ResourceID: native.Original.ResourceID, ResourceCreatedAt: native.Original.OriginalCreateReturnedAt.UTC().Format(time.RFC3339Nano), QEMU: native.Original.QEMU, OriginalDisk: disk, IssuedAt: now, OriginalProvisioningDeadline: pre.OriginalDeadline, OriginalContextDeadline: r.Request.OriginalContextDeadline, CleanupDeadline: deadline, BaselineMembers: members, FailedSlotMembers: failed, FailedSlotEnsuredEvents: events, ProductionQualified: false, PositiveQuiescence: false}
 	authority.Body, err = json.Marshal(body)
 	if err != nil {
 		return authority, body, err
@@ -211,12 +211,12 @@ func (r *Realm) ReadSourceRecoveryFailureCleanup(ctx context.Context, a SourceFa
 	var f SourceFailureCleanupPhysical
 	original, cancel := context.WithDeadline(ctx, b.CleanupDeadline)
 	defer cancel()
-	if b.Recovery == nil || b.Schema != "original_source_recovery_failure_cleanup_authority_v1" || session.Child.CompensationOf != b.ParentGrantID {
+	if b.Slot != SourceFailureSlot(r.Request.NativeCase) || session.Child.Slot != b.Slot || b.Recovery == nil || b.Schema != "original_source_recovery_failure_cleanup_authority_v1" || session.Child.CompensationOf != b.ParentGrantID {
 		return f, ErrOriginalUnknown
 	}
 	for _, phase := range []string{"signal", "unlink"} {
 		var request model.CapacitySourceRecoveryEffectRequest
-		requestWire, err := Await(original, filepath.Join(SlotDirectory(r.PrivateDirectory, 2), "source-recovery-"+phase+"-request.json"), &request)
+		requestWire, err := Await(original, filepath.Join(SlotDirectory(r.PrivateDirectory, SourceFailureSlot(r.Request.NativeCase)), "source-recovery-"+phase+"-request.json"), &request)
 		if err != nil || request.Phase != phase {
 			return f, ErrOriginalUnknown
 		}
@@ -226,14 +226,14 @@ func (r *Realm) ReadSourceRecoveryFailureCleanup(ctx context.Context, a SourceFa
 		if err != nil {
 			return f, err
 		}
-		if _, err = Publish(original, filepath.Join(SlotDirectory(r.PrivateDirectory, 2), "source-recovery-"+phase+"-permit.json"), permit); err != nil {
+		if _, err = Publish(original, filepath.Join(SlotDirectory(r.PrivateDirectory, SourceFailureSlot(r.Request.NativeCase)), "source-recovery-"+phase+"-permit.json"), permit); err != nil {
 			return f, err
 		}
 	}
-	if _, err := Await(original, filepath.Join(SlotDirectory(r.PrivateDirectory, 2), "source-failure-cleanup-physical.json"), &f); err != nil {
+	if _, err := Await(original, filepath.Join(SlotDirectory(r.PrivateDirectory, SourceFailureSlot(r.Request.NativeCase)), "source-failure-cleanup-physical.json"), &f); err != nil {
 		return f, err
 	}
-	if f.Schema != "original_source_recovery_failure_cleanup_physical_v1" || f.Scope != "host_owned_recovery_failure_cleanup_only_not_positive_retirement" || f.AuthoritySHA256 != capacity.GuestRetirementSHA(a) || f.CoreSource != b.CoreSource || f.GuestSource != b.GuestSource || f.Slot != 2 || f.ResourceID != b.ResourceID || f.QEMU != b.QEMU || f.OriginalDisk != b.OriginalDisk || f.OriginalSignal != 9 || f.OriginalWaitCode != -9 || !f.OriginalStderrEOF || f.AbsenceClass != "ENOENT" || f.PositiveQuiescence || f.ProductionQualified {
+	if f.Schema != "original_source_recovery_failure_cleanup_physical_v1" || f.Scope != "host_owned_recovery_failure_cleanup_only_not_positive_retirement" || f.AuthoritySHA256 != capacity.GuestRetirementSHA(a) || f.CoreSource != b.CoreSource || f.GuestSource != b.GuestSource || f.Slot != b.Slot || f.ResourceID != b.ResourceID || f.QEMU != b.QEMU || f.OriginalDisk != b.OriginalDisk || f.OriginalSignal != 9 || f.OriginalWaitCode != -9 || !f.OriginalStderrEOF || f.AbsenceClass != "ENOENT" || f.PositiveQuiescence || f.ProductionQualified {
 		return f, ErrOriginalUnknown
 	}
 	for _, at := range []time.Time{f.OriginalPinStartedAt, f.OriginalPinReturnedAt, f.OriginalSignalCalledAt, f.OriginalSignalReturnedAt, f.OriginalWaitReturnedAt, f.OriginalStderrCloseReturnedAt, f.OriginalPIDFDOffReturnedAt, f.OriginalPIDFDCloseReturnedAt, f.OriginalUnlinkCalledAt, f.OriginalUnlinkReturnedAt, f.OriginalDirectorySyncReturnedAt, f.OriginalAbsenceReturnedAt, f.OriginalDirectoryCloseReturnedAt} {

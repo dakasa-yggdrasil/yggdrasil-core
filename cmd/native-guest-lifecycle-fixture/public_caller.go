@@ -168,21 +168,25 @@ func (f *fixture) runOriginalPublicCaller(ctx context.Context) (runErr error) {
 	if len(f.realm.OwnedSlots()) != 0 {
 		return q.ErrOriginalUnknown
 	}
-	baseline, originals, err := f.originalWorkflow(ctx, "baseline", 1, q.QualificationAssessment(p, 0, 0.9, time.Now().UTC()), "")
+	baselineSlot, failedSlot := 1, 2
+	if q.SourceFailureSlot(f.request.NativeCase) == 1 {
+		baselineSlot, failedSlot = 2, 1
+	}
+	baseline, originals, err := f.originalWorkflow(ctx, "baseline", baselineSlot, q.QualificationAssessment(p, 0, 0.9, time.Now().UTC()), "")
 	returns = append(returns, originals...)
 	if err != nil || baseline.Status != "succeeded" {
 		return q.ErrOriginalUnknown
 	}
 	runIDs = append(runIDs, baseline.ID.String())
 	var prepared q.PreCreateRequest
-	if _, err = q.Await(ctx, filepath.Join(q.SlotDirectory(f.private, 2), "pre-create-request.json"), &prepared); err != nil {
+	if _, err = q.Await(ctx, filepath.Join(q.SlotDirectory(f.private, failedSlot), "pre-create-request.json"), &prepared); err != nil {
 		return err
 	}
-	baselineProbeAt, err := f.actualLastUsefulProbeTime(ctx, 1)
+	baselineProbeAt, err := f.actualLastUsefulProbeTime(ctx, baselineSlot)
 	if err != nil || !capacity.Fresh(baselineProbeAt, time.Now().UTC(), p.MaxEvidenceAgeSeconds) {
 		return q.ErrOriginalUnknown
 	}
-	burst, originals, err := f.originalWorkflow(ctx, "burst", 2, q.QualificationAssessment(p, 1, 0.9, baselineProbeAt), "")
+	burst, originals, err := f.originalWorkflow(ctx, "burst", failedSlot, q.QualificationAssessment(p, 1, 0.9, baselineProbeAt), "")
 	returns = append(returns, originals...)
 	if err != nil {
 		return err

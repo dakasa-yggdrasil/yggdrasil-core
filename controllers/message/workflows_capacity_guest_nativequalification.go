@@ -433,8 +433,8 @@ func guestOriginalSourceContractFence(ctx context.Context, store repository.Capa
 }
 
 func guestOriginalSourceCreateWitness(ctx context.Context, store repository.CapacityStore, id string, proof model.CapacityMutationProof, key ed25519.PrivateKey) (model.CapacityGuestOriginalCreateWitness, error) {
-	if originalGuestNativeRealm != nil && capacitynativeqemu.PostlossSourceCase(originalGuestNativeRealm.Request.NativeCase) && proof.Slot == 2 {
-		return store.RecordGuestPostlossObservedWitness(ctx, id, proof, key, originalGuestNativeRealm.Request.NativeCase, filepath.Join(capacitynativeqemu.SlotDirectory(originalGuestNativeRealm.PrivateDirectory, 2), "core-original-create-transport-uncertain.json"))
+	if originalGuestNativeRealm != nil && capacitynativeqemu.PostlossSourceCase(originalGuestNativeRealm.Request.NativeCase) && proof.Slot == capacitynativeqemu.SourceFailureSlot(originalGuestNativeRealm.Request.NativeCase) {
+		return store.RecordGuestPostlossObservedWitness(ctx, id, proof, key, originalGuestNativeRealm.Request.NativeCase, filepath.Join(capacitynativeqemu.SlotDirectory(originalGuestNativeRealm.PrivateDirectory, proof.Slot), "core-original-create-transport-uncertain.json"))
 	}
 	return store.RecordGuestCreateWitness(ctx, id, proof, key)
 }
@@ -442,10 +442,10 @@ func guestOriginalSourceCreateWitness(ctx context.Context, store repository.Capa
 // The standard capacity.recover step and this resolved step share the actual
 // original RunOne invocation executor. Caller JSON supplies no private context.
 func sourceGuestRecoveryCleanupStep(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, input guestOriginalStepInput, operation string) (any, error) {
-	if originalGuestNativeRealm == nil || !capacitynativeqemu.CanonicalSourceCompensationCase(originalGuestNativeRealm.Request.NativeCase) || operation != "capacity.qualify_original_guest_echo" || input.Slot != 2 || input.RequestID != "source_recovery_cleanup_v1" || p.GuestRetirementBinding == nil || p.GuestRetirementBinding.EvidenceClass != "native_qemu_qualification" || p.GuestRetirementBinding.ProfileManifest.Profile != "qualification-original-echo-writer-v1" {
+	if originalGuestNativeRealm == nil || !capacitynativeqemu.CanonicalSourceCompensationCase(originalGuestNativeRealm.Request.NativeCase) || operation != "capacity.qualify_original_guest_echo" || input.Slot != capacitynativeqemu.SourceFailureSlot(originalGuestNativeRealm.Request.NativeCase) || input.RequestID != "source_recovery_cleanup_v1" || p.GuestRetirementBinding == nil || p.GuestRetirementBinding.EvidenceClass != "native_qemu_qualification" || p.GuestRetirementBinding.ProfileManifest.Profile != "qualification-original-echo-writer-v1" {
 		return nil, errOriginalGuestStep
 	}
-	pre, err := originalGuestNativeRealm.OriginalPreregistration(2)
+	pre, err := originalGuestNativeRealm.OriginalPreregistration(input.Slot)
 	if err != nil || pre.PreregistrationID != input.PreregistrationID || pre.PolicyID != policy.ID.String() || pre.PolicyChecksum != policy.Checksum || pre.WorkflowID != store.WorkflowID.String() {
 		return nil, errOriginalGuestStep
 	}
@@ -455,7 +455,7 @@ func sourceGuestRecoveryCleanupStep(ctx context.Context, store repository.Capaci
 	}
 	var member model.CapacityGuestRetirementMemberBinding
 	for _, m := range p.GuestRetirementBinding.Members {
-		if m.Slot == 2 {
+		if m.Slot == input.Slot {
 			member = m
 		}
 	}

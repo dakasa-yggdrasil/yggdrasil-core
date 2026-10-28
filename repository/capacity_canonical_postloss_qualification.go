@@ -18,9 +18,7 @@ import (
 	"time"
 )
 
-func canonicalPostlossCase(c string) bool {
-	return c == "canonical_postloss_unprotected_failed_create_reissue" || c == "canonical_postloss_protected_failed_create_reissue"
-}
+func canonicalPostlossCase(c string) bool { return capacity.GuestPostlossQualificationSlot(c) != 0 }
 
 type postlossReplyRead struct {
 	Schema          string    `json:"schema"`
@@ -138,7 +136,7 @@ func (s CapacityStore) RecordGuestPostlossObservedWitness(ctx context.Context, p
 		}
 		result = model.CapacityGuestOriginalCreateWitness{Schema: capacity.GuestCreateWitnessSchema, BindingName: stored.pre.BindingName, PreregistrationID: stored.pre.PreregistrationID, PreregistrationNonceSHA256: stored.pre.NonceSHA256, Tuple: model.CapacityGuestNativeTuple{Provider: provider, InstanceID: original.Binding.IntegrationInstanceID, InstanceChecksum: original.Binding.IntegrationChecksum, TypeID: original.Binding.IntegrationTypeID, TypeChecksum: original.Binding.IntegrationTypeChecksum, ScopeChecksum: original.Binding.ScopeChecksum, ProfileChecksum: slot.DesiredSpec.ProfileChecksum, Profile: original.Binding.ProfileName, Slot: original.Grant.Slot, ResourceID: proof.ResourceID, CreatedAt: proof.ResourceCreatedAt}, OriginalCreateGrantID: original.Grant.GrantID, OriginalCreateAttemptID: original.AttemptID, OriginalCreateRequestSHA256: original.Grant.RequestSHA256, OriginalCreateSettlementSHA256: capacity.GuestRetirementSHA(*original.Settlement), ProfileManifestSHA256: stored.pre.ProfileManifestSHA256, BootstrapSHA256: stored.binding.ProfileManifest.BootstrapSHA256, CoreSourceCommit: stored.pre.CoreSourceCommit, OriginalDeadline: stored.pre.OriginalDeadline, OriginalCreateReturnedAt: returned, ObservedAt: now}
 
-		if !canonicalPostlossCase(nativeCase) || stored.pre.Slot != 2 || stored.binding.ProfileManifest.Profile != "qualification-original-echo-writer-v1" || original.Grant.CompensationOf != "" || s.hostOriginalOrdinary != nil {
+		if !canonicalPostlossCase(nativeCase) || stored.pre.Slot != capacity.GuestPostlossQualificationSlot(nativeCase) || stored.binding.ProfileManifest.Profile != "qualification-original-echo-writer-v1" || original.Grant.CompensationOf != "" || s.hostOriginalOrdinary != nil {
 			return ErrCapacityDisabled
 		}
 		transportWire, readErr := readPostlossOriginalFact(transportPath)
@@ -175,7 +173,7 @@ func (s CapacityStore) RecordGuestPostlossObservedWitness(ctx context.Context, p
 }
 
 func (s CapacityStore) canonicalPostlossParentTx(ctx context.Context, tx *sql.Tx, stored guestOriginalStored, parent capacityMutationRecord, nativeCase string) bool {
-	if !canonicalPostlossCase(nativeCase) || parent.Settlement == nil || parent.Settlement.Outcome != "uncertain" || !parent.Settlement.TransportCompleted || parent.Settlement.ResourceID != "" || parent.Settlement.ResourceCreatedAt != "" || parent.Settlement.ActionID != "" || stored.pre.Slot != 2 || stored.pre.PolicyID != parent.PolicyID.String() || stored.pre.PolicyChecksum != parent.PolicyChecksum {
+	if !canonicalPostlossCase(nativeCase) || parent.Settlement == nil || parent.Settlement.Outcome != "uncertain" || !parent.Settlement.TransportCompleted || parent.Settlement.ResourceID != "" || parent.Settlement.ResourceCreatedAt != "" || parent.Settlement.ActionID != "" || stored.pre.Slot != capacity.GuestPostlossQualificationSlot(nativeCase) || stored.pre.PolicyID != parent.PolicyID.String() || stored.pre.PolicyChecksum != parent.PolicyChecksum {
 		return false
 	}
 	var witnessWire, originalGrant, transportWire []byte
