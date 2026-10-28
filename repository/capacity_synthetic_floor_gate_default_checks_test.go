@@ -42,3 +42,32 @@ func TestFloorFixtureNeedsCleanupTime(t *testing.T) {
 		t.Fatal("owner began without its full cleanup interval")
 	}
 }
+
+func TestSyntheticCompensationChildCensus(t *testing.T) {
+	root := "TestCapacityMutationCompensationPostgres"
+	child := root + "/unprotected_failed_create"
+	events := `{"Action":"run","Test":"` + root + `"}` + "\n" +
+		`{"Action":"run","Test":"` + child + `"}` + "\n" +
+		`{"Action":"pass","Test":"` + child + `"}` + "\n" +
+		`{"Action":"pass","Test":"` + root + `"}` + "\n" + `{"Action":"pass"}` + "\n"
+	capture := func(s string) floorFixtureCapture {
+		var out floorFixtureCapture
+		_, _ = out.Write([]byte(s))
+		return out
+	}
+	out := capture(events)
+	if !syntheticRepositoryCensus(&out, root, child) {
+		t.Fatal("complete compensation census refused")
+	}
+	for _, bad := range []string{
+		strings.Replace(events, `{"Action":"run","Test":"`+child+`"}`+"\n", "", 1),
+		events + `{"Action":"pass","Test":"` + child + `"}` + "\n",
+		strings.Replace(events, `{"Action":"pass","Test":"`+root+`"}`, `{"Action":"skip","Test":"`+root+`"}`, 1),
+		events + `{"Action":"pass"}` + "\n",
+	} {
+		out = capture(bad)
+		if syntheticRepositoryCensus(&out, root, child) {
+			t.Fatal("incomplete or duplicated census accepted")
+		}
+	}
+}

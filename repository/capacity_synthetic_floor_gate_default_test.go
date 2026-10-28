@@ -63,12 +63,17 @@ func floorFixtureSummary(out, stderr *floorFixtureCapture, exitCode int) string 
 }
 
 func floorFixtureCensus(out *floorFixtureCapture) bool {
+	return syntheticRepositoryCensus(out, "TestSyntheticFloorDrainBudgetPostgres", "")
+}
+
+// Require the parent and selected child separately; a duplicate or skip is not evidence.
+func syntheticRepositoryCensus(out *floorFixtureCapture, root, child string) bool {
 	if out.total != int64(len(out.buf)) {
 		return false
 	}
 	scanner := bufio.NewScanner(bytes.NewReader(out.buf))
 	scanner.Buffer(make([]byte, 1024), floorFixtureOutputLimit)
-	var run, pass, packagePass bool
+	counts := map[string]int{}
 	for scanner.Scan() {
 		var event struct {
 			Action string `json:"Action"`
@@ -80,19 +85,14 @@ func floorFixtureCensus(out *floorFixtureCapture) bool {
 		if event.Action == "fail" || event.Action == "skip" {
 			return false
 		}
-		if event.Test == "TestSyntheticFloorDrainBudgetPostgres" {
-			if event.Action == "run" {
-				run = true
-			}
-			if event.Action == "pass" {
-				pass = true
-			}
-		}
-		if event.Test == "" && event.Action == "pass" {
-			packagePass = true
+		if event.Action == "run" || event.Action == "pass" {
+			counts[event.Test+":"+event.Action]++
 		}
 	}
-	return scanner.Err() == nil && run && pass && packagePass
+	if scanner.Err() != nil || counts[root+":run"] != 1 || counts[root+":pass"] != 1 || counts[":pass"] != 1 {
+		return false
+	}
+	return child == "" || (counts[child+":run"] == 1 && counts[child+":pass"] == 1)
 }
 
 func floorFixtureReapDatabase(ctx context.Context, admin *sql.DB, name string) error {
@@ -122,7 +122,22 @@ func floorFixtureCleanupAfterJoin(ctx context.Context, admin *sql.DB, name strin
 // Invoke only the explicitly synthetic test build. The child creates and
 // drops its own PG16 database; it cannot qualify native or production facts.
 func runSyntheticFloorGate(t *testing.T) {
+	runSyntheticRepositoryGate(t, "TestSyntheticFloorDrainBudgetPostgres", "")
+}
+
+func runSyntheticRepositoryGate(t *testing.T, rootTest, childTest string) {
 	t.Helper()
+	// Only these reviewed fixture cases may be selected by the original tests.
+	allowed := rootTest == "TestSyntheticFloorDrainBudgetPostgres" && childTest == "" ||
+		rootTest == "TestCapacityMutationCompensationPostgres" && (childTest == "unprotected_failed_create" || childTest == "protected_failed_create_without_serving_membership")
+	if !allowed {
+		t.Fatal("unsupported synthetic fixture case")
+	}
+	fullChild, pattern := "", "^"+rootTest+"$"
+	if childTest != "" {
+		fullChild = rootTest + "/" + childTest
+		pattern += "/^" + childTest + "$"
+	}
 	dsn := os.Getenv("DB_URL")
 	if dsn == "" {
 		if os.Getenv("REQUIRE_CAPACITY_POSTGRES") == "true" {
@@ -179,7 +194,7 @@ func runSyntheticFloorGate(t *testing.T) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, goBinary, "test", "-race", "-json", "-timeout=120s", "-buildvcs=true", "-tags", "recoveryfixture", "./repository", "-run", "^TestSyntheticFloorDrainBudgetPostgres$", "-count=1")
+	cmd := exec.CommandContext(ctx, goBinary, "test", "-race", "-json", "-timeout=120s", "-buildvcs=true", "-tags", "recoveryfixture", "./repository", "-run", pattern, "-count=1")
 	floorFixtureConfigureProcess(cmd)
 	cmd.Dir = root
 	cmd.Env = append(os.Environ(), "CAPACITY_RECOVERY_FIXTURE_ONLY=true", "CAPACITY_RECOVERY_FIXTURE_DATABASE="+name, "RECOVERY_FIXTURE_ADMIN_URL="+dsn, "GOWORK=off")
@@ -206,7 +221,7 @@ func runSyntheticFloorGate(t *testing.T) {
 	if cleanupErr != nil {
 		t.Fatal("synthetic database cleanup unconfirmed")
 	}
-	if err != nil || !floorFixtureCensus(&out) {
-		t.Fatal("isolated synthetic floor fixture failed or incomplete; no physical qualification was granted")
+	if err != nil || !syntheticRepositoryCensus(&out, rootTest, fullChild) {
+		t.Fatal("isolated synthetic repository fixture failed or incomplete; no physical qualification was granted")
 	}
 }
