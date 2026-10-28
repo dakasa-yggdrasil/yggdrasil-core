@@ -884,11 +884,16 @@ func TestSyntheticCompensationIssueExploration(t *testing.T) {
 			if _, e = issuer.ConfirmCompensation(ctx, current, missing); e == nil {
 				t.Fatal("missing auxiliary admitted")
 			}
-			confirmed, e := issuer.ConfirmCompensation(ctx, current, deleted)
-			if e != nil || confirmed.State != "confirmed" {
-				t.Fatal("real ConfirmCompensation", confirmed, e)
+			paused = issuer
+			paused.ExecutionEnabled = false
+			if _, e = db.ExecContext(ctx, `UPDATE public.manifests SET active=false WHERE id=$1`, current.ID); e != nil {
+				t.Fatal(e)
 			}
-			if _, e = issuer.ConfirmCompensation(ctx, current, deleted); e != nil {
+			confirmed, e := paused.ConfirmCompensation(ctx, current, deleted)
+			if e != nil || confirmed.State != "confirmed" {
+				t.Fatal("paused cleanup readback", confirmed, e)
+			}
+			if _, e = paused.ConfirmCompensation(ctx, current, deleted); e != nil {
 				t.Fatal("same confirmation replay", e)
 			}
 			parentReceipt, e := issuer.MutationReceipt(ctx, mutation.AdapterPrincipalID, grant.GrantID)
