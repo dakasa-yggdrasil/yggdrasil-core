@@ -7,11 +7,12 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 3024fe8608bf5cb56c82064dff0a72960b89ffe5
-verified_diff_sha256: 6d71fd71d15232868f0465a9a2382d09af680d366c6c01719166d1c66d4aa75d
+verified_at_commit: edda091fe2f2fbec43f7389f7abda6cfbc1c3458
+verified_diff_sha256: 25c3af7f1f839187827c8f021ab20d127e9115539ef12898f443331f043dc4e7
 reconciler_schema: 1
 verified_at: 2026-10-28
 by: Giomaster
+installation_diagnostic_and_compensation_review: Reviewed closed qualification-only installation read classes and the exact planner refusal for disabled compensation or non-destroy plans. The service census was regenerated; local planner and isolated PostgreSQL checks passed. Native Linux integration and the full capacity gate remain required.
 native_diagnostic_source_reconciliation: Reviewed closed failure-stage codes for native qualification and preserved the production refusal path. The service source census and digest were regenerated; Linux test binaries compiled locally and the integrated native execution remains required.
 qemu_broker_source_reconciliation: Reconciled the nativequalification-only broker Describe and read consumers, dedicated socket ownership, startup and cleanup guards with the service interface contract at the source commit above. The digest records git diff --binary HEAD^ HEAD at that commit. Source transport checks do not establish native QEMU, PG17 or production qualification.
 historical_fourth_owning_ci_note: Reconciled the final one-line lowercase hexadecimal interval complement after the complete fourth owning CI inventory. Independent SAME review found zero confirmed findings; exact byte acceptance, length and empty behavior and short-circuit order remain unchanged. Bounded textual recurrence review covers all 209 changed Go paths across tags and finds only this occurrence; it is not a linter or global semantic pass. Five test sources, expected manifest, four named rosters, collector, owning workflow and budgets stay literal. Prior source CI passed all 216 roots and 2055 descendants, each of 2271 nodes once with exact names and no FAIL/SKIP. Fourteen original ZIPs, 373 members and 23 GoJSON collections for all eight prior terminal runs remain retained. Genuine context and summary preserve all nine actual input digests. Successor owning CI is required; old45 stays HOLD/edit_lease false, Registry EMPTY, Native NULL, C6 HOLD and FULL_CORE_NATIVE_PENDING. No local functional execution or production change occurred.
