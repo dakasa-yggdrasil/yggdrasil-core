@@ -8,6 +8,7 @@ import (
 	"os"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -79,13 +80,15 @@ func nativeWorkflowFixtureWorkflow(t *testing.T, wf model.WorkflowManifestSpec) 
 	return wf
 }
 
-func nativeWorkflowFixturePolicy(t *testing.T, p model.CapacityPolicySpec, mutation model.CapacityMutationBinding, slots []model.CapacityMutationSlotBinding) model.CapacityPolicySpec {
+func nativeWorkflowFixturePolicy(t *testing.T, p model.CapacityPolicySpec, mutation model.CapacityMutationBinding, slots []model.CapacityMutationSlotBinding) (model.CapacityPolicySpec, model.CapacityMutationBinding) {
 	t.Helper()
 	if os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") != "true" {
-		return p
+		return p, mutation
 	}
 	capacity.RecoveryFixtureApprovalScope(t)
-	_, b, _, _, _ := capacity.RecoveryFixtureInstalled(t)
+	fixturePolicy, b, _, _, _ := capacity.RecoveryFixtureInstalled(t)
+	mutation.OriginalProviderSourceCommit = fixturePolicy.MutationBindings[0].OriginalProviderSourceCommit
+	p.MutationBindings = []model.CapacityMutationBinding{mutation}
 	b.CoreAuthoritySourceCommit = capacity.CurrentGuestCoreSource()
 	if b.CoreAuthoritySourceCommit == "" {
 		t.Fatal("clean source identity required")
@@ -112,7 +115,7 @@ func nativeWorkflowFixturePolicy(t *testing.T, p model.CapacityPolicySpec, mutat
 	if err := capacity.RegisterRecoveryFixtureApproval(p, b, "hetzner"); err != nil {
 		t.Fatal("synthetic approval refused", err)
 	}
-	return p
+	return p, mutation
 }
 
 func nativeWorkflowFixtureStore(t *testing.T, store repository.CapacityStore) repository.CapacityStore {
@@ -126,3 +129,19 @@ func nativeWorkflowFixtureStore(t *testing.T, store repository.CapacityStore) re
 }
 
 func nativeWorkflowSyntheticGate(*testing.T) bool { return false }
+
+// This is a declared response used only in the isolated test DB. It is not a
+// provider call and must never be treated as production or native evidence.
+func nativeWorkflowFixtureSettlement(t *testing.T, b model.CapacityMutationBinding, g model.CapacityMutationGrant, s model.CapacityMutationSettleRequest) model.CapacityMutationSettleRequest {
+	t.Helper()
+	if os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") != "true" || s.Outcome != "accepted" {
+		return s
+	}
+	at := time.Now().UTC().Format(time.RFC3339Nano)
+	if s.NextActionIDs == nil {
+		s.NextActionIDs = []string{}
+	}
+	s.OriginalProviderCreateReturn = &model.CapacityOriginalProviderCreateReturn{Schema: "hetzner_original_create_return_v1", Provider: "hetzner", AdapterSourceCommit: b.OriginalProviderSourceCommit, GrantID: g.GrantID, AttemptID: s.AttemptID, RequestSHA256: g.RequestSHA256, ResourceID: s.ResourceID, ResourceCreatedAt: s.ResourceCreatedAt, ActionID: s.ActionID, NextActionIDs: append([]string{}, s.NextActionIDs...), CalledAt: at, ReturnedAt: at, ContextDeadline: g.ExpiresAt.UTC().Format(time.RFC3339Nano), ResponseStatus: 201, ResponseBodySHA256: capacity.BusinessCreationSHA256([]byte("synthetic provider response")), ResponseBytes: int64(len("synthetic provider response"))}
+	s.ObservedAt = at
+	return s
+}

@@ -12,10 +12,14 @@ func nativeWorkflowFixtureDSN(_ *testing.T, dsn string) string { return dsn }
 func nativeWorkflowFixtureWorkflow(_ *testing.T, wf model.WorkflowManifestSpec) model.WorkflowManifestSpec {
 	return wf
 }
-func nativeWorkflowFixturePolicy(_ *testing.T, p model.CapacityPolicySpec, _ model.CapacityMutationBinding, _ []model.CapacityMutationSlotBinding) model.CapacityPolicySpec {
-	return p
+func nativeWorkflowFixturePolicy(_ *testing.T, p model.CapacityPolicySpec, b model.CapacityMutationBinding, _ []model.CapacityMutationSlotBinding) (model.CapacityPolicySpec, model.CapacityMutationBinding) {
+	return p, b
 }
 func nativeWorkflowFixtureStore(_ *testing.T, s repository.CapacityStore) repository.CapacityStore {
 	return s
 }
 func nativeWorkflowSyntheticGate(*testing.T) bool { return false }
+
+func nativeWorkflowFixtureSettlement(_ *testing.T, _ model.CapacityMutationBinding, _ model.CapacityMutationGrant, s model.CapacityMutationSettleRequest) model.CapacityMutationSettleRequest {
+	return s
+}
