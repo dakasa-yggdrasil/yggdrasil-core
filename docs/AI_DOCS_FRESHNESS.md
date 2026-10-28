@@ -7,9 +7,10 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: bfc91dfc0bf1b7648133e15364aaaa385af5a512
-verified_diff_sha256: 50855350939fbcae57338ff265adc2f3e7af6d6270af356a8c91dfa813663296
+verified_at_commit: 78b35843dfd207f4aa0dec97fc62d23a61d497d4
+verified_diff_sha256: c93946e1d4bd5db67d0cfae49025cdc4bd0c9e3fd56e12c7be3dec84f65d260d
 reconciler_schema: 1
+guest_probe_diagnostic_retention_review: Native qualification now retains every actual probe diagnostic under the digest of its unique challenge without replacing a previous original. A peer reviewed the scope, publication behavior and negative checks. The Linux nativequalification package compiled; actual QEMU execution and complete production qualification remain required.
 verified_at: 2026-10-28
 by: Giomaster
 native_read_binding_review: Qualification resolves the exact original member and slot through the current Guest binding to the unique mutation binding. Independent review and nine race-tested cases passed; native QEMU and production qualification remain required.
