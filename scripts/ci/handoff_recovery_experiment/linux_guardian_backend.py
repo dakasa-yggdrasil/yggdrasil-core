@@ -39,5 +39,5 @@ class LinuxGuardianBackend:
   p=Path(marker['path']);core.need(p==self.marker_directory/'ROOT-ONE-GUARDIAN-START.PUBLIC.json','EXACT_GUARDIAN_MARKER_PATH');raw,_=locks.core.read_regular(p,self.expected_uid);return raw
  def start_once(self,marker):
   core.need(self.holding_maintenance and not self.holding_guardian and not self.start_called and self.marker==marker,'GUARDIAN_ONE_SHOT_AND_LOCK_STATE');core.need(hashlib.sha256(self.readback_marker(marker)).hexdigest()==marker['sha256'],'SAME_GUARDIAN_INTENT_IMMEDIATELY_BEFORE_START');self.start_called=True
-  _,facts=self.native(START,deadline=time.monotonic()+20,stdin=b'',env={'PATH':'/usr/sbin:/usr/bin:/sbin:/bin','LANG':'C'},cap=1<<20,diagnostic_path=None);return facts
+  started=time.monotonic();_,facts=self.native(START,deadline=started+20,stdin=b'',env={'PATH':'/usr/sbin:/usr/bin:/sbin:/bin','LANG':'C'},cap=1<<20,diagnostic_path=None);return {**facts,'argv':list(START),'started_monotonic':started,'finished_monotonic':time.monotonic()}
  def observe_guardian(self):return self.inspector.observe_guardian()
