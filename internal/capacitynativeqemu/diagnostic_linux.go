@@ -6,12 +6,20 @@ import (
 	"context"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/google/uuid"
 	"path/filepath"
 	"time"
 )
 
-func (r *Realm) publishProbeDiagnostic(ctx context.Context, slot int, variant string, returned capacity.GuestOriginalHTTPReturn) error {
-	_, err := Publish(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, slot), "probe-http-"+variant+".json"), capacity.GuestProbeDiagnostic(returned))
+func (r *Realm) publishProbeDiagnostic(ctx context.Context, slot int, variant, challengeID string, returned capacity.GuestOriginalHTTPReturn) error {
+	id, err := uuid.Parse(challengeID)
+	if err != nil || id.String() != challengeID || slot < 1 || slot > 2 || (variant != "normal" && variant != "recovery" && variant != "floor") {
+		return ErrOriginalUnknown
+	}
+	// Keep the diagnostic bound to this actual challenge while retaining only
+	// its digest in paths that may later be exported publicly.
+	digest := capacity.BusinessCreationSHA256([]byte(challengeID))
+	_, err = Publish(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, slot), "probe-http-"+variant+"-"+digest+".json"), capacity.GuestProbeDiagnostic(returned))
 	return err
 }
 

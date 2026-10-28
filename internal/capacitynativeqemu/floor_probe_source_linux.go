@@ -73,7 +73,7 @@ func (r *Realm) FloorSourceProbe(ctx context.Context, store repository.CapacityS
 		return result, err
 	}
 	returned, err := client.Original(original, http.MethodGet, "/v1/qualification-serving-probe", requestWire)
-	if diagnosticErr := r.publishProbeDiagnostic(ctx, slot, "floor", returned); diagnosticErr != nil && err == nil {
+	if diagnosticErr := r.publishProbeDiagnostic(ctx, slot, "floor", c.ChallengeID, returned); diagnosticErr != nil && err == nil {
 		return result, diagnosticErr
 	}
 	if original.Err() != nil || err != nil || capacity.GuestOriginalHTTPDecode(returned, &result) != nil || ValidateProbeReturn(request, result, receipt.Enrollment, receipt.OriginalProvisioningSHA256, returned.DriverReturnedAt) != nil {
