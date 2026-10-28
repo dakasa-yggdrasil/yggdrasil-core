@@ -140,3 +140,36 @@ func (s CapacityStore) canonicalPostlossConfirmationTx(ctx context.Context, tx *
 	wire, err := json.Marshal(proof)
 	return err == nil && bytes.Equal(wire, proofWire) && capacity.BusinessCreationSHA256(freshWire) == freshSHA && capacity.BusinessCreationSHA256(proofWire) == proofSHA && postlossConfirmationJoin(originalWire, freshWire, stored.witness, receipt, parent.Grant, proof, now)
 }
+
+// VerifyCanonicalPostlossConfirmed rechecks the immutable original qualification
+// join at its recorded instant, after the owning confirmation was committed.
+// It is source-fixture evidence and never enables provider authority.
+func (s CapacityStore) VerifyCanonicalPostlossConfirmed(ctx context.Context, policy model.Manifest, p model.CapacityPolicySpec, nativeCase string, grant model.CapacityMutationGrant, proof model.CapacityMutationProof) error {
+	if !canonicalPostlossCase(nativeCase) || grant.Slot != capacity.GuestPostlossQualificationSlot(nativeCase) || grant.GrantID == "" || proof.GrantID != grant.GrantID {
+		return ErrCapacityConflict
+	}
+	var preID string
+	if err := s.DB.QueryRowContext(ctx, `SELECT id::text FROM public.capacity_vm_provisioning_preregistrations WHERE create_grant_id=$1`, grant.GrantID).Scan(&preID); err != nil {
+		return err
+	}
+	return s.guestStoredTransaction(ctx, preID, func(tx *sql.Tx, stored guestOriginalStored, now time.Time) error {
+		var raw []byte
+		var parent capacityMutationRecord
+		var recordedAt time.Time
+		if stored.pre.OriginalCreateGrantID != grant.GrantID || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.Slot != grant.Slot ||
+			tx.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1 FOR SHARE`, grant.GrantID).Scan(&raw) != nil || json.Unmarshal(raw, &parent) != nil ||
+			parent.Grant.State != "confirmed" || parent.Grant.GrantID != grant.GrantID || parent.PolicyID != policy.ID || parent.PolicyChecksum != policy.Checksum || parent.WorkflowID != s.WorkflowID || parent.Proof == nil ||
+			tx.QueryRowContext(ctx, `SELECT recorded_at FROM public.capacity_canonical_postloss_confirmations WHERE preregistration_id=$1 AND parent_grant_id=$2`, preID, grant.GrantID).Scan(&recordedAt) != nil || recordedAt.IsZero() || recordedAt.After(now) {
+			return ErrCapacityConflict
+		}
+		if loadGuestWitnessTx(ctx, tx, &stored) != nil || stored.witness.SourceObservation == nil || stored.witness.SourceObservation.Case != nativeCase {
+			return ErrCapacityConflict
+		}
+		actual, actualErr := json.Marshal(parent.Proof)
+		expected, expectedErr := json.Marshal(proof)
+		if actualErr != nil || expectedErr != nil || !bytes.Equal(actual, expected) || !s.canonicalPostlossConfirmationTx(ctx, tx, policy, p, parent, proof, recordedAt) {
+			return ErrCapacityConflict
+		}
+		return nil
+	})
+}
