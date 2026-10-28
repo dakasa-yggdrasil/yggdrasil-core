@@ -40,36 +40,60 @@ func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context,
 		var witness model.CapacityGuestOriginalCreateWitness
 		var wire []byte
 		if err = f.db.QueryRowContext(ctx, `SELECT original_wire FROM public.capacity_guest_original_create_witnesses WHERE preregistration_id=$1`, pre.PreregistrationID).Scan(&wire); err != nil || capacity.DecodeGuestLifecycle(wire, &witness) != nil {
+			sourceFailureDiagnostic("witness")
 			return q.ErrOriginalUnknown
 		}
 		client, err := f.sourceClient(failedSlot)
 		if err != nil {
+			sourceFailureDiagnostic("client")
 			return err
 		}
 		defer client.Close()
+		seenTransport, seenPending := false, false
 		for {
 			read, cancel := context.WithTimeout(ctx, 5*time.Second)
 			returned, callErr := client.Original(read, http.MethodGet, "/v1/qualification-source-refusal", []byte("{}"))
 			cancel()
 			if callErr == nil && returned.Status == 200 {
 				var failed q.QualificationFailureRecord
-				if capacity.GuestOriginalHTTPDecode(returned, &failed) != nil || f.realm.ValidateOriginalFailure(failed, pre, witness, f.binding.ProvisionerPublicKey, returned.DriverReturnedAt) != nil {
+				if capacity.GuestOriginalHTTPDecode(returned, &failed) != nil {
+					sourceFailureDiagnostic("decode")
+					return q.ErrOriginalUnknown
+				}
+				if f.realm.ValidateOriginalFailure(failed, pre, witness, f.binding.ProvisionerPublicKey, returned.DriverReturnedAt) != nil {
+					sourceFailureDiagnostic("validation")
 					return q.ErrOriginalUnknown
 				}
 				if err = store.RecordGuestQualificationSourceReturn(ctx, pre.PreregistrationID, "source_refusal", returned.Body); err != nil {
+					sourceFailureDiagnostic("record")
 					return err
 				}
 				failureSHA = capacity.BusinessCreationSHA256(returned.Body)
 				if _, err = q.PublishBytes(ctx, filepath.Join(q.SlotDirectory(f.private, failedSlot), "core-original-failed-owner-diagnostic.json"), returned.Body); err != nil {
+					sourceFailureDiagnostic("publish")
 					return err
 				}
 				break
 			}
+			if callErr != nil && !seenTransport {
+				sourceFailureDiagnostic("transport")
+				seenTransport = true
+			}
+			if callErr == nil && returned.Status == 409 && !seenPending {
+				sourceFailureDiagnostic("http_pending")
+				seenPending = true
+			}
 			if ctx.Err() != nil || (callErr == nil && returned.Status != 409) {
+				if ctx.Err() != nil {
+					sourceFailureDiagnostic("timeout")
+				} else {
+					sourceFailureDiagnostic("http_unexpected")
+				}
 				return q.ErrOriginalUnknown
 			}
 			select {
 			case <-ctx.Done():
+				sourceFailureDiagnostic("timeout")
 				return q.ErrOriginalUnknown
 			case <-time.After(20 * time.Millisecond):
 			}
