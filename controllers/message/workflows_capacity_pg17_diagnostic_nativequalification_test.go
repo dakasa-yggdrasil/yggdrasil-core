@@ -24,6 +24,9 @@ func TestPG17DiagnosticClosedPredicates(t *testing.T) {
 	}{
 		{pg17NativeResultFailure(r), "pg17-confirm-native-12"},
 		{pg17ConfirmFailure("check-02"), "pg17-confirm-check-02"},
+		{pg17ConfirmFailure("proof-join"), "pg17-confirm-proof-join"},
+		{pg17ConfirmFailure("guest-slot-one"), "pg17-confirm-guest-slot-one"},
+		{pg17ConfirmFailure("guest-conflict"), "pg17-confirm-guest-conflict"},
 		{pg17ConfirmFailure("native-12\nsecret"), "pg17-original-workflow-confirm"},
 		{errors.New("secret"), "pg17-original-workflow-confirm"},
 	} {

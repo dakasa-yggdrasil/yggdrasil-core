@@ -34,7 +34,7 @@ func pg17NativeResultFailure(result model.WorkflowRunStepResult) error {
 }
 func guestPG17ConfirmFailurePredicate(err error) string {
 	var stage pg17Diagnostic
-	if errors.As(err, &stage) && regexp.MustCompile(`^(?:check-0[1-6]|native-(?:0[1-9]|[12][0-9]|3[01]))$`).MatchString(string(stage)) {
+	if errors.As(err, &stage) && regexp.MustCompile(`^(?:check-0[1-6]|proof-join|guest-slot-one|guest-conflict|native-(?:0[1-9]|[12][0-9]|3[01]))$`).MatchString(string(stage)) {
 		return "pg17-confirm-" + string(stage)
 	}
 	return "pg17-original-workflow-confirm"
