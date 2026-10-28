@@ -217,6 +217,7 @@ func (s *Server) serveCapacityGuestRequest(w http.ResponseWriter, r *http.Reques
 		}
 		receipt, err := store.RegisterOriginalGuest(ctx, p.base.principalID, registration, intent, enrollment)
 		if err != nil {
+			guestRegistrationDiagnosticLog(err)
 			guestHTTPError(w, err)
 			return
 		}
