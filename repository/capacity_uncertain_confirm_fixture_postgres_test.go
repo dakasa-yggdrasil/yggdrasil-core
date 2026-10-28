@@ -38,6 +38,11 @@ func TestUnanchoredUncertainCreateCannotConfirmPostgres(t *testing.T) {
 	proof.ObservedAt = time.Now().UTC()
 	proof.ActionsTerminal, proof.ActionsSuccessful = true, true
 	proof.ActionIDs = []string{"unrelated-action"}
+	forged := f.store
+	forged.hostOriginalOrdinary = &hostOriginalOrdinaryFactory{}
+	if _, err = forged.ConfirmMutation(ctx, f.policy, f.intent.Generation, f.intent.FencingToken, f.intent.LeaseOwner, proof); !errors.Is(err, ErrHostFactoryHold) {
+		t.Fatal("unverified host source bypassed guard", err)
+	}
 	if _, err = f.store.ConfirmMutation(ctx, f.policy, f.intent.Generation, f.intent.FencingToken, f.intent.LeaseOwner, proof); !errors.Is(err, ErrCapacityConflict) {
 		t.Fatalf("unanchored uncertain create confirmed or wrong refusal: %v", err)
 	}

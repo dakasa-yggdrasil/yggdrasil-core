@@ -758,6 +758,12 @@ func (s CapacityStore) ConfirmMutation(ctx context.Context, policy model.Manifes
 		if err := s.guardOriginalHostConfirmTx(ctx, tx, policy.Metadata.Namespace, p, b, g.Slot, proof); err != nil {
 			return err
 		}
+		// A lost create reply without its action or lifetime cannot bind a
+		// later arbitrary proof. An original host-factory scope may proceed
+		// only after the preceding guard verified its exact source-owned proof.
+		if s.hostOriginalOrdinary == nil && g.Capability == b.EnsureCapability && g.CompensationOf == "" && record.Settlement != nil && record.Settlement.Outcome == "uncertain" && (record.Settlement.ActionID == "" || record.Settlement.ResourceID == "" || record.Settlement.ResourceCreatedAt == "") {
+			return ErrCapacityConflict
+		}
 		if record.PolicyID == policy.ID && record.PolicyChecksum == policy.Checksum && record.WorkflowID == s.WorkflowID && g.State == "confirmed" && record.Proof != nil {
 			previous, _ := json.Marshal(record.Proof)
 			requested, _ := json.Marshal(proof)
