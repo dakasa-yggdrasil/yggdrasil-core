@@ -21,6 +21,10 @@ import (
 // All witness/enrollment/retirement data are synthetic and confined to a
 // newly created local PG16 database. This supplies no native/provider proof.
 func TestSyntheticFloorDrainBudgetPostgres(t *testing.T) {
+	runSyntheticFloorGate(t)
+}
+
+func runSyntheticFloorGate(t *testing.T) {
 	capacity.RecoveryFixtureApprovalScope(t)
 	db := recoveryTestIsolatedDB(t)
 	var dbName string

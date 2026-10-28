@@ -337,73 +337,9 @@ func TestCapacityMutationPostgres(t *testing.T) {
 		}
 	})
 	t.Run("floor_drain_pending_delete_budget_and_tombstone", func(t *testing.T) {
-		f := mutationPostgresFixture(t, true)
-		// A fixture records a requested reduction. The real Advance method,
-		// rather than a caller flag, must admit its drained transition.
-		f.intent.Decision.Action = "drain"
-		f.intent.Decision.Units = 2
-		f.intent.Phase = "draining"
-		raw, _ := json.Marshal(f.intent)
-		if _, err := f.db.ExecContext(ctx, `UPDATE public.capacity_intents SET intent=$2::jsonb WHERE namespace=$1`, f.policy.Metadata.Namespace, raw); err != nil {
-			t.Fatal(err)
-		}
-		destroy := func(slot int) model.CapacityMutationIssue {
-			var spec map[string]any
-			_ = json.Unmarshal(f.plans[slot].DesiredSpec, &spec)
-			spec["capability"] = f.binding.DestroyCapability
-			spec["expected_resource_id"] = fmt.Sprintf("resource-%d", slot)
-			spec["expected_resource_created_at"] = f.created
-			encoded, _ := json.Marshal(spec)
-			return model.CapacityMutationIssue{BindingName: f.binding.Name, DesiredSpec: encoded}
-		}
-		if _, err := f.store.IssueMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, destroy(4)); !errors.Is(err, ErrCapacityConflict) {
-			t.Fatal("undrained delete admitted", err)
-		}
-		proof := model.CapacityTransitionProof{Assessment: f.a, ObservedAt: time.Now().UTC(), ReceiptRef: "fixture:drain", Healthy: true, Inflight: capacityTestCount(0)}
-		if _, err := f.store.Advance(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, "drained", proof); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := f.store.IssueMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, destroy(2)); err == nil {
-			t.Fatal("floor deletion admitted")
-		}
-		g, err := f.store.IssueMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, destroy(4))
-		if err != nil {
-			t.Fatal(err)
-		}
-		if _, err = f.store.IssueMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, destroy(3)); err != nil {
-			t.Fatal(err)
-		}
-		nonce := uuid.NewString()
-		redeem := mutationRedeem(g, nonce)
-		if _, err = f.store.RedeemMutation(ctx, f.binding.AdapterPrincipalID, redeem); err != nil {
-			t.Fatal(err)
-		}
-		settle := mutationSettlement(redeem, f.created)
-		if _, err = f.store.SettleMutation(ctx, f.binding.AdapterPrincipalID, nonce, settle); err != nil {
-			t.Fatal(err)
-		}
-		deleted := f.proof(t, 4)
-		deleted.GrantID = g.GrantID
-		deleted.RequestSHA256 = g.RequestSHA256
-		deleted.ResourceAbsent = true
-		deleted.ActionsTerminal = true
-		deleted.ActionsSuccessful = true
-		deleted.ActionIDs = []string{"native-action", "bootstrap-action"}
-		if _, err = f.store.ConfirmMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, deleted); !errors.Is(err, ErrCapacityConflict) {
-			t.Fatal("unobserved paid auxiliary disappearance", err)
-		}
-		deleted.AuxiliaryAbsent = []model.CapacityMutationAuxiliaryResource{{Kind: "primary_ip", ID: "ip-fixture"}}
-		if _, err = f.store.ConfirmMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, deleted); err != nil {
-			t.Fatal(err)
-		}
-		var applied int
-		if err = f.db.QueryRowContext(ctx, `SELECT count(*) FROM public.event_log WHERE idempotency_key=$1 AND type='fixture.server.destroyed' AND payload->>'resource_id'=$2`, "capacity-mutation/"+g.GrantID, deleted.ResourceID).Scan(&applied); err != nil || applied != 1 {
-			t.Fatal("canonical deletion event", applied, err)
-		}
-		if err = f.store.RecordMutationSlot(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, f.plans[4], f.proof(t, 4)); !errors.Is(err, ErrCapacityConflict) {
-			t.Fatal("tombstone silently readopted", err)
-		}
+		runSyntheticFloorGate(t)
 	})
+
 	t.Run("policy_instance_type_and_executor_fences", func(t *testing.T) {
 		for _, target := range []string{"policy", "instance", "type", "executor"} {
 			t.Run(target, func(t *testing.T) {
