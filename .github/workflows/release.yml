@@ -21,6 +21,10 @@ permissions:
   packages: write
   id-token: write
 
+concurrency:
+  group: yggdrasil-core-release
+  cancel-in-progress: false
+
 jobs:
   docker:
     runs-on: ubuntu-latest
@@ -57,14 +61,15 @@ jobs:
             org.opencontainers.image.title=yggdrasil-core
             org.opencontainers.image.licenses=Apache-2.0
 
-      - name: Build & push multi-arch image
+      - name: Build and push unique candidate image
+        id: build
         uses: docker/build-push-action@v6
         with:
           context: .
           file: Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          tags: ${{ steps.meta.outputs.tags }}
+          tags: ghcr.io/dakasa-yggdrasil/yggdrasil-core:candidate-${{ github.run_id }}-${{ github.run_attempt }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
@@ -74,3 +79,84 @@ jobs:
           # it; never lands in an image layer.
           secrets: |
             github_token=${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Go for image verification
+        uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+
+      - name: Verify published binaries and source revision
+        env:
+          IMAGE: ghcr.io/dakasa-yggdrasil/yggdrasil-core@${{ steps.build.outputs.digest }}
+          EXPECTED_REVISION: ${{ github.sha }}
+        run: |
+          set -eu
+          index=$(docker buildx imagetools inspect "$IMAGE" --format '{{json .Manifest}}')
+          for arch in amd64 arm64; do
+            manifest=$(printf '%s' "$index" | jq -er --arg arch "$arch" \
+              '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == $arch) | .digest] | if length == 1 then .[0] else error("expected exactly one platform manifest") end')
+            printf '%s\n' "$manifest" | grep -Eq '^sha256:[0-9a-f]{64}$' || { echo "Invalid platform digest" >&2; exit 1; }
+            platform_image="ghcr.io/dakasa-yggdrasil/yggdrasil-core@$manifest"
+            docker pull --platform "linux/$arch" "$platform_image"
+            test "$(docker image inspect --format '{{.Architecture}}' "$platform_image")" = "$arch"
+            container=$(docker create --platform "linux/$arch" "$platform_image")
+            temp=$(mktemp -d)
+            mkdir -p "$temp/app" "$temp/usr/local/bin"
+            for binary in yggdrasil-core goose yggdrasil-bootstrap yggdrasil-bootstrap-admin; do
+              docker cp "$container:/app/$binary" "$temp/app/$binary"
+            done
+            docker cp "$container:/usr/local/bin/kubectl" "$temp/usr/local/bin/kubectl"
+            docker rm "$container" > /dev/null
+            sh scripts/verify-image-platform.sh "linux/$arch" "$temp"
+            go version -m "$temp/app/yggdrasil-core" > "$temp/build-info"
+            awk -v expected="vcs.revision=$EXPECTED_REVISION" \
+              '$1 == "build" && $2 == expected { found = 1 } END { exit !found }' "$temp/build-info"
+            awk '$1 == "build" && $2 == "vcs.modified=false" { found = 1 } END { exit !found }' "$temp/build-info"
+            # Execute each binary in a network-isolated container. The Core
+            # gets deliberately invalid configuration so it exits before
+            # opening any external service or accepting traffic.
+            run_expect() {
+              expected_status=$1
+              expected_text=$2
+              entrypoint=$3
+              shift 3
+              set +e
+              output=$(timeout 45 docker run --rm --platform "linux/$arch" --network none \
+                --env YGGDRASIL_WORKFLOW_DISPATCH_LOCK_JSON=invalid \
+                --entrypoint "$entrypoint" "$platform_image" "$@" 2>&1)
+              status=$?
+              set -e
+              if [ "$status" -ne "$expected_status" ] || ! printf '%s\n' "$output" | grep -Fq -- "$expected_text"; then
+                printf 'Execution failed for %s on %s (exit %s):\n%s\n' "$entrypoint" "$arch" "$status" "$output" >&2
+                exit 1
+              fi
+            }
+            run_expect 2 'panic: boot-validation failed:' /app/yggdrasil-core
+            run_expect 1 'usage: go run ./scripts/goose' /app/goose
+            run_expect 0 'Usage of' /app/yggdrasil-bootstrap -h
+            run_expect 2 'Usage of bootstrap-admin:' /app/yggdrasil-bootstrap-admin -h
+            run_expect 0 'Client Version:' /usr/local/bin/kubectl version --client
+            rm -rf "$temp"
+          done
+
+      - name: Promote verified digest to release tags
+        env:
+          IMAGE: ghcr.io/dakasa-yggdrasil/yggdrasil-core@${{ steps.build.outputs.digest }}
+          DIGEST: ${{ steps.build.outputs.digest }}
+          TAGS: ${{ steps.meta.outputs.tags }}
+        run: |
+          set -eu
+          set --
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            set -- "$@" --tag "$tag"
+          done <<< "$TAGS"
+          test "$#" -gt 0
+          # A single index source is copied without changing its digest.
+          docker buildx imagetools create "$@" "$IMAGE"
+          while IFS= read -r tag; do
+            [ -n "$tag" ] || continue
+            actual=$(docker buildx imagetools inspect "$tag" --format '{{json .Manifest}}' | jq -r .digest)
+            test "$actual" = "$DIGEST" || { echo "Digest mismatch for $tag" >&2; exit 1; }
+          done <<< "$TAGS"

@@ -81,6 +81,16 @@
       "line": 139
     },
     {
+      "argument_expression": "method, path, strings.NewReader(string(body))",
+      "argument_sha256": "318d4995c19ead917f19637b79ec7e7cc71d09b12afec2dd760277c95d56cf87",
+      "build_constraint": "linux && capacitytest && nativequalification",
+      "callee": "httptest.NewRequest",
+      "expression_complete": true,
+      "file": "controllers/httpapi/capacity_fixture_http_qualification.go",
+      "function": "AssertSyntheticCapacityHTTP",
+      "line": 60
+    },
+    {
       "argument_expression": "ctx, http.MethodGet, url, nil",
       "argument_sha256": "4978aa31eb4ab16087e92fde62f39ce4f490cadd63076d9888a3498a278bf7fe",
       "build_constraint": "default",
