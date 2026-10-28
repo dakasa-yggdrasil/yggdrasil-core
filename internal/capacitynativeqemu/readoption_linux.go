@@ -63,10 +63,18 @@ func(r *Realm) OriginalReadoptionPresence(ctx context.Context,slot int,b model.C
  original,cancel:=context.WithTimeout(ctx,5*time.Second);defer cancel()
  fresh,err:=Observe(original,SlotDirectory(r.PrivateDirectory,slot),native.Original,r.QEMUBinarySHA256)
  if err!=nil || r.verifyFixedCommand(original,slot,fresh)!=nil{return proof,ErrOriginalUnknown}
- raw,err:=Publish(original,filepath.Join(SlotDirectory(r.PrivateDirectory,slot),"delete-readoption-original-native-read.json"),fresh)
+ raw,err:=publishReadoptionOriginalNativeRead(original,filepath.Join(SlotDirectory(r.PrivateDirectory,slot),"delete-readoption-original-native-read.json"),native,fresh)
  if err!=nil{return proof,err}
  proof=originalReadoptionPresenceProof(slot,b,pre,native,fresh,raw)
  return proof,nil
+}
+
+// Preserve the exact creator identity from the original read alongside the
+// independently observed fresh return. No creator or provider call is replayed.
+func publishReadoptionOriginalNativeRead(ctx context.Context, path string, native, fresh IndependentReturn) ([]byte, error) {
+ if !validSHA(native.OriginalCreatorSHA256) { return nil, ErrOriginalUnknown }
+ fresh.OriginalCreatorSHA256 = native.OriginalCreatorSHA256
+ return Publish(ctx, path, fresh)
 }
 
 // A presence observation has no action claims. Emit an explicit empty array so
