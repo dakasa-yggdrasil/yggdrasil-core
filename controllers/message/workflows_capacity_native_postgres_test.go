@@ -1157,7 +1157,8 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 	run := func(c context.Context, op string, value map[string]any) model.WorkflowRunStepResult {
 		return executeCapacityNativeWorkflowStep(c, nil, db, ref, model.WorkflowRunStepResult{Kind: "yggdrasil", Operation: op, Status: "failed"}, value)
 	}
-	count := func() int {
+	count := func(t *testing.T) int {
+		t.Helper()
 		var n int
 		if err := db.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE namespace=$1`, ns).Scan(&n); err != nil {
 			t.Fatal(err)
@@ -1167,7 +1168,7 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 	t.Run("readonly_real_adapter_inventory_has_no_authority", func(t *testing.T) {
 		t.Setenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED", "false")
 		got := run(ctx, "capacity.observe_vm_inventory", input())
-		if got.Status != "succeeded" || got.Metadata["native_members"] != float64(2) || got.Metadata["useful_capacity_known"] != false || got.Metadata["registered"] != float64(0) || count() != 0 {
+		if got.Status != "succeeded" || got.Metadata["native_members"] != float64(2) || got.Metadata["useful_capacity_known"] != false || got.Metadata["registered"] != float64(0) || count(t) != 0 {
 			t.Fatalf("read-only source became authority: %+v", got)
 		}
 	})
@@ -1190,7 +1191,7 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 	t.Run("native_collision_refuses_entire_inventory", func(t *testing.T) {
 		mode = "collision"
 		defer func() { mode = "inventory" }()
-		if run(ctx, "capacity.observe_vm_inventory", input()).Status == "succeeded" || count() != 0 {
+		if run(ctx, "capacity.observe_vm_inventory", input()).Status == "succeeded" || count(t) != 0 {
 			t.Fatal("native drift gained coverage")
 		}
 	})
@@ -1212,7 +1213,7 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 	t.Setenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED", "true")
 	t.Run("complete_inventory_registers_through_existing_lease", func(t *testing.T) {
 		got := run(ctx, "capacity.record_vm_inventory", leased())
-		if got.Status != "succeeded" || got.Metadata["registered"] != float64(2) || count() != 2 {
+		if got.Status != "succeeded" || got.Metadata["registered"] != float64(2) || count(t) != 2 {
 			t.Fatalf("registration failed: %+v", got)
 		}
 		before := rpcCalls
@@ -1220,7 +1221,8 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 			t.Fatal("another invocation borrowed native registration lease")
 		}
 	})
-	issue := func(slot int) model.CapacityMutationGrant {
+	issue := func(t *testing.T, slot int) model.CapacityMutationGrant {
+		t.Helper()
 		raw, _ := json.Marshal(slots[slot-1].DesiredSpec)
 		g, e := store.IssueMutation(ctx, policy, intent.Generation, intent.FencingToken, intent.LeaseOwner, model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: raw})
 		if e != nil {
@@ -1228,7 +1230,8 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 		}
 		return g
 	}
-	settle := func(g model.CapacityMutationGrant, known bool) {
+	settle := func(t *testing.T, g model.CapacityMutationGrant, known bool) {
+		t.Helper()
 		nonce := strings.Repeat("a", 64)
 		sum := sha256.Sum256([]byte(nonce))
 		r := model.CapacityMutationRedeemRequest{GrantID: g.GrantID, AttemptID: uuid.NewString(), SettlementTokenSHA256: fmt.Sprintf("%x", sum), Capability: g.Capability, IntegrationInstanceID: g.IntegrationInstanceID, ScopeChecksum: g.ScopeChecksum, ProfileName: g.ProfileName, Slot: g.Slot, RequestSHA256: g.RequestSHA256}
@@ -1255,13 +1258,13 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 		}
 	}
 	t.Run("native_reads_confirm_once_without_readiness_claim", func(t *testing.T) {
-		g := issue(3)
-		settle(g, true)
+		g := issue(t, 3)
+		settle(t, g, true)
 		mode = "confirm"
 		v := leased()
 		v["grant_id"] = g.GrantID
 		got := run(ctx, "capacity.confirm_native_mutation", v)
-		if got.Status != "succeeded" || count() != 3 || got.Metadata["useful_capacity_known"] != false {
+		if got.Status != "succeeded" || count(t) != 3 || got.Metadata["useful_capacity_known"] != false {
 			t.Fatalf("native confirmation failed: %+v", got)
 		}
 		receipt, err = store.NativeMutationReceipt(ctx, policy, b, g.GrantID)
@@ -1278,8 +1281,8 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 		members = append(members, map[string]any{"slot": 3, "id": 100, "created_at": nativeCreated, "grant_id": g.GrantID})
 	})
 	t.Run("lost_failed_creation_is_explicit_unresolved_member", func(t *testing.T) {
-		g := issue(4)
-		settle(g, false)
+		g := issue(t, 4)
+		settle(t, g, false)
 		mode = "failed"
 		v := input()
 		v["parent_grant_id"], v["slot"] = g.GrantID, 4
@@ -1290,18 +1293,18 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 		raw, _ := json.Marshal(got.Metadata["mutation_proof"])
 		var proof model.CapacityMutationProof
 		json.Unmarshal(raw, &proof)
-		if proof.ResourceID != "104" || proof.SpecVerified || !proof.CompensationIdentityVerified || !proof.ActionHistoryComplete || !proof.ActionsFailed || count() != 3 {
+		if proof.ResourceID != "104" || proof.SpecVerified || !proof.CompensationIdentityVerified || !proof.ActionHistoryComplete || !proof.ActionsFailed || count(t) != 3 {
 			t.Fatal("failed lifetime became physical/registered capacity", proof)
 		}
 		mode = "failed_inventory"
 		got = run(ctx, "capacity.observe_vm_inventory", v)
-		if got.Status != "succeeded" || got.Metadata["native_members"] != float64(4) || len(got.Metadata["mutation_proofs"].([]any)) != 3 || count() != 3 {
+		if got.Status != "succeeded" || got.Metadata["native_members"] != float64(4) || len(got.Metadata["mutation_proofs"].([]any)) != 3 || count(t) != 3 {
 			t.Fatalf("unresolved member was dropped or counted as registered: %+v", got)
 		}
 		v = leased()
 		v["parent_grant_id"], v["slot"] = g.GrantID, 4
 		got = run(ctx, "capacity.record_vm_inventory", v)
-		if got.Status != "succeeded" || got.Metadata["registered"] != float64(3) || count() != 3 {
+		if got.Status != "succeeded" || got.Metadata["registered"] != float64(3) || count(t) != 3 {
 			t.Fatalf("failed member altered serving ledger: %+v", got)
 		}
 		var state string
