@@ -38,6 +38,10 @@ type repositoryOriginalResult struct {
 	SettlementScopePrivacyPassed bool   `json:"settlement_scope_privacy_passed"`
 	RepositoryUnresolved         bool   `json:"repository_unresolved"`
 	RepositoryNativeConfirmation bool   `json:"repository_native_confirmation"`
+	RepositoryPausedUnredeemed   bool   `json:"repository_paused_unredeemed"`
+	RepositoryHistoricalRecovery bool   `json:"repository_historical_recovery"`
+	RepositoryPartialRecovery    bool   `json:"repository_partial_recovery"`
+	RepositoryAuthorityFences    bool   `json:"repository_authority_fences"`
 	ProviderSendAttempted        bool   `json:"provider_send_attempted"`
 	NativeOrProductionQualified  bool   `json:"native_or_production_qualified"`
 }

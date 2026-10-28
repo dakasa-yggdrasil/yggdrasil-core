@@ -262,29 +262,9 @@ func TestCapacityMutationPostgres(t *testing.T) {
 		}
 	})
 	t.Run("paused_unredeemed_expiry_can_reconcile_without_native_fence", func(t *testing.T) {
-		f := mutationPostgresFixture(t, true)
-		g := f.issue(t, 5)
-		if _, err := f.db.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET expires_at=clock_timestamp()-interval '1 hour' WHERE id=$1`, g.GrantID); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := f.db.ExecContext(ctx, `UPDATE public.capacity_intents SET intent=jsonb_set(intent,'{lease_expires_at}',to_jsonb($2::text)) WHERE namespace=$1`, f.policy.Metadata.Namespace, time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)); err != nil {
-			t.Fatal(err)
-		}
-		recovery := f.store
-		recovery.ExecutionEnabled = false
-		recovery.ExecutorID = uuid.NewString()
-		lease, err := recovery.Recover(ctx, f.policy, 1, freshCapacityTestAssessment(f.a, 4))
-		if err != nil {
-			t.Fatal(err)
-		}
-		proof := model.CapacityTransitionProof{Assessment: freshCapacityTestAssessment(f.a, 4), ObservedAt: time.Now().UTC(), ReceiptRef: "fixture:never-redeemed", Healthy: true, Inflight: capacityTestCount(0), MutationInflight: capacityTestCount(0), NoMutationVerified: true, MutationAuthorityKind: "core_mutation_grants"}
-		result, err := recovery.Reconcile(ctx, f.policy, 1, lease.FencingToken, lease.LeaseOwner, "aborted", proof)
-		if err != nil || result.Phase != "aborted" {
-			t.Fatal(result, err)
-		}
-		var state string
-		if err = f.db.QueryRowContext(ctx, `SELECT state FROM public.capacity_mutation_grants WHERE id=$1`, g.GrantID).Scan(&state); err != nil || state != "expired" {
-			t.Fatal(state, err)
+		r := repositoryOriginalFixture(t)
+		if !r.RepositoryPausedUnredeemed {
+			t.Fatal("source-owned paused unredeemed recovery did not pass")
 		}
 	})
 	t.Run("concurrent_issue_and_single_redemption", func(t *testing.T) {
@@ -319,129 +299,15 @@ func TestCapacityMutationPostgres(t *testing.T) {
 		assertGenericCapacityMutationEvent(t)
 	})
 	t.Run("historical_recovery_confirms_after_pause", func(t *testing.T) {
-		f := mutationPostgresFixture(t, true)
-		g := f.issue(t, 5)
-		nonce := uuid.NewString()
-		r := mutationRedeem(g, nonce)
-		if _, err := f.store.RedeemMutation(ctx, f.binding.AdapterPrincipalID, r); err != nil {
-			t.Fatal(err)
-		}
-		settle := mutationSettlement(r, f.created)
-		if _, err := f.store.SettleMutation(ctx, f.binding.AdapterPrincipalID, nonce, settle); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := f.db.ExecContext(ctx, `UPDATE public.capacity_intents SET intent=jsonb_set(intent,'{lease_expires_at}',to_jsonb($2::text)) WHERE namespace=$1`, f.policy.Metadata.Namespace, time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := f.db.ExecContext(ctx, `UPDATE public.manifests SET active=false WHERE id=$1`, f.policy.ID); err != nil {
-			t.Fatal(err)
-		}
-		recovery := f.store
-		recovery.ExecutorID = uuid.NewString()
-		recovery.ExecutionEnabled = false
-		lease, err := recovery.Recover(ctx, f.policy, 1, freshCapacityTestAssessment(f.a, 4))
-		if err != nil {
-			t.Fatal(err)
-		}
-		proof := f.proof(t, 5)
-		proof.GrantID = g.GrantID
-		proof.ActionsTerminal = true
-		proof.ActionsSuccessful = true
-		proof.ActionIDs = []string{"native-action", "bootstrap-action"}
-		proof.ResourceCreatedAt = settle.ResourceCreatedAt
-		proof.ObservedCreationGrantID = g.GrantID
-		result, err := recovery.ConfirmMutation(ctx, f.policy, 1, lease.FencingToken, lease.LeaseOwner, proof)
-		if err != nil || result.State != "confirmed" {
-			t.Fatal(result, err)
+		r := repositoryOriginalFixture(t)
+		if !r.RepositoryHistoricalRecovery {
+			t.Fatal("source-owned historical confirmation after pause did not pass")
 		}
 	})
 	t.Run("partial_recovery_matches_fresh_membership_and_allows_new_intent", func(t *testing.T) {
-		f := mutationPostgresFixture(t, true)
-		g := f.issue(t, 5)
-		nonce := uuid.NewString()
-		r := mutationRedeem(g, nonce)
-		if _, err := f.store.RedeemMutation(ctx, f.binding.AdapterPrincipalID, r); err != nil {
-			t.Fatal(err)
-		}
-		settled := mutationSettlement(r, f.created)
-		if _, err := f.store.SettleMutation(ctx, f.binding.AdapterPrincipalID, nonce, settled); err != nil {
-			t.Fatal(err)
-		}
-		native := f.proof(t, 5)
-		native.GrantID, native.ResourceCreatedAt, native.ObservedCreationGrantID = g.GrantID, settled.ResourceCreatedAt, g.GrantID
-		native.ActionsTerminal, native.ActionsSuccessful = true, true
-		native.ActionIDs = []string{"native-action", "bootstrap-action"}
-		if _, err := f.store.ConfirmMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, native); err != nil {
-			t.Fatal(err)
-		}
-		unsent := f.issue(t, 6)
-		if _, err := f.db.ExecContext(ctx, `UPDATE public.capacity_intents SET intent=jsonb_set(intent,'{lease_expires_at}',to_jsonb($2::text)) WHERE namespace=$1`, f.policy.Metadata.Namespace, time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)); err != nil {
-			t.Fatal(err)
-		}
-		recovery := f.store
-		recovery.ExecutionEnabled, recovery.ExecutorID = false, uuid.NewString()
-		lease, err := recovery.Recover(ctx, f.policy, 1, freshCapacityTestAssessment(f.a, 5))
-		if err != nil {
-			t.Fatal(err)
-		}
-		zero := 0
-		proof := model.CapacityTransitionProof{Assessment: freshCapacityTestAssessment(f.a, 5), ObservedAt: time.Now().UTC(), ReceiptRef: "fixture:complete-partial-inventory", Healthy: true, Inflight: &zero, MutationInflight: &zero, MutationAuthorityKind: "core_mutation_grants", MembershipComplete: true}
-		if _, err := recovery.Reconcile(ctx, f.policy, 1, lease.FencingToken, lease.LeaseOwner, "reconciled_partial", proof); err == nil {
-			t.Fatal("partial recovery ignored an outstanding permission")
-		}
-		if _, err := f.db.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET expires_at=$2 WHERE id=$1`, unsent.GrantID, time.Now().Add(-time.Second)); err != nil {
-			t.Fatal(err)
-		}
-		for _, scenario := range []string{"incomplete", "wrong_count", "outside_change", "no_mutation", "provider_fence"} {
-			bad := proof
-			switch scenario {
-			case "incomplete":
-				bad.MembershipComplete = false
-			case "wrong_count":
-				bad.Assessment.Snapshot.Units = 4
-			case "outside_change":
-				bad.Assessment.Snapshot.Units = 7
-			case "no_mutation":
-				bad.NoMutationVerified = true
-			case "provider_fence":
-				bad.ProviderFencingToken = lease.FencingToken
-			}
-			if _, err := recovery.Reconcile(ctx, f.policy, 1, lease.FencingToken, lease.LeaseOwner, "reconciled_partial", bad); err == nil {
-				t.Fatal("partial recovery accepted unsafe proof", scenario)
-			}
-		}
-		if _, err := f.db.ExecContext(ctx, `UPDATE public.capacity_resource_slots SET slot_record=jsonb_set(slot_record,'{observed_at}',to_jsonb($2::text)) WHERE namespace=$1 AND slot=1`, f.policy.Metadata.Namespace, time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano)); err != nil {
-			t.Fatal(err)
-		}
-		if _, err := recovery.Reconcile(ctx, f.policy, 1, lease.FencingToken, lease.LeaseOwner, "reconciled_partial", proof); err == nil {
-			t.Fatal("partial recovery accepted stale membership")
-		}
-		if err := recovery.RecordMutationSlot(ctx, f.policy, 1, lease.FencingToken, lease.LeaseOwner, f.plans[7], f.proof(t, 7)); err == nil {
-			t.Fatal("recovery registered a new native tuple")
-		}
-		for slot := 1; slot <= 5; slot++ {
-			observed := f.proof(t, slot)
-			if slot == 5 {
-				observed.ResourceCreatedAt = settled.ResourceCreatedAt
-			}
-			if err := recovery.RecordMutationSlot(ctx, f.policy, 1, lease.FencingToken, lease.LeaseOwner, f.plans[slot], observed); err != nil {
-				t.Fatal("read-only recovery did not refresh exact membership", slot, err)
-			}
-		}
-		partial, err := recovery.Reconcile(ctx, f.policy, 1, lease.FencingToken, lease.LeaseOwner, "reconciled_partial", proof)
-		if err != nil || partial.Phase != "reconciled_partial" || partial.Assessment.Snapshot.Units != 5 || partial.LeaseOwner != "" || partial.Decision.ExecutionPermitted {
-			t.Fatal("partial observed state did not close safely", partial, err)
-		}
-		if _, err := recovery.RenewRecovery(ctx, f.policy, 1, lease.FencingToken, lease.LeaseOwner); !errors.Is(err, ErrCapacityConflict) {
-			t.Fatal("partial terminal state retained authority", err)
-		}
-		// Advance only the persisted cooldown clock, never wall-clock sleeps.
-		if _, err := f.db.ExecContext(ctx, `UPDATE public.capacity_intents SET intent=jsonb_set(intent,'{decision,clock,last_action_at}',to_jsonb($2::text)) WHERE namespace=$1`, f.policy.Metadata.Namespace, time.Now().Add(-time.Minute).UTC().Format(time.RFC3339Nano)); err != nil {
-			t.Fatal(err)
-		}
-		next, err := f.store.Assess(ctx, f.policy, freshCapacityTestAssessment(f.a, 5))
-		if err != nil || next.Generation != 2 || next.Phase != "proposed" || next.Decision.Units != 7 {
-			t.Fatal("partial state prevented a separately assessed new generation", next, err)
+		r := repositoryOriginalFixture(t)
+		if !r.RepositoryPartialRecovery {
+			t.Fatal("source-owned partial recovery and new assessment did not pass")
 		}
 	})
 	t.Run("floor_drain_pending_delete_budget_and_tombstone", func(t *testing.T) {
@@ -515,26 +381,9 @@ func TestCapacityMutationPostgres(t *testing.T) {
 	t.Run("policy_instance_type_and_executor_fences", func(t *testing.T) {
 		for _, target := range []string{"policy", "instance", "type", "executor"} {
 			t.Run(target, func(t *testing.T) {
-				f := mutationPostgresFixture(t, true)
-				g := f.issue(t, 5)
-				id := f.policy.ID.String()
-				if target == "instance" {
-					id = f.binding.IntegrationInstanceID
-				}
-				if target == "type" {
-					id = f.binding.IntegrationTypeID
-				}
-				if target == "executor" {
-					if _, err := f.db.ExecContext(ctx, `UPDATE public.capacity_intents SET intent=jsonb_set(intent,'{lease_executor_id}',to_jsonb($2::text)) WHERE namespace=$1`, f.policy.Metadata.Namespace, uuid.NewString()); err != nil {
-						t.Fatal(err)
-					}
-				} else {
-					if _, err := f.db.ExecContext(ctx, `UPDATE public.manifests SET active=false WHERE id=$1`, id); err != nil {
-						t.Fatal(err)
-					}
-				}
-				if response, err := f.store.RedeemMutation(ctx, f.binding.AdapterPrincipalID, mutationRedeem(g, uuid.NewString())); err == nil || response.Mode == "write_once" {
-					t.Fatal("stale authority redeemed", response, err)
+				r := repositoryOriginalFixture(t)
+				if !r.RepositoryAuthorityFences {
+					t.Fatal("source-owned authority fence and restored control did not pass", target)
 				}
 			})
 		}
