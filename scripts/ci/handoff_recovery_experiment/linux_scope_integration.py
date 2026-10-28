@@ -1,5 +1,5 @@
 """Disposable Ubuntu systemd/cgroup integration; never touches production."""
-import hashlib,json,os,secrets,subprocess,tempfile
+import base64,hashlib,json,os,secrets,subprocess,tempfile,time
 from pathlib import Path
 import owner_scope as scope
 import scope_collector
@@ -17,7 +17,15 @@ with tempfile.TemporaryDirectory(prefix='scope-integration-') as tmp:
   lease=json.loads((out/'OWNER-LEASE.PUBLIC.json').read_bytes());assert lease['source_sha256']==digest
   # Synthetic SSM is deliberately not evidence of AWS or Brain execution.
   expected={'command_id':'fixture','instance_id':'fixture','request_sha256':'fixture'};ssm={'schema':'verified_ssm_terminal_transport_only_v1','terminal_does_not_prove_remote_process_or_job_absent':True,**expected}
-  got=scope_collector.collect(lease=lease,expected_ssm=expected,ssm_terminal=ssm,native=frozen_native.native,diagnostic_directory=diags)
+  for attempt in range(20):
+   attempt_dir=diags/str(attempt);attempt_dir.mkdir(mode=0o700)
+   try:
+    got=scope_collector.collect(lease=lease,expected_ssm=expected,ssm_terminal=ssm,native=frozen_native.native,diagnostic_directory=attempt_dir)
+    break
+   except scope.Held as e:
+    if str(e)!='NO_PENDING_SYSTEMD_JOBS' or attempt==19:
+     row=json.loads((attempt_dir/'JOBS-ORIGINAL-IO.PRIVATE.json').read_bytes());print('LAST_JOBS_OUTPUT',base64.b64decode(row['stdout_base64']).decode(),flush=True);raise
+    time.sleep(1)
   assert got['result']['owner_and_cgroup_empty'] is True
   print(json.dumps({'actual_linux_systemd_scope_and_native_io':True,'ssm_fixture_only':True,'production_authority':False}))
  finally:

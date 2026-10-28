@@ -4,7 +4,7 @@ No CLI and no production authority: caller must source-pin this module and nativ
 verify the exact lease and SSM diagnostics, and hold the maintenance mutex. Captured
 facts are snapshots; the one-shot owner launch must not be replayable.
 """
-import errno,hashlib,os,time
+import errno,hashlib,json,os,time
 from pathlib import Path
 import owner_scope as contract
 class Held(Exception):pass
@@ -25,7 +25,7 @@ def fs_read(path):
  return {'path':path,'fd_closed':True,'status':'ok','errno':None,'content':bytes(data).decode('ascii')}
 def command(argv,native,diagnostic):
  raw,facts=native(argv,deadline=time.monotonic()+8,stdin=b'',env={'PATH':'/usr/sbin:/usr/bin:/sbin:/bin','LANG':'C'},cap=1<<20,diagnostic_path=diagnostic)
- return {'argv':argv,'stdout':raw.decode('utf-8'),'stdout_sha256':hashlib.sha256(raw).hexdigest(),'transport':facts}
+ diagnostic_record=json.loads(Path(diagnostic).read_bytes());return {'argv':argv,'stdout':raw.decode('utf-8'),'stdout_sha256':hashlib.sha256(raw).hexdigest(),'transport':facts,'original_diagnostic':diagnostic_record}
 def collect(*,lease,expected_ssm,ssm_terminal,native,diagnostic_directory):
  unit=contract.unit_for(lease['run_id']);contract.need(lease.get('cgroup')=='/system.slice/'+unit and type(lease.get('pid'))is int and lease['pid']>1,'EXACT_LEASE_PATHS_BEFORE_READ');d=Path(diagnostic_directory);contract.need(d.is_absolute(),'ABSOLUTE_PRIVATE_DIAGNOSTIC_DIRECTORY')
  unit_read=command(['/usr/bin/systemctl','show',unit,'--property=Id,ActiveState,MainPID,ControlGroup,KillMode,Delegate,Restart'],native,d/'UNIT-ORIGINAL-IO.PRIVATE.json')

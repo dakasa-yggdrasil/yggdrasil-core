@@ -6,6 +6,7 @@ Delegate=no, no restart, no --collect before inspection and no service replays; 
 its original terminal SSM custody are a separate prerequisite.
 """
 import hashlib,json,os,re,stat
+import ssm_terminal_custody
 from pathlib import Path
 class Held(Exception):pass
 def need(v,g):
@@ -24,7 +25,7 @@ def fs_result(v,expected_path):
  if v.get('status')=='absent':need(v.get('errno')==2 and v.get('content') is None,'ONLY_EXPLICIT_ENOENT');return None
  need(v.get('status')=='ok' and v.get('errno') is None and type(v.get('content'))is str,'ONLY_SUCCESSFUL_FILESYSTEM_READ');return v['content']
 def native_stdout(v,expected_argv):
- need(type(v)is dict and v.get('argv')==expected_argv and type(v.get('stdout'))is str and type(v.get('transport'))is dict,'TYPED_EXACT_NATIVE_READ');t=v['transport'];need(t.get('exit_code')==0 and t.get('captured_output_truncated') is False and all(t.get(k)is True for k in ('native_started','wait_zero','stdout_EOF','stderr_EOF','all_local_FDs_closed','local_child_joined')),'CLOSED_ZERO_NATIVE_READ');need(v.get('stdout_sha256')==hashlib.sha256(v['stdout'].encode()).hexdigest(),'EXACT_NATIVE_STDOUT');return v['stdout']
+ need(type(v)is dict and v.get('argv')==expected_argv and type(v.get('stdout'))is str and type(v.get('transport'))is dict,'TYPED_EXACT_NATIVE_READ');t=v['transport'];need(t.get('exit_code')==0 and t.get('captured_output_truncated') is False and all(t.get(k)is True for k in ('native_started','wait_zero','stdout_EOF','stderr_EOF','all_local_FDs_closed','local_child_joined')),'CLOSED_ZERO_NATIVE_READ');need(v.get('stdout_sha256')==hashlib.sha256(v['stdout'].encode()).hexdigest(),'EXACT_NATIVE_STDOUT');diagnostic=v.get('original_diagnostic');need(ssm_terminal_custody.stdout(diagnostic)==v['stdout'].encode(),'EXACT_ORIGINAL_DIAGNOSTIC_STDOUT');dt=diagnostic['original_local_transport'];need(all(t.get(k)==dt.get(k) for k in ('pid','exit_code','native_started','wait_zero','stdout_EOF','stderr_EOF','all_local_FDs_closed','local_child_joined','captured_output_truncated')),'SAME_NATIVE_CALL_AND_DIAGNOSTIC');return v['stdout']
 def validate_terminal(*,lease,boot_read,unit_read,cgroup_read,pid_read,jobs_read,ssm_terminal,expected_ssm):
  unit=unit_for(lease['run_id']);current_boot=fs_result(boot_read,'/proc/sys/kernel/random/boot_id');need(type(current_boot)is str and lease['schema']=='handoff_isolated_owner_lease_v1' and lease['unit']==unit and lease['cgroup']=='/system.slice/'+unit and lease['boot_id']==current_boot.strip(),'SAME_ISOLATED_SCOPE_AND_BOOT')
  need(ssm_terminal.get('schema')=='verified_ssm_terminal_transport_only_v1' and ssm_terminal.get('terminal_does_not_prove_remote_process_or_job_absent') is True and type(expected_ssm)is dict and set(expected_ssm)=={'command_id','instance_id','request_sha256'} and all(ssm_terminal.get(k)==v for k,v in expected_ssm.items()),'EXACT_ORIGINAL_TERMINAL_SSM_REQUIRED')
