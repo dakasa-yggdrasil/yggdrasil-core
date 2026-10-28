@@ -182,7 +182,7 @@ func TestSyntheticFailedFloorRecoveryPostgres(t *testing.T) {
 		t.Fatal(err)
 	}
 	failed := f.proof(t, 3)
-	failed.GrantID, failed.ResourceCreatedAt, failed.ObservedCreationGrantID = parent.GrantID, settled.ResourceCreatedAt, parent.GrantID
+	failed.GrantID, failed.ResourceID, failed.ResourceCreatedAt, failed.ObservedCreationGrantID = parent.GrantID, settled.ResourceID, settled.ResourceCreatedAt, parent.GrantID
 	failed.ActionsTerminal, failed.ActionsFailed, failed.SpecVerified, failed.CompensationIdentityVerified = true, true, false, true
 	failed.ActionIDs = []string{"native-action", "bootstrap-action"}
 	var desired model.CapacityMutationSpecV1
