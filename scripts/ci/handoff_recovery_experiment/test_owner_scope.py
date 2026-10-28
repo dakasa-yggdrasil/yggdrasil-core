@@ -21,6 +21,9 @@ class ScopeTest(unittest.TestCase):
  def test_original_job_diagnostic_is_mandatory(self):
   t={'exit_code':0,'captured_output_truncated':False,**{k:True for k in ('native_started','wait_zero','stdout_EOF','stderr_EOF','all_local_FDs_closed','local_child_joined')}}
   with self.assertRaises(Exception):self.call(jobs_read={'argv':['/usr/bin/systemctl','list-jobs','--no-pager','--no-legend'],'stdout':'','stdout_sha256':hashlib.sha256(b'').hexdigest(),'transport':t,'original_diagnostic':None})
+ def test_recovery_owner_has_distinct_unit_and_lease_schema(self):
+  unit=s.unit_for(self.r,'controller_recovery');lease=s.make_lease(run_id=self.r,source_sha256='b'*64,boot_id=self.boot,pid=123,proc_stat=self.stat,cgroup='/system.slice/'+unit,kind='controller_recovery');self.assertEqual(lease['schema'],'controller_recovery_isolated_owner_lease_v1');self.assertNotEqual(unit,s.unit_for(self.r))
+  with self.assertRaises(s.Held):s.make_lease(run_id=self.r,source_sha256='b'*64,boot_id=self.boot,pid=123,proc_stat=self.stat,cgroup='/system.slice/'+s.unit_for(self.r),kind='controller_recovery')
  def test_scope_or_boot_mismatch_rejected(self):
   with self.assertRaises(s.Held):self.call(boot_read={'path':'/proc/sys/kernel/random/boot_id','fd_closed':True,'status':'ok','errno':None,'content':'00000000-0000-0000-0000-000000000000'})
   with self.assertRaises(s.Held):s.make_lease(run_id=self.r,source_sha256='b'*64,boot_id=self.boot,pid=123,proc_stat=self.stat,cgroup='/system.slice/ssm-agent.service')

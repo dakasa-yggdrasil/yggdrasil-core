@@ -27,11 +27,11 @@ def fs_read(path):
 def command(argv,native,diagnostic):
  raw,facts=native(argv,deadline=time.monotonic()+8,stdin=b'',env={'PATH':'/usr/sbin:/usr/bin:/sbin:/bin','LANG':'C'},cap=1<<20,diagnostic_path=diagnostic)
  diagnostic_record=json.loads(Path(diagnostic).read_bytes());return {'argv':argv,'stdout':raw.decode('utf-8'),'stdout_sha256':hashlib.sha256(raw).hexdigest(),'transport':facts,'original_diagnostic':diagnostic_record}
-def collect(*,lease,ssm_evidence,native,diagnostic_directory):
+def collect(*,lease,ssm_evidence,native,diagnostic_directory,kind='handoff'):
  ssm_terminal=ssm_terminal_custody.qualify(**ssm_evidence);expected_ssm={k:ssm_terminal[k] for k in ('command_id','instance_id','request_sha256')}
- unit=contract.unit_for(lease['run_id']);contract.need(lease.get('cgroup')=='/system.slice/'+unit and type(lease.get('pid'))is int and lease['pid']>1,'EXACT_LEASE_PATHS_BEFORE_READ');d=Path(diagnostic_directory);contract.need(d.is_absolute(),'ABSOLUTE_PRIVATE_DIAGNOSTIC_DIRECTORY')
+ unit=contract.unit_for(lease['run_id'],kind);contract.need(lease.get('cgroup')=='/system.slice/'+unit and type(lease.get('pid'))is int and lease['pid']>1,'EXACT_LEASE_PATHS_BEFORE_READ');d=Path(diagnostic_directory);contract.need(d.is_absolute(),'ABSOLUTE_PRIVATE_DIAGNOSTIC_DIRECTORY')
  unit_read=command(['/usr/bin/systemctl','show',unit,'--property=Id,ActiveState,MainPID,ControlGroup,KillMode,Delegate,Restart'],native,d/'UNIT-ORIGINAL-IO.PRIVATE.json')
  jobs=command(['/usr/bin/systemctl','list-jobs','--no-pager','--no-legend'],native,d/'JOBS-ORIGINAL-IO.PRIVATE.json')
  boot=fs_read('/proc/sys/kernel/random/boot_id');cg=fs_read('/sys/fs/cgroup'+lease['cgroup']+'/cgroup.events');pid=fs_read('/proc/'+str(lease['pid'])+'/stat')
- result=contract.validate_terminal(lease=lease,boot_read=boot,unit_read=unit_read,cgroup_read=cg,pid_read=pid,jobs_read=jobs,ssm_terminal=ssm_terminal,expected_ssm=expected_ssm)
+ result=contract.validate_terminal(lease=lease,boot_read=boot,unit_read=unit_read,cgroup_read=cg,pid_read=pid,jobs_read=jobs,ssm_terminal=ssm_terminal,expected_ssm=expected_ssm,kind=kind)
  return {'result':result,'unit_original':unit_read,'jobs_original':jobs,'boot_read':boot,'cgroup_read':cg,'pid_read':pid}

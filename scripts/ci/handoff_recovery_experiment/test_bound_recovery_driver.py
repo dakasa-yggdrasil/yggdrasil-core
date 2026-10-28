@@ -27,6 +27,20 @@ class Tests(unittest.TestCase):
   self.i.snapshot=lambda:{'previous_recovery_start_terminal':True}
   with self.b.maintenance_lock():
    with self.assertRaises(d.Held):self.b.snapshot()
+class PrepareTests(unittest.TestCase):
+ def setUp(self):
+  import hashlib
+  self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name);self.run='a'*20;self.folder=self.root/('Core263-pair-handoff-'+self.run);self.folder.mkdir();self.old=self.root/'old';self.old.write_bytes(b'old');self.lease=self.root/'lease';self.lease.write_text(json.dumps({'schema':'handoff_isolated_owner_lease_v1','run_id':self.run}));self.base=self.folder/'RECOVERY-BASELINE.PUBLIC.json';self.base.write_text(json.dumps({'schema':'Root_Core263_preSTOP_recovery_baseline_v1','run_id':self.run,'old_config_sha256':hashlib.sha256(b'old').hexdigest()}));self.g=types.SimpleNamespace(NEW_CONFIG=self.old,read=lambda p,*_:Path(p).read_bytes(),loads=json.loads)
+ def tearDown(self):self.tmp.cleanup()
+ def args(self):
+  ref=lambda p:{'path':str(p),'sha256':'1'*64}
+  return {'guardian':self.g,'base':None,'bridge':None,'coverage':None,'native':None,'lease_ref':ref(self.lease),'scope_ref':ref(self.root/'scope'),'baseline_ref':ref(self.base),'handoff_marker_ref':ref(self.root/'marker'),'ssm_evidence':{},'expected_source_sha256':'2'*64,'expected_admission_sha256':'3'*64,'diagnostic_root':self.root}
+ def test_prepares_only_from_recorded_baseline_and_matching_old_bytes(self):
+  instance=types.SimpleNamespace(configure_binding=lambda **kwargs:None)
+  with patch.object(d,'BRAIN_ROOT',self.root),patch.object(d,'BoundBrainInspector',return_value=instance) as ctor:
+   self.assertIs(d.prepare_inspector(**self.args()),instance);self.assertEqual(ctor.call_args.kwargs['expected']['run_id'],self.run)
+   self.old.write_bytes(b'different')
+   with self.assertRaises(d.Held):d.prepare_inspector(**self.args())
 class ExecuteTests(unittest.TestCase):
  def setUp(self):
   self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name);self.run='b'*20;self.handoff='a'*20;(self.root/('Core263-pair-handoff-'+self.handoff)).mkdir(mode=0o700)

@@ -12,12 +12,12 @@ class Held(Exception):pass
 def need(v,g):
  if not v:raise Held(g)
 class BoundBrainInspector(brain_inspector.BrainInspector):
- def configure_binding(self,*,lease_ref,scope_ref,expected_source_sha256,expected_admission_sha256):
-  self.binding_inputs={'lease_original_ref':lease_ref,'scope_original_ref':scope_ref,'expected_source_sha256':expected_source_sha256,'expected_admission_sha256':expected_admission_sha256};self.last_binding=None
+ def configure_binding(self,*,lease_ref,scope_ref,baseline_ref,handoff_marker_ref,expected_source_sha256,expected_admission_sha256):
+  self.binding_inputs={'lease_original_ref':lease_ref,'scope_original_ref':scope_ref,'baseline_original_ref':baseline_ref,'handoff_marker_original_ref':handoff_marker_ref,'expected_source_sha256':expected_source_sha256,'expected_admission_sha256':expected_admission_sha256};self.last_binding=None
  def snapshot(self):
   need(hasattr(self,'binding_inputs'),'REVIEWED_HANDOFF_BINDING_REQUIRED');v=super().snapshot();kw=self.binding_inputs;lease=self.g.read(kw['lease_original_ref']['path'],4096,0o600);scope=self.g.read(kw['scope_original_ref']['path'],32768,0o600);ssm=ssm_terminal_custody.qualify(**self.ssm_evidence)
-  bound=scope_binding.bind(lease_bytes=lease,scope_bytes=scope,terminal_scope=self.last_scope_result,ssm_original=ssm,**kw)
-  need(bound['old_config_sha256']==self.expected['old_config_sha256'] and bound['new_config_sha256']==self.expected['new_config_sha256'],'SAME_REVIEWED_CONFIG_PAIR_IN_SCOPE');self.last_binding=bound;return v
+  baseline=self.g.read(kw['baseline_original_ref']['path'],32768,0o600);marker=self.g.read(kw['handoff_marker_original_ref']['path'],32768,0o600);bound=scope_binding.bind(lease_bytes=lease,scope_bytes=scope,baseline_bytes=baseline,handoff_marker_bytes=marker,terminal_scope=self.last_scope_result,ssm_original=ssm,**kw)
+  need(bound['old_config_sha256']==self.expected['old_config_sha256'] and bound['new_config_sha256']==self.expected['new_config_sha256'],'SAME_REVIEWED_CONFIG_PAIR_IN_SCOPE');baseline=bound['recovery_baseline'];need(all(self.expected.get(k)==baseline.get(k) for k in ('boot_id','guardian_source_sha256','guardian_authority_sha256','handles_sha256','prior_controller','prior_guardian','prior_unit_properties','core')),'EXACT_PRESTOP_CONTROLLER_GUARDIAN_NETWORK_AND_CORE_BASELINE');self.last_binding=bound;return v
 class BoundLinuxBackend(linux_backend.LinuxBackend):
  def snapshot(self):
   v=super().snapshot();bound=self.inspector.last_binding;need(type(bound)is dict and bound.get('schema')=='bound_handoff_recovery_marker_namespace_v1' and bound.get('marker_directory')==str(self.marker_directory) and bound.get('marker_absence_or_recovery_authorized') is False,'EXACT_ORIGINAL_HANDOFF_MARKER_NAMESPACE')
@@ -63,3 +63,18 @@ def execute_controller_recovery(*,inspector,native,run_id):
   try:record('HOLD.PUBLIC.json',{'schema':'bound_handoff_controller_recovery_hold_v1','handoff_run_id':handoff,'recovery_run_id':run_id,'error_class':type(e).__name__,'automatic_replay_permitted':False})
   except BaseException:pass
   raise
+
+def prepare_inspector(*,guardian,base,bridge,coverage,native,lease_ref,scope_ref,baseline_ref,handoff_marker_ref,ssm_evidence,expected_source_sha256,expected_admission_sha256,diagnostic_root):
+ """Derive expected state from the recorded pre-STOP baseline, not caller guesses.
+
+ Reads here do not authorize a start. The inspector revalidates the whole join
+ under maintenance lock before the backend permits any restoration/start.
+ """
+ lease=guardian.loads(guardian.read(lease_ref['path'],4096,0o600));baseline=guardian.loads(guardian.read(baseline_ref['path'],32768,0o600));need(lease.get('schema')=='handoff_isolated_owner_lease_v1' and baseline.get('schema')=='Root_Core263_preSTOP_recovery_baseline_v1' and lease.get('run_id')==baseline.get('run_id'),'EXACT_ORIGINAL_RECOVERY_BASELINE_AND_LEASE')
+ run=lease['run_id'];need(__import__('re').fullmatch('[a-f0-9]{20}',str(run)),'EXACT_HANDOFF_RUN');folder=BRAIN_ROOT/('Core263-pair-handoff-'+run);need(baseline_ref['path']==str(folder/'RECOVERY-BASELINE.PUBLIC.json'),'ONLY_HANDOFF_BASELINE_PATH')
+ old=folder/'OLD-CONTROLLER-CONFIG.PUBLIC.json'
+ if not old.exists():old=guardian.NEW_CONFIG
+ need(__import__('hashlib').sha256(guardian.read(old,32768,0o600)).hexdigest()==baseline['old_config_sha256'],'ACTUAL_EXACT_OLD_CONFIG_BYTES')
+ inspector=BoundBrainInspector(guardian=guardian,base=base,bridge=bridge,coverage=coverage,native=native,expected=baseline,lease=lease,ssm_evidence=ssm_evidence,old_config_path=old,diagnostic_root=diagnostic_root)
+ inspector.configure_binding(lease_ref=lease_ref,scope_ref=scope_ref,baseline_ref=baseline_ref,handoff_marker_ref=handoff_marker_ref,expected_source_sha256=expected_source_sha256,expected_admission_sha256=expected_admission_sha256)
+ return inspector

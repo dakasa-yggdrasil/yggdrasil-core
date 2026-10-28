@@ -5,12 +5,12 @@ import owner_scope as scope
 import scope_collector
 import frozen_native
 assert os.geteuid()==0
-run_id=secrets.token_hex(10);unit=scope.unit_for(run_id)
+run_id=secrets.token_hex(10);unit=scope.unit_for(run_id,'controller_recovery')
 with tempfile.TemporaryDirectory(prefix='scope-integration-') as tmp:
  d=Path(tmp);os.chmod(d,0o700);out=d/'out';out.mkdir(mode=0o700);diags=d/'diagnostics';diags.mkdir(mode=0o700)
  source=d/'fixture_owner.py'
  # The owner receives its script hash as an argument to avoid a self-hashing file.
- source.write_text("import sys\nsys.path.insert(0,"+repr(str(Path(__file__).resolve().parent))+")\nimport owner_scope\nowner_scope.persist_self_lease(run_id="+repr(run_id)+",source_path=__file__,source_sha256=sys.argv[1],output_directory="+repr(str(out))+")\nprint('LEASE_WRITTEN', flush=True)\n");os.chmod(source,0o600)
+ source.write_text("import sys\nsys.path.insert(0,"+repr(str(Path(__file__).resolve().parent))+")\nimport owner_scope\nowner_scope.persist_self_lease(run_id="+repr(run_id)+",source_path=__file__,source_sha256=sys.argv[1],output_directory="+repr(str(out))+",kind='controller_recovery')\nprint('LEASE_WRITTEN', flush=True)\n");os.chmod(source,0o600)
  digest=hashlib.sha256(source.read_bytes()).hexdigest()
  try:
   call=subprocess.run(['/usr/bin/systemd-run','--unit='+unit,'--wait','--pipe','--property=Type=oneshot','--property=KillMode=control-group','--property=Delegate=no','--property=Restart=no','/usr/bin/python3','-B',str(source),digest],check=True,timeout=30,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
@@ -25,7 +25,7 @@ with tempfile.TemporaryDirectory(prefix='scope-integration-') as tmp:
   evidence={'request_bytes':request_bytes,'send_diagnostic':diagnostic(send),'get_diagnostic':diagnostic(get),'command_id':command_id,'instance_id':instance_id,'expected_request_sha256':hashlib.sha256(request_bytes).hexdigest()}
   attempt_dir=diags/'0';attempt_dir.mkdir(mode=0o700)
   try:
-   got=scope_collector.collect(lease=lease,ssm_evidence=evidence,native=frozen_native.native,diagnostic_directory=attempt_dir)
+   got=scope_collector.collect(lease=lease,ssm_evidence=evidence,native=frozen_native.native,diagnostic_directory=attempt_dir,kind='controller_recovery')
    assert got['result']['owner_and_cgroup_empty'] is True
    outcome='terminal_scope_observed'
   except scope.Held as e:
