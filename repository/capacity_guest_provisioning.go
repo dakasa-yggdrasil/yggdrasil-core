@@ -380,26 +380,32 @@ func (s CapacityStore) RegisterOriginalGuest(ctx context.Context, principal stri
 	var result model.CapacityGuestOriginalProvisioningReceipt
 	err := s.guestStoredTransaction(ctx, registration.Result.PreregistrationID, func(tx *sql.Tx, stored guestOriginalStored, now time.Time) error {
 		if principal != stored.member.ProvisionerClientPrincipal {
-			return ErrCapacityMutationAuthorization
+			return guestRegistrationFailure("principal", ErrCapacityMutationAuthorization)
 		}
 		p, _, err := s.guestCurrentTx(ctx, tx, stored, now, true)
 		if err != nil {
-			return err
+			return guestRegistrationFailure("current", err)
 		}
 		if err = loadGuestWitnessTx(ctx, tx, &stored); err != nil {
-			return err
+			return guestRegistrationFailure("witness_load", err)
 		}
 		corePublic := registration.EnrollmentStatement.CoreIntentPublicKey
 		if registration.Result.ProductionClock != nil && !capacity.GuestProductionClockStoredMatches(registration.Result.ProductionClock, stored.pre, stored.witness, stored.binding.ProfileManifest) {
-			return ErrCapacityConflict
+			return guestRegistrationFailure("production_clock", ErrCapacityConflict)
 		}
-		if !capacity.GuestLifecycleKeyMatches(intentKey, corePublic) || !capacity.GuestLifecycleKeyMatches(enrollmentKey, stored.binding.EnrollmentIssuerPublicKey) || bytes.Equal(intentKey, enrollmentKey) || capacity.GuestOriginalCreateWitness(p, stored.binding, stored.member, stored.pre, stored.witness, corePublic, now) != nil || capacity.GuestOriginalRegistration(p, stored.binding, stored.member, stored.witness, registration, now) != nil {
-			return ErrCapacityConflict
+		if !capacity.GuestLifecycleKeyMatches(intentKey, corePublic) || !capacity.GuestLifecycleKeyMatches(enrollmentKey, stored.binding.EnrollmentIssuerPublicKey) || bytes.Equal(intentKey, enrollmentKey) {
+			return guestRegistrationFailure("keys", ErrCapacityConflict)
+		}
+		if capacity.GuestOriginalCreateWitness(p, stored.binding, stored.member, stored.pre, stored.witness, corePublic, now) != nil {
+			return guestRegistrationFailure("witness_validation", ErrCapacityConflict)
+		}
+		if capacity.GuestOriginalRegistration(p, stored.binding, stored.member, stored.witness, registration, now) != nil {
+			return guestRegistrationFailure("registration_validation", ErrCapacityConflict)
 		}
 		e := model.CapacityGuestRetirementEnrollment{Statement: registration.EnrollmentStatement}
 		e.Signature, err = capacity.GuestLifecycleSignature(enrollmentKey, e.Statement)
 		if err != nil || capacity.GuestRetirementEnrollment(p, stored.binding, stored.member, e, now) != nil {
-			return ErrCapacityConflict
+			return guestRegistrationFailure("enrollment_validation", ErrCapacityConflict)
 		}
 		result = model.CapacityGuestOriginalProvisioningReceipt{PreregistrationID: stored.pre.PreregistrationID, OriginalProvisioningSHA256: capacity.GuestRetirementSHA(registration), Enrollment: e, RecordedAt: now}
 		registrationWire, err := json.Marshal(registration)

@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "20be8ce7b6c2466d8c09fb9690cac4c82559bc7664d8aec0974eb61f3af80418",
+  "source_inventory_sha256": "714bc2943a520107584cac49d03156999c5ba1dfca9393391be4a0aa24c7bd02",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -717,6 +717,11 @@
     "scope": "Independent source review of immutable original binding derivation for an expired never-redeemed compensation child. Four PostgreSQL repository scenarios use declared synthetic Guest and provider observations; no physical four-member or producer qualification is claimed. Exact final-source Linux gate and native qualification remain required.",
     "reviewed_source_commit": "1780bbb",
     "source_inventory_sha256": "20be8ce7b6c2466d8c09fb9690cac4c82559bc7664d8aec0974eb61f3af80418",
+    "production_or_native_qualification": false
+  },
+  "registration_diagnostic_review_20261028": {
+    "scope": "Closed qualification-only labels preserve original registration errors; source review does not establish the cause of a specific 409. Linux execution and current native qualification remain required.",
+    "source_inventory_sha256": "714bc2943a520107584cac49d03156999c5ba1dfca9393391be4a0aa24c7bd02",
     "production_or_native_qualification": false
   }
 }
