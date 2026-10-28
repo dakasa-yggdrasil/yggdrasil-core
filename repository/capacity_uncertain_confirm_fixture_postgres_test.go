@@ -46,8 +46,17 @@ func TestRecoveryFixtureUnanchoredUncertainCreateCannotConfirmPostgres(t *testin
 	if _, err = forged.ConfirmMutation(ctx, f.policy, f.intent.Generation, f.intent.FencingToken, f.intent.LeaseOwner, proof); !errors.Is(err, ErrHostFactoryHold) {
 		t.Fatal("unverified host source bypassed guard", err)
 	}
-	if _, err = f.store.ConfirmMutation(ctx, f.policy, f.intent.Generation, f.intent.FencingToken, f.intent.LeaseOwner, proof); !errors.Is(err, ErrCapacityConflict) {
-		t.Fatalf("unanchored uncertain create confirmed or wrong refusal: %v", err)
+	for _, scenario := range []struct{ name, resource string }{
+		{"foreign_resource_from_qemu_refusal", "00000000-0000-4000-8000-000000000001"},
+		{"unrelated_action_without_owner", "123"},
+	} {
+		t.Run(scenario.name, func(t *testing.T) {
+			bad := proof
+			bad.ResourceID = scenario.resource
+			if _, err := f.store.ConfirmMutation(ctx, f.policy, f.intent.Generation, f.intent.FencingToken, f.intent.LeaseOwner, bad); !errors.Is(err, ErrCapacityConflict) {
+				t.Fatalf("unanchored uncertain create confirmed or wrong refusal: %v", err)
+			}
+		})
 	}
 	receipt, err := f.store.MutationReceipt(ctx, f.binding.AdapterPrincipalID, parent.GrantID)
 	if err != nil || receipt.Grant.State != "settled" || receipt.Outcome != "uncertain" || receipt.ResourceID != "" || receipt.ActionID != "" {
