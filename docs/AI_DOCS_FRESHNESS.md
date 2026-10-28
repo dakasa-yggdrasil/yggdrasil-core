@@ -7,11 +7,12 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: ced8cdfd01f50eadbe480a0d840927dc051b9a5c
-verified_diff_sha256: 32ae8ce82edbd82ea4a179adc93cf12456c84a7d58a51a019029250149e33214
+verified_at_commit: b982bf16e23b998f9e79865ee749d22ed257b94a
+verified_diff_sha256: 0e9033aeb7fcf4635fc7cd2c6f3306c398b8dd57b29145a175bf3b8571907971
 reconciler_schema: 1
 verified_at: 2026-10-28
 by: Giomaster
+pidfd_and_retirement_diagnostic_review: Reviewed acceptance of readable pidfd with or without hangup after original Wait and the closed qualification-only retirement diagnostics. Actual end-to-end Guest and full capacity checks remain required.
 unique_probe_diagnostic_review: Reviewed immutable diagnostic names derived from actual challenge IDs, duplicate and invalid path refusals, and preservation of the source inventory. Linux compilation passed; integrated native CI remains required.
 image_manifest_and_subtest_review: Reviewed per-platform manifest selection from the immutable image index after a real image-store collision; synthetic selection checks reject missing and duplicate descriptors. Reviewed scoped subtest failures and Linux compilation. Actual image and native CI remain required.
 image_platform_and_native_fixture_review: Reviewed BuildKit platform inheritance, candidate-only image publication and digest promotion after architecture and source checks. Independently reviewed native confirmation fixture preserves separate Guest and native proofs and verifies conflict and replay. Actual image and native CI remain required.
