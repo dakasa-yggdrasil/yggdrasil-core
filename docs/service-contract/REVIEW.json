@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "2f2e182d11d3739d2306438fc4efc88f541d4df66342270e37db58341a38c9cc",
+  "source_inventory_sha256": "35ab379476969c26655c3b231d5f31201e4fd0dea6461c9662212fa16500f50f",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -774,6 +774,11 @@
   "postloss_pending_probe_sequence_20261028": {
     "scope": "Qualification-only failed-create slot retains the exact original uncertain settlement and independently validated proof, checks current lease and no canonical event/member, and uses a distinct pending-enrollment stage. The baseline confirmation remains separate. Source review only; same-source PostgreSQL and QEMU validation are required.",
     "source_inventory_sha256": "2f2e182d11d3739d2306438fc4efc88f541d4df66342270e37db58341a38c9cc",
+    "production_or_native_qualification": false
+  },
+  "registration_protected_group_diagnostic_20261028": {
+    "scope": "Qualification-only closed V1 protected-registration first-failure group uses the same captured time and preserves the original conflict. The source review and unit tests do not establish any historical 409 cause; Linux and native execution remain required.",
+    "source_inventory_sha256": "72f268b8efcc4bb4fc4eb13a25272eb7a37392220401da4323e7bc301068650f",
     "production_or_native_qualification": false
   }
 }

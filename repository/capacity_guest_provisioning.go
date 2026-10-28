@@ -400,7 +400,7 @@ func (s CapacityStore) RegisterOriginalGuest(ctx context.Context, principal stri
 			return guestRegistrationFailure("witness_validation", ErrCapacityConflict)
 		}
 		if validationErr := capacity.GuestOriginalRegistration(p, stored.binding, stored.member, stored.witness, registration, now); validationErr != nil {
-			return guestRegistrationValidationFailure(validationErr)
+			return guestRegistrationValidationFailureDetail(validationErr, p, stored.binding, stored.member, stored.witness, registration, now)
 		}
 		e := model.CapacityGuestRetirementEnrollment{Statement: registration.EnrollmentStatement}
 		e.Signature, err = capacity.GuestLifecycleSignature(enrollmentKey, e.Statement)
