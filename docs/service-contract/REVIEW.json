@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "714bc2943a520107584cac49d03156999c5ba1dfca9393391be4a0aa24c7bd02",
+  "source_inventory_sha256": "dbbf1dd3b47b340b0deb4f89a2e258b2953dd0d5ce5b8b82f755f8e6a2ebf9f1",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -722,6 +722,11 @@
   "registration_diagnostic_review_20261028": {
     "scope": "Closed qualification-only labels preserve original registration errors; source review does not establish the cause of a specific 409. Linux execution and current native qualification remain required.",
     "source_inventory_sha256": "714bc2943a520107584cac49d03156999c5ba1dfca9393391be4a0aa24c7bd02",
+    "production_or_native_qualification": false
+  },
+  "snapshot_projection_review_20261028": {
+    "scope": "The snapshot return join uses the original challenge id. A PostgreSQL regression executes the same query against the migrated schema and transaction-local records; native and final Linux execution remain required.",
+    "source_inventory_sha256": "dbbf1dd3b47b340b0deb4f89a2e258b2953dd0d5ce5b8b82f755f8e6a2ebf9f1",
     "production_or_native_qualification": false
   }
 }
