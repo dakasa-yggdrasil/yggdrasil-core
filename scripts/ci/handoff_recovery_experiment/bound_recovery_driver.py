@@ -7,6 +7,7 @@ is not protection against privileged operators that ignore the shared protocol.
 """
 from pathlib import Path
 import brain_inspector,linux_backend,linux_guardian_backend,scope_binding,ssm_terminal_custody
+BRAIN_ROOT=Path('/opt/dakasa/capacity-network')
 class Held(Exception):pass
 def need(v,g):
  if not v:raise Held(g)
@@ -35,3 +36,30 @@ def build_controller(*,inspector,native,marker_directory,run_id):
 
 def build_guardian(*,inspector,native,marker_directory,run_id):
  return BoundGuardianBackend(maintenance_path='/run/dakasa-capacity-network/guardian-maintenance.lock',guardian_path='/var/lib/dakasa-capacity-network-recovery/guardian.lock',marker_directory=marker_directory,run_id=run_id,inspector=inspector,native=native,expected_uid=0)
+
+def execute_controller_recovery(*,inspector,native,run_id):
+ """Called only by a separately source-pinned SSM owner; no autonomous retry.
+
+ A durable marker survives an unknown result. A missing completion receipt is
+ never interpreted as a failed START. Guardian start/requalification is separate.
+ """
+ import json,os,re,sys
+ import recovery_core
+ need(sys.platform=='linux' and os.geteuid()==0 and re.fullmatch('[a-f0-9]{20}',str(run_id)),'EXACT_LINUX_ROOT_RECOVERY_RUN')
+ handoff=inspector.lease['run_id'];need(re.fullmatch('[a-f0-9]{20}',str(handoff)),'EXACT_AUTHENTIC_HANDOFF_RUN');folder=BRAIN_ROOT/('Core263-pair-handoff-'+handoff);out=folder/('controller-recovery-'+run_id);out.mkdir(mode=0o700)
+ backend=build_controller(inspector=inspector,native=native,marker_directory=folder,run_id=run_id);backend.start_diagnostic=out/'START-NATIVE-ORIGINAL-IO.PRIVATE.json';old=inspector.g.read(inspector.old,32768,0o600);expected={k:inspector.expected[k]for k in ('old_config_sha256','new_config_sha256')}
+ def record(name,value):
+  raw=(json.dumps(value,sort_keys=True,separators=(',',':'),allow_nan=False)+'\n').encode();fd=os.open(out/name,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_CLOEXEC,0o600)
+  with os.fdopen(fd,'wb') as f:f.write(raw);f.flush();os.fsync(f.fileno())
+  d=os.open(out,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+  try:os.fsync(d)
+  finally:os.close(d)
+  return {'path':str(out/name),'sha256':__import__('hashlib').sha256(raw).hexdigest()}
+ try:
+  result=recovery_core.recover_with_backend(backend,expected,old);ref=record('RETURN.PUBLIC.json',{'schema':'bound_handoff_controller_recovery_original_return_v1','handoff_run_id':handoff,'recovery_run_id':run_id,'result':result,'guardian_requalification_not_inferred':True,'unobserved_no_gap_not_inferred':True});return ref
+ except BaseException as e:
+  # The marker and original runtime evidence, not this generic error, determine
+  # whether a START might have occurred. Never call the same operation again.
+  try:record('HOLD.PUBLIC.json',{'schema':'bound_handoff_controller_recovery_hold_v1','handoff_run_id':handoff,'recovery_run_id':run_id,'error_class':type(e).__name__,'automatic_replay_permitted':False})
+  except BaseException:pass
+  raise

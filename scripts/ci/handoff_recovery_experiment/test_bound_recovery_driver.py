@@ -1,4 +1,5 @@
-import os,tempfile,unittest
+import json,os,tempfile,types,unittest
+from unittest.mock import patch
 from pathlib import Path
 import bound_recovery_driver as d
 import recovery_core
@@ -26,4 +27,18 @@ class Tests(unittest.TestCase):
   self.i.snapshot=lambda:{'previous_recovery_start_terminal':True}
   with self.b.maintenance_lock():
    with self.assertRaises(d.Held):self.b.snapshot()
+class ExecuteTests(unittest.TestCase):
+ def setUp(self):
+  self.tmp=tempfile.TemporaryDirectory();self.root=Path(self.tmp.name);self.run='b'*20;self.handoff='a'*20;(self.root/('Core263-pair-handoff-'+self.handoff)).mkdir(mode=0o700)
+  self.inspector=types.SimpleNamespace(lease={'run_id':self.handoff},g=types.SimpleNamespace(read=lambda *_:b'old'),old='/tmp/old',expected={'old_config_sha256':'1'*64,'new_config_sha256':'2'*64})
+ def tearDown(self):self.tmp.cleanup()
+ def test_durable_return_contains_only_real_result(self):
+  result={'action':'observe_running_controller','start_attempted':False,'guardian_requalification_needed':True};backend=types.SimpleNamespace()
+  with patch.object(d,'BRAIN_ROOT',self.root),patch.object(d,'build_controller',return_value=backend),patch('sys.platform','linux'),patch('os.geteuid',return_value=0),patch.object(recovery_core,'recover_with_backend',return_value=result):ref=d.execute_controller_recovery(inspector=self.inspector,native=None,run_id=self.run)
+  value=json.loads(Path(ref['path']).read_bytes());self.assertEqual(value['result'],result);self.assertTrue(value['guardian_requalification_not_inferred'])
+ def test_uncertain_error_records_hold_not_success(self):
+  backend=types.SimpleNamespace()
+  with patch.object(d,'BRAIN_ROOT',self.root),patch.object(d,'build_controller',return_value=backend),patch('sys.platform','linux'),patch('os.geteuid',return_value=0),patch.object(recovery_core,'recover_with_backend',side_effect=TimeoutError('unknown')):
+   with self.assertRaises(TimeoutError):d.execute_controller_recovery(inspector=self.inspector,native=None,run_id=self.run)
+  out=self.root/('Core263-pair-handoff-'+self.handoff)/('controller-recovery-'+self.run);self.assertTrue((out/'HOLD.PUBLIC.json').exists());self.assertFalse((out/'RETURN.PUBLIC.json').exists())
 if __name__=='__main__':unittest.main(verbosity=2)

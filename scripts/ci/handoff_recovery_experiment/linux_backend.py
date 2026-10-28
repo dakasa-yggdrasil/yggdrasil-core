@@ -64,6 +64,6 @@ class LinuxBackend:
   # ignore-dependencies is limited to this exact unit: hub/cold are separately
   # revalidated active and unchanged by the inspector, so no dependency restarts.
   self._start_called=True
-  _,facts=self.native(START,deadline=time.monotonic()+20,stdin=b'',env={'PATH':'/usr/sbin:/usr/bin:/sbin:/bin','LANG':'C'},cap=1<<20,diagnostic_path=None)
-  return facts
+  started=time.monotonic();_,facts=self.native(START,deadline=started+20,stdin=b'',env={'PATH':'/usr/sbin:/usr/bin:/sbin:/bin','LANG':'C'},cap=1<<20,diagnostic_path=getattr(self,'start_diagnostic',None))
+  return {**facts,'argv':list(START),'started_monotonic':started,'finished_monotonic':time.monotonic()}
  def observe_started(self):return self.inspector.observe_started()
