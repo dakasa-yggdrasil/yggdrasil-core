@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "e8ee4c5f92a62a0cb6e83528c43d6cac087caff7efd97cdafc3b327301794887",
+  "source_inventory_sha256": "f1f5bf1fc55bfbf67c4f236cde13ac0b29d5b7d1cc8d60738ecfcac70075ce65",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -732,6 +732,11 @@
   "readoption_creator_review_20261028": {
     "scope": "Original native readoption export retains the creator digest only for the same creator object. Prior export HOLD remains historical; exact-source Linux and native validation are required.",
     "source_inventory_sha256": "e8ee4c5f92a62a0cb6e83528c43d6cac087caff7efd97cdafc3b327301794887",
+    "production_or_native_qualification": false
+  },
+  "snapshot_clock_wait_review_20261028": {
+    "scope": "Qualification-only wait after the original snapshot reservation and before the single GET; no deadline or validation changes. Cancellation during the wait leaves a reserved read without return and remains HOLD. The 100ms interval does not establish general clock synchronization; Linux and native testing remain required.",
+    "source_inventory_sha256": "f1f5bf1fc55bfbf67c4f236cde13ac0b29d5b7d1cc8d60738ecfcac70075ce65",
     "production_or_native_qualification": false
   }
 }
