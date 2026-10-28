@@ -404,6 +404,10 @@ func (s *Server) serveGuestOriginalAuthority(w http.ResponseWriter, r *http.Requ
 			guestHTTPError(w, err)
 			return
 		}
+		if err := guestQualificationBeforeSnapshotGET(ctx, read); err != nil {
+			guestHTTPError(w, err)
+			return
+		}
 		returned, err := client.Original(ctx, http.MethodGet, "/v1/runtime-snapshot", body)
 		var snapshot model.CapacityGuestRuntimeSnapshot
 		retention, cancelRetention := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
