@@ -649,7 +649,13 @@
   "reviewer": "Root full production-source delta review; separate independent manager/dial/monitor peer; source acceptance only",
   "schema": "core_service_source_review_v1",
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "e6e919b15af44e43b6d05c4c969beca37dc2569a0c1ff4633e7ce47f3ab85e2e",
+  "pg16_fixture_integration_review": {
+    "scope": "Independent source review of test-only fixture integration, adapter pin, cleanup and census. Native qualification and the original lost-reply cases remain separate and unqualified.",
+    "reviewed_code_commit": "6d47bec0ee895d9a32520dedee3520f86c6cc1a6",
+    "source_inventory_sha256": "796924aa14592aaf1b23528b3f4f703e8f7cce67b1e57be78123feea3e38574f",
+    "production_or_full_gate_qualification": false
+  },
+  "source_inventory_sha256": "796924aa14592aaf1b23528b3f4f703e8f7cce67b1e57be78123feea3e38574f",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
