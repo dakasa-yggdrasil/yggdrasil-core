@@ -7,11 +7,12 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: edda091fe2f2fbec43f7389f7abda6cfbc1c3458
-verified_diff_sha256: 25c3af7f1f839187827c8f021ab20d127e9115539ef12898f443331f043dc4e7
+verified_at_commit: 0c4b63cb02cff18676ebb3f41dc5c2aef18d2994
+verified_diff_sha256: 02594ab9c05806ac72c243b113ffc306737ecb2c40741c786b7bd1710ff1d619
 reconciler_schema: 1
 verified_at: 2026-10-28
 by: Giomaster
+mandatory_http_integration_review: The original gate roster and existing services are preserved while the HTTP case uses the separately Linux-validated owned PG17 fixture. Cleanup and original Go exits are recorded separately. Full gate execution and remaining failed cases are still required.
 installation_diagnostic_and_compensation_review: Reviewed closed qualification-only installation read classes and the exact planner refusal for disabled compensation or non-destroy plans. The service census was regenerated; local planner and isolated PostgreSQL checks passed. Native Linux integration and the full capacity gate remain required.
 native_diagnostic_source_reconciliation: Reviewed closed failure-stage codes for native qualification and preserved the production refusal path. The service source census and digest were regenerated; Linux test binaries compiled locally and the integrated native execution remains required.
 qemu_broker_source_reconciliation: Reconciled the nativequalification-only broker Describe and read consumers, dedicated socket ownership, startup and cleanup guards with the service interface contract at the source commit above. The digest records git diff --binary HEAD^ HEAD at that commit. Source transport checks do not establish native QEMU, PG17 or production qualification.
