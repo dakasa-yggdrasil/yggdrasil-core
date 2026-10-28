@@ -1,0 +1,13 @@
+name: Handoff recovery primitives Linux qualification
+on:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  native-lock-cas:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v4
+      - name: Test isolated file CAS, process locks and refusal paths
+        run: python3 -m unittest discover -s scripts/ci/handoff_recovery_experiment -p 'test_*.py' -v
