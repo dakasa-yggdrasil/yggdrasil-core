@@ -218,10 +218,32 @@ func RecoveryFixtureCausal(t *testing.T, p model.CapacityPolicySpec, reg model.C
 // provider or production authority and is unavailable in normal builds.
 func RecoveryFixtureCompensationRegistration(t *testing.T, p model.CapacityPolicySpec, b model.CapacityGuestRetirementBinding, pre model.CapacityGuestOriginalProvisioningPreregistration, settle model.CapacityMutationSettleRequest) (model.CapacityGuestOriginalCreateWitness, model.CapacityGuestOriginalProvisioningRegistration, model.CapacityGuestOriginalProvisioningReceipt) {
 	t.Helper()
+	if settle.OriginalProviderCreateReturn == nil {
+		t.Fatal("fixture original return required")
+	}
+	returned, err := time.Parse(time.RFC3339Nano, settle.OriginalProviderCreateReturn.ReturnedAt)
+	if err != nil {
+		t.Fatal(err)
+	}
+	return recoveryFixtureCompensationRegistration(t, p, b, pre, settle, settle.ResourceID, settle.ResourceCreatedAt, returned)
+}
+
+// RecoveryFixturePostlossRegistration declares independent synthetic readback
+// for an uncertain settlement. It does not represent a Guest or provider.
+func RecoveryFixturePostlossRegistration(t *testing.T, p model.CapacityPolicySpec, b model.CapacityGuestRetirementBinding, pre model.CapacityGuestOriginalProvisioningPreregistration, settle model.CapacityMutationSettleRequest, resourceID, createdAt string, observedAt time.Time) (model.CapacityGuestOriginalCreateWitness, model.CapacityGuestOriginalProvisioningRegistration, model.CapacityGuestOriginalProvisioningReceipt) {
+	t.Helper()
+	if settle.Outcome != "uncertain" || settle.ResourceID != "" || settle.ResourceCreatedAt != "" || settle.ActionID != "" || len(settle.NextActionIDs) != 0 || len(settle.AuxiliaryResources) != 0 || settle.AuxiliaryInventoryComplete || settle.OriginalProviderCreateReturn != nil || resourceID == "" || createdAt == "" || observedAt.IsZero() {
+		t.Fatal("fixture requires empty uncertain settlement and independent declared observation")
+	}
+	return recoveryFixtureCompensationRegistration(t, p, b, pre, settle, resourceID, createdAt, observedAt)
+}
+
+func recoveryFixtureCompensationRegistration(t *testing.T, p model.CapacityPolicySpec, b model.CapacityGuestRetirementBinding, pre model.CapacityGuestOriginalProvisioningPreregistration, settle model.CapacityMutationSettleRequest, resourceID, createdAt string, returned time.Time) (model.CapacityGuestOriginalCreateWitness, model.CapacityGuestOriginalProvisioningRegistration, model.CapacityGuestOriginalProvisioningReceipt) {
+	t.Helper()
 	if !strings.HasSuffix(filepath.Base(os.Args[0]), ".test") || os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") != "true" {
 		t.Fatal("test-only fixture")
 	}
-	if pre.Slot < 1 || pre.Slot > len(b.Members) || settle.OriginalProviderCreateReturn == nil {
+	if pre.Slot < 1 || pre.Slot > len(b.Members) {
 		t.Fatal("fixture original operands")
 	}
 	core := ed25519.NewKeyFromSeed([]byte(strings.Repeat("c", 32)))
@@ -230,11 +252,7 @@ func RecoveryFixtureCompensationRegistration(t *testing.T, p model.CapacityPolic
 	member := b.Members[pre.Slot-1]
 	mutation := p.MutationBindings[0]
 	spec := mutation.Slots[pre.Slot-1].DesiredSpec
-	returned, err := time.Parse(time.RFC3339Nano, settle.OriginalProviderCreateReturn.ReturnedAt)
-	if err != nil {
-		t.Fatal(err)
-	}
-	tuple := model.CapacityGuestNativeTuple{Provider: "hetzner", InstanceID: mutation.IntegrationInstanceID, InstanceChecksum: mutation.IntegrationChecksum, TypeID: mutation.IntegrationTypeID, TypeChecksum: mutation.IntegrationTypeChecksum, ScopeChecksum: mutation.ScopeChecksum, ProfileChecksum: spec.ProfileChecksum, Profile: mutation.ProfileName, Slot: pre.Slot, ResourceID: settle.ResourceID, CreatedAt: settle.ResourceCreatedAt}
+	tuple := model.CapacityGuestNativeTuple{Provider: "hetzner", InstanceID: mutation.IntegrationInstanceID, InstanceChecksum: mutation.IntegrationChecksum, TypeID: mutation.IntegrationTypeID, TypeChecksum: mutation.IntegrationTypeChecksum, ScopeChecksum: mutation.ScopeChecksum, ProfileChecksum: spec.ProfileChecksum, Profile: mutation.ProfileName, Slot: pre.Slot, ResourceID: resourceID, CreatedAt: createdAt}
 	w := model.CapacityGuestOriginalCreateWitness{Schema: GuestCreateWitnessSchema, BindingName: pre.BindingName, PreregistrationID: pre.PreregistrationID, PreregistrationNonceSHA256: pre.NonceSHA256, OriginalCreateGrantID: pre.OriginalCreateGrantID, OriginalCreateAttemptID: settle.AttemptID, OriginalCreateRequestSHA256: pre.OriginalCreateRequestSHA256, OriginalCreateSettlementSHA256: GuestRetirementSHA(settle), ProfileManifestSHA256: b.ProfileManifestSHA256, BootstrapSHA256: GuestProfileBootstrapSHA(b.ProfileManifest, pre.Slot), CoreSourceCommit: b.CoreAuthoritySourceCommit, OriginalCreateReturnedAt: returned, ObservedAt: returned.Add(time.Millisecond), OriginalDeadline: pre.OriginalDeadline, Tuple: tuple}
 	w.ProviderNativeIdentity = &model.CapacityGuestProviderNativeIdentity{Schema: GuestProviderNativeIdentitySchema, Provider: "hetzner", ResourceID: tuple.ResourceID, ResourceCreatedAt: tuple.CreatedAt, Region: "us-east", Location: "ash", TypeID: "22", ImageID: "33", Hostname: "unit-guest", ObservedAt: w.ObservedAt, AdapterSourceCommit: mutation.OriginalProviderSourceCommit}
 	w.Signature, _ = GuestLifecycleSignature(core, w)

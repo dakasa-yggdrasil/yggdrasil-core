@@ -561,21 +561,21 @@ func TestSyntheticCompensationIssueExploration(t *testing.T) {
 		name      string
 		protected bool
 	}{{"unprotected_failed_create", false}, {"protected_failed_create_without_serving_membership", true}} {
-		t.Run(scenario.name, func(t *testing.T) { runSyntheticCompensation(t, scenario.protected) })
+		t.Run(scenario.name, func(t *testing.T) { runSyntheticCompensation(t, scenario.protected, false) })
 	}
 }
 
 func syntheticCompensationIfEnabled(t *testing.T, protected, lost bool) bool {
-	if lost || os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") != "true" {
+	if os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") != "true" {
 		return false
 	}
-	runSyntheticCompensation(t, protected)
+	runSyntheticCompensation(t, protected, lost)
 	return true
 }
 
 // These original repository cases use declared signed records and an isolated
 // test-only profile. They do not qualify a physical Guest or provider.
-func runSyntheticCompensation(t *testing.T, protected bool) {
+func runSyntheticCompensation(t *testing.T, protected, lost bool) {
 	capacity.RecoveryFixtureApprovalScope(t)
 	db := recoveryTestIsolatedDB(t)
 	var dbName string
@@ -704,10 +704,16 @@ func runSyntheticCompensation(t *testing.T, protected bool) {
 	}
 	settle := mutationSettlement(redeem, f.created)
 	instant := time.Now().UTC().Format(time.RFC3339Nano)
-	settle.ResourceCreatedAt = instant
-	settle.ResourceID = "123"
+	nativeResourceID, nativeCreatedAt := "123", instant
 	settle.ObservedAt = instant
-	settle.OriginalProviderCreateReturn = &model.CapacityOriginalProviderCreateReturn{Schema: "hetzner_original_create_return_v1", Provider: "hetzner", AdapterSourceCommit: mutation.OriginalProviderSourceCommit, GrantID: grant.GrantID, AttemptID: redeem.AttemptID, RequestSHA256: grant.RequestSHA256, ResourceID: settle.ResourceID, ResourceCreatedAt: instant, ActionID: settle.ActionID, NextActionIDs: settle.NextActionIDs, CalledAt: instant, ReturnedAt: instant, ContextDeadline: grant.ExpiresAt.UTC().Format(time.RFC3339Nano), ResponseStatus: 201, ResponseBodySHA256: strings.Repeat("d", 64), ResponseBytes: 100}
+	if lost {
+		settle.Outcome, settle.ResourceID, settle.ResourceCreatedAt, settle.ActionID = "uncertain", "", "", ""
+		settle.NextActionIDs, settle.AuxiliaryResources, settle.AuxiliaryInventoryComplete = nil, nil, false
+		settle.OriginalProviderCreateReturn = nil
+	} else {
+		settle.ResourceCreatedAt, settle.ResourceID = nativeCreatedAt, nativeResourceID
+		settle.OriginalProviderCreateReturn = &model.CapacityOriginalProviderCreateReturn{Schema: "hetzner_original_create_return_v1", Provider: "hetzner", AdapterSourceCommit: mutation.OriginalProviderSourceCommit, GrantID: grant.GrantID, AttemptID: redeem.AttemptID, RequestSHA256: grant.RequestSHA256, ResourceID: settle.ResourceID, ResourceCreatedAt: instant, ActionID: settle.ActionID, NextActionIDs: settle.NextActionIDs, CalledAt: instant, ReturnedAt: instant, ContextDeadline: grant.ExpiresAt.UTC().Format(time.RFC3339Nano), ResponseStatus: 201, ResponseBodySHA256: strings.Repeat("d", 64), ResponseBytes: 100}
+	}
 	if _, e = store.SettleMutation(ctx, mutation.AdapterPrincipalID, nonce, settle); e != nil {
 		t.Fatal("real SettleMutation", e)
 	}
@@ -719,17 +725,28 @@ func runSyntheticCompensation(t *testing.T, protected bool) {
 	if e = json.Unmarshal(preWire, &pre); e != nil {
 		t.Fatal(e)
 	}
-	witness, reg, receipt := capacity.RecoveryFixtureCompensationRegistration(t, p, b, pre, settle)
-	if witness.PreregistrationID != pre.PreregistrationID || reg.Result.Tuple.ResourceID != settle.ResourceID || receipt.PreregistrationID != pre.PreregistrationID {
+	var witness model.CapacityGuestOriginalCreateWitness
+	var reg model.CapacityGuestOriginalProvisioningRegistration
+	var receipt model.CapacityGuestOriginalProvisioningReceipt
+	if lost {
+		observed, err := time.Parse(time.RFC3339Nano, instant)
+		if err != nil {
+			t.Fatal(err)
+		}
+		witness, reg, receipt = capacity.RecoveryFixturePostlossRegistration(t, p, b, pre, settle, nativeResourceID, nativeCreatedAt, observed)
+	} else {
+		witness, reg, receipt = capacity.RecoveryFixtureCompensationRegistration(t, p, b, pre, settle)
+	}
+	if witness.PreregistrationID != pre.PreregistrationID || reg.Result.Tuple.ResourceID != nativeResourceID || receipt.PreregistrationID != pre.PreregistrationID {
 		t.Fatal("fixture lineage")
 	}
 	retirementID := syntheticRetirement(t, ctx, db, store, policy, p, b, pre, witness, reg, receipt, intent)
 	proof := f.proof(t, failedSlot)
-	proof.GrantID, proof.RequestSHA256, proof.ResourceID, proof.ResourceCreatedAt, proof.ObservedCreationGrantID = grant.GrantID, grant.RequestSHA256, settle.ResourceID, settle.ResourceCreatedAt, grant.GrantID
+	proof.GrantID, proof.RequestSHA256, proof.ResourceID, proof.ResourceCreatedAt, proof.ObservedCreationGrantID = grant.GrantID, grant.RequestSHA256, nativeResourceID, nativeCreatedAt, grant.GrantID
 	proof.ActionsTerminal, proof.ActionsFailed, proof.SpecVerified, proof.CompensationIdentityVerified = true, true, false, true
 	proof.ActionIDs = []string{"native-action", "bootstrap-action"}
-	proof.ActionHistoryComplete = false
-	off := map[string]any{"server": map[string]any{"id": settle.ResourceID, "created_at": settle.ResourceCreatedAt, "status": "off", "observed_at": time.Now().UTC().Format(time.RFC3339Nano)}}
+	proof.ActionHistoryComplete = lost
+	off := map[string]any{"server": map[string]any{"id": nativeResourceID, "created_at": nativeCreatedAt, "status": "off", "observed_at": time.Now().UTC().Format(time.RFC3339Nano)}}
 	offWire, _ := json.Marshal(off)
 	if _, e = db.Exec(`INSERT INTO public.capacity_guest_original_native_poweroff_reads(id,intent_id,observation_sha256,original_wire,original_record,recorded_at) VALUES($1,$2,$3,$4,$5::jsonb,clock_timestamp())`, uuid.NewString(), retirementID, capacity.BusinessCreationSHA256(offWire), offWire, string(offWire)); e != nil {
 		t.Fatal("synthetic native off", e)
@@ -751,8 +768,8 @@ func runSyntheticCompensation(t *testing.T, protected bool) {
 		t.Fatal(e)
 	}
 	desired.Capability = mutation.DestroyCapability
-	desired.ExpectedResourceID = settle.ResourceID
-	desired.ExpectedResourceCreatedAt = settle.ResourceCreatedAt
+	desired.ExpectedResourceID = nativeResourceID
+	desired.ExpectedResourceCreatedAt = nativeCreatedAt
 	desiredRaw, _ := json.Marshal(desired)
 	zero := 0
 	drain := model.CapacityTransitionProof{Assessment: freshCapacityTestAssessment(a, 4), ObservedAt: time.Now().UTC(), ReceiptRef: "fixture:never-routed-and-complete-floor", Healthy: true, MembershipComplete: true, AdmissionClosed: true, RoutingWithdrawn: true, Inflight: &zero, NativeActionsInflight: &zero}
@@ -817,9 +834,10 @@ func runSyntheticCompensation(t *testing.T, protected bool) {
 			bad.Mutation.DesiredSpec = json.RawMessage(string(desiredRaw))
 			bad.FailedProof.ResourceID = "replacement"
 		case "incomplete_action_history":
-			// This applies to the two separate uncertain-transport cases,
-			// which remain in the original test and are not covered here.
-			continue
+			if !lost {
+				continue
+			}
+			bad.FailedProof.ActionHistoryComplete = false
 		}
 		if _, err := issuer.IssueCompensation(ctx, current, bad); err == nil {
 			t.Fatal("unsafe compensation admitted", variant)
@@ -845,6 +863,35 @@ func runSyntheticCompensation(t *testing.T, protected bool) {
 	}
 	if child.CompensationOf != grant.GrantID {
 		t.Fatal("wrong compensation lineage")
+	}
+	if lost {
+		// An expired, never-redeemed child may be replaced, but the parent
+		// native lifetime cannot be changed even with its original label.
+		if _, err := db.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET expires_at=$2::text::timestamptz,grant_record=jsonb_set(grant_record,'{grant,expires_at}',to_jsonb($2::text)) WHERE id=$1`, child.GrantID, time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)); err != nil {
+			t.Fatal(err)
+		}
+		replacement := issue
+		replacement.FailedProof.ResourceID = "replacement-lifetime"
+		changed := desired
+		changed.ExpectedResourceID = replacement.FailedProof.ResourceID
+		replacement.Mutation.DesiredSpec, _ = json.Marshal(changed)
+		if _, err := issuer.IssueCompensation(ctx, current, replacement); !errors.Is(err, ErrCapacityConflict) {
+			t.Fatal("expired child replaced pinned parent lifetime", err)
+		}
+		replacement = issue
+		created, _ := time.Parse(time.RFC3339Nano, nativeCreatedAt)
+		replacement.FailedProof.ResourceCreatedAt = created.Add(time.Second).Format(time.RFC3339Nano)
+		changed = desired
+		changed.ExpectedResourceCreatedAt = replacement.FailedProof.ResourceCreatedAt
+		replacement.Mutation.DesiredSpec, _ = json.Marshal(changed)
+		if _, err := issuer.IssueCompensation(ctx, current, replacement); !errors.Is(err, ErrCapacityConflict) {
+			t.Fatal("expired child changed pinned creation time", err)
+		}
+		reissued, err := issuer.IssueCompensation(ctx, current, issue)
+		if err != nil || reissued.GrantID == child.GrantID || reissued.ExpectedResourceID != nativeResourceID || reissued.ExpectedResourceCreatedAt != nativeCreatedAt {
+			t.Fatal("same immutable lifetime could not reissue unused child", reissued, err)
+		}
+		child = reissued
 	}
 	stranger := issuer
 	stranger.ExecutorID = uuid.NewString()
@@ -876,8 +923,8 @@ func runSyntheticCompensation(t *testing.T, protected bool) {
 	if _, e = issuer.ConfirmCompensation(ctx, current, deleted); e == nil {
 		t.Fatal("absence alone confirmed")
 	}
-	childSettle := mutationSettlement(childRedeem, settle.ResourceCreatedAt)
-	childSettle.ResourceID = settle.ResourceID
+	childSettle := mutationSettlement(childRedeem, nativeCreatedAt)
+	childSettle.ResourceID = nativeResourceID
 	if _, e = issuer.SettleMutation(ctx, mutation.AdapterPrincipalID, childNonce, childSettle); e != nil {
 		t.Fatal("child settlement", e)
 	}
@@ -895,7 +942,7 @@ func runSyntheticCompensation(t *testing.T, protected bool) {
 	if e != nil {
 		t.Fatal("synthetic native proof", e)
 	}
-	if !protected {
+	if !protected && !lost {
 		t.Run("global_slot_precedes_child_row_during_foreign_issue", func(t *testing.T) { compensationForeignIssueLockOrder(t, f, issuer, current, child, deleted) })
 	}
 	missing := deleted
@@ -919,7 +966,7 @@ func runSyntheticCompensation(t *testing.T, protected bool) {
 	if e != nil || parentReceipt.Grant.State != "compensated" {
 		t.Fatal("unresolved parent", parentReceipt, e)
 	}
-	if parentReceipt.NativeReadback == nil || parentReceipt.NativeReadback.ResourceID != settle.ResourceID || parentReceipt.NativeReadback.ResourceCreatedAt != settle.ResourceCreatedAt || parentReceipt.ResourceID != settle.ResourceID || parentReceipt.ResourceCreatedAt != settle.ResourceCreatedAt || parentReceipt.ActionID != settle.ActionID || parentReceipt.Outcome != settle.Outcome {
+	if parentReceipt.NativeReadback == nil || parentReceipt.NativeReadback.ResourceID != nativeResourceID || parentReceipt.NativeReadback.ResourceCreatedAt != nativeCreatedAt || parentReceipt.ResourceID != settle.ResourceID || parentReceipt.ResourceCreatedAt != settle.ResourceCreatedAt || parentReceipt.ActionID != settle.ActionID || parentReceipt.Outcome != settle.Outcome {
 		t.Fatal("readback replaced original", parentReceipt)
 	}
 	var eventParent string

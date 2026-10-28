@@ -4,18 +4,20 @@ package repository
 
 import "testing"
 
-// Use the reviewed synthetic repository fixture only for accepted cases. Lost
-// replies continue through the original case until their own evidence is ready.
+// Repository-only synthetic member and readback facts are not physical qualification.
 func syntheticCompensationIfEnabled(t *testing.T, protected, lost bool) bool {
-	if lost {
-		return false
-	}
 	selected := "unprotected_failed_create"
 	if protected {
 		selected = "protected_failed_create_without_serving_membership"
 	}
+	if lost {
+		selected = "lost_create_reply_uses_separate_native_readback"
+	}
+	if lost && protected {
+		selected = "protected_lost_create_reply"
+	}
 	passed := runSyntheticRepositoryGate(t, "TestCapacityMutationCompensationPostgres", selected)
-	if !protected {
+	if !protected && !lost {
 		t.Run("global_slot_precedes_child_row_during_foreign_issue", func(t *testing.T) {
 			// The child census confirms the actual nested test ran and passed.
 			if !passed {

@@ -136,7 +136,7 @@ func runSyntheticRepositoryGate(t *testing.T, rootTest, childTest string) bool {
 	t.Helper()
 	// Only these reviewed fixture cases may be selected by the original tests.
 	allowed := (rootTest == "TestSyntheticFloorDrainBudgetPostgres" || rootTest == "TestSyntheticFailedFloorRecoveryPostgres") && childTest == "" ||
-		rootTest == "TestCapacityMutationCompensationPostgres" && (childTest == "unprotected_failed_create" || childTest == "protected_failed_create_without_serving_membership")
+		rootTest == "TestCapacityMutationCompensationPostgres" && (childTest == "unprotected_failed_create" || childTest == "protected_failed_create_without_serving_membership" || childTest == "lost_create_reply_uses_separate_native_readback" || childTest == "protected_lost_create_reply")
 	if !allowed {
 		t.Fatal("unsupported synthetic fixture case")
 	}
