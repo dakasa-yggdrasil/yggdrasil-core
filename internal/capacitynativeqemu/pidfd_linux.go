@@ -91,7 +91,7 @@ func (r *Realm) OriginalNativeOff(ctx context.Context) ([]byte, []byte, error) {
 		if e != nil {
 			return nil, nil, ErrOriginalUnknown
 		}
-		if n == 1 && poll[0].Revents == unix.POLLIN {
+		if n == 1 && repository.GuestNativeQEMUPIDFDExited(poll[0].Revents) {
 			break
 		}
 		if n != 0 || poll[0].Revents != 0 {

@@ -91,3 +91,25 @@ func guestInstallationFailureState(err error) string {
 	}
 	return "confirmation_read_error"
 }
+
+// Fixed qualification-only predicates disclose no response bodies or errors.
+// Priority reflects the earliest relevant guard, not an assertion that later
+// operations succeeded. The original retirement refusal remains unchanged.
+func guestRetirementStep39Predicate(httpFailed, floorFailed, decodeFailed, loadFailed, notAuthenticated, recordFailed bool) string {
+	switch {
+	case httpFailed:
+		return "original-retirement-39-http"
+	case floorFailed:
+		return "original-retirement-39-floor"
+	case decodeFailed:
+		return "original-retirement-39-decode"
+	case loadFailed:
+		return "original-retirement-39-load"
+	case notAuthenticated:
+		return "original-retirement-39-auth"
+	case recordFailed:
+		return "original-retirement-39-record"
+	default:
+		return "original-guest-step-39"
+	}
+}
