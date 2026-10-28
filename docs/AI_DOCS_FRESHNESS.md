@@ -7,9 +7,10 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 78b35843dfd207f4aa0dec97fc62d23a61d497d4
-verified_diff_sha256: c93946e1d4bd5db67d0cfae49025cdc4bd0c9e3fd56e12c7be3dec84f65d260d
+verified_at_commit: b9e68ab5ad781206a13fcf4dfe479bfd71ce1627
+verified_diff_sha256: 2e3ed88c62a40085a28a7a7ee07f57f83841398b0fe2b607e69c9e8374580cf5
 reconciler_schema: 1
+guest_original_pidfd_and_retirement_diagnostic_review: Independent source review preserved the original process identity, pre-retirement pin, Wait, stderr EOF and deadline guards while accepting Linux readable pidfd events with optional hangup; the isolated Linux kernel test observed mask 17 after actual child reap. A separate closed native-qualification predicate identifies retirement hold classes without changing production behavior. Actual native QEMU CI and complete production qualification remain required.
 guest_probe_diagnostic_retention_review: Native qualification now retains every actual probe diagnostic under the digest of its unique challenge without replacing a previous original. A peer reviewed the scope, publication behavior and negative checks. The Linux nativequalification package compiled; actual QEMU execution and complete production qualification remain required.
 verified_at: 2026-10-28
 by: Giomaster
