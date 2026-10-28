@@ -11,6 +11,16 @@ import (
 	"time"
 )
 
+func TestGuestQualificationReadoptionClosedStages(t *testing.T) {
+	cause := errors.New("private details")
+	for stage, want := range map[string]string{"readoption_presence": "original-guest-step-47", "readoption_plan": "original-guest-step-48", "readoption_lease": "original-guest-step-49"} {
+		err := GuestQualificationRefusal(stage, cause)
+		if GuestQualificationPredicate(err) != want || !errors.Is(err, cause) || strings.Contains(err.Error(), "private details") {
+			t.Fatalf("wrong closed readoption stage: %s", stage)
+		}
+	}
+}
+
 func TestGuestQualificationRefusalClosedProjection(t *testing.T) {
 	cause := errors.New("SECRET SQL HTTP credential body")
 	cases := []struct{ stage, predicate string }{

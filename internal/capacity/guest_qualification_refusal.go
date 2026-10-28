@@ -32,6 +32,12 @@ func GuestQualificationPredicate(err error) string {
 		return "original-guest-step-17"
 	}
 	switch refusal.stage {
+	case "readoption_presence":
+		return "original-guest-step-47"
+	case "readoption_plan":
+		return "original-guest-step-48"
+	case "readoption_lease":
+		return "original-guest-step-49"
 	case "probe_http_config_held":
 		return "original-guest-step-50"
 	case "probe_http_enrollment_held":

@@ -19,9 +19,9 @@ func sourceNativePostDeleteReadoptionContract(ctx context.Context,store reposito
  freshAbsence,err:=originalGuestNativeRealm.ObserveOriginalDeletedDisk(ctx,confirmed);if err!=nil{return err}
  var originalPresence model.CapacityMutationProof
  presenceWire,err:=q.ReadPrivate(ctx,filepath.Join(q.SlotDirectory(originalGuestNativeRealm.PrivateDirectory,2),"delete-readoption-original-presence.json"),&originalPresence)
- if err!=nil || originalPresence.Slot!=2 || originalPresence.ResourceAbsent || !originalPresence.OwnerVerified || !originalPresence.SpecVerified || originalPresence.ResourceID!=absence.ResourceID || originalPresence.ResourceCreatedAt!=absence.ResourceCreatedAt || originalPresence.ResourceID!=freshAbsence.ResourceID || originalPresence.ResourceCreatedAt!=freshAbsence.ResourceCreatedAt{return errOriginalGuestStep}
- desired,err:=sourceNativeReadoptionDesired(p,b,originalPresence);if err!=nil{return err}
- if err=store.ValidateNativeObservationLease(ctx,policy,input.Generation,input.FencingToken,input.LeaseOwner);err!=nil{return err}
+ if err!=nil || originalPresence.Slot!=2 || originalPresence.ResourceAbsent || !originalPresence.OwnerVerified || !originalPresence.SpecVerified || originalPresence.ResourceID!=absence.ResourceID || originalPresence.ResourceCreatedAt!=absence.ResourceCreatedAt || originalPresence.ResourceID!=freshAbsence.ResourceID || originalPresence.ResourceCreatedAt!=freshAbsence.ResourceCreatedAt{return capacity.GuestQualificationRefusal("readoption_presence",errOriginalGuestStep)}
+ desired,err:=sourceNativeReadoptionDesired(p,b,originalPresence);if err!=nil{return capacity.GuestQualificationRefusal("readoption_plan",err)}
+ if err=store.ValidateNativeObservationLease(ctx,policy,input.Generation,input.FencingToken,input.LeaseOwner);err!=nil{return capacity.GuestQualificationRefusal("readoption_lease",err)}
  var prior,after []byte;var beforeAt,afterAt time.Time
  query:=`SELECT slot_record FROM public.capacity_resource_slots WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND integration_instance_id=$5 AND scope_checksum=$6 AND profile_name=$7 AND slot=2`
  if err=store.DB.QueryRowContext(ctx,query,policy.Metadata.Namespace,p.Environment,p.Domain,p.Dimension,b.IntegrationInstanceID,b.ScopeChecksum,b.ProfileName).Scan(&prior);err!=nil{return err}
