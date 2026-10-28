@@ -811,10 +811,9 @@ func runSyntheticCompensation(t *testing.T, protected bool) {
 			bad.Mutation.DesiredSpec = json.RawMessage(string(desiredRaw))
 			bad.FailedProof.ResourceID = "replacement"
 		case "incomplete_action_history":
-			if true {
-				continue
-			}
-			bad.FailedProof.ActionHistoryComplete = false
+			// This applies to the two separate uncertain-transport cases,
+			// which remain in the original test and are not covered here.
+			continue
 		}
 		if _, err := issuer.IssueCompensation(ctx, current, bad); err == nil {
 			t.Fatal("unsafe compensation admitted", variant)
