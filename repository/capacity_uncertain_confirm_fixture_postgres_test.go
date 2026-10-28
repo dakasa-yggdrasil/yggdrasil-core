@@ -5,6 +5,8 @@ package repository
 import (
 	"context"
 	"errors"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"strings"
 	"testing"
 	"time"
 
@@ -56,5 +58,38 @@ func TestUnanchoredUncertainCreateCannotConfirmPostgres(t *testing.T) {
 	}
 	if err = f.db.QueryRowContext(ctx, `SELECT count(*) FROM public.event_log WHERE idempotency_key=$1 AND metadata->>'namespace'=$2`, "capacity-mutation/"+parent.GrantID, f.policy.Metadata.Namespace).Scan(&count); err != nil || count != 0 {
 		t.Fatal("unanchored proof emitted event", err)
+	}
+}
+
+// This synthetic accepted response is separate from the unknown-response case.
+func TestAcceptedCreateStillConfirmsPostgres(t *testing.T) {
+	f := syntheticFailedFloorSetup(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	parent, err := f.store.IssueMutation(ctx, f.policy, f.intent.Generation, f.intent.FencingToken, f.intent.LeaseOwner, f.plans[3])
+	if err != nil {
+		t.Fatal(err)
+	}
+	nonce := uuid.NewString()
+	redemption := mutationRedeem(parent, nonce)
+	if _, err = f.store.RedeemMutation(ctx, f.binding.AdapterPrincipalID, redemption); err != nil {
+		t.Fatal(err)
+	}
+	settlement := mutationSettlement(redemption, f.created)
+	instant := time.Now().UTC().Format(time.RFC3339Nano)
+	settlement.ResourceID, settlement.ResourceCreatedAt, settlement.ObservedAt = "123", instant, instant
+	settlement.OriginalProviderCreateReturn = &model.CapacityOriginalProviderCreateReturn{Schema: "hetzner_original_create_return_v1", Provider: "hetzner", AdapterSourceCommit: f.binding.OriginalProviderSourceCommit, GrantID: parent.GrantID, AttemptID: redemption.AttemptID, RequestSHA256: parent.RequestSHA256, ResourceID: settlement.ResourceID, ResourceCreatedAt: instant, ActionID: settlement.ActionID, NextActionIDs: settlement.NextActionIDs, CalledAt: instant, ReturnedAt: instant, ContextDeadline: parent.ExpiresAt.UTC().Format(time.RFC3339Nano), ResponseStatus: 201, ResponseBodySHA256: strings.Repeat("d", 64), ResponseBytes: 100}
+	if _, err = f.store.SettleMutation(ctx, f.binding.AdapterPrincipalID, nonce, settlement); err != nil {
+		t.Fatal(err)
+	}
+	proof := f.proof(t, 3)
+	proof.GrantID, proof.ObservedCreationGrantID = parent.GrantID, parent.GrantID
+	proof.ResourceID, proof.ResourceCreatedAt = settlement.ResourceID, settlement.ResourceCreatedAt
+	proof.ObservedAt = time.Now().UTC()
+	proof.ActionsTerminal, proof.ActionsSuccessful = true, true
+	proof.ActionIDs = append([]string{settlement.ActionID}, settlement.NextActionIDs...)
+	confirmed, err := f.store.ConfirmMutation(ctx, f.policy, f.intent.Generation, f.intent.FencingToken, f.intent.LeaseOwner, proof)
+	if err != nil || confirmed.State != "confirmed" {
+		t.Fatal("accepted create did not confirm", err)
 	}
 }
