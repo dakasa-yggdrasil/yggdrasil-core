@@ -328,7 +328,7 @@
       "expression_complete": true,
       "file": "internal/capacitynativeqemu/realm_linux.go",
       "function": "sourceFenceRedeem",
-      "line": 739
+      "line": 767
     },
     {
       "argument_expression": "req",
@@ -338,7 +338,7 @@
       "expression_complete": true,
       "file": "internal/capacitynativeqemu/realm_linux.go",
       "function": "sourceFenceRedeem",
-      "line": 745
+      "line": 773
     },
     {
       "argument_expression": "ctx, http.MethodPost, provider.TokenURL, strings.NewReader(form.Encode())",
