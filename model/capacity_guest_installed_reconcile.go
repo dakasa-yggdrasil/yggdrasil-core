@@ -30,4 +30,8 @@ type CapacityInstalledGuestPreviousCanary struct {
 	PossibleSend     bool   `json:"possible_send"`
 	Outcome          string `json:"outcome"`
 	ClosedHTTPStatus int    `json:"closed_HTTP_status"`
+	// An incomplete historical GET is still unknown, never an accepted
+	// return or a claim that the original operation had no effect.
+	OriginalTransportState  string `json:"original_transport_state,omitempty"`
+	OriginalTransportSHA256 string `json:"original_transport_sha256,omitempty"`
 }

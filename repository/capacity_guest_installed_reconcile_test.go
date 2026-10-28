@@ -92,7 +92,7 @@ func TestInstalledGuestPreviousHeldPublicationRemainsHeldAndUnknownRemainsUnknow
 			if name == "unexpired" {
 				deadline = now.Add(time.Second)
 			}
-			mock.ExpectQuery("SELECT c.id::text,c.phase").WithArgs(policy.ID, old.Generation, old.FencingToken).WillReturnRows(sqlmock.NewRows([]string{"id", "phase", "deadline", "send", "outcome", "transport"}).AddRow(uuid.NewString(), "publish", deadline, send, outcome, transport))
+			mock.ExpectQuery("SELECT c.id::text,c.phase").WithArgs(policy.ID, old.Generation, old.FencingToken).WillReturnRows(sqlmock.NewRows([]string{"id", "phase", "deadline", "send", "outcome", "transport", "return_sha"}).AddRow(uuid.NewString(), "publish", deadline, send, outcome, transport, ""))
 			rows, got := previousInstalledCanariesTx(context.Background(), tx, policy, old, now)
 			if name == "unexpired" || name == "incomplete_return" {
 				if got == nil {

@@ -1,0 +1,67 @@
+name: Guest historical unknown read recovery
+on:
+  pull_request:
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  signed-postgres-recovery:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: recovery-fixture-only
+          POSTGRES_DB: recovery_fixture
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d recovery_fixture"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      DB_HOST: 127.0.0.1
+      DB_PORT: "5432"
+      DB_NAME: recovery_fixture
+      DB_USER: postgres
+      DB_PASSWORD: recovery-fixture-only
+      DB_SSLMODE: disable
+      DB_URL: postgres://postgres:recovery-fixture-only@127.0.0.1:5432/recovery_fixture?sslmode=disable
+      REQUIRE_CAPACITY_POSTGRES: "true"
+      GOWORK: "off"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Apply source-owned schema
+        run: go run ./scripts/goose up
+      - name: Verify signed lineage and PostgreSQL guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p artifacts/unknown-read
+          go test -race -json -p 1 -count=1 -timeout=3m ./repository -run '^(TestHistoricalUnknownRead.*|TestHistoricalRecoverySignedSourceFixture|TestInstalledGuestPreviousHeldPublicationRemainsHeldAndUnknownRemainsUnknown)$' | tee artifacts/unknown-read/events.jsonl
+          python3 - <<'PY'
+          import json
+          from collections import Counter
+          from pathlib import Path
+          events=[json.loads(line) for line in Path('artifacts/unknown-read/events.jsonl').read_text().splitlines() if line]
+          required={'TestHistoricalUnknownReadTransportKeepsUncertainty','TestHistoricalUnknownReadRetainsOriginalAndVerifierIsRequired','TestHistoricalUnknownReadVerifiesSignedSQLLineage','TestHistoricalUnknownReadPostgresSignedLineage','TestHistoricalUnknownReadPostgresB509Compatibility','TestHistoricalRecoverySignedSourceFixture','TestInstalledGuestPreviousHeldPublicationRemainsHeldAndUnknownRemainsUnknown'}
+          runs=Counter(e.get('Test') for e in events if e.get('Action')=='run')
+          passed=Counter(e.get('Test') for e in events if e.get('Action')=='pass' and e.get('Test'))
+          if any(runs[n]!=1 or passed[n]!=1 for n in required) or any(e.get('Action') in ('skip','fail','build-fail') for e in events):
+              raise SystemExit('signed original lineage test census incomplete or failed')
+          if sum(e.get('Action')=='pass' and not e.get('Test') for e in events)!=1:
+              raise SystemExit('owning repository package did not pass')
+          PY
+      - name: Retain source test evidence
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: unknown-read-signed-postgres
+          path: artifacts/unknown-read/
+          if-no-files-found: warn

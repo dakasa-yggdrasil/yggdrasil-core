@@ -200,7 +200,7 @@ func (s CapacityStore) TryResumeInstalledGuest(ctx context.Context, policy model
 		}
 		previousResumeRun, previousResumeSHA = m.NewRunID, capacity.BusinessCreationSHA256(lastWire)
 	}
-	previous, err := previousInstalledCanariesTx(ctx, tx, policy, old, now)
+	previous, err := s.previousInstalledCanariesVerifiedTx(ctx, tx, policy, p, old, *selected, selectedReceipt.Enrollment, now)
 	if err != nil {
 		return old, false, err
 	}
@@ -256,39 +256,68 @@ func (s CapacityStore) TryResumeInstalledGuest(ctx context.Context, policy model
 // ID pair is a periodic current test; expired kernel nonces and the existing
 // runtime mutex/canaryPending serialize it without replaying the old request.
 func previousInstalledCanariesTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, old model.CapacityIntent, now time.Time) ([]model.CapacityInstalledGuestPreviousCanary, error) {
-	rows, err := tx.QueryContext(ctx, `SELECT c.id::text,c.phase,c.original_deadline,EXISTS(SELECT 1 FROM public.capacity_guest_notify_canary_sends s WHERE s.challenge_id=c.id),COALESCE(r.outcome,''),r.original_transport FROM public.capacity_guest_notify_canary_challenges c LEFT JOIN public.capacity_guest_notify_canary_returns r ON r.challenge_id=c.id WHERE c.policy_id=$1 AND c.generation=$2 AND c.fence=$3 ORDER BY c.recorded_at,c.id LIMIT 257`, policy.ID, old.Generation, old.FencingToken)
+	return previousInstalledCanariesWithReadVerifier(ctx, tx, policy, old, now, nil)
+}
+
+type installedUncertainReadVerifier func(string, model.CapacityInstalledGuestPreviousCanary, []byte, capacity.GuestOriginalHTTPReturn) error
+
+func previousInstalledCanariesWithReadVerifier(ctx context.Context, tx *sql.Tx, policy model.Manifest, old model.CapacityIntent, now time.Time, verify installedUncertainReadVerifier) ([]model.CapacityInstalledGuestPreviousCanary, error) {
+	rows, err := tx.QueryContext(ctx, `SELECT c.id::text,c.phase,c.original_deadline,EXISTS(SELECT 1 FROM public.capacity_guest_notify_canary_sends s WHERE s.challenge_id=c.id),COALESCE(r.outcome,''),r.original_transport,COALESCE(r.return_sha256,'') FROM public.capacity_guest_notify_canary_challenges c LEFT JOIN public.capacity_guest_notify_canary_returns r ON r.challenge_id=c.id WHERE c.policy_id=$1 AND c.generation=$2 AND c.fence=$3 ORDER BY c.recorded_at,c.id LIMIT 257`, policy.ID, old.Generation, old.FencingToken)
 	if err != nil {
 		return nil, err
 	}
 	defer rows.Close()
-	out := []model.CapacityInstalledGuestPreviousCanary{}
+	type observedCanary struct {
+		row       model.CapacityInstalledGuestPreviousCanary
+		transport []byte
+		returnSHA string
+	}
+	observed := []observedCanary{}
 	for rows.Next() {
 		var row model.CapacityInstalledGuestPreviousCanary
 		var deadline time.Time
 		var transport []byte
-		if err = rows.Scan(&row.ChallengeID, &row.Phase, &deadline, &row.PossibleSend, &row.Outcome, &transport); err != nil {
+		var returnSHA string
+		if err = rows.Scan(&row.ChallengeID, &row.Phase, &deadline, &row.PossibleSend, &row.Outcome, &transport, &returnSHA); err != nil {
 			return nil, err
 		}
-		if len(out) >= 256 || !deadline.Before(now) {
+		if len(observed) >= 256 || !deadline.Before(now) {
 			return nil, ErrCapacityConflict
 		}
-		if len(transport) > 0 {
-			var original capacity.GuestOriginalHTTPReturn
-			if json.Unmarshal(transport, &original) != nil || original.PreflightFailed || original.DoFailed || original.ReadFailed || original.CloseFailed || original.OriginalContextFailed || original.ResponseBodyScope != capacity.GuestOriginalBodyCompleteRead || original.CloseReturnedAt.IsZero() || original.DriverReturnedAt.Before(original.CloseReturnedAt) {
-				return nil, ErrCapacityConflict
-			}
-			row.ClosedHTTPStatus = original.Status
-		}
-		if row.Outcome == "" {
-			row.Outcome = "unknown"
-		}
-		out = append(out, row)
+		observed = append(observed, observedCanary{row: row, transport: append([]byte(nil), transport...), returnSHA: returnSHA})
 	}
 	if err = rows.Err(); err != nil {
 		return nil, err
 	}
 	if err = rows.Close(); err != nil {
 		return nil, err
+	}
+	out := make([]model.CapacityInstalledGuestPreviousCanary, 0, len(observed))
+	for _, item := range observed {
+		row, transport := item.row, item.transport
+		if len(transport) > 0 {
+			var original capacity.GuestOriginalHTTPReturn
+			if json.Unmarshal(transport, &original) != nil {
+				return nil, ErrCapacityConflict
+			}
+			if original.PreflightFailed || original.DoFailed || original.ReadFailed || original.CloseFailed || original.OriginalContextFailed || original.ResponseBodyScope != capacity.GuestOriginalBodyCompleteRead || original.CloseReturnedAt.IsZero() || original.DriverReturnedAt.Before(original.CloseReturnedAt) {
+				// JSONB changes textual formatting. Reconstruct only the exact
+				// canonical diagnostic shape written by the pinned 2de issuer.
+				var actualRecord, canonicalRecord map[string]json.RawMessage
+				canonical, canonErr := json.Marshal(original)
+				if canonErr != nil || json.Unmarshal(transport, &actualRecord) != nil || json.Unmarshal(canonical, &canonicalRecord) != nil || !reflect.DeepEqual(actualRecord, canonicalRecord) || item.returnSHA != capacity.BusinessCreationSHA256(canonical) || verify == nil || verify(row.ChallengeID, row, transport, original) != nil {
+					return nil, ErrCapacityConflict
+				}
+				row.OriginalTransportState = "unknown_read_timeout"
+				row.OriginalTransportSHA256 = item.returnSHA
+			} else {
+				row.ClosedHTTPStatus = original.Status
+			}
+		}
+		if row.Outcome == "" {
+			row.Outcome = "unknown"
+		}
+		out = append(out, row)
 	}
 	return out, nil
 }
