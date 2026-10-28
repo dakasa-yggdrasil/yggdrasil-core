@@ -8,7 +8,7 @@ permissions:
   contents: read
 jobs:
   capacity-postgres:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 15
     services:
       postgres:
@@ -90,6 +90,43 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Prepare isolated PostgreSQL 17 owner for source-identified cases
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error --location -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          sudo tee /etc/apt/sources.list.d/pgdg.sources >/dev/null <<'EOF'
+          Types: deb
+          URIs: https://apt.postgresql.org/pub/repos/apt
+          Suites: noble-pgdg
+          Components: main
+          Signed-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          EOF
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-common
+          # The test creates its own private cluster. Never let the package
+          # install a separate system-managed PG17 cluster on this runner.
+          sudo python3 - <<'PYCONFIG'
+          from pathlib import Path
+          path = Path('/etc/postgresql-common/createcluster.conf')
+          lines = path.read_text().splitlines() if path.exists() else []
+          lines = [line for line in lines if not line.strip().startswith('create_main_cluster')]
+          path.write_text('\n'.join(lines + ['create_main_cluster = false']) + '\n')
+          PYCONFIG
+          test -z "$(pg_lsclusters --no-header | awk '$1 == 17 {print}')"
+          sudo apt-get install -y --no-install-recommends postgresql-17
+          test -z "$(pg_lsclusters --no-header | awk '$1 == 17 {print}')"
+          printf 'CAPACITY_TEST_PG_BIN=%s\nCAPACITY_TEST_GO=%s\n' /usr/lib/postgresql/17/bin "$(command -v go)" >> "$GITHUB_ENV"
+      - name: Test fixture owner process cleanup
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/test_capacity_original_exit_custody.py
+          python3 scripts/ci/capacity_fixture_safety_census_test.py
+          python3 scripts/ci/capacity_fixture_safety_census.py --python
+          go test -race -count=1 -json ./internal/capacityfixturetest > "$RUNNER_TEMP/capacity-fixture-safety-go.jsonl"
+          python3 scripts/ci/capacity_fixture_safety_census.py --go-events "$RUNNER_TEMP/capacity-fixture-safety-go.jsonl"
       # Linux owner pins actual directory FDs for fixed native openat reads.
       # The Source corpus requires exact10 roots+78 children once run/pass.
       # CLI cases build the current package in their own private test directory;
@@ -282,13 +319,33 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
+          # Compare the package inputs before go test can compile them. The
+          # verifier itself comes from a fresh exact-HEAD checkout.
+          capacity_source_dir="$(mktemp -d "$RUNNER_TEMP/capacity-source-parity.XXXXXXXX")"
+          trap 'rm -rf "$capacity_source_dir"' EXIT
+          git clone --quiet --no-hardlinks -- "$GITHUB_WORKSPACE" "$capacity_source_dir/clean"
+          test "$(git -C "$capacity_source_dir/clean" rev-parse HEAD)" = "$(git rev-parse HEAD)"
+          python3 "$capacity_source_dir/clean/scripts/ci/capacity_fixture_source_equivalence.py" --source "$GITHUB_WORKSPACE" --clone "$capacity_source_dir/clean" --go "$(command -v go)" --package ./controllers/httpapi
           core_pg_case_dir="$RUNNER_TEMP/capacity-postgres-original/capacity"
+          capacity_owner_registry="$(mktemp -d /tmp/dk-reg-XXXXXXXX)"
+          export CAPACITY_TEST_OWNER_ROOT="$capacity_owner_registry"
           "$RUNNER_TEMP/capacity-source-corpus-go-owner/status-owner" start "capacity"
           set +e
           go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message ./controllers/httpapi ./addons -run '^(TestCapacity(Intent.*|Workflow|Mutation.*|NativeLifetime)Postgres|TestCapacityNativeAdapter(OriginalHTTP|LegacyHTTPPreserved)|TestCapacityGuestNativeAdapterOriginalHTTP|TestCapacityGuestNativeDescribeCanonicalCatalog|TestCapacityGuestCollectorProtocolPostgres|TestCapacityDispatch(Postgres|AuthorizationPostgres|OriginalTransportPostgres|SchedulerPostgres|DemandPostgres)|TestCapacityNativeReleaseRecoveryPostgres|TestCapacityNativeReleaseOriginalUnredeemedPostgres|TestCapacityReleaseOriginalCaller|TestCapacityReleaseRecoveryFrame|TestProcessMatchedTrigger_.*)$' 2>"$core_pg_case_dir/go-test.stderr" | tee "$core_pg_case_dir/original.jsonl" 2>"$core_pg_case_dir/tee.stderr"
           core_pg_pipeline_status=("${PIPESTATUS[@]}")
           core_pg_go_exit="${core_pg_pipeline_status[0]}"
           core_pg_tee_exit="${core_pg_pipeline_status[1]}"
+          # This shell survives a go test timeout and independently checks that
+          # each recorded owner exited after stopping its own PostgreSQL.
+          python3 "$capacity_source_dir/clean/scripts/ci/capacity_fixture_owner_registry.py" --registry "$capacity_owner_registry" >"$core_pg_case_dir/fixture-cleanup.json"
+          capacity_owner_exit="$?"
+          capacity_owner_record_exit=0
+          printf '%s\n' "$capacity_owner_exit" > "$core_pg_case_dir/fixture-cleanup-exit.txt" || capacity_owner_record_exit="$?"
+          if [ "$capacity_owner_exit" -ne 0 ] || [ "$capacity_owner_record_exit" -ne 0 ]; then
+            echo "Fixture cleanup uncertain; retained registry: $capacity_owner_registry" >&2
+          else
+            rm -rf "$capacity_owner_registry"
+          fi
           python3 - <<'PY' >"$core_pg_case_dir/census.stdout" 2>"$core_pg_case_dir/census.stderr"
           import json
           from pathlib import Path
@@ -488,7 +545,7 @@ jobs:
           core_pg_census_exit=$?
           "$RUNNER_TEMP/capacity-source-corpus-go-owner/status-owner" finish "capacity" "$core_pg_go_exit" "$core_pg_tee_exit" "$core_pg_census_exit"
           core_pg_state_exit=$?
-          if [[ "$core_pg_go_exit" != 0 || "$core_pg_tee_exit" != 0 || "$core_pg_census_exit" != 0 || "$core_pg_state_exit" != 0 ]]; then
+          if [[ "$core_pg_go_exit" != 0 || "$core_pg_tee_exit" != 0 || "$core_pg_census_exit" != 0 || "$core_pg_state_exit" != 0 || "$capacity_owner_exit" != 0 || "$capacity_owner_record_exit" != 0 ]]; then
             exit 1
           fi
       - name: Qualify closed original Guest wire and scoped roster protocol
