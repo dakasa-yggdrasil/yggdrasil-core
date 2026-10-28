@@ -43,6 +43,12 @@ func nativeWorkflowFixtureDSN(t *testing.T, dsn string) string {
 		t.Fatal("nonlocal PG refused")
 	}
 	name := "recovery_fixture_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	if requested := os.Getenv("CAPACITY_RECOVERY_FIXTURE_DATABASE"); requested != "" {
+		if len(requested) != len("recovery_fixture_")+32 || !strings.HasPrefix(requested, "recovery_fixture_") || strings.Trim(requested[len("recovery_fixture_"):], "0123456789abcdef") != "" {
+			t.Fatal("closed synthetic database name required")
+		}
+		name = requested
+	}
 	if _, err = admin.Exec("CREATE DATABASE " + pq.QuoteIdentifier(name)); err != nil {
 		t.Fatal("fixture database create failed")
 	}

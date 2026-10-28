@@ -19,7 +19,7 @@ func nativeWorkflowFixturePolicy(_ *testing.T, p model.CapacityPolicySpec, b mod
 func nativeWorkflowFixtureStore(_ *testing.T, s repository.CapacityStore) repository.CapacityStore {
 	return s
 }
-func nativeWorkflowSyntheticGate(*testing.T) bool { return false }
+func nativeWorkflowSyntheticGate(t *testing.T) bool { runSyntheticNativeWorkflowGate(t); return true }
 
 func nativeWorkflowFixtureSettlement(_ *testing.T, _ model.CapacityMutationBinding, _ model.CapacityMutationGrant, s model.CapacityMutationSettleRequest) model.CapacityMutationSettleRequest {
 	return s

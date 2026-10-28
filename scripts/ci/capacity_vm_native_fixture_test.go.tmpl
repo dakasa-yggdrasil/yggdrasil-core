@@ -37,7 +37,14 @@ type coreNativeFixtureHTTP struct {
 	created time.Time
 }
 
-func (h coreNativeFixtureHTTP) Do(r *http.Request) (*http.Response, error) {
+func (h coreNativeFixtureHTTP) Do(r *http.Request) (response *http.Response, returnedErr error) {
+	// Return the owning request on every synthetic transport path, just as
+	// the adapter's fleetFake and the real HTTP client do.
+	defer func() {
+		if response != nil {
+			response.Request = r
+		}
+	}()
 	if r.URL.Host == "api.hetzner.cloud" && (strings.HasPrefix(r.URL.Path, "/v1/actions/") || strings.HasSuffix(r.URL.Path, "/actions")) {
 		if strings.HasPrefix(r.URL.Path, "/v1/actions/") || r.URL.Query().Get("status") != "running" {
 			id := int64(100)
