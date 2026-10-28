@@ -5,6 +5,7 @@ package repository
 import (
 	"strings"
 	"testing"
+	"time"
 )
 
 func TestSyntheticFloorChildCensusAndOutput(t *testing.T) {
@@ -33,5 +34,11 @@ func TestSyntheticFloorChildCensusAndOutput(t *testing.T) {
 	_, _ = huge.Write([]byte(strings.Repeat("x", floorFixtureOutputLimit+1)))
 	if len(huge.buf) != floorFixtureOutputLimit || floorFixtureCensus(&huge) || !strings.Contains(floorFixtureSummary(&huge, &stderr, 1), "stdout_truncated=true") {
 		t.Fatal("bounded output or truncation guard failed")
+	}
+}
+
+func TestFloorFixtureNeedsCleanupTime(t *testing.T) {
+	if floorFixtureEnoughTime(164*time.Second) || !floorFixtureEnoughTime(165*time.Second) {
+		t.Fatal("owner began without its full cleanup interval")
 	}
 }
