@@ -4,3 +4,5 @@ package repository
 
 func guestRegistrationFailure(_ string, err error) error { return err }
 func GuestRegistrationDiagnostic(error) string           { return "" }
+
+func guestRegistrationValidationFailure(error) error { return ErrCapacityConflict }

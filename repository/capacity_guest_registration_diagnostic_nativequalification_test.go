@@ -20,3 +20,21 @@ func TestGuestRegistrationDiagnosticClosed(t *testing.T) {
 		t.Fatal("unknown diagnostic admitted")
 	}
 }
+
+func TestGuestRegistrationValidationDiagnosticClosed(t *testing.T) {
+	for _, item := range []struct{ message, stage string }{
+		{"production requires the explicit original boot clock", "registration_clock"},
+		{"explicit original production clock required", "registration_clock"},
+		{"complete original protected provisioning required", "registration_protected"},
+		{"full original pre-admission writer census required", "registration_census"},
+		{"source-approved original writer placement required", "registration_placement"},
+		{"separate original enrollment statement required", "registration_enrollment"},
+		{"original provisioning callback signature refused", "registration_signature"},
+		{"private material", "registration_validation"},
+	} {
+		err := guestRegistrationValidationFailure(errors.New(item.message))
+		if !errors.Is(err, ErrCapacityConflict) || GuestRegistrationDiagnostic(err) != item.stage || strings.Contains(err.Error(), item.message) {
+			t.Fatal("validation diagnostic changed or exposed guard", item.stage)
+		}
+	}
+}

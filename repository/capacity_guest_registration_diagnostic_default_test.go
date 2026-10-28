@@ -9,7 +9,7 @@ import (
 
 func TestGuestRegistrationDiagnosticDefaultUnchanged(t *testing.T) {
 	err := errors.New("original")
-	if guestRegistrationFailure("current", err) != err || GuestRegistrationDiagnostic(err) != "" {
+	if guestRegistrationFailure("current", err) != err || GuestRegistrationDiagnostic(err) != "" || guestRegistrationValidationFailure(err) != ErrCapacityConflict {
 		t.Fatal("default error changed")
 	}
 }
