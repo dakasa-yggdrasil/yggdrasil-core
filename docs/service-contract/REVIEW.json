@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "caa6f70759a712372cbacf9e7e1dcd29dc2b86297efca23b1a84b4c4c2e40d6f",
+  "source_inventory_sha256": "174cb7e15d82394b9b79799328b0ca2bd7c93a962e7e60f1a0931faea6abb65f",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -752,6 +752,11 @@
   "source_failure_http_diagnostic_review_20261028": {
     "scope": "Qualification-only fixed classification of the same original HTTP return. Error, retries, context and deadlines remain unchanged; prior transport labels do not establish a network error. Exact Linux and native validation remain required.",
     "source_inventory_sha256": "caa6f70759a712372cbacf9e7e1dcd29dc2b86297efca23b1a84b4c4c2e40d6f",
+    "production_or_native_qualification": false
+  },
+  "source_failure_http_last_review_20261028": {
+    "scope": "Qualification-only final closed HTTP class and attempt count on original timeout, in addition to earlier first-class labels. No bodies, URLs, errors or retries change. Prior HOLDs remain historical; exact Linux and native validation remain required.",
+    "source_inventory_sha256": "174cb7e15d82394b9b79799328b0ca2bd7c93a962e7e60f1a0931faea6abb65f",
     "production_or_native_qualification": false
   }
 }
