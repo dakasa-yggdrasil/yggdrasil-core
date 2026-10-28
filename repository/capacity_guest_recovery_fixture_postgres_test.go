@@ -722,7 +722,7 @@ func runSyntheticCompensation(t *testing.T, protected bool) {
 	proof.GrantID, proof.RequestSHA256, proof.ResourceID, proof.ResourceCreatedAt, proof.ObservedCreationGrantID = grant.GrantID, grant.RequestSHA256, settle.ResourceID, settle.ResourceCreatedAt, grant.GrantID
 	proof.ActionsTerminal, proof.ActionsFailed, proof.SpecVerified, proof.CompensationIdentityVerified = true, true, false, true
 	proof.ActionIDs = []string{"native-action", "bootstrap-action"}
-	proof.ActionHistoryComplete = true
+	proof.ActionHistoryComplete = false
 	off := map[string]any{"server": map[string]any{"id": settle.ResourceID, "created_at": settle.ResourceCreatedAt, "status": "off", "observed_at": time.Now().UTC().Format(time.RFC3339Nano)}}
 	offWire, _ := json.Marshal(off)
 	if _, e = db.Exec(`INSERT INTO public.capacity_guest_original_native_poweroff_reads(id,intent_id,observation_sha256,original_wire,original_record,recorded_at) VALUES($1,$2,$3,$4,$5::jsonb,clock_timestamp())`, uuid.NewString(), retirementID, capacity.BusinessCreationSHA256(offWire), offWire, string(offWire)); e != nil {
