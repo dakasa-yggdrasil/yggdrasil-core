@@ -35,6 +35,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
+	"golang.org/x/sys/unix"
 )
 
 type capacityGuestProtocolPostgres struct {
@@ -243,7 +244,7 @@ func (n *capacityGuestNativeFixture) read(name string, out any) error {
 	if err != nil {
 		return err
 	}
-	fd, openErr := syscall.Openat(int(dir.Fd()), name, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
+	fd, openErr := unix.Openat(int(dir.Fd()), name, syscall.O_RDONLY|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0)
 	dirErr := dir.Close()
 	if openErr != nil {
 		if errors.Is(openErr, syscall.ENOENT) && dirErr == nil {
@@ -310,7 +311,7 @@ func (n *capacityGuestNativeFixture) writePrepare(value any) (result error) {
 	if _, e := os.Lstat(filepath.Join(n.dir, "prepare.json")); !errors.Is(e, os.ErrNotExist) {
 		return errCapacityNativeObservation
 	}
-	fd, err := syscall.Openat(int(dir.Fd()), "prepare.json.new", syscall.O_WRONLY|syscall.O_CREAT|syscall.O_EXCL|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0600)
+	fd, err := unix.Openat(int(dir.Fd()), "prepare.json.new", syscall.O_WRONLY|syscall.O_CREAT|syscall.O_EXCL|syscall.O_NOFOLLOW|syscall.O_CLOEXEC, 0600)
 	if err != nil {
 		return errCapacityNativeObservation
 	}
@@ -321,7 +322,7 @@ func (n *capacityGuestNativeFixture) writePrepare(value any) (result error) {
 	if written != len(raw) || writeErr != nil || syncErr != nil || closeErr != nil || nativeAdapterContext(n.ctx) != nil || nativeAdapterContext(n.prepareCtx) != nil {
 		return errCapacityNativeObservation
 	}
-	if err = syscall.Renameat(int(dir.Fd()), "prepare.json.new", int(dir.Fd()), "prepare.json"); err != nil {
+	if err = unix.Renameat(int(dir.Fd()), "prepare.json.new", int(dir.Fd()), "prepare.json"); err != nil {
 		return errCapacityNativeObservation
 	}
 	if dir.Sync() != nil || nativeAdapterContext(n.ctx) != nil || nativeAdapterContext(n.prepareCtx) != nil {
