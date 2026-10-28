@@ -172,6 +172,28 @@ func (f repositoryScenario) issueForSlot(slot int) (model.CapacityMutationIssue,
 	return model.CapacityMutationIssue{}, errors.New("slot not approved")
 }
 
+// A fully shaped proof for a previously unrecorded slot. The positive
+// control below verifies this exact shape reaches RecordMutationSlot under a
+// normal lease; no provider observation is claimed.
+func (f repositoryScenario) unrecordedSlotProof(slot int) (model.CapacityMutationIssue, model.CapacityMutationProof, error) {
+	for _, candidate := range f.binding.Slots {
+		if candidate.Slot != slot {
+			continue
+		}
+		raw, err := json.Marshal(candidate.DesiredSpec)
+		if err != nil {
+			return model.CapacityMutationIssue{}, model.CapacityMutationProof{}, err
+		}
+		now := time.Now().UTC()
+		return model.CapacityMutationIssue{BindingName: f.binding.Name, DesiredSpec: raw}, model.CapacityMutationProof{
+			BindingName: f.binding.Name, Slot: slot, RequestSHA256: candidate.DesiredSpecSHA256,
+			ResourceID: "synthetic-new-member-slot-7", ResourceCreatedAt: now.Format(time.RFC3339Nano),
+			ObservedAt: now, ReceiptRef: "synthetic:unrecorded-recovery-control", OwnerVerified: true, SpecVerified: true,
+		}, nil
+	}
+	return model.CapacityMutationIssue{}, model.CapacityMutationProof{}, errors.New("slot not approved")
+}
+
 func repositoryPartialRecovery(ctx context.Context, db *sql.DB, source string) error {
 	f, err := newRepositoryScenario(ctx, db, source)
 	if err != nil {
@@ -241,17 +263,30 @@ func repositoryPartialRecovery(ctx context.Context, db *sql.DB, source string) e
 	if _, err = recovery.Reconcile(ctx, f.policy, f.input.Generation, lease.FencingToken, lease.LeaseOwner, "reconciled_partial", proof); !errors.Is(err, repository.ErrCapacityConflict) || !strings.Contains(err.Error(), "partial recovery inventory does not match fresh immutable native membership") {
 		return errors.New("stale membership did not reach intended hold")
 	}
-	issue7, err := f.issueForSlot(7)
+	// First validate the same proof construction on a separate normal lease.
+	// This prevents a wrong slot hash or malformed proof from falsely crediting
+	// the recovery-only refusal.
+	control, err := newRepositoryScenario(ctx, db, source)
 	if err != nil {
 		return err
 	}
-	bogus := native
-	bogus.Slot = 7
-	bogus.GrantID = ""
-	bogus.ResourceID = "synthetic-no-existing-slot"
-	bogus.ObservedCreationGrantID = ""
-	if err = recovery.RecordMutationSlot(ctx, f.policy, f.input.Generation, lease.FencingToken, lease.LeaseOwner, issue7, bogus); err == nil {
+	controlIssue, controlProof, err := control.unrecordedSlotProof(7)
+	if err != nil {
+		return err
+	}
+	if err = control.store.RecordMutationSlot(ctx, control.policy, control.input.Generation, control.input.Fence, control.input.LeaseOwner, controlIssue, controlProof); err != nil {
+		return fmt.Errorf("normal lease did not accept valid unrecorded slot control: %w", err)
+	}
+	issue7, unrecorded, err := f.unrecordedSlotProof(7)
+	if err != nil {
+		return err
+	}
+	if err = recovery.RecordMutationSlot(ctx, f.policy, f.input.Generation, lease.FencingToken, lease.LeaseOwner, issue7, unrecorded); !errors.Is(err, repository.ErrCapacityConflict) {
 		return errors.New("recovery registered an unobserved slot")
+	}
+	var unrecordedCount int
+	if err = db.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE integration_instance_id=$1 AND scope_checksum=$2 AND profile_name=$3 AND slot=$4`, f.binding.IntegrationInstanceID, f.binding.ScopeChecksum, f.binding.ProfileName, 7).Scan(&unrecordedCount); err != nil || unrecordedCount != 0 {
+		return errors.New("recovery left a new slot record")
 	}
 	for slot := 1; slot <= 5; slot++ {
 		issue, observed, e := f.slotIssueProof(ctx, slot)
