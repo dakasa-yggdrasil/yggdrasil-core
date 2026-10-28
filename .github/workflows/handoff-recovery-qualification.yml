@@ -13,3 +13,5 @@ jobs:
       - uses: actions/checkout@v4
       - name: Test isolated file CAS, process locks and refusal paths
         run: python3 -m unittest discover -s scripts/ci/handoff_recovery_experiment -p 'test_*.py' -v
+      - name: Test a disposable real systemd owner scope and native reads
+        run: sudo python3 scripts/ci/handoff_recovery_experiment/linux_scope_integration.py

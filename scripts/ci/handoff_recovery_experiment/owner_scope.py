@@ -36,3 +36,32 @@ def validate_terminal(*,lease,boot_read,unit_read,cgroup_read,pid_read,jobs_read
   rows=dict(line.split() for line in cgroup_events.splitlines());need(rows.get('populated')=='0','OWNER_CGROUP_AND_DESCENDANTS_EMPTY')
  if current_pid_stat is not None:need(start_ticks(current_pid_stat)!=lease['start_ticks'],'OWNER_PROCESS_TERMINATED_OR_PID_REUSED')
  return {'schema':'handoff_owner_scope_terminal_check_v1','unit':unit,'run_id':lease['run_id'],'same_boot':True,'owner_and_cgroup_empty':True,'no_pending_systemd_jobs':True,'terminal_ssm_distinct':True,'guarantee_depends_on_exclusive_one_shot_launch_and_locked_revalidation':True}
+
+def persist_self_lease(*,run_id,source_path,source_sha256,output_directory):
+ """Write one durable self identity; callable only inside its isolated service.
+
+ Does not launch the service or prove its later termination. All parent-path
+ ownership and immutability are additional installer/admission obligations.
+ """
+ import sys
+ need(sys.platform=='linux' and os.geteuid()==0,'LINUX_ROOT_REQUIRED')
+ src=Path(source_path);out=Path(output_directory);need(src.is_absolute() and out.is_absolute(),'ABSOLUTE_SOURCE_AND_OUTPUT')
+ fd=os.open(src,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC)
+ try:
+  st=os.fstat(fd);need(stat.S_ISREG(st.st_mode) and st.st_uid==0 and st.st_nlink==1 and not stat.S_IMODE(st.st_mode)&0o022,'SAFE_OWNER_SOURCE');raw=b''
+  while True:
+   part=os.read(fd,65536)
+   if not part:break
+   raw+=part;need(len(raw)<=1<<20,'BOUNDED_OWNER_SOURCE')
+ finally:os.close(fd)
+ need(hashlib.sha256(raw).hexdigest()==source_sha256,'EXACT_OWNER_SOURCE_SHA')
+ pid=os.getpid();boot=Path('/proc/sys/kernel/random/boot_id').read_text().strip();proc=Path('/proc/'+str(pid)+'/stat').read_text();groups=Path('/proc/'+str(pid)+'/cgroup').read_text().splitlines();unified=[r[3:] for r in groups if r.startswith('0::')];need(len(unified)==1,'ONLY_UNIFIED_CGROUP_V2')
+ lease=make_lease(run_id=run_id,source_sha256=source_sha256,boot_id=boot,pid=pid,proc_stat=proc,cgroup=unified[0]);body=(json.dumps(lease,sort_keys=True,separators=(',',':'))+'\n').encode()
+ d=os.open(out,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
+ try:
+  ds=os.fstat(d);need(ds.st_uid==0 and not stat.S_IMODE(ds.st_mode)&0o077,'PRIVATE_OWNER_DIRECTORY');name='OWNER-LEASE.PUBLIC.json';f=os.open(name,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_CLOEXEC,0o600,dir_fd=d)
+  with os.fdopen(f,'wb') as file:file.write(body);file.flush();os.fsync(file.fileno())
+  os.fsync(d);f=os.open(name,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=d)
+  with os.fdopen(f,'rb') as file:need(file.read(len(body)+1)==body,'OWNER_LEASE_READBACK')
+ finally:os.close(d)
+ return {'path':str(out/name),'sha256':hashlib.sha256(body).hexdigest()}
