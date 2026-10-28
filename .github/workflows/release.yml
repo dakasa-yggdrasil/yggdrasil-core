@@ -92,10 +92,15 @@ jobs:
           EXPECTED_REVISION: ${{ github.sha }}
         run: |
           set -eu
+          index=$(docker buildx imagetools inspect "$IMAGE" --format '{{json .Manifest}}')
           for arch in amd64 arm64; do
-            docker pull --platform "linux/$arch" "$IMAGE"
-            test "$(docker image inspect --format '{{.Architecture}}' "$IMAGE")" = "$arch"
-            container=$(docker create --platform "linux/$arch" "$IMAGE")
+            manifest=$(printf '%s' "$index" | jq -er --arg arch "$arch" \
+              '[.manifests[] | select(.platform.os == "linux" and .platform.architecture == $arch) | .digest] | if length == 1 then .[0] else error("expected exactly one platform manifest") end')
+            printf '%s\n' "$manifest" | grep -Eq '^sha256:[0-9a-f]{64}$' || { echo "Invalid platform digest" >&2; exit 1; }
+            platform_image="ghcr.io/dakasa-yggdrasil/yggdrasil-core@$manifest"
+            docker pull --platform "linux/$arch" "$platform_image"
+            test "$(docker image inspect --format '{{.Architecture}}' "$platform_image")" = "$arch"
+            container=$(docker create --platform "linux/$arch" "$platform_image")
             temp=$(mktemp -d)
             mkdir -p "$temp/app" "$temp/usr/local/bin"
             for binary in yggdrasil-core goose yggdrasil-bootstrap yggdrasil-bootstrap-admin; do
@@ -119,7 +124,7 @@ jobs:
               set +e
               output=$(timeout 45 docker run --rm --platform "linux/$arch" --network none \
                 --env YGGDRASIL_WORKFLOW_DISPATCH_LOCK_JSON=invalid \
-                --entrypoint "$entrypoint" "$IMAGE" "$@" 2>&1)
+                --entrypoint "$entrypoint" "$platform_image" "$@" 2>&1)
               status=$?
               set -e
               if [ "$status" -ne "$expected_status" ] || ! printf '%s\n' "$output" | grep -Fq -- "$expected_text"; then
