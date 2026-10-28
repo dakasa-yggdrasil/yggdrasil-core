@@ -57,6 +57,9 @@ type report struct {
 	CoreSource                   string `json:"core_source"`
 	Provider                     string `json:"provider"`
 	Slot                         int    `json:"slot"`
+	BaselineUnits                int    `json:"baseline_units"`
+	Floor                        int    `json:"floor"`
+	RegisteredBaseline           int    `json:"registered_baseline"`
 	IssuanceReturns              int    `json:"issuance_returns"`
 	SerializedIssueMatches       bool   `json:"serialized_issue_matches"`
 	RejectedIssueRollsBack       bool   `json:"rejected_issue_rolls_back"`
@@ -74,6 +77,9 @@ type report struct {
 	NativeReadRequiresSettlement bool   `json:"native_read_requires_settlement"`
 	SyntheticConfirmationOnce    bool   `json:"synthetic_confirmation_once"`
 	SettlementScopePrivacyPassed bool   `json:"settlement_scope_privacy_passed"`
+	RepositoryLostReply          bool   `json:"repository_lost_reply"`
+	RepositoryUnresolved         bool   `json:"repository_unresolved"`
+	RepositoryNativeConfirmation bool   `json:"repository_native_confirmation"`
 	SyntheticHTTPCallbacksPassed bool   `json:"synthetic_http_callbacks_passed"`
 	ProviderSendAttempted        bool   `json:"provider_send_attempted"`
 	NativeOrProductionQualified  bool   `json:"native_or_production_qualified"`
@@ -577,7 +583,10 @@ func main() {
 }
 func mainError() error {
 	if len(os.Args) == 2 && os.Args[1] == "--synthetic-seed-run" {
-		return seedAndRun()
+		return seedAndRun(false)
+	}
+	if len(os.Args) == 2 && os.Args[1] == "--synthetic-repository-run" {
+		return seedAndRun(true)
 	}
 	if len(os.Args) != 1 {
 		return errors.New("unsupported fixture mode")

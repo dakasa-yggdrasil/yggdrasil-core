@@ -145,7 +145,9 @@ def write_linux_owner_identity(parent):
 def main():
     global pending_signal, cleanup_uncertain
     parser = argparse.ArgumentParser()
-    parser.add_argument("--run-grants", action="store_true", help="run synthetic source-only concurrency after reviewed clean commit")
+    mode = parser.add_mutually_exclusive_group()
+    mode.add_argument("--run-grants", action="store_true", help="run synthetic source-only concurrency and HTTP after reviewed clean commit")
+    mode.add_argument("--run-repository", action="store_true", help="run source-only repository scenarios with four baseline members")
     args = parser.parse_args()
     if not PG.is_dir() or not GO.is_file():
         raise RuntimeError("PostgreSQL and Go executables required")
@@ -185,11 +187,12 @@ import("context";"database/sql";"os";"time";_ "github.com/lib/pq";"github.com/pr
 func main(){ctx,cancel:=context.WithTimeout(context.Background(),90*time.Second);defer cancel();db,e:=sql.Open("postgres",os.Getenv("CAPACITY_TEST_OWNED_DSN"));if e!=nil{panic(e)};defer db.Close();var name,dir,id,listen string;var sock bool;var version int;e=db.QueryRowContext(ctx,"SELECT current_database(),current_setting('data_directory'),system_identifier::text,current_setting('listen_addresses'),inet_server_addr() IS NULL,current_setting('server_version_num')::int FROM pg_control_system()").Scan(&name,&dir,&id,&listen,&sock,&version);if e!=nil||name!="ci_capacity_original_grant"||dir!=os.Getenv("CAPACITY_TEST_PGDATA")||id!=os.Getenv("CAPACITY_TEST_PG_SYSTEM_ID")||listen!=""||!sock||version/10000!=17{panic("unowned PostgreSQL refused")};if e=goose.SetDialect("postgres");e!=nil{panic(e)};if e=goose.UpToContext(ctx,db,"db/migrations",82);e!=nil{panic(e)};v,e:=goose.GetDBVersionContext(ctx,db);if e!=nil||v!=82{panic("schema 82 required")}}
 ''')
         run([GO, "run", "-mod=readonly", migrator], env=env, timeout=120)
-        if args.run_grants:
+        if args.run_grants or args.run_repository:
             binary = owner / "grant-fixture"
             run([GO, "build", "-race", "-tags", "capacitytest nativequalification", "-o", binary, "./cmd/capacity-original-grant-fixture"], env=env, timeout=120)
             try:
-                process = run([binary, "--synthetic-seed-run"], env=env, input_text=json.dumps({"source_root": str(ROOT)}), timeout=120)
+                fixture_mode = "--synthetic-repository-run" if args.run_repository else "--synthetic-seed-run"
+                process = run([binary, fixture_mode], env=env, input_text=json.dumps({"source_root": str(ROOT)}), timeout=120)
             except subprocess.CalledProcessError as exc:
                 raise RuntimeError("synthetic grant runner failed: " + exc.stderr.strip()[:1000]) from exc
             result = json.loads(process.stdout)

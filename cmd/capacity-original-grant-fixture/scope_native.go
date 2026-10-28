@@ -19,8 +19,14 @@ import (
 
 // syntheticSettlementScope exercises actual issue/redeem and callback storage
 // using invented data on the verified isolated database. No provider is called.
-func syntheticSettlementScope(ctx context.Context, db *sql.DB, source string) error {
-	input, err := prepareSynthetic(ctx, db, source)
+func syntheticSettlementScope(ctx context.Context, db *sql.DB, source string, repositoryScenario bool) error {
+	var input request
+	var err error
+	if repositoryScenario {
+		input, err = prepareSyntheticWithLimits(ctx, db, source, 2, 4, 20, 2, 120)
+	} else {
+		input, err = prepareSynthetic(ctx, db, source)
+	}
 	if err != nil {
 		return err
 	}

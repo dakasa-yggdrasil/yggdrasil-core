@@ -4,4 +4,4 @@ package main
 
 import "errors"
 
-func seedAndRun() error { return errors.New("synthetic seed requires nativequalification build") }
+func seedAndRun(bool) error { return errors.New("synthetic seed requires nativequalification build") }

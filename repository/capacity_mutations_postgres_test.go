@@ -8,8 +8,6 @@ import (
 	"errors"
 	"fmt"
 	"strings"
-	"sync"
-	"sync/atomic"
 	"testing"
 	"time"
 
@@ -290,199 +288,35 @@ func TestCapacityMutationPostgres(t *testing.T) {
 		}
 	})
 	t.Run("concurrent_issue_and_single_redemption", func(t *testing.T) {
-		f := mutationPostgresFixture(t, true)
-		var wg sync.WaitGroup
-		var lock sync.Mutex
-		grants := map[string]bool{}
-		for i := 0; i < 12; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				g, err := f.store.IssueMutation(ctx, f.policy, f.intent.Generation, f.intent.FencingToken, f.intent.LeaseOwner, f.plans[5])
-				if err != nil {
-					t.Error(err)
-					return
-				}
-				lock.Lock()
-				grants[g.GrantID] = true
-				lock.Unlock()
-			}()
-		}
-		wg.Wait()
-		if len(grants) != 1 {
-			t.Fatalf("duplicate durable reservations: %v", grants)
-		}
-		g := f.issue(t, 5)
-		var writes atomic.Int32
-		for i := 0; i < 12; i++ {
-			wg.Add(1)
-			go func() {
-				defer wg.Done()
-				r := mutationRedeem(g, uuid.NewString())
-				response, err := f.store.RedeemMutation(ctx, f.binding.AdapterPrincipalID, r)
-				if err != nil {
-					t.Error(err)
-					return
-				}
-				if response.Mode == "write_once" {
-					writes.Add(1)
-				}
-			}()
-		}
-		wg.Wait()
-		if writes.Load() != 1 {
-			t.Fatalf("native send permissions=%d", writes.Load())
+		r := repositoryOriginalFixture(t)
+		if r.IssuanceReturns != 20 || !r.SerializedIssueMatches || r.ActiveGrantRows != 1 || r.PreregistrationRows != 1 || r.RedeemReturns != 20 || r.WriteOnce != 1 || r.ReadOnly != 19 {
+			t.Fatal("source-owned concurrent issuance/redemption did not satisfy the original invariant", r)
 		}
 	})
 	t.Run("lost_reply_same_attempt_is_read_only", func(t *testing.T) {
-		f := mutationPostgresFixture(t, true)
-		g := f.issue(t, 5)
-		nonce := uuid.NewString()
-		r := mutationRedeem(g, nonce)
-		first, err := f.store.RedeemMutation(ctx, f.binding.AdapterPrincipalID, r)
-		if err != nil || first.Mode != "write_once" {
-			t.Fatal(first, err)
-		}
-		replay, err := f.store.RedeemMutation(ctx, f.binding.AdapterPrincipalID, r)
-		if err != nil || replay.Mode != "read_only" {
-			t.Fatal(replay, err)
-		}
-		settle := model.CapacityMutationSettleRequest{GrantID: g.GrantID, AttemptID: r.AttemptID, RequestSHA256: g.RequestSHA256, Outcome: "rejected_before_send", TransportCompleted: true, ObservedAt: time.Now().UTC().Format(time.RFC3339Nano)}
-		if _, err = f.store.SettleMutation(ctx, f.binding.AdapterPrincipalID, nonce, settle); err != nil {
-			t.Fatal(err)
-		}
-		if _, err = f.store.SettleMutation(ctx, f.binding.AdapterPrincipalID, nonce, settle); err != nil {
-			t.Fatal("idempotent settlement", err)
-		}
-		next := f.issue(t, 5)
-		if next.GrantID == g.GrantID {
-			t.Fatal("retired unsent grant reused")
+		r := repositoryOriginalFixture(t)
+		if !r.RepositoryLostReply {
+			t.Fatal("source-owned original replay and before-send settlement did not pass")
 		}
 	})
 	t.Run("settlement_nonce_scope_pause_and_private_receipt", func(t *testing.T) {
-		f := mutationPostgresFixture(t, true)
-		g := f.issue(t, 5)
-		nonce := uuid.NewString()
-		r := mutationRedeem(g, nonce)
-		if _, err := f.store.RedeemMutation(ctx, f.binding.AdapterPrincipalID, r); err != nil {
-			t.Fatal(err)
-		}
-		settle := mutationSettlement(r, f.created)
-		if _, err := f.store.SettleMutation(ctx, "other", nonce, settle); !errors.Is(err, ErrCapacityMutationAuthorization) {
-			t.Fatal(err)
-		}
-		if _, err := f.store.SettleMutation(ctx, f.binding.AdapterPrincipalID, uuid.NewString(), settle); !errors.Is(err, ErrCapacityMutationAuthorization) {
-			t.Fatal(err)
-		}
-		paused := f.store
-		paused.ExecutionEnabled = false
-		if _, err := paused.SettleMutation(ctx, f.binding.AdapterPrincipalID, nonce, settle); err != nil {
-			t.Fatal("pause lost owning transport receipt", err)
-		}
-		receipt, err := paused.MutationReceipt(ctx, f.binding.AdapterPrincipalID, g.GrantID)
-		if err != nil || receipt.ResourceID != settle.ResourceID || receipt.ActionID != settle.ActionID || !receipt.TransportCompleted {
-			t.Fatal(receipt, err)
-		}
-		encoded, _ := json.Marshal(receipt)
-		for _, private := range []string{nonce, r.SettlementTokenSHA256, f.intent.LeaseOwner, f.store.ExecutorID} {
-			if strings.Contains(string(encoded), private) {
-				t.Fatal("private authority leaked")
-			}
-		}
-		if _, err = paused.MutationReceipt(ctx, "other", g.GrantID); !errors.Is(err, ErrCapacityMutationAuthorization) {
-			t.Fatal(err)
-		}
-		settle.ActionID = "different"
-		if _, err = paused.SettleMutation(ctx, f.binding.AdapterPrincipalID, nonce, settle); !errors.Is(err, ErrCapacityConflict) {
-			t.Fatal("conflicting receipt overwritten", err)
+		r := repositoryOriginalFixture(t)
+		if !r.SettlementScopePrivacyPassed {
+			t.Fatal("source-owned settlement scope, pause, or privacy check did not pass")
 		}
 	})
 	t.Run("unresolved_mutation_blocks_terminal_and_expiry_reissue", func(t *testing.T) {
-		f := mutationPostgresFixture(t, true)
-		g := f.issue(t, 5)
-		r := mutationRedeem(g, uuid.NewString())
-		if _, err := f.store.RedeemMutation(ctx, f.binding.AdapterPrincipalID, r); err != nil {
-			t.Fatal(err)
-		}
-		proof := model.CapacityTransitionProof{Assessment: f.a, ObservedAt: time.Now().UTC(), ReceiptRef: "fixture:ready", Healthy: true, Inflight: capacityTestCount(0)}
-		for _, phase := range []string{"prepared", "canary"} {
-			if _, err := f.store.Advance(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, phase, proof); err != nil {
-				t.Fatal(err)
-			}
-		}
-		proof.Assessment.Snapshot.Units = f.intent.Decision.Units
-		if _, err := f.store.Advance(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, "promoted", proof); !errors.Is(err, ErrCapacityConflict) {
-			t.Fatal("unsettled authority promoted", err)
-		}
-		if _, err := f.db.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET expires_at=clock_timestamp()-interval '1 hour' WHERE id=$1`, g.GrantID); err != nil {
-			t.Fatal(err)
-		}
-		replay, err := f.store.RedeemMutation(ctx, f.binding.AdapterPrincipalID, r)
-		if err != nil || replay.Mode != "read_only" {
-			t.Fatal(replay, err)
-		}
-		var state string
-		if err = f.db.QueryRowContext(ctx, `SELECT state FROM public.capacity_mutation_grants WHERE id=$1`, g.GrantID).Scan(&state); err != nil || state != "redeemed" {
-			t.Fatal(state, err)
+		r := repositoryOriginalFixture(t)
+		if !r.RepositoryUnresolved {
+			t.Fatal("source-owned unresolved authority and expired replay check did not pass")
 		}
 	})
 	t.Run("native_action_cannot_replace_transport_settlement", func(t *testing.T) {
-		f := mutationPostgresFixture(t, true)
-		g := f.issue(t, 5)
-		nonce := uuid.NewString()
-		r := mutationRedeem(g, nonce)
-		if _, err := f.store.RedeemMutation(ctx, f.binding.AdapterPrincipalID, r); err != nil {
-			t.Fatal(err)
+		r := repositoryOriginalFixture(t)
+		if !r.RepositoryNativeConfirmation {
+			t.Fatal("source-owned settlement and synthetic native confirmation check did not pass")
 		}
-		proof := f.proof(t, 5)
-		proof.GrantID = g.GrantID
-		proof.ActionsTerminal = true
-		proof.ActionsSuccessful = true
-		proof.ActionIDs = []string{"native-action", "bootstrap-action"}
-		if _, err := f.store.ConfirmMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, proof); !errors.Is(err, ErrCapacityConflict) {
-			t.Fatal("missing transport settled by GET", err)
-		}
-		settle := mutationSettlement(r, f.created)
-		if _, err := f.store.SettleMutation(ctx, f.binding.AdapterPrincipalID, nonce, settle); err != nil {
-			t.Fatal(err)
-		}
-		var auditCount int
-		if err := f.db.QueryRowContext(ctx, `SELECT count(*) FROM public.event_log WHERE idempotency_key=$1`, "capacity-mutation/"+g.GrantID).Scan(&auditCount); err != nil || auditCount != 0 {
-			t.Fatal("accepted transport emitted an applied event", auditCount, err)
-		}
-		proof.ResourceCreatedAt = settle.ResourceCreatedAt
-		proof.ObservedCreationGrantID = g.GrantID
-		proof.ActionIDs = []string{"native-action"}
-		if _, err := f.store.ConfirmMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, proof); !errors.Is(err, ErrCapacityConflict) {
-			t.Fatal("unobserved next action", err)
-		}
-		proof.ActionIDs = []string{"native-action", "bootstrap-action"}
-		proof.ResourceID = "replacement"
-		if _, err := f.store.ConfirmMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, proof); !errors.Is(err, ErrCapacityConflict) {
-			t.Fatal("native replacement adopted", err)
-		}
-		proof.ResourceID = settle.ResourceID
-		for _, creationGrantID := range []string{"", uuid.NewString()} {
-			proof.ObservedCreationGrantID = creationGrantID
-			if _, err := f.store.ConfirmMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, proof); !errors.Is(err, ErrCapacityConflict) {
-				t.Fatal("creation identity without its exact native grant label", err)
-			}
-		}
-		proof.ObservedCreationGrantID = g.GrantID
-		result, err := f.store.ConfirmMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, proof)
-		if err != nil || result.State != "confirmed" {
-			t.Fatal(result, err)
-		}
-		if _, err = f.store.ConfirmMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, proof); err != nil {
-			t.Fatal("exact confirmation replay", err)
-		}
-		var eventType, aggregateType, resourceID, instanceID string
-		if err := f.db.QueryRowContext(ctx, `SELECT type,aggregate_type,payload->>'resource_id',payload->>'instance_id' FROM public.event_log WHERE idempotency_key=$1`, "capacity-mutation/"+g.GrantID).Scan(&eventType, &aggregateType, &resourceID, &instanceID); err != nil || eventType != "fixture.server.ensured" || aggregateType != "fixture_server" || resourceID != proof.ResourceID || instanceID != f.binding.IntegrationInstanceID {
-			t.Fatal("canonical native event", eventType, resourceID, err)
-		}
-		if err := f.db.QueryRowContext(ctx, `SELECT count(*) FROM public.event_log WHERE idempotency_key=$1`, "capacity-mutation/"+g.GrantID).Scan(&auditCount); err != nil || auditCount != 1 {
-			t.Fatal("duplicate confirmation event", auditCount, err)
-		}
+		assertGenericCapacityMutationEvent(t)
 	})
 	t.Run("historical_recovery_confirms_after_pause", func(t *testing.T) {
 		f := mutationPostgresFixture(t, true)

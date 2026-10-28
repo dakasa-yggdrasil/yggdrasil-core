@@ -326,6 +326,7 @@ jobs:
           git clone --quiet --no-hardlinks -- "$GITHUB_WORKSPACE" "$capacity_source_dir/clean"
           test "$(git -C "$capacity_source_dir/clean" rev-parse HEAD)" = "$(git rev-parse HEAD)"
           python3 "$capacity_source_dir/clean/scripts/ci/capacity_fixture_source_equivalence.py" --source "$GITHUB_WORKSPACE" --clone "$capacity_source_dir/clean" --go "$(command -v go)" --package ./controllers/httpapi
+          python3 "$capacity_source_dir/clean/scripts/ci/capacity_fixture_source_equivalence.py" --source "$GITHUB_WORKSPACE" --clone "$capacity_source_dir/clean" --go "$(command -v go)" --package ./repository
           core_pg_case_dir="$RUNNER_TEMP/capacity-postgres-original/capacity"
           capacity_owner_registry="$(mktemp -d /tmp/dk-reg-XXXXXXXX)"
           export CAPACITY_TEST_OWNER_ROOT="$capacity_owner_registry"

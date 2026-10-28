@@ -39,11 +39,15 @@ func prepareSynthetic(ctx context.Context, db *sql.DB, source string) (request, 
 }
 
 func prepareSyntheticWithBaseline(ctx context.Context, db *sql.DB, source string, floor, units, maxSlots int) (request, error) {
+	return prepareSyntheticWithLimits(ctx, db, source, floor, units, maxSlots, 1, 300)
+}
+
+func prepareSyntheticWithLimits(ctx context.Context, db *sql.DB, source string, floor, units, maxSlots, step, leaseSeconds int) (request, error) {
 	var req request
 	if source == "" || source != capacity.CurrentGuestCoreSource() {
 		return req, errors.New("actual clean source required")
 	}
-	if floor < 1 || units < 0 || units >= maxSlots || floor > maxSlots || maxSlots > 20 {
+	if floor < 1 || units < 0 || units >= maxSlots || floor > maxSlots || maxSlots > 20 || step < 1 || step > 2 || leaseSeconds < 120 || leaseSeconds > 300 {
 		return req, errors.New("synthetic baseline outside bounded fixture scope")
 	}
 	ns := "ci-synthetic-" + uuid.NewString()[:8]
@@ -121,7 +125,7 @@ func prepareSyntheticWithBaseline(ctx context.Context, db *sql.DB, source string
 		return req, e
 	}
 	now := time.Now().UTC()
-	p := model.CapacityPolicySpec{Environment: "qualification", Domain: "infrastructure", Dimension: "native_echo", TargetIdentity: "synthetic:" + ns, Owner: "synthetic-native", Workflow: model.ManifestSelector{Namespace: ns, Name: wf.Metadata.Name}, Currency: "USD", Floor: floor, Ceiling: maxSlots, Step: 1, MaxEvidenceAgeSeconds: 30, MaxSampleGapSeconds: 5, MinSamples: 1, DownHoldSeconds: 1, LeaseSeconds: 300, ExecutionEnabled: true, Signals: []model.CapacitySignalRule{{Name: "qualification-demand", SourceIdentity: "source-controlled-native-fixture-demand", Unit: "ratio", UpAbove: .8, DownBelow: .3}}, Profiles: []model.CapacityProfile{{Name: profile.Profile, Provider: "native-qemu", Region: "synthetic", MinUnits: floor, MaxUnits: maxSlots, QuoteValidUntil: now.Add(time.Hour), ValidationValidUntil: now.Add(time.Hour), ValidationRef: "synthetic-only:no-native-guest"}}, MutationBindings: []model.CapacityMutationBinding{b}, GuestRetirementBinding: &binding}
+	p := model.CapacityPolicySpec{Environment: "qualification", Domain: "infrastructure", Dimension: "native_echo", TargetIdentity: "synthetic:" + ns, Owner: "synthetic-native", Workflow: model.ManifestSelector{Namespace: ns, Name: wf.Metadata.Name}, Currency: "USD", Floor: floor, Ceiling: maxSlots, Step: step, MaxEvidenceAgeSeconds: 30, MaxSampleGapSeconds: 5, MinSamples: 1, DownHoldSeconds: 1, LeaseSeconds: leaseSeconds, ExecutionEnabled: true, Signals: []model.CapacitySignalRule{{Name: "qualification-demand", SourceIdentity: "source-controlled-native-fixture-demand", Unit: "ratio", UpAbove: .8, DownBelow: .3}}, Profiles: []model.CapacityProfile{{Name: profile.Profile, Provider: "native-qemu", Region: "synthetic", MinUnits: floor, MaxUnits: maxSlots, QuoteValidUntil: now.Add(time.Hour), ValidationValidUntil: now.Add(time.Hour), ValidationRef: "synthetic-only:no-native-guest"}}, MutationBindings: []model.CapacityMutationBinding{b}, GuestRetirementBinding: &binding}
 	if e = manifest.ValidateCapacityPolicySpec(p); e != nil {
 		return req, fmt.Errorf("synthetic policy validation: %w", e)
 	}
@@ -163,7 +167,7 @@ func prepareSyntheticWithBaseline(ctx context.Context, db *sql.DB, source string
 
 // seedAndRun uses only a source root and a disposable database chosen by the
 // surrounding test owner. It deliberately refuses a dirty binary or checkout.
-func seedAndRun() error {
+func seedAndRun(repositoryScenario bool) error {
 	var input struct {
 		SourceRoot string `json:"source_root"`
 	}
@@ -195,23 +199,70 @@ func seedAndRun() error {
 	if err = checkOwnedPostgres(ctx, db, database, os.Getenv("CAPACITY_TEST_SOCKET_DIR")); err != nil {
 		return err
 	}
-	request, err := prepareSynthetic(ctx, db, source)
+	var request request
+	if repositoryScenario {
+		request, err = prepareSyntheticWithLimits(ctx, db, source, 2, 4, 20, 2, 120)
+	} else {
+		request, err = prepareSynthetic(ctx, db, source)
+	}
 	if err != nil {
 		return err
 	}
 	request.SourceRoot = input.SourceRoot
+	var baselineUnits, floor, registered int
+	if repositoryScenario {
+		policy, readErr := repository.GetManifestByID(ctx, db, request.PolicyID)
+		if readErr != nil {
+			return readErr
+		}
+		var spec model.CapacityPolicySpec
+		if json.Unmarshal(policy.Spec, &spec) != nil {
+			return errors.New("repository synthetic policy invalid")
+		}
+		current, readErr := (repository.CapacityStore{DB: db}).Observe(ctx, policy)
+		if readErr != nil {
+			return readErr
+		}
+		if readErr = db.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_resource_slots WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, policy.Metadata.Namespace, spec.Environment, spec.Domain, spec.Dimension).Scan(&registered); readErr != nil {
+			return readErr
+		}
+		baselineUnits, floor = current.BaselineSnapshot.Units, spec.Floor
+		if floor != 2 || baselineUnits != 4 || registered != 4 || request.Slot != 5 || spec.Step != 2 || spec.LeaseSeconds != 120 || spec.Ceiling != 20 {
+			return errors.New("repository synthetic baseline mismatch")
+		}
+	}
 	result, err := run(ctx, db, request, source)
 	if err != nil {
 		return err
 	}
-	if err = syntheticSettlementScope(ctx, db, source); err != nil {
+	if repositoryScenario {
+		result.Floor, result.BaselineUnits, result.RegisteredBaseline = floor, baselineUnits, registered
+	}
+
+	if err = syntheticSettlementScope(ctx, db, source, repositoryScenario); err != nil {
 		return fmt.Errorf("synthetic settlement scope: %w", err)
 	}
 	result.SettlementScopePrivacyPassed = true
-	httpPassed, err := syntheticHTTPCallbacks(ctx, db, source)
-	if err != nil {
-		return fmt.Errorf("synthetic HTTP callbacks: %w", err)
+	if repositoryScenario {
+		if err = repositoryLostReply(ctx, db, source); err != nil {
+			return fmt.Errorf("repository replay: %w", err)
+		}
+		result.RepositoryLostReply = true
+		if err = repositoryUnresolved(ctx, db, source); err != nil {
+			return fmt.Errorf("repository unresolved: %w", err)
+		}
+		result.RepositoryUnresolved = true
+		if err = repositoryNativeConfirmation(ctx, db, source); err != nil {
+			return fmt.Errorf("repository confirmation: %w", err)
+		}
+		result.RepositoryNativeConfirmation = true
 	}
-	result.SyntheticHTTPCallbacksPassed = httpPassed
+	if !repositoryScenario {
+		httpPassed, httpErr := syntheticHTTPCallbacks(ctx, db, source)
+		if httpErr != nil {
+			return fmt.Errorf("synthetic HTTP callbacks: %w", httpErr)
+		}
+		result.SyntheticHTTPCallbacksPassed = httpPassed
+	}
 	return json.NewEncoder(os.Stdout).Encode(result)
 }
