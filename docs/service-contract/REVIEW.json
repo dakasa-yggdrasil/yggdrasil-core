@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "dbbf1dd3b47b340b0deb4f89a2e258b2953dd0d5ce5b8b82f755f8e6a2ebf9f1",
+  "source_inventory_sha256": "e8ee4c5f92a62a0cb6e83528c43d6cac087caff7efd97cdafc3b327301794887",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -727,6 +727,11 @@
   "snapshot_projection_review_20261028": {
     "scope": "The snapshot return join uses the original challenge id. A PostgreSQL regression executes the same query against the migrated schema and transaction-local records; native and final Linux execution remain required.",
     "source_inventory_sha256": "dbbf1dd3b47b340b0deb4f89a2e258b2953dd0d5ce5b8b82f755f8e6a2ebf9f1",
+    "production_or_native_qualification": false
+  },
+  "readoption_creator_review_20261028": {
+    "scope": "Original native readoption export retains the creator digest only for the same creator object. Prior export HOLD remains historical; exact-source Linux and native validation are required.",
+    "source_inventory_sha256": "e8ee4c5f92a62a0cb6e83528c43d6cac087caff7efd97cdafc3b327301794887",
     "production_or_native_qualification": false
   }
 }
