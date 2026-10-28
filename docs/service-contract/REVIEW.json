@@ -738,5 +738,12 @@
     "scope": "Qualification-only wait after the original snapshot reservation and before the single GET; no deadline or validation changes. Cancellation during the wait leaves a reserved read without return and remains HOLD. The 100ms interval does not establish general clock synchronization; Linux and native testing remain required.",
     "source_inventory_sha256": "f1f5bf1fc55bfbf67c4f236cde13ac0b29d5b7d1cc8d60738ecfcac70075ce65",
     "production_or_native_qualification": false
+  },
+  "capacity_pg_gate_timeout_change_20261028": {
+    "scope": "The main capacity PostgreSQL Go test command uses a six-minute per-package watchdog in place of five minutes. All test selectors, internal owner and cleanup deadlines, cleanup registry, and failure census are unchanged.",
+    "evidence": "A prior 4-CPU LAB execution reached the floor child with approximately 161.46 seconds remaining while its unchanged safety gate requires at least 165 seconds. That execution failed; no success is attributed to this change.",
+    "source_code_commit": "18e00f2",
+    "source_inventory_sha256": "f1f5bf1fc55bfbf67c4f236cde13ac0b29d5b7d1cc8d60738ecfcac70075ce65",
+    "full_gate_or_production_qualification": false
   }
 }
