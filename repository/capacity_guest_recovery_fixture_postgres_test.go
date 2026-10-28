@@ -1059,3 +1059,5 @@ func syntheticRetirement(t *testing.T, ctx context.Context, db *sql.DB, store Ca
 	}
 	return i.RequestID
 }
+
+func syntheticFailedFloorIfEnabled(*testing.T) bool { return false }

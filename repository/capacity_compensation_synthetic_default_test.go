@@ -25,3 +25,9 @@ func syntheticCompensationIfEnabled(t *testing.T, protected, lost bool) bool {
 	}
 	return true
 }
+
+// The below-floor original node owns a distinct signed synthetic test process.
+func syntheticFailedFloorIfEnabled(t *testing.T) bool {
+	runSyntheticRepositoryGate(t, "TestSyntheticFailedFloorRecoveryPostgres", "")
+	return true
+}
