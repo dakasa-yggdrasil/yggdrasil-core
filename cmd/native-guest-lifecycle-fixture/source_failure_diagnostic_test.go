@@ -48,3 +48,37 @@ func TestSourceFailureHTTPDiagnosticClosed(t *testing.T) {
 		t.Fatal("success classified as failure")
 	}
 }
+
+func TestSourceFailureHTTPHistoryLastAndNoCall(t *testing.T) {
+	var history sourceFailureHTTPHistory
+	if history.calls != 0 || history.lastClass() != "no_call" {
+		t.Fatal("missing no-call timeout classification")
+	}
+	for _, c := range []struct {
+		r    capacity.GuestOriginalHTTPReturn
+		want string
+	}{
+		{capacity.GuestOriginalHTTPReturn{Status: 409, ResponseBodyScope: capacity.GuestOriginalBodyCompleteRead}, "http_409_complete"},
+		{capacity.GuestOriginalHTTPReturn{DoFailed: true}, "http_transport"},
+		{capacity.GuestOriginalHTTPReturn{OriginalContextFailed: true, DoFailed: true}, "http_context"},
+	} {
+		if got := history.observe(c.r, errors.New("private material")); got != c.want || history.lastClass() != c.want {
+			t.Fatal("last original return lost", c.want)
+		}
+	}
+	if history.calls != 3 || history.lastClass() != "http_context" {
+		t.Fatal("wrong original attempt count or final classification")
+	}
+	var unclassified sourceFailureHTTPHistory
+	unclassified.observe(capacity.GuestOriginalHTTPReturn{}, nil)
+	if unclassified.calls != 1 || unclassified.lastClass() != "unclassified" {
+		t.Fatal("unclassified original return was invented")
+	}
+	// The diagnostic must never output arbitrary input as a classification.
+	for _, bad := range []string{"private material", "timeout", "http_private"} {
+		unclassified.last = bad
+		if unclassified.lastClass() != "unclassified" {
+			t.Fatal("arbitrary last stage admitted")
+		}
+	}
+}

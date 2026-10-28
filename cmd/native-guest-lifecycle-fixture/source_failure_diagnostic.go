@@ -6,6 +6,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"log"
 	"net/http"
+	"strings"
 )
 
 // Emits a fixed classification only, never a body, key, identity or error.
@@ -57,4 +58,36 @@ func sourceFailureHTTPStage(r capacity.GuestOriginalHTTPReturn, cause error) str
 	default:
 		return "http_other"
 	}
+}
+
+// The history records only classifications of actual completed calls. It is
+// private to one source owner and never holds a response, error or identity.
+type sourceFailureHTTPHistory struct {
+	calls uint64
+	last  string
+}
+
+func (h *sourceFailureHTTPHistory) observe(r capacity.GuestOriginalHTTPReturn, cause error) string {
+	if h.calls < ^uint64(0) {
+		h.calls++
+	}
+	stage := sourceFailureHTTPStage(r, cause)
+	h.last = stage
+	return stage
+}
+
+func (h sourceFailureHTTPHistory) lastClass() string {
+	if h.calls == 0 {
+		return "no_call"
+	}
+	if !strings.HasPrefix(h.last, "http_") || sourceFailureDiagnosticStage(h.last) != h.last {
+		return "unclassified"
+	}
+	return h.last
+}
+
+// Keep the existing timeout label and add one closed summary in the same log
+// write, after the original context is done; no retry or deadline is changed.
+func sourceFailureHTTPTimeoutDiagnostic(h sourceFailureHTTPHistory) {
+	log.Printf("canonical_source_failure_diagnostic_v1 stage=timeout\ncanonical_source_failure_http_last_v1 attempts=%d last_class=%s", h.calls, h.lastClass())
 }

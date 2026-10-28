@@ -51,10 +51,12 @@ func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context,
 		defer client.Close()
 		seenTransport, seenPending := false, false
 		seenHTTPStages := map[string]bool{}
+		var httpHistory sourceFailureHTTPHistory
 		for {
 			read, cancel := context.WithTimeout(ctx, 5*time.Second)
 			returned, callErr := client.Original(read, http.MethodGet, "/v1/qualification-source-refusal", []byte("{}"))
 			cancel()
+			stage := httpHistory.observe(returned, callErr)
 			if callErr == nil && returned.Status == 200 {
 				var failed q.QualificationFailureRecord
 				if capacity.GuestOriginalHTTPDecode(returned, &failed) != nil {
@@ -77,7 +79,6 @@ func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context,
 				break
 			}
 			if callErr != nil {
-				stage := sourceFailureHTTPStage(returned, callErr)
 				if stage != "" && !seenHTTPStages[stage] {
 					sourceFailureDiagnostic(stage)
 					seenHTTPStages[stage] = true
@@ -93,7 +94,7 @@ func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context,
 			}
 			if ctx.Err() != nil || (callErr == nil && returned.Status != 409) {
 				if ctx.Err() != nil {
-					sourceFailureDiagnostic("timeout")
+					sourceFailureHTTPTimeoutDiagnostic(httpHistory)
 				} else {
 					sourceFailureDiagnostic("http_unexpected")
 				}
@@ -101,7 +102,7 @@ func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context,
 			}
 			select {
 			case <-ctx.Done():
-				sourceFailureDiagnostic("timeout")
+				sourceFailureHTTPTimeoutDiagnostic(httpHistory)
 				return q.ErrOriginalUnknown
 			case <-time.After(20 * time.Millisecond):
 			}
