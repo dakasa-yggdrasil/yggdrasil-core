@@ -135,5 +135,9 @@ func TestSyntheticFailedFloorRecoveryPostgres(t *testing.T) {
 	if f.intent.Decision.Reason != "protected_floor_recovery" || f.intent.Decision.Units != 3 || f.intent.BaselineSnapshot.Units != 2 {
 		t.Fatal("fixture did not admit exact floor repair", f.intent.Decision)
 	}
-	f.issue(t, 3)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	if _, err := f.store.IssueMutation(ctx, f.policy, f.intent.Generation, f.intent.FencingToken, f.intent.LeaseOwner, f.plans[3]); err != nil {
+		t.Fatal(err)
+	}
 }
