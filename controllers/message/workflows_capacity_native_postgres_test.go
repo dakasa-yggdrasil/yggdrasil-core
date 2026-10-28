@@ -1060,7 +1060,8 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 		db.Close()
 	})
 	iid, tid := uuid.New(), uuid.New()
-	seed := capacityNativeFixture(t, map[string]any{"mode": "seed", "instance_id": iid.String(), "type_id": tid.String()})
+	seedInput := nativeWorkflowFixtureSeed(t, map[string]any{"mode": "seed", "instance_id": iid.String(), "type_id": tid.String()})
+	seed := capacityNativeFixture(t, seedInput)
 	var typeSpec model.IntegrationTypeManifestSpec
 	var describe model.AdapterDescribeResponse
 	seedRaw, _ := json.Marshal(seed["describe"])
@@ -1148,9 +1149,9 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 	if err = json.Unmarshal(raw, &slots); err != nil || len(slots) != 4 {
 		t.Fatal("native approved projections absent", err)
 	}
-	b := model.CapacityMutationBinding{Name: "native-vm", IntegrationInstanceID: iid.String(), IntegrationChecksum: instance.Checksum, IntegrationTypeID: tid.String(), IntegrationTypeChecksum: ty.Checksum, AdapterPrincipalID: "fleet-adapter", ScopeChecksum: slots[0].DesiredSpec.ScopeChecksum, ProfileName: "workers", EnsureCapability: "ensure_server", DestroyCapability: "destroy_server", ProtectedSlots: 1, MaxSlots: 4, Slots: slots}
+	b := model.CapacityMutationBinding{Name: "native-vm", IntegrationInstanceID: iid.String(), IntegrationChecksum: instance.Checksum, IntegrationTypeID: tid.String(), IntegrationTypeChecksum: ty.Checksum, AdapterPrincipalID: "fleet-adapter", ScopeChecksum: slots[0].DesiredSpec.ScopeChecksum, ProfileName: slots[0].DesiredSpec.ProfileName, EnsureCapability: "ensure_server", DestroyCapability: "destroy_server", ProtectedSlots: 1, MaxSlots: 4, Slots: slots}
 	now := time.Now().UTC()
-	p := model.CapacityPolicySpec{Environment: "production", Domain: "vm-workers", Dimension: "nodes", TargetIdentity: "fleet/native-vm", Owner: "capacity-native", Workflow: model.ManifestSelector{Namespace: ns, Name: wf.Metadata.Name}, Currency: "EUR", Floor: 1, Ceiling: 4, Step: 2, MaxEvidenceAgeSeconds: 60, MaxSampleGapSeconds: 30, MinSamples: 3, DownHoldSeconds: 60, LeaseSeconds: 120, ExecutionEnabled: true, Signals: []model.CapacitySignalRule{{Name: "load", SourceIdentity: "prom/queue", Unit: "ratio", UpAbove: .8, DownBelow: .3}}, Profiles: []model.CapacityProfile{{Name: "workers", Provider: "hetzner", Region: "nbg1", MinUnits: 1, MaxUnits: 4, UnitMonthlyCostMinor: 100, QuoteValidUntil: now.Add(time.Hour), ValidationValidUntil: now.Add(time.Hour), ValidationRef: "fixture:capacity-qualification-is-separate"}}, MutationBindings: []model.CapacityMutationBinding{b}}
+	p := model.CapacityPolicySpec{Environment: "production", Domain: "vm-workers", Dimension: "nodes", TargetIdentity: "fleet/native-vm", Owner: "capacity-native", Workflow: model.ManifestSelector{Namespace: ns, Name: wf.Metadata.Name}, Currency: "EUR", Floor: 1, Ceiling: 4, Step: 2, MaxEvidenceAgeSeconds: 60, MaxSampleGapSeconds: 30, MinSamples: 3, DownHoldSeconds: 60, LeaseSeconds: 120, ExecutionEnabled: true, Signals: []model.CapacitySignalRule{{Name: "load", SourceIdentity: "prom/queue", Unit: "ratio", UpAbove: .8, DownBelow: .3}}, Profiles: []model.CapacityProfile{{Name: b.ProfileName, Provider: "hetzner", Region: "nbg1", MinUnits: 1, MaxUnits: 4, UnitMonthlyCostMinor: 100, QuoteValidUntil: now.Add(time.Hour), ValidationValidUntil: now.Add(time.Hour), ValidationRef: "fixture:capacity-qualification-is-separate"}}, MutationBindings: []model.CapacityMutationBinding{b}}
 	p, b = nativeWorkflowFixturePolicy(t, p, b, slots)
 	policy := create(uuid.New(), "capacity_policy", "workers", p)
 	executor, _ := ctx.Value(capacityInvocationKey{}).(string)

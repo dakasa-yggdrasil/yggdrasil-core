@@ -17,6 +17,7 @@ import (
 
 type coreNativeFixtureInput struct {
 	Mode            string                                    `json:"mode"`
+	Profile         string                                    `json:"profile"`
 	InstanceID      string                                    `json:"instance_id"`
 	TypeID          string                                    `json:"type_id"`
 	Request         protocol.AdapterExecuteIntegrationRequest `json:"request"`
@@ -84,6 +85,18 @@ func TestCapacityCoreNativeFixtureProducer(t *testing.T) {
 	}
 	if in.Mode == "seed" {
 		req := fixtureRequest(t, OperationEnsureServer)
+		if in.Profile != "" {
+			if in.Profile != "notify-hetzner-elastic" {
+				t.Fatal("unsupported synthetic profile")
+			}
+			fleet, ok := req.Integration.InstanceSpec.Config["fleet"].(protocol.FleetConfig)
+			if !ok || len(fleet.Profiles) != 1 {
+				t.Fatal("one source fixture profile required")
+			}
+			fleet.Profiles[0].Name = in.Profile
+			req.Integration.InstanceSpec.Config["fleet"] = fleet
+			req.Input["profile"] = in.Profile
+		}
 		req.Integration.Instance.ID = uuid.MustParse(in.InstanceID)
 		req.Integration.Type.ID = uuid.MustParse(in.TypeID)
 		slots := []map[string]any{}

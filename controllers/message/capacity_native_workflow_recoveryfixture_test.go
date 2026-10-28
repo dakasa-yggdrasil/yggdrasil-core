@@ -156,3 +156,11 @@ func nativeWorkflowFixtureContext(t *testing.T, parent context.Context) context.
 	t.Cleanup(cancel)
 	return ctx
 }
+
+func nativeWorkflowFixtureSeed(t *testing.T, input map[string]any) map[string]any {
+	t.Helper()
+	if os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") == "true" {
+		input["profile"] = "notify-hetzner-elastic"
+	}
+	return input
+}
