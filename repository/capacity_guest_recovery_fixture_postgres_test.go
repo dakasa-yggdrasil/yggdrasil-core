@@ -853,8 +853,8 @@ func runSyntheticCompensation(t *testing.T, protected bool) {
 		t.Fatal("missing parent identity", e)
 	}
 	permit, e := issuer.RedeemMutation(ctx, mutation.AdapterPrincipalID, childRedeem)
-	if e != nil || permit.Mode != "write_once" {
-		t.Fatal("child redeem", permit, e)
+	if e != nil || permit.Mode != "write_once" || permit.CompensationOf != grant.GrantID {
+		t.Fatal("child redeem lost parent identity", permit, e)
 	}
 	again, e := issuer.RedeemMutation(ctx, mutation.AdapterPrincipalID, childRedeem)
 	if e != nil || again.Mode != "read_only" {
