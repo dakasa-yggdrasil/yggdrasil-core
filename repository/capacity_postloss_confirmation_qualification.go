@@ -173,3 +173,51 @@ func (s CapacityStore) VerifyCanonicalPostlossConfirmed(ctx context.Context, pol
 		return nil
 	})
 }
+
+// VerifyCanonicalPostlossPending checks the still-uncertain source create and
+// exact independently observed proof without authorizing confirmation or cleanup.
+func (s CapacityStore) VerifyCanonicalPostlossPending(ctx context.Context, policy model.Manifest, p model.CapacityPolicySpec, nativeCase string, grant model.CapacityMutationGrant, proof model.CapacityMutationProof) error {
+	if !canonicalPostlossCase(nativeCase) || grant.Slot != capacity.GuestPostlossQualificationSlot(nativeCase) || grant.GrantID == "" || proof.GrantID != grant.GrantID {
+		return ErrCapacityConflict
+	}
+	var preID string
+	if err := s.DB.QueryRowContext(ctx, `SELECT id::text FROM public.capacity_vm_provisioning_preregistrations WHERE create_grant_id=$1`, grant.GrantID).Scan(&preID); err != nil {
+		return err
+	}
+	return s.guestStoredTransaction(ctx, preID, func(tx *sql.Tx, stored guestOriginalStored, now time.Time) error {
+		return s.verifyCanonicalPostlossPendingTx(ctx, tx, stored, policy, p, nativeCase, grant, proof, now)
+	})
+}
+
+// Shared by the owning verifier and explicit isolated PostgreSQL tests.
+func (s CapacityStore) verifyCanonicalPostlossPendingTx(ctx context.Context, tx *sql.Tx, stored guestOriginalStored, policy model.Manifest, p model.CapacityPolicySpec, nativeCase string, grant model.CapacityMutationGrant, proof model.CapacityMutationProof, now time.Time) error {
+	if s.ExecutorID != stored.pre.ExecutorID {
+		return ErrCapacityConflict
+	}
+	if _, _, err := s.guestCurrentTx(ctx, tx, stored, now, true); err != nil {
+		return err
+	}
+	var raw []byte
+	var parent capacityMutationRecord
+	if stored.pre.OriginalCreateGrantID != grant.GrantID || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.Slot != grant.Slot || tx.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1 FOR SHARE`, grant.GrantID).Scan(&raw) != nil || json.Unmarshal(raw, &parent) != nil || parent.Grant.State != "settled" || parent.Grant.GrantID != grant.GrantID || parent.PolicyID != policy.ID || parent.PolicyChecksum != policy.Checksum || parent.WorkflowID != s.WorkflowID || parent.Proof != nil {
+		return ErrCapacityConflict
+	}
+	settlement := parent.Settlement
+	if settlement == nil || settlement.Outcome != "uncertain" || !settlement.TransportCompleted || settlement.ResourceID != "" || settlement.ResourceCreatedAt != "" || settlement.ActionID != "" || len(settlement.NextActionIDs) != 0 || len(settlement.AuxiliaryResources) != 0 || settlement.AuxiliaryInventoryComplete || settlement.OriginalProviderCreateReturn != nil || settlement.OriginalProviderDestroyReturn != nil {
+		return ErrCapacityConflict
+	}
+	expectedGrant := grant
+	expectedGrant.State = parent.Grant.State
+	if capacity.GuestRetirementSHA(expectedGrant) != capacity.GuestRetirementSHA(parent.Grant) {
+		return ErrCapacityConflict
+	}
+	if loadGuestWitnessTx(ctx, tx, &stored) != nil || stored.witness.SourceObservation == nil || stored.witness.SourceObservation.Case != nativeCase || !s.canonicalPostlossConfirmationTx(ctx, tx, policy, p, parent, proof, now) {
+		return ErrCapacityConflict
+	}
+	var events, members, failedSlotMembers int
+	// Match the stricter source cleanup census across the whole namespace.
+	if tx.QueryRowContext(ctx, `SELECT count(*) FROM public.event_log WHERE idempotency_key=$1`, "capacity-mutation/"+grant.GrantID).Scan(&events) != nil || tx.QueryRowContext(ctx, `SELECT count(*) FILTER (WHERE resource_id<>''),count(*) FILTER (WHERE slot=$2 AND resource_id<>'') FROM public.capacity_resource_slots WHERE namespace=$1`, policy.Metadata.Namespace, grant.Slot).Scan(&members, &failedSlotMembers) != nil || events != 0 || members != 1 || failedSlotMembers != 0 {
+		return ErrCapacityConflict
+	}
+	return nil
+}

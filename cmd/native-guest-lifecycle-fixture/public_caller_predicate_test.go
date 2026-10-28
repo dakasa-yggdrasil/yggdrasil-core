@@ -22,6 +22,7 @@ func TestOriginalPublicClosedRefusalPredicates(t *testing.T) {
 		"original-canonical-floor-permission-gate",
 		"original-source-historical-confirm",
 		"original-source-historical-output",
+		"original-source-postloss-pending",
 		"original-source-live-partial",
 		"original-source-live-partial-output",
 		"original-source-terminal",

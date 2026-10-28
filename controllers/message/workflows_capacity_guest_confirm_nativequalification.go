@@ -23,3 +23,29 @@ func guestOriginalSourceConfirmationProof(ctx context.Context, store repository.
 		return store.RecordCanonicalPostlossConfirmation(read, pre.PreregistrationID, confirmed, wire)
 	})
 }
+
+// Only the fixed postloss failure slot remains pending: the baseline and all
+// ordinary source/production paths retain their existing confirmation.
+func guestOriginalSourcePendingPostloss(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, input guestOriginalStepInput, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, proof model.CapacityMutationProof) (bool, error) {
+	if originalGuestNativeRealm == nil {
+		return false, errOriginalGuestStep
+	}
+	nativeCase := originalGuestNativeRealm.Request.NativeCase
+	if !capacitynativeqemu.PostlossSourceCase(nativeCase) || input.Slot != capacitynativeqemu.SourceFailureSlot(nativeCase) {
+		return false, nil
+	}
+	if input.Slot != grant.Slot || grant.Slot != pre.Slot || pre.OriginalCreateGrantID != grant.GrantID || pre.Generation != input.Generation || pre.Fence != input.FencingToken || pre.LeaseOwner != input.LeaseOwner || pre.ExecutorID != store.ExecutorID || ctx.Err() != nil {
+		return true, errOriginalGuestStep
+	}
+	if err := store.VerifyCanonicalPostlossPending(ctx, policy, p, nativeCase, grant, proof); err != nil {
+		return true, err
+	}
+	return true, nil
+}
+
+func guestOriginalSourcePendingEnrollment(ctx context.Context, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, receipt model.CapacityGuestOriginalProvisioningReceipt) error {
+	if originalGuestNativeRealm == nil {
+		return errOriginalGuestStep
+	}
+	return originalGuestNativeRealm.EnrolledPending(ctx, grant, pre, receipt)
+}

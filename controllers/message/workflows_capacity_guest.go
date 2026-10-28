@@ -397,24 +397,35 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 			result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
 			return result
 		}
-		guestConfirmProof := confirmProof
-		if hostRealm == nil {
-			if confirmProof, err = guestPG17BeforeConfirm(original, store, policy, workflowRef, b, parsed, grant, confirmProof); err != nil {
-				return fail(guestPG17ConfirmFailurePredicate(err))
+		pendingPostloss, pendingErr := guestOriginalSourcePendingPostloss(original, store, policy, p, parsed, grant, pre, confirmProof)
+		if pendingErr != nil {
+			return fail("original-source-postloss-pending")
+		}
+		if !pendingPostloss {
+			guestConfirmProof := confirmProof
+			if hostRealm == nil {
+				if confirmProof, err = guestPG17BeforeConfirm(original, store, policy, workflowRef, b, parsed, grant, confirmProof); err != nil {
+					return fail(guestPG17ConfirmFailurePredicate(err))
+				}
+			}
+			if _, err = store.ConfirmMutation(original, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, confirmProof); err != nil {
+				return fail("original-guest-step-30")
+			}
+			if err = guestOriginalSourceAssertApply(original, store, policy, parsed, confirmProof, grant); err != nil {
+				return fail("original-guest-step-42")
+			}
+			if hostRealm == nil {
+				if err = guestPG17AfterConfirm(original, store, policy, p, b, parsed, grant, confirmProof, guestConfirmProof); err != nil {
+					return fail("pg17-original-confirm-assertions")
+				}
 			}
 		}
-		if _, err = store.ConfirmMutation(original, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, confirmProof); err != nil {
-			return fail("original-guest-step-30")
+		if pendingPostloss {
+			err = guestOriginalSourcePendingEnrollment(original, grant, pre, receipt)
+		} else {
+			err = guestOriginalSourceEnrolled(original, grant, pre, receipt)
 		}
-		if err = guestOriginalSourceAssertApply(original, store, policy, parsed, confirmProof, grant); err != nil {
-			return fail("original-guest-step-42")
-		}
-		if hostRealm == nil {
-			if err = guestPG17AfterConfirm(original, store, policy, p, b, parsed, grant, confirmProof, guestConfirmProof); err != nil {
-				return fail("pg17-original-confirm-assertions")
-			}
-		}
-		if err = guestOriginalSourceEnrolled(original, grant, pre, receipt); err != nil {
+		if err != nil {
 			return fail("original-guest-step-31")
 		}
 		if recoveredOutput, handled, recoveryErr := guestOriginalSourceLivePartial(original, store, policy, p, b, parsed, key, step, grant, pre); handled {

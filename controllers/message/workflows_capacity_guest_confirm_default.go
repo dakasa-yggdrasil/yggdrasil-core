@@ -19,3 +19,12 @@ func guestOriginalSourceConfirmationProof(ctx context.Context, store repository.
 	}
 	return source.owner.Read(ctx, g)
 }
+
+// Default/production execution always keeps the existing confirmation path.
+func guestOriginalSourcePendingPostloss(context.Context, repository.CapacityStore, model.Manifest, model.CapacityPolicySpec, guestOriginalStepInput, model.CapacityMutationGrant, model.CapacityGuestOriginalProvisioningPreregistration, model.CapacityMutationProof) (bool, error) {
+	return false, nil
+}
+
+func guestOriginalSourcePendingEnrollment(context.Context, model.CapacityMutationGrant, model.CapacityGuestOriginalProvisioningPreregistration, model.CapacityGuestOriginalProvisioningReceipt) error {
+	return errOriginalGuestStep
+}

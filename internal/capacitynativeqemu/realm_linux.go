@@ -549,6 +549,18 @@ func (r *Realm) publicSerial(slot int) string {
 }
 
 func (r *Realm) Enrolled(ctx context.Context, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, receipt model.CapacityGuestOriginalProvisioningReceipt) error {
+	return r.recordEnrollment(ctx, grant, pre, receipt, false)
+}
+
+// EnrolledPending is called only after the source-only pending verifier; it is
+// not a confirmation, capacity claim, or cleanup authority.
+func (r *Realm) EnrolledPending(ctx context.Context, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, receipt model.CapacityGuestOriginalProvisioningReceipt) error {
+	if !PostlossSourceCase(r.Request.NativeCase) || grant.Slot != SourceFailureSlot(r.Request.NativeCase) {
+		return ErrOriginalUnknown
+	}
+	return r.recordEnrollment(ctx, grant, pre, receipt, true)
+}
+func (r *Realm) recordEnrollment(ctx context.Context, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, receipt model.CapacityGuestOriginalProvisioningReceipt, pending bool) error {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.preregistrations[grant.Slot] != pre || receipt.PreregistrationID != pre.PreregistrationID {
@@ -556,8 +568,24 @@ func (r *Realm) Enrolled(ctx context.Context, grant model.CapacityMutationGrant,
 	}
 	r.enrollments[grant.Slot] = receipt
 	stage := Stage{FixtureSchema, "original-enrollment-recorded.json", grant.Slot, capacity.CurrentGuestCoreSource(), r.Request.SourceCommit, pre.OriginalDeadline, time.Now().UTC(), capacity.GuestRetirementSHA(receipt)}
+	if pending {
+		stage.Stage = "original-enrollment-pending-confirmation.json"
+		_, err := Publish(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, grant.Slot), stage.Stage), pendingEnrollmentStage(stage, receipt))
+		return err
+	}
 	_, err := Publish(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, grant.Slot), stage.Stage), stage)
 	return err
+}
+
+// The pending marker retains distinct hashes of the complete receipt and its
+// signed enrollment. It does not claim confirmation or authority to reclaim.
+type PendingEnrollmentStage struct {
+	Stage
+	EnrollmentSHA256 string `json:"enrollment_sha256"`
+}
+
+func pendingEnrollmentStage(stage Stage, receipt model.CapacityGuestOriginalProvisioningReceipt) PendingEnrollmentStage {
+	return PendingEnrollmentStage{Stage: stage, EnrollmentSHA256: capacity.GuestRetirementSHA(receipt.Enrollment)}
 }
 
 func (r *Realm) Witnessed(ctx context.Context, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, witness model.CapacityGuestOriginalCreateWitness) error {
