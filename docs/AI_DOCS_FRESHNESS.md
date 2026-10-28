@@ -7,11 +7,12 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 0d1ce9e46b6bcff093b56a06303a43c8c0a60685
-verified_diff_sha256: 750d33ec1931e806a67b1f31067ac452e8c30bb47bdf2064335b1d67eef37f8c
+verified_at_commit: ced8cdfd01f50eadbe480a0d840927dc051b9a5c
+verified_diff_sha256: 32ae8ce82edbd82ea4a179adc93cf12456c84a7d58a51a019029250149e33214
 reconciler_schema: 1
 verified_at: 2026-10-28
 by: Giomaster
+unique_probe_diagnostic_review: Reviewed immutable diagnostic names derived from actual challenge IDs, duplicate and invalid path refusals, and preservation of the source inventory. Linux compilation passed; integrated native CI remains required.
 image_manifest_and_subtest_review: Reviewed per-platform manifest selection from the immutable image index after a real image-store collision; synthetic selection checks reject missing and duplicate descriptors. Reviewed scoped subtest failures and Linux compilation. Actual image and native CI remain required.
 image_platform_and_native_fixture_review: Reviewed BuildKit platform inheritance, candidate-only image publication and digest promotion after architecture and source checks. Independently reviewed native confirmation fixture preserves separate Guest and native proofs and verifies conflict and replay. Actual image and native CI remain required.
 inventory_guard_and_binding_merge_review: Independently reviewed the precise inventory guard test and qualification member-binding correction, preserving both source sides. Owned PG16 execution and source census passed; full Linux gate and native provider proof remain required.
