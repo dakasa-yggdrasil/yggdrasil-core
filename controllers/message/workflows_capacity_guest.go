@@ -507,7 +507,7 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		}
 		cancelRetention()
 		if callErr != nil || floorJoinErr != nil || recordErr != nil || !persisted {
-			return fail("original-guest-step-39")
+			return fail(guestRetirementStep39Predicate(callErr != nil, floorJoinErr != nil, !decoded, loadErr != nil, !persisted, recordErr != nil))
 		}
 		output = struct {
 			RequestID           string                                   `json:"request_id"`

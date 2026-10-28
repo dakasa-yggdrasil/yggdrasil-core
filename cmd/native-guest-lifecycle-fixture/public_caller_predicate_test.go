@@ -11,6 +11,12 @@ import (
 
 func TestOriginalPublicClosedRefusalPredicates(t *testing.T) {
 	accepted := []string{
+		"original-retirement-39-http",
+		"original-retirement-39-floor",
+		"original-retirement-39-decode",
+		"original-retirement-39-load",
+		"original-retirement-39-auth",
+		"original-retirement-39-record",
 		"original-canonical-floor-next-output",
 		"original-canonical-floor-next-permission",
 		"original-canonical-floor-permission-gate",
