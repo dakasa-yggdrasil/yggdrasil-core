@@ -334,7 +334,7 @@ func guestOriginalSourceAssertApply(ctx context.Context, store repository.Capaci
 // the repository. Every rejected transaction must leave canonical state empty.
 func guestOriginalSourceAssertNativeRefusals(ctx context.Context, store repository.CapacityStore, policy model.Manifest, input guestOriginalStepInput, proof model.CapacityMutationProof, grant model.CapacityMutationGrant) error {
 	if originalGuestNativeRealm == nil || ctx.Err() != nil {
-		return errOriginalGuestStep
+		return guestRefusal43Error(0, "pre", errOriginalGuestStep)
 	}
 	canonicalEmpty := func() error {
 		var events, members int
@@ -350,11 +350,11 @@ func guestOriginalSourceAssertNativeRefusals(ctx context.Context, store reposito
 		return nil
 	}
 	if err := canonicalEmpty(); err != nil {
-		return err
+		return guestRefusal43Error(0, "initial", err)
 	}
 	names := []string{"creation_grant_missing", "creation_grant_foreign", "resource_foreign", "creation_epoch_foreign", "actions_empty", "required_action_missing", "actions_nonterminal", "actions_unsuccessful", "owner_unverified", "spec_unverified", "request_foreign"}
 	refused := make([]string, 0, len(names))
-	for _, name := range names {
+	for index, name := range names {
 		bad := proof
 		switch name {
 		case "creation_grant_missing":
@@ -394,10 +394,14 @@ func guestOriginalSourceAssertNativeRefusals(ctx context.Context, store reposito
 			}
 		}
 		if _, err := store.ConfirmMutation(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, bad); !errors.Is(err, repository.ErrCapacityConflict) {
-			return errors.Join(errOriginalGuestStep, err)
+			kind := "error"
+			if err == nil {
+				kind = "accepted"
+			}
+			return guestRefusal43Error(index+1, kind, errors.Join(errOriginalGuestStep, err))
 		}
 		if err := canonicalEmpty(); err != nil {
-			return err
+			return guestRefusal43Error(index+1, "state", err)
 		}
 		refused = append(refused, name)
 	}
@@ -413,7 +417,10 @@ func guestOriginalSourceAssertNativeRefusals(ctx context.Context, store reposito
 		CanonicalMembers    int      `json:"canonical_members"`
 	}{"original_guest_native_refusal_contract_v1", capacity.CurrentGuestCoreSource(), input.Slot, grant.GrantID, proof.ResourceID, capacity.GuestRetirementSHA(proof), refused, 0, 0}
 	_, err := capacitynativeqemu.Publish(ctx, filepath.Join(capacitynativeqemu.SlotDirectory(originalGuestNativeRealm.PrivateDirectory, input.Slot), "native-refusal-contract.json"), contract)
-	return err
+	if err != nil {
+		return guestRefusal43Error(0, "publish", err)
+	}
+	return nil
 }
 
 // Selector is the immutable owning source request, never a workflow input.

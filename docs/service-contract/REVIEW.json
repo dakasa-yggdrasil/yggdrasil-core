@@ -649,7 +649,12 @@
   "reviewer": "Root full production-source delta review; separate independent manager/dial/monitor peer; source acceptance only",
   "schema": "core_service_source_review_v1",
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "e6e919b15af44e43b6d05c4c969beca37dc2569a0c1ff4633e7ce47f3ab85e2e",
+  "refusal43_source_diagnostic_review": {
+    "scope": "Qualification-only closed refusal stage; preserves error decisions, transaction ordering, and production aggregate predicate. The peer reviewed source; Linux execution and native scenario remain required.",
+    "source_inventory_sha256": "b4bd64ab7c87699fbc555ecb07620c816d678cbee0ed2059340832f542d6b680",
+    "production_or_native_qualification": false
+  },
+  "source_inventory_sha256": "b4bd64ab7c87699fbc555ecb07620c816d678cbee0ed2059340832f542d6b680",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
