@@ -11,6 +11,12 @@ import (
 
 func TestOriginalPublicClosedRefusalPredicates(t *testing.T) {
 	accepted := []string{
+		"original-retirement-39-http",
+		"original-retirement-39-floor",
+		"original-retirement-39-decode",
+		"original-retirement-39-load",
+		"original-retirement-39-auth",
+		"original-retirement-39-record",
 		"original-canonical-floor-next-output",
 		"original-canonical-floor-next-permission",
 		"original-canonical-floor-permission-gate",
@@ -25,6 +31,8 @@ func TestOriginalPublicClosedRefusalPredicates(t *testing.T) {
 		"pg17-original-historical-assertions",
 		"pg17-original-terminal-assertions",
 		"pg17-original-workflow-confirm",
+		"pg17-confirm-native-01",
+		"pg17-confirm-check-02",
 	}
 	for _, predicate := range accepted {
 		t.Run(predicate, func(t *testing.T) {
@@ -35,7 +43,7 @@ func TestOriginalPublicClosedRefusalPredicates(t *testing.T) {
 			}
 		})
 	}
-	for _, predicate := range []string{"pg17-original-create-assertions-extra", "pg17-original-create-assertions\nsecret", "https://example.invalid/secret", "original-source-unknown", "original-guest-step-001"} {
+	for _, predicate := range []string{"pg17-original-create-assertions-extra", "pg17-original-create-assertions\nsecret", "https://example.invalid/secret", "original-source-unknown", "original-guest-step-001", "pg17-confirm-native-001", "pg17-confirm-native-01\nsecret", "pg17-confirm-check-secret", "pg17-confirm-native-32", "pg17-confirm-check-07"} {
 		t.Run("refuse_"+predicate, func(t *testing.T) {
 			var got originalPublicReturn
 			got.projectOriginalWorkflowReturn(model.WorkflowRunRecord{Status: "failed", Result: &model.RunWorkflowResponse{Steps: []model.WorkflowRunStepResult{{ID: "original-native-qemu-create", Status: "failed", Metadata: map[string]any{"original_guest_refusal_predicate": predicate}}}}})

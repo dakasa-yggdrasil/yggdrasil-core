@@ -41,7 +41,8 @@ func executeCapacityNativeWorkflowStep(ctx context.Context, conn *amqp.Connectio
 		return executeCapacityVMNodeWorkflowStep(ctx, conn, db, workflowRef, result, input)
 	}
 	result.Attempts = 1
-	fail := func() model.WorkflowRunStepResult {
+	fail := func(stage string) model.WorkflowRunStepResult {
+		nativeQualificationFailure(&result, stage)
 		result.Error = errCapacityNativeObservation.Error()
 		result.FinishedAt = time.Now().UTC()
 		return result
@@ -52,49 +53,49 @@ func executeCapacityNativeWorkflowStep(ctx context.Context, conn *amqp.Connectio
 	ctx = withNativeAdapterPolicy(ctx, parent)
 	var parsed model.CapacityVMObservationInput
 	if !capacityNativeOperation(result.Operation) || capacity.DecodeVMObservation(input, &parsed) != nil || db == nil || parsed.Policy.ManifestID != "" || strings.TrimSpace(parsed.Policy.Namespace) == "" || strings.TrimSpace(parsed.Policy.Name) == "" || parsed.BindingName == "" {
-		return fail()
+		return fail("native-01")
 	}
 	writes := result.Operation == "capacity.record_vm_inventory" || result.Operation == "capacity.confirm_native_mutation"
 	if parsed.Policy.Version != nil && (!writes || *parsed.Policy.Version < 1) {
-		return fail()
+		return fail("native-02")
 	}
 	if !writes && (parsed.Generation != 0 || parsed.FencingToken != 0 || parsed.LeaseOwner != "") {
-		return fail()
+		return fail("native-03")
 	}
 	if writes && (parsed.Generation < 1 || parsed.FencingToken < 1 || parsed.LeaseOwner == "") {
-		return fail()
+		return fail("native-04")
 	}
 	if result.Operation == "capacity.confirm_native_mutation" {
 		if parsed.GrantID == "" || parsed.ParentGrantID != "" || parsed.Slot != 0 {
-			return fail()
+			return fail("native-05")
 		}
 	} else if parsed.GrantID != "" || (parsed.ParentGrantID == "") != (parsed.Slot == 0) || parsed.Slot < 0 || (result.Operation == "capacity.observe_failed_vm_creation" && parsed.ParentGrantID == "") {
-		return fail()
+		return fail("native-06")
 	}
 	policy, err := repository.ResolveManifest(ctx, db, "capacity_policy", parsed.Policy.Namespace, parsed.Policy.Name, parsed.Policy.Version, parsed.Policy.Version == nil)
 	if err != nil {
-		return fail()
+		return fail("native-07")
 	}
 	p, err := manifest.ParseCapacityPolicySpec(policy.Spec)
 	if err != nil || manifest.ValidateCapacityPolicySpec(p) != nil || workflowRef.Kind != "workflow" || workflowRef.Namespace != p.Workflow.Namespace || workflowRef.Name != p.Workflow.Name {
-		return fail()
+		return fail("native-08")
 	}
 	wf, err := repository.ResolveManifest(ctx, db, "workflow", p.Workflow.Namespace, p.Workflow.Name, nil, true)
 	if err != nil || wf.ID != workflowRef.ID || wf.Version != workflowRef.Version {
-		return fail()
+		return fail("native-09")
 	}
 	workflow, err := manifest.ParseWorkflowSpec(wf.Spec)
 	if err != nil || workflow.Authorization == nil {
-		return fail()
+		return fail("native-10")
 	}
 	b, err := capacity.VMObservationBinding(p, parsed.BindingName)
 	if err != nil {
-		return fail()
+		return fail("native-11")
 	}
 	executorID, _ := ctx.Value(capacityInvocationKey{}).(string)
 	store := repository.CapacityStore{DB: db, ExecutionEnabled: os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true", WorkflowID: wf.ID, ExecutorID: executorID}
 	if writes && store.ValidateNativeObservationLease(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner) != nil {
-		return fail()
+		return fail("native-12")
 	}
 	required := []string{capacity.VMObserveInventory}
 	switch result.Operation {
@@ -106,15 +107,26 @@ func executeCapacityNativeWorkflowStep(ctx context.Context, conn *amqp.Connectio
 	revision := model.CapacityObservationAdapterBinding{IntegrationInstanceID: b.IntegrationInstanceID, InstanceChecksum: b.IntegrationChecksum, IntegrationTypeID: b.IntegrationTypeID, TypeChecksum: b.IntegrationTypeChecksum}
 	resolved, err := resolveCapacityObservationAdapterWithResolver(ctx, conn, db, revision, required, resolveIntegrationInstance)
 	if err != nil {
-		return fail()
+		return fail("native-13")
 	}
 	im, is, tm, ts := resolved.instance, resolved.instanceSpec, resolved.typ, resolved.typeSpec
 	read := func(operation string, fixed map[string]any, out any) (string, error) {
 		if !capacityNativeCatalogOperation(ts, operation) {
+			guestPG17ReadClientDiagnostic(ctx, result.Operation, operation, "catalog")
 			return "", errCapacityNativeObservation
 		}
-		r, err := executeIntegrationThroughResolvedWithPolicy(ctx, conn, model.ExecuteIntegrationRequest{Operation: operation, Capability: operation, Input: fixed}, im, is, tm, ts, 65*time.Second, integrationExecutionPolicy{detailFreeErrors: true, safeError: errCapacityNativeObservation, requireExplicitResponse: true, nativeHTTP: &nativeAdapterHTTPPolicy{limit: 2 << 20, parent: parent}})
-		if err != nil || (r.Status != "observed" && r.Status != "absent") || capacity.DecodeVMObservation(r.Output, out) != nil {
+		readCtx := guestPG17ReadDiagnosticContext(ctx, result.Operation, operation)
+		r, err := executeIntegrationThroughResolvedWithPolicy(readCtx, conn, model.ExecuteIntegrationRequest{Operation: operation, Capability: operation, Input: fixed}, im, is, tm, ts, 65*time.Second, integrationExecutionPolicy{detailFreeErrors: true, safeError: errCapacityNativeObservation, requireExplicitResponse: true, nativeHTTP: &nativeAdapterHTTPPolicy{limit: 2 << 20, parent: parent}})
+		if err != nil {
+			guestPG17ReadClientDiagnostic(ctx, result.Operation, operation, "transport")
+			return "", errCapacityNativeObservation
+		}
+		if r.Status != "observed" && r.Status != "absent" {
+			guestPG17ReadClientDiagnostic(ctx, result.Operation, operation, "status")
+			return "", errCapacityNativeObservation
+		}
+		if capacity.DecodeVMObservation(r.Output, out) != nil {
+			guestPG17ReadClientDiagnostic(ctx, result.Operation, operation, "decode")
 			return "", errCapacityNativeObservation
 		}
 		return r.Status, nil
@@ -128,7 +140,7 @@ func executeCapacityNativeWorkflowStep(ctx context.Context, conn *amqp.Connectio
 		if parsed.ParentGrantID != "" {
 			r, err := store.NativeMutationReceipt(ctx, policy, b, parsed.ParentGrantID)
 			if err != nil || !capacityNativeFailedParent(r, b, parsed.Slot) {
-				return fail()
+				return fail("native-14")
 			}
 			parent = &r
 			fixed["failed_creation_parent"], fixed["slot"] = parsed.ParentGrantID, parsed.Slot
@@ -136,11 +148,11 @@ func executeCapacityNativeWorkflowStep(ctx context.Context, conn *amqp.Connectio
 		var inv model.CapacityVMFleetInventory
 		status, err := read(capacity.VMObserveInventory, fixed, &inv)
 		if err != nil || status != "observed" {
-			return fail()
+			return fail("native-15")
 		}
 		proofs, err := capacity.VMInventoryProofs(p, b, inv, parsed.ParentGrantID, parsed.Slot, time.Now().UTC(), receiptRef)
 		if err != nil || (parent != nil && !capacityNativeFailedReadbackMatches(*parent, inv.FailedCreation)) {
-			return fail()
+			return fail("native-16")
 		}
 		registered := 0
 		if writes {
@@ -153,34 +165,34 @@ func executeCapacityNativeWorkflowStep(ctx context.Context, conn *amqp.Connectio
 				}
 				raw, err := json.Marshal(projection)
 				if err != nil || projection == nil || store.RecordMutationSlot(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: raw}, proof) != nil {
-					return fail()
+					return fail("native-17")
 				}
 				registered++
 			}
 			if store.CheckNativeMembershipCoverage(ctx, policy, b, proofs) != nil {
-				return fail()
+				return fail("native-18")
 			}
 		}
 		output = model.CapacityVMInventoryReceipt{Inventory: inv, MutationProofs: proofs, NativeMembers: len(inv.Members), Registered: registered}
 	case "capacity.observe_failed_vm_creation":
 		parent, err := store.NativeMutationReceipt(ctx, policy, b, parsed.ParentGrantID)
 		if err != nil || !capacityNativeFailedParent(parent, b, parsed.Slot) {
-			return fail()
+			return fail("native-19")
 		}
 		var candidate model.CapacityVMFailedCreationCandidate
 		status, err := read(capacity.VMObserveFailedCreation, map[string]any{"profile": b.ProfileName, "slot": parsed.Slot, "grant_id": parsed.ParentGrantID}, &candidate)
 		if err != nil || status != "observed" || !capacityNativeFailedReadbackMatches(parent, &candidate) {
-			return fail()
+			return fail("native-20")
 		}
 		proof, err := capacity.VMFailedCreationProof(p, b, candidate, parsed.ParentGrantID, parsed.Slot, time.Now().UTC(), receiptRef)
 		if err != nil {
-			return fail()
+			return fail("native-21")
 		}
 		output = map[string]any{"candidate": candidate, "mutation_proof": proof, "useful_capacity_known": false}
 	case "capacity.confirm_native_mutation":
 		r, err := store.NativeMutationReceipt(ctx, policy, b, parsed.GrantID)
 		if err != nil || r.Grant.CompensationOf != "" || (r.Grant.State != "settled" && r.Grant.State != "confirmed") {
-			return fail()
+			return fail("native-22")
 		}
 		fixed := map[string]any{"profile": b.ProfileName, "slot": r.Grant.Slot, "grant_id": r.Grant.GrantID}
 		if r.Grant.Capability == b.DestroyCapability {
@@ -191,11 +203,11 @@ func executeCapacityNativeWorkflowStep(ctx context.Context, conn *amqp.Connectio
 		var plan model.CapacityVMFleetPlan
 		status, err := read(capacity.VMObserveServer, fixed, &plan)
 		if err != nil {
-			return fail()
+			return fail("native-23")
 		}
 		proof, err := capacity.VMServerPlanProof(p, b, plan, r, status, time.Now().UTC(), receiptRef)
 		if err != nil {
-			return fail()
+			return fail("native-24")
 		}
 		fixed["expected_resource_id"], fixed["expected_resource_created_at"] = proof.ResourceID, proof.ResourceCreatedAt
 		ids := append([]string{}, r.NextActionIDs...)
@@ -205,23 +217,23 @@ func executeCapacityNativeWorkflowStep(ctx context.Context, conn *amqp.Connectio
 		collection := model.CapacityVMActionCollection{ResourceID: proof.ResourceID, ResourceCreatedAt: proof.ResourceCreatedAt, Complete: true}
 		if len(ids) == 0 {
 			if proof.ResourceAbsent {
-				return fail() // Unknown deletion actions cannot be recovered from absence.
+				return fail("native-25") // Unknown deletion actions cannot be recovered from absence.
 			}
 			status, err = read(capacity.VMObserveAction, fixed, &collection)
 			if err != nil || status != "observed" || collection.CreationGrantID != r.Grant.GrantID || collection.ResourceCreatedAt != proof.ResourceCreatedAt {
-				return fail()
+				return fail("native-26")
 			}
 			proof.ActionHistoryComplete = true
 		} else {
 			if len(ids) > 64 {
-				return fail()
+				return fail("native-27")
 			}
 			for _, id := range ids {
 				var action model.CapacityVMActionObservation
 				fixed["action_id"] = id
 				status, err = read(capacity.VMObserveAction, fixed, &action)
 				if err != nil || status != "observed" || action.ID != id {
-					return fail()
+					return fail("native-28")
 				}
 				collection.Actions = append(collection.Actions, action)
 			}
@@ -229,7 +241,7 @@ func executeCapacityNativeWorkflowStep(ctx context.Context, conn *amqp.Connectio
 		}
 		proof.ActionIDs, err = capacity.VMActionProof(p, collection, proof.ResourceID, time.Now().UTC(), true)
 		if err != nil {
-			return fail()
+			return fail("native-29")
 		}
 		proof.ActionsTerminal, proof.ActionsSuccessful = true, true
 		// Repeat observation never re-emits an event or alters the original
@@ -238,14 +250,14 @@ func executeCapacityNativeWorkflowStep(ctx context.Context, conn *amqp.Connectio
 		if grant.State != "confirmed" {
 			grant, err = store.ConfirmMutation(ctx, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, proof)
 			if err != nil {
-				return fail()
+				return fail("native-30")
 			}
 		}
 		output = map[string]any{"grant": grant, "mutation_proof": proof, "useful_capacity_known": false}
 	}
 	raw, err := json.Marshal(output)
 	if err != nil || json.Unmarshal(raw, &result.Metadata) != nil {
-		return fail()
+		return fail("native-31")
 	}
 	result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
 	return result

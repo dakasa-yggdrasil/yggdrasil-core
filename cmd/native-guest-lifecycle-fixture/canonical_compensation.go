@@ -11,6 +11,7 @@ import (
 	message "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	q "github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacitynativeqemu"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacityqualification"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -102,7 +103,7 @@ func (f *fixture) prepareCanonicalSourceChild(ctx context.Context, p model.Capac
 	issue := model.CapacityCompensationIssue{ParentGrantID: pre.OriginalCreateGrantID, Mutation: model.CapacityMutationIssue{BindingName: binding.Name, DesiredSpec: desired}, FailedProof: eligible.Aggregate, DrainProof: drain}
 	current := f.policy
 	if !binding.CompensationEnabled {
-		if _, err = issuer.IssueCompensation(ctx, f.policy, issue); !errors.Is(err, repository.ErrCapacityDisabled) {
+		if _, err = issuer.IssueCompensation(ctx, f.policy, issue); !capacityqualification.IsCompensationPlanNotEnabledDestroy(err) {
 			return none, noPolicy, noChild, noSession, q.ErrOriginalUnknown
 		}
 		enabled := p

@@ -8,10 +8,10 @@ import (
 	"errors"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	q "github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacitynativeqemu"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacityqualification"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
-	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc/amqp"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"path/filepath"
 	"strconv"
@@ -22,7 +22,7 @@ import (
 var pg17OriginalReadBrokerMu sync.Mutex
 var pg17OriginalReadBroker *amqp.Connection
 
-// StartPG17OriginalReadConsumer reuses the original broker connection, SDK
+// StartPG17OriginalReadConsumer uses the dedicated original fixture broker connection, SDK
 // RPC codec and advertised endpoint. It cannot declare a differently named
 // queue outside that fixed advertised contract, spawn an executor, send
 // provider mutations or read another Realm.
@@ -30,8 +30,8 @@ var pg17OriginalReadBroker *amqp.Connection
 // Subscription.Close is an unsubscribe request, not an observed SDK driver
 // goroutine Wait. Only the original outer Core process Wait/EOF/retirement
 // can close that process-scoped driver boundary; this helper claims none.
-func StartPG17OriginalReadConsumer(ctx context.Context, broker *amqp.Connection, store repository.CapacityStore, policy model.Manifest, realm *q.Realm) (func() error, error) {
-	if broker == nil || realm == nil || realm != originalGuestNativeRealm || store.DB == nil || realm.Request.NativeCase != "positive_original_lifecycle" || ctx.Err() != nil {
+func StartPG17OriginalReadConsumer(ctx context.Context, clientBroker, broker *amqp.Connection, store repository.CapacityStore, policy model.Manifest, realm *q.Realm) (func() error, error) {
+	if clientBroker == nil || broker == nil || clientBroker == broker || realm == nil || realm != originalGuestNativeRealm || store.DB == nil || realm.Request.NativeCase != "positive_original_lifecycle" || ctx.Err() != nil {
 		return nil, q.ErrOriginalUnknown
 	}
 	if _, ok := ctx.Deadline(); !ok {
@@ -42,7 +42,7 @@ func StartPG17OriginalReadConsumer(ctx context.Context, broker *amqp.Connection,
 		pg17OriginalReadBrokerMu.Unlock()
 		return nil, q.ErrOriginalUnknown
 	}
-	pg17OriginalReadBroker = broker
+	pg17OriginalReadBroker = clientBroker
 	pg17OriginalReadBrokerMu.Unlock()
 	var mu sync.Mutex
 	var owners sync.WaitGroup
@@ -50,8 +50,14 @@ func StartPG17OriginalReadConsumer(ctx context.Context, broker *amqp.Connection,
 	reads := 0
 	var workerErr error
 	failWorker := func(err error) { mu.Lock(); workerErr = errors.Join(workerErr, err); mu.Unlock() }
-	transport := rpcamqp.New(broker)
-	subscription, err := transport.Consume(rpc.ConsumerConfig{Endpoint: "qualification.original.execute", Concurrency: 1, Timeout: 65 * time.Second, Handler: func(deliveryContext context.Context, d rpc.Delivery) (returnErr error) {
+	closeDescribe, err := capacityqualification.StartDescribe(ctx, broker)
+	if err != nil {
+		pg17OriginalReadBrokerMu.Lock()
+		pg17OriginalReadBroker = nil
+		pg17OriginalReadBrokerMu.Unlock()
+		return nil, err
+	}
+	subscription, err := capacityqualification.ConsumePredeclared(ctx, broker, rpc.ConsumerConfig{Endpoint: "qualification.original.execute", Concurrency: 1, Timeout: 65 * time.Second, Handler: func(deliveryContext context.Context, d rpc.Delivery) (returnErr error) {
 		defer func() {
 			if returnErr != nil {
 				failWorker(returnErr)
@@ -83,6 +89,7 @@ func StartPG17OriginalReadConsumer(ctx context.Context, broker *amqp.Connection,
 			}
 		}()
 		defer func() { cancel(); <-done }()
+		diagnostic := func(stage string) { _ = realm.RecordPG17ReadDiagnostic(original, "consumer", stage) }
 		reply := func(data any, failure bool) error {
 			var wire []byte
 			var encodeErr error
@@ -102,6 +109,7 @@ func StartPG17OriginalReadConsumer(ctx context.Context, broker *amqp.Connection,
 		}
 		var request model.AdapterExecuteIntegrationRequest
 		if d.Endpoint != "qualification.original.execute" || d.ReplyTo == "" || d.CorrelationID == "" || len(d.Body) == 0 || len(d.Body) >= 2<<20 || capacity.DecodeGuestLifecycle(d.Body, &request) != nil || len(request.Auth) != 0 || len(request.Metadata) != 0 || request.Operation != request.Capability || (request.Operation != capacity.VMObserveServer && request.Operation != capacity.VMObserveAction) {
+			diagnostic("envelope")
 			failWorker(q.ErrOriginalUnknown)
 			return reply(nil, true)
 		}
@@ -110,18 +118,21 @@ func StartPG17OriginalReadConsumer(ctx context.Context, broker *amqp.Connection,
 		ordinal := reads
 		mu.Unlock()
 		if ordinal > 4 {
+			diagnostic("ordinal")
 			failWorker(q.ErrOriginalUnknown)
 			return reply(nil, true)
 		}
 		startedAt := time.Now().UTC()
 		response, readErr := realm.PG17NativeRead(original, store, policy, request)
 		if readErr != nil || original.Err() != nil {
+			diagnostic("callee")
 			failWorker(q.ErrOriginalUnknown)
 			return reply(nil, true)
 		}
 		nativeFile, fileOK := response.Metadata["original_native_read_file"].(string)
 		nativeSHA, shaOK := response.Metadata["original_native_read_sha256"].(string)
 		if !fileOK || !shaOK || !capacity.ValidDigest(nativeSHA) || filepath.Base(nativeFile) != nativeFile {
+			diagnostic("metadata")
 			failWorker(q.ErrOriginalUnknown)
 			return reply(nil, true)
 		}
@@ -129,15 +140,18 @@ func StartPG17OriginalReadConsumer(ctx context.Context, broker *amqp.Connection,
 		requestFile, responseFile := prefix+"-request.private.json", prefix+"-response.private.json"
 		slotDirectory := q.SlotDirectory(realm.PrivateDirectory, 2)
 		if _, err := q.PublishBytes(original, filepath.Join(slotDirectory, requestFile), d.Body); err != nil {
+			diagnostic("request_publish")
 			failWorker(q.ErrOriginalUnknown)
 			return reply(nil, true)
 		}
 		wire, encodeErr := jsonMarshalPG17Success(response)
 		if encodeErr != nil {
+			diagnostic("response_encode")
 			failWorker(q.ErrOriginalUnknown)
 			return reply(nil, true)
 		}
 		if _, err := q.PublishBytes(original, filepath.Join(slotDirectory, responseFile), wire); err != nil {
+			diagnostic("response_publish")
 			failWorker(q.ErrOriginalUnknown)
 			return reply(nil, true)
 		}
@@ -172,14 +186,20 @@ func StartPG17OriginalReadConsumer(ctx context.Context, broker *amqp.Connection,
 		}{"pg17_original_rpc_read_return_v1", "SOURCE_ONLY_TYPED_RPC_NOT_NATIVE_OR_DRIVER_RETIREMENT", capacity.CurrentGuestCoreSource(), realm.Request.NativeCase, ordinal, request.Operation, requestFile, capacity.BusinessCreationSHA256(d.Body), responseFile, capacity.BusinessCreationSHA256(wire), nativeFile, nativeSHA, startedAt, replyReturnedAt, time.Now().UTC(), replyErr == nil, replyErr == nil && ackErr == nil, false, false}
 		_, retainErr := q.Publish(original, filepath.Join(slotDirectory, prefix+"-return.json"), record)
 		if retainErr != nil {
+			diagnostic("return_publish")
 			return retainErr
 		}
 		if replyErr != nil {
+			diagnostic("reply_ack")
 			return replyErr
+		}
+		if ackErr != nil {
+			diagnostic("reply_ack")
 		}
 		return ackErr
 	}})
 	if err != nil {
+		_ = closeDescribe()
 		pg17OriginalReadBrokerMu.Lock()
 		pg17OriginalReadBroker = nil
 		pg17OriginalReadBrokerMu.Unlock()
@@ -192,7 +212,7 @@ func StartPG17OriginalReadConsumer(ctx context.Context, broker *amqp.Connection,
 			mu.Lock()
 			closing = true
 			mu.Unlock()
-			joined = subscription.Close()
+			joined = errors.Join(subscription.Close(), closeDescribe())
 			owners.Wait()
 			mu.Lock()
 			joined = errors.Join(joined, workerErr)

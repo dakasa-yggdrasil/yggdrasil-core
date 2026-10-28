@@ -67,7 +67,7 @@ func TestCapacityGuestOriginalWorkflowNativeReadsPostgres(t *testing.T) {
 		run, err := repository.GetWorkflowRun(ctx,db,parsed)
 		var exact int
 		if err != nil || run.ID != parsed || run.WorkflowNamespace != c.Namespace || run.WorkflowName != workflowName || run.Status != "succeeded" || run.Error != "" || run.StartedAt == nil || run.FinishedAt == nil || run.FinishedAt.Before(*run.StartedAt) || run.Result == nil || run.Result.Status != "succeeded" { t.Fatal("actual public run did not succeed with full result",err) }
-		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM public.workflow_runs WHERE id=$1 AND workflow_id=$2`,id,c.WorkflowID).Scan(&exact); err != nil || exact != 1 { t.Fatal("public run belongs to another immutable workflow",err) }
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM (`+q.OriginalWorkflowIdentitySQL+`) exact_original`,id,c.WorkflowID).Scan(&exact); err != nil || exact != 1 { t.Fatal("public run belongs to another immutable workflow",err) }
 		principal, ok := run.Metadata[repository.WorkflowRunCreatorMachinePrincipalMetadataKey].(string)
 		if !ok || principal == "" { t.Fatal("original run lacks server-authored public machine principal") }
 		mode, ok := run.Inputs["mode"].(string)

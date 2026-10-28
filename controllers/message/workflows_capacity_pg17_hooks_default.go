@@ -15,7 +15,7 @@ func guestPG17AfterCreate(ctx context.Context, store repository.CapacityStore, p
 	return nil
 }
 
-func guestPG17AfterConfirm(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, binding model.CapacityMutationBinding, input guestOriginalStepInput, grant model.CapacityMutationGrant, proof model.CapacityMutationProof) error {
+func guestPG17AfterConfirm(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, binding model.CapacityMutationBinding, input guestOriginalStepInput, grant model.CapacityMutationGrant, proof, guestProof model.CapacityMutationProof) error {
 	return nil
 }
 
@@ -27,6 +27,6 @@ func guestPG17AfterHistorical(ctx context.Context, store repository.CapacityStor
 	return nil
 }
 
-func guestPG17BeforeConfirm(ctx context.Context, store repository.CapacityStore, policy model.Manifest, workflow model.ManifestReference, input guestOriginalStepInput, grant model.CapacityMutationGrant) error {
-	return nil
+func guestPG17BeforeConfirm(ctx context.Context, store repository.CapacityStore, policy model.Manifest, workflow model.ManifestReference, binding model.CapacityMutationBinding, input guestOriginalStepInput, grant model.CapacityMutationGrant, proof model.CapacityMutationProof) (model.CapacityMutationProof, error) {
+	return proof, nil
 }

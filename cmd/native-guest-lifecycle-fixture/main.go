@@ -35,6 +35,7 @@ import (
 	message "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	q "github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacitynativeqemu"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacityqualification"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -176,11 +177,17 @@ func run() (runErr error) {
 	defer f.realm.Close()
 	defer func() { runErr = errors.Join(runErr, f.realm.CloseOriginalPins()) }()
 	if request.NativeCase == "positive_original_lifecycle" {
-		closePG17Read, pg17Err := message.StartPG17OriginalReadConsumer(ctx, broker, repository.CapacityStore{DB: db, WorkflowID: f.workflow.ID}, f.policy, f.realm)
-		if pg17Err != nil {
-			return pg17Err
+		readBroker, dialErr := capacityqualification.DialDedicated(ctx, os.Getenv("BROKER_URL"))
+		if dialErr != nil {
+			return dialErr
 		}
-		defer func() { runErr = errors.Join(runErr, closePG17Read()) }()
+		closePG17Read, pg17Err := readBroker.StartWith(ctx, 5*time.Second, func() (func() error, error) {
+			return message.StartPG17OriginalReadConsumer(ctx, broker, readBroker.Connection, repository.CapacityStore{DB: db, WorkflowID: f.workflow.ID}, f.policy, f.realm)
+		})
+		if pg17Err != nil {
+			return errors.Join(pg17Err, readBroker.CloseWith(ctx, 5*time.Second, closePG17Read))
+		}
+		defer func() { runErr = errors.Join(runErr, readBroker.CloseWith(ctx, 5*time.Second, closePG17Read)) }()
 	}
 	workflowOwners, err := httpapi.NewNativeOriginalWorkflowOwners(ctx)
 	if err != nil {

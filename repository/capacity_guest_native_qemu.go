@@ -46,12 +46,20 @@ type GuestNativeQEMUPIDFDReturn struct {
 	OriginalCloseReturnedAt time.Time              `json:"original_close_returned_at"`
 }
 
+// GuestNativeQEMUPIDFDExited accepts only the original pidfd's readable
+// exit event, with Linux's accompanying hangup after its child was reaped.
+// HUP alone, ERR, NVAL and every other event remain unknown.
+func GuestNativeQEMUPIDFDExited(revents int16) bool {
+	const pollIn, pollHup = int16(1), int16(16)
+	return revents == pollIn || revents == pollIn|pollHup
+}
+
 func guestNativeQEMUOffJoin(off GuestNativeQEMUOffReturn, join GuestNativeQEMUPIDFDReturn, stored GuestRetirementOriginal, quiescent model.CapacityGuestRetirementObservation, creatorSHA string, now time.Time) bool {
 	same := func(a, b GuestNativeQEMUProcess) bool {
 		return a.PID == b.PID && a.PPID == b.PPID && a.StartTicks == b.StartTicks
 	}
 	i := stored.Request.Intent
-	return capacity.GuestOriginalNativeQEMUProviderEnabled("native-qemu") && stored.Binding.EvidenceClass == "native_qemu_qualification" && off.Schema == "core_original_guest_native_qemu_fixture_v1" && off.Stage == "native-off-original.json" && off.Scope == "original_burst_native_off" && off.Slot == i.Slot && i.Slot == 2 && off.ResourceID == i.Tuple.ResourceID && off.SourceCommit == stored.Binding.GuestSourceCommit && off.CreatorOriginalSHA256 == creatorSHA && capacity.ValidDigest(creatorSHA) && off.QEMU.PID > 1 && off.QEMU.StartTicks > 0 && off.OriginalWaitCode == 0 && off.OriginalStderrEOF && !off.OriginalWaitReturnedAt.Before(quiescent.Record.PoweroffOperation.WaitReturnedAt) && !off.OriginalStderrCloseReturnedAt.Before(off.OriginalWaitReturnedAt) && !off.OriginalStderrCloseReturnedAt.After(now) && join.Schema == "core_original_same_qemu_pidfd_join_v1" && join.ResourceID == off.ResourceID && join.CreatorOriginalSHA256 == creatorSHA && same(join.Before, off.QEMU) && same(join.Before, join.After) && !join.OriginalPinStartedAt.IsZero() && !join.OriginalPinReturnedAt.Before(join.OriginalPinStartedAt) && !join.OriginalPinReturnedAt.After(i.IssuedAt) && join.OriginalPollRevents == 1 && !join.OriginalPollReturnedAt.Before(off.OriginalWaitReturnedAt) && !join.OriginalCloseReturnedAt.Before(join.OriginalPollReturnedAt) && !join.OriginalCloseReturnedAt.After(now) && join.OriginalCloseReturnedAt.Before(i.OriginalDeadline)
+	return capacity.GuestOriginalNativeQEMUProviderEnabled("native-qemu") && stored.Binding.EvidenceClass == "native_qemu_qualification" && off.Schema == "core_original_guest_native_qemu_fixture_v1" && off.Stage == "native-off-original.json" && off.Scope == "original_burst_native_off" && off.Slot == i.Slot && i.Slot == 2 && off.ResourceID == i.Tuple.ResourceID && off.SourceCommit == stored.Binding.GuestSourceCommit && off.CreatorOriginalSHA256 == creatorSHA && capacity.ValidDigest(creatorSHA) && off.QEMU.PID > 1 && off.QEMU.StartTicks > 0 && off.OriginalWaitCode == 0 && off.OriginalStderrEOF && !off.OriginalWaitReturnedAt.Before(quiescent.Record.PoweroffOperation.WaitReturnedAt) && !off.OriginalStderrCloseReturnedAt.Before(off.OriginalWaitReturnedAt) && !off.OriginalStderrCloseReturnedAt.After(now) && join.Schema == "core_original_same_qemu_pidfd_join_v1" && join.ResourceID == off.ResourceID && join.CreatorOriginalSHA256 == creatorSHA && same(join.Before, off.QEMU) && same(join.Before, join.After) && !join.OriginalPinStartedAt.IsZero() && !join.OriginalPinReturnedAt.Before(join.OriginalPinStartedAt) && !join.OriginalPinReturnedAt.After(i.IssuedAt) && GuestNativeQEMUPIDFDExited(join.OriginalPollRevents) && !join.OriginalPollReturnedAt.Before(off.OriginalWaitReturnedAt) && !join.OriginalCloseReturnedAt.Before(join.OriginalPollReturnedAt) && !join.OriginalCloseReturnedAt.After(now) && join.OriginalCloseReturnedAt.Before(i.OriginalDeadline)
 }
 
 type guestNativeQEMUOriginalIdentity struct {

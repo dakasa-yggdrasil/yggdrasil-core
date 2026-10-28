@@ -6,12 +6,20 @@ import (
 	"context"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/google/uuid"
 	"path/filepath"
 	"time"
 )
 
-func (r *Realm) publishProbeDiagnostic(ctx context.Context, slot int, variant string, returned capacity.GuestOriginalHTTPReturn) error {
-	_, err := Publish(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, slot), "probe-http-"+variant+".json"), capacity.GuestProbeDiagnostic(returned))
+func (r *Realm) publishProbeDiagnostic(ctx context.Context, slot int, variant, challengeID string, returned capacity.GuestOriginalHTTPReturn) error {
+	id, err := uuid.Parse(challengeID)
+	if err != nil || id.String() != challengeID || slot < 1 || slot > 2 || (variant != "normal" && variant != "recovery" && variant != "floor") {
+		return ErrOriginalUnknown
+	}
+	// Keep the diagnostic bound to this actual challenge while retaining only
+	// its digest in paths that may later be exported publicly.
+	digest := capacity.BusinessCreationSHA256([]byte(challengeID))
+	_, err = Publish(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, slot), "probe-http-"+variant+"-"+digest+".json"), capacity.GuestProbeDiagnostic(returned))
 	return err
 }
 
@@ -40,7 +48,7 @@ func (r *Realm) InstallationRecorded(ctx context.Context, g model.CapacityMutati
 
 func (r *Realm) InstallationReadState(ctx context.Context, slot int, state string) error {
 	switch state {
-	case "receipt_read_error", "receipt_refused", "read_ok", "receipt_pending", "confirmation_pending", "confirmation_refused", "confirmation_read_error":
+	case "receipt_read_error", "receipt_refused", "read_ok", "receipt_pending", "confirmation_pending", "confirmation_refused", "confirmation_read_error", "confirmation_lease_invalid", "confirmation_disabled", "confirmation_context_cancelled", "confirmation_context_deadline", "confirmation_transaction_closed", "confirmation_sql_deadlock", "confirmation_sql_serialization", "confirmation_sql_cancelled", "confirmation_sql_other":
 	default:
 		return ErrOriginalUnknown
 	}

@@ -396,27 +396,32 @@ func executeIntegrationThroughResolvedWithPolicy(
 	}
 
 	if operation := strings.TrimSpace(response.Operation); operation != "" && operation != req.Operation {
+		guestPG17TransportStage(ctx, "operation")
 		err := fmt.Errorf("unexpected adapter operation %q", response.Operation)
 		if policy.detailFreeErrors {
 			return model.ExecuteIntegrationResponse{}, policy.sanitizeError(err)
 		}
 		return model.ExecuteIntegrationResponse{}, err
 	} else if policy.requireExplicitResponse && operation == "" {
+		guestPG17TransportStage(ctx, "operation")
 		return model.ExecuteIntegrationResponse{}, policy.sanitizeError(errors.New("adapter response operation is required"))
 	}
 	if capability := strings.TrimSpace(response.Capability); capability != "" && capability != req.Capability {
+		guestPG17TransportStage(ctx, "capability")
 		err := fmt.Errorf("unexpected adapter capability %q", response.Capability)
 		if policy.detailFreeErrors {
 			return model.ExecuteIntegrationResponse{}, policy.sanitizeError(err)
 		}
 		return model.ExecuteIntegrationResponse{}, err
 	} else if policy.requireExplicitResponse && capability == "" {
+		guestPG17TransportStage(ctx, "capability")
 		return model.ExecuteIntegrationResponse{}, policy.sanitizeError(errors.New("adapter response capability is required"))
 	}
 
 	status := strings.TrimSpace(response.Status)
 	if status == "" {
 		if policy.requireExplicitResponse {
+			guestPG17TransportStage(ctx, "explicit_status")
 			return model.ExecuteIntegrationResponse{}, policy.sanitizeError(errors.New("adapter response status is required"))
 		}
 		status = "succeeded"
