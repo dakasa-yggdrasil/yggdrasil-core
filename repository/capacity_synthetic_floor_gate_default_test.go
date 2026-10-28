@@ -7,9 +7,11 @@ import (
 	"bytes"
 	"context"
 	"crypto/sha256"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -17,9 +19,17 @@ import (
 	"strings"
 	"testing"
 	"time"
+
+	"github.com/google/uuid"
+	"github.com/lib/pq"
 )
 
 const floorFixtureOutputLimit = 128 << 10
+const floorFixtureMinimumRemaining = 165 * time.Second
+
+func floorFixtureEnoughTime(remaining time.Duration) bool {
+	return remaining >= floorFixtureMinimumRemaining
+}
 
 type floorFixtureCapture struct {
 	buf   []byte
@@ -85,6 +95,30 @@ func floorFixtureCensus(out *floorFixtureCapture) bool {
 	return scanner.Err() == nil && run && pass && packagePass
 }
 
+func floorFixtureReapDatabase(ctx context.Context, admin *sql.DB, name string) error {
+	if len(name) != len("recovery_fixture_")+32 || !strings.HasPrefix(name, "recovery_fixture_") || strings.Trim(name[len("recovery_fixture_"):], "0123456789abcdef") != "" {
+		return errors.New("invalid synthetic database identity")
+	}
+	if _, err := admin.ExecContext(ctx, "DROP DATABASE IF EXISTS "+pq.QuoteIdentifier(name)+" WITH (FORCE)"); err != nil {
+		return err
+	}
+	var remains bool
+	if err := admin.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname=$1)`, name).Scan(&remains); err != nil {
+		return err
+	}
+	if remains {
+		return errors.New("synthetic database still exists")
+	}
+	return nil
+}
+
+func floorFixtureCleanupAfterJoin(ctx context.Context, admin *sql.DB, name string, groupErr error) error {
+	if groupErr != nil {
+		return groupErr
+	}
+	return floorFixtureReapDatabase(ctx, admin, name)
+}
+
 // Invoke only the explicitly synthetic test build. The child creates and
 // drops its own PG16 database; it cannot qualify native or production facts.
 func runSyntheticFloorGate(t *testing.T) {
@@ -115,11 +149,40 @@ func runSyntheticFloorGate(t *testing.T) {
 	if !filepath.IsAbs(root) || exec.Command("git", "-C", root, "diff", "--quiet", "HEAD", "--").Run() != nil {
 		t.Fatal("fixture source must be clean")
 	}
+	parsed, parseErr := url.Parse(dsn)
+	if parseErr != nil || (parsed.Scheme != "postgres" && parsed.Scheme != "postgresql") {
+		t.Fatal("local synthetic database required")
+	}
+	host, socket := parsed.Hostname(), parsed.Query().Get("host")
+	if host != "localhost" && host != "127.0.0.1" && host != "::1" && !(host == "" && strings.HasPrefix(socket, "/")) {
+		t.Fatal("remote synthetic database refused")
+	}
+	admin, err := sql.Open("postgres", dsn)
+	if err != nil {
+		t.Fatal("synthetic database owner unavailable")
+	}
+	defer admin.Close()
+	var addr string
+	var major int
+	if err = admin.QueryRow(`SELECT COALESCE(inet_server_addr()::text,'unix'), current_setting('server_version_num')::int / 10000`).Scan(&addr, &major); err != nil || major != 16 || !(addr == "unix" || strings.HasPrefix(addr, "127.") || addr == "::1") {
+		t.Fatal("actual local PG16 owner required")
+	}
+	name := "recovery_fixture_" + strings.ReplaceAll(uuid.NewString(), "-", "")
+	var existing bool
+	if err = admin.QueryRow(`SELECT EXISTS(SELECT 1 FROM pg_database WHERE datname=$1)`, name).Scan(&existing); err != nil || existing {
+		t.Fatal("unique synthetic database owner required")
+	}
+	// Do not start if the enclosing Go test timeout could kill this owner
+	// before its child timeout and independent database cleanup can finish.
+	if deadline, ok := t.Deadline(); ok && !floorFixtureEnoughTime(time.Until(deadline)) {
+		t.Fatal("insufficient time to own and clean synthetic fixture")
+	}
 	ctx, cancel := context.WithTimeout(context.Background(), 150*time.Second)
 	defer cancel()
-	cmd := exec.CommandContext(ctx, goBinary, "test", "-race", "-json", "-buildvcs=true", "-tags", "recoveryfixture", "./repository", "-run", "^TestSyntheticFloorDrainBudgetPostgres$", "-count=1")
+	cmd := exec.CommandContext(ctx, goBinary, "test", "-race", "-json", "-timeout=120s", "-buildvcs=true", "-tags", "recoveryfixture", "./repository", "-run", "^TestSyntheticFloorDrainBudgetPostgres$", "-count=1")
+	floorFixtureConfigureProcess(cmd)
 	cmd.Dir = root
-	cmd.Env = append(os.Environ(), "CAPACITY_RECOVERY_FIXTURE_ONLY=true", "RECOVERY_FIXTURE_ADMIN_URL="+dsn, "GOWORK=off")
+	cmd.Env = append(os.Environ(), "CAPACITY_RECOVERY_FIXTURE_ONLY=true", "CAPACITY_RECOVERY_FIXTURE_DATABASE="+name, "RECOVERY_FIXTURE_ADMIN_URL="+dsn, "GOWORK=off")
 	var out, stderr floorFixtureCapture
 	cmd.Stdout, cmd.Stderr = &out, &stderr
 	err = cmd.Run()
@@ -131,7 +194,18 @@ func runSyntheticFloorGate(t *testing.T) {
 			exitCode = exit.ExitCode()
 		}
 	}
-	t.Log("synthetic floor child:", floorFixtureSummary(&out, &stderr, exitCode))
+	groupErr := floorFixtureJoinProcessGroup(cmd)
+	cleanupCtx, cleanupCancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cleanupCancel()
+	cleanupErr := floorFixtureCleanupAfterJoin(cleanupCtx, admin, name, groupErr)
+	if groupErr != nil {
+		t.Log("synthetic floor child:", floorFixtureSummary(&out, &stderr, exitCode), "process_group_joined=false", "database_cleanup_pending=", name)
+		t.Fatal("synthetic child process group did not join; database cleanup pending")
+	}
+	t.Log("synthetic floor child:", floorFixtureSummary(&out, &stderr, exitCode), "process_group_joined=true", "database_cleanup_confirmed=", cleanupErr == nil)
+	if cleanupErr != nil {
+		t.Fatal("synthetic database cleanup unconfirmed")
+	}
 	if err != nil || !floorFixtureCensus(&out) {
 		t.Fatal("isolated synthetic floor fixture failed or incomplete; no physical qualification was granted")
 	}
