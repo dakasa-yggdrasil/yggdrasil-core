@@ -1,0 +1,97 @@
+name: Capacity source-owned HTTP qualification
+on:
+  pull_request:
+  push:
+    branches: [main]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  capacity-owned-http:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    env:
+      GOWORK: "off"
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Install PostgreSQL 17 tools
+        shell: bash
+        run: |
+          set -euo pipefail
+          sudo install -d /usr/share/postgresql-common/pgdg
+          sudo curl --fail --silent --show-error --location -o /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc https://www.postgresql.org/media/keys/ACCC4CF8.asc
+          sudo tee /etc/apt/sources.list.d/pgdg.sources >/dev/null <<'EOF'
+          Types: deb
+          URIs: https://apt.postgresql.org/pub/repos/apt
+          Suites: noble-pgdg
+          Components: main
+          Signed-By: /usr/share/postgresql-common/pgdg/apt.postgresql.org.asc
+          EOF
+          sudo apt-get update -qq
+          sudo apt-get install -y --no-install-recommends postgresql-common
+          # The test creates its own private cluster. Never let the package
+          # install a separate system-managed PG17 cluster on this runner.
+          sudo python3 - <<'PYCONFIG'
+          from pathlib import Path
+          path = Path('/etc/postgresql-common/createcluster.conf')
+          lines = path.read_text().splitlines() if path.exists() else []
+          lines = [line for line in lines if not line.strip().startswith('create_main_cluster')]
+          path.write_text('\n'.join(lines + ['create_main_cluster = false']) + '\n')
+          PYCONFIG
+          test -z "$(pg_lsclusters --no-header | awk '$1 == 17 {print}')"
+          sudo apt-get install -y --no-install-recommends postgresql-17
+          test -z "$(pg_lsclusters --no-header | awk '$1 == 17 {print}')"
+      - name: Verify source and test runner isolation
+        shell: bash
+        env:
+          CAPACITY_TEST_PG_BIN: /usr/lib/postgresql/17/bin
+        run: |
+          set -euo pipefail
+          test -z "$(git status --porcelain --untracked-files=normal)"
+          test "$(git rev-parse HEAD)" = "$GITHUB_SHA"
+          go mod download
+          export CAPACITY_TEST_GO="$(command -v go)"
+          python3 scripts/ci/capacity_fixture_safety_census_test.py
+          python3 scripts/ci/capacity_fixture_safety_census.py --python
+          go test -race -count=1 -json ./internal/capacityfixturetest > "$RUNNER_TEMP/capacity-fixture-safety-go.jsonl"
+          python3 scripts/ci/capacity_fixture_safety_census.py --go-events "$RUNNER_TEMP/capacity-fixture-safety-go.jsonl"
+      - name: Exercise source-owned HTTP callback on isolated PG17
+        shell: bash
+        env:
+          CAPACITY_TEST_PG_BIN: /usr/lib/postgresql/17/bin
+          REQUIRE_CAPACITY_POSTGRES: "true"
+        run: |
+          set -euo pipefail
+          export CAPACITY_TEST_GO="$(command -v go)"
+          capacity_source_dir="$(mktemp -d "$RUNNER_TEMP/capacity-source-parity.XXXXXXXX")"
+          trap 'rm -rf "$capacity_source_dir"' EXIT
+          git clone --quiet --no-hardlinks -- "$GITHUB_WORKSPACE" "$capacity_source_dir/clean"
+          test "$(git -C "$capacity_source_dir/clean" rev-parse HEAD)" = "$(git rev-parse HEAD)"
+          python3 "$capacity_source_dir/clean/scripts/ci/capacity_fixture_source_equivalence.py" --source "$GITHUB_WORKSPACE" --clone "$capacity_source_dir/clean" --go "$CAPACITY_TEST_GO" --package ./controllers/httpapi
+          capacity_owner_registry="$(mktemp -d /tmp/dk-reg-XXXXXXXX)"
+          export CAPACITY_TEST_OWNER_ROOT="$capacity_owner_registry"
+          set +e
+          go test -race -count=1 -v ./controllers/httpapi -run '^TestCapacityMutationHTTPPostgres$'
+          test_exit="$?"
+          python3 "$capacity_source_dir/clean/scripts/ci/capacity_fixture_owner_registry.py" --registry "$capacity_owner_registry" >"$RUNNER_TEMP/capacity-fixture-cleanup.json"
+          cleanup_exit="$?"
+          set -e
+          if [ "$cleanup_exit" -eq 0 ]; then
+            rm -rf "$capacity_owner_registry"
+          else
+            echo "Fixture cleanup uncertain; retained registry: $capacity_owner_registry" >&2
+          fi
+          test "$test_exit" -eq 0 && test "$cleanup_exit" -eq 0
+      - name: Retain fixture cleanup status
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: capacity-http-fixture-cleanup
+          path: ${{ runner.temp }}/capacity-fixture-cleanup.json
+          if-no-files-found: warn
