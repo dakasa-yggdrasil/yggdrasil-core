@@ -119,7 +119,7 @@ func TestCapacityGuestOriginalNativeHoldCorpusPostgres(t *testing.T) {
 		if n == 0 || (ack && (n == 1 || n == 2)) {
 			expected = "succeeded"
 		}
-		if err := tx.QueryRowContext(ctx, `SELECT status FROM public.workflow_runs WHERE id=$1 AND workflow_id=$2`, id, c.WorkflowID).Scan(&status); err != nil || status != expected {
+		if err := tx.QueryRowContext(ctx, q.OriginalWorkflowIdentitySQL, id, c.WorkflowID).Scan(&status); err != nil || status != expected {
 			t.Fatal("real public caller baseline/failed run missing", err)
 		}
 	}
