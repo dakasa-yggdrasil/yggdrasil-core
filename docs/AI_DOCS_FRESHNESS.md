@@ -7,11 +7,12 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 0e3394b5399703588813c852651473c6b100b806
-verified_diff_sha256: bed5678a062e53315418999886f0b89761086859efa7ccbc4f81661bd2e77fc8
+verified_at_commit: f8175beeff26605a44f98915444b77eb596d12c8
+verified_diff_sha256: f11193d36606e03f74aae28f0a626abc08326d87d452597505e63b90e0478904
 reconciler_schema: 1
 verified_at: 2026-10-28
 by: Giomaster
+capacity_recovery_fixture_review: Three recovery and four fence subcases retain their original names and use real source-issued grants on an isolated PG16 fixture. Independent review and local PG16 execution passed; some negative refusals remain generic as in the old cases. Integrated Linux and full-gate evidence remain required.
 combined_capacity_gate_review: The merge retains both reviewed native-read correction and source-identified capacity tests. The complete source census was regenerated; isolated PostgreSQL 16 tests passed on the merge, and Linux CI plus remaining capacity cases remain required.
 native_read_enablement_review: The qualification read now uses the actual process enablement flag and the already validated original executor. The current lease and all remaining guards are retained; an isolated PG test verified disabled, valid, foreign and expired cases. Linux QEMU and full gate remain required.
 native_read_diagnostic_review: Qualification-only closed RPC and native-read stages were independently reviewed, with fixed output and no raw error or request data. Portable tests and Linux compilation passed; actual Linux/QEMU and unchanged full capacity gate remain required. Synchronous diagnostic writes may consume qualification deadline.
