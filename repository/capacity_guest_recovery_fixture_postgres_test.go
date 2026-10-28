@@ -558,6 +558,16 @@ func TestSyntheticCompensationIssueExploration(t *testing.T) {
 		t.Run(scenario.name, func(t *testing.T) {
 			capacity.RecoveryFixtureApprovalScope(t)
 			db := recoveryTestIsolatedDB(t)
+			var dbName string
+			if err := db.QueryRow(`SELECT current_database()`).Scan(&dbName); err != nil {
+				t.Fatal(err)
+			}
+			adminURL, err := url.Parse(os.Getenv("RECOVERY_FIXTURE_ADMIN_URL"))
+			if err != nil {
+				t.Fatal(err)
+			}
+			adminURL.Path = "/" + dbName
+			t.Setenv("DB_URL", adminURL.String())
 			ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 			defer cancel()
 			p, b, _, _, _ := capacity.RecoveryFixtureInstalled(t)
@@ -865,6 +875,9 @@ func TestSyntheticCompensationIssueExploration(t *testing.T) {
 			deleted, e = capacity.VMRetirementProof(p, p.MutationBindings[0], receiptAfter, native, time.Now().UTC(), "fixture:native-read")
 			if e != nil {
 				t.Fatal("synthetic native proof", e)
+			}
+			if !scenario.protected {
+				compensationForeignIssueLockOrder(t, f, issuer, current, child, deleted)
 			}
 			missing := deleted
 			missing.AuxiliaryAbsent = nil
