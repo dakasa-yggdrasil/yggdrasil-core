@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "5c79d26a423c7cdd153be14c0c537d5fb899d35077b426b8798d8047a6f5b0ab",
+  "source_inventory_sha256": "8b3a729ff4ab52ffcaa37955dfcab9c1ae8077c13d992d714d7935d3b8b62ab3",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -742,6 +742,11 @@
   "registration_validation_classification_review_20261028": {
     "scope": "Qualification-only mapping of source-owned fixed registration validation errors to closed labels, preserving the original conflict and all guards. Exact-source Linux and native tests remain required; no cause is attributed to historical HOLDs.",
     "source_inventory_sha256": "5c79d26a423c7cdd153be14c0c537d5fb899d35077b426b8798d8047a6f5b0ab",
+    "production_or_native_qualification": false
+  },
+  "source_failure_read_diagnostic_review_20261028": {
+    "scope": "Qualification-only fixed-stage diagnostics of original failure read, with no raw error or body output and unchanged retry, deadline and guards. Existing HOLDs are not classified by this source; exact Linux and native validation remain required.",
+    "source_inventory_sha256": "8b3a729ff4ab52ffcaa37955dfcab9c1ae8077c13d992d714d7935d3b8b62ab3",
     "production_or_native_qualification": false
   }
 }
