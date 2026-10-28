@@ -379,7 +379,7 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 			return fail("original-guest-step-46")
 		}
 		if err = guestOriginalSourceAssertNativeRefusals(original, store, policy, parsed, confirmProof, grant); err != nil {
-			return fail("original-guest-step-43")
+			return fail(guestOriginalRefusal43Predicate(err))
 		}
 		if historicalOutput, handled, historicalErr := guestOriginalSourceHistoricalConfirm(original, store, policy, p, b, parsed, key, grant, pre, receipt, proof); handled {
 			if historicalErr != nil {

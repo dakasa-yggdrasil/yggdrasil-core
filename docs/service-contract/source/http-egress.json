@@ -308,7 +308,7 @@
       "expression_complete": true,
       "file": "internal/capacitynativeqemu/realm_linux.go",
       "function": "api",
-      "line": 194
+      "line": 191
     },
     {
       "argument_expression": "req",
@@ -318,7 +318,7 @@
       "expression_complete": true,
       "file": "internal/capacitynativeqemu/realm_linux.go",
       "function": "api",
-      "line": 203
+      "line": 200
     },
     {
       "argument_expression": "ctx, http.MethodPost, r.CoreOrigin+\"/api/v1/capacity/mutations/redeem\", bytes.NewReader(body)",
@@ -328,7 +328,7 @@
       "expression_complete": true,
       "file": "internal/capacitynativeqemu/realm_linux.go",
       "function": "sourceFenceRedeem",
-      "line": 742
+      "line": 739
     },
     {
       "argument_expression": "req",
@@ -338,7 +338,7 @@
       "expression_complete": true,
       "file": "internal/capacitynativeqemu/realm_linux.go",
       "function": "sourceFenceRedeem",
-      "line": 748
+      "line": 745
     },
     {
       "argument_expression": "ctx, http.MethodPost, provider.TokenURL, strings.NewReader(form.Encode())",

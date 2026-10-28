@@ -168,21 +168,25 @@ func (f *fixture) runOriginalPublicCaller(ctx context.Context) (runErr error) {
 	if len(f.realm.OwnedSlots()) != 0 {
 		return q.ErrOriginalUnknown
 	}
-	baseline, originals, err := f.originalWorkflow(ctx, "baseline", 1, q.QualificationAssessment(p, 0, 0.9, time.Now().UTC()), "")
+	baselineSlot, failedSlot := 1, 2
+	if q.SourceFailureSlot(f.request.NativeCase) == 1 {
+		baselineSlot, failedSlot = 2, 1
+	}
+	baseline, originals, err := f.originalWorkflow(ctx, "baseline", baselineSlot, q.QualificationAssessment(p, 0, 0.9, time.Now().UTC()), "")
 	returns = append(returns, originals...)
 	if err != nil || baseline.Status != "succeeded" {
 		return q.ErrOriginalUnknown
 	}
 	runIDs = append(runIDs, baseline.ID.String())
 	var prepared q.PreCreateRequest
-	if _, err = q.Await(ctx, filepath.Join(q.SlotDirectory(f.private, 2), "pre-create-request.json"), &prepared); err != nil {
+	if _, err = q.Await(ctx, filepath.Join(q.SlotDirectory(f.private, failedSlot), "pre-create-request.json"), &prepared); err != nil {
 		return err
 	}
-	baselineProbeAt, err := f.actualLastUsefulProbeTime(ctx, 1)
+	baselineProbeAt, err := f.actualLastUsefulProbeTime(ctx, baselineSlot)
 	if err != nil || !capacity.Fresh(baselineProbeAt, time.Now().UTC(), p.MaxEvidenceAgeSeconds) {
 		return q.ErrOriginalUnknown
 	}
-	burst, originals, err := f.originalWorkflow(ctx, "burst", 2, q.QualificationAssessment(p, 1, 0.9, baselineProbeAt), "")
+	burst, originals, err := f.originalWorkflow(ctx, "burst", failedSlot, q.QualificationAssessment(p, 1, 0.9, baselineProbeAt), "")
 	returns = append(returns, originals...)
 	if err != nil {
 		return err
@@ -292,7 +296,7 @@ func (record *originalPublicReturn) projectOriginalWorkflowReturn(run model.Work
 				continue
 			}
 			record.WorkflowFailedStep = step.ID
-			if predicate, ok := step.Metadata["original_guest_refusal_predicate"].(string); ok && regexp.MustCompile(`^(?:original-guest-step-[0-9]{2}|original-retirement-39-(?:http|floor|decode|load|auth|record)|original-canonical-floor-next-output|original-canonical-floor-next-permission|original-canonical-floor-permission-gate|original-source-historical-confirm|original-source-historical-output|original-source-live-partial|original-source-live-partial-output|original-source-terminal|original-source-terminal-output|pg17-original-confirm-assertions|pg17-original-create-assertions|pg17-original-historical-assertions|pg17-original-terminal-assertions|pg17-original-workflow-confirm|pg17-confirm-(?:check-0[1-6]|native-(?:0[1-9]|[12][0-9]|3[01])))$`).MatchString(predicate) {
+			if predicate, ok := step.Metadata["original_guest_refusal_predicate"].(string); ok && regexp.MustCompile(`^(?:original-guest-step-[0-9]{2}|original-retirement-39-(?:http|floor|decode|load|auth|record)|original-refusal-43-(?:pre|initial|publish|check-(?:0[1-9]|1[01])-(?:accepted|error|state))|original-canonical-floor-next-output|original-canonical-floor-next-permission|original-canonical-floor-permission-gate|original-source-historical-confirm|original-source-historical-output|original-source-live-partial|original-source-live-partial-output|original-source-terminal|original-source-terminal-output|pg17-original-confirm-assertions|pg17-original-create-assertions|pg17-original-historical-assertions|pg17-original-terminal-assertions|pg17-original-workflow-confirm|pg17-confirm-(?:check-0[1-6]|native-(?:0[1-9]|[12][0-9]|3[01])))$`).MatchString(predicate) {
 				record.WorkflowPredicate = predicate
 			}
 			if step.Error == "" {

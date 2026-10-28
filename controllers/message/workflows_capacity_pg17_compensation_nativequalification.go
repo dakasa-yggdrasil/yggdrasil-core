@@ -44,6 +44,20 @@ func pg17CompensationIdentity(ctx context.Context, realm *q.Realm, store reposit
 	return 0, "", errors.New("pg17 closed original compensation case required")
 }
 
+func pg17PostlossSlotProtection(nativeCase string, slot, protectedSlots int) bool {
+	if slot != q.SourceFailureSlot(nativeCase) || slot < 1 {
+		return false
+	}
+	switch nativeCase {
+	case "canonical_postloss_protected_failed_create_reissue":
+		return slot <= protectedSlots
+	case "canonical_postloss_unprotected_failed_create_reissue":
+		return slot > protectedSlots
+	default:
+		return false
+	}
+}
+
 // Hash only: private grant/lease/token values never enter the returned DTO.
 // Fixed queries cover all durable mutation state touched by the tested calls.
 func pg17CompensationState(ctx context.Context, store repository.CapacityStore, namespace string) (string, error) {
@@ -131,8 +145,18 @@ func PG17AssertCompensationEligibility(ctx context.Context, realm *q.Realm, issu
 			return nil, errors.New("pg17 actual action status refused")
 		}
 	}
-	if successes != 1 || failures != 1 || !issue.FailedProof.ActionsFailed || issue.FailedProof.ActionsSuccessful || !issue.FailedProof.ActionsTerminal || !issue.FailedProof.CompensationIdentityVerified || issue.FailedProof.ResourceAbsent || issue.FailedProof.Slot != 2 {
+	if successes != 1 || failures != 1 || !issue.FailedProof.ActionsFailed || issue.FailedProof.ActionsSuccessful || !issue.FailedProof.ActionsTerminal || !issue.FailedProof.CompensationIdentityVerified || issue.FailedProof.ResourceAbsent || issue.FailedProof.Slot != q.SourceFailureSlot(realm.Request.NativeCase) {
 		return nil, errors.New("pg17 failed original operation must preserve native start success")
+	}
+	if q.PostlossSourceCase(realm.Request.NativeCase) {
+		var spec model.CapacityPolicySpec
+		if json.Unmarshal(current.Spec, &spec) != nil {
+			return nil, errors.New("pg17 postloss policy spec required")
+		}
+		binding, bindingErr := capacity.VMObservationBinding(spec, issue.Mutation.BindingName)
+		if bindingErr != nil || !pg17PostlossSlotProtection(realm.Request.NativeCase, issue.FailedProof.Slot, binding.ProtectedSlots) {
+			return nil, errors.New("pg17 actual failed slot protection differs")
+		}
 	}
 	variants := []string{"unknown_action", "successful_action", "wrong_parent", "wrong_creation_label", "missing_identity", "running_business", "running_native", "open_admission", "routed", "incomplete_inventory", "below_floor", "wrong_tuple"}
 	if q.PostlossSourceCase(realm.Request.NativeCase) {
@@ -292,7 +316,7 @@ func PG17AssertCompensationAfterConfirm(ctx context.Context, realm *q.Realm, iss
 	}
 	var members, failedMembers, parentEvents, childEvents int
 	var eventParent string
-	if err = issuer.DB.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE resource_id<>''),count(*) FILTER(WHERE slot=2 AND resource_id<>'') FROM public.capacity_resource_slots WHERE namespace=$1`, current.Metadata.Namespace).Scan(&members, &failedMembers); err != nil {
+	if err = issuer.DB.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE resource_id<>''),count(*) FILTER(WHERE slot=$2 AND resource_id<>'') FROM public.capacity_resource_slots WHERE namespace=$1`, current.Metadata.Namespace, q.SourceFailureSlot(realm.Request.NativeCase)).Scan(&members, &failedMembers); err != nil {
 		return nil, err
 	}
 	if err = issuer.DB.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE idempotency_key=$2),count(*) FILTER(WHERE idempotency_key=$3) FROM public.event_log WHERE metadata->>'namespace'=$1`, current.Metadata.Namespace, "capacity-mutation/"+parentBefore.Grant.GrantID, "capacity-mutation/"+child.GrantID).Scan(&parentEvents, &childEvents); err != nil {

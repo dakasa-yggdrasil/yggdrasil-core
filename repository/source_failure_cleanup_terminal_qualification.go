@@ -315,9 +315,22 @@ type SourceFailureCleanupCurrentRead struct {
 	ProductionQualified      bool      `json:"production_qualified"`
 }
 
+func sourceCleanupSlotDirectoryMatches(b SourceFailureCleanupBody) bool {
+	slot := canonicalSourceExpectedSlot(b.NativeCase)
+	if slot == 0 {
+		switch b.NativeCase {
+		case "compensation_unprotected_failed_create", "compensation_protected_failed_create", "compensation_unprotected_lost_create_reply", "compensation_protected_lost_create_reply", "source_live_failed_floor_recovery":
+			slot = 2
+		default:
+			return false
+		}
+	}
+	return b.Slot == slot && ((slot == 1 && filepath.Base(b.SourceSlotDirectory) == "slot-1") || (slot == 2 && filepath.Base(b.SourceSlotDirectory) == "slot-2"))
+}
+
 func sourceFailureCleanupCurrentRead(b SourceFailureCleanupBody, t SourceFailureCleanupTerminal, current model.CapacityIntent, dbNow time.Time) (SourceFailureCleanupCurrentRead, error) {
 	var r SourceFailureCleanupCurrentRead
-	if b.CoreSource != capacity.CurrentGuestCoreSource() || b.SourceDirectoryDevice == 0 || b.SourceDirectoryInode == 0 || filepath.Clean(b.SourceSlotDirectory) != b.SourceSlotDirectory || !filepath.IsAbs(b.SourceSlotDirectory) || filepath.Base(b.SourceSlotDirectory) != "slot-2" || !strings.HasPrefix(filepath.Base(filepath.Dir(b.SourceSlotDirectory)), "guest-provisioning-native-") || !dbNow.Before(b.OriginalContextDeadline) {
+	if b.CoreSource != capacity.CurrentGuestCoreSource() || b.SourceDirectoryDevice == 0 || b.SourceDirectoryInode == 0 || !sourceCleanupSlotDirectoryMatches(b) || filepath.Clean(b.SourceSlotDirectory) != b.SourceSlotDirectory || !filepath.IsAbs(b.SourceSlotDirectory) || !strings.HasPrefix(filepath.Base(filepath.Dir(b.SourceSlotDirectory)), "guest-provisioning-native-") || !dbNow.Before(b.OriginalContextDeadline) {
 		return r, ErrCapacityConflict
 	}
 	r = SourceFailureCleanupCurrentRead{Generation: current.Generation, FencingToken: current.FencingToken, LeaseOwner: current.LeaseOwner, ExecutorID: current.LeaseExecutorID, Schema: "original_source_failure_cleanup_current_read_v1", ReadID: uuid.NewString(), ParentGrantID: b.ParentGrantID, AuthoritySHA256: t.AuthoritySHA256, OriginalTerminalSHA256: t.TerminalSHA256, CoreSource: b.CoreSource, GuestSource: b.GuestSource, HostBootID: b.OriginalHostBootID, DirectoryDevice: b.SourceDirectoryDevice, DirectoryInode: b.SourceDirectoryInode, StartedAt: time.Now().UTC(), ProductionQualified: false}

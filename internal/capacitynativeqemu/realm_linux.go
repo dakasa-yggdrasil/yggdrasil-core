@@ -164,10 +164,7 @@ func (r *Realm) Prepare(ctx context.Context, slot int) error {
 	if err != nil {
 		return err
 	}
-	selected := r.Request.NativeCase
-	if slot == 1 {
-		selected = "positive_original_lifecycle"
-	}
+	selected := sourceGuestCase(r.Request.NativeCase, slot)
 	if pre.Schema != FixtureSchema || pre.Stage != "pre-create-request.json" || pre.NativeCase != selected || pre.Slot != slot || pre.ResourceID != r.Request.Slots[slot-1].ResourceID || pre.CreatorSourceSHA256 != r.Request.CreatorSourceSHA256 || !pre.OriginalContextDeadline.Equal(r.Request.OriginalContextDeadline) || pre.OriginalProvisioningBudgetSeconds != 420 || pre.SourceConfigStageSHA256 != stageSHA || pre.SourceISOSHA256 != isoSHA || pre.BootstrapSHA256 != bootstrapSHA || bootstrapSHA != r.Profile.BootstrapSHA256 {
 		return ErrOriginalUnknown
 	}
@@ -443,7 +440,7 @@ func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, poli
 	}
 	var creator CreatorReturn
 	creatorPath := filepath.Join(dir, "creator-original.json")
-	if slot == 2 && (SourceLostCreateCase(r.Request.NativeCase) || PostlossSourceCase(r.Request.NativeCase)) {
+	if slot == SourceFailureSlot(r.Request.NativeCase) && (SourceLostCreateCase(r.Request.NativeCase) || PostlossSourceCase(r.Request.NativeCase)) {
 		if err := readSourceLostCreateReply(ctx, dir); err != nil {
 			return proof, err
 		}
@@ -482,7 +479,7 @@ func (r *Realm) Create(ctx context.Context, store repository.CapacityStore, poli
 	actionID := "qemu-original-create:" + capacity.GuestRetirementSHA(creator)
 	created := creator.OriginalCreateReturnedAt.UTC().Format(time.RFC3339Nano)
 	settlement := model.CapacityMutationSettleRequest{GrantID: grant.GrantID, AttemptID: attempt, RequestSHA256: grant.RequestSHA256, Outcome: "accepted", TransportCompleted: true, ResourceID: creator.ResourceID, ResourceCreatedAt: created, ActionID: actionID, ObservedAt: native.CloseReturnedAt.UTC().Format(time.RFC3339Nano)}
-	if slot == 2 && (SourceLostCreateCase(r.Request.NativeCase) || PostlossSourceCase(r.Request.NativeCase)) {
+	if slot == SourceFailureSlot(r.Request.NativeCase) && (SourceLostCreateCase(r.Request.NativeCase) || PostlossSourceCase(r.Request.NativeCase)) {
 		// Actual original owning reply was empty EOF. Independent native
 		// identity is retained separately; no accepted identity is invented.
 		settlement.Outcome, settlement.ResourceID, settlement.ResourceCreatedAt, settlement.ActionID = "uncertain", "", "", ""
@@ -567,11 +564,11 @@ func (r *Realm) Witnessed(ctx context.Context, grant model.CapacityMutationGrant
 	if witness.PreregistrationID != pre.PreregistrationID || witness.OriginalCreateGrantID != grant.GrantID || witness.Tuple.Slot != grant.Slot || witness.Tuple.ResourceID != r.Request.Slots[grant.Slot-1].ResourceID {
 		return ErrOriginalUnknown
 	}
-	if PostlossSourceCase(r.Request.NativeCase) && pre.Slot == 2 {
+	if PostlossSourceCase(r.Request.NativeCase) && pre.Slot == SourceFailureSlot(r.Request.NativeCase) {
 		if witness.SourceObservation == nil {
 			return ErrOriginalUnknown
 		}
-		if _, err := Publish(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, 2), "core-postloss-observed-create-witness.json"), witness); err != nil {
+		if _, err := Publish(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, pre.Slot), "core-postloss-observed-create-witness.json"), witness); err != nil {
 			return err
 		}
 	}

@@ -21,3 +21,5 @@ func guestPG17TransportStage(_ context.Context, _ string)                       
 
 // Production keeps the original aggregate refusal and discloses no detail.
 func guestRetirementStep39Predicate(_, _, _, _, _, _ bool) string { return "original-guest-step-39" }
+
+func guestOriginalRefusal43Predicate(error) string { return "original-guest-step-43" }

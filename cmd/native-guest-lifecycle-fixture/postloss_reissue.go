@@ -20,6 +20,8 @@ import (
 
 func (f *fixture) reissueCanonicalPostlossChild(ctx context.Context, issuer repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, pre model.CapacityGuestOriginalProvisioningPreregistration, first model.CapacityMutationGrant, issue model.CapacityCompensationIssue) (model.CapacityMutationGrant, error) {
 	var none model.CapacityMutationGrant
+	failedSlot := q.SourceFailureSlot(f.request.NativeCase)
+	baselineSlot := q.SourceBaselineSlot(f.request.NativeCase)
 	initialBinding, bindingErr := capacity.VMObservationBinding(p, f.binding.MutationBindingName)
 	if !q.PostlossSourceCase(f.request.NativeCase) || bindingErr != nil || !initialBinding.CompensationEnabled || first.CompensationOf != pre.OriginalCreateGrantID || first.State != "issued" {
 		return none, q.ErrOriginalUnknown
@@ -128,7 +130,7 @@ func (f *fixture) reissueCanonicalPostlossChild(ctx context.Context, issuer repo
 	if err != nil {
 		return none, err
 	}
-	client, err := f.sourceClient(2)
+	client, err := f.sourceClient(failedSlot)
 	if err != nil {
 		return none, err
 	}
@@ -147,7 +149,7 @@ func (f *fixture) reissueCanonicalPostlossChild(ctx context.Context, issuer repo
 	if capacity.GuestOriginalHTTPDecode(returned, &freshFailure) != nil || freshFailure.ReadNonceSHA256 != nonceSHA {
 		return none, q.ErrOriginalUnknown
 	}
-	if _, err = q.PublishBytes(ctx, filepath.Join(q.SlotDirectory(f.private, 2), "core-postloss-fresh-failure-read.json"), returned.Body); err != nil {
+	if _, err = q.PublishBytes(ctx, filepath.Join(q.SlotDirectory(f.private, failedSlot), "core-postloss-fresh-failure-read.json"), returned.Body); err != nil {
 		return none, err
 	}
 	fresh, err := issuer.AppendCanonicalPostlossFreshRead(ctx, policy, pre.OriginalCreateGrantID, first.GrantID, nonceSHA, nativeWire, returned.Body)
@@ -161,7 +163,7 @@ func (f *fixture) reissueCanonicalPostlossChild(ctx context.Context, issuer repo
 	if _, err = q.PublishBytes(ctx, filepath.Join(f.private, "canonical-postloss-fresh-eligibility.json"), freshWire); err != nil {
 		return none, err
 	}
-	baselineClient, err := f.sourceClient(1)
+	baselineClient, err := f.sourceClient(baselineSlot)
 	if err != nil {
 		return none, err
 	}
@@ -173,7 +175,7 @@ func (f *fixture) reissueCanonicalPostlossChild(ctx context.Context, issuer repo
 	}
 	parentStore := issuer
 	parentStore.ExecutorID = intent.LeaseExecutorID
-	probe, err := f.realm.DiagnosticProbe(ctx, parentStore, 1, f.corePrivate, baselineClient)
+	probe, err := f.realm.DiagnosticProbe(ctx, parentStore, baselineSlot, f.corePrivate, baselineClient)
 	if err != nil {
 		return none, err
 	}
@@ -185,13 +187,13 @@ func (f *fixture) reissueCanonicalPostlossChild(ctx context.Context, issuer repo
 	if err != nil {
 		return none, err
 	}
-	native, err := f.realm.FreshNativeMember(ctx, 1, binding)
+	native, err := f.realm.FreshNativeMember(ctx, baselineSlot, binding)
 	if err != nil {
 		return none, err
 	}
 	var desired []byte
 	for _, slot := range binding.Slots {
-		if slot.Slot == 1 {
+		if slot.Slot == baselineSlot {
 			desired, err = json.Marshal(slot.DesiredSpec)
 		}
 	}

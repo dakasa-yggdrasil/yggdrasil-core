@@ -17,7 +17,7 @@ import (
 )
 
 func (f *fixture) prepareOriginalRecoveryCleanupChronology(ctx context.Context, p model.CapacityPolicySpec, pre model.CapacityGuestOriginalProvisioningPreregistration) error {
-	if !q.CanonicalSourceCompensationCase(f.request.NativeCase) || pre.Slot != 2 {
+	if !q.CanonicalSourceCompensationCase(f.request.NativeCase) || pre.Slot != q.SourceFailureSlot(f.request.NativeCase) {
 		return q.ErrOriginalUnknown
 	}
 	limit := pre.OriginalDeadline
@@ -57,12 +57,12 @@ func (f *fixture) prepareOriginalRecoveryCleanupChronology(ctx context.Context, 
 		case <-timer.C:
 		}
 	}
-	client, err := f.sourceClient(1)
+	client, err := f.sourceClient(q.SourceBaselineSlot(f.request.NativeCase))
 	if err != nil {
 		return err
 	}
 	defer client.Close()
-	observed, err := f.realm.DiagnosticProbe(ctx, repository.CapacityStore{DB: f.db, WorkflowID: f.workflow.ID}, 1, f.corePrivate, client)
+	observed, err := f.realm.DiagnosticProbe(ctx, repository.CapacityStore{DB: f.db, WorkflowID: f.workflow.ID}, q.SourceBaselineSlot(f.request.NativeCase), f.corePrivate, client)
 	if err != nil {
 		return err
 	}
@@ -83,7 +83,7 @@ func (f *fixture) prepareOriginalRecoveryCleanupChronology(ctx context.Context, 
 func (f *fixture) originalRecoveryWorkflow(ctx context.Context, generation int64, assessment model.CapacityAssessment, preID string) (model.WorkflowRunRecord, []originalPublicReturn, error) {
 	var run model.WorkflowRunRecord
 	var originals []originalPublicReturn
-	request := model.RunWorkflowRequest{Workflow: model.ManifestSelector{Namespace: f.namespace, Name: f.workflow.Metadata.Name}, Inputs: map[string]any{"mode": "recovery_cleanup", "slot": 2, "generation": generation, "assessment": assessment, "preregistration_id": preID}, Metadata: map[string]any{"idempotency_key": uuid.NewString()}}
+	request := model.RunWorkflowRequest{Workflow: model.ManifestSelector{Namespace: f.namespace, Name: f.workflow.Metadata.Name}, Inputs: map[string]any{"mode": "recovery_cleanup", "slot": q.SourceFailureSlot(f.request.NativeCase), "generation": generation, "assessment": assessment, "preregistration_id": preID}, Metadata: map[string]any{"idempotency_key": uuid.NewString()}}
 	var accepted struct {
 		RunID    string                 `json:"run_id"`
 		Status   string                 `json:"status"`
@@ -134,12 +134,12 @@ func (f *fixture) recoveryCleanupProof(ctx context.Context, p model.CapacityPoli
 	if err != nil || !current.RecoveryOnly || current.Generation != session.Epoch.Generation || current.FencingToken != session.Epoch.FencingToken || current.LeaseOwner != session.Epoch.LeaseOwner || current.LeaseExecutorID != store.ExecutorID || current.LeaseExpiresAt == nil {
 		return noStore, noIntent, noProof, q.ErrOriginalUnknown
 	}
-	client, err := f.sourceClient(1)
+	client, err := f.sourceClient(q.SourceBaselineSlot(f.request.NativeCase))
 	if err != nil {
 		return noStore, noIntent, noProof, err
 	}
 	defer client.Close()
-	probe, err := f.realm.DiagnosticProbe(ctx, store, 1, f.corePrivate, client)
+	probe, err := f.realm.DiagnosticProbe(ctx, store, q.SourceBaselineSlot(f.request.NativeCase), f.corePrivate, client)
 	if err != nil {
 		return noStore, noIntent, noProof, err
 	}
@@ -147,13 +147,13 @@ func (f *fixture) recoveryCleanupProof(ctx context.Context, p model.CapacityPoli
 	if err != nil {
 		return noStore, noIntent, noProof, err
 	}
-	physical, err := f.realm.FreshNativeMember(ctx, 1, binding)
+	physical, err := f.realm.FreshNativeMember(ctx, q.SourceBaselineSlot(f.request.NativeCase), binding)
 	if err != nil {
 		return noStore, noIntent, noProof, err
 	}
 	var desired []byte
 	for _, slot := range binding.Slots {
-		if slot.Slot == 1 {
+		if slot.Slot == q.SourceBaselineSlot(f.request.NativeCase) {
 			desired, err = json.Marshal(slot.DesiredSpec)
 		}
 	}

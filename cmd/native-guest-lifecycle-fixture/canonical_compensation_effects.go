@@ -28,7 +28,9 @@ func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context,
 	if !q.CanonicalSourceCompensationCase(f.request.NativeCase) || q.SourceLostCreateCase(f.request.NativeCase) || baseline.Status != "succeeded" || burst.Status != "failed" || p.Ceiling != 2 || p.Floor < 1 || p.Floor > 2 {
 		return q.ErrOriginalUnknown
 	}
-	pre, err := f.realm.OriginalPreregistration(2)
+	failedSlot := q.SourceFailureSlot(f.request.NativeCase)
+	baselineSlot := q.SourceBaselineSlot(f.request.NativeCase)
+	pre, err := f.realm.OriginalPreregistration(failedSlot)
 	if err != nil {
 		return err
 	}
@@ -40,7 +42,7 @@ func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context,
 		if err = f.db.QueryRowContext(ctx, `SELECT original_wire FROM public.capacity_guest_original_create_witnesses WHERE preregistration_id=$1`, pre.PreregistrationID).Scan(&wire); err != nil || capacity.DecodeGuestLifecycle(wire, &witness) != nil {
 			return q.ErrOriginalUnknown
 		}
-		client, err := f.sourceClient(2)
+		client, err := f.sourceClient(failedSlot)
 		if err != nil {
 			return err
 		}
@@ -58,7 +60,7 @@ func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context,
 					return err
 				}
 				failureSHA = capacity.BusinessCreationSHA256(returned.Body)
-				if _, err = q.PublishBytes(ctx, filepath.Join(q.SlotDirectory(f.private, 2), "core-original-failed-owner-diagnostic.json"), returned.Body); err != nil {
+				if _, err = q.PublishBytes(ctx, filepath.Join(q.SlotDirectory(f.private, failedSlot), "core-original-failed-owner-diagnostic.json"), returned.Body); err != nil {
 					return err
 				}
 				break
@@ -81,12 +83,12 @@ func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context,
 			return q.ErrOriginalUnknown
 		}
 	}
-	baselineClient, err := f.sourceClient(1)
+	baselineClient, err := f.sourceClient(baselineSlot)
 	if err != nil {
 		return err
 	}
 	defer baselineClient.Close()
-	useful, err := f.realm.DiagnosticProbe(ctx, store, 1, f.corePrivate, baselineClient)
+	useful, err := f.realm.DiagnosticProbe(ctx, store, baselineSlot, f.corePrivate, baselineClient)
 	if err != nil {
 		return err
 	}
@@ -140,10 +142,10 @@ func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context,
 		return err
 	}
 	// Signed actual-child authority precedes the existing Source ready-file.
-	if _, err = q.PublishBytes(ctx, filepath.Join(q.SlotDirectory(f.private, 2), "canonical-source-child-authority.json"), session.Authority); err != nil {
+	if _, err = q.PublishBytes(ctx, filepath.Join(q.SlotDirectory(f.private, failedSlot), "canonical-source-child-authority.json"), session.Authority); err != nil {
 		return err
 	}
-	if _, err = q.PublishBytes(ctx, filepath.Join(q.SlotDirectory(f.private, 2), "source-failure-cleanup-authority.json"), authorityWire); err != nil {
+	if _, err = q.PublishBytes(ctx, filepath.Join(q.SlotDirectory(f.private, failedSlot), "source-failure-cleanup-authority.json"), authorityWire); err != nil {
 		return err
 	}
 	physical, err := f.realm.ReadSourceRecoveryFailureCleanup(ctx, authority, body, issuer, currentPolicy, session)
@@ -151,7 +153,7 @@ func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context,
 		return err
 	}
 	var retainedPhysical q.SourceFailureCleanupPhysical
-	physicalWire, err := q.Await(ctx, filepath.Join(q.SlotDirectory(f.private, 2), "source-failure-cleanup-physical.json"), &retainedPhysical)
+	physicalWire, err := q.Await(ctx, filepath.Join(q.SlotDirectory(f.private, failedSlot), "source-failure-cleanup-physical.json"), &retainedPhysical)
 	if err != nil || capacity.GuestRetirementSHA(retainedPhysical) != capacity.GuestRetirementSHA(physical) {
 		return q.ErrOriginalUnknown
 	}
@@ -168,7 +170,7 @@ func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context,
 		return q.ErrOriginalUnknown
 	}
 	var members, failed, events int
-	if err = f.db.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE resource_id<>''),count(*) FILTER(WHERE slot=2 AND resource_id<>'') FROM public.capacity_resource_slots WHERE namespace=$1`, f.namespace).Scan(&members, &failed); err != nil || members != 1 || failed != 0 {
+	if err = f.db.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE resource_id<>''),count(*) FILTER(WHERE slot=$2 AND resource_id<>'') FROM public.capacity_resource_slots WHERE namespace=$1`, f.namespace, failedSlot).Scan(&members, &failed); err != nil || members != 1 || failed != 0 {
 		return q.ErrOriginalUnknown
 	}
 	if err = f.db.QueryRowContext(ctx, `SELECT count(*) FROM public.event_log WHERE idempotency_key=$1`, "capacity-mutation/"+pre.OriginalCreateGrantID).Scan(&events); err != nil || events != 0 {
@@ -272,7 +274,7 @@ func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context,
 	if err != nil {
 		return err
 	}
-	if err = f.db.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE resource_id<>''),count(*) FILTER(WHERE slot=2 AND resource_id<>'') FROM public.capacity_resource_slots WHERE namespace=$1`, f.namespace).Scan(&members, &failed); err != nil || members != 1 || failed != 0 {
+	if err = f.db.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE resource_id<>''),count(*) FILTER(WHERE slot=$2 AND resource_id<>'') FROM public.capacity_resource_slots WHERE namespace=$1`, f.namespace, failedSlot).Scan(&members, &failed); err != nil || members != 1 || failed != 0 {
 		return q.ErrOriginalUnknown
 	}
 	var ensured, destroyed int

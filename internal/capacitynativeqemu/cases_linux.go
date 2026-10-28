@@ -35,10 +35,7 @@ func PositiveCase(value string) bool {
 // source case insertion is fixed before ISO/precreate; arbitrary env/commands
 // or later bootstrap/profile mutation never enters the source approved realm.
 func (r *Realm) verifySourceUnits(ctx context.Context, slot int) error {
-	selected := r.Request.NativeCase
-	if slot == 1 {
-		selected = "positive_original_lifecycle"
-	}
+	selected := sourceGuestCase(r.Request.NativeCase, slot)
 	if !AllowedCase(selected) && !SourceLivePartialCase(selected) && !SourceHistoricalConfirmCase(selected) && !SourceTerminalCase(selected) && !SourceFailedFloorCase(selected) {
 		return ErrOriginalUnknown
 	}

@@ -16,7 +16,7 @@ import (
 func (r *Realm) ExpireCanonicalPostlossUnusedChild(ctx context.Context, child model.CapacityMutationGrant) (model.CapacityMutationRedeemResponse, error) {
 	var response model.CapacityMutationRedeemResponse
 	var random [32]byte
-	if !PostlossSourceCase(r.Request.NativeCase) || child.State != "issued" || child.CompensationOf == "" || child.Slot != 2 {
+	if !PostlossSourceCase(r.Request.NativeCase) || child.State != "issued" || child.CompensationOf == "" || child.Slot != SourceFailureSlot(r.Request.NativeCase) {
 		return response, ErrOriginalUnknown
 	}
 	if _, err := rand.Read(random[:]); err != nil {
@@ -34,18 +34,18 @@ func (r *Realm) FreshCanonicalPostlossNative(ctx context.Context) (IndependentRe
 		return fresh, nil, ErrOriginalUnknown
 	}
 	r.mu.Lock()
-	original, ok := r.originals[2]
+	original, ok := r.originals[SourceFailureSlot(r.Request.NativeCase)]
 	r.mu.Unlock()
 	if !ok {
 		return fresh, nil, ErrOriginalUnknown
 	}
 	read, cancel := context.WithTimeout(ctx, 5*time.Second)
-	fresh, err := Observe(read, SlotDirectory(r.PrivateDirectory, 2), original.Original, r.QEMUBinarySHA256)
+	fresh, err := Observe(read, SlotDirectory(r.PrivateDirectory, SourceFailureSlot(r.Request.NativeCase)), original.Original, r.QEMUBinarySHA256)
 	cancel()
-	if err != nil || r.verifyFixedCommand(ctx, 2, fresh) != nil || !sameProcess(fresh.Before, original.After) || !sameProcess(fresh.After, original.After) || fresh.OriginalDisk != original.OriginalDisk {
+	if err != nil || r.verifyFixedCommand(ctx, SourceFailureSlot(r.Request.NativeCase), fresh) != nil || !sameProcess(fresh.Before, original.After) || !sameProcess(fresh.After, original.After) || fresh.OriginalDisk != original.OriginalDisk {
 		return fresh, nil, ErrOriginalUnknown
 	}
 	fresh.OriginalCreatorSHA256 = original.OriginalCreatorSHA256
-	wire, err := Publish(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, 2), "core-postloss-fresh-native-read.json"), fresh)
+	wire, err := Publish(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, SourceFailureSlot(r.Request.NativeCase)), "core-postloss-fresh-native-read.json"), fresh)
 	return fresh, wire, err
 }
