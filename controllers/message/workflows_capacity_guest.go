@@ -353,7 +353,7 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 			} else if errors.Is(readErr, repository.ErrCapacityConflict) || errors.Is(readErr, repository.ErrCapacityMutationAuthorization) {
 				installationReadState = "confirmation_refused"
 			} else if readErr != nil {
-				installationReadState = "confirmation_read_error"
+				installationReadState = guestInstallationFailureState(readErr)
 			}
 			if errors.Is(readErr, sql.ErrNoRows) {
 				return receipt, false, nil

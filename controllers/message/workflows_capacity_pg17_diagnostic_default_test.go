@@ -18,3 +18,9 @@ func TestNativeQualificationDiagnosticAbsent(t *testing.T) {
 		t.Fatal("production failure changed")
 	}
 }
+
+func TestDefaultInstallationFailureStateDoesNotDisclose(t *testing.T) {
+	if got := guestInstallationFailureState(errors.New("private")); got != "confirmation_read_error" {
+		t.Fatal(got)
+	}
+}

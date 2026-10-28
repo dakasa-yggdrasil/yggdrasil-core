@@ -3,7 +3,12 @@
 package message
 
 import (
+	"context"
+	"database/sql"
 	"errors"
+
+	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
+	"github.com/lib/pq"
 	"regexp"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -33,4 +38,34 @@ func guestPG17ConfirmFailurePredicate(err error) string {
 		return "pg17-confirm-" + string(stage)
 	}
 	return "pg17-original-workflow-confirm"
+}
+
+// Diagnostic states are fixed vocabulary and never expose database errors.
+func guestInstallationFailureState(err error) string {
+	switch {
+	case errors.Is(err, repository.ErrCapacityLease):
+		return "confirmation_lease_invalid"
+	case errors.Is(err, repository.ErrCapacityDisabled):
+		return "confirmation_disabled"
+	case errors.Is(err, context.Canceled):
+		return "confirmation_context_cancelled"
+	case errors.Is(err, context.DeadlineExceeded):
+		return "confirmation_context_deadline"
+	case errors.Is(err, sql.ErrTxDone):
+		return "confirmation_transaction_closed"
+	}
+	var pg *pq.Error
+	if errors.As(err, &pg) {
+		switch string(pg.Code) {
+		case "40P01":
+			return "confirmation_sql_deadlock"
+		case "40001":
+			return "confirmation_sql_serialization"
+		case "57014":
+			return "confirmation_sql_cancelled"
+		default:
+			return "confirmation_sql_other"
+		}
+	}
+	return "confirmation_read_error"
 }

@@ -44,7 +44,7 @@ func TestProbeTimeoutRetentionUsesOwnerBudget(t *testing.T) {
 	}
 }
 func TestInstallationTerminalStateRetention(t *testing.T) {
-	for _, state := range []string{"receipt_pending", "receipt_refused", "receipt_read_error", "confirmation_pending", "confirmation_refused", "confirmation_read_error", "read_ok"} {
+	for _, state := range []string{"receipt_pending", "receipt_refused", "receipt_read_error", "confirmation_pending", "confirmation_refused", "confirmation_read_error", "confirmation_lease_invalid", "confirmation_disabled", "confirmation_context_cancelled", "confirmation_context_deadline", "confirmation_transaction_closed", "confirmation_sql_deadlock", "confirmation_sql_serialization", "confirmation_sql_cancelled", "confirmation_sql_other", "read_ok"} {
 		t.Run(state, func(t *testing.T) {
 			r := &Realm{PrivateDirectory: t.TempDir()}
 			if err := os.MkdirAll(SlotDirectory(r.PrivateDirectory, 1), 0700); err != nil {

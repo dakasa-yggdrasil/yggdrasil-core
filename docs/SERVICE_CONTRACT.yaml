@@ -12,7 +12,7 @@
   "source_inventory": {
     "id": "complete_runtime_source_census",
     "evidence": "docs/service-contract/source/sources.json",
-    "sha256": "c3d7b15dddfefd6c8191f4f54856604a625d930774c0b161c517a2d3e32bba20"
+    "sha256": "2cdf5038774df5dd87655d9196a1c21e1f355a499520638e0f8699647543d71f"
   },
   "produces": [
     {

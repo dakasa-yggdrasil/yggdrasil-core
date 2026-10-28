@@ -40,7 +40,7 @@ func (r *Realm) InstallationRecorded(ctx context.Context, g model.CapacityMutati
 
 func (r *Realm) InstallationReadState(ctx context.Context, slot int, state string) error {
 	switch state {
-	case "receipt_read_error", "receipt_refused", "read_ok", "receipt_pending", "confirmation_pending", "confirmation_refused", "confirmation_read_error":
+	case "receipt_read_error", "receipt_refused", "read_ok", "receipt_pending", "confirmation_pending", "confirmation_refused", "confirmation_read_error", "confirmation_lease_invalid", "confirmation_disabled", "confirmation_context_cancelled", "confirmation_context_deadline", "confirmation_transaction_closed", "confirmation_sql_deadlock", "confirmation_sql_serialization", "confirmation_sql_cancelled", "confirmation_sql_other":
 	default:
 		return ErrOriginalUnknown
 	}
