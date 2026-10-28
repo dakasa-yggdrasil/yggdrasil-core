@@ -44,8 +44,8 @@ func TestOriginalReadoptionPresenceClosedRoundTrip(t *testing.T) {
 
 func TestReadoptionNativeReturnPreservesCreatorHash(t *testing.T) {
 	ctx := context.Background()
-	native := IndependentReturn{OriginalCreatorSHA256: strings.Repeat("a", 64)}
-	fresh := IndependentReturn{Schema: "core_independent_original_qemu_read_v1", Original: CreatorReturn{OriginalIO: []OriginalIO{}}, IO: []OriginalIO{}}
+	native := IndependentReturn{OriginalCreatorSHA256: strings.Repeat("a", 64), Original: CreatorReturn{ResourceID: "original", OriginalIO: []OriginalIO{}}}
+	fresh := IndependentReturn{Schema: "core_independent_original_qemu_read_v1", Original: native.Original, IO: []OriginalIO{}}
 	path := filepath.Join(t.TempDir(), "native.json")
 	raw, err := publishReadoptionOriginalNativeRead(ctx, path, native, fresh)
 	if err != nil {
@@ -61,6 +61,11 @@ func TestReadoptionNativeReturnPreservesCreatorHash(t *testing.T) {
 	var wire map[string]any
 	if err := json.Unmarshal(raw, &wire); err != nil || wire["original_creator_sha256"] != native.OriginalCreatorSHA256 {
 		t.Fatal("published wire lost creator hash", err)
+	}
+	foreign := fresh
+	foreign.Original.ResourceID = "foreign"
+	if _, err := publishReadoptionOriginalNativeRead(ctx, filepath.Join(t.TempDir(), "foreign.json"), native, foreign); err == nil {
+		t.Fatal("foreign creator accepted")
 	}
 	invalidPath := filepath.Join(t.TempDir(), "invalid.json")
 	if _, err := publishReadoptionOriginalNativeRead(ctx, invalidPath, IndependentReturn{}, fresh); err == nil {

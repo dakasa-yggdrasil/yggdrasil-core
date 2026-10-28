@@ -6,6 +6,7 @@ import (
  "context"
  "os"
  "path/filepath"
+ "reflect"
  "time"
  "github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
  "github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -72,7 +73,7 @@ func(r *Realm) OriginalReadoptionPresence(ctx context.Context,slot int,b model.C
 // Preserve the exact creator identity from the original read alongside the
 // independently observed fresh return. No creator or provider call is replayed.
 func publishReadoptionOriginalNativeRead(ctx context.Context, path string, native, fresh IndependentReturn) ([]byte, error) {
- if !validSHA(native.OriginalCreatorSHA256) { return nil, ErrOriginalUnknown }
+ if !validSHA(native.OriginalCreatorSHA256) || !reflect.DeepEqual(native.Original, fresh.Original) { return nil, ErrOriginalUnknown }
  fresh.OriginalCreatorSHA256 = native.OriginalCreatorSHA256
  return Publish(ctx, path, fresh)
 }
