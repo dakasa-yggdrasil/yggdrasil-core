@@ -16,12 +16,17 @@ class LinuxBackend:
   core.need(os.name=='posix' and len(run_id)==20 and all(c in '0123456789abcdef' for c in run_id),'LINUX_SCOPE_RUN_ID')
   self.maintenance_path=Path(maintenance_path);self.controller_path=Path(controller_path);self.config_path=Path(config_path);self.marker_directory=Path(marker_directory)
   core.need(all(p.is_absolute() for p in (self.maintenance_path,self.controller_path,self.config_path,self.marker_directory)),'ABSOLUTE_LINUX_PATHS')
-  self.run_id=run_id;self.inspector=inspector;self.native=native;self.expected_uid=expected_uid;self.holding_maintenance=False;self.holding_controller=False;self._own_marker_claimed=False
+  self.run_id=run_id;self.inspector=inspector;self.native=native;self.expected_uid=expected_uid;self.holding_maintenance=False;self.holding_controller=False;self._own_marker_claimed=False;self._own_marker=None;self._start_called=False
  def _open_lock(self,path):
-  fd=os.open(path,os.O_RDWR|os.O_NOFOLLOW|os.O_CLOEXEC)
+  d=os.open(path.parent,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
   try:
-   s=os.fstat(fd);core.need(stat.S_ISREG(s.st_mode) and s.st_uid==self.expected_uid and s.st_nlink==1 and not stat.S_IMODE(s.st_mode)&0o022,'SAFE_LOCK_FILE');fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB);return fd
-  except BaseException:os.close(fd);raise
+   ds=os.fstat(d);core.need(ds.st_uid==self.expected_uid and not stat.S_IMODE(ds.st_mode)&0o022,'SAFE_LOCK_DIRECTORY')
+   fd=os.open(path.name,os.O_RDWR|os.O_NOFOLLOW|os.O_CLOEXEC,dir_fd=d)
+   try:
+    s=os.fstat(fd);core.need(stat.S_ISREG(s.st_mode) and s.st_uid==self.expected_uid and s.st_nlink==1 and not stat.S_IMODE(s.st_mode)&0o022,'SAFE_LOCK_FILE');fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+    fresh=os.stat(path.name,dir_fd=d,follow_symlinks=False);core.need(stat.S_ISREG(fresh.st_mode) and (fresh.st_dev,fresh.st_ino)==(s.st_dev,s.st_ino),'LOCK_NAME_STILL_SAME_INODE');return fd
+   except BaseException:os.close(fd);raise
+  finally:os.close(d)
  @contextlib.contextmanager
  def maintenance_lock(self):
   core.need(not self.holding_maintenance and not self.holding_controller,'NONREENTRANT_MAINTENANCE_LOCK');fd=self._open_lock(self.maintenance_path);self.holding_maintenance=True
@@ -49,14 +54,16 @@ class LinuxBackend:
    with os.fdopen(fd,'wb') as f:f.write(data);f.flush();os.fsync(f.fileno())
    os.fsync(d)
    marker={'schema':'handoff_recovery_possible_start_marker_v1','run_id':self.run_id,'path':str(self.marker_directory/name),'sha256':hashlib.sha256(data).hexdigest(),'exclusive_create':True,'file_fsync':True,'directory_fsync':True,'readback_verified':False}
-   core.need(self.readback_marker(marker)==data,'MARKER_READBACK');marker['readback_verified']=True;self._own_marker_claimed=True;return marker
+   core.need(self.readback_marker(marker)==data,'MARKER_READBACK');marker['readback_verified']=True;self._own_marker_claimed=True;self._own_marker=dict(marker);return marker
   finally:os.close(d)
  def readback_marker(self,marker):
   path=Path(marker['path']);core.need(path==self.marker_directory/'ROOT-ONE-RECOVERY-POSSIBLE-START.PUBLIC.json','EXACT_MARKER_PATH');raw,_=core.read_regular(path,self.expected_uid);return raw
  def start_once(self):
   core.need(self.holding_maintenance and not self.holding_controller,'MAINTENANCE_HELD_CONTROLLER_RELEASED')
+  core.need(not self._start_called,'RECOVERY_START_NEVER_REPEATED');core.need(self._own_marker_claimed and self._own_marker is not None,'ORIGINAL_DURABLE_MARKER_REQUIRED');raw=self.readback_marker(self._own_marker);core.need(hashlib.sha256(raw).hexdigest()==self._own_marker['sha256'],'ORIGINAL_MARKER_IMMEDIATELY_BEFORE_START')
   # ignore-dependencies is limited to this exact unit: hub/cold are separately
   # revalidated active and unchanged by the inspector, so no dependency restarts.
+  self._start_called=True
   _,facts=self.native(START,deadline=time.monotonic()+20,stdin=b'',env={'PATH':'/usr/sbin:/usr/bin:/sbin:/bin','LANG':'C'},cap=1<<20,diagnostic_path=None)
   return facts
  def observe_started(self):return self.inspector.observe_started()

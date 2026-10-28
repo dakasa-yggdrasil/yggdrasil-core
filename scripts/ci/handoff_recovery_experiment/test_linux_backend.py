@@ -29,6 +29,34 @@ class LinuxBackendTests(unittest.TestCase):
    with self.assertRaises(core.Held):
     with self.backend.maintenance_lock():pass
    self.assertTrue(self.backend.snapshot()['maintenance_lock_owned'])
+ def test_direct_start_without_marker_is_rejected(self):
+  with self.backend.maintenance_lock():
+   with self.assertRaises(core.Held):self.backend.start_once()
+  self.assertEqual(self.calls,[])
+ def test_tampered_marker_is_rejected_before_start(self):
+  with self.backend.maintenance_lock():
+   with self.backend.controller_lock():self.backend.claim_start_once(self.expected)
+   path=Path(self.temp.name)/'ROOT-ONE-RECOVERY-POSSIBLE-START.PUBLIC.json';path.write_bytes(b'tampered')
+   with self.assertRaises(core.Held):self.backend.start_once()
+  self.assertEqual(self.calls,[])
+ def test_start_is_one_shot_even_when_called_directly(self):
+  with self.backend.maintenance_lock():
+   with self.backend.controller_lock():self.backend.claim_start_once(self.expected)
+   self.backend.start_once()
+   with self.assertRaises(core.Held):self.backend.start_once()
+  self.assertEqual(len(self.calls),1)
+ def test_uncertain_start_never_retried(self):
+  def uncertain(*args,**kwargs):self.calls.append(args[0]);raise TimeoutError('unknown outcome')
+  self.backend.native=uncertain
+  with self.backend.maintenance_lock():
+   with self.backend.controller_lock():self.backend.claim_start_once(self.expected)
+   with self.assertRaises(TimeoutError):self.backend.start_once()
+   with self.assertRaises(core.Held):self.backend.start_once()
+  self.assertEqual(len(self.calls),1)
+ def test_unprotected_lock_parent_rejected(self):
+  os.chmod(self.temp.name,0o777)
+  with self.assertRaises(core.Held):
+   with self.backend.maintenance_lock():pass
  def test_check_once_failure_never_starts(self):
   self.i.check_once=lambda *_:False
   with self.assertRaises(core.Held):core.recover_with_backend(self.backend,self.expected,b'old')
