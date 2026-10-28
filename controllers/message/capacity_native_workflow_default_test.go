@@ -3,6 +3,7 @@
 package message
 
 import (
+	"context"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"testing"
@@ -23,3 +24,5 @@ func nativeWorkflowSyntheticGate(*testing.T) bool { return false }
 func nativeWorkflowFixtureSettlement(_ *testing.T, _ model.CapacityMutationBinding, _ model.CapacityMutationGrant, s model.CapacityMutationSettleRequest) model.CapacityMutationSettleRequest {
 	return s
 }
+
+func nativeWorkflowFixtureContext(_ *testing.T, ctx context.Context) context.Context { return ctx }

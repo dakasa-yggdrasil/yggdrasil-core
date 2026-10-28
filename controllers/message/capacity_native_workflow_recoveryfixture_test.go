@@ -3,6 +3,7 @@
 package message
 
 import (
+	"context"
 	"database/sql"
 	"net/url"
 	"os"
@@ -144,4 +145,14 @@ func nativeWorkflowFixtureSettlement(t *testing.T, b model.CapacityMutationBindi
 	s.OriginalProviderCreateReturn = &model.CapacityOriginalProviderCreateReturn{Schema: "hetzner_original_create_return_v1", Provider: "hetzner", AdapterSourceCommit: b.OriginalProviderSourceCommit, GrantID: g.GrantID, AttemptID: s.AttemptID, RequestSHA256: g.RequestSHA256, ResourceID: s.ResourceID, ResourceCreatedAt: s.ResourceCreatedAt, ActionID: s.ActionID, NextActionIDs: append([]string{}, s.NextActionIDs...), CalledAt: at, ReturnedAt: at, ContextDeadline: g.ExpiresAt.UTC().Format(time.RFC3339Nano), ResponseStatus: 201, ResponseBodySHA256: capacity.BusinessCreationSHA256([]byte("synthetic provider response")), ResponseBytes: int64(len("synthetic provider response"))}
 	s.ObservedAt = at
 	return s
+}
+
+func nativeWorkflowFixtureContext(t *testing.T, parent context.Context) context.Context {
+	t.Helper()
+	if os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") != "true" {
+		return parent
+	}
+	ctx, cancel := context.WithTimeout(parent, 2*time.Minute)
+	t.Cleanup(cancel)
+	return ctx
 }
