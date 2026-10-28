@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "35ab379476969c26655c3b231d5f31201e4fd0dea6461c9662212fa16500f50f",
+  "source_inventory_sha256": "939b9241eb5f5bd8677d76d6e489a2a4eb49c0d1f9d4b99346df613da863732c",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -780,5 +780,9 @@
     "scope": "Qualification-only closed V1 protected-registration first-failure group uses the same captured time and preserves the original conflict. The source review and unit tests do not establish any historical 409 cause; Linux and native execution remain required.",
     "source_inventory_sha256": "72f268b8efcc4bb4fc4eb13a25272eb7a37392220401da4323e7bc301068650f",
     "production_or_native_qualification": false
+  },
+  "qualification_registration_clock_review_20261028": {
+    "scope": "Qualification-only authenticated clock sample from the same locked PostgreSQL transaction before the unchanged single registration POST. No production clock, registration validator, signed data or original deadline is changed. Source review and local tests only; real PostgreSQL with authenticated TLS and native QEMU validation remain required.",
+    "source_inventory_sha256": "939b9241eb5f5bd8677d76d6e489a2a4eb49c0d1f9d4b99346df613da863732c"
   }
 }

@@ -347,6 +347,8 @@ func (s *Server) serveCapacityGuestRequest(w http.ResponseWriter, r *http.Reques
 		var out any
 		if len(parts) == 2 && parts[1] == "create-witness" {
 			out, err = store.GuestCreateWitness(ctx, p.base.principalID, id.String(), nonce[0])
+		} else if len(parts) == 2 && parts[1] == "qualification-registration-clock" {
+			out, err = guestQualificationRegistrationClock(ctx, store, p.base.principalID, id.String(), nonce[0], r)
 		} else if len(parts) == 1 {
 			out, err = store.GuestProvisioningReceipt(ctx, p.base.principalID, id.String(), nonce[0])
 		} else {
