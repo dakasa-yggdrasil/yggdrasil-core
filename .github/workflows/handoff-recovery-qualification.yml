@@ -15,3 +15,5 @@ jobs:
         run: python3 -m unittest discover -s scripts/ci/handoff_recovery_experiment -p 'test_*.py' -v
       - name: Test a disposable real systemd owner scope and native reads
         run: sudo python3 scripts/ci/handoff_recovery_experiment/linux_scope_integration.py
+      - name: Test a disposable actual controller start and lock handoff
+        run: sudo python3 scripts/ci/handoff_recovery_experiment/linux_real_backend_integration.py
