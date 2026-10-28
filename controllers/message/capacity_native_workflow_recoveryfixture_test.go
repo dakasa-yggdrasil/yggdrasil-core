@@ -164,3 +164,7 @@ func nativeWorkflowFixtureSeed(t *testing.T, input map[string]any) map[string]an
 	}
 	return input
 }
+
+func nativeWorkflowFixtureManaged() bool {
+	return os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") == "true"
+}

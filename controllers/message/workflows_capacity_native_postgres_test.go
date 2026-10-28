@@ -1048,6 +1048,10 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 	ctx := newCapacityInvocationContext(nativeWorkflowFixtureContext(t, context.Background()))
 	ns := "capacity-native-" + uuid.NewString()
 	t.Cleanup(func() {
+		if nativeWorkflowFixtureManaged() {
+			_ = db.Close()
+			return
+		}
 		for _, table := range []string{"event_log", "capacity_mutation_grants", "capacity_resource_slots", "capacity_intent_events", "capacity_intents", "manifests"} {
 			query := `DELETE FROM public.` + table + ` WHERE namespace=$1`
 			if table == "event_log" {

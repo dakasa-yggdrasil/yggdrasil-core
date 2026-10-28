@@ -28,3 +28,5 @@ func nativeWorkflowFixtureSettlement(_ *testing.T, _ model.CapacityMutationBindi
 func nativeWorkflowFixtureContext(_ *testing.T, ctx context.Context) context.Context { return ctx }
 
 func nativeWorkflowFixtureSeed(_ *testing.T, input map[string]any) map[string]any { return input }
+
+func nativeWorkflowFixtureManaged() bool { return false }
