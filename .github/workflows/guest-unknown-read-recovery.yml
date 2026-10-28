@@ -89,14 +89,20 @@ jobs:
           set -euo pipefail
           mkdir -p "$RUNNER_TEMP/recovery-artifacts" "$RUNNER_TEMP/recovery-pg-socket"
           PG_BIN=/usr/lib/postgresql/16/bin
-          "$PG_BIN/initdb" --auth-local=trust --auth-host=reject -D "$RUNNER_TEMP/recovery-pg-data" > "$RUNNER_TEMP/recovery-artifacts/postgres-init.log"
-          "$PG_BIN/pg_ctl" -D "$RUNNER_TEMP/recovery-pg-data" -l "$RUNNER_TEMP/recovery-pg.log" -o "-k $RUNNER_TEMP/recovery-pg-socket -c listen_addresses= -p 55492" -w start
           cleanup() {
-            "$PG_BIN/pg_ctl" -D "$RUNNER_TEMP/recovery-pg-data" -m immediate -w stop || true
+            original_rc=$?
+            trap - EXIT
+            if test -f "$RUNNER_TEMP/recovery-pg-data/postmaster.pid"; then
+              "$PG_BIN/pg_ctl" -D "$RUNNER_TEMP/recovery-pg-data" -m immediate -w stop || true
+            fi
             mkdir -p artifacts/unknown-read-fixture
             cp -a "$RUNNER_TEMP/recovery-artifacts/." artifacts/unknown-read-fixture/
+            if test -f "$RUNNER_TEMP/recovery-pg.log"; then cp "$RUNNER_TEMP/recovery-pg.log" artifacts/unknown-read-fixture/postgres-start.log; fi
+            exit "$original_rc"
           }
           trap cleanup EXIT
+          "$PG_BIN/initdb" --auth-local=trust --auth-host=reject -D "$RUNNER_TEMP/recovery-pg-data" > "$RUNNER_TEMP/recovery-artifacts/postgres-init.log" 2>&1
+          "$PG_BIN/pg_ctl" -D "$RUNNER_TEMP/recovery-pg-data" -l "$RUNNER_TEMP/recovery-pg.log" -o "-k $RUNNER_TEMP/recovery-pg-socket -c listen_addresses= -p 55492" -w start
           "$PG_BIN/createdb" -h "$RUNNER_TEMP/recovery-pg-socket" -p 55492 recovery_fixture
           export DB_HOST="$RUNNER_TEMP/recovery-pg-socket" DB_PORT=55492 DB_NAME=recovery_fixture DB_USER="$(id -un)" DB_PASSWORD='' DB_SSLMODE=disable GOWORK=off
           export DB_URL="host=$DB_HOST port=$DB_PORT user=$DB_USER dbname=$DB_NAME sslmode=disable"
