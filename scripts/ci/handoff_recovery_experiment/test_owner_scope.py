@@ -18,6 +18,9 @@ class ScopeTest(unittest.TestCase):
  def test_unattempted_or_permission_denied_read_rejected(self):
   for status,errno in [('unknown',None),('error',13)]:
    with self.assertRaises(s.Held):self.call(pid_read={'path':'/proc/123/stat','fd_closed':True,'status':status,'errno':errno,'content':None})
+ def test_original_job_diagnostic_is_mandatory(self):
+  t={'exit_code':0,'captured_output_truncated':False,**{k:True for k in ('native_started','wait_zero','stdout_EOF','stderr_EOF','all_local_FDs_closed','local_child_joined')}}
+  with self.assertRaises(Exception):self.call(jobs_read={'argv':['/usr/bin/systemctl','list-jobs','--no-pager','--no-legend'],'stdout':'','stdout_sha256':hashlib.sha256(b'').hexdigest(),'transport':t,'original_diagnostic':None})
  def test_scope_or_boot_mismatch_rejected(self):
   with self.assertRaises(s.Held):self.call(boot_read={'path':'/proc/sys/kernel/random/boot_id','fd_closed':True,'status':'ok','errno':None,'content':'00000000-0000-0000-0000-000000000000'})
   with self.assertRaises(s.Held):s.make_lease(run_id=self.r,source_sha256='b'*64,boot_id=self.boot,pid=123,proc_stat=self.stat,cgroup='/system.slice/ssm-agent.service')

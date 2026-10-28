@@ -7,6 +7,7 @@ facts are snapshots; the one-shot owner launch must not be replayable.
 import errno,hashlib,json,os,time
 from pathlib import Path
 import owner_scope as contract
+import ssm_terminal_custody
 class Held(Exception):pass
 def fs_read(path):
  fd=None;data=bytearray();failure=None
@@ -26,7 +27,8 @@ def fs_read(path):
 def command(argv,native,diagnostic):
  raw,facts=native(argv,deadline=time.monotonic()+8,stdin=b'',env={'PATH':'/usr/sbin:/usr/bin:/sbin:/bin','LANG':'C'},cap=1<<20,diagnostic_path=diagnostic)
  diagnostic_record=json.loads(Path(diagnostic).read_bytes());return {'argv':argv,'stdout':raw.decode('utf-8'),'stdout_sha256':hashlib.sha256(raw).hexdigest(),'transport':facts,'original_diagnostic':diagnostic_record}
-def collect(*,lease,expected_ssm,ssm_terminal,native,diagnostic_directory):
+def collect(*,lease,ssm_evidence,native,diagnostic_directory):
+ ssm_terminal=ssm_terminal_custody.qualify(**ssm_evidence);expected_ssm={k:ssm_terminal[k] for k in ('command_id','instance_id','request_sha256')}
  unit=contract.unit_for(lease['run_id']);contract.need(lease.get('cgroup')=='/system.slice/'+unit and type(lease.get('pid'))is int and lease['pid']>1,'EXACT_LEASE_PATHS_BEFORE_READ');d=Path(diagnostic_directory);contract.need(d.is_absolute(),'ABSOLUTE_PRIVATE_DIAGNOSTIC_DIRECTORY')
  unit_read=command(['/usr/bin/systemctl','show',unit,'--property=Id,ActiveState,MainPID,ControlGroup,KillMode,Delegate,Restart'],native,d/'UNIT-ORIGINAL-IO.PRIVATE.json')
  jobs=command(['/usr/bin/systemctl','list-jobs','--no-pager','--no-legend'],native,d/'JOBS-ORIGINAL-IO.PRIVATE.json')
