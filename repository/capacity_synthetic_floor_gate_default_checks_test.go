@@ -48,6 +48,8 @@ func TestSyntheticCompensationChildCensus(t *testing.T) {
 	child := root + "/unprotected_failed_create"
 	events := `{"Action":"run","Test":"` + root + `"}` + "\n" +
 		`{"Action":"run","Test":"` + child + `"}` + "\n" +
+		`{"Action":"run","Test":"` + child + `/global_slot_precedes_child_row_during_foreign_issue"}` + "\n" +
+		`{"Action":"pass","Test":"` + child + `/global_slot_precedes_child_row_during_foreign_issue"}` + "\n" +
 		`{"Action":"pass","Test":"` + child + `"}` + "\n" +
 		`{"Action":"pass","Test":"` + root + `"}` + "\n" + `{"Action":"pass"}` + "\n"
 	capture := func(s string) floorFixtureCapture {
@@ -64,6 +66,8 @@ func TestSyntheticCompensationChildCensus(t *testing.T) {
 		events + `{"Action":"pass","Test":"` + child + `"}` + "\n",
 		strings.Replace(events, `{"Action":"pass","Test":"`+root+`"}`, `{"Action":"skip","Test":"`+root+`"}`, 1),
 		events + `{"Action":"pass"}` + "\n",
+		strings.Replace(events, `{"Action":"pass","Test":"`+child+`/global_slot_precedes_child_row_during_foreign_issue"}`+"\n", "", 1),
+		events + `{"Action":"run","Test":"` + child + `/global_slot_precedes_child_row_during_foreign_issue"}` + "\n",
 	} {
 		out = capture(bad)
 		if syntheticRepositoryCensus(&out, root, child) {

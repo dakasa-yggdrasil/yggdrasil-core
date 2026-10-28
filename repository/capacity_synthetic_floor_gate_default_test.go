@@ -92,7 +92,14 @@ func syntheticRepositoryCensus(out *floorFixtureCapture, root, child string) boo
 	if scanner.Err() != nil || counts[root+":run"] != 1 || counts[root+":pass"] != 1 || counts[":pass"] != 1 {
 		return false
 	}
-	return child == "" || (counts[child+":run"] == 1 && counts[child+":pass"] == 1)
+	if child != "" && (counts[child+":run"] != 1 || counts[child+":pass"] != 1) {
+		return false
+	}
+	if child == "TestCapacityMutationCompensationPostgres/unprotected_failed_create" {
+		nested := child + "/global_slot_precedes_child_row_during_foreign_issue"
+		return counts[nested+":run"] == 1 && counts[nested+":pass"] == 1
+	}
+	return true
 }
 
 func floorFixtureReapDatabase(ctx context.Context, admin *sql.DB, name string) error {
@@ -125,7 +132,7 @@ func runSyntheticFloorGate(t *testing.T) {
 	runSyntheticRepositoryGate(t, "TestSyntheticFloorDrainBudgetPostgres", "")
 }
 
-func runSyntheticRepositoryGate(t *testing.T, rootTest, childTest string) {
+func runSyntheticRepositoryGate(t *testing.T, rootTest, childTest string) bool {
 	t.Helper()
 	// Only these reviewed fixture cases may be selected by the original tests.
 	allowed := rootTest == "TestSyntheticFloorDrainBudgetPostgres" && childTest == "" ||
@@ -224,4 +231,5 @@ func runSyntheticRepositoryGate(t *testing.T, rootTest, childTest string) {
 	if err != nil || !syntheticRepositoryCensus(&out, rootTest, fullChild) {
 		t.Fatal("isolated synthetic repository fixture failed or incomplete; no physical qualification was granted")
 	}
+	return true
 }

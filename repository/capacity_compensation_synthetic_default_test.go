@@ -14,6 +14,14 @@ func syntheticCompensationIfEnabled(t *testing.T, protected, lost bool) bool {
 	if protected {
 		selected = "protected_failed_create_without_serving_membership"
 	}
-	runSyntheticRepositoryGate(t, "TestCapacityMutationCompensationPostgres", selected)
+	passed := runSyntheticRepositoryGate(t, "TestCapacityMutationCompensationPostgres", selected)
+	if !protected {
+		t.Run("global_slot_precedes_child_row_during_foreign_issue", func(t *testing.T) {
+			// The child census confirms the actual nested test ran and passed.
+			if !passed {
+				t.Fatal("child lock-order test not confirmed")
+			}
+		})
+	}
 	return true
 }
