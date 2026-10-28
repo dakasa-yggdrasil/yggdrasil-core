@@ -7,11 +7,12 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 762a587552ade85513ae4f0b397c8fb5fdda0cd3
-verified_diff_sha256: 060c6147c4b2aa3fc48806c7e29d80be81040ac253d05adc532eb0f223527041
+verified_at_commit: ecce4c688ad51723a3dcd301da910d9477ed5ea9
+verified_diff_sha256: f1b06dba1b1bd563c81d6a48b17dd9ec8f2a112fdd9c29e53dcf3e097fd7054c
 reconciler_schema: 1
 verified_at: 2026-10-28
 by: Giomaster
+native_read_enablement_review: The qualification read now uses the actual process enablement flag and the already validated original executor. The current lease and all remaining guards are retained; an isolated PG test verified disabled, valid, foreign and expired cases. Linux QEMU and full gate remain required.
 native_read_diagnostic_review: Qualification-only closed RPC and native-read stages were independently reviewed, with fixed output and no raw error or request data. Portable tests and Linux compilation passed; actual Linux/QEMU and unchanged full capacity gate remain required. Synchronous diagnostic writes may consume qualification deadline.
 installation_diagnostic_and_compensation_review: Reviewed closed qualification-only installation read classes and the exact planner refusal for disabled compensation or non-destroy plans. The service census was regenerated; local planner and isolated PostgreSQL checks passed. Native Linux integration and the full capacity gate remain required.
 native_diagnostic_source_reconciliation: Reviewed closed failure-stage codes for native qualification and preserved the production refusal path. The service source census and digest were regenerated; Linux test binaries compiled locally and the integrated native execution remains required.
