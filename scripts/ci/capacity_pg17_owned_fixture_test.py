@@ -23,6 +23,14 @@ class RunnerIsolationTest(unittest.TestCase):
         fixture.active_child = None
         fixture.cleanup_uncertain = False
 
+    def test_explicit_postgres_major_matches_binary(self):
+        self.assertTrue(fixture.valid_binary_major("postgres (PostgreSQL) 16.15 (Homebrew)", "16"))
+        self.assertTrue(fixture.valid_binary_major("postgres (PostgreSQL) 17.6", "17"))
+        self.assertFalse(fixture.valid_binary_major("postgres (PostgreSQL) 17.6", "16"))
+        self.assertFalse(fixture.valid_binary_major("postgres (PostgreSQL) 16.15", "17"))
+        self.assertFalse(fixture.valid_binary_major("postgres (PostgreSQL) 18.1", "18"))
+        self.assertFalse(fixture.valid_binary_major("postgres (PostgreSQL) 16.15 extra\n17", "16"))
+
     def test_child_does_not_inherit_credentials_or_postgres_overrides(self):
         with mock.patch.dict(os.environ, {"AWS_SECRET_ACCESS_KEY": "sentinel", "PGHOST": "not-the-fixture"}):
             child = fixture.run([sys.executable, "-c", "import os; print('AWS_SECRET_ACCESS_KEY' in os.environ, 'PGHOST' in os.environ)"])

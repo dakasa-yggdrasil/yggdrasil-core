@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Create and destroy an owned, Unix-socket-only PG17 test cluster.
+"""Create and destroy an owned, Unix-socket-only PostgreSQL 16 or 17 test cluster.
 
 This prepares and validates schema and server isolation. With --run-grants it
 also exercises a synthetic source-only grant fixture; it does not establish
@@ -142,6 +142,10 @@ def write_linux_owner_identity(parent):
         os.fsync(out.fileno())
 
 
+def valid_binary_major(version, major):
+    return major in ("16", "17") and re.fullmatch(r"postgres \(PostgreSQL\) " + major + r"\.[0-9]+(?:\s.*)?", version) is not None
+
+
 def main():
     global pending_signal, cleanup_uncertain
     parser = argparse.ArgumentParser()
@@ -151,6 +155,9 @@ def main():
     args = parser.parse_args()
     if not PG.is_dir() or not GO.is_file():
         raise RuntimeError("PostgreSQL and Go executables required")
+    major = os.environ.get("CAPACITY_TEST_PG_MAJOR", "17")
+    if major not in ("16", "17"):
+        raise RuntimeError("explicit isolated PostgreSQL major 16 or 17 required")
     cleanup_uncertain = False
     parent, publish_cleanup = owner_parent()
     owner = Path(tempfile.mkdtemp(prefix="dk-pg-", dir=parent))
@@ -163,6 +170,9 @@ def main():
     try:
         if publish_cleanup and os.environ.get("CAPACITY_TEST_OWNER_ROOT"):
             write_linux_owner_identity(parent)
+        version = run([PG / "postgres", "--version"]).stdout.strip()
+        if not valid_binary_major(version, major):
+            raise RuntimeError("PostgreSQL binary major differs from requested major")
         run([PG / "initdb", "-D", data, "--username=postgres", "--auth-local=trust", "--auth-host=reject", "--encoding=UTF8", "--no-locale"])
         start_attempted = True
         run([PG / "pg_ctl", "-D", data, "-l", owner / "postgres.log", "-o", f"-k {sock} -h '' -p 54383 -c unix_socket_permissions=0700 -c max_connections=32 -c shared_buffers=32MB", "-w", "-t", "20", "start"])
@@ -177,14 +187,14 @@ def main():
             raise RuntimeError("owned cluster identity mismatch")
         run([PG / "createdb", "-h", sock, "-p", "54383", "-U", "postgres", DATABASE])
         dsn = f"postgres://postgres@/{DATABASE}?host={quote(str(sock), safe='')}&port=54383&sslmode=disable"
-        env = dict(safe_environment(), CAPACITY_TEST_ALLOW="isolated-postgresql-only", CAPACITY_TEST_SOCKET_DIR=str(sock), CAPACITY_TEST_PGDATA=str(data), CAPACITY_TEST_PG_BIN=str(PG), CAPACITY_TEST_PG_SYSTEM_ID=ids[0], CAPACITY_TEST_OWNED_DSN=dsn, DB_URL=dsn, REQUIRE_CAPACITY_OWNED_POSTGRES="true")
+        env = dict(safe_environment(), CAPACITY_TEST_ALLOW="isolated-postgresql-only", CAPACITY_TEST_SOCKET_DIR=str(sock), CAPACITY_TEST_PGDATA=str(data), CAPACITY_TEST_PG_BIN=str(PG), CAPACITY_TEST_PG_MAJOR=major, CAPACITY_TEST_PG_SYSTEM_ID=ids[0], CAPACITY_TEST_OWNED_DSN=dsn, DB_URL=dsn, REQUIRE_CAPACITY_OWNED_POSTGRES="true")
         run([GO, "test", "-tags", "capacitytest", "-count=1", "./cmd/capacity-original-grant-fixture", "-run", "TestOwnedPostgres"], env=env, timeout=120)
         # Standalone migrator executes only after the test binary validates PID,
         # socket, data directory, server control identity and no TCP listener.
         migrator = owner / "migrate.go"
         migrator.write_text('''package main
 import("context";"database/sql";"os";"time";_ "github.com/lib/pq";"github.com/pressly/goose/v3")
-func main(){ctx,cancel:=context.WithTimeout(context.Background(),90*time.Second);defer cancel();db,e:=sql.Open("postgres",os.Getenv("CAPACITY_TEST_OWNED_DSN"));if e!=nil{panic(e)};defer db.Close();var name,dir,id,listen string;var sock bool;var version int;e=db.QueryRowContext(ctx,"SELECT current_database(),current_setting('data_directory'),system_identifier::text,current_setting('listen_addresses'),inet_server_addr() IS NULL,current_setting('server_version_num')::int FROM pg_control_system()").Scan(&name,&dir,&id,&listen,&sock,&version);if e!=nil||name!="ci_capacity_original_grant"||dir!=os.Getenv("CAPACITY_TEST_PGDATA")||id!=os.Getenv("CAPACITY_TEST_PG_SYSTEM_ID")||listen!=""||!sock||version/10000!=17{panic("unowned PostgreSQL refused")};if e=goose.SetDialect("postgres");e!=nil{panic(e)};if e=goose.UpToContext(ctx,db,"db/migrations",82);e!=nil{panic(e)};v,e:=goose.GetDBVersionContext(ctx,db);if e!=nil||v!=82{panic("schema 82 required")}}
+func mustMajor()int{if os.Getenv("CAPACITY_TEST_PG_MAJOR")=="16"{return 16};if os.Getenv("CAPACITY_TEST_PG_MAJOR")=="17"{return 17};panic("bad PostgreSQL major")};func main(){ctx,cancel:=context.WithTimeout(context.Background(),90*time.Second);defer cancel();db,e:=sql.Open("postgres",os.Getenv("CAPACITY_TEST_OWNED_DSN"));if e!=nil{panic(e)};defer db.Close();var name,dir,id,listen string;var sock bool;var version int;e=db.QueryRowContext(ctx,"SELECT current_database(),current_setting('data_directory'),system_identifier::text,current_setting('listen_addresses'),inet_server_addr() IS NULL,current_setting('server_version_num')::int FROM pg_control_system()").Scan(&name,&dir,&id,&listen,&sock,&version);if e!=nil||name!="ci_capacity_original_grant"||dir!=os.Getenv("CAPACITY_TEST_PGDATA")||id!=os.Getenv("CAPACITY_TEST_PG_SYSTEM_ID")||listen!=""||!sock||version/10000!=mustMajor(){panic("unowned PostgreSQL refused")};if e=goose.SetDialect("postgres");e!=nil{panic(e)};if e=goose.UpToContext(ctx,db,"db/migrations",82);e!=nil{panic(e)};v,e:=goose.GetDBVersionContext(ctx,db);if e!=nil||v!=82{panic("schema 82 required")}}
 ''')
         run([GO, "run", "-mod=readonly", migrator], env=env, timeout=120)
         if args.run_grants or args.run_repository:
@@ -196,11 +206,11 @@ func main(){ctx,cancel:=context.WithTimeout(context.Background(),90*time.Second)
             except subprocess.CalledProcessError as exc:
                 raise RuntimeError("synthetic grant runner failed: " + exc.stderr.strip()[:1000]) from exc
             result = json.loads(process.stdout)
-            if result.get("provider") != "native-qemu" or result.get("native_or_production_qualified") is not False or result.get("provider_send_attempted") is not False:
+            if result.get("provider") != "native-qemu" or result.get("native_or_production_qualified") is not False or result.get("provider_send_attempted") is not False or not isinstance(result.get("postgres_version_num"), int) or result["postgres_version_num"] // 10000 != int(major):
                 raise RuntimeError("unexpected synthetic result scope")
             print(json.dumps(result, sort_keys=True))
         else:
-            print(json.dumps({"schema": "owned_pg17_fixture_preflight_v1", "schema_version": 82, "unix_socket_only": True, "owned_identity_verified": True, "grant_test_run": False, "production_used": False}))
+            print(json.dumps({"schema": f"owned_pg{major}_fixture_preflight_v1", "schema_version": 82, "postgres_major": int(major), "unix_socket_only": True, "owned_identity_verified": True, "grant_test_run": False, "production_used": False}))
     finally:
         # Finish bounded shutdown even if another ordinary termination signal
         # arrives. Never remove the cluster on uncertain shutdown.

@@ -10,6 +10,7 @@ import unittest
 HERE = Path(__file__).resolve().parent
 PYTHON_REQUIRED = {
     'capacity_pg17_owned_fixture_test.RunnerIsolationTest.' + name for name in (
+        'test_explicit_postgres_major_matches_binary',
         'test_child_does_not_inherit_credentials_or_postgres_overrides',
         'test_signal_during_spawn_kills_and_joins_the_new_child',
         'test_exited_leader_with_child_holding_pipes_times_out',

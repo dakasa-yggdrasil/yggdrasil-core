@@ -235,6 +235,9 @@ func seedAndRun(repositoryScenario bool) error {
 	if err != nil {
 		return err
 	}
+	if err = db.QueryRowContext(ctx, `SELECT current_setting('server_version_num')::int`).Scan(&result.PostgresVersionNum); err != nil {
+		return err
+	}
 	if repositoryScenario {
 		result.Floor, result.BaselineUnits, result.RegisteredBaseline = floor, baselineUnits, registered
 	}

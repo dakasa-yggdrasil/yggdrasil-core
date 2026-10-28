@@ -90,7 +90,7 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
-      - name: Prepare isolated PostgreSQL 17 owner for source-identified cases
+      - name: Prepare isolated PostgreSQL 16 and 17 owners for source-identified cases
         shell: bash
         run: |
           set -euo pipefail
@@ -115,9 +115,12 @@ jobs:
           path.write_text('\n'.join(lines + ['create_main_cluster = false']) + '\n')
           PYCONFIG
           test -z "$(pg_lsclusters --no-header | awk '$1 == 17 {print}')"
-          sudo apt-get install -y --no-install-recommends postgresql-17
+          pg_lsclusters --no-header | awk '$1 == 16 {print}' | sort > "$RUNNER_TEMP/capacity-pg16-before.txt"
+          sudo apt-get install -y --no-install-recommends postgresql-16 postgresql-17
           test -z "$(pg_lsclusters --no-header | awk '$1 == 17 {print}')"
-          printf 'CAPACITY_TEST_PG_BIN=%s\nCAPACITY_TEST_GO=%s\n' /usr/lib/postgresql/17/bin "$(command -v go)" >> "$GITHUB_ENV"
+          pg_lsclusters --no-header | awk '$1 == 16 {print}' | sort > "$RUNNER_TEMP/capacity-pg16-after.txt"
+          cmp "$RUNNER_TEMP/capacity-pg16-before.txt" "$RUNNER_TEMP/capacity-pg16-after.txt"
+          printf 'CAPACITY_TEST_PG_BIN=%s\nCAPACITY_TEST_PG16_BIN=%s\nCAPACITY_TEST_HTTP_PG_MAJOR=16\nCAPACITY_TEST_GO=%s\n' /usr/lib/postgresql/17/bin /usr/lib/postgresql/16/bin "$(command -v go)" >> "$GITHUB_ENV"
       - name: Test fixture owner process cleanup
         shell: bash
         run: |

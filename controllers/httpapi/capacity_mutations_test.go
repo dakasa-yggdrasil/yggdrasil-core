@@ -158,12 +158,23 @@ func TestCapacityMutationExactJSON(t *testing.T) {
 // This case runs its unchanged real HTTP authentication and callback assertions
 // inside a clean source-identified Linux binary. A go test binary lacks native
 // VCS build identity and cannot legitimately issue or redeem an original
-// Guest grant. The owner provides a private isolated PG17 and the exact binary.
+// Guest grant. The owner provides a private isolated PostgreSQL 16 or 17 and the exact binary.
 func TestCapacityMutationHTTPPostgres(t *testing.T) {
 	if os.Getenv("DB_URL") == "" && os.Getenv("REQUIRE_CAPACITY_POSTGRES") != "true" {
 		t.Skip("PostgreSQL callback protocol runs in CI")
 	}
-	pg, goBinary := os.Getenv("CAPACITY_TEST_PG_BIN"), os.Getenv("CAPACITY_TEST_GO")
+	major := os.Getenv("CAPACITY_TEST_HTTP_PG_MAJOR")
+	if major == "" {
+		major = "17"
+	}
+	if major != "16" && major != "17" {
+		t.Fatal("explicit PostgreSQL major 16 or 17 required")
+	}
+	pg := os.Getenv("CAPACITY_TEST_PG_BIN")
+	if major == "16" {
+		pg = os.Getenv("CAPACITY_TEST_PG16_BIN")
+	}
+	goBinary := os.Getenv("CAPACITY_TEST_GO")
 	if !filepath.IsAbs(pg) || !filepath.IsAbs(goBinary) {
 		t.Fatal("PostgreSQL 17 and Go paths required for the isolated qualification owner")
 	}
@@ -230,7 +241,7 @@ func TestCapacityMutationHTTPPostgres(t *testing.T) {
 			command.Env = append(command.Env, key+"="+value)
 		}
 	}
-	command.Env = append(command.Env, "CAPACITY_TEST_PG_BIN="+pg, "CAPACITY_TEST_GO="+goBinary, "CAPACITY_TEST_PARENT_DIR="+ownerDir)
+	command.Env = append(command.Env, "CAPACITY_TEST_PG_BIN="+pg, "CAPACITY_TEST_PG_MAJOR="+major, "CAPACITY_TEST_GO="+goBinary, "CAPACITY_TEST_PARENT_DIR="+ownerDir)
 	if registry := os.Getenv("CAPACITY_TEST_OWNER_ROOT"); registry != "" {
 		command.Env = append(command.Env, "CAPACITY_TEST_OWNER_ROOT="+registry)
 	}
@@ -240,14 +251,16 @@ func TestCapacityMutationHTTPPostgres(t *testing.T) {
 		t.Fatalf("source-owned HTTP scenario failed (cleanup confirmed=%t; owner directory=%s): %v", confirmed, ownerDir, err)
 	}
 	var result struct {
-		Schema       string `json:"schema"`
-		CoreSource   string `json:"core_source"`
-		Provider     string `json:"provider"`
-		HTTP         bool   `json:"synthetic_http_callbacks_passed"`
-		ProviderSend bool   `json:"provider_send_attempted"`
-		Native       bool   `json:"native_or_production_qualified"`
+		Schema             string `json:"schema"`
+		CoreSource         string `json:"core_source"`
+		PostgresVersionNum int    `json:"postgres_version_num"`
+		Provider           string `json:"provider"`
+		HTTP               bool   `json:"synthetic_http_callbacks_passed"`
+		ProviderSend       bool   `json:"provider_send_attempted"`
+		Native             bool   `json:"native_or_production_qualified"`
 	}
-	if err = json.Unmarshal([]byte(stdout), &result); err != nil || result.Schema != "ci_original_grant_concurrency_result_v1" || result.CoreSource != head || result.Provider != "native-qemu" || !result.HTTP || result.ProviderSend || result.Native {
+	if err = json.Unmarshal([]byte(stdout), &result); err != nil || result.Schema != "ci_original_grant_concurrency_result_v1" || result.CoreSource != head || fmt.Sprint(result.PostgresVersionNum/10000) != major || result.Provider != "native-qemu" || !result.HTTP || result.ProviderSend || result.Native {
 		t.Fatal("real source-owned HTTP scenario did not complete in the required isolated scope", err)
 	}
+	t.Logf("owned PostgreSQL server_version_num=%d", result.PostgresVersionNum)
 }

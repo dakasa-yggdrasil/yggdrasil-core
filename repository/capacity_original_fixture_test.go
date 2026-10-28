@@ -21,6 +21,7 @@ import (
 type repositoryOriginalResult struct {
 	Schema                       string `json:"schema"`
 	CoreSource                   string `json:"core_source"`
+	PostgresVersionNum           int    `json:"postgres_version_num"`
 	Provider                     string `json:"provider"`
 	Slot                         int    `json:"slot"`
 	Floor                        int    `json:"floor"`
@@ -45,7 +46,7 @@ var repositoryOriginalOnce sync.Once
 var repositoryOriginalReport repositoryOriginalResult
 var repositoryOriginalErr error
 
-// This calls a clean VCS-built executable on a separately owned PG17. It never
+// This calls a clean VCS-built executable on a separately owned PG16. It never
 // promotes synthetic membership or receipts into production evidence. Each
 // scenario is prepared separately within that DB, preserving independent cases.
 func repositoryOriginalFixture(t *testing.T) repositoryOriginalResult {
@@ -57,13 +58,14 @@ func repositoryOriginalFixture(t *testing.T) repositoryOriginalResult {
 	if repositoryOriginalErr != nil {
 		t.Fatal(repositoryOriginalErr)
 	}
+	t.Logf("owned PostgreSQL server_version_num=%d", repositoryOriginalReport.PostgresVersionNum)
 	return repositoryOriginalReport
 }
 
 func executeRepositoryOriginalFixture() (result repositoryOriginalResult, err error) {
-	pg, goBinary := os.Getenv("CAPACITY_TEST_PG_BIN"), os.Getenv("CAPACITY_TEST_GO")
+	pg, goBinary := os.Getenv("CAPACITY_TEST_PG16_BIN"), os.Getenv("CAPACITY_TEST_GO")
 	if !filepath.IsAbs(pg) || !filepath.IsAbs(goBinary) {
-		return result, errors.New("PG17 and Go paths required for isolated repository qualification")
+		return result, errors.New("PG16 and Go paths required for isolated repository qualification")
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 180*time.Second)
 	defer cancel()
@@ -126,7 +128,7 @@ func executeRepositoryOriginalFixture() (result repositoryOriginalResult, err er
 			command.Env = append(command.Env, key+"="+value)
 		}
 	}
-	command.Env = append(command.Env, "CAPACITY_TEST_PG_BIN="+pg, "CAPACITY_TEST_GO="+goBinary, "CAPACITY_TEST_PARENT_DIR="+ownerDir)
+	command.Env = append(command.Env, "CAPACITY_TEST_PG_BIN="+pg, "CAPACITY_TEST_PG_MAJOR=16", "CAPACITY_TEST_GO="+goBinary, "CAPACITY_TEST_PARENT_DIR="+ownerDir)
 	if registry := os.Getenv("CAPACITY_TEST_OWNER_ROOT"); registry != "" {
 		command.Env = append(command.Env, "CAPACITY_TEST_OWNER_ROOT="+registry)
 	}
@@ -138,7 +140,7 @@ func executeRepositoryOriginalFixture() (result repositoryOriginalResult, err er
 	if err = json.Unmarshal([]byte(stdout), &result); err != nil {
 		return result, errors.New("repository qualification result invalid")
 	}
-	if result.Schema != "ci_original_grant_concurrency_result_v1" || result.CoreSource != head || result.Provider != "native-qemu" || result.Slot != 5 || result.Floor != 2 || result.BaselineUnits != 4 || result.RegisteredBaseline != 4 || result.ProviderSendAttempted || result.NativeOrProductionQualified {
+	if result.Schema != "ci_original_grant_concurrency_result_v1" || result.CoreSource != head || result.Provider != "native-qemu" || result.Slot != 5 || result.Floor != 2 || result.BaselineUnits != 4 || result.RegisteredBaseline != 4 || result.PostgresVersionNum/10000 != 16 || result.ProviderSendAttempted || result.NativeOrProductionQualified {
 		return result, errors.New("repository source or synthetic baseline differs")
 	}
 	return result, nil

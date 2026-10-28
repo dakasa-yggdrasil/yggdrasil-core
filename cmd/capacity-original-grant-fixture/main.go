@@ -55,6 +55,7 @@ type request struct {
 type report struct {
 	Schema                       string `json:"schema"`
 	CoreSource                   string `json:"core_source"`
+	PostgresVersionNum           int    `json:"postgres_version_num"`
 	Provider                     string `json:"provider"`
 	Slot                         int    `json:"slot"`
 	BaselineUnits                int    `json:"baseline_units"`
@@ -212,7 +213,11 @@ func checkOwnedPostgres(ctx context.Context, db *sql.DB, dbName, socketDir strin
 	var actual, listen, actualData, actualID string
 	var version int
 	var unixSocket bool
-	if err = db.QueryRowContext(ctx, `SELECT current_database(), current_setting('server_version_num')::int, inet_server_addr() IS NULL, current_setting('listen_addresses'), current_setting('data_directory'), system_identifier::text FROM pg_control_system()`).Scan(&actual, &version, &unixSocket, &listen, &actualData, &actualID); err != nil || actual != dbName || version < 170000 || version >= 180000 || !unixSocket || listen != "" || actualData != data || actualID != systemID {
+	major, majorErr := strconv.Atoi(os.Getenv("CAPACITY_TEST_PG_MAJOR"))
+	if majorErr != nil || (major != 16 && major != 17) {
+		return errors.New("explicit isolated PostgreSQL major 16 or 17 required")
+	}
+	if err = db.QueryRowContext(ctx, `SELECT current_database(), current_setting('server_version_num')::int, inet_server_addr() IS NULL, current_setting('listen_addresses'), current_setting('data_directory'), system_identifier::text FROM pg_control_system()`).Scan(&actual, &version, &unixSocket, &listen, &actualData, &actualID); err != nil || actual != dbName || version/10000 != major || !unixSocket || listen != "" || actualData != data || actualID != systemID {
 		return errors.New("fixture server identity mismatch")
 	}
 	return nil

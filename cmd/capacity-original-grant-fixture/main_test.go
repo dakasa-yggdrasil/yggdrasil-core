@@ -93,6 +93,16 @@ func TestOwnedPostgres(t *testing.T) {
 	if err = checkOwnedPostgres(ctx, db, name, os.Getenv("CAPACITY_TEST_SOCKET_DIR")); err != nil {
 		t.Fatal(err)
 	}
+	major := os.Getenv("CAPACITY_TEST_PG_MAJOR")
+	wrong := "16"
+	if major == "16" {
+		wrong = "17"
+	}
+	t.Setenv("CAPACITY_TEST_PG_MAJOR", wrong)
+	if err = checkOwnedPostgres(ctx, db, name, os.Getenv("CAPACITY_TEST_SOCKET_DIR")); err == nil {
+		t.Fatal("wrong PostgreSQL major accepted")
+	}
+	t.Setenv("CAPACITY_TEST_PG_MAJOR", major)
 	t.Setenv("CAPACITY_TEST_PG_SYSTEM_ID", "1")
 	if err = checkOwnedPostgres(ctx, db, name, os.Getenv("CAPACITY_TEST_SOCKET_DIR")); err == nil {
 		t.Fatal("foreign system identifier accepted")
