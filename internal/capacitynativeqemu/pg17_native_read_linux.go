@@ -7,6 +7,7 @@ import (
 	"encoding/base32"
 	"encoding/hex"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -75,10 +76,10 @@ func (r *Realm) PG17NativeRead(ctx context.Context, store repository.CapacitySto
 	if !preOK || !originalOK || !started || pre.OriginalCreateGrantID != grantID || pre.PolicyID != policy.ID.String() || pre.WorkflowID != store.WorkflowID.String() || pre.CoreSourceCommit != capacity.CurrentGuestCoreSource() || deadline.After(pre.OriginalDeadline) || original.Original.OriginalSourceCommit != r.Request.SourceCommit || original.Original.ResourceID != r.Request.Slots[slot-1].ResourceID {
 		return refuse("realm", ErrOriginalUnknown)
 	}
-	// The RPC worker is a read owner, not the workflow executor. Bind only a
-	// local readonly store copy to the SAME actual private preregistration after
-	// its full immutable DB record/source/workflow match. No context/lease or
-	// mutation authority is created or transferred to the worker.
+	// The RPC worker uses only read methods on this local store copy. The
+	// immutable preregistration selects the original executor; the process flag
+	// remains an actual prerequisite for the original current-lease check.
+	// No context, lease, or provider mutation is created by this read.
 	var preregistrationRaw []byte
 	if err := store.DB.QueryRowContext(ctx, `SELECT preregistration_record FROM public.capacity_vm_provisioning_preregistrations WHERE id=$1 AND create_grant_id=$2`, pre.PreregistrationID, grantID).Scan(&preregistrationRaw); err != nil {
 		return refuse("prereg_query", err)
@@ -87,8 +88,7 @@ func (r *Realm) PG17NativeRead(ctx context.Context, store repository.CapacitySto
 	if json.Unmarshal(preregistrationRaw, &durablePre) != nil || capacity.GuestRetirementSHA(durablePre) != capacity.GuestRetirementSHA(pre) || pre.ExecutorID == "" || pre.PolicyChecksum != policy.Checksum {
 		return refuse("prereg_compare", ErrOriginalUnknown)
 	}
-	store.ExecutorID = pre.ExecutorID
-	store.ExecutionEnabled = false
+	store = pg17OriginalReadStore(store, pre.ExecutorID)
 	persisted, err := store.OriginalGuestProvisioning(ctx, grantID)
 	if err != nil || capacity.GuestRetirementSHA(persisted) != capacity.GuestRetirementSHA(pre) {
 		return refuse("original", ErrOriginalUnknown)
@@ -169,4 +169,12 @@ func (r *Realm) PG17NativeRead(ctx context.Context, store repository.CapacitySto
 		return refuse("context", ErrOriginalUnknown)
 	}
 	return out, nil
+}
+
+// pg17OriginalReadStore binds the read to the original executor while using
+// the same actual process enablement checked by the production handler.
+func pg17OriginalReadStore(store repository.CapacityStore, executor string) repository.CapacityStore {
+	store.ExecutorID = executor
+	store.ExecutionEnabled = os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true"
+	return store
 }
