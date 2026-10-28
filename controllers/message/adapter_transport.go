@@ -213,9 +213,11 @@ func (c *adapterTransportClient) callWithPolicy(
 		policy.native = &copy
 	}
 	if policy.native != nil && policy.contextError(ctx) != nil {
+		guestPG17TransportStage(ctx, "context")
 		return policy.sanitizeError(policy.contextError(ctx))
 	}
 	if err := contractdocs.Validate(contract.Family, contract.RequestDef, request); err != nil {
+		guestPG17TransportStage(ctx, "contract_request")
 		if policy.detailFreeErrors {
 			return policy.sanitizeError(err)
 		}
@@ -227,15 +229,18 @@ func (c *adapterTransportClient) callWithPolicy(
 	case "rabbitmq":
 		queue := adapterQueueForCapability(typeSpec.Adapter.Queues, capability)
 		if queue == "" {
+			guestPG17TransportStage(ctx, "transport_setup")
 			return fmt.Errorf("adapter queue for capability %q is required", capability)
 		}
 		if c.rpcTransport == nil {
+			guestPG17TransportStage(ctx, "transport_setup")
 			err := fmt.Errorf("%w: rpc transport is not configured", ErrAdapterTransportUnavailable)
 			return policy.sanitizeError(err)
 		}
 		rpcTransport := c.rpcTransport
 		if policy.native != nil {
 			if policy.native.get || policy.native.requireTLS {
+				guestPG17TransportStage(ctx, "transport_setup")
 				return policy.sanitizeError(errors.New("private native HTTPS reader cannot use broker RPC"))
 			}
 			rpcTransport = &nativeBoundedRPC{Transport: rpcTransport, policy: policy.native}
@@ -257,6 +262,7 @@ func (c *adapterTransportClient) callWithPolicy(
 
 	if response != nil && contract.ResponseDef != "" {
 		if err := contractdocs.Validate(contract.Family, contract.ResponseDef, response); err != nil {
+			guestPG17TransportStage(ctx, "contract_response")
 			if policy.detailFreeErrors {
 				return policy.sanitizeError(err)
 			}
@@ -264,6 +270,7 @@ func (c *adapterTransportClient) callWithPolicy(
 		}
 	}
 	if policy.native != nil && policy.contextError(ctx) != nil {
+		guestPG17TransportStage(ctx, "context")
 		return policy.sanitizeError(policy.contextError(ctx))
 	}
 	return nil

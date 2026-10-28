@@ -38,11 +38,13 @@ func callRPCWithPolicy(
 	policy adapterCallPolicy,
 ) error {
 	if transport == nil {
+		guestPG17TransportStage(ctx, "transport_setup")
 		return policy.sanitizeError(fmt.Errorf("rpc: transport is nil"))
 	}
 
 	body, err := json.Marshal(request)
 	if err != nil {
+		guestPG17TransportStage(ctx, "rpc_marshal")
 		if policy.detailFreeErrors {
 			return policy.sanitizeError(err)
 		}
@@ -55,9 +57,14 @@ func callRPCWithPolicy(
 		ContentType: "application/json",
 	})
 	if err != nil {
+		guestPG17TransportStage(ctx, "rpc_roundtrip")
 		return policy.sanitizeError(err)
 	}
-	return decodeRPCBodyWithPolicy(reply.Body, response, policy)
+	err = decodeRPCBodyWithPolicy(reply.Body, response, policy)
+	if err != nil {
+		guestPG17TransportStage(ctx, "rpc_response")
+	}
+	return err
 }
 
 func decodeRPCBody(body []byte, response any) error {

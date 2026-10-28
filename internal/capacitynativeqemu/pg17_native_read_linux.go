@@ -7,6 +7,7 @@ import (
 	"encoding/base32"
 	"encoding/hex"
 	"encoding/json"
+	"os"
 	"path/filepath"
 	"strconv"
 	"strings"
@@ -26,18 +27,22 @@ import (
 // projection, not claims that QEMU has a provider's labels or paid resources.
 func (r *Realm) PG17NativeRead(ctx context.Context, store repository.CapacityStore, policy model.Manifest, request model.AdapterExecuteIntegrationRequest) (model.AdapterExecuteIntegrationResponse, error) {
 	out := model.AdapterExecuteIntegrationResponse{}
+	refuse := func(stage string, err error) (model.AdapterExecuteIntegrationResponse, error) {
+		_ = r.RecordPG17ReadDiagnostic(ctx, "callee", stage)
+		return model.AdapterExecuteIntegrationResponse{}, err
+	}
 	deadline, ok := ctx.Deadline()
 	if !ok || ctx.Err() != nil || deadline.After(r.Request.OriginalContextDeadline) || r.Request.NativeCase != "positive_original_lifecycle" || len(r.Request.Slots) != 2 || store.DB == nil || request.Operation != request.Capability || (request.Capability != capacity.VMObserveServer && request.Capability != capacity.VMObserveAction) || len(request.Auth) != 0 || len(request.Metadata) != 0 {
-		return out, ErrOriginalUnknown
+		return refuse("scope", ErrOriginalUnknown)
 	}
 	var spec model.CapacityPolicySpec
 	if json.Unmarshal(policy.Spec, &spec) != nil || policy.Metadata.Namespace == "" || spec.Owner == "" {
-		return out, ErrOriginalUnknown
+		return refuse("policy", ErrOriginalUnknown)
 	}
 	profile, profileOK := request.Input["profile"].(string)
 	grantID, grantOK := request.Input["grant_id"].(string)
 	if !profileOK || !grantOK || grantID == "" {
-		return out, ErrOriginalUnknown
+		return refuse("input", ErrOriginalUnknown)
 	}
 	var slot int
 	switch v := request.Input["slot"].(type) {
@@ -45,14 +50,14 @@ func (r *Realm) PG17NativeRead(ctx context.Context, store repository.CapacitySto
 		slot = v
 	case float64:
 		if v != 1 && v != 2 {
-			return out, ErrOriginalUnknown
+			return refuse("slot_type", ErrOriginalUnknown)
 		}
 		slot = int(v)
 	default:
-		return out, ErrOriginalUnknown
+		return refuse("slot_type", ErrOriginalUnknown)
 	}
 	if slot != 2 {
-		return out, ErrOriginalUnknown
+		return refuse("slot", ErrOriginalUnknown)
 	}
 	allowed := map[string]bool{"profile": true, "slot": true, "grant_id": true, "expected_resource_id": true, "expected_resource_created_at": true}
 	if request.Capability == capacity.VMObserveAction {
@@ -60,7 +65,7 @@ func (r *Realm) PG17NativeRead(ctx context.Context, store repository.CapacitySto
 	}
 	for key := range request.Input {
 		if !allowed[key] {
-			return out, ErrOriginalUnknown
+			return refuse("keys", ErrOriginalUnknown)
 		}
 	}
 	r.mu.Lock()
@@ -69,58 +74,60 @@ func (r *Realm) PG17NativeRead(ctx context.Context, store repository.CapacitySto
 	started := r.started[slot]
 	r.mu.Unlock()
 	if !preOK || !originalOK || !started || pre.OriginalCreateGrantID != grantID || pre.PolicyID != policy.ID.String() || pre.WorkflowID != store.WorkflowID.String() || pre.CoreSourceCommit != capacity.CurrentGuestCoreSource() || deadline.After(pre.OriginalDeadline) || original.Original.OriginalSourceCommit != r.Request.SourceCommit || original.Original.ResourceID != r.Request.Slots[slot-1].ResourceID {
-		return out, ErrOriginalUnknown
+		return refuse("realm", ErrOriginalUnknown)
 	}
-	// The RPC worker is a read owner, not the workflow executor. Bind only a
-	// local readonly store copy to the SAME actual private preregistration after
-	// its full immutable DB record/source/workflow match. No context/lease or
-	// mutation authority is created or transferred to the worker.
+	// The RPC worker uses only read methods on this local store copy. The
+	// immutable preregistration selects the original executor; the process flag
+	// remains an actual prerequisite for the original current-lease check.
+	// No context, lease, or provider mutation is created by this read.
 	var preregistrationRaw []byte
 	if err := store.DB.QueryRowContext(ctx, `SELECT preregistration_record FROM public.capacity_vm_provisioning_preregistrations WHERE id=$1 AND create_grant_id=$2`, pre.PreregistrationID, grantID).Scan(&preregistrationRaw); err != nil {
-		return out, err
+		return refuse("prereg_query", err)
 	}
 	var durablePre model.CapacityGuestOriginalProvisioningPreregistration
 	if json.Unmarshal(preregistrationRaw, &durablePre) != nil || capacity.GuestRetirementSHA(durablePre) != capacity.GuestRetirementSHA(pre) || pre.ExecutorID == "" || pre.PolicyChecksum != policy.Checksum {
-		return out, ErrOriginalUnknown
+		return refuse("prereg_compare", ErrOriginalUnknown)
 	}
-	store.ExecutorID = pre.ExecutorID
-	store.ExecutionEnabled = false
+	store = pg17OriginalReadStore(store, pre.ExecutorID)
 	persisted, err := store.OriginalGuestProvisioning(ctx, grantID)
 	if err != nil || capacity.GuestRetirementSHA(persisted) != capacity.GuestRetirementSHA(pre) {
-		return out, ErrOriginalUnknown
+		return refuse("original", ErrOriginalUnknown)
 	}
 	binding, err := capacity.VMObservationBinding(spec, pre.BindingName)
 	if err != nil || profile != binding.ProfileName || request.Integration.Instance.ID.String() != binding.IntegrationInstanceID || request.Integration.Type.ID.String() != binding.IntegrationTypeID {
-		return out, ErrOriginalUnknown
+		return refuse("binding", ErrOriginalUnknown)
 	}
 	// Resolve the exact current manifests, not request-supplied specs or mutable
 	// aliases. The fixed native handler also independently enforces revisions.
 	instanceID, err := uuid.Parse(binding.IntegrationInstanceID)
 	if err != nil {
-		return out, ErrOriginalUnknown
+		return refuse("ids", ErrOriginalUnknown)
 	}
 	typeID, err := uuid.Parse(binding.IntegrationTypeID)
 	if err != nil {
-		return out, ErrOriginalUnknown
+		return refuse("ids", ErrOriginalUnknown)
 	}
 	instance, err := repository.GetManifestByID(ctx, store.DB, instanceID)
 	if err != nil || !instance.Metadata.Active || instance.Kind != "integration_instance" || instance.Metadata.Namespace != policy.Metadata.Namespace || instance.Checksum != binding.IntegrationChecksum {
-		return out, ErrOriginalUnknown
+		return refuse("instance", ErrOriginalUnknown)
 	}
 	typ, err := repository.GetManifestByID(ctx, store.DB, typeID)
 	if err != nil || !typ.Metadata.Active || typ.Kind != "integration_type" || typ.Metadata.Namespace != policy.Metadata.Namespace || typ.Checksum != binding.IntegrationTypeChecksum {
-		return out, ErrOriginalUnknown
+		return refuse("type", ErrOriginalUnknown)
 	}
 	receipt, err := store.MutationReceipt(ctx, binding.AdapterPrincipalID, grantID)
 	if err != nil || receipt.Grant.GrantID != grantID || receipt.Grant.Slot != slot || (receipt.Grant.State != "settled" && receipt.Grant.State != "confirmed") || receipt.Outcome != "accepted" || !receipt.TransportCompleted || receipt.ResourceID != original.Original.ResourceID || receipt.ResourceCreatedAt != original.Original.OriginalCreateReturnedAt.UTC().Format(time.RFC3339Nano) || receipt.ActionID != "qemu-original-create:"+capacity.GuestRetirementSHA(original.Original) || len(receipt.NextActionIDs) != 0 {
-		return out, ErrOriginalUnknown
+		return refuse("receipt", ErrOriginalUnknown)
 	}
 	if request.Input["expected_resource_id"] != receipt.ResourceID || request.Input["expected_resource_created_at"] != receipt.ResourceCreatedAt {
-		return out, ErrOriginalUnknown
+		return refuse("expected", ErrOriginalUnknown)
 	}
 	fresh, err := Observe(ctx, SlotDirectory(r.PrivateDirectory, slot), original.Original, r.QEMUBinarySHA256)
-	if err != nil || r.verifyFixedCommand(ctx, slot, fresh) != nil || fresh.UUID.UUID != receipt.ResourceID || !fresh.Status.Running || fresh.Status.Status != "running" || fresh.CloseReturnedAt.Before(fresh.StartedAt) || !fresh.CloseReturnedAt.Before(deadline) {
-		return out, ErrOriginalUnknown
+	if err != nil {
+		return refuse("native_read", ErrOriginalUnknown)
+	}
+	if r.verifyFixedCommand(ctx, slot, fresh) != nil || fresh.UUID.UUID != receipt.ResourceID || !fresh.Status.Running || fresh.Status.Status != "running" || fresh.CloseReturnedAt.Before(fresh.StartedAt) || !fresh.CloseReturnedAt.Before(deadline) {
+		return refuse("native_identity", ErrOriginalUnknown)
 	}
 	var approved *model.CapacityMutationSpecV1
 	var approvedSHA string
@@ -130,19 +137,19 @@ func (r *Realm) PG17NativeRead(ctx context.Context, store repository.CapacitySto
 		}
 	}
 	if approved == nil || approvedSHA != receipt.Grant.RequestSHA256 || approvedSHA != pre.OriginalCreateRequestSHA256 || approved.NativeName != "original-native-qemu-slot-"+strconv.Itoa(slot) || approved.ProfileChecksum != capacity.GuestRetirementSHA([]string{"native-original-qemu-fixed-1536-2-kvm", r.Profile.OwnerSourceCommit}) || approved.AdmissionChecksum != capacity.GuestRetirementSHA(r.Profile) || pre.ProfileManifestSHA256 != capacity.GuestRetirementSHA(r.Profile) || binding.EnsureCapability != "ensure_server" {
-		return out, ErrOriginalUnknown
+		return refuse("approved", ErrOriginalUnknown)
 	}
 	// Retain complete actual native I/O independently of the public projection.
 	originalReadFile := "pg17-native-read-" + uuid.NewString() + ".json"
 	originalReadWire, err := Publish(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, slot), originalReadFile), fresh)
 	if err != nil {
-		return out, err
+		return refuse("publish", err)
 	}
 	at := fresh.CloseReturnedAt.UTC().Format(time.RFC3339Nano)
 	out = model.AdapterExecuteIntegrationResponse{Operation: request.Operation, Capability: request.Capability, Status: "observed", Metadata: map[string]any{"original_native_read_file": originalReadFile, "original_native_read_sha256": capacity.BusinessCreationSHA256(originalReadWire)}}
 	if request.Capability == capacity.VMObserveAction {
 		if request.Input["action_id"] != receipt.ActionID || original.Original.OriginalCreateStartedAt.IsZero() || original.Original.OriginalCreateReturnedAt.Before(original.Original.OriginalCreateStartedAt) || !original.Original.OriginalClosesReturned {
-			return model.AdapterExecuteIntegrationResponse{}, ErrOriginalUnknown
+			return refuse("action", ErrOriginalUnknown)
 		}
 		out.Output = model.CapacityVMActionObservation{ID: receipt.ActionID, Status: "success", Command: "ensure_server", ResourceID: receipt.ResourceID, StartedAt: original.Original.OriginalCreateStartedAt.UTC().Format(time.RFC3339Nano), FinishedAt: receipt.ResourceCreatedAt, ObservedAt: at, ProviderFencingEvidence: false}
 	} else {
@@ -159,7 +166,15 @@ func (r *Realm) PG17NativeRead(ctx context.Context, store repository.CapacitySto
 		out.Output = model.CapacityVMFleetPlan{DesiredSpec: desired, RequestSHA256: approvedSHA, Protected: slot <= binding.ProtectedSlots, Server: &server, ObservedAt: at}
 	}
 	if ctx.Err() != nil || !time.Now().Before(deadline) {
-		return model.AdapterExecuteIntegrationResponse{}, ErrOriginalUnknown
+		return refuse("context", ErrOriginalUnknown)
 	}
 	return out, nil
+}
+
+// pg17OriginalReadStore binds the read to the original executor while using
+// the same actual process enablement checked by the production handler.
+func pg17OriginalReadStore(store repository.CapacityStore, executor string) repository.CapacityStore {
+	store.ExecutorID = executor
+	store.ExecutionEnabled = os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED") == "true"
+	return store
 }

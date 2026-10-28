@@ -89,6 +89,7 @@ func StartPG17OriginalReadConsumer(ctx context.Context, clientBroker, broker *am
 			}
 		}()
 		defer func() { cancel(); <-done }()
+		diagnostic := func(stage string) { _ = realm.RecordPG17ReadDiagnostic(original, "consumer", stage) }
 		reply := func(data any, failure bool) error {
 			var wire []byte
 			var encodeErr error
@@ -108,6 +109,7 @@ func StartPG17OriginalReadConsumer(ctx context.Context, clientBroker, broker *am
 		}
 		var request model.AdapterExecuteIntegrationRequest
 		if d.Endpoint != "qualification.original.execute" || d.ReplyTo == "" || d.CorrelationID == "" || len(d.Body) == 0 || len(d.Body) >= 2<<20 || capacity.DecodeGuestLifecycle(d.Body, &request) != nil || len(request.Auth) != 0 || len(request.Metadata) != 0 || request.Operation != request.Capability || (request.Operation != capacity.VMObserveServer && request.Operation != capacity.VMObserveAction) {
+			diagnostic("envelope")
 			failWorker(q.ErrOriginalUnknown)
 			return reply(nil, true)
 		}
@@ -116,18 +118,21 @@ func StartPG17OriginalReadConsumer(ctx context.Context, clientBroker, broker *am
 		ordinal := reads
 		mu.Unlock()
 		if ordinal > 4 {
+			diagnostic("ordinal")
 			failWorker(q.ErrOriginalUnknown)
 			return reply(nil, true)
 		}
 		startedAt := time.Now().UTC()
 		response, readErr := realm.PG17NativeRead(original, store, policy, request)
 		if readErr != nil || original.Err() != nil {
+			diagnostic("callee")
 			failWorker(q.ErrOriginalUnknown)
 			return reply(nil, true)
 		}
 		nativeFile, fileOK := response.Metadata["original_native_read_file"].(string)
 		nativeSHA, shaOK := response.Metadata["original_native_read_sha256"].(string)
 		if !fileOK || !shaOK || !capacity.ValidDigest(nativeSHA) || filepath.Base(nativeFile) != nativeFile {
+			diagnostic("metadata")
 			failWorker(q.ErrOriginalUnknown)
 			return reply(nil, true)
 		}
@@ -135,15 +140,18 @@ func StartPG17OriginalReadConsumer(ctx context.Context, clientBroker, broker *am
 		requestFile, responseFile := prefix+"-request.private.json", prefix+"-response.private.json"
 		slotDirectory := q.SlotDirectory(realm.PrivateDirectory, 2)
 		if _, err := q.PublishBytes(original, filepath.Join(slotDirectory, requestFile), d.Body); err != nil {
+			diagnostic("request_publish")
 			failWorker(q.ErrOriginalUnknown)
 			return reply(nil, true)
 		}
 		wire, encodeErr := jsonMarshalPG17Success(response)
 		if encodeErr != nil {
+			diagnostic("response_encode")
 			failWorker(q.ErrOriginalUnknown)
 			return reply(nil, true)
 		}
 		if _, err := q.PublishBytes(original, filepath.Join(slotDirectory, responseFile), wire); err != nil {
+			diagnostic("response_publish")
 			failWorker(q.ErrOriginalUnknown)
 			return reply(nil, true)
 		}
@@ -178,10 +186,15 @@ func StartPG17OriginalReadConsumer(ctx context.Context, clientBroker, broker *am
 		}{"pg17_original_rpc_read_return_v1", "SOURCE_ONLY_TYPED_RPC_NOT_NATIVE_OR_DRIVER_RETIREMENT", capacity.CurrentGuestCoreSource(), realm.Request.NativeCase, ordinal, request.Operation, requestFile, capacity.BusinessCreationSHA256(d.Body), responseFile, capacity.BusinessCreationSHA256(wire), nativeFile, nativeSHA, startedAt, replyReturnedAt, time.Now().UTC(), replyErr == nil, replyErr == nil && ackErr == nil, false, false}
 		_, retainErr := q.Publish(original, filepath.Join(slotDirectory, prefix+"-return.json"), record)
 		if retainErr != nil {
+			diagnostic("return_publish")
 			return retainErr
 		}
 		if replyErr != nil {
+			diagnostic("reply_ack")
 			return replyErr
+		}
+		if ackErr != nil {
+			diagnostic("reply_ack")
 		}
 		return ackErr
 	}})

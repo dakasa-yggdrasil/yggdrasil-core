@@ -112,10 +112,21 @@ func executeCapacityNativeWorkflowStep(ctx context.Context, conn *amqp.Connectio
 	im, is, tm, ts := resolved.instance, resolved.instanceSpec, resolved.typ, resolved.typeSpec
 	read := func(operation string, fixed map[string]any, out any) (string, error) {
 		if !capacityNativeCatalogOperation(ts, operation) {
+			guestPG17ReadClientDiagnostic(ctx, result.Operation, operation, "catalog")
 			return "", errCapacityNativeObservation
 		}
-		r, err := executeIntegrationThroughResolvedWithPolicy(ctx, conn, model.ExecuteIntegrationRequest{Operation: operation, Capability: operation, Input: fixed}, im, is, tm, ts, 65*time.Second, integrationExecutionPolicy{detailFreeErrors: true, safeError: errCapacityNativeObservation, requireExplicitResponse: true, nativeHTTP: &nativeAdapterHTTPPolicy{limit: 2 << 20, parent: parent}})
-		if err != nil || (r.Status != "observed" && r.Status != "absent") || capacity.DecodeVMObservation(r.Output, out) != nil {
+		readCtx := guestPG17ReadDiagnosticContext(ctx, result.Operation, operation)
+		r, err := executeIntegrationThroughResolvedWithPolicy(readCtx, conn, model.ExecuteIntegrationRequest{Operation: operation, Capability: operation, Input: fixed}, im, is, tm, ts, 65*time.Second, integrationExecutionPolicy{detailFreeErrors: true, safeError: errCapacityNativeObservation, requireExplicitResponse: true, nativeHTTP: &nativeAdapterHTTPPolicy{limit: 2 << 20, parent: parent}})
+		if err != nil {
+			guestPG17ReadClientDiagnostic(ctx, result.Operation, operation, "transport")
+			return "", errCapacityNativeObservation
+		}
+		if r.Status != "observed" && r.Status != "absent" {
+			guestPG17ReadClientDiagnostic(ctx, result.Operation, operation, "status")
+			return "", errCapacityNativeObservation
+		}
+		if capacity.DecodeVMObservation(r.Output, out) != nil {
+			guestPG17ReadClientDiagnostic(ctx, result.Operation, operation, "decode")
 			return "", errCapacityNativeObservation
 		}
 		return r.Status, nil

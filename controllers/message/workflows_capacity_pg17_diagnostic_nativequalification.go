@@ -40,6 +40,28 @@ func guestPG17ConfirmFailurePredicate(err error) string {
 	return "pg17-original-workflow-confirm"
 }
 
+type pg17ReadDiagnosticContextKey struct{}
+
+func guestPG17ReadDiagnosticContext(ctx context.Context, workflowOperation, capability string) context.Context {
+	if originalGuestNativeRealm == nil || workflowOperation != "capacity.confirm_native_mutation" || (capability != "observe_servers" && capability != "observe_server_action") {
+		return ctx
+	}
+	return context.WithValue(ctx, pg17ReadDiagnosticContextKey{}, true)
+}
+func guestPG17TransportStage(ctx context.Context, stage string) {
+	if ctx != nil && ctx.Value(pg17ReadDiagnosticContextKey{}) == true && originalGuestNativeRealm != nil {
+		_ = originalGuestNativeRealm.RecordPG17ReadDiagnostic(ctx, "client", stage)
+	}
+}
+
+// Diagnostics are best-effort, emitted only in the isolated positive fixture.
+func guestPG17ReadClientDiagnostic(ctx context.Context, workflowOperation, capability, stage string) {
+	if originalGuestNativeRealm == nil || workflowOperation != "capacity.confirm_native_mutation" || (capability != "observe_servers" && capability != "observe_server_action") {
+		return
+	}
+	_ = originalGuestNativeRealm.RecordPG17ReadDiagnostic(ctx, "client", stage)
+}
+
 // Diagnostic states are fixed vocabulary and never expose database errors.
 func guestInstallationFailureState(err error) string {
 	switch {
