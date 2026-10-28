@@ -4,6 +4,7 @@ import (
 	"context"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"errors"
 	"fmt"
@@ -34,6 +35,11 @@ func mutationPostgresFixture(t *testing.T, register bool) mutationFixture {
 }
 
 func mutationPostgresFixtureWithBaseline(t *testing.T, register bool, floor, units int) mutationFixture {
+	return mutationPostgresFixtureWithGuestShape(t, register, floor, units, false)
+}
+
+// Structural Guest fixture reaches earlier guards without provider authority.
+func mutationPostgresFixtureWithGuestShape(t *testing.T, register bool, floor, units int, guestShape bool) mutationFixture {
 	t.Helper()
 	db, original, a := capacityPostgresFixture(t)
 	ctx := context.Background()
@@ -101,8 +107,28 @@ func mutationPostgresFixtureWithBaseline(t *testing.T, register bool, floor, uni
 	profile.UnitMonthlyCostMinor = 200
 	p.Profiles = append(p.Profiles, profile)
 	p.MutationBindings = []model.CapacityMutationBinding{b, alt}
+	if guestShape {
+		source, digest := strings.Repeat("1", 40), strings.Repeat("b", 64)
+		writer := model.CapacityGuestProtectedWriterDefinition{ID: "structural-writer", SourceCommit: source, BinarySHA256: digest, CgroupRelativePath: ".", CommandSHA256: digest, HandleContractSHA256: digest}
+		profile := model.CapacityGuestProtectedProfileManifest{Schema: capacity.GuestProtectedProfileSchema, Profile: b.ProfileName, MutationBinding: b.Name, CoverageClass: "native_qualification_subset", BootstrapOwnerSourceCommit: source, BootstrapOwnerBinarySHA256: digest, BootstrapReaderBinarySHA256: digest, BootstrapPayloadSHA256: digest, BootstrapSHA256: digest, OriginalProvisioningBudgetSeconds: 60, OriginalProvisioningStepID: "structural-step", OwnerSourceCommit: source, OwnerBinarySHA256: digest, ProtectedCgroup: capacity.GuestProtectedCgroup, ActorSourceCommit: source, ActorBinarySHA256: digest, RuntimeClientCommandSHA256: digest, PoweroffCommandSHA256: digest, Writers: []model.CapacityGuestProtectedWriterDefinition{writer}}
+		r := model.CapacityGuestRetirementBinding{Mode: capacity.GuestRetirementSchema, MutationBindingName: b.Name, EvidenceClass: "native_qemu_qualification", ProvisionerSourceCommit: source, GuestSourceCommit: source, CoreAuthoritySourceCommit: source, ProvisionerPublicKey: base64.StdEncoding.EncodeToString([]byte(strings.Repeat("a", 32))), EnrollmentIssuerPublicKey: base64.StdEncoding.EncodeToString([]byte(strings.Repeat("b", 32))), EnrollmentSigningKeyRef: "secret://fixture/enrollment#value", IntentSigningKeyRef: "secret://fixture/intent#value", ProfileManifest: profile, ProfileManifestSHA256: capacity.GuestRetirementSHA(profile), MaxEvidenceAgeSeconds: 30}
+		for slot := 1; slot <= b.MaxSlots; slot++ {
+			name := fmt.Sprintf("structural-%d", slot)
+			r.Members = append(r.Members, model.CapacityGuestRetirementMemberBinding{Name: name, Slot: slot, Origin: fmt.Sprintf("https://127.0.0.1:%d", 20000+slot), ServerCARef: "secret://fixture/ca#value", ClientCertificateRef: "secret://fixture/cert#value", ClientKeyRef: "secret://fixture/key#value", ActorClientPrincipal: name + "-actor", ProvisionerClientPrincipal: name + "-provisioner"})
+		}
+		p.GuestRetirementBinding = &r
+		if err := capacity.ValidateGuestRetirementBinding(p, &r); err != nil {
+			t.Fatal("structural Guest fixture invalid", err)
+		}
+		if capacity.GuestOriginalProfileEnabled(p, r, "fixture") {
+			t.Fatal("structural Guest fixture unexpectedly approved")
+		}
+	}
 	policy := create("capacity_policy", "api", p)
 	store := CapacityStore{DB: db, ExecutionEnabled: true, WorkflowID: wf.ID, ExecutorID: uuid.NewString()}
+	if guestShape {
+		store = store.WithOriginalGuestProvisioning(model.WorkflowStepSpec{}, strings.Repeat("1", 40), strings.Repeat("c", 64))
+	}
 	intent, err := store.Assess(ctx, policy, a)
 	if err != nil {
 		t.Fatal(err)
@@ -389,17 +415,24 @@ func TestCapacityMutationPostgres(t *testing.T) {
 		}
 	})
 	t.Run("complete_membership_and_bound_plan_required", func(t *testing.T) {
-		f := mutationPostgresFixture(t, false)
-		if _, err := f.store.IssueMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, f.plans[5]); !errors.Is(err, ErrCapacityConflict) {
+		f := mutationPostgresFixtureWithGuestShape(t, false, 2, 4, true)
+		if _, err := f.store.IssueMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, f.plans[5]); !errors.Is(err, ErrCapacityConflict) || !strings.Contains(err.Error(), "native membership has not been completely registered") {
 			t.Fatal("incomplete native inventory admitted", err)
 		}
 		for slot := 1; slot <= 4; slot++ {
 			f.record(t, slot)
 		}
+		if _, err := f.store.IssueMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, f.plans[5]); !errors.Is(err, ErrCapacityConflict) || !strings.Contains(err.Error(), "complete original protected Guest preregistration required") {
+			t.Fatal("complete membership did not reach the unapproved Guest hold", err)
+		}
+		var grants, preregistrations int
+		if err := f.db.QueryRowContext(ctx, `SELECT (SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1), (SELECT count(*) FROM public.capacity_vm_provisioning_preregistrations WHERE preregistration_record->>'policy_id'=$2)`, f.policy.Metadata.Namespace, f.policy.ID.String()).Scan(&grants, &preregistrations); err != nil || grants != 0 || preregistrations != 0 {
+			t.Fatal("unapproved Guest hold did not roll back grant/preregistration", grants, preregistrations, err)
+		}
 		bad := f.plans[5]
 		bad.DesiredSpec = json.RawMessage(strings.Replace(string(bad.DesiredSpec), "node-5", "caller-selected", 1))
-		if _, err := f.store.IssueMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, bad); err == nil {
-			t.Fatal("caller changed approved spec")
+		if _, err := f.store.IssueMutation(ctx, f.policy, 1, f.intent.FencingToken, f.intent.LeaseOwner, bad); err == nil || !strings.Contains(err.Error(), "desired spec is not the operator-approved slot revision") {
+			t.Fatal("caller changed approved spec", err)
 		}
 		other := f.store
 		other.ExecutorID = uuid.NewString()
