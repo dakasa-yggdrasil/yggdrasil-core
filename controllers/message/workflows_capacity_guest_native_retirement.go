@@ -12,7 +12,6 @@ import (
 	q "github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacitynativeqemu"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
-	"sync"
 	"time"
 	"github.com/google/uuid"
 )
@@ -67,7 +66,7 @@ func sourceNativeBaseline(ctx context.Context, store repository.CapacityStore, p
 	return probe, err
 }
 
-func guestOriginalSourceBeforeRetirement(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, input guestOriginalStepInput, key ed25519.PrivateKey) (func() error, error) {
+func guestOriginalSourceBeforeRetirement(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, input guestOriginalStepInput, key ed25519.PrivateKey) (func(context.Context) error, error) {
 	if originalGuestNativeRealm == nil || input.Slot != 2 || !q.RetirementCase(originalGuestNativeRealm.Request.NativeCase) {
 		return nil, errOriginalGuestStep
 	}
@@ -86,39 +85,11 @@ func guestOriginalSourceBeforeRetirement(ctx context.Context, store repository.C
 	if err!=nil{return nil,err}
 	if _,err=q.Publish(ctx,filepath.Join(q.SlotDirectory(originalGuestNativeRealm.PrivateDirectory,2),"delete-readoption-original-presence.json"),presence);err!=nil{return nil,err}
 	}
-	original, cancel := context.WithCancel(ctx)
-	returned := make(chan error, 1)
-	go func() {
-		ticker := time.NewTicker(2 * time.Second)
-		defer ticker.Stop()
-		for {
-			select {
-			case <-original.Done():
-				returned <- nil
-				return
-			case <-ticker.C:
-				if _, err := sourceNativeBaseline(original, store, policy, p, input, key); err != nil {
-					if original.Err() != nil {
-						returned <- nil
-					} else {
-						returned <- err
-					}
-					return
-				}
-			}
-		}
-	}()
-	var once sync.Once
-	var joined error
-	join := func() error {
-		once.Do(func() {
-			cancel()
-			// Cancellation requests the SAME keeper's stop; only its actual
-			// return releases the workflow's DB/HTTP/native owners.
-			joined = <-returned
-		})
-		return joined
-	}
+	ticker := time.NewTicker(2 * time.Second)
+	join := startOriginalFloorKeeper(ctx, ticker.C, ticker.Stop, func(probeCtx context.Context) error {
+		_, err := sourceNativeBaseline(probeCtx, store, policy, p, input, key)
+		return err
+	})
 	return join, nil
 }
 

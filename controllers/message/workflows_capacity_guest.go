@@ -460,7 +460,7 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		if err != nil {
 			return fail("original-guest-step-33")
 		}
-		defer joinOriginalFloor()
+		defer func() { _ = joinOriginalFloor(ctx) }()
 		nonce, err := sourceGuestNonce()
 		if err != nil {
 			return fail("original-guest-step-34")
@@ -485,7 +485,7 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 			return fail("original-guest-step-38")
 		}
 		returned, callErr := client.Original(original, http.MethodPost, "/v1/retirement", body)
-		floorJoinErr := joinOriginalFloor()
+		floorJoinErr := joinOriginalFloor(original)
 		var observed model.CapacityGuestRetirementObservation
 		decoded := capacity.GuestOriginalHTTPDecode(returned, &observed) == nil
 		// Only a closed authenticated protocol body is retained. Unknown body
