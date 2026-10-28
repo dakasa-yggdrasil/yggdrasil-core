@@ -656,7 +656,12 @@
     "source_inventory_sha256": "796924aa14592aaf1b23528b3f4f703e8f7cce67b1e57be78123feea3e38574f",
     "production_or_full_gate_qualification": false
   },
-  "source_inventory_sha256": "796924aa14592aaf1b23528b3f4f703e8f7cce67b1e57be78123feea3e38574f",
+  "integrated_source_review_20261028": {
+    "scope": "Combined reviewed postloss slot and closed refusal diagnostics, floor keeper, readoption, protected destroy and synthetic PG fixtures. Source review is limited; full exact-source LAB, native scenarios and production qualification remain required.",
+    "source_inventory_sha256": "43d990df35e99a5dfe2ee5290039f0253d994c6a71cd1490a9a19995ac9f6f38",
+    "production_or_full_gate_qualification": false
+  },
+  "source_inventory_sha256": "43d990df35e99a5dfe2ee5290039f0253d994c6a71cd1490a9a19995ac9f6f38",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",

@@ -11,6 +11,16 @@ import (
 	"time"
 )
 
+func TestGuestQualificationReadoptionClosedStages(t *testing.T) {
+	cause := errors.New("private details")
+	for stage, want := range map[string]string{"readoption_presence": "original-guest-step-47", "readoption_plan": "original-guest-step-48", "readoption_lease": "original-guest-step-49"} {
+		err := GuestQualificationRefusal(stage, cause)
+		if GuestQualificationPredicate(err) != want || !errors.Is(err, cause) || strings.Contains(err.Error(), "private details") {
+			t.Fatalf("wrong closed readoption stage: %s", stage)
+		}
+	}
+}
+
 func TestGuestQualificationRefusalClosedProjection(t *testing.T) {
 	cause := errors.New("SECRET SQL HTTP credential body")
 	cases := []struct{ stage, predicate string }{
@@ -20,6 +30,9 @@ func TestGuestQualificationRefusalClosedProjection(t *testing.T) {
 		{"probe_http_enrollment_decode_held", "original-guest-step-53"},
 		{"probe_http_enrollment_validate_held", "original-guest-step-54"},
 		{"probe_http_enrollment_command_held", "original-guest-step-55"},
+		{"native_finish_protected_spec", "original-guest-step-56"},
+		{"native_finish_protected_refusal", "original-guest-step-57"},
+		{"native_finish_burst_issue", "original-guest-step-58"},
 		{"observe", "original-guest-step-60"},
 		{"lease_missing", "original-guest-step-61"},
 		{"generation", "original-guest-step-62"},

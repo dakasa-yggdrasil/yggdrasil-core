@@ -5,6 +5,7 @@ import (
 	"crypto/sha256"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"io"
 	"net/url"
@@ -190,6 +191,10 @@ type MutationPlan struct {
 
 // PrepareMutationPlan binds a provider's dry-run projection to an operator slot
 // digest. Core never constructs SDK payloads or learns credential/bootstrap data.
+// ErrProtectedMutationDestroy identifies the approved protected-slot guard.
+// It does not authorize a destroy or imply that a malformed tuple was valid.
+var ErrProtectedMutationDestroy = errors.New("capacity destruction requires an unprotected immutable resource")
+
 func PrepareMutationPlan(p model.CapacityPolicySpec, issue model.CapacityMutationIssue) (MutationPlan, error) {
 	return prepareMutationPlan(p, issue, false)
 }
@@ -244,7 +249,14 @@ func prepareMutationPlan(p model.CapacityPolicySpec, issue model.CapacityMutatio
 	plan.ExpectedResourceID = spec.ExpectedResourceID
 	plan.ExpectedResourceCreatedAt = spec.ExpectedResourceCreatedAt
 	if plan.Capability == b.DestroyCapability {
-		if (!compensation && plan.Slot <= b.ProtectedSlots) || plan.ExpectedResourceID == "" || len(plan.ExpectedResourceID) > 128 {
+		if !compensation && plan.Slot <= b.ProtectedSlots {
+			created, err := time.Parse(time.RFC3339Nano, plan.ExpectedResourceCreatedAt)
+			if plan.ExpectedResourceID == "" || len(plan.ExpectedResourceID) > 128 || err != nil || created.IsZero() {
+				return plan, fmt.Errorf("capacity destruction requires an unprotected immutable resource")
+			}
+			return plan, ErrProtectedMutationDestroy
+		}
+		if plan.ExpectedResourceID == "" || len(plan.ExpectedResourceID) > 128 {
 			return plan, fmt.Errorf("capacity destruction requires an unprotected immutable resource")
 		}
 		created, err := time.Parse(time.RFC3339Nano, plan.ExpectedResourceCreatedAt)

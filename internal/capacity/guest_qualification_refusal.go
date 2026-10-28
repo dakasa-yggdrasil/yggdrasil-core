@@ -32,6 +32,12 @@ func GuestQualificationPredicate(err error) string {
 		return "original-guest-step-17"
 	}
 	switch refusal.stage {
+	case "readoption_presence":
+		return "original-guest-step-47"
+	case "readoption_plan":
+		return "original-guest-step-48"
+	case "readoption_lease":
+		return "original-guest-step-49"
 	case "probe_http_config_held":
 		return "original-guest-step-50"
 	case "probe_http_enrollment_held":
@@ -44,6 +50,12 @@ func GuestQualificationPredicate(err error) string {
 		return "original-guest-step-54"
 	case "probe_http_enrollment_command_held":
 		return "original-guest-step-55"
+	case "native_finish_protected_spec":
+		return "original-guest-step-56"
+	case "native_finish_protected_refusal":
+		return "original-guest-step-57"
+	case "native_finish_burst_issue":
+		return "original-guest-step-58"
 	case "observe":
 		return "original-guest-step-60"
 	case "lease_missing":

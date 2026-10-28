@@ -37,7 +37,7 @@ func guestOriginalSourceWitnessed(ctx context.Context, g model.CapacityMutationG
 func sourceGuestQualificationStep(context.Context, repository.CapacityStore, model.Manifest, model.CapacityPolicySpec, guestOriginalStepInput, ed25519.PrivateKey, string) (any, error) {
 	return nil, errOriginalGuestStep
 }
-func guestOriginalSourceBeforeRetirement(context.Context, repository.CapacityStore, model.Manifest, model.CapacityPolicySpec, guestOriginalStepInput, ed25519.PrivateKey) (func() error, error) {
+func guestOriginalSourceBeforeRetirement(context.Context, repository.CapacityStore, model.Manifest, model.CapacityPolicySpec, guestOriginalStepInput, ed25519.PrivateKey) (func(context.Context) error, error) {
 	return nil, errOriginalGuestStep
 }
 
