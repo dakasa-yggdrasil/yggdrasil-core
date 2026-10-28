@@ -651,7 +651,8 @@
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
   "pg16_fixture_integration_review": {
     "scope": "Independent source review of test-only fixture integration, adapter pin, cleanup and census. Native qualification and the original lost-reply cases remain separate and unqualified.",
-    "reviewed_code_commit": "6d47bec0ee895d9a32520dedee3520f86c6cc1a6",
+    "reviewed_code_commit": "6a98b52d0a8a93bee01a69834842b6a1602625fb",
+    "failed_floor_fixture_scope": "Independent comparison preserved the original below-floor baseline and refusal assertions. The PG16 execution uses signed synthetic Guest and native records; native and production qualification remain separate.",
     "source_inventory_sha256": "796924aa14592aaf1b23528b3f4f703e8f7cce67b1e57be78123feea3e38574f",
     "production_or_full_gate_qualification": false
   },
