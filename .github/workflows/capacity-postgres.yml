@@ -33,6 +33,7 @@ jobs:
     env:
       CAPACITY_DISPATCH_BROKER_URL: amqp://dispatch:dispatch-ci-only@127.0.0.1:5672/
       GOWORK: "off"
+      PYTHONDONTWRITEBYTECODE: "1"
       DB_HOST: 127.0.0.1
       DB_PORT: "5432"
       DB_NAME: capacity_integration
@@ -256,6 +257,12 @@ jobs:
           (cd .ci-bound-kubernetes && go test -c -o "$RUNNER_TEMP/capacity-hpa-fixture" ./internal/adapter)
           echo "CAPACITY_METRIC_FIXTURE_BINARY=$RUNNER_TEMP/capacity-metric-fixture" >> "$GITHUB_ENV"
           echo "CAPACITY_HPA_FIXTURE_BINARY=$RUNNER_TEMP/capacity-hpa-fixture" >> "$GITHUB_ENV"
+      - name: Stage fixture sources outside the owning Core checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/test_stage_capacity_fixture_sources.py
+          bash scripts/ci/stage_capacity_fixture_sources.sh
       - name: Apply production migrations
         run: go run ./scripts/goose up
       - name: Require the closed original Guest reconcile Source protocol
