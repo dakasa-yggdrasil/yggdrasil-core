@@ -65,6 +65,12 @@ func(r *Realm) OriginalReadoptionPresence(ctx context.Context,slot int,b model.C
  if err!=nil || r.verifyFixedCommand(original,slot,fresh)!=nil{return proof,ErrOriginalUnknown}
  raw,err:=Publish(original,filepath.Join(SlotDirectory(r.PrivateDirectory,slot),"delete-readoption-original-native-read.json"),fresh)
  if err!=nil{return proof,err}
- proof=model.CapacityMutationProof{BindingName:b.Name,Slot:slot,ResourceID:native.Original.ResourceID,ResourceCreatedAt:native.Original.OriginalCreateReturnedAt.UTC().Format(time.RFC3339Nano),RequestSHA256:pre.OriginalCreateRequestSHA256,ObservedAt:fresh.CloseReturnedAt,ReceiptRef:"original-native-qemu-fresh:"+capacity.BusinessCreationSHA256(raw),OwnerVerified:true,SpecVerified:true,ObservedCreationGrantID:pre.OriginalCreateGrantID}
+ proof=originalReadoptionPresenceProof(slot,b,pre,native,fresh,raw)
  return proof,nil
+}
+
+// A presence observation has no action claims. Emit an explicit empty array so
+// the existing closed decoder can read it without inventing action evidence.
+func originalReadoptionPresenceProof(slot int,b model.CapacityMutationBinding,pre model.CapacityGuestOriginalProvisioningPreregistration,native,fresh IndependentReturn,raw []byte) model.CapacityMutationProof {
+ return model.CapacityMutationProof{BindingName:b.Name,Slot:slot,ResourceID:native.Original.ResourceID,ResourceCreatedAt:native.Original.OriginalCreateReturnedAt.UTC().Format(time.RFC3339Nano),RequestSHA256:pre.OriginalCreateRequestSHA256,ObservedAt:fresh.CloseReturnedAt,ReceiptRef:"original-native-qemu-fresh:"+capacity.BusinessCreationSHA256(raw),OwnerVerified:true,SpecVerified:true,ActionIDs:[]string{},ObservedCreationGrantID:pre.OriginalCreateGrantID}
 }
