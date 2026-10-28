@@ -236,7 +236,7 @@ func TestCapacityGuestOriginalNativeCorpusPostgres(t *testing.T) {
 	}
 	for _, run := range c.OriginalRunIDs {
 		var count int
-		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM public.workflow_runs WHERE id=$1 AND workflow_id=$2`, run, c.WorkflowID).Scan(&count); err != nil || count != 1 {
+		if err := tx.QueryRowContext(ctx, `SELECT count(*) FROM (`+q.OriginalWorkflowIdentitySQL+`) exact_original`, run, c.WorkflowID).Scan(&count); err != nil || count != 1 {
 			t.Fatal("original public workflow run absent", err)
 		}
 	}

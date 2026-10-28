@@ -10,6 +10,7 @@ On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 verified_at_commit: b982bf16e23b998f9e79865ee749d22ed257b94a
 verified_diff_sha256: 0e9033aeb7fcf4635fc7cd2c6f3306c398b8dd57b29145a175bf3b8571907971
 reconciler_schema: 1
+public_workflow_identity_review: Reviewed the public idempotent writer nullable fields and full resolved workflow identity join. LAB Linux PostgreSQL 16 with schema 82 passed the writer and nine negative cases, including explicit NULL checks; integrated native CI remains required.
 verified_at: 2026-10-28
 by: Giomaster
 pidfd_and_retirement_diagnostic_review: Reviewed acceptance of readable pidfd with or without hangup after original Wait and the closed qualification-only retirement diagnostics. Actual end-to-end Guest and full capacity checks remain required.
