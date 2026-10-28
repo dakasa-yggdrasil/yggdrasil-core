@@ -249,7 +249,9 @@ func TestSyntheticFailedFloorRecoveryPostgres(t *testing.T) {
 	if permission, err := issuer.RedeemMutation(ctx, f.binding.AdapterPrincipalID, childRedemption); err != nil || permission.Mode != "write_once" {
 		t.Fatal("separate cleanup gate could not redeem belowfloor baseline", permission, err)
 	}
-	if _, err := issuer.SettleMutation(ctx, f.binding.AdapterPrincipalID, childNonce, mutationSettlement(childRedemption, settled.ResourceCreatedAt)); err != nil {
+	childSettle := mutationSettlement(childRedemption, settled.ResourceCreatedAt)
+	childSettle.ResourceID = settled.ResourceID
+	if _, err := issuer.SettleMutation(ctx, f.binding.AdapterPrincipalID, childNonce, childSettle); err != nil {
 		t.Fatal(err)
 	}
 	deleted := failed
