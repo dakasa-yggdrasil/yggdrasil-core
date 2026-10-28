@@ -307,6 +307,8 @@ func TestSyntheticFailedFloorRecoveryPostgres(t *testing.T) {
 	// the closed historical recovery epoch back into write authority.
 	nextStore := issuer
 	nextStore.ExecutorID = uuid.NewString()
+	nextStep := model.WorkflowStepSpec{ID: b.ProfileManifest.OriginalProvisioningStepID, Use: model.WorkflowStepUseSpec{Kind: "yggdrasil", Operation: capacity.ProvisionOriginalGuestOperation}, TimeoutSeconds: b.ProfileManifest.OriginalProvisioningBudgetSeconds}
+	nextStore = nextStore.WithOriginalGuestProvisioning(nextStep, capacity.CurrentGuestCoreSource(), capacity.BusinessCreationSHA256([]byte(uuid.NewString())))
 	next, err := nextStore.Assess(ctx, current, freshCapacityTestAssessment(f.a, 2))
 	if err != nil || next.Generation != lease.Generation+1 || next.Decision.Reason != "protected_floor_recovery" || next.Decision.Units != 3 || next.FloorDegraded {
 		t.Fatal("failed floor deadlocked next independent repair", next, err)
