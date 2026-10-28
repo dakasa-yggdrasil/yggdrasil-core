@@ -1,4 +1,4 @@
-//go:build (!linux || !nativequalification) && !recoveryfixture
+//go:build (!linux || !nativequalification) && (!recoveryfixture || nativequalification)
 
 package message
 
