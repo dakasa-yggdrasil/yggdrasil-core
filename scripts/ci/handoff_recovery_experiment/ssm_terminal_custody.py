@@ -1,17 +1,21 @@
-"""Pure validator of captured AWS CLI original SEND and terminal GET evidence.
+"""Validate original closed AWS CLI diagnostics for one terminal SSM command.
 
-This authenticates transport provenance only to the extent the caller validates
-and supplies the originals. Terminal SSM does not prove remote descendants or a
-systemd job are gone: those require separate host-side proof before recovery.
+Evidence must be obtained through a source-pinned trusted native caller and its
+original diagnostic files, not caller-synthesized records. Terminal SSM does not
+prove remote descendants or a systemd job are gone; inspect them independently.
 """
-import hashlib,json,re
+import base64,hashlib,json,re
 class Held(Exception):pass
 def need(v,why):
  if not v:raise Held(why)
-def closed(row):
- need(type(row)is dict and type(row.get('exit_code'))is int and row['exit_code']==0 and row.get('captured_output_truncated') is False and all(row.get(k)is True for k in ('native_started','wait_zero','stdout_EOF','stderr_EOF','all_local_FDs_closed','local_child_joined')),'ORIGINAL_CLOSED_ZERO_LOCAL_TRANSPORT')
-def qualify(*,request_bytes,send_stdout,get_stdout,send_transport,get_transport,command_id,instance_id,expected_request_sha256):
- closed(send_transport);closed(get_transport)
+def stdout(row):
+ need(type(row)is dict and row.get('schema')=='private_original_baker_SSH_diagnostic_v1','ORIGINAL_NATIVE_DIAGNOSTIC')
+ t=row['original_local_transport'];need(type(t)is dict and type(t.get('exit_code'))is int and t['exit_code']==0 and t.get('captured_output_truncated') is False and all(t.get(k)is True for k in ('native_started','wait_zero','stdout_EOF','stderr_EOF','all_local_FDs_closed','local_child_joined')),'ORIGINAL_CLOSED_ZERO_LOCAL_TRANSPORT')
+ try:raw=base64.b64decode(row['stdout_base64'],validate=True)
+ except (ValueError,TypeError):raise Held('ORIGINAL_DIAGNOSTIC_BASE64')
+ need(len(raw)==row['stdout_bytes'] and hashlib.sha256(raw).hexdigest()==row['stdout_sha256'],'DIAGNOSTIC_STDOUT_BYTES_AND_SHA');return raw
+def qualify(*,request_bytes,send_diagnostic,get_diagnostic,command_id,instance_id,expected_request_sha256):
+ send_stdout=stdout(send_diagnostic);get_stdout=stdout(get_diagnostic)
  need(type(request_bytes)is bytes and hashlib.sha256(request_bytes).hexdigest()==expected_request_sha256,'EXACT_EXECUTED_REQUEST_BYTES')
  need(re.fullmatch(r'[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}',command_id) is not None and re.fullmatch(r'i-[0-9a-f]{17}',instance_id) is not None,'EXACT_COMMAND_AND_INSTANCE_IDENTIFIERS')
  request=json.loads(request_bytes);send=json.loads(send_stdout);got=json.loads(get_stdout)
