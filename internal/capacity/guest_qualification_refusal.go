@@ -44,6 +44,12 @@ func GuestQualificationPredicate(err error) string {
 		return "original-guest-step-54"
 	case "probe_http_enrollment_command_held":
 		return "original-guest-step-55"
+	case "native_finish_protected_spec":
+		return "original-guest-step-56"
+	case "native_finish_protected_refusal":
+		return "original-guest-step-57"
+	case "native_finish_burst_issue":
+		return "original-guest-step-58"
 	case "observe":
 		return "original-guest-step-60"
 	case "lease_missing":

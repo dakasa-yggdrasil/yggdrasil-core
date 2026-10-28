@@ -167,14 +167,14 @@ func sourceGuestNativeRetirementFinished(ctx context.Context, store repository.C
 	}
 	baselineIssue, err := sourceNativeProtectedDestroyIssue(original, p, b)
 	if err != nil {
-		return nil, err
+		return nil, capacity.GuestQualificationRefusal("native_finish_protected_spec", err)
 	}
 	if _, err = store.IssueMutation(original, policy, input.Generation, input.FencingToken, input.LeaseOwner, baselineIssue); !errors.Is(err, repository.ErrCapacityConflict) {
-		return nil, errOriginalGuestStep
+		return nil, capacity.GuestQualificationRefusal("native_finish_protected_refusal", errOriginalGuestStep)
 	}
 	grant, err := store.IssueMutation(original, policy, input.Generation, input.FencingToken, input.LeaseOwner, burstIssue)
 	if err != nil {
-		return nil, err
+		return nil, capacity.GuestQualificationRefusal("native_finish_burst_issue", err)
 	}
 	if err = sourceNativePendingDeleteContract(original, store, policy, p, b, input, burstIssue, baselineIssue, grant); err != nil {
 		return nil, err
