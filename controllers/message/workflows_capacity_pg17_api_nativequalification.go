@@ -103,7 +103,7 @@ func AssertPG17NativeWorkflow(ctx context.Context, conn *amqp.Connection, store 
 	out := PG17AssertionResult{}
 	executor, _ := ctx.Value(capacityInvocationKey{}).(string)
 	if originalGuestNativeRealm == nil || originalGuestNativeRealm.Request.NativeCase != "positive_original_lifecycle" || executor == "" || executor != store.ExecutorID || ctx.Err() != nil || store.DB == nil || step.Operation != "capacity.confirm_native_mutation" || grant.Slot != 2 || input["grant_id"] != grant.GrantID {
-		return out, errOriginalGuestStep
+		return out, pg17ConfirmFailure("check-01")
 	}
 	count := func() (int, int, error) {
 		var events, members int
@@ -115,29 +115,29 @@ func AssertPG17NativeWorkflow(ctx context.Context, conn *amqp.Connection, store 
 		return out, err
 	}
 	if events != 0 || members != 1 {
-		return out, errOriginalGuestStep
+		return out, pg17ConfirmFailure("check-02")
 	}
 	first := executeCapacityNativeWorkflowStep(ctx, conn, store.DB, workflow, step, input)
 	if first.Status != "succeeded" || first.Metadata["useful_capacity_known"] != false {
-		return out, errOriginalGuestStep
+		return out, pg17NativeResultFailure(first)
 	}
 	events, members, err = count()
 	if err != nil {
 		return out, err
 	}
 	if events != 1 || members != 2 {
-		return out, errOriginalGuestStep
+		return out, pg17ConfirmFailure("check-04")
 	}
 	replay := executeCapacityNativeWorkflowStep(ctx, conn, store.DB, workflow, step, input)
 	if replay.Status != "succeeded" || replay.Metadata["useful_capacity_known"] != false {
-		return out, errOriginalGuestStep
+		return out, pg17ConfirmFailure("check-05")
 	}
 	events, members, err = count()
 	if err != nil {
 		return out, err
 	}
 	if events != 1 || members != 2 || ctx.Err() != nil {
-		return out, errOriginalGuestStep
+		return out, pg17ConfirmFailure("check-06")
 	}
 	// Full typed handler returns remain private originals. The public assertion
 	// exports only their body hashes, not a replacement success boolean.

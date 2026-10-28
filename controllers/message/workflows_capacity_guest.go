@@ -399,7 +399,7 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		}
 		if hostRealm == nil {
 			if err = guestPG17BeforeConfirm(original, store, policy, workflowRef, parsed, grant); err != nil {
-				return fail("pg17-original-workflow-confirm")
+				return fail(guestPG17ConfirmFailurePredicate(err))
 			}
 		}
 		if _, err = store.ConfirmMutation(original, policy, parsed.Generation, parsed.FencingToken, parsed.LeaseOwner, confirmProof); err != nil {
