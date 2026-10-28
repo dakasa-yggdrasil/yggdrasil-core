@@ -7,7 +7,9 @@ import (
 	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
+	"errors"
 	"strings"
+	"sync"
 	"testing"
 	"time"
 
@@ -749,25 +751,84 @@ func TestSyntheticCompensationIssueExploration(t *testing.T) {
 			}
 			issuer := store
 			issuer.ExecutorID = uuid.NewString()
-			check, e := db.BeginTx(ctx, nil)
-			if e != nil {
-				t.Fatal(e)
+			paused := issuer
+			paused.ExecutionEnabled = false
+			if _, e = paused.IssueCompensation(ctx, current, issue); !errors.Is(e, ErrCapacityDisabled) {
+				t.Fatal("paused cleanup admitted", e)
 			}
-			parent, e = readCompensationRecord(ctx, check, current, p, grant.GrantID, false)
-			if e != nil {
-				t.Fatal(e)
+			for _, variant := range []string{"unknown_action", "successful_action", "wrong_parent", "wrong_creation_label", "missing_identity", "running_business", "running_native", "open_admission", "routed", "incomplete_inventory", "below_floor", "wrong_tuple", "incomplete_action_history"} {
+				bad := issue
+				switch variant {
+				case "unknown_action":
+					bad.FailedProof.ActionsTerminal = false
+				case "successful_action":
+					bad.FailedProof.ActionsSuccessful = true
+				case "wrong_parent":
+					bad.ParentGrantID = uuid.NewString()
+				case "wrong_creation_label":
+					bad.FailedProof.ObservedCreationGrantID = uuid.NewString()
+				case "missing_identity":
+					bad.FailedProof.CompensationIdentityVerified = false
+				case "running_business":
+					one := 1
+					bad.DrainProof.Inflight = &one
+				case "running_native":
+					one := 1
+					bad.DrainProof.NativeActionsInflight = &one
+				case "open_admission":
+					bad.DrainProof.AdmissionClosed = false
+				case "routed":
+					bad.DrainProof.RoutingWithdrawn = false
+				case "incomplete_inventory":
+					bad.DrainProof.MembershipComplete = false
+				case "below_floor":
+					bad.DrainProof.Assessment.Snapshot.Units = 1
+				case "wrong_tuple":
+					bad.Mutation.DesiredSpec = json.RawMessage(string(desiredRaw))
+					bad.FailedProof.ResourceID = "replacement"
+				case "incomplete_action_history":
+					if true {
+						continue
+					}
+					bad.FailedProof.ActionHistoryComplete = false
+				}
+				if _, err := issuer.IssueCompensation(ctx, current, bad); err == nil {
+					t.Fatal("unsafe compensation admitted", variant)
+				}
 			}
-			t.Log("parent state", parent.Grant.State, "same binding", sameCompensationBinding(p.MutationBindings[0], parent.Binding), "proof", validFailedCreationProof(p, parent, proof, time.Now().UTC()), "cleanup", issuer.guestFailedCreateCleanupTx(ctx, check, p, parent, proof, time.Now().UTC(), ""), "drain", validateCompensationDrain(ctx, check, current.Metadata.Namespace, p, drain, time.Now().UTC(), parent.Generation))
-			_ = check.Rollback()
-			child, e := issuer.IssueCompensation(ctx, current, issue)
-			if e != nil {
-				t.Fatal("real IssueCompensation", e)
+			var wg sync.WaitGroup
+			grants := make(chan model.CapacityMutationGrant, 2)
+			failures := make(chan error, 2)
+			for n := 0; n < 2; n++ {
+				wg.Add(1)
+				go func() {
+					defer wg.Done()
+					g, err := issuer.IssueCompensation(ctx, current, issue)
+					grants <- g
+					failures <- err
+				}()
+			}
+			wg.Wait()
+			child, repeated := <-grants, <-grants
+			first, second := <-failures, <-failures
+			if first != nil || second != nil || child.GrantID != repeated.GrantID {
+				t.Fatal("concurrent issuance", child, repeated, first, second)
 			}
 			if child.CompensationOf != grant.GrantID {
 				t.Fatal("wrong compensation lineage")
 			}
+			stranger := issuer
+			stranger.ExecutorID = uuid.NewString()
+			if _, e = stranger.IssueCompensation(ctx, current, issue); !errors.Is(e, ErrCapacityConflict) {
+				t.Fatal("foreign issuer adopted cleanup", e)
+			}
 			childNonce := uuid.NewString()
 			childRedeem := mutationRedeem(child, childNonce)
+			badRedeem := childRedeem
+			badRedeem.CompensationOf = ""
+			if _, e = issuer.RedeemMutation(ctx, mutation.AdapterPrincipalID, badRedeem); !errors.Is(e, ErrCapacityMutationAuthorization) {
+				t.Fatal("missing parent identity", e)
+			}
 			permit, e := issuer.RedeemMutation(ctx, mutation.AdapterPrincipalID, childRedeem)
 			if e != nil || permit.Mode != "write_once" {
 				t.Fatal("child redeem", permit, e)
@@ -813,6 +874,35 @@ func TestSyntheticCompensationIssueExploration(t *testing.T) {
 			confirmed, e := issuer.ConfirmCompensation(ctx, current, deleted)
 			if e != nil || confirmed.State != "confirmed" {
 				t.Fatal("real ConfirmCompensation", confirmed, e)
+			}
+			if _, e = issuer.ConfirmCompensation(ctx, current, deleted); e != nil {
+				t.Fatal("same confirmation replay", e)
+			}
+			parentReceipt, e := issuer.MutationReceipt(ctx, mutation.AdapterPrincipalID, grant.GrantID)
+			if e != nil || parentReceipt.Grant.State != "compensated" {
+				t.Fatal("unresolved parent", parentReceipt, e)
+			}
+			if parentReceipt.NativeReadback == nil || parentReceipt.NativeReadback.ResourceID != settle.ResourceID || parentReceipt.NativeReadback.ResourceCreatedAt != settle.ResourceCreatedAt || parentReceipt.ResourceID != settle.ResourceID || parentReceipt.ResourceCreatedAt != settle.ResourceCreatedAt || parentReceipt.ActionID != settle.ActionID || parentReceipt.Outcome != settle.Outcome {
+				t.Fatal("readback replaced original", parentReceipt)
+			}
+			var eventParent string
+			if e = db.QueryRow(`SELECT payload->'observed'->>'compensation_of' FROM public.event_log WHERE metadata->>'namespace'=$1 AND type='hetzner.server.destroyed'`, policy.Metadata.Namespace).Scan(&eventParent); e != nil || eventParent != grant.GrantID {
+				t.Fatal("missing event lineage", eventParent, e)
+			}
+			var serving, ensured, destroyed int
+			if e = db.QueryRow(`SELECT count(*) FROM public.capacity_resource_slots WHERE namespace=$1 AND resource_id<>''`, policy.Metadata.Namespace).Scan(&serving); e != nil {
+				t.Fatal(e)
+			}
+			if e = db.QueryRow(`SELECT count(*) FILTER(WHERE type='hetzner.server.ensured'),count(*) FILTER(WHERE type='hetzner.server.destroyed') FROM public.event_log WHERE metadata->>'namespace'=$1`, policy.Metadata.Namespace).Scan(&ensured, &destroyed); e != nil || serving != 4 || ensured != 0 || destroyed != 1 {
+				t.Fatal("failed create changed membership or event count", serving, ensured, destroyed, e)
+			}
+			terminal := model.CapacityTransitionProof{Assessment: freshCapacityTestAssessment(a, 4), ObservedAt: time.Now().UTC(), ReceiptRef: "fixture:closed-failed-create", Healthy: true, Inflight: &zero, MutationInflight: &zero, MutationAuthorityKind: "core_mutation_grants", MembershipComplete: true, NoMutationVerified: true}
+			if _, e = recovery.Reconcile(ctx, policy, 1, lease.FencingToken, lease.LeaseOwner, "aborted", terminal); e == nil {
+				t.Fatal("compensated write became no-mutation abort")
+			}
+			terminal.NoMutationVerified = false
+			if _, e = recovery.Reconcile(ctx, policy, 1, lease.FencingToken, lease.LeaseOwner, "reconciled_partial", terminal); e != nil {
+				t.Fatal("recovery remained stuck", e)
 			}
 		})
 	}
