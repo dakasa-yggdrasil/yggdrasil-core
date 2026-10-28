@@ -7,7 +7,7 @@ class InspectorTests(unittest.TestCase):
   self.t=tempfile.TemporaryDirectory();self.old=b'old';self.e={'old_config_sha256':hashlib.sha256(self.old).hexdigest(),'new_config_sha256':'f'*64,'boot_id':'boot'}
   self.i=object.__new__(b.BrainInspector);self.i.seq=0;self.i.out=Path(self.t.name);self.i.old=Path(self.t.name)/'old';self.i.lease={};self.i.ssm_evidence={};self.i.native=None;self.i.expected=self.e
   self.i.g=types.SimpleNamespace(read=lambda path,*args:self.old,NEW_CONFIG='config',UNIT='controller',GUARDIAN='guardian',RUNTIME=Path('/runtime'))
-  self.i.static=lambda:('handles',{});self.i.properties=lambda unit:{'ActiveState':'inactive','SubState':'dead','MainPID':'0'};self.i.cgroup_empty=lambda _:True
+  self.i.static=lambda:('handles',{});self.i.properties=lambda unit:{'ActiveState':'inactive','SubState':'dead','MainPID':'0'};self.i.cgroup_empty=lambda _:True;self.i.prior_controller_terminated=lambda:True
  def tearDown(self):self.t.cleanup()
  def test_check_once_requires_readonly_four_backend_contract(self):
   response={'schema':'root_R11_static_empty_and_current_readonly_check_v1','applied':False,'backends':['broker','core','rds','redis'],'prometheus_sources':1,'held_native_read_classes':{}}
@@ -21,6 +21,12 @@ class InspectorTests(unittest.TestCase):
   with patch.object(b.scope_collector,'collect',return_value={'result':{'owner_and_cgroup_empty':True}}),patch.object(Path,'read_text',return_value='boot'):
    v=self.i.snapshot()
   self.assertFalse(v['previous_recovery_start_terminal'])
+ def test_prior_process_identity_checked_from_original_pid(self):
+  self.i.expected['prior_controller']={'pid':123,'start_ticks':777};stat='123 (x) S '+('0 '*18)+'777 0'
+  with patch.object(b.scope_collector,'fs_read',return_value={'status':'ok','errno':None,'content':stat,'fd_closed':True}):self.assertFalse(b.BrainInspector.prior_controller_terminated(self.i))
+  with patch.object(b.scope_collector,'fs_read',return_value={'status':'absent','errno':2,'content':None,'fd_closed':True}):self.assertTrue(b.BrainInspector.prior_controller_terminated(self.i))
+  with patch.object(b.scope_collector,'fs_read',return_value={'status':'error','errno':13,'content':None,'fd_closed':True}):
+   with self.assertRaises(b.Held):b.BrainInspector.prior_controller_terminated(self.i)
  def test_wrong_old_config_rejected(self):
   with self.assertRaises(b.Held):self.i.check_once(b'other',self.e)
 if __name__=='__main__':unittest.main(verbosity=2)

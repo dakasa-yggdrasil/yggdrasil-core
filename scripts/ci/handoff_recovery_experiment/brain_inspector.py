@@ -8,6 +8,7 @@ caller must hold maintenance lock and never replay unknown SSM/systemd effects.
 import hashlib,json,os,re,time
 from pathlib import Path
 import scope_collector
+import owner_scope
 class Held(Exception):pass
 def need(v,g):
  if not v:raise Held(g)
@@ -50,6 +51,11 @@ class BrainInspector:
  def check_once(self,old_bytes,expected):
   need(sha(old_bytes)==expected['old_config_sha256'] and self.g.read(self.old,32768,0o600)==old_bytes,'EXACT_OLD_CONFIG_CHECK_PATH')
   raw=self.call(['/usr/bin/python3','-B',str(self.g.RUNTIME/'controller.py'),'--config',str(self.old),'--check-once'],timeout=35);v=json.loads(raw.splitlines()[-1]);need(v.get('schema')=='root_R11_static_empty_and_current_readonly_check_v1' and v.get('applied') is False and v.get('backends')==['broker','core','rds','redis'] and v.get('prometheus_sources')==1 and v.get('held_native_read_classes')=={},'ACTUAL_OLD_READONLY_CHECK_ONCE');return True
+ def prior_controller_terminated(self):
+  prior=self.expected['prior_controller'];need(type(prior['pid'])is int and prior['pid']>1 and type(prior['start_ticks'])is int and prior['start_ticks']>0,'EXACT_PRIOR_PID_AND_START_TICKS');r=scope_collector.fs_read('/proc/'+str(prior['pid'])+'/stat')
+  need(r['fd_closed'] is True,'PRIOR_PROCESS_READ_CLOSED')
+  if r['status']=='absent':need(r['errno']==2,'ONLY_EXPLICIT_PRIOR_PROCESS_ENOENT');return True
+  need(r['status']=='ok' and r['errno'] is None,'PRIOR_PROCESS_READ_KNOWN');return owner_scope.start_ticks(r['content'])!=prior['start_ticks']
  def snapshot(self):
   self.seq+=1;scope_dir=self.out/('SCOPE-%05d'%self.seq);scope_dir.mkdir(mode=0o700);scope=scope_collector.collect(lease=self.lease,ssm_evidence=self.ssm_evidence,native=self.native,diagnostic_directory=scope_dir)
   need(scope['result']['owner_and_cgroup_empty'] is True,'ISOLATED_HANDOFF_OWNER_TERMINAL');boot=Path('/proc/sys/kernel/random/boot_id').read_text().strip();need(boot==self.expected['boot_id'],'SAME_BOOT');cfg=sha(self.g.read(self.g.NEW_CONFIG,32768,0o600));need(cfg in (self.expected['old_config_sha256'],self.expected['new_config_sha256']),'ONLY_REVIEWED_CONFIG_PAIR');handles,core=self.static();p=self.properties(self.g.UNIT);gp=self.properties(self.g.GUARDIAN)
@@ -57,7 +63,7 @@ class BrainInspector:
   running_ok=False
   if state=='running':
    need(p['MainPID'].isdigit() and int(p['MainPID'])>1 and re.fullmatch('[a-f0-9]{32}',p['InvocationID']) is not None,'ACTUAL_RUNNING_CONTROLLER_IDENTITY');pid=int(p['MainPID']);cmd=Path('/proc/'+str(pid)+'/cmdline').read_bytes();expected_cmd=b'\0'.join(x.encode()for x in ['/usr/bin/python3','-B',str(self.g.RUNTIME/'controller.py'),'--config',str(self.g.NEW_CONFIG),'--run'])+b'\0';need(cmd==expected_cmd,'EXACT_RUNNING_CONTROLLER_COMMAND');running_ok=True
-  dead=state in ('inactive','failed') and p['MainPID']=='0' and self.cgroup_empty(self.g.UNIT);guardian_empty=guardian=='inactive' and self.cgroup_empty(self.g.GUARDIAN)
+  dead=state in ('inactive','failed') and p['MainPID']=='0' and self.cgroup_empty(self.g.UNIT) and self.prior_controller_terminated();guardian_empty=guardian=='inactive' and self.cgroup_empty(self.g.GUARDIAN)
   checked=self.check_once(self.g.read(self.old,32768,0o600),self.expected) if dead and guardian_empty else False
   return {'owner_terminal':True,'previous_recovery_start_terminal':False,'unit_hashes_exact':True,'runtime_hashes_exact':True,'boot_identity_exact':True,'hub_and_cold_unchanged':True,'core_healthy':True,'config_is_regular_single_link':True,'nft_structure_exact':True,'config_sha256':cfg,'guardian_state':guardian,'guardian_cgroup_empty':guardian_empty,'controller_state':state,'controller_identity_verified':running_ok,'controller_pid_absent':dead,'controller_cgroup_empty':dead,'controller_start_job_pending':False,'check_once_old_config_success':checked}
  def observe_started(self):
