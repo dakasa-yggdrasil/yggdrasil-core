@@ -258,6 +258,20 @@ func TestSyntheticFailedFloorRecoveryPostgres(t *testing.T) {
 	deleted.GrantID, deleted.RequestSHA256 = child.GrantID, child.RequestSHA256
 	deleted.ActionsSuccessful, deleted.ActionsFailed, deleted.ResourceAbsent = true, false, true
 	deleted.AuxiliaryAbsent = []model.CapacityMutationAuxiliaryResource{{Kind: "primary_ip", ID: "ip-fixture"}}
+	receiptAfter, e := issuer.MutationReceipt(ctx, f.binding.AdapterPrincipalID, child.GrantID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	observedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	native := model.CapacityVMRetirementObservation{CapacityVMNativeTuple: model.CapacityVMNativeTuple{ID: child.ExpectedResourceID, CreatedAt: child.ExpectedResourceCreatedAt}, DestroyGrantID: child.GrantID, DestroyGrantState: "settled", CompensationOf: grant.GrantID, OriginalOutcome: "accepted", OriginalTransportCompleted: true, ServerAbsent: true, ServerAbsenceComplete: true, ServerObservedAt: observedAt, DeleteAction: model.CapacityVMRetirementAction{Known: true, Observed: true, ID: childSettle.ActionID, Status: "success", Command: "delete_server", StartedAt: observedAt, FinishedAt: observedAt}, NextActions: []model.CapacityVMActionObservation{{ID: "bootstrap-action", Status: "success", Command: "delete_server", ResourceID: child.ExpectedResourceID, StartedAt: observedAt, FinishedAt: observedAt, ObservedAt: observedAt}}, AuxiliaryResources: []model.CapacityVMAuxiliaryObservation{{Kind: "primary_ip", ID: "ip-fixture", Absent: true, ObservedAt: observedAt}}, AuxiliaryInventoryComplete: true, BillableResourcesAbsent: true, RetirementComplete: true, HoldReasons: []string{}, ObservationStartedAt: observedAt, ObservedAt: observedAt}
+	native.BillingExposure = &model.CapacityVMBillingExposure{Basis: "profile_admission_ceiling_not_invoice", Currency: capacity.NativeBillingCurrency(pInitial), WindowStart: child.ExpectedResourceCreatedAt, WindowEndUpperBound: observedAt, WindowEndSource: "native_delete_action_finished", Resources: []model.CapacityVMBillableResourceWindow{{Kind: "server", ID: child.ExpectedResourceID, WindowStart: child.ExpectedResourceCreatedAt, WindowStartSource: "native_server_created_at", WindowEndUpperBound: observedAt, WindowEndSource: "native_delete_action_finished", StartedHoursUpperBound: 1}, {Kind: "primary_ip", ID: "ip-fixture", WindowStart: child.ExpectedResourceCreatedAt, WindowStartSource: "server_creation_proxy_not_native_ip_creation", WindowEndUpperBound: observedAt, WindowEndSource: "first_complete_absence_observation", StartedHoursUpperBound: 1}}, StartedHoursUpperBound: 1, CalendarMonthsUpperBound: 1, ExcludedCosts: []string{"test only"}}
+	if e = recovery.RecordVMRetirementReadback(ctx, f.policy, f.intent.Generation, lease.FencingToken, lease.LeaseOwner, native); e != nil {
+		t.Fatal("real readback writer", e)
+	}
+	deleted, e = capacity.VMRetirementProof(pInitial, pInitial.MutationBindings[0], receiptAfter, native, time.Now().UTC(), "fixture:native-read")
+	if e != nil {
+		t.Fatal("synthetic native proof", e)
+	}
 	if _, err := issuer.ConfirmCompensation(ctx, current, deleted); err != nil {
 		t.Fatal(err)
 	}
