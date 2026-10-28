@@ -865,6 +865,7 @@ func runSyntheticCompensation(t *testing.T, protected, lost bool) {
 		t.Fatal("wrong compensation lineage")
 	}
 	if lost {
+		originalChild := child
 		// An expired, never-redeemed child may be replaced, but the parent
 		// native lifetime cannot be changed even with its original label.
 		if _, err := db.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET expires_at=$2::text::timestamptz,grant_record=jsonb_set(grant_record,'{grant,expires_at}',to_jsonb($2::text)) WHERE id=$1`, child.GrantID, time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)); err != nil {
@@ -892,6 +893,46 @@ func runSyntheticCompensation(t *testing.T, protected, lost bool) {
 			t.Fatal("same immutable lifetime could not reissue unused child", reissued, err)
 		}
 		child = reissued
+		// The expired grant never gains write authority on replay.
+		oldRedeem := mutationRedeem(originalChild, uuid.NewString())
+		oldPermit, err := issuer.RedeemMutation(ctx, mutation.AdapterPrincipalID, oldRedeem)
+		if err != nil || oldPermit.Mode != "read_only" {
+			t.Fatal("expired child gained send authority", oldPermit, err)
+		}
+		// Corrupt each predecessor fact inside a rolled-back transaction. The
+		// actual binding is untouched, and no synthetic send is performed.
+		for _, bad := range []struct{ path, value string }{
+			{"{attempt_id}", `"prior-attempt"`},
+			{"{settlement_token_sha256}", `"prior-token"`},
+			{"{settlement}", `{}`},
+			{"{proof}", `{}`},
+			{"{grant,grant_id}", `"00000000-0000-4000-8000-000000000001"`},
+			{"{grant,request_sha256}", `"other"`},
+			{"{grant,expected_resource_id}", `"other"`},
+			{"{grant,profile_name}", `"other"`},
+			{"{grant,scope_checksum}", `"other"`},
+		} {
+			tx, err := db.BeginTx(ctx, nil)
+			if err != nil {
+				t.Fatal(err)
+			}
+			_, err = tx.ExecContext(ctx, `UPDATE public.capacity_mutation_grants SET grant_record=jsonb_set(grant_record,$2::text[],$3::jsonb) WHERE id=$1`, originalChild.GrantID, bad.path, bad.value)
+			if err != nil {
+				_ = tx.Rollback()
+				t.Fatal(err)
+			}
+			var raw []byte
+			var currentChild capacityMutationRecord
+			if tx.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1`, child.GrantID).Scan(&raw) != nil || json.Unmarshal(raw, &currentChild) != nil {
+				_ = tx.Rollback()
+				t.Fatal("successor missing")
+			}
+			_, _, _, guardErr := guestCompensationBindingTx(ctx, tx, currentChild)
+			_ = tx.Rollback()
+			if !errors.Is(guardErr, ErrCapacityConflict) {
+				t.Fatal("adulterated predecessor admitted", bad.path, guardErr)
+			}
+		}
 	}
 	stranger := issuer
 	stranger.ExecutorID = uuid.NewString()

@@ -99,25 +99,26 @@ func guestCompensationBindingTx(ctx context.Context, tx *sql.Tx, child capacityM
 	if err != nil {
 		return "", nil, "", ErrCapacityConflict
 	}
-	rows, err := tx.QueryContext(ctx, `SELECT state,grant_record,expires_at FROM public.capacity_mutation_grants WHERE grant_record->'grant'->>'compensation_of'=$1 AND id<>$2`, child.Grant.CompensationOf, child.Grant.GrantID)
+	rows, err := tx.QueryContext(ctx, `SELECT id::text,state,grant_record,expires_at,expires_at=(grant_record->'grant'->>'expires_at')::timestamptz FROM public.capacity_mutation_grants WHERE grant_record->'grant'->>'compensation_of'=$1 AND id<>$2`, child.Grant.CompensationOf, child.Grant.GrantID)
 	if err != nil {
 		return "", nil, "", err
 	}
 	defer rows.Close()
 	foundFirst, count := false, 0
 	for rows.Next() {
-		var state string
+		var rowID, state string
 		var raw []byte
 		var expires time.Time
+		var expiryConsistent bool
 		var previous capacityMutationRecord
-		if rows.Scan(&state, &raw, &expires) != nil || json.Unmarshal(raw, &previous) != nil {
+		if rows.Scan(&rowID, &state, &raw, &expires, &expiryConsistent) != nil || json.Unmarshal(raw, &previous) != nil {
 			return "", nil, "", ErrCapacityConflict
 		}
 		count++
 		if previous.Grant.GrantID == first {
 			foundFirst = true
 		}
-		if state != "expired" || previous.Grant.State != "expired" || expires.After(child.CreatedAt) || !previous.Grant.ExpiresAt.Equal(expires) || previous.AttemptID != "" || previous.SettlementTokenSHA256 != "" || previous.Settlement != nil || previous.Proof != nil || previous.Grant.CompensationOf != child.Grant.CompensationOf || previous.Grant.RequestSHA256 != child.Grant.RequestSHA256 || previous.Grant.ExpectedResourceID != child.Grant.ExpectedResourceID || previous.Grant.ExpectedResourceCreatedAt != child.Grant.ExpectedResourceCreatedAt || previous.Grant.Slot != child.Grant.Slot || previous.PolicyID != child.PolicyID || previous.PolicyChecksum != child.PolicyChecksum || previous.WorkflowID != child.WorkflowID || previous.ExecutorID != child.ExecutorID || previous.Generation != child.Generation || !reflect.DeepEqual(previous.Binding, child.Binding) {
+		if rowID != previous.Grant.GrantID || state != "expired" || previous.Grant.State != "expired" || expires.After(child.CreatedAt) || !expiryConsistent || previous.AttemptID != "" || previous.SettlementTokenSHA256 != "" || previous.Settlement != nil || previous.Proof != nil || previous.Grant.CompensationOf != child.Grant.CompensationOf || previous.Grant.RequestSHA256 != child.Grant.RequestSHA256 || previous.Grant.ExpectedResourceID != child.Grant.ExpectedResourceID || previous.Grant.ExpectedResourceCreatedAt != child.Grant.ExpectedResourceCreatedAt || previous.Grant.Slot != child.Grant.Slot || previous.Grant.BindingName != child.Grant.BindingName || previous.Grant.IntegrationInstanceID != child.Grant.IntegrationInstanceID || previous.Grant.ScopeChecksum != child.Grant.ScopeChecksum || previous.Grant.ProfileName != child.Grant.ProfileName || previous.Grant.Capability != child.Grant.Capability || previous.PolicyID != child.PolicyID || previous.PolicyChecksum != child.PolicyChecksum || previous.WorkflowID != child.WorkflowID || previous.ExecutorID != child.ExecutorID || previous.Generation != child.Generation || !reflect.DeepEqual(previous.Binding, child.Binding) {
 			return "", nil, "", ErrCapacityConflict
 		}
 	}
