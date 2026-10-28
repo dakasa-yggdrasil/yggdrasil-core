@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "e3dd1ad7771a35eb03aa7d0ac63feef95cdf3aaf129058a2f1d737da8f8c48ac",
+  "source_inventory_sha256": "20be8ce7b6c2466d8c09fb9690cac4c82559bc7664d8aec0974eb61f3af80418",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -712,5 +712,11 @@
     "D14 CI preserves the exact original sixteen-root artifact and adds five recovery/UTC/API roots in a separate retained artifact; a local Bash output-tree control verified the separation.",
     "D15 local disposable PostgreSQL17/Goose1..80 passed four race roots/102 nodes with no failures/skips and closed shutdown; new HTTP authorization/closed IDs/privacy passed eleven nodes; real-context authority UTC passed seven nodes. Complete Linux-target Core, Goose, nativequalification source builds and full static lint passed. The exact original sixteen CI roots remain intact; ten additional recovery/UTC/API roots have a separate retained artifact. These Source checks grant no production lifecycle credit.",
     "D15 R2 resolves the actual general-CI route-count guard failure introduced by two new explicit administrative routes. Both route wrapper/inventory and canonical permission tests passed under race, with zero failures/skips; complete Linux-target lint passed. Runtime Go sources, SQL80, all previous migrations and recovery-specific tests remain byteexact to the prior genuine publication. The prior failed original CI and publication are preserved."
-  ]
+  ],
+  "compensation_reissue_review_20261028": {
+    "scope": "Independent source review of immutable original binding derivation for an expired never-redeemed compensation child. Four PostgreSQL repository scenarios use declared synthetic Guest and provider observations; no physical four-member or producer qualification is claimed. Exact final-source Linux gate and native qualification remain required.",
+    "reviewed_source_commit": "1780bbb",
+    "source_inventory_sha256": "20be8ce7b6c2466d8c09fb9690cac4c82559bc7664d8aec0974eb61f3af80418",
+    "production_or_native_qualification": false
+  }
 }
