@@ -12,7 +12,7 @@
   "source_inventory": {
     "id": "complete_runtime_source_census",
     "evidence": "docs/service-contract/source/sources.json",
-    "sha256": "6467ea3baa18c77c61ef695a69176031fa64cc05a3781e4d6fca0db642fab6b4"
+    "sha256": "daf450cbb3de7f22a3136e456c13308888a9c7b9f158d0d570e8882c4636de3f"
   },
   "produces": [
     {
@@ -62,7 +62,7 @@
     {
       "id": "http_and_rpc_egress_callsites",
       "evidence": "docs/service-contract/source/http-egress.json",
-      "sha256": "1c6be51b84db086ee3b58d6a287a88a07072c99428bc99ccdd1ef1c2520a41a8"
+      "sha256": "27c06b9a51d83040a0416fc5d7ee20fcd42f0d02536b6d9ed222254c18dfbb0f"
     },
     {
       "id": "optional_provider_sdk_callsites",

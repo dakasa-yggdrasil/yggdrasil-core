@@ -28,3 +28,10 @@ func SourceBaselineSlot(c string) int {
 	}
 	return 1
 }
+
+func sourceGuestCase(nativeCase string, slot int) string {
+	if slot == SourceBaselineSlot(nativeCase) {
+		return "positive_original_lifecycle"
+	}
+	return nativeCase
+}

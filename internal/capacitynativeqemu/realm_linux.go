@@ -164,10 +164,7 @@ func (r *Realm) Prepare(ctx context.Context, slot int) error {
 	if err != nil {
 		return err
 	}
-	selected := r.Request.NativeCase
-	if (SourceFailureSlot(r.Request.NativeCase) == 1 && slot == 2) || (SourceFailureSlot(r.Request.NativeCase) != 1 && slot == 1) {
-		selected = "positive_original_lifecycle"
-	}
+	selected := sourceGuestCase(r.Request.NativeCase, slot)
 	if pre.Schema != FixtureSchema || pre.Stage != "pre-create-request.json" || pre.NativeCase != selected || pre.Slot != slot || pre.ResourceID != r.Request.Slots[slot-1].ResourceID || pre.CreatorSourceSHA256 != r.Request.CreatorSourceSHA256 || !pre.OriginalContextDeadline.Equal(r.Request.OriginalContextDeadline) || pre.OriginalProvisioningBudgetSeconds != 420 || pre.SourceConfigStageSHA256 != stageSHA || pre.SourceISOSHA256 != isoSHA || pre.BootstrapSHA256 != bootstrapSHA || bootstrapSHA != r.Profile.BootstrapSHA256 {
 		return ErrOriginalUnknown
 	}
