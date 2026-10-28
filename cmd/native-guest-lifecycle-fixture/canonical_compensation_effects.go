@@ -50,6 +50,7 @@ func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context,
 		}
 		defer client.Close()
 		seenTransport, seenPending := false, false
+		seenHTTPStages := map[string]bool{}
 		for {
 			read, cancel := context.WithTimeout(ctx, 5*time.Second)
 			returned, callErr := client.Original(read, http.MethodGet, "/v1/qualification-source-refusal", []byte("{}"))
@@ -74,6 +75,13 @@ func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context,
 					return err
 				}
 				break
+			}
+			if callErr != nil {
+				stage := sourceFailureHTTPStage(returned, callErr)
+				if stage != "" && !seenHTTPStages[stage] {
+					sourceFailureDiagnostic(stage)
+					seenHTTPStages[stage] = true
+				}
 			}
 			if callErr != nil && !seenTransport {
 				sourceFailureDiagnostic("transport")
