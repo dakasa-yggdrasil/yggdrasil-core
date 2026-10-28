@@ -169,7 +169,7 @@ func sourceGuestNativeRetirementFinished(ctx context.Context, store repository.C
 	if err != nil {
 		return nil, capacity.GuestQualificationRefusal("native_finish_protected_spec", err)
 	}
-	if _, err = store.IssueMutation(original, policy, input.Generation, input.FencingToken, input.LeaseOwner, baselineIssue); !errors.Is(err, repository.ErrCapacityConflict) {
+	if _, err = store.IssueMutation(original, policy, input.Generation, input.FencingToken, input.LeaseOwner, baselineIssue); !errors.Is(err, capacity.ErrProtectedMutationDestroy) {
 		return nil, capacity.GuestQualificationRefusal("native_finish_protected_refusal", errOriginalGuestStep)
 	}
 	grant, err := store.IssueMutation(original, policy, input.Generation, input.FencingToken, input.LeaseOwner, burstIssue)
@@ -253,7 +253,7 @@ func sourceNativePendingDeleteContract(ctx context.Context, store repository.Cap
 	if err != nil || capacity.GuestRetirementSHA(repeated) != capacity.GuestRetirementSHA(grant) {
 		return errOriginalGuestStep
 	}
-	if _, err = store.IssueMutation(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, baselineIssue); !errors.Is(err, repository.ErrCapacityConflict) {
+	if _, err = store.IssueMutation(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, baselineIssue); !errors.Is(err, capacity.ErrProtectedMutationDestroy) {
 		return errOriginalGuestStep
 	}
 	var live, pending, creates int
