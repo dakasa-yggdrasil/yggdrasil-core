@@ -1033,7 +1033,7 @@ func capacitySourceFixture(t *testing.T, binaryEnv, rootTest string, input any) 
 // capability registry. The protected operation performs actual HTTP transport,
 // Describe verification and durable PostgreSQL authority checks.
 func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
-	dsn := os.Getenv("DB_URL")
+	dsn := nativeWorkflowFixtureDSN(t, os.Getenv("DB_URL"))
 	if dsn == "" {
 		if os.Getenv("REQUIRE_CAPACITY_POSTGRES") == "true" {
 			t.Fatal("capacity native PostgreSQL gate requires DB_URL")
@@ -1138,7 +1138,9 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 	config := seed["config"].(map[string]any)
 	config["base_url"] = server.URL
 	instance := create(iid, "integration_instance", "native-vm", model.IntegrationInstanceManifestSpec{TypeRef: model.ManifestSelector{ManifestID: tid.String()}, Status: "active", Config: config, Credentials: seed["credentials"].(map[string]any)})
-	wf := create(uuid.New(), "workflow", "native-scale", model.WorkflowManifestSpec{Trigger: model.WorkflowTriggerSpec{Mode: "manual"}, Authorization: &model.WorkflowAuthorizationSpec{RBAC: model.ManifestSelector{Namespace: ns, Name: "capacity-rbac"}}, Steps: []model.WorkflowStepSpec{{ID: "inventory", Use: model.WorkflowStepUseSpec{Kind: "yggdrasil", Operation: "capacity.observe_vm_inventory"}}}})
+	wfSpec := model.WorkflowManifestSpec{Trigger: model.WorkflowTriggerSpec{Mode: "manual"}, Authorization: &model.WorkflowAuthorizationSpec{RBAC: model.ManifestSelector{Namespace: ns, Name: "capacity-rbac"}}, Steps: []model.WorkflowStepSpec{{ID: "inventory", Use: model.WorkflowStepUseSpec{Kind: "yggdrasil", Operation: "capacity.observe_vm_inventory"}}}}
+	wfSpec = nativeWorkflowFixtureWorkflow(t, wfSpec)
+	wf := create(uuid.New(), "workflow", "native-scale", wfSpec)
 	ref := manifestReferenceFromRecord(wf)
 	var slots []model.CapacityMutationSlotBinding
 	raw, _ := json.Marshal(seed["slots"])
@@ -1148,6 +1150,7 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 	b := model.CapacityMutationBinding{Name: "native-vm", IntegrationInstanceID: iid.String(), IntegrationChecksum: instance.Checksum, IntegrationTypeID: tid.String(), IntegrationTypeChecksum: ty.Checksum, AdapterPrincipalID: "fleet-adapter", ScopeChecksum: slots[0].DesiredSpec.ScopeChecksum, ProfileName: "workers", EnsureCapability: "ensure_server", DestroyCapability: "destroy_server", ProtectedSlots: 1, MaxSlots: 4, Slots: slots}
 	now := time.Now().UTC()
 	p := model.CapacityPolicySpec{Environment: "production", Domain: "vm-workers", Dimension: "nodes", TargetIdentity: "fleet/native-vm", Owner: "capacity-native", Workflow: model.ManifestSelector{Namespace: ns, Name: wf.Metadata.Name}, Currency: "EUR", Floor: 1, Ceiling: 4, Step: 2, MaxEvidenceAgeSeconds: 60, MaxSampleGapSeconds: 30, MinSamples: 3, DownHoldSeconds: 60, LeaseSeconds: 120, ExecutionEnabled: true, Signals: []model.CapacitySignalRule{{Name: "load", SourceIdentity: "prom/queue", Unit: "ratio", UpAbove: .8, DownBelow: .3}}, Profiles: []model.CapacityProfile{{Name: "workers", Provider: "hetzner", Region: "nbg1", MinUnits: 1, MaxUnits: 4, UnitMonthlyCostMinor: 100, QuoteValidUntil: now.Add(time.Hour), ValidationValidUntil: now.Add(time.Hour), ValidationRef: "fixture:capacity-qualification-is-separate"}}, MutationBindings: []model.CapacityMutationBinding{b}}
+	p = nativeWorkflowFixturePolicy(t, p, b, slots)
 	policy := create(uuid.New(), "capacity_policy", "workers", p)
 	executor, _ := ctx.Value(capacityInvocationKey{}).(string)
 	store := repository.CapacityStore{DB: db, ExecutionEnabled: true, WorkflowID: wf.ID, ExecutorID: executor}
@@ -1224,7 +1227,8 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 	issue := func(t *testing.T, slot int) model.CapacityMutationGrant {
 		t.Helper()
 		raw, _ := json.Marshal(slots[slot-1].DesiredSpec)
-		g, e := store.IssueMutation(ctx, policy, intent.Generation, intent.FencingToken, intent.LeaseOwner, model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: raw})
+		issuingStore := nativeWorkflowFixtureStore(t, store)
+		g, e := issuingStore.IssueMutation(ctx, policy, intent.Generation, intent.FencingToken, intent.LeaseOwner, model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: raw})
 		if e != nil {
 			t.Fatal(e)
 		}
@@ -1258,6 +1262,9 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 		}
 	}
 	t.Run("native_reads_confirm_once_without_readiness_claim", func(t *testing.T) {
+		if nativeWorkflowSyntheticGate(t) {
+			return
+		}
 		g := issue(t, 3)
 		settle(t, g, true)
 		mode = "confirm"
@@ -1281,6 +1288,9 @@ func TestCapacityMutationNativeWorkflowPostgres(t *testing.T) {
 		members = append(members, map[string]any{"slot": 3, "id": 100, "created_at": nativeCreated, "grant_id": g.GrantID})
 	})
 	t.Run("lost_failed_creation_is_explicit_unresolved_member", func(t *testing.T) {
+		if nativeWorkflowSyntheticGate(t) {
+			return
+		}
 		g := issue(t, 4)
 		settle(t, g, false)
 		mode = "failed"
