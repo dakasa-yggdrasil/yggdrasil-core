@@ -4,6 +4,7 @@ package repository
 
 import (
 	"context"
+	"crypto/ed25519"
 	"encoding/base64"
 	"encoding/json"
 	"strings"
@@ -544,4 +545,377 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 
 		})
 	}
+}
+
+// Exploratory source fixture: fake provider and all member facts are test data.
+func TestSyntheticCompensationIssueExploration(t *testing.T) {
+	capacity.RecoveryFixtureApprovalScope(t)
+	db := recoveryTestIsolatedDB(t)
+	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
+	defer cancel()
+	p, b, _, _, _ := capacity.RecoveryFixtureInstalled(t)
+	ns := "unit-compensation-" + uuid.NewString()
+	now := time.Now().UTC()
+	v := 0.9
+	generic := model.CapacityPolicySpec{Environment: "production", Domain: "api", Dimension: "replicas", TargetIdentity: "cluster/ns/api", Owner: "capacity-api", MaxEvidenceAgeSeconds: 60, MaxSampleGapSeconds: 30, MinSamples: 3, UpHoldSeconds: 0, DownHoldSeconds: 1, CooldownSeconds: 30, Signals: []model.CapacitySignalRule{{Name: "pressure", SourceIdentity: "prom/api", Unit: "ratio", UpAbove: 0.8, DownBelow: 0.3}}}
+	a := model.CapacityAssessment{Snapshot: model.CapacitySnapshot{TargetIdentity: generic.TargetIdentity, ResourceUID: "hpa-1", WorkloadUID: "deployment-1", WorkloadResourceVersion: "10", ResourceVersion: "1", Owner: generic.Owner, Units: 4, ObservedAt: now}, Evidence: []model.CapacityEvidence{{Name: "pressure", SourceIdentity: "prom/api", Unit: "ratio", RequireData: true, Matched: true, DataState: "present", Value: &v, RangeMin: &v, RangeMax: &v, SourceSampledAt: now, WindowStart: now.Add(-time.Minute), WindowEnd: now, Samples: 10, CoverageComplete: true, MaxGapSeconds: 15}}}
+	p.Environment, p.Domain, p.Dimension = generic.Environment, generic.Domain, generic.Dimension
+	p.TargetIdentity, p.Owner, p.Signals = generic.TargetIdentity, generic.Owner, generic.Signals
+	p.MaxEvidenceAgeSeconds, p.MaxSampleGapSeconds, p.MinSamples = generic.MaxEvidenceAgeSeconds, generic.MaxSampleGapSeconds, generic.MinSamples
+	p.UpHoldSeconds, p.DownHoldSeconds, p.CooldownSeconds = generic.UpHoldSeconds, generic.DownHoldSeconds, generic.CooldownSeconds
+	p.Workflow = model.ManifestSelector{Namespace: ns, Name: "synthetic-guest-workflow"}
+	p.Floor, p.Ceiling, p.Step, p.LeaseSeconds = 2, 8, 2, 120
+	p.ExecutionEnabled = true
+	p.GuestNotifyReconcileBinding = nil
+	p.Profiles[0].MinUnits = 2
+	p.Profiles[0].QuoteValidUntil = time.Now().UTC().Add(time.Hour)
+	p.Profiles[0].ValidationValidUntil = time.Now().UTC().Add(time.Hour)
+	a.Snapshot.TargetIdentity = p.TargetIdentity
+	a.Snapshot.Owner = p.Owner
+	a.Snapshot.Profile = p.Profiles[0].Name
+	create := func(kind, name string, spec any) model.Manifest {
+		t.Helper()
+		wire, e := json.Marshal(spec)
+		if e != nil {
+			t.Fatal(e)
+		}
+		m, e := CreateManifestVersion(ctx, db, model.ManifestDocument{APIVersion: "v1", Kind: kind, Metadata: model.ManifestMetadataInput{Namespace: ns, Name: name}, Spec: wire}, capacity.BusinessCreationSHA256(wire))
+		if e != nil {
+			t.Fatal(e)
+		}
+		return m
+	}
+	typSpec := mutationTypeFixture()
+	typSpec.Provider = "hetzner"
+	typ := create("integration_type", "synthetic-type", typSpec)
+	inst := create("integration_instance", "synthetic-instance", map[string]any{"type_ref": model.ManifestSelector{ManifestID: typ.ID.String()}})
+	mutation := p.MutationBindings[0]
+	mutation.IntegrationInstanceID = inst.ID.String()
+	mutation.IntegrationChecksum = inst.Checksum
+	mutation.IntegrationTypeID = typ.ID.String()
+	mutation.IntegrationTypeChecksum = typ.Checksum
+	mutation.ProtectedSlots = 2
+	plans := map[int]model.CapacityMutationIssue{}
+	for i := range mutation.Slots {
+		slot := &mutation.Slots[i]
+		slot.DesiredSpec.IntegrationInstanceID = inst.ID.String()
+		wire, e := json.Marshal(slot.DesiredSpec)
+		if e != nil {
+			t.Fatal(e)
+		}
+		var canonical map[string]any
+		if e = json.Unmarshal(wire, &canonical); e != nil {
+			t.Fatal(e)
+		}
+		wire, e = json.Marshal(canonical)
+		if e != nil {
+			t.Fatal(e)
+		}
+		slot.DesiredSpecSHA256 = capacity.BusinessCreationSHA256(wire)
+		plans[slot.Slot] = model.CapacityMutationIssue{BindingName: mutation.Name, DesiredSpec: wire}
+	}
+	p.MutationBindings = []model.CapacityMutationBinding{mutation}
+	p.GuestRetirementBinding = &b
+	if err := capacity.ValidateGuestRetirementBinding(p, &b); err != nil {
+		t.Fatal("binding", err)
+	}
+	if err := capacity.ValidateGuestNotifyCanaryBinding(p); err != nil {
+		t.Fatal("canary", err)
+	}
+	if err := capacity.RegisterRecoveryFixtureApproval(p, b, "hetzner"); err != nil {
+		t.Fatal("test approval", err)
+	}
+	withCleanup := p
+	withCleanup.MutationBindings = append([]model.CapacityMutationBinding(nil), p.MutationBindings...)
+	withCleanup.MutationBindings[0].CompensationEnabled = true
+	if err := capacity.RegisterRecoveryFixtureApproval(withCleanup, b, "hetzner"); err != nil {
+		t.Fatal("test cleanup approval", err)
+	}
+	step := model.WorkflowStepSpec{ID: b.ProfileManifest.OriginalProvisioningStepID, Use: model.WorkflowStepUseSpec{Kind: "yggdrasil", Operation: capacity.ProvisionOriginalGuestOperation}, TimeoutSeconds: b.ProfileManifest.OriginalProvisioningBudgetSeconds}
+	wf := create("workflow", p.Workflow.Name, map[string]any{"authorization": map[string]any{"rbac": map[string]string{"namespace": p.Workflow.Namespace, "name": "fixture-rbac"}}, "steps": []model.WorkflowStepSpec{step}})
+	policy := create("capacity_policy", "synthetic-guest-policy", p)
+	store := CapacityStore{DB: db, ExecutionEnabled: true, WorkflowID: wf.ID, ExecutorID: uuid.NewString()}.WithOriginalGuestProvisioning(step, capacity.CurrentGuestCoreSource(), strings.Repeat("a", 64))
+	intent, e := store.Assess(ctx, policy, a)
+	if e != nil {
+		t.Fatal("assess", e)
+	}
+	t.Logf("assessed phase=%s action=%s reason=%s units=%d", intent.Phase, intent.Decision.Action, intent.Decision.Reason, intent.Decision.Units)
+	intent, e = store.Claim(ctx, policy, intent.Generation, a)
+	if e != nil {
+		t.Fatal("claim", e)
+	}
+	f := mutationFixture{db: db, policy: policy, store: store, a: a, intent: intent, binding: mutation, plans: plans, created: time.Now().Add(-time.Hour).UTC().Format(time.RFC3339Nano)}
+	for slot := 1; slot <= 4; slot++ {
+		f.record(t, slot)
+	}
+	grant, e := store.IssueMutation(ctx, policy, intent.Generation, intent.FencingToken, intent.LeaseOwner, plans[5])
+	if e != nil {
+		t.Fatal("real IssueMutation", e)
+	}
+	nonce := uuid.NewString()
+	redeem := mutationRedeem(grant, nonce)
+	if _, e = store.RedeemMutation(ctx, mutation.AdapterPrincipalID, redeem); e != nil {
+		t.Fatal("real RedeemMutation", e)
+	}
+	settle := mutationSettlement(redeem, f.created)
+	instant := time.Now().UTC().Format(time.RFC3339Nano)
+	settle.ResourceCreatedAt = instant
+	settle.ResourceID = "123"
+	settle.ObservedAt = instant
+	settle.OriginalProviderCreateReturn = &model.CapacityOriginalProviderCreateReturn{Schema: "hetzner_original_create_return_v1", Provider: "hetzner", AdapterSourceCommit: mutation.OriginalProviderSourceCommit, GrantID: grant.GrantID, AttemptID: redeem.AttemptID, RequestSHA256: grant.RequestSHA256, ResourceID: settle.ResourceID, ResourceCreatedAt: instant, ActionID: settle.ActionID, NextActionIDs: settle.NextActionIDs, CalledAt: instant, ReturnedAt: instant, ContextDeadline: grant.ExpiresAt.UTC().Format(time.RFC3339Nano), ResponseStatus: 201, ResponseBodySHA256: strings.Repeat("d", 64), ResponseBytes: 100}
+	if _, e = store.SettleMutation(ctx, mutation.AdapterPrincipalID, nonce, settle); e != nil {
+		t.Fatal("real SettleMutation", e)
+	}
+	var preWire []byte
+	if e = db.QueryRow(`SELECT original_wire FROM public.capacity_vm_provisioning_preregistrations WHERE create_grant_id=$1`, grant.GrantID).Scan(&preWire); e != nil {
+		t.Fatal(e)
+	}
+	var pre model.CapacityGuestOriginalProvisioningPreregistration
+	if e = json.Unmarshal(preWire, &pre); e != nil {
+		t.Fatal(e)
+	}
+	witness, reg, receipt := capacity.RecoveryFixtureCompensationRegistration(t, p, b, pre, settle)
+	if witness.PreregistrationID != pre.PreregistrationID || reg.Result.Tuple.ResourceID != settle.ResourceID || receipt.PreregistrationID != pre.PreregistrationID {
+		t.Fatal("fixture lineage")
+	}
+	retirementID := syntheticRetirement(t, ctx, db, store, policy, p, b, pre, witness, reg, receipt, intent)
+	proof := f.proof(t, 5)
+	proof.GrantID, proof.RequestSHA256, proof.ResourceID, proof.ResourceCreatedAt, proof.ObservedCreationGrantID = grant.GrantID, grant.RequestSHA256, settle.ResourceID, settle.ResourceCreatedAt, grant.GrantID
+	proof.ActionsTerminal, proof.ActionsFailed, proof.SpecVerified, proof.CompensationIdentityVerified = true, true, false, true
+	proof.ActionIDs = []string{"native-action", "bootstrap-action"}
+	proof.ActionHistoryComplete = true
+	off := map[string]any{"server": map[string]any{"id": settle.ResourceID, "created_at": settle.ResourceCreatedAt, "status": "off", "observed_at": time.Now().UTC().Format(time.RFC3339Nano)}}
+	offWire, _ := json.Marshal(off)
+	if _, e = db.Exec(`INSERT INTO public.capacity_guest_original_native_poweroff_reads(id,intent_id,observation_sha256,original_wire,original_record,recorded_at) VALUES($1,$2,$3,$4,$5::jsonb,clock_timestamp())`, uuid.NewString(), retirementID, capacity.BusinessCreationSHA256(offWire), offWire, string(offWire)); e != nil {
+		t.Fatal("synthetic native off", e)
+	}
+	tx, e := db.BeginTx(ctx, nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	parent, e := readCompensationRecord(ctx, tx, policy, p, grant.GrantID, false)
+	if e != nil {
+		t.Fatal(e)
+	}
+	if e = store.guestFailedCreateCleanupTx(ctx, tx, p, parent, proof, time.Now().UTC(), ""); e != nil {
+		t.Fatal("real cleanup evidence guard", e)
+	}
+	_ = tx.Rollback()
+	var desired model.CapacityMutationSpecV1
+	if e = json.Unmarshal(plans[5].DesiredSpec, &desired); e != nil {
+		t.Fatal(e)
+	}
+	desired.Capability = mutation.DestroyCapability
+	desired.ExpectedResourceID = settle.ResourceID
+	desired.ExpectedResourceCreatedAt = settle.ResourceCreatedAt
+	desiredRaw, _ := json.Marshal(desired)
+	zero := 0
+	drain := model.CapacityTransitionProof{Assessment: freshCapacityTestAssessment(a, 4), ObservedAt: time.Now().UTC(), ReceiptRef: "fixture:never-routed-and-complete-floor", Healthy: true, MembershipComplete: true, AdmissionClosed: true, RoutingWithdrawn: true, Inflight: &zero, NativeActionsInflight: &zero}
+	issue := model.CapacityCompensationIssue{ParentGrantID: grant.GrantID, Mutation: model.CapacityMutationIssue{BindingName: mutation.Name, DesiredSpec: desiredRaw}, FailedProof: proof, DrainProof: drain}
+	if _, e = store.IssueCompensation(ctx, policy, issue); e == nil {
+		t.Fatal("disabled compensation accepted")
+	}
+	if _, e = db.Exec(`UPDATE public.capacity_intents SET intent=jsonb_set(intent,'{lease_expires_at}',to_jsonb($2::text)) WHERE namespace=$1`, policy.Metadata.Namespace, time.Now().Add(-time.Second).UTC().Format(time.RFC3339Nano)); e != nil {
+		t.Fatal(e)
+	}
+	recovery := store
+	recovery.ExecutionEnabled = false
+	recovery.ExecutorID = uuid.NewString()
+	lease, e := recovery.Recover(ctx, policy, intent.Generation, freshCapacityTestAssessment(a, 4))
+	if e != nil {
+		t.Fatal("recovery", e)
+	}
+	if _, e = recovery.IssueMutation(ctx, policy, intent.Generation, lease.FencingToken, lease.LeaseOwner, plans[6]); e == nil {
+		t.Fatal("recovery issued new create")
+	}
+	p.MutationBindings[0].CompensationEnabled = true
+	rawPolicy, _ := json.Marshal(p)
+	current, e := CreateManifestVersion(ctx, db, model.ManifestDocument{APIVersion: policy.APIVersion, Kind: policy.Kind, Metadata: model.ManifestMetadataInput{Namespace: policy.Metadata.Namespace, Name: policy.Metadata.Name}, Spec: rawPolicy}, capacity.BusinessCreationSHA256(rawPolicy))
+	if e != nil {
+		t.Fatal(e)
+	}
+	issuer := store
+	issuer.ExecutorID = uuid.NewString()
+	check, e := db.BeginTx(ctx, nil)
+	if e != nil {
+		t.Fatal(e)
+	}
+	parent, e = readCompensationRecord(ctx, check, current, p, grant.GrantID, false)
+	if e != nil {
+		t.Fatal(e)
+	}
+	t.Log("parent state", parent.Grant.State, "same binding", sameCompensationBinding(p.MutationBindings[0], parent.Binding), "proof", validFailedCreationProof(p, parent, proof, time.Now().UTC()), "cleanup", issuer.guestFailedCreateCleanupTx(ctx, check, p, parent, proof, time.Now().UTC(), ""), "drain", validateCompensationDrain(ctx, check, current.Metadata.Namespace, p, drain, time.Now().UTC(), parent.Generation))
+	_ = check.Rollback()
+	child, e := issuer.IssueCompensation(ctx, current, issue)
+	if e != nil {
+		t.Fatal("real IssueCompensation", e)
+	}
+	if child.CompensationOf != grant.GrantID {
+		t.Fatal("wrong compensation lineage")
+	}
+	childNonce := uuid.NewString()
+	childRedeem := mutationRedeem(child, childNonce)
+	permit, e := issuer.RedeemMutation(ctx, mutation.AdapterPrincipalID, childRedeem)
+	if e != nil || permit.Mode != "write_once" {
+		t.Fatal("child redeem", permit, e)
+	}
+	again, e := issuer.RedeemMutation(ctx, mutation.AdapterPrincipalID, childRedeem)
+	if e != nil || again.Mode != "read_only" {
+		t.Fatal("child replay", again, e)
+	}
+	deleted := proof
+	deleted.GrantID = child.GrantID
+	deleted.RequestSHA256 = child.RequestSHA256
+	deleted.ActionsSuccessful = true
+	deleted.ActionsFailed = false
+	deleted.ResourceAbsent = true
+	deleted.AuxiliaryAbsent = []model.CapacityMutationAuxiliaryResource{{Kind: "primary_ip", ID: "ip-fixture"}}
+	if _, e = issuer.ConfirmCompensation(ctx, current, deleted); e == nil {
+		t.Fatal("absence alone confirmed")
+	}
+	childSettle := mutationSettlement(childRedeem, settle.ResourceCreatedAt)
+	childSettle.ResourceID = settle.ResourceID
+	if _, e = issuer.SettleMutation(ctx, mutation.AdapterPrincipalID, childNonce, childSettle); e != nil {
+		t.Fatal("child settlement", e)
+	}
+	receiptAfter, e := issuer.MutationReceipt(ctx, mutation.AdapterPrincipalID, child.GrantID)
+	if e != nil {
+		t.Fatal(e)
+	}
+	observedAt := time.Now().UTC().Format(time.RFC3339Nano)
+	native := model.CapacityVMRetirementObservation{CapacityVMNativeTuple: model.CapacityVMNativeTuple{ID: child.ExpectedResourceID, CreatedAt: child.ExpectedResourceCreatedAt}, DestroyGrantID: child.GrantID, DestroyGrantState: "settled", CompensationOf: grant.GrantID, OriginalOutcome: "accepted", OriginalTransportCompleted: true, ServerAbsent: true, ServerAbsenceComplete: true, ServerObservedAt: observedAt, DeleteAction: model.CapacityVMRetirementAction{Known: true, Observed: true, ID: childSettle.ActionID, Status: "success", Command: "delete_server", StartedAt: observedAt, FinishedAt: observedAt}, NextActions: []model.CapacityVMActionObservation{{ID: "bootstrap-action", Status: "success", Command: "delete_server", ResourceID: child.ExpectedResourceID, StartedAt: observedAt, FinishedAt: observedAt, ObservedAt: observedAt}}, AuxiliaryResources: []model.CapacityVMAuxiliaryObservation{{Kind: "primary_ip", ID: "ip-fixture", Absent: true, ObservedAt: observedAt}}, AuxiliaryInventoryComplete: true, BillableResourcesAbsent: true, RetirementComplete: true, HoldReasons: []string{}, ObservationStartedAt: observedAt, ObservedAt: observedAt}
+	native.BillingExposure = &model.CapacityVMBillingExposure{Basis: "profile_admission_ceiling_not_invoice", Currency: capacity.NativeBillingCurrency(p), WindowStart: child.ExpectedResourceCreatedAt, WindowEndUpperBound: observedAt, WindowEndSource: "native_delete_action_finished", Resources: []model.CapacityVMBillableResourceWindow{{Kind: "server", ID: child.ExpectedResourceID, WindowStart: child.ExpectedResourceCreatedAt, WindowStartSource: "native_server_created_at", WindowEndUpperBound: observedAt, WindowEndSource: "native_delete_action_finished", StartedHoursUpperBound: 1}, {Kind: "primary_ip", ID: "ip-fixture", WindowStart: child.ExpectedResourceCreatedAt, WindowStartSource: "server_creation_proxy_not_native_ip_creation", WindowEndUpperBound: observedAt, WindowEndSource: "first_complete_absence_observation", StartedHoursUpperBound: 1}}, StartedHoursUpperBound: 1, CalendarMonthsUpperBound: 1, ExcludedCosts: []string{"test only"}}
+	if e = recovery.RecordVMRetirementReadback(ctx, policy, intent.Generation, lease.FencingToken, lease.LeaseOwner, native); e != nil {
+		t.Fatal("real readback writer", e)
+	}
+	deleted, e = capacity.VMRetirementProof(p, p.MutationBindings[0], receiptAfter, native, time.Now().UTC(), "fixture:native-read")
+	if e != nil {
+		t.Fatal("synthetic native proof", e)
+	}
+	missing := deleted
+	missing.AuxiliaryAbsent = nil
+	if _, e = issuer.ConfirmCompensation(ctx, current, missing); e == nil {
+		t.Fatal("missing auxiliary admitted")
+	}
+	confirmed, e := issuer.ConfirmCompensation(ctx, current, deleted)
+	if e != nil || confirmed.State != "confirmed" {
+		t.Fatal("real ConfirmCompensation", confirmed, e)
+	}
+}
+
+// Declared source-owned SQL input. It never observes an actual Guest or host.
+// RecordGuestObservation and RecordGuestCallerReturn are the real methods.
+func syntheticRetirement(t *testing.T, ctx context.Context, db *sql.DB, store CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, b model.CapacityGuestRetirementBinding, pre model.CapacityGuestOriginalProvisioningPreregistration, witness model.CapacityGuestOriginalCreateWitness, reg model.CapacityGuestOriginalProvisioningRegistration, receipt model.CapacityGuestOriginalProvisioningReceipt, epoch model.CapacityIntent) string {
+	t.Helper()
+	wire := func(x any) []byte {
+		t.Helper()
+		v, e := json.Marshal(x)
+		if e != nil {
+			t.Fatal(e)
+		}
+		return v
+	}
+	must := func(q string, args ...any) {
+		t.Helper()
+		if _, e := db.ExecContext(ctx, q, args...); e != nil {
+			t.Fatal("synthetic record", e)
+		}
+	}
+	witnessWire := wire(witness)
+	must(`INSERT INTO public.capacity_guest_original_create_witnesses(preregistration_id,original_create_attempt_id,resource_tuple_sha256,witness_sha256,original_wire,original_record,recorded_at) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7)`, pre.PreregistrationID, witness.OriginalCreateAttemptID, capacity.GuestRetirementSHA(witness.Tuple), capacity.GuestRetirementSHA(witness), witnessWire, string(witnessWire), witness.ObservedAt)
+	must(`INSERT INTO public.capacity_vm_original_enrollments(preregistration_id,resource_tuple_sha256,enrollment_sha256,original_provisioning_sha256,enrollment_record,recorded_at,registration_wire,receipt_wire) VALUES($1,$2,$3,$4,$5::jsonb,$6,$7,$8)`, pre.PreregistrationID, capacity.GuestRetirementSHA(receipt.Enrollment.Statement.Tuple), capacity.GuestRetirementSHA(receipt.Enrollment), receipt.OriginalProvisioningSHA256, string(wire(receipt.Enrollment)), receipt.RecordedAt, wire(reg), wire(receipt))
+	// Times are fixture data with strictly ordered actual validation bounds.
+	start := time.Now().UTC().Truncate(time.Microsecond).Add(40 * time.Millisecond)
+	stamp := func(ms int) time.Time { return start.Add(time.Duration(ms) * time.Millisecond) }
+	e := receipt.Enrollment
+	core := ed25519.NewKeyFromSeed([]byte(strings.Repeat("c", 32)))
+	observer := ed25519.NewKeyFromSeed([]byte(strings.Repeat("o", 32)))
+	i := model.CapacityGuestRetirementIntent{Schema: capacity.GuestRetirementSchema, Purpose: capacity.GuestRetirementPurpose, BindingName: pre.BindingName, Slot: pre.Slot, RequestID: uuid.NewString(), AttemptID: uuid.NewString(), NonceSHA256: strings.Repeat("a", 64), EnrollmentSHA256: capacity.GuestRetirementSHA(e), Tuple: e.Statement.Tuple, Actor: e.Statement.Actor, PolicyID: policy.ID.String(), PolicyChecksum: policy.Checksum, WorkflowID: store.WorkflowID.String(), WorkflowChecksum: pre.WorkflowChecksum, Generation: uint64(epoch.Generation), Fence: uint64(epoch.FencingToken), LeaseOwner: epoch.LeaseOwner, WithdrawOperationID: uuid.NewString(), WithdrawRequestSHA256: strings.Repeat("d", 64), DrainOperationID: uuid.NewString(), DrainRequestSHA256: strings.Repeat("e", 64), IssuedAt: start, OriginalDeadline: start.Add(30 * time.Second)}
+	r := model.CapacityGuestRetirementRequest{Intent: i}
+	r.Signature, _ = capacity.GuestLifecycleSignature(core, i)
+	if err := capacity.GuestRetirementRequest(r, e, start, false); err != nil {
+		t.Fatal("signed retirement request", err)
+	}
+	must(`INSERT INTO public.capacity_vm_retirement_intents(id,preregistration_id,attempt_id,nonce_sha256,intent_sha256,intent_record,original_deadline,created_at,original_wire) VALUES($1,$2,$3,$4,$5,$6::jsonb,$7,$8,$9)`, i.RequestID, pre.PreregistrationID, i.AttemptID, i.NonceSHA256, capacity.GuestRetirementSHA(i), string(wire(i)), i.OriginalDeadline, i.IssuedAt, wire(r))
+	must(`INSERT INTO public.capacity_guest_original_retirement_contexts(intent_id,executor_id,original_step_id,original_step_timeout_seconds,original_context_deadline,core_actual_source_commit,recorded_at) VALUES($1,$2,'synthetic-retire',60,$3,$4,$5)`, i.RequestID, store.ExecutorID, i.OriginalDeadline, capacity.CurrentGuestCoreSource(), i.IssuedAt)
+	must(`INSERT INTO public.capacity_guest_original_caller_attempts(intent_id,attempt_id,request_sha256,principal_id,possible_send_at,original_deadline) VALUES($1,$2,$3,$4,$5,$6)`, i.RequestID, i.AttemptID, capacity.GuestRetirementSHA(r), b.Members[pre.Slot-1].ActorClientPrincipal, i.IssuedAt, i.OriginalDeadline)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if err = store.recordGuestAuthorityIssueTx(ctx, tx, policy, p, b, "retirement_intent", i.RequestID, capacity.GuestRetirementSHA(i)); err != nil {
+		t.Fatal("audit", err)
+	}
+	if err = tx.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	digest := strings.Repeat("a", 64)
+	writer := e.Statement.Writers[0]
+	census := func(ms int, processes []model.CapacityGuestRetirementNativeProcess) model.CapacityGuestRetirementProtectedCensus {
+		return model.CapacityGuestRetirementProtectedCensus{Schema: "guest_retirement_protected_cgroup_v1", Scope: "fixed_protected_cgroup_v2", SourceCommit: e.Statement.Runtime.SourceCommit, Processes: processes, RawCensusSHA256: digest, ObservedAt: stamp(ms)}
+	}
+	runtime := model.CapacityGuestRetirementRuntimeReturn{Schema: capacity.GuestRetirementSchema, IntentSHA256: capacity.GuestRetirementSHA(i), AttemptID: i.AttemptID, Runtime: e.Statement.Runtime, WriterRosterSHA256: e.Statement.WriterRosterSHA256, WithdrawRequestSHA256: i.WithdrawRequestSHA256, DrainRequestSHA256: i.DrainRequestSHA256, UnknownWriters: []string{}, ReturnedAt: stamp(41)}
+	runtime.Withdraw = model.CapacityGuestRetirementOriginalOperation{OperationID: i.WithdrawOperationID, RequestSHA256: i.WithdrawRequestSHA256, ResultSHA256: digest, StartedAt: stamp(33), OriginalReturnedAt: stamp(34), Outcome: "returned"}
+	runtime.Drain = model.CapacityGuestRetirementOriginalOperation{OperationID: i.DrainOperationID, RequestSHA256: i.DrainRequestSHA256, ResultSHA256: digest, StartedAt: stamp(35), OriginalReturnedAt: stamp(39), Outcome: "returned"}
+	runtime.CensusBefore = census(32, []model.CapacityGuestRetirementNativeProcess{{PID: writer.Lifetime.PID, StartTicks: writer.Lifetime.StartTicks}})
+	runtime.CensusAfter = census(40, []model.CapacityGuestRetirementNativeProcess{})
+	runtime.Writers = []model.CapacityGuestRetirementWriterReturn{{Writer: writer, AdmissionClosedAt: stamp(32), OriginalWithdrawReturnedAt: stamp(34), OriginalWorkersJoinedAt: stamp(38), OriginalConnectionsJoinedAt: stamp(38), OriginalResultSHA256: digest, Outcome: "joined"}}
+	op := model.CapacityGuestRetirementOperationReturn{StartedAt: stamp(31), PID: 200, StartTicks: 201, WaitReturnedAt: stamp(42), ExitCode: 0, BodyJoined: true, CloseReturned: true, Outcome: "returned"}
+	offStart := stamp(65)
+	power := model.CapacityGuestRetirementOperationReturn{StartedAt: stamp(66), PID: 210, StartTicks: 211, WaitReturnedAt: stamp(69), ExitCode: 0, BodyJoined: true, CloseReturned: true, Outcome: "returned"}
+	record := model.CapacityGuestRetirementRecord{Schema: capacity.GuestRetirementSchema, Sequence: 1, State: "possible_start", Intent: i, IntentSHA256: capacity.GuestRetirementSHA(i), EnrollmentSHA256: capacity.GuestRetirementSHA(e), PossibleStartAt: stamp(19), RecordedAt: stamp(20), WriterQuiescenceScope: "enrolled_roster_only"}
+	var observations []model.CapacityGuestRetirementObservation
+	for n := 1; n <= 4; n++ {
+		if n > 1 {
+			record.PreviousSHA256 = observations[n-2].RecordSHA256
+			record.Sequence = n
+			record.RuntimeOperation = &op
+			record.RuntimeReturn = &runtime
+			record.WriterQuiescenceEvidence = true
+			record.RecordedAt = stamp(45)
+			record.State = "quiescent"
+		}
+		if n >= 3 {
+			record.State = "poweroff_possible_start"
+			record.PoweroffPossibleStartAt = &offStart
+			record.RecordedAt = stamp(65)
+		}
+		if n == 4 {
+			record.State = "poweroff_command_returned"
+			record.PoweroffOperation = &power
+			record.PoweroffCommandReturned = true
+			record.RecordedAt = stamp(70)
+		}
+		observed := model.CapacityGuestRetirementObservation{Schema: capacity.GuestRetirementSchema, Record: record, RecordSHA256: capacity.GuestRetirementSHA(record), JournalComplete: true, HoldReasons: []string{}, Reader: e.Statement.Actor, ObservedAt: stamp([]int{25, 50, 68, 75}[n-1])}
+		observed.Signature, _ = capacity.GuestLifecycleSignature(observer, observed)
+		if err = capacity.GuestRetirementObservation(observed, e, i, observed.ObservedAt, false); err != nil {
+			t.Fatalf("synthetic signed record %d: %v", n, err)
+		}
+		observations = append(observations, observed)
+	}
+	time.Sleep(150 * time.Millisecond)
+	for _, observed := range observations {
+		if err = store.RecordGuestObservation(ctx, i.RequestID, observed); err != nil {
+			t.Fatal("real RecordGuestObservation", err)
+		}
+	}
+	body := wire(observations[3])
+	sha := capacity.BusinessCreationSHA256(body)
+	call := GuestOriginalCallerReturn{RequestID: i.RequestID, AttemptID: i.AttemptID, StartedAt: stamp(1), DoStartedAt: stamp(2), DoReturnedAt: stamp(80), ReadReturnedAt: stamp(81), CloseReturnedAt: stamp(82), DriverReturnedAt: stamp(83), OriginalDeadline: i.OriginalDeadline, ReceivedBodyBytes: len(body), BodyPersisted: true, Body: body, Status: 200, ResponseSHA256: sha, ResponseBodyScope: capacity.GuestOriginalBodyCompleteRead, RetainedPrefixBytes: len(body), RetainedPrefixSHA256: sha}
+	if err = store.RecordGuestCallerReturn(ctx, call); err != nil {
+		t.Fatal("real RecordGuestCallerReturn", err)
+	}
+	tx, err = db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer tx.Rollback()
+	loaded, err := loadGuestRetirementTx(ctx, tx, i.RequestID)
+	if err != nil {
+		t.Fatal("real retirement load", err)
+	}
+	if _, err = guestQuiescentProofTx(ctx, tx, loaded); err != nil {
+		t.Fatal("signed retirement chain", err)
+	}
+	return i.RequestID
 }
