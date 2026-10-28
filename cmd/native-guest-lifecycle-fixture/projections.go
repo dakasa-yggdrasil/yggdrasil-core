@@ -126,7 +126,7 @@ func (f *fixture) exportOriginalRetirementProjections(ctx context.Context, reque
 	if err = rows.Close(); err != nil {
 		return err
 	}
-	rows, err = f.db.QueryContext(ctx, `SELECT c.ordinal,r.return_sha256,r.original_wire FROM public.capacity_guest_runtime_snapshot_challenges c JOIN public.capacity_guest_runtime_snapshot_returns r ON r.challenge_id=c.challenge_id WHERE c.intent_id=$1 ORDER BY c.ordinal`, requestID)
+	rows, err = f.db.QueryContext(ctx, `SELECT c.ordinal,r.return_sha256,r.original_wire FROM public.capacity_guest_runtime_snapshot_challenges c JOIN public.capacity_guest_runtime_snapshot_returns r ON r.challenge_id=c.id WHERE c.intent_id=$1 ORDER BY c.ordinal`, requestID)
 	if err != nil {
 		return err
 	}
