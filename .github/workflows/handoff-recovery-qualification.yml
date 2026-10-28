@@ -1,6 +1,8 @@
 name: Handoff recovery primitives Linux qualification
 on:
   workflow_dispatch:
+  push:
+    branches: [experiments/handoff-recovery-linux-qualification-20261028]
 permissions:
   contents: read
 jobs:
