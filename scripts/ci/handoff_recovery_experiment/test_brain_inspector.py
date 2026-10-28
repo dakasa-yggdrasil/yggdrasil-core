@@ -27,6 +27,14 @@ class InspectorTests(unittest.TestCase):
   with patch.object(b.scope_collector,'fs_read',return_value={'status':'absent','errno':2,'content':None,'fd_closed':True}):self.assertTrue(b.BrainInspector.prior_controller_terminated(self.i))
   with patch.object(b.scope_collector,'fs_read',return_value={'status':'error','errno':13,'content':None,'fd_closed':True}):
    with self.assertRaises(b.Held):b.BrainInspector.prior_controller_terminated(self.i)
+ def test_guardian_history_unproven_keeps_recovery_held(self):
+  basic={k:True for k in ('owner_terminal','controller_identity_verified','core_healthy','nft_structure_exact','hub_and_cold_unchanged','unit_hashes_exact','runtime_hashes_exact','boot_identity_exact','guardian_cgroup_empty')};basic.update(config_sha256=self.e['old_config_sha256'],guardian_state='inactive');self.i.snapshot=lambda:basic
+  self.i.expected.update(post_recovery_controller={'pid':123,'invocation_id':'id','start_ticks':777},prior_guardian={'pid':456,'start_ticks':333});self.i.properties=lambda _: {'ActiveState':'active','SubState':'running','MainPID':'123','InvocationID':'id'}
+  self.i.call=lambda *_:b'nft';self.i.coverage=types.SimpleNamespace(kernel_text=lambda _:{'all_four_backends_and_reverse_sources_positive':True});stat='123 (x) S '+('0 '*18)+'777 0'
+  def read(path):
+   return {'status':'ok','errno':None,'content':stat,'fd_closed':True} if path=='/proc/123/stat' else {'status':'absent','errno':2,'content':None,'fd_closed':True}
+  with patch.object(b.scope_collector,'fs_read',side_effect=read):v=self.i.snapshot_guardian()
+  self.assertFalse(v['previous_guardian_start_terminal']);self.assertTrue(v['prior_guardian_identity_absent'])
  def test_wrong_old_config_rejected(self):
   with self.assertRaises(b.Held):self.i.check_once(b'other',self.e)
 if __name__=='__main__':unittest.main(verbosity=2)
