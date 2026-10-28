@@ -397,8 +397,9 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 			result.Status, result.Error, result.FinishedAt = "succeeded", "", time.Now().UTC()
 			return result
 		}
+		guestConfirmProof := confirmProof
 		if hostRealm == nil {
-			if err = guestPG17BeforeConfirm(original, store, policy, workflowRef, parsed, grant); err != nil {
+			if confirmProof, err = guestPG17BeforeConfirm(original, store, policy, workflowRef, b, parsed, grant, confirmProof); err != nil {
 				return fail(guestPG17ConfirmFailurePredicate(err))
 			}
 		}
@@ -409,7 +410,7 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 			return fail("original-guest-step-42")
 		}
 		if hostRealm == nil {
-			if err = guestPG17AfterConfirm(original, store, policy, p, b, parsed, grant, confirmProof); err != nil {
+			if err = guestPG17AfterConfirm(original, store, policy, p, b, parsed, grant, confirmProof, guestConfirmProof); err != nil {
 				return fail("pg17-original-confirm-assertions")
 			}
 		}

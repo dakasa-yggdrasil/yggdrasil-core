@@ -29,8 +29,8 @@ func guestPG17AfterCreate(ctx context.Context, store repository.CapacityStore, p
 	return nil
 }
 
-func guestPG17AfterConfirm(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, binding model.CapacityMutationBinding, input guestOriginalStepInput, grant model.CapacityMutationGrant, proof model.CapacityMutationProof) error {
-	rows, err := guestPG17MutationAfterConfirm(ctx, store, policy, p, binding, input, grant, proof)
+func guestPG17AfterConfirm(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, binding model.CapacityMutationBinding, input guestOriginalStepInput, grant model.CapacityMutationGrant, proof, guestProof model.CapacityMutationProof) error {
+	rows, err := guestPG17MutationAfterConfirm(ctx, store, policy, p, binding, input, grant, proof, guestProof)
 	if err != nil {
 		return err
 	}
@@ -62,20 +62,23 @@ func guestPG17AfterHistorical(ctx context.Context, store repository.CapacityStor
 	return PG17RetainAssertions(ctx, originalGuestNativeRealm, policy, store.WorkflowID.String(), input.Slot, "mutation-historical", rows)
 }
 
-func guestPG17BeforeConfirm(ctx context.Context, store repository.CapacityStore, policy model.Manifest, workflow model.ManifestReference, input guestOriginalStepInput, grant model.CapacityMutationGrant) error {
+func guestPG17BeforeConfirm(ctx context.Context, store repository.CapacityStore, policy model.Manifest, workflow model.ManifestReference, binding model.CapacityMutationBinding, input guestOriginalStepInput, grant model.CapacityMutationGrant, proof model.CapacityMutationProof) (model.CapacityMutationProof, error) {
 	if originalGuestNativeRealm == nil || originalGuestNativeRealm.Request.NativeCase != "positive_original_lifecycle" || input.Slot != 2 {
-		return nil
+		return proof, nil
 	}
 	pg17OriginalReadBrokerMu.Lock()
 	broker := pg17OriginalReadBroker
 	pg17OriginalReadBrokerMu.Unlock()
 	if broker == nil {
-		return errOriginalGuestStep
+		return model.CapacityMutationProof{}, errOriginalGuestStep
 	}
 	originalInput := map[string]any{"policy": map[string]any{"namespace": policy.Metadata.Namespace, "name": policy.Metadata.Name}, "binding_name": input.BindingName, "generation": input.Generation, "fencing_token": input.FencingToken, "lease_owner": input.LeaseOwner, "grant_id": grant.GrantID}
-	result, err := AssertPG17NativeWorkflow(ctx, broker, store, policy, workflow, model.WorkflowRunStepResult{Kind: "yggdrasil", Operation: "capacity.confirm_native_mutation", Status: "failed"}, originalInput, grant)
+	result, confirmedProof, err := AssertPG17NativeWorkflow(ctx, broker, store, policy, workflow, model.WorkflowRunStepResult{Kind: "yggdrasil", Operation: "capacity.confirm_native_mutation", Status: "failed"}, originalInput, input, binding, grant, proof)
 	if err != nil {
-		return err
+		return model.CapacityMutationProof{}, err
 	}
-	return PG17RetainAssertions(ctx, originalGuestNativeRealm, policy, store.WorkflowID.String(), input.Slot, "native-workflow", []PG17AssertionResult{result})
+	if err := PG17RetainAssertions(ctx, originalGuestNativeRealm, policy, store.WorkflowID.String(), input.Slot, "native-workflow", []PG17AssertionResult{result}); err != nil {
+		return model.CapacityMutationProof{}, err
+	}
+	return confirmedProof, nil
 }

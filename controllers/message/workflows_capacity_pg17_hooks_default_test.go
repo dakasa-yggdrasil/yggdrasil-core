@@ -4,6 +4,7 @@ package message
 
 import (
 	"context"
+	"reflect"
 	"testing"
 	"time"
 
@@ -24,9 +25,15 @@ func TestProductionOriginalGuestAssertionsLeaveRealAdmissionToWorkflow(t *testin
 	for name, call := range map[string]func() error{
 		"after_create": func() error { return guestPG17AfterCreate(ctx, store, policy, spec, binding, input, grant, pre, proof) },
 		"before_confirm": func() error {
-			return guestPG17BeforeConfirm(ctx, store, policy, model.ManifestReference{}, input, grant)
+			got, err := guestPG17BeforeConfirm(ctx, store, policy, model.ManifestReference{}, binding, input, grant, proof)
+			if !reflect.DeepEqual(got, proof) {
+				t.Fatal("production proof was changed")
+			}
+			return err
 		},
-		"after_confirm":  func() error { return guestPG17AfterConfirm(ctx, store, policy, spec, binding, input, grant, proof) },
+		"after_confirm": func() error {
+			return guestPG17AfterConfirm(ctx, store, policy, spec, binding, input, grant, proof, proof)
+		},
 		"after_terminal": func() error { return guestPG17AfterTerminal(ctx, store, policy, spec, binding, input, grant, pre, nil) },
 		"after_historical": func() error {
 			return guestPG17AfterHistorical(ctx, store, policy, spec, binding, input, grant, pre, nil)

@@ -6,6 +6,7 @@ import (
 	"bytes"
 	"context"
 	"encoding/json"
+	"errors"
 	"path/filepath"
 	"strings"
 	"time"
@@ -99,11 +100,11 @@ func AssertPG17SourceFence(ctx context.Context, store repository.CapacityStore, 
 // the owning engine's existing invocation context, workflow reference and resolved
 // input. No executor/lease/assessment is installed here. Integrate BEFORE the
 // first canonical Confirm, only for the actual positive slot2 after settlement.
-func AssertPG17NativeWorkflow(ctx context.Context, conn *amqp.Connection, store repository.CapacityStore, policy model.Manifest, workflow model.ManifestReference, step model.WorkflowRunStepResult, input map[string]any, grant model.CapacityMutationGrant) (PG17AssertionResult, error) {
+func AssertPG17NativeWorkflow(ctx context.Context, conn *amqp.Connection, store repository.CapacityStore, policy model.Manifest, workflow model.ManifestReference, step model.WorkflowRunStepResult, input map[string]any, guestInput guestOriginalStepInput, binding model.CapacityMutationBinding, grant model.CapacityMutationGrant, guestProof model.CapacityMutationProof) (PG17AssertionResult, model.CapacityMutationProof, error) {
 	out := PG17AssertionResult{}
 	executor, _ := ctx.Value(capacityInvocationKey{}).(string)
 	if originalGuestNativeRealm == nil || originalGuestNativeRealm.Request.NativeCase != "positive_original_lifecycle" || executor == "" || executor != store.ExecutorID || ctx.Err() != nil || store.DB == nil || step.Operation != "capacity.confirm_native_mutation" || grant.Slot != 2 || input["grant_id"] != grant.GrantID {
-		return out, pg17ConfirmFailure("check-01")
+		return out, model.CapacityMutationProof{}, pg17ConfirmFailure("check-01")
 	}
 	count := func() (int, int, error) {
 		var events, members int
@@ -112,47 +113,86 @@ func AssertPG17NativeWorkflow(ctx context.Context, conn *amqp.Connection, store 
 	}
 	events, members, err := count()
 	if err != nil {
-		return out, err
+		return out, model.CapacityMutationProof{}, err
 	}
 	if events != 0 || members != 1 {
-		return out, pg17ConfirmFailure("check-02")
+		return out, model.CapacityMutationProof{}, pg17ConfirmFailure("check-02")
 	}
 	first := executeCapacityNativeWorkflowStep(ctx, conn, store.DB, workflow, step, input)
 	if first.Status != "succeeded" || first.Metadata["useful_capacity_known"] != false {
-		return out, pg17NativeResultFailure(first)
+		return out, model.CapacityMutationProof{}, pg17NativeResultFailure(first)
 	}
 	events, members, err = count()
 	if err != nil {
-		return out, err
+		return out, model.CapacityMutationProof{}, err
 	}
 	if events != 1 || members != 2 {
-		return out, pg17ConfirmFailure("check-04")
+		return out, model.CapacityMutationProof{}, pg17ConfirmFailure("check-04")
 	}
 	replay := executeCapacityNativeWorkflowStep(ctx, conn, store.DB, workflow, step, input)
 	if replay.Status != "succeeded" || replay.Metadata["useful_capacity_known"] != false {
-		return out, pg17ConfirmFailure("check-05")
+		return out, model.CapacityMutationProof{}, pg17ConfirmFailure("check-05")
 	}
 	events, members, err = count()
 	if err != nil {
-		return out, err
+		return out, model.CapacityMutationProof{}, err
 	}
 	if events != 1 || members != 2 || ctx.Err() != nil {
-		return out, pg17ConfirmFailure("check-06")
+		return out, model.CapacityMutationProof{}, pg17ConfirmFailure("check-06")
 	}
 	// Full typed handler returns remain private originals. The public assertion
 	// exports only their body hashes, not a replacement success boolean.
 	privateSlot := capacitynativeqemu.SlotDirectory(originalGuestNativeRealm.PrivateDirectory, grant.Slot)
 	firstWire, err := capacitynativeqemu.Publish(ctx, filepath.Join(privateSlot, "pg17-native-workflow-first.json"), first)
 	if err != nil {
-		return out, err
+		return out, model.CapacityMutationProof{}, err
 	}
 	replayWire, err := capacitynativeqemu.Publish(ctx, filepath.Join(privateSlot, "pg17-native-workflow-replay.json"), replay)
 	if err != nil {
-		return out, err
+		return out, model.CapacityMutationProof{}, err
+	}
+	// Join both independently returned native reads to the separately retained
+	// Guest enrollment read before replaying the exact proof already committed.
+	var firstResult, replayResult pg17NativeProofReturn
+	firstJSON, firstErr := json.Marshal(first.Metadata)
+	replayJSON, replayErr := json.Marshal(replay.Metadata)
+	if firstErr != nil || replayErr != nil || json.Unmarshal(firstJSON, &firstResult) != nil || json.Unmarshal(replayJSON, &replayResult) != nil || pg17JoinNativeProofs(binding, grant, guestProof, firstResult, replayResult, "core-native:"+workflow.ID.String()+":"+binding.IntegrationInstanceID+":capacity.confirm_native_mutation") != nil {
+		return out, model.CapacityMutationProof{}, pg17ConfirmFailure("proof-join")
+	}
+	// Confirming a different Guest receipt after the handler committed must
+	// remain a conflict. The write attempt is the real repository operation;
+	// database reads only demonstrate that the rejected attempt changed nothing.
+	var beforeConflict, afterConflict []byte
+	if err := store.DB.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1 AND namespace=$2`, grant.GrantID, policy.Metadata.Namespace).Scan(&beforeConflict); err != nil {
+		return out, model.CapacityMutationProof{}, err
+	}
+	_, conflictErr := store.ConfirmMutation(ctx, policy, guestInput.Generation, guestInput.FencingToken, guestInput.LeaseOwner, guestProof)
+	if !errors.Is(conflictErr, repository.ErrCapacityConflict) || ctx.Err() != nil {
+		return out, model.CapacityMutationProof{}, pg17ConfirmFailure("guest-conflict")
+	}
+	if err := store.DB.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1 AND namespace=$2`, grant.GrantID, policy.Metadata.Namespace).Scan(&afterConflict); err != nil {
+		return out, model.CapacityMutationProof{}, err
+	}
+	events, members, err = count()
+	if err != nil || !bytes.Equal(beforeConflict, afterConflict) || events != 1 || members != 2 || ctx.Err() != nil {
+		return out, model.CapacityMutationProof{}, pg17ConfirmFailure("guest-conflict")
+	}
+	// Slot 1 completed the normal Guest path: its exact refreshed Guest proof
+	// was confirmed and retried by guestOriginalSourceAssertApply. Join the
+	// retained apply contract to its independent enrollment lineage explicitly.
+	var slotOne capacitynativeqemu.EnrollmentConfirmProofLineage
+	slotOnePath := filepath.Join(capacitynativeqemu.SlotDirectory(originalGuestNativeRealm.PrivateDirectory, 1), "enrollment-confirm-proof-lineage.json")
+	lineageWire, err := capacitynativeqemu.ReadPrivate(ctx, slotOnePath, &slotOne)
+	if err != nil {
+		return out, model.CapacityMutationProof{}, err
+	}
+	apply, applyWire, err := pg17MutationContract(ctx, 1, "canonical-apply-contract.json", `["schema","core_source","slot","grant_id","resource_id","proof_sha256","canonical_events","registered_members"]`)
+	if err != nil || slotOne.Schema != "core_original_enrollment_confirm_proof_lineage_v1" || slotOne.CoreSource != capacity.CurrentGuestCoreSource() || slotOne.Slot != 1 || slotOne.GrantID == "" || slotOne.GrantID == grant.GrantID || slotOne.ConfirmationProof.GrantID != slotOne.GrantID || slotOne.ConfirmationProof.Slot != 1 || slotOne.ConfirmationProofSHA256 != capacity.GuestRetirementSHA(slotOne.ConfirmationProof) || !pg17MutationCommon(apply, "original_guest_canonical_apply_once_v1", 1, slotOne.GrantID) || !pg17MutationEqual(apply, "resource_id", slotOne.ConfirmationProof.ResourceID) || pg17MutationDigest(apply, "proof_sha256") != slotOne.ConfirmationProofSHA256 || !pg17MutationEqual(apply, "canonical_events", 1) || !pg17MutationEqual(apply, "registered_members", 1) {
+		return out, model.CapacityMutationProof{}, pg17ConfirmFailure("guest-slot-one")
 	}
 	// Publish only hashes of the actual handler returns, never private input.
-	out = PG17AssertionResult{Schema: "core_pg17_assertion_v1", CaseID: 19, OriginalTest: "TestCapacityMutationNativeWorkflowPostgres/native_reads_confirm_once_without_readiness_claim", SourceCase: originalGuestNativeRealm.Request.NativeCase, CoreSource: capacity.CurrentGuestCoreSource(), PolicyID: policy.ID.String(), WorkflowID: store.WorkflowID.String(), Checks: []string{"original_fixed_native_handler_twice", "owning_invocation_context_preserved", "registered_1_to_2_then_2", "canonical_event_0_to_1_then_1", "useful_capacity_known_false_both"}, EvidenceSHA256: []string{capacity.BusinessCreationSHA256(firstWire), capacity.BusinessCreationSHA256(replayWire)}, NativeQualified: false}
-	return out, nil
+	out = PG17AssertionResult{Schema: "core_pg17_assertion_v1", CaseID: 19, OriginalTest: "TestCapacityMutationNativeWorkflowPostgres/native_reads_confirm_once_without_readiness_claim", SourceCase: originalGuestNativeRealm.Request.NativeCase, CoreSource: capacity.CurrentGuestCoreSource(), PolicyID: policy.ID.String(), WorkflowID: store.WorkflowID.String(), Checks: []string{"original_fixed_native_handler_twice", "owning_invocation_context_preserved", "registered_1_to_2_then_2", "canonical_event_0_to_1_then_1", "useful_capacity_known_false_both", "guest_and_both_native_returns_exact_identity_action_profile_join", "slot_one_guest_proof_first_confirm_and_idempotent_retry", "slot_two_different_guest_proof_rejected_without_changes"}, EvidenceSHA256: []string{capacity.BusinessCreationSHA256(firstWire), capacity.BusinessCreationSHA256(replayWire), capacity.GuestRetirementSHA(guestProof), capacity.BusinessCreationSHA256(lineageWire), capacity.BusinessCreationSHA256(applyWire), capacity.BusinessCreationSHA256(beforeConflict), capacity.BusinessCreationSHA256(afterConflict)}, NativeQualified: false}
+	return out, firstResult.Proof, nil
 }
 
 // AssertPG17HTTPReturns consumes only the original Source-owned closed contract

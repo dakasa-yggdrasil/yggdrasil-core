@@ -14,7 +14,7 @@ func guestPG17AfterCreate(ctx context.Context, store repository.CapacityStore, p
 }
 
 // The native qualification harness is unsupported on this platform.
-func guestPG17AfterConfirm(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, binding model.CapacityMutationBinding, input guestOriginalStepInput, grant model.CapacityMutationGrant, proof model.CapacityMutationProof) error {
+func guestPG17AfterConfirm(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, binding model.CapacityMutationBinding, input guestOriginalStepInput, grant model.CapacityMutationGrant, proof, guestProof model.CapacityMutationProof) error {
 	return errOriginalGuestStep
 }
 
@@ -28,6 +28,6 @@ func guestPG17AfterHistorical(ctx context.Context, store repository.CapacityStor
 	return errOriginalGuestStep
 }
 
-func guestPG17BeforeConfirm(ctx context.Context, store repository.CapacityStore, policy model.Manifest, workflow model.ManifestReference, input guestOriginalStepInput, grant model.CapacityMutationGrant) error {
-	return errOriginalGuestStep
+func guestPG17BeforeConfirm(ctx context.Context, store repository.CapacityStore, policy model.Manifest, workflow model.ManifestReference, binding model.CapacityMutationBinding, input guestOriginalStepInput, grant model.CapacityMutationGrant, proof model.CapacityMutationProof) (model.CapacityMutationProof, error) {
+	return model.CapacityMutationProof{}, errOriginalGuestStep
 }

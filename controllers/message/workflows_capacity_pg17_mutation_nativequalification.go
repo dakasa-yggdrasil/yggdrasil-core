@@ -227,7 +227,7 @@ func guestPG17MutationAfterCreate(ctx context.Context, store repository.Capacity
 	return rows, nil
 }
 
-func guestPG17MutationAfterConfirm(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, binding model.CapacityMutationBinding, input guestOriginalStepInput, grant model.CapacityMutationGrant, proof model.CapacityMutationProof) ([]PG17AssertionResult, error) {
+func guestPG17MutationAfterConfirm(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, binding model.CapacityMutationBinding, input guestOriginalStepInput, grant model.CapacityMutationGrant, proof, guestProof model.CapacityMutationProof) ([]PG17AssertionResult, error) {
 	r, raw, err := pg17MutationGrant(ctx, store, policy, input, grant)
 	if err != nil {
 		return nil, err
@@ -260,7 +260,7 @@ func guestPG17MutationAfterConfirm(ctx context.Context, store repository.Capacit
 	if err != nil {
 		return nil, err
 	}
-	if !pg17MutationCommon(refusal, "original_guest_native_refusal_contract_v1", input.Slot, grant.GrantID) || !pg17MutationEqual(refusal, "resource_id", proof.ResourceID) || pg17MutationDigest(refusal, "original_proof_sha256") != capacity.GuestRetirementSHA(proof) || !pg17MutationEqual(refusal, "canonical_events", 0) || !pg17MutationEqual(refusal, "canonical_members", 0) {
+	if !pg17MutationCommon(refusal, "original_guest_native_refusal_contract_v1", input.Slot, grant.GrantID) || !pg17MutationEqual(refusal, "resource_id", proof.ResourceID) || pg17MutationDigest(refusal, "original_proof_sha256") != capacity.GuestRetirementSHA(guestProof) || !pg17MutationEqual(refusal, "canonical_events", 0) || !pg17MutationEqual(refusal, "canonical_members", 0) {
 		return nil, errOriginalGuestStep
 	}
 	var members int
