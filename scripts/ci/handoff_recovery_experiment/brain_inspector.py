@@ -58,7 +58,7 @@ class BrainInspector:
   need(r['status']=='ok' and r['errno'] is None,'PRIOR_PROCESS_READ_KNOWN');return owner_scope.start_ticks(r['content'])!=prior['start_ticks']
  def snapshot(self):
   self.seq+=1;scope_dir=self.out/('SCOPE-%05d'%self.seq);scope_dir.mkdir(mode=0o700);scope=scope_collector.collect(lease=self.lease,ssm_evidence=self.ssm_evidence,native=self.native,diagnostic_directory=scope_dir)
-  need(scope['result']['owner_and_cgroup_empty'] is True,'ISOLATED_HANDOFF_OWNER_TERMINAL');boot=Path('/proc/sys/kernel/random/boot_id').read_text().strip();need(boot==self.expected['boot_id'],'SAME_BOOT');cfg=sha(self.g.read(self.g.NEW_CONFIG,32768,0o600));need(cfg in (self.expected['old_config_sha256'],self.expected['new_config_sha256']),'ONLY_REVIEWED_CONFIG_PAIR');handles,core=self.static();p=self.properties(self.g.UNIT);gp=self.properties(self.g.GUARDIAN)
+  need(scope['result']['owner_and_cgroup_empty'] is True,'ISOLATED_HANDOFF_OWNER_TERMINAL');self.last_scope_result=scope['result'];boot=Path('/proc/sys/kernel/random/boot_id').read_text().strip();need(boot==self.expected['boot_id'],'SAME_BOOT');cfg=sha(self.g.read(self.g.NEW_CONFIG,32768,0o600));need(cfg in (self.expected['old_config_sha256'],self.expected['new_config_sha256']),'ONLY_REVIEWED_CONFIG_PAIR');handles,core=self.static();p=self.properties(self.g.UNIT);gp=self.properties(self.g.GUARDIAN)
   state='running' if p['ActiveState']=='active' and p['SubState']=='running' else ('activating' if p['ActiveState']=='activating' else p['ActiveState']);guardian='active' if gp['ActiveState']=='active' and gp['SubState']=='running' else ('inactive' if gp['ActiveState']=='inactive' and gp['MainPID']=='0' else 'unknown')
   running_ok=False
   if state=='running':
