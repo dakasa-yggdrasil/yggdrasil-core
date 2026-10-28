@@ -36,7 +36,7 @@ def validate_terminal(*,lease,boot_read,unit_read,cgroup_read,pid_read,jobs_read
  if cgroup_events is not None:
   rows=dict(line.split() for line in cgroup_events.splitlines());need(rows.get('populated')=='0','OWNER_CGROUP_AND_DESCENDANTS_EMPTY')
  if current_pid_stat is not None:need(start_ticks(current_pid_stat)!=lease['start_ticks'],'OWNER_PROCESS_TERMINATED_OR_PID_REUSED')
- return {'schema':'handoff_owner_scope_terminal_check_v1','unit':unit,'run_id':lease['run_id'],'same_boot':True,'owner_and_cgroup_empty':True,'no_pending_systemd_jobs':True,'terminal_ssm_distinct':True,'guarantee_depends_on_exclusive_one_shot_launch_and_locked_revalidation':True}
+ return {'schema':'handoff_owner_scope_terminal_check_v1','unit':unit,'run_id':lease['run_id'],'owner_lease_sha256':hashlib.sha256((json.dumps(lease,sort_keys=True,separators=(',',':'))+'\n').encode()).hexdigest(),'boot_id':lease['boot_id'],'same_boot':True,'owner_and_cgroup_empty':True,'no_pending_systemd_jobs':True,'terminal_ssm_distinct':True,'ssm_original':dict(expected_ssm),'guarantee_depends_on_exclusive_one_shot_launch_and_locked_revalidation':True}
 
 def persist_self_lease(*,run_id,source_path,source_sha256,output_directory):
  """Write one durable self identity; callable only inside its isolated service.
