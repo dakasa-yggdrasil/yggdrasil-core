@@ -234,10 +234,30 @@ func TestRefreshEnrollmentProofRejectsUnboundedOrUnownedInput(t *testing.T) {
 					cancel()
 				}
 			}
-			proof, err := f.realm.RefreshEnrollmentProof(ctx, f.grant, f.pre, f.enrollment, f.proof)
+			proof, err := f.realm.RefreshEnrollmentProof(ctx, f.grant, f.pre, f.enrollment, f.proof, nil)
 			if err == nil || !reflect.DeepEqual(proof, model.CapacityMutationProof{}) {
 				t.Fatal("unbounded or unowned input reached native authority")
 			}
 		})
+	}
+}
+
+func TestPostlossConfirmationRetentionSelection(t *testing.T) {
+	for _, tc := range []struct {
+		name string
+		slot int
+		want bool
+	}{
+		{"canonical_postloss_unprotected_failed_create_reissue", 2, true},
+		{"canonical_postloss_unprotected_failed_create_reissue", 1, false},
+		{"canonical_postloss_protected_failed_create_reissue", 1, true},
+		{"canonical_postloss_protected_failed_create_reissue", 2, false},
+		{"canonical_failed_floor_recovery", 2, false},
+		{"positive_original_lifecycle", 2, false},
+		{"unrecognized", 1, false},
+	} {
+		if got := postlossConfirmationRetentionRequired(tc.name, tc.slot); got != tc.want {
+			t.Fatal(tc.name, tc.slot, got)
+		}
 	}
 }

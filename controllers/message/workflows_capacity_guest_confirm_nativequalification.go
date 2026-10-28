@@ -7,9 +7,10 @@ import (
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacitynativeqemu"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 )
 
-func guestOriginalSourceConfirmationProof(ctx context.Context, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, receipt model.CapacityGuestOriginalProvisioningReceipt, original model.CapacityMutationProof) (model.CapacityMutationProof, error) {
+func guestOriginalSourceConfirmationProof(ctx context.Context, store repository.CapacityStore, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, receipt model.CapacityGuestOriginalProvisioningReceipt, original model.CapacityMutationProof) (model.CapacityMutationProof, error) {
 	if originalGuestNativeRealm == nil || ctx.Err() != nil {
 		return model.CapacityMutationProof{}, errOriginalGuestStep
 	}
@@ -18,5 +19,7 @@ func guestOriginalSourceConfirmationProof(ctx context.Context, grant model.Capac
 	if capacitynativeqemu.SourceHistoricalConfirmCase(originalGuestNativeRealm.Request.NativeCase) {
 		return original, nil
 	}
-	return originalGuestNativeRealm.RefreshEnrollmentProof(ctx, grant, pre, receipt, original)
+	return originalGuestNativeRealm.RefreshEnrollmentProof(ctx, grant, pre, receipt, original, func(read context.Context, confirmed model.CapacityMutationProof, wire []byte) error {
+		return store.RecordCanonicalPostlossConfirmation(read, pre.PreregistrationID, confirmed, wire)
+	})
 }

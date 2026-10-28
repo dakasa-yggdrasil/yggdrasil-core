@@ -374,7 +374,7 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 		// enrollment callback. This still grants no business readiness/canary.
 		// The creation witness remains immutable. Enrollment can outlive its
 		// freshness window, so confirmation needs another actual native read.
-		confirmProof, err := guestOriginalSourceConfirmationProof(original, grant, pre, receipt, proof)
+		confirmProof, err := guestOriginalSourceConfirmationProof(original, store, grant, pre, receipt, proof)
 		if err != nil {
 			return fail("original-guest-step-46")
 		}

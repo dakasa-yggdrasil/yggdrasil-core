@@ -661,7 +661,12 @@
     "source_inventory_sha256": "43d990df35e99a5dfe2ee5290039f0253d994c6a71cd1490a9a19995ac9f6f38",
     "production_or_full_gate_qualification": false
   },
-  "source_inventory_sha256": "43d990df35e99a5dfe2ee5290039f0253d994c6a71cd1490a9a19995ac9f6f38",
+  "postloss_confirmation_join_review": {
+    "scope": "QEMU qualification-only immutable source custody and exact confirmation join; conservative production HOLD for unanchored uncertain creates. Full independent review, Linux transaction tests and native validation remain required.",
+    "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
+    "production_or_native_qualification": false
+  },
+  "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",

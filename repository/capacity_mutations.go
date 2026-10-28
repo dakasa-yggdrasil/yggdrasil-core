@@ -769,7 +769,7 @@ func (s CapacityStore) ConfirmMutation(ctx context.Context, policy model.Manifes
 		// A lost create reply without its action or lifetime cannot bind a
 		// later arbitrary proof. An original host-factory scope may proceed
 		// only after the preceding guard verified its exact source-owned proof.
-		if s.hostOriginalOrdinary == nil && g.Capability == b.EnsureCapability && g.CompensationOf == "" && record.Settlement != nil && record.Settlement.Outcome == "uncertain" && (record.Settlement.ActionID == "" || record.Settlement.ResourceID == "" || record.Settlement.ResourceCreatedAt == "") {
+		if s.hostOriginalOrdinary == nil && g.Capability == b.EnsureCapability && g.CompensationOf == "" && record.Settlement != nil && record.Settlement.Outcome == "uncertain" && (record.Settlement.ActionID == "" || record.Settlement.ResourceID == "" || record.Settlement.ResourceCreatedAt == "") && !s.canonicalPostlossConfirmationTx(ctx, tx, policy, p, record, proof, now) {
 			return ErrCapacityConflict
 		}
 		v2Original, v2Err := guestV2RetirementProofTx(ctx, tx, p, record, proof, now)
