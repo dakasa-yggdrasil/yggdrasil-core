@@ -81,6 +81,10 @@ type report struct {
 	RepositoryLostReply          bool   `json:"repository_lost_reply"`
 	RepositoryUnresolved         bool   `json:"repository_unresolved"`
 	RepositoryNativeConfirmation bool   `json:"repository_native_confirmation"`
+	RepositoryPausedUnredeemed   bool   `json:"repository_paused_unredeemed"`
+	RepositoryHistoricalRecovery bool   `json:"repository_historical_recovery"`
+	RepositoryPartialRecovery    bool   `json:"repository_partial_recovery"`
+	RepositoryAuthorityFences    bool   `json:"repository_authority_fences"`
 	SyntheticHTTPCallbacksPassed bool   `json:"synthetic_http_callbacks_passed"`
 	ProviderSendAttempted        bool   `json:"provider_send_attempted"`
 	NativeOrProductionQualified  bool   `json:"native_or_production_qualified"`

@@ -259,6 +259,22 @@ func seedAndRun(repositoryScenario bool) error {
 			return fmt.Errorf("repository confirmation: %w", err)
 		}
 		result.RepositoryNativeConfirmation = true
+		if err = repositoryPausedUnredeemed(ctx, db, source); err != nil {
+			return fmt.Errorf("repository paused unredeemed: %w", err)
+		}
+		result.RepositoryPausedUnredeemed = true
+		if err = repositoryHistoricalRecovery(ctx, db, source); err != nil {
+			return fmt.Errorf("repository historical recovery: %w", err)
+		}
+		result.RepositoryHistoricalRecovery = true
+		if err = repositoryPartialRecovery(ctx, db, source); err != nil {
+			return fmt.Errorf("repository partial recovery: %w", err)
+		}
+		result.RepositoryPartialRecovery = true
+		if err = repositoryAuthorityFences(ctx, db, source); err != nil {
+			return fmt.Errorf("repository authority fences: %w", err)
+		}
+		result.RepositoryAuthorityFences = true
 	}
 	if !repositoryScenario {
 		httpPassed, httpErr := syntheticHTTPCallbacks(ctx, db, source)
