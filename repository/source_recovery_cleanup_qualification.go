@@ -7,6 +7,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"errors"
 	"reflect"
 	"time"
 
@@ -87,65 +88,87 @@ func (s CapacityStore) CheckSourceRecoveryCleanupLease(ctx context.Context, poli
 }
 
 // Called only with the actual store captured by the resolved Source step. The
-// executor and lease are never populated from caller-provided JSON.
-func (s CapacityStore) PrepareSourceRecoveryCleanupChallenge(ctx context.Context, policy model.Manifest, parentID, nonce string) (model.CapacitySourceRecoveryCleanupEpoch, error) {
+// executor and lease are never populated from caller-provided JSON; the step's
+// own epoch is bound to the locked database intent before any challenge exists.
+func (s CapacityStore) PrepareSourceRecoveryCleanupChallenge(ctx context.Context, policy model.Manifest, parentID, nonce string, generation, fence int64, owner string) (model.CapacitySourceRecoveryCleanupEpoch, error) {
 	var e model.CapacitySourceRecoveryCleanupEpoch
-	if !capacity.ValidDigest(nonce) || s.DB == nil || !validCapacityExecutor(s.ExecutorID) {
-		return e, ErrCapacityDisabled
+	if !capacity.ValidDigest(nonce) {
+		return e, capacity.GuestQualificationRefusal("recovery-cleanup-nonce", ErrCapacityDisabled)
+	}
+	if s.DB == nil || !validCapacityExecutor(s.ExecutorID) {
+		return e, capacity.GuestQualificationRefusal("recovery-cleanup-store", ErrCapacityDisabled)
 	}
 	tx, err := s.DB.BeginTx(ctx, nil)
 	if err != nil {
-		return e, err
+		return e, capacity.GuestQualificationRefusal("recovery-cleanup-challenge-tx", err)
 	}
 	defer tx.Rollback()
 	p, err := parseCapacityPolicy(policy)
 	if err != nil {
-		return e, err
+		return e, capacity.GuestQualificationRefusal("recovery-cleanup-policy", err)
 	}
 	if err = lockMutationScope(ctx, tx, policy.Metadata.Namespace, p); err != nil {
-		return e, err
+		return e, capacity.GuestQualificationRefusal("recovery-cleanup-lock", err)
 	}
 	parent, err := loadCompensationRecord(ctx, tx, policy, p, parentID)
 	if err != nil {
-		return e, err
+		return e, capacity.GuestQualificationRefusal("recovery-cleanup-parent-load", err)
 	}
 	if parent.Grant.State != "settled" || parent.Grant.CompensationOf != "" || parent.WorkflowID != s.WorkflowID || parent.Settlement == nil || !parent.Settlement.TransportCompleted {
-		return e, ErrCapacityConflict
+		return e, capacity.GuestQualificationRefusal("recovery-cleanup-parent-state", ErrCapacityConflict)
 	}
 	var preID string
 	if err = tx.QueryRowContext(ctx, `SELECT id::text FROM public.capacity_vm_provisioning_preregistrations WHERE create_grant_id=$1`, parentID).Scan(&preID); err != nil {
-		return e, err
+		return e, capacity.GuestQualificationRefusal("recovery-cleanup-prereg-id", err)
 	}
 	stored, err := loadGuestOriginalTx(ctx, tx, preID)
 	if err != nil {
-		return e, err
+		return e, capacity.GuestQualificationRefusal("recovery-cleanup-prereg-load", err)
 	}
 	if stored.binding.EvidenceClass != "native_qemu_qualification" || stored.binding.ProfileManifest.Profile != "qualification-original-echo-writer-v1" || stored.pre.OriginalWorkflowStepTimeoutSeconds != 600 || stored.pre.CoreSourceCommit != capacity.CurrentGuestCoreSource() || stored.pre.WorkflowID != s.WorkflowID.String() || stored.pre.PolicyID != parent.PolicyID.String() || stored.pre.PolicyChecksum != parent.PolicyChecksum {
-		return e, ErrCapacityDisabled
+		return e, capacity.GuestQualificationRefusal("recovery-cleanup-prereg-binding", ErrCapacityDisabled)
 	}
 	var now time.Time
 	if err = tx.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil {
-		return e, err
+		return e, capacity.GuestQualificationRefusal("recovery-cleanup-clock", err)
 	}
 	current, err := loadCapacityIntent(ctx, tx, policy.Metadata.Namespace, p, true)
 	if err != nil {
-		return e, err
+		return e, capacity.GuestQualificationRefusal("recovery-cleanup-intent-load", err)
 	}
-	if current.Generation != parent.Generation || current.FencingToken <= parent.FencingToken || current.LeaseOwner == parent.LeaseOwner || current.LeaseExpiresAt == nil || !now.Before(stored.pre.OriginalDeadline) || !now.Before(stored.pre.OriginalWorkflowContextDeadline) {
-		return e, ErrCapacityConflict
+	if !now.Before(stored.pre.OriginalDeadline) || !now.Before(stored.pre.OriginalWorkflowContextDeadline) {
+		return e, capacity.GuestQualificationRefusal("recovery-cleanup-deadline", ErrCapacityConflict)
 	}
-	if err = s.checkRecoveryLease(policy, &current, current.Generation, current.FencingToken, current.LeaseOwner, now); err != nil {
+	if err = s.recoveryCleanupChallengeLease(policy, &current, parent, generation, fence, owner, now); err != nil {
 		return e, err
 	}
 	e = model.CapacitySourceRecoveryCleanupEpoch{Schema: "original_source_recovery_cleanup_epoch_v1", OriginalGeneration: parent.Generation, OriginalFencingToken: parent.FencingToken, OriginalLeaseOwner: parent.LeaseOwner, OriginalExecutorID: parent.ExecutorID, CurrentPolicyID: current.PolicyID.String(), CurrentPolicyChecksum: current.PolicyChecksum, Generation: current.Generation, FencingToken: current.FencingToken, LeaseOwner: current.LeaseOwner, ExecutorID: current.LeaseExecutorID, RecoveryDBObservedAt: current.UpdatedAt, LeaseExpiresAt: *current.LeaseExpiresAt, IntentSHA256: capacity.GuestRetirementSHA(current), NonceSHA256: nonce, ChallengePreparedAt: now}
 	wire, err := json.Marshal(e)
 	if err != nil {
-		return e, err
+		return e, capacity.GuestQualificationRefusal("recovery-cleanup-challenge-encode", err)
 	}
 	if _, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_source_recovery_cleanup_challenges VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, nonce, parentID, preID, policy.Metadata.Namespace, current.Generation, current.FencingToken, wire, now); err != nil {
-		return e, err
+		return e, capacity.GuestQualificationRefusal("recovery-cleanup-challenge-insert", err)
 	}
-	return e, tx.Commit()
+	return e, capacity.GuestQualificationRefusal("recovery-cleanup-challenge-commit", tx.Commit())
+}
+
+// The caller's step epoch, never the locked row's own tuple, is the lease
+// claim: the recovered row must equal it and be held by this executor.
+func (s CapacityStore) recoveryCleanupChallengeLease(policy model.Manifest, current *model.CapacityIntent, parent capacityMutationRecord, generation, fence int64, owner string, now time.Time) error {
+	if current == nil || current.Generation != generation || current.FencingToken != fence {
+		return capacity.GuestQualificationRefusal("recovery-cleanup-intent-epoch", ErrCapacityConflict)
+	}
+	if current.Generation != parent.Generation || current.FencingToken <= parent.FencingToken || current.LeaseOwner == parent.LeaseOwner || current.LeaseExpiresAt == nil {
+		return capacity.GuestQualificationRefusal("recovery-cleanup-intent-parent", ErrCapacityConflict)
+	}
+	// A stale or non-recovery row (conflict) is kept apart from an owner,
+	// executor or expiry mismatch (lease) on the same locked intent.
+	err := s.checkRecoveryLease(policy, current, generation, fence, owner, now)
+	if errors.Is(err, ErrCapacityConflict) {
+		return capacity.GuestQualificationRefusal("recovery-cleanup-lease-state", err)
+	}
+	return capacity.GuestQualificationRefusal("recovery-cleanup-lease", err)
 }
 
 // Fresh reads append independent observations; immutable failed.RecordedAt,

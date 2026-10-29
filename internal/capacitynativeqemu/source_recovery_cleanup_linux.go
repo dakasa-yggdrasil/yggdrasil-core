@@ -39,18 +39,21 @@ func (r *Realm) OriginalRecoveryCleanupSession(ctx context.Context) (SourceRecov
 	return *s, nil
 }
 
-func (r *Realm) PrepareOriginalRecoveryCleanupRead(ctx context.Context, store repository.CapacityStore, policy model.Manifest, pre model.CapacityGuestOriginalProvisioningPreregistration, client *capacity.GuestOriginalHTTPClient) error {
+// generation, fence and owner are the resolved step's own epoch; the store
+// binds them to the locked recovery intent. Every refusal names one closed stage.
+func (r *Realm) PrepareOriginalRecoveryCleanupRead(ctx context.Context, store repository.CapacityStore, policy model.Manifest, pre model.CapacityGuestOriginalProvisioningPreregistration, client *capacity.GuestOriginalHTTPClient, generation, fence int64, owner string) error {
 	if !CanonicalSourceCompensationCase(r.Request.NativeCase) || pre.Slot != SourceFailureSlot(r.Request.NativeCase) || pre.WorkflowID != store.WorkflowID.String() || client == nil {
-		return ErrOriginalUnknown
+		return capacity.GuestQualificationRefusal("recovery-cleanup-case", ErrOriginalUnknown)
 	}
 	var random [32]byte
 	if _, err := rand.Read(random[:]); err != nil {
-		return err
+		return capacity.GuestQualificationRefusal("recovery-cleanup-random", err)
 	}
 	nonce := capacity.BusinessCreationSHA256(random[:])
-	epoch, err := store.PrepareSourceRecoveryCleanupChallenge(ctx, policy, pre.OriginalCreateGrantID, nonce)
+	epoch, err := store.PrepareSourceRecoveryCleanupChallenge(ctx, policy, pre.OriginalCreateGrantID, nonce, generation, fence, owner)
 	if err != nil {
-		return err
+		// The store's deeper stage wins; this one only types an untyped cause.
+		return capacity.GuestQualificationRefusal("recovery-cleanup-challenge", err)
 	}
 	request := struct {
 		Schema      string `json:"schema"`
@@ -58,35 +61,41 @@ func (r *Realm) PrepareOriginalRecoveryCleanupRead(ctx context.Context, store re
 	}{"canonical_recovery_fresh_failure_request_v1", nonce}
 	raw, err := Publish(ctx, filepath.Join(r.PrivateDirectory, "canonical-recovery-fresh-read-request.json"), request)
 	if err != nil {
-		return err
+		return capacity.GuestQualificationRefusal("recovery-cleanup-request-publish", err)
 	}
 	// Both operations are reads of the SAME already-started original, never retry,
 	// Prepare, adoption, create, withdraw or positive-quiescence permission.
 	_, nativeWire, err := r.freshCanonicalRecoveryNative(ctx)
 	if err != nil {
-		return err
+		return capacity.GuestQualificationRefusal("recovery-cleanup-fresh-native", err)
 	}
 	read, cancel := context.WithTimeout(ctx, 5*time.Second)
 	returned, err := client.Original(read, http.MethodGet, "/v1/qualification-source-refusal", raw)
 	cancel()
-	if err != nil || returned.Status != 200 || !returned.DriverReturnedAt.Before(pre.OriginalDeadline) {
-		return ErrOriginalUnknown
+	if err != nil {
+		return capacity.GuestQualificationRefusal("recovery-cleanup-http-transport", ErrOriginalUnknown)
+	}
+	if returned.Status != 200 {
+		return capacity.GuestQualificationRefusal("recovery-cleanup-http-status", ErrOriginalUnknown)
+	}
+	if !returned.DriverReturnedAt.Before(pre.OriginalDeadline) {
+		return capacity.GuestQualificationRefusal("recovery-cleanup-http-late", ErrOriginalUnknown)
 	}
 	if _, err = Publish(ctx, filepath.Join(r.PrivateDirectory, "canonical-recovery-fresh-read-host-return.json"), returned); err != nil {
-		return err
+		return capacity.GuestQualificationRefusal("recovery-cleanup-return-publish", err)
 	}
 	if _, err = PublishBytes(ctx, filepath.Join(SlotDirectory(r.PrivateDirectory, SourceFailureSlot(r.Request.NativeCase)), "core-recovery-fresh-failure-read.json"), returned.Body); err != nil {
-		return err
+		return capacity.GuestQualificationRefusal("recovery-cleanup-failure-publish", err)
 	}
 	epoch, err = store.CompleteSourceRecoveryCleanupRead(ctx, policy, pre.OriginalCreateGrantID, epoch, nativeWire, returned.Body)
 	if err != nil {
-		return err
+		return capacity.GuestQualificationRefusal("recovery-cleanup-complete", err)
 	}
 	session := SourceRecoveryCleanupSession{Store: store, Policy: policy, PreregistrationID: pre.PreregistrationID, Epoch: epoch}
 	r.mu.Lock()
 	defer r.mu.Unlock()
 	if r.recoveryCleanup != nil {
-		return ErrOriginalUnknown
+		return capacity.GuestQualificationRefusal("recovery-cleanup-session", ErrOriginalUnknown)
 	}
 	r.recoveryCleanup = &session
 	return nil

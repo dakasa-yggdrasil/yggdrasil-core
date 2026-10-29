@@ -43,6 +43,9 @@ func TestOriginalPublicClosedRefusalPredicates(t *testing.T) {
 			accepted = append(accepted, fmt.Sprintf("original-refusal-43-check-%02d-%s", i, k))
 		}
 	}
+	for _, stage := range []string{"scope", "preregistration", "observe", "epoch", "client", "case", "random", "challenge", "request-publish", "fresh-native", "http-transport", "http-status", "http-late", "return-publish", "failure-publish", "complete", "session", "nonce", "store", "challenge-tx", "policy", "lock", "parent-load", "parent-state", "prereg-id", "prereg-load", "prereg-binding", "clock", "intent-load", "intent-epoch", "intent-parent", "deadline", "lease", "lease-state", "challenge-encode", "challenge-insert", "challenge-commit"} {
+		accepted = append(accepted, "original-recovery-cleanup-"+stage)
+	}
 	for _, predicate := range accepted {
 		t.Run(predicate, func(t *testing.T) {
 			var got originalPublicReturn
@@ -52,7 +55,7 @@ func TestOriginalPublicClosedRefusalPredicates(t *testing.T) {
 			}
 		})
 	}
-	for _, predicate := range []string{"original-refusal-43-check-00-state", "original-refusal-43-check-12-state", "original-refusal-43-check-01-secret", "original-refusal-43-pre\nsecret", "pg17-original-create-assertions-extra", "pg17-original-create-assertions\nsecret", "https://example.invalid/secret", "original-source-unknown", "original-guest-step-001", "pg17-confirm-native-001", "pg17-confirm-native-01\nsecret", "pg17-confirm-check-secret", "pg17-confirm-native-32", "pg17-confirm-check-07"} {
+	for _, predicate := range []string{"original-refusal-43-check-00-state", "original-refusal-43-check-12-state", "original-refusal-43-check-01-secret", "original-refusal-43-pre\nsecret", "pg17-original-create-assertions-extra", "pg17-original-create-assertions\nsecret", "https://example.invalid/secret", "original-source-unknown", "original-guest-step-001", "pg17-confirm-native-001", "pg17-confirm-native-01\nsecret", "pg17-confirm-check-secret", "pg17-confirm-native-32", "pg17-confirm-check-07", "original-recovery-cleanup-", "original-recovery-cleanup-unknown", "original-recovery-cleanup-lease-extra", "original-recovery-cleanup-lease\nsecret", "original-recovery-cleanup-lease ", "original-recovery-cleanup-challenge-", "original-recovery-cleanup-intent_epoch", "original-recovery-cleanup-LEASE", "original-recovery-cleanup-.*", "xoriginal-recovery-cleanup-lease"} {
 		t.Run("refuse_"+predicate, func(t *testing.T) {
 			var got originalPublicReturn
 			got.projectOriginalWorkflowReturn(model.WorkflowRunRecord{Status: "failed", Result: &model.RunWorkflowResponse{Steps: []model.WorkflowRunStepResult{{ID: "original-native-qemu-create", Status: "failed", Metadata: map[string]any{"original_guest_refusal_predicate": predicate}}}}})

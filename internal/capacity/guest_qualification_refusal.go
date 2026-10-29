@@ -31,6 +31,21 @@ func GuestQualificationPredicate(err error) string {
 	if !errors.As(err, &refusal) || refusal == nil {
 		return "original-guest-step-17"
 	}
+	// The deepest recovery-cleanup stage names the actual refusing owner; an
+	// outer layer's stage is only a fallback for an untyped inner cause.
+	if guestRecoveryCleanupStage(refusal.stage) {
+		for next := refusal; ; {
+			var inner *guestQualificationRefusal
+			if !errors.As(next.cause, &inner) || inner == nil {
+				break
+			}
+			if guestRecoveryCleanupStage(inner.stage) {
+				refusal = inner
+			}
+			next = inner
+		}
+		return "original-" + refusal.stage
+	}
 	switch refusal.stage {
 	case "readoption_presence":
 		return "original-guest-step-47"
@@ -140,6 +155,23 @@ func GuestQualificationPredicate(err error) string {
 		return "original-guest-step-89"
 	}
 	return "original-guest-step-17"
+}
+
+// The closed original recovery-cleanup stages. Each projects only its own fixed
+// name; no value from the refusing branch reaches the public predicate.
+func guestRecoveryCleanupStage(stage string) bool {
+	switch stage {
+	case "recovery-cleanup-scope", "recovery-cleanup-preregistration", "recovery-cleanup-observe", "recovery-cleanup-epoch", "recovery-cleanup-client",
+		"recovery-cleanup-case", "recovery-cleanup-random", "recovery-cleanup-challenge", "recovery-cleanup-request-publish", "recovery-cleanup-fresh-native",
+		"recovery-cleanup-http-transport", "recovery-cleanup-http-status", "recovery-cleanup-http-late", "recovery-cleanup-return-publish", "recovery-cleanup-failure-publish",
+		"recovery-cleanup-complete", "recovery-cleanup-session",
+		"recovery-cleanup-nonce", "recovery-cleanup-store", "recovery-cleanup-challenge-tx", "recovery-cleanup-policy", "recovery-cleanup-lock",
+		"recovery-cleanup-parent-load", "recovery-cleanup-parent-state", "recovery-cleanup-prereg-id", "recovery-cleanup-prereg-load", "recovery-cleanup-prereg-binding",
+		"recovery-cleanup-clock", "recovery-cleanup-intent-load", "recovery-cleanup-intent-epoch", "recovery-cleanup-intent-parent", "recovery-cleanup-deadline",
+		"recovery-cleanup-lease", "recovery-cleanup-lease-state", "recovery-cleanup-challenge-encode", "recovery-cleanup-challenge-insert", "recovery-cleanup-challenge-commit":
+		return true
+	}
+	return false
 }
 
 // GuestQualificationHTTPRefusal classifies only a failed original call. Context

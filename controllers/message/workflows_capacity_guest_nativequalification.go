@@ -450,15 +450,20 @@ func guestOriginalSourceCreateWitness(ctx context.Context, store repository.Capa
 // original RunOne invocation executor. Caller JSON supplies no private context.
 func sourceGuestRecoveryCleanupStep(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, input guestOriginalStepInput, operation string) (any, error) {
 	if originalGuestNativeRealm == nil || !capacitynativeqemu.CanonicalSourceCompensationCase(originalGuestNativeRealm.Request.NativeCase) || operation != "capacity.qualify_original_guest_echo" || input.Slot != capacitynativeqemu.SourceFailureSlot(originalGuestNativeRealm.Request.NativeCase) || input.RequestID != "source_recovery_cleanup_v1" || p.GuestRetirementBinding == nil || p.GuestRetirementBinding.EvidenceClass != "native_qemu_qualification" || p.GuestRetirementBinding.ProfileManifest.Profile != "qualification-original-echo-writer-v1" {
-		return nil, errOriginalGuestStep
+		return nil, capacity.GuestQualificationRefusal("recovery-cleanup-scope", errOriginalGuestStep)
 	}
 	pre, err := originalGuestNativeRealm.OriginalPreregistration(input.Slot)
 	if err != nil || pre.PreregistrationID != input.PreregistrationID || pre.PolicyID != policy.ID.String() || pre.PolicyChecksum != policy.Checksum || pre.WorkflowID != store.WorkflowID.String() {
-		return nil, errOriginalGuestStep
+		return nil, capacity.GuestQualificationRefusal("recovery-cleanup-preregistration", errOriginalGuestStep)
 	}
 	current, err := store.Observe(ctx, policy)
-	if err != nil || !current.RecoveryOnly || current.Generation != input.Generation || current.FencingToken != input.FencingToken || current.LeaseOwner != input.LeaseOwner || current.LeaseExecutorID != store.ExecutorID {
-		return nil, errOriginalGuestStep
+	if err != nil {
+		return nil, capacity.GuestQualificationRefusal("recovery-cleanup-observe", errOriginalGuestStep)
+	}
+	// Observe redacts owner and executor. They are bound only by the store under
+	// the scope lock, from this step's epoch and the store's actual executor.
+	if !recoveryCleanupObservedEpoch(current, input) {
+		return nil, capacity.GuestQualificationRefusal("recovery-cleanup-epoch", errOriginalGuestStep)
 	}
 	var member model.CapacityGuestRetirementMemberBinding
 	for _, m := range p.GuestRetirementBinding.Members {
@@ -468,14 +473,20 @@ func sourceGuestRecoveryCleanupStep(ctx context.Context, store repository.Capaci
 	}
 	client, err := sourceGuestClient(ctx, store.DB, member)
 	if err != nil {
-		return nil, err
+		return nil, capacity.GuestQualificationRefusal("recovery-cleanup-client", err)
 	}
 	defer client.Close()
-	if err = originalGuestNativeRealm.PrepareOriginalRecoveryCleanupRead(ctx, store, policy, pre, client); err != nil {
+	// The Realm types every branch; its (or the store's) deeper stage is kept.
+	if err = originalGuestNativeRealm.PrepareOriginalRecoveryCleanupRead(ctx, store, policy, pre, client, input.Generation, input.FencingToken, input.LeaseOwner); err != nil {
 		return nil, err
 	}
 	// No executor/lease/token escapes through the public workflow result.
 	return map[string]any{"schema": "original_source_recovery_cleanup_admitted_v1", "scope": "CURRENT_READ_ONLY_ADMISSION_NOT_PHYSICAL_EFFECT", "native_qualified": false}, nil
+}
+
+// Only unredacted public facts are compared; an empty step owner never binds.
+func recoveryCleanupObservedEpoch(current model.CapacityIntent, input guestOriginalStepInput) bool {
+	return current.RecoveryOnly && current.Generation == input.Generation && current.FencingToken == input.FencingToken && input.LeaseOwner != ""
 }
 
 func guestOriginalSourceInstallation(ctx context.Context, g model.CapacityMutationGrant, p model.CapacityGuestOriginalProvisioningPreregistration, r model.CapacityGuestOriginalProvisioningReceipt, confirmation model.CapacityGuestOriginalInstallationConfirmation, readReturnedAt time.Time) error {

@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "939b9241eb5f5bd8677d76d6e489a2a4eb49c0d1f9d4b99346df613da863732c",
+  "source_inventory_sha256": "5f38c9d75d4c0c6822bca6cf93a137bdd08afc8133ce3f64dc80a237faee7e45",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -784,5 +784,9 @@
   "qualification_registration_clock_review_20261028": {
     "scope": "Qualification-only authenticated clock sample from the same locked PostgreSQL transaction before the unchanged single registration POST. No production clock, registration validator, signed data or original deadline is changed. Source review and local tests only; real PostgreSQL with authenticated TLS and native QEMU validation remain required.",
     "source_inventory_sha256": "939b9241eb5f5bd8677d76d6e489a2a4eb49c0d1f9d4b99346df613da863732c"
+  },
+  "qualification_recovery_cleanup_epoch_review_20261029": {
+    "scope": "Qualification-only recovery cleanup no longer compares the owner and executor that Observe redacts; the step epoch is bound to the locked intent with the existing recovery lease check before any challenge. Every refusal projects one closed original-recovery-cleanup stage with no value. Production predicates and default builds are unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
+    "source_inventory_sha256": "5f38c9d75d4c0c6822bca6cf93a137bdd08afc8133ce3f64dc80a237faee7e45"
   }
 }

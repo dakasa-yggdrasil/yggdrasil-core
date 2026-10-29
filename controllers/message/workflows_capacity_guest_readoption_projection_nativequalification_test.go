@@ -3,14 +3,18 @@
 package message
 
 import (
+	"context"
 	"crypto/sha256"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"testing"
+	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
+	q "github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacitynativeqemu"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
 )
 
@@ -53,5 +57,61 @@ func TestSourceNativeReadoptionUsesCanonicalApprovedPlan(t *testing.T) {
 	changedB.Slots[0].DesiredSpec = &changed
 	if _, err := sourceNativeReadoptionDesired(p, changedB, proof); err == nil {
 		t.Fatal("unapproved desired projection accepted")
+	}
+}
+
+func TestSourceRecoveryCleanupObservedEpochIgnoresRedactedLease(t *testing.T) {
+	expiry := time.Date(2026, 1, 1, 0, 1, 0, 0, time.UTC)
+	// Observe always returns the owner and executor blanked.
+	current := model.CapacityIntent{Generation: 2, FencingToken: 4, RecoveryOnly: true, LeaseExpiresAt: &expiry}
+	input := guestOriginalStepInput{Generation: 2, FencingToken: 4, LeaseOwner: uuid.NewString()}
+	if !recoveryCleanupObservedEpoch(current, input) {
+		t.Fatal("redacted observation refused the current step epoch")
+	}
+	for name, mutate := range map[string]func(*model.CapacityIntent, *guestOriginalStepInput){
+		"not_recovery": func(c *model.CapacityIntent, _ *guestOriginalStepInput) { c.RecoveryOnly = false },
+		"generation":   func(_ *model.CapacityIntent, i *guestOriginalStepInput) { i.Generation = 1 },
+		"fence":        func(_ *model.CapacityIntent, i *guestOriginalStepInput) { i.FencingToken = 3 },
+		"empty_owner":  func(_ *model.CapacityIntent, i *guestOriginalStepInput) { i.LeaseOwner = "" },
+	} {
+		c, i := current, input
+		mutate(&c, &i)
+		if recoveryCleanupObservedEpoch(c, i) {
+			t.Fatalf("observed epoch accepted: %s", name)
+		}
+	}
+}
+
+// The actual call sites, not synthetic refusals, name the scope, preregistration
+// and Realm case stages; the public error text stays the generic step error.
+func TestSourceRecoveryCleanupStepNamesCallSiteStage(t *testing.T) {
+	old := originalGuestNativeRealm
+	t.Cleanup(func() { originalGuestNativeRealm = old })
+	const native = "canonical_compensation_protected_failed_create"
+	p := model.CapacityPolicySpec{GuestRetirementBinding: &model.CapacityGuestRetirementBinding{EvidenceClass: "native_qemu_qualification", ProfileManifest: model.CapacityGuestProtectedProfileManifest{Profile: "qualification-original-echo-writer-v1"}}}
+	input := guestOriginalStepInput{Slot: q.SourceFailureSlot(native), RequestID: "source_recovery_cleanup_v1", Generation: 2, FencingToken: 4, LeaseOwner: uuid.NewString()}
+	step := func() error {
+		_, err := sourceGuestRecoveryCleanupStep(context.Background(), repository.CapacityStore{}, model.Manifest{}, p, input, "capacity.qualify_original_guest_echo")
+		return err
+	}
+	refused := func(err error, stage string) bool {
+		return err != nil && err.Error() == "protected original Guest qualification unavailable" && capacity.GuestQualificationPredicate(err) == "original-recovery-cleanup-"+stage && !strings.Contains(err.Error(), input.LeaseOwner)
+	}
+	originalGuestNativeRealm = nil
+	if !refused(step(), "scope") {
+		t.Fatal("missing realm not refused at scope")
+	}
+	originalGuestNativeRealm = &q.Realm{Request: q.SourceRequest{NativeCase: "positive_original_lifecycle"}}
+	if !refused(step(), "scope") {
+		t.Fatal("non-canonical case not refused at scope")
+	}
+	realm := &q.Realm{Request: q.SourceRequest{NativeCase: native}}
+	originalGuestNativeRealm = realm
+	if !refused(step(), "preregistration") {
+		t.Fatal("absent preregistration not refused at preregistration")
+	}
+	pre := model.CapacityGuestOriginalProvisioningPreregistration{Slot: input.Slot, WorkflowID: uuid.Nil.String()}
+	if !refused(realm.PrepareOriginalRecoveryCleanupRead(context.Background(), repository.CapacityStore{}, model.Manifest{}, pre, nil, input.Generation, input.FencingToken, input.LeaseOwner), "case") {
+		t.Fatal("missing client not refused at the Realm case stage")
 	}
 }
