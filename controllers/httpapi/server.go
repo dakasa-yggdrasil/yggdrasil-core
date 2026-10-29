@@ -1031,7 +1031,7 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 			if jwtClaims, ok := tryBearerHeader(r, s.consoleJWTVerifier); ok {
 				sub, _ := jwtClaims["sub"].(string)
 				if sub != "" {
-					if !s.allowPhoneProfileID(w, r, sub) {
+					if !s.allowSignedInHumanID(w, r, sub, jwtIssuedAt(jwtClaims)) {
 						return
 					}
 					// Normalize to the SAME claim keys the session path sets,
@@ -2078,6 +2078,11 @@ func (s *Server) handleCollaboratorUpdate(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		writeMappedError(w, err)
 		return
+	}
+	// A status write to a status that cannot sign in terminated every session
+	// in the update's transaction (ADR-0087); fire the back-channel after it.
+	if req.Status != nil && !collaboratorCanSignIn(collaborator.Status) {
+		s.dispatchBackchannelLogoutForCollaborator(r.Context(), collaborator.ID)
 	}
 
 	if beforeErr == nil {

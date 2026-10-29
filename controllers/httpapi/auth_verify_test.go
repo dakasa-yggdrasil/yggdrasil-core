@@ -5,6 +5,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	sqlmock "github.com/DATA-DOG/go-sqlmock"
 )
@@ -41,10 +42,11 @@ func TestAuthVerify_BearerAudienceMatch(t *testing.T) {
 	defer db.Close()
 	const subject = "00000000-0000-4000-8000-000000000009"
 	expectCurrentPhoneProfile(mock, subject, false)
+	expectGlobalRevocationRead(mock, subject, time.Unix(1_700_000_000, 0), false)
 	s := &Server{db: db, surfaceJWTVerifier: nil} // replaced below via the seam
 	s.surfaceVerify = func(_ context.Context, token, aud string) (map[string]any, error) {
 		if token == "good-token" && aud == "dakasa-ai" {
-			return map[string]any{"sub": subject, "collaborator_id": subject, "sid": "sess-x"}, nil
+			return map[string]any{"sub": subject, "collaborator_id": subject, "sid": "sess-x", "iat": float64(1_700_000_000)}, nil
 		}
 		return nil, errInvalidFakeToken
 	}
@@ -94,6 +96,7 @@ func TestAuthVerifySignedIdentityCannotBypassPendingPhoneProfile(t *testing.T) {
 	defer db.Close()
 	const subject = "00000000-0000-4000-8000-000000000009"
 	expectCurrentPhoneProfile(mock, subject, true)
+	expectGlobalRevocationRead(mock, subject, time.Unix(0, 0), false)
 	s := &Server{db: db, surfaceVerify: func(context.Context, string, string) (map[string]any, error) {
 		return map[string]any{"sub": subject}, nil
 	}}
@@ -120,5 +123,87 @@ func TestAuthVerify_NoCredential401(t *testing.T) {
 
 	if w.Code != http.StatusUnauthorized {
 		t.Fatalf("no credential: got %d, want 401", w.Code)
+	}
+}
+
+// ForwardAuth path 1 re-reads the JWT subject: a signed identity of a
+// collaborator who cannot sign in is refused with 401 and no identity
+// headers, so the surface stays closed (ADR-0087).
+func TestAuthVerifySignedIdentityOfCollaboratorWhoCannotSignInIs401(t *testing.T) {
+	const subject = "00000000-0000-4000-8000-000000000009"
+	for _, status := range []string{"pending_start", "on_leave", "suspended", "offboarded"} {
+		t.Run(status, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			expectCollaboratorStatusRow(mock, subject, status)
+			s := &Server{db: db, surfaceVerify: func(context.Context, string, string) (map[string]any, error) {
+				return map[string]any{"sub": subject, "collaborator_id": subject}, nil
+			}}
+			r := httptest.NewRequest(http.MethodGet, "/api/v1/auth/verify?aud=surface-ci", nil)
+			r.Header.Set("Authorization", "Bearer signed-fixture")
+			w := httptest.NewRecorder()
+			s.handleAuthVerify(w, r)
+			if w.Code != http.StatusUnauthorized || w.Header().Get("X-Auth-Kind") != "" || w.Header().Get("X-Auth-Subject") != "" {
+				t.Fatalf("status %q: got %d kind=%q, want 401 without identity", status, w.Code, w.Header().Get("X-Auth-Kind"))
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+// A surface system token carries no sub, so there is no collaborator to
+// re-read: path 1 still answers 200 system without touching the database.
+func TestAuthVerifySystemTokenWithoutSubjectIsUnchanged(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	s := &Server{db: db, surfaceVerify: func(context.Context, string, string) (map[string]any, error) {
+		return map[string]any{"aud": "dakasa-ai"}, nil
+	}}
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/auth/verify?aud=dakasa-ai", nil)
+	r.Header.Set("Authorization", "Bearer system-fixture")
+	w := httptest.NewRecorder()
+	s.handleAuthVerify(w, r)
+	if w.Code != http.StatusOK || w.Header().Get("X-Auth-Kind") != "system" || w.Header().Get("X-Auth-Subject") != "" {
+		t.Fatalf("system token: got %d kind=%q, want 200 system", w.Code, w.Header().Get("X-Auth-Kind"))
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+// ForwardAuth path 1 refuses a signed identity issued at or before a global
+// session revocation of its subject, although the collaborator is active
+// again: a reactivation does not revive a token minted before a termination
+// (ADR-0087).
+func TestAuthVerifySignedIdentityIssuedBeforeAGlobalRevocationIs401(t *testing.T) {
+	const subject = "00000000-0000-4000-8000-000000000009"
+	issuedAt := time.Unix(1_700_000_000, 0)
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	expectCollaboratorStatusRow(mock, subject, "active")
+	expectGlobalRevocationRead(mock, subject, issuedAt, true)
+	s := &Server{db: db, surfaceVerify: func(context.Context, string, string) (map[string]any, error) {
+		return map[string]any{"sub": subject, "collaborator_id": subject, "iat": float64(issuedAt.Unix())}, nil
+	}}
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/auth/verify?aud=surface-ci", nil)
+	r.Header.Set("Authorization", "Bearer signed-fixture")
+	w := httptest.NewRecorder()
+	s.handleAuthVerify(w, r)
+	if w.Code != http.StatusUnauthorized || w.Header().Get("X-Auth-Kind") != "" || w.Header().Get("X-Auth-Subject") != "" {
+		t.Fatalf("got %d kind=%q, want 401 without identity", w.Code, w.Header().Get("X-Auth-Kind"))
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }

@@ -5,6 +5,55 @@ All notable changes to yggdrasil-core are documented here.
 ## [Unreleased]
 
 ### Security
+- **A collaborator who can no longer sign in loses every session, and no
+  session, SSO reuse or OIDC mint path serves them (ADR-0087).** Only
+  `active` signs in (`collaboratorstate.CanSignIn`, the login rule).
+  `ResolveAuthSession` now refuses a session whose current collaborator is
+  `pending_start`, `on_leave`, `suspended` or `offboarded`, and every caller
+  treats it as unauthenticated: the console gate and `/auth/session` answer
+  401 and clear the cookie, `/auth/verify` answers 401, Core introspection
+  answers `{"active":false}`, and SSO session reuse
+  (`/auth/third-party/start` with `auth_request_id`, the OIDC login bridge,
+  the SAML IdP) falls back to the interactive login. The console gate JWT
+  branch and ForwardAuth path 1 re-read the JWT subject and answer 401, also
+  for a token whose `iat` is at or before a global `session_revocation` row
+  of the subject, so a reactivation does not revive a JWT minted before a
+  termination. The OIDC provider refuses, for such a subject, to honor an
+  authorization request (including one pre-bound at creation), save or
+  exchange a code (a refusal does not burn the code) and mint access or
+  refresh tokens; the refresh grant answers `invalid_grant`, the provider
+  introspection answers `{"active":false}`, userinfo answers 403, and Core's
+  `/api/v1/oidc/introspect` answers inactive for the subject's refresh
+  tokens. An authorization request is honored only while open (not consumed
+  and inside its 10 minute lifetime), so the provider callback no longer
+  mints a new code from a request whose code was exchanged, that a
+  termination closed or that expired, and a code of a consumed request does
+  not exchange. Every status writer (suspend, unsuspend, PATCH on both
+  routes, AMQP `collaborator.update`, absence start and end, offboard,
+  re-onboard, both branches of the status clock) goes through the status
+  session policy of `repository.UpdateCollaboratorTx`, which in the same
+  transaction terminates once when the new status cannot sign in (console
+  sessions and OIDC refresh tokens revoked, bound authorization requests and
+  their codes closed, one global `session_revocation` row with reason
+  `offboarded` or `admin_revoked` and metadata
+  `{source, from_status, to_status}`, one `collaborator.session.terminated`)
+  and revokes leftovers without an event on reactivation; a termination
+  failure fails the status write. Back-channel logout fires after the commit
+  on the HTTP status writers, the AMQP consumer and auto-offboards.
+  **Behavior changes:** a long absence (`on_leave`) ends sessions (vacation
+  keeps `active` and does not); re-onboarding emits a `session.terminated`;
+  every `/offboard` call emits exactly one `session.terminated`, before
+  `collaborator.offboarded`, including a repeated offboard of a collaborator
+  who is already offboarded (metadata source `offboard_repeat`), and its
+  revocation metadata no longer carries `offboard_reason`; a JWT minted
+  before any global `session_revocation` row of its subject (termination,
+  credential reset, admin revoke-sessions, password change, RP-initiated
+  logout of any client) is refused on the console gate and on ForwardAuth
+  path 1 until the relying party gets a new token; an authorization request
+  older than 10 minutes no longer resumes; every `UpdateCollaborator` runs in
+  a transaction and every refresh grant and refresh-token introspection
+  costs one extra read. No migration, no new revocation reason and no new
+  event; the `collaborator.session.terminated` payload is unchanged.
 - **BREAKING: Tartaro effective actions use one authorization predicate,
   answer a god-mode verdict and expand wildcards (ADR-0086).** The console variant of
   `GET /api/v1/collaborators/{id}/effective-tartaro-actions` now counts only

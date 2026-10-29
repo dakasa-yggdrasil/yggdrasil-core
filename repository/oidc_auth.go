@@ -73,6 +73,10 @@ func GetOIDCAuthRequestByID(ctx context.Context, db *sql.DB, id uuid.UUID) (mode
 // the code has already been consumed or has expired: an authorization code
 // is single-use and short-lived (RFC 6749 §4.1.2, §10.5), so a consumed or
 // expired code must be indistinguishable from a code that never existed.
+// A code of a consumed request is refused the same way: the request is
+// consumed after its first exchange, and a session termination consumes the
+// bound requests of the collaborator (ADR-0087), so no code saved from such
+// a request exchanges. The code row carries its own short expiry.
 // The caller enforces the single-use guarantee atomically via
 // ConsumeOIDCAuthCode on the same exchange; this filter is defense in depth.
 func GetOIDCAuthRequestByCode(ctx context.Context, db *sql.DB, code string) (model.OIDCAuthRequest, error) {
@@ -87,6 +91,7 @@ func GetOIDCAuthRequestByCode(ctx context.Context, db *sql.DB, code string) (mod
 		WHERE c.code = $1
 		  AND c.consumed_at IS NULL
 		  AND c.expires_at > NOW()
+		  AND ar.consumed_at IS NULL
 	`, code).Scan(
 		&ar.ID, &ar.ClientID, &ar.CollaboratorID, &ar.RedirectURI, pq.Array(&ar.Scopes),
 		&codeCh, &codeChMethod, &state, &nonce,

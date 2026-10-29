@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**34 decisions.**
+**35 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -44,3 +44,4 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0034](0034-bind-delivered-mfa-codes-to-canonical-contact-possession.md) | Use saved profile contacts automatically for OTP MFA | Proposed | 2026-10-08 | yggdrasil-core / collaborator authentication |
 | [0085](0085-retire-the-materialized-tartaro-actions-trait.md) | Retire the materialized tartaro_actions trait | Accepted | 2026-10-29 | yggdrasil-core / Tartaro effective actions; integration-tartaro-dakasa team reactors |
 | [0086](0086-compute-tartaro-effective-actions-with-one-predicate-god-mode-and-wildcard-expansion.md) | Compute Tartaro effective actions with one predicate, a god-mode verdict and wildcard expansion | Accepted | 2026-10-29 | yggdrasil-core / Tartaro effective actions (console and directory machine variants) |
+| [0087](0087-terminate-every-session-when-a-collaborator-can-no-longer-sign-in.md) | Terminate every session when a collaborator can no longer sign in | Accepted | 2026-10-29 | yggdrasil-core / collaborator sessions, SSO session reuse, OIDC token issuance and collaborator status writers |

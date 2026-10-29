@@ -218,6 +218,14 @@ func (f *nativeProtocolFixture) authorizeParams() (url.Values, string, string) {
 
 func (f *nativeProtocolFixture) authorize(t *testing.T, method string) (string, string, string) {
 	t.Helper()
+	_, code, nonce, verifier := f.authorizeRequest(t, method)
+	return code, nonce, verifier
+}
+
+// authorizeRequest runs authorize and also returns the id of the
+// authorization request the provider created and the login bound.
+func (f *nativeProtocolFixture) authorizeRequest(t *testing.T, method string) (string, string, string, string) {
+	t.Helper()
 	params, nonce, verifier := f.authorizeParams()
 	endpoint := f.authorizationEndpoint
 	var body url.Values
@@ -236,6 +244,11 @@ func (f *nativeProtocolFixture) authorize(t *testing.T, method string) (string, 
 	if !strings.HasPrefix(resume, f.issuer+"/authorize/callback?id=") {
 		t.Fatal("controlled authentication did not resume the real provider callback")
 	}
+	resumed, err := url.Parse(resume)
+	if err != nil {
+		t.Fatal(err)
+	}
+	requestID := resumed.Query().Get("id")
 	response = f.do(t, http.MethodGet, resume, nil, "")
 	loopback := nativeProtocolRedirect(t, response)
 	parsed, err := url.Parse(loopback)
@@ -256,10 +269,10 @@ func (f *nativeProtocolFixture) authorize(t *testing.T, method string) (string, 
 		if values.Get("error") != "" || values.Get("code") == "" || values.Get("state") != params.Get("state") {
 			t.Fatal("native callback must carry a code, the original state, and no OAuth error")
 		}
-		return values.Get("code"), nonce, verifier
+		return requestID, values.Get("code"), nonce, verifier
 	default:
 		t.Fatal("the real loopback listener did not receive the authorization callback")
-		return "", "", ""
+		return "", "", "", ""
 	}
 }
 

@@ -59,8 +59,13 @@ func (s *Server) handleCollaboratorOffboard(w http.ResponseWriter, r *http.Reque
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	st := "offboarded"
-	collab, err := repository.UpdateCollaboratorTx(r.Context(), tx, model.UpdateCollaboratorRequest{ID: id, Status: &st})
+	// §13 INTEGRATION_CONTRACT: OffboardCollaboratorTx terminates every
+	// session and refresh token, records the session_revocation row and
+	// emits collaborator.session.terminated in THIS transaction (ADR-0087),
+	// so a crash cannot leave an offboarded collaborator with live sessions.
+	// Every call emits exactly one session.terminated, including a repeated
+	// offboard of a collaborator who is already offboarded.
+	collab, err := repository.OffboardCollaboratorTx(r.Context(), tx, id)
 	if err != nil {
 		writeMappedError(w, err)
 		return
@@ -103,53 +108,6 @@ func (s *Server) handleCollaboratorOffboard(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	// §13 INTEGRATION_CONTRACT: offboarding terminates EVERY active
-	// session immediately + propagates to OIDC clients + adapter reactors
-	// via the canon session.terminated event. The session revoke + the
-	// canon event happen in the SAME tx as the offboard mutation so a
-	// crash between cannot leave a "soft-offboarded" collaborator with
-	// live sessions.
-	if _, err := tx.ExecContext(r.Context(), `
-		UPDATE auth_sessions
-		SET status = 'revoked',
-		    revoked_at = NOW(),
-		    updated_at = NOW()
-		WHERE collaborator_id = $1 AND revoked_at IS NULL
-	`, collab.ID); err != nil {
-		writeMappedError(w, fmt.Errorf("revoke sessions on offboard: %w", err))
-		return
-	}
-
-	rev, revErr := repository.InsertSessionRevocation(r.Context(), s.db, tx, repository.InsertSessionRevocationRequest{
-		CollaboratorID: collab.ID,
-		SessionJTI:     nil,
-		Reason:         repository.SessionRevocationReasonOffboarded,
-		Metadata:       map[string]any{"offboard_reason": strings.TrimSpace(req.Reason)},
-	})
-	if revErr != nil {
-		writeMappedError(w, fmt.Errorf("record offboard revocation: %w", revErr))
-		return
-	}
-	sessionPayload := map[string]any{
-		"collaborator_id": collab.ID.String(),
-		"reason":          repository.SessionRevocationReasonOffboarded,
-		"revocation_id":   rev.ID.String(),
-	}
-	if collab.PrimaryEmail != "" {
-		sessionPayload["primary_email"] = collab.PrimaryEmail
-	}
-	if _, err := repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
-		Type:           repository.EventTypeCollaboratorSessionTerminated,
-		SchemaVersion:  "v1",
-		AggregateType:  "collaborator",
-		AggregateID:    collab.ID.String(),
-		Payload:        sessionPayload,
-		IdempotencyKey: "session.terminated." + rev.ID.String(),
-	}); err != nil {
-		writeMappedError(w, fmt.Errorf("emit session.terminated on offboard: %w", err))
-		return
-	}
-
 	if err := tx.Commit(); err != nil {
 		writeMappedError(w, fmt.Errorf("commit collaborator.offboarded: %w", err))
 		return
@@ -185,10 +143,16 @@ func (s *Server) statusChangeHandler(w http.ResponseWriter, r *http.Request, new
 		writeMappedError(w, err)
 		return
 	}
+	// UpdateCollaborator commits the status change together with its session
+	// policy (ADR-0087): a status that cannot sign in terminates every session
+	// and refresh token, a reactivation revokes leftovers.
 	collab, err := repository.UpdateCollaborator(r.Context(), s.db, model.UpdateCollaboratorRequest{ID: id, Status: &newStatus})
 	if err != nil {
 		writeMappedError(w, err)
 		return
+	}
+	if !collaboratorCanSignIn(collab.Status) {
+		s.dispatchBackchannelLogoutForCollaborator(r.Context(), collab.ID)
 	}
 	payload := map[string]any{}
 	if reason := strings.TrimSpace(req.Reason); reason != "" {
@@ -267,6 +231,8 @@ func (s *Server) handleCollaboratorReOnboard(w http.ResponseWriter, r *http.Requ
 		writeMappedError(w, fmt.Errorf("commit collaborator.re_onboarded: %w", err))
 		return
 	}
+	// pending_start cannot sign in, so UpdateCollaboratorTx terminated again.
+	s.dispatchBackchannelLogoutForCollaborator(r.Context(), collab.ID)
 
 	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collab})
 }
@@ -669,6 +635,9 @@ func (s *Server) handleCollaboratorAbsenceStart(w http.ResponseWriter, r *http.R
 		return
 	}
 	// Long leaves transition active → on_leave. Vacation stays on active.
+	// on_leave cannot sign in, so the transition terminates every session in
+	// this transaction (ADR-0087); the back-channel fires after the commit.
+	leftActive := false
 	if absType != "vacation" && collab.Status == "active" {
 		st := "on_leave"
 		updated, err := repository.UpdateCollaboratorTx(r.Context(), tx, model.UpdateCollaboratorRequest{ID: id, Status: &st})
@@ -677,6 +646,7 @@ func (s *Server) handleCollaboratorAbsenceStart(w http.ResponseWriter, r *http.R
 			return
 		}
 		collab = updated
+		leftActive = true
 	}
 
 	lifecyclePayload := map[string]any{"type": absType}
@@ -725,6 +695,9 @@ func (s *Server) handleCollaboratorAbsenceStart(w http.ResponseWriter, r *http.R
 	if err := tx.Commit(); err != nil {
 		writeMappedError(w, fmt.Errorf("commit collaborator.absence_started: %w", err))
 		return
+	}
+	if leftActive {
+		s.dispatchBackchannelLogoutForCollaborator(r.Context(), collab.ID)
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{"collaborator": collab})

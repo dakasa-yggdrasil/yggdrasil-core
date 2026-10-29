@@ -103,7 +103,9 @@ func (s *Server) handleOIDCIntrospect(w http.ResponseWriter, r *http.Request) {
 
 // introspectSessionToken treats the supplied token as an opaque
 // yggdrasil session token (cookie value) and resolves it against
-// auth_sessions, then runs the §13 revocation check.
+// auth_sessions, then runs the §13 revocation check. ResolveAuthSession
+// refuses a session whose collaborator cannot sign in (ADR-0087), so such a
+// session falls through to the refresh lookup and answers inactive.
 func (s *Server) introspectSessionToken(ctx context.Context, token string) (introspectResponse, bool) {
 	session, collab, err := repository.ResolveAuthSession(ctx, s.db, token)
 	if err != nil {
@@ -156,6 +158,15 @@ func (s *Server) introspectRefreshToken(ctx context.Context, token string) (intr
 	// effectively dead too. Mirrors the back-channel logout semantics.
 	revoked, err := repository.IsSessionRevoked(ctx, s.db, r.CollaboratorID, nil, r.CreatedAt)
 	if err == nil && revoked {
+		return introspectResponse{Active: false}, true
+	}
+	// The refresh grant refuses a subject who cannot sign in (ADR-0087), so
+	// introspection answers the same for the same token: a token with no
+	// later revocation row (minted by a login that raced the status change,
+	// or older than the status policy) is inactive too. A subject whose row
+	// cannot be read is inactive as well; a pending phone profile is not a
+	// status and keeps the token active.
+	if err := repository.RequireIssuableSubject(ctx, s.db, r.CollaboratorID); errors.Is(err, repository.ErrCollaboratorCannotSignIn) || errors.Is(err, repository.ErrPhoneUnavailable) {
 		return introspectResponse{Active: false}, true
 	}
 

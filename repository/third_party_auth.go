@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/collaboratorstate"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
 )
@@ -283,7 +284,7 @@ func AuthenticateWithThirdPartyIdentity(
 			}
 			return model.Collaborator{}, model.ThirdPartyIdentity{}, model.AuthSession{}, "", err
 		}
-		if strings.ToLower(strings.TrimSpace(collaborator.Status)) != "active" {
+		if !collaboratorstate.CanSignIn(collaborator.Status) {
 			return model.Collaborator{}, model.ThirdPartyIdentity{}, model.AuthSession{}, "", ErrAuthInvalidCredentials
 		}
 
@@ -320,7 +321,7 @@ func AuthenticateWithThirdPartyIdentity(
 		}
 		return model.Collaborator{}, model.ThirdPartyIdentity{}, model.AuthSession{}, "", err
 	}
-	if strings.ToLower(strings.TrimSpace(collaborator.Status)) != "active" {
+	if !collaboratorstate.CanSignIn(collaborator.Status) {
 		return model.Collaborator{}, model.ThirdPartyIdentity{}, model.AuthSession{}, "", ErrAuthInvalidCredentials
 	}
 
