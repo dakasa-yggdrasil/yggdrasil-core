@@ -132,6 +132,9 @@ func (s CapacityStore) PrepareSourceRecoveryCleanupChallenge(ctx context.Context
 	if err = tx.QueryRowContext(ctx, `SELECT clock_timestamp()`).Scan(&now); err != nil {
 		return e, capacity.GuestQualificationRefusal("recovery-cleanup-clock", err)
 	}
+	// The epoch is compared with reflect.DeepEqual against its own JSON
+	// round-trip; a session-zone Location would never equal the decoded UTC.
+	now = now.UTC()
 	current, err := loadCapacityIntent(ctx, tx, policy.Metadata.Namespace, p, true)
 	if err != nil {
 		return e, capacity.GuestQualificationRefusal("recovery-cleanup-intent-load", err)
@@ -142,7 +145,7 @@ func (s CapacityStore) PrepareSourceRecoveryCleanupChallenge(ctx context.Context
 	if err = s.recoveryCleanupChallengeLease(policy, &current, parent, generation, fence, owner, now); err != nil {
 		return e, err
 	}
-	e = model.CapacitySourceRecoveryCleanupEpoch{Schema: "original_source_recovery_cleanup_epoch_v1", OriginalGeneration: parent.Generation, OriginalFencingToken: parent.FencingToken, OriginalLeaseOwner: parent.LeaseOwner, OriginalExecutorID: parent.ExecutorID, CurrentPolicyID: current.PolicyID.String(), CurrentPolicyChecksum: current.PolicyChecksum, Generation: current.Generation, FencingToken: current.FencingToken, LeaseOwner: current.LeaseOwner, ExecutorID: current.LeaseExecutorID, RecoveryDBObservedAt: current.UpdatedAt, LeaseExpiresAt: *current.LeaseExpiresAt, IntentSHA256: capacity.GuestRetirementSHA(current), NonceSHA256: nonce, ChallengePreparedAt: now}
+	e = model.CapacitySourceRecoveryCleanupEpoch{Schema: "original_source_recovery_cleanup_epoch_v1", OriginalGeneration: parent.Generation, OriginalFencingToken: parent.FencingToken, OriginalLeaseOwner: parent.LeaseOwner, OriginalExecutorID: parent.ExecutorID, CurrentPolicyID: current.PolicyID.String(), CurrentPolicyChecksum: current.PolicyChecksum, Generation: current.Generation, FencingToken: current.FencingToken, LeaseOwner: current.LeaseOwner, ExecutorID: current.LeaseExecutorID, RecoveryDBObservedAt: current.UpdatedAt.UTC(), LeaseExpiresAt: current.LeaseExpiresAt.UTC(), IntentSHA256: capacity.GuestRetirementSHA(current), NonceSHA256: nonce, ChallengePreparedAt: now}
 	wire, err := json.Marshal(e)
 	if err != nil {
 		return e, capacity.GuestQualificationRefusal("recovery-cleanup-challenge-encode", err)
@@ -236,30 +239,11 @@ func (s CapacityStore) CompleteSourceRecoveryCleanupRead(ctx context.Context, po
 	}
 	b := SourceFailureCleanupBody{CreatorSHA256: creator.OriginalCreatorSHA256, FailureSHA256: f.FailureSHA256, OriginalProvisioningDeadline: stored.pre.OriginalDeadline}
 	identity := CanonicalSourceEligibility{NativeCase: failed.NativeCase, GuestSource: stored.binding.GuestSourceCommit, PreregistrationID: preID, FailureSHA256: f.FailureSHA256}
-	var native struct {
-		Schema                               string          `json:"schema"`
-		OriginalCreatorSHA256                string          `json:"original_creator_sha256"`
-		Original                             json.RawMessage `json:"original"`
-		Before                               json.RawMessage `json:"before"`
-		After                                json.RawMessage `json:"after"`
-		QMPPeerPID                           int32           `json:"qmp_peer_pid"`
-		ExecutableSHA256                     string          `json:"executable_sha256"`
-		CommandLineSHA256                    string          `json:"command_line_sha256"`
-		OriginalDisk                         json.RawMessage `json:"original_disk"`
-		OriginalDiskFD                       int             `json:"original_disk_fd"`
-		OriginalDiskReadReturnedAt           time.Time       `json:"original_disk_read_returned_at"`
-		OriginalDiskDirectoryCloseReturnedAt time.Time       `json:"original_disk_directory_close_returned_at"`
-		UUID                                 json.RawMessage `json:"uuid"`
-		Status                               json.RawMessage `json:"status"`
-		StartedAt                            time.Time       `json:"started_at"`
-		ReadReturnedAt                       time.Time       `json:"read_returned_at"`
-		CloseReturnedAt                      time.Time       `json:"close_returned_at"`
-		IO                                   json.RawMessage `json:"io"`
-	}
+	var native qualificationNativeRead
 	// Decode the same original native schema without importing provider package
 	// (which already imports repository). Exact original stable identity is
 	// checked against the immutable original native row, all refreshed IO is real.
-	if capacity.DecodeGuestLifecycle(nativeWire, &native) != nil || native.Schema != "core_independent_original_qemu_read_v1" || native.OriginalCreatorSHA256 != b.CreatorSHA256 || native.StartedAt.IsZero() || native.ReadReturnedAt.Before(native.StartedAt) || native.CloseReturnedAt.Before(native.ReadReturnedAt) || !capacity.Fresh(native.CloseReturnedAt, now, p.MaxEvidenceAgeSeconds) {
+	if decodeQualificationNativeRead(nativeWire, &native) != nil || native.Schema != "core_independent_original_qemu_read_v1" || native.OriginalCreatorSHA256 != b.CreatorSHA256 || native.StartedAt.IsZero() || native.ReadReturnedAt.Before(native.StartedAt) || native.CloseReturnedAt.Before(native.ReadReturnedAt) || !capacity.Fresh(native.CloseReturnedAt, now, p.MaxEvidenceAgeSeconds) {
 		return out, ErrCapacityConflict
 	}
 	var originalNativeWire []byte
