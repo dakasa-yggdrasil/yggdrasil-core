@@ -186,7 +186,7 @@ func TestCapacityGuestOriginalNativeHoldCorpusPostgres(t *testing.T) {
 			}
 			var registrationWire []byte
 			var registration model.CapacityGuestOriginalProvisioningRegistration
-			if err := tx.QueryRowContext(ctx, `SELECT registration_wire FROM public.capacity_vm_original_enrollments WHERE preregistration_id=$1`, stored.pre.PreregistrationID).Scan(&registrationWire); err != nil || capacity.DecodeGuestLifecycle(registrationWire, &registration) != nil || capacity.GuestOriginalRegistration(p, stored.binding, stored.member, stored.witness, registration, registration.Result.OriginalReturnedAt) != nil {
+			if err := tx.QueryRowContext(ctx, `SELECT registration_wire FROM public.capacity_vm_original_enrollments WHERE preregistration_id=$1`, stored.pre.PreregistrationID).Scan(&registrationWire); err != nil || capacity.DecodeGuestLifecycle(registrationWire, &registration) != nil || capacity.GuestOriginalRegistration(p, stored.binding, stored.member, stored.witness, registration, receipt.RecordedAt) != nil {
 				t.Fatal("actual optional original placement/bootstrap bytes incomplete", err)
 			}
 			enrollments[n], registrationSHAs[n] = receipt, registrationSHA

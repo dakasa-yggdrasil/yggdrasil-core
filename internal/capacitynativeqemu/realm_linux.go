@@ -1045,7 +1045,7 @@ func sourceFencePrivateIntent(ctx context.Context, store repository.CapacityStor
 	if err := store.DB.QueryRowContext(ctx, `SELECT intent FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&wire); err != nil {
 		return intent, err
 	}
-	if closedJSON(wire, &intent) != nil || intent.Namespace != policy.Metadata.Namespace || intent.PolicyID != policy.ID || intent.PolicyChecksum != policy.Checksum || intent.Environment != p.Environment || intent.Domain != p.Domain || intent.Dimension != p.Dimension || intent.Generation < 1 || intent.FencingToken < 1 || ctx.Err() != nil {
+	if repository.DecodeQualificationCapacityIntent(wire, &intent) != nil || intent.Namespace != policy.Metadata.Namespace || intent.PolicyID != policy.ID || intent.PolicyChecksum != policy.Checksum || intent.Environment != p.Environment || intent.Domain != p.Domain || intent.Dimension != p.Dimension || intent.Generation < 1 || intent.FencingToken < 1 || ctx.Err() != nil {
 		return intent, ErrOriginalUnknown
 	}
 	return intent, nil

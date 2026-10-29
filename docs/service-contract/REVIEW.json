@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "650ae93b28202cee15f0d3a43b55ce9f456d923d30734cabdaf816581a4e11dd",
+  "source_inventory_sha256": "777042d400d2bae282b1e936b0bb025640a2f24fc42b00e3205038daac51874b",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -804,5 +804,9 @@
   "qualification_single_observe_settle_review_20261029": {
     "scope": "Qualification-only canonical compensation settle consumes the single write-once signed cleanup read through a read-only reader that repeats Observe's locks, preconditions, eligibility, owned physical and body gates, verifies the stored signature and freshness, and binds every proof field; the pre-settlement hook remains the only Observe, so Settle and Confirm use the same stored proof. Production settle and confirm validators are unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
     "source_inventory_sha256": "650ae93b28202cee15f0d3a43b55ce9f456d923d30734cabdaf816581a4e11dd"
+  },
+  "qualification_source_fence_intent_review_20261029": {
+    "scope": "Qualification-only source fence reads the private capacity intent through the closed qualification intent decoder instead of the Guest lifecycle decoder that refused its null native_pod_baseline, and the readonly native corpus tests validate stored registrations at their receipt record time. Shared validators unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
+    "source_inventory_sha256": "777042d400d2bae282b1e936b0bb025640a2f24fc42b00e3205038daac51874b"
   }
 }

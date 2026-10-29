@@ -139,31 +139,100 @@ func TestQualificationCapacityIntentDeclarationMatchesModel(t *testing.T) {
 // qualification decoder, and recoveryCleanupProof reads the unredacted row
 // instead of the public, lease-redacting Observe.
 //
-// Scope of the misuse guard: it is syntactic and covers only this fixture
-// package. Within a function it marks identifiers declared with
-// `var x model.CapacityIntent` or `var x *model.CapacityIntent`, and
-// identifiers assigned from `model.CapacityIntent{}`, `&model.CapacityIntent{}`
-// or `new(model.CapacityIntent)`, then refuses DecodeGuestLifecycle(_, &x) or
-// DecodeGuestLifecycle(_, x) on them. It does not resolve types through
-// go/types, so struct fields and values of other origins are not seen, and
-// internal/capacitynativeqemu (whose realm_linux.go is pinned by the LAB
-// overlay and still decodes the private intent with the shared decoder) is
-// not scanned.
+// Scope of the misuse guard: it is syntactic and covers the fixture package
+// and internal/capacitynativeqemu. Within a function it marks identifiers
+// declared with `var x model.CapacityIntent` or `var x *model.CapacityIntent`,
+// and identifiers assigned from `model.CapacityIntent{}`,
+// `&model.CapacityIntent{}` or `new(model.CapacityIntent)`, then refuses a
+// refused decoder called as decoder(_, &x) or decoder(_, x) on them. It does
+// not resolve types through go/types, so struct fields and values of other
+// origins are not seen.
 func TestNativeFixtureIntentRowsUseQualificationDecoder(t *testing.T) {
-	type site struct{ file, function string }
-	expected := map[site]int{
+	expected := map[nativeIntentSite]int{
 		{"canonical_compensation.go", "prepareCanonicalSourceChild"}:   1,
 		{"postloss_reissue.go", "reissueCanonicalPostlossChild"}:       1,
 		{"source_compensation.go", "finishOriginalSourceCompensation"}: 1,
 		{"canonical_recovery_cleanup.go", "recoveryCleanupProof"}:      1,
 	}
-	fset := token.NewFileSet()
-	parsed := closedGuardParseDir(t, fset, "../cmd/native-guest-lifecycle-fixture")
-	if len(parsed) == 0 {
-		t.Fatal("no fixture files scanned")
+	found, functions := nativeIntentDecoderScan(t, "../cmd/native-guest-lifecycle-fixture", "DecodeGuestLifecycle")
+	if !functions["recoveryCleanupProof"] {
+		t.Fatal("recoveryCleanupProof not found")
 	}
-	found := map[site]int{}
-	recoveryProofSeen := false
+	if !reflect.DeepEqual(found, expected) {
+		t.Fatalf("qualification intent decoder call sites differ:\n got %v\nwant %v", found, expected)
+	}
+}
+
+// internal/capacitynativeqemu reads the private source-fence capacity_intents
+// row only through the closed qualification decoder. Its package-local
+// closedJSON routes a struct pointer to the shared Guest lifecycle decoder,
+// which refuses the stored null native pod baseline, so it is refused too.
+func TestNativeQEMUIntentRowsUseQualificationDecoder(t *testing.T) {
+	expected := map[nativeIntentSite]int{
+		{"realm_linux.go", "sourceFencePrivateIntent"}: 1,
+	}
+	found, functions := nativeIntentDecoderScan(t, "../internal/capacitynativeqemu", "DecodeGuestLifecycle", "closedJSON")
+	if !functions["sourceFencePrivateIntent"] || !functions["closedJSON"] {
+		t.Fatal("sourceFencePrivateIntent or closedJSON not found")
+	}
+	if !reflect.DeepEqual(found, expected) {
+		t.Fatalf("qualification intent decoder call sites differ:\n got %v\nwant %v", found, expected)
+	}
+	// The decoder guard above is syntactic. Independently of how a new reader
+	// would decode, only sourceFencePrivateIntent may name the table at all.
+	readers := nativeIntentSQLReaders(t, "../internal/capacitynativeqemu")
+	if want := map[nativeIntentSite]int{{"realm_linux.go", "sourceFencePrivateIntent"}: 1}; !reflect.DeepEqual(readers, want) {
+		t.Fatalf("capacity_intents readers differ:\n got %v\nwant %v", readers, want)
+	}
+}
+
+// nativeIntentSQLReaders returns, per function of the non-test Go files of
+// dir, the number of string literals that mention capacity_intents. A literal
+// outside any function body is reported under the function name "".
+func nativeIntentSQLReaders(t *testing.T, dir string) map[nativeIntentSite]int {
+	t.Helper()
+	fset := token.NewFileSet()
+	parsed := closedGuardParseDir(t, fset, dir)
+	if len(parsed) == 0 {
+		t.Fatalf("no files scanned in %s", dir)
+	}
+	readers := map[nativeIntentSite]int{}
+	for file, f := range parsed {
+		for _, decl := range f.Decls {
+			name := ""
+			if fn, ok := decl.(*ast.FuncDecl); ok {
+				name = fn.Name.Name
+			}
+			ast.Inspect(decl, func(n ast.Node) bool {
+				if lit, ok := n.(*ast.BasicLit); ok && lit.Kind == token.STRING && strings.Contains(lit.Value, "capacity_intents") {
+					readers[nativeIntentSite{file, name}]++
+				}
+				return true
+			})
+		}
+	}
+	return readers
+}
+
+type nativeIntentSite struct{ file, function string }
+
+// nativeIntentDecoderScan parses the non-test Go files of dir, fails on any
+// refused decoder applied to a capacity intent identifier or value, and
+// returns the DecodeQualificationCapacityIntent call sites and the set of
+// function names seen.
+func nativeIntentDecoderScan(t *testing.T, dir string, refused ...string) (map[nativeIntentSite]int, map[string]bool) {
+	t.Helper()
+	refusedNames := map[string]bool{}
+	for _, name := range refused {
+		refusedNames[name] = true
+	}
+	fset := token.NewFileSet()
+	parsed := closedGuardParseDir(t, fset, dir)
+	if len(parsed) == 0 {
+		t.Fatalf("no files scanned in %s", dir)
+	}
+	found := map[nativeIntentSite]int{}
+	functions := map[string]bool{}
 	for file, f := range parsed {
 		alias := closedGuardRepositoryImport(f)
 		for _, decl := range f.Decls {
@@ -171,6 +240,7 @@ func TestNativeFixtureIntentRowsUseQualificationDecoder(t *testing.T) {
 			if !ok || fn.Body == nil {
 				continue
 			}
+			functions[fn.Name.Name] = true
 			intents := map[string]bool{}
 			ast.Inspect(fn.Body, func(n ast.Node) bool {
 				switch v := n.(type) {
@@ -197,46 +267,41 @@ func TestNativeFixtureIntentRowsUseQualificationDecoder(t *testing.T) {
 				}
 				return true
 			})
-			if fn.Name.Name == "recoveryCleanupProof" {
-				recoveryProofSeen = true
-			}
 			ast.Inspect(fn.Body, func(n ast.Node) bool {
 				call, ok := n.(*ast.CallExpr)
 				if !ok {
 					return true
 				}
-				sel, ok := call.Fun.(*ast.SelectorExpr)
-				if !ok {
-					return true
+				var callee string
+				switch fun := call.Fun.(type) {
+				case *ast.SelectorExpr:
+					callee = fun.Sel.Name
+					if fn.Name.Name == "recoveryCleanupProof" && callee == "Observe" {
+						t.Fatalf("%s: recoveryCleanupProof calls the lease-redacting Observe", file)
+					}
+					if x, ok := fun.X.(*ast.Ident); ok && alias != "" && x.Name == alias && callee == "DecodeQualificationCapacityIntent" {
+						found[nativeIntentSite{file, fn.Name.Name}]++
+					}
+				case *ast.Ident:
+					callee = fun.Name
 				}
-				if fn.Name.Name == "recoveryCleanupProof" && sel.Sel.Name == "Observe" {
-					t.Fatalf("%s: recoveryCleanupProof calls the lease-redacting Observe", file)
-				}
-				if x, ok := sel.X.(*ast.Ident); ok && alias != "" && x.Name == alias && sel.Sel.Name == "DecodeQualificationCapacityIntent" {
-					found[site{file, fn.Name.Name}]++
-				}
-				if sel.Sel.Name == "DecodeGuestLifecycle" && len(call.Args) == 2 {
+				if refusedNames[callee] && len(call.Args) == 2 {
 					target := call.Args[1]
 					if u, ok := target.(*ast.UnaryExpr); ok && u.Op == token.AND {
 						target = u.X
 					}
 					if id, ok := target.(*ast.Ident); ok && intents[id.Name] {
-						t.Fatalf("%s:%s: capacity intent row decoded by the shared Guest lifecycle decoder", file, fn.Name.Name)
+						t.Fatalf("%s:%s: capacity intent row decoded by %s", file, fn.Name.Name, callee)
 					}
 					if nativeFixtureIsCapacityIntentValue(call.Args[1]) {
-						t.Fatalf("%s:%s: capacity intent value decoded by the shared Guest lifecycle decoder", file, fn.Name.Name)
+						t.Fatalf("%s:%s: capacity intent value decoded by %s", file, fn.Name.Name, callee)
 					}
 				}
 				return true
 			})
 		}
 	}
-	if !recoveryProofSeen {
-		t.Fatal("recoveryCleanupProof not found")
-	}
-	if !reflect.DeepEqual(found, expected) {
-		t.Fatalf("qualification intent decoder call sites differ:\n got %v\nwant %v", found, expected)
-	}
+	return found, functions
 }
 
 // nativeFixtureIsCapacityIntentValue reports model.CapacityIntent{...},

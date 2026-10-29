@@ -271,7 +271,7 @@ func TestCapacityGuestOriginalNativeCorpusPostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 		var registration model.CapacityGuestOriginalProvisioningRegistration
-		if capacity.DecodeGuestLifecycle(registrationWire, &registration) != nil || capacity.GuestOriginalRegistration(p, stored.binding, stored.member, stored.witness, registration, registration.Result.OriginalReturnedAt) != nil {
+		if capacity.DecodeGuestLifecycle(registrationWire, &registration) != nil || capacity.GuestOriginalRegistration(p, stored.binding, stored.member, stored.witness, registration, receipt.RecordedAt) != nil {
 			t.Fatal("real bootstrap/source placement cannot be replaced by a completeness claim")
 		}
 		readWire := guestOriginalNativeWire(t, tx, ctx, `SELECT original_wire,return_sha256,original_record=convert_from(original_wire,'UTF8')::jsonb FROM public.capacity_guest_qualification_native_source_returns WHERE preregistration_id=$1 AND native_stage='native_read' AND return_sha256=$2`, stored.pre.PreregistrationID, resource.CoreNativeOriginalReadSHA256)
