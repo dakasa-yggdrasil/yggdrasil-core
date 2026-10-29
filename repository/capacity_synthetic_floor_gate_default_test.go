@@ -176,7 +176,7 @@ func runSyntheticRepositoryGate(t *testing.T, rootTest, childTest string) bool {
 		t.Fatal("local synthetic database required")
 	}
 	host, socket := parsed.Hostname(), parsed.Query().Get("host")
-	if host != "localhost" && host != "127.0.0.1" && host != "::1" && !(host == "" && strings.HasPrefix(socket, "/")) {
+	if !pg16LocalDSN(host, socket) {
 		t.Fatal("remote synthetic database refused")
 	}
 	admin, err := sql.Open("postgres", dsn)
@@ -186,7 +186,7 @@ func runSyntheticRepositoryGate(t *testing.T, rootTest, childTest string) bool {
 	defer admin.Close()
 	var addr string
 	var major int
-	if err = admin.QueryRow(`SELECT COALESCE(inet_server_addr()::text,'unix'), current_setting('server_version_num')::int / 10000`).Scan(&addr, &major); err != nil || major != 16 || !(addr == "unix" || strings.HasPrefix(addr, "127.") || addr == "::1") {
+	if err = admin.QueryRow(`SELECT COALESCE(inet_server_addr()::text,'unix'), current_setting('server_version_num')::int / 10000`).Scan(&addr, &major); err != nil || major != 16 || !pg16LocalServer(host, addr) {
 		t.Fatal("actual local PG16 owner required")
 	}
 	name := "recovery_fixture_" + strings.ReplaceAll(uuid.NewString(), "-", "")

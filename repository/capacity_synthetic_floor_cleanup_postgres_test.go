@@ -31,7 +31,7 @@ func TestFloorFixtureDatabaseCleanupPostgres(t *testing.T) {
 		t.Fatal("local DSN required")
 	}
 	host, socket := u.Hostname(), u.Query().Get("host")
-	if host != "localhost" && host != "127.0.0.1" && host != "::1" && !(host == "" && strings.HasPrefix(socket, "/")) {
+	if !pg16LocalDSN(host, socket) {
 		t.Fatal("remote database refused")
 	}
 	admin, err := sql.Open("postgres", dsn)
@@ -41,7 +41,7 @@ func TestFloorFixtureDatabaseCleanupPostgres(t *testing.T) {
 	t.Cleanup(func() { _ = admin.Close() })
 	var addr string
 	var major int
-	if err = admin.QueryRow(`SELECT COALESCE(inet_server_addr()::text,'unix'), current_setting('server_version_num')::int / 10000`).Scan(&addr, &major); err != nil || major != 16 || !(addr == "unix" || strings.HasPrefix(addr, "127.") || addr == "::1") {
+	if err = admin.QueryRow(`SELECT COALESCE(inet_server_addr()::text,'unix'), current_setting('server_version_num')::int / 10000`).Scan(&addr, &major); err != nil || major != 16 || !pg16LocalServer(host, addr) {
 		t.Fatal("actual local PG16 required")
 	}
 	name := "recovery_fixture_" + strings.ReplaceAll(uuid.NewString(), "-", "")
