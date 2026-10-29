@@ -16,7 +16,15 @@ Two paths, both converging on a session row + bearer token after MFA:
    redirect to the provider → `/api/v1/auth/third-party/callback/
    <provider>` → session issued. Provider config lives in
    `third_party_auth_provider` table (see
-   [docs/auth-providers/](./auth-providers/)).
+   [docs/auth-providers/](./auth-providers/)). The callback takes the
+   provider, subject and email only from the provider's own token
+   exchange and userinfo, after verifying the signed state cookie. No
+   route opens a session from an identity the caller asserts:
+   `POST /api/v1/auth/third-party/login`, which took provider, subject,
+   email and `auto_link_by_email` from the request body and could link
+   and sign in any active collaborator with MFA enrolled, is removed and
+   answers 404 (ADR-0088). Until a Core without it runs in production,
+   the production ingress refuses that path with 403.
 
 MFA enrollment is mandatory. If a collaborator has no MFA enrollment,
 auth paths return `mfa_not_enrolled` and the console guides the user

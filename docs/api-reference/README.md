@@ -92,12 +92,17 @@ Supported `kind` values (the authoritative list is the switch in
 | POST | `/api/v1/auth/login` | Password then authenticator/recovery code or automatic email/SMS OTP from saved profile contacts; HTTP202 is the MFA stage, HTTP200 completes login |
 | GET | `/api/v1/auth/mfa/contact/options` | Automatic canonical contact availability (read-only owner link/session) |
 | POST | `/api/v1/auth/mfa/contact/login/begin` | Verify password and request a login OTP |
-| POST | `/api/v1/auth/third-party/login` | Third-party identity exchange |
 | GET | `/api/v1/auth/third-party/start/{provider}` | OIDC start |
 | GET | `/api/v1/auth/third-party/callback/{provider}` | OIDC callback |
 
 See [contact OTP MFA](../mfa-contact-otp.md) for exact request/response
 fields, delivery configuration and recovery boundaries.
+
+Third-party login is the browser flow only: start redirects to the
+provider and the callback reads the identity from the provider's own
+token exchange and userinfo. `POST /api/v1/auth/third-party/login`, which
+opened a session from a provider, subject and e-mail taken from the
+request body, is removed and answers 404 (ADR-0088).
 
 ## See also
 
