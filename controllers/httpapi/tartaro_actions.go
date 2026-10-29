@@ -59,8 +59,9 @@ type consoleEffectiveTartaroActionsResponse struct {
 
 // handleEffectiveTartaroActions serves the console variant of the live
 // Tartaro authorization read. It applies the same membership predicate as the
-// directory machine variant (computeAuthorizedTartaroActions), so the two
-// variants answer the same action set for the same collaborator.
+// directory machine variant (computeAuthorizedTartaroActions) and the same
+// active-record policy, so the two variants answer the same action set and
+// the same god-mode verdict for the same collaborator.
 func (s *Server) handleEffectiveTartaroActions(w http.ResponseWriter, r *http.Request) {
 	collabIDStr := r.PathValue("id")
 	if _, err := uuid.Parse(collabIDStr); err != nil {
@@ -71,6 +72,25 @@ func (s *Server) handleEffectiveTartaroActions(w http.ResponseWriter, r *http.Re
 	collab, err := getCollaboratorCached(r.Context(), s.db, collabIDStr)
 	if err != nil {
 		writeMappedError(w, err)
+		return
+	}
+
+	// This route is the live authorization source of the Tartaro panel
+	// services, which call it with the human's own token. A collaborator who
+	// is not active (pending_start, on_leave, suspended, offboarded) confers
+	// no Tartaro authority, even while a token minted before the status
+	// change is still valid: the answer is empty sets and no god mode,
+	// without walking memberships or grants. The directory variant reads the
+	// same collaborator as absent (404), which its consumers also treat as no
+	// action. The console keeps the 200 because a console caller can already
+	// read that the collaborator exists.
+	if !tartaroCollaboratorActive(collab) {
+		writeJSON(w, http.StatusOK, consoleEffectiveTartaroActionsResponse{
+			CollaboratorID:         collab.ID.String(),
+			EffectiveViaTeams:      []effectivePerTeam{},
+			ComputedTartaroActions: []string{},
+			GodMode:                false,
+		})
 		return
 	}
 
@@ -97,7 +117,7 @@ func (s *Server) handleEffectiveTartaroActions(w http.ResponseWriter, r *http.Re
 // own console god mode (repository.ResolveYggdrasilPermissions) is a separate,
 // unchanged rule.
 func tartaroGodMode(collaborator model.Collaborator) bool {
-	if collaborator.Status != "active" {
+	if !tartaroCollaboratorActive(collaborator) {
 		return false
 	}
 	switch value := collaborator.Traits["yggdrasil_admin"].(type) {
@@ -108,6 +128,15 @@ func tartaroGodMode(collaborator model.Collaborator) bool {
 	default:
 		return false
 	}
+}
+
+// tartaroCollaboratorActive is the active-record policy of both
+// effective-actions variants: only a collaborator whose status is exactly
+// "active" can hold Tartaro actions or god mode. The directory variant
+// applies it through loadActiveDirectoryCollaborator, the console variant in
+// handleEffectiveTartaroActions, and tartaroGodMode for the verdict.
+func tartaroCollaboratorActive(collaborator model.Collaborator) bool {
+	return collaborator.Status == "active"
 }
 
 // effectiveTartaroActionsResult is the ground-truth computation of one

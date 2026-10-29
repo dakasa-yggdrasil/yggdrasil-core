@@ -196,8 +196,6 @@ func TestConsoleEffectiveActionsAnswerNoGodModeForAnInactiveAdmin(t *testing.T) 
 	id := uuid.New()
 	mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
 		WillReturnRows(tartaroCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "suspended", `{"yggdrasil_admin":true}`))
-	mock.ExpectQuery(authorizationMembershipsQuery).WithArgs(id).
-		WillReturnRows(sqlmock.NewRows(authorizationMembershipColumns()))
 
 	recorder := serveConsoleEffectiveTartaroActions(&Server{db: db, logger: zap.NewNop()}, id.String())
 
@@ -210,6 +208,77 @@ func TestConsoleEffectiveActionsAnswerNoGodModeForAnInactiveAdmin(t *testing.T) 
 	}
 	if err := mock.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
+	}
+}
+
+func TestConsoleEffectiveActionsAnswerNoActionForACollaboratorWhoIsNotActive(t *testing.T) {
+	// The console variant is the live authorization source of the Tartaro
+	// panel services, called with the human's own token, which outlives a
+	// status change. A collaborator who is not active must get no action from
+	// it, exactly like the directory variant, which reads them as absent.
+	// Only the collaborator is read: the mock carries no membership, grant or
+	// catalog expectation, so a walk would hit an unexpected query, fail the
+	// read with a non-200 status and leave the body without the empty sets.
+	for _, status := range []string{"pending_start", "on_leave", "suspended", "offboarded", "Active", ""} {
+		t.Run("status "+status, func(t *testing.T) {
+			db, mock := newTartaroActionsMock(t)
+			id := uuid.New()
+			mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
+				WillReturnRows(tartaroCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, status,
+					`{"department":"finance","tartaro_actions":["tartaro:write_financeiro"]}`))
+
+			recorder := serveConsoleEffectiveTartaroActions(&Server{db: db, logger: zap.NewNop()}, id.String())
+
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+			}
+			want := `{"collaborator_id":"` + id.String() + `","effective_via_teams":[],"computed_tartaro_actions":[],"god_mode":false}`
+			if got := strings.TrimSpace(recorder.Body.String()); got != want {
+				t.Fatalf("body=%s, want %s", got, want)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestEffectiveActionsVariantsGiveNoActionToASuspendedCollaboratorWithGrants(t *testing.T) {
+	// Parity for a suspended non-admin whose team still grants Tartaro
+	// actions: the console variant answers empty sets and no god mode, and the
+	// directory variant answers 404 without reading memberships. Neither
+	// variant walks the grants of a collaborator who is not active.
+	id := uuid.New()
+
+	consoleDB, consoleMock := newTartaroActionsMock(t)
+	consoleMock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
+		WillReturnRows(tartaroCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "suspended", `{}`))
+	console := serveConsoleEffectiveTartaroActions(&Server{db: consoleDB, logger: zap.NewNop()}, id.String())
+	if console.Code != http.StatusOK {
+		t.Fatalf("console status=%d body=%s", console.Code, console.Body.String())
+	}
+	body := decodeDirectoryBody(t, console)
+	if got := fmt.Sprint(body["computed_tartaro_actions"]); got != "[]" {
+		t.Fatalf("console computed_tartaro_actions=%s", got)
+	}
+	if got := fmt.Sprint(body["effective_via_teams"]); got != "[]" {
+		t.Fatalf("console effective_via_teams=%s", got)
+	}
+	if body["god_mode"] != false {
+		t.Fatalf("console god_mode=%v", body["god_mode"])
+	}
+	if err := consoleMock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("console variant: %v", err)
+	}
+
+	directoryDB, directoryMock := newTartaroActionsMock(t)
+	directoryMock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
+		WillReturnRows(tartaroCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "suspended", `{}`))
+	if _, reason, err := (&Server{db: directoryDB, logger: zap.NewNop()}).loadActiveDirectoryCollaborator(context.Background(), id.String()); reason != "inactive" || err == nil {
+		t.Fatalf("directory variant loaded a suspended collaborator: reason=%q err=%v", reason, err)
+	}
+	if err := directoryMock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("directory variant: %v", err)
 	}
 }
 
