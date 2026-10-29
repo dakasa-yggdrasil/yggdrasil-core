@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "413ad1ddd4e19134eb55940ee5040d0de3e8390d352375a660608bd82b02948b",
+  "source_inventory_sha256": "100e08b070439e65007ba9a8875cae685a6a8402ac29a8f26369e218fccd9063",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -792,5 +792,9 @@
   "qualification_native_read_decode_review_20261029": {
     "scope": "Qualification-only closed decoder for the core_independent_original_qemu_read_v1 wire shared by recovery cleanup and postloss fresh reads: the shared Guest lifecycle decoder treated json.RawMessage members as arrays and refused every real wire. Every member is required once and non-null, unknown, duplicate and trailing data are refused, and raw members keep their typed JSON kind; recovery epoch PostgreSQL times are normalized to UTC before their JSON round-trip comparison. Shared production validators are unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
     "source_inventory_sha256": "413ad1ddd4e19134eb55940ee5040d0de3e8390d352375a660608bd82b02948b"
+  },
+  "qualification_source_cleanup_closed_decode_review_20261029": {
+    "scope": "Qualification-only closed decoding of the signed source failure cleanup body and physical record, whose qemu and original_disk members the shared Guest lifecycle decoder refused as arrays; the native read decoder now shares the same closed helper. Members are required once, non-null and in their typed JSON kind, and the raw qemu and original_disk subtrees are closed against their producer shapes. No production-reachable site was found or changed; shared validators are unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
+    "source_inventory_sha256": "100e08b070439e65007ba9a8875cae685a6a8402ac29a8f26369e218fccd9063"
   }
 }

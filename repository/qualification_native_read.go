@@ -3,14 +3,11 @@
 package repository
 
 import (
-	"bytes"
 	"encoding/json"
 	"fmt"
 	"reflect"
 	"strings"
 	"time"
-
-	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 )
 
 // qualificationNativeRead mirrors the wire of the provider's
@@ -50,10 +47,8 @@ var qualificationNativeReadRawShapes = map[string]byte{
 	"io":            '[',
 }
 
-// The literal member set of the wire, computed once. NativeCanonicalObject
-// only reads it, so sharing it across calls is safe.
-var qualificationNativeReadAllowed = qualificationNativeReadMembers()
-
+// The literal member set of the wire (the closed decoder derives the same set
+// from the struct; the tests compare it with the real Core wire).
 func qualificationNativeReadMembers() map[string]bool {
 	members := map[string]bool{}
 	for _, f := range reflect.VisibleFields(reflect.TypeOf(qualificationNativeRead{})) {
@@ -65,36 +60,16 @@ func qualificationNativeReadMembers() map[string]bool {
 // decodeQualificationNativeRead is the qualification-only closed decoder for
 // that wire. The shared Guest lifecycle decoder treats json.RawMessage as an
 // ordinary slice and so refuses every object member; it stays unchanged.
-// Here every one of the literal members is required exactly once and non-null,
+// Every one of the literal members is required exactly once and non-null,
 // unknown, duplicate (at any depth) and trailing data are refused, and each raw
-// member must have its typed wire's JSON kind before the struct is decoded.
+// member must have its typed wire's JSON kind before the struct is decoded
+// (decodeQualificationClosed).
 func decodeQualificationNativeRead(wire []byte, out *qualificationNativeRead) error {
-	refused := fmt.Errorf("closed qualification native read required")
-	if out == nil || len(wire) == 0 || len(wire) > capacity.GuestBootstrapLimit {
-		return refused
+	if out == nil {
+		return fmt.Errorf("closed qualification native read required")
 	}
-	allowed := qualificationNativeReadAllowed
-	members, err := capacity.NativeCanonicalObject(wire, allowed)
-	if err != nil || len(members) != len(allowed) {
-		return refused
+	if decodeQualificationClosed(wire, out, qualificationNativeReadRawShapes, nil) != nil {
+		return fmt.Errorf("closed qualification native read required")
 	}
-	for name, raw := range members {
-		value := bytes.TrimSpace(raw)
-		// The provider always populates every member (io included): a nil IO
-		// slice marshals as null and is never valid refreshed evidence.
-		if len(value) == 0 || bytes.Equal(value, []byte("null")) {
-			return refused
-		}
-		if shape, ok := qualificationNativeReadRawShapes[name]; ok && value[0] != shape {
-			return refused
-		}
-	}
-	var decoded qualificationNativeRead
-	// Duplicate members inside the raw subtrees, trailing values and typed
-	// scalar mismatches are refused by the shared native decoder.
-	if capacity.DecodeNativeCapacity(json.RawMessage(wire), &decoded) != nil {
-		return refused
-	}
-	*out = decoded
 	return nil
 }

@@ -193,7 +193,7 @@ func canonicalCleanupHistory(ctx context.Context, s CapacityStore, tx *sql.Tx, p
 		return stored, b, t, err
 	}
 	body, err := canonicalSignedBody(ctx, s, stored, aw)
-	if err != nil || capacity.DecodeGuestLifecycle(body, &b) != nil {
+	if err != nil || decodeSourceFailureCleanupBody(body, &b) != nil {
 		return stored, b, t, ErrCapacityConflict
 	}
 	if len(tw) > 0 {
@@ -595,7 +595,7 @@ func (s CapacityStore) canonicalOwnedPhysicalTx(ctx context.Context, tx *sql.Tx,
 		return a, b, t, err
 	}
 	var f SourceFailureCleanupPhysical
-	if capacity.DecodeGuestLifecycle(physicalWire, &f) != nil || capacity.BusinessCreationSHA256(physicalWire) != t.PhysicalSHA256 || f.AuthoritySHA256 != a.SourceAuthoritySHA256 || f.CoreSource != e.CoreSource || f.GuestSource != e.GuestSource || f.ResourceID != b.ResourceID || !reflect.DeepEqual(f.QEMU, b.QEMU) || !reflect.DeepEqual(f.OriginalDisk, b.OriginalDisk) || f.OriginalSignal != 9 || f.OriginalWaitCode != -9 || !f.OriginalStderrEOF || f.AbsenceClass != "ENOENT" || f.PositiveQuiescence || f.ProductionQualified {
+	if decodeSourceFailureCleanupPhysical(physicalWire, &f) != nil || capacity.BusinessCreationSHA256(physicalWire) != t.PhysicalSHA256 || f.AuthoritySHA256 != a.SourceAuthoritySHA256 || f.CoreSource != e.CoreSource || f.GuestSource != e.GuestSource || f.ResourceID != b.ResourceID || !reflect.DeepEqual(f.QEMU, b.QEMU) || !reflect.DeepEqual(f.OriginalDisk, b.OriginalDisk) || f.OriginalSignal != 9 || f.OriginalWaitCode != -9 || !f.OriginalStderrEOF || f.AbsenceClass != "ENOENT" || f.PositiveQuiescence || f.ProductionQualified {
 		return a, b, t, ErrCapacityConflict
 	}
 	if b.Recovery != nil {

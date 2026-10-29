@@ -127,7 +127,7 @@ func (s CapacityStore) ValidateSourceFailureCleanupTerminalTx(ctx context.Contex
 	var signedTerminal SourceFailureCleanupAuthority
 	var b SourceFailureCleanupBody
 	var f SourceFailureCleanupPhysical
-	if capacity.DecodeGuestLifecycle(aw, &a) != nil || capacity.DecodeGuestLifecycle(a.Body, &b) != nil || capacity.DecodeGuestLifecycle(pw, &f) != nil || capacity.DecodeGuestLifecycle(tw, &signedTerminal) != nil || capacity.DecodeGuestLifecycle(signedTerminal.Body, &out) != nil {
+	if capacity.DecodeGuestLifecycle(aw, &a) != nil || decodeSourceFailureCleanupBody(a.Body, &b) != nil || decodeSourceFailureCleanupPhysical(pw, &f) != nil || capacity.DecodeGuestLifecycle(tw, &signedTerminal) != nil || capacity.DecodeGuestLifecycle(signedTerminal.Body, &out) != nil {
 		return out, ErrCapacityConflict
 	}
 	switch b.NativeCase {

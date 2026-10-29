@@ -153,7 +153,7 @@ func (s CapacityStore) sourceFloorCapacityTransaction(ctx context.Context, polic
 	var authorityWire []byte
 	if err=tx.QueryRowContext(ctx,`SELECT authority_wire FROM public.capacity_source_failure_cleanup_originals WHERE parent_grant_id=$1 AND namespace=$2`,parentID,policy.Metadata.Namespace).Scan(&authorityWire);err!=nil{return model.CapacityIntent{},err}
 	var authority SourceFailureCleanupAuthority;var body SourceFailureCleanupBody
-	if capacity.DecodeGuestLifecycle(authorityWire,&authority)!=nil || capacity.DecodeGuestLifecycle(authority.Body,&body)!=nil || body.NativeCase!="source_live_failed_floor_recovery" {return model.CapacityIntent{},ErrCapacityConflict}
+	if capacity.DecodeGuestLifecycle(authorityWire,&authority)!=nil || decodeSourceFailureCleanupBody(authority.Body,&body)!=nil || body.NativeCase!="source_live_failed_floor_recovery" {return model.CapacityIntent{},ErrCapacityConflict}
 
 	next, receipt, err := mutate(p, previous, now.UTC())
 	if err != nil {
