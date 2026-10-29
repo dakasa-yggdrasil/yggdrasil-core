@@ -5,6 +5,23 @@ All notable changes to yggdrasil-core are documented here.
 ## [Unreleased]
 
 ### Security
+- **Tartaro effective actions: one authorization predicate, a god-mode
+  verdict and wildcard expansion (ADR-0086).** The console variant of
+  `GET /api/v1/collaborators/{id}/effective-tartaro-actions` now counts only
+  memberships the RBAC projection honors now (membership active, team active,
+  inside the `starts_at`/`ends_at` window), exactly like the directory machine
+  variant, so both answer the same actions. Both variants add a boolean
+  `god_mode`: true only for an `active` collaborator whose
+  `traits.yggdrasil_admin` is `true`, `"true"` or `"1"`; it is never derived
+  from a grant. A `*` grant on the configured Tartaro instance now expands to
+  every `action_catalog` entry with category `permission` of that instance's
+  active integration type (deduplicated, sorted, `*` never returned); when the
+  catalog cannot be resolved the wildcard contributes nothing and the read is
+  still answered. `*` on other instances is unchanged. The grants of all
+  membership teams are read in one statement instead of one team lookup and
+  one grant read per membership. **Behavior change:** the directory envelope
+  gains the `god_mode` key, so a consumer with a strict decoder must accept it
+  before this Core is deployed.
 - **BREAKING: a Core without an explicit development `YGGDRASIL_ENV` no
   longer accepts anonymous workflow dispatch, event publishes, or
   integration install, bootstrap and product deploy requests
@@ -167,6 +184,14 @@ All notable changes to yggdrasil-core are documented here.
   stays quarantined until both its caller and workflow inputs are purpose-bound.
 - Preserved the dedicated auth-admin credential only on the exact provider,
   SCIM, and SAML mutation routes while keeping workflow credentials excluded.
+
+### Removed
+- **The materialized `tartaro_actions` trait is retired (ADR-0085,
+  superseding ADR-0009).** `POST /api/v1/collaborators/{id}/sync-tartaro-actions`
+  is removed, and the console effective-actions response no longer carries
+  `trait_tartaro_actions` or `drift`; Core never reads the trait for an
+  answer. The one-shot `scripts/migrate_tartaro_roles_to_actions` and the
+  binary committed at the repository root are deleted.
 
 ## [2.18.1] - 2026-08-29
 

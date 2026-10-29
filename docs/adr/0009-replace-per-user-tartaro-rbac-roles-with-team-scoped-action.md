@@ -1,11 +1,11 @@
 # ADR-0009: Replace per-user Tartaro RBAC roles with team-scoped action grants materialized via the reactor framework
 
-- **Status:** Accepted
+- **Status:** Superseded by 0085
 - **Date:** 2026-05-18
 - **Deciders:** unknown (user-approved decisions per design doc)
 - **Scope:** yggdrasil-core (canon events + team_grant endpoints), integration-tartaro-dakasa, dakasa-tartaro-fe (tartaro-operations, tartaro-api and sibling services), dakasa-commons
 - **Supersedes:** —
-- **Superseded by:** —
+- **Superseded by:** 0085
 
 ## Context
 
