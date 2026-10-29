@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-29T18:22:44-03:00",
+  "generated_at": "2026-10-29T19:21:05-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1362,
+    ".go": 1365,
     ".json": 178,
     ".py": 16,
     ".sql": 82,
@@ -11,7 +11,7 @@
     ".yml": 31
   },
   "provenance": {
-    "commit": "0ff7e10c98b1b72ddd632dacd46fab96bb075e0d",
+    "commit": "f178d146c4d100f4195b1575bc71212233834aee",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "9c5ee5fc17f1484c740ac05a8bce8730edcce006f3362f1c633f28b0c2cf50bd"
+        "sha256": "b8053e00a374a26713a25dcbadbff76ffc7944ecbf3c776a0394a3acf7aaff66"
       },
       {
         "path": "AGENTS.md",
@@ -65,8 +65,8 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 305,
-      "kb": 3874
+      "files": 307,
+      "kb": 3883
     },
     {
       "path": "controllers/httpapi",
@@ -76,7 +76,7 @@
     {
       "path": "controllers/message",
       "files": 174,
-      "kb": 1553
+      "kb": 1554
     },
     {
       "path": "internal/capacity",
@@ -105,8 +105,8 @@
     },
     {
       "path": "internal/capacitynativeqemu",
-      "files": 46,
-      "kb": 295
+      "files": 47,
+      "kb": 297
     },
     {
       "path": "docs/bootstrap/manifests/integrations",
