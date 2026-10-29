@@ -8,7 +8,7 @@ Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
 verified_at_commit: f178d146c4d100f4195b1575bc71212233834aee
-verified_diff_sha256: 
+verified_diff_sha256: f59743d7d41c797bdd74ece493451aff433f7032b3151463d26097f0616e33b8
 reconciler_schema: 1
 canonical_postloss_compensation_review: Reviewed the qualification-only canonical postloss compensation chain: recovery cleanup epoch binding and closed refusal stages, closed qualification decoders for the native read, source cleanup body/physical record and private capacity intent, unredacted recovery proof, child-bound unscoped redeem, single stored read settle, and the CI PostgreSQL service admitted as the local PG16 owner. Production validators unchanged; no prose docs needed changes. No local tests ran; LAB native QEMU passed both postloss cases, CI remains the gate.
 public_workflow_identity_review: Reviewed the public idempotent writer nullable fields and full resolved workflow identity join. LAB Linux PostgreSQL 16 with schema 82 passed the writer and nine negative cases, including explicit NULL checks; integrated native CI remains required.
