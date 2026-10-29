@@ -16,6 +16,15 @@ import (
  "github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 )
 
+// Raise only the floor and the unique profile minimum required by the policy
+// contract. The baseline policy must remain unchanged for its real owner.
+func strongerSourceFloorPolicy(before model.CapacityPolicySpec)(model.CapacityPolicySpec,error){
+ if before.Floor!=1 || before.Ceiling!=2 || len(before.Profiles)!=1 || before.Profiles[0].MinUnits!=1 || before.Profiles[0].MaxUnits!=2{return model.CapacityPolicySpec{},q.ErrOriginalUnknown}
+ after:=before;after.Profiles=append([]model.CapacityProfile(nil),before.Profiles...);after.Floor=2;after.Profiles[0].MinUnits=2
+ if capacity.ValidatePolicy(before)!=nil || capacity.ValidatePolicy(after)!=nil{return model.CapacityPolicySpec{},q.ErrOriginalUnknown}
+ return after,nil
+}
+
 // The source bridge is an immutable observation of two REAL administrative
 // versions. It is not authority supplied by a workflow parameter or a caller.
 func(f *fixture) prepareOriginalFloorBridge(ctx context.Context, baselineProbeSHA string)(q.SourceFloorPolicyBridge,error){
@@ -25,13 +34,14 @@ func(f *fixture) prepareOriginalFloorBridge(ctx context.Context, baselineProbeSH
  if json.Unmarshal(old.Spec,&before)!=nil || old.ID!=f.policy.ID || old.Checksum!=f.policy.Checksum || !old.Metadata.Active || old.Metadata.Namespace!=f.namespace || before.Floor!=1 || before.Ceiling!=2 || before.GuestRetirementBinding==nil || capacity.GuestRetirementSHA(*before.GuestRetirementBinding)!=capacity.GuestRetirementSHA(f.binding){return q.SourceFloorPolicyBridge{},q.ErrOriginalUnknown}
  originalBinding,bindingErr:=capacity.VMObservationBinding(before,before.GuestRetirementBinding.MutationBindingName)
  if bindingErr!=nil || !originalBinding.CompensationEnabled{return q.SourceFloorPolicyBridge{},q.ErrOriginalUnknown}
- after:=before;after.Floor=2
+ // ValidatePolicy forbids profile.MinUnits below the raised policy floor.
+ after,err:=strongerSourceFloorPolicy(before);if err!=nil{return q.SourceFloorPolicyBridge{},err}
  current,err:=f.createManifest(ctx,"capacity_policy",old.Metadata.Name,after);if err!=nil{return q.SourceFloorPolicyBridge{},err}
  oldRead,err:=repository.GetManifestByID(ctx,f.db,old.ID);if err!=nil{return q.SourceFloorPolicyBridge{},err}
  newRead,err:=repository.GetManifestByID(ctx,f.db,current.ID);if err!=nil{return q.SourceFloorPolicyBridge{},err}
  var actual model.CapacityPolicySpec
- if oldRead.Metadata.Active || !newRead.Metadata.Active || newRead.ID==oldRead.ID || newRead.Kind!=oldRead.Kind || newRead.Metadata.Namespace!=oldRead.Metadata.Namespace || newRead.Metadata.Name!=oldRead.Metadata.Name || newRead.Version!=oldRead.Version+1 || oldRead.Checksum!=old.Checksum || string(oldRead.Spec)!=string(old.Spec) || json.Unmarshal(newRead.Spec,&actual)!=nil || actual.Floor!=2{return q.SourceFloorPolicyBridge{},q.ErrOriginalUnknown}
- actual.Floor=1
+ if oldRead.Metadata.Active || !newRead.Metadata.Active || newRead.ID==oldRead.ID || newRead.Kind!=oldRead.Kind || newRead.Metadata.Namespace!=oldRead.Metadata.Namespace || newRead.Metadata.Name!=oldRead.Metadata.Name || newRead.Version!=oldRead.Version+1 || oldRead.Checksum!=old.Checksum || string(oldRead.Spec)!=string(old.Spec) || json.Unmarshal(newRead.Spec,&actual)!=nil || actual.Floor!=2 || len(actual.Profiles)!=1 || actual.Profiles[0].MinUnits!=2{return q.SourceFloorPolicyBridge{},q.ErrOriginalUnknown}
+ actual.Floor=1;actual.Profiles[0].MinUnits=1
  if capacity.GuestRetirementSHA(actual)!=capacity.GuestRetirementSHA(before){return q.SourceFloorPolicyBridge{},q.ErrOriginalUnknown}
  bridge:=q.SourceFloorPolicyBridge{Schema:"core_original_floor_policy_bridge_v1",Scope:"SOURCE_ONLY_EXACT_FLOOR_1_TO_2",CoreSource:capacity.CurrentGuestCoreSource(),GuestSource:f.request.SourceCommit,Namespace:f.namespace,PolicyName:old.Metadata.Name,OriginalPolicyID:old.ID.String(),OriginalPolicyChecksum:old.Checksum,CurrentPolicyID:current.ID.String(),CurrentPolicyChecksum:current.Checksum,OriginalVersion:old.Version,CurrentVersion:current.Version,WorkflowID:f.workflow.ID.String(),BindingSHA256:capacity.GuestRetirementSHA(f.binding),OriginalFloor:1,CurrentFloor:2,BaselineUnits:1,OriginalBaselineProbeSHA256:baselineProbeSHA,CreatedAt:time.Now().UTC(),NativeQualified:false}
  wire,err:=json.Marshal(bridge);if err!=nil{return q.SourceFloorPolicyBridge{},err}
