@@ -36,20 +36,25 @@ import (
 	"bytes"
 	"context"
 	"crypto/rsa"
+	"database/sql"
 	"encoding/json"
 	"errors"
 	"fmt"
 	"io"
 	"net/http"
 	"net/url"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
+	safego "github.com/dakasa-yggdrasil/yggdrasil-core/internal/goroutine"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	jose "github.com/go-jose/go-jose/v4"
 	"github.com/go-jose/go-jose/v4/jwt"
 	"github.com/google/uuid"
+	"go.uber.org/zap"
 )
 
 // BackchannelEventClaim is the URI defined in RFC 8417 §2.4.
@@ -89,6 +94,48 @@ func NewBackchannelDispatcher(storage *Storage, issuerURL string) *BackchannelDi
 		IssuerURL: issuerURL,
 		Now:       time.Now,
 	}
+}
+
+// BackchannelDispatcherFromEnv builds a dispatcher for the paths that change
+// a collaborator's status outside the HTTP server (AMQP collaborator.update,
+// the status clock). It returns nil unless YGGDRASIL_OIDC_ISSUER is set,
+// which is the same condition under which the HTTP addon mounts the OP and
+// the HTTP server wires its own dispatcher. A nil dispatcher is a valid
+// no-op receiver of DispatchForCollaboratorInBackground.
+func BackchannelDispatcherFromEnv(db *sql.DB) *BackchannelDispatcher {
+	issuer := strings.TrimSpace(os.Getenv("YGGDRASIL_OIDC_ISSUER"))
+	if issuer == "" || db == nil {
+		return nil
+	}
+	return NewBackchannelDispatcher(NewStorage(db, issuer), issuer)
+}
+
+// DispatchForCollaboratorInBackground fires the back-channel logout of one
+// collaborator after the caller's commit, without blocking it: a panic-safe
+// goroutine with a 30s budget that logs the outcome. Dispatch is idempotent
+// (only active links are listed, and each is marked terminated), so a
+// repeat finds nothing to do. Nil-safe: a nil dispatcher does nothing.
+func (d *BackchannelDispatcher) DispatchForCollaboratorInBackground(collaboratorID uuid.UUID, logger *zap.Logger) {
+	if d == nil {
+		return
+	}
+	if logger == nil {
+		logger = zap.NewNop()
+	}
+	safego.SafeGo("backchannel_logout_collaborator", func() {
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		defer cancel()
+		results, err := d.DispatchForCollaborator(ctx, collaboratorID)
+		if err != nil {
+			logger.Warn("backchannel logout dispatch (collaborator) failed",
+				zap.String("collaborator_id", collaboratorID.String()),
+				zap.Error(err))
+			return
+		}
+		logger.Info("backchannel logout (collaborator) dispatched",
+			zap.String("collaborator_id", collaboratorID.String()),
+			zap.Int("clients", len(results)))
+	})
 }
 
 // DispatchForCollaborator fans out to every active OIDC client linked to

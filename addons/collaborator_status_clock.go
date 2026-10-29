@@ -8,6 +8,7 @@ import (
 	"strconv"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/controllers/oidc"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/runtime"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -23,7 +24,10 @@ func init() {
 // reached, and offboards collaborators whose end_date has passed.
 //
 // Status flips emit lifecycle events with actor_type=system so the
-// audit log distinguishes automatic transitions from manual ones.
+// audit log distinguishes automatic transitions from manual ones. Both flips
+// go through repository.UpdateCollaborator, which applies the session policy
+// of the status change (ADR-0087); an auto-offboard also fires the
+// back-channel logout after its commit.
 func bootstrapCollaboratorStatusClock(ctx context.Context, app *runtime.ServiceApp) error {
 	db, ok := Postgres(app)
 	if !ok {
@@ -31,9 +35,10 @@ func bootstrapCollaboratorStatusClock(ctx context.Context, app *runtime.ServiceA
 	}
 	logger, _ := Logger(app)
 	interval := collaboratorStatusClockInterval()
+	backchannel := oidc.BackchannelDispatcherFromEnv(db)
 
 	stop := make(chan struct{})
-	go runCollaboratorStatusClock(ctx, db, logger, interval, stop)
+	go runCollaboratorStatusClock(ctx, db, logger, backchannel, interval, stop)
 
 	app.RegisterCloser(func(context.Context) error {
 		close(stop)
@@ -42,11 +47,11 @@ func bootstrapCollaboratorStatusClock(ctx context.Context, app *runtime.ServiceA
 	return nil
 }
 
-func runCollaboratorStatusClock(ctx context.Context, db *sql.DB, logger *zap.Logger, interval time.Duration, stop <-chan struct{}) {
+func runCollaboratorStatusClock(ctx context.Context, db *sql.DB, logger *zap.Logger, backchannel *oidc.BackchannelDispatcher, interval time.Duration, stop <-chan struct{}) {
 	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
-	if err := RunCollaboratorStatusClockTick(ctx, db); err != nil {
+	if err := runCollaboratorStatusClockTick(ctx, db, backchannel, logger); err != nil {
 		if logger != nil {
 			logger.Warn("collaborator_status_clock initial tick failed", zap.Error(err))
 		}
@@ -59,7 +64,7 @@ func runCollaboratorStatusClock(ctx context.Context, db *sql.DB, logger *zap.Log
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			if err := RunCollaboratorStatusClockTick(ctx, db); err != nil {
+			if err := runCollaboratorStatusClockTick(ctx, db, backchannel, logger); err != nil {
 				if logger != nil {
 					logger.Warn("collaborator_status_clock tick failed", zap.Error(err))
 				}
@@ -71,8 +76,13 @@ func runCollaboratorStatusClock(ctx context.Context, db *sql.DB, logger *zap.Log
 // RunCollaboratorStatusClockTick runs ONE pass of the clock — promote
 // pending_starts that have reached their start_date and offboard any
 // collaborator past their end_date. Date math runs in local time so it
-// agrees with the calendar semantics of HR/employment data.
+// agrees with the calendar semantics of HR/employment data. It fires no
+// back-channel logout (nil dispatcher); the running clock does.
 func RunCollaboratorStatusClockTick(ctx context.Context, db *sql.DB) error {
+	return runCollaboratorStatusClockTick(ctx, db, nil, nil)
+}
+
+func runCollaboratorStatusClockTick(ctx context.Context, db *sql.DB, backchannel *oidc.BackchannelDispatcher, logger *zap.Logger) error {
 	today := time.Now().Format("2006-01-02")
 
 	pendingIDs, err := queryCollabIDs(ctx, db, `
@@ -128,6 +138,7 @@ func RunCollaboratorStatusClockTick(ctx context.Context, db *sql.DB) error {
 		if err != nil {
 			return err
 		}
+		backchannel.DispatchForCollaboratorInBackground(collab.ID, logger)
 		if _, err := repository.AppendLifecycleEvent(ctx, db, model.AppendLifecycleEventRequest{
 			CollaboratorID: collab.ID,
 			EventType:      model.LifecycleEventOffboarded,
