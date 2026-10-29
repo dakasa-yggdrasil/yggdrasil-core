@@ -2,7 +2,6 @@ package httpapi
 
 import (
 	"context"
-	"fmt"
 	"net/http"
 	"os"
 	"sort"
@@ -14,8 +13,8 @@ import (
 )
 
 // tartaroInstance{Namespace,Name} identify the Tartaro integration instance
-// whose team_grants materialize the tartaro_actions trait. A grant whose
-// instance does not match is ignored (see ListTeamGrants filtering below), so
+// whose team_grants confer Tartaro actions. A grant whose instance does not
+// match is ignored (see ListTeamGrants filtering below), so
 // a wrong name silently zeroes EVERY collaborator's effective tartaro actions,
 // which reads as a blanket 403 on Tartaro. The live instance is
 // tartaro-dakasa-validation (the only registered Tartaro integration_instance);
@@ -40,8 +39,10 @@ type effectivePerTeam struct {
 	Actions  []string `json:"actions"`
 }
 
-// handleEffectiveTartaroActions returns the trait set vs the ground-
-// truth computation. drift=true signals the reactor lagged or failed.
+// handleEffectiveTartaroActions answers the live computation of the
+// collaborator's Tartaro actions: the per-team breakdown and the sorted
+// union. The materialized traits.tartaro_actions trait is retired, so nothing
+// here reads it or compares the computation with it.
 func (s *Server) handleEffectiveTartaroActions(w http.ResponseWriter, r *http.Request) {
 	collabIDStr := r.PathValue("id")
 	collabID, err := uuid.Parse(collabIDStr)
@@ -50,8 +51,7 @@ func (s *Server) handleEffectiveTartaroActions(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	collab, err := getCollaboratorCached(r.Context(), s.db, collabIDStr)
-	if err != nil {
+	if _, err := getCollaboratorCached(r.Context(), s.db, collabIDStr); err != nil {
 		writeMappedError(w, err)
 		return
 	}
@@ -62,15 +62,10 @@ func (s *Server) handleEffectiveTartaroActions(w http.ResponseWriter, r *http.Re
 		return
 	}
 
-	traitActions := parseTraitActions(collab.Traits)
-	drift := !equalSortedStrings(traitActions, effective.Computed)
-
 	writeJSON(w, http.StatusOK, map[string]any{
 		"collaborator_id":          collabID,
-		"trait_tartaro_actions":    traitActions,
 		"effective_via_teams":      effective.PerTeam,
 		"computed_tartaro_actions": effective.Computed,
-		"drift":                    drift,
 	})
 }
 
@@ -85,9 +80,7 @@ type effectiveTartaroActionsResult struct {
 // computeEffectiveTartaroActions walks the collaborator's active team
 // memberships and their grants on the configured Tartaro instance. Grants on
 // any other instance and wildcard grants are ignored, exactly as the console
-// route has always done. The membership set is the one the tartaro reactor
-// materializes into the trait (tm.active only), so the console drift view
-// compares like with like.
+// route has always done.
 func (s *Server) computeEffectiveTartaroActions(ctx context.Context, collabID uuid.UUID) (effectiveTartaroActionsResult, error) {
 	memberships, err := repository.ListTeamMemberships(ctx, s.db, model.ListTeamMembershipsRequest{
 		CollaboratorID: collabID.String(),
@@ -106,7 +99,7 @@ func (s *Server) computeEffectiveTartaroActions(ctx context.Context, collabID uu
 // active, team active, inside the starts_at/ends_at window) and then applies
 // the same grant walk as the console computation. An expired, not-yet-started,
 // or deactivated-team membership therefore contributes no action here even
-// while the materialized trait or the console drift view still lists it.
+// while the console computation still lists it.
 func (s *Server) computeAuthorizedTartaroActions(ctx context.Context, collabID uuid.UUID) (effectiveTartaroActionsResult, error) {
 	memberships, err := repository.ListAuthorizationTeamMemberships(ctx, s.db, collabID)
 	if err != nil {
@@ -154,85 +147,4 @@ func (s *Server) tartaroActionsFromMemberships(ctx context.Context, memberships 
 	sort.Strings(computed)
 
 	return effectiveTartaroActionsResult{PerTeam: perTeam, Computed: computed}, nil
-}
-
-// handleSyncTartaroActions emits a synthetic team_membership.added event
-// so the tartaro reactor reprocesses this user. Returns 202 Accepted.
-func (s *Server) handleSyncTartaroActions(w http.ResponseWriter, r *http.Request) {
-	collabIDStr := r.PathValue("id")
-	collabID, err := uuid.Parse(collabIDStr)
-	if err != nil {
-		writeJSON(w, http.StatusBadRequest, map[string]any{"error": "invalid collaborator id"})
-		return
-	}
-
-	if _, err := getCollaboratorCached(r.Context(), s.db, collabIDStr); err != nil {
-		writeMappedError(w, err)
-		return
-	}
-
-	tx, err := s.db.BeginTx(r.Context(), nil)
-	if err != nil {
-		writeMappedError(w, fmt.Errorf("begin tx: %w", err))
-		return
-	}
-	defer func() { _ = tx.Rollback() }()
-
-	// Payload must satisfy team_membership.added v1 schema:
-	// required (collaborator_id, team_id), additionalProperties:false.
-	// This is a synthetic event — no real team_id — so we use the
-	// zero UUID and encode the trigger in `source` (free-string field).
-	if _, err := repository.EmitEvent(r.Context(), tx, model.EmitEventRequest{
-		Type:          repository.EventTypeTeamMembershipAdded,
-		SchemaVersion: "v1",
-		AggregateType: "team_membership",
-		AggregateID:   collabID.String(),
-		Payload: map[string]any{
-			"collaborator_id": collabID.String(),
-			"team_id":         "00000000-0000-0000-0000-000000000000",
-			"role":            "synthetic",
-			"source":          "sync-tartaro-actions",
-		},
-		Actor: &model.EventActor{Type: model.ActorTypeAPI, ID: actorIDFromRequest(r)},
-	}); err != nil {
-		writeMappedError(w, fmt.Errorf("emit synthetic event: %w", err))
-		return
-	}
-	if err := tx.Commit(); err != nil {
-		writeMappedError(w, fmt.Errorf("commit: %w", err))
-		return
-	}
-	writeJSON(w, http.StatusAccepted, map[string]any{
-		"collaborator_id": collabID,
-		"events_emitted":  1,
-		"event_type":      "team_membership.added",
-		"note":            "synthetic — reactor recomputes user trait",
-	})
-}
-
-func parseTraitActions(traits map[string]any) []string {
-	if traits == nil {
-		return []string{}
-	}
-	raw, _ := traits["tartaro_actions"].([]any)
-	out := make([]string, 0, len(raw))
-	for _, v := range raw {
-		if s, ok := v.(string); ok {
-			out = append(out, s)
-		}
-	}
-	sort.Strings(out)
-	return out
-}
-
-func equalSortedStrings(a, b []string) bool {
-	if len(a) != len(b) {
-		return false
-	}
-	for i := range a {
-		if a[i] != b[i] {
-			return false
-		}
-	}
-	return true
 }
