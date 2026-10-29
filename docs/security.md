@@ -5,7 +5,10 @@ network boundaries in a self-hosted deployment.
 
 ## Authentication
 
-Two paths, both converging on a session row + bearer token after MFA:
+Two paths, both converging on a session row + bearer token, and both
+requiring MFA enrollment. The password path also asks for a factor or a
+contact OTP; the third-party path asks for none, because the provider
+authenticates the login:
 
 1. **Password** — `/api/v1/auth/login`. Credentials checked against
    `auth_identities` table. A valid password returns
@@ -22,8 +25,9 @@ Two paths, both converging on a session row + bearer token after MFA:
    route opens a session from an identity the caller asserts:
    `POST /api/v1/auth/third-party/login`, which took provider, subject,
    email and `auto_link_by_email` from the request body and could link
-   and sign in any active collaborator with MFA enrolled, is removed and
-   answers 404 (ADR-0088). Until a Core without it runs in production,
+   and sign in any active collaborator (at once with MFA enrolled, and
+   through the enroll link its enroll-required answer carried without
+   it), is removed and answers 404 (ADR-0088). Until a Core without it runs in production,
    the production ingress refuses that path with 403.
 
 MFA enrollment is mandatory. If a collaborator has no MFA enrollment,

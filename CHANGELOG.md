@@ -14,6 +14,10 @@ All notable changes to yggdrasil-core are documented here.
   identity to any active collaborator by e-mail, or name the subject of an
   identity already linked, and get a full session for any collaborator with
   MFA enrolled (the third-party session checks enrollment, not a factor).
+  For a collaborator without MFA enrolled, the enroll-required answer carried
+  a live MFA enroll link and the collaborator record, which let the caller
+  enroll a factor of their own and then sign in, so every active
+  collaborator was exposed.
   Every method and spelling of the path now answers 404 from the mux. The
   browser flow (`GET /api/v1/auth/third-party/start/{provider}` and
   `GET /api/v1/auth/third-party/callback/{provider}`) is unchanged and is the
