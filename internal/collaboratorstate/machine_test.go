@@ -69,3 +69,29 @@ func TestValidateTransition_NoOpSameStatus(t *testing.T) {
 		t.Fatalf("expected same-status transition to be a no-op (nil), got %v", err)
 	}
 }
+
+// CanSignIn is the login rule every session, session reuse and token mint
+// shares: exactly "active" (case and surrounding whitespace tolerated) signs
+// in, and every other canonical status and the empty value do not.
+func TestCanSignInIsTheLoginRule(t *testing.T) {
+	for status, want := range map[string]bool{
+		"active":        true,
+		" Active ":      true,
+		"ACTIVE":        true,
+		"":              false,
+		"pending_start": false,
+		"on_leave":      false,
+		"suspended":     false,
+		"offboarded":    false,
+		"activated":     false,
+	} {
+		if got := CanSignIn(status); got != want {
+			t.Errorf("CanSignIn(%q) = %v, want %v", status, got, want)
+		}
+	}
+	for _, status := range AllStatuses() {
+		if got, want := CanSignIn(string(status)), status == StatusActive; got != want {
+			t.Errorf("CanSignIn(%q) = %v, want %v", status, got, want)
+		}
+	}
+}

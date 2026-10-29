@@ -233,3 +233,51 @@ func TestRequireAuthenticatedConsoleAPIs_NoCreds_Still401(t *testing.T) {
 		t.Fatalf("expected 401 with no credentials, got %d", w.Code)
 	}
 }
+
+// expectCollaboratorStatusRow expects the single collaborator read of a human
+// JWT branch (allowSignedInHumanID) and answers a row in the given status with
+// no pending phone profile.
+func expectCollaboratorStatusRow(mock sqlmock.Sqlmock, id, status string) {
+	mock.ExpectQuery(`(?i)FROM\s+public\.collaborators`).WithArgs(id).
+		WillReturnRows(sqlmock.NewRows(collaboratorColumns()).AddRow(id, "status-ci", status, "Status CI", "person@example.test", nil, nil,
+			[]byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), 0, time.Now(), time.Now()))
+}
+
+// Gate-level: an OP JWT outlives a status change by up to its lifetime. Its
+// subject is re-read on every request, and a collaborator who cannot sign in
+// is refused with 401 before any handler runs (ADR-0087). The collaborator
+// read is the same single statement the phone profile rule already used.
+func TestRequireAuthenticatedConsoleAPIs_RefusesOPJWTOfCollaboratorWhoCannotSignIn(t *testing.T) {
+	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "")
+	priv, _ := rsa.GenerateKey(rand.Reader, 2048)
+	now := time.Unix(1_700_000_000, 0)
+	tok := mintJWT(t, priv, "kid-1", baseClaims(now))
+	for _, status := range []string{"pending_start", "on_leave", "suspended", "offboarded"} {
+		t.Run(status, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			expectCollaboratorStatusRow(mock, "11111111-1111-1111-1111-111111111111", status)
+			s := &Server{db: db, consoleJWTVerifier: newTestVerifier(priv, "kid-1", now)}
+
+			called := false
+			h := s.requireAuthenticatedConsoleAPIs(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+				called = true
+				w.WriteHeader(http.StatusOK)
+			}))
+			req := httptest.NewRequest(http.MethodGet, "/api/v1/collaborators", nil)
+			req.Header.Set("Authorization", "Bearer "+tok)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+
+			if w.Code != http.StatusUnauthorized || called {
+				t.Fatalf("status %q: got %d (handler called=%v), want 401 before any handler", status, w.Code, called)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}

@@ -24,6 +24,10 @@ import (
 //  2. Session cookie (or X-Session-Token) → repository.ResolveAuthSession. Any
 //     authenticated collaborator passes. This is the unchanged browser path.
 //
+// Both paths refuse a collaborator who cannot sign in (ADR-0087): path 1
+// re-reads the JWT subject (allowSignedInHumanID) and path 2 inherits the
+// status check of ResolveAuthSession. A system token with no sub is unchanged.
+//
 // Anything else → 401, so ForwardAuth blocks the surface.
 //
 // Response on success: 200 + X-Auth-Kind (human|system) and, for a human,
@@ -39,7 +43,7 @@ func (s *Server) handleAuthVerify(w http.ResponseWriter, r *http.Request) {
 	// Path 1: surface-scoped Bearer JWT.
 	if expectedAud := r.URL.Query().Get("aud"); expectedAud != "" && s.surfaceVerify != nil {
 		if claims, ok := s.tryBearerForAudience(r, expectedAud); ok {
-			if sub, _ := claims["sub"].(string); sub != "" && !s.allowPhoneProfileID(w, r, sub) {
+			if sub, _ := claims["sub"].(string); sub != "" && !s.allowSignedInHumanID(w, r, sub) {
 				return
 			}
 			writeVerifyIdentity(w, claims)

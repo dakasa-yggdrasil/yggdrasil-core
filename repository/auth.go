@@ -12,6 +12,7 @@ import (
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/collaboratorstate"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/coreauth"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
@@ -42,6 +43,11 @@ var (
 	// recent failed login attempts and is temporarily inaccessible
 	// until LockedUntil expires (security audit 2026-05-27 A4).
 	ErrAuthAccountLocked = errors.New("account locked")
+	// ErrCollaboratorCannotSignIn is returned by RequireIssuableSubject when
+	// the token subject's status is not one that signs in
+	// (collaboratorstate.CanSignIn). The OIDC provider refuses to mint for
+	// that subject (ADR-0087).
+	ErrCollaboratorCannotSignIn = errors.New("collaborator cannot sign in")
 )
 
 // loginFailureThreshold + loginLockDuration tune the account-level lockout,
@@ -171,7 +177,7 @@ func VerifyLoginCredentialsWithMFAVersion(
 		}
 		return model.Collaborator{}, "", err
 	}
-	if strings.ToLower(strings.TrimSpace(collaborator.Status)) != "active" {
+	if !collaboratorstate.CanSignIn(collaborator.Status) {
 		return model.Collaborator{}, "", ErrAuthInvalidCredentials
 	}
 
@@ -337,6 +343,13 @@ func CreateAuthSession(
 }
 
 // ResolveAuthSession returns one active session and its collaborator from a raw token.
+//
+// A session is valid only while its collaborator can sign in
+// (collaboratorstate.CanSignIn, the login rule): the collaborator row read
+// here is the current one, so a session whose collaborator stopped being
+// active is refused on its next request with ErrAuthSessionNotFound
+// (unwrapped, so callers answer 401 and clear the cookie), even when no
+// termination revoked the row (ADR-0087).
 func ResolveAuthSession(
 	ctx context.Context,
 	db *sql.DB,
@@ -379,8 +392,39 @@ func ResolveAuthSession(
 	if err != nil {
 		return model.AuthSession{}, model.Collaborator{}, err
 	}
+	if !collaboratorstate.CanSignIn(collaborator.Status) {
+		return model.AuthSession{}, model.Collaborator{}, ErrAuthSessionNotFound
+	}
 
 	return session, collaborator, nil
+}
+
+// RequireIssuableSubject is the OIDC mint gate: it rechecks the current
+// collaborator row before an authorization request is honored, a code is
+// saved or exchanged, or an access or refresh token is minted. Core tokens
+// carry iat = mint time and no sid, so a relying party's iat-aware denylist
+// accepts anything minted after a revocation; the only safe answer for a
+// subject who cannot sign in is to refuse to mint (ADR-0087). The status
+// wins over the phone profile requirement. A missing row or a failed read
+// answers ErrPhoneUnavailable, as RequirePhoneProfileComplete does.
+func RequireIssuableSubject(ctx context.Context, db *sql.DB, id uuid.UUID) error {
+	if db == nil || id == uuid.Nil {
+		return ErrPhoneUnavailable
+	}
+	var (
+		status  string
+		pending bool
+	)
+	if db.QueryRowContext(ctx, `SELECT status, phone_profile_required FROM public.collaborators WHERE id=$1`, id).Scan(&status, &pending) != nil {
+		return ErrPhoneUnavailable
+	}
+	if !collaboratorstate.CanSignIn(status) {
+		return ErrCollaboratorCannotSignIn
+	}
+	if pending {
+		return ErrPhoneProfileRequired
+	}
+	return nil
 }
 
 // ListActiveSessionsForCollaborator returns every status='active' AND

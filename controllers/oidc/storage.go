@@ -384,7 +384,7 @@ func (s *Storage) AuthRequestByID(ctx context.Context, id string) (op.AuthReques
 		return nil, err
 	}
 	if ar.CollaboratorID != nil {
-		if err := repository.RequirePhoneProfileComplete(ctx, s.db, *ar.CollaboratorID); err != nil {
+		if err := repository.RequireIssuableSubject(ctx, s.db, *ar.CollaboratorID); err != nil {
 			return nil, err
 		}
 	}
@@ -408,8 +408,10 @@ func (s *Storage) AuthRequestByCode(ctx context.Context, code string) (op.AuthRe
 	if err != nil {
 		return nil, err
 	}
+	// The subject is rechecked before the code is consumed, so a refusal
+	// (status or phone profile) does not burn the code.
 	if ar.CollaboratorID != nil {
-		if err := repository.RequirePhoneProfileComplete(ctx, s.db, *ar.CollaboratorID); err != nil {
+		if err := repository.RequireIssuableSubject(ctx, s.db, *ar.CollaboratorID); err != nil {
 			return nil, err
 		}
 	}
@@ -434,7 +436,7 @@ func (s *Storage) SaveAuthCode(ctx context.Context, id string, code string) erro
 	if ar.CollaboratorID == nil {
 		return repository.ErrPhoneProfileRequired
 	}
-	if err := repository.RequirePhoneProfileComplete(ctx, s.db, *ar.CollaboratorID); err != nil {
+	if err := repository.RequireIssuableSubject(ctx, s.db, *ar.CollaboratorID); err != nil {
 		return err
 	}
 	return repository.SaveOIDCAuthCode(ctx, s.db, code, parsed, time.Now().Add(AuthorizationCodeLifetime))
@@ -468,7 +470,7 @@ func generateOpaqueToken() (string, error) {
 // "jti" the OP embeds in the access JWT — opaque, not persisted because
 // access tokens are stateless.
 func (s *Storage) CreateAccessToken(ctx context.Context, request op.TokenRequest) (string, time.Time, error) {
-	if err := s.requireCompletedPhoneProfile(ctx, request.GetSubject()); err != nil {
+	if err := s.requireIssuableSubject(ctx, request.GetSubject()); err != nil {
 		return "", time.Time{}, err
 	}
 	id, err := generateOpaqueToken()
@@ -503,7 +505,7 @@ func (s *Storage) CreateAccessAndRefreshTokens(
 		return "", "", time.Time{}, fmt.Errorf("token subject is not a UUID: %w", perr)
 	}
 
-	if err := repository.RequirePhoneProfileComplete(ctx, s.db, collabID); err != nil {
+	if err := repository.RequireIssuableSubject(ctx, s.db, collabID); err != nil {
 		return "", "", time.Time{}, err
 	}
 
@@ -626,6 +628,13 @@ func (s *Storage) TokenRequestByRefreshToken(ctx context.Context, refreshToken s
 		return nil, op.ErrInvalidRefreshToken
 	}
 	if time.Now().After(r.ExpiresAt) {
+		return nil, op.ErrInvalidRefreshToken
+	}
+	// A subject who cannot sign in gets invalid_grant, so the relying party
+	// drops the grant instead of retrying a server error. A status change
+	// already revoked the subject's refresh tokens (ADR-0087); this covers a
+	// token minted by a login that raced the change and tokens older than it.
+	if errors.Is(repository.RequireIssuableSubject(ctx, s.db, r.CollaboratorID), repository.ErrCollaboratorCannotSignIn) {
 		return nil, op.ErrInvalidRefreshToken
 	}
 	return &refreshTokenRequestView{r: r}, nil
@@ -985,10 +994,12 @@ func (s *Storage) Health(ctx context.Context) error {
 // _ ensures the interface is satisfied at compile time.
 var _ op.Storage = (*Storage)(nil)
 
-func (s *Storage) requireCompletedPhoneProfile(ctx context.Context, subject string) error {
+// requireIssuableSubject applies repository.RequireIssuableSubject (status,
+// then phone profile) to a token request subject.
+func (s *Storage) requireIssuableSubject(ctx context.Context, subject string) error {
 	id, err := uuid.Parse(subject)
 	if err != nil {
 		return repository.ErrPhoneUnavailable
 	}
-	return repository.RequirePhoneProfileComplete(ctx, s.db, id)
+	return repository.RequireIssuableSubject(ctx, s.db, id)
 }

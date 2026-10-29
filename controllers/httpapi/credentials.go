@@ -16,6 +16,7 @@ import (
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/password"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/collaboratorstate"
 	safego "github.com/dakasa-yggdrasil/yggdrasil-core/internal/goroutine"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -864,8 +865,9 @@ func collaboratorEligibleForSetup(status string) bool {
 // reset mints a session, so it follows this rule and not the wider setup
 // allowlist; otherwise a pending_start account (a re-hire before the start
 // date still holding old factors) would get a session the login refuses.
+// It delegates to the single predicate, collaboratorstate.CanSignIn.
 func collaboratorCanSignIn(status string) bool {
-	return strings.ToLower(strings.TrimSpace(status)) == "active"
+	return collaboratorstate.CanSignIn(status)
 }
 
 // readAndCloseBody reads the entire request body and closes it.

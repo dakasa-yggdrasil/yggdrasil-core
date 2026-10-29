@@ -122,3 +122,56 @@ func TestAuthVerify_NoCredential401(t *testing.T) {
 		t.Fatalf("no credential: got %d, want 401", w.Code)
 	}
 }
+
+// ForwardAuth path 1 re-reads the JWT subject: a signed identity of a
+// collaborator who cannot sign in is refused with 401 and no identity
+// headers, so the surface stays closed (ADR-0087).
+func TestAuthVerifySignedIdentityOfCollaboratorWhoCannotSignInIs401(t *testing.T) {
+	const subject = "00000000-0000-4000-8000-000000000009"
+	for _, status := range []string{"pending_start", "on_leave", "suspended", "offboarded"} {
+		t.Run(status, func(t *testing.T) {
+			db, mock, err := sqlmock.New()
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer db.Close()
+			expectCollaboratorStatusRow(mock, subject, status)
+			s := &Server{db: db, surfaceVerify: func(context.Context, string, string) (map[string]any, error) {
+				return map[string]any{"sub": subject, "collaborator_id": subject}, nil
+			}}
+			r := httptest.NewRequest(http.MethodGet, "/api/v1/auth/verify?aud=surface-ci", nil)
+			r.Header.Set("Authorization", "Bearer signed-fixture")
+			w := httptest.NewRecorder()
+			s.handleAuthVerify(w, r)
+			if w.Code != http.StatusUnauthorized || w.Header().Get("X-Auth-Kind") != "" || w.Header().Get("X-Auth-Subject") != "" {
+				t.Fatalf("status %q: got %d kind=%q, want 401 without identity", status, w.Code, w.Header().Get("X-Auth-Kind"))
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+// A surface system token carries no sub, so there is no collaborator to
+// re-read: path 1 still answers 200 system without touching the database.
+func TestAuthVerifySystemTokenWithoutSubjectIsUnchanged(t *testing.T) {
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	s := &Server{db: db, surfaceVerify: func(context.Context, string, string) (map[string]any, error) {
+		return map[string]any{"aud": "dakasa-ai"}, nil
+	}}
+	r := httptest.NewRequest(http.MethodGet, "/api/v1/auth/verify?aud=dakasa-ai", nil)
+	r.Header.Set("Authorization", "Bearer system-fixture")
+	w := httptest.NewRecorder()
+	s.handleAuthVerify(w, r)
+	if w.Code != http.StatusOK || w.Header().Get("X-Auth-Kind") != "system" || w.Header().Get("X-Auth-Subject") != "" {
+		t.Fatalf("system token: got %d kind=%q, want 200 system", w.Code, w.Header().Get("X-Auth-Kind"))
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}

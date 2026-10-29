@@ -8,6 +8,7 @@ import (
 	"io"
 	"net/http"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/collaboratorstate"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/contactphone"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -42,6 +43,29 @@ func (s *Server) allowPhoneProfileID(w http.ResponseWriter, r *http.Request, id 
 	c, err := repository.GetCollaborator(r.Context(), s.db, id)
 	if err != nil {
 		writeProblemJSON(w, http.StatusServiceUnavailable, "directory.unavailable", "Profile state is unavailable.")
+		return false
+	}
+	return s.allowPhoneProfile(w, r, c)
+}
+
+// allowSignedInHumanID gates the branches that accept a human JWT this OP
+// signed (console gate, surface ForwardAuth). An access JWT outlives a status
+// change by up to its lifetime, so its subject is re-read here with the same
+// single collaborator read as allowPhoneProfileID: a subject who cannot sign
+// in (collaboratorstate.CanSignIn) answers 401, then the phone profile rule
+// applies (ADR-0087).
+func (s *Server) allowSignedInHumanID(w http.ResponseWriter, r *http.Request, id string) bool {
+	if s.db == nil {
+		writeProblemJSON(w, http.StatusServiceUnavailable, "directory.unavailable", "Profile state is unavailable.")
+		return false
+	}
+	c, err := repository.GetCollaborator(r.Context(), s.db, id)
+	if err != nil {
+		writeProblemJSON(w, http.StatusServiceUnavailable, "directory.unavailable", "Profile state is unavailable.")
+		return false
+	}
+	if !collaboratorstate.CanSignIn(c.Status) {
+		writeJSONError(w, http.StatusUnauthorized, "unauthenticated")
 		return false
 	}
 	return s.allowPhoneProfile(w, r, c)
