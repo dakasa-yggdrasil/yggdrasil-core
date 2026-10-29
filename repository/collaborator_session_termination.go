@@ -15,6 +15,10 @@ import (
 // a termination caused by a status change (ADR-0087).
 const collaboratorStatusChangeSource = "collaborator_status_change"
 
+// collaboratorOffboardRepeatSource is the session_revocation.metadata source
+// of a POST /offboard on a collaborator who is already offboarded.
+const collaboratorOffboardRepeatSource = "offboard_repeat"
+
 // TerminateCollaboratorSessionsTx is the §13 INTEGRATION_CONTRACT fan-out for
 // one collaborator, inside the caller's transaction: every console session
 // and every OIDC refresh token is revoked, a global session_revocation row
@@ -97,4 +101,35 @@ func applyCollaboratorStatusSessionPolicyTx(ctx context.Context, tx *sql.Tx, pre
 		return fmt.Errorf("terminate sessions on status change: %w", err)
 	}
 	return nil
+}
+
+// OffboardCollaboratorTx is the status write of POST /offboard. It sets
+// offboarded through the same UPDATE and status session policy as
+// UpdateCollaboratorTx, so a change from any other status terminates once.
+// The endpoint keeps its always-terminate contract: when the collaborator
+// was already offboarded the policy has nothing to do (same status), so the
+// termination runs here instead, with reason offboarded and metadata
+// {source: "offboard_repeat", from_status, to_status}. A repeated offboard
+// therefore sweeps sessions and refresh tokens left from before the status
+// policy existed and emits session.terminated for the reactors again
+// (ADR-0087). The caller fires the back-channel logout after its commit.
+func OffboardCollaboratorTx(ctx context.Context, tx *sql.Tx, id string) (model.Collaborator, error) {
+	status := string(collaboratorstate.StatusOffboarded)
+	updated, previousStatus, err := updateCollaboratorOn(ctx, tx, model.UpdateCollaboratorRequest{ID: id, Status: &status})
+	if err != nil {
+		return model.Collaborator{}, err
+	}
+	if err := applyCollaboratorStatusSessionPolicyTx(ctx, tx, previousStatus, updated); err != nil {
+		return model.Collaborator{}, err
+	}
+	if previousStatus == updated.Status {
+		if _, err := TerminateCollaboratorSessionsTx(ctx, tx, updated, SessionRevocationReasonOffboarded, map[string]any{
+			"source":      collaboratorOffboardRepeatSource,
+			"from_status": previousStatus,
+			"to_status":   updated.Status,
+		}); err != nil {
+			return model.Collaborator{}, fmt.Errorf("terminate sessions on repeated offboard: %w", err)
+		}
+	}
+	return updated, nil
 }

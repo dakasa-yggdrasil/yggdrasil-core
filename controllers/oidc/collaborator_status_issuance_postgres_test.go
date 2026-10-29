@@ -22,7 +22,8 @@ import (
 // after a revocation; refusing to mint is the only safe answer. The status is
 // flipped with raw SQL, so no termination runs: the gate alone is proven, and
 // restoring active shows it reads the current row (the refused exchanges
-// consumed nothing and revoked nothing).
+// consumed nothing and revoked nothing). The provider introspection and
+// userinfo refuse an access token of such a subject the same way.
 func TestCollaboratorStatusNativeIssuancePostgres(t *testing.T) {
 	if os.Getenv("DB_URL") == "" && os.Getenv("REQUIRE_SESSION_LIFECYCLE_POSTGRES") == "true" {
 		t.Fatal("DB_URL is required by the session lifecycle PostgreSQL gate")
@@ -93,6 +94,16 @@ func TestCollaboratorStatusNativeIssuancePostgres(t *testing.T) {
 			if _, err := s.TokenRequestByRefreshToken(ctx, refresh); !errors.Is(err, op.ErrInvalidRefreshToken) {
 				t.Fatalf("the refresh grant was not invalid_grant: %v", err)
 			}
+			// An access token minted while active outlives the change: the
+			// provider introspection answers inactive (an error before any
+			// field is set) and userinfo refuses it.
+			introspection := new(oidc.IntrospectionResponse)
+			if err := s.SetIntrospectionFromToken(ctx, introspection, "jti-"+status, f.subject.String(), f.clientID); !errors.Is(err, repository.ErrCollaboratorCannotSignIn) || introspection.Subject != "" || introspection.Email != "" {
+				t.Fatalf("introspection described the token: err=%v subject=%q", err, introspection.Subject)
+			}
+			if err := s.SetUserinfoFromToken(ctx, new(oidc.UserInfo), "jti-"+status, f.subject.String(), ""); !errors.Is(err, repository.ErrCollaboratorCannotSignIn) {
+				t.Fatalf("userinfo answered: %v", err)
+			}
 		})
 	}
 
@@ -108,5 +119,9 @@ func TestCollaboratorStatusNativeIssuancePostgres(t *testing.T) {
 	// The refused refresh grants revoked nothing; the gate reads the current row.
 	if _, err := s.TokenRequestByRefreshToken(ctx, refresh); err != nil {
 		t.Fatalf("restoring active did not restore the refresh grant: %v", err)
+	}
+	introspection := new(oidc.IntrospectionResponse)
+	if err := s.SetIntrospectionFromToken(ctx, introspection, "jti-active", f.subject.String(), f.clientID); err != nil || introspection.Subject != f.subject.String() {
+		t.Fatalf("restoring active did not restore introspection: err=%v subject=%q", err, introspection.Subject)
 	}
 }

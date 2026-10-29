@@ -228,6 +228,70 @@ func TestCollaboratorSessionLifecycleHTTPPostgres(t *testing.T) {
 		}
 	})
 
+	t.Run("offboard_again_terminates_again", func(t *testing.T) {
+		person, _, _ := sessionLifecycleHTTPSignedIn(t, db)
+		path := "/api/v1/collaborators/" + person.ID.String() + "/offboard"
+		asAdmin(http.MethodPost, path, map[string]any{"reason": "voluntary"})
+		// A session left from before the status policy existed (the old PATCH,
+		// AMQP and status clock offboards terminated nothing).
+		if _, _, err := repository.CreateAuthSession(ctx, db, person.ID, nil, time.Hour); err != nil {
+			t.Fatal("leftover session fixture failed")
+		}
+		asAdmin(http.MethodPost, path, map[string]any{"reason": "voluntary"})
+		st := sessionLifecycleHTTPRead(t, db, person.ID)
+		if st.liveSessions != 0 || st.terminated != 2 || st.offboarded != 2 {
+			t.Fatalf("repeated offboard: %+v, want no live session and two of each event", st)
+		}
+		if len(st.revocationReasons) != 2 || st.revocationReasons[1] != repository.SessionRevocationReasonOffboarded {
+			t.Fatalf("repeated offboard revocations: %v", st.revocationReasons)
+		}
+		m := st.revocationMetadata[1]
+		if m["source"] != "offboard_repeat" || m["from_status"] != "offboarded" || m["to_status"] != "offboarded" || len(m) != 3 {
+			t.Fatalf("repeated offboard revocation metadata: %v", m)
+		}
+	})
+
+	t.Run("introspection_refuses_a_subject_who_cannot_sign_in", func(t *testing.T) {
+		clientID := "introspect-ci-" + uuid.NewString()
+		if err := repository.UpsertOIDCClient(ctx, db, model.OIDCClient{
+			ClientID: clientID, ClientSecretHash: "$2a$10$irrelevant",
+			RedirectURIs: []string{"https://introspect.example.test/cb"}, PostLogoutRedirectURIs: []string{},
+			Scopes: []string{"openid"}, GrantTypes: []string{"authorization_code", "refresh_token"}, PKCERequired: true,
+		}); err != nil {
+			t.Fatalf("OIDC client fixture failed: %v", err)
+		}
+		t.Cleanup(func() {
+			_, _ = db.Exec(`DELETE FROM public.oidc_refresh_tokens WHERE client_id=$1`, clientID)
+			_, _ = db.Exec(`DELETE FROM public.oidc_clients WHERE client_id=$1`, clientID)
+		})
+		person, _, _ := sessionLifecycleHTTPSignedIn(t, db)
+		refresh := "rt-" + uuid.NewString()
+		if err := repository.CreateOIDCRefreshToken(ctx, db, model.OIDCRefreshToken{
+			Token: refresh, CollaboratorID: person.ID, ClientID: clientID,
+			Scopes: []string{"openid"}, ExpiresAt: time.Now().Add(time.Hour),
+		}); err != nil {
+			t.Fatalf("refresh token fixture failed: %v", err)
+		}
+		s := &Server{db: db}
+		if resp, ok := s.introspectRefreshToken(ctx, refresh); !ok || !resp.Active {
+			t.Fatalf("an active subject's refresh token: ok=%v active=%v", ok, resp.Active)
+		}
+		// Raw SQL writes no revocation row, as for a collaborator who was
+		// already suspended before the status policy existed.
+		if _, err := db.Exec(`UPDATE public.collaborators SET status='suspended' WHERE id=$1`, person.ID); err != nil {
+			t.Fatal("status fixture failed")
+		}
+		if resp, ok := s.introspectRefreshToken(ctx, refresh); !ok || resp.Active || resp.Subject != "" {
+			t.Fatalf("a suspended subject's refresh token: ok=%v active=%v", ok, resp.Active)
+		}
+		if _, err := db.Exec(`UPDATE public.collaborators SET status='active' WHERE id=$1`, person.ID); err != nil {
+			t.Fatal("status fixture failed")
+		}
+		if resp, ok := s.introspectRefreshToken(ctx, refresh); !ok || !resp.Active {
+			t.Fatalf("introspection did not read the restored status: ok=%v active=%v", ok, resp.Active)
+		}
+	})
+
 	t.Run("session_reuse_falls_back_to_interactive_login", func(t *testing.T) {
 		clientID := "session-reuse-ci-" + uuid.NewString()
 		if err := repository.UpsertOIDCClient(ctx, db, model.OIDCClient{

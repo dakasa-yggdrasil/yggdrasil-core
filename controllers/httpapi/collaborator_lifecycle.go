@@ -59,13 +59,13 @@ func (s *Server) handleCollaboratorOffboard(w http.ResponseWriter, r *http.Reque
 	}
 	defer func() { _ = tx.Rollback() }()
 
-	// §13 INTEGRATION_CONTRACT: UpdateCollaboratorTx terminates every
+	// §13 INTEGRATION_CONTRACT: OffboardCollaboratorTx terminates every
 	// session and refresh token, records the session_revocation row and
 	// emits collaborator.session.terminated in THIS transaction (ADR-0087),
-	// so a crash cannot leave an offboarded collaborator with live sessions,
-	// and the offboard emits exactly one session.terminated.
-	st := "offboarded"
-	collab, err := repository.UpdateCollaboratorTx(r.Context(), tx, model.UpdateCollaboratorRequest{ID: id, Status: &st})
+	// so a crash cannot leave an offboarded collaborator with live sessions.
+	// Every call emits exactly one session.terminated, including a repeated
+	// offboard of a collaborator who is already offboarded.
+	collab, err := repository.OffboardCollaboratorTx(r.Context(), tx, id)
 	if err != nil {
 		writeMappedError(w, err)
 		return

@@ -186,6 +186,8 @@ func TestRequireAuthenticatedConsoleAPIs_AcceptsOPJWT(t *testing.T) {
 	}
 	defer db.Close()
 	expectCurrentPhoneProfile(mock, "11111111-1111-1111-1111-111111111111", false)
+	// baseClaims carries no iat, so the token counts as issued at the epoch.
+	expectGlobalRevocationRead(mock, "11111111-1111-1111-1111-111111111111", time.Unix(0, 0), false)
 	s := &Server{db: db, consoleJWTVerifier: newTestVerifier(priv, "kid-1", now)}
 
 	var gotCollab string
@@ -241,6 +243,69 @@ func expectCollaboratorStatusRow(mock sqlmock.Sqlmock, id, status string) {
 	mock.ExpectQuery(`(?i)FROM\s+public\.collaborators`).WithArgs(id).
 		WillReturnRows(sqlmock.NewRows(collaboratorColumns()).AddRow(id, "status-ci", status, "Status CI", "person@example.test", nil, nil,
 			[]byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), []byte("{}"), 0, time.Now(), time.Now()))
+}
+
+// expectGlobalRevocationRead expects the session_revocation read of a human
+// JWT branch (allowSignedInHumanID) for the subject and the token's iat, and
+// answers whether a global revocation at or after that iat exists.
+func expectGlobalRevocationRead(mock sqlmock.Sqlmock, id string, issuedAt time.Time, revoked bool) {
+	mock.ExpectQuery(`(?i)FROM\s+session_revocation`).WithArgs(id, sqlmock.AnyArg(), issuedAt).
+		WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(revoked))
+}
+
+// Gate-level: a termination writes a global session_revocation row, and a
+// reactivation must not revive an OP JWT minted before it. A token whose iat
+// is at or before such a row is refused with 401 before any handler runs,
+// although the collaborator is active again (ADR-0087).
+func TestRequireAuthenticatedConsoleAPIs_RefusesOPJWTIssuedBeforeAGlobalRevocation(t *testing.T) {
+	t.Setenv("YGGDRASIL_WORKFLOW_RUN_TOKEN", "")
+	priv, _ := rsa.GenerateKey(rand.Reader, 2048)
+	now := time.Unix(1_700_000_000, 0)
+	claims := baseClaims(now)
+	claims["iat"] = float64(now.Add(-5 * time.Minute).Unix())
+	tok := mintJWT(t, priv, "kid-1", claims)
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer db.Close()
+	expectCollaboratorStatusRow(mock, "11111111-1111-1111-1111-111111111111", "active")
+	expectGlobalRevocationRead(mock, "11111111-1111-1111-1111-111111111111", now.Add(-5*time.Minute), true)
+	s := &Server{db: db, consoleJWTVerifier: newTestVerifier(priv, "kid-1", now)}
+
+	called := false
+	h := s.requireAuthenticatedConsoleAPIs(http.HandlerFunc(func(w http.ResponseWriter, _ *http.Request) {
+		called = true
+		w.WriteHeader(http.StatusOK)
+	}))
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/collaborators", nil)
+	req.Header.Set("Authorization", "Bearer "+tok)
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized || called {
+		t.Fatalf("got %d (handler called=%v), want 401 before any handler", w.Code, called)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestJWTIssuedAtReadsNumericClaims(t *testing.T) {
+	for name, tc := range map[string]struct {
+		claims map[string]any
+		want   int64
+	}{
+		"float":   {map[string]any{"iat": float64(1_700_000_123)}, 1_700_000_123},
+		"number":  {map[string]any{"iat": json.Number("1700000124")}, 1_700_000_124},
+		"int64":   {map[string]any{"iat": int64(1_700_000_125)}, 1_700_000_125},
+		"missing": {map[string]any{}, 0},
+		"string":  {map[string]any{"iat": "1700000126"}, 0},
+	} {
+		if got := jwtIssuedAt(tc.claims).Unix(); got != tc.want {
+			t.Errorf("%s: got %d, want %d", name, got, tc.want)
+		}
+	}
 }
 
 // Gate-level: an OP JWT outlives a status change by up to its lifetime. Its

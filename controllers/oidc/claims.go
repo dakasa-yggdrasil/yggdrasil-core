@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/collaboratorstate"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/monitoring"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
@@ -17,15 +19,36 @@ import (
 // strings when the collaborator can't be located — callers decide whether
 // to error or fall back to a token-only response.
 func loadCollaboratorForUserinfo(ctx context.Context, db *sql.DB, userID string) (id uuid.UUID, email, displayName string, err error) {
-	parsed, err := uuid.Parse(userID)
-	if err != nil {
-		return uuid.Nil, "", "", fmt.Errorf("invalid user id: %w", err)
-	}
-	c, err := repository.GetCollaborator(ctx, db, parsed.String())
+	c, err := loadUserinfoCollaborator(ctx, db, userID)
 	if err != nil {
 		return uuid.Nil, "", "", err
 	}
 	return c.ID, c.PrimaryEmail, c.DisplayName, nil
+}
+
+// loadSignedInCollaboratorForUserinfo is loadCollaboratorForUserinfo for
+// the endpoints that answer about a token a relying party already holds
+// (userinfo and the provider introspection): a subject who cannot sign in
+// (collaboratorstate.CanSignIn) answers repository.ErrCollaboratorCannotSignIn,
+// so the provider answers 403 on userinfo and {"active":false} on
+// introspection while the token is still unexpired (ADR-0087).
+func loadSignedInCollaboratorForUserinfo(ctx context.Context, db *sql.DB, userID string) (id uuid.UUID, email, displayName string, err error) {
+	c, err := loadUserinfoCollaborator(ctx, db, userID)
+	if err != nil {
+		return uuid.Nil, "", "", err
+	}
+	if !collaboratorstate.CanSignIn(c.Status) {
+		return uuid.Nil, "", "", repository.ErrCollaboratorCannotSignIn
+	}
+	return c.ID, c.PrimaryEmail, c.DisplayName, nil
+}
+
+func loadUserinfoCollaborator(ctx context.Context, db *sql.DB, userID string) (model.Collaborator, error) {
+	parsed, err := uuid.Parse(userID)
+	if err != nil {
+		return model.Collaborator{}, fmt.Errorf("invalid user id: %w", err)
+	}
+	return repository.GetCollaborator(ctx, db, parsed.String())
 }
 
 // buildTeamsClaim returns the slugs of the (active) teams the collaborator

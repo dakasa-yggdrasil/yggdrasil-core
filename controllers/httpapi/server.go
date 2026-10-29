@@ -1031,7 +1031,7 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 			if jwtClaims, ok := tryBearerHeader(r, s.consoleJWTVerifier); ok {
 				sub, _ := jwtClaims["sub"].(string)
 				if sub != "" {
-					if !s.allowSignedInHumanID(w, r, sub) {
+					if !s.allowSignedInHumanID(w, r, sub, jwtIssuedAt(jwtClaims)) {
 						return
 					}
 					// Normalize to the SAME claim keys the session path sets,

@@ -7,6 +7,7 @@ import (
 	"errors"
 	"io"
 	"net/http"
+	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/collaboratorstate"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/contactphone"
@@ -50,11 +51,14 @@ func (s *Server) allowPhoneProfileID(w http.ResponseWriter, r *http.Request, id 
 
 // allowSignedInHumanID gates the branches that accept a human JWT this OP
 // signed (console gate, surface ForwardAuth). An access JWT outlives a status
-// change by up to its lifetime, so its subject is re-read here with the same
-// single collaborator read as allowPhoneProfileID: a subject who cannot sign
-// in (collaboratorstate.CanSignIn) answers 401, then the phone profile rule
-// applies (ADR-0087).
-func (s *Server) allowSignedInHumanID(w http.ResponseWriter, r *http.Request, id string) bool {
+// change and a termination by up to its lifetime, so its subject is re-read
+// here with the same single collaborator read as allowPhoneProfileID: a
+// subject who cannot sign in (collaboratorstate.CanSignIn) answers 401, a
+// token issued at or before a global session_revocation row of the subject
+// (repository.IsSessionRevoked with the token's iat) answers 401, so a
+// reactivation does not revive a token minted before the termination, then
+// the phone profile rule applies (ADR-0087).
+func (s *Server) allowSignedInHumanID(w http.ResponseWriter, r *http.Request, id string, issuedAt time.Time) bool {
 	if s.db == nil {
 		writeProblemJSON(w, http.StatusServiceUnavailable, "directory.unavailable", "Profile state is unavailable.")
 		return false
@@ -68,7 +72,36 @@ func (s *Server) allowSignedInHumanID(w http.ResponseWriter, r *http.Request, id
 		writeJSONError(w, http.StatusUnauthorized, "unauthenticated")
 		return false
 	}
+	revoked, err := repository.IsSessionRevoked(r.Context(), s.db, c.ID, nil, issuedAt)
+	if err != nil {
+		writeProblemJSON(w, http.StatusServiceUnavailable, "directory.unavailable", "Profile state is unavailable.")
+		return false
+	}
+	if revoked {
+		writeJSONError(w, http.StatusUnauthorized, "unauthenticated")
+		return false
+	}
 	return s.allowPhoneProfile(w, r, c)
+}
+
+// jwtIssuedAt reads the iat claim of a verified JWT, a JSON number in whole
+// seconds. A token without a readable iat counts as issued at the epoch, so
+// any global revocation of its subject refuses it (fail closed). Core always
+// sets iat.
+func jwtIssuedAt(claims map[string]any) time.Time {
+	switch v := claims["iat"].(type) {
+	case float64:
+		return time.Unix(int64(v), 0)
+	case json.Number:
+		if n, err := v.Int64(); err == nil {
+			return time.Unix(n, 0)
+		}
+	case int64:
+		return time.Unix(v, 0)
+	case int:
+		return time.Unix(int64(v), 0)
+	}
+	return time.Unix(0, 0)
 }
 
 func (s *Server) handleSelfPhoneGet(w http.ResponseWriter, r *http.Request) {
