@@ -36,9 +36,12 @@ so a session of a collaborator who is `pending_start`, `on_leave`,
 `suspended` or `offboarded` answers 401 and clears the cookie on the
 next request, even if no termination revoked its row. A status change
 to one of those statuses terminates every session and OIDC refresh
-token of the collaborator in the same transaction and emits
+token of the collaborator, and closes the OIDC authorization requests
+already bound to them, in the same transaction and emits
 `collaborator.session.terminated`; changing back to `active` revokes
 whatever was left over, so a reactivation never revives an old session.
+A human OIDC JWT issued at or before such a termination stays refused on
+the console gate and on `/api/v1/auth/verify` after a reactivation.
 
 ## Password login
 

@@ -26,7 +26,15 @@ the login:
   session, so a suspended human could keep obtaining relying party tokens.
 - The human JWT branches of the console gate and of the surface ForwardAuth
   accepted an access JWT for its whole lifetime (15 minutes, or a per-client
-  override up to 24 hours) after a status change.
+  override up to 24 hours) after a status change. The provider introspection
+  (`oauth/introspect`) and userinfo described such a token as active, and
+  Core's `/api/v1/oidc/introspect` called a refresh token active without
+  reading the status.
+- An OIDC authorization request bound to a collaborator stayed usable: the
+  provider callback (`/authorize/callback?id=`) read it by id only, with no
+  consumed or expiry check, and minted a fresh code from it with no new
+  authentication. Whoever kept a request id and its PKCE verifier could get
+  new tokens after a termination, a credential reset or a reactivation.
 - Only the offboard handler terminated sessions, with its own inline copy of
   the fan-out. Suspend, unsuspend, PATCH, AMQP `collaborator.update`, absence
   start and end, re-onboard and the status clock only set the status, and the
@@ -51,13 +59,20 @@ token from Core, whatever path wrote the status:
    self-service reset use it.
 2. **Session validity.** `ResolveAuthSession` refuses a session whose current
    collaborator cannot sign in with the unwrapped `ErrAuthSessionNotFound`, so
-   every caller answers 401 and clears the cookie. It reads the collaborator
-   it already read; nothing caches a session or its collaborator across
+   every caller treats the session as unauthenticated: the console gate and
+   `/auth/session` answer 401 and clear the cookie, `/auth/verify` answers
+   401, Core introspection answers `{"active":false}`, and SSO reuse and the
+   SAML IdP fall back to the interactive login. It reads the collaborator it
+   already read; nothing caches a session or its collaborator across
    requests, so the refusal applies on the next request.
 3. **Human JWT branches.** The console gate JWT branch and ForwardAuth path 1
    (when `sub` is set) re-read the subject in the single read the phone
-   profile rule already made and answer 401 when it cannot sign in. The
-   workflow and machine branches are unchanged.
+   profile rule already made and answer 401 when it cannot sign in. They
+   then answer 401 when the token's `iat` is at or before a global
+   `session_revocation` row of the subject (`repository.IsSessionRevoked`
+   with no session id, one indexed read), so a reactivation does not revive a
+   JWT minted before a termination. A token without a readable `iat` counts
+   as issued at the epoch. The workflow and machine branches are unchanged.
 4. **OIDC mint gate.** `repository.RequireIssuableSubject` reads status and
    phone profile in one statement: status first
    (`ErrCollaboratorCannotSignIn`), then the phone profile. The provider
@@ -65,12 +80,23 @@ token from Core, whatever path wrote the status:
    pre-bound at creation), saving a code, exchanging a code (before the code
    is consumed, so a refusal does not burn it), and minting access and
    refresh tokens. The refresh grant answers `invalid_grant` for such a
-   subject.
+   subject. The provider introspection answers `{"active":false}` and
+   userinfo answers 403 for an access token of such a subject, and Core's
+   `/api/v1/oidc/introspect` answers inactive for its refresh token, as the
+   refresh grant does.
+   An authorization request is honored, and gets a code, only while it is
+   open: not consumed (its code was exchanged, or a termination closed it)
+   and inside its lifetime (`AuthorizationCodeLifetime`, 10 minutes from
+   creation, which is also the lifetime of the third-party login state that
+   binds it). A closed request answers like one that never existed, and a
+   code of a consumed request does not exchange.
 5. **SSO reuse** needs no code of its own: it resolves the session through
    `ResolveAuthSession`, so it falls back to the interactive login, whose
    callback refuses anyone who cannot sign in.
 6. **One termination primitive.** `repository.TerminateCollaboratorSessionsTx`
-   revokes every console session and OIDC refresh token, writes one global
+   revokes every console session and OIDC refresh token, closes every live
+   authorization request bound to the collaborator and its unexchanged codes
+   (`repository.RevokeAllAuthSessions`), writes one global
    `session_revocation` row and emits `collaborator.session.terminated`
    (idempotency key `session.terminated.<revocation id>`), in the caller's
    transaction. Credential replacement (setup re-access, reset, MFA reset)
@@ -87,14 +113,19 @@ token from Core, whatever path wrote the status:
      "collaborator_status_change", from_status, to_status}`. Every change to a
      status that cannot sign in terminates, including `suspended` to
      `offboarded` and `offboarded` to `pending_start`;
-   - the new status can sign in (reactivation): leftover sessions and refresh
-     tokens are revoked with no revocation row, event or back-channel, so a
-     reactivation never revives a session opened before it.
+   - the new status can sign in (reactivation): leftover sessions, refresh
+     tokens and bound authorization requests are revoked with no revocation
+     row, event or back-channel, so a reactivation never revives a session
+     opened before it.
    Concurrent writers are serialized by the version check (the loser gets
    `ErrConcurrentUpdate` and rolls back), the termination commits or rolls
    back with the status, and a termination failure fails the status write.
    The offboard handler drops its inline copy and emits exactly one
-   `session.terminated`.
+   `session.terminated` per call. It writes through
+   `repository.OffboardCollaboratorTx`, which terminates by itself, with
+   metadata source `offboard_repeat`, when the collaborator is already
+   offboarded, so a repeated `/offboard` keeps the old always-terminate
+   behavior and sweeps what was left from before this change.
 8. **Back-channel after commit.** When a write set a status that cannot sign
    in, RFC 8417 back-channel logout fires after the commit: on the HTTP
    status writers, on the AMQP consumer and on auto-offboards of the status
@@ -112,8 +143,19 @@ untouched.
 - A suspended, on-leave, offboarded or not-yet-started collaborator is
   refused on the next request by every session, reuse and mint path,
   including sessions opened before this change, which are swept at their
-  next status change. No `session.terminated` is emitted retroactively for a
-  collaborator who was already not active when this change ships.
+  next status change or at a repeated `/offboard`. No `session.terminated` is
+  emitted retroactively for a collaborator who was already not active when
+  this change ships.
+- The human JWT branches now read the global `session_revocation` rows, so
+  every writer of such a row refuses the subject's earlier JWTs there until
+  the relying party gets a new token: a termination, a credential reset,
+  admin revoke-sessions, a password change (which keeps the current console
+  session) and an RP-initiated logout of any one client (`TerminateSession`
+  writes a global row with the client in its metadata). Introspection
+  already read those rows. A token minted in the same second as a revocation
+  is refused too, because `iat` has whole seconds.
+- An authorization request older than its lifetime no longer resumes, and
+  neither does one whose code was exchanged.
 - Visible behavior changes: a long absence (`on_leave`) now ends sessions,
   while vacation keeps the status `active` and does not; re-onboarding emits
   a `session.terminated`; on offboard, `session.terminated` precedes
@@ -139,14 +181,16 @@ untouched.
   revocation; items 2 to 4 refuse it and the next status change sweeps it.
 - Follow-ups, outside this decision: `DELETE` of a collaborator (the cascade
   removes the rows and emits nothing); admin revoke-sessions still leaves
-  refresh tokens alive; PATCH and status clock offboards still write no
-  `collaborator.offboarded` event or offboard lifecycle row; `prompt` and
-  `max_age` are ignored; an `id_token_hint` can pre-bind a request for an
-  active subject; `POST /api/v1/auth/third-party/login`; reaching relying
-  parties without `offline_access` by back-channel (creating links on
-  `CreateAccessToken`); userinfo has no status check; outstanding setup,
-  reset and enroll links are not invalidated (none of them mints a session
-  for a collaborator who cannot sign in).
+  refresh tokens alive; PATCH offboards write neither the
+  `collaborator.offboarded` event nor an offboard lifecycle row, and status
+  clock offboards write the lifecycle row but no `collaborator.offboarded`
+  event; `prompt` and `max_age` are ignored; an `id_token_hint` can pre-bind
+  a request for an active subject; `POST /api/v1/auth/third-party/login`;
+  reaching relying parties without `offline_access` by back-channel
+  (creating links on `CreateAccessToken`); nothing deletes old
+  `oidc_auth_requests` and `oidc_auth_codes` rows; outstanding setup, reset
+  and enroll links are not invalidated (none of them mints a session for a
+  collaborator who cannot sign in).
 
 ## Related
 

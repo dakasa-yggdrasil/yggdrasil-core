@@ -30,10 +30,18 @@ default = 30 days). A session is valid only while its collaborator can
 sign in, and only `active` signs in (ADR-0087): a session, an SSO session
 reuse (third-party start with `auth_request_id`, the OIDC login bridge, the
 SAML IdP), a human OIDC JWT on the console gate or on `/api/v1/auth/verify`,
-and every OIDC authorization, code and token mint are refused for a
-collaborator who is `pending_start`, `on_leave`, `suspended` or
-`offboarded`, on the next request (401; the refresh grant answers
-`invalid_grant`). Logout revokes its own session at once.
+token introspection and userinfo, and every OIDC authorization, code and
+token mint are refused for a collaborator who is `pending_start`,
+`on_leave`, `suspended` or `offboarded`, on the next request (401 on the
+console gate, `/auth/session` and `/auth/verify`, `{"active":false}` on
+introspection, 403 on userinfo, a fallback to the interactive login on SSO
+and SAML reuse, `invalid_grant` on the refresh grant). A human OIDC JWT is
+also refused on the console gate and on `/api/v1/auth/verify` when its
+`iat` is at or before a global `session_revocation` row of its subject, so
+a reactivation does not revive a token minted before a termination. An
+OIDC authorization request resumes only while open: one whose code was
+exchanged, that a termination closed, or that is older than 10 minutes
+mints no code. Logout revokes its own session at once.
 
 The first admin on a fresh install is provisioned by the
 `first_run_bootstrap` addon. Once the DB has any collaborator, the
@@ -58,16 +66,20 @@ Link rules:
   `too_short`, `contains_identity`, `too_common`) never consumes the link.
 - Every path that replaces a credential through a link (setup re-access,
   reset, `reset_mfa`) runs the §13 fan-out: console sessions and OIDC
-  refresh tokens are revoked, a `session_revocation` row is written,
-  `collaborator.session.terminated` is emitted and back-channel logout
-  fires. A first access has nothing to revoke and emits nothing. Every
-  status change to a status that cannot sign in (suspend, PATCH, AMQP
-  `collaborator.update`, long absence, offboard, re-onboard, the status
-  clock) runs the same fan-out once, in the status change's transaction,
-  with reason `offboarded` or `admin_revoked` and metadata
-  `{source, from_status, to_status}`, and fires back-channel logout after
-  the commit. A reactivation only revokes leftover sessions and refresh
-  tokens, with no row or event (ADR-0087).
+  refresh tokens are revoked, OIDC authorization requests already bound to
+  the collaborator and their unexchanged codes are closed, a
+  `session_revocation` row is written, `collaborator.session.terminated`
+  is emitted and back-channel logout fires. A first access has nothing to
+  revoke and emits nothing. Every status change to a status that cannot
+  sign in (suspend, PATCH, AMQP `collaborator.update`, long absence,
+  offboard, re-onboard, the status clock) runs the same fan-out once, in
+  the status change's transaction, with reason `offboarded` or
+  `admin_revoked` and metadata `{source, from_status, to_status}`, and
+  fires back-channel logout after the commit; a repeated `/offboard` of a
+  collaborator who is already offboarded runs it too, with source
+  `offboard_repeat`. A reactivation only revokes leftover sessions, refresh
+  tokens and bound authorization requests, with no row or event
+  (ADR-0087).
 - A setup link clears the login lockout (`failed_attempts`,
   `locked_until`): the next step for an enrolled account is the login.
 - `/auth/passwords/forgot` and `/auth/passwords/reset` follow the login's
