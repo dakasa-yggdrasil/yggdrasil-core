@@ -130,10 +130,18 @@ State signing prevents CSRF. The signing key is config (
 
 ### Auto-link by email
 
-When `auto_link_by_email: true` on the provider, a successful
-third-party login matches the userinfo email against existing
-collaborators. If a single match exists, the third-party identity is
-linked to that collaborator. Otherwise a new collaborator is created.
+When `auto_link_by_email: true` on the provider, the first callback
+for a provider subject Core does not know matches the userinfo email
+against existing collaborators. If a collaborator who can sign in has
+that primary email, the third-party identity is linked to them. When no
+collaborator has it, the callback creates one only when the OIDC
+provider settings enable `auto_provision`, the provider marks the email
+verified and its domain is allowed; otherwise the login is refused.
+
+The email and subject always come from the provider's userinfo for the
+code the callback exchanged. Core has no route that links or signs in
+from a provider, subject or email the caller supplies:
+`POST /api/v1/auth/third-party/login`, which did, is removed (ADR-0088).
 
 This is the right default for most teams (engineers' GitHub email
 already matches their work email). Disable it when you want admin

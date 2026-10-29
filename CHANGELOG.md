@@ -5,6 +5,34 @@ All notable changes to yggdrasil-core are documented here.
 ## [Unreleased]
 
 ### Security
+- **BREAKING: the body-asserted third-party identity exchange is removed
+  (ADR-0088).** `POST /api/v1/auth/third-party/login` took a provider,
+  subject, e-mail and `auto_link_by_email` from the request body and passed
+  them to `repository.AuthenticateWithThirdPartyIdentity` as if a provider
+  had verified them. The route was public (outside the console gate,
+  CSRF-exempt, no rate limit), so an anonymous caller could link a new
+  identity to any active collaborator by e-mail, or name the subject of an
+  identity already linked, and get a full session for any collaborator with
+  MFA enrolled (the third-party session checks enrollment, not a factor).
+  For a collaborator without MFA enrolled, the enroll-required answer carried
+  a live MFA enroll link and the collaborator record, which let the caller
+  enroll a factor of their own and then sign in, so every active
+  collaborator was exposed.
+  Every method and spelling of the path now answers 404 from the mux. The
+  browser flow (`GET /api/v1/auth/third-party/start/{provider}` and
+  `GET /api/v1/auth/third-party/callback/{provider}`) is unchanged and is the
+  only third-party login; the callback still builds the request from the
+  provider's own token exchange and userinfo.
+  `repository.AuthenticateWithThirdPartyIdentity` and
+  `model.LoginWithThirdPartyIdentityRequest` stay, with the callback as their
+  only caller. Regression guards: the route leaves the
+  `TestNoUngatedMutatingRoutes` allowlist, a router-level unit test requires
+  404 or 405 with no cookie and no database access, and a new PostgreSQL step
+  in the native OIDC integration workflow proves that the removed path links
+  and signs in nobody while the browser flow still links by e-mail, signs the
+  linked identity in again and refuses a forged state. **Breaking for** any
+  client of the route (the `surface-auth` proxy path list and a CLI smoke
+  step, changed in their own repositories). No migration, no new event.
 - **A collaborator who can no longer sign in loses every session, and no
   session, SSO reuse or OIDC mint path serves them (ADR-0087).** Only
   `active` signs in (`collaboratorstate.CanSignIn`, the login rule).
@@ -247,6 +275,10 @@ All notable changes to yggdrasil-core are documented here.
   SCIM, and SAML mutation routes while keeping workflow credentials excluded.
 
 ### Removed
+- **BREAKING: `POST /api/v1/auth/third-party/login` (ADR-0088).** The
+  handler `handleAuthThirdPartyLogin` is deleted; see Security. It skips the
+  one-release deprecation window on purpose: it was a security exposure, not
+  a contract to migrate.
 - **BREAKING: the materialized `tartaro_actions` trait is retired (ADR-0085,
   superseding ADR-0009).** `POST /api/v1/collaborators/{id}/sync-tartaro-actions`
   is removed, and the console effective-actions response no longer carries

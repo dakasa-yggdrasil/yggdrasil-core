@@ -249,6 +249,9 @@ func DeleteThirdPartyIdentity(
 }
 
 // AuthenticateWithThirdPartyIdentity validates one externally verified identity and opens a new session.
+// It trusts req.Provider, req.Subject and req.Email, so its only caller must be
+// the browser callback, which takes them from the provider's own token exchange
+// and userinfo; never pass it values a caller supplied (ADR-0088).
 func AuthenticateWithThirdPartyIdentity(
 	ctx context.Context,
 	db *sql.DB,

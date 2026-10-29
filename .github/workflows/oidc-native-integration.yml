@@ -277,6 +277,40 @@ jobs:
               raise SystemExit(f"Session lifecycle gate incomplete: missing={sorted(expected - passed)}, skipped={sorted(skipped)}")
           print("Every collaborator session lifecycle PostgreSQL scenario executed.")
           PY
+      # ADR-0088: POST /api/v1/auth/third-party/login, which opened a session
+      # from a provider, subject and email taken from the request body, is
+      # gone. This step proves against the migrated schema that the removed
+      # route links and signs in nobody, and that the browser login (start,
+      # provider code exchange, userinfo, callback) still links an active
+      # collaborator by e-mail, signs the linked identity in again and refuses
+      # a forged state. The REQUIRE flag turns a missing DB_URL into a failure
+      # instead of a skip.
+      - name: Prove the third-party browser login against the migrated schema
+        if: ${{ !cancelled() }}
+        env:
+          REQUIRE_THIRD_PARTY_LOGIN_POSTGRES: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -json -p 1 -count=1 -timeout=5m ./controllers/httpapi -run '^TestThirdPartyBrowserLoginHTTPPostgres$' | tee third-party-login-results.jsonl
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          root = "TestThirdPartyBrowserLoginHTTPPostgres"
+          scenarios = {
+              "identity_exchange_route_is_gone",
+              "forged_state_is_refused",
+              "browser_callback_links_by_email_and_signs_in",
+              "returning_identity_signs_in_again",
+          }
+          expected = {root} | {f"{root}/{name}" for name in scenarios}
+          events = [json.loads(line) for line in Path("third-party-login-results.jsonl").read_text().splitlines() if line.strip()]
+          passed = {event.get("Test") for event in events if event.get("Action") == "pass"}
+          skipped = {event.get("Test") for event in events if event.get("Action") == "skip"}
+          if expected - passed or skipped:
+              raise SystemExit(f"Third-party login gate incomplete: missing={sorted(expected - passed)}, skipped={sorted(skipped)}")
+          print("Every third-party browser login PostgreSQL scenario executed.")
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -286,4 +320,5 @@ jobs:
             contact-directory-results.jsonl
             mfa-contact-results.jsonl
             session-lifecycle-results.jsonl
+            third-party-login-results.jsonl
           if-no-files-found: warn

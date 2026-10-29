@@ -133,6 +133,9 @@ with `?kind=X` in the query string.
 - `/api/v1/auth/passwords/*` — local password (Argon2id, scheme stored in DB).
 - `/api/v1/auth/third-party/{start,callback}/{provider}` — OIDC/SAML
   third-party login. Providers configured via `auth_provider` manifests.
+  This browser flow is the only third-party login: never add a route that
+  opens a session from a provider, subject or email the caller supplies
+  (ADR-0088 removed `POST /api/v1/auth/third-party/login`).
 - `/api/v1/auth/session` — current session.
 - MFA via TOTP/WebAuthn/recovery codes (`auth/mfa/...`).
 - SCIM v2 at `/api/v1/auth/scim/*`.
