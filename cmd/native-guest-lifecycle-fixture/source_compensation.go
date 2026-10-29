@@ -18,6 +18,35 @@ import (
  "github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 )
 
+// This qualification-only marker attests that the authority's original
+// PublishBytes returned successfully, not that this marker's own Publish did.
+type originalSourceCleanupPublication struct {
+ Schema string `json:"schema"`
+ Scope string `json:"scope"`
+ NativeCase string `json:"native_case"`
+ CoreSource string `json:"core_source"`
+ GuestSource string `json:"guest_source"`
+ ParentGrantID string `json:"parent_grant_id"`
+ AuthorityID string `json:"authority_id"`
+ AuthoritySHA256 string `json:"authority_sha256"`
+ Slot int `json:"slot"`
+ AuthorityPublishedAt time.Time `json:"authority_published_at"`
+ CleanupDeadline time.Time `json:"cleanup_deadline"`
+ OriginalContextDeadline time.Time `json:"original_context_deadline"`
+}
+
+func publishOriginalSourceCleanupAuthority(ctx context.Context, dir string, wire []byte, body q.SourceFailureCleanupBody, key ed25519.PrivateKey) error {
+ if !q.SourceCompensationCase(body.NativeCase) || q.CanonicalSourceCompensationCase(body.NativeCase) || body.Slot!=2 || len(key)!=ed25519.PrivateKeySize {return q.ErrOriginalUnknown}
+ if _,err:=q.PublishBytes(ctx,filepath.Join(dir,"source-failure-cleanup-authority.json"),wire);err!=nil{return err}
+ publishedAt:=time.Now().UTC()
+ if publishedAt.Before(body.IssuedAt) || !publishedAt.Before(body.CleanupDeadline) || !publishedAt.Before(body.OriginalContextDeadline){return q.ErrOriginalUnknown}
+ marker:=originalSourceCleanupPublication{Schema:"original_source_cleanup_authority_publication_v1",Scope:"same_original_source_authority_publication_return_only",NativeCase:body.NativeCase,CoreSource:body.CoreSource,GuestSource:body.GuestSource,ParentGrantID:body.ParentGrantID,AuthorityID:body.AuthorityID,AuthoritySHA256:capacity.BusinessCreationSHA256(wire),Slot:body.Slot,AuthorityPublishedAt:publishedAt,CleanupDeadline:body.CleanupDeadline,OriginalContextDeadline:body.OriginalContextDeadline}
+ markerWire,err:=json.Marshal(marker);if err!=nil{return err}
+ signed:=q.SourceFailureCleanupAuthority{Body:markerWire,Signature:base64.StdEncoding.EncodeToString(ed25519.Sign(key,markerWire))}
+ _,err=q.Publish(ctx,filepath.Join(dir,"source-failure-cleanup-authority-publication.json"),signed)
+ return err
+}
+
 // Runs inside the SAME original fixture, never a provider or production API.
 // It preserves accepted/uncertain create transport and never fabricates a
 // positive enrollment for an uncertain reply. The frontend owns its actual
@@ -60,7 +89,7 @@ func (f *fixture) finishOriginalSourceCompensation(ctx context.Context,p model.C
  var authorityReadback []byte
  if err=f.db.QueryRowContext(ctx,`SELECT authority_wire FROM public.capacity_source_failure_cleanup_originals WHERE parent_grant_id=$1`,pre.OriginalCreateGrantID).Scan(&authorityReadback);err!=nil || !bytes.Equal(authorityReadback,authorityWire){return q.ErrOriginalUnknown}
  if err=store.CheckSourceFailureCleanupLease(ctx,f.policy,pre.OriginalCreateGrantID);err!=nil{return err}
- if _,err=q.PublishBytes(ctx,filepath.Join(q.SlotDirectory(f.private,2),"source-failure-cleanup-authority.json"),authorityWire);err!=nil{return err}
+ if err=publishOriginalSourceCleanupAuthority(ctx,q.SlotDirectory(f.private,2),authorityWire,body,f.corePrivate);err!=nil{return err}
  physical,err:=f.realm.ReadSourceFailureCleanup(ctx,authority,body);if err!=nil{return err}
  var retainedPhysical q.SourceFailureCleanupPhysical
  physicalWire,err:=q.Await(ctx,filepath.Join(q.SlotDirectory(f.private,2),"source-failure-cleanup-physical.json"),&retainedPhysical);if err!=nil || capacity.GuestRetirementSHA(retainedPhysical)!=capacity.GuestRetirementSHA(physical){return q.ErrOriginalUnknown}
