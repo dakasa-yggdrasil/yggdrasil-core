@@ -5,6 +5,33 @@ All notable changes to yggdrasil-core are documented here.
 ## [Unreleased]
 
 ### Security
+- **BREAKING: Tartaro effective actions use one authorization predicate,
+  answer a god-mode verdict and expand wildcards (ADR-0086).** The console variant of
+  `GET /api/v1/collaborators/{id}/effective-tartaro-actions` now counts only
+  memberships the RBAC projection honors now (membership active, team active,
+  inside the `starts_at`/`ends_at` window), exactly like the directory machine
+  variant, and gives a collaborator who is not `active` (`pending_start`,
+  `on_leave`, `suspended`, `offboarded`) no action: it answers empty
+  `effective_via_teams` and `computed_tartaro_actions` with `god_mode` false
+  where the directory variant answers 404, so both variants confer the same
+  authority. Both variants add a boolean
+  `god_mode`: true only for an `active` collaborator whose
+  `traits.yggdrasil_admin` is `true`, `"true"` or `"1"`; it is never derived
+  from a grant. A `*` grant on the configured Tartaro instance now expands to
+  every `action_catalog` entry with category `permission` of that instance's
+  active integration type (deduplicated, sorted, `*` never returned); when the
+  catalog cannot be resolved the wildcard contributes nothing and the read is
+  still answered. `*` on other instances is unchanged. The grants of all
+  membership teams are read in one statement instead of one team lookup and
+  one grant read per membership. **Behavior change (the breaking part):**
+  the console variant can answer fewer actions than before (windowed or inactive-team
+  memberships, collaborators who are not active). **Rollout precondition:**
+  the directory envelope gains the `god_mode` key, and dakasa-tartaro-api,
+  tartaro-legal and tartaro-review decode it strictly. Their builds that
+  accept an optional boolean `god_mode` must be running in production before
+  this Core, or any Core with this change cherry-picked onto it, is rolled
+  out; otherwise every evidence-gated private read of those services fails
+  closed until they are redeployed. Core has no switch for the key.
 - **BREAKING: a Core without an explicit development `YGGDRASIL_ENV` no
   longer accepts anonymous workflow dispatch, event publishes, or
   integration install, bootstrap and product deploy requests
@@ -110,7 +137,8 @@ All notable changes to yggdrasil-core are documented here.
   allowlisted instance, each behind its own capability. The credential is
   accepted only on those three GET routes, served with minimal projections
   (`id`, `primary_email`, `display_name`, `status`; `collaborator_id`,
-  `computed_tartaro_actions`), never becomes a collaborator, and fails closed
+  `computed_tartaro_actions` and, since ADR-0086, `god_mode`), never becomes
+  a collaborator, and fails closed
   with 401/403 on expired, revoked, out-of-scope, wrong-method, path-variant,
   broad-query, and foreign-route attempts. The directory claim is decided
   before the gate's public pass-through on every request, so a directory
@@ -122,7 +150,8 @@ All notable changes to yggdrasil-core are documented here.
   now (active membership, active team, inside the `starts_at`/`ends_at`
   window; one predicate shared with the RBAC subject resolver), so the
   machine answer is never wider than what Yggdrasil authorizes; the console
-  drift view is unchanged. Database failures on the machine path answer a
+  variant now uses the same predicate and its drift view is removed
+  (ADR-0085, ADR-0086). Database failures on the machine path answer a
   fixed 500 `internal.error` without the driver text. Every attributable
   outcome is audited as `directory.machine_read` synchronously and
   fail-closed: the row is stored before the outcome is answered and, when it
@@ -167,6 +196,19 @@ All notable changes to yggdrasil-core are documented here.
   stays quarantined until both its caller and workflow inputs are purpose-bound.
 - Preserved the dedicated auth-admin credential only on the exact provider,
   SCIM, and SAML mutation routes while keeping workflow credentials excluded.
+
+### Removed
+- **BREAKING: the materialized `tartaro_actions` trait is retired (ADR-0085,
+  superseding ADR-0009).** `POST /api/v1/collaborators/{id}/sync-tartaro-actions`
+  is removed, and the console effective-actions response no longer carries
+  `trait_tartaro_actions` or `drift`; Core never reads the trait for an
+  answer. The removal skips the one-release deprecation window on purpose
+  (ADR-0085): the route only triggered a writer that replaces whole trait
+  objects, and the known consumers read only `computed_tartaro_actions`. A
+  client that calls the route now gets no handler and no event, and a client
+  that decoded the two fields reads them as absent. The one-shot
+  `scripts/migrate_tartaro_roles_to_actions` and the binary committed at the
+  repository root are deleted.
 
 ## [2.18.1] - 2026-08-29
 

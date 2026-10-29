@@ -6,7 +6,7 @@ tracked** (see `AGENTS.md` § Spec-driven docs). The domain-wide model is define
 monorepo root `docs/adr/0001-adopt-adr-plus-scratch-model.md`. To change a decision, write a
 NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 
-**27 decisions.**
+**34 decisions.**
 
 | ADR | Title | Status | Date | Scope |
 |-----|-------|--------|------|-------|
@@ -18,7 +18,7 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0006](0006-auto-heal-integration-type-manifest-drift-from-the-adapter-s.md) | Auto-heal `integration_type` manifest drift from the adapter's live `describe` response, preserving only the operator-owned `reactors` field | Accepted | 2026-05-16 | yggdrasil-core (`integration_type` manifest lifecycle) |
 | [0007](0007-provider-neutral-collaborator-external-identity-mapping-popu.md) | Provider-neutral collaborator↔external-identity mapping, populated via reactor envelope + webhook receiver | Accepted | 2026-05-16 | yggdrasil-core (`internal/externalidentity/`), integration-slack, integration-google-workspace, integration-github (opt-in adapters) |
 | [0008](0008-integration-surfaces-federated-per-adapter-admin-spas-discov.md) | Integration Surfaces — federated per-adapter admin SPAs discovered by manifest and slot | Accepted | 2026-05-17 | yggdrasil-core, surface-console, surface-template, per-`integration-<name>` adapter repos |
-| [0009](0009-replace-per-user-tartaro-rbac-roles-with-team-scoped-action.md) | Replace per-user Tartaro RBAC roles with team-scoped action grants materialized via the reactor framework | Accepted | 2026-05-18 | yggdrasil-core (canon events + team_grant endpoints), integration-tartaro-dakasa, dakasa-tartaro-fe (tartaro-operations, tartaro-api and sibling services), dakasa-commons |
+| [0009](0009-replace-per-user-tartaro-rbac-roles-with-team-scoped-action.md) | Replace per-user Tartaro RBAC roles with team-scoped action grants materialized via the reactor framework | Superseded by 0085 | 2026-05-18 | yggdrasil-core (canon events + team_grant endpoints), integration-tartaro-dakasa, dakasa-tartaro-fe (tartaro-operations, tartaro-api and sibling services), dakasa-commons |
 | [0010](0010-team-mirroring-reactors-ack-via-a-reserved-envelope-into-a-p.md) | Team-mirroring reactors ack via a reserved envelope into a provisioning log, self-healed by an anti-join reconcile sweep | Accepted | 2026-05-18 | yggdrasil-core (reactor dispatcher extension), integration-slack, integration-github, integration-google-workspace |
 | [0011](0011-bootstrap-internal-public-oidc-clients-declaratively.md) | Bootstrap internal public OIDC clients declaratively | Accepted | 2026-08-25 | yggdrasil-core / internal OIDC client lifecycle |
 | [0012](0012-keep-sensitive-integration-outputs-transient-between-workflow-steps.md) | Keep sensitive integration outputs transient between workflow steps | Superseded | 2026-09-01 | yggdrasil-core / workflow execution and integration adapter contract |
@@ -42,3 +42,5 @@ NEW ADR that supersedes the old one; never edit an Accepted ADR's Decision.
 | [0032](0032-materialize-explicit-typed-team-leadership.md) | Materialize explicit typed team leadership | Accepted | 2026-10-07 | yggdrasil-core / team writers and directory leadership |
 | [0033](0033-preserve-current-declarations-during-conditional-contact-writes.md) | Preserve current declarations during conditional contact writes | Accepted | 2026-10-07 | yggdrasil-core / operator contact declaration |
 | [0034](0034-bind-delivered-mfa-codes-to-canonical-contact-possession.md) | Use saved profile contacts automatically for OTP MFA | Proposed | 2026-10-08 | yggdrasil-core / collaborator authentication |
+| [0085](0085-retire-the-materialized-tartaro-actions-trait.md) | Retire the materialized tartaro_actions trait | Accepted | 2026-10-29 | yggdrasil-core / Tartaro effective actions; integration-tartaro-dakasa team reactors |
+| [0086](0086-compute-tartaro-effective-actions-with-one-predicate-god-mode-and-wildcard-expansion.md) | Compute Tartaro effective actions with one predicate, a god-mode verdict and wildcard expansion | Accepted | 2026-10-29 | yggdrasil-core / Tartaro effective actions (console and directory machine variants) |

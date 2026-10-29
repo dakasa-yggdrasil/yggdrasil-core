@@ -297,12 +297,11 @@ the mux would otherwise redirect to a clean path, and canonical spellings that
 match no route: none serves its body, its redirect, or a 404 to a directory
 attempt. Callers that do not name themselves as directory attempts keep every
 route's existing behavior. The legacy collaborator responses carry only `id`, `primary_email`,
-`display_name`, and `status`, or `collaborator_id` and
-`computed_tartaro_actions`; inactive collaborators read as absent. The
-effective actions are computed only from memberships the RBAC projection
-honors now (membership active, team active, inside the `starts_at`/`ends_at`
-window, one shared predicate), so the machine answer is never wider than what
-Yggdrasil would authorize. Any database failure answers a fixed 500
+`display_name`, and `status`, or `collaborator_id`,
+`computed_tartaro_actions` and `god_mode` (ADR-0086); inactive collaborators
+read as absent. The effective actions follow the Tartaro effective-actions
+rules below, so the machine answer is never wider than what Yggdrasil would
+authorize. Any database failure answers a fixed 500
 `internal.error` (`directory is unavailable`) without the driver text. Each
 attributable outcome writes a `directory.machine_read` audit row before it is
 answered; the write is synchronous and fail-closed, so when the row cannot be
@@ -327,6 +326,34 @@ event principal or a plaintext credential makes Core serve an empty directory
 inventory instead (ADR-0022): the shared bearer reaches its own scope, and
 directory reads answer 401 until the inventory is fixed. A digest shared with
 a workflow principal refuses the workflow surface.
+
+Tartaro effective actions (ADR-0085, ADR-0086) are computed live, the same
+way for the console variant of
+`GET /api/v1/collaborators/{id}/effective-tartaro-actions` (the caller's
+session or OIDC token) and for the directory machine variant above. Only
+memberships the RBAC projection honors now count (membership active, team
+active, inside the `starts_at`/`ends_at` window, the single
+`authorizationMembershipPredicate`), and only their grants on the configured
+Tartaro instance (`YGGDRASIL_TARTARO_INSTANCE_NAMESPACE`/`_NAME`, default
+`dakasa/tartaro-dakasa-validation`). A `*` grant on that instance expands to
+every `action_catalog` entry with category `permission` of the instance's
+active integration type; when that catalog cannot be resolved the wildcard
+contributes nothing and the read is still answered (fail closed, logged at
+warn level). `*` never appears in an answer, and `*` on any other instance
+keeps its own meaning. Both variants answer `god_mode`, true only for an
+`active` collaborator whose `traits.yggdrasil_admin` is the boolean `true` or
+exactly `"true"` or `"1"`; it is never derived from a grant. A collaborator
+who is not `active` gets no action and no god mode from either variant, even
+with a token minted before the status change: the directory variant reads
+them as absent (404), and the console variant answers empty sets with
+`god_mode` false without reading memberships or grants. The console
+variant answers `collaborator_id`, `effective_via_teams`,
+`computed_tartaro_actions` and `god_mode`. A consumer that decodes the
+directory envelope strictly must accept `god_mode` before a Core that sends
+it is rolled out (ADR-0086). The materialized
+`traits.tartaro_actions` trait is retired: Core never reads it for an answer,
+the console response no longer carries `trait_tartaro_actions` or `drift`,
+and `POST /api/v1/collaborators/{id}/sync-tartaro-actions` no longer exists.
 
 The new [restricted snapshot contract](directory-snapshot.md) is a separate
 typed projection of lifecycle, hierarchy and membership windows. It omits

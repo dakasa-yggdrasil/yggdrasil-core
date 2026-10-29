@@ -388,12 +388,13 @@ func (s *Server) handleCollaboratorTeamAdd(w http.ResponseWriter, r *http.Reques
 	// The upsert, the lifecycle audit row AND the team_membership.added canon
 	// event all land in ONE transaction. This is the same atomic state+emit
 	// contract handleTeamMembershipUpsert honors (server.go). Emitting the
-	// canon event is NOT optional bookkeeping: it is what drives the tartaro
-	// reactor to (re)materialize the collaborator's tartaro_actions trait and
-	// what the ground-truth effective-actions endpoint reflects. The previous
-	// version wrote only public.lifecycle_events (not a reactor source), so a
-	// team added through this path never propagated to effective access and
-	// the collaborator kept getting 403 until a manual sync.
+	// canon event is NOT optional bookkeeping: it is what every reactor
+	// subscribed to team_membership.added (team mirroring adapters, for
+	// example) reacts to. Effective Tartaro access needs no event: both
+	// effective-tartaro-actions variants read the committed membership live
+	// (ADR-0085), so the new team counts as soon as this transaction commits.
+	// The previous version wrote only public.lifecycle_events (not a reactor
+	// source), so reactors never saw a team added through this path.
 	tx, err := s.db.BeginTx(r.Context(), nil)
 	if err != nil {
 		writeMappedError(w, fmt.Errorf("begin tx: %w", err))

@@ -207,9 +207,14 @@ type directoryCollaboratorResponse struct {
 	Collaborator directoryCollaboratorProjection `json:"collaborator"`
 }
 
+// directoryEffectiveActionsResponse is the minimal effective-actions
+// projection: the collaborator id, the sorted Tartaro actions and the
+// god-mode verdict (ADR-0086, which adds god_mode to the ADR-0019 projection).
+// No trait, per-team, drift or personal data is ever returned.
 type directoryEffectiveActionsResponse struct {
 	CollaboratorID         string   `json:"collaborator_id"`
 	ComputedTartaroActions []string `json:"computed_tartaro_actions"`
+	GodMode                bool     `json:"god_mode"`
 }
 
 func projectDirectoryCollaborator(collaborator model.Collaborator) directoryCollaboratorProjection {
@@ -417,6 +422,7 @@ func (s *Server) serveDirectoryEffectiveActions(w http.ResponseWriter, r *http.R
 	writeJSON(w, http.StatusOK, directoryEffectiveActionsResponse{
 		CollaboratorID:         collaborator.ID.String(),
 		ComputedTartaroActions: effective.Computed,
+		GodMode:                tartaroGodMode(collaborator),
 	})
 }
 

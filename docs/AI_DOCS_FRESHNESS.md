@@ -7,9 +7,9 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 9e5e2b2b89a55dbf376c338392aa5935c8ebc4aa
-verified_diff_sha256: 4e9cc0f81a467370438d476e22b15233300c93cd79cc0ab7c53439e4b449c276
+verified_at_commit: ebaddb28f00cfd492fcf32612da9dc65e816a783
+verified_diff_sha256: 7a9ee2553cbcaf304ac4554c735bc7ad85c3909605f5c27d3aecccb18c10acf6
 reconciler_schema: 1
-verified_at: 2026-10-10
-by: Codex
-note: Reconciled automatic contact OTP with the explicit owner requirement: saved email/phone require no registration, opt-in or contact factor row. Actual password+OTP proof still precedes sessions. Setup and forced password changes support contact-only accounts; recent session proof is server-issued, short-lived and consumed with the password update. Federated provider auth remains separate. CI only; no production activation. TOTP confirmation is independent of shared MFA posture and commits current-seed proof, recovery codes and enrollment-link consumption atomically.
+verified_at: 2026-10-29
+by: Giomaster
+note: Reconciled the live Tartaro effective actions change after review. ADR-0085 retires the materialized tartaro_actions trait (sync route, console trait and drift fields, migration script and committed binary) and supersedes ADR-0009; ADR-0086 records the shared authorization predicate, the active-record policy (a collaborator who is not active gets empty sets on the console variant and 404 on the directory variant), the god_mode verdict, the permission-catalog wildcard expansion that fails closed, the god_mode key added to the minimal directory projection with its strict-decoder rollout precondition, and the suspend session lifecycle follow-up. docs/security.md, CLAUDE.md, the CHANGELOG (breaking labels, older directory bullet corrected) and the ADR index match the code. Static checks only (gofmt, go build, go vet); tests run in CI. No deployment or production change.

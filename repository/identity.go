@@ -2140,6 +2140,49 @@ func ListTeamGrants(ctx context.Context, db *sql.DB, req model.ListTeamGrantsReq
 	}
 	defer rows.Close()
 
+	return scanTeamGrantRows(rows)
+}
+
+// ListTeamGrantsByTeamIDs returns the grants of every listed team, on every
+// integration instance, in ONE round trip instead of one ListTeamGrants call
+// (team lookup plus grant read) per team. The identifiers must already be
+// canonical team UUIDs, for example the team_id of membership rows; duplicates
+// are read once and an empty list answers no grants without a query. Rows are
+// ordered by team, then instance and action, like ListTeamGrants per team.
+func ListTeamGrantsByTeamIDs(ctx context.Context, db *sql.DB, teamIDs []uuid.UUID) ([]model.TeamGrant, error) {
+	seen := make(map[uuid.UUID]struct{}, len(teamIDs))
+	args := make([]any, 0, len(teamIDs))
+	placeholders := make([]string, 0, len(teamIDs))
+	for _, teamID := range teamIDs {
+		if _, ok := seen[teamID]; ok {
+			continue
+		}
+		seen[teamID] = struct{}{}
+		args = append(args, teamID)
+		placeholders = append(placeholders, fmt.Sprintf("$%d", len(args)))
+	}
+	if len(args) == 0 {
+		return []model.TeamGrant{}, nil
+	}
+
+	rows, err := db.QueryContext(ctx, `
+		SELECT id, team_id, integration_instance_namespace, integration_instance_name,
+			action_name, scope, granted_at, granted_by
+		FROM public.team_grants
+		WHERE team_id IN (`+strings.Join(placeholders, ", ")+`)
+		ORDER BY team_id, integration_instance_namespace, integration_instance_name, action_name
+	`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanTeamGrantRows(rows)
+}
+
+// scanTeamGrantRows scans the team grant projection shared by ListTeamGrants
+// and ListTeamGrantsByTeamIDs.
+func scanTeamGrantRows(rows *sql.Rows) ([]model.TeamGrant, error) {
 	grants := []model.TeamGrant{}
 	for rows.Next() {
 		var g model.TeamGrant
