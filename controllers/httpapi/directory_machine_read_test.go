@@ -1,7 +1,6 @@
 package httpapi
 
 import (
-	"context"
 	"database/sql"
 	"database/sql/driver"
 	"encoding/json"
@@ -127,13 +126,9 @@ func authorizationMembershipColumns() []string {
 // authorizationMembershipsQuery matches only a memberships query that carries
 // the authorization predicate: an active membership of an active team inside
 // its starts_at/ends_at window. A query that lists tm.active memberships
-// alone does not match, so the directory oracle cannot silently fall back to
-// the broader materialized set.
+// alone does not match, so neither effective-actions variant (directory or
+// console) can silently fall back to that broader set.
 const authorizationMembershipsQuery = `FROM public\.team_memberships tm\s+JOIN public\.teams t ON t\.id = tm\.team_id\s+JOIN public\.collaborators c ON c\.id = tm\.collaborator_id\s+WHERE\s+tm\.collaborator_id = \$1\s+AND tm\.active = TRUE\s+AND t\.status = 'active'\s+AND \(tm\.starts_at IS NULL OR tm\.starts_at <= NOW\(\)\)\s+AND \(tm\.ends_at IS NULL OR tm\.ends_at >= NOW\(\)\)`
-
-func teamColumns() []string {
-	return []string{"id", "slug", "name", "type", "status", "email", "parent_team_id", "owners", "traits", "metadata", "created_at", "updated_at"}
-}
 
 func teamGrantColumns() []string {
 	return []string{"id", "team_id", "integration_instance_namespace", "integration_instance_name", "action_name", "scope", "granted_at", "granted_by"}
@@ -415,20 +410,28 @@ func TestDirectoryMachineEffectiveActionsOnAllowedInstance(t *testing.T) {
 
 	// Machine handler loads the collaborator, then the directory oracle lists
 	// the memberships that confer authority now (authorization predicate),
-	// resolves the team and lists its grants.
+	// reads the grants of those teams in one statement and, because a "*"
+	// grant on the configured instance is present, reads that instance's
+	// permission catalog once (ADR-0086).
 	mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
 		WillReturnRows(directoryCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "active", "Ana Souza", testLookupEmail))
 	mock.ExpectQuery(authorizationMembershipsQuery).WithArgs(id).
 		WillReturnRows(sqlmock.NewRows(authorizationMembershipColumns()).AddRow(uuid.New().String(), teamID.String(), "social", id.String(), "ana-souza",
 			"member", true, "manual", nil, nil, []byte("{}"), time.Now(), time.Now(), false))
-	mock.ExpectQuery(`FROM public\.teams\s+WHERE id = \$1`).WithArgs(teamID).
-		WillReturnRows(sqlmock.NewRows(teamColumns()).AddRow(teamID.String(), "social", "Social", "functional", "active", nil, nil, []byte("[]"), []byte("{}"), []byte("{}"), time.Now(), time.Now()))
-	mock.ExpectQuery(`FROM public\.team_grants`).WithArgs(teamID.String()).
+	mock.ExpectQuery(teamGrantsByTeamIDsQuery(1)).WithArgs(teamID).
 		WillReturnRows(sqlmock.NewRows(teamGrantColumns()).
 			AddRow(uuid.New().String(), teamID.String(), "dakasa", "tartaro-dakasa-validation", "publish_social_post", []byte("{}"), time.Now(), nil).
 			AddRow(uuid.New().String(), teamID.String(), "dakasa", "tartaro-dakasa-validation", "*", []byte("{}"), time.Now(), nil).
 			AddRow(uuid.New().String(), teamID.String(), "dakasa", "other-instance", "delete_everything", []byte("{}"), time.Now(), nil).
+			AddRow(uuid.New().String(), teamID.String(), "dakasa", "other-instance", "*", []byte("{}"), time.Now(), nil).
 			AddRow(uuid.New().String(), teamID.String(), "dakasa", "tartaro-dakasa-validation", "approve_social_post", []byte("{}"), time.Now(), nil))
+	mock.ExpectQuery(tartaroPermissionCatalogQuery).WithArgs("dakasa", "tartaro-dakasa-validation").
+		WillReturnRows(sqlmock.NewRows(tartaroCatalogColumns()).
+			AddRow([]byte(tartaroTestTypeRef), tartaroTypeCandidates("tartaro-dakasa", `[
+				{"name":"approve_social_post","category":"permission"},
+				{"name":"moderate_social_post","category":"permission"},
+				{"name":"on_collaborator_session_terminated","category":"reactor"}
+			]`)))
 
 	recorder := httptest.NewRecorder()
 	handler.ServeHTTP(recorder, directoryRequest(http.MethodGet, "/api/v1/collaborators/"+id.String()+"/effective-tartaro-actions", "bearer", testDirectoryToken))
@@ -437,17 +440,20 @@ func TestDirectoryMachineEffectiveActionsOnAllowedInstance(t *testing.T) {
 		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
 	body := decodeDirectoryBody(t, recorder)
-	if got := sortedKeys(body); strings.Join(got, ",") != "collaborator_id,computed_tartaro_actions" {
+	if got := sortedKeys(body); strings.Join(got, ",") != "collaborator_id,computed_tartaro_actions,god_mode" {
 		t.Fatalf("envelope keys=%v", got)
 	}
 	if body["collaborator_id"] != id.String() {
 		t.Fatalf("collaborator_id=%v", body["collaborator_id"])
 	}
-	actions, _ := body["computed_tartaro_actions"].([]any)
-	if fmt.Sprint(actions) != "[approve_social_post publish_social_post]" {
-		t.Fatalf("computed_tartaro_actions=%v, want the sorted grants of the configured instance only", actions)
+	if body["god_mode"] != false {
+		t.Fatalf("god_mode=%v, want false for a collaborator without the admin trait", body["god_mode"])
 	}
-	for _, forbidden := range []string{"trait", "drift", "effective_via_teams", "team_id", "delete_everything", "primary_email"} {
+	actions, _ := body["computed_tartaro_actions"].([]any)
+	if fmt.Sprint(actions) != "[approve_social_post moderate_social_post publish_social_post]" {
+		t.Fatalf("computed_tartaro_actions=%v, want the sorted grants of the configured instance with its wildcard expanded", actions)
+	}
+	for _, forbidden := range []string{"trait", "drift", "effective_via_teams", "team_id", "delete_everything", "primary_email", `"*"`, "on_collaborator_session_terminated"} {
 		if strings.Contains(recorder.Body.String(), forbidden) {
 			t.Fatalf("effective actions response leaks %q: %s", forbidden, recorder.Body.String())
 		}
@@ -1328,6 +1334,15 @@ func TestDirectoryMachineRepositoryErrorsAnswerAFixed500(t *testing.T) {
 				WillReturnRows(directoryCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "active", "Ana Souza", testLookupEmail))
 			mock.ExpectQuery(authorizationMembershipsQuery).WithArgs(id).WillReturnError(driverErr)
 		}},
+		{name: "effective actions grants", target: "/api/v1/collaborators/" + id.String() + "/effective-tartaro-actions", capability: directoryCapabilityEffectiveActions, reason: "effective_actions_failed", expect: func(mock sqlmock.Sqlmock) {
+			teamID := uuid.New()
+			mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
+				WillReturnRows(directoryCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "active", "Ana Souza", testLookupEmail))
+			mock.ExpectQuery(authorizationMembershipsQuery).WithArgs(id).
+				WillReturnRows(sqlmock.NewRows(authorizationMembershipColumns()).AddRow(uuid.New().String(), teamID.String(), "social", id.String(), "ana-souza",
+					"member", true, "manual", nil, nil, []byte("{}"), time.Now(), time.Now(), false))
+			mock.ExpectQuery(teamGrantsByTeamIDsQuery(1)).WithArgs(teamID).WillReturnError(driverErr)
+		}},
 	}
 	for _, tc := range cases {
 		t.Run(tc.name, func(t *testing.T) {
@@ -1385,7 +1400,7 @@ func TestDirectoryMachineEffectiveActionsReadOnlyMembershipsThatAuthorizeNow(t *
 	if recorder.Code != http.StatusOK {
 		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
-	if got := strings.TrimSpace(recorder.Body.String()); got != `{"collaborator_id":"`+id.String()+`","computed_tartaro_actions":[]}` {
+	if got := strings.TrimSpace(recorder.Body.String()); got != `{"collaborator_id":"`+id.String()+`","computed_tartaro_actions":[],"god_mode":false}` {
 		t.Fatalf("body=%s, want an empty action list", got)
 	}
 	requireSingleAudit(t, capture, "success", directoryCapabilityEffectiveActions, id.String(), "")
@@ -1394,31 +1409,47 @@ func TestDirectoryMachineEffectiveActionsReadOnlyMembershipsThatAuthorizeNow(t *
 	}
 }
 
-func TestConsoleEffectiveActionsKeepTheMaterializedMembershipSet(t *testing.T) {
-	// The console drift view compares the reactor's trait against the same
-	// tm.active membership set the reactor materializes from; it must not
-	// adopt the directory oracle's predicate or every windowed membership
-	// would read as drift.
-	db, mock, err := sqlmock.New()
-	if err != nil {
-		t.Fatal(err)
+func TestDirectoryMachineEffectiveActionsAnswerGodModeFromTheAdminTrait(t *testing.T) {
+	// god_mode is derived from traits.yggdrasil_admin of the active
+	// collaborator (bool true, or exactly "true" or "1"), never from a grant,
+	// and is the only trait-derived value the envelope carries. An inactive
+	// collaborator already reads as absent on this route.
+	cases := []struct {
+		name   string
+		traits string
+		want   string
+	}{
+		{name: "bool true", traits: `{"yggdrasil_admin":true}`, want: "true"},
+		{name: "string true", traits: `{"yggdrasil_admin":"true"}`, want: "true"},
+		{name: "string 1", traits: `{"yggdrasil_admin":"1"}`, want: "true"},
+		{name: "bool false", traits: `{"yggdrasil_admin":false}`, want: "false"},
+		{name: "number 1", traits: `{"yggdrasil_admin":1}`, want: "false"},
+		{name: "missing", traits: `{"tartaro_actions":["*"]}`, want: "false"},
 	}
-	t.Cleanup(func() { _ = db.Close() })
-	id := uuid.New()
-	mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
-		WillReturnRows(directoryCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "active", "Ana Souza", testLookupEmail))
-	mock.ExpectQuery(`FROM public\.team_memberships tm\s+JOIN public\.teams t ON t\.id = tm\.team_id\s+JOIN public\.collaborators c ON c\.id = tm\.collaborator_id\s+WHERE tm\.collaborator_id = \$1 AND tm\.active = TRUE\s+ORDER BY`).WithArgs(id).
-		WillReturnRows(sqlmock.NewRows(authorizationMembershipColumns()))
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			configureDirectoryPrincipal(t, []string{directoryCapabilityEffectiveActions}, testTartaroInstance)
+			handler, mock, capture := newDirectoryGateServer(t)
+			id := uuid.New()
+			mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
+				WillReturnRows(tartaroCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "active", tc.traits))
+			mock.ExpectQuery(authorizationMembershipsQuery).WithArgs(id).
+				WillReturnRows(sqlmock.NewRows(authorizationMembershipColumns()))
 
-	server := &Server{db: db, logger: zap.NewNop()}
-	result, err := server.computeEffectiveTartaroActions(context.Background(), id)
-	if err != nil {
-		t.Fatal(err)
-	}
-	if len(result.Computed) != 0 || len(result.PerTeam) != 0 {
-		t.Fatalf("result=%+v", result)
-	}
-	if err := mock.ExpectationsWereMet(); err != nil {
-		t.Fatal(err)
+			recorder := httptest.NewRecorder()
+			handler.ServeHTTP(recorder, directoryRequest(http.MethodGet, "/api/v1/collaborators/"+id.String()+"/effective-tartaro-actions", "header", testDirectoryToken))
+
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+			}
+			want := `{"collaborator_id":"` + id.String() + `","computed_tartaro_actions":[],"god_mode":` + tc.want + `}`
+			if got := strings.TrimSpace(recorder.Body.String()); got != want {
+				t.Fatalf("body=%s, want %s", got, want)
+			}
+			requireSingleAudit(t, capture, "success", directoryCapabilityEffectiveActions, id.String(), "")
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
 	}
 }
