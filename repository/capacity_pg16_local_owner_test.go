@@ -1,5 +1,3 @@
-//go:build !recoveryfixture || nativequalification
-
 package repository
 
 import (

@@ -39,7 +39,7 @@ func nativeWorkflowFixtureDSN(t *testing.T, dsn string) string {
 		t.Fatal("fixture admin unavailable")
 	}
 	var addr string
-	if err = admin.QueryRow(`SELECT COALESCE(inet_server_addr()::text,'unix')`).Scan(&addr); err != nil || !(addr == "unix" || strings.HasPrefix(addr, "127.") || addr == "::1") {
+	if err = admin.QueryRow(`SELECT COALESCE(inet_server_addr()::text,'unix')`).Scan(&addr); err != nil || !pg16LocalServer(host, addr) {
 		t.Fatal("nonlocal PG refused")
 	}
 	name := "recovery_fixture_" + strings.ReplaceAll(uuid.NewString(), "-", "")

@@ -191,7 +191,7 @@ func recoveryTestIsolatedDB(t *testing.T) *sql.DB {
 		t.Fatal(err)
 	}
 	var addr string
-	if err = admin.QueryRow(`SELECT COALESCE(inet_server_addr()::text,'unix')`).Scan(&addr); err != nil || !(addr == "unix" || strings.HasPrefix(addr, "127.") || addr == "::1") {
+	if err = admin.QueryRow(`SELECT COALESCE(inet_server_addr()::text,'unix')`).Scan(&addr); err != nil || !pg16LocalServer(host, addr) {
 		t.Fatal("nonlocal actual PostgreSQL refused", err)
 	}
 	name := "recovery_fixture_" + strings.ReplaceAll(uuid.NewString(), "-", "")
