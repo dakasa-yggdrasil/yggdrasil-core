@@ -1,17 +1,17 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-26T14:52:34-03:00",
+  "generated_at": "2026-10-29T16:56:07-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1238,
-    ".json": 173,
-    ".py": 6,
+    ".go": 1362,
+    ".json": 178,
+    ".py": 16,
     ".sql": 82,
     ".yaml": 11,
-    ".yml": 30
+    ".yml": 31
   },
   "provenance": {
-    "commit": "1d6e637981364fe285d375110cb1bbab641d64aa",
+    "commit": "d7956ebfc743af5f48cba89279eba5802d0ed949",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "8c93e7e43508c142901f01c33d6434bda033f92028d878b2f4905a96501c04d5"
+        "sha256": "25c2e3a00b9849add771a78974692fac255b25865a35d51d6feddd639ff31922"
       },
       {
         "path": "AGENTS.md",
@@ -40,7 +40,7 @@
       },
       {
         "path": "Dockerfile",
-        "sha256": "d60e795d4fc4f351c9e91963f0a2538a60b8f7e75ef25872c691021155aecf14"
+        "sha256": "6352cdfe93d649169ac5b32f8a2e1b0c70d307850c38f168a1ce862be90660ea"
       },
       {
         "path": "Dockerfile.dev",
@@ -65,23 +65,23 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 265,
-      "kb": 3535
+      "files": 305,
+      "kb": 3872
     },
     {
       "path": "controllers/httpapi",
-      "files": 221,
-      "kb": 2297
+      "files": 231,
+      "kb": 2304
     },
     {
       "path": "controllers/message",
-      "files": 144,
-      "kb": 1467
+      "files": 174,
+      "kb": 1553
     },
     {
       "path": "internal/capacity",
-      "files": 111,
-      "kb": 1279
+      "files": 117,
+      "kb": 1330
     },
     {
       "path": "model",
@@ -105,8 +105,8 @@
     },
     {
       "path": "internal/capacitynativeqemu",
-      "files": 37,
-      "kb": 272
+      "files": 46,
+      "kb": 295
     },
     {
       "path": "docs/bootstrap/manifests/integrations",
@@ -119,9 +119,9 @@
       "kb": 193
     },
     {
-      "path": "docs/bootstrap/seeds/integrations",
-      "files": 20,
-      "kb": 87
+      "path": "cmd/native-guest-lifecycle-fixture",
+      "files": 22,
+      "kb": 228
     }
   ],
   "top_files_by_size": [
@@ -311,7 +311,7 @@
     ]
   },
   "ops": {
-    "config_files": 14,
-    "k8s_manifests": 14
+    "config_files": 15,
+    "k8s_manifests": 15
   }
 }

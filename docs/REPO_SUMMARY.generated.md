@@ -1,15 +1,15 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-26T14:52:34-03:00_
+_Generated from HEAD at: 2026-10-29T16:56:07-03:00_
 
 ## Languages
 
-- `.go`: 1238 files
-- `.json`: 173 files
-- `.py`: 6 files
+- `.go`: 1362 files
+- `.json`: 178 files
+- `.py`: 16 files
 - `.sql`: 82 files
 - `.yaml`: 11 files
-- `.yml`: 30 files
+- `.yml`: 31 files
 
 ## Contracts & Artifacts
 
@@ -24,18 +24,18 @@ _Generated from HEAD at: 2026-10-26T14:52:34-03:00_
 
 ## Top Directories by File Count
 
-- repository: 265 files (3535.2 KB)
-- controllers/httpapi: 221 files (2297.1 KB)
-- controllers/message: 144 files (1467.1 KB)
-- internal/capacity: 111 files (1279.0 KB)
-- model: 85 files (475.6 KB)
+- repository: 305 files (3872.1 KB)
+- controllers/httpapi: 231 files (2304.0 KB)
+- controllers/message: 174 files (1553.6 KB)
+- internal/capacity: 117 files (1330.7 KB)
+- model: 85 files (475.9 KB)
 - db/migrations: 81 files (482.7 KB)
 - manifest: 65 files (397.1 KB)
 - addons: 49 files (282.8 KB)
-- internal/capacitynativeqemu: 37 files (272.0 KB)
+- internal/capacitynativeqemu: 46 files (295.5 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
 - controllers/oidc: 23 files (193.4 KB)
-- docs/bootstrap/seeds/integrations: 20 files (87.4 KB)
+- cmd/native-guest-lifecycle-fixture: 22 files (228.4 KB)
 
 ## Heaviest Files
 
@@ -54,8 +54,8 @@ _Generated from HEAD at: 2026-10-26T14:52:34-03:00_
 
 ## Ops & Messaging
 
-- K8s/Config files scanned: **14**
-- Manifests (k8s-ish): **14**
+- K8s/Config files scanned: **15**
+- Manifests (k8s-ish): **15**
 
 ## Dependencies
 
