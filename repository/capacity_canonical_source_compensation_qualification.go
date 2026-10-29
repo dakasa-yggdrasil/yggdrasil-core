@@ -11,7 +11,9 @@ import (
 	"errors"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"path/filepath"
 	"reflect"
+	"strings"
 	"time"
 )
 
@@ -699,10 +701,110 @@ func (s CapacityStore) canonicalSourceConfirmedCleanupTx(ctx context.Context, tx
 		return true, err
 	}
 	var observed CanonicalSourceAbsenceRead
-	if capacity.DecodeGuestLifecycle(body, &observed) != nil || capacity.BusinessCreationSHA256(wire) != sha || observed.Schema != "canonical_source_compensation_absence_v2" || observed.EligibilitySHA256 != e.EligibilityWireSHA256 || observed.RequestSHA256 != child.Grant.RequestSHA256 || observed.ChildGrantID != child.Grant.GrantID || observed.ParentGrantID != e.ParentGrantID || observed.Scope != "ORIGINAL_CHILD_OWNED_KILL_UNLINK_AND_FRESH_ABSENCE" || observed.ProductionQualified || !reflect.DeepEqual(observed.Proof, proof) || child.Settlement == nil || child.Settlement.ActionID != a.ActionID || observed.ActionID != a.ActionID || child.Settlement.ResourceID != proof.ResourceID || observed.Read.PIDFDOpenError != "ESRCH" || observed.Read.DiskAbsence != "ENOENT" || !capacity.Fresh(observed.Read.ReturnedAt, now, p.MaxEvidenceAgeSeconds) {
+	if capacity.DecodeGuestLifecycle(body, &observed) != nil || !canonicalSourceStoredReadValid(observed, wire, sha, child, e, a.ActionID, p.MaxEvidenceAgeSeconds, now) || !reflect.DeepEqual(observed.Proof, proof) || child.Settlement == nil || child.Settlement.ActionID != a.ActionID || child.Settlement.ResourceID != proof.ResourceID {
 		return true, ErrCapacityConflict
 	}
 	return true, nil
+}
+
+// canonicalSourceStoredReadValid is the content check of the single write-once
+// signed absence read (public.capacity_canonical_source_cleanup_reads) shared by
+// the confirm path and the read-only pre-settlement reader. The caller has
+// already verified the ed25519 signature and decoded the body; this checks the
+// row digest, the schema/scope, the child/parent/request/eligibility/action
+// joins, the native ESRCH/ENOENT outcomes, that it is not production evidence
+// and that the read is still fresh at the transaction's database clock.
+func canonicalSourceStoredReadValid(observed CanonicalSourceAbsenceRead, wire []byte, sha string, child capacityMutationRecord, e CanonicalSourceEligibility, actionID string, maxEvidenceAgeSeconds int, now time.Time) bool {
+	return capacity.BusinessCreationSHA256(wire) == sha && observed.Schema == "canonical_source_compensation_absence_v2" && observed.EligibilitySHA256 == e.EligibilityWireSHA256 && observed.RequestSHA256 == child.Grant.RequestSHA256 && observed.ChildGrantID == child.Grant.GrantID && observed.ParentGrantID == e.ParentGrantID && observed.Scope == "ORIGINAL_CHILD_OWNED_KILL_UNLINK_AND_FRESH_ABSENCE" && !observed.ProductionQualified && observed.ActionID == actionID && observed.Read.PIDFDOpenError == "ESRCH" && observed.Read.DiskAbsence == "ENOENT" && capacity.Fresh(observed.Read.ReturnedAt, now, maxEvidenceAgeSeconds)
+}
+
+// canonicalSourceStoredProofBound checks that the stored proof is the one
+// ObserveCanonicalSourceCompensation built for this child and this read. It is
+// used only by the read-only pre-settlement reader; the confirm path instead
+// requires the proof passed in to be DeepEqual to the stored one.
+func canonicalSourceStoredProofBound(observed CanonicalSourceAbsenceRead, child capacityMutationRecord, e CanonicalSourceEligibility, actionID string) bool {
+	proof := observed.Proof
+	return proof.GrantID == child.Grant.GrantID && proof.BindingName == child.Binding.Name && proof.Slot == child.Grant.Slot && proof.ResourceID == child.Grant.ExpectedResourceID && proof.ResourceCreatedAt == child.Grant.ExpectedResourceCreatedAt && proof.RequestSHA256 == child.Grant.RequestSHA256 && proof.ObservedAt.Equal(observed.Read.ReturnedAt) && proof.ReceiptRef == "canonical-child-owned-cleanup:"+actionID && proof.OwnerVerified && proof.SpecVerified && proof.ResourceAbsent && len(proof.ActionIDs) == 1 && proof.ActionIDs[0] == actionID && proof.ActionsTerminal && proof.ActionsSuccessful && proof.CompensationIdentityVerified && proof.ObservedCreationGrantID == e.ParentGrantID && proof.AWSRetirementLifecycle == nil && proof.ProviderNativeIdentity == nil && proof.AWSInstanceLifecycle == nil && !proof.ActionHistoryComplete && !proof.ActionsFailed && len(proof.AuxiliaryAbsent) == 0
+}
+
+// canonicalSourceStoredReadBodyCurrent repeats, at the reader's database clock,
+// the static gate that sourceFailureCleanupCurrentRead applies to the original
+// cleanup body before Observe takes its native read: the current guest core
+// source, a non-zero source directory identity, the expected slot directory
+// shape and that the original context deadline has not passed. It performs no
+// native observation, so a Settle authorized by the stored read is never
+// authorized after the deadline Observe itself would have refused.
+func canonicalSourceStoredReadBodyCurrent(b SourceFailureCleanupBody, now time.Time) bool {
+	return b.CoreSource == capacity.CurrentGuestCoreSource() && b.SourceDirectoryDevice != 0 && b.SourceDirectoryInode != 0 && sourceCleanupSlotDirectoryMatches(b) && filepath.Clean(b.SourceSlotDirectory) == b.SourceSlotDirectory && filepath.IsAbs(b.SourceSlotDirectory) && strings.HasPrefix(filepath.Base(filepath.Dir(b.SourceSlotDirectory)), "guest-provisioning-native-") && now.Before(b.OriginalContextDeadline)
+}
+
+// CanonicalSourceCompensationObserved returns the proof of the single write-once
+// absence read that ObserveCanonicalSourceCompensation stored for childID. It
+// writes nothing: the read row is keyed by child_grant_id, so a second Observe
+// for the same child fails on the primary key. It takes the same transaction,
+// scope/slot/row/intent locks and preconditions as Observe (redeemed child with
+// no settlement, this executor and workflow, canonical eligibility, the child's
+// owned physical cleanup), verifies the stored read's signature and digest, and
+// applies the confirm path's content and freshness checks, so Settle and Confirm
+// carry exactly the stored proof. It also repeats Observe's static gate on the
+// original cleanup body (core source, slot directory, original context
+// deadline). Its authority is the stored read, at most MaxEvidenceAgeSeconds
+// old at the database clock; it is not a new native pidfd/disk observation.
+func (s CapacityStore) CanonicalSourceCompensationObserved(ctx context.Context, policy model.Manifest, childID string) (model.CapacityMutationProof, error) {
+	var proof model.CapacityMutationProof
+	err := s.compensationTransaction(ctx, policy, false, func(tx *sql.Tx, p model.CapacityPolicySpec, now time.Time) error {
+		locator, err := readCompensationRecord(ctx, tx, policy, p, childID, false)
+		if err != nil {
+			return err
+		}
+		if err = lockNativeMutationSlot(ctx, tx, locator.Binding, locator.Grant.Slot); err != nil {
+			return err
+		}
+		child, err := loadCompensationRecord(ctx, tx, policy, p, childID)
+		if err != nil {
+			return err
+		}
+		if !reflect.DeepEqual(child, locator) || child.Grant.State != "redeemed" || child.Settlement != nil || child.ExecutorID != s.ExecutorID || child.WorkflowID != s.WorkflowID {
+			return ErrCapacityConflict
+		}
+		e, handled, err := s.canonicalEligibilityTx(ctx, tx, child.Grant.CompensationOf, now)
+		if !handled || err != nil {
+			return ErrCapacityConflict
+		}
+		a, b, _, err := s.canonicalOwnedPhysicalTx(ctx, tx, child, e, now)
+		if err != nil {
+			return err
+		}
+		if !canonicalSourceStoredReadBodyCurrent(b, now) {
+			return ErrCapacityConflict
+		}
+		if _, err = loadCapacityIntent(ctx, tx, policy.Metadata.Namespace, p, true); err != nil {
+			return err
+		}
+		var wire []byte
+		var sha string
+		if err = tx.QueryRowContext(ctx, `SELECT read_wire,read_sha256 FROM public.capacity_canonical_source_cleanup_reads WHERE child_grant_id=$1`, childID).Scan(&wire, &sha); err != nil {
+			return err
+		}
+		stored, _, _, err := canonicalCleanupHistory(ctx, s, tx, e.PreregistrationID)
+		if err != nil {
+			return err
+		}
+		body, err := canonicalSignedBody(ctx, s, stored, wire)
+		if err != nil {
+			return err
+		}
+		var observed CanonicalSourceAbsenceRead
+		if capacity.DecodeGuestLifecycle(body, &observed) != nil || !canonicalSourceStoredReadValid(observed, wire, sha, child, e, a.ActionID, p.MaxEvidenceAgeSeconds, now) || !canonicalSourceStoredProofBound(observed, child, e, a.ActionID) {
+			return ErrCapacityConflict
+		}
+		proof = observed.Proof
+		return nil
+	})
+	if err != nil {
+		return model.CapacityMutationProof{}, err
+	}
+	return proof, nil
 }
 
 func (s CapacityStore) CanonicalSourceEligibilityWire(ctx context.Context, parentID string) ([]byte, error) {

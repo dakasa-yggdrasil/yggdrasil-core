@@ -269,6 +269,10 @@ func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context,
 	if err = message.PG17RetainAssertions(ctx, f.realm, currentPolicy, f.workflow.ID.String(), 0, "compensation-pre-settlement", pg17Pre); err != nil {
 		return err
 	}
+	// Ordering: PG17AssertCompensationPreSettlement performs the single
+	// write-once ObserveCanonicalSourceCompensation for the child. Settle and
+	// Confirm only read that stored proof, so the hook must stay before Settle,
+	// and Confirm must run within MaxEvidenceAgeSeconds of its ReturnedAt.
 	deleted, apiWire, err := f.realm.SettleCanonicalSourceChild(ctx, issuer, currentPolicy, session)
 	if err != nil {
 		return err
