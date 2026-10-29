@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "777042d400d2bae282b1e936b0bb025640a2f24fc42b00e3205038daac51874b",
+  "source_inventory_sha256": "4cff65fdaabbca7dc0a3eee4b2774d7247354735230ad6b011acc9fbde18f004",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -808,5 +808,10 @@
   "qualification_source_fence_intent_review_20261029": {
     "scope": "Qualification-only source fence reads the private capacity intent through the closed qualification intent decoder instead of the Guest lifecycle decoder that refused its null native_pod_baseline, and the readonly native corpus tests validate stored registrations at their receipt record time. Shared validators unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
     "source_inventory_sha256": "777042d400d2bae282b1e936b0bb025640a2f24fc42b00e3205038daac51874b"
+  },
+  "canonical_compensation_pending_probe_sequence_20261029": {
+    "scope": "Qualification-only failed-create slot of the two canonical compensation failed-create cases is held pending like the canonical postloss slot: the exact original uncertain settlement and independently validated proof are retained, current lease and no canonical event/member are checked, and a distinct pending-enrollment stage is published, so the parent create grant stays settled and unregistered for recovery cleanup and compensation. Floor recovery, non-canonical compensation and lost-create-reply cases, production confirm, cleanup and compensation validators are unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
+    "source_inventory_sha256": "4cff65fdaabbca7dc0a3eee4b2774d7247354735230ad6b011acc9fbde18f004",
+    "production_or_native_qualification": false
   }
 }

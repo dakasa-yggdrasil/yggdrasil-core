@@ -555,7 +555,7 @@ func (r *Realm) Enrolled(ctx context.Context, grant model.CapacityMutationGrant,
 // EnrolledPending is called only after the source-only pending verifier; it is
 // not a confirmation, capacity claim, or cleanup authority.
 func (r *Realm) EnrolledPending(ctx context.Context, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, receipt model.CapacityGuestOriginalProvisioningReceipt) error {
-	if !PostlossSourceCase(r.Request.NativeCase) || grant.Slot != SourceFailureSlot(r.Request.NativeCase) {
+	if !(PostlossSourceCase(r.Request.NativeCase) || CanonicalCompensationPendingCase(r.Request.NativeCase)) || grant.Slot != SourceFailureSlot(r.Request.NativeCase) {
 		return ErrOriginalUnknown
 	}
 	return r.recordEnrollment(ctx, grant, pre, receipt, true)
