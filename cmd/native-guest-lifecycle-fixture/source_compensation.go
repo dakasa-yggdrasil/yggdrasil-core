@@ -81,7 +81,7 @@ func (f *fixture) finishOriginalSourceCompensation(ctx context.Context,p model.C
  if _,err=f.db.ExecContext(ctx,`INSERT INTO public.capacity_source_failure_cleanup_terminals(parent_grant_id,terminal_wire) VALUES($1,$2)`,pre.OriginalCreateGrantID,terminalWire);err!=nil{return err}
  tx,err:=f.db.BeginTx(ctx,nil);if err!=nil{return err};defer tx.Rollback()
  var currentWire []byte;var current model.CapacityIntent;var checkedAt time.Time
- if err=tx.QueryRowContext(ctx,`SELECT intent FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 FOR UPDATE`,f.namespace,p.Environment,p.Domain,p.Dimension).Scan(&currentWire);err!=nil || capacity.DecodeGuestLifecycle(currentWire,&current)!=nil{return q.ErrOriginalUnknown}
+ if err=tx.QueryRowContext(ctx,`SELECT intent FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 FOR UPDATE`,f.namespace,p.Environment,p.Domain,p.Dimension).Scan(&currentWire);err!=nil || repository.DecodeQualificationCapacityIntent(currentWire,&current)!=nil{return q.ErrOriginalUnknown}
  if err=tx.QueryRowContext(ctx,`SELECT clock_timestamp()`).Scan(&checkedAt);err!=nil{return err}
  store.ExecutorID=ownerLease.ExecutorID
  verifiedTerminal,err:=store.ValidateSourceFailureCleanupTerminalTx(ctx,tx,f.policy,p,current,pre.OriginalCreateGrantID,checkedAt);if err!=nil{return err}

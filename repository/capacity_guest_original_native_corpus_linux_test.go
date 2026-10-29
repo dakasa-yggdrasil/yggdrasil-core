@@ -271,7 +271,7 @@ func TestCapacityGuestOriginalNativeCorpusPostgres(t *testing.T) {
 			t.Fatal(err)
 		}
 		var registration model.CapacityGuestOriginalProvisioningRegistration
-		if capacity.DecodeGuestLifecycle(registrationWire, &registration) != nil || capacity.GuestOriginalRegistration(p, stored.binding, stored.member, stored.witness, registration, registration.Result.OriginalReturnedAt) != nil {
+		if capacity.DecodeGuestLifecycle(registrationWire, &registration) != nil || capacity.GuestOriginalRegistration(p, stored.binding, stored.member, stored.witness, registration, receipt.RecordedAt) != nil {
 			t.Fatal("real bootstrap/source placement cannot be replaced by a completeness claim")
 		}
 		readWire := guestOriginalNativeWire(t, tx, ctx, `SELECT original_wire,return_sha256,original_record=convert_from(original_wire,'UTF8')::jsonb FROM public.capacity_guest_qualification_native_source_returns WHERE preregistration_id=$1 AND native_stage='native_read' AND return_sha256=$2`, stored.pre.PreregistrationID, resource.CoreNativeOriginalReadSHA256)
@@ -463,7 +463,10 @@ func TestCapacityGuestOriginalNativeCorpusPostgres(t *testing.T) {
 	observationGrant.State = observed.GrantState
 	r := model.CapacityMutationReceipt{Grant: observationGrant, AttemptID: destroy.AttemptID, Outcome: destroy.Settlement.Outcome, TransportCompleted: destroy.Settlement.TransportCompleted, ResourceID: destroy.Settlement.ResourceID, ResourceCreatedAt: destroy.Settlement.ResourceCreatedAt, ActionID: destroy.Settlement.ActionID, NextActionIDs: destroy.Settlement.NextActionIDs, AuxiliaryResources: destroy.Settlement.AuxiliaryResources, AuxiliaryInventoryComplete: destroy.Settlement.AuxiliaryInventoryComplete}
 	proof, err := repository.GuestNativeQEMUDeleteProof(p, destroy.Binding, r, observed, at, destroy.Proof.ReceiptRef)
-	if err != nil || !reflect.DeepEqual(proof, *destroy.Proof) {
+	// Compare persisted forms: omitempty decodes an empty auxiliary slice as nil.
+	gotProof, gotErr := json.Marshal(proof)
+	wantProof, wantErr := json.Marshal(*destroy.Proof)
+	if err != nil || gotErr != nil || wantErr != nil || !bytes.Equal(gotProof, wantProof) {
 		t.Fatal("native physical deletion proof diverges from actual original provider read", err)
 	}
 	baselineReceipt, baselineRegistrationSHA, err := loadGuestReceiptTx(ctx, tx, baseline.pre.PreregistrationID)

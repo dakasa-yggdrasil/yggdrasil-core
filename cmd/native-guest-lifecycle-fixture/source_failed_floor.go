@@ -5,6 +5,7 @@ package main
 import (
  "context"
  "encoding/json"
+ "errors"
  "path/filepath"
  "time"
  "github.com/google/uuid"
@@ -53,7 +54,16 @@ func(f *fixture) prepareOriginalFloorBridge(ctx context.Context, baselineProbeSH
 // Concrete called prefix: baseline1 -> stronger persisted Floor2 -> actual
 // failed Create2 -> independently signed physical cleanup. A settled original
 // cannot become terminal just because the physical child was cleaned up.
-func(f *fixture) runOriginalFailedFloorCaller(ctx context.Context)error{
+func(f *fixture) runOriginalFailedFloorCaller(ctx context.Context)(runErr error){
+ // Same failure-only retention as the public caller: an early refusal keeps
+ // its actual public workflow returns observable. Still a failure.
+ defer func(){
+  if runErr!=nil{
+   diagnostic,cancel:=context.WithTimeout(context.WithoutCancel(ctx),5*time.Second);defer cancel()
+   _,writeErr:=q.Publish(diagnostic,filepath.Join(f.private,"core-original-public-caller-failure-returns.json"),f.publicReturns)
+   runErr=errors.Join(runErr,writeErr)
+  }
+ }()
  if !q.SourceFailedFloorCase(f.request.NativeCase) || len(f.realm.OwnedSlots())!=0{return q.ErrOriginalUnknown}
  var p model.CapacityPolicySpec
  if json.Unmarshal(f.policy.Spec,&p)!=nil || p.Floor!=1 || p.Ceiling!=2{return q.ErrOriginalUnknown}

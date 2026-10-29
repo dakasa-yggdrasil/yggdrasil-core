@@ -1,6 +1,7 @@
 package repository
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
 	"encoding/json"
@@ -52,7 +53,13 @@ func (s CapacityStore) guestFailedCreateCleanupTx(ctx context.Context, tx *sql.T
 		var linked string
 		var wire []byte
 		var digest string
-		if err = tx.QueryRowContext(ctx, `SELECT intent_id::text,original_wire,eligibility_sha256 FROM public.capacity_vm_retirement_delete_bindings WHERE destroy_grant_id=$1`, childID).Scan(&linked, &wire, &digest); err != nil || linked != id {
+		var raw []byte
+		var child capacityMutationRecord
+		if tx.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1`, childID).Scan(&raw) != nil || json.Unmarshal(raw, &child) != nil {
+			return ErrCapacityConflict
+		}
+		linked, wire, digest, err = guestCompensationBindingTx(ctx, tx, child)
+		if err != nil || linked != id {
 			return ErrCapacityConflict
 		}
 		quiescent, err := guestQuiescentProofTx(ctx, tx, stored)
@@ -65,6 +72,60 @@ func (s CapacityStore) guestFailedCreateCleanupTx(ctx context.Context, tx *sql.T
 		}
 	}
 	return nil
+}
+
+// guestCompensationBindingTx derives a replacement only from the single
+// immutable original binding and a fully closed history of never-redeemed
+// siblings. Callers hold the mutation scope lock; issuance/confirmation also
+// hold the native-slot lock. No second binding or provider send is invented.
+func guestCompensationBindingTx(ctx context.Context, tx *sql.Tx, child capacityMutationRecord) (string, []byte, string, error) {
+	var id, digest string
+	var wire []byte
+	err := tx.QueryRowContext(ctx, `SELECT intent_id::text,original_wire,eligibility_sha256 FROM public.capacity_vm_retirement_delete_bindings WHERE destroy_grant_id=$1`, child.Grant.GrantID).Scan(&id, &wire, &digest)
+	if err == nil {
+		return id, wire, digest, nil
+	}
+	if err != sql.ErrNoRows || child.Grant.CompensationOf == "" {
+		return "", nil, "", ErrCapacityConflict
+	}
+	// The original intent is singular for this create. V2 retirement issuance
+	// does not use compensation lineage and must never use this derivation.
+	id, err = singleFailedCreateRetirementTx(ctx, tx, child.Grant.CompensationOf)
+	if err != nil {
+		return "", nil, "", ErrCapacityConflict
+	}
+	var first string
+	err = tx.QueryRowContext(ctx, `SELECT b.destroy_grant_id::text,b.original_wire,b.eligibility_sha256 FROM public.capacity_vm_retirement_delete_bindings b JOIN public.capacity_mutation_grants g ON g.id=b.destroy_grant_id WHERE b.intent_id=$1 AND g.grant_record->'grant'->>'compensation_of'=$2`, id, child.Grant.CompensationOf).Scan(&first, &wire, &digest)
+	if err != nil {
+		return "", nil, "", ErrCapacityConflict
+	}
+	rows, err := tx.QueryContext(ctx, `SELECT id::text,state,grant_record,expires_at,expires_at=(grant_record->'grant'->>'expires_at')::timestamptz FROM public.capacity_mutation_grants WHERE grant_record->'grant'->>'compensation_of'=$1 AND id<>$2`, child.Grant.CompensationOf, child.Grant.GrantID)
+	if err != nil {
+		return "", nil, "", err
+	}
+	defer rows.Close()
+	foundFirst, count := false, 0
+	for rows.Next() {
+		var rowID, state string
+		var raw []byte
+		var expires time.Time
+		var expiryConsistent bool
+		var previous capacityMutationRecord
+		if rows.Scan(&rowID, &state, &raw, &expires, &expiryConsistent) != nil || json.Unmarshal(raw, &previous) != nil {
+			return "", nil, "", ErrCapacityConflict
+		}
+		count++
+		if previous.Grant.GrantID == first {
+			foundFirst = true
+		}
+		if rowID != previous.Grant.GrantID || state != "expired" || previous.Grant.State != "expired" || expires.After(child.CreatedAt) || !expiryConsistent || previous.AttemptID != "" || previous.SettlementTokenSHA256 != "" || previous.Settlement != nil || previous.Proof != nil || previous.Grant.CompensationOf != child.Grant.CompensationOf || previous.Grant.RequestSHA256 != child.Grant.RequestSHA256 || previous.Grant.ExpectedResourceID != child.Grant.ExpectedResourceID || previous.Grant.ExpectedResourceCreatedAt != child.Grant.ExpectedResourceCreatedAt || previous.Grant.Slot != child.Grant.Slot || previous.Grant.BindingName != child.Grant.BindingName || previous.Grant.IntegrationInstanceID != child.Grant.IntegrationInstanceID || previous.Grant.ScopeChecksum != child.Grant.ScopeChecksum || previous.Grant.ProfileName != child.Grant.ProfileName || previous.Grant.Capability != child.Grant.Capability || previous.PolicyID != child.PolicyID || previous.PolicyChecksum != child.PolicyChecksum || previous.WorkflowID != child.WorkflowID || previous.ExecutorID != child.ExecutorID || previous.Generation != child.Generation || !reflect.DeepEqual(previous.Binding, child.Binding) {
+			return "", nil, "", ErrCapacityConflict
+		}
+	}
+	if rows.Err() != nil || !foundFirst || count == 0 {
+		return "", nil, "", ErrCapacityConflict
+	}
+	return id, wire, digest, nil
 }
 
 // A compensation has an independent current workflow authority but binds to
@@ -91,6 +152,17 @@ func (s CapacityStore) bindGuestCompensationTx(ctx context.Context, tx *sql.Tx, 
 	wire, err := json.Marshal(proof)
 	if err != nil {
 		return err
+	}
+	var exists bool
+	if err = tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.capacity_vm_retirement_delete_bindings WHERE intent_id=$1)`, id).Scan(&exists); err != nil {
+		return err
+	}
+	if exists {
+		linked, originalWire, digest, err := guestCompensationBindingTx(ctx, tx, child)
+		if err != nil || linked != id || digest != capacity.GuestRetirementSHA(proof) || !bytes.Equal(originalWire, wire) {
+			return ErrCapacityConflict
+		}
+		return nil
 	}
 	_, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_vm_retirement_delete_bindings(destroy_grant_id,intent_id,eligibility_sha256,original_eligibility_record,recorded_at,original_wire) VALUES($1,$2,$3,$4::jsonb,$5,$6)`, child.Grant.GrantID, id, capacity.GuestRetirementSHA(proof), string(wire), now, wire)
 	return err

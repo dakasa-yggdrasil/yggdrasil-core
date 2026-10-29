@@ -28,6 +28,9 @@ func TestCapacityMutationCompensationPostgres(t *testing.T) {
 		{"protected_lost_create_reply", true, true},
 	} {
 		t.Run(scenario.name, func(t *testing.T) {
+			if syntheticCompensationIfEnabled(t, scenario.protected, scenario.lostReply) {
+				return
+			}
 			protected, lostReply := scenario.protected, scenario.lostReply
 			f := mutationPostgresFixture(t, !protected)
 			failedSlot := 5

@@ -114,30 +114,11 @@ func (s CapacityStore) AppendCanonicalPostlossFreshRead(ctx context.Context, pol
 			return e, err
 		}
 	}
-	var native struct {
-		Schema                               string          `json:"schema"`
-		OriginalCreatorSHA256                string          `json:"original_creator_sha256"`
-		Original                             json.RawMessage `json:"original"`
-		Before                               json.RawMessage `json:"before"`
-		After                                json.RawMessage `json:"after"`
-		QMPPeerPID                           int32           `json:"qmp_peer_pid"`
-		ExecutableSHA256                     string          `json:"executable_sha256"`
-		CommandLineSHA256                    string          `json:"command_line_sha256"`
-		OriginalDisk                         json.RawMessage `json:"original_disk"`
-		OriginalDiskFD                       int             `json:"original_disk_fd"`
-		OriginalDiskReadReturnedAt           time.Time       `json:"original_disk_read_returned_at"`
-		OriginalDiskDirectoryCloseReturnedAt time.Time       `json:"original_disk_directory_close_returned_at"`
-		UUID                                 json.RawMessage `json:"uuid"`
-		Status                               json.RawMessage `json:"status"`
-		StartedAt                            time.Time       `json:"started_at"`
-		ReadReturnedAt                       time.Time       `json:"read_returned_at"`
-		CloseReturnedAt                      time.Time       `json:"close_returned_at"`
-		IO                                   json.RawMessage `json:"io"`
-	}
+	var native qualificationNativeRead
 	// Decode the same original native schema without importing provider package
 	// (which already imports repository). Exact original stable identity is
 	// checked against the immutable original native row, all refreshed IO is real.
-	if capacity.DecodeGuestLifecycle(nativeWire, &native) != nil || native.Schema != "core_independent_original_qemu_read_v1" || native.OriginalCreatorSHA256 != b.CreatorSHA256 || native.StartedAt.IsZero() || native.ReadReturnedAt.Before(native.StartedAt) || native.CloseReturnedAt.Before(native.ReadReturnedAt) || !capacity.Fresh(native.CloseReturnedAt, now, p.MaxEvidenceAgeSeconds) {
+	if decodeQualificationNativeRead(nativeWire, &native) != nil || native.Schema != "core_independent_original_qemu_read_v1" || native.OriginalCreatorSHA256 != b.CreatorSHA256 || native.StartedAt.IsZero() || native.ReadReturnedAt.Before(native.StartedAt) || native.CloseReturnedAt.Before(native.ReadReturnedAt) || !capacity.Fresh(native.CloseReturnedAt, now, p.MaxEvidenceAgeSeconds) {
 		return e, ErrCapacityConflict
 	}
 	var originalNativeWire []byte

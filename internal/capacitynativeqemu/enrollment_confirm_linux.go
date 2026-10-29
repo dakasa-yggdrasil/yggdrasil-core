@@ -30,10 +30,14 @@ type EnrollmentConfirmProofLineage struct {
 	NativeReadSHA256        string                      `json:"native_read_sha256"`
 }
 
+func postlossConfirmationRetentionRequired(nativeCase string, slot int) bool {
+	return PostlossSourceCase(nativeCase) && slot == SourceFailureSlot(nativeCase)
+}
+
 // RefreshEnrollmentProof observes the SAME source-owned native create after
 // its enrollment receipt. It preserves the create proof/action lineage and
 // original deadline, and does not publish the post-confirm Enrolled stage.
-func (r *Realm) RefreshEnrollmentProof(ctx context.Context, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, enrollment model.CapacityGuestOriginalProvisioningReceipt, originalProof model.CapacityMutationProof) (model.CapacityMutationProof, error) {
+func (r *Realm) RefreshEnrollmentProof(ctx context.Context, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, enrollment model.CapacityGuestOriginalProvisioningReceipt, originalProof model.CapacityMutationProof, retain func(context.Context, model.CapacityMutationProof, []byte) error) (model.CapacityMutationProof, error) {
 	var empty model.CapacityMutationProof
 	deadline, bounded := ctx.Deadline()
 	if r == nil || !bounded || ctx.Err() != nil || grant.Slot < 1 || grant.Slot > 2 || len(r.Request.Slots) != 2 {
@@ -67,6 +71,12 @@ func (r *Realm) RefreshEnrollmentProof(ctx context.Context, grant model.Capacity
 	proof, err := mergeEnrollmentConfirmProof(originalProof, original, fresh, disk, enrollment.RecordedAt, readDeadline, nativeWire)
 	if err != nil {
 		return empty, err
+	}
+	// Only the source owner has the real joined fresh read and exact proof.
+	if postlossConfirmationRetentionRequired(r.Request.NativeCase, grant.Slot) {
+		if retain == nil || retain(read, proof, nativeWire) != nil {
+			return empty, ErrOriginalUnknown
+		}
 	}
 	lineage := EnrollmentConfirmProofLineage{
 		Schema: "core_original_enrollment_confirm_proof_lineage_v1", CoreSource: capacity.CurrentGuestCoreSource(),

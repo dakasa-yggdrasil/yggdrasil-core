@@ -217,6 +217,7 @@ func (s *Server) serveCapacityGuestRequest(w http.ResponseWriter, r *http.Reques
 		}
 		receipt, err := store.RegisterOriginalGuest(ctx, p.base.principalID, registration, intent, enrollment)
 		if err != nil {
+			guestRegistrationDiagnosticLog(err)
 			guestHTTPError(w, err)
 			return
 		}
@@ -346,6 +347,8 @@ func (s *Server) serveCapacityGuestRequest(w http.ResponseWriter, r *http.Reques
 		var out any
 		if len(parts) == 2 && parts[1] == "create-witness" {
 			out, err = store.GuestCreateWitness(ctx, p.base.principalID, id.String(), nonce[0])
+		} else if len(parts) == 2 && parts[1] == "qualification-registration-clock" {
+			out, err = guestQualificationRegistrationClock(ctx, store, p.base.principalID, id.String(), nonce[0], r)
 		} else if len(parts) == 1 {
 			out, err = store.GuestProvisioningReceipt(ctx, p.base.principalID, id.String(), nonce[0])
 		} else {
@@ -400,6 +403,10 @@ func (s *Server) serveGuestOriginalAuthority(w http.ResponseWriter, r *http.Requ
 	if read.Challenge != nil {
 		body, err := json.Marshal(model.CapacityGuestRuntimeSnapshotRequest{Challenge: *read.Challenge})
 		if err != nil {
+			guestHTTPError(w, err)
+			return
+		}
+		if err := guestQualificationBeforeSnapshotGET(ctx, read); err != nil {
 			guestHTTPError(w, err)
 			return
 		}

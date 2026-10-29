@@ -17,6 +17,7 @@ import (
 
 type coreNativeFixtureInput struct {
 	Mode            string                                    `json:"mode"`
+	Profile         string                                    `json:"profile"`
 	InstanceID      string                                    `json:"instance_id"`
 	TypeID          string                                    `json:"type_id"`
 	Request         protocol.AdapterExecuteIntegrationRequest `json:"request"`
@@ -36,7 +37,14 @@ type coreNativeFixtureHTTP struct {
 	created time.Time
 }
 
-func (h coreNativeFixtureHTTP) Do(r *http.Request) (*http.Response, error) {
+func (h coreNativeFixtureHTTP) Do(r *http.Request) (response *http.Response, returnedErr error) {
+	// Return the owning request on every synthetic transport path, just as
+	// the adapter's fleetFake and the real HTTP client do.
+	defer func() {
+		if response != nil {
+			response.Request = r
+		}
+	}()
 	if r.URL.Host == "api.hetzner.cloud" && (strings.HasPrefix(r.URL.Path, "/v1/actions/") || strings.HasSuffix(r.URL.Path, "/actions")) {
 		if strings.HasPrefix(r.URL.Path, "/v1/actions/") || r.URL.Query().Get("status") != "running" {
 			id := int64(100)
@@ -84,6 +92,18 @@ func TestCapacityCoreNativeFixtureProducer(t *testing.T) {
 	}
 	if in.Mode == "seed" {
 		req := fixtureRequest(t, OperationEnsureServer)
+		if in.Profile != "" {
+			if in.Profile != "notify-hetzner-elastic" {
+				t.Fatal("unsupported synthetic profile")
+			}
+			fleet, ok := req.Integration.InstanceSpec.Config["fleet"].(protocol.FleetConfig)
+			if !ok || len(fleet.Profiles) != 1 {
+				t.Fatal("one source fixture profile required")
+			}
+			fleet.Profiles[0].Name = in.Profile
+			req.Integration.InstanceSpec.Config["fleet"] = fleet
+			req.Input["profile"] = in.Profile
+		}
 		req.Integration.Instance.ID = uuid.MustParse(in.InstanceID)
 		req.Integration.Type.ID = uuid.MustParse(in.TypeID)
 		slots := []map[string]any{}

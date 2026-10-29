@@ -8,6 +8,7 @@ import (
 	"encoding/json"
 	"os"
 	"path/filepath"
+	"strings"
 	"testing"
 	"time"
 
@@ -28,7 +29,7 @@ func TestCapacityGuestOriginalWorkflowNativeReadsPostgres(t *testing.T) {
 	var c q.Corpus
 	if os.Getenv("REQUIRE_CAPACITY_GUEST_NATIVE_CORPUS") != "true" { t.Fatal("owning original corpus is mandatory") }
 	if _, err := q.ReadPrivate(ctx, path, &c); err != nil { t.Fatal("closed full corpus required", err) }
-	if c.Schema != "core_original_guest_native_qemu_corpus_v1" || !q.PositiveCase(c.NativeCase) || c.NativeCase != os.Getenv("GUEST_ORIGINAL_NATIVE_CASE") || c.CaseOutcome != "ORIGINAL_PROTECTED_LIFECYCLE_JOINED" || c.ActualCoreSourceCommit != capacity.CurrentGuestCoreSource() || len(c.NativeResources) != 2 || len(c.OriginalPreregistrationIDs) != 2 || len(c.OriginalRunIDs) < 2 || len(c.OriginalRunIDs) > 8 {
+	if c.Schema != "core_original_guest_native_qemu_corpus_v1" || !q.PositiveCase(c.NativeCase) || c.NativeCase != os.Getenv("GUEST_ORIGINAL_NATIVE_CASE") || c.CaseOutcome != "ORIGINAL_PROTECTED_LIFECYCLE_JOINED" || !guestOriginalPinnedCoreSource(c.ActualCoreSourceCommit) || len(c.NativeResources) != 2 || len(c.OriginalPreregistrationIDs) != 2 || len(c.OriginalRunIDs) < 2 || len(c.OriginalRunIDs) > 8 {
 		t.Fatal("current exact owning two-slot positive corpus required")
 	}
 	db, err := sql.Open("postgres", os.Getenv("DB_URL"))
@@ -155,4 +156,14 @@ type guestActualPublicReturn struct {
 	WorkflowErrorClass    string    `json:"workflow_error_class"`
 	WorkflowErrorBytes    int       `json:"workflow_error_bytes"`
 	WorkflowErrorSHA256   string    `json:"workflow_error_sha256"`
+}
+
+// Test binaries are not VCS-stamped, so the corpus is bound to the Core pin
+// the native job checked out instead of the build info revision.
+func guestOriginalPinnedCoreSource(value string) bool {
+	pin := os.Getenv("CORE_ORIGINAL_GUEST_NATIVE_SOURCE_COMMIT")
+	if len(pin) != 40 || strings.Trim(pin, "0123456789abcdef") != "" {
+		return false
+	}
+	return value == pin
 }

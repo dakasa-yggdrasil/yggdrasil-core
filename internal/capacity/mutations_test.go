@@ -3,6 +3,7 @@ package capacity
 import (
 	"crypto/sha256"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"testing"
@@ -64,6 +65,30 @@ func TestCapacityMutationClosedProjection(t *testing.T) {
 	destroy, err := PrepareMutationPlan(p, issue)
 	if err != nil || destroy.RequestSHA256 != "" {
 		t.Fatal("runtime tuple supplied a destroy digest before ledger binding", destroy, err)
+	}
+	// A fixture must distinguish the actual protected-slot rejection from a
+	// lease/transport/malformed-tuple failure before crediting the guard.
+	protected := p
+	protected.MutationBindings = append([]model.CapacityMutationBinding(nil), p.MutationBindings...)
+	protected.MutationBindings[0].ProtectedSlots = 1
+	if _, err := PrepareMutationPlan(protected, issue); !errors.Is(err, ErrProtectedMutationDestroy) || err.Error() != "capacity destruction requires an unprotected immutable resource" {
+		t.Fatal("protected destroy was not refused by the exact guard", err)
+	}
+	bad := spec
+	bad.ExpectedResourceID = ""
+	badWire, _ := json.Marshal(bad)
+	if _, err := PrepareMutationPlan(protected, model.CapacityMutationIssue{BindingName: "fleet", DesiredSpec: badWire}); err == nil || errors.Is(err, ErrProtectedMutationDestroy) {
+		t.Fatal("missing resource was credited as the protected guard", err)
+	}
+	bad = spec
+	bad.ExpectedResourceCreatedAt = "invalid"
+	badWire, _ = json.Marshal(bad)
+	if _, err := PrepareMutationPlan(protected, model.CapacityMutationIssue{BindingName: "fleet", DesiredSpec: badWire}); err == nil || errors.Is(err, ErrProtectedMutationDestroy) {
+		t.Fatal("invalid creation time was credited as the protected guard", err)
+	}
+	protected.MutationBindings[0].CompensationEnabled = true
+	if _, err := PrepareCompensationPlan(protected, issue); err != nil {
+		t.Fatal("separately authorized protected compensation changed", err)
 	}
 	if _, err := BindMutationDestroyPlan(destroy, "replacement-id", spec.ExpectedResourceCreatedAt); err == nil {
 		t.Fatal("caller identity replaced registered immutable membership")

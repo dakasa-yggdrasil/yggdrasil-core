@@ -7,6 +7,7 @@ import (
 	"os"
 	"path/filepath"
 	"strings"
+	"testing"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 )
@@ -25,4 +26,15 @@ func RegisterRecoveryFixtureApproval(p model.CapacityPolicySpec, binding model.C
 	}
 	guestProductionProfileApprovals = append(guestProductionProfileApprovals, guestProductionProfileApproval{Provider: provider, Profile: binding.ProfileManifest.Profile, ProductionCatalogSHA256: catalog, ContractSHA256: contract})
 	return nil
+}
+
+// RecoveryFixtureApprovalScope restores exactly the pre-test registry. Tests
+// using this process-scoped registry must be sequential and tagged explicitly.
+func RecoveryFixtureApprovalScope(t *testing.T) {
+	t.Helper()
+	if !strings.HasSuffix(filepath.Base(os.Args[0]), ".test") || os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") != "true" {
+		t.Fatal("recovery fixture is test-only")
+	}
+	before := append([]guestProductionProfileApproval(nil), guestProductionProfileApprovals...)
+	t.Cleanup(func() { guestProductionProfileApprovals = before })
 }

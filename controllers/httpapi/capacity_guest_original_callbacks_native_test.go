@@ -36,7 +36,7 @@ func TestCapacityGuestOriginalHTTPCallbacksPostgres(t *testing.T) {
 	if _, err := q.ReadPrivate(ctx, os.Getenv("CAPACITY_GUEST_NATIVE_CORPUS_FILE"), &corpus); err != nil {
 		t.Fatal("full closed original corpus unavailable", err)
 	}
-	if corpus.Schema != "core_original_guest_native_qemu_corpus_v1" || !q.PositiveCase(corpus.NativeCase) || corpus.NativeCase != os.Getenv("GUEST_ORIGINAL_NATIVE_CASE") || corpus.CaseOutcome != "ORIGINAL_PROTECTED_LIFECYCLE_JOINED" || corpus.ActualCoreSourceCommit != capacity.CurrentGuestCoreSource() || len(corpus.OriginalPreregistrationIDs) != 2 || len(corpus.NativeResources) != 2 {
+	if corpus.Schema != "core_original_guest_native_qemu_corpus_v1" || !q.PositiveCase(corpus.NativeCase) || corpus.NativeCase != os.Getenv("GUEST_ORIGINAL_NATIVE_CASE") || corpus.CaseOutcome != "ORIGINAL_PROTECTED_LIFECYCLE_JOINED" || !guestOriginalPinnedCoreSource(corpus.ActualCoreSourceCommit) || len(corpus.OriginalPreregistrationIDs) != 2 || len(corpus.NativeResources) != 2 {
 		t.Fatal("current exact owning two-slot positive corpus required")
 	}
 	db, err := sql.Open("postgres", os.Getenv("DB_URL"))
@@ -126,4 +126,14 @@ func TestCapacityGuestOriginalHTTPCallbacksPostgres(t *testing.T) {
 		if err != nil || !reflect.DeepEqual(before, after) { t.Fatal("read-only callback checks altered canonical receipt", err) }
 		if err := db.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1`, g.GrantID).Scan(&afterWire); err != nil || string(afterWire) != string(grantWire) { t.Fatal("callback negative changed private ledger", err) }
 	}
+}
+
+// Test binaries are not VCS-stamped, so the corpus is bound to the Core pin
+// the native job checked out instead of the build info revision.
+func guestOriginalPinnedCoreSource(value string) bool {
+	pin := os.Getenv("CORE_ORIGINAL_GUEST_NATIVE_SOURCE_COMMIT")
+	if len(pin) != 40 || strings.Trim(pin, "0123456789abcdef") != "" {
+		return false
+	}
+	return value == pin
 }

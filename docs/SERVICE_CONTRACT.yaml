@@ -12,13 +12,13 @@
   "source_inventory": {
     "id": "complete_runtime_source_census",
     "evidence": "docs/service-contract/source/sources.json",
-    "sha256": "c0c1fc9fd52ac9c534ee1e50cb9e5ac3e16b062575d1753590d6d819ad4cb501"
+    "sha256": "4cff65fdaabbca7dc0a3eee4b2774d7247354735230ad6b011acc9fbde18f004"
   },
   "produces": [
     {
       "id": "transactional_event_emission_sites",
       "evidence": "docs/service-contract/source/event-emissions.json",
-      "sha256": "124aa65460ec8fd76b590b8b447343552ab566ee3e3b3e8a3af7680d85de300d"
+      "sha256": "edafe85272c6cb7c7824130ee025b58b035a7c812178bc678d2c2e3f549015c2"
     },
     {
       "id": "embedded_event_schema_keys",
@@ -55,14 +55,14 @@
     {
       "id": "independent_source_review",
       "evidence": "docs/service-contract/REVIEW.json",
-      "sha256": "7aa2484da91e24339ea54f362eef93bd11aed37cbaaaddd55a0031ae229f0939"
+      "sha256": "37b4b9f821c8abaf6c65f1a73931d44d6ea7d82759144d2ef498609c44027c27"
     }
   ],
   "callsREST": [
     {
       "id": "http_and_rpc_egress_callsites",
       "evidence": "docs/service-contract/source/http-egress.json",
-      "sha256": "1c6be51b84db086ee3b58d6a287a88a07072c99428bc99ccdd1ef1c2520a41a8"
+      "sha256": "452439a54cb4c98ad9773b810fa34337ae34265428c40f50b147437261bb2fb3"
     },
     {
       "id": "optional_provider_sdk_callsites",
@@ -84,7 +84,7 @@
     {
       "id": "pre_mux_capacity_dispatch",
       "evidence": "docs/service-contract/source/http-intercept-dispatch.json",
-      "sha256": "4b571703c09487afe728cc9c9a27b3a0f6577bc9ec60f1127ceb9ea043fef9f7"
+      "sha256": "37993f131ec0f198503900b566447600132de1f2526e1459601d14310557a54d"
     },
     {
       "id": "auth_dispatch_source_functions",

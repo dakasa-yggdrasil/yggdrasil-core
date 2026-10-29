@@ -4,7 +4,7 @@ import("context";"crypto/rand";"encoding/hex";"encoding/json";"path/filepath";"t
 type CanonicalCleanupSession struct {Child model.CapacityMutationGrant;AttemptID string;Nonce string;StartedAt time.Time;RedeemReturnedAt time.Time;Redeem model.CapacityMutationRedeemResponse;Replay model.CapacityMutationRedeemResponse;Authority []byte;ActionID string}
 func(r *Realm) RedeemCanonicalSourceChild(ctx context.Context,store repository.CapacityStore,policy model.Manifest,child model.CapacityMutationGrant)(CanonicalCleanupSession,error){
  var s CanonicalCleanupSession
- if !CanonicalSourceCompensationCase(r.Request.NativeCase) || child.CompensationOf=="" || child.Slot!=2 || child.State!="issued"{return s,ErrOriginalUnknown}
+ if !CanonicalSourceCompensationCase(r.Request.NativeCase) || child.CompensationOf=="" || child.Slot!=SourceFailureSlot(r.Request.NativeCase) || child.State!="issued"{return s,ErrOriginalUnknown}
  var entropy [32]byte;if _,err:=rand.Read(entropy[:]);err!=nil{return s,err};s.Nonce=hex.EncodeToString(entropy[:]);s.AttemptID=uuid.NewString();s.Child=child;s.StartedAt=time.Now().UTC()
  request:=model.CapacityMutationRedeemRequest{GrantID:child.GrantID,AttemptID:s.AttemptID,SettlementTokenSHA256:capacity.BusinessCreationSHA256([]byte(s.Nonce)),Capability:child.Capability,IntegrationInstanceID:child.IntegrationInstanceID,ScopeChecksum:child.ScopeChecksum,ProfileName:child.ProfileName,Slot:child.Slot,RequestSHA256:child.RequestSHA256,ExpectedResourceID:child.ExpectedResourceID,ExpectedResourceCreatedAt:child.ExpectedResourceCreatedAt,CompensationOf:child.CompensationOf}
  if err:=r.api(ctx,"/api/v1/capacity/mutations/redeem","",request,&s.Redeem);err!=nil || s.Redeem.Mode!="write_once" || s.Redeem.GrantID!=child.GrantID || s.Redeem.AttemptID!=s.AttemptID || s.Redeem.RequestSHA256!=child.RequestSHA256 || s.Redeem.CompensationOf!=child.CompensationOf{return s,ErrOriginalUnknown};s.RedeemReturnedAt=time.Now().UTC()
@@ -12,9 +12,15 @@ func(r *Realm) RedeemCanonicalSourceChild(ctx context.Context,store repository.C
  raw,err:=json.Marshal(s.Redeem);if err!=nil{return s,err};if _,err=PublishBytes(ctx,filepath.Join(r.PrivateDirectory,"canonical-source-redeem-return.json"),raw);err!=nil{return s,err};s.Authority,err=store.AuthorizeCanonicalSourceChild(ctx,policy,child.GrantID,s.AttemptID,capacity.BusinessCreationSHA256(raw));if err!=nil{return s,err};s.ActionID="canonical-original-cleanup:"+child.GrantID+":"+s.AttemptID
  return s,nil
 }
+// SettleCanonicalSourceChild settles the child with the proof of the single
+// write-once absence read that the PG17 pre-settlement hook stored through
+// ObserveCanonicalSourceCompensation. It does not observe again (a second
+// Observe fails on the child_grant_id primary key) and takes no new pidfd/disk
+// read: its authority is the stored read, at most MaxEvidenceAgeSeconds old at
+// the database clock, and that stored read must exist before Settle runs.
 func(r *Realm) SettleCanonicalSourceChild(ctx context.Context,store repository.CapacityStore,policy model.Manifest,s CanonicalCleanupSession)(model.CapacityMutationProof,[]byte,error){
  var proof model.CapacityMutationProof
- observed,err:=store.ObserveCanonicalSourceCompensation(ctx,policy,s.Child.GrantID);if err!=nil{return proof,nil,err}
+ observed,err:=store.CanonicalSourceCompensationObserved(ctx,policy,s.Child.GrantID);if err!=nil{return proof,nil,err}
  settlement:=model.CapacityMutationSettleRequest{GrantID:s.Child.GrantID,AttemptID:s.AttemptID,RequestSHA256:s.Child.RequestSHA256,Outcome:"accepted",TransportCompleted:true,ResourceID:observed.ResourceID,ResourceCreatedAt:observed.ResourceCreatedAt,ActionID:s.ActionID,ObservedAt:observed.ObservedAt.UTC().Format(time.RFC3339Nano),AuxiliaryInventoryComplete:true}
  var returned struct{GrantID string `json:"grant_id"`;AttemptID string `json:"attempt_id"`;RequestSHA256 string `json:"request_sha256"`;Status string `json:"status"`}
  if err=r.api(ctx,"/api/v1/capacity/mutations/settle",s.Nonce,settlement,&returned);err!=nil || returned.Status!="settled" || returned.GrantID!=s.Child.GrantID || returned.AttemptID!=s.AttemptID || returned.RequestSHA256!=s.Child.RequestSHA256{return proof,nil,ErrOriginalUnknown}

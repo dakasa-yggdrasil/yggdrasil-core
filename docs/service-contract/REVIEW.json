@@ -649,7 +649,24 @@
   "reviewer": "Root full production-source delta review; separate independent manager/dial/monitor peer; source acceptance only",
   "schema": "core_service_source_review_v1",
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "e6e919b15af44e43b6d05c4c969beca37dc2569a0c1ff4633e7ce47f3ab85e2e",
+  "pg16_fixture_integration_review": {
+    "scope": "Independent source review of test-only fixture integration, adapter pin, cleanup and census. Native qualification and the original lost-reply cases remain separate and unqualified.",
+    "reviewed_code_commit": "6a98b52d0a8a93bee01a69834842b6a1602625fb",
+    "failed_floor_fixture_scope": "Independent comparison preserved the original below-floor baseline and refusal assertions. The PG16 execution uses signed synthetic Guest and native records; native and production qualification remain separate.",
+    "source_inventory_sha256": "796924aa14592aaf1b23528b3f4f703e8f7cce67b1e57be78123feea3e38574f",
+    "production_or_full_gate_qualification": false
+  },
+  "integrated_source_review_20261028": {
+    "scope": "Combined reviewed postloss slot and closed refusal diagnostics, floor keeper, readoption, protected destroy and synthetic PG fixtures. Source review is limited; full exact-source LAB, native scenarios and production qualification remain required.",
+    "source_inventory_sha256": "43d990df35e99a5dfe2ee5290039f0253d994c6a71cd1490a9a19995ac9f6f38",
+    "production_or_full_gate_qualification": false
+  },
+  "postloss_confirmation_join_review": {
+    "scope": "QEMU qualification-only immutable source custody and exact confirmation join; conservative production HOLD for unanchored uncertain creates. Full independent review, Linux transaction tests and native validation remain required.",
+    "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
+    "production_or_native_qualification": false
+  },
+  "source_inventory_sha256": "4cff65fdaabbca7dc0a3eee4b2774d7247354735230ad6b011acc9fbde18f004",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -695,5 +712,106 @@
     "D14 CI preserves the exact original sixteen-root artifact and adds five recovery/UTC/API roots in a separate retained artifact; a local Bash output-tree control verified the separation.",
     "D15 local disposable PostgreSQL17/Goose1..80 passed four race roots/102 nodes with no failures/skips and closed shutdown; new HTTP authorization/closed IDs/privacy passed eleven nodes; real-context authority UTC passed seven nodes. Complete Linux-target Core, Goose, nativequalification source builds and full static lint passed. The exact original sixteen CI roots remain intact; ten additional recovery/UTC/API roots have a separate retained artifact. These Source checks grant no production lifecycle credit.",
     "D15 R2 resolves the actual general-CI route-count guard failure introduced by two new explicit administrative routes. Both route wrapper/inventory and canonical permission tests passed under race, with zero failures/skips; complete Linux-target lint passed. Runtime Go sources, SQL80, all previous migrations and recovery-specific tests remain byteexact to the prior genuine publication. The prior failed original CI and publication are preserved."
-  ]
+  ],
+  "compensation_reissue_review_20261028": {
+    "scope": "Independent source review of immutable original binding derivation for an expired never-redeemed compensation child. Four PostgreSQL repository scenarios use declared synthetic Guest and provider observations; no physical four-member or producer qualification is claimed. Exact final-source Linux gate and native qualification remain required.",
+    "reviewed_source_commit": "1780bbb",
+    "source_inventory_sha256": "20be8ce7b6c2466d8c09fb9690cac4c82559bc7664d8aec0974eb61f3af80418",
+    "production_or_native_qualification": false
+  },
+  "registration_diagnostic_review_20261028": {
+    "scope": "Closed qualification-only labels preserve original registration errors; source review does not establish the cause of a specific 409. Linux execution and current native qualification remain required.",
+    "source_inventory_sha256": "714bc2943a520107584cac49d03156999c5ba1dfca9393391be4a0aa24c7bd02",
+    "production_or_native_qualification": false
+  },
+  "snapshot_projection_review_20261028": {
+    "scope": "The snapshot return join uses the original challenge id. A PostgreSQL regression executes the same query against the migrated schema and transaction-local records; native and final Linux execution remain required.",
+    "source_inventory_sha256": "dbbf1dd3b47b340b0deb4f89a2e258b2953dd0d5ce5b8b82f755f8e6a2ebf9f1",
+    "production_or_native_qualification": false
+  },
+  "readoption_creator_review_20261028": {
+    "scope": "Original native readoption export retains the creator digest only for the same creator object. Prior export HOLD remains historical; exact-source Linux and native validation are required.",
+    "source_inventory_sha256": "e8ee4c5f92a62a0cb6e83528c43d6cac087caff7efd97cdafc3b327301794887",
+    "production_or_native_qualification": false
+  },
+  "snapshot_clock_wait_review_20261028": {
+    "scope": "Qualification-only wait after the original snapshot reservation and before the single GET; no deadline or validation changes. Cancellation during the wait leaves a reserved read without return and remains HOLD. The 100ms interval does not establish general clock synchronization; Linux and native testing remain required.",
+    "source_inventory_sha256": "f1f5bf1fc55bfbf67c4f236cde13ac0b29d5b7d1cc8d60738ecfcac70075ce65",
+    "production_or_native_qualification": false
+  },
+  "registration_validation_classification_review_20261028": {
+    "scope": "Qualification-only mapping of source-owned fixed registration validation errors to closed labels, preserving the original conflict and all guards. Exact-source Linux and native tests remain required; no cause is attributed to historical HOLDs.",
+    "source_inventory_sha256": "5c79d26a423c7cdd153be14c0c537d5fb899d35077b426b8798d8047a6f5b0ab",
+    "production_or_native_qualification": false
+  },
+  "source_failure_read_diagnostic_review_20261028": {
+    "scope": "Qualification-only fixed-stage diagnostics of original failure read, with no raw error or body output and unchanged retry, deadline and guards. Existing HOLDs are not classified by this source; exact Linux and native validation remain required.",
+    "source_inventory_sha256": "8b3a729ff4ab52ffcaa37955dfcab9c1ae8077c13d992d714d7935d3b8b62ab3",
+    "production_or_native_qualification": false
+  },
+  "source_failure_http_diagnostic_review_20261028": {
+    "scope": "Qualification-only fixed classification of the same original HTTP return. Error, retries, context and deadlines remain unchanged; prior transport labels do not establish a network error. Exact Linux and native validation remain required.",
+    "source_inventory_sha256": "caa6f70759a712372cbacf9e7e1dcd29dc2b86297efca23b1a84b4c4c2e40d6f",
+    "production_or_native_qualification": false
+  },
+  "source_failure_http_last_review_20261028": {
+    "scope": "Qualification-only final closed HTTP class and attempt count on original timeout, in addition to earlier first-class labels. No bodies, URLs, errors or retries change. Prior HOLDs remain historical; exact Linux and native validation remain required.",
+    "source_inventory_sha256": "174cb7e15d82394b9b79799328b0ca2bd7c93a962e7e60f1a0931faea6abb65f",
+    "production_or_native_qualification": false
+  },
+  "postloss_confirm_assertion_review_20261028": {
+    "scope": "Source-only assertion retains empty uncertain settlement and revalidates the immutable witness, independent reads and confirmed proof; accepted-resource equality is retained. Source review only; PostgreSQL negative cases and QEMU validation remain required.",
+    "source_inventory_sha256": "ac322cc3d079c8ce81b310fbc98d5be8b51e813a9d8f5ca7ece4bc5cdc842b92",
+    "production_or_native_qualification": false
+  },
+  "capacity_pg_gate_timeout_change_20261028": {
+    "scope": "The main capacity PostgreSQL Go test command uses a six-minute per-package watchdog in place of five minutes. All test selectors, internal owner and cleanup deadlines, cleanup registry, and failure census are unchanged.",
+    "evidence": "A prior 4-CPU LAB execution reached the floor child with approximately 161.46 seconds remaining while its unchanged safety gate requires at least 165 seconds. That execution failed; no success is attributed to this change.",
+    "source_code_commit": "18e00f2",
+    "source_inventory_sha256": "f1f5bf1fc55bfbf67c4f236cde13ac0b29d5b7d1cc8d60738ecfcac70075ce65",
+    "full_gate_or_production_qualification": false
+  },
+  "postloss_pending_probe_sequence_20261028": {
+    "scope": "Qualification-only failed-create slot retains the exact original uncertain settlement and independently validated proof, checks current lease and no canonical event/member, and uses a distinct pending-enrollment stage. The baseline confirmation remains separate. Source review only; same-source PostgreSQL and QEMU validation are required.",
+    "source_inventory_sha256": "2f2e182d11d3739d2306438fc4efc88f541d4df66342270e37db58341a38c9cc",
+    "production_or_native_qualification": false
+  },
+  "registration_protected_group_diagnostic_20261028": {
+    "scope": "Qualification-only closed V1 protected-registration first-failure group uses the same captured time and preserves the original conflict. The source review and unit tests do not establish any historical 409 cause; Linux and native execution remain required.",
+    "source_inventory_sha256": "72f268b8efcc4bb4fc4eb13a25272eb7a37392220401da4323e7bc301068650f",
+    "production_or_native_qualification": false
+  },
+  "qualification_registration_clock_review_20261028": {
+    "scope": "Qualification-only authenticated clock sample from the same locked PostgreSQL transaction before the unchanged single registration POST. No production clock, registration validator, signed data or original deadline is changed. Source review and local tests only; real PostgreSQL with authenticated TLS and native QEMU validation remain required.",
+    "source_inventory_sha256": "939b9241eb5f5bd8677d76d6e489a2a4eb49c0d1f9d4b99346df613da863732c"
+  },
+  "qualification_recovery_cleanup_epoch_review_20261029": {
+    "scope": "Qualification-only recovery cleanup no longer compares the owner and executor that Observe redacts; the step epoch is bound to the locked intent with the existing recovery lease check before any challenge. Every refusal projects one closed original-recovery-cleanup stage with no value. Production predicates and default builds are unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
+    "source_inventory_sha256": "5f38c9d75d4c0c6822bca6cf93a137bdd08afc8133ce3f64dc80a237faee7e45"
+  },
+  "qualification_native_read_decode_review_20261029": {
+    "scope": "Qualification-only closed decoder for the core_independent_original_qemu_read_v1 wire shared by recovery cleanup and postloss fresh reads: the shared Guest lifecycle decoder treated json.RawMessage members as arrays and refused every real wire. Every member is required once and non-null, unknown, duplicate and trailing data are refused, and raw members keep their typed JSON kind; recovery epoch PostgreSQL times are normalized to UTC before their JSON round-trip comparison. Shared production validators are unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
+    "source_inventory_sha256": "413ad1ddd4e19134eb55940ee5040d0de3e8390d352375a660608bd82b02948b"
+  },
+  "qualification_source_cleanup_closed_decode_review_20261029": {
+    "scope": "Qualification-only closed decoding of the signed source failure cleanup body and physical record, whose qemu and original_disk members the shared Guest lifecycle decoder refused as arrays; the native read decoder now shares the same closed helper. Members are required once, non-null and in their typed JSON kind, and the raw qemu and original_disk subtrees are closed against their producer shapes. No production-reachable site was found or changed; shared validators are unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
+    "source_inventory_sha256": "100e08b070439e65007ba9a8875cae685a6a8402ac29a8f26369e218fccd9063"
+  },
+  "qualification_canonical_child_review_20261029": {
+    "scope": "Qualification-only canonical compensation: the native fixture decodes the private capacity intent row with a closed decoder that admits null only for native_pod_baseline, recovery cleanup proof reads the unredacted intent instead of the redacted Observe view, and the unscoped compensation redeem is bound to the authenticated child grant (compensation_of, cleanup child link, generation, workflow and recovery executor) before the recovery lease check. Shared validators, Observe and the API store construction are unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
+    "source_inventory_sha256": "9b45b1a015c23429f48b709915e5790b7ee57a22919b16a0e7676faf07f1296c"
+  },
+  "qualification_single_observe_settle_review_20261029": {
+    "scope": "Qualification-only canonical compensation settle consumes the single write-once signed cleanup read through a read-only reader that repeats Observe's locks, preconditions, eligibility, owned physical and body gates, verifies the stored signature and freshness, and binds every proof field; the pre-settlement hook remains the only Observe, so Settle and Confirm use the same stored proof. Production settle and confirm validators are unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
+    "source_inventory_sha256": "650ae93b28202cee15f0d3a43b55ce9f456d923d30734cabdaf816581a4e11dd"
+  },
+  "qualification_source_fence_intent_review_20261029": {
+    "scope": "Qualification-only source fence reads the private capacity intent through the closed qualification intent decoder instead of the Guest lifecycle decoder that refused its null native_pod_baseline, and the readonly native corpus tests validate stored registrations at their receipt record time. Shared validators unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
+    "source_inventory_sha256": "777042d400d2bae282b1e936b0bb025640a2f24fc42b00e3205038daac51874b"
+  },
+  "canonical_compensation_pending_probe_sequence_20261029": {
+    "scope": "Qualification-only failed-create slot of the two canonical compensation failed-create cases is held pending like the canonical postloss slot: the exact original uncertain settlement and independently validated proof are retained, current lease and no canonical event/member are checked, and a distinct pending-enrollment stage is published, so the parent create grant stays settled and unregistered for recovery cleanup and compensation. Floor recovery, non-canonical compensation and lost-create-reply cases, production confirm, cleanup and compensation validators are unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
+    "source_inventory_sha256": "4cff65fdaabbca7dc0a3eee4b2774d7247354735230ad6b011acc9fbde18f004",
+    "production_or_native_qualification": false
+  }
 }

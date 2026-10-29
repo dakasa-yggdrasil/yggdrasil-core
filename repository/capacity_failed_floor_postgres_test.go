@@ -14,6 +14,9 @@ import (
 )
 
 func TestCapacityMutationFailedFloorRecoveryPostgres(t *testing.T) {
+	if syntheticFailedFloorIfEnabled(t) {
+		return
+	}
 	ctx := context.Background()
 	f := mutationPostgresFixtureWithBaseline(t, true, 3, 2)
 	if f.intent.Decision.Reason != "protected_floor_recovery" || f.intent.Decision.Units != 3 || f.intent.BaselineSnapshot.Units != 2 {

@@ -23,6 +23,8 @@ func (f *fixture) prepareCanonicalSourceChild(ctx context.Context, p model.Capac
 	var noPolicy model.Manifest
 	var noChild model.CapacityMutationGrant
 	var noSession q.CanonicalCleanupSession
+	failedSlot := q.SourceFailureSlot(f.request.NativeCase)
+	baselineSlot := q.SourceBaselineSlot(f.request.NativeCase)
 	issuer := repository.CapacityStore{DB: f.db, WorkflowID: f.workflow.ID, ExecutionEnabled: true, ExecutorID: uuid.NewString()}
 	recoverySession, recoveryErr := f.realm.OriginalRecoveryCleanupSession(ctx)
 	if recoveryErr != nil {
@@ -35,10 +37,10 @@ func (f *fixture) prepareCanonicalSourceChild(ctx context.Context, p model.Capac
 	}
 	var currentWire []byte
 	var intent model.CapacityIntent
-	if err = f.db.QueryRowContext(ctx, `SELECT intent FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, f.namespace, p.Environment, p.Domain, p.Dimension).Scan(&currentWire); err != nil || capacity.DecodeGuestLifecycle(currentWire, &intent) != nil {
+	if err = f.db.QueryRowContext(ctx, `SELECT intent FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, f.namespace, p.Environment, p.Domain, p.Dimension).Scan(&currentWire); err != nil || repository.DecodeQualificationCapacityIntent(currentWire, &intent) != nil {
 		return none, noPolicy, noChild, noSession, q.ErrOriginalUnknown
 	}
-	client, err := f.sourceClient(1)
+	client, err := f.sourceClient(baselineSlot)
 	if err != nil {
 		return none, noPolicy, noChild, noSession, err
 	}
@@ -47,7 +49,7 @@ func (f *fixture) prepareCanonicalSourceChild(ctx context.Context, p model.Capac
 	if issuer.ExecutorID != intent.LeaseExecutorID || !intent.RecoveryOnly {
 		return none, noPolicy, noChild, noSession, q.ErrOriginalUnknown
 	}
-	useful, err := f.realm.DiagnosticProbe(ctx, parentStore, 1, f.corePrivate, client)
+	useful, err := f.realm.DiagnosticProbe(ctx, parentStore, baselineSlot, f.corePrivate, client)
 	if err != nil {
 		return none, noPolicy, noChild, noSession, err
 	}
@@ -55,13 +57,13 @@ func (f *fixture) prepareCanonicalSourceChild(ctx context.Context, p model.Capac
 	if err != nil {
 		return none, noPolicy, noChild, noSession, err
 	}
-	native, err := f.realm.FreshNativeMember(ctx, 1, binding)
+	native, err := f.realm.FreshNativeMember(ctx, baselineSlot, binding)
 	if err != nil {
 		return none, noPolicy, noChild, noSession, err
 	}
 	var baselineDesired []byte
 	for _, slot := range binding.Slots {
-		if slot.Slot == 1 {
+		if slot.Slot == baselineSlot {
 			baselineDesired, err = json.Marshal(slot.DesiredSpec)
 		}
 	}
@@ -75,12 +77,12 @@ func (f *fixture) prepareCanonicalSourceChild(ctx context.Context, p model.Capac
 		return none, noPolicy, noChild, noSession, err
 	}
 	var live, failed int
-	if err = f.db.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE resource_id<>''),count(*) FILTER(WHERE slot=2 AND resource_id<>'') FROM public.capacity_resource_slots WHERE namespace=$1`, f.namespace).Scan(&live, &failed); err != nil || live != 1 || failed != 0 {
+	if err = f.db.QueryRowContext(ctx, `SELECT count(*) FILTER(WHERE resource_id<>''),count(*) FILTER(WHERE slot=$2 AND resource_id<>'') FROM public.capacity_resource_slots WHERE namespace=$1`, f.namespace, failedSlot).Scan(&live, &failed); err != nil || live != 1 || failed != 0 {
 		return none, noPolicy, noChild, noSession, q.ErrOriginalUnknown
 	}
 	var destroy model.CapacityMutationSpecV1
 	for _, slot := range binding.Slots {
-		if slot.Slot == 2 {
+		if slot.Slot == failedSlot {
 			if slot.DesiredSpec == nil {
 				return none, noPolicy, noChild, noSession, q.ErrOriginalUnknown
 			}

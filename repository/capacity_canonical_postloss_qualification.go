@@ -18,9 +18,7 @@ import (
 	"time"
 )
 
-func canonicalPostlossCase(c string) bool {
-	return c == "canonical_postloss_unprotected_failed_create_reissue" || c == "canonical_postloss_protected_failed_create_reissue"
-}
+func canonicalPostlossCase(c string) bool { return capacity.GuestPostlossQualificationSlot(c) != 0 }
 
 type postlossReplyRead struct {
 	Schema          string    `json:"schema"`
@@ -138,7 +136,7 @@ func (s CapacityStore) RecordGuestPostlossObservedWitness(ctx context.Context, p
 		}
 		result = model.CapacityGuestOriginalCreateWitness{Schema: capacity.GuestCreateWitnessSchema, BindingName: stored.pre.BindingName, PreregistrationID: stored.pre.PreregistrationID, PreregistrationNonceSHA256: stored.pre.NonceSHA256, Tuple: model.CapacityGuestNativeTuple{Provider: provider, InstanceID: original.Binding.IntegrationInstanceID, InstanceChecksum: original.Binding.IntegrationChecksum, TypeID: original.Binding.IntegrationTypeID, TypeChecksum: original.Binding.IntegrationTypeChecksum, ScopeChecksum: original.Binding.ScopeChecksum, ProfileChecksum: slot.DesiredSpec.ProfileChecksum, Profile: original.Binding.ProfileName, Slot: original.Grant.Slot, ResourceID: proof.ResourceID, CreatedAt: proof.ResourceCreatedAt}, OriginalCreateGrantID: original.Grant.GrantID, OriginalCreateAttemptID: original.AttemptID, OriginalCreateRequestSHA256: original.Grant.RequestSHA256, OriginalCreateSettlementSHA256: capacity.GuestRetirementSHA(*original.Settlement), ProfileManifestSHA256: stored.pre.ProfileManifestSHA256, BootstrapSHA256: stored.binding.ProfileManifest.BootstrapSHA256, CoreSourceCommit: stored.pre.CoreSourceCommit, OriginalDeadline: stored.pre.OriginalDeadline, OriginalCreateReturnedAt: returned, ObservedAt: now}
 
-		if !canonicalPostlossCase(nativeCase) || stored.pre.Slot != 2 || stored.binding.ProfileManifest.Profile != "qualification-original-echo-writer-v1" || original.Grant.CompensationOf != "" || s.hostOriginalOrdinary != nil {
+		if !canonicalPostlossCase(nativeCase) || stored.pre.Slot != capacity.GuestPostlossQualificationSlot(nativeCase) || stored.binding.ProfileManifest.Profile != "qualification-original-echo-writer-v1" || original.Grant.CompensationOf != "" || s.hostOriginalOrdinary != nil {
 			return ErrCapacityDisabled
 		}
 		transportWire, readErr := readPostlossOriginalFact(transportPath)
@@ -162,7 +160,7 @@ func (s CapacityStore) RecordGuestPostlossObservedWitness(ctx context.Context, p
 		if err != nil {
 			return err
 		}
-		if _, err = tx.ExecContext(ctx, `CREATE TABLE public.capacity_canonical_postloss_originals(preregistration_id uuid PRIMARY KEY,parent_grant_id uuid UNIQUE NOT NULL,original_grant_wire bytea NOT NULL,transport_read_wire bytea NOT NULL,transport_read_sha256 text NOT NULL,native_read_sha256 text NOT NULL,witness_wire bytea NOT NULL,witness_sha256 text UNIQUE NOT NULL); CREATE FUNCTION public.postloss_original_immutable() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'immutable postloss original'; END $$; CREATE TRIGGER postloss_original_immutable BEFORE UPDATE OR DELETE ON public.capacity_canonical_postloss_originals FOR EACH ROW EXECUTE FUNCTION public.postloss_original_immutable()`); err != nil {
+		if _, err = tx.ExecContext(ctx, `CREATE TABLE public.capacity_canonical_postloss_originals(preregistration_id uuid PRIMARY KEY,parent_grant_id uuid UNIQUE NOT NULL,original_grant_wire bytea NOT NULL,transport_read_wire bytea NOT NULL,transport_read_sha256 text NOT NULL,native_read_sha256 text NOT NULL,witness_wire bytea NOT NULL,witness_sha256 text UNIQUE NOT NULL); CREATE FUNCTION public.postloss_original_immutable() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'immutable postloss original'; END $$; CREATE TRIGGER postloss_original_immutable BEFORE UPDATE OR DELETE ON public.capacity_canonical_postloss_originals FOR EACH ROW EXECUTE FUNCTION public.postloss_original_immutable(); CREATE TABLE public.capacity_canonical_postloss_confirmations(preregistration_id uuid PRIMARY KEY,parent_grant_id uuid UNIQUE NOT NULL,native_wire bytea NOT NULL,native_sha256 text NOT NULL,proof_wire bytea NOT NULL,proof_sha256 text NOT NULL,recorded_at timestamptz NOT NULL); CREATE TRIGGER postloss_confirmation_immutable BEFORE UPDATE OR DELETE ON public.capacity_canonical_postloss_confirmations FOR EACH ROW EXECUTE FUNCTION public.postloss_original_immutable()`); err != nil {
 			return err
 		}
 		if _, err = tx.ExecContext(ctx, `INSERT INTO public.capacity_canonical_postloss_originals VALUES($1,$2,$3,$4,$5,$6,$7,$8)`, preregistrationID, original.Grant.GrantID, raw, transportWire, capacity.BusinessCreationSHA256(transportWire), capacity.BusinessCreationSHA256(nativeWire), wire, capacity.BusinessCreationSHA256(wire)); err != nil {
@@ -175,7 +173,7 @@ func (s CapacityStore) RecordGuestPostlossObservedWitness(ctx context.Context, p
 }
 
 func (s CapacityStore) canonicalPostlossParentTx(ctx context.Context, tx *sql.Tx, stored guestOriginalStored, parent capacityMutationRecord, nativeCase string) bool {
-	if !canonicalPostlossCase(nativeCase) || parent.Settlement == nil || parent.Settlement.Outcome != "uncertain" || !parent.Settlement.TransportCompleted || parent.Settlement.ResourceID != "" || parent.Settlement.ResourceCreatedAt != "" || parent.Settlement.ActionID != "" || stored.pre.Slot != 2 || stored.pre.PolicyID != parent.PolicyID.String() || stored.pre.PolicyChecksum != parent.PolicyChecksum {
+	if !canonicalPostlossCase(nativeCase) || parent.Settlement == nil || parent.Settlement.Outcome != "uncertain" || !parent.Settlement.TransportCompleted || parent.Settlement.ResourceID != "" || parent.Settlement.ResourceCreatedAt != "" || parent.Settlement.ActionID != "" || stored.pre.Slot != capacity.GuestPostlossQualificationSlot(nativeCase) || stored.pre.PolicyID != parent.PolicyID.String() || stored.pre.PolicyChecksum != parent.PolicyChecksum {
 		return false
 	}
 	var witnessWire, originalGrant, transportWire []byte

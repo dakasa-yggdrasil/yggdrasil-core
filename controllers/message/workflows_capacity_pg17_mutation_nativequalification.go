@@ -227,12 +227,41 @@ func guestPG17MutationAfterCreate(ctx context.Context, store repository.Capacity
 	return rows, nil
 }
 
+// Classify the existing settlement without changing it or manufacturing a reply.
+func pg17ConfirmSettlementClass(nativeCase string, slot int, settlement *model.CapacityMutationSettleRequest, proof model.CapacityMutationProof) int {
+	if settlement == nil {
+		return 0
+	}
+	if settlement.Outcome == "accepted" {
+		if settlement.ResourceID == proof.ResourceID {
+			return 1
+		}
+		return 0
+	}
+	if q.PostlossSourceCase(nativeCase) && slot == q.SourceFailureSlot(nativeCase) && settlement.Outcome == "uncertain" && settlement.TransportCompleted && settlement.ResourceID == "" && settlement.ResourceCreatedAt == "" && settlement.ActionID == "" && len(settlement.NextActionIDs) == 0 && len(settlement.AuxiliaryResources) == 0 && !settlement.AuxiliaryInventoryComplete && settlement.OriginalProviderCreateReturn == nil && settlement.OriginalProviderDestroyReturn == nil {
+		return 2
+	}
+	return 0
+}
+
 func guestPG17MutationAfterConfirm(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, binding model.CapacityMutationBinding, input guestOriginalStepInput, grant model.CapacityMutationGrant, proof, guestProof model.CapacityMutationProof) ([]PG17AssertionResult, error) {
+	if originalGuestNativeRealm == nil {
+		return nil, errOriginalGuestStep
+	}
 	r, raw, err := pg17MutationGrant(ctx, store, policy, input, grant)
 	if err != nil {
 		return nil, err
 	}
-	if r.Grant.State != "confirmed" || r.Settlement == nil || r.Settlement.ResourceID != proof.ResourceID || r.EventProvider == "" || r.EventResource == "" {
+	if r.Grant.State != "confirmed" || r.Settlement == nil || r.EventProvider == "" || r.EventResource == "" {
+		return nil, errOriginalGuestStep
+	}
+	switch pg17ConfirmSettlementClass(originalGuestNativeRealm.Request.NativeCase, input.Slot, r.Settlement, proof) {
+	case 1: // Original accepted settlement must match the confirmed resource.
+	case 2: // Exact witness and independent native read remain required.
+		if store.VerifyCanonicalPostlossConfirmed(ctx, policy, p, originalGuestNativeRealm.Request.NativeCase, grant, proof) != nil {
+			return nil, errOriginalGuestStep
+		}
+	default:
 		return nil, errOriginalGuestStep
 	}
 	var count int

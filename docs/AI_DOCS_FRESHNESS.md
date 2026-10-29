@@ -7,9 +7,10 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: b982bf16e23b998f9e79865ee749d22ed257b94a
-verified_diff_sha256: 0e9033aeb7fcf4635fc7cd2c6f3306c398b8dd57b29145a175bf3b8571907971
+verified_at_commit: f178d146c4d100f4195b1575bc71212233834aee
+verified_diff_sha256: f59743d7d41c797bdd74ece493451aff433f7032b3151463d26097f0616e33b8
 reconciler_schema: 1
+canonical_postloss_compensation_review: Reviewed the qualification-only canonical postloss compensation chain: recovery cleanup epoch binding and closed refusal stages, closed qualification decoders for the native read, source cleanup body/physical record and private capacity intent, unredacted recovery proof, child-bound unscoped redeem, single stored read settle, and the CI PostgreSQL service admitted as the local PG16 owner. Production validators unchanged; no prose docs needed changes. No local tests ran; LAB native QEMU passed both postloss cases, CI remains the gate.
 public_workflow_identity_review: Reviewed the public idempotent writer nullable fields and full resolved workflow identity join. LAB Linux PostgreSQL 16 with schema 82 passed the writer and nine negative cases, including explicit NULL checks; integrated native CI remains required.
 verified_at: 2026-10-28
 by: Giomaster

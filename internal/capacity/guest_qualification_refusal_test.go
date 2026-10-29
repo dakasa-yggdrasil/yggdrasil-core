@@ -11,6 +11,16 @@ import (
 	"time"
 )
 
+func TestGuestQualificationReadoptionClosedStages(t *testing.T) {
+	cause := errors.New("private details")
+	for stage, want := range map[string]string{"readoption_presence": "original-guest-step-47", "readoption_plan": "original-guest-step-48", "readoption_lease": "original-guest-step-49"} {
+		err := GuestQualificationRefusal(stage, cause)
+		if GuestQualificationPredicate(err) != want || !errors.Is(err, cause) || strings.Contains(err.Error(), "private details") {
+			t.Fatalf("wrong closed readoption stage: %s", stage)
+		}
+	}
+}
+
 func TestGuestQualificationRefusalClosedProjection(t *testing.T) {
 	cause := errors.New("SECRET SQL HTTP credential body")
 	cases := []struct{ stage, predicate string }{
@@ -20,6 +30,9 @@ func TestGuestQualificationRefusalClosedProjection(t *testing.T) {
 		{"probe_http_enrollment_decode_held", "original-guest-step-53"},
 		{"probe_http_enrollment_validate_held", "original-guest-step-54"},
 		{"probe_http_enrollment_command_held", "original-guest-step-55"},
+		{"native_finish_protected_spec", "original-guest-step-56"},
+		{"native_finish_protected_refusal", "original-guest-step-57"},
+		{"native_finish_burst_issue", "original-guest-step-58"},
 		{"observe", "original-guest-step-60"},
 		{"lease_missing", "original-guest-step-61"},
 		{"generation", "original-guest-step-62"},
@@ -240,5 +253,60 @@ func TestGuestQualificationUnrecognizedServerProblem(t *testing.T) {
 		if err == nil || calls != 1 || GuestQualificationPredicate(projected) != "original-guest-step-98" || strings.Contains(projected.Error(), "SECRET") {
 			t.Fatal("unrecognized complete server problem was disclosed or promoted")
 		}
+	}
+}
+
+var guestRecoveryCleanupTestStages = []string{"scope", "preregistration", "observe", "epoch", "client", "case", "random", "challenge", "request-publish", "fresh-native", "http-transport", "http-status", "http-late", "return-publish", "failure-publish", "complete", "session", "nonce", "store", "challenge-tx", "policy", "lock", "parent-load", "parent-state", "prereg-id", "prereg-load", "prereg-binding", "clock", "intent-load", "intent-epoch", "intent-parent", "deadline", "lease", "lease-state", "challenge-encode", "challenge-insert", "challenge-commit"}
+
+func TestGuestQualificationRecoveryCleanupClosedStages(t *testing.T) {
+	cause := errors.New("SECRET owner executor SQL body")
+	seen := map[string]bool{}
+	for _, stage := range guestRecoveryCleanupTestStages {
+		t.Run(stage, func(t *testing.T) {
+			err := GuestQualificationRefusal("recovery-cleanup-"+stage, cause)
+			want := "original-recovery-cleanup-" + stage
+			if !errors.Is(err, cause) || strings.Contains(err.Error(), "SECRET") || GuestQualificationPredicate(fmt.Errorf("outer: %w", err)) != want || seen[want] {
+				t.Fatal("recovery cleanup stage not closed, distinct and private")
+			}
+			seen[want] = true
+		})
+	}
+	for _, stage := range []string{"recovery-cleanup-", "recovery-cleanup-unknown", "recovery-cleanup-lease\nSECRET", "recovery-cleanup-lease-extra", "recovery_cleanup_lease", "original-recovery-cleanup-lease", "lease"} {
+		if GuestQualificationPredicate(GuestQualificationRefusal(stage, cause)) != "original-guest-step-17" {
+			t.Fatalf("unknown recovery stage acquired a predicate: %q", stage)
+		}
+	}
+	// Existing underscore stages keep their numbered predicates.
+	for stage, want := range map[string]string{"observe": "original-guest-step-60", "client": "original-guest-step-68", "deadline": "original-guest-step-80", "nonce": "original-guest-step-81"} {
+		if GuestQualificationPredicate(GuestQualificationRefusal(stage, cause)) != want {
+			t.Fatalf("existing stage changed: %s", stage)
+		}
+	}
+}
+
+func TestGuestQualificationRecoveryCleanupDeepestStageWins(t *testing.T) {
+	cause := errors.New("SECRET")
+	deep := GuestQualificationRefusal("recovery-cleanup-intent-epoch", cause)
+	mid := GuestQualificationRefusal("recovery-cleanup-challenge", fmt.Errorf("store: %w", deep))
+	outer := fmt.Errorf("step: %w", mid)
+	if GuestQualificationPredicate(outer) != "original-recovery-cleanup-intent-epoch" || !errors.Is(outer, cause) || strings.Contains(outer.Error(), "SECRET") {
+		t.Fatal("outer recovery stage hid the deepest refusing owner")
+	}
+	if GuestQualificationPredicate(GuestQualificationRefusal("recovery-cleanup-challenge", cause)) != "original-recovery-cleanup-challenge" {
+		t.Fatal("untyped inner cause lost its outer fallback stage")
+	}
+	unknown := GuestQualificationRefusal("recovery-cleanup-complete", GuestQualificationRefusal("recovery-cleanup-unknown", cause))
+	if GuestQualificationPredicate(unknown) != "original-recovery-cleanup-complete" {
+		t.Fatal("unknown inner stage promoted")
+	}
+	foreign := GuestQualificationRefusal("recovery-cleanup-complete", GuestQualificationRefusal("probe_http", GuestQualificationRefusal("recovery-cleanup-lease", cause)))
+	if GuestQualificationPredicate(foreign) != "original-recovery-cleanup-lease" {
+		t.Fatal("deepest recovery stage not found through a foreign stage")
+	}
+	if GuestQualificationPredicate(GuestQualificationRefusal("observe", deep)) != "original-guest-step-60" {
+		t.Fatal("existing outermost-stage projection changed")
+	}
+	if GuestQualificationRefusal("recovery-cleanup-challenge-commit", nil) != nil {
+		t.Fatal("successful commit turned into refusal")
 	}
 }

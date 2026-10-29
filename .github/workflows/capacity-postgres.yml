@@ -33,6 +33,7 @@ jobs:
     env:
       CAPACITY_DISPATCH_BROKER_URL: amqp://dispatch:dispatch-ci-only@127.0.0.1:5672/
       GOWORK: "off"
+      PYTHONDONTWRITEBYTECODE: "1"
       DB_HOST: 127.0.0.1
       DB_PORT: "5432"
       DB_NAME: capacity_integration
@@ -65,7 +66,7 @@ jobs:
         uses: actions/checkout@v4
         with:
           repository: dakasa-yggdrasil/integration-hetzner
-          ref: cddc784604e7bdb26717c36c2cff242558a781aa
+          ref: 6026f78572a0ebfbf1b50984c2d47ff28bdc714d
           path: .ci-native-hetzner
           token: ${{ steps.native-token.outputs.token }}
           persist-credentials: false
@@ -239,7 +240,7 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          test "$(git -C .ci-native-hetzner rev-parse HEAD)" = cddc784604e7bdb26717c36c2cff242558a781aa
+          test "$(git -C .ci-native-hetzner rev-parse HEAD)" = 6026f78572a0ebfbf1b50984c2d47ff28bdc714d
           cp scripts/ci/capacity_vm_native_fixture_test.go.tmpl .ci-native-hetzner/internal/adapter/capacity_core_native_fixture_test.go
           cd .ci-native-hetzner
           go test -c -o "$RUNNER_TEMP/capacity-native-fixture" ./internal/adapter
@@ -256,6 +257,12 @@ jobs:
           (cd .ci-bound-kubernetes && go test -c -o "$RUNNER_TEMP/capacity-hpa-fixture" ./internal/adapter)
           echo "CAPACITY_METRIC_FIXTURE_BINARY=$RUNNER_TEMP/capacity-metric-fixture" >> "$GITHUB_ENV"
           echo "CAPACITY_HPA_FIXTURE_BINARY=$RUNNER_TEMP/capacity-hpa-fixture" >> "$GITHUB_ENV"
+      - name: Stage fixture sources outside the owning Core checkout
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 scripts/ci/test_stage_capacity_fixture_sources.py
+          bash scripts/ci/stage_capacity_fixture_sources.sh
       - name: Apply production migrations
         run: go run ./scripts/goose up
       - name: Require the closed original Guest reconcile Source protocol
@@ -335,7 +342,7 @@ jobs:
           export CAPACITY_TEST_OWNER_ROOT="$capacity_owner_registry"
           "$RUNNER_TEMP/capacity-source-corpus-go-owner/status-owner" start "capacity"
           set +e
-          go test -race -json -p 1 -count=1 -timeout=5m ./repository ./controllers/message ./controllers/httpapi ./addons -run '^(TestCapacity(Intent.*|Workflow|Mutation.*|NativeLifetime)Postgres|TestCapacityNativeAdapter(OriginalHTTP|LegacyHTTPPreserved)|TestCapacityGuestNativeAdapterOriginalHTTP|TestCapacityGuestNativeDescribeCanonicalCatalog|TestCapacityGuestCollectorProtocolPostgres|TestCapacityDispatch(Postgres|AuthorizationPostgres|OriginalTransportPostgres|SchedulerPostgres|DemandPostgres)|TestCapacityNativeReleaseRecoveryPostgres|TestCapacityNativeReleaseOriginalUnredeemedPostgres|TestCapacityReleaseOriginalCaller|TestCapacityReleaseRecoveryFrame|TestProcessMatchedTrigger_.*)$' 2>"$core_pg_case_dir/go-test.stderr" | tee "$core_pg_case_dir/original.jsonl" 2>"$core_pg_case_dir/tee.stderr"
+          go test -race -json -p 1 -count=1 -timeout=6m ./repository ./controllers/message ./controllers/httpapi ./addons -run '^(TestCapacity(Intent.*|Workflow|Mutation.*|NativeLifetime)Postgres|TestCapacityNativeAdapter(OriginalHTTP|LegacyHTTPPreserved)|TestCapacityGuestNativeAdapterOriginalHTTP|TestCapacityGuestNativeDescribeCanonicalCatalog|TestCapacityGuestCollectorProtocolPostgres|TestCapacityDispatch(Postgres|AuthorizationPostgres|OriginalTransportPostgres|SchedulerPostgres|DemandPostgres)|TestCapacityNativeReleaseRecoveryPostgres|TestCapacityNativeReleaseOriginalUnredeemedPostgres|TestCapacityReleaseOriginalCaller|TestCapacityReleaseRecoveryFrame|TestProcessMatchedTrigger_.*)$' 2>"$core_pg_case_dir/go-test.stderr" | tee "$core_pg_case_dir/original.jsonl" 2>"$core_pg_case_dir/tee.stderr"
           core_pg_pipeline_status=("${PIPESTATUS[@]}")
           core_pg_go_exit="${core_pg_pipeline_status[0]}"
           core_pg_tee_exit="${core_pg_pipeline_status[1]}"

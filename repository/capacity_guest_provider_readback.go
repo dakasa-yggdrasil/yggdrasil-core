@@ -40,7 +40,13 @@ func (s CapacityStore) guestConfirmedDestroyTx(ctx context.Context, tx *sql.Tx, 
 	var id string
 	var bindingWire []byte
 	var digest string
-	if err := tx.QueryRowContext(ctx, `SELECT intent_id::text,original_wire,eligibility_sha256 FROM public.capacity_vm_retirement_delete_bindings WHERE destroy_grant_id=$1`, original.Grant.GrantID).Scan(&id, &bindingWire, &digest); err != nil {
+	var bindingErr error
+	if original.Grant.CompensationOf != "" {
+		id, bindingWire, digest, bindingErr = guestCompensationBindingTx(ctx, tx, original)
+	} else {
+		bindingErr = tx.QueryRowContext(ctx, `SELECT intent_id::text,original_wire,eligibility_sha256 FROM public.capacity_vm_retirement_delete_bindings WHERE destroy_grant_id=$1`, original.Grant.GrantID).Scan(&id, &bindingWire, &digest)
+	}
+	if bindingErr != nil {
 		return ErrCapacityConflict
 	}
 	v2, kindErr := guestRetirementV2KindTx(ctx, tx, id)
