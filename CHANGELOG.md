@@ -5,6 +5,38 @@ All notable changes to yggdrasil-core are documented here.
 ## [Unreleased]
 
 ### Security
+- **A collaborator who can no longer sign in loses every session, and no
+  session, SSO reuse or OIDC mint path serves them (ADR-0087).** Only
+  `active` signs in (`collaboratorstate.CanSignIn`, the login rule).
+  `ResolveAuthSession` now refuses a session whose current collaborator is
+  `pending_start`, `on_leave`, `suspended` or `offboarded` (401, cookie
+  cleared, on the console gate, `/auth/session`, `/auth/verify`,
+  introspection, SAML and every other caller), so SSO session reuse
+  (`/auth/third-party/start` with `auth_request_id`, the OIDC login bridge,
+  the SAML IdP) falls back to the interactive login. The console gate JWT
+  branch and ForwardAuth path 1 re-read the JWT subject and answer 401. The
+  OIDC provider refuses, for such a subject, to honor an authorization
+  request (including one pre-bound at creation), save or exchange a code
+  (a refusal does not burn the code) and mint access or refresh tokens, and
+  the refresh grant answers `invalid_grant`. Every status writer (suspend,
+  unsuspend, PATCH on both routes, AMQP `collaborator.update`, absence start
+  and end, offboard, re-onboard, both branches of the status clock) goes
+  through `repository.UpdateCollaboratorTx`, which in the same transaction
+  terminates once when the new status cannot sign in (console sessions and
+  OIDC refresh tokens revoked, one global `session_revocation` row with
+  reason `offboarded` or `admin_revoked` and metadata
+  `{source, from_status, to_status}`, one `collaborator.session.terminated`)
+  and revokes leftovers without an event on reactivation; a termination
+  failure fails the status write. Back-channel logout fires after the commit
+  on the HTTP status writers, the AMQP consumer and auto-offboards.
+  **Behavior changes:** a long absence (`on_leave`) ends sessions (vacation
+  keeps `active` and does not); re-onboarding emits a `session.terminated`;
+  an offboard emits exactly one `session.terminated`, before
+  `collaborator.offboarded`, and its revocation metadata no longer carries
+  `offboard_reason`; every `UpdateCollaborator` runs in a transaction and
+  every refresh grant costs one extra read. No migration, no new revocation
+  reason and no new event; the `collaborator.session.terminated` payload is
+  unchanged.
 - **BREAKING: Tartaro effective actions use one authorization predicate,
   answer a god-mode verdict and expand wildcards (ADR-0086).** The console variant of
   `GET /api/v1/collaborators/{id}/effective-tartaro-actions` now counts only

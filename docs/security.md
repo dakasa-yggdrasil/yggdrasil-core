@@ -26,8 +26,14 @@ requires the actual OTP proof; contact presence alone never grants access. See
 [contact OTP MFA](./mfa-contact-otp.md) for configuration, API and limits.
 
 Sessions carry a server-side expiry (`AUTH_SESSION_TTL_HOURS`, 720
-default = 30 days). Revocation is immediate via
-`/api/v1/auth/logout`.
+default = 30 days). A session is valid only while its collaborator can
+sign in, and only `active` signs in (ADR-0087): a session, an SSO session
+reuse (third-party start with `auth_request_id`, the OIDC login bridge, the
+SAML IdP), a human OIDC JWT on the console gate or on `/api/v1/auth/verify`,
+and every OIDC authorization, code and token mint are refused for a
+collaborator who is `pending_start`, `on_leave`, `suspended` or
+`offboarded`, on the next request (401; the refresh grant answers
+`invalid_grant`). Logout revokes its own session at once.
 
 The first admin on a fresh install is provisioned by the
 `first_run_bootstrap` addon. Once the DB has any collaborator, the
@@ -54,7 +60,14 @@ Link rules:
   reset, `reset_mfa`) runs the §13 fan-out: console sessions and OIDC
   refresh tokens are revoked, a `session_revocation` row is written,
   `collaborator.session.terminated` is emitted and back-channel logout
-  fires. A first access has nothing to revoke and emits nothing.
+  fires. A first access has nothing to revoke and emits nothing. Every
+  status change to a status that cannot sign in (suspend, PATCH, AMQP
+  `collaborator.update`, long absence, offboard, re-onboard, the status
+  clock) runs the same fan-out once, in the status change's transaction,
+  with reason `offboarded` or `admin_revoked` and metadata
+  `{source, from_status, to_status}`, and fires back-channel logout after
+  the commit. A reactivation only revokes leftover sessions and refresh
+  tokens, with no row or event (ADR-0087).
 - A setup link clears the login lockout (`failed_attempts`,
   `locked_until`): the next step for an enrolled account is the login.
 - `/auth/passwords/forgot` and `/auth/passwords/reset` follow the login's

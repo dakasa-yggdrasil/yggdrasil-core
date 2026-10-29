@@ -30,6 +30,16 @@ Logout revokes immediately (`revoked_at` set, `status = revoked`).
 Expired sessions are filtered at resolution time and lazily reaped by
 a background job.
 
+A session is valid only while its collaborator can sign in, and only
+`active` signs in (ADR-0087). Resolution reads the current collaborator,
+so a session of a collaborator who is `pending_start`, `on_leave`,
+`suspended` or `offboarded` answers 401 and clears the cookie on the
+next request, even if no termination revoked its row. A status change
+to one of those statuses terminates every session and OIDC refresh
+token of the collaborator in the same transaction and emits
+`collaborator.session.terminated`; changing back to `active` revokes
+whatever was left over, so a reactivation never revives an old session.
+
 ## Password login
 
 ```http
@@ -103,6 +113,14 @@ GET  /api/v1/auth/third-party/callback/{provider}?code=...&state=...
        opens session, sets cookie
 ```
 
+When the OIDC provider sends the browser here with `auth_request_id`
+and the browser already holds a Core session, the start endpoint
+reuses that session to complete the OIDC login without a second IdP
+round trip. Reuse resolves the session like any other request, so a
+collaborator who cannot sign in falls back to the interactive login,
+whose callback refuses them; the provider also refuses to issue a code
+or token for such a subject.
+
 State signing prevents CSRF. The signing key is config (
 `AUTH_THIRD_PARTY_STATE_SECRET`); rotate per the
 [security guide](../security.md).
@@ -132,9 +150,12 @@ The bearer issued at login can travel as:
 - A `Authorization: Bearer <token>` header (the CLI's default).
 - A cookie (the browser default — name configurable via
   `AUTH_SESSION_COOKIE_NAME`, defaults `yggdrasil_session`).
-- A header for workflow-run callbacks: `X-Yggdrasil-Workflow-Token`.
+- An `X-Session-Token: <token>` header.
 
-All three resolve through the same session lookup.
+All three resolve through the same session lookup. The
+`X-Yggdrasil-Workflow-Token` header is not a session carrier: it
+holds a workflow machine credential, accepted only on the workflow-run
+routes (see [workflows](./workflows.md)).
 
 ## Wire shape — session resolution
 
