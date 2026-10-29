@@ -83,7 +83,8 @@ func TestRequireAuthenticatedConsoleAPIs_AllowsPublicAuthAndDiscovery(t *testing
 		"/api/v1/auth/mfa/enroll/request",
 		"/api/v1/auth/mfa/enroll/validate",
 		"/api/v1/auth/providers",
-		"/api/v1/auth/third-party/login",
+		"/api/v1/auth/third-party/start/google",
+		"/api/v1/auth/third-party/callback/google",
 		"/api/v1/tenant/brand",
 	}
 

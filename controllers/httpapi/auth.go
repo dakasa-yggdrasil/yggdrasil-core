@@ -362,39 +362,6 @@ func authLoginFactors(identity model.AuthIdentity) []string {
 	return factors
 }
 
-func (s *Server) handleAuthThirdPartyLogin(w http.ResponseWriter, r *http.Request) {
-	var req model.LoginWithThirdPartyIdentityRequest
-	if err := decodeJSON(r, &req); err != nil {
-		writeMappedError(w, err)
-		return
-	}
-
-	req.SessionMetadata = mergeAuthMetadata(req.SessionMetadata, r)
-	collaborator, identity, session, token, err := repository.AuthenticateWithThirdPartyIdentity(
-		r.Context(),
-		s.db,
-		req,
-		authSessionTTL(),
-	)
-	if err != nil {
-		if errors.Is(err, mfa.ErrMFANotEnrolled) {
-			s.writeMFAEnrollRequired(w, r, collaborator)
-			return
-		}
-		writeMappedError(w, err)
-		return
-	}
-
-	writeAuthCookie(w, token, session.ExpiresAt)
-	writeCSRFCookie(w, computeCSRFToken(session.ID), session.ExpiresAt)
-	writeJSON(w, http.StatusOK, authThirdPartyLoginResponse{
-		Collaborator: collaborator,
-		Identity:     identity,
-		Session:      session,
-		Token:        token,
-	})
-}
-
 func (s *Server) handleAuthThirdPartyStart(w http.ResponseWriter, r *http.Request) {
 	// A15: deny unknown query params on this third-party start endpoint.
 	// `redirect_to` and `auth_request_id` are the only legit knobs; any

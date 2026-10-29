@@ -54,6 +54,9 @@ type DeleteThirdPartyIdentityRequest struct {
 }
 
 // LoginWithThirdPartyIdentityRequest starts a session from one externally verified identity.
+// Only the browser callback builds it, from the userinfo the provider returned
+// for an exchanged authorization code. No route decodes it from a request body
+// (ADR-0088).
 type LoginWithThirdPartyIdentityRequest struct {
 	Provider        string         `json:"provider"`
 	Subject         string         `json:"subject"`
