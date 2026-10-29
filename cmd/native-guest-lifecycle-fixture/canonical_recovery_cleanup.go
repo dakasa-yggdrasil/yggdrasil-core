@@ -130,8 +130,14 @@ func (f *fixture) recoveryCleanupProof(ctx context.Context, p model.CapacityPoli
 		return noStore, noIntent, noProof, err
 	}
 	store := session.Store
-	current, err := store.Observe(ctx, f.policy)
-	if err != nil || !current.RecoveryOnly || current.Generation != session.Epoch.Generation || current.FencingToken != session.Epoch.FencingToken || current.LeaseOwner != session.Epoch.LeaseOwner || current.LeaseExecutorID != store.ExecutorID || current.LeaseExpiresAt == nil {
+	// The public Observe DTO redacts the lease owner and executor, so the
+	// recovery epoch is compared against the private unredacted intent row.
+	var currentWire []byte
+	var current model.CapacityIntent
+	if err = f.db.QueryRowContext(ctx, `SELECT intent FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, f.policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&currentWire); err != nil {
+		return noStore, noIntent, noProof, q.ErrOriginalUnknown
+	}
+	if repository.DecodeQualificationCapacityIntent(currentWire, &current) != nil || f.policy.Metadata.Namespace != f.namespace || current.Namespace != f.policy.Metadata.Namespace || current.PolicyName != f.policy.Metadata.Name || current.PolicyID != f.policy.ID || current.PolicyChecksum != f.policy.Checksum || current.Environment != p.Environment || current.Domain != p.Domain || current.Dimension != p.Dimension || !current.RecoveryOnly || current.Generation != session.Epoch.Generation || current.FencingToken != session.Epoch.FencingToken || current.LeaseOwner != session.Epoch.LeaseOwner || current.LeaseExecutorID != store.ExecutorID || current.LeaseExpiresAt == nil {
 		return noStore, noIntent, noProof, q.ErrOriginalUnknown
 	}
 	client, err := f.sourceClient(q.SourceBaselineSlot(f.request.NativeCase))

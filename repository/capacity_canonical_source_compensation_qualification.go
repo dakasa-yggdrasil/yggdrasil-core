@@ -444,7 +444,18 @@ func (s CapacityStore) canonicalSourceFailedCleanupTx(ctx context.Context, tx *s
 		return true, readErr
 	}
 	if body.Recovery != nil {
-		if _, readErr = s.sourceRecoveryCleanupLeaseTx(ctx, tx, body, parent, now); readErr != nil {
+		// An unscoped redeem (WorkflowID nil) is bound to the authenticated
+		// child grant's workflow; a scoped store is used unchanged. On the
+		// unscoped path the parent.WorkflowID == s.WorkflowID check inside
+		// sourceRecoveryCleanupLeaseTx holds by construction (the child is
+		// bound to the parent's workflow), so it no longer checks the caller:
+		// the caller's authority there comes from RedeemMutation's callback
+		// adapter principal and active-workflow checks.
+		leaseStore, scopeErr := s.canonicalSourceRedeemLeaseStoreTx(ctx, tx, parent, childID, e.EligibilityWireSHA256, body.Recovery.ExecutorID)
+		if scopeErr != nil {
+			return true, scopeErr
+		}
+		if _, readErr = leaseStore.sourceRecoveryCleanupLeaseTx(ctx, tx, body, parent, now); readErr != nil {
 			return true, readErr
 		}
 	}

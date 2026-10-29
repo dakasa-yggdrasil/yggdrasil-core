@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "100e08b070439e65007ba9a8875cae685a6a8402ac29a8f26369e218fccd9063",
+  "source_inventory_sha256": "9b45b1a015c23429f48b709915e5790b7ee57a22919b16a0e7676faf07f1296c",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -796,5 +796,9 @@
   "qualification_source_cleanup_closed_decode_review_20261029": {
     "scope": "Qualification-only closed decoding of the signed source failure cleanup body and physical record, whose qemu and original_disk members the shared Guest lifecycle decoder refused as arrays; the native read decoder now shares the same closed helper. Members are required once, non-null and in their typed JSON kind, and the raw qemu and original_disk subtrees are closed against their producer shapes. No production-reachable site was found or changed; shared validators are unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
     "source_inventory_sha256": "100e08b070439e65007ba9a8875cae685a6a8402ac29a8f26369e218fccd9063"
+  },
+  "qualification_canonical_child_review_20261029": {
+    "scope": "Qualification-only canonical compensation: the native fixture decodes the private capacity intent row with a closed decoder that admits null only for native_pod_baseline, recovery cleanup proof reads the unredacted intent instead of the redacted Observe view, and the unscoped compensation redeem is bound to the authenticated child grant (compensation_of, cleanup child link, generation, workflow and recovery executor) before the recovery lease check. Shared validators, Observe and the API store construction are unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
+    "source_inventory_sha256": "9b45b1a015c23429f48b709915e5790b7ee57a22919b16a0e7676faf07f1296c"
   }
 }

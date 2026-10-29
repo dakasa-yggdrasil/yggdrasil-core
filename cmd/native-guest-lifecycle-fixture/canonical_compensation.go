@@ -37,7 +37,7 @@ func (f *fixture) prepareCanonicalSourceChild(ctx context.Context, p model.Capac
 	}
 	var currentWire []byte
 	var intent model.CapacityIntent
-	if err = f.db.QueryRowContext(ctx, `SELECT intent FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, f.namespace, p.Environment, p.Domain, p.Dimension).Scan(&currentWire); err != nil || capacity.DecodeGuestLifecycle(currentWire, &intent) != nil {
+	if err = f.db.QueryRowContext(ctx, `SELECT intent FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, f.namespace, p.Environment, p.Domain, p.Dimension).Scan(&currentWire); err != nil || repository.DecodeQualificationCapacityIntent(currentWire, &intent) != nil {
 		return none, noPolicy, noChild, noSession, q.ErrOriginalUnknown
 	}
 	client, err := f.sourceClient(baselineSlot)
