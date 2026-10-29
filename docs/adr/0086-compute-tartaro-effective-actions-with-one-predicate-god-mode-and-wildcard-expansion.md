@@ -64,6 +64,19 @@ Both variants run one computation (`computeAuthorizedTartaroActions`):
    is still answered with the explicit grants: the expansion fails closed and
    never fails the read. `*` on any other instance keeps its existing
    meaning, including yggdrasil-self god mode and guard semantics.
+4. **One active-record policy.** A collaborator whose status is not exactly
+   `active` (`pending_start`, `on_leave`, `suspended`, `offboarded`) holds no
+   Tartaro action and no god mode in either variant, whatever their
+   memberships and grants say and however long a token minted before the
+   status change stays valid. The directory variant keeps reading such a
+   collaborator as absent (404, ADR-0019). The console variant answers `200`
+   with empty `effective_via_teams` and `computed_tartaro_actions` and
+   `god_mode` false, without reading memberships, grants or the catalog; it
+   keeps the `200` because a console caller can already read that the
+   collaborator exists. The console variant is the live authorization source
+   of the Tartaro panel services (dakasa-tartaro-fe ADR-0015), called with
+   the human's own token, so it must not be wider than the directory
+   variant.
 
 Response shapes:
 
@@ -79,24 +92,46 @@ Response shapes:
 ## Consequences
 
 - The two variants answer the same action set and the same god-mode verdict
-  for the same collaborator at the same moment. The console variant can now
-  be narrower than before for an expired, not-yet-started or
-  deactivated-team membership.
+  for the same active collaborator at the same moment. For a collaborator
+  who is not active they differ only in shape: the console answers empty
+  sets with `god_mode` false and the directory answers 404, and both mean no
+  Tartaro authority (the Tartaro services already map a 404 to an empty
+  set). The console variant can now be narrower than before for an expired,
+  not-yet-started or deactivated-team membership and for a collaborator who
+  is not active.
 - A console "all actions" grant now gives the team every Tartaro permission.
   A permission added to the adapter catalog reaches existing wildcard holders
   at the next catalog sync, and a permission removed from it leaves them. A
   catalog outage can only narrow an answer, never widen it.
-- Consumers that decode the envelope strictly must accept the `god_mode` key
-  before a Core with this change is deployed; consumers that also need older
-  Cores treat an absent key as "not reported" and keep their previous source
-  for god mode. Consumers that use the verdict to bypass action checks stay
-  responsible for any approval flow that must not be bypassed.
+- **Rollout precondition.** The directory envelope gains a key, and three
+  consumers decode it strictly: dakasa-tartaro-api, tartaro-legal and
+  tartaro-review (`internal/authz/evidence.go`, which rejects any key other
+  than `collaborator_id` and `computed_tartaro_actions` before their
+  `god_mode` change). Those three services must run, in production, a build
+  that accepts an optional boolean `god_mode` before any Core carrying this
+  change is rolled out, including a Core built by cherry-picking it onto
+  another lineage. Rolled out earlier, Core makes every evidence-gated
+  private read of those services fail closed for every collaborator until
+  they are redeployed; rolling Core back restores them. Core has no switch
+  for the key: the order is a release step, recorded here and in the
+  CHANGELOG. Consumers that also need older Cores treat an absent key as
+  "not reported" and keep their previous source for god mode. Consumers
+  that use the verdict to bypass action checks stay responsible for any
+  approval flow that must not be bypassed.
 - The grant walk no longer resolves each team and reads its grants one by
   one; a collaborator in many teams costs one membership read, one grant read
   and, only with a wildcard grant, one catalog read.
 - Core's own console permissions (`repository.ResolveYggdrasilPermissions`)
   keep their separate rules, including the boolean-only reading of
   `yggdrasil_admin`.
+- Follow-up, outside this decision: suspending a collaborator only changes
+  their status. It revokes no Core session, sends no back-channel logout
+  (offboarding does both) and leaves memberships in place, and reusing an
+  existing Core session to complete an OIDC login does not check the
+  collaborator status, so a suspended human can keep obtaining Tartaro
+  tokens. The active-record policy above makes those tokens carry no
+  Tartaro authority, but the session lifecycle gap stays open until suspend
+  terminates sessions and session reuse checks the status.
 
 ## Related
 

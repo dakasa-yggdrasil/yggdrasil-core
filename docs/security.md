@@ -342,9 +342,15 @@ contributes nothing and the read is still answered (fail closed, logged at
 warn level). `*` never appears in an answer, and `*` on any other instance
 keeps its own meaning. Both variants answer `god_mode`, true only for an
 `active` collaborator whose `traits.yggdrasil_admin` is the boolean `true` or
-exactly `"true"` or `"1"`; it is never derived from a grant. The console
+exactly `"true"` or `"1"`; it is never derived from a grant. A collaborator
+who is not `active` gets no action and no god mode from either variant, even
+with a token minted before the status change: the directory variant reads
+them as absent (404), and the console variant answers empty sets with
+`god_mode` false without reading memberships or grants. The console
 variant answers `collaborator_id`, `effective_via_teams`,
-`computed_tartaro_actions` and `god_mode`. The materialized
+`computed_tartaro_actions` and `god_mode`. A consumer that decodes the
+directory envelope strictly must accept `god_mode` before a Core that sends
+it is rolled out (ADR-0086). The materialized
 `traits.tartaro_actions` trait is retired: Core never reads it for an answer,
 the console response no longer carries `trait_tartaro_actions` or `drift`,
 and `POST /api/v1/collaborators/{id}/sync-tartaro-actions` no longer exists.
