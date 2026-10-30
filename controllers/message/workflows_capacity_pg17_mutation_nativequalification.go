@@ -350,8 +350,7 @@ func guestPG17MutationAfterTerminal(ctx context.Context, store repository.Capaci
 	if json.Unmarshal(intentRaw, &intent) != nil || intent.PolicyID != policy.ID || intent.PolicyChecksum != policy.Checksum || intent.Generation != input.Generation || intent.FencingToken != retained.RecoveryFence || !intent.RecoveryOnly || intent.LeaseOwner == input.LeaseOwner || intent.LeaseExecutorID == store.ExecutorID || intent.Decision.ExecutionPermitted {
 		return nil, errOriginalGuestStep
 	}
-	var physical model.CapacityMutationProof
-	pw, err := q.ReadPrivate(ctx, filepath.Join(originalGuestNativeRealm.PrivateDirectory, "source-terminal-physical-proof.json"), &physical)
+	pw, physical, err := pg17ReadTerminalPhysical(ctx, filepath.Join(originalGuestNativeRealm.PrivateDirectory, "source-terminal-physical-proof.json"))
 	if err != nil {
 		return nil, err
 	}
