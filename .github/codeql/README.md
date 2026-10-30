@@ -32,3 +32,9 @@ the query from that protected tag. Otherwise, a pull request could change its
 own scanner configuration or query and suppress an alert. For an update, create
 and protect a new versioned tag, verify its commit and scanner behavior, and only
 then change this repository's property to the new reference.
+
+The versioned repository property for this configuration is
+`dakasa-yggdrasil/yggdrasil-core/.github/codeql/remote.yml@codeql-r1`.
+The corresponding tag must retain active update and deletion restrictions with
+no bypass actors. Check the tag's commit and ruleset before changing the property
+or accepting its managed scan as the baseline.
