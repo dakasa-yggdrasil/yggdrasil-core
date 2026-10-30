@@ -570,6 +570,16 @@
         "cmd/native-guest-lifecycle-fixture/source_compensation.go": "500a7cb43de403ab9f2d3a7ef9160e13cecf7643f6c280d7172e6c9cabbf2b0f",
         "cmd/native-guest-lifecycle-fixture/source_floor_compensation_diagnostic.go": "446d86da093b7eb3ebcf442ae0c8db998ee924398085419acef5c680be2fd0ad"
       }
+    },
+    "qualification_source_floor_receipt_failure_observation_20261030": {
+      "scope": "qualification-only closed receipt guard labels, no authority or production credit",
+      "original_guard_order_and_error_preserved": true,
+      "source_test_and_physical_run": "pending",
+      "source_files": {
+        "internal/capacitynativeqemu/source_failure_cleanup_linux.go": "49f7bbfbbb9ecbe0a3e21e3b7b3a88626296f7c707be9d296e38bd839a61e38d",
+        "internal/capacitynativeqemu/source_failure_cleanup_receipt_diagnostic_test.go": "76e633f642339eb5c02b62f084f2e24172ef531348e13465fd26e925ada19d33",
+        "cmd/native-guest-lifecycle-fixture/source_floor_compensation_diagnostic.go": "931975bce92798288398b592570c72a61035570b62ebc64e41e0fd7b5272415f"
+      }
     }
   },
   "human_architecture_signoff_claimed": false,
