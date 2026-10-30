@@ -913,5 +913,10 @@
     "scope": "Qualification-only Source recovery caller joins the immutable preregistration and original grant after lease expiry without treating historical read as current authority. Independent source review completed; two Source cases and focused Linux tests passed on a separately instrumented pair. Exact integrated CI remains required.",
     "source_inventory_sha256": "2ff6d25d98edf38c54a17105bb480f809729281e81a0b743c57aaa8595314ab7",
     "production_or_native_qualification": false
+  },
+  "qualification_terminal_physical_wire_review_20261030": {
+    "scope": "Qualification-only terminal physical decoder preserves original bytes and typed hash while accepting the producer nil action list under closed validation. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.",
+    "source_inventory_sha256": "09e94a5e7d96c553dc9008a59e65b5131ca9b72d68694021963ebd483c09636a",
+    "production_or_native_qualification": false
   }
 }
