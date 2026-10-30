@@ -1,10 +1,10 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-30T00:19:34-03:00_
+_Generated from HEAD at: 2026-10-30T00:31:46-03:00_
 
 ## Languages
 
-- `.go`: 1388 files
+- `.go`: 1391 files
 - `.json`: 178 files
 - `.py`: 16 files
 - `.sql`: 82 files
@@ -24,13 +24,13 @@ _Generated from HEAD at: 2026-10-30T00:19:34-03:00_
 
 ## Top Directories by File Count
 
-- repository: 316 files (3947.8 KB)
-- controllers/httpapi: 235 files (2395.8 KB)
-- controllers/message: 178 files (1567.6 KB)
+- repository: 317 files (3949.2 KB)
+- controllers/httpapi: 236 files (2396.5 KB)
+- controllers/message: 178 files (1567.8 KB)
 - internal/capacity: 117 files (1330.7 KB)
 - model: 85 files (476.0 KB)
 - db/migrations: 81 files (482.7 KB)
-- manifest: 65 files (397.1 KB)
+- manifest: 65 files (397.9 KB)
 - addons: 50 files (288.7 KB)
 - internal/capacitynativeqemu: 47 files (297.9 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
@@ -42,7 +42,7 @@ _Generated from HEAD at: 2026-10-30T00:19:34-03:00_
 - docs/bootstrap/manifests/products/observability-prometheus.json: 5020.2 KB
 - docs/bootstrap/manifests/products/strategy-deployment-argo-rollouts.json: 1778.3 KB
 - docs/bootstrap/manifests/products/mesh-istio-continuous-deployment-argo-cd.json: 1634.5 KB
-- internal/capacityhostfactory/owner_linux.go: 1502.8 KB
+- internal/capacityhostfactory/owner_linux.go: 1502.9 KB
 - docs/bootstrap/manifests/products/observability-grafana.json: 1008.9 KB
 - docs/bootstrap/manifests/products/certificate-cert-manager.json: 696.5 KB
 - repository/capacity_host_original_factory.go: 575.6 KB

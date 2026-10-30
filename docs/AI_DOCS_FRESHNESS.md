@@ -7,9 +7,10 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 274810338f3bb2e706bcc4c44eec00da2c8c3e8e
-verified_diff_sha256: f3d6f505a8e4f75f6baadd69034111a0983a711ec4f8561ec30b1eb89ddb29ae
+verified_at_commit: 7d65ec9f8984c52d6598943b85607b7d6102b1d1
+verified_diff_sha256: a6ef2f937ca024d40ff157a9b72a53a3a4b874279331f102609b1234edab9426
 reconciler_schema: 1
+ci_security_and_pending_selection_review: Reviewed credential-reference error redaction, bounded allocation hints and frame sizing, and the qualification-only pending selection test. Focused Linux LAB tests passed; full selector, QEMU and owning CI remain required.
 directory_private_response_and_original_output_review: Directory machine responses remain non-cacheable and retain ADR-0019 precedence; normal Guest provisioning returns its original evidence instead of a shadowed value. Independent review and focused Linux race tests passed; positive native QEMU and owning CI remain required.
 qualification_source_cleanup_execution_review: The original qualification-only cleanup store reads the same execution flag as the controller and preserves all live policy, fence, owner and lease checks. Independent review and focused Linux LAB tests passed; original QEMU and owning CI remain required.
 qualification_noncanonical_pending_and_pg17_http_review: The two source-only failed-create slots preserve pending enrollment until guarded cleanup, while the isolated PG17 HTTP gate is restored alongside PG16. Independent review and targeted Linux LAB tests passed; original QEMU and owning CI remain required.
