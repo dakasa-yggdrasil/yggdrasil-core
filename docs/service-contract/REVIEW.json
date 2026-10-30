@@ -908,5 +908,10 @@
     "scope": "Source live-partial and historical callers use existing closed failure-only public return retention without replacing the original errors or granting authority. Source review completed; Linux and owning CI remain required.",
     "source_inventory_sha256": "eacc59f2cbd779f0a805aecab24b8627b3ecb56cd9ef830ea9a8a885ea8500a8",
     "production_or_native_qualification": false
+  },
+  "qualification_terminal_physical_wire_review_20261030": {
+    "scope": "Qualification-only terminal physical decoder retains original bytes and accepts only the producer nil action list in addition to closed typed validation; diagnostic retains closed failure-stage facts. Independent static review completed; Linux and original Source scenarios remain required.",
+    "source_inventory_sha256": "5ef0d4e4cda89afc56125ed857b1a78bf949f6bfb11a2885d24d82740a996579",
+    "production_or_native_qualification": false
   }
 }
