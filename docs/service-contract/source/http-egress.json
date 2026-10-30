@@ -218,7 +218,7 @@
       "expression_complete": true,
       "file": "controllers/oidc/back_channel_logout.go",
       "function": "dispatchOne",
-      "line": 193
+      "line": 240
     },
     {
       "argument_expression": "ctx, method, c.origin+path, bytes.NewReader(body)",

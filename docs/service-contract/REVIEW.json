@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "4b1ebc6c4c5c4922102f0c00ca784c9ed79ff3f51d564361ae45d825c1bb48bb",
+  "source_inventory_sha256": "ef302de27f6bd0bc5ca61418a6f64c5b30617024197b01bb39e35d1067dcadc7",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -817,6 +817,11 @@
   "qualification_floor_and_publication_return_review_20261029": {
     "scope": "Qualification-only floor successor adjusts the unique profile minimum alongside the floor, with the source bridge admitting exactly that delta; noncanonical source cleanup retains a signed original authority publication return. Source and peer review only. Linux LAB/CI and real native QEMU validation remain required.",
     "source_inventory_sha256": "4b1ebc6c4c5c4922102f0c00ca784c9ed79ff3f51d564361ae45d825c1bb48bb",
+    "production_or_native_qualification": false
+  },
+  "main_merge_floor_and_directory_review_20261029": {
+    "scope": "Merge current Core main through 89855092 with the qualification floor and publication-return changes; Directory credential-family precedence, collision refusal and sensitive-log projection reviewed statically. Upstream changes are incorporated from main. Remote Linux tests, CI, native QEMU and production qualification remain required.",
+    "source_inventory_sha256": "ef302de27f6bd0bc5ca61418a6f64c5b30617024197b01bb39e35d1067dcadc7",
     "production_or_native_qualification": false
   }
 }

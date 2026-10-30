@@ -16,6 +16,11 @@ import (
  "github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 )
 
+// The initial failed owner must reach its real echo probe. The later repair
+// stops after issuing its next grant and must not run that probe.
+const failedFloorInitialMode = "burst"
+const failedFloorNextMode = "floor_repair"
+
 // Raise only the floor and the unique profile minimum required by the policy
 // contract. The baseline policy must remain unchanged for its real owner.
 func strongerSourceFloorPolicy(before model.CapacityPolicySpec)(model.CapacityPolicySpec,error){
@@ -85,7 +90,7 @@ func(f *fixture) runOriginalFailedFloorCaller(ctx context.Context)(runErr error)
  bridge,err:=f.prepareOriginalFloorBridge(ctx,capacity.GuestRetirementSHA(probe));if err!=nil{return err}
  if json.Unmarshal(f.policy.Spec,&p)!=nil || p.Floor!=2 || p.Ceiling!=2{return q.ErrOriginalUnknown}
  at,err:=f.actualLastUsefulProbeTime(ctx,1);if err!=nil{return err}
- burst,burstReturns,err:=f.originalWorkflow(ctx,"floor_repair",2,q.QualificationAssessment(p,1,0.9,at),"")
+ burst,burstReturns,err:=f.originalWorkflow(ctx,failedFloorInitialMode,2,q.QualificationAssessment(p,1,0.9,at),"")
  returns=append(returns,burstReturns...)
  if err!=nil || burst.Status!="failed"{return q.ErrOriginalUnknown}
  if q.CanonicalSourceCompensationCase(f.request.NativeCase){

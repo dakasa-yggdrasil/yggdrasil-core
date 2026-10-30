@@ -4,7 +4,7 @@
       "build_constraint": "default",
       "file": "controllers/message/identities.go",
       "function": "package",
-      "line": 19,
+      "line": 21,
       "name": "queueCollaboratorCreate",
       "value": "yggdrasil-core.collaborator.create"
     },
@@ -12,7 +12,7 @@
       "build_constraint": "default",
       "file": "controllers/message/identities.go",
       "function": "package",
-      "line": 20,
+      "line": 22,
       "name": "queueCollaboratorUpdate",
       "value": "yggdrasil-core.collaborator.update"
     },
@@ -20,7 +20,7 @@
       "build_constraint": "default",
       "file": "controllers/message/identities.go",
       "function": "package",
-      "line": 21,
+      "line": 23,
       "name": "queueCollaboratorDelete",
       "value": "yggdrasil-core.collaborator.delete"
     },
@@ -28,7 +28,7 @@
       "build_constraint": "default",
       "file": "controllers/message/identities.go",
       "function": "package",
-      "line": 22,
+      "line": 24,
       "name": "queueCollaboratorGet",
       "value": "yggdrasil-core.collaborator.get"
     },
@@ -36,7 +36,7 @@
       "build_constraint": "default",
       "file": "controllers/message/identities.go",
       "function": "package",
-      "line": 23,
+      "line": 25,
       "name": "queueCollaboratorList",
       "value": "yggdrasil-core.collaborator.list"
     },
@@ -44,7 +44,7 @@
       "build_constraint": "default",
       "file": "controllers/message/identities.go",
       "function": "package",
-      "line": 24,
+      "line": 26,
       "name": "queueTeamCreate",
       "value": "yggdrasil-core.team.create"
     },
@@ -52,7 +52,7 @@
       "build_constraint": "default",
       "file": "controllers/message/identities.go",
       "function": "package",
-      "line": 25,
+      "line": 27,
       "name": "queueTeamUpdate",
       "value": "yggdrasil-core.team.update"
     },
@@ -60,7 +60,7 @@
       "build_constraint": "default",
       "file": "controllers/message/identities.go",
       "function": "package",
-      "line": 26,
+      "line": 28,
       "name": "queueTeamDelete",
       "value": "yggdrasil-core.team.delete"
     },
@@ -68,7 +68,7 @@
       "build_constraint": "default",
       "file": "controllers/message/identities.go",
       "function": "package",
-      "line": 27,
+      "line": 29,
       "name": "queueTeamGet",
       "value": "yggdrasil-core.team.get"
     },
@@ -76,7 +76,7 @@
       "build_constraint": "default",
       "file": "controllers/message/identities.go",
       "function": "package",
-      "line": 28,
+      "line": 30,
       "name": "queueTeamList",
       "value": "yggdrasil-core.team.list"
     },
@@ -84,7 +84,7 @@
       "build_constraint": "default",
       "file": "controllers/message/identities.go",
       "function": "package",
-      "line": 29,
+      "line": 31,
       "name": "queueTeamMembershipUpsert",
       "value": "yggdrasil-core.team.membership.upsert"
     },
@@ -92,7 +92,7 @@
       "build_constraint": "default",
       "file": "controllers/message/identities.go",
       "function": "package",
-      "line": 30,
+      "line": 32,
       "name": "queueTeamMembershipList",
       "value": "yggdrasil-core.team.membership.list"
     },

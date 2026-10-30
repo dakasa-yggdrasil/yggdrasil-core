@@ -12,13 +12,13 @@
   "source_inventory": {
     "id": "complete_runtime_source_census",
     "evidence": "docs/service-contract/source/sources.json",
-    "sha256": "4b1ebc6c4c5c4922102f0c00ca784c9ed79ff3f51d564361ae45d825c1bb48bb"
+    "sha256": "ef302de27f6bd0bc5ca61418a6f64c5b30617024197b01bb39e35d1067dcadc7"
   },
   "produces": [
     {
       "id": "transactional_event_emission_sites",
       "evidence": "docs/service-contract/source/event-emissions.json",
-      "sha256": "edafe85272c6cb7c7824130ee025b58b035a7c812178bc678d2c2e3f549015c2"
+      "sha256": "8639e6bf6d2c5ec479f9b171a9b50f03a558798f28ed45a0afb9908ba7649461"
     },
     {
       "id": "embedded_event_schema_keys",
@@ -28,14 +28,14 @@
     {
       "id": "event_and_queue_constants",
       "evidence": "docs/service-contract/source/event-and-queue-constants.json",
-      "sha256": "74d20498371087b9cd1ed9078285be56f4ebd9f519e3c618bc92c297040794e1"
+      "sha256": "41938430b08975319d249822bcec9630d47354cc9885d8b4089da298c842bf14"
     }
   ],
   "consumes": [
     {
       "id": "logical_rpc_consumers",
       "evidence": "docs/service-contract/source/rpc-consumers.json",
-      "sha256": "0ead9be8adb390c5cad6436914dc77f4a50871357c51e0369b72f78acf6b885c"
+      "sha256": "40fdd21fa0e42be48ff0a022ab704a25b0b906fb659fd21f767edd0caa807b10"
     },
     {
       "id": "http_inbound_protocols_and_auth",
@@ -55,14 +55,14 @@
     {
       "id": "independent_source_review",
       "evidence": "docs/service-contract/REVIEW.json",
-      "sha256": "cc350e16ed78f7f5599d75e8c503a72e33a5617318fa3a32e591256d04e15d70"
+      "sha256": "1f54578b3195b3215a72e9332bbaff900b668f2fe95be2e0197195420d2c62ac"
     }
   ],
   "callsREST": [
     {
       "id": "http_and_rpc_egress_callsites",
       "evidence": "docs/service-contract/source/http-egress.json",
-      "sha256": "452439a54cb4c98ad9773b810fa34337ae34265428c40f50b147437261bb2fb3"
+      "sha256": "8131e23857477b176ddf4cc9dc7dc9395e56e8135e391f1e6ccc1528ce0983c1"
     },
     {
       "id": "optional_provider_sdk_callsites",
@@ -79,7 +79,7 @@
     {
       "id": "http_mux_registrations",
       "evidence": "docs/service-contract/source/http-routes.json",
-      "sha256": "1d928c01ddeedb76e71950874980e6609f14fad7e659b68f97e1167ae2ff9eac"
+      "sha256": "307e728d9784d9eac8cedf4041c872efd7afa63f0ae06f933401a59a6f32effb"
     },
     {
       "id": "pre_mux_capacity_dispatch",
@@ -89,7 +89,7 @@
     {
       "id": "auth_dispatch_source_functions",
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
-      "sha256": "c28b37af114fdd8f0673607fdae30a7396d7b62fea9b5dff392945ea32ab5bc5"
+      "sha256": "2a15c37e44c30785ed9b5f8631318766930a39188d43d0cacb1335cf340ece0a"
     }
   ]
 }

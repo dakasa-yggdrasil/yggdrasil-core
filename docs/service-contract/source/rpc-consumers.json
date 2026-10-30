@@ -12,84 +12,84 @@
       "endpoint_expression": "queueCollaboratorCreate",
       "file": "controllers/message/identities.go",
       "function": "identityConsumers",
-      "line": 36
+      "line": 42
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueCollaboratorUpdate",
       "file": "controllers/message/identities.go",
       "function": "identityConsumers",
-      "line": 42
+      "line": 48
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueCollaboratorDelete",
       "file": "controllers/message/identities.go",
       "function": "identityConsumers",
-      "line": 48
+      "line": 54
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueCollaboratorGet",
       "file": "controllers/message/identities.go",
       "function": "identityConsumers",
-      "line": 54
+      "line": 60
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueCollaboratorList",
       "file": "controllers/message/identities.go",
       "function": "identityConsumers",
-      "line": 60
+      "line": 66
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueTeamCreate",
       "file": "controllers/message/identities.go",
       "function": "identityConsumers",
-      "line": 66
+      "line": 72
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueTeamUpdate",
       "file": "controllers/message/identities.go",
       "function": "identityConsumers",
-      "line": 72
+      "line": 78
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueTeamDelete",
       "file": "controllers/message/identities.go",
       "function": "identityConsumers",
-      "line": 78
+      "line": 84
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueTeamGet",
       "file": "controllers/message/identities.go",
       "function": "identityConsumers",
-      "line": 84
+      "line": 90
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueTeamList",
       "file": "controllers/message/identities.go",
       "function": "identityConsumers",
-      "line": 90
+      "line": 96
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueTeamMembershipUpsert",
       "file": "controllers/message/identities.go",
       "function": "identityConsumers",
-      "line": 96
+      "line": 102
     },
     {
       "build_constraint": "default",
       "endpoint_expression": "queueTeamMembershipList",
       "file": "controllers/message/identities.go",
       "function": "identityConsumers",
-      "line": 102
+      "line": 108
     },
     {
       "build_constraint": "default",

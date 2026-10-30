@@ -204,7 +204,7 @@ func (f *fixture) finishOriginalCanonicalFloorRecovery(ctx context.Context, p mo
 		return err
 	}
 	assessment := q.QualificationAssessment(p, 1, 0.9, fresh.OriginalNativeAfterReturnedAt)
-	nextRun, _, err := f.originalWorkflow(ctx, "floor_repair", 2, assessment, "")
+	nextRun, _, err := f.originalWorkflow(ctx, failedFloorNextMode, 2, assessment, "")
 	if err != nil || nextRun.Status != "succeeded" {
 		return q.ErrOriginalUnknown
 	}

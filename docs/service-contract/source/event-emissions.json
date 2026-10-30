@@ -107,20 +107,9 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/collaborator_lifecycle.go",
       "function": "handleCollaboratorOffboard",
-      "line": 95,
+      "line": 100,
       "type_expressions": [
         "repository.EventTypeCollaboratorOffboarded"
-      ]
-    },
-    {
-      "argument_expression_sha256": "7df4bc1564a684a76c479fd9364eece8a52e4990a0fd2556167c24c0d398ceaf",
-      "build_constraint": "default",
-      "callee": "EmitEvent",
-      "file": "controllers/httpapi/collaborator_lifecycle.go",
-      "function": "handleCollaboratorOffboard",
-      "line": 141,
-      "type_expressions": [
-        "repository.EventTypeCollaboratorSessionTerminated"
       ]
     },
     {
@@ -129,7 +118,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/collaborator_lifecycle.go",
       "function": "handleCollaboratorReOnboard",
-      "line": 255,
+      "line": 219,
       "type_expressions": [
         "repository.EventTypeCollaboratorReOnboarded"
       ]
@@ -140,7 +129,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/collaborator_lifecycle.go",
       "function": "handleCollaboratorRoleChange",
-      "line": 344,
+      "line": 310,
       "type_expressions": [
         "repository.EventTypeCollaboratorRoleChanged"
       ]
@@ -151,7 +140,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/collaborator_lifecycle.go",
       "function": "handleCollaboratorTeamAdd",
-      "line": 432,
+      "line": 399,
       "type_expressions": [
         "repository.EventTypeTeamMembershipAdded",
         "model.ActorTypeAPI"
@@ -163,7 +152,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/collaborator_lifecycle.go",
       "function": "handleCollaboratorTeamRemove",
-      "line": 511,
+      "line": 478,
       "type_expressions": [
         "repository.EventTypeTeamMembershipRemoved",
         "model.ActorTypeAPI"
@@ -175,7 +164,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/collaborator_lifecycle.go",
       "function": "handleCollaboratorAbsenceStart",
-      "line": 713,
+      "line": 684,
       "type_expressions": [
         "repository.EventTypeCollaboratorAbsenceStarted"
       ]
@@ -186,7 +175,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/collaborator_lifecycle.go",
       "function": "handleCollaboratorAbsenceEnd",
-      "line": 790,
+      "line": 764,
       "type_expressions": [
         "repository.EventTypeCollaboratorAbsenceEnded"
       ]
@@ -197,20 +186,9 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/credentials.go",
       "function": "resetMFAAndIssueSetupLink",
-      "line": 202,
+      "line": 203,
       "type_expressions": [
         "repository.EventTypeCredentialMFAReset"
-      ]
-    },
-    {
-      "argument_expression_sha256": "06ee5d6c74dbcdc12c461e301e425005499dcb2ac2b7e2ed09ab81c8ef54dea0",
-      "build_constraint": "default",
-      "callee": "EmitEvent",
-      "file": "controllers/httpapi/credentials.go",
-      "function": "revokeForCredentialReplacement",
-      "line": 246,
-      "type_expressions": [
-        "repository.EventTypeCollaboratorSessionTerminated"
       ]
     },
     {
@@ -219,7 +197,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/credentials.go",
       "function": "emitCredentialEvent",
-      "line": 535,
+      "line": 509,
       "type_expressions": []
     },
     {
@@ -228,7 +206,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/credentials.go",
       "function": "handleSetupCommit",
-      "line": 779,
+      "line": 753,
       "type_expressions": [
         "repository.EventTypeCredentialPasswordSetupCompleted",
         "\"collaborator\""
@@ -240,7 +218,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/credentials.go",
       "function": "handlePasswordChange",
-      "line": 1106,
+      "line": 1081,
       "type_expressions": [
         "repository.EventTypeCredentialPasswordChanged",
         "\"collaborator\""
@@ -252,7 +230,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/credentials.go",
       "function": "handlePasswordChange",
-      "line": 1143,
+      "line": 1118,
       "type_expressions": [
         "repository.EventTypeCollaboratorSessionTerminated"
       ]
@@ -263,7 +241,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/credentials.go",
       "function": "handlePasswordReset",
-      "line": 1544,
+      "line": 1519,
       "type_expressions": [
         "repository.EventTypeCredentialPasswordChanged",
         "\"collaborator\""
@@ -376,7 +354,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleCollaboratorCreate",
-      "line": 2099,
+      "line": 2102,
       "type_expressions": [
         "repository.EventTypeCollaboratorCreated"
       ]
@@ -387,7 +365,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamCreate",
-      "line": 2336,
+      "line": 2344,
       "type_expressions": [
         "repository.EventTypeTeamCreated"
       ]
@@ -398,7 +376,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamUpdate",
-      "line": 2431,
+      "line": 2439,
       "type_expressions": [
         "repository.EventTypeTeamUpdated"
       ]
@@ -409,7 +387,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamDelete",
-      "line": 2520,
+      "line": 2528,
       "type_expressions": [
         "repository.EventTypeTeamDeleted"
       ]
@@ -420,7 +398,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamGrantCreate",
-      "line": 2584,
+      "line": 2592,
       "type_expressions": [
         "repository.EventTypeTeamGrantAdded",
         "model.ActorTypeAPI"
@@ -432,7 +410,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamGrantDelete",
-      "line": 2621,
+      "line": 2629,
       "type_expressions": [
         "repository.EventTypeTeamGrantRevoked",
         "model.ActorTypeAPI"
@@ -444,7 +422,7 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamMembershipUpsert",
-      "line": 2728,
+      "line": 2736,
       "type_expressions": [
         "repository.EventTypeTeamMembershipAdded"
       ]
@@ -455,21 +433,9 @@
       "callee": "EmitEvent",
       "file": "controllers/httpapi/server.go",
       "function": "handleTeamMembershipUpsert",
-      "line": 2753,
+      "line": 2761,
       "type_expressions": [
         "repository.EventTypeTeamMembershipRemoved"
-      ]
-    },
-    {
-      "argument_expression_sha256": "e1a4a201e576e287b2f50317015ea329f37c709ff00ab8307e50fdc7f0a43149",
-      "build_constraint": "default",
-      "callee": "EmitEvent",
-      "file": "controllers/httpapi/tartaro_actions.go",
-      "function": "handleSyncTartaroActions",
-      "line": 185,
-      "type_expressions": [
-        "repository.EventTypeTeamMembershipAdded",
-        "model.ActorTypeAPI"
       ]
     },
     {
@@ -740,6 +706,17 @@
       "type_expressions": [
         "record.EventProvider + \".\" + record.EventResource + \".\" + verb",
         "\"workflow\""
+      ]
+    },
+    {
+      "argument_expression_sha256": "1b06f80657498426df295c81647810c77cb9795b34e8569477daa1c3e161b9ea",
+      "build_constraint": "default",
+      "callee": "EmitEvent",
+      "file": "repository/collaborator_session_termination.go",
+      "function": "TerminateCollaboratorSessionsTx",
+      "line": 53,
+      "type_expressions": [
+        "EventTypeCollaboratorSessionTerminated"
       ]
     },
     {

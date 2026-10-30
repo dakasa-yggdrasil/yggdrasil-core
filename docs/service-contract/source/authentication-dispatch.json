@@ -40,7 +40,7 @@
       "build_constraint": "default",
       "file": "controllers/httpapi/contact_phone.go",
       "function": "phoneProfileExemptPath",
-      "line": 23
+      "line": 25
     },
     {
       "build_constraint": "default",
@@ -52,7 +52,7 @@
       "build_constraint": "default",
       "file": "controllers/httpapi/directory_machine_read.go",
       "function": "serveDirectoryMachineRequest",
-      "line": 233
+      "line": 275
     },
     {
       "build_constraint": "default",
