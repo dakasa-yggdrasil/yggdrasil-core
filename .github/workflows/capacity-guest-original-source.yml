@@ -26,6 +26,19 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Verify closed canonical child failure diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -tags=nativequalification -json ./cmd/native-guest-lifecycle-fixture -run '^TestCanonicalChildFailureStageClosed$' > "$RUNNER_TEMP/child-stage-test.jsonl"
+          python3 - <<'PYCENSUS'
+          import json,os
+          rows=[json.loads(line) for line in open(os.environ['RUNNER_TEMP']+'/child-stage-test.jsonl') if line.strip()]
+          root='TestCanonicalChildFailureStageClosed'
+          required={root}|{root+'/'+name for name in ('original_failure','protected_failure','success','foreign_case','arbitrary_stage')}
+          passed={row['Test'] for row in rows if row.get('Action')=='pass' and row.get('Test')}
+          if required-passed or any(row.get('Action') in ('skip','fail','build-fail') for row in rows):raise SystemExit('closed diagnostic census failed')
+          PYCENSUS
       - name: Actual original provider source contracts and default refusal
         shell: bash
         run: |
