@@ -16,6 +16,10 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Verify reference identity before analysis
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote --tags https://github.com/dakasa-yggdrasil/yggdrasil-core.git refs/tags/codeql-research-c55-20261030 | cut -f1)" = c55c0a7856a39dbd523be30c099e51b136ad9ce6
       - id: init
         uses: github/codeql-action/init@v4
         with:
