@@ -559,6 +559,18 @@
       "reviewed_at": "2026-10-26T17:43:37.079058+00:00",
       "schema82_Linux_CI_image_Goose_runtime_and_useful_capacity_still_required": true,
       "source_inventory_sha256": "e6e919b15af44e43b6d05c4c969beca37dc2569a0c1ff4633e7ce47f3ab85e2e"
+    },
+    "qualification_source_floor_pending_20261030": {
+      "scope": "fixed source-live failed-floor slot two only, pending without member or event",
+      "settlement_and_cleanup_guards_preserved": true,
+      "source_test_and_physical_run": "pending",
+      "source_files": {
+        "internal/capacitynativeqemu/postloss_case_linux.go": "fd4cee0bcb412e687fd6c84fefa94d58d6a568370f00a1a51e53d03ac59921fb",
+        "repository/capacity_compensation_pending_qualification.go": "f4c8206d0e7a5db83ef3a5fbbc9661d1a7993a5b73454bc1ecf5b696de507f19",
+        "internal/capacitynativeqemu/compensation_pending_case_linux_test.go": "1a065743d07e32098df37fc3e1b081130ded20163cd40d70a749e81624fc6a63",
+        "repository/capacity_compensation_pending_qualification_test.go": "c21ba7f831fce840d8e98f2fa794547828a2b7d8724dfdc30d3d9cdca0d9d928",
+        "controllers/message/workflows_capacity_guest_postloss_pending_nativequalification_test.go": "11bfd158c4080773abc1877c16dae037bcd9886179c0dc2c4f3be2bfd5b26240"
+      }
     }
   },
   "human_architecture_signoff_claimed": false,
