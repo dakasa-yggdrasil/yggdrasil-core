@@ -1,0 +1,4 @@
+name: dakasa-research/go-hash-analysis
+version: 0.0.1
+dependencies:
+  codeql/go-all: '*'

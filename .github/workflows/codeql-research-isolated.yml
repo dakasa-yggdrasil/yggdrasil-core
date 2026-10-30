@@ -1,0 +1,50 @@
+name: Isolated CodeQL reference barrier experiment
+on:
+  push:
+    branches: ['elastic/codeql-evidence-diagnostic-20261030']
+permissions:
+  contents: read
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - id: setup
+        uses: github/codeql-action/setup-codeql@v3
+        with:
+          languages: go
+      - name: Build CodeQL database from exact diagnostic commit
+        env:
+          CODEQL_BIN: ${{ steps.setup.outputs.codeql-path }}
+          GOMAXPROCS: '2'
+        run: |
+          set -euo pipefail
+          "$CODEQL_BIN" version
+          "$CODEQL_BIN" database create "$RUNNER_TEMP/codeql-db" --language=go --source-root=. --command='go build -p 2 ./...'
+      - name: Analyze original and reference-only barrier
+        env:
+          CODEQL_BIN: ${{ steps.setup.outputs.codeql-path }}
+        run: |
+          set -euo pipefail
+          cd .github/codeql-research
+          "$CODEQL_BIN" pack install
+          "$CODEQL_BIN" database analyze "$RUNNER_TEMP/codeql-db" original.ql --format=sarif-latest --output="$RUNNER_TEMP/original.sarif" --threads=2
+          "$CODEQL_BIN" database analyze "$RUNNER_TEMP/codeql-db" narrow.ql --format=sarif-latest --output="$RUNNER_TEMP/narrow.sarif" --threads=2
+      - name: Check positive and negative paths
+        run: python3 .github/codeql-research/verify.py "$RUNNER_TEMP/original.sarif" "$RUNNER_TEMP/narrow.sarif"
+      - name: Preserve reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-research-reports
+          path: |
+            ${{ runner.temp }}/original.sarif
+            ${{ runner.temp }}/narrow.sarif
+          if-no-files-found: ignore
+          retention-days: 3
