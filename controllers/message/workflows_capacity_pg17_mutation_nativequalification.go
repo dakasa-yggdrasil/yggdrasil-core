@@ -358,8 +358,7 @@ func guestPG17MutationAfterTerminal(ctx context.Context, store repository.Capaci
 		return nil, errOriginalGuestStep
 	}
 	stage = "physical_read"
-	var physical model.CapacityMutationProof
-	pw, err := q.ReadPrivate(ctx, filepath.Join(originalGuestNativeRealm.PrivateDirectory, "source-terminal-physical-proof.json"), &physical)
+	pw, physical, err := pg17ReadTerminalPhysical(ctx, filepath.Join(originalGuestNativeRealm.PrivateDirectory, "source-terminal-physical-proof.json"))
 	if err != nil {
 		return nil, err
 	}
