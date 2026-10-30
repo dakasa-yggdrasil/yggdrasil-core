@@ -1,7 +1,0 @@
-# Retain the default suite and replace only the password-hashing query with
-# the reference-aware equivalent. Other languages and queries remain enabled.
-queries:
-  - uses: ./.github/codeql/queries/public-secret-name.ql
-query-filters:
-  - exclude:
-      id: go/weak-sensitive-data-hashing
