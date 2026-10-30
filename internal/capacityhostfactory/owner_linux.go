@@ -26195,10 +26195,13 @@ func (w *originalSealedWorker) emitOriginalFinalSourceAuditCarrier(envelope []by
 		return err
 	}
 	w.finalCarrierRaw = bytes.Clone(raw)
+	if len(raw) > bodyLimit {
+		return refused("storage_unknown", nil)
+	}
 	wire := make([]byte, 4, 4+len(raw))
 	binary.BigEndian.PutUint32(wire, uint32(len(raw)))
 	wire = append(wire, raw...)
-	if len(raw) > bodyLimit || w.stdoutBytes+int64(len(wire)) > bodyLimit {
+	if w.stdoutBytes+int64(len(wire)) > bodyLimit {
 		return refused("storage_unknown", nil)
 	}
 	if err = nativeProcessPhase(w.lastCtx, w.publisher.ledger); err != nil {
