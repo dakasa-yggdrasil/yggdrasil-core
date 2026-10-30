@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "b9a5626d175219c29f4c84c6898063ba033285bb63a26e5f5794ba357bfc90ac",
+  "source_inventory_sha256": "7d7c622a7c3e7bdad2a6da4ef42690c133989226668d3aa77bad69bd3c76523a",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -827,6 +827,11 @@
   "main_adr0088_security_merge_review_20261029": {
     "scope": "Merge upstream ADR-0088 removal of body-asserted third-party login, preserving provider browser start and callback. Source merge review only; original CI, Linux integration and production readback are required.",
     "source_inventory_sha256": "b9a5626d175219c29f4c84c6898063ba033285bb63a26e5f5794ba357bfc90ac",
+    "production_or_native_qualification": false
+  },
+  "failed_floor_probe_order_review_20261029": {
+    "scope": "Qualification-only failed-floor cases probe the failed slot first while retaining the full original member roster and requiring all probes before any advance. The exact patch passed targeted Linux/race LAB tests; native QEMU and CI remain required.",
+    "source_inventory_sha256": "7d7c622a7c3e7bdad2a6da4ef42690c133989226668d3aa77bad69bd3c76523a",
     "production_or_native_qualification": false
   }
 }

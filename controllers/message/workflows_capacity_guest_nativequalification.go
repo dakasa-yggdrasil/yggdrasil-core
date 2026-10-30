@@ -67,6 +67,26 @@ func guestOriginalSourceWitnessed(ctx context.Context, g model.CapacityMutationG
 	return originalGuestNativeRealm.Witnessed(ctx, g, p, w)
 }
 
+// Keep the full roster: a failed-floor qualification probes the originally
+// failed slot first, but a successful phase still requires every member.
+func sourceFailedFloorProbeOrder(nativeCase string, floor int, slots []int) []int {
+	ordered := append([]int(nil), slots...)
+	if capacitynativeqemu.SourceFailedFloorCase(nativeCase) && floor == 2 && len(ordered) == 2 && ordered[0] == 1 && ordered[1] == 2 {
+		ordered[0], ordered[1] = ordered[1], ordered[0]
+	}
+	return ordered
+}
+
+// Completion is called only after every original member operation succeeds.
+func qualifyEveryOriginalGuest(slots []int, qualify func(int) error, complete func() error) error {
+	for _, slot := range slots {
+		if err := qualify(slot); err != nil {
+			return err
+		}
+	}
+	return complete()
+}
+
 func sourceGuestQualificationStep(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, input guestOriginalStepInput, key ed25519.PrivateKey, operation string) (any, error) {
 	if input.RequestID == "source_recovery_cleanup_v1" {
 		return sourceGuestRecoveryCleanupStep(ctx, store, policy, p, input, operation)
@@ -101,8 +121,9 @@ func sourceGuestQualificationStep(ctx context.Context, store repository.Capacity
 	if len(slots) != current.Decision.Units {
 		return nil, capacity.GuestQualificationRefusal("owned_slots", errOriginalGuestStep)
 	}
+	slots = sourceFailedFloorProbeOrder(originalGuestNativeRealm.Request.NativeCase, p.Floor, slots)
 	var probes []capacitynativeqemu.QualificationProbeReceipt
-	for _, slot := range slots {
+	err = qualifyEveryOriginalGuest(slots, func(slot int) error {
 		member := model.CapacityGuestRetirementMemberBinding{}
 		for _, m := range p.GuestRetirementBinding.Members {
 			if m.Slot == slot {
@@ -110,21 +131,21 @@ func sourceGuestQualificationStep(ctx context.Context, store repository.Capacity
 			}
 		}
 		if member.Name == "" {
-			return nil, capacity.GuestQualificationRefusal("member", errOriginalGuestStep)
+			return capacity.GuestQualificationRefusal("member", errOriginalGuestStep)
 		}
 		client, err := sourceGuestClient(ctx, store.DB, member)
 		if err != nil {
-			return nil, capacity.GuestQualificationRefusal("client", err)
+			return capacity.GuestQualificationRefusal("client", err)
 		}
 		probe, err := originalGuestNativeRealm.Probe(ctx, store, policy, input.Generation, input.FencingToken, input.LeaseOwner, slot, key, client, *current.LeaseExpiresAt)
 		client.Close()
 		if err != nil {
-			return nil, err
+			return err
 		}
 		probes = append(probes, probe)
 		physical, err := originalGuestNativeRealm.FreshNativeMember(ctx, slot, b)
 		if err != nil {
-			return nil, capacity.GuestQualificationRefusal("fresh_native", err)
+			return capacity.GuestQualificationRefusal("fresh_native", err)
 		}
 		var projection *model.CapacityMutationSpecV1
 		for _, approved := range b.Slots {
@@ -133,28 +154,35 @@ func sourceGuestQualificationStep(ctx context.Context, store repository.Capacity
 			}
 		}
 		if projection == nil {
-			return nil, capacity.GuestQualificationRefusal("projection", errOriginalGuestStep)
+			return capacity.GuestQualificationRefusal("projection", errOriginalGuestStep)
 		}
 		wire, err := json.Marshal(projection)
 		if err != nil {
-			return nil, capacity.GuestQualificationRefusal("projection_encode", err)
+			return capacity.GuestQualificationRefusal("projection_encode", err)
 		}
 		if err = store.RecordMutationSlot(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: wire}, physical); err != nil {
-			return nil, capacity.GuestQualificationRefusal("record_slot", err)
+			return capacity.GuestQualificationRefusal("record_slot", err)
 		}
-	}
-	// Healthy is restricted to the ACTUAL admitted source echo profile. Each
-	// same original writer just served its bounded challenge; native/count or
-	// a signed census alone cannot produce this phase receipt.
-	at := time.Now().UTC()
-	assessment := capacitynativeqemu.QualificationAssessment(p, len(probes), 0.9, at)
-	zero := 0
-	proof := model.CapacityTransitionProof{Assessment: assessment, ObservedAt: at, ReceiptRef: "original-native-useful-echo:" + capacity.GuestRetirementSHA(probes), Healthy: len(probes) == len(slots) && len(probes) > 0, Inflight: &zero}
-	for _, phase := range []string{"prepared", "canary", "promoted"} {
-		if _, err = store.Advance(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, phase, proof); err != nil {
-			return nil, capacity.GuestQualificationRefusal("advance_"+phase, err)
+		return nil
+	}, func() error {
+		// Healthy is restricted to the ACTUAL admitted source echo profile. Each
+		// same original writer just served its bounded challenge; native/count or
+		// a signed census alone cannot produce this phase receipt.
+		at := time.Now().UTC()
+		assessment := capacitynativeqemu.QualificationAssessment(p, len(probes), 0.9, at)
+		zero := 0
+		proof := model.CapacityTransitionProof{Assessment: assessment, ObservedAt: at, ReceiptRef: "original-native-useful-echo:" + capacity.GuestRetirementSHA(probes), Healthy: len(probes) == len(slots) && len(probes) > 0, Inflight: &zero}
+		for _, phase := range []string{"prepared", "canary", "promoted"} {
+			if _, err = store.Advance(ctx, policy, input.Generation, input.FencingToken, input.LeaseOwner, phase, proof); err != nil {
+				return capacity.GuestQualificationRefusal("advance_"+phase, err)
+			}
 		}
+		return nil
+	})
+	if err != nil {
+		return nil, err
 	}
+
 	return struct {
 		Scope                             string                                         `json:"scope"`
 		UsefulEchoProbes                  []capacitynativeqemu.QualificationProbeReceipt `json:"useful_echo_probes"`
