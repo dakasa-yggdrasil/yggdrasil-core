@@ -1,0 +1,6 @@
+# Research fixture; no active property points here.
+queries:
+  - uses: dakasa-yggdrasil/yggdrasil-core/.github/codeql-research/narrow.ql@c55c0a7856a39dbd523be30c099e51b136ad9ce6
+query-filters:
+  - exclude:
+      id: go/weak-sensitive-data-hashing

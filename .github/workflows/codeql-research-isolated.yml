@@ -1,53 +1,53 @@
-name: Isolated CodeQL non-Go suite equivalence experiment
+name: Isolated CodeQL action and immutable query experiment
 on:
   push:
     branches: ['elastic/codeql-evidence-diagnostic-20261030']
 permissions:
   contents: read
+  security-events: read
 jobs:
   analyze:
-    strategy:
-      fail-fast: false
-      matrix:
-        language: [actions, javascript, python]
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - id: setup
-        uses: github/codeql-action/setup-codeql@v4
+      - uses: actions/setup-go@v5
         with:
-          languages: ${{ matrix.language }}
-      - name: Build database with test configuration
+          go-version-file: go.mod
+      - id: init
+        uses: github/codeql-action/init@v4
+        with:
+          languages: go
+          build-mode: manual
+          config-file: .github/codeql-research/codeql-config-external-research.yml
+      - name: Build Core
+        run: go build -p 2 ./...
+      - id: analyze
+        uses: github/codeql-action/analyze@v4
+        with:
+          upload: never
+          upload-database: false
+          output: ${{ runner.temp }}/codeql-action-results
+      - name: Compare with default Go suite and positive controls
         env:
-          CODEQL_BIN: ${{ steps.setup.outputs.codeql-path }}
-          TASK_LANGUAGE: ${{ matrix.language }}
+          CODEQL_BIN: ${{ steps.init.outputs.codeql-path }}
+          CODEQL_DB: ${{ fromJSON(steps.analyze.outputs.db-locations).go }}
         run: |
           set -euo pipefail
-          "$CODEQL_BIN" version
-          (cd .github/codeql-research && "$CODEQL_BIN" pack install)
-          "$CODEQL_BIN" database create "$RUNNER_TEMP/codeql-db" --language="$TASK_LANGUAGE" --source-root=. --codescanning-config=.github/codeql-research/codeql-config-research.yml
-      - name: Analyze default and candidate suites
-        env:
-          CODEQL_BIN: ${{ steps.setup.outputs.codeql-path }}
-          TASK_LANGUAGE: ${{ matrix.language }}
-        run: |
-          set -euo pipefail
-          "$CODEQL_BIN" database analyze "$RUNNER_TEMP/codeql-db" "codeql/${TASK_LANGUAGE}-queries:codeql-suites/${TASK_LANGUAGE}-code-scanning.qls" --format=sarif-latest --output="$RUNNER_TEMP/original.sarif" --threads=2 2>&1 | tee "$RUNNER_TEMP/original.log"
-          "$CODEQL_BIN" database analyze "$RUNNER_TEMP/codeql-db" --format=sarif-latest --output="$RUNNER_TEMP/narrow.sarif" --threads=2 2>&1 | tee "$RUNNER_TEMP/narrow.log"
-      - name: Compare all reported rule IDs and findings
-        run: python3 .github/codeql-research/compare_other_suites.py "$RUNNER_TEMP/original.sarif" "$RUNNER_TEMP/narrow.sarif"
-      - name: Preserve reports and execution logs
+          "$CODEQL_BIN" database analyze "$CODEQL_DB" codeql/go-queries:codeql-suites/go-code-scanning.qls --format=sarif-latest --output="$RUNNER_TEMP/original.sarif" --threads=2
+          candidate="$RUNNER_TEMP/codeql-action-results/go.sarif"
+          test -f "$candidate"
+          python3 .github/codeql-research/compare_suites.py "$RUNNER_TEMP/original.sarif" "$candidate"
+          python3 .github/codeql-research/verify.py "$RUNNER_TEMP/original.sarif" "$candidate"
+      - name: Preserve reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: codeql-suite-reports-${{ matrix.language }}
+          name: codeql-action-external-query-reports
           path: |
             ${{ runner.temp }}/original.sarif
-            ${{ runner.temp }}/narrow.sarif
-            ${{ runner.temp }}/original.log
-            ${{ runner.temp }}/narrow.log
+            ${{ runner.temp }}/codeql-action-results/*.sarif
           if-no-files-found: ignore
           retention-days: 3
