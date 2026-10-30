@@ -1034,9 +1034,9 @@ func (s CapacityStore) CanonicalFloorNextPermission(ctx context.Context, policy 
 	if !handled || err != nil || e.NativeCase != "canonical_failed_floor_recovery" {
 		return true, ErrCapacityConflict
 	}
-	var old model.CapacityIntent
-	if capacity.DecodeGuestLifecycle(raw, &old) != nil || capacity.BusinessCreationSHA256(raw) != sha || old.PolicyID != policy.ID || old.PolicyChecksum != policy.Checksum || old.Phase != "reconciled_failed_floor" || !old.FloorDegraded || old.Generation+1 != current.Generation || old.Assessment.Snapshot.Units != 1 || current.BaselineSnapshot.Units != 1 || current.Decision.Reason != "protected_floor_recovery" || current.Decision.Units != 2 || current.Phase != "preparing" {
-		return true, ErrCapacityConflict
+	old, err := canonicalFloorTerminalForNextPermission(raw, sha, policy, current)
+	if err != nil {
+		return true, err
 	}
 	parent, err := loadCompensationRecord(ctx, tx, policy, p, parentID)
 	if err != nil || parent.Grant.State != "compensated" || parent.WorkflowID != s.WorkflowID || parent.Generation != old.Generation {
@@ -1047,6 +1047,17 @@ func (s CapacityStore) CanonicalFloorNextPermission(ctx context.Context, policy 
 		return true, ErrCapacityConflict
 	}
 	return true, tx.Commit()
+}
+
+// The terminal is a persisted CapacityIntent, whose required pod baseline may
+// be null when no baseline was captured. Keep its closed qualification decoder
+// and every identity, generation, phase, and digest check together.
+func canonicalFloorTerminalForNextPermission(raw []byte, sha string, policy model.Manifest, current model.CapacityIntent) (model.CapacityIntent, error) {
+	var old model.CapacityIntent
+	if DecodeQualificationCapacityIntent(raw, &old) != nil || capacity.BusinessCreationSHA256(raw) != sha || old.PolicyID != policy.ID || old.PolicyChecksum != policy.Checksum || old.Phase != "reconciled_failed_floor" || !old.FloorDegraded || old.Generation+1 != current.Generation || old.Assessment.Snapshot.Units != 1 || current.BaselineSnapshot.Units != 1 || current.Decision.Reason != "protected_floor_recovery" || current.Decision.Units != 2 || current.Phase != "preparing" {
+		return model.CapacityIntent{}, ErrCapacityConflict
+	}
+	return old, nil
 }
 
 // These facts are read from immutable original parent and actual current
