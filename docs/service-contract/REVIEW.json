@@ -913,5 +913,10 @@
     "scope": "After a failed startup-delay qualification workflow, retain only bounded non-atomic ordinal-two authority observations and hash-bound closed transport facts. Absence means unobserved, not proof of no operation. Independent static review completed; Linux CI and native execution remain required.",
     "source_inventory_sha256": "c084384f719732a1672cd616ff621987528bbf92ff528cecd0a3246f7d69308d",
     "production_or_native_qualification": false
+  },
+  "qualification_positive_authority_diagnostic_review_20261030": {
+    "scope": "Qualification-only positive and startup failed retirement observations retain closed authority read facts without changing authority or original outcomes. Independent source review completed; Linux CI and original execution remain required.",
+    "source_inventory_sha256": "0784addbff672c07575efd01e8aed9a3413b89255814cf48ee6e221b353a5135",
+    "production_or_native_qualification": false
   }
 }
