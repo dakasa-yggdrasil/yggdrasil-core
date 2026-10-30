@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "3f1e4b6ecf9bc4a85670bf7ae91588c91b23d9877939b819d21ac586655c3afb",
+  "source_inventory_sha256": "e39e7a9b59509ae8815e897a77e7598d6332eefc8d88034d81eb8b3bcc2a3f32",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -867,6 +867,16 @@
   "qualification_source_cleanup_execution_authority_review_20261030": {
     "scope": "The native qualification source cleanup store reads the same process execution authority as the fixture and production controller; the existing policy, lease, owner and fencing guards remain required. Independent source review and targeted LAB Linux race tests passed; the original QEMU and owning CI remain required.",
     "source_inventory_sha256": "3f1e4b6ecf9bc4a85670bf7ae91588c91b23d9877939b819d21ac586655c3afb",
+    "production_or_native_qualification": false
+  },
+  "directory_private_response_cache_review_20261030": {
+    "scope": "Directory machine responses retain Cache-Control no-store across unknown, ambiguous, successful and audit-failure cases while preserving ADR-0019 credential-family precedence and refusal status. Independent review and targeted Linux race tests passed; owning CI remains required.",
+    "source_inventory_sha256": "e39e7a9b59509ae8815e897a77e7598d6332eefc8d88034d81eb8b3bcc2a3f32",
+    "production_or_native_qualification": false
+  },
+  "original_guest_workflow_output_review_20261030": {
+    "scope": "The permission-only output no longer shadows the original provisioning result, so the existing public workflow output retains the preregistration, committed witness digest and receipt. A native corpus test additionally joins the witness digest to its committed original wire. Independent review and targeted Linux race tests passed; actual positive QEMU and owning CI remain required.",
+    "source_inventory_sha256": "e39e7a9b59509ae8815e897a77e7598d6332eefc8d88034d81eb8b3bcc2a3f32",
     "production_or_native_qualification": false
   }
 }
