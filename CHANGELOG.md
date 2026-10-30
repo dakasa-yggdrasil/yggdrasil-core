@@ -5,6 +5,82 @@ All notable changes to yggdrasil-core are documented here.
 ## [Unreleased]
 
 ### Security
+- **A collaborator who can no longer sign in loses every session, and no
+  session, SSO reuse or OIDC mint path serves them (ADR-0087).** Only
+  `active` signs in (`collaboratorstate.CanSignIn`, the login rule).
+  `ResolveAuthSession` now refuses a session whose current collaborator is
+  `pending_start`, `on_leave`, `suspended` or `offboarded`, and every caller
+  treats it as unauthenticated: the console gate and `/auth/session` answer
+  401 and clear the cookie, `/auth/verify` answers 401, Core introspection
+  answers `{"active":false}`, and SSO session reuse
+  (`/auth/third-party/start` with `auth_request_id`, the OIDC login bridge,
+  the SAML IdP) falls back to the interactive login. The console gate JWT
+  branch and ForwardAuth path 1 re-read the JWT subject and answer 401, also
+  for a token whose `iat` is at or before a global `session_revocation` row
+  of the subject, so a reactivation does not revive a JWT minted before a
+  termination. The OIDC provider refuses, for such a subject, to honor an
+  authorization request (including one pre-bound at creation), save or
+  exchange a code (a refusal does not burn the code) and mint access or
+  refresh tokens; the refresh grant answers `invalid_grant`, the provider
+  introspection answers `{"active":false}`, userinfo answers 403, and Core's
+  `/api/v1/oidc/introspect` answers inactive for the subject's refresh
+  tokens. An authorization request is honored only while open (not consumed
+  and inside its 10 minute lifetime), so the provider callback no longer
+  mints a new code from a request whose code was exchanged, that a
+  termination closed or that expired, and a code of a consumed request does
+  not exchange. Every status writer (suspend, unsuspend, PATCH on both
+  routes, AMQP `collaborator.update`, absence start and end, offboard,
+  re-onboard, both branches of the status clock) goes through the status
+  session policy of `repository.UpdateCollaboratorTx`, which in the same
+  transaction terminates once when the new status cannot sign in (console
+  sessions and OIDC refresh tokens revoked, bound authorization requests and
+  their codes closed, one global `session_revocation` row with reason
+  `offboarded` or `admin_revoked` and metadata
+  `{source, from_status, to_status}`, one `collaborator.session.terminated`)
+  and revokes leftovers without an event on reactivation; a termination
+  failure fails the status write. Back-channel logout fires after the commit
+  on the HTTP status writers, the AMQP consumer and auto-offboards.
+  **Behavior changes:** a long absence (`on_leave`) ends sessions (vacation
+  keeps `active` and does not); re-onboarding emits a `session.terminated`;
+  every `/offboard` call emits exactly one `session.terminated`, before
+  `collaborator.offboarded`, including a repeated offboard of a collaborator
+  who is already offboarded (metadata source `offboard_repeat`), and its
+  revocation metadata no longer carries `offboard_reason`; a JWT minted
+  before any global `session_revocation` row of its subject (termination,
+  credential reset, admin revoke-sessions, password change, RP-initiated
+  logout of any client) is refused on the console gate and on ForwardAuth
+  path 1 until the relying party gets a new token; an authorization request
+  older than 10 minutes no longer resumes; every `UpdateCollaborator` runs in
+  a transaction and every refresh grant and refresh-token introspection
+  costs one extra read. No migration, no new revocation reason and no new
+  event; the `collaborator.session.terminated` payload is unchanged.
+- **BREAKING: Tartaro effective actions use one authorization predicate,
+  answer a god-mode verdict and expand wildcards (ADR-0086).** The console variant of
+  `GET /api/v1/collaborators/{id}/effective-tartaro-actions` now counts only
+  memberships the RBAC projection honors now (membership active, team active,
+  inside the `starts_at`/`ends_at` window), exactly like the directory machine
+  variant, and gives a collaborator who is not `active` (`pending_start`,
+  `on_leave`, `suspended`, `offboarded`) no action: it answers empty
+  `effective_via_teams` and `computed_tartaro_actions` with `god_mode` false
+  where the directory variant answers 404, so both variants confer the same
+  authority. Both variants add a boolean
+  `god_mode`: true only for an `active` collaborator whose
+  `traits.yggdrasil_admin` is `true`, `"true"` or `"1"`; it is never derived
+  from a grant. A `*` grant on the configured Tartaro instance now expands to
+  every `action_catalog` entry with category `permission` of that instance's
+  active integration type (deduplicated, sorted, `*` never returned); when the
+  catalog cannot be resolved the wildcard contributes nothing and the read is
+  still answered. `*` on other instances is unchanged. The grants of all
+  membership teams are read in one statement instead of one team lookup and
+  one grant read per membership. **Behavior change (the breaking part):**
+  the console variant can answer fewer actions than before (windowed or inactive-team
+  memberships, collaborators who are not active). **Rollout precondition:**
+  the directory envelope gains the `god_mode` key, and dakasa-tartaro-api,
+  tartaro-legal and tartaro-review decode it strictly. Their builds that
+  accept an optional boolean `god_mode` must be running in production before
+  this Core, or any Core with this change cherry-picked onto it, is rolled
+  out; otherwise every evidence-gated private read of those services fails
+  closed until they are redeployed. Core has no switch for the key.
 - **BREAKING: a Core without an explicit development `YGGDRASIL_ENV` no
   longer accepts anonymous workflow dispatch, event publishes, or
   integration install, bootstrap and product deploy requests
@@ -110,7 +186,8 @@ All notable changes to yggdrasil-core are documented here.
   allowlisted instance, each behind its own capability. The credential is
   accepted only on those three GET routes, served with minimal projections
   (`id`, `primary_email`, `display_name`, `status`; `collaborator_id`,
-  `computed_tartaro_actions`), never becomes a collaborator, and fails closed
+  `computed_tartaro_actions` and, since ADR-0086, `god_mode`), never becomes
+  a collaborator, and fails closed
   with 401/403 on expired, revoked, out-of-scope, wrong-method, path-variant,
   broad-query, and foreign-route attempts. The directory claim is decided
   before the gate's public pass-through on every request, so a directory
@@ -122,7 +199,8 @@ All notable changes to yggdrasil-core are documented here.
   now (active membership, active team, inside the `starts_at`/`ends_at`
   window; one predicate shared with the RBAC subject resolver), so the
   machine answer is never wider than what Yggdrasil authorizes; the console
-  drift view is unchanged. Database failures on the machine path answer a
+  variant now uses the same predicate and its drift view is removed
+  (ADR-0085, ADR-0086). Database failures on the machine path answer a
   fixed 500 `internal.error` without the driver text. Every attributable
   outcome is audited as `directory.machine_read` synchronously and
   fail-closed: the row is stored before the outcome is answered and, when it
@@ -167,6 +245,19 @@ All notable changes to yggdrasil-core are documented here.
   stays quarantined until both its caller and workflow inputs are purpose-bound.
 - Preserved the dedicated auth-admin credential only on the exact provider,
   SCIM, and SAML mutation routes while keeping workflow credentials excluded.
+
+### Removed
+- **BREAKING: the materialized `tartaro_actions` trait is retired (ADR-0085,
+  superseding ADR-0009).** `POST /api/v1/collaborators/{id}/sync-tartaro-actions`
+  is removed, and the console effective-actions response no longer carries
+  `trait_tartaro_actions` or `drift`; Core never reads the trait for an
+  answer. The removal skips the one-release deprecation window on purpose
+  (ADR-0085): the route only triggered a writer that replaces whole trait
+  objects, and the known consumers read only `computed_tartaro_actions`. A
+  client that calls the route now gets no handler and no event, and a client
+  that decoded the two fields reads them as absent. The one-shot
+  `scripts/migrate_tartaro_roles_to_actions` and the binary committed at the
+  repository root are deleted.
 
 ## [2.18.1] - 2026-08-29
 

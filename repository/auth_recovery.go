@@ -104,10 +104,17 @@ func ResetMFAFactors(ctx context.Context, tx DBExecer, collaboratorID uuid.UUID)
 }
 
 // RevokeAllAuthSessions revokes every live console session AND every live
-// OIDC refresh token of a collaborator. Used whenever a credential is
-// replaced through a link (setup, reset, MFA reset): nothing opened with
-// the old credential may outlive it, including relying parties that only
-// hold a refresh token. Returns how many console sessions were revoked.
+// OIDC refresh token of a collaborator, and closes every live OIDC
+// authorization request bound to them together with its unexchanged codes.
+// Used whenever a credential is replaced through a link (setup, reset, MFA
+// reset) and by the status session policy (ADR-0087): nothing opened with
+// the old credential or before the status change may outlive it, including
+// relying parties that only hold a refresh token. A bound request is a
+// finished login waiting for its code, and the provider callback
+// (/authorize/callback?id=...) mints a fresh code from it with no new
+// authentication, so it is closed too. Expired requests are refused on
+// read and are left as they are. Returns how many console sessions were
+// revoked.
 func RevokeAllAuthSessions(ctx context.Context, tx DBExecer, collaboratorID uuid.UUID) (int64, error) {
 	res, err := tx.ExecContext(ctx, `
 		UPDATE public.auth_sessions
@@ -127,6 +134,26 @@ func RevokeAllAuthSessions(ctx context.Context, tx DBExecer, collaboratorID uuid
 		  AND revoked_at IS NULL
 	`, collaboratorID); err != nil {
 		return 0, fmt.Errorf("revoke oidc refresh tokens: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE public.oidc_auth_codes c
+		SET consumed_at = NOW()
+		FROM public.oidc_auth_requests ar
+		WHERE ar.id = c.auth_request_id
+		  AND ar.collaborator_id = $1
+		  AND c.consumed_at IS NULL
+		  AND c.expires_at > NOW()
+	`, collaboratorID); err != nil {
+		return 0, fmt.Errorf("consume oidc auth codes: %w", err)
+	}
+	if _, err := tx.ExecContext(ctx, `
+		UPDATE public.oidc_auth_requests
+		SET consumed_at = NOW()
+		WHERE collaborator_id = $1
+		  AND consumed_at IS NULL
+		  AND expires_at > NOW()
+	`, collaboratorID); err != nil {
+		return 0, fmt.Errorf("consume oidc auth requests: %w", err)
 	}
 	return revoked, nil
 }

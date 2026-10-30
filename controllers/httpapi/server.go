@@ -629,7 +629,6 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	mux.HandleFunc("GET /api/v1/collaborators/{id}/lifecycle-events", server.handleCollaboratorLifecycleEvents)
 	mux.HandleFunc("GET /api/v1/collaborators/{id}/provider-state", server.handleCollaboratorProviderState)
 	mux.HandleFunc("GET /api/v1/collaborators/{id}/effective-tartaro-actions", server.handleEffectiveTartaroActions)
-	mux.HandleFunc("POST /api/v1/collaborators/{id}/sync-tartaro-actions", server.requireOpsPermissionFunc(permEditCollaborator, server.handleSyncTartaroActions))
 	mux.HandleFunc("POST /api/v1/collaborator-external-identities", server.requireOpsPermissionFunc(permEditCollaborator, server.handleExternalIdentityPost))
 	mux.HandleFunc("GET /api/v1/collaborator-external-identities", server.handleExternalIdentityGet)
 	mux.HandleFunc("DELETE /api/v1/collaborator-external-identities/{id}", server.requireOpsPermissionFunc(permEditCollaborator, server.handleExternalIdentityDelete))
@@ -978,22 +977,6 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 
 func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		if principal := s.originalHostCredential(r); principal != nil || hostFactoryPath(r.URL.Path) {
-			s.serveOriginalHostRequest(w, r, principal)
-			return
-		}
-		if principal := s.capacityGuestCredential(r); principal != nil || capacityGuestPath(r.URL.Path) {
-			s.serveCapacityGuestRequest(w, r, principal)
-			return
-		}
-		if originalCanaryAuthorityClaim(r) {
-			s.serveOriginalCanaryAuthority(w, r)
-			return
-		}
-		if principal := s.capacityMutationCredential(r); principal != nil || capacityMutationPath(r.URL.Path) {
-			s.serveCapacityMutationRequest(w, r, principal)
-			return
-		}
 		// Directory machine-read path (ADR-0019) is decided first, on every
 		// request, before the public pass-through and before any other
 		// credential family. A request that names itself as a directory
@@ -1009,6 +992,23 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 		// behavior on every route.
 		if claim := s.directoryMachineClaimFor(r); claim.claimed {
 			s.serveDirectoryMachineRequest(w, r, claim)
+			return
+		}
+
+		if principal := s.originalHostCredential(r); principal != nil || hostFactoryPath(r.URL.Path) {
+			s.serveOriginalHostRequest(w, r, principal)
+			return
+		}
+		if principal := s.capacityGuestCredential(r); principal != nil || capacityGuestPath(r.URL.Path) {
+			s.serveCapacityGuestRequest(w, r, principal)
+			return
+		}
+		if originalCanaryAuthorityClaim(r) {
+			s.serveOriginalCanaryAuthority(w, r)
+			return
+		}
+		if principal := s.capacityMutationCredential(r); principal != nil || capacityMutationPath(r.URL.Path) {
+			s.serveCapacityMutationRequest(w, r, principal)
 			return
 		}
 
@@ -1082,7 +1082,7 @@ func (s *Server) requireAuthenticatedConsoleAPIs(next http.Handler) http.Handler
 			if jwtClaims, ok := tryBearerHeader(r, s.consoleJWTVerifier); ok {
 				sub, _ := jwtClaims["sub"].(string)
 				if sub != "" {
-					if !s.allowPhoneProfileID(w, r, sub) {
+					if !s.allowSignedInHumanID(w, r, sub, jwtIssuedAt(jwtClaims)) {
 						return
 					}
 					// Normalize to the SAME claim keys the session path sets,
@@ -1551,9 +1551,12 @@ type Server struct {
 func (s *Server) withLogging(next http.Handler) http.Handler {
 	return http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		startedAt := time.Now()
+		method, route := originalCanaryAccessLog(r)
+		if s.directoryMachineClaimFor(r).claimed {
+			method, route = s.directoryMachineAccessLog(r)
+		}
 		writer := &statusWriter{ResponseWriter: w, status: http.StatusOK}
 		next.ServeHTTP(writer, r)
-		method, route := originalCanaryAccessLog(r)
 
 		s.logger.Info("http request served",
 			zap.String("service", s.serviceName),
@@ -2154,6 +2157,11 @@ func (s *Server) handleCollaboratorUpdate(w http.ResponseWriter, r *http.Request
 	if err != nil {
 		writeMappedError(w, err)
 		return
+	}
+	// A status write to a status that cannot sign in terminated every session
+	// in the update's transaction (ADR-0087); fire the back-channel after it.
+	if req.Status != nil && !collaboratorCanSignIn(collaborator.Status) {
+		s.dispatchBackchannelLogoutForCollaborator(r.Context(), collaborator.ID)
 	}
 
 	if beforeErr == nil {

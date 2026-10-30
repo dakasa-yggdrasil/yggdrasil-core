@@ -177,9 +177,15 @@ with `?kind=X` in the query string.
   minimal projections (decided before the public pass-through, on every
   request), never receive collaborator claims, fail closed (401/403)
   everywhere else, and are audited synchronously and fail-closed (no outcome
-  is answered without its `directory.machine_read` row). Effective actions
-  use the RBAC membership predicate (active team, membership window). See
-  `docs/security.md` for the contract.
+  is answered without its `directory.machine_read` row). Effective actions,
+  console and directory variants alike, use the RBAC membership predicate
+  (active team, membership window), give a collaborator who is not active
+  no action (console: empty sets, directory: 404), answer `god_mode` (active
+  collaborator with the `yggdrasil_admin` trait) and expand a `*` grant on
+  the configured Tartaro instance to that instance's permission catalog
+  (ADR-0086). The
+  materialized `tartaro_actions` trait is retired: nothing reads or writes it
+  for authorization (ADR-0085). See `docs/security.md` for the contract.
 - `YGGDRASIL_WORKFLOW_RUN_TOKEN` is a workflow-route-only migration bridge and
   is rejected unless explicitly enabled with a future expiry. Every request it
   authenticates is logged, counted in

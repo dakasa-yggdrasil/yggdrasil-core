@@ -11,6 +11,7 @@ package collaboratorstate
 import (
 	"errors"
 	"fmt"
+	"strings"
 )
 
 type Status string
@@ -59,6 +60,16 @@ var allowedTransitions = map[Status]map[Status]struct{}{
 	StatusOffboarded: {
 		StatusPendingStart: {},
 	},
+}
+
+// CanSignIn is the single status rule of every path that opens, keeps or
+// reuses an authenticated session or mints a token for a collaborator: only
+// "active" signs in. pending_start, on_leave, suspended and offboarded never
+// do. The comparison tolerates case and surrounding whitespace, which the
+// collaborators_status_check constraint cannot store, so it is exactly as
+// strict as an exact compare on a stored value.
+func CanSignIn(status string) bool {
+	return strings.ToLower(strings.TrimSpace(status)) == "active"
 }
 
 // IsKnown reports whether s is one of the canonical status values.

@@ -212,6 +212,71 @@ jobs:
               raise SystemExit(f"Contact MFA PostgreSQL gate incomplete: missing={sorted(expected - passed)}, skipped={sorted(skipped)}")
           print("Contact OTP MFA PostgreSQL and cryptographic gates executed every required scenario.")
           PY
+      # ADR-0087: a collaborator who can no longer sign in loses every session
+      # and refresh token, and no session, session reuse or OIDC mint path
+      # serves them. The unit job has no PostgreSQL, so the DB_URL lifecycle
+      # tests never ran there; this step proves the status policy against the
+      # migrated schema. The REQUIRE flag turns a missing DB_URL into a failure
+      # instead of a skip, and packages run sequentially because the status
+      # clock reads every collaborator.
+      - name: Prove the collaborator session lifecycle against the migrated schema
+        if: ${{ !cancelled() }}
+        env:
+          REQUIRE_SESSION_LIFECYCLE_POSTGRES: "true"
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -json -p 1 -count=1 -timeout=5m ./repository ./controllers/oidc ./controllers/httpapi ./addons -run '^Test(CollaboratorStatusSessionPolicyPostgres|CollaboratorStatusNativeIssuancePostgres|CollaboratorAuthRequestReplayPostgres|CollaboratorSessionLifecycleHTTPPostgres|StatusClockOffboardTerminatesSessionsPostgres)$' | tee session-lifecycle-results.jsonl
+          python3 - <<'PY'
+          import json
+          from pathlib import Path
+          suites = {
+              "TestCollaboratorStatusSessionPolicyPostgres": {
+                  "leaving_active_terminates_once",
+                  "leaving_active_terminates_once/on_leave",
+                  "leaving_active_terminates_once/suspended",
+                  "leaving_active_terminates_once/offboarded",
+                  "same_status_write_is_a_noop",
+                  "non_status_write_terminates_nothing",
+                  "moving_between_statuses_that_cannot_sign_in_terminates_again",
+                  "reactivation_revokes_leftovers_without_an_event",
+                  "rollback_keeps_sessions_and_emits_nothing",
+                  "concurrent_suspends_terminate_once",
+                  "resolution_reads_current_status",
+              },
+              "TestCollaboratorStatusNativeIssuancePostgres": {
+                  "pending_start", "on_leave", "suspended", "offboarded",
+              },
+              "TestCollaboratorAuthRequestReplayPostgres": {
+                  "callback_after_exchange_is_refused",
+                  "suspend_then_unsuspend_closes_bound_requests",
+                  "credential_reset_closes_bound_requests",
+                  "expired_request_is_refused",
+              },
+              "TestCollaboratorSessionLifecycleHTTPPostgres": {
+                  "suspend_ends_the_session_and_unsuspend_does_not_revive",
+                  "patch_status_terminates",
+                  "long_absence_terminates_vacation_does_not",
+                  "offboard_emits_exactly_one_session_terminated",
+                  "offboard_again_terminates_again",
+                  "introspection_refuses_a_subject_who_cannot_sign_in",
+                  "session_reuse_falls_back_to_interactive_login",
+              },
+              "TestStatusClockOffboardTerminatesSessionsPostgres": {
+                  "offboard_terminates_sessions",
+                  "promotion_revokes_leftovers_without_an_event",
+              },
+          }
+          expected = set()
+          for root, scenarios in suites.items():
+              expected |= {root} | {f"{root}/{name}" for name in scenarios}
+          events = [json.loads(line) for line in Path("session-lifecycle-results.jsonl").read_text().splitlines() if line.strip()]
+          passed = {event.get("Test") for event in events if event.get("Action") == "pass"}
+          skipped = {event.get("Test") for event in events if event.get("Action") == "skip"}
+          if expected - passed or skipped:
+              raise SystemExit(f"Session lifecycle gate incomplete: missing={sorted(expected - passed)}, skipped={sorted(skipped)}")
+          print("Every collaborator session lifecycle PostgreSQL scenario executed.")
+          PY
       - uses: actions/upload-artifact@v4
         if: always()
         with:
@@ -220,4 +285,5 @@ jobs:
             native-oidc-results.jsonl
             contact-directory-results.jsonl
             mfa-contact-results.jsonl
+            session-lifecycle-results.jsonl
           if-no-files-found: warn

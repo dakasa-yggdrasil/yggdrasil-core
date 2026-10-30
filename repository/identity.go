@@ -209,29 +209,59 @@ func CreateCollaboratorWithIdentityTx(ctx context.Context, tx *sql.Tx, req model
 	return created, nil
 }
 
-// UpdateCollaborator updates one collaborator record with patch semantics.
+// UpdateCollaborator updates one collaborator record with patch semantics. It
+// runs UpdateCollaboratorTx in its own transaction, so a status change and its
+// session policy commit together (ADR-0087).
 func UpdateCollaborator(ctx context.Context, db *sql.DB, req model.UpdateCollaboratorRequest) (model.Collaborator, error) {
-	return updateCollaboratorOn(ctx, db, req)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		return model.Collaborator{}, err
+	}
+	defer func() { _ = tx.Rollback() }()
+	updated, err := UpdateCollaboratorTx(ctx, tx, req)
+	if err != nil {
+		return model.Collaborator{}, err
+	}
+	if err := tx.Commit(); err != nil {
+		return model.Collaborator{}, err
+	}
+	return updated, nil
 }
 
 // UpdateCollaboratorTx is the *sql.Tx variant of UpdateCollaborator. Lifecycle
 // handlers that must emit a canon event in the same transaction as the state
 // mutation pass their *sql.Tx here so both rows commit (or neither does).
+//
+// It is the choke point of every status writer: after the version-checked
+// UPDATE succeeds it applies the session policy of the status change
+// (applyCollaboratorStatusSessionPolicyTx) in the same transaction. A status
+// that cannot sign in terminates every session and refresh token once; a
+// reactivation revokes leftovers. The caller fires the back-channel logout
+// after its commit.
 func UpdateCollaboratorTx(ctx context.Context, tx *sql.Tx, req model.UpdateCollaboratorRequest) (model.Collaborator, error) {
-	return updateCollaboratorOn(ctx, tx, req)
-}
-
-func updateCollaboratorOn(ctx context.Context, q dbtx, req model.UpdateCollaboratorRequest) (model.Collaborator, error) {
-	current, err := getCollaboratorOn(ctx, q, req.ID)
+	updated, previousStatus, err := updateCollaboratorOn(ctx, tx, req)
 	if err != nil {
 		return model.Collaborator{}, err
+	}
+	if err := applyCollaboratorStatusSessionPolicyTx(ctx, tx, previousStatus, updated); err != nil {
+		return model.Collaborator{}, err
+	}
+	return updated, nil
+}
+
+// updateCollaboratorOn writes the patch and also returns the status the row
+// had before it, for the session policy of UpdateCollaboratorTx.
+func updateCollaboratorOn(ctx context.Context, q dbtx, req model.UpdateCollaboratorRequest) (model.Collaborator, string, error) {
+	current, err := getCollaboratorOn(ctx, q, req.ID)
+	if err != nil {
+		return model.Collaborator{}, "", err
 	}
 
 	slug := current.Slug
 	if req.Slug != nil {
 		slug = normalizeSlug(*req.Slug)
 		if slug == "" {
-			return model.Collaborator{}, fmt.Errorf("collaborator slug is required")
+			return model.Collaborator{}, "", fmt.Errorf("collaborator slug is required")
 		}
 	}
 
@@ -242,7 +272,7 @@ func updateCollaboratorOn(ctx context.Context, q dbtx, req model.UpdateCollabora
 			from := collaboratorstate.Status(strings.TrimSpace(current.Status))
 			to := collaboratorstate.Status(strings.TrimSpace(status))
 			if err := collaboratorstate.ValidateTransition(from, to); err != nil {
-				return model.Collaborator{}, fmt.Errorf("%w: %s", ErrInvalidCollaboratorStatusTransition, err.Error())
+				return model.Collaborator{}, "", fmt.Errorf("%w: %s", ErrInvalidCollaboratorStatusTransition, err.Error())
 			}
 		}
 	}
@@ -251,7 +281,7 @@ func updateCollaboratorOn(ctx context.Context, q dbtx, req model.UpdateCollabora
 	if req.DisplayName != nil {
 		displayName = strings.TrimSpace(*req.DisplayName)
 		if displayName == "" {
-			return model.Collaborator{}, fmt.Errorf("collaborator display_name is required")
+			return model.Collaborator{}, "", fmt.Errorf("collaborator display_name is required")
 		}
 	}
 
@@ -264,11 +294,11 @@ func updateCollaboratorOn(ctx context.Context, q dbtx, req model.UpdateCollabora
 	if req.ManagerID != nil {
 		resolvedManagerID, err := resolveOptionalCollaboratorIDOn(ctx, q, *req.ManagerID)
 		if err != nil {
-			return model.Collaborator{}, err
+			return model.Collaborator{}, "", err
 		}
 		managerID = resolvedUUIDPointer(resolvedManagerID)
 		if managerID != nil && *managerID == current.ID {
-			return model.Collaborator{}, fmt.Errorf("collaborator manager_id cannot reference itself")
+			return model.Collaborator{}, "", fmt.Errorf("collaborator manager_id cannot reference itself")
 		}
 	}
 
@@ -276,7 +306,7 @@ func updateCollaboratorOn(ctx context.Context, q dbtx, req model.UpdateCollabora
 	if req.PrimaryTeamID != nil {
 		resolvedPrimaryTeamID, err := resolveOptionalTeamIDOn(ctx, q, *req.PrimaryTeamID)
 		if err != nil {
-			return model.Collaborator{}, err
+			return model.Collaborator{}, "", err
 		}
 		primaryTeamID = resolvedUUIDPointer(resolvedPrimaryTeamID)
 	}
@@ -304,23 +334,23 @@ func updateCollaboratorOn(ctx context.Context, q dbtx, req model.UpdateCollabora
 
 	personalDataRaw, err := marshalJSONObject(personalData)
 	if err != nil {
-		return model.Collaborator{}, err
+		return model.Collaborator{}, "", err
 	}
 	employmentDataRaw, err := marshalJSONObject(employmentData)
 	if err != nil {
-		return model.Collaborator{}, err
+		return model.Collaborator{}, "", err
 	}
 	thirdPartyIdentitiesRaw, err := marshalJSONObject(thirdPartyIdentities)
 	if err != nil {
-		return model.Collaborator{}, err
+		return model.Collaborator{}, "", err
 	}
 	traitsRaw, err := marshalJSONObject(traits)
 	if err != nil {
-		return model.Collaborator{}, err
+		return model.Collaborator{}, "", err
 	}
 	metadataRaw, err := marshalJSONObject(metadata)
 	if err != nil {
-		return model.Collaborator{}, err
+		return model.Collaborator{}, "", err
 	}
 
 	// Optimistic locking: only update if the row is still on the version we
@@ -387,9 +417,12 @@ func updateCollaboratorOn(ctx context.Context, q dbtx, req model.UpdateCollabora
 
 	updated, err := scanCollaborator(row)
 	if errors.Is(err, sql.ErrNoRows) {
-		return model.Collaborator{}, ErrConcurrentUpdate
+		return model.Collaborator{}, "", ErrConcurrentUpdate
 	}
-	return updated, err
+	if err != nil {
+		return model.Collaborator{}, "", err
+	}
+	return updated, current.Status, nil
 }
 
 // DeleteCollaborator removes one collaborator by UUID or slug.
@@ -2140,6 +2173,49 @@ func ListTeamGrants(ctx context.Context, db *sql.DB, req model.ListTeamGrantsReq
 	}
 	defer rows.Close()
 
+	return scanTeamGrantRows(rows)
+}
+
+// ListTeamGrantsByTeamIDs returns the grants of every listed team, on every
+// integration instance, in ONE round trip instead of one ListTeamGrants call
+// (team lookup plus grant read) per team. The identifiers must already be
+// canonical team UUIDs, for example the team_id of membership rows; duplicates
+// are read once and an empty list answers no grants without a query. Rows are
+// ordered by team, then instance and action, like ListTeamGrants per team.
+func ListTeamGrantsByTeamIDs(ctx context.Context, db *sql.DB, teamIDs []uuid.UUID) ([]model.TeamGrant, error) {
+	seen := make(map[uuid.UUID]struct{}, len(teamIDs))
+	args := make([]any, 0, len(teamIDs))
+	placeholders := make([]string, 0, len(teamIDs))
+	for _, teamID := range teamIDs {
+		if _, ok := seen[teamID]; ok {
+			continue
+		}
+		seen[teamID] = struct{}{}
+		args = append(args, teamID)
+		placeholders = append(placeholders, fmt.Sprintf("$%d", len(args)))
+	}
+	if len(args) == 0 {
+		return []model.TeamGrant{}, nil
+	}
+
+	rows, err := db.QueryContext(ctx, `
+		SELECT id, team_id, integration_instance_namespace, integration_instance_name,
+			action_name, scope, granted_at, granted_by
+		FROM public.team_grants
+		WHERE team_id IN (`+strings.Join(placeholders, ", ")+`)
+		ORDER BY team_id, integration_instance_namespace, integration_instance_name, action_name
+	`, args...)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	return scanTeamGrantRows(rows)
+}
+
+// scanTeamGrantRows scans the team grant projection shared by ListTeamGrants
+// and ListTeamGrantsByTeamIDs.
+func scanTeamGrantRows(rows *sql.Rows) ([]model.TeamGrant, error) {
 	grants := []model.TeamGrant{}
 	for rows.Next() {
 		var g model.TeamGrant

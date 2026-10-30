@@ -151,45 +151,52 @@ func resolveIntegrationInstance(ctx context.Context, db *sql.DB, query string, a
 // resolved type is always the active one. A type without a provider does not
 // resolve.
 func selectIntegrationTypeProvider(typeRef model.ManifestSelector, candidates []integrationTypeCandidate) (string, bool) {
-	var match *integrationTypeCandidate
-	if manifestID := strings.TrimSpace(typeRef.ManifestID); manifestID != "" {
-		parsed, err := uuid.Parse(manifestID)
-		if err != nil {
-			return "", false
-		}
-		for index := range candidates {
-			if candidates[index].ID == parsed {
-				match = &candidates[index]
-				break
-			}
-		}
-	} else {
-		name := strings.ToLower(strings.TrimSpace(typeRef.Name))
-		if name == "" {
-			return "", false
-		}
-		namespace := strings.ToLower(strings.TrimSpace(typeRef.Namespace))
-		if namespace == "" {
-			namespace = "global"
-		}
-		for index := range candidates {
-			candidate := &candidates[index]
-			if candidate.Namespace != namespace || candidate.Name != name {
-				continue
-			}
-			if typeRef.Version != nil && candidate.Version != *typeRef.Version {
-				continue
-			}
-			match = candidate
-			break
-		}
-	}
-	if match == nil {
+	index := selectIntegrationTypeCandidate(typeRef, candidates)
+	if index < 0 {
 		return "", false
 	}
-	provider := strings.TrimSpace(match.Provider)
+	provider := strings.TrimSpace(candidates[index].Provider)
 	if provider == "" {
 		return "", false
 	}
 	return provider, true
+}
+
+// selectIntegrationTypeCandidate returns the index of the candidate the
+// type_ref selects (manifest_id first, else namespace defaulting to "global",
+// name and optional version), or -1 when none matches. It reads only the
+// identity fields of each candidate, so every resolver that loads the same
+// candidate set selects the same active integration_type.
+func selectIntegrationTypeCandidate(typeRef model.ManifestSelector, candidates []integrationTypeCandidate) int {
+	if manifestID := strings.TrimSpace(typeRef.ManifestID); manifestID != "" {
+		parsed, err := uuid.Parse(manifestID)
+		if err != nil {
+			return -1
+		}
+		for index := range candidates {
+			if candidates[index].ID == parsed {
+				return index
+			}
+		}
+		return -1
+	}
+	name := strings.ToLower(strings.TrimSpace(typeRef.Name))
+	if name == "" {
+		return -1
+	}
+	namespace := strings.ToLower(strings.TrimSpace(typeRef.Namespace))
+	if namespace == "" {
+		namespace = "global"
+	}
+	for index := range candidates {
+		candidate := &candidates[index]
+		if candidate.Namespace != namespace || candidate.Name != name {
+			continue
+		}
+		if typeRef.Version != nil && candidate.Version != *typeRef.Version {
+			continue
+		}
+		return index
+	}
+	return -1
 }

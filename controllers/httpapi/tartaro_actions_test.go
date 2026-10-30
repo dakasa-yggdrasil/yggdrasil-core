@@ -3,190 +3,505 @@ package httpapi
 import (
 	"context"
 	"database/sql"
-	"encoding/json"
+	"errors"
 	"fmt"
 	"net/http"
 	"net/http/httptest"
-	"os"
 	"strings"
 	"testing"
+	"time"
 
+	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
-	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/google/uuid"
-	_ "github.com/lib/pq"
 	"go.uber.org/zap"
+	"go.uber.org/zap/zapcore"
+	"go.uber.org/zap/zaptest/observer"
 )
 
-func openTartaroActionsTestDB(t *testing.T) *sql.DB {
-	t.Helper()
-	dsn := os.Getenv("DB_URL")
-	if dsn == "" {
-		t.Skip("DB_URL not set; skipping tartaro actions integration test")
+// teamGrantsByTeamIDsQuery matches the one batched grant read of the grant
+// walk for count membership teams. A walk that reads grants team by team
+// (team lookup plus grant read per membership) does not match.
+func teamGrantsByTeamIDsQuery(count int) string {
+	placeholders := make([]string, 0, count)
+	for index := 1; index <= count; index++ {
+		placeholders = append(placeholders, fmt.Sprintf(`\$%d`, index))
 	}
-	db, err := sql.Open("postgres", dsn)
-	if err != nil {
-		t.Fatalf("open db: %v", err)
-	}
-	if err := db.Ping(); err != nil {
-		t.Fatalf("ping db: %v", err)
-	}
-	return db
+	return `FROM public\.team_grants\s+WHERE team_id IN \(` + strings.Join(placeholders, ", ") + `\)`
 }
 
-func newTartaroActionsTestServer(t *testing.T, db *sql.DB) http.Handler {
-	t.Helper()
-	logger, _ := zap.NewDevelopment()
-	srv, err := New("yggdrasil-core-test", db, nil, logger)
-	if err != nil {
-		t.Fatalf("New server: %v", err)
-	}
-	return srv
+// tartaroPermissionCatalogQuery matches the catalog read that resolves a "*"
+// grant on the configured Tartaro instance.
+const tartaroPermissionCatalogQuery = `'action_catalog', COALESCE\(ty\.spec -> 'action_catalog', '\[\]'::jsonb\)[\s\S]+WHERE a\.kind = 'integration_instance'\s+AND a\.namespace = \$1\s+AND a\.name = \$2\s+AND a\.active = TRUE`
+
+const tartaroTestTypeRef = `{"namespace":"dakasa","name":"tartaro-dakasa"}`
+
+// tartaroTestCatalog mixes permission entries (one duplicated, one literal
+// "*"), a reactor, an explicit capability and an uncategorized capability.
+// Only the two distinct permission names may come out of a wildcard.
+const tartaroTestCatalog = `[
+	{"name":"tartaro:read_user","category":"permission"},
+	{"name":"tartaro:moderate_post","category":"permission"},
+	{"name":"tartaro:read_user","category":"permission"},
+	{"name":"*","category":"permission"},
+	{"name":"on_collaborator_session_terminated","category":"reactor"},
+	{"name":"observe_collaborator","category":"capability"},
+	{"name":"observe_collaborators"}
+]`
+
+func tartaroCatalogColumns() []string {
+	return []string{"type_ref", "candidates"}
 }
 
-// seedTartaroCollaborator inserts a minimal active collaborator for tartaro tests.
-func seedTartaroCollaborator(t *testing.T, db *sql.DB) uuid.UUID {
-	t.Helper()
-	slug := fmt.Sprintf("tartaro-test-%s", uuid.New().String()[:8])
-	collab, err := repository.CreateCollaborator(context.Background(), db, model.CreateCollaboratorRequest{
-		Slug:         slug,
-		DisplayName:  "Tartaro Test",
-		PrimaryEmail: slug + "@dakasa.test",
-		Status:       "active",
-	})
-	if err != nil {
-		t.Fatalf("seed collaborator: %v", err)
-	}
-	t.Cleanup(func() {
-		_, _ = db.Exec(`DELETE FROM public.team_memberships WHERE collaborator_id = $1`, collab.ID)
-		_, _ = db.Exec(`DELETE FROM public.event_log WHERE aggregate_id = $1`, collab.ID.String())
-		_, _ = db.Exec(`DELETE FROM public.collaborators WHERE id = $1`, collab.ID)
-	})
-	return collab.ID
+func tartaroTypeCandidates(typeName, catalog string) []byte {
+	return []byte(`[{"id":"` + uuid.New().String() + `","namespace":"dakasa","name":"` + typeName + `","version":3,"action_catalog":` + catalog + `}]`)
 }
 
-// seedTartaroTeam inserts a minimal active team for tartaro tests.
-func seedTartaroTeam(t *testing.T, db *sql.DB) uuid.UUID {
-	t.Helper()
-	slug := fmt.Sprintf("tartaro-team-%s", uuid.New().String()[:8])
-	team, err := repository.CreateTeam(context.Background(), db, model.CreateTeamRequest{
-		Slug:   slug,
-		Name:   "Tartaro Team Test",
-		Type:   "team",
-		Status: "active",
-	})
-	if err != nil {
-		t.Fatalf("seed team: %v", err)
-	}
-	t.Cleanup(func() {
-		_, _ = db.Exec(`DELETE FROM public.team_grants WHERE team_id = $1`, team.ID)
-		_, _ = db.Exec(`DELETE FROM public.teams WHERE id = $1`, team.ID)
-	})
-	return team.ID
+func tartaroCollaboratorRow(rows *sqlmock.Rows, id uuid.UUID, status, traits string) *sqlmock.Rows {
+	return rows.AddRow(
+		id.String(), "ana-souza", status, "Ana Souza", testLookupEmail, "", "",
+		[]byte(`{}`), []byte(`{}`), []byte(`{}`),
+		[]byte(traits), []byte(`{}`), 3,
+		time.Now(), time.Now(),
+	)
 }
 
-// addCollaboratorToTeam inserts a team_membership row.
-func addCollaboratorToTeam(t *testing.T, db *sql.DB, collabID, teamID uuid.UUID) {
-	t.Helper()
-	active := true
-	_, err := repository.UpsertTeamMembership(context.Background(), db, model.UpsertTeamMembershipRequest{
-		TeamID:         teamID.String(),
-		CollaboratorID: collabID.String(),
-		Active:         &active,
-	})
-	if err != nil {
-		t.Fatalf("add collaborator to team: %v", err)
-	}
+func tartaroMembershipRow(rows *sqlmock.Rows, collaboratorID, teamID uuid.UUID, teamSlug string) *sqlmock.Rows {
+	return rows.AddRow(uuid.New().String(), teamID.String(), teamSlug, collaboratorID.String(), "ana-souza",
+		"member", true, "manual", nil, nil, []byte("{}"), time.Now(), time.Now(), false)
 }
 
-// addTartaroGrant grants an action of integration-tartaro-dakasa to a team.
-func addTartaroGrant(t *testing.T, db *sql.DB, teamID uuid.UUID, namespace, name, action string) {
-	t.Helper()
-	grant, err := repository.GrantTeamAction(context.Background(), db, model.GrantTeamActionRequest{
-		TeamID:                       teamID.String(),
-		IntegrationInstanceNamespace: namespace,
-		IntegrationInstanceName:      name,
-		ActionName:                   action,
-	})
-	if err != nil {
-		t.Fatalf("add tartaro grant: %v", err)
-	}
-	t.Cleanup(func() {
-		_, _ = db.Exec(`DELETE FROM public.team_grants WHERE id = $1`, grant.ID)
-	})
+func tartaroGrantRow(rows *sqlmock.Rows, teamID uuid.UUID, namespace, name, action string) *sqlmock.Rows {
+	return rows.AddRow(uuid.New().String(), teamID.String(), namespace, name, action, []byte("{}"), time.Now(), nil)
 }
 
-func TestEffectiveTartaroActions(t *testing.T) {
-	db := openTartaroActionsTestDB(t)
+func newTartaroActionsMock(t *testing.T) (*sql.DB, sqlmock.Sqlmock) {
+	t.Helper()
+	db, mock, err := sqlmock.New()
+	if err != nil {
+		t.Fatal(err)
+	}
 	t.Cleanup(func() { _ = db.Close() })
-	srv := newTartaroActionsTestServer(t, db)
+	return db, mock
+}
 
-	collabID := seedTartaroCollaborator(t, db)
-	teamID := seedTartaroTeam(t, db)
-	addCollaboratorToTeam(t, db, collabID, teamID)
-	addTartaroGrant(t, db, teamID, "dakasa", "integration-tartaro-dakasa", "tartaro:moderate_post")
-	// Trait left empty on purpose — endpoint should compute and report drift=true
+func serveConsoleEffectiveTartaroActions(server *Server, id string) *httptest.ResponseRecorder {
+	req := httptest.NewRequest(http.MethodGet, "/api/v1/collaborators/"+id+"/effective-tartaro-actions", nil)
+	req.SetPathValue("id", id)
+	recorder := httptest.NewRecorder()
+	server.handleEffectiveTartaroActions(recorder, req)
+	return recorder
+}
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/collaborators/"+collabID.String()+"/effective-tartaro-actions", nil)
-	rr := httptest.NewRecorder()
-	srv.ServeHTTP(rr, req)
-	if rr.Code != http.StatusOK {
-		t.Fatalf("expected 200, got %d (body=%s)", rr.Code, rr.Body.String())
+func TestTartaroGodModeReadsTheAdminTraitOfActiveCollaborators(t *testing.T) {
+	cases := []struct {
+		name   string
+		status string
+		traits map[string]any
+		want   bool
+	}{
+		{name: "bool true", status: "active", traits: map[string]any{"yggdrasil_admin": true}, want: true},
+		{name: "string true", status: "active", traits: map[string]any{"yggdrasil_admin": "true"}, want: true},
+		{name: "string 1", status: "active", traits: map[string]any{"yggdrasil_admin": "1"}, want: true},
+		{name: "bool false", status: "active", traits: map[string]any{"yggdrasil_admin": false}},
+		{name: "string false", status: "active", traits: map[string]any{"yggdrasil_admin": "false"}},
+		{name: "string 0", status: "active", traits: map[string]any{"yggdrasil_admin": "0"}},
+		{name: "uppercase string", status: "active", traits: map[string]any{"yggdrasil_admin": "TRUE"}},
+		{name: "padded string", status: "active", traits: map[string]any{"yggdrasil_admin": " true"}},
+		{name: "empty string", status: "active", traits: map[string]any{"yggdrasil_admin": ""}},
+		{name: "json number one", status: "active", traits: map[string]any{"yggdrasil_admin": float64(1)}},
+		{name: "list", status: "active", traits: map[string]any{"yggdrasil_admin": []any{true}}},
+		{name: "object", status: "active", traits: map[string]any{"yggdrasil_admin": map[string]any{"value": true}}},
+		{name: "null", status: "active", traits: map[string]any{"yggdrasil_admin": nil}},
+		{name: "missing", status: "active", traits: map[string]any{"tartaro_actions": []any{"*"}}},
+		{name: "nil traits", status: "active"},
+		{name: "suspended admin", status: "suspended", traits: map[string]any{"yggdrasil_admin": true}},
+		{name: "offboarded admin", status: "offboarded", traits: map[string]any{"yggdrasil_admin": "true"}},
+		{name: "uppercase active status", status: "Active", traits: map[string]any{"yggdrasil_admin": true}},
+		{name: "empty status", status: "", traits: map[string]any{"yggdrasil_admin": "1"}},
 	}
-	var resp struct {
-		TraitTartaroActions    []string `json:"trait_tartaro_actions"`
-		ComputedTartaroActions []string `json:"computed_tartaro_actions"`
-		EffectiveViaTeams      []struct {
-			TeamID  string   `json:"team_id"`
-			Actions []string `json:"actions"`
-		} `json:"effective_via_teams"`
-		Drift bool `json:"drift"`
-	}
-	if err := json.Unmarshal(rr.Body.Bytes(), &resp); err != nil {
-		t.Fatalf("decode: %v", err)
-	}
-	if !resp.Drift {
-		t.Fatal("expected drift=true since trait is empty")
-	}
-	if len(resp.ComputedTartaroActions) != 1 || resp.ComputedTartaroActions[0] != "tartaro:moderate_post" {
-		t.Fatalf("expected computed=[tartaro:moderate_post], got %v", resp.ComputedTartaroActions)
-	}
-	if len(resp.EffectiveViaTeams) != 1 || len(resp.EffectiveViaTeams[0].Actions) != 1 {
-		t.Fatalf("expected 1 team with 1 action, got %+v", resp.EffectiveViaTeams)
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			got := tartaroGodMode(model.Collaborator{ID: uuid.New(), Status: tc.status, Traits: tc.traits})
+			if got != tc.want {
+				t.Fatalf("tartaroGodMode(status=%q, traits=%v)=%v, want %v", tc.status, tc.traits, got, tc.want)
+			}
+		})
 	}
 }
 
-func TestSyncTartaroActionsEmitsSyntheticEvent(t *testing.T) {
-	db := openTartaroActionsTestDB(t)
-	t.Cleanup(func() { _ = db.Close() })
-	srv := newTartaroActionsTestServer(t, db)
+func TestConsoleEffectiveActionsUseTheAuthorizationPredicateAndAnswerGodMode(t *testing.T) {
+	// The console variant applies the same membership predicate as the
+	// directory variant (authorizationMembershipsQuery only matches a query
+	// that carries membership active, team active and the window), reads the
+	// grants of every team in one statement, keeps only the configured
+	// instance and answers god_mode. The retired trait comparison is gone.
+	db, mock := newTartaroActionsMock(t)
+	id := uuid.New()
+	alpha := uuid.New()
+	beta := uuid.New()
+	mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
+		WillReturnRows(tartaroCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "active",
+			`{"yggdrasil_admin":true,"tartaro_actions":["tartaro:stale_trait_action"]}`))
+	memberships := sqlmock.NewRows(authorizationMembershipColumns())
+	tartaroMembershipRow(memberships, id, alpha, "alpha")
+	tartaroMembershipRow(memberships, id, beta, "beta")
+	mock.ExpectQuery(authorizationMembershipsQuery).WithArgs(id).WillReturnRows(memberships)
+	grants := sqlmock.NewRows(teamGrantColumns())
+	tartaroGrantRow(grants, alpha, "dakasa", "tartaro-dakasa-validation", "tartaro:read_user")
+	tartaroGrantRow(grants, alpha, "dakasa", "other-instance", "tartaro:delete_everything")
+	tartaroGrantRow(grants, beta, "dakasa", "tartaro-dakasa-validation", "tartaro:read_user")
+	tartaroGrantRow(grants, beta, "dakasa", "tartaro-dakasa-validation", "tartaro:moderate_post")
+	mock.ExpectQuery(teamGrantsByTeamIDsQuery(2)).WithArgs(alpha, beta).WillReturnRows(grants)
 
-	collabID := seedTartaroCollaborator(t, db)
+	recorder := serveConsoleEffectiveTartaroActions(&Server{db: db, logger: zap.NewNop()}, id.String())
 
-	req := httptest.NewRequest(http.MethodPost, "/api/v1/collaborators/"+collabID.String()+"/sync-tartaro-actions", strings.NewReader(""))
-	rr := httptest.NewRecorder()
-	srv.ServeHTTP(rr, req)
-	if rr.Code != http.StatusAccepted {
-		t.Fatalf("expected 202, got %d (body=%s)", rr.Code, rr.Body.String())
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
 	}
-	var count int
-	if err := db.QueryRow(`SELECT COUNT(*) FROM event_log WHERE aggregate_id = $1 AND type = 'team_membership.added'`, collabID.String()).Scan(&count); err != nil {
-		t.Fatalf("query event_log: %v", err)
+	body := decodeDirectoryBody(t, recorder)
+	if got := strings.Join(sortedKeys(body), ","); got != "collaborator_id,computed_tartaro_actions,effective_via_teams,god_mode" {
+		t.Fatalf("console keys=%s", got)
 	}
-	if count == 0 {
-		t.Fatal("expected synthetic team_membership.added event in event_log")
+	if body["collaborator_id"] != id.String() || body["god_mode"] != true {
+		t.Fatalf("body=%s", recorder.Body.String())
+	}
+	if got := fmt.Sprint(body["computed_tartaro_actions"]); got != "[tartaro:moderate_post tartaro:read_user]" {
+		t.Fatalf("computed_tartaro_actions=%s", got)
+	}
+	teams, _ := body["effective_via_teams"].([]any)
+	if len(teams) != 2 {
+		t.Fatalf("effective_via_teams=%v", body["effective_via_teams"])
+	}
+	first, _ := teams[0].(map[string]any)
+	second, _ := teams[1].(map[string]any)
+	if first["team_id"] != alpha.String() || first["team_slug"] != "alpha" || fmt.Sprint(first["actions"]) != "[tartaro:read_user]" {
+		t.Fatalf("alpha=%v", first)
+	}
+	if second["team_id"] != beta.String() || second["team_slug"] != "beta" || fmt.Sprint(second["actions"]) != "[tartaro:moderate_post tartaro:read_user]" {
+		t.Fatalf("beta=%v", second)
+	}
+	for _, forbidden := range []string{"trait_tartaro_actions", "drift", "stale_trait_action", "delete_everything"} {
+		if strings.Contains(recorder.Body.String(), forbidden) {
+			t.Fatalf("console response carries %q: %s", forbidden, recorder.Body.String())
+		}
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("the console variant did not use the authorization predicate and one grant read: %v", err)
 	}
 }
 
-func TestEffectiveTartaroActionsReturns404ForUnknownCollab(t *testing.T) {
-	db := openTartaroActionsTestDB(t)
-	t.Cleanup(func() { _ = db.Close() })
-	srv := newTartaroActionsTestServer(t, db)
+func TestConsoleEffectiveActionsAnswerNoGodModeForAnInactiveAdmin(t *testing.T) {
+	db, mock := newTartaroActionsMock(t)
+	id := uuid.New()
+	mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
+		WillReturnRows(tartaroCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "suspended", `{"yggdrasil_admin":true}`))
 
-	req := httptest.NewRequest(http.MethodGet, "/api/v1/collaborators/00000000-0000-0000-0000-000000000000/effective-tartaro-actions", nil)
-	rr := httptest.NewRecorder()
-	srv.ServeHTTP(rr, req)
-	if rr.Code != http.StatusNotFound {
-		t.Fatalf("expected 404, got %d", rr.Code)
+	recorder := serveConsoleEffectiveTartaroActions(&Server{db: db, logger: zap.NewNop()}, id.String())
+
+	if recorder.Code != http.StatusOK {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	want := `{"collaborator_id":"` + id.String() + `","effective_via_teams":[],"computed_tartaro_actions":[],"god_mode":false}`
+	if got := strings.TrimSpace(recorder.Body.String()); got != want {
+		t.Fatalf("body=%s, want %s", got, want)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConsoleEffectiveActionsAnswerNoActionForACollaboratorWhoIsNotActive(t *testing.T) {
+	// The console variant is the live authorization source of the Tartaro
+	// panel services, called with the human's own token, which outlives a
+	// status change. A collaborator who is not active must get no action from
+	// it, exactly like the directory variant, which reads them as absent.
+	// Only the collaborator is read: the mock carries no membership, grant or
+	// catalog expectation, so a walk would hit an unexpected query, fail the
+	// read with a non-200 status and leave the body without the empty sets.
+	for _, status := range []string{"pending_start", "on_leave", "suspended", "offboarded", "Active", ""} {
+		t.Run("status "+status, func(t *testing.T) {
+			db, mock := newTartaroActionsMock(t)
+			id := uuid.New()
+			mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
+				WillReturnRows(tartaroCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, status,
+					`{"department":"finance","tartaro_actions":["tartaro:write_financeiro"]}`))
+
+			recorder := serveConsoleEffectiveTartaroActions(&Server{db: db, logger: zap.NewNop()}, id.String())
+
+			if recorder.Code != http.StatusOK {
+				t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+			}
+			want := `{"collaborator_id":"` + id.String() + `","effective_via_teams":[],"computed_tartaro_actions":[],"god_mode":false}`
+			if got := strings.TrimSpace(recorder.Body.String()); got != want {
+				t.Fatalf("body=%s, want %s", got, want)
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestEffectiveActionsVariantsGiveNoActionToASuspendedCollaboratorWithGrants(t *testing.T) {
+	// Parity for a suspended non-admin whose team still grants Tartaro
+	// actions: the console variant answers empty sets and no god mode, and the
+	// directory variant answers 404 without reading memberships. Neither
+	// variant walks the grants of a collaborator who is not active.
+	id := uuid.New()
+
+	consoleDB, consoleMock := newTartaroActionsMock(t)
+	consoleMock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
+		WillReturnRows(tartaroCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "suspended", `{}`))
+	console := serveConsoleEffectiveTartaroActions(&Server{db: consoleDB, logger: zap.NewNop()}, id.String())
+	if console.Code != http.StatusOK {
+		t.Fatalf("console status=%d body=%s", console.Code, console.Body.String())
+	}
+	body := decodeDirectoryBody(t, console)
+	if got := fmt.Sprint(body["computed_tartaro_actions"]); got != "[]" {
+		t.Fatalf("console computed_tartaro_actions=%s", got)
+	}
+	if got := fmt.Sprint(body["effective_via_teams"]); got != "[]" {
+		t.Fatalf("console effective_via_teams=%s", got)
+	}
+	if body["god_mode"] != false {
+		t.Fatalf("console god_mode=%v", body["god_mode"])
+	}
+	if err := consoleMock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("console variant: %v", err)
+	}
+
+	directoryDB, directoryMock := newTartaroActionsMock(t)
+	directoryMock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
+		WillReturnRows(tartaroCollaboratorRow(sqlmock.NewRows(collaboratorColumns()), id, "suspended", `{}`))
+	if _, reason, err := (&Server{db: directoryDB, logger: zap.NewNop()}).loadActiveDirectoryCollaborator(context.Background(), id.String()); reason != "inactive" || err == nil {
+		t.Fatalf("directory variant loaded a suspended collaborator: reason=%q err=%v", reason, err)
+	}
+	if err := directoryMock.ExpectationsWereMet(); err != nil {
+		t.Fatalf("directory variant: %v", err)
+	}
+}
+
+func TestConsoleEffectiveActionsRejectAnInvalidIDWithoutTheDatabase(t *testing.T) {
+	db, mock := newTartaroActionsMock(t)
+	recorder := serveConsoleEffectiveTartaroActions(&Server{db: db, logger: zap.NewNop()}, "not-a-uuid")
+	if recorder.Code != http.StatusBadRequest {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestConsoleEffectiveActionsAnswer404ForAnUnknownCollaborator(t *testing.T) {
+	db, mock := newTartaroActionsMock(t)
+	id := uuid.New()
+	mock.ExpectQuery(`FROM public\.collaborators\s+WHERE id = \$1`).WithArgs(id).
+		WillReturnRows(sqlmock.NewRows(collaboratorColumns()))
+
+	recorder := serveConsoleEffectiveTartaroActions(&Server{db: db, logger: zap.NewNop()}, id.String())
+
+	if recorder.Code != http.StatusNotFound {
+		t.Fatalf("status=%d body=%s", recorder.Code, recorder.Body.String())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTartaroWildcardGrantExpandsToThePermissionCatalog(t *testing.T) {
+	// A "*" grant on the configured instance means every permission action
+	// of that instance's active integration_type. The catalog is read once
+	// even when two teams hold the wildcard, the expansion is deduplicated
+	// with explicit grants and sorted, and "*" never appears literally.
+	db, mock := newTartaroActionsMock(t)
+	id := uuid.New()
+	alpha := uuid.New()
+	beta := uuid.New()
+	grants := sqlmock.NewRows(teamGrantColumns())
+	tartaroGrantRow(grants, alpha, "dakasa", "tartaro-dakasa-validation", "*")
+	tartaroGrantRow(grants, alpha, "dakasa", "tartaro-dakasa-validation", "tartaro:read_user")
+	tartaroGrantRow(grants, alpha, "dakasa", "tartaro-dakasa-validation", "tartaro:legacy_extra")
+	tartaroGrantRow(grants, beta, "dakasa", "tartaro-dakasa-validation", "*")
+	mock.ExpectQuery(teamGrantsByTeamIDsQuery(2)).WithArgs(alpha, beta).WillReturnRows(grants)
+	mock.ExpectQuery(tartaroPermissionCatalogQuery).WithArgs("dakasa", "tartaro-dakasa-validation").
+		WillReturnRows(sqlmock.NewRows(tartaroCatalogColumns()).
+			AddRow([]byte(tartaroTestTypeRef), tartaroTypeCandidates("tartaro-dakasa", tartaroTestCatalog)))
+
+	core, logs := observer.New(zapcore.DebugLevel)
+	server := &Server{db: db, logger: zap.New(core)}
+	memberships := []model.TeamMembership{
+		{TeamID: alpha, TeamSlug: "alpha", CollaboratorID: id},
+		{TeamID: beta, TeamSlug: "beta", CollaboratorID: id},
+	}
+	result, err := server.tartaroActionsFromMemberships(context.Background(), memberships)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprint(result.Computed); got != "[tartaro:legacy_extra tartaro:moderate_post tartaro:read_user]" {
+		t.Fatalf("computed=%s", got)
+	}
+	if len(result.PerTeam) != 2 ||
+		fmt.Sprint(result.PerTeam[0].Actions) != "[tartaro:legacy_extra tartaro:moderate_post tartaro:read_user]" ||
+		fmt.Sprint(result.PerTeam[1].Actions) != "[tartaro:moderate_post tartaro:read_user]" {
+		t.Fatalf("per team=%+v", result.PerTeam)
+	}
+	for _, team := range result.PerTeam {
+		for _, action := range team.Actions {
+			if action == tartaroWildcardAction {
+				t.Fatalf("wildcard leaked literally: %+v", result.PerTeam)
+			}
+		}
+	}
+	if logs.Len() != 0 {
+		t.Fatalf("a resolvable catalog must not log: %v", logs.All())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTartaroWildcardOnAnotherInstanceIsIgnoredWithoutReadingACatalog(t *testing.T) {
+	// A "*" grant on any other instance (another name, or the configured
+	// name under another namespace) is not a Tartaro grant: it contributes
+	// nothing and no catalog is read. An unexpected catalog query would fail
+	// against sqlmock and be logged, so an empty log proves none was issued.
+	db, mock := newTartaroActionsMock(t)
+	id := uuid.New()
+	team := uuid.New()
+	grants := sqlmock.NewRows(teamGrantColumns())
+	tartaroGrantRow(grants, team, "dakasa", "yggdrasil-self", "*")
+	tartaroGrantRow(grants, team, "other-namespace", "tartaro-dakasa-validation", "*")
+	tartaroGrantRow(grants, team, "dakasa", "tartaro-dakasa-validation", "tartaro:read_user")
+	mock.ExpectQuery(teamGrantsByTeamIDsQuery(1)).WithArgs(team).WillReturnRows(grants)
+
+	core, logs := observer.New(zapcore.DebugLevel)
+	server := &Server{db: db, logger: zap.New(core)}
+	result, err := server.tartaroActionsFromMemberships(context.Background(), []model.TeamMembership{{TeamID: team, TeamSlug: "social", CollaboratorID: id}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if got := fmt.Sprint(result.Computed); got != "[tartaro:read_user]" {
+		t.Fatalf("computed=%s", got)
+	}
+	if logs.Len() != 0 {
+		t.Fatalf("no catalog may be read for a foreign wildcard: %v", logs.All())
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTartaroWildcardContributesNothingWhenTheCatalogIsNotResolvable(t *testing.T) {
+	// Fail closed for the wildcard only: explicit grants still count, the
+	// computation does not error, and the failure is logged once.
+	cases := []struct {
+		name   string
+		expect func(sqlmock.Sqlmock)
+	}{
+		{name: "instance without an active version", expect: func(mock sqlmock.Sqlmock) {
+			mock.ExpectQuery(tartaroPermissionCatalogQuery).WithArgs("dakasa", "tartaro-dakasa-validation").
+				WillReturnRows(sqlmock.NewRows(tartaroCatalogColumns()))
+		}},
+		{name: "type_ref selects no active type", expect: func(mock sqlmock.Sqlmock) {
+			mock.ExpectQuery(tartaroPermissionCatalogQuery).WithArgs("dakasa", "tartaro-dakasa-validation").
+				WillReturnRows(sqlmock.NewRows(tartaroCatalogColumns()).
+					AddRow([]byte(tartaroTestTypeRef), tartaroTypeCandidates("another-type", tartaroTestCatalog)))
+		}},
+		{name: "unreadable type_ref", expect: func(mock sqlmock.Sqlmock) {
+			mock.ExpectQuery(tartaroPermissionCatalogQuery).WithArgs("dakasa", "tartaro-dakasa-validation").
+				WillReturnRows(sqlmock.NewRows(tartaroCatalogColumns()).
+					AddRow([]byte(`"not an object"`), tartaroTypeCandidates("tartaro-dakasa", tartaroTestCatalog)))
+		}},
+		{name: "malformed catalog", expect: func(mock sqlmock.Sqlmock) {
+			mock.ExpectQuery(tartaroPermissionCatalogQuery).WithArgs("dakasa", "tartaro-dakasa-validation").
+				WillReturnRows(sqlmock.NewRows(tartaroCatalogColumns()).
+					AddRow([]byte(tartaroTestTypeRef), tartaroTypeCandidates("tartaro-dakasa", `{"name":"not a list"}`)))
+		}},
+		{name: "database failure", expect: func(mock sqlmock.Sqlmock) {
+			mock.ExpectQuery(tartaroPermissionCatalogQuery).WithArgs("dakasa", "tartaro-dakasa-validation").
+				WillReturnError(errors.New("pq: canceling statement due to statement timeout"))
+		}},
+	}
+	for _, tc := range cases {
+		t.Run(tc.name, func(t *testing.T) {
+			db, mock := newTartaroActionsMock(t)
+			id := uuid.New()
+			team := uuid.New()
+			grants := sqlmock.NewRows(teamGrantColumns())
+			tartaroGrantRow(grants, team, "dakasa", "tartaro-dakasa-validation", "*")
+			tartaroGrantRow(grants, team, "dakasa", "tartaro-dakasa-validation", "tartaro:read_user")
+			mock.ExpectQuery(teamGrantsByTeamIDsQuery(1)).WithArgs(team).WillReturnRows(grants)
+			tc.expect(mock)
+
+			core, logs := observer.New(zapcore.DebugLevel)
+			server := &Server{db: db, logger: zap.New(core)}
+			result, err := server.tartaroActionsFromMemberships(context.Background(), []model.TeamMembership{{TeamID: team, TeamSlug: "social", CollaboratorID: id}})
+			if err != nil {
+				t.Fatalf("an unresolvable catalog must not fail the computation: %v", err)
+			}
+			if got := fmt.Sprint(result.Computed); got != "[tartaro:read_user]" {
+				t.Fatalf("computed=%s, want only the explicit grant", got)
+			}
+			if len(result.PerTeam) != 1 || fmt.Sprint(result.PerTeam[0].Actions) != "[tartaro:read_user]" {
+				t.Fatalf("per team=%+v", result.PerTeam)
+			}
+			if logs.FilterLevelExact(zapcore.WarnLevel).Len() != 1 {
+				t.Fatalf("the unresolvable catalog must be logged once at warn level: %v", logs.All())
+			}
+			if err := mock.ExpectationsWereMet(); err != nil {
+				t.Fatal(err)
+			}
+		})
+	}
+}
+
+func TestTartaroWildcardOnlyTeamDropsOutWhenTheCatalogIsNotResolvable(t *testing.T) {
+	db, mock := newTartaroActionsMock(t)
+	id := uuid.New()
+	team := uuid.New()
+	mock.ExpectQuery(teamGrantsByTeamIDsQuery(1)).WithArgs(team).
+		WillReturnRows(tartaroGrantRow(sqlmock.NewRows(teamGrantColumns()), team, "dakasa", "tartaro-dakasa-validation", "*"))
+	mock.ExpectQuery(tartaroPermissionCatalogQuery).WithArgs("dakasa", "tartaro-dakasa-validation").
+		WillReturnRows(sqlmock.NewRows(tartaroCatalogColumns()))
+
+	server := &Server{db: db, logger: zap.NewNop()}
+	result, err := server.tartaroActionsFromMemberships(context.Background(), []model.TeamMembership{{TeamID: team, TeamSlug: "social", CollaboratorID: id}})
+	if err != nil {
+		t.Fatal(err)
+	}
+	if len(result.Computed) != 0 || len(result.PerTeam) != 0 || result.Computed == nil || result.PerTeam == nil {
+		t.Fatalf("result=%+v, want empty non-nil sets", result)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTartaroGrantWalkWithoutMembershipsReadsNoGrants(t *testing.T) {
+	db, mock := newTartaroActionsMock(t)
+	server := &Server{db: db, logger: zap.NewNop()}
+	result, err := server.tartaroActionsFromMemberships(context.Background(), nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if result.Computed == nil || result.PerTeam == nil || len(result.Computed) != 0 || len(result.PerTeam) != 0 {
+		t.Fatalf("result=%+v, want empty non-nil sets", result)
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
+	}
+}
+
+func TestTartaroGrantWalkSurfacesAGrantReadFailure(t *testing.T) {
+	db, mock := newTartaroActionsMock(t)
+	team := uuid.New()
+	mock.ExpectQuery(teamGrantsByTeamIDsQuery(1)).WithArgs(team).WillReturnError(errors.New("pq: connection reset"))
+	server := &Server{db: db, logger: zap.NewNop()}
+	if _, err := server.tartaroActionsFromMemberships(context.Background(), []model.TeamMembership{{TeamID: team, TeamSlug: "social"}}); err == nil {
+		t.Fatal("a failed grant read must fail the computation")
+	}
+	if err := mock.ExpectationsWereMet(); err != nil {
+		t.Fatal(err)
 	}
 }

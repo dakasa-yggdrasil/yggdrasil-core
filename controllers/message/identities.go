@@ -8,6 +8,8 @@ import (
 	"strings"
 	"time"
 
+	oidccontroller "github.com/dakasa-yggdrasil/yggdrasil-core/controllers/oidc"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/collaboratorstate"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
@@ -31,6 +33,10 @@ const (
 )
 
 func identityConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) []ConsumerConfig {
+	// Built once: a status written through collaborator.update to a status
+	// that cannot sign in fires the back-channel logout after its commit,
+	// like the HTTP status writers (ADR-0087). Nil without an OIDC issuer.
+	backchannel := oidccontroller.BackchannelDispatcherFromEnv(db)
 	return []ConsumerConfig{
 		{
 			Queue:   queueCollaboratorCreate,
@@ -42,7 +48,7 @@ func identityConsumers(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) []
 			Queue:   queueCollaboratorUpdate,
 			Timeout: 10 * time.Second,
 			QoS:     10,
-			Handler: collaboratorUpdateHandler(conn, db, logger),
+			Handler: collaboratorUpdateHandler(conn, db, backchannel, logger),
 		},
 		{
 			Queue:   queueCollaboratorDelete,
@@ -123,16 +129,21 @@ func collaboratorCreateHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Lo
 	}
 }
 
-func collaboratorUpdateHandler(conn *amqp.Connection, db *sql.DB, logger *zap.Logger) ConsumerHandler {
+func collaboratorUpdateHandler(conn *amqp.Connection, db *sql.DB, backchannel *oidccontroller.BackchannelDispatcher, logger *zap.Logger) ConsumerHandler {
 	return func(ctx context.Context, d rpc.Delivery) error {
 		var req model.UpdateCollaboratorRequest
 		if err := json.Unmarshal(d.Body, &req); err != nil {
 			return replyFailure(ctx, d, "bad_request", err, logger)
 		}
 
+		// UpdateCollaborator commits a status change together with its
+		// session policy (ADR-0087).
 		collaborator, err := repository.UpdateCollaborator(ctx, db, req)
 		if err != nil {
 			return replyFailure(ctx, d, identityErrorCode(err), err, logger)
+		}
+		if req.Status != nil && !collaboratorstate.CanSignIn(collaborator.Status) {
+			backchannel.DispatchForCollaboratorInBackground(collaborator.ID, logger)
 		}
 
 		return replySuccess(ctx, d, map[string]any{"collaborator": collaborator}, logger)

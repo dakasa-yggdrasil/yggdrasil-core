@@ -16,6 +16,7 @@ import (
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/mfa"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/auth/password"
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/collaboratorstate"
 	safego "github.com/dakasa-yggdrasil/yggdrasil-core/internal/goroutine"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/httperr"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
@@ -220,37 +221,10 @@ func (s *Server) resetMFAAndIssueSetupLink(r *http.Request, collabID uuid.UUID, 
 // self-service reset, admin MFA reset): console sessions and OIDC refresh
 // tokens are revoked, a global session_revocation row tells introspection
 // and adapters, and collaborator.session_terminated is emitted. The caller
-// fires the back-channel logout after its commit.
+// fires the back-channel logout after its commit. The fan-out itself is
+// repository.TerminateCollaboratorSessionsTx, shared with status changes.
 func (s *Server) revokeForCredentialReplacement(ctx context.Context, tx *sql.Tx, collab model.Collaborator, reason string, metadata map[string]any) error {
-	if _, err := repository.RevokeAllAuthSessions(ctx, tx, collab.ID); err != nil {
-		return err
-	}
-	rev, err := repository.InsertSessionRevocation(ctx, s.db, tx, repository.InsertSessionRevocationRequest{
-		CollaboratorID: collab.ID,
-		SessionJTI:     nil,
-		Reason:         reason,
-		Metadata:       metadata,
-	})
-	if err != nil {
-		return err
-	}
-	sessionPayload := map[string]any{
-		"collaborator_id": collab.ID.String(),
-		"reason":          reason,
-		"revocation_id":   rev.ID.String(),
-		"emitted_at":      time.Now().UTC().Format(time.RFC3339),
-	}
-	if collab.PrimaryEmail != "" {
-		sessionPayload["primary_email"] = collab.PrimaryEmail
-	}
-	_, err = repository.EmitEvent(ctx, tx, model.EmitEventRequest{
-		Type:           repository.EventTypeCollaboratorSessionTerminated,
-		SchemaVersion:  "v1",
-		AggregateType:  "collaborator",
-		AggregateID:    collab.ID.String(),
-		Payload:        sessionPayload,
-		IdempotencyKey: "session.terminated." + rev.ID.String(),
-	})
+	_, err := repository.TerminateCollaboratorSessionsTx(ctx, tx, collab, reason, metadata)
 	return err
 }
 
@@ -864,8 +838,9 @@ func collaboratorEligibleForSetup(status string) bool {
 // reset mints a session, so it follows this rule and not the wider setup
 // allowlist; otherwise a pending_start account (a re-hire before the start
 // date still holding old factors) would get a session the login refuses.
+// It delegates to the single predicate, collaboratorstate.CanSignIn.
 func collaboratorCanSignIn(status string) bool {
-	return strings.ToLower(strings.TrimSpace(status)) == "active"
+	return collaboratorstate.CanSignIn(status)
 }
 
 // readAndCloseBody reads the entire request body and closes it.

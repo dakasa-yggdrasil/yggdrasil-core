@@ -372,8 +372,23 @@ func validateRequiredPKCE(client model.OIDCClient, req *oidc.AuthRequest) error 
 	return nil
 }
 
+// requireOpenAuthRequest refuses an authorization request that is closed:
+// consumed (its code was exchanged, or a session termination closed it) or
+// past its lifetime. The provider callback (/authorize/callback?id=...)
+// mints a fresh code from a bound request with no new authentication, so a
+// closed request answers exactly like one that never existed (ADR-0087).
+// The lifetime is AuthorizationCodeLifetime from creation, which is also the
+// lifetime of the third-party login state that binds the request.
+func requireOpenAuthRequest(ar model.OIDCAuthRequest, now time.Time) error {
+	if ar.ConsumedAt != nil || !now.Before(ar.ExpiresAt) {
+		return repository.ErrOIDCAuthRequestNotFound
+	}
+	return nil
+}
+
 // AuthRequestByID looks up a previously created auth request. Called by
-// the OP after the login UI redirects back, before issuing a code.
+// the OP after the login UI redirects back, before issuing a code. A closed
+// request (requireOpenAuthRequest) is refused before the subject is read.
 func (s *Storage) AuthRequestByID(ctx context.Context, id string) (op.AuthRequest, error) {
 	parsed, err := uuid.Parse(id)
 	if err != nil {
@@ -383,8 +398,11 @@ func (s *Storage) AuthRequestByID(ctx context.Context, id string) (op.AuthReques
 	if err != nil {
 		return nil, err
 	}
+	if err := requireOpenAuthRequest(ar, time.Now()); err != nil {
+		return nil, err
+	}
 	if ar.CollaboratorID != nil {
-		if err := repository.RequirePhoneProfileComplete(ctx, s.db, *ar.CollaboratorID); err != nil {
+		if err := repository.RequireIssuableSubject(ctx, s.db, *ar.CollaboratorID); err != nil {
 			return nil, err
 		}
 	}
@@ -408,8 +426,10 @@ func (s *Storage) AuthRequestByCode(ctx context.Context, code string) (op.AuthRe
 	if err != nil {
 		return nil, err
 	}
+	// The subject is rechecked before the code is consumed, so a refusal
+	// (status or phone profile) does not burn the code.
 	if ar.CollaboratorID != nil {
-		if err := repository.RequirePhoneProfileComplete(ctx, s.db, *ar.CollaboratorID); err != nil {
+		if err := repository.RequireIssuableSubject(ctx, s.db, *ar.CollaboratorID); err != nil {
 			return nil, err
 		}
 	}
@@ -421,7 +441,8 @@ func (s *Storage) AuthRequestByCode(ctx context.Context, code string) (op.AuthRe
 
 // SaveAuthCode persists a freshly issued authorization code, linking it
 // to the originating auth request id. The OP generates the code value
-// (entropy is its concern); we just store it with our standard expiry.
+// (entropy is its concern); we just store it with our standard expiry. A
+// closed request (requireOpenAuthRequest) gets no code.
 func (s *Storage) SaveAuthCode(ctx context.Context, id string, code string) error {
 	parsed, err := uuid.Parse(id)
 	if err != nil {
@@ -431,10 +452,13 @@ func (s *Storage) SaveAuthCode(ctx context.Context, id string, code string) erro
 	if err != nil {
 		return err
 	}
+	if err := requireOpenAuthRequest(ar, time.Now()); err != nil {
+		return err
+	}
 	if ar.CollaboratorID == nil {
 		return repository.ErrPhoneProfileRequired
 	}
-	if err := repository.RequirePhoneProfileComplete(ctx, s.db, *ar.CollaboratorID); err != nil {
+	if err := repository.RequireIssuableSubject(ctx, s.db, *ar.CollaboratorID); err != nil {
 		return err
 	}
 	return repository.SaveOIDCAuthCode(ctx, s.db, code, parsed, time.Now().Add(AuthorizationCodeLifetime))
@@ -468,7 +492,7 @@ func generateOpaqueToken() (string, error) {
 // "jti" the OP embeds in the access JWT — opaque, not persisted because
 // access tokens are stateless.
 func (s *Storage) CreateAccessToken(ctx context.Context, request op.TokenRequest) (string, time.Time, error) {
-	if err := s.requireCompletedPhoneProfile(ctx, request.GetSubject()); err != nil {
+	if err := s.requireIssuableSubject(ctx, request.GetSubject()); err != nil {
 		return "", time.Time{}, err
 	}
 	id, err := generateOpaqueToken()
@@ -503,7 +527,7 @@ func (s *Storage) CreateAccessAndRefreshTokens(
 		return "", "", time.Time{}, fmt.Errorf("token subject is not a UUID: %w", perr)
 	}
 
-	if err := repository.RequirePhoneProfileComplete(ctx, s.db, collabID); err != nil {
+	if err := repository.RequireIssuableSubject(ctx, s.db, collabID); err != nil {
 		return "", "", time.Time{}, err
 	}
 
@@ -626,6 +650,13 @@ func (s *Storage) TokenRequestByRefreshToken(ctx context.Context, refreshToken s
 		return nil, op.ErrInvalidRefreshToken
 	}
 	if time.Now().After(r.ExpiresAt) {
+		return nil, op.ErrInvalidRefreshToken
+	}
+	// A subject who cannot sign in gets invalid_grant, so the relying party
+	// drops the grant instead of retrying a server error. A status change
+	// already revoked the subject's refresh tokens (ADR-0087); this covers a
+	// token minted by a login that raced the change and tokens older than it.
+	if errors.Is(repository.RequireIssuableSubject(ctx, s.db, r.CollaboratorID), repository.ErrCollaboratorCannotSignIn) {
 		return nil, op.ErrInvalidRefreshToken
 	}
 	return &refreshTokenRequestView{r: r}, nil
@@ -841,25 +872,30 @@ func (s *Storage) GetKeyByIDAndClientID(ctx context.Context, keyID, clientID str
 func (s *Storage) SetUserinfoFromScopes(
 	ctx context.Context, userInfo *oidc.UserInfo, userID, clientID string, scopes []string,
 ) error {
-	return s.populateUserInfo(ctx, userInfo, userID, scopes)
+	return s.populateUserInfo(ctx, userInfo, userID, scopes, false)
 }
 
 // SetUserinfoFromToken is the userinfo endpoint hook. The OP has already
-// validated the bearer access token; we just need to populate claims.
+// validated the bearer access token; we just need to populate claims. A
+// subject who cannot sign in gets no claims: the provider answers 403 for
+// an access token that outlives the status change (ADR-0087).
 func (s *Storage) SetUserinfoFromToken(
 	ctx context.Context, userInfo *oidc.UserInfo, tokenID, subject, origin string,
 ) error {
 	return s.populateUserInfo(ctx, userInfo, subject, []string{
 		oidc.ScopeOpenID, oidc.ScopeEmail, oidc.ScopeProfile, "roles",
-	})
+	}, true)
 }
 
 // SetIntrospectionFromToken is the introspection endpoint hook. We
 // populate the same claims as userinfo plus a few token-specific fields.
+// A subject who cannot sign in returns an error before anything is set, so
+// the provider answers {"active":false} for an access token that outlives
+// the status change, as the Core introspection does (ADR-0087).
 func (s *Storage) SetIntrospectionFromToken(
 	ctx context.Context, introspection *oidc.IntrospectionResponse, tokenID, subject, clientID string,
 ) error {
-	cid, email, displayName, err := loadCollaboratorForUserinfo(ctx, s.db, subject)
+	cid, email, displayName, err := loadSignedInCollaboratorForUserinfo(ctx, s.db, subject)
 	if err != nil {
 		return err
 	}
@@ -881,11 +917,17 @@ func (s *Storage) SetIntrospectionFromToken(
 
 // populateUserInfo fills email/name and (if "roles" granted) teams on the
 // shared *oidc.UserInfo struct. Used by SetUserinfoFromScopes and
-// SetUserinfoFromToken which differ only in the trigger.
+// SetUserinfoFromToken which differ only in the trigger. requireSignIn
+// refuses a subject who cannot sign in (the userinfo endpoint); the ID token
+// path is already behind the mint gate.
 func (s *Storage) populateUserInfo(
-	ctx context.Context, userInfo *oidc.UserInfo, userID string, scopes []string,
+	ctx context.Context, userInfo *oidc.UserInfo, userID string, scopes []string, requireSignIn bool,
 ) error {
-	cid, email, displayName, err := loadCollaboratorForUserinfo(ctx, s.db, userID)
+	load := loadCollaboratorForUserinfo
+	if requireSignIn {
+		load = loadSignedInCollaboratorForUserinfo
+	}
+	cid, email, displayName, err := load(ctx, s.db, userID)
 	if err != nil {
 		return err
 	}
@@ -985,10 +1027,12 @@ func (s *Storage) Health(ctx context.Context) error {
 // _ ensures the interface is satisfied at compile time.
 var _ op.Storage = (*Storage)(nil)
 
-func (s *Storage) requireCompletedPhoneProfile(ctx context.Context, subject string) error {
+// requireIssuableSubject applies repository.RequireIssuableSubject (status,
+// then phone profile) to a token request subject.
+func (s *Storage) requireIssuableSubject(ctx context.Context, subject string) error {
 	id, err := uuid.Parse(subject)
 	if err != nil {
 		return repository.ErrPhoneUnavailable
 	}
-	return repository.RequirePhoneProfileComplete(ctx, s.db, id)
+	return repository.RequireIssuableSubject(ctx, s.db, id)
 }
