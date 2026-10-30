@@ -13,7 +13,7 @@ import (
 
 // Synthetic records exercise the parent join only. They cannot attest a QEMU.
 func TestCanonicalCompensationPendingParentFailsClosed(t *testing.T) {
-	for c, want := range map[string]bool{"canonical_compensation_unprotected_failed_create": true, "canonical_compensation_protected_failed_create": true, "canonical_failed_floor_recovery": true, "compensation_unprotected_failed_create": true, "compensation_protected_failed_create": true, "canonical_postloss_unprotected_failed_create_reissue": false, "": false} {
+	for c, want := range map[string]bool{"canonical_compensation_unprotected_failed_create": true, "canonical_compensation_protected_failed_create": true, "canonical_failed_floor_recovery": true, "compensation_unprotected_failed_create": true, "compensation_protected_failed_create": true, "source_live_failed_floor_recovery": true, "canonical_postloss_unprotected_failed_create_reissue": false, "": false} {
 		if canonicalCompensationPendingCase(c) != want {
 			t.Fatalf("case %q selection changed", c)
 		}
@@ -75,6 +75,7 @@ func TestSourceFailedCreatePendingScope(t *testing.T) {
 	}{
 		{"compensation_unprotected_failed_create", 1},
 		{"compensation_protected_failed_create", 1},
+		{"source_live_failed_floor_recovery", 1},
 		{"compensation_unprotected_lost_create_reply", 2},
 		{"compensation_protected_lost_create_reply", 2},
 		{"positive_original_lifecycle", 2},

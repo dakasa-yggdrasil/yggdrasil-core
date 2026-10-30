@@ -16,7 +16,7 @@ import (
 // Only fixed failed-create qualification cases hold their accepted source
 // create pending, including failed-floor recovery; lost replies do not.
 func canonicalCompensationPendingCase(c string) bool {
-	return c == "canonical_compensation_unprotected_failed_create" || c == "canonical_compensation_protected_failed_create" || c == "canonical_failed_floor_recovery" || c == "compensation_unprotected_failed_create" || c == "compensation_protected_failed_create"
+	return c == "canonical_compensation_unprotected_failed_create" || c == "canonical_compensation_protected_failed_create" || c == "canonical_failed_floor_recovery" || c == "compensation_unprotected_failed_create" || c == "compensation_protected_failed_create" || c == "source_live_failed_floor_recovery"
 }
 
 // The accepted original settlement stays the parent's only fact: unconfirmed,
