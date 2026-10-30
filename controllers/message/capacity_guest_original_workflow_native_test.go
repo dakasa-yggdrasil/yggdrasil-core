@@ -105,6 +105,9 @@ func TestCapacityGuestOriginalWorkflowNativeReadsPostgres(t *testing.T) {
 			var storedWire []byte
 			var consistent bool
 			if err := tx.QueryRowContext(ctx, `SELECT original_wire,preregistration_record=convert_from(original_wire,'UTF8')::jsonb FROM public.capacity_vm_provisioning_preregistrations WHERE id=$1`,pre.PreregistrationID).Scan(&storedWire,&consistent); err != nil || !consistent || capacity.GuestRetirementSHA(pre) != capacity.BusinessCreationSHA256(storedWire) { t.Fatal("public workflow output differs from full original preregistration",err) }
+			var witnessWire []byte
+			var witnessSHA string
+			if err := tx.QueryRowContext(ctx, `SELECT witness_sha256,original_wire,original_record=convert_from(original_wire,'UTF8')::jsonb FROM public.capacity_guest_original_create_witnesses WHERE preregistration_id=$1`,pre.PreregistrationID).Scan(&witnessSHA,&witnessWire,&consistent); err != nil || !consistent || witnessSHA != output.WitnessSHA256 || capacity.BusinessCreationSHA256(witnessWire) != witnessSHA { t.Fatal("public workflow output differs from the committed original create witness",err) }
 			resource := c.NativeResources[pre.Slot-1]
 			if resource.Slot != pre.Slot || output.Receipt.Enrollment.Statement.Tuple.ResourceID != resource.ResourceID || output.Receipt.Enrollment.Statement.Tuple.CreatedAt != resource.ResourceCreatedAt || capacity.GuestRetirementSHA(output.Receipt.Enrollment) != resource.EnrollmentSHA256 { t.Fatal("public output adopted another native resource") }
 			created[pre.PreregistrationID] = true

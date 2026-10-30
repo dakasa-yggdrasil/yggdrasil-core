@@ -260,12 +260,12 @@ func executeCapacityGuestWorkflowStep(parent context.Context, db *sql.DB, workfl
 			return fail("original-guest-step-22")
 		}
 		store = store.WithOriginalGuestProvisioning(step, capacity.CurrentGuestCoreSource(), capacity.BusinessCreationSHA256([]byte(nonce)))
-		output, handled, permissionErr := guestOriginalCanonicalFloorPermission(ctx, store, policy, parsed, model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: body}, permissionOnly)
+		permissionOutput, handled, permissionErr := guestOriginalCanonicalFloorPermission(ctx, store, policy, parsed, model.CapacityMutationIssue{BindingName: b.Name, DesiredSpec: body}, permissionOnly)
 		if permissionErr != nil || permissionOnly != handled {
 			return fail("original-canonical-floor-next-permission")
 		}
 		if handled {
-			encoded, encodeErr := json.Marshal(output)
+			encoded, encodeErr := json.Marshal(permissionOutput)
 			if encodeErr != nil || json.Unmarshal(encoded, &result.Metadata) != nil {
 				return fail("original-canonical-floor-next-output")
 			}
