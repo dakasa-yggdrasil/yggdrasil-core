@@ -559,6 +559,15 @@
       "reviewed_at": "2026-10-26T17:43:37.079058+00:00",
       "schema82_Linux_CI_image_Goose_runtime_and_useful_capacity_still_required": true,
       "source_inventory_sha256": "e6e919b15af44e43b6d05c4c969beca37dc2569a0c1ff4633e7ce47f3ab85e2e"
+    },
+    "qualification_startup_corpus_failure_observation_20261030": {
+      "scope": "qualification-only readonly corpus failure labels, no authority or production credit",
+      "original_fatal_and_predicates_preserved": true,
+      "source_test_and_physical_run": "pending",
+      "test_files": {
+        "repository/capacity_guest_original_native_corpus_linux_test.go": "cdfa62f6abd9655b376c3b6d1ae83e944945cbe74cae666b8c42ced7f7f37f6d",
+        "repository/capacity_guest_original_native_transport_diagnostic_test.go": "490271a1cced61e69c5b579bdfa42ae79932879150b35db640516f57e7634002"
+      }
     }
   },
   "human_architecture_signoff_claimed": false,
