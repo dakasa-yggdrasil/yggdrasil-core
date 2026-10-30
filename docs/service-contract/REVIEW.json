@@ -562,7 +562,7 @@
     }
   },
   "human_architecture_signoff_claimed": false,
-  "non_test_Go_sources": 706,
+  "non_test_Go_sources": 756,
   "previous_AWS1652_review_accepted_at": "2026-10-23T02:46:08.896936+00:00",
   "previous_accepted_inventory_sha256": "9e84d02942ec5c2178962b84ce64baa859ff43472e0916d2d5df4d304dae9de8",
   "previous_accepted_review_sha256": "6d6bb4351292d4e7f4274aaa7470c6553f60541799d58170fce4e7cf30250e05",
@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "0038d58adc141c24f7ef7dffa23dc1d978583185ef6319321100fbff8ead42ac",
+  "source_inventory_sha256": "5fffc403ef980bd92b6398b9afc5ca9248844498ce64843cf329de7f474013f8",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -837,6 +837,16 @@
   "failed_floor_pending_recovery_review_20261029": {
     "scope": "Qualification-only canonical failed-floor recovery retains the failed slot as an accepted settled grant with original evidence, current lease and no member or event until cleanup. The baseline and production paths stay unchanged. Source review only; remote tests and native QEMU remain required.",
     "source_inventory_sha256": "0038d58adc141c24f7ef7dffa23dc1d978583185ef6319321100fbff8ead42ac",
+    "production_or_native_qualification": false
+  },
+  "qualification_floor_terminal_decoder_review_20261030": {
+    "scope": "Qualification-only canonical failed-floor next-permission gate uses the existing closed persisted-intent decoder, accepting a null native pod baseline while preserving original-byte digest, policy, generation, phase, floor, parent and child guards. Other lifecycle decoders and production paths remain unchanged. Independent source review completed; Linux and native QEMU validation remain required.",
+    "source_inventory_sha256": "5fffc403ef980bd92b6398b9afc5ca9248844498ce64843cf329de7f474013f8",
+    "production_or_native_qualification": false
+  },
+  "qualification_failed_probe_challenge_review_20261030": {
+    "scope": "For the two original probe HOLD cases only, the signed Guest diagnostic binds the validated and consumed original challenge hash to the committed Core challenge; the Guest monotonic-derived operation deadline and Core challenge wall deadline remain distinct. Owner return ordering uses the original Guest deadline. Challenge signature, identities, original nonce budget and source-only scope remain required. Independent source review completed; Linux and native QEMU validation remain required.",
+    "source_inventory_sha256": "5fffc403ef980bd92b6398b9afc5ca9248844498ce64843cf329de7f474013f8",
     "production_or_native_qualification": false
   }
 }
