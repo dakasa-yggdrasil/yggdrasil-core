@@ -12,7 +12,7 @@
   "source_inventory": {
     "id": "complete_runtime_source_census",
     "evidence": "docs/service-contract/source/sources.json",
-    "sha256": "09e94a5e7d96c553dc9008a59e65b5131ca9b72d68694021963ebd483c09636a"
+    "sha256": "e6e682ad84335f2f7ee34e63f50573ca59601fc588b065bd5b4568e515aed431"
   },
   "produces": [
     {
@@ -55,7 +55,7 @@
     {
       "id": "independent_source_review",
       "evidence": "docs/service-contract/REVIEW.json",
-      "sha256": "9e313a9441a3a6134807953771b19a2d08224620eca7093c6e2f0a7e66ccd7ee"
+      "sha256": "583786025092589b1f0bb2fbb0e7309d6888f3c0b2830e2935794baed0b7d613"
     }
   ],
   "callsREST": [
