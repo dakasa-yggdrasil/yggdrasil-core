@@ -1,4 +1,4 @@
-name: Isolated CodeQL reference barrier experiment
+name: Isolated CodeQL reference barrier focused experiment
 on:
   push:
     branches: ['elastic/codeql-evidence-diagnostic-20261030']
@@ -19,14 +19,14 @@ jobs:
         uses: github/codeql-action/setup-codeql@v3
         with:
           languages: go
-      - name: Build CodeQL database from exact diagnostic commit
+      - name: Build focused CodeQL database from exact diagnostic commit
         env:
           CODEQL_BIN: ${{ steps.setup.outputs.codeql-path }}
           GOMAXPROCS: '2'
         run: |
           set -euo pipefail
           "$CODEQL_BIN" version
-          "$CODEQL_BIN" database create "$RUNNER_TEMP/codeql-db" --language=go --source-root=. --command='go build -p 2 ./...'
+          "$CODEQL_BIN" database create "$RUNNER_TEMP/codeql-db" --language=go --source-root=. --command='go build -p 2 ./internal/controlplane'
       - name: Analyze original and reference-only barrier
         env:
           CODEQL_BIN: ${{ steps.setup.outputs.codeql-path }}
