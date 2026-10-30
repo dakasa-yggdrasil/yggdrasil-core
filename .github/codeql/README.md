@@ -25,3 +25,10 @@ If this repository-specific configuration fails to load, unset the
 suite; do not disable default setup. Verify a new managed main-branch scan and
 its open alerts before relying on pull-request comparisons. Keep the organization
 property's default unset so other repositories retain their own configuration.
+
+The repository property must reference `remote.yml` at a protected tag, not a
+file from the pull request being scanned. The configuration likewise fetches
+the query from that protected tag. Otherwise, a pull request could change its
+own scanner configuration or query and suppress an alert. For an update, create
+and protect a new versioned tag, verify its commit and scanner behavior, and only
+then change this repository's property to the new reference.
