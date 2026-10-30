@@ -148,6 +148,56 @@ type guestOriginalAuthorityTransport struct {
 	OriginalContextFailed bool      `json:"original_context_failed"`
 }
 
+// This qualification-test diagnostic re-evaluates only the already-failed
+// transport predicate, in its original order. It exposes no wire or identity.
+func guestOriginalAuthorityTransportFailure(wire, reply []byte, digest, readID, stage string, consistent bool) string {
+	var returned guestOriginalAuthorityTransport
+	switch {
+	case !consistent:
+		return "sql_consistency"
+	case capacity.BusinessCreationSHA256(wire) != digest:
+		return "wire_digest"
+	case capacity.DecodeGuestLifecycle(wire, &returned) != nil:
+		return "wire_decode"
+	case !capacity.GuestOriginalHTTPBodyFactsValid(returned.ResponseBodyScope, returned.ReadReturnedAt, returned.ReceivedBodyBytes, returned.ResponseSHA256, returned.RetainedPrefixBytes, returned.RetainedPrefixSHA256, returned.ReadFailed):
+		return "body_facts"
+	case returned.ResponseBodyScope != capacity.GuestOriginalBodyCompleteRead:
+		return "body_scope"
+	case returned.RetainedPrefixBytes != len(reply):
+		return "prefix_length"
+	case returned.RetainedPrefixSHA256 != capacity.BusinessCreationSHA256(reply):
+		return "prefix_digest"
+	case returned.ReadID != readID:
+		return "read_binding"
+	case returned.Stage != stage:
+		return "stage_binding"
+	case returned.Status != 200:
+		return "status"
+	case returned.PreflightFailed || returned.DoFailed || returned.ReadFailed || returned.CloseFailed || returned.OriginalContextFailed:
+		return "failure_flags"
+	case len(reply) == 0:
+		return "reply_empty"
+	case returned.ReceivedBodyBytes != len(reply):
+		return "reply_length"
+	case returned.ResponseSHA256 != capacity.BusinessCreationSHA256(reply):
+		return "reply_digest"
+	case returned.StartedAt.IsZero() || returned.DoStartedAt.Before(returned.StartedAt) || returned.DoReturnedAt.Before(returned.DoStartedAt) || returned.ReadReturnedAt.Before(returned.DoReturnedAt) || returned.CloseReturnedAt.Before(returned.ReadReturnedAt) || returned.DriverReturnedAt.Before(returned.CloseReturnedAt) || !returned.DriverReturnedAt.Before(returned.OriginalDeadline):
+		return "clock_order"
+	default:
+		return "unknown"
+	}
+}
+
+func guestOriginalAuthorityTransportLocation(phase string, ordinal int, stage string) string {
+	if (phase != "before_start" && phase != "before_poweroff") || (ordinal != 1 && ordinal != 2) || (stage != "snapshot" && stage != "journal") {
+		return "unknown"
+	}
+	if ordinal == 1 {
+		return phase + "_1_" + stage
+	}
+	return phase + "_2_" + stage
+}
+
 func guestOriginalNativeSource(value string) bool {
 	raw, err := hex.DecodeString(value)
 	return err == nil && len(raw) == 20 && value == strings.ToLower(value)
@@ -393,6 +443,9 @@ func TestCapacityGuestOriginalNativeCorpusPostgres(t *testing.T) {
 		var returned guestOriginalAuthorityTransport
 		if !consistent || capacity.BusinessCreationSHA256(wire) != digest || capacity.DecodeGuestLifecycle(wire, &returned) != nil || !capacity.GuestOriginalHTTPBodyFactsValid(returned.ResponseBodyScope, returned.ReadReturnedAt, returned.ReceivedBodyBytes, returned.ResponseSHA256, returned.RetainedPrefixBytes, returned.RetainedPrefixSHA256, returned.ReadFailed) || returned.ResponseBodyScope != capacity.GuestOriginalBodyCompleteRead || returned.RetainedPrefixBytes != len(reply) || returned.RetainedPrefixSHA256 != capacity.BusinessCreationSHA256(reply) || returned.ReadID != readID || returned.Stage != stage || returned.Status != 200 || returned.PreflightFailed || returned.DoFailed || returned.ReadFailed || returned.CloseFailed || returned.OriginalContextFailed || len(reply) == 0 || returned.ReceivedBodyBytes != len(reply) || returned.ResponseSHA256 != capacity.BusinessCreationSHA256(reply) || returned.StartedAt.IsZero() || returned.DoStartedAt.Before(returned.StartedAt) || returned.DoReturnedAt.Before(returned.DoStartedAt) || returned.ReadReturnedAt.Before(returned.DoReturnedAt) || returned.CloseReturnedAt.Before(returned.ReadReturnedAt) || returned.DriverReturnedAt.Before(returned.CloseReturnedAt) || !returned.DriverReturnedAt.Before(returned.OriginalDeadline) {
 			rows.Close()
+			if c.NativeCase == "actor_startup_delay_positive" {
+				t.Log("closed authority transport failure", guestOriginalAuthorityTransportLocation(phase, ordinal, stage), guestOriginalAuthorityTransportFailure(wire, reply, digest, readID, stage, consistent))
+			}
 			t.Fatal("actual original authority transport and exact complete body do not join")
 		}
 		if phase == "before_start" && stage == "snapshot" && (ordinal == 1 || ordinal == 2) {
