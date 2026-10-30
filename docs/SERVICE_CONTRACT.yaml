@@ -12,13 +12,13 @@
   "source_inventory": {
     "id": "complete_runtime_source_census",
     "evidence": "docs/service-contract/source/sources.json",
-    "sha256": "ef302de27f6bd0bc5ca61418a6f64c5b30617024197b01bb39e35d1067dcadc7"
+    "sha256": "b9a5626d175219c29f4c84c6898063ba033285bb63a26e5f5794ba357bfc90ac"
   },
   "produces": [
     {
       "id": "transactional_event_emission_sites",
       "evidence": "docs/service-contract/source/event-emissions.json",
-      "sha256": "8639e6bf6d2c5ec479f9b171a9b50f03a558798f28ed45a0afb9908ba7649461"
+      "sha256": "b4521ca10cb6c9a87751b50901cf1593cb61f4823b1d522bceb5d55c2c4ab19e"
     },
     {
       "id": "embedded_event_schema_keys",
@@ -55,7 +55,7 @@
     {
       "id": "independent_source_review",
       "evidence": "docs/service-contract/REVIEW.json",
-      "sha256": "1f54578b3195b3215a72e9332bbaff900b668f2fe95be2e0197195420d2c62ac"
+      "sha256": "05848cabb798a1f0638ea1e71f9e0d7930baae625076b2b5e498366b8ad1c46d"
     }
   ],
   "callsREST": [
@@ -79,7 +79,7 @@
     {
       "id": "http_mux_registrations",
       "evidence": "docs/service-contract/source/http-routes.json",
-      "sha256": "307e728d9784d9eac8cedf4041c872efd7afa63f0ae06f933401a59a6f32effb"
+      "sha256": "04af3608cbb28014ba46895f8f5dbcc6a1be0a30993a6117e21117f3b803c66e"
     },
     {
       "id": "pre_mux_capacity_dispatch",
@@ -89,7 +89,7 @@
     {
       "id": "auth_dispatch_source_functions",
       "evidence": "docs/service-contract/source/authentication-dispatch.json",
-      "sha256": "2a15c37e44c30785ed9b5f8631318766930a39188d43d0cacb1335cf340ece0a"
+      "sha256": "294f2bf42a4949f712b992b0c6fe57755f225b049c5f09000579581ceb6bd97c"
     }
   ]
 }

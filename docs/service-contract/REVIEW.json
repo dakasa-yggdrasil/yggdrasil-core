@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "ef302de27f6bd0bc5ca61418a6f64c5b30617024197b01bb39e35d1067dcadc7",
+  "source_inventory_sha256": "b9a5626d175219c29f4c84c6898063ba033285bb63a26e5f5794ba357bfc90ac",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -822,6 +822,11 @@
   "main_merge_floor_and_directory_review_20261029": {
     "scope": "Merge current Core main through 89855092 with the qualification floor and publication-return changes; Directory credential-family precedence, collision refusal and sensitive-log projection reviewed statically. Upstream changes are incorporated from main. Remote Linux tests, CI, native QEMU and production qualification remain required.",
     "source_inventory_sha256": "ef302de27f6bd0bc5ca61418a6f64c5b30617024197b01bb39e35d1067dcadc7",
+    "production_or_native_qualification": false
+  },
+  "main_adr0088_security_merge_review_20261029": {
+    "scope": "Merge upstream ADR-0088 removal of body-asserted third-party login, preserving provider browser start and callback. Source merge review only; original CI, Linux integration and production readback are required.",
+    "source_inventory_sha256": "b9a5626d175219c29f4c84c6898063ba033285bb63a26e5f5794ba357bfc90ac",
     "production_or_native_qualification": false
   }
 }
