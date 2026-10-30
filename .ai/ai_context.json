@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-29T22:59:44-03:00",
+  "generated_at": "2026-10-29T23:29:03-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 1385,
@@ -8,10 +8,10 @@
     ".py": 16,
     ".sql": 82,
     ".yaml": 11,
-    ".yml": 31
+    ".yml": 32
   },
   "provenance": {
-    "commit": "523990a8a5001a73b79ff54df75a16426b3c39b4",
+    "commit": "2382189b7f9cbb47eecd1afdc8f62b34a2115de1",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "a1c06972efb01c9f5247291eccf9ab81506d80b024fdb51db1d30bb32ba6ed3f"
+        "sha256": "d27cc6785f7bd899b28928db9ddd16edfdf8d332f0c90c9638863e52a7f2530f"
       },
       {
         "path": "AGENTS.md",
@@ -66,7 +66,7 @@
     {
       "path": "repository",
       "files": 315,
-      "kb": 3943
+      "kb": 3944
     },
     {
       "path": "controllers/httpapi",
@@ -311,7 +311,7 @@
     ]
   },
   "ops": {
-    "config_files": 15,
-    "k8s_manifests": 15
+    "config_files": 16,
+    "k8s_manifests": 16
   }
 }

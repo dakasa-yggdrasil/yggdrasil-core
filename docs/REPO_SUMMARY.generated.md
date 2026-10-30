@@ -1,6 +1,6 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-29T22:59:44-03:00_
+_Generated from HEAD at: 2026-10-29T23:29:03-03:00_
 
 ## Languages
 
@@ -9,7 +9,7 @@ _Generated from HEAD at: 2026-10-29T22:59:44-03:00_
 - `.py`: 16 files
 - `.sql`: 82 files
 - `.yaml`: 11 files
-- `.yml`: 31 files
+- `.yml`: 32 files
 
 ## Contracts & Artifacts
 
@@ -24,7 +24,7 @@ _Generated from HEAD at: 2026-10-29T22:59:44-03:00_
 
 ## Top Directories by File Count
 
-- repository: 315 files (3943.6 KB)
+- repository: 315 files (3944.6 KB)
 - controllers/httpapi: 235 files (2395.2 KB)
 - controllers/message: 178 files (1567.1 KB)
 - internal/capacity: 117 files (1330.7 KB)
@@ -32,7 +32,7 @@ _Generated from HEAD at: 2026-10-29T22:59:44-03:00_
 - db/migrations: 81 files (482.7 KB)
 - manifest: 65 files (397.1 KB)
 - addons: 50 files (288.7 KB)
-- internal/capacitynativeqemu: 47 files (297.8 KB)
+- internal/capacitynativeqemu: 47 files (297.9 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
 - cmd/native-guest-lifecycle-fixture: 25 files (239.3 KB)
 - controllers/oidc: 25 files (210.8 KB)
@@ -54,8 +54,8 @@ _Generated from HEAD at: 2026-10-29T22:59:44-03:00_
 
 ## Ops & Messaging
 
-- K8s/Config files scanned: **15**
-- Manifests (k8s-ish): **15**
+- K8s/Config files scanned: **16**
+- Manifests (k8s-ish): **16**
 
 ## Dependencies
 

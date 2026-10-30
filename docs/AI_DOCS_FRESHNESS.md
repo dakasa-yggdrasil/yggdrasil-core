@@ -7,9 +7,10 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 523990a8a5001a73b79ff54df75a16426b3c39b4
-verified_diff_sha256: e42c6f1bd58616e9feca38e431e5d84d79a5d5497a95357cfdd23aa0b05dec26
+verified_at_commit: 2382189b7f9cbb47eecd1afdc8f62b34a2115de1
+verified_diff_sha256: 15aa498af0047433e3470f33bb2d8ef5f0a45a4ffb9e6bf42792c4aab6907163
 reconciler_schema: 1
+qualification_noncanonical_pending_and_pg17_http_review: The two source-only failed-create slots preserve pending enrollment until guarded cleanup, while the isolated PG17 HTTP gate is restored alongside PG16. Independent review and targeted Linux LAB tests passed; original QEMU and owning CI remain required.
 qualification_pg17_retained_intent_read_review: The canonical failed-floor terminal and next intent and the partial-recovery terminal are read from the original private file and validated by the existing closed qualification CapacityIntent decoder. Hashes, joins and production paths remain unchanged. Independent review and Linux LAB race census passed; final QEMU and owning CI remain required.
 qualification_floor_terminal_decoder_review: The qualification-only failed-floor next-permission gate uses the existing closed persisted-intent decoder for a null pod baseline while retaining original digest, policy, generation, floor, parent and child guards. Independent source review completed; Linux and native QEMU validation remain required.
 qualification_failed_probe_challenge_review: The two probe HOLD cases bind the original validated and consumed challenge by signed Guest hash and committed Core hash; Guest owner timing retains its actual monotonic-derived deadline. Other native cases and production qualification are not claimed. Independent source review completed; Linux and native QEMU validation remain required.
