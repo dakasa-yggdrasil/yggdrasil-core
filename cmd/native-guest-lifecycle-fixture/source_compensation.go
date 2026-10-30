@@ -9,6 +9,7 @@ import (
  "encoding/base64"
  "encoding/json"
  "net/http"
+ "os"
  "path/filepath"
  "time"
 
@@ -52,10 +53,14 @@ func publishOriginalSourceCleanupAuthority(ctx context.Context, dir string, wire
 // positive enrollment for an uncertain reply. The frontend owns its actual
 // child, original Wait and pipe owners; signed source authority is durable
 // BEFORE any separately labelled host cleanup action.
+func (f *fixture) sourceFailureCleanupStore() repository.CapacityStore {
+ return repository.CapacityStore{DB:f.db,WorkflowID:f.workflow.ID,ExecutionEnabled:os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED")=="true"}
+}
+
 func (f *fixture) finishOriginalSourceCompensation(ctx context.Context,p model.CapacityPolicySpec,baseline,burst model.WorkflowRunRecord,runIDs []string,returns []originalPublicReturn) error {
  if !q.SourceCompensationCase(f.request.NativeCase) || baseline.Status!="succeeded" || burst.Status!="failed" || p.Ceiling!=2 || p.Floor<1 || p.Floor>2 {return q.ErrOriginalUnknown}
  pre,err:=f.realm.OriginalPreregistration(2);if err!=nil{return err}
- store:=repository.CapacityStore{DB:f.db,WorkflowID:f.workflow.ID}
+ store:=f.sourceFailureCleanupStore()
  failureSHA,enrollmentSHA:="",""
  if !q.SourceLostCreateCase(f.request.NativeCase) {
   var witness model.CapacityGuestOriginalCreateWitness;var wire []byte
