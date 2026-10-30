@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-30T05:47:05-03:00",
+  "generated_at": "2026-10-30T09:04:56-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1397,
+    ".go": 1399,
     ".json": 178,
     ".py": 16,
     ".sql": 82,
@@ -11,7 +11,7 @@
     ".yml": 32
   },
   "provenance": {
-    "commit": "9ab2d0f451a0b03b0dc48006dbe8cde801e95978",
+    "commit": "da6e99fafd9c8a634d4f60a889571f247c45fc0e",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "e01d8cce8d36f00af561dc16c8f4d6b11f2217eb663ffd38c0b2290b6ffe4ec2"
+        "sha256": "f5454545ff84621f69b463184dd9890149e121f2749da19e8ce8c883be6bf7d6"
       },
       {
         "path": "AGENTS.md",
@@ -110,8 +110,8 @@
     },
     {
       "path": "cmd/native-guest-lifecycle-fixture",
-      "files": 28,
-      "kb": 249
+      "files": 30,
+      "kb": 253
     },
     {
       "path": "docs/bootstrap/manifests/integrations",
