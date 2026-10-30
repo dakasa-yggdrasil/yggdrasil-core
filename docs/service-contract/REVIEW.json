@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "e39e7a9b59509ae8815e897a77e7598d6332eefc8d88034d81eb8b3bcc2a3f32",
+  "source_inventory_sha256": "4feff8ef6bdf8bbb4dcba468888ae2a5bd33804bfd30ebfd3a6a77d54403198f",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -877,6 +877,16 @@
   "original_guest_workflow_output_review_20261030": {
     "scope": "The permission-only output no longer shadows the original provisioning result, so the existing public workflow output retains the preregistration, committed witness digest and receipt. A native corpus test additionally joins the witness digest to its committed original wire. Independent review and targeted Linux race tests passed; actual positive QEMU and owning CI remain required.",
     "source_inventory_sha256": "e39e7a9b59509ae8815e897a77e7598d6332eefc8d88034d81eb8b3bcc2a3f32",
+    "production_or_native_qualification": false
+  },
+  "control_plane_validation_and_allocation_review_20261030": {
+    "scope": "Reject invalid database password references without echoing input. Remove an unchecked map size sum, explicitly bound the collaborator allocation by the existing normalized limit, and reject an oversized original audit frame before wire allocation while retaining the failure marker and original raw bytes. Independent review and focused Linux race tests passed; owning CI and CodeQL review remain required.",
+    "source_inventory_sha256": "4feff8ef6bdf8bbb4dcba468888ae2a5bd33804bfd30ebfd3a6a77d54403198f",
+    "production_or_native_qualification": false
+  },
+  "noncanonical_pending_selector_census_review_20261030": {
+    "scope": "Align the existing source-only pending selection test with the two failed-create slot-2 cases while continuing to require rejection of a mismatched grant and excluding the baseline, lost replies and source-live floor case. No production behavior changed; full owning CI and native qualification remain required.",
+    "source_inventory_sha256": "4feff8ef6bdf8bbb4dcba468888ae2a5bd33804bfd30ebfd3a6a77d54403198f",
     "production_or_native_qualification": false
   }
 }
