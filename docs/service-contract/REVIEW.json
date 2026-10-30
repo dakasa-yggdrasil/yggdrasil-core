@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "7744f3374fc6b82428f2c7bdb4e91cfc40cc8fb03a3884cdfc988c6584d75811",
+  "source_inventory_sha256": "3f1e4b6ecf9bc4a85670bf7ae91588c91b23d9877939b819d21ac586655c3afb",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -862,6 +862,11 @@
   "qualification_pg17_owned_http_gate_review_20261030": {
     "scope": "Restore the original source-owned PostgreSQL 17 HTTP callback gate beside the existing PostgreSQL 16 coverage. Original owner, source parity, race, isolated database and cleanup checks remain required. LAB HTTP gate passed; owning CI remains required.",
     "source_inventory_sha256": "7744f3374fc6b82428f2c7bdb4e91cfc40cc8fb03a3884cdfc988c6584d75811",
+    "production_or_native_qualification": false
+  },
+  "qualification_source_cleanup_execution_authority_review_20261030": {
+    "scope": "The native qualification source cleanup store reads the same process execution authority as the fixture and production controller; the existing policy, lease, owner and fencing guards remain required. Independent source review and targeted LAB Linux race tests passed; the original QEMU and owning CI remain required.",
+    "source_inventory_sha256": "3f1e4b6ecf9bc4a85670bf7ae91588c91b23d9877939b819d21ac586655c3afb",
     "production_or_native_qualification": false
   }
 }
