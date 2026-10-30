@@ -898,5 +898,10 @@
     "scope": "Source fence and recovery callers retain only closed already-projected public returns on failure. Failure recording does not replace the original error, grant a new effect, or produce success evidence. Independent source review completed; focused Linux, owning CI and native qualification remain required.",
     "source_inventory_sha256": "bb79d38a3ffa01dd8fc9f4fcc6f50bd23742ecaf171c21e857c3db74a4b2fb41",
     "production_or_native_qualification": false
+  },
+  "source_terminal_failure_retention_review_20261030": {
+    "scope": "The Source terminal caller uses the existing failure-only closed public return retention, without altering original error or granting native or production authority. Source review completed; focused Linux and owning CI remain required.",
+    "source_inventory_sha256": "128cd89bf2cb871798baf25b7421a84ac36a3b8c03f19f885c72faea5d313f94",
+    "production_or_native_qualification": false
   }
 }
