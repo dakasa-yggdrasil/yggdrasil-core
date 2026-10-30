@@ -628,22 +628,28 @@ func (f *fixture) runOriginalSourceFenceCaller(ctx context.Context) (runErr erro
 
 func (f *fixture) runOriginalRecoveryContractCaller(ctx context.Context) (runErr error) {
 	defer f.retainSourceCallerFailure(ctx, &runErr)
+	stage := "entry"
+	defer func() { f.retainRecoveryGuardFailure(ctx, runErr, stage) }()
 	if !q.SourceRecoveryCase(f.request.NativeCase) || len(f.realm.OwnedSlots()) != 0 {
 		return q.ErrOriginalUnknown
 	}
+	stage = "policy_decode"
 	var p model.CapacityPolicySpec
 	if json.Unmarshal(f.policy.Spec, &p) != nil {
 		return q.ErrOriginalUnknown
 	}
+	stage = "workflow"
 	run, returns, err := f.originalWorkflow(ctx, "source_contract", 1, q.QualificationAssessment(p, 0, 0.9, time.Now().UTC()), "")
 	if err != nil || run.Status != "succeeded" || run.Result == nil || len(run.Result.Steps) != 3 {
 		return q.ErrOriginalUnknown
 	}
+	stage = "contract_read_and_identity"
 	var contract q.SourceRecoveryContract
 	wire, err := q.ReadPrivate(ctx, filepath.Join(f.private, "source-recovery-contract.json"), &contract)
 	if err != nil || contract.Schema != "core_original_source_recovery_contract_v1" || contract.Scope != "SOURCE_CONTRACT_ONLY_NO_NATIVE_AUTHORITY" || contract.Case != f.request.NativeCase || contract.CoreSource != capacity.CurrentGuestCoreSource() || contract.GuestSource != f.request.SourceCommit || contract.Namespace != f.namespace || contract.PolicyID != f.policy.ID.String() || contract.WorkflowID != f.workflow.ID.String() || contract.Slot != 1 || contract.NativeQualified || !contract.CheckedAt.Before(contract.OriginalDeadline) || contract.OriginalDeadline.After(f.request.OriginalContextDeadline) || contract.DBExpiryObservedAt.Before(contract.GrantExpiresAt) {
 		return q.ErrOriginalUnknown
 	}
+	stage = "workflow_step_binding"
 	matched := 0
 	for _, step := range run.Result.Steps {
 		if step.Status != "succeeded" || step.Error != "" {
@@ -658,14 +664,17 @@ func (f *fixture) runOriginalRecoveryContractCaller(ctx context.Context) (runErr
 			matched++
 		}
 	}
+	stage = "phase_binding"
 	if matched != 1 || contract.PhaseAfter != contract.PhaseBefore || contract.PhaseAfter != "preparing" || contract.ReconcileAccepted {
 		return q.ErrOriginalUnknown
 	}
+	stage = "original_provisioning"
 	store := repository.CapacityStore{DB: f.db}
 	pre, err := store.OriginalGuestProvisioning(ctx, contract.GrantID)
 	if err != nil || pre.PreregistrationID != contract.PreregistrationID || pre.Generation != contract.Generation || pre.Fence != contract.FenceBefore {
 		return q.ErrOriginalUnknown
 	}
+	stage = "intent_read_and_binding"
 	var rawIntent, rawGrant []byte
 	if err = f.db.QueryRowContext(ctx, `SELECT intent FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, f.namespace, p.Environment, p.Domain, p.Dimension).Scan(&rawIntent); err != nil {
 		return err
@@ -674,17 +683,21 @@ func (f *fixture) runOriginalRecoveryContractCaller(ctx context.Context) (runErr
 	if json.Unmarshal(rawIntent, &intent) != nil || intent.PolicyID != f.policy.ID || intent.PolicyChecksum != f.policy.Checksum || intent.FencingToken != contract.FenceAfter || intent.Phase != contract.PhaseAfter {
 		return q.ErrOriginalUnknown
 	}
+	stage = "grant_record_hash"
 	if err = f.db.QueryRowContext(ctx, `SELECT grant_record FROM public.capacity_mutation_grants WHERE id=$1 AND namespace=$2`, contract.GrantID, f.namespace).Scan(&rawGrant); err != nil || capacity.BusinessCreationSHA256(rawGrant) != contract.GrantAfterSHA256 {
 		return q.ErrOriginalUnknown
 	}
+	stage = "grant_state"
 	var state string
 	if err = f.db.QueryRowContext(ctx, `SELECT state FROM public.capacity_mutation_grants WHERE id=$1 AND namespace=$2`, contract.GrantID, f.namespace).Scan(&state); err != nil || state != contract.StateAfter {
 		return q.ErrOriginalUnknown
 	}
+	stage = "policy_binding"
 	actualPolicy, err := repository.GetManifestByID(ctx, f.db, f.policy.ID)
 	if err != nil || actualPolicy.ID != f.policy.ID || actualPolicy.Kind != "capacity_policy" || actualPolicy.Checksum != f.policy.Checksum || actualPolicy.Metadata.Namespace != f.namespace || actualPolicy.Metadata.Active != contract.PolicyActiveAfter {
 		return q.ErrOriginalUnknown
 	}
+	stage = "case_invariants"
 	if contract.Case == "source_contract_unredeemed_expiry_recovery" {
 		if !contract.PolicyPauseApplied || contract.PolicyPauseRows != 1 || contract.PolicyActiveAfter || contract.PauseMode != "persisted_policy_manifest_inactive_and_recovery_store_execution_disabled" {
 			return q.ErrOriginalUnknown
@@ -700,10 +713,12 @@ func (f *fixture) runOriginalRecoveryContractCaller(ctx context.Context) (runErr
 			return q.ErrOriginalUnknown
 		}
 	}
+	stage = "publish_returns"
 	returnsWire, err := q.Publish(ctx, filepath.Join(f.private, "source-recovery-public-returns.json"), returns)
 	if err != nil {
 		return err
 	}
+	stage = "publish_completion_readback"
 	completion := q.SourceFenceCompletion{Schema: q.FixtureSchema, Stage: "original-source-contract-completed.json", Scope: "SOURCE_CONTRACT_ONLY_NO_NATIVE_AUTHORITY", Case: contract.Case, CoreSource: contract.CoreSource, GuestSource: contract.GuestSource, WorkflowRunID: run.ID.String(), ContractSHA256: capacity.BusinessCreationSHA256(wire), PublicReturnsSHA256: capacity.BusinessCreationSHA256(returnsWire), NativeQualified: false}
 	if _, err = q.Publish(ctx, filepath.Join(f.private, "source-recovery-caller-readback.json"), completion); err != nil {
 		return err

@@ -56,4 +56,36 @@ func TestSourceContractFailureRetainsPublicReturns(t *testing.T) {
 			t.Fatalf("original error changed after failed diagnostic publication: %v", runErr)
 		}
 	})
+
+	for _, tc := range []struct {
+		nativeCase, stage string
+		err               error
+		want              bool
+	}{
+		{"source_contract_unresolved_expiry", "contract_read_and_identity", q.ErrOriginalUnknown, true},
+		{"source_contract_unredeemed_expiry_recovery", "grant_state", q.ErrOriginalUnknown, true},
+		{"source_contract_unresolved_expiry", "grant_state", nil, false},
+		{"positive_original_lifecycle", "grant_state", q.ErrOriginalUnknown, false},
+		{"source_contract_unresolved_expiry", "secret arbitrary input", q.ErrOriginalUnknown, false},
+	} {
+		f := &fixture{private: t.TempDir()}
+		f.request.NativeCase = tc.nativeCase
+		f.retainRecoveryGuardFailure(context.Background(), tc.err, tc.stage)
+		path := filepath.Join(f.private, "core-source-recovery-guard-diagnostic.json")
+		if !tc.want {
+			if _, err := os.Lstat(path); !errors.Is(err, os.ErrNotExist) {
+				t.Fatal("unexpected failure projection")
+			}
+			continue
+		}
+		var got struct {
+			Schema string `json:"schema"`
+			Case   string `json:"case"`
+			Stage  string `json:"stage"`
+			Scope  string `json:"scope"`
+		}
+		if _, err := q.ReadPrivate(context.Background(), path, &got); err != nil || got.Schema != "core_source_recovery_guard_diagnostic_v1" || got.Case != tc.nativeCase || got.Stage != tc.stage || got.Scope != "failure_observation_only_not_authority" {
+			t.Fatal("incorrect failure-only guard projection")
+		}
+	}
 }

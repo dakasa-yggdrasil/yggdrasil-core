@@ -331,3 +331,24 @@ func (record *originalPublicReturn) projectOriginalWorkflowReturn(run model.Work
 		}
 	}
 }
+
+// The fixed label identifies only the last entered guard group. Publication is
+// best-effort and never changes the original result or establishes authority.
+func (f *fixture) retainRecoveryGuardFailure(ctx context.Context, runErr error, stage string) {
+	if runErr == nil || !q.SourceRecoveryCase(f.request.NativeCase) {
+		return
+	}
+	switch stage {
+	case "entry", "policy_decode", "workflow", "contract_read_and_identity", "workflow_step_binding", "phase_binding", "original_provisioning", "intent_read_and_binding", "grant_record_hash", "grant_state", "policy_binding", "case_invariants", "publish_returns", "publish_completion_readback":
+	default:
+		return
+	}
+	diagnostic, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	_, _ = q.Publish(diagnostic, filepath.Join(f.private, "core-source-recovery-guard-diagnostic.json"), struct {
+		Schema string `json:"schema"`
+		Case   string `json:"case"`
+		Stage  string `json:"stage"`
+		Scope  string `json:"scope"`
+	}{"core_source_recovery_guard_diagnostic_v1", f.request.NativeCase, stage, "failure_observation_only_not_authority"})
+}
