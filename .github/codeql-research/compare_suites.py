@@ -15,7 +15,7 @@ def load(path):
 base_rules, base_findings = load(sys.argv[1])
 new_rules, new_findings = load(sys.argv[2])
 base_id = 'go/weak-sensitive-data-hashing'
-new_id = 'dakasa-research/weak-sensitive-narrow'
+new_id = 'dakasa/go-secret-reference-hashing'
 assert base_id in base_rules, ('missing_baseline_hash_query', base_rules)
 assert new_id in new_rules, ('missing_configured_hash_query', new_rules)
 assert base_id not in new_rules, 'old hash query unexpectedly remains in candidate'

@@ -1,4 +1,4 @@
-name: Isolated CodeQL action and immutable query experiment
+name: Isolated CodeQL Action exact candidate suite comparison
 on:
   push:
     branches: ['elastic/codeql-evidence-diagnostic-20261030']
@@ -7,26 +7,40 @@ permissions:
   security-events: read
 jobs:
   analyze:
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - language: go
+            suite: go
+            mode: manual
+          - language: actions
+            suite: actions
+            mode: none
+          - language: javascript-typescript
+            suite: javascript
+            mode: none
+          - language: python
+            suite: python
+            mode: none
     runs-on: ubuntu-latest
     timeout-minutes: 35
     steps:
       - uses: actions/checkout@v4
         with:
           persist-credentials: false
-      - uses: actions/setup-go@v5
+      - if: matrix.language == 'go'
+        uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
-      - name: Verify reference identity before analysis
-        run: |
-          set -euo pipefail
-          test "$(git ls-remote --tags https://github.com/dakasa-yggdrasil/yggdrasil-core.git refs/tags/codeql-research-c55-20261030 | cut -f1)" = c55c0a7856a39dbd523be30c099e51b136ad9ce6
       - id: init
         uses: github/codeql-action/init@v4
         with:
-          languages: go
-          build-mode: manual
-          config-file: .github/codeql-research/codeql-config-external-research.yml
-      - name: Build Core
+          languages: ${{ matrix.language }}
+          build-mode: ${{ matrix.mode }}
+          config-file: .github/codeql/codeql-config.yml
+      - if: matrix.language == 'go'
+        name: Build Core
         run: go build -p 2 ./...
       - id: analyze
         uses: github/codeql-action/analyze@v4
@@ -34,24 +48,32 @@ jobs:
           upload: never
           upload-database: false
           output: ${{ runner.temp }}/codeql-action-results
-      - name: Compare with default Go suite and positive controls
+      - name: Compare with default suite
         env:
           CODEQL_BIN: ${{ steps.init.outputs.codeql-path }}
-          CODEQL_DB: ${{ fromJSON(steps.analyze.outputs.db-locations).go }}
+          CODEQL_DBS: ${{ steps.analyze.outputs.db-locations }}
+          TASK_SUITE: ${{ matrix.suite }}
+          TASK_LANGUAGE: ${{ matrix.language }}
         run: |
           set -euo pipefail
-          "$CODEQL_BIN" database analyze "$CODEQL_DB" codeql/go-queries:codeql-suites/go-code-scanning.qls --format=sarif-latest --output="$RUNNER_TEMP/original.sarif" --threads=2
-          candidate="$RUNNER_TEMP/codeql-action-results/go.sarif"
-          test -f "$candidate"
-          python3 .github/codeql-research/compare_suites.py "$RUNNER_TEMP/original.sarif" "$candidate"
-          python3 .github/codeql-research/verify.py "$RUNNER_TEMP/original.sarif" "$candidate"
+          database="$(printf '%s' "$CODEQL_DBS" | jq -er 'to_entries | if length == 1 then .[0].value else error("expected one database") end')"
+          "$CODEQL_BIN" database analyze "$database" "codeql/${TASK_SUITE}-queries:codeql-suites/${TASK_SUITE}-code-scanning.qls" --format=sarif-latest --output="$RUNNER_TEMP/original.sarif" --threads=2 2>&1 | tee "$RUNNER_TEMP/baseline.log"
+          mapfile -t candidates < <(find "$RUNNER_TEMP/codeql-action-results" -name '*.sarif' -type f)
+          test "${#candidates[@]}" -eq 1
+          if [ "$TASK_LANGUAGE" = go ]; then
+            python3 .github/codeql-research/compare_suites.py "$RUNNER_TEMP/original.sarif" "${candidates[0]}"
+            python3 .github/codeql-research/verify.py "$RUNNER_TEMP/original.sarif" "${candidates[0]}"
+          else
+            python3 .github/codeql-research/compare_other_suites.py "$RUNNER_TEMP/original.sarif" "${candidates[0]}"
+          fi
       - name: Preserve reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: codeql-action-external-query-reports
+          name: codeql-action-exact-${{ matrix.suite }}
           path: |
             ${{ runner.temp }}/original.sarif
+            ${{ runner.temp }}/baseline.log
             ${{ runner.temp }}/codeql-action-results/*.sarif
           if-no-files-found: ignore
           retention-days: 3
