@@ -453,7 +453,10 @@ func New(serviceName string, db *sql.DB, conn *amqp.Connection, logger *zap.Logg
 	// (security audit 2026-05-27 A4). The middleware wraps the handler
 	// so the limiter check runs before any DB work.
 	mux.Handle("POST /api/v1/auth/login", loginRateLimit(server.loginLimiter, http.HandlerFunc(server.handleAuthLogin)))
-	mux.HandleFunc("POST /api/v1/auth/third-party/login", server.handleAuthThirdPartyLogin)
+	// Third-party login is the browser flow only: start redirects to the
+	// provider, and the callback exchanges the provider's code and reads its
+	// userinfo server side. Never register a route that opens a session from
+	// a provider, subject or email the caller supplies (ADR-0088).
 	mux.HandleFunc("GET /api/v1/auth/third-party/start/{provider}", server.handleAuthThirdPartyStart)
 	mux.HandleFunc("GET /api/v1/auth/third-party/callback/{provider}", server.handleAuthThirdPartyCallback)
 	mux.HandleFunc("GET /api/v1/auth/third-party-identities", server.handleThirdPartyIdentityList)

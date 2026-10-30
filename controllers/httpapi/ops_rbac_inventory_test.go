@@ -351,7 +351,6 @@ func TestNoUngatedMutatingRoutes(t *testing.T) {
 		`POST /api/v1/auth/passwords/forgot`:            "pre-session, rate-limited",
 		`POST /api/v1/auth/passwords/reset`:             "reset-token flow, pre-session",
 		`POST /api/v1/auth/login`:                       "pre-session, rate-limited",
-		`POST /api/v1/auth/third-party/login`:           "pre-session third-party",
 		`POST /api/v1/auth/logout`:                      "self logout",
 		`POST /api/v1/auth/mfa/enroll/request`:          "pre-session enroll",
 		`POST /api/v1/auth/mfa/factors/totp/begin`:      "self MFA enroll",
