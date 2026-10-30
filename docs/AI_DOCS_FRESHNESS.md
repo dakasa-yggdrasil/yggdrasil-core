@@ -7,9 +7,10 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: bd10a51c6e49f04387984d8cd0271fbf9d14d02b
-verified_diff_sha256: e58d51cb5410de2f3eb307e94753a4446c3d9cfd70b021afddea72e6a30cb31e
+verified_at_commit: 1025486c206f46166f198c0b50da894e0a30d1a4
+verified_diff_sha256: d338b394d9e537cdf43d9b38051f54f5ecfbe707bf0f4a6ecda2e274c806eb42
 reconciler_schema: 1
+positive_authority_diagnostic_review: Qualification-only failed positive and startup retirement diagnostics retain closed bounded authority facts without changing authority or original outcomes. Independent static review complete; Linux CI and original executions remain required, and missing evidence remains unknown.
 startup_authority_diagnostic_review: Qualification-only failure diagnostics retain closed ordinal-two source observations and hash-bound transport flags; these reads are non-atomic and unobserved states do not prove absence. Static review completed; Linux and native CI remain required.
 source_live_failure_returns_review: Live-partial and historical Source failures preserve closed caller returns without changing original error or granting authority. Source review completed; Linux and owning CI remain required.
 source_terminal_failure_returns_review: The Source terminal caller preserves closed public return diagnostics only on failure and leaves the original outcome unchanged. Source review completed; Linux and owning CI remain required.
