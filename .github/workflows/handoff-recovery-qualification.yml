@@ -17,3 +17,7 @@ jobs:
         run: sudo python3 scripts/ci/handoff_recovery_experiment/linux_scope_integration.py
       - name: Test a disposable actual controller start and lock handoff
         run: sudo python3 scripts/ci/handoff_recovery_experiment/linux_real_backend_integration.py
+      - name: Test the combined Guardian recovery contracts
+        run: python3 -m unittest discover -s scripts/ci/handoff_guardian_integration -p 'test_*.py' -v
+      - name: Test Guardian recovery with disposable systemd units and locks
+        run: sudo --preserve-env=GITHUB_ACTIONS,RUNNER_ENVIRONMENT python3 scripts/ci/handoff_guardian_integration/ci_guardian_recovery_integration_DRAFT.py
