@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "4feff8ef6bdf8bbb4dcba468888ae2a5bd33804bfd30ebfd3a6a77d54403198f",
+  "source_inventory_sha256": "7442ca3f445db143712927139ea887102372484d80ca5e86e8284326ff5e4415",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -923,5 +923,12 @@
     "scope": "Qualification-only source_live_failed_floor_recovery uses the existing pending-enrollment verifier for slot 2 while retaining settlement, membership, event and cleanup guards. Focused Linux tests and independent source review passed; physical and exact integrated CI remain required.",
     "source_inventory_sha256": "73516bea820373f73124d2f4ae966416de285b079cc461accc64ee7a6dec948d",
     "production_or_native_qualification": false
+  },
+  "startup_log_redaction_review_20261030": {
+    "scope": "startup log no longer records broker URL; reports only whether configured",
+    "source_commit": "8cab2574521a9e72287d083a02f8c9f891cbdd57",
+    "linux_race_test_ssm": "56cc8169-f8be-4fa2-be92-b6e18df57c6f",
+    "production_broker_credential_presence_verified": false,
+    "candidate_ci_and_release_qualification_pending": true
   }
 }
