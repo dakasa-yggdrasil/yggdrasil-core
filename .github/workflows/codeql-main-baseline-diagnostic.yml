@@ -1,0 +1,57 @@
+name: Isolated CodeQL current main baseline comparison
+on:
+  push:
+    branches: ['elastic/codeql-main-baseline-diagnostic-20261030']
+permissions:
+  contents: read
+  security-events: read
+jobs:
+  analyze:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - id: init
+        uses: github/codeql-action/init@v4
+        with:
+          languages: go
+          build-mode: manual
+          config-file: .github/codeql/codeql-config.yml
+      - name: Build Core main with candidate scanner files
+        run: go build -p 2 ./...
+      - id: analyze
+        uses: github/codeql-action/analyze@v4
+        with:
+          upload: never
+          upload-database: false
+          output: ${{ runner.temp }}/candidate-results
+      - name: Compare current main published findings and default suite
+        env:
+          CODEQL_BIN: ${{ steps.init.outputs.codeql-path }}
+          CODEQL_DBS: ${{ steps.analyze.outputs.db-locations }}
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          database="$(printf '%s' "$CODEQL_DBS" | jq -er 'to_entries | if length == 1 then .[0].value else error("expected one database") end')"
+          "$CODEQL_BIN" database analyze "$database" codeql/go-queries:codeql-suites/go-code-scanning.qls --format=sarif-latest --output="$RUNNER_TEMP/original.sarif" --threads=2
+          gh api -H 'Accept: application/sarif+json' repos/dakasa-yggdrasil/yggdrasil-core/code-scanning/analyses/2058671595 > "$RUNNER_TEMP/published-main.sarif"
+          mapfile -t candidates < <(find "$RUNNER_TEMP/candidate-results" -name '*.sarif' -type f)
+          test "${#candidates[@]}" -eq 1
+          python3 .github/codeql-baseline-diagnostic/compare_suites.py "$RUNNER_TEMP/original.sarif" "${candidates[0]}"
+          python3 .github/codeql-baseline-diagnostic/compare_main.py "$RUNNER_TEMP/published-main.sarif" "$RUNNER_TEMP/original.sarif"
+      - name: Preserve reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: codeql-current-main-baseline-reports
+          path: |
+            ${{ runner.temp }}/original.sarif
+            ${{ runner.temp }}/published-main.sarif
+            ${{ runner.temp }}/candidate-results/*.sarif
+          if-no-files-found: ignore
+          retention-days: 3
