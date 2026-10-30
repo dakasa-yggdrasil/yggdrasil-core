@@ -7,9 +7,10 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 9ab2d0f451a0b03b0dc48006dbe8cde801e95978
-verified_diff_sha256: aaf271230db6a643c475a8a32341902983a0d3fbd8ef5846e00b4f1f7e0cc2aa
+verified_at_commit: 301f32aed95342e113ce18a4df8e536b6d085dec
+verified_diff_sha256: f4b14309b4cf1ea88300acdad89530fa0d96e3d877ebbc17984b807faa3db7e4
 reconciler_schema: 1
+qualification_held_hello_validation_diagnostic_review: Failure-only held-hello guard labels preserve the original decoder, refusal and signature checks. Independent review and Linux race census passed; isolated physical and owning CI remain required.
 source_terminal_physical_wire_review: Qualification-only decoder validates the original nil action-list representation without changing raw bytes or typed hash. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.
 source_recovery_historical_review: Qualification-only historical preregistration read verifies immutable bindings after lease expiry without granting current authority. Independent review and two original Source scenarios passed in a separately instrumented CI pair; exact integrated CI remains required.
 source_live_failure_returns_review: Live-partial and historical Source failures preserve closed caller returns without changing original error or granting authority. Source review completed; Linux and owning CI remain required.
