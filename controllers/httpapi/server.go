@@ -4238,7 +4238,7 @@ func mergeStringAnyMaps(base map[string]any, extra map[string]any) map[string]an
 	if len(base) == 0 && len(extra) == 0 {
 		return nil
 	}
-	out := make(map[string]any, len(base)+len(extra))
+	out := make(map[string]any, len(base))
 	for key, value := range base {
 		out[key] = value
 	}
