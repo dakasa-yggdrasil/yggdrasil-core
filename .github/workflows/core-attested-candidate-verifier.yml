@@ -1,0 +1,75 @@
+name: Independently verify an attested Core candidate
+
+on:
+  push:
+    branches:
+      - candidate/core-d524-attested-verify-20261030
+
+permissions:
+  contents: read
+  actions: read
+  attestations: write
+  id-token: write
+  artifact-metadata: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Download evidence from the fixed producer run
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: core-attested-candidate-41115565265-1
+          path: evidence
+          run-id: 41115565265
+          github-token: ${{ github.token }}
+
+      - name: Verify producer identity, attestations and byte joins
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: dakasa-yggdrasil/yggdrasil-core
+        run: |
+          set -eu
+          producer=6733c2510e4fcf3ffdacad901b88e59231bda941
+          workflow=dakasa-yggdrasil/yggdrasil-core/.github/workflows/core-attested-candidate.yml
+          mkdir verified
+          gh api "repos/$GH_REPO/actions/runs/41115565265" > verified/producer-run.json
+          gh api -H 'Accept: application/vnd.github.raw+json' "repos/$GH_REPO/contents/.github/workflows/core-attested-candidate.yml?ref=$producer" > verified/producer-workflow.yml
+          test "$(sha256sum verified/producer-workflow.yml | cut -d' ' -f1)" = 8cf6cee3d3535fa78580998e29ebe458709c75f5743a8d62306b0653eeac33ba
+          jq -e --arg head "$producer" '.id == 41115565265 and .run_attempt == 1 and .head_sha == $head and .path == ".github/workflows/core-attested-candidate.yml" and .status == "completed" and .conclusion == "success" and .repository.full_name == "dakasa-yggdrasil/yggdrasil-core"' verified/producer-run.json >/dev/null
+          for name in candidate.json manifest.json yggdrasil-core build-info.txt; do
+            test -f "evidence/$name"
+            gh attestation verify "evidence/$name" --repo "$GH_REPO" \
+              --signer-workflow "$workflow" --source-digest "$producer" \
+              --source-ref refs/heads/candidate/core-d524-attested-20261030 \
+              --deny-self-hosted-runners --format json > "verified/$name.attestation.json"
+          done
+          python3 - <<'PY'
+          import hashlib,json,pathlib
+          p=pathlib.Path('evidence');d=json.loads((p/'candidate.json').read_bytes());source='d52465ec5b26014406d2b010dce4fe09e2c169dd';head='6733c2510e4fcf3ffdacad901b88e59231bda941'
+          assert d['schema']=='attested_core_candidate_observation_v1' and d['source_commit']==source and d['workflow_head']==head and d['run_id']==41115565265 and d['run_attempt']==1 and d['production_activation'] is False
+          for file,key in (('manifest.json','manifest_sha256'),('yggdrasil-core','core_binary_sha256'),('build-info.txt','build_info_sha256')):assert hashlib.sha256((p/file).read_bytes()).hexdigest()==d[key]
+          assert d['image']=='ghcr.io/dakasa-yggdrasil/yggdrasil-core@sha256:'+d['manifest_sha256']
+          lines=(p/'build-info.txt').read_text().splitlines();fields={}
+          for line in lines:
+              pieces=line.strip().split(maxsplit=1)
+              if len(pieces)==2 and pieces[0]=='build':
+                  key,sep,value=pieces[1].partition('=');assert sep and key not in fields;fields[key]=value
+          assert all(fields.get(k)==v for k,v in {'vcs.revision':source,'vcs.modified':'false','GOOS':'linux','GOARCH':'amd64','CGO_ENABLED':'0'}.items()) and fields.get('-tags','')==''
+          out={'schema':'independent_attested_core_candidate_v1','producer_run':41115565265,'producer_attempt':1,'producer_workflow_head':head,'source_commit':source,'image':d['image'],'manifest_sha256':d['manifest_sha256'],'core_binary_sha256':d['core_binary_sha256'],'four_attestations_verified':True,'github_hosted_runner_enforced':True,'production_activation':False,'ecr_publication_qualified':False}
+          pathlib.Path('verified/summary.json').write_text(json.dumps(out,sort_keys=True,separators=(',',':'))+'\n')
+          PY
+
+      - name: Attest independent verification summary
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: verified/summary.json
+
+      - name: Preserve independent verification
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: core-attested-independent-${{ github.run_id }}-${{ github.run_attempt }}
+          path: verified/
+          if-no-files-found: error
+          retention-days: 2
