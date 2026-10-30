@@ -30,13 +30,16 @@ jobs:
         shell: bash
         run: |
           set -euo pipefail
-          go test -p 1 -race -count=1 -tags=nativequalification -json ./cmd/native-guest-lifecycle-fixture -run '^TestHeldHelloFailureStageClosed$' | tee "$RUNNER_TEMP/held-hello-stage.jsonl"
+          go test -p 1 -race -count=1 -tags=nativequalification -json ./cmd/native-guest-lifecycle-fixture ./internal/capacitynativeqemu -run '^(TestHeldHelloFailureStageClosed|TestHeldHelloFailureValidationGroups)$' | tee "$RUNNER_TEMP/held-hello-stage.jsonl"
           python3 - <<'PYCENSUS'
           import json,os
           rows=[json.loads(line) for line in open(os.environ['RUNNER_TEMP']+'/held-hello-stage.jsonl') if line.strip()]
-          root='TestHeldHelloFailureStageClosed'
-          required={root}|{root+'/'+name for name in ('pending','lease','success','foreign_case','arbitrary_stage')}
-          passed={row['Test'] for row in rows if row.get('Action')=='pass' and row.get('Test')}
+          fixture='github.com/dakasa-yggdrasil/yggdrasil-core/cmd/native-guest-lifecycle-fixture'
+          native='github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacitynativeqemu'
+          roots=((fixture,'TestHeldHelloFailureStageClosed',('pending','lease','decode','identity','signature','owners','probe','journal','case','census','success','foreign_case','arbitrary_stage')),
+                 (native,'TestHeldHelloFailureValidationGroups',('valid','identity','signature','owners','journal','case','census')))
+          required={(pkg,root) for pkg,root,names in roots}|{(pkg,root+'/'+name) for pkg,root,names in roots for name in names}
+          passed={(row.get('Package'),row['Test']) for row in rows if row.get('Action')=='pass' and row.get('Test')}
           if required-passed or any(row.get('Action') in ('skip','fail','build-fail') for row in rows):raise SystemExit('closed held hello census failed')
           PYCENSUS
       - name: Actual original provider source contracts and default refusal
