@@ -1,10 +1,10 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-30T11:22:22-03:00_
+_Generated from HEAD at: 2026-10-30T11:33:55-03:00_
 
 ## Languages
 
-- `.go`: 1397 files
+- `.go`: 1399 files
 - `.json`: 178 files
 - `.py`: 16 files
 - `.sql`: 82 files
@@ -33,7 +33,7 @@ _Generated from HEAD at: 2026-10-30T11:22:22-03:00_
 - manifest: 65 files (397.9 KB)
 - addons: 50 files (288.7 KB)
 - internal/capacitynativeqemu: 47 files (298.1 KB)
-- cmd/native-guest-lifecycle-fixture: 28 files (249.9 KB)
+- cmd/native-guest-lifecycle-fixture: 30 files (259.9 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
 - controllers/oidc: 25 files (210.8 KB)
 
