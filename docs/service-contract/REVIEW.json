@@ -918,5 +918,10 @@
     "scope": "Qualification-only terminal physical decoder preserves original bytes and typed hash while accepting the producer nil action list under closed validation. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.",
     "source_inventory_sha256": "09e94a5e7d96c553dc9008a59e65b5131ca9b72d68694021963ebd483c09636a",
     "production_or_native_qualification": false
+  },
+  "qualification_source_floor_compensation_diagnostic_review_20261030": {
+    "scope": "Qualification-only failure diagnostic retains a closed compensation stage for source failed-floor recovery; it preserves the original error and grants no authority. Focused CI passed; separate physical diagnosis remains required.",
+    "source_inventory_sha256": "56955697fb0f396da1031c36f2949bed072285e0915bcb6436c444f55c53458c",
+    "production_or_native_qualification": false
   }
 }
