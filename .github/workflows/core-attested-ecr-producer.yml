@@ -1,0 +1,98 @@
+name: One distinct attested Core ECR import
+
+on:
+  push:
+    branches:
+      - candidate/core-d524-ecr-producer-20261030
+
+permissions:
+  contents: read
+  actions: read
+  attestations: write
+  id-token: write
+  artifact-metadata: write
+
+concurrency:
+  group: distinct-core-ecr-attested-import-20261030
+  cancel-in-progress: false
+
+jobs:
+  import:
+    if: github.run_attempt == 1
+    runs-on: ubuntu-latest
+    timeout-minutes: 25
+    steps:
+      - name: Checkout producer source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Download independent signed candidate summary
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: core-attested-independent-41116032126-1
+          path: verified-input
+          run-id: 41116032126
+          github-token: ${{ github.token }}
+
+      - name: Verify independent summary and signer
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: dakasa-yggdrasil/yggdrasil-core
+        run: |
+          set -eu
+          expected=8a5b3ce9d4dd068baf0946d2032b1c0dd4f4c868d2ef373244cd1e71d38d7a46
+          test "$(sha256sum verified-input/summary.json | cut -d' ' -f1)" = "$expected"
+          gh attestation verify verified-input/summary.json --repo "$GH_REPO" \
+            --signer-workflow dakasa-yggdrasil/yggdrasil-core/.github/workflows/core-attested-candidate-verifier.yml \
+            --source-digest 07e39a36cd48b689069502ee0acee8394c96241e \
+            --source-ref refs/heads/candidate/core-d524-attested-verify-20261030 \
+            --deny-self-hosted-runners --format json > verified-input/summary-verification.json
+
+      - name: Install signed, version-pinned AWS CLI in runner temp
+        run: |
+          set -eu
+          root="$RUNNER_TEMP/r6-aws-cli"
+          test ! -e "$root"
+          mkdir -m 700 "$root" "$root/gnupg"
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 120 --max-filesize 200000000 \
+            https://awscli.amazonaws.com/awscli-exe-linux-x86_64-2.34.29.zip -o "$root/aws.zip"
+          curl --fail --silent --show-error --location --proto '=https' --tlsv1.2 --max-time 30 --max-filesize 65536 \
+            https://awscli.amazonaws.com/awscli-exe-linux-x86_64-2.34.29.zip.sig -o "$root/aws.zip.sig"
+          export GNUPGHOME="$root/gnupg"
+          gpg --batch --import .github/scripts/aws_cli_public_key.asc >/dev/null 2>&1
+          gpg --batch --with-colons --fingerprint A6310ACC4672475C | awk -F: '$1 == "fpr" { print $10; exit }' > "$root/fingerprint"
+          test "$(cat "$root/fingerprint")" = FB5DB77FD5C118B80511ADA8A6310ACC4672475C
+          gpg --batch --status-fd 1 --verify "$root/aws.zip.sig" "$root/aws.zip" > "$root/signature-status" 2>/dev/null
+          grep -F '[GNUPG:] VALIDSIG FB5DB77FD5C118B80511ADA8A6310ACC4672475C ' "$root/signature-status" >/dev/null
+          unzip -q "$root/aws.zip" -d "$root/extracted"
+          "$root/extracted/aws/dist/aws" --version | grep -E '^aws-cli/2\.34\.29 '
+          printf 'R6_AWS_CLI=%s\n' "$root/extracted/aws/dist/aws" >> "$GITHUB_ENV"
+
+      - name: Assume the time-bounded dedicated ECR role
+        uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
+        with:
+          role-to-assume: arn:aws:iam::153828470928:role/dakasa-r6-ecr-d524-20261030
+          role-session-name: core-ecr-${{ github.run_id }}
+          role-duration-seconds: 900
+          allowed-account-ids: '153828470928'
+          aws-region: us-east-1
+
+      - name: Import one distinct digest and preserve original receipts
+        id: import
+        run: python3 -I -B .github/scripts/ecr_attested_import.py
+
+      - name: Attest actual import and readback receipts
+        if: ${{ always() && steps.import.outcome != 'skipped' }}
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: receipts/*.json
+
+      - name: Preserve receipts even if import failed
+        if: ${{ always() && steps.import.outcome != 'skipped' }}
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: core-attested-ecr-receipts-${{ github.run_id }}-${{ github.run_attempt }}
+          path: receipts/
+          if-no-files-found: error
+          retention-days: 2
