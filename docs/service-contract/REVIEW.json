@@ -908,5 +908,10 @@
     "scope": "Source live-partial and historical callers use existing closed failure-only public return retention without replacing the original errors or granting authority. Source review completed; Linux and owning CI remain required.",
     "source_inventory_sha256": "eacc59f2cbd779f0a805aecab24b8627b3ecb56cd9ef830ea9a8a885ea8500a8",
     "production_or_native_qualification": false
+  },
+  "qualification_startup_authority_observation_review_20261030": {
+    "scope": "After a failed startup-delay qualification workflow, retain only bounded non-atomic ordinal-two authority observations and hash-bound closed transport facts. Absence means unobserved, not proof of no operation. Independent static review completed; Linux CI and native execution remain required.",
+    "source_inventory_sha256": "c084384f719732a1672cd616ff621987528bbf92ff528cecd0a3246f7d69308d",
+    "production_or_native_qualification": false
   }
 }
