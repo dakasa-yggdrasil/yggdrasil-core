@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-30T00:48:41-03:00",
+  "generated_at": "2026-10-30T02:09:11-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1392,
+    ".go": 1393,
     ".json": 178,
     ".py": 16,
     ".sql": 82,
@@ -11,7 +11,7 @@
     ".yml": 32
   },
   "provenance": {
-    "commit": "7cc51e02ddfe8051e3f9b4c33fa6c5c5eb1c108f",
+    "commit": "f490d977ce0a7f7970628880816dc9539819ea43",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "855be3c33bcc9c2f277e3dded154d7fd89601480da4c808b38b85ae89c219c83"
+        "sha256": "bd947f708abab8442c8d9f6b207f1115ec9ac7305cc588a8cb3f0b1920226ff1"
       },
       {
         "path": "AGENTS.md",
@@ -109,14 +109,14 @@
       "kb": 297
     },
     {
+      "path": "cmd/native-guest-lifecycle-fixture",
+      "files": 28,
+      "kb": 249
+    },
+    {
       "path": "docs/bootstrap/manifests/integrations",
       "files": 28,
       "kb": 98
-    },
-    {
-      "path": "cmd/native-guest-lifecycle-fixture",
-      "files": 27,
-      "kb": 246
     },
     {
       "path": "controllers/oidc",
