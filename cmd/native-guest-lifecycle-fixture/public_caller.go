@@ -251,6 +251,7 @@ func (f *fixture) runOriginalPublicCaller(ctx context.Context) (runErr error) {
 		return err
 	}
 	if f.request.NativeCase == "held_ack_after_owned_original_deadline" {
+		f.retainHeldAckTransportDiagnostic(ctx, pre.PreregistrationID, retirement.Status)
 		runIDs = append(runIDs, retirement.ID.String())
 		return f.finishExpectedOriginalHold(ctx, p, baseline, retirement, runIDs, returns)
 	}
