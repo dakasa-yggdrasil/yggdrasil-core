@@ -57,44 +57,64 @@ func (f *fixture) sourceFailureCleanupStore() repository.CapacityStore {
  return repository.CapacityStore{DB:f.db,WorkflowID:f.workflow.ID,ExecutionEnabled:os.Getenv("YGGDRASIL_CAPACITY_EXECUTION_ENABLED")=="true"}
 }
 
-func (f *fixture) finishOriginalSourceCompensation(ctx context.Context,p model.CapacityPolicySpec,baseline,burst model.WorkflowRunRecord,runIDs []string,returns []originalPublicReturn) error {
+func (f *fixture) finishOriginalSourceCompensation(ctx context.Context,p model.CapacityPolicySpec,baseline,burst model.WorkflowRunRecord,runIDs []string,returns []originalPublicReturn) (runErr error) {
+ stage:="begin";defer func(){f.retainSourceFloorCompensationFailure(ctx,stage,&runErr)}()
  if !q.SourceCompensationCase(f.request.NativeCase) || baseline.Status!="succeeded" || burst.Status!="failed" || p.Ceiling!=2 || p.Floor<1 || p.Floor>2 {return q.ErrOriginalUnknown}
+ stage="preregistration"
  pre,err:=f.realm.OriginalPreregistration(2);if err!=nil{return err}
  store:=f.sourceFailureCleanupStore()
  failureSHA,enrollmentSHA:="",""
  if !q.SourceLostCreateCase(f.request.NativeCase) {
+  stage="witness"
   var witness model.CapacityGuestOriginalCreateWitness;var wire []byte
   if err=f.db.QueryRowContext(ctx,`SELECT original_wire FROM public.capacity_guest_original_create_witnesses WHERE preregistration_id=$1`,pre.PreregistrationID).Scan(&wire);err!=nil || capacity.DecodeGuestLifecycle(wire,&witness)!=nil{return q.ErrOriginalUnknown}
+  stage="source_client"
   client,err:=f.sourceClient(2);if err!=nil{return err};defer client.Close()
+  stage="source_refusal"
   for {
    read,cancel:=context.WithTimeout(ctx,5*time.Second);returned,callErr:=client.Original(read,http.MethodGet,"/v1/qualification-source-refusal",[]byte("{}"));cancel()
    if callErr==nil && returned.Status==200 {
+    stage="source_refusal_validate"
     var failed q.QualificationFailureRecord
     if capacity.GuestOriginalHTTPDecode(returned,&failed)!=nil || f.realm.ValidateOriginalFailure(failed,pre,witness,f.binding.ProvisionerPublicKey,returned.DriverReturnedAt)!=nil{return q.ErrOriginalUnknown}
+    stage="source_refusal_record"
     if err=store.RecordGuestQualificationSourceReturn(ctx,pre.PreregistrationID,"source_refusal",returned.Body);err!=nil{return err}
     failureSHA=capacity.BusinessCreationSHA256(returned.Body)
+    stage="source_refusal_publish"
     if _,err=q.PublishBytes(ctx,filepath.Join(q.SlotDirectory(f.private,2),"core-original-failed-owner-diagnostic.json"),returned.Body);err!=nil{return err};break
    }
+   if callErr!=nil{stage="source_refusal_transport"}else if returned.Status==409{stage="source_refusal_pending"}else{stage="source_refusal_status"}
    if ctx.Err()!=nil || (callErr==nil && returned.Status!=409){return q.ErrOriginalUnknown}
    select {case<-ctx.Done():return q.ErrOriginalUnknown;case<-time.After(20*time.Millisecond):}
   }
+  stage="enrollment"
   if err=f.db.QueryRowContext(ctx,`SELECT enrollment_sha256 FROM public.capacity_vm_original_enrollments WHERE preregistration_id=$1`,pre.PreregistrationID).Scan(&enrollmentSHA);err!=nil{return err}
  } else {
   var enrolled int
   if err=f.db.QueryRowContext(ctx,`SELECT count(*) FROM public.capacity_vm_original_enrollments WHERE preregistration_id=$1`,pre.PreregistrationID).Scan(&enrolled);err!=nil || enrolled!=0{return q.ErrOriginalUnknown}
  }
+ stage="baseline_client"
  baselineClient,err:=f.sourceClient(1);if err!=nil{return err};defer baselineClient.Close()
+ stage="baseline_probe"
  useful,err:=f.realm.DiagnosticProbe(ctx,store,1,f.corePrivate,baselineClient);if err!=nil{return err}
+ stage="prepare_cleanup"
  authority,body,err:=f.realm.PrepareSourceFailureCleanup(ctx,store,f.policy,pre,failureSHA,enrollmentSHA,f.corePrivate);if err!=nil{return err}
  // Source-scoped table is constructed by this exact nativequalification
  // fixture only. Ordinary production grants/registry are not modified.
+ stage="cleanup_tables"
  _,err=f.db.ExecContext(ctx,`CREATE TABLE public.capacity_source_failure_cleanup_originals(parent_grant_id uuid PRIMARY KEY,authority_id uuid UNIQUE NOT NULL,namespace text NOT NULL,authority_wire bytea NOT NULL,authority_sha256 text NOT NULL); CREATE TABLE public.capacity_source_failure_cleanup_physical(parent_grant_id uuid PRIMARY KEY REFERENCES public.capacity_source_failure_cleanup_originals(parent_grant_id),physical_wire bytea NOT NULL,physical_sha256 text NOT NULL); CREATE TABLE public.capacity_source_failure_cleanup_terminals(parent_grant_id uuid PRIMARY KEY REFERENCES public.capacity_source_failure_cleanup_physical(parent_grant_id),terminal_wire bytea NOT NULL); CREATE TABLE public.capacity_source_failure_cleanup_reads(read_id uuid PRIMARY KEY,parent_grant_id uuid NOT NULL REFERENCES public.capacity_source_failure_cleanup_terminals(parent_grant_id),generation bigint NOT NULL,fencing_token bigint NOT NULL,read_wire bytea NOT NULL,read_sha256 text NOT NULL UNIQUE,UNIQUE(parent_grant_id,generation,fencing_token)); CREATE FUNCTION public.source_cleanup_original_immutable() RETURNS trigger LANGUAGE plpgsql AS $$ BEGIN RAISE EXCEPTION 'immutable source cleanup original'; END $$; CREATE TRIGGER immutable_source_cleanup_authority BEFORE UPDATE OR DELETE ON public.capacity_source_failure_cleanup_originals FOR EACH ROW EXECUTE FUNCTION public.source_cleanup_original_immutable(); CREATE TRIGGER immutable_source_cleanup_physical BEFORE UPDATE OR DELETE ON public.capacity_source_failure_cleanup_physical FOR EACH ROW EXECUTE FUNCTION public.source_cleanup_original_immutable(); CREATE TRIGGER immutable_source_cleanup_reads BEFORE UPDATE OR DELETE ON public.capacity_source_failure_cleanup_reads FOR EACH ROW EXECUTE FUNCTION public.source_cleanup_original_immutable(); CREATE TRIGGER immutable_source_cleanup_terminal BEFORE UPDATE OR DELETE ON public.capacity_source_failure_cleanup_terminals FOR EACH ROW EXECUTE FUNCTION public.source_cleanup_original_immutable()`);if err!=nil{return err}
+ stage="authority_encode"
  authorityWire,err:=json.Marshal(authority);if err!=nil{return err}
+ stage="authority_insert"
  inserted,err:=f.db.ExecContext(ctx,`INSERT INTO public.capacity_source_failure_cleanup_originals(parent_grant_id,authority_id,namespace,authority_wire,authority_sha256) VALUES($1,$2,$3,$4,$5)`,pre.OriginalCreateGrantID,body.AuthorityID,f.namespace,authorityWire,capacity.BusinessCreationSHA256(authorityWire));if err!=nil{return err};n,err:=inserted.RowsAffected();if err!=nil || n!=1{return q.ErrOriginalUnknown}
+ stage="authority_readback"
  var authorityReadback []byte
  if err=f.db.QueryRowContext(ctx,`SELECT authority_wire FROM public.capacity_source_failure_cleanup_originals WHERE parent_grant_id=$1`,pre.OriginalCreateGrantID).Scan(&authorityReadback);err!=nil || !bytes.Equal(authorityReadback,authorityWire){return q.ErrOriginalUnknown}
+ stage="cleanup_lease"
  if err=store.CheckSourceFailureCleanupLease(ctx,f.policy,pre.OriginalCreateGrantID);err!=nil{return err}
+ stage="authority_publish"
  if err=publishOriginalSourceCleanupAuthority(ctx,q.SlotDirectory(f.private,2),authorityWire,body,f.corePrivate);err!=nil{return err}
+ stage="after_authority"
  physical,err:=f.realm.ReadSourceFailureCleanup(ctx,authority,body);if err!=nil{return err}
  var retainedPhysical q.SourceFailureCleanupPhysical
  physicalWire,err:=q.Await(ctx,filepath.Join(q.SlotDirectory(f.private,2),"source-failure-cleanup-physical.json"),&retainedPhysical);if err!=nil || capacity.GuestRetirementSHA(retainedPhysical)!=capacity.GuestRetirementSHA(physical){return q.ErrOriginalUnknown}
