@@ -908,5 +908,10 @@
     "scope": "Source live-partial and historical callers use existing closed failure-only public return retention without replacing the original errors or granting authority. Source review completed; Linux and owning CI remain required.",
     "source_inventory_sha256": "eacc59f2cbd779f0a805aecab24b8627b3ecb56cd9ef830ea9a8a885ea8500a8",
     "production_or_native_qualification": false
+  },
+  "qualification_source_recovery_historical_review_20261030": {
+    "scope": "Qualification-only Source recovery caller joins the immutable preregistration and original grant after lease expiry without treating historical read as current authority. Independent source review completed; two Source cases and focused Linux tests passed on a separately instrumented pair. Exact integrated CI remains required.",
+    "source_inventory_sha256": "2ff6d25d98edf38c54a17105bb480f809729281e81a0b743c57aaa8595314ab7",
+    "production_or_native_qualification": false
   }
 }
