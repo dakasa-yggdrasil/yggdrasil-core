@@ -13,10 +13,10 @@ import (
 	"github.com/google/uuid"
 )
 
-// Only the fixed canonical failed-create cases hold their accepted source
-// create pending, including failed-floor recovery; legacy cases do not.
+// Only fixed failed-create qualification cases hold their accepted source
+// create pending, including failed-floor recovery; lost replies do not.
 func canonicalCompensationPendingCase(c string) bool {
-	return c == "canonical_compensation_unprotected_failed_create" || c == "canonical_compensation_protected_failed_create" || c == "canonical_failed_floor_recovery"
+	return c == "canonical_compensation_unprotected_failed_create" || c == "canonical_compensation_protected_failed_create" || c == "canonical_failed_floor_recovery" || c == "compensation_unprotected_failed_create" || c == "compensation_protected_failed_create"
 }
 
 // The accepted original settlement stays the parent's only fact: unconfirmed,
@@ -41,7 +41,7 @@ func canonicalCompensationPendingParent(parent capacityMutationRecord, grant mod
 // refreshed native proof without confirming, registering or authorizing cleanup.
 // Source cleanup never treats a confirmed member as a failed creation.
 func (s CapacityStore) VerifyCanonicalCompensationPending(ctx context.Context, policy model.Manifest, p model.CapacityPolicySpec, nativeCase string, grant model.CapacityMutationGrant, proof model.CapacityMutationProof) error {
-	if !canonicalCompensationPendingCase(nativeCase) || grant.Slot != canonicalSourceExpectedSlot(nativeCase) || grant.GrantID == "" || proof.GrantID != grant.GrantID {
+	if !canonicalCompensationPendingCase(nativeCase) || grant.Slot != 2 || grant.GrantID == "" || proof.GrantID != grant.GrantID {
 		return ErrCapacityConflict
 	}
 	var preID string

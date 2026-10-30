@@ -24,7 +24,7 @@ func guestOriginalSourceConfirmationProof(ctx context.Context, store repository.
 	})
 }
 
-// Only the fixed postloss and canonical compensation failure slots remain
+// Only the fixed postloss and failed-create compensation slots remain
 // pending: source cleanup never treats a confirmed member as a failed creation.
 // The baseline and all ordinary source/production paths retain confirmation.
 func guestOriginalSourcePendingPostloss(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, input guestOriginalStepInput, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, proof model.CapacityMutationProof) (bool, error) {

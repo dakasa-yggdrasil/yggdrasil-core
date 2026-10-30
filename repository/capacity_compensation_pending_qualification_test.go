@@ -3,6 +3,7 @@
 package repository
 
 import (
+	"context"
 	"strings"
 	"testing"
 
@@ -12,8 +13,8 @@ import (
 
 // Synthetic records exercise the parent join only. They cannot attest a QEMU.
 func TestCanonicalCompensationPendingParentFailsClosed(t *testing.T) {
-	for c, want := range map[string]bool{"canonical_compensation_unprotected_failed_create": true, "canonical_compensation_protected_failed_create": true, "canonical_failed_floor_recovery": true, "compensation_unprotected_failed_create": false, "canonical_postloss_unprotected_failed_create_reissue": false, "": false} {
-		if canonicalCompensationPendingCase(c) != want || (want && canonicalSourceExpectedSlot(c) != 2) {
+	for c, want := range map[string]bool{"canonical_compensation_unprotected_failed_create": true, "canonical_compensation_protected_failed_create": true, "canonical_failed_floor_recovery": true, "compensation_unprotected_failed_create": true, "compensation_protected_failed_create": true, "canonical_postloss_unprotected_failed_create_reissue": false, "": false} {
+		if canonicalCompensationPendingCase(c) != want {
 			t.Fatalf("case %q selection changed", c)
 		}
 	}
@@ -61,5 +62,29 @@ func TestCanonicalCompensationPendingParentFailsClosed(t *testing.T) {
 		if canonicalCompensationPendingParent(record, grant, policy, workflow, p) {
 			t.Fatalf("%s parent accepted", name)
 		}
+	}
+}
+
+// Selection fails before touching the store for every wrong slot and the
+// separate lost-reply/positive paths.
+func TestSourceFailedCreatePendingScope(t *testing.T) {
+	store := CapacityStore{}
+	for _, tc := range []struct {
+		name string
+		slot int
+	}{
+		{"compensation_unprotected_failed_create", 1},
+		{"compensation_protected_failed_create", 1},
+		{"compensation_unprotected_lost_create_reply", 2},
+		{"compensation_protected_lost_create_reply", 2},
+		{"positive_original_lifecycle", 2},
+	} {
+		t.Run(tc.name, func(t *testing.T) {
+			grant := model.CapacityMutationGrant{GrantID: uuid.NewString(), Slot: tc.slot}
+			proof := model.CapacityMutationProof{GrantID: grant.GrantID}
+			if err := store.VerifyCanonicalCompensationPending(context.Background(), model.Manifest{}, model.CapacityPolicySpec{}, tc.name, grant, proof); err != ErrCapacityConflict {
+				t.Fatalf("out-of-scope case or slot accepted: %v", err)
+			}
+		})
 	}
 }
