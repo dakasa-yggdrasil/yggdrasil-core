@@ -1,0 +1,145 @@
+name: Attested immutable Core candidate
+
+# A distinct candidate only; this branch never promotes shared release tags.
+on:
+  push:
+    branches:
+      - candidate/core-d524-attested-20261030
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write
+  attestations: write
+  artifact-metadata: write
+
+concurrency:
+  group: attested-core-candidate-${{ github.run_id }}
+  cancel-in-progress: false
+
+jobs:
+  build-and-attest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 35
+    steps:
+      - name: Checkout exact reviewed source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+          ref: d52465ec5b26014406d2b010dce4fe09e2c169dd
+          path: source
+
+      - name: Verify clean source checkout
+        run: |
+          set -eu
+          test "$(git -C source rev-parse HEAD)" = d52465ec5b26014406d2b010dce4fe09e2c169dd
+          test -z "$(git -C source status --porcelain)"
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
+
+      - name: Authenticate to GHCR
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Build a distinct immutable candidate
+        id: build
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
+        with:
+          context: ./source
+          file: ./source/Dockerfile
+          platforms: linux/amd64
+          push: true
+          provenance: false
+          tags: ghcr.io/dakasa-yggdrasil/yggdrasil-core:attested-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          labels: |
+            org.opencontainers.image.source=https://github.com/dakasa-yggdrasil/yggdrasil-core
+            org.opencontainers.image.revision=d52465ec5b26014406d2b010dce4fe09e2c169dd
+            org.opencontainers.image.version=attested-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          secrets: |
+            github_token=${{ secrets.GITHUB_TOKEN }}
+
+      - name: Set up Go for static build information
+        uses: actions/setup-go@40f1582b2485089dde7abd97c1529aa768e1baff # v5
+        with:
+          go-version-file: source/go.mod
+          cache: false
+
+      - name: Preserve exact manifest, binary and build information
+        env:
+          IMAGE: ghcr.io/dakasa-yggdrasil/yggdrasil-core@${{ steps.build.outputs.digest }}
+          EXPECTED_REVISION: d52465ec5b26014406d2b010dce4fe09e2c169dd
+          BUILD_DIGEST: ${{ steps.build.outputs.digest }}
+        run: |
+          set -eu
+          printf '%s\n' "$BUILD_DIGEST" | grep -Eq '^sha256:[0-9a-f]{64}$'
+          mkdir evidence
+          docker buildx imagetools inspect --raw "$IMAGE" > evidence/manifest.json
+          test "sha256:$(sha256sum evidence/manifest.json | cut -d' ' -f1)" = "$BUILD_DIGEST"
+          docker pull --platform linux/amd64 "$IMAGE"
+          test "$(docker image inspect --format '{{.Architecture}}' "$IMAGE")" = amd64
+          test "$(docker image inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "$IMAGE")" = "$EXPECTED_REVISION"
+          container=$(docker create --platform linux/amd64 "$IMAGE")
+          temp=$(mktemp -d)
+          trap 'docker rm -f "$container" >/dev/null 2>&1 || true; rm -rf "$temp"' EXIT
+          mkdir -p "$temp/app" "$temp/usr/local/bin"
+          for binary in yggdrasil-core goose yggdrasil-bootstrap yggdrasil-bootstrap-admin; do
+            docker cp "$container:/app/$binary" "$temp/app/$binary"
+          done
+          docker cp "$container:/usr/local/bin/kubectl" "$temp/usr/local/bin/kubectl"
+          cp "$temp/app/yggdrasil-core" evidence/yggdrasil-core
+          docker rm "$container" >/dev/null
+          sh source/scripts/verify-image-platform.sh linux/amd64 "$temp"
+          run_expect() {
+            expected_status=$1
+            expected_text=$2
+            entrypoint=$3
+            shift 3
+            set +e
+            output=$(timeout 45 docker run --rm --platform linux/amd64 --network none \
+              --env YGGDRASIL_WORKFLOW_DISPATCH_LOCK_JSON=invalid \
+              --entrypoint "$entrypoint" "$IMAGE" "$@" 2>&1)
+            status=$?
+            set -e
+            if [ "$status" -ne "$expected_status" ] || ! printf '%s\n' "$output" | grep -Fq -- "$expected_text"; then
+              printf 'Execution failed for %s (exit %s):\n%s\n' "$entrypoint" "$status" "$output" >&2
+              exit 1
+            fi
+          }
+          run_expect 2 'panic: boot-validation failed:' /app/yggdrasil-core
+          run_expect 1 'usage: go run ./scripts/goose' /app/goose
+          run_expect 0 'Usage of' /app/yggdrasil-bootstrap -h
+          run_expect 2 'Usage of bootstrap-admin:' /app/yggdrasil-bootstrap-admin -h
+          run_expect 0 'Client Version:' /usr/local/bin/kubectl version --client
+          rm -rf "$temp"
+          trap - EXIT
+          go version -m evidence/yggdrasil-core > evidence/build-info.txt
+          for expected in "vcs.revision=$EXPECTED_REVISION" 'vcs.modified=false' 'GOOS=linux' 'GOARCH=amd64' 'CGO_ENABLED=0'; do
+            awk -v expected="$expected" '$1 == "build" && $2 == expected { found = 1 } END { exit !found }' evidence/build-info.txt
+          done
+          if awk '$1 == "build" && $2 ~ /^-tags=/ && $2 != "-tags=" { found = 1 } END { exit !found }' evidence/build-info.txt; then
+            echo 'Non-default build tags' >&2
+            exit 1
+          fi
+          python3 - <<'PY'
+          import hashlib,json,os,pathlib
+          p=pathlib.Path('evidence');binary=p/'yggdrasil-core';manifest=p/'manifest.json'
+          data={'schema':'attested_core_candidate_observation_v1','source_commit':os.environ['EXPECTED_REVISION'],'workflow_head':os.environ['GITHUB_SHA'],'run_id':int(os.environ['GITHUB_RUN_ID']),'run_attempt':int(os.environ['GITHUB_RUN_ATTEMPT']),'image':os.environ['IMAGE'],'manifest_sha256':hashlib.sha256(manifest.read_bytes()).hexdigest(),'core_binary_sha256':hashlib.sha256(binary.read_bytes()).hexdigest(),'build_info_sha256':hashlib.sha256((p/'build-info.txt').read_bytes()).hexdigest(),'production_activation':False}
+          (p/'candidate.json').write_text(json.dumps(data,sort_keys=True,separators=(',',':'))+'\n')
+          PY
+
+      - name: Attest immutable candidate evidence
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: evidence/*
+
+      - name: Upload candidate evidence
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: core-attested-candidate-${{ github.run_id }}-${{ github.run_attempt }}
+          path: evidence/
+          if-no-files-found: error
+          retention-days: 2
