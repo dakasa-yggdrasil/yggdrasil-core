@@ -615,16 +615,8 @@ func ListCollaboratorsPaginated(
 	}
 	defer rows.Close()
 
-	// Keep the allocation bounded even if pagination normalization changes;
-	// the SQL limit and returned page semantics remain normalized above.
-	allocationLimit := pagination.Limit
-	if allocationLimit < 0 {
-		allocationLimit = 0
-	}
-	if allocationLimit > model.MaxPaginationLimit {
-		allocationLimit = model.MaxPaginationLimit
-	}
-	collaborators := make([]model.Collaborator, 0, allocationLimit)
+	// Use a small constant initial capacity independent of request input.
+	collaborators := make([]model.Collaborator, 0, 16)
 	for rows.Next() {
 		c, err := scanCollaborator(rows)
 		if err != nil {

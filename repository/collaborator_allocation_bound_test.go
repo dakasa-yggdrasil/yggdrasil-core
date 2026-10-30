@@ -8,7 +8,7 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 )
 
-func TestListCollaboratorsAllocationUsesNormalizedLimit(t *testing.T) {
+func TestListCollaboratorsUsesNormalizedLimit(t *testing.T) {
 	for _, tc := range []struct {
 		name  string
 		input int
@@ -28,8 +28,8 @@ func TestListCollaboratorsAllocationUsesNormalizedLimit(t *testing.T) {
 			mock.ExpectQuery("FROM public.collaborators").WithArgs(tc.limit + 1).
 				WillReturnRows(sqlmock.NewRows([]string{"id"}))
 			got, _, err := ListCollaboratorsPaginated(context.Background(), db, model.ListCollaboratorsRequest{}, model.PaginationRequest{Limit: tc.input})
-			if err != nil || got == nil || len(got) != 0 || cap(got) != tc.limit {
-				t.Fatalf("normalized page allocation differs: len=%d cap=%d err=%v", len(got), cap(got), err)
+			if err != nil || got == nil || len(got) != 0 {
+				t.Fatalf("normalized page differs: len=%d err=%v", len(got), err)
 			}
 			if err := mock.ExpectationsWereMet(); err != nil {
 				t.Fatal(err)
