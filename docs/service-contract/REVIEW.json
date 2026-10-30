@@ -908,5 +908,10 @@
     "scope": "Source live-partial and historical callers use existing closed failure-only public return retention without replacing the original errors or granting authority. Source review completed; Linux and owning CI remain required.",
     "source_inventory_sha256": "eacc59f2cbd779f0a805aecab24b8627b3ecb56cd9ef830ea9a8a885ea8500a8",
     "production_or_native_qualification": false
+  },
+  "qualification_held_ack_transport_review_20261030": {
+    "scope": "Qualification-only caller retains closed flags and status from one hash-verified original retirement HTTP return after a held-ack failure. No response body or credential is projected, and missing or ambiguous return remains unknown. Independent source review completed; Linux CI and native execution remain required.",
+    "source_inventory_sha256": "2365419a03c6ac75b7edc44fc95d64753686ef555374080205b572e8f17cae11",
+    "production_or_native_qualification": false
   }
 }
