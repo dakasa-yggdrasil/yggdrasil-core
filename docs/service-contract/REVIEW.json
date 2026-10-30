@@ -1,0 +1,927 @@
+{
+  "accepted_at": "2026-10-25T17:55:53.066551+00:00",
+  "accepted_at_is_historical_for_two_profile_candidate": false,
+  "checker": {
+    "actual_binary_clean_VCS": true,
+    "actual_binary_sha256": "ac6a58a0a98e2bcfbdd3f0571d55b495e4f48ccb7fee4b66295c273f4f211f2f",
+    "private_repository": "dakasa-co/dakasa-commons",
+    "publication_commit": "3ad45d29acd7fd730618959a43e31fd1eea24ddd",
+    "tracked_tree_sha256": "f4d5b55f01d765954d8aee968dd366b519ee6ce141b0fd80df66099e998c3a3b"
+  },
+  "current_reviewed_source_overlay": {
+    "AWS164_actual_instance_contract_successor": {
+      "Root_final_source_review_complete": true,
+      "accepted_source_inventory_sha256": "e50205786355bd8229db8093dd6134d2de0cb3dedc93e071a325581804c1c6a6",
+      "actual_Darwin_contract_matcher_pass_nodes": 23,
+      "actual_Darwin_contract_matcher_skips": 0,
+      "actual_owning_typed_contract_source_review_sha256": "d6e40549c18383a258822d5d33286d17b8a1c1dc9e4366d07db6aee8dd386e22",
+      "actual_provider_publication": "f81697fe298a1df63956af6ac65dd5b7ca937a3d",
+      "base": "063bb9d147e6b18905099d64f50553f2a7357ef8",
+      "full_operational_policy_validated": false,
+      "independent_input_transformer_peer_sha256": "9146c6d0a578c6d31b5c3d6cfeac6d3bac55243475476c39f54c1486064069ed",
+      "independent_literal_delta_peer_sha256": "293dbee438b51b0c280419e3b6b0b55e421eac548196ebb6e2c8ee8837c2bb65",
+      "native_useful_lifecycle_or_deployment_qualified": false,
+      "original_IAM_version_qualification_sha256": "e149c7c3f3dcc1f10645c694ee3579548a781847f14638715adcecdd6f0a7e00",
+      "profiles": {
+        "aws": "3978273bfaf34b9c1898565298d350665c89eec29051a14368b5116ece7cb702",
+        "hetzner": "6c7b5b4eef25545dd3b46908527e3f738585b0c524a04af2ca49b5bdec24d5b1"
+      },
+      "source_approval_rows": 2
+    },
+    "D10_dedicated_native_denied_HTTP": {
+      "Linux_CI_image_runtime_or_business_or_ledger_qualification": null,
+      "Linux_focused_roots_required": 39,
+      "Root_three_pure_Mac_roots_diagnostic_only_return_sha256": "3c943f897f0c246ad3c1747e0df2bbbb97920e971606728caf48858c32763737",
+      "all74_SQL_and_normal_registry_profiles_IIDs_inventory_references_unchanged": true,
+      "base": "17795d9d9c0c39bd83e7e38ef36e2987282e4df5",
+      "dedicated_observer_source_commit": "836ef8b0a864c07761d1f5e59d11a14d03ebf823",
+      "independent_final_source_bind_peer_sha256": "8beddc4dab302d6404f35ea3ae5250bf694cb411f92d6a5af8f594c42d862883",
+      "normal_AWS_supplier_source_commit": "c34e330d8b266bb88e29ae7cf7b01df6f9fd96ce",
+      "schema": 75,
+      "source_catalog_sha256": "8168ed6a5b60a4f8a047eeae478ce85949cd1bc5a338f5bfc2ce889087b53171",
+      "source_inventory_sha256": "33e3310863e266bd4266d941e605ce0de3b6029e709bd1d3e0ff4db74c136ced"
+    },
+    "D12_NULL_workflow_identity_and_bounded_startup": {
+      "Mac_Linux_target_full_static_lint_issues": 0,
+      "Root_final_Source_review_sha256": "d46eee92dfd8d2e2ed1de13b001e8587de86c42245bb841f5101e75a5505d025",
+      "actual_local_PG8_subcases_no_fail_no_skip": true,
+      "actual_local_PG8_subcases_summary_sha256": "628106c92f34f4e496be8ec0fdc3ba053118f078a0b98db7774bd58adbbec304",
+      "actual_local_PG_stopped_after_tests": true,
+      "all76_SQL_and_dependencies_unchanged": true,
+      "base": "d8989492178b641dfac522db2bf075d0f25bee15",
+      "historical_workflow_records_backfilled": false,
+      "independent_final_fixture_peer_sha256": "a5c4f310588be36becf4fe411d872de7c2bf3c8f829377c9494fe4f390c50f29",
+      "independent_product_peer_sha256": "4dae0ce8a5d748ef357b25c2639235760374dbf250e93eb390434ec04ba688ba",
+      "independent_startup_peer_sha256": "d92a92cc68651c1894ea6785b811a60e3182eca428b6b2a8d4a23d72dac6121a",
+      "production_qualification_claimed": false,
+      "reviewed_at": "2026-10-25T10:12:28.790323+00:00",
+      "source_inventory_sha256": "171b75fc1326a872c70cf661c436d2baa84efacd09650f9793ab3a1ac500e7bc"
+    },
+    "D12_installed_reconcile_and_explicit_protocol_authority": {
+      "Root_frozen_final_source_review_sha256": "77133c5c29a4530b852c4eb11e8239a1bb54ff08eb84da832e8aba22de2f43cd",
+      "actual_issuer_build_separate": true,
+      "all75_previous_migrations_unchanged": true,
+      "independent_installed_recovery_source_peer_sha256": "bfb5b6d3c6a43a82916193b20a0e2440bdb515e95be33b1d14f0b94f29f2453e",
+      "installed_reconcile_fresh_fenced_readiness_no_CREATE_or_old_publication_replay": true,
+      "legacy_guest_authority_source": "48888f21acdddaf411094ec525004297c229863f",
+      "local_source_validation_sha256": "db619bdbf46dfff119d07afb0271ae9db0e4bc3e5a963144a77fadcc33aaeb61",
+      "production_qualification_claimed": false,
+      "schema": 77,
+      "source_inventory_sha256": "5bcde85da8edf21cf9db104a6730dbeda23df8623cb5c679d0427a7d9856c30d"
+    },
+    "D13_actual_a900_profiles_historical_compatibility_and_failed_installed_disposal": {
+      "Guest_source": "a900f5379db35ee48f74798c4a68cd8091f8c116",
+      "actual_local_evidence": {
+        "complete_Linux_target_static_lint_zero": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-D13-LINUX-TARGET-COMPLETE-STATIC-LINT-R3-20261025/ORIGINAL-CALLER.PUBLIC.json",
+          "sha256": "edc40ba38624d85f4b2d9750feedfa321fc3423ebd57f80bac9f1594608ecdeb"
+        },
+        "distinct_mutation_principal_binding_correction": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-A900-TWO-CORRECTED-MUTATION-FULL-TYPED-PROFILES-20261025/TWO-CORRECTED-COMPILED-PROFILES-RETURN.PUBLIC.json",
+          "sha256": "ea9eb0c8fee6e5d35ddc0e288cd751c87e1a2876ae0daf917e4d9a62bbf03e9d"
+        },
+        "failed_installed_disposal_legacy_V1_and_PG78": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/GUEST-FAILED-INSTALLED-DISPOSAL-LOCAL-VALIDATION/R4-V1/SOURCE-CHECKPOINT.PUBLIC.json",
+          "sha256": "1753cf4b1381144627aa9bdda9af52d96c066cf534fe060f0086f0f3aac250ba"
+        },
+        "final_five_approval_Source_postimages": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/core-D13-a900-production-approval-appender-source-review/ACTUAL-PRINCIPAL-CORRECTION/SOURCE-CHECKPOINT.PUBLIC.json",
+          "sha256": "78d8788683bd209df5345ea3ce33a830456cebb2ea4a19a305564152fd49d5de"
+        },
+        "ordinary_V2_drained_and_original_receipt": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/Core-retirement-V2-drained-local-validation/SOURCE-CHECKPOINT-R3.PUBLIC.json",
+          "sha256": "5858b4d4dd5576fc6d3288fd9c1098eab022bc9fdd666a1e6f634130fd771c40"
+        },
+        "terminal_disposal_scheduler_handoff_PG17_race": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/GUEST-FAILED-INSTALLED-DISPOSAL-LOCAL-VALIDATION/R5-R3-TERMINAL-SCHEDULER-HANDOFF/SOURCE-ADDENDUM.PUBLIC.json",
+          "sha256": "6d805d732bba3190476e93e96a53f0b652cf9876191de2143007f99e48af2a70"
+        },
+        "two_existing_roots_75_race_nodes_no_fail_or_skip": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/core-D13-a900-production-approval-appender-source-review/ACTUAL-PRINCIPAL-CORRECTION/GO-TEST-RETURN.PUBLIC.json",
+          "sha256": "599cfba44e81837ad9474a7030e587e605ab2e79e2d88c308272ea642c836540"
+        },
+        "two_native_readonly_slot2_dryruns_and_full_policies": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-A900-TWO-FULL-TYPED-PROFILES-20261025/TWO-COMPILED-PROFILES-RETURN.PUBLIC.json",
+          "sha256": "42741ff4bd681d913ac6da3313ec3ea566736882ee0d6b272c350e72a1585bad"
+        }
+      },
+      "all_previous_SQL_through77_unchanged": true,
+      "base": "c8d9b7c0d13ae8ef22a8f088ee7a7628f0148a6a",
+      "both_new_full_profiles_DISABLED": true,
+      "complete_production_source_records": 691,
+      "current_Linux_CI_ELF_ECR_SQL78_network_R39_rollout_and_native_lifecycle_required": true,
+      "current_four_contract_map_sha256": "b5a496bb19f332a82387af7af85b75c9c738f17a139d23665de4548b89c199cd",
+      "distinct_scoped_mutation_principals_required_per_new_integration_instance": true,
+      "existing_original_creation_installation_failed_ACKs_and_possible_business_effects_preserved": true,
+      "historical_two_contract_map_sha256": "557b50ee2b03b5d3425ce2ce958538dc602fb4339f853e65139949626058116c",
+      "independent_source_peers": {
+        "actual_native_wire_decoder_and_mapping": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/GUEST-V2-EMBEDDED-INTENT-AND-PRODUCTION-WIRE-INDEPENDENT-SOURCE-PEER.PUBLIC.json",
+          "sha256": "89e5d9757da6929a77c84cfa0df42c744739ade2a882dc042091d4e4fda335fc"
+        },
+        "legacy_V1_disposal": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/CORE-D13-FAILED-INSTALLED-548-V1-NARROW-SOURCE-PEER.PUBLIC.json",
+          "sha256": "12d5ed3521778899790431b8fe89d2ebd97f22bcf5d73f8255eab6381addf4c8"
+        },
+        "terminal_scheduler_handoff": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/CORE-D13-TERMINAL-DISPOSAL-SCHEDULER-HANDOFF-INDEPENDENT-SOURCE-PEER.PUBLIC.json",
+          "sha256": "6032f6beffc952efbf8f9b81679ab92292960f93ea6ddbb74a4e0a0d47842a1a"
+        }
+      },
+      "new_SQL78_sha256": "fdd466f4f655ab577834b5f660fdb31a2b877460224e96b34fc8c08626ea5538",
+      "new_contracts": {
+        "aws": {
+          "actual_owning_full_policy_result_ref": {
+            "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-A900-TWO-CORRECTED-MUTATION-FULL-TYPED-PROFILES-20261025/AWS-TYPED-RESULT.PUBLIC.json",
+            "sha256": "15609822c427061e7288236d1a829091620cb0a01f796fb90b2e078b8cd814fa"
+          },
+          "adapter_principal_id": "notify-aws-elastic-adapter-grant-a900",
+          "contract_sha256": "97beb27b884fcf3928f2da6f14d8840ba0fb6f460012fdb50b8ab02b01334df7",
+          "profile_manifest_sha256": "a77fba7e94f839dbac7500f1eef88e29c309014ebf73bd0da16e59812ef92df9"
+        },
+        "hetzner": {
+          "actual_owning_full_policy_result_ref": {
+            "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-A900-TWO-CORRECTED-MUTATION-FULL-TYPED-PROFILES-20261025/HETZNER-TYPED-RESULT.PUBLIC.json",
+            "sha256": "70c050d719d0a0dd7ee71b1ba693df5391796b8a77571174308a6e957b92ad67"
+          },
+          "adapter_principal_id": "notify-hetzner-elastic-adapter-grant-a900",
+          "contract_sha256": "3fcb7fc4634fc5102d2172cc1d7f66bd92a61b9d544525a3438e8cdf914803f9",
+          "profile_manifest_sha256": "3ec37521106e4f6c4a191bd60fb690cb6e64f0fa5c8715617211daad3ccebf44"
+        }
+      },
+      "old548_disposal_uses_only_actual_signed_legacy_V1_protocol": true,
+      "ordinary_new_Guest_retirement_V2_remains_required": true,
+      "original_two_approval_rows_and_fixtures_preserved": true,
+      "production_qualification_claimed": false,
+      "protocol_authority_revision": "48888f21acdddaf411094ec525004297c229863f",
+      "reviewed_at": "2026-10-25T14:13:32.703374+00:00",
+      "source_inventory_sha256": "65be8c218107efb35f0ec4a5c70427c7ece2de191397720d880941f051913245",
+      "source_only": true
+    },
+    "D13_nativequalification_disposal_boundary_and_common_pure_join_correction": {
+      "CodeQL_alert_dismissal_or_suppression_claimed": false,
+      "Linux_execution_claimed": false,
+      "Linux_full_message_tagged_test_binary_compile_zero": true,
+      "Linux_tagged_Core_build_zero": true,
+      "Mac_race_exact_source_copy_join_and_refusal_13_nodes_no_failure_or_skip": true,
+      "actual_validation_checkpoint_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/CORE-D13-NATIVEQUAL-STUB-CORRECTION-VALIDATION-R5-20261025/SOURCE-CHECKPOINT.PUBLIC.json",
+        "sha256": "ae93a36f2150825074cafdbe1446cb24c8eba41a79681866fb7fdbdc3f7b1be2"
+      },
+      "all_SQL_and_four_profile_approvals_unchanged": true,
+      "base": "ca45fb7adc97c8db4f34ee81cb477c7739e5d3ab",
+      "common_native_off_pure_join_body_byteexact": true,
+      "complete_production_source_records": 693,
+      "current_publication_CI_and_production_runtime_required": true,
+      "explicit_nativequalification_privileged_disposal_refusal_stubs": true,
+      "four_contract_map_sha256": "b5a496bb19f332a82387af7af85b75c9c738f17a139d23665de4548b89c199cd",
+      "independent_exact_pure_extraction_peer_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/CORE-D13-PURE-NATIVE-OFF-JOIN-EXTRACTION-INDEPENDENT-SOURCE-PEER.PUBLIC.json",
+        "sha256": "00b0d85c67031d1ead1c46a4f49f63da791744b95b84d309c83af2a19a803aed"
+      },
+      "independent_refusal_stub_peer_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/CORE-D13-NATIVEQUALIFICATION-DISPOSAL-STUBS-INDEPENDENT-SOURCE-PEER.PUBLIC.json",
+        "sha256": "35ff7a0cf51b3cb487aa0c626d2b3091d1f608d33a3b5164b9b2467ee8dabb0e"
+      },
+      "no_test_skip_added": true,
+      "original_timestamp_join_test_and_root_hook_untagged_and_byteexact": true,
+      "prior_original_qualified_build_CI_failures_preserved": true,
+      "production_disposal_implementation_unchanged": true,
+      "reviewed_at": "2026-10-25T14:46:02.488478+00:00",
+      "seven_CodeQL_alerts_preserved_source_triage_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/PR87-SEVEN-CODEQL-ALERTS-LOCAL-SOURCE-SEMANTIC-TRIAGE.PUBLIC.json",
+        "sha256": "f40870a51debbbebc71431581df39194d1d557e836424c08bdf7b54b63f46a4a"
+      },
+      "source_inventory_sha256": "b7eaaa39bce293d82152ad4d28574f2e9103e4b2cf1d109bb20b36c2b274d4d9",
+      "source_only": true,
+      "whole_Darwin_message_package_execution_claimed": false
+    },
+    "D14_expired_never_sent_retirement_distinct_successor": {
+      "all_seven_possible_send_or_result_classes_refuse_recovery": true,
+      "author_local_validation_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/D14-RECOVERY79-LOCAL-VALIDATION/R3/SOURCE-CHECKPOINT.PUBLIC.json",
+        "sha256": "57e49be6f9725e46dc04ed648a3096d9fddfc533b7050c28f838de103c6897b0"
+      },
+      "base": "3d570162ba51967ee791316c23c5b45419993f1b",
+      "deadline_canonicalized_before_signing_complete_equality_retained": true,
+      "local_positive_scope": "Typed PostgreSQL storage/authentication/CAS and canonical signed DTO; genuine Guest/native production execution remains independently required.",
+      "old63_64_77_78_preserved_append_only79": true,
+      "old_expired_intent_or_signature_or_ACK_changed": false,
+      "one_explicit_never_sent_successor_new_request_attempt_nonce_context_fence_run": true,
+      "production_or_Guest_runtime_qualified": false,
+      "root_Core_Goose_nativequalification_build_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-D14-LINUX-TARGET-SOURCE-BUILD-20261025/RETURN.PUBLIC.json",
+        "sha256": "6d4f4e8e48871bad044181c4881d07b39d5dfe93a7836a5e9a1567343da3c122"
+      },
+      "root_UTC_regression_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-D14-UTC-TAGGED-SWITCH-REGRESSION-20261025/RETURN.PUBLIC.json",
+        "sha256": "b3e98ae2a6da77c1b1df6aea5c33f597ff9322549fcb4338730b81f1bd66d08a"
+      },
+      "root_complete_Linux_target_lint_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-D14-LINUX-TARGET-SOURCE-LINT-R2-20261025/RETURN.PUBLIC.json",
+        "sha256": "d45dd8a4b8d5d1dce8e275edc23722dee45e4153eb23368815aaf77e0d08c849"
+      },
+      "schema79_sha256": "90a64acdec8f70bf2a1d97ae01d43e52bc43234b16b8b46987fe447b822dfebb",
+      "source_only": true
+    },
+    "D15_R2_current_ops_route_inventory": {
+      "Root_Source_review_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-CORED15-R2-OPS-INVENTORY-SOURCE-REVIEW-20261025.PUBLIC.json",
+        "sha256": "458626a6e6d9f756e46d5d75bcec1f30dc2bca4bc974742117e244bcc2de1f15"
+      },
+      "actual_ops_route_inventory_count": 41,
+      "actual_two_root_race_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-D15-R2-OPS-INVENTORY-REGRESSION-20261025/RETURN.PUBLIC.json",
+        "sha256": "c93aedf595bb8f27563304762cf3e0af89b281a4e1844941bd5d07034f60d4b2"
+      },
+      "bounded_inventory_range": [
+        35,
+        50
+      ],
+      "full_Linux_target_lint_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-D15-R2-LINUX-TARGET-SOURCE-LINT-20261025/RETURN.PUBLIC.json",
+        "sha256": "b2811c2189581a209c0cc7b6693b934754b27b48753696d2fa45aa7eda970486"
+      },
+      "production_qualification_claimed": false,
+      "route_wrapper_and_canonical_permission_assertions_preserved": true,
+      "runtime_and_SQL80_source_unchanged": true
+    },
+    "D15_scheduler_authority_deadline_and_distinct_prejournal_refusal80": {
+      "Root_final_Source_review_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-CORED15-SCHEDULER-PREJOURNAL80-SOURCE-REVIEW-20261025.PUBLIC.json",
+        "sha256": "543c558e001092bb583088eb2ca4fd6cafac17da305ab48cadff99581da410da"
+      },
+      "actual_local_validation_refs": {
+        "API80": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/D15-SCHEDULER-REACHABILITY-LOCAL-VALIDATION/R2/HTTP80-AUTH-IDS-PRIVACY.PUBLIC.json",
+          "sha256": "bfb105d5ba6695d23127e3099e210ca20aebde5529988f197ce1f6025aa5da53"
+        },
+        "PG80_R2": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/D15-PREJOURNAL80-LOCAL-VALIDATION/R2/ROOT-CENSUS.PUBLIC.json",
+          "sha256": "cbe185d609f81b38f0034125e1d63cdd6609712bbaee5889f9a8764c1d74cf14"
+        },
+        "authority_UTC": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/D15-SCHEDULER-REACHABILITY-LOCAL-VALIDATION/R2/AUTHORITY-UTC.PUBLIC.json",
+          "sha256": "86d12557917b162a0f2dfbc790c7c713cfd16b64b08676cda02b077be2f94836"
+        },
+        "full_Linux_target_build": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-D15-LINUX-TARGET-SOURCE-BUILD-20261025/RETURN.PUBLIC.json",
+          "sha256": "f9f4bf03fda07ccac37e61b56bdebc9fab1b4040edda400efb91d390991b66f3"
+        },
+        "full_Linux_target_static_lint": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-D15-LINUX-TARGET-SOURCE-LINT-20261025/RETURN.PUBLIC.json",
+          "sha256": "1baf4921127229b9a4e9bd4ab083ee49a028028b8692bb78a3019b536b1abb95"
+        }
+      },
+      "all78_previous_SQL_byteexact": true,
+      "base": "6f9651542a5ad826757ac18224720f50af3adc83",
+      "independent_Source_peer_refs": {
+        "authority_UTC": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/D15-AUTHORITY-SNAPSHOT-DEADLINE-UTC-INDEPENDENT-NARROW-SOURCE-PEER.PUBLIC.json",
+          "sha256": "1da7c4362a10d69f73add170e2b67e1020a08fe8ddbaf23b8a1305385741635b"
+        },
+        "causal80_crossfamily_latecallback": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/D15-PREJOURNAL80-CAUSALITY-CROSSFAMILY-LATECALLBACK-INDEPENDENT-SOURCE-PEER.PUBLIC.json",
+          "sha256": "a9f589bb319bccb883c222479e8b4d314e6fb3ef1f2f0395869c259320038ab0"
+        },
+        "publication_projection": {
+          "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/D15-GENUINE-PUBLICATION-PROJECTOR-INDEPENDENT-SOURCE-PEER.PUBLIC.json",
+          "sha256": "cb00864b09219fdd6a5bd3c3ad8177cf2ea6678539765fc6b987ab21eb5ecb11"
+        }
+      },
+      "old_possible_send_and_business_effects_preserved": true,
+      "production_qualification_claimed": false,
+      "schema": 80,
+      "source_inventory_sha256": "84dfea477a430dbd4da1daf58f66b5e8a37cb070471a9f88bf648910f3a3d4ed"
+    },
+    "D6_failed_witnessed_terminal_and_AWS1654_observer": {
+      "HTTP_package_source_pass": true,
+      "Linux_CI_and_image_and_production_qualification": null,
+      "Mac_message_execution": null,
+      "complete_source_map_compact_representation_with_same_658_records": true,
+      "historical_NULL_workflow_id_and_finalization_ACK_preserved": true,
+      "independent_final_peer_sha256": "8e74f5cca4c61b40ce3c1b576a3c9dc51daef384cbccb43e0dbee55e62a30fde",
+      "local_nullable_PG_return_sha256": "2aed5e38f9ccb47a407602d65f4ebe1a7ba128db96bb7811087dad0405046382",
+      "old_protected_profiles_and_registry_byteexact": true,
+      "phase2_R3_profiles_excluded": true,
+      "reviewed_at": "2026-10-23T20:51:48.329356+00:00",
+      "reviewed_source_closure_sha256": "a1cc4dfe34bac13267b878da0f9b6d155154b2b708292830f7b473154f587978",
+      "schema": 73,
+      "source_inventory_sha256": "a477069c886ff9d7da76a8b0b2acbd69f1c18bbe13c2e46389e2ad0a73661748",
+      "source_roster_sha256": "8dde1288c5e3cbb287142ef3b8d40e371f7540dc54b2376bc7a45277da44e3f2"
+    },
+    "D7_R3_complete_profiles": {
+      "Linux_CI_image_rollout_and_useful_capacity_qualification": null,
+      "Root_final_source_review_complete": true,
+      "accepted_source_inventory_sha256": "1e075f71b7f5631784e610cec68907bc13ca5399f90a5314d7522aad79f28012",
+      "actual_Darwin_registry_pass_nodes": 50,
+      "actual_Darwin_registry_roots": 2,
+      "actual_Darwin_registry_skips": 0,
+      "authenticated_operational_fields": [
+        "profiles",
+        "controller_binding",
+        "guest_notify_reconcile_binding"
+      ],
+      "base": "9ecff39e007c939de3618387fa7229de44915fdd",
+      "complete_profiles": 2,
+      "full_operational_policy_validated": true,
+      "independent_typed_source_peer_sha256": "f8d0b9e74ea49670945f7ea5f81fe1260fa8d84305ba079d390531215a70ab75",
+      "native_credentials_and_grant_bearers_unchanged": true,
+      "native_quote_dates_manufactured": false,
+      "only_slot1_individually_native_observed": true,
+      "owning_full_policy_typed_return_sha256": "9ab95989a006e72322635ee77d3143624aebd558322320e9bbee866db9e7dc71",
+      "slots_per_profile": 8,
+      "typed_compiler_source_sha256": "f76e43c4389565862fc61d1117b3027225db50b5727b5b03c30a40325b58dc5c"
+    },
+    "D8_native_authorization_denied_original_accounting": {
+      "Core_CI_image_schema74_rollout_and_useful_capacity_qualification": null,
+      "MAC_message_tests_not_executed_due_inherited_Linux_only_fixture": true,
+      "Root_MAC_HTTP_roots_passed": 3,
+      "Root_MAC_XML_PG_repository_roots_passed": 8,
+      "Root_XML_PG_followup_ref": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-D8-XML-PG17-THREE-PEER-FIXES-R3-20261023/RETURN.PUBLIC.json",
+        "sha256": "8dcec2e9e6a8b5c58bf7048460d8074a8af8d0bd1c01bf3d89a2bf7528a7c5e7"
+      },
+      "Root_source_review_complete": true,
+      "Root_three_peer_fixes_targeted_PG_roots_passed": 2,
+      "Source_record_count": 665,
+      "accepted_source_inventory_sha256": "aa7294c0ca0e741319adb392b9fd42749772e1359a84c281adb5bf3169dacddb",
+      "independent_final_source_peer_sha256": "7ad5c2820d5dea8b81da64af49db5dbd112a6a730b3ea18ce017e7d097d06fdf",
+      "original_uncertainty_NULL_identities_failed_run_and_NULL_ACK_preserved": true,
+      "owning_Linux_focused_roots_required": 30,
+      "reviewed_observer_publication": "c34e330d8b266bb88e29ae7cf7b01df6f9fd96ce",
+      "separate_schema": 74,
+      "source_roster_sha256": "c5aa076fc54a6ca9477c7e6201382eb9a1c9de03b00f0c2521d9364087de5dc7"
+    },
+    "D9_returned_failed_ACK_and_AWS1655_actual_contract": {
+      "AWS_actual_provider_source": "c34e330d8b266bb88e29ae7cf7b01df6f9fd96ce",
+      "AWS_contract_sha256": "76c468b890f07284b1205b87bf97833764d7de2a4fe7a62bf03e26cb49c9e281",
+      "AWS_new_instance_id": "5e5096f7-2577-48d6-bee9-5991b33831dc",
+      "Hetzner_contract_fixture_and_registry_approval_byteexact": true,
+      "Root_actual_registry_fail_or_skip": 0,
+      "Root_actual_registry_pass_nodes": 47,
+      "Root_actual_registry_roots": 5,
+      "Root_local_new_HTTP_roots_passed": 1,
+      "Root_local_new_repository_PG_roots_passed": 4,
+      "Root_source_review_complete": true,
+      "Source_CI_image_schema75_rollout_and_new_useful_capacity_qualification": null,
+      "accepted_source_inventory_sha256": "e39f4614184ecd918fd38152d877c3f3e1d296f24e3092d61c8b462f651427ec",
+      "actual_full_policies_validated_by_owning_Go": true,
+      "actual_two_full_profiles_typed_return_sha256": "63350a13e99d25a8329a9f7fd70d059d2c433194f4981f4fb9e8a2f50ab3b644",
+      "base": "91fe965fd319853902d595c98599f07817a0a61d",
+      "business_BASE_catalog_sha256": "8db09ec3eb1ffc7365eb471d7de46c9da4dd3670b9147a6c08af147acc4a9508",
+      "full_profile_compilation_independent_peer_sha256": "543ac1e2827b76b132786d6f9e074dd22030f1f504c83aa241379a0f0899a14c",
+      "independent_business_BASE_peer_sha256": "73a02f7e1104eb2ceb6cc979823bd948e97f29d86a53b28a0ba2fe994ea55f83",
+      "local_PG17_XML_Unix_shutdown_original_zero": true,
+      "local_new_tests_return_sha256": "abd7c8a3609b87cc7e42c3ff9b74f9e2f35dc50642fa1ef8ca0a28650e52b06a",
+      "message_Linux_compile_only_no_execution": true,
+      "original_failed_workflow_and_returned_ACK_preserved": true,
+      "owning_Linux_focused_roots_required": 36,
+      "policies_execution_enabled": false,
+      "registry_tests_return_sha256": "eaea861cc8ff863f45bc88563a09bc017e7f5456effc2c5a92550766d9c0253e",
+      "separate_schema": 75,
+      "slots_per_profile": 8,
+      "source_record_count": 666
+    },
+    "H034_supplier_patch_sha256": "b9dc27414035fd518efbc63eb2bfad48e0b8d5609f59c76d1900c1bb0ced1699",
+    "Root_current_combined_portable_nodes": 205,
+    "Root_current_combined_portable_roots": 29,
+    "Root_current_combined_portable_skips": 0,
+    "actual_AWS1652_contract_successor": {
+      "H_fixture_and_approval_byteexact": true,
+      "actual_adapter_source": "56bbed398dfdb4f53a68f8ed8ff6b7fb6ef0f5f9",
+      "all_non_mutation_profile_fields_byteexact": true,
+      "base_publication": "2b93a7298bc1432e17df885d30e2b59036a3e97c",
+      "contract_sha256": "d7edd5c50df10c21f93c3024d0d95a5e6c5b24d5a3ae339d7a833f3c0f47eacb",
+      "full_operational_policy_validated": false,
+      "independent_full_source_typed_integration_peer_sha256": "e81c9c04f5347445bc99ceb55f3855e6263316c0d2655026dc98770ae60cefc2",
+      "metadata_return_sha256": "7f1bda8f2fa5e5fb6909bd7d13946332ad34868812a852502507569d9372b111",
+      "owning_typed_result_sha256": "a5ed77f46087f1f5afee4de0f2186e3e22ea4a3f4f562c4cceb64c4fce96b545",
+      "production_or_native_business_qualification": false,
+      "source_head": "5cc5cda37038a41f6a533f3e2f41ad5d27bf679b",
+      "source_inventory_sha256": "38a3bda5ecfd7aaf2b466b8c0b858ff0307fa6225419057d88d12bb62467d6e1"
+    },
+    "actual_AWS1653_contract_successor": {
+      "H_fixture_and_approval_byteexact": true,
+      "actual_adapter_source": "39bdd1da87adba6ac03432e1602ec62dc63baaad",
+      "all_non_mutation_profile_fields_byteexact": true,
+      "base_publication": "d3c703973eb3b88a380f042298e0e2eb6004c784",
+      "contract_sha256": "1c87694e9b8d48675ed63d85af038b245bc8eac3ff0a12abf1dd1a8039df97d0",
+      "current_targeted_capacity_PASS_nodes": 70,
+      "current_targeted_capacity_failures_or_skips": 0,
+      "current_targeted_capacity_roots": 6,
+      "five_guard_peer_sha256": "fd511282d20ef6ef6d441321d171eb43c51653d3ecd70f61f61a839905ccfc1d",
+      "full_operational_policy_validated": false,
+      "independent_typed_and_postimages_peer_sha256": "2a02d8b1a006e4014de9b8b378aceddb98b5f28440330e8b7f5f967f788f802e",
+      "metadata_return_sha256": "66cbb4436cfce38122a5b521199e610edf8c8c2c81c923adc2454a56b12d7829",
+      "owning_dry_run_return_sha256": "b9a1dd3b127cdf741888997fbf25f4fc21e540b3a9dcb98bdd2225648d438e2a",
+      "owning_typed_build_return_sha256": "798a6f8a170d577ae4698e5876ac9c1aa95d6947b291031bdfea3ea17deb934a",
+      "owning_typed_result_sha256": "56fea0098acac70928b540576bf052d69591f7d0f591b039b1f941b20a5403a2",
+      "production_or_native_business_qualification": false,
+      "source_approval_rows": 2,
+      "source_head": "89390a2a53bd5b2fda94bf82862b9e19c8ecb345",
+      "source_inventory_sha256": "c0668bc3898922f4bb644f0f69f820961d1ece2094c464222628ed1cd78cfbd9"
+    },
+    "base": "9670704587cf054a0df0969a2a89f6b58a7193e8",
+    "bridge_patch_sha256": "0a2667607a1c69a8a4f284caa0e8a83b155e895852784454441884efcdb0d523",
+    "closed_canary_original_return_clock": {
+      "Root_source_delta_review_complete": true,
+      "actual_local_PG_stopped": true,
+      "actual_owned_PG17_regression_return_sha256": "17555a82b15f36c7e76f389c72e72aee8e69e9cd352a83edf642cae788002b14",
+      "actual_test_failures": 0,
+      "actual_test_passes": 32,
+      "actual_test_skips": 0,
+      "complete_accepted_Record_business_ledger_test_claimed": false,
+      "existing_deadline_authority_causal_and_immutable_guards_preserved": true,
+      "future_native_Guest_business_qualification_required": true,
+      "historical_held_originals_reclassified": false,
+      "independent_formatted_Source_peer_sha256": "0e2a2c81cd4f453ee451ca2d5aba5bde3015304bffc9a366114274a999b12d76",
+      "product_source_sha256": "4d993aadd9c62efee0be664465f7ea745ec2ff99257a3075b5f19efb8d16cc0d",
+      "source_code_commit": "a657cc87b3edc96328d715542d5eaeb679533f4f",
+      "source_inventory_sha256": "e3b1ff22bf7b590ee9f3111a4c123cc7459d39c60699872f06ab2c617ecc5a75",
+      "source_only": true
+    },
+    "compiled_registry_empty": false,
+    "final_cost_cadence_patch_sha256": "a3095f9950d1699e60efe620af4e75727575234345811e0fff823ee049387780",
+    "floor_bootstrap_successor": {
+      "author_final_portable_nodes": 29,
+      "author_final_portable_roots": 2,
+      "author_final_portable_skips": 0,
+      "base": "178c7203748f0c04a262d6b815fc037387ff10c1",
+      "independent_A3_peer_sha256": "7215658abae5cf4b5f30605810f73983da4fa725290f86b3005044e993c523f5",
+      "native_execution_claimed": false,
+      "source_only": true
+    },
+    "independent_A3_bridge_peer_sha256": "a1c40a1cbb8c1e93f2891c2873bb063116ed30034b5fa8f79a11cff21cd79822",
+    "independent_A3_final_delta_peer_sha256": "c9f4a27aafd220b2e686938ffe3472eecd27ab3f697eb3bd492c66378be80b51",
+    "original_create_disposition_recovery": {
+      "SQL71_sha256": "17aaf1b2a6090c36ed39bc40e5f9e62ad861a6cd71a7061676fee33abc3d197d",
+      "actual_typed_contract_profiles": {
+        "aws": "dfe965c6c02cf3dc056e9bd74e91b4d1ff60a6d0336f028d162ef7c378e09ffe",
+        "hetzner": "c01b8969fb8ac4fbacf373275973df3d9b0caa8d5b1391b192e23e2715560921"
+      },
+      "base": "7dd060cab5ddceb19fa96c0f06ec6eea4b28660f",
+      "compiled_approval_rows": 2,
+      "full_operational_policy_validated": false,
+      "independent_reviews": {
+        "AWS1651-ACTUAL-V3-FUTURE-CONTRACT-INPUTS-INDEPENDENT-SOURCE-PEER.PUBLIC.json": "6a30f8d2eb43b3faa9c45619e0ff45197e1799c4437ec7840325957a7706163c",
+        "AWS1651-ACTUAL-V3-OWNING-CORE-TYPED-CONTRACT-INDEPENDENT-SOURCE-PEER.PUBLIC.json": "aee750e5315656ebed1d7723f9d75b2a9dcde934285233ef9042c05e4e826742",
+        "CORE-ORIGINAL-CREATE-DISPOSITION-REPOSITORY-INDEPENDENT-SOURCE-PEER.PUBLIC.json": "3abb79d75e0d25863db5aab3f412a9fc8d7bc13f40e2bda64225fe3c2f8947b3",
+        "CORE-ORIGINAL-DISPOSITION-BRIDGE-OPERATIONS-INDEPENDENT-SOURCE-PEER.PUBLIC.json": "4d2444ea8ffa27431f29ac78cdfaae28a5716d80036d8292cd1584f815ef1c4e",
+        "CORE-ORIGINAL-DISPOSITION-PRIVATE-READ-AND-SYNC-IDENTITY-INDEPENDENT-SOURCE-PEER.PUBLIC.json": "c149225820b99dc48d970998470b7b6ad9a86d970a10436c642d0b74d0e95656",
+        "CORE-PRODUCTION-PG17-ASSERTIONS-INDEPENDENT-SOURCE-PEER.PUBLIC.json": "6883d52f20a28ed9eb68bd7891376f5ca8324e3f9faae944f157f72c0d9129a6",
+        "CORE-TWO-ACTUAL-PROVIDER-CONTRACT-FIXTURES-INDEPENDENT-SOURCE-PEER.PUBLIC.json": "14eb44e0799cbcac441447c8c8abbd783934530157e556ac89024620a6460fc2",
+        "H035-ACTUAL-V4-FUTURE-CONTRACT-INPUTS-INDEPENDENT-SOURCE-PEER.PUBLIC.json": "21e8b08d73d6df89ce82c0927045fcc3952790af98364f5a76596e7537cb82fb",
+        "H035-ACTUAL-V4-OWNING-CORE-TYPED-CONTRACT-INDEPENDENT-SOURCE-PEER.PUBLIC.json": "c938a979fdd4c958cd5928b87c784f3b8e5389f322b8d1ed7e983c0e29ac0a4c"
+      },
+      "production_or_native_capacity_claim": false,
+      "source_inventory_sha256": "3248d5eb46fdfcb9cc9ad30419b9754b4fa62daa8a8f21393dd1447a7449a286",
+      "source_only": true
+    },
+    "schema72_and_explicit_empty_EC2": {
+      "AWS1651_source_unchanged": "5745ceb06e3221c756a3b6a26da1df248b8b4417",
+      "AWS1652_source": "56bbed398dfdb4f53a68f8ed8ff6b7fb6ef0f5f9",
+      "SQL72_sha256": "189e2889b32e03d3ac1d947c3d8595c6ca48e8fa897d03dceed48d66766b27fe",
+      "current_owning_CI_native_and_production_pending": true,
+      "independent_peers": {
+        "exact_source_guards": "ef15870031e01b7756545639b8e21cbb113681be123f2c463b0ad148a0acaaf3",
+        "raw_empty_XML": "740128143af533306af7d30dc282ff652ca1500e3960b97fc821741a48dc42ea",
+        "schema72_and_exact_integration": "b759b0fdf638acc163e54cce5cd22c4f0b437764ec4adb7863f52f0178db2019"
+      },
+      "ordinary_Enqueue_Claim_Start_unchanged": true,
+      "source_head": "0183fe48a8b635c53d55c7c0cae832a20f75c51e",
+      "source_only": true
+    },
+    "serialized_AMQP_session_recovery": {
+      "Root_real_local_broker320_original_tool_result_sha256": "f74f47fae729c55e564d16eb612d336f87b8fd1f0cfae6989f10d9e5860b1c4e",
+      "author_validation_sha256": "35bef7a537317c755e8deb027399d76e6d6268d8143811a7d931d520ed9dd019",
+      "base_production_source": "5201d21f721c6ff109e91204de5c172f29fc5b25",
+      "frozen_roster_sha256": "41c0aa1ccb9fcd44712cd5535de9c885fdc03e28cdbfcf89eec8057ef6e428c8",
+      "independent_manager_monitor_peer_sha256": "e18a83c4be78826eac1b83ee997e1e3780fd234b5de6b13cd08ccd94923871c4",
+      "payload_replay_added": false,
+      "production_deployment_or_native_business_pass": false,
+      "same_SQL_and_dependencies": true,
+      "source_head": "c3863e9c984a9a814b243e5d8a2f9a0e736f9a6e",
+      "source_inventory_sha256": "b1893307d635b70417460185e97b2e55d38edd7962ba55032b98d590a803bbc5"
+    },
+    "source_only": true,
+    "two_actual_approval_candidate": {
+      "Root_exact_source_application_receipt_sha256": "a982d43d24f27ace74a2ff12de752df04d7226f6d081a2ce83d6705d0a031e81",
+      "Root_final_integration_review_pending": false,
+      "Root_final_source_review_complete": true,
+      "accepted_source_inventory_sha256": "f2060483555e0028216f30749895be8c848b7904d251096b4d26fabdbdea860f",
+      "base": "532ddfe05a1e9d74340021b49b6513193d5775f5",
+      "compiled_approval_rows": 2,
+      "full_operational_policy_validated": false,
+      "independent_A3_full_static_peer_sha256": "45f4cd806c01d62c1680914869f1a98044ff7cbaecbd989a20e25e52002288bb",
+      "native_lifecycle_qualification_claimed": false,
+      "process_flags_changed": false,
+      "profiles": {
+        "aws": "ddd39fc8ee9d4b23e39b5af99dc13eb43168ebf92291507000f83ada8f5880b4",
+        "hetzner": "6c7b5b4eef25545dd3b46908527e3f738585b0c524a04af2ca49b5bdec24d5b1"
+      },
+      "source_review_only": true,
+      "typed_contract_source_review_sha256": "29ae1f3575e7a172b8d8dc27ee31eb076c36e5183560d9cd10aea50abb935971"
+    },
+    "typed82_witnessed_unenrolled_AWS_and_original_Core_bound_replacement": {
+      "AWS_administrative_terminal_not_Guest_quiescence": true,
+      "H_explicit_replacement_preserves_full_V2_terminal_chain": true,
+      "Linux_target_lint_and_Core_cross_compile": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-CORE263-TYPED82-FULL-LINUX-TARGET-R2-f9ad60b2ea2af3bf913b/RETURN.PUBLIC.json",
+        "sha256": "0b1b9d7872ed7624c64ad716823300f8a1033e313fbfc3dad91b4c83eb0fcb34"
+      },
+      "Linux_target_static_scope": "All production and then-current R3 test source; R4 changed fixtures only. No Linux execution or clean image claim.",
+      "Root_final_source_review_complete": true,
+      "actual_PG_test_failures": 0,
+      "actual_PG_test_passes": 497,
+      "actual_PG_test_skips": 0,
+      "actual_local_PG_regression_containing_original": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-WHOLE-CORE263-TYPED82-R4-BROAD-LOCAL-PG17-7184cd6f50c304af7fc9/RETURN.PUBLIC.json",
+        "sha256": "a365a1f0f1b31579f0301c67d9b3dcb6462db45af03433696a2088a9ba523dd0"
+      },
+      "actual_local_full_migrated_PG17_regressions": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/ROOT-CORE263-TYPED82-R4-BROAD-MIGRATED-OWNED-PG17-92f308eb92c1301c6a8d/RETURN.PUBLIC.json",
+        "sha256": "e6d82223d29156831e2f51f48705fb76bf7189984108b48513550aba70b1aa05"
+      },
+      "all_existing_SQL_through81_byteexact": true,
+      "base": "59f59f531405abcb337ba94343db3513273cdda0",
+      "complete_production_source_records": 706,
+      "historical_focused_CI_rosters_retained_and_new_eight_roots_added": true,
+      "human_architecture_signoff_claimed": false,
+      "independent_combined_production_source_peer": {
+        "path": "/Users/giovanniriosmartins/Documents/Codex/2026-10-21/v/work/production/Core263-combined82-formatted-source-review/INDEPENDENT-COMBINED-PRODUCTION-SOURCE-PEER.PUBLIC.json",
+        "sha256": "d0ee88788f7ed6485ac1ae2ce3116d958991a3ab0e7959c59676ac4c34420508"
+      },
+      "new_migration82_sha256": "f604cb49a43ce62382ad91be2b4089706568878733bc87f4bb76b5897b2dac76",
+      "old_ACK_deadline_or_attempt_replayed_or_retimed": false,
+      "owned_disposable_PG17_cluster_with_two_databases_stopped": true,
+      "production_qualification_claimed": false,
+      "reviewed_at": "2026-10-26T17:43:37.079058+00:00",
+      "schema82_Linux_CI_image_Goose_runtime_and_useful_capacity_still_required": true,
+      "source_inventory_sha256": "e6e919b15af44e43b6d05c4c969beca37dc2569a0c1ff4633e7ce47f3ab85e2e"
+    }
+  },
+  "human_architecture_signoff_claimed": false,
+  "non_test_Go_sources": 756,
+  "previous_AWS1652_review_accepted_at": "2026-10-23T02:46:08.896936+00:00",
+  "previous_accepted_inventory_sha256": "9e84d02942ec5c2178962b84ce64baa859ff43472e0916d2d5df4d304dae9de8",
+  "previous_accepted_review_sha256": "6d6bb4351292d4e7f4274aaa7470c6553f60541799d58170fce4e7cf30250e05",
+  "previous_inventory_before_closed_canary_return_clock_sha256": "84dfea477a430dbd4da1daf58f66b5e8a37cb070471a9f88bf648910f3a3d4ed",
+  "previous_inventory_before_typed82_recovery_sha256": "e3b1ff22bf7b590ee9f3111a4c123cc7459d39c60699872f06ab2c617ecc5a75",
+  "previous_original_create_disposition_accepted_at": "2026-10-21T23:08:55.177061+00:00",
+  "previous_original_create_disposition_reviewer": "Root full-reviewed the explicit AWS1.64 closed supplier/retirement catalog, original new-instance metadata/dry-run/IAM scope qualification and actual rebuilt owning typed contracts; independent A3 complete input and literal-registry/fixture/semantics peers preserve the exact two-row boundary. Source acceptance only; no native useful member, runtime or human approval is claimed.",
+  "previous_review_accepted_at": "2026-10-21T19:28:31.389131+00:00",
+  "previous_review_before_AMQP_session_recovery_sha256": "75350fe06eae3bc91d89ef3dfa904029fef1ba4718024aa8ba31063238ec5059",
+  "previous_review_before_AWS164_actual_instance_contract_successor_sha256": "a3c6edf138584b0fb0da606336deb7a463fadfa4a9cc5869edb72acf1dc3c421",
+  "previous_review_before_D10_dedicated_readonly_observer_sha256": "3b8d1eab38b41b49b3d85b0a90b35ba9fdba67418896de902d58c7c5d6c61663",
+  "previous_review_before_D12_NULL_workflow_identity_and_bounded_startup_sha256": "28835da1eb863fcbb352adde587cfa617fe2c624a1c2ba7656ce5873d25c9af9",
+  "previous_review_before_D12_inventory_and_lint_correction_sha256": "2dcd0143eb4c4b6b864f3035c18ab352b69ddb7e10011b883ad8d3571406cf97",
+  "previous_review_before_D12_unbounded_lint_correction_sha256": "eaefd44faca96b8cea72a33a17b2b3c5afd55e460767fbeb21604cb591982f60",
+  "previous_review_before_D14_presend_retirement_recovery_sha256": "34e6bf85f4bc5d6c1f75b78414a40fdee8dd964b78a6ccc2b4a10f83533e548e",
+  "previous_review_before_D15_R2_ops_inventory_sha256": "dbc351b28be5896c80c22828b061c2a5cfc8499fa4c61d37ffa7857e9d1ca4bf",
+  "previous_review_before_D15_prejournal_refusal_and_scheduler_sha256": "efa62303bdfddf7b8322b8238c66833bf71377dbe3a414c3911834b625acf91b",
+  "previous_review_before_D7_R3_complete_profiles_sha256": "a866516ae2e96c6bec1b03d10d66fc5da57bfb258c702c6be19b3dd833bbd452",
+  "previous_review_before_actual_AWS1652_contract_successor_sha256": "fb87e8b18a2e5847d83e6abdb57ccd23ed0759eb0abcc33f214966dcd5d5fc6f",
+  "previous_review_before_actual_AWS1653_contract_successor_sha256": "e4820e92a3ab43b3ba63ff229977eeae82835c8b7f60c7e596d245d0dcd949da",
+  "previous_review_before_closed_canary_return_clock_sha256": "93c0cc047af062528d350722b4029bb8c2397b119d7d1797e5d833a5500677c1",
+  "previous_review_before_final_two_approval_acceptance_sha256": "8743d3f7a2c0983472ac6e6ba39915a7607fe29c3700e5acf6df775bbccdebd9",
+  "previous_review_before_floor_bootstrap_sha256": "a38b423729b60de88fecf379d7f4d68fd423ad97a2914091d95478ae114cfa2e",
+  "previous_review_before_original_create_disposition_recovery_sha256": "3f2e427ae005de56544a60346b723d33a63fc253586a0625f11abd13299ca34e",
+  "previous_review_before_schema72_explicit_empty_sha256": "467c71460da8f277880a5594f388fd83a56898b795325ba5396dd7fa76a936c6",
+  "previous_review_before_two_actual_approval_candidate_sha256": "2fa1a8302d35d015d3e0e72913693646dec46a488664fcf5b2d84adcc78eb695",
+  "previous_review_before_typed82_recovery_sha256": "a391699122b39dea2db145e6950033efe63433e000650e3b8d6919ac4ed44da4",
+  "previous_schema72_acceptance_timestamp": "2026-10-22T23:44:58.360035+00:00",
+  "previous_schema72_reviewed_head": "7dd060cab5ddceb19fa96c0f06ec6eea4b28660f",
+  "previous_two_approval_candidate_accepted_at": "2026-10-21T19:41:22.206677+00:00",
+  "previous_two_approval_candidate_reviewer": "Codex A4 source census owner preserving prior Root and independent reviews, binding independent A3 full static floor-bootstrap review to the exact successor source; no human, native or deployment approval claimed",
+  "production_deployment_or_native_pass_claimed": false,
+  "reviewed": [
+    "Exact explicit service profile; legacy defaults and duplicate checks preserved",
+    "Closed bounded checker, no unknown profile fallback; evidence and full non-test source bytes verified",
+    "Actual HTTP/pre-mux credential ownership, event emission/validation, RPC, HTTP/SDK and shipped-command edges",
+    "All three production shipped commands included; no blanket scripts exclusion",
+    "Dynamic endpoints describe actual configuration/trust owners, without fabricated fixed production endpoints",
+    "Native qualification build constraints remain separate from production resources and permissions",
+    "Original AWS provider branches remain scoped to the exact provider/source/ensure pair; generic legacy AWS and compensation proofs retain the existing contract",
+    "AWS observe_ec2_instance is accepted only for its source-pinned original capability pair",
+    "Signed provider native identity joins the independently read immutable provider tuple, current source/settlement and fresh observation; kernel boot/process lifetimes remain distinct",
+    "Hetzner location/network_zone is kept separate from the removed Cloud API datacenter and unknown availability-zone; AWS account/private hostname come from the actual native reservation",
+    "Same original primary HTTP and secondary TLS handler and authority registry; certificate validation before DB bootstrap, bind-failure Close and same-context shutdown",
+    "Guest Notify immutable challenge/nonce/send/return source and fixed stable-slot declarative broker topology",
+    "Guest-v2 causal publication and read remain in the same original five-second context and immutable executor; native commit fields explicit NULL or actual equal native timestamps",
+    "Useful promotion and before/after retirement floor reconstruct complete raw original transport, signed process/enrollment and same-transaction business evidence; no cached healthy flag",
+    "Stable maintenance epoch cannot acquire provider mutation lease or adopt unresolved grants",
+    "Per-slot user-data hashes are a closed alternative to the legacy shared hash; exact policy/witness/journal selection; common setup binary hash unchanged",
+    "Entire added production V2 DTO, separate Core30s and Guest kernel nonce/expiry ownership, original HTTP nonce/read/close and final signature, immutable nonce+four original journal records with no wire rewrite",
+    "Original caller possible-send commits before the one POST; four authority reads join the same original enrollment/workflow epoch and never renew its deadline",
+    "Native off and original destroy require complete original caller ACK before durable read challenge, actual Core5s RPC return and separate PG ledger age; provider timestamps remain inside native source content",
+    "Real AWS termination and exact Hetzner0.3 b375 source/catalog capability gate before send; original destroy settlement and retained resource/action/auxiliary absence, same60s GET-only pending polling and fresh afterACK floor at confirmation",
+    "Ordered action identity joins treat omitted empty receipt lists semantically while preserving signed raw payloads, exact nonempty IDs/order and duplicate refusal; legacy AWS/create/qualification validation remains separate",
+    "Exact original Notify singleton root cgroup path is admitted only under the same complete production binding and validated Notify canary/topology; generic writer paths and qualification remain separate",
+    "Independent original-profile GET uses the fixed authenticated Core route and principal-pinned digest, exactly one immutable original native witness, and rechecks current policy/workflow/lease/compiled approval in the original bounded transaction; caller profile selectors are refused",
+    "Root independently read the complete six-file original pending profile change, existing ready lookup/current transaction owners and exact sentinel discriminator: one current unresolved preregistration and original create grant, locked source/policy/workflow/lease/member joins, no witness/native authority in425, exact canonical non-cacheable response and one ready recheck without deadline renewal",
+    "Root reviewed the complete production clock/registration/installation, HTTP and repository/factory delta; independent A2 reviewed all29 CODE and3 META postimages and actual callers. Original signed read carries current locked PG remaining interval into one Guest CLOCK_BOOTTIME owner, preserving5s whole exchange and420s original acquisition; V1 remains closed. Immutable registration, result, receipt and issuer statement retain separate authenticated hash domains; default registry stays empty and no DDL is added.",
+    "Root reviewed exact original AWS terminate_ec2_instance callback principal scope; Hetzner0.3.2 original supplier and V2 retirement require the same complete reviewed catalog and exact b672 publication, preserving b375/0.3.0 and legacy gates. Six existing native AWS action transitions have exact naming exceptions with no prefix or hard-fail relaxation. Independent A3 whole compatibility/YAML peer9b244de724e70100ea09e4afeea05dd5e86f628e4c00ce4b5b1552db209cee60 and prior principal peer retained. No schema, route, budget, default production registry or runtime authority change.",
+    "Root independently reviewed all six lint postimages: the first current-policy transaction read and its error remain mandatory while only its unused policy result is discarded; the policy consumed after the original PG clock sample comes from the same second revalidation. Three pure De Morgan complements preserve guard truth and short-circuit order. One non-authoritative provider error begins lowercase. io.NopCloser retains its inferred io.ReadCloser interface. No deadline, call count, source pin, signature, SQL, authority or registry change.",
+    "Final two native AWS mutation pair guards preserve exact short-circuit and callback evaluation after complete nested De Morgan normalization; only two source census records change. Bounded source tests and original CI532 lint failure remain distinct; next owning Linux CI is required.",
+    "Independent A3 full27-file bridge and12-file cumulative financial/cadence source reviews found no concrete P1/P2 at their frozen exact snapshots; Root authorized integrating these source patches with the additive H034 supplier source into the existing branch. The complete current635-source census binds every integrated production postimage.",
+    "The canonical Guest graph uses explicit plan/complete opcodes, durable scheduled machine-principal/RBAC/dispatch ownership, source-only observations and original no-replay provision/useful/retirement ledgers. Default production approval registry remains empty; HPA/qualification contracts are separate.",
+    "New Guest-only strict thresholds, finite explicit administrative USD assumptions and exact selected native currency preserve legacy dated behavior and original fresh quote checks. Source controller cadence and actual range sample gaps are separate; Coverage30/min5 is independent of Demand300/min61. Neither missing data nor a schedule wake supplies native readiness or drain authority.",
+    "Independent A3 full static floor-bootstrap review721565 binds the exact three production and two new test postimages. Only the immutable original native-zero protected floor generation may complete using bound Coverage30/current15s source time while keeping actual missing Demand300 unchanged. Current original lease/source/compiled graph/native ledger and raw useful-canary phase guards remain in the same transaction; generic, recovery, nonzero-baseline, reduction and above-floor authority remain refused.",
+    "Author prepared exactly two complete actual public Notify protected contracts through the frozen owning Core typed helper and original native/caller joins. AWS external-IAM-v2 and H034 own dry-run public records remain unchanged; the lean AWS type is joined to original Core RPC and installer/type metadata. This literal two-row approval is a source candidate pending Root final integration review, not a deployment or useful-member observation.",
+    "Root completed the final full source review of exactly two original Notify protected contracts and verified all nine integrated postimages against the frozen candidate. Independent A3 full actual-ABI and two-approval static peer45f4 is bound separately. The current636-source inventory matches every production source byte; the literal two-row registry is accepted for source publication, while runtime current-source rebinding, operational policy, process flags, grants and native qualification remain separate gates. Earlier pending and registry-empty statements describe their historical predecessor snapshots.",
+    "AWS1.64 is admitted only through the explicit complete supplier and retirement catalog with observe_fleet_inventory; an unknown future version stays refused. The complete actual AWS V2 mutation binding, all eight source-derived specs and literal contract approval come from rebuilt owning Core typed output after the original metadata/dry-run/new-scope IAM qualification. Exact profiles, bootstraps and the whole Hetzner contract remain unchanged. Independent A3 full input-transformer and literal3-postimage peers bind this delta and the complete636-source census; historical approvals and failures remain identified separately.",
+    "Production default PG17 assertions are passive harness hooks while the complete real signed witness, current provider/native return, fencing and installation chain remain mandatory. A separate human GodMode administrative disposition records authenticated terminal absence for an accepted expired never-witnessed create without rewriting its grant, preregistration, settlement or failed workflow. Goose71 provides append-only records and a matching one-way grant pointer. Original source/current observer source remain separate, raw provider transport remains private to the dedicated bridge, and every generic execution path refuses this operation/capability. Logical scope/profile/slot successors require a fresh strictly greater generation and fence. Historical catalog IDs resolve the current active logical type, retain operator labels/description, and the serialized compare-and-write refuses stale overwrite, duplicate versions and resurrection.",
+    "Exactly two production approval rows now bind genuine AWS1.65.1/V3 and Hetzner0.3.5/V4 integration metadata and the corresponding complete owning-Core typed contract projections. All eight specs are source-derived with only slot1 individually observed. The complete protected profiles, writer catalogs, canary and physical settings remain unchanged; CoreAuthoritySourceCommit remains a separately required final runtime binding. Old enabled V3 policies and accepted failed creations are not relabeled or replayed.",
+    "The AWS approval now binds actual AWS1.65.2/V4 metadata, its owning original dry-run and the complete owning-Core typed policy projection. Exactly the mutation binding identity/source/type/scope and eight derived specs change; reversing those bindings recovers the previous complete fixture. The protected profile, canary and production catalog and complete Hetzner fixture/approval remain byte-exact. Independent full typed/source integration peer e81c9c04 binds all postimages. Runtime CoreAuthoritySourceCommit, genuine image/600, policy and native lifecycle remain separate mandatory gates.",
+    "AWS1.65.3 source39bdd is the sole current observer; the supplier and retirement catalogs retain exact historical1.65.1/1.65.2 source pairs and require the complete four-operation lifecycle catalog for1.65.2/1.65.3. Its root-EBS predicate allows only explicitly virtual ephemeral extras while six native reads and original absence gates remain mandatory. Actual V5 metadata and the original owning dry-run derive the complete new contract1c876; reverse mutation-binding replacement recovers the old fixture and Hetzner remains byteexact. Schema72 is unchanged; deployment, original600, disposition, policy and business authority remain separate.",
+    "Dedicated native-denial HTTP observer is source-pinned and separate from the normal AWS supplier; complete historical/current catalog authentication precedes explicit historical AWS protocol projection. Original creator/configuration and accounting history remain immutable; SQL75 and normal profiles/inventories are unchanged.",
+    "D12 preserves immutable Guest wire authority while recording the real clean issuer in a separate atomic SQL77 ledger. Installed reconciliation keeps the same native resource, enrollment, installation and generation, requires the previous failed run and acknowledged finalization plus a fresh private dispatch run, and admits at most three new fenced readiness attempts. Existing failures and possible business effects remain immutable. The post-CI style correction uses equivalent tagged-switch and De Morgan predicates; intentional nil-owner rejection tests retain nil and narrow documented staticcheck exclusions. The current complete inventory includes all inherited D11 and added D12 production source.",
+    "Three additional original-disposition De Morgan normalizations preserve left-to-right short-circuit and side-effect call order, including the explicit-empty-instances predicate. The owning lint workflow now reports all same-kind and per-linter findings without truncation; no check is disabled. Original failed lint runs remain failures.",
+    "D13 retains both complete historical contracts and their original compatibility map, then adds the two real a900 contracts derived from original native slot2 dry-runs and the owning C8 full-policy compiler. Each new integration instance has a distinct scoped mutation principal. Historical issuer verification keeps full original bindings and the actual build; SQL78 records failed installed disposal without inventing useful capacity or erasing business effects. Guest548 uses its genuine narrow signed V1 protocol; ordinary V2 gains the required drained transition, original destroy receipt and closed production DTO decoding. Terminal disposal proceeds to ordinary reassessment while source/profile replacement gates remain mandatory.",
+    "The nativequalification build receives only two explicit error-only privileged disposal boundaries. The pure AWS native-off timestamp join moves byte-for-byte into common source, retaining its eight original cases and root hook without any Skip. Default production disposal behavior, SQL and all four complete approval contracts remain unchanged.",
+    "D14 canonical UTC retirement deadline precedes signing and durable JSON; whole request equality, signatures and original deadline checks remain intact.",
+    "D14 explicit IDs-only GodMode recovery preserves the expired never-sent original and uses one append-only successor with fresh scheduled ownership. Scope/intent locks and seven evidence-class refusals protect uncertain sends; ambiguous legacy compensation selectors refuse both originals.",
+    "D14 schema79 continuation joins the exact recovery claim and issued successor while preserving immutable63/64/77/78 rows. Native Guest quiescence, native poweroff, cleanup and complete absence require their own original evidence."
+  ],
+  "reviewed_source_head": "9ecff39e007c939de3618387fa7229de44915fdd",
+  "reviewed_source_head_is_historical": true,
+  "reviewer": "Root full production-source delta review; separate independent manager/dial/monitor peer; source acceptance only",
+  "schema": "core_service_source_review_v1",
+  "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
+  "pg16_fixture_integration_review": {
+    "scope": "Independent source review of test-only fixture integration, adapter pin, cleanup and census. Native qualification and the original lost-reply cases remain separate and unqualified.",
+    "reviewed_code_commit": "6a98b52d0a8a93bee01a69834842b6a1602625fb",
+    "failed_floor_fixture_scope": "Independent comparison preserved the original below-floor baseline and refusal assertions. The PG16 execution uses signed synthetic Guest and native records; native and production qualification remain separate.",
+    "source_inventory_sha256": "796924aa14592aaf1b23528b3f4f703e8f7cce67b1e57be78123feea3e38574f",
+    "production_or_full_gate_qualification": false
+  },
+  "integrated_source_review_20261028": {
+    "scope": "Combined reviewed postloss slot and closed refusal diagnostics, floor keeper, readoption, protected destroy and synthetic PG fixtures. Source review is limited; full exact-source LAB, native scenarios and production qualification remain required.",
+    "source_inventory_sha256": "43d990df35e99a5dfe2ee5290039f0253d994c6a71cd1490a9a19995ac9f6f38",
+    "production_or_full_gate_qualification": false
+  },
+  "postloss_confirmation_join_review": {
+    "scope": "QEMU qualification-only immutable source custody and exact confirmation join; conservative production HOLD for unanchored uncertain creates. Full independent review, Linux transaction tests and native validation remain required.",
+    "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
+    "production_or_native_qualification": false
+  },
+  "source_inventory_sha256": "4feff8ef6bdf8bbb4dcba468888ae2a5bd33804bfd30ebfd3a6a77d54403198f",
+  "validation": [
+    "Author focused owning command/catalog/package tests passed on Darwin",
+    "Author full compiled CLI integration and negative cases passed",
+    "Root compiled clean exact publication with buildvcs=true and verified revision/modified=false",
+    "Root integrated census and five static-tool tests passed",
+    "Root actual candidate CLI refused only architecture review incomplete before acceptance",
+    "Author focused actual provider identity, AWS observation, default registry and workflow source tests passed on Darwin; Linux owning CI remains required",
+    "Root independently reviewed the integration deltas and regenerated the complete source census",
+    "Root independently read all added production sources and integration diffs; independent A3 canary/maintenance/useful reviews retained separately",
+    "Focused actual Darwin portable source evidence supplied by authors; no native PostgreSQL proof attributed to Mac",
+    "Root exact owning secondary HTTP/TLS race tests passed previously; Linux owning current-source and schema70 absent-authority gates newly required",
+    "Root independently read complete added production V2 source and integration diffs, and then reviewed Hetzner0.3 successor source/capability/CI deltas",
+    "Root verified both frozen author manifests against exact Git source objects and the complete625-file census; author portable tests and crosscompile are scoped source evidence",
+    "Hetzner owning Linux CI39585655677 passed actual race/census/image build for literalb375 source; Core current V2 owning Linux/Goose70 native-negative CI is still required",
+    "Actual production VM create/useful/drain/delete, native positive PostgreSQL authority chain and operational elasticity remain unqualified by this source acceptance",
+    "Root fully read the exact cgroup and original-profile source/test/workflow/Proposed ADR diffs and current transaction/lookup/witness owners; source census regenerated at625",
+    "Author focused Darwin cgroup five roots47 nodes and authenticated profile source three roots61 nodes passed; these do not supply native PostgreSQL or production qualification",
+    "Author focused Darwin153nodes passed; Root reviewed literal source and unchanged625production census. Owning native positive PostgreSQL pending-to-witness/old-settled scope remains separate and is not claimed by content tests or source review. Actual previous Core owning Linux4144nodes passed atd2aa, not attributed to this new source.",
+    "Whole-delta independent A2 source review receipt SHA256225f82040af06bfde2b281ddf58abad3fd84aa13435e8ad0779ccadad7d0a851 and independent A4 Guest37-file peer SHA2562ce4f8f9a0d6c89667ced994cd66f9070a9b0dc8f0c5e53a3622716ad122f914 report no concrete P1/P2. Author actual Darwin12roots166nodes and Guest20roots169nodes/crosscompiles are portable source evidence. Current owning Linux/race/PG execution and physical provisioning remain separately required.",
+    "Author actual Darwin owning allowlist seven roots/thirteen nodes and byte-exact portable gate harness two roots/thirty nodes passed; production package build and Linux whole-message crosscompile passed but no Linux execution is attributed. Both authentic public adapter payloads pass real model/document/naming validation after exact exceptions. Root regenerated complete630-source census; owning Linux/source/native PostgreSQL CI remains required. Server audit independently records original AWS type naming rejection; this source review does not classify a discarded original HTTP response or supply capacity authority.",
+    "Author actual Darwin internal/capacity and repository six roots/fifty-seven nodes passed without skips. The original three-package Darwin command remains exit1 because existing controller test fixtures require Linux Openat/Renameat; it is not reported as a full pass. The complete controller test package cross-compiled for Linux in17.408s without execution. Root read every seven-line equivalence, regenerated630-source census and retains original owning lint failure119344932521. Current owning Linux lint and tests remain required.",
+    "Author exact final source passed29 portable roots/205nodes/no skips, Core message+HTTP build and Linuxamd64 message+HTTP test crosscompiles. Root independently ran the integrated same29-root corpus with205nodes/no skips and actual exit0. No Linux/PG/provider execution is attributed to these portable checks.",
+    "Independent A3 full bridge peer a1c40 and cumulative final peer c9f4 are static source reviews, not native execution. Source capacity-postgres CI newly requires25 roots/noSkip including an actual PG refusal that preserves existing intent/lease/event/grant authority. Its execution remains owning CI work.",
+    "This registry-empty source publication is for early owning Linux/PG CI. No compiled two-profile approval, new H034 metadata UUID, operational metrics, process flag, credential, database migration or production activation is supplied by this review. Initial-floor telemetry maturation remains a source-supported functional follow-up before activation; no native positive is claimed.",
+    "Floor successor author Darwin eleven roots/seventy-eight nodes passed before the added15s transaction-age guard; final two floor roots/twenty-nine nodes/no skips passed with the exact current helper. Core message+HTTP build and Linuxamd64 message test crosscompile passed before only those additional pure Fresh checks/test case. No Linux or PostgreSQL execution is attributed. The current owning CI requires28 no-skip roots including a new actual generic floor-claim PostgreSQL authority refusal; complete protected production-positive execution remains separately required.",
+    "The earlier registry-empty validation requiring a floor-maturation follow-up describes predecessor178c only. This source successor implements that narrow path and still does not supply production profile approvals, process flags, deployment, credentials, metrics, VM authority or native success. Three test-only lint equivalences preserve exact behavior; owning lint rerun remains required.",
+    "Author actual public ABI five roots passed without any API/private/native call. Core typed contract-only execution completed0 for two providers and16slots with unchanged3fd/be3 ProfileManifest hashes; full operational policy validation remains false. Candidate source approval matching with the two actual public datasets passed1root/23nodes/noSkip on Darwin, including foreign-source/runtime/member/recipient/adapter/admission/age/cross-provider/duplicate refusals. Linux/PG/current-source positive physical lifecycle remains owning qualification work.",
+    "Root final source acceptance and exact application receipt a982d43d bind candidate377126 and independent A3 peer45f4. Existing author current-Core contract test1root/23nodes/noSkip passed; no redundant tests were rerun for this documentation-only acceptance update. Current owning Linux/PG execution remains required and no production lifecycle success is supplied by this acceptance.",
+    "Author isolated Unix-socket PostgreSQL17 validation exercised append-only/FK/index/concurrency, same-source snapshot/races, authentic auxiliary kinds, AWS original-UNKNOWN six-read adjunct while preserving false completeness, and fresh successor generation/fence. Actual migration sequence was also applied to the pre71 Core schema locally; only initial pgcrypto extension creation was omitted because the task-local PG was compiled without OpenSSL, and this limitation remains explicit. This is not production migration proof.",
+    "Focused author API/bridge/catalog/private-output/sync and real local PostgreSQL historical-ID/CAS tests passed. The new labels preservation/independence root passed0.491s; final two actual complete contract plus registry suite passed0.562s. Addons test compilation and complete Linuxamd64 Core compile-only build passed; buildvcs=false helper/binary artifacts are not release artifacts. Current owning CI/release, production Goose71 and original bounded network/Core/provider/Guest qualification remain separately required.",
+    "The exact reviewed published service-doctor binary ac6a58a0a98e2bcfbdd3f0571d55b495e4f48ccb7fee4b66295c273f4f211f2f validated this complete service scaffold locally; deterministic646-source census verification and git diff whitespace checks passed. Independent actual two-fixture/literal review14eb44e0799cbcac441447c8c8abbd783934530157e556ac89024620a6460fc2 confirms only the two contract digest literals change in the closed registry and both fixture projections equal their owning typed outputs.",
+    "Local source-only validation: XML9 roots92subcases and controller4roots26subcases passed; Darwin Linux-fixture-only overlay is explicit, complete Linux controller compile used no overlay and was not executed. External isolated PostgreSQL17 with pgcrypto exercised41 new schema72/API/concurrency leaves without skips; integration peer binds the exact source. These are not production migration or native business proof.",
+    "Six targeted owning capacity roots/seventy PASS nodes and zero FAIL/SKIP completed locally on Darwin for actual two-provider approval fixtures and registry negatives. Official649-source census regenerated; current owning Linux/CI, schema72 migration and production firstReady600 remain separately required, not supplied by local source acceptance.",
+    "Current AWS1653 five-guard tests passed five roots/thirty-four subcases using only the inherited Linux-only PostgreSQL fixture Darwin portability overlay; full Linux controller test compilation passed without overlay and no Linux execution is claimed. Actual approval fixture and registry tests passed six roots/seventy nodes without fail or skip on Darwin. Official649-source census and published service doctor remain the final guarded validation.",
+    "Final frozen Darwin source passed33 roots/37 nodes with no FAIL/SKIP: manager/consumer race, focused addon/message/HTTP race and loopback guard. HTTP/message focused-file scopes remain explicit in the author validation; this is not whole Linux execution. Root final real isolated loopback RabbitMQ320 test passed with all Go sources pinned before and unchanged after, proving request/consumption recovery, unavailable drain, one generation and no ambiguous replay. Current owning Linux/CI and production rollout600 remain separately required.",
+    "D9 source acceptance: four new isolated PostgreSQL17 XML repository roots and one new HTTP race root completed without skips; Linux message compilation completed without execution. The actual owning Go compiler validated both full disabled operational policies and all sixteen slot plans; its six original native children and original containing process completed zero. Exact generated AWS mutation bindings and one default registry digest changed; the complete Hetzner fixture and approval are byteexact. Five owning registry race roots passed forty-seven nodes without failures or skips. Current owning Linux focused thirty-six roots, Source CI, release image, production Goose75 and rollout remain separate required evidence.",
+    "Root ran three new pure controller roots under an explicit external Mac-only overlay excluding other existing test files; all three passed without skips. Earlier Mac compile failures from existing Linux syscall fixtures remain separate preserved failures. The required owning Linux39 race/PostgreSQL workflow, actual dedicated image/runtime, new network pair, original Core600 and native accounting remain independent operational qualifications.",
+    "Original D12 Linux49 and Linux16 source workflows passed on the preceding publication; their historical results are not attributed to this correction. Current owning CI must validate the successor publication, generated complete census and contract digests. No deployment, migration or useful-capacity success is supplied by this source review.",
+    "D13 source acceptance retains actual local isolated PostgreSQL17/schema78, normal V2, terminal scheduler handoff and exact five-postimage evidence. Both original native slot2 readonly RPCs and the owning Go full-policy compilations returned zero; corrected final policies differ only in their two new adapter principal IDs. Two existing approval roots passed75 race nodes with no fail/skip. Complete Linux-target static lint passed with zero issues before only the final literal principal/contract substitutions; current publication CI remains required. No SQL78 production migration, D13 rollout, new inventory activation or useful native lifecycle is supplied by this source review.",
+    "After the actual ca45 tagged-CI compile failure, Linux nativequalification Core build and complete message test-binary compilation both returned zero. Isolated byte-exact source copies of the pure join and refusal boundaries passed thirteen Mac race nodes with no failure or skip; no whole Darwin message package or Linux runtime execution is claimed. Current exact-publication CI is required. Seven separately reported CodeQL findings remain preserved with a local historical/bounds/semantic triage; no alert was suppressed or dismissed.",
+    "D14 actual local PostgreSQL17 recovery storage root34nodes, twelve inherited repository roots156nodes, compatibility/UTC56nodes and administrative API8nodes passed with race and no fail/skip; PostgreSQL stopped with original exit0.",
+    "D14 Root full Linux-target Core, Goose and nativequalification source builds passed; complete static lint passed after a test-only tagged-switch correction. Fresh two-root UTC regression passed.",
+    "D14 CI preserves the exact original sixteen-root artifact and adds five recovery/UTC/API roots in a separate retained artifact; a local Bash output-tree control verified the separation.",
+    "D15 local disposable PostgreSQL17/Goose1..80 passed four race roots/102 nodes with no failures/skips and closed shutdown; new HTTP authorization/closed IDs/privacy passed eleven nodes; real-context authority UTC passed seven nodes. Complete Linux-target Core, Goose, nativequalification source builds and full static lint passed. The exact original sixteen CI roots remain intact; ten additional recovery/UTC/API roots have a separate retained artifact. These Source checks grant no production lifecycle credit.",
+    "D15 R2 resolves the actual general-CI route-count guard failure introduced by two new explicit administrative routes. Both route wrapper/inventory and canonical permission tests passed under race, with zero failures/skips; complete Linux-target lint passed. Runtime Go sources, SQL80, all previous migrations and recovery-specific tests remain byteexact to the prior genuine publication. The prior failed original CI and publication are preserved."
+  ],
+  "compensation_reissue_review_20261028": {
+    "scope": "Independent source review of immutable original binding derivation for an expired never-redeemed compensation child. Four PostgreSQL repository scenarios use declared synthetic Guest and provider observations; no physical four-member or producer qualification is claimed. Exact final-source Linux gate and native qualification remain required.",
+    "reviewed_source_commit": "1780bbb",
+    "source_inventory_sha256": "20be8ce7b6c2466d8c09fb9690cac4c82559bc7664d8aec0974eb61f3af80418",
+    "production_or_native_qualification": false
+  },
+  "registration_diagnostic_review_20261028": {
+    "scope": "Closed qualification-only labels preserve original registration errors; source review does not establish the cause of a specific 409. Linux execution and current native qualification remain required.",
+    "source_inventory_sha256": "714bc2943a520107584cac49d03156999c5ba1dfca9393391be4a0aa24c7bd02",
+    "production_or_native_qualification": false
+  },
+  "snapshot_projection_review_20261028": {
+    "scope": "The snapshot return join uses the original challenge id. A PostgreSQL regression executes the same query against the migrated schema and transaction-local records; native and final Linux execution remain required.",
+    "source_inventory_sha256": "dbbf1dd3b47b340b0deb4f89a2e258b2953dd0d5ce5b8b82f755f8e6a2ebf9f1",
+    "production_or_native_qualification": false
+  },
+  "readoption_creator_review_20261028": {
+    "scope": "Original native readoption export retains the creator digest only for the same creator object. Prior export HOLD remains historical; exact-source Linux and native validation are required.",
+    "source_inventory_sha256": "e8ee4c5f92a62a0cb6e83528c43d6cac087caff7efd97cdafc3b327301794887",
+    "production_or_native_qualification": false
+  },
+  "snapshot_clock_wait_review_20261028": {
+    "scope": "Qualification-only wait after the original snapshot reservation and before the single GET; no deadline or validation changes. Cancellation during the wait leaves a reserved read without return and remains HOLD. The 100ms interval does not establish general clock synchronization; Linux and native testing remain required.",
+    "source_inventory_sha256": "f1f5bf1fc55bfbf67c4f236cde13ac0b29d5b7d1cc8d60738ecfcac70075ce65",
+    "production_or_native_qualification": false
+  },
+  "registration_validation_classification_review_20261028": {
+    "scope": "Qualification-only mapping of source-owned fixed registration validation errors to closed labels, preserving the original conflict and all guards. Exact-source Linux and native tests remain required; no cause is attributed to historical HOLDs.",
+    "source_inventory_sha256": "5c79d26a423c7cdd153be14c0c537d5fb899d35077b426b8798d8047a6f5b0ab",
+    "production_or_native_qualification": false
+  },
+  "source_failure_read_diagnostic_review_20261028": {
+    "scope": "Qualification-only fixed-stage diagnostics of original failure read, with no raw error or body output and unchanged retry, deadline and guards. Existing HOLDs are not classified by this source; exact Linux and native validation remain required.",
+    "source_inventory_sha256": "8b3a729ff4ab52ffcaa37955dfcab9c1ae8077c13d992d714d7935d3b8b62ab3",
+    "production_or_native_qualification": false
+  },
+  "source_failure_http_diagnostic_review_20261028": {
+    "scope": "Qualification-only fixed classification of the same original HTTP return. Error, retries, context and deadlines remain unchanged; prior transport labels do not establish a network error. Exact Linux and native validation remain required.",
+    "source_inventory_sha256": "caa6f70759a712372cbacf9e7e1dcd29dc2b86297efca23b1a84b4c4c2e40d6f",
+    "production_or_native_qualification": false
+  },
+  "source_failure_http_last_review_20261028": {
+    "scope": "Qualification-only final closed HTTP class and attempt count on original timeout, in addition to earlier first-class labels. No bodies, URLs, errors or retries change. Prior HOLDs remain historical; exact Linux and native validation remain required.",
+    "source_inventory_sha256": "174cb7e15d82394b9b79799328b0ca2bd7c93a962e7e60f1a0931faea6abb65f",
+    "production_or_native_qualification": false
+  },
+  "postloss_confirm_assertion_review_20261028": {
+    "scope": "Source-only assertion retains empty uncertain settlement and revalidates the immutable witness, independent reads and confirmed proof; accepted-resource equality is retained. Source review only; PostgreSQL negative cases and QEMU validation remain required.",
+    "source_inventory_sha256": "ac322cc3d079c8ce81b310fbc98d5be8b51e813a9d8f5ca7ece4bc5cdc842b92",
+    "production_or_native_qualification": false
+  },
+  "capacity_pg_gate_timeout_change_20261028": {
+    "scope": "The main capacity PostgreSQL Go test command uses a six-minute per-package watchdog in place of five minutes. All test selectors, internal owner and cleanup deadlines, cleanup registry, and failure census are unchanged.",
+    "evidence": "A prior 4-CPU LAB execution reached the floor child with approximately 161.46 seconds remaining while its unchanged safety gate requires at least 165 seconds. That execution failed; no success is attributed to this change.",
+    "source_code_commit": "18e00f2",
+    "source_inventory_sha256": "f1f5bf1fc55bfbf67c4f236cde13ac0b29d5b7d1cc8d60738ecfcac70075ce65",
+    "full_gate_or_production_qualification": false
+  },
+  "postloss_pending_probe_sequence_20261028": {
+    "scope": "Qualification-only failed-create slot retains the exact original uncertain settlement and independently validated proof, checks current lease and no canonical event/member, and uses a distinct pending-enrollment stage. The baseline confirmation remains separate. Source review only; same-source PostgreSQL and QEMU validation are required.",
+    "source_inventory_sha256": "2f2e182d11d3739d2306438fc4efc88f541d4df66342270e37db58341a38c9cc",
+    "production_or_native_qualification": false
+  },
+  "registration_protected_group_diagnostic_20261028": {
+    "scope": "Qualification-only closed V1 protected-registration first-failure group uses the same captured time and preserves the original conflict. The source review and unit tests do not establish any historical 409 cause; Linux and native execution remain required.",
+    "source_inventory_sha256": "72f268b8efcc4bb4fc4eb13a25272eb7a37392220401da4323e7bc301068650f",
+    "production_or_native_qualification": false
+  },
+  "qualification_registration_clock_review_20261028": {
+    "scope": "Qualification-only authenticated clock sample from the same locked PostgreSQL transaction before the unchanged single registration POST. No production clock, registration validator, signed data or original deadline is changed. Source review and local tests only; real PostgreSQL with authenticated TLS and native QEMU validation remain required.",
+    "source_inventory_sha256": "939b9241eb5f5bd8677d76d6e489a2a4eb49c0d1f9d4b99346df613da863732c"
+  },
+  "qualification_recovery_cleanup_epoch_review_20261029": {
+    "scope": "Qualification-only recovery cleanup no longer compares the owner and executor that Observe redacts; the step epoch is bound to the locked intent with the existing recovery lease check before any challenge. Every refusal projects one closed original-recovery-cleanup stage with no value. Production predicates and default builds are unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
+    "source_inventory_sha256": "5f38c9d75d4c0c6822bca6cf93a137bdd08afc8133ce3f64dc80a237faee7e45"
+  },
+  "qualification_native_read_decode_review_20261029": {
+    "scope": "Qualification-only closed decoder for the core_independent_original_qemu_read_v1 wire shared by recovery cleanup and postloss fresh reads: the shared Guest lifecycle decoder treated json.RawMessage members as arrays and refused every real wire. Every member is required once and non-null, unknown, duplicate and trailing data are refused, and raw members keep their typed JSON kind; recovery epoch PostgreSQL times are normalized to UTC before their JSON round-trip comparison. Shared production validators are unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
+    "source_inventory_sha256": "413ad1ddd4e19134eb55940ee5040d0de3e8390d352375a660608bd82b02948b"
+  },
+  "qualification_source_cleanup_closed_decode_review_20261029": {
+    "scope": "Qualification-only closed decoding of the signed source failure cleanup body and physical record, whose qemu and original_disk members the shared Guest lifecycle decoder refused as arrays; the native read decoder now shares the same closed helper. Members are required once, non-null and in their typed JSON kind, and the raw qemu and original_disk subtrees are closed against their producer shapes. No production-reachable site was found or changed; shared validators are unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
+    "source_inventory_sha256": "100e08b070439e65007ba9a8875cae685a6a8402ac29a8f26369e218fccd9063"
+  },
+  "qualification_canonical_child_review_20261029": {
+    "scope": "Qualification-only canonical compensation: the native fixture decodes the private capacity intent row with a closed decoder that admits null only for native_pod_baseline, recovery cleanup proof reads the unredacted intent instead of the redacted Observe view, and the unscoped compensation redeem is bound to the authenticated child grant (compensation_of, cleanup child link, generation, workflow and recovery executor) before the recovery lease check. Shared validators, Observe and the API store construction are unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
+    "source_inventory_sha256": "9b45b1a015c23429f48b709915e5790b7ee57a22919b16a0e7676faf07f1296c"
+  },
+  "qualification_single_observe_settle_review_20261029": {
+    "scope": "Qualification-only canonical compensation settle consumes the single write-once signed cleanup read through a read-only reader that repeats Observe's locks, preconditions, eligibility, owned physical and body gates, verifies the stored signature and freshness, and binds every proof field; the pre-settlement hook remains the only Observe, so Settle and Confirm use the same stored proof. Production settle and confirm validators are unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
+    "source_inventory_sha256": "650ae93b28202cee15f0d3a43b55ce9f456d923d30734cabdaf816581a4e11dd"
+  },
+  "qualification_source_fence_intent_review_20261029": {
+    "scope": "Qualification-only source fence reads the private capacity intent through the closed qualification intent decoder instead of the Guest lifecycle decoder that refused its null native_pod_baseline, and the readonly native corpus tests validate stored registrations at their receipt record time. Shared validators unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
+    "source_inventory_sha256": "777042d400d2bae282b1e936b0bb025640a2f24fc42b00e3205038daac51874b"
+  },
+  "canonical_compensation_pending_probe_sequence_20261029": {
+    "scope": "Qualification-only failed-create slot of the two canonical compensation failed-create cases is held pending like the canonical postloss slot: the exact original uncertain settlement and independently validated proof are retained, current lease and no canonical event/member are checked, and a distinct pending-enrollment stage is published, so the parent create grant stays settled and unregistered for recovery cleanup and compensation. Floor recovery, non-canonical compensation and lost-create-reply cases, production confirm, cleanup and compensation validators are unchanged. Source review only; no local tests ran; Linux CI and native QEMU validation remain required.",
+    "source_inventory_sha256": "4cff65fdaabbca7dc0a3eee4b2774d7247354735230ad6b011acc9fbde18f004",
+    "production_or_native_qualification": false
+  },
+  "qualification_floor_and_publication_return_review_20261029": {
+    "scope": "Qualification-only floor successor adjusts the unique profile minimum alongside the floor, with the source bridge admitting exactly that delta; noncanonical source cleanup retains a signed original authority publication return. Source and peer review only. Linux LAB/CI and real native QEMU validation remain required.",
+    "source_inventory_sha256": "4b1ebc6c4c5c4922102f0c00ca784c9ed79ff3f51d564361ae45d825c1bb48bb",
+    "production_or_native_qualification": false
+  },
+  "main_merge_floor_and_directory_review_20261029": {
+    "scope": "Merge current Core main through 89855092 with the qualification floor and publication-return changes; Directory credential-family precedence, collision refusal and sensitive-log projection reviewed statically. Upstream changes are incorporated from main. Remote Linux tests, CI, native QEMU and production qualification remain required.",
+    "source_inventory_sha256": "ef302de27f6bd0bc5ca61418a6f64c5b30617024197b01bb39e35d1067dcadc7",
+    "production_or_native_qualification": false
+  },
+  "main_adr0088_security_merge_review_20261029": {
+    "scope": "Merge upstream ADR-0088 removal of body-asserted third-party login, preserving provider browser start and callback. Source merge review only; original CI, Linux integration and production readback are required.",
+    "source_inventory_sha256": "b9a5626d175219c29f4c84c6898063ba033285bb63a26e5f5794ba357bfc90ac",
+    "production_or_native_qualification": false
+  },
+  "failed_floor_probe_order_review_20261029": {
+    "scope": "Qualification-only failed-floor cases probe the failed slot first while retaining the full original member roster and requiring all probes before any advance. The exact patch passed targeted Linux/race LAB tests; native QEMU and CI remain required.",
+    "source_inventory_sha256": "7d7c622a7c3e7bdad2a6da4ef42690c133989226668d3aa77bad69bd3c76523a",
+    "production_or_native_qualification": false
+  },
+  "failed_floor_pending_recovery_review_20261029": {
+    "scope": "Qualification-only canonical failed-floor recovery retains the failed slot as an accepted settled grant with original evidence, current lease and no member or event until cleanup. The baseline and production paths stay unchanged. Source review only; remote tests and native QEMU remain required.",
+    "source_inventory_sha256": "0038d58adc141c24f7ef7dffa23dc1d978583185ef6319321100fbff8ead42ac",
+    "production_or_native_qualification": false
+  },
+  "qualification_floor_terminal_decoder_review_20261030": {
+    "scope": "Qualification-only canonical failed-floor next-permission gate uses the existing closed persisted-intent decoder, accepting a null native pod baseline while preserving original-byte digest, policy, generation, phase, floor, parent and child guards. Other lifecycle decoders and production paths remain unchanged. Independent source review completed; Linux and native QEMU validation remain required.",
+    "source_inventory_sha256": "5fffc403ef980bd92b6398b9afc5ca9248844498ce64843cf329de7f474013f8",
+    "production_or_native_qualification": false
+  },
+  "qualification_failed_probe_challenge_review_20261030": {
+    "scope": "For the two original probe HOLD cases only, the signed Guest diagnostic binds the validated and consumed original challenge hash to the committed Core challenge; the Guest monotonic-derived operation deadline and Core challenge wall deadline remain distinct. Owner return ordering uses the original Guest deadline. Challenge signature, identities, original nonce budget and source-only scope remain required. Independent source review completed; Linux and native QEMU validation remain required.",
+    "source_inventory_sha256": "5fffc403ef980bd92b6398b9afc5ca9248844498ce64843cf329de7f474013f8",
+    "production_or_native_qualification": false
+  },
+  "qualification_pg17_retained_intent_read_review_20261030": {
+    "scope": "Qualification-only PG17 reads of canonical failed-floor terminal and next intent and the source partial-recovery terminal retain the original private NOFOLLOW read and original byte hashes, then apply the existing closed CapacityIntent decoder that permits null only for the native pod baseline. Original joins and production decoders remain unchanged. Independent source review and Linux LAB race/census passed; QEMU and owning CI remain required.",
+    "source_inventory_sha256": "08cdaf7d646abd92f33be8282be078a49d5c03e2fc252649a182a9a8d840b776",
+    "production_or_native_qualification": false
+  },
+  "qualification_noncanonical_failed_create_pending_review_20261030": {
+    "scope": "Qualification-only noncanonical failed-create slots retain the accepted settled parent and enrollment evidence without confirmation, member or event; the existing current lease, cleanup and source custody guards remain required. Lost replies, baseline and production paths are unchanged. Independent review and targeted Linux LAB race/census passed; QEMU and owning CI remain required.",
+    "source_inventory_sha256": "7744f3374fc6b82428f2c7bdb4e91cfc40cc8fb03a3884cdfc988c6584d75811",
+    "production_or_native_qualification": false
+  },
+  "qualification_pg17_owned_http_gate_review_20261030": {
+    "scope": "Restore the original source-owned PostgreSQL 17 HTTP callback gate beside the existing PostgreSQL 16 coverage. Original owner, source parity, race, isolated database and cleanup checks remain required. LAB HTTP gate passed; owning CI remains required.",
+    "source_inventory_sha256": "7744f3374fc6b82428f2c7bdb4e91cfc40cc8fb03a3884cdfc988c6584d75811",
+    "production_or_native_qualification": false
+  },
+  "qualification_source_cleanup_execution_authority_review_20261030": {
+    "scope": "The native qualification source cleanup store reads the same process execution authority as the fixture and production controller; the existing policy, lease, owner and fencing guards remain required. Independent source review and targeted LAB Linux race tests passed; the original QEMU and owning CI remain required.",
+    "source_inventory_sha256": "3f1e4b6ecf9bc4a85670bf7ae91588c91b23d9877939b819d21ac586655c3afb",
+    "production_or_native_qualification": false
+  },
+  "directory_private_response_cache_review_20261030": {
+    "scope": "Directory machine responses retain Cache-Control no-store across unknown, ambiguous, successful and audit-failure cases while preserving ADR-0019 credential-family precedence and refusal status. Independent review and targeted Linux race tests passed; owning CI remains required.",
+    "source_inventory_sha256": "e39e7a9b59509ae8815e897a77e7598d6332eefc8d88034d81eb8b3bcc2a3f32",
+    "production_or_native_qualification": false
+  },
+  "original_guest_workflow_output_review_20261030": {
+    "scope": "The permission-only output no longer shadows the original provisioning result, so the existing public workflow output retains the preregistration, committed witness digest and receipt. A native corpus test additionally joins the witness digest to its committed original wire. Independent review and targeted Linux race tests passed; actual positive QEMU and owning CI remain required.",
+    "source_inventory_sha256": "e39e7a9b59509ae8815e897a77e7598d6332eefc8d88034d81eb8b3bcc2a3f32",
+    "production_or_native_qualification": false
+  },
+  "control_plane_validation_and_allocation_review_20261030": {
+    "scope": "Reject invalid database password references without echoing input. Remove an unchecked map size sum, explicitly bound the collaborator allocation by the existing normalized limit, and reject an oversized original audit frame before wire allocation while retaining the failure marker and original raw bytes. Independent review and focused Linux race tests passed; owning CI and CodeQL review remain required.",
+    "source_inventory_sha256": "4feff8ef6bdf8bbb4dcba468888ae2a5bd33804bfd30ebfd3a6a77d54403198f",
+    "production_or_native_qualification": false
+  },
+  "noncanonical_pending_selector_census_review_20261030": {
+    "scope": "Align the existing source-only pending selection test with the two failed-create slot-2 cases while continuing to require rejection of a mismatched grant and excluding the baseline, lost replies and source-live floor case. No production behavior changed; full owning CI and native qualification remain required.",
+    "source_inventory_sha256": "4feff8ef6bdf8bbb4dcba468888ae2a5bd33804bfd30ebfd3a6a77d54403198f",
+    "production_or_native_qualification": false
+  },
+  "constant_allocation_and_token_digest_review_20261030": {
+    "scope": "Collaborator page allocation begins with a constant capacity independent of request input; executor settlement token hashing is isolated from evidence hashing while preserving the original JSON-string SHA256 bytes. Independent review and focused Linux race tests passed; token entropy and native AWS transport are not established, and owning CI remains required.",
+    "source_inventory_sha256": "d7c7c29e47952740166817416caec3a9f490e94a5cd1dc854ed746114d992d57",
+    "production_or_native_qualification": false
+  },
+  "source_contract_failure_retention_review_20261030": {
+    "scope": "Source fence and recovery callers retain only closed already-projected public returns on failure. Failure recording does not replace the original error, grant a new effect, or produce success evidence. Independent source review completed; focused Linux, owning CI and native qualification remain required.",
+    "source_inventory_sha256": "bb79d38a3ffa01dd8fc9f4fcc6f50bd23742ecaf171c21e857c3db74a4b2fb41",
+    "production_or_native_qualification": false
+  },
+  "source_terminal_failure_retention_review_20261030": {
+    "scope": "The Source terminal caller uses the existing failure-only closed public return retention, without altering original error or granting native or production authority. Source review completed; focused Linux and owning CI remain required.",
+    "source_inventory_sha256": "128cd89bf2cb871798baf25b7421a84ac36a3b8c03f19f885c72faea5d313f94",
+    "production_or_native_qualification": false
+  },
+  "source_live_failure_retention_review_20261030": {
+    "scope": "Source live-partial and historical callers use existing closed failure-only public return retention without replacing the original errors or granting authority. Source review completed; Linux and owning CI remain required.",
+    "source_inventory_sha256": "eacc59f2cbd779f0a805aecab24b8627b3ecb56cd9ef830ea9a8a885ea8500a8",
+    "production_or_native_qualification": false
+  },
+  "qualification_source_recovery_historical_review_20261030": {
+    "scope": "Qualification-only Source recovery caller joins the immutable preregistration and original grant after lease expiry without treating historical read as current authority. Independent source review completed; two Source cases and focused Linux tests passed on a separately instrumented pair. Exact integrated CI remains required.",
+    "source_inventory_sha256": "2ff6d25d98edf38c54a17105bb480f809729281e81a0b743c57aaa8595314ab7",
+    "production_or_native_qualification": false
+  },
+  "qualification_terminal_physical_wire_review_20261030": {
+    "scope": "Qualification-only terminal physical decoder preserves original bytes and typed hash while accepting the producer nil action list under closed validation. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.",
+    "source_inventory_sha256": "09e94a5e7d96c553dc9008a59e65b5131ca9b72d68694021963ebd483c09636a",
+    "production_or_native_qualification": false
+  },
+  "qualification_source_failed_floor_pending_review_20261030": {
+    "scope": "Qualification-only source_live_failed_floor_recovery uses the existing pending-enrollment verifier for slot 2 while retaining settlement, membership, event and cleanup guards. Focused Linux tests and independent source review passed; physical and exact integrated CI remain required.",
+    "source_inventory_sha256": "73516bea820373f73124d2f4ae966416de285b079cc461accc64ee7a6dec948d",
+    "production_or_native_qualification": false
+  }
+}

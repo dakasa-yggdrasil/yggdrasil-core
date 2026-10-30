@@ -13,5 +13,7 @@
   "K8sDir": "platform/kube",
   "GCPRegistry": {
     "Repository": "dakasa-app-be"
-  }
+  },
+  "Repository": "dakasa-yggdrasil/yggdrasil-core",
+  "DoctorProfile": "public-go-module-v1"
 }

@@ -145,14 +145,7 @@ func TestSyncIntegrationType_BootstrapDriftFix(t *testing.T) {
 
 	require.NoError(t, SyncIntegrationType(ctx, deps, v1.ID))
 
-	// After the first sync, v1.ID is the original type manifest ID. The
-	// GetIntegrationType dep looks up by ID — so we need to fetch the
-	// active v2 manifest ID and sync against that to test idempotency of
-	// the live spec (no diff between v2 and the same stub live spec).
-	// Alternatively: the stub returns the same spec; if we pass v1.ID, the
-	// syncer re-reads the active manifest for the (namespace,name) — but
-	// actually GetManifestByID fetches by UUID, which is the v1 row UUID,
-	// not the v2 row UUID. Re-sync via v2.ID to test idempotency properly.
+	// Repeated historical-ID nudges must reuse the active healed type.
 	require.NoError(t, SyncIntegrationType(ctx, deps, v2.ID))
 
 	v2Again, err := repository.ResolveManifest(ctx, db, "integration_type", namespace, typeName, nil, true)
@@ -177,7 +170,7 @@ func newSyncIntegrationTestDeps(db *sql.DB, stub model.IntegrationTypeManifestSp
 func (d *syncIntegrationTestDeps) Now() time.Time { return time.Now().UTC() }
 
 func (d *syncIntegrationTestDeps) GetIntegrationType(ctx context.Context, typeID uuid.UUID) (model.Manifest, model.IntegrationTypeManifestSpec, error) {
-	m, err := repository.GetManifestByID(ctx, d.db, typeID)
+	m, err := repository.CurrentIntegrationTypeForSync(ctx, d.db, typeID)
 	if err != nil {
 		return model.Manifest{}, model.IntegrationTypeManifestSpec{}, err
 	}
@@ -230,12 +223,12 @@ func (d *syncIntegrationTestDeps) InvokeDescribe(
 	return d.stubLive, nil
 }
 
-func (d *syncIntegrationTestDeps) ApplyManifestVersion(ctx context.Context, doc model.ManifestDocument) (model.Manifest, error) {
+func (d *syncIntegrationTestDeps) ApplyManifestVersion(ctx context.Context, expected model.Manifest, doc model.ManifestDocument) (model.Manifest, error) {
 	checksum, err := manifestengine.Checksum(doc)
 	if err != nil {
 		return model.Manifest{}, err
 	}
-	return repository.CreateManifestVersion(ctx, d.db, doc, checksum)
+	return repository.ApplyIntegrationTypeSyncVersion(ctx, d.db, expected, doc, checksum)
 }
 
 func (d *syncIntegrationTestDeps) EmitEvent(ctx context.Context, eventType string, aggregateID uuid.UUID, payload map[string]any) error {

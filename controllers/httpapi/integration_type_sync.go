@@ -106,7 +106,7 @@ func (c *captureEmitter) EmitEvent(ctx context.Context, eventType string, aggreg
 func (s *Server) buildManifestSyncDeps() manifestsync.Deps {
 	return &httpManifestSyncDeps{
 		db:              s.db,
-		conn:            s.rabbitmq,
+		connection:      s.brokerConnection,
 		describeTimeout: 10 * time.Second,
 	}
 }
@@ -117,13 +117,21 @@ func (s *Server) buildManifestSyncDeps() manifestsync.Deps {
 type httpManifestSyncDeps struct {
 	db              *sql.DB
 	conn            *amqp.Connection
+	connection      func() *amqp.Connection
 	describeTimeout time.Duration
+}
+
+func (p *httpManifestSyncDeps) brokerConnection() *amqp.Connection {
+	if p.connection != nil {
+		return p.connection()
+	}
+	return p.conn
 }
 
 func (p *httpManifestSyncDeps) Now() time.Time { return time.Now().UTC() }
 
 func (p *httpManifestSyncDeps) GetIntegrationType(ctx context.Context, typeID uuid.UUID) (model.Manifest, model.IntegrationTypeManifestSpec, error) {
-	m, err := repository.GetManifestByID(ctx, p.db, typeID)
+	m, err := repository.CurrentIntegrationTypeForSync(ctx, p.db, typeID)
 	if err != nil {
 		return model.Manifest{}, model.IntegrationTypeManifestSpec{}, fmt.Errorf("get integration_type %s: %w", typeID, err)
 	}
@@ -177,15 +185,15 @@ func (p *httpManifestSyncDeps) InvokeDescribe(
 ) (model.IntegrationTypeManifestSpec, error) {
 	rpcCtx, cancel := context.WithTimeout(ctx, p.describeTimeout)
 	defer cancel()
-	return messagecontroller.DescribeIntegrationType(rpcCtx, p.conn, instanceManifest, typeManifest, instanceSpec, typeSpec)
+	return messagecontroller.DescribeIntegrationType(rpcCtx, p.brokerConnection(), instanceManifest, typeManifest, instanceSpec, typeSpec)
 }
 
-func (p *httpManifestSyncDeps) ApplyManifestVersion(ctx context.Context, doc model.ManifestDocument) (model.Manifest, error) {
+func (p *httpManifestSyncDeps) ApplyManifestVersion(ctx context.Context, expected model.Manifest, doc model.ManifestDocument) (model.Manifest, error) {
 	checksum, err := manifestengine.Checksum(doc)
 	if err != nil {
 		return model.Manifest{}, fmt.Errorf("compute manifest checksum: %w", err)
 	}
-	return repository.CreateManifestVersion(ctx, p.db, doc, checksum)
+	return repository.ApplyIntegrationTypeSyncVersion(ctx, p.db, expected, doc, checksum)
 }
 
 func (p *httpManifestSyncDeps) EmitEvent(ctx context.Context, eventType string, aggregateID uuid.UUID, payload map[string]any) error {

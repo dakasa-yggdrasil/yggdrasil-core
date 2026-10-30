@@ -41,8 +41,12 @@ RUN --mount=type=secret,id=github_token \
 
 FROM --platform=$BUILDPLATFORM golang:1.25-bookworm AS build
 
-ARG TARGETOS=linux
-ARG TARGETARCH=amd64
+# Inherit BuildKit's automatic target platform arguments. Providing defaults
+# here would shadow those values and produce amd64 binaries in arm64 images.
+ARG TARGETOS
+ARG TARGETARCH
+ARG TARGETPLATFORM
+ARG WITH_CONSOLE=false
 
 WORKDIR /build
 
@@ -56,19 +60,36 @@ RUN go mod download
 
 COPY . .
 
-# Replace the committed placeholder bundle with the freshly-built one
-# from stage console-build. The destination dir already exists with a
-# placeholder index.html so go:embed compiles in dev/local builds.
-COPY --from=console-build /console/dist ./controllers/console/yggdrasil-console-dist
+# The default release compiles the exact committed bundle. Replacing even its
+# placeholder would mark the native Core checkout modified and erase its source
+# authority. An explicitly requested external console build keeps its existing
+# behavior; it does not claim an unmodified native Core source stamp.
+COPY --from=console-build /console/dist /tmp/console-dist
+RUN if [ "${WITH_CONSOLE}" = "true" ]; then \
+        cp -a /tmp/console-dist/. ./controllers/console/yggdrasil-console-dist/; \
+    fi
 
-RUN go build -o /bin/yggdrasil-core . \
+RUN go build -buildvcs=true -o /bin/yggdrasil-core . \
  && go build -o /bin/goose ./scripts/goose \
  && go build -o /bin/yggdrasil-bootstrap ./scripts/bootstrap \
- && go build -o /bin/yggdrasil-bootstrap-admin ./scripts/bootstrap-admin
+ && go build -o /bin/yggdrasil-bootstrap-admin ./scripts/bootstrap-admin \
+ && for binary in /bin/yggdrasil-core /bin/goose /bin/yggdrasil-bootstrap /bin/yggdrasil-bootstrap-admin; do \
+        go version -m "$binary" > /tmp/binary-build-info \
+     && awk -v expected="GOARCH=${TARGETPLATFORM#*/}" \
+            '$1 == "build" && $2 == expected { found = 1 } END { exit !found }' /tmp/binary-build-info \
+     || { echo "Wrong architecture in $binary for $TARGETPLATFORM" >&2; exit 1; }; \
+    done \
+ && if [ "${WITH_CONSOLE}" != "true" ]; then \
+        go version -m /bin/yggdrasil-core > /tmp/core-build-info \
+     && awk -v expected="vcs.revision=$(git rev-parse HEAD)" \
+            '$1 == "build" && $2 == expected { found = 1 } END { exit !found }' /tmp/core-build-info \
+     && awk '$1 == "build" && $2 == "vcs.modified=false" { found = 1 } END { exit !found }' /tmp/core-build-info; \
+    fi
 
 FROM alpine:3.21
 
-ARG TARGETARCH=amd64
+ARG TARGETARCH
+ARG TARGETPLATFORM
 
 RUN apk add --no-cache ca-certificates curl \
     && curl -LO "https://dl.k8s.io/release/$(curl -L -s https://dl.k8s.io/release/stable.txt)/bin/linux/${TARGETARCH}/kubectl" \
@@ -82,6 +103,9 @@ COPY --from=build /bin/yggdrasil-core /app/yggdrasil-core
 COPY --from=build /bin/goose /app/goose
 COPY --from=build /bin/yggdrasil-bootstrap /app/yggdrasil-bootstrap
 COPY --from=build /bin/yggdrasil-bootstrap-admin /app/yggdrasil-bootstrap-admin
+COPY scripts/verify-image-platform.sh /tmp/verify-image-platform.sh
+RUN sh /tmp/verify-image-platform.sh "$TARGETPLATFORM" / \
+    && rm /tmp/verify-image-platform.sh
 # Ship schema migrations and default seed manifests so a self-hosted
 # deployment can `goose up` and bootstrap without mounting anything.
 COPY db/migrations /app/db/migrations

@@ -2,6 +2,7 @@ package httpapi
 
 import (
 	"context"
+	"crypto/subtle"
 	"errors"
 	"fmt"
 	"net/http"
@@ -60,8 +61,10 @@ func (route directoryMachineRoute) capability() string {
 // presented itself as a directory machine principal, and which configured
 // principal (in any lifecycle state) the credential digest matched.
 type directoryMachineClaim struct {
-	claimed   bool
-	principal *directoryMachinePrincipal
+	claimed      bool
+	principal    *directoryMachinePrincipal
+	attributable []*directoryMachinePrincipal
+	ambiguous    bool
 }
 
 // directoryMachineClaimFor decides whether the request must be served by the
@@ -80,15 +83,49 @@ type directoryMachineClaim struct {
 // header matches nothing (refused as unknown) and a bearer is not a directory
 // attempt.
 func (s *Server) directoryMachineClaimFor(r *http.Request) directoryMachineClaim {
-	if header := strings.TrimSpace(r.Header.Get(directoryMachineTokenHeader)); header != "" {
-		return directoryMachineClaim{claimed: true, principal: directoryMachinePrincipalByCredential(header, s.directoryMachinePrincipals)}
-	}
-	if bearer := bearerToken(r.Header.Get("Authorization")); bearer != "" {
-		if principal := directoryMachinePrincipalByCredential(bearer, s.directoryMachinePrincipals); principal != nil {
-			return directoryMachineClaim{claimed: true, principal: principal}
+	var claim directoryMachineClaim
+	var headerPresent, directoryBearerPresent bool
+	var headerCount, authorizationCount int
+	seen := make(map[*directoryMachinePrincipal]bool)
+	addPrincipal := func(principal *directoryMachinePrincipal) {
+		if principal == nil || seen[principal] {
+			return
+		}
+		seen[principal] = true
+		claim.attributable = append(claim.attributable, principal)
+		if claim.principal == nil {
+			claim.principal = principal
 		}
 	}
-	return directoryMachineClaim{}
+	for name, values := range r.Header {
+		switch {
+		case strings.EqualFold(name, directoryMachineTokenHeader):
+			headerPresent = true
+			headerCount += len(values)
+			if len(values) == 0 {
+				headerCount++
+			}
+			for _, value := range values {
+				if header := strings.TrimSpace(value); header != "" {
+					addPrincipal(directoryMachinePrincipalByCredential(header, s.directoryMachinePrincipals))
+				}
+			}
+		case strings.EqualFold(name, "Authorization"):
+			authorizationCount += len(values)
+			for _, value := range values {
+				if bearer := bearerToken(value); bearer != "" {
+					principal := directoryMachinePrincipalByCredential(bearer, s.directoryMachinePrincipals)
+					if principal != nil {
+						directoryBearerPresent = true
+						addPrincipal(principal)
+					}
+				}
+			}
+		}
+	}
+	claim.claimed = headerPresent || directoryBearerPresent
+	claim.ambiguous = claim.claimed && (headerCount > 1 || authorizationCount > 1 || (headerPresent && directoryBearerPresent))
+	return claim
 }
 
 // directoryMachineRouteFor classifies the request against the three exact
@@ -236,12 +273,46 @@ func projectDirectoryCollaborator(collaborator model.Collaborator) directoryColl
 // synchronously and, when the row cannot be written, answers 500 itself so
 // no data and no verdict leave without their trail.
 func (s *Server) serveDirectoryMachineRequest(w http.ResponseWriter, r *http.Request, claim directoryMachineClaim) {
+	// The Directory family owns the response even when another private
+	// credential also claims the request. Never cache those responses.
+	w.Header().Set("Cache-Control", "no-store")
 	principal := claim.principal
+	// Every recognized identity in an ambiguous Directory attempt is
+	// attributable. Record each denial before returning any verdict.
+	if claim.ambiguous {
+		anyUsable := false
+		for _, matched := range claim.attributable {
+			if usable, _ := directoryMachinePrincipalUsable(matched, time.Now().UTC()); usable {
+				anyUsable = true
+			}
+			if !s.auditDirectoryMachineOutcome(w, r, matched, "", "", "denied", "ambiguous_credentials") {
+				return
+			}
+		}
+		if !anyUsable {
+			writeProblemJSON(w, http.StatusUnauthorized, httperr.CodeAuthUnauthenticated, "directory credential is missing, unknown, expired, or not active")
+			return
+		}
+		writeProblemJSON(w, http.StatusForbidden, httperr.CodePermissionDenied, "ambiguous machine credentials")
+		return
+	}
 	if usable, reason := directoryMachinePrincipalUsable(principal, time.Now().UTC()); !usable {
 		if !s.auditDirectoryMachineOutcome(w, r, principal, "", "", "denied", reason) {
 			return
 		}
 		writeProblemJSON(w, http.StatusUnauthorized, httperr.CodeAuthUnauthenticated, "directory credential is missing, unknown, expired, or not active")
+		return
+	}
+
+	// Do not let a Directory claim mask a separately claimed capacity
+	// identity. Ambiguous requests are denied before any read or effect,
+	// and the attributable Directory denial is recorded synchronously.
+	if s.originalHostCredential(r) != nil || s.capacityGuestCredential(r) != nil ||
+		s.capacityMutationCredential(r) != nil || originalCanaryAuthorityClaim(r) {
+		if !s.auditDirectoryMachineOutcome(w, r, principal, "", "", "denied", "ambiguous_credentials") {
+			return
+		}
+		writeProblemJSON(w, http.StatusForbidden, httperr.CodePermissionDenied, "ambiguous machine credentials")
 		return
 	}
 
@@ -251,6 +322,13 @@ func (s *Server) serveDirectoryMachineRequest(w http.ResponseWriter, r *http.Req
 			return
 		}
 		writeProblemJSON(w, http.StatusForbidden, httperr.CodePermissionDenied, "directory principal is not authorized for this route")
+		return
+	}
+	if s.directoryTargetIsCredential(r, collaboratorID) {
+		if !s.auditDirectoryMachineOutcome(w, r, principal, "", "", "denied", "target_matches_credential") {
+			return
+		}
+		writeProblemJSON(w, http.StatusForbidden, httperr.CodePermissionDenied, "directory target is unavailable")
 		return
 	}
 	capability := route.capability()
@@ -432,6 +510,56 @@ func (s *Server) serveDirectoryEffectiveActions(w http.ResponseWriter, r *http.R
 // only so a test can shorten it to prove the timeout classification.
 var directoryAuditWriteTimeout = 5 * time.Second
 
+// directoryTargetIsCredential detects a canonical target that is also a
+// presented credential or a configured Directory credential, including an
+// inactive or rotated credential. The target itself is never written when
+// there is a match.
+func (s *Server) directoryTargetIsCredential(r *http.Request, target string) bool {
+	if target == "" {
+		return false
+	}
+	for i := range s.directoryMachinePrincipals {
+		if machineCredentialMatches(target, s.directoryMachinePrincipals[i].TokenSHA256) {
+			return true
+		}
+	}
+	for name, values := range r.Header {
+		for _, value := range values {
+			var candidate string
+			switch {
+			case strings.EqualFold(name, directoryMachineTokenHeader):
+				candidate = strings.TrimSpace(value)
+			case strings.EqualFold(name, "Authorization"):
+				candidate = bearerToken(value)
+			}
+			if candidate != "" && subtle.ConstantTimeCompare([]byte(target), []byte(candidate)) == 1 {
+				return true
+			}
+		}
+	}
+	return false
+}
+
+// directoryMachineAccessLog projects caller-controlled request fields into a
+// bounded audit/log form before a Directory attempt can persist them.
+func (s *Server) directoryMachineAccessLog(r *http.Request) (string, string) {
+	method, route := r.Method, r.URL.Path
+	if originalCanaryAuthorityClaim(r) {
+		method, route = originalCanaryAccessLog(r)
+	} else {
+		switch method {
+		case http.MethodGet, http.MethodPost, http.MethodPut, http.MethodPatch, http.MethodDelete, http.MethodHead, http.MethodOptions:
+		default:
+			method = "PRIVATE_REFUSED"
+		}
+		directoryRoute, target := directoryMachineRouteFor(r)
+		if (directoryRoute == directoryRouteNone && r.URL.Path != "/healthz") || s.directoryTargetIsCredential(r, target) {
+			route = "/directory/refused"
+		}
+	}
+	return method, route
+}
+
 // directoryMachineAuditEvent builds the audit row for one machine outcome. It
 // carries the principal, rotation, capability, method, path, target
 // collaborator id, outcome, and reason. It never carries the credential, the
@@ -439,12 +567,16 @@ var directoryAuditWriteTimeout = 5 * time.Second
 // query, which is deliberately not recorded. The trace reference is taken
 // from a valid W3C traceparent only (requestTraceIDs, shared by every audit
 // writer).
-func directoryMachineAuditEvent(r *http.Request, principal *directoryMachinePrincipal, capability, targetID, outcome, reason string) model.AuditEvent {
+func (s *Server) directoryMachineAuditEvent(r *http.Request, principal *directoryMachinePrincipal, capability, targetID, outcome, reason string) model.AuditEvent {
+	method, route := s.directoryMachineAccessLog(r)
+	if s.directoryTargetIsCredential(r, targetID) {
+		targetID = ""
+	}
 	metadata := map[string]any{
 		"principal_id": principal.PrincipalID,
 		"rotation_id":  principal.RotationID,
-		"method":       r.Method,
-		"path":         r.URL.Path,
+		"method":       method,
+		"path":         route,
 	}
 	if capability != "" {
 		metadata["capability"] = capability
@@ -479,7 +611,10 @@ func (s *Server) auditDirectoryMachineOutcome(w http.ResponseWriter, r *http.Req
 	if principal == nil {
 		return true
 	}
-	event := directoryMachineAuditEvent(r, principal, capability, targetID, outcome, reason)
+	if s.directoryTargetIsCredential(r, targetID) {
+		targetID = ""
+	}
+	event := s.directoryMachineAuditEvent(r, principal, capability, targetID, outcome, reason)
 	var err error
 	deadlineExpired := false
 	switch {

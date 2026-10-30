@@ -1,21 +1,21 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-09-27T02:18:44-03:00_
+_Generated from HEAD at: 2026-10-30T11:22:22-03:00_
 
 ## Languages
 
-- `.go`: 647 files
-- `.json`: 144 files
-- `.py`: 1 files
-- `.sql`: 52 files
-- `.yaml`: 9 files
-- `.yml`: 22 files
+- `.go`: 1397 files
+- `.json`: 178 files
+- `.py`: 16 files
+- `.sql`: 82 files
+- `.yaml`: 11 files
+- `.yml`: 34 files
 
 ## Contracts & Artifacts
 
 - API Spec: **false**  ((not configured))
 - Event Schemas: **0**  (events/contracts,docs/events/contracts)
-- DB Migrations: **51**  (db/migrations)
+- DB Migrations: **81**  (db/migrations)
 
 ## Docs
 
@@ -24,38 +24,38 @@ _Generated from HEAD at: 2026-09-27T02:18:44-03:00_
 
 ## Top Directories by File Count
 
-- controllers/httpapi: 157 files (1556.6 KB)
-- repository: 94 files (610.9 KB)
-- manifest: 57 files (360.5 KB)
-- model: 55 files (209.9 KB)
-- controllers/message: 51 files (516.0 KB)
-- db/migrations: 51 files (91.1 KB)
-- addons: 39 files (187.6 KB)
+- repository: 319 files (3958.0 KB)
+- controllers/httpapi: 236 files (2396.5 KB)
+- controllers/message: 180 files (1572.8 KB)
+- internal/capacity: 117 files (1330.7 KB)
+- model: 85 files (476.0 KB)
+- db/migrations: 81 files (482.7 KB)
+- manifest: 65 files (397.9 KB)
+- addons: 50 files (288.7 KB)
+- internal/capacitynativeqemu: 47 files (298.1 KB)
+- cmd/native-guest-lifecycle-fixture: 28 files (249.9 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
-- controllers/oidc: 22 files (188.9 KB)
-- docs/bootstrap/seeds/integrations: 20 files (87.4 KB)
-- internal/externalidentity: 15 files (61.5 KB)
-- docs/contracts/reactors/v1: 11 files (12.7 KB)
+- controllers/oidc: 25 files (210.8 KB)
 
 ## Heaviest Files
 
 - docs/bootstrap/manifests/products/observability-prometheus.json: 5020.2 KB
 - docs/bootstrap/manifests/products/strategy-deployment-argo-rollouts.json: 1778.3 KB
 - docs/bootstrap/manifests/products/mesh-istio-continuous-deployment-argo-cd.json: 1634.5 KB
+- internal/capacityhostfactory/owner_linux.go: 1502.9 KB
 - docs/bootstrap/manifests/products/observability-grafana.json: 1008.9 KB
 - docs/bootstrap/manifests/products/certificate-cert-manager.json: 696.5 KB
+- repository/capacity_host_original_factory.go: 575.6 KB
 - docs/bootstrap/manifests/products/observability-loki.json: 542.9 KB
 - docs/bootstrap/manifests/products/message-broker-rabbitmq.json: 531.8 KB
-- controllers/httpapi/server.go: 171.7 KB
-- controllers/message/products.go: 75.4 KB
-- controllers/httpapi/directory_machine_read_test.go: 65.8 KB
-- repository/identity.go: 62.9 KB
-- controllers/httpapi/credentials.go: 57.3 KB
+- scripts/ci/host_factory_source_package_expected.json: 524.7 KB
+- internal/capacityhostfactory/owner_nativequalification_test.go: 510.0 KB
+- internal/capacity/host_original_factory.go: 323.5 KB
 
 ## Ops & Messaging
 
-- K8s/Config files scanned: **5**
-- Manifests (k8s-ish): **5**
+- K8s/Config files scanned: **18**
+- Manifests (k8s-ish): **18**
 
 ## Dependencies
 
@@ -87,7 +87,7 @@ _Generated from HEAD at: 2026-09-27T02:18:44-03:00_
 - github.com/boombuler/barcode v1.0.1-0.20190219062509-6c824513bacc // indirect
 - github.com/cespare/xxhash/v2 v2.3.0 // indirect
 - github.com/crewjam/saml v0.5.1
-- github.com/dakasa-yggdrasil/yggdrasil-sdk-go v0.9.0
+- github.com/dakasa-yggdrasil/yggdrasil-sdk-go v0.9.1-0.20261018141245-05f42ab80ed0
 - github.com/davecgh/go-spew v1.1.1 // indirect
 - github.com/emicklei/go-restful/v3 v3.12.2 // indirect
 - github.com/fatih/color v1.13.0 // indirect
@@ -158,7 +158,7 @@ _Generated from HEAD at: 2026-09-27T02:18:44-03:00_
 - golang.org/x/net v0.58.0 // indirect
 - golang.org/x/oauth2 v0.36.0 // indirect
 - golang.org/x/sync v0.22.0 // indirect
-- golang.org/x/sys v0.47.0 // indirect
+- golang.org/x/sys v0.47.0
 - golang.org/x/term v0.45.0 // indirect
 - golang.org/x/text v0.41.0 // indirect
 - golang.org/x/time v0.9.0

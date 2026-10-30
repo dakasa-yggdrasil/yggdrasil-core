@@ -1,12 +1,58 @@
 package manifest
 
 import (
+	"encoding/json"
+	"os"
 	"path/filepath"
 	"strings"
 	"testing"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 )
+
+func TestLoadCapabilityNamingAllowlist_AWS173CatalogExactTransitions(t *testing.T) {
+	al, err := LoadCapabilityNamingAllowlist(filepath.Join("..", "config", "capability_naming_allowlist.yaml"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	// This retained native catalog has the same 173 action definitions as the
+	// reviewed AWS 1.63 catalog. Exercise the complete owning catalog,
+	// including legacy actions, instead of a hand-built six-entry replacement.
+	raw, err := os.ReadFile(filepath.Join("..", "repository", "testdata", "capacity_aws_type_v130.json"))
+	if err != nil {
+		t.Fatal(err)
+	}
+	var native model.Manifest
+	if err := json.Unmarshal(raw, &native); err != nil {
+		t.Fatal(err)
+	}
+	spec, err := ParseIntegrationTypeSpec(native.Spec)
+	if err != nil || len(spec.ActionCatalog) != 173 {
+		t.Fatal("retained complete native AWS catalog required", err)
+	}
+	if warnings := ValidateActionCatalogNaming(spec.ActionCatalog, al); len(warnings) != 0 {
+		t.Fatalf("actual AWS catalog remains nonconformant: %v", warnings)
+	}
+	for _, name := range []string{"start_ec2_instance", "stop_ec2_instance", "terminate_ec2_instance", "detach_iam_policy", "associate_eks_secrets_encryption", "set_asg_desired_capacity"} {
+		t.Run(name, func(t *testing.T) {
+			found := 0
+			changed := append([]model.IntegrationActionDefinition(nil), spec.ActionCatalog...)
+			for n := range changed {
+				if changed[n].Name == name {
+					found++
+					changed[n].Name += "_unreviewed"
+				}
+			}
+			if found != 1 || !al.Allowed(name, "capability") || al.Allowed(name+"_unreviewed", "capability") {
+				t.Fatal("native operation must have one exact exemption")
+			}
+			warnings := ValidateActionCatalogNaming(changed, al)
+			if len(warnings) != 1 || warnings[0].Code != "CAPABILITY_NAME_NONCONFORMANT" || warnings[0].Value != name+"_unreviewed" {
+				t.Fatalf("near-spelling exemption escaped exact match: %v", warnings)
+			}
+		})
+	}
+}
 
 func TestLoadCapabilityNamingAllowlist_Exact(t *testing.T) {
 	path := filepath.Join("..", "config", "capability_naming_allowlist.yaml")

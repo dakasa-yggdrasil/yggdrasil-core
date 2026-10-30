@@ -1,0 +1,486 @@
+{
+  "records": [
+    {
+      "argument_expression": "ctx, method, f.realm.CoreOrigin+path, bytes.NewReader(body)",
+      "argument_sha256": "28231e33c3c69f781789d8890bcdd9582f8a238b7558ff2c09af41b931c24a82",
+      "build_constraint": "linux && nativequalification",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "cmd/native-guest-lifecycle-fixture/public_caller.go",
+      "function": "originalPublic",
+      "line": 67
+    },
+    {
+      "argument_expression": "request",
+      "argument_sha256": "1f58b9145b24d108d7ac38887338b3ea3229833b9c1e418250343f907bfd1047",
+      "build_constraint": "linux && nativequalification",
+      "callee": "Client.Do",
+      "expression_complete": true,
+      "file": "cmd/native-guest-lifecycle-fixture/public_caller.go",
+      "function": "originalPublic",
+      "line": 75
+    },
+    {
+      "argument_expression": "ctx, method, \"https://127.0.0.1:19449\"+path, bytes.NewReader(body)",
+      "argument_sha256": "d9635b40cd277eabc98f4b84d5a43804dd5339235a43510f3c5998aaa49e5936",
+      "build_constraint": "linux && nativequalification",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "cmd/native-host-factory-fixture/main.go",
+      "function": "callOriginalPublicWorkflow",
+      "line": 559
+    },
+    {
+      "argument_expression": "req",
+      "argument_sha256": "c3f7bdf537c46724392c4428e47e04c148c56966190c3c9ed92114800c9f35bb",
+      "build_constraint": "linux && nativequalification",
+      "callee": "client.Do",
+      "expression_complete": true,
+      "file": "cmd/native-host-factory-fixture/main.go",
+      "function": "callOriginalPublicWorkflow",
+      "line": 569
+    },
+    {
+      "argument_expression": "\n\t\t\t\thttp.MethodPost,\n\t\t\t\tyggdrasilURL(\"/api/v1/auth/passwords/setup-tokens\"),\n\t\t\t\tbytes.NewReader(payload),\n\t\t\t",
+      "argument_sha256": "636e84cc07334928460894187a2330199a5fc5cf5c9f8a27333f1894f893f950",
+      "build_constraint": "default",
+      "callee": "http.NewRequest",
+      "expression_complete": true,
+      "file": "cmd/yggdrasil/auth_passwords.go",
+      "function": "error",
+      "line": 84
+    },
+    {
+      "argument_expression": "req",
+      "argument_sha256": "c3f7bdf537c46724392c4428e47e04c148c56966190c3c9ed92114800c9f35bb",
+      "build_constraint": "default",
+      "callee": "DefaultClient.Do",
+      "expression_complete": true,
+      "file": "cmd/yggdrasil/auth_passwords.go",
+      "function": "error",
+      "line": 95
+    },
+    {
+      "argument_expression": "\n\t\thttp.MethodGet,\n\t\tyggdrasilURL(\"/api/v1/collaborators/\"+slugOrID),\n\t\tnil,\n\t",
+      "argument_sha256": "f77e5e3138255b9fcf6f5967c3420e726fa8ffe183220148ca26d1d2f1b10567",
+      "build_constraint": "default",
+      "callee": "http.NewRequest",
+      "expression_complete": true,
+      "file": "cmd/yggdrasil/auth_passwords.go",
+      "function": "resolveCollaboratorID",
+      "line": 129
+    },
+    {
+      "argument_expression": "req",
+      "argument_sha256": "c3f7bdf537c46724392c4428e47e04c148c56966190c3c9ed92114800c9f35bb",
+      "build_constraint": "default",
+      "callee": "DefaultClient.Do",
+      "expression_complete": true,
+      "file": "cmd/yggdrasil/auth_passwords.go",
+      "function": "resolveCollaboratorID",
+      "line": 139
+    },
+    {
+      "argument_expression": "method, path, strings.NewReader(string(body))",
+      "argument_sha256": "318d4995c19ead917f19637b79ec7e7cc71d09b12afec2dd760277c95d56cf87",
+      "build_constraint": "linux && capacitytest && nativequalification",
+      "callee": "httptest.NewRequest",
+      "expression_complete": true,
+      "file": "controllers/httpapi/capacity_fixture_http_qualification.go",
+      "function": "AssertSyntheticCapacityHTTP",
+      "line": 60
+    },
+    {
+      "argument_expression": "ctx, http.MethodGet, url, nil",
+      "argument_sha256": "4978aa31eb4ab16087e92fde62f39ce4f490cadd63076d9888a3498a278bf7fe",
+      "build_constraint": "default",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "controllers/httpapi/integrations_install.go",
+      "function": "fetchQuickstartManifest",
+      "line": 185
+    },
+    {
+      "argument_expression": "httpReq",
+      "argument_sha256": "2214424d8335f32e0bd5addabe176310e5bc991a631cba30bc8e73c3f10b0fee",
+      "build_constraint": "default",
+      "callee": "client.Do",
+      "expression_complete": true,
+      "file": "controllers/httpapi/integrations_install.go",
+      "function": "fetchQuickstartManifest",
+      "line": 192
+    },
+    {
+      "argument_expression": "ctx, request",
+      "argument_sha256": "5f84a66bd8374712779b4258c35dc67eb8de70eb913f7db9e47d139a7a6c5ff0",
+      "build_constraint": "default",
+      "callee": "Transport.Request",
+      "expression_complete": true,
+      "file": "controllers/message/adapter_transport.go",
+      "function": "Request",
+      "line": 293
+    },
+    {
+      "argument_expression": "ctx, http.MethodPost, targetURL, bytes.NewReader(body)",
+      "argument_sha256": "3907f85d78c66bb93477338c530785bdb9747f295c2cc3cc158a3a6d6eae943b",
+      "build_constraint": "default",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "controllers/message/adapter_transport.go",
+      "function": "callHTTPJSONWithPolicy",
+      "line": 336
+    },
+    {
+      "argument_expression": "httpReq",
+      "argument_sha256": "2214424d8335f32e0bd5addabe176310e5bc991a631cba30bc8e73c3f10b0fee",
+      "build_constraint": "default",
+      "callee": "httpClient.Do",
+      "expression_complete": true,
+      "file": "controllers/message/adapter_transport.go",
+      "function": "callHTTPJSONWithPolicy",
+      "line": 345
+    },
+    {
+      "argument_expression": "ctx, method, target, bytes.NewReader(body)",
+      "argument_sha256": "ceb54b551ba64b77e5eeeb8b172108a5696378b740f23b86b4e942b576652d0c",
+      "build_constraint": "default",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "controllers/message/adapter_transport.go",
+      "function": "error",
+      "line": 438
+    },
+    {
+      "argument_expression": "req",
+      "argument_sha256": "c3f7bdf537c46724392c4428e47e04c148c56966190c3c9ed92114800c9f35bb",
+      "build_constraint": "default",
+      "callee": "client.Do",
+      "expression_complete": true,
+      "file": "controllers/message/adapter_transport.go",
+      "function": "error",
+      "line": 463
+    },
+    {
+      "argument_expression": "ctx, http.MethodGet, targetURL, nil",
+      "argument_sha256": "7060d957c3dacc6a20ab0e275b7b4f42244be3a47d92f661035d40cab2eef325",
+      "build_constraint": "default",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "controllers/message/integration_describe.go",
+      "function": "checkHTTPJSONTransportConnectivity",
+      "line": 276
+    },
+    {
+      "argument_expression": "req",
+      "argument_sha256": "c3f7bdf537c46724392c4428e47e04c148c56966190c3c9ed92114800c9f35bb",
+      "build_constraint": "default",
+      "callee": "DefaultClient.Do",
+      "expression_complete": true,
+      "file": "controllers/message/integration_describe.go",
+      "function": "checkHTTPJSONTransportConnectivity",
+      "line": 281
+    },
+    {
+      "argument_expression": "ctx, rpc.Request{\n\t\tEndpoint:    endpoint,\n\t\tBody:        body,\n\t\tContentType: \"application/json\",\n\t}",
+      "argument_sha256": "5924e08e26b75f064db13c0e0cd1954b708302ca7b94451dda5a5d908ebe3854",
+      "build_constraint": "default",
+      "callee": "transport.Request",
+      "expression_complete": true,
+      "file": "controllers/message/rpc_client.go",
+      "function": "callRPCWithPolicy",
+      "line": 54
+    },
+    {
+      "argument_expression": "owner, method, endpoint, bytes.NewReader(request)",
+      "argument_sha256": "61903ef308ed3668ef5b24a3b7c2c798f1e2ac443d348d25be6afdc43c707458",
+      "build_constraint": "default",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "controllers/message/workflows_capacity_notify_window.go",
+      "function": "error",
+      "line": 157
+    },
+    {
+      "argument_expression": "req",
+      "argument_sha256": "c3f7bdf537c46724392c4428e47e04c148c56966190c3c9ed92114800c9f35bb",
+      "build_constraint": "default",
+      "callee": "fixedClient.Do",
+      "expression_complete": true,
+      "file": "controllers/message/workflows_capacity_notify_window.go",
+      "function": "error",
+      "line": 180
+    },
+    {
+      "argument_expression": "ctx, http.MethodPost, uri, bytes.NewBufferString(body.Encode())",
+      "argument_sha256": "22190e3ba5744c2e4902992dfbf6a8b6690d65f83e5be5110be69588c0f6ead2",
+      "build_constraint": "default",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "controllers/oidc/back_channel_logout.go",
+      "function": "dispatchOne",
+      "line": 240
+    },
+    {
+      "argument_expression": "ctx, method, c.origin+path, bytes.NewReader(body)",
+      "argument_sha256": "75202b84c65bb04c913ec889468e6953e7313be1be8f1e62795482ca075bd634",
+      "build_constraint": "default",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "internal/capacity/guest_original_http.go",
+      "function": "Original",
+      "line": 104
+    },
+    {
+      "argument_expression": "request",
+      "argument_sha256": "1f58b9145b24d108d7ac38887338b3ea3229833b9c1e418250343f907bfd1047",
+      "build_constraint": "default",
+      "callee": "client.Do",
+      "expression_complete": true,
+      "file": "internal/capacity/guest_original_http.go",
+      "function": "Original",
+      "line": 111
+    },
+    {
+      "argument_expression": "ctx, method, origin+path, bytes.NewReader(body)",
+      "argument_sha256": "0283f5cf114f72b9fe7652e4cf18bb78860f59fa549a0c812836cec7415d5dcc",
+      "build_constraint": "linux",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "internal/capacityhostfactory/owner_linux.go",
+      "function": "originalHTTPWithSettlement",
+      "line": 13533
+    },
+    {
+      "argument_expression": "request",
+      "argument_sha256": "1f58b9145b24d108d7ac38887338b3ea3229833b9c1e418250343f907bfd1047",
+      "build_constraint": "linux",
+      "callee": "client.Do",
+      "expression_complete": true,
+      "file": "internal/capacityhostfactory/owner_linux.go",
+      "function": "originalHTTPWithSettlement",
+      "line": 13574
+    },
+    {
+      "argument_expression": "ctx, http.MethodGet, r.CoreOrigin+\"/api/v1/capacity/mutations/\"+id, nil",
+      "argument_sha256": "72a8b1d04643e93887889bd2839f05a43d630ea6f42aa5362452e7daa21463d6",
+      "build_constraint": "linux && nativequalification",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "internal/capacitynativeqemu/destroy_linux.go",
+      "function": "OriginalMutationReceipt",
+      "line": 53
+    },
+    {
+      "argument_expression": "request",
+      "argument_sha256": "1f58b9145b24d108d7ac38887338b3ea3229833b9c1e418250343f907bfd1047",
+      "build_constraint": "linux && nativequalification",
+      "callee": "Client.Do",
+      "expression_complete": true,
+      "file": "internal/capacitynativeqemu/destroy_linux.go",
+      "function": "OriginalMutationReceipt",
+      "line": 58
+    },
+    {
+      "argument_expression": "ctx, method, r.CoreOrigin+route, bytes.NewReader(body)",
+      "argument_sha256": "a057cd6cc6e1c610523217aa527a323d3403df5b1c99d8601c0915673dbd838c",
+      "build_constraint": "linux && nativequalification",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "internal/capacitynativeqemu/pg17_http_assertions_linux.go",
+      "function": "pg17HTTP",
+      "line": 83
+    },
+    {
+      "argument_expression": "req",
+      "argument_sha256": "c3f7bdf537c46724392c4428e47e04c148c56966190c3c9ed92114800c9f35bb",
+      "build_constraint": "linux && nativequalification",
+      "callee": "Client.Do",
+      "expression_complete": true,
+      "file": "internal/capacitynativeqemu/pg17_http_assertions_linux.go",
+      "function": "pg17HTTP",
+      "line": 101
+    },
+    {
+      "argument_expression": "ctx, http.MethodPost, r.CoreOrigin+path, bytes.NewReader(body)",
+      "argument_sha256": "445fda32dd0d2d60d34869c125f1df13ad3bd1a944162c7d8a9310d4cd4c96d8",
+      "build_constraint": "linux && nativequalification",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "internal/capacitynativeqemu/realm_linux.go",
+      "function": "api",
+      "line": 191
+    },
+    {
+      "argument_expression": "req",
+      "argument_sha256": "c3f7bdf537c46724392c4428e47e04c148c56966190c3c9ed92114800c9f35bb",
+      "build_constraint": "linux && nativequalification",
+      "callee": "Client.Do",
+      "expression_complete": true,
+      "file": "internal/capacitynativeqemu/realm_linux.go",
+      "function": "api",
+      "line": 200
+    },
+    {
+      "argument_expression": "ctx, http.MethodPost, r.CoreOrigin+\"/api/v1/capacity/mutations/redeem\", bytes.NewReader(body)",
+      "argument_sha256": "2548571facfdb3da76d99440976d5d6f0e06f2a1fadc6efe05920ebaad2f6854",
+      "build_constraint": "linux && nativequalification",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "internal/capacitynativeqemu/realm_linux.go",
+      "function": "sourceFenceRedeem",
+      "line": 767
+    },
+    {
+      "argument_expression": "req",
+      "argument_sha256": "c3f7bdf537c46724392c4428e47e04c148c56966190c3c9ed92114800c9f35bb",
+      "build_constraint": "linux && nativequalification",
+      "callee": "Client.Do",
+      "expression_complete": true,
+      "file": "internal/capacitynativeqemu/realm_linux.go",
+      "function": "sourceFenceRedeem",
+      "line": 773
+    },
+    {
+      "argument_expression": "ctx, http.MethodPost, provider.TokenURL, strings.NewReader(form.Encode())",
+      "argument_sha256": "17e31b254818da2abf2b6d5b0585dc9429ca4cc36dad2af94835df5a4599278f",
+      "build_constraint": "default",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "internal/coreauth/third_party.go",
+      "function": "ExchangeAuthorizationCode",
+      "line": 150
+    },
+    {
+      "argument_expression": "req",
+      "argument_sha256": "c3f7bdf537c46724392c4428e47e04c148c56966190c3c9ed92114800c9f35bb",
+      "build_constraint": "default",
+      "callee": "client.Do",
+      "expression_complete": true,
+      "file": "internal/coreauth/third_party.go",
+      "function": "ExchangeAuthorizationCode",
+      "line": 157
+    },
+    {
+      "argument_expression": "ctx, http.MethodGet, provider.UserInfoURL, nil",
+      "argument_sha256": "7fbcae44a75c9b86b62d99bfd3517f1915420d134913b203ee4f18be6a0a6b5d",
+      "build_constraint": "default",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "internal/coreauth/third_party.go",
+      "function": "FetchOAuthProfile",
+      "line": 183
+    },
+    {
+      "argument_expression": "req",
+      "argument_sha256": "c3f7bdf537c46724392c4428e47e04c148c56966190c3c9ed92114800c9f35bb",
+      "build_constraint": "default",
+      "callee": "client.Do",
+      "expression_complete": true,
+      "file": "internal/coreauth/third_party.go",
+      "function": "FetchOAuthProfile",
+      "line": 190
+    },
+    {
+      "argument_expression": "ctx, http.MethodGet, discoveryURL, nil",
+      "argument_sha256": "72c9da47b5220ca4d6819caa8b8b6cc5e0c884e02e45a245a233e50fd3856ea0",
+      "build_constraint": "default",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "internal/coreauth/third_party.go",
+      "function": "ResolveOIDCDiscovery",
+      "line": 229
+    },
+    {
+      "argument_expression": "req",
+      "argument_sha256": "c3f7bdf537c46724392c4428e47e04c148c56966190c3c9ed92114800c9f35bb",
+      "build_constraint": "default",
+      "callee": "client.Do",
+      "expression_complete": true,
+      "file": "internal/coreauth/third_party.go",
+      "function": "ResolveOIDCDiscovery",
+      "line": 235
+    },
+    {
+      "argument_expression": "ctx, method, c.baseURL+path, reader",
+      "argument_sha256": "a6cb002bcfe72c584a2d9cac214d4838219e72f2095d729973b52ccba7f60f19",
+      "build_constraint": "default",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "internal/operator/client.go",
+      "function": "do",
+      "line": 155
+    },
+    {
+      "argument_expression": "req",
+      "argument_sha256": "c3f7bdf537c46724392c4428e47e04c148c56966190c3c9ed92114800c9f35bb",
+      "build_constraint": "default",
+      "callee": "http.Do",
+      "expression_complete": true,
+      "file": "internal/operator/client.go",
+      "function": "do",
+      "line": 167
+    },
+    {
+      "argument_expression": "ctx, http.MethodGet, url, nil",
+      "argument_sha256": "4978aa31eb4ab16087e92fde62f39ce4f490cadd63076d9888a3498a278bf7fe",
+      "build_constraint": "default",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "internal/surface/client.go",
+      "function": "FetchManifest",
+      "line": 44
+    },
+    {
+      "argument_expression": "req",
+      "argument_sha256": "c3f7bdf537c46724392c4428e47e04c148c56966190c3c9ed92114800c9f35bb",
+      "build_constraint": "default",
+      "callee": "http.Do",
+      "expression_complete": true,
+      "file": "internal/surface/client.go",
+      "function": "FetchManifest",
+      "line": 45
+    },
+    {
+      "argument_expression": "ctx, http.MethodGet, url, nil",
+      "argument_sha256": "4978aa31eb4ab16087e92fde62f39ce4f490cadd63076d9888a3498a278bf7fe",
+      "build_constraint": "default",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "internal/surface/client.go",
+      "function": "FetchData",
+      "line": 76
+    },
+    {
+      "argument_expression": "req",
+      "argument_sha256": "c3f7bdf537c46724392c4428e47e04c148c56966190c3c9ed92114800c9f35bb",
+      "build_constraint": "default",
+      "callee": "http.Do",
+      "expression_complete": true,
+      "file": "internal/surface/client.go",
+      "function": "FetchData",
+      "line": 77
+    },
+    {
+      "argument_expression": "ctx, http.MethodPost, url, body",
+      "argument_sha256": "19a29b08e07c23826cd2439b4070a595cd7db632a67512a6ffef1f0ed9404a64",
+      "build_constraint": "default",
+      "callee": "http.NewRequestWithContext",
+      "expression_complete": true,
+      "file": "internal/surface/client.go",
+      "function": "ExecuteAction",
+      "line": 95
+    },
+    {
+      "argument_expression": "req",
+      "argument_sha256": "c3f7bdf537c46724392c4428e47e04c148c56966190c3c9ed92114800c9f35bb",
+      "build_constraint": "default",
+      "callee": "http.Do",
+      "expression_complete": true,
+      "file": "internal/surface/client.go",
+      "function": "ExecuteAction",
+      "line": 97
+    }
+  ],
+  "schema": "core_source_interface_census_v1",
+  "scope": "source facts; no deployed endpoint or runtime authority claimed"
+}

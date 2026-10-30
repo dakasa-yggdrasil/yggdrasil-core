@@ -9,11 +9,11 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/workflowdispatchlock"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 	"github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc"
-	rpcamqp "github.com/dakasa-yggdrasil/yggdrasil-sdk-go/rpc/amqp"
 	amqp "github.com/rabbitmq/amqp091-go"
 	"go.uber.org/zap"
 )
@@ -280,16 +280,24 @@ func executeIntegrationThroughResolved(
 }
 
 type integrationExecutionPolicy struct {
-	detailFreeErrors        bool
-	safeError               error
-	allowSensitiveOutput    bool
-	requireExplicitResponse bool
+	originalCreateDisposition bool
+	detailFreeErrors          bool
+	safeError                 error
+	allowSensitiveOutput      bool
+	requireExplicitResponse   bool
+	nativeHTTP                *nativeAdapterHTTPPolicy
 }
 
 func (policy integrationExecutionPolicy) sanitizeError(err error) error {
 	if err != nil && policy.detailFreeErrors {
 		if policy.safeError != nil {
+			if policy.nativeHTTP != nil {
+				return &opaqueAdapterError{public: policy.safeError, cause: err}
+			}
 			return policy.safeError
+		}
+		if policy.nativeHTTP != nil {
+			return &opaqueAdapterError{public: errSensitiveOutputSink, cause: err}
 		}
 		return errSensitiveOutputSink
 	}
@@ -307,6 +315,9 @@ func executeIntegrationThroughResolvedWithPolicy(
 	timeoutOverride time.Duration,
 	policy integrationExecutionPolicy,
 ) (model.ExecuteIntegrationResponse, error) {
+	if !originalDispositionExecutionAllowed(req, policy) {
+		return model.ExecuteIntegrationResponse{}, policy.sanitizeError(errSensitiveOutputSink)
+	}
 	timeout := defaultWorkflowStepTimeout
 	if typeSpec.Adapter.TimeoutSeconds > 0 {
 		timeout = time.Duration(typeSpec.Adapter.TimeoutSeconds) * time.Second
@@ -318,7 +329,7 @@ func executeIntegrationThroughResolvedWithPolicy(
 	rpcCtx, cancel := context.WithTimeout(ctx, timeout)
 	defer cancel()
 
-	request := model.AdapterExecuteIntegrationRequest{
+	var request any = model.AdapterExecuteIntegrationRequest{
 		Operation:  req.Operation,
 		Capability: req.Capability,
 		Input:      cloneAuthorizationInput(req.Input),
@@ -331,9 +342,40 @@ func executeIntegrationThroughResolvedWithPolicy(
 			InstanceSpec: instanceSpec,
 		},
 	}
+	if policy.nativeHTTP != nil && policy.nativeHTTP.guest != nil {
+		guest := policy.nativeHTTP.guest
+		var original model.IntegrationInstanceManifestSpec
+		key, keyOK := instanceSpec.Credentials["ssh_private_key"].(string)
+		if req.Operation != capacity.ObserveGuestBootstrap || req.Capability != capacity.ObserveGuestBootstrap || len(req.Auth) != 0 || len(req.Metadata) != 0 || len(req.Input) != 1 || req.Input["binding_name"] == nil || len(instanceSpec.Credentials) != 1 || !keyOK || key == "" || len(key) > 16384 || json.Unmarshal(instanceManifest.Spec, &original) != nil || len(original.Credentials) != 0 || !strings.HasPrefix(original.CredentialsRef, "secret://"+instanceManifest.Metadata.Namespace+"/") || len(typeManifest.Spec) == 0 || typeSpec.Adapter.Transport != "http_json" || typeSpec.Provider != "guest-bootstrap" || typeSpec.Adapter.Endpoints.Describe != "/rpc/describe" || typeSpec.Adapter.Endpoints.Execute != "/rpc/execute" {
+			return model.ExecuteIntegrationResponse{}, policy.sanitizeError(errors.New("fixed private Guest execution refused"))
+		}
+		base, err := adapterBaseURL(original)
+		if err != nil || base != guest.baseURL {
+			return model.ExecuteIntegrationResponse{}, policy.sanitizeError(errors.Join(err, errors.New("original Guest public origin differs")))
+		}
+		// Original PUBLIC raw specs are separate from resolved Auth. The SSH
+		// key uses the existing private SDK envelope; bearer is header-only.
+		request = struct {
+			Operation   string            `json:"operation"`
+			Capability  string            `json:"capability"`
+			Input       map[string]any    `json:"input"`
+			Auth        map[string]string `json:"auth"`
+			Integration struct {
+				Type         model.ManifestReference `json:"type"`
+				TypeSpec     json.RawMessage         `json:"type_spec"`
+				Instance     model.ManifestReference `json:"instance"`
+				InstanceSpec json.RawMessage         `json:"instance_spec"`
+			} `json:"integration"`
+		}{Operation: req.Operation, Capability: req.Capability, Input: cloneAuthorizationInput(req.Input), Auth: map[string]string{"ssh_private_key": key}, Integration: struct {
+			Type         model.ManifestReference `json:"type"`
+			TypeSpec     json.RawMessage         `json:"type_spec"`
+			Instance     model.ManifestReference `json:"instance"`
+			InstanceSpec json.RawMessage         `json:"instance_spec"`
+		}{manifestReferenceFromRecord(typeManifest), append(json.RawMessage(nil), typeManifest.Spec...), manifestReferenceFromRecord(instanceManifest), append(json.RawMessage(nil), instanceManifest.Spec...)}}
+	}
 
 	var response model.AdapterExecuteIntegrationResponse
-	transport := newAdapterTransportClient(rpcamqp.New(conn))
+	transport := newAdapterTransportClient(sessionAMQPTransport(conn))
 	if err := transport.callWithPolicy(
 		rpcCtx,
 		integrationExecuteContract,
@@ -342,7 +384,7 @@ func executeIntegrationThroughResolvedWithPolicy(
 		"execute",
 		request,
 		&response,
-		adapterCallPolicy{detailFreeErrors: policy.detailFreeErrors},
+		adapterCallPolicy{detailFreeErrors: policy.detailFreeErrors, native: policy.nativeHTTP},
 	); err != nil {
 		if policy.detailFreeErrors {
 			return model.ExecuteIntegrationResponse{}, policy.sanitizeError(err)
@@ -354,30 +396,44 @@ func executeIntegrationThroughResolvedWithPolicy(
 	}
 
 	if operation := strings.TrimSpace(response.Operation); operation != "" && operation != req.Operation {
+		guestPG17TransportStage(ctx, "operation")
 		err := fmt.Errorf("unexpected adapter operation %q", response.Operation)
 		if policy.detailFreeErrors {
 			return model.ExecuteIntegrationResponse{}, policy.sanitizeError(err)
 		}
 		return model.ExecuteIntegrationResponse{}, err
 	} else if policy.requireExplicitResponse && operation == "" {
+		guestPG17TransportStage(ctx, "operation")
 		return model.ExecuteIntegrationResponse{}, policy.sanitizeError(errors.New("adapter response operation is required"))
 	}
 	if capability := strings.TrimSpace(response.Capability); capability != "" && capability != req.Capability {
+		guestPG17TransportStage(ctx, "capability")
 		err := fmt.Errorf("unexpected adapter capability %q", response.Capability)
 		if policy.detailFreeErrors {
 			return model.ExecuteIntegrationResponse{}, policy.sanitizeError(err)
 		}
 		return model.ExecuteIntegrationResponse{}, err
 	} else if policy.requireExplicitResponse && capability == "" {
+		guestPG17TransportStage(ctx, "capability")
 		return model.ExecuteIntegrationResponse{}, policy.sanitizeError(errors.New("adapter response capability is required"))
 	}
 
 	status := strings.TrimSpace(response.Status)
 	if status == "" {
 		if policy.requireExplicitResponse {
+			guestPG17TransportStage(ctx, "explicit_status")
 			return model.ExecuteIntegrationResponse{}, policy.sanitizeError(errors.New("adapter response status is required"))
 		}
 		status = "succeeded"
+	}
+	if policy.nativeHTTP != nil {
+		joined := errors.Join(nativeAdapterContext(rpcCtx), nativeAdapterContext(ctx))
+		if policy.nativeHTTP.parent != nil {
+			joined = errors.Join(joined, nativeAdapterContext(policy.nativeHTTP.parent))
+		}
+		if joined != nil {
+			return model.ExecuteIntegrationResponse{}, policy.sanitizeError(joined)
+		}
 	}
 
 	return model.ExecuteIntegrationResponse{
