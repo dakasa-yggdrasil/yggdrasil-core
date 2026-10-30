@@ -23,12 +23,7 @@ func main() {
 	if logger, ok := addons.Logger(app); ok {
 		httpAddr, _ := app.Resource("http_addr")
 		httpAddrValue, _ := httpAddr.(string)
-		logger.Info("yggdrasil-core worker started",
-			zap.String("service", serviceName),
-			zap.String("http_addr", httpAddrValue),
-			zap.String("broker_url", os.Getenv("BROKER_URL")),
-			zap.String("db_host", os.Getenv("DB_HOST")),
-		)
+		logStartup(logger, serviceName, httpAddrValue)
 	}
 
 	stop := make(chan os.Signal, 1)
@@ -39,4 +34,13 @@ func main() {
 	defer cancel()
 
 	_ = app.Shutdown(ctx)
+}
+
+func logStartup(logger *zap.Logger, service, httpAddr string) {
+	logger.Info("yggdrasil-core worker started",
+		zap.String("service", service),
+		zap.String("http_addr", httpAddr),
+		zap.Bool("broker_configured", os.Getenv("BROKER_URL") != ""),
+		zap.String("db_host", os.Getenv("DB_HOST")),
+	)
 }
