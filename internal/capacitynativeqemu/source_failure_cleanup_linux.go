@@ -110,11 +110,27 @@ type SourceFailureCleanupPhysical struct {
 }
 
 func (r *Realm) PrepareSourceFailureCleanup(ctx context.Context, store repository.CapacityStore, policy model.Manifest, pre model.CapacityGuestOriginalProvisioningPreregistration, failureSHA, enrollmentSHA string, key ed25519.PrivateKey) (SourceFailureCleanupAuthority, SourceFailureCleanupBody, error) {
+	return r.prepareSourceFailureCleanup(ctx, store, policy, pre, failureSHA, enrollmentSHA, key, nil)
+}
+
+// Observe only a fixed stage on the source qualification failure path.
+func (r *Realm) PrepareSourceFailureCleanupDiagnostic(ctx context.Context, store repository.CapacityStore, policy model.Manifest, pre model.CapacityGuestOriginalProvisioningPreregistration, failureSHA, enrollmentSHA string, key ed25519.PrivateKey, stage *string) (SourceFailureCleanupAuthority, SourceFailureCleanupBody, error) {
+	return r.prepareSourceFailureCleanup(ctx, store, policy, pre, failureSHA, enrollmentSHA, key, stage)
+}
+
+func (r *Realm) prepareSourceFailureCleanup(ctx context.Context, store repository.CapacityStore, policy model.Manifest, pre model.CapacityGuestOriginalProvisioningPreregistration, failureSHA, enrollmentSHA string, key ed25519.PrivateKey, stage *string) (SourceFailureCleanupAuthority, SourceFailureCleanupBody, error) {
+	mark := func(value string) {
+		if stage != nil {
+			*stage = value
+		}
+	}
+	mark("prepare_input")
 	var authority SourceFailureCleanupAuthority
 	var body SourceFailureCleanupBody
 	if !SourceCompensationCase(r.Request.NativeCase) || pre.Slot != 2 || len(key) != ed25519.PrivateKeySize || ctx.Err() != nil || pre.CoreSourceCommit != capacity.CurrentGuestCoreSource() || policy.Metadata.Namespace == "" || pre.WorkflowID != store.WorkflowID.String() {
 		return authority, body, ErrOriginalUnknown
 	}
+	mark("prepare_native")
 	r.mu.Lock()
 	native, ok := r.originals[2]
 	disk, known := r.disks[2]
@@ -122,10 +138,12 @@ func (r *Realm) PrepareSourceFailureCleanup(ctx context.Context, store repositor
 	if !ok || !known || native.OriginalDisk != disk {
 		return authority, body, ErrOriginalUnknown
 	}
+	mark("prepare_receipt")
 	receipt, err := r.OriginalMutationReceipt(ctx, pre.OriginalCreateGrantID)
 	if err != nil || receipt.Grant.State != "settled" || !receipt.TransportCompleted {
 		return authority, body, ErrOriginalUnknown
 	}
+	mark("prepare_outcome")
 	lost := SourceLostCreateCase(r.Request.NativeCase)
 	if lost {
 		if receipt.Outcome != "uncertain" || receipt.ResourceID != "" || receipt.ResourceCreatedAt != "" || failureSHA != "" || enrollmentSHA != "" {
@@ -138,26 +156,32 @@ func (r *Realm) PrepareSourceFailureCleanup(ctx context.Context, store repositor
 	} else if receipt.Outcome != "accepted" || !validSHA(failureSHA) || !validSHA(enrollmentSHA) {
 		return authority, body, ErrOriginalUnknown
 	}
+	mark("prepare_members")
 	var members, failed, events int
 	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FILTER (WHERE resource_id<>''),count(*) FILTER (WHERE slot=2 AND resource_id<>'') FROM public.capacity_resource_slots WHERE namespace=$1`, policy.Metadata.Namespace).Scan(&members, &failed); err != nil || members != 1 || failed != 0 {
 		return authority, body, ErrOriginalUnknown
 	}
+	mark("prepare_events")
 	if err = store.DB.QueryRowContext(ctx, `SELECT count(*) FROM public.event_log WHERE idempotency_key=$1`, "capacity-mutation/"+pre.OriginalCreateGrantID).Scan(&events); err != nil || events != 0 {
 		return authority, body, ErrOriginalUnknown
 	}
 	// Read the ACTUAL private current lease, never a cached grant expiry or
 	// an invented successor. This creates no lease and renews no clock.
+	mark("prepare_policy")
 	var policySpec model.CapacityPolicySpec
 	if json.Unmarshal(policy.Spec, &policySpec) != nil {
 		return authority, body, ErrOriginalUnknown
 	}
+	mark("prepare_lease")
 	if err = store.CheckSourceFailureCleanupLease(ctx, policy, pre.OriginalCreateGrantID); err != nil {
 		return authority, body, err
 	}
+	mark("prepare_intent")
 	currentLease, err := sourceFencePrivateIntent(ctx, store, policy, policySpec)
 	if err != nil || currentLease.Generation != pre.Generation || currentLease.FencingToken != pre.Fence || currentLease.LeaseOwner != pre.LeaseOwner || currentLease.LeaseExecutorID != pre.ExecutorID || currentLease.LeaseExpiresAt == nil || currentLease.RecoveryOnly {
 		return authority, body, ErrOriginalUnknown
 	}
+	mark("prepare_deadline")
 	now := time.Now().UTC()
 	deadline := now.Add(150 * time.Second)
 	parent, ok := ctx.Deadline()
@@ -176,6 +200,7 @@ func (r *Realm) PrepareSourceFailureCleanup(ctx context.Context, store repositor
 	if !now.Before(deadline) {
 		return authority, body, ErrOriginalUnknown
 	}
+	mark("prepare_directory")
 	directory, err := unix.Open(SlotDirectory(r.PrivateDirectory, 2), unix.O_RDONLY|unix.O_DIRECTORY|unix.O_NOFOLLOW|unix.O_CLOEXEC, 0)
 	if err != nil {
 		return authority, body, err
@@ -186,11 +211,13 @@ func (r *Realm) PrepareSourceFailureCleanup(ctx context.Context, store repositor
 	if se != nil || ce != nil {
 		return authority, body, ErrOriginalUnknown
 	}
+	mark("prepare_host_identity")
 	hostBoot, err := os.ReadFile("/proc/sys/kernel/random/boot_id")
 	if err != nil || !validUUID(strings.TrimSpace(string(hostBoot))) {
 		return authority, body, ErrOriginalUnknown
 	}
 	body = SourceFailureCleanupBody{Schema: "original_source_failure_cleanup_authority_v1", SourceSlotDirectory: SlotDirectory(r.PrivateDirectory, 2), SourceDirectoryDevice: uint64(directoryStat.Dev), SourceDirectoryInode: directoryStat.Ino, OriginalHostBootID: strings.TrimSpace(string(hostBoot)), Mode: "failure_cleanup_only", Scope: "same_original_host_qemu_cleanup_not_guest_positive_retirement", AuthorityID: uuid.NewString(), NativeCase: r.Request.NativeCase, CoreSource: capacity.CurrentGuestCoreSource(), GuestSource: r.Request.SourceCommit, CreatorSourceSHA256: r.Request.CreatorSourceSHA256, PreregistrationID: pre.PreregistrationID, ParentGrantID: pre.OriginalCreateGrantID, PolicyID: policy.ID.String(), PolicyChecksum: policy.Checksum, OriginalReceiptSHA256: capacity.GuestRetirementSHA(receipt), OriginalOutcome: receipt.Outcome, FailureSHA256: failureSHA, EnrollmentSHA256: enrollmentSHA, CreatorSHA256: native.OriginalCreatorSHA256, NativeReadSHA256: capacity.GuestRetirementSHA(native), Slot: 2, ResourceID: native.Original.ResourceID, ResourceCreatedAt: native.Original.OriginalCreateReturnedAt.UTC().Format(time.RFC3339Nano), QEMU: native.Original.QEMU, OriginalDisk: disk, IssuedAt: now, OriginalProvisioningDeadline: pre.OriginalDeadline, OriginalContextDeadline: r.Request.OriginalContextDeadline, CleanupDeadline: deadline, BaselineMembers: members, FailedSlotMembers: failed, FailedSlotEnsuredEvents: events, ProductionQualified: false, PositiveQuiescence: false}
+	mark("prepare_encoding")
 	authority.Body, err = json.Marshal(body)
 	if err != nil {
 		return authority, body, err

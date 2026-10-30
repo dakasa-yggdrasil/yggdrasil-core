@@ -98,7 +98,8 @@ func (f *fixture) finishOriginalSourceCompensation(ctx context.Context,p model.C
  stage="baseline_probe"
  useful,err:=f.realm.DiagnosticProbe(ctx,store,1,f.corePrivate,baselineClient);if err!=nil{return err}
  stage="prepare_cleanup"
- authority,body,err:=f.realm.PrepareSourceFailureCleanup(ctx,store,f.policy,pre,failureSHA,enrollmentSHA,f.corePrivate);if err!=nil{return err}
+ var authority q.SourceFailureCleanupAuthority;var body q.SourceFailureCleanupBody
+ if f.request.NativeCase=="source_live_failed_floor_recovery" {authority,body,err=f.realm.PrepareSourceFailureCleanupDiagnostic(ctx,store,f.policy,pre,failureSHA,enrollmentSHA,f.corePrivate,&stage)}else{authority,body,err=f.realm.PrepareSourceFailureCleanup(ctx,store,f.policy,pre,failureSHA,enrollmentSHA,f.corePrivate)};if err!=nil{return err}
  // Source-scoped table is constructed by this exact nativequalification
  // fixture only. Ordinary production grants/registry are not modified.
  stage="cleanup_tables"
