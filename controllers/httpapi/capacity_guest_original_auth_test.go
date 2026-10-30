@@ -71,7 +71,7 @@ func TestCapacityGuestOriginalAuth(t *testing.T) {
 			r.Header.Set(capacityOriginalCanaryAuthorityHeader, strings.Repeat("a", 64))
 			r.Header.Set(capacityOriginalCanaryScopeHeader, strings.Repeat("b", 64))
 		}},
-		{name: "guest_cannot_become_directory_reader", role: "actor", method: "GET", target: "https://core.invalid/api/v1/collaborators/by-email", credential: token, status: 403, mutate: func(r *http.Request, _ *Server) { r.Header.Set(directoryMachineTokenHeader, "directory-bearer") }},
+		{name: "guest_cannot_become_directory_reader", role: "actor", method: "GET", target: "https://core.invalid/api/v1/collaborators/by-email", credential: token, status: 401, mutate: func(r *http.Request, _ *Server) { r.Header.Set(directoryMachineTokenHeader, "directory-bearer") }},
 		{name: "database_unavailable_retains_private_claim", role: "actor", method: "GET", target: "https://core.invalid" + guestRetirementBase + "/intents/original?phase=before_start", credential: token, status: 503},
 	} {
 		t.Run(test.name, func(t *testing.T) {

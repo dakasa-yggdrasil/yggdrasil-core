@@ -91,6 +91,9 @@ func TestDirectoryCapacityCredentialCollisionsFailClosed(t *testing.T) {
 			if recorder.Code != tc.status || reached {
 				t.Fatalf("status=%d reached=%v body=%s", recorder.Code, reached, recorder.Body.String())
 			}
+			if (tc.directory != "" || tc.secondDirectory != "" || tc.bearer == testDirectoryToken || tc.secondBearer == testDirectoryToken) && recorder.Header().Get("Cache-Control") != "no-store" {
+				t.Fatal("Directory response is cacheable")
+			}
 			if tc.reason == "success" {
 				requireSingleAudit(t, capture, "success", directoryCapabilityRead, id.String(), "")
 			} else if tc.reason != "" {
@@ -118,6 +121,9 @@ func TestDirectoryCapacityCollisionWithholdsDenialWhenAuditFails(t *testing.T) {
 	s.requireAuthenticatedConsoleAPIs(http.HandlerFunc(func(http.ResponseWriter, *http.Request) { t.Fatal("reached fallback") })).ServeHTTP(w, req)
 	if w.Code != http.StatusInternalServerError {
 		t.Fatalf("status=%d, want 500", w.Code)
+	}
+	if w.Header().Get("Cache-Control") != "no-store" {
+		t.Fatal("Directory audit failure is cacheable")
 	}
 }
 
@@ -175,6 +181,9 @@ func TestDirectoryPresentEmptyHeaderAndDistinctIdentities(t *testing.T) {
 			gate.ServeHTTP(w, req)
 			if w.Code != tc.status || reached {
 				t.Fatalf("status=%d reached=%v body=%s", w.Code, reached, w.Body.String())
+			}
+			if w.Header().Get("Cache-Control") != "no-store" {
+				t.Fatal("Directory response is cacheable")
 			}
 			events := capture.snapshot()
 			if len(events) != len(tc.actors) {

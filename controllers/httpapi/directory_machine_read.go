@@ -273,6 +273,9 @@ func projectDirectoryCollaborator(collaborator model.Collaborator) directoryColl
 // synchronously and, when the row cannot be written, answers 500 itself so
 // no data and no verdict leave without their trail.
 func (s *Server) serveDirectoryMachineRequest(w http.ResponseWriter, r *http.Request, claim directoryMachineClaim) {
+	// The Directory family owns the response even when another private
+	// credential also claims the request. Never cache those responses.
+	w.Header().Set("Cache-Control", "no-store")
 	principal := claim.principal
 	// Every recognized identity in an ambiguous Directory attempt is
 	// attributable. Record each denial before returning any verdict.
