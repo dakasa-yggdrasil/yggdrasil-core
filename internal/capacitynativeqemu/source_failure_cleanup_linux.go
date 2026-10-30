@@ -138,9 +138,17 @@ func (r *Realm) prepareSourceFailureCleanup(ctx context.Context, store repositor
 	if !ok || !known || native.OriginalDisk != disk {
 		return authority, body, ErrOriginalUnknown
 	}
-	mark("prepare_receipt")
+	mark("prepare_receipt_read")
 	receipt, err := r.OriginalMutationReceipt(ctx, pre.OriginalCreateGrantID)
-	if err != nil || receipt.Grant.State != "settled" || !receipt.TransportCompleted {
+	if err != nil {
+		return authority, body, ErrOriginalUnknown
+	}
+	mark("prepare_receipt_state")
+	if receipt.Grant.State != "settled" {
+		return authority, body, ErrOriginalUnknown
+	}
+	mark("prepare_receipt_transport")
+	if !receipt.TransportCompleted {
 		return authority, body, ErrOriginalUnknown
 	}
 	mark("prepare_outcome")

@@ -16,7 +16,7 @@ func (f *fixture) retainSourceFloorCompensationFailure(ctx context.Context, stag
 		return
 	}
 	switch stage {
-	case "begin", "preregistration", "witness", "source_client", "source_refusal", "source_refusal_pending", "source_refusal_transport", "source_refusal_status", "source_refusal_validate", "source_refusal_record", "source_refusal_publish", "enrollment", "baseline_client", "baseline_probe", "prepare_cleanup", "prepare_input", "prepare_native", "prepare_receipt", "prepare_outcome", "prepare_members", "prepare_events", "prepare_policy", "prepare_lease", "prepare_intent", "prepare_deadline", "prepare_directory", "prepare_host_identity", "prepare_encoding", "cleanup_tables", "authority_encode", "authority_insert", "authority_readback", "cleanup_lease", "authority_publish", "after_authority":
+	case "begin", "preregistration", "witness", "source_client", "source_refusal", "source_refusal_pending", "source_refusal_transport", "source_refusal_status", "source_refusal_validate", "source_refusal_record", "source_refusal_publish", "enrollment", "baseline_client", "baseline_probe", "prepare_cleanup", "prepare_input", "prepare_native", "prepare_receipt", "prepare_receipt_read", "prepare_receipt_state", "prepare_receipt_transport", "prepare_outcome", "prepare_members", "prepare_events", "prepare_policy", "prepare_lease", "prepare_intent", "prepare_deadline", "prepare_directory", "prepare_host_identity", "prepare_encoding", "cleanup_tables", "authority_encode", "authority_insert", "authority_readback", "cleanup_lease", "authority_publish", "after_authority":
 	default:
 		return
 	}
