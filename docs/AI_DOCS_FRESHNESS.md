@@ -7,9 +7,10 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: aa1ae8f94a3c91ac6824156c1c5145f84b895efe
-verified_diff_sha256: 446f6ee09fbb643d76e2318402851bbb48dc9e5e9f875fc8a52b0160dc5b9f9d
+verified_at_commit: 274810338f3bb2e706bcc4c44eec00da2c8c3e8e
+verified_diff_sha256: f3d6f505a8e4f75f6baadd69034111a0983a711ec4f8561ec30b1eb89ddb29ae
 reconciler_schema: 1
+directory_private_response_and_original_output_review: Directory machine responses remain non-cacheable and retain ADR-0019 precedence; normal Guest provisioning returns its original evidence instead of a shadowed value. Independent review and focused Linux race tests passed; positive native QEMU and owning CI remain required.
 qualification_source_cleanup_execution_review: The original qualification-only cleanup store reads the same execution flag as the controller and preserves all live policy, fence, owner and lease checks. Independent review and focused Linux LAB tests passed; original QEMU and owning CI remain required.
 qualification_noncanonical_pending_and_pg17_http_review: The two source-only failed-create slots preserve pending enrollment until guarded cleanup, while the isolated PG17 HTTP gate is restored alongside PG16. Independent review and targeted Linux LAB tests passed; original QEMU and owning CI remain required.
 qualification_pg17_retained_intent_read_review: The canonical failed-floor terminal and next intent and the partial-recovery terminal are read from the original private file and validated by the existing closed qualification CapacityIntent decoder. Hashes, joins and production paths remain unchanged. Independent review and Linux LAB race census passed; final QEMU and owning CI remain required.
