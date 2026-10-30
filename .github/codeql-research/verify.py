@@ -15,9 +15,9 @@ def findings(path):
     return found
 
 original, narrow=map(findings,sys.argv[1:])
-for name in ('PROBE_DIRECT_PASSWORD','PROBE_RAW_REFERENCE','PROBE_SHARED'):
+for name in ('PROBE_DIRECT_PASSWORD','PROBE_RAW_REFERENCE','PROBE_OTHER_CALL','PROBE_SHARED'):
     assert markers[name] in original, ('baseline_missing',name,original.keys())
     assert markers[name] in narrow, ('narrow_missing',name,narrow.keys())
 assert markers['PROBE_REFERENCE_NAME'] in original, ('baseline_missing_reference_name',original.keys())
 assert markers['PROBE_REFERENCE_NAME'] not in narrow, ('narrow_still_reports_reference_name',narrow.keys())
-print('PASS synthetic direct password, raw reference, shared sink retained; reference-name path removed')
+print('PASS synthetic direct password, raw reference, other extractor call and shared sink retained; reference-name path removed')

@@ -65,7 +65,8 @@ module ComputationallyExpensiveHashFunctionFlow {
       node instanceof Barrier or
       node.asExpr().(CallExpr).getTarget().hasQualifiedName(
         "github.com/dakasa-yggdrasil/yggdrasil-core/internal/controlplane", "secretRefName"
-      )
+      ) and
+      node.asExpr().getEnclosingFunction().getName() = "envFromExternalPostgresSecret"
     }
 
     predicate isBarrierIn(DataFlow::Node node) {
