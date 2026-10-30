@@ -7,9 +7,10 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 2382189b7f9cbb47eecd1afdc8f62b34a2115de1
-verified_diff_sha256: 15aa498af0047433e3470f33bb2d8ef5f0a45a4ffb9e6bf42792c4aab6907163
+verified_at_commit: aa1ae8f94a3c91ac6824156c1c5145f84b895efe
+verified_diff_sha256: 57b7171400464c924c8b97f28ae26b9e57f258d10f553ce83ccaec42da2c5860
 reconciler_schema: 1
+qualification_source_cleanup_execution_review: The original qualification-only cleanup store reads the same execution flag as the controller and preserves all live policy, fence, owner and lease checks. Independent review and focused Linux LAB tests passed; original QEMU and owning CI remain required.
 qualification_noncanonical_pending_and_pg17_http_review: The two source-only failed-create slots preserve pending enrollment until guarded cleanup, while the isolated PG17 HTTP gate is restored alongside PG16. Independent review and targeted Linux LAB tests passed; original QEMU and owning CI remain required.
 qualification_pg17_retained_intent_read_review: The canonical failed-floor terminal and next intent and the partial-recovery terminal are read from the original private file and validated by the existing closed qualification CapacityIntent decoder. Hashes, joins and production paths remain unchanged. Independent review and Linux LAB race census passed; final QEMU and owning CI remain required.
 qualification_floor_terminal_decoder_review: The qualification-only failed-floor next-permission gate uses the existing closed persisted-intent decoder for a null pod baseline while retaining original digest, policy, generation, floor, parent and child guards. Independent source review completed; Linux and native QEMU validation remain required.
