@@ -913,5 +913,10 @@
     "scope": "Qualification-only Source recovery caller retains one closed failure-stage label for the two expiry cases. It preserves original errors and authority, and missing evidence remains unknown. Independent source review completed; Linux CI and original execution remain required.",
     "source_inventory_sha256": "e7dbdddc5f388929e35c393ac729f7e68b34446a89fb7a367de4609162080db0",
     "production_or_native_qualification": false
+  },
+  "qualification_source_recovery_historical_read_review_20261030": {
+    "scope": "Qualification-only Source recovery caller joins the immutable preregistration and original grant after lease expiry without treating historical read as current authority. Independent source review completed; PostgreSQL CI and original scenarios remain required.",
+    "source_inventory_sha256": "aac7d23dbb7f3ab087708c02143337184b9fba72073d86ed533bd75cb61bee6c",
+    "production_or_native_qualification": false
   }
 }
