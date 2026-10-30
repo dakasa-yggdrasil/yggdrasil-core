@@ -40,7 +40,7 @@ func (a Adapter) Execute(ctx context.Context, g Grant, attemptID, settlementToke
 	if !now.Before(g.ExpiresAt) {
 		return ErrDenied
 	}
-	claim := Claim{GrantID: g.ID, Action: g.Action, CommandID: g.CommandID, RequestSHA: g.RequestSHA, AttemptID: attemptID, SettlementSHA: Digest(settlementToken)}
+	claim := Claim{GrantID: g.ID, Action: g.Action, CommandID: g.CommandID, RequestSHA: g.RequestSHA, AttemptID: attemptID, SettlementSHA: settlementTokenDigest(settlementToken)}
 	reply, err := a.Ledger.Redeem(ctx, claim)
 	if err != nil || reply.Mode != "execute_once" || reply.GrantID != g.ID || !reply.Deadline.Equal(g.ExpiresAt) {
 		return ErrUnknown

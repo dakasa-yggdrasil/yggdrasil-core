@@ -43,7 +43,14 @@ func Capability(action string) string {
 	}
 	return ""
 }
-func Digest(v any) string   { raw, _ := json.Marshal(v); return fmt.Sprintf("%x", sha256.Sum256(raw)) }
+func Digest(v any) string { raw, _ := json.Marshal(v); return fmt.Sprintf("%x", sha256.Sum256(raw)) }
+
+// settlementTokenDigest preserves the JSON-string digest used by the wire protocol.
+func settlementTokenDigest(token string) string {
+	raw, _ := json.Marshal(token)
+	return fmt.Sprintf("%x", sha256.Sum256(raw))
+}
+
 func Key(r Resource) string { return r.AccountID + "/" + r.Region + "/" + r.InstanceID }
 func SameResource(a, b Resource) bool {
 	return a.AccountID == b.AccountID && a.Region == b.Region && a.InstanceID == b.InstanceID && slices.Equal(a.Volumes, b.Volumes)
@@ -121,7 +128,7 @@ func Redeem(g *Grant, principal string, c Claim, now time.Time, execution bool, 
 	return r, nil
 }
 func Settle(g *Grant, principal, token string, r Result, now time.Time) error {
-	if ValidateGrant(*g) != nil || principal != g.Binding.AdapterPrincipal || r.GrantID != g.ID || r.AttemptID != g.AttemptID || r.RequestSHA != g.RequestSHA || subtle.ConstantTimeCompare([]byte(Digest(token)), []byte(g.SettlementSHA)) != 1 || (g.State != "redeemed" && g.State != "settled") || (r.Outcome != "accepted" && r.Outcome != "uncertain") {
+	if ValidateGrant(*g) != nil || principal != g.Binding.AdapterPrincipal || r.GrantID != g.ID || r.AttemptID != g.AttemptID || r.RequestSHA != g.RequestSHA || subtle.ConstantTimeCompare([]byte(settlementTokenDigest(token)), []byte(g.SettlementSHA)) != 1 || (g.State != "redeemed" && g.State != "settled") || (r.Outcome != "accepted" && r.Outcome != "uncertain") {
 		return ErrDenied
 	}
 	if r.Outcome == "accepted" && (!r.OriginalJoined || r.ServiceRequestID == "" || len(r.ServiceRequestID) > 256) {
