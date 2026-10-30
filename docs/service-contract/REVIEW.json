@@ -918,5 +918,10 @@
     "scope": "Qualification-only terminal physical decoder preserves original bytes and typed hash while accepting the producer nil action list under closed validation. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.",
     "source_inventory_sha256": "09e94a5e7d96c553dc9008a59e65b5131ca9b72d68694021963ebd483c09636a",
     "production_or_native_qualification": false
+  },
+  "qualification_held_hello_validation_diagnostic_review_20261030": {
+    "scope": "The held-hello diagnostic classifies existing failure-only HTTP decode and original validation guard groups without changing admission criteria or original error. Independent source review and focused Linux race census passed; the isolated physical scenario and owning CI remain required.",
+    "source_inventory_sha256": "32127fdda659f51e86db7e725cf267e90f4bc081b6f48e1daadddcda77e4c020",
+    "production_or_native_qualification": false
   }
 }
