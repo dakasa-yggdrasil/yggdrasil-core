@@ -7,9 +7,10 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: d277ab05fc393d89b5753917aa93ee7845d343d3
-verified_diff_sha256: ae786f293cbd9aa80fafb7f2c3b66f076d4aa0b0c549fff55ec36b7f70330ad5
+verified_at_commit: 523990a8a5001a73b79ff54df75a16426b3c39b4
+verified_diff_sha256: e42c6f1bd58616e9feca38e431e5d84d79a5d5497a95357cfdd23aa0b05dec26
 reconciler_schema: 1
+qualification_pg17_retained_intent_read_review: The canonical failed-floor terminal and next intent and the partial-recovery terminal are read from the original private file and validated by the existing closed qualification CapacityIntent decoder. Hashes, joins and production paths remain unchanged. Independent review and Linux LAB race census passed; final QEMU and owning CI remain required.
 qualification_floor_terminal_decoder_review: The qualification-only failed-floor next-permission gate uses the existing closed persisted-intent decoder for a null pod baseline while retaining original digest, policy, generation, floor, parent and child guards. Independent source review completed; Linux and native QEMU validation remain required.
 qualification_failed_probe_challenge_review: The two probe HOLD cases bind the original validated and consumed challenge by signed Guest hash and committed Core hash; Guest owner timing retains its actual monotonic-derived deadline. Other native cases and production qualification are not claimed. Independent source review completed; Linux and native QEMU validation remain required.
 canonical_postloss_compensation_review: Reviewed the qualification-only canonical postloss compensation chain: recovery cleanup epoch binding and closed refusal stages, closed qualification decoders for the native read, source cleanup body/physical record and private capacity intent, unredacted recovery proof, child-bound unscoped redeem, single stored read settle, and the CI PostgreSQL service admitted as the local PG16 owner. Production validators unchanged; no prose docs needed changes. No local tests ran; LAB native QEMU passed both postloss cases, CI remains the gate.

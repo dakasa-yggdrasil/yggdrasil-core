@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-29T22:28:00-03:00",
+  "generated_at": "2026-10-29T22:59:44-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1384,
+    ".go": 1385,
     ".json": 178,
     ".py": 16,
     ".sql": 82,
@@ -11,7 +11,7 @@
     ".yml": 31
   },
   "provenance": {
-    "commit": "d277ab05fc393d89b5753917aa93ee7845d343d3",
+    "commit": "523990a8a5001a73b79ff54df75a16426b3c39b4",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "38a6f0f93a963c98ea7370a9d461cedad5b0c25353de824857591c0437a27967"
+        "sha256": "a1c06972efb01c9f5247291eccf9ab81506d80b024fdb51db1d30bb32ba6ed3f"
       },
       {
         "path": "AGENTS.md",
@@ -75,8 +75,8 @@
     },
     {
       "path": "controllers/message",
-      "files": 177,
-      "kb": 1561
+      "files": 178,
+      "kb": 1567
     },
     {
       "path": "internal/capacity",
