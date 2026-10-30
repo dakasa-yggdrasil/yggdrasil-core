@@ -543,7 +543,8 @@ func (f *fixture) prepareSource(ctx context.Context) error {
 // This separate closed caller never enters the native original corpus reader.
 // It executes the actual authenticated workflow and rereads the same durable
 // grant/administrative result; its result has Source authority only.
-func (f *fixture) runOriginalSourceFenceCaller(ctx context.Context) error {
+func (f *fixture) runOriginalSourceFenceCaller(ctx context.Context) (runErr error) {
+	defer f.retainSourceCallerFailure(ctx, &runErr)
 	if !q.SourceContractCase(f.request.NativeCase) || len(f.realm.OwnedSlots()) != 0 {
 		return q.ErrOriginalUnknown
 	}
@@ -625,7 +626,8 @@ func (f *fixture) runOriginalSourceFenceCaller(ctx context.Context) error {
 	return nil
 }
 
-func (f *fixture) runOriginalRecoveryContractCaller(ctx context.Context) error {
+func (f *fixture) runOriginalRecoveryContractCaller(ctx context.Context) (runErr error) {
+	defer f.retainSourceCallerFailure(ctx, &runErr)
 	if !q.SourceRecoveryCase(f.request.NativeCase) || len(f.realm.OwnedSlots()) != 0 {
 		return q.ErrOriginalUnknown
 	}

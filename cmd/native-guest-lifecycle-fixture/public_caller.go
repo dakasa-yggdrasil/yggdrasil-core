@@ -147,6 +147,18 @@ func (f *fixture) originalWorkflow(ctx context.Context, mode string, slot int, a
 	}
 }
 
+// retainSourceCallerFailure records only the already projected public returns.
+// It does not change the original failure or publish success evidence.
+func (f *fixture) retainSourceCallerFailure(ctx context.Context, runErr *error) {
+	if *runErr == nil {
+		return
+	}
+	diagnostic, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	defer cancel()
+	returns := append([]originalPublicReturn{}, f.publicReturns...)
+	_, _ = q.Publish(diagnostic, filepath.Join(f.private, "core-original-public-caller-failure-returns.json"), returns)
+}
+
 func (f *fixture) runOriginalPublicCaller(ctx context.Context) (runErr error) {
 	defer func() {
 		if runErr != nil {
