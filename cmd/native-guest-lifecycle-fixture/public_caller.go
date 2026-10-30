@@ -255,6 +255,7 @@ func (f *fixture) runOriginalPublicCaller(ctx context.Context) (runErr error) {
 		return f.finishExpectedOriginalHold(ctx, p, baseline, retirement, runIDs, returns)
 	}
 	if retirement.Status != "succeeded" {
+		f.retainStartupAuthorityDiagnostic(ctx, pre.PreregistrationID, retirement.Status)
 		return q.ErrOriginalUnknown
 	}
 	runIDs = append(runIDs, retirement.ID.String())
