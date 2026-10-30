@@ -9,10 +9,10 @@ func PostlossSourceCase(c string) bool {
 	return capacity.GuestPostlossQualificationSlot(c) != 0
 }
 
-// CanonicalCompensationPendingCase holds only the two fixed canonical
-// compensation failed creates pending: their accepted parent stays settled.
+// CanonicalCompensationPendingCase holds the fixed canonical failed-create
+// cases pending, including failed-floor recovery: their accepted parent stays settled.
 func CanonicalCompensationPendingCase(c string) bool {
-	return c == "canonical_compensation_unprotected_failed_create" || c == "canonical_compensation_protected_failed_create"
+	return c == "canonical_compensation_unprotected_failed_create" || c == "canonical_compensation_protected_failed_create" || c == "canonical_failed_floor_recovery"
 }
 
 // SourceFailureSlot is a fixed case-to-slot binding, never an arbitrary caller

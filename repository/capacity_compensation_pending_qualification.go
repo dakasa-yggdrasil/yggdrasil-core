@@ -13,10 +13,10 @@ import (
 	"github.com/google/uuid"
 )
 
-// Only the two fixed canonical compensation failed-create cases hold their
-// accepted source create pending; floor recovery and legacy cases do not.
+// Only the fixed canonical failed-create cases hold their accepted source
+// create pending, including failed-floor recovery; legacy cases do not.
 func canonicalCompensationPendingCase(c string) bool {
-	return c == "canonical_compensation_unprotected_failed_create" || c == "canonical_compensation_protected_failed_create"
+	return c == "canonical_compensation_unprotected_failed_create" || c == "canonical_compensation_protected_failed_create" || c == "canonical_failed_floor_recovery"
 }
 
 // The accepted original settlement stays the parent's only fact: unconfirmed,

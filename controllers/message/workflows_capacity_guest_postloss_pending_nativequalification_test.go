@@ -30,7 +30,7 @@ func TestSourcePostlossPendingSelectionFailsClosed(t *testing.T) {
 	}{
 		{"positive_original_lifecycle", 1, false}, {"canonical_postloss_unprotected_failed_create_reissue", 1, false}, {"canonical_postloss_protected_failed_create_reissue", 2, false}, {"unknown", 1, false},
 		{"canonical_postloss_protected_failed_create_reissue", 1, true}, {"canonical_postloss_unprotected_failed_create_reissue", 2, true},
-		{"canonical_compensation_unprotected_failed_create", 1, false}, {"canonical_compensation_protected_failed_create", 1, false}, {"canonical_failed_floor_recovery", 2, false}, {"compensation_unprotected_failed_create", 2, false}, {"compensation_protected_failed_create", 2, false}, {"compensation_unprotected_lost_create_reply", 2, false},
+		{"canonical_compensation_unprotected_failed_create", 1, false}, {"canonical_compensation_protected_failed_create", 1, false}, {"canonical_failed_floor_recovery", 1, false}, {"canonical_failed_floor_recovery", 2, true}, {"compensation_unprotected_failed_create", 2, false}, {"compensation_protected_failed_create", 2, false}, {"compensation_unprotected_lost_create_reply", 2, false},
 		{"canonical_compensation_unprotected_failed_create", 2, true}, {"canonical_compensation_protected_failed_create", 2, true},
 	} {
 		originalGuestNativeRealm = &q.Realm{Request: q.SourceRequest{NativeCase: tc.name}}

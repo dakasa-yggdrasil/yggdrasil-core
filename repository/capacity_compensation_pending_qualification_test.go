@@ -12,7 +12,7 @@ import (
 
 // Synthetic records exercise the parent join only. They cannot attest a QEMU.
 func TestCanonicalCompensationPendingParentFailsClosed(t *testing.T) {
-	for c, want := range map[string]bool{"canonical_compensation_unprotected_failed_create": true, "canonical_compensation_protected_failed_create": true, "canonical_failed_floor_recovery": false, "compensation_unprotected_failed_create": false, "canonical_postloss_unprotected_failed_create_reissue": false, "": false} {
+	for c, want := range map[string]bool{"canonical_compensation_unprotected_failed_create": true, "canonical_compensation_protected_failed_create": true, "canonical_failed_floor_recovery": true, "compensation_unprotected_failed_create": false, "canonical_postloss_unprotected_failed_create_reissue": false, "": false} {
 		if canonicalCompensationPendingCase(c) != want || (want && canonicalSourceExpectedSlot(c) != 2) {
 			t.Fatalf("case %q selection changed", c)
 		}
