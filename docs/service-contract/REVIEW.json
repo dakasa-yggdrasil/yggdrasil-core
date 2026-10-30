@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "5fffc403ef980bd92b6398b9afc5ca9248844498ce64843cf329de7f474013f8",
+  "source_inventory_sha256": "08cdaf7d646abd92f33be8282be078a49d5c03e2fc252649a182a9a8d840b776",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -847,6 +847,11 @@
   "qualification_failed_probe_challenge_review_20261030": {
     "scope": "For the two original probe HOLD cases only, the signed Guest diagnostic binds the validated and consumed original challenge hash to the committed Core challenge; the Guest monotonic-derived operation deadline and Core challenge wall deadline remain distinct. Owner return ordering uses the original Guest deadline. Challenge signature, identities, original nonce budget and source-only scope remain required. Independent source review completed; Linux and native QEMU validation remain required.",
     "source_inventory_sha256": "5fffc403ef980bd92b6398b9afc5ca9248844498ce64843cf329de7f474013f8",
+    "production_or_native_qualification": false
+  },
+  "qualification_pg17_retained_intent_read_review_20261030": {
+    "scope": "Qualification-only PG17 reads of canonical failed-floor terminal and next intent and the source partial-recovery terminal retain the original private NOFOLLOW read and original byte hashes, then apply the existing closed CapacityIntent decoder that permits null only for the native pod baseline. Original joins and production decoders remain unchanged. Independent source review and Linux LAB race/census passed; QEMU and owning CI remain required.",
+    "source_inventory_sha256": "08cdaf7d646abd92f33be8282be078a49d5c03e2fc252649a182a9a8d840b776",
     "production_or_native_qualification": false
   }
 }
