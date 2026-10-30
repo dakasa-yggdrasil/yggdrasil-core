@@ -670,7 +670,7 @@ func (f *fixture) runOriginalRecoveryContractCaller(ctx context.Context) (runErr
 	}
 	stage = "original_provisioning"
 	store := repository.CapacityStore{DB: f.db}
-	pre, err := store.OriginalGuestProvisioning(ctx, contract.GrantID)
+	pre, err := store.ReadSourceRecoveryHistoricalPreregistration(ctx, f.policy, f.workflow.ID, contract.GrantID, contract.PreregistrationID, contract.Slot, contract.Generation, contract.FenceBefore)
 	if err != nil || pre.PreregistrationID != contract.PreregistrationID || pre.Generation != contract.Generation || pre.Fence != contract.FenceBefore {
 		return q.ErrOriginalUnknown
 	}
