@@ -91,6 +91,26 @@ func TestValidateControlPlanePostgresExternalRejectsBadSecretRef(t *testing.T) {
 	}
 }
 
+func TestValidateControlPlanePasswordRefDoesNotExposeInvalidInput(t *testing.T) {
+	const secret = "DO_NOT_LOG_invalid_password"
+	for _, mode := range []string{"bundled", "external"} {
+		t.Run(mode, func(t *testing.T) {
+			spec := controlPlaneSpecFixture()
+			if mode == "bundled" {
+				spec.Postgres.Bundled.PasswordRef = secret
+			} else {
+				spec.Postgres = model.ControlPlanePostgresSpec{Mode: "external", External: &model.ControlPlanePostgresExternalSpec{
+					Host: "db.example.com", Database: "db", Username: "user", PasswordRef: secret,
+				}}
+			}
+			err := ValidateControlPlaneSpec(spec)
+			if err == nil || strings.Contains(err.Error(), secret) || !strings.Contains(err.Error(), "postgres."+mode+".password_ref is invalid") {
+				t.Fatalf("invalid reference did not produce a safe, attributable refusal")
+			}
+		})
+	}
+}
+
 func TestValidateControlPlanePostgresRejectsBothBundledAndExternal(t *testing.T) {
 	spec := controlPlaneSpecFixture()
 	spec.Postgres.External = &model.ControlPlanePostgresExternalSpec{

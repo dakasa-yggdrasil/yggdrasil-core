@@ -2,6 +2,7 @@ package manifest
 
 import (
 	"encoding/json"
+	"errors"
 	"fmt"
 	"regexp"
 	"slices"
@@ -109,7 +110,7 @@ func validateControlPlanePostgres(pg model.ControlPlanePostgresSpec) error {
 		}
 		if ref := strings.TrimSpace(pg.Bundled.PasswordRef); ref != "" {
 			if !controlPlaneSecretRefPattern.MatchString(ref) {
-				return fmt.Errorf("control_plane postgres.bundled.password_ref %q is invalid", ref)
+				return errors.New("control_plane postgres.bundled.password_ref is invalid")
 			}
 		}
 	case "external":
@@ -129,7 +130,7 @@ func validateControlPlanePostgres(pg model.ControlPlanePostgresSpec) error {
 			return fmt.Errorf("control_plane postgres.external.username is required")
 		}
 		if !controlPlaneSecretRefPattern.MatchString(pg.External.PasswordRef) {
-			return fmt.Errorf("control_plane postgres.external.password_ref %q is invalid", pg.External.PasswordRef)
+			return errors.New("control_plane postgres.external.password_ref is invalid")
 		}
 		if pg.External.Port < 0 || pg.External.Port > 65535 {
 			return fmt.Errorf("control_plane postgres.external.port %d is out of range", pg.External.Port)
