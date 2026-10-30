@@ -908,5 +908,10 @@
     "scope": "Source live-partial and historical callers use existing closed failure-only public return retention without replacing the original errors or granting authority. Source review completed; Linux and owning CI remain required.",
     "source_inventory_sha256": "eacc59f2cbd779f0a805aecab24b8627b3ecb56cd9ef830ea9a8a885ea8500a8",
     "production_or_native_qualification": false
+  },
+  "qualification_source_recovery_guard_diagnostic_review_20261030": {
+    "scope": "Qualification-only Source recovery caller retains one closed failure-stage label for the two expiry cases. It preserves original errors and authority, and missing evidence remains unknown. Independent source review completed; Linux CI and original execution remain required.",
+    "source_inventory_sha256": "e7dbdddc5f388929e35c393ac729f7e68b34446a89fb7a367de4609162080db0",
+    "production_or_native_qualification": false
   }
 }
