@@ -826,7 +826,8 @@ func (f *fixture) initializeOriginalRecoverySourceTables(ctx context.Context) er
 	return nil
 }
 
-func (f *fixture) runOriginalTerminalCaller(ctx context.Context) error {
+func (f *fixture) runOriginalTerminalCaller(ctx context.Context) (runErr error) {
+	defer f.retainSourceCallerFailure(ctx, &runErr)
 	var p model.CapacityPolicySpec
 	if json.Unmarshal(f.policy.Spec, &p) != nil || len(f.realm.OwnedSlots()) != 0 {
 		return q.ErrOriginalUnknown
