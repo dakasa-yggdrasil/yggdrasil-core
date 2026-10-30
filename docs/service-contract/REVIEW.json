@@ -559,6 +559,16 @@
       "reviewed_at": "2026-10-26T17:43:37.079058+00:00",
       "schema82_Linux_CI_image_Goose_runtime_and_useful_capacity_still_required": true,
       "source_inventory_sha256": "e6e919b15af44e43b6d05c4c969beca37dc2569a0c1ff4633e7ce47f3ab85e2e"
+    },
+    "qualification_held_ack_transport_observation_558_20261030": {
+      "scope": "fixed held-ack source-only original failure observations, not authority",
+      "previously_tested_diagnostic_port": true,
+      "current_physical_run": "pending",
+      "source_files": {
+        "cmd/native-guest-lifecycle-fixture/held_ack_transport_diagnostic.go": "a9101dd66877e472b97a00d1ffccb369cd7512a66eb2f2bf6d0bc6e3a0ed3860",
+        "cmd/native-guest-lifecycle-fixture/held_ack_transport_diagnostic_test.go": "09d6335c90521fe0ac4bf7a34de57e6161875377628fb592dda2e64ca560c6ff",
+        "cmd/native-guest-lifecycle-fixture/public_caller.go": "867526f75582626b6baf4cf5866c839c41b2e0076886417b8aba4f872e32c8fc"
+      }
     }
   },
   "human_architecture_signoff_claimed": false,
