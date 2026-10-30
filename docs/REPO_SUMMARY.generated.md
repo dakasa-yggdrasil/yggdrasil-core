@@ -1,10 +1,10 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-29T21:46:13-03:00_
+_Generated from HEAD at: 2026-10-29T22:28:00-03:00_
 
 ## Languages
 
-- `.go`: 1383 files
+- `.go`: 1384 files
 - `.json`: 178 files
 - `.py`: 16 files
 - `.sql`: 82 files
@@ -24,7 +24,7 @@ _Generated from HEAD at: 2026-10-29T21:46:13-03:00_
 
 ## Top Directories by File Count
 
-- repository: 314 files (3934.5 KB)
+- repository: 315 files (3943.6 KB)
 - controllers/httpapi: 235 files (2395.2 KB)
 - controllers/message: 177 files (1561.6 KB)
 - internal/capacity: 117 files (1330.7 KB)
@@ -32,7 +32,7 @@ _Generated from HEAD at: 2026-10-29T21:46:13-03:00_
 - db/migrations: 81 files (482.7 KB)
 - manifest: 65 files (397.1 KB)
 - addons: 50 files (288.7 KB)
-- internal/capacitynativeqemu: 47 files (297.6 KB)
+- internal/capacitynativeqemu: 47 files (297.8 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
 - cmd/native-guest-lifecycle-fixture: 25 files (239.3 KB)
 - controllers/oidc: 25 files (210.8 KB)
