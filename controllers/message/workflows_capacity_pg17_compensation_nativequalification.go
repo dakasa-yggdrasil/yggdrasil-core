@@ -414,6 +414,22 @@ func PG17AssertFailedFloorTerminalNegatives(ctx context.Context, realm *q.Realm,
 	return pg17CompensationResult(ctx, realm, recovery, policy, checks, evidence)
 }
 
+// Read original private bytes under the existing no-follow, permission, size,
+// duplicate-key, and context checks, then use the closed CapacityIntent decoder
+// which permits only the native pod baseline to be null.
+func pg17ReadQualificationIntent(ctx context.Context, path string) ([]byte, model.CapacityIntent, error) {
+	var raw json.RawMessage
+	wire, err := q.ReadPrivate(ctx, path, &raw)
+	if err != nil {
+		return nil, model.CapacityIntent{}, err
+	}
+	var intent model.CapacityIntent
+	if err = repository.DecodeQualificationCapacityIntent(wire, &intent); err != nil {
+		return nil, model.CapacityIntent{}, err
+	}
+	return wire, intent, nil
+}
+
 // Hook: AFTER the producer publishes its actual full-floor result. This only
 // joins retained originals to SAME database state; next grant is permission,
 // not provider Prepare/Create, useful capacity or a second Native execution.
@@ -460,8 +476,7 @@ func PG17AssertFailedFloorAfterCompletion(ctx context.Context, realm *q.Realm, s
 	if result.Schema != "canonical_source_failed_floor_v1" || result.Scope != "SOURCE_ONLY_ORDINARY_RECONCILE_AFTER_GENERIC_COMPENSATION" || result.Case != realm.Request.NativeCase || result.CoreSource != capacity.CurrentGuestCoreSource() || result.GuestSource != realm.Request.SourceCommit || result.ParentGrantID != parentID || result.ParentState != "compensated" || result.ChildState != "confirmed" || result.Phase != "reconciled_failed_floor" || result.BaselineUnits != 1 || result.FloorUnits != 2 || result.NextGrantState != "issued" || result.NextGrantRedeemed || result.NativeQualified || result.ProductionQualified {
 		return nil, errors.New("pg17 original full-floor result differs")
 	}
-	var terminal model.CapacityIntent
-	terminalWire, err := q.ReadPrivate(ctx, realm.PrivateDirectory+"/canonical-floor-terminal-intent.json", &terminal)
+	terminalWire, terminal, err := pg17ReadQualificationIntent(ctx, realm.PrivateDirectory+"/canonical-floor-terminal-intent.json")
 	if err != nil {
 		return nil, err
 	}
@@ -476,8 +491,7 @@ func PG17AssertFailedFloorAfterCompletion(ctx context.Context, realm *q.Realm, s
 	if !reflect.DeepEqual(persistedTerminal, terminalWire) || terminalSHA != result.TerminalSHA {
 		return nil, errors.New("pg17 actual database historical terminal differs")
 	}
-	var next model.CapacityIntent
-	nextWire, err := q.ReadPrivate(ctx, realm.PrivateDirectory+"/canonical-floor-next-intent.json", &next)
+	nextWire, next, err := pg17ReadQualificationIntent(ctx, realm.PrivateDirectory+"/canonical-floor-next-intent.json")
 	if err != nil {
 		return nil, err
 	}

@@ -81,8 +81,7 @@ func assertPG17OriginalPartial(ctx context.Context, store repository.CapacitySto
 	if witnesses != 0 || native != 0 || member3 != 0 {
 		return out, errOriginalGuestStep
 	}
-	var terminal model.CapacityIntent
-	terminalRaw, err := q.ReadPrivate(ctx, filepath.Join(originalGuestNativeRealm.PrivateDirectory, "source-live-partial-terminal.json"), &terminal)
+	terminalRaw, terminal, err := pg17ReadQualificationIntent(ctx, filepath.Join(originalGuestNativeRealm.PrivateDirectory, "source-live-partial-terminal.json"))
 	if err != nil {
 		return out, err
 	}
