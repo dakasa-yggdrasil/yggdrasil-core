@@ -903,5 +903,10 @@
     "scope": "The Source terminal caller uses the existing failure-only closed public return retention, without altering original error or granting native or production authority. Source review completed; focused Linux and owning CI remain required.",
     "source_inventory_sha256": "128cd89bf2cb871798baf25b7421a84ac36a3b8c03f19f885c72faea5d313f94",
     "production_or_native_qualification": false
+  },
+  "source_live_failure_retention_review_20261030": {
+    "scope": "Source live-partial and historical callers use existing closed failure-only public return retention without replacing the original errors or granting authority. Source review completed; Linux and owning CI remain required.",
+    "source_inventory_sha256": "eacc59f2cbd779f0a805aecab24b8627b3ecb56cd9ef830ea9a8a885ea8500a8",
+    "production_or_native_qualification": false
   }
 }
