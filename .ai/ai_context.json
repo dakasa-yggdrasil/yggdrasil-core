@@ -1,9 +1,9 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-29T20:23:12-03:00",
+  "generated_at": "2026-10-29T21:08:23-03:00",
   "primary_language": "go",
   "languages": {
-    ".go": 1368,
+    ".go": 1382,
     ".json": 178,
     ".py": 16,
     ".sql": 82,
@@ -11,7 +11,7 @@
     ".yml": 31
   },
   "provenance": {
-    "commit": "a157d72d7e1e71e7f5cfc5e29d520b0b3df69b0c",
+    "commit": "b91e5e09b71dee1be72931ca65db244c20eced1f",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "6b3491c98102e5dbb2aa4123dcb86f50d4804216b9c75d00c8b0967338e0a93d"
+        "sha256": "735f92382c6d53dae56f7b2ebc14dbb072ae78264d2048727dcbc0601057ec0d"
       },
       {
         "path": "AGENTS.md",
@@ -28,7 +28,7 @@
       },
       {
         "path": "CLAUDE.md",
-        "sha256": "a49274d3d808cc995f2bdfaf5cd0347b2cde3eaf7dfce3e162593220cae54bab"
+        "sha256": "e210806d3d36acb96ffca4f3a3ea118f4137b9117a83606e9b19727608ac68d3"
       },
       {
         "path": "README.md",
@@ -65,18 +65,18 @@
   "top_dirs": [
     {
       "path": "repository",
-      "files": 308,
-      "kb": 3886
+      "files": 314,
+      "kb": 3934
     },
     {
       "path": "controllers/httpapi",
-      "files": 231,
-      "kb": 2304
+      "files": 235,
+      "kb": 2395
     },
     {
       "path": "controllers/message",
-      "files": 174,
-      "kb": 1554
+      "files": 176,
+      "kb": 1558
     },
     {
       "path": "internal/capacity",
@@ -86,7 +86,7 @@
     {
       "path": "model",
       "files": 85,
-      "kb": 475
+      "kb": 476
     },
     {
       "path": "db/migrations",
@@ -100,8 +100,8 @@
     },
     {
       "path": "addons",
-      "files": 49,
-      "kb": 282
+      "files": 50,
+      "kb": 288
     },
     {
       "path": "internal/capacitynativeqemu",
@@ -115,13 +115,13 @@
     },
     {
       "path": "cmd/native-guest-lifecycle-fixture",
-      "files": 24,
-      "kb": 237
+      "files": 25,
+      "kb": 239
     },
     {
       "path": "controllers/oidc",
-      "files": 23,
-      "kb": 193
+      "files": 25,
+      "kb": 210
     }
   ],
   "top_files_by_size": [
