@@ -392,6 +392,26 @@ func TestCapacityGuestOriginalNativeCorpusPostgres(t *testing.T) {
 		wire, reply, digest, readID, phase, stage, ordinal, consistent := row.wire, row.reply, row.digest, row.readID, row.phase, row.stage, row.ordinal, row.consistent
 		var returned guestOriginalAuthorityTransport
 		if !consistent || capacity.BusinessCreationSHA256(wire) != digest || capacity.DecodeGuestLifecycle(wire, &returned) != nil || !capacity.GuestOriginalHTTPBodyFactsValid(returned.ResponseBodyScope, returned.ReadReturnedAt, returned.ReceivedBodyBytes, returned.ResponseSHA256, returned.RetainedPrefixBytes, returned.RetainedPrefixSHA256, returned.ReadFailed) || returned.ResponseBodyScope != capacity.GuestOriginalBodyCompleteRead || returned.RetainedPrefixBytes != len(reply) || returned.RetainedPrefixSHA256 != capacity.BusinessCreationSHA256(reply) || returned.ReadID != readID || returned.Stage != stage || returned.Status != 200 || returned.PreflightFailed || returned.DoFailed || returned.ReadFailed || returned.CloseFailed || returned.OriginalContextFailed || len(reply) == 0 || returned.ReceivedBodyBytes != len(reply) || returned.ResponseSHA256 != capacity.BusinessCreationSHA256(reply) || returned.StartedAt.IsZero() || returned.DoStartedAt.Before(returned.StartedAt) || returned.DoReturnedAt.Before(returned.DoStartedAt) || returned.ReadReturnedAt.Before(returned.DoReturnedAt) || returned.CloseReturnedAt.Before(returned.ReadReturnedAt) || returned.DriverReturnedAt.Before(returned.CloseReturnedAt) || !returned.DriverReturnedAt.Before(returned.OriginalDeadline) {
+			// Failure-only closed grouping. No wire, identity, response or error is emitted.
+			group := "unknown"
+			var diagnostic guestOriginalAuthorityTransport
+			switch {
+			case !consistent:
+				group = "record_consistency"
+			case capacity.BusinessCreationSHA256(wire) != digest:
+				group = "wire_digest"
+			case capacity.DecodeGuestLifecycle(wire, &diagnostic) != nil:
+				group = "wire_decode"
+			case !capacity.GuestOriginalHTTPBodyFactsValid(returned.ResponseBodyScope, returned.ReadReturnedAt, returned.ReceivedBodyBytes, returned.ResponseSHA256, returned.RetainedPrefixBytes, returned.RetainedPrefixSHA256, returned.ReadFailed) || returned.ResponseBodyScope != capacity.GuestOriginalBodyCompleteRead:
+				group = "body_facts"
+			case returned.RetainedPrefixBytes != len(reply) || returned.RetainedPrefixSHA256 != capacity.BusinessCreationSHA256(reply) || len(reply) == 0 || returned.ReceivedBodyBytes != len(reply) || returned.ResponseSHA256 != capacity.BusinessCreationSHA256(reply):
+				group = "reply_binding"
+			case returned.ReadID != readID || returned.Stage != stage || returned.Status != 200 || returned.PreflightFailed || returned.DoFailed || returned.ReadFailed || returned.CloseFailed || returned.OriginalContextFailed:
+				group = "identity_or_status"
+			case returned.StartedAt.IsZero() || returned.DoStartedAt.Before(returned.StartedAt) || returned.DoReturnedAt.Before(returned.DoStartedAt) || returned.ReadReturnedAt.Before(returned.DoReturnedAt) || returned.CloseReturnedAt.Before(returned.ReadReturnedAt) || returned.DriverReturnedAt.Before(returned.CloseReturnedAt) || !returned.DriverReturnedAt.Before(returned.OriginalDeadline):
+				group = "timeline"
+			}
+			t.Log("authority_transport_join_failure_v1 group=" + group)
 			rows.Close()
 			t.Fatal("actual original authority transport and exact complete body do not join")
 		}
