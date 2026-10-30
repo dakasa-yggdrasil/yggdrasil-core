@@ -666,7 +666,7 @@
     "source_inventory_sha256": "a22fc09c10bf41bccb11a573e84c3f420e8df58934662474d1634cdc7fa62613",
     "production_or_native_qualification": false
   },
-  "source_inventory_sha256": "08cdaf7d646abd92f33be8282be078a49d5c03e2fc252649a182a9a8d840b776",
+  "source_inventory_sha256": "7744f3374fc6b82428f2c7bdb4e91cfc40cc8fb03a3884cdfc988c6584d75811",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
@@ -852,6 +852,16 @@
   "qualification_pg17_retained_intent_read_review_20261030": {
     "scope": "Qualification-only PG17 reads of canonical failed-floor terminal and next intent and the source partial-recovery terminal retain the original private NOFOLLOW read and original byte hashes, then apply the existing closed CapacityIntent decoder that permits null only for the native pod baseline. Original joins and production decoders remain unchanged. Independent source review and Linux LAB race/census passed; QEMU and owning CI remain required.",
     "source_inventory_sha256": "08cdaf7d646abd92f33be8282be078a49d5c03e2fc252649a182a9a8d840b776",
+    "production_or_native_qualification": false
+  },
+  "qualification_noncanonical_failed_create_pending_review_20261030": {
+    "scope": "Qualification-only noncanonical failed-create slots retain the accepted settled parent and enrollment evidence without confirmation, member or event; the existing current lease, cleanup and source custody guards remain required. Lost replies, baseline and production paths are unchanged. Independent review and targeted Linux LAB race/census passed; QEMU and owning CI remain required.",
+    "source_inventory_sha256": "7744f3374fc6b82428f2c7bdb4e91cfc40cc8fb03a3884cdfc988c6584d75811",
+    "production_or_native_qualification": false
+  },
+  "qualification_pg17_owned_http_gate_review_20261030": {
+    "scope": "Restore the original source-owned PostgreSQL 17 HTTP callback gate beside the existing PostgreSQL 16 coverage. Original owner, source parity, race, isolated database and cleanup checks remain required. LAB HTTP gate passed; owning CI remains required.",
+    "source_inventory_sha256": "7744f3374fc6b82428f2c7bdb4e91cfc40cc8fb03a3884cdfc988c6584d75811",
     "production_or_native_qualification": false
   }
 }
