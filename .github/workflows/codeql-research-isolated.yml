@@ -1,4 +1,4 @@
-name: Isolated CodeQL Action exact candidate suite comparison
+name: Isolated CodeQL Action protected reference comparison
 on:
   push:
     branches: ['elastic/codeql-evidence-diagnostic-20261030']
@@ -33,12 +33,16 @@ jobs:
         uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Verify protected tag identity
+        run: |
+          set -euo pipefail
+          test "$(git ls-remote --tags https://github.com/dakasa-yggdrasil/yggdrasil-core.git refs/tags/codeql-r1 | cut -f1)" = 7fb2e71f23ddc306cd0a58c0ca5d4bbebc425026
       - id: init
         uses: github/codeql-action/init@v4
         with:
           languages: ${{ matrix.language }}
           build-mode: ${{ matrix.mode }}
-          config-file: .github/codeql/codeql-config.yml
+          config-file: dakasa-yggdrasil/yggdrasil-core/.github/codeql/remote.yml@codeql-r1
       - if: matrix.language == 'go'
         name: Build Core
         run: go build -p 2 ./...
