@@ -322,7 +322,9 @@ func guestPG17MutationAfterConfirm(ctx context.Context, store repository.Capacit
 	return []PG17AssertionResult{pg17MutationResult(11, policy, r.WorkflowID, []string{"post_settlement_proof_covariates_refused_without_effects", "confirm_replay_one_event_actual_provider_resource_instance", "one_registered_member_original_transport_settlement_required"}, capacity.BusinessCreationSHA256(raw), capacity.BusinessCreationSHA256(aw), capacity.BusinessCreationSHA256(nw))}, nil
 }
 
-func guestPG17MutationAfterTerminal(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, binding model.CapacityMutationBinding, input guestOriginalStepInput, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, output any) ([]PG17AssertionResult, error) {
+func guestPG17MutationAfterTerminal(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, binding model.CapacityMutationBinding, input guestOriginalStepInput, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, output any) (results []PG17AssertionResult, runErr error) {
+	stage := "entry"
+	defer func() { retainPG17TerminalGuardFailure(ctx, runErr, stage) }()
 	if originalGuestNativeRealm == nil || ctx.Err() != nil {
 		return nil, errOriginalGuestStep
 	}
@@ -330,36 +332,44 @@ func guestPG17MutationAfterTerminal(ctx context.Context, store repository.Capaci
 	if !ok {
 		return nil, errOriginalGuestStep
 	}
+	stage = "contract_read"
 	var retained q.SourceTerminalContract
 	wire, err := q.ReadPrivate(ctx, filepath.Join(originalGuestNativeRealm.PrivateDirectory, "source-terminal-contract.json"), &retained)
 	if err != nil {
 		return nil, err
 	}
+	stage = "contract_join"
 	if capacity.GuestRetirementSHA(retained) != capacity.GuestRetirementSHA(actual) || retained.CoreSource != capacity.CurrentGuestCoreSource() || retained.Case != originalGuestNativeRealm.Request.NativeCase || retained.PolicyID != policy.ID.String() || retained.GrantID != grant.GrantID || retained.Generation != input.Generation || retained.RecoveryFence <= input.FencingToken || retained.NativeQualified || retained.CheckedAt.Before(retained.LeaseExpiredObservedAt) || retained.LeaseExpiredObservedAt.Before(grant.ExpiresAt) || retained.CheckedAt.After(pre.OriginalDeadline) || retained.OriginalDeadline.After(pre.OriginalDeadline) {
 		return nil, errOriginalGuestStep
 	}
+	stage = "grant_read"
 	r, raw, err := pg17MutationGrant(ctx, store, policy, input, grant)
 	if err != nil {
 		return nil, err
 	}
+	stage = "intent_read"
 	var intentRaw []byte
 	var intent model.CapacityIntent
 	if err = store.DB.QueryRowContext(ctx, `SELECT intent FROM public.capacity_intents WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&intentRaw); err != nil {
 		return nil, err
 	}
+	stage = "intent_join"
 	if json.Unmarshal(intentRaw, &intent) != nil || intent.PolicyID != policy.ID || intent.PolicyChecksum != policy.Checksum || intent.Generation != input.Generation || intent.FencingToken != retained.RecoveryFence || !intent.RecoveryOnly || intent.LeaseOwner == input.LeaseOwner || intent.LeaseExecutorID == store.ExecutorID || intent.Decision.ExecutionPermitted {
 		return nil, errOriginalGuestStep
 	}
+	stage = "physical_read"
 	var physical model.CapacityMutationProof
 	pw, err := q.ReadPrivate(ctx, filepath.Join(originalGuestNativeRealm.PrivateDirectory, "source-terminal-physical-proof.json"), &physical)
 	if err != nil {
 		return nil, err
 	}
+	stage = "physical_join"
 	if capacity.GuestRetirementSHA(physical) != retained.PhysicalSHA256 || physical.ResourceID == "" || physical.Slot != 1 {
 		return nil, errOriginalGuestStep
 	}
 	pins := []string{capacity.BusinessCreationSHA256(wire), capacity.BusinessCreationSHA256(raw), capacity.BusinessCreationSHA256(intentRaw), capacity.BusinessCreationSHA256(pw)}
 	if retained.Case == "source_live_unredeemed_abort" {
+		stage = "abort_state"
 		current, err := repository.GetManifestByID(ctx, store.DB, policy.ID)
 		if err != nil {
 			return nil, err
@@ -367,31 +377,38 @@ func guestPG17MutationAfterTerminal(ctx context.Context, store repository.Capaci
 		if current.Metadata.Active || current.Checksum != policy.Checksum || r.Grant.State != "expired" || r.AttemptID != "" || r.Settlement != nil || retained.GrantState != "expired" || retained.Terminal != "aborted" || retained.TerminalRefused {
 			return nil, errOriginalGuestStep
 		}
+		stage = "abort_contract_read"
 		noFence, nw, err := pg17MutationContract(ctx, 0, "pg17-no-native-fence-reconcile.json", `["schema","core_source","grant_id","generation","fence","no_private_native_store","same_context","execution_enabled","outcome","proof_sha256","recovered_intent_sha256","result_sha256"]`)
 		if err != nil {
 			return nil, err
 		}
+		stage = "abort_contract_join"
 		if !pg17MutationEqual(noFence, "schema", "core_pg17_no_native_fence_reconcile_v1") || !pg17MutationEqual(noFence, "core_source", capacity.CurrentGuestCoreSource()) || !pg17MutationEqual(noFence, "grant_id", grant.GrantID) || !pg17MutationEqual(noFence, "generation", input.Generation) || !pg17MutationEqual(noFence, "fence", retained.RecoveryFence) || !pg17MutationEqual(noFence, "no_private_native_store", true) || !pg17MutationEqual(noFence, "same_context", true) || !pg17MutationEqual(noFence, "execution_enabled", false) || !pg17MutationEqual(noFence, "outcome", "aborted") || pg17MutationDigest(noFence, "proof_sha256") != retained.ProofSHA256 || pg17MutationDigest(noFence, "recovered_intent_sha256") == "" || pg17MutationDigest(noFence, "result_sha256") == "" {
 			return nil, errOriginalGuestStep
 		}
 		pins = append(pins, capacity.BusinessCreationSHA256(nw))
 		return []PG17AssertionResult{pg17MutationResult(6, policy, r.WorkflowID, []string{"actual_persisted_policy_inactive_readback", "actual_grant_and_lease_expiry_without_edits_new_recovery_fence", "unredeemed_grant_expired_without_attempt_or_settlement_aborted", "ordinary_reconcile_without_private_native_store_same_context_lease_db_deadline"}, pins...)}, nil
 	}
+	stage = "unresolved_state"
 	if retained.Case != "source_live_unresolved_terminal" || r.Grant.State != "redeemed" || r.AttemptID == "" || r.Settlement != nil || retained.GrantState != "redeemed" || !retained.TerminalRefused {
 		return nil, errOriginalGuestStep
 	}
+	stage = "unresolved_replay_read"
 	var replay model.CapacityMutationRedeemResponse
 	rw, err := q.ReadPrivate(ctx, filepath.Join(originalGuestNativeRealm.PrivateDirectory, "source-terminal-replay-typed-return.json"), &replay)
 	if err != nil {
 		return nil, err
 	}
+	stage = "unresolved_replay_join"
 	if capacity.BusinessCreationSHA256(rw) != retained.ReplaySHA256 || replay.Mode != "read_only" || replay.GrantID != grant.GrantID || replay.AttemptID != r.AttemptID || replay.RequestSHA256 != grant.RequestSHA256 {
 		return nil, errOriginalGuestStep
 	}
+	stage = "unresolved_contract_read"
 	advance, adw, err := pg17MutationContract(ctx, 0, "pg17-unresolved-advance-contract.json", `["schema","core_source","grant_id","slot","prepared","canary","promoted_refused","predicate","native_baseline_units","negative_request_units","negative_is_physical_evidence","probe_sha256","canary_sha256","grant_sha256","refusal_sha256"]`)
 	if err != nil {
 		return nil, err
 	}
+	stage = "unresolved_contract_join"
 	if !pg17MutationCommon(advance, "core_pg17_unresolved_advance_v1", 2, grant.GrantID) || !pg17MutationEqual(advance, "prepared", true) || !pg17MutationEqual(advance, "canary", true) || !pg17MutationEqual(advance, "promoted_refused", true) || !pg17MutationEqual(advance, "predicate", "unresolved_provider_mutation_authority") || !pg17MutationEqual(advance, "native_baseline_units", 1) || !pg17MutationEqual(advance, "negative_request_units", 2) || !pg17MutationEqual(advance, "negative_is_physical_evidence", false) || pg17MutationDigest(advance, "grant_sha256") != capacity.BusinessCreationSHA256(raw) || pg17MutationDigest(advance, "probe_sha256") == "" || pg17MutationDigest(advance, "canary_sha256") == "" || pg17MutationDigest(advance, "refusal_sha256") == "" {
 		return nil, errOriginalGuestStep
 	}

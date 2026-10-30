@@ -48,7 +48,11 @@ func guestPG17AfterTerminal(ctx context.Context, store repository.CapacityStore,
 	if len(rows) == 0 {
 		return nil
 	}
-	return PG17RetainAssertions(ctx, originalGuestNativeRealm, policy, store.WorkflowID.String(), input.Slot, "mutation-terminal", rows)
+	err = PG17RetainAssertions(ctx, originalGuestNativeRealm, policy, store.WorkflowID.String(), input.Slot, "mutation-terminal", rows)
+	if err != nil {
+		retainPG17TerminalGuardFailure(ctx, err, "retention")
+	}
+	return err
 }
 
 func guestPG17AfterHistorical(ctx context.Context, store repository.CapacityStore, policy model.Manifest, p model.CapacityPolicySpec, binding model.CapacityMutationBinding, input guestOriginalStepInput, grant model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, output any) error {
