@@ -415,7 +415,19 @@ func (s *Server) serveGuestOriginalAuthority(w http.ResponseWriter, r *http.Requ
 		retention, cancelRetention := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
 		retainedErr := store.RecordGuestAuthorityTransport(retention, read, "snapshot", returned)
 		cancelRetention()
-		if retainedErr != nil || err != nil || capacity.GuestOriginalHTTPDecode(returned, &snapshot) != nil || store.RecordGuestSnapshot(ctx, read, snapshot) != nil {
+		stage := ""
+		switch {
+		case retainedErr != nil:
+			stage = "retention"
+		case err != nil:
+			stage = "transport"
+		case capacity.GuestOriginalHTTPDecode(returned, &snapshot) != nil:
+			stage = "decode"
+		case store.RecordGuestSnapshot(ctx, read, snapshot) != nil:
+			stage = "snapshot_record"
+		}
+		if stage != "" {
+			guestQualificationSnapshotFailure(w, read, stage)
 			guestHTTPError(w, repository.ErrCapacityConflict)
 			return
 		}

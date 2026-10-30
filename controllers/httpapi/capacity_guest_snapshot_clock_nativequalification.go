@@ -4,6 +4,7 @@ package httpapi
 
 import (
 	"context"
+	"net/http"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
@@ -26,5 +27,16 @@ func guestQualificationBeforeSnapshotGET(ctx context.Context, read repository.Gu
 		return ctx.Err()
 	case <-timer.C:
 		return ctx.Err()
+	}
+}
+
+// Qualification-only closed failure observation; it never grants authority.
+func guestQualificationSnapshotFailure(w http.ResponseWriter, read repository.GuestOriginalAuthorityRead, stage string) {
+	if read.Original.Binding.EvidenceClass != "native_qemu_qualification" || read.Phase != "before_start" || read.Ordinal != 2 {
+		return
+	}
+	switch stage {
+	case "retention", "transport", "decode", "snapshot_record":
+		w.Header().Set("X-Guest-Qualification-Snapshot-Failure", stage)
 	}
 }
