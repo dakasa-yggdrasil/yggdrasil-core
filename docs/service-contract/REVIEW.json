@@ -918,5 +918,10 @@
     "scope": "Qualification-only terminal physical decoder preserves original bytes and typed hash while accepting the producer nil action list under closed validation. Independent source review and one Source case passed on a separately instrumented pair; the second case and exact integrated CI remain required.",
     "source_inventory_sha256": "09e94a5e7d96c553dc9008a59e65b5131ca9b72d68694021963ebd483c09636a",
     "production_or_native_qualification": false
+  },
+  "qualification_source_failed_floor_pending_review_20261030": {
+    "scope": "Qualification-only source_live_failed_floor_recovery uses the existing pending-enrollment verifier for slot 2 while retaining settlement, membership, event and cleanup guards. Focused Linux tests and independent source review passed; physical and exact integrated CI remain required.",
+    "source_inventory_sha256": "73516bea820373f73124d2f4ae966416de285b079cc461accc64ee7a6dec948d",
+    "production_or_native_qualification": false
   }
 }
