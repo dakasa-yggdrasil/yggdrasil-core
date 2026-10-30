@@ -7,9 +7,10 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: b063fb042293deac630c9fe2fc41c2546fd4476e
-verified_diff_sha256: e1b1c54dee2bb61809bd9fd79dd9143006a328297f05ac6ea2436dffaebbd7b5
+verified_at_commit: 8c79a7afe1074601cbe8a72334496f72ab11d4df
+verified_diff_sha256: 1a52702517acbc9c19816b1a26a105782456b03ef9a6cfe72131af33cfdf67cd
 reconciler_schema: 1
+source_recovery_historical_read_review: Qualification-only historical preregistration read checks immutable stored bindings after lease expiry without granting current authority. Independent static review completed; PostgreSQL CI and original Source scenarios remain required.
 source_recovery_guard_diagnostic_review: Qualification-only failure retention records the last closed guard group for two expiry scenarios, without changing authority or the original error. Independent static source review completed; Linux CI and original execution remain required. Missing diagnostics remain unknown.
 source_live_failure_returns_review: Live-partial and historical Source failures preserve closed caller returns without changing original error or granting authority. Source review completed; Linux and owning CI remain required.
 source_terminal_failure_returns_review: The Source terminal caller preserves closed public return diagnostics only on failure and leaves the original outcome unchanged. Source review completed; Linux and owning CI remain required.
