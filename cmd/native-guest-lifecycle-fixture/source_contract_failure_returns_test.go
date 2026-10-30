@@ -20,6 +20,8 @@ func TestSourceContractFailureRetainsPublicReturns(t *testing.T) {
 		{"fence", (*fixture).runOriginalSourceFenceCaller},
 		{"recovery", (*fixture).runOriginalRecoveryContractCaller},
 		{"terminal", (*fixture).runOriginalTerminalCaller},
+		{"live_partial", (*fixture).runOriginalLivePartialCaller},
+		{"historical_confirm", (*fixture).runOriginalHistoricalConfirmCaller},
 	} {
 		t.Run(tc.name, func(t *testing.T) {
 			f := &fixture{private: t.TempDir(), publicReturns: []originalPublicReturn{{Method: "POST", Path: "/api/v1/workflow-runs", WorkflowStatus: "failed"}}}

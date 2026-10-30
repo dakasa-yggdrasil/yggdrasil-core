@@ -712,7 +712,8 @@ func (f *fixture) runOriginalRecoveryContractCaller(ctx context.Context) (runErr
 	return nil
 }
 
-func (f *fixture) runOriginalLivePartialCaller(ctx context.Context) error {
+func (f *fixture) runOriginalLivePartialCaller(ctx context.Context) (runErr error) {
+	defer f.retainSourceCallerFailure(ctx, &runErr)
 	var p model.CapacityPolicySpec
 	if json.Unmarshal(f.policy.Spec, &p) != nil || len(f.realm.OwnedSlots()) != 0 {
 		return q.ErrOriginalUnknown
@@ -763,7 +764,8 @@ func (f *fixture) runOriginalLivePartialCaller(ctx context.Context) error {
 	return nil
 }
 
-func (f *fixture) runOriginalHistoricalConfirmCaller(ctx context.Context) error {
+func (f *fixture) runOriginalHistoricalConfirmCaller(ctx context.Context) (runErr error) {
+	defer f.retainSourceCallerFailure(ctx, &runErr)
 	var p model.CapacityPolicySpec
 	if json.Unmarshal(f.policy.Spec, &p) != nil || len(f.realm.OwnedSlots()) != 0 {
 		return q.ErrOriginalUnknown
