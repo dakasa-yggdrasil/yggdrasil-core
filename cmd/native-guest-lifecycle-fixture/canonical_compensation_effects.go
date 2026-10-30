@@ -24,7 +24,9 @@ import (
 // positive enrollment for an uncertain reply. The frontend owns its actual
 // child, original Wait and pipe owners; signed source authority is durable
 // BEFORE any separately labelled host cleanup action.
-func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context, p model.CapacityPolicySpec, baseline, burst model.WorkflowRunRecord, runIDs []string, returns []originalPublicReturn) error {
+func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context, p model.CapacityPolicySpec, baseline, burst model.WorkflowRunRecord, runIDs []string, returns []originalPublicReturn) (runErr error) {
+	stage := "begin"
+	defer func() { f.retainCanonicalChildFailure(ctx, stage, &runErr) }()
 	if !q.CanonicalSourceCompensationCase(f.request.NativeCase) || q.SourceLostCreateCase(f.request.NativeCase) || baseline.Status != "succeeded" || burst.Status != "failed" || p.Ceiling != 2 || p.Floor < 1 || p.Floor > 2 {
 		return q.ErrOriginalUnknown
 	}
@@ -163,24 +165,30 @@ func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context,
 	if err != nil {
 		return err
 	}
+	stage = "prepare_child"
 	issuer, currentPolicy, child, session, err := f.prepareCanonicalSourceChild(ctx, p, pre)
 	if err != nil {
 		return err
 	}
+	stage = "read_eligibility"
 	eligibilityWire, err := issuer.CanonicalSourceEligibilityWire(ctx, pre.OriginalCreateGrantID)
 	if err != nil {
 		return err
 	}
+	stage = "publish_eligibility"
 	if _, err = q.PublishBytes(ctx, filepath.Join(f.private, "canonical-source-eligibility.json"), eligibilityWire); err != nil {
 		return err
 	}
 	// Signed actual-child authority precedes the existing Source ready-file.
+	stage = "publish_child_authority"
 	if _, err = q.PublishBytes(ctx, filepath.Join(q.SlotDirectory(f.private, failedSlot), "canonical-source-child-authority.json"), session.Authority); err != nil {
 		return err
 	}
+	stage = "publish_cleanup_authority"
 	if _, err = q.PublishBytes(ctx, filepath.Join(q.SlotDirectory(f.private, failedSlot), "source-failure-cleanup-authority.json"), authorityWire); err != nil {
 		return err
 	}
+	stage = "after_cleanup_authority"
 	physical, err := f.realm.ReadSourceRecoveryFailureCleanup(ctx, authority, body, issuer, currentPolicy, session)
 	if err != nil {
 		return err

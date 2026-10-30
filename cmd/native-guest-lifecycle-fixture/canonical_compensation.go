@@ -18,7 +18,9 @@ import (
 	"sync"
 )
 
-func (f *fixture) prepareCanonicalSourceChild(ctx context.Context, p model.CapacityPolicySpec, pre model.CapacityGuestOriginalProvisioningPreregistration) (repository.CapacityStore, model.Manifest, model.CapacityMutationGrant, q.CanonicalCleanupSession, error) {
+func (f *fixture) prepareCanonicalSourceChild(ctx context.Context, p model.CapacityPolicySpec, pre model.CapacityGuestOriginalProvisioningPreregistration) (_ repository.CapacityStore, _ model.Manifest, _ model.CapacityMutationGrant, _ q.CanonicalCleanupSession, runErr error) {
+	stage := "begin"
+	defer func() { f.retainCanonicalChildFailure(ctx, stage, &runErr) }()
 	var none repository.CapacityStore
 	var noPolicy model.Manifest
 	var noChild model.CapacityMutationGrant
@@ -130,6 +132,7 @@ func (f *fixture) prepareCanonicalSourceChild(ctx context.Context, p model.Capac
 	if _, err = paused.IssueCompensation(ctx, current, issue); !errors.Is(err, repository.ErrCapacityDisabled) {
 		return none, noPolicy, noChild, noSession, q.ErrOriginalUnknown
 	}
+	stage = "eligibility"
 	pg17Eligibility, pg17Err := message.PG17AssertCompensationEligibility(ctx, f.realm, issuer, current, issue)
 	if pg17Err != nil {
 		return none, noPolicy, noChild, noSession, pg17Err
@@ -137,9 +140,11 @@ func (f *fixture) prepareCanonicalSourceChild(ctx context.Context, p model.Capac
 	if pg17Err = message.PG17RetainAssertions(ctx, f.realm, current, f.workflow.ID.String(), 0, "compensation-eligibility", pg17Eligibility); pg17Err != nil {
 		return none, noPolicy, noChild, noSession, pg17Err
 	}
+	stage = "unresolved_parent"
 	if err = f.assertOriginalRecoveryUnresolved(ctx, p, pre, "parent"); err != nil {
 		return none, noPolicy, noChild, noSession, err
 	}
+	stage = "issue_children"
 	var group sync.WaitGroup
 	children := make(chan model.CapacityMutationGrant, 2)
 	failures := make(chan error, 2)
@@ -158,6 +163,7 @@ func (f *fixture) prepareCanonicalSourceChild(ctx context.Context, p model.Capac
 	if first != nil || second != nil || child.GrantID != repeat.GrantID || child.CompensationOf != pre.OriginalCreateGrantID {
 		return none, noPolicy, noChild, noSession, q.ErrOriginalUnknown
 	}
+	stage = "foreign_issue"
 	stranger := issuer
 	stranger.ExecutorID = uuid.NewString()
 	if _, err = stranger.IssueCompensation(ctx, current, issue); !errors.Is(err, repository.ErrCapacityConflict) {
@@ -165,6 +171,7 @@ func (f *fixture) prepareCanonicalSourceChild(ctx context.Context, p model.Capac
 	}
 	// Actual negative calls cannot mint effects before the original API
 	// redemption, and no physical absence exists before the frontend action.
+	stage = "unredeemed_check"
 	if _, err = issuer.AuthorizeCanonicalSourceChild(ctx, current, child.GrantID, uuid.NewString(), capacity.BusinessCreationSHA256([]byte("unredeemed-probe"))); err == nil {
 		return none, noPolicy, noChild, noSession, q.ErrOriginalUnknown
 	}
@@ -174,13 +181,16 @@ func (f *fixture) prepareCanonicalSourceChild(ctx context.Context, p model.Capac
 			return none, noPolicy, noChild, noSession, err
 		}
 	}
+	stage = "unresolved_child"
 	if err = f.assertOriginalRecoveryUnresolved(ctx, p, pre, "child"); err != nil {
 		return none, noPolicy, noChild, noSession, err
 	}
+	stage = "redeem_child"
 	session, err := f.realm.RedeemCanonicalSourceChild(ctx, issuer, current, child)
 	if err != nil {
 		return none, noPolicy, noChild, noSession, err
 	}
+	stage = "redeemed_checks"
 	if _, err = issuer.ObserveCanonicalSourceCompensation(ctx, current, child.GrantID); err == nil {
 		return none, noPolicy, noChild, noSession, q.ErrOriginalUnknown
 	}
