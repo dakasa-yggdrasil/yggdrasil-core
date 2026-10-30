@@ -7,9 +7,10 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 168112c4ed8b92e959714254002fb3a69b16d4fd
-verified_diff_sha256: 83c807efdd5a327a79d3ac6cbe4f92236888b894fa72121e55ff840e384221e7
+verified_at_commit: a4cc4de86b629fdf7097aa055db97e02d763d180
+verified_diff_sha256: 34059cdcf413a7637e0c8723e55f3d67a12140378693c46f2b11116fa62c4a86
 reconciler_schema: 1
+source_terminal_physical_wire_review: Qualification-only decoder accepts the original nil action list with closed validation and original wire/hash, and retains only closed terminal failure stages. Independent static review completed; Linux and original Source cases remain required.
 source_live_failure_returns_review: Live-partial and historical Source failures preserve closed caller returns without changing original error or granting authority. Source review completed; Linux and owning CI remain required.
 source_terminal_failure_returns_review: The Source terminal caller preserves closed public return diagnostics only on failure and leaves the original outcome unchanged. Source review completed; Linux and owning CI remain required.
 source_contract_failure_returns_review: Source-only fence and recovery failures retain the existing closed public return projection without changing the original error or publishing success. Source review completed; Linux testing and owning CI remain required.
