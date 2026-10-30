@@ -39,6 +39,19 @@ jobs:
           passed={row['Test'] for row in rows if row.get('Action')=='pass' and row.get('Test')}
           if required-passed or any(row.get('Action') in ('skip','fail','build-fail') for row in rows):raise SystemExit('closed floor diagnostic census failed')
           PYCENSUS
+      - name: Verify original failed floor preparation guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -tags=nativequalification -json ./internal/capacitynativeqemu -run '^TestSourceFailureCleanupPreparationStages$' | tee "$RUNNER_TEMP/floor-prepare-test.jsonl"
+          python3 - <<'PYCENSUS'
+          import json,os
+          rows=[json.loads(line) for line in open(os.environ['RUNNER_TEMP']+'/floor-prepare-test.jsonl') if line.strip()]
+          root='TestSourceFailureCleanupPreparationStages'
+          required={root}|{root+'/'+name for name in ('input','foreign_case','native_owners_missing')}
+          passed={row['Test'] for row in rows if row.get('Action')=='pass' and row.get('Test')}
+          if required-passed or any(row.get('Action') in ('skip','fail','build-fail') for row in rows):raise SystemExit('floor preparation diagnostic census failed')
+          PYCENSUS
       - name: Actual original provider source contracts and default refusal
         shell: bash
         run: |
