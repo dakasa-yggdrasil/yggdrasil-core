@@ -7,9 +7,10 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: f490d977ce0a7f7970628880816dc9539819ea43
-verified_diff_sha256: 5a61bf54ad13a3f104c4d07fc20b9ac5b29c663afd785c129b73cd04a37869b5
+verified_at_commit: 4b6f5926776d6163b605693483b864b97ce0a28e
+verified_diff_sha256: f4664a3616b529190ad74644d384ed88e360900733986fa7fb6246faf8841017
 reconciler_schema: 1
+source_terminal_failure_returns_review: The Source terminal caller preserves closed public return diagnostics only on failure and leaves the original outcome unchanged. Source review completed; Linux and owning CI remain required.
 source_contract_failure_returns_review: Source-only fence and recovery failures retain the existing closed public return projection without changing the original error or publishing success. Source review completed; Linux testing and owning CI remain required.
 constant_allocation_and_settlement_digest_review: Reviewed a constant initial page allocation and separate settlement-token digest retaining the original JSON-string SHA256 wire; focused Linux race tests passed. Token entropy is not established, the native power adapter is not operational, and owning CI remains required.
 ci_security_and_pending_selection_review: Reviewed credential-reference error redaction, bounded allocation hints and frame sizing, and the qualification-only pending selection test. Focused Linux LAB tests passed; full selector, QEMU and owning CI remain required.
