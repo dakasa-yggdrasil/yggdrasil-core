@@ -1,0 +1,4 @@
+name: dakasa/go-security-queries
+version: 1.0.0
+dependencies:
+  codeql/go-all: 8.0.1
