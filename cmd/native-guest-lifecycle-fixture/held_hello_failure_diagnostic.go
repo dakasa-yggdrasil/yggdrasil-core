@@ -16,7 +16,7 @@ func (f *fixture) retainHeldHelloFailure(ctx context.Context, stage string, runE
 		return
 	}
 	switch stage {
-	case "begin", "preregistration", "witness", "source_client", "source_refusal", "source_refusal_pending", "source_refusal_transport", "source_refusal_status", "source_refusal_validate", "source_refusal_record", "source_refusal_publish", "fresh_native", "creator_hash", "native_publish", "native_preregistration", "native_record", "baseline_client", "baseline_probe", "retirement_count", "destroy_count", "corpus", "corpus_publish":
+	case "begin", "preregistration", "witness", "source_client", "source_refusal", "source_refusal_pending", "source_refusal_transport", "source_refusal_status", "source_refusal_validate", "source_refusal_decode", "source_refusal_identity", "source_refusal_signature", "source_refusal_owners", "source_refusal_probe", "source_refusal_journal", "source_refusal_case", "source_refusal_census", "source_refusal_record", "source_refusal_publish", "fresh_native", "creator_hash", "native_publish", "native_preregistration", "native_record", "baseline_client", "baseline_probe", "retirement_count", "destroy_count", "corpus", "corpus_publish":
 	default:
 		return
 	}

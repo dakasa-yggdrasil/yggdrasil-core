@@ -59,7 +59,17 @@ func (f *fixture) finishExpectedOriginalHold(ctx context.Context, p model.Capaci
 		cancel()
 		if callErr == nil && returned.Status == http.StatusOK {
 			stage = "source_refusal_validate"
-			if capacity.GuestOriginalHTTPDecode(returned, &record) != nil || f.realm.ValidateOriginalFailure(record, pre, witness, f.binding.ProvisionerPublicKey, returned.DriverReturnedAt) != nil {
+			if capacity.GuestOriginalHTTPDecode(returned, &record) != nil {
+				stage = "source_refusal_decode"
+				return q.ErrOriginalUnknown
+			}
+			if f.request.NativeCase == "held_hello_original_deadline" {
+				label, validationErr := f.realm.ValidateOriginalFailureClassified(record, pre, witness, f.binding.ProvisionerPublicKey, returned.DriverReturnedAt)
+				if validationErr != nil {
+					stage = label
+					return q.ErrOriginalUnknown
+				}
+			} else if f.realm.ValidateOriginalFailure(record, pre, witness, f.binding.ProvisionerPublicKey, returned.DriverReturnedAt) != nil {
 				return q.ErrOriginalUnknown
 			}
 			raw = returned.Body

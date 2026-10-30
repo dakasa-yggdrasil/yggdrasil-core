@@ -85,13 +85,20 @@ type QualificationFailureRecord struct {
 // A failed owner diagnostic proves its authentic partial returns only. It
 // never supplies enrollment/noStart/quiescence or poweroff/delete authority.
 func (r *Realm) ValidateOriginalFailure(record QualificationFailureRecord, pre model.CapacityGuestOriginalProvisioningPreregistration, witness model.CapacityGuestOriginalCreateWitness, producerPublic string, now time.Time) error {
+	_, err := r.ValidateOriginalFailureClassified(record, pre, witness, producerPublic, now)
+	return err
+}
+
+// ValidateOriginalFailureClassified identifies only the failed closed guard group.
+// Labels describe the same refusal and never authorize or retain the record.
+func (r *Realm) ValidateOriginalFailureClassified(record QualificationFailureRecord, pre model.CapacityGuestOriginalProvisioningPreregistration, witness model.CapacityGuestOriginalCreateWitness, producerPublic string, now time.Time) (string, error) {
 	if PositiveCase(r.Request.NativeCase) || record.Schema != "original_qualification_failed_owner_returns_v1" || record.NativeCase != r.Request.NativeCase || record.SourceCommit != r.Request.SourceCommit || record.Scope != "failed_original_owners_diagnostic_not_capacity_admission_or_quiescence" || record.Phase == "" || record.Tuple != witness.Tuple || record.PreregistrationID != pre.PreregistrationID || record.OriginalCreateWitnessSHA256 != capacity.GuestRetirementSHA(witness) || !record.OriginalProvisioningDeadline.Equal(pre.OriginalDeadline) || record.OriginalOperationDeadline.IsZero() || record.OriginalOperationDeadline.After(r.Request.OriginalContextDeadline) || record.Runtime.PID < 2 || record.Runtime.StartTicks < 1 || record.Runtime.SourceCommit != r.Request.SourceCommit || record.Runtime.BinarySHA256 != r.Profile.OwnerBinarySHA256 || record.OriginalChild.PID < 2 || record.OriginalChild.StartTicks < 1 || record.OriginalStartCalledAt.Before(witness.ObservedAt) || record.OriginalStartReturnedAt.Before(record.OriginalStartCalledAt) || record.RecordedAt.After(now) || record.RecordedAt.Before(record.OriginalStartReturnedAt) || record.ProducerPublicKey != producerPublic || record.OriginalExitCode == nil {
-		return ErrOriginalUnknown
+		return "source_refusal_identity", ErrOriginalUnknown
 	}
 	signature := record.Signature
 	record.Signature = ""
 	if !verifySignature(producerPublic, signature, record) {
-		return ErrOriginalUnknown
+		return "source_refusal_signature", ErrOriginalUnknown
 	}
 	facts := []QualificationFailedOwnerReturn{record.OriginalWait, record.OriginalOutputEOFAndClose, record.OriginalDiagnosticEOFAndClose}
 	if record.OriginalProbeRead != nil {
@@ -99,22 +106,22 @@ func (r *Realm) ValidateOriginalFailure(record QualificationFailureRecord, pre m
 	}
 	for _, fact := range facts {
 		if fact.OriginalReturnedAt.IsZero() || fact.OriginalReturnedAt.Before(record.OriginalStartReturnedAt) || fact.OriginalReturnedAt.After(record.RecordedAt) || !validSHA(fact.OriginalBodySHA256) || fact.OriginalBodyBytes < 0 || fact.OriginalBodyBytes > capacity.GuestBootstrapLimit || (fact.ErrorClass != "none" && fact.ErrorClass != "original_owner_error") {
-			return ErrOriginalUnknown
+			return "source_refusal_owners", ErrOriginalUnknown
 		}
 	}
 	if r.Request.NativeCase == "cancelled_probe_original_join" && record.OriginalProbeRead == nil {
-		return ErrOriginalUnknown
+		return "source_refusal_probe", ErrOriginalUnknown
 	}
-	if err := validateOriginalFailureCase(record); err != nil {
-		return err
+	if stage, err := validateOriginalFailureCaseClassified(record); err != nil {
+		return stage, err
 	}
 	if record.CensusAfter == nil && record.NativeCensusErrorClass != "original_census_error" {
-		return ErrOriginalUnknown
+		return "source_refusal_census", ErrOriginalUnknown
 	}
 	if record.CensusAfter != nil && record.NativeCensusErrorClass != "" {
-		return ErrOriginalUnknown
+		return "source_refusal_census", ErrOriginalUnknown
 	}
-	return nil
+	return "", nil
 }
 
 func (r *Realm) OriginalPreregistration(slot int) (model.CapacityGuestOriginalProvisioningPreregistration, error) {
