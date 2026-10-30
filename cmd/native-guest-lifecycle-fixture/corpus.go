@@ -22,19 +22,24 @@ func (f *fixture) sourceClient(slot int) (*capacity.GuestOriginalHTTPClient, err
 	}
 	return nil, q.ErrOriginalUnknown
 }
-func (f *fixture) finishExpectedOriginalHold(ctx context.Context, p model.CapacityPolicySpec, baseline, burst model.WorkflowRunRecord, runIDs []string, returns []originalPublicReturn) error {
+func (f *fixture) finishExpectedOriginalHold(ctx context.Context, p model.CapacityPolicySpec, baseline, burst model.WorkflowRunRecord, runIDs []string, returns []originalPublicReturn) (runErr error) {
+	stage := "begin"
+	defer func() { f.retainHeldHelloFailure(ctx, stage, &runErr) }()
 	if q.PositiveCase(f.request.NativeCase) || baseline.Status != "succeeded" || burst.Status != "failed" {
 		return q.ErrOriginalUnknown
 	}
+	stage = "preregistration"
 	pre, err := f.realm.OriginalPreregistration(2)
 	if err != nil {
 		return err
 	}
+	stage = "witness"
 	var witness model.CapacityGuestOriginalCreateWitness
 	var witnessWire []byte
 	if err = f.db.QueryRowContext(ctx, `SELECT original_wire FROM public.capacity_guest_original_create_witnesses WHERE preregistration_id=$1`, pre.PreregistrationID).Scan(&witnessWire); err != nil || capacity.DecodeGuestLifecycle(witnessWire, &witness) != nil {
 		return q.ErrOriginalUnknown
 	}
+	stage = "source_client"
 	client, err := f.sourceClient(2)
 	if err != nil {
 		return err
@@ -47,16 +52,25 @@ func (f *fixture) finishExpectedOriginalHold(ctx context.Context, p model.Capaci
 	// Failed workflow/expired lease does not close a child owner. Keep the
 	// SAME original 600 context and read its signed diagnostic after Wait and
 	// both EOF/Close owners actually return, possibly after its 420 deadline.
+	stage = "source_refusal"
 	for {
 		read, cancel := context.WithTimeout(ctx, 5*time.Second)
 		returned, callErr := client.Original(read, http.MethodGet, "/v1/qualification-source-refusal", []byte("{}"))
 		cancel()
 		if callErr == nil && returned.Status == http.StatusOK {
+			stage = "source_refusal_validate"
 			if capacity.GuestOriginalHTTPDecode(returned, &record) != nil || f.realm.ValidateOriginalFailure(record, pre, witness, f.binding.ProvisionerPublicKey, returned.DriverReturnedAt) != nil {
 				return q.ErrOriginalUnknown
 			}
 			raw = returned.Body
 			break
+		}
+		if callErr != nil {
+			stage = "source_refusal_transport"
+		} else if returned.Status == http.StatusConflict {
+			stage = "source_refusal_pending"
+		} else {
+			stage = "source_refusal_status"
 		}
 		if returned.Status != http.StatusConflict && callErr == nil {
 			return q.ErrOriginalUnknown
@@ -68,38 +82,47 @@ func (f *fixture) finishExpectedOriginalHold(ctx context.Context, p model.Capaci
 		}
 	}
 	store := repository.CapacityStore{DB: f.db, WorkflowID: f.workflow.ID}
+	stage = "source_refusal_record"
 	if err = store.RecordGuestQualificationSourceReturn(ctx, pre.PreregistrationID, "source_refusal", raw); err != nil {
 		return err
 	}
+	stage = "source_refusal_publish"
 	if _, err = q.PublishBytes(ctx, filepath.Join(q.SlotDirectory(f.private, 2), "core-original-failed-owner-diagnostic.json"), raw); err != nil {
 		return err
 	}
 	for slot := 1; slot <= 2; slot++ {
+		stage = "fresh_native"
 		fresh, err := f.realm.FreshOriginalNative(ctx, slot)
 		if err != nil {
 			return err
 		}
+		stage = "creator_hash"
 		fresh.OriginalCreatorSHA256, err = q.FileSHA(ctx, filepath.Join(q.SlotDirectory(f.private, slot), "creator-original.json"), 2<<20)
 		if err != nil {
 			return err
 		}
+		stage = "native_publish"
 		freshWire, publishErr := q.Publish(ctx, filepath.Join(q.SlotDirectory(f.private, slot), "core-original-expected-hold-native-alive.json"), fresh)
 		if publishErr != nil {
 			return publishErr
 		}
+		stage = "native_preregistration"
 		originalPre, loadErr := f.realm.OriginalPreregistration(slot)
 		if loadErr != nil {
 			return loadErr
 		}
+		stage = "native_record"
 		if err = store.RecordGuestQualificationSourceReturn(ctx, originalPre.PreregistrationID, "diagnostic_native_read", freshWire); err != nil {
 			return err
 		}
 	}
+	stage = "baseline_client"
 	baselineClient, err := f.sourceClient(1)
 	if err != nil {
 		return err
 	}
 	defer baselineClient.Close()
+	stage = "baseline_probe"
 	useful, err := f.realm.DiagnosticProbe(ctx, store, 1, f.corePrivate, baselineClient)
 	if err != nil {
 		return err
@@ -107,12 +130,15 @@ func (f *fixture) finishExpectedOriginalHold(ctx context.Context, p model.Capaci
 	// Diagnostic echo remains observational. It cannot refresh the failed
 	// epoch's capacity phase, useful-floor row, admission, grant or noStart.
 	var forbidden int
+	stage = "retirement_count"
 	if err = f.db.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_vm_retirement_intents WHERE preregistration_id=$1`, pre.PreregistrationID).Scan(&forbidden); err != nil || (f.request.NativeCase == "held_ack_after_owned_original_deadline" && forbidden != 1) || (f.request.NativeCase != "held_ack_after_owned_original_deadline" && forbidden != 0) {
 		return q.ErrOriginalUnknown
 	}
+	stage = "destroy_count"
 	if err = f.db.QueryRowContext(ctx, `SELECT count(*) FROM public.capacity_mutation_grants WHERE grant_record->>'policy_id'=$1 AND grant_record->'grant'->>'capability'='destroy_server'`, f.policy.ID.String()).Scan(&forbidden); err != nil || forbidden != 0 {
 		return q.ErrOriginalUnknown
 	}
+	stage = "corpus"
 	corpus, err := f.originalCorpus(ctx, runIDs)
 	if err != nil {
 		return err
@@ -127,6 +153,7 @@ func (f *fixture) finishExpectedOriginalHold(ctx context.Context, p model.Capaci
 		corpus.FailedRetirementAttempt = failed
 	}
 	corpus.BaselineServingProbeSHA256 = capacity.GuestRetirementSHA(useful)
+	stage = "corpus_publish"
 	return f.retainOriginalCorpus(ctx, corpus, returns)
 }
 
