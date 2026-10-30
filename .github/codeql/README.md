@@ -19,3 +19,9 @@ change is the narrowly scoped barrier described above. When upgrading CodeQL,
 compare the upstream query and its library dependency with this copy, update
 them together as needed, and verify direct-password, raw-reference,
 other-caller and shared-sink positive controls before adoption.
+
+If this repository-specific configuration fails to load, unset the
+`github-codeql-config-file` property for this repository to restore the default
+suite; do not disable default setup. Verify a new managed main-branch scan and
+its open alerts before relying on pull-request comparisons. Keep the organization
+property's default unset so other repositories retain their own configuration.
