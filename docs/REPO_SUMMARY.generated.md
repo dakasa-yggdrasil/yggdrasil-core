@@ -1,6 +1,6 @@
 # Repo Summary (generated)
 
-_Generated from HEAD at: 2026-10-30T02:21:30-03:00_
+_Generated from HEAD at: 2026-10-30T02:24:06-03:00_
 
 ## Languages
 
@@ -33,7 +33,7 @@ _Generated from HEAD at: 2026-10-30T02:21:30-03:00_
 - manifest: 65 files (397.9 KB)
 - addons: 50 files (288.7 KB)
 - internal/capacitynativeqemu: 47 files (297.9 KB)
-- cmd/native-guest-lifecycle-fixture: 28 files (249.5 KB)
+- cmd/native-guest-lifecycle-fixture: 28 files (249.7 KB)
 - docs/bootstrap/manifests/integrations: 28 files (98.6 KB)
 - controllers/oidc: 25 files (210.8 KB)
 
