@@ -1,4 +1,4 @@
-name: Isolated CodeQL reference barrier focused experiment
+name: Isolated CodeQL full suite equivalence experiment
 on:
   push:
     branches: ['elastic/codeql-evidence-diagnostic-20261030']
@@ -16,33 +16,35 @@ jobs:
         with:
           go-version-file: go.mod
       - id: setup
-        uses: github/codeql-action/setup-codeql@v3
+        uses: github/codeql-action/setup-codeql@v4
         with:
           languages: go
-      - name: Build focused CodeQL database from exact diagnostic commit
+      - name: Build database with test configuration
         env:
           CODEQL_BIN: ${{ steps.setup.outputs.codeql-path }}
           GOMAXPROCS: '2'
         run: |
           set -euo pipefail
           "$CODEQL_BIN" version
-          "$CODEQL_BIN" database create "$RUNNER_TEMP/codeql-db" --language=go --source-root=. --command='go build -p 2 ./internal/controlplane'
-      - name: Analyze original and reference-only barrier
+          (cd .github/codeql-research && "$CODEQL_BIN" pack install)
+          "$CODEQL_BIN" database create "$RUNNER_TEMP/codeql-db" --language=go --source-root=. --codescanning-config=.github/codeql-research/codeql-config-research.yml --command='go build -p 2 ./...'
+      - name: Analyze default and candidate full Go suites
         env:
           CODEQL_BIN: ${{ steps.setup.outputs.codeql-path }}
         run: |
           set -euo pipefail
-          cd .github/codeql-research
-          "$CODEQL_BIN" pack install
-          "$CODEQL_BIN" database analyze "$RUNNER_TEMP/codeql-db" original.ql --format=sarif-latest --output="$RUNNER_TEMP/original.sarif" --threads=2
-          "$CODEQL_BIN" database analyze "$RUNNER_TEMP/codeql-db" narrow.ql --format=sarif-latest --output="$RUNNER_TEMP/narrow.sarif" --threads=2
-      - name: Check positive and negative paths
-        run: python3 .github/codeql-research/verify.py "$RUNNER_TEMP/original.sarif" "$RUNNER_TEMP/narrow.sarif"
+          "$CODEQL_BIN" database analyze "$RUNNER_TEMP/codeql-db" codeql/go-queries:codeql-suites/go-code-scanning.qls --format=sarif-latest --output="$RUNNER_TEMP/original.sarif" --threads=2
+          "$CODEQL_BIN" database analyze "$RUNNER_TEMP/codeql-db" --format=sarif-latest --output="$RUNNER_TEMP/narrow.sarif" --threads=2
+      - name: Compare query sets, other findings, and positive and negative controls
+        run: |
+          set -euo pipefail
+          python3 .github/codeql-research/compare_suites.py "$RUNNER_TEMP/original.sarif" "$RUNNER_TEMP/narrow.sarif"
+          python3 .github/codeql-research/verify.py "$RUNNER_TEMP/original.sarif" "$RUNNER_TEMP/narrow.sarif"
       - name: Preserve reports
         if: always()
         uses: actions/upload-artifact@v4
         with:
-          name: codeql-research-reports
+          name: codeql-suite-equivalence-reports
           path: |
             ${{ runner.temp }}/original.sarif
             ${{ runner.temp }}/narrow.sarif

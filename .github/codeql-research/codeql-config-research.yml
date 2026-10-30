@@ -1,0 +1,6 @@
+# Research only. This file is not installed in repository or org properties.
+queries:
+  - uses: ./.github/codeql-research/narrow.ql
+query-filters:
+  - exclude:
+      id: go/weak-sensitive-data-hashing
