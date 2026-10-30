@@ -7,9 +7,10 @@ The docs-freshness CI reads it: a PR that bumps it is trusted and the AI is skip
 Before a PR: update stale docs, set verified_at_commit to your branch tip.
 On arrival: if this is behind the code you touch, reconcile the docs FIRST.
 
-verified_at_commit: 7d65ec9f8984c52d6598943b85607b7d6102b1d1
-verified_diff_sha256: a6ef2f937ca024d40ff157a9b72a53a3a4b874279331f102609b1234edab9426
+verified_at_commit: 7cc51e02ddfe8051e3f9b4c33fa6c5c5eb1c108f
+verified_diff_sha256: 552f40e56322edfa6dcbbd683255bce22185472433116e869c9cb0a50082b89c
 reconciler_schema: 1
+constant_allocation_and_settlement_digest_review: Reviewed a constant initial page allocation and separate settlement-token digest retaining the original JSON-string SHA256 wire; focused Linux race tests passed. Token entropy is not established, the native power adapter is not operational, and owning CI remains required.
 ci_security_and_pending_selection_review: Reviewed credential-reference error redaction, bounded allocation hints and frame sizing, and the qualification-only pending selection test. Focused Linux LAB tests passed; full selector, QEMU and owning CI remain required.
 directory_private_response_and_original_output_review: Directory machine responses remain non-cacheable and retain ADR-0019 precedence; normal Guest provisioning returns its original evidence instead of a shadowed value. Independent review and focused Linux race tests passed; positive native QEMU and owning CI remain required.
 qualification_source_cleanup_execution_review: The original qualification-only cleanup store reads the same execution flag as the controller and preserves all live policy, fence, owner and lease checks. Independent review and focused Linux LAB tests passed; original QEMU and owning CI remain required.
