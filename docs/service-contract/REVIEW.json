@@ -928,5 +928,10 @@
     "scope": "Failure-only native qualification diagnostic observes bounded historical authority transport with closed fields; missing evidence remains UNKNOWN and cannot grant authority. Previously reviewed; exact diagnostic CI required.",
     "source_inventory_sha256": "50456b8dc0500c48e4ddc6c3865ccdb741d78a2d3d2579b4c4e5d6d96694dc1a",
     "production_or_native_qualification": false
+  },
+  "qualification_snapshot_failure_observation_20261030": {
+    "scope": "Qualification-only snapshot guard emits a closed stage on the original conflict without retrying the transaction; production headers and original predicates remain unchanged. Independent source review completed; focused and physical CI remain required.",
+    "source_inventory_sha256": "7fde246ec2eee098ededfaef3c9276ff6bdd958706e279f67a1b276d4cc5cc27",
+    "production_or_native_qualification": false
   }
 }

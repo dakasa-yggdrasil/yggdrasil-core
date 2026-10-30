@@ -12,7 +12,7 @@
   "source_inventory": {
     "id": "complete_runtime_source_census",
     "evidence": "docs/service-contract/source/sources.json",
-    "sha256": "50456b8dc0500c48e4ddc6c3865ccdb741d78a2d3d2579b4c4e5d6d96694dc1a"
+    "sha256": "7fde246ec2eee098ededfaef3c9276ff6bdd958706e279f67a1b276d4cc5cc27"
   },
   "produces": [
     {
@@ -55,7 +55,7 @@
     {
       "id": "independent_source_review",
       "evidence": "docs/service-contract/REVIEW.json",
-      "sha256": "125f4d4eeddd709bff1db208b42303fff4c069994e5f72bca77a9f0fa426ac93"
+      "sha256": "ae63152ec6d273df1b332e951b762382d050dd2c850f536acbf8bc763a9dc4b4"
     }
   ],
   "callsREST": [
@@ -84,7 +84,7 @@
     {
       "id": "pre_mux_capacity_dispatch",
       "evidence": "docs/service-contract/source/http-intercept-dispatch.json",
-      "sha256": "37993f131ec0f198503900b566447600132de1f2526e1459601d14310557a54d"
+      "sha256": "bc983a359fc2a8ca148248bccd7aaa3bbc3078a34e9aebe2cb8db0e42df41e77"
     },
     {
       "id": "auth_dispatch_source_functions",

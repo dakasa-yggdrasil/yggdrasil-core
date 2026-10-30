@@ -3,15 +3,43 @@
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_guest.go",
+      "function": "serveGuestOriginalAuthority",
+      "line": 420,
+      "predicate": "retainedErr != nil"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_guest.go",
+      "function": "serveGuestOriginalAuthority",
+      "line": 422,
+      "predicate": "err != nil"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_guest.go",
+      "function": "serveGuestOriginalAuthority",
+      "line": 424,
+      "predicate": "capacity.GuestOriginalHTTPDecode(returned, &snapshot) != nil"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_guest.go",
+      "function": "serveGuestOriginalAuthority",
+      "line": 426,
+      "predicate": "store.RecordGuestSnapshot(ctx, read, snapshot) != nil"
+    },
+    {
+      "build_constraint": "default",
+      "file": "controllers/httpapi/capacity_guest.go",
       "function": "guestHTTPError",
-      "line": 462,
+      "line": 474,
       "predicate": "errors.Is(err, repository.ErrCapacityMutationAuthorization), errors.Is(err, sql.ErrNoRows)"
     },
     {
       "build_constraint": "default",
       "file": "controllers/httpapi/capacity_guest.go",
       "function": "guestHTTPError",
-      "line": 464,
+      "line": 476,
       "predicate": "errors.Is(err, repository.ErrCapacityConflict), errors.Is(err, repository.ErrCapacityLease), errors.Is(err, repository.ErrCapacityDisabled)"
     },
     {
