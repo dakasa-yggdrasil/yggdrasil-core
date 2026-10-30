@@ -1,6 +1,6 @@
 {
   "schema_version": 2,
-  "generated_at": "2026-10-30T05:47:05-03:00",
+  "generated_at": "2026-10-30T10:59:28-03:00",
   "primary_language": "go",
   "languages": {
     ".go": 1397,
@@ -8,10 +8,10 @@
     ".py": 16,
     ".sql": 82,
     ".yaml": 11,
-    ".yml": 32
+    ".yml": 34
   },
   "provenance": {
-    "commit": "9ab2d0f451a0b03b0dc48006dbe8cde801e95978",
+    "commit": "43ff828f3f9ad2f2e12e8a1dba6432172afee649",
     "dirty": true,
     "files": [
       {
@@ -20,7 +20,7 @@
       },
       {
         "path": "docs/SERVICE_CONTRACT.yaml",
-        "sha256": "e01d8cce8d36f00af561dc16c8f4d6b11f2217eb663ffd38c0b2290b6ffe4ec2"
+        "sha256": "b09e1e157f19871f6831a4e8ee1f3e2ed8f4b333892fe07881f6b7b7f4257a66"
       },
       {
         "path": "AGENTS.md",
@@ -66,7 +66,7 @@
     {
       "path": "repository",
       "files": 319,
-      "kb": 3957
+      "kb": 3958
     },
     {
       "path": "controllers/httpapi",
@@ -106,7 +106,7 @@
     {
       "path": "internal/capacitynativeqemu",
       "files": 47,
-      "kb": 297
+      "kb": 298
     },
     {
       "path": "cmd/native-guest-lifecycle-fixture",
@@ -311,7 +311,7 @@
     ]
   },
   "ops": {
-    "config_files": 16,
-    "k8s_manifests": 16
+    "config_files": 18,
+    "k8s_manifests": 18
   }
 }
