@@ -26,6 +26,19 @@ jobs:
       - uses: actions/setup-go@v5
         with:
           go-version-file: go.mod
+      - name: Verify closed original authority transport diagnostic
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -tags=nativequalification -json ./repository -run '^TestOriginalAuthorityTransportFailureDiagnostic$' | tee "$RUNNER_TEMP/authority-corpus-diagnostic.jsonl"
+          python3 - <<'PYCENSUS'
+          import json,os
+          rows=[json.loads(line) for line in open(os.environ['RUNNER_TEMP']+'/authority-corpus-diagnostic.jsonl') if line.strip()]
+          root='TestOriginalAuthorityTransportFailureDiagnostic'
+          required={root}|{root+'/'+name for name in ('valid','sql_inconsistent','wire_digest','wire_decode','reply_absent','reply_changed','read_binding','stage_binding','clock')}
+          passed={row['Test'] for row in rows if row.get('Action')=='pass' and row.get('Test')}
+          if required-passed or any(row.get('Action') in ('skip','fail','build-fail') for row in rows):raise SystemExit('authority corpus diagnostic census failed')
+          PYCENSUS
       - name: Actual original provider source contracts and default refusal
         shell: bash
         run: |
