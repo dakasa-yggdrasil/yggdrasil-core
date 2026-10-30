@@ -52,9 +52,12 @@ func TestStartupAuthorityDiagnostic(t *testing.T) {
 			}
 			f := &fixture{db: db, private: t.TempDir()}
 			f.request.NativeCase = "actor_startup_delay_positive"
+			if mode == "recorded" || mode == "wrong_digest" {
+				f.request.NativeCase = "positive_original_lifecycle"
+			}
 			status := "failed"
 			if mode == "other_case" {
-				f.request.NativeCase = "positive_original_lifecycle"
+				f.request.NativeCase = "held_hello_original_deadline"
 			}
 			if mode == "success" {
 				status = "succeeded"

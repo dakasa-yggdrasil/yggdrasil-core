@@ -55,7 +55,7 @@ func startupOriginalTransport(raw []byte, digest, readID, stage string) (startup
 // A bounded diagnostic read after a failed workflow; it never grants authority
 // and absence means only that a row was not visible in this observation.
 func (f *fixture) retainStartupAuthorityDiagnostic(ctx context.Context, preregistrationID, retirementStatus string) {
-	if f.request.NativeCase != "actor_startup_delay_positive" || retirementStatus != "failed" || f.db == nil || preregistrationID == "" {
+	if (f.request.NativeCase != "actor_startup_delay_positive" && f.request.NativeCase != "positive_original_lifecycle") || retirementStatus != "failed" || f.db == nil || preregistrationID == "" {
 		return
 	}
 	diagnostic, cancel := context.WithTimeout(ctx, 2*time.Second)
