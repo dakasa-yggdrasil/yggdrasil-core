@@ -1,0 +1,7 @@
+# The configuration and query must both be fetched from a protected tag.
+# A pull request must not be able to change the scanner that evaluates it.
+queries:
+  - uses: dakasa-yggdrasil/yggdrasil-core/.github/codeql/queries/public-secret-name.ql@codeql-r1
+query-filters:
+  - exclude:
+      id: go/weak-sensitive-data-hashing
