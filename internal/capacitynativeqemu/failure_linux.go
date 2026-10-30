@@ -60,6 +60,7 @@ type QualificationFailureRecord struct {
 	OriginalCreateWitnessSHA256   string                                        `json:"original_create_witness_sha256"`
 	OriginalProvisioningDeadline  time.Time                                     `json:"original_provisioning_deadline"`
 	OriginalOperationDeadline     time.Time                                     `json:"original_operation_deadline"`
+	OriginalProbeChallengeSHA256  string                                        `json:"original_probe_challenge_sha256,omitempty"`
 	Runtime                       model.CapacityGuestRetirementLifetime         `json:"runtime"`
 	OriginalChild                 model.CapacityGuestRetirementNativeProcess    `json:"original_child"`
 	OriginalStartCalledAt         time.Time                                     `json:"original_start_called_at"`

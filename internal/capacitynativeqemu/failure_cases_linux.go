@@ -28,11 +28,11 @@ func validateOriginalFailureCase(record QualificationFailureRecord) error {
 			return ErrOriginalUnknown
 		}
 	case "held_probe_body_original_deadline":
-		if record.Phase != "original_probe_held" || !late || j.LastSequence != 6 || j.LastState != "admitted" || !validSHA(j.EnrollmentSHA256) || !j.AdmissionPossible || !j.AdmissionWriteReturned {
+		if record.Phase != "original_probe_held" || !validSHA(record.OriginalProbeChallengeSHA256) || !late || j.LastSequence != 6 || j.LastState != "admitted" || !validSHA(j.EnrollmentSHA256) || !j.AdmissionPossible || !j.AdmissionWriteReturned {
 			return ErrOriginalUnknown
 		}
 	case "cancelled_probe_original_join":
-		if record.Phase != "original_probe_held" || record.OriginalProbeRead == nil || record.OriginalProbeRead.ErrorClass != "none" || record.OriginalProbeRead.OriginalBodyBytes == 0 || !record.OriginalProbeRead.OriginalReturnedAt.Before(record.OriginalOperationDeadline) || record.OriginalWait.OriginalReturnedAt.Before(record.OriginalProbeRead.OriginalReturnedAt) || !record.OriginalWait.OriginalReturnedAt.Before(record.OriginalOperationDeadline) || j.LastSequence != 6 || j.LastState != "admitted" || !validSHA(j.EnrollmentSHA256) || !j.AdmissionPossible || !j.AdmissionWriteReturned {
+		if record.Phase != "original_probe_held" || !validSHA(record.OriginalProbeChallengeSHA256) || record.OriginalProbeRead == nil || record.OriginalProbeRead.ErrorClass != "none" || record.OriginalProbeRead.OriginalBodyBytes == 0 || !record.OriginalProbeRead.OriginalReturnedAt.Before(record.OriginalOperationDeadline) || record.OriginalWait.OriginalReturnedAt.Before(record.OriginalProbeRead.OriginalReturnedAt) || !record.OriginalWait.OriginalReturnedAt.Before(record.OriginalOperationDeadline) || j.LastSequence != 6 || j.LastState != "admitted" || !validSHA(j.EnrollmentSHA256) || !j.AdmissionPossible || !j.AdmissionWriteReturned {
 			return ErrOriginalUnknown
 		}
 	case "canonical_postloss_unprotected_failed_create_reissue", "canonical_postloss_protected_failed_create_reissue", "canonical_compensation_unprotected_failed_create", "canonical_compensation_protected_failed_create", "canonical_failed_floor_recovery", "failed_owner_after_enrollment", "compensation_unprotected_failed_create", "compensation_protected_failed_create", "source_live_failed_floor_recovery":

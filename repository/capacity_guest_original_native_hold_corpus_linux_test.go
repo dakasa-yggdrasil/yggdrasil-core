@@ -4,7 +4,9 @@ package repository_test
 
 import (
 	"context"
+	"crypto/ed25519"
 	"database/sql"
+	"encoding/base64"
 	"encoding/json"
 	"os"
 	"path/filepath"
@@ -18,6 +20,65 @@ import (
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/repository"
 )
+
+// The signed diagnostic reports the writer's effective monotonic-derived
+// context deadline. It is not the Core wall-clock deadline of the challenge.
+func guestOriginalHoldChallengeBinding(failure q.QualificationFailureRecord, challenge q.QualificationProbeChallenge) bool {
+	return capacity.ValidDigest(failure.OriginalProbeChallengeSHA256) && !failure.OriginalOperationDeadline.IsZero() && capacity.GuestRetirementSHA(challenge) == failure.OriginalProbeChallengeSHA256
+}
+
+func guestOriginalHoldCancelledProbeTiming(failure q.QualificationFailureRecord) bool {
+	probe := failure.OriginalProbeRead
+	return probe != nil && probe.ErrorClass == "none" && probe.OriginalReturnedAt.Before(failure.OriginalOperationDeadline) && !failure.OriginalWait.OriginalReturnedAt.Before(probe.OriginalReturnedAt) && !failure.OriginalOutputEOFAndClose.OriginalReturnedAt.Before(probe.OriginalReturnedAt) && failure.OriginalWait.OriginalReturnedAt.Before(failure.OriginalOperationDeadline) && failure.OriginalOutputEOFAndClose.OriginalReturnedAt.Before(failure.OriginalOperationDeadline)
+}
+
+func TestGuestOriginalHoldChallengeBinding(t *testing.T) {
+	issued := time.Date(2026, 1, 1, 0, 0, 0, 0, time.UTC)
+	challenge := q.QualificationProbeChallenge{IssuedAt: issued, OriginalDeadline: issued.Add(5 * time.Second)}
+	failure := q.QualificationFailureRecord{OriginalProbeChallengeSHA256: capacity.GuestRetirementSHA(challenge), OriginalOperationDeadline: issued.Add(7 * time.Second)}
+	if !guestOriginalHoldChallengeBinding(failure, challenge) {
+		t.Fatal("the authenticated challenge and distinct actual deadline must bind")
+	}
+	// Guest timestamps can precede Core wall-clock issuance when clocks differ;
+	// the signed hash and in-process order bind the challenge, not wall clocks.
+	failure.OriginalOperationDeadline = issued.Add(-time.Second)
+	failure.OriginalProbeRead = &q.QualificationFailedOwnerReturn{OriginalReturnedAt: issued.Add(-3 * time.Second), ErrorClass: "none"}
+	failure.OriginalWait.OriginalReturnedAt = issued.Add(-2 * time.Second)
+	failure.OriginalOutputEOFAndClose.OriginalReturnedAt = issued.Add(-2 * time.Second)
+	if !guestOriginalHoldChallengeBinding(failure, challenge) || !guestOriginalHoldCancelledProbeTiming(failure) {
+		t.Fatal("independent clock offsets replaced original Guest ordering")
+	}
+	failure.OriginalWait.OriginalReturnedAt = failure.OriginalOperationDeadline
+	if guestOriginalHoldCancelledProbeTiming(failure) {
+		t.Fatal("owner return at the original deadline was accepted")
+	}
+	failure.OriginalWait.OriginalReturnedAt = failure.OriginalProbeRead.OriginalReturnedAt.Add(-time.Nanosecond)
+	if guestOriginalHoldCancelledProbeTiming(failure) {
+		t.Fatal("owner return before the original read was accepted")
+	}
+	failure.OriginalProbeChallengeSHA256 = ""
+	if guestOriginalHoldChallengeBinding(failure, challenge) {
+		t.Fatal("absent challenge hash accepted")
+	}
+	failure.OriginalProbeChallengeSHA256 = capacity.GuestRetirementSHA(challenge)
+	other := challenge
+	other.OriginalDeadline = other.OriginalDeadline.Add(time.Nanosecond)
+	public, private, err := ed25519.GenerateKey(nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	signature, err := capacity.GuestLifecycleSignature(private, other)
+	if err != nil || !capacity.GuestQualificationSignature(base64.StdEncoding.EncodeToString(public), signature, other) {
+		t.Fatal("other challenge was not independently signed", err)
+	}
+	if guestOriginalHoldChallengeBinding(failure, other) {
+		t.Fatal("different signed challenge accepted")
+	}
+	failure.OriginalOperationDeadline = time.Time{}
+	if guestOriginalHoldChallengeBinding(failure, challenge) {
+		t.Fatal("missing actual operation deadline accepted")
+	}
+}
 
 func guestOriginalHoldReceipt(t *testing.T) (q.Corpus, string) {
 	t.Helper()
@@ -282,7 +343,7 @@ func TestCapacityGuestOriginalNativeHoldCorpusPostgres(t *testing.T) {
 	case "held_probe_body_original_deadline", "cancelled_probe_original_join":
 		var probeWire []byte
 		var consistent bool
-		if err := tx.QueryRowContext(ctx, `SELECT original_wire,original_record=convert_from(original_wire,'UTF8')::jsonb AND original_deadline=(original_record->'challenge'->>'original_deadline')::timestamptz AND recorded_at<(original_record->'challenge'->>'original_deadline')::timestamptz FROM public.capacity_guest_qualification_probe_challenges WHERE preregistration_id=$1 AND usage_class='capacity_phase' AND original_deadline=$2`, originals[1].pre.PreregistrationID, failure.OriginalOperationDeadline).Scan(&probeWire, &consistent); err != nil || !consistent {
+		if err := tx.QueryRowContext(ctx, `SELECT original_wire,original_record=convert_from(original_wire,'UTF8')::jsonb AND original_deadline=(original_record->'challenge'->>'original_deadline')::timestamptz AND recorded_at<(original_record->'challenge'->>'original_deadline')::timestamptz FROM public.capacity_guest_qualification_probe_challenges WHERE preregistration_id=$1 AND usage_class='capacity_phase' AND challenge_sha256=$2`, originals[1].pre.PreregistrationID, failure.OriginalProbeChallengeSHA256).Scan(&probeWire, &consistent); err != nil || !consistent {
 			t.Fatal("failed probe lost its committed original signed challenge", err)
 		}
 		var probeRequest q.QualificationProbeRequest
@@ -291,16 +352,15 @@ func TestCapacityGuestOriginalNativeHoldCorpusPostgres(t *testing.T) {
 		}
 		ch := probeRequest.Challenge
 		statement := enrollments[1].Enrollment.Statement
-		if failure.Phase != "original_probe_held" || ch.Tuple != statement.Tuple || ch.Actor != statement.Actor || ch.Runtime != statement.Runtime || len(statement.Writers) != 1 || ch.Writer != statement.Writers[0] || ch.EnrollmentSHA256 != c.NativeResources[1].EnrollmentSHA256 || !ch.OriginalDeadline.Equal(failure.OriginalOperationDeadline) || ch.OriginalDeadline.Sub(ch.IssuedAt) != 5*time.Second || !capacity.GuestQualificationSignature(statement.CoreIntentPublicKey, probeRequest.Signature, ch) {
+		if failure.Phase != "original_probe_held" || ch.Tuple != statement.Tuple || ch.Actor != statement.Actor || ch.Runtime != statement.Runtime || len(statement.Writers) != 1 || ch.Writer != statement.Writers[0] || ch.EnrollmentSHA256 != c.NativeResources[1].EnrollmentSHA256 || !guestOriginalHoldChallengeBinding(failure, ch) || ch.OriginalDeadline.Sub(ch.IssuedAt) != 5*time.Second || !capacity.GuestQualificationSignature(statement.CoreIntentPublicKey, probeRequest.Signature, ch) {
 			t.Fatal("failed probe renewed or adopted another original challenge")
 		}
 		if c.NativeCase == "held_probe_body_original_deadline" {
-			if failure.OriginalProbeRead != nil || failure.OriginalWait.OriginalReturnedAt.Before(ch.OriginalDeadline) || failure.OriginalOutputEOFAndClose.OriginalReturnedAt.Before(ch.OriginalDeadline) || failure.OriginalWait.ErrorClass != "original_owner_error" {
+			if failure.OriginalProbeRead != nil || failure.OriginalWait.OriginalReturnedAt.Before(failure.OriginalOperationDeadline) || failure.OriginalOutputEOFAndClose.OriginalReturnedAt.Before(failure.OriginalOperationDeadline) || failure.OriginalWait.ErrorClass != "original_owner_error" {
 				t.Fatal("held probe prefix replaced late original owners/terminal EOF")
 			}
 		} else {
-			probe := failure.OriginalProbeRead
-			if probe == nil || probe.ErrorClass != "none" || !probe.OriginalReturnedAt.Before(ch.OriginalDeadline) || probe.OriginalReturnedAt.Before(ch.IssuedAt) || failure.OriginalWait.OriginalReturnedAt.Before(probe.OriginalReturnedAt) || failure.OriginalOutputEOFAndClose.OriginalReturnedAt.Before(probe.OriginalReturnedAt) || !failure.OriginalWait.OriginalReturnedAt.Before(ch.OriginalDeadline) || !failure.OriginalOutputEOFAndClose.OriginalReturnedAt.Before(ch.OriginalDeadline) {
+			if !guestOriginalHoldCancelledProbeTiming(failure) {
 				t.Fatal("cancelled probe replaced its original echo/owner joins")
 			}
 		}

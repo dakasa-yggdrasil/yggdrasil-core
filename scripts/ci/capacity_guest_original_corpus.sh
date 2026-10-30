@@ -45,7 +45,7 @@ if [[ -z "$guest_preflight_error" ]]; then
       guest_pipeline_status=("${PIPESTATUS[@]}")
       ;;
     native-hold)
-      go test -json -tags nativequalification -p 1 -count=1 -timeout=3m ./repository -run '^TestCapacityGuestOriginalNativeHoldCorpusPostgres$' 2>"$guest_go_stderr" | tee "$guest_corpus_path" 2>"$guest_tee_stderr"
+      go test -json -tags nativequalification -p 1 -count=1 -timeout=3m ./repository -run '^(TestCapacityGuestOriginalNativeHoldCorpusPostgres|TestGuestOriginalHoldChallengeBinding)$' 2>"$guest_go_stderr" | tee "$guest_corpus_path" 2>"$guest_tee_stderr"
       guest_pipeline_status=("${PIPESTATUS[@]}")
       ;;
     bytes)
@@ -98,7 +98,7 @@ if mode == 'native':
     groups = {'TestCapacityGuestOriginalNativeCorpusPostgres': (), 'TestCapacityGuestOriginalHTTPCallbacksPostgres': (), 'TestCapacityGuestOriginalWorkflowNativeReadsPostgres': ()}
     packages = {'github.com/dakasa-yggdrasil/yggdrasil-core/repository', 'github.com/dakasa-yggdrasil/yggdrasil-core/controllers/httpapi', 'github.com/dakasa-yggdrasil/yggdrasil-core/controllers/message'}
 elif mode == 'native-hold':
-    groups = {'TestCapacityGuestOriginalNativeHoldCorpusPostgres': ()}
+    groups = {'TestCapacityGuestOriginalNativeHoldCorpusPostgres': (), 'TestGuestOriginalHoldChallengeBinding': ()}
     packages = {'github.com/dakasa-yggdrasil/yggdrasil-core/repository'}
 elif mode == 'bytes':
     groups = {'TestGuestOriginalClosedBytes': (
