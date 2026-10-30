@@ -52,6 +52,19 @@ jobs:
           passed={row['Test'] for row in rows if row.get('Action')=='pass' and row.get('Test')}
           if required-passed or any(row.get('Action') in ('skip','fail','build-fail') for row in rows):raise SystemExit('floor preparation diagnostic census failed')
           PYCENSUS
+      - name: Verify original cleanup receipt guards
+        shell: bash
+        run: |
+          set -euo pipefail
+          go test -p 1 -race -count=1 -tags=nativequalification -json ./internal/capacitynativeqemu -run '^TestSourceFailureCleanupReceiptStages$' | tee "$RUNNER_TEMP/floor-receipt-test.jsonl"
+          python3 - <<'PYCENSUS'
+          import json,os
+          rows=[json.loads(line) for line in open(os.environ['RUNNER_TEMP']+'/floor-receipt-test.jsonl') if line.strip()]
+          root='TestSourceFailureCleanupReceiptStages'
+          required={root}|{root+'/'+name for name in ('read_refused','unsettled','transport_incomplete')}
+          passed={row['Test'] for row in rows if row.get('Action')=='pass' and row.get('Test')}
+          if required-passed or any(row.get('Action') in ('skip','fail','build-fail') for row in rows):raise SystemExit('receipt diagnostic census failed')
+          PYCENSUS
       - name: Actual original provider source contracts and default refusal
         shell: bash
         run: |
