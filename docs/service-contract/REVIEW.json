@@ -559,6 +559,17 @@
       "reviewed_at": "2026-10-26T17:43:37.079058+00:00",
       "schema82_Linux_CI_image_Goose_runtime_and_useful_capacity_still_required": true,
       "source_inventory_sha256": "e6e919b15af44e43b6d05c4c969beca37dc2569a0c1ff4633e7ce47f3ab85e2e"
+    },
+    "qualification_source_floor_prepare_failure_observation_20261030": {
+      "scope": "qualification-only closed failure-stage observations, no authority or production credit",
+      "original_guard_and_return_preserved": true,
+      "source_test_and_physical_run": "pending",
+      "source_files": {
+        "internal/capacitynativeqemu/source_failure_cleanup_linux.go": "b7dc9ec091b0b6eb647cc966e6d727c2469fee6e678b3c79d7a97dfdfe34f587",
+        "internal/capacitynativeqemu/source_failure_cleanup_diagnostic_test.go": "c2680a6508f00aa0471f7e9d9dca466436ab9a594311d6ab0fb786956909ad1a",
+        "cmd/native-guest-lifecycle-fixture/source_compensation.go": "500a7cb43de403ab9f2d3a7ef9160e13cecf7643f6c280d7172e6c9cabbf2b0f",
+        "cmd/native-guest-lifecycle-fixture/source_floor_compensation_diagnostic.go": "446d86da093b7eb3ebcf442ae0c8db998ee924398085419acef5c680be2fd0ad"
+      }
     }
   },
   "human_architecture_signoff_claimed": false,
