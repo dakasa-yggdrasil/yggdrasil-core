@@ -1,0 +1,23 @@
+name: Disposable recovery marker proof diagnostic
+on:
+  push:
+    branches: [codex/recovery-marker-proof-20261031]
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify marker owner and real systemd sender terminality
+        run: |
+          set -eu
+          target="$(sudo mktemp -d /run/ci-recovery-marker.XXXXXX)"
+          trap 'sudo rm -rf "$target"' EXIT
+          sudo cp .github/diagnostics/guarded-service/{guarded_unit_identity.py,recovery_terminality_DRAFT.py,verify_recovery_terminality.py,systemd_peer.py} "$target/"
+          sudo cp -R .github/diagnostics/controller-integration/runtime "$target/runtime"
+          sudo chmod -R go-w "$target"
+          sudo /usr/bin/python3 -B "$target/verify_recovery_terminality.py"
