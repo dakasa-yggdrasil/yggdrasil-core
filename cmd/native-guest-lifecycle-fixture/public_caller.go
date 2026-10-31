@@ -248,7 +248,10 @@ func (f *fixture) runOriginalPublicCaller(ctx context.Context) (runErr error) {
 	retirement, originals, err := f.originalWorkflow(ctx, "retire", 2, q.QualificationDemandWindow(p, 2, 0.1, at, lowDemandStartedAt, lowDemandReturnedAt), pre.PreregistrationID)
 	returns = append(returns, originals...)
 	if f.request.NativeCase == "actor_startup_delay_positive" && (err != nil || retirement.Status != "succeeded") {
-		f.retainFailedRetirementCallerDiagnostic(ctx)
+		f.retainFailedRetirementCallerDiagnostic(ctx, "core-original-retirement-caller-projection.json")
+	}
+	if f.request.NativeCase == "held_ack_after_owned_original_deadline" {
+		f.retainFailedRetirementCallerDiagnostic(ctx, "diagnostic-retirement-caller-before-poll.json")
 	}
 	if err != nil {
 		return err

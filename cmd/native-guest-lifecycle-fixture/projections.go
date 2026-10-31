@@ -55,6 +55,10 @@ func (f *fixture) projectOriginal(ctx context.Context, name, kind, identity, dig
 // source ISO enters these files. Shared16 Record contains only native facts,
 // opaque digests and source IDs; the signed Observation is never exported raw.
 func (f *fixture) exportOriginalRetirementCallerProjection(ctx context.Context, requestID string) error {
+	return f.exportNamedRetirementCallerProjection(ctx, requestID, "core-original-retirement-caller-projection.json")
+}
+
+func (f *fixture) exportNamedRetirementCallerProjection(ctx context.Context, requestID, name string) error {
 	var callerWire []byte
 	var callerSHA string
 	if err := f.db.QueryRowContext(ctx, `SELECT original_wire,return_sha256 FROM public.capacity_guest_original_caller_returns WHERE intent_id=$1`, requestID).Scan(&callerWire, &callerSHA); err != nil {
@@ -65,7 +69,7 @@ func (f *fixture) exportOriginalRetirementCallerProjection(ctx context.Context, 
 		return q.ErrOriginalUnknown
 	}
 	callerKeys := []string{"request_id", "attempt_id", "started_at", "do_started_at", "driver_returned_at", "preflight_failed", "do_returned_at", "read_returned_at", "close_returned_at", "original_deadline", "status", "received_body_bytes", "body_persisted", "response_sha256", "response_body_scope", "retained_prefix_bytes", "retained_prefix_sha256", "do_failed", "read_failed", "close_failed", "original_context_failed"}
-	if err := f.projectOriginal(ctx, "core-original-retirement-caller-projection.json", "retirement_caller_return", requestID, callerSHA, callerWire, caller, callerKeys); err != nil {
+	if err := f.projectOriginal(ctx, name, "retirement_caller_return", requestID, callerSHA, callerWire, caller, callerKeys); err != nil {
 		return err
 	}
 	return nil
