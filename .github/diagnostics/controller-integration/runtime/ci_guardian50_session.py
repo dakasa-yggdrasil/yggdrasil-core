@@ -3,7 +3,7 @@
 No production authority. Guardian and controller are separate systemd peers;
 synthetic DNS/topology and a fixture-derived 47 pin remain explicit.
 """
-import base64,hashlib,importlib.util,json,os,threading,time,types
+import base64,hashlib,importlib.util,json,os,struct,threading,time,types
 from pathlib import Path
 import ci_reader_fixture,guarded_nl as nl,guarded_sources,guarded_unit_identity as identity
 import guarded_verifier,guarded_live_observation,transition_structure_DRAFT as trans
@@ -31,7 +31,7 @@ def read_line(channel):
     raise RuntimeError('bounded fixture message')
 
 def serve(channel,listener):
-    verified=None;controller=None;reference=None;sender_channel=None;auth=None;sender_worker=None;watcher=None;denier=None
+    verified=None;controller=None;reference=None;sender_channel=None;auth=None;sender_worker=None;watcher=None;denier=None;deny_recovery=None
     watch_stop=threading.Event();closing=threading.Event();send_lock=threading.Lock();sender_errors=[]
     def publish(row):
         with send_lock:channel.sendall(nl.canon(row))
@@ -122,15 +122,46 @@ def serve(channel,listener):
                 deny_dir=ROOT/'guardian-deny-receipts';deny_dir.mkdir(mode=0o700)
                 denier=generation.GenerationEmitter(initial_raw=original,transition=trans,receipt_dir=deny_dir,
                              host_netns=os.environ['CI_HOST_NETNS'],recover_fixture=True)
+                uncertain=os.environ.get('CI_DENY_ACK_UNCERTAIN')=='1'
+                recovery_before=None;unknown_wire=None
+                if uncertain:
+                    class UnknownAfterSend:
+                        def __init__(self,inner):self.inner=inner;self.sent=0
+                        def send(self,payload):
+                            result=self.inner.send(payload)
+                            if len(payload)>=6 and struct.unpack_from('<H',payload,4)[0]==0x10:
+                                self.sent+=1;raise RuntimeError('CI_DENY_ACK_UNKNOWN_AFTER_SEND')
+                            return result
+                        def __getattr__(self,name):return getattr(self.inner,name)
+                    denier.nl=UnknownAfterSend(denier.nl)
                 maps={'inbound':[('0b'*12,1)],'reverse':[('0c'*12,1)]};records=[]
                 try:
                     for role in ('inbound','reverse'):records.append(nl.make_program(maps[role]))
                     transferred=records;records=[]
-                    denied=denier.submit({'maps':maps,'backends':[],'cores':[],'prom':[]},transferred)
+                    try:denied=denier.submit({'maps':maps,'backends':[],'cores':[],'prom':[]},transferred)
+                    except RuntimeError as error:
+                        if not uncertain or str(error)!='CI_DENY_ACK_UNKNOWN_AFTER_SEND':raise
+                        assert denier.state=='HOLD_UNKNOWN_OR_UNVERIFIED' and denier.nl.sent==1
+                        intent=json.loads((deny_dir/'INTENT-101.json').read_bytes())
+                        unknown_wire=intent['wire_sha256']
+                        assert not (deny_dir/'ACK-101.json').exists()
+                        denier.nl.close()  # old socket terminal; FDs stay held
+                        recovery_dir=ROOT/'guardian-deny-recovery';recovery_dir.mkdir(mode=0o700)
+                        deny_recovery=generation.GenerationEmitter(initial_raw=original,transition=trans,
+                             receipt_dir=recovery_dir,host_netns=os.environ['CI_HOST_NETNS'],recover_fixture=True)
+                        recovery_before=nl.genid(deny_recovery.nl)
+                        maps2={'inbound':[('0d'*12,1)],'reverse':[('0e'*12,1)]}
+                        for role in ('inbound','reverse'):records.append(nl.make_program(maps2[role]))
+                        transferred=records;records=[]
+                        denied=deny_recovery.submit({'maps':maps2,'backends':[],'cores':[],'prom':[]},transferred)
+                        assert denied['wire_sha256']!=intent['wire_sha256']
                 finally:
                     for record in records:os.close(record['program_fd']);os.close(record['map_fd'])
+                if uncertain:assert deny_recovery is not None
                 publish({'event':'DENIED','genid':denied['after'],'wire_sha256':denied['wire_sha256'],
                          'reader_invalidated':True,'failure_ns':failure_ns,'deny_ack_ns':time.monotonic_ns(),
+                         'original_deny_ack_unknown':uncertain,'distinct_deny_recovery':uncertain,
+                         'recovery_before':recovery_before,'unknown_wire_sha256':unknown_wire,
                          'production_authority':False})
             elif kind=='STOP':break
             else:raise RuntimeError('UNEXPECTED_GUARDIAN_CONTROL_COMMAND')
@@ -144,6 +175,7 @@ def serve(channel,listener):
         elif sender_channel is not None:sender_channel.close()
         if reference is not None:reference.close()
         if denier is not None:denier.close_private_fixture()
+        if deny_recovery is not None:deny_recovery.close_private_fixture()
         if verified is not None:verified.close()
         if controller is not None:os.close(controller['pidfd'])
         if sender_errors:raise RuntimeError('GUARDIAN_SENDER_ERROR:'+','.join(sender_errors))

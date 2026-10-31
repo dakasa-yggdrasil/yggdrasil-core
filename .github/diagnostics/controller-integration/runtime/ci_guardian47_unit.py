@@ -14,6 +14,7 @@ class Guardian47:
             subprocess.run(['/usr/bin/systemd-run','--quiet','--no-block','--unit='+self.unit,
                 '--property=RuntimeMaxSec=30s','--setenv=CI_GUARDED_FIXTURE=1',
                 '--setenv=CI_HOST_NETNS='+os.environ['CI_HOST_NETNS'],
+                '--setenv=CI_DENY_ACK_UNCERTAIN='+os.environ.get('CI_DENY_ACK_UNCERTAIN','0'),
                 '--setenv=CI_CONTROLLER_UNIT='+os.environ['CI_CONTROLLER_UNIT'],
                 '/usr/bin/nsenter','--net=/proc/%d/ns/net'%os.getpid(),*self.argv],check=True,timeout=10)
             until=time.monotonic()+12

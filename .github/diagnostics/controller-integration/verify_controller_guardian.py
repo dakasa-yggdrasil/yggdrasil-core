@@ -259,13 +259,22 @@ def main():
             denied_by_guardian=failure_result[0];assert denied_by_guardian['reader_invalidated']
             prior_generation=next_pin.receipt['after']
             next_generation=lambda value:((value+1)&0xffffffff or 1)
+            uncertain_deny=os.environ.get('CI_DENY_ACK_UNCERTAIN')=='1'
+            assert denied_by_guardian['original_deny_ack_unknown']==uncertain_deny
+            assert denied_by_guardian['distinct_deny_recovery']==uncertain_deny
             print('CI_GENERATION_ORDER',json.dumps({'order':failure_order,'prior':prior_generation,
-                  'after_positive_send':positive_generation,'after_deny_ack':denied_by_guardian['genid']}),flush=True)
+                  'after_positive_send':positive_generation,'after_deny_ack':denied_by_guardian['genid'],
+                  'deny_ack_unknown':uncertain_deny,'recovery_before':denied_by_guardian['recovery_before']}),flush=True)
             if failure_order=='positive-first':
                 assert positive_generation==[next_generation(prior_generation)]
-                assert denied_by_guardian['genid']==next_generation(positive_generation[0])
+                before_deny=positive_generation[0]
             else:
-                assert not positive_generation and denied_by_guardian['genid']==next_generation(prior_generation)
+                assert not positive_generation;before_deny=prior_generation
+            if uncertain_deny:
+                assert denied_by_guardian['recovery_before']==next_generation(before_deny)
+                assert denied_by_guardian['genid']==next_generation(denied_by_guardian['recovery_before'])
+                assert denied_by_guardian['unknown_wire_sha256']!=denied_by_guardian['wire_sha256']
+            else:assert denied_by_guardian['genid']==next_generation(before_deny)
             old_intent=json.loads((receipts/'INTENT-003.json').read_bytes())
             assert old_intent['wire_sha256']!=denied_by_guardian['wire_sha256']
             if pending_handoff is not None:
@@ -285,7 +294,7 @@ def main():
             kernel_after=coverage.kernel_text(cmd('/usr/sbin/nft','-a','list','table','inet','dakasa_capacity_network'))
             assert all(not rows for rows in kernel_after['dynamic_collections'].values())
             deny_ms=(denied_by_guardian['deny_ack_ns']-denied_by_guardian['failure_ns'])/1e6
-            print('PASS concurrent Reader failure order=%s: distinct Guardian deny and no accepted stale successor; deny_ack_ms=%.2f'%(failure_order,deny_ms),flush=True)
+            print('PASS concurrent Reader failure order=%s deny_ack_unknown=%s: distinct Guardian deny and no accepted stale successor; deny_ack_ms=%.2f'%(failure_order,uncertain_deny,deny_ms),flush=True)
         finally:
             release.set();injector.join(10)
             if failure_lease is not None:failure_owner.release(failure_lease)
