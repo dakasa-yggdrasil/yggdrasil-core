@@ -4,7 +4,7 @@ Source Reader evidence, systemd identity and pre-existing verified generation
 are fixtures. Real nft/BPF and the original Guardian registry and authority
 methods execute; none of this grants production authority.
 """
-import hashlib,json,os,socket,sys,threading,time
+import base64,hashlib,json,os,socket,sys,threading,time
 from pathlib import Path
 import guarded_nl as nl
 import guarded_generation as generation
@@ -16,7 +16,7 @@ import guarded_current15 as current15
 import guarded_authority_ci as authority
 
 
-def exercise(*, root, raw, trans, host_netns, baseline, endpoints, encode, coverage):
+def exercise(*, root, raw, trans, host_netns, baseline, baseline_plan, endpoints, encode, coverage):
     from subprocess import run,PIPE
     def text():return run(['/usr/sbin/nft','-a','list','table','inet','dakasa_capacity_network'],stdout=PIPE,check=True,timeout=5).stdout
     net=socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,12);net.bind((0,0));net.settimeout(5)
@@ -35,12 +35,19 @@ def exercise(*, root, raw, trans, host_netns, baseline, endpoints, encode, cover
         class Sources:
             @staticmethod
             def build_expected(cache):return expected
+            @staticmethod
+            def verify(cache,kernel,actual):
+                assert kernel['all_four_backends_and_reverse_sources_positive']
+                assert all(actual[role] for role in ('inbound','reverse'))
+                return {'source_generation':1,'invalidation_epoch':1}
         sources=Sources()
         old_result={k:v for k,v in baseline.items() if k not in ('ok','counter')}
-        old_actual={role:nl.map_rows(rec['map_id']) for role,rec in zip(('inbound','reverse'),old_result['programs'])}
-        anchor={'pid':os.getpid(),'start_ticks':prep['start_ticks'],'netns':os.readlink('/proc/self/ns/net')}
-        old_verified=verifier._VerifiedGeneration(result=old_result,anchor=anchor,reader_cache=cache,
-                joined={},actual=old_actual,sender_pidfd=os.pidfd_open(os.getpid(),0),capability=verifier._VERIFIED_CAPABILITY)
+        anchor={'pid':os.getpid(),'start_ticks':prep['start_ticks'],'netns':os.readlink('/proc/self/ns/net'),
+                'initial':base64.b64encode(raw).decode()}
+        probe=Path(__file__).with_name('ci_nl_probe.py');probe_sha=hashlib.sha256(probe.read_bytes()).hexdigest()
+        old_verified=verifier.verify_and_seal(result=baseline,anchor=anchor,plan=baseline_plan,receipt_dir=root/'receipts2',
+                reader_cache=cache,nl=nl,sources=sources,transition=trans,coverage=coverage,
+                probe_path=probe,probe_sha256=probe_sha)
         def validate(verified):
             generation_now=nl.genid(net);snapshot=coverage.kernel_text(text())
             if not snapshot['all_four_backends_and_reverse_sources_positive']:raise RuntimeError('CI_EXPECTED_POSITIVE_KERNEL')
@@ -90,13 +97,13 @@ def exercise(*, root, raw, trans, host_netns, baseline, endpoints, encode, cover
         transfer=records;records=[]
         result=sender.submit(plan,transfer,sender_session=session,sender_permit=permit)
         assert result['ok'] and permit.consumed and result['genid']==old_result['after']
-        new_actual={role:nl.map_rows(rec['map_id']) for role,rec in zip(('inbound','reverse'),result['programs'])}
-        new_verified=verifier._VerifiedGeneration(result=result,anchor=anchor,reader_cache=cache,
-                joined={},actual=new_actual,sender_pidfd=os.pidfd_open(os.getpid(),0),capability=verifier._VERIFIED_CAPABILITY)
+        new_verified=verifier.verify_and_seal(result=result,anchor=anchor,plan=plan,receipt_dir=receipts,
+                reader_cache=cache,nl=nl,sources=sources,transition=trans,coverage=coverage,
+                probe_path=probe,probe_sha256=probe_sha)
         confirmed=reg.confirm(proof,new_verified)
         assert confirmed['same_guardian_successor_verified'] and reg.pending is None
         print('PASS actual Guardian registry, reference-program comparison, one-use authority and BPF nft rotation',flush=True)
-        print('BOUNDARY: Reader, prior verified receipt, systemd identity, lease and full AST verification are fixtures',flush=True)
+        print('BOUNDARY: Reader, systemd identity, ownership lease and deployed service integration are fixtures',flush=True)
     finally:
         stop.set()
         if worker is not None:worker.join(10)

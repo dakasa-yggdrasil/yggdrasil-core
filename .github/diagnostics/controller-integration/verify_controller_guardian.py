@@ -165,7 +165,7 @@ def main():
         print('BOUNDARY: Guardian permit, source witnesses and ownership lease simulated; no production authority',flush=True)
         import ci_guardian_registry
         ci_guardian_registry.exercise(root=HERE,raw=raw,trans=trans,host_netns=os.environ['CI_HOST_NETNS'],
-                 baseline=refreshed,endpoints=endpoints,encode=encode,coverage=coverage)
+                 baseline=refreshed,baseline_plan=new_plan,endpoints=endpoints,encode=encode,coverage=coverage)
     finally:
         for rec in records:
             os.close(rec['program_fd']);os.close(rec['map_fd'])
