@@ -247,6 +247,9 @@ func (f *fixture) runOriginalPublicCaller(ctx context.Context) (runErr error) {
 	}
 	retirement, originals, err := f.originalWorkflow(ctx, "retire", 2, q.QualificationDemandWindow(p, 2, 0.1, at, lowDemandStartedAt, lowDemandReturnedAt), pre.PreregistrationID)
 	returns = append(returns, originals...)
+	if f.request.NativeCase == "actor_startup_delay_positive" && (err != nil || retirement.Status != "succeeded") {
+		f.retainFailedRetirementCallerDiagnostic(ctx)
+	}
 	if err != nil {
 		return err
 	}
