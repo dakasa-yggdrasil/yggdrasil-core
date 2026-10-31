@@ -1,0 +1,26 @@
+name: Disposable typed custody UNKNOWN review
+on:
+  push:
+    branches: [codex/custody-typed-review-20261031]
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify typed custody and UNKNOWN nft snapshot
+        run: |
+          set -eu
+          if ! command -v nft >/dev/null || ! command -v ip >/dev/null; then sudo apt-get update -qq && sudo apt-get install -y nftables iproute2; fi
+          sudo modprobe xt_bpf
+          target="$(sudo mktemp -d /run/ci-typed-custody.XXXXXX)"
+          trap 'sudo rm -rf "$target"' EXIT
+          sudo cp .github/diagnostics/guarded-service/{guarded_unit_identity.py,recovery_terminality_DRAFT.py,verify_recovery_terminality.py,systemd_peer.py} "$target/"
+          sudo cp .github/diagnostics/controller-integration/coverage.py "$target/coverage.py"
+          sudo cp -R .github/diagnostics/controller-integration/runtime "$target/runtime"
+          sudo chmod -R go-w "$target"
+          sudo unshare --net --mount --propagation private -- /usr/bin/python3 -B "$target/verify_recovery_terminality.py"
