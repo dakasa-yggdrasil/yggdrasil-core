@@ -20,8 +20,10 @@ def test(fd,packet):
 def main():
     source=socket.inet_aton('10.201.24.17');dest=socket.inet_aton('172.18.1.3');port=5432
     key=source+dest+struct.pack('>H',port)+bytes(2)
-    packet=bytearray(40);packet[0]=0x45;packet[9]=6;packet[12:16]=source;packet[16:20]=dest
-    packet[20:22]=struct.pack('>H',45678);packet[22:24]=struct.pack('>H',port)
+    ip=bytearray(40);ip[0]=0x45;ip[9]=6;ip[12:16]=source;ip[16:20]=dest
+    ip[20:22]=struct.pack('>H',45678);ip[22:24]=struct.pack('>H',port)
+    # skb test-run consumes an Ethernet header before the network payload.
+    packet=bytes.fromhex('0200000000010200000000020800')+bytes(ip)
     deadline=time.monotonic_ns()+1_000_000_000
     r=nl.make_program([(key.hex(),deadline)])
     try:
