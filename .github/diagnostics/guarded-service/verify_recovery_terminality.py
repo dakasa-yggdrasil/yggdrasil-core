@@ -1,5 +1,5 @@
 """Exercise terminal sender proof against live systemd units in CI only."""
-import hashlib,os,signal,socket,subprocess,sys,time,uuid
+import hashlib,os,signal,socket,subprocess,sys,tempfile,time,uuid
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent/'runtime'))
 import drain_marker_v3_DRAFT as v3
@@ -41,12 +41,15 @@ try:
             time.sleep(.05)
     assert result['pidfd_dead'] and result['cgroup_unpopulated'] and not result['effect_or_send_authority']
     print('PASS original marker, pidfd, exact InvocationID, terminal unit/job and empty cgroup',flush=True)
-    original_mount=anchor.cgroup_root.mount
-    anchor.cgroup_root.mount=('forged',)+original_mount[1:]
-    try:terminal.prove_terminal_for_marker(marker);raise AssertionError('changed cgroup mount accepted')
-    except terminal.Held as error:assert str(error)=='CGROUP_MOUNT_OR_NAMESPACE_CHANGED'
-    finally:anchor.cgroup_root.mount=original_mount
-    print('PASS cgroup mount identity change rejected',flush=True)
+    # Real private mount namespace; no mount change propagates to host.
+    with tempfile.TemporaryDirectory(prefix='wrong-cgroup-mount-') as wrong:
+        subprocess.run(['/usr/bin/mount','--bind',wrong,'/sys/fs/cgroup'],check=True,timeout=5)
+        try:
+            try:terminal.prove_terminal_for_marker(marker);raise AssertionError('wrong cgroup mount accepted')
+            except terminal.Held as error:
+                assert str(error) in ('CGROUP_MOUNT_OR_NAMESPACE_CHANGED','EXACT_UNIFIED_CGROUP_MOUNT_REQUIRED'),str(error)
+        finally:subprocess.run(['/usr/bin/umount','/sys/fs/cgroup'],check=True,timeout=5)
+    print('PASS actual cgroup mount replacement rejected in private namespace',flush=True)
     # Attempting to restart the participating writer must leave the marker.
     subprocess.run(['/usr/bin/systemctl','start',unit],check=False,timeout=10)
     deadline=time.monotonic()+5
