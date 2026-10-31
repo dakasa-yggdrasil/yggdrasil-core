@@ -41,3 +41,5 @@ jobs:
             --setenv=CI_GUARDED_FIXTURE=1 --setenv=CI_HOST_NETNS="$host_netns" \
             --setenv=CI_CONTROLLER_UNIT="$unit.service" \
             /usr/bin/unshare --net -- /usr/bin/python3 -B "$target/verify_controller_guardian.py"
+      - name: Verify BPF absolute expiry and Reader failure semantics
+        run: sudo unshare --net -- /usr/bin/python3 -B .github/diagnostics/controller-integration/runtime/ci_bpf_expiry.py
