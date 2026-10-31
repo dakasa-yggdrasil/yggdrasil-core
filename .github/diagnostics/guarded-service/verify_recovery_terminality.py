@@ -103,6 +103,15 @@ try:
         evidence=recovery.inspect_unknown(marker,root/'real-receipts',counter=1,sender_records=sender_records)
         assert evidence['before_genid']==unknown['intent_genid'] and evidence['wire_sha256']==unknown['wire_sha256']
         assert not evidence['ack_observed'] and not evidence['absence_of_unrecorded_sends_proven']
+        fake_ack=root/'real-receipts'/'ACK-001.json';fake_ack.touch(mode=0o600)
+        try:
+            try:recovery.inspect_unknown(marker,root/'real-receipts',counter=1,sender_records=sender_records);raise AssertionError('existing ACK accepted as unknown')
+            except recovery.Held as error:assert str(error)=='UNKNOWN_ACK_ALREADY_PRESENT'
+        finally:fake_ack.unlink()
+        wrong_records=[dict(record) for record in sender_records];wrong_records[0]['program_id']+=1
+        try:recovery.inspect_unknown(marker,root/'real-receipts',counter=1,sender_records=wrong_records);raise AssertionError('wrong original BPF identity accepted')
+        except recovery.Held as error:assert str(error)=='ORIGINAL_UNKNOWN_INTENT_OR_WIRE_MISMATCH'
+        print('PASS unexpected ACK and mismatched sender intent identities are rejected',flush=True)
         sample=recovery.sample_attached(coord,netlink,expected_marker=marker.key,expected_genid=genid,
                                records=records,reference=reference,cache=cache,original_pin=original,
                                receipt=receipt,coverage=coverage)
