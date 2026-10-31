@@ -52,8 +52,11 @@ def main():
     same,key,silent=cycle(cache,key);assert same is None and not silent.dispatched
     old_native=native_io.process.native;calls=[]
     def ambiguous(*args,**kwargs):
-        value=old_native(*args,**kwargs);calls.append(1)
-        raise native_io.process.Held('CI_INJECT_AFTER_NATIVE_COMPLETED')
+        value=old_native(*args,**kwargs)
+        if args[0]==['/usr/sbin/nft','-f','-']:
+            calls.append(1)
+            raise native_io.process.Held('CI_INJECT_AFTER_NATIVE_COMPLETED')
+        return value
     native_io.process.native=ambiguous
     cache.rows=endpoints(2);cache.key='uncertain'
     try:
