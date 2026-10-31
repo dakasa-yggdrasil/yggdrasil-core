@@ -4,6 +4,7 @@ package main
 
 import (
 	"context"
+	"fmt"
 	"path/filepath"
 	"time"
 
@@ -71,12 +72,16 @@ func (d *refusalPollDiagnostic) observe(r capacity.GuestOriginalHTTPReturn, call
 	}
 }
 
-func (f *fixture) retainRefusalPollDiagnostic(ctx context.Context, d refusalPollDiagnostic) {
+func (f *fixture) retainRefusalPollDiagnostic(ctx context.Context, d refusalPollDiagnostic, snapshot int) {
 	if d.Case != "held_ack_after_owned_original_deadline" {
 		return
 	}
 	d.OuterContextFailed = ctx.Err() != nil
-	diagnostic, cancel := context.WithTimeout(context.WithoutCancel(ctx), 5*time.Second)
+	diagnostic, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
 	defer cancel()
-	_, _ = q.Publish(diagnostic, filepath.Join(f.private, "core-refusal-poll-diagnostic.json"), d)
+	name := "core-refusal-poll-final.json"
+	if snapshot >= 0 {
+		name = fmt.Sprintf("core-refusal-poll-snapshot-%02d.json", snapshot)
+	}
+	_, _ = q.Publish(diagnostic, filepath.Join(f.private, name), d)
 }

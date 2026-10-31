@@ -45,7 +45,8 @@ func (f *fixture) finishExpectedOriginalHold(ctx context.Context, p model.Capaci
 	var record q.QualificationFailureRecord
 	var raw []byte
 	diagnostic := refusalPollDiagnostic{Schema: "native_qualification_refusal_poll_diagnostic_v1", Case: f.request.NativeCase}
-	defer func() { f.retainRefusalPollDiagnostic(ctx, diagnostic) }()
+	snapshot, lastSnapshot := 0, time.Time{}
+	defer func() { f.retainRefusalPollDiagnostic(ctx, diagnostic, -1) }()
 	// Failed workflow/expired lease does not close a child owner. Keep the
 	// SAME original 600 context and read its signed diagnostic after Wait and
 	// both EOF/Close owners actually return, possibly after its 420 deadline.
@@ -55,6 +56,13 @@ func (f *fixture) finishExpectedOriginalHold(ctx context.Context, p model.Capaci
 		cancel()
 		if f.request.NativeCase == "held_ack_after_owned_original_deadline" {
 			diagnostic.observe(returned, callErr)
+			// Closed snapshots survive a supervisor terminating this process at
+			// the same outer deadline; none changes a qualification outcome.
+			if snapshot < 24 && (lastSnapshot.IsZero() || time.Since(lastSnapshot) >= 30*time.Second) {
+				f.retainRefusalPollDiagnostic(ctx, diagnostic, snapshot)
+				snapshot++
+				lastSnapshot = time.Now()
+			}
 		}
 		if callErr == nil && returned.Status == http.StatusOK {
 			if capacity.GuestOriginalHTTPDecode(returned, &record) != nil || f.realm.ValidateOriginalFailure(record, pre, witness, f.binding.ProvisionerPublicKey, returned.DriverReturnedAt) != nil {
