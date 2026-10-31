@@ -6,6 +6,7 @@ import drain_marker_v3_DRAFT as v3
 uid=uuid.uuid4().hex[:12];sender='ci-custody-sender-'+uid+'.service';guardian='ci-custody-guardian-'+uid+'.service'
 units=[sender,guardian];files=[Path('/run/systemd/system')/unit for unit in units]
 coord=v3.CoordinatorV3(root/'coord');coord.initialize_for_ci();lock=root/'writer.lock';lock.touch(mode=0o600)
+lock_stat=lock.stat();lock_identity='%d:%d'%(lock_stat.st_dev,lock_stat.st_ino)
 sockpath=root/'custody.sock';server=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM);server.bind(str(sockpath));server.listen(2)
 source=hashlib.sha256((root/'writer.py').read_bytes()).hexdigest();custodian=None;childfd=None
 
@@ -29,10 +30,10 @@ def signal_main(unit):
 
 try:
     for unit,role,unit_file in zip(units,['sender','guardian'],files):
-        args=[str(root/'writer.py'),str(root),role,unit,str(coord.directory),str(lock),str(sockpath),str(root/(role+'.stage'))]
+        args=[str(root/'writer.py'),str(root),role,unit,str(coord.directory),str(lock),str(sockpath),str(root/(role+'.stage')),lock_identity]
         unit_file.write_text('[Service]\nType=simple\nKillMode=process\nRuntimeMaxSec=45s\nEnvironment=CI_CONTROLLER_UNIT='+unit+'\nExecStart=/usr/bin/python3 -B '+' '.join(args)+'\n')
     subprocess.run(['/usr/bin/systemctl','daemon-reload'],check=True,timeout=10)
-    custodian=subprocess.Popen(['/usr/bin/python3','-B',str(root/'custodian.py'),str(root),str(server.fileno()),sender,guardian,source,str(lock)],
+    custodian=subprocess.Popen(['/usr/bin/python3','-B',str(root/'custodian.py'),str(root),str(server.fileno()),sender,guardian,source,str(lock),lock_identity],
         pass_fds=[server.fileno()],stdin=subprocess.PIPE,stdout=subprocess.PIPE,text=True,bufsize=1)
     server.close()
     subprocess.run(['/usr/bin/systemctl','start',sender],check=True,timeout=10)
@@ -63,6 +64,14 @@ try:
         if time.monotonic()>deadline:raise RuntimeError(str(acquired))
         time.sleep(.05)
     assert acquired['old_sockets_closed'] and not acquired['production_authority']
+    # Replacing the pathname cannot silently turn a different flock into the fence.
+    displaced=root/'writer.lock.original';lock.rename(displaced);lock.touch(mode=0o600)
+    try:
+        changed=query('lockcheck');assert changed=={'reason':'ORIGINAL_LOCK_INODE_REQUIRED','state':'HOLD'},changed
+    finally:
+        lock.unlink();displaced.rename(lock)
+    assert query('lockcheck')['state']=='ORIGINAL_LOCK'
+    print('PASS replaced lock inode is rejected even with original exclusive fd open',flush=True)
     (root/'sender.stage').unlink()
     subprocess.run(['/usr/bin/systemctl','start',sender],check=False,timeout=10)
     wait_for(root/'sender.stage')

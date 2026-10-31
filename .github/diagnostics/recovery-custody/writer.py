@@ -1,10 +1,11 @@
 """CI-only cooperative systemd writer; never sends netlink messages."""
 import array,fcntl,os,socket,sys,time,types
 from pathlib import Path
-root,role,unit,coord_dir,lock_path,peer_path,stage=sys.argv[1:]
+root,role,unit,coord_dir,lock_path,peer_path,stage,lock_identity=sys.argv[1:]
 sys.path.insert(0,str(Path(root)/'runtime'))
 import drain_marker_v3_DRAFT as v3
-with open(lock_path,'rb') as lock:
+import lock_guard
+with lock_guard.open_checked(lock_path,lock_identity) as lock:
     try:fcntl.flock(lock,fcntl.LOCK_SH|fcntl.LOCK_NB)
     except BlockingIOError:
         Path(stage).write_text('BLOCKED_BEFORE_SOCKET');sys.exit(75)
