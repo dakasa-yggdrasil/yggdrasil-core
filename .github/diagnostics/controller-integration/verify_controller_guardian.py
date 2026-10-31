@@ -200,6 +200,13 @@ def main():
         first.activate_lab_guarded_pin(active_pin)
         drain.finish(initial_drain_intent,active_pin,emitted)
         assert not drain.marker_exists()
+        uid=initial_core.native_identity.split('/',1)[0]
+        witness=watch.admission_witness(uid,initial_core.address)
+        assert witness['event']=='ADMISSION_WITNESS',witness
+        assert witness['fifty_object_shape_verified'] and witness['bpf_rule_fd_map_join_verified']
+        assert not witness['kubernetes_proven'] and not witness['production_authority']
+        assert watch.admission_witness('wrong-uid',initial_core.address)['event']=='ADMISSION_HOLD'
+        print('PASS Guardian-owned 50-object BPF/rules/Reader read-only witness and UID mismatch HOLD',flush=True)
         if os.environ.get('CI_TEST_EXPIRED_PERMIT')=='1':
             ceiling=guarded_sources.build_expected(guardian_cache)
             rotation_prepared=guarded_preparation.PreparedGeneration(real_cache,

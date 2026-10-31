@@ -14,6 +14,11 @@ class GuardedDriver:
         self.ceiling_cache,self.endpoints,self.max_commits=ceiling_cache,endpoints,max_commits
         self.results=[];self.pause_started=None
     def prepare(self,cache):
+        rows,_,_,_,_=cache.snapshot()
+        core=next(x for x in rows if x.kind=='core')
+        witness=self.watch.admission_witness(core.native_identity.split('/',1)[0],core.address)
+        if witness.get('event')!='ADMISSION_HOLD' or witness.get('guard')!='GUARDED_INTENT_PENDING':
+            raise RuntimeError('PENDING_INTENT_MUST_BLOCK_ADMISSION:'+str(witness))
         expected=guarded_sources.build_expected(self.ceiling_cache)
         prepared=guarded_preparation.PreparedGeneration(cache,
                     deadline_ceilings={role:expected[role] for role in ('inbound','reverse')})

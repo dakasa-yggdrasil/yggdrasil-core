@@ -47,7 +47,7 @@ class Watch:
         self.channel.sendall(guarded_nl.canon({'command':command,**fields}))
         while True:
             row=self.read()
-            if row['event']==expected:return row
+            if row['event']==expected or (command=='ADMISSION_WITNESS' and row['event']=='ADMISSION_HOLD'):return row
             if row['event']=='HOLD' and command in ('STOP_DNS','RESTORE_DNS'):
                 self.last_hold=row;continue
             if row['event']=='DENIED' and command=='STOP_DNS':
@@ -61,6 +61,8 @@ class Watch:
             row=self.read()
             if row['event']=='CONNECTED':return channel
             if row['event'] not in ('SAMPLE','FINISHED'):raise RuntimeError('UNEXPECTED_GUARDIAN_CONNECT_EVENT:'+str(row))
+    def admission_witness(self,uid,address):
+        return self.control('ADMISSION_WITNESS','ADMISSION_WITNESS',uid=uid,address=address)
     def prepare(self,records):return self.control('PREPARE','PREPARED',records=list(records))
     def confirm(self,result,plan):return self.control('CONFIRM','CONFIRMED',result=result,plan=plan)
     def resume(self):return self.control('RESUME','RESUMED')

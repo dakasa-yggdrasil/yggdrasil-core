@@ -12,13 +12,15 @@ import guarded_program_identity_DRAFT as program_module,guarded_authority_ci as 
 import native_io,native_structure,nft_owner as nft
 import guarded_generation as generation
 import drain_marker_v3_DRAFT as drain_v3
+import guarded_admission_v3_DRAFT as admission
 HERE=Path(__file__).resolve().parent;ROOT=HERE.parent
 spec=importlib.util.spec_from_file_location('ci_guardian',ROOT/'network_guardian.py');guardian=importlib.util.module_from_spec(spec);spec.loader.exec_module(guardian)
 spec=importlib.util.spec_from_file_location('ci_coverage',ROOT/'coverage.py');coverage=importlib.util.module_from_spec(spec);spec.loader.exec_module(coverage)
 
 def endpoints(suffix):
     now=time.monotonic()
-    entries=[nft.Backend(k,a,nft.PORTS[k],now,now+20,'synthetic') for k,a in
+    entries=[nft.Backend(k,a,nft.PORTS[k],now,now+20,
+             ('00000000-0000-0000-0000-%012x/synthetic'%suffix if k=='core' else 'synthetic')) for k,a in
        [('core','10.244.1.'+str(suffix)),('broker','172.18.1.2'),('rds','172.18.1.3'),('redis','172.18.1.4')]]
     return entries,[entries[0]],[nft.PrometheusSource('10.244.1.9',now,now+20,'synthetic')]
 
@@ -161,7 +163,14 @@ def serve(channel,listener):
         publish({'event':'READY','pid':os.getpid(),'production_authority':False});launch_watch()
         while True:
             command=read_line(channel);kind=command['command']
-            if kind=='PAUSE':
+            if kind=='ADMISSION_WITNESS':
+                try:
+                    result=admission.observe(verified,reg,generation.CI_DRAIN_COORDINATION,command['uid'],command['address'])
+                    publish({'event':'ADMISSION_WITNESS',**result})
+                except Exception as error:
+                    publish({'event':'ADMISSION_HOLD','error_class':type(error).__name__,
+                             'guard':str(error)[:160],'production_authority':False})
+            elif kind=='PAUSE':
                 stop_watch();publish({'event':'PAUSED','production_authority':False})
             elif kind=='CONNECT':
                 if auth is not None:raise RuntimeError('ONE_SENDER_CHANNEL')
