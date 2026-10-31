@@ -172,4 +172,4 @@ def observe(verified,registry,coord,uid,address):
 
 def evaluate(_request, coordination):
     with coordination.admission_or_other_writer():
-        raise FenceError('GUARDED_BPF_AND_KUBERNETES_ADMISSION_NOT_VALIDATED')
+        raise FenceError('GUARDED_BPF_ADMISSION_NOT_VALIDATED')
