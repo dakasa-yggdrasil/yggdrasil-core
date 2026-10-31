@@ -25,3 +25,5 @@ jobs:
           trap 'sudo rm -rf "$target"' EXIT
           sudo cp .github/diagnostics/guarded-service/{guarded_unit_identity.py,systemd_peer.py,systemd_peer_47.py,verify_systemd_identity.py,guardian47.py,guarded_nl.py} "$target/"
           sudo /usr/bin/python3 -B "$target/verify_systemd_identity.py"
+      - name: Probe real BPF primitives in a private network namespace
+        run: sudo unshare --net -- /usr/bin/python3 -B .github/diagnostics/guarded-service/verify_bpf_capability.py
