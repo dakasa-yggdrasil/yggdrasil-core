@@ -39,6 +39,17 @@ def _pins(records,reference):
     need(len(seen_p)==2 and len(seen_m)==2,'DISTINCT_PROGRAM_AND_MAP_IDS')
     return rows
 
+def _marker_reader_join(record,cache,expected):
+    entries,cores,_prom,errors,generation=cache.snapshot()
+    need(not errors and generation==expected['source_generation'],'SAME_FRESH_READER_GENERATION_REQUIRED')
+    core=[entry for entry in entries if entry.kind=='core']
+    actual=sorted((entry.native_identity,entry.address) for entry in cores)
+    declared=[tuple(value) for value in record.get('sources',[])]
+    need(len(core)==1 and record.get('core_identity')==core[0].native_identity
+         and record.get('core_uid')==core[0].native_identity.split('/',1)[0]
+         and record.get('core_address')==core[0].address
+         and declared==actual,'MARKER_CORE_AND_REVERSE_MUST_MATCH_FRESH_READERS')
+
 def sample(coordinator,netlink,*,expected_marker,expected_genid,records,reference,cache):
     """Same-process sample; never conflates inventory with attached nft state."""
     need(type(coordinator) is marker_v3.CoordinatorV3,'EXACT_V3_COORDINATOR_REQUIRED')
@@ -62,7 +73,8 @@ def sample(coordinator,netlink,*,expected_marker,expected_genid,records,referenc
     need(marker_v3._marker_identity(coordinator)[:3]==expected_marker,'ORIGINAL_MARKER_CHANGED')
     records=json.loads(json.dumps(records))
     before=nl.genid(netlink);need(before==expected_genid,'ORIGINAL_GENID_CHANGED')
-    expected=sources.build_expected(cache);rows=_pins(records,reference);now=time.monotonic_ns()
+    expected=sources.build_expected(cache);_marker_reader_join(marker[3],cache,expected)
+    rows=_pins(records,reference);now=time.monotonic_ns()
     for role in ('inbound','reverse'):
         actual=dict(rows[role]);wanted=expected[role]
         need(set(actual)==set(wanted) and all(now<expiry<=wanted[k] for k,expiry in actual.items()),
@@ -70,6 +82,7 @@ def sample(coordinator,netlink,*,expected_marker,expected_genid,records,referenc
     final=sources.build_expected(cache);after=nl.genid(netlink)
     need(after==before and final['invalidation_epoch']==expected['invalidation_epoch']
          and final['source_generation']==expected['source_generation'],'GENID_OR_READER_CHANGED_DURING_SAMPLE')
+    _marker_reader_join(marker[3],cache,final)
     for role in ('inbound','reverse'):
         actual=dict(rows[role]);wanted=final[role];now=time.monotonic_ns()
         need(set(actual)==set(wanted) and all(now<expiry<=wanted[k] for k,expiry in actual.items()),

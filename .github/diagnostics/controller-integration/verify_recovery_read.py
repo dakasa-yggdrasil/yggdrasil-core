@@ -41,6 +41,10 @@ try:
     try:refuse(sample,'RECOVERY_LOCK_DIRECTORY_OR_MOUNT_CHANGED')
     finally:coord.writer_lock.unlink();displaced.rename(coord.writer_lock)
     print('PASS marker writer-lock inode replacement rejected',flush=True)
+    wrong_marker=dict(marker._marker_identity(coord)[3]);wrong_marker['core_address']='10.244.1.250'
+    refuse(lambda:recovery._marker_reader_join(wrong_marker,cache,sources.build_expected(cache)),
+           'MARKER_CORE_AND_REVERSE_MUST_MATCH_FRESH_READERS')
+    print('PASS different marker core identity rejected by fresh Reader join',flush=True)
     bad=[dict(x) for x in records];bad[0]['program_id']+=1
     refuse(lambda:sample(records=bad),'PINNED_BPF_DESCRIPTOR_IDENTITY')
     duplicate=[dict(records[0]),dict(records[0])]
