@@ -1,0 +1,24 @@
+name: Disposable typed writer lease review
+on:
+  push:
+    branches: [codex/typed-lease-review-20261031]
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Test typed lease through native IO and real nft
+        run: |
+          set -eu
+          if ! command -v nft >/dev/null; then sudo apt-get update -qq && sudo apt-get install -y nftables; fi
+          target="$(sudo mktemp -d /run/ci-typed-lease.XXXXXX)"
+          trap 'sudo rm -rf "$target"' EXIT
+          sudo cp .github/diagnostics/recovery-custody/*.py "$target/"
+          sudo cp -R .github/diagnostics/controller-integration/runtime "$target/runtime"
+          sudo chmod -R go-w "$target"
+          sudo /usr/bin/python3 -B "$target/verify_native_lease.py"
