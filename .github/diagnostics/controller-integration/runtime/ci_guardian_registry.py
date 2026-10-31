@@ -38,7 +38,8 @@ def exercise(*, root, raw, trans, host_netns, baseline, endpoints, encode, cover
         sources=Sources()
         old_result={k:v for k,v in baseline.items() if k not in ('ok','counter')}
         old_actual={role:nl.map_rows(rec['map_id']) for role,rec in zip(('inbound','reverse'),old_result['programs'])}
-        old_verified=verifier._VerifiedGeneration(result=old_result,anchor={'pid':os.getpid()},reader_cache=cache,
+        anchor={'pid':os.getpid(),'start_ticks':prep['start_ticks'],'netns':os.readlink('/proc/self/ns/net')}
+        old_verified=verifier._VerifiedGeneration(result=old_result,anchor=anchor,reader_cache=cache,
                 joined={},actual=old_actual,sender_pidfd=os.pidfd_open(os.getpid(),0),capability=verifier._VERIFIED_CAPABILITY)
         def validate(verified):
             generation_now=nl.genid(net);snapshot=coverage.kernel_text(text())
@@ -90,7 +91,7 @@ def exercise(*, root, raw, trans, host_netns, baseline, endpoints, encode, cover
         result=sender.submit(plan,transfer,sender_session=session,sender_permit=permit)
         assert result['ok'] and permit.consumed and result['genid']==old_result['after']
         new_actual={role:nl.map_rows(rec['map_id']) for role,rec in zip(('inbound','reverse'),result['programs'])}
-        new_verified=verifier._VerifiedGeneration(result=result,anchor={'pid':os.getpid()},reader_cache=cache,
+        new_verified=verifier._VerifiedGeneration(result=result,anchor=anchor,reader_cache=cache,
                 joined={},actual=new_actual,sender_pidfd=os.pidfd_open(os.getpid(),0),capability=verifier._VERIFIED_CAPABILITY)
         confirmed=reg.confirm(proof,new_verified)
         assert confirmed['same_guardian_successor_verified'] and reg.pending is None
