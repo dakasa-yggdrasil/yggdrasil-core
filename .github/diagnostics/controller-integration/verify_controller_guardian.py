@@ -4,7 +4,7 @@ The cache, owner and deployment-specific compiled AST pin are fixtures. This
 exercises real controller/native process and Guardian methods, not BPF service
 integration or production authority.
 """
-import base64,hashlib,importlib.util,json,os,socket,subprocess,sys,tempfile,threading,time,types
+import base64,hashlib,importlib.util,json,os,socket,struct,subprocess,sys,tempfile,threading,time,types
 from pathlib import Path
 HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE/'runtime'))
@@ -82,7 +82,7 @@ def main():
     native_structure.COMPILED_NATIVE_AST_SHA256=expected
     raw=cmd('/usr/sbin/nft','-a','-j','list','ruleset')
     original=trans.OriginalPin(raw)
-    records=[];first=None;recovery=None;positive=None;session=None;server=None;prepared=None;initial_prepared=None
+    records=[];first=None;uncertain=None;recovery=None;positive=None;session=None;server=None;prepared=None;initial_prepared=None
     server_done=threading.Event();server_errors=[];worker=None
     try:
         import ci_reader_fixture,guarded_sources,guarded_preparation
@@ -148,6 +148,34 @@ def main():
         try:observer.kernel(guarded=guarded_context);raise AssertionError('foreign genid change was accepted')
         except RuntimeError as error:assert str(error)=='GUARDED_RECEIPT_GENERATION_CHANGED'
         verified.close()
+        # A complete netlink send is made, but its ACK is deliberately never
+        # read. Hold its ownership/FD custody and never submit that wire again.
+        unknown_dir=HERE/'unknown-receipts';unknown_dir.mkdir(mode=0o700)
+        uncertain=generation.GenerationEmitter(initial_raw=raw,transition=trans,receipt_dir=unknown_dir,
+                                               host_netns=os.environ['CI_HOST_NETNS'],recover_fixture=True)
+        class InjectAfterSend:
+            def __init__(self,inner):self.inner=inner;self.sent=0
+            def send(self,payload):
+                sent=self.inner.send(payload)
+                if len(payload)>=6 and struct.unpack_from('<H',payload,4)[0]==0x10:
+                    self.sent+=1
+                    raise RuntimeError('CI_UNKNOWN_AFTER_ACTUAL_NETLINK_SEND')
+                return sent
+            def __getattr__(self,name):return getattr(self.inner,name)
+        uncertain.nl=InjectAfterSend(uncertain.nl)
+        unknown_maps={'inbound':[('09'*12,1)],'reverse':[('0a'*12,1)]}
+        for role in ('inbound','reverse'):records.append(nl.make_program(unknown_maps[role]))
+        transferred=records;records=[]
+        try:
+            uncertain.submit({'maps':unknown_maps,'backends':[],'cores':[],'prom':[]},transferred)
+            raise AssertionError('uncertain send was reported successful')
+        except RuntimeError as error:assert str(error)=='CI_UNKNOWN_AFTER_ACTUAL_NETLINK_SEND'
+        assert uncertain.state=='HOLD_UNKNOWN_OR_UNVERIFIED' and uncertain.nl.sent==1
+        try:uncertain.submit({},[]);raise AssertionError('uncertain sender allowed replay')
+        except RuntimeError as error:assert str(error)=='ONLY_READY_SAME_OWNER'
+        unknown_intent=json.loads((unknown_dir/'INTENT-101.json').read_bytes())
+        assert not (unknown_dir/'ACK-101.json').exists()
+        uncertain.nl.close()
         recovery=generation.GenerationEmitter(initial_raw=raw,transition=trans,receipt_dir=receipts,
                                                host_netns=os.environ['CI_HOST_NETNS'],recover_fixture=True)
         deny_maps={'inbound':[('03'*12,1)],'reverse':[('04'*12,1)]}
@@ -155,10 +183,11 @@ def main():
         transferred=records;records=[]
         denied=recovery.submit({'maps':deny_maps,'backends':[],'cores':[],'prom':[]},transferred)
         assert denied['ok'] and denied['genid']!=emitted['after'] and denied['wire_sha256']!=emitted['wire_sha256']
+        assert denied['wire_sha256']!=unknown_intent['wire_sha256']
         text=cmd('/usr/sbin/nft','-a','list','table','inet','dakasa_capacity_network')
         observed=coverage.kernel_text(text)
         assert all(not values for values in observed['dynamic_collections'].values())
-        print('PASS actual BPF-backed 47-to-50 sender, unverified hold, foreign genid and distinct deny-only fenced transaction',flush=True)
+        print('PASS actual BPF-backed 47-to-50, unknown after real send, no replay and distinct deny-only fenced transaction',flush=True)
         print('BOUNDARY: fake authority and AST; deny-only recovery, not live Guardian or positive recovery',flush=True)
         # Continue only in the isolated fixture: an untrusted stand-in Guardian
         # provides a permit, while the real SenderSession checks the live FDs,
@@ -223,5 +252,6 @@ def main():
         if prepared is not None:prepared.close()
         if positive is not None:positive.close_private_fixture()
         if recovery is not None:recovery.close_private_fixture()
+        if uncertain is not None:uncertain.close_private_fixture()
         if first is not None:first.close_private_fixture()
 if __name__=='__main__':main()
