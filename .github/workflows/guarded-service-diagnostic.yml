@@ -52,3 +52,10 @@ jobs:
           done
       - name: Verify BPF absolute expiry and Reader failure semantics
         run: sudo unshare --net -- /usr/bin/python3 -B .github/diagnostics/controller-integration/runtime/ci_bpf_expiry.py
+      - name: Verify original sender terminality and replacement rejection
+        run: |
+          set -eu
+          target="$(sudo mktemp -d /run/ci-terminality.XXXXXX)"
+          trap 'sudo rm -rf "$target"' EXIT
+          sudo cp .github/diagnostics/guarded-service/{guarded_unit_identity.py,recovery_terminality_DRAFT.py,verify_recovery_terminality.py,systemd_peer.py} "$target/"
+          sudo /usr/bin/python3 -B "$target/verify_recovery_terminality.py"
