@@ -4,6 +4,7 @@ Nothing runs or changes on import. Kernel syntax and paths require Root's real
 Brain nft -c and end-to-end qualification before installation.
 """
 from dataclasses import dataclass
+from contextlib import ExitStack
 import hashlib
 import ipaddress
 import json
@@ -471,7 +472,7 @@ STATIC_APPLY_SECONDS = 2.0
 STATIC_INIT_SECONDS = 5.0
 
 
-def native_initialize_static(*, apply, _ownership):
+def _native_initialize_static_impl(*, apply, _ownership):
     import native_structure
     _consume_ownership(_ownership, .750)
     require(_ownership.exists is False, 'R37_COLD_CREATE_ONLY_NO_EXISTING_TABLE_REPLACEMENT')
@@ -533,30 +534,61 @@ def _ci_coordination():
             'ONLY_BOUND_CI_DRAIN_COORDINATOR')
     return CI_DRAIN_COORDINATION
 
+
+def _enter_writer(stack, coord, started):
+    from drain_coordination_DRAFT import FenceError
+    try:return stack.enter_context(coord.admission_or_other_writer())
+    except FenceError as error:
+        raise NoSend('DRAFT_DRAIN_COORDINATION_HOLD',started,time.monotonic()) from error
+
 def native_batch(backends, *, apply=False, core_sources=(), prometheus_sources=(), _ownership=None):
-    coord=_ci_coordination()
-    with coord.admission_or_other_writer() as state:
-        for item in backends:
+    from drain_coordination_DRAFT import FenceError
+    coord=_ci_coordination();started=time.monotonic()
+    with ExitStack() as stack:
+        state=_enter_writer(stack,coord,started)
+        for item in (*backends,*core_sources):
             if item.kind=='core':
-                coord.base.require_allowed(state,item.native_identity.split('/',1)[0],item.address)
-        return _native_batch_impl(backends,apply=apply,core_sources=core_sources,
-                                  prometheus_sources=prometheus_sources,_ownership=_ownership)
+                try:coord.base.require_allowed(state,item.native_identity.split('/',1)[0],item.address)
+                except FenceError as error:
+                    raise NoSend('DRAFT_RETIRED_CORE_SOURCE',started,time.monotonic()) from error
+        with coord.typed_native_send():
+            return _native_batch_impl(backends,apply=apply,core_sources=core_sources,
+                                      prometheus_sources=prometheus_sources,_ownership=_ownership)
 
 def native_refresh(backends, *, core_sources=(), prometheus_sources=(), apply, _ownership):
     import partial_refresh_DRAFT as partial
-    coord=_ci_coordination()
-    with coord.admission_or_other_writer() as state:
+    from drain_coordination_DRAFT import FenceError
+    coord=_ci_coordination();started=time.monotonic()
+    with ExitStack() as stack:
+        state=_enter_writer(stack,coord,started)
         core=[item for item in backends if item.kind=='core']
         require(len(core)<=1,'DRAFT_ONE_CORE_BACKEND')
-        retired=False
-        if core:
-            try:coord.base.require_allowed(state,core[0].native_identity.split('/',1)[0],core[0].address)
-            except Exception as error:
-                from drain_coordination_DRAFT import FenceError
-                if not isinstance(error,FenceError) or str(error)!='RETIRED_BACKEND':raise
+        retired=False;eligible=[]
+        for item in core:
+            try:coord.base.require_allowed(state,item.native_identity.split('/',1)[0],item.address)
+            except FenceError as error:
+                if str(error)!='RETIRED_BACKEND':
+                    raise NoSend('DRAFT_DRAIN_COORDINATION_HOLD',started,time.monotonic()) from error
                 retired=True
-        if retired:
-            return partial.native_partial(backends,core_sources=core_sources,
-                prometheus_sources=prometheus_sources,state=state,apply=apply,_ownership=_ownership)
-        return _native_refresh_impl(backends,core_sources=core_sources,
-                                    prometheus_sources=prometheus_sources,apply=apply,_ownership=_ownership)
+        for item in core_sources:
+            require(item.kind=='core','DRAFT_ONLY_CORE_SOURCES')
+            try:coord.base.require_allowed(state,item.native_identity.split('/',1)[0],item.address)
+            except FenceError as error:
+                if str(error)!='RETIRED_BACKEND':
+                    raise NoSend('DRAFT_DRAIN_COORDINATION_HOLD',started,time.monotonic()) from error
+                retired=True
+            else:eligible.append(item)
+        # No exception after entering a writer is converted to NoSend.
+        with coord.typed_native_send():
+            if retired:
+                return partial.native_partial(backends,core_sources=eligible,
+                    prometheus_sources=prometheus_sources,state=state,apply=apply,_ownership=_ownership)
+            return _native_refresh_impl(backends,core_sources=core_sources,
+                                        prometheus_sources=prometheus_sources,apply=apply,_ownership=_ownership)
+
+def native_initialize_static(*, apply, _ownership):
+    coord=_ci_coordination();started=time.monotonic()
+    with ExitStack() as stack:
+        _enter_writer(stack,coord,started)
+        with coord.typed_native_send():
+            return _native_initialize_static_impl(apply=apply,_ownership=_ownership)

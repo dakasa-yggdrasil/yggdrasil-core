@@ -11,6 +11,7 @@ import json
 import os
 import pathlib
 import re
+import stat
 import tempfile
 
 class FenceError(RuntimeError):
@@ -21,6 +22,55 @@ class Coordinator:
         self.directory = pathlib.Path(directory)
         self.lock_path = self.directory / 'drain.lock'
         self.state_path = self.directory / 'drain-fences.json'
+        self._directory_identity = None
+        self._lock_identity = None
+
+    def _private_directory(self):
+        info=os.lstat(self.directory)
+        if (not stat.S_ISDIR(info.st_mode) or info.st_uid!=0
+                or stat.S_IMODE(info.st_mode)!=0o700):
+            raise FenceError('ROOT_PRIVATE_COORDINATION_DIRECTORY_REQUIRED')
+        identity=(info.st_dev,info.st_ino)
+        if self._directory_identity is not None and identity!=self._directory_identity:
+            raise FenceError('COORDINATION_DIRECTORY_REPLACED')
+        self._directory_identity=identity
+
+    def _checked_lock(self, fd):
+        actual=os.fstat(fd);named=os.lstat(self.lock_path)
+        if (not stat.S_ISREG(actual.st_mode) or actual.st_uid!=0
+                or stat.S_IMODE(actual.st_mode)!=0o600 or actual.st_nlink!=1
+                or (actual.st_dev,actual.st_ino)!=(named.st_dev,named.st_ino)):
+            raise FenceError('ROOT_PRIVATE_STABLE_LOCK_REQUIRED')
+        identity=(actual.st_dev,actual.st_ino)
+        if self._lock_identity is not None and identity!=self._lock_identity:
+            raise FenceError('COORDINATION_LOCK_REPLACED')
+        self._lock_identity=identity
+
+    def revalidate_lock(self):
+        self._private_directory()
+        named=os.lstat(self.lock_path)
+        if self._lock_identity is None or (named.st_dev,named.st_ino)!=self._lock_identity:
+            raise FenceError('COORDINATION_LOCK_REPLACED')
+
+    def _read_state(self):
+        fd=os.open(self.state_path,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC)
+        try:
+            before=os.fstat(fd)
+            if (not stat.S_ISREG(before.st_mode) or before.st_uid!=0
+                    or stat.S_IMODE(before.st_mode)!=0o600 or before.st_nlink!=1
+                    or before.st_size>1048576):
+                raise FenceError('ROOT_PRIVATE_FENCE_STATE_REQUIRED')
+            raw=bytearray()
+            while len(raw)<=1048576:
+                part=os.read(fd,min(65536,1048577-len(raw)))
+                if not part:break
+                raw.extend(part)
+            after=os.fstat(fd);named=os.lstat(self.state_path)
+            stamp=lambda st:(st.st_dev,st.st_ino,st.st_uid,st.st_mode,st.st_nlink,st.st_size,st.st_mtime_ns,st.st_ctime_ns)
+            if len(raw)>1048576 or stamp(before)!=stamp(after) or stamp(after)!=stamp(named):
+                raise FenceError('FENCE_STATE_CHANGED_DURING_READ')
+            return json.loads(raw)
+        finally:os.close(fd)
 
     def initialize_for_test(self):
         self.directory.mkdir(mode=0o700, parents=True, exist_ok=False)
@@ -28,6 +78,7 @@ class Coordinator:
         self._write({'version': 2, 'retired': {}, 'anchor': None})
 
     def _write(self, state):
+        self._private_directory()
         fd, name = tempfile.mkstemp(prefix='.fences-', dir=self.directory)
         try:
             with os.fdopen(fd, 'w') as file:
@@ -46,17 +97,23 @@ class Coordinator:
 
     @contextlib.contextmanager
     def locked(self, *, nonblocking=False):
+        fd=None
         try:
-            fd = os.open(self.lock_path, os.O_RDWR | os.O_NOFOLLOW)
-        except OSError as exc:
-            raise FenceError('COORDINATOR_UNAVAILABLE') from exc
+            self._private_directory()
+            fd = os.open(self.lock_path, os.O_RDWR | os.O_NOFOLLOW | os.O_CLOEXEC)
+            self._checked_lock(fd)
+        except BaseException as exc:
+            if fd is not None:os.close(fd)
+            if isinstance(exc,OSError):raise FenceError('COORDINATOR_UNAVAILABLE') from exc
+            raise
         try:
             try:
                 fcntl.flock(fd, fcntl.LOCK_EX | (fcntl.LOCK_NB if nonblocking else 0))
             except BlockingIOError as exc:
                 raise FenceError('COORDINATOR_BUSY') from exc
+            self._checked_lock(fd)
             try:
-                state = json.loads(self.state_path.read_text())
+                state = self._read_state()
                 if set(state) != {'version', 'retired', 'anchor'} or state['version'] != 2 or type(state['retired']) is not dict:
                     raise FenceError('INVALID_FENCE_STATE')
                 for uid, address in state['retired'].items():

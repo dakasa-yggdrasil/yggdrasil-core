@@ -115,8 +115,57 @@ with tempfile.TemporaryDirectory(prefix='ci-drain-retired-') as tmp:
     import nft_owner as nft
     nft.CI_DRAIN_COORDINATION=coord
     stale=types.SimpleNamespace(kind='core',native_identity=old+'/container',address='10.244.1.1')
+    good=types.SimpleNamespace(kind='core',native_identity=new+'/container',address='10.244.1.2')
+    reused=types.SimpleNamespace(kind='core',native_identity=new+'/container',address='10.244.1.1')
+    native_io.CI_DRAIN_COORDINATION=coord
+    def must_not_send(call,reason):
+        try:call()
+        except nft.NoSend as error:assert error.guard==reason,(error.guard,reason)
+        else:raise AssertionError('expected pre-send hold '+reason)
     with mock.patch.dict(os.environ,{'CI_GUARDED_FIXTURE':'1'}):
-        must_hold(lambda:nft.native_batch([stale],apply=True),'RETIRED_BACKEND')
+        must_not_send(lambda:nft.native_batch([stale],apply=True),'DRAFT_RETIRED_CORE_SOURCE')
+        must_not_send(lambda:nft.native_batch([good],core_sources=[good,stale],apply=True),
+                      'DRAFT_RETIRED_CORE_SOURCE')
+        must_not_send(lambda:nft.native_batch([reused],apply=True),'DRAFT_RETIRED_CORE_SOURCE')
+        must_not_send(lambda:nft.native_batch([good],core_sources=[good,reused],apply=True),
+                      'DRAFT_RETIRED_CORE_SOURCE')
+        try:native_io.command([],role='hot_dynamic_apply')
+        except native_io.process.Held as error:assert str(error)=='TYPED_NATIVE_WRITER_REQUIRED'
+        else:raise AssertionError('untyped native write was accepted')
+        import partial_refresh_DRAFT as partial
+        captured=[]
+        def fake_partial(backends,*,core_sources,**kwargs):
+            captured.extend(core_sources)
+            raise v3.FenceError('AFTER_POSSIBLE_PARTIAL_SEND')
+        with mock.patch.object(partial,'native_partial',side_effect=fake_partial):
+            try:nft.native_refresh([good],core_sources=[good,stale],prometheus_sources=[],
+                                   apply=lambda:True,_ownership=None)
+            except v3.FenceError as error:assert str(error)=='AFTER_POSSIBLE_PARTIAL_SEND'
+            else:raise AssertionError('partial writer error was recast or swallowed')
+        assert captured==[good]
+        captured.clear()
+        with mock.patch.object(partial,'native_partial',side_effect=fake_partial):
+            try:nft.native_refresh([good],core_sources=[good,reused],prometheus_sources=[],
+                                   apply=lambda:True,_ownership=None)
+            except v3.FenceError as error:assert str(error)=='AFTER_POSSIBLE_PARTIAL_SEND'
+            else:raise AssertionError('reused-IP source was not filtered')
+        assert captured==[good]
+
+with tempfile.TemporaryDirectory(prefix='ci-drain-lock-seal-') as tmp:
+    coord=v3.CoordinatorV3(Path(tmp)/'coord');coord.initialize_for_ci()
+    with coord.base.locked():pass
+    original=coord.base.lock_path.with_name('original.lock')
+    os.rename(coord.base.lock_path,original)
+    coord.base.lock_path.touch(mode=0o600)
+    must_hold(lambda:coord.base.locked().__enter__(),'COORDINATION_LOCK_REPLACED')
+    coord.base.lock_path.unlink();os.rename(original,coord.base.lock_path)
+    os.chmod(coord.base.lock_path,0o666)
+    must_hold(lambda:coord.base.locked().__enter__(),'ROOT_PRIVATE_STABLE_LOCK_REQUIRED')
+    os.chmod(coord.base.lock_path,0o600)
+    with coord.base.locked():coord.base.revalidate_lock()
+    os.chmod(coord.directory,0o777)
+    must_hold(lambda:coord.base.locked().__enter__(),'ROOT_PRIVATE_COORDINATION_DIRECTORY_REQUIRED')
+    os.chmod(coord.directory,0o700)
 
 with tempfile.TemporaryDirectory(prefix='ci-drain-crash-') as tmp:
     coord=v3.CoordinatorV3(Path(tmp)/'coord');coord.initialize_for_ci()

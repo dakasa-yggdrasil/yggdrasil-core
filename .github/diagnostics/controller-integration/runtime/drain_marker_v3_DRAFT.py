@@ -59,6 +59,7 @@ class CoordinatorV3:
         # Reentrancy is per-thread and only for the identical coordinator,
         # so native_io can enforce the same held lock at the final send.
         if getattr(self._local,'state',None) is not None:
+            self.base.revalidate_lock()
             yield self._local.state
             return
         with self.base.locked(nonblocking=True) as state:
@@ -66,6 +67,16 @@ class CoordinatorV3:
             self._local.state=state
             try:yield state
             finally:self._local.state=None
+    @contextlib.contextmanager
+    def typed_native_send(self):
+        if getattr(self._local,'state',None) is None:
+            raise FenceError('NATIVE_SEND_REQUIRES_HELD_COORDINATION')
+        prior=getattr(self._local,'native_send',False)
+        self._local.native_send=True
+        try:yield
+        finally:self._local.native_send=prior
+    def native_send_authorized(self):
+        return getattr(self._local,'state',None) is not None and getattr(self._local,'native_send',False)
     def begin(self, core, sources, *, _ci_after_create=None):
         uid=core.native_identity.split('/',1)[0]
         if not uid or not core.address:raise FenceError('CORE_IDENTITY_REQUIRED')
@@ -78,13 +89,14 @@ class CoordinatorV3:
                 **identity,'boot_id':Path('/proc/sys/kernel/random/boot_id').read_text().strip(),
                 'netns':os.readlink('/proc/self/ns/net'),
                 'sources':sorted((x.native_identity,x.address) for x in sources)}
-        raw=(json.dumps(record,sort_keys=True,separators=(',',':'))+'\n').encode()
         # O_EXCL is intentionally the only filesystem mutation while locked.
         # Mere existence, including an empty/torn record, blocks all participants.
         with self.base.locked(nonblocking=True) as state:
             if self.marker_exists():raise FenceError('GUARDED_INTENT_PENDING')
             self.base.require_allowed(state,uid,core.address)
             for source in sources:self.base.require_allowed(state,source.native_identity.split('/',1)[0],source.address)
+            record['lock_dev'],record['lock_ino']=self.base._lock_identity
+            raw=(json.dumps(record,sort_keys=True,separators=(',',':'))+'\n').encode()
             fd=os.open(self.marker,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
             inode=os.fstat(fd).st_ino
         try:
@@ -121,6 +133,7 @@ class CoordinatorV3:
         if (record.get('unit')!=os.environ.get('CI_CONTROLLER_UNIT')
                 or record.get('invocation_id')!=os.environ.get('INVOCATION_ID')
                 or record.get('start_ticks')!=identity._startticks(os.getpid())
+                or (record.get('lock_dev'),record.get('lock_ino'))!=self.base._lock_identity
                 or Path('/proc/self/cgroup').read_text().splitlines()!=['0::'+record.get('control_group','')]):
             raise FenceError('SAME_PROCESS_LIFETIME_REQUIRED')
         current=sorted((x.native_identity,x.address) for x in sources)
@@ -256,6 +269,7 @@ def mint_emergency(coord,verified,registry,nl,netlink):
     marker=_durable_marker_identity(coord);record=marker[3]
     if (record['pid']!=verified.anchor['pid']
             or record['start_ticks']!=verified.anchor['start_ticks']
+            or (record.get('lock_dev'),record.get('lock_ino'))!=coord.base._lock_identity
             or any(record.get(k)!=registry.prep.get(k) for k in
                    ('pid','start_ticks','unit','invocation_id','control_group'))
             or record['boot_id']!=Path('/proc/sys/kernel/random/boot_id').read_text().strip()

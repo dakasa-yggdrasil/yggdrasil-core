@@ -101,6 +101,8 @@ def command(argv, *, data=None, timeout=2, role):
         # Common native write boundary, including installer and cold start.
         # No catch recasts an exception after the child might have started.
         with CI_DRAIN_COORDINATION.admission_or_other_writer():
+            require(CI_DRAIN_COORDINATION.native_send_authorized(),
+                    'TYPED_NATIVE_WRITER_REQUIRED')
             return _command(argv,data=data,timeout=timeout,role=role)
     return _command(argv,data=data,timeout=timeout,role=role)
 
