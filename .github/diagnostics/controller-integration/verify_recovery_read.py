@@ -36,6 +36,11 @@ try:
         ('nft_attachment_verified','nft_dynamic_collections_verified','sender_terminality_verified',
          'exclusive_writer_custody_verified','effect_or_recovery_authority'))
     print('PASS real marker, frozen BPF descriptors/maps, genid and fresh synthetic DNS/route witnesses',flush=True)
+    displaced=coord.writer_lock.with_name('writer.lock.original')
+    coord.writer_lock.rename(displaced);coord.writer_lock.touch(mode=0o600)
+    try:refuse(sample,'RECOVERY_LOCK_DIRECTORY_OR_MOUNT_CHANGED')
+    finally:coord.writer_lock.unlink();displaced.rename(coord.writer_lock)
+    print('PASS marker writer-lock inode replacement rejected',flush=True)
     bad=[dict(x) for x in records];bad[0]['program_id']+=1
     refuse(lambda:sample(records=bad),'PINNED_BPF_DESCRIPTOR_IDENTITY')
     duplicate=[dict(records[0]),dict(records[0])]
