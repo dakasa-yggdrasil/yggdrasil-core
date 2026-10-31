@@ -22,7 +22,7 @@ if child_path:
 s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
 s.connect(sys.argv[1])
 if os.environ.get('CI_TERM_TRANSFER_BPF')=='1':
-    import hashlib
+    import hashlib,struct
     import guarded_nl as nl,guarded_generation as generation,native_structure,transition_structure_DRAFT as transition
     line=bytearray()
     while not line.endswith(b'\n'):
@@ -38,11 +38,34 @@ if os.environ.get('CI_TERM_TRANSFER_BPF')=='1':
         receipts=Path(os.environ['CI_TERM_RECEIPTS']);receipts.mkdir(mode=0o700)
         emitter=generation.GenerationEmitter(initial_raw=initial,transition=transition,receipt_dir=receipts,
                     host_netns=os.environ['CI_HOST_NETNS'])
-        receipt=emitter.submit(requested,records,drain_permit=coord.barrier(intent,core,[core]))
-        raw=(json.dumps({'records':records,'receipt':receipt},sort_keys=True)+'\n').encode()
+        raw=(json.dumps({'records':records},sort_keys=True)+'\n').encode()
         fds=array.array('i',[r[key] for r in records for key in ('program_fd','map_fd')])
         if s.sendmsg([raw],[(socket.SOL_SOCKET,socket.SCM_RIGHTS,fds)])!=len(raw):
             raise RuntimeError('INCOMPLETE_BPF_FD_TRANSFER')
+        if s.recv(1)!=b'G':raise RuntimeError('CUSTODY_NOT_CONFIRMED')
+        class UnknownAfterSend:
+            def __init__(self,inner):self.inner=inner;self.batch_sends=0
+            def send(self,payload):
+                result=self.inner.send(payload)
+                if len(payload)>=6 and struct.unpack_from('<H',payload,4)[0]==0x10:
+                    self.batch_sends+=1;raise RuntimeError('CI_ACK_UNKNOWN_AFTER_SEND')
+                return result
+            def __getattr__(self,name):return getattr(self.inner,name)
+        emitter.nl=UnknownAfterSend(emitter.nl)
+        try:
+            emitter.submit(requested,records,drain_permit=coord.barrier(intent,core,[core]))
+            raise AssertionError('unknown send returned success')
+        except RuntimeError as error:
+            if str(error)!='CI_ACK_UNKNOWN_AFTER_SEND':raise
+        if emitter.state!='HOLD_UNKNOWN_OR_UNVERIFIED' or emitter.nl.batch_sends!=1:
+            raise RuntimeError('UNKNOWN_MUST_REMAIN_HELD_WITHOUT_REPLAY')
+        intent_raw=(receipts/'INTENT-001.json').read_bytes();intent_record=json.loads(intent_raw)
+        wire=(receipts/'WIRE-001.bin').read_bytes()
+        if (receipts/'ACK-001.json').exists() or hashlib.sha256(wire).hexdigest()!=intent_record['wire_sha256']:
+            raise RuntimeError('ORIGINAL_UNKNOWN_WIRE_CUSTODY_REQUIRED')
+        s.sendall((json.dumps({'state':'UNKNOWN','intent_genid':intent_record['genid'],
+                   'wire_sha256':intent_record['wire_sha256'],'batch_sends':emitter.nl.batch_sends},sort_keys=True)+'\n').encode())
+
         s.recv(1)
     finally:
         for record in records:os.close(record['program_fd']);os.close(record['map_fd'])

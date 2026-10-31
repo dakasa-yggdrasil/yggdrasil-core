@@ -52,8 +52,27 @@ try:
         raise RuntimeError('EXACT_BPF_DESCRIPTOR_TRANSFER_REQUIRED')
     level,kind,data=anc[0];fds=array.array('i');fds.frombytes(data[:len(data)-(len(data)%fds.itemsize)])
     if level!=socket.SOL_SOCKET or kind!=socket.SCM_RIGHTS or len(fds)!=4:raise RuntimeError('EXACT_FOUR_BPF_FDS_REQUIRED')
-    transferred=json.loads(raw);records=transferred['records'];receipt=transferred['receipt'];assert len(records)==2
-    genid=receipt['after']
+    transferred=json.loads(raw);records=transferred['records'];assert len(records)==2
+    sender_records=[dict(record) for record in records]
+    channel.sendall(b'G')
+    line=bytearray()
+    while not line.endswith(b'\n'):
+        part=channel.recv(1)
+        if not part:raise RuntimeError('UNKNOWN_SEND_REPORT_MISSING')
+        line.extend(part)
+    unknown=json.loads(line)
+    assert unknown['state']=='UNKNOWN' and unknown['batch_sends']==1
+    genid=nl.genid(netlink)
+    assert genid==((unknown['intent_genid']+1)&0xffffffff or 1)
+    assert not (root/'real-receipts'/'ACK-001.json').exists()
+    observed_rules=nl.rules(netlink,'admit_deadline')
+    handles=[__import__('struct').unpack('>Q',dict((k&0x3fff,v) for k,v in fields)[3])[0] for fields,_ in observed_rules]
+    current_objects,_=native_structure._objects(nl.cmd('/usr/sbin/nft','-a','-j','list','ruleset'))
+    chains=[x['chain']['handle'] for x in current_objects if 'chain' in x and x['chain']['name']=='admit_deadline']
+    assert len(handles)==2 and len(chains)==1
+    # Diagnostic observation only. It is not an ACK or trusted receipt.
+    receipt={'after':genid,'handles':handles,'chain':chains[0],'programs':sender_records}
+    print('PASS one batch sent with ACK deliberately unobserved; marker and original intent retained',flush=True)
     for record,pf,mf in zip(records,fds[::2],fds[1::2]):
         record['sender_program_fd']=record['program_fd']
         record['program_fd'],record['map_fd']=pf,mf
@@ -90,7 +109,15 @@ try:
         print('PASS same custodian: terminal marker, exclusive writer flock, real genid, frozen BPF and fresh Readers',flush=True)
         print('PASS BPF FDs received from authenticated sender remain readable after its death',flush=True)
         print('PASS same sample joins original 50 structure, rule FD references and four nft collections',flush=True)
-        print('BOUNDARY sender ACK is known; hidden BPF pointer and receipt trust remain unproven',flush=True)
+        print('BOUNDARY ACK remains UNKNOWN; hidden BPF pointer and receipt trust remain unproven',flush=True)
+        subprocess.run(['/usr/sbin/nft','add','table','ip','ci_concurrent_external_writer'],check=True,timeout=5)
+        try:
+            recovery.sample_attached(coord,netlink,expected_marker=marker.key,expected_genid=genid,
+                records=records,reference=reference,cache=cache,original_pin=original,receipt=receipt,coverage=coverage)
+            raise AssertionError('external genid change accepted')
+        except recovery.Held as error:assert str(error)=='ORIGINAL_GENID_CHANGED'
+        assert coord.marker.exists() and not (root/'real-receipts'/'ACK-001.json').exists()
+        print('PASS external netlink mutation invalidates sample; UNKNOWN marker remains and wire is never replayed',flush=True)
     # Real private mount namespace; no mount change propagates to host.
     with tempfile.TemporaryDirectory(prefix='wrong-cgroup-mount-') as wrong:
         subprocess.run(['/usr/bin/mount','--bind',wrong,'/sys/fs/cgroup'],check=True,timeout=5)
