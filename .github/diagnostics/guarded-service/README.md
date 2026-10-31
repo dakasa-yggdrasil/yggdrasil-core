@@ -1,0 +1,7 @@
+# Disposable Guardian service integration diagnostics
+
+This branch contains experimental LAB-derived source, not a production runtime or deployment. It combines the v58 positive attestation handler with the service candidate's same-process identity checks, and makes the separately pinned source path work with both `/usr/bin/python3 -B` and `/usr/bin/python3 -I -B`. All args remain exactly compared with the live process; the expected unit, invocation, source hash and cgroup remain independently checked.
+
+Linux CI runs the candidate's precommit and attestation using a real private-netns nft generation and simulated AST/Reader data. A separate transient systemd peer uses real process identity and root-owned source verification; the precommit handshake uses both that identity and real nft reads, while the AST/parser and probe responses are fixtures. Tests include altered source, invocation, argv and nft generation.
+
+A foreign nft mutation makes current genid differ from the historical receipt even when managed objects have not changed. The candidate currently refuses this state. The old receipt must not be edited or treated as a new ACK. Recovery requires a distinct, independently authorized and generation-fenced new transaction using newly observed sources and custody; ambiguous old send remains unknown and must not be replayed. The actual Guardian/controller integration, independent AST/BPF verification, production-shaped TTL and effect timing, complete service test, and safe recovery are unimplemented or unproven here.

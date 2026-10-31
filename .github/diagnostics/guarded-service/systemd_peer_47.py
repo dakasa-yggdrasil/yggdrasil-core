@@ -1,5 +1,5 @@
 """Service-shaped peer for disposable Guardian precommit integration test."""
-import json,os,socket,sys
+import json,os,socket,sys,time
 from pathlib import Path
 raw=Path('/proc/self/stat').read_bytes().rsplit(b') ',1)[1].split()
 ticks=int(raw[19])
@@ -14,3 +14,5 @@ while not data.endswith(b'\n'):
     data.extend(part)
 reply=json.loads(data);assert reply['origin_digest']=='b'*64 and reply['production_authority'] is False
 s.close()
+# Keep the authenticated pid alive long enough for Guardian to observe EOF.
+time.sleep(.5)
