@@ -4,7 +4,7 @@ No authorization, no writes, no replay, no cleanup. Input record provenance,
 real rule attachment, four collections, terminal custody and exclusivity are
 NOT proved here. This is one read-only building block, never a recovery permit.
 """
-import ctypes,hashlib,json,os,socket,time
+import ctypes,hashlib,json,os,socket,stat,time
 import drain_marker_v3_DRAFT as marker_v3
 import guarded_nl as nl
 import guarded_program_identity_DRAFT as program_module
