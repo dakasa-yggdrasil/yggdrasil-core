@@ -181,9 +181,8 @@ def original_cycle(config, eks, *, apply):
     # One native full-ruleset read rechecks the SAME header/handle and all
     # external ct-mark owners after collection, before the unchanged batch.
     ownership = nft.revalidate_owned_ruleset(snapshot)
-    with _ci_drain().admission_or_other_writer():
-        result = nft.native_batch(entries, core_sources=sources, prometheus_sources=prometheus_sources,
-                                  apply=apply(), _ownership=ownership)
+    result = nft.native_batch(entries, core_sources=sources, prometheus_sources=prometheus_sources,
+                              apply=apply(), _ownership=ownership)
     result['held_native_read_classes'] = errors
     result['original_collect_elapsed_seconds'] = collect_returned - collect_started
     return result
@@ -253,9 +252,8 @@ def cached_cycle(reader, lease, ownership, *, apply, previous_key, schedule=None
     def original_apply():
         ownership.permit_original_send(lease,attempt_started)
         return apply()
-    with _ci_drain().admission_or_other_writer():
-        result = nft.native_refresh(entries, core_sources=sources, prometheus_sources=prometheus_sources,
-                                    apply=original_apply, _ownership=lease.token)
+    result = nft.native_refresh(entries, core_sources=sources, prometheus_sources=prometheus_sources,
+                                apply=original_apply, _ownership=lease.token)
     result['held_native_read_classes'] = errors
     result['same_process_topology_generation'] = generation
     result['same_process_semantic_cache_revision'] = revision

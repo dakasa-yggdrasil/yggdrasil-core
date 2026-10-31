@@ -90,7 +90,21 @@ def allowed(argv, role, data):
     require((type(data) is bytes and 0 < len(data) <= 65536) if role in ('refresh_template_check', 'initial_static_check', 'initial_static_apply', 'hot_dynamic_apply') else data is None, 'COMPILED_NATIVE_INPUT_SHAPE')
 
 
+CI_DRAIN_COORDINATION = None
+
 def command(argv, *, data=None, timeout=2, role):
+    if role in ('initial_static_apply','hot_dynamic_apply'):
+        import drain_marker_v3_DRAFT as drain_v3
+        require(os.environ.get('CI_GUARDED_FIXTURE')=='1'
+                and type(CI_DRAIN_COORDINATION) is drain_v3.CoordinatorV3,
+                'ONLY_BOUND_CI_DRAIN_COORDINATOR')
+        # Common native write boundary, including installer and cold start.
+        # No catch recasts an exception after the child might have started.
+        with CI_DRAIN_COORDINATION.admission_or_other_writer():
+            return _command(argv,data=data,timeout=timeout,role=role)
+    return _command(argv,data=data,timeout=timeout,role=role)
+
+def _command(argv, *, data=None, timeout=2, role):
     global _index, _reserved_records, _reserved_bytes, _used_records, _used_bytes
     allowed(argv, role, data)
     require(_initialized and type(timeout) in (int, float) and 0 < timeout <= 10, 'INITIALIZED_BOUNDED_ORIGINAL_NATIVE_OPERATION')

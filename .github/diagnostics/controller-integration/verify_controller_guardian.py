@@ -47,7 +47,7 @@ def main():
     print('PASS actual controller process systemd identity, source hash and cgroup',flush=True)
     import drain_marker_v3_DRAFT as drain_v3
     drain=drain_v3.CoordinatorV3(HERE/'drain-coordinator')
-    drain.initialize_for_ci();controller.CI_DRAIN_COORDINATION=drain
+    drain.initialize_for_ci();controller.CI_DRAIN_COORDINATION=drain;native_io.CI_DRAIN_COORDINATION=drain
     native_io.ROOT=HERE/'custody';native_io.ROOT.mkdir(mode=0o700)
     native_io.configure();native_io.end_initialization()
     cmd('/usr/sbin/nft','-f','-',inp=nft.render((),now=time.monotonic(),table_exists=False).encode())
@@ -181,6 +181,28 @@ def main():
         first.activate_lab_guarded_pin(active_pin)
         drain.finish(initial_drain_intent,active_pin,emitted)
         assert not drain.marker_exists()
+        if os.environ.get('CI_TEST_EXPIRED_PERMIT')=='1':
+            ceiling=guarded_sources.build_expected(guardian_cache)
+            rotation_prepared=guarded_preparation.PreparedGeneration(real_cache,
+                         deadline_ceilings={role:ceiling[role] for role in ('inbound','reverse')})
+            descriptors=list(rotation_prepared.fixture_descriptors(real_cache))
+            rows,cores,_,_,_=real_cache.snapshot()
+            core=next(x for x in rows if x.kind=='core')
+            expired_intent=drain.begin(core,cores);drain.barrier(expired_intent,core,cores)
+            watch.prepare(descriptors)
+            permit=rotation_session.prepare(descriptors,until_ns=time.monotonic_ns()+1_500_000_000)
+            before=nl.genid(first.nl)
+            while time.monotonic_ns()<=permit.deadline_ns:time.sleep(.01)
+            try:rotation_session.consume(permit,descriptors);raise AssertionError('expired permit accepted')
+            except direct_sender.Held as error:assert str(error)=='ORIGINAL_PERMIT_DEADLINE_EXPIRED'
+            try:rotation_session.consume(permit,descriptors);raise AssertionError('expired permit reused')
+            except direct_sender.Held as error:assert str(error)=='EXACT_SINGLE_USE_SENDER_PERMIT_REQUIRED'
+            pending=watch.pending_state()
+            assert pending['pending'] and pending['possible_send'] and nl.genid(first.nl)==before
+            assert drain.marker_exists() and first.counter==1 and not (receipts/'INTENT-002.json').exists()
+            print('PASS expired Guardian permit and v3 marker remain pending without nft send',flush=True)
+            verified.close()
+            return
         import ci_guarded_driver
         driver=ci_guarded_driver.GuardedDriver(watch=watch,sender=rotation_session,emitter=first,
                   positive_session=positive_guardian,ceiling_cache=guardian_cache,endpoints=endpoints,max_commits=2)
@@ -294,6 +316,10 @@ def main():
             finally:current.close()
             kernel_after=coverage.kernel_text(cmd('/usr/sbin/nft','-a','list','table','inet','dakasa_capacity_network'))
             assert all(not rows for rows in kernel_after['dynamic_collections'].values())
+            restored=watch.restore_dns()
+            assert restored['registry_state']=='UNKNOWN' and restored['genid']==denied_by_guardian['genid']
+            assert drain.marker_exists()
+            print('PASS DNS recovered; Guardian UNKNOWN and v3 marker remain held',flush=True)
             deny_ms=(denied_by_guardian['deny_ack_ns']-denied_by_guardian['failure_ns'])/1e6
             print('PASS concurrent Reader failure order=%s deny_ack_unknown=%s: distinct Guardian deny and no accepted stale successor; deny_ack_ms=%.2f'%(failure_order,uncertain_deny,deny_ms),flush=True)
         finally:
@@ -311,98 +337,12 @@ def main():
         try:observer.kernel(guarded=guarded_context);raise AssertionError('foreign genid change was accepted')
         except RuntimeError as error:assert str(error)=='GUARDED_RECEIPT_GENERATION_CHANGED'
         verified.close()
-        # A complete netlink send is made, but its ACK is deliberately never
-        # read. Hold its ownership/FD custody and never submit that wire again.
-        unknown_dir=HERE/'unknown-receipts';unknown_dir.mkdir(mode=0o700)
-        uncertain=generation.GenerationEmitter(initial_raw=raw,transition=trans,receipt_dir=unknown_dir,
-                                               host_netns=os.environ['CI_HOST_NETNS'],recover_fixture=True)
-        class InjectAfterSend:
-            def __init__(self,inner):self.inner=inner;self.sent=0
-            def send(self,payload):
-                sent=self.inner.send(payload)
-                if len(payload)>=6 and struct.unpack_from('<H',payload,4)[0]==0x10:
-                    self.sent+=1
-                    raise RuntimeError('CI_UNKNOWN_AFTER_ACTUAL_NETLINK_SEND')
-                return sent
-            def __getattr__(self,name):return getattr(self.inner,name)
-        uncertain.nl=InjectAfterSend(uncertain.nl)
-        unknown_maps={'inbound':[('09'*12,1)],'reverse':[('0a'*12,1)]}
-        for role in ('inbound','reverse'):records.append(nl.make_program(unknown_maps[role]))
-        transferred=records;records=[]
-        try:
-            uncertain.submit({'maps':unknown_maps,'backends':[],'cores':[],'prom':[]},transferred)
-            raise AssertionError('uncertain send was reported successful')
-        except RuntimeError as error:assert str(error)=='CI_UNKNOWN_AFTER_ACTUAL_NETLINK_SEND'
-        assert uncertain.state=='HOLD_UNKNOWN_OR_UNVERIFIED' and uncertain.nl.sent==1
-        try:uncertain.submit({},[]);raise AssertionError('uncertain sender allowed replay')
-        except RuntimeError as error:assert str(error)=='ONLY_READY_SAME_OWNER'
-        unknown_intent=json.loads((unknown_dir/'INTENT-101.json').read_bytes())
-        assert not (unknown_dir/'ACK-101.json').exists()
-        uncertain.nl.close()
-        recovery=generation.GenerationEmitter(initial_raw=raw,transition=trans,receipt_dir=receipts,
-                                               host_netns=os.environ['CI_HOST_NETNS'],recover_fixture=True)
-        deny_maps={'inbound':[('03'*12,1)],'reverse':[('04'*12,1)]}
-        for role in ('inbound','reverse'):records.append(nl.make_program(deny_maps[role]))
-        transferred=records;records=[]
-        denied=recovery.submit({'maps':deny_maps,'backends':[],'cores':[],'prom':[]},transferred)
-        assert denied['ok'] and denied['genid']!=emitted['after'] and denied['wire_sha256']!=emitted['wire_sha256']
-        assert denied['wire_sha256']!=unknown_intent['wire_sha256']
-        text=cmd('/usr/sbin/nft','-a','list','table','inet','dakasa_capacity_network')
-        observed=coverage.kernel_text(text)
-        assert all(not values for values in observed['dynamic_collections'].values())
-        print('PASS actual BPF-backed 47-to-50, unknown after real send, no replay and distinct deny-only fenced transaction',flush=True)
-        print('BOUNDARY: fake authority and AST; deny-only recovery, not live Guardian or positive recovery',flush=True)
-        # Continue only in the isolated fixture: an untrusted stand-in Guardian
-        # provides a permit, while the real SenderSession checks the live FDs,
-        # frozen maps, program->map linkage and same kernel generation twice.
-        # No observation, systemd identity, ownership lease or service grant
-        # is proved by this stand-in.
-        import guarded_sender_session_DRAFT as sender_protocol
-        receipts2=HERE/'receipts2';receipts2.mkdir(mode=0o700)
-        positive=generation.GenerationEmitter(initial_raw=raw,transition=trans,receipt_dir=receipts2,
-                                               host_netns=os.environ['CI_HOST_NETNS'],recover_fixture=True)
-        a,b=socket.socketpair();server=b
-        class FakeIdentity:
-            def authenticate(self,*args,**kwargs):return {'pidfd':os.pidfd_open(os.getpid(),0)}
-        guard={'unit':'fixture.service','invocation_id':'f'*32,'argv':['fixture'],'source_sha256':'a'*64}
-        session=sender_protocol.SenderSession(a,identity=FakeIdentity(),guardian=guard,nl=nl)
-        def mock_guardian():
-            try:
-                data=bytearray()
-                while not data.endswith(b'\n'):
-                    chunk=b.recv(1)
-                    if not chunk:raise RuntimeError('fixture peer closed')
-                    data.extend(chunk)
-                request=json.loads(data)
-                ids=[[x['program_id'],x['map_id']] for x in request['programs']]
-                reply={'schema':'lab_sender_prepared_permit_reply_v1','nonce':request['nonce'],
-                       'sender_pid':request['sender_pid'],'sender_start_ticks':request['sender_start_ticks'],
-                       'genid':request['genid'],'ids':ids,'map_digest':request['map_digest'],
-                       'deadline_ns':request['until_ns'],'source_epoch':1,'external_effect_authorized':False}
-                b.sendall(nl.canon(reply));server_done.wait(10)
-            except BaseException as error:server_errors.append(error)
-        worker=threading.Thread(target=mock_guardian);worker.start()
-        guard_expected=guarded_sources.build_expected(guardian_cache)
-        prepared=guarded_preparation.PreparedGeneration(real_cache,
-                 deadline_ceilings={role:guard_expected[role] for role in ('inbound','reverse')})
-        descriptors=prepared.fixture_descriptors(real_cache)
-        new_maps={role:[(key.hex(),deadline) for key,deadline in sorted(nl.map_rows(rec['map_id']))]
-                  for role,rec in zip(('inbound','reverse'),descriptors)}
-        assert len(new_maps['inbound'])==64 and len(new_maps['reverse'])==32
-        rows,cores,prom,errors,_=real_cache.snapshot();assert not errors
-        new_plan={'maps':new_maps,'backends':[encode(x) for x in rows],'cores':[encode(x) for x in cores],'prom':[encode(x) for x in prom]}
-        permit=session.prepare(list(descriptors),until_ns=time.monotonic_ns()+3_000_000_000)
-        transferred=prepared.take_same_process_for_emitter(real_cache)
-        refreshed=positive.submit(new_plan,transferred,sender_session=session,sender_permit=permit)
-        assert refreshed['ok'] and permit.consumed and refreshed['genid']==denied['after']
-        assert refreshed['wire_sha256'] not in (emitted['wire_sha256'],denied['wire_sha256'])
-        text=cmd('/usr/sbin/nft','-a','list','table','inet','dakasa_capacity_network')
-        assert coverage.kernel_text(text)['all_four_backends_and_reverse_sources_positive']
-        print('PASS fresh positive BPF sender with real one-use FD/genid permit after deny-only generation',flush=True)
-        print('BOUNDARY: Guardian permit, source witnesses and ownership lease simulated; no production authority',flush=True)
-        import ci_guardian_registry
-        ci_guardian_registry.exercise(root=HERE,raw=raw,trans=trans,host_netns=os.environ['CI_HOST_NETNS'],
-                 baseline=refreshed,baseline_plan=new_plan,reader_cache=guardian_cache,sender_cache=real_cache,encode=encode,coverage=coverage)
+        # The untouched legacy standalone cases execute separately in a new
+        # network namespace and separate filesystem tree. They cannot consume
+        # or clear this v3 unknown marker, which remains held here.
+        assert drain.marker_exists(), 'unknown v3 intent must not be removed'
+        print('PASS v3 unknown marker retained; standalone legacy corpus runs in separate netns',flush=True)
+        print('BOUNDARY: independent legacy corpus does not prove v3 recovery',flush=True)
     finally:
         if pre_guardian is not None:pre_guardian.close()
         if watch is not None:watch.close()

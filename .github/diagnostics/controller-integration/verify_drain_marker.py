@@ -42,6 +42,13 @@ with tempfile.TemporaryDirectory(prefix='ci-drain-marker-') as tmp:
     must_hold(lambda:v3.mint_emergency(coord,object(),object(),None,None),
               'AUTHENTICATED_GUARDIAN_IDENTITY_REQUIRED')
     must_hold(lambda:admission.evaluate({},coord),'GUARDED_INTENT_PENDING')
+    # The common native-IO boundary must also reject direct cold and hot
+    # writers, including callers that bypass controller wrappers.
+    import native_io
+    native_io.CI_DRAIN_COORDINATION=coord
+    with mock.patch.dict(os.environ,{'CI_GUARDED_FIXTURE':'1'}):
+        for role in ('initial_static_apply','hot_dynamic_apply'):
+            must_hold(lambda:native_io.command([],role=role),'GUARDED_INTENT_PENDING')
     must_hold(lambda:coord.barrier(intent,backend(ip='10.244.1.3'),[core]),'INTENT_OBSERVATION_CHANGED')
     # Unknown outcome has no cleanup path; another begin is refused.
     must_hold(lambda:coord.begin(core,[core]),'GUARDED_INTENT_PENDING')

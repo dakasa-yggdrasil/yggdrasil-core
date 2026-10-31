@@ -48,7 +48,7 @@ class Watch:
         while True:
             row=self.read()
             if row['event']==expected:return row
-            if row['event']=='HOLD' and command=='STOP_DNS':
+            if row['event']=='HOLD' and command in ('STOP_DNS','RESTORE_DNS'):
                 self.last_hold=row;continue
             if row['event']=='DENIED' and command=='STOP_DNS':
                 self.pending_deny=row;continue
@@ -64,6 +64,7 @@ class Watch:
     def prepare(self,records):return self.control('PREPARE','PREPARED',records=list(records))
     def confirm(self,result,plan):return self.control('CONFIRM','CONFIRMED',result=result,plan=plan)
     def resume(self):return self.control('RESUME','RESUMED')
+    def pending_state(self):return self.control('PROBE_PENDING','PENDING_STATE')
     def stop_dns_and_wait_for_autonomous_deny(self):
         stopped=self.control('STOP_DNS','DNS_STOPPED')
         while True:
@@ -72,6 +73,7 @@ class Watch:
             if row['event']=='DENIED':row['dns_stop_ns']=stopped['dns_stop_ns'];return row
             if row['event']=='HOLD':self.last_hold=row;continue
             if row['event'] not in ('SAMPLE','FINISHED'):raise RuntimeError('AUTONOMOUS_DENY_FAILED:'+str(row))
+    def restore_dns(self):return self.control('RESTORE_DNS','DNS_RESTORED')
     def expect_hold(self):
         deadline=time.monotonic()+8
         while time.monotonic()<deadline:
