@@ -162,10 +162,18 @@ with tempfile.TemporaryDirectory(prefix='ci-drain-lock-seal-') as tmp:
     os.chmod(coord.base.lock_path,0o666)
     must_hold(lambda:coord.base.locked().__enter__(),'ROOT_PRIVATE_STABLE_LOCK_REQUIRED')
     os.chmod(coord.base.lock_path,0o600)
-    with coord.base.locked():coord.base.revalidate_lock()
+    with coord.base.locked():
+        coord.base.revalidate_lock()
+        os.chmod(coord.base.lock_path,0o666)
+        must_hold(coord.base.revalidate_lock,'ROOT_PRIVATE_STABLE_LOCK_REQUIRED')
+        os.chmod(coord.base.lock_path,0o600)
     os.chmod(coord.directory,0o777)
     must_hold(lambda:coord.base.locked().__enter__(),'ROOT_PRIVATE_COORDINATION_DIRECTORY_REQUIRED')
     os.chmod(coord.directory,0o700)
+    parent=coord.directory.parent
+    os.chmod(parent,0o777)
+    must_hold(lambda:coord.base.locked().__enter__(),'ROOT_CONTROLLED_COORDINATION_ANCESTOR_REQUIRED')
+    os.chmod(parent,0o700)
 
 with tempfile.TemporaryDirectory(prefix='ci-drain-crash-') as tmp:
     coord=v3.CoordinatorV3(Path(tmp)/'coord');coord.initialize_for_ci()

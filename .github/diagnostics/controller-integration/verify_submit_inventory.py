@@ -31,4 +31,26 @@ netlink_sends=sum(isinstance(node,ast.Call) and isinstance(node.func,ast.Attribu
     and node.func.value.attr=='nl' for node in ast.walk(tree))
 if netlink_sends!=2:
     raise RuntimeError('UNREVIEWED_COMMON_NETLINK_SENDS')
+direct_native={}
+for file in (root/'runtime').glob('*.py'):
+    tree=ast.parse(file.read_text(),filename=str(file))
+    for node in ast.walk(tree):
+        if (isinstance(node,ast.Call) and isinstance(node.func,ast.Attribute)
+                and node.func.attr in ('native','_command')
+                and isinstance(node.func.value,ast.Name)):
+            key=(file.name,node.func.value.id,node.func.attr)
+            direct_native[key]=direct_native.get(key,0)+1
+if direct_native!={('native_io.py','process','native'):1,
+                    ('eks_https.py','original_process','native'):1}:
+    raise RuntimeError('UNREVIEWED_DIRECT_NATIVE_CALLS: '+repr(direct_native))
+raw_internal_calls={}
+for file in (root/'runtime').glob('*.py'):
+    tree=ast.parse(file.read_text(),filename=str(file))
+    for node in ast.walk(tree):
+        if isinstance(node,ast.ImportFrom) and node.module=='native_io' and any(x.name=='_command' for x in node.names):
+            raise RuntimeError('DIRECT_NATIVE_COMMAND_IMPORT_FORBIDDEN')
+        if isinstance(node,ast.Call) and isinstance(node.func,ast.Name) and node.func.id=='_command':
+            raw_internal_calls[file.name]=raw_internal_calls.get(file.name,0)+1
+if raw_internal_calls!={'native_io.py':2}:
+    raise RuntimeError('UNREVIEWED_INTERNAL_COMMAND_CALLS: '+repr(raw_internal_calls))
 print('PASS closed active and separately isolated legacy inventories; not production coverage')

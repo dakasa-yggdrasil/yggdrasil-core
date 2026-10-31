@@ -96,6 +96,8 @@ class CoordinatorV3:
             self.base.require_allowed(state,uid,core.address)
             for source in sources:self.base.require_allowed(state,source.native_identity.split('/',1)[0],source.address)
             record['lock_dev'],record['lock_ino']=self.base._lock_identity
+            record['directory_identity']=list(self.base._directory_identity)
+            record['mount_identity']=list(self.base._mount_identity)
             raw=(json.dumps(record,sort_keys=True,separators=(',',':'))+'\n').encode()
             fd=os.open(self.marker,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
             inode=os.fstat(fd).st_ino
@@ -134,6 +136,8 @@ class CoordinatorV3:
                 or record.get('invocation_id')!=os.environ.get('INVOCATION_ID')
                 or record.get('start_ticks')!=identity._startticks(os.getpid())
                 or (record.get('lock_dev'),record.get('lock_ino'))!=self.base._lock_identity
+                or record.get('directory_identity')!=list(self.base._directory_identity)
+                or record.get('mount_identity')!=list(self.base._mount_identity)
                 or Path('/proc/self/cgroup').read_text().splitlines()!=['0::'+record.get('control_group','')]):
             raise FenceError('SAME_PROCESS_LIFETIME_REQUIRED')
         current=sorted((x.native_identity,x.address) for x in sources)
@@ -270,6 +274,8 @@ def mint_emergency(coord,verified,registry,nl,netlink):
     if (record['pid']!=verified.anchor['pid']
             or record['start_ticks']!=verified.anchor['start_ticks']
             or (record.get('lock_dev'),record.get('lock_ino'))!=coord.base._lock_identity
+            or record.get('directory_identity')!=list(coord.base._directory_identity)
+            or record.get('mount_identity')!=list(coord.base._mount_identity)
             or any(record.get(k)!=registry.prep.get(k) for k in
                    ('pid','start_ticks','unit','invocation_id','control_group'))
             or record['boot_id']!=Path('/proc/sys/kernel/random/boot_id').read_text().strip()

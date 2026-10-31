@@ -24,8 +24,50 @@ class Coordinator:
         self.state_path = self.directory / 'drain-fences.json'
         self._directory_identity = None
         self._lock_identity = None
+        self._ancestors = None
+        self._mount_identity = None
+
+    @staticmethod
+    def _mount_fingerprint(path):
+        # CI-only bounded allowlist. Real deployment must independently pin
+        # the provisioned local mount and its durability contract.
+        def unescape(value):
+            return re.sub(r'\\([0-7]{3})',lambda m:chr(int(m.group(1),8)),value)
+        matches=[]
+        for line in pathlib.Path('/proc/self/mountinfo').read_text().splitlines():
+            left,sep,right=line.partition(' - ')
+            if not sep:raise FenceError('MOUNTINFO_PARSE_FAILED')
+            a,b=left.split(),right.split()
+            if len(a)<6 or len(b)<2:raise FenceError('MOUNTINFO_PARSE_FAILED')
+            mount=unescape(a[4])
+            if path==mount or path.startswith(mount.rstrip('/')+'/'):
+                matches.append((len(mount),(a[0],a[2],unescape(a[3]),mount,b[0],b[1])))
+        if not matches:raise FenceError('COORDINATION_MOUNT_NOT_FOUND')
+        longest=max(item[0] for item in matches)
+        candidates=[item[1] for item in matches if item[0]==longest]
+        if len(candidates)!=1:raise FenceError('AMBIGUOUS_COORDINATION_MOUNT')
+        selected=candidates[0]
+        if selected[4] not in ('ext4','xfs','tmpfs','overlay'):
+            raise FenceError('CI_LOCAL_MOUNT_TYPE_REQUIRED')
+        return selected
 
     def _private_directory(self):
+        if not self.directory.is_absolute() or os.path.realpath(self.directory)!=str(self.directory):
+            raise FenceError('NON_SYMLINK_ABSOLUTE_COORDINATION_PATH_REQUIRED')
+        ancestors=[]
+        for parent in reversed(self.directory.parents):
+            value=os.lstat(parent)
+            if (not stat.S_ISDIR(value.st_mode) or value.st_uid!=0
+                    or (value.st_mode & 0o022 and not value.st_mode & stat.S_ISVTX)):
+                raise FenceError('ROOT_CONTROLLED_COORDINATION_ANCESTOR_REQUIRED')
+            ancestors.append((str(parent),value.st_dev,value.st_ino,value.st_mode,value.st_uid))
+        if self._ancestors is not None and ancestors!=self._ancestors:
+            raise FenceError('COORDINATION_ANCESTOR_CHANGED')
+        self._ancestors=ancestors
+        mount=self._mount_fingerprint(str(self.directory))
+        if self._mount_identity is not None and mount!=self._mount_identity:
+            raise FenceError('COORDINATION_MOUNT_CHANGED')
+        self._mount_identity=mount
         info=os.lstat(self.directory)
         if (not stat.S_ISDIR(info.st_mode) or info.st_uid!=0
                 or stat.S_IMODE(info.st_mode)!=0o700):
@@ -51,6 +93,9 @@ class Coordinator:
         named=os.lstat(self.lock_path)
         if self._lock_identity is None or (named.st_dev,named.st_ino)!=self._lock_identity:
             raise FenceError('COORDINATION_LOCK_REPLACED')
+        if (not stat.S_ISREG(named.st_mode) or named.st_uid!=0
+                or stat.S_IMODE(named.st_mode)!=0o600 or named.st_nlink!=1):
+            raise FenceError('ROOT_PRIVATE_STABLE_LOCK_REQUIRED')
 
     def _read_state(self):
         fd=os.open(self.state_path,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC)
