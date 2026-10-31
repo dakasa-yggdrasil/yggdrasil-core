@@ -62,7 +62,7 @@ class IntegrationTest(unittest.TestCase):
         self.assertEqual(call['unit'],'test.service');self.assertEqual(obj.sender,os.getpid())
     def test_identity_mismatch_rejected(self):
         with self.assertRaisesRegex(authority.Held,'SAME_ORIGINAL_CONTROLLER_IDENTITY'):self.create(Identity(wrong=True))
-    def attest(self, drift):
+    def attest(self, drift, prior_drift=False):
         obj=self.create();generation=guarded_nl.genid(self.nlsock)
         rows={'inbound':[(b'a'*12,time.monotonic_ns()+20_000_000_000)],'reverse':[(b'b'*12,time.monotonic_ns()+20_000_000_000)]}
         records=[{'program_fd':10,'program_id':110,'map_fd':11,'map_id':211}, {'program_fd':20,'program_id':120,'map_fd':21,'map_id':221}]
@@ -80,7 +80,14 @@ class IntegrationTest(unittest.TestCase):
             current=guarded_nl.genid(self.nlsock);seen.append(current)
             return {'observation':{'genid':current,'receipt_sha256':receipt_hash,'kernel_min_deadline_ns':time.monotonic_ns()+15_000_000_000},'invalidation_epoch':4}
         obj.validate_kernel=snapshot;sent=[];obj._send=sent.append
-        if drift:
+        if prior_drift:
+            # A foreign table change happened before the attestation started.
+            # It leaves this fixture's objects untouched but advances the real
+            # namespace generation. The candidate cannot yet requalify it.
+            subprocess.run(['/usr/sbin/nft','add','table','ip','ci_prior_drift'],check=True)
+            with self.assertRaisesRegex(authority.Held,'EXACT_VERIFIED_POSITIVE_RECEIPT'):obj.attest_current(request)
+            self.assertNotEqual(generation,seen[0]);self.assertEqual(sent,[])
+        elif drift:
             with self.assertRaisesRegex(authority.Held,'STABLE_POSITIVE_KERNEL_AND_SOURCE'):obj.attest_current(request)
             self.assertNotEqual(seen[0],seen[1]);self.assertEqual(sent,[])
         else:
@@ -88,4 +95,5 @@ class IntegrationTest(unittest.TestCase):
             self.assertFalse(sent[0]['external_effect_authorized'])
     def test_positive_attestation(self):self.attest(False)
     def test_real_nft_genid_drift_rejected(self):self.attest(True)
+    def test_preexisting_foreign_nft_change_requires_requalification(self):self.attest(False,prior_drift=True)
 if __name__=='__main__':unittest.main(verbosity=2)
