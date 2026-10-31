@@ -92,7 +92,7 @@ def main():
     native_structure.COMPILED_NATIVE_AST_SHA256=expected
     raw=cmd('/usr/sbin/nft','-a','-j','list','ruleset')
     original=trans.OriginalPin(raw)
-    records=[];first=None;uncertain=None;recovery=None;positive=None;session=None;server=None;prepared=None;initial_prepared=None
+    records=[];first=None;uncertain=None;recovery=None;positive=None;session=None;server=None;prepared=None;initial_prepared=None;watch=None
     server_done=threading.Event();server_errors=[];worker=None
     try:
         import ci_reader_fixture,guarded_sources,guarded_preparation
@@ -147,6 +147,8 @@ def main():
         assert live['scope']=='guarded50_non_authorizing_ci_lab' and live['kernel']['all_four_backends_and_reverse_sources_positive']
         assert live['live']['grant_authority'] is False
         print('PASS Owner.kernel guarded 50 with real source/tuple join and original receipt',flush=True)
+        import ci_guardian_unit
+        watch=ci_guardian_unit.Watch(root=HERE,anchor=anchor,result=emitted,plan=first_plan)
         print('PASS cached_guarded_cycle with actual original 47 ownership reader and BPF emitter',flush=True)
         try:first.submit({},[]);raise AssertionError('unverified generation allowed another send')
         except RuntimeError as e:assert str(e)=='ONLY_READY_SAME_OWNER'
@@ -154,6 +156,7 @@ def main():
         # receipt proves the present generation. The diagnostic recovery sender
         # is distinct and submits a deny-only batch using fresh expired maps.
         cmd('/usr/sbin/nft','add','table','ip','ci_foreign_after_50')
+        watch.expect_hold();watch.close();watch=None
         try:observer.kernel(guarded=guarded_context);raise AssertionError('foreign genid change was accepted')
         except RuntimeError as error:assert str(error)=='GUARDED_RECEIPT_GENERATION_CHANGED'
         verified.close()
@@ -250,6 +253,7 @@ def main():
         ci_guardian_registry.exercise(root=HERE,raw=raw,trans=trans,host_netns=os.environ['CI_HOST_NETNS'],
                  baseline=refreshed,baseline_plan=new_plan,reader_cache=guardian_cache,sender_cache=real_cache,encode=encode,coverage=coverage)
     finally:
+        if watch is not None:watch.close()
         for rec in records:
             os.close(rec['program_fd']);os.close(rec['map_fd'])
         server_done.set()

@@ -1028,7 +1028,26 @@ class Owner:
     def watch_initial_identity(self):
         return None  # No LAB history is admitted.
 
-    def watch(self):
+    def watch(self, *, guarded=None, stop=None, publish=None, duration=None):
+        if guarded is not None:
+            # Separate non-authorizing experimental mode. The existing
+            # production watch/recovery path below is not changed or invoked.
+            require(os.environ.get('CI_GUARDED_FIXTURE')=='1' and stop is not None and callable(publish)
+                    and type(duration) in (int,float) and 0<duration<=20,
+                    'BOUNDED_PRIVATE_GUARDED_WATCH_ONLY')
+            deadline=time.monotonic()+duration
+            while not stop.is_set() and time.monotonic()<deadline:
+                try:
+                    value,observed=self.kernel(guarded=guarded)
+                    publish({'event':'SAMPLE','observed':observed,'generation':value['live']['observation']['genid'],
+                             'production_authority':False})
+                except Exception as error:
+                    publish({'event':'HOLD','error_class':type(error).__name__,'guard':str(error)[:160],
+                             'production_authority':False})
+                    return
+                stop.wait(min(.25,max(0,deadline-time.monotonic())))
+            publish({'event':'FINISHED','production_authority':False})
+            return
         # A second Guardian cannot race this permanent owner after a service restart.
         fd = os.open(LEDGER / 'guardian.lock', os.O_RDWR | os.O_CREAT | os.O_NOFOLLOW | os.O_CLOEXEC, 0o600)
         fcntl.flock(fd, fcntl.LOCK_EX | fcntl.LOCK_NB)
