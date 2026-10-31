@@ -43,6 +43,7 @@ def serve(channel,listener):
             if watcher.is_alive():raise RuntimeError('GUARDED_WATCH_DID_NOT_STOP')
             watcher=None
     try:
+        generation.CI_DRAIN_COORDINATION=drain_v3.CoordinatorV3(ROOT/'drain-coordinator')
         channel.settimeout(15);request=read_line(channel)
         controller=identity.authenticate(channel,unit=request['unit'],expected_invocation=request['invocation'],
                       expected_argv=request['argv'],source_sha256=request['source_sha256'])
@@ -116,7 +117,7 @@ def serve(channel,listener):
                 for role in ('inbound','reverse'):records.append(nl.make_program(maps[role]))
                 transferred=records;records=[]
                 emergency=drain_v3.mint_emergency(drain_v3.CoordinatorV3(ROOT/'drain-coordinator'),
-                    verified,reg,nl,denier.nl)
+                    verified,reg,denier)
                 try:denied=denier.submit({'maps':maps,'backends':[],'cores':[],'prom':[]},transferred,
                                          emergency_permit=emergency)
                 except RuntimeError as error:
@@ -134,7 +135,7 @@ def serve(channel,listener):
                     for role in ('inbound','reverse'):records.append(nl.make_program(maps2[role]))
                     transferred=records;records=[]
                     recovery_emergency=drain_v3.mint_emergency(drain_v3.CoordinatorV3(ROOT/'drain-coordinator'),
-                        verified,reg,nl,deny_recovery.nl)
+                        verified,reg,deny_recovery)
                     denied=deny_recovery.submit({'maps':maps2,'backends':[],'cores':[],'prom':[]},transferred,
                                                 emergency_permit=recovery_emergency)
                     assert denied['wire_sha256']!=intent['wire_sha256']

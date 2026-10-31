@@ -462,7 +462,7 @@ def _serve_guarded_hot(reader, pin, *, apply, driver, initial_sequence=1):
             before_entries,before_cores,_,_,_=current
             before_core=[item for item in before_entries if item.kind=='core']
             nft.require(len(before_core)==1,'CI_ONE_CORE_FOR_DRAIN_INTENT')
-            intent=_ci_drain().begin(before_core[0],before_cores)
+            intent=_ci_drain().begin(before_core[0],before_cores,writer_lease=driver.emitter.writer_lease)
             _ci_drain().barrier(intent,before_core[0],before_cores)
             try:
                 prepared,permit=driver.prepare(reader.cache)

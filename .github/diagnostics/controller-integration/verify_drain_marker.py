@@ -1,5 +1,5 @@
 """Concurrent process and crash checks for CI-only v3 marker."""
-import os,subprocess,sys,tempfile,threading,time,types
+import fcntl,os,subprocess,sys,tempfile,threading,time,types
 from pathlib import Path
 from unittest import mock
 HERE=Path(__file__).resolve().parent
@@ -20,6 +20,15 @@ def must_hold(fn,reason):
 with tempfile.TemporaryDirectory(prefix='ci-drain-marker-') as tmp:
     coord=v3.CoordinatorV3(Path(tmp)/'coord');coord.initialize_for_ci()
     core=backend()
+    must_hold(lambda:coord.begin(core,[core],writer_lease=object()),
+              'ORIGINAL_WRITER_LEASE_REQUIRED_BEFORE_INTENT')
+    writer_lease=coord.acquire_writer_lease()
+    exclusive_fd=os.open(coord.writer_lock,os.O_RDWR)
+    try:
+        try:fcntl.flock(exclusive_fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except BlockingIOError:pass
+        else:raise AssertionError('recovery EX acquired while writer lease lives')
+    finally:os.close(exclusive_fd)
     must_hold(lambda:admission.evaluate({},coord),'GUARDED_BPF_ADMISSION_NOT_VALIDATED')
     # fsync runs with no flock: another participant can acquire it, sees the
     # visible pending marker and denies rather than waiting for durability.
@@ -29,7 +38,7 @@ with tempfile.TemporaryDirectory(prefix='ci-drain-marker-') as tmp:
         must_hold(lambda:admission.evaluate({},coord),'GUARDED_INTENT_PENDING')
         return real_fsync(fd)
     with mock.patch.object(v3.os,'fsync',side_effect=observed_fsync):
-        intent=coord.begin(core,[core])
+        intent=coord.begin(core,[core],writer_lease=writer_lease)
     assert len(checks)==2 and coord.marker_exists()
     permit=coord.barrier(intent,core,[core])
     plan={'backends':[{'kind':'core','address':core.address,'deadline':int(core.expires*1e9)}],
@@ -39,7 +48,7 @@ with tempfile.TemporaryDirectory(prefix='ci-drain-marker-') as tmp:
     v3.authorize_positive(permit,plan)
     must_hold(lambda:v3.authorize_emergency(None,{'backends':[],'cores':[],'prom':[],
               'maps':{'inbound':[],'reverse':[]}},None,consume=False),'ORIGINAL_LIVE_EMERGENCY_PERMIT_REQUIRED')
-    must_hold(lambda:v3.mint_emergency(coord,object(),object(),None,None),
+    must_hold(lambda:v3.mint_emergency(coord,object(),object(),None),
               'AUTHENTICATED_GUARDIAN_IDENTITY_REQUIRED')
     must_hold(lambda:admission.evaluate({},coord),'GUARDED_INTENT_PENDING')
     # The common native-IO boundary must also reject direct cold and hot
@@ -51,7 +60,7 @@ with tempfile.TemporaryDirectory(prefix='ci-drain-marker-') as tmp:
             must_hold(lambda:native_io.command([],role=role),'GUARDED_INTENT_PENDING')
     must_hold(lambda:coord.barrier(intent,backend(ip='10.244.1.3'),[core]),'INTENT_OBSERVATION_CHANGED')
     # Unknown outcome has no cleanup path; another begin is refused.
-    must_hold(lambda:coord.begin(core,[core]),'GUARDED_INTENT_PENDING')
+    must_hold(lambda:coord.begin(core,[core],writer_lease=writer_lease),'GUARDED_INTENT_PENDING')
     # Guardian does its own file+directory fsync without holding flock; merely
     # seeing a complete JSON marker is not accepted as a durability proof.
     checks=[]
@@ -64,7 +73,8 @@ with tempfile.TemporaryDirectory(prefix='ci-drain-marker-') as tmp:
         guard_recovery_epoch=1,errors={'rds':'failure'})
     registry=types.SimpleNamespace(lock=threading.Lock(),state='UNKNOWN',cache=cache)
     nl=types.SimpleNamespace(genid=lambda _:99)
-    emergency=v3._EmergencyPermit(coord,object(),registry,nl,99,3,1,marker,v3._CAPABILITY)
+    fake_emitter=types.SimpleNamespace(nl=None,writer_lease=writer_lease)
+    emergency=v3._EmergencyPermit(coord,object(),registry,nl,99,3,1,marker,writer_lease,fake_emitter,v3._CAPABILITY)
     denial={'backends':[],'cores':[],'prom':[],'maps':{'inbound':[('00'*12,1)],'reverse':[('01'*12,1)]}}
     cache.guard_invalidation_epoch=5
     v3.authorize_emergency(emergency,denial,None,consume=False)
@@ -90,9 +100,13 @@ with tempfile.TemporaryDirectory(prefix='ci-drain-marker-') as tmp:
     must_hold(lambda:v3.authorize_emergency(emergency,denial,None,consume=False),
               'ORIGINAL_LIVE_EMERGENCY_PERMIT_REQUIRED')
     assert coord.marker_exists()
-    v3.authorize_positive(permit,plan,consume=True,emitter=object(),genid=1)
+    v3.authorize_positive(permit,plan,consume=True,emitter=types.SimpleNamespace(writer_lease=writer_lease),genid=1)
     must_hold(lambda:v3.authorize_positive(permit,plan),'POSITIVE_INTENT_ALREADY_SENT_OR_UNKNOWN')
     assert coord.marker_exists()
+    writer_lease.close()
+    exclusive_fd=os.open(coord.writer_lock,os.O_RDWR)
+    try:fcntl.flock(exclusive_fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+    finally:os.close(exclusive_fd)
 
 # The actual Cache increments recovery epoch when a stored error clears,
 # even if another failure appears before an observer samples it.
@@ -183,7 +197,8 @@ sys.path.insert(0,sys.argv[1])
 import drain_marker_v3_DRAFT as v3
 coord=v3.CoordinatorV3(sys.argv[2]); now=time.monotonic()
 core=types.SimpleNamespace(native_identity='old/container',address='10.244.1.2',expires=now+20)
-coord.begin(core,[core],_ci_after_create=lambda:os._exit(81))
+lease=coord.acquire_writer_lease()
+coord.begin(core,[core],writer_lease=lease,_ci_after_create=lambda:os._exit(81))
 """
     unit='ci-drain-marker-crash-'+str(os.getpid())
     p=subprocess.run(['/usr/bin/systemd-run','--quiet','--wait','--pipe','--unit='+unit,

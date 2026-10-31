@@ -541,10 +541,17 @@ def _enter_writer(stack, coord, started):
     except FenceError as error:
         raise NoSend('DRAFT_DRAIN_COORDINATION_HOLD',started,time.monotonic()) from error
 
+def _enter_writer_lease(stack, coord, started):
+    from drain_coordination_DRAFT import FenceError
+    try:return stack.enter_context(coord.writer_lease())
+    except (FenceError,BlockingIOError) as error:
+        raise NoSend('DRAFT_WRITER_LEASE_HOLD',started,time.monotonic()) from error
+
 def native_batch(backends, *, apply=False, core_sources=(), prometheus_sources=(), _ownership=None):
     from drain_coordination_DRAFT import FenceError
     coord=_ci_coordination();started=time.monotonic()
     with ExitStack() as stack:
+        _enter_writer_lease(stack,coord,started)
         state=_enter_writer(stack,coord,started)
         for item in (*backends,*core_sources):
             if item.kind=='core':
@@ -560,6 +567,7 @@ def native_refresh(backends, *, core_sources=(), prometheus_sources=(), apply, _
     from drain_coordination_DRAFT import FenceError
     coord=_ci_coordination();started=time.monotonic()
     with ExitStack() as stack:
+        _enter_writer_lease(stack,coord,started)
         state=_enter_writer(stack,coord,started)
         core=[item for item in backends if item.kind=='core']
         require(len(core)<=1,'DRAFT_ONE_CORE_BACKEND')
@@ -589,6 +597,7 @@ def native_refresh(backends, *, core_sources=(), prometheus_sources=(), apply, _
 def native_initialize_static(*, apply, _ownership):
     coord=_ci_coordination();started=time.monotonic()
     with ExitStack() as stack:
+        _enter_writer_lease(stack,coord,started)
         _enter_writer(stack,coord,started)
         with coord.typed_native_send():
             return _native_initialize_static_impl(apply=apply,_ownership=_ownership)

@@ -37,10 +37,11 @@ def _original_systemd_identity():
     return {'unit':unit,'invocation_id':invocation,'control_group':first['ControlGroup'],'start_ticks':ticks}
 
 class Intent:
-    def __init__(self, owner, nonce, inode, digest, core_uid, core_address, capability):
+    def __init__(self, owner, nonce, inode, digest, core_uid, core_address, writer_lease, capability):
         if capability is not _CAPABILITY:raise FenceError('ONLY_LOCAL_INTENT')
         self.owner,self.nonce,self.inode,self.digest=owner,nonce,inode,digest
         self.core_uid,self.core_address=core_uid,core_address
+        self.writer_lease=writer_lease
         self.pid=os.getpid();self.capability=capability
         self.sent=False;self.before_genid=None;self.emitter=None
 
@@ -48,9 +49,36 @@ class CoordinatorV3:
     def __init__(self,directory):
         self.base=Coordinator(directory);self.directory=Path(directory)
         self.marker=self.directory/'guarded-intent.json'
+        self.writer_lock=self.directory/'writer.lock'
+        self._writer_identity=None
         self._local=threading.local()
     def initialize_for_ci(self):
         self.base.initialize_for_test()
+        fd=os.open(self.writer_lock,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+        try:os.fsync(fd)
+        finally:os.close(fd)
+        directory_fd=os.open(self.directory,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+        try:os.fsync(directory_fd)
+        finally:os.close(directory_fd)
+    def acquire_writer_lease(self):
+        import writer_lease_v3_DRAFT as writer_lease
+        return writer_lease.acquire(self)
+    @contextlib.contextmanager
+    def writer_lease(self):
+        current=getattr(self._local,'writer_lease',None)
+        if current is not None:
+            current.validate();yield current;return
+        lease=self.acquire_writer_lease()
+        self._local.writer_lease=lease
+        try:yield lease
+        finally:
+            self._local.writer_lease=None
+            lease.close()
+    def current_writer_lease(self):
+        lease=getattr(self._local,'writer_lease',None)
+        if lease is None:raise FenceError('TYPED_WRITER_LEASE_REQUIRED')
+        lease.validate()
+        return lease
     def marker_exists(self):
         try:os.lstat(self.marker);return True
         except FileNotFoundError:return False
@@ -77,11 +105,15 @@ class CoordinatorV3:
         finally:self._local.native_send=prior
     def native_send_authorized(self):
         return getattr(self._local,'state',None) is not None and getattr(self._local,'native_send',False)
-    def begin(self, core, sources, *, _ci_after_create=None):
+    def begin(self, core, sources, *, writer_lease, _ci_after_create=None):
         uid=core.native_identity.split('/',1)[0]
         if not uid or not core.address:raise FenceError('CORE_IDENTITY_REQUIRED')
         if not sources or not any(x.address==core.address and x.native_identity==core.native_identity for x in sources):
             raise FenceError('CORE_SOURCE_JOIN_REQUIRED')
+        import writer_lease_v3_DRAFT as lease_module
+        if type(writer_lease) is not lease_module.WriterLease or writer_lease.coord is not self:
+            raise FenceError('ORIGINAL_WRITER_LEASE_REQUIRED_BEFORE_INTENT')
+        writer_lease.validate()
         identity=_original_systemd_identity()
         nonce=secrets.token_hex(32)
         record={'schema':'ci_guarded_drain_intent_v3','nonce':nonce,'pid':os.getpid(),
@@ -95,7 +127,9 @@ class CoordinatorV3:
             if self.marker_exists():raise FenceError('GUARDED_INTENT_PENDING')
             self.base.require_allowed(state,uid,core.address)
             for source in sources:self.base.require_allowed(state,source.native_identity.split('/',1)[0],source.address)
+            writer_lease.validate()
             record['lock_dev'],record['lock_ino']=self.base._lock_identity
+            record['writer_lock_identity']=list(self._writer_identity)
             record['directory_identity']=list(self.base._directory_identity)
             record['mount_identity']=list(self.base._mount_identity)
             raw=(json.dumps(record,sort_keys=True,separators=(',',':'))+'\n').encode()
@@ -115,11 +149,12 @@ class CoordinatorV3:
         finally:os.close(directory_fd)
         if _original_systemd_identity()!=identity:
             raise FenceError('SYSTEMD_IDENTITY_CHANGED_DURING_INTENT')
-        return Intent(self,nonce,inode,hashlib.sha256(raw).hexdigest(),uid,core.address,_CAPABILITY)
+        return Intent(self,nonce,inode,hashlib.sha256(raw).hexdigest(),uid,core.address,writer_lease,_CAPABILITY)
     def _verify(self,intent,core,sources,state):
         if (type(intent)is not Intent or intent.capability is not _CAPABILITY
                 or intent.owner is not self or intent.pid!=os.getpid()):
             raise FenceError('ONLY_OWN_LIVE_INTENT')
+        intent.writer_lease.validate()
         fd=os.open(self.marker,os.O_RDONLY|os.O_NOFOLLOW)
         try:
             st=os.fstat(fd)
@@ -138,6 +173,7 @@ class CoordinatorV3:
                 or (record.get('lock_dev'),record.get('lock_ino'))!=self.base._lock_identity
                 or record.get('directory_identity')!=list(self.base._directory_identity)
                 or record.get('mount_identity')!=list(self.base._mount_identity)
+                or record.get('writer_lock_identity')!=list(self._writer_identity)
                 or Path('/proc/self/cgroup').read_text().splitlines()!=['0::'+record.get('control_group','')]):
             raise FenceError('SAME_PROCESS_LIFETIME_REQUIRED')
         current=sorted((x.native_identity,x.address) for x in sources)
@@ -162,6 +198,7 @@ class CoordinatorV3:
         return _PositivePermit(self,intent,core,tuple(sources),_CAPABILITY)
     def finish(self,intent,pin,emitted):
         import native_structure
+        intent.writer_lease.validate()
         # Exact same-process Guardian pin; no generic caller boolean.
         if (type(pin) is not native_structure._GuardedStructure
                 or pin.capability is not native_structure._CAPABILITY
@@ -202,16 +239,19 @@ def authorize_positive(permit,plan,*,consume=False,emitter=None,genid=None):
                    for x in sources for source in permit.sources if source.address==x['address'])):
         raise FenceError('POSITIVE_PLAN_REVERSE_DIFFERS_FROM_INTENT')
     if consume:
-        if emitter is None or type(genid) is not int:raise FenceError('EXACT_EMITTER_GENERATION_REQUIRED')
+        if (emitter is None or type(genid) is not int
+                or getattr(emitter,'writer_lease',None) is not permit.intent.writer_lease):
+            raise FenceError('EXACT_EMITTER_GENERATION_REQUIRED')
         permit.intent.sent=True
         permit.intent.before_genid=genid
         permit.intent.emitter=emitter
 
 class _EmergencyPermit:
-    def __init__(self,coord,verified,registry,nl,genid,epoch,recovery_epoch,marker_identity,capability):
+    def __init__(self,coord,verified,registry,nl,genid,epoch,recovery_epoch,marker_identity,writer_lease,emitter,capability):
         if capability is not _CAPABILITY:raise FenceError('ONLY_GUARDIAN_EMERGENCY_PERMIT')
         self.coord,self.verified,self.registry,self.nl=coord,verified,registry,nl
         self.genid,self.epoch,self.recovery_epoch,self.marker_identity=genid,epoch,recovery_epoch,marker_identity
+        self.writer_lease=writer_lease;self.emitter=emitter
         self.pid=os.getpid();self.netns=os.readlink('/proc/self/ns/net')
         self.until=time.monotonic()+5;self.used=False;self.capability=capability
 
@@ -255,15 +295,24 @@ def _durable_marker_identity(coord):
     if observed[:3]!=expected:raise FenceError('INTENT_CHANGED_AFTER_DURABILITY')
     return observed
 
-def mint_emergency(coord,verified,registry,nl,netlink):
+def mint_emergency(coord,verified,registry,emitter):
     import guarded_verifier
     import guarded_refresh_registry_DRAFT as registry_module
+    import guarded_generation
+    import guarded_nl as nl
     if (type(verified) is not guarded_verifier._VerifiedGeneration
             or verified.capability is not guarded_verifier._VERIFIED_CAPABILITY
             or verified.guardian_pid!=os.getpid() or verified.sender_pidfd is None
             or type(registry) is not registry_module.GuardianRefreshRegistry
             or registry.pid!=os.getpid() or registry.cache is not verified.reader_cache):
         raise FenceError('AUTHENTICATED_GUARDIAN_IDENTITY_REQUIRED')
+    import writer_lease_v3_DRAFT as lease_module
+    if type(emitter) is not guarded_generation.GenerationEmitter or emitter.pid!=os.getpid():
+        raise FenceError('ORIGINAL_GUARDIAN_EMITTER_REQUIRED')
+    writer_lease=emitter.writer_lease
+    if type(writer_lease) is not lease_module.WriterLease:
+        raise FenceError('GUARDIAN_WRITER_LEASE_REQUIRED')
+    writer_lease.validate()
     with registry.lock:
         if registry.state!='UNKNOWN':raise FenceError('INVALIDATED_GUARDIAN_REQUIRED')
     with registry.cache.lock:
@@ -276,18 +325,22 @@ def mint_emergency(coord,verified,registry,nl,netlink):
             or (record.get('lock_dev'),record.get('lock_ino'))!=coord.base._lock_identity
             or record.get('directory_identity')!=list(coord.base._directory_identity)
             or record.get('mount_identity')!=list(coord.base._mount_identity)
+            or record.get('writer_lock_identity')!=list(writer_lease.coord._writer_identity)
             or any(record.get(k)!=registry.prep.get(k) for k in
                    ('pid','start_ticks','unit','invocation_id','control_group'))
             or record['boot_id']!=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
             or record['netns']!=os.readlink('/proc/self/ns/net')):
         raise FenceError('SAME_MARKER_OWNER_BOOT_AND_NETNS_REQUIRED')
-    return _EmergencyPermit(coord,verified,registry,nl,nl.genid(netlink),epoch,recovery_epoch,marker,_CAPABILITY)
+    return _EmergencyPermit(coord,verified,registry,nl,nl.genid(emitter.nl),epoch,recovery_epoch,marker,writer_lease,emitter,_CAPABILITY)
 
 def authorize_emergency(permit,plan,netlink,*,consume):
     if (type(permit) is not _EmergencyPermit or permit.capability is not _CAPABILITY
             or permit.pid!=os.getpid() or permit.netns!=os.readlink('/proc/self/ns/net')
             or permit.used or time.monotonic()>=permit.until):
         raise FenceError('ORIGINAL_LIVE_EMERGENCY_PERMIT_REQUIRED')
+    if permit.emitter.nl is not netlink or permit.emitter.writer_lease is not permit.writer_lease:
+        raise FenceError('SAME_GUARDIAN_EMITTER_REQUIRED')
+    permit.writer_lease.validate()
     if plan['backends'] or plan['cores'] or plan['prom'] or set(plan['maps'])!={'inbound','reverse'}:
         raise FenceError('EMERGENCY_DENY_MUST_HAVE_NO_POSITIVE_BACKENDS')
     if any(deadline!=1 for rows in plan['maps'].values() for _,deadline in rows):

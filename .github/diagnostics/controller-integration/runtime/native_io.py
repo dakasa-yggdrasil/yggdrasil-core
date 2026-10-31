@@ -103,10 +103,11 @@ def command(argv, *, data=None, timeout=2, role):
         with CI_DRAIN_COORDINATION.admission_or_other_writer():
             require(CI_DRAIN_COORDINATION.native_send_authorized(),
                     'TYPED_NATIVE_WRITER_REQUIRED')
-            return _command(argv,data=data,timeout=timeout,role=role)
+            lease=CI_DRAIN_COORDINATION.current_writer_lease()
+            return _command(argv,data=data,timeout=timeout,role=role,writer_lease=lease)
     return _command(argv,data=data,timeout=timeout,role=role)
 
-def _command(argv, *, data=None, timeout=2, role):
+def _command(argv, *, data=None, timeout=2, role, writer_lease=None):
     global _index, _reserved_records, _reserved_bytes, _used_records, _used_bytes
     allowed(argv, role, data)
     require(_initialized and type(timeout) in (int, float) and 0 < timeout <= 10, 'INITIALIZED_BOUNDED_ORIGINAL_NATIVE_OPERATION')
@@ -124,7 +125,7 @@ def _command(argv, *, data=None, timeout=2, role):
     out = None
     try:
         out, _ = process.native(argv, deadline=deadline, stdin=b'' if data is None else data,
-            env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C'}, cap=cap, custody=facts, capture=capture)
+            env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C'}, cap=cap, custody=facts, capture=capture, writer_lease=writer_lease)
     except BaseException as caught:
         error = caught
     returned = time.monotonic()

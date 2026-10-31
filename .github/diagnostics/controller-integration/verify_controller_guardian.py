@@ -110,6 +110,7 @@ def main():
     # Experiment with the actual LAB 47->50 sender, fixed to this CI namespace.
     # The CI fixture supplies observation/lease authority and is not a service.
     import guarded_nl as nl, guarded_generation as generation, transition_structure_DRAFT as trans
+    generation.CI_DRAIN_COORDINATION=drain
     native_structure.COMPILED_NATIVE_AST_SHA256=expected
     raw=cmd('/usr/sbin/nft','-a','-j','list','ruleset')
     original=trans.OriginalPin(raw)
@@ -134,7 +135,7 @@ def main():
         origin=native_structure.begin_guarded_transition(pin)
         initial_entries,initial_cores,_,_,_=real_cache.snapshot()
         initial_core=next(x for x in initial_entries if x.kind=='core')
-        initial_drain_intent=drain.begin(initial_core,initial_cores)
+        initial_drain_intent=drain.begin(initial_core,initial_cores,writer_lease=first.writer_lease)
         drain.barrier(initial_drain_intent,initial_core,initial_cores)
         try:
             with drain.admission_or_other_writer():pass
@@ -206,7 +207,7 @@ def main():
             descriptors=list(rotation_prepared.fixture_descriptors(real_cache))
             rows,cores,_,_,_=real_cache.snapshot()
             core=next(x for x in rows if x.kind=='core')
-            expired_intent=drain.begin(core,cores);drain.barrier(expired_intent,core,cores)
+            expired_intent=drain.begin(core,cores,writer_lease=first.writer_lease);drain.barrier(expired_intent,core,cores)
             watch.prepare(descriptors)
             permit=rotation_session.prepare(descriptors,until_ns=time.monotonic_ns()+1_500_000_000)
             before=nl.genid(first.nl)
@@ -244,7 +245,7 @@ def main():
         failure_records=failure_prepared.fixture_descriptors(real_cache)
         failure_entries,failure_cores,_,_,_=real_cache.snapshot()
         failure_core=next(x for x in failure_entries if x.kind=='core')
-        failure_drain_intent=drain.begin(failure_core,failure_cores)
+        failure_drain_intent=drain.begin(failure_core,failure_cores,writer_lease=first.writer_lease)
         drain.barrier(failure_drain_intent,failure_core,failure_cores)
         watch.prepare(failure_records)
         failure_permit=rotation_session.prepare(list(failure_records),until_ns=time.monotonic_ns()+5_000_000_000)

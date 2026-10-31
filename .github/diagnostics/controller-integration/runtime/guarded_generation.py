@@ -21,6 +21,8 @@ import nft_owner as nft
 import native_structure as structure
 import guarded_sender_session_DRAFT as sender_protocol
 
+CI_DRAIN_COORDINATION = None
+
 
 class GenerationEmitter:
     def __init__(self, *, initial_raw, transition, receipt_dir, host_netns, recover_fixture=False):
@@ -35,9 +37,19 @@ class GenerationEmitter:
         self.receipt_dir = Path(receipt_dir)
         n.check(self.receipt_dir.is_dir() and not self.receipt_dir.is_symlink(),
                 'PRIVATE_LAB_RECEIPT_DIRECTORY')
-        self.nl = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, 12)
-        self.nl.bind((0, 0))
-        self.nl.settimeout(5)
+        import drain_marker_v3_DRAFT as drain_v3
+        n.check(type(CI_DRAIN_COORDINATION) is drain_v3.CoordinatorV3,
+                'ONLY_BOUND_CI_DRAIN_COORDINATOR')
+        # Writer lease precedes opening the netlink socket and remains held
+        # until every owned socket and program/map FD is closed.
+        self.writer_lease=CI_DRAIN_COORDINATION.acquire_writer_lease()
+        try:
+            self.nl = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, 12)
+            self.nl.bind((0, 0))
+            self.nl.settimeout(5)
+        except BaseException:
+            self.writer_lease.close()
+            raise
         self.state = 'READY'
         self.counter = 100 if recover_fixture else 0
         self.has_gates = False
@@ -58,6 +70,7 @@ class GenerationEmitter:
                 self.has_gates = True
         except BaseException:
             self.nl.close()
+            self.writer_lease.close()
             raise
         self.old = []
         self.held = []
@@ -356,4 +369,5 @@ class GenerationEmitter:
         self._close(self.old)
         self._close(self.held)
         self.nl.close()
+        self.writer_lease.close()
         self.state = 'CLOSED'

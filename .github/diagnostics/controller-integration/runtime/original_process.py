@@ -53,7 +53,7 @@ def stop_wait(process):
     except BaseException:return{'pid':process.pid,'joined':False,'exit_code':None}
 
 
-def native(argv,*,deadline,stdin=b'',env=None,cap=4*1024**2,custody=None,capture=None):
+def native(argv,*,deadline,stdin=b'',env=None,cap=4*1024**2,custody=None,capture=None,writer_lease=None):
     """Own same stdin/stdout/stderr pipes and actual Wait under one deadline."""
     facts=custody if custody is not None else{}
     facts.update(native_started=False,local_child_joined=True,all_local_FDs_closed=True,
@@ -61,7 +61,13 @@ def native(argv,*,deadline,stdin=b'',env=None,cap=4*1024**2,custody=None,capture
     if capture is not None:capture.update(stdout=b'',stderr=b'',transport=dict(facts))
     require(time.monotonic()<deadline,'ORIGINAL_NATIVE_DEADLINE')
     require(callable(getattr(os,'pidfd_open',None)),'ORIGINAL_LINUX_PIDFD_REQUIRED_BEFORE_CHILD')
-    process=subprocess.Popen(argv,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env or SAFE,close_fds=True)
+    inherited=()
+    if writer_lease is not None:
+        import writer_lease_v3_DRAFT as lease_module
+        require(type(writer_lease) is lease_module.WriterLease,'TYPED_WRITER_LEASE_REQUIRED')
+        inherited=(writer_lease.validate(),)
+    process=subprocess.Popen(argv,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,
+                             env=env or SAFE,close_fds=True,pass_fds=inherited)
     streams=(process.stdin,process.stdout,process.stderr);selector=None;pidfd=None;out=bytearray();err=bytearray();pending=b'';offset=0;exhausted=False;facts.update(pid=process.pid,native_started=True,wait_zero=False,stdout_EOF=False,stderr_EOF=False,all_local_FDs_closed=False,local_child_joined=False,captured_output_truncated=False)
     try:
         selector=selectors.DefaultSelector()
