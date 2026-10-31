@@ -3,7 +3,7 @@ name: Independently verify an attested Core candidate
 on:
   push:
     branches:
-      - candidate/core-d524-attested-verify-20261030
+      - candidate/core-ddd-attested-verify-20261031
 
 permissions:
   contents: read
@@ -20,9 +20,9 @@ jobs:
       - name: Download evidence from the fixed producer run
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: core-attested-candidate-41115565265-1
+          name: core-attested-candidate-41247922814-1
           path: evidence
-          run-id: 41115565265
+          run-id: 41247922814
           github-token: ${{ github.token }}
 
       - name: Verify producer identity, attestations and byte joins
@@ -31,24 +31,24 @@ jobs:
           GH_REPO: dakasa-yggdrasil/yggdrasil-core
         run: |
           set -eu
-          producer=6733c2510e4fcf3ffdacad901b88e59231bda941
+          producer=2678f01ce88937f706882f298691b7085f9ef0da
           workflow=dakasa-yggdrasil/yggdrasil-core/.github/workflows/core-attested-candidate.yml
           mkdir verified
-          gh api "repos/$GH_REPO/actions/runs/41115565265" > verified/producer-run.json
+          gh api "repos/$GH_REPO/actions/runs/41247922814" > verified/producer-run.json
           gh api -H 'Accept: application/vnd.github.raw+json' "repos/$GH_REPO/contents/.github/workflows/core-attested-candidate.yml?ref=$producer" > verified/producer-workflow.yml
-          test "$(sha256sum verified/producer-workflow.yml | cut -d' ' -f1)" = 8cf6cee3d3535fa78580998e29ebe458709c75f5743a8d62306b0653eeac33ba
-          jq -e --arg head "$producer" '.id == 41115565265 and .run_attempt == 1 and .head_sha == $head and .path == ".github/workflows/core-attested-candidate.yml" and .status == "completed" and .conclusion == "success" and .repository.full_name == "dakasa-yggdrasil/yggdrasil-core"' verified/producer-run.json >/dev/null
+          test "$(sha256sum verified/producer-workflow.yml | cut -d' ' -f1)" = 4cc2299932cfd91002bfaeb67e6962b053d19e5633c1310f079b3962c4d954d4
+          jq -e --arg head "$producer" '.id == 41247922814 and .run_attempt == 1 and .head_sha == $head and .path == ".github/workflows/core-attested-candidate.yml" and .status == "completed" and .conclusion == "success" and .repository.full_name == "dakasa-yggdrasil/yggdrasil-core"' verified/producer-run.json >/dev/null
           for name in candidate.json manifest.json yggdrasil-core build-info.txt; do
             test -f "evidence/$name"
             gh attestation verify "evidence/$name" --repo "$GH_REPO" \
               --signer-workflow "$workflow" --source-digest "$producer" \
-              --source-ref refs/heads/candidate/core-d524-attested-20261030 \
+              --source-ref refs/heads/candidate/core-ddd-attested-20261031 \
               --deny-self-hosted-runners --format json > "verified/$name.attestation.json"
           done
           python3 - <<'PY'
           import hashlib,json,pathlib
-          p=pathlib.Path('evidence');d=json.loads((p/'candidate.json').read_bytes());source='d52465ec5b26014406d2b010dce4fe09e2c169dd';head='6733c2510e4fcf3ffdacad901b88e59231bda941'
-          assert d['schema']=='attested_core_candidate_observation_v1' and d['source_commit']==source and d['workflow_head']==head and d['run_id']==41115565265 and d['run_attempt']==1 and d['production_activation'] is False
+          p=pathlib.Path('evidence');d=json.loads((p/'candidate.json').read_bytes());source='dddaba1d4890cd094b01bb04492be722defdcd55';head='2678f01ce88937f706882f298691b7085f9ef0da'
+          assert d['schema']=='attested_core_candidate_observation_v1' and d['source_commit']==source and d['workflow_head']==head and d['run_id']==41247922814 and d['run_attempt']==1 and d['production_activation'] is False
           for file,key in (('manifest.json','manifest_sha256'),('yggdrasil-core','core_binary_sha256'),('build-info.txt','build_info_sha256')):assert hashlib.sha256((p/file).read_bytes()).hexdigest()==d[key]
           assert d['image']=='ghcr.io/dakasa-yggdrasil/yggdrasil-core@sha256:'+d['manifest_sha256']
           lines=(p/'build-info.txt').read_text().splitlines();fields={}
@@ -57,7 +57,7 @@ jobs:
               if len(pieces)==2 and pieces[0]=='build':
                   key,sep,value=pieces[1].partition('=');assert sep and key not in fields;fields[key]=value
           assert all(fields.get(k)==v for k,v in {'vcs.revision':source,'vcs.modified':'false','GOOS':'linux','GOARCH':'amd64','CGO_ENABLED':'0'}.items()) and fields.get('-tags','')==''
-          out={'schema':'independent_attested_core_candidate_v1','producer_run':41115565265,'producer_attempt':1,'producer_workflow_head':head,'source_commit':source,'image':d['image'],'manifest_sha256':d['manifest_sha256'],'core_binary_sha256':d['core_binary_sha256'],'four_attestations_verified':True,'github_hosted_runner_enforced':True,'production_activation':False,'ecr_publication_qualified':False}
+          out={'schema':'independent_attested_core_candidate_v1','producer_run':41247922814,'producer_attempt':1,'producer_workflow_head':head,'source_commit':source,'image':d['image'],'manifest_sha256':d['manifest_sha256'],'core_binary_sha256':d['core_binary_sha256'],'four_attestations_verified':True,'github_hosted_runner_enforced':True,'production_activation':False,'ecr_publication_qualified':False}
           pathlib.Path('verified/summary.json').write_text(json.dumps(out,sort_keys=True,separators=(',',':'))+'\n')
           PY
 
