@@ -137,10 +137,10 @@ same_ip_cache.publish_topology(topology(uid2))
 with tempfile.TemporaryDirectory(prefix='ci-stale-uid-') as tmp:
     test_coord=v3.CoordinatorV3(Path(tmp)/'coord');test_coord.initialize_for_ci()
     def retire_if_current():
-        with same_ip_cache.lock:
-            if same_ip_cache.guard_invalidation_epoch!=witness_epoch:
-                raise v3.FenceError('READER_CHANGED_BEFORE_RETIRE')
-            with test_coord.admission_or_other_writer() as state:
+        with test_coord.admission_or_other_writer() as state:
+            with same_ip_cache.lock:
+                if same_ip_cache.guard_invalidation_epoch!=witness_epoch:
+                    raise v3.FenceError('READER_CHANGED_BEFORE_RETIRE')
                 test_coord.base.retire(state,uid1,'10.244.1.1',anchor_uid=uid2,anchor_address='10.244.1.2')
     must_hold(retire_if_current,'READER_CHANGED_BEFORE_RETIRE')
     with test_coord.admission_or_other_writer() as state:
