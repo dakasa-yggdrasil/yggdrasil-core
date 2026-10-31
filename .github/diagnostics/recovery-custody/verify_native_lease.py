@@ -50,6 +50,19 @@ try:
     print('PASS real nft child retains passed FD after parent death; exclusive succeeds only after child exit',flush=True)
     launch('reader');assert exclusive();close_child()
     print('PASS real nft read-only child does not inherit writer lock; prior writer FD did not leak on reexec',flush=True)
+    # Clean, successful exit as opposed to the forced-death paths above.
+    code=('import os,sys; key=(int(sys.argv[1]),int(sys.argv[2])); found=False; '
+          'fds=os.listdir("/proc/self/fd"); '
+          'print(int(any((lambda s:(s.st_dev,s.st_ino)==key)(os.stat("/proc/self/fd/"+n)) '
+          'for n in fds if os.path.exists("/proc/self/fd/"+n))))')
+    with open(lock,'rb') as lease:
+        fcntl.flock(lease,fcntl.LOCK_SH|fcntl.LOCK_NB)
+        args=['/usr/bin/python3','-B','-c',code,str(st.st_dev),str(st.st_ino)]
+        output,_=original_process.native(args,deadline=time.monotonic()+5,writer_lease_fd=lease.fileno())
+        assert output.strip()==b'1'
+    output,_=original_process.native(args,deadline=time.monotonic()+5)
+    assert output.strip()==b'0' and exclusive()
+    print('PASS normal child exit and read-only reexec leave no writer lease FD',flush=True)
 finally:
     if childfd is not None:
         try:signal.pidfd_send_signal(childfd,signal.SIGKILL)
