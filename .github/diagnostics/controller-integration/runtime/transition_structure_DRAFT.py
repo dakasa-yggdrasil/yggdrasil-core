@@ -89,8 +89,12 @@ def verify_guarded(pin, raw, *, observed_chain_handle, observed_rule_handles):
                     'EXACT_GATE_CHAIN')
             gate_chains.append(v);continue
         if kind=='rule' and v.get('chain')=='admit_deadline':
+            # CI's newer nft emits a named xt match instead of null. This
+            # fixture-only structural check does not prove BPF attachment.
+            allowed_xt = ({'xt':None}, {'xt':{'name':'bpf','type':'match'}})
             require(set(v)=={'family','table','chain','handle','expr'}
-                    and v['expr']==[{'xt':None},{'jump':{'target':'admit_new'}}], 'EXACT_GATE_RULE_EXPR')
+                    and len(v['expr']) == 2 and v['expr'][0] in allowed_xt
+                    and v['expr'][1] == {'jump':{'target':'admit_new'}}, 'EXACT_GATE_RULE_EXPR')
             gate_rules.append(v['handle']);continue
         if kind=='rule':
             for e in v.get('expr',[]):
