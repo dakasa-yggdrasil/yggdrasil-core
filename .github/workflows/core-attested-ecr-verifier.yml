@@ -3,7 +3,7 @@ name: Independently verify a distinct Core ECR import
 on:
   push:
     branches:
-      - candidate/core-d524-ecr-verify-20261030
+      - candidate/core-ddd-ecr-verify-20261031
 
 permissions:
   contents: read
@@ -25,9 +25,9 @@ jobs:
       - name: Download exact ECR producer receipts
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: core-attested-ecr-receipts-41117617300-1
+          name: core-attested-ecr-receipts-41248618470-1
           path: receipts
-          run-id: 41117617300
+          run-id: 41248618470
           github-token: ${{ github.token }}
 
       - name: Verify producer identity, attestations and original returns
@@ -36,14 +36,14 @@ jobs:
           GH_REPO: dakasa-yggdrasil/yggdrasil-core
         run: |
           set -eu
-          producer=0bcc87d25c650b0e975fc7f4ee30b2a0c0b8422f
+          producer=159fcb92ad1eabf5f8f082f3a37523ecef52a1e2
           workflow=dakasa-yggdrasil/yggdrasil-core/.github/workflows/core-attested-ecr-producer.yml
           mkdir verified
-          gh api "repos/$GH_REPO/actions/runs/41117617300" > verified/producer-run.json
-          jq -e --arg head "$producer" '.id == 41117617300 and .run_attempt == 1 and .head_sha == $head and .path == ".github/workflows/core-attested-ecr-producer.yml" and .status == "completed" and .conclusion == "success" and .repository.full_name == "dakasa-yggdrasil/yggdrasil-core"' verified/producer-run.json >/dev/null
+          gh api "repos/$GH_REPO/actions/runs/41248618470" > verified/producer-run.json
+          jq -e --arg head "$producer" '.id == 41248618470 and .run_attempt == 1 and .head_sha == $head and .path == ".github/workflows/core-attested-ecr-producer.yml" and .status == "completed" and .conclusion == "success" and .repository.full_name == "dakasa-yggdrasil/yggdrasil-core"' verified/producer-run.json >/dev/null
           for spec in \
-            '.github/workflows/core-attested-ecr-producer.yml:d05e1b540127ca6b11786b38fe03150aef253b9788ce79c80c6985971b217fc8' \
-            '.github/scripts/ecr_attested_import.py:3a6dcf675f116dd264456f42a7fdc02c0ceb250b5c85fe5522d9151635c66f4a' \
+            '.github/workflows/core-attested-ecr-producer.yml:25a321f86e11782670a0100b117b8113346a24f64787f76994af839abfc0d44d' \
+            '.github/scripts/ecr_attested_import.py:c83cfdc28c8312c2ee54f9b54e583f91d47d8558f941e8965d8366afe0e07afa' \
             '.github/scripts/ecr_frozen_native.py:4326b46957a8df0ef8b940e864df41b68db74a70349b1f9007d731c512c955bc' \
             '.github/scripts/aws_cli_public_key.asc:279541b6dd1c831a260ee0f9fb71d63bbcc14ebc4bf62c605336e86c11d4eefb'; do
             path=${spec%:*}
@@ -52,12 +52,12 @@ jobs:
             test "$(sha256sum verified/current-source | cut -d' ' -f1)" = "$digest"
           done
           rm verified/current-source
-          test "$(sha256sum .github/scripts/verify_ecr_receipts.py | cut -d' ' -f1)" = 904df7772d46e2f1ecc5b1da565a543191cb685cda902ac60f4273af32d8ea2c
+          test "$(sha256sum .github/scripts/verify_ecr_receipts.py | cut -d' ' -f1)" = b71c481a7bb3c14ef1ef450736f13b12d04ddd9ec6c81c54075ce02e045c5031
           for name in ABSENCE-BEFORE ECR-RETURN IMPORT-INTENT DESCRIBE-001 LAYERS LOCAL-COPY LOCAL-CREATE LOCAL-IMAGE MANIFEST PULL-ORIGINAL STS; do
             test -f "receipts/$name.json"
             gh attestation verify "receipts/$name.json" --repo "$GH_REPO" \
               --signer-workflow "$workflow" --source-digest "$producer" \
-              --source-ref refs/heads/candidate/core-d524-ecr-producer-20261030 \
+              --source-ref refs/heads/candidate/core-ddd-ecr-producer-20261031 \
               --deny-self-hosted-runners --format json > "verified/$name.attestation.json"
           done
           python3 -I -B .github/scripts/verify_ecr_receipts.py
