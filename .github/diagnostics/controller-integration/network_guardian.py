@@ -402,7 +402,10 @@ class Owner:
         return {'ifindex': link['ifindex'], 'hub_public_key': seal['hub_public_key'],
                 'peer_public_keys': seal['peer_public_keys'], 'mtu': 1280, 'VIP_count': 3, 'route_count': 16}
 
-    def kernel(self, measurement=None, allow_absent=False):
+    def kernel(self, measurement=None, allow_absent=False, *, guarded=None):
+        if guarded is not None:
+            require(measurement is None and not allow_absent, 'GUARDED_OBSERVATION_IS_NOT_LEGACY_MEASUREMENT')
+            return self.kernel_guarded(guarded)
         raw = self.call('full-native-ruleset', ['/usr/sbin/nft', '-a', '-j', 'list', 'ruleset'])
         owned, all_rows = self.C._objects(raw)
         if owned:
@@ -439,6 +442,50 @@ class Owner:
         text = self.call('native-dynamic-expiries', ['/usr/sbin/nft', '-a', 'list', 'table', 'inet', 'dakasa_capacity_network'])
         observed = time.monotonic()
         return self.coverage.kernel_text(text), observed
+
+    def kernel_guarded(self, context):
+        """CI/LAB 50-object observation, not wired into watch or effect leases.
+
+        The verified receipt retains original ACK/FD provenance; its generation
+        must stay stable across all full-structure, mark, tuple and source reads.
+        A genid change remains HOLD and never rewrites the historical receipt.
+        """
+        import base64, socket
+        require(type(context) is dict and set(context)=={'verified','verifier','sources','nl','transition','live','probe','probe_sha256'},
+                'EXACT_GUARDED_KERNEL_CONTEXT')
+        verified=context['verified'];verifier=context['verifier'];nl=context['nl'];transition=context['transition']
+        require(type(verified) is verifier._VerifiedGeneration and verified.capability is verifier._VERIFIED_CAPABILITY
+                and verified.guardian_pid==os.getpid() and verified.sender_pidfd is not None
+                and verified.anchor['netns']==os.readlink('/proc/self/ns/net'),
+                'SAME_LIVE_GUARDIAN_VERIFIED_GUARDED_GENERATION')
+        pin=transition.OriginalPin(base64.b64decode(verified.anchor['initial'],validate=True))
+        source=read(RUNTIME/'nft_owner.py')
+        require(sha(source)==RUNTIME_HASHES['nft_owner.py'],'UNCHANGED_RUNTIME_MARK_PREFLIGHT_SOURCE')
+        node=next(x for x in ast.parse(source).body if isinstance(x,ast.FunctionDef) and x.name=='ruleset_mark_preflight')
+        namespace={'TABLE':'dakasa_capacity_network','require':require,'json':json}
+        exec(compile(ast.Module(body=[node],type_ignores=[]),'actual_runtime_mark_guard','exec'),namespace)
+        net=socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,12);net.bind((0,0));net.settimeout(5)
+        try:
+            first=nl.genid(net)
+            require(first==verified.result['after'],'GUARDED_RECEIPT_GENERATION_CHANGED')
+            def full_shape():
+                raw=self.call('full-native-ruleset-guarded',['/usr/sbin/nft','-a','-j','list','ruleset'])
+                _owned,all_rows=self.C._objects(raw)
+                transition.verify_guarded(pin,raw,observed_chain_handle=verified.result['chain'],
+                                           observed_rule_handles=tuple(verified.result['handles']))
+                namespace['ruleset_mark_preflight'](all_rows)
+            full_shape()
+            envelope=context['live'].observe(verified,verifier=verifier,sources=context['sources'],nl=nl,
+                        coverage=self.coverage,probe_path=context['probe'],probe_sha256=context['probe_sha256'])
+            kernel=self.coverage.kernel_text(self.call('native-dynamic-expiries-guarded',
+                                ['/usr/sbin/nft','-a','list','table','inet','dakasa_capacity_network']))
+            full_shape()
+            require(nl.genid(net)==first==envelope['observation']['genid'],
+                    'SAME_GUARDED_GENERATION_AROUND_FULL_OWNER_KERNEL')
+            require(envelope.get('grant_authority') is False and envelope.get('cross_process_effect_lease') is False,
+                    'NO_GUARDED_EFFECT_AUTHORITY_FROM_KERNEL_OBSERVATION')
+            return {'scope':'guarded50_non_authorizing_ci_lab','kernel':kernel,'live':envelope},time.monotonic()
+        finally:net.close()
 
     def transport(self):
         raw = self.call('full-filter', ['/usr/sbin/iptables-save', '-c', '-t', 'filter'])

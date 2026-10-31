@@ -118,7 +118,7 @@ def main():
             if lease is not None:owner.release(lease)
             stop.set();wake.set();owner.close_join(time.monotonic()+5)
         assert emitted['ok'] and first.state=='AWAITING_FIXTURE_VERIFICATION'
-        import guarded_verifier
+        import guarded_verifier,guarded_live_observation
         first_maps={role:[(item.hex(),deadline) for item,deadline in sorted(nl.map_rows(rec['map_id']))]
                     for role,rec in zip(('inbound','reverse'),emitted['programs'])}
         erows,ecores,eprom,eerrors,_=real_cache.snapshot();assert not eerrors
@@ -130,7 +130,14 @@ def main():
         verified=guarded_verifier.verify_and_seal(result=emitted,anchor=anchor,plan=first_plan,receipt_dir=receipts,
                     reader_cache=guardian_cache,nl=nl,sources=guarded_sources,transition=trans,coverage=coverage,
                     probe_path=probe,probe_sha256=hashlib.sha256(probe.read_bytes()).hexdigest())
-        verified.close()
+        os.environ['INVOCATION_ID']='f'*32
+        guarded_context={'verified':verified,'verifier':guarded_verifier,'sources':guarded_sources,'nl':nl,
+                         'transition':trans,'live':guarded_live_observation,'probe':probe,
+                         'probe_sha256':hashlib.sha256(probe.read_bytes()).hexdigest()}
+        live,_=observer.kernel(guarded=guarded_context)
+        assert live['scope']=='guarded50_non_authorizing_ci_lab' and live['kernel']['all_four_backends_and_reverse_sources_positive']
+        assert live['live']['grant_authority'] is False
+        print('PASS Owner.kernel guarded 50 with real source/tuple join and original receipt',flush=True)
         print('PASS cached_guarded_cycle with actual original 47 ownership reader and BPF emitter',flush=True)
         try:first.submit({},[]);raise AssertionError('unverified generation allowed another send')
         except RuntimeError as e:assert str(e)=='ONLY_READY_SAME_OWNER'
@@ -138,6 +145,9 @@ def main():
         # receipt proves the present generation. The diagnostic recovery sender
         # is distinct and submits a deny-only batch using fresh expired maps.
         cmd('/usr/sbin/nft','add','table','ip','ci_foreign_after_50')
+        try:observer.kernel(guarded=guarded_context);raise AssertionError('foreign genid change was accepted')
+        except RuntimeError as error:assert str(error)=='GUARDED_RECEIPT_GENERATION_CHANGED'
+        verified.close()
         recovery=generation.GenerationEmitter(initial_raw=raw,transition=trans,receipt_dir=receipts,
                                                host_netns=os.environ['CI_HOST_NETNS'],recover_fixture=True)
         deny_maps={'inbound':[('03'*12,1)],'reverse':[('04'*12,1)]}
