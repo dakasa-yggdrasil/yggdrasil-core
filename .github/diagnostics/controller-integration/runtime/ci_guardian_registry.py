@@ -15,6 +15,7 @@ import guarded_verifier as verifier
 import guarded_current15 as current15
 import guarded_authority_ci as authority
 import guarded_sources
+import guarded_preparation
 
 
 def exercise(*, root, raw, trans, host_netns, baseline, baseline_plan, reader_cache, sender_cache, encode, coverage):
@@ -25,14 +26,16 @@ def exercise(*, root, raw, trans, host_netns, baseline, baseline_plan, reader_ca
     prep_fd=os.pidfd_open(os.getpid(),0);ctrl_group=Path('/proc/self/cgroup').read_text().strip().split(':',2)[2]
     prep={'pid':os.getpid(),'start_ticks':nl.startticks(os.getpid()),'pidfd':prep_fd,'unit':'fixture.service',
           'invocation_id':'f'*32,'control_group':ctrl_group}
-    cache=reader_cache;reference=None;old_verified=None;new_verified=None;sender=None;session=None;auth=None
+    cache=reader_cache;reference=None;old_verified=None;new_verified=None;sender=None;session=None;auth=None;prepared=None
     stop=threading.Event();server_errors=[];worker=None;records=[]
     try:
-        original_expected=guarded_sources.build_expected(sender_cache)
-        maps={role:[(key.hex(),deadline) for key,deadline in sorted(original_expected[role].items())]
-              for role in ('inbound','reverse')}
+        guard_expected=guarded_sources.build_expected(cache)
+        prepared=guarded_preparation.PreparedGeneration(sender_cache,
+                 deadline_ceilings={role:guard_expected[role] for role in ('inbound','reverse')})
+        records=list(prepared.fixture_descriptors(sender_cache))
+        maps={role:[(key.hex(),deadline) for key,deadline in sorted(nl.map_rows(rec['map_id']))]
+              for role,rec in zip(('inbound','reverse'),records)}
         assert len(maps['inbound'])==64 and len(maps['reverse'])==32
-        for role in ('inbound','reverse'):records.append(nl.make_program(maps[role]))
         class Sources:
             invalid=False
             @classmethod
@@ -97,7 +100,7 @@ def exercise(*, root, raw, trans, host_netns, baseline, baseline_plan, reader_ca
         sender=generation.GenerationEmitter(initial_raw=raw,transition=trans,receipt_dir=receipts,host_netns=host_netns,recover_fixture=True)
         entries,cores,prom,errors,_=sender_cache.snapshot();assert not errors
         plan={'maps':maps,'backends':[encode(x) for x in entries],'cores':[encode(x) for x in cores],'prom':[encode(x) for x in prom]}
-        transfer=records;records=[]
+        transfer=prepared.take_same_process_for_emitter(sender_cache);records=[]
         result=sender.submit(plan,transfer,sender_session=session,sender_permit=permit)
         assert result['ok'] and permit.consumed and result['genid']==old_result['after']
         new_verified=verifier.verify_and_seal(result=result,anchor=anchor,plan=plan,receipt_dir=receipts,
@@ -119,5 +122,5 @@ def exercise(*, root, raw, trans, host_netns, baseline, baseline_plan, reader_ca
         if old_verified is not None:old_verified.close()
         if reference is not None:reference.close()
         if sender is not None:sender.close_private_fixture()
-        for rec in records:os.close(rec['program_fd']);os.close(rec['map_fd'])
+        if prepared is not None:prepared.close()
         if server_errors:raise RuntimeError('guardian protocol fixture failed') from server_errors[0]

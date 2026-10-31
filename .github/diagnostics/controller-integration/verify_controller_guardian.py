@@ -82,7 +82,7 @@ def main():
     native_structure.COMPILED_NATIVE_AST_SHA256=expected
     raw=cmd('/usr/sbin/nft','-a','-j','list','ruleset')
     original=trans.OriginalPin(raw)
-    records=[];first=None;recovery=None;positive=None;session=None;server=None
+    records=[];first=None;recovery=None;positive=None;session=None;server=None;prepared=None
     server_done=threading.Event();server_errors=[];worker=None
     try:
         now=time.monotonic_ns();expiry=now+15_000_000_000
@@ -149,19 +149,21 @@ def main():
                 b.sendall(nl.canon(reply));server_done.wait(10)
             except BaseException as error:server_errors.append(error)
         worker=threading.Thread(target=mock_guardian);worker.start()
-        import ci_reader_fixture,guarded_sources
+        import ci_reader_fixture,guarded_sources,guarded_preparation
         real_cache=ci_reader_fixture.start(endpoints)
         guardian_cache=ci_reader_fixture.start(endpoints,setup=False)
         assert real_cache is not guardian_cache
-        real_expected=guarded_sources.build_expected(real_cache)
-        new_maps={role:[(key.hex(),deadline) for key,deadline in sorted(real_expected[role].items())]
-                  for role in ('inbound','reverse')}
+        guard_expected=guarded_sources.build_expected(guardian_cache)
+        prepared=guarded_preparation.PreparedGeneration(real_cache,
+                 deadline_ceilings={role:guard_expected[role] for role in ('inbound','reverse')})
+        descriptors=prepared.fixture_descriptors(real_cache)
+        new_maps={role:[(key.hex(),deadline) for key,deadline in sorted(nl.map_rows(rec['map_id']))]
+                  for role,rec in zip(('inbound','reverse'),descriptors)}
         assert len(new_maps['inbound'])==64 and len(new_maps['reverse'])==32
-        for role in ('inbound','reverse'):records.append(nl.make_program(new_maps[role]))
         rows,cores,prom,errors,_=real_cache.snapshot();assert not errors
         new_plan={'maps':new_maps,'backends':[encode(x) for x in rows],'cores':[encode(x) for x in cores],'prom':[encode(x) for x in prom]}
-        permit=session.prepare(records,until_ns=time.monotonic_ns()+3_000_000_000)
-        transferred=records;records=[]
+        permit=session.prepare(list(descriptors),until_ns=time.monotonic_ns()+3_000_000_000)
+        transferred=prepared.take_same_process_for_emitter(real_cache)
         refreshed=positive.submit(new_plan,transferred,sender_session=session,sender_permit=permit)
         assert refreshed['ok'] and permit.consumed and refreshed['genid']==denied['after']
         assert refreshed['wire_sha256'] not in (emitted['wire_sha256'],denied['wire_sha256'])
@@ -180,6 +182,7 @@ def main():
         if session is not None:session.close()
         if server is not None:server.close()
         if server_errors:raise RuntimeError('fixture Guardian failed') from server_errors[0]
+        if prepared is not None:prepared.close()
         if positive is not None:positive.close_private_fixture()
         if recovery is not None:recovery.close_private_fixture()
         if first is not None:first.close_private_fixture()
