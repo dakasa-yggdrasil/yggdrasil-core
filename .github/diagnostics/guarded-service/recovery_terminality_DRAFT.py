@@ -58,14 +58,20 @@ def _populated(cgroup):
     need(values.get('populated') in ('0','1'),'EXACT_CGROUP_POPULATED_EVENT')
     return values['populated']=='1'
 
+def _pidfd_terminal(pidfd):
+    poll=select.poll();poll.register(pidfd,select.POLLIN|select.POLLHUP|select.POLLERR)
+    events=poll.poll(0)
+    need(all(not (mask & (select.POLLNVAL|select.POLLERR)) for _,mask in events),
+         'PIDFD_ERROR_IS_NOT_TERMINAL_PROOF')
+    return len(events)==1 and bool(events[0][1] & (select.POLLIN|select.POLLHUP))
+
 def prove_terminal(anchor):
     """Read-only proof for this anchor; never mints any write authority."""
     need(type(anchor) is SenderAnchor and anchor.capability is _CAPABILITY and not anchor.closed
          and anchor.pid==os.getpid(),'LIVE_SAME_CUSTODIAN_ANCHOR_REQUIRED')
     v=anchor.verified
     need(Path('/proc/sys/kernel/random/boot_id').read_text().strip()==anchor.boot,'SAME_BOOT_REQUIRED')
-    poll=select.poll();poll.register(v['pidfd'],select.POLLIN|select.POLLHUP|select.POLLERR)
-    need(bool(poll.poll(0)),'ORIGINAL_SENDER_STILL_ALIVE')
+    need(_pidfd_terminal(v['pidfd']),'ORIGINAL_SENDER_STILL_ALIVE')
     first=_systemd(v['unit'])
     need(first['Id']==v['unit'] and first['InvocationID']==v['invocation_id']
          and first['MainPID']=='0' and first['ActiveState'] in ('inactive','failed')
@@ -73,7 +79,7 @@ def prove_terminal(anchor):
          'SAME_TERMINAL_INVOCATION_WITHOUT_JOB_REQUIRED')
     need(not _populated(v['control_group']),'SENDER_CGROUP_OR_DESCENDANTS_STILL_POPULATED')
     second=_systemd(v['unit'])
-    need(second==first and not _populated(v['control_group']) and bool(poll.poll(0)),
+    need(second==first and not _populated(v['control_group']) and _pidfd_terminal(v['pidfd']),
          'TERMINAL_STATE_MUST_REMAIN_STABLE')
     return {'schema':'ci_original_sender_terminality_v1','unit':v['unit'],'pid':v['pid'],
             'start_ticks':v['start_ticks'],'invocation_id':v['invocation_id'],

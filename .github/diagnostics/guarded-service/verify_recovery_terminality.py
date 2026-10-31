@@ -19,7 +19,8 @@ try:
     anchor=terminal.capture_authenticated(channel,unit=unit,invocation=props['InvocationID'],argv=argv,source_sha256=digest)
     try:terminal.prove_terminal(anchor);raise AssertionError('live sender accepted')
     except terminal.Held as error:assert str(error)=='ORIGINAL_SENDER_STILL_ALIVE'
-    subprocess.run(['/usr/bin/systemctl','stop',unit],check=True,timeout=10)
+    subprocess.run(['/usr/bin/systemctl','kill','--kill-whom=main','--signal=KILL',unit],check=True,timeout=10)
+    time.sleep(.2)
     print('CI_TERMINAL_SYSTEMD',terminal._systemd(unit),flush=True)
     deadline=time.monotonic()+5
     while True:
