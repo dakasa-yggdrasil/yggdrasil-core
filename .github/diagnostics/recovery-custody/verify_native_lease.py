@@ -38,7 +38,7 @@ def close_child():
 
 try:
     launch('writer');assert not exclusive();close_child()
-    print('PASS writer child retains passed FD after parent death; exclusive succeeds only after child exit',flush=True)
+    print('PASS real nft child retains passed FD after parent death; exclusive succeeds only after child exit',flush=True)
     launch('reader');assert exclusive();close_child()
     print('PASS read-only child does not inherit writer lock; prior writer FD did not leak on reexec',flush=True)
 finally:
