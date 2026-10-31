@@ -23,5 +23,5 @@ jobs:
           set -eu
           target="$(sudo mktemp -d /run/ci-guarded-identity.XXXXXX)"
           trap 'sudo rm -rf "$target"' EXIT
-          sudo cp .github/diagnostics/guarded-service/{guarded_unit_identity.py,systemd_peer.py,verify_systemd_identity.py} "$target/"
+          sudo cp .github/diagnostics/guarded-service/{guarded_unit_identity.py,systemd_peer.py,systemd_peer_47.py,verify_systemd_identity.py,guardian47.py,guarded_nl.py} "$target/"
           sudo /usr/bin/python3 -B "$target/verify_systemd_identity.py"
