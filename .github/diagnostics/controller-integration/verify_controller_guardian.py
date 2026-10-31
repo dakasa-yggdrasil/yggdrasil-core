@@ -221,7 +221,7 @@ def main():
         class DelayedPositiveSend:
             def __init__(self,inner):self.inner=inner;self.sent=0
             def send(self,payload):
-                if len(payload)>=6 and struct.unpack_from('<H',payload,4)[0]==0x10:
+                if self.sent==0 and len(payload)>=6 and struct.unpack_from('<H',payload,4)[0]==0x10:
                     if failure_order=='positive-first':
                         outcome=self.inner.send(payload);self.sent+=1
                         probe_sock=socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,12);probe_sock.bind((0,0));probe_sock.settimeout(5)
