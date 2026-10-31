@@ -35,6 +35,16 @@ def cycle(cache,previous):
 
 def main():
     assert os.geteuid()==0
+    import guarded_unit_identity
+    peer,peer2=socket.socketpair()
+    try:
+        argv=Path('/proc/self/cmdline').read_bytes().rstrip(b'\0').decode().split('\0')
+        observed=guarded_unit_identity.authenticate(peer,unit=os.environ['CI_CONTROLLER_UNIT'],
+                   expected_invocation=os.environ['INVOCATION_ID'],expected_argv=argv,
+                   source_sha256=hashlib.sha256(Path(__file__).read_bytes()).hexdigest())
+        assert observed['pid']==os.getpid();os.close(observed['pidfd'])
+    finally:peer.close();peer2.close()
+    print('PASS actual controller process systemd identity, source hash and cgroup',flush=True)
     native_io.ROOT=HERE/'custody';native_io.ROOT.mkdir(mode=0o700)
     native_io.configure();native_io.end_initialization()
     cmd('/usr/sbin/nft','-f','-',inp=nft.render((),now=time.monotonic(),table_exists=False).encode())
@@ -130,7 +140,6 @@ def main():
         verified=guarded_verifier.verify_and_seal(result=emitted,anchor=anchor,plan=first_plan,receipt_dir=receipts,
                     reader_cache=guardian_cache,nl=nl,sources=guarded_sources,transition=trans,coverage=coverage,
                     probe_path=probe,probe_sha256=hashlib.sha256(probe.read_bytes()).hexdigest())
-        os.environ['INVOCATION_ID']='f'*32
         guarded_context={'verified':verified,'verifier':guarded_verifier,'sources':guarded_sources,'nl':nl,
                          'transition':trans,'live':guarded_live_observation,'probe':probe,
                          'probe_sha256':hashlib.sha256(probe.read_bytes()).hexdigest()}

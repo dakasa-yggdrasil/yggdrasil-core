@@ -36,4 +36,8 @@ jobs:
           sudo cp -R .github/diagnostics/controller-integration/. "$target/"
           sudo chmod -R go-w "$target"
           host_netns="$(readlink /proc/self/ns/net)"
-          sudo env CI_GUARDED_FIXTURE=1 CI_HOST_NETNS="$host_netns" unshare --net -- /usr/bin/python3 -B "$target/verify_controller_guardian.py"
+          unit="ci-capacity-controller-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          sudo systemd-run --quiet --wait --pipe --unit="$unit" --property=RuntimeMaxSec=120s \
+            --setenv=CI_GUARDED_FIXTURE=1 --setenv=CI_HOST_NETNS="$host_netns" \
+            --setenv=CI_CONTROLLER_UNIT="$unit.service" \
+            /usr/bin/unshare --net -- /usr/bin/python3 -B "$target/verify_controller_guardian.py"
