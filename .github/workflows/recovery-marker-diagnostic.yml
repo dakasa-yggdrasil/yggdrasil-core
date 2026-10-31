@@ -15,12 +15,13 @@ jobs:
       - name: Verify marker owner and real systemd sender terminality
         run: |
           set -eu
+          if ! command -v nft >/dev/null || ! command -v ip >/dev/null; then sudo apt-get update -qq && sudo apt-get install -y nftables iproute2; fi
           target="$(sudo mktemp -d /run/ci-recovery-marker.XXXXXX)"
           trap 'sudo rm -rf "$target"' EXIT
           sudo cp .github/diagnostics/guarded-service/{guarded_unit_identity.py,recovery_terminality_DRAFT.py,verify_recovery_terminality.py,systemd_peer.py} "$target/"
           sudo cp -R .github/diagnostics/controller-integration/runtime "$target/runtime"
           sudo chmod -R go-w "$target"
-          sudo unshare --mount --propagation private -- /usr/bin/python3 -B "$target/verify_recovery_terminality.py"
+          sudo unshare --net --mount --propagation private -- /usr/bin/python3 -B "$target/verify_recovery_terminality.py"
       - name: Verify independent custody, socket lifetime and restart fence
         run: |
           set -eu

@@ -1,6 +1,10 @@
 """Root-owned throwaway systemd peer used only by Linux CI."""
 import os,socket,sys,time
 from pathlib import Path
+lock_path=os.environ.get('CI_TERM_WRITER_LOCK')
+if lock_path:
+    import fcntl
+    writer_lock=open(lock_path,'rb');fcntl.flock(writer_lock,fcntl.LOCK_SH|fcntl.LOCK_NB)
 runtime=os.environ.get('CI_TERM_RUNTIME')
 if runtime:
     import types
