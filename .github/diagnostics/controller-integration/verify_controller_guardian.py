@@ -45,6 +45,9 @@ def main():
         assert observed['pid']==os.getpid();os.close(observed['pidfd'])
     finally:peer.close();peer2.close()
     print('PASS actual controller process systemd identity, source hash and cgroup',flush=True)
+    import drain_marker_v3_DRAFT as drain_v3
+    drain=drain_v3.CoordinatorV3(HERE/'drain-coordinator')
+    drain.initialize_for_ci();controller.CI_DRAIN_COORDINATION=drain
     native_io.ROOT=HERE/'custody';native_io.ROOT.mkdir(mode=0o700)
     native_io.configure();native_io.end_initialization()
     cmd('/usr/sbin/nft','-f','-',inp=nft.render((),now=time.monotonic(),table_exists=False).encode())
@@ -111,6 +114,15 @@ def main():
         pin=native_structure._OriginalStructure(native_structure._handles(original_rows),None,native_structure._CAPABILITY,
                   proof_kind='original_owned_read_adoption',original_native_read_sha256=hashlib.sha256(raw).hexdigest())
         origin=native_structure.begin_guarded_transition(pin)
+        initial_entries,initial_cores,_,_,_=real_cache.snapshot()
+        initial_core=next(x for x in initial_entries if x.kind=='core')
+        initial_drain_intent=drain.begin(initial_core,initial_cores)
+        drain.barrier(initial_drain_intent,initial_core,initial_cores)
+        try:
+            with drain.admission_or_other_writer():pass
+            raise AssertionError('pending guarded intent did not block admission')
+        except drain_v3.FenceError as error:
+            assert str(error)=='GUARDED_INTENT_PENDING'
         import ci_guardian47_unit
         pre_guardian=ci_guardian47_unit.Guardian47(root=HERE,origin=origin)
         stop=threading.Event();wake=threading.Event()
@@ -124,7 +136,7 @@ def main():
             assert lease is not None
             handoff,pending_key=controller.cached_guarded_cycle(types.SimpleNamespace(cache=real_cache),lease,owner,
                   emitter=first,prepared=initial_prepared,apply=lambda:True,previous_key=None,transition_origin=origin,
-                  guardian_session=pre_guardian.session)
+                  guardian_session=pre_guardian.session,drain_intent=initial_drain_intent)
             assert pending_key is not None and handoff['guardian_receipt_acceptance_pending'] is True
             emitted=handoff['native_result']
         finally:
@@ -167,6 +179,8 @@ def main():
         attestation=rotation_session.attest_current(first.receipt,until_ns=time.monotonic_ns()+8_000_000_000)
         active_pin=native_structure.accept_lab_positive_guarded(positive_guardian,first,attestation)
         first.activate_lab_guarded_pin(active_pin)
+        drain.finish(initial_drain_intent,active_pin,emitted)
+        assert not drain.marker_exists()
         import ci_guarded_driver
         driver=ci_guarded_driver.GuardedDriver(watch=watch,sender=rotation_session,emitter=first,
                   positive_session=positive_guardian,ceiling_cache=guardian_cache,endpoints=endpoints,max_commits=2)
@@ -188,6 +202,10 @@ def main():
         failure_prepared=guarded_preparation.PreparedGeneration(real_cache,
                 deadline_ceilings={role:guard_expected[role] for role in ('inbound','reverse')})
         failure_records=failure_prepared.fixture_descriptors(real_cache)
+        failure_entries,failure_cores,_,_,_=real_cache.snapshot()
+        failure_core=next(x for x in failure_entries if x.kind=='core')
+        failure_drain_intent=drain.begin(failure_core,failure_cores)
+        drain.barrier(failure_drain_intent,failure_core,failure_cores)
         watch.prepare(failure_records)
         failure_permit=rotation_session.prepare(list(failure_records),until_ns=time.monotonic_ns()+5_000_000_000)
         failure_stop=threading.Event();failure_wake=threading.Event()
@@ -213,7 +231,7 @@ def main():
         def inject_failure():
             try:
                 if not entered.wait(8):raise RuntimeError('POSITIVE_SEND_NOT_REACHED')
-                failure_result.append(watch.inject_reader_failure_and_deny())
+                failure_result.append(watch.stop_dns_and_wait_for_autonomous_deny())
             except BaseException as error:failure_errors.append(error)
             finally:release.set()
         injector=threading.Thread(target=inject_failure);injector.start()
@@ -229,11 +247,17 @@ def main():
             try:
                 pending_handoff,_=controller.cached_guarded_cycle(types.SimpleNamespace(cache=real_cache),failure_lease,failure_owner,
                      emitter=first,prepared=failure_prepared,apply=lambda:True,previous_key=None,
-                     guarded_pin=next_pin,sender_session=rotation_session,sender_permit=failure_permit)
+                     guarded_pin=next_pin,sender_session=rotation_session,sender_permit=failure_permit,
+                     drain_intent=failure_drain_intent)
             except Exception:
                 assert first.state=='HOLD_UNKNOWN_OR_UNVERIFIED' and first.nl.sent==1
             injector.join(10);assert not injector.is_alive() and not failure_errors and len(failure_result)==1
             denied_by_guardian=failure_result[0];assert denied_by_guardian['reader_invalidated']
+            assert drain.marker_exists(), 'uncertain prior intent must remain'
+            try:
+                with drain.admission_or_other_writer():pass
+                raise AssertionError('uncertain intent allowed ordinary admission')
+            except drain_v3.FenceError as error:assert str(error)=='GUARDED_INTENT_PENDING'
             prior_generation=next_pin.receipt['after']
             next_generation=lambda value:((value+1)&0xffffffff or 1)
             uncertain_deny=os.environ.get('CI_DENY_ACK_UNCERTAIN')=='1'

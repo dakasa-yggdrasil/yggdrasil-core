@@ -1,7 +1,7 @@
 name: Disposable Guardian service integration diagnostic
 on:
   push:
-    branches: [codex/nice-inheritance-diagnostic-20261031]
+    branches: [codex/guarded-drain-v3-20261031]
 permissions:
   contents: read
 jobs:
@@ -12,6 +12,15 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - name: Verify pending drain marker under concurrency and process crash
+        run: |
+          set -eu
+          unit="ci-drain-marker-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          sudo systemd-run --quiet --wait --pipe --unit="$unit" \
+            --setenv=CI_CONTROLLER_UNIT="$unit.service" \
+            /usr/bin/python3 -I -B "$GITHUB_WORKSPACE/.github/diagnostics/controller-integration/verify_drain_marker.py"
+      - name: Verify closed sender inventory
+        run: python3 -I -B .github/diagnostics/controller-integration/verify_submit_inventory.py
       - name: Install nftables if required
         run: |
           set -eu

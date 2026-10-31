@@ -25,6 +25,16 @@ import native_structure
 import native_io
 import transition_adoption as transition
 import whole_witness as whole
+import drain_marker_v3_DRAFT as drain_v3
+
+# CI-only injection. No default path or production authority.
+CI_DRAIN_COORDINATION = None
+
+def _ci_drain():
+    nft.require(os.environ.get('CI_GUARDED_FIXTURE')=='1'
+                and type(CI_DRAIN_COORDINATION) is drain_v3.CoordinatorV3,
+                'ONLY_BOUND_CI_DRAIN_COORDINATOR')
+    return CI_DRAIN_COORDINATION
 
 PREFIX = Path('/opt/dakasa/capacity-network')
 STATE = Path('/run/dakasa-capacity-network')
@@ -171,8 +181,9 @@ def original_cycle(config, eks, *, apply):
     # One native full-ruleset read rechecks the SAME header/handle and all
     # external ct-mark owners after collection, before the unchanged batch.
     ownership = nft.revalidate_owned_ruleset(snapshot)
-    result = nft.native_batch(entries, core_sources=sources, prometheus_sources=prometheus_sources,
-                              apply=apply(), _ownership=ownership)
+    with _ci_drain().admission_or_other_writer():
+        result = nft.native_batch(entries, core_sources=sources, prometheus_sources=prometheus_sources,
+                                  apply=apply(), _ownership=ownership)
     result['held_native_read_classes'] = errors
     result['original_collect_elapsed_seconds'] = collect_returned - collect_started
     return result
@@ -242,8 +253,9 @@ def cached_cycle(reader, lease, ownership, *, apply, previous_key, schedule=None
     def original_apply():
         ownership.permit_original_send(lease,attempt_started)
         return apply()
-    result = nft.native_refresh(entries, core_sources=sources, prometheus_sources=prometheus_sources,
-                                apply=original_apply, _ownership=lease.token)
+    with _ci_drain().admission_or_other_writer():
+        result = nft.native_refresh(entries, core_sources=sources, prometheus_sources=prometheus_sources,
+                                    apply=original_apply, _ownership=lease.token)
     result['held_native_read_classes'] = errors
     result['same_process_topology_generation'] = generation
     result['same_process_semantic_cache_revision'] = revision
@@ -254,7 +266,7 @@ def cached_cycle(reader, lease, ownership, *, apply, previous_key, schedule=None
 
 def cached_guarded_cycle(reader, lease, ownership, *, emitter, prepared, apply,
                          previous_key, transition_origin=None, guardian_session=None,
-                         guarded_pin=None, sender_session=None, sender_permit=None):
+                         guarded_pin=None, sender_session=None, sender_permit=None, drain_intent=None):
     """CI/LAB candidate: hand one stable cache generation to the BPF emitter.
 
     This method is not wired into serve_hot. Its returned key is *pending*:
@@ -290,14 +302,21 @@ def cached_guarded_cycle(reader, lease, ownership, *, emitter, prepared, apply,
     newest,newest_key,newest_revision=cache.commit_snapshot()
     nft.require(newest_key==key and newest_revision==revision and newest==snapshot,
                 'SAME_CACHE_SNAPSHOT_BEFORE_GUARDED_HANDOFF')
+    core=[item for item in entries if item.kind=='core']
+    nft.require(len(core)==1,'CI_ONE_CORE_FOR_DRAIN_BARRIER')
+    # A durable exclusive intent blocks participating admission and writers
+    # while Guardian prepare/send/ACK execute without holding flock.
+    drain_permit=_ci_drain().barrier(drain_intent,core[0],cores)
     nft.require(apply() is True,'ORIGINAL_GUARDED_APPLY_REQUIRED')
     records=prepared.take_same_process_for_emitter(cache)
     if emitter.has_gates:
         result=emitter.submit(plan,records,guarded_lease=lease,guarded_owner=ownership,
-                              guarded_pin=guarded_pin,sender_session=sender_session,sender_permit=sender_permit)
+                              guarded_pin=guarded_pin,sender_session=sender_session,sender_permit=sender_permit,
+                              drain_permit=drain_permit)
     else:
         result=emitter.submit(plan,records,original_lease=lease,original_owner=ownership,
-                              transition_origin=transition_origin,guardian_session=guardian_session)
+                              transition_origin=transition_origin,guardian_session=guardian_session,
+                              drain_permit=drain_permit)
     # Keep the exact emitter return intact: its receipt bytes are validated
     # independently and must not acquire controller-only metadata.
     return {'native_result':result,'submitted_plan':plan,'same_process_topology_generation':generation,
@@ -429,6 +448,14 @@ def _serve_guarded_hot(reader, pin, *, apply, driver, initial_sequence=1):
             if key==last_key and installed_until is not None and now<installed_until-1.250:
                 reader.cache.wake.wait(min(.05,max(0,installed_until-1.250-now)));reader.cache.wake.clear();continue
             prepared=None;lease=None
+            # This must precede watch.prepare and SenderSession.prepare:
+            # either can register an externally uncertain operation.
+            current,_,_=reader.cache.commit_snapshot()
+            before_entries,before_cores,_,_,_=current
+            before_core=[item for item in before_entries if item.kind=='core']
+            nft.require(len(before_core)==1,'CI_ONE_CORE_FOR_DRAIN_INTENT')
+            intent=_ci_drain().begin(before_core[0],before_cores)
+            _ci_drain().barrier(intent,before_core[0],before_cores)
             try:
                 prepared,permit=driver.prepare(reader.cache)
                 driver.begin_handoff()
@@ -443,9 +470,10 @@ def _serve_guarded_hot(reader, pin, *, apply, driver, initial_sequence=1):
                 # a fresh prepared generation and the same original deadline.
                 handoff,new_key=cached_guarded_cycle(reader,lease,owner,emitter=driver.emitter,
                     prepared=prepared,apply=apply,previous_key=None,guarded_pin=pin,
-                    sender_session=driver.sender,sender_permit=permit)
+                    sender_session=driver.sender,sender_permit=permit,drain_intent=intent)
                 nft.require(handoff is not None,'GUARDED_REFRESH_NOT_DISPATCHED')
                 pin=driver.confirm(handoff,owner,lease,pin,started)
+                _ci_drain().finish(intent,pin,handoff['native_result'])
                 last_key=new_key;sequence+=1
                 deadlines=[value for rows in handoff['submitted_plan']['maps'].values() for _key,value in rows]
                 nft.require(deadlines and all(type(x) is int for x in deadlines),'BOUNDED_GUARDED_DEADLINES')

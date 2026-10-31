@@ -72,9 +72,17 @@ class GenerationEmitter:
             os.close(rec['map_fd'])
         records.clear()
 
-    def submit(self, plan, records, *, original_lease=None, original_owner=None, transition_origin=None, guardian_session=None, guarded_lease=None, guarded_owner=None, guarded_pin=None, sender_session=None, sender_permit=None):
+    def submit(self, plan, records, *, original_lease=None, original_owner=None, transition_origin=None, guardian_session=None, guarded_lease=None, guarded_owner=None, guarded_pin=None, sender_session=None, sender_permit=None, drain_permit=None, emergency_permit=None):
         """Take ownership of two FD pairs; never replay after a possible send."""
         n.check(self.state == 'READY' and self.pid == os.getpid(), 'ONLY_READY_SAME_OWNER')
+        import drain_marker_v3_DRAFT as drain_v3
+        denied_plan=not plan['backends'] and not plan['cores'] and not plan['prom']
+        if denied_plan:
+            n.check(drain_permit is None,'NO_POSITIVE_PERMIT_FOR_EMERGENCY')
+            drain_v3.authorize_emergency(emergency_permit,plan,self.nl,consume=False)
+        else:
+            n.check(emergency_permit is None,'NO_EMERGENCY_PERMIT_FOR_POSITIVE')
+            drain_v3.authorize_positive(drain_permit,plan)
         lease_mode = original_lease is not None or original_owner is not None or transition_origin is not None
         guarded_mode = guarded_lease is not None or guarded_owner is not None or guarded_pin is not None
         n.check(not (lease_mode and guarded_mode), 'ONE_GUARDED_OR_ORIGINAL_LEASE_MODE')
@@ -220,6 +228,16 @@ class GenerationEmitter:
                         'ORIGINAL_GUARDIAN_SENDER_PERMIT_CONSUMED_AT_DISPATCH')
                 n.check(time.monotonic_ns() < sender_permit.deadline_ns,
                         'ORIGINAL_SENDER_PERMIT_DEADLINE_AT_DISPATCH')
+            # Enforce the marker and exact generation immediately before
+            # the only native send. No marker is removed by this operation.
+            if denied_plan:
+                drain_v3.authorize_emergency(emergency_permit,plan,self.nl,consume=True)
+            else:
+                n.check(n.genid(self.nl)==g,'GUARDED_DRAIN_SAME_GENERATION_AT_SEND')
+                drain_v3.authorize_positive(drain_permit,plan,consume=True,emitter=self,genid=g)
+            if guarded_mode or lease_mode:
+                n.check(0 <= time.monotonic() - attempt_started < .250,
+                        'GUARDED_DRAIN_250MS_BEFORE_SEND_NOT_EXTENDED')
             send_started = time.monotonic_ns()
             possible_send = True
             self.state = 'SEND_UNCERTAIN'

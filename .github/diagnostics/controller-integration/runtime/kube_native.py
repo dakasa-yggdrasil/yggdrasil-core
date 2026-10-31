@@ -170,10 +170,11 @@ def core(config, collisions, collision_expires):
         require(address not in collisions, 'CORE_SERVICE_ADDRESS_COLLISION')
         item = Backend('core', address, 9443, started, min(started + MAX_FRESH_SECONDS, collision_expires), pod['metadata']['uid'] + '/' + states[0]['containerID'])
         item.validate()
-        candidates.append(item)
+        candidates.append((pod_image[0] != image[0], item))
     require(1 <= len(candidates) <= 2, 'ONE_OR_TWO_READY_APPROVED_CORE_PODS')
-    candidates.sort(key=lambda v: v.native_identity)
-    return candidates[0], tuple(candidates)
+    candidates.sort(key=lambda pair: (pair[0], pair[1].native_identity))
+    ordered = tuple(pair[1] for pair in candidates)
+    return ordered[0], ordered
 
 
 def prometheus(collisions, collision_expires):
