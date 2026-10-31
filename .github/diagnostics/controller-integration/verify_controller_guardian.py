@@ -215,7 +215,7 @@ def main():
         failure_permit=rotation_session.prepare(list(failure_records),until_ns=time.monotonic_ns()+5_000_000_000)
         failure_stop=threading.Event();failure_wake=threading.Event()
         failure_owner=native_structure._OwnershipReader(next_pin,failure_stop,failure_wake);failure_owner.start();failure_lease=None
-        entered=threading.Event();release=threading.Event();failure_result=[];failure_errors=[]
+        entered=threading.Event();release=threading.Event();failure_result=[];failure_errors=[];positive_generation=[]
         failure_order=os.environ.get('CI_FAILURE_ORDER','deny-first')
         assert failure_order in ('deny-first','positive-first')
         class DelayedPositiveSend:
@@ -224,6 +224,9 @@ def main():
                 if len(payload)>=6 and struct.unpack_from('<H',payload,4)[0]==0x10:
                     if failure_order=='positive-first':
                         outcome=self.inner.send(payload);self.sent+=1
+                        probe_sock=socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,12);probe_sock.bind((0,0));probe_sock.settimeout(5)
+                        try:positive_generation.append(nl.genid(probe_sock))
+                        finally:probe_sock.close()
                     entered.set()
                     if not release.wait(8):raise RuntimeError('CI_RELEASE_TIMEOUT')
                     if failure_order=='positive-first':return outcome
@@ -254,6 +257,15 @@ def main():
                 assert first.state=='HOLD_UNKNOWN_OR_UNVERIFIED' and first.nl.sent==1
             injector.join(10);assert not injector.is_alive() and not failure_errors and len(failure_result)==1
             denied_by_guardian=failure_result[0];assert denied_by_guardian['reader_invalidated']
+            prior_generation=next_pin.receipt['after']
+            next_generation=lambda value:((value+1)&0xffffffff or 1)
+            if failure_order=='positive-first':
+                assert positive_generation==[next_generation(prior_generation)]
+                assert denied_by_guardian['genid']==next_generation(positive_generation[0])
+            else:
+                assert not positive_generation and denied_by_guardian['genid']==next_generation(prior_generation)
+            old_intent=json.loads((receipts/'INTENT-003.json').read_bytes())
+            assert old_intent['wire_sha256']!=denied_by_guardian['wire_sha256']
             if pending_handoff is not None:
                 assert failure_order=='positive-first' and first.state=='AWAITING_FIXTURE_VERIFICATION'
                 # Local ACK alone cannot confirm the successor: the Guardian
