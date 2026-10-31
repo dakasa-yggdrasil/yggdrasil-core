@@ -1,5 +1,5 @@
 """Concurrent process and crash checks for CI-only v3 marker."""
-import os,subprocess,sys,tempfile,time,types
+import os,subprocess,sys,tempfile,threading,time,types
 from pathlib import Path
 from unittest import mock
 HERE=Path(__file__).resolve().parent
@@ -45,9 +45,58 @@ with tempfile.TemporaryDirectory(prefix='ci-drain-marker-') as tmp:
     must_hold(lambda:coord.barrier(intent,backend(ip='10.244.1.3'),[core]),'INTENT_OBSERVATION_CHANGED')
     # Unknown outcome has no cleanup path; another begin is refused.
     must_hold(lambda:coord.begin(core,[core]),'GUARDED_INTENT_PENDING')
+    # Guardian does its own file+directory fsync without holding flock; merely
+    # seeing a complete JSON marker is not accepted as a durability proof.
+    checks=[]
+    with mock.patch.object(v3.os,'fsync',side_effect=observed_fsync):
+        marker=v3._durable_marker_identity(coord)
+    assert len(checks)==2 and marker[1]==intent.inode
+    # Policy-only fake token exercises monotone epochs, strict denial and genid
+    # checks; mint_emergency above still rejects an unauthenticated caller.
+    cache=types.SimpleNamespace(lock=threading.Lock(),guard_invalidation_epoch=3,
+        guard_recovery_epoch=1,errors={'rds':'failure'})
+    registry=types.SimpleNamespace(lock=threading.Lock(),state='UNKNOWN',cache=cache)
+    nl=types.SimpleNamespace(genid=lambda _:99)
+    emergency=v3._EmergencyPermit(coord,object(),registry,nl,99,3,1,marker,v3._CAPABILITY)
+    denial={'backends':[],'cores':[],'prom':[],'maps':{'inbound':[('00'*12,1)],'reverse':[('01'*12,1)]}}
+    cache.guard_invalidation_epoch=5
+    v3.authorize_emergency(emergency,denial,None,consume=False)
+    cache.guard_invalidation_epoch=2
+    must_hold(lambda:v3.authorize_emergency(emergency,denial,None,consume=False),
+              'READER_INVALIDATION_EPOCH_ROLLED_BACK')
+    cache.guard_invalidation_epoch=5
+    cache.errors={}
+    must_hold(lambda:v3.authorize_emergency(emergency,denial,None,consume=False),
+              'READER_NO_LONGER_INVALID')
+    cache.errors={'rds':'failure'};cache.guard_recovery_epoch=2
+    must_hold(lambda:v3.authorize_emergency(emergency,denial,None,consume=False),
+              'READER_RECOVERED_SINCE_PERMIT')
+    cache.guard_recovery_epoch=1
+    positive=dict(denial,backends=[{'kind':'core'}])
+    must_hold(lambda:v3.authorize_emergency(emergency,positive,None,consume=False),
+              'EMERGENCY_DENY_MUST_HAVE_NO_POSITIVE_BACKENDS')
+    nl.genid=lambda _:100
+    must_hold(lambda:v3.authorize_emergency(emergency,denial,None,consume=False),
+              'EMERGENCY_MARKER_OR_GENID_CHANGED')
+    nl.genid=lambda _:99
+    v3.authorize_emergency(emergency,denial,None,consume=True)
+    must_hold(lambda:v3.authorize_emergency(emergency,denial,None,consume=False),
+              'ORIGINAL_LIVE_EMERGENCY_PERMIT_REQUIRED')
+    assert coord.marker_exists()
     v3.authorize_positive(permit,plan,consume=True,emitter=object(),genid=1)
     must_hold(lambda:v3.authorize_positive(permit,plan),'POSITIVE_INTENT_ALREADY_SENT_OR_UNKNOWN')
     assert coord.marker_exists()
+
+# The actual Cache increments recovery epoch when a stored error clears,
+# even if another failure appears before an observer samples it.
+import observations
+cache=observations.Cache()
+with cache.lock:
+    before=cache._state_key();cache.errors={'rds':'failure'};cache._changed(before)
+    before=cache._state_key();cache.errors={};cache._changed(before)
+    recovered=cache.guard_recovery_epoch
+    before=cache._state_key();cache.errors={'rds':'failure-again'};cache._changed(before)
+    assert recovered>0 and cache.guard_recovery_epoch==recovered
 
 with tempfile.TemporaryDirectory(prefix='ci-drain-crash-') as tmp:
     coord=v3.CoordinatorV3(Path(tmp)/'coord');coord.initialize_for_ci()

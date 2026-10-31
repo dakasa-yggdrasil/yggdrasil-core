@@ -100,7 +100,8 @@ class CoordinatorV3:
         fd=os.open(self.marker,os.O_RDONLY|os.O_NOFOLLOW)
         try:
             st=os.fstat(fd)
-            if not stat.S_ISREG(st.st_mode) or st.st_ino!=intent.inode or st.st_nlink!=1:
+            if (not stat.S_ISREG(st.st_mode) or st.st_ino!=intent.inode or st.st_nlink!=1
+                    or stat.S_IMODE(st.st_mode)!=0o600 or st.st_uid!=self.directory.stat().st_uid):
                 raise FenceError('INTENT_INODE_CHANGED')
             raw=os.read(fd,65537)
         finally:os.close(fd)
@@ -181,10 +182,10 @@ def authorize_positive(permit,plan,*,consume=False,emitter=None,genid=None):
         permit.intent.emitter=emitter
 
 class _EmergencyPermit:
-    def __init__(self,coord,verified,registry,nl,genid,epoch,marker_identity,capability):
+    def __init__(self,coord,verified,registry,nl,genid,epoch,recovery_epoch,marker_identity,capability):
         if capability is not _CAPABILITY:raise FenceError('ONLY_GUARDIAN_EMERGENCY_PERMIT')
         self.coord,self.verified,self.registry,self.nl=coord,verified,registry,nl
-        self.genid,self.epoch,self.marker_identity=genid,epoch,marker_identity
+        self.genid,self.epoch,self.recovery_epoch,self.marker_identity=genid,epoch,recovery_epoch,marker_identity
         self.pid=os.getpid();self.netns=os.readlink('/proc/self/ns/net')
         self.until=time.monotonic()+5;self.used=False;self.capability=capability
 
@@ -194,10 +195,39 @@ def _marker_identity(coord):
         try:
             st=os.fstat(fd);raw=os.read(fd,65537)
         finally:os.close(fd)
-        if not stat.S_ISREG(st.st_mode) or st.st_nlink!=1 or not raw or len(raw)>65536:
+        if (not stat.S_ISREG(st.st_mode) or st.st_nlink!=1 or stat.S_IMODE(st.st_mode)!=0o600
+                or st.st_uid!=coord.directory.stat().st_uid or not raw or len(raw)>65536):
             raise FenceError('EXACT_DURABLE_INTENT_REQUIRED_FOR_DENY')
         record=json.loads(raw)
+        if record.get('schema')!='ci_guarded_drain_intent_v3':
+            raise FenceError('EXACT_DURABLE_INTENT_SCHEMA_REQUIRED')
         return (st.st_dev,st.st_ino,hashlib.sha256(raw).hexdigest(),record)
+
+def _durable_marker_identity(coord):
+    # Visible bytes do not prove durability. Guardian fsyncs the exact opened
+    # marker and parent outside flock, then compares it again under the lock.
+    fd=os.open(coord.marker,os.O_RDONLY|os.O_NOFOLLOW)
+    try:
+        before=os.fstat(fd);raw=os.read(fd,65537)
+        if (not stat.S_ISREG(before.st_mode) or before.st_nlink!=1
+                or stat.S_IMODE(before.st_mode)!=0o600
+                or before.st_uid!=coord.directory.stat().st_uid or not raw or len(raw)>65536):
+            raise FenceError('EXACT_DURABLE_INTENT_REQUIRED_FOR_DENY')
+        record=json.loads(raw)
+        if record.get('schema')!='ci_guarded_drain_intent_v3':
+            raise FenceError('EXACT_DURABLE_INTENT_SCHEMA_REQUIRED')
+        os.fsync(fd)
+        directory_fd=os.open(coord.directory,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+        try:os.fsync(directory_fd)
+        finally:os.close(directory_fd)
+        after=os.fstat(fd)
+        key=lambda st:(st.st_dev,st.st_ino,st.st_uid,st.st_mode,st.st_size,st.st_mtime_ns,st.st_ctime_ns)
+        if key(before)!=key(after):raise FenceError('INTENT_CHANGED_DURING_DURABILITY')
+        expected=(before.st_dev,before.st_ino,hashlib.sha256(raw).hexdigest())
+    finally:os.close(fd)
+    observed=_marker_identity(coord)
+    if observed[:3]!=expected:raise FenceError('INTENT_CHANGED_AFTER_DURABILITY')
+    return observed
 
 def mint_emergency(coord,verified,registry,nl,netlink):
     import guarded_verifier
@@ -210,10 +240,11 @@ def mint_emergency(coord,verified,registry,nl,netlink):
         raise FenceError('AUTHENTICATED_GUARDIAN_IDENTITY_REQUIRED')
     with registry.lock:
         if registry.state!='UNKNOWN':raise FenceError('INVALIDATED_GUARDIAN_REQUIRED')
-    entries,cores,prom,errors,_=registry.cache.snapshot()
-    if not errors:raise FenceError('REAL_READER_INVALIDATION_REQUIRED')
-    with registry.cache.lock:epoch=registry.cache.guard_invalidation_epoch
-    marker=_marker_identity(coord);record=marker[3]
+    with registry.cache.lock:
+        if not registry.cache.errors:raise FenceError('REAL_EXPLICIT_READER_INVALIDATION_REQUIRED')
+        epoch=registry.cache.guard_invalidation_epoch
+        recovery_epoch=registry.cache.guard_recovery_epoch
+    marker=_durable_marker_identity(coord);record=marker[3]
     if (record['pid']!=verified.anchor['pid']
             or record['start_ticks']!=verified.anchor['start_ticks']
             or any(record.get(k)!=registry.prep.get(k) for k in
@@ -221,7 +252,7 @@ def mint_emergency(coord,verified,registry,nl,netlink):
             or record['boot_id']!=Path('/proc/sys/kernel/random/boot_id').read_text().strip()
             or record['netns']!=os.readlink('/proc/self/ns/net')):
         raise FenceError('SAME_MARKER_OWNER_BOOT_AND_NETNS_REQUIRED')
-    return _EmergencyPermit(coord,verified,registry,nl,nl.genid(netlink),epoch,marker,_CAPABILITY)
+    return _EmergencyPermit(coord,verified,registry,nl,nl.genid(netlink),epoch,recovery_epoch,marker,_CAPABILITY)
 
 def authorize_emergency(permit,plan,netlink,*,consume):
     if (type(permit) is not _EmergencyPermit or permit.capability is not _CAPABILITY
@@ -235,8 +266,13 @@ def authorize_emergency(permit,plan,netlink,*,consume):
     with permit.registry.lock:
         if permit.registry.state!='UNKNOWN':raise FenceError('GUARDIAN_NOT_IN_UNKNOWN')
     with permit.registry.cache.lock:
-        if permit.registry.cache.guard_invalidation_epoch!=permit.epoch:
-            raise FenceError('READER_INVALIDATION_EPOCH_CHANGED')
+        current_epoch=permit.registry.cache.guard_invalidation_epoch
+        if not permit.registry.cache.errors:
+            raise FenceError('READER_NO_LONGER_INVALID')
+        if permit.registry.cache.guard_recovery_epoch!=permit.recovery_epoch:
+            raise FenceError('READER_RECOVERED_SINCE_PERMIT')
+        if type(current_epoch) is not int or current_epoch<permit.epoch:
+            raise FenceError('READER_INVALIDATION_EPOCH_ROLLED_BACK')
     current=_marker_identity(permit.coord)
     if current[:3]!=permit.marker_identity[:3] or permit.nl.genid(netlink)!=permit.genid:
         raise FenceError('EMERGENCY_MARKER_OR_GENID_CHANGED')

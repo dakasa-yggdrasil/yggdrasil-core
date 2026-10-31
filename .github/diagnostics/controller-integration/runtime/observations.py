@@ -55,6 +55,7 @@ class Cache:
         self.lock = threading.Lock()
         self.generation = 0
         self.guard_invalidation_epoch = 0
+        self.guard_recovery_epoch = 0  # CI draft: changes when an explicit error clears
         self.collisions = frozenset()
         self.collision_expires = 0
         self.entries, self.core_sources, self.prometheus = (), (), ()
@@ -179,6 +180,10 @@ class Cache:
             self.collision_expires,tuple(sorted(self.errors.items())))
 
     def _changed(self, before):
+        previous_errors = dict(before[-1])
+        if any(name not in self.errors for name in previous_errors):
+            require(self.guard_recovery_epoch < MAX_SEQUENCE, 'BOUNDED_GUARD_RECOVERY_EPOCH')
+            self.guard_recovery_epoch += 1
         if self._state_key() != before:
             require(self.revision < MAX_SEQUENCE, 'BOUNDED_SEMANTIC_CACHE_REVISION')
             self.revision += 1
