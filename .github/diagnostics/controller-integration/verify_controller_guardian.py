@@ -213,7 +213,7 @@ def main():
         def inject_failure():
             try:
                 if not entered.wait(8):raise RuntimeError('POSITIVE_SEND_NOT_REACHED')
-                failure_result.append(watch.inject_reader_failure_and_deny())
+                failure_result.append(watch.stop_dns_and_wait_for_autonomous_deny())
             except BaseException as error:failure_errors.append(error)
             finally:release.set()
         injector=threading.Thread(target=inject_failure);injector.start()

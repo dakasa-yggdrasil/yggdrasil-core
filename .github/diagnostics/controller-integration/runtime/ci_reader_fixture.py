@@ -36,3 +36,45 @@ def start(endpoints, *, setup=True):
         return cache
     finally:
         server.close();worker.join(5)
+
+class LiveReaders:
+    """Actual Reader loops against a stoppable synthetic UDP DNS service."""
+    def __init__(self,endpoints):
+        self.server=socket.socket(socket.AF_INET,socket.SOCK_DGRAM)
+        self.server.bind(('127.0.0.1',5353));self.server.settimeout(.1)
+        self.server_stop=threading.Event();self.server_errors=[]
+        def respond():
+            while not self.server_stop.is_set():
+                try:raw,addr=self.server.recvfrom(4096)
+                except socket.timeout:continue
+                except OSError:
+                    if not self.server_stop.is_set():self.server_errors.append('SOCKET_ERROR')
+                    break
+                if b'\x03rds' in raw:ip='172.18.1.3'
+                elif b'\x05redis' in raw:ip='172.18.1.4'
+                else:self.server_errors.append('UNEXPECTED_QUESTION');break
+                reply=raw[:2]+struct.pack('!5H',0x8180,1,1,0,0)+raw[12:]+b'\xc0\x0c'+struct.pack('!HHIH',1,1,30,4)+socket.inet_aton(ip)
+                self.server.sendto(reply,addr)
+        self.server_thread=threading.Thread(target=respond);self.server_thread.start()
+        def topology():
+            entries,cores,prom=endpoints(4)
+            return ([x for x in entries if x.kind in ('core','broker')],cores,prom,{},frozenset(),time.monotonic()+25)
+        def route(answer,previous=None):
+            output=native_io.command(['/usr/sbin/ip','-j','-4','route','get',answer.addresses[0]],role='route_'+answer.kind)
+            if previous is not None:return whole.route_after_zero(previous,answer,output.stdout,native_io.last_facts())
+            return whole.route_from_original(answer,output.stdout,native_io.last_facts())
+        self.readers=observations.Readers(topology,dns_native.resolve,route);self.readers.start()
+        deadline=time.monotonic()+8
+        while time.monotonic()<deadline:
+            rows,cores,prom,errors,_=self.readers.cache.snapshot()
+            if len(rows)==4 and len(cores)==1 and len(prom)==1 and not errors:return
+            time.sleep(.025)
+        self.close();raise RuntimeError('LIVE_READERS_NOT_READY')
+    @property
+    def cache(self):return self.readers.cache
+    def stop_dns(self):
+        self.server_stop.set();self.server_thread.join(2);self.server.close()
+        if self.server_thread.is_alive() or self.server_errors:raise RuntimeError('DNS_FIXTURE_STOP_FAILED')
+    def close(self):
+        if not self.server_stop.is_set():self.stop_dns()
+        self.readers.close_join(time.monotonic()+5)

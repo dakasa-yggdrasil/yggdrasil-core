@@ -31,7 +31,7 @@ def read_line(channel):
     raise RuntimeError('bounded fixture message')
 
 def serve(channel,listener):
-    verified=None;controller=None;reference=None;sender_channel=None;auth=None;sender_worker=None;watcher=None;denier=None;deny_recovery=None
+    verified=None;controller=None;reference=None;sender_channel=None;auth=None;sender_worker=None;watcher=None;denier=None;deny_recovery=None;readers=None;monitor=None;cache=None
     watch_stop=threading.Event();closing=threading.Event();send_lock=threading.Lock();sender_errors=[]
     def publish(row):
         with send_lock:channel.sendall(nl.canon(row))
@@ -47,7 +47,7 @@ def serve(channel,listener):
                       expected_argv=request['argv'],source_sha256=request['source_sha256'])
         assert controller['pid']==request['anchor']['pid'] and controller['start_ticks']==request['anchor']['start_ticks']
         native_io.ROOT=ROOT/'guardian-custody';native_io.ROOT.mkdir(mode=0o700);native_io.configure();native_io.end_initialization()
-        cache=ci_reader_fixture.start(endpoints,setup=False)
+        readers=ci_reader_fixture.LiveReaders(endpoints);cache=readers.cache
         original=base64.b64decode(request['anchor']['initial'],validate=True)
         rows,_=native_structure._objects(original)
         native_structure.COMPILED_NATIVE_AST_SHA256=hashlib.sha256(native_structure._structure(rows,keep_handles=False)).hexdigest()
@@ -88,6 +88,68 @@ def serve(channel,listener):
                 if not closing.is_set():sender_errors.append('SENDER_CLOSED')
             except BaseException as error:
                 sender_errors.append(type(error).__name__+':'+str(error))
+        def deny_after_reader_failure():
+            nonlocal denier,deny_recovery
+            # CI-only: interrupt the independently owned Reader after a
+            # positive permit, then fence pending old sends with a distinct
+            # expired-map transaction. This is not a production recovery.
+            if os.environ.get('CI_GUARDED_FIXTURE')!='1':raise RuntimeError('ONLY_PRIVATE_CI_FAILURE_INJECTION')
+            failure_ns=time.monotonic_ns();auth.revoke_and_notify()
+            deny_dir=ROOT/'guardian-deny-receipts';deny_dir.mkdir(mode=0o700)
+            denier=generation.GenerationEmitter(initial_raw=original,transition=trans,receipt_dir=deny_dir,
+                         host_netns=os.environ['CI_HOST_NETNS'],recover_fixture=True)
+            uncertain=os.environ.get('CI_DENY_ACK_UNCERTAIN')=='1'
+            recovery_before=None;unknown_wire=None
+            if uncertain:
+                class UnknownAfterSend:
+                    def __init__(self,inner):self.inner=inner;self.sent=0
+                    def send(self,payload):
+                        result=self.inner.send(payload)
+                        if len(payload)>=6 and struct.unpack_from('<H',payload,4)[0]==0x10:
+                            self.sent+=1;raise RuntimeError('CI_DENY_ACK_UNKNOWN_AFTER_SEND')
+                        return result
+                    def __getattr__(self,name):return getattr(self.inner,name)
+                denier.nl=UnknownAfterSend(denier.nl)
+            maps={'inbound':[('0b'*12,1)],'reverse':[('0c'*12,1)]};records=[]
+            try:
+                for role in ('inbound','reverse'):records.append(nl.make_program(maps[role]))
+                transferred=records;records=[]
+                try:denied=denier.submit({'maps':maps,'backends':[],'cores':[],'prom':[]},transferred)
+                except RuntimeError as error:
+                    if not uncertain or str(error)!='CI_DENY_ACK_UNKNOWN_AFTER_SEND':raise
+                    assert denier.state=='HOLD_UNKNOWN_OR_UNVERIFIED' and denier.nl.sent==1
+                    intent=json.loads((deny_dir/'INTENT-101.json').read_bytes())
+                    unknown_wire=intent['wire_sha256']
+                    assert not (deny_dir/'ACK-101.json').exists()
+                    denier.nl.close()  # old socket terminal; FDs stay held
+                    recovery_dir=ROOT/'guardian-deny-recovery';recovery_dir.mkdir(mode=0o700)
+                    deny_recovery=generation.GenerationEmitter(initial_raw=original,transition=trans,
+                         receipt_dir=recovery_dir,host_netns=os.environ['CI_HOST_NETNS'],recover_fixture=True)
+                    recovery_before=nl.genid(deny_recovery.nl)
+                    maps2={'inbound':[('0d'*12,1)],'reverse':[('0e'*12,1)]}
+                    for role in ('inbound','reverse'):records.append(nl.make_program(maps2[role]))
+                    transferred=records;records=[]
+                    denied=deny_recovery.submit({'maps':maps2,'backends':[],'cores':[],'prom':[]},transferred)
+                    assert denied['wire_sha256']!=intent['wire_sha256']
+            finally:
+                for record in records:os.close(record['program_fd']);os.close(record['map_fd'])
+            if uncertain:assert deny_recovery is not None
+            publish({'event':'DENIED','genid':denied['after'],'wire_sha256':denied['wire_sha256'],
+                     'reader_invalidated':True,'failure_ns':failure_ns,'deny_ack_ns':time.monotonic_ns(),
+                     'original_deny_ack_unknown':uncertain,'distinct_deny_recovery':uncertain,
+                     'recovery_before':recovery_before,'unknown_wire_sha256':unknown_wire,
+                     'production_authority':False})
+        def monitor_readers():
+            while not closing.is_set():
+                cache.wake.wait(.05);cache.wake.clear()
+                if closing.is_set():return
+                _rows,_cores,_prom,errors,_gen=cache.snapshot()
+                if errors and auth is not None:
+                    try:deny_after_reader_failure()
+                    except BaseException as error:
+                        publish({'event':'DENY_FAILED','error_class':type(error).__name__,'guard':str(error)[:160],'production_authority':False})
+                    return
+        monitor=threading.Thread(target=monitor_readers);monitor.start()
         publish({'event':'READY','pid':os.getpid(),'production_authority':False});launch_watch()
         while True:
             command=read_line(channel);kind=command['command']
@@ -113,60 +175,16 @@ def serve(channel,listener):
                 publish({'event':'CONFIRMED','genid':verified.result['after'],**confirmation})
             elif kind=='RESUME':
                 launch_watch();publish({'event':'RESUMED','production_authority':False})
-            elif kind=='INJECT_READER_FAILURE_AND_DENY':
-                # CI-only: interrupt the independently owned Reader after a
-                # positive permit, then fence pending old sends with a distinct
-                # expired-map transaction. This is not a production recovery.
-                if os.environ.get('CI_GUARDED_FIXTURE')!='1':raise RuntimeError('ONLY_PRIVATE_CI_FAILURE_INJECTION')
-                failure_ns=time.monotonic_ns();cache.dns_failed('rds','InjectedReaderFailure');auth.revoke_and_notify()
-                deny_dir=ROOT/'guardian-deny-receipts';deny_dir.mkdir(mode=0o700)
-                denier=generation.GenerationEmitter(initial_raw=original,transition=trans,receipt_dir=deny_dir,
-                             host_netns=os.environ['CI_HOST_NETNS'],recover_fixture=True)
-                uncertain=os.environ.get('CI_DENY_ACK_UNCERTAIN')=='1'
-                recovery_before=None;unknown_wire=None
-                if uncertain:
-                    class UnknownAfterSend:
-                        def __init__(self,inner):self.inner=inner;self.sent=0
-                        def send(self,payload):
-                            result=self.inner.send(payload)
-                            if len(payload)>=6 and struct.unpack_from('<H',payload,4)[0]==0x10:
-                                self.sent+=1;raise RuntimeError('CI_DENY_ACK_UNKNOWN_AFTER_SEND')
-                            return result
-                        def __getattr__(self,name):return getattr(self.inner,name)
-                    denier.nl=UnknownAfterSend(denier.nl)
-                maps={'inbound':[('0b'*12,1)],'reverse':[('0c'*12,1)]};records=[]
-                try:
-                    for role in ('inbound','reverse'):records.append(nl.make_program(maps[role]))
-                    transferred=records;records=[]
-                    try:denied=denier.submit({'maps':maps,'backends':[],'cores':[],'prom':[]},transferred)
-                    except RuntimeError as error:
-                        if not uncertain or str(error)!='CI_DENY_ACK_UNKNOWN_AFTER_SEND':raise
-                        assert denier.state=='HOLD_UNKNOWN_OR_UNVERIFIED' and denier.nl.sent==1
-                        intent=json.loads((deny_dir/'INTENT-101.json').read_bytes())
-                        unknown_wire=intent['wire_sha256']
-                        assert not (deny_dir/'ACK-101.json').exists()
-                        denier.nl.close()  # old socket terminal; FDs stay held
-                        recovery_dir=ROOT/'guardian-deny-recovery';recovery_dir.mkdir(mode=0o700)
-                        deny_recovery=generation.GenerationEmitter(initial_raw=original,transition=trans,
-                             receipt_dir=recovery_dir,host_netns=os.environ['CI_HOST_NETNS'],recover_fixture=True)
-                        recovery_before=nl.genid(deny_recovery.nl)
-                        maps2={'inbound':[('0d'*12,1)],'reverse':[('0e'*12,1)]}
-                        for role in ('inbound','reverse'):records.append(nl.make_program(maps2[role]))
-                        transferred=records;records=[]
-                        denied=deny_recovery.submit({'maps':maps2,'backends':[],'cores':[],'prom':[]},transferred)
-                        assert denied['wire_sha256']!=intent['wire_sha256']
-                finally:
-                    for record in records:os.close(record['program_fd']);os.close(record['map_fd'])
-                if uncertain:assert deny_recovery is not None
-                publish({'event':'DENIED','genid':denied['after'],'wire_sha256':denied['wire_sha256'],
-                         'reader_invalidated':True,'failure_ns':failure_ns,'deny_ack_ns':time.monotonic_ns(),
-                         'original_deny_ack_unknown':uncertain,'distinct_deny_recovery':uncertain,
-                         'recovery_before':recovery_before,'unknown_wire_sha256':unknown_wire,
-                         'production_authority':False})
+            elif kind=='STOP_DNS':
+                readers.stop_dns();publish({'event':'DNS_STOPPED','dns_stop_ns':time.monotonic_ns(),'production_authority':False})
             elif kind=='STOP':break
             else:raise RuntimeError('UNEXPECTED_GUARDIAN_CONTROL_COMMAND')
     finally:
-        closing.set();stop_watch()
+        closing.set()
+        if cache is not None:cache.wake.set()
+        stop_watch()
+        if monitor is not None:monitor.join(5)
+        if readers is not None:readers.close()
         if sender_channel is not None:
             try:sender_channel.shutdown(2)
             except OSError:pass
