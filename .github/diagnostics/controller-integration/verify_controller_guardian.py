@@ -259,6 +259,8 @@ def main():
             denied_by_guardian=failure_result[0];assert denied_by_guardian['reader_invalidated']
             prior_generation=next_pin.receipt['after']
             next_generation=lambda value:((value+1)&0xffffffff or 1)
+            print('CI_GENERATION_ORDER',json.dumps({'order':failure_order,'prior':prior_generation,
+                  'after_positive_send':positive_generation,'after_deny_ack':denied_by_guardian['genid']}),flush=True)
             if failure_order=='positive-first':
                 assert positive_generation==[next_generation(prior_generation)]
                 assert denied_by_guardian['genid']==next_generation(positive_generation[0])
