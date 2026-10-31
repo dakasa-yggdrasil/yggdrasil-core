@@ -25,7 +25,7 @@ def main():
     deadline=time.monotonic_ns()+1_000_000_000
     r=nl.make_program([(key.hex(),deadline)])
     try:
-        before=test(r['program_fd'],bytes(packet));assert before==0xffffffff
+        before=test(r['program_fd'],bytes(packet));assert before==0xffffffff, 'CI_BEFORE_RETVAL_%s'%before
         # A Reader failure alone does not mutate this frozen map.
         after_reader_failure=test(r['program_fd'],bytes(packet));assert after_reader_failure==0xffffffff
         while time.monotonic_ns()<=deadline+50_000_000:time.sleep(.01)
