@@ -3,9 +3,10 @@
 The maps, reader witness and systemd identity verifier are fixtures. This is
 not an integrated Guardian or a production qualification.
 """
-import hashlib,json,os,socket,subprocess,sys,time,types,unittest
+import hashlib,json,os,socket,subprocess,sys,threading,time,types,unittest
 from pathlib import Path
 import authority
+import guardian47
 import guarded_nl
 
 class Registry:
@@ -62,6 +63,37 @@ class IntegrationTest(unittest.TestCase):
         self.assertEqual(call['unit'],'test.service');self.assertEqual(obj.sender,os.getpid())
     def test_identity_mismatch_rejected(self):
         with self.assertRaisesRegex(authority.Held,'SAME_ORIGINAL_CONTROLLER_IDENTITY'):self.create(Identity(wrong=True))
+    def test_precommit_47_accepts_service_identity(self):
+        # Identity, AST and probe-source seals are fixtures; nft ruleset and
+        # generation are real in the disposable network namespace.
+        self.identity._secure_source=lambda path,digest:None
+        precommit_nl=FakeNL()
+        def command(*args):
+            if 'list' in args:return guarded_nl.cmd('/usr/sbin/nft','-j','list','ruleset')
+            return json.dumps({'genid':guarded_nl.genid(self.nlsock)}).encode()
+        precommit_nl.cmd=command
+        structure=types.SimpleNamespace(_objects=lambda raw,_with_origin:([],[],json.loads(raw)))
+        transition=types.SimpleNamespace(OriginalPin=lambda raw:types.SimpleNamespace(digest='b'*64))
+        nft=types.SimpleNamespace(ruleset_mark_preflight=lambda *args,**kwargs:None)
+        request={'schema':'lab_precommit47_request_v1','nonce':'a'*64,'sender_pid':os.getpid(),
+                 'sender_start_ticks':self.reg.prep['start_ticks'],'origin_digest':'b'*64,'origin_raw_sha256':'c'*64}
+        self.peer.sendall(self.nl.canon(request));errors=[]
+        old=os.environ.get('INVOCATION_ID');os.environ['INVOCATION_ID']='d'*32
+        def serve():
+            try:guardian47.serve(self.sock,preparer_identity=self.reg.prep,sender_argv=self.identity_argv,
+                    source_sha256='a'*64,probe_path='/tmp/ci-probe.py',probe_sha256='e'*64,
+                    identity=self.identity,nl=precommit_nl,structure=structure,transition=transition,nft=nft,host_netns='not-current')
+            except Exception as exc:errors.append(exc)
+        worker=threading.Thread(target=serve);worker.start()
+        try:
+            self.peer.settimeout(10);reply=guardian47.read_line(self.peer)
+            self.assertEqual(reply['origin_digest'],'b'*64);self.assertFalse(reply['production_authority'])
+            self.assertEqual(reply['genid'],guarded_nl.genid(self.nlsock));self.assertEqual(len(self.identity.calls),1)
+        finally:
+            self.peer.close();worker.join(10)
+            if old is None:del os.environ['INVOCATION_ID']
+            else:os.environ['INVOCATION_ID']=old
+        self.assertFalse(worker.is_alive());self.assertEqual(errors,[])
     def attest(self, drift, prior_drift=False):
         obj=self.create();generation=guarded_nl.genid(self.nlsock)
         rows={'inbound':[(b'a'*12,time.monotonic_ns()+20_000_000_000)],'reverse':[(b'b'*12,time.monotonic_ns()+20_000_000_000)]}
