@@ -216,12 +216,17 @@ def main():
         failure_stop=threading.Event();failure_wake=threading.Event()
         failure_owner=native_structure._OwnershipReader(next_pin,failure_stop,failure_wake);failure_owner.start();failure_lease=None
         entered=threading.Event();release=threading.Event();failure_result=[];failure_errors=[]
+        failure_order=os.environ.get('CI_FAILURE_ORDER','deny-first')
+        assert failure_order in ('deny-first','positive-first')
         class DelayedPositiveSend:
             def __init__(self,inner):self.inner=inner;self.sent=0
             def send(self,payload):
                 if len(payload)>=6 and struct.unpack_from('<H',payload,4)[0]==0x10:
+                    if failure_order=='positive-first':
+                        outcome=self.inner.send(payload);self.sent+=1
                     entered.set()
                     if not release.wait(8):raise RuntimeError('CI_RELEASE_TIMEOUT')
+                    if failure_order=='positive-first':return outcome
                     self.sent+=1
                 return self.inner.send(payload)
             def __getattr__(self,name):return getattr(self.inner,name)
@@ -240,22 +245,33 @@ def main():
                 else:failure_lease=handed[0]
             assert failure_lease is not None
             first.nl=DelayedPositiveSend(first.nl)
+            pending_handoff=None
             try:
-                controller.cached_guarded_cycle(types.SimpleNamespace(cache=real_cache),failure_lease,failure_owner,
+                pending_handoff,_=controller.cached_guarded_cycle(types.SimpleNamespace(cache=real_cache),failure_lease,failure_owner,
                      emitter=first,prepared=failure_prepared,apply=lambda:True,previous_key=None,
                      guarded_pin=next_pin,sender_session=rotation_session,sender_permit=failure_permit)
-                raise AssertionError('stale positive transaction unexpectedly succeeded')
             except Exception:
                 assert first.state=='HOLD_UNKNOWN_OR_UNVERIFIED' and first.nl.sent==1
             injector.join(10);assert not injector.is_alive() and not failure_errors and len(failure_result)==1
             denied_by_guardian=failure_result[0];assert denied_by_guardian['reader_invalidated']
+            if pending_handoff is not None:
+                assert failure_order=='positive-first' and first.state=='AWAITING_FIXTURE_VERIFICATION'
+                # Local ACK alone cannot confirm the successor: the Guardian
+                # must reject the old receipt after the newer deny generation.
+                try:
+                    guarded_verifier.verify_and_seal(result=pending_handoff['native_result'],anchor=anchor,
+                         plan=pending_handoff['submitted_plan'],receipt_dir=receipts,reader_cache=guardian_cache,
+                         nl=nl,sources=guarded_sources,transition=trans,coverage=coverage,
+                         probe_path=probe,probe_sha256=hashlib.sha256(probe.read_bytes()).hexdigest())
+                    raise AssertionError('stale success was incorrectly verified')
+                except RuntimeError as error:assert str(error) in ('GENERATION_NOT_EXPECTED','INDEPENDENT_PRE_READ_GENERATION')
             current=socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,12);current.bind((0,0));current.settimeout(5)
             try:assert nl.genid(current)==denied_by_guardian['genid']
             finally:current.close()
             kernel_after=coverage.kernel_text(cmd('/usr/sbin/nft','-a','list','table','inet','dakasa_capacity_network'))
             assert all(not rows for rows in kernel_after['dynamic_collections'].values())
             deny_ms=(denied_by_guardian['deny_ack_ns']-denied_by_guardian['failure_ns'])/1e6
-            print('PASS concurrent Reader failure: distinct Guardian deny fenced previous positive lease; deny_ack_ms=%.2f'%deny_ms,flush=True)
+            print('PASS concurrent Reader failure order=%s: distinct Guardian deny and no accepted stale successor; deny_ack_ms=%.2f'%(failure_order,deny_ms),flush=True)
         finally:
             release.set();injector.join(10)
             if failure_lease is not None:failure_owner.release(failure_lease)

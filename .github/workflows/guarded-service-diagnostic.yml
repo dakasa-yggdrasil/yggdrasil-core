@@ -31,15 +31,19 @@ jobs:
         run: |
           set -eu
           sudo modprobe xt_bpf
-          target="$(sudo mktemp -d /run/ci-controller-guardian.XXXXXX)"
-          trap 'sudo rm -rf "$target"' EXIT
-          sudo cp -R .github/diagnostics/controller-integration/. "$target/"
-          sudo chmod -R go-w "$target"
           host_netns="$(readlink /proc/self/ns/net)"
-          unit="ci-capacity-controller-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          sudo systemd-run --quiet --wait --pipe --unit="$unit" --property=RuntimeMaxSec=120s \
-            --setenv=CI_GUARDED_FIXTURE=1 --setenv=CI_HOST_NETNS="$host_netns" \
-            --setenv=CI_CONTROLLER_UNIT="$unit.service" \
-            /usr/bin/unshare --net -- /usr/bin/python3 -B "$target/verify_controller_guardian.py"
+          for order in deny-first positive-first; do
+            target="$(sudo mktemp -d /run/ci-controller-guardian.XXXXXX)"
+            trap 'sudo rm -rf "$target"' EXIT
+            sudo cp -R .github/diagnostics/controller-integration/. "$target/"
+            sudo chmod -R go-w "$target"
+            unit="ci-capacity-controller-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-${order}"
+            sudo systemd-run --quiet --wait --pipe --unit="$unit" --property=RuntimeMaxSec=120s \
+              --setenv=CI_GUARDED_FIXTURE=1 --setenv=CI_HOST_NETNS="$host_netns" --setenv=CI_FAILURE_ORDER="$order" \
+              --setenv=CI_CONTROLLER_UNIT="$unit.service" \
+              /usr/bin/unshare --net -- /usr/bin/python3 -B "$target/verify_controller_guardian.py"
+            sudo rm -rf "$target"
+            trap - EXIT
+          done
       - name: Verify BPF absolute expiry and Reader failure semantics
         run: sudo unshare --net -- /usr/bin/python3 -B .github/diagnostics/controller-integration/runtime/ci_bpf_expiry.py
