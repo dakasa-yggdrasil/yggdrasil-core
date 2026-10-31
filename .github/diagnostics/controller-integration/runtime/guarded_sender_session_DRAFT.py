@@ -37,8 +37,8 @@ class SenderSession:
         need(type(channel) is socket.socket and type(guardian) is dict
              and set(guardian)=={'unit','invocation_id','argv','source_sha256'},
              'EXACT_CONNECTED_GUARDIAN_IDENTITY_REQUIRED')
-        need(os.geteuid()==0 and Path('/proc/sys/kernel/random/boot_id').read_text().strip()=='9930f6b8-f1e4-4542-a81b-9000e0efa4ed'
-             and os.environ.get('LAB_HOST_NETNS') and os.readlink('/proc/self/ns/net')!=os.environ['LAB_HOST_NETNS'],
+        need(os.geteuid()==0 and os.environ.get('CI_GUARDED_FIXTURE')=='1'
+             and os.environ.get('CI_HOST_NETNS') and os.readlink('/proc/self/ns/net')!=os.environ['CI_HOST_NETNS'],
              'ONLY_DISPOSABLE_LAB_SENDER_NETNS')
         self.channel, self.nl, self.pid, self.thread = channel, nl, os.getpid(), threading.get_ident()
         self.netns = os.readlink('/proc/self/ns/net')

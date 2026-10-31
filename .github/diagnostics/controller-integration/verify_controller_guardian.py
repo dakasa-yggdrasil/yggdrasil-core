@@ -4,7 +4,7 @@ The cache, owner and deployment-specific compiled AST pin are fixtures. This
 exercises real controller/native process and Guardian methods, not BPF service
 integration or production authority.
 """
-import hashlib,importlib.util,json,os,subprocess,sys,tempfile,time,types
+import hashlib,importlib.util,json,os,socket,subprocess,sys,tempfile,threading,time,types
 from pathlib import Path
 HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE/'runtime'))
@@ -82,7 +82,8 @@ def main():
     native_structure.COMPILED_NATIVE_AST_SHA256=expected
     raw=cmd('/usr/sbin/nft','-a','-j','list','ruleset')
     original=trans.OriginalPin(raw)
-    records=[];first=None;recovery=None
+    records=[];first=None;recovery=None;positive=None;session=None;server=None
+    server_done=threading.Event();server_errors=[];worker=None
     try:
         now=time.monotonic_ns();expiry=now+15_000_000_000
         maps={'inbound':[('01'*12,expiry)],'reverse':[('02'*12,expiry)]}
@@ -118,9 +119,59 @@ def main():
         assert all(not values for values in observed['dynamic_collections'].values())
         print('PASS actual BPF-backed 47-to-50 sender, unverified hold, foreign genid and distinct deny-only fenced transaction',flush=True)
         print('BOUNDARY: fake authority and AST; deny-only recovery, not live Guardian or positive recovery',flush=True)
+        # Continue only in the isolated fixture: an untrusted stand-in Guardian
+        # provides a permit, while the real SenderSession checks the live FDs,
+        # frozen maps, program->map linkage and same kernel generation twice.
+        # No observation, systemd identity, ownership lease or service grant
+        # is proved by this stand-in.
+        import guarded_sender_session_DRAFT as sender_protocol
+        receipts2=HERE/'receipts2';receipts2.mkdir(mode=0o700)
+        positive=generation.GenerationEmitter(initial_raw=raw,transition=trans,receipt_dir=receipts2,
+                                               host_netns=os.environ['CI_HOST_NETNS'],recover_fixture=True)
+        a,b=socket.socketpair();server=b
+        class FakeIdentity:
+            def authenticate(self,*args,**kwargs):return {'pidfd':os.pidfd_open(os.getpid(),0)}
+        guard={'unit':'fixture.service','invocation_id':'f'*32,'argv':['fixture'],'source_sha256':'a'*64}
+        session=sender_protocol.SenderSession(a,identity=FakeIdentity(),guardian=guard,nl=nl)
+        def mock_guardian():
+            try:
+                data=bytearray()
+                while not data.endswith(b'\n'):
+                    chunk=b.recv(1)
+                    if not chunk:raise RuntimeError('fixture peer closed')
+                    data.extend(chunk)
+                request=json.loads(data)
+                ids=[[x['program_id'],x['map_id']] for x in request['programs']]
+                reply={'schema':'lab_sender_prepared_permit_reply_v1','nonce':request['nonce'],
+                       'sender_pid':request['sender_pid'],'sender_start_ticks':request['sender_start_ticks'],
+                       'genid':request['genid'],'ids':ids,'map_digest':request['map_digest'],
+                       'deadline_ns':request['until_ns'],'source_epoch':1,'external_effect_authorized':False}
+                b.sendall(nl.canon(reply));server_done.wait(10)
+            except BaseException as error:server_errors.append(error)
+        worker=threading.Thread(target=mock_guardian);worker.start()
+        now=time.monotonic_ns();new_expiry=now+15_000_000_000
+        new_maps={'inbound':[('05'*12,new_expiry)],'reverse':[('06'*12,new_expiry)]}
+        for role in ('inbound','reverse'):records.append(nl.make_program(new_maps[role]))
+        rows,cores,prom=endpoints(4)
+        new_plan={'maps':new_maps,'backends':[encode(x) for x in rows],'cores':[encode(x) for x in cores],'prom':[encode(x) for x in prom]}
+        permit=session.prepare(records,until_ns=time.monotonic_ns()+3_000_000_000)
+        transferred=records;records=[]
+        refreshed=positive.submit(new_plan,transferred,sender_session=session,sender_permit=permit)
+        assert refreshed['ok'] and permit.consumed and refreshed['genid']==denied['after']
+        assert refreshed['wire_sha256'] not in (emitted['wire_sha256'],denied['wire_sha256'])
+        text=cmd('/usr/sbin/nft','-a','list','table','inet','dakasa_capacity_network')
+        assert coverage.kernel_text(text)['all_four_backends_and_reverse_sources_positive']
+        print('PASS fresh positive BPF sender with real one-use FD/genid permit after deny-only generation',flush=True)
+        print('BOUNDARY: Guardian permit, source witnesses and ownership lease simulated; no production authority',flush=True)
     finally:
         for rec in records:
             os.close(rec['program_fd']);os.close(rec['map_fd'])
+        server_done.set()
+        if worker is not None:worker.join(10)
+        if session is not None:session.close()
+        if server is not None:server.close()
+        if server_errors:raise RuntimeError('fixture Guardian failed') from server_errors[0]
+        if positive is not None:positive.close_private_fixture()
         if recovery is not None:recovery.close_private_fixture()
         if first is not None:first.close_private_fixture()
 if __name__=='__main__':main()
