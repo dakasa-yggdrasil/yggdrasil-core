@@ -82,26 +82,43 @@ def main():
     native_structure.COMPILED_NATIVE_AST_SHA256=expected
     raw=cmd('/usr/sbin/nft','-a','-j','list','ruleset')
     original=trans.OriginalPin(raw)
-    records=[];first=None;recovery=None;positive=None;session=None;server=None;prepared=None
+    records=[];first=None;recovery=None;positive=None;session=None;server=None;prepared=None;initial_prepared=None
     server_done=threading.Event();server_errors=[];worker=None
     try:
-        now=time.monotonic_ns();expiry=now+15_000_000_000
-        maps={'inbound':[('01'*12,expiry)],'reverse':[('02'*12,expiry)]}
-        for role in ('inbound','reverse'):records.append(nl.make_program(maps[role]))
-        rows,cores,prom=cache.rows
+        import ci_reader_fixture,guarded_sources,guarded_preparation
+        real_cache=ci_reader_fixture.start(endpoints)
+        guardian_cache=ci_reader_fixture.start(endpoints,setup=False)
+        assert real_cache is not guardian_cache
+        guard_expected=guarded_sources.build_expected(guardian_cache)
+        initial_prepared=guarded_preparation.PreparedGeneration(real_cache,
+                 deadline_ceilings={role:guard_expected[role] for role in ('inbound','reverse')})
         def encode(row):return {'kind':getattr(row,'kind','prom'),'address':row.address,'port':getattr(row,'port',0),'deadline':int(row.expires*1e9)}
-        plan={'maps':maps,'backends':[encode(x) for x in rows],'cores':[encode(x) for x in cores],'prom':[encode(x) for x in prom]}
         receipts=HERE/'receipts';receipts.mkdir(mode=0o700)
         first=generation.GenerationEmitter(initial_raw=raw,transition=trans,receipt_dir=receipts,host_netns=os.environ['CI_HOST_NETNS'])
-        transferred=records;records=[]
-        try:emitted=first.submit(plan,transferred)
-        except trans.Rejected:
-            probe=json.loads(cmd('/usr/sbin/nft','-a','-j','list','ruleset'))
-            gates=[x for x in probe['nftables'] if x.get('rule',{}).get('chain')=='admit_deadline']
-            print('CI_GATE_JSON',json.dumps(gates,sort_keys=True),flush=True)
-            raise
+        original_rows,_=native_structure._objects(raw)
+        # Fixture pin is built from this disposable namespace; production
+        # must instead use its own qualified echo/read-adoption pin.
+        pin=native_structure._OriginalStructure(native_structure._handles(original_rows),None,native_structure._CAPABILITY,
+                  proof_kind='original_owned_read_adoption',original_native_read_sha256=hashlib.sha256(raw).hexdigest())
+        origin=native_structure.begin_guarded_transition(pin)
+        stop=threading.Event();wake=threading.Event()
+        owner=native_structure._OwnershipReader(pin,stop,wake);owner.start();lease=None
+        try:
+            deadline=time.monotonic()+5
+            while lease is None and time.monotonic()<deadline:
+                handed,error=owner.take()
+                if handed is None:wake.wait(.05);wake.clear()
+                else:lease=handed[0]
+            assert lease is not None
+            emitted,pending_key=controller.cached_guarded_cycle(types.SimpleNamespace(cache=real_cache),lease,owner,
+                  emitter=first,prepared=initial_prepared,apply=lambda:True,previous_key=None,transition_origin=origin)
+            assert pending_key is not None and emitted['guardian_receipt_acceptance_pending'] is True
+        finally:
+            if lease is not None:owner.release(lease)
+            stop.set();wake.set();owner.close_join(time.monotonic()+5)
         assert emitted['ok'] and first.state=='AWAITING_FIXTURE_VERIFICATION'
-        try:first.submit(plan,[]);raise AssertionError('unverified generation allowed another send')
+        print('PASS cached_guarded_cycle with actual original 47 ownership reader and BPF emitter',flush=True)
+        try:first.submit({},[]);raise AssertionError('unverified generation allowed another send')
         except RuntimeError as e:assert str(e)=='ONLY_READY_SAME_OWNER'
         # Independently changed foreign nft object: never infer that the old
         # receipt proves the present generation. The diagnostic recovery sender
@@ -149,10 +166,6 @@ def main():
                 b.sendall(nl.canon(reply));server_done.wait(10)
             except BaseException as error:server_errors.append(error)
         worker=threading.Thread(target=mock_guardian);worker.start()
-        import ci_reader_fixture,guarded_sources,guarded_preparation
-        real_cache=ci_reader_fixture.start(endpoints)
-        guardian_cache=ci_reader_fixture.start(endpoints,setup=False)
-        assert real_cache is not guardian_cache
         guard_expected=guarded_sources.build_expected(guardian_cache)
         prepared=guarded_preparation.PreparedGeneration(real_cache,
                  deadline_ceilings={role:guard_expected[role] for role in ('inbound','reverse')})
@@ -182,6 +195,7 @@ def main():
         if session is not None:session.close()
         if server is not None:server.close()
         if server_errors:raise RuntimeError('fixture Guardian failed') from server_errors[0]
+        if initial_prepared is not None:initial_prepared.close()
         if prepared is not None:prepared.close()
         if positive is not None:positive.close_private_fixture()
         if recovery is not None:recovery.close_private_fixture()

@@ -252,6 +252,58 @@ def cached_cycle(reader, lease, ownership, *, apply, previous_key, schedule=None
     return result,key
 
 
+def cached_guarded_cycle(reader, lease, ownership, *, emitter, prepared, apply,
+                         previous_key, transition_origin=None, guardian_session=None,
+                         guarded_pin=None, sender_session=None, sender_permit=None):
+    """CI/LAB candidate: hand one stable cache generation to the BPF emitter.
+
+    This method is not wired into serve_hot. Its returned key is *pending*:
+    the caller must not commit it until an independent Guardian verifies and
+    acknowledges the original receipt. Errors after a possible send escape;
+    this function never retries an uncertain transaction.
+    """
+    import guarded_nl
+    cache=reader.cache
+    snapshot,key,revision=cache.commit_snapshot()
+    if key == previous_key:
+        return None,key
+    entries,cores,prom,errors,generation=snapshot
+    nft.require(not errors and len(entries)==4 and len(cores)>0 and len(prom)==1,
+                'ONLY_FULL_GUARDED_CACHE_SNAPSHOT')
+    if emitter.has_gates:
+        nft.require(guarded_pin is not None and sender_session is not None and sender_permit is not None
+                    and transition_origin is None and guardian_session is None,
+                    'ORIGINAL_GUARDED_LEASE_PIN_AND_GUARDIAN_PERMIT_REQUIRED')
+    else:
+        nft.require(transition_origin is not None and guarded_pin is None
+                    and sender_session is None and sender_permit is None
+                    and (guardian_session is not None or os.environ.get('CI_GUARDED_FIXTURE')=='1'),
+                    'ORIGINAL_47_ORIGIN_AND_GUARDIAN_REQUIRED')
+    descriptors=prepared.fixture_descriptors(cache)
+    maps={role:[(item.hex(),deadline) for item,deadline in sorted(guarded_nl.map_rows(record['map_id']))]
+          for role,record in zip(('inbound','reverse'),descriptors)}
+    def encode(item):
+        return {'kind':getattr(item,'kind','prom'),'address':item.address,
+                'port':getattr(item,'port',0),'deadline':int(item.expires*1e9)}
+    plan={'maps':maps,'backends':[encode(x) for x in entries],
+          'cores':[encode(x) for x in cores],'prom':[encode(x) for x in prom]}
+    newest,newest_key,newest_revision=cache.commit_snapshot()
+    nft.require(newest_key==key and newest_revision==revision and newest==snapshot,
+                'SAME_CACHE_SNAPSHOT_BEFORE_GUARDED_HANDOFF')
+    nft.require(apply() is True,'ORIGINAL_GUARDED_APPLY_REQUIRED')
+    records=prepared.take_same_process_for_emitter(cache)
+    if emitter.has_gates:
+        result=emitter.submit(plan,records,guarded_lease=lease,guarded_owner=ownership,
+                              guarded_pin=guarded_pin,sender_session=sender_session,sender_permit=sender_permit)
+    else:
+        result=emitter.submit(plan,records,original_lease=lease,original_owner=ownership,
+                              transition_origin=transition_origin,guardian_session=guardian_session)
+    result['same_process_topology_generation']=generation
+    result['same_process_semantic_cache_revision']=revision
+    result['guardian_receipt_acceptance_pending']=True
+    return result,key
+
+
 def _retained_unused_cycle(reader, lease, ownership, *, apply, previous_key, schedule, transition_context=None):
     """Borrow ONE original token without renewing it while no payload changed.
 
