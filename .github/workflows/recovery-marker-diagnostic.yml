@@ -59,3 +59,17 @@ jobs:
           sudo systemd-run --quiet --wait --pipe --unit="$unit" \
             --setenv=CI_CONTROLLER_UNIT="$unit.service" \
             /usr/bin/unshare --net -- /usr/bin/python3 -B "$target/verify_recovery_read.py"
+      - name: Join 50-rule references and four real nft collections
+        run: |
+          set -eu
+          sudo modprobe xt_bpf
+          target="$(sudo mktemp -d /run/ci-recovery-attached.XXXXXX)"
+          trap 'sudo rm -rf "$target"' EXIT
+          sudo cp -R .github/diagnostics/controller-integration/. "$target/"
+          sudo chmod -R go-w "$target"
+          unit="ci-recovery-attached-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          host_netns="$(readlink /proc/self/ns/net)"
+          sudo systemd-run --quiet --wait --pipe --unit="$unit" \
+            --setenv=CI_CONTROLLER_UNIT="$unit.service" --setenv=CI_GUARDED_FIXTURE=1 \
+            --setenv=CI_RECOVERY_READ_ONLY=1 --setenv=CI_HOST_NETNS="$host_netns" \
+            /usr/bin/unshare --net -- /usr/bin/python3 -B "$target/verify_controller_guardian.py"

@@ -162,6 +162,26 @@ def main():
         assert live['scope']=='guarded50_non_authorizing_ci_lab' and live['kernel']['all_four_backends_and_reverse_sources_positive']
         assert live['live']['grant_authority'] is False
         print('PASS Owner.kernel guarded 50 with real source/tuple join and original receipt',flush=True)
+        if os.environ.get('CI_RECOVERY_READ_ONLY')=='1':
+            import recovery_read_DRAFT as recovery_read,guarded_program_identity_DRAFT as reference_module
+            reference=reference_module.GuardianProgramReference()
+            try:
+                key=drain_v3._durable_marker_identity(drain)[:3]
+                def observe(**kw):
+                    return recovery_read.sample_attached(drain,first.nl,expected_marker=key,
+                        expected_genid=kw.get('genid',emitted['after']),records=kw.get('records',emitted['programs']),
+                        reference=reference,cache=guardian_cache,original_pin=original,
+                        receipt=kw.get('receipt',emitted),coverage=coverage)
+                result=observe()
+                assert result['four_nft_collections_joined'] and result['nft_rule_fd_reference_observed']
+                assert not result['kernel_bpf_pointer_proven'] and not result['effect_or_recovery_authority']
+                bad=dict(emitted);bad['handles']=[emitted['handles'][0]+1,emitted['handles'][1]]
+                try:observe(receipt=bad);raise AssertionError('wrong rule handle accepted')
+                except recovery_read.Held as error:assert str(error)=='SAME_RULE_HANDLE_AND_FD_REFERENCE'
+                print('PASS real guarded 50 shape, ordered rule FD references and four dynamic collections joined',flush=True)
+                print('PASS wrong nft gate handle rejected; pointer and receipt provenance remain unproven',flush=True)
+            finally:reference.close()
+            return
         import ci_guardian_unit
         watch=ci_guardian_unit.Watch(root=HERE,anchor=anchor,result=emitted,plan=first_plan,existing=pre_guardian)
         assert watch.peer['pid']==pre_guardian.session.pid
