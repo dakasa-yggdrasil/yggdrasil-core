@@ -39,6 +39,15 @@ try:
     wait_for(root/'child.pid');childfd=os.pidfd_open(int((root/'child.pid').read_text()))
     subprocess.run(['/usr/bin/systemctl','start',guardian],check=True,timeout=10)
     ready=query();assert ready['state']=='READY' and len(ready['fds'])==2 and len(set(ready['fds']))==2,ready
+    if '--early-custodian-death' in sys.argv:
+        os.kill(custodian.pid,signal.SIGKILL);custodian.wait(timeout=5)
+        with open(lock,'rb') as f:
+            import fcntl
+            try:fcntl.flock(f,fcntl.LOCK_EX|fcntl.LOCK_NB);raise AssertionError('live writers lost their fence')
+            except BlockingIOError:pass
+        assert coord.marker.exists()
+        print('PASS custodian dies with writers live: inherited shared fence and marker remain',flush=True)
+        sys.exit(0)
     signal_main(guardian)
     pinned=query('sockets');assert pinned['state']=='SOCKETS' and pinned['inodes']==ready['fds'],pinned
     assert query('acquire')['state']=='HOLD'

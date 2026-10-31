@@ -31,3 +31,10 @@ jobs:
           sudo cp -R .github/diagnostics/controller-integration/runtime "$target/runtime"
           sudo chmod -R go-w "$target"
           sudo /usr/bin/python3 -B "$target/verify_custody.py"
+          sudo rm -rf "$target"
+          target="$(sudo mktemp -d /run/ci-recovery-custody.XXXXXX)"
+          sudo cp .github/diagnostics/recovery-custody/*.py "$target/"
+          sudo cp .github/diagnostics/guarded-service/{guarded_unit_identity.py,recovery_terminality_DRAFT.py} "$target/"
+          sudo cp -R .github/diagnostics/controller-integration/runtime "$target/runtime"
+          sudo chmod -R go-w "$target"
+          sudo /usr/bin/python3 -B "$target/verify_custody.py" --early-custodian-death

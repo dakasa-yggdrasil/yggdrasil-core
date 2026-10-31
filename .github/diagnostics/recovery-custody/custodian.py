@@ -19,6 +19,13 @@ def accept(role,unit):
     if data!=b'F' or flags&(socket.MSG_CTRUNC|socket.MSG_TRUNC) or len(anc)!=1:raise RuntimeError('EXACT_NETLINK_DESCRIPTOR_REQUIRED')
     level,kind,raw=anc[0];fds=array.array('i');fds.frombytes(raw[:len(raw)-(len(raw)%fds.itemsize)])
     if level!=socket.SOL_SOCKET or kind!=socket.SCM_RIGHTS or len(fds)!=1 or not stat.S_ISSOCK(os.fstat(fds[0]).st_mode):raise RuntimeError('ONE_SOCKET_FD_REQUIRED')
+    probe=socket.socket(fileno=fds[0])
+    try:
+        if (probe.getsockopt(socket.SOL_SOCKET,socket.SO_DOMAIN)!=socket.AF_NETLINK
+                or probe.getsockopt(socket.SOL_SOCKET,socket.SO_PROTOCOL)!=12
+                or probe.getsockopt(socket.SOL_SOCKET,socket.SO_TYPE)!=socket.SOCK_RAW):
+            raise RuntimeError('EXACT_NETFILTER_NETLINK_SOCKET_REQUIRED')
+    finally:probe.detach()
     received.append(fds[0]);anchors[role]=(anchor,channel)
     if role=='sender':return terminal.capture_marker(anchor,coord)
 try:
