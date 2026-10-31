@@ -21,3 +21,13 @@ jobs:
           sudo cp -R .github/diagnostics/controller-integration/runtime "$target/runtime"
           sudo chmod -R go-w "$target"
           sudo unshare --mount --propagation private -- /usr/bin/python3 -B "$target/verify_recovery_terminality.py"
+      - name: Verify independent custody, socket lifetime and restart fence
+        run: |
+          set -eu
+          target="$(sudo mktemp -d /run/ci-recovery-custody.XXXXXX)"
+          trap 'sudo rm -rf "$target"' EXIT
+          sudo cp .github/diagnostics/recovery-custody/*.py "$target/"
+          sudo cp .github/diagnostics/guarded-service/{guarded_unit_identity.py,recovery_terminality_DRAFT.py} "$target/"
+          sudo cp -R .github/diagnostics/controller-integration/runtime "$target/runtime"
+          sudo chmod -R go-w "$target"
+          sudo /usr/bin/python3 -B "$target/verify_custody.py"
