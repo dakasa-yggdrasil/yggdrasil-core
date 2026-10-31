@@ -14,6 +14,8 @@ def wait_file(path):
 def launch(mode):
     global childfd
     for name in ('native-child.pid','native-child.report'):(root/name).unlink(missing_ok=True)
+    import shutil
+    shutil.rmtree(root/'native-io-root',ignore_errors=True)
     unit_file.write_text('[Service]\nType=simple\nKillMode=process\nRuntimeMaxSec=50s\nExecStart=/usr/bin/python3 -B '+str(root/'native_parent.py')+' '+str(root)+' '+mode+' '+str(lock)+' '+identity+'\n')
     subprocess.run(['/usr/bin/systemctl','daemon-reload'],check=True,timeout=10)
     subprocess.run(['/usr/bin/systemctl','start',unit],check=True,timeout=10)
@@ -37,10 +39,17 @@ def close_child():
         time.sleep(.02)
 
 try:
+    sys.path.insert(0,str(root/'runtime'))
+    import native_io,original_process
+    try:
+        native_io.command(['/usr/sbin/nft','-j','list','ruleset'],role='ruleset_mark',writer_lease_fd=0)
+        raise AssertionError('read-only role accepted writer lease')
+    except original_process.Held as error:assert str(error)=='WRITER_LEASE_FOR_APPLY_ONLY'
+    print('PASS native_io rejects writer lease for read-only role',flush=True)
     launch('writer');assert not exclusive();close_child()
     print('PASS real nft child retains passed FD after parent death; exclusive succeeds only after child exit',flush=True)
     launch('reader');assert exclusive();close_child()
-    print('PASS read-only child does not inherit writer lock; prior writer FD did not leak on reexec',flush=True)
+    print('PASS real nft read-only child does not inherit writer lock; prior writer FD did not leak on reexec',flush=True)
 finally:
     if childfd is not None:
         try:signal.pidfd_send_signal(childfd,signal.SIGKILL)
