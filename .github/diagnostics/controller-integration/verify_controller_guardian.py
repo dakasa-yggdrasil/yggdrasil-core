@@ -92,7 +92,8 @@ def main():
         plan={'maps':maps,'backends':[encode(x) for x in rows],'cores':[encode(x) for x in cores],'prom':[encode(x) for x in prom]}
         receipts=HERE/'receipts';receipts.mkdir(mode=0o700)
         first=generation.GenerationEmitter(initial_raw=raw,transition=trans,receipt_dir=receipts,host_netns=os.environ['CI_HOST_NETNS'])
-        emitted=first.submit(plan,records);records=[]
+        transferred=records;records=[]
+        emitted=first.submit(plan,transferred)
         assert emitted['ok'] and first.state=='AWAITING_FIXTURE_VERIFICATION'
         try:first.submit(plan,[]);raise AssertionError('unverified generation allowed another send')
         except RuntimeError as e:assert str(e)=='ONLY_READY_SAME_OWNER'
@@ -104,7 +105,8 @@ def main():
                                                host_netns=os.environ['CI_HOST_NETNS'],recover_fixture=True)
         deny_maps={'inbound':[('03'*12,1)],'reverse':[('04'*12,1)]}
         for role in ('inbound','reverse'):records.append(nl.make_program(deny_maps[role]))
-        denied=recovery.submit({'maps':deny_maps,'backends':[],'cores':[],'prom':[]},records);records=[]
+        transferred=records;records=[]
+        denied=recovery.submit({'maps':deny_maps,'backends':[],'cores':[],'prom':[]},transferred)
         assert denied['ok'] and denied['genid']!=emitted['after'] and denied['wire_sha256']!=emitted['wire_sha256']
         text=cmd('/usr/sbin/nft','-a','list','table','inet','dakasa_capacity_network')
         observed=coverage.kernel_text(text)

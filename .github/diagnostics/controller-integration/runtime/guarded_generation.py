@@ -241,7 +241,7 @@ class GenerationEmitter:
                 for typ, number, data in n.packets(raw):
                     n.check(typ == 2 and number in expected and number not in ack and len(data) >= 4, 'ACK_SHAPE')
                     ack[number] = struct.unpack_from('<i', data)[0]
-                    n.check(ack[number] == 0, 'ACK_FAILED')
+                    n.check(ack[number] == 0, 'ACK_FAILED_SEQUENCE_%s_ERRNO_%s' % (number,ack[number]))
             current = n.rules(self.nl, 'admit_deadline')
             handles = [struct.unpack('>Q', dict((k & 0x3fff, v) for k, v in fields)[3])[0]
                        for fields, _ in current]
