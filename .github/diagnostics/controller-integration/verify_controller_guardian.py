@@ -167,45 +167,20 @@ def main():
         attestation=rotation_session.attest_current(first.receipt,until_ns=time.monotonic_ns()+8_000_000_000)
         active_pin=native_structure.accept_lab_positive_guarded(positive_guardian,first,attestation)
         first.activate_lab_guarded_pin(active_pin)
-        guard_expected=guarded_sources.build_expected(guardian_cache)
-        rotation_prepared=guarded_preparation.PreparedGeneration(real_cache,
-                     deadline_ceilings={role:guard_expected[role] for role in ('inbound','reverse')})
-        descriptors=rotation_prepared.fixture_descriptors(real_cache)
-        approval=watch.prepare(descriptors);assert approval['genid']==active_pin.receipt['after']
-        permit=rotation_session.prepare(list(descriptors),until_ns=time.monotonic_ns()+3_000_000_000)
-        guard_stop=threading.Event();guard_wake=threading.Event()
-        guarded_owner=native_structure._OwnershipReader(active_pin,guard_stop,guard_wake);guarded_owner.start();guarded_lease=None
-        pause_started=time.monotonic();watch.pause()
-        try:
-            deadline=time.monotonic()+5
-            while guarded_lease is None and time.monotonic()<deadline:
-                handed,error=guarded_owner.take()
-                if handed is None:guard_wake.wait(.05);guard_wake.clear()
-                else:guarded_lease=handed[0]
-            assert guarded_lease is not None
-            cycle_started=time.monotonic_ns()
-            rotated,next_key=controller.cached_guarded_cycle(types.SimpleNamespace(cache=real_cache),guarded_lease,guarded_owner,
-                    emitter=first,prepared=rotation_prepared,apply=lambda:True,previous_key=None,
-                    guarded_pin=active_pin,sender_session=rotation_session,sender_permit=permit)
-            result=rotated['native_result'];assert next_key is not None and result['guarded_lease_used']
-            confirmed=watch.confirm(result,rotated['submitted_plan']);assert confirmed['same_guardian_successor_verified']
-            next_attestation=rotation_session.attest_current(first.receipt,until_ns=time.monotonic_ns()+8_000_000_000)
-            next_pin=native_structure.accept_lab_positive_guarded(positive_guardian,first,next_attestation,previous_pin=active_pin)
-            first.activate_lab_guarded_pin(next_pin)
-            guarded_owner.adopt_lab_guarded_pin(active_pin,next_pin,guarded_lease)
-            lease_age_ms=(result['send_started_ns']-int(guarded_lease.token.returned*1e9))/1e6
-            dispatch_ms=(result['send_started_ns']-cycle_started)/1e6
-            assert 0<=lease_age_ms<750 and 0<=dispatch_ms<250
-        finally:
-            if guarded_lease is not None:guarded_owner.release(guarded_lease)
-            guard_stop.set();guard_wake.set();guarded_owner.close_join(time.monotonic()+5)
-        watch.resume();pause_ms=(time.monotonic()-pause_started)*1000
+        import ci_guarded_driver
+        driver=ci_guarded_driver.GuardedDriver(watch=watch,sender=rotation_session,emitter=first,
+                  positive_session=positive_guardian,ceiling_cache=guardian_cache,endpoints=endpoints,max_commits=2)
+        running_reader=types.SimpleNamespace(cache=real_cache,stop=threading.Event(),shutdown_deadline=lambda:time.monotonic()+5)
+        loop_result=controller.serve_hot(running_reader,active_pin,apply=lambda:True,guarded_driver=driver)
+        assert len(driver.results)==2 and loop_result['sequence']==3 and loop_result['production_authority'] is False
+        next_pin=loop_result['pin'];result=driver.results[-1]['native_result']
         while True:
             sample=watch.read()
             if sample['event']=='SAMPLE':
                 assert sample['generation']==result['after'];break
             if sample['event']!='FINISHED':raise RuntimeError('UNEXPECTED_POST_ROTATION_EVENT:'+str(sample))
-        print('PASS separate Guardian authorized and verified guarded 50-to-50 rotation; lease_age_ms=%.2f dispatch_ms=%.2f watch_pause_ms=%.2f'%(lease_age_ms,dispatch_ms,pause_ms),flush=True)
+        print('PASS serve_hot and separate Guardian verified two guarded rotations: '+json.dumps([
+            {key:round(row[key],2) for key in ('lease_age_ms','dispatch_ms','watch_pause_ms')} for row in driver.results]),flush=True)
         # Keep watch running while a second positive transaction is ready to
         # send. The Guardian invalidates its own Reader and wins a distinct
         # genid-fenced deny transaction before the old send is released.
@@ -275,7 +250,7 @@ def main():
                 assert denied_by_guardian['genid']==next_generation(denied_by_guardian['recovery_before'])
                 assert denied_by_guardian['unknown_wire_sha256']!=denied_by_guardian['wire_sha256']
             else:assert denied_by_guardian['genid']==next_generation(before_deny)
-            old_intent=json.loads((receipts/'INTENT-003.json').read_bytes())
+            old_intent=json.loads((receipts/('INTENT-%03d.json'%first.counter)).read_bytes())
             assert old_intent['wire_sha256']!=denied_by_guardian['wire_sha256']
             if pending_handoff is not None:
                 assert failure_order=='positive-first' and first.state=='AWAITING_FIXTURE_VERIFICATION'

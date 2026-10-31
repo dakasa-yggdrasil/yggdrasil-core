@@ -339,7 +339,9 @@ def _retained_unused_cycle(reader, lease, ownership, *, apply, previous_key, sch
     return None, previous_key
 
 
-def serve_hot(reader, pin, *, apply, initial_sequence=1, transition_context=None):
+def serve_hot(reader, pin, *, apply, initial_sequence=1, transition_context=None, guarded_driver=None):
+    if guarded_driver is not None:
+        return _serve_guarded_hot(reader,pin,apply=apply,driver=guarded_driver,initial_sequence=initial_sequence)
     # Only the original main thread commits. One independent full-ruleset
     # reader feeds original one-use tokens. It never writes a kernel batch.
     ownership=native_structure._OwnershipReader(pin,reader.stop,reader.cache.wake)
@@ -406,6 +408,55 @@ def serve_hot(reader, pin, *, apply, initial_sequence=1, transition_context=None
         # three observation readers with the SAME clock, never a new window.
         reader.stop.set();reader.cache.wake.set()
         ownership.close_join(reader.shutdown_deadline())
+
+
+def _serve_guarded_hot(reader, pin, *, apply, driver, initial_sequence=1):
+    """CI/LAB continuous caller: failures propagate and are never replayed.
+
+    Guardian/driver custody is required throughout. The caller must perform
+    distinct reconciliation after an unknown send. This path is not wired
+    into the production entrypoint and grants no remote-effect authority.
+    """
+    import ci_guarded_driver
+    nft.require(type(driver) is ci_guarded_driver.GuardedDriver and os.environ.get('CI_GUARDED_FIXTURE')=='1',
+                'ONLY_BOUNDED_CI_GUARDED_DRIVER')
+    owner=native_structure._OwnershipReader(pin,reader.stop,reader.cache.wake);owner.start()
+    sequence=initial_sequence;last_key=None;installed_until=None
+    try:
+        while not reader.stop.is_set():
+            _snapshot,key,_revision=reader.cache.commit_snapshot()
+            now=time.monotonic()
+            if key==last_key and installed_until is not None and now<installed_until-1.250:
+                reader.cache.wake.wait(min(.05,max(0,installed_until-1.250-now)));reader.cache.wake.clear();continue
+            prepared=None;lease=None
+            try:
+                prepared,permit=driver.prepare(reader.cache)
+                driver.begin_handoff()
+                deadline=time.monotonic()+5
+                while lease is None and not reader.stop.is_set() and time.monotonic()<deadline:
+                    handed,error=owner.take()
+                    if handed is None:reader.cache.wake.wait(.05);reader.cache.wake.clear()
+                    else:lease=handed[0]
+                nft.require(lease is not None,'GUARDED_OWNERSHIP_NOT_AVAILABLE_WITHIN_BUDGET')
+                started=time.monotonic_ns()
+                # A due refresh may use the same semantic key; it still needs
+                # a fresh prepared generation and the same original deadline.
+                handoff,new_key=cached_guarded_cycle(reader,lease,owner,emitter=driver.emitter,
+                    prepared=prepared,apply=apply,previous_key=None,guarded_pin=pin,
+                    sender_session=driver.sender,sender_permit=permit)
+                nft.require(handoff is not None,'GUARDED_REFRESH_NOT_DISPATCHED')
+                pin=driver.confirm(handoff,owner,lease,pin,started)
+                last_key=new_key;sequence+=1
+                deadlines=[value for rows in handoff['submitted_plan']['maps'].values() for _key,value in rows]
+                nft.require(deadlines and all(type(x) is int for x in deadlines),'BOUNDED_GUARDED_DEADLINES')
+                installed_until=min(deadlines)/1e9
+                driver.finish(reader)
+            finally:
+                if lease is not None:owner.release(lease)
+                if prepared is not None:prepared.close()
+    finally:
+        reader.stop.set();reader.cache.wake.set();owner.close_join(reader.shutdown_deadline())
+    return {'last_key':last_key,'pin':pin,'sequence':sequence,'production_authority':False}
 
 
 def main():
