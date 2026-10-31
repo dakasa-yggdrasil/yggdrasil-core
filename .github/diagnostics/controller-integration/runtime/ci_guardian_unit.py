@@ -8,7 +8,7 @@ class Watch:
         self.owns_unit=existing is None
         self.unit=('ci-guarded-watch-'+uuid.uuid4().hex+'.service') if self.owns_unit else existing.unit
         self.path=(root/'guardian-watch.sock') if self.owns_unit else existing.path
-        self.channel=None;self.peer=None;self.start=time.monotonic()
+        self.channel=None;self.peer=None;self.start=time.monotonic();self.last_hold=None
         script=Path(__file__).with_name('ci_guardian_process.py').resolve() if self.owns_unit else Path(existing.argv[2])
         self.argv=['/usr/bin/python3','-B',str(script),str(self.path)] if self.owns_unit else existing.argv
         try:
@@ -48,6 +48,8 @@ class Watch:
         while True:
             row=self.read()
             if row['event']==expected:return row
+            if row['event']=='HOLD' and command=='INJECT_READER_FAILURE_AND_DENY':
+                self.last_hold=row;continue
             if row['event'] not in ('SAMPLE','FINISHED'):raise RuntimeError('UNEXPECTED_GUARDIAN_CONTROL_EVENT:'+str(row))
     def pause(self):return self.control('PAUSE','PAUSED')
     def sender_channel(self):
@@ -60,13 +62,15 @@ class Watch:
     def prepare(self,records):return self.control('PREPARE','PREPARED',records=list(records))
     def confirm(self,result,plan):return self.control('CONFIRM','CONFIRMED',result=result,plan=plan)
     def resume(self):return self.control('RESUME','RESUMED')
+    def inject_reader_failure_and_deny(self):return self.control('INJECT_READER_FAILURE_AND_DENY','DENIED')
     def expect_hold(self):
         deadline=time.monotonic()+8
         while time.monotonic()<deadline:
-            row=self.read()
+            row=self.last_hold if self.last_hold is not None else self.read()
+            self.last_hold=None
             if row['event']=='HOLD':
-                assert row['guard']=='GUARDED_RECEIPT_GENERATION_CHANGED' and not row['production_authority']
-                print('PASS separate Guardian watch HOLD after external genid change',flush=True);return
+                assert row['guard'] in ('GUARDED_RECEIPT_GENERATION_CHANGED','ORIGINAL_DNS_ROUTE_WITNESS_REQUIRED') and not row['production_authority']
+                print('PASS separate Guardian watch HOLD after source failure or genid change',flush=True);return
             assert row['event']=='SAMPLE'
         raise RuntimeError('GUARDIAN_HOLD_NOT_OBSERVED')
     def close(self):

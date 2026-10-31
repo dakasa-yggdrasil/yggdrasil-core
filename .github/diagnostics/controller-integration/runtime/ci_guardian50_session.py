@@ -10,6 +10,7 @@ import guarded_verifier,guarded_live_observation,transition_structure_DRAFT as t
 import guarded_current15 as current15,guarded_refresh_registry_DRAFT as registry_module
 import guarded_program_identity_DRAFT as program_module,guarded_authority_ci as authority
 import native_io,native_structure,nft_owner as nft
+import guarded_generation as generation
 HERE=Path(__file__).resolve().parent;ROOT=HERE.parent
 spec=importlib.util.spec_from_file_location('ci_guardian',ROOT/'network_guardian.py');guardian=importlib.util.module_from_spec(spec);spec.loader.exec_module(guardian)
 spec=importlib.util.spec_from_file_location('ci_coverage',ROOT/'coverage.py');coverage=importlib.util.module_from_spec(spec);spec.loader.exec_module(coverage)
@@ -30,7 +31,7 @@ def read_line(channel):
     raise RuntimeError('bounded fixture message')
 
 def serve(channel,listener):
-    verified=None;controller=None;reference=None;sender_channel=None;auth=None;sender_worker=None;watcher=None
+    verified=None;controller=None;reference=None;sender_channel=None;auth=None;sender_worker=None;watcher=None;denier=None
     watch_stop=threading.Event();closing=threading.Event();send_lock=threading.Lock();sender_errors=[]
     def publish(row):
         with send_lock:channel.sendall(nl.canon(row))
@@ -112,6 +113,25 @@ def serve(channel,listener):
                 publish({'event':'CONFIRMED','genid':verified.result['after'],**confirmation})
             elif kind=='RESUME':
                 launch_watch();publish({'event':'RESUMED','production_authority':False})
+            elif kind=='INJECT_READER_FAILURE_AND_DENY':
+                # CI-only: interrupt the independently owned Reader after a
+                # positive permit, then fence pending old sends with a distinct
+                # expired-map transaction. This is not a production recovery.
+                if os.environ.get('CI_GUARDED_FIXTURE')!='1':raise RuntimeError('ONLY_PRIVATE_CI_FAILURE_INJECTION')
+                failure_ns=time.monotonic_ns();cache.dns_failed('rds','InjectedReaderFailure');auth.revoke_and_notify()
+                deny_dir=ROOT/'guardian-deny-receipts';deny_dir.mkdir(mode=0o700)
+                denier=generation.GenerationEmitter(initial_raw=original,transition=trans,receipt_dir=deny_dir,
+                             host_netns=os.environ['CI_HOST_NETNS'],recover_fixture=True)
+                maps={'inbound':[('0b'*12,1)],'reverse':[('0c'*12,1)]};records=[]
+                try:
+                    for role in ('inbound','reverse'):records.append(nl.make_program(maps[role]))
+                    transferred=records;records=[]
+                    denied=denier.submit({'maps':maps,'backends':[],'cores':[],'prom':[]},transferred)
+                finally:
+                    for record in records:os.close(record['program_fd']);os.close(record['map_fd'])
+                publish({'event':'DENIED','genid':denied['after'],'wire_sha256':denied['wire_sha256'],
+                         'reader_invalidated':True,'failure_ns':failure_ns,'deny_ack_ns':time.monotonic_ns(),
+                         'production_authority':False})
             elif kind=='STOP':break
             else:raise RuntimeError('UNEXPECTED_GUARDIAN_CONTROL_COMMAND')
     finally:
@@ -123,6 +143,7 @@ def serve(channel,listener):
         if auth is not None:auth.close()
         elif sender_channel is not None:sender_channel.close()
         if reference is not None:reference.close()
+        if denier is not None:denier.close_private_fixture()
         if verified is not None:verified.close()
         if controller is not None:os.close(controller['pidfd'])
         if sender_errors:raise RuntimeError('GUARDIAN_SENDER_ERROR:'+','.join(sender_errors))
