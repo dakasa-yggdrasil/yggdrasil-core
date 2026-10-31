@@ -1,0 +1,72 @@
+"""CI-only preflight observation of pending intent, real genid, BPF and Readers.
+
+No authorization, no writes, no replay, no cleanup. Input record provenance,
+real rule attachment, four collections, terminal custody and exclusivity are
+NOT proved here. This is one read-only building block, never a recovery permit.
+"""
+import ctypes,hashlib,json,os,socket,time
+import drain_marker_v3_DRAFT as marker_v3
+import guarded_nl as nl
+import guarded_program_identity_DRAFT as program_module
+import guarded_sources as sources
+
+class Held(RuntimeError):pass
+
+def need(value,reason):
+    if not value:raise Held(reason)
+
+def _pins(records,reference):
+    need(type(reference) is program_module.GuardianProgramReference
+         and reference.pid==os.getpid() and not reference.closed,'ORIGINAL_LIVE_REFERENCE_REQUIRED')
+    need(type(records) is list and len(records)==2,'EXACT_TWO_PINNED_PROGRAMS_REQUIRED')
+    seen_p=set();seen_m=set();rows={}
+    for role,record in zip(('inbound','reverse'),records):
+        need(type(record) is dict and all(type(record.get(k)) is int and record[k]>0
+             for k in ('program_fd','program_id','map_fd','map_id')),'EXACT_PIN_FIELDS_REQUIRED')
+        pf,mf=record['program_fd'],record['map_fd']
+        pi=nl.ProgInfo();ids=(ctypes.c_uint32*8)();pi.nr_map_ids=8;pi.map_ids=ctypes.addressof(ids)
+        nl.info(pf,pi);mi=nl.info(mf,nl.MapInfo())
+        own_p=nl.fdinfo(os.getpid(),pf);own_m=nl.fdinfo(os.getpid(),mf)
+        need(pi.id==record['program_id'] and pi.type==1 and pi.nr_map_ids==1
+             and ids[0]==record['map_id']==mi.id and bytes(pi.tag).hex()==record.get('program_tag')
+             and int(own_p['prog_id'])==pi.id and int(own_m['map_id'])==mi.id
+             and own_m['frozen'].strip()=='1' and mi.type==1 and mi.key_size==12
+             and mi.value_size==8 and mi.map_flags&128,'PINNED_BPF_DESCRIPTOR_IDENTITY')
+        reference.verify(pi.id,mi.id)
+        seen_p.add(pi.id);seen_m.add(mi.id);actual=nl.map_rows(mi.id)
+        need(len(actual)>0 and len(actual)==len(dict(actual)),'EXACT_NONEMPTY_BPF_MAP')
+        rows[role]=actual
+    need(len(seen_p)==2 and len(seen_m)==2,'DISTINCT_PROGRAM_AND_MAP_IDS')
+    return rows
+
+def sample(coordinator,netlink,*,expected_marker,expected_genid,records,reference,cache):
+    """Same-process sample; never conflates inventory with attached nft state."""
+    need(type(coordinator) is marker_v3.CoordinatorV3,'EXACT_V3_COORDINATOR_REQUIRED')
+    need(type(netlink) is socket.socket and netlink.family==socket.AF_NETLINK
+         and netlink.getsockopt(socket.SOL_SOCKET,socket.SO_PROTOCOL)==12,'NETFILTER_NETLINK_SOCKET_REQUIRED')
+    need(type(expected_genid) is int and 0<expected_genid<2**32,'EXACT_EXPECTED_GENID_REQUIRED')
+    need(type(expected_marker) is tuple and len(expected_marker)==3,'EXACT_ANCHORED_MARKER_REQUIRED')
+    marker=marker_v3._durable_marker_identity(coordinator)
+    need(marker[:3]==expected_marker,'ORIGINAL_MARKER_CHANGED')
+    records=json.loads(json.dumps(records))
+    before=nl.genid(netlink);need(before==expected_genid,'ORIGINAL_GENID_CHANGED')
+    expected=sources.build_expected(cache);rows=_pins(records,reference);now=time.monotonic_ns()
+    for role in ('inbound','reverse'):
+        actual=dict(rows[role]);wanted=expected[role]
+        need(set(actual)==set(wanted) and all(now<expiry<=wanted[k] for k,expiry in actual.items()),
+             'PINNED_MAP_DIFFERS_FROM_FRESH_READERS')
+    final=sources.build_expected(cache);after=nl.genid(netlink)
+    need(after==before and final['invalidation_epoch']==expected['invalidation_epoch']
+         and final['source_generation']==expected['source_generation'],'GENID_OR_READER_CHANGED_DURING_SAMPLE')
+    for role in ('inbound','reverse'):
+        actual=dict(rows[role]);wanted=final[role];now=time.monotonic_ns()
+        need(set(actual)==set(wanted) and all(now<expiry<=wanted[k] for k,expiry in actual.items()),
+             'MAP_OR_SOURCE_EXPIRED_DURING_SAMPLE')
+    need(marker_v3._marker_identity(coordinator)[:3]==marker[:3],'INTENT_CHANGED_DURING_SAMPLE')
+    canonical={k:[[key.hex(),expiry] for key,expiry in sorted(v)] for k,v in rows.items()}
+    return {'schema':'ci_readonly_recovery_preflight_v1','marker_dev':marker[0],'marker_ino':marker[1],
+            'marker_sha256':marker[2],'genid':before,'reader_generation':expected['source_generation'],
+            'reader_epoch':expected['invalidation_epoch'],'maps_sha256':hashlib.sha256(nl.canon(canonical)).hexdigest(),
+            'fd_custody_checked':True,'fresh_readers_checked':True,'nft_attachment_verified':False,
+            'nft_dynamic_collections_verified':False,'sender_terminality_verified':False,
+            'exclusive_writer_custody_verified':False,'effect_or_recovery_authority':False}

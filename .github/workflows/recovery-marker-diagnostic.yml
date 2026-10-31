@@ -48,3 +48,14 @@ jobs:
           sudo cp -R .github/diagnostics/controller-integration/runtime "$target/runtime"
           sudo chmod -R go-w "$target"
           sudo /usr/bin/python3 -B "$target/verify_native_lease.py"
+      - name: Observe marker, genid, frozen BPF and fresh Readers in private netns
+        run: |
+          set -eu
+          target="$(sudo mktemp -d /run/ci-recovery-read.XXXXXX)"
+          trap 'sudo rm -rf "$target"' EXIT
+          sudo cp -R .github/diagnostics/controller-integration/. "$target/"
+          sudo chmod -R go-w "$target"
+          unit="ci-recovery-read-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          sudo systemd-run --quiet --wait --pipe --unit="$unit" \
+            --setenv=CI_CONTROLLER_UNIT="$unit.service" \
+            /usr/bin/unshare --net -- /usr/bin/python3 -B "$target/verify_recovery_read.py"
