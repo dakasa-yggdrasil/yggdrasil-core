@@ -261,13 +261,70 @@ class _GuardedGuardianSession:
         self.active_receipt_sha256 = None
 
 
+class _PositiveGuardianSession:
+    """LAB-only, direct Guardian channel and fixture-origin 47; no production authority."""
+    def __init__(self, sender, origin, original_guardian, capability):
+        import guarded_sender_session_DRAFT as sp
+        import transition_structure_DRAFT as transition
+        nft.require(capability is _CAPABILITY and type(sender) is sp.SenderSession
+                    and type(origin) is _GuardedTransitionOrigin and origin._capability is _CAPABILITY
+                    and origin._pid == os.getpid() and origin._consumed and sender.pid == os.getpid()
+                    and type(original_guardian) is _GuardedGuardianSession and original_guardian.origin is origin
+                    and original_guardian.pid == sender.peer['pid'] and original_guardian.ticks == sender.peer['start_ticks']
+                    and original_guardian.invocation == sender.peer['invocation_id'],
+                    'ONLY_DIRECT_LAB_POSITIVE_GUARDIAN_SESSION')
+        self.sender, self.origin, self.original_pin, self.capability = sender, origin, transition.OriginalPin(origin._raw), capability
+        self.pid, self.ticks, self.pidfd = sender.peer['pid'], sender.peer['start_ticks'], sender.pidfd
+        self.channel, self.used, self.active_receipt_sha256 = sender.channel, True, None
+        self.attestation, self.original_guardian = None, original_guardian
+
+
+def begin_lab_positive_guardian_session(sender, origin, original_guardian):
+    """LAB fixture origin only; this does not attest a productive legacy cutover."""
+    result = _PositiveGuardianSession(sender, origin, original_guardian, _CAPABILITY)
+    _lab_guardian_alive(result)
+    return result
+
+
+def accept_lab_positive_guarded(session, emitter, attestation, *, previous_pin=None):
+    """Mint only from this sender's direct Guardian response and held original receipt."""
+    import guarded_sender_session_DRAFT as sp
+    import guarded_generation as generation
+    import guarded_nl as nl
+    nft.require(type(session) is _PositiveGuardianSession and session.capability is _CAPABILITY
+                and type(emitter) is generation.GenerationEmitter and emitter.pid == os.getpid()
+                and emitter.state == 'AWAITING_FIXTURE_VERIFICATION' and type(attestation) is sp._PositiveAttestation
+                and attestation.capability is sp._CAPABILITY and attestation.session is session.sender
+                and attestation.pid == os.getpid(), 'ORIGINAL_DIRECT_POSITIVE_ATTESTATION_REQUIRED')
+    receipt = emitter.receipt
+    digest = hashlib.sha256(nl.canon(receipt)).hexdigest()
+    nft.require(attestation.receipt_sha256 == digest and attestation.genid == receipt['after']
+                and attestation.ids == tuple((r['program_id'],r['map_id']) for r in receipt['programs'])
+                and time.monotonic_ns() < attestation.deadline_ns, 'EXACT_SENDER_RECEIPT_ATTESTATION')
+    if previous_pin is None:
+        nft.require(session.active_receipt_sha256 is None and receipt.get('original_47_lease_used') is True
+                    and receipt.get('original_47_origin_sha256') == session.origin._raw_sha256
+                    and receipt.get('genid') == session.original_guardian.genid,
+                    'ONE_INITIAL_POSITIVE_PIN_WITH_ORIGINAL_47_LEASE_AND_ORIGIN')
+    else:
+        nft.require(type(previous_pin) is _GuardedStructure and previous_pin.session is session
+                    and previous_pin.emitter is emitter and session.active_receipt_sha256 == hashlib.sha256(nl.canon(previous_pin.receipt)).hexdigest()
+                    and receipt.get('guarded_lease_used') is True and receipt['genid'] == previous_pin.receipt['after']
+                    and receipt.get('guarded_previous_receipt_sha256') == session.active_receipt_sha256,
+                    'SAME_PREVIOUS_POSITIVE_PIN_AND_ORIGINAL_DISPATCHED_LEASE')
+    _lab_guardian_alive(session)
+    session.attestation, session.active_receipt_sha256 = attestation, digest
+    return _GuardedStructure(session, emitter, receipt, _CAPABILITY)
+
+
 class _GuardedStructure:
     def __init__(self, session, emitter, receipt, capability):
-        nft.require(capability is _CAPABILITY and type(session) is _GuardedGuardianSession
+        nft.require(capability is _CAPABILITY and type(session) in (_GuardedGuardianSession, _PositiveGuardianSession)
                     and session.capability is _CAPABILITY and session.used,
                     'ONLY_ORIGINAL_AUTHENTICATED_GUARDED_PIN')
         self.session, self.emitter, self.receipt = session, emitter, copy.deepcopy(receipt)
         self.pid, self.capability = os.getpid(), capability
+        self.attestation = session.attestation if type(session) is _PositiveGuardianSession else None
 
 
 class _GuardedValidatedOwnership:
@@ -280,6 +337,19 @@ class _GuardedValidatedOwnership:
 
 def _lab_guardian_alive(session):
     import select
+    if type(session) is _PositiveGuardianSession:
+        sender = session.sender
+        _lab_guardian_alive(session.original_guardian)
+        nft.require(not sender.closed and os.getpid() == sender.pid
+                    and os.readlink('/proc/self/ns/net') == sender.netns
+                    and sender.nl.startticks(sender.pid) == sender.ticks
+                    and sender.nl.startticks(session.pid) == session.ticks,
+                    'SAME_LIVE_POSITIVE_GUARDIAN_AND_SENDER')
+        p = select.poll();p.register(session.pidfd, select.POLLIN)
+        nft.require(not p.poll(0), 'POSITIVE_GUARDIAN_PIDFD_MUST_BE_LIVE')
+        p = select.poll();p.register(session.channel, select.POLLIN | select.POLLHUP | select.POLLERR)
+        nft.require(not p.poll(0), 'POSITIVE_GUARDIAN_CHANNEL_MUST_BE_QUIET')
+        return
     p = select.poll()
     p.register(session.pidfd, select.POLLIN)
     nft.require(not p.poll(0), 'ORIGINAL_GUARDIAN_PIDFD_MUST_BE_LIVE')
@@ -369,7 +439,8 @@ def accept_lab_guarded_transition(session, emitter, plan, *, previous_pin=None):
     if previous_pin is None:
         nft.require(receipt.get('original_47_lease_used') is True
                     and receipt.get('genid') == session.genid
-                    and receipt.get('original_47_origin_sha256') == session.origin._raw_sha256,
+                    and receipt.get('original_47_origin_sha256') == session.origin._raw_sha256
+                    and receipt.get('genid') == session.original_guardian.genid,
                     'ORIGINAL_47_LEASE_AND_ORIGIN_IN_RECEIPT')
     else:
         nft.require(receipt.get('guarded_lease_used') is True
@@ -429,15 +500,26 @@ def revalidate_lab_guarded(pin):
         nft.require(nl.genid(sock) == first == pin.receipt['after'], 'SAME_GUARDED_GENERATION')
     finally:
         sock.close()
-    for entry in pin.receipt['programs']:
+    map_groups = {}
+    for role, entry in zip(('inbound','reverse'), pin.receipt['programs']):
         program = nl.fdinfo(os.getpid(), entry['program_fd'])
         m = nl.fdinfo(os.getpid(), entry['map_fd'])
         nft.require(int(program['prog_id']) == entry['program_id']
                     and int(m['map_id']) == entry['map_id'] and m['frozen'].strip() == '1',
                     'LIVE_ORIGINAL_GUARDED_PROGRAM_AND_FROZEN_MAP_FDS')
         map_rows = nl.map_rows(entry['map_id'])
-        nft.require(bool(map_rows) and all(deadline == 1 for key, deadline in map_rows),
-                    'ONLY_EXPIRED_DENY_MAPS_ACCEPTED_BY_LAB_PIN')
+        nft.require(bool(map_rows), 'NONEMPTY_GUARDED_MAP')
+        if type(pin.session) is _PositiveGuardianSession:
+            nft.require(all(deadline > time.monotonic_ns() for key, deadline in map_rows), 'POSITIVE_MAPS_NOT_EXPIRED')
+            map_groups[role] = [[key.hex(), deadline] for key,deadline in sorted(map_rows)]
+        else:
+            nft.require(all(deadline == 1 for key, deadline in map_rows), 'ONLY_EXPIRED_DENY_MAPS_ACCEPTED_BY_LAB_PIN')
+    if type(pin.session) is _PositiveGuardianSession:
+        a = pin.attestation
+        nft.require(a is pin.session.attestation and a.receipt_sha256 == pin.session.active_receipt_sha256
+                    and time.monotonic_ns() < a.deadline_ns
+                    and hashlib.sha256(nl.canon(map_groups)).hexdigest() == a.digest,
+                    'SAME_LIVE_POSITIVE_GUARDIAN_ATTESTED_MAPS_AND_DEADLINE')
     _lab_guardian_alive(pin.session)
     return _GuardedValidatedOwnership(pin, _CAPABILITY)
 

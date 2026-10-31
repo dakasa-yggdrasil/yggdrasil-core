@@ -32,6 +32,13 @@ class _Permit:
         self.deadline_ns, self.epoch, self.pid = deadline_ns, epoch, os.getpid()
         self.capability, self.consumed = capability, False
 
+class _PositiveAttestation:
+    def __init__(self, session, receipt_sha256, genid, ids, digest, deadline_ns, source_epoch, capability):
+        need(capability is _CAPABILITY and type(session) is SenderSession, 'ONLY_ORIGINAL_GUARDIAN_POSITIVE_ATTESTATION')
+        self.session, self.receipt_sha256, self.genid = session, receipt_sha256, genid
+        self.ids, self.digest, self.deadline_ns, self.source_epoch = ids, digest, deadline_ns, source_epoch
+        self.pid, self.capability = os.getpid(), capability
+
 class SenderSession:
     def __init__(self, channel, *, identity, guardian, nl):
         need(type(channel) is socket.socket and type(guardian) is dict
@@ -135,6 +142,32 @@ class SenderSession:
         self._live(require_quiet=True)
         need(time.monotonic_ns()<permit.deadline_ns,'ORIGINAL_PERMIT_DEADLINE_EXPIRED_AFTER_REVALIDATION')
         return {'lab_sender_permit_consumed':True,'external_effect_authorized':False,'production_authority':False}
+
+    def attest_current(self, receipt, *, until_ns):
+        need(type(receipt) is dict and self.pending is None and type(until_ns) is int
+             and time.monotonic_ns()<until_ns<=time.monotonic_ns()+30_000_000_000,
+             'ORIGINAL_BOUNDED_POSITIVE_ATTESTATION_REQUEST')
+        self._live(require_quiet=True)
+        ids,digest=self._records(receipt['programs']);genid=self.nl.genid(self.netlink)
+        need(genid==receipt['after'],'ATTEST_CURRENT_RECEIPT_GENID')
+        receipt_sha=hashlib.sha256(self.nl.canon(receipt)).hexdigest();nonce=secrets.token_hex(32)
+        req={'schema':'lab_positive_generation_attest_request_v1','nonce':nonce,'sender_pid':self.pid,
+             'sender_start_ticks':self.ticks,'genid':genid,'receipt_sha256':receipt_sha,
+             'ids':[list(x) for x in ids],'map_digest':digest,'until_ns':until_ns}
+        self.channel.settimeout(max(.001,min(5,(until_ns-time.monotonic_ns())/1e9)))
+        self.channel.sendall(self.nl.canon(req));reply=self._read_reply(until_ns)
+        need(type(reply) is dict and set(reply)=={'schema','nonce','sender_pid','sender_start_ticks','genid','receipt_sha256','ids','map_digest','deadline_ns','source_epoch','external_effect_authorized'}
+             and reply['schema']=='lab_positive_generation_attest_reply_v1' and reply['nonce']==nonce
+             and reply['sender_pid']==self.pid and reply['sender_start_ticks']==self.ticks
+             and reply['genid']==genid and reply['receipt_sha256']==receipt_sha and reply['ids']==req['ids']
+             and reply['map_digest']==digest and type(reply['deadline_ns']) is int
+             and time.monotonic_ns()<reply['deadline_ns']<=until_ns and type(reply['source_epoch']) is int
+             and reply['source_epoch']>=0 and reply['external_effect_authorized'] is False,
+             'EXACT_ORIGINAL_GUARDIAN_POSITIVE_ATTESTATION')
+        self._live(require_quiet=True)
+        need(self.nl.genid(self.netlink)==genid and time.monotonic_ns()<reply['deadline_ns'],
+             'LIVE_UNCHANGED_POSITIVE_ATTESTATION')
+        return _PositiveAttestation(self,receipt_sha,genid,ids,digest,reply['deadline_ns'],reply['source_epoch'],_CAPABILITY)
 
     def close(self):
         if not self.closed:
