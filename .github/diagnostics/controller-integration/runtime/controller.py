@@ -298,10 +298,11 @@ def cached_guarded_cycle(reader, lease, ownership, *, emitter, prepared, apply,
     else:
         result=emitter.submit(plan,records,original_lease=lease,original_owner=ownership,
                               transition_origin=transition_origin,guardian_session=guardian_session)
-    result['same_process_topology_generation']=generation
-    result['same_process_semantic_cache_revision']=revision
-    result['guardian_receipt_acceptance_pending']=True
-    return result,key
+    # Keep the exact emitter return intact: its receipt bytes are validated
+    # independently and must not acquire controller-only metadata.
+    return {'native_result':result,'same_process_topology_generation':generation,
+            'same_process_semantic_cache_revision':revision,
+            'guardian_receipt_acceptance_pending':True},key
 
 
 def _retained_unused_cycle(reader, lease, ownership, *, apply, previous_key, schedule, transition_context=None):

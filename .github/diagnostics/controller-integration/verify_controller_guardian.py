@@ -4,7 +4,7 @@ The cache, owner and deployment-specific compiled AST pin are fixtures. This
 exercises real controller/native process and Guardian methods, not BPF service
 integration or production authority.
 """
-import hashlib,importlib.util,json,os,socket,subprocess,sys,tempfile,threading,time,types
+import base64,hashlib,importlib.util,json,os,socket,subprocess,sys,tempfile,threading,time,types
 from pathlib import Path
 HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE/'runtime'))
@@ -110,13 +110,27 @@ def main():
                 if handed is None:wake.wait(.05);wake.clear()
                 else:lease=handed[0]
             assert lease is not None
-            emitted,pending_key=controller.cached_guarded_cycle(types.SimpleNamespace(cache=real_cache),lease,owner,
+            handoff,pending_key=controller.cached_guarded_cycle(types.SimpleNamespace(cache=real_cache),lease,owner,
                   emitter=first,prepared=initial_prepared,apply=lambda:True,previous_key=None,transition_origin=origin)
-            assert pending_key is not None and emitted['guardian_receipt_acceptance_pending'] is True
+            assert pending_key is not None and handoff['guardian_receipt_acceptance_pending'] is True
+            emitted=handoff['native_result']
         finally:
             if lease is not None:owner.release(lease)
             stop.set();wake.set();owner.close_join(time.monotonic()+5)
         assert emitted['ok'] and first.state=='AWAITING_FIXTURE_VERIFICATION'
+        import guarded_verifier
+        first_maps={role:[(item.hex(),deadline) for item,deadline in sorted(nl.map_rows(rec['map_id']))]
+                    for role,rec in zip(('inbound','reverse'),emitted['programs'])}
+        erows,ecores,eprom,eerrors,_=real_cache.snapshot();assert not eerrors
+        first_plan={'maps':first_maps,'backends':[encode(x) for x in erows],
+                    'cores':[encode(x) for x in ecores],'prom':[encode(x) for x in eprom]}
+        anchor={'pid':os.getpid(),'start_ticks':nl.startticks(os.getpid()),'netns':os.readlink('/proc/self/ns/net'),
+                'initial':base64.b64encode(raw).decode()}
+        probe=HERE/'runtime'/'ci_nl_probe.py'
+        verified=guarded_verifier.verify_and_seal(result=emitted,anchor=anchor,plan=first_plan,receipt_dir=receipts,
+                    reader_cache=guardian_cache,nl=nl,sources=guarded_sources,transition=trans,coverage=coverage,
+                    probe_path=probe,probe_sha256=hashlib.sha256(probe.read_bytes()).hexdigest())
+        verified.close()
         print('PASS cached_guarded_cycle with actual original 47 ownership reader and BPF emitter',flush=True)
         try:first.submit({},[]);raise AssertionError('unverified generation allowed another send')
         except RuntimeError as e:assert str(e)=='ONLY_READY_SAME_OWNER'
