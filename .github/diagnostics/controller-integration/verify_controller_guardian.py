@@ -159,7 +159,7 @@ def main():
         # Pause observation explicitly during the in-flight handoff. This is
         # a measured sampling gap, not continuous monitoring or authority.
         import guarded_sender_session_DRAFT as direct_sender
-        pause_started=time.monotonic();watch.pause();sender_channel=watch.sender_channel()
+        sender_channel=watch.sender_channel()
         guardian_spec={'unit':pre_guardian.unit,'invocation_id':pre_guardian.session.invocation,
                        'argv':pre_guardian.argv,'source_sha256':hashlib.sha256(Path(pre_guardian.argv[2]).read_bytes()).hexdigest()}
         rotation_session=direct_sender.SenderSession(sender_channel,identity=guarded_unit_identity,guardian=guardian_spec,nl=nl)
@@ -175,6 +175,7 @@ def main():
         permit=rotation_session.prepare(list(descriptors),until_ns=time.monotonic_ns()+3_000_000_000)
         guard_stop=threading.Event();guard_wake=threading.Event()
         guarded_owner=native_structure._OwnershipReader(active_pin,guard_stop,guard_wake);guarded_owner.start();guarded_lease=None
+        pause_started=time.monotonic();watch.pause()
         try:
             deadline=time.monotonic()+5
             while guarded_lease is None and time.monotonic()<deadline:
