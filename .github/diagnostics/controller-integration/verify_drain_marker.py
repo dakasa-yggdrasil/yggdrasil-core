@@ -119,6 +119,34 @@ with cache.lock:
     before=cache._state_key();cache.errors={'rds':'failure-again'};cache._changed(before)
     assert recovered>0 and cache.guard_recovery_epoch==recovered
 
+# A UID may change while IP, role and deadlines stay the same. This checks
+# invalidation before a simulated retirement; it grants no DELETE authority.
+import nft_owner
+same_ip_cache=observations.Cache()
+now=time.monotonic();deadline=now+20
+uid1='00000000-0000-0000-0000-000000000001'
+uid2='00000000-0000-0000-0000-000000000002'
+def topology(identity):
+    core=nft_owner.Backend('core','10.244.1.2',9443,now,deadline,identity+'/container')
+    return ([core],[core],[],{},frozenset(),deadline)
+same_ip_cache.publish_topology(topology(uid1))
+with same_ip_cache.lock:witness_epoch=same_ip_cache.guard_invalidation_epoch
+same_ip_cache.publish_topology(topology(uid1))
+with same_ip_cache.lock:assert same_ip_cache.guard_invalidation_epoch==witness_epoch
+same_ip_cache.publish_topology(topology(uid2))
+with tempfile.TemporaryDirectory(prefix='ci-stale-uid-') as tmp:
+    test_coord=v3.CoordinatorV3(Path(tmp)/'coord');test_coord.initialize_for_ci()
+    def retire_if_current():
+        with same_ip_cache.lock:
+            if same_ip_cache.guard_invalidation_epoch!=witness_epoch:
+                raise v3.FenceError('READER_CHANGED_BEFORE_RETIRE')
+            with test_coord.admission_or_other_writer() as state:
+                test_coord.base.retire(state,uid1,'10.244.1.1',anchor_uid=uid2,anchor_address='10.244.1.2')
+    must_hold(retire_if_current,'READER_CHANGED_BEFORE_RETIRE')
+    with test_coord.admission_or_other_writer() as state:
+        assert state['retired']=={} and state['anchor'] is None
+print('PASS same-IP Core UID replacement blocks experimental retirement and leaves fence unchanged',flush=True)
+
 with tempfile.TemporaryDirectory(prefix='ci-drain-retired-') as tmp:
     coord=v3.CoordinatorV3(Path(tmp)/'coord');coord.initialize_for_ci()
     old='00000000-0000-0000-0000-000000000001'

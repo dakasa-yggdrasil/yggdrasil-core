@@ -200,7 +200,8 @@ class Cache:
 
     def _guard_evidence_key(self):
         def endpoint(x):
-            return (getattr(x, 'kind', 'prometheus'), x.address, getattr(x, 'port', None))
+            return (getattr(x, 'kind', 'prometheus'), x.address, getattr(x, 'port', None),
+                    x.native_identity)
         dns = []
         for kind, witness in sorted(self.dns.items()):
             dns.append((kind, None if witness is None else
