@@ -36,6 +36,10 @@ try:
         ('nft_attachment_verified','nft_dynamic_collections_verified','sender_terminality_verified',
          'exclusive_writer_custody_verified','effect_or_recovery_authority'))
     print('PASS real marker, frozen BPF descriptors/maps, genid and fresh synthetic DNS/route witnesses',flush=True)
+    wrong_marker=dict(marker._marker_identity(coord)[3]);wrong_marker['core_address']='10.244.1.250'
+    refuse(lambda:recovery._marker_reader_join(wrong_marker,cache,sources.build_expected(cache)),
+           'MARKER_CORE_AND_REVERSE_MUST_MATCH_FRESH_READERS')
+    print('PASS different marker core identity rejected by fresh Reader join',flush=True)
     bad=[dict(x) for x in records];bad[0]['program_id']+=1
     refuse(lambda:sample(records=bad),'PINNED_BPF_DESCRIPTOR_IDENTITY')
     duplicate=[dict(records[0]),dict(records[0])]
