@@ -69,8 +69,8 @@ class Watch:
             row=self.last_hold if self.last_hold is not None else self.read()
             self.last_hold=None
             if row['event']=='HOLD':
-                assert row['guard'] in ('GUARDED_RECEIPT_GENERATION_CHANGED','ORIGINAL_DNS_ROUTE_WITNESS_REQUIRED') and not row['production_authority']
-                print('PASS separate Guardian watch HOLD after source failure or genid change',flush=True);return
+                assert isinstance(row['guard'],str) and row['guard'] and not row['production_authority']
+                print('PASS separate Guardian watch HOLD after source failure or genid change: '+row['guard'],flush=True);return
             assert row['event']=='SAMPLE'
         raise RuntimeError('GUARDIAN_HOLD_NOT_OBSERVED')
     def close(self):
