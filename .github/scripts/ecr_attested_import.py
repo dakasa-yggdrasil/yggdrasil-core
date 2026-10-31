@@ -6,7 +6,7 @@ continue after a client timeout, which remains UNKNOWN. Login tokens stay in
 memory/private temporary Docker config and are never put in receipts.
 """
 import base64,hashlib,importlib.util,json,os,pathlib,re,shutil,subprocess,sys,tempfile,time
-P=pathlib.Path(__file__).resolve().parent;OUT=pathlib.Path('receipts');REPO='ghcr/dakasa-yggdrasil/yggdrasil-core';ACCOUNT='153828470928';DIGEST='sha256:54aad8a4bec50f447a2b9e3351d5422a6bdd734a3fad5c98dda1b27b5ce74f05';ELF='22c39c565d2dc5d662dc6965a70b4fa84e67fbec9f44bbac669d35a1714fe658';SOURCE='d52465ec5b26014406d2b010dce4fe09e2c169dd';REGISTRY=ACCOUNT+'.dkr.ecr.us-east-1.amazonaws.com';TARGET=REGISTRY+'/'+REPO+'@'+DIGEST
+P=pathlib.Path(__file__).resolve().parent;OUT=pathlib.Path('receipts');REPO='ghcr/dakasa-yggdrasil/yggdrasil-core';ACCOUNT='153828470928';DIGEST='sha256:12d3c608501a53c1b73e2c5bd1f6597232d6ec4200afe99509608eab058a8599';ELF='c33c8f69347ebb5565d81482fa2d226ab39c57dbad2b61066e890bda0036dec6';SOURCE='dddaba1d4890cd094b01bb04492be722defdcd55';REGISTRY=ACCOUNT+'.dkr.ecr.us-east-1.amazonaws.com';TARGET=REGISTRY+'/'+REPO+'@'+DIGEST
 class Held(RuntimeError):pass
 def need(v,r):
  if not v:raise Held(r)
@@ -21,13 +21,13 @@ def main():
  def checked(label,argv,seconds=40):
   raw,facts=run(label,argv,seconds);need(all(facts.get(k)is True for k in ('wait_zero','stdout_EOF','stderr_EOF','all_local_FDs_closed','local_child_joined')),'ORIGINAL_CLOSED_ZERO_REQUIRED');return raw
  def aws(*args):return [str(cli),*args,'--region','us-east-1','--output','json']
- identity=json.loads(checked('STS',aws('sts','get-caller-identity')));need(identity.get('Account')==ACCOUNT and identity.get('Arn','').startswith('arn:aws:sts::'+ACCOUNT+':assumed-role/dakasa-r6-ecr-d524-20261030/'),'ONLY_DEDICATED_ROLE')
+ identity=json.loads(checked('STS',aws('sts','get-caller-identity')));need(identity.get('Account')==ACCOUNT and identity.get('Arn','').startswith('arn:aws:sts::'+ACCOUNT+':assumed-role/dakasa-r6-ecr-ddd-20261031/'),'ONLY_DEDICATED_ROLE')
  _,pre=run('ABSENCE-BEFORE',aws('ecr','describe-images','--repository-name',REPO,'--image-ids','imageDigest='+DIGEST));need(pre.get('wait_zero') is False and pre.get('error_code')=='ImageNotFoundException','ONLY_ABSENT_NEW_DIGEST')
  need(not os.environ.get('DOCKER_CONFIG'),'NO_INHERITED_DOCKER_CONFIG');temp=pathlib.Path(tempfile.mkdtemp(prefix='r6-ecr-auth-',dir=os.environ['RUNNER_TEMP']));os.chmod(temp,0o700);env['DOCKER_CONFIG']=str(temp)
  try:
   # Credentials are never persisted in receipts or argv, and temp config is removed.
   password=subprocess.run([str(cli),'ecr','get-login-password','--region','us-east-1'],stdin=subprocess.DEVNULL,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env,timeout=30);need(password.returncode==0 and 0<len(password.stdout)<4096,'ECR_LOGIN_PASSWORD_HOLD');login=subprocess.run([str(docker),'login','--username','AWS','--password-stdin',REGISTRY],input=password.stdout,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env={k:v for k,v in env.items() if not k.startswith('AWS_') and k not in ('GH_TOKEN','GITHUB_TOKEN')},timeout=30);need(login.returncode==0,'DOCKER_LOGIN_HOLD');del password,login
-  n.once(OUT/'IMPORT-INTENT.json',{'schema':'one_distinct_attested_ecr_import_intent_v1','target':TARGET,'source_commit':SOURCE,'producer_run':41115565265,'verifier_run':41116032126,'expected_elf_sha256':ELF,'aws_cli_sha256':cli_sha,'docker_cli_sha256':docker_sha,'no_retry':True,'production_activation':False})
+  n.once(OUT/'IMPORT-INTENT.json',{'schema':'one_distinct_attested_ecr_import_intent_v1','target':TARGET,'source_commit':SOURCE,'producer_run':41247922814,'verifier_run':41248309324,'expected_elf_sha256':ELF,'aws_cli_sha256':cli_sha,'docker_cli_sha256':docker_sha,'no_retry':True,'production_activation':False})
   raw,facts=run('PULL-ORIGINAL',[str(docker),'pull','--platform','linux/amd64',TARGET],seconds=240);need(all(facts.get(k)is True for k in ('wait_zero','stdout_EOF','stderr_EOF','all_local_FDs_closed','local_child_joined')),'ORIGINAL_PULL_UNCERTAIN_NO_RETRY')
   # Only GET/describe reads may poll eventual visibility; never resend the pull.
   end=time.monotonic()+90;attempt=0

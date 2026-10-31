@@ -3,7 +3,7 @@ name: One distinct attested Core ECR import
 on:
   push:
     branches:
-      - candidate/core-d524-ecr-producer-20261030
+      - candidate/core-ddd-ecr-producer-20261031
 
 permissions:
   contents: read
@@ -13,7 +13,7 @@ permissions:
   artifact-metadata: write
 
 concurrency:
-  group: distinct-core-ecr-attested-import-20261030
+  group: distinct-core-ecr-attested-import-ddd-20261031
   cancel-in-progress: false
 
 jobs:
@@ -30,9 +30,9 @@ jobs:
       - name: Download independent signed candidate summary
         uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
-          name: core-attested-independent-41116032126-1
+          name: core-attested-independent-41248309324-1
           path: verified-input
-          run-id: 41116032126
+          run-id: 41248309324
           github-token: ${{ github.token }}
 
       - name: Verify independent summary and signer
@@ -41,12 +41,12 @@ jobs:
           GH_REPO: dakasa-yggdrasil/yggdrasil-core
         run: |
           set -eu
-          expected=8a5b3ce9d4dd068baf0946d2032b1c0dd4f4c868d2ef373244cd1e71d38d7a46
+          expected=55c1fb3d49d5385e6872063e284762899567e82ffaaac36732cc05a3fdf2f701
           test "$(sha256sum verified-input/summary.json | cut -d' ' -f1)" = "$expected"
           gh attestation verify verified-input/summary.json --repo "$GH_REPO" \
             --signer-workflow dakasa-yggdrasil/yggdrasil-core/.github/workflows/core-attested-candidate-verifier.yml \
-            --source-digest 07e39a36cd48b689069502ee0acee8394c96241e \
-            --source-ref refs/heads/candidate/core-d524-attested-verify-20261030 \
+            --source-digest 34d1714db3c54d59c3a1fb9d91611549782801dc \
+            --source-ref refs/heads/candidate/core-ddd-attested-verify-20261031 \
             --deny-self-hosted-runners --format json > verified-input/summary-verification.json
 
       - name: Install signed, version-pinned AWS CLI in runner temp
@@ -72,7 +72,7 @@ jobs:
       - name: Assume the time-bounded dedicated ECR role
         uses: aws-actions/configure-aws-credentials@7474bc4690e29a8392af63c5b98e7449536d5c3a # v4
         with:
-          role-to-assume: arn:aws:iam::153828470928:role/dakasa-r6-ecr-d524-20261030
+          role-to-assume: arn:aws:iam::153828470928:role/dakasa-r6-ecr-ddd-20261031
           role-session-name: core-ecr-${{ github.run_id }}
           role-duration-seconds: 900
           allowed-account-ids: '153828470928'
