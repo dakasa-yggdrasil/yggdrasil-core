@@ -35,6 +35,10 @@ class WriterLease:
         if self.capability is not _CAPABILITY or self.closed or self.pid!=os.getpid():
             raise FenceError('ORIGINAL_LIVE_WRITER_LEASE_REQUIRED')
         self._identity()
+        # Reassert SH: if another code path erroneously unlocked the FD,
+        # recovery EX wins instead of permitting a writer without custody.
+        fcntl.flock(self.fd,fcntl.LOCK_SH|fcntl.LOCK_NB)
+        self._identity()
         return self.fd
 
     def close(self):

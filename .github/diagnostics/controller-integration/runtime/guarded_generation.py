@@ -43,11 +43,15 @@ class GenerationEmitter:
         # Writer lease precedes opening the netlink socket and remains held
         # until every owned socket and program/map FD is closed.
         self.writer_lease=CI_DRAIN_COORDINATION.acquire_writer_lease()
+        self.nl=None
         try:
             self.nl = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, 12)
             self.nl.bind((0, 0))
             self.nl.settimeout(5)
         except BaseException:
+            # An uncertain socket close retains the lease; never close the
+            # lease first while a writer socket could remain live.
+            if self.nl is not None:self.nl.close()
             self.writer_lease.close()
             raise
         self.state = 'READY'

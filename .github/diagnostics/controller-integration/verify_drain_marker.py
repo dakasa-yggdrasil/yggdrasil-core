@@ -189,6 +189,47 @@ with tempfile.TemporaryDirectory(prefix='ci-drain-lock-seal-') as tmp:
     must_hold(lambda:coord.base.locked().__enter__(),'ROOT_CONTROLLED_COORDINATION_ANCESTOR_REQUIRED')
     os.chmod(parent,0o700)
 
+with tempfile.TemporaryDirectory(prefix='ci-emitter-bind-') as tmp:
+    import guarded_generation as generation
+    import writer_lease_v3_DRAFT as writer_module
+    coord=v3.CoordinatorV3(Path(tmp)/'coord');coord.initialize_for_ci()
+    generation.CI_DRAIN_COORDINATION=coord
+    events=[]
+    class FailedBindSocket:
+        def bind(self,_):raise OSError('CI_BIND_FAILED')
+        def close(self):events.append('socket_closed')
+    close_original=writer_module.WriterLease.close
+    def close_observed(lease):
+        events.append('lease_closed');return close_original(lease)
+    fake_transition=types.SimpleNamespace(OriginalPin=lambda _:object())
+    with mock.patch.dict(os.environ,{'CI_GUARDED_FIXTURE':'1'}),          mock.patch.object(generation.socket,'socket',return_value=FailedBindSocket()),          mock.patch.object(writer_module.WriterLease,'close',close_observed):
+        try:generation.GenerationEmitter(initial_raw=b'ci',transition=fake_transition,
+                receipt_dir=Path(tmp),host_netns='not-current')
+        except OSError as error:assert str(error)=='CI_BIND_FAILED'
+        else:raise AssertionError('failed socket bind unexpectedly succeeded')
+    assert events==['socket_closed','lease_closed'],events
+    fd=os.open(coord.writer_lock,os.O_RDWR)
+    try:fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+    finally:os.close(fd)
+    # If socket close itself is uncertain, the lease must remain live.
+    class UnknownCloseSocket(FailedBindSocket):
+        def close(self):events.append('socket_close_unknown');raise OSError('CI_CLOSE_UNKNOWN')
+    acquired=[];original_acquire=coord.acquire_writer_lease
+    def capture_lease():
+        lease=original_acquire();acquired.append(lease);return lease
+    with mock.patch.dict(os.environ,{'CI_GUARDED_FIXTURE':'1'}),          mock.patch.object(coord,'acquire_writer_lease',side_effect=capture_lease),          mock.patch.object(generation.socket,'socket',return_value=UnknownCloseSocket()):
+        try:generation.GenerationEmitter(initial_raw=b'ci',transition=fake_transition,
+                receipt_dir=Path(tmp),host_netns='not-current')
+        except OSError as error:assert str(error)=='CI_CLOSE_UNKNOWN'
+        else:raise AssertionError('uncertain close unexpectedly succeeded')
+    assert len(acquired)==1 and not acquired[0].closed
+    fd=os.open(coord.writer_lock,os.O_RDWR)
+    try:
+        try:fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        except BlockingIOError:pass
+        else:raise AssertionError('uncertain socket close released writer lease')
+    finally:os.close(fd);acquired[0].close()
+
 with tempfile.TemporaryDirectory(prefix='ci-drain-crash-') as tmp:
     coord=v3.CoordinatorV3(Path(tmp)/'coord');coord.initialize_for_ci()
     program="""
