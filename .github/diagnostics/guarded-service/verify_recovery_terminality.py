@@ -1,5 +1,5 @@
 """Exercise terminal sender proof against live systemd units in CI only."""
-import fcntl,hashlib,os,signal,socket,subprocess,sys,tempfile,time,uuid
+import array,fcntl,hashlib,json,os,signal,socket,subprocess,sys,tempfile,time,uuid
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent/'runtime'))
 import drain_marker_v3_DRAFT as v3
@@ -21,7 +21,7 @@ cache=ci_reader_fixture.start(endpoints)
 subprocess.run(['/usr/sbin/nft','add','table','ip','ci_custody_read'],check=True,timeout=5)
 netlink=socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,12);netlink.bind((0,0));netlink.settimeout(4)
 genid=nl.genid(netlink);reference=program.GuardianProgramReference();wanted=sources.build_expected(cache)
-records=[nl.make_program([(key.hex(),expiry) for key,expiry in wanted[role].items()]) for role in ('inbound','reverse')]
+records=[]
 unit='ci-terminal-proof-'+uuid.uuid4().hex+'.service';unit_file=Path('/run/systemd/system')/unit
 server=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
 server.bind(str(path));server.listen(2);server.settimeout(12)
@@ -32,11 +32,21 @@ def launch():
     subprocess.run(['/usr/bin/systemctl','start',unit],check=True,timeout=10)
     channel,_=server.accept();channels.append(channel);return channel
 try:
-    unit_file.write_text('[Service]\nType=simple\nKillMode=process\nNetworkNamespacePath=/proc/'+str(os.getpid())+'/ns/net\nRuntimeMaxSec=30s\nEnvironment=CI_TERM_WRITER_LOCK='+str(writer_lock)+'\nEnvironment=CI_CONTROLLER_UNIT='+unit+'\nEnvironment=CI_TERM_CHILD_PIDFILE='+str(child_path)+'\nEnvironment=CI_TERM_RUNTIME='+str(root/'runtime')+'\nEnvironment=CI_TERM_COORD='+str(coord.directory)+'\nExecStart='+' '.join(argv)+'\n')
+    unit_file.write_text('[Service]\nType=simple\nKillMode=process\nNetworkNamespacePath=/proc/'+str(os.getpid())+'/ns/net\nRuntimeMaxSec=30s\nEnvironment=CI_TERM_WRITER_LOCK='+str(writer_lock)+'\nEnvironment=CI_TERM_TRANSFER_BPF=1\nEnvironment=CI_CONTROLLER_UNIT='+unit+'\nEnvironment=CI_TERM_CHILD_PIDFILE='+str(child_path)+'\nEnvironment=CI_TERM_RUNTIME='+str(root/'runtime')+'\nEnvironment=CI_TERM_COORD='+str(coord.directory)+'\nExecStart='+' '.join(argv)+'\n')
     subprocess.run(['/usr/bin/systemctl','daemon-reload'],check=True,timeout=10)
     channel=launch();props=identity._properties(unit);digest=hashlib.sha256(peer.read_bytes()).hexdigest()
     anchor=terminal.capture_authenticated(channel,unit=unit,invocation=props['InvocationID'],argv=argv,source_sha256=digest)
     marker=terminal.capture_marker(anchor,coord)
+    requested={role:[(key.hex(),expiry) for key,expiry in wanted[role].items()] for role in ('inbound','reverse')}
+    channel.sendall((json.dumps(requested,sort_keys=True)+'\n').encode())
+    raw,anc,flags,_=channel.recvmsg(65536,socket.CMSG_SPACE(4*array.array('i').itemsize))
+    if not raw.endswith(b'\n') or flags&(socket.MSG_CTRUNC|socket.MSG_TRUNC) or len(anc)!=1:
+        raise RuntimeError('EXACT_BPF_DESCRIPTOR_TRANSFER_REQUIRED')
+    level,kind,data=anc[0];fds=array.array('i');fds.frombytes(data[:len(data)-(len(data)%fds.itemsize)])
+    if level!=socket.SOL_SOCKET or kind!=socket.SCM_RIGHTS or len(fds)!=4:raise RuntimeError('EXACT_FOUR_BPF_FDS_REQUIRED')
+    records=json.loads(raw);assert len(records)==2
+    for record,pf,mf in zip(records,fds[::2],fds[1::2]):
+        record['program_fd'],record['map_fd']=pf,mf
     childfd=os.pidfd_open(int(child_path.read_text()))
     try:terminal.prove_terminal(anchor);raise AssertionError('live sender accepted')
     except terminal.Held as error:assert str(error)=='ORIGINAL_SENDER_STILL_ALIVE'
@@ -66,7 +76,8 @@ try:
         terminal.prove_terminal_for_marker(marker)
         assert not sample['effect_or_recovery_authority'] and not sample['nft_attachment_verified']
         print('PASS same custodian: terminal marker, exclusive writer flock, real genid, frozen BPF and fresh Readers',flush=True)
-        print('BOUNDARY sampled BPF FDs are fixture-owned, not transferred from dead sender',flush=True)
+        print('PASS BPF FDs received from authenticated sender remain readable after its death',flush=True)
+        print('BOUNDARY fixture-created maps are not yet proven attached to nft rules',flush=True)
     # Real private mount namespace; no mount change propagates to host.
     with tempfile.TemporaryDirectory(prefix='wrong-cgroup-mount-') as wrong:
         subprocess.run(['/usr/bin/mount','--bind',wrong,'/sys/fs/cgroup'],check=True,timeout=5)

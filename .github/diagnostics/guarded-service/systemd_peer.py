@@ -1,5 +1,5 @@
 """Root-owned throwaway systemd peer used only by Linux CI."""
-import os,socket,sys,time
+import array,json,os,socket,sys,time
 from pathlib import Path
 lock_path=os.environ.get('CI_TERM_WRITER_LOCK')
 if lock_path:
@@ -21,4 +21,21 @@ if child_path:
     Path(child_path).write_text(str(child))
 s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
 s.connect(sys.argv[1])
-s.recv(1)
+if os.environ.get('CI_TERM_TRANSFER_BPF')=='1':
+    import guarded_nl as nl
+    line=bytearray()
+    while not line.endswith(b'\n'):
+        part=s.recv(1)
+        if not part:raise RuntimeError('MISSING_PIN_REQUEST')
+        line.extend(part)
+    requested=json.loads(line);records=[]
+    try:
+        for role in ('inbound','reverse'):records.append(nl.make_program(requested[role]))
+        raw=(json.dumps(records,sort_keys=True)+'\n').encode()
+        fds=array.array('i',[r[key] for r in records for key in ('program_fd','map_fd')])
+        if s.sendmsg([raw],[(socket.SOL_SOCKET,socket.SCM_RIGHTS,fds)])!=len(raw):
+            raise RuntimeError('INCOMPLETE_BPF_FD_TRANSFER')
+        s.recv(1)
+    finally:
+        for record in records:os.close(record['program_fd']);os.close(record['map_fd'])
+else:s.recv(1)
