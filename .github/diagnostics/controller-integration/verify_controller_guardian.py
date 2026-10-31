@@ -163,6 +163,9 @@ def main():
         assert coverage.kernel_text(text)['all_four_backends_and_reverse_sources_positive']
         print('PASS fresh positive BPF sender with real one-use FD/genid permit after deny-only generation',flush=True)
         print('BOUNDARY: Guardian permit, source witnesses and ownership lease simulated; no production authority',flush=True)
+        import ci_guardian_registry
+        ci_guardian_registry.exercise(root=HERE,raw=raw,trans=trans,host_netns=os.environ['CI_HOST_NETNS'],
+                 baseline=refreshed,endpoints=endpoints,encode=encode,coverage=coverage)
     finally:
         for rec in records:
             os.close(rec['program_fd']);os.close(rec['map_fd'])

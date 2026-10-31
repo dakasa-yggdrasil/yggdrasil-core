@@ -1,0 +1,112 @@
+"""Private-CI integration of actual Guardian registry and actual BPF sender.
+
+Source Reader evidence, systemd identity and pre-existing verified generation
+are fixtures. Real nft/BPF and the original Guardian registry and authority
+methods execute; none of this grants production authority.
+"""
+import hashlib,json,os,socket,sys,threading,time
+from pathlib import Path
+import guarded_nl as nl
+import guarded_generation as generation
+import guarded_sender_session_DRAFT as sender_protocol
+import guarded_refresh_registry_DRAFT as registry_module
+import guarded_program_identity_DRAFT as program_module
+import guarded_verifier as verifier
+import guarded_current15 as current15
+import guarded_authority_ci as authority
+
+
+def exercise(*, root, raw, trans, host_netns, baseline, endpoints, encode, coverage):
+    from subprocess import run,PIPE
+    def text():return run(['/usr/sbin/nft','-a','list','table','inet','dakasa_capacity_network'],stdout=PIPE,check=True,timeout=5).stdout
+    net=socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,12);net.bind((0,0));net.settimeout(5)
+    preparer,registry_side=socket.socketpair();sender_side,guardian_side=socket.socketpair()
+    prep_fd=os.pidfd_open(os.getpid(),0);ctrl_group=Path('/proc/self/cgroup').read_text().strip().split(':',2)[2]
+    prep={'pid':os.getpid(),'start_ticks':nl.startticks(os.getpid()),'pidfd':prep_fd,'unit':'fixture.service',
+          'invocation_id':'f'*32,'control_group':ctrl_group}
+    cache=object();reference=None;old_verified=None;new_verified=None;sender=None;session=None;auth=None
+    stop=threading.Event();server_errors=[];worker=None;records=[]
+    try:
+        deadline=time.monotonic_ns()+15_000_000_000
+        maps={'inbound':[('07'*12,deadline)],'reverse':[('08'*12,deadline)]}
+        for role in ('inbound','reverse'):records.append(nl.make_program(maps[role]))
+        expected={role:{bytes.fromhex(k):v for k,v in rows} for role,rows in maps.items()}
+        expected.update(invalidation_epoch=1,source_generation=1,dnat={},cores=set(),prom=set())
+        class Sources:
+            @staticmethod
+            def build_expected(cache):return expected
+        sources=Sources()
+        old_result={k:v for k,v in baseline.items() if k not in ('ok','counter')}
+        old_actual={role:nl.map_rows(rec['map_id']) for role,rec in zip(('inbound','reverse'),old_result['programs'])}
+        old_verified=verifier._VerifiedGeneration(result=old_result,anchor={'pid':os.getpid()},reader_cache=cache,
+                joined={},actual=old_actual,sender_pidfd=os.pidfd_open(os.getpid(),0),capability=verifier._VERIFIED_CAPABILITY)
+        def validate(verified):
+            generation_now=nl.genid(net);snapshot=coverage.kernel_text(text())
+            if not snapshot['all_four_backends_and_reverse_sources_positive']:raise RuntimeError('CI_EXPECTED_POSITIVE_KERNEL')
+            return {'observation':{'genid':generation_now,
+                    'kernel_min_deadline_ns':time.monotonic_ns()+snapshot['minimum_actual_expires_ms']*1_000_000},
+                    'invalidation_epoch':expected['invalidation_epoch']}
+        reference=program_module.GuardianProgramReference()
+        reg=registry_module.GuardianRefreshRegistry(registry_side,prep,cache=cache,sources=sources,nl=nl,
+                    verifier=verifier,current15=current15,program_module=program_module,reference=reference,validate_kernel=validate)
+        chain=current15.CoverageChain(cache,sources,verifier)
+        invalid=chain.capture_before_send();expected['invalidation_epoch']=2
+        try:reg.prepare(invalid,old_verified,records);raise AssertionError('invalidated reader accepted')
+        except registry_module.Held as exc:assert str(exc)=='LIVE_ORIGINAL_SOURCE_AND_KERNEL_GENERATION'
+        assert reg.pending is None;expected['invalidation_epoch']=1
+        before=chain.capture_before_send();proof=reg.prepare(before,old_verified,records)
+        assert not proof.sent and reg.pending is proof
+        class Identity:
+            @staticmethod
+            def _current_ids(*_):pass
+            @staticmethod
+            def _secure_source(*_):pass
+            @staticmethod
+            def authenticate(*_,**__):return {'pid':os.getpid(),'start_ticks':prep['start_ticks'],
+                    'control_group':ctrl_group,'pidfd':os.pidfd_open(os.getpid(),0)}
+        ident=Identity();argv=Path('/proc/self/cmdline').read_bytes().rstrip(b'\0').decode().split('\0')
+        auth=authority.SenderRegistryAuthority(guardian_side,registry=reg,registry_module=registry_module,
+            verified=old_verified,verifier=verifier,identity=ident,nl=nl,sender_argv=argv,
+            sender_sha256='a'*64,validate_kernel=validate)
+        session=sender_protocol.SenderSession(sender_side,identity=ident,
+            guardian={'unit':'fixture.service','invocation_id':'f'*32,'argv':['fixture'],'source_sha256':'a'*64},nl=nl)
+        def serve():
+            try:
+                raw_request=bytearray()
+                while not raw_request.endswith(b'\n'):
+                    chunk=guardian_side.recv(1)
+                    if not chunk:raise RuntimeError('sender channel closed')
+                    raw_request.extend(chunk)
+                auth.answer_once(json.loads(raw_request));stop.wait(10)
+            except BaseException as exc:server_errors.append(exc)
+        worker=threading.Thread(target=serve);worker.start()
+        permit=session.prepare(records,until_ns=time.monotonic_ns()+3_000_000_000)
+        assert proof.sent and proof.sender_claimed and reg.pending is proof
+        receipts=root/'receipts3';receipts.mkdir(mode=0o700)
+        sender=generation.GenerationEmitter(initial_raw=raw,transition=trans,receipt_dir=receipts,host_netns=host_netns,recover_fixture=True)
+        entries,cores,prom=endpoints(5)
+        plan={'maps':maps,'backends':[encode(x) for x in entries],'cores':[encode(x) for x in cores],'prom':[encode(x) for x in prom]}
+        transfer=records;records=[]
+        result=sender.submit(plan,transfer,sender_session=session,sender_permit=permit)
+        assert result['ok'] and permit.consumed and result['genid']==old_result['after']
+        new_actual={role:nl.map_rows(rec['map_id']) for role,rec in zip(('inbound','reverse'),result['programs'])}
+        new_verified=verifier._VerifiedGeneration(result=result,anchor={'pid':os.getpid()},reader_cache=cache,
+                joined={},actual=new_actual,sender_pidfd=os.pidfd_open(os.getpid(),0),capability=verifier._VERIFIED_CAPABILITY)
+        confirmed=reg.confirm(proof,new_verified)
+        assert confirmed['same_guardian_successor_verified'] and reg.pending is None
+        print('PASS actual Guardian registry, reference-program comparison, one-use authority and BPF nft rotation',flush=True)
+        print('BOUNDARY: Reader, prior verified receipt, systemd identity, lease and full AST verification are fixtures',flush=True)
+    finally:
+        stop.set()
+        if worker is not None:worker.join(10)
+        if session is not None:session.close()
+        else:sender_side.close()
+        if auth is not None:auth.close()
+        else:guardian_side.close()
+        preparer.close();registry_side.close();net.close();os.close(prep_fd)
+        if new_verified is not None:new_verified.close()
+        if old_verified is not None:old_verified.close()
+        if reference is not None:reference.close()
+        if sender is not None:sender.close_private_fixture()
+        for rec in records:os.close(rec['program_fd']);os.close(rec['map_fd'])
+        if server_errors:raise RuntimeError('guardian protocol fixture failed') from server_errors[0]
