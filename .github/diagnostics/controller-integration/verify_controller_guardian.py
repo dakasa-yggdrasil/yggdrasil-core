@@ -149,10 +149,14 @@ def main():
                 b.sendall(nl.canon(reply));server_done.wait(10)
             except BaseException as error:server_errors.append(error)
         worker=threading.Thread(target=mock_guardian);worker.start()
-        now=time.monotonic_ns();new_expiry=now+15_000_000_000
-        new_maps={'inbound':[('05'*12,new_expiry)],'reverse':[('06'*12,new_expiry)]}
+        import ci_reader_fixture,guarded_sources
+        real_cache=ci_reader_fixture.start(endpoints)
+        real_expected=guarded_sources.build_expected(real_cache)
+        new_maps={role:[(key.hex(),deadline) for key,deadline in sorted(real_expected[role].items())]
+                  for role in ('inbound','reverse')}
+        assert len(new_maps['inbound'])==64 and len(new_maps['reverse'])==32
         for role in ('inbound','reverse'):records.append(nl.make_program(new_maps[role]))
-        rows,cores,prom=endpoints(4)
+        rows,cores,prom,errors,_=real_cache.snapshot();assert not errors
         new_plan={'maps':new_maps,'backends':[encode(x) for x in rows],'cores':[encode(x) for x in cores],'prom':[encode(x) for x in prom]}
         permit=session.prepare(records,until_ns=time.monotonic_ns()+3_000_000_000)
         transferred=records;records=[]
@@ -165,7 +169,7 @@ def main():
         print('BOUNDARY: Guardian permit, source witnesses and ownership lease simulated; no production authority',flush=True)
         import ci_guardian_registry
         ci_guardian_registry.exercise(root=HERE,raw=raw,trans=trans,host_netns=os.environ['CI_HOST_NETNS'],
-                 baseline=refreshed,baseline_plan=new_plan,endpoints=endpoints,encode=encode,coverage=coverage)
+                 baseline=refreshed,baseline_plan=new_plan,reader_cache=real_cache,encode=encode,coverage=coverage)
     finally:
         for rec in records:
             os.close(rec['program_fd']);os.close(rec['map_fd'])
