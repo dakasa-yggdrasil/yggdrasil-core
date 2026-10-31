@@ -53,7 +53,7 @@ def stop_wait(process):
     except BaseException:return{'pid':process.pid,'joined':False,'exit_code':None}
 
 
-def native(argv,*,deadline,stdin=b'',env=None,cap=4*1024**2,custody=None,capture=None):
+def native(argv,*,deadline,stdin=b'',env=None,cap=4*1024**2,custody=None,capture=None,writer_lease_fd=None):
     """Own same stdin/stdout/stderr pipes and actual Wait under one deadline."""
     facts=custody if custody is not None else{}
     facts.update(native_started=False,local_child_joined=True,all_local_FDs_closed=True,
@@ -61,7 +61,12 @@ def native(argv,*,deadline,stdin=b'',env=None,cap=4*1024**2,custody=None,capture
     if capture is not None:capture.update(stdout=b'',stderr=b'',transport=dict(facts))
     require(time.monotonic()<deadline,'ORIGINAL_NATIVE_DEADLINE')
     require(callable(getattr(os,'pidfd_open',None)),'ORIGINAL_LINUX_PIDFD_REQUIRED_BEFORE_CHILD')
-    process=subprocess.Popen(argv,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env or SAFE,close_fds=True)
+    # CI draft only: pass the writer lease across exec so a live nft child
+    # continues holding it even if its controller dies. A read must pass none.
+    require(writer_lease_fd is None or (type(writer_lease_fd) is int and writer_lease_fd>=0),
+            'EXACT_WRITER_LEASE_FD_REQUIRED')
+    inherited=() if writer_lease_fd is None else (writer_lease_fd,)
+    process=subprocess.Popen(argv,stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,env=env or SAFE,close_fds=True,pass_fds=inherited)
     streams=(process.stdin,process.stdout,process.stderr);selector=None;pidfd=None;out=bytearray();err=bytearray();pending=b'';offset=0;exhausted=False;facts.update(pid=process.pid,native_started=True,wait_zero=False,stdout_EOF=False,stderr_EOF=False,all_local_FDs_closed=False,local_child_joined=False,captured_output_truncated=False)
     try:
         selector=selectors.DefaultSelector()

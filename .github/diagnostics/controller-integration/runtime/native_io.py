@@ -90,9 +90,10 @@ def allowed(argv, role, data):
     require((type(data) is bytes and 0 < len(data) <= 65536) if role in ('refresh_template_check', 'initial_static_check', 'initial_static_apply', 'hot_dynamic_apply') else data is None, 'COMPILED_NATIVE_INPUT_SHAPE')
 
 
-def command(argv, *, data=None, timeout=2, role):
+def command(argv, *, data=None, timeout=2, role, writer_lease_fd=None):
     global _index, _reserved_records, _reserved_bytes, _used_records, _used_bytes
     allowed(argv, role, data)
+    require(writer_lease_fd is None or role in ('initial_static_apply','hot_dynamic_apply'), 'WRITER_LEASE_FOR_APPLY_ONLY')
     require(_initialized and type(timeout) in (int, float) and 0 < timeout <= 10, 'INITIALIZED_BOUNDED_ORIGINAL_NATIVE_OPERATION')
     # Reserve worst-case full error bytes BEFORE starting each child. Output
     # cap is 8MiB per pipe, as in the prior whole-ruleset reader. Bounded disk
@@ -108,7 +109,7 @@ def command(argv, *, data=None, timeout=2, role):
     out = None
     try:
         out, _ = process.native(argv, deadline=deadline, stdin=b'' if data is None else data,
-            env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C'}, cap=cap, custody=facts, capture=capture)
+            env={'PATH': '/usr/sbin:/usr/bin:/sbin:/bin', 'LANG': 'C'}, cap=cap, custody=facts, capture=capture, writer_lease_fd=writer_lease_fd)
     except BaseException as caught:
         error = caught
     returned = time.monotonic()
