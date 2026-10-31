@@ -4,7 +4,7 @@ name: Attested immutable Core candidate
 on:
   push:
     branches:
-      - candidate/core-d524-attested-20261030
+      - candidate/core-ddd-attested-20261031
 
 permissions:
   contents: read
@@ -26,13 +26,13 @@ jobs:
         uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
         with:
           persist-credentials: false
-          ref: d52465ec5b26014406d2b010dce4fe09e2c169dd
+          ref: dddaba1d4890cd094b01bb04492be722defdcd55
           path: source
 
       - name: Verify clean source checkout
         run: |
           set -eu
-          test "$(git -C source rev-parse HEAD)" = d52465ec5b26014406d2b010dce4fe09e2c169dd
+          test "$(git -C source rev-parse HEAD)" = dddaba1d4890cd094b01bb04492be722defdcd55
           test -z "$(git -C source status --porcelain)"
 
       - name: Set up Docker Buildx
@@ -57,7 +57,7 @@ jobs:
           tags: ghcr.io/dakasa-yggdrasil/yggdrasil-core:attested-candidate-${{ github.run_id }}-${{ github.run_attempt }}
           labels: |
             org.opencontainers.image.source=https://github.com/dakasa-yggdrasil/yggdrasil-core
-            org.opencontainers.image.revision=d52465ec5b26014406d2b010dce4fe09e2c169dd
+            org.opencontainers.image.revision=dddaba1d4890cd094b01bb04492be722defdcd55
             org.opencontainers.image.version=attested-candidate-${{ github.run_id }}-${{ github.run_attempt }}
           secrets: |
             github_token=${{ secrets.GITHUB_TOKEN }}
@@ -71,7 +71,7 @@ jobs:
       - name: Preserve exact manifest, binary and build information
         env:
           IMAGE: ghcr.io/dakasa-yggdrasil/yggdrasil-core@${{ steps.build.outputs.digest }}
-          EXPECTED_REVISION: d52465ec5b26014406d2b010dce4fe09e2c169dd
+          EXPECTED_REVISION: dddaba1d4890cd094b01bb04492be722defdcd55
           BUILD_DIGEST: ${{ steps.build.outputs.digest }}
         run: |
           set -eu
