@@ -17,7 +17,7 @@ import guarded_authority_ci as authority
 import guarded_sources
 
 
-def exercise(*, root, raw, trans, host_netns, baseline, baseline_plan, reader_cache, encode, coverage):
+def exercise(*, root, raw, trans, host_netns, baseline, baseline_plan, reader_cache, sender_cache, encode, coverage):
     from subprocess import run,PIPE
     def text():return run(['/usr/sbin/nft','-a','list','table','inet','dakasa_capacity_network'],stdout=PIPE,check=True,timeout=5).stdout
     net=socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,12);net.bind((0,0));net.settimeout(5)
@@ -28,7 +28,7 @@ def exercise(*, root, raw, trans, host_netns, baseline, baseline_plan, reader_ca
     cache=reader_cache;reference=None;old_verified=None;new_verified=None;sender=None;session=None;auth=None
     stop=threading.Event();server_errors=[];worker=None;records=[]
     try:
-        original_expected=guarded_sources.build_expected(cache)
+        original_expected=guarded_sources.build_expected(sender_cache)
         maps={role:[(key.hex(),deadline) for key,deadline in sorted(original_expected[role].items())]
               for role in ('inbound','reverse')}
         assert len(maps['inbound'])==64 and len(maps['reverse'])==32
@@ -95,7 +95,7 @@ def exercise(*, root, raw, trans, host_netns, baseline, baseline_plan, reader_ca
         assert proof.sent and proof.sender_claimed and reg.pending is proof
         receipts=root/'receipts3';receipts.mkdir(mode=0o700)
         sender=generation.GenerationEmitter(initial_raw=raw,transition=trans,receipt_dir=receipts,host_netns=host_netns,recover_fixture=True)
-        entries,cores,prom,errors,_=cache.snapshot();assert not errors
+        entries,cores,prom,errors,_=sender_cache.snapshot();assert not errors
         plan={'maps':maps,'backends':[encode(x) for x in entries],'cores':[encode(x) for x in cores],'prom':[encode(x) for x in prom]}
         transfer=records;records=[]
         result=sender.submit(plan,transfer,sender_session=session,sender_permit=permit)
@@ -106,7 +106,7 @@ def exercise(*, root, raw, trans, host_netns, baseline, baseline_plan, reader_ca
         confirmed=reg.confirm(proof,new_verified)
         assert confirmed['same_guardian_successor_verified'] and reg.pending is None
         print('PASS actual Guardian registry, reference-program comparison, one-use authority and BPF nft rotation',flush=True)
-        print('BOUNDARY: synthetic DNS/topology, shared Reader cache, systemd identity, ownership lease and deployed service integration',flush=True)
+        print('BOUNDARY: synthetic DNS/topology, separate same-process Reader caches, systemd identity, ownership lease and deployed service integration',flush=True)
     finally:
         stop.set()
         if worker is not None:worker.join(10)

@@ -151,6 +151,8 @@ def main():
         worker=threading.Thread(target=mock_guardian);worker.start()
         import ci_reader_fixture,guarded_sources
         real_cache=ci_reader_fixture.start(endpoints)
+        guardian_cache=ci_reader_fixture.start(endpoints,setup=False)
+        assert real_cache is not guardian_cache
         real_expected=guarded_sources.build_expected(real_cache)
         new_maps={role:[(key.hex(),deadline) for key,deadline in sorted(real_expected[role].items())]
                   for role in ('inbound','reverse')}
@@ -169,7 +171,7 @@ def main():
         print('BOUNDARY: Guardian permit, source witnesses and ownership lease simulated; no production authority',flush=True)
         import ci_guardian_registry
         ci_guardian_registry.exercise(root=HERE,raw=raw,trans=trans,host_netns=os.environ['CI_HOST_NETNS'],
-                 baseline=refreshed,baseline_plan=new_plan,reader_cache=real_cache,encode=encode,coverage=coverage)
+                 baseline=refreshed,baseline_plan=new_plan,reader_cache=guardian_cache,sender_cache=real_cache,encode=encode,coverage=coverage)
     finally:
         for rec in records:
             os.close(rec['program_fd']);os.close(rec['map_fd'])

@@ -2,11 +2,12 @@
 import socket,struct,subprocess,threading,time
 import dns_native,native_io,observations,whole_witness as whole
 
-def start(endpoints):
-    subprocess.run(['/usr/sbin/ip','link','set','lo','up'],check=True)
-    subprocess.run(['/usr/sbin/ip','link','add','br-2980a83da24e','type','dummy'],check=True)
-    subprocess.run(['/usr/sbin/ip','addr','add','172.18.0.1/16','dev','br-2980a83da24e'],check=True)
-    subprocess.run(['/usr/sbin/ip','link','set','br-2980a83da24e','up'],check=True)
+def start(endpoints, *, setup=True):
+    if setup:
+        subprocess.run(['/usr/sbin/ip','link','set','lo','up'],check=True)
+        subprocess.run(['/usr/sbin/ip','link','add','br-2980a83da24e','type','dummy'],check=True)
+        subprocess.run(['/usr/sbin/ip','addr','add','172.18.0.1/16','dev','br-2980a83da24e'],check=True)
+        subprocess.run(['/usr/sbin/ip','link','set','br-2980a83da24e','up'],check=True)
     server=socket.socket(socket.AF_INET,socket.SOCK_DGRAM);server.bind(('127.0.0.1',5353));server.settimeout(5)
     errors=[]
     def respond():
