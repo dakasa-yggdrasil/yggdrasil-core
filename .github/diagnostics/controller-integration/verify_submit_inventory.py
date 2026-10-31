@@ -4,7 +4,7 @@ from pathlib import Path
 
 root=Path(__file__).resolve().parent
 active={'runtime/ci_guardian_registry.py':1,'runtime/ci_guardian50_session.py':2,
-        'runtime/guarded_generation.py':1,'runtime/controller.py':2}
+        'runtime/guarded_generation.py':1,'runtime/controller.py':2,'verify_controller_guardian.py':1}
 legacy={**active,'verify_controller_guardian.py':5}
 def inventory(directory):
     found={}

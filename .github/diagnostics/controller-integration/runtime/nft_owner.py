@@ -385,7 +385,7 @@ def table_text_identity(raw):
             and lines[-1] == '}', 'EXACT_NATIVE_TABLE_HEADER_COMMENT')
 
 
-def native_batch(backends, *, apply=False, core_sources=(), prometheus_sources=(), _ownership=None):
+def _native_batch_impl(backends, *, apply=False, core_sources=(), prometheus_sources=(), _ownership=None):
     if _ownership is None:
         exists = owned_table()
     else:
@@ -504,7 +504,7 @@ def native_initialize_static(*, apply, _ownership):
     return result, pin
 
 
-def native_refresh(backends, *, core_sources=(), prometheus_sources=(), apply, _ownership):
+def _native_refresh_impl(backends, *, core_sources=(), prometheus_sources=(), apply, _ownership):
     _consume_ownership(_ownership, .750)
     started = time.monotonic()
     raw = render_refresh(backends, now=started, core_sources=core_sources, prometheus_sources=prometheus_sources).encode()
@@ -520,3 +520,43 @@ def native_refresh(backends, *, core_sources=(), prometheus_sources=(), apply, _
     result['original_native_command_facts'] = native_io.last_facts() if applied else None
     require(time.monotonic() - started < .250, 'ORIGINAL_REFRESH_FACTS_WITHIN_SAME_BUDGET')
     return result
+
+
+# CI-only common typed-writer gate; every caller, including non-controller
+# callers, is checked before native I/O. Production binding is not provided.
+CI_DRAIN_COORDINATION = None
+
+def _ci_coordination():
+    import drain_marker_v3_DRAFT as drain_v3
+    require(os.environ.get('CI_GUARDED_FIXTURE')=='1'
+            and type(CI_DRAIN_COORDINATION) is drain_v3.CoordinatorV3,
+            'ONLY_BOUND_CI_DRAIN_COORDINATOR')
+    return CI_DRAIN_COORDINATION
+
+def native_batch(backends, *, apply=False, core_sources=(), prometheus_sources=(), _ownership=None):
+    coord=_ci_coordination()
+    with coord.admission_or_other_writer() as state:
+        for item in backends:
+            if item.kind=='core':
+                coord.base.require_allowed(state,item.native_identity.split('/',1)[0],item.address)
+        return _native_batch_impl(backends,apply=apply,core_sources=core_sources,
+                                  prometheus_sources=prometheus_sources,_ownership=_ownership)
+
+def native_refresh(backends, *, core_sources=(), prometheus_sources=(), apply, _ownership):
+    import partial_refresh_DRAFT as partial
+    coord=_ci_coordination()
+    with coord.admission_or_other_writer() as state:
+        core=[item for item in backends if item.kind=='core']
+        require(len(core)<=1,'DRAFT_ONE_CORE_BACKEND')
+        retired=False
+        if core:
+            try:coord.base.require_allowed(state,core[0].native_identity.split('/',1)[0],core[0].address)
+            except Exception as error:
+                from drain_coordination_DRAFT import FenceError
+                if not isinstance(error,FenceError) or str(error)!='RETIRED_BACKEND':raise
+                retired=True
+        if retired:
+            return partial.native_partial(backends,core_sources=core_sources,
+                prometheus_sources=prometheus_sources,state=state,apply=apply,_ownership=_ownership)
+        return _native_refresh_impl(backends,core_sources=core_sources,
+                                    prometheus_sources=prometheus_sources,apply=apply,_ownership=_ownership)

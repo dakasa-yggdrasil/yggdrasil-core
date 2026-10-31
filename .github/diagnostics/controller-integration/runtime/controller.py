@@ -200,12 +200,15 @@ class _RefreshSchedule:
 
     def __init__(self):
         self.key = self.identity = self.installed_end = self.checked = None
+        self.core_pending = False
 
     @staticmethod
     def stamp(view):
         return view[1], view[3], view[4], view[5]
 
     def due(self, view, now):
+        if self.core_pending:
+            return True
         if self.key is None or view[3] != self.identity:
             return True
         if (view[1] == self.key and self.checked is not None
@@ -221,6 +224,10 @@ class _RefreshSchedule:
     def applied(self, view, result):
         if result['applied'] is not True:
             return
+        if result.get('core_pending') is True:
+            self.core_pending = True
+            return
+        self.core_pending = False
         start, end = result['render_started'], result['native_apply_returned']
         nft.require(type(start) in (int, float) and type(end) in (int, float)
                     and start <= end < start + .250,
@@ -242,7 +249,7 @@ def cached_cycle(reader, lease, ownership, *, apply, previous_key, schedule=None
     # the handoff; no caller/disk pin or reminted token exists.
     view = None if schedule is None else reader.cache.scheduling_snapshot()
     (entries,sources,prometheus_sources,errors,generation),key,revision = reader.cache.commit_snapshot() if view is None else view[:3]
-    if key == previous_key and (schedule is None or view[3] == schedule.identity):
+    if key == previous_key and (schedule is None or (not schedule.core_pending and view[3] == schedule.identity)):
         if schedule is not None:
             schedule.no_change(view)
         return None,key  # no native call, token consumption, log or rewrite
@@ -259,7 +266,7 @@ def cached_cycle(reader, lease, ownership, *, apply, previous_key, schedule=None
     result['same_process_semantic_cache_revision'] = revision
     if schedule is not None:
         schedule.applied(view, result)
-    return result,key
+    return result,(previous_key if result.get('core_pending') is True else key)
 
 
 def cached_guarded_cycle(reader, lease, ownership, *, emitter, prepared, apply,
@@ -418,6 +425,9 @@ def serve_hot(reader, pin, *, apply, initial_sequence=1, transition_context=None
             if result['applied'] is True:
                 last_key=committed_key
             observations.emit_json(result)
+            if result.get('core_pending') is True:
+                reader.stop.wait(.250)
+                continue
             closure=transition.close_after_first_fresh_commit(transition_context,result)
             if closure is not None:observations.emit_json(closure)
     finally:

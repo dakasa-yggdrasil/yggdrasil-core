@@ -15,7 +15,8 @@ def cmd(*args,inp=None):return subprocess.run(args,input=inp,stdout=subprocess.P
 
 def endpoints(suffix):
     now=time.monotonic()
-    entries=[nft.Backend(k,a,nft.PORTS[k],now,now+20,'synthetic') for k,a in
+    entries=[nft.Backend(k,a,nft.PORTS[k],now,now+20,
+             ('00000000-0000-0000-0000-%012x/synthetic'%suffix if k=='core' else 'synthetic')) for k,a in
        [('core','10.244.1.'+str(suffix)),('broker','172.18.1.2'),('rds','172.18.1.3'),('redis','172.18.1.4')]]
     prom=nft.PrometheusSource('10.244.1.9',now,now+20,'synthetic')
     return entries,[entries[0]],[prom]
@@ -47,7 +48,7 @@ def main():
     print('PASS actual controller process systemd identity, source hash and cgroup',flush=True)
     import drain_marker_v3_DRAFT as drain_v3
     drain=drain_v3.CoordinatorV3(HERE/'drain-coordinator')
-    drain.initialize_for_ci();controller.CI_DRAIN_COORDINATION=drain;native_io.CI_DRAIN_COORDINATION=drain
+    drain.initialize_for_ci();controller.CI_DRAIN_COORDINATION=drain;native_io.CI_DRAIN_COORDINATION=drain;nft.CI_DRAIN_COORDINATION=drain
     native_io.ROOT=HERE/'custody';native_io.ROOT.mkdir(mode=0o700)
     native_io.configure();native_io.end_initialization()
     cmd('/usr/sbin/nft','-f','-',inp=nft.render((),now=time.monotonic(),table_exists=False).encode())
@@ -63,6 +64,23 @@ def main():
     assert one['applied'] and lease.dispatched and key=='initial'
     snapshot,_=observer.kernel();assert snapshot['all_four_backends_and_reverse_sources_positive']
     same,key,silent=cycle(cache,key);assert same is None and not silent.dispatched
+    # Model guard admission->durable retirement with no pending v3 marker.
+    # A stale Core must not be reinstalled; a fresh Ready anchor may preserve
+    # its own untouched TTL while the other backends refresh atomically.
+    anchor_rows=endpoints(2);cache.rows=anchor_rows;cache.key='anchor'
+    anchored,key,_=cycle(cache,key);assert anchored['applied'] and key=='anchor'
+    old_uid='00000000-0000-0000-0000-000000000001'
+    new_uid='00000000-0000-0000-0000-000000000002'
+    with drain.admission_or_other_writer() as state:
+        drain.base.retire(state,old_uid,'10.244.1.1',anchor_uid=new_uid,anchor_address='10.244.1.2')
+    assert not drain.marker_exists()
+    stale=endpoints(1);fresh=endpoints(2)
+    cache.rows=(stale[0],fresh[1],fresh[2]);cache.key='retired-stale'
+    partial,pending,partial_lease=cycle(cache,key)
+    assert partial['applied'] and partial['core_pending'] and pending==key and partial_lease.dispatched
+    after=cmd('/usr/sbin/nft','-a','list','table','inet','dakasa_capacity_network')
+    assert b'10.244.1.2' in after and b'10.244.1.1' not in after
+    print('PASS retired Core blocked after marker cleared; fresh anchor preserved, other maps refreshed',flush=True)
     old_native=native_io.process.native;calls=[]
     def ambiguous(*args,**kwargs):
         value=old_native(*args,**kwargs)

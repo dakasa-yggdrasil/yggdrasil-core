@@ -14,6 +14,7 @@ from pathlib import Path
 import secrets
 import stat
 import time
+import threading
 from drain_coordination_DRAFT import Coordinator, FenceError
 
 _CAPABILITY=object()
@@ -47,6 +48,7 @@ class CoordinatorV3:
     def __init__(self,directory):
         self.base=Coordinator(directory);self.directory=Path(directory)
         self.marker=self.directory/'guarded-intent.json'
+        self._local=threading.local()
     def initialize_for_ci(self):
         self.base.initialize_for_test()
     def marker_exists(self):
@@ -54,9 +56,16 @@ class CoordinatorV3:
         except FileNotFoundError:return False
     @contextlib.contextmanager
     def admission_or_other_writer(self):
+        # Reentrancy is per-thread and only for the identical coordinator,
+        # so native_io can enforce the same held lock at the final send.
+        if getattr(self._local,'state',None) is not None:
+            yield self._local.state
+            return
         with self.base.locked(nonblocking=True) as state:
             if self.marker_exists():raise FenceError('GUARDED_INTENT_PENDING')
-            yield state
+            self._local.state=state
+            try:yield state
+            finally:self._local.state=None
     def begin(self, core, sources, *, _ci_after_create=None):
         uid=core.native_identity.split('/',1)[0]
         if not uid or not core.address:raise FenceError('CORE_IDENTITY_REQUIRED')

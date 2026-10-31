@@ -105,6 +105,19 @@ with cache.lock:
     before=cache._state_key();cache.errors={'rds':'failure-again'};cache._changed(before)
     assert recovered>0 and cache.guard_recovery_epoch==recovered
 
+with tempfile.TemporaryDirectory(prefix='ci-drain-retired-') as tmp:
+    coord=v3.CoordinatorV3(Path(tmp)/'coord');coord.initialize_for_ci()
+    old='00000000-0000-0000-0000-000000000001'
+    new='00000000-0000-0000-0000-000000000002'
+    with coord.admission_or_other_writer() as state:
+        coord.base.retire(state,old,'10.244.1.1',anchor_uid=new,anchor_address='10.244.1.2')
+    assert not coord.marker_exists()
+    import nft_owner as nft
+    nft.CI_DRAIN_COORDINATION=coord
+    stale=types.SimpleNamespace(kind='core',native_identity=old+'/container',address='10.244.1.1')
+    with mock.patch.dict(os.environ,{'CI_GUARDED_FIXTURE':'1'}):
+        must_hold(lambda:nft.native_batch([stale],apply=True),'RETIRED_BACKEND')
+
 with tempfile.TemporaryDirectory(prefix='ci-drain-crash-') as tmp:
     coord=v3.CoordinatorV3(Path(tmp)/'coord');coord.initialize_for_ci()
     program="""
