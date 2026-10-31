@@ -124,12 +124,22 @@ try:
         print('PASS BPF FDs received from authenticated sender remain readable after its death',flush=True)
         print('PASS same sample joins original 50 structure, rule FD references and four nft collections',flush=True)
         print('BOUNDARY ACK remains UNKNOWN; hidden BPF pointer and receipt trust remain unproven',flush=True)
+        import observations
+        cold=observations.Cache()
+        try:
+            deny.run(marker_anchor=marker,writer_lock=writer_lock,fence=fence,
+                old_directory=root/'real-receipts',sender_records=sender_records,expected_genid=genid,
+                original_pin=original,coverage=coverage,deny_dir=root/'cold-deny',cache=cold,simulate_ack_loss=False)
+            raise AssertionError('missing fresh readers accepted')
+        except sources.Held as error:assert str(error)=='ORIGINAL_DNS_ROUTE_WITNESS_REQUIRED'
+        assert nl.genid(netlink)==genid and not (root/'cold-deny').exists()
+        print('PASS missing fresh Reader evidence prevents deny dispatch and leaves genid unchanged',flush=True)
         denied=deny.run(marker_anchor=marker,writer_lock=writer_lock,fence=fence,
             old_directory=root/'real-receipts',sender_records=sender_records,expected_genid=genid,
-            original_pin=original,coverage=coverage,deny_dir=root/'distinct-deny',
+            original_pin=original,coverage=coverage,deny_dir=root/'distinct-deny',cache=cache,
             simulate_ack_loss=os.environ.get('CI_DENY_UNKNOWN')=='1')
         assert denied['marker_retained'] and denied['original_ack_unknown'] and not denied['production_authority']
-        assert denied['deny_wire_sha256']!=denied['old_wire_sha256']
+        assert denied['deny_wire_sha256']!=denied['old_wire_sha256'] and type(denied['fresh_reader_generation']) is int
         print('PASS distinct deny batch leaves four nft collections empty and both unknown evidence and marker retained; deny_ack_unknown='+str(denied['deny_ack_unknown']),flush=True)
         subprocess.run(['/usr/sbin/nft','add','table','ip','ci_concurrent_external_writer'],check=True,timeout=5)
         try:

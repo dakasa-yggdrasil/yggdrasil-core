@@ -7,6 +7,7 @@ and unknown deny ACKs remain unknown; original intent/marker are never removed.
 import fcntl,hashlib,json,os,socket,stat,struct
 from pathlib import Path
 import guarded_nl as nl
+import guarded_sources as sources
 import recovery_read_DRAFT as recovery
 import recovery_terminality_DRAFT as terminal
 import transition_structure_DRAFT as transition
@@ -17,7 +18,7 @@ def need(value,reason):
     if not value:raise Held(reason)
 
 def run(*,marker_anchor,writer_lock,fence,old_directory,sender_records,expected_genid,
-        original_pin,coverage,deny_dir,simulate_ack_loss):
+        original_pin,coverage,deny_dir,cache,simulate_ack_loss):
     need(os.geteuid()==0 and os.readlink('/proc/self/ns/net')!=os.readlink('/proc/1/ns/net'),
          'ONLY_DISPOSABLE_NETWORK_NAMESPACE')
     need(type(marker_anchor) is terminal.MarkerAnchor and type(simulate_ack_loss) is bool,
@@ -32,6 +33,8 @@ def run(*,marker_anchor,writer_lock,fence,old_directory,sender_records,expected_
          and observed[3].get('writer_lock_identity')==[lockst.st_dev,lockst.st_ino],
          'SAME_ORIGINAL_MARKER_AND_WRITER_LOCK_REQUIRED')
     old=recovery.inspect_unknown(marker_anchor,old_directory,counter=1,sender_records=sender_records)
+    fresh=sources.build_expected(cache)
+    recovery._marker_reader_join(observed[3],cache,fresh)
     net=socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,12);net.bind((0,0));net.settimeout(3)
     probe=None;records=[]
     try:
@@ -56,6 +59,11 @@ def run(*,marker_anchor,writer_lock,fence,old_directory,sender_records,expected_
             'old_unknown_wire_sha256':old['wire_sha256'],'wire_sha256':digest,
             'programs':records,'no_retry':True,'production_authority':False}))
         terminal.prove_terminal_for_marker(marker_anchor)
+        current_source=sources.build_expected(cache)
+        recovery._marker_reader_join(observed[3],cache,current_source)
+        need(current_source['source_generation']==fresh['source_generation']
+             and current_source['invalidation_epoch']==fresh['invalidation_epoch'],
+             'FRESH_READER_CHANGED_BEFORE_DENY')
         need(nl.genid(net)==expected_genid,'PRE_DISPATCH_GENID_CHANGED')
         need(net.send(wire)==len(wire),'WHOLE_DENY_BATCH_REQUIRED')
         if not simulate_ack_loss:
@@ -84,10 +92,16 @@ def run(*,marker_anchor,writer_lock,fence,old_directory,sender_records,expected_
         need(all(not rows for rows in dynamic['dynamic_collections'].values()),'ALL_FOUR_COLLECTIONS_MUST_BE_EMPTY')
         need(nl.genid(probe)==after,'DENY_GENID_CHANGED_DURING_READBACK')
         still=recovery.inspect_unknown(marker_anchor,old_directory,counter=1,sender_records=sender_records)
+        final_source=sources.build_expected(cache)
+        recovery._marker_reader_join(observed[3],cache,final_source)
+        need(final_source['source_generation']==fresh['source_generation']
+             and final_source['invalidation_epoch']==fresh['invalidation_epoch'],
+             'FRESH_READER_CHANGED_DURING_DENY_OBSERVATION')
         need(still['wire_sha256']==old['wire_sha256'],'ORIGINAL_UNKNOWN_WIRE_CHANGED')
         return {'after_genid':after,'deny_wire_sha256':digest,'old_wire_sha256':old['wire_sha256'],
                 'deny_ack_unknown':simulate_ack_loss,'original_ack_unknown':True,
-                'marker_retained':True,'production_authority':False}
+                'marker_retained':True,'fresh_reader_generation':fresh['source_generation'],
+                'reader_epoch':fresh['invalidation_epoch'],'production_authority':False}
     finally:
         # If send/ACK/verification fails, no retry is made and both intents stay.
         if probe is not None:probe.close()
