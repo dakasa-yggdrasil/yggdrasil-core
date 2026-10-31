@@ -130,7 +130,6 @@ def main():
         finally:
             if lease is not None:owner.release(lease)
             stop.set();wake.set();owner.close_join(time.monotonic()+5)
-        pre_guardian.close();pre_guardian=None
         assert emitted['ok'] and first.state=='AWAITING_FIXTURE_VERIFICATION'
         import guarded_verifier,guarded_live_observation
         first_maps={role:[(item.hex(),deadline) for item,deadline in sorted(nl.map_rows(rec['map_id']))]
@@ -152,7 +151,8 @@ def main():
         assert live['live']['grant_authority'] is False
         print('PASS Owner.kernel guarded 50 with real source/tuple join and original receipt',flush=True)
         import ci_guardian_unit
-        watch=ci_guardian_unit.Watch(root=HERE,anchor=anchor,result=emitted,plan=first_plan)
+        watch=ci_guardian_unit.Watch(root=HERE,anchor=anchor,result=emitted,plan=first_plan,existing=pre_guardian)
+        assert watch.peer['pid']==pre_guardian.session.pid
         print('PASS cached_guarded_cycle with actual original 47 ownership reader and BPF emitter',flush=True)
         try:first.submit({},[]);raise AssertionError('unverified generation allowed another send')
         except RuntimeError as e:assert str(e)=='ONLY_READY_SAME_OWNER'
@@ -161,6 +161,7 @@ def main():
         # is distinct and submits a deny-only batch using fresh expired maps.
         cmd('/usr/sbin/nft','add','table','ip','ci_foreign_after_50')
         watch.expect_hold();watch.close();watch=None
+        pre_guardian.close();pre_guardian=None
         try:observer.kernel(guarded=guarded_context);raise AssertionError('foreign genid change was accepted')
         except RuntimeError as error:assert str(error)=='GUARDED_RECEIPT_GENERATION_CHANGED'
         verified.close()

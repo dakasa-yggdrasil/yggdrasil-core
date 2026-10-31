@@ -4,13 +4,15 @@ from pathlib import Path
 import guarded_nl,guarded_unit_identity as identity
 
 class Watch:
-    def __init__(self,*,root,anchor,result,plan):
-        self.unit='ci-guarded-watch-'+uuid.uuid4().hex+'.service';self.path=root/'guardian-watch.sock'
+    def __init__(self,*,root,anchor,result,plan,existing=None):
+        self.owns_unit=existing is None
+        self.unit=('ci-guarded-watch-'+uuid.uuid4().hex+'.service') if self.owns_unit else existing.unit
+        self.path=(root/'guardian-watch.sock') if self.owns_unit else existing.path
         self.channel=None;self.peer=None;self.start=time.monotonic()
-        script=Path(__file__).with_name('ci_guardian_process.py').resolve()
-        self.argv=['/usr/bin/python3','-B',str(script),str(self.path)]
+        script=Path(__file__).with_name('ci_guardian_process.py').resolve() if self.owns_unit else Path(existing.argv[2])
+        self.argv=['/usr/bin/python3','-B',str(script),str(self.path)] if self.owns_unit else existing.argv
         try:
-            subprocess.run(['/usr/bin/systemd-run','--quiet','--no-block','--unit='+self.unit,
+            if self.owns_unit:subprocess.run(['/usr/bin/systemd-run','--quiet','--no-block','--unit='+self.unit,
                  '--property=RuntimeMaxSec=30s','--setenv=CI_GUARDED_FIXTURE=1',
                  '--setenv=CI_HOST_NETNS='+os.environ['CI_HOST_NETNS'],
                  '/usr/bin/nsenter','--net=/proc/%d/ns/net'%os.getpid(),*self.argv],check=True,timeout=10)
@@ -53,5 +55,6 @@ class Watch:
     def close(self):
         if self.peer is not None:os.close(self.peer['pidfd']);self.peer=None
         if self.channel is not None:self.channel.close();self.channel=None
-        subprocess.run(['/usr/bin/systemctl','stop',self.unit],check=False,timeout=10)
-        self.path.unlink(missing_ok=True)
+        if self.owns_unit:
+            subprocess.run(['/usr/bin/systemctl','stop',self.unit],check=False,timeout=10)
+            self.path.unlink(missing_ok=True)
