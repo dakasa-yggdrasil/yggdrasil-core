@@ -41,6 +41,12 @@ try:
             time.sleep(.05)
     assert result['pidfd_dead'] and result['cgroup_unpopulated'] and not result['effect_or_send_authority']
     print('PASS original marker, pidfd, exact InvocationID, terminal unit/job and empty cgroup',flush=True)
+    original_mount=anchor.cgroup_root.mount
+    anchor.cgroup_root.mount=('forged',)+original_mount[1:]
+    try:terminal.prove_terminal_for_marker(marker);raise AssertionError('changed cgroup mount accepted')
+    except terminal.Held as error:assert str(error)=='CGROUP_MOUNT_OR_NAMESPACE_CHANGED'
+    finally:anchor.cgroup_root.mount=original_mount
+    print('PASS cgroup mount identity change rejected',flush=True)
     # Attempting to restart the participating writer must leave the marker.
     subprocess.run(['/usr/bin/systemctl','start',unit],check=False,timeout=10)
     deadline=time.monotonic()+5

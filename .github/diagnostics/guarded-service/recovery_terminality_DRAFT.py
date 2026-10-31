@@ -4,7 +4,7 @@ Not a recovery permit. Assumes a separate trusted custodian remains alive and
 retains pidfd from before exit. Does not prove kernel effects, socket transfer,
 marker integrity, netlink quiescence, safe namespace or permission to send.
 """
-import os,select,subprocess,time
+import ctypes,os,select,subprocess,time
 from pathlib import Path
 import guarded_unit_identity as identity
 
@@ -23,12 +23,13 @@ def _systemd(unit):
     return dict(rows)
 
 class SenderAnchor:
-    def __init__(self,verified,boot,netns,capability):
+    def __init__(self,verified,boot,netns,cgroup_root,capability):
         need(capability is _CAPABILITY,'ONLY_AUTHENTICATED_LIVE_SENDER')
-        self.verified=verified;self.boot=boot;self.netns=netns;self.pid=os.getpid()
+        self.verified=verified;self.boot=boot;self.netns=netns;self.cgroup_root=cgroup_root;self.pid=os.getpid()
         self.capability=capability;self.closed=False
     def close(self):
-        if not self.closed:self.closed=True;os.close(self.verified['pidfd'])
+        if not self.closed:
+            self.closed=True;os.close(self.verified['pidfd']);self.cgroup_root.close()
 
 def capture_authenticated(channel,*,unit,invocation,argv,source_sha256):
     """Real peer credentials/systemd/source validation while the peer is live."""
@@ -41,22 +42,75 @@ def capture_authenticated(channel,*,unit,invocation,argv,source_sha256):
         need(again['ActiveState']=='active' and again['MainPID']==str(peer['pid'])
              and again['InvocationID']==invocation and again['ControlGroup']==peer['control_group'],
              'SAME_LIVE_SENDER_AFTER_CAPTURE')
-        return SenderAnchor(peer,boot,netns,_CAPABILITY)
+        return SenderAnchor(peer,boot,netns,_CgroupRoot(peer['control_group']),_CAPABILITY)
     except BaseException:
         os.close(peer['pidfd']);raise
 
-def _populated(cgroup):
-    need(cgroup.startswith('/system.slice/') and '..' not in cgroup.split('/'),'EXACT_SYSTEMD_CGROUP')
-    directory=Path('/sys/fs/cgroup')/cgroup.lstrip('/')
-    try:
-        fd=os.open(directory/'cgroup.events',os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW)
-    except FileNotFoundError:return False
-    try:
-        rows=os.read(fd,4096).decode().splitlines()
-    finally:os.close(fd)
-    values=dict(row.split(' ',1) for row in rows)
-    need(values.get('populated') in ('0','1'),'EXACT_CGROUP_POPULATED_EVENT')
-    return values['populated']=='1'
+class _CgroupRoot:
+    """Pin exact cgroup2 mount and system.slice while authenticated peer lives."""
+    def __init__(self,cgroup):
+        parts=cgroup.split('/')
+        need(len(parts)==3 and parts[0]=='' and parts[1]=='system.slice'
+             and parts[2] and parts[2] not in ('.','..'),'EXACT_SYSTEMD_CGROUP')
+        self.name=parts[2]
+        self.mount_ns=os.readlink('/proc/self/ns/mnt')
+        self.cgroup_ns=os.readlink('/proc/self/ns/cgroup')
+        self.mount=self._mountinfo()
+        self.root=os.open('/sys/fs/cgroup',os.O_RDONLY|os.O_DIRECTORY|os.O_CLOEXEC|os.O_NOFOLLOW)
+        try:
+            self.slice=os.open('system.slice',os.O_RDONLY|os.O_DIRECTORY|os.O_CLOEXEC|os.O_NOFOLLOW,dir_fd=self.root)
+            self.root_stat=self._key(os.fstat(self.root));self.slice_stat=self._key(os.fstat(self.slice))
+            self._validate()
+        except BaseException:
+            if hasattr(self,'slice'):os.close(self.slice)
+            os.close(self.root);raise
+    @staticmethod
+    def _key(st):return (st.st_dev,st.st_ino)
+    @staticmethod
+    def _mountinfo():
+        matches=[]
+        for line in Path('/proc/self/mountinfo').read_text().splitlines():
+            fields=line.split(' - ',1)
+            if len(fields)!=2:continue
+            left=fields[0].split();right=fields[1].split()
+            if len(left)>=6 and len(right)>=1 and left[4]=='/sys/fs/cgroup':
+                matches.append((left[0],left[1],left[2],left[3],left[4],right[0]))
+        need(len(matches)==1 and matches[0][3]=='/' and matches[0][5]=='cgroup2',
+             'EXACT_UNIFIED_CGROUP_MOUNT_REQUIRED')
+        return matches[0]
+    def _validate(self):
+        need(os.readlink('/proc/self/ns/mnt')==self.mount_ns
+             and os.readlink('/proc/self/ns/cgroup')==self.cgroup_ns
+             and self._mountinfo()==self.mount,'CGROUP_MOUNT_OR_NAMESPACE_CHANGED')
+        st=os.stat('/sys/fs/cgroup',follow_symlinks=False)
+        need(self._key(st)==self.root_stat==self._key(os.fstat(self.root)),
+             'CGROUP_ROOT_CHANGED')
+        need(self._key(os.stat('system.slice',dir_fd=self.root,follow_symlinks=False))
+             ==self.slice_stat==self._key(os.fstat(self.slice)),'CGROUP_SLICE_CHANGED')
+        data=ctypes.create_string_buffer(256)
+        libc=ctypes.CDLL(None,use_errno=True)
+        need(libc.fstatfs(self.root,ctypes.byref(data))==0
+             and ctypes.c_long.from_buffer(data).value==0x63677270,'CGROUP2_STATFS_REQUIRED')
+    def populated(self):
+        self._validate()
+        try:
+            directory=os.open(self.name,os.O_RDONLY|os.O_DIRECTORY|os.O_CLOEXEC|os.O_NOFOLLOW,dir_fd=self.slice)
+        except FileNotFoundError:
+            # Absence only counts after checking the same real mount/slice twice.
+            self._validate()
+            try:os.stat(self.name,dir_fd=self.slice,follow_symlinks=False)
+            except FileNotFoundError:return False
+            raise Held('CGROUP_APPEARED_DURING_ABSENCE_CHECK')
+        try:
+            fd=os.open('cgroup.events',os.O_RDONLY|os.O_CLOEXEC|os.O_NOFOLLOW,dir_fd=directory)
+            try:rows=os.read(fd,4096).decode().splitlines()
+            finally:os.close(fd)
+            values=dict(row.split(' ',1) for row in rows)
+            need(values.get('populated') in ('0','1'),'EXACT_CGROUP_POPULATED_EVENT')
+            self._validate()
+            return values['populated']=='1'
+        finally:os.close(directory)
+    def close(self):os.close(self.slice);os.close(self.root)
 
 def _pidfd_terminal(pidfd):
     poll=select.poll();poll.register(pidfd,select.POLLIN|select.POLLHUP|select.POLLERR)
@@ -77,9 +131,9 @@ def prove_terminal(anchor):
          and first['MainPID']=='0' and first['ActiveState'] in ('inactive','failed')
          and first['SubState'] in ('dead','failed') and first['Job'] in ('','0'),
          'SAME_TERMINAL_INVOCATION_WITHOUT_JOB_REQUIRED')
-    need(not _populated(v['control_group']),'SENDER_CGROUP_OR_DESCENDANTS_STILL_POPULATED')
+    need(not anchor.cgroup_root.populated(),'SENDER_CGROUP_OR_DESCENDANTS_STILL_POPULATED')
     second=_systemd(v['unit'])
-    need(second==first and not _populated(v['control_group']) and _pidfd_terminal(v['pidfd']),
+    need(second==first and not anchor.cgroup_root.populated() and _pidfd_terminal(v['pidfd']),
          'TERMINAL_STATE_MUST_REMAIN_STABLE')
     return {'schema':'ci_original_sender_terminality_v1','unit':v['unit'],'pid':v['pid'],
             'start_ticks':v['start_ticks'],'invocation_id':v['invocation_id'],
