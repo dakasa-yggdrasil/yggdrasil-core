@@ -1,0 +1,16 @@
+name: Disposable thread priority inheritance diagnostic
+on:
+  push:
+    branches: [codex/nice-inheritance-diagnostic-20261031]
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify thread inheritance on disposable Linux runner
+        run: sudo python3 -B .github/diagnostics/nft-priority/inheritance_experiment.py
