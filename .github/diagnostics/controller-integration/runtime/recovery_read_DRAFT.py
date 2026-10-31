@@ -101,10 +101,15 @@ def sample_attached(coordinator,netlink,*,expected_marker,expected_genid,records
                  records=records,reference=reference,cache=cache)
     rules=nl.rules(netlink,'admit_deadline')
     need(len(rules)==2,'TWO_OBSERVED_GATE_RULES_REQUIRED')
-    for rec,handle,(fields,body) in zip(records,receipt['handles'],rules):
+    need(type(receipt.get('programs')) is list and len(receipt['programs'])==2,
+         'RECEIPT_PROGRAM_CENSUS_REQUIRED')
+    for rec,original,handle,(fields,body) in zip(records,receipt['programs'],receipt['handles'],rules):
+        sender_fd=rec.get('sender_program_fd',rec['program_fd'])
+        need(all(rec.get(k)==original.get(k) for k in ('program_id','program_tag','map_id'))
+             and sender_fd==original.get('program_fd'),'RECEIPT_AND_PINNED_PROGRAM_MISMATCH')
         attrs=dict((k&0x3fff,v) for k,v in fields)
         need(struct.unpack('>Q',attrs[3])[0]==handle
-             and struct.pack('<HHi',2,0,rec['program_fd']) in body,'SAME_RULE_HANDLE_AND_FD_REFERENCE')
+             and struct.pack('<HHi',2,0,sender_fd) in body,'SAME_RULE_HANDLE_AND_FD_REFERENCE')
     raw=nl.cmd('/usr/sbin/nft','-a','-j','list','ruleset')
     transition.verify_guarded(original_pin,raw,observed_chain_handle=receipt['chain'],
                               observed_rule_handles=tuple(receipt['handles']))

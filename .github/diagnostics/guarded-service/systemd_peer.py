@@ -12,7 +12,7 @@ if runtime:
     import drain_marker_v3_DRAFT as v3
     coord=v3.CoordinatorV3(os.environ['CI_TERM_COORD'])
     core=types.SimpleNamespace(native_identity='old/container',address='10.244.1.2',expires=time.monotonic()+60)
-    coord.begin(core,[core])
+    intent=coord.begin(core,[core])
 child_path=os.environ.get("CI_TERM_CHILD_PIDFILE")
 if child_path:
     child=os.fork()
@@ -22,7 +22,8 @@ if child_path:
 s=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
 s.connect(sys.argv[1])
 if os.environ.get('CI_TERM_TRANSFER_BPF')=='1':
-    import guarded_nl as nl
+    import hashlib
+    import guarded_nl as nl,guarded_generation as generation,native_structure,transition_structure_DRAFT as transition
     line=bytearray()
     while not line.endswith(b'\n'):
         part=s.recv(1)
@@ -30,8 +31,15 @@ if os.environ.get('CI_TERM_TRANSFER_BPF')=='1':
         line.extend(part)
     requested=json.loads(line);records=[]
     try:
-        for role in ('inbound','reverse'):records.append(nl.make_program(requested[role]))
-        raw=(json.dumps(records,sort_keys=True)+'\n').encode()
+        for role in ('inbound','reverse'):records.append(nl.make_program(requested['maps'][role]))
+        initial=nl.cmd('/usr/sbin/nft','-a','-j','list','ruleset')
+        objects,_=native_structure._objects(initial)
+        native_structure.COMPILED_NATIVE_AST_SHA256=hashlib.sha256(native_structure._structure(objects,keep_handles=False)).hexdigest()
+        receipts=Path(os.environ['CI_TERM_RECEIPTS']);receipts.mkdir(mode=0o700)
+        emitter=generation.GenerationEmitter(initial_raw=initial,transition=transition,receipt_dir=receipts,
+                    host_netns=os.environ['CI_HOST_NETNS'])
+        receipt=emitter.submit(requested,records,drain_permit=coord.barrier(intent,core,[core]))
+        raw=(json.dumps({'records':records,'receipt':receipt},sort_keys=True)+'\n').encode()
         fds=array.array('i',[r[key] for r in records for key in ('program_fd','map_fd')])
         if s.sendmsg([raw],[(socket.SOL_SOCKET,socket.SCM_RIGHTS,fds)])!=len(raw):
             raise RuntimeError('INCOMPLETE_BPF_FD_TRANSFER')

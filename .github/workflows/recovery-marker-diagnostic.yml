@@ -20,6 +20,8 @@ jobs:
           trap 'sudo rm -rf "$target"' EXIT
           sudo cp .github/diagnostics/guarded-service/{guarded_unit_identity.py,recovery_terminality_DRAFT.py,verify_recovery_terminality.py,systemd_peer.py} "$target/"
           sudo cp -R .github/diagnostics/controller-integration/runtime "$target/runtime"
+          sudo cp .github/diagnostics/controller-integration/coverage.py "$target/coverage.py"
+          sudo modprobe xt_bpf
           sudo chmod -R go-w "$target"
           sudo unshare --net --mount --propagation private -- /usr/bin/python3 -B "$target/verify_recovery_terminality.py"
       - name: Verify independent custody, socket lifetime and restart fence

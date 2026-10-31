@@ -1,12 +1,13 @@
 """Exercise terminal sender proof against live systemd units in CI only."""
-import array,fcntl,hashlib,json,os,signal,socket,subprocess,sys,tempfile,time,uuid
+import array,fcntl,hashlib,importlib.util,json,os,signal,socket,subprocess,sys,tempfile,time,uuid
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent/'runtime'))
 import drain_marker_v3_DRAFT as v3
 import guarded_unit_identity as identity
 import recovery_terminality_DRAFT as terminal
 import ci_reader_fixture,guarded_nl as nl,guarded_program_identity_DRAFT as program
-import guarded_sources as sources,native_io,nft_owner as nft,recovery_read_DRAFT as recovery
+import guarded_sources as sources,native_io,native_structure,nft_owner as nft,recovery_read_DRAFT as recovery
+import transition_structure_DRAFT as transition
 
 root=Path(__file__).resolve().parent;peer=(root/'systemd_peer.py').resolve();path=root/'terminal-peer.sock'
 coord=v3.CoordinatorV3(root/'coord');coord.initialize_for_ci()
@@ -18,7 +19,11 @@ def endpoints(_):
           [('core','10.244.1.2'),('broker','172.18.1.2'),('rds','172.18.1.3'),('redis','172.18.1.4')]]
     return rows,[rows[0]],[nft.PrometheusSource('10.244.1.9',now,now+20,'synthetic')]
 cache=ci_reader_fixture.start(endpoints)
-subprocess.run(['/usr/sbin/nft','add','table','ip','ci_custody_read'],check=True,timeout=5)
+subprocess.run(['/usr/sbin/nft','-f','-'],input=nft.render((),now=time.monotonic(),table_exists=False).encode(),check=True,timeout=5)
+initial=nl.cmd('/usr/sbin/nft','-a','-j','list','ruleset');objects,_=native_structure._objects(initial)
+native_structure.COMPILED_NATIVE_AST_SHA256=hashlib.sha256(native_structure._structure(objects,keep_handles=False)).hexdigest()
+original=transition.OriginalPin(initial)
+spec=importlib.util.spec_from_file_location('ci_recovery_coverage',root/'coverage.py');coverage=importlib.util.module_from_spec(spec);spec.loader.exec_module(coverage)
 netlink=socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,12);netlink.bind((0,0));netlink.settimeout(4)
 genid=nl.genid(netlink);reference=program.GuardianProgramReference();wanted=sources.build_expected(cache)
 records=[]
@@ -32,20 +37,25 @@ def launch():
     subprocess.run(['/usr/bin/systemctl','start',unit],check=True,timeout=10)
     channel,_=server.accept();channels.append(channel);return channel
 try:
-    unit_file.write_text('[Service]\nType=simple\nKillMode=process\nNetworkNamespacePath=/proc/'+str(os.getpid())+'/ns/net\nRuntimeMaxSec=30s\nEnvironment=CI_TERM_WRITER_LOCK='+str(writer_lock)+'\nEnvironment=CI_TERM_TRANSFER_BPF=1\nEnvironment=CI_CONTROLLER_UNIT='+unit+'\nEnvironment=CI_TERM_CHILD_PIDFILE='+str(child_path)+'\nEnvironment=CI_TERM_RUNTIME='+str(root/'runtime')+'\nEnvironment=CI_TERM_COORD='+str(coord.directory)+'\nExecStart='+' '.join(argv)+'\n')
+    unit_file.write_text('[Service]\nType=simple\nKillMode=process\nNetworkNamespacePath=/proc/'+str(os.getpid())+'/ns/net\nRuntimeMaxSec=30s\nEnvironment=CI_TERM_WRITER_LOCK='+str(writer_lock)+'\nEnvironment=CI_GUARDED_FIXTURE=1\nEnvironment=CI_HOST_NETNS='+os.readlink('/proc/1/ns/net')+'\nEnvironment=CI_TERM_RECEIPTS='+str(root/'real-receipts')+'\nEnvironment=CI_TERM_TRANSFER_BPF=1\nEnvironment=CI_CONTROLLER_UNIT='+unit+'\nEnvironment=CI_TERM_CHILD_PIDFILE='+str(child_path)+'\nEnvironment=CI_TERM_RUNTIME='+str(root/'runtime')+'\nEnvironment=CI_TERM_COORD='+str(coord.directory)+'\nExecStart='+' '.join(argv)+'\n')
     subprocess.run(['/usr/bin/systemctl','daemon-reload'],check=True,timeout=10)
     channel=launch();props=identity._properties(unit);digest=hashlib.sha256(peer.read_bytes()).hexdigest()
     anchor=terminal.capture_authenticated(channel,unit=unit,invocation=props['InvocationID'],argv=argv,source_sha256=digest)
     marker=terminal.capture_marker(anchor,coord)
-    requested={role:[(key.hex(),expiry) for key,expiry in wanted[role].items()] for role in ('inbound','reverse')}
+    entries,cores,prom,errors,_=cache.snapshot();assert not errors
+    def encode(x):return {'kind':getattr(x,'kind','prom'),'address':x.address,'port':getattr(x,'port',0),'deadline':int(x.expires*1e9)}
+    requested={'maps':{role:[(key.hex(),expiry) for key,expiry in wanted[role].items()] for role in ('inbound','reverse')},
+               'backends':[encode(x) for x in entries],'cores':[encode(x) for x in cores],'prom':[encode(x) for x in prom]}
     channel.sendall((json.dumps(requested,sort_keys=True)+'\n').encode())
     raw,anc,flags,_=channel.recvmsg(65536,socket.CMSG_SPACE(4*array.array('i').itemsize))
     if not raw.endswith(b'\n') or flags&(socket.MSG_CTRUNC|socket.MSG_TRUNC) or len(anc)!=1:
         raise RuntimeError('EXACT_BPF_DESCRIPTOR_TRANSFER_REQUIRED')
     level,kind,data=anc[0];fds=array.array('i');fds.frombytes(data[:len(data)-(len(data)%fds.itemsize)])
     if level!=socket.SOL_SOCKET or kind!=socket.SCM_RIGHTS or len(fds)!=4:raise RuntimeError('EXACT_FOUR_BPF_FDS_REQUIRED')
-    records=json.loads(raw);assert len(records)==2
+    transferred=json.loads(raw);records=transferred['records'];receipt=transferred['receipt'];assert len(records)==2
+    genid=receipt['after']
     for record,pf,mf in zip(records,fds[::2],fds[1::2]):
+        record['sender_program_fd']=record['program_fd']
         record['program_fd'],record['map_fd']=pf,mf
     childfd=os.pidfd_open(int(child_path.read_text()))
     try:terminal.prove_terminal(anchor);raise AssertionError('live sender accepted')
@@ -71,13 +81,16 @@ try:
     with open(writer_lock,'rb') as fence:
         fcntl.flock(fence,fcntl.LOCK_EX|fcntl.LOCK_NB)
         terminal.prove_terminal_for_marker(marker)
-        sample=recovery.sample(coord,netlink,expected_marker=marker.key,expected_genid=genid,
-                               records=records,reference=reference,cache=cache)
+        sample=recovery.sample_attached(coord,netlink,expected_marker=marker.key,expected_genid=genid,
+                               records=records,reference=reference,cache=cache,original_pin=original,
+                               receipt=receipt,coverage=coverage)
         terminal.prove_terminal_for_marker(marker)
-        assert not sample['effect_or_recovery_authority'] and not sample['nft_attachment_verified']
+        assert not sample['effect_or_recovery_authority'] and not sample['kernel_bpf_pointer_proven']
+        assert sample['nft_rule_fd_reference_observed'] and sample['four_nft_collections_joined']
         print('PASS same custodian: terminal marker, exclusive writer flock, real genid, frozen BPF and fresh Readers',flush=True)
         print('PASS BPF FDs received from authenticated sender remain readable after its death',flush=True)
-        print('BOUNDARY fixture-created maps are not yet proven attached to nft rules',flush=True)
+        print('PASS same sample joins original 50 structure, rule FD references and four nft collections',flush=True)
+        print('BOUNDARY sender ACK is known; hidden BPF pointer and receipt trust remain unproven',flush=True)
     # Real private mount namespace; no mount change propagates to host.
     with tempfile.TemporaryDirectory(prefix='wrong-cgroup-mount-') as wrong:
         subprocess.run(['/usr/bin/mount','--bind',wrong,'/sys/fs/cgroup'],check=True,timeout=5)
