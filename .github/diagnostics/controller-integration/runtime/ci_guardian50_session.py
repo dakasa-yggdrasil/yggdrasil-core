@@ -3,7 +3,7 @@
 No production authority. Guardian and controller are separate systemd peers;
 synthetic DNS/topology and a fixture-derived 47 pin remain explicit.
 """
-import base64,hashlib,importlib.util,json,os,struct,threading,time,types
+import base64,hashlib,importlib.util,json,os,socket,struct,threading,time,types
 from pathlib import Path
 import ci_reader_fixture,guarded_nl as nl,guarded_sources,guarded_unit_identity as identity
 import guarded_verifier,guarded_live_observation,transition_structure_DRAFT as trans
@@ -183,6 +183,24 @@ def serve(channel,listener):
                              'state':reg.state,'production_authority':False})
             elif kind=='STOP_DNS':
                 readers.stop_dns();publish({'event':'DNS_STOPPED','dns_stop_ns':time.monotonic_ns(),'production_authority':False})
+            elif kind=='RESTORE_DNS':
+                # Fresh DNS/route observations must not clear UNKNOWN or turn
+                # the old permit into authority for a new kernel effect.
+                readers.restart_dns();deadline=time.monotonic()+8;fresh=None
+                while time.monotonic()<deadline:
+                    try:fresh=guarded_sources.build_expected(cache);break
+                    except guarded_sources.Held:time.sleep(.025)
+                if fresh is None:raise RuntimeError('FRESH_DNS_OBSERVATION_NOT_READY')
+                with reg.lock:
+                    assert reg.state=='UNKNOWN' and reg.pending is not None and reg.pending.sent
+                net=socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,12);net.bind((0,0));net.settimeout(5)
+                try:
+                    before=nl.genid(net)
+                    snapshot=coverage.kernel_text(nl.cmd('/usr/sbin/nft','-a','list','table','inet','dakasa_capacity_network'))
+                    assert all(not rows for rows in snapshot['dynamic_collections'].values()) and nl.genid(net)==before
+                finally:net.close()
+                publish({'event':'DNS_RESTORED','genid':before,'registry_state':reg.state,
+                         'source_epoch':fresh['invalidation_epoch'],'production_authority':False})
             elif kind=='STOP':break
             else:raise RuntimeError('UNEXPECTED_GUARDIAN_CONTROL_COMMAND')
     finally:

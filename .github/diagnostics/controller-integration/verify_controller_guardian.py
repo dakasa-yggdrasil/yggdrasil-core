@@ -289,6 +289,9 @@ def main():
             finally:current.close()
             kernel_after=coverage.kernel_text(cmd('/usr/sbin/nft','-a','list','table','inet','dakasa_capacity_network'))
             assert all(not rows for rows in kernel_after['dynamic_collections'].values())
+            restored=watch.restore_dns()
+            assert restored['registry_state']=='UNKNOWN' and restored['genid']==denied_by_guardian['genid']
+            print('PASS real DNS restored and reobserved; prior uncertain Guardian reservation remains UNKNOWN',flush=True)
             deny_ms=(denied_by_guardian['deny_ack_ns']-denied_by_guardian['failure_ns'])/1e6
             print('PASS concurrent Reader failure order=%s deny_ack_unknown=%s: distinct Guardian deny and no accepted stale successor; deny_ack_ms=%.2f'%(failure_order,uncertain_deny,deny_ms),flush=True)
         finally:

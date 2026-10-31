@@ -48,7 +48,7 @@ class Watch:
         while True:
             row=self.read()
             if row['event']==expected:return row
-            if row['event']=='HOLD' and command=='STOP_DNS':
+            if row['event']=='HOLD' and command in ('STOP_DNS','RESTORE_DNS'):
                 self.last_hold=row;continue
             if row['event']=='DENIED' and command=='STOP_DNS':
                 self.pending_deny=row;continue
@@ -73,6 +73,7 @@ class Watch:
             if row['event']=='DENIED':row['dns_stop_ns']=stopped['dns_stop_ns'];return row
             if row['event']=='HOLD':self.last_hold=row;continue
             if row['event'] not in ('SAMPLE','FINISHED'):raise RuntimeError('AUTONOMOUS_DENY_FAILED:'+str(row))
+    def restore_dns(self):return self.control('RESTORE_DNS','DNS_RESTORED')
     def expect_hold(self):
         deadline=time.monotonic()+8
         while time.monotonic()<deadline:
