@@ -93,7 +93,12 @@ def main():
         receipts=HERE/'receipts';receipts.mkdir(mode=0o700)
         first=generation.GenerationEmitter(initial_raw=raw,transition=trans,receipt_dir=receipts,host_netns=os.environ['CI_HOST_NETNS'])
         transferred=records;records=[]
-        emitted=first.submit(plan,transferred)
+        try:emitted=first.submit(plan,transferred)
+        except trans.Rejected:
+            probe=json.loads(cmd('/usr/sbin/nft','-a','-j','list','ruleset'))
+            gates=[x for x in probe['nftables'] if x.get('rule',{}).get('chain')=='admit_deadline']
+            print('CI_GATE_JSON',json.dumps(gates,sort_keys=True),flush=True)
+            raise
         assert emitted['ok'] and first.state=='AWAITING_FIXTURE_VERIFICATION'
         try:first.submit(plan,[]);raise AssertionError('unverified generation allowed another send')
         except RuntimeError as e:assert str(e)=='ONLY_READY_SAME_OWNER'
