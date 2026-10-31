@@ -126,6 +126,7 @@ class CoordinatorV3:
         with self.base.locked(nonblocking=True) as state:
             if self.marker_exists():raise FenceError('GUARDED_INTENT_PENDING')
             self.base.require_allowed(state,uid,core.address)
+            self.base.require_anchor(state,(core,),sources)
             for source in sources:self.base.require_allowed(state,source.native_identity.split('/',1)[0],source.address)
             writer_lease.validate()
             record['lock_dev'],record['lock_ino']=self.base._lock_identity
@@ -189,6 +190,7 @@ class CoordinatorV3:
         if core.expires<=now+.250 or any(x.expires<=now+.250 for x in sources):
             raise FenceError('INTENT_READY_EVIDENCE_EXPIRED')
         self.base.require_allowed(state,uid,core.address)
+        self.base.require_anchor(state,(core,),sources)
         for source in sources:self.base.require_allowed(state,source.native_identity.split('/',1)[0],source.address)
     def barrier(self,intent,core,sources):
         # Recheck immediately before prepare/send. No send or long fsync under

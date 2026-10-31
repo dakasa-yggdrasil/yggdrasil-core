@@ -154,6 +154,14 @@ with tempfile.TemporaryDirectory(prefix='ci-drain-retired-') as tmp:
     with coord.admission_or_other_writer() as state:
         coord.base.retire(state,old,'10.244.1.1',anchor_uid=new,anchor_address='10.244.1.2')
     assert not coord.marker_exists()
+    with coord.writer_lease() as lease:
+        third=types.SimpleNamespace(kind='core',native_identity='00000000-0000-0000-0000-000000000003/container',
+                                    address='10.244.1.3',expires=time.monotonic()+20)
+        must_hold(lambda:coord.begin(third,[third],writer_lease=lease),'ACTIVE_ANCHOR_MUST_REMAIN_SELECTED')
+    with coord.admission_or_other_writer() as state:
+        must_hold(lambda:coord.base.retire(state,'00000000-0000-0000-0000-000000000003',
+                    '10.244.1.3',anchor_uid='00000000-0000-0000-0000-000000000004',
+                    anchor_address='10.244.1.4'),'ACTIVE_ANCHOR_CANNOT_BE_REPLACED')
     import nft_owner as nft
     nft.CI_DRAIN_COORDINATION=coord
     stale=types.SimpleNamespace(kind='core',native_identity=old+'/container',address='10.244.1.1')

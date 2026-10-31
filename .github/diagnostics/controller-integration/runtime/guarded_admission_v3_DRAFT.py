@@ -24,14 +24,14 @@ ROOT=HERE.parent
 CI_SOURCE_SHA256 = {'ci_guardian50_session.py': 'f36bc31d2e2920ca0bcc969c77d3591bdb83b3782808aa85d7e4cfd5dfed152a',
  'ci_nl_probe.py': '92ef4d57f659f2683af06640be77e0dc04eb775d6fd5670b35fa720af3a546de',
  'coverage.py': 'c13f2d872f4b9a8351aa2999372ac8f2fd472f4db8e015810b3d6c28a596bfa6',
- 'drain_marker_v3_DRAFT.py': 'f2a33a9c51ce991f22f747da2783964c1cca948935be4b1faf328c6c3ac71670',
+ 'drain_marker_v3_DRAFT.py': '2c9c5d000ee6bc5dd644b1a1cd1fef769229d50c311fdc7d4a2de4001cef23f9',
  'guarded_live_observation.py': '10686a406a02d473e7d47b89d74c1b98dc7969bb82cb1459242739b2e9e6ce2c',
  'guarded_nl.py': '6a4fd005a7bd053ca71c424672dde85d87ca496510b01f6ebdc97a91f607b71a',
  'guarded_refresh_registry_DRAFT.py': 'e15753b01adcbe4fe23d993496066de8b47a65fd4efdf422c84ceb45f784d71f',
  'guarded_sources.py': 'e8935b8406ba4b4571d7779d65c2f280a3ed9f2aea128ce58079c2a0b9b40a66',
  'guarded_verifier.py': '66f19e364e627491fee88d61362c08fb860c29667e23654a447ab55691d74f41',
  'native_structure.py': '7da5d5ef6b543b5a8ec54bf92520e5999f06ae816c31d7b377ee51c1d2738ebf',
- 'nft_owner.py': '22119c6f0f7718ff1354eaaa366d283ed9cc64b40011c81d4df0c82ebc69a394',
+ 'nft_owner.py': '9572d99121aad82ab148d70e7a1b6c576f716794288f623d47c08e891e4153f7',
  'observations.py': '1d53464bb58ca124dc6cf908298e4ace7bc26a5ed2ad4fcb3cdb6565b8428b33',
  'transition_structure_DRAFT.py': '2bc9ca68845b27c91822b3bd8004d54c2469f866e50c134f391495e7f0f9e32e'}
 

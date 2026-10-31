@@ -100,13 +100,21 @@ def main():
     # CI owns this entire namespace and no other mutator. This does not establish
     # those prerequisites or any receipt/attachment truth in production.
     cmd('/usr/sbin/nft','add','table','ip','ci_unrelated')
-    cache.rows=endpoints(3);cache.key='new-observation'
-    new,newkey,newlease=cycle(cache,key);assert new['applied'] and newlease.dispatched and newkey=='new-observation'
+    third=endpoints(3);anchor=endpoints(2)
+    cache.rows=(third[0],anchor[1],anchor[2]);cache.key='third-unretired'
+    new,newkey,newlease=cycle(cache,key)
+    assert new['applied'] and new['core_pending'] and newlease.dispatched and newkey==key
     fresh=cmd('/usr/sbin/nft','-a','list','table','inet','dakasa_capacity_network')
-    assert b'10.244.1.3' in fresh and b'10.244.1.2' not in fresh
+    assert b'10.244.1.2' in fresh and b'10.244.1.3' not in fresh
+    print('PASS third unretired Core cannot replace fenced anchor before DELETE',flush=True)
     snapshot,_=observer.kernel();assert snapshot['all_four_backends_and_reverse_sources_positive']
     print('PASS actual cached_cycle/native nft, Guardian.kernel, unknown effect no replay, fresh distinct reconciliation',flush=True)
     print('BOUNDARY: private CI namespace; cache, owner and compiled AST pin are fixtures; legacy relative TTL',flush=True)
+    # The following independent BPF fixture uses a fresh, isolated fence.
+    # Preserve the earlier fixture directory; this is not an anchor release.
+    (HERE/'drain-coordinator').rename(HERE/'drain-coordinator-anchored-fixture')
+    drain=drain_v3.CoordinatorV3(HERE/'drain-coordinator');drain.initialize_for_ci()
+    controller.CI_DRAIN_COORDINATION=drain;native_io.CI_DRAIN_COORDINATION=drain;nft.CI_DRAIN_COORDINATION=drain
     # Experiment with the actual LAB 47->50 sender, fixed to this CI namespace.
     # The CI fixture supplies observation/lease authority and is not a service.
     import guarded_nl as nl, guarded_generation as generation, transition_structure_DRAFT as trans

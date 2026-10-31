@@ -558,6 +558,9 @@ def native_batch(backends, *, apply=False, core_sources=(), prometheus_sources=(
                 try:coord.base.require_allowed(state,item.native_identity.split('/',1)[0],item.address)
                 except FenceError as error:
                     raise NoSend('DRAFT_RETIRED_CORE_SOURCE',started,time.monotonic()) from error
+        try:coord.base.require_anchor(state,backends,core_sources)
+        except FenceError as error:
+            raise NoSend('DRAFT_ACTIVE_ANCHOR_REQUIRED',started,time.monotonic()) from error
         with coord.typed_native_send():
             return _native_batch_impl(backends,apply=apply,core_sources=core_sources,
                                       prometheus_sources=prometheus_sources,_ownership=_ownership)
@@ -572,6 +575,10 @@ def native_refresh(backends, *, core_sources=(), prometheus_sources=(), apply, _
         core=[item for item in backends if item.kind=='core']
         require(len(core)<=1,'DRAFT_ONE_CORE_BACKEND')
         retired=False;eligible=[]
+        try:coord.base.require_anchor(state,backends,core_sources)
+        except FenceError as error:
+            if str(error)!='ACTIVE_ANCHOR_MUST_REMAIN_SELECTED':raise
+            retired=True
         for item in core:
             try:coord.base.require_allowed(state,item.native_identity.split('/',1)[0],item.address)
             except FenceError as error:
@@ -598,6 +605,8 @@ def native_initialize_static(*, apply, _ownership):
     coord=_ci_coordination();started=time.monotonic()
     with ExitStack() as stack:
         _enter_writer_lease(stack,coord,started)
-        _enter_writer(stack,coord,started)
+        state=_enter_writer(stack,coord,started)
+        if state['anchor'] is not None:
+            raise NoSend('DRAFT_ACTIVE_ANCHOR_REQUIRED',started,time.monotonic())
         with coord.typed_native_send():
             return _native_initialize_static_impl(apply=apply,_ownership=_ownership)

@@ -193,6 +193,8 @@ class Coordinator:
             if anchor_uid in retired or anchor_address in retired.values():
                 raise FenceError('RETIRED_ANCHOR')
             anchor = {'uid': anchor_uid, 'address': anchor_address}
+        if state['anchor'] is not None and anchor != state['anchor']:
+            raise FenceError('ACTIVE_ANCHOR_CANNOT_BE_REPLACED')
         updated = {'version': 2, 'retired': retired, 'anchor': anchor}
         self._write(updated)
         state.update(updated)
@@ -201,3 +203,13 @@ class Coordinator:
     def require_allowed(state, uid, address):
         if uid in state['retired'] or address in state['retired'].values():
             raise FenceError('RETIRED_BACKEND')
+
+    @staticmethod
+    def require_anchor(state, backends, sources):
+        anchor=state['anchor']
+        if anchor is None:return
+        cores=[x for x in backends if x.kind=='core']
+        match=lambda x: (x.native_identity.split('/',1)[0]==anchor['uid']
+                         and x.address==anchor['address'])
+        if len(cores)!=1 or not match(cores[0]) or not any(match(x) for x in sources):
+            raise FenceError('ACTIVE_ANCHOR_MUST_REMAIN_SELECTED')
