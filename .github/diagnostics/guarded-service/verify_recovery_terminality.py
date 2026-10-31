@@ -5,6 +5,7 @@ sys.path.insert(0,str(Path(__file__).resolve().parent/'runtime'))
 import drain_marker_v3_DRAFT as v3
 import guarded_unit_identity as identity
 import recovery_terminality_DRAFT as terminal
+import deny_recovery_DRAFT as deny
 import ci_reader_fixture,guarded_nl as nl,guarded_program_identity_DRAFT as program
 import guarded_sources as sources,native_io,native_structure,nft_owner as nft,recovery_read_DRAFT as recovery
 import transition_structure_DRAFT as transition
@@ -123,14 +124,21 @@ try:
         print('PASS BPF FDs received from authenticated sender remain readable after its death',flush=True)
         print('PASS same sample joins original 50 structure, rule FD references and four nft collections',flush=True)
         print('BOUNDARY ACK remains UNKNOWN; hidden BPF pointer and receipt trust remain unproven',flush=True)
+        denied=deny.run(marker_anchor=marker,writer_lock=writer_lock,fence=fence,
+            old_directory=root/'real-receipts',sender_records=sender_records,expected_genid=genid,
+            original_pin=original,coverage=coverage,deny_dir=root/'distinct-deny',
+            simulate_ack_loss=os.environ.get('CI_DENY_UNKNOWN')=='1')
+        assert denied['marker_retained'] and denied['original_ack_unknown'] and not denied['production_authority']
+        assert denied['deny_wire_sha256']!=denied['old_wire_sha256']
+        print('PASS distinct deny batch leaves four nft collections empty and both unknown evidence and marker retained; deny_ack_unknown='+str(denied['deny_ack_unknown']),flush=True)
         subprocess.run(['/usr/sbin/nft','add','table','ip','ci_concurrent_external_writer'],check=True,timeout=5)
         try:
-            recovery.sample_attached(coord,netlink,expected_marker=marker.key,expected_genid=genid,
-                records=records,reference=reference,cache=cache,original_pin=original,receipt=receipt,coverage=coverage)
+            recovery.sample(coord,netlink,expected_marker=marker.key,expected_genid=denied['after_genid'],
+                records=records,reference=reference,cache=cache)
             raise AssertionError('external genid change accepted')
         except recovery.Held as error:assert str(error)=='ORIGINAL_GENID_CHANGED'
         assert coord.marker.exists() and not (root/'real-receipts'/'ACK-001.json').exists()
-        print('PASS external netlink mutation invalidates sample; UNKNOWN marker remains and wire is never replayed',flush=True)
+        print('PASS external netlink mutation invalidates sample; UNKNOWN marker remains and original wire is never replayed',flush=True)
     # Real private mount namespace; no mount change propagates to host.
     with tempfile.TemporaryDirectory(prefix='wrong-cgroup-mount-') as wrong:
         subprocess.run(['/usr/bin/mount','--bind',wrong,'/sys/fs/cgroup'],check=True,timeout=5)
