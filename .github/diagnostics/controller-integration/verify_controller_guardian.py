@@ -76,4 +76,44 @@ def main():
     snapshot,_=observer.kernel();assert snapshot['all_four_backends_and_reverse_sources_positive']
     print('PASS actual cached_cycle/native nft, Guardian.kernel, unknown effect no replay, fresh distinct reconciliation',flush=True)
     print('BOUNDARY: private CI namespace; cache, owner and compiled AST pin are fixtures; legacy relative TTL',flush=True)
+    # Experiment with the actual LAB 47->50 sender, fixed to this CI namespace.
+    # The CI fixture supplies observation/lease authority and is not a service.
+    import guarded_nl as nl, guarded_generation as generation, transition_structure_DRAFT as trans
+    native_structure.COMPILED_NATIVE_AST_SHA256=expected
+    raw=cmd('/usr/sbin/nft','-a','-j','list','ruleset')
+    original=trans.OriginalPin(raw)
+    records=[];first=None;recovery=None
+    try:
+        now=time.monotonic_ns();expiry=now+15_000_000_000
+        maps={'inbound':[('01'*12,expiry)],'reverse':[('02'*12,expiry)]}
+        for role in ('inbound','reverse'):records.append(nl.make_program(maps[role]))
+        rows,cores,prom=cache.rows
+        def encode(row):return {'kind':getattr(row,'kind','prom'),'address':row.address,'port':getattr(row,'port',0),'deadline':int(row.expires*1e9)}
+        plan={'maps':maps,'backends':[encode(x) for x in rows],'cores':[encode(x) for x in cores],'prom':[encode(x) for x in prom]}
+        receipts=HERE/'receipts';receipts.mkdir(mode=0o700)
+        first=generation.GenerationEmitter(initial_raw=raw,transition=trans,receipt_dir=receipts,host_netns=os.environ['CI_HOST_NETNS'])
+        emitted=first.submit(plan,records);records=[]
+        assert emitted['ok'] and first.state=='AWAITING_FIXTURE_VERIFICATION'
+        try:first.submit(plan,[]);raise AssertionError('unverified generation allowed another send')
+        except RuntimeError as e:assert str(e)=='ONLY_READY_SAME_OWNER'
+        # Independently changed foreign nft object: never infer that the old
+        # receipt proves the present generation. The diagnostic recovery sender
+        # is distinct and submits a deny-only batch using fresh expired maps.
+        cmd('/usr/sbin/nft','add','table','ip','ci_foreign_after_50')
+        recovery=generation.GenerationEmitter(initial_raw=raw,transition=trans,receipt_dir=receipts,
+                                               host_netns=os.environ['CI_HOST_NETNS'],recover_fixture=True)
+        deny_maps={'inbound':[('03'*12,1)],'reverse':[('04'*12,1)]}
+        for role in ('inbound','reverse'):records.append(nl.make_program(deny_maps[role]))
+        denied=recovery.submit({'maps':deny_maps,'backends':[],'cores':[],'prom':[]},records);records=[]
+        assert denied['ok'] and denied['genid']!=emitted['after'] and denied['wire_sha256']!=emitted['wire_sha256']
+        text=cmd('/usr/sbin/nft','-a','list','table','inet','dakasa_capacity_network')
+        observed=coverage.kernel_text(text)
+        assert all(not values for values in observed['dynamic_collections'].values())
+        print('PASS actual BPF-backed 47-to-50 sender, unverified hold, foreign genid and distinct deny-only fenced transaction',flush=True)
+        print('BOUNDARY: fake authority and AST; deny-only recovery, not live Guardian or positive recovery',flush=True)
+    finally:
+        for rec in records:
+            os.close(rec['program_fd']);os.close(rec['map_fd'])
+        if recovery is not None:recovery.close_private_fixture()
+        if first is not None:first.close_private_fixture()
 if __name__=='__main__':main()
