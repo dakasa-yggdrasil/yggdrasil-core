@@ -43,6 +43,23 @@ class Watch:
             if b==b'\n':return json.loads(buf)
             buf.extend(b)
         raise RuntimeError('GUARDIAN_WATCH_OUTPUT_TOO_LARGE')
+    def control(self,command,expected,**fields):
+        self.channel.sendall(guarded_nl.canon({'command':command,**fields}))
+        while True:
+            row=self.read()
+            if row['event']==expected:return row
+            if row['event'] not in ('SAMPLE','FINISHED'):raise RuntimeError('UNEXPECTED_GUARDIAN_CONTROL_EVENT:'+str(row))
+    def pause(self):return self.control('PAUSE','PAUSED')
+    def sender_channel(self):
+        self.control('CONNECT','LISTENING')
+        channel=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM);channel.settimeout(10);channel.connect(str(self.path))
+        while True:
+            row=self.read()
+            if row['event']=='CONNECTED':return channel
+            if row['event'] not in ('SAMPLE','FINISHED'):raise RuntimeError('UNEXPECTED_GUARDIAN_CONNECT_EVENT:'+str(row))
+    def prepare(self,records):return self.control('PREPARE','PREPARED',records=list(records))
+    def confirm(self,result,plan):return self.control('CONFIRM','CONFIRMED',result=result,plan=plan)
+    def resume(self):return self.control('RESUME','RESUMED')
     def expect_hold(self):
         deadline=time.monotonic()+8
         while time.monotonic()<deadline:
@@ -54,7 +71,10 @@ class Watch:
         raise RuntimeError('GUARDIAN_HOLD_NOT_OBSERVED')
     def close(self):
         if self.peer is not None:os.close(self.peer['pidfd']);self.peer=None
-        if self.channel is not None:self.channel.close();self.channel=None
+        if self.channel is not None:
+            try:self.channel.sendall(guarded_nl.canon({'command':'STOP'}))
+            except OSError:pass
+            self.channel.close();self.channel=None
         if self.owns_unit:
             subprocess.run(['/usr/bin/systemctl','stop',self.unit],check=False,timeout=10)
             self.path.unlink(missing_ok=True)

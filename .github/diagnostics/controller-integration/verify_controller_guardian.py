@@ -92,7 +92,7 @@ def main():
     native_structure.COMPILED_NATIVE_AST_SHA256=expected
     raw=cmd('/usr/sbin/nft','-a','-j','list','ruleset')
     original=trans.OriginalPin(raw)
-    records=[];first=None;uncertain=None;recovery=None;positive=None;session=None;server=None;prepared=None;initial_prepared=None;watch=None;pre_guardian=None
+    records=[];first=None;uncertain=None;recovery=None;positive=None;session=None;server=None;prepared=None;initial_prepared=None;watch=None;pre_guardian=None;rotation_session=None;rotation_prepared=None
     server_done=threading.Event();server_errors=[];worker=None
     try:
         import ci_reader_fixture,guarded_sources,guarded_preparation
@@ -156,11 +156,61 @@ def main():
         print('PASS cached_guarded_cycle with actual original 47 ownership reader and BPF emitter',flush=True)
         try:first.submit({},[]);raise AssertionError('unverified generation allowed another send')
         except RuntimeError as e:assert str(e)=='ONLY_READY_SAME_OWNER'
+        # Pause observation explicitly during the in-flight handoff. This is
+        # a measured sampling gap, not continuous monitoring or authority.
+        import guarded_sender_session_DRAFT as direct_sender
+        pause_started=time.monotonic();watch.pause();sender_channel=watch.sender_channel()
+        guardian_spec={'unit':pre_guardian.unit,'invocation_id':pre_guardian.session.invocation,
+                       'argv':pre_guardian.argv,'source_sha256':hashlib.sha256(Path(pre_guardian.argv[2]).read_bytes()).hexdigest()}
+        rotation_session=direct_sender.SenderSession(sender_channel,identity=guarded_unit_identity,guardian=guardian_spec,nl=nl)
+        positive_guardian=native_structure.begin_lab_positive_guardian_session(rotation_session,origin,pre_guardian.session)
+        attestation=rotation_session.attest_current(first.receipt,until_ns=time.monotonic_ns()+8_000_000_000)
+        active_pin=native_structure.accept_lab_positive_guarded(positive_guardian,first,attestation)
+        first.activate_lab_guarded_pin(active_pin)
+        guard_expected=guarded_sources.build_expected(guardian_cache)
+        rotation_prepared=guarded_preparation.PreparedGeneration(real_cache,
+                     deadline_ceilings={role:guard_expected[role] for role in ('inbound','reverse')})
+        descriptors=rotation_prepared.fixture_descriptors(real_cache)
+        approval=watch.prepare(descriptors);assert approval['genid']==active_pin.receipt['after']
+        permit=rotation_session.prepare(list(descriptors),until_ns=time.monotonic_ns()+3_000_000_000)
+        guard_stop=threading.Event();guard_wake=threading.Event()
+        guarded_owner=native_structure._OwnershipReader(active_pin,guard_stop,guard_wake);guarded_owner.start();guarded_lease=None
+        try:
+            deadline=time.monotonic()+5
+            while guarded_lease is None and time.monotonic()<deadline:
+                handed,error=guarded_owner.take()
+                if handed is None:guard_wake.wait(.05);guard_wake.clear()
+                else:guarded_lease=handed[0]
+            assert guarded_lease is not None
+            cycle_started=time.monotonic_ns()
+            rotated,next_key=controller.cached_guarded_cycle(types.SimpleNamespace(cache=real_cache),guarded_lease,guarded_owner,
+                    emitter=first,prepared=rotation_prepared,apply=lambda:True,previous_key=None,
+                    guarded_pin=active_pin,sender_session=rotation_session,sender_permit=permit)
+            result=rotated['native_result'];assert next_key is not None and result['guarded_lease_used']
+            confirmed=watch.confirm(result,rotated['submitted_plan']);assert confirmed['same_guardian_successor_verified']
+            next_attestation=rotation_session.attest_current(first.receipt,until_ns=time.monotonic_ns()+8_000_000_000)
+            next_pin=native_structure.accept_lab_positive_guarded(positive_guardian,first,next_attestation,previous_pin=active_pin)
+            first.activate_lab_guarded_pin(next_pin)
+            guarded_owner.adopt_lab_guarded_pin(active_pin,next_pin,guarded_lease)
+            lease_age_ms=(result['send_started_ns']-int(guarded_lease.token.returned*1e9))/1e6
+            dispatch_ms=(result['send_started_ns']-cycle_started)/1e6
+            assert 0<=lease_age_ms<750 and 0<=dispatch_ms<250
+        finally:
+            if guarded_lease is not None:guarded_owner.release(guarded_lease)
+            guard_stop.set();guard_wake.set();guarded_owner.close_join(time.monotonic()+5)
+        watch.resume();pause_ms=(time.monotonic()-pause_started)*1000
+        while True:
+            sample=watch.read()
+            if sample['event']=='SAMPLE':
+                assert sample['generation']==result['after'];break
+            if sample['event']!='FINISHED':raise RuntimeError('UNEXPECTED_POST_ROTATION_EVENT:'+str(sample))
+        print('PASS separate Guardian authorized and verified guarded 50-to-50 rotation; lease_age_ms=%.2f dispatch_ms=%.2f watch_pause_ms=%.2f'%(lease_age_ms,dispatch_ms,pause_ms),flush=True)
         # Independently changed foreign nft object: never infer that the old
         # receipt proves the present generation. The diagnostic recovery sender
         # is distinct and submits a deny-only batch using fresh expired maps.
         cmd('/usr/sbin/nft','add','table','ip','ci_foreign_after_50')
         watch.expect_hold();watch.close();watch=None
+        rotation_session.close();rotation_session=None
         pre_guardian.close();pre_guardian=None
         try:observer.kernel(guarded=guarded_context);raise AssertionError('foreign genid change was accepted')
         except RuntimeError as error:assert str(error)=='GUARDED_RECEIPT_GENERATION_CHANGED'
@@ -260,6 +310,7 @@ def main():
     finally:
         if pre_guardian is not None:pre_guardian.close()
         if watch is not None:watch.close()
+        if rotation_session is not None:rotation_session.close()
         for rec in records:
             os.close(rec['program_fd']);os.close(rec['map_fd'])
         server_done.set()
@@ -268,6 +319,7 @@ def main():
         if server is not None:server.close()
         if server_errors:raise RuntimeError('fixture Guardian failed') from server_errors[0]
         if initial_prepared is not None:initial_prepared.close()
+        if rotation_prepared is not None:rotation_prepared.close()
         if prepared is not None:prepared.close()
         if positive is not None:positive.close_private_fixture()
         if recovery is not None:recovery.close_private_fixture()

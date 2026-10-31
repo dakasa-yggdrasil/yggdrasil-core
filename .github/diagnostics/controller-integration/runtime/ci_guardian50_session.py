@@ -1,8 +1,14 @@
-"""Non-authorizing 50 watch session in an already authenticated CI Guardian."""
+"""Bounded experimental Guardian watch and registry for a private CI netns.
+
+No production authority. Guardian and controller are separate systemd peers;
+synthetic DNS/topology and a fixture-derived 47 pin remain explicit.
+"""
 import base64,hashlib,importlib.util,json,os,threading,time,types
 from pathlib import Path
 import ci_reader_fixture,guarded_nl as nl,guarded_sources,guarded_unit_identity as identity
 import guarded_verifier,guarded_live_observation,transition_structure_DRAFT as trans
+import guarded_current15 as current15,guarded_refresh_registry_DRAFT as registry_module
+import guarded_program_identity_DRAFT as program_module,guarded_authority_ci as authority
 import native_io,native_structure,nft_owner as nft
 HERE=Path(__file__).resolve().parent;ROOT=HERE.parent
 spec=importlib.util.spec_from_file_location('ci_guardian',ROOT/'network_guardian.py');guardian=importlib.util.module_from_spec(spec);spec.loader.exec_module(guardian)
@@ -18,15 +24,24 @@ def read_line(channel):
     data=bytearray()
     while len(data)<=1024*1024:
         ch=channel.recv(1)
-        if not ch:raise RuntimeError('fixture controller closed')
+        if not ch:raise EOFError('fixture peer closed')
         if ch==b'\n':return json.loads(data)
         data.extend(ch)
     raise RuntimeError('bounded fixture message')
 
-def serve(channel):
-    verified=None;controller=None
+def serve(channel,listener):
+    verified=None;controller=None;reference=None;sender_channel=None;auth=None;sender_worker=None;watcher=None
+    watch_stop=threading.Event();closing=threading.Event();send_lock=threading.Lock();sender_errors=[]
+    def publish(row):
+        with send_lock:channel.sendall(nl.canon(row))
+    def stop_watch():
+        nonlocal watcher
+        if watcher is not None:
+            watch_stop.set();watcher.join(5)
+            if watcher.is_alive():raise RuntimeError('GUARDED_WATCH_DID_NOT_STOP')
+            watcher=None
     try:
-        channel.settimeout(10);request=read_line(channel)
+        channel.settimeout(15);request=read_line(channel)
         controller=identity.authenticate(channel,unit=request['unit'],expected_invocation=request['invocation'],
                       expected_argv=request['argv'],source_sha256=request['source_sha256'])
         assert controller['pid']==request['anchor']['pid'] and controller['start_ticks']==request['anchor']['start_ticks']
@@ -36,9 +51,11 @@ def serve(channel):
         rows,_=native_structure._objects(original)
         native_structure.COMPILED_NATIVE_AST_SHA256=hashlib.sha256(native_structure._structure(rows,keep_handles=False)).hexdigest()
         probe=HERE/'ci_nl_probe.py';probe_sha=hashlib.sha256(probe.read_bytes()).hexdigest()
-        verified=guarded_verifier.verify_and_seal(result=request['result'],anchor=request['anchor'],plan=request['plan'],
-              receipt_dir=ROOT/'receipts',reader_cache=cache,nl=nl,sources=guarded_sources,transition=trans,
-              coverage=coverage,probe_path=probe,probe_sha256=probe_sha)
+        def seal(result,plan):
+            return guarded_verifier.verify_and_seal(result=result,anchor=request['anchor'],plan=plan,
+                  receipt_dir=ROOT/'receipts',reader_cache=cache,nl=nl,sources=guarded_sources,transition=trans,
+                  coverage=coverage,probe_path=probe,probe_sha256=probe_sha)
+        verified=seal(request['result'],request['plan'])
         guardian.RUNTIME=HERE;guardian.RUNTIME_HASHES['nft_owner.py']=hashlib.sha256((HERE/'nft_owner.py').read_bytes()).hexdigest()
         observer=guardian.Owner.__new__(guardian.Owner)
         observer.C=types.SimpleNamespace(_objects=native_structure._objects,_structure=native_structure._structure,
@@ -46,8 +63,66 @@ def serve(channel):
         observer.coverage=coverage;observer.call=lambda name,args:nl.cmd(*args)
         ctx={'verified':verified,'verifier':guarded_verifier,'sources':guarded_sources,'nl':nl,'transition':trans,
              'live':guarded_live_observation,'probe':probe,'probe_sha256':probe_sha}
-        channel.sendall(nl.canon({'event':'READY','pid':os.getpid(),'production_authority':False}))
-        observer.watch(guarded=ctx,stop=threading.Event(),publish=lambda row:channel.sendall(nl.canon(row)),duration=10)
+        def validate(v):
+            local=dict(ctx);local['verified']=v
+            return observer.kernel(guarded=local)[0]['live']
+        reference=program_module.GuardianProgramReference()
+        reg=registry_module.GuardianRefreshRegistry(channel,controller,cache=cache,sources=guarded_sources,nl=nl,
+                verifier=guarded_verifier,current15=current15,program_module=program_module,reference=reference,validate_kernel=validate)
+        chain=current15.CoverageChain(cache,guarded_sources,guarded_verifier);proof=None
+        def launch_watch():
+            nonlocal watcher,watch_stop
+            if watcher is not None:raise RuntimeError('ONE_WATCH_ONLY')
+            watch_stop=threading.Event()
+            watcher=threading.Thread(target=lambda:observer.watch(guarded=ctx,stop=watch_stop,publish=publish,duration=10))
+            watcher.start()
+        def serve_sender():
+            try:
+                while not closing.is_set():
+                    req=read_line(sender_channel);schema=req.get('schema')
+                    if schema=='lab_positive_generation_attest_request_v1':auth.attest_current(req)
+                    elif schema=='lab_sender_prepared_permit_request_v1':auth.answer_once(req)
+                    else:raise RuntimeError('UNEXPECTED_GUARDIAN_SENDER_REQUEST')
+            except (EOFError,OSError):
+                if not closing.is_set():sender_errors.append('SENDER_CLOSED')
+            except BaseException as error:
+                sender_errors.append(type(error).__name__+':'+str(error))
+        publish({'event':'READY','pid':os.getpid(),'production_authority':False});launch_watch()
+        while True:
+            command=read_line(channel);kind=command['command']
+            if kind=='PAUSE':
+                stop_watch();publish({'event':'PAUSED','production_authority':False})
+            elif kind=='CONNECT':
+                if auth is not None:raise RuntimeError('ONE_SENDER_CHANNEL')
+                publish({'event':'LISTENING','production_authority':False})
+                sender_channel,_=listener.accept();sender_channel.settimeout(15)
+                auth=authority.SenderRegistryAuthority(sender_channel,registry=reg,registry_module=registry_module,
+                     verified=verified,verifier=guarded_verifier,identity=identity,nl=nl,sender_argv=request['argv'],
+                     sender_sha256=request['source_sha256'],validate_kernel=validate)
+                sender_worker=threading.Thread(target=serve_sender);sender_worker.start()
+                publish({'event':'CONNECTED','production_authority':False})
+            elif kind=='PREPARE':
+                proof=reg.prepare(chain.capture_before_send(),verified,command['records'])
+                publish({'event':'PREPARED','genid':proof.genid,'production_authority':False})
+            elif kind=='CONFIRM':
+                next_verified=seal(command['result'],command['plan'])
+                try:confirmation=reg.confirm(proof,next_verified)
+                except BaseException:next_verified.close();raise
+                old=verified;verified=next_verified;ctx['verified']=verified;auth.verified=verified;old.close();proof=None
+                publish({'event':'CONFIRMED','genid':verified.result['after'],**confirmation})
+            elif kind=='RESUME':
+                launch_watch();publish({'event':'RESUMED','production_authority':False})
+            elif kind=='STOP':break
+            else:raise RuntimeError('UNEXPECTED_GUARDIAN_CONTROL_COMMAND')
     finally:
+        closing.set();stop_watch()
+        if sender_channel is not None:
+            try:sender_channel.shutdown(2)
+            except OSError:pass
+        if sender_worker is not None:sender_worker.join(5)
+        if auth is not None:auth.close()
+        elif sender_channel is not None:sender_channel.close()
+        if reference is not None:reference.close()
         if verified is not None:verified.close()
         if controller is not None:os.close(controller['pidfd'])
+        if sender_errors:raise RuntimeError('GUARDIAN_SENDER_ERROR:'+','.join(sender_errors))

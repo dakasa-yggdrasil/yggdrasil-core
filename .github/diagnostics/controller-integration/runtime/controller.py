@@ -300,7 +300,7 @@ def cached_guarded_cycle(reader, lease, ownership, *, emitter, prepared, apply,
                               transition_origin=transition_origin,guardian_session=guardian_session)
     # Keep the exact emitter return intact: its receipt bytes are validated
     # independently and must not acquire controller-only metadata.
-    return {'native_result':result,'same_process_topology_generation':generation,
+    return {'native_result':result,'submitted_plan':plan,'same_process_topology_generation':generation,
             'same_process_semantic_cache_revision':revision,
             'guardian_receipt_acceptance_pending':True},key
 

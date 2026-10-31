@@ -24,7 +24,7 @@ try:
     worker=threading.Thread(target=run_precommit);worker.start()
     watch_channel,_=server.accept()
     import ci_guardian50_session
-    ci_guardian50_session.serve(watch_channel)
+    ci_guardian50_session.serve(watch_channel,server)
 finally:
     closing.set()
     if watch_channel is not None:watch_channel.close()
