@@ -175,6 +175,12 @@ def serve(channel,listener):
                 publish({'event':'CONFIRMED','genid':verified.result['after'],**confirmation})
             elif kind=='RESUME':
                 launch_watch();publish({'event':'RESUMED','production_authority':False})
+            elif kind=='PROBE_PENDING':
+                with reg.lock:
+                    pending=reg.pending
+                    publish({'event':'PENDING_STATE','pending':pending is not None,
+                             'possible_send':bool(pending is not None and getattr(pending,'sent',False)),
+                             'state':reg.state,'production_authority':False})
             elif kind=='STOP_DNS':
                 readers.stop_dns();publish({'event':'DNS_STOPPED','dns_stop_ns':time.monotonic_ns(),'production_authority':False})
             elif kind=='STOP':break

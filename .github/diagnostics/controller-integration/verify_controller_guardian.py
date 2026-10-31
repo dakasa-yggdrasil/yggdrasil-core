@@ -167,6 +167,25 @@ def main():
         attestation=rotation_session.attest_current(first.receipt,until_ns=time.monotonic_ns()+8_000_000_000)
         active_pin=native_structure.accept_lab_positive_guarded(positive_guardian,first,attestation)
         first.activate_lab_guarded_pin(active_pin)
+        if os.environ.get('CI_TEST_EXPIRED_PERMIT')=='1':
+            ceiling=guarded_sources.build_expected(guardian_cache)
+            rotation_prepared=guarded_preparation.PreparedGeneration(real_cache,
+                         deadline_ceilings={role:ceiling[role] for role in ('inbound','reverse')})
+            descriptors=list(rotation_prepared.fixture_descriptors(real_cache))
+            watch.prepare(descriptors)
+            permit=rotation_session.prepare(descriptors,until_ns=time.monotonic_ns()+1_500_000_000)
+            before=nl.genid(first.nl)
+            while time.monotonic_ns()<=permit.deadline_ns:time.sleep(.01)
+            try:rotation_session.consume(permit,descriptors);raise AssertionError('expired permit accepted')
+            except direct_sender.Held as error:assert str(error)=='ORIGINAL_PERMIT_DEADLINE_EXPIRED'
+            try:rotation_session.consume(permit,descriptors);raise AssertionError('expired permit reused')
+            except direct_sender.Held as error:assert str(error)=='EXACT_SINGLE_USE_SENDER_PERMIT_REQUIRED'
+            pending=watch.pending_state()
+            assert pending['pending'] and pending['possible_send'] and nl.genid(first.nl)==before
+            assert first.counter==1 and not (receipts/'INTENT-002.json').exists()
+            print('PASS expired one-use permit rejected without nft send; Guardian reservation remains possible-send',flush=True)
+            verified.close()
+            return
         import ci_guarded_driver
         driver=ci_guarded_driver.GuardedDriver(watch=watch,sender=rotation_session,emitter=first,
                   positive_session=positive_guardian,ceiling_cache=guardian_cache,endpoints=endpoints,max_commits=2)

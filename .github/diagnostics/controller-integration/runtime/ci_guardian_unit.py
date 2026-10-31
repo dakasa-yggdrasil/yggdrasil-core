@@ -64,6 +64,7 @@ class Watch:
     def prepare(self,records):return self.control('PREPARE','PREPARED',records=list(records))
     def confirm(self,result,plan):return self.control('CONFIRM','CONFIRMED',result=result,plan=plan)
     def resume(self):return self.control('RESUME','RESUMED')
+    def pending_state(self):return self.control('PROBE_PENDING','PENDING_STATE')
     def stop_dns_and_wait_for_autonomous_deny(self):
         stopped=self.control('STOP_DNS','DNS_STOPPED')
         while True:
