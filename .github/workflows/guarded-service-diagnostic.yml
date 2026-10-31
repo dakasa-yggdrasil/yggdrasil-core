@@ -30,6 +30,7 @@ jobs:
       - name: Exercise original controller and Guardian on disposable nft
         run: |
           set -eu
+          sudo modprobe xt_bpf
           target="$(sudo mktemp -d /run/ci-controller-guardian.XXXXXX)"
           trap 'sudo rm -rf "$target"' EXIT
           sudo cp -R .github/diagnostics/controller-integration/. "$target/"
