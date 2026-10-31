@@ -45,10 +45,17 @@ class Intent:
         self.pid=os.getpid();self.capability=capability
         self.sent=False;self.before_genid=None;self.emitter=None
 
+class _AdmissionReservation:
+    def __init__(self,owner,inode,nonce,capability):
+        if capability is not _CAPABILITY:raise FenceError('PRIVATE_ADMISSION_RESERVATION')
+        self.owner,self.inode,self.nonce,self.capability=owner,inode,nonce,capability
+        self.pid=os.getpid();self.closed=False
+
 class CoordinatorV3:
     def __init__(self,directory):
         self.base=Coordinator(directory);self.directory=Path(directory)
         self.marker=self.directory/'guarded-intent.json'
+        self.admission_marker=self.directory/'admission-intent.json'
         self.writer_lock=self.directory/'writer.lock'
         self._writer_identity=None
         self._local=threading.local()
@@ -82,6 +89,55 @@ class CoordinatorV3:
     def marker_exists(self):
         try:os.lstat(self.marker);return True
         except FileNotFoundError:return False
+    def admission_marker_exists(self):
+        try:os.lstat(self.admission_marker);return True
+        except FileNotFoundError:return False
+    def reserve_admission(self, *, _ci_after_create=None):
+        # Exclusive visible reservation blocks writers before slow fsync. It
+        # grants no DELETE and has no path that commits a retirement yet.
+        if os.environ.get('CI_GUARDED_FIXTURE')!='1':raise FenceError('ONLY_PRIVATE_CI_RESERVATION')
+        if getattr(self._local,'state',None) is not None:raise FenceError('RESERVATION_REQUIRES_NO_HELD_LOCK')
+        nonce=secrets.token_hex(32)
+        raw=(json.dumps({'schema':'ci_admission_reservation_v1','pid':os.getpid(),
+                        'nonce':nonce},sort_keys=True,separators=(',',':'))+'\n').encode()
+        with self.base.locked(nonblocking=True):
+            if self.marker_exists() or self.admission_marker_exists():raise FenceError('ADMISSION_OR_SENDER_PENDING')
+            fd=os.open(self.admission_marker,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+            identity=os.fstat(fd);inode=(identity.st_dev,identity.st_ino)
+        try:
+            if _ci_after_create is not None:_ci_after_create()
+            offset=0
+            while offset<len(raw):
+                n=os.write(fd,raw[offset:])
+                if n<=0:raise OSError('admission reservation write failed')
+                offset+=n
+            os.fsync(fd)
+        finally:os.close(fd)
+        parent=os.open(self.directory,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+        try:os.fsync(parent)
+        finally:os.close(parent)
+        with self.base.locked(nonblocking=True):
+            named=os.lstat(self.admission_marker)
+            if (named.st_dev,named.st_ino)!=inode:raise FenceError('ADMISSION_RESERVATION_CHANGED')
+        return _AdmissionReservation(self,inode,nonce,_CAPABILITY)
+    def cancel_admission(self,reservation):
+        # Only unused reservations can be canceled; no retirement is exposed.
+        if (type(reservation) is not _AdmissionReservation or reservation.capability is not _CAPABILITY
+                or reservation.owner is not self or reservation.pid!=os.getpid() or reservation.closed):
+            raise FenceError('ORIGINAL_UNUSED_ADMISSION_RESERVATION_REQUIRED')
+        with self.base.locked(nonblocking=True):
+            fd=os.open(self.admission_marker,os.O_RDONLY|os.O_NOFOLLOW)
+            try:
+                value=os.fstat(fd);raw=os.read(fd,4097)
+                if ((value.st_dev,value.st_ino)!=reservation.inode or len(raw)>4096
+                        or json.loads(raw).get('nonce')!=reservation.nonce):
+                    raise FenceError('ADMISSION_RESERVATION_CHANGED')
+            finally:os.close(fd)
+            os.unlink(self.admission_marker)
+            reservation.closed=True
+        parent=os.open(self.directory,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+        try:os.fsync(parent)
+        finally:os.close(parent)
     @contextlib.contextmanager
     def admission_or_other_writer(self):
         # Reentrancy is per-thread and only for the identical coordinator,
@@ -92,6 +148,7 @@ class CoordinatorV3:
             return
         with self.base.locked(nonblocking=True) as state:
             if self.marker_exists():raise FenceError('GUARDED_INTENT_PENDING')
+            if self.admission_marker_exists():raise FenceError('ADMISSION_INTENT_PENDING')
             self._local.state=state
             try:yield state
             finally:self._local.state=None
@@ -125,6 +182,7 @@ class CoordinatorV3:
         # Mere existence, including an empty/torn record, blocks all participants.
         with self.base.locked(nonblocking=True) as state:
             if self.marker_exists():raise FenceError('GUARDED_INTENT_PENDING')
+            if self.admission_marker_exists():raise FenceError('ADMISSION_INTENT_PENDING')
             self.base.require_allowed(state,uid,core.address)
             self.base.require_anchor(state,(core,),sources)
             for source in sources:self.base.require_allowed(state,source.native_identity.split('/',1)[0],source.address)

@@ -17,6 +17,32 @@ def must_hold(fn,reason):
         assert str(error)==reason,(str(error),reason)
     else:raise AssertionError('expected hold '+reason)
 
+with tempfile.TemporaryDirectory(prefix='ci-admission-reserve-') as tmp:
+    coord=v3.CoordinatorV3(Path(tmp)/'coord');coord.initialize_for_ci()
+    with mock.patch.dict(os.environ,{'CI_GUARDED_FIXTURE':'1'}):
+        original_fsync=os.fsync;seen=[]
+        def during_reservation(fd):
+            with coord.base.locked(nonblocking=True):seen.append(True)
+            must_hold(lambda:admission.evaluate({},coord),'ADMISSION_INTENT_PENDING')
+            return original_fsync(fd)
+        with mock.patch.object(v3.os,'fsync',side_effect=during_reservation):
+            reservation=coord.reserve_admission()
+        assert len(seen)==2 and coord.admission_marker_exists()
+        with coord.writer_lease() as lease:
+            core=backend()
+            must_hold(lambda:coord.begin(core,[core],writer_lease=lease),'ADMISSION_INTENT_PENDING')
+        coord.cancel_admission(reservation)
+        assert not coord.admission_marker_exists()
+        must_hold(lambda:coord.cancel_admission(reservation),'ORIGINAL_UNUSED_ADMISSION_RESERVATION_REQUIRED')
+        child=os.fork()
+        if child==0:
+            coord.reserve_admission(_ci_after_create=lambda:os._exit(19))
+            os._exit(20)
+        _pid,status=os.waitpid(child,0)
+        assert os.waitstatus_to_exitcode(status)==19 and coord.admission_marker_exists()
+        must_hold(lambda:admission.evaluate({},coord),'ADMISSION_INTENT_PENDING')
+        print('PASS admission reservation excludes writers during fsync, cancellation works, crash holds',flush=True)
+
 with tempfile.TemporaryDirectory(prefix='ci-drain-marker-') as tmp:
     coord=v3.CoordinatorV3(Path(tmp)/'coord');coord.initialize_for_ci()
     core=backend()
