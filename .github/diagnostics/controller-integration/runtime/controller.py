@@ -277,7 +277,7 @@ def cached_guarded_cycle(reader, lease, ownership, *, emitter, prepared, apply,
     else:
         nft.require(transition_origin is not None and guarded_pin is None
                     and sender_session is None and sender_permit is None
-                    and (guardian_session is not None or os.environ.get('CI_GUARDED_FIXTURE')=='1'),
+                    and guardian_session is not None,
                     'ORIGINAL_47_ORIGIN_AND_GUARDIAN_REQUIRED')
     descriptors=prepared.fixture_descriptors(cache)
     maps={role:[(item.hex(),deadline) for item,deadline in sorted(guarded_nl.map_rows(record['map_id']))]

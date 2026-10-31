@@ -92,7 +92,7 @@ def main():
     native_structure.COMPILED_NATIVE_AST_SHA256=expected
     raw=cmd('/usr/sbin/nft','-a','-j','list','ruleset')
     original=trans.OriginalPin(raw)
-    records=[];first=None;uncertain=None;recovery=None;positive=None;session=None;server=None;prepared=None;initial_prepared=None;watch=None
+    records=[];first=None;uncertain=None;recovery=None;positive=None;session=None;server=None;prepared=None;initial_prepared=None;watch=None;pre_guardian=None
     server_done=threading.Event();server_errors=[];worker=None
     try:
         import ci_reader_fixture,guarded_sources,guarded_preparation
@@ -111,6 +111,8 @@ def main():
         pin=native_structure._OriginalStructure(native_structure._handles(original_rows),None,native_structure._CAPABILITY,
                   proof_kind='original_owned_read_adoption',original_native_read_sha256=hashlib.sha256(raw).hexdigest())
         origin=native_structure.begin_guarded_transition(pin)
+        import ci_guardian47_unit
+        pre_guardian=ci_guardian47_unit.Guardian47(root=HERE,origin=origin)
         stop=threading.Event();wake=threading.Event()
         owner=native_structure._OwnershipReader(pin,stop,wake);owner.start();lease=None
         try:
@@ -121,12 +123,14 @@ def main():
                 else:lease=handed[0]
             assert lease is not None
             handoff,pending_key=controller.cached_guarded_cycle(types.SimpleNamespace(cache=real_cache),lease,owner,
-                  emitter=first,prepared=initial_prepared,apply=lambda:True,previous_key=None,transition_origin=origin)
+                  emitter=first,prepared=initial_prepared,apply=lambda:True,previous_key=None,transition_origin=origin,
+                  guardian_session=pre_guardian.session)
             assert pending_key is not None and handoff['guardian_receipt_acceptance_pending'] is True
             emitted=handoff['native_result']
         finally:
             if lease is not None:owner.release(lease)
             stop.set();wake.set();owner.close_join(time.monotonic()+5)
+        pre_guardian.close();pre_guardian=None
         assert emitted['ok'] and first.state=='AWAITING_FIXTURE_VERIFICATION'
         import guarded_verifier,guarded_live_observation
         first_maps={role:[(item.hex(),deadline) for item,deadline in sorted(nl.map_rows(rec['map_id']))]
@@ -253,6 +257,7 @@ def main():
         ci_guardian_registry.exercise(root=HERE,raw=raw,trans=trans,host_netns=os.environ['CI_HOST_NETNS'],
                  baseline=refreshed,baseline_plan=new_plan,reader_cache=guardian_cache,sender_cache=real_cache,encode=encode,coverage=coverage)
     finally:
+        if pre_guardian is not None:pre_guardian.close()
         if watch is not None:watch.close()
         for rec in records:
             os.close(rec['program_fd']);os.close(rec['map_fd'])
