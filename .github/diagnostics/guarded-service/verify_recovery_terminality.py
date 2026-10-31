@@ -100,12 +100,16 @@ try:
     with open(writer_lock,'rb') as fence:
         fcntl.flock(fence,fcntl.LOCK_EX|fcntl.LOCK_NB)
         terminal.prove_terminal_for_marker(marker)
+        evidence=recovery.inspect_unknown(marker,root/'real-receipts',counter=1,sender_records=sender_records)
+        assert evidence['before_genid']==unknown['intent_genid'] and evidence['wire_sha256']==unknown['wire_sha256']
+        assert not evidence['ack_observed'] and not evidence['absence_of_unrecorded_sends_proven']
         sample=recovery.sample_attached(coord,netlink,expected_marker=marker.key,expected_genid=genid,
                                records=records,reference=reference,cache=cache,original_pin=original,
                                receipt=receipt,coverage=coverage)
         terminal.prove_terminal_for_marker(marker)
         assert not sample['effect_or_recovery_authority'] and not sample['kernel_bpf_pointer_proven']
         assert sample['nft_rule_fd_reference_observed'] and sample['four_nft_collections_joined']
+        print('PASS retained original intent/wire independently match terminal sender; no ACK inferred',flush=True)
         print('PASS same custodian: terminal marker, exclusive writer flock, real genid, frozen BPF and fresh Readers',flush=True)
         print('PASS BPF FDs received from authenticated sender remain readable after its death',flush=True)
         print('PASS same sample joins original 50 structure, rule FD references and four nft collections',flush=True)

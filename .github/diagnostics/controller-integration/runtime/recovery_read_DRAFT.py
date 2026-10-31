@@ -125,3 +125,43 @@ def sample_attached(coordinator,netlink,*,expected_marker,expected_genid,records
     return {**last,'four_nft_collections_joined':True,'nft_rule_fd_reference_observed':True,
             'kernel_bpf_pointer_proven':False,'receipt_provenance_verified':False,
             'effect_or_recovery_authority':False}
+
+def inspect_unknown(marker_anchor,directory,*,counter,sender_records):
+    """Read original retained intent/wire after sender termination, never replay.
+
+    Requires the same surviving terminality custodian; directory integrity and
+    every possible writer remain external assumptions. No ACK is inferred.
+    """
+    import struct
+    from pathlib import Path
+    import recovery_terminality_DRAFT as terminal
+    need(type(marker_anchor) is terminal.MarkerAnchor and type(counter) is int and 0<counter<1000,
+         'ORIGINAL_CUSTODY_AND_COUNTER_REQUIRED')
+    terminal.prove_terminal_for_marker(marker_anchor)
+    directory=Path(directory);st=directory.lstat()
+    need(stat.S_ISDIR(st.st_mode) and not directory.is_symlink() and st.st_uid==0
+         and not stat.S_IMODE(st.st_mode)&0o077,'PRIVATE_ORIGINAL_INTENT_DIRECTORY_REQUIRED')
+    stem='%03d'%counter
+    intent_raw=nl.private_read(directory/('INTENT-'+stem+'.json'));intent=json.loads(intent_raw)
+    wire=nl.private_read(directory/('WIRE-'+stem+'.bin'))
+    try:os.lstat(directory/('ACK-'+stem+'.json'))
+    except FileNotFoundError:pass
+    else:raise Held('UNKNOWN_ACK_ALREADY_PRESENT')
+    sender=marker_anchor.sender;v=sender.verified
+    need(intent.get('schema')=='lab_real_reader_rotation_intent_v1'
+         and intent.get('pid')==v['pid'] and intent.get('start_ticks')==v['start_ticks']
+         and intent.get('boot_id')==sender.boot and intent.get('netns')==sender.netns
+         and intent.get('programs')==sender_records and intent.get('no_retry') is True
+         and hashlib.sha256(wire).hexdigest()==intent.get('wire_sha256'),
+         'ORIGINAL_UNKNOWN_INTENT_OR_WIRE_MISMATCH')
+    packets=nl.packets(wire);need(len(packets)>=3 and packets[0][0]==0x10 and packets[0][1]==100
+         and packets[-1][0]==0x11,'EXACT_SINGLE_ORIGINAL_NFT_BATCH_REQUIRED')
+    gen=[val for key,val in nl.attrs(packets[0][2][4:]) if key&0x3fff==1]
+    need(len(gen)==1 and len(gen[0])==4 and struct.unpack('>I',gen[0])[0]==intent.get('genid')
+         and [row[1] for row in packets[1:-1]]==intent.get('ack_sequences'),
+         'ORIGINAL_WIRE_GENID_AND_SEQUENCE_REQUIRED')
+    terminal.prove_terminal_for_marker(marker_anchor)
+    return {'schema':'ci_original_unknown_wire_observation_v1','sender_pid':v['pid'],
+            'before_genid':intent['genid'],'wire_sha256':intent['wire_sha256'],
+            'ack_observed':False,'no_retry_claim':True,'absence_of_unrecorded_sends_proven':False,
+            'effect_or_recovery_authority':False}
