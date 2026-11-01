@@ -8,6 +8,7 @@ from pathlib import Path
 import ci_reader_fixture,guarded_nl as nl,guarded_sources,guarded_unit_identity as identity
 import guarded_verifier,guarded_live_observation,transition_structure_DRAFT as trans
 import guarded_current15 as current15,guarded_refresh_registry_DRAFT as registry_module
+import guarded_effect_lease_two_peers_DRAFT as effect_lease,guarded_lease_ipc_DRAFT as holder_ipc
 import guarded_program_identity_DRAFT as program_module,guarded_authority_ci as authority
 import native_io,native_structure,nft_owner as nft
 import guarded_generation as generation
@@ -34,7 +35,7 @@ def read_line(channel):
     raise RuntimeError('bounded fixture message')
 
 def serve(channel,listener):
-    verified=None;controller=None;reference=None;sender_channel=None;auth=None;sender_worker=None;watcher=None;denier=None;deny_recovery=None;readers=None;monitor=None;cache=None
+    verified=None;controller=None;reference=None;holder_channel=None;holder_identity=None;holder_authority=None;holder_session=None;holder_worker=None;chain_before=None;sender_channel=None;auth=None;sender_worker=None;watcher=None;denier=None;deny_recovery=None;readers=None;monitor=None;cache=None
     watch_stop=threading.Event();closing=threading.Event();send_lock=threading.Lock();sender_errors=[]
     def publish(row):
         with send_lock:channel.sendall(nl.canon(row))
@@ -46,7 +47,7 @@ def serve(channel,listener):
             watcher=None
     try:
         generation.CI_DRAIN_COORDINATION=drain_v3.CoordinatorV3(ROOT/'drain-coordinator')
-        channel.settimeout(15);request=read_line(channel)
+        channel.settimeout(30 if os.environ.get('CI_HOLDER_TEST')=='1' else 15);request=read_line(channel)
         controller=identity.authenticate(channel,unit=request['unit'],expected_invocation=request['invocation'],
                       expected_argv=request['argv'],source_sha256=request['source_sha256'])
         assert controller['pid']==request['anchor']['pid'] and controller['start_ticks']==request['anchor']['start_ticks']
@@ -99,6 +100,7 @@ def serve(channel,listener):
             # expired-map transaction. This is not a production recovery.
             if os.environ.get('CI_GUARDED_FIXTURE')!='1':raise RuntimeError('ONLY_PRIVATE_CI_FAILURE_INJECTION')
             failure_ns=time.monotonic_ns();auth.revoke_and_notify()
+            if holder_session is not None:holder_session.revoke_and_notify()
             deny_dir=ROOT/'guardian-deny-receipts';deny_dir.mkdir(mode=0o700)
             denier=generation.GenerationEmitter(initial_raw=original,transition=trans,receipt_dir=deny_dir,
                          host_netns=os.environ['CI_HOST_NETNS'],recover_fixture=True)
@@ -181,13 +183,41 @@ def serve(channel,listener):
                      sender_sha256=request['source_sha256'],validate_kernel=validate)
                 sender_worker=threading.Thread(target=serve_sender);sender_worker.start()
                 publish({'event':'CONNECTED','production_authority':False})
+            elif kind=='COVERAGE':
+                obs=chain.last_observation
+                publish({'event':'COVERAGE','qualified':bool(obs is not None and obs[0]),
+                         'coverage_ns':0 if obs is None else obs[2]-obs[1],'production_authority':False})
+            elif kind=='CONNECT_HOLDER':
+                if os.environ.get('CI_HOLDER_TEST')!='1' or holder_session is not None:raise RuntimeError('ONLY_ONE_HOLDER_TEST')
+                publish({'event':'HOLDER_LISTENING','production_authority':False})
+                holder_channel,_=listener.accept();holder_channel.settimeout(10)
+                holder_identity=identity.authenticate(holder_channel,unit=command['unit'],expected_invocation=command['invocation'],
+                    expected_argv=command['argv'],source_sha256=command['source_sha256'])
+                holder_authority=effect_lease.EffectLeaseAuthority(holder_channel,cache=cache,sources=guarded_sources,nl=nl,
+                    verifier=guarded_verifier,current15=current15,preparer_channel=channel,program_reference=reference)
+                assert holder_authority.peer==holder_identity['pid'] and holder_authority.preparer==controller['pid']
+                def acquire_holder(until):
+                    return reg.acquire_holder(holder_authority,effect_lease,lambda:holder_authority.acquire(verified,chain,until))
+                def validate_holder():
+                    value=validate(verified);lease=holder_authority.lease
+                    assert lease is not None and value['observation']['genid']==lease['epoch']
+                    assert value['invalidation_epoch']==lease['invalidation_epoch']
+                holder_session=holder_ipc.HolderSession(holder_channel,holder_authority,acquire_holder,validate_holder)
+                holder_worker=threading.Thread(target=holder_session.serve);holder_worker.start()
+                publish({'event':'HOLDER_CONNECTED','pid':holder_identity['pid'],'production_authority':False})
             elif kind=='PREPARE':
-                proof=reg.prepare(chain.capture_before_send(),verified,command['records'])
+                chain_before=chain.capture_before_send()
+                proof=reg.prepare(chain_before,verified,command['records'])
                 publish({'event':'PREPARED','genid':proof.genid,'production_authority':False})
             elif kind=='CONFIRM':
                 next_verified=seal(command['result'],command['plan'])
                 try:confirmation=reg.confirm(proof,next_verified)
                 except BaseException:next_verified.close();raise
+                if os.environ.get('CI_HOLDER_TEST')=='1':
+                    envelope=validate(next_verified)
+                    chain.record(chain_before,next_verified,envelope)
+                    confirmation['current15_qualified']=envelope['current15_qualified']
+                    confirmation['coverage_ns']=envelope['observed_ns']-chain.start_ns
                 old=verified;verified=next_verified;ctx['verified']=verified;auth.verified=verified;old.close();proof=None
                 publish({'event':'CONFIRMED','genid':verified.result['after'],**confirmation})
             elif kind=='RESUME':
@@ -226,6 +256,14 @@ def serve(channel,listener):
         stop_watch()
         if monitor is not None:monitor.join(5)
         if readers is not None:readers.close()
+        if holder_session is not None:holder_session.stopped.set()
+        if holder_channel is not None:
+            try:holder_channel.shutdown(2)
+            except OSError:pass
+        if holder_worker is not None:holder_worker.join(5)
+        if holder_authority is not None:holder_authority.close()
+        if holder_identity is not None:os.close(holder_identity['pidfd'])
+        if holder_channel is not None:holder_channel.close()
         if sender_channel is not None:
             try:sender_channel.shutdown(2)
             except OSError:pass

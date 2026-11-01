@@ -49,6 +49,8 @@ class GuardedDriver:
         self.results[-1]['watch_pause_ms']=(time.monotonic()-self.pause_started)*1000
         if len(self.results)>=self.max_commits:
             reader.stop.set();return
+        # Holder qualification uses the original 15-second chain, never a fake clock.
+        if os.environ.get('CI_HOLDER_TEST')=='1' and len(self.results)==1:time.sleep(15.1)
         # One synthetic new topology observation wakes the real cache loop.
         entries,cores,prom=self.endpoints(4)
         reader.cache.publish_topology(([x for x in entries if x.kind in ('core','broker')],cores,prom,{},frozenset(),time.monotonic()+25))

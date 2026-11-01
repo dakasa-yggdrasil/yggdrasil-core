@@ -1,0 +1,30 @@
+name: Disposable Guardian holder rotation review
+on:
+  push:
+    branches: [codex/holder-rotation-review-20261031]
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Verify real holder, 50-to-50 race and revocation
+        run: |
+          set -eu
+          if ! command -v nft >/dev/null || ! command -v ip >/dev/null; then sudo apt-get update -qq && sudo apt-get install -y nftables iproute2; fi
+          sudo modprobe xt_bpf
+          target="$(sudo mktemp -d /run/ci-holder-rotation.XXXXXX)"
+          trap 'sudo rm -rf "$target"' EXIT
+          sudo cp -R .github/diagnostics/controller-integration/. "$target/"
+          sudo chmod -R go-w "$target"
+          unit="ci-holder-controller-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          host_netns="$(readlink /proc/self/ns/net)"
+          sudo systemd-run --quiet --wait --pipe --unit="$unit" --property=RuntimeMaxSec=120s \
+            --setenv=CI_CONTROLLER_UNIT="$unit.service" --setenv=CI_GUARDED_FIXTURE=1 \
+            --setenv=CI_HOLDER_TEST=1 --setenv=CI_HOST_NETNS="$host_netns" \
+            --setenv=CI_FAILURE_ORDER=positive-first --setenv=CI_DENY_ACK_UNCERTAIN=1 \
+            /usr/bin/unshare --net -- /usr/bin/python3 -B "$target/verify_controller_guardian.py"

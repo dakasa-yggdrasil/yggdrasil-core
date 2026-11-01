@@ -4,7 +4,7 @@ The cache, owner and deployment-specific compiled AST pin are fixtures. This
 exercises real controller/native process and Guardian methods, not BPF service
 integration or production authority.
 """
-import base64,hashlib,importlib.util,json,os,socket,struct,subprocess,sys,tempfile,threading,time,types
+import base64,hashlib,importlib.util,json,os,select,socket,struct,subprocess,sys,tempfile,threading,time,types,uuid
 from pathlib import Path
 HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE/'runtime'))
@@ -115,7 +115,7 @@ def main():
     raw=cmd('/usr/sbin/nft','-a','-j','list','ruleset')
     original=trans.OriginalPin(raw)
     records=[];first=None;uncertain=None;recovery=None;positive=None;session=None;server=None;prepared=None;initial_prepared=None;watch=None;pre_guardian=None;rotation_session=None;rotation_prepared=None
-    server_done=threading.Event();server_errors=[];worker=None
+    server_done=threading.Event();server_errors=[];worker=None;holder_unit=None;holder_pidfd=None;holder_state=None
     try:
         import ci_reader_fixture,guarded_sources,guarded_preparation
         real_cache=ci_reader_fixture.start(endpoints)
@@ -243,6 +243,37 @@ def main():
             if sample['event']!='FINISHED':raise RuntimeError('UNEXPECTED_POST_ROTATION_EVENT:'+str(sample))
         print('PASS serve_hot and separate Guardian verified two guarded rotations: '+json.dumps([
             {key:round(row[key],2) for key in ('lease_age_ms','dispatch_ms','watch_pause_ms')} for row in driver.results]),flush=True)
+        if os.environ.get('CI_HOLDER_TEST')=='1':
+            coverage_state=watch.control('COVERAGE','COVERAGE')
+            assert coverage_state['qualified'] and coverage_state['coverage_ns']>=15_000_000_000,coverage_state
+            holder_unit='ci-rotation-holder-'+uuid.uuid4().hex+'.service'
+            go=HERE/'holder-go';acquired=HERE/'holder-acquired';revoked=HERE/'holder-revoked'
+            holder_script=(HERE/'runtime'/'ci_holder_process.py').resolve()
+            holder_argv=['/usr/bin/python3','-B',str(holder_script),str(watch.path),str(go),str(acquired),str(revoked)]
+            subprocess.run(['/usr/bin/systemd-run','--quiet','--no-block','--unit='+holder_unit,
+                '--property=RuntimeMaxSec=20s','/usr/bin/nsenter','--net=/proc/%d/ns/net'%os.getpid(),*holder_argv],check=True,timeout=10)
+            until=time.monotonic()+8
+            while True:
+                holder_props=guarded_unit_identity._properties(holder_unit)
+                if holder_props['ActiveState']=='active' and int(holder_props['MainPID'])>1:break
+                if time.monotonic()>until:raise RuntimeError('HOLDER_SYSTEMD_NOT_ACTIVE')
+                time.sleep(.02)
+            holder_pid=int(holder_props['MainPID']);holder_pidfd=os.pidfd_open(holder_pid)
+            watch.control('CONNECT_HOLDER','HOLDER_LISTENING',unit=holder_unit,invocation=holder_props['InvocationID'],
+                          argv=holder_argv,source_sha256=hashlib.sha256(holder_script.read_bytes()).hexdigest())
+            go.touch(mode=0o600)
+            while True:
+                connected=watch.read()
+                if connected['event']=='HOLDER_CONNECTED':break
+                if connected['event'] not in ('SAMPLE','FINISHED'):raise RuntimeError('UNEXPECTED_HOLDER_EVENT:'+str(connected))
+            assert connected['pid']==holder_pid and holder_pid!=watch.peer['pid'] and holder_pid!=os.getpid()
+            while not acquired.exists():
+                if time.monotonic()>until:raise RuntimeError('HOLDER_ACQUISITION_TIMEOUT')
+                time.sleep(.01)
+            holder_state=json.loads(acquired.read_text())
+            assert holder_state['until']>time.monotonic_ns()+500_000_000
+            print('PASS separate systemd Guardian and holder; real continuous coverage >=15s and active bounded lease',flush=True)
+
         # Keep watch running while a second positive transaction is ready to
         # send. The Guardian invalidates its own Reader and wins a distinct
         # genid-fenced deny transaction before the old send is released.
@@ -258,7 +289,7 @@ def main():
         failure_permit=rotation_session.prepare(list(failure_records),until_ns=time.monotonic_ns()+5_000_000_000)
         failure_stop=threading.Event();failure_wake=threading.Event()
         failure_owner=native_structure._OwnershipReader(next_pin,failure_stop,failure_wake);failure_owner.start();failure_lease=None
-        entered=threading.Event();release=threading.Event();failure_result=[];failure_errors=[];positive_generation=[]
+        entered=threading.Event();release=threading.Event();failure_result=[];failure_errors=[];positive_generation=[];positive_send_time=[]
         failure_order=os.environ.get('CI_FAILURE_ORDER','deny-first')
         assert failure_order in ('deny-first','positive-first')
         class DelayedPositiveSend:
@@ -266,7 +297,7 @@ def main():
             def send(self,payload):
                 if self.sent==0 and len(payload)>=6 and struct.unpack_from('<H',payload,4)[0]==0x10:
                     if failure_order=='positive-first':
-                        outcome=self.inner.send(payload);self.sent+=1
+                        outcome=self.inner.send(payload);self.sent+=1;positive_send_time.append(time.monotonic_ns())
                         probe_sock=socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,12);probe_sock.bind((0,0));probe_sock.settimeout(5)
                         try:positive_generation.append(nl.genid(probe_sock))
                         finally:probe_sock.close()
@@ -301,6 +332,16 @@ def main():
                 assert first.state=='HOLD_UNKNOWN_OR_UNVERIFIED' and first.nl.sent==1
             injector.join(10);assert not injector.is_alive() and not failure_errors and len(failure_result)==1
             denied_by_guardian=failure_result[0];assert denied_by_guardian['reader_invalidated']
+            if holder_state is not None:
+                assert failure_order=='positive-first' and len(positive_send_time)==1
+                assert positive_send_time[0]<holder_state['until'],'HOLDER_EXPIRED_BEFORE_SEND'
+                until=time.monotonic()+5
+                while not revoked.exists():
+                    if time.monotonic()>until:raise RuntimeError('HOLDER_REVOCATION_NOT_OBSERVED')
+                    time.sleep(.01)
+                poll=select.poll();poll.register(holder_pidfd,select.POLLIN)
+                assert poll.poll(5000),'HOLDER_PIDFD_NOT_TERMINAL'
+                print('PASS 50-to-50 send while holder active; separate Guardian revoked holder and holder process exited',flush=True)
             assert drain.marker_exists(), 'uncertain prior intent must remain'
             try:
                 with drain.admission_or_other_writer():pass
@@ -370,6 +411,8 @@ def main():
         print('PASS v3 unknown marker retained; standalone legacy corpus runs in separate netns',flush=True)
         print('BOUNDARY: independent legacy corpus does not prove v3 recovery',flush=True)
     finally:
+        if holder_pidfd is not None:os.close(holder_pidfd)
+        if holder_unit is not None:subprocess.run(['/usr/bin/systemctl','stop',holder_unit],check=False,timeout=10)
         if pre_guardian is not None:pre_guardian.close()
         if watch is not None:watch.close()
         if rotation_session is not None:rotation_session.close()
