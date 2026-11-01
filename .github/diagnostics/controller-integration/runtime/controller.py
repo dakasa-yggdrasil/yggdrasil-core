@@ -472,9 +472,8 @@ def _serve_guarded_hot(reader, pin, *, apply, driver, initial_sequence=1):
                     before_core=[item for item in before_entries if item.kind=='core']
                     nft.require(len(before_core)==1,'CI_ONE_CORE_FOR_DRAIN_INTENT')
                     intent=_ci_drain().begin(before_core[0],before_cores,writer_lease=driver.emitter.writer_lease)
-                except (drain_v3.AdmissionPendingBeforeIntent,ci_guarded_driver.SnapshotChangedBeforeIntent,
-                        ci_guarded_driver.TransientSourcesBeforeIntent) as error:
-                    # Only these typed outcomes prove this attempt created
+                except (drain_v3.AdmissionPendingBeforeIntent,ci_guarded_driver.SnapshotChangedBeforeIntent) as error:
+                    # Only these two typed outcomes prove this attempt created
                     # no marker, performed no Guardian prepare and sent no wire.
                     now=time.monotonic()
                     if admission_wait_deadline is None:
@@ -482,8 +481,7 @@ def _serve_guarded_hot(reader, pin, *, apply, driver, initial_sequence=1):
                         if installed_until is not None:admission_wait_deadline=min(admission_wait_deadline,installed_until-1.250)
                     if now>=admission_wait_deadline:raise
                     if type(error) is drain_v3.AdmissionPendingBeforeIntent:driver.pre_intent_waits+=1
-                    elif type(error) is ci_guarded_driver.SnapshotChangedBeforeIntent:driver.pre_intent_discards+=1
-                    else:driver.pre_source_waits+=1
+                    else:driver.pre_intent_discards+=1
                     reader.stop.wait(min(.05,admission_wait_deadline-now))
                     continue
                 admission_wait_deadline=None

@@ -31,7 +31,7 @@ CI_SOURCE_SHA256 = {'ci_holder_process.py': 'bbfe28072bbb6622d4dcd809725152707c8
  'guarded_live_observation.py': '10686a406a02d473e7d47b89d74c1b98dc7969bb82cb1459242739b2e9e6ce2c',
  'guarded_nl.py': '6a4fd005a7bd053ca71c424672dde85d87ca496510b01f6ebdc97a91f607b71a',
  'guarded_refresh_registry_DRAFT.py': 'e15753b01adcbe4fe23d993496066de8b47a65fd4efdf422c84ceb45f784d71f',
- 'guarded_sources.py': '287edd67937c1650a5dc657d12ccc1bb2192a2692d863b117bdcb13eba6f0349',
+ 'guarded_sources.py': 'e8935b8406ba4b4571d7779d65c2f280a3ed9f2aea128ce58079c2a0b9b40a66',
  'guarded_verifier.py': '66f19e364e627491fee88d61362c08fb860c29667e23654a447ab55691d74f41',
  'native_structure.py': '7da5d5ef6b543b5a8ec54bf92520e5999f06ae816c31d7b377ee51c1d2738ebf',
  'nft_owner.py': '0d4387e933d1d1ee61d4a47bbb6f68d71224e9825d73e63b3df5916b9e811922',

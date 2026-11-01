@@ -58,18 +58,3 @@ jobs:
             --setenv=CI_HOLDER_TEST=1 --setenv=CI_CONTINUOUS_TEST=1 --setenv=CI_POST_MARKER_TEST=1 \
             --setenv=CI_HOST_NETNS="$host_netns" \
             /usr/bin/unshare --net -- /usr/bin/python3 -B "$target/verify_controller_guardian.py"
-
-      - name: Verify persistent missing original source causes bounded no-send HOLD
-        run: |
-          set -eu
-          target="$(sudo mktemp -d /run/ci-source-timeout.XXXXXX)"
-          trap 'sudo rm -rf "$target"' EXIT
-          sudo cp -R .github/diagnostics/controller-integration/. "$target/"
-          sudo chmod -R go-w "$target"
-          unit="ci-source-timeout-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
-          host_netns="$(readlink /proc/self/ns/net)"
-          sudo systemd-run --quiet --wait --pipe --unit="$unit" --property=RuntimeMaxSec=30s \
-            --setenv=CI_CONTROLLER_UNIT="$unit.service" --setenv=CI_GUARDED_FIXTURE=1 \
-            --setenv=CI_HOLDER_TEST=1 --setenv=CI_CONTINUOUS_TEST=1 --setenv=CI_SOURCE_TIMEOUT_TEST=1 \
-            --setenv=CI_HOST_NETNS="$host_netns" \
-            /usr/bin/unshare --net -- /usr/bin/python3 -B "$target/verify_controller_guardian.py"
