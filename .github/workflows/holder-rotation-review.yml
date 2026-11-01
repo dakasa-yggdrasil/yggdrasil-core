@@ -12,6 +12,8 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
+      - name: Check renewal rejection and expiry semantics
+        run: python3 -I -B .github/diagnostics/controller-integration/verify_holder_renew_policy.py
       - name: Verify real holder, 50-to-50 race and revocation
         run: |
           set -eu

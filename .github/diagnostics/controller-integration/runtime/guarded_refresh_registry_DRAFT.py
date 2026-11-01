@@ -193,6 +193,8 @@ class GuardianRefreshRegistry:
                  'CONFIRMED_SUCCESSOR_MUST_COVER_HOLDER')
             holder._source_live(lease)
         self._preparer_live()
+        if holder is not None:
+            with holder.lock:holder._require_sender_fd_capacity_locked()
         owned_fd=os.dup(verified.sender_pidfd) if holder is not None else None
         try:
             if owned_fd is not None:
@@ -202,6 +204,7 @@ class GuardianRefreshRegistry:
                 need(self.pending is proof and self.state==proof.mode and self.holder is holder,'SAME_PENDING_LIVE_REFRESH')
                 if holder is not None:
                     with holder.lock:
+                        holder._require_sender_fd_capacity_locked()
                         need(holder.lease is lease and not lease['revoked'] and time.monotonic_ns()<lease['until']
                              and lease['epoch']==proof.genid and lease['invalidation_epoch']==proof.epoch,
                              'SAME_LIVE_HOLDER_AT_SUCCESSOR_COMMIT')

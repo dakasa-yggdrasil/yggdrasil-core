@@ -30,6 +30,13 @@ def need(value, reason):
 
 
 class EffectLeaseAuthority:
+    # CI-only hard stop until per-generation readers have explicit custody.
+    MAX_OWNED_SENDER_PIDFDS = 64
+
+    def _require_sender_fd_capacity_locked(self):
+        need(len(self._owned_sender_pidfds) < self.MAX_OWNED_SENDER_PIDFDS,
+             'HOLDER_SENDER_PIDFD_CAPACITY_EXHAUSTED')
+
     def __init__(self, channel, *, cache, sources, nl, verifier, current15, preparer_channel=None, program_reference=None):
         need(type(channel) is socket.socket, 'ORIGINAL_CONTROL_SOCKET_REQUIRED')
         peer, uid, _ = struct.unpack('3i', channel.getsockopt(socket.SOL_SOCKET, socket.SO_PEERCRED, 12))
@@ -124,6 +131,7 @@ class EffectLeaseAuthority:
             self._source_live(lease)
             with self.lock:
                 need(self.lease is None, 'ONE_OUTSTANDING_EFFECT_LEASE')
+                self._require_sender_fd_capacity_locked()
                 self._owned_sender_pidfds.append(owned_fd)
                 self.lease = lease
         except BaseException:
@@ -272,6 +280,7 @@ class EffectLeaseAuthority:
         self._source_live(lease)
         with self.lock:
             need(self.lease is lease and self.pending is pending and not lease['revoked'], 'SAME_PENDING_LIVE_LEASE')
+            self._require_sender_fd_capacity_locked()
             owned_fd=os.dup(verified.sender_pidfd)
             successor=dict(lease)
             successor.update({'epoch':genid,'receipt_sha256':receipt_hash,'sender_pidfd':owned_fd,
