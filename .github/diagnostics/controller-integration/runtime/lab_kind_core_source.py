@@ -100,8 +100,12 @@ class Source:
             need(obj.get('addressType')=='IPv4','IPV4_ENDPOINT_SLICE_REQUIRED')
             owners=obj['metadata'].get('ownerReferences',[])
             need(any(x.get('kind')=='Service' and x.get('uid')==s.service_uid for x in owners),'ENDPOINT_SLICE_SERVICE_UID_REQUIRED')
-            if not any(x.get('port')==s.endpoint_port and x.get('protocol','TCP')==s.protocol for x in obj.get('ports',[])):continue
-            for ep in obj.get('endpoints',[]):
+            ports=obj.get('ports');endpoints=obj.get('endpoints')
+            need(ports is None or type(ports) is list,'EXACT_ENDPOINT_PORT_LIST_REQUIRED')
+            need(endpoints is None or type(endpoints) is list,'EXACT_ENDPOINT_LIST_REQUIRED')
+            if ports is None or endpoints is None:continue
+            if not any(x.get('port')==s.endpoint_port and x.get('protocol','TCP')==s.protocol for x in ports):continue
+            for ep in endpoints:
                 cond=ep.get('conditions',{});ref=ep.get('targetRef',{});addresses=ep.get('addresses',[])
                 if cond.get('ready') is not True or cond.get('serving') is not True or cond.get('terminating') is True:continue
                 need(ref.get('kind')=='Pod' and ref.get('namespace')==s.namespace and uid(ref.get('uid'))
