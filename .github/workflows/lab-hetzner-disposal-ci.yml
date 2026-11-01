@@ -28,6 +28,7 @@ jobs:
         with:
           ref: ${{ github.event.pull_request.head.sha || github.sha }}
           persist-credentials: false
+          fetch-depth: 0
       - name: Verify exact Source checkout
         shell: bash
         run: |
@@ -39,6 +40,16 @@ jobs:
         with:
           go-version-file: go.mod
           cache: true
+      - name: Compile exact previous Core decoder
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          legacy="$RUNNER_TEMP/core-legacy-2de"
+          git worktree add --detach "$legacy" 2de33bbca46000d86a6dc0d5162383a6128e3517
+          [[ "$(git -C "$legacy" rev-parse HEAD)" == 2de33bbca46000d86a6dc0d5162383a6128e3517 ]]
+          cp repository/testdata/lab_core_bound_legacy_decode_test.go.txt "$legacy/repository/lab_core_bound_legacy_decode_test.go"
+          (cd "$legacy" && GOWORK=off go test -p=1 -race -buildvcs=false -c -o "$RUNNER_TEMP/lab-legacy-2de.test" ./repository)
+          printf 'LAB_HETZNER_LEGACY_TEST_BIN=%s\n' "$RUNNER_TEMP/lab-legacy-2de.test" >> "$GITHUB_ENV"
       - name: PostgreSQL17 Unix socket and focused race gates
         shell: bash
         run: |
@@ -149,11 +160,12 @@ jobs:
           func main(){ctx,stop:=context.WithTimeout(context.Background(),90*time.Second);defer stop();db,e:=sql.Open("postgres",os.Getenv("D12_SOURCE_CI_PG17_DSN"));if e!=nil{panic(e)};defer db.Close();var name,listen string;var socket bool;var version int;e=db.QueryRowContext(ctx,`SELECT current_database(),inet_server_addr() IS NULL,current_setting('listen_addresses'),current_setting('server_version_num')::int`).Scan(&name,&socket,&listen,&version);if e!=nil||name!="core_d12_test"||!socket||listen!=""||version/10000!=17{panic("foreign D12 Source fixture")};if e=goose.SetDialect("postgres");e!=nil{panic(e)};if e=goose.UpContext(ctx,db,"db/migrations");e!=nil{panic(e)};v,e:=goose.GetDBVersionContext(ctx,db);if e!=nil||v!=82{panic("schema82 missing")};fmt.Println("D12_SOURCE_DISPOSABLE_SCHEMA82_READY")}
           GO_MIGRATE
           record migrate go run "$pg_root/migrate.go"
-          if ! record lab-hetzner-storage go test -p=1 -race -count=1 -timeout=4m -v ./repository -run '^TestLABFailedInstalledDisposalExistingStorage$'; then
+          if ! record lab-hetzner-storage go test -p=1 -race -count=1 -timeout=4m -v ./repository -run '^TestLABFailedInstalled(DisposalExistingStorage|CoreBoundLegacyRollback)$'; then
             cat "$LOGS/lab-hetzner-storage.stdout" "$LOGS/lab-hetzner-storage.stderr"
             exit 1
           fi
           grep -F -- '--- PASS: TestLABFailedInstalledDisposalExistingStorage' "$LOGS/lab-hetzner-storage.stdout"
+          grep -F 'LAB_HETZNER_PG82_CURRENT_READ_LEGACY_HOLD_ROLLBACK_PRESERVED' "$LOGS/lab-hetzner-storage.stdout"
       - name: Retain original outputs and shutdown proof
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

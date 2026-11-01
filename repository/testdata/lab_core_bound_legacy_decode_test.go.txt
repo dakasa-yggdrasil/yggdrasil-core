@@ -1,0 +1,40 @@
+package repository
+
+import (
+	"encoding/json"
+	"os"
+	"strings"
+	"testing"
+)
+
+// This test is compiled only into the checked-out 2de33bb test binary. It
+// consumes a wire read by the current source from its disposable PostgreSQL.
+func TestLABCoreBoundLegacyDecode(t *testing.T) {
+	path := os.Getenv("LAB_DISPOSAL_WIRE")
+	if path == "" {
+		t.Fatal("disposable wire required")
+	}
+	raw, err := os.ReadFile(path)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var legacy FailedInstalledGuestDisposal
+	err = decodeFailedInstalledDisposal(raw, &legacy)
+	if err == nil || !strings.Contains(err.Error(), "unknown field") {
+		t.Fatalf("legacy source did not reject the new persisted wire: %v", err)
+	}
+	// A separately encoded legacy-only in-memory representation remains
+	// readable, isolating the source incompatibility from test setup errors.
+	if err = json.Unmarshal(raw, &legacy); err != nil {
+		t.Fatal(err)
+	}
+	oldWire, err := json.Marshal(legacy)
+	if err != nil {
+		t.Fatal(err)
+	}
+	var roundtrip FailedInstalledGuestDisposal
+	if err = decodeFailedInstalledDisposal(oldWire, &roundtrip); err != nil {
+		t.Fatalf("legacy decoder control refused: %v", err)
+	}
+	t.Log("LAB_CORE2DE_REAL_PG_WIRE_UNKNOWN_FIELDS_HELD_CONTROL_PASS")
+}
