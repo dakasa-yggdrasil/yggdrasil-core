@@ -80,3 +80,38 @@ func TestLabRegistryRequiresExactReviewedContractAndCurrentIssuer(t *testing.T) 
 		t.Fatal("changed contract was accepted")
 	}
 }
+
+// Isolated LAB policy operand only. It exercises the reviewed real contract
+// digest and never grants execution or selects a production supplier.
+func TestLabRegistryMatchesAWS54755Policy(t *testing.T) {
+	raw, err := os.ReadFile("testdata/lab-aws-policy-54755.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var document model.ManifestDocument
+	if json.Unmarshal(raw, &document) != nil {
+		t.Fatal("bad policy envelope")
+	}
+	var p model.CapacityPolicySpec
+	if json.Unmarshal(document.Spec, &p) != nil || p.GuestRetirementBinding == nil {
+		t.Fatal("bad LAB policy")
+	}
+	b := *p.GuestRetirementBinding
+	if got := GuestProductionProfileContractSHA256(p, b, "aws"); got != "ec0c6365779ee345b1767783940685fc2f7d02706b5b1013c4556860e011d3ef" {
+		t.Fatalf("contract changed: %s", got)
+	}
+	if !guestProductionProfileMatches(p, b, "aws", b.CoreAuthoritySourceCommit, activeGuestProfileApprovals()) {
+		t.Fatal("exact isolated LAB policy rejected")
+	}
+	// Core issuer is intentionally excluded from this contract. Updating it
+	// for the final binary must preserve the digest while remaining current.
+	p.GuestRetirementBinding.CoreAuthoritySourceCommit = strings.Repeat("a", 40)
+	b = *p.GuestRetirementBinding
+	if GuestProductionProfileContractSHA256(p, b, "aws") != "ec0c6365779ee345b1767783940685fc2f7d02706b5b1013c4556860e011d3ef" || !guestProductionProfileMatches(p, b, "aws", b.CoreAuthoritySourceCommit, activeGuestProfileApprovals()) {
+		t.Fatal("current Core issuer changed the reviewed contract")
+	}
+	p.MutationBindings[0].OriginalProviderSourceCommit = strings.Repeat("f", 40)
+	if guestProductionProfileMatches(p, b, "aws", b.CoreAuthoritySourceCommit, activeGuestProfileApprovals()) {
+		t.Fatal("foreign provider source accepted")
+	}
+}
