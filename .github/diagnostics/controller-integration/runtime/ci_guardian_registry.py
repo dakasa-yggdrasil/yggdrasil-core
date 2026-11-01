@@ -83,7 +83,7 @@ def exercise(*, root, raw, trans, host_netns, baseline, baseline_plan, reader_ca
             verified=old_verified,verifier=verifier,identity=ident,nl=nl,sender_argv=argv,
             sender_sha256='a'*64,validate_kernel=validate)
         session=sender_protocol.SenderSession(sender_side,identity=ident,
-            guardian={'unit':'fixture.service','invocation_id':'f'*32,'argv':['fixture'],'source_sha256':'a'*64},nl=nl)
+            guardian={'unit':'fixture.service','invocation_id':'f'*32,'argv':['fixture'],'source_sha256':'a'*64},nl=nl,coord=generation.CI_DRAIN_COORDINATION)
         def serve():
             try:
                 raw_request=bytearray()

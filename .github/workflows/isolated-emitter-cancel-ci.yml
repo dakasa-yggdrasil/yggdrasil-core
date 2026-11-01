@@ -33,3 +33,14 @@ jobs:
           sudo systemd-run --quiet --wait --pipe --unit="ci-custodian-bad-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --property=RuntimeMaxSec=60s --setenv=CI_GUARDED_FIXTURE=1 --setenv=CI_BAD_FD_TEST=1 \
             --setenv=CI_HOST_NETNS="$(readlink /proc/self/ns/net)" /usr/bin/unshare --net -- /usr/bin/python3 -B "$target/verify_isolated_sender.py"
+
+      - name: Verify sender-session netfilter socket lifetime fence
+        run: |
+          set -eu
+          target="$(sudo mktemp -d /run/ci-session-custody.XXXXXX)"
+          trap 'sudo rm -rf "$target"' EXIT
+          sudo cp -R .github/diagnostics/controller-integration/. "$target/"
+          sudo chmod -R go-w "$target"
+          sudo systemd-run --quiet --wait --pipe --unit="ci-session-custody-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --property=RuntimeMaxSec=30s --setenv=CI_GUARDED_FIXTURE=1 \
+            --setenv=CI_HOST_NETNS="$(readlink /proc/self/ns/net)" /usr/bin/unshare --net -- /usr/bin/python3 -B "$target/verify_sender_session_custody.py"

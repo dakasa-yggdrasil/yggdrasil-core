@@ -25,6 +25,12 @@ class Held(RuntimeError):
 def need(value, reason):
     if not value:raise Held(reason)
 
+def _bind_netlink(sock):
+    sock.bind((0,0));sock.settimeout(5)
+
+def _close_netlink(sock):
+    sock.close()
+
 class _Permit:
     def __init__(self, session, genid, ids, digest, deadline_ns, epoch, capability):
         need(capability is _CAPABILITY, 'ONLY_ORIGINAL_SENDER_SESSION_PERMIT')
@@ -40,7 +46,7 @@ class _PositiveAttestation:
         self.pid, self.capability = os.getpid(), capability
 
 class SenderSession:
-    def __init__(self, channel, *, identity, guardian, nl):
+    def __init__(self, channel, *, identity, guardian, nl, coord):
         need(type(channel) is socket.socket and type(guardian) is dict
              and set(guardian)=={'unit','invocation_id','argv','source_sha256'},
              'EXACT_CONNECTED_GUARDIAN_IDENTITY_REQUIRED')
@@ -53,11 +59,22 @@ class SenderSession:
         self.peer = identity.authenticate(channel,unit=guardian['unit'],
             expected_invocation=guardian['invocation_id'],expected_argv=guardian['argv'],
             source_sha256=guardian['source_sha256'],expected_uid=0)
-        self.pidfd = self.peer['pidfd'];self.pending=None;self.closed=False
+        self.pidfd=self.peer['pidfd'];self.pending=None;self.closed=False
+        self.netlink=None;self.netlink_inode=None;self.writer_lease=None
         try:
-            self.netlink = socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,12);self.netlink.bind((0,0));self.netlink.settimeout(5)
+            import drain_marker_v3_DRAFT as marker
+            need(type(coord) is marker.CoordinatorV3,'EXACT_SENDER_WRITER_COORDINATOR_REQUIRED')
+            # A potentially writable netfilter socket may never precede SH.
+            self.writer_lease=coord.acquire_writer_lease()
+            self.netlink=socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,12)
+            self.netlink_inode=os.fstat(self.netlink.fileno()).st_ino
+            _bind_netlink(self.netlink)
         except BaseException:
-            os.close(self.pidfd);self.channel.close();raise
+            # On close failure or another live alias, keep SH held.
+            try:self._close_writer_socket()
+            finally:
+                os.close(self.pidfd);self.pidfd=None;self.channel.close()
+            raise
 
     def _live(self, *, require_quiet):
         need(not self.closed and os.getpid()==self.pid and threading.get_ident()==self.thread
@@ -169,10 +186,22 @@ class SenderSession:
              'LIVE_UNCHANGED_POSITIVE_ATTESTATION')
         return _PositiveAttestation(self,receipt_sha,genid,ids,digest,reply['deadline_ns'],reply['source_epoch'],_CAPABILITY)
 
+    def _close_writer_socket(self):
+        if self.netlink is not None:
+            _close_netlink(self.netlink)  # an exception deliberately retains SH
+            self.netlink=None
+        if self.netlink_inode is not None:
+            expected='socket:['+str(self.netlink_inode)+']'
+            for name in os.listdir('/proc/self/fd'):
+                try:target=os.readlink('/proc/self/fd/'+name)
+                except FileNotFoundError:continue
+                need(target!=expected,'SESSION_NETLINK_SOCKET_STILL_REFERENCED')
+            self.netlink_inode=None
+        if self.writer_lease is not None:
+            self.writer_lease.close();self.writer_lease=None
     def close(self):
-        if not self.closed:
-            self.closed=True;self.pending=None
-            try:os.close(self.pidfd)
-            finally:
-                try:self.netlink.close()
-                finally:self.channel.close()
+        need(os.getpid()==self.pid and threading.get_ident()==self.thread,'SAME_SESSION_CLOSER_REQUIRED')
+        self.closed=True;self.pending=None
+        if self.pidfd is not None:os.close(self.pidfd);self.pidfd=None
+        self.channel.close()
+        self._close_writer_socket()

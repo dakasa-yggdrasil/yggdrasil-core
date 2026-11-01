@@ -201,7 +201,7 @@ def main():
         sender_channel=watch.sender_channel()
         guardian_spec={'unit':pre_guardian.unit,'invocation_id':pre_guardian.session.invocation,
                        'argv':pre_guardian.argv,'source_sha256':hashlib.sha256(Path(pre_guardian.argv[2]).read_bytes()).hexdigest()}
-        rotation_session=direct_sender.SenderSession(sender_channel,identity=guarded_unit_identity,guardian=guardian_spec,nl=nl)
+        rotation_session=direct_sender.SenderSession(sender_channel,identity=guarded_unit_identity,guardian=guardian_spec,nl=nl,coord=drain)
         positive_guardian=native_structure.begin_lab_positive_guardian_session(rotation_session,origin,pre_guardian.session)
         attestation=rotation_session.attest_current(first.receipt,until_ns=time.monotonic_ns()+8_000_000_000)
         active_pin=native_structure.accept_lab_positive_guarded(positive_guardian,first,attestation)
