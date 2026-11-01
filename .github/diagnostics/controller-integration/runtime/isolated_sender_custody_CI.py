@@ -41,12 +41,21 @@ class ExclusiveObservation:
                 and stat.S_IMODE(opened.st_mode)==0o600 and
                 (opened.st_dev,opened.st_ino)==(named.st_dev,named.st_ino)==self.writer_identity,
                 'SAME_ROOT_PRIVATE_WRITER_INODE_REQUIRED')
+    def _exclusive_held(self):
+        fd=os.open(self.anchor.coordinator.writer_lock,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC)
+        try:
+            opened=os.fstat(fd)
+            require((opened.st_dev,opened.st_ino)==self.writer_identity,'SAME_PROBE_INODE_REQUIRED')
+            try:fcntl.flock(fd,fcntl.LOCK_SH|fcntl.LOCK_NB)
+            except BlockingIOError:return
+            raise Held('EXCLUSIVE_WRITER_FENCE_LOST')
+        finally:os.close(fd)
     def verify(self):
         require(self.fd is not None and self.pid==os.getpid(),'SAME_LIVE_EXCLUSIVE_CUSTODIAN_REQUIRED')
-        self._same_inode()
+        self._same_inode();self._exclusive_held()
         terminal.prove_terminal_for_marker(self.anchor)
         require(nl.genid(self.netlink)==self.expected_genid,'EXCLUSIVE_OBSERVATION_GENID_CHANGED')
-        self._same_inode()
+        self._same_inode();self._exclusive_held()
         terminal.prove_terminal_for_marker(self.anchor)
         require(nl.genid(self.netlink)==self.expected_genid,'EXCLUSIVE_OBSERVATION_GENID_CHANGED')
         return {'terminal_sender':True,'writer_inode':self.writer_identity,'genid':self.expected_genid,

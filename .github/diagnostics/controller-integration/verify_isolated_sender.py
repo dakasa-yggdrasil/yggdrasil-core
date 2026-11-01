@@ -55,6 +55,11 @@ try:
         assert nl.genid(net)==before and coord.marker_exists()
         probe=subprocess.run(['/usr/bin/flock','-s','-n',str(coord.writer_lock),'/usr/bin/true'],timeout=5)
         assert probe.returncode!=0  # new cooperating sender cannot acquire SH
+        fcntl.flock(fence.fd,fcntl.LOCK_UN)
+        try:fence.verify();raise AssertionError('released EX accepted')
+        except custody.Held as error:assert str(error)=='EXCLUSIVE_WRITER_FENCE_LOST'
+        fcntl.flock(fence.fd,fcntl.LOCK_EX|fcntl.LOCK_NB);fence.verify()
+        print('PASS lost EX is rejected before observation can be used',flush=True)
         assert not list((root/'sender-receipts').glob('WIRE-*')) and not list((root/'sender-receipts').glob('INTENT-*'))
         for rec,pf,mf in zip(records,received[::2],received[1::2]):
             assert int(nl.fdinfo(os.getpid(),pf)['prog_id'])==rec['program_id']
