@@ -585,6 +585,46 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 						t.Fatal("claim changed original history")
 					}
 					t.Log("LAB_CORE_BOUND_DISPOSAL_CLAIMED_FENCE_AND_REFUSAL_ROLLBACK")
+					var retireStep, finishStep model.WorkflowStepSpec
+					for _, step := range steps {
+						if step.Use.Operation == capacity.RetireOriginalGuestOperation {
+							retireStep = step
+						}
+						if step.Use.Operation == "capacity.finish_original_guest_retirement" {
+							finishStep = step
+						}
+					}
+					if retireStep.ID == "" || finishStep.ID == "" {
+						t.Fatal("exact original retirement steps missing")
+					}
+					store.ExecutionEnabled = true
+					retirementStore := store.WithOriginalGuestRetirement(retireStep, capacity.CurrentGuestCoreSource())
+					originalOwner, ownerErr := capacity.NewGuestRetirementV2OriginalOwner(claimCtx)
+					if ownerErr != nil {
+						t.Fatal("bounded retirement owner", ownerErr)
+					}
+					defer originalOwner.Close()
+					key := ed25519.NewKeyFromSeed([]byte(strings.Repeat("c", 32)))
+					if _, issueErr := retirementStore.IssueGuestRetirementV2(originalOwner, policy, claimed.Generation, claimed.FencingToken, uuid.NewString(), pre.PreregistrationID, strings.Repeat("f", 64), key); issueErr == nil {
+						t.Fatal("foreign lease issued retirement")
+					}
+					request, issueErr := retirementStore.IssueGuestRetirementV2(originalOwner, policy, claimed.Generation, claimed.FencingToken, claimed.LeaseOwner, pre.PreregistrationID, strings.Repeat("f", 64), key)
+					if issueErr != nil || request.Intent.PreregistrationID != pre.PreregistrationID || request.Intent.Fence != uint64(claimed.FencingToken) || request.Intent.Schema != capacity.GuestRetirementV2IntentSchema || capacity.ValidateGuestRetirementV2Preflight(request, receipt.Enrollment, time.Now().UTC()) != nil {
+						t.Fatal("synthetic retirement preflight", issueErr)
+					}
+					var nonceRows, callerRows int
+					if err = db.QueryRow(`SELECT (SELECT count(*) FROM public.capacity_vm_retirement_original_returns WHERE intent_id=$1),(SELECT count(*) FROM public.capacity_guest_original_caller_attempts WHERE intent_id=$1)`, request.Intent.RequestID).Scan(&nonceRows, &callerRows); err != nil || nonceRows != 0 || callerRows != 0 {
+						t.Fatal("preflight unexpectedly sent Guest I/O", err)
+					}
+					finishStore := store.WithOriginalGuestNotifyCanary(finishStep, capacity.CurrentGuestCoreSource())
+					if _, _, finishErr := finishStore.PrepareFailedInstalledGuestNativeCleanup(claimCtx, policy, claimed.Generation, claimed.FencingToken, claimed.LeaseOwner, request.Intent.RequestID); finishErr == nil {
+						t.Fatal("native cleanup admitted without V2 chain")
+					}
+					rows, readErr = (CapacityStore{DB: db}).ReadFailedInstalledGuestDisposal(ctx, pre.PreregistrationID)
+					if readErr != nil || len(rows) != 2 || !reflect.DeepEqual(beforeOriginals, originals()) {
+						t.Fatal("held V2 preflight mutated originals", readErr)
+					}
+					t.Log("LAB_SYNTHETIC_RETIREMENT_V2_SIGNED_PREFLIGHT_NO_SEND_CLEANUP_HELD")
 					t.Log("LAB_CORE_BOUND_DISPOSAL_REQUESTED_READBACK_NO_DUPLICATE")
 					return
 				}
