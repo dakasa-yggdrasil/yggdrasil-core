@@ -544,6 +544,31 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 					if !reflect.DeepEqual(beforeOriginals, originals()) {
 						t.Fatal("synthetic original history changed")
 					}
+					claimRun, _ := start(2)
+					store.OriginalRunID, store.ExecutorID = claimRun.RunID, pre.ExecutorID
+					claimCtx, stopClaim := context.WithTimeout(context.Background(), 10*time.Second)
+					defer stopClaim()
+					badAssessment := assessment
+					badAssessment.Snapshot.ResourceUID = "foreign-lab-resource"
+					if _, _, admitted, claimErr := store.TryClaimFailedInstalledGuestDisposal(claimCtx, policy, badAssessment); admitted || claimErr == nil {
+						t.Fatal("foreign assessment claimed disposal", claimErr)
+					}
+					rows, readErr = (CapacityStore{DB: db}).ReadFailedInstalledGuestDisposal(ctx, pre.PreregistrationID)
+					if readErr != nil || len(rows) != 1 || rows[0].Stage != "requested" {
+						t.Fatal("refused claim changed disposition", readErr)
+					}
+					claimed, claimedPre, admitted, claimErr := store.TryClaimFailedInstalledGuestDisposal(claimCtx, policy, assessment)
+					if claimErr != nil || !admitted || claimedPre != pre.PreregistrationID || claimed.FailedInstalledDisposal == nil || claimed.FailedInstalledDisposal.Stage != "claimed" || claimed.FencingToken != old.FencingToken+1 {
+						t.Fatal("LAB original disposal claim", claimedPre, admitted, claimErr)
+					}
+					rows, readErr = (CapacityStore{DB: db}).ReadFailedInstalledGuestDisposal(ctx, pre.PreregistrationID)
+					if readErr != nil || len(rows) != 2 {
+						t.Fatal("LAB requested/claimed lineage", readErr)
+					}
+					if !reflect.DeepEqual(beforeOriginals, originals()) {
+						t.Fatal("claim changed original history")
+					}
+					t.Log("LAB_CORE_BOUND_DISPOSAL_CLAIMED_FENCE_AND_REFUSAL_ROLLBACK")
 					t.Log("LAB_CORE_BOUND_DISPOSAL_REQUESTED_READBACK_NO_DUPLICATE")
 					return
 				}

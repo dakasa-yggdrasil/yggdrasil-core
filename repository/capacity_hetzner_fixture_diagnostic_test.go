@@ -135,6 +135,7 @@ func labHetznerAdmissionDiagnostic(t *testing.T, db *sql.DB, preID, lastRun stri
 	}
 	originalCore, e := failedInstalledOriginalCanaryIssuerTx(ctx, tx, p, stored, receipt, run)
 	if !check("CANARY_ISSUER", e) {
+		labHetznerCanaryDiagnostic(t, ctx, tx, stored, receipt, run)
 		return
 	}
 	t.Log("LAB_DIAG_CORE_ISSUER_SHAPE", len(originalCore) == 40, originalCore != capacity.CurrentGuestCoreSource())
@@ -156,4 +157,48 @@ func labHetznerAdmissionDiagnostic(t *testing.T, db *sql.DB, preID, lastRun stri
 	t.Log("LAB_DIAG_FINAL_FLAGS", expectedRun == lastRun, stored.pre.Fence == originalFence, failedInstalledRetirementMode(p, stored.binding), capacity.CurrentGuestCoreSource())
 	var intended map[string]any
 	_ = json.Unmarshal(originalRaw, &intended)
+}
+
+func labHetznerCanaryDiagnostic(t *testing.T, ctx context.Context, tx *sql.Tx, stored guestOriginalStored, receipt model.CapacityGuestOriginalProvisioningReceipt, run string) {
+	pre := stored.pre
+	rows, e := tx.QueryContext(ctx, failedInstalledOriginalCanaryIssuerQuery, run, pre.PreregistrationID, pre.WorkflowID, pre.PolicyID, pre.Generation, pre.Fence, pre.ExecutorID)
+	if e != nil {
+		t.Log("LAB_CANARY_QUERY_ERROR", e)
+		return
+	}
+	defer rows.Close()
+	type issue struct{ read, publish, source, parentSource, executor, parentExecutor, sha, parentSHA string }
+	var found []issue
+	for rows.Next() {
+		var v issue
+		if e = rows.Scan(&v.read, &v.publish, &v.source, &v.parentSource, &v.executor, &v.parentExecutor, &v.sha, &v.parentSHA); e != nil {
+			t.Log("LAB_CANARY_SCAN", e)
+			return
+		}
+		found = append(found, v)
+	}
+	if e = rows.Err(); e != nil {
+		t.Log("LAB_CANARY_ROWS", e)
+		return
+	}
+	t.Log("LAB_CANARY_COUNT", len(found))
+	if len(found) != 1 {
+		return
+	}
+	v := found[0]
+	t.Log("LAB_CANARY_SOURCE_FLAGS", failedInstalledCoreSource.MatchString(v.source), v.source == v.parentSource, v.source != stored.binding.CoreAuthoritySourceCommit, v.executor == pre.ExecutorID, v.parentExecutor == pre.ExecutorID)
+	read, e := loadGuestNotifyPreflightTx(ctx, tx, v.read)
+	if e != nil {
+		t.Log("LAB_CANARY_READ", e)
+		return
+	}
+	pub, e := loadGuestNotifyPreflightTx(ctx, tx, v.publish)
+	if e != nil {
+		t.Log("LAB_CANARY_PUBLISH", e)
+		return
+	}
+	for _, c := range []model.CapacityGuestNotifyCanaryChallenge{read, pub} {
+		t.Log("LAB_CANARY_PRE_FLAGS", c.PreregistrationID == pre.PreregistrationID, c.PolicyID == pre.PolicyID, c.PolicyChecksum == pre.PolicyChecksum, c.WorkflowID == pre.WorkflowID, c.WorkflowChecksum == pre.WorkflowChecksum, c.Generation == uint64(pre.Generation), c.Fence == uint64(pre.Fence), c.ProfileManifestSHA256 == stored.binding.ProfileManifestSHA256, c.Tuple == stored.witness.Tuple, capacity.ValidateGuestNotifyCanaryPreflight(c, receipt.Enrollment, c.IssuedAt) == nil, verifyGuestAuthorityIssuerTx(ctx, tx, "canary_challenge", c.ChallengeID, v.source, stored.binding, pre) == nil)
+	}
+	t.Log("LAB_CANARY_PAIR_FLAGS", v.sha == capacity.GuestRetirementSHA(read), v.parentSHA == capacity.GuestRetirementSHA(pub), capacity.GuestNotifyCausalPair(pub, read))
 }
