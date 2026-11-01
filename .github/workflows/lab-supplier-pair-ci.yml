@@ -1,0 +1,25 @@
+name: LAB exact supplier pair qualification
+on:
+  push:
+    branches: ['diagnostic/lab-supplier-pair-ci-20261101']
+permissions:
+  contents: read
+jobs:
+  verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: 659326fb251841b41148dd59eaf84aea7d03a269
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: Confirm exact source
+        run: test "$(git rev-parse HEAD)" = 659326fb251841b41148dd59eaf84aea7d03a269
+      - name: Validate LAB pair and bounded broker path
+        run: go test -race -tags labqualification ./controllers/message -run '^Test(LabOriginal|OriginalGuestSupplier|OriginalGuestFloorCollectionAndStrictAdmission)' -count=1 -v
+      - name: Validate default supplier behavior
+        run: go test -race ./controllers/message -run '^TestOriginalGuestSupplier' -count=1 -v
