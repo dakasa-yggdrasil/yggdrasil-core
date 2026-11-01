@@ -32,6 +32,25 @@ finally:
     if copy is not None:os.close(copy)
     session.close();peer.close()
 
+# A forked child inherits socket and lease together. Even after the parent
+# closes its session, the open-file-description lock remains until child exit.
+session,peer=new_session();rfd,wfd=os.pipe();child=os.fork()
+if child==0:
+    os.close(wfd)
+    try:os.read(rfd,1)
+    finally:os._exit(0)
+os.close(rfd)
+try:
+    session.close();assert not exclusive_possible()
+    os.write(wfd,b'x');os.close(wfd);wfd=None
+    _pid,status=os.waitpid(child,0);assert os.WIFEXITED(status) and exclusive_possible()
+    print('PASS child-inherited socket and writer lock block EX until child exit',flush=True)
+finally:
+    if wfd is not None:os.close(wfd)
+    try:os.waitpid(child,0)
+    except ChildProcessError:pass
+    session.close();peer.close()
+
 # A bind failure is pre-effect: close the created socket before releasing SH.
 original_bind=sender._bind_netlink
 try:
