@@ -281,6 +281,13 @@ def main():
             span=driver.results[-1]['confirmed_ns']-driver.results[0]['confirmed_ns']
             assert span>=35_000_000_000,(span,len(driver.results))
             print('PASS independent stop signal, confirmed guarded rotations span %.2fs with no expired prior window'%(span/1e9),flush=True)
+            # The following fault injection is a separate, bounded scenario.
+            # Keep its last actual source evidence/deadlines but stop these
+            # controller-side producers so they cannot replace the snapshot
+            # in the middle of the deliberately suspended handoff. Guardian's
+            # independent live Readers and all deadline guards remain active.
+            for active_reader in continuous_readers:active_reader.close()
+            continuous_readers=[]
         else:assert len(driver.results)==(4 if os.environ.get('CI_HOLDER_TEST')=='1' else 2)
         assert loop_result['sequence']==len(driver.results)+1 and loop_result['production_authority'] is False
         next_pin=loop_result['pin'];result=driver.results[-1]['native_result']
