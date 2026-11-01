@@ -18,7 +18,7 @@ before=nl.genid(net)
 server=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM);server.bind(str(root/'sender.sock'));server.listen(2);server.settimeout(10)
 unit='ci-isolated-sender-'+uuid.uuid4().hex+'.service';unitfile=Path('/run/systemd/system')/unit
 script=(root/'runtime'/'ci_isolated_sender.py').resolve();argv=['/usr/bin/python3','-B',str(script),str(root)]
-channel=None;anchor=None;childfd=None;received=[];live=None;registry_peer=None;registry_channel=None;prep=None;reference=None
+channel=None;anchor=None;childfd=None;received=[];live=None;independent=None;registry_peer=None;registry_channel=None;prep=None;reference=None
 try:
     bad_fd=os.environ.get('CI_BAD_FD_TEST')=='1'
     unitfile.write_text('[Service]\nType=simple\nKillMode=process\nRuntimeMaxSec=30s\nEnvironment=CI_GUARDED_FIXTURE=1\nEnvironment=CI_SENDER_BAD_FD_ID='+('1' if bad_fd else '0')+'\nEnvironment=CI_HOST_NETNS='+os.readlink('/proc/1/ns/net')+'\nEnvironment=CI_CONTROLLER_UNIT='+unit+'\nExecStart=/usr/bin/nsenter --net=/proc/'+str(os.getpid())+'/ns/net '+' '.join(argv)+'\n')
@@ -46,6 +46,15 @@ try:
     observed=guardian_registry.observe_isolated_sender(live)
     assert observed['pid']==anchor.verified['pid'] and not observed['prepare_authority'] and not observed['cancel_authority']
     print('PASS actual Guardian registry observes authenticated isolated sender and original program FDs without authorizing',flush=True)
+    independent=custody.IndependentWriterGuard(live)
+    # SCM_RIGHTS shares the sender OFD: an unlock affects both copies. A
+    # separate Guardian open description must nevertheless retain its own SH.
+    fcntl.flock(independent.sender_fd,fcntl.LOCK_UN)
+    with open(coord.writer_lock,'rb') as probe:
+        try:fcntl.flock(probe,fcntl.LOCK_EX|fcntl.LOCK_NB);raise AssertionError('sender unlock removed independent Guardian SH')
+        except BlockingIOError:pass
+    print('PASS sender unlock of SCM-shared OFD cannot release independent Guardian SH',flush=True)
+    fcntl.flock(independent.sender_fd,fcntl.LOCK_SH|fcntl.LOCK_NB)
     childfd=os.pidfd_open(int((root/'sender-child.pid').read_text()))
     run('/usr/bin/systemctl','kill','--kill-whom=main','--signal=KILL',unit)
     deadline=time.monotonic()+5
@@ -66,7 +75,7 @@ try:
         except terminal.Held:
             if time.monotonic()>deadline:raise
             time.sleep(.05)
-    with custody.ExclusiveObservation(marked,net,before) as fence:
+    with custody.ExclusiveObservation(marked,net,before,independent_guard=independent) as fence:
         observation=fence.verify();assert observation['cancel_authority'] is False
         no_send=live.inspect_no_recorded_send(fence)
         assert no_send['empty_original_receipts_observed'] and not no_send['cancel_authority']
@@ -119,6 +128,9 @@ finally:
     if prep is not None:os.close(prep['pidfd'])
     if registry_channel is not None:registry_channel.close()
     if registry_peer is not None:registry_peer.close()
+    if independent is not None:
+        try:independent.close_after_terminal()
+        except terminal.Held:pass  # process exit retains conservative kernel custody
     if live is not None:live.close()
     elif anchor is not None:anchor.close()
     if channel is not None:channel.close()

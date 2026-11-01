@@ -15,11 +15,11 @@ def require(value,reason):
     if not value:raise Held(reason)
 
 class ExclusiveObservation:
-    def __init__(self,anchor,netlink,expected_genid):
+    def __init__(self,anchor,netlink,expected_genid,*,independent_guard=None):
         require(type(anchor) is terminal.MarkerAnchor and type(netlink) is socket.socket
                 and type(expected_genid) is int,'EXACT_CUSTODIAN_INPUTS_REQUIRED')
         self.anchor=anchor;self.netlink=netlink;self.expected_genid=expected_genid
-        self.fd=None;self.pid=os.getpid()
+        self.fd=None;self.pid=os.getpid();self.independent_guard=independent_guard
     def __enter__(self):
         coord=self.anchor.coordinator
         observed=marker._durable_marker_identity(coord)
@@ -27,14 +27,27 @@ class ExclusiveObservation:
         recorded=observed[3].get('writer_lock_identity')
         require(type(recorded) is list and len(recorded)==2 and all(type(x) is int for x in recorded),
                 'MARKER_WRITER_INODE_REQUIRED')
-        fd=os.open(coord.writer_lock,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC)
+        guard=self.independent_guard
+        if guard is not None:
+            require(type(guard) is IndependentWriterGuard and guard.live.marker is self.anchor
+                    and guard.pid==os.getpid() and guard.fd is not None,'SAME_INDEPENDENT_GUARD_REQUIRED')
+            # The sender and every descendant must be terminal before the
+            # Guardian closes the transferred sender OFD or upgrades its own.
+            terminal.prove_terminal_for_marker(self.anchor)
+            os.close(guard.sender_fd);guard.sender_fd=None
+            fd=guard.fd
+        else:fd=os.open(coord.writer_lock,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC)
         try:
             self.fd=fd;self.writer_identity=tuple(recorded);self._same_inode()
+            # flock conversion is not guaranteed atomic. Failure is HOLD;
+            # success is followed by terminality/inode/genid revalidation.
             fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            if guard is not None:guard.fd=None
             self.verify()
             return self
         except BaseException:
-            os.close(fd);self.fd=None;raise
+            if guard is None:os.close(fd)
+            self.fd=None;raise
     def _same_inode(self):
         opened=os.fstat(self.fd);named=os.lstat(self.anchor.coordinator.writer_lock)
         require(stat.S_ISREG(opened.st_mode) and opened.st_uid==0 and opened.st_nlink==1
@@ -137,3 +150,50 @@ class LiveSenderCustody:
         for fd in self.fds:os.close(fd)
         self.fds=[]
         if self.anchor is not None:self.anchor.close();self.anchor=None
+
+
+class IndependentWriterGuard:
+    """Guardian-owned SH on a separate open-file-description, CI only.
+
+    A sender may unlock/convert its SCM-transferred OFD; that cannot remove
+    this separately opened SH. This is not cancellation or recovery authority.
+    """
+    def __init__(self,live):
+        import array,json
+        require(type(live) is LiveSenderCustody and live.pid==os.getpid() and live.anchor is not None,
+                'LIVE_AUTHENTICATED_SENDER_CUSTODY_REQUIRED')
+        require(not terminal._pidfd_terminal(live.anchor.verified['pidfd']),'ORIGINAL_SENDER_MUST_BE_LIVE')
+        self.live=live;self.pid=os.getpid();self.fd=None;self.sender_fd=None;unclaimed=[]
+        try:
+            live.channel.sendall(b'L')
+            raw,anc,flags,_=live.channel.recvmsg(4096,socket.CMSG_SPACE(array.array('i').itemsize))
+            for level,kind,data in anc:
+                if level==socket.SOL_SOCKET and kind==socket.SCM_RIGHTS:
+                    received=array.array('i');received.frombytes(data[:len(data)-len(data)%received.itemsize])
+                    unclaimed.extend(received)
+            require(raw.endswith(b'\n') and not flags&(socket.MSG_CTRUNC|socket.MSG_TRUNC) and len(anc)==1
+                    and anc[0][:2]==(socket.SOL_SOCKET,socket.SCM_RIGHTS) and len(unclaimed)==1,
+                    'EXACT_ONE_WRITER_FD_REQUIRED')
+            self.sender_fd=unclaimed.pop();msg=json.loads(raw)
+            require(type(msg) is dict and set(msg)=={'schema','writer_fd'} and msg['schema']=='ci_writer_lease_transfer_v1'
+                    and type(msg['writer_fd']) is int and msg['writer_fd']>=0,'EXACT_WRITER_FD_MESSAGE_REQUIRED')
+            info=marker._durable_marker_identity(live.coord);expected=tuple(info[3]['writer_lock_identity'])
+            source=os.stat('/proc/%d/fd/%d'%(live.anchor.verified['pid'],msg['writer_fd']))
+            sent=os.fstat(self.sender_fd);named=os.lstat(live.coord.writer_lock)
+            require((source.st_dev,source.st_ino)==(sent.st_dev,sent.st_ino)==
+                    (named.st_dev,named.st_ino)==expected,'SAME_SENDER_WRITER_INODE_REQUIRED')
+            self.fd=os.open(live.coord.writer_lock,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC)
+            opened=os.fstat(self.fd)
+            require((opened.st_dev,opened.st_ino)==expected,'SAME_INDEPENDENT_GUARD_INODE_REQUIRED')
+            fcntl.flock(self.fd,fcntl.LOCK_SH|fcntl.LOCK_NB)
+            require(not terminal._pidfd_terminal(live.anchor.verified['pidfd'])
+                    and marker._marker_identity(live.coord)[:3]==live.marker.key,'SAME_LIVE_SENDER_MARKER_REQUIRED')
+        except BaseException:
+            for fd in unclaimed:os.close(fd)
+            if self.fd is not None:os.close(self.fd);self.fd=None
+            if self.sender_fd is not None:os.close(self.sender_fd);self.sender_fd=None
+            raise
+    def close_after_terminal(self):
+        terminal.prove_terminal_for_marker(self.live.marker)
+        if self.sender_fd is not None:os.close(self.sender_fd);self.sender_fd=None
+        if self.fd is not None:os.close(self.fd);self.fd=None

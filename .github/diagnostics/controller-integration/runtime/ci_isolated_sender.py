@@ -28,5 +28,10 @@ fds=array.array('i',[r[k] for r in records for k in ('program_fd','map_fd')])
 if channel.sendmsg([msg],[(socket.SOL_SOCKET,socket.SCM_RIGHTS,fds)])!=len(msg):raise RuntimeError('FD_TRANSFER_FAILED')
 # This fixture does not consume a Guardian permit and does not invoke submit.
 # Kill makes inherited writer custody and terminality observable independently.
-channel.recv(1)
+request=channel.recv(1)
+if request==b'L':
+    msg=(json.dumps({'schema':'ci_writer_lease_transfer_v1','writer_fd':emitter.writer_lease.fd},sort_keys=True)+'\n').encode()
+    fds=array.array('i',[emitter.writer_lease.fd])
+    if channel.sendmsg([msg],[(socket.SOL_SOCKET,socket.SCM_RIGHTS,fds)])!=len(msg):raise RuntimeError('LEASE_TRANSFER_FAILED')
+    channel.recv(1)
 raise RuntimeError('UNEXPECTED_SENDER_RESUME')
