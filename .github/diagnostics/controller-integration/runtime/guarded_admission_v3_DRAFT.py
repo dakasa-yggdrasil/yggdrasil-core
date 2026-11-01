@@ -21,7 +21,7 @@ from drain_coordination_DRAFT import FenceError
 HERE=Path(__file__).resolve().parent
 ROOT=HERE.parent
 # Generated from this isolated package, not accepted from the RPC caller.
-CI_SOURCE_SHA256 = {'ci_guardian50_session.py': '2f6dce209683b7ce2e97bb6e8d2aab93c44aebfa7406a9ddb11e743057b931b2',
+CI_SOURCE_SHA256 = {'ci_guardian50_session.py': '269d3a84a45a9d34f37e74dfb1d56777958762b01dccbcae6410ec5bc2cc6f07',
  'ci_nl_probe.py': '92ef4d57f659f2683af06640be77e0dc04eb775d6fd5670b35fa720af3a546de',
  'coverage.py': 'c13f2d872f4b9a8351aa2999372ac8f2fd472f4db8e015810b3d6c28a596bfa6',
  'drain_marker_v3_DRAFT.py': 'f2a33a9c51ce991f22f747da2783964c1cca948935be4b1faf328c6c3ac71670',

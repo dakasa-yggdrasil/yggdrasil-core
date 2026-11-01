@@ -19,7 +19,7 @@ spec=importlib.util.spec_from_file_location('ci_guardian',ROOT/'network_guardian
 spec=importlib.util.spec_from_file_location('ci_coverage',ROOT/'coverage.py');coverage=importlib.util.module_from_spec(spec);spec.loader.exec_module(coverage)
 
 def endpoints(suffix):
-    now=time.monotonic();ttl=60 if os.environ.get('CI_HOLDER_TEST')=='1' else 20
+    now=time.monotonic();ttl=29 if os.environ.get('CI_HOLDER_TEST')=='1' else 20
     entries=[nft.Backend(k,a,nft.PORTS[k],now,now+ttl,
              ('00000000-0000-0000-0000-%012x/synthetic'%suffix if k=='core' else 'synthetic')) for k,a in
        [('core','10.244.1.'+str(suffix)),('broker','172.18.1.2'),('rds','172.18.1.3'),('redis','172.18.1.4')]]
