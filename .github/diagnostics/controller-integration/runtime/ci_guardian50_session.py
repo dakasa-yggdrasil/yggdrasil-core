@@ -93,6 +93,7 @@ def serve(channel,listener):
                 if not closing.is_set():sender_errors.append('SENDER_CLOSED')
             except BaseException as error:
                 sender_errors.append(type(error).__name__+':'+str(error))
+                print('CI_GUARDIAN_SENDER_ERROR '+type(error).__name__+':'+str(error),flush=True)
         def deny_after_reader_failure():
             nonlocal denier,deny_recovery
             # CI-only: interrupt the independently owned Reader after a
