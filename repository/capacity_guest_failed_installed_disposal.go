@@ -468,13 +468,20 @@ func (s CapacityStore) failedInstalledDisposalActiveTx(ctx context.Context, tx *
 // New Source is required, not a caller's replacement-ready assertion. The
 // current compiled complete contract must approve the different Guest Source
 // and profile before any subsequent native creation in this dimension.
-func requireFailedInstalledReplacementTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec) error {
+func guardFallbackNewerDisposalTx(ctx context.Context, tx *sql.Tx, namespace string, p model.CapacityPolicySpec) error {
 	var unsupported bool
-	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.capacity_guest_failed_installed_disposals WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND original_record ?| array['replacement_mode','original_failed_issuer_core_source','replacement_core_source'])`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension).Scan(&unsupported); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.capacity_guest_failed_installed_disposals WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND original_record ?| array['replacement_mode','original_failed_issuer_core_source','replacement_core_source'])`, namespace, p.Environment, p.Domain, p.Dimension).Scan(&unsupported); err != nil {
 		return err
 	}
 	if unsupported {
 		return ErrCapacityConflict
+	}
+	return nil
+}
+
+func requireFailedInstalledReplacementTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec) error {
+	if err := guardFallbackNewerDisposalTx(ctx, tx, policy.Metadata.Namespace, p); err != nil {
+		return err
 	}
 	if p.GuestNotifyReconcileBinding == nil {
 		return nil

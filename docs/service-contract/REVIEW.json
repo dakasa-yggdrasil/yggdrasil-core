@@ -429,8 +429,8 @@
       "base": "2de33bbca46000d86a6dc0d5162383a6128e3517",
       "independent_final_review_complete": false,
       "production_rollout_or_rollback_qualified": false,
-      "scope": "Separate strict read of Core-bound disposition wire and HOLD for unsupported replacement; no new endpoint or effect authorization.",
-      "source_inventory_sha256": "8173acbe1953bbee55eceefe6a7a3db16fd42f2eaed9a97e2d9652e4264a906d"
+      "scope": "Separate strict read of Core-bound disposition wire; HOLD unsupported issue, write-once redemption and replacement; no new endpoint or effect authorization.",
+      "source_inventory_sha256": "8bb13d3f0b7a8331430eb5e72a612f5e56fd015ab42556c77ac93e4a70956f4b"
     },
     "final_cost_cadence_patch_sha256": "a3095f9950d1699e60efe620af4e75727575234345811e0fff823ee049387780",
     "floor_bootstrap_successor": {
@@ -598,7 +598,7 @@
   "reviewer": "Root full production-source delta review; separate independent manager/dial/monitor peer; source acceptance only",
   "schema": "core_service_source_review_v1",
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "8173acbe1953bbee55eceefe6a7a3db16fd42f2eaed9a97e2d9652e4264a906d",
+  "source_inventory_sha256": "8bb13d3f0b7a8331430eb5e72a612f5e56fd015ab42556c77ac93e4a70956f4b",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",
