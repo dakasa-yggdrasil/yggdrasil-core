@@ -97,13 +97,15 @@ class HolderSession:
             stream.close()
 
 
-def close_after_workers(worker, session, authority, timeout=5):
-    """Do not close peer, preparer or sender FDs while either reader lives."""
+def require_terminal(worker, label, timeout=5):
     if worker is not None:
         worker.join(timeout)
-        if worker.is_alive():raise RuntimeError('HOLDER_WORKER_NOT_TERMINAL')
+        if worker.is_alive():raise RuntimeError(label+'_NOT_TERMINAL')
+
+
+def close_after_workers(worker, session, authority, timeout=5):
+    """Do not close peer, preparer or sender FDs while either reader lives."""
+    require_terminal(worker,'HOLDER_WORKER',timeout)
     monitor=None if session is None else session.monitor
-    if monitor is not None:
-        monitor.join(timeout)
-        if monitor.is_alive():raise RuntimeError('HOLDER_MONITOR_NOT_TERMINAL')
+    require_terminal(monitor,'HOLDER_MONITOR',timeout)
     if authority is not None:authority.close()

@@ -296,19 +296,19 @@ def serve(channel,listener):
         closing.set()
         if cache is not None:cache.wake.set()
         stop_watch()
-        if monitor is not None:monitor.join(5)
-        if readers is not None:readers.close()
+        holder_ipc.require_terminal(monitor,'READER_MONITOR')
         if holder_session is not None:holder_session.stopped.set()
         if holder_channel is not None:
             try:holder_channel.shutdown(2)
             except OSError:pass
-        holder_ipc.close_after_workers(holder_worker,holder_session,holder_authority)
-        if holder_identity is not None:os.close(holder_identity['pidfd'])
-        if holder_channel is not None:holder_channel.close()
         if sender_channel is not None:
             try:sender_channel.shutdown(2)
             except OSError:pass
-        if sender_worker is not None:sender_worker.join(5)
+        holder_ipc.require_terminal(sender_worker,'SENDER_WORKER')
+        holder_ipc.close_after_workers(holder_worker,holder_session,holder_authority)
+        if readers is not None:readers.close()
+        if holder_identity is not None:os.close(holder_identity['pidfd'])
+        if holder_channel is not None:holder_channel.close()
         if auth is not None:auth.close()
         elif sender_channel is not None:sender_channel.close()
         if reference is not None:reference.close()

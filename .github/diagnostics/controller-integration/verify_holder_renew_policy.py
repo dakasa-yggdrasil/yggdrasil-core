@@ -108,6 +108,12 @@ for stuck_monitor in (False,True):
     assert not probe.closed
     stop.set();ipc.close_after_workers(None if stuck_monitor else thread,session,probe,timeout=3)
     assert probe.closed
+for label in ('READER_MONITOR','SENDER_WORKER'):
+    stop=threading.Event();thread=threading.Thread(target=stop.wait);thread.start()
+    try:ipc.require_terminal(thread,label,timeout=.01)
+    except RuntimeError as error:assert str(error)==label+'_NOT_TERMINAL'
+    else:raise AssertionError('live callback allowed teardown')
+    stop.set();ipc.require_terminal(thread,label,timeout=3)
 
 class Expiring:
     def __init__(self):self.lock=threading.Lock();self.lease={'until':time.monotonic_ns()+100_000_000,'revoked':False}
