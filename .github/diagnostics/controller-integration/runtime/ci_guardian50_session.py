@@ -221,13 +221,26 @@ def serve(channel,listener):
                 holder_worker=threading.Thread(target=holder_session.serve);holder_worker.start()
                 publish({'event':'HOLDER_CONNECTED','pid':holder_identity['pid'],'production_authority':False})
             elif kind=='PREPARE':
-                chain_before=chain.capture_before_send()
-                proof=reg.prepare(chain_before,verified,command['records'])
+                coord=generation.CI_DRAIN_COORDINATION
+                auth.bind_prepare_marker(coord,verified)
+                try:
+                    chain_before=chain.capture_before_send()
+                    proof=reg.prepare(chain_before,verified,command['records'])
+                    auth.require_prepare_marker(coord,verified)
+                except BaseException:
+                    reg.holder_lost()
+                    raise
                 publish({'event':'PREPARED','genid':proof.genid,'production_authority':False})
             elif kind=='CONFIRM':
+                coord=generation.CI_DRAIN_COORDINATION
+                auth.require_prepare_marker(coord,verified)
                 next_verified=seal(command['result'],command['plan'])
-                try:confirmation=reg.confirm(proof,next_verified)
-                except BaseException:next_verified.close();raise
+                try:
+                    auth.require_prepare_marker(coord,verified)
+                    confirmation=reg.confirm(proof,next_verified)
+                    auth.complete_prepare_marker(coord,verified)
+                except BaseException:
+                    reg.holder_lost();next_verified.close();raise
                 if os.environ.get('CI_HOLDER_TEST')=='1':
                     envelope=validate(next_verified)
                     chain.record(chain_before,next_verified,envelope)

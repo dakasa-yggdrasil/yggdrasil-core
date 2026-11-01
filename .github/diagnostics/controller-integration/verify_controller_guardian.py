@@ -4,7 +4,7 @@ The cache, owner and deployment-specific compiled AST pin are fixtures. This
 exercises real controller/native process and Guardian methods, not BPF service
 integration or production authority.
 """
-import base64,hashlib,importlib.util,json,os,select,socket,struct,subprocess,sys,tempfile,threading,time,types,uuid
+import base64,hashlib,importlib.util,json,os,select,signal,socket,struct,subprocess,sys,tempfile,threading,time,types,uuid
 from pathlib import Path
 HERE=Path(__file__).resolve().parent
 sys.path.insert(0,str(HERE/'runtime'))
@@ -234,6 +234,31 @@ def main():
         assert not witness['kubernetes_proven'] and not witness['production_authority']
         assert watch.admission_witness('wrong-uid',initial_core.address)['event']=='ADMISSION_HOLD'
         print('PASS Guardian-owned 50-object BPF/rules/Reader read-only witness and UID mismatch HOLD',flush=True)
+        if os.environ.get('CI_GUARDIAN_DEATH_AFTER_PREPARE')=='1':
+            ceiling=guarded_sources.build_expected(guardian_cache)
+            rotation_prepared=guarded_preparation.PreparedGeneration(real_cache,
+                         deadline_ceilings={role:ceiling[role] for role in ('inbound','reverse')})
+            descriptors=list(rotation_prepared.fixture_descriptors(real_cache))
+            rows,cores,_,_,_=real_cache.snapshot();core=next(x for x in rows if x.kind=='core')
+            intent=drain.begin(core,cores,writer_lease=first.writer_lease);drain.barrier(intent,core,cores)
+            marker_before=drain_v3._durable_marker_identity(drain)[:3]
+            watch.prepare(descriptors)
+            permit=rotation_session.prepare(descriptors,until_ns=time.monotonic_ns()+3_000_000_000)
+            assert watch.pending_state()['possible_send']
+            before=nl.genid(first.nl)
+            signal.pidfd_send_signal(watch.peer['pidfd'],signal.SIGKILL)
+            poll=select.poll();poll.register(watch.peer['pidfd'],select.POLLIN)
+            assert poll.poll(5000),'guardian failed to die'
+            try:rotation_session.consume(permit,descriptors);raise AssertionError('dead guardian permit accepted')
+            except direct_sender.Held as error:assert str(error)=='GUARDIAN_PROCESS_TERMINATED'
+            try:rotation_session.consume(permit,descriptors);raise AssertionError('permit replayed')
+            except direct_sender.Held as error:assert str(error)=='EXACT_SINGLE_USE_SENDER_PERMIT_REQUIRED'
+            assert drain_v3._marker_identity(drain)[:3]==marker_before and nl.genid(first.nl)==before
+            assert first.counter==1 and not (receipts/'INTENT-002.json').exists()
+            print('PASS Guardian death after both prepares preserves marker and refuses permit/replay',flush=True)
+            print('BOUNDARY: preserved marker is UNKNOWN, not proof of no send or restart authority',flush=True)
+            verified.close()
+            return
         if os.environ.get('CI_TEST_EXPIRED_PERMIT')=='1':
             ceiling=guarded_sources.build_expected(guardian_cache)
             rotation_prepared=guarded_preparation.PreparedGeneration(real_cache,

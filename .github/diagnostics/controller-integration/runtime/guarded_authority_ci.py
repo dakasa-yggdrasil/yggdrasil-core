@@ -31,7 +31,7 @@ class SenderRegistryAuthority:
         self.channel,self.registry,self.registry_module,self.verified,self.nl=channel,registry,registry_module,verified,nl
         self.sender,self.ticks,self.netns,self.guardian=pid,anchor['start_ticks'],anchor['netns'],os.getpid()
         self.identity,self.uid,self.gid=identity,uid,gid;self.validate_kernel=validate_kernel
-        self.lock=threading.Lock();self.closed=False;self.pidfd=os.pidfd_open(pid,0);self.writer_guard=None
+        self.lock=threading.Lock();self.closed=False;self.pidfd=os.pidfd_open(pid,0);self.writer_guard=None;self.prepared_marker=None;self.committed_markers=set()
         try:
             self._live();raw=Path('/proc/%d/cmdline'%pid).read_bytes()
             need(raw.endswith(b'\0') and raw[:-1].split(b'\0')==[x.encode() for x in sender_argv],'EXACT_SENDER_ARGV')
@@ -98,6 +98,36 @@ class SenderRegistryAuthority:
              'SAME_GUARDIAN_WRITER_CUSTODY_INODE_REQUIRED')
         return guard[2]
 
+    def bind_prepare_marker(self,coord,verified):
+        import drain_marker_v3_DRAFT as marker
+        inode=self.require_writer_custody(coord,verified)
+        need(self.prepared_marker is None and len(self.committed_markers)<128,
+             'NO_PREVIOUS_MARKER_BINDING_REQUIRED')
+        observed=marker._durable_marker_identity(coord);record=observed[3];prep=self.registry.prep
+        need(all(record.get(k)==prep[k] for k in ('pid','start_ticks','unit','invocation_id','control_group'))
+             and record.get('boot_id')==Path('/proc/sys/kernel/random/boot_id').read_text().strip()
+             and record.get('netns')==self.netns and record.get('writer_lock_identity')==list(inode)
+             and observed[:3] not in self.committed_markers,
+             'DURABLE_MARKER_MUST_MATCH_CUSTODIED_PREPARER')
+        self.require_writer_custody(coord,verified)
+        self.prepared_marker=(coord,observed[:3],verified)
+        return observed[:3]
+
+    def require_prepare_marker(self,coord,verified):
+        import drain_marker_v3_DRAFT as marker
+        bound=self.prepared_marker
+        need(bound is not None and bound[0] is coord and bound[2] is verified,
+             'ORIGINAL_PREPARED_MARKER_BINDING_REQUIRED')
+        self.require_writer_custody(coord,verified)
+        need(marker._marker_identity(coord)[:3]==bound[1],
+             'ORIGINAL_PREPARED_MARKER_UNCHANGED_REQUIRED')
+        self.require_writer_custody(coord,verified)
+        return bound[1]
+
+    def complete_prepare_marker(self,coord,verified):
+        key=self.require_prepare_marker(coord,verified)
+        self.committed_markers.add(key);self.prepared_marker=None
+
     def _send(self,value):
         with self.lock:self.channel.sendall(self.nl.canon(value))
 
@@ -130,6 +160,8 @@ class SenderRegistryAuthority:
              and request['sender_pid']==self.sender and request['sender_start_ticks']==self.ticks
              and type(request['genid']) is int and type(request['until_ns']) is int,'EXACT_SENDER_REQUEST')
         self._live()
+        need(self.prepared_marker is not None,'ORIGINAL_PREPARED_MARKER_BINDING_REQUIRED')
+        self.require_prepare_marker(self.prepared_marker[0],self.verified)
         with self.registry.lock:
             proof=self.registry.pending;holder=self.registry.holder
             need(type(proof) is self.registry_module._Prepared and proof.capability is self.registry_module._CAPABILITY
@@ -153,6 +185,7 @@ class SenderRegistryAuthority:
             proof.sender_claimed=True
         try:
             self.registry.mark_send_started(proof)
+            self.require_prepare_marker(self.prepared_marker[0],self.verified)
             self._send({'schema':'lab_sender_prepared_permit_reply_v1','nonce':request['nonce'],
                         'sender_pid':self.sender,'sender_start_ticks':self.ticks,'genid':proof.genid,
                         'ids':[list(x) for x in ids],'map_digest':digest,'deadline_ns':deadline,
