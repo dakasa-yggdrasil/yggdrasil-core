@@ -10,6 +10,8 @@ import dns_native
 import whole_witness as whole
 
 class Held(Exception):pass
+class OriginalDNSWitnessUnavailable(Held):
+    """An original DNS/route witness is not currently available."""
 def require(ok,reason):
     if not ok:raise Held(reason)
 def tk(src,dst,port):return socket.inet_aton(src)+socket.inet_aton(dst)+struct.pack('>H',port)+bytes(2)
@@ -19,7 +21,8 @@ def build_expected(cache,*,now=None):
     require(type(now) in (int,float) and math.isfinite(now),'FINITE_ORIGINAL_CLOCK')
     with cache.lock:
         for role in ('rds','redis'):
-            require(type(cache.dns.get(role))is whole.CompleteWitness,'ORIGINAL_DNS_ROUTE_WITNESS_REQUIRED')
+            if type(cache.dns.get(role)) is not whole.CompleteWitness:
+                raise OriginalDNSWitnessUnavailable('ORIGINAL_DNS_ROUTE_WITNESS_REQUIRED')
         entries,cores,prom,errors,generation=cache._snapshot_locked()
         require(not errors and len(entries)==4 and {x.kind for x in entries}=={'core','broker','rds','redis'},'FOUR_ORIGINAL_BACKEND_WITNESSES_REQUIRED')
         require(1<=len(cores)<=8 and len(prom)==1 and len({x.address for x in cores})==len(cores),'CORE_PROM_CENSUS_REQUIRED')

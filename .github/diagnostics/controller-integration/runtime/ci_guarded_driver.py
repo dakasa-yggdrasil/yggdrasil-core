@@ -17,6 +17,9 @@ def bounded_guardian_ceilings(watch,cache):
         expected[role]={k:min(v,ceilings[k]) for k,v in expected[role].items()}
     return expected
 
+class TransientSourcesBeforeIntent(RuntimeError):
+    """The local DNS source is unavailable before marker or prepare."""
+
 class SnapshotChangedBeforeIntent(RuntimeError):
     """A local precomputation was discarded before any intent or prepare."""
 
@@ -30,7 +33,7 @@ class GuardedDriver:
             raise RuntimeError('ONLY_BOUNDED_PRIVATE_CI_DRIVER')
         self.watch,self.sender,self.emitter,self.positive_session=watch,sender,emitter,positive_session
         self.ceiling_cache,self.endpoints,self.max_commits=ceiling_cache,endpoints,max_commits
-        self.results=[];self.pause_started=None;self.stop_signal=stop_signal;self.previous_expiry_ns=None;self.pre_intent_waits=0;self.pre_intent_discards=0;self._ci_before_pre_intent=None
+        self.results=[];self.pause_started=None;self.stop_signal=stop_signal;self.previous_expiry_ns=None;self.pre_intent_waits=0;self.pre_intent_discards=0;self.pre_source_waits=0;self._ci_before_pre_intent=None
     def prepare_local(self,cache):
         start=cache.commit_snapshot();prepared=None
         try:
@@ -45,6 +48,9 @@ class GuardedDriver:
         except SnapshotChangedBeforeIntent:
             if prepared is not None:prepared.close()
             raise
+        except guarded_sources.OriginalDNSWitnessUnavailable as error:
+            if prepared is not None:prepared.close()
+            raise TransientSourcesBeforeIntent('LOCAL_DNS_WITNESS_UNAVAILABLE_BEFORE_INTENT') from error
         except (guarded_preparation.Held,guarded_sources.Held) as error:
             if prepared is not None:prepared.close()
             if cache.commit_snapshot()!=start:

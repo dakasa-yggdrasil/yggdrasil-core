@@ -247,11 +247,15 @@ def main():
         import ci_guarded_driver
         external_stop=threading.Event() if os.environ.get('CI_CONTINUOUS_TEST')=='1' else None
         timeout_test=os.environ.get('CI_ADMISSION_TIMEOUT_TEST')=='1'
+        source_timeout_test=os.environ.get('CI_SOURCE_TIMEOUT_TEST')=='1'
+        if source_timeout_test:
+            continuous_readers[1].close()
+            guardian_cache.dns_failed('rds','CI_PERSISTENT_DNS_FAILURE')
         post_marker_test=os.environ.get('CI_POST_MARKER_TEST')=='1'
-        timer=threading.Timer(42,external_stop.set) if external_stop is not None and not (timeout_test or post_marker_test) else None
+        timer=threading.Timer(42,external_stop.set) if external_stop is not None and not (timeout_test or post_marker_test or source_timeout_test) else None
         if timer is not None:timer.daemon=True;timer.start()
         admission_release=None;admission_errors=[]
-        if external_stop is not None and not post_marker_test:
+        if external_stop is not None and not (post_marker_test or source_timeout_test):
             reservation=drain.reserve_admission()
             def release_admission():
                 try:
@@ -297,6 +301,12 @@ def main():
             assert not admission_release.is_alive() and not admission_errors
             print('PASS admission hold timed out before marker or prepare; no sender replay or new wire',flush=True)
             return
+        except ci_guarded_driver.TransientSourcesBeforeIntent:
+            if not source_timeout_test:raise
+            assert driver.pre_source_waits>0 and not drain.marker_exists() and first.counter==1
+            assert not (receipts/'INTENT-002.json').exists()
+            print('PASS persistent missing original DNS source times out before marker or prepare, no wire',flush=True)
+            return
         except nft.Held as error:
             if not post_marker_test or str(error)!='SAME_CACHE_SNAPSHOT_BEFORE_GUARDED_HANDOFF':raise
             pending=watch.pending_state()
@@ -304,7 +314,7 @@ def main():
             assert not (receipts/'INTENT-002.json').exists()
             print('PASS cache change after prepare remains HOLD with marker and Guardian reservation, no replay',flush=True)
             return
-        if timeout_test or post_marker_test:raise AssertionError('EXPECTED_PRE_SEND_HOLD')
+        if timeout_test or post_marker_test or source_timeout_test:raise AssertionError('EXPECTED_PRE_SEND_HOLD')
         if timer is not None:
             timer.cancel();timer.join();admission_release.join(2)
             assert not admission_release.is_alive() and not admission_errors and driver.pre_intent_waits>0 and driver.pre_intent_discards>0
