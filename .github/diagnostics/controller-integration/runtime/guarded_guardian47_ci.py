@@ -74,7 +74,8 @@ def serve(channel,*,preparer_identity,sender_argv,source_sha256,probe_path,probe
         def probe():
             import fenced_probe_CI
             return json.loads(fenced_probe_CI.call(nl,prefix,probe_path))['genid']
-        before=probe();raw=nl.cmd(*prefix,'/usr/sbin/nft','-j','list','ruleset');rows,rules,original=structure._objects(raw,_with_origin=True)
+        import fenced_probe_CI
+        before=probe();raw=fenced_probe_CI.read_nft(nl,prefix,'-j','list','ruleset');rows,rules,original=structure._objects(raw,_with_origin=True)
         pin=transition.OriginalPin(raw);nft.ruleset_mark_preflight(rules,_original_json=original)
         after=probe();live();identity._secure_source(Path(sender_script),source_sha256);identity._secure_source(Path(probe_path),probe_sha256)
         need(before==after and pin.digest==request['origin_digest'],

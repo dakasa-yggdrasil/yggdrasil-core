@@ -79,10 +79,11 @@ def verify_generation(*, result, anchor, plan, receipt_dir, reader_cache,
             check(int(mi['map_id']) == entry['map_id'] and mi['frozen'].strip() == '1',
                   'SENDER_MAP_FROZEN')
             actual[name] = nl.map_rows(entry['map_id'])
-        raw = nl.cmd(*prefix, '/usr/sbin/nft', '-a', '-j', 'list', 'ruleset')
+        import fenced_probe_CI
+        raw = fenced_probe_CI.read_nft(nl,prefix, '-a', '-j', 'list', 'ruleset')
         transition.verify_guarded(pin, raw, observed_chain_handle=result['chain'],
                                   observed_rule_handles=tuple(result['handles']))
-        text = nl.cmd(*prefix, '/usr/sbin/nft', '-a', 'list', 'table', 'inet', 'dakasa_capacity_network')
+        text = fenced_probe_CI.read_nft(nl,prefix, '-a', 'list', 'table', 'inet', 'dakasa_capacity_network')
         joined = sources.verify(reader_cache, coverage.kernel_text(text), actual)
         last_probe = crossprobe()
         check(last_probe == first_probe and not sender_poll.poll(0)

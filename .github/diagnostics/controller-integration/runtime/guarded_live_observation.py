@@ -46,7 +46,8 @@ def observe(verified, *, verifier, sources, nl, coverage, probe_path, probe_sha2
         check(set(actual[name]) == set(verified.actual[name]) and len(actual[name]) == len(verified.actual[name]),
               'SAME_VERIFIED_ORIGINAL_MAP_CONTENTS')
     kernel_read_started_ns = time.monotonic_ns()
-    text = nl.cmd(*prefix, '/usr/sbin/nft', '-a', 'list', 'table', 'inet', 'dakasa_capacity_network')
+    import fenced_probe_CI
+    text = fenced_probe_CI.read_nft(nl,prefix, '-a', 'list', 'table', 'inet', 'dakasa_capacity_network')
     kernel = coverage.kernel_text(text)
     joined = sources.verify(cache, kernel, actual)
     check(type(kernel['minimum_actual_expires_ms']) is int and kernel['minimum_actual_expires_ms'] > 0,

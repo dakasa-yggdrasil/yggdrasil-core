@@ -17,22 +17,24 @@ import sys
 import time
 
 from drain_coordination_DRAFT import FenceError
+import fenced_probe_CI
 
 HERE=Path(__file__).resolve().parent
 ROOT=HERE.parent
 # Generated from this isolated package, not accepted from the RPC caller.
-CI_SOURCE_SHA256 = {'ci_holder_process.py': 'bbfe28072bbb6622d4dcd809725152707c8ab4b63085ca1b618839e823277e1a',
+CI_SOURCE_SHA256 = {'fenced_probe_CI.py': 'd8a1f3f035675d6cd4d04a0efb479a595bad69fe0fee9cedefec39ba7c339fae',
+ 'ci_holder_process.py': 'bbfe28072bbb6622d4dcd809725152707c8ab4b63085ca1b618839e823277e1a',
  'guarded_effect_lease_two_peers_DRAFT.py': 'dae81780de396d99d9d84b99b2c9fc75901b2fb8eee5e3a2be73a3b0a692157e',
  'guarded_lease_ipc_DRAFT.py': '2ccff8cb8dd953d94784913aeb54a2aee3bc593a8eea4b1237a924cd6f977361',
  'ci_guardian50_session.py': 'eef6a6a593f575e3f9213d256b5a02990a32d78cbfd6c00150018d6d3e80f426',
  'ci_nl_probe.py': 'cffaff1f55d16e32ee7acedbcc52a3ad3702d44fa8693b8e4461d01d5b1ef65a',
  'coverage.py': 'c13f2d872f4b9a8351aa2999372ac8f2fd472f4db8e015810b3d6c28a596bfa6',
  'drain_marker_v3_DRAFT.py': '205d4749d3adb62a59a0ffb71ef87e953bf27ea1225da6e2e166e2ec0cdf703c',
- 'guarded_live_observation.py': '0ba8e280203fc964f82fed12d5db6c0b9a8c63810f49197e646fb2d2e1919cd8',
+ 'guarded_live_observation.py': 'e36acd5a4ff24157d133e74c8789f0300152370a656749ee4ae73cd1193319ff',
  'guarded_nl.py': '04409b298606a1d8a61b95064970bae76f4b23d189514f7b2d2b369e4df41749',
  'guarded_refresh_registry_DRAFT.py': '1a562343aa7a5977ca22354a0e273db791a5c8bef9bcf8a86ba3c39d114fd09d',
  'guarded_sources.py': 'e8935b8406ba4b4571d7779d65c2f280a3ed9f2aea128ce58079c2a0b9b40a66',
- 'guarded_verifier.py': '020d13135ac476854d51f013c7d0954d50b1f6203b0ba6ebaa4ff12e2c0fcdef',
+ 'guarded_verifier.py': 'e37154919bca2fffb56d384d58a8ad9c5f4e8eb468bdb4409c7db99a06a10e55',
  'native_structure.py': '79e185a4b7e7025f61d9dd43ec7f6b4fada7ee33a811baee3508fc912accd1b2',
  'nft_owner.py': '0d4387e933d1d1ee61d4a47bbb6f68d71224e9825d73e63b3df5916b9e811922',
  'observations.py': '1d53464bb58ca124dc6cf908298e4ace7bc26a5ed2ad4fcb3cdb6565b8428b33',
@@ -67,7 +69,7 @@ def _read_sealed(path,expected):
     finally:os.close(fd)
 
 def _fixed_sources():
-    names=('guarded_live_observation','guarded_verifier','guarded_sources',
+    names=('fenced_probe_CI','guarded_live_observation','guarded_verifier','guarded_sources',
            'guarded_nl','transition_structure_DRAFT','native_structure',
            'guarded_refresh_registry_DRAFT','drain_marker_v3_DRAFT',
            'nft_owner','observations','ci_guardian50_session',
