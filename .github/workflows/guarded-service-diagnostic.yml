@@ -1,7 +1,7 @@
 name: Disposable Guardian service integration diagnostic
 on:
   push:
-    branches: [codex/guarded-drain-v3-20261031]
+    branches: [codex/network-holder-integrated-20261031]
 permissions:
   contents: read
 jobs:

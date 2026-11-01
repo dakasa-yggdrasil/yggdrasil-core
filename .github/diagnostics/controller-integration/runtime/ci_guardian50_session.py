@@ -3,11 +3,12 @@
 No production authority. Guardian and controller are separate systemd peers;
 synthetic DNS/topology and a fixture-derived 47 pin remain explicit.
 """
-import base64,hashlib,importlib.util,json,os,socket,struct,threading,time,types
+import base64,hashlib,importlib.util,json,os,re,socket,struct,threading,time,types
 from pathlib import Path
 import ci_reader_fixture,guarded_nl as nl,guarded_sources,guarded_unit_identity as identity
 import guarded_verifier,guarded_live_observation,transition_structure_DRAFT as trans
 import guarded_current15 as current15,guarded_refresh_registry_DRAFT as registry_module
+import guarded_effect_lease_two_peers_DRAFT as effect_lease,guarded_lease_ipc_DRAFT as holder_ipc
 import guarded_program_identity_DRAFT as program_module,guarded_authority_ci as authority
 import native_io,native_structure,nft_owner as nft
 import guarded_generation as generation
@@ -18,11 +19,11 @@ spec=importlib.util.spec_from_file_location('ci_guardian',ROOT/'network_guardian
 spec=importlib.util.spec_from_file_location('ci_coverage',ROOT/'coverage.py');coverage=importlib.util.module_from_spec(spec);spec.loader.exec_module(coverage)
 
 def endpoints(suffix):
-    now=time.monotonic()
-    entries=[nft.Backend(k,a,nft.PORTS[k],now,now+20,
+    now=time.monotonic();ttl=29 if os.environ.get('CI_HOLDER_TEST')=='1' else 20
+    entries=[nft.Backend(k,a,nft.PORTS[k],now,now+ttl,
              ('00000000-0000-0000-0000-%012x/synthetic'%suffix if k=='core' else 'synthetic')) for k,a in
        [('core','10.244.1.'+str(suffix)),('broker','172.18.1.2'),('rds','172.18.1.3'),('redis','172.18.1.4')]]
-    return entries,[entries[0]],[nft.PrometheusSource('10.244.1.9',now,now+20,'synthetic')]
+    return entries,[entries[0]],[nft.PrometheusSource('10.244.1.9',now,now+ttl,'synthetic')]
 
 def read_line(channel):
     data=bytearray()
@@ -34,7 +35,7 @@ def read_line(channel):
     raise RuntimeError('bounded fixture message')
 
 def serve(channel,listener):
-    verified=None;controller=None;reference=None;sender_channel=None;auth=None;sender_worker=None;watcher=None;denier=None;deny_recovery=None;readers=None;monitor=None;cache=None
+    verified=None;controller=None;reference=None;holder_channel=None;holder_identity=None;holder_authority=None;holder_session=None;holder_worker=None;chain_before=None;sender_channel=None;auth=None;sender_worker=None;watcher=None;denier=None;deny_recovery=None;readers=None;monitor=None;cache=None
     watch_stop=threading.Event();closing=threading.Event();send_lock=threading.Lock();sender_errors=[]
     def publish(row):
         with send_lock:channel.sendall(nl.canon(row))
@@ -46,7 +47,7 @@ def serve(channel,listener):
             watcher=None
     try:
         generation.CI_DRAIN_COORDINATION=drain_v3.CoordinatorV3(ROOT/'drain-coordinator')
-        channel.settimeout(15);request=read_line(channel)
+        channel.settimeout(30 if os.environ.get('CI_HOLDER_TEST')=='1' else 15);request=read_line(channel)
         controller=identity.authenticate(channel,unit=request['unit'],expected_invocation=request['invocation'],
                       expected_argv=request['argv'],source_sha256=request['source_sha256'])
         assert controller['pid']==request['anchor']['pid'] and controller['start_ticks']==request['anchor']['start_ticks']
@@ -92,6 +93,7 @@ def serve(channel,listener):
                 if not closing.is_set():sender_errors.append('SENDER_CLOSED')
             except BaseException as error:
                 sender_errors.append(type(error).__name__+':'+str(error))
+                print('CI_GUARDIAN_SENDER_ERROR '+type(error).__name__+':'+str(error),flush=True)
         def deny_after_reader_failure():
             nonlocal denier,deny_recovery
             # CI-only: interrupt the independently owned Reader after a
@@ -99,6 +101,7 @@ def serve(channel,listener):
             # expired-map transaction. This is not a production recovery.
             if os.environ.get('CI_GUARDED_FIXTURE')!='1':raise RuntimeError('ONLY_PRIVATE_CI_FAILURE_INJECTION')
             failure_ns=time.monotonic_ns();auth.revoke_and_notify()
+            if holder_session is not None:holder_session.revoke_and_notify()
             deny_dir=ROOT/'guardian-deny-receipts';deny_dir.mkdir(mode=0o700)
             denier=generation.GenerationEmitter(initial_raw=original,transition=trans,receipt_dir=deny_dir,
                          host_netns=os.environ['CI_HOST_NETNS'],recover_fixture=True)
@@ -175,19 +178,55 @@ def serve(channel,listener):
             elif kind=='CONNECT':
                 if auth is not None:raise RuntimeError('ONE_SENDER_CHANNEL')
                 publish({'event':'LISTENING','production_authority':False})
-                sender_channel,_=listener.accept();sender_channel.settimeout(15)
+                sender_channel,_=listener.accept();sender_channel.settimeout(30 if os.environ.get('CI_HOLDER_TEST')=='1' else 15)
                 auth=authority.SenderRegistryAuthority(sender_channel,registry=reg,registry_module=registry_module,
                      verified=verified,verifier=guarded_verifier,identity=identity,nl=nl,sender_argv=request['argv'],
                      sender_sha256=request['source_sha256'],validate_kernel=validate)
                 sender_worker=threading.Thread(target=serve_sender);sender_worker.start()
                 publish({'event':'CONNECTED','production_authority':False})
+            elif kind=='COVERAGE':
+                obs=chain.last_observation
+                publish({'event':'COVERAGE','qualified':bool(obs is not None and obs[0]),
+                         'coverage_ns':0 if obs is None else obs[2]-obs[1],'production_authority':False})
+            elif kind=='CONNECT_HOLDER':
+                if os.environ.get('CI_HOLDER_TEST')!='1' or holder_session is not None:raise RuntimeError('ONLY_ONE_HOLDER_TEST')
+                holder_script=HERE/'ci_holder_process.py'
+                admission._read_sealed(holder_script,admission.CI_SOURCE_SHA256['ci_holder_process.py'])
+                expected_holder_argv=['/usr/bin/python3','-B',str(holder_script),str(ROOT/'guardian47.sock'),
+                                      str(ROOT/'holder-go'),str(ROOT/'holder-acquired'),str(ROOT/'holder-revoked')]
+                if (re.fullmatch(r'ci-rotation-holder-[0-9a-f]{32}\.service',command.get('unit','')) is None
+                        or command.get('argv')!=expected_holder_argv
+                        or command.get('source_sha256')!=admission.CI_SOURCE_SHA256['ci_holder_process.py']):
+                    raise RuntimeError('EXACT_CI_HOLDER_UNIT_AND_SOURCE_REQUIRED')
+                publish({'event':'HOLDER_LISTENING','production_authority':False})
+                holder_channel,_=listener.accept();holder_channel.settimeout(10)
+                holder_identity=identity.authenticate(holder_channel,unit=command['unit'],expected_invocation=command['invocation'],
+                    expected_argv=command['argv'],source_sha256=command['source_sha256'])
+                holder_authority=effect_lease.EffectLeaseAuthority(holder_channel,cache=cache,sources=guarded_sources,nl=nl,
+                    verifier=guarded_verifier,current15=current15,preparer_channel=channel,program_reference=reference)
+                assert holder_authority.peer==holder_identity['pid'] and holder_authority.preparer==controller['pid']
+                def acquire_holder(until):
+                    return reg.acquire_holder(holder_authority,effect_lease,lambda:holder_authority.acquire(verified,chain,until))
+                def validate_holder():
+                    value=validate(verified);lease=holder_authority.lease
+                    assert lease is not None and value['observation']['genid']==lease['epoch']
+                    assert value['invalidation_epoch']==lease['invalidation_epoch']
+                holder_session=holder_ipc.HolderSession(holder_channel,holder_authority,acquire_holder,validate_holder)
+                holder_worker=threading.Thread(target=holder_session.serve);holder_worker.start()
+                publish({'event':'HOLDER_CONNECTED','pid':holder_identity['pid'],'production_authority':False})
             elif kind=='PREPARE':
-                proof=reg.prepare(chain.capture_before_send(),verified,command['records'])
+                chain_before=chain.capture_before_send()
+                proof=reg.prepare(chain_before,verified,command['records'])
                 publish({'event':'PREPARED','genid':proof.genid,'production_authority':False})
             elif kind=='CONFIRM':
                 next_verified=seal(command['result'],command['plan'])
                 try:confirmation=reg.confirm(proof,next_verified)
                 except BaseException:next_verified.close();raise
+                if os.environ.get('CI_HOLDER_TEST')=='1':
+                    envelope=validate(next_verified)
+                    chain.record(chain_before,next_verified,envelope)
+                    confirmation['current15_qualified']=envelope['current15_qualified']
+                    confirmation['coverage_ns']=envelope['observed_ns']-chain.start_ns
                 old=verified;verified=next_verified;ctx['verified']=verified;auth.verified=verified;old.close();proof=None
                 publish({'event':'CONFIRMED','genid':verified.result['after'],**confirmation})
             elif kind=='RESUME':
@@ -226,6 +265,14 @@ def serve(channel,listener):
         stop_watch()
         if monitor is not None:monitor.join(5)
         if readers is not None:readers.close()
+        if holder_session is not None:holder_session.stopped.set()
+        if holder_channel is not None:
+            try:holder_channel.shutdown(2)
+            except OSError:pass
+        if holder_worker is not None:holder_worker.join(5)
+        if holder_authority is not None:holder_authority.close()
+        if holder_identity is not None:os.close(holder_identity['pidfd'])
+        if holder_channel is not None:holder_channel.close()
         if sender_channel is not None:
             try:sender_channel.shutdown(2)
             except OSError:pass

@@ -1,0 +1,16 @@
+name: Disposable freshness deadline regression
+on:
+  push:
+    branches: [codex/network-holder-integrated-20261031]
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Validate original deadline comparisons
+        run: python3 -I -B .github/diagnostics/controller-integration/verify_freshness_float.py

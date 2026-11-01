@@ -74,7 +74,7 @@ class Backend:
         network = '10.244.0.0/16' if self.kind == 'core' else '172.18.0.0/16'
         require(ip in ipaddress.IPv4Network(network), 'FIXED_BACKEND_RANGE')
         require(self.address != BRAIN and self.address != '172.18.0.1' and self.address not in PEERS, 'NO_HUB_OR_PEER_BACKEND')
-        require(isinstance(self.observed_started, (int, float)) and isinstance(self.expires, (int, float)) and math.isfinite(self.observed_started) and math.isfinite(self.expires) and 0 < self.expires - self.observed_started <= MAX_FRESH_SECONDS, 'NATIVE_OBSERVATION_WINDOW')
+        require(isinstance(self.observed_started, (int, float)) and isinstance(self.expires, (int, float)) and math.isfinite(self.observed_started) and math.isfinite(self.expires) and self.observed_started < self.expires <= self.observed_started + MAX_FRESH_SECONDS, 'NATIVE_OBSERVATION_WINDOW')
         require(isinstance(self.native_identity, str) and 0 < len(self.native_identity) <= 256 and '\n' not in self.native_identity, 'NATIVE_IDENTITY_REQUIRED')
 
 
@@ -89,7 +89,7 @@ class PrometheusSource:
         require(ipv4(self.address) in ipaddress.IPv4Network('10.244.0.0/16'), 'PROMETHEUS_POD_SOURCE_RANGE')
         require(type(self.observed_started) in (int, float) and type(self.expires) in (int, float)
                 and math.isfinite(self.observed_started) and math.isfinite(self.expires)
-                and 0 < self.expires - self.observed_started <= MAX_FRESH_SECONDS, 'PROMETHEUS_NATIVE_OBSERVATION_WINDOW')
+                and self.observed_started < self.expires <= self.observed_started + MAX_FRESH_SECONDS, 'PROMETHEUS_NATIVE_OBSERVATION_WINDOW')
         require(isinstance(self.native_identity, str) and 0 < len(self.native_identity) <= 512
                 and '\n' not in self.native_identity, 'PROMETHEUS_NATIVE_LIFETIME_REQUIRED')
 
