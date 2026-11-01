@@ -99,7 +99,8 @@ def _kernel_genid(nl):
 
 def observe(verified,registry,coord,uid,address,*,authority):
     import guarded_authority_ci as auth_module
-    if type(authority) is not auth_module.SenderRegistryAuthority:
+    if (type(authority) is not auth_module.SenderRegistryAuthority
+            or authority.registry is not registry or authority.verified is not verified):
         raise FenceError('BOUND_ACTIVE_GUARDIAN_WRITER_CUSTODY_REQUIRED')
     writer_identity=authority.require_writer_custody(coord,verified)
     import guarded_live_observation as live

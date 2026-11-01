@@ -1,5 +1,5 @@
 """Real Linux netlink socket and writer lock lifetime; CI namespace only."""
-import fcntl,os,signal,socket,subprocess,sys,time
+import array,fcntl,os,signal,socket,subprocess,sys,time
 from pathlib import Path
 root=Path(__file__).resolve().parent;sys.path.insert(0,str(root/'runtime'))
 import drain_marker_v3_DRAFT as marker,guarded_nl as nl,guarded_sender_session_DRAFT as sender
@@ -11,7 +11,13 @@ class Identity:
 identity=Identity();guard={'unit':'ci-only.service','invocation_id':'f'*32,'argv':['ci'],'source_sha256':'a'*64}
 def new_session():
     left,right=socket.socketpair()
-    try:return sender.SenderSession(left,identity=identity,guardian=guard,nl=nl,coord=coord),right
+    try:
+        session=sender.SenderSession(left,identity=identity,guardian=guard,nl=nl,coord=coord)
+        msg,anc,flags,_=right.recvmsg(1,socket.CMSG_SPACE(array.array('i').itemsize))
+        assert msg==b'W' and not flags and len(anc)==1
+        received=array.array('i');received.frombytes(anc[0][2][:array.array('i').itemsize])
+        assert len(received)==1;os.close(received[0])
+        return session,right
     except BaseException:left.close();right.close();raise
 
 def exclusive_possible():
