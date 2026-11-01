@@ -107,6 +107,18 @@ class CoordinatorV3:
                     or stamp(after)!=stamp(named) or len(raw)>4096 or json.loads(raw)!=expected):
                 raise FenceError('ADMISSION_RESERVATION_CHANGED')
         finally:os.close(fd)
+    def _same_admission_effect(self,identity,expected_sha256):
+        fd=os.open(self.admission_effect,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC)
+        try:
+            first=os.fstat(fd);raw=os.read(fd,65537);after=os.fstat(fd);named=os.lstat(self.admission_effect)
+            stamp=lambda x:(x.st_dev,x.st_ino,x.st_uid,x.st_mode,x.st_nlink,x.st_size,x.st_mtime_ns,x.st_ctime_ns)
+            if (not stat.S_ISREG(first.st_mode) or stat.S_IMODE(first.st_mode)!=0o600
+                    or first.st_uid!=self.directory.stat().st_uid or first.st_nlink!=1
+                    or (first.st_dev,first.st_ino)!=identity or stamp(first)!=stamp(after)
+                    or stamp(after)!=stamp(named) or len(raw)>65536
+                    or hashlib.sha256(raw).hexdigest()!=expected_sha256):
+                raise FenceError('ADMISSION_EFFECT_CHANGED')
+        finally:os.close(fd)
     def reserve_admission(self, *, _ci_after_create=None):
         # Exclusive visible reservation blocks writers before slow fsync. It
         # grants no DELETE; effects require a separate durable intent.
@@ -183,19 +195,18 @@ class CoordinatorV3:
         try:os.fsync(directory_fd)
         finally:os.close(directory_fd)
         with self.base.locked(nonblocking=True) as state:
-            info=os.lstat(self.admission_effect)
+            self._same_admission_effect(effect_identity,hashlib.sha256(raw).hexdigest())
             self._same_admission_reservation(reservation)
-            if ((info.st_dev,info.st_ino)!=effect_identity or not self.admission_marker_exists()
+            if (not self.admission_marker_exists()
                     or hashlib.sha256(json.dumps(state,sort_keys=True,separators=(',',':')).encode()).hexdigest()!=before):
                 raise FenceError('ADMISSION_EFFECT_CHANGED')
         # Durable effect marker blocks all participating writers while the
         # atomic fence write/fsync runs without the coordination/Reader locks.
         self.base._write(updated)
         with self.base.locked(nonblocking=True) as state:
-            info=os.lstat(self.admission_effect)
+            self._same_admission_effect(effect_identity,hashlib.sha256(raw).hexdigest())
             self._same_admission_reservation(reservation)
-            if ((info.st_dev,info.st_ino)!=effect_identity or state!=updated
-                    or not self.admission_marker_exists()):
+            if state!=updated or not self.admission_marker_exists():
                 raise FenceError('ADMISSION_FENCE_ACK_UNKNOWN')
         return {'fence_persisted':True,'production_authority':False,'delete_allowed':False}
     @contextlib.contextmanager
