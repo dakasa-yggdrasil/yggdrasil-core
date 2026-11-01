@@ -16,10 +16,6 @@ import (
 // private file, never the DB. Neither record nor result implies real Guest or
 // provider authority.
 func TestLABFailedInstalledCoreBoundLegacyRollback(t *testing.T) {
-	legacy := os.Getenv("LAB_HETZNER_LEGACY_TEST_BIN")
-	if legacy == "" {
-		t.Fatal("the pinned 2de test binary is required")
-	}
 	db, policy := d12AuthorityLocalFixture(t)
 	ctx := context.Background()
 	tx, err := db.BeginTx(ctx, nil)
@@ -51,8 +47,23 @@ func TestLABFailedInstalledCoreBoundLegacyRollback(t *testing.T) {
 	if err = tx.QueryRowContext(ctx, `SELECT original_wire FROM public.capacity_guest_failed_installed_disposals WHERE id=$1 AND stage='requested'`, r.ID).Scan(&wire); err != nil {
 		t.Fatal(err)
 	}
+	labAssertLegacyRefusesCoreBoundWire(t, wire)
+	var after []byte
+	if err = tx.QueryRowContext(ctx, `SELECT original_wire FROM public.capacity_guest_failed_installed_disposals WHERE id=$1 AND stage='requested'`, r.ID).Scan(&after); err != nil || string(after) != string(wire) {
+		t.Fatal("stored wire changed", err)
+	}
+	t.Log("LAB_HETZNER_PG82_CURRENT_READ_LEGACY_HOLD_ROLLBACK_PRESERVED")
+}
+
+// The binary must be built from pinned 2de with only its decoder test added.
+func labAssertLegacyRefusesCoreBoundWire(t *testing.T, wire []byte) {
+	t.Helper()
+	legacy := os.Getenv("LAB_HETZNER_LEGACY_TEST_BIN")
+	if legacy == "" {
+		t.Fatal("the pinned 2de test binary is required")
+	}
 	path := filepath.Join(t.TempDir(), "pg-original-wire.json")
-	if err = os.WriteFile(path, wire, 0600); err != nil {
+	if err := os.WriteFile(path, wire, 0600); err != nil {
 		t.Fatal(err)
 	}
 	cmd := exec.Command(legacy, "-test.run=^TestLABCoreBoundLegacyDecode$", "-test.v")
@@ -62,9 +73,4 @@ func TestLABFailedInstalledCoreBoundLegacyRollback(t *testing.T) {
 	if err != nil || !strings.Contains(string(output), "LAB_CORE2DE_REAL_PG_WIRE_UNKNOWN_FIELDS_HELD_CONTROL_PASS") {
 		t.Fatal("legacy decoder evidence missing", err)
 	}
-	var after []byte
-	if err = tx.QueryRowContext(ctx, `SELECT original_wire FROM public.capacity_guest_failed_installed_disposals WHERE id=$1 AND stage='requested'`, r.ID).Scan(&after); err != nil || string(after) != string(wire) {
-		t.Fatal("stored wire changed", err)
-	}
-	t.Log("LAB_HETZNER_PG82_CURRENT_READ_LEGACY_HOLD_ROLLBACK_PRESERVED")
 }

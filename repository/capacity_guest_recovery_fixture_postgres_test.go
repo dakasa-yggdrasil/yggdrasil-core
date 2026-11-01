@@ -548,6 +548,18 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 					if !reflect.DeepEqual(beforeOriginals, originals()) {
 						t.Fatal("synthetic original history changed")
 					}
+					if os.Getenv("LAB_HETZNER_LEGACY_TEST_BIN") != "" {
+						var wire, after []byte
+						q := `SELECT original_wire FROM public.capacity_guest_failed_installed_disposals WHERE id=$1 AND stage='requested'`
+						if err = db.QueryRow(q, rows[0].ID).Scan(&wire); err != nil {
+							t.Fatal("read committed disposition", err)
+						}
+						labAssertLegacyRefusesCoreBoundWire(t, wire)
+						if err = db.QueryRow(q, rows[0].ID).Scan(&after); err != nil || !reflect.DeepEqual(wire, after) {
+							t.Fatal("legacy read changed committed disposition", err)
+						}
+						t.Log("LAB_SIGNED_HTTP_COMMITTED_PG_WIRE_CORE2DE_HELD_UNCHANGED")
+					}
 					claimRun, _ := start(2)
 					store.OriginalRunID, store.ExecutorID = claimRun.RunID, pre.ExecutorID
 					claimCtx, stopClaim := context.WithTimeout(context.Background(), 10*time.Second)
