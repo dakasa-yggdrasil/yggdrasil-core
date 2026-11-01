@@ -259,6 +259,9 @@ def serve(channel,listener):
                          'source_epoch':fresh['invalidation_epoch'],'production_authority':False})
             elif kind=='STOP':break
             else:raise RuntimeError('UNEXPECTED_GUARDIAN_CONTROL_COMMAND')
+    except BaseException as error:
+        print('CI_GUARDIAN_CONTROL_ERROR '+type(error).__name__+':'+str(error),flush=True)
+        raise
     finally:
         closing.set()
         if cache is not None:cache.wake.set()
