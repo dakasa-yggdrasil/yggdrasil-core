@@ -58,3 +58,14 @@ jobs:
             --setenv=CI_HOLDER_TEST=1 --setenv=CI_HOST_NETNS="$(readlink /proc/self/ns/net)" \
             --setenv=CI_FAILURE_ORDER=positive-first --setenv=CI_DENY_ACK_UNCERTAIN=1 \
             /usr/bin/unshare --net -- /usr/bin/python3 -B "$target/verify_controller_guardian.py"
+
+      - name: Measure netfilter read without CAP_NET_ADMIN
+        run: |
+          set -eu
+          target="$(sudo mktemp -d /run/ci-netfilter-cap.XXXXXX)"
+          trap 'sudo rm -rf "$target"' EXIT
+          sudo cp -R .github/diagnostics/controller-integration/. "$target/"
+          sudo chmod -R go-w "$target"
+          sudo systemd-run --quiet --wait --pipe --unit="ci-netfilter-cap-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
+            --property=RuntimeMaxSec=30s --setenv=CI_HOST_NETNS="$(readlink /proc/self/ns/net)" \
+            /usr/bin/unshare --net -- /usr/bin/python3 -B "$target/verify_netfilter_readonly_caps.py"
