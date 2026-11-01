@@ -18,6 +18,7 @@ jobs:
     timeout-minutes: 25
     env:
       GOMAXPROCS: '2'
+      REQUIRE_LAB_HETZNER_LEGACY: 'true'
       GOMEMLIMIT: 2GiB
       CGO_ENABLED: '1'
       GOFLAGS: -mod=readonly

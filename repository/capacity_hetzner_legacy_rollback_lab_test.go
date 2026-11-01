@@ -16,6 +16,12 @@ import (
 // private file, never the DB. Neither record nor result implies real Guest or
 // provider authority.
 func TestLABFailedInstalledCoreBoundLegacyRollback(t *testing.T) {
+	if os.Getenv("LAB_HETZNER_LEGACY_TEST_BIN") == "" {
+		if os.Getenv("REQUIRE_LAB_HETZNER_LEGACY") == "true" {
+			t.Fatal("the pinned 2de test binary is required")
+		}
+		t.Skip("the pinned legacy binary is available in the dedicated LAB gate")
+	}
 	db, policy := d12AuthorityLocalFixture(t)
 	ctx := context.Background()
 	tx, err := db.BeginTx(ctx, nil)
