@@ -43,6 +43,46 @@ with tempfile.TemporaryDirectory(prefix='ci-admission-reserve-') as tmp:
         must_hold(lambda:admission.evaluate({},coord),'ADMISSION_INTENT_PENDING')
         print('PASS admission reservation excludes writers during fsync, cancellation works, crash holds',flush=True)
 
+with tempfile.TemporaryDirectory(prefix='ci-admission-effect-') as tmp:
+    coord=v3.CoordinatorV3(Path(tmp)/'coord');coord.initialize_for_ci()
+    with mock.patch.dict(os.environ,{'CI_GUARDED_FIXTURE':'1'}):
+        r=coord.reserve_admission()
+        result=coord.begin_admission_effect(r,'00000000-0000-0000-0000-000000000001','10.244.1.1',
+                    anchor_uid='00000000-0000-0000-0000-000000000002',anchor_address='10.244.1.2')
+        assert result['fence_persisted'] and not result['delete_allowed'] and not result['production_authority']
+        must_hold(lambda:coord.cancel_admission(r),'ORIGINAL_UNUSED_ADMISSION_RESERVATION_REQUIRED')
+        must_hold(lambda:admission.evaluate({},coord),'ADMISSION_INTENT_PENDING')
+        with coord.base.locked(nonblocking=True) as state:
+            assert state['retired']=={'00000000-0000-0000-0000-000000000001':'10.244.1.1'}
+            assert state['anchor']=={'uid':'00000000-0000-0000-0000-000000000002','address':'10.244.1.2'}
+        print('PASS effect and fence persist outside lock while reservation keeps DELETE held',flush=True)
+
+with tempfile.TemporaryDirectory(prefix='ci-effect-failure-') as tmp:
+    coord=v3.CoordinatorV3(Path(tmp)/'coord');coord.initialize_for_ci()
+    with mock.patch.dict(os.environ,{'CI_GUARDED_FIXTURE':'1'}):
+        r=coord.reserve_admission()
+        with mock.patch.object(coord.base,'_write',side_effect=OSError('injected fsync uncertainty')):
+            try:coord.begin_admission_effect(r,'00000000-0000-0000-0000-000000000001','10.244.1.1',
+                        anchor_uid='00000000-0000-0000-0000-000000000002',anchor_address='10.244.1.2')
+            except OSError:pass
+            else:raise AssertionError('failed fence write accepted')
+        assert coord.admission_marker_exists() and coord.admission_effect.exists()
+        must_hold(lambda:coord.cancel_admission(r),'ORIGINAL_UNUSED_ADMISSION_RESERVATION_REQUIRED')
+        must_hold(lambda:admission.evaluate({},coord),'ADMISSION_INTENT_PENDING')
+
+with tempfile.TemporaryDirectory(prefix='ci-anchor-delete-') as tmp:
+    coord=v3.CoordinatorV3(Path(tmp)/'coord');coord.initialize_for_ci()
+    with coord.admission_or_other_writer() as state:
+        coord.base.retire(state,'00000000-0000-0000-0000-000000000001','10.244.1.1',
+                          anchor_uid='00000000-0000-0000-0000-000000000002',anchor_address='10.244.1.2')
+    with mock.patch.dict(os.environ,{'CI_GUARDED_FIXTURE':'1'}):
+        r=coord.reserve_admission()
+        must_hold(lambda:coord.begin_admission_effect(r,'00000000-0000-0000-0000-000000000002','10.244.1.2',
+                     anchor_uid='00000000-0000-0000-0000-000000000003',anchor_address='10.244.1.3'),
+                  'ACTIVE_ANCHOR_DELETE_HELD')
+        coord.cancel_admission(r)
+    print('PASS failed effect remains held and DELETE of the active anchor is denied',flush=True)
+
 with tempfile.TemporaryDirectory(prefix='ci-drain-marker-') as tmp:
     coord=v3.CoordinatorV3(Path(tmp)/'coord');coord.initialize_for_ci()
     core=backend()

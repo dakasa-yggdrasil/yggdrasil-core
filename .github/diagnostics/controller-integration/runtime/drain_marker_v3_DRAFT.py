@@ -49,13 +49,14 @@ class _AdmissionReservation:
     def __init__(self,owner,inode,nonce,capability):
         if capability is not _CAPABILITY:raise FenceError('PRIVATE_ADMISSION_RESERVATION')
         self.owner,self.inode,self.nonce,self.capability=owner,inode,nonce,capability
-        self.pid=os.getpid();self.closed=False
+        self.pid=os.getpid();self.closed=False;self.effect_started=False
 
 class CoordinatorV3:
     def __init__(self,directory):
         self.base=Coordinator(directory);self.directory=Path(directory)
         self.marker=self.directory/'guarded-intent.json'
         self.admission_marker=self.directory/'admission-intent.json'
+        self.admission_effect=self.directory/'admission-effect.json'
         self.writer_lock=self.directory/'writer.lock'
         self._writer_identity=None
         self._local=threading.local()
@@ -90,11 +91,25 @@ class CoordinatorV3:
         try:os.lstat(self.marker);return True
         except FileNotFoundError:return False
     def admission_marker_exists(self):
-        try:os.lstat(self.admission_marker);return True
-        except FileNotFoundError:return False
+        for path in (self.admission_marker,self.admission_effect):
+            try:os.lstat(path);return True
+            except FileNotFoundError:pass
+        return False
+    def _same_admission_reservation(self,reservation):
+        fd=os.open(self.admission_marker,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC)
+        try:
+            value=os.fstat(fd);raw=os.read(fd,4097);after=os.fstat(fd);named=os.lstat(self.admission_marker)
+            stamp=lambda x:(x.st_dev,x.st_ino,x.st_uid,x.st_mode,x.st_nlink,x.st_size,x.st_mtime_ns,x.st_ctime_ns)
+            expected={'schema':'ci_admission_reservation_v1','pid':reservation.pid,'nonce':reservation.nonce}
+            if (not stat.S_ISREG(value.st_mode) or stat.S_IMODE(value.st_mode)!=0o600
+                    or value.st_uid!=self.directory.stat().st_uid or value.st_nlink!=1
+                    or (value.st_dev,value.st_ino)!=reservation.inode or stamp(value)!=stamp(after)
+                    or stamp(after)!=stamp(named) or len(raw)>4096 or json.loads(raw)!=expected):
+                raise FenceError('ADMISSION_RESERVATION_CHANGED')
+        finally:os.close(fd)
     def reserve_admission(self, *, _ci_after_create=None):
         # Exclusive visible reservation blocks writers before slow fsync. It
-        # grants no DELETE and has no path that commits a retirement yet.
+        # grants no DELETE; effects require a separate durable intent.
         if os.environ.get('CI_GUARDED_FIXTURE')!='1':raise FenceError('ONLY_PRIVATE_CI_RESERVATION')
         if getattr(self._local,'state',None) is not None:raise FenceError('RESERVATION_REQUIRES_NO_HELD_LOCK')
         nonce=secrets.token_hex(32)
@@ -123,21 +138,66 @@ class CoordinatorV3:
     def cancel_admission(self,reservation):
         # Only unused reservations can be canceled; no retirement is exposed.
         if (type(reservation) is not _AdmissionReservation or reservation.capability is not _CAPABILITY
-                or reservation.owner is not self or reservation.pid!=os.getpid() or reservation.closed):
+                or reservation.owner is not self or reservation.pid!=os.getpid() or reservation.closed or reservation.effect_started):
             raise FenceError('ORIGINAL_UNUSED_ADMISSION_RESERVATION_REQUIRED')
         with self.base.locked(nonblocking=True):
-            fd=os.open(self.admission_marker,os.O_RDONLY|os.O_NOFOLLOW)
-            try:
-                value=os.fstat(fd);raw=os.read(fd,4097)
-                if ((value.st_dev,value.st_ino)!=reservation.inode or len(raw)>4096
-                        or json.loads(raw).get('nonce')!=reservation.nonce):
-                    raise FenceError('ADMISSION_RESERVATION_CHANGED')
-            finally:os.close(fd)
+            if reservation.closed or reservation.effect_started:
+                raise FenceError('ORIGINAL_UNUSED_ADMISSION_RESERVATION_REQUIRED')
+            self._same_admission_reservation(reservation)
             os.unlink(self.admission_marker)
             reservation.closed=True
         parent=os.open(self.directory,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
         try:os.fsync(parent)
         finally:os.close(parent)
+    def begin_admission_effect(self,reservation,uid,address,*,anchor_uid,anchor_address):
+        # Experimental effect intent, not an AdmissionReview approval. The
+        # marker survives ambiguous writes and forbids cancellation/replay.
+        if (type(reservation) is not _AdmissionReservation or reservation.capability is not _CAPABILITY
+                or reservation.owner is not self or reservation.pid!=os.getpid()
+                or reservation.closed or reservation.effect_started):
+            raise FenceError('ORIGINAL_UNUSED_ADMISSION_RESERVATION_REQUIRED')
+        with self.base.locked(nonblocking=True) as state:
+            if reservation.closed or reservation.effect_started:
+                raise FenceError('ORIGINAL_UNUSED_ADMISSION_RESERVATION_REQUIRED')
+            self._same_admission_reservation(reservation)
+            if self.marker_exists():raise FenceError('ADMISSION_RESERVATION_CHANGED')
+            anchor=state['anchor']
+            if anchor is not None and (uid==anchor['uid'] or address==anchor['address']):
+                raise FenceError('ACTIVE_ANCHOR_DELETE_HELD')
+            updated=self.base.retirement_state(state,uid,address,anchor_uid=anchor_uid,anchor_address=anchor_address)
+            before=hashlib.sha256(json.dumps(state,sort_keys=True,separators=(',',':')).encode()).hexdigest()
+            raw=(json.dumps({'schema':'ci_admission_effect_v1','reservation_nonce':reservation.nonce,
+                'state_before_sha256':before,'retirement':updated},sort_keys=True,separators=(',',':'))+'\n').encode()
+            reservation.effect_started=True
+            fd=os.open(self.admission_effect,os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW,0o600)
+            info=os.fstat(fd);effect_identity=(info.st_dev,info.st_ino)
+        try:
+            offset=0
+            while offset<len(raw):
+                n=os.write(fd,raw[offset:])
+                if n<=0:raise OSError('admission effect write failed')
+                offset+=n
+            os.fsync(fd)
+        finally:os.close(fd)
+        directory_fd=os.open(self.directory,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW)
+        try:os.fsync(directory_fd)
+        finally:os.close(directory_fd)
+        with self.base.locked(nonblocking=True) as state:
+            info=os.lstat(self.admission_effect)
+            self._same_admission_reservation(reservation)
+            if ((info.st_dev,info.st_ino)!=effect_identity or not self.admission_marker_exists()
+                    or hashlib.sha256(json.dumps(state,sort_keys=True,separators=(',',':')).encode()).hexdigest()!=before):
+                raise FenceError('ADMISSION_EFFECT_CHANGED')
+        # Durable effect marker blocks all participating writers while the
+        # atomic fence write/fsync runs without the coordination/Reader locks.
+        self.base._write(updated)
+        with self.base.locked(nonblocking=True) as state:
+            info=os.lstat(self.admission_effect)
+            self._same_admission_reservation(reservation)
+            if ((info.st_dev,info.st_ino)!=effect_identity or state!=updated
+                    or not self.admission_marker_exists()):
+                raise FenceError('ADMISSION_FENCE_ACK_UNKNOWN')
+        return {'fence_persisted':True,'production_authority':False,'delete_allowed':False}
     @contextlib.contextmanager
     def admission_or_other_writer(self):
         # Reentrancy is per-thread and only for the identical coordinator,

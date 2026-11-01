@@ -177,7 +177,7 @@ class Coordinator:
         finally:
             os.close(fd)
 
-    def retire(self, state, uid, address, *, anchor_uid=None, anchor_address=None):
+    def retirement_state(self, state, uid, address, *, anchor_uid=None, anchor_address=None):
         if not re.fullmatch(r'[a-f0-9-]{36}', uid) or str(ipaddress.IPv4Address(address)) != address:
             raise FenceError('INVALID_RETIRED_IDENTITY')
         retired = dict(state['retired'])
@@ -195,7 +195,10 @@ class Coordinator:
             anchor = {'uid': anchor_uid, 'address': anchor_address}
         if state['anchor'] is not None and anchor != state['anchor']:
             raise FenceError('ACTIVE_ANCHOR_CANNOT_BE_REPLACED')
-        updated = {'version': 2, 'retired': retired, 'anchor': anchor}
+        return {'version': 2, 'retired': retired, 'anchor': anchor}
+
+    def retire(self, state, uid, address, *, anchor_uid=None, anchor_address=None):
+        updated=self.retirement_state(state,uid,address,anchor_uid=anchor_uid,anchor_address=anchor_address)
         self._write(updated)
         state.update(updated)
 
