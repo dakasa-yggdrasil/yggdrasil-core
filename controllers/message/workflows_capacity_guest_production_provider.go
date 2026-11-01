@@ -238,13 +238,13 @@ func resolveOriginalGuestSupplier(ctx context.Context, conn *amqp.Connection, st
 		return empty, errOriginalGuestStep
 	}
 	ts, err := manifest.ParseIntegrationTypeSpec(tm.Spec)
-	if err != nil || !originalGuestSupplierCatalogSourceFor(provider, ts, source) || !originalGuestSupplierSourceConfigFor(provider, is, source) {
+	if err != nil || !(originalGuestSupplierCatalogSourceFor(provider, ts, source) || labOriginalGuestSupplierApproved(provider, source, im, tm, ts)) || !originalGuestSupplierSourceConfigFor(provider, is, source) {
 		return empty, errOriginalGuestStep
 	}
 	// Secret hydration and live Describe occur only after public registry and
 	// exact raw catalog checks. Recheck the same immutable revisions afterward.
 	im, is, tm, ts, err = resolveIntegrationInstance(ctx, conn, store.DB, model.ManifestSelector{ManifestID: b.IntegrationInstanceID})
-	if err != nil || !im.Metadata.Active || im.ID.String() != b.IntegrationInstanceID || im.Checksum != b.InstanceChecksum || !tm.Metadata.Active || tm.ID.String() != b.IntegrationTypeID || tm.Checksum != b.TypeChecksum || !originalGuestSupplierCatalogSourceFor(provider, ts, source) || !originalGuestSupplierSourceConfigFor(provider, is, source) {
+	if err != nil || !im.Metadata.Active || im.ID.String() != b.IntegrationInstanceID || im.Checksum != b.InstanceChecksum || !tm.Metadata.Active || tm.ID.String() != b.IntegrationTypeID || tm.Checksum != b.TypeChecksum || !(originalGuestSupplierCatalogSourceFor(provider, ts, source) || labOriginalGuestSupplierApproved(provider, source, im, tm, ts)) || !originalGuestSupplierSourceConfigFor(provider, is, source) {
 		return empty, errOriginalGuestStep
 	}
 	return capacityResolvedObservationAdapter{im, is, tm, ts}, nil

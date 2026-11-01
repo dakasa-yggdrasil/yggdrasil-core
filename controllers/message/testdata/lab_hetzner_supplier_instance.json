@@ -1,0 +1,110 @@
+{
+  "apiVersion": "yggdrasil.io/v1alpha1",
+  "kind": "integration_instance",
+  "metadata": {
+    "description": "Isolated elastic LAB Hetzner provider",
+    "name": "hetzner-lab-90228b994002",
+    "namespace": "dakasa-production"
+  },
+  "spec": {
+    "config": {
+      "fleet": {
+        "anchor": {
+          "created_at": "2026-10-30T21:05:44Z",
+          "id": 12791372,
+          "owner": "elastic-lab-6ec84"
+        },
+        "definitive_rejections": [],
+        "grant_base_url": "https://10.201.24.1:9443",
+        "mutations_enabled": true,
+        "name_prefix": "elasticlab6",
+        "original_create_source_commit": "bcd65615c8704e0fd1f5d60875f80180b35f9599",
+        "owner": "elastic-lab-6ec84",
+        "profiles": [
+          {
+            "bootstrap_key": "",
+            "bootstrap_sha256": "",
+            "currency": "USD",
+            "enable_ipv4": true,
+            "enable_ipv6": false,
+            "firewall_ids": [
+              11940262
+            ],
+            "image_id": 450578882,
+            "location": "ash",
+            "location_id": 4,
+            "max_gross_hourly_micros": 100000,
+            "max_gross_monthly_micros": 75000000,
+            "max_slots": 8,
+            "name": "notify-hetzner-elastic",
+            "network_ids": [
+              12791372
+            ],
+            "protected_slots": 1,
+            "quote_max_age_seconds": 60,
+            "server_type": "cpx11",
+            "server_type_id": 22,
+            "slot_bootstraps": [
+              {
+                "bootstrap_key": "lab-hetzner-s1-90228-bootstrap",
+                "bootstrap_sha256": "16037e4ef599f850cf787b647a7aac52bdea9e7ecc9267a07762b92f9e03f9e6",
+                "slot": 1
+              },
+              {
+                "bootstrap_key": "lab-hetzner-s2-90228-bootstrap",
+                "bootstrap_sha256": "3ecb99e65f55da1ae237518630432e858beba262000065c1b395e1e71a729edf",
+                "slot": 2
+              },
+              {
+                "bootstrap_key": "lab-hetzner-s3-90228-bootstrap",
+                "bootstrap_sha256": "8ba68143bce98d70dbd35697c687778e00282e0591e05479b693086a7c99ff9b",
+                "slot": 3
+              },
+              {
+                "bootstrap_key": "lab-hetzner-s4-90228-bootstrap",
+                "bootstrap_sha256": "b6e5657ea30fe78fdfc41aeb0ac2cf82f9747d1c2cf36a2b31a816ef5503383f",
+                "slot": 4
+              },
+              {
+                "bootstrap_key": "lab-hetzner-s5-90228-bootstrap",
+                "bootstrap_sha256": "aa7684759f6c6f791814d701716771cfad55960d5f5a207e2b0e9e08d85034df",
+                "slot": 5
+              },
+              {
+                "bootstrap_key": "lab-hetzner-s6-90228-bootstrap",
+                "bootstrap_sha256": "a27118c0c0a39a7e963e183d7c0537f0d501e2b30d42484f542584a56b0f7733",
+                "slot": 6
+              },
+              {
+                "bootstrap_key": "lab-hetzner-s7-90228-bootstrap",
+                "bootstrap_sha256": "ddbd2b4e78378876d131396b1edc7298a35c55ed007bb2e8966777b2df8264b7",
+                "slot": 7
+              },
+              {
+                "bootstrap_key": "lab-hetzner-s8-90228-bootstrap",
+                "bootstrap_sha256": "5ab81aae39f30605d5f447f187b85b21cc17b21a0a7edf7a5be31c7700a78708",
+                "slot": 8
+              }
+            ],
+            "ssh_key_ids": [
+              131994216
+            ]
+          }
+        ],
+        "project_label": "elastic-lab-6ec84"
+      }
+    },
+    "credentials_ref": "secret://dakasa-production/lab-hetzner-credentials-90228",
+    "discovery": {
+      "enabled": false,
+      "mode": "manual"
+    },
+    "owners": [
+      "lab"
+    ],
+    "status": "active",
+    "type_ref": {
+      "manifest_id": "8b3ccd73-a5d8-4544-ae8f-f2d9ee356df1"
+    }
+  }
+}
