@@ -31,6 +31,10 @@ class GateDecision(unittest.TestCase):
     def test_similar_nonstamp_path_does_not_skip(self):
         self.assertEqual(self.decide(['docs/AI_DOCS_FRESHNESSXmd', 'controller.go']), 'run_ai=true')
 
+    def test_large_code_diff_without_stamp_requests_review(self):
+        files = ['controller.go'] + ['docs/' + str(n).zfill(6) + '.md' for n in range(10000)]
+        self.assertEqual(self.decide(files), 'run_ai=true')
+
     def test_code_without_stamp_requests_review(self):
         self.assertEqual(self.decide(['docs/readme.md', 'controller.go']), 'run_ai=true')
 
