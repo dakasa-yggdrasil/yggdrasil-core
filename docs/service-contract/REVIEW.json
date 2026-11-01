@@ -9,6 +9,13 @@
     "tracked_tree_sha256": "f4d5b55f01d765954d8aee968dd366b519ee6ce141b0fd80df66099e998c3a3b"
   },
   "current_reviewed_source_overlay": {
+    "protected_guest_floor_recovery": {
+      "source": "controllers/message/workflows_capacity_guest_reconcile.go",
+      "source_sha256": "93cd1edbbad87a9d97d9f9fcd6105fc1b1f612065e639f941f4a8b90fd26afb8",
+      "decision": "Complete native inventory precedes demand; a missing floor may be repaired without demand while member coverage remains independently checked. Normal scaling and readiness still require demand.",
+      "validation": "Default package suites and focused collector/planner tests passed locally; real provider lifecycle and rollout remain separate gates.",
+      "independent_collector_review": "binding_status reviewed ordering and strict demand gate; real integrations remain pending."
+    },
     "AWS164_actual_instance_contract_successor": {
       "Root_final_source_review_complete": true,
       "accepted_source_inventory_sha256": "e50205786355bd8229db8093dd6134d2de0cb3dedc93e071a325581804c1c6a6",
