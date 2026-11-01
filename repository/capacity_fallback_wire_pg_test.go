@@ -17,6 +17,7 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity/executorpower"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
 	"github.com/google/uuid"
@@ -120,6 +121,14 @@ func labFallbackAuthorityPG(t *testing.T, dsn string) {
 	if _, err := f.store.IssueCompensation(ctx, f.policy, model.CapacityCompensationIssue{}); !errors.Is(err, errFallbackNewerDisposition) {
 		t.Fatal("cross-dimension IssueCompensation did not reach HOLD", err)
 	}
+	request := model.CapacityNativeHPARequest{Namespace: "fixture", HPAName: "fixture", ExpectedUID: "fixture", ExpectedResourceVersion: "1", ExpectedWorkloadUID: "fixture", ExpectedWorkloadResourceVersion: "1", Owner: "fixture", Generation: 1, IdempotencyKey: "fixture", MinReplicas: 1, MaxReplicas: 1}
+	requestWire, err := json.Marshal(request)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = f.store.IssueNativeCommand(ctx, f.policy, f.intent, capacity.EnsureBoundHPAEnvelope, "fixture", requestWire); !errors.Is(err, errFallbackNewerDisposition) {
+		t.Fatal("cross-dimension native issue did not reach HOLD", err)
+	}
 	var grants int
 	if err := f.db.QueryRow(`SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1`, f.policy.Metadata.Namespace).Scan(&grants); err != nil || grants != 0 {
 		t.Fatal("HOLD created a mutation grant", grants, err)
@@ -139,6 +148,26 @@ func labFallbackAuthorityPG(t *testing.T, dsn string) {
 	var jobs int
 	if err = db.QueryRow(`SELECT count(*) FROM public.capacity_dispatch_jobs WHERE realm=$1`, envelope.Realm).Scan(&jobs); err != nil || jobs != 0 {
 		t.Fatal("dispatch HOLD created a job", jobs, err)
+	}
+	// A pre-existing issued native command remains issued, with no permit.
+	token := strings.Repeat("a", 64)
+	adapter := model.CapacityObservationAdapterBinding{IntegrationInstanceID: uuid.NewString(), IntegrationTypeID: uuid.NewString()}
+	command := model.CapacityNativeCommand{CommandID: uuid.New(), Namespace: envelope.Realm, Environment: envelope.Environment, Domain: envelope.Domain, Dimension: envelope.Dimension, Operation: capacity.EnsureBoundHPAEnvelope, Phase: "envelope", Sequence: 1, State: "issued", AdapterPrincipalID: "synthetic-adapter", Adapter: adapter, RequestSHA256: strings.Repeat("b", 64), AuthorityTokenSHA256: capacity.BusinessCreationSHA256([]byte(token))}
+	commandWire, err := json.Marshal(command)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO public.capacity_native_commands(id,namespace,environment,domain,dimension,generation,operation,phase,sequence,state,authority_token_sha256,command_record) VALUES($1,$2,$3,$4,$5,1,$6,$7,1,'issued',$8,$9::jsonb)`, command.CommandID, command.Namespace, command.Environment, command.Domain, command.Dimension, command.Operation, command.Phase, command.AuthorityTokenSHA256, string(commandWire))
+	if err != nil {
+		t.Fatal("synthetic native command", err)
+	}
+	nativeReq := model.CapacityNativeAuthorityRedeemRequest{AuthorityToken: token, IntegrationInstanceID: adapter.IntegrationInstanceID, IntegrationTypeID: adapter.IntegrationTypeID, Capability: command.Operation, RequestSHA256: command.RequestSHA256}
+	if _, err = (CapacityStore{DB: db, ExecutionEnabled: true}).RedeemNativeCommand(ctx, command.AdapterPrincipalID, nativeReq); !errors.Is(err, errFallbackNewerDisposition) {
+		t.Fatal("cross-dimension native redeem escaped HOLD", err)
+	}
+	var nativeState string
+	if err = db.QueryRow(`SELECT state FROM public.capacity_native_commands WHERE id=$1`, command.CommandID).Scan(&nativeState); err != nil || nativeState != "issued" {
+		t.Fatal("held native command changed", nativeState, err)
 	}
 	// Seed a hypothetical previously queued, not-yet-started job in this
 	// disposable database. This performs no workflow or external invocation.
@@ -168,9 +197,22 @@ func labFallbackAuthorityPG(t *testing.T, dsn string) {
 	if err = seed.Commit(); err != nil {
 		t.Fatal(err)
 	}
-	claimed, err := ClaimCapacityDispatch(ctx, db, envelope.Realm, envelope.Environment, uuid.New(), time.Minute)
+	if _, err = ClaimCapacityDispatch(ctx, db, envelope.Realm, envelope.Environment, uuid.New(), time.Minute); !errors.Is(err, ErrCapacityDispatchClaim) {
+		t.Fatal("queued dispatch claimed under HOLD", err)
+	}
+	var fence int
+	if err = db.QueryRow(`SELECT fencing_token FROM public.capacity_dispatch_jobs WHERE id=$1`, envelope.JobID).Scan(&fence); err != nil || fence != 0 {
+		t.Fatal("HOLD changed queued fence", fence, err)
+	}
+	// Model a claim made before the newer marker by seeding its exact durable
+	// fields; no Start or workflow invocation is simulated.
+	_, err = db.Exec(`UPDATE public.capacity_dispatch_jobs SET lease_owner=$2,fencing_token=1,lease_expires_at=clock_timestamp()+interval '1 minute' WHERE id=$1`, envelope.JobID, uuid.New())
 	if err != nil {
-		t.Fatal("synthetic original queued claim", err)
+		t.Fatal("synthetic prior claim", err)
+	}
+	claimed, err := readCapacityDispatchJob(ctx, db, envelope.JobID, false)
+	if err != nil {
+		t.Fatal("synthetic prior claim readback", err)
 	}
 	if _, err = StartCapacityDispatch(ctx, db, claimed); !errors.Is(err, ErrCapacityDispatchClaim) {
 		t.Fatal("previous queued job escaped HOLD", err)
@@ -230,7 +272,7 @@ func labFallbackAuthorityPG(t *testing.T, dsn string) {
 	if err = db.QueryRow(`SELECT state FROM public.capacity_mutation_grants WHERE id=$1`, g.ID).Scan(&state); err != nil || state != "issued" {
 		t.Fatal("held power grant changed", state, err)
 	}
-	t.Log("LAB_FALLBACK_PG82_CROSS_SCOPE_ISSUE_COMPENSATION_DISPATCH_POWER_ISSUE_REDEEM_HELD")
+	t.Log("LAB_FALLBACK_PG82_CROSS_SCOPE_MUTATION_COMPENSATION_NATIVE_DISPATCH_POWER_HELD")
 }
 
 func labFallbackFixtureURL(t *testing.T, dsn string) *url.URL {

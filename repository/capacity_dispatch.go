@@ -170,6 +170,9 @@ func ClaimCapacityDispatch(ctx context.Context, db *sql.DB, realm, environment s
 		return CapacityDispatchJob{}, ErrCapacityDispatchClaim
 	}
 	defer tx.Rollback()
+	if err = guardFallbackNewerDisposalTx(ctx, tx); err != nil {
+		return CapacityDispatchJob{}, ErrCapacityDispatchClaim
+	}
 	var id uuid.UUID
 	const claimQuery = `SELECT j.id FROM public.capacity_dispatch_jobs j
 		JOIN public.workflow_runs r ON r.id=j.run_id
