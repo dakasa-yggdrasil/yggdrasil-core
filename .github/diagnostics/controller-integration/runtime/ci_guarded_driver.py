@@ -3,16 +3,20 @@
 A bounded test fixture, not installed service configuration or production
 authority. Any exception aborts the loop; no uncertain send is retried.
 """
-import os,time
+import os,time,threading
 import guarded_preparation,guarded_sources,native_structure
 
 class GuardedDriver:
-    def __init__(self,*,watch,sender,emitter,positive_session,ceiling_cache,endpoints,max_commits):
-        if os.environ.get('CI_GUARDED_FIXTURE')!='1' or type(max_commits) is not int or not 1<=max_commits<=(4 if os.environ.get('CI_HOLDER_TEST')=='1' else 3):
+    def __init__(self,*,watch,sender,emitter,positive_session,ceiling_cache,endpoints,max_commits,stop_signal=None):
+        continuous=os.environ.get('CI_CONTINUOUS_TEST')=='1'
+        limit=12 if continuous else (4 if os.environ.get('CI_HOLDER_TEST')=='1' else 3)
+        if (os.environ.get('CI_GUARDED_FIXTURE')!='1' or type(max_commits) is not int or not 1<=max_commits<=limit
+                or (continuous and (os.environ.get('CI_HOLDER_TEST')!='1' or type(stop_signal) is not type(threading.Event())))
+                or (not continuous and stop_signal is not None)):
             raise RuntimeError('ONLY_BOUNDED_PRIVATE_CI_DRIVER')
         self.watch,self.sender,self.emitter,self.positive_session=watch,sender,emitter,positive_session
         self.ceiling_cache,self.endpoints,self.max_commits=ceiling_cache,endpoints,max_commits
-        self.results=[];self.pause_started=None
+        self.results=[];self.pause_started=None;self.stop_signal=stop_signal;self.previous_expiry_ns=None
     def prepare(self,cache):
         rows,_,_,_,_=cache.snapshot()
         core=next(x for x in rows if x.kind=='core')
@@ -42,11 +46,22 @@ class GuardedDriver:
         lease_age=(result['send_started_ns']-int(lease.token.returned*1e9))/1e6
         dispatch=(result['send_started_ns']-started)/1e6
         if not (0<=lease_age<750 and 0<=dispatch<250):raise RuntimeError('ORIGINAL_GUARDED_BUDGETS')
-        self.results.append({'native_result':result,'lease_age_ms':lease_age,'dispatch_ms':dispatch})
+        completed_ns=time.monotonic_ns()
+        if self.previous_expiry_ns is not None and completed_ns>=self.previous_expiry_ns:
+            raise RuntimeError('PREVIOUS_KERNEL_WINDOW_EXPIRED_BEFORE_CONFIRMED_REFRESH')
+        deadlines=[value for rows in handoff['submitted_plan']['maps'].values() for _,value in rows]
+        if not deadlines or min(deadlines)<=completed_ns:raise RuntimeError('NEW_KERNEL_WINDOW_ALREADY_EXPIRED')
+        self.previous_expiry_ns=min(deadlines)
+        self.results.append({'native_result':result,'lease_age_ms':lease_age,'dispatch_ms':dispatch,
+                             'confirmed_ns':completed_ns,'minimum_deadline_ns':self.previous_expiry_ns})
         return new_pin
     def finish(self,reader):
         self.watch.resume()
         self.results[-1]['watch_pause_ms']=(time.monotonic()-self.pause_started)*1000
+        if self.stop_signal is not None:
+            if self.stop_signal.wait(5.2):reader.stop.set();return
+            if len(self.results)>=self.max_commits:raise RuntimeError('CI_CONTINUOUS_BOUND_REACHED_WITHOUT_STOP')
+            return
         if len(self.results)>=self.max_commits:
             reader.stop.set();return
         # Holder qualification uses the original 15-second chain, never a fake clock.

@@ -123,7 +123,7 @@ def main():
     raw=cmd('/usr/sbin/nft','-a','-j','list','ruleset')
     original=trans.OriginalPin(raw)
     records=[];first=None;uncertain=None;recovery=None;positive=None;session=None;server=None;prepared=None;initial_prepared=None;watch=None;pre_guardian=None;rotation_session=None;rotation_prepared=None
-    server_done=threading.Event();server_errors=[];worker=None;holder_unit=None;holder_pidfd=None;holder_state=None;holder_cgroup=None;holder_unit_file=None
+    server_done=threading.Event();server_errors=[];worker=None;holder_unit=None;holder_pidfd=None;holder_state=None;holder_cgroup=None;holder_unit_file=None;continuous_readers=[]
     try:
         import ci_reader_fixture,guarded_sources,guarded_preparation
         real_cache=ci_reader_fixture.start(endpoints)
@@ -237,13 +237,30 @@ def main():
             print('PASS expired Guardian permit and v3 marker remain pending without nft send',flush=True)
             verified.close()
             return
+        if os.environ.get('CI_CONTINUOUS_TEST')=='1':
+            # Guardian owns the synthetic DNS socket. Separate controller-side
+            # Readers use that actual socket and refresh route/topology while
+            # the Guardian keeps its independent Reader and kernel validation.
+            continuous_readers=[ci_reader_fixture.LiveReaders(endpoints,shared_dns=True),
+                                ci_reader_fixture.LiveReaders(endpoints,shared_dns=True)]
+            real_cache,guardian_cache=(r.cache for r in continuous_readers)
         import ci_guarded_driver
+        external_stop=threading.Event() if os.environ.get('CI_CONTINUOUS_TEST')=='1' else None
+        timer=threading.Timer(42,external_stop.set) if external_stop is not None else None
+        if timer is not None:timer.daemon=True;timer.start()
         driver=ci_guarded_driver.GuardedDriver(watch=watch,sender=rotation_session,emitter=first,
                   positive_session=positive_guardian,ceiling_cache=guardian_cache,endpoints=endpoints,
-                  max_commits=4 if os.environ.get('CI_HOLDER_TEST')=='1' else 2)
+                  max_commits=(12 if external_stop is not None else (4 if os.environ.get('CI_HOLDER_TEST')=='1' else 2)),
+                  stop_signal=external_stop)
         running_reader=types.SimpleNamespace(cache=real_cache,stop=threading.Event(),shutdown_deadline=lambda:time.monotonic()+5)
         loop_result=controller.serve_hot(running_reader,active_pin,apply=lambda:True,guarded_driver=driver)
-        assert len(driver.results)==(4 if os.environ.get('CI_HOLDER_TEST')=='1' else 2)
+        if timer is not None:
+            timer.cancel();timer.join()
+            assert external_stop.is_set() and len(driver.results)>=7
+            span=driver.results[-1]['confirmed_ns']-driver.results[0]['confirmed_ns']
+            assert span>=35_000_000_000,(span,len(driver.results))
+            print('PASS independent stop signal, confirmed guarded rotations span %.2fs with no expired prior window'%(span/1e9),flush=True)
+        else:assert len(driver.results)==(4 if os.environ.get('CI_HOLDER_TEST')=='1' else 2)
         assert loop_result['sequence']==len(driver.results)+1 and loop_result['production_authority'] is False
         next_pin=loop_result['pin'];result=driver.results[-1]['native_result']
         while True:
@@ -441,6 +458,7 @@ def main():
         print('PASS v3 unknown marker retained; standalone legacy corpus runs in separate netns',flush=True)
         print('BOUNDARY: independent legacy corpus does not prove v3 recovery',flush=True)
     finally:
+        for reader in continuous_readers:reader.close()
         if holder_pidfd is not None:os.close(holder_pidfd)
         if holder_cgroup is not None:holder_cgroup.close()
         if holder_unit is not None:subprocess.run(['/usr/bin/systemctl','stop',holder_unit],check=False,timeout=10)

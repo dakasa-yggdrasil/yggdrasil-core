@@ -39,8 +39,9 @@ def start(endpoints, *, setup=True):
 
 class LiveReaders:
     """Actual Reader loops against a stoppable synthetic UDP DNS service."""
-    def __init__(self,endpoints):
-        self.server_errors=[];self.start_dns()
+    def __init__(self,endpoints,*,shared_dns=False):
+        self.server_errors=[];self.shared_dns=shared_dns
+        if not shared_dns:self.start_dns()
         def topology():
             entries,cores,prom=endpoints(4)
             return ([x for x in entries if x.kind in ('core','broker')],cores,prom,{},frozenset(),time.monotonic()+(35 if os.environ.get('CI_HOLDER_TEST')=='1' else 25))
@@ -81,5 +82,5 @@ class LiveReaders:
         if not self.server_stop.is_set():raise RuntimeError('DNS_FIXTURE_STILL_RUNNING')
         self.start_dns()
     def close(self):
-        if not self.server_stop.is_set():self.stop_dns()
+        if not self.shared_dns and not self.server_stop.is_set():self.stop_dns()
         self.readers.close_join(time.monotonic()+5)

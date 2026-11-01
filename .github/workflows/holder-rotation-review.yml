@@ -1,7 +1,7 @@
 name: Disposable Guardian holder rotation review
 on:
   push:
-    branches: [codex/network-holder-integrated-20261031]
+    branches: [codex/continuous-rotation-ci-20261031]
 permissions:
   contents: read
 jobs:
@@ -25,6 +25,6 @@ jobs:
           host_netns="$(readlink /proc/self/ns/net)"
           sudo systemd-run --quiet --wait --pipe --unit="$unit" --property=RuntimeMaxSec=120s \
             --setenv=CI_CONTROLLER_UNIT="$unit.service" --setenv=CI_GUARDED_FIXTURE=1 \
-            --setenv=CI_HOLDER_TEST=1 --setenv=CI_HOST_NETNS="$host_netns" \
+            --setenv=CI_HOLDER_TEST=1 --setenv=CI_CONTINUOUS_TEST=1 --setenv=CI_HOST_NETNS="$host_netns" \
             --setenv=CI_FAILURE_ORDER=positive-first --setenv=CI_DENY_ACK_UNCERTAIN=1 \
             /usr/bin/unshare --net -- /usr/bin/python3 -B "$target/verify_controller_guardian.py"
