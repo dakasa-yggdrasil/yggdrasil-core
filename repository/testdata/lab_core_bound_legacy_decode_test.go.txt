@@ -20,7 +20,7 @@ func TestLABCoreBoundLegacyDecode(t *testing.T) {
 	}
 	var legacy FailedInstalledGuestDisposal
 	err = decodeFailedInstalledDisposal(raw, &legacy)
-	if err == nil || !strings.Contains(err.Error(), "unknown field") {
+	if err == nil || !strings.Contains(err.Error(), `unknown field "replacement_mode"`) {
 		t.Fatalf("legacy source did not reject the new persisted wire: %v", err)
 	}
 	// A separately encoded legacy-only in-memory representation remains
