@@ -18,7 +18,7 @@ def endpoints(suffix):
     entries=[nft.Backend(k,a,nft.PORTS[k],now,now+20,
              ('00000000-0000-0000-0000-%012x/synthetic'%suffix if k=='core' else 'synthetic')) for k,a in
        [('core','10.244.1.'+str(suffix)),('broker','172.18.1.2'),('rds','172.18.1.3'),('redis','172.18.1.4')]]
-    prom=nft.PrometheusSource('10.244.1.9',now,now+20,'synthetic')
+    prom=nft.PrometheusSource('10.244.1.9',now,now+ttl,'synthetic')
     return entries,[entries[0]],[prom]
 class Cache:
     def __init__(self):self.rows=endpoints(1);self.key='initial'

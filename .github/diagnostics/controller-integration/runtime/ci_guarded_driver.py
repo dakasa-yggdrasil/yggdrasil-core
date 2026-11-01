@@ -53,4 +53,4 @@ class GuardedDriver:
         if os.environ.get('CI_HOLDER_TEST')=='1':time.sleep(5.2)
         # One synthetic new topology observation wakes the real cache loop.
         entries,cores,prom=self.endpoints(4)
-        reader.cache.publish_topology(([x for x in entries if x.kind in ('core','broker')],cores,prom,{},frozenset(),time.monotonic()+25))
+        reader.cache.publish_topology(([x for x in entries if x.kind in ('core','broker')],cores,prom,{},frozenset(),time.monotonic()+(65 if os.environ.get('CI_HOLDER_TEST')=='1' else 25)))

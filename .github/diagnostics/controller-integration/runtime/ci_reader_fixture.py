@@ -1,5 +1,5 @@
 """Real DNS UDP, route and original Cache in a disposable Linux namespace."""
-import socket,struct,subprocess,threading,time
+import os,socket,struct,subprocess,threading,time
 import dns_native,native_io,observations,whole_witness as whole
 
 def start(endpoints, *, setup=True):
@@ -24,7 +24,7 @@ def start(endpoints, *, setup=True):
     try:
         cache=observations.Cache();entries,cores,prom=endpoints(4)
         topology=[x for x in entries if x.kind in ('core','broker')]
-        cache.publish_topology((topology,cores,prom,{},frozenset(),time.monotonic()+25))
+        cache.publish_topology((topology,cores,prom,{},frozenset(),time.monotonic()+(65 if os.environ.get('CI_HOLDER_TEST')=='1' else 25)))
         for role in ('rds','redis'):
             context=cache.collision_context();answer=dns_native.resolve(role,context[0])
             result=native_io.command(['/usr/sbin/ip','-j','-4','route','get',answer.addresses[0]],role='route_'+role)
@@ -43,7 +43,7 @@ class LiveReaders:
         self.server_errors=[];self.start_dns()
         def topology():
             entries,cores,prom=endpoints(4)
-            return ([x for x in entries if x.kind in ('core','broker')],cores,prom,{},frozenset(),time.monotonic()+25)
+            return ([x for x in entries if x.kind in ('core','broker')],cores,prom,{},frozenset(),time.monotonic()+(65 if os.environ.get('CI_HOLDER_TEST')=='1' else 25))
         def route(answer,previous=None):
             output=native_io.command(['/usr/sbin/ip','-j','-4','route','get',answer.addresses[0]],role='route_'+answer.kind)
             if previous is not None:return whole.route_after_zero(previous,answer,output.stdout,native_io.last_facts())
