@@ -25,7 +25,7 @@ import (
 
 // An isolated synthetic Guest returns one signed nonce over actual loopback
 // mTLS. It has no provider credentials, process custody or production authority.
-func labAcquireSyntheticV2Nonce(t *testing.T, owner *capacity.GuestRetirementV2OriginalOwner, coreKey ed25519.PrivateKey, request model.CapacityGuestRetirementRequestV2, enrollment model.CapacityGuestRetirementEnrollment, afterNonce func(*capacity.GuestOriginalHTTPClient)) {
+func labAcquireSyntheticV2Nonce(t *testing.T, owner *capacity.GuestRetirementV2OriginalOwner, coreKey ed25519.PrivateKey, request model.CapacityGuestRetirementRequestV2, enrollment model.CapacityGuestRetirementEnrollment, positive bool, afterNonce func(*capacity.GuestOriginalHTTPClient, <-chan []model.CapacityGuestRetirementObservationV2)) {
 	t.Helper()
 	caPub, caKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -56,6 +56,7 @@ func labAcquireSyntheticV2Nonce(t *testing.T, owner *capacity.GuestRetirementV2O
 	clientCAs := x509.NewCertPool()
 	clientCAs.AddCert(ca)
 	var calls, writes atomic.Int64
+	observations := make(chan []model.CapacityGuestRetirementObservationV2, 1)
 	observer := ed25519.NewKeyFromSeed([]byte(strings.Repeat("o", 32)))
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
 		if r.TLS == nil || len(r.TLS.VerifiedChains) != 1 {
@@ -71,6 +72,22 @@ func labAcquireSyntheticV2Nonce(t *testing.T, owner *capacity.GuestRetirementV2O
 			writes.Add(1)
 			if got.Intent.RequestID != request.Intent.RequestID || got.Intent.AttemptID != request.Intent.AttemptID || capacity.ValidateGuestRetirementV2Request(got, enrollment, time.Now().UTC(), true) != nil {
 				http.Error(w, "synthetic retirement", http.StatusBadRequest)
+				return
+			}
+			if positive {
+				chain, chainErr := labSyntheticV2Chain(got.Intent, enrollment)
+				if chainErr != nil {
+					http.Error(w, "synthetic chain: "+chainErr.Error(), http.StatusBadRequest)
+					return
+				}
+				raw, marshalErr := json.Marshal(chain[len(chain)-1])
+				if marshalErr != nil {
+					http.Error(w, "synthetic chain encoding", http.StatusInternalServerError)
+					return
+				}
+				observations <- chain
+				w.Header().Set("Content-Type", "application/json")
+				_, _ = w.Write(raw)
 				return
 			}
 			// Only the synthetic endpoint receives this request. Drop the
@@ -129,7 +146,7 @@ func labAcquireSyntheticV2Nonce(t *testing.T, owner *capacity.GuestRetirementV2O
 	if err = owner.AcquireNonce(client, coreKey, request, enrollment); err == nil || calls.Load() != 1 {
 		t.Fatal("nonce replay or duplicate HTTP")
 	}
-	afterNonce(client)
+	afterNonce(client, observations)
 	if calls.Load() != 1 || writes.Load() != 1 {
 		t.Fatal("synthetic HTTP replay", calls.Load(), writes.Load())
 	}

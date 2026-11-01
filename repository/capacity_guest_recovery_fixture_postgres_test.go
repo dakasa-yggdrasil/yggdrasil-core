@@ -233,7 +233,7 @@ func recoveryTestIsolatedDB(t *testing.T) *sql.DB {
 }
 
 func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
-	for _, scenario := range []string{"bad_return_digest", "bad_run_lineage", "foreign_executor", "different_resource", "valid", "lab_core_bound_disposal"} {
+	for _, scenario := range []string{"bad_return_digest", "bad_run_lineage", "foreign_executor", "different_resource", "valid", "lab_core_bound_disposal", "lab_core_bound_disposal_success"} {
 		t.Run(scenario, func(t *testing.T) {
 			db := recoveryTestIsolatedDB(t)
 			db.SetMaxOpenConns(1)
@@ -346,7 +346,7 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 			}
 			original, originalJob := start(0)
 			var originalCanaryAt time.Time
-			if scenario == "lab_core_bound_disposal" {
+			if strings.HasPrefix(scenario, "lab_core_bound_disposal") {
 				// The declared signed canary and its bounded return must fit inside
 				// the actual original failed run; no synthetic late ACK is added.
 				originalCanaryAt = time.Now().UTC().Truncate(time.Microsecond)
@@ -363,7 +363,7 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 				}
 				if id == "complete-original-provision" {
 					s.Status = "failed"
-					if scenario == "lab_core_bound_disposal" {
+					if strings.HasPrefix(scenario, "lab_core_bound_disposal") {
 						s.Metadata = map[string]any{"original_guest_reconcile_refusal_stage": "fresh_original_canary"}
 					}
 				}
@@ -389,7 +389,7 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 				t.Fatal("previous dispatch finish", err)
 			}
 			var current CapacityDispatchEnvelope
-			if scenario != "lab_core_bound_disposal" {
+			if !strings.HasPrefix(scenario, "lab_core_bound_disposal") {
 				current, _ = start(2)
 			}
 			var originalWire, originalResult []byte
@@ -411,7 +411,7 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 				id     uuid.UUID
 				result []byte
 			}{{original.RunID, originalResult}, {previous.RunID, previousResult}}
-			if scenario != "lab_core_bound_disposal" {
+			if !strings.HasPrefix(scenario, "lab_core_bound_disposal") {
 				verifiedRuns = append(verifiedRuns, struct {
 					id     uuid.UUID
 					result []byte
@@ -428,7 +428,7 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 			}
 			at := time.Now().UTC().Add(-12 * time.Second).Truncate(time.Microsecond)
 			fixtureFence := pre.Fence + 1
-			if scenario == "lab_core_bound_disposal" {
+			if strings.HasPrefix(scenario, "lab_core_bound_disposal") {
 				at = originalCanaryAt
 				fixtureFence = pre.Fence
 			}
@@ -444,7 +444,7 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 					t.Fatal("fixture row", err)
 				}
 			}
-			if scenario == "lab_core_bound_disposal" {
+			if strings.HasPrefix(scenario, "lab_core_bound_disposal") {
 				write(`UPDATE public.capacity_mutation_grants SET state='confirmed',grant_record=$2::jsonb WHERE id=$1`, pre.OriginalCreateGrantID, `{"grant":{"capability":"ensure_server"},"binding":{"ensure_capability":"ensure_server"}}`)
 			} else {
 				write(`UPDATE public.capacity_mutation_grants SET state='confirmed' WHERE id=$1`, pre.OriginalCreateGrantID)
@@ -493,7 +493,7 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 			if e = wtx.Commit(); e != nil {
 				t.Fatal(e)
 			}
-			if scenario == "lab_core_bound_disposal" {
+			if strings.HasPrefix(scenario, "lab_core_bound_disposal") {
 				originals := func() [][]byte {
 					t.Helper()
 					var grant, preWire, witnessWire, receiptWire, installationWire, runWire []byte
@@ -616,7 +616,7 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 					if err = db.QueryRow(`SELECT (SELECT count(*) FROM public.capacity_vm_retirement_original_returns WHERE intent_id=$1),(SELECT count(*) FROM public.capacity_guest_original_caller_attempts WHERE intent_id=$1)`, request.Intent.RequestID).Scan(&nonceRows, &callerRows); err != nil || nonceRows != 0 || callerRows != 0 {
 						t.Fatal("preflight unexpectedly sent Guest I/O", err)
 					}
-					labAcquireSyntheticV2Nonce(t, originalOwner, key, request, receipt.Enrollment, func(client *capacity.GuestOriginalHTTPClient) {
+					labAcquireSyntheticV2Nonce(t, originalOwner, key, request, receipt.Enrollment, scenario == "lab_core_bound_disposal_success", func(client *capacity.GuestOriginalHTTPClient, observations <-chan []model.CapacityGuestRetirementObservationV2) {
 						if err = retirementStore.FinalizeGuestRetirementV2Nonce(originalOwner); err != nil {
 							t.Fatal("persist original synthetic nonce", err)
 						}
@@ -635,15 +635,48 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 							t.Fatal(marshalErr)
 						}
 						returned, callErr := client.Original(originalOwner.Context(), "POST", model.GuestRetirementV2WritePath, body)
-						if callErr == nil || !returned.DoFailed || returned.Status != 0 {
+						var observed model.CapacityGuestRetirementObservationV2
+						positive := scenario == "lab_core_bound_disposal_success"
+						if positive {
+							if callErr != nil || capacity.GuestOriginalHTTPDecode(returned, &observed) != nil || capacity.GuestRetirementV2Observation(observed, receipt.Enrollment, finalRequest.Intent, false) != nil {
+								t.Fatal("synthetic full Guest return", callErr, string(returned.Body))
+							}
+						} else if callErr == nil || !returned.DoFailed || returned.Status != 0 {
 							t.Fatal("synthetic lost return was treated as success", callErr)
 						}
-						retained := GuestOriginalCallerReturn{RequestID: finalRequest.Intent.RequestID, AttemptID: finalRequest.Intent.AttemptID, StartedAt: returned.StartedAt, DoStartedAt: returned.DoStartedAt, DriverReturnedAt: returned.DriverReturnedAt, PreflightFailed: returned.PreflightFailed, DoReturnedAt: returned.DoReturnedAt, ReadReturnedAt: returned.ReadReturnedAt, CloseReturnedAt: returned.CloseReturnedAt, OriginalDeadline: finalRequest.Intent.OriginalDeadline, ReceivedBodyBytes: returned.ReceivedBodyBytes, BodyPersisted: false, Status: returned.Status, ResponseSHA256: returned.ResponseSHA256, ResponseBodyScope: returned.ResponseBodyScope, RetainedPrefixBytes: returned.RetainedPrefixBytes, RetainedPrefixSHA256: returned.RetainedPrefixSHA256, DoFailed: returned.DoFailed, ReadFailed: returned.ReadFailed, CloseFailed: returned.CloseFailed, OriginalContextFailed: returned.OriginalContextFailed}
+						retained := GuestOriginalCallerReturn{RequestID: finalRequest.Intent.RequestID, AttemptID: finalRequest.Intent.AttemptID, StartedAt: returned.StartedAt, DoStartedAt: returned.DoStartedAt, DriverReturnedAt: returned.DriverReturnedAt, PreflightFailed: returned.PreflightFailed, DoReturnedAt: returned.DoReturnedAt, ReadReturnedAt: returned.ReadReturnedAt, CloseReturnedAt: returned.CloseReturnedAt, OriginalDeadline: finalRequest.Intent.OriginalDeadline, ReceivedBodyBytes: returned.ReceivedBodyBytes, BodyPersisted: positive, Status: returned.Status, ResponseSHA256: returned.ResponseSHA256, ResponseBodyScope: returned.ResponseBodyScope, RetainedPrefixBytes: returned.RetainedPrefixBytes, RetainedPrefixSHA256: returned.RetainedPrefixSHA256, DoFailed: returned.DoFailed, ReadFailed: returned.ReadFailed, CloseFailed: returned.CloseFailed, OriginalContextFailed: returned.OriginalContextFailed}
+						if positive {
+							retained.Body = returned.Body
+						}
 						if err = retirementStore.RecordGuestCallerReturnV2(claimCtx, retained); err != nil {
 							t.Fatal("retain original uncertain caller return", err)
 						}
 						if err = retirementStore.ReserveGuestCallerV2(originalOwner); err == nil {
 							t.Fatal("duplicate synthetic write reserved")
+						}
+						if positive {
+							var chain []model.CapacityGuestRetirementObservationV2
+							select {
+							case chain = <-observations:
+							case <-claimCtx.Done():
+								t.Fatal("synthetic Guest chain absent")
+							}
+							if len(chain) != 4 || chain[3].RecordSHA256 != observed.RecordSHA256 {
+								t.Fatal("synthetic Guest chain mismatch")
+							}
+							if err = retirementStore.RecordGuestObservationV2(claimCtx, request.Intent.RequestID, chain[1]); err == nil {
+								t.Fatal("out-of-order synthetic observation accepted")
+							}
+							for _, item := range chain {
+								if err = retirementStore.RecordGuestObservationV2(claimCtx, request.Intent.RequestID, item); err != nil {
+									t.Fatal("persist signed synthetic Guest observation", err)
+								}
+							}
+							challenge, challengeErr := retirementStore.PrepareGuestNativePoweroffReadV2(claimCtx, request.Intent.RequestID)
+							if challengeErr != nil || challenge.Tuple != request.Intent.Tuple {
+								t.Fatal("synthetic V2 chain did not prepare native read", challengeErr)
+							}
+							t.Log("LAB_SYNTHETIC_V2_FOUR_SIGNED_RECORDS_ORIGINAL_CALLER_NATIVE_READ_PREPARED")
 						}
 					})
 					var callerReturns int
@@ -658,7 +691,11 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 					if readErr != nil || len(rows) != 2 || !reflect.DeepEqual(beforeOriginals, originals()) {
 						t.Fatal("held V2 preflight mutated originals", readErr)
 					}
-					t.Log("LAB_SYNTHETIC_RETIREMENT_V2_MTLS_ONE_WRITE_LOST_NO_REPLAY_CLEANUP_HELD")
+					if scenario == "lab_core_bound_disposal_success" {
+						t.Log("LAB_SYNTHETIC_RETIREMENT_V2_POSITIVE_CHAIN_CLEANUP_HELD")
+					} else {
+						t.Log("LAB_SYNTHETIC_RETIREMENT_V2_MTLS_ONE_WRITE_LOST_NO_REPLAY_CLEANUP_HELD")
+					}
 					t.Log("LAB_CORE_BOUND_DISPOSAL_REQUESTED_READBACK_NO_DUPLICATE")
 					return
 				}

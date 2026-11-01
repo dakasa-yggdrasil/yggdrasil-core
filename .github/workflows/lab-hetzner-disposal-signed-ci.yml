@@ -62,12 +62,13 @@ jobs:
           mkdir -p "$RUNNER_TEMP/lab-hetzner-signed"
           export LAB_HETZNER_HTTP_TEST_BIN="$RUNNER_TEMP/lab-hetzner-http.test"
           go test -p=1 -race -buildvcs=true -tags recoveryfixture -c -o "$LAB_HETZNER_HTTP_TEST_BIN" ./controllers/httpapi
-          go test -p=1 -race -buildvcs=true -tags recoveryfixture -count=1 -timeout=5m -v ./repository -run '^TestRecoveryFixtureResumeSetupPostgres/lab_core_bound_disposal$' 2>&1 | tee "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
+          go test -p=1 -race -buildvcs=true -tags recoveryfixture -count=1 -timeout=5m -v ./repository -run '^TestRecoveryFixtureResumeSetupPostgres/lab_core_bound_disposal(_success)?$' 2>&1 | tee "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
           grep -F 'LAB_CORE_BOUND_DISPOSAL_REQUESTED_READBACK_NO_DUPLICATE' "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
           grep -F 'LAB_HETZNER_CORE_BOUND_HTTPS_LOST_RESPONSE_GET_ONLY_ADVANCE_HELD' "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
           grep -F 'LAB_SIGNED_HTTP_COMMITTED_PG_WIRE_CORE2DE_HELD_UNCHANGED' "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
           grep -F 'LAB_CORE_BOUND_DISPOSAL_CLAIMED_FENCE_AND_REFUSAL_ROLLBACK' "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
           grep -F 'LAB_SYNTHETIC_RETIREMENT_V2_MTLS_ONE_WRITE_LOST_NO_REPLAY_CLEANUP_HELD' "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
+          grep -F 'LAB_SYNTHETIC_V2_FOUR_SIGNED_RECORDS_ORIGINAL_CALLER_NATIVE_READ_PREPARED' "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
       - name: Retain original test output
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
