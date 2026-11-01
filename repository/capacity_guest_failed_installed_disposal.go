@@ -468,9 +468,14 @@ func (s CapacityStore) failedInstalledDisposalActiveTx(ctx context.Context, tx *
 // New Source is required, not a caller's replacement-ready assertion. The
 // current compiled complete contract must approve the different Guest Source
 // and profile before any subsequent native creation in this dimension.
-func guardFallbackNewerDisposalTx(ctx context.Context, tx *sql.Tx, namespace string, p model.CapacityPolicySpec) error {
+// This older binary cannot prove that authorities in another policy dimension
+// target a different native resource. Conservatively hold new authority across
+// the fallback until a newer Core handles the newer disposition contract.
+// Operational handoff must fence every 32fe writer before starting this fallback:
+// the old dimension locks alone do not serialize cross-dimension insertion.
+func guardFallbackNewerDisposalTx(ctx context.Context, tx *sql.Tx) error {
 	var unsupported bool
-	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.capacity_guest_failed_installed_disposals WHERE namespace=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND original_record ?| array['replacement_mode','original_failed_issuer_core_source','replacement_core_source'])`, namespace, p.Environment, p.Domain, p.Dimension).Scan(&unsupported); err != nil {
+	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.capacity_guest_failed_installed_disposals WHERE original_record ?| array['replacement_mode','original_failed_issuer_core_source','replacement_core_source'])`).Scan(&unsupported); err != nil {
 		return err
 	}
 	if unsupported {
@@ -480,7 +485,7 @@ func guardFallbackNewerDisposalTx(ctx context.Context, tx *sql.Tx, namespace str
 }
 
 func requireFailedInstalledReplacementTx(ctx context.Context, tx *sql.Tx, policy model.Manifest, p model.CapacityPolicySpec) error {
-	if err := guardFallbackNewerDisposalTx(ctx, tx, policy.Metadata.Namespace, p); err != nil {
+	if err := guardFallbackNewerDisposalTx(ctx, tx); err != nil {
 		return err
 	}
 	if p.GuestNotifyReconcileBinding == nil {

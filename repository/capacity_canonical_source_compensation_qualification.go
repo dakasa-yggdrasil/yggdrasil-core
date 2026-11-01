@@ -506,6 +506,9 @@ type CanonicalSourceChildAuthority struct {
 func (s CapacityStore) AuthorizeCanonicalSourceChild(ctx context.Context, policy model.Manifest, childID, attempt, redeemSHA string) ([]byte, error) {
 	var result []byte
 	err := s.compensationTransaction(ctx, policy, false, func(tx *sql.Tx, p model.CapacityPolicySpec, now time.Time) error {
+		if err := guardFallbackNewerDisposalTx(ctx, tx); err != nil {
+			return err
+		}
 		child, err := loadCompensationRecord(ctx, tx, policy, p, childID)
 		if err != nil {
 			return err

@@ -49,6 +49,9 @@ func (s CapacityStore) guestCreateRedemptionTx(ctx context.Context, tx *sql.Tx, 
 func (s CapacityStore) IssueGuestRetirement(ctx context.Context, policy model.Manifest, generation, fence int64, owner, preregistrationID, nonce string, key ed25519.PrivateKey) (model.CapacityGuestRetirementRequest, error) {
 	var result model.CapacityGuestRetirementRequest
 	err := s.mutationTransaction(ctx, policy, false, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
+		if err := guardFallbackNewerDisposalTx(ctx, tx); err != nil {
+			return err
+		}
 		stored, err := loadGuestOriginalTx(ctx, tx, preregistrationID)
 		origin := s.guestRetirementOrigin
 		if err != nil || origin == nil || origin.source != capacity.CurrentGuestCoreSource() || !capacity.GuestBindingAuthorityCurrent(p, stored.binding) || origin.step.Use.Kind != "yggdrasil" || origin.step.Use.Operation != capacity.RetireOriginalGuestOperation || origin.step.TimeoutSeconds < 1 || origin.step.TimeoutSeconds > 86400 || origin.step.Retry.MaxAttempts > 1 || origin.step.ForEach != nil || p.GuestRetirementBinding == nil || !reflect.DeepEqual(*p.GuestRetirementBinding, stored.binding) || stored.pre.PolicyID != policy.ID.String() || stored.pre.PolicyChecksum != policy.Checksum || stored.pre.WorkflowID != s.WorkflowID.String() || !capacityIntentReduction(current) || (current.Phase != "draining" && current.Phase != "drained") {
@@ -270,6 +273,9 @@ func (s CapacityStore) guestRetirementFloorTx(ctx context.Context, tx *sql.Tx, n
 // original HTTP result/Read/Close is recorded separately; timeout is not retry.
 func (s CapacityStore) ReserveGuestCaller(ctx context.Context, request model.CapacityGuestRetirementRequest) error {
 	return s.guestRetirementTransaction(ctx, request.Intent.RequestID, func(tx *sql.Tx, stored GuestRetirementOriginal, now time.Time) error {
+		if err := guardFallbackNewerDisposalTx(ctx, tx); err != nil {
+			return err
+		}
 		if stored.Request.Intent != request.Intent || stored.Request.Signature != request.Signature || capacity.GuestRetirementRequest(request, stored.Receipt.Enrollment, now, true) != nil {
 			return ErrCapacityConflict
 		}

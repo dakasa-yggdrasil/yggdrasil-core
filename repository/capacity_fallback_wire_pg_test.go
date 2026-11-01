@@ -72,7 +72,7 @@ func TestLABCoreBoundLegacyDecode(t *testing.T) {
 	policy := model.Manifest{}
 	policy.Metadata.Namespace = view.Namespace
 	p := model.CapacityPolicySpec{Environment: view.Environment, Domain: view.Domain, Dimension: view.Dimension}
-	if err = guardFallbackNewerDisposalTx(context.Background(), tx, view.Namespace, p); err == nil {
+	if err = guardFallbackNewerDisposalTx(context.Background(), tx); err == nil {
 		t.Fatal("unsupported mutation issuance or redemption gate allowed")
 	}
 	if err = requireFailedInstalledReplacementTx(context.Background(), tx, policy, p); err == nil {

@@ -184,7 +184,7 @@ func (s CapacityStore) IssueMutation(ctx context.Context, policy model.Manifest,
 		return result, err
 	}
 	err := s.mutationTransaction(ctx, policy, false, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, intent model.CapacityIntent, now time.Time) error {
-		if err := guardFallbackNewerDisposalTx(ctx, tx, policy.Metadata.Namespace, p); err != nil {
+		if err := guardFallbackNewerDisposalTx(ctx, tx); err != nil {
 			return err
 		}
 		plan, err := capacity.PrepareMutationPlan(p, issue)
@@ -449,7 +449,7 @@ func (s CapacityStore) RedeemMutation(ctx context.Context, principal string, r m
 		}
 		// Keep already-returned callbacks recordable, but never issue a new
 		// write-once redemption under a newer, unsupported disposal contract.
-		if err := guardFallbackNewerDisposalTx(ctx, tx, ns, scope); err != nil {
+		if err := guardFallbackNewerDisposalTx(ctx, tx); err != nil {
 			return err
 		}
 		var raw []byte

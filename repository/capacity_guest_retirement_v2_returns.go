@@ -18,6 +18,9 @@ func (s CapacityStore) ReserveGuestCallerV2(original *capacity.GuestRetirementV2
 		return err
 	}
 	return s.guestRetirementV2Transaction(original.Context(), request.Intent.RequestID, true, func(tx *sql.Tx, stored GuestRetirementOriginalV2, nowPG time.Time) error {
+		if err := guardFallbackNewerDisposalTx(original.Context(), tx); err != nil {
+			return err
+		}
 		public := request
 		public.Nonce = ""
 		if stored.ExecutorID != s.ExecutorID || !reflect.DeepEqual(public, stored.Request) || capacity.GuestRetirementSHA(request) != stored.RequestSHA256 || capacity.ValidateGuestRetirementV2Request(request, stored.Receipt.Enrollment, time.Now().UTC(), true) != nil {

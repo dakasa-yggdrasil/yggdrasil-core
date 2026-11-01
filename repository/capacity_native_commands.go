@@ -52,6 +52,9 @@ func (s CapacityStore) issueNativeCommand(ctx context.Context, policy model.Mani
 	token := hex.EncodeToString(secret)
 	tokenDigest, requestDigest := sha256.Sum256([]byte(token)), sha256.Sum256(request)
 	err = s.mutationTransaction(ctx, policy, false, intent.Generation, intent.FencingToken, intent.LeaseOwner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
+		if err := guardFallbackNewerDisposalTx(ctx, tx); err != nil {
+			return err
+		}
 		if p.HPAExecutionBinding == nil || p.AssessmentBinding == nil || len(p.MutationBindings) != 0 || !p.ExecutionEnabled || !s.ExecutionEnabled {
 			return ErrCapacityDisabled
 		}
@@ -246,6 +249,9 @@ func (s CapacityStore) RedeemNativeCommand(ctx context.Context, principal string
 	var command model.CapacityNativeCommand
 	if json.Unmarshal(raw, &command) != nil || command.CommandID != initial.CommandID || command.State != "issued" || command.AdapterPrincipalID != principal || command.Adapter.IntegrationInstanceID != request.IntegrationInstanceID || command.Adapter.IntegrationTypeID != request.IntegrationTypeID || command.Operation != request.Capability || command.RequestSHA256 != request.RequestSHA256 {
 		return permit, ErrCapacityMutationAuthorization
+	}
+	if err := guardFallbackNewerDisposalTx(ctx, tx); err != nil {
+		return permit, err
 	}
 	if (!command.AdmissionOnly && !s.ExecutionEnabled) || (command.AdmissionOnly && (!s.AdmissionOnly || command.Operation == capacity.EnsureBoundHPAEnvelope || command.Phase == "terminate")) {
 		return permit, ErrCapacityMutationAuthorization

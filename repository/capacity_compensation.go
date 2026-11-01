@@ -164,6 +164,9 @@ func validateCompensationDrain(ctx context.Context, tx *sql.Tx, namespace string
 func (s CapacityStore) IssueCompensation(ctx context.Context, policy model.Manifest, issue model.CapacityCompensationIssue) (model.CapacityMutationGrant, error) {
 	var result model.CapacityMutationGrant
 	err := s.compensationTransaction(ctx, policy, false, func(tx *sql.Tx, p model.CapacityPolicySpec, now time.Time) error {
+		if err := guardFallbackNewerDisposalTx(ctx, tx); err != nil {
+			return err
+		}
 		plan, err := capacity.PrepareCompensationPlan(p, issue.Mutation)
 		if err != nil {
 			return err

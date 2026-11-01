@@ -105,6 +105,9 @@ func (s CapacityStore) IssueGuestNotifyCanaryRead(ctx context.Context, policy mo
 func (s CapacityStore) issueGuestNotifyCanary(ctx context.Context, policy model.Manifest, generation, fence int64, owner, preID, usage, recordID string, key ed25519.PrivateKey) (model.CapacityGuestNotifyCanaryChallenge, error) {
 	var result model.CapacityGuestNotifyCanaryChallenge
 	err := s.guestNotifyTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
+		if err := guardFallbackNewerDisposalTx(ctx, tx); err != nil {
+			return err
+		}
 		maintenance := s.guestNotifyMaintenanceOrigin()
 		if s.guestNotifyOrigin == nil || current.FailedInstalledDisposal != nil || current.RecoveryOnly || !capacity.GuestNotifyCanaryUsage(usage) || (usage == "steady_useful_membership") != maintenance || !maintenance && !capacityProfileCurrent(p, current.Decision, now) {
 			return ErrCapacityConflict
@@ -213,6 +216,9 @@ func loadGuestNotifyPreflightTx(ctx context.Context, tx *sql.Tx, id string) (mod
 // call. A duplicate request refuses; it never returns another permission.
 func (s CapacityStore) ReserveGuestNotifyCanarySend(ctx context.Context, policy model.Manifest, generation, fence int64, owner string, c model.CapacityGuestNotifyCanaryChallenge) error {
 	return s.guestNotifyTransaction(ctx, policy, true, generation, fence, owner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
+		if err := guardFallbackNewerDisposalTx(ctx, tx); err != nil {
+			return err
+		}
 		stored, receipt, err := s.guestNotifyStoredTx(ctx, tx, policy, p, c.PreregistrationID)
 		if err != nil {
 			return err

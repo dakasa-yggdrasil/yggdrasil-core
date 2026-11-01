@@ -162,6 +162,9 @@ func loadPowerActivity(ctx context.Context, tx *sql.Tx, scope executorpower.Scop
 func (s CapacityStore) IssueExecutorPower(ctx context.Context, policy model.Manifest, commandID string) (executorpower.Grant, error) {
 	var result executorpower.Grant
 	err := s.powerTransaction(ctx, policy, false, func(tx *sql.Tx, p model.CapacityPolicySpec, scope executorpower.Scope, now time.Time) error {
+		if err := guardFallbackNewerDisposalTx(ctx, tx); err != nil {
+			return err
+		}
 		b := *p.ExecutorPowerBinding
 		if !s.ExecutorPowerEnabled || !s.ExecutionEnabled || !p.ExecutionEnabled || !b.Enabled || s.ExecutorID == "" || s.ExecutorActivityPrincipal != "machine:"+b.ControllerPrincipal {
 			return executorpower.ErrDenied
@@ -282,6 +285,9 @@ func (s CapacityStore) executorPowerCallback(ctx context.Context, id, principal,
 	}
 	enabled := false
 	if send && g.State == "issued" {
+		if err := guardFallbackNewerDisposalTx(ctx, tx); err != nil {
+			return err
+		}
 		var policyRaw []byte
 		var checksum string
 		var active bool

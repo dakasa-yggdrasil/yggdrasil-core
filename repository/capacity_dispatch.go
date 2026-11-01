@@ -104,6 +104,9 @@ func EnqueueCapacityDispatch(ctx context.Context, tx *sql.Tx, e CapacityDispatch
 	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, string(scope)); err != nil {
 		return CapacityDispatchJob{}, false, ErrCapacityDispatchEnvelope
 	}
+	if err = guardFallbackNewerDisposalTx(ctx, tx); err != nil {
+		return CapacityDispatchJob{}, false, ErrCapacityDispatchEnvelope
+	}
 	var duplicate uuid.UUID
 	err = tx.QueryRowContext(ctx, `SELECT job_id FROM public.capacity_dispatch_wakes WHERE realm=$1 AND environment=$2 AND domain=$3 AND dimension=$4 AND source_tick=$5`, e.Realm, e.Environment, e.Domain, e.Dimension, e.SourceTick).Scan(&duplicate)
 	if err == nil {
@@ -256,6 +259,13 @@ func StartCapacityDispatch(ctx context.Context, db *sql.DB, job CapacityDispatch
 		return CapacityDispatchJob{}, ErrCapacityDispatchClaim
 	}
 	defer tx.Rollback()
+	scope, _ := json.Marshal([]string{job.Realm, job.Environment, job.Domain, job.Dimension})
+	if _, err = tx.ExecContext(ctx, `SELECT pg_advisory_xact_lock(hashtextextended($1, 0))`, string(scope)); err != nil {
+		return CapacityDispatchJob{}, ErrCapacityDispatchClaim
+	}
+	if err = guardFallbackNewerDisposalTx(ctx, tx); err != nil {
+		return CapacityDispatchJob{}, ErrCapacityDispatchClaim
+	}
 	current, err := readCapacityDispatchJob(ctx, tx, job.JobID, true)
 	var now time.Time
 	if err != nil || !sameCapacityDispatchClaim(current, job) || checkCapacityDispatchOriginal(ctx, tx, current) != nil {
