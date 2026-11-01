@@ -77,6 +77,9 @@ func (s CapacityStore) BeginOriginalNotifyWindow(ctx context.Context, policy mod
 		return observed, originalNotifyStoreRefusal(err)
 	}
 	err := s.mutationTransaction(ctx, policy, false, intent.Generation, intent.FencingToken, intent.LeaseOwner, func(tx *sql.Tx, p model.CapacityPolicySpec, current model.CapacityIntent, now time.Time) error {
+		if err := guardFallbackNewerDisposalTx(ctx, tx); err != nil {
+			return err
+		}
 		if p.NativeNotifyWindowBinding == nil || marker.State != "possible_start" || !marker.PossibleStartAt.IsZero() || marker.OriginalReturnsSHA256 != "" || marker.OriginalReturnsObservedAt != nil || !originalNotifyMarkerMatches(marker, policy, current, s, now) || marker.SourceCommit != p.NativeNotifyWindowBinding.SourceCommit || marker.QuerySHA256 != p.NativeNotifyWindowBinding.QuerySHA256 {
 			return errOriginalNotifyWindow
 		}

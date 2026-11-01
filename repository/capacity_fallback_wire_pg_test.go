@@ -121,6 +121,11 @@ func labFallbackAuthorityPG(t *testing.T, dsn string) {
 	if _, err := f.store.IssueCompensation(ctx, f.policy, model.CapacityCompensationIssue{}); !errors.Is(err, errFallbackNewerDisposition) {
 		t.Fatal("cross-dimension IssueCompensation did not reach HOLD", err)
 	}
+	notifyCtx, cancelNotify := context.WithTimeout(ctx, 5*time.Second)
+	defer cancelNotify()
+	if _, err := f.store.BeginOriginalNotifyWindow(notifyCtx, f.policy, f.intent, model.CapacityOriginalNotifyWindowMarker{}); !errors.Is(err, errFallbackNewerDisposition) {
+		t.Fatal("cross-dimension original Notify publication did not reach HOLD", err)
+	}
 	request := model.CapacityNativeHPARequest{Namespace: "fixture", HPAName: "fixture", ExpectedUID: "fixture", ExpectedResourceVersion: "1", ExpectedWorkloadUID: "fixture", ExpectedWorkloadResourceVersion: "1", Owner: "fixture", Generation: 1, IdempotencyKey: "fixture", MinReplicas: 1, MaxReplicas: 1}
 	requestWire, err := json.Marshal(request)
 	if err != nil {
@@ -272,7 +277,7 @@ func labFallbackAuthorityPG(t *testing.T, dsn string) {
 	if err = db.QueryRow(`SELECT state FROM public.capacity_mutation_grants WHERE id=$1`, g.ID).Scan(&state); err != nil || state != "issued" {
 		t.Fatal("held power grant changed", state, err)
 	}
-	t.Log("LAB_FALLBACK_PG82_CROSS_SCOPE_MUTATION_COMPENSATION_NATIVE_DISPATCH_POWER_HELD")
+	t.Log("LAB_FALLBACK_PG82_CROSS_SCOPE_MUTATION_COMPENSATION_NATIVE_DISPATCH_POWER_NOTIFY_HELD")
 }
 
 func labFallbackFixtureURL(t *testing.T, dsn string) *url.URL {
