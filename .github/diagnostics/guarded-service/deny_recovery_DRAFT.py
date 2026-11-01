@@ -1,4 +1,4 @@
-"""Disposable CI-only deny experiment under retained writer EX; not a permit.
+"""Disposable CI-only deny experiment under retained writer EX; not production authority.
 
 Never invokes this module in production. It creates a *new*, separately journaled
 netlink batch with expired maps and empty dynamic collections. Unknown original
@@ -11,6 +11,7 @@ import guarded_sources as sources
 import recovery_read_DRAFT as recovery
 import recovery_terminality_DRAFT as terminal
 import transition_structure_DRAFT as transition
+import recovery_authority_CI as authority
 
 class Held(RuntimeError):pass
 
@@ -18,7 +19,7 @@ def need(value,reason):
     if not value:raise Held(reason)
 
 def run(*,marker_anchor,writer_lock,fence,old_directory,sender_records,expected_genid,
-        original_pin,coverage,deny_dir,cache,simulate_ack_loss):
+        original_pin,coverage,deny_dir,cache,old_records,reference,receipt,simulate_ack_loss):
     need(os.geteuid()==0 and os.readlink('/proc/self/ns/net')!=os.readlink('/proc/1/ns/net'),
          'ONLY_DISPOSABLE_NETWORK_NAMESPACE')
     need(type(marker_anchor) is terminal.MarkerAnchor and type(simulate_ack_loss) is bool,
@@ -39,17 +40,9 @@ def run(*,marker_anchor,writer_lock,fence,old_directory,sender_records,expected_
     probe=None;records=[]
     try:
         need(nl.genid(net)==expected_genid,'PRE_DENY_GENID_CHANGED')
-        current=nl.rules(net,'admit_deadline');need(len(current)==2,'EXACT_TWO_OLD_GATE_RULES_REQUIRED')
         for role in ('inbound','reverse'):
             records.append(nl.make_program([(('ab' if role=='inbound' else 'cd')*12,1)]))
-        seq=201;parts=[]
-        for fields,_ in current:
-            h=dict((k&0x3fff,v) for k,v in fields)[3]
-            parts.append(nl.msg((10<<8)|8,1|4,seq,struct.pack('>BBH',1,0,0)+nl.attr(1,b'dakasa_capacity_network\0')+nl.attr(2,b'admit_deadline\0')+nl.attr(3,h)));seq+=1
-        for rec in records:parts.append(nl.xtjump(rec['program_fd'],seq));seq+=1
-        for name in ('core_ready4','prometheus_ready4','backend_forward4','backend_dnat4'):
-            parts.append(nl.flush(name,seq));seq+=1
-        wire=nl.begin(expected_genid,200)+b''.join(parts)+nl.end(seq)
+        wire,seq=authority.deny_wire(net,expected_genid,records,reference)
         digest=hashlib.sha256(wire).hexdigest()
         need(digest!=old['wire_sha256'],'DENY_MUST_USE_DISTINCT_WIRE')
         deny_dir=Path(deny_dir);deny_dir.mkdir(mode=0o700)
@@ -65,7 +58,19 @@ def run(*,marker_anchor,writer_lock,fence,old_directory,sender_records,expected_
              and current_source['invalidation_epoch']==fresh['invalidation_epoch'],
              'FRESH_READER_CHANGED_BEFORE_DENY')
         need(nl.genid(net)==expected_genid,'PRE_DISPATCH_GENID_CHANGED')
+        arguments=dict(anchor=marker_anchor,fence=fence,net=net,genid=expected_genid,wire=wire,
+            deny_records=records,reference=reference,cache=cache,old_directory=old_directory,
+            sender_records=sender_records,old_records=old_records,original_pin=original_pin,receipt=receipt,coverage=coverage,deny_dir=deny_dir)
+        try:authority.consume(None,wire,old_directory=old_directory,sender_records=sender_records);raise AssertionError('missing permit accepted')
+        except authority.Held as error:need(str(error)=='LIVE_UNUSED_CI_DENY_PERMIT_REQUIRED','MISSING_PERMIT_WRONG_GUARD')
+        invalid=authority.mint(**arguments)
+        try:authority.consume(invalid,wire+b'X',old_directory=old_directory,sender_records=sender_records);raise AssertionError('changed wire accepted')
+        except authority.Held as error:need(str(error)=='SAME_DURABLE_DENY_BYTES_REQUIRED','CHANGED_WIRE_WRONG_GUARD')
+        permit=authority.mint(**arguments)
+        authority.consume(permit,wire,old_directory=old_directory,sender_records=sender_records)
         need(net.send(wire)==len(wire),'WHOLE_DENY_BATCH_REQUIRED')
+        try:authority.consume(permit,wire,old_directory=old_directory,sender_records=sender_records);raise AssertionError('permit replay accepted')
+        except authority.Held as error:need(str(error)=='LIVE_UNUSED_CI_DENY_PERMIT_REQUIRED','PERMIT_REPLAY_WRONG_GUARD')
         if not simulate_ack_loss:
             pending=set(range(201,seq));acks={}
             while set(acks)!=pending:
@@ -101,7 +106,7 @@ def run(*,marker_anchor,writer_lock,fence,old_directory,sender_records,expected_
         return {'after_genid':after,'deny_wire_sha256':digest,'old_wire_sha256':old['wire_sha256'],
                 'deny_ack_unknown':simulate_ack_loss,'original_ack_unknown':True,
                 'marker_retained':True,'fresh_reader_generation':fresh['source_generation'],
-                'reader_epoch':fresh['invalidation_epoch'],'production_authority':False}
+                'reader_epoch':fresh['invalidation_epoch'],'ci_deny_permit_consumed':True,'production_authority':False}
     finally:
         # If send/ACK/verification fails, no retry is made and both intents stay.
         if probe is not None:probe.close()

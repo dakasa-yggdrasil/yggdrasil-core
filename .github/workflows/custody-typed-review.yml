@@ -19,15 +19,19 @@ jobs:
           sudo modprobe xt_bpf
           target="$(sudo mktemp -d /run/ci-typed-custody.XXXXXX)"
           trap 'sudo rm -rf "$target"' EXIT
-          sudo cp .github/diagnostics/guarded-service/{guarded_unit_identity.py,recovery_terminality_DRAFT.py,deny_recovery_DRAFT.py,verify_recovery_terminality.py,systemd_peer.py} "$target/"
+          sudo cp .github/diagnostics/guarded-service/{guarded_unit_identity.py,recovery_terminality_DRAFT.py,recovery_authority_CI.py,deny_recovery_DRAFT.py,verify_recovery_terminality.py,systemd_peer.py} "$target/"
           sudo cp .github/diagnostics/controller-integration/coverage.py "$target/coverage.py"
           sudo cp -R .github/diagnostics/controller-integration/runtime "$target/runtime"
           sudo chmod -R go-w "$target"
-          sudo unshare --net --mount --propagation private -- /usr/bin/python3 -B "$target/verify_recovery_terminality.py"
+          unit="ci-recovery-custodian-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-ack"
+          sudo systemd-run --quiet --wait --pipe --unit="$unit" --setenv=CI_CUSTODIAN_UNIT="$unit.service" \
+            /usr/bin/unshare --net --mount --propagation private -- /usr/bin/python3 -B "$target/verify_recovery_terminality.py"
           sudo rm -rf "$target"
           target="$(sudo mktemp -d /run/ci-typed-custody.XXXXXX)"
-          sudo cp .github/diagnostics/guarded-service/{guarded_unit_identity.py,recovery_terminality_DRAFT.py,deny_recovery_DRAFT.py,verify_recovery_terminality.py,systemd_peer.py} "$target/"
+          sudo cp .github/diagnostics/guarded-service/{guarded_unit_identity.py,recovery_terminality_DRAFT.py,recovery_authority_CI.py,deny_recovery_DRAFT.py,verify_recovery_terminality.py,systemd_peer.py} "$target/"
           sudo cp .github/diagnostics/controller-integration/coverage.py "$target/coverage.py"
           sudo cp -R .github/diagnostics/controller-integration/runtime "$target/runtime"
           sudo chmod -R go-w "$target"
-          sudo unshare --net --mount --propagation private -- /usr/bin/env CI_DENY_UNKNOWN=1 /usr/bin/python3 -B "$target/verify_recovery_terminality.py"
+          unit="ci-recovery-custodian-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-unknown"
+          sudo systemd-run --quiet --wait --pipe --unit="$unit" --setenv=CI_CUSTODIAN_UNIT="$unit.service" --setenv=CI_DENY_UNKNOWN=1 \
+            /usr/bin/unshare --net --mount --propagation private -- /usr/bin/python3 -B "$target/verify_recovery_terminality.py"
