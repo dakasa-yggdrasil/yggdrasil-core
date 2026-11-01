@@ -57,6 +57,12 @@ try:
         assert nl.genid(net)==before and coord.marker_exists()
         probe=subprocess.run(['/usr/bin/flock','-s','-n',str(coord.writer_lock),'/usr/bin/true'],timeout=5)
         assert probe.returncode!=0  # new cooperating sender cannot acquire SH
+        restart_unit='ci-sender-restart-'+uuid.uuid4().hex
+        run('/usr/bin/systemd-run','--quiet','--wait','--pipe','--unit='+restart_unit,
+            '--property=RuntimeMaxSec=10s','--setenv=CI_GUARDED_FIXTURE=1',
+            '/usr/bin/nsenter','--net=/proc/'+str(os.getpid())+'/ns/net','/usr/bin/python3','-B',
+            str(root/'runtime'/'ci_sender_restart_probe.py'),str(root))
+        fence.verify()  # the actual typed lease could not create a writer
         fcntl.flock(fence.fd,fcntl.LOCK_UN)
         try:fence.verify();raise AssertionError('released EX accepted')
         except custody.Held as error:assert str(error)=='EXCLUSIVE_WRITER_FENCE_LOST'
