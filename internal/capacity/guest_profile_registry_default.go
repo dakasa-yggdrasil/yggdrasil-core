@@ -1,4 +1,4 @@
-//go:build !nativequalification
+//go:build !nativequalification && !labqualification
 
 package capacity
 

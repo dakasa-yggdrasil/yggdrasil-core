@@ -10,5 +10,5 @@ import "github.com/dakasa-yggdrasil/yggdrasil-core/model"
 // Qualification and synthetic profiles remain excluded.
 
 func guestOriginalProductionProfileEnabled(p model.CapacityPolicySpec, binding model.CapacityGuestRetirementBinding, provider string) bool {
-	return guestProductionProfileMatches(p, binding, provider, CurrentGuestCoreSource(), guestProductionProfileApprovals)
+	return guestProductionProfileMatches(p, binding, provider, CurrentGuestCoreSource(), activeGuestProfileApprovals())
 }

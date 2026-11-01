@@ -1,0 +1,35 @@
+name: LAB closed registry qualification
+on:
+  push:
+    branches: ['diagnostic/lab-core-ddd-closed-20261101']
+permissions:
+  contents: read
+jobs:
+  source-guards:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+          cache: false
+      - name: LAB-only closed registry and historical compatibility refusal
+        run: go test -race -tags labqualification ./internal/capacity -run '^TestLabRegistry' -count=1 -v
+      - name: Production-default source contract remains unchanged
+        run: go test -race ./internal/capacity -run 'TestGuestProtocol|TestGuest.*Registry|TestGuest.*Profile' -count=1 -v
+      - name: Reject combined LAB and native qualification classes
+        shell: bash
+        run: |
+          set -euo pipefail
+          if go test -tags labqualification,nativequalification ./internal/capacity -run '^$' > "$RUNNER_TEMP/combined-tags.log" 2>&1; then
+            echo 'Combined execution classes unexpectedly compiled'
+            exit 1
+          fi
+          python3 - <<'PY'
+          import os,pathlib
+          log=pathlib.Path(os.environ['RUNNER_TEMP'],'combined-tags.log').read_text()
+          assert 'labqualification_and_nativequalification_must_not_be_combined' in log
+          PY

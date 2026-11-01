@@ -37,13 +37,16 @@ func guestProtocolAuthoritySupported(authority, actualBuild, provider, profile s
 	if authority == actualBuild {
 		return true
 	}
+	if !guestHistoricalProductionApprovalsEnabled {
+		return false
+	}
 	return authority == GuestD11ProtocolAuthority && ((provider == "aws" && profile == "notify-aws-elastic") || (provider == "hetzner" && profile == "notify-hetzner-elastic"))
 }
 
 // GuestProtocolCompatibilityMapSHA256 identifies only the compiled production
 // contracts. It contains neither a self-referential build hash nor credentials.
 func GuestProtocolCompatibilityMapSHA256() string {
-	return guestProtocolCompatibilityMapSHA256(guestProductionProfileApprovals)
+	return guestProtocolCompatibilityMapSHA256(activeGuestProfileApprovals())
 }
 
 func guestProtocolCompatibilityMapSHA256(approvals []guestProductionProfileApproval) string {
@@ -58,11 +61,14 @@ func guestProtocolCompatibilityMapSHA256(approvals []guestProductionProfileAppro
 // against that exact map's complete contracts. It does not issue new authority;
 // issuance independently requires the current build and current approvals.
 func GuestBindingApprovedByCompatibilityMap(p model.CapacityPolicySpec, binding model.CapacityGuestRetirementBinding, actualIssuer, compatibilityMap string) bool {
-	return guestBindingApprovedByCompatibilityMap(p, binding, actualIssuer, compatibilityMap, guestProductionProfileApprovals)
+	return guestBindingApprovedByCompatibilityMap(p, binding, actualIssuer, compatibilityMap, activeGuestProfileApprovals())
 }
 
 func guestBindingApprovedByCompatibilityMap(p model.CapacityPolicySpec, binding model.CapacityGuestRetirementBinding, actualIssuer, compatibilityMap string, currentApprovals []guestProductionProfileApproval) bool {
 	approvals := currentApprovals
+	if !guestHistoricalProductionApprovalsEnabled && (compatibilityMap == GuestD12ProtocolCompatibilityMapSHA256 || compatibilityMap == GuestD15ProtocolCompatibilityMapSHA256) {
+		return false
+	}
 	if compatibilityMap == GuestD12ProtocolCompatibilityMapSHA256 {
 		if guestProtocolCompatibilityMapSHA256(guestD12ProtocolProfileApprovals) != GuestD12ProtocolCompatibilityMapSHA256 {
 			return false
