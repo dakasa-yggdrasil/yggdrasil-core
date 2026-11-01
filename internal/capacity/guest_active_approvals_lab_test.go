@@ -12,8 +12,8 @@ import (
 )
 
 func TestLabRegistryRejectsProductionProfilesAndHistoricalAuthority(t *testing.T) {
-	if len(activeGuestProfileApprovals()) != 0 || guestHistoricalProductionApprovalsEnabled {
-		t.Fatal("an unconfigured LAB must not admit production approvals")
+	if len(activeGuestProfileApprovals()) != 2 || guestHistoricalProductionApprovalsEnabled {
+		t.Fatal("LAB must expose only its two reviewed approvals and no historical authority")
 	}
 	for _, provider := range []string{"aws", "hetzner"} {
 		t.Run(provider, func(t *testing.T) {
