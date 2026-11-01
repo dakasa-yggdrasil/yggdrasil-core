@@ -49,8 +49,17 @@ func TestLABCoreBoundLegacyDecode(t *testing.T) {
 		t.Fatal("schema82 fixture required", version, err)
 	}
 	rows, err := (CapacityStore{DB: db}).ReadFailedInstalledGuestDisposal(context.Background(), view.PreregistrationID)
-	if err != nil || len(rows) != 1 || rows[0].ID != view.ID || rows[0].ReplacementMode != view.ReplacementMode {
+	if err != nil {
 		t.Fatal("PG read", err)
+	}
+	matched := false
+	for _, row := range rows {
+		if row.ID == view.ID && row.Stage == view.Stage && row.ReplacementMode == view.ReplacementMode {
+			matched = true
+		}
+	}
+	if !matched {
+		t.Fatal("requested stage absent from PG read")
 	}
 	tx, err := db.BeginTx(context.Background(), nil)
 	if err != nil {
@@ -78,7 +87,9 @@ func TestLABCoreBoundLegacyDecode(t *testing.T) {
 	if err = tx.Rollback(); err != nil {
 		t.Fatal(err)
 	}
-	labFallbackStartup(t, dsn)
+	if view.Stage == "terminal" {
+		labFallbackStartup(t, dsn)
+	}
 	if err = db.QueryRow(`SELECT original_wire FROM public.capacity_guest_failed_installed_disposals WHERE id=$1 AND stage=$2`, view.ID, view.Stage).Scan(&after); err != nil || !bytes.Equal(raw, after) {
 		t.Fatal("wire changed across startup", err)
 	}

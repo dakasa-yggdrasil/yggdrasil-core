@@ -67,7 +67,14 @@ jobs:
           text = path.read_text()
           old = 'labAssertLegacyRefusesCoreBoundWire(t, wire)'
           assert text.count(old) == 1
-          path.write_text(text.replace(old, 't.Setenv("LAB_FALLBACK_DB", address.String())\n\t\t\t\t\t\t' + old))
+          text = text.replace(old, 't.Setenv("LAB_FALLBACK_DB", address.String())\n\t\t\t\t\t\t' + old)
+          anchor = 't.Log("LAB_SYNTHETIC_HETZNER_TERMINAL_ABSENCE_NO_PROVIDER_NO_REPLAY")'
+          assert text.count(anchor) == 1
+          injection = '''var fallbackTerminal []byte
+          if err = db.QueryRow(`SELECT original_wire FROM public.capacity_guest_failed_installed_disposals WHERE id=$1 AND stage='terminal'`, prepared.ID).Scan(&fallbackTerminal); err != nil { t.Fatal(err) }
+          labAssertLegacyRefusesCoreBoundWire(t, fallbackTerminal)
+          '''
+          path.write_text(text.replace(anchor, injection + anchor))
           PY
           cat > "$RUNNER_TEMP/compare" <<'SH'
           #!/usr/bin/env bash
@@ -87,7 +94,7 @@ jobs:
           export LAB_FALLBACK_CORE="$RUNNER_TEMP/fallback-core"
           export LAB_FALLBACK_GOOSE="$RUNNER_TEMP/fallback-goose"
           cd "$RUNNER_TEMP/source-32fe-fixture"
-          go test -p=1 -race -buildvcs=false -tags recoveryfixture -count=1 -timeout=5m -v ./repository -run '^TestRecoveryFixtureResumeSetupPostgres/lab_core_bound_disposal$' 2>&1 | tee "$RUNNER_TEMP/fallback-evidence/fixture.log"
+          go test -p=1 -race -buildvcs=false -tags recoveryfixture -count=1 -timeout=5m -v ./repository -run '^TestRecoveryFixtureResumeSetupPostgres/lab_core_bound_disposal_complete$' 2>&1 | tee "$RUNNER_TEMP/fallback-evidence/fixture.log"
           grep -F 'LAB_CORE2DE_REAL_PG_WIRE_UNKNOWN_FIELDS_HELD_CONTROL_PASS' "$RUNNER_TEMP/fallback-evidence/fixture.log"
           grep -F 'LAB_FALLBACK_PG82_COMPAT_READ_MUTATION_REPLACEMENT_HELD_ORIGINAL_UNCHANGED' "$RUNNER_TEMP/fallback-evidence/fixture.log"
           grep -F 'LAB_FALLBACK_ACTUAL_GOOSE_AND_CORE_SCHEMA82_HEALTH_SHUTDOWN_PASS' "$RUNNER_TEMP/fallback-evidence/fixture.log"
