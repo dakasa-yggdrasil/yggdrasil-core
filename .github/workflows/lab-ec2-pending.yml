@@ -22,3 +22,5 @@ jobs:
         run: go test -race -count=1 -timeout=120s ./internal/capacity -run 'TestVMAWSReadUsesExactExistingCapability|TestVMInventoryProofs'
       - name: LAB compiled owner tests
         run: go test -race -tags labqualification -count=1 -timeout=120s ./controllers/message -run '^TestOriginalAWS(Unpublished|TopologyPending|TopologyDeadlineBoundary|CreateOwner|GuestSupplier)'
+      - name: Exact LAB supplier registry and broker no-replay tests
+        run: go test -race -tags labqualification -count=1 -timeout=120s ./controllers/message -run '^TestLabOriginal(Supplier|GuestSupplier)'

@@ -19,7 +19,7 @@ import (
 
 func TestLabOriginalGuestSupplierExactPairs(t *testing.T) {
 	cases := []struct{ name, fixture, provider, source, instanceID, instanceChecksum, typeID, typeChecksum, version, queue string }{
-		{"aws", "testdata/lab_aws_supplier_type.json", "aws", "57fcec882c31ad958d92556de9e9789fc95b8970", "bf14f99f-5de3-4314-a462-db85fa973f3c", "32638e487fd58c64aff23d20990e8e2f243762c60b2d918d1f19d344df723beb", "c7547c2f-1fb5-424b-bb7b-03d99f98328c", "75344b44769a8a9089da8fc13d2217ce6c58fa0234cd8fa77af514d379d855ce", "1.65.5", "yggdrasil.adapter.aws"},
+		{"aws", "testdata/lab_aws_supplier_type.json", "aws", "54755ed6bbdc6735e9ac29088f1c77e6289847a8", "72ddfa74-c8f2-4e42-98a1-0d1d771afcdf", "cc0f3ef8cebc2ccb9c9e52591166edd991b105864dc9dc2fca4c583deaf091ca", "c7547c2f-1fb5-424b-bb7b-03d99f98328c", "75344b44769a8a9089da8fc13d2217ce6c58fa0234cd8fa77af514d379d855ce", "1.65.5", "yggdrasil.adapter.aws"},
 		{"hetzner", "testdata/lab_hetzner_supplier_type.json", "hetzner", "bcd65615c8704e0fd1f5d60875f80180b35f9599", "73bbf97c-e6c5-44ff-aaf3-0cb868ae764a", "5893366ae4d8791eb41402c1dbb7050dffe5717f6763aa091c688cecfa635b50", "8b3ccd73-a5d8-4544-ae8f-f2d9ee356df1", "fbaa33a618963333f68b8991a7548a6550f713c3543f112cd7e4f33275304dc7", "0.3.5", "yggdrasil.adapter.hetzner"},
 	}
 	for _, tc := range cases {
