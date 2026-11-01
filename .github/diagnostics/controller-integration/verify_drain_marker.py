@@ -70,6 +70,23 @@ with tempfile.TemporaryDirectory(prefix='ci-effect-failure-') as tmp:
         must_hold(lambda:coord.cancel_admission(r),'ORIGINAL_UNUSED_ADMISSION_RESERVATION_REQUIRED')
         must_hold(lambda:admission.evaluate({},coord),'ADMISSION_INTENT_PENDING')
 
+with tempfile.TemporaryDirectory(prefix='ci-effect-tamper-') as tmp:
+    coord=v3.CoordinatorV3(Path(tmp)/'coord');coord.initialize_for_ci()
+    with mock.patch.dict(os.environ,{'CI_GUARDED_FIXTURE':'1'}):
+        r=coord.reserve_admission();original_fsync=os.fsync;tampered=[]
+        def corrupt_effect(fd):
+            original_fsync(fd)
+            if not tampered and coord.admission_effect.exists():
+                with coord.admission_effect.open('wb') as f:f.write(b'{}\n')
+                tampered.append(True)
+        with mock.patch.object(v3.os,'fsync',side_effect=corrupt_effect):
+            must_hold(lambda:coord.begin_admission_effect(r,'00000000-0000-0000-0000-000000000001','10.244.1.1',
+                        anchor_uid='00000000-0000-0000-0000-000000000002',anchor_address='10.244.1.2'),
+                      'ADMISSION_EFFECT_CHANGED')
+        with coord.base.locked(nonblocking=True) as state:assert state['retired']=={}
+        must_hold(lambda:admission.evaluate({},coord),'ADMISSION_INTENT_PENDING')
+        must_hold(lambda:coord.cancel_admission(r),'ORIGINAL_UNUSED_ADMISSION_RESERVATION_REQUIRED')
+
 with tempfile.TemporaryDirectory(prefix='ci-anchor-delete-') as tmp:
     coord=v3.CoordinatorV3(Path(tmp)/'coord');coord.initialize_for_ci()
     with coord.admission_or_other_writer() as state:
