@@ -249,6 +249,9 @@ def first_send_eligible(context,entries,cores,prom,errors,now):
     require_transition_live(context)
     return len(entries)==4 and {x.kind for x in entries}=={'core','broker','rds','redis'} and 1<=len(cores)<=8 and len(prom)==1 and errors=={} and all(x.observed_started>=context['adoption_returned'] and nft._kernel_remaining(x.expires,now,True,reserve_seconds=.250)>0 for x in(*entries,*cores,*prom))
 
+def _within_original_lifetime(issued,expiry):
+    return issued<expiry<=issued+30
+
 def close_after_first_fresh_commit(context,result):
     import native_io
     if context is None or context['closed']:return None
@@ -257,7 +260,7 @@ def close_after_first_fresh_commit(context,result):
     started,returned=result['render_started'],result['native_apply_returned'];require(number(started)and number(returned)and context['adoption_returned']<=started<=returned<started+.250,'R37_ORIGINAL_FRESH_NORMAL_COMMIT_CLOCKS')
     for item in(*result['backend_freshness'].values(),*result['core_source_freshness'],*result['prometheus_source_freshness']):
         issued,expiry=item['original_started'],item['original_expires']
-        require(context['adoption_returned']<=issued<=started and 0<expiry-issued<=30 and item['kernel_timeout_ms']==max(0,math.floor(1000*(expiry-started-.250))) and item['kernel_timeout_ms']>0,'R37_FRESH_NORMAL_LIFETIME_NOT_ROOT_CONNECTIVITY_CREDIT')
+        require(context['adoption_returned']<=issued<=started and _within_original_lifetime(issued,expiry) and item['kernel_timeout_ms']==max(0,math.floor(1000*(expiry-started-.250))) and item['kernel_timeout_ms']>0,'R37_FRESH_NORMAL_LIFETIME_NOT_ROOT_CONNECTIVITY_CREDIT')
     facts=result['original_native_command_facts'];require(type(facts)is dict and facts.get('role')=='hot_dynamic_apply' and facts.get('closed_before_original_deadline_zero')is True and facts.get('stdin_sha256')==result['nft_source_sha256'],'R37_ORIGINAL_NORMAL_APPLY_CLOSED0')
     require(sha(read_root(AUTH_PATH,32768))==context['receipt_sha256'],'R37_SAME_ACTIVE_RECEIPT_BYTES_BEFORE_CLOSE')
     receipt=context['receipt'];closed={'schema':'Root_network_transition_connectivity_closed_v1','operation_id':receipt['operation_id'],'receipt_sha256':context['receipt_sha256'],'root_uid':os.geteuid(),'boot_id':_boot(),'controller_pid':os.getpid(),'controller_start_ticks':_ticks(),'old_config_sha256':receipt['old_config_sha256'],'new_config_sha256':receipt['new_config_sha256'],'prestate_root_sha256':receipt['prestate_root_sha256'],'normal_original_commit_sequence':result['commit_sequence'],'normal_original_commit_source_sha256':result['nft_source_sha256'],'normal_original_native_facts':facts,'normal_render_started':started,'normal_native_apply_returned':returned,'closed_monotonic':time.monotonic(),'temporary_authority_removed':True,'capacity_or_Core_freshness_credit':False}
