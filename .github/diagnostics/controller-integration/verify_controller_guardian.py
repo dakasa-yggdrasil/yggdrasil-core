@@ -308,7 +308,8 @@ def main():
         # Keep watch running while a second positive transaction is ready to
         # send. The Guardian invalidates its own Reader and wins a distinct
         # genid-fenced deny transaction before the old send is released.
-        guard_expected=guarded_sources.build_expected(guardian_cache)
+        guard_expected=(ci_guarded_driver.bounded_guardian_ceilings(watch,guardian_cache)
+                        if external_stop is not None else guarded_sources.build_expected(guardian_cache))
         failure_prepared=guarded_preparation.PreparedGeneration(real_cache,
                 deadline_ceilings={role:guard_expected[role] for role in ('inbound','reverse')})
         failure_records=failure_prepared.fixture_descriptors(real_cache)

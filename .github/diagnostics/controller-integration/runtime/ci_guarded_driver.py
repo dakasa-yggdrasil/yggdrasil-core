@@ -6,6 +6,17 @@ authority. Any exception aborts the loop; no uncertain send is retried.
 import os,time,threading
 import guarded_preparation,guarded_sources,native_structure
 
+def bounded_guardian_ceilings(watch,cache):
+    expected=guarded_sources.build_expected(cache)
+    remote=watch.source_ceilings()
+    if remote.get('production_authority') is not False:raise RuntimeError('CI_CEILING_ONLY')
+    for role in ('inbound','reverse'):
+        rows=remote['maps'][role];ceilings={bytes.fromhex(k):v for k,v in rows}
+        if len(rows)!=len(ceilings) or set(ceilings)!=set(expected[role]) or any(type(v) is not int for v in ceilings.values()):
+            raise RuntimeError('EXACT_INDEPENDENT_GUARDIAN_CEILINGS_REQUIRED')
+        expected[role]={k:min(v,ceilings[k]) for k,v in expected[role].items()}
+    return expected
+
 class GuardedDriver:
     def __init__(self,*,watch,sender,emitter,positive_session,ceiling_cache,endpoints,max_commits,stop_signal=None):
         continuous=os.environ.get('CI_CONTINUOUS_TEST')=='1'
@@ -23,15 +34,8 @@ class GuardedDriver:
         witness=self.watch.admission_witness(core.native_identity.split('/',1)[0],core.address)
         if witness.get('event')!='ADMISSION_HOLD' or witness.get('guard')!='GUARDED_INTENT_PENDING':
             raise RuntimeError('PENDING_INTENT_MUST_BLOCK_ADMISSION:'+str(witness))
-        expected=guarded_sources.build_expected(self.ceiling_cache)
-        if self.stop_signal is not None:
-            remote=self.watch.source_ceilings()
-            if remote.get('production_authority') is not False:raise RuntimeError('CI_CEILING_ONLY')
-            for role in ('inbound','reverse'):
-                rows=remote['maps'][role];ceilings={bytes.fromhex(k):v for k,v in rows}
-                if len(rows)!=len(ceilings) or set(ceilings)!=set(expected[role]) or any(type(v) is not int for v in ceilings.values()):
-                    raise RuntimeError('EXACT_INDEPENDENT_GUARDIAN_CEILINGS_REQUIRED')
-                expected[role]={k:min(v,ceilings[k]) for k,v in expected[role].items()}
+        expected=(bounded_guardian_ceilings(self.watch,self.ceiling_cache) if self.stop_signal is not None
+                  else guarded_sources.build_expected(self.ceiling_cache))
         prepared=guarded_preparation.PreparedGeneration(cache,
                     deadline_ceilings={role:expected[role] for role in ('inbound','reverse')})
         try:
