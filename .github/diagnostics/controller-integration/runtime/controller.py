@@ -460,29 +460,33 @@ def _serve_guarded_hot(reader, pin, *, apply, driver, initial_sequence=1):
             if key==last_key and installed_until is not None and now<installed_until-1.250:
                 reader.cache.wake.wait(min(.05,max(0,installed_until-1.250-now)));reader.cache.wake.clear();continue
             prepared=None;lease=None
-            # This must precede watch.prepare and SenderSession.prepare:
-            # either can register an externally uncertain operation.
-            current,_,_=reader.cache.commit_snapshot()
-            before_entries,before_cores,_,_,_=current
-            before_core=[item for item in before_entries if item.kind=='core']
-            nft.require(len(before_core)==1,'CI_ONE_CORE_FOR_DRAIN_INTENT')
             try:
-                intent=_ci_drain().begin(before_core[0],before_cores,writer_lease=driver.emitter.writer_lease)
-            except drain_v3.AdmissionPendingBeforeIntent:
-                # This exact typed exception is raised under the coordination
-                # lock before this sender's O_EXCL. No prepare or send ran.
-                now=time.monotonic()
-                if admission_wait_deadline is None:
-                    admission_wait_deadline=now+2.0
-                    if installed_until is not None:admission_wait_deadline=min(admission_wait_deadline,installed_until-1.250)
-                if now>=admission_wait_deadline:raise
-                driver.pre_intent_waits+=1
-                reader.stop.wait(min(.05,admission_wait_deadline-now))
-                continue  # reread all sources; acquire a new ownership lease later
-            admission_wait_deadline=None
-            _ci_drain().barrier(intent,before_core[0],before_cores)
-            try:
-                prepared,permit=driver.prepare(reader.cache)
+                try:
+                    # Local frozen BPF maps and a read-only Guardian ceiling
+                    # have no send/registry authority. Do this before marker.
+                    prepared,before=driver.prepare_local(reader.cache)
+                    if reader.cache.commit_snapshot()!=before:
+                        raise ci_guarded_driver.SnapshotChangedBeforeIntent('LOCAL_SNAPSHOT_CHANGED_BEFORE_INTENT')
+                    current,_,_=before
+                    before_entries,before_cores,_,_,_=current
+                    before_core=[item for item in before_entries if item.kind=='core']
+                    nft.require(len(before_core)==1,'CI_ONE_CORE_FOR_DRAIN_INTENT')
+                    intent=_ci_drain().begin(before_core[0],before_cores,writer_lease=driver.emitter.writer_lease)
+                except (drain_v3.AdmissionPendingBeforeIntent,ci_guarded_driver.SnapshotChangedBeforeIntent) as error:
+                    # Only these two typed outcomes prove this attempt created
+                    # no marker, performed no Guardian prepare and sent no wire.
+                    now=time.monotonic()
+                    if admission_wait_deadline is None:
+                        admission_wait_deadline=now+2.0
+                        if installed_until is not None:admission_wait_deadline=min(admission_wait_deadline,installed_until-1.250)
+                    if now>=admission_wait_deadline:raise
+                    if type(error) is drain_v3.AdmissionPendingBeforeIntent:driver.pre_intent_waits+=1
+                    else:driver.pre_intent_discards+=1
+                    reader.stop.wait(min(.05,admission_wait_deadline-now))
+                    continue
+                admission_wait_deadline=None
+                _ci_drain().barrier(intent,before_core[0],before_cores)
+                permit=driver.prepare_remote(reader.cache,prepared)
                 driver.begin_handoff()
                 deadline=time.monotonic()+5
                 while lease is None and not reader.stop.is_set() and time.monotonic()<deadline:

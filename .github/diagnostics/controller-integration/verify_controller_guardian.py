@@ -261,6 +261,14 @@ def main():
                   positive_session=positive_guardian,ceiling_cache=guardian_cache,endpoints=endpoints,
                   max_commits=(12 if external_stop is not None else (4 if os.environ.get('CI_HOLDER_TEST')=='1' else 2)),
                   stop_signal=external_stop)
+        if external_stop is not None:
+            changed=[False]
+            def change_cache_once():
+                if changed[0]:return
+                changed[0]=True
+                entries,cores,prom=endpoints(4)
+                real_cache.publish_topology(([x for x in entries if x.kind in ('core','broker')],cores,prom,{},frozenset(),time.monotonic()+35))
+            driver._ci_before_pre_intent=change_cache_once
         running_reader=types.SimpleNamespace(cache=real_cache,stop=threading.Event(),shutdown_deadline=lambda:time.monotonic()+5)
         try:
             loop_result=controller.serve_hot(running_reader,active_pin,apply=lambda:True,guarded_driver=driver)
@@ -275,8 +283,8 @@ def main():
         if timeout_test:raise AssertionError('ADMISSION_HOLD_MUST_TIMEOUT')
         if timer is not None:
             timer.cancel();timer.join();admission_release.join(2)
-            assert not admission_release.is_alive() and not admission_errors and driver.pre_intent_waits>0
-            print('PASS real admission reservation held before sender intent; bounded typed retry and fresh observations',flush=True)
+            assert not admission_release.is_alive() and not admission_errors and driver.pre_intent_waits>0 and driver.pre_intent_discards>0
+            print('PASS concurrent cache change and admission reservation before sender intent; bounded typed retry and fresh observations',flush=True)
             assert external_stop.is_set() and len(driver.results)>=7
             span=driver.results[-1]['confirmed_ns']-driver.results[0]['confirmed_ns']
             assert span>=35_000_000_000,(span,len(driver.results))

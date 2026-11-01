@@ -17,6 +17,9 @@ def bounded_guardian_ceilings(watch,cache):
         expected[role]={k:min(v,ceilings[k]) for k,v in expected[role].items()}
     return expected
 
+class SnapshotChangedBeforeIntent(RuntimeError):
+    """A local precomputation was discarded before any intent or prepare."""
+
 class GuardedDriver:
     def __init__(self,*,watch,sender,emitter,positive_session,ceiling_cache,endpoints,max_commits,stop_signal=None):
         continuous=os.environ.get('CI_CONTINUOUS_TEST')=='1'
@@ -27,24 +30,38 @@ class GuardedDriver:
             raise RuntimeError('ONLY_BOUNDED_PRIVATE_CI_DRIVER')
         self.watch,self.sender,self.emitter,self.positive_session=watch,sender,emitter,positive_session
         self.ceiling_cache,self.endpoints,self.max_commits=ceiling_cache,endpoints,max_commits
-        self.results=[];self.pause_started=None;self.stop_signal=stop_signal;self.previous_expiry_ns=None;self.pre_intent_waits=0
-    def prepare(self,cache):
+        self.results=[];self.pause_started=None;self.stop_signal=stop_signal;self.previous_expiry_ns=None;self.pre_intent_waits=0;self.pre_intent_discards=0;self._ci_before_pre_intent=None
+    def prepare_local(self,cache):
+        start=cache.commit_snapshot();prepared=None
+        try:
+            expected=(bounded_guardian_ceilings(self.watch,self.ceiling_cache) if self.stop_signal is not None
+                      else guarded_sources.build_expected(self.ceiling_cache))
+            prepared=guarded_preparation.PreparedGeneration(cache,
+                        deadline_ceilings={role:expected[role] for role in ('inbound','reverse')})
+            prepared.fixture_descriptors(cache)
+            if self._ci_before_pre_intent is not None:self._ci_before_pre_intent()
+            if cache.commit_snapshot()!=start:raise SnapshotChangedBeforeIntent('LOCAL_SNAPSHOT_CHANGED_BEFORE_INTENT')
+            return prepared,start
+        except SnapshotChangedBeforeIntent:
+            if prepared is not None:prepared.close()
+            raise
+        except (guarded_preparation.Held,guarded_sources.Held) as error:
+            if prepared is not None:prepared.close()
+            if cache.commit_snapshot()!=start:
+                raise SnapshotChangedBeforeIntent('LOCAL_SNAPSHOT_CHANGED_BEFORE_INTENT') from error
+            raise
+        except BaseException:
+            if prepared is not None:prepared.close()
+            raise
+    def prepare_remote(self,cache,prepared):
         rows,_,_,_,_=cache.snapshot()
         core=next(x for x in rows if x.kind=='core')
         witness=self.watch.admission_witness(core.native_identity.split('/',1)[0],core.address)
         if witness.get('event')!='ADMISSION_HOLD' or witness.get('guard')!='GUARDED_INTENT_PENDING':
             raise RuntimeError('PENDING_INTENT_MUST_BLOCK_ADMISSION:'+str(witness))
-        expected=(bounded_guardian_ceilings(self.watch,self.ceiling_cache) if self.stop_signal is not None
-                  else guarded_sources.build_expected(self.ceiling_cache))
-        prepared=guarded_preparation.PreparedGeneration(cache,
-                    deadline_ceilings={role:expected[role] for role in ('inbound','reverse')})
-        try:
-            descriptors=prepared.fixture_descriptors(cache)
-            self.watch.prepare(descriptors)
-            permit=self.sender.prepare(list(descriptors),until_ns=time.monotonic_ns()+3_000_000_000)
-            return prepared,permit
-        except BaseException:
-            prepared.close();raise
+        descriptors=prepared.fixture_descriptors(cache)
+        self.watch.prepare(descriptors)
+        return self.sender.prepare(list(descriptors),until_ns=time.monotonic_ns()+3_000_000_000)
     def begin_handoff(self):
         self.pause_started=time.monotonic();self.watch.pause()
     def confirm(self,handoff,owner,lease,pin,started):
