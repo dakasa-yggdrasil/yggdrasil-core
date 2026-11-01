@@ -457,6 +457,10 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 				before := challenge
 				before.GuestNonce = model.CapacityGuestNotifyCanaryNonce{}
 				before.Signature = ""
+				before.Signature, e = capacity.GuestLifecycleSignature(ed25519.NewKeyFromSeed([]byte(strings.Repeat("c", 32))), before)
+				if e != nil {
+					t.Fatal("sign test-only original preflight", e)
+				}
 				beforeWire := raw(before)
 				beforeSHA := capacity.GuestRetirementSHA(before)
 				write(`INSERT INTO public.capacity_guest_notify_canary_challenges(id,preregistration_id,record_challenge_id,phase,policy_id,workflow_id,generation,fence,executor_id,lease_owner,challenge_sha256,nonce_sha256,original_wire,original_record,original_deadline,recorded_at) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14::jsonb,$15,$16)`, challenge.ChallengeID, challenge.PreregistrationID, challenge.RecordChallengeID, phase, challenge.PolicyID, challenge.WorkflowID, challenge.Generation, challenge.Fence, pre.ExecutorID, challenge.LeaseOwner, beforeSHA, challenge.NonceSHA256, beforeWire, string(beforeWire), challenge.OriginalDeadline, challenge.IssuedAt)
