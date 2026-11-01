@@ -76,7 +76,7 @@ class LiveSenderCustody:
         require(os.geteuid()==0 and os.environ.get('CI_GUARDED_FIXTURE')=='1'
                 and os.environ.get('CI_HOST_NETNS') and os.readlink('/proc/self/ns/net')!=os.environ['CI_HOST_NETNS'],
                 'ONLY_PRIVATE_CI_CUSTODY_REQUIRED')
-        self.channel=channel;self.netlink=netlink;self.coord=coord;self.pid=os.getpid();self.fds=[];self.anchor=None
+        self.channel=channel;self.netlink=netlink;self.coord=coord;self.pid=os.getpid();self.fds=[];self.anchor=None;self.receipt_fd=None
         try:
             before=nl.genid(netlink)
             self.anchor=terminal.capture_authenticated(channel,unit=unit,invocation=invocation,argv=argv,source_sha256=source_sha256)
@@ -103,11 +103,37 @@ class LiveSenderCustody:
                 ids.append((record['program_id'],record['map_id']))
             require(len({x[0] for x in ids})==len({x[1] for x in ids})==2,'DISTINCT_SENDER_PROGRAMS_AND_MAPS_REQUIRED')
             self.marker=terminal.capture_marker(self.anchor,coord)
+            require(len(argv)==4 and argv[:2]==['/usr/bin/python3','-B'], 'EXACT_SENDER_ARGUMENTS_REQUIRED')
+            self.receipts=__import__('pathlib').Path(argv[3])/'sender-receipts'
+            require(os.path.realpath(self.receipts)==str(self.receipts),'EXACT_NON_SYMLINK_RECEIPT_DIRECTORY_REQUIRED')
+            self.receipt_fd=os.open(self.receipts,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
+            info=os.fstat(self.receipt_fd);named=os.lstat(self.receipts)
+            require(stat.S_ISDIR(info.st_mode) and info.st_uid==0 and stat.S_IMODE(info.st_mode)==0o700
+                    and (info.st_dev,info.st_ino)==(named.st_dev,named.st_ino),'ROOT_PRIVATE_STABLE_RECEIPT_DIRECTORY_REQUIRED')
+            self.receipt_inode=(info.st_dev,info.st_ino)
             require(nl.genid(netlink)==before,'KERNEL_CHANGED_DURING_LIVE_CUSTODY')
             self.genid=before
         except BaseException:
             self.close();raise
+    def inspect_no_recorded_send(self, fence):
+        # This is evidence only. It does not prove that uninstrumented writers
+        # are impossible, that Guardian registries agree, or that a permit may
+        # be canceled. No marker is unlinked by this method.
+        require(type(fence) is ExclusiveObservation and fence.anchor is self.marker
+                and fence.netlink is self.netlink and self.receipt_fd is not None
+                and self.pid==os.getpid(),'SAME_SENDER_AND_EXCLUSIVE_FENCE_REQUIRED')
+        fence.verify()
+        opened=os.fstat(self.receipt_fd);named=os.lstat(self.receipts)
+        require(stat.S_ISDIR(named.st_mode) and (opened.st_dev,opened.st_ino)==
+                (named.st_dev,named.st_ino)==self.receipt_inode,'ORIGINAL_RECEIPT_DIRECTORY_CHANGED')
+        require(os.listdir(self.receipt_fd)==[],'SENDER_RECEIPT_DIRECTORY_NOT_EMPTY')
+        fence.verify()
+        named=os.lstat(self.receipts)
+        require((named.st_dev,named.st_ino)==self.receipt_inode and os.listdir(self.receipt_fd)==[],
+                'ORIGINAL_RECEIPT_DIRECTORY_CHANGED')
+        return {'empty_original_receipts_observed':True,'cancel_authority':False,'production_authority':False}
     def close(self):
+        if self.receipt_fd is not None:os.close(self.receipt_fd);self.receipt_fd=None
         for fd in self.fds:os.close(fd)
         self.fds=[]
         if self.anchor is not None:self.anchor.close();self.anchor=None

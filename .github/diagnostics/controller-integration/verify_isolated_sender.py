@@ -68,6 +68,20 @@ try:
             time.sleep(.05)
     with custody.ExclusiveObservation(marked,net,before) as fence:
         observation=fence.verify();assert observation['cancel_authority'] is False
+        no_send=live.inspect_no_recorded_send(fence)
+        assert no_send['empty_original_receipts_observed'] and not no_send['cancel_authority']
+        fake=live.receipts/'WIRE-001.bin';fake.touch(mode=0o600)
+        try:
+            try:live.inspect_no_recorded_send(fence);raise AssertionError('recorded wire ignored')
+            except custody.Held as error:assert str(error)=='SENDER_RECEIPT_DIRECTORY_NOT_EMPTY'
+        finally:fake.unlink()
+        displaced=root/'sender-receipts-displaced';live.receipts.rename(displaced);live.receipts.mkdir(mode=0o700)
+        try:
+            try:live.inspect_no_recorded_send(fence);raise AssertionError('replaced receipt directory accepted')
+            except custody.Held as error:assert str(error)=='ORIGINAL_RECEIPT_DIRECTORY_CHANGED'
+        finally:live.receipts.rmdir();displaced.rename(live.receipts)
+        assert live.inspect_no_recorded_send(fence)['empty_original_receipts_observed']
+        print('PASS pinned receipt directory and absence check reject forged wire and replacement; no cancellation authority',flush=True)
         assert nl.genid(net)==before and coord.marker_exists()
         probe=subprocess.run(['/usr/bin/flock','-s','-n',str(coord.writer_lock),'/usr/bin/true'],timeout=5)
         assert probe.returncode!=0  # new cooperating sender cannot acquire SH
