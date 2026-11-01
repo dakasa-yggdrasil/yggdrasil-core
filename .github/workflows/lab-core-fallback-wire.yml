@@ -109,7 +109,7 @@ jobs:
           go test -overlay="$RUNNER_TEMP/fallback-fixture-overlay.json" -p=1 -race -buildvcs=true -tags recoveryfixture -count=1 -timeout=5m -v ./repository -run '^TestRecoveryFixtureResumeSetupPostgres/lab_core_bound_disposal_complete$' 2>&1 | tee "$RUNNER_TEMP/fallback-evidence/fixture.log"
           grep -F 'LAB_CORE2DE_REAL_PG_WIRE_UNKNOWN_FIELDS_HELD_CONTROL_PASS' "$RUNNER_TEMP/fallback-evidence/fixture.log"
           grep -F 'LAB_FALLBACK_PG82_COMPAT_READ_MUTATION_REPLACEMENT_HELD_ORIGINAL_UNCHANGED' "$RUNNER_TEMP/fallback-evidence/fixture.log"
-          grep -F 'LAB_FALLBACK_PG82_CROSS_SCOPE_ISSUE_COMPENSATION_DISPATCH_POWER_REDEEM_HELD' "$RUNNER_TEMP/fallback-evidence/fixture.log"
+          grep -F 'LAB_FALLBACK_PG82_CROSS_SCOPE_ISSUE_COMPENSATION_DISPATCH_POWER_ISSUE_REDEEM_HELD' "$RUNNER_TEMP/fallback-evidence/fixture.log"
           grep -F 'LAB_FALLBACK_ACTUAL_GOOSE_AND_CORE_SCHEMA82_HEALTH_SHUTDOWN_PASS' "$RUNNER_TEMP/fallback-evidence/fixture.log"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()

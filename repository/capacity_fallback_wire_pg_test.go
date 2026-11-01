@@ -140,6 +140,78 @@ func labFallbackAuthorityPG(t *testing.T, dsn string) {
 	if err = db.QueryRow(`SELECT count(*) FROM public.capacity_dispatch_jobs WHERE realm=$1`, envelope.Realm).Scan(&jobs); err != nil || jobs != 0 {
 		t.Fatal("dispatch HOLD created a job", jobs, err)
 	}
+	// Seed a hypothetical previously queued, not-yet-started job in this
+	// disposable database. This performs no workflow or external invocation.
+	seed, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	version := envelope.Workflow.Version
+	if err = InsertWorkflowRunTx(ctx, seed, envelope.RunID, model.ManifestSelector{Namespace: envelope.Workflow.Namespace, Name: envelope.Workflow.Name, Version: &version}, envelope.Inputs, envelope.Metadata); err != nil {
+		_ = seed.Rollback()
+		t.Fatal("synthetic pending run", err)
+	}
+	rawEnvelope, err := encodeCapacityDispatchEnvelope(envelope)
+	if err != nil {
+		_ = seed.Rollback()
+		t.Fatal(err)
+	}
+	_, err = seed.Exec(`INSERT INTO public.capacity_dispatch_jobs (id,run_id,protocol,realm,environment,domain,dimension,source_tick,envelope,envelope_sha256) VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`, envelope.JobID, envelope.RunID, envelope.Protocol, envelope.Realm, envelope.Environment, envelope.Domain, envelope.Dimension, envelope.SourceTick, string(rawEnvelope), capacityDispatchSHA(rawEnvelope))
+	if err != nil {
+		_ = seed.Rollback()
+		t.Fatal("synthetic queued job", err)
+	}
+	if err = insertCapacityDispatchWake(ctx, seed, envelope, envelope.JobID); err != nil {
+		_ = seed.Rollback()
+		t.Fatal(err)
+	}
+	if err = seed.Commit(); err != nil {
+		t.Fatal(err)
+	}
+	claimed, err := ClaimCapacityDispatch(ctx, db, envelope.Realm, envelope.Environment, uuid.New(), time.Minute)
+	if err != nil {
+		t.Fatal("synthetic original queued claim", err)
+	}
+	if _, err = StartCapacityDispatch(ctx, db, claimed); !errors.Is(err, ErrCapacityDispatchClaim) {
+		t.Fatal("previous queued job escaped HOLD", err)
+	}
+	var jobState string
+	var started sql.NullTime
+	if err = db.QueryRow(`SELECT state,started_at FROM public.capacity_dispatch_jobs WHERE id=$1`, envelope.JobID).Scan(&jobState, &started); err != nil || jobState != "queued" || started.Valid {
+		t.Fatal("HOLD changed original queued job", jobState, err)
+	}
+	// The issued-power guard is reached only after validating the actual
+	// policy/workflow and adapter catalog; the later adoption is unnecessary.
+	policy, spec, binding, _ := powerPolicy(t)
+	powerNS := "fallback-power-" + uuid.NewString()
+	policy.Metadata.Namespace, spec.Workflow.Namespace, binding.AdoptionWorkflow.Namespace = powerNS, powerNS, powerNS
+	spec.ExecutorPowerBinding = &binding
+	policy.Spec, _ = json.Marshal(spec)
+	workflowID := uuid.New()
+	insertManifest := func(id, kind, name, checksum string, value any) {
+		raw, encodeErr := json.Marshal(value)
+		if encodeErr != nil {
+			t.Fatal(encodeErr)
+		}
+		if _, insertErr := db.Exec(`INSERT INTO public.manifests(id,api_version,kind,namespace,name,version,checksum,spec) VALUES($1,'v1',$2,$3,$4,1,$5,$6::jsonb)`, id, kind, powerNS, name, checksum, string(raw)); insertErr != nil {
+			t.Fatal("synthetic power manifest", insertErr)
+		}
+	}
+	insertManifest(policy.ID.String(), "capacity_policy", policy.Metadata.Name, policy.Checksum, spec)
+	insertManifest(workflowID.String(), "workflow", spec.Workflow.Name, "fallback-power-workflow", map[string]any{"authorization": map[string]any{"rbac": map[string]string{"namespace": powerNS, "name": "test-only"}}})
+	var catalog any
+	if json.Unmarshal([]byte(powerCatalogJSON), &catalog) != nil {
+		t.Fatal("power catalog")
+	}
+	insertManifest(binding.TypeID, "integration_type", "aws-power", binding.TypeChecksum, catalog)
+	insertManifest(binding.IntegrationID, "integration_instance", "aws-instance", binding.IntegrationChecksum, map[string]any{"type_ref": model.ManifestSelector{ManifestID: binding.TypeID}})
+	powerStore := CapacityStore{DB: db, ExecutionEnabled: true, ExecutorPowerEnabled: true, ExecutorID: uuid.NewString(), ExecutorActivityPrincipal: "machine:" + binding.ControllerPrincipal, WorkflowID: workflowID}
+	if _, err = powerStore.IssueExecutorPower(ctx, policy, "synthetic-power-command"); !errors.Is(err, errFallbackNewerDisposition) {
+		t.Fatal("cross-dimension power issue did not reach HOLD", err)
+	}
+	if err = db.QueryRow(`SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1`, powerNS).Scan(&grants); err != nil || grants != 0 {
+		t.Fatal("power HOLD created a grant", grants, err)
+	}
 	_, g, _ := powerCallbackFixture(t)
 	wire, err := json.Marshal(g)
 	if err != nil {
@@ -158,7 +230,7 @@ func labFallbackAuthorityPG(t *testing.T, dsn string) {
 	if err = db.QueryRow(`SELECT state FROM public.capacity_mutation_grants WHERE id=$1`, g.ID).Scan(&state); err != nil || state != "issued" {
 		t.Fatal("held power grant changed", state, err)
 	}
-	t.Log("LAB_FALLBACK_PG82_CROSS_SCOPE_ISSUE_COMPENSATION_DISPATCH_POWER_REDEEM_HELD")
+	t.Log("LAB_FALLBACK_PG82_CROSS_SCOPE_ISSUE_COMPENSATION_DISPATCH_POWER_ISSUE_REDEEM_HELD")
 }
 
 func labFallbackFixtureURL(t *testing.T, dsn string) *url.URL {
