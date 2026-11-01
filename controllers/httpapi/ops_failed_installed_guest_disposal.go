@@ -84,7 +84,15 @@ func (s *Server) handleOpsFailedInstalledGuestDisposalRead(w http.ResponseWriter
 	}
 	out := []map[string]any{}
 	for _, r := range rows {
-		out = append(out, failedInstalledGuestDisposalSummary(r))
+		summary := failedInstalledGuestDisposalSummary(r.FailedInstalledGuestDisposal)
+		if r.ReplacementMode != "" {
+			summary["replacement_mode"] = r.ReplacementMode
+			summary["original_failed_issuer_core_source"] = r.OriginalFailedIssuerCoreSource
+			summary["replacement_core_source"] = r.ReplacementCoreSource
+			summary["fallback_compatibility_hold"] = true
+			delete(summary, "replacement_requires_different_approved_Guest")
+		}
+		out = append(out, summary)
 	}
 	writeJSON(w, http.StatusOK, out)
 }

@@ -1,0 +1,100 @@
+name: LAB Core fallback wire compatibility
+on:
+  push:
+    branches: [codex/fallback-core32fe-wire-hold-20261101]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  fallback-wire-pg82:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fixture-only
+          POSTGRES_DB: recovery_fixture
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d recovery_fixture"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+      rabbitmq:
+        image: rabbitmq:4-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: fixture
+          RABBITMQ_DEFAULT_PASS: lab-only
+        ports: ["5672:5672"]
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 3s --health-timeout 5s --health-retries 30
+    env:
+      GOWORK: 'off'
+      GOMAXPROCS: '2'
+      CAPACITY_RECOVERY_FIXTURE_ONLY: 'true'
+      RECOVERY_FIXTURE_ADMIN_URL: 'postgres://postgres:fixture-only@127.0.0.1:5432/postgres?sslmode=disable'
+      LAB_HETZNER_BROKER_URL: 'amqp://fixture:lab-only@127.0.0.1:5672/'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build three exact source test binaries
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -z "$(git status --porcelain --untracked-files=all)" ]]
+          git worktree add --detach "$RUNNER_TEMP/source-32fe-fixture" 721f1c968cf666938c7ec594fc5692ab3d2c5d86
+          git worktree add --detach "$RUNNER_TEMP/legacy-2de" 2de33bbca46000d86a6dc0d5162383a6128e3517
+          source="$RUNNER_TEMP/source-32fe-fixture"
+          [[ "$(git -C "$source" rev-parse HEAD)" == 721f1c968cf666938c7ec594fc5692ab3d2c5d86 ]]
+          cp "$source/repository/testdata/lab_core_bound_legacy_decode_test.go.txt" "$RUNNER_TEMP/legacy-2de/repository/lab_core_bound_legacy_decode_test.go"
+          (cd "$RUNNER_TEMP/legacy-2de" && go test -p=1 -race -buildvcs=false -c -o "$RUNNER_TEMP/legacy.test" ./repository)
+          go test -p=1 -race -buildvcs=true -c -o "$RUNNER_TEMP/fallback.test" ./repository
+          go build -buildvcs=true -o "$RUNNER_TEMP/fallback-core" .
+          go build -buildvcs=true -o "$RUNNER_TEMP/fallback-goose" ./scripts/goose
+          (cd "$source" && go test -p=1 -race -buildvcs=true -tags recoveryfixture -c -o "$RUNNER_TEMP/http.test" ./controllers/httpapi)
+          # The test-only injection passes the disposable fixture DSN to the
+          # child comparison. No production source or runtime code is edited.
+          python3 - "$source/repository/capacity_guest_recovery_fixture_postgres_test.go" <<'PY'
+          import pathlib, sys
+          path = pathlib.Path(sys.argv[1])
+          text = path.read_text()
+          old = 'labAssertLegacyRefusesCoreBoundWire(t, wire)'
+          assert text.count(old) == 1
+          path.write_text(text.replace(old, 't.Setenv("LAB_FALLBACK_DB", address.String())\n\t\t\t\t\t\t' + old))
+          PY
+          cat > "$RUNNER_TEMP/compare" <<'SH'
+          #!/usr/bin/env bash
+          set -euo pipefail
+          "$RUNNER_TEMP/legacy.test" "$@"
+          "$RUNNER_TEMP/fallback.test" "$@"
+          SH
+          chmod 0700 "$RUNNER_TEMP/compare"
+      - name: Compare unchanged 2de and fallback against handler-committed wire
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p "$RUNNER_TEMP/fallback-evidence"
+          export LAB_HETZNER_LEGACY_TEST_BIN="$RUNNER_TEMP/compare"
+          export LAB_HETZNER_HTTP_TEST_BIN="$RUNNER_TEMP/http.test"
+          export LAB_FALLBACK_ROOT="$GITHUB_WORKSPACE"
+          export LAB_FALLBACK_CORE="$RUNNER_TEMP/fallback-core"
+          export LAB_FALLBACK_GOOSE="$RUNNER_TEMP/fallback-goose"
+          cd "$RUNNER_TEMP/source-32fe-fixture"
+          go test -p=1 -race -buildvcs=false -tags recoveryfixture -count=1 -timeout=5m -v ./repository -run '^TestRecoveryFixtureResumeSetupPostgres/lab_core_bound_disposal$' 2>&1 | tee "$RUNNER_TEMP/fallback-evidence/fixture.log"
+          grep -F 'LAB_CORE2DE_REAL_PG_WIRE_UNKNOWN_FIELDS_HELD_CONTROL_PASS' "$RUNNER_TEMP/fallback-evidence/fixture.log"
+          grep -F 'LAB_FALLBACK_PG82_COMPAT_READ_MUTATION_REPLACEMENT_HELD_ORIGINAL_UNCHANGED' "$RUNNER_TEMP/fallback-evidence/fixture.log"
+          grep -F 'LAB_FALLBACK_ACTUAL_GOOSE_AND_CORE_SCHEMA82_HEALTH_SHUTDOWN_PASS' "$RUNNER_TEMP/fallback-evidence/fixture.log"
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        if: always()
+        with:
+          name: lab-fallback-wire-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/fallback-evidence/
+          if-no-files-found: warn
+          retention-days: 7

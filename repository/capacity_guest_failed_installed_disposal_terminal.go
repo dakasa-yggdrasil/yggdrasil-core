@@ -441,7 +441,7 @@ func (s CapacityStore) CompleteFailedInstalledGuestAbsence(ctx context.Context, 
 	return out, nil
 }
 
-func (s CapacityStore) ReadFailedInstalledGuestDisposal(ctx context.Context, preID string) ([]FailedInstalledGuestDisposal, error) {
+func (s CapacityStore) ReadFailedInstalledGuestDisposal(ctx context.Context, preID string) ([]FailedInstalledDisposalRead, error) {
 	if s.DB == nil || !validCapacityExecutor(preID) {
 		return nil, ErrCapacityMutationAuthorization
 	}
@@ -450,15 +450,15 @@ func (s CapacityStore) ReadFailedInstalledGuestDisposal(ctx context.Context, pre
 		return nil, err
 	}
 	defer rows.Close()
-	out := []FailedInstalledGuestDisposal{}
+	out := []FailedInstalledDisposalRead{}
 	for rows.Next() {
 		var raw []byte
 		var sha string
-		var r FailedInstalledGuestDisposal
 		if err = rows.Scan(&raw, &sha); err != nil {
 			return nil, err
 		}
-		if capacity.BusinessCreationSHA256(raw) != sha || decodeFailedInstalledDisposal(raw, &r) != nil {
+		r, decodeErr := decodeFailedInstalledDisposalRead(raw)
+		if capacity.BusinessCreationSHA256(raw) != sha || decodeErr != nil || r.PreregistrationID != preID {
 			return nil, ErrCapacityConflict
 		}
 		out = append(out, r)
