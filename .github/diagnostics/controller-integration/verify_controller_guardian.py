@@ -247,10 +247,11 @@ def main():
         import ci_guarded_driver
         external_stop=threading.Event() if os.environ.get('CI_CONTINUOUS_TEST')=='1' else None
         timeout_test=os.environ.get('CI_ADMISSION_TIMEOUT_TEST')=='1'
-        timer=threading.Timer(42,external_stop.set) if external_stop is not None and not timeout_test else None
+        post_marker_test=os.environ.get('CI_POST_MARKER_TEST')=='1'
+        timer=threading.Timer(42,external_stop.set) if external_stop is not None and not (timeout_test or post_marker_test) else None
         if timer is not None:timer.daemon=True;timer.start()
         admission_release=None;admission_errors=[]
-        if external_stop is not None:
+        if external_stop is not None and not post_marker_test:
             reservation=drain.reserve_admission()
             def release_admission():
                 try:
@@ -269,6 +270,19 @@ def main():
                 entries,cores,prom=endpoints(4)
                 real_cache.publish_topology(([x for x in entries if x.kind in ('core','broker')],cores,prom,{},frozenset(),time.monotonic()+35))
             driver._ci_before_pre_intent=change_cache_once
+        if post_marker_test:
+            begin=driver.begin_handoff
+            def inject_after_prepare():
+                begin()
+                original_rows=nl.map_rows
+                def changed_rows(map_id):
+                    nl.map_rows=original_rows
+                    rows=original_rows(map_id)
+                    entries,cores,prom=endpoints(4)
+                    real_cache.publish_topology(([x for x in entries if x.kind in ('core','broker')],cores,prom,{},frozenset(),time.monotonic()+35))
+                    return rows
+                nl.map_rows=changed_rows
+            driver.begin_handoff=inject_after_prepare
         running_reader=types.SimpleNamespace(cache=real_cache,stop=threading.Event(),shutdown_deadline=lambda:time.monotonic()+5)
         try:
             loop_result=controller.serve_hot(running_reader,active_pin,apply=lambda:True,guarded_driver=driver)
@@ -280,7 +294,14 @@ def main():
             assert not admission_release.is_alive() and not admission_errors
             print('PASS admission hold timed out before marker or prepare; no sender replay or new wire',flush=True)
             return
-        if timeout_test:raise AssertionError('ADMISSION_HOLD_MUST_TIMEOUT')
+        except nft.Held as error:
+            if not post_marker_test or str(error)!='SAME_CACHE_SNAPSHOT_BEFORE_GUARDED_HANDOFF':raise
+            pending=watch.pending_state()
+            assert pending['pending'] and drain.marker_exists() and first.counter==1
+            assert not (receipts/'INTENT-002.json').exists()
+            print('PASS cache change after prepare remains HOLD with marker and Guardian reservation, no replay',flush=True)
+            return
+        if timeout_test or post_marker_test:raise AssertionError('EXPECTED_PRE_SEND_HOLD')
         if timer is not None:
             timer.cancel();timer.join();admission_release.join(2)
             assert not admission_release.is_alive() and not admission_errors and driver.pre_intent_waits>0 and driver.pre_intent_discards>0
