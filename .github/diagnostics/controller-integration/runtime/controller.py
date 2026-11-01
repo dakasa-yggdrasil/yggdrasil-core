@@ -451,6 +451,10 @@ def _serve_guarded_hot(reader, pin, *, apply, driver, initial_sequence=1):
     sequence=initial_sequence;last_key=None;installed_until=None
     try:
         while not reader.stop.is_set():
+            # Stop only between handoffs. An in-flight transaction must still
+            # reach confirmation or retain its uncertain marker.
+            if driver.stop_signal is not None and driver.stop_signal.is_set():
+                reader.stop.set();break
             _snapshot,key,_revision=reader.cache.commit_snapshot()
             now=time.monotonic()
             if key==last_key and installed_until is not None and now<installed_until-1.250:
