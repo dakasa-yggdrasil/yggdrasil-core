@@ -5,7 +5,7 @@ it marks a single prepared generation as possibly dispatched; a reply failure
 or process loss is UNKNOWN, never replayed. This does not make a userspace
 check atomic with a later kernel send or grant any external effect.
 """
-import hashlib,os,re,select,socket,struct,threading,time
+import array,fcntl,hashlib,os,re,select,socket,stat,struct,threading,time
 from pathlib import Path
 
 class Held(RuntimeError):pass
@@ -31,7 +31,7 @@ class SenderRegistryAuthority:
         self.channel,self.registry,self.registry_module,self.verified,self.nl=channel,registry,registry_module,verified,nl
         self.sender,self.ticks,self.netns,self.guardian=pid,anchor['start_ticks'],anchor['netns'],os.getpid()
         self.identity,self.uid,self.gid=identity,uid,gid;self.validate_kernel=validate_kernel
-        self.lock=threading.Lock();self.closed=False;self.pidfd=os.pidfd_open(pid,0)
+        self.lock=threading.Lock();self.closed=False;self.pidfd=os.pidfd_open(pid,0);self.writer_guard=None
         try:
             self._live();raw=Path('/proc/%d/cmdline'%pid).read_bytes()
             need(raw.endswith(b'\0') and raw[:-1].split(b'\0')==[x.encode() for x in sender_argv],'EXACT_SENDER_ARGV')
@@ -54,6 +54,46 @@ class SenderRegistryAuthority:
              and self.nl.startticks(self.sender)==self.ticks and os.readlink('/proc/%d/ns/net'%self.sender)==self.netns,
              'SAME_LIVE_GUARDIAN_AND_SENDER')
         self.identity._current_ids(self.sender,self.uid,self.gid)
+
+    def receive_writer_custody(self,coord):
+        import drain_marker_v3_DRAFT as marker
+        need(type(coord) is marker.CoordinatorV3 and self.writer_guard is None,
+             'ONE_EXACT_WRITER_CUSTODY_REQUIRED')
+        self._live();unclaimed=[];independent=None
+        try:
+            msg,anc,flags,_=self.channel.recvmsg(1,socket.CMSG_SPACE(array.array('i').itemsize))
+            for level,kind,data in anc:
+                if level==socket.SOL_SOCKET and kind==socket.SCM_RIGHTS:
+                    a=array.array('i');a.frombytes(data[:len(data)-len(data)%a.itemsize]);unclaimed.extend(a)
+            need(msg==b'W' and not flags&(socket.MSG_CTRUNC|socket.MSG_TRUNC)
+                 and len(anc)==1 and anc[0][:2]==(socket.SOL_SOCKET,socket.SCM_RIGHTS)
+                 and len(unclaimed)==1,'EXACT_SENDER_WRITER_FD_REQUIRED')
+            received=unclaimed[0];coord.base._private_directory()
+            sent=os.fstat(received);named=os.lstat(coord.writer_lock)
+            expected=(named.st_dev,named.st_ino)
+            need(stat.S_ISREG(named.st_mode) and named.st_uid==0 and named.st_nlink==1
+                 and stat.S_IMODE(named.st_mode)==0o600 and (sent.st_dev,sent.st_ino)==expected,
+                 'SAME_PRIVATE_WRITER_INODE_REQUIRED')
+            independent=os.open(coord.writer_lock,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC)
+            opened=os.fstat(independent)
+            need((opened.st_dev,opened.st_ino)==expected,'SAME_INDEPENDENT_WRITER_INODE_REQUIRED')
+            fcntl.flock(independent,fcntl.LOCK_SH|fcntl.LOCK_NB)
+            self._live();self.writer_guard=(coord,independent,expected,self.sender,self.ticks)
+            independent=None
+        finally:
+            for fd in unclaimed:os.close(fd)
+            if independent is not None:os.close(independent)
+
+    def require_writer_custody(self,coord,verified):
+        guard=self.writer_guard
+        need(not self.closed and guard is not None and guard[0] is coord
+             and verified.anchor['pid']==self.sender==guard[3]
+             and verified.anchor['start_ticks']==self.ticks==guard[4],
+             'BOUND_ACTIVE_GUARDIAN_WRITER_CUSTODY_REQUIRED')
+        self._live();opened=os.fstat(guard[1]);named=os.lstat(coord.writer_lock)
+        need((opened.st_dev,opened.st_ino)==(named.st_dev,named.st_ino)==guard[2],
+             'SAME_GUARDIAN_WRITER_CUSTODY_INODE_REQUIRED')
+        return guard[2]
 
     def _send(self,value):
         with self.lock:self.channel.sendall(self.nl.canon(value))

@@ -84,6 +84,7 @@ def serve(channel,listener):
             watcher.start()
         def serve_sender():
             try:
+                auth.receive_writer_custody(generation.CI_DRAIN_COORDINATION)
                 while not closing.is_set():
                     req=read_line(sender_channel);schema=req.get('schema')
                     if schema=='lab_positive_generation_attest_request_v1':auth.attest_current(req)
@@ -168,7 +169,7 @@ def serve(channel,listener):
             command=read_line(channel);kind=command['command']
             if kind=='ADMISSION_WITNESS':
                 try:
-                    result=admission.observe(verified,reg,generation.CI_DRAIN_COORDINATION,command['uid'],command['address'])
+                    result=admission.observe(verified,reg,generation.CI_DRAIN_COORDINATION,command['uid'],command['address'],authority=auth)
                     publish({'event':'ADMISSION_WITNESS',**result})
                 except Exception as error:
                     publish({'event':'ADMISSION_HOLD','error_class':type(error).__name__,

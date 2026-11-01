@@ -86,6 +86,7 @@ def exercise(*, root, raw, trans, host_netns, baseline, baseline_plan, reader_ca
             guardian={'unit':'fixture.service','invocation_id':'f'*32,'argv':['fixture'],'source_sha256':'a'*64},nl=nl,coord=generation.CI_DRAIN_COORDINATION)
         def serve():
             try:
+                auth.receive_writer_custody(generation.CI_DRAIN_COORDINATION)
                 raw_request=bytearray()
                 while not raw_request.endswith(b'\n'):
                     chunk=guardian_side.recv(1)

@@ -5,6 +5,7 @@ previous nft genid and its same-process effect lease before answering. This
 module checks the sender side only: its existence or a caller-supplied answer
 never establishes those Guardian-side properties or production authority.
 """
+import array
 import ctypes
 import hashlib
 import json
@@ -69,6 +70,10 @@ class SenderSession:
             self.netlink=socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,12)
             self.netlink_inode=os.fstat(self.netlink.fileno()).st_ino
             _bind_netlink(self.netlink)
+            # The Guardian receives this FD over the authenticated sender channel
+            # and acquires its own SH on a distinct open-file-description.
+            sent=self.channel.sendmsg([b'W'],[(socket.SOL_SOCKET,socket.SCM_RIGHTS,array.array('i',[self.writer_lease.validate()]))])
+            need(sent==1,'EXACT_WRITER_CUSTODY_TRANSFER_REQUIRED')
         except BaseException:
             # On close failure or another live alias, keep SH held.
             try:self._close_writer_socket()

@@ -197,6 +197,25 @@ def main():
         except RuntimeError as e:assert str(e)=='ONLY_READY_SAME_OWNER'
         # Pause observation explicitly during the in-flight handoff. This is
         # a measured sampling gap, not continuous monitoring or authority.
+        # Adversary: this sender has an FD for the correct inode but drops its
+        # SH; an unrelated process holds SH. Without bound Guardian custody,
+        # admission must reject instead of attributing that foreign lock.
+        import fcntl
+        fcntl.flock(first.writer_lease.fd,fcntl.LOCK_UN)
+        other_code=('import fcntl,os,sys; f=os.open(sys.argv[1],os.O_RDONLY); '
+                    'fcntl.flock(f,fcntl.LOCK_SH); print("READY",flush=True); sys.stdin.read(1)')
+        other=subprocess.Popen(['/usr/bin/python3','-I','-B','-c',other_code,str(drain.writer_lock)],
+                               stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE)
+        try:
+            assert other.stdout.readline()==b'READY\n'
+            info=Path('/proc/self/fdinfo/%d'%first.writer_lease.fd).read_text()
+            assert not any(line.startswith('lock:') for line in info.splitlines())
+            no_guard=watch.admission_witness(initial_core.native_identity.split('/',1)[0],initial_core.address)
+            assert no_guard['event']=='ADMISSION_HOLD' and no_guard['guard']=='BOUND_ACTIVE_GUARDIAN_WRITER_CUSTODY_REQUIRED',no_guard
+            print('PASS foreign SH cannot masquerade as bound sender custody',flush=True)
+        finally:
+            first.writer_lease.validate()
+            other.stdin.write(b'x');other.stdin.flush();other.wait(timeout=5)
         import guarded_sender_session_DRAFT as direct_sender
         sender_channel=watch.sender_channel()
         guardian_spec={'unit':pre_guardian.unit,'invocation_id':pre_guardian.session.invocation,

@@ -22,11 +22,12 @@ import fenced_probe_CI
 HERE=Path(__file__).resolve().parent
 ROOT=HERE.parent
 # Generated from this isolated package, not accepted from the RPC caller.
-CI_SOURCE_SHA256 = {'fenced_probe_CI.py': 'd8a1f3f035675d6cd4d04a0efb479a595bad69fe0fee9cedefec39ba7c339fae',
+CI_SOURCE_SHA256 = {'guarded_authority_ci.py': '357e34d5310410607d51076c9d07a9082b20a1265ae52501aafdf621374c8128',
+ 'fenced_probe_CI.py': 'd8a1f3f035675d6cd4d04a0efb479a595bad69fe0fee9cedefec39ba7c339fae',
  'ci_holder_process.py': 'bbfe28072bbb6622d4dcd809725152707c8ab4b63085ca1b618839e823277e1a',
  'guarded_effect_lease_two_peers_DRAFT.py': 'dae81780de396d99d9d84b99b2c9fc75901b2fb8eee5e3a2be73a3b0a692157e',
  'guarded_lease_ipc_DRAFT.py': '2ccff8cb8dd953d94784913aeb54a2aee3bc593a8eea4b1237a924cd6f977361',
- 'ci_guardian50_session.py': 'eef6a6a593f575e3f9213d256b5a02990a32d78cbfd6c00150018d6d3e80f426',
+ 'ci_guardian50_session.py': '3dccf08186e4630ced19551ae4c6f5ce8cffe3bd3d22387aa6dd4404def33b98',
  'ci_nl_probe.py': 'cffaff1f55d16e32ee7acedbcc52a3ad3702d44fa8693b8e4461d01d5b1ef65a',
  'coverage.py': 'c13f2d872f4b9a8351aa2999372ac8f2fd472f4db8e015810b3d6c28a596bfa6',
  'drain_marker_v3_DRAFT.py': '205d4749d3adb62a59a0ffb71ef87e953bf27ea1225da6e2e166e2ec0cdf703c',
@@ -69,7 +70,7 @@ def _read_sealed(path,expected):
     finally:os.close(fd)
 
 def _fixed_sources():
-    names=('fenced_probe_CI','guarded_live_observation','guarded_verifier','guarded_sources',
+    names=('guarded_authority_ci','fenced_probe_CI','guarded_live_observation','guarded_verifier','guarded_sources',
            'guarded_nl','transition_structure_DRAFT','native_structure',
            'guarded_refresh_registry_DRAFT','drain_marker_v3_DRAFT',
            'nft_owner','observations','ci_guardian50_session',
@@ -96,27 +97,11 @@ def _kernel_genid(nl):
         return nl.genid(channel)
     finally:channel.close()
 
-def _sender_holds_writer_fd(coord,pid):
-    expected=coord.directory/'writer.lock'
-    value=os.lstat(expected)
-    if (not stat.S_ISREG(value.st_mode) or value.st_uid!=0
-            or stat.S_IMODE(value.st_mode)!=0o600 or value.st_nlink!=1):
-        raise FenceError('EXACT_WRITER_LOCK_REQUIRED')
-    fd=os.open(expected,os.O_RDWR|os.O_NOFOLLOW)
-    try:
-        try:fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
-        except BlockingIOError:pass
-        else:raise FenceError('WRITER_SHARED_LEASE_NOT_HELD')
-    finally:os.close(fd)
-    found=[]
-    for entry in Path('/proc/%d/fd'%pid).iterdir():
-        try:info=entry.stat()
-        except (FileNotFoundError,PermissionError):continue
-        if (info.st_dev,info.st_ino)==(value.st_dev,value.st_ino):found.append(entry.name)
-    if not found:raise FenceError('SENDER_WRITER_FD_NOT_OBSERVED')
-    return value.st_dev,value.st_ino
-
-def observe(verified,registry,coord,uid,address):
+def observe(verified,registry,coord,uid,address,*,authority):
+    import guarded_authority_ci as auth_module
+    if type(authority) is not auth_module.SenderRegistryAuthority:
+        raise FenceError('BOUND_ACTIVE_GUARDIAN_WRITER_CUSTODY_REQUIRED')
+    writer_identity=authority.require_writer_custody(coord,verified)
     import guarded_live_observation as live
     import guarded_verifier as verifier
     import guarded_sources as sources
@@ -155,11 +140,12 @@ def observe(verified,registry,coord,uid,address):
     if (errors or len(selected)!=1 or len(matches)!=1 or selected[0]!=matches[0]
             or generation!=proof['observation']['reader_generation']):
         raise FenceError('ORIGINAL_READY_UID_IP_AND_GENERATION_REQUIRED')
-    writer_identity=_sender_holds_writer_fd(coord,verified.anchor['pid'])
     with coord.admission_or_other_writer() as state:
         if hashlib.sha256(json.dumps(state,sort_keys=True,separators=(',',':')).encode()).hexdigest()!=state_digest:
             raise FenceError('FENCE_STATE_CHANGED_DURING_OBSERVATION')
         coord.base.require_allowed(state,uid,address)
+        if authority.require_writer_custody(coord,verified)!=writer_identity:
+            raise FenceError('BOUND_ACTIVE_GUARDIAN_WRITER_CUSTODY_REQUIRED')
         with registry.lock:
             if registry.pending is not None or registry.state=='UNKNOWN':
                 raise FenceError('NO_PENDING_OR_UNKNOWN_GUARDIAN_REQUIRED')
