@@ -76,7 +76,6 @@ func collectOriginalGuestAssessment(ctx context.Context, conn *amqp.Connection, 
 	if p.GuestNotifyReconcileBinding == nil || capacity.ValidateGuestNotifyReconcileBinding(p) != nil {
 		return inv, assessment, reporting, errOriginalGuestStep
 	}
-	b := p.MutationBindings[0]
 	read := func(binding model.CapacityObservationAdapterBinding, operation string, input map[string]any, out any) error {
 		if originalGuestReconcileLive(ctx) != nil {
 			return errOriginalGuestStep
@@ -98,17 +97,21 @@ func collectOriginalGuestAssessment(ctx context.Context, conn *amqp.Connection, 
 		}
 		return capacity.DecodeVMObservation(returned.Output, out)
 	}
-	for _, binding := range p.GuestNotifyReconcileBinding.Signals {
-		var raw model.CapacityMetricRangeObservation
-		if err := read(binding.Adapter, capacity.ObserveMetricRange, map[string]any{"binding": binding.BindingName}, &raw); err != nil {
-			return inv, assessment, reporting, err
-		}
-		evidence, err := capacity.BoundMetricEvidence(p, binding, raw, time.Now().UTC())
-		if err != nil {
-			return inv, assessment, reporting, err
-		}
-		assessment.Evidence = append(assessment.Evidence, evidence)
+	return collectOriginalGuestAssessmentFromReads(ctx, policy, p, read)
+}
+
+type originalGuestBoundRead func(model.CapacityObservationAdapterBinding, string, map[string]any, any) error
+
+// The live caller above resolves and authenticates each adapter. Keeping the
+// ordered reads together also allows qualification of the full decision path.
+func collectOriginalGuestAssessmentFromReads(ctx context.Context, policy model.Manifest, p model.CapacityPolicySpec, read originalGuestBoundRead) (model.CapacityVMFleetInventory, model.CapacityAssessment, model.CapacityMetricRangeObservation, error) {
+	var inv model.CapacityVMFleetInventory
+	var assessment model.CapacityAssessment
+	var reporting model.CapacityMetricRangeObservation
+	if p.GuestNotifyReconcileBinding == nil || capacity.ValidateGuestNotifyReconcileBinding(p) != nil || read == nil {
+		return inv, assessment, reporting, errOriginalGuestStep
 	}
+	b := p.MutationBindings[0]
 	revision := model.CapacityObservationAdapterBinding{IntegrationInstanceID: b.IntegrationInstanceID, InstanceChecksum: b.IntegrationChecksum, IntegrationTypeID: b.IntegrationTypeID, TypeChecksum: b.IntegrationTypeChecksum}
 	if err := read(revision, capacity.VMObserveInventory, map[string]any{"profile": b.ProfileName}, &inv); err != nil {
 		return inv, assessment, reporting, err
@@ -118,6 +121,18 @@ func collectOriginalGuestAssessment(ctx context.Context, conn *amqp.Connection, 
 	if err != nil || originalGuestReconcileLive(ctx) != nil {
 		return inv, assessment, reporting, errOriginalGuestStep
 	}
+	// A complete, fresh native inventory proves whether the protected floor is
+	// absent. Demand telemetry is unavailable before the first Guest reports;
+	// the planner already permits only floor repair without that telemetry.
+	// Ordinary scale and every member/readiness proof retain strict signals.
+	assessment.Evidence, err = collectOriginalGuestDemand(p, assessment.Snapshot, func(binding model.CapacityMetricSignalBinding) (model.CapacityMetricRangeObservation, error) {
+		var raw model.CapacityMetricRangeObservation
+		err := read(binding.Adapter, capacity.ObserveMetricRange, map[string]any{"binding": binding.BindingName}, &raw)
+		return raw, err
+	})
+	if err != nil {
+		return inv, assessment, reporting, err
+	}
 	coverage := *p.GuestNotifyReconcileBinding.MemberCoverage
 	if err = read(coverage.Adapter, capacity.ObserveMetricRange, map[string]any{"binding": coverage.BindingName}, &reporting); err != nil {
 		return inv, assessment, reporting, err
@@ -126,6 +141,29 @@ func collectOriginalGuestAssessment(ctx context.Context, conn *amqp.Connection, 
 		return inv, assessment, reporting, err
 	}
 	return inv, assessment, reporting, nil
+}
+
+// The caller must supply the snapshot returned by GuestReconcileSnapshot
+// from the actual complete provider inventory. No caller-supplied unit count
+// crosses the workflow boundary. Missing demand is permitted only below the
+// fixed floor; the independent membership-coverage read is still mandatory.
+func collectOriginalGuestDemand(p model.CapacityPolicySpec, snapshot model.CapacitySnapshot, read func(model.CapacityMetricSignalBinding) (model.CapacityMetricRangeObservation, error)) ([]model.CapacityEvidence, error) {
+	if snapshot.Units < p.Floor {
+		return nil, nil
+	}
+	var evidence []model.CapacityEvidence
+	for _, binding := range p.GuestNotifyReconcileBinding.Signals {
+		raw, err := read(binding)
+		if err != nil {
+			return nil, err
+		}
+		e, err := capacity.BoundMetricEvidence(p, binding, raw, time.Now().UTC())
+		if err != nil {
+			return nil, err
+		}
+		evidence = append(evidence, e)
+	}
+	return evidence, nil
 }
 
 func originalGuestNextSlot(p model.CapacityPolicySpec, inv model.CapacityVMFleetInventory, members []repository.GuestNotifyFloorMember, decision model.CapacityDecision) (string, int, string, error) {
