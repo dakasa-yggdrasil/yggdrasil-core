@@ -21,6 +21,8 @@ import (
 	"github.com/pressly/goose/v3"
 	"net/url"
 	"os"
+	"os/exec"
+	"path/filepath"
 	"reflect"
 )
 
@@ -488,9 +490,67 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 				t.Fatal(e)
 			}
 			if scenario == "lab_core_bound_disposal" {
+				originals := func() [][]byte {
+					t.Helper()
+					var grant, preWire, witnessWire, receiptWire, installationWire, runWire []byte
+					queries := []struct {
+						q    string
+						id   any
+						dest *[]byte
+					}{
+						{`SELECT state||':'||grant_record::text FROM public.capacity_mutation_grants WHERE id=$1`, pre.OriginalCreateGrantID, &grant},
+						{`SELECT original_wire FROM public.capacity_vm_provisioning_preregistrations WHERE id=$1`, pre.PreregistrationID, &preWire},
+						{`SELECT original_wire FROM public.capacity_guest_original_create_witnesses WHERE preregistration_id=$1`, pre.PreregistrationID, &witnessWire},
+						{`SELECT receipt_wire FROM public.capacity_vm_original_enrollments WHERE preregistration_id=$1`, pre.PreregistrationID, &receiptWire},
+						{`SELECT original_wire FROM public.capacity_guest_original_installations WHERE preregistration_id=$1`, pre.PreregistrationID, &installationWire},
+						{`SELECT row_to_json(w)::text FROM public.workflow_runs w WHERE id=$1`, original.RunID, &runWire},
+					}
+					for _, q := range queries {
+						if err = db.QueryRow(q.q, q.id).Scan(q.dest); err != nil {
+							t.Fatal("synthetic original snapshot", err)
+						}
+					}
+					return [][]byte{grant, preWire, witnessWire, receiptWire, installationWire, runWire}
+				}
+				beforeOriginals := originals()
+				if binary := os.Getenv("LAB_HETZNER_HTTP_TEST_BIN"); binary != "" {
+					var dbName string
+					if err = db.QueryRow(`SELECT current_database()`).Scan(&dbName); err != nil {
+						t.Fatal(err)
+					}
+					address, parseErr := url.Parse(os.Getenv("RECOVERY_FIXTURE_ADMIN_URL"))
+					if parseErr != nil {
+						t.Fatal(parseErr)
+					}
+					address.Path = "/" + dbName
+					dir := t.TempDir()
+					if err = os.WriteFile(filepath.Join(dir, "policy.json"), raw(p), 0600); err != nil {
+						t.Fatal(err)
+					}
+					childCtx, stopChild := context.WithTimeout(context.Background(), 60*time.Second)
+					defer stopChild()
+					child := exec.CommandContext(childCtx, binary, "-test.run=^TestLABHetznerSignedDisposalHTTP$", "-test.v")
+					child.Env = append(os.Environ(), "LAB_HETZNER_HTTP_FIXTURE_DIR="+dir, "LAB_HETZNER_DB_URL="+address.String(), "LAB_HETZNER_PRE="+pre.PreregistrationID, "LAB_HETZNER_FAILED_RUN="+previous.RunID.String())
+					output, childErr := child.CombinedOutput()
+					t.Logf("LAB synthetic HTTP owner: %s", output)
+					if childErr != nil {
+						labHetznerAdmissionDiagnostic(t, db, pre.PreregistrationID, previous.RunID.String())
+						t.Fatal("LAB HTTP owner held", childErr)
+					}
+					rows, readErr := (CapacityStore{DB: db}).ReadFailedInstalledGuestDisposal(ctx, pre.PreregistrationID)
+					if readErr != nil || len(rows) != 1 || rows[0].Stage != "requested" {
+						t.Fatal("LAB HTTP original readback", readErr)
+					}
+					if !reflect.DeepEqual(beforeOriginals, originals()) {
+						t.Fatal("synthetic original history changed")
+					}
+					t.Log("LAB_CORE_BOUND_DISPOSAL_REQUESTED_READBACK_NO_DUPLICATE")
+					return
+				}
 				issuer := "collaborator:" + uuid.NewString()
 				result, requestErr := (CapacityStore{DB: db}).RequestFailedInstalledGuestCoreReplacement(ctx, pre.PreregistrationID, previous.RunID.String(), issuer)
 				if requestErr != nil {
+					labHetznerAdmissionDiagnostic(t, db, pre.PreregistrationID, previous.RunID.String())
 					t.Fatalf("LAB full Core-bound request: %v", requestErr)
 				}
 				if result.Stage != "requested" || result.ReplacementMode != FailedInstalledCoreReplacementMode || !result.BusinessEffectsPreserved || result.UsefulCapacityBefore != 0 {
@@ -509,6 +569,9 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 				rows, readErr = (CapacityStore{DB: db}).ReadFailedInstalledGuestDisposal(ctx, pre.PreregistrationID)
 				if readErr != nil || len(rows) != 1 || rows[0].Stage != "requested" {
 					t.Fatal("refused advance altered lineage", readErr)
+				}
+				if !reflect.DeepEqual(beforeOriginals, originals()) {
+					t.Fatal("synthetic original history changed")
 				}
 				t.Log("LAB_CORE_BOUND_DISPOSAL_REQUESTED_READBACK_NO_DUPLICATE")
 				return

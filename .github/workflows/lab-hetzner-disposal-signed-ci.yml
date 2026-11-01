@@ -20,11 +20,21 @@ jobs:
         options: >-
           --health-cmd "pg_isready -U postgres -d recovery_fixture"
           --health-interval 5s --health-timeout 5s --health-retries 12
+      rabbitmq:
+        image: rabbitmq:4-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: fixture
+          RABBITMQ_DEFAULT_PASS: lab-only
+        ports: ["5672:5672"]
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 3s --health-timeout 5s --health-retries 30
     env:
       GOWORK: 'off'
       GOMAXPROCS: '2'
       CAPACITY_RECOVERY_FIXTURE_ONLY: 'true'
       RECOVERY_FIXTURE_ADMIN_URL: 'postgres://postgres:fixture-only@127.0.0.1:5432/postgres?sslmode=disable'
+      LAB_HETZNER_BROKER_URL: 'amqp://fixture:lab-only@127.0.0.1:5672/'
     steps:
       - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
         with:
@@ -39,8 +49,11 @@ jobs:
           set -euo pipefail
           [[ -z "$(git status --porcelain --untracked-files=all)" ]]
           mkdir -p "$RUNNER_TEMP/lab-hetzner-signed"
+          export LAB_HETZNER_HTTP_TEST_BIN="$RUNNER_TEMP/lab-hetzner-http.test"
+          go test -p=1 -race -buildvcs=true -tags recoveryfixture -c -o "$LAB_HETZNER_HTTP_TEST_BIN" ./controllers/httpapi
           go test -p=1 -race -buildvcs=true -tags recoveryfixture -count=1 -timeout=5m -v ./repository -run '^TestRecoveryFixtureResumeSetupPostgres/lab_core_bound_disposal$' 2>&1 | tee "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
           grep -F 'LAB_CORE_BOUND_DISPOSAL_REQUESTED_READBACK_NO_DUPLICATE' "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
+          grep -F 'LAB_HETZNER_CORE_BOUND_HTTPS_LOST_RESPONSE_GET_ONLY_ADVANCE_HELD' "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
       - name: Retain original test output
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
