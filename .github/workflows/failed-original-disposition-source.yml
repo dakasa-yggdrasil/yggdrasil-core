@@ -15,6 +15,16 @@ jobs:
   focused-linux:
     runs-on: ubuntu-24.04
     timeout-minutes: 25
+    services:
+      rabbitmq:
+        image: rabbitmq:4-alpine
+        env:
+          RABBITMQ_DEFAULT_USER: fixture
+          RABBITMQ_DEFAULT_PASS: lab-ci-only
+        ports: ["5672:5672"]
+        options: >-
+          --health-cmd "rabbitmq-diagnostics -q ping"
+          --health-interval 3s --health-timeout 5s --health-retries 30
     env:
       GOMAXPROCS: '2'
       GOMEMLIMIT: 2GiB
@@ -248,6 +258,16 @@ jobs:
           (p/'WITNESSED-AWS82-CENSUS.PUBLIC.json').write_text(json.dumps(value,sort_keys=True,indent=2)+'\n')
           print(json.dumps(value,sort_keys=True))
           PY_82
+          # Separate non-authorizing LAB fixture: actual handler/DB, synthetic
+          # authentication and readonly adapters, single lost POST response.
+          export LAB_GEN8_BROKER_URL='amqp://fixture:lab-ci-only@127.0.0.1:5672/'
+          export LAB_GEN8_REPOSITORY_TEST_BIN="$pg_root/gen8-repository.test"
+          record lab-gen8-seed-build go test -p=1 -race -c -o "$LAB_GEN8_REPOSITORY_TEST_BIN" ./repository
+          if ! record lab-gen8-http go test -p=1 -race -count=1 -timeout=4m -v ./controllers/httpapi -run '^TestLABGen8AuthenticatedHTTPPostgresLostResponse$'; then
+            cat "$LOGS/lab-gen8-http.stdout" "$LOGS/lab-gen8-http.stderr"
+            exit 1
+          fi
+          grep -F 'LAB_AUTHENTICATED_CORE_SCHEMA82_GET_RECONCILED' "$LOGS/lab-gen8-http.stdout"
       - name: Retain original outputs and shutdown proof
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2

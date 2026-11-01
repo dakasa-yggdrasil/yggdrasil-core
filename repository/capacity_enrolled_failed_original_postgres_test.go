@@ -321,6 +321,10 @@ func enrolledFailedAWSContractBoundaries(t *testing.T, db *sql.DB) {
 // DECLARED AWS history for the new SQL76 contract. It is constructed before
 // witness/enrollment insertion; no immutable historical row is rewritten.
 // As in the H SQL fixture, signature-shaped enrollment is not Go authority.
+// labGen8FixtureSetup is used only by the isolated end-to-end test before any
+// declared original is inserted; the ordinary fixtures leave it nil.
+var labGen8FixtureSetup func(*dispositionPGFixture)
+
 func enrolledFailedAWSOriginalPGFixture(t *testing.T, db *sql.DB, auxiliaryFlag, auxiliaryResources string) failedOriginalFixture {
 	t.Helper()
 	f := originalDispositionPGFixturePrepared(t, db, func(f *dispositionPGFixture) {
@@ -349,6 +353,9 @@ func enrolledFailedAWSOriginalPGFixture(t *testing.T, db *sql.DB, auxiliaryFlag,
 		p.Profiles[0].Provider = "aws"
 		policyRaw, _ := json.Marshal(p)
 		f.policy.Spec = policyRaw
+		if labGen8FixtureSetup != nil {
+			labGen8FixtureSetup(f)
+		}
 		grantRaw, _ := json.Marshal(f.record)
 		// Preserve the real owning c34 omitempty shape in the default positive.
 		// Compatibility/forgery cases change only the DECLARED SQL representation
