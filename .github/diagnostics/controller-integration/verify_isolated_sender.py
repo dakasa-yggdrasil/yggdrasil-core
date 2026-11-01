@@ -4,6 +4,7 @@ from pathlib import Path
 root=Path(__file__).resolve().parent;sys.path.insert(0,str(root/'runtime'))
 import drain_marker_v3_DRAFT as v3,guarded_nl as nl,guarded_unit_identity as identity
 import native_structure,nft_owner as nft,recovery_terminality_DRAFT as terminal
+import isolated_sender_custody_CI as custody
 
 def run(*args,input=None):
     return subprocess.run(args,input=input,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=True,timeout=10).stdout
@@ -49,10 +50,11 @@ try:
         except terminal.Held:
             if time.monotonic()>deadline:raise
             time.sleep(.05)
-    with open(coord.writer_lock,'rb') as fence:
-        fcntl.flock(fence,fcntl.LOCK_EX|fcntl.LOCK_NB)
-        terminal.prove_terminal_for_marker(marked)
+    with custody.ExclusiveObservation(marked,net,before) as fence:
+        observation=fence.verify();assert observation['cancel_authority'] is False
         assert nl.genid(net)==before and coord.marker_exists()
+        probe=subprocess.run(['/usr/bin/flock','-s','-n',str(coord.writer_lock),'/usr/bin/true'],timeout=5)
+        assert probe.returncode!=0  # new cooperating sender cannot acquire SH
         assert not list((root/'sender-receipts').glob('WIRE-*')) and not list((root/'sender-receipts').glob('INTENT-*'))
         for rec,pf,mf in zip(records,received[::2],received[1::2]):
             assert int(nl.fdinfo(os.getpid(),pf)['prog_id'])==rec['program_id']
@@ -62,7 +64,9 @@ try:
         # must invalidate any observation, never justify marker deletion.
         run('/usr/sbin/nft','add','table','ip','ci_external_uncooperative_writer')
         assert nl.genid(net)!=before and coord.marker_exists()
-        print('PASS external genid drift observed under EX and marker remains',flush=True)
+        try:fence.verify();raise AssertionError('drift accepted')
+        except custody.Held as error:assert str(error)=='EXCLUSIVE_OBSERVATION_GENID_CHANGED'
+        print('PASS external genid drift invalidates exclusive observation and marker remains',flush=True)
     print('BOUNDARY: no Guardian prepare/permit, no marker removal or restart authority',flush=True)
 finally:
     subprocess.run(['/usr/bin/journalctl','-u',unit,'--no-pager','-n','40'],check=False,timeout=10)
