@@ -194,7 +194,7 @@ def serve(channel,listener):
                 admission._read_sealed(holder_script,admission.CI_SOURCE_SHA256['ci_holder_process.py'])
                 expected_holder_argv=['/usr/bin/python3','-B',str(holder_script),str(ROOT/'guardian47.sock'),
                                       str(ROOT/'holder-go'),str(ROOT/'holder-acquired'),str(ROOT/'holder-revoked')]
-                if (re.fullmatch(r'ci-rotation-holder-[0-9a-f]{32}\.service',command.get('unit','')) is None
+                if (re.fullmatch(r'ci-rotation-holder-(?:[0-9a-f]{12}-)?[0-9a-f]{32}\.service',command.get('unit','')) is None
                         or command.get('argv')!=expected_holder_argv
                         or command.get('source_sha256')!=admission.CI_SOURCE_SHA256['ci_holder_process.py']):
                     raise RuntimeError('EXACT_CI_HOLDER_UNIT_AND_SOURCE_REQUIRED')

@@ -1,5 +1,5 @@
 """Generated LAB-only bounded rehearsal entrypoint. Not a production service."""
-import hashlib,json,os,re,shutil,stat,subprocess,sys,urllib.request
+import hashlib,importlib.util,json,os,re,shutil,stat,subprocess,sys,urllib.request
 from pathlib import Path
 
 SPEC=json.loads(__SPEC_LITERAL__)
@@ -78,7 +78,34 @@ def validate_systemd():
          and rows['ActiveState']=='active' and rows['FragmentPath']==SPEC['unit_path']
          and Path('/proc/self/cgroup').read_text().splitlines()==['0::'+rows['ControlGroup']],
          'EXACT_LAB_SYSTEMD_UNIT_REQUIRED')
+    unit_path=Path(SPEC['unit_path']);cleanup=BASE/'cleanup.py'
+    for path,digest in ((unit_path,SPEC['unit_sha256']),(cleanup,SPEC['cleanup_sha256'])):
+        _private_root(path,False)
+        need(hashlib.sha256(path.read_bytes()).hexdigest()==digest,'SEALED_UNIT_AND_CLEANUP_REQUIRED')
     return inv
+
+def validate_empty_slice():
+    # Reuse the exact sealed cleanup inventory; a randomized slice must not
+    # already contain any unit or cgroup before this one-shot run begins.
+    spec=importlib.util.spec_from_file_location('lab_cleanup_preflight',BASE/'cleanup.py')
+    module=importlib.util.module_from_spec(spec);spec.loader.exec_module(module)
+    need(not module.services() and module.slice_cgroup() is None,'EMPTY_UNIQUE_LAB_SLICE_REQUIRED')
+    for directory in ('/run/systemd/system','/etc/systemd/system','/usr/lib/systemd/system'):
+        need(not os.path.lexists(str(Path(directory)/SPEC['slice'])),'NO_EXISTING_LAB_SLICE_FRAGMENT')
+
+def reserve_run(invocation):
+    # A nonce is permanently consumed, including after a partial or failed run.
+    directory=Path('/var/lib/dakasa-elastic-lab-rehearsal-runs')
+    _private_root(directory.parent,True)
+    directory.mkdir(mode=0o700,exist_ok=True);_private_root(directory,True)
+    fd=os.open(directory/SPEC['nonce'],os.O_WRONLY|os.O_CREAT|os.O_EXCL|os.O_NOFOLLOW|os.O_CLOEXEC,0o600)
+    try:
+        os.write(fd,(json.dumps({'unit':SPEC['unit'],'boot_id':SPEC['boot_id'],'invocation_id':invocation},sort_keys=True)+'\n').encode())
+        os.fsync(fd)
+    finally:os.close(fd)
+    fd=os.open(directory,os.O_RDONLY|os.O_DIRECTORY|os.O_NOFOLLOW|os.O_CLOEXEC)
+    try:os.fsync(fd)
+    finally:os.close(fd)
 
 def main():
     need(os.geteuid()==0,'ROOT_LAB_ONLY')
@@ -88,6 +115,9 @@ def main():
     runtime=Path('/run')/SPEC['runtime_directory'];_private_root(runtime,True)
     need(not any(runtime.iterdir()),'EMPTY_PRIVATE_RUNTIME_REQUIRED')
     need(shutil.disk_usage(runtime).free>=256*1024*1024,'LAB_RUNTIME_DISK_SPACE_REQUIRED')
+    # Reuse of a bundle is forbidden even if the previous run failed.
+    validate_empty_slice()
+    reserve_run(invocation)
     stage=runtime/'source';shutil.copytree(source,stage,symlinks=False)
     # Verify the copied tree again before executing any source.
     manifest=json.loads((BASE/'manifest.json').read_bytes());expected=manifest['files'];actual={}

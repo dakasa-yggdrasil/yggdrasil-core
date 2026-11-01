@@ -23,7 +23,7 @@ jobs:
           sudo chmod -R go-w "$target"
           unit="ci-holder-controller-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
           host_netns="$(readlink /proc/self/ns/net)"
-          slice="dakasa-elastic-lab-$(printf '%012x' "$GITHUB_RUN_ID").slice"
+          slice="system-dakasa-elastic-lab-$(printf '%012x' "$GITHUB_RUN_ID").slice"
           sudo systemd-run --quiet --wait --pipe --unit="$unit" --property=RuntimeMaxSec=120s \
             --setenv=CI_CONTROLLER_UNIT="$unit.service" --setenv=CI_GUARDED_FIXTURE=1 \
             --setenv=CI_HOLDER_TEST=1 --setenv=CI_AUXILIARY_SLICE="$slice" --setenv=CI_HOST_NETNS="$host_netns" \

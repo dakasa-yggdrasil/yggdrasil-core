@@ -4,7 +4,7 @@ Not a recovery permit. Assumes a separate trusted custodian remains alive and
 retains pidfd from before exit. Does not prove kernel effects, socket transfer,
 marker integrity, netlink quiescence, safe namespace or permission to send.
 """
-import ctypes,os,select,subprocess,time
+import ctypes,os,re,select,subprocess,time
 from pathlib import Path
 import guarded_unit_identity as identity
 
@@ -50,19 +50,25 @@ class _CgroupRoot:
     """Pin exact cgroup2 mount and system.slice while authenticated peer lives."""
     def __init__(self,cgroup):
         parts=cgroup.split('/')
-        need(len(parts)==3 and parts[0]=='' and parts[1]=='system.slice'
-             and parts[2] and parts[2] not in ('.','..'),'EXACT_SYSTEMD_CGROUP')
-        self.name=parts[2]
+        need(len(parts)>=3 and len(parts)<=12 and parts[0]=='' and parts[1]=='system.slice'
+             and re.fullmatch(r'[a-zA-Z0-9_.@:-]+\.service',parts[-1]) is not None
+             and all(re.fullmatch(r'[a-zA-Z0-9_.@:-]+\.slice',part) is not None for part in parts[2:-1]),
+             'EXACT_SYSTEMD_CGROUP')
+        self.name=parts[-1];self.parent_names=parts[1:-1]
         self.mount_ns=os.readlink('/proc/self/ns/mnt')
         self.cgroup_ns=os.readlink('/proc/self/ns/cgroup')
         self.mount=self._mountinfo()
         self.root=os.open('/sys/fs/cgroup',os.O_RDONLY|os.O_DIRECTORY|os.O_CLOEXEC|os.O_NOFOLLOW)
+        self.parent_fds=[];self.parent_stats=[]
         try:
-            self.slice=os.open('system.slice',os.O_RDONLY|os.O_DIRECTORY|os.O_CLOEXEC|os.O_NOFOLLOW,dir_fd=self.root)
-            self.root_stat=self._key(os.fstat(self.root));self.slice_stat=self._key(os.fstat(self.slice))
+            current=self.root
+            for name in self.parent_names:
+                current=os.open(name,os.O_RDONLY|os.O_DIRECTORY|os.O_CLOEXEC|os.O_NOFOLLOW,dir_fd=current)
+                self.parent_fds.append(current);self.parent_stats.append(self._key(os.fstat(current)))
+            self.root_stat=self._key(os.fstat(self.root))
             self._validate()
         except BaseException:
-            if hasattr(self,'slice'):os.close(self.slice)
+            for fd in reversed(self.parent_fds):os.close(fd)
             os.close(self.root);raise
     @staticmethod
     def _key(st):return (st.st_dev,st.st_ino)
@@ -85,8 +91,11 @@ class _CgroupRoot:
         st=os.stat('/sys/fs/cgroup',follow_symlinks=False)
         need(self._key(st)==self.root_stat==self._key(os.fstat(self.root)),
              'CGROUP_ROOT_CHANGED')
-        need(self._key(os.stat('system.slice',dir_fd=self.root,follow_symlinks=False))
-             ==self.slice_stat==self._key(os.fstat(self.slice)),'CGROUP_SLICE_CHANGED')
+        parent=self.root
+        for name,fd,expected in zip(self.parent_names,self.parent_fds,self.parent_stats):
+            need(self._key(os.stat(name,dir_fd=parent,follow_symlinks=False))
+                 ==expected==self._key(os.fstat(fd)),'CGROUP_SLICE_CHANGED')
+            parent=fd
         data=ctypes.create_string_buffer(256)
         libc=ctypes.CDLL(None,use_errno=True)
         need(libc.fstatfs(self.root,ctypes.byref(data))==0
@@ -94,11 +103,11 @@ class _CgroupRoot:
     def populated(self):
         self._validate()
         try:
-            directory=os.open(self.name,os.O_RDONLY|os.O_DIRECTORY|os.O_CLOEXEC|os.O_NOFOLLOW,dir_fd=self.slice)
+            directory=os.open(self.name,os.O_RDONLY|os.O_DIRECTORY|os.O_CLOEXEC|os.O_NOFOLLOW,dir_fd=self.parent_fds[-1])
         except FileNotFoundError:
             # Absence only counts after checking the same real mount/slice twice.
             self._validate()
-            try:os.stat(self.name,dir_fd=self.slice,follow_symlinks=False)
+            try:os.stat(self.name,dir_fd=self.parent_fds[-1],follow_symlinks=False)
             except FileNotFoundError:return False
             raise Held('CGROUP_APPEARED_DURING_ABSENCE_CHECK')
         try:
@@ -110,7 +119,9 @@ class _CgroupRoot:
             self._validate()
             return values['populated']=='1'
         finally:os.close(directory)
-    def close(self):os.close(self.slice);os.close(self.root)
+    def close(self):
+        for fd in reversed(self.parent_fds):os.close(fd)
+        os.close(self.root)
 
 def _pidfd_terminal(pidfd):
     poll=select.poll();poll.register(pidfd,select.POLLIN|select.POLLHUP|select.POLLERR)

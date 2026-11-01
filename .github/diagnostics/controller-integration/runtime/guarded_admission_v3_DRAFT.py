@@ -24,7 +24,7 @@ ROOT=HERE.parent
 CI_SOURCE_SHA256 = {'ci_holder_process.py': 'bbfe28072bbb6622d4dcd809725152707c8ab4b63085ca1b618839e823277e1a',
  'guarded_effect_lease_two_peers_DRAFT.py': 'dae81780de396d99d9d84b99b2c9fc75901b2fb8eee5e3a2be73a3b0a692157e',
  'guarded_lease_ipc_DRAFT.py': '2ccff8cb8dd953d94784913aeb54a2aee3bc593a8eea4b1237a924cd6f977361',
- 'ci_guardian50_session.py': 'e7beeaaa663c772176699372e4d988f827ceadc26ba5f6afa89733ddea0144c8',
+ 'ci_guardian50_session.py': '9833f0e0b423580c9aa01482e24d4005a925470bdc63a751fbeb5314d719f49f',
  'ci_nl_probe.py': '92ef4d57f659f2683af06640be77e0dc04eb775d6fd5670b35fa720af3a546de',
  'coverage.py': 'c13f2d872f4b9a8351aa2999372ac8f2fd472f4db8e015810b3d6c28a596bfa6',
  'drain_marker_v3_DRAFT.py': '652d3660617440058a4cc8f3f8b41d05a7b75e777e4a991f1e8030050f348906',

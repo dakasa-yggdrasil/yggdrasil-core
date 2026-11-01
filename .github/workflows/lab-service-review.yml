@@ -12,14 +12,17 @@ jobs:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
         with:
           persist-credentials: false
-      - name: Build and validate sealed LAB bundle
+      - name: Validate generated identity, seal and real systemd cleanup
         run: |
           set -eu
           target="$(mktemp -d /tmp/ci-lab-bundle.XXXXXX)"
           trap 'sudo rm -rf "$target"' EXIT
           python3 -B .github/diagnostics/lab-service/build.py --commit "$(git rev-parse HEAD)" \
-            --boot-id fc2c144a-7ea5-45a9-b6e5-180bb07166f2 --output "$target/bundle"
+            --boot-id fc2c144a-7ea5-45a9-b6e5-180bb07166f2 --output "$target/clean"
+          python3 -B .github/diagnostics/lab-service/build.py --commit "$(git rev-parse HEAD)" \
+            --boot-id fc2c144a-7ea5-45a9-b6e5-180bb07166f2 --output "$target/foreign"
           sudo chown -R root:root "$target"
-          sudo python3 -B .github/diagnostics/lab-service/verify_bundle.py "$target/bundle"
-      - name: Verify real systemd auxiliary cleanup after parent death
-        run: sudo python3 -B .github/diagnostics/lab-service/verify_auxiliary_cleanup.py
+          sudo python3 -B .github/diagnostics/lab-service/verify_bundle.py "$target/clean"
+          python3 -c 'import json,sys; a=json.load(open(sys.argv[1]));b=json.load(open(sys.argv[2]));assert a["nonce"]!=b["nonce"] and a["unit"]!=b["unit"] and a["slice"]!=b["slice"]' "$target/clean/bundle-summary.json" "$target/foreign/bundle-summary.json"
+          sudo python3 -B .github/diagnostics/lab-service/verify_auxiliary_cleanup.py "$target/clean" clean
+          sudo python3 -B .github/diagnostics/lab-service/verify_auxiliary_cleanup.py "$target/foreign" foreign

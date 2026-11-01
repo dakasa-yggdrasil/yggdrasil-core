@@ -6,13 +6,17 @@ import native_structure as structure,transition_structure_DRAFT as trans
 
 class Guardian47:
     def __init__(self,*,root,origin):
-        self.unit='ci-guarded-precommit-'+uuid.uuid4().hex+'.service';self.path=root/'guardian47.sock'
+        auxiliary=os.environ.get('CI_AUXILIARY_SLICE','')
+        match=re.fullmatch(r'system-dakasa-elastic-lab-([0-9a-f]{12})\.slice',auxiliary) if auxiliary else None
+        if auxiliary and match is None:raise RuntimeError('EXACT_LAB_AUXILIARY_SLICE_REQUIRED')
+        prefix=(match.group(1)+'-') if match else ''
+        self.unit='ci-guarded-precommit-'+prefix+uuid.uuid4().hex+'.service';self.path=root/'guardian47.sock'
         self.channel=None;self.session=None
         script=Path(__file__).with_name('ci_guardian47_process.py').resolve()
         self.argv=['/usr/bin/python3','-B',str(script),str(self.path)]
         try:
             auxiliary=os.environ.get('CI_AUXILIARY_SLICE','')
-            if auxiliary and re.fullmatch(r'dakasa-elastic-lab-[0-9a-f]{12}\.slice',auxiliary) is None:
+            if auxiliary and re.fullmatch(r'system-dakasa-elastic-lab-[0-9a-f]{12}\.slice',auxiliary) is None:
                 raise RuntimeError('EXACT_LAB_AUXILIARY_SLICE_REQUIRED')
             slice_args=['--slice='+auxiliary] if auxiliary else []
             subprocess.run(['/usr/bin/systemd-run','--quiet','--no-block','--unit='+self.unit,*slice_args,

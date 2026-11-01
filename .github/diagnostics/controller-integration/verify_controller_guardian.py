@@ -256,7 +256,14 @@ def main():
         if os.environ.get('CI_HOLDER_TEST')=='1':
             coverage_state=watch.control('COVERAGE','COVERAGE')
             assert coverage_state['qualified'] and coverage_state['coverage_ns']>=15_000_000_000,coverage_state
-            holder_unit='ci-rotation-holder-'+uuid.uuid4().hex+'.service'
+            auxiliary=os.environ.get('CI_AUXILIARY_SLICE','')
+            if auxiliary:
+                import re
+                match=re.fullmatch(r'system-dakasa-elastic-lab-([0-9a-f]{12})\.slice',auxiliary)
+                assert match
+                holder_prefix=match.group(1)+'-'
+            else:holder_prefix=''
+            holder_unit='ci-rotation-holder-'+holder_prefix+uuid.uuid4().hex+'.service'
             go=HERE/'holder-go';acquired=HERE/'holder-acquired';revoked=HERE/'holder-revoked'
             holder_script=(HERE/'runtime'/'ci_holder_process.py').resolve()
             holder_argv=['/usr/bin/python3','-B',str(holder_script),str(watch.path),str(go),str(acquired),str(revoked)]
@@ -264,7 +271,7 @@ def main():
             auxiliary=os.environ.get('CI_AUXILIARY_SLICE','')
             if auxiliary:
                 import re
-                assert re.fullmatch(r'dakasa-elastic-lab-[0-9a-f]{12}\.slice',auxiliary)
+                assert re.fullmatch(r'system-dakasa-elastic-lab-[0-9a-f]{12}\.slice',auxiliary)
             slice_line=('Slice='+auxiliary+'\n') if auxiliary else ''
             holder_unit_file.write_text('[Service]\nType=simple\n'+slice_line+'RuntimeMaxSec=20s\nExecStart=/usr/bin/nsenter --net=/proc/'+str(os.getpid())+'/ns/net '+' '.join(holder_argv)+'\n')
             subprocess.run(['/usr/bin/systemctl','daemon-reload'],check=True,timeout=10)
