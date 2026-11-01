@@ -4,6 +4,7 @@ package repository
 
 import (
 	"crypto/ed25519"
+	"encoding/json"
 	"fmt"
 	"os"
 	"strings"
@@ -87,8 +88,9 @@ func TestLABSyntheticV2ChainLocal(t *testing.T) {
 	if os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") != "true" {
 		t.Skip("explicit test fixture only")
 	}
-	_, _, reg, receipt, _ := capacity.RecoveryFixtureInstalled(t)
+	p, _, reg, receipt, _ := capacity.RecoveryFixtureInstalled(t)
 	pre := reg.Result.ProductionClock.Authority.Preregistration
+	_ = labSyntheticNativeOffPlan(t, p, p.MutationBindings[0], reg, pre.OriginalCreateGrantID)
 	e := receipt.Enrollment
 	now := time.Now().UTC()
 	rawNonce := strings.Repeat("f", 64)
@@ -107,4 +109,31 @@ func TestLABSyntheticV2ChainLocal(t *testing.T) {
 	if err != nil || len(chain) != 4 {
 		t.Fatal("synthetic chain", err)
 	}
+}
+
+// The plan is declared synthetic test data, not an adapter response or an
+// assertion that any native server is powered off.
+func labSyntheticNativeOffPlan(t *testing.T, p model.CapacityPolicySpec, b model.CapacityMutationBinding, reg model.CapacityGuestOriginalProvisioningRegistration, grantID string) model.CapacityVMFleetPlan {
+	t.Helper()
+	slot := b.Slots[0]
+	spec := *slot.DesiredSpec
+	spec.Capability = capacity.VMObserveServer
+	spec.ExpectedResourceID = reg.Result.Tuple.ResourceID
+	spec.ExpectedResourceCreatedAt = reg.Result.Tuple.CreatedAt
+	projection := map[string]any{"schema_version": spec.SchemaVersion, "capability": spec.Capability, "integration_instance_id": spec.IntegrationInstanceID, "scope_checksum": spec.ScopeChecksum, "profile_checksum": spec.ProfileChecksum, "admission_checksum": spec.AdmissionChecksum, "profile_name": spec.ProfileName, "slot": spec.Slot, "native_name": spec.NativeName, "bootstrap_sha256": spec.BootstrapSHA256, "expected_resource_id": spec.ExpectedResourceID, "expected_resource_created_at": spec.ExpectedResourceCreatedAt}
+	wire, err := json.Marshal(projection)
+	if err != nil {
+		t.Fatal(err)
+	}
+	inventory := capacity.RecoveryFixtureInventory(t, p, reg, time.Now().UTC())
+	server := inventory.Members[0].Server
+	server.Labels["yggdrasil.io/intent"] = grantID
+	plan := model.CapacityVMFleetPlan{DesiredSpec: spec, RequestSHA256: capacity.BusinessCreationSHA256(wire), Protected: 1 <= b.ProtectedSlots, Server: &server, ObservedAt: time.Now().UTC().Format(time.RFC3339Nano)}
+	g := model.CapacityMutationGrant{GrantID: grantID, BindingName: b.Name, IntegrationInstanceID: b.IntegrationInstanceID, ScopeChecksum: b.ScopeChecksum, ProfileName: b.ProfileName, Slot: 1, Capability: b.EnsureCapability, RequestSHA256: slot.DesiredSpecSHA256, State: "confirmed"}
+	receipt := model.CapacityMutationReceipt{Grant: g, Outcome: "accepted", TransportCompleted: true, ResourceID: reg.Result.Tuple.ResourceID, ResourceCreatedAt: reg.Result.Tuple.CreatedAt}
+	if err = capacity.GuestRetirementV2NativeOffPlanContent(p, b, plan, receipt); err != nil {
+		t.Logf("synthetic details provider=%s ensure=%s destroy=%s source_len=%d protected=%v protected_slots=%d spec_slot=%d bslot=%d server=%s name_matches=%v labels=%d digest=%s approved=%s tuple=%v", p.Profiles[0].Provider, b.EnsureCapability, b.DestroyCapability, len(b.OriginalProviderSourceCommit), plan.Protected, b.ProtectedSlots, spec.Slot, slot.Slot, server.Status, server.Name == slot.DesiredSpec.NativeName, len(server.Labels), plan.RequestSHA256, slot.DesiredSpecSHA256, server.CreatedAt == receipt.ResourceCreatedAt)
+		t.Fatal("declared synthetic native off plan", err)
+	}
+	return plan
 }

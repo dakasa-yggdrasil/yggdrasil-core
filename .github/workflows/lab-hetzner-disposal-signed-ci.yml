@@ -69,6 +69,7 @@ jobs:
           grep -F 'LAB_CORE_BOUND_DISPOSAL_CLAIMED_FENCE_AND_REFUSAL_ROLLBACK' "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
           grep -F 'LAB_SYNTHETIC_RETIREMENT_V2_MTLS_ONE_WRITE_LOST_NO_REPLAY_CLEANUP_HELD' "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
           grep -F 'LAB_SYNTHETIC_V2_FOUR_SIGNED_RECORDS_ORIGINAL_CALLER_NATIVE_READ_PREPARED' "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
+          grep -F 'LAB_SYNTHETIC_RETIREMENT_V2_OFF_CLEANUP_PENDING_NO_DELETE' "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
       - name: Retain original test output
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

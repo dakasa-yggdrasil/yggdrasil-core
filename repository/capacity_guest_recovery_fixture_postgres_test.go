@@ -445,7 +445,15 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 				}
 			}
 			if strings.HasPrefix(scenario, "lab_core_bound_disposal") {
-				write(`UPDATE public.capacity_mutation_grants SET state='confirmed',grant_record=$2::jsonb WHERE id=$1`, pre.OriginalCreateGrantID, `{"grant":{"capability":"ensure_server"},"binding":{"ensure_capability":"ensure_server"}}`)
+				grantWire := []byte(`{"grant":{"capability":"ensure_server"},"binding":{"ensure_capability":"ensure_server"}}`)
+				if scenario == "lab_core_bound_disposal_success" {
+					// Declared test-only provider receipt. It is not an actual
+					// adapter response or evidence of any production VM.
+					g := model.CapacityMutationGrant{GrantID: pre.OriginalCreateGrantID, BindingName: mutation.Name, IntegrationInstanceID: mutation.IntegrationInstanceID, ScopeChecksum: mutation.ScopeChecksum, ProfileName: mutation.ProfileName, Slot: 1, Capability: mutation.EnsureCapability, RequestSHA256: mutation.Slots[0].DesiredSpecSHA256, State: "confirmed"}
+					settlement := &model.CapacityMutationSettleRequest{GrantID: g.GrantID, AttemptID: witness.OriginalCreateAttemptID, RequestSHA256: g.RequestSHA256, Outcome: "accepted", TransportCompleted: true, ResourceID: reg.Result.Tuple.ResourceID, ResourceCreatedAt: reg.Result.Tuple.CreatedAt}
+					grantWire = raw(capacityMutationRecord{Grant: g, Binding: mutation, AttemptID: settlement.AttemptID, Settlement: settlement})
+				}
+				write(`UPDATE public.capacity_mutation_grants SET state='confirmed',grant_record=$2::jsonb WHERE id=$1`, pre.OriginalCreateGrantID, string(grantWire))
 			} else {
 				write(`UPDATE public.capacity_mutation_grants SET state='confirmed' WHERE id=$1`, pre.OriginalCreateGrantID)
 			}
@@ -677,6 +685,13 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 								t.Fatal("synthetic V2 chain did not prepare native read", challengeErr)
 							}
 							t.Log("LAB_SYNTHETIC_V2_FOUR_SIGNED_RECORDS_ORIGINAL_CALLER_NATIVE_READ_PREPARED")
+							plan := labSyntheticNativeOffPlan(t, p, mutation, reg, pre.OriginalCreateGrantID)
+							start := time.Now().UTC()
+							nativeReturn := GuestNativePoweroffReturnV2{Schema: "original_core_guest_native_poweroff_read_return_v2", Challenge: challenge, Status: "observed", Plan: &plan, StartedAtCore: start, OriginalReturnedAtCore: time.Now().UTC()}
+							if err = retirementStore.RecordGuestNativePoweroffV2(claimCtx, nativeReturn); err != nil {
+								t.Fatal("retain declared synthetic native off", err)
+							}
+							t.Log("LAB_SYNTHETIC_NATIVE_OFF_RECORDED_NO_PROVIDER_CALLED")
 						}
 					})
 					var callerReturns int
@@ -684,17 +699,23 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 						t.Fatal("synthetic caller evidence", err)
 					}
 					finishStore := store.WithOriginalGuestNotifyCanary(finishStep, capacity.CurrentGuestCoreSource())
-					if _, _, finishErr := finishStore.PrepareFailedInstalledGuestNativeCleanup(claimCtx, policy, claimed.Generation, claimed.FencingToken, claimed.LeaseOwner, request.Intent.RequestID); finishErr == nil {
-						t.Fatal("native cleanup admitted without V2 chain")
+					prepared, handled, finishErr := finishStore.PrepareFailedInstalledGuestNativeCleanup(claimCtx, policy, claimed.Generation, claimed.FencingToken, claimed.LeaseOwner, request.Intent.RequestID)
+					wantRows := 2
+					if scenario == "lab_core_bound_disposal_success" {
+						if finishErr != nil || !handled || prepared.Stage != "quiescent" {
+							t.Fatal("synthetic native cleanup preparation", finishErr)
+						}
+						wantRows = 3
+						t.Log("LAB_SYNTHETIC_RETIREMENT_V2_OFF_CLEANUP_PENDING_NO_DELETE")
+					} else {
+						if finishErr == nil {
+							t.Fatal("native cleanup admitted without V2 chain")
+						}
+						t.Log("LAB_SYNTHETIC_RETIREMENT_V2_MTLS_ONE_WRITE_LOST_NO_REPLAY_CLEANUP_HELD")
 					}
 					rows, readErr = (CapacityStore{DB: db}).ReadFailedInstalledGuestDisposal(ctx, pre.PreregistrationID)
-					if readErr != nil || len(rows) != 2 || !reflect.DeepEqual(beforeOriginals, originals()) {
-						t.Fatal("held V2 preflight mutated originals", readErr)
-					}
-					if scenario == "lab_core_bound_disposal_success" {
-						t.Log("LAB_SYNTHETIC_RETIREMENT_V2_POSITIVE_CHAIN_CLEANUP_HELD")
-					} else {
-						t.Log("LAB_SYNTHETIC_RETIREMENT_V2_MTLS_ONE_WRITE_LOST_NO_REPLAY_CLEANUP_HELD")
+					if readErr != nil || len(rows) != wantRows || !reflect.DeepEqual(beforeOriginals, originals()) {
+						t.Fatal("synthetic retirement changed originals", readErr)
 					}
 					t.Log("LAB_CORE_BOUND_DISPOSAL_REQUESTED_READBACK_NO_DUPLICATE")
 					return
