@@ -61,8 +61,8 @@ def native(argv,*,deadline,stdin=b'',env=None,cap=4*1024**2,custody=None,capture
     if capture is not None:capture.update(stdout=b'',stderr=b'',transport=dict(facts))
     require(time.monotonic()<deadline,'ORIGINAL_NATIVE_DEADLINE')
     require(callable(getattr(os,'pidfd_open',None)),'ORIGINAL_LINUX_PIDFD_REQUIRED_BEFORE_CHILD')
-    is_nft_apply=(bool(argv) and argv[0]=='/usr/sbin/nft' and '-f' in argv and '-c' not in argv)
-    require((writer_lease is not None)==is_nft_apply,'WRITER_LEASE_EXACTLY_FOR_NFT_APPLY')
+    is_nft=(bool(argv) and argv[0]=='/usr/sbin/nft')
+    require((writer_lease is not None)==is_nft,'WRITER_LEASE_EXACTLY_FOR_NFT_PROCESS')
     inherited=()
     if writer_lease is not None:
         import writer_lease_v3_DRAFT as lease_module

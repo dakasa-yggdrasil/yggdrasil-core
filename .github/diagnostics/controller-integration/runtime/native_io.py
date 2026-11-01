@@ -105,6 +105,18 @@ def command(argv, *, data=None, timeout=2, role):
                     'TYPED_NATIVE_WRITER_REQUIRED')
             lease=CI_DRAIN_COORDINATION.current_writer_lease()
             return _command(argv,data=data,timeout=timeout,role=role,writer_lease=lease)
+    if argv and argv[0]=='/usr/sbin/nft':
+        import drain_marker_v3_DRAFT as drain_v3
+        require(os.environ.get('CI_GUARDED_FIXTURE')=='1'
+                and type(CI_DRAIN_COORDINATION) is drain_v3.CoordinatorV3,
+                'ONLY_BOUND_CI_DRAIN_COORDINATOR')
+        # nft readers open NETLINK_NETFILTER too; a child must retain SH if
+        # the parent dies until the child's socket actually closes.
+        lease=CI_DRAIN_COORDINATION.acquire_writer_lease()
+        try:
+            return _command(argv,data=data,timeout=timeout,role=role,writer_lease=lease)
+        finally:
+            lease.close()
     return _command(argv,data=data,timeout=timeout,role=role)
 
 def _command(argv, *, data=None, timeout=2, role, writer_lease=None):

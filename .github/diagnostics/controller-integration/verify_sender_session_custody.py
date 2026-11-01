@@ -1,5 +1,5 @@
 """Real Linux netlink socket and writer lock lifetime; CI namespace only."""
-import fcntl,os,socket,subprocess,sys
+import fcntl,os,signal,socket,subprocess,sys,time
 from pathlib import Path
 root=Path(__file__).resolve().parent;sys.path.insert(0,str(root/'runtime'))
 import drain_marker_v3_DRAFT as marker,guarded_nl as nl,guarded_sender_session_DRAFT as sender
@@ -121,4 +121,41 @@ try:
 finally:
     if child.poll() is None:child.kill();child.wait(timeout=5)
     lease.close()
+# The exact native launcher passes SH into an actual nft child, including a
+# read/check invocation. Kill the launcher while nft waits on a FIFO, and
+# prove the child alone keeps recovery EX unavailable until its pidfd exits.
+import original_process as original
+fifo=root/'ci-native-nft-input.fifo'
+os.mkfifo(fifo,0o600)
+rfd,wfd=os.pipe();launcher=os.fork()
+if launcher==0:
+    os.close(rfd)
+    lease=coord.acquire_writer_lease()
+    real_popen=original.subprocess.Popen
+    def spawn_then_die(*args,**kwargs):
+        proc=real_popen(*args,**kwargs)
+        os.write(wfd,(str(proc.pid)+'\n').encode())
+        os._exit(0)
+    original.subprocess.Popen=spawn_then_die
+    original.native(['/usr/sbin/nft','-c','-f',str(fifo)],deadline=time.monotonic()+5,writer_lease=lease)
+    os._exit(91)
+os.close(wfd); nft_pidfd=None
+try:
+    raw=os.read(rfd,32); assert raw.endswith(b'\n')
+    nft_pid=int(raw); nft_pidfd=os.pidfd_open(nft_pid)
+    _,status=os.waitpid(launcher,0);assert os.WIFEXITED(status) and os.WEXITSTATUS(status)==0
+    assert not exclusive_possible()
+    signal.pidfd_send_signal(nft_pidfd,signal.SIGKILL)
+    import select
+    assert select.poll().poll(0)==[]
+    poll=select.poll();poll.register(nft_pidfd,select.POLLIN);assert poll.poll(5000)
+    assert exclusive_possible()
+    print('PASS nft check inherits SH after launcher death until its process exits',flush=True)
+finally:
+    os.close(rfd)
+    if nft_pidfd is not None:
+        try:signal.pidfd_send_signal(nft_pidfd,signal.SIGKILL)
+        except ProcessLookupError:pass
+        os.close(nft_pidfd)
+    fifo.unlink(missing_ok=True)
 print('BOUNDARY: cooperative writers and same-process aliases; independent SCM transfers require separate custody',flush=True)
