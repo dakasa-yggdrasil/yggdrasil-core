@@ -487,9 +487,8 @@ def revalidate_lab_guarded(pin):
                 and pin.session.active_receipt_sha256 == hashlib.sha256(nl.canon(pin.receipt)).hexdigest(),
                 'SAME_LIVE_EMITTER_RECEIPT_CUSTODY')
     nft.require(nl.startticks(pin.session.pid) == pin.session.ticks, 'SAME_GUARDIAN_PROCESS')
-    sock = socket.socket(socket.AF_NETLINK, socket.SOCK_RAW, 12)
-    sock.bind((0, 0));sock.settimeout(5)
-    try:
+    import fenced_netfilter_CI as fenced
+    with fenced.FencedSocket(pin.emitter.writer_lease.coord) as sock:
         first = nl.genid(sock)
         reply = nft.command(['/usr/sbin/nft', '-j', 'list', 'ruleset'], role='ruleset_structure')
         nft.require(reply.returncode == 0, 'NATIVE_CURRENT_STRUCTURAL_READ')
@@ -498,8 +497,6 @@ def revalidate_lab_guarded(pin):
             observed_chain_handle=pin.receipt['chain'], observed_rule_handles=tuple(pin.receipt['handles']))
         nft.ruleset_mark_preflight(rules, _original_json=original_json)
         nft.require(nl.genid(sock) == first == pin.receipt['after'], 'SAME_GUARDED_GENERATION')
-    finally:
-        sock.close()
     map_groups = {}
     for role, entry in zip(('inbound','reverse'), pin.receipt['programs']):
         program = nl.fdinfo(os.getpid(), entry['program_fd'])

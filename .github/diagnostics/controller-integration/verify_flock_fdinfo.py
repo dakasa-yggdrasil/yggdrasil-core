@@ -35,7 +35,8 @@ parentfd,path=tempfile.mkstemp(prefix='ci-flock-fdinfo-',dir='/run');os.fchmod(p
 fcntl.flock(parentfd,fcntl.LOCK_SH|fcntl.LOCK_NB);info=os.fstat(parentfd);expected=(info.st_dev,info.st_ino)
 a,b=socket.socketpair();pid=os.fork()
 if pid==0:
- a.close();fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW);reader=b.makefile('rb',buffering=0)
+ a.close();os.close(parentfd)  # do not inherit the other observer's SH OFD
+ fd=os.open(path,os.O_RDONLY|os.O_NOFOLLOW);reader=b.makefile('rb',buffering=0)
  try:
   while True:
    op=reader.readline().decode().strip()

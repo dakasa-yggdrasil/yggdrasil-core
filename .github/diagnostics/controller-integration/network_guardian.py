@@ -464,8 +464,9 @@ class Owner:
         node=next(x for x in ast.parse(source).body if isinstance(x,ast.FunctionDef) and x.name=='ruleset_mark_preflight')
         namespace={'TABLE':'dakasa_capacity_network','require':require,'json':json}
         exec(compile(ast.Module(body=[node],type_ignores=[]),'actual_runtime_mark_guard','exec'),namespace)
-        net=socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,12);net.bind((0,0));net.settimeout(5)
-        try:
+        import guarded_generation as generation
+        import fenced_netfilter_CI as fenced
+        with fenced.FencedSocket(generation.CI_DRAIN_COORDINATION) as net:
             first=nl.genid(net)
             require(first==verified.result['after'],'GUARDED_RECEIPT_GENERATION_CHANGED')
             def full_shape():
@@ -485,7 +486,6 @@ class Owner:
             require(envelope.get('grant_authority') is False and envelope.get('cross_process_effect_lease') is False,
                     'NO_GUARDED_EFFECT_AUTHORITY_FROM_KERNEL_OBSERVATION')
             return {'scope':'guarded50_non_authorizing_ci_lab','kernel':kernel,'live':envelope},time.monotonic()
-        finally:net.close()
 
     def transport(self):
         raw = self.call('full-filter', ['/usr/sbin/iptables-save', '-c', '-t', 'filter'])
