@@ -616,12 +616,39 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 					if err = db.QueryRow(`SELECT (SELECT count(*) FROM public.capacity_vm_retirement_original_returns WHERE intent_id=$1),(SELECT count(*) FROM public.capacity_guest_original_caller_attempts WHERE intent_id=$1)`, request.Intent.RequestID).Scan(&nonceRows, &callerRows); err != nil || nonceRows != 0 || callerRows != 0 {
 						t.Fatal("preflight unexpectedly sent Guest I/O", err)
 					}
-					labAcquireSyntheticV2Nonce(t, originalOwner, key, request, receipt.Enrollment)
-					if err = retirementStore.FinalizeGuestRetirementV2Nonce(originalOwner); err != nil {
-						t.Fatal("persist original synthetic nonce", err)
-					}
-					if err = db.QueryRow(`SELECT (SELECT count(*) FROM public.capacity_vm_retirement_original_returns WHERE intent_id=$1),(SELECT count(*) FROM public.capacity_guest_original_caller_attempts WHERE intent_id=$1)`, request.Intent.RequestID).Scan(&nonceRows, &callerRows); err != nil || nonceRows != 1 || callerRows != 0 {
-						t.Fatal("synthetic nonce journal or caller state", err)
+					labAcquireSyntheticV2Nonce(t, originalOwner, key, request, receipt.Enrollment, func(client *capacity.GuestOriginalHTTPClient) {
+						if err = retirementStore.FinalizeGuestRetirementV2Nonce(originalOwner); err != nil {
+							t.Fatal("persist original synthetic nonce", err)
+						}
+						if err = db.QueryRow(`SELECT (SELECT count(*) FROM public.capacity_vm_retirement_original_returns WHERE intent_id=$1),(SELECT count(*) FROM public.capacity_guest_original_caller_attempts WHERE intent_id=$1)`, request.Intent.RequestID).Scan(&nonceRows, &callerRows); err != nil || nonceRows != 1 || callerRows != 0 {
+							t.Fatal("synthetic nonce journal or caller state", err)
+						}
+						if err = retirementStore.ReserveGuestCallerV2(originalOwner); err != nil {
+							t.Fatal("reserve single synthetic caller", err)
+						}
+						finalRequest, _, _, exchangeErr := originalOwner.NonceExchange()
+						if exchangeErr != nil {
+							t.Fatal("original nonce exchange", exchangeErr)
+						}
+						body, marshalErr := json.Marshal(finalRequest)
+						if marshalErr != nil {
+							t.Fatal(marshalErr)
+						}
+						returned, callErr := client.Original(originalOwner.Context(), "POST", model.GuestRetirementV2WritePath, body)
+						if callErr == nil || !returned.DoFailed || returned.Status != 0 {
+							t.Fatal("synthetic lost return was treated as success", callErr)
+						}
+						retained := GuestOriginalCallerReturn{RequestID: finalRequest.Intent.RequestID, AttemptID: finalRequest.Intent.AttemptID, StartedAt: returned.StartedAt, DoStartedAt: returned.DoStartedAt, DriverReturnedAt: returned.DriverReturnedAt, PreflightFailed: returned.PreflightFailed, DoReturnedAt: returned.DoReturnedAt, ReadReturnedAt: returned.ReadReturnedAt, CloseReturnedAt: returned.CloseReturnedAt, OriginalDeadline: finalRequest.Intent.OriginalDeadline, ReceivedBodyBytes: returned.ReceivedBodyBytes, BodyPersisted: false, Status: returned.Status, ResponseSHA256: returned.ResponseSHA256, ResponseBodyScope: returned.ResponseBodyScope, RetainedPrefixBytes: returned.RetainedPrefixBytes, RetainedPrefixSHA256: returned.RetainedPrefixSHA256, DoFailed: returned.DoFailed, ReadFailed: returned.ReadFailed, CloseFailed: returned.CloseFailed, OriginalContextFailed: returned.OriginalContextFailed}
+						if err = retirementStore.RecordGuestCallerReturnV2(claimCtx, retained); err != nil {
+							t.Fatal("retain original uncertain caller return", err)
+						}
+						if err = retirementStore.ReserveGuestCallerV2(originalOwner); err == nil {
+							t.Fatal("duplicate synthetic write reserved")
+						}
+					})
+					var callerReturns int
+					if err = db.QueryRow(`SELECT (SELECT count(*) FROM public.capacity_guest_original_caller_attempts WHERE intent_id=$1),(SELECT count(*) FROM public.capacity_guest_original_caller_returns WHERE intent_id=$1)`, request.Intent.RequestID).Scan(&callerRows, &callerReturns); err != nil || callerRows != 1 || callerReturns != 1 {
+						t.Fatal("synthetic caller evidence", err)
 					}
 					finishStore := store.WithOriginalGuestNotifyCanary(finishStep, capacity.CurrentGuestCoreSource())
 					if _, _, finishErr := finishStore.PrepareFailedInstalledGuestNativeCleanup(claimCtx, policy, claimed.Generation, claimed.FencingToken, claimed.LeaseOwner, request.Intent.RequestID); finishErr == nil {
@@ -631,7 +658,7 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 					if readErr != nil || len(rows) != 2 || !reflect.DeepEqual(beforeOriginals, originals()) {
 						t.Fatal("held V2 preflight mutated originals", readErr)
 					}
-					t.Log("LAB_SYNTHETIC_RETIREMENT_V2_MTLS_NONCE_NO_WRITE_CLEANUP_HELD")
+					t.Log("LAB_SYNTHETIC_RETIREMENT_V2_MTLS_ONE_WRITE_LOST_NO_REPLAY_CLEANUP_HELD")
 					t.Log("LAB_CORE_BOUND_DISPOSAL_REQUESTED_READBACK_NO_DUPLICATE")
 					return
 				}

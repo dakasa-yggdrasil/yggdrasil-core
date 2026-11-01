@@ -25,7 +25,7 @@ import (
 
 // An isolated synthetic Guest returns one signed nonce over actual loopback
 // mTLS. It has no provider credentials, process custody or production authority.
-func labAcquireSyntheticV2Nonce(t *testing.T, owner *capacity.GuestRetirementV2OriginalOwner, coreKey ed25519.PrivateKey, request model.CapacityGuestRetirementRequestV2, enrollment model.CapacityGuestRetirementEnrollment) {
+func labAcquireSyntheticV2Nonce(t *testing.T, owner *capacity.GuestRetirementV2OriginalOwner, coreKey ed25519.PrivateKey, request model.CapacityGuestRetirementRequestV2, enrollment model.CapacityGuestRetirementEnrollment, afterNonce func(*capacity.GuestOriginalHTTPClient)) {
 	t.Helper()
 	caPub, caKey, err := ed25519.GenerateKey(rand.Reader)
 	if err != nil {
@@ -55,16 +55,40 @@ func labAcquireSyntheticV2Nonce(t *testing.T, owner *capacity.GuestRetirementV2O
 	}
 	clientCAs := x509.NewCertPool()
 	clientCAs.AddCert(ca)
-	var calls atomic.Int64
+	var calls, writes atomic.Int64
 	observer := ed25519.NewKeyFromSeed([]byte(strings.Repeat("o", 32)))
 	server := httptest.NewUnstartedServer(http.HandlerFunc(func(w http.ResponseWriter, r *http.Request) {
-		calls.Add(1)
-		if r.Method != http.MethodGet || r.URL.Path != model.GuestRetirementV2NoncePath || r.TLS == nil || len(r.TLS.VerifiedChains) != 1 {
-			http.Error(w, "synthetic endpoint or client identity", http.StatusBadRequest)
+		if r.TLS == nil || len(r.TLS.VerifiedChains) != 1 {
+			http.Error(w, "synthetic client identity", http.StatusBadRequest)
 			return
 		}
 		var got model.CapacityGuestRetirementRequestV2
-		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&got) != nil || capacity.GuestRetirementSHA(got.Intent) != capacity.GuestRetirementSHA(request.Intent) || capacity.ValidateGuestRetirementV2Preflight(got, enrollment, time.Now().UTC()) != nil {
+		if json.NewDecoder(http.MaxBytesReader(w, r.Body, 1<<20)).Decode(&got) != nil {
+			http.Error(w, "synthetic request", http.StatusBadRequest)
+			return
+		}
+		if r.Method == http.MethodPost && r.URL.Path == model.GuestRetirementV2WritePath {
+			writes.Add(1)
+			if got.Intent.RequestID != request.Intent.RequestID || got.Intent.AttemptID != request.Intent.AttemptID || capacity.ValidateGuestRetirementV2Request(got, enrollment, time.Now().UTC(), true) != nil {
+				http.Error(w, "synthetic retirement", http.StatusBadRequest)
+				return
+			}
+			// Only the synthetic endpoint receives this request. Drop the
+			// original response after full receipt; do not invent Guest effect.
+			hijacker, ok := w.(http.Hijacker)
+			if !ok {
+				http.Error(w, "synthetic transport", http.StatusInternalServerError)
+				return
+			}
+			conn, _, hijackErr := hijacker.Hijack()
+			if hijackErr != nil {
+				return
+			}
+			_ = conn.Close()
+			return
+		}
+		calls.Add(1)
+		if r.Method != http.MethodGet || r.URL.Path != model.GuestRetirementV2NoncePath || capacity.GuestRetirementSHA(got.Intent) != capacity.GuestRetirementSHA(request.Intent) || capacity.ValidateGuestRetirementV2Preflight(got, enrollment, time.Now().UTC()) != nil {
 			http.Error(w, "synthetic preflight", http.StatusBadRequest)
 			return
 		}
@@ -104,5 +128,9 @@ func labAcquireSyntheticV2Nonce(t *testing.T, owner *capacity.GuestRetirementV2O
 	}
 	if err = owner.AcquireNonce(client, coreKey, request, enrollment); err == nil || calls.Load() != 1 {
 		t.Fatal("nonce replay or duplicate HTTP")
+	}
+	afterNonce(client)
+	if calls.Load() != 1 || writes.Load() != 1 {
+		t.Fatal("synthetic HTTP replay", calls.Load(), writes.Load())
 	}
 }
