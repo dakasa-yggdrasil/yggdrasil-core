@@ -333,24 +333,35 @@ func (s *originalProductionGuestSupplier) Prepare(ctx context.Context, slot int)
 	}
 	return nil
 }
+
+type originalGuestEnsureResult struct {
+	Plan          model.CapacityVMFleetPlan `json:"plan"`
+	ActionID      string                    `json:"action_id"`
+	NextActionIDs []string                  `json:"next_action_ids"`
+}
+
 func (s *originalProductionGuestSupplier) Create(ctx context.Context, g model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration) (model.CapacityMutationProof, error) {
-	var returned struct {
-		Plan          model.CapacityVMFleetPlan `json:"plan"`
-		ActionID      string                    `json:"action_id"`
-		NextActionIDs []string                  `json:"next_action_ids"`
-	}
-	status, err := s.call(ctx, s.binding.EnsureCapability, map[string]any{"profile": s.binding.ProfileName, "slot": g.Slot, "dry_run": false, "grant_id": g.GrantID}, &returned)
+	return s.createOwned(ctx, g, pre, s.call, func(ctx context.Context, grantID string) (model.CapacityMutationReceipt, error) {
+		return s.store.NativeMutationReceipt(ctx, s.policy, s.binding, grantID)
+	}, s.Read)
+}
+
+// createOwned is the actual same-owner path. Production supplies guarded call,
+// settled receipt and Read above; injection here permits no-replay testing.
+func (s *originalProductionGuestSupplier) createOwned(ctx context.Context, g model.CapacityMutationGrant, pre model.CapacityGuestOriginalProvisioningPreregistration, call func(context.Context, string, map[string]any, any) (string, error), receiptRead func(context.Context, string) (model.CapacityMutationReceipt, error), read func(context.Context, model.CapacityMutationGrant) (model.CapacityMutationProof, error)) (model.CapacityMutationProof, error) {
+	var returned originalGuestEnsureResult
+	status, err := call(ctx, s.binding.EnsureCapability, map[string]any{"profile": s.binding.ProfileName, "slot": g.Slot, "dry_run": false, "grant_id": g.GrantID}, &returned)
 	if err != nil || status != "accepted" || returned.Plan.Server == nil || returned.Plan.RequestSHA256 != g.RequestSHA256 {
 		return model.CapacityMutationProof{}, errOriginalGuestStep
 	}
-	receipt, err := s.store.NativeMutationReceipt(ctx, s.policy, s.binding, g.GrantID)
+	receipt, err := receiptRead(ctx, g.GrantID)
 	if err != nil || !originalGuestReceiptActionJoin(receipt, returned.ActionID, returned.NextActionIDs) || receipt.ResourceID != returned.Plan.Server.ID || receipt.ResourceCreatedAt != returned.Plan.Server.CreatedAt {
 		return model.CapacityMutationProof{}, errOriginalGuestStep
 	}
 	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 	for {
-		proof, err := s.Read(ctx, g)
+		proof, err := read(ctx, g)
 		if !errors.Is(err, errOriginalGuestProviderPending) {
 			if err == nil {
 				s.createdGrant = g

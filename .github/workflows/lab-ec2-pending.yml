@@ -1,0 +1,24 @@
+name: LAB EC2 pending Core owner
+on:
+  push:
+    branches: ['diagnostic/lab-core-ec2-status-unpublished-20261101']
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  owner-pending:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Core owner and closed observation tests
+        run: go test -race -count=1 -timeout=180s ./controllers/message
+      - name: Native observation proof tests
+        run: go test -race -count=1 -timeout=120s ./internal/capacity -run 'TestVMAWSReadUsesExactExistingCapability|TestVMInventoryProofs'
+      - name: LAB compiled owner tests
+        run: go test -race -tags labqualification -count=1 -timeout=120s ./controllers/message -run '^TestOriginalAWS(Unpublished|TopologyPending|TopologyDeadlineBoundary|CreateOwner|GuestSupplier)'

@@ -188,6 +188,7 @@ type CapacityAWSInstanceLifecycle struct {
 	Schema         string    `json:"schema"`
 	RequestID      string    `json:"request_id"`
 	EC2State       string    `json:"ec2_state"`
+	PendingReasons []string  `json:"pending_reasons,omitempty"`
 	SystemStatus   string    `json:"system_status"`
 	InstanceStatus string    `json:"instance_status"`
 	ObservedAt     time.Time `json:"observed_at"`
