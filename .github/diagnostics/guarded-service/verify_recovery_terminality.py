@@ -6,6 +6,7 @@ import drain_marker_v3_DRAFT as v3
 import guarded_unit_identity as identity
 import recovery_terminality_DRAFT as terminal
 import deny_recovery_DRAFT as deny
+import recovery_authority_CI as authority
 import ci_reader_fixture,guarded_nl as nl,guarded_program_identity_DRAFT as program
 import guarded_sources as sources,native_io,native_structure,nft_owner as nft,recovery_read_DRAFT as recovery
 import transition_structure_DRAFT as transition
@@ -124,6 +125,32 @@ try:
         print('PASS BPF FDs received from authenticated sender remain readable after its death',flush=True)
         print('PASS same sample joins original 50 structure, rule FD references and four nft collections',flush=True)
         print('BOUNDARY ACK remains UNKNOWN; hidden BPF pointer and receipt trust remain unproven',flush=True)
+        # Real concurrent writer after permit mint, before attempted dispatch.
+        # The external table is isolated to this disposable network namespace.
+        race_records=[nl.make_program([('ef'*12,1)]),nl.make_program([('fa'*12,1)])]
+        try:
+            race_wire,_=authority.deny_wire(netlink,genid,race_records,reference)
+            race_dir=root/'race-deny';race_dir.mkdir(mode=0o700)
+            race_hash=hashlib.sha256(race_wire).hexdigest()
+            nl.durable(race_dir/'DENY-WIRE.bin',race_wire)
+            nl.durable(race_dir/'DENY-INTENT.json',nl.canon({'schema':'ci_distinct_deny_after_unknown_v1',
+                'genid':genid,'marker_sha256':marker.key[2],'old_unknown_wire_sha256':unknown['wire_sha256'],
+                'wire_sha256':race_hash,'programs':race_records,'no_retry':True,'production_authority':False}))
+            race_permit=authority.mint(anchor=marker,fence=fence,net=netlink,genid=genid,wire=race_wire,
+                deny_records=race_records,reference=reference,cache=cache,old_directory=root/'real-receipts',
+                sender_records=sender_records,old_records=records,original_pin=original,receipt=receipt,
+                coverage=coverage,deny_dir=race_dir)
+            subprocess.run(['/usr/sbin/nft','add','table','ip','ci_writer_race_before_send'],check=True,timeout=5)
+            try:
+                authority.consume(race_permit,race_wire,old_directory=root/'real-receipts',sender_records=sender_records)
+                raise AssertionError('stale genid permit accepted')
+            except authority.Held as error:assert str(error)=='CI_DENY_GENID_CHANGED',str(error)
+            assert coord.marker.exists() and not (root/'real-receipts'/'ACK-001.json').exists()
+            assert coverage.kernel_text(nl.cmd('/usr/sbin/nft','-a','list','table','inet','dakasa_capacity_network'))['all_four_backends_and_reverse_sources_positive']
+            genid=nl.genid(netlink);receipt=dict(receipt,after=genid)
+            print('PASS actual external genid change after mint blocks deny send; fresh observation required',flush=True)
+        finally:
+            for rec in race_records:os.close(rec['program_fd']);os.close(rec['map_fd'])
         import observations
         cold=observations.Cache()
         try:
