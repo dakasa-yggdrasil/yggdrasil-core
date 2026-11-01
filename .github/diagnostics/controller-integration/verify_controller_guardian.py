@@ -440,8 +440,7 @@ def main():
             holder_unit_file.unlink(missing_ok=True);subprocess.run(['/usr/bin/systemctl','daemon-reload'],check=False,timeout=10)
         if pre_guardian is not None:
             log=subprocess.run(['/usr/bin/journalctl','-u',pre_guardian.unit,'--no-pager','-n','100'],capture_output=True,text=True,timeout=10).stdout
-            for line in log.splitlines():
-                if 'CI_GUARDIAN_SENDER_ERROR' in line:print(line,flush=True)
+            for line in log.splitlines()[-30:]:print('CI_GUARDIAN_LOG '+line,flush=True)
             pre_guardian.close()
         if watch is not None:watch.close()
         if rotation_session is not None:rotation_session.close()
