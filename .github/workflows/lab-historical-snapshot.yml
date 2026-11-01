@@ -1,0 +1,19 @@
+name: LAB historical snapshot validation
+on:
+  push:
+    branches: ['diagnostic/lab-historical-snapshot-20261101']
+permissions:
+  contents: read
+jobs:
+  diagnostic-only:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: go.mod
+      - name: Exact historical identity and closed input negatives
+        run: go test -race -count=1 -timeout=120s ./internal/labhistorical ./cmd/lab-historical-snapshot
