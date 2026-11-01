@@ -18,7 +18,7 @@
     {
       "id": "transactional_event_emission_sites",
       "evidence": "docs/service-contract/source/event-emissions.json",
-      "sha256": "124aa65460ec8fd76b590b8b447343552ab566ee3e3b3e8a3af7680d85de300d"
+      "sha256": "e6ec782aa1939c3231a4d40dd67e35a883414f7eae8d35b79405f061a95b3b7e"
     },
     {
       "id": "embedded_event_schema_keys",
