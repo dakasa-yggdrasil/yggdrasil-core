@@ -30,20 +30,25 @@ class ExclusiveObservation:
         guard=self.independent_guard
         if guard is not None:
             require(type(guard) is IndependentWriterGuard and guard.live.marker is self.anchor
-                    and guard.pid==os.getpid() and guard.fd is not None,'SAME_INDEPENDENT_GUARD_REQUIRED')
-            # The sender and every descendant must be terminal before the
-            # Guardian closes the transferred sender OFD or upgrades its own.
+                    and guard.pid==os.getpid() and guard.fd is not None and guard.state=='ACTIVE',
+                    'SAME_ACTIVE_INDEPENDENT_GUARD_REQUIRED')
+            # Before releasing the sender OFD or attempting conversion, prove
+            # the original sender and every descendant are terminal.
             terminal.prove_terminal_for_marker(self.anchor)
-            os.close(guard.sender_fd);guard.sender_fd=None
-            fd=guard.fd
+            if guard.sender_fd is not None:os.close(guard.sender_fd);guard.sender_fd=None
+            fd=guard.fd;guard.state='PROMOTING'
         else:fd=os.open(coord.writer_lock,os.O_RDONLY|os.O_NOFOLLOW|os.O_CLOEXEC)
         try:
             self.fd=fd;self.writer_identity=tuple(recorded);self._same_inode()
-            # flock conversion is not guaranteed atomic. Failure is HOLD;
-            # success is followed by terminality/inode/genid revalidation.
-            fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
-            if guard is not None:guard.fd=None
+            # SH-to-EX conversion is NOT atomic. On failure the old SH may
+            # already be gone: permanently mark this guard LOST, never reuse.
+            try:fcntl.flock(fd,fcntl.LOCK_EX|fcntl.LOCK_NB)
+            except BaseException:
+                if guard is not None:guard.state='LOST'
+                raise
+            if guard is not None:guard.state='EXCLUSIVE_UNVERIFIED'
             self.verify()
+            if guard is not None:guard.state='EXCLUSIVE';guard.fd=None
             return self
         except BaseException:
             if guard is None:os.close(fd)
@@ -163,7 +168,7 @@ class IndependentWriterGuard:
         require(type(live) is LiveSenderCustody and live.pid==os.getpid() and live.anchor is not None,
                 'LIVE_AUTHENTICATED_SENDER_CUSTODY_REQUIRED')
         require(not terminal._pidfd_terminal(live.anchor.verified['pidfd']),'ORIGINAL_SENDER_MUST_BE_LIVE')
-        self.live=live;self.pid=os.getpid();self.fd=None;self.sender_fd=None;unclaimed=[]
+        self.live=live;self.pid=os.getpid();self.fd=None;self.sender_fd=None;self.state='INITIALIZING';unclaimed=[]
         try:
             live.channel.sendall(b'L')
             raw,anc,flags,_=live.channel.recvmsg(4096,socket.CMSG_SPACE(array.array('i').itemsize))
@@ -188,12 +193,15 @@ class IndependentWriterGuard:
             fcntl.flock(self.fd,fcntl.LOCK_SH|fcntl.LOCK_NB)
             require(not terminal._pidfd_terminal(live.anchor.verified['pidfd'])
                     and marker._marker_identity(live.coord)[:3]==live.marker.key,'SAME_LIVE_SENDER_MARKER_REQUIRED')
+            self.state='ACTIVE'
         except BaseException:
             for fd in unclaimed:os.close(fd)
             if self.fd is not None:os.close(self.fd);self.fd=None
             if self.sender_fd is not None:os.close(self.sender_fd);self.sender_fd=None
+            self.state='LOST'
             raise
     def close_after_terminal(self):
         terminal.prove_terminal_for_marker(self.live.marker)
         if self.sender_fd is not None:os.close(self.sender_fd);self.sender_fd=None
         if self.fd is not None:os.close(self.fd);self.fd=None
+        self.state='CLOSED'

@@ -75,6 +75,23 @@ try:
         except terminal.Held:
             if time.monotonic()>deadline:raise
             time.sleep(.05)
+    if os.environ.get('CI_CONVERSION_RACE_TEST')=='1':
+        contender=os.open(coord.writer_lock,os.O_RDONLY|os.O_NOFOLLOW)
+        try:
+            fcntl.flock(contender,fcntl.LOCK_SH|fcntl.LOCK_NB)
+            try:
+                with custody.ExclusiveObservation(marked,net,before,independent_guard=independent):
+                    raise AssertionError('contended EX promotion accepted')
+            except BlockingIOError:pass
+            assert independent.state=='LOST' and coord.marker_exists() and nl.genid(net)==before
+        finally:os.close(contender)
+        try:
+            with custody.ExclusiveObservation(marked,net,before,independent_guard=independent):
+                raise AssertionError('lost guard reused')
+        except custody.Held as error:assert str(error)=='SAME_ACTIVE_INDEPENDENT_GUARD_REQUIRED'
+        assert coord.marker_exists()
+        print('PASS contended SH-to-EX promotion marks guard LOST and cannot be reused; marker retained',flush=True)
+        sys.exit(0)
     with custody.ExclusiveObservation(marked,net,before,independent_guard=independent) as fence:
         observation=fence.verify();assert observation['cancel_authority'] is False
         no_send=live.inspect_no_recorded_send(fence)

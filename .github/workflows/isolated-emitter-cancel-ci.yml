@@ -69,3 +69,15 @@ jobs:
           sudo systemd-run --quiet --wait --pipe --unit="ci-netfilter-cap-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}" \
             --property=RuntimeMaxSec=30s --setenv=CI_HOST_NETNS="$(readlink /proc/self/ns/net)" \
             /usr/bin/unshare --net -- /usr/bin/python3 -B "$target/verify_netfilter_readonly_caps.py"
+
+      - name: Verify contended SH to EX conversion is permanently HOLD
+        run: |
+          set -eu
+          target="$(sudo mktemp -d /run/ci-conversion-race.XXXXXX)"
+          trap 'sudo rm -rf "$target"' EXIT
+          sudo cp -R .github/diagnostics/controller-integration/. "$target/"
+          sudo chmod -R go-w "$target"
+          unit="ci-conversion-race-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          sudo systemd-run --quiet --wait --pipe --unit="$unit" --property=RuntimeMaxSec=60s \
+            --setenv=CI_CUSTODIAN_UNIT="$unit.service" --setenv=CI_GUARDED_FIXTURE=1 --setenv=CI_CONVERSION_RACE_TEST=1 \
+            --setenv=CI_HOST_NETNS="$(readlink /proc/self/ns/net)" /usr/bin/unshare --net -- /usr/bin/python3 -B "$target/verify_isolated_sender.py"
