@@ -90,8 +90,11 @@ class SenderRegistryAuthority:
              and verified.anchor['pid']==self.sender==guard[3]
              and verified.anchor['start_ticks']==self.ticks==guard[4],
              'BOUND_ACTIVE_GUARDIAN_WRITER_CUSTODY_REQUIRED')
-        self._live();opened=os.fstat(guard[1]);named=os.lstat(coord.writer_lock)
-        need((opened.st_dev,opened.st_ino)==(named.st_dev,named.st_ino)==guard[2],
+        self._live();coord.base._private_directory()
+        opened=os.fstat(guard[1]);named=os.lstat(coord.writer_lock)
+        need(stat.S_ISREG(opened.st_mode) and opened.st_uid==0 and opened.st_nlink==1
+             and stat.S_IMODE(opened.st_mode)==0o600
+             and (opened.st_dev,opened.st_ino)==(named.st_dev,named.st_ino)==guard[2],
              'SAME_GUARDIAN_WRITER_CUSTODY_INODE_REQUIRED')
         return guard[2]
 

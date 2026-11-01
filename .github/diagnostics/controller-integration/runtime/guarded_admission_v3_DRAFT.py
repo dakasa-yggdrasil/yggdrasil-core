@@ -22,7 +22,7 @@ import fenced_probe_CI
 HERE=Path(__file__).resolve().parent
 ROOT=HERE.parent
 # Generated from this isolated package, not accepted from the RPC caller.
-CI_SOURCE_SHA256 = {'guarded_authority_ci.py': '357e34d5310410607d51076c9d07a9082b20a1265ae52501aafdf621374c8128',
+CI_SOURCE_SHA256 = {'guarded_authority_ci.py': 'a104ca187b99b0e6ec5963d26e7ae1ec51e0b5e0d57877f28920d50be7bb4569',
  'fenced_probe_CI.py': 'd8a1f3f035675d6cd4d04a0efb479a595bad69fe0fee9cedefec39ba7c339fae',
  'ci_holder_process.py': 'bbfe28072bbb6622d4dcd809725152707c8ab4b63085ca1b618839e823277e1a',
  'guarded_effect_lease_two_peers_DRAFT.py': 'dae81780de396d99d9d84b99b2c9fc75901b2fb8eee5e3a2be73a3b0a692157e',
@@ -98,6 +98,7 @@ def _kernel_genid(nl):
     finally:channel.close()
 
 def observe(verified,registry,coord,uid,address,*,authority):
+    coverage=_fixed_sources()
     import guarded_authority_ci as auth_module
     if (type(authority) is not auth_module.SenderRegistryAuthority
             or authority.registry is not registry or authority.verified is not verified):
@@ -111,7 +112,6 @@ def observe(verified,registry,coord,uid,address,*,authority):
     import guarded_refresh_registry_DRAFT as registry_module
     with coord.admission_or_other_writer() as state:
         coord.base.require_allowed(state,uid,address)
-    coverage=_fixed_sources()
     if (type(verified) is not verifier._VerifiedGeneration
             or verified.capability is not verifier._VERIFIED_CAPABILITY
             or verified.guardian_pid!=os.getpid()
