@@ -274,14 +274,17 @@ def main():
             begin=driver.begin_handoff
             def inject_after_prepare():
                 begin()
-                original_rows=nl.map_rows
-                def changed_rows(map_id):
-                    nl.map_rows=original_rows
-                    rows=original_rows(map_id)
-                    entries,cores,prom=endpoints(4)
-                    real_cache.publish_topology(([x for x in entries if x.kind in ('core','broker')],cores,prom,{},frozenset(),time.monotonic()+35))
-                    return rows
-                nl.map_rows=changed_rows
+                original_snapshot=real_cache.commit_snapshot
+                owner_thread=threading.get_ident();calls=[0]
+                def changed_snapshot():
+                    if threading.get_ident()==owner_thread:
+                        calls[0]+=1
+                        if calls[0]==2:
+                            entries,cores,prom=endpoints(4)
+                            real_cache.publish_topology(([x for x in entries if x.kind in ('core','broker')],cores,prom,{},frozenset(),time.monotonic()+35))
+                            real_cache.commit_snapshot=original_snapshot
+                    return original_snapshot()
+                real_cache.commit_snapshot=changed_snapshot
             driver.begin_handoff=inject_after_prepare
         running_reader=types.SimpleNamespace(cache=real_cache,stop=threading.Event(),shutdown_deadline=lambda:time.monotonic()+5)
         try:
