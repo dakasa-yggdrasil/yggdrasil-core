@@ -23,6 +23,6 @@ jobs:
             --boot-id fc2c144a-7ea5-45a9-b6e5-180bb07166f2 --output "$target/foreign"
           sudo chown -R root:root "$target"
           sudo python3 -B .github/diagnostics/lab-service/verify_bundle.py "$target/clean"
-          python3 -c 'import json,sys; a=json.load(open(sys.argv[1]));b=json.load(open(sys.argv[2]));assert a["nonce"]!=b["nonce"] and a["unit"]!=b["unit"] and a["slice"]!=b["slice"]' "$target/clean/bundle-summary.json" "$target/foreign/bundle-summary.json"
+          sudo python3 -c 'import json,sys; a=json.load(open(sys.argv[1]));b=json.load(open(sys.argv[2]));assert a["nonce"]!=b["nonce"] and a["unit"]!=b["unit"] and a["slice"]!=b["slice"]' "$target/clean/bundle-summary.json" "$target/foreign/bundle-summary.json"
           sudo python3 -B .github/diagnostics/lab-service/verify_auxiliary_cleanup.py "$target/clean" clean
           sudo python3 -B .github/diagnostics/lab-service/verify_auxiliary_cleanup.py "$target/foreign" foreign
