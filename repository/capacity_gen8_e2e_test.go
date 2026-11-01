@@ -74,7 +74,9 @@ func TestLABGen8SeedAndReadonlyObserver(t *testing.T) {
 			http.Error(w, "method", 405)
 			return
 		}
-		owner, e := f.store.BeginFailedOriginalDisposition(r.Context(), f.pre.OriginalCreateGrantID, f.jobID.String(), "collaborator:"+uuid.NewString())
+		ctx, cancel := context.WithTimeout(r.Context(), 5*time.Second)
+		defer cancel()
+		owner, e := f.store.BeginFailedOriginalDisposition(ctx, f.pre.OriginalCreateGrantID, f.jobID.String(), "collaborator:"+uuid.NewString())
 		if e != nil {
 			http.Error(w, "fixture candidate", 500)
 			return

@@ -20,6 +20,7 @@ import (
 	"net"
 	"net/http"
 	"net/http/httptest"
+	"net/url"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -56,7 +57,8 @@ func TestLABGen8AuthenticatedHTTPPostgresLostResponse(t *testing.T) {
 		t.Fatal("isolated schema82 required", err)
 	}
 	brokerURL := os.Getenv("LAB_GEN8_BROKER_URL")
-	if !strings.HasPrefix(brokerURL, "amqp://") || !strings.Contains(brokerURL, "@127.0.0.1:") {
+	brokerAddress, parseErr := url.Parse(brokerURL)
+	if parseErr != nil || brokerAddress.Scheme != "amqp" || brokerAddress.Hostname() != "127.0.0.1" || brokerAddress.Port() == "" || brokerAddress.User == nil {
 		t.Fatal("explicit loopback broker required")
 	}
 	broker, err := amqp.Dial(brokerURL)
@@ -174,7 +176,10 @@ func TestLABGen8AuthenticatedHTTPPostgresLostResponse(t *testing.T) {
 		}
 	}
 	if meta["grant"] == "" {
-		t.Fatal("seed failed to report")
+		_ = seed.Process.Kill()
+		_ = seed.Wait()
+		seedFinished = true
+		t.Fatalf("seed failed to report: %s", seedLog.String())
 	}
 	mu.Lock()
 	seedURL, seedToken = meta["seed_url"], meta["seed_token"]
@@ -193,6 +198,8 @@ func TestLABGen8AuthenticatedHTTPPostgresLostResponse(t *testing.T) {
 		resp, e := http.Post(seedURL+"/shutdown/"+seedToken, "application/json", nil)
 		if e == nil {
 			_ = resp.Body.Close()
+		} else {
+			_ = seed.Process.Kill()
 		}
 		if e = seed.Wait(); e != nil {
 			t.Errorf("seed exit: %v %s", e, seedLog.String())
@@ -258,6 +265,28 @@ func TestLABGen8AuthenticatedHTTPPostgresLostResponse(t *testing.T) {
 	coreServer.TLS = &tls.Config{Certificates: []tls.Certificate{cert}, MinVersion: tls.VersionTLS12}
 	coreServer.StartTLS()
 	defer coreServer.Close()
+	pool := x509.NewCertPool()
+	parsedCert, err := x509.ParseCertificate(der)
+	if err != nil {
+		t.Fatal(err)
+	}
+	pool.AddCert(parsedCert)
+	negativeTransport := &http.Transport{TLSClientConfig: &tls.Config{RootCAs: pool, ServerName: "yggdrasil.dakasa.me", MinVersion: tls.VersionTLS12}}
+	defer negativeTransport.CloseIdleConnections()
+	negativeClient := &http.Client{Transport: negativeTransport, Timeout: 5 * time.Second}
+	negativeReq, err := http.NewRequest(http.MethodGet, coreServer.URL+"/api/v1/ops/capacity/failed-original-dispositions/"+meta["grant"], nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	negativeReq.Header.Set("Authorization", "Bearer incorrect-lab-token")
+	negativeResp, err := negativeClient.Do(negativeReq)
+	if err != nil {
+		t.Fatal("negative authenticated TLS request", err)
+	}
+	_ = negativeResp.Body.Close()
+	if negativeResp.StatusCode != http.StatusUnauthorized {
+		t.Fatal("invalid bearer admitted", negativeResp.StatusCode)
+	}
 	certPath := filepath.Join(dir, "core-ca.pem")
 	if err = os.WriteFile(certPath, pem.EncodeToMemory(&pem.Block{Type: "CERTIFICATE", Bytes: der}), 0600); err != nil {
 		t.Fatal(err)
@@ -272,8 +301,12 @@ func TestLABGen8AuthenticatedHTTPPostgresLostResponse(t *testing.T) {
 		if e != nil {
 			mu.Lock()
 			code := status
+			observed := make(map[string]int, len(counts))
+			for k, v := range counts {
+				observed[k] = v
+			}
 			mu.Unlock()
-			t.Fatalf("courier %s: %v %s; handler=%d", action, e, out, code)
+			t.Fatalf("courier %s: %v %s; handler=%d fixture_routes=%v", action, e, out, code, observed)
 		}
 		t.Logf("courier %s: %s", action, strings.TrimSpace(string(out)))
 	}

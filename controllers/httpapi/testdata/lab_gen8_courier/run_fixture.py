@@ -36,7 +36,7 @@ class Operator:
   if kw['tries']!=1 or kw['allow_replay'] is not False:raise RuntimeError('RETRY_REFUSED')
   req=urllib.request.Request(self.SERVER+path,method=method,data=json.dumps(body).encode() if body is not None else None)
   req.add_header('Authorization','Bearer lab-synthetic-token')
-  return json.loads(self._ygg_open(req,2).read())
+  return json.loads(self._ygg_open(req,kw['timeout']).read())
 def summary(value,*_):
  if not isinstance(value,dict) or value.get('grant_id')!=grant or value.get('job_id')!=job or value.get('dispatch_state')!='failed_disposed' or value.get('original_finalization_ack_present') is not False or value.get('original_unknown_ACK_preserved') is not True or value.get('provider_mutations')!=0:raise RuntimeError('EXACT_LAB_SUMMARY_REQUIRED')
 c=types.SimpleNamespace(ROUTE='/api/v1/ops/capacity/failed-original-dispositions',NEW_CORE_SOURCE='lab-fixture',fresh=lambda v:None,utc=lambda s:datetime.datetime.fromisoformat(s.replace('Z','+00:00')),loads=json.loads,summary=summary)
