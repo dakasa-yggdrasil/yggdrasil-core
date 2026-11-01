@@ -4,7 +4,10 @@ from pathlib import Path
 import guarded_guardian47_ci as precommit,guarded_unit_identity as identity,guarded_nl as nl
 import native_structure as structure,nft_owner as nft,transition_structure_DRAFT as trans
 
-root=Path(__file__).resolve().parent;path=Path(sys.argv[1]);server=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
+root=Path(__file__).resolve().parent
+import drain_marker_v3_DRAFT as marker,guarded_generation as generation
+generation.CI_DRAIN_COORDINATION=marker.CoordinatorV3(root.parent/'drain-coordinator')
+path=Path(sys.argv[1]);server=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
 server.bind(str(path));server.listen(2);server.settimeout(15);channel=None;peer=None;watch_channel=None;worker=None;closing=threading.Event();errors=[]
 try:
     channel,_=server.accept()

@@ -1,5 +1,6 @@
 """LAB-only read-only probe; identical netlink schema without controller imports."""
-import base64,json,socket,struct
+import base64,fcntl,json,os,socket,stat,struct,sys
+from pathlib import Path
 
 def check(ok,reason):
  if not ok:raise RuntimeError(reason)
@@ -27,6 +28,13 @@ def rules(nl):
    check(typ==((10<<8)|6),'RULE_DUMP_TYPE');fields=attrs(data[4:]);v={k&0x3fff:x for k,x in fields}
    if v.get(1)==b'dakasa_capacity_network\0' and v.get(2)==b'admit_deadline\0':out.append(data)
  return out
+check(len(sys.argv)==3 and sys.argv[1]=='probe' and sys.argv[2].isdigit(),'EXACT_INHERITED_WRITER_FD_REQUIRED')
+writer_fd=int(sys.argv[2]);opened=os.fstat(writer_fd)
+lock=Path(__file__).resolve().parent.parent/'drain-coordinator'/'writer.lock';named=os.lstat(lock)
+check(stat.S_ISREG(opened.st_mode) and opened.st_uid==0 and stat.S_IMODE(opened.st_mode)==0o600
+      and opened.st_nlink==1 and (opened.st_dev,opened.st_ino)==(named.st_dev,named.st_ino),
+      'SAME_INHERITED_WRITER_INODE_REQUIRED')
+fcntl.flock(writer_fd,fcntl.LOCK_SH|fcntl.LOCK_NB)
 s=socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,12);s.bind((0,0));s.settimeout(5)
 try:
  first=genid(s);rows=rules(s);last=genid(s);check(first==last,'GENID_CHANGED_IN_PROBE')

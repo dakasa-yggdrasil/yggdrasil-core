@@ -6,6 +6,8 @@ provided by the fixture and the real Guardian recovery watch is not installed.
 import base64,hashlib,importlib.util,json,os,socket,sys,threading,time,types
 from pathlib import Path
 HERE=Path(__file__).resolve().parent;ROOT=HERE.parent
+import drain_marker_v3_DRAFT as marker,guarded_generation as generation
+generation.CI_DRAIN_COORDINATION=marker.CoordinatorV3(ROOT/'drain-coordinator')
 import ci_reader_fixture,guarded_nl as nl,guarded_sources,guarded_unit_identity as identity
 import guarded_verifier,guarded_live_observation,transition_structure_DRAFT as trans
 import native_io,native_structure,nft_owner as nft

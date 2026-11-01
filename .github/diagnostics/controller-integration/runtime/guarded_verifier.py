@@ -54,7 +54,8 @@ def verify_generation(*, result, anchor, plan, receipt_dir, reader_cache,
               'EXACT_LAB_PROBE_SOURCE')
         prefix = ['/usr/bin/nsenter', '--net=/proc/' + str(sender_pid) + '/ns/net']
         def crossprobe():
-            return json.loads(nl.cmd(*prefix, '/usr/bin/python3', '-I', '-B', str(probe), 'probe'))
+            import fenced_probe_CI
+            return json.loads(fenced_probe_CI.call(nl,prefix,probe))
         first_probe = crossprobe()
         check(first_probe['genid'] == result['after'] and len(first_probe['rules']) == 2,
               'INDEPENDENT_PRE_READ_GENERATION')

@@ -31,7 +31,8 @@ def observe(verified, *, verifier, sources, nl, coverage, probe_path, probe_sha2
     check(hashlib.sha256(source.read_bytes()).hexdigest() == probe_sha256, 'EXACT_GUARDIAN_PROBE_SOURCE')
     prefix = ['/usr/bin/nsenter', '--net=/proc/' + str(sender_pid) + '/ns/net']
     def probe():
-        return json.loads(nl.cmd(*prefix, '/usr/bin/python3', '-I', '-B', str(source), 'probe'))
+        import fenced_probe_CI
+        return json.loads(fenced_probe_CI.call(nl,prefix,source))
     first = probe()
     check(first['genid'] == result['after'] and len(first['rules']) == 2, 'ORIGINAL_GUARDED_GENERATION_REQUIRED')
     actual = {}

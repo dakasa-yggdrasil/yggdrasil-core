@@ -1,5 +1,5 @@
 """Real Linux netlink socket and writer lock lifetime; CI namespace only."""
-import fcntl,os,socket,sys
+import fcntl,os,socket,subprocess,sys
 from pathlib import Path
 root=Path(__file__).resolve().parent;sys.path.insert(0,str(root/'runtime'))
 import drain_marker_v3_DRAFT as marker,guarded_nl as nl,guarded_sender_session_DRAFT as sender
@@ -103,4 +103,22 @@ try:
     fenced._close=original_close;observer.close();assert exclusive_possible()
     print('PASS observer bind/close failures preserve socket-before-lease ordering',flush=True)
 finally:fenced._close=original_close;observer.close()
+# A privileged probe inherits the same SH open-file-description through
+# nsenter+exec. Closing the parent's copy cannot make EX available while the
+# child remains alive with its socket-capable privilege.
+lease=coord.acquire_writer_lease();fd=lease.validate()
+child_code=('import fcntl,os,sys; fd=int(sys.argv[1]); os.fstat(fd); '
+            'fcntl.flock(fd,fcntl.LOCK_SH|fcntl.LOCK_NB); '
+            'sys.stdout.write("READY\\n"); sys.stdout.flush(); sys.stdin.read(1)')
+child=subprocess.Popen(['/usr/bin/nsenter','--net=/proc/self/ns/net','--','/usr/bin/python3','-I','-B','-c',child_code,str(fd)],
+    stdin=subprocess.PIPE,stdout=subprocess.PIPE,stderr=subprocess.PIPE,pass_fds=(fd,))
+try:
+    assert child.stdout.readline()==b'READY\n'
+    lease.close();assert not exclusive_possible()
+    child.stdin.write(b'x');child.stdin.flush();assert child.wait(timeout=5)==0
+    assert exclusive_possible()
+    print('PASS inherited probe SH survives nsenter and exec until child exit',flush=True)
+finally:
+    if child.poll() is None:child.kill();child.wait(timeout=5)
+    lease.close()
 print('BOUNDARY: cooperative writers and same-process aliases; independent SCM transfers require separate custody',flush=True)

@@ -16,8 +16,13 @@ def bpf(op,raw):
     b=ctypes.create_string_buffer(raw+bytes(max(0,144-len(raw))));r=LIB.syscall(321,op,ctypes.byref(b),ctypes.sizeof(b))
     if r<0:raise OSError(ctypes.get_errno(),os.strerror(ctypes.get_errno()))
     return r
-def cmd(*argv,inp=None):
-    p=subprocess.run(argv,input=inp,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=10)
+def cmd(*argv,inp=None,writer_lease=None):
+    pass_fds=()
+    if writer_lease is not None:
+        import writer_lease_v3_DRAFT as lease_module
+        check(type(writer_lease) is lease_module.WriterLease,'EXACT_PROBE_WRITER_LEASE_REQUIRED')
+        pass_fds=(writer_lease.validate(),)
+    p=subprocess.run(argv,input=inp,stdout=subprocess.PIPE,stderr=subprocess.PIPE,timeout=10,pass_fds=pass_fds)
     if p.returncode:raise RuntimeError('COMMAND_FAILED:'+argv[0]+':'+p.stderr.decode(errors='replace')[:400])
     return p.stdout
 def packets(raw):

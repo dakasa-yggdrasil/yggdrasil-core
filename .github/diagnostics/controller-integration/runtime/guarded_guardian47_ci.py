@@ -71,7 +71,9 @@ def serve(channel,*,preparer_identity,sender_argv,source_sha256,probe_path,probe
              and all(type(request[k]) is str and re.fullmatch('[a-f0-9]{64}',request[k]) for k in ('nonce','origin_digest','origin_raw_sha256')),'EXACT_PRECOMMIT_REQUEST')
         prefix=['/usr/bin/nsenter','--net=/proc/%d/ns/net'%pid]
         identity._secure_source(Path(probe_path),probe_sha256)
-        def probe():return json.loads(nl.cmd(*prefix,'/usr/bin/python3','-I','-B',probe_path))['genid']
+        def probe():
+            import fenced_probe_CI
+            return json.loads(fenced_probe_CI.call(nl,prefix,probe_path))['genid']
         before=probe();raw=nl.cmd(*prefix,'/usr/sbin/nft','-j','list','ruleset');rows,rules,original=structure._objects(raw,_with_origin=True)
         pin=transition.OriginalPin(raw);nft.ruleset_mark_preflight(rules,_original_json=original)
         after=probe();live();identity._secure_source(Path(sender_script),source_sha256);identity._secure_source(Path(probe_path),probe_sha256)
