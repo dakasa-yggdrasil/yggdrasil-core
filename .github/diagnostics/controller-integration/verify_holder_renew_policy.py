@@ -84,7 +84,30 @@ for _ in range(a.MAX_OWNED_SENDER_PIDFDS):
 with a.lock:held(lambda:a._duplicate_sender_locked(read_fd))
 assert len(a._owned_sender_pidfds)==a.MAX_OWNED_SENDER_PIDFDS
 owners.clear();gc.collect();assert len(a._owned_sender_pidfds)==0
+with a.lock:owner=a._duplicate_sender_locked(read_fd)
+snapshot={'sender_pidfd':owner,'revoked':False};a.lease=snapshot;del owner
+a.peer_pidfd=os.dup(read_fd);a.preparer_pidfd=os.dup(read_fd)
+snapshot_fd=snapshot['sender_pidfd'].fd;a.close();os.fstat(snapshot_fd)
+del snapshot;gc.collect()
+try:os.fstat(snapshot_fd)
+except OSError:pass
+else:raise AssertionError('snapshot FD retained after last reader')
 os.close(read_fd);os.close(write_fd)
+
+# A timed-out join cannot close any authority FD, including when only the
+# monitor remains alive. Once both terminate, normal close is permitted.
+class CloseProbe:
+    def __init__(self):self.closed=False
+    def close(self):self.closed=True
+for stuck_monitor in (False,True):
+    stop=threading.Event();thread=threading.Thread(target=stop.wait);thread.start()
+    probe=CloseProbe();session=types.SimpleNamespace(monitor=thread if stuck_monitor else None)
+    try:ipc.close_after_workers(None if stuck_monitor else thread,session,probe,timeout=.01)
+    except RuntimeError:pass
+    else:raise AssertionError('live reader allowed authority close')
+    assert not probe.closed
+    stop.set();ipc.close_after_workers(None if stuck_monitor else thread,session,probe,timeout=3)
+    assert probe.closed
 
 class Expiring:
     def __init__(self):self.lock=threading.Lock();self.lease={'until':time.monotonic_ns()+100_000_000,'revoked':False}

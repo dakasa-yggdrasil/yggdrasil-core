@@ -302,8 +302,7 @@ def serve(channel,listener):
         if holder_channel is not None:
             try:holder_channel.shutdown(2)
             except OSError:pass
-        if holder_worker is not None:holder_worker.join(5)
-        if holder_authority is not None:holder_authority.close()
+        holder_ipc.close_after_workers(holder_worker,holder_session,holder_authority)
         if holder_identity is not None:os.close(holder_identity['pidfd'])
         if holder_channel is not None:holder_channel.close()
         if sender_channel is not None:

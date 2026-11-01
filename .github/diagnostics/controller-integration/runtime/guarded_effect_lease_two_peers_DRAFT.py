@@ -323,5 +323,5 @@ class EffectLeaseAuthority:
         self.revoke()
         os.close(self.peer_pidfd)
         if self.preparer_pidfd is not None:os.close(self.preparer_pidfd)
-        for fd in list(self._owned_sender_pidfds):fd.close()
-        self._owned_sender_pidfds.clear()
+        # A reader holding a lease snapshot keeps its generation FD alive.
+        with self.lock:self.lease=None

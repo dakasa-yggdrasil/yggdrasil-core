@@ -22,6 +22,7 @@ class HolderSession:
         self.lock = threading.Lock()
         self.stopped = threading.Event()
         self.last_id = 0
+        self.monitor = None
 
     def _send(self, value):
         encoded = (json.dumps(value,sort_keys=True,separators=(',',':'))+'\n').encode()
@@ -47,7 +48,7 @@ class HolderSession:
                     try:self.channel.shutdown(socket.SHUT_RD)
                     except OSError:pass
                     return
-        worker=threading.Thread(target=monitor);worker.start()
+        worker=threading.Thread(target=monitor);self.monitor=worker;worker.start()
         stream = self.channel.makefile('rb',buffering=0)
         try:
             while not self.stopped.is_set():
@@ -94,3 +95,15 @@ class HolderSession:
             worker.join(3)
             if worker.is_alive():raise RuntimeError('HOLDER_MONITOR_NOT_STOPPED')
             stream.close()
+
+
+def close_after_workers(worker, session, authority, timeout=5):
+    """Do not close peer, preparer or sender FDs while either reader lives."""
+    if worker is not None:
+        worker.join(timeout)
+        if worker.is_alive():raise RuntimeError('HOLDER_WORKER_NOT_TERMINAL')
+    monitor=None if session is None else session.monitor
+    if monitor is not None:
+        monitor.join(timeout)
+        if monitor.is_alive():raise RuntimeError('HOLDER_MONITOR_NOT_TERMINAL')
+    if authority is not None:authority.close()
