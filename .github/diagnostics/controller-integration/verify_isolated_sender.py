@@ -17,21 +17,15 @@ before=nl.genid(net)
 server=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM);server.bind(str(root/'sender.sock'));server.listen(2);server.settimeout(10)
 unit='ci-isolated-sender-'+uuid.uuid4().hex+'.service';unitfile=Path('/run/systemd/system')/unit
 script=(root/'runtime'/'ci_isolated_sender.py').resolve();argv=['/usr/bin/python3','-B',str(script),str(root)]
-channel=None;anchor=None;childfd=None;received=[]
+channel=None;anchor=None;childfd=None;received=[];live=None
 try:
     unitfile.write_text('[Service]\nType=simple\nKillMode=process\nRuntimeMaxSec=30s\nEnvironment=CI_GUARDED_FIXTURE=1\nEnvironment=CI_HOST_NETNS='+os.readlink('/proc/1/ns/net')+'\nEnvironment=CI_CONTROLLER_UNIT='+unit+'\nExecStart=/usr/bin/nsenter --net=/proc/'+str(os.getpid())+'/ns/net '+' '.join(argv)+'\n')
     run('/usr/bin/systemctl','daemon-reload');run('/usr/bin/systemctl','start',unit)
     channel,_=server.accept();props=identity._properties(unit)
-    anchor=terminal.capture_authenticated(channel,unit=unit,invocation=props['InvocationID'],argv=argv,source_sha256=hashlib.sha256(script.read_bytes()).hexdigest())
-    payload,anc,flags,_=channel.recvmsg(65536,socket.CMSG_SPACE(4*array.array('i').itemsize))
-    assert payload.endswith(b'\n') and not flags&(socket.MSG_CTRUNC|socket.MSG_TRUNC) and len(anc)==1
-    level,kind,data=anc[0];fds=array.array('i');fds.frombytes(data[:len(data)-len(data)%fds.itemsize]);received=list(fds)
-    assert level==socket.SOL_SOCKET and kind==socket.SCM_RIGHTS and len(received)==4
-    records=json.loads(payload)['records'];assert len(records)==2
-    marked=terminal.capture_marker(anchor,coord)
-    for rec,pf,mf in zip(records,received[::2],received[1::2]):
-        assert int(nl.fdinfo(os.getpid(),pf)['prog_id'])==rec['program_id']
-        assert int(nl.fdinfo(os.getpid(),mf)['map_id'])==rec['map_id']
+    live=custody.LiveSenderCustody(channel,unit=unit,invocation=props['InvocationID'],argv=argv,
+        source_sha256=hashlib.sha256(script.read_bytes()).hexdigest(),coord=coord,netlink=net)
+    anchor=live.anchor;marked=live.marker;records=live.records;received=live.fds
+    assert live.genid==before
     childfd=os.pidfd_open(int((root/'sender-child.pid').read_text()))
     run('/usr/bin/systemctl','kill','--kill-whom=main','--signal=KILL',unit)
     deadline=time.monotonic()+5
@@ -79,8 +73,8 @@ finally:
         try:signal.pidfd_send_signal(childfd,signal.SIGKILL)
         except ProcessLookupError:pass
         os.close(childfd)
-    for fd in received:os.close(fd)
-    if anchor is not None:anchor.close()
+    if live is not None:live.close()
+    elif anchor is not None:anchor.close()
     if channel is not None:channel.close()
     server.close();net.close()
     subprocess.run(['/usr/bin/systemctl','stop',unit],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=10)
