@@ -87,6 +87,31 @@ with tempfile.TemporaryDirectory(prefix='ci-effect-tamper-') as tmp:
         must_hold(lambda:admission.evaluate({},coord),'ADMISSION_INTENT_PENDING')
         must_hold(lambda:coord.cancel_admission(r),'ORIGINAL_UNUSED_ADMISSION_RESERVATION_REQUIRED')
 
+with tempfile.TemporaryDirectory(prefix='ci-effect-delay-') as tmp:
+    coord=v3.CoordinatorV3(Path(tmp)/'coord');coord.initialize_for_ci()
+    with mock.patch.dict(os.environ,{'CI_GUARDED_FIXTURE':'1'}):
+        r=coord.reserve_admission();entered=threading.Event();release=threading.Event();results=[]
+        original_fsync=os.fsync
+        def delayed_fsync(fd):
+            if not entered.is_set():
+                entered.set()
+                if not release.wait(5):raise RuntimeError('fixture release timed out')
+            return original_fsync(fd)
+        def run_effect():
+            try:results.append(coord.begin_admission_effect(r,'00000000-0000-0000-0000-000000000001','10.244.1.1',
+                anchor_uid='00000000-0000-0000-0000-000000000002',anchor_address='10.244.1.2'))
+            except BaseException as error:results.append(error)
+        with mock.patch.object(v3.os,'fsync',side_effect=delayed_fsync):
+            worker=threading.Thread(target=run_effect);worker.start()
+            try:
+                assert entered.wait(5)
+                with coord.base.locked(nonblocking=True):pass
+                must_hold(lambda:admission.evaluate({},coord),'ADMISSION_INTENT_PENDING')
+                must_hold(lambda:coord.cancel_admission(r),'ORIGINAL_UNUSED_ADMISSION_RESERVATION_REQUIRED')
+            finally:release.set();worker.join(5)
+        assert not worker.is_alive() and len(results)==1 and isinstance(results[0],dict) and not results[0]['delete_allowed']
+        print('PASS delayed effect fsync leaves locks available and admission held',flush=True)
+
 with tempfile.TemporaryDirectory(prefix='ci-anchor-delete-') as tmp:
     coord=v3.CoordinatorV3(Path(tmp)/'coord');coord.initialize_for_ci()
     with coord.admission_or_other_writer() as state:
