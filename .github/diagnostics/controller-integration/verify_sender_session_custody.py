@@ -124,6 +124,8 @@ finally:
 # The exact native launcher passes SH into an actual nft child, including a
 # read/check invocation. Kill the launcher while nft waits on a FIFO, and
 # prove the child alone keeps recovery EX unavailable until its pidfd exits.
+# The FIFO blocks before the nft read: this does not prove its netlink socket
+# was opened, only the actual nft process inherited and retained the lease.
 import original_process as original
 fifo=root/'ci-native-nft-input.fifo'
 os.mkfifo(fifo,0o600)
@@ -147,10 +149,9 @@ try:
     assert not exclusive_possible()
     signal.pidfd_send_signal(nft_pidfd,signal.SIGKILL)
     import select
-    assert select.poll().poll(0)==[]
     poll=select.poll();poll.register(nft_pidfd,select.POLLIN);assert poll.poll(5000)
     assert exclusive_possible()
-    print('PASS nft check inherits SH after launcher death until its process exits',flush=True)
+    print('PASS nft process inherits SH through launcher death while blocked before read (socket opening not proved)',flush=True)
 finally:
     os.close(rfd)
     if nft_pidfd is not None:
