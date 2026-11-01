@@ -5,11 +5,14 @@ package repository
 import (
 	"crypto/ed25519"
 	"fmt"
+	"os"
 	"strings"
+	"testing"
 	"time"
 
 	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/google/uuid"
 )
 
 // Declared test-only operations. These facts are deliberately synthetic and
@@ -76,4 +79,32 @@ func labSyntheticV2Chain(i model.CapacityGuestRetirementIntentV2, e model.Capaci
 	}
 	time.Sleep(time.Until(at(30)))
 	return observations, nil
+}
+
+// Offline unit check of declared fixture facts; it cannot reach a database or
+// a provider and is not Guest-quiescence evidence.
+func TestLABSyntheticV2ChainLocal(t *testing.T) {
+	if os.Getenv("CAPACITY_RECOVERY_FIXTURE_ONLY") != "true" {
+		t.Skip("explicit test fixture only")
+	}
+	_, _, reg, receipt, _ := capacity.RecoveryFixtureInstalled(t)
+	pre := reg.Result.ProductionClock.Authority.Preregistration
+	e := receipt.Enrollment
+	now := time.Now().UTC()
+	rawNonce := strings.Repeat("f", 64)
+	intent := model.CapacityGuestRetirementIntentV2{CapacityGuestRetirementIntent: model.CapacityGuestRetirementIntent{Schema: capacity.GuestRetirementV2IntentSchema, Purpose: capacity.GuestRetirementV2Purpose, BindingName: e.Statement.BindingName, Slot: pre.Slot, RequestID: uuid.NewString(), AttemptID: uuid.NewString(), NonceSHA256: capacity.BusinessCreationSHA256([]byte(rawNonce)), EnrollmentSHA256: capacity.GuestRetirementSHA(e), Tuple: e.Statement.Tuple, Actor: e.Statement.Actor, PolicyID: pre.PolicyID, PolicyChecksum: pre.PolicyChecksum, WorkflowID: pre.WorkflowID, WorkflowChecksum: pre.WorkflowChecksum, Generation: uint64(pre.Generation), Fence: uint64(pre.Fence), LeaseOwner: pre.LeaseOwner, WithdrawOperationID: uuid.NewString(), WithdrawRequestSHA256: strings.Repeat("d", 64), DrainOperationID: uuid.NewString(), DrainRequestSHA256: strings.Repeat("e", 64), IssuedAt: now, OriginalDeadline: now.Add(3 * time.Second)}, PreregistrationID: pre.PreregistrationID, ProfileManifestSHA256: pre.ProfileManifestSHA256, CoreSourceCommit: e.Statement.CoreAuthoritySourceCommit, Runtime: e.Statement.Runtime, Writers: append([]model.CapacityGuestRetirementWriter(nil), e.Statement.Writers...), WriterRosterSHA256: e.Statement.WriterRosterSHA256}
+	nonce := model.CapacityGuestRetirementNonceV2{Schema: capacity.GuestRetirementV2NonceSchema, RequestID: intent.RequestID, AttemptID: intent.AttemptID, PreflightSHA256: capacity.GuestRetirementV2PreflightSHA(intent), EnrollmentSHA256: capacity.GuestRetirementSHA(e), Actor: e.Statement.Actor, Runtime: e.Statement.Runtime, WriterRosterSHA256: e.Statement.WriterRosterSHA256, NonceSHA256: strings.Repeat("2", 64), IssuedMonotonicNS: 1000000000, ExpiresMonotonicNS: 4000000000}
+	observer := ed25519.NewKeyFromSeed([]byte(strings.Repeat("o", 32)))
+	nonce.Signature, _ = capacity.GuestLifecycleSignature(observer, nonce)
+	intent.GuestNonce = nonce
+	intent.GuestExpiresMonotonicNS = nonce.ExpiresMonotonicNS - 1000000
+	request := model.CapacityGuestRetirementRequestV2{Intent: intent, Nonce: rawNonce}
+	request.Signature, _ = capacity.GuestLifecycleSignature(ed25519.NewKeyFromSeed([]byte(strings.Repeat("c", 32))), intent)
+	if err := capacity.ValidateGuestRetirementV2Request(request, e, time.Now().UTC(), true); err != nil {
+		t.Fatal("synthetic request", err)
+	}
+	chain, err := labSyntheticV2Chain(intent, e)
+	if err != nil || len(chain) != 4 {
+		t.Fatal("synthetic chain", err)
+	}
 }
