@@ -246,14 +246,15 @@ def main():
             real_cache,guardian_cache=(r.cache for r in continuous_readers)
         import ci_guarded_driver
         external_stop=threading.Event() if os.environ.get('CI_CONTINUOUS_TEST')=='1' else None
-        timer=threading.Timer(42,external_stop.set) if external_stop is not None else None
+        timeout_test=os.environ.get('CI_ADMISSION_TIMEOUT_TEST')=='1'
+        timer=threading.Timer(42,external_stop.set) if external_stop is not None and not timeout_test else None
         if timer is not None:timer.daemon=True;timer.start()
         admission_release=None;admission_errors=[]
         if external_stop is not None:
             reservation=drain.reserve_admission()
             def release_admission():
                 try:
-                    time.sleep(.6);drain.cancel_admission(reservation)
+                    time.sleep(3 if timeout_test else .6);drain.cancel_admission(reservation)
                 except BaseException as error:admission_errors.append(error)
             admission_release=threading.Thread(target=release_admission,daemon=True);admission_release.start()
         driver=ci_guarded_driver.GuardedDriver(watch=watch,sender=rotation_session,emitter=first,
@@ -261,7 +262,17 @@ def main():
                   max_commits=(12 if external_stop is not None else (4 if os.environ.get('CI_HOLDER_TEST')=='1' else 2)),
                   stop_signal=external_stop)
         running_reader=types.SimpleNamespace(cache=real_cache,stop=threading.Event(),shutdown_deadline=lambda:time.monotonic()+5)
-        loop_result=controller.serve_hot(running_reader,active_pin,apply=lambda:True,guarded_driver=driver)
+        try:
+            loop_result=controller.serve_hot(running_reader,active_pin,apply=lambda:True,guarded_driver=driver)
+        except drain_v3.AdmissionPendingBeforeIntent:
+            if not timeout_test:raise
+            assert driver.pre_intent_waits>0 and not drain.marker_exists() and first.counter==1
+            assert not (receipts/'INTENT-002.json').exists()
+            admission_release.join(5)
+            assert not admission_release.is_alive() and not admission_errors
+            print('PASS admission hold timed out before marker or prepare; no sender replay or new wire',flush=True)
+            return
+        if timeout_test:raise AssertionError('ADMISSION_HOLD_MUST_TIMEOUT')
         if timer is not None:
             timer.cancel();timer.join();admission_release.join(2)
             assert not admission_release.is_alive() and not admission_errors and driver.pre_intent_waits>0
