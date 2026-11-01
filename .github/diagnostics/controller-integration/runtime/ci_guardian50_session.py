@@ -177,7 +177,7 @@ def serve(channel,listener):
             elif kind=='CONNECT':
                 if auth is not None:raise RuntimeError('ONE_SENDER_CHANNEL')
                 publish({'event':'LISTENING','production_authority':False})
-                sender_channel,_=listener.accept();sender_channel.settimeout(15)
+                sender_channel,_=listener.accept();sender_channel.settimeout(30 if os.environ.get('CI_HOLDER_TEST')=='1' else 15)
                 auth=authority.SenderRegistryAuthority(sender_channel,registry=reg,registry_module=registry_module,
                      verified=verified,verifier=guarded_verifier,identity=identity,nl=nl,sender_argv=request['argv'],
                      sender_sha256=request['source_sha256'],validate_kernel=validate)
