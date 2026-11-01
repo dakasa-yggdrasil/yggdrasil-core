@@ -59,6 +59,9 @@ jobs:
           go test -p=1 -race -buildvcs=true -count=1 ./repository -run '^Test(CapacityExecutorPower.*|FallbackCoreBoundDisposalHoldsPower|FallbackReadNewWireHoldsMutatingDecoder)$'
           go build -buildvcs=true -o "$RUNNER_TEMP/fallback-core" .
           go build -buildvcs=true -o "$RUNNER_TEMP/fallback-goose" ./scripts/goose
+          go version -m "$RUNNER_TEMP/fallback-core" > "$RUNNER_TEMP/fallback-build-info"
+          grep -F "vcs.revision=$GITHUB_SHA" "$RUNNER_TEMP/fallback-build-info"
+          grep -F 'vcs.modified=false' "$RUNNER_TEMP/fallback-build-info"
           # Overlay only the test harness; the source worktree stays clean so
           # its actual VCS authority check remains in force.
           python3 - "$source/repository/capacity_guest_recovery_fixture_postgres_test.go" "$RUNNER_TEMP" <<'PY'
@@ -106,10 +109,13 @@ jobs:
           export LAB_FALLBACK_GOOSE="$RUNNER_TEMP/fallback-goose"
           cd "$RUNNER_TEMP/source-32fe-fixture"
           go test -p=1 -race -buildvcs=true -tags recoveryfixture -c -o "$LAB_HETZNER_HTTP_TEST_BIN" ./controllers/httpapi
+          go version -m "$LAB_HETZNER_HTTP_TEST_BIN" > "$RUNNER_TEMP/source-handler-build-info"
+          grep -F 'vcs.revision=721f1c968cf666938c7ec594fc5692ab3d2c5d86' "$RUNNER_TEMP/source-handler-build-info"
+          grep -F 'vcs.modified=false' "$RUNNER_TEMP/source-handler-build-info"
           go test -overlay="$RUNNER_TEMP/fallback-fixture-overlay.json" -p=1 -race -buildvcs=true -tags recoveryfixture -count=1 -timeout=5m -v ./repository -run '^TestRecoveryFixtureResumeSetupPostgres/lab_core_bound_disposal_complete$' 2>&1 | tee "$RUNNER_TEMP/fallback-evidence/fixture.log"
           grep -F 'LAB_CORE2DE_REAL_PG_WIRE_UNKNOWN_FIELDS_HELD_CONTROL_PASS' "$RUNNER_TEMP/fallback-evidence/fixture.log"
           grep -F 'LAB_FALLBACK_PG82_COMPAT_READ_MUTATION_REPLACEMENT_HELD_ORIGINAL_UNCHANGED' "$RUNNER_TEMP/fallback-evidence/fixture.log"
-          grep -F 'LAB_FALLBACK_PG82_CROSS_SCOPE_ISSUE_COMPENSATION_DISPATCH_POWER_ISSUE_REDEEM_HELD' "$RUNNER_TEMP/fallback-evidence/fixture.log"
+          grep -F 'LAB_FALLBACK_PG82_CROSS_SCOPE_MUTATION_COMPENSATION_NATIVE_DISPATCH_POWER_HELD' "$RUNNER_TEMP/fallback-evidence/fixture.log"
           grep -F 'LAB_FALLBACK_ACTUAL_GOOSE_AND_CORE_SCHEMA82_HEALTH_SHUTDOWN_PASS' "$RUNNER_TEMP/fallback-evidence/fixture.log"
       - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
         if: always()
