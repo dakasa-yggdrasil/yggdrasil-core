@@ -101,6 +101,7 @@ func originalDispositionPGFixturePrepared(t *testing.T, db *sql.DB, prepare func
 	}
 	record, pre, guest, policy, intent = f.record, f.pre, f.binding, f.policy, f.intent
 	g, binding = record.Grant, record.Binding
+	instance = g.IntegrationInstanceID
 	policyRaw = policy.Spec
 	if err := json.Unmarshal(policyRaw, &p); err != nil {
 		t.Fatal("declared prepared policy", err)

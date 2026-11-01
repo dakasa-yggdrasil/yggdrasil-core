@@ -322,6 +322,10 @@ func enrolledFailedAWSContractBoundaries(t *testing.T, db *sql.DB) {
 // witness/enrollment insertion; no immutable historical row is rewritten.
 // As in the H SQL fixture, signature-shaped enrollment is not Go authority.
 func enrolledFailedAWSOriginalPGFixture(t *testing.T, db *sql.DB, auxiliaryFlag, auxiliaryResources string) failedOriginalFixture {
+	return enrolledFailedAWSOriginalPGFixturePrepared(t, db, auxiliaryFlag, auxiliaryResources, nil)
+}
+
+func enrolledFailedAWSOriginalPGFixturePrepared(t *testing.T, db *sql.DB, auxiliaryFlag, auxiliaryResources string, prepare func(*dispositionPGFixture)) failedOriginalFixture {
 	t.Helper()
 	f := originalDispositionPGFixturePrepared(t, db, func(f *dispositionPGFixture) {
 		f.record.EventProvider = "aws"
@@ -349,6 +353,9 @@ func enrolledFailedAWSOriginalPGFixture(t *testing.T, db *sql.DB, auxiliaryFlag,
 		p.Profiles[0].Provider = "aws"
 		policyRaw, _ := json.Marshal(p)
 		f.policy.Spec = policyRaw
+		if prepare != nil {
+			prepare(f)
+		}
 		grantRaw, _ := json.Marshal(f.record)
 		// Preserve the real owning c34 omitempty shape in the default positive.
 		// Compatibility/forgery cases change only the DECLARED SQL representation
