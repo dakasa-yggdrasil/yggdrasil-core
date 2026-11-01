@@ -1,14 +1,16 @@
 """Disposable CI systemd sender, staging only; does not grant cancellation."""
-import array,json,os,socket,sys,time,types
+import array,hashlib,json,os,socket,sys,time,types
 from pathlib import Path
 import drain_marker_v3_DRAFT as marker,guarded_generation as generation,guarded_nl as nl
-import transition_structure_DRAFT as transition
+import native_structure,transition_structure_DRAFT as transition
 
 root=Path(sys.argv[1]);channel=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM)
 channel.connect(str(root/'sender.sock'))
 coord=marker.CoordinatorV3(root/'coord');generation.CI_DRAIN_COORDINATION=coord
 receipts=root/'sender-receipts';receipts.mkdir(mode=0o700)
 raw=nl.cmd('/usr/sbin/nft','-a','-j','list','ruleset')
+objects,_=native_structure._objects(raw)
+native_structure.COMPILED_NATIVE_AST_SHA256=hashlib.sha256(native_structure._structure(objects,keep_handles=False)).hexdigest()
 emitter=generation.GenerationEmitter(initial_raw=raw,transition=transition,receipt_dir=receipts,host_netns=os.environ['CI_HOST_NETNS'])
 core=types.SimpleNamespace(native_identity='old/container',address='10.244.1.2',expires=time.monotonic()+60)
 intent=coord.begin(core,[core],writer_lease=emitter.writer_lease)

@@ -65,6 +65,7 @@ try:
         print('PASS external genid drift observed under EX and marker remains',flush=True)
     print('BOUNDARY: no Guardian prepare/permit, no marker removal or restart authority',flush=True)
 finally:
+    subprocess.run(['/usr/bin/journalctl','-u',unit,'--no-pager','-n','40'],check=False,timeout=10)
     if childfd is not None:
         try:signal.pidfd_send_signal(childfd,signal.SIGKILL)
         except ProcessLookupError:pass
