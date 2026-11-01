@@ -231,17 +231,19 @@ def main():
             return
         import ci_guarded_driver
         driver=ci_guarded_driver.GuardedDriver(watch=watch,sender=rotation_session,emitter=first,
-                  positive_session=positive_guardian,ceiling_cache=guardian_cache,endpoints=endpoints,max_commits=2)
+                  positive_session=positive_guardian,ceiling_cache=guardian_cache,endpoints=endpoints,
+                  max_commits=4 if os.environ.get('CI_HOLDER_TEST')=='1' else 2)
         running_reader=types.SimpleNamespace(cache=real_cache,stop=threading.Event(),shutdown_deadline=lambda:time.monotonic()+5)
         loop_result=controller.serve_hot(running_reader,active_pin,apply=lambda:True,guarded_driver=driver)
-        assert len(driver.results)==2 and loop_result['sequence']==3 and loop_result['production_authority'] is False
+        assert len(driver.results)==(4 if os.environ.get('CI_HOLDER_TEST')=='1' else 2)
+        assert loop_result['sequence']==len(driver.results)+1 and loop_result['production_authority'] is False
         next_pin=loop_result['pin'];result=driver.results[-1]['native_result']
         while True:
             sample=watch.read()
             if sample['event']=='SAMPLE':
                 assert sample['generation']==result['after'];break
             if sample['event']!='FINISHED':raise RuntimeError('UNEXPECTED_POST_ROTATION_EVENT:'+str(sample))
-        print('PASS serve_hot and separate Guardian verified two guarded rotations: '+json.dumps([
+        print('PASS serve_hot and separate Guardian verified guarded rotations: '+json.dumps([
             {key:round(row[key],2) for key in ('lease_age_ms','dispatch_ms','watch_pause_ms')} for row in driver.results]),flush=True)
         if os.environ.get('CI_HOLDER_TEST')=='1':
             coverage_state=watch.control('COVERAGE','COVERAGE')

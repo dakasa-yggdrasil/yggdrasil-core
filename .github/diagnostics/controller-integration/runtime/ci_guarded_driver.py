@@ -8,7 +8,7 @@ import guarded_preparation,guarded_sources,native_structure
 
 class GuardedDriver:
     def __init__(self,*,watch,sender,emitter,positive_session,ceiling_cache,endpoints,max_commits):
-        if os.environ.get('CI_GUARDED_FIXTURE')!='1' or type(max_commits) is not int or not 1<=max_commits<=3:
+        if os.environ.get('CI_GUARDED_FIXTURE')!='1' or type(max_commits) is not int or not 1<=max_commits<=(4 if os.environ.get('CI_HOLDER_TEST')=='1' else 3):
             raise RuntimeError('ONLY_BOUNDED_PRIVATE_CI_DRIVER')
         self.watch,self.sender,self.emitter,self.positive_session=watch,sender,emitter,positive_session
         self.ceiling_cache,self.endpoints,self.max_commits=ceiling_cache,endpoints,max_commits
@@ -50,7 +50,7 @@ class GuardedDriver:
         if len(self.results)>=self.max_commits:
             reader.stop.set();return
         # Holder qualification uses the original 15-second chain, never a fake clock.
-        if os.environ.get('CI_HOLDER_TEST')=='1' and len(self.results)==1:time.sleep(15.1)
+        if os.environ.get('CI_HOLDER_TEST')=='1':time.sleep(5.2)
         # One synthetic new topology observation wakes the real cache loop.
         entries,cores,prom=self.endpoints(4)
         reader.cache.publish_topology(([x for x in entries if x.kind in ('core','broker')],cores,prom,{},frozenset(),time.monotonic()+25))
