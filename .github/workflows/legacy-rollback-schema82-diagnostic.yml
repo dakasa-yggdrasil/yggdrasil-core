@@ -1,0 +1,76 @@
+name: Legacy Core schema82 rollback diagnostic
+on:
+  push:
+    branches: ['diagnostic/failed-original-rollback-20261101']
+permissions:
+  contents: read
+jobs:
+  two-source-postgres:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 20
+    env:
+      GOMAXPROCS: '2'
+      GOMEMLIMIT: 2GiB
+      CGO_ENABLED: '1'
+      GOFLAGS: -mod=readonly
+      PG_IMAGE: postgres:17@sha256:2d2b8998d31037bf721cfdf764d76ba74171b4fab3431b7f72c27c56ddbdf9e3
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Build legacy Core from exact commit and run two-source fixture
+        shell: bash
+        run: |
+          set -Eeuo pipefail
+          umask 077
+          pg_root="$(mktemp -d "$RUNNER_TEMP/rollback82-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}-XXXXXX")"
+          legacy="$pg_root/legacy"
+          git worktree add --detach "$legacy" 2de33bbca46000d86a6dc0d5162383a6128e3517
+          test "$(git -C "$legacy" rev-parse HEAD)" = 2de33bbca46000d86a6dc0d5162383a6128e3517
+          mkdir -p "$legacy/scripts/rollbackprobe"
+          cp scripts/rollbackprobe/main.go "$legacy/scripts/rollbackprobe/main.go"
+          (cd "$legacy" && go build -o "$pg_root/legacy-probe" ./scripts/rollbackprobe)
+          export LEGACY_CORE_ROLLBACK_PROBE="$pg_root/legacy-probe" REQUIRE_LEGACY_CORE_ROLLBACK_PROBE=true
+          export PGDATA="$pg_root/data" PGHOST="$pg_root/socket" PGUSER=postgres
+          export PGDATABASE="original_disposition_test_${GITHUB_RUN_ID}_${GITHUB_RUN_ATTEMPT}"
+          export ORIGINAL_CREATE_DISPOSITION_PG_DSN="host=$PGHOST dbname=$PGDATABASE user=$PGUSER sslmode=disable"
+          export REQUIRE_ORIGINAL_CREATE_DISPOSITION_PG=true
+          mkdir -m 0700 "$PGDATA" "$PGHOST"
+          cid=''
+          cleanup() {
+            rc=$?
+            trap - EXIT INT TERM
+            if [[ -n "$cid" ]]; then
+              docker stop --time 30 "$cid" >/dev/null || rc=1
+              status="$(docker wait "$cid")" || rc=1
+              [[ "$status" = 0 ]] || rc=1
+              docker rm --volumes "$cid" >/dev/null || rc=1
+            fi
+            exit "$rc"
+          }
+          trap cleanup EXIT
+          trap 'exit 130' INT
+          trap 'exit 143' TERM
+          docker pull "$PG_IMAGE" >/dev/null
+          cid="$(docker create --network none --user "$(id -u):$(id -g)" --cap-drop ALL --security-opt no-new-privileges --memory 512m --cpus 2 --pids-limit 128 --mount "type=bind,src=$pg_root,dst=$pg_root" --mount "type=bind,src=$PGHOST,dst=/var/run/postgresql" -e PGDATA -e PGHOST -e PGUSER -e PGDATABASE -e POSTGRES_USER=postgres -e "POSTGRES_DB=$PGDATABASE" -e POSTGRES_HOST_AUTH_METHOD=trust "$PG_IMAGE" postgres -k "$PGHOST" -c listen_addresses= -c unix_socket_permissions=0700 -c max_connections=20 -c shared_buffers=32MB -c max_worker_processes=0 -c max_parallel_workers=0)"
+          [[ "$cid" =~ ^[0-9a-f]{64}$ ]]
+          docker start "$cid" >/dev/null
+          ready=0
+          for n in $(seq 1 60); do
+            if docker exec "$cid" pg_isready -h "$PGHOST" -U "$PGUSER" -d "$PGDATABASE" >/dev/null 2>&1; then ready=1; break; fi
+            sleep 1
+          done
+          test "$ready" = 1
+          chmod 0700 "$PGHOST"
+          cat > "$pg_root/migrate.go" <<'GO_MIGRATE'
+          package main
+          import("context";"database/sql";"fmt";"os";"strings";"time";_ "github.com/lib/pq";"github.com/pressly/goose/v3")
+          func main(){ctx,stop:=context.WithTimeout(context.Background(),90*time.Second);defer stop();db,e:=sql.Open("postgres",os.Getenv("ORIGINAL_CREATE_DISPOSITION_PG_DSN"));if e!=nil{panic(e)};defer db.Close();var name,listen string;var socket bool;var version int;e=db.QueryRowContext(ctx,`SELECT current_database(),inet_server_addr() IS NULL,current_setting('listen_addresses'),current_setting('server_version_num')::int`).Scan(&name,&socket,&listen,&version);if e!=nil||name!=os.Getenv("PGDATABASE")||!strings.HasPrefix(name,"original_disposition_test_")||!socket||listen!=""||version/10000!=17{panic("foreign DB")};if e=goose.SetDialect("postgres");e!=nil{panic(e)};if e=goose.UpContext(ctx,db,"db/migrations");e!=nil{panic(e)};v,e:=goose.GetDBVersionContext(ctx,db);if e!=nil||v!=82{panic("schema82 missing")};fmt.Println("DISPOSABLE_SCHEMA82_READY")}
+          GO_MIGRATE
+          go run "$pg_root/migrate.go"
+          go test -p=1 -race -count=1 -timeout=4m ./repository -run '^TestFailedOriginalAWSLegacyRollbackCompatibility$' -v
