@@ -233,7 +233,7 @@ func recoveryTestIsolatedDB(t *testing.T) *sql.DB {
 }
 
 func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
-	for _, scenario := range []string{"bad_return_digest", "bad_run_lineage", "foreign_executor", "different_resource", "valid", "lab_core_bound_disposal", "lab_core_bound_disposal_success"} {
+	for _, scenario := range []string{"bad_return_digest", "bad_run_lineage", "foreign_executor", "different_resource", "valid", "lab_core_bound_disposal", "lab_core_bound_disposal_success", "lab_core_bound_disposal_complete"} {
 		t.Run(scenario, func(t *testing.T) {
 			db := recoveryTestIsolatedDB(t)
 			db.SetMaxOpenConns(1)
@@ -249,6 +249,10 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 			defer tx.Rollback()
 			p, b, reg, receipt, confirmation := capacity.RecoveryFixtureInstalled(t)
 			p.ExecutionEnabled = true
+			var completeRecord capacityMutationRecord
+			if scenario == "lab_core_bound_disposal_complete" {
+				reg, receipt, confirmation, completeRecord = labCompleteSyntheticInstalled(t, p, b, reg)
+			}
 			pre := reg.Result.ProductionClock.Authority.Preregistration
 			if !capacity.GuestBindingAuthorityCurrent(p, b) {
 				if err := capacity.RegisterRecoveryFixtureApproval(p, b, "hetzner"); err != nil {
@@ -446,7 +450,9 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 			}
 			if strings.HasPrefix(scenario, "lab_core_bound_disposal") {
 				grantWire := []byte(`{"grant":{"capability":"ensure_server"},"binding":{"ensure_capability":"ensure_server"}}`)
-				if scenario == "lab_core_bound_disposal_success" {
+				if scenario == "lab_core_bound_disposal_complete" {
+					grantWire = raw(completeRecord)
+				} else if scenario == "lab_core_bound_disposal_success" {
 					// Declared test-only provider receipt. It is not an actual
 					// adapter response or evidence of any production VM.
 					g := model.CapacityMutationGrant{GrantID: pre.OriginalCreateGrantID, BindingName: mutation.Name, IntegrationInstanceID: mutation.IntegrationInstanceID, ScopeChecksum: mutation.ScopeChecksum, ProfileName: mutation.ProfileName, Slot: 1, Capability: mutation.EnsureCapability, RequestSHA256: mutation.Slots[0].DesiredSpecSHA256, State: "confirmed"}
@@ -568,7 +574,7 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 						}
 						t.Log("LAB_SIGNED_HTTP_COMMITTED_PG_WIRE_CORE2DE_HELD_UNCHANGED")
 					}
-					claimRun, _ := start(2)
+					claimRun, claimJob := start(2)
 					store.OriginalRunID, store.ExecutorID = claimRun.RunID, pre.ExecutorID
 					claimCtx, stopClaim := context.WithTimeout(context.Background(), 10*time.Second)
 					defer stopClaim()
@@ -624,7 +630,7 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 					if err = db.QueryRow(`SELECT (SELECT count(*) FROM public.capacity_vm_retirement_original_returns WHERE intent_id=$1),(SELECT count(*) FROM public.capacity_guest_original_caller_attempts WHERE intent_id=$1)`, request.Intent.RequestID).Scan(&nonceRows, &callerRows); err != nil || nonceRows != 0 || callerRows != 0 {
 						t.Fatal("preflight unexpectedly sent Guest I/O", err)
 					}
-					labAcquireSyntheticV2Nonce(t, originalOwner, key, request, receipt.Enrollment, scenario == "lab_core_bound_disposal_success", func(client *capacity.GuestOriginalHTTPClient, observations <-chan []model.CapacityGuestRetirementObservationV2) {
+					labAcquireSyntheticV2Nonce(t, originalOwner, key, request, receipt.Enrollment, scenario != "lab_core_bound_disposal", func(client *capacity.GuestOriginalHTTPClient, observations <-chan []model.CapacityGuestRetirementObservationV2) {
 						if err = retirementStore.FinalizeGuestRetirementV2Nonce(originalOwner); err != nil {
 							t.Fatal("persist original synthetic nonce", err)
 						}
@@ -644,7 +650,7 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 						}
 						returned, callErr := client.Original(originalOwner.Context(), "POST", model.GuestRetirementV2WritePath, body)
 						var observed model.CapacityGuestRetirementObservationV2
-						positive := scenario == "lab_core_bound_disposal_success"
+						positive := scenario != "lab_core_bound_disposal"
 						if positive {
 							if callErr != nil || capacity.GuestOriginalHTTPDecode(returned, &observed) != nil || capacity.GuestRetirementV2Observation(observed, receipt.Enrollment, finalRequest.Intent, false) != nil {
 								t.Fatal("synthetic full Guest return", callErr, string(returned.Body))
@@ -701,12 +707,51 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 					finishStore := store.WithOriginalGuestNotifyCanary(finishStep, capacity.CurrentGuestCoreSource())
 					prepared, handled, finishErr := finishStore.PrepareFailedInstalledGuestNativeCleanup(claimCtx, policy, claimed.Generation, claimed.FencingToken, claimed.LeaseOwner, request.Intent.RequestID)
 					wantRows := 2
-					if scenario == "lab_core_bound_disposal_success" {
+					if scenario != "lab_core_bound_disposal" {
 						if finishErr != nil || !handled || prepared.Stage != "quiescent" {
 							t.Fatal("synthetic native cleanup preparation", finishErr)
 						}
 						wantRows = 3
-						if _, beginErr := (CapacityStore{DB: db}).BeginFailedInstalledGuestAbsence(claimCtx, pre.PreregistrationID, prepared.ID, "synthetic-test"); beginErr == nil {
+						if err = FinishCapacityDispatch(ctx, db, claimJob, capacityDispatchResponse(claimRun, "succeeded"), time.Now().UTC(), nil); err != nil {
+							t.Fatal("synthetic claim workflow terminal ACK", err)
+						}
+						// First prove the shared V2/zero-active-job checks, so a
+						// later incomplete-receipt refusal is not merely an active job.
+						checkTx, checkErr := db.BeginTx(ctx, nil)
+						if checkErr != nil {
+							t.Fatal(checkErr)
+						}
+						_, _, _, checkErr = loadFailedInstalledQuiescentTx(ctx, checkTx, pre.PreregistrationID, prepared.ID, "")
+						_ = checkTx.Rollback()
+						if checkErr != nil {
+							t.Fatal("synthetic quiescent and terminal job guard", checkErr)
+						}
+						absenceOwner, beginErr := (CapacityStore{DB: db}).BeginFailedInstalledGuestAbsence(claimCtx, pre.PreregistrationID, prepared.ID, "synthetic-test")
+						if scenario == "lab_core_bound_disposal_complete" {
+							if beginErr != nil {
+								t.Fatal("synthetic complete original lineage", beginErr)
+							}
+							observed := labSyntheticNativeAbsence(t, absenceOwner.Candidate())
+							terminal, terminalErr := (CapacityStore{DB: db}).CompleteFailedInstalledGuestAbsence(claimCtx, absenceOwner, observed)
+							if terminalErr != nil || terminal.Stage != "terminal" {
+								t.Fatal("synthetic terminal disposition", terminalErr)
+							}
+							if _, duplicateErr := (CapacityStore{DB: db}).CompleteFailedInstalledGuestAbsence(claimCtx, absenceOwner, observed); duplicateErr == nil {
+								t.Fatal("synthetic terminal owner replay")
+							}
+							terminalTx, terminalErr := db.BeginTx(ctx, nil)
+							if terminalErr != nil {
+								t.Fatal(terminalErr)
+							}
+							terminalIntent, terminalErr := loadCapacityIntent(ctx, terminalTx, policy.Metadata.Namespace, p, false)
+							terminalSlot, exists, slotErr := loadMutationSlot(ctx, terminalTx, policy.Metadata.Namespace, p, mutation, 1)
+							_ = terminalTx.Rollback()
+							if terminalErr != nil || slotErr != nil || !exists || !terminalSlot.Tombstone || terminalSlot.ResourceID != "" || terminalIntent.Phase != "disposed_failed_installed" || terminalIntent.Decision.Units != 0 {
+								t.Fatal("synthetic terminal CAS and tombstone", terminalErr, slotErr)
+							}
+							wantRows = 4
+							t.Log("LAB_SYNTHETIC_HETZNER_TERMINAL_ABSENCE_NO_PROVIDER_NO_REPLAY")
+						} else if beginErr == nil {
 							t.Fatal("declared incomplete create receipt gained terminal authority")
 						}
 						t.Log("LAB_SYNTHETIC_RETIREMENT_V2_OFF_CLEANUP_PENDING_NO_DELETE")
