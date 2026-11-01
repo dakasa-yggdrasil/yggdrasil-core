@@ -116,16 +116,36 @@ func (f *fixture) finishOriginalCanonicalSourceCompensation(ctx context.Context,
 			return q.ErrOriginalUnknown
 		}
 	}
+	// Isolated diagnostic branch only: bound the call without exposing keys,
+	// request bodies, error messages, or changing the five-second probe deadline.
+	mark := func(stage string) {
+		if f.request.NativeCase != "canonical_compensation_unprotected_failed_create" {
+			return
+		}
+		diag, cancel := context.WithTimeout(context.WithoutCancel(ctx), time.Second)
+		defer cancel()
+		_, _ = q.Publish(diag, filepath.Join(f.private, "diagnostic-compensation-"+stage+".json"), struct {
+			Schema              string    `json:"schema"`
+			Stage               string    `json:"stage"`
+			ObservedAt          time.Time `json:"observed_at"`
+			ProductionQualified bool      `json:"production_qualified"`
+		}{"diagnostic_compensation_boundary_v1", stage, time.Now().UTC(), false})
+	}
+	mark("before_baseline_client")
 	baselineClient, err := f.sourceClient(baselineSlot)
 	if err != nil {
 		return err
 	}
 	defer baselineClient.Close()
+	mark("before_baseline_probe")
 	useful, err := f.realm.DiagnosticProbe(ctx, store, baselineSlot, f.corePrivate, baselineClient)
 	if err != nil {
+		mark("baseline_probe_error")
 		return err
 	}
+	mark("baseline_probe_succeeded")
 	if err = f.prepareOriginalRecoveryCleanupChronology(ctx, p, pre); err != nil {
+		mark("recovery_chronology_error")
 		return err
 	}
 	recoverySession, err := f.realm.OriginalRecoveryCleanupSession(ctx)
