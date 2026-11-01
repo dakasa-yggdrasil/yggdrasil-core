@@ -340,5 +340,10 @@ func TestLABGen8AuthenticatedHTTPPostgresLostResponse(t *testing.T) {
 	if counts["observer POST /rpc/execute"] != 1 || counts["observer POST /rpc/describe"] < 2 || counts["creator POST /rpc/describe"] < 1 {
 		t.Fatal("expected read-only observer lifecycle", counts)
 	}
+	for route, count := range counts {
+		if count > 0 && route != "observer POST /rpc/execute" && route != "observer POST /rpc/describe" && route != "creator POST /rpc/describe" && route != "creator GET /" {
+			t.Fatal("unexpected adapter route", route, counts)
+		}
+	}
 	t.Logf("LAB_AUTHENTICATED_CORE_SCHEMA82_GET_RECONCILED post=%d observer_execute=%d production_authority=false", posts, counts["observer POST /rpc/execute"])
 }
