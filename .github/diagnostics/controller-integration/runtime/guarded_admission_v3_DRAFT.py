@@ -27,7 +27,7 @@ CI_SOURCE_SHA256 = {'guarded_authority_ci.py': 'd91bb30ea7f809fb37e9624614b0f8e5
  'ci_holder_process.py': 'bbfe28072bbb6622d4dcd809725152707c8ab4b63085ca1b618839e823277e1a',
  'guarded_effect_lease_two_peers_DRAFT.py': 'dae81780de396d99d9d84b99b2c9fc75901b2fb8eee5e3a2be73a3b0a692157e',
  'guarded_lease_ipc_DRAFT.py': '2ccff8cb8dd953d94784913aeb54a2aee3bc593a8eea4b1237a924cd6f977361',
- 'ci_guardian50_session.py': '2f2b31f12944eb50191dba9cb2fbad39de2d5269fe9c13c469005c629e8b725f',
+ 'ci_guardian50_session.py': 'a9cc284bc79bee2950dea4e96dcc5db6f1f1dfabc04f232c4f1dca5dfc22b647',
  'ci_nl_probe.py': 'cffaff1f55d16e32ee7acedbcc52a3ad3702d44fa8693b8e4461d01d5b1ef65a',
  'coverage.py': 'c13f2d872f4b9a8351aa2999372ac8f2fd472f4db8e015810b3d6c28a596bfa6',
  'drain_marker_v3_DRAFT.py': '205d4749d3adb62a59a0ffb71ef87e953bf27ea1225da6e2e166e2ec0cdf703c',

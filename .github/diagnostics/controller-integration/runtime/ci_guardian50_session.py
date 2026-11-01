@@ -95,6 +95,12 @@ def serve(channel,listener):
             except BaseException as error:
                 sender_errors.append(type(error).__name__+':'+str(error))
                 print('CI_GUARDIAN_SENDER_ERROR '+type(error).__name__+':'+str(error),flush=True)
+            finally:
+                # Losing the sender channel with a bound marker is ambiguous,
+                # including when the remote prepare/ACK outcome is unknown.
+                # Never clear that marker or retry the previous permit here.
+                if auth is not None and auth.prepared_marker is not None:
+                    reg.holder_lost()
         def deny_after_reader_failure():
             nonlocal denier,deny_recovery
             # CI-only: interrupt the independently owned Reader after a

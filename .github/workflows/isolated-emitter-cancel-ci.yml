@@ -72,6 +72,19 @@ jobs:
             --setenv=CI_GUARDIAN_DEATH_AFTER_PREPARE=1 --setenv=CI_HOST_NETNS="$(readlink /proc/self/ns/net)" \
             /usr/bin/unshare --net -- /usr/bin/python3 -B "$target/verify_controller_guardian.py"
 
+      - name: Hold UNKNOWN when sender channel closes after prepare
+        run: |
+          set -eu
+          target="$(sudo mktemp -d /run/ci-sender-close.XXXXXX)"
+          trap 'sudo rm -rf "$target"' EXIT
+          sudo cp -R .github/diagnostics/controller-integration/. "$target/"
+          sudo chmod -R go-w "$target"
+          unit="ci-sender-close-${GITHUB_RUN_ID}-${GITHUB_RUN_ATTEMPT}"
+          sudo systemd-run --quiet --wait --pipe --unit="$unit" --property=RuntimeMaxSec=60s \
+            --setenv=CI_CONTROLLER_UNIT="$unit.service" --setenv=CI_GUARDED_FIXTURE=1 \
+            --setenv=CI_SENDER_CLOSE_AFTER_PREPARE=1 --setenv=CI_HOST_NETNS="$(readlink /proc/self/ns/net)" \
+            /usr/bin/unshare --net -- /usr/bin/python3 -B "$target/verify_controller_guardian.py"
+
       - name: Measure netfilter read without CAP_NET_ADMIN
         run: |
           set -eu

@@ -234,7 +234,8 @@ def main():
         assert not witness['kubernetes_proven'] and not witness['production_authority']
         assert watch.admission_witness('wrong-uid',initial_core.address)['event']=='ADMISSION_HOLD'
         print('PASS Guardian-owned 50-object BPF/rules/Reader read-only witness and UID mismatch HOLD',flush=True)
-        if os.environ.get('CI_GUARDIAN_DEATH_AFTER_PREPARE')=='1':
+        if (os.environ.get('CI_GUARDIAN_DEATH_AFTER_PREPARE')=='1'
+                or os.environ.get('CI_SENDER_CLOSE_AFTER_PREPARE')=='1'):
             ceiling=guarded_sources.build_expected(guardian_cache)
             rotation_prepared=guarded_preparation.PreparedGeneration(real_cache,
                          deadline_ceilings={role:ceiling[role] for role in ('inbound','reverse')})
@@ -246,16 +247,28 @@ def main():
             permit=rotation_session.prepare(descriptors,until_ns=time.monotonic_ns()+3_000_000_000)
             assert watch.pending_state()['possible_send']
             before=nl.genid(first.nl)
-            signal.pidfd_send_signal(watch.peer['pidfd'],signal.SIGKILL)
-            poll=select.poll();poll.register(watch.peer['pidfd'],select.POLLIN)
-            assert poll.poll(5000),'guardian failed to die'
-            try:rotation_session.consume(permit,descriptors);raise AssertionError('dead guardian permit accepted')
-            except direct_sender.Held as error:assert str(error)=='GUARDIAN_PROCESS_TERMINATED'
-            try:rotation_session.consume(permit,descriptors);raise AssertionError('permit replayed')
-            except direct_sender.Held as error:assert str(error)=='EXACT_SINGLE_USE_SENDER_PERMIT_REQUIRED'
+            if os.environ.get('CI_SENDER_CLOSE_AFTER_PREPARE')=='1':
+                saved_session=rotation_session;rotation_session.close();rotation_session=None
+                limit=time.monotonic()+5;pending=None
+                while time.monotonic()<limit:
+                    pending=watch.pending_state()
+                    if pending['state']=='UNKNOWN':break
+                    time.sleep(.02)
+                assert pending['state']=='UNKNOWN' and pending['pending'] and pending['possible_send'],pending
+                try:saved_session.consume(permit,descriptors);raise AssertionError('closed sender permit accepted')
+                except direct_sender.Held as error:assert str(error)=='EXACT_SINGLE_USE_SENDER_PERMIT_REQUIRED'
+                print('PASS sender channel loss after prepare moves Guardian to UNKNOWN, no replay',flush=True)
+            else:
+                signal.pidfd_send_signal(watch.peer['pidfd'],signal.SIGKILL)
+                poll=select.poll();poll.register(watch.peer['pidfd'],select.POLLIN)
+                assert poll.poll(5000),'guardian failed to die'
+                try:rotation_session.consume(permit,descriptors);raise AssertionError('dead guardian permit accepted')
+                except direct_sender.Held as error:assert str(error)=='GUARDIAN_PROCESS_TERMINATED'
+                try:rotation_session.consume(permit,descriptors);raise AssertionError('permit replayed')
+                except direct_sender.Held as error:assert str(error)=='EXACT_SINGLE_USE_SENDER_PERMIT_REQUIRED'
+                print('PASS Guardian death after both prepares preserves marker and refuses permit/replay',flush=True)
             assert drain_v3._marker_identity(drain)[:3]==marker_before and nl.genid(first.nl)==before
             assert first.counter==1 and not (receipts/'INTENT-002.json').exists()
-            print('PASS Guardian death after both prepares preserves marker and refuses permit/replay',flush=True)
             print('BOUNDARY: preserved marker is UNKNOWN, not proof of no send or restart authority',flush=True)
             verified.close()
             return
