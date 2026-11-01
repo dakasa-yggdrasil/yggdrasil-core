@@ -27,7 +27,7 @@ class GuardedDriver:
             raise RuntimeError('ONLY_BOUNDED_PRIVATE_CI_DRIVER')
         self.watch,self.sender,self.emitter,self.positive_session=watch,sender,emitter,positive_session
         self.ceiling_cache,self.endpoints,self.max_commits=ceiling_cache,endpoints,max_commits
-        self.results=[];self.pause_started=None;self.stop_signal=stop_signal;self.previous_expiry_ns=None
+        self.results=[];self.pause_started=None;self.stop_signal=stop_signal;self.previous_expiry_ns=None;self.pre_intent_waits=0
     def prepare(self,cache):
         rows,_,_,_,_=cache.snapshot()
         core=next(x for x in rows if x.kind=='core')

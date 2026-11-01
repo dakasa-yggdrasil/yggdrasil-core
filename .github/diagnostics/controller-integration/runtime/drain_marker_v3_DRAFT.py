@@ -17,6 +17,9 @@ import time
 import threading
 from drain_coordination_DRAFT import Coordinator, FenceError
 
+class AdmissionPendingBeforeIntent(FenceError):
+    """The admission marker was observed before this sender created an intent."""
+
 _CAPABILITY=object()
 
 def _original_systemd_identity():
@@ -253,7 +256,7 @@ class CoordinatorV3:
         # Mere existence, including an empty/torn record, blocks all participants.
         with self.base.locked(nonblocking=True) as state:
             if self.marker_exists():raise FenceError('GUARDED_INTENT_PENDING')
-            if self.admission_marker_exists():raise FenceError('ADMISSION_INTENT_PENDING')
+            if self.admission_marker_exists():raise AdmissionPendingBeforeIntent('ADMISSION_INTENT_PENDING')
             self.base.require_allowed(state,uid,core.address)
             self.base.require_anchor(state,(core,),sources)
             for source in sources:self.base.require_allowed(state,source.native_identity.split('/',1)[0],source.address)

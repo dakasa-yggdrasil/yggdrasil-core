@@ -248,6 +248,14 @@ def main():
         external_stop=threading.Event() if os.environ.get('CI_CONTINUOUS_TEST')=='1' else None
         timer=threading.Timer(42,external_stop.set) if external_stop is not None else None
         if timer is not None:timer.daemon=True;timer.start()
+        admission_release=None;admission_errors=[]
+        if external_stop is not None:
+            reservation=drain.reserve_admission()
+            def release_admission():
+                try:
+                    time.sleep(.6);drain.cancel_admission(reservation)
+                except BaseException as error:admission_errors.append(error)
+            admission_release=threading.Thread(target=release_admission,daemon=True);admission_release.start()
         driver=ci_guarded_driver.GuardedDriver(watch=watch,sender=rotation_session,emitter=first,
                   positive_session=positive_guardian,ceiling_cache=guardian_cache,endpoints=endpoints,
                   max_commits=(12 if external_stop is not None else (4 if os.environ.get('CI_HOLDER_TEST')=='1' else 2)),
@@ -255,7 +263,9 @@ def main():
         running_reader=types.SimpleNamespace(cache=real_cache,stop=threading.Event(),shutdown_deadline=lambda:time.monotonic()+5)
         loop_result=controller.serve_hot(running_reader,active_pin,apply=lambda:True,guarded_driver=driver)
         if timer is not None:
-            timer.cancel();timer.join()
+            timer.cancel();timer.join();admission_release.join(2)
+            assert not admission_release.is_alive() and not admission_errors and driver.pre_intent_waits>0
+            print('PASS real admission reservation held before sender intent; bounded typed retry and fresh observations',flush=True)
             assert external_stop.is_set() and len(driver.results)>=7
             span=driver.results[-1]['confirmed_ns']-driver.results[0]['confirmed_ns']
             assert span>=35_000_000_000,(span,len(driver.results))

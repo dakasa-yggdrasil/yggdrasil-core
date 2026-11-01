@@ -448,7 +448,7 @@ def _serve_guarded_hot(reader, pin, *, apply, driver, initial_sequence=1):
     nft.require(type(driver) is ci_guarded_driver.GuardedDriver and os.environ.get('CI_GUARDED_FIXTURE')=='1',
                 'ONLY_BOUNDED_CI_GUARDED_DRIVER')
     owner=native_structure._OwnershipReader(pin,reader.stop,reader.cache.wake);owner.start()
-    sequence=initial_sequence;last_key=None;installed_until=None
+    sequence=initial_sequence;last_key=None;installed_until=None;admission_wait_deadline=None
     try:
         while not reader.stop.is_set():
             # Stop only between handoffs. An in-flight transaction must still
@@ -466,7 +466,20 @@ def _serve_guarded_hot(reader, pin, *, apply, driver, initial_sequence=1):
             before_entries,before_cores,_,_,_=current
             before_core=[item for item in before_entries if item.kind=='core']
             nft.require(len(before_core)==1,'CI_ONE_CORE_FOR_DRAIN_INTENT')
-            intent=_ci_drain().begin(before_core[0],before_cores,writer_lease=driver.emitter.writer_lease)
+            try:
+                intent=_ci_drain().begin(before_core[0],before_cores,writer_lease=driver.emitter.writer_lease)
+            except drain_v3.AdmissionPendingBeforeIntent:
+                # This exact typed exception is raised under the coordination
+                # lock before this sender's O_EXCL. No prepare or send ran.
+                now=time.monotonic()
+                if admission_wait_deadline is None:
+                    admission_wait_deadline=now+2.0
+                    if installed_until is not None:admission_wait_deadline=min(admission_wait_deadline,installed_until-1.250)
+                if now>=admission_wait_deadline:raise
+                driver.pre_intent_waits+=1
+                reader.stop.wait(min(.05,admission_wait_deadline-now))
+                continue  # reread all sources; acquire a new ownership lease later
+            admission_wait_deadline=None
             _ci_drain().barrier(intent,before_core[0],before_cores)
             try:
                 prepared,permit=driver.prepare(reader.cache)
