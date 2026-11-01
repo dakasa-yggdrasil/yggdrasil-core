@@ -59,11 +59,11 @@ jobs:
           go build -buildvcs=true -o "$RUNNER_TEMP/fallback-core" .
           go build -buildvcs=true -o "$RUNNER_TEMP/fallback-goose" ./scripts/goose
           (cd "$source" && go test -p=1 -race -buildvcs=true -tags recoveryfixture -c -o "$RUNNER_TEMP/http.test" ./controllers/httpapi)
-          # The test-only injection passes the disposable fixture DSN to the
-          # child comparison. No production source or runtime code is edited.
-          python3 - "$source/repository/capacity_guest_recovery_fixture_postgres_test.go" <<'PY'
-          import pathlib, sys
-          path = pathlib.Path(sys.argv[1])
+          # Overlay only the test harness; the source worktree stays clean so
+          # its actual VCS authority check remains in force.
+          python3 - "$source/repository/capacity_guest_recovery_fixture_postgres_test.go" "$RUNNER_TEMP" <<'PY'
+          import json, pathlib, sys
+          path = pathlib.Path(sys.argv[1]); temp = pathlib.Path(sys.argv[2])
           text = path.read_text()
           old = 'labAssertLegacyRefusesCoreBoundWire(t, wire)'
           assert text.count(old) == 1
@@ -74,8 +74,11 @@ jobs:
           if err = db.QueryRow(`SELECT original_wire FROM public.capacity_guest_failed_installed_disposals WHERE id=$1 AND stage='terminal'`, prepared.ID).Scan(&fallbackTerminal); err != nil { t.Fatal(err) }
           labAssertLegacyRefusesCoreBoundWire(t, fallbackTerminal)
           '''
-          path.write_text(text.replace(anchor, injection + anchor))
+          overlay = temp / 'fallback-fixture-overlay.go'
+          overlay.write_text(text.replace(anchor, injection + anchor))
+          (temp / 'fallback-fixture-overlay.json').write_text(json.dumps({'Replace': {str(path): str(overlay)}}))
           PY
+          [[ -z "$(git -C "$source" status --porcelain --untracked-files=all)" ]]
           cat > "$RUNNER_TEMP/compare" <<'SH'
           #!/usr/bin/env bash
           set -euo pipefail
@@ -94,7 +97,7 @@ jobs:
           export LAB_FALLBACK_CORE="$RUNNER_TEMP/fallback-core"
           export LAB_FALLBACK_GOOSE="$RUNNER_TEMP/fallback-goose"
           cd "$RUNNER_TEMP/source-32fe-fixture"
-          go test -p=1 -race -buildvcs=false -tags recoveryfixture -count=1 -timeout=5m -v ./repository -run '^TestRecoveryFixtureResumeSetupPostgres/lab_core_bound_disposal_complete$' 2>&1 | tee "$RUNNER_TEMP/fallback-evidence/fixture.log"
+          go test -overlay="$RUNNER_TEMP/fallback-fixture-overlay.json" -p=1 -race -buildvcs=true -tags recoveryfixture -count=1 -timeout=5m -v ./repository -run '^TestRecoveryFixtureResumeSetupPostgres/lab_core_bound_disposal_complete$' 2>&1 | tee "$RUNNER_TEMP/fallback-evidence/fixture.log"
           grep -F 'LAB_CORE2DE_REAL_PG_WIRE_UNKNOWN_FIELDS_HELD_CONTROL_PASS' "$RUNNER_TEMP/fallback-evidence/fixture.log"
           grep -F 'LAB_FALLBACK_PG82_COMPAT_READ_MUTATION_REPLACEMENT_HELD_ORIGINAL_UNCHANGED' "$RUNNER_TEMP/fallback-evidence/fixture.log"
           grep -F 'LAB_FALLBACK_ACTUAL_GOOSE_AND_CORE_SCHEMA82_HEALTH_SHUTDOWN_PASS' "$RUNNER_TEMP/fallback-evidence/fixture.log"
