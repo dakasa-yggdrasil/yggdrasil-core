@@ -1,5 +1,5 @@
 """Bounded negative checks for CI holder renew; real-kernel test follows."""
-import os,socket,sys,threading,time,types
+import gc,os,socket,sys,threading,time,types,weakref
 from pathlib import Path
 sys.path.insert(0,str(Path(__file__).resolve().parent/'runtime'))
 import guarded_effect_lease_two_peers_DRAFT as effect
@@ -53,13 +53,38 @@ except effect.BusyBeforeRenew:pass
 else:raise AssertionError('pending sender did not reject renewal')
 assert not called
 
-# Descriptor retention is bounded until readers have per-generation custody.
-a,v,c,live,now=fixture()
-a._owned_sender_pidfds=[0] * (a.MAX_OWNED_SENDER_PIDFDS - 1)
-a._require_sender_fd_capacity_locked()
-a._owned_sender_pidfds.append(0)
-held(a._require_sender_fd_capacity_locked)
+# 500 replacements with one reader retaining an old snapshot. Its FD stays
+# valid until that reader ends; all other retired generations are reclaimed.
+a,v,c,live,now=fixture();a._owned_sender_pidfds=weakref.WeakSet()
+read_fd,write_fd=os.pipe()
+with a.lock:owner=a._duplicate_sender_locked(read_fd)
+lease={'sender_pidfd':owner};del owner
+reader_ready=threading.Event();reader_finish=threading.Event();reader_done=threading.Event()
+reader_fd=lease['sender_pidfd'].fd
+def retain(snapshot):
+    reader_ready.set();assert reader_finish.wait(3)
+    os.fstat(snapshot['sender_pidfd'].fd);reader_done.set()
+reader=threading.Thread(target=retain,args=(lease,));reader.start();assert reader_ready.wait(3)
+for _ in range(500):
+    with a.lock:owner=a._duplicate_sender_locked(read_fd)
+    lease={'sender_pidfd':owner};del owner
+    os.fstat(reader_fd)
+    assert len(a._owned_sender_pidfds)<=2
+reader_finish.set();reader.join(3);assert reader_done.is_set() and not reader.is_alive()
+del reader;gc.collect()
+try:os.fstat(reader_fd)
+except OSError:pass
+else:raise AssertionError('retired reader descriptor leaked')
+assert len(a._owned_sender_pidfds)==1
+del lease;gc.collect()
+assert len(a._owned_sender_pidfds)==0
+owners=[]
+for _ in range(a.MAX_OWNED_SENDER_PIDFDS):
+    with a.lock:owners.append(a._duplicate_sender_locked(read_fd))
+with a.lock:held(lambda:a._duplicate_sender_locked(read_fd))
 assert len(a._owned_sender_pidfds)==a.MAX_OWNED_SENDER_PIDFDS
+owners.clear();gc.collect();assert len(a._owned_sender_pidfds)==0
+os.close(read_fd);os.close(write_fd)
 
 class Expiring:
     def __init__(self):self.lock=threading.Lock();self.lease={'until':time.monotonic_ns()+100_000_000,'revoked':False}

@@ -14,6 +14,7 @@ import socket
 import struct
 import threading
 import time
+import weakref
 
 
 class Held(Exception):
@@ -27,6 +28,20 @@ class BusyBeforeRenew(Exception):
 def need(value, reason):
     if not value:
         raise Held(reason)
+
+
+class _OwnedPidfd:
+    """One generation owns one duplicate; a lease snapshot retains its owner."""
+    def __init__(self, fd):
+        self.fd = fd
+
+    def close(self):
+        if self.fd is not None:
+            fd, self.fd = self.fd, None
+            os.close(fd)
+
+    def __del__(self):
+        self.close()
 
 
 class EffectLeaseAuthority:
@@ -71,9 +86,15 @@ class EffectLeaseAuthority:
         self.lock = threading.Lock()
         self.lease = None
         self.pending = None
-        # Lease-owned duplicated pidfds are not closed during an in-flight
-        # reader; retire them only after all session threads have stopped.
-        self._owned_sender_pidfds = []
+        # Weak references enforce a cap without retaining retired generations.
+        # Every live lease snapshot holds its generation's owner strongly.
+        self._owned_sender_pidfds = weakref.WeakSet()
+
+    def _duplicate_sender_locked(self, fd):
+        self._require_sender_fd_capacity_locked()
+        owner = _OwnedPidfd(os.dup(fd))
+        self._owned_sender_pidfds.add(owner)
+        return owner
 
     def _peer_live(self):
         p = select.poll();p.register(self.peer_pidfd, select.POLLIN)
@@ -88,7 +109,7 @@ class EffectLeaseAuthority:
         now = time.monotonic_ns()
         need(now < lease['until'], 'FIXTURE_LEASE_EXPIRED')
         self._peer_live()
-        poll = select.poll();poll.register(lease['sender_pidfd'], select.POLLIN)
+        poll = select.poll();poll.register(lease['sender_pidfd'].fd, select.POLLIN)
         need(not poll.poll(0), 'ORIGINAL_SENDER_MUST_REMAIN_LIVE')
         current = self.sources.build_expected(self.cache)
         need(current['invalidation_epoch'] == lease['invalidation_epoch'], 'READER_INVALIDATION_REVOKES_LEASE')
@@ -123,7 +144,7 @@ class EffectLeaseAuthority:
         until = min(requested_until_ns, deadline)
         need(now < until and all(deadline >= until for rows in maps.values() for deadline in rows.values()),
              'ALL_ORIGINAL_TUPLES_MUST_COVER_LEASE')
-        owned_fd=os.dup(verified.sender_pidfd)
+        with self.lock:owned_fd=self._duplicate_sender_locked(verified.sender_pidfd)
         lease = {'token': secrets.token_hex(32), 'until': until, 'epoch': genid,
                  'receipt_sha256': receipt_hash, 'invalidation_epoch': epoch,
                  'maps': maps, 'sender_pidfd': owned_fd, 'revoked': False}
@@ -131,11 +152,9 @@ class EffectLeaseAuthority:
             self._source_live(lease)
             with self.lock:
                 need(self.lease is None, 'ONE_OUTSTANDING_EFFECT_LEASE')
-                self._require_sender_fd_capacity_locked()
-                self._owned_sender_pidfds.append(owned_fd)
                 self.lease = lease
         except BaseException:
-            os.close(owned_fd);raise
+            owned_fd.close();raise
         return {'token': lease['token'], 'expires_monotonic_ns': until, 'genid': lease['epoch'],
                 'receipt_sha256': lease['receipt_sha256'], 'lab_only': True,
                 'external_effect_authorized': False, 'production_authority': False}
@@ -280,12 +299,10 @@ class EffectLeaseAuthority:
         self._source_live(lease)
         with self.lock:
             need(self.lease is lease and self.pending is pending and not lease['revoked'], 'SAME_PENDING_LIVE_LEASE')
-            self._require_sender_fd_capacity_locked()
-            owned_fd=os.dup(verified.sender_pidfd)
+            owned_fd=self._duplicate_sender_locked(verified.sender_pidfd)
             successor=dict(lease)
             successor.update({'epoch':genid,'receipt_sha256':receipt_hash,'sender_pidfd':owned_fd,
                               'maps':{role:dict(verified.actual[role]) for role in ('inbound','reverse')}})
-            self._owned_sender_pidfds.append(owned_fd)
             self.lease=successor
             self.pending = None
         return {'successor_verified': True, 'genid': genid, 'external_effect_authorized': False}
@@ -306,5 +323,5 @@ class EffectLeaseAuthority:
         self.revoke()
         os.close(self.peer_pidfd)
         if self.preparer_pidfd is not None:os.close(self.preparer_pidfd)
-        for fd in self._owned_sender_pidfds:os.close(fd)
+        for fd in list(self._owned_sender_pidfds):fd.close()
         self._owned_sender_pidfds.clear()

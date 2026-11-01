@@ -193,18 +193,17 @@ class GuardianRefreshRegistry:
                  'CONFIRMED_SUCCESSOR_MUST_COVER_HOLDER')
             holder._source_live(lease)
         self._preparer_live()
+        owned_fd=None
         if holder is not None:
-            with holder.lock:holder._require_sender_fd_capacity_locked()
-        owned_fd=os.dup(verified.sender_pidfd) if holder is not None else None
+            with holder.lock:owned_fd=holder._duplicate_sender_locked(verified.sender_pidfd)
         try:
             if owned_fd is not None:
-                poll=select.poll();poll.register(owned_fd,select.POLLIN)
+                poll=select.poll();poll.register(owned_fd.fd,select.POLLIN)
                 need(not poll.poll(0),'SUCCESSOR_SENDER_MUST_BE_LIVE')
             with self.lock:
                 need(self.pending is proof and self.state==proof.mode and self.holder is holder,'SAME_PENDING_LIVE_REFRESH')
                 if holder is not None:
                     with holder.lock:
-                        holder._require_sender_fd_capacity_locked()
                         need(holder.lease is lease and not lease['revoked'] and time.monotonic_ns()<lease['until']
                              and lease['epoch']==proof.genid and lease['invalidation_epoch']==proof.epoch,
                              'SAME_LIVE_HOLDER_AT_SUCCESSOR_COMMIT')
@@ -212,13 +211,12 @@ class GuardianRefreshRegistry:
                         successor.update({'epoch':result['after'],'receipt_sha256':obs['receipt_sha256'],
                             'maps':{role:dict(verified.actual[role]) for role in ('inbound','reverse')},
                             'sender_pidfd':owned_fd})
-                        holder._owned_sender_pidfds.append(owned_fd)
                         holder.lease=successor
                         owned_fd=None
                 self.current_verified=verified
                 self.pending=None
         finally:
-            if owned_fd is not None:os.close(owned_fd)
+            if owned_fd is not None:owned_fd.close()
         return {'same_guardian_successor_verified':True,'mode':proof.mode,'external_effect_authorized':False,'production_authority':False}
 
     def fail_or_unknown(self,proof):
