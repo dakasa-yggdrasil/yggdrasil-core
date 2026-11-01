@@ -63,6 +63,7 @@ class Watch:
             if row['event'] not in ('SAMPLE','FINISHED'):raise RuntimeError('UNEXPECTED_GUARDIAN_CONNECT_EVENT:'+str(row))
     def admission_witness(self,uid,address):
         return self.control('ADMISSION_WITNESS','ADMISSION_WITNESS',uid=uid,address=address)
+    def source_ceilings(self):return self.control('SOURCE_CEILINGS','SOURCE_CEILINGS')
     def prepare(self,records):return self.control('PREPARE','PREPARED',records=list(records))
     def confirm(self,result,plan):return self.control('CONFIRM','CONFIRMED',result=result,plan=plan)
     def resume(self):return self.control('RESUME','RESUMED')

@@ -184,6 +184,11 @@ def serve(channel,listener):
                      sender_sha256=request['source_sha256'],validate_kernel=validate)
                 sender_worker=threading.Thread(target=serve_sender);sender_worker.start()
                 publish({'event':'CONNECTED','production_authority':False})
+            elif kind=='SOURCE_CEILINGS':
+                expected=guarded_sources.build_expected(cache)
+                publish({'event':'SOURCE_CEILINGS',
+                         'maps':{role:[[key.hex(),value] for key,value in sorted(expected[role].items())]
+                                 for role in ('inbound','reverse')},'production_authority':False})
             elif kind=='COVERAGE':
                 obs=chain.last_observation
                 publish({'event':'COVERAGE','qualified':bool(obs is not None and obs[0]),

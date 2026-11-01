@@ -24,6 +24,14 @@ class GuardedDriver:
         if witness.get('event')!='ADMISSION_HOLD' or witness.get('guard')!='GUARDED_INTENT_PENDING':
             raise RuntimeError('PENDING_INTENT_MUST_BLOCK_ADMISSION:'+str(witness))
         expected=guarded_sources.build_expected(self.ceiling_cache)
+        if self.stop_signal is not None:
+            remote=self.watch.source_ceilings()
+            if remote.get('production_authority') is not False:raise RuntimeError('CI_CEILING_ONLY')
+            for role in ('inbound','reverse'):
+                rows=remote['maps'][role];ceilings={bytes.fromhex(k):v for k,v in rows}
+                if len(rows)!=len(ceilings) or set(ceilings)!=set(expected[role]) or any(type(v) is not int for v in ceilings.values()):
+                    raise RuntimeError('EXACT_INDEPENDENT_GUARDIAN_CEILINGS_REQUIRED')
+                expected[role]={k:min(v,ceilings[k]) for k,v in expected[role].items()}
         prepared=guarded_preparation.PreparedGeneration(cache,
                     deadline_ceilings={role:expected[role] for role in ('inbound','reverse')})
         try:
