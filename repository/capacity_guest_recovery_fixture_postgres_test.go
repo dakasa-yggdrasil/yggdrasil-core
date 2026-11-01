@@ -706,6 +706,9 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 							t.Fatal("synthetic native cleanup preparation", finishErr)
 						}
 						wantRows = 3
+						if _, beginErr := (CapacityStore{DB: db}).BeginFailedInstalledGuestAbsence(claimCtx, pre.PreregistrationID, prepared.ID, "synthetic-test"); beginErr == nil {
+							t.Fatal("declared incomplete create receipt gained terminal authority")
+						}
 						t.Log("LAB_SYNTHETIC_RETIREMENT_V2_OFF_CLEANUP_PENDING_NO_DELETE")
 					} else {
 						if finishErr == nil {
