@@ -1,0 +1,78 @@
+"""Systemd sender/FD custody preflight, not cancellation or replay authority."""
+import array,fcntl,hashlib,json,os,signal,socket,subprocess,sys,time,uuid
+from pathlib import Path
+root=Path(__file__).resolve().parent;sys.path.insert(0,str(root/'runtime'))
+import drain_marker_v3_DRAFT as v3,guarded_nl as nl,guarded_unit_identity as identity
+import native_structure,nft_owner as nft,recovery_terminality_DRAFT as terminal
+
+def run(*args,input=None):
+    return subprocess.run(args,input=input,stdout=subprocess.PIPE,stderr=subprocess.PIPE,check=True,timeout=10).stdout
+coord=v3.CoordinatorV3(root/'coord');coord.initialize_for_ci()
+run('/usr/sbin/nft','-f','-',input=nft.render((),now=time.monotonic(),table_exists=False).encode())
+raw=nl.cmd('/usr/sbin/nft','-a','-j','list','ruleset');objects,_=native_structure._objects(raw)
+assert len(objects)==47
+net=socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,12);net.bind((0,0));net.settimeout(5)
+before=nl.genid(net)
+server=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM);server.bind(str(root/'sender.sock'));server.listen(2);server.settimeout(10)
+unit='ci-isolated-sender-'+uuid.uuid4().hex+'.service';unitfile=Path('/run/systemd/system')/unit
+script=(root/'runtime'/'ci_isolated_sender.py').resolve();argv=['/usr/bin/python3','-B',str(script),str(root)]
+channel=None;anchor=None;childfd=None;received=[]
+try:
+    unitfile.write_text('[Service]\nType=simple\nKillMode=process\nRuntimeMaxSec=30s\nEnvironment=CI_GUARDED_FIXTURE=1\nEnvironment=CI_HOST_NETNS='+os.readlink('/proc/1/ns/net')+'\nEnvironment=CI_CONTROLLER_UNIT='+unit+'\nExecStart=/usr/bin/nsenter --net=/proc/'+str(os.getpid())+'/ns/net '+' '.join(argv)+'\n')
+    run('/usr/bin/systemctl','daemon-reload');run('/usr/bin/systemctl','start',unit)
+    channel,_=server.accept();props=identity._properties(unit)
+    anchor=terminal.capture_authenticated(channel,unit=unit,invocation=props['InvocationID'],argv=argv,source_sha256=hashlib.sha256(script.read_bytes()).hexdigest())
+    payload,anc,flags,_=channel.recvmsg(65536,socket.CMSG_SPACE(4*array.array('i').itemsize))
+    assert payload.endswith(b'\n') and not flags&(socket.MSG_CTRUNC|socket.MSG_TRUNC) and len(anc)==1
+    level,kind,data=anc[0];fds=array.array('i');fds.frombytes(data[:len(data)-len(data)%fds.itemsize]);received=list(fds)
+    assert level==socket.SOL_SOCKET and kind==socket.SCM_RIGHTS and len(received)==4
+    records=json.loads(payload)['records'];assert len(records)==2
+    marked=terminal.capture_marker(anchor,coord)
+    for rec,pf,mf in zip(records,received[::2],received[1::2]):
+        assert int(nl.fdinfo(os.getpid(),pf)['prog_id'])==rec['program_id']
+        assert int(nl.fdinfo(os.getpid(),mf)['map_id'])==rec['map_id']
+    childfd=os.pidfd_open(int((root/'sender-child.pid').read_text()))
+    run('/usr/bin/systemctl','kill','--kill-whom=main','--signal=KILL',unit)
+    deadline=time.monotonic()+5
+    while not terminal._pidfd_terminal(anchor.verified['pidfd']):
+        assert time.monotonic()<deadline;time.sleep(.02)
+    try:terminal.prove_terminal_for_marker(marked);raise AssertionError('live descendant accepted')
+    except terminal.Held as error:assert str(error)=='SENDER_CGROUP_OR_DESCENDANTS_STILL_POPULATED'
+    with open(coord.writer_lock,'rb') as fence:
+        try:fcntl.flock(fence,fcntl.LOCK_EX|fcntl.LOCK_NB);raise AssertionError('live descendant failed to fence')
+        except BlockingIOError:pass
+    print('PASS killed sender leader, inherited live socket and SH block terminality and EX',flush=True)
+    signal.pidfd_send_signal(childfd,signal.SIGKILL)
+    deadline=time.monotonic()+5
+    while True:
+        try:terminal.prove_terminal_for_marker(marked);break
+        except terminal.Held:
+            if time.monotonic()>deadline:raise
+            time.sleep(.05)
+    with open(coord.writer_lock,'rb') as fence:
+        fcntl.flock(fence,fcntl.LOCK_EX|fcntl.LOCK_NB)
+        terminal.prove_terminal_for_marker(marked)
+        assert nl.genid(net)==before and coord.marker_exists()
+        assert not list((root/'sender-receipts').glob('WIRE-*')) and not list((root/'sender-receipts').glob('INTENT-*'))
+        for rec,pf,mf in zip(records,received[::2],received[1::2]):
+            assert int(nl.fdinfo(os.getpid(),pf)['prog_id'])==rec['program_id']
+            assert int(nl.fdinfo(os.getpid(),mf)['map_id'])==rec['map_id']
+        print('PASS terminal original systemd cgroup, writer EX and retained original SCM_RIGHTS under unchanged genid',flush=True)
+        # Even EX is cooperative: an unparticipating writer changes genid and
+        # must invalidate any observation, never justify marker deletion.
+        run('/usr/sbin/nft','add','table','ip','ci_external_uncooperative_writer')
+        assert nl.genid(net)!=before and coord.marker_exists()
+        print('PASS external genid drift observed under EX and marker remains',flush=True)
+    print('BOUNDARY: no Guardian prepare/permit, no marker removal or restart authority',flush=True)
+finally:
+    if childfd is not None:
+        try:signal.pidfd_send_signal(childfd,signal.SIGKILL)
+        except ProcessLookupError:pass
+        os.close(childfd)
+    for fd in received:os.close(fd)
+    if anchor is not None:anchor.close()
+    if channel is not None:channel.close()
+    server.close();net.close()
+    subprocess.run(['/usr/bin/systemctl','stop',unit],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=10)
+    unitfile.unlink(missing_ok=True)
+    subprocess.run(['/usr/bin/systemctl','daemon-reload'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=10)
