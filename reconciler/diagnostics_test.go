@@ -139,6 +139,7 @@ func TestManifestDiagnosticsCoverDatabaseAndApply(t *testing.T) {
 func TestSecretDiagnosticsAreCountsOnly(t *testing.T) {
 	client := fake.NewSimpleClientset(&corev1.Secret{ObjectMeta: metav1.ObjectMeta{
 		Namespace: "dakasa", Name: "stale", Annotations: map[string]string{AnnotationVersion: "1"},
+		Labels: map[string]string{LabelManagedBy: LabelManagedByValue},
 	}})
 	resource := schema.GroupResource{Resource: "secrets"}
 	client.PrependReactor("get", "secrets", func(action k8stesting.Action) (bool, runtime.Object, error) {
