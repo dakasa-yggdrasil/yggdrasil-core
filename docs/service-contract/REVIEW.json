@@ -430,7 +430,7 @@
       "independent_final_review_complete": false,
       "production_rollout_or_rollback_qualified": false,
       "scope": "Strict read-only Core-bound wire; conservative global HOLD for fresh capacity authority and dispatch, with 32fe writers fenced before fallback; existing returns remain recordable. Operational qualification and independent review are not claimed.",
-      "source_inventory_sha256": "88cbca70fbf5bb3a732b30428ca931612ed928952501e13aaac38320b0dcda56"
+      "source_inventory_sha256": "2c537d7239bdb07acd3a630585701e36f668c54f3383227dab4a6cc37c789998"
     },
     "final_cost_cadence_patch_sha256": "a3095f9950d1699e60efe620af4e75727575234345811e0fff823ee049387780",
     "floor_bootstrap_successor": {
@@ -598,7 +598,7 @@
   "reviewer": "Root full production-source delta review; separate independent manager/dial/monitor peer; source acceptance only",
   "schema": "core_service_source_review_v1",
   "scope": "Source contract only; parameterized deployment and operational qualification remain separately required",
-  "source_inventory_sha256": "88cbca70fbf5bb3a732b30428ca931612ed928952501e13aaac38320b0dcda56",
+  "source_inventory_sha256": "2c537d7239bdb07acd3a630585701e36f668c54f3383227dab4a6cc37c789998",
   "validation": [
     "Author focused owning command/catalog/package tests passed on Darwin",
     "Author full compiled CLI integration and negative cases passed",

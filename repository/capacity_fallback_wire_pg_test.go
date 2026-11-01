@@ -4,6 +4,8 @@ import (
 	"bytes"
 	"context"
 	"database/sql"
+	"encoding/json"
+	"errors"
 	"net"
 	"net/http"
 	"net/url"
@@ -15,7 +17,9 @@ import (
 	"testing"
 	"time"
 
+	"github.com/dakasa-yggdrasil/yggdrasil-core/internal/capacity/executorpower"
 	"github.com/dakasa-yggdrasil/yggdrasil-core/model"
+	"github.com/google/uuid"
 	_ "github.com/lib/pq"
 )
 
@@ -91,6 +95,7 @@ func TestLABCoreBoundLegacyDecode(t *testing.T) {
 		t.Fatal(err)
 	}
 	if view.Stage == "terminal" {
+		labFallbackAuthorityPG(t, dsn)
 		labFallbackStartup(t, dsn)
 	}
 	if err = db.QueryRow(`SELECT original_wire FROM public.capacity_guest_failed_installed_disposals WHERE id=$1 AND stage=$2`, view.ID, view.Stage).Scan(&after); err != nil || !bytes.Equal(raw, after) {
@@ -99,6 +104,61 @@ func TestLABCoreBoundLegacyDecode(t *testing.T) {
 	if err = db.QueryRow(`SELECT max(version_id) FROM goose_db_version WHERE is_applied`).Scan(&version); err != nil || version != 82 {
 		t.Fatal("migration version changed across startup", version, err)
 	}
+}
+
+// These are disposable unrelated scopes in the same PG82 fixture. No adapter,
+// broker, Guest or provider is called and no permission may be produced.
+func labFallbackAuthorityPG(t *testing.T, dsn string) {
+	t.Helper()
+	labFallbackFixtureURL(t, dsn)
+	t.Setenv("DB_URL", dsn)
+	f := mutationPostgresFixture(t, false)
+	ctx := context.Background()
+	if _, err := f.store.IssueMutation(ctx, f.policy, f.intent.Generation, f.intent.FencingToken, f.intent.LeaseOwner, f.plans[5]); !errors.Is(err, errFallbackNewerDisposition) {
+		t.Fatal("cross-dimension IssueMutation did not reach HOLD", err)
+	}
+	if _, err := f.store.IssueCompensation(ctx, f.policy, model.CapacityCompensationIssue{}); !errors.Is(err, errFallbackNewerDisposition) {
+		t.Fatal("cross-dimension IssueCompensation did not reach HOLD", err)
+	}
+	var grants int
+	if err := f.db.QueryRow(`SELECT count(*) FROM public.capacity_mutation_grants WHERE namespace=$1`, f.policy.Metadata.Namespace).Scan(&grants); err != nil || grants != 0 {
+		t.Fatal("HOLD created a mutation grant", grants, err)
+	}
+	db, envelope := capacityDispatchPostgresFixture(t)
+	tx, err := db.BeginTx(ctx, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	if _, _, err = EnqueueCapacityDispatch(ctx, tx, envelope); !errors.Is(err, ErrCapacityDispatchEnvelope) {
+		_ = tx.Rollback()
+		t.Fatal("cross-dimension dispatch admitted", err)
+	}
+	if err = tx.Rollback(); err != nil {
+		t.Fatal(err)
+	}
+	var jobs int
+	if err = db.QueryRow(`SELECT count(*) FROM public.capacity_dispatch_jobs WHERE realm=$1`, envelope.Realm).Scan(&jobs); err != nil || jobs != 0 {
+		t.Fatal("dispatch HOLD created a job", jobs, err)
+	}
+	_, g, _ := powerCallbackFixture(t)
+	wire, err := json.Marshal(g)
+	if err != nil {
+		t.Fatal(err)
+	}
+	_, err = db.Exec(`INSERT INTO public.capacity_mutation_grants(id,namespace,environment,domain,dimension,generation,integration_instance_id,scope_checksum,profile_name,slot,state,grant_record,expires_at) VALUES($1,$2,$3,$4,$5,1,$6,$7,$8,1,'issued',$9::jsonb,$10)`, g.ID, g.Scope.Namespace, g.Scope.Environment, g.Scope.Domain, g.Scope.Dimension, g.Binding.IntegrationID, executorpower.Digest(g.Binding.Resource), executorPowerProfile, string(wire), g.ExpiresAt)
+	if err != nil {
+		t.Fatal("synthetic issued power fixture", err)
+	}
+	c := executorpower.Claim{GrantID: g.ID, Action: g.Action, CommandID: g.CommandID, RequestSHA: g.RequestSHA, AttemptID: uuid.NewString(), SettlementSHA: executorpower.Digest(strings.Repeat("t", 32))}
+	reply, err := (CapacityStore{DB: db, ExecutionEnabled: true, ExecutorPowerEnabled: true}).RedeemExecutorPower(ctx, g.Binding.AdapterPrincipal, g.Binding.IntegrationID, c)
+	if !errors.Is(err, errFallbackNewerDisposition) || reply.Mode != "" {
+		t.Fatal("cross-dimension power redeem escaped HOLD", reply, err)
+	}
+	var state string
+	if err = db.QueryRow(`SELECT state FROM public.capacity_mutation_grants WHERE id=$1`, g.ID).Scan(&state); err != nil || state != "issued" {
+		t.Fatal("held power grant changed", state, err)
+	}
+	t.Log("LAB_FALLBACK_PG82_CROSS_SCOPE_ISSUE_COMPENSATION_DISPATCH_POWER_REDEEM_HELD")
 }
 
 func labFallbackFixtureURL(t *testing.T, dsn string) *url.URL {

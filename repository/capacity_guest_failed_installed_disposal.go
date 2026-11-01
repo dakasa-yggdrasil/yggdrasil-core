@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"errors"
+	"fmt"
 	"io"
 	"reflect"
 	"time"
@@ -473,13 +474,15 @@ func (s CapacityStore) failedInstalledDisposalActiveTx(ctx context.Context, tx *
 // the fallback until a newer Core handles the newer disposition contract.
 // Operational handoff must fence every 32fe writer before starting this fallback:
 // the old dimension locks alone do not serialize cross-dimension insertion.
+var errFallbackNewerDisposition = fmt.Errorf("%w: fallback newer disposition", ErrCapacityConflict)
+
 func guardFallbackNewerDisposalTx(ctx context.Context, tx *sql.Tx) error {
 	var unsupported bool
 	if err := tx.QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM public.capacity_guest_failed_installed_disposals WHERE original_record ?| array['replacement_mode','original_failed_issuer_core_source','replacement_core_source'])`).Scan(&unsupported); err != nil {
 		return err
 	}
 	if unsupported {
-		return ErrCapacityConflict
+		return errFallbackNewerDisposition
 	}
 	return nil
 }

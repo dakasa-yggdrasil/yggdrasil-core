@@ -123,6 +123,7 @@ func TestCapacityExecutorPowerIssuesInExistingLedgerWithActivityFence(t *testing
 	defer db.Close()
 	s := CapacityStore{DB: db, ExecutionEnabled: true, ExecutorPowerEnabled: true, ExecutorID: "invocation", ExecutorActivityPrincipal: "machine:controller", WorkflowID: uuid.New()}
 	powerTxExpect(m, policy, p, s.WorkflowID, false, now)
+	m.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM public.capacity_guest_failed_installed_disposals`).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
 	adoption, _ := executorpower.Adopt(b, powerOperator, uuid.NewString(), executorpower.Observation{Resource: b.Resource, State: "stopped", ObservedAt: now}, now, true)
 	raw, _ := json.Marshal(adoption)
 	m.ExpectQuery(`SELECT slot_record FROM public.capacity_resource_slots`).WithArgs(b.IntegrationID, executorpower.Digest(b.Resource), executorPowerProfile, "ops", p.Environment, p.Domain, p.Dimension, b.Resource.InstanceID).WillReturnRows(sqlmock.NewRows([]string{"slot_record"}).AddRow(raw))
@@ -183,6 +184,7 @@ func TestCapacityExecutorPowerRevokedRedeemPersistsNoSend(t *testing.T) {
 			db, m, _ := sqlmock.New()
 			defer db.Close()
 			powerCallbackExpect(m, g, now)
+			m.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM public.capacity_guest_failed_installed_disposals`).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(false))
 			m.ExpectQuery(`SELECT spec,checksum,active FROM public.manifests`).WithArgs(g.Scope.PolicyID).WillReturnRows(sqlmock.NewRows([]string{"spec", "checksum", "active"}).AddRow(policy.Spec, policy.Checksum, false))
 			m.ExpectExec(`UPDATE public.capacity_mutation_grants SET state`).WithArgs(g.ID, "rejected", sqlmock.AnyArg(), executorpower.Kind).WillReturnResult(sqlmock.NewResult(0, 1))
 			if unknown {
@@ -300,4 +302,38 @@ func TestCapacityExecutorPowerLegacyDestroyCannotClaimAdoptedEC2(t *testing.T) {
 	if err = m.ExpectationsWereMet(); err != nil {
 		t.Fatal(err)
 	}
+}
+
+func TestFallbackCoreBoundDisposalHoldsPowerIssueAndRedeem(t *testing.T) {
+	t.Run("issue", func(t *testing.T) {
+		policy, p, _, now := powerPolicy(t)
+		db, m, _ := sqlmock.New()
+		defer db.Close()
+		s := CapacityStore{DB: db, ExecutionEnabled: true, ExecutorPowerEnabled: true, ExecutorID: "invocation", ExecutorActivityPrincipal: "machine:controller", WorkflowID: uuid.New()}
+		powerTxExpect(m, policy, p, s.WorkflowID, false, now)
+		m.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM public.capacity_guest_failed_installed_disposals`).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+		m.ExpectRollback()
+		if _, err := s.IssueExecutorPower(context.Background(), policy, "original-command"); !errors.Is(err, ErrCapacityConflict) {
+			t.Fatal("new power authority escaped HOLD", err)
+		}
+		if err := m.ExpectationsWereMet(); err != nil {
+			t.Fatal(err)
+		}
+	})
+	t.Run("redeem", func(t *testing.T) {
+		_, g, now := powerCallbackFixture(t)
+		db, m, _ := sqlmock.New()
+		defer db.Close()
+		powerCallbackExpect(m, g, now)
+		m.ExpectQuery(`SELECT EXISTS\(SELECT 1 FROM public.capacity_guest_failed_installed_disposals`).WillReturnRows(sqlmock.NewRows([]string{"exists"}).AddRow(true))
+		m.ExpectRollback()
+		c := executorpower.Claim{GrantID: g.ID, Action: g.Action, CommandID: g.CommandID, RequestSHA: g.RequestSHA, AttemptID: uuid.NewString(), SettlementSHA: executorpower.Digest(strings.Repeat("t", 32))}
+		r, err := (CapacityStore{DB: db, ExecutionEnabled: true, ExecutorPowerEnabled: true}).RedeemExecutorPower(context.Background(), g.Binding.AdapterPrincipal, g.Binding.IntegrationID, c)
+		if !errors.Is(err, ErrCapacityConflict) || r.Mode != "" {
+			t.Fatal("write-once power escaped HOLD", r, err)
+		}
+		if err = m.ExpectationsWereMet(); err != nil {
+			t.Fatal(err)
+		}
+	})
 }
