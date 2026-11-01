@@ -261,7 +261,12 @@ def main():
             holder_script=(HERE/'runtime'/'ci_holder_process.py').resolve()
             holder_argv=['/usr/bin/python3','-B',str(holder_script),str(watch.path),str(go),str(acquired),str(revoked)]
             holder_unit_file=Path('/run/systemd/system')/holder_unit
-            holder_unit_file.write_text('[Service]\nType=simple\nRuntimeMaxSec=20s\nExecStart=/usr/bin/nsenter --net=/proc/'+str(os.getpid())+'/ns/net '+' '.join(holder_argv)+'\n')
+            auxiliary=os.environ.get('CI_AUXILIARY_SLICE','')
+            if auxiliary:
+                import re
+                assert re.fullmatch(r'dakasa-elastic-lab-[0-9a-f]{12}\.slice',auxiliary)
+            slice_line=('Slice='+auxiliary+'\n') if auxiliary else ''
+            holder_unit_file.write_text('[Service]\nType=simple\n'+slice_line+'RuntimeMaxSec=20s\nExecStart=/usr/bin/nsenter --net=/proc/'+str(os.getpid())+'/ns/net '+' '.join(holder_argv)+'\n')
             subprocess.run(['/usr/bin/systemctl','daemon-reload'],check=True,timeout=10)
             subprocess.run(['/usr/bin/systemctl','start',holder_unit],check=True,timeout=10)
             until=time.monotonic()+8
@@ -271,6 +276,8 @@ def main():
                 if time.monotonic()>until:raise RuntimeError('HOLDER_SYSTEMD_NOT_ACTIVE')
                 time.sleep(.02)
             import recovery_terminality_DRAFT as terminal
+            if auxiliary and auxiliary not in holder_props['ControlGroup'].split('/'):
+                raise RuntimeError('HOLDER_NOT_IN_LAB_AUXILIARY_SLICE')
             holder_pid=int(holder_props['MainPID']);holder_pidfd=os.pidfd_open(holder_pid)
             holder_cgroup=terminal._CgroupRoot(holder_props['ControlGroup'])
             watch.control('CONNECT_HOLDER','HOLDER_LISTENING',unit=holder_unit,invocation=holder_props['InvocationID'],
@@ -448,7 +455,9 @@ def main():
             holder_unit_file.unlink(missing_ok=True);subprocess.run(['/usr/bin/systemctl','daemon-reload'],check=False,timeout=10)
         if pre_guardian is not None:
             log=subprocess.run(['/usr/bin/journalctl','-u',pre_guardian.unit,'--no-pager','-n','100'],capture_output=True,text=True,timeout=10).stdout
-            for line in log.splitlines()[-30:]:print('CI_GUARDIAN_LOG '+line,flush=True)
+            if sys.exc_info()[0] is not None:
+                for line in log.splitlines()[-30:]:
+                    if '{\"Core_or_VM_authority\"' not in line:print('CI_GUARDIAN_LOG '+line,flush=True)
             pre_guardian.close()
         if watch is not None:watch.close()
         if rotation_session is not None:rotation_session.close()

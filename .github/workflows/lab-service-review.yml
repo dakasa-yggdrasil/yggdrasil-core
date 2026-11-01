@@ -1,0 +1,25 @@
+name: Disposable sealed LAB service rehearsal review
+on:
+  push:
+    branches: [codex/lab-service-rehearsal-20261031]
+permissions:
+  contents: read
+jobs:
+  diagnostic:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262
+        with:
+          persist-credentials: false
+      - name: Build and validate sealed LAB bundle
+        run: |
+          set -eu
+          target="$(mktemp -d /tmp/ci-lab-bundle.XXXXXX)"
+          trap 'sudo rm -rf "$target"' EXIT
+          python3 -B .github/diagnostics/lab-service/build.py --commit "$(git rev-parse HEAD)" \
+            --boot-id fc2c144a-7ea5-45a9-b6e5-180bb07166f2 --output "$target/bundle"
+          sudo chown -R root:root "$target"
+          sudo python3 -B .github/diagnostics/lab-service/verify_bundle.py "$target/bundle"
+      - name: Verify real systemd auxiliary cleanup after parent death
+        run: sudo python3 -B .github/diagnostics/lab-service/verify_auxiliary_cleanup.py

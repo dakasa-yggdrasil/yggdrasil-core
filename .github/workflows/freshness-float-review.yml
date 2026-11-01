@@ -1,7 +1,7 @@
 name: Disposable freshness deadline regression
 on:
   push:
-    branches: [codex/network-holder-integrated-20261031]
+    branches: [codex/lab-service-rehearsal-20261031]
 permissions:
   contents: read
 jobs:

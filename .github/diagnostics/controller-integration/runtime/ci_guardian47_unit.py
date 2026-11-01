@@ -1,5 +1,5 @@
 """Controller-side start, authentication and lifecycle of CI precommit Guardian."""
-import hashlib,os,socket,subprocess,time,uuid
+import hashlib,os,re,socket,subprocess,time,uuid
 from pathlib import Path
 import guarded_guardian47_ci as precommit,guarded_unit_identity as identity,guarded_nl as nl
 import native_structure as structure,transition_structure_DRAFT as trans
@@ -11,7 +11,11 @@ class Guardian47:
         script=Path(__file__).with_name('ci_guardian47_process.py').resolve()
         self.argv=['/usr/bin/python3','-B',str(script),str(self.path)]
         try:
-            subprocess.run(['/usr/bin/systemd-run','--quiet','--no-block','--unit='+self.unit,
+            auxiliary=os.environ.get('CI_AUXILIARY_SLICE','')
+            if auxiliary and re.fullmatch(r'dakasa-elastic-lab-[0-9a-f]{12}\.slice',auxiliary) is None:
+                raise RuntimeError('EXACT_LAB_AUXILIARY_SLICE_REQUIRED')
+            slice_args=['--slice='+auxiliary] if auxiliary else []
+            subprocess.run(['/usr/bin/systemd-run','--quiet','--no-block','--unit='+self.unit,*slice_args,
                 '--property=RuntimeMaxSec=90s','--setenv=CI_GUARDED_FIXTURE=1',
                 '--setenv=CI_HOLDER_TEST='+os.environ.get('CI_HOLDER_TEST','0'),
                 '--setenv=CI_HOST_NETNS='+os.environ['CI_HOST_NETNS'],
@@ -23,6 +27,8 @@ class Guardian47:
             if not self.path.exists():raise RuntimeError('GUARDIAN47_SOCKET_NOT_READY')
             self.channel=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM);self.channel.settimeout(10);self.channel.connect(str(self.path))
             props=identity._properties(self.unit)
+            if auxiliary and auxiliary not in props['ControlGroup'].split('/'):
+                raise RuntimeError('GUARDIAN_NOT_IN_LAB_AUXILIARY_SLICE')
             self.session=precommit.connect(origin,self.channel,guardian_unit=self.unit,invocation=props['InvocationID'],
                  guardian_argv=self.argv,source_sha256=hashlib.sha256(script.read_bytes()).hexdigest(),
                  identity=identity,nl=nl,structure=structure,transition=trans)
