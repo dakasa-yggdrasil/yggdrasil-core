@@ -231,7 +231,7 @@ func recoveryTestIsolatedDB(t *testing.T) *sql.DB {
 }
 
 func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
-	for _, scenario := range []string{"bad_return_digest", "bad_run_lineage", "foreign_executor", "different_resource", "valid"} {
+	for _, scenario := range []string{"bad_return_digest", "bad_run_lineage", "foreign_executor", "different_resource", "valid", "lab_core_bound_disposal"} {
 		t.Run(scenario, func(t *testing.T) {
 			db := recoveryTestIsolatedDB(t)
 			db.SetMaxOpenConns(1)
@@ -343,6 +343,13 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 				return e, j
 			}
 			original, originalJob := start(0)
+			var originalCanaryAt time.Time
+			if scenario == "lab_core_bound_disposal" {
+				// The declared signed canary and its bounded return must fit inside
+				// the actual original failed run; no synthetic late ACK is added.
+				originalCanaryAt = time.Now().UTC().Truncate(time.Microsecond)
+				time.Sleep(6 * time.Second)
+			}
 			response := capacityDispatchResponse(original, "failed")
 			for _, id := range []string{"plan-original-guest", "provision-original-notify", "retire-original-guest", "refresh-original-membership", "complete-original-provision", "finish-original-retirement", "complete-original-retirement"} {
 				s := model.WorkflowRunStepResult{ID: id, Status: "skipped"}
@@ -354,6 +361,9 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 				}
 				if id == "complete-original-provision" {
 					s.Status = "failed"
+					if scenario == "lab_core_bound_disposal" {
+						s.Metadata = map[string]any{"original_guest_reconcile_refusal_stage": "fresh_original_canary"}
+					}
 				}
 				response.Steps = append(response.Steps, s)
 			}
@@ -376,7 +386,10 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 			if err = FinishCapacityDispatch(ctx, db, previousJob, response, time.Now().UTC(), nil); err != nil {
 				t.Fatal("previous dispatch finish", err)
 			}
-			current, _ := start(2)
+			var current CapacityDispatchEnvelope
+			if scenario != "lab_core_bound_disposal" {
+				current, _ = start(2)
+			}
 			var originalWire, originalResult []byte
 			if err = db.QueryRow(`SELECT row_to_json(w)::text,w.result FROM public.workflow_runs w WHERE id=$1`, original.RunID).Scan(&originalWire, &originalResult); err != nil || !originalInstalledFailureResult(originalResult, pre, wf.ID) {
 				t.Fatal("original dispatch payload", err)
@@ -392,10 +405,17 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 				t.Fatal(e)
 			}
 			defer rt.Rollback()
-			for _, v := range []struct {
+			verifiedRuns := []struct {
 				id     uuid.UUID
 				result []byte
-			}{{original.RunID, originalResult}, {previous.RunID, previousResult}, {current.RunID, nil}} {
+			}{{original.RunID, originalResult}, {previous.RunID, previousResult}}
+			if scenario != "lab_core_bound_disposal" {
+				verifiedRuns = append(verifiedRuns, struct {
+					id     uuid.UUID
+					result []byte
+				}{current.RunID, nil})
+			}
+			for _, v := range verifiedRuns {
 				if e = store.installedGuestDispatchRunTx(ctx, rt, policy, p, v.id, v.result); e != nil {
 					t.Fatal("verified actual dispatch", v.id, e)
 				}
@@ -405,7 +425,12 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 				t.Fatal(e)
 			}
 			at := time.Now().UTC().Add(-12 * time.Second).Truncate(time.Microsecond)
-			read, pub, pubReturn, transport := capacity.RecoveryFixtureCausal(t, p, reg, receipt, uint64(pre.Fence+1), pre.LeaseOwner, at)
+			fixtureFence := pre.Fence + 1
+			if scenario == "lab_core_bound_disposal" {
+				at = originalCanaryAt
+				fixtureFence = pre.Fence
+			}
+			read, pub, pubReturn, transport := capacity.RecoveryFixtureCausal(t, p, reg, receipt, uint64(fixtureFence), pre.LeaseOwner, at)
 			wtx, e := db.BeginTx(ctx, nil)
 			if e != nil {
 				t.Fatal(e)
@@ -417,7 +442,11 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 					t.Fatal("fixture row", err)
 				}
 			}
-			write(`UPDATE public.capacity_mutation_grants SET state='confirmed' WHERE id=$1`, pre.OriginalCreateGrantID)
+			if scenario == "lab_core_bound_disposal" {
+				write(`UPDATE public.capacity_mutation_grants SET state='confirmed',grant_record=$2::jsonb WHERE id=$1`, pre.OriginalCreateGrantID, `{"grant":{"capability":"ensure_server"},"binding":{"ensure_capability":"ensure_server"}}`)
+			} else {
+				write(`UPDATE public.capacity_mutation_grants SET state='confirmed' WHERE id=$1`, pre.OriginalCreateGrantID)
+			}
 			for _, challenge := range []model.CapacityGuestNotifyCanaryChallenge{pub, read} {
 				phase := "read"
 				if challenge.ChallengeID == pub.ChallengeID {
@@ -457,6 +486,32 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 			write(`INSERT INTO public.capacity_intents(namespace,environment,domain,dimension,intent,updated_at) VALUES($1,$2,$3,$4,$5::jsonb,$6)`, policy.Metadata.Namespace, p.Environment, p.Domain, p.Dimension, string(raw(old)), old.UpdatedAt)
 			if e = wtx.Commit(); e != nil {
 				t.Fatal(e)
+			}
+			if scenario == "lab_core_bound_disposal" {
+				issuer := "collaborator:" + uuid.NewString()
+				result, requestErr := (CapacityStore{DB: db}).RequestFailedInstalledGuestCoreReplacement(ctx, pre.PreregistrationID, previous.RunID.String(), issuer)
+				if requestErr != nil {
+					t.Fatalf("LAB full Core-bound request: %v", requestErr)
+				}
+				if result.Stage != "requested" || result.ReplacementMode != FailedInstalledCoreReplacementMode || !result.BusinessEffectsPreserved || result.UsefulCapacityBefore != 0 {
+					t.Fatal("LAB disposition summary")
+				}
+				rows, readErr := (CapacityStore{DB: db}).ReadFailedInstalledGuestDisposal(ctx, pre.PreregistrationID)
+				if readErr != nil || len(rows) != 1 || rows[0].ID != result.ID {
+					t.Fatal("LAB request readback", readErr)
+				}
+				if _, duplicateErr := (CapacityStore{DB: db}).RequestFailedInstalledGuestCoreReplacement(ctx, pre.PreregistrationID, previous.RunID.String(), issuer); duplicateErr == nil {
+					t.Fatal("duplicate admission accepted")
+				}
+				if _, advanceErr := (CapacityStore{DB: db}).AdvanceFailedInstalledGuestCleanup(ctx, pre.PreregistrationID, result.ID); advanceErr == nil {
+					t.Fatal("missing original V2 quiescence admitted")
+				}
+				rows, readErr = (CapacityStore{DB: db}).ReadFailedInstalledGuestDisposal(ctx, pre.PreregistrationID)
+				if readErr != nil || len(rows) != 1 || rows[0].Stage != "requested" {
+					t.Fatal("refused advance altered lineage", readErr)
+				}
+				t.Log("LAB_CORE_BOUND_DISPOSAL_REQUESTED_READBACK_NO_DUPLICATE")
+				return
 			}
 			before := string(raw(old))
 			callAssessment := assessment

@@ -1,0 +1,51 @@
+name: LAB Hetzner signed disposal fixture
+on:
+  push:
+    branches: [codex/lab-hetzner-gen8-retirement-20261101]
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  signed-disposal:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: fixture-only
+          POSTGRES_DB: recovery_fixture
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd "pg_isready -U postgres -d recovery_fixture"
+          --health-interval 5s --health-timeout 5s --health-retries 12
+    env:
+      GOWORK: 'off'
+      GOMAXPROCS: '2'
+      CAPACITY_RECOVERY_FIXTURE_ONLY: 'true'
+      RECOVERY_FIXTURE_ADMIN_URL: 'postgres://postgres:fixture-only@127.0.0.1:5432/postgres?sslmode=disable'
+    steps:
+      - uses: actions/checkout@11bd71901bbe5b1630ceea73d27597364c9af683
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5
+        with:
+          go-version-file: go.mod
+          cache: true
+      - name: Execute signed synthetic installed Guest disposition
+        shell: bash
+        run: |
+          set -euo pipefail
+          [[ -z "$(git status --porcelain --untracked-files=all)" ]]
+          mkdir -p "$RUNNER_TEMP/lab-hetzner-signed"
+          go test -p=1 -race -buildvcs=true -tags recoveryfixture -count=1 -timeout=5m -v ./repository -run '^TestRecoveryFixtureResumeSetupPostgres/lab_core_bound_disposal$' 2>&1 | tee "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
+          grep -F 'LAB_CORE_BOUND_DISPOSAL_REQUESTED_READBACK_NO_DUPLICATE' "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
+      - name: Retain original test output
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02
+        with:
+          name: lab-hetzner-signed-${{ github.run_id }}-${{ github.run_attempt }}
+          path: ${{ runner.temp }}/lab-hetzner-signed/
+          if-no-files-found: warn
+          retention-days: 7
