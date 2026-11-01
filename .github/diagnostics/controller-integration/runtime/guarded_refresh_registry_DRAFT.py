@@ -42,6 +42,46 @@ class GuardianRefreshRegistry:
         need(os.getpid()==self.pid and not poll.poll(0) and self.nl.startticks(self.prep['pid'])==self.prep['start_ticks'],
              'ORIGINAL_PREPARER_AND_GUARDIAN_LIVE')
 
+    def observe_isolated_sender(self, custody):
+        """Read-only binding; does not prepare, authorize, cancel or send.
+
+        Future sender handoff must use this actual authenticated process and
+        both frozen FD sets. Existing prepare continues to require the original
+        preparer until the sender-session protocol is integrated.
+        """
+        import isolated_sender_custody_CI as isolated
+        import recovery_terminality_DRAFT as terminal
+        need(type(custody) is isolated.LiveSenderCustody and custody.pid==self.pid
+             and custody.anchor is not None and not custody.anchor.closed
+             and custody.marker.sender is custody.anchor and len(custody.fds)==4,
+             'ORIGINAL_ISOLATED_CUSTODY_REQUIRED')
+        self._preparer_live()
+        need(not terminal._pidfd_terminal(custody.anchor.verified['pidfd'])
+             and custody.anchor.netns==os.readlink('/proc/self/ns/net')
+             and self.nl.genid(custody.netlink)==custody.genid,
+             'SAME_LIVE_ISOLATED_SENDER_AND_GENID_REQUIRED')
+        with self.lock:
+            need(self.pending is None and self.state=='FIXTURE_EMPTY' and self.holder is None,
+                 'ISOLATED_OBSERVATION_REQUIRES_EMPTY_REGISTRY')
+        ids=[];sender=custody.anchor.verified['pid']
+        for record,pf,mf in zip(custody.records,custody.fds[::2],custody.fds[1::2]):
+            need(int(self.nl.fdinfo(sender,record['program_fd'])['prog_id'])==
+                 int(self.nl.fdinfo(os.getpid(),pf)['prog_id'])==record['program_id']
+                 and int(self.nl.fdinfo(sender,record['map_fd'])['map_id'])==
+                 int(self.nl.fdinfo(os.getpid(),mf)['map_id'])==record['map_id'],
+                 'ISOLATED_REGISTRY_FDS_MUST_MATCH')
+            self.reference.verify(record['program_id'],record['map_id'])
+            ids.append((record['program_id'],record['map_id']))
+        self._preparer_live()
+        need(not terminal._pidfd_terminal(custody.anchor.verified['pidfd'])
+             and self.nl.genid(custody.netlink)==custody.genid,
+             'SAME_LIVE_ISOLATED_SENDER_AND_GENID_REQUIRED')
+        with self.lock:
+            need(self.pending is None and self.state=='FIXTURE_EMPTY' and self.holder is None,
+                 'ISOLATED_OBSERVATION_REQUIRES_EMPTY_REGISTRY')
+        return {'pid':sender,'programs':ids,'genid':custody.genid,
+                'prepare_authority':False,'cancel_authority':False,'production_authority':False}
+
     def acquire_holder(self,authority,authority_module,acquire):
         """Only path to add a holder: serialize acquire with all refreshes."""
         with self.lock:

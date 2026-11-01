@@ -4,6 +4,7 @@ from pathlib import Path
 root=Path(__file__).resolve().parent;sys.path.insert(0,str(root/'runtime'))
 import drain_marker_v3_DRAFT as v3,guarded_nl as nl,guarded_unit_identity as identity
 import native_structure,nft_owner as nft,recovery_terminality_DRAFT as terminal
+import guarded_refresh_registry_DRAFT as registry,guarded_program_identity_DRAFT as program
 import isolated_sender_custody_CI as custody
 
 def run(*args,input=None):
@@ -17,7 +18,7 @@ before=nl.genid(net)
 server=socket.socket(socket.AF_UNIX,socket.SOCK_STREAM);server.bind(str(root/'sender.sock'));server.listen(2);server.settimeout(10)
 unit='ci-isolated-sender-'+uuid.uuid4().hex+'.service';unitfile=Path('/run/systemd/system')/unit
 script=(root/'runtime'/'ci_isolated_sender.py').resolve();argv=['/usr/bin/python3','-B',str(script),str(root)]
-channel=None;anchor=None;childfd=None;received=[];live=None
+channel=None;anchor=None;childfd=None;received=[];live=None;registry_peer=None;registry_channel=None;prep=None;reference=None
 try:
     bad_fd=os.environ.get('CI_BAD_FD_TEST')=='1'
     unitfile.write_text('[Service]\nType=simple\nKillMode=process\nRuntimeMaxSec=30s\nEnvironment=CI_GUARDED_FIXTURE=1\nEnvironment=CI_SENDER_BAD_FD_ID='+('1' if bad_fd else '0')+'\nEnvironment=CI_HOST_NETNS='+os.readlink('/proc/1/ns/net')+'\nEnvironment=CI_CONTROLLER_UNIT='+unit+'\nExecStart=/usr/bin/nsenter --net=/proc/'+str(os.getpid())+'/ns/net '+' '.join(argv)+'\n')
@@ -34,11 +35,24 @@ try:
     if bad_fd:raise AssertionError('mismatched sender FD identity accepted')
     anchor=live.anchor;marked=live.marker;records=live.records;received=live.fds
     assert live.genid==before
+    registry_channel,registry_peer=socket.socketpair()
+    self_argv=Path('/proc/self/cmdline').read_bytes().rstrip(b'\0').decode().split('\0')
+    self_unit=os.environ['CI_CUSTODIAN_UNIT'];self_props=identity._properties(self_unit)
+    prep=identity.authenticate(registry_channel,unit=self_unit,expected_invocation=self_props['InvocationID'],
+        expected_argv=self_argv,source_sha256=hashlib.sha256(Path(self_argv[2]).read_bytes()).hexdigest())
+    reference=program.GuardianProgramReference()
+    guardian_registry=registry.GuardianRefreshRegistry(registry_channel,prep,cache=None,sources=None,nl=nl,
+        verifier=None,current15=None,program_module=program,reference=reference,validate_kernel=lambda _:None)
+    observed=guardian_registry.observe_isolated_sender(live)
+    assert observed['pid']==anchor.verified['pid'] and not observed['prepare_authority'] and not observed['cancel_authority']
+    print('PASS actual Guardian registry observes authenticated isolated sender and original program FDs without authorizing',flush=True)
     childfd=os.pidfd_open(int((root/'sender-child.pid').read_text()))
     run('/usr/bin/systemctl','kill','--kill-whom=main','--signal=KILL',unit)
     deadline=time.monotonic()+5
     while not terminal._pidfd_terminal(anchor.verified['pidfd']):
         assert time.monotonic()<deadline;time.sleep(.02)
+    try:guardian_registry.observe_isolated_sender(live);raise AssertionError('dead isolated sender accepted')
+    except registry.Held as error:assert str(error)=='SAME_LIVE_ISOLATED_SENDER_AND_GENID_REQUIRED'
     try:terminal.prove_terminal_for_marker(marked);raise AssertionError('live descendant accepted')
     except terminal.Held as error:assert str(error)=='SENDER_CGROUP_OR_DESCENDANTS_STILL_POPULATED'
     with open(coord.writer_lock,'rb') as fence:
@@ -87,6 +101,10 @@ finally:
         try:signal.pidfd_send_signal(childfd,signal.SIGKILL)
         except ProcessLookupError:pass
         os.close(childfd)
+    if reference is not None:reference.close()
+    if prep is not None:os.close(prep['pidfd'])
+    if registry_channel is not None:registry_channel.close()
+    if registry_peer is not None:registry_peer.close()
     if live is not None:live.close()
     elif anchor is not None:anchor.close()
     if channel is not None:channel.close()
