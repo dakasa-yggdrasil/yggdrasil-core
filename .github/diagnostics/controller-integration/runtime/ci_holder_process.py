@@ -22,3 +22,5 @@ event=read()
 if event.get('event')!='REVOKED':raise RuntimeError('EXPECTED_HOLDER_REVOCATION')
 Path(revoked).write_text('REVOKED')
 s.close()
+# Deliberate fixture failure keeps systemd InvocationID observable after exit.
+sys.exit(42)

@@ -115,7 +115,7 @@ def main():
     raw=cmd('/usr/sbin/nft','-a','-j','list','ruleset')
     original=trans.OriginalPin(raw)
     records=[];first=None;uncertain=None;recovery=None;positive=None;session=None;server=None;prepared=None;initial_prepared=None;watch=None;pre_guardian=None;rotation_session=None;rotation_prepared=None
-    server_done=threading.Event();server_errors=[];worker=None;holder_unit=None;holder_pidfd=None;holder_state=None
+    server_done=threading.Event();server_errors=[];worker=None;holder_unit=None;holder_pidfd=None;holder_state=None;holder_cgroup=None;holder_unit_file=None
     try:
         import ci_reader_fixture,guarded_sources,guarded_preparation
         real_cache=ci_reader_fixture.start(endpoints)
@@ -252,15 +252,19 @@ def main():
             go=HERE/'holder-go';acquired=HERE/'holder-acquired';revoked=HERE/'holder-revoked'
             holder_script=(HERE/'runtime'/'ci_holder_process.py').resolve()
             holder_argv=['/usr/bin/python3','-B',str(holder_script),str(watch.path),str(go),str(acquired),str(revoked)]
-            subprocess.run(['/usr/bin/systemd-run','--quiet','--no-block','--unit='+holder_unit,
-                '--property=RuntimeMaxSec=20s','/usr/bin/nsenter','--net=/proc/%d/ns/net'%os.getpid(),*holder_argv],check=True,timeout=10)
+            holder_unit_file=Path('/run/systemd/system')/holder_unit
+            holder_unit_file.write_text('[Service]\nType=simple\nRuntimeMaxSec=20s\nExecStart=/usr/bin/nsenter --net=/proc/'+str(os.getpid())+'/ns/net '+' '.join(holder_argv)+'\n')
+            subprocess.run(['/usr/bin/systemctl','daemon-reload'],check=True,timeout=10)
+            subprocess.run(['/usr/bin/systemctl','start',holder_unit],check=True,timeout=10)
             until=time.monotonic()+8
             while True:
                 holder_props=guarded_unit_identity._properties(holder_unit)
                 if holder_props['ActiveState']=='active' and int(holder_props['MainPID'])>1:break
                 if time.monotonic()>until:raise RuntimeError('HOLDER_SYSTEMD_NOT_ACTIVE')
                 time.sleep(.02)
+            import recovery_terminality_DRAFT as terminal
             holder_pid=int(holder_props['MainPID']);holder_pidfd=os.pidfd_open(holder_pid)
+            holder_cgroup=terminal._CgroupRoot(holder_props['ControlGroup'])
             watch.control('CONNECT_HOLDER','HOLDER_LISTENING',unit=holder_unit,invocation=holder_props['InvocationID'],
                           argv=holder_argv,source_sha256=hashlib.sha256(holder_script.read_bytes()).hexdigest())
             go.touch(mode=0o600)
@@ -305,7 +309,9 @@ def main():
                         finally:probe_sock.close()
                     entered.set()
                     if not release.wait(8):raise RuntimeError('CI_RELEASE_TIMEOUT')
-                    if failure_order=='positive-first':return outcome
+                    if failure_order=='positive-first':
+                        if os.environ.get('CI_HOLDER_TEST')=='1':raise RuntimeError('CI_POSITIVE_ACK_UNKNOWN_AFTER_SEND')
+                        return outcome
                     self.sent+=1
                 return self.inner.send(payload)
             def __getattr__(self,name):return getattr(self.inner,name)
@@ -330,8 +336,12 @@ def main():
                      emitter=first,prepared=failure_prepared,apply=lambda:True,previous_key=None,
                      guarded_pin=next_pin,sender_session=rotation_session,sender_permit=failure_permit,
                      drain_intent=failure_drain_intent)
-            except Exception:
+            except Exception as error:
                 assert first.state=='HOLD_UNKNOWN_OR_UNVERIFIED' and first.nl.sent==1
+                if holder_state is not None:
+                    assert str(error)=='CI_POSITIVE_ACK_UNKNOWN_AFTER_SEND'
+                    assert not (receipts/('ACK-%03d.json'%first.counter)).exists()
+                    print('PASS holder-active 50-to-50 sender ACK unobserved; intent retained and no replay',flush=True)
             injector.join(10);assert not injector.is_alive() and not failure_errors and len(failure_result)==1
             denied_by_guardian=failure_result[0];assert denied_by_guardian['reader_invalidated']
             if holder_state is not None:
@@ -343,7 +353,17 @@ def main():
                     time.sleep(.01)
                 poll=select.poll();poll.register(holder_pidfd,select.POLLIN)
                 assert poll.poll(5000),'HOLDER_PIDFD_NOT_TERMINAL'
-                print('PASS 50-to-50 send while holder active; separate Guardian revoked holder and holder process exited',flush=True)
+                deadline=time.monotonic()+5
+                while True:
+                    holder_terminal=terminal._systemd(holder_unit)
+                    if (holder_terminal['InvocationID']==holder_props['InvocationID']
+                        and holder_terminal['MainPID']=='0' and holder_terminal['ActiveState']=='failed'
+                        and holder_terminal['SubState']=='failed' and holder_terminal['Job']==''
+                        and not holder_cgroup.populated()):break
+                    if time.monotonic()>deadline:raise RuntimeError('HOLDER_CGROUP_OR_UNIT_NOT_TERMINAL:'+str(holder_terminal))
+                    time.sleep(.02)
+                assert terminal._systemd(holder_unit)==holder_terminal and not holder_cgroup.populated()
+                print('PASS 50-to-50 send with active holder; Guardian revoked it and original systemd invocation/cgroup terminated',flush=True)
             assert drain.marker_exists(), 'uncertain prior intent must remain'
             try:
                 with drain.admission_or_other_writer():pass
@@ -414,7 +434,10 @@ def main():
         print('BOUNDARY: independent legacy corpus does not prove v3 recovery',flush=True)
     finally:
         if holder_pidfd is not None:os.close(holder_pidfd)
+        if holder_cgroup is not None:holder_cgroup.close()
         if holder_unit is not None:subprocess.run(['/usr/bin/systemctl','stop',holder_unit],check=False,timeout=10)
+        if holder_unit_file is not None:
+            holder_unit_file.unlink(missing_ok=True);subprocess.run(['/usr/bin/systemctl','daemon-reload'],check=False,timeout=10)
         if pre_guardian is not None:pre_guardian.close()
         if watch is not None:watch.close()
         if rotation_session is not None:rotation_session.close()
