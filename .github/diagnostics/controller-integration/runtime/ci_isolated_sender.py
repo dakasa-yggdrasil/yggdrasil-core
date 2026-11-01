@@ -21,7 +21,9 @@ child=os.fork()
 if child==0:
     while True:time.sleep(60)
 (root/'sender-child.pid').write_text(str(child))
-msg=(json.dumps({'records':records},sort_keys=True)+'\n').encode()
+published=[dict(item) for item in records]
+if os.environ.get('CI_SENDER_BAD_FD_ID')=='1':published[0]['program_id']+=1
+msg=(json.dumps({'records':published},sort_keys=True)+'\n').encode()
 fds=array.array('i',[r[k] for r in records for k in ('program_fd','map_fd')])
 if channel.sendmsg([msg],[(socket.SOL_SOCKET,socket.SCM_RIGHTS,fds)])!=len(msg):raise RuntimeError('FD_TRANSFER_FAILED')
 # This fixture does not consume a Guardian permit and does not invoke submit.

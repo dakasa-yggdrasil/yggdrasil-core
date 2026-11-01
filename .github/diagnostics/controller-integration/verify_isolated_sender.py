@@ -19,11 +19,19 @@ unit='ci-isolated-sender-'+uuid.uuid4().hex+'.service';unitfile=Path('/run/syste
 script=(root/'runtime'/'ci_isolated_sender.py').resolve();argv=['/usr/bin/python3','-B',str(script),str(root)]
 channel=None;anchor=None;childfd=None;received=[];live=None
 try:
-    unitfile.write_text('[Service]\nType=simple\nKillMode=process\nRuntimeMaxSec=30s\nEnvironment=CI_GUARDED_FIXTURE=1\nEnvironment=CI_HOST_NETNS='+os.readlink('/proc/1/ns/net')+'\nEnvironment=CI_CONTROLLER_UNIT='+unit+'\nExecStart=/usr/bin/nsenter --net=/proc/'+str(os.getpid())+'/ns/net '+' '.join(argv)+'\n')
+    bad_fd=os.environ.get('CI_BAD_FD_TEST')=='1'
+    unitfile.write_text('[Service]\nType=simple\nKillMode=process\nRuntimeMaxSec=30s\nEnvironment=CI_GUARDED_FIXTURE=1\nEnvironment=CI_SENDER_BAD_FD_ID='+('1' if bad_fd else '0')+'\nEnvironment=CI_HOST_NETNS='+os.readlink('/proc/1/ns/net')+'\nEnvironment=CI_CONTROLLER_UNIT='+unit+'\nExecStart=/usr/bin/nsenter --net=/proc/'+str(os.getpid())+'/ns/net '+' '.join(argv)+'\n')
     run('/usr/bin/systemctl','daemon-reload');run('/usr/bin/systemctl','start',unit)
     channel,_=server.accept();props=identity._properties(unit)
-    live=custody.LiveSenderCustody(channel,unit=unit,invocation=props['InvocationID'],argv=argv,
-        source_sha256=hashlib.sha256(script.read_bytes()).hexdigest(),coord=coord,netlink=net)
+    try:
+        live=custody.LiveSenderCustody(channel,unit=unit,invocation=props['InvocationID'],argv=argv,
+            source_sha256=hashlib.sha256(script.read_bytes()).hexdigest(),coord=coord,netlink=net)
+    except custody.Held as error:
+        if not bad_fd or str(error)!='SENDER_AND_CUSTODIAN_FDS_MUST_MATCH':raise
+        assert coord.marker_exists()
+        print('PASS mismatched sender FD identity rejected and marker retained',flush=True)
+        sys.exit(0)
+    if bad_fd:raise AssertionError('mismatched sender FD identity accepted')
     anchor=live.anchor;marked=live.marker;records=live.records;received=live.fds
     assert live.genid==before
     childfd=os.pidfd_open(int((root/'sender-child.pid').read_text()))
@@ -77,6 +85,7 @@ finally:
     elif anchor is not None:anchor.close()
     if channel is not None:channel.close()
     server.close();net.close()
+    subprocess.run(['/usr/bin/systemctl','kill','--kill-whom=all','--signal=KILL',unit],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=10)
     subprocess.run(['/usr/bin/systemctl','stop',unit],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=10)
     unitfile.unlink(missing_ok=True)
     subprocess.run(['/usr/bin/systemctl','daemon-reload'],stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,timeout=10)
