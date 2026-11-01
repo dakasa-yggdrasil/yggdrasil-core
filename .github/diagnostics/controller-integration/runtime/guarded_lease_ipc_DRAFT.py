@@ -8,13 +8,17 @@ is observational; effect-boundary admission must be independently fenced.
 import json
 import socket
 import threading
+import select
+import time
+import guarded_effect_lease_two_peers_DRAFT as effect_lease
 
 
 class HolderSession:
-    def __init__(self, channel, authority, acquire, validate_status):
+    def __init__(self, channel, authority, acquire, validate_status, *, renew=None, status=None, release=None, on_lost=None):
         if type(channel) is not socket.socket or channel is not authority.channel or not callable(acquire) or not callable(validate_status):
             raise RuntimeError('ORIGINAL_AUTHENTICATED_HOLDER_CHANNEL_REQUIRED')
         self.channel, self.authority, self.acquire, self.validate_status = channel, authority, acquire, validate_status
+        self.renew,self.status,self.release,self.on_lost=renew,status,release,on_lost
         self.lock = threading.Lock()
         self.stopped = threading.Event()
         self.last_id = 0
@@ -25,11 +29,25 @@ class HolderSession:
             self.channel.sendall(encoded)
 
     def revoke_and_notify(self):
-        self.authority.revoke()
+        if self.on_lost is not None:self.on_lost()
+        else:self.authority.revoke()
         try:self._send({'event':'REVOKED'})
         except (BrokenPipeError,ConnectionResetError,OSError):pass
 
     def serve(self):
+        def monitor():
+            while not self.stopped.wait(.05):
+                with self.authority.lock:lease=self.authority.lease
+                if lease is None:continue
+                try:self.authority._source_live(lease)
+                except Exception:
+                    with self.authority.lock:same=self.authority.lease is lease and not lease['revoked']
+                    if not same:continue
+                    self.revoke_and_notify();self.stopped.set()
+                    try:self.channel.shutdown(socket.SHUT_RD)
+                    except OSError:pass
+                    return
+        worker=threading.Thread(target=monitor);worker.start()
         stream = self.channel.makefile('rb',buffering=0)
         try:
             while not self.stopped.is_set():
@@ -51,19 +69,28 @@ class HolderSession:
                         issued=self.acquire(req['until_ns'])
                         value={key:issued[key] for key in ('token','expires_monotonic_ns','genid','external_effect_authorized','production_authority')}
                     elif op=='status' and set(req)=={'id','op','token'} and type(req['token']) is str:
-                        self.authority.status(req['token'])
-                        self.validate_status()
-                        value=self.authority.status(req['token'])
+                        if self.status is not None:value=self.status(req['token'])
+                        else:
+                            self.authority.status(req['token']);self.validate_status()
+                            value=self.authority.status(req['token'])
+                    elif (op=='renew' and set(req)=={'id','op','token','until_ns'}
+                          and type(req['token']) is str and type(req['until_ns']) is int and self.renew is not None):
+                        value=self.renew(req['token'],req['until_ns'])
                     elif op=='release' and set(req)=={'id','op','token'} and type(req['token']) is str:
-                        value=self.authority.release(req['token'])
+                        value=(self.release(req['token']) if self.release is not None else self.authority.release(req['token']))
                     else:raise RuntimeError('EXACT_OPERATION_FIELDS_REQUIRED')
                     if value.get('external_effect_authorized') is not False:
                         raise RuntimeError('NO_EXTERNAL_AUTHORITY')
                     self._send({'id':ident,'ok':True,**value})
+                except effect_lease.BusyBeforeRenew:
+                    self._send({'id':ident,'ok':False,'reason':'BUSY'})
                 except Exception:
                     self.revoke_and_notify()
                     self._send({'id':ident,'ok':False,'reason':'HOLD'})
         finally:
-            self.authority.revoke()
+            if self.on_lost is not None:self.on_lost()
+            else:self.authority.revoke()
             self.stopped.set()
+            worker.join(3)
+            if worker.is_alive():raise RuntimeError('HOLDER_MONITOR_NOT_STOPPED')
             stream.close()

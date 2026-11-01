@@ -21,16 +21,16 @@ from drain_coordination_DRAFT import FenceError
 HERE=Path(__file__).resolve().parent
 ROOT=HERE.parent
 # Generated from this isolated package, not accepted from the RPC caller.
-CI_SOURCE_SHA256 = {'ci_holder_process.py': 'bbfe28072bbb6622d4dcd809725152707c8ab4b63085ca1b618839e823277e1a',
- 'guarded_effect_lease_two_peers_DRAFT.py': 'dae81780de396d99d9d84b99b2c9fc75901b2fb8eee5e3a2be73a3b0a692157e',
- 'guarded_lease_ipc_DRAFT.py': '2ccff8cb8dd953d94784913aeb54a2aee3bc593a8eea4b1237a924cd6f977361',
- 'ci_guardian50_session.py': 'eef6a6a593f575e3f9213d256b5a02990a32d78cbfd6c00150018d6d3e80f426',
+CI_SOURCE_SHA256 = {'ci_guardian50_session.py': '97a2a9a5ff0c6b8c7146991112944dc1cf20b126c18a0f1f41f1f7305184f59d',
+ 'ci_holder_process.py': '27e10800cc4cd535ac0a807d1fd520ef5d5f4f47d359196e0d2b1c698430917d',
  'ci_nl_probe.py': '92ef4d57f659f2683af06640be77e0dc04eb775d6fd5670b35fa720af3a546de',
  'coverage.py': 'c13f2d872f4b9a8351aa2999372ac8f2fd472f4db8e015810b3d6c28a596bfa6',
  'drain_marker_v3_DRAFT.py': '652d3660617440058a4cc8f3f8b41d05a7b75e777e4a991f1e8030050f348906',
+ 'guarded_effect_lease_two_peers_DRAFT.py': '087d0768c5d399c5aa2c24f446a0f27d8af7cbb1f09c9212c2fc5e9a527df277',
+ 'guarded_lease_ipc_DRAFT.py': 'c682ecc925ed0e125be1f18142b563bca6d7fd3e48501ba3753f3a8b8cc5177a',
  'guarded_live_observation.py': '10686a406a02d473e7d47b89d74c1b98dc7969bb82cb1459242739b2e9e6ce2c',
  'guarded_nl.py': '6a4fd005a7bd053ca71c424672dde85d87ca496510b01f6ebdc97a91f607b71a',
- 'guarded_refresh_registry_DRAFT.py': 'e15753b01adcbe4fe23d993496066de8b47a65fd4efdf422c84ceb45f784d71f',
+ 'guarded_refresh_registry_DRAFT.py': '5d2829393552a1dd2ba4fb07010f1365eec77d2739cceba1d479b30d2e5dd76b',
  'guarded_sources.py': 'e8935b8406ba4b4571d7779d65c2f280a3ed9f2aea128ce58079c2a0b9b40a66',
  'guarded_verifier.py': '66f19e364e627491fee88d61362c08fb860c29667e23654a447ab55691d74f41',
  'native_structure.py': '7da5d5ef6b543b5a8ec54bf92520e5999f06ae816c31d7b377ee51c1d2738ebf',

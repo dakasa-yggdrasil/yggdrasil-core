@@ -19,6 +19,10 @@ import time
 class Held(Exception):
     pass
 
+class BusyBeforeRenew(Exception):
+    """No renewal or new sender effect was performed."""
+    pass
+
 
 def need(value, reason):
     if not value:
@@ -60,6 +64,9 @@ class EffectLeaseAuthority:
         self.lock = threading.Lock()
         self.lease = None
         self.pending = None
+        # Lease-owned duplicated pidfds are not closed during an in-flight
+        # reader; retire them only after all session threads have stopped.
+        self._owned_sender_pidfds = []
 
     def _peer_live(self):
         p = select.poll();p.register(self.peer_pidfd, select.POLLIN)
@@ -109,16 +116,57 @@ class EffectLeaseAuthority:
         until = min(requested_until_ns, deadline)
         need(now < until and all(deadline >= until for rows in maps.values() for deadline in rows.values()),
              'ALL_ORIGINAL_TUPLES_MUST_COVER_LEASE')
+        owned_fd=os.dup(verified.sender_pidfd)
         lease = {'token': secrets.token_hex(32), 'until': until, 'epoch': genid,
                  'receipt_sha256': receipt_hash, 'invalidation_epoch': epoch,
-                 'maps': maps, 'sender_pidfd': verified.sender_pidfd, 'revoked': False}
-        self._source_live(lease)
-        with self.lock:
-            need(self.lease is None, 'ONE_OUTSTANDING_EFFECT_LEASE')
-            self.lease = lease
+                 'maps': maps, 'sender_pidfd': owned_fd, 'revoked': False}
+        try:
+            self._source_live(lease)
+            with self.lock:
+                need(self.lease is None, 'ONE_OUTSTANDING_EFFECT_LEASE')
+                self._owned_sender_pidfds.append(owned_fd)
+                self.lease = lease
+        except BaseException:
+            os.close(owned_fd);raise
         return {'token': lease['token'], 'expires_monotonic_ns': until, 'genid': lease['epoch'],
                 'receipt_sha256': lease['receipt_sha256'], 'lab_only': True,
                 'external_effect_authorized': False, 'production_authority': False}
+
+    def renew(self, token, verified, chain, requested_until_ns, live):
+        """CI-only: extend only on the same live confirmed Guardian generation."""
+        lease=self._require_lease(token);now=time.monotonic_ns()
+        need(type(verified) is self.verifier._VerifiedGeneration
+             and verified.capability is self.verifier._VERIFIED_CAPABILITY
+             and verified.guardian_pid==self.pid and verified.reader_cache is self.cache
+             and verified.sender_pidfd is not None, 'ORIGINAL_VERIFIED_GENERATION_REQUIRED')
+        need(type(chain) is self.current15.CoverageChain and chain.cache is self.cache
+             and chain.pid==self.pid and chain.verifier is self.verifier
+             and chain.last_verified is verified and chain.last_observation is not None,
+             'ORIGINAL_GUARDIAN_COVERAGE_CHAIN_REQUIRED')
+        qualified,start,observed,deadline,epoch,genid,receipt_hash=chain.last_observation
+        need(qualified is True and observed-start>=15_000_000_000 and now<deadline
+             and chain.genid==genid==lease['epoch'] and chain.epoch==epoch==lease['invalidation_epoch']
+             and chain.deadline_ns==deadline and receipt_hash==lease['receipt_sha256'],
+             'SAME_CONTINUOUS_VERIFIED_LEASE_GENERATION_REQUIRED')
+        need(type(requested_until_ns) is int and now<requested_until_ns<=now+5_000_000_000,
+             'BOUNDED_LAB_LEASE_REQUEST')
+        obs=live['observation']
+        need(live.get('invalidation_epoch')==epoch and obs['genid']==genid
+             and obs['receipt_sha256']==receipt_hash, 'LIVE_KERNEL_AND_SOURCE_REQUIRED_FOR_RENEW')
+        until=min(requested_until_ns,deadline,obs['kernel_min_deadline_ns'])
+        maps={role:dict(verified.actual[role]) for role in ('inbound','reverse')}
+        need(until>lease['until'] and all(set(maps[role])==set(lease['maps'][role])
+             and all(expiry>=until for expiry in maps[role].values()) for role in maps),
+             'RENEWED_LEASE_MUST_BE_COVERED')
+        current=self._source_live(lease)
+        need(all(all(current[role][key]>=until for key in maps[role]) for role in maps),
+             'RENEWAL_EXCEEDS_CURRENT_SOURCE_DEADLINE')
+        with self.lock:
+            need(self.lease is lease and not lease['revoked'] and time.monotonic_ns()<lease['until'],
+                 'PREVIOUS_LEASE_MUST_STILL_BE_LIVE')
+            renewed=dict(lease);renewed['until']=until;self.lease=renewed
+        return {'token':renewed['token'],'expires_monotonic_ns':until,'genid':genid,
+                'lab_only':True,'external_effect_authorized':False,'production_authority':False}
 
     def _require_lease(self, token):
         with self.lock:
@@ -224,9 +272,12 @@ class EffectLeaseAuthority:
         self._source_live(lease)
         with self.lock:
             need(self.lease is lease and self.pending is pending and not lease['revoked'], 'SAME_PENDING_LIVE_LEASE')
-            lease['epoch'], lease['receipt_sha256'] = genid, receipt_hash
-            lease['sender_pidfd'] = verified.sender_pidfd
-            lease['maps'] = {role: dict(verified.actual[role]) for role in ('inbound', 'reverse')}
+            owned_fd=os.dup(verified.sender_pidfd)
+            successor=dict(lease)
+            successor.update({'epoch':genid,'receipt_sha256':receipt_hash,'sender_pidfd':owned_fd,
+                              'maps':{role:dict(verified.actual[role]) for role in ('inbound','reverse')}})
+            self._owned_sender_pidfds.append(owned_fd)
+            self.lease=successor
             self.pending = None
         return {'successor_verified': True, 'genid': genid, 'external_effect_authorized': False}
 
@@ -246,3 +297,5 @@ class EffectLeaseAuthority:
         self.revoke()
         os.close(self.peer_pidfd)
         if self.preparer_pidfd is not None:os.close(self.preparer_pidfd)
+        for fd in self._owned_sender_pidfds:os.close(fd)
+        self._owned_sender_pidfds.clear()

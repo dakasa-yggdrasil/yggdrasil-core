@@ -246,7 +246,8 @@ def main():
             real_cache,guardian_cache=(r.cache for r in continuous_readers)
         import ci_guarded_driver
         external_stop=threading.Event() if os.environ.get('CI_CONTINUOUS_TEST')=='1' else None
-        timer=threading.Timer(42,external_stop.set) if external_stop is not None else None
+        renew_test=os.environ.get('CI_HOLDER_RENEW_TEST')=='1'
+        timer=threading.Timer(21 if renew_test else 42,external_stop.set) if external_stop is not None else None
         if timer is not None:timer.daemon=True;timer.start()
         driver=ci_guarded_driver.GuardedDriver(watch=watch,sender=rotation_session,emitter=first,
                   positive_session=positive_guardian,ceiling_cache=guardian_cache,endpoints=endpoints,
@@ -256,9 +257,9 @@ def main():
         loop_result=controller.serve_hot(running_reader,active_pin,apply=lambda:True,guarded_driver=driver)
         if timer is not None:
             timer.cancel();timer.join()
-            assert external_stop.is_set() and len(driver.results)>=7
+            assert external_stop.is_set() and len(driver.results)>=(3 if renew_test else 7)
             span=driver.results[-1]['confirmed_ns']-driver.results[0]['confirmed_ns']
-            assert span>=35_000_000_000,(span,len(driver.results))
+            assert span>=(15_000_000_000 if renew_test else 35_000_000_000),(span,len(driver.results))
             print('PASS independent stop signal, confirmed guarded rotations span %.2fs with no expired prior window'%(span/1e9),flush=True)
         else:assert len(driver.results)==(4 if os.environ.get('CI_HOLDER_TEST')=='1' else 2)
         assert loop_result['sequence']==len(driver.results)+1 and loop_result['production_authority'] is False
@@ -278,7 +279,9 @@ def main():
             holder_script=(HERE/'runtime'/'ci_holder_process.py').resolve()
             holder_argv=['/usr/bin/python3','-B',str(holder_script),str(watch.path),str(go),str(acquired),str(revoked)]
             holder_unit_file=Path('/run/systemd/system')/holder_unit
-            holder_unit_file.write_text('[Service]\nType=simple\nRuntimeMaxSec=20s\nExecStart=/usr/bin/nsenter --net=/proc/'+str(os.getpid())+'/ns/net '+' '.join(holder_argv)+'\n')
+            holder_unit_file.write_text('[Service]\nType=simple\nRuntimeMaxSec='+('80s' if renew_test else '20s')+
+                '\nEnvironment=CI_HOLDER_RENEW_TEST='+('1' if renew_test else '0')+
+                '\nExecStart=/usr/bin/nsenter --net=/proc/'+str(os.getpid())+'/ns/net '+' '.join(holder_argv)+'\n')
             subprocess.run(['/usr/bin/systemctl','daemon-reload'],check=True,timeout=10)
             subprocess.run(['/usr/bin/systemctl','start',holder_unit],check=True,timeout=10)
             until=time.monotonic()+8
@@ -304,6 +307,30 @@ def main():
             holder_state=json.loads(acquired.read_text())
             assert holder_state['until']>time.monotonic_ns()+500_000_000
             print('PASS separate systemd Guardian and holder; real continuous coverage >=15s and active bounded lease',flush=True)
+            if renew_test:
+                renew_stop=threading.Event();renew_timer=threading.Timer(39,renew_stop.set);renew_timer.daemon=True;renew_timer.start()
+                renew_driver=ci_guarded_driver.GuardedDriver(watch=watch,sender=rotation_session,emitter=first,
+                     positive_session=positive_guardian,ceiling_cache=guardian_cache,endpoints=endpoints,max_commits=12,
+                     stop_signal=renew_stop)
+                renew_driver.previous_expiry_ns=driver.results[-1]['minimum_deadline_ns']
+                renew_reader=types.SimpleNamespace(cache=real_cache,stop=threading.Event(),shutdown_deadline=lambda:time.monotonic()+5)
+                renew_result=controller.serve_hot(renew_reader,next_pin,apply=lambda:True,guarded_driver=renew_driver,
+                                                   initial_sequence=loop_result['sequence'])
+                renew_timer.cancel();renew_timer.join();next_pin=renew_result['pin']
+                until=time.monotonic()+2;holder_state=None
+                while time.monotonic()<until:
+                    try:
+                        value=json.loads(acquired.read_text())
+                        if value.get('last_ack_ns',0)-value.get('started_ns',0)>=35_000_000_000:
+                            holder_state=value;break
+                    except (OSError,ValueError):pass
+                    time.sleep(.02)
+                assert holder_state is not None and holder_state['renewals']>=10 and len(set(holder_state['genids']))>=2,holder_state
+                assert holder_state['until']>time.monotonic_ns()+250_000_000
+                print('PASS active holder renewed without gaps for %.2fs across %d generations (%d renewals, %d busy)'%
+                    ((holder_state['last_ack_ns']-holder_state['started_ns'])/1e9,len(set(holder_state['genids'])),
+                     holder_state['renewals'],holder_state['busy_count']),flush=True)
+
 
         # Keep watch running while a second positive transaction is ready to
         # send. The Guardian invalidates its own Reader and wins a distinct
@@ -321,7 +348,7 @@ def main():
         failure_permit=rotation_session.prepare(list(failure_records),until_ns=time.monotonic_ns()+5_000_000_000)
         failure_stop=threading.Event();failure_wake=threading.Event()
         failure_owner=native_structure._OwnershipReader(next_pin,failure_stop,failure_wake);failure_owner.start();failure_lease=None
-        entered=threading.Event();release=threading.Event();failure_result=[];failure_errors=[];positive_generation=[];positive_send_time=[]
+        entered=threading.Event();release=threading.Event();failure_result=[];failure_errors=[];positive_generation=[];positive_send_time=[];holder_send_deadline=[]
         failure_order=os.environ.get('CI_FAILURE_ORDER','deny-first')
         assert failure_order in ('deny-first','positive-first')
         class DelayedPositiveSend:
@@ -329,6 +356,16 @@ def main():
             def send(self,payload):
                 if self.sent==0 and len(payload)>=6 and struct.unpack_from('<H',payload,4)[0]==0x10:
                     if failure_order=='positive-first':
+                        if renew_test:
+                            until=time.monotonic()+.3;seen=None
+                            while time.monotonic()<until:
+                                try:
+                                    value=json.loads(acquired.read_text())
+                                    if value.get('until',0)>time.monotonic_ns():seen=value;break
+                                except (OSError,ValueError):pass
+                                time.sleep(.005)
+                            if seen is None:raise RuntimeError('NO_LIVE_HOLDER_ACK_AT_SEND')
+                            holder_send_deadline.append(seen['until'])
                         outcome=self.inner.send(payload);self.sent+=1;positive_send_time.append(time.monotonic_ns())
                         probe_sock=socket.socket(socket.AF_NETLINK,socket.SOCK_RAW,12);probe_sock.bind((0,0));probe_sock.settimeout(5)
                         try:positive_generation.append(nl.genid(probe_sock))
@@ -372,7 +409,7 @@ def main():
             denied_by_guardian=failure_result[0];assert denied_by_guardian['reader_invalidated']
             if holder_state is not None:
                 assert failure_order=='positive-first' and len(positive_send_time)==1
-                assert positive_send_time[0]<holder_state['until'],'HOLDER_EXPIRED_BEFORE_SEND'
+                assert positive_send_time[0]<(holder_send_deadline[0] if renew_test else holder_state['until']),'HOLDER_EXPIRED_BEFORE_SEND'
                 until=time.monotonic()+5
                 while not revoked.exists():
                     if time.monotonic()>until:raise RuntimeError('HOLDER_REVOCATION_NOT_OBSERVED')

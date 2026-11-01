@@ -35,6 +35,7 @@ class GuardianRefreshRegistry:
         self.channel,self.prep,self.cache,self.sources,self.nl=channel,prep_identity,cache,sources,nl
         self.verifier,self.current15,self.reference,self.validate_kernel=verifier,current15,reference,validate_kernel
         self.pid=os.getpid();self.lock=threading.Lock();self.holder=None;self.state='FIXTURE_EMPTY';self.pending=None
+        self.current_verified=None
         self._preparer_live()
 
     def _preparer_live(self):
@@ -52,6 +53,27 @@ class GuardianRefreshRegistry:
             need(authority.lease is not None and not authority.lease['revoked'] and value.get('external_effect_authorized') is False,
                  'ORIGINAL_HOLDER_LEASE_REQUIRED')
             self.holder=authority;self.state='HOLDER';return value
+
+    def observe_holder(self,authority,operation):
+        """Reserve the registry while a read/renewal is independently verified."""
+        import guarded_effect_lease_two_peers_DRAFT as effect_lease
+        with self.lock:
+            need(self.state=='HOLDER' and self.holder is authority and self.current_verified is not None,
+                 'ORIGINAL_LIVE_HOLDER_REQUIRED')
+            if self.pending is not None:raise effect_lease.BusyBeforeRenew('REFRESH_OR_HOLDER_OPERATION_PENDING')
+            reservation=object();self.pending=reservation;verified=self.current_verified
+        try:
+            self._preparer_live()
+            value=operation(verified)
+            with self.lock:
+                need(self.pending is reservation and self.state=='HOLDER' and self.holder is authority,
+                     'HOLDER_OPERATION_STATE_CHANGED')
+                self.pending=None
+            return value
+        except BaseException:
+            with self.lock:
+                if self.pending is reservation:self.pending=None
+            raise
 
     def holder_lost(self):
         """Loss is ambiguous until explicit fenced recovery, never 'absent'."""
@@ -171,13 +193,35 @@ class GuardianRefreshRegistry:
                  'CONFIRMED_SUCCESSOR_MUST_COVER_HOLDER')
             holder._source_live(lease)
         self._preparer_live()
-        with self.lock:
-            need(self.pending is proof and self.state==proof.mode and self.holder is holder,'SAME_PENDING_LIVE_REFRESH')
-            self.pending=None
+        owned_fd=os.dup(verified.sender_pidfd) if holder is not None else None
+        try:
+            if owned_fd is not None:
+                poll=select.poll();poll.register(owned_fd,select.POLLIN)
+                need(not poll.poll(0),'SUCCESSOR_SENDER_MUST_BE_LIVE')
+            with self.lock:
+                need(self.pending is proof and self.state==proof.mode and self.holder is holder,'SAME_PENDING_LIVE_REFRESH')
+                if holder is not None:
+                    with holder.lock:
+                        need(holder.lease is lease and not lease['revoked'] and time.monotonic_ns()<lease['until']
+                             and lease['epoch']==proof.genid and lease['invalidation_epoch']==proof.epoch,
+                             'SAME_LIVE_HOLDER_AT_SUCCESSOR_COMMIT')
+                        successor=dict(lease)
+                        successor.update({'epoch':result['after'],'receipt_sha256':obs['receipt_sha256'],
+                            'maps':{role:dict(verified.actual[role]) for role in ('inbound','reverse')},
+                            'sender_pidfd':owned_fd})
+                        holder._owned_sender_pidfds.append(owned_fd)
+                        holder.lease=successor
+                        owned_fd=None
+                self.current_verified=verified
+                self.pending=None
+        finally:
+            if owned_fd is not None:os.close(owned_fd)
         return {'same_guardian_successor_verified':True,'mode':proof.mode,'external_effect_authorized':False,'production_authority':False}
 
     def fail_or_unknown(self,proof):
+        holder=None
         with self.lock:
             need(self.pending is proof,'SAME_PENDING_REFRESH_REQUIRED')
-            if proof.sent:self.state='UNKNOWN'
+            if proof.sent:self.state='UNKNOWN';holder=self.holder
             else:self.pending=None
+        if holder is not None:holder.revoke()

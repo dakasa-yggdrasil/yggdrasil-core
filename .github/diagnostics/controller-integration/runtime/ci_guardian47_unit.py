@@ -12,7 +12,7 @@ class Guardian47:
         self.argv=['/usr/bin/python3','-B',str(script),str(self.path)]
         try:
             subprocess.run(['/usr/bin/systemd-run','--quiet','--no-block','--unit='+self.unit,
-                '--property=RuntimeMaxSec=90s','--setenv=CI_GUARDED_FIXTURE=1',
+                '--property=RuntimeMaxSec='+('180s' if os.environ.get('CI_HOLDER_RENEW_TEST')=='1' else '90s'),'--setenv=CI_GUARDED_FIXTURE=1',
                 '--setenv=CI_HOLDER_TEST='+os.environ.get('CI_HOLDER_TEST','0'),
                 '--setenv=CI_HOST_NETNS='+os.environ['CI_HOST_NETNS'],
                 '--setenv=CI_DENY_ACK_UNCERTAIN='+os.environ.get('CI_DENY_ACK_UNCERTAIN','0'),

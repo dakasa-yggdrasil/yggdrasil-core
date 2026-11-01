@@ -75,6 +75,7 @@ def serve(channel,listener):
         reference=program_module.GuardianProgramReference()
         reg=registry_module.GuardianRefreshRegistry(channel,controller,cache=cache,sources=guarded_sources,nl=nl,
                 verifier=guarded_verifier,current15=current15,program_module=program_module,reference=reference,validate_kernel=validate)
+        reg.current_verified=verified
         chain=current15.CoverageChain(cache,guarded_sources,guarded_verifier);proof=None
         def launch_watch():
             nonlocal watcher,watch_stop
@@ -213,10 +214,26 @@ def serve(channel,listener):
                 def acquire_holder(until):
                     return reg.acquire_holder(holder_authority,effect_lease,lambda:holder_authority.acquire(verified,chain,until))
                 def validate_holder():
-                    value=validate(verified);lease=holder_authority.lease
+                    value=validate(reg.current_verified);lease=holder_authority.lease
                     assert lease is not None and value['observation']['genid']==lease['epoch']
                     assert value['invalidation_epoch']==lease['invalidation_epoch']
-                holder_session=holder_ipc.HolderSession(holder_channel,holder_authority,acquire_holder,validate_holder)
+                def status_holder(token):
+                    def check(current):
+                        holder_authority.status(token);value=validate(current)
+                        with holder_authority.lock:lease=holder_authority.lease
+                        assert lease is not None and value['observation']['genid']==lease['epoch']
+                        assert value['invalidation_epoch']==lease['invalidation_epoch']
+                        return holder_authority.status(token)
+                    return reg.observe_holder(holder_authority,check)
+                def renew_holder(token,until):
+                    return reg.observe_holder(holder_authority,
+                        lambda current:holder_authority.renew(token,current,chain,until,validate(current)))
+                def release_holder(token):
+                    holder_authority.status(token)
+                    reg.holder_lost()
+                    raise RuntimeError('RELEASE_REQUIRES_FENCED_RECONCILIATION')
+                holder_session=holder_ipc.HolderSession(holder_channel,holder_authority,acquire_holder,validate_holder,
+                                  renew=renew_holder,status=status_holder,release=release_holder,on_lost=reg.holder_lost)
                 holder_worker=threading.Thread(target=holder_session.serve);holder_worker.start()
                 publish({'event':'HOLDER_CONNECTED','pid':holder_identity['pid'],'production_authority':False})
             elif kind=='PREPARE':
@@ -225,13 +242,21 @@ def serve(channel,listener):
                 publish({'event':'PREPARED','genid':proof.genid,'production_authority':False})
             elif kind=='CONFIRM':
                 next_verified=seal(command['result'],command['plan'])
-                try:confirmation=reg.confirm(proof,next_verified)
-                except BaseException:next_verified.close();raise
-                if os.environ.get('CI_HOLDER_TEST')=='1':
-                    envelope=validate(next_verified)
-                    chain.record(chain_before,next_verified,envelope)
-                    confirmation['current15_qualified']=envelope['current15_qualified']
-                    confirmation['coverage_ns']=envelope['observed_ns']-chain.start_ns
+                try:
+                    envelope=None
+                    if os.environ.get('CI_HOLDER_TEST')=='1':
+                        envelope=validate(next_verified)
+                        chain.record(chain_before,next_verified,envelope)
+                    confirmation=reg.confirm(proof,next_verified)
+                    if envelope is not None:
+                        confirmation['current15_qualified']=envelope['current15_qualified']
+                        confirmation['coverage_ns']=envelope['observed_ns']-chain.start_ns
+                except BaseException:
+                    try:reg.fail_or_unknown(proof)
+                    finally:
+                        if holder_session is not None:holder_session.revoke_and_notify()
+                        next_verified.close()
+                    raise
                 old=verified;verified=next_verified;ctx['verified']=verified;auth.verified=verified;old.close();proof=None
                 publish({'event':'CONFIRMED','genid':verified.result['after'],**confirmation})
             elif kind=='RESUME':
