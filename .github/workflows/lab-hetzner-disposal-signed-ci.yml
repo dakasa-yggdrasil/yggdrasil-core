@@ -67,7 +67,7 @@ jobs:
           grep -F 'LAB_HETZNER_CORE_BOUND_HTTPS_LOST_RESPONSE_GET_ONLY_ADVANCE_HELD' "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
           grep -F 'LAB_SIGNED_HTTP_COMMITTED_PG_WIRE_CORE2DE_HELD_UNCHANGED' "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
           grep -F 'LAB_CORE_BOUND_DISPOSAL_CLAIMED_FENCE_AND_REFUSAL_ROLLBACK' "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
-          grep -F 'LAB_SYNTHETIC_RETIREMENT_V2_SIGNED_PREFLIGHT_NO_SEND_CLEANUP_HELD' "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
+          grep -F 'LAB_SYNTHETIC_RETIREMENT_V2_MTLS_NONCE_NO_WRITE_CLEANUP_HELD' "$RUNNER_TEMP/lab-hetzner-signed/fixture.log"
       - name: Retain original test output
         if: always()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02

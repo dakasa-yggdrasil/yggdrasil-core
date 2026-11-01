@@ -616,6 +616,13 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 					if err = db.QueryRow(`SELECT (SELECT count(*) FROM public.capacity_vm_retirement_original_returns WHERE intent_id=$1),(SELECT count(*) FROM public.capacity_guest_original_caller_attempts WHERE intent_id=$1)`, request.Intent.RequestID).Scan(&nonceRows, &callerRows); err != nil || nonceRows != 0 || callerRows != 0 {
 						t.Fatal("preflight unexpectedly sent Guest I/O", err)
 					}
+					labAcquireSyntheticV2Nonce(t, originalOwner, key, request, receipt.Enrollment)
+					if err = retirementStore.FinalizeGuestRetirementV2Nonce(originalOwner); err != nil {
+						t.Fatal("persist original synthetic nonce", err)
+					}
+					if err = db.QueryRow(`SELECT (SELECT count(*) FROM public.capacity_vm_retirement_original_returns WHERE intent_id=$1),(SELECT count(*) FROM public.capacity_guest_original_caller_attempts WHERE intent_id=$1)`, request.Intent.RequestID).Scan(&nonceRows, &callerRows); err != nil || nonceRows != 1 || callerRows != 0 {
+						t.Fatal("synthetic nonce journal or caller state", err)
+					}
 					finishStore := store.WithOriginalGuestNotifyCanary(finishStep, capacity.CurrentGuestCoreSource())
 					if _, _, finishErr := finishStore.PrepareFailedInstalledGuestNativeCleanup(claimCtx, policy, claimed.Generation, claimed.FencingToken, claimed.LeaseOwner, request.Intent.RequestID); finishErr == nil {
 						t.Fatal("native cleanup admitted without V2 chain")
@@ -624,7 +631,7 @@ func TestRecoveryFixtureResumeSetupPostgres(t *testing.T) {
 					if readErr != nil || len(rows) != 2 || !reflect.DeepEqual(beforeOriginals, originals()) {
 						t.Fatal("held V2 preflight mutated originals", readErr)
 					}
-					t.Log("LAB_SYNTHETIC_RETIREMENT_V2_SIGNED_PREFLIGHT_NO_SEND_CLEANUP_HELD")
+					t.Log("LAB_SYNTHETIC_RETIREMENT_V2_MTLS_NONCE_NO_WRITE_CLEANUP_HELD")
 					t.Log("LAB_CORE_BOUND_DISPOSAL_REQUESTED_READBACK_NO_DUPLICATE")
 					return
 				}
