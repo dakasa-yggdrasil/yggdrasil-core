@@ -72,7 +72,11 @@ func TestFailedOriginalAWSLegacyRollbackCompatibility(t *testing.T) {
 		f.pre.ProfileManifestSHA256 = p.GuestRetirementBinding.ProfileManifestSHA256
 		f.pre.CoreSourceCommit = p.GuestRetirementBinding.CoreAuthoritySourceCommit
 		f.pre.OriginalWorkflowStepID = p.GuestRetirementBinding.ProfileManifest.OriginalProvisioningStepID
+		f.pre.OriginalWorkflowStepTimeoutSeconds = p.GuestRetirementBinding.ProfileManifest.OriginalProvisioningBudgetSeconds
 		f.binding = *p.GuestRetirementBinding
+		if !capacity.GuestOriginalProvisioningDeadlineMatches(f.pre, f.binding.ProfileManifest) {
+			t.Fatal("representative preregistration deadline mismatch")
+		}
 		f.record.Settlement.RequestSHA256 = slot.DesiredSpecSHA256
 		f.record.Settlement.OriginalProviderCreateReturn.RequestSHA256 = slot.DesiredSpecSHA256
 		f.policy.Spec, err = json.Marshal(p)
