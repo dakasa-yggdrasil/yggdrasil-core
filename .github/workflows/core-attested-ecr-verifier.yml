@@ -1,0 +1,76 @@
+name: Independently verify a distinct Core ECR import
+
+on:
+  push:
+    branches:
+      - candidate/core-32fe-ecr-verify-20261101
+
+permissions:
+  contents: read
+  actions: read
+  attestations: write
+  id-token: write
+  artifact-metadata: write
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout verifier source
+        uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
+        with:
+          persist-credentials: false
+
+      - name: Download exact ECR producer receipts
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
+        with:
+          name: core-attested-ecr-receipts-41279233654-1
+          path: receipts
+          run-id: 41279233654
+          github-token: ${{ github.token }}
+
+      - name: Verify producer identity, attestations and original returns
+        env:
+          GH_TOKEN: ${{ github.token }}
+          GH_REPO: dakasa-yggdrasil/yggdrasil-core
+        run: |
+          set -eu
+          producer=e85286649bd677de30c1f648145d44532755203a
+          workflow=dakasa-yggdrasil/yggdrasil-core/.github/workflows/core-attested-ecr-producer.yml
+          mkdir verified
+          gh api "repos/$GH_REPO/actions/runs/41279233654" > verified/producer-run.json
+          jq -e --arg head "$producer" '.id == 41279233654 and .run_attempt == 1 and .head_sha == $head and .path == ".github/workflows/core-attested-ecr-producer.yml" and .status == "completed" and .conclusion == "success" and .repository.full_name == "dakasa-yggdrasil/yggdrasil-core"' verified/producer-run.json >/dev/null
+          for spec in \
+            '.github/workflows/core-attested-ecr-producer.yml:896c6d4c41114f9cbafb34a0ef770210bef36795dcdbf9d9d0df5a3248be9edd' \
+            '.github/scripts/ecr_attested_import.py:343313e543858cd4e345290e669e89722f7d6c479d4a84f8de0bf0aa39e38335' \
+            '.github/scripts/ecr_frozen_native.py:4326b46957a8df0ef8b940e864df41b68db74a70349b1f9007d731c512c955bc' \
+            '.github/scripts/aws_cli_public_key.asc:279541b6dd1c831a260ee0f9fb71d63bbcc14ebc4bf62c605336e86c11d4eefb'; do
+            path=${spec%:*}
+            digest=${spec##*:}
+            gh api -H 'Accept: application/vnd.github.raw+json' "repos/$GH_REPO/contents/$path?ref=$producer" > verified/current-source
+            test "$(sha256sum verified/current-source | cut -d' ' -f1)" = "$digest"
+          done
+          rm verified/current-source
+          test "$(sha256sum .github/scripts/verify_ecr_receipts.py | cut -d' ' -f1)" = 1f006bfaaa4c78261d5168efd73b262894e05ccbafa50a36ef8783c774870b6f
+          for name in ABSENCE-BEFORE ECR-RETURN IMPORT-INTENT DESCRIBE-001 DESCRIBE-002 LAYERS LOCAL-COPY LOCAL-CREATE LOCAL-IMAGE MANIFEST PULL-ORIGINAL STS; do
+            test -f "receipts/$name.json"
+            gh attestation verify "receipts/$name.json" --repo "$GH_REPO" \
+              --signer-workflow "$workflow" --source-digest "$producer" \
+              --source-ref refs/heads/candidate/core-32fe-ecr-producer-20261101 \
+              --deny-self-hosted-runners --format json > "verified/$name.attestation.json"
+          done
+          python3 -I -B .github/scripts/verify_ecr_receipts.py
+
+      - name: Attest independent verification summary
+        uses: actions/attest@1e69f48acb82d1966a394da916b4c1698aa569d6 # v4.2.2
+        with:
+          subject-path: verified/summary.json
+
+      - name: Preserve independent verification
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: core-attested-ecr-independent-${{ github.run_id }}-${{ github.run_attempt }}
+          path: verified/
+          if-no-files-found: error
+          retention-days: 2
